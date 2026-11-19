@@ -24,7 +24,7 @@ END";
     assert!(output.status.success(), "{output:?}");
     assert_eq!(
         written,
-        "existing=1\ntests_run=2\ntests_listed=3\ntests_by_package=both=1/1 kept=1/2\n"
+        "existing=1\ntests_run=2\ntests_listed=3\ntests_ignored=1\ntests_by_package=both=1/1 kept=1/2\n"
     );
 }
 
@@ -41,7 +41,7 @@ END";
     assert_eq!(output.status.code(), Some(0), "{output:?}");
     assert_eq!(
         written,
-        "existing=1\ntests_run=1\ntests_listed=1\ntests_by_package=ran=1/1\n"
+        "existing=1\ntests_run=1\ntests_listed=1\ntests_ignored=0\ntests_by_package=ran=1/1\n"
     );
 }
 
@@ -55,7 +55,7 @@ END";
     let (_, written, _) = run_with_output("tests-run-idle", script, &counts, &NEXTEST_RUN);
     assert_eq!(
         written,
-        "existing=1\ntests_run=1\ntests_listed=3\ntests_by_package=idle=0/2 kept=1/1\n"
+        "existing=1\ntests_run=1\ntests_listed=3\ntests_ignored=0\ntests_by_package=idle=0/2 kept=1/1\n"
     );
 }
 
@@ -68,7 +68,10 @@ fn run_omits_the_package_map_when_a_package_ran_more_than_it_matched() {
 END";
     let one = listed(&[("kept", &["alpha"])]);
     let (_, written, _) = run_with_output("tests-run-exceed", script, &one, &NEXTEST_RUN);
-    assert_eq!(written, "existing=1\ntests_run=2\ntests_listed=1\n");
+    assert_eq!(
+        written,
+        "existing=1\ntests_run=2\ntests_listed=1\ntests_ignored=0\n"
+    );
 }
 
 #[test]
@@ -79,20 +82,29 @@ fn run_omits_the_package_map_when_the_lines_do_not_reconcile() {
 END";
     let two = listed(&[("ran", &["alpha", "beta"])]);
     let (_, written, _) = run_with_output("tests-run-short", short, &two, &NEXTEST_RUN);
-    assert_eq!(written, "existing=1\ntests_run=2\ntests_listed=2\n");
+    assert_eq!(
+        written,
+        "existing=1\ntests_run=2\ntests_listed=2\ntests_ignored=0\n"
+    );
     let hostile = r"cat >&2 <<'END'
     PASS [nope] (1/1) ran tests::t
  Summary [   0.010s] 1 test run: 1 passed, 0 skipped
 END";
     let one = listed(&[("ran", &["t"])]);
     let (_, written, _) = run_with_output("tests-run-hostile", hostile, &one, &NEXTEST_RUN);
-    assert_eq!(written, "existing=1\ntests_run=1\ntests_listed=1\n");
+    assert_eq!(
+        written,
+        "existing=1\ntests_run=1\ntests_listed=1\ntests_ignored=0\n"
+    );
     let named = r"cat >&2 <<'END'
     PASS [   0.010s] (1/1) bad=name tests::t
  Summary [   0.010s] 1 test run: 1 passed, 0 skipped
 END";
     let (_, written, _) = run_with_output("tests-run-bad-name", named, &one, &NEXTEST_RUN);
-    assert_eq!(written, "existing=1\ntests_run=1\ntests_listed=1\n");
+    assert_eq!(
+        written,
+        "existing=1\ntests_run=1\ntests_listed=1\ntests_ignored=0\n"
+    );
     let prose = r"cat >&2 <<'END'
 PASS the exam
     PASS [   0.010s] (1/1) ran tests::alpha
@@ -102,7 +114,7 @@ END";
     let (_, written, _) = run_with_output("tests-run-prose", prose, &ran, &NEXTEST_RUN);
     assert_eq!(
         written,
-        "existing=1\ntests_run=1\ntests_listed=1\ntests_by_package=ran=1/1\n"
+        "existing=1\ntests_run=1\ntests_listed=1\ntests_ignored=0\ntests_by_package=ran=1/1\n"
     );
 }
 
@@ -122,7 +134,7 @@ END";
     assert!(output.status.success(), "{output:?}");
     assert_eq!(
         written,
-        "existing=1\ntests_run=1\ntests_listed=3\ntests_by_package=gone=0/2 kept=1/1\n"
+        "existing=1\ntests_run=1\ntests_listed=3\ntests_ignored=0\ntests_by_package=gone=0/2 kept=1/1\n"
     );
 }
 
@@ -182,6 +194,42 @@ END";
     );
 }
 
+fn required_verdict(written: &str) -> Result<velnor_rust::Verdict, Box<dyn std::error::Error>> {
+    let outputs = written
+        .lines()
+        .filter_map(|line| line.split_once('='))
+        .map(|(key, value)| (key.to_owned(), value.to_owned()))
+        .collect::<BTreeMap<_, _>>();
+    let spec = VerdictSpec::parse(
+        "rust-plan",
+        &[
+            "rust-plan=always".to_owned(),
+            "rust-test=lane:root".to_owned(),
+        ],
+        &["rust-test=root".to_owned()],
+    )?;
+    let needs = BTreeMap::from([
+        (
+            JobId::new("rust-plan")?,
+            Need {
+                result: Some("success".to_owned()),
+                outputs: BTreeMap::from([
+                    ("rust_root_mode".to_owned(), "some".to_owned()),
+                    ("rust_root_tests".to_owned(), "run".to_owned()),
+                ]),
+            },
+        ),
+        (
+            JobId::new("rust-test")?,
+            Need {
+                result: Some("success".to_owned()),
+                outputs,
+            },
+        ),
+    ]);
+    Ok(decide(&spec, &needs, Some("pull_request")))
+}
+
 #[test]
 fn a_package_whose_tests_are_all_ignored_does_not_fail_the_required_gate() {
     let script = r"cat >&2 <<'END'
@@ -195,41 +243,30 @@ END";
     assert!(output.status.success(), "{output:?}");
     assert_eq!(
         written,
-        "existing=1\ntests_run=0\ntests_listed=0\ntests_by_package=\n"
+        "existing=1\ntests_run=0\ntests_listed=0\ntests_ignored=1\ntests_by_package=\n"
     );
-    let outputs = written
-        .lines()
-        .filter_map(|line| line.split_once('='))
-        .map(|(key, value)| (key.to_owned(), value.to_owned()))
-        .collect::<BTreeMap<_, _>>();
-    let spec = VerdictSpec::parse(
-        "rust-plan",
-        &[
-            "rust-plan=always".to_owned(),
-            "rust-test=lane:root".to_owned(),
-        ],
-        &["rust-test=root".to_owned()],
-    )
-    .expect("verdict spec");
-    let needs = BTreeMap::from([
-        (
-            JobId::new("rust-plan").expect("job id"),
-            Need {
-                result: Some("success".to_owned()),
-                outputs: BTreeMap::from([
-                    ("rust_root_mode".to_owned(), "some".to_owned()),
-                    ("rust_root_tests".to_owned(), "run".to_owned()),
-                ]),
-            },
-        ),
-        (
-            JobId::new("rust-test").expect("job id"),
-            Need {
-                result: Some("success".to_owned()),
-                outputs,
-            },
-        ),
-    ]);
-    let verdict = decide(&spec, &needs, Some("pull_request"));
+    let verdict = required_verdict(&written).expect("verdict");
     assert!(verdict.passed, "{}", verdict.table());
+}
+
+#[test]
+fn a_suite_that_is_compiled_out_fails_the_required_gate() {
+    let script = r"cat >&2 <<'END'
+     Summary [   0.001s] 0 tests run: 0 passed, 0 skipped
+END";
+    let list = r#"{"test-count":0,"rust-suites":{}}"#;
+    let (output, written, _) =
+        run_with_output("tests-run-compiled-out", script, list, &NEXTEST_RUN);
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(
+        written,
+        "existing=1\ntests_run=0\ntests_listed=0\ntests_ignored=0\ntests_by_package=\n"
+    );
+    let verdict = required_verdict(&written).expect("verdict");
+    assert!(!verdict.passed, "{}", verdict.table());
+    assert!(
+        verdict.table().contains("listed no tests and ran none"),
+        "{}",
+        verdict.table()
+    );
 }

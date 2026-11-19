@@ -7,6 +7,8 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
+use velnor_actions_contract::workflow::cache_family::STATE_RUNNER_TEMP;
+
 use crate::gc1_mbx_stub;
 pub(crate) use crate::gc1_scene_key::{DEFAULT_SNAPSHOT, Key};
 use crate::gc1_scene_resolve::resolve;
@@ -132,6 +134,7 @@ impl Scene {
         fsize_blocks: Option<u64>,
     ) -> Result<String, Box<dyn Error>> {
         let path = format!("{}:{}", self.bin.display(), std::env::var("PATH")?);
+        let script = &script.replace(STATE_RUNNER_TEMP, &self.runner.display().to_string());
         let mut command = Command::new("sh");
         match fsize_blocks {
             Some(blocks) => command
@@ -144,7 +147,10 @@ impl Scene {
         };
         self.base_env(&mut command, &path);
         for (name, value) in env {
-            command.env(name, value);
+            command.env(
+                name,
+                value.replace(STATE_RUNNER_TEMP, &self.runner.display().to_string()),
+            );
         }
         for name in unset {
             command.env_remove(name);

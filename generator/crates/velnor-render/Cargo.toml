@@ -21,4 +21,5 @@ doctest = false
 [dependencies]
 velnor-model.workspace = true
 velnor-release.workspace = true
+velnor-workflows.workspace = true
 serde_json.workspace = true

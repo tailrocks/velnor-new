@@ -3,7 +3,7 @@
 
 use crate::cache::CacheKey;
 use crate::helper::HelperRelease;
-use crate::ids::{JobId, RepoPath};
+use crate::ids::{JobId, RepoPath, RootSlug};
 use crate::plan::CargoCommand;
 use crate::verdict::VerdictSpec;
 
@@ -21,6 +21,15 @@ pub enum StepKind {
         expiry: BaseExpiry,
         targets: Vec<RepoPath>,
     },
+    SourcesLocks(Vec<RepoPath>),
+    SourcesFetch {
+        lane: RootSlug,
+        position: usize,
+    },
+    SourcesFetchAll {
+        lane: RootSlug,
+        manifests: Vec<RepoPath>,
+    },
     CacheDecide {
         manifests: Vec<RepoPath>,
         target: RepoPath,
@@ -35,6 +44,7 @@ pub enum StepKind {
         lane: JobId,
         family: TrimFamily,
     },
+    CacheBudget(u64),
     RustComponents(Vec<String>),
     RustTargets(Vec<String>),
     UploadArchive {
@@ -50,6 +60,20 @@ pub enum StepKind {
     InputsSave(RepoPath),
     InputsRestore(RepoPath),
     CratesMirror(crate::repo::CratesMirror),
+    PrivateCheck {
+        cached: Vec<crate::ids::RootSlug>,
+    },
+    PrivateToken {
+        sources: crate::repo::PrivateSources,
+        cached: Vec<crate::ids::RootSlug>,
+    },
+    PrivateFetch {
+        manifests: Vec<RepoPath>,
+        cached: Vec<crate::ids::RootSlug>,
+    },
+    MbxRemote,
+    MbxStore,
+    MbxSeed,
     TestSetup {
         name: String,
         run: String,
@@ -58,6 +82,8 @@ pub enum StepKind {
     InstallHelper(HelperRelease),
     FailWhenANeedFailed,
     FailOnDraftRun,
+    DraftNotice,
+    ClearRunLabel,
     Verdict {
         spec: VerdictSpec,
         needs_max_bytes: usize,
@@ -95,4 +121,5 @@ pub enum HelperCommand {
     CheckMetadata,
     Restored(BaseExpiry),
     InputsAudit,
+    MergeGroupPassed,
 }

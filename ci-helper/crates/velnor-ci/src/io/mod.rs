@@ -3,9 +3,12 @@
 
 mod activity;
 mod archive_witness;
+mod artifact_api;
+mod artifact_unzip;
 mod audit;
 mod build_inputs;
 mod cache;
+pub mod cache_api;
 mod cache_paths;
 mod cache_sources;
 mod cache_upload;
@@ -14,25 +17,38 @@ mod configurations;
 mod crates_mirror;
 mod crates_mirror_dispatch;
 mod crates_mirror_mise;
+mod fetch;
+mod fetch_credentials;
+mod fetch_reports;
+mod fetch_toolchain;
 mod git;
 mod git_witness;
 mod http;
 mod inputs;
 mod manifests;
+mod merge_group;
 mod plan;
+mod plan_request;
+pub mod preview;
+mod private_check;
 pub mod pump;
+mod qualification;
 mod recording;
+mod registry;
 mod release;
 mod report;
 mod report_checkout;
 mod report_inputs;
 mod required;
+mod resolve_qualification;
 mod restored;
 mod run;
 mod setup;
+mod sources;
 mod timings;
 mod unit_platforms;
 mod units;
+mod write_request;
 
 use std::fs::{self, OpenOptions};
 use std::io::{Read, Write};
@@ -47,14 +63,16 @@ pub use self::restored::{break_time_ties, break_time_ties_with};
 pub use self::timings::write_report;
 use crate::cli::{
     AuditArgs, BenchCommand, CacheCommand, CheckTagArgs, Cli, CollectArgs, Command, CompareArgs,
-    DecideArgs, InputsCommand, ReleaseCommand, ReleaseGateArgs,
+    DecideArgs, InputsCommand, QualificationCommand, ReleaseCommand, ReleaseGateArgs,
+    SourcesCommand,
 };
 use crate::collect::collect;
-use crate::compare::compare;
+use crate::compare::{compare, compare_across_populations};
 use crate::error::CiError;
 use crate::escape::stderr_line;
 use crate::gate::{check_tag, release_gate};
 use crate::github::Repo;
+use crate::lane_guard;
 use crate::metrics::{METRICS_SCHEMA_VERSION, RunMetrics};
 use clap::{CommandFactory, FromArgMatches};
 
@@ -104,6 +122,12 @@ pub fn main() -> ExitCode {
     };
     if let Command::Run(args) = &cli.command {
         return run::run(args);
+    }
+    if let Command::Sources(SourcesCommand::Fetch(args)) = &cli.command {
+        return sources::fetch(args);
+    }
+    if let Command::LaneGuard(args) = &cli.command {
+        return lane_guard::run(args);
     }
     match run(cli) {
         Ok(output) => {
@@ -173,11 +197,23 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Release(ReleaseCommand::Record(args)) => release::run_record(&args),
         Command::Release(ReleaseCommand::Preflight(args)) => release::run_preflight(&args),
         Command::Release(ReleaseCommand::Publish(args)) => release::run_publish(&args),
+        Command::Release(ReleaseCommand::FamilyTag(args)) => release::run_family_tag(&args),
         Command::Release(ReleaseCommand::CheckConfig(args)) => release::run_check_config(&args),
         Command::Plan(args) => plan::run_plan(&args),
+        Command::MergeGroupPassed => Ok(merge_group::run()),
+        Command::WriteRequest(args) => write_request::run(&args),
+        Command::ResolveQualification(args) => resolve_qualification::run(&args),
         Command::Gate(args) => required::run_gate(&args),
+        Command::Qualification(QualificationCommand::Compare(args)) => {
+            qualification::run_compare(&args)
+        }
+        Command::FetchReports(args) => fetch_reports::run_fetch_reports(&args),
         Command::Timings(args) => timings::run_timings(&args),
         Command::CratesMirror(args) => crates_mirror::setup(&args),
+        Command::Fetch(args) => fetch::fetch(&args),
+        Command::PrivateTokenAllowed => private_check::run(),
+        Command::MbxStore => crate::mbx_store::setup(),
+        Command::MbxSeed => crate::mbx_seed::setup(),
         Command::Prepare => setup::prepare(),
         Command::CheckMetadata => setup::check_metadata(),
         Command::CheckConfigurations(args) => configurations::check(&args),
@@ -185,11 +221,12 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Cache(CacheCommand::Verify(args)) => cache_upload::verify(&args.key),
         Command::Cache(CacheCommand::Check(args)) => cache_upload::check(&args.success),
         Command::Cache(CacheCommand::Trim(args)) => cache::run_trim(&args.prefix, args.keep),
+        Command::Cache(CacheCommand::Budget(args)) => cache_api::run_budget(&args),
         Command::Restored(args) => {
             let root = current_dir()?;
             let configured = cache_paths::list("VELNOR_CACHE_TARGETS")?.unwrap_or(args.target_dir);
             let targets = if configured.is_empty() {
-                every_root_target(&root)
+                every_root_target(&root)?
             } else {
                 configured
                     .iter()
@@ -202,13 +239,13 @@ fn run(cli: Cli) -> Result<String, CiError> {
             Ok(expiry.report + &ties)
         }
         Command::ValidateArtifactId => {
-            crate::preview::validate_artifact_id(
-                &std::env::var(crate::preview::ARTIFACT_ID_VARIABLE).unwrap_or_default(),
+            crate::preview_helpers::validate_artifact_id(
+                &std::env::var(crate::preview_helpers::ARTIFACT_ID_VARIABLE).unwrap_or_default(),
             )?;
             Ok(String::new())
         }
         Command::InstallGh(args) => {
-            crate::preview::install_gh(
+            crate::preview_helpers::install_gh(
                 &args.version,
                 std::env::var(TOKEN_VARIABLE).ok().as_deref(),
             )?;
@@ -216,10 +253,17 @@ fn run(cli: Cli) -> Result<String, CiError> {
         }
         Command::StageBundle => {
             let bundle = env_path("BUNDLE_PATH")?;
-            crate::preview::stage_bundle(&bundle, &env_path("RUNNER_TEMP")?)?;
+            crate::preview_helpers::stage_bundle(&bundle, &env_path("RUNNER_TEMP")?)?;
             Ok(String::new())
         }
-        Command::Run(_) => Err(CiError::new("run is handled before commands")),
+        Command::VerifyRuntime(args) => preview::cli::verify_runtime(&args),
+        Command::VerifyMacProof => preview::cli::verify_mac_proof(),
+        Command::RunAuthority(args) => preview::cli::run_authority(&args),
+        Command::AdmitPreview => preview::admit::admit_preview(),
+        Command::Run(_) | Command::Sources(_) => {
+            Err(CiError::new("run and sources are handled before commands"))
+        }
+        Command::LaneGuard(_) => Err(CiError::new("lane-guard is handled before commands")),
     }
 }
 
@@ -319,7 +363,13 @@ pub fn write_metrics(path: &Path, metrics: &RunMetrics) -> Result<(), CiError> {
 }
 
 fn run_compare(args: &CompareArgs) -> Result<String, CiError> {
-    compare(&read_metrics(&args.a)?, &read_metrics(&args.b)?)
+    let a = read_metrics(&args.a)?;
+    let b = read_metrics(&args.b)?;
+    if args.allow_different_populations {
+        compare_across_populations(&a, &b)
+    } else {
+        compare(&a, &b)
+    }
 }
 
 pub fn read_metrics(path: &Path) -> Result<RunMetrics, CiError> {

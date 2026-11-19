@@ -121,7 +121,7 @@ pub(crate) fn audit_prepare_installs_with_catalog_and_verifiers(
         }
     }
     for command in validator_commands {
-        audit_validator_command(command, &mut subjects, &mut blocking);
+        audit_validator_command(command, catalog, &mut subjects, &mut blocking);
     }
     subjects.sort_by(|left, right| left.display.cmp(&right.display));
     subjects.dedup();
@@ -276,6 +276,7 @@ fn audit_against_lock(
     }
 }
 
-#[cfg(test)]
+// Its fixture builds a release manifest for linux-x86_64 and macOS hosts only (tests/support/consumer_manifest.rs).
+#[cfg(all(test, not(all(target_os = "linux", target_arch = "aarch64"))))]
 #[path = "lock_audit_tests.rs"]
 mod tests;

@@ -19,7 +19,7 @@ fn recorded_outputs(plan: &ReleasePlan, helper: &HelperRelease) -> Vec<String> {
                 .map(|(package, _)| package)
                 .chain(&root.inherited)
         })
-        .chain(plan.binaries.iter().map(|binary| &binary.package))
+        .chain(plan.tagged_binaries().iter().map(|binary| &binary.package))
         .collect();
     let commits = helper.version().at_least(TAGGED_COMMIT_HELPER);
     packages
@@ -51,7 +51,7 @@ pub(crate) fn commit_outputs(plan: &ReleasePlan, helper: &HelperRelease) -> Vec<
     if !helper.version().at_least(TAGGED_COMMIT_HELPER) {
         return Vec::new();
     }
-    plan.binaries
+    plan.tagged_binaries()
         .iter()
         .map(|binary| {
             let output = commit_output(&binary.package);

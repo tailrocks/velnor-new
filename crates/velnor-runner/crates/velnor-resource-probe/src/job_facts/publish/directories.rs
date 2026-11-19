@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{BTRFS_MAGIC, DIRECTORY_MODE, ROOT_GID, ROOT_UID, RUNTIME_DIRECTORY_TARGET};
+use super::{DIRECTORY_MODE, ROOT_GID, ROOT_UID, RUNTIME_DIRECTORY_TARGET};
 use crate::{ProbeError, execution_channel_wire::ExecutionChannelDirectory, mountinfo::MountEntry};
 use rustix::fs::{
     AtFlags, FileType, Mode, OFlags, StatxFlags, fstat, fstatfs, fstatvfs, open, openat, statx,
@@ -110,7 +110,6 @@ pub(super) fn compare_runner_directory(
     expected: &ExecutionChannelDirectory,
     observed: &ExecutionChannelDirectory,
 ) -> Result<(), ProbeError> {
-    let btrfs = observed.filesystem_type_magic == BTRFS_MAGIC;
     if observed.target != expected.target
         || observed.inode != expected.inode
         || observed.owner_uid != expected.owner_uid
@@ -127,12 +126,61 @@ pub(super) fn compare_runner_directory(
         || observed.mount_source != expected.mount_source
         || observed.mount_device_major != expected.mount_device_major
         || observed.mount_device_minor != expected.mount_device_minor
-        || (!btrfs
-            && (observed.statx_device_major != expected.statx_device_major
-                || observed.statx_device_minor != expected.statx_device_minor))
+        || observed.statx_device_major != expected.statx_device_major
+        || observed.statx_device_minor != expected.statx_device_minor
         || observed.read_only
     {
         return Err(ProbeError::Invalid("job_facts_runner_binding"));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn btrfs_directory(statx_minor: u32, mount_root: &str) -> ExecutionChannelDirectory {
+        ExecutionChannelDirectory {
+            target: super::super::DIRECTORY_TARGET.to_owned(),
+            inode: 256,
+            owner_uid: 0,
+            owner_gid: 0,
+            mode: 0o555,
+            mount_id: 7,
+            statx_mount_id: 7,
+            mount_root: mount_root.to_owned(),
+            mount_source: "/dev/vda1".to_owned(),
+            mount_device_major: 0,
+            mount_device_minor: 40,
+            statx_device_major: 0,
+            statx_device_minor: statx_minor,
+            filesystem_type_magic: crate::filesystem::BTRFS_SUPER_MAGIC,
+            filesystem_type_name: "btrfs".to_owned(),
+            filesystem_id: 9,
+            read_only: false,
+            executable_mount: false,
+        }
+    }
+
+    #[test]
+    fn btrfs_same_subvolume_is_accepted() {
+        assert!(
+            compare_runner_directory(
+                &btrfs_directory(41, "/job-facts"),
+                &btrfs_directory(41, "/")
+            )
+            .is_ok()
+        );
+    }
+
+    #[test]
+    fn btrfs_other_subvolume_with_same_inode_is_refused() {
+        assert!(
+            compare_runner_directory(
+                &btrfs_directory(41, "/job-facts"),
+                &btrfs_directory(42, "/")
+            )
+            .is_err()
+        );
+    }
 }
