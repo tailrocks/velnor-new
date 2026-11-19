@@ -36,6 +36,8 @@ Code was re-read at velnor-new `d6be276a6c` and velnor-legacy `1b9fc038`. Labels
 - **Every CI job on Velnor, or retired: day 4.8 at P50 (P90 day 7).** Each move deletes the type's
   old route in the same change.
 - **The App gate, day 4.2 (P90 6.5); the PR and group Actions gates deleted, day 5.2 (P90 7.5).**
+- **Speed proof:** benchmarks BM01–BM15 (design section 11); the claim is published at about day 15
+  (P90 19), only if they pass, and only against the arms that ran.
 - **Storage:** the site RustFS clusters deploy on day 1; L1 routes leave `local` at about day 3,
   only after the phase-1 cluster test (ST06) passes; no verdict waits on them.
 - **Final deletion, day 6.5 (P90 9):** ARC's velnor-new scale set and the old runner code review did
@@ -454,6 +456,11 @@ arms run one at a time on the same two FI workers, so arms, not agents, set the 
 | D15 | Recovery: redeploy the previous image; the pre-approved break-glass verifier if none can verify; never an admin merge | day 1 | Redeploy only |
 | D16 | A label carried from draft arms the PR at `ready_for_review`; recommended yes | day 2 | No |
 | D17 | Who approves a reduction in the inventory; recommended the owner only | day 3 | None accepted |
+| D18 | A Velnor merge train in place of GitHub's queue (decision 7); recommended not now, BM14 first | day 8 | GitHub's queue |
+| D19 | Pre-label compile and test of ready PRs (decision 12); recommended no, use `velnor verify` | day 3 | No |
+| D20 | One high-clock node per site now; recommended for BM15 only, then verdict classes at ≥ 1.15 | day 4 | No rental |
+| D21 | One compile feeding both witnesses after graduation; recommended no | day 7 | No |
+| D22 | Rented comparator arms for BM03; recommended one vendor arm and GitHub larger runners | day 5 | None; the claim names only the arms run |
 
 D6 (the lab's reference executor), D10 (two witnesses, ALLGREEN), D12 (where release bytes are built)
 and D13 (park the old runner's PRs) are decided by decisions 16 and 19 and the rulings.

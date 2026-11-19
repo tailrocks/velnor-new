@@ -1017,6 +1017,22 @@ cluster test.
 | O27 sandbox start; C12 | Accepted: stage 3 budgeted at ≤ 1 s P90 for provision, attach and spawn; clones land in a pre-mounted volume; C12 unresolved until K17 (plan P08) | 3 |
 | G18 C5 elimination | Adopted as clock injection and fenced fixtures; a process-wide clock shim rejected | 6.1; plan T08 |
 
+### Group 33: fastest-runner critique by Muse Wonder; open items
+
+| Point | Decision | v3 section |
+|---|---|---|
+| G28 deeper speculation | Adopted: Velnor's own speculation up to four prefixes deep at batch priority, independent of the ruleset depth | 8.3 |
+| G27 mbx on the verdict path | Already the design: a bounded transfer only where measured faster | 7.3 |
+| O23 no comparator raced | Accepted: S3 with owner question D22 | 11, 13 |
+| Muse Wonder Full | No separate group: its points are in groups 26 (B1–B7, O24), 27 (publication rules) and 29 (O13) | — |
+
+**Unresolved, for an adjudicator** (each runs on its safe default): C02 (Buildkite-style agents),
+C03 (rented runners), C04 (RBE): no arm has run, so no claim names them; C12 (sandbox-start floor):
+budget ≤ 1 s P90 until P08 measures; C13 (full tree-hash cost): the full hash stays until BM13; X01
+(raised in synthesis from O15 and G17): whether a complete trace of a C5-free execution, with
+listings, failed lookups and metadata, licenses a hit by the observed-input argument, against
+ruling Q5. Until ruled, narrow keys need reviewed contracts and step 3's root-cold rule stays.
+
 ## Design review
 
 The eight design critiques and the comparison that verified them are the input here; ids are the
