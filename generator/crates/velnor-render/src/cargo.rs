@@ -287,13 +287,13 @@ fn deny(manifest: &RepoPath) -> (String, String, Vec<(String, Value)>) {
     match manifest.parent() {
         None => (
             "Dependency policy".into(),
-            "cargo-deny check".into(),
+            "cargo-deny --locked check".into(),
             vec![],
         ),
         Some(directory) => (
             format!("Dependency policy ({directory})"),
             format!(
-                "cargo-deny --manifest-path '{}' check",
+                "cargo-deny --manifest-path '{}' --locked check",
                 manifest.as_str().replace('\'', "'\\''")
             ),
             vec![],

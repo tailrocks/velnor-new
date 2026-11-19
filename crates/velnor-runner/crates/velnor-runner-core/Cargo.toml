@@ -10,6 +10,10 @@ license.workspace = true
 autotests = false
 
 [[test]]
+name = "capacity_public"
+path = "tests/capacity_public.rs"
+
+[[test]]
 name = "lifecycle_public"
 path = "tests/lifecycle_public.rs"
 

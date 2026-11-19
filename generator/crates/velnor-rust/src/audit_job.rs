@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    CacheKey, CacheRoot, CargoCommand, HelperCommand, Job, JobId, RepoFacts, RootSlug, RustRoot,
-    StepKind,
+    CacheKey, CargoCommand, HelperCommand, Job, JobId, RepoFacts, RootSlug, RustRoot, StepKind,
 };
 
+use crate::base_cache::cache_root;
 use crate::lane::{Lane, PLAN_JOB};
 use crate::plan::{job, setup_roots, step};
 
@@ -23,7 +23,7 @@ pub(crate) fn audit_job(facts: &RepoFacts, jobs: &[Job]) -> Option<Job> {
     let families: Vec<JobId> = facts
         .rust_roots
         .iter()
-        .map(|root| target_family(jobs, root).unwrap_or(AUDIT_JOB))
+        .map(|root| target_family(facts, jobs, root).unwrap_or(AUDIT_JOB))
         .collect();
     let mut steps = setup_roots(facts, &facts.rust_roots, &lane, &families);
     steps.extend(
@@ -35,7 +35,7 @@ pub(crate) fn audit_job(facts: &RepoFacts, jobs: &[Job]) -> Option<Job> {
     steps.push(step(StepKind::Helper(HelperCommand::InputsAudit)));
     Some(Job {
         when,
-        skip_on_draft: false,
+        pr: crate::plan::quick(facts),
         needs: vec![PLAN_JOB],
         steps,
         ..job(facts, AUDIT_JOB)
@@ -45,8 +45,8 @@ pub(crate) fn audit_job(facts: &RepoFacts, jobs: &[Job]) -> Option<Job> {
 /// The audit builds every target, so it restores, read-only, the target cache
 /// of the last lane that saves this root (the one that builds the tests) and
 /// starts warm instead of building cold.
-fn target_family(jobs: &[Job], root: &RustRoot) -> Option<JobId> {
-    let cache_root = CacheRoot::new(&root.manifest, root.target_dir.clone());
+fn target_family(facts: &RepoFacts, jobs: &[Job], root: &RustRoot) -> Option<JobId> {
+    let cache_root = cache_root(facts, root);
     jobs.iter()
         .flat_map(|job| &job.steps)
         .filter_map(|step| match &step.kind {

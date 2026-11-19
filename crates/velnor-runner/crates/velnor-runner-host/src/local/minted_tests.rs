@@ -14,9 +14,11 @@ fn encode(kind: &str, side: &str, name: &str) -> String {
 }
 
 fn lines(state: &std::path::Path) -> usize {
-    std::fs::read_to_string(state.join(MINTED_FILE)).map_or(0, |text| {
-        text.lines().filter(|line| !line.is_empty()).count()
-    })
+    std::fs::read_to_string(state.join(MINTED_FILE))
+        .expect("the journal must be readable to be measured")
+        .lines()
+        .filter(|line| !line.is_empty())
+        .count()
 }
 
 #[tokio::test]
