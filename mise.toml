@@ -19,7 +19,7 @@ rust = { version = "1.99.1", profile = "minimal", components = [
 ], mr_boxington = true }
 mr-boxington = { version = "1.29.2", workflow = "release.yml@refs/heads/main" }
 bun = "1.4.5"
-hk = "2.8.0"
+hk = "2.13.0"
 cargo-binstall = "1.27.0"
 "aqua:nextest-rs/nextest/cargo-nextest" = "0.9.152"
 # Workflow linting (hard decision 10): CI reads these versions at run time,
