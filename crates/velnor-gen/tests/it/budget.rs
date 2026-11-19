@@ -115,7 +115,9 @@ fn the_budget_job_never_runs_on_a_pull_request_or_a_merge_group() -> TestResult 
             );
         }
         assert!(
-            !condition.replace(DEFAULT_BRANCH_PUSH, "").contains("''push''"),
+            !condition
+                .replace(DEFAULT_BRANCH_PUSH, "")
+                .contains("''push''"),
             "a push counts only on the default branch\n{condition}"
         );
     }
