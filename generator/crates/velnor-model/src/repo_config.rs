@@ -39,6 +39,7 @@ pub struct RustCiConfig {
     pub test_setup: Vec<TestSetup>,
     pub lint: Vec<LintJob>,
     pub test_groups: Vec<TestGroup>,
+    pub checkout: CheckoutScope,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -167,6 +168,7 @@ impl Default for RustCiConfig {
             test_setup: Vec::new(),
             lint: Vec::new(),
             test_groups: Vec::new(),
+            checkout: CheckoutScope::Full,
         }
     }
 }
@@ -184,4 +186,10 @@ pub struct PrivateSources {
     pub private_key: String,
     pub owner: String,
     pub repositories: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CheckoutScope {
+    Full,
+    Sparse,
 }

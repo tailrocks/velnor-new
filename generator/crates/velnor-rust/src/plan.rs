@@ -182,8 +182,8 @@ pub fn check_required_check(facts: &RepoFacts, plan: &WorkflowPlan) -> Result<()
     Ok(())
 }
 
-pub(crate) fn head(facts: &RepoFacts, depth: u32) -> Vec<Step> {
-    let mut steps = vec![step(StepKind::Checkout { depth })];
+pub(crate) fn head(facts: &RepoFacts, depth: u32, sparse: Option<Vec<String>>) -> Vec<Step> {
+    let mut steps = vec![step(StepKind::Checkout { depth, sparse })];
     steps.extend(
         facts
             .helper
@@ -256,6 +256,9 @@ pub(crate) fn setup_roots(
         } else {
             CHECKOUT_DEPTH
         },
+        lane.plan
+            .as_ref()
+            .and_then(|_| crate::sparse::paths(facts, roots)),
     );
     if lane.plan.is_none() {
         steps.push(step(StepKind::Helper(HelperCommand::Plan)));

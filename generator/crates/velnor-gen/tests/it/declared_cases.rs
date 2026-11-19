@@ -265,3 +265,80 @@ fn a_case_holds_its_permissions_and_a_plain_job_can_need_its_jobs() -> TestResul
     assert!(message.contains("contents"), "{message}");
     Ok(())
 }
+
+const DIGEST: &str = "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
+fn with_container_and_service(container: &str, service: &str) -> String {
+    CASES.replace(
+        "[[workflow.case.step]]\nname = \"Mask canary\"",
+        &format!(
+            "[workflow.case.container]\nimage = \"{container}\"\n\n[[workflow.case.service]]\nname = \"redis\"\nimage = \"{service}\"\nports = [\"6379:6379\"]\noptions = \"--health-cmd 'redis-cli ping'\"\n\n[[workflow.case.step]]\nname = \"Mask canary\""
+        ),
+    )
+}
+
+#[test]
+fn a_case_container_and_service_render_on_both_jobs() -> TestResult {
+    let image = format!("alpine:3@{DIGEST}");
+    let redis = format!("redis:7@{DIGEST}");
+    let cases = with_container_and_service(&image, &redis);
+    let tree = qualification(&format!("{MODES}{cases}"))?;
+    for id in ["mask-hosted", "mask-scale-set"] {
+        let body = job(&tree, id)?;
+        assert_eq!(
+            body.at(&["container", "image"]).and_then(Node::text),
+            Some(image.as_str()),
+            "{id}"
+        );
+        let service = body.at(&["services", "redis"]).ok_or("no service")?;
+        assert_eq!(
+            service.get("image").and_then(Node::text),
+            Some(redis.as_str()),
+            "{id}"
+        );
+        assert_eq!(
+            service.get("ports").ok_or("no ports")?.texts(),
+            ["6379:6379"]
+        );
+    }
+    for id in ["js-hosted", "js-scale-set"] {
+        let body = job(&tree, id)?;
+        assert!(
+            body.get("container").is_none() && body.get("services").is_none(),
+            "{id}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn a_case_container_or_service_without_a_digest_is_refused() -> TestResult {
+    let pinned = format!("alpine:3@{DIGEST}");
+    let message = refusal(&format!(
+        "{MODES}{}",
+        with_container_and_service("alpine:3", &pinned)
+    ))?;
+    assert!(
+        message.contains("container") && message.contains("digest"),
+        "{message}"
+    );
+    let message = refusal(&format!(
+        "{MODES}{}",
+        with_container_and_service(&pinned, "redis:7")
+    ))?;
+    assert!(
+        message.contains("service redis") && message.contains("digest"),
+        "{message}"
+    );
+    Ok(())
+}
+
+#[test]
+fn a_case_service_needs_a_health_check() -> TestResult {
+    let pinned = format!("alpine:3@{DIGEST}");
+    let cases = with_container_and_service(&pinned, &pinned)
+        .replace("--health-cmd 'redis-cli ping'", "--health-retries 3");
+    let message = refusal(&format!("{MODES}{cases}"))?;
+    assert!(message.contains("--health-cmd"), "{message}");
+    Ok(())
+}

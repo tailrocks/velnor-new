@@ -6,3 +6,4 @@ mod cli;
 mod fixture;
 mod layers;
 mod record;
+mod tar;
