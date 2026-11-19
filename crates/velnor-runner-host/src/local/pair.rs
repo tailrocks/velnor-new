@@ -28,6 +28,7 @@ use super::storage::{self, Sizes};
 pub const ENVIRONMENT_LABEL: &str = "velnor-local";
 pub(super) const PAIR_LABEL: &str = "velnor-local.pair";
 const CRATES_MIRROR_OFF: &str = "VELNOR_CRATES_MIRROR=off";
+const MISE_SKILLS_FETCH_OFF: &str = "MISE_SKILLS_FETCH=false";
 const ROLE_LABEL: &str = "velnor-local.role";
 pub const START_GRACE: std::time::Duration = std::time::Duration::from_millis(250);
 pub(super) const SIDE_LABEL: &str = "velnor-local.side";
@@ -197,11 +198,10 @@ fn runner_create(
         context,
     )?;
     own(&mut runner, labels, None)?;
-    runner
-        .config
-        .env
-        .get_or_insert_default()
-        .push(CRATES_MIRROR_OFF.to_owned());
+    runner.config.env.get_or_insert_default().extend([
+        CRATES_MIRROR_OFF.to_owned(),
+        MISE_SKILLS_FETCH_OFF.to_owned(),
+    ]);
     if local_ci {
         runner
             .config

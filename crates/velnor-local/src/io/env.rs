@@ -23,7 +23,7 @@ use crate::doctor::{CACHE_IMAGE as LOCAL_IMAGE, RUNNER_IMAGE};
 pub use engine::{DockerCli, Engine};
 pub(super) use engine::{program, words};
 pub const READY_TIMEOUT: Duration = Duration::from_secs(60);
-const RUNNER_START: &str = "run -d --platform linux/arm64 -e GITHUB_ACTIONS_RUNNER_FORCE_GHES=1 -e VELNOR_CRATES_MIRROR=off";
+const RUNNER_START: &str = "run -d --platform linux/arm64 -e GITHUB_ACTIONS_RUNNER_FORCE_GHES=1 -e VELNOR_CRATES_MIRROR=off -e MISE_SKILLS_FETCH=false";
 const OPENSSL: &str = "openssl genrsa -out /keys/token.pem 2048 && openssl rsa -in /keys/token.pem -RSAPublicKey_out -outform DER -out /keys/token.pub.der";
 
 #[derive(Debug)]
