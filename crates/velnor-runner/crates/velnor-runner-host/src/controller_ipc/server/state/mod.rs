@@ -340,3 +340,5 @@ impl ControlState {
 
 #[cfg(test)]
 mod observation_start_tests;
+#[cfg(test)]
+mod session_poll_receipt_tests;

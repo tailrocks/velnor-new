@@ -28,7 +28,7 @@ fn public_generation_keeps_plan_bootstrap_and_uses_required_verdict_controller()
     let workflow = fs::read_to_string(paths.repo.join(".github/workflows/ci.yml"))?;
     let plan = workflow_job(&workflow, "plan")?;
     assert!(
-        plan.contains("/v0.1.80/velnor-actions-0.1.80-x86_64-unknown-linux-gnu"),
+        plan.contains("/v0.1.81/velnor-actions-0.1.81-x86_64-unknown-linux-gnu"),
         "Plan no longer uses the immutable SDK80 bootstrap"
     );
     assert!(plan.contains("gh@2.103.3"), "Plan helper catalog changed");
@@ -49,6 +49,10 @@ fn public_generation_keeps_plan_bootstrap_and_uses_required_verdict_controller()
     Ok(())
 }
 
+#[cfg_attr(
+    all(target_os = "linux", target_arch = "aarch64"),
+    ignore = "old-engine release binaries have no linux-arm64 target; P4 runs velnor-gen workflows (velnor-ci ships linux-arm64)"
+)]
 #[test]
 fn consumer_required_uses_canonical_group_ledger_fanin() -> Result<(), Box<dyn Error>> {
     let temp = tempfile::tempdir()?;

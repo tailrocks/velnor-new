@@ -3,7 +3,7 @@
 
 [package]
 name = "velnor-gen"
-version = "0.1.81"
+version = "0.1.86"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true

@@ -16,6 +16,7 @@ use crate::target_dir::target_dir;
 use crate::toml_file::table;
 
 pub(crate) const CARGO_LOCK: RepoPath = RepoPath::from_static("Cargo.lock");
+const NEXTEST_CONFIG: RepoPath = RepoPath::from_static(".config/nextest.toml");
 
 type Candidate<'a> = (&'a RepoPath, &'a RustMetadata);
 pub(crate) type Targets = BTreeMap<PackageName, BTreeSet<RepoPath>>;
@@ -116,10 +117,23 @@ fn root(
     Ok(RustRoot {
         manifest: manifest.clone(),
         target_dir: target_dir(view, manifest)?,
+        nextest_ci_profile: nextest_ci_profile(view, manifest),
         members,
         depends_on: depends_on.into_iter().collect(),
         external_dependencies: external_dependencies.into_iter().collect(),
     })
+}
+
+fn nextest_ci_profile(view: &RepoView, manifest: &RepoPath) -> bool {
+    view.files
+        .get(&manifest.sibling(&NEXTEST_CONFIG))
+        .and_then(|bytes| table(bytes).ok())
+        .is_some_and(|config| {
+            config
+                .get("profile")
+                .and_then(|profiles| profiles.get("ci"))
+                .is_some()
+        })
 }
 
 const CARGO_CONFIGS: [&str; 2] = [".cargo/config.toml", ".cargo/config"];
@@ -325,6 +339,7 @@ fn member(
                     name: dependency.name.clone(),
                     kind: dependency.kind,
                     platform: dependency.platform.clone(),
+                    optional: dependency.optional,
                     manifest,
                 })
             })
