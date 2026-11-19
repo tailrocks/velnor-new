@@ -7,7 +7,9 @@ use serde::Deserialize;
 
 use crate::error::CiError;
 
-const NAME_LIMIT: usize = 128;
+/// The longest artifact name that is still a usable file name: a path component holds 255 bytes,
+/// and extraction stages the artifact as `.<name>.partial`.
+const NAME_LIMIT: usize = 255 - ".".len() - ".partial".len();
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct Listed {

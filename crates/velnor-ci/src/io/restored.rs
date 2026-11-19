@@ -17,11 +17,8 @@ pub fn break_time_ties_with(
     root: &Path,
     set: &dyn Fn(&Path, u64) -> Result<(), CiError>,
 ) -> Result<String, CiError> {
-    let TrackedPaths {
-        top,
-        paths,
-        non_utf8,
-    } = tracked_paths(root)?;
+    let TrackedPaths { top, paths } = tracked_paths(root)?;
+    let non_utf8 = paths.iter().filter(|path| path.to_str().is_none()).count();
     if non_utf8 > 0 {
         return Err(CiError::new(format!(
             "{non_utf8} tracked paths are not valid UTF-8 and cannot be tie-broken, so the cache is not used"
@@ -30,6 +27,10 @@ pub fn break_time_ties_with(
     let mut files = Vec::with_capacity(paths.len());
     for path in paths {
         let full = top.join(&path);
+        let path = path
+            .to_str()
+            .ok_or_else(|| CiError::new("tracked path is not valid UTF-8"))?
+            .to_owned();
         match fs::symlink_metadata(&full) {
             Ok(metadata) if metadata.is_file() => files.push((path, modified_ns(&full)?)),
             _ => {}

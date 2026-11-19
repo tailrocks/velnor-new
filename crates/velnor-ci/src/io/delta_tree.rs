@@ -34,7 +34,7 @@ fn inventory(root: &Path, filtered: bool) -> Result<BTreeSet<PathBuf>, CiError> 
                     && matches!(path.components().count(), 2 | 3))
                     || (path.starts_with(".velnor")
                         && path != Path::new(".velnor")
-                        && path != Path::new(".velnor/inputs.tsv")))
+                        && !crate::inputs::is_inputs_file(&path)))
             {
                 continue;
             }
@@ -159,7 +159,11 @@ pub(super) fn validate(
         }
     }
     let mut expected: BTreeSet<_> = manifest.nodes.keys().cloned().collect();
-    if manifest.nodes.contains_key(Path::new(".velnor/inputs.tsv")) {
+    if manifest
+        .nodes
+        .keys()
+        .any(|path| crate::inputs::is_inputs_file(path))
+    {
         expected.insert(PathBuf::from(".velnor"));
     }
     if inventory(&staging.join("files"), false)? != expected {

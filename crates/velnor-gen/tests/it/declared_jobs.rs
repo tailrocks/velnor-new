@@ -266,6 +266,22 @@ fn the_attest_action_is_pinned_and_never_pushes_to_a_registry() -> TestResult {
 }
 
 #[test]
+fn the_attest_action_needs_contents_read() -> TestResult {
+    for permissions in [
+        "permissions = { id-token = \"write\", attestations = \"write\" }",
+        "permissions = { id-token = \"write\", attestations = \"write\", contents = \"none\" }",
+    ] {
+        let config = ATTEST.replace(
+            "permissions = { id-token = \"write\", attestations = \"write\", contents = \"read\" }",
+            permissions,
+        );
+        let message = refusal(&workflow("", "", &config))?;
+        assert!(message.contains("contents"), "{permissions}: {message}");
+    }
+    Ok(())
+}
+
+#[test]
 fn the_attest_action_needs_its_permissions_and_keeps_its_lock() -> TestResult {
     let without = ATTEST.replace("id-token = \"write\", ", "");
     let message = refusal(&workflow("", "", &without))?;
@@ -273,5 +289,54 @@ fn the_attest_action_needs_its_permissions_and_keeps_its_lock() -> TestResult {
     let pushing = ATTEST.replace("with = { ", "with = { push-to-registry = \"true\", ");
     let message = refusal(&workflow("", "", &pushing))?;
     assert!(message.contains("push-to-registry"), "{message}");
+    Ok(())
+}
+
+fn needs_condition(condition: &str) -> String {
+    workflow(
+        "",
+        "",
+        &format!(
+            "\n[[workflow.job]]\nid = \"first\"\n\n[[workflow.job.step]]\nname = \"First\"\nrun = \"echo ok\"\n\n[[workflow.job]]\nid = \"second\"\nneeds = [\"first\"]\nif = \"{condition}\"\n\n[[workflow.job.step]]\nname = \"Second\"\nrun = \"echo ok\"\n"
+        ),
+    )
+}
+
+#[test]
+fn a_wildcard_needs_reference_must_name_a_real_property() -> TestResult {
+    for condition in [
+        "always() && !contains(needs.*.reslt, 'failure')",
+        "needs.*.anything == 'x'",
+        "needs.*.result.extra == 'x'",
+        "needs.* == 'x'",
+    ] {
+        let message = refusal(&needs_condition(condition))?;
+        assert!(message.contains("needs.*"), "{condition}: {message}");
+    }
+    rendered(&needs_condition(
+        "always() && !contains(needs.*.result, 'failure')",
+    ))?;
+    Ok(())
+}
+
+#[test]
+fn a_matrix_job_cannot_declare_outputs() -> TestResult {
+    let config = |outputs: &str| {
+        workflow(
+            "",
+            "",
+            &format!(
+                "\n[[workflow.job]]\nid = \"build\"\n{outputs}\n[workflow.job.matrix]\naxes = {{ os = [\"a\", \"b\"] }}\n\n[[workflow.job.step]]\nid = \"build\"\nname = \"Build\"\nrun = \"echo ok\"\n"
+            ),
+        )
+    };
+    let message = refusal(&config(
+        "outputs = { digest = \"steps.build.outputs.digest\" }",
+    ))?;
+    assert!(
+        message.contains("matrix") && message.contains("outputs"),
+        "{message}"
+    );
+    rendered(&config(""))?;
     Ok(())
 }

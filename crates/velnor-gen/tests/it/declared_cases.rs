@@ -342,3 +342,33 @@ fn a_case_service_needs_a_health_check() -> TestResult {
     assert!(message.contains("--health-cmd"), "{message}");
     Ok(())
 }
+
+#[test]
+fn a_mode_name_with_a_quote_is_escaped_in_the_case_condition() -> TestResult {
+    let config = format!("{MODES}{CASES}")
+        .replace(
+            "options = [\"both\", \"features\", \"js\", \"mask\", \"cache\"]",
+            "options = [\"both\", \"features\", \"js\", \"mask\", \"cache\", \"canary's\"]",
+        )
+        .replace("modes = [\"features\", \"js\"]", "modes = [\"canary's\"]");
+    let tree = qualification(&config)?;
+    assert_eq!(
+        job(&tree, "js-hosted")?.get("if").and_then(Node::text),
+        Some("${{ inputs.mode == 'canary''s' }}")
+    );
+    Ok(())
+}
+
+#[test]
+fn a_wrapped_case_condition_is_joined_without_its_wrapper() -> TestResult {
+    let config = format!("{MODES}{CASES}").replace(
+        "if = \"github.ref != format('refs/heads/{0}', github.event.repository.default_branch)\"",
+        "if = \"${{ github.ref != 'refs/heads/main' }}\"",
+    );
+    let tree = qualification(&config)?;
+    assert_eq!(
+        job(&tree, "cache-hosted")?.get("if").and_then(Node::text),
+        Some("${{ (inputs.mode == 'cache') && (github.ref != 'refs/heads/main') }}")
+    );
+    Ok(())
+}
