@@ -51,18 +51,6 @@ fn a_family_release_of_one_plain_binary_still_renders() -> TestResult {
 #[test]
 fn a_family_release_refuses_the_keys_it_cannot_publish_yet() -> TestResult {
     for (binaries, key) in [
-        (
-            "[[binaries]]\npackage = \"app\"\nasset_name = \"{{ bin }}-{{ platform }}\"\n",
-            "asset_name",
-        ),
-        (
-            "[[binaries]]\npackage = \"app\"\nbins = [{ bin = \"rg\" }]\n",
-            "bins",
-        ),
-        (
-            "[[binaries]]\npackage = \"app\"\ninclude = [\"LICENSE\"]\n",
-            "include",
-        ),
         ("[[binaries]]\npackage = \"app\"\nattest = true\n", "attest"),
         (
             "[[binaries]]\npackage = \"app\"\nformat = \"raw\"\nsmoke = true\n",
@@ -79,12 +67,5 @@ fn a_family_release_refuses_the_keys_it_cannot_publish_yet() -> TestResult {
     ] {
         assert_eq!(refused_key(binaries)?, key);
     }
-    Ok(())
-}
-
-#[test]
-fn a_family_release_refuses_pre_publish_checks() -> TestResult {
-    let binaries = "[[binaries]]\npackage = \"app\"\n[[checks]]\nname = \"Qualify\"\nrun = \"bash qualify.sh\"\n";
-    assert_eq!(refused_key(binaries)?, "[[checks]]");
     Ok(())
 }

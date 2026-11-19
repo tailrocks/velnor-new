@@ -66,6 +66,7 @@ pub(crate) type Populate = Box<dyn Fn(&Path) + Send + Sync>;
 #[derive(PartialEq, Eq)]
 pub(crate) enum OsRelease {
     Fixture,
+    #[cfg(not(target_os = "linux"))]
     Platform,
 }
 

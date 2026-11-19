@@ -8,6 +8,7 @@ use crate::yaml_tree::Node;
 const PUSH: &str = "[workflow.on.push]\nbranches = [\"main\"]";
 const PULL_REQUEST: &str = "[workflow.on.pull_request]\ntypes = [\"opened\"]";
 const MERGE_GROUP: &str = "[workflow.on]\nmerge_group = true";
+const WORKFLOW_RUN: &str = "[workflow.on.workflow_run]\nworkflows = [\"CI\"]";
 const LOCAL: &str = "./.github/workflows/hand-written.yml";
 const SHA: &str = "0123456789abcdef0123456789abcdef01234567";
 
@@ -46,13 +47,15 @@ fn a_pinned_call_needs_exactly_forty_lower_case_hex_digits() -> TestResult {
 }
 
 #[test]
-fn a_local_or_pinned_callee_is_refused_from_a_workflow_a_pull_request_or_merge_queue_starts()
+fn a_local_or_pinned_callee_is_refused_from_a_workflow_a_pull_request_merge_queue_or_workflow_run_starts()
 -> TestResult {
     for on in [
         PULL_REQUEST,
         MERGE_GROUP,
         &format!("{PUSH}\n\n{PULL_REQUEST}"),
         &format!("{MERGE_GROUP}\n\n{PUSH}"),
+        WORKFLOW_RUN,
+        &format!("{PUSH}\n\n{WORKFLOW_RUN}"),
     ] {
         for uses in [LOCAL.to_owned(), pinned(SHA)] {
             let message = refusal(&caller(on, &uses))?;
@@ -72,7 +75,6 @@ fn a_local_or_pinned_callee_stays_allowed_from_push_dispatch_schedule_and_call()
         "[workflow.on.workflow_dispatch]",
         "[workflow.on]\nschedule = [\"23 4 * * 1\"]",
         "[workflow.on]\nworkflow_call = true",
-        "[workflow.on.workflow_run]\nworkflows = [\"CI\"]",
     ];
     for on in on {
         for uses in [LOCAL.to_owned(), pinned(SHA)] {
@@ -194,5 +196,18 @@ fn a_workflow_run_on_a_self_hosted_runner_reads_github_event_only_in_an_if() -> 
             "{value}: {message}"
         );
     }
+    Ok(())
+}
+
+#[test]
+fn a_declared_callee_that_calls_outside_is_refused_from_a_workflow_run_workflow() -> TestResult {
+    let config = format!(
+        "[[workflow]]\nfile = \"middle\"\nname = \"Middle\"\n\n[[workflow.job]]\nid = \"inner\"\nuses = \"{LOCAL}\"\n\n[[workflow]]\nfile = \"caller\"\nname = \"Caller\"\n\n{WORKFLOW_RUN}\n\n[[workflow.job]]\nid = \"release\"\nuses = \"middle\"\n"
+    );
+    let message = refusal(&config)?;
+    assert!(
+        message.contains("job release") && message.contains("workflow_run"),
+        "{message}"
+    );
     Ok(())
 }

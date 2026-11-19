@@ -287,7 +287,7 @@ fn a_versioned_name_gets_its_sidecar_in_the_stage_folder_with_the_version_bound(
     );
     assert_eq!(
         step.get("working-directory").and_then(Node::text),
-        Some("stage")
+        Some("${{ runner.temp }}/stage")
     );
     assert_eq!(
         step.at(&["env", "VERSION"]).and_then(Node::text),
