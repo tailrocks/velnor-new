@@ -36,6 +36,24 @@ const SOURCE_QUALIFICATION_JOBS: [&str; 6] = [
 ];
 const SOURCES_CARGO_HOME: &str = velnor_actions_contract::workflow::cache_family::CARGO_HOME_EXPR;
 
+fn triggers() -> Yaml {
+    Yaml::Map(vec![
+        (
+            "pull_request".to_owned(),
+            Yaml::Map(vec![(
+                "types".to_owned(),
+                Yaml::Seq(
+                    crate::render::EXPECTED_PR_TYPES
+                        .iter()
+                        .map(|kind| Yaml::str(*kind))
+                        .collect(),
+                ),
+            )]),
+        ),
+        ("workflow_dispatch".to_owned(), Yaml::Map(Vec::new())),
+    ])
+}
+
 pub(super) fn render(
     request: &Schema2WorkflowRequest,
     source_plan: Option<&SourceQualificationPlan>,
@@ -80,24 +98,7 @@ pub(super) fn render(
     ));
     let mut document = Yaml::Map(vec![
         ("name".to_owned(), Yaml::str("Source qualification")),
-        (
-            "on".to_owned(),
-            Yaml::Map(vec![
-                (
-                    "pull_request".to_owned(),
-                    Yaml::Map(vec![(
-                        "types".to_owned(),
-                        Yaml::Seq(
-                            crate::render::EXPECTED_PR_TYPES
-                                .iter()
-                                .map(|kind| Yaml::str(*kind))
-                                .collect(),
-                        ),
-                    )]),
-                ),
-                ("workflow_dispatch".to_owned(), Yaml::Map(Vec::new())),
-            ]),
-        ),
+        ("on".to_owned(), triggers()),
         ("permissions".to_owned(), read_permissions()),
         (
             "concurrency".to_owned(),
