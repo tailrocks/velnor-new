@@ -10,12 +10,13 @@ use bollard::query_parameters::{
 };
 use futures_util::StreamExt;
 
+use crate::config::RunnerPlatform;
 use crate::docker_client::docker_deadline;
 use crate::error::HostError;
 use crate::journal::StorageRole;
 use crate::launch::BootstrapContainerRole;
 use crate::launch::bootstrap::containers::pair::{PairCreate, PairSpecContext, create_body};
-use crate::worker::{WorkerContainerRole, WorkerVolumeRole};
+use crate::worker::{WorkerContainerRole, WorkerIdentityNames, WorkerVolumeRole};
 
 use super::io::{MetadataUpload, upload_to_metadata};
 use super::layout;
@@ -25,6 +26,7 @@ use super::storage::{self, Sizes};
 
 pub const ENVIRONMENT_LABEL: &str = "velnor-local";
 pub(super) const PAIR_LABEL: &str = "velnor-local.pair";
+const CRATES_MIRROR_OFF: &str = "VELNOR_CRATES_MIRROR=off";
 const ROLE_LABEL: &str = "velnor-local.role";
 pub const START_GRACE: std::time::Duration = std::time::Duration::from_millis(250);
 pub(super) const SIDE_LABEL: &str = "velnor-local.side";
@@ -159,18 +161,42 @@ async fn create_and_start(
         layout::home_archive()?,
     )
     .await?;
-    let mut runner = create_body(
-        names.container_name(WorkerContainerRole::Runner),
+    let runner = runner_create(
+        names,
         request.runner_image.clone(),
-        BootstrapContainerRole::Runner,
-        format!("container:{dind_id}"),
+        &dind_id,
         validated.platform,
         &context,
+        labels("runner"),
     )?;
-    own(&mut runner, labels("runner"), None)?;
     let runner_id = create(docker, runner).await?;
     start(docker, &runner_id).await?;
     Ok((dind_id, runner_id))
+}
+
+fn runner_create(
+    names: &WorkerIdentityNames,
+    image: String,
+    dind_id: &str,
+    platform: RunnerPlatform,
+    context: &PairSpecContext<'_>,
+    labels: HashMap<String, String>,
+) -> Result<PairCreate, HostError> {
+    let mut runner = create_body(
+        names.container_name(WorkerContainerRole::Runner),
+        image,
+        BootstrapContainerRole::Runner,
+        format!("container:{dind_id}"),
+        platform,
+        context,
+    )?;
+    own(&mut runner, labels, None)?;
+    runner
+        .config
+        .env
+        .get_or_insert_default()
+        .push(CRATES_MIRROR_OFF.to_owned());
+    Ok(runner)
 }
 
 fn own(
@@ -301,3 +327,7 @@ const fn storage_role(role: WorkerVolumeRole) -> StorageRole {
 const fn volume_role(role: WorkerVolumeRole) -> &'static str {
     storage_role(role).as_str()
 }
+
+#[cfg(test)]
+#[path = "pair_tests.rs"]
+mod tests;

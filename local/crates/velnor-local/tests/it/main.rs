@@ -6,6 +6,7 @@ mod authority;
 mod cache_server;
 mod checkout;
 mod conformance;
+mod crates_mirror;
 mod dev_binary;
 mod doctor;
 mod driver;

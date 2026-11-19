@@ -184,6 +184,16 @@ The scenario sends a push to the default branch first, which saves the caches, t
 
 The scenario also sends several events to one environment, and the next event can be sent while the single-use runner pair is being replaced (#1221). A later event may then fail with "No runner is registered" or "no job-start decision".
 
+## Workflows with a crates mirror
+
+A workflow generated with a `[crates_mirror]` table in `.velnor/rust-ci.toml` (see `generator/CONFIG.md`) runs `velnor-ci crates-mirror`, which fails when the mirror's CA bundle is missing. Neither exists on a developer machine, so every runner that `velnor-local` starts, in `pair` and in `plain` mode, has `VELNOR_CRATES_MIRROR=off` in its environment. The step then prints `crates mirror disabled by VELNOR_CRATES_MIRROR=off` and Cargo uses crates.io. Run the generated workflow unchanged, with no override file:
+
+```sh
+velnor-local run warm --repo "$REPO" --dir "$STATE" --workflow .github/workflows/rust-ci.yml --repository owner/name
+```
+
+The workflow needs a pinned `velnor-ci` release of at least `0.1.82`, which `velnor-gen` enforces whenever the table is present. A run through the pair or plain runner is the only place this variable is set; production runners never set it and still fail closed without the mirror.
+
 ## Why each setting
 
 - `Runner.Server__GitApiServerUrl=http://api-stub` becomes `GITHUB_API_URL` in every job, so the helper's API calls reach the stub. Action downloads keep their own URLs (`Runner.Server:ActionDownloadUrls`), except with `--velnor-ci-binary`, which points the tarball URL at the API stub (see "Run an unreleased velnor-ci").
