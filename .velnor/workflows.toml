@@ -182,7 +182,7 @@ run = "printf '%s\\n' bind-ok > \"$GITHUB_WORKSPACE/g4-bind.txt\""
 
 [[workflow.case.step]]
 name = "Read it through a bind mount"
-run = "docker run --rm -v \"$GITHUB_WORKSPACE/g4-bind.txt:/g4-bind.txt:ro\" alpine:3.24.2@sha256:d56c381f961d307a21b3ca004cf1e3910f106644aefb1f43e654c8a56c4fd395 cat /g4-bind.txt > \"$RUNNER_TEMP/g4-bind-out\""
+run = "docker run --rm -v \"$GITHUB_WORKSPACE/g4-bind.txt:/g4-bind.txt:ro\" alpine:3.24.4@sha256:0f49f331d9212aff11b932863be4eb01cdf962969aa86dab7d1ee21ac6f5f52b cat /g4-bind.txt > \"$RUNNER_TEMP/g4-bind-out\""
 
 [[workflow.case.step]]
 name = "Require the content"
@@ -308,7 +308,7 @@ timeout_minutes = 5
 
 [[workflow.case.service]]
 name = "redis"
-image = "redis:8.10.2-alpine@sha256:2d3814be5e9b06a30a0be54770b7e12052e7e79ec85271aefd34875c1f393b23"
+image = "redis:8.10.2-alpine@sha256:16b124a2d3eacd620d917ead6fd26cbf1f1d7117fa94122398971931cfe2d403"
 ports = ["6379:6379"]
 options = "--health-cmd \"redis-cli ping\" --health-interval 5s --health-timeout 5s --health-retries 12"
 
@@ -322,11 +322,11 @@ title = "Container"
 timeout_minutes = 5
 
 [workflow.case.container]
-image = "alpine:3.24.2@sha256:d56c381f961d307a21b3ca004cf1e3910f106644aefb1f43e654c8a56c4fd395"
+image = "alpine:3.24.4@sha256:0f49f331d9212aff11b932863be4eb01cdf962969aa86dab7d1ee21ac6f5f52b"
 
 [[workflow.case.service]]
 name = "redis"
-image = "redis:8.10.2-alpine@sha256:2d3814be5e9b06a30a0be54770b7e12052e7e79ec85271aefd34875c1f393b23"
+image = "redis:8.10.2-alpine@sha256:16b124a2d3eacd620d917ead6fd26cbf1f1d7117fa94122398971931cfe2d403"
 ports = ["6379:6379"]
 options = "--health-cmd \"redis-cli ping\" --health-interval 5s --health-timeout 5s --health-retries 12"
 
@@ -341,7 +341,7 @@ timeout_minutes = 5
 
 [[workflow.case.service]]
 name = "redis"
-image = "redis:8.10.2-alpine@sha256:2d3814be5e9b06a30a0be54770b7e12052e7e79ec85271aefd34875c1f393b23"
+image = "redis:8.10.2-alpine@sha256:16b124a2d3eacd620d917ead6fd26cbf1f1d7117fa94122398971931cfe2d403"
 ports = ["6379:6379"]
 options = "--health-cmd \"redis-cli ping\" --health-interval 5s --health-timeout 5s --health-retries 12"
 
