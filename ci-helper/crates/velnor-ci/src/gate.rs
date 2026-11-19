@@ -359,6 +359,8 @@ fn judge(name: &str, jobs: &[ApiRunJob], running: bool, branch: &str) -> Check {
     if ours.is_empty() {
         return if running {
             Check::Waiting("has not started".to_owned())
+        } else if jobs.iter().any(|job| job.name == name) {
+            Check::Failed("it concluded skipped".to_owned())
         } else {
             Check::Failed(format!("no job of a push run on {branch} reports it"))
         };

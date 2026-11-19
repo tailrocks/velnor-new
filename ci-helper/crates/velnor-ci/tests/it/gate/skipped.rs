@@ -4,7 +4,7 @@
 use serde_json::{Value, json};
 use velnor_ci::github::run_jobs_path;
 
-use super::{GREEN, GREEN_CI, ONE_PASSED, Recorded, absent, concluded, verdict};
+use super::{GREEN, GREEN_CI, ONE_PASSED, Recorded, concluded, verdict};
 use crate::support::repo;
 
 fn with_twin(conclusion: &str, twin_first: bool, own: &str) -> Recorded {
@@ -53,6 +53,6 @@ fn any_failed_required_job_fails_even_beside_a_skipped_one() {
 fn only_skipped_required_jobs_never_pass() {
     assert_eq!(
         with_twin("skipped", true, "skipped").gate(GREEN),
-        Err(absent("Required"))
+        concluded(GREEN, "Required", "skipped")
     );
 }
