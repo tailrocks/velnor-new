@@ -7,6 +7,7 @@ use velnor_model::{HelperVersion, RELEASE_CONFIG_PATH, RepoPath};
 use velnor_release::ReleaseError;
 use velnor_render::RuleViolation;
 use velnor_rust::{DetectError, MAX_SOURCE_ROOTS, MetadataFileError};
+use velnor_workflows::WorkflowsError;
 
 use crate::{COMPATIBLE_HELPER_SERIES, RELEASE_HELPER_MINIMUM};
 
@@ -25,9 +26,11 @@ pub enum GenerateError {
     InputsBuildHelperTooOld(HelperVersion),
     PrOnlyChecksHelperTooOld(HelperVersion),
     MergeGroupHelperTooOld(HelperVersion),
+    PrCiHelperTooOld(HelperVersion),
     TooManySourceRoots(usize),
     FamilyTagHelperTooOld(HelperVersion),
     Metadata(MetadataFileError),
+    Workflows(WorkflowsError),
     Rules(Vec<RuleViolation>),
 }
 
@@ -68,6 +71,10 @@ impl fmt::Display for GenerateError {
                 f,
                 "velnor-ci {version} cannot record pre-build directory inventories for inputs audit; pin velnor-ci 0.1.81 or later with `velnor-gen pin-helper 0.1.81`"
             ),
+            Self::PrCiHelperTooOld(version) => write!(
+                f,
+                "velnor-ci {version} does not know the pr_ci key of .velnor/rust-ci.toml; pin velnor-ci 0.1.86 or later with `velnor-gen pin-helper 0.1.86`"
+            ),
             Self::PrOnlyChecksHelperTooOld(version) => write!(
                 f,
                 "velnor-ci {version} cannot enforce pr_only_checks; pin velnor-ci 0.1.82 or later with `velnor-gen pin-helper 0.1.82`"
@@ -81,6 +88,7 @@ impl fmt::Display for GenerateError {
                 "velnor-ci {version} cannot bind a family tag; pin velnor-ci 0.1.83 or later with `velnor-gen pin-helper 0.1.83`"
             ),
             Self::Metadata(error) => error.fmt(f),
+            Self::Workflows(error) => error.fmt(f),
             Self::Rules(violations) => {
                 f.write_str("the generated workflow breaks the YAML rules:")?;
                 for violation in violations {

@@ -6,6 +6,7 @@ mod drifts;
 mod error;
 pub mod io;
 mod release;
+mod reusable;
 mod workflow_triggers;
 
 pub use crate::release::{release_ruleset, release_ruleset_drift};
@@ -16,7 +17,7 @@ use std::collections::BTreeMap;
 use std::io::Write;
 
 use velnor_model::{
-    FullRun, HelperRelease, HelperVersion, MbxStore, OnMain, PushAfterMergeGroup, RepoFacts,
+    FullRun, HelperRelease, HelperVersion, MbxStore, OnMain, PrCi, PushAfterMergeGroup, RepoFacts,
     RepoPath, RepoView,
 };
 use velnor_render::render;
@@ -74,6 +75,7 @@ pub fn expected_with_notes(
     let plan = plan(&facts);
     check_required_check(&facts, &plan)?;
     let mut files = render(&plan).map_err(GenerateError::Rules)?;
+    files.extend(reusable::reusable_workflows(view, helper)?);
     let (release, release_notes) = release::release_workflow(view, &facts, helper, &files)?;
     files.extend(release);
     let mut notes = facts.timings_notes;
@@ -108,6 +110,9 @@ fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, GenerateError> {
         return Err(GenerateError::InputsBuildHelperTooOld(
             release.version().clone(),
         ));
+    }
+    if facts.config.pr_ci == PrCi::Label && !release.version().at_least((0, 1, 86)) {
+        return Err(GenerateError::PrCiHelperTooOld(release.version().clone()));
     }
     if facts.config.crates_mirror.is_some() && !release.version().at_least((0, 1, 81)) {
         return Err(GenerateError::MirrorHelperTooOld(release.version().clone()));

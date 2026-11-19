@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    Gate, GateNeed, MERGE_GROUP_SKIP_OUTPUT, MERGE_GROUP_STEP, PlanFrom, RootSlug, VerdictSpec,
-    When,
+    CI_AUTO_LABEL, CI_RUN_LABEL, Gate, GateNeed, MERGE_GROUP_SKIP_OUTPUT, MERGE_GROUP_STEP, PlanFrom,
+    PrRun, RootSlug, VerdictSpec, When,
 };
 
 use crate::rules::{RenderedStep, Value};
@@ -14,6 +14,11 @@ pub(crate) const CACHE_DEBUG_ON: &str = "vars.VELNOR_CACHE_DEBUG == '1'";
 const NOT_CANCELLED: &str = "!cancelled()";
 const ALWAYS: &str = "always()";
 const NOT_DRAFT: &str = "github.event.pull_request.draft != true";
+const IS_PULL_REQUEST_NOT: &str = "github.event_name != 'pull_request'";
+const IS_PULL_REQUEST: &str = "github.event_name == 'pull_request'";
+const PULL_REQUEST_LABELS: &str = "github.event.pull_request.labels.*.name";
+const RELATED_EVENT: &str = "(github.event.action != 'labeled' || github.event.label.name == 'ci:run' || github.event.label.name == 'ci:auto') && (github.event.action != 'edited' || github.event.changes.base != null)";
+const SAME_REPOSITORY: &str = "github.event.pull_request.head.repo.full_name == github.repository";
 const SCHEDULE: &str = "schedule";
 const PUSH: &str = "push";
 pub(crate) const TOOLS_STEP: &str = "tools";
@@ -109,7 +114,7 @@ pub(crate) fn condition(
     when: When,
     gate: Option<&Gate>,
     setup: Setup,
-    skip_draft: bool,
+    pr: PrRun,
     extra: &[String],
 ) -> Option<String> {
     let mut parts = Vec::new();
@@ -170,14 +175,17 @@ pub(crate) fn condition(
             parts.push(ON_DEFAULT_BRANCH.to_owned());
             parts.push(SAVING_EVENTS.to_owned());
         }
+        When::ClearRunLabel => {
+            parts.push(IS_PULL_REQUEST.to_owned());
+            parts.push(SAME_REPOSITORY.to_owned());
+            parts.push(has_label(CI_RUN_LABEL));
+        }
         When::SaveToolsOnDefaultBranch => {
             parts.push(ON_DEFAULT_BRANCH.to_owned());
             parts.push(format!("steps.{TOOLS_STEP}.outputs.cache-hit != 'true'"));
         }
     }
-    if skip_draft {
-        parts.push(NOT_DRAFT.to_owned());
-    }
+    parts.extend(pr_parts(pr));
     parts.extend(extra.iter().cloned());
     if let Some(gate) = gate {
         parts.extend(gate_parts(gate, setup == Setup::Replanned));
@@ -189,12 +197,43 @@ pub(crate) fn condition(
     }
 }
 
-pub(crate) fn admission(when: When, gate: Option<&Gate>, skip_draft: bool) -> String {
+fn has_label(label: &str) -> String {
+    format!("contains({PULL_REQUEST_LABELS}, '{label}')")
+}
+
+fn requested_here() -> String {
+    format!(
+        "({SAME_REPOSITORY} && ({} || {}))",
+        has_label(CI_RUN_LABEL),
+        has_label(CI_AUTO_LABEL)
+    )
+}
+
+fn pr_parts(pr: PrRun) -> Vec<String> {
+    match pr {
+        PrRun::Always => Vec::new(),
+        PrRun::Ready => vec![NOT_DRAFT.to_owned()],
+        PrRun::Quick => vec![NOT_DRAFT.to_owned(), RELATED_EVENT.to_owned()],
+        PrRun::Related => vec![RELATED_EVENT.to_owned()],
+        PrRun::Requested => vec![
+            NOT_DRAFT.to_owned(),
+            RELATED_EVENT.to_owned(),
+            format!("({IS_PULL_REQUEST_NOT} || {})", requested_here()),
+        ],
+        PrRun::Unrequested => vec![
+            IS_PULL_REQUEST.to_owned(),
+            NOT_DRAFT.to_owned(),
+            format!("!{}", requested_here()),
+        ],
+    }
+}
+
+pub(crate) fn admission(when: When, gate: Option<&Gate>, pr: PrRun) -> String {
     let plan_succeeded: Vec<String> = match gate.map(|gate| &gate.from) {
         Some(PlanFrom::Job(job)) => vec![format!("needs.{job}.result == 'success'")],
         _ => Vec::new(),
     };
-    match condition(when, gate, Setup::Before, skip_draft, &plan_succeeded) {
+    match condition(when, gate, Setup::Before, pr, &plan_succeeded) {
         Some(predicate) => format!(
             "${{{{ {ACTIVE_EVENT} && ({}) }}}}",
             predicate.trim_start_matches("${{ ").trim_end_matches(" }}")

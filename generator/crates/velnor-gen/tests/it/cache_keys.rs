@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    CacheKey, CacheRoot, Concurrency, Host, Job, JobId, Permissions, PullRequestType, RepoPath,
-    RootSlug, RunnerLabel, Step, StepKind, Triggers, WORKFLOW_PATH, When, WorkflowPlan,
+    CacheKey, CacheRoot, Concurrency, Host, Job, JobId, Permissions, PrRun, PullRequestType,
+    RepoPath, RootSlug, RunnerLabel, Step, StepKind, Triggers, WORKFLOW_PATH, When, WorkflowPlan,
 };
 use velnor_render::{RenderedKey, render, render_key, render_key_with_mise};
 
@@ -178,7 +178,7 @@ fn a_save_step_renders_the_same_key_without_fallbacks() -> TestResult {
             comment: None,
             needs: Vec::new(),
             when: When::Success,
-            skip_on_draft: false,
+            pr: PrRun::Always,
             runs_on: RunnerLabel::new("ubuntu-latest")?,
             permissions: Permissions::default(),
             timeout_minutes: 10,
@@ -192,6 +192,7 @@ fn a_save_step_renders_the_same_key_without_fallbacks() -> TestResult {
                 when: When::Success,
                 skip_on_draft: false,
                 skip_after_merge_group: None,
+                pr: PrRun::Always,
                 gate: None,
                 reads: None,
             }],

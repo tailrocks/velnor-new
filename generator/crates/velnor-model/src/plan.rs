@@ -45,6 +45,7 @@ pub enum PullRequestType {
     ReadyForReview,
     Edited,
     ConvertedToDraft,
+    Labeled,
 }
 
 impl PullRequestType {
@@ -60,6 +61,7 @@ impl PullRequestType {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Concurrency {
     CancelOlderPullRequestRuns,
+    CancelOlderPullRequestRunsExceptUnrelatedLabels,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -86,7 +88,7 @@ pub struct Job {
     pub comment: Option<String>,
     pub needs: Vec<JobId>,
     pub when: When,
-    pub skip_on_draft: bool,
+    pub pr: PrRun,
     pub runs_on: RunnerLabel,
     pub permissions: Permissions,
     pub timeout_minutes: u16,
@@ -104,8 +106,23 @@ pub struct Step {
     pub when: When,
     pub skip_on_draft: bool,
     pub skip_after_merge_group: Option<PlanFrom>,
+    pub pr: PrRun,
     pub gate: Option<Gate>,
     pub reads: Option<PlanRef>,
+}
+
+pub const CI_RUN_LABEL: &str = "ci:run";
+pub const CI_AUTO_LABEL: &str = "ci:auto";
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum PrRun {
+    #[default]
+    Always,
+    Ready,
+    Quick,
+    Related,
+    Requested,
+    Unrequested,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -213,6 +230,7 @@ pub enum When {
     FullAuditOrPush,
     BaseExpired,
     SavingRun,
+    ClearRunLabel,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -7,7 +7,7 @@ use std::fs;
 use std::path::Path;
 
 use velnor_model::{
-    CommitSha, Concurrency, HelperRelease, HelperVersion, Job, JobId, Permissions, Platform,
+    CommitSha, Concurrency, HelperRelease, HelperVersion, Job, JobId, Permissions, Platform, PrRun,
     PullRequestType, RunnerLabel, Sha256, Step, StepKind, Triggers, WORKFLOW_PATH, When,
     WorkflowPlan,
 };
@@ -87,7 +87,7 @@ pub(crate) fn plan(kinds: Vec<StepKind>) -> Result<WorkflowPlan, Box<dyn Error>>
             comment: None,
             needs: Vec::new(),
             when: When::Success,
-            skip_on_draft: false,
+            pr: PrRun::Always,
             runs_on: RunnerLabel::new("ubuntu-latest")?,
             permissions: Permissions::default(),
             timeout_minutes: 10,
@@ -103,6 +103,7 @@ pub(crate) fn plan(kinds: Vec<StepKind>) -> Result<WorkflowPlan, Box<dyn Error>>
                     when: When::Success,
                     skip_on_draft: false,
                     skip_after_merge_group: None,
+                    pr: PrRun::Always,
                     gate: None,
                     reads: None,
                 })

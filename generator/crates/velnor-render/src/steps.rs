@@ -33,15 +33,18 @@ pub(crate) const UPLOAD_ARTIFACT: &str =
 pub(crate) const DOWNLOAD_ARTIFACT: &str =
     "actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333";
 
+pub(crate) const ATTEST_BUILD_PROVENANCE: &str =
+    "actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8";
+
 pub(crate) const TEST_STEP_ID: &str = "test";
 pub(crate) const MISE_VERSION: &str = "2026.11.10";
 #[path = "steps_helpers.rs"]
 mod steps_helpers;
 use steps_helpers::{rustup_add, saved_unless_hit, variable};
 
-const IS_DRAFT: &str = "${{ github.event.pull_request.draft == true }}";
-const CACHE_RESTORE: &str = "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
-const CACHE_SAVE: &str = "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
+pub(crate) const CACHE_RESTORE: &str =
+    "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
+pub(crate) const CACHE_SAVE: &str = "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
 const A_NEED_FAILED: &str =
     "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}";
 
@@ -78,7 +81,7 @@ pub(crate) fn rendered_job(job: &Job, fork_runner: &RunnerLabel) -> RenderedJob 
         comment: job.comment.clone(),
         needs: job.needs.iter().map(ToString::to_string).collect(),
         condition: Some(crate::base_steps::audited_lane(
-            admission(job.when, job.gate.as_ref(), job.skip_on_draft),
+            admission(job.when, job.gate.as_ref(), job.pr),
             job,
         )),
         runs_on: job.runs_on.as_str().to_owned(),
@@ -205,7 +208,7 @@ fn rendered_steps(
                 step.when,
                 step.gate.as_ref(),
                 setup,
-                step.skip_on_draft,
+                step.pr,
                 &extra,
             ),
         );
@@ -296,12 +299,9 @@ fn step_body(
             ..RenderedStep::default()
         },
         StepKind::InstallHelper(release) => install_helper(release),
-        StepKind::FailOnDraftRun => RenderedStep {
-            name: "Fail on a draft pull request, whose jobs were skipped".to_owned(),
-            condition: Some(IS_DRAFT.to_owned()),
-            run: Some("exit 1".to_owned()),
-            ..RenderedStep::default()
-        },
+        StepKind::FailOnDraftRun => crate::draft_steps::fail_on_draft(),
+        StepKind::DraftNotice => crate::draft_steps::draft_notice(),
+        StepKind::ClearRunLabel => crate::draft_steps::clear_run_label(),
         StepKind::UploadCargoLog => upload_cargo_log(),
         StepKind::Verdict {
             spec,
