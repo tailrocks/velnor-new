@@ -7,8 +7,9 @@ use crate::pinned_actions::ATTEST_BUILD_PROVENANCE;
 use crate::release::HOSTED_RUNNER;
 use crate::release_assets::{assets, bind_version, read_version, word};
 use crate::release_binaries::{
-    DIST, PUBLISH_TIMEOUT_MINUTES, SUMS_FILE, artifact, behind_the_gate, download, package_tag,
+    DIST, PUBLISH_TIMEOUT_MINUTES, SUMS_FILE, artifact, behind_the_gate, download,
 };
+use crate::release_context::package_tag;
 use crate::release_steps::{install_tool, permissions, variables};
 use crate::rules::{RenderedJob, RenderedStep, Value};
 

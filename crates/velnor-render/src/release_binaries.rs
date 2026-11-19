@@ -13,6 +13,7 @@ use crate::release_assets::{
 use crate::release_attest::{attest, verify};
 use crate::release_binary_sums::{steps as binary_sums_steps, upload_paths};
 use crate::release_checks::publish_needs;
+use crate::release_context::{BuildContext, Private, package_tag};
 use crate::release_outputs::commit_output;
 use crate::release_raw::{raw_packaging, smoke_steps};
 use crate::release_steps::{
@@ -30,22 +31,6 @@ pub(crate) const BUILD_TIMEOUT_MINUTES: u16 = 60;
 pub(crate) const PUBLISH_TIMEOUT_MINUTES: u16 = 10;
 pub(crate) const DIST: &str = "dist";
 pub(crate) const SUMS_FILE: &str = "SHA256SUMS";
-
-pub(crate) struct Private<'a> {
-    pub(crate) helper: &'a HelperRelease,
-    pub(crate) sources: &'a PrivateSources,
-}
-
-pub(crate) struct BuildContext<'a> {
-    pub(crate) source: &'a str,
-    pub(crate) same_commit: RenderedStep,
-    pub(crate) tag: &'a str,
-    pub(crate) private: Option<Private<'a>>,
-}
-
-pub(crate) fn package_tag(binary: &BinaryPlan) -> String {
-    format!("${{{{ needs.tag.outputs.{} }}}}", binary.package)
-}
 
 pub(crate) fn binary_jobs(
     plan: &ReleasePlan,

@@ -166,24 +166,8 @@ pub struct RuleViolation {
 
 impl fmt::Display for RuleViolation {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if let Rule::WorkflowTooLarge(bytes) = &self.rule {
-            return write!(
-                f,
-                "the workflow is {bytes} bytes, and GitHub does not start a workflow file above {MAX_WORKFLOW_BYTES} bytes; reduce the workflow size"
-            );
-        }
-        if let Rule::OutputNameCollision(name) = &self.rule {
-            return write!(
-                f,
-                "the tag job would define the output {name} twice: it is both a released package and the commit output of another package; rename the package"
-            );
-        }
-        if let Rule::DistFileCollision(name) = &self.rule {
-            return write!(
-                f,
-                "job {} downloads two artifacts that both contain {name} into the same dist folder, so one would overwrite the other; give the binaries distinct asset names",
-                self.job
-            );
+        if let Some(message) = crate::rule_messages::whole_workflow(&self.rule, &self.job) {
+            return f.write_str(&message);
         }
         write!(f, "job {} step {}: ", self.job, self.step + 1)?;
         match &self.rule {

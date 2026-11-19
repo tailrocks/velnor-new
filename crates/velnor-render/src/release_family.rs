@@ -10,10 +10,11 @@ use crate::release::{
 };
 use crate::release_assets::{bind_version, published_files, quoted, read_version};
 use crate::release_binaries::{
-    BUILD_TIMEOUT_MINUTES, BuildContext, DIST, PUBLISH_TIMEOUT_MINUTES, Private, SUMS_FILE,
-    artifact, build_steps, command, download, download_to, target, upload,
+    BUILD_TIMEOUT_MINUTES, DIST, PUBLISH_TIMEOUT_MINUTES, SUMS_FILE, artifact, build_steps,
+    command, download, download_to, target, upload,
 };
 use crate::release_checks::{family_publish_needs, tag_needs};
+use crate::release_context::{BuildContext, Private};
 use crate::release_steps::{
     TOOLCHAIN, app_token, checkout, expression, join, permissions, shell_word, variables,
 };
