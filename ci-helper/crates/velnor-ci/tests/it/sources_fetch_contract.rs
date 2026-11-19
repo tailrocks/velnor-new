@@ -9,8 +9,8 @@ use std::process::Command;
 use clap::Parser;
 use velnor_ci::cli::{Cli, Command as CiCommand, SourcesCommand};
 use velnor_model::{
-    Concurrency, Job, JobId, Permissions, PrRun, PullRequestType, RepoPath, RootSlug, RunnerLabel,
-    Step, StepKind, Triggers, WORKFLOW_PATH, When, WorkflowPlan,
+    Concurrency, Job, JobId, Permissions, PrRun, PullRequestType, RepoPath, RootSlug, RunnerLabel, Step,
+    StepKind, Triggers, WORKFLOW_PATH, When, WorkflowPlan,
 };
 use velnor_render::render;
 

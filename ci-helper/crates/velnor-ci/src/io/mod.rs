@@ -64,8 +64,8 @@ pub use self::restored::{break_time_ties, break_time_ties_with};
 pub use self::timings::write_report;
 use crate::cli::{
     AuditArgs, BenchCommand, CacheCommand, CheckTagArgs, Cli, CollectArgs, Command, CompareArgs,
-    DecideArgs, ImageCommand, InputsCommand, QualificationCommand, ReleaseCommand, ReleaseGateArgs,
-    SourcesCommand,
+    DecideArgs, ImageCommand, InputsCommand, QualificationCommand, ReleaseCommand,
+    ReleaseGateArgs, SourcesCommand,
 };
 use crate::collect::collect;
 use crate::compare::{compare, compare_across_populations};
