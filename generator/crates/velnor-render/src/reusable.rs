@@ -7,6 +7,7 @@ use velnor_workflows::{
     WorkflowsPlan,
 };
 
+use crate::gate::all_conditions;
 use crate::reusable_on::on;
 use crate::rules::{
     MAX_WORKFLOW_BYTES, RenderedConcurrency, RenderedJob, RenderedMatrix, RenderedMatrixSource,
@@ -16,7 +17,7 @@ use crate::steps::{
     ATTEST_BUILD_PROVENANCE, CACHE_RESTORE, CACHE_SAVE, CHECKOUT, DOWNLOAD_ARTIFACT, MISE,
     UPLOAD_ARTIFACT, install_helper,
 };
-use crate::workflow::{yaml_concurrency, yaml_job};
+use crate::workflow::{SAME_REPOSITORY, yaml_concurrency, yaml_job};
 use crate::yaml::{Yaml, emit, entry, text};
 
 pub const REUSABLE_HEADER: &str =
@@ -93,7 +94,10 @@ fn rendered_job(workflow: &Workflow, job: &Job, helper: &HelperRelease) -> Rende
     RenderedJob {
         id: job.id.clone(),
         needs: job.needs.clone(),
-        condition: condition(workflow.condition.as_deref(), job.condition.as_deref()),
+        condition: call_fence(
+            job,
+            condition(workflow.condition.as_deref(), job.condition.as_deref()),
+        ),
         concurrency: job.concurrency.as_ref().map(rendered_concurrency),
         environment: job.environment.clone(),
         uses: job.call.as_ref().map(|call| call_path(&call.target)),
@@ -145,6 +149,15 @@ fn condition(workflow: Option<&str>, job: Option<&str>) -> Option<String> {
         (Some(only), None) | (None, Some(only)) => Some(format!("${{{{ {only} }}}}")),
         (Some(first), Some(second)) => Some(format!("${{{{ ({first}) && ({second}) }}}}")),
     }
+}
+
+/// A call job has no `runs-on` to put the fork fallback on, and the callee may run on a
+/// self-hosted runner, so a pull request from a fork skips the call.
+fn call_fence(job: &Job, condition: Option<String>) -> Option<String> {
+    if job.call.is_none() {
+        return condition;
+    }
+    all_conditions(Some(format!("${{{{ {SAME_REPOSITORY} }}}}")), condition)
 }
 
 fn call_path(target: &CallTarget) -> String {

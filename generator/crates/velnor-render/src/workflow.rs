@@ -7,7 +7,8 @@ use crate::rules::{
 use crate::yaml::{Yaml, entry, text};
 use velnor_model::{TESTS_BY_PACKAGE_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT};
 
-const SAME_REPOSITORY: &str = "(!startsWith(github.event_name, 'pull_request') || github.event.pull_request.head.repo.full_name == github.repository)";
+/// True for every event except a pull request from a fork.
+pub(crate) const SAME_REPOSITORY: &str = "(!startsWith(github.event_name, 'pull_request') || github.event.pull_request.head.repo.full_name == github.repository)";
 
 pub(crate) fn yaml_job(job: &RenderedJob) -> Yaml {
     let mut items = Vec::new();
