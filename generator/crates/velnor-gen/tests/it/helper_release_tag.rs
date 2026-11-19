@@ -16,7 +16,7 @@ const RELEASES: &str = "https://github.com/tailrocks/velnor-new/releases/downloa
 #[test]
 fn a_helper_below_0_1_85_is_tagged_rust_ci_v_and_0_1_85_and_later_tools_v() -> TestResult {
     for (version, tag) in [
-        ("0.1.79", "rust-ci-v0.1.79"),
+        ("0.1.81", "rust-ci-v0.1.81"),
         ("0.1.84", "rust-ci-v0.1.84"),
         ("0.1.100", "tools-v0.1.100"),
         ("0.1.85", "tools-v0.1.85"),

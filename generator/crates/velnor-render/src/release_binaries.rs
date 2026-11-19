@@ -4,7 +4,7 @@
 use velnor_model::{HelperRelease, Platform};
 use velnor_release::{BinaryFormat, BinaryPlan, Libc, RELEASE_APP_SLUG, ReleasePlan};
 
-use crate::release::{FROM_A_PASSED_PUSH, GATE_IS_READY, HOSTED_RUNNER, VERIFIED_COMMIT};
+use crate::release::{FROM_A_PASSED_PUSH, GATE_IS_READY, HOSTED_RUNNER};
 use crate::release_assets::{
     COMMIT_FILE, STAGE, archive_packaging, asset, assets, bind_version, quoted, read_version,
     selection, uploaded, versioned,
@@ -15,8 +15,7 @@ use crate::release_checks::publish_needs;
 use crate::release_outputs::commit_output;
 use crate::release_raw::{raw_packaging, smoke_steps};
 use crate::release_steps::{
-    TAGGED_COMMIT_HELPER, checkout, expression, install_tool, join, permissions, shell_word,
-    variables,
+    checkout, expression, install_tool, join, permissions, shell_word, variables,
 };
 use crate::rules::{RenderedJob, RenderedStep, Value};
 use crate::steps::install_helper;
@@ -38,9 +37,9 @@ pub(crate) fn binary_jobs(plan: &ReleasePlan, helper: &HelperRelease) -> Vec<Ren
             let mut jobs: Vec<RenderedJob> = binary
                 .platforms
                 .iter()
-                .map(|platform| build(binary, *platform, helper))
+                .map(|platform| build(binary, *platform))
                 .collect();
-            jobs.push(sums(binary, helper));
+            jobs.push(sums(binary));
             if binary.attest {
                 jobs.push(verify(binary));
             }
@@ -86,7 +85,7 @@ pub(crate) fn behind_the_gate(id: String, binary: &BinaryPlan, needs: Vec<String
     }
 }
 
-fn build(binary: &BinaryPlan, platform: Platform, helper: &HelperRelease) -> RenderedJob {
+fn build(binary: &BinaryPlan, platform: Platform) -> RenderedJob {
     let (runner, _) = target(platform, binary);
     RenderedJob {
         permissions: permissions(&[("contents", "read")]),
@@ -96,7 +95,7 @@ fn build(binary: &BinaryPlan, platform: Platform, helper: &HelperRelease) -> Ren
             binary,
             platform,
             &tagged_source(binary),
-            same_commit(binary, helper),
+            same_commit(binary),
         ),
         ..behind_the_gate(build_id(&binary.package, platform), binary, Vec::new())
     }
@@ -181,30 +180,17 @@ pub(crate) fn build_steps(
     steps
 }
 
-fn tag_commit(binary: &BinaryPlan, helper: &HelperRelease) -> String {
-    if helper.version().at_least(TAGGED_COMMIT_HELPER) {
-        format!(
-            "${{{{ needs.tag.outputs.{} }}}}",
-            commit_output(&binary.package)
-        )
-    } else {
-        VERIFIED_COMMIT.to_owned()
-    }
+fn tag_commit(binary: &BinaryPlan) -> String {
+    format!(
+        "${{{{ needs.tag.outputs.{} }}}}",
+        commit_output(&binary.package)
+    )
 }
 
-fn same_commit(binary: &BinaryPlan, helper: &HelperRelease) -> RenderedStep {
-    let expected = tag_commit(binary, helper);
-    let (name, test) = if helper.version().at_least(TAGGED_COMMIT_HELPER) {
-        (
-            "Check that the tag is on the verified commit itself",
-            "test -n \"$COMMIT\" -a \"$CHECKED_OUT\" = \"$COMMIT\"",
-        )
-    } else {
-        (
-            "Check that the tag is the commit the gate verified",
-            "test \"$CHECKED_OUT\" = \"$COMMIT\"",
-        )
-    };
+fn same_commit(binary: &BinaryPlan) -> RenderedStep {
+    let expected = tag_commit(binary);
+    let name = "Check that the tag is on the verified commit itself";
+    let test = "test -n \"$COMMIT\" -a \"$CHECKED_OUT\" = \"$COMMIT\"";
     RenderedStep {
         env: variables(&[
             ("COMMIT", &expected),
@@ -218,7 +204,7 @@ fn tagged_source(binary: &BinaryPlan) -> String {
     format!("refs/tags/${{{{ needs.tag.outputs.{} }}}}", binary.package)
 }
 
-fn sums(binary: &BinaryPlan, helper: &HelperRelease) -> RenderedJob {
+fn sums(binary: &BinaryPlan) -> RenderedJob {
     let mut steps: Vec<RenderedStep> = binary
         .platforms
         .iter()
@@ -228,7 +214,7 @@ fn sums(binary: &BinaryPlan, helper: &HelperRelease) -> RenderedJob {
     if binary.commit_file {
         steps.push(RenderedStep {
             working_directory: Some(DIST.to_owned()),
-            env: variables(&[("COMMIT", &tag_commit(binary, helper))]),
+            env: variables(&[("COMMIT", &tag_commit(binary))]),
             ..command(
                 "Record the commit of the release".to_owned(),
                 format!("echo \"$COMMIT\" > {COMMIT_FILE}"),

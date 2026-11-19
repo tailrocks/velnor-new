@@ -65,7 +65,7 @@ a7e9a4897a81bb86338896573e43b79b4f05e34a489549f1687117dd456648ba  velnor-ci-aarc
 
 fn archive_lock() -> Result<String, Box<dyn Error>> {
     Ok(pin_lock(
-        "0.1.79",
+        "0.1.81",
         COMMIT_FILE,
         ARCHIVE_SUMS,
         Some(BINARY_SUMS),
@@ -115,7 +115,7 @@ fn the_pin_reads_the_archive_lines_and_ignores_raw_lines_beside_them() -> TestRe
         &SUMS[SUMS.find('\n').map_or(0, |at| at + 1)..]
     );
     assert_eq!(
-        pin_lock("0.1.79", COMMIT_FILE, &mixed, Some(BINARY_SUMS))?,
+        pin_lock("0.1.81", COMMIT_FILE, &mixed, Some(BINARY_SUMS))?,
         archive_lock()?
     );
     Ok(())
@@ -152,9 +152,31 @@ fn an_archive_release_is_not_pinned_without_a_verified_complete_binary_digest_fi
         (swap("4e9a4859", "4e9a485A"), Some(BINARY_SUMS)),
     ];
     for (sums, binary) in cases {
-        let result = pin_lock("0.1.79", COMMIT_FILE, &sums, binary);
+        let result = pin_lock("0.1.81", COMMIT_FILE, &sums, binary);
         assert!(result.is_err(), "{sums:?} with {binary:?} gave {result:?}");
     }
+}
+
+#[test]
+fn a_linux_only_archive_release_is_pinned() -> TestResult {
+    let linux = |text: &str| -> String {
+        text.lines()
+            .filter(|line| {
+                line.contains("linux") || line.ends_with("SUMS") || line.ends_with("COMMIT")
+            })
+            .flat_map(|line| [line, "\n"])
+            .collect()
+    };
+    let sums = linux(ARCHIVE_SUMS).replace(
+        "4e9a485939165d82a9ebd49078778ca47137f344524ce8d87d03116760d5bb6d",
+        "501023317acc4d029a91ce011d5ac710e07432d040d17dfd0ce88d4c0a6b132a",
+    );
+    let lock = pin_lock("0.1.79", COMMIT_FILE, &sums, Some(&linux(BINARY_SUMS)))?;
+    assert!(
+        lock.contains("linux-x64") && !lock.contains("d8a670bd"),
+        "{lock}"
+    );
+    Ok(())
 }
 
 #[test]
@@ -162,8 +184,8 @@ fn only_a_release_that_lists_the_binary_digest_file_needs_it_downloaded() -> Tes
     assert!(lists_binary_sums(ARCHIVE_SUMS));
     assert!(!lists_binary_sums(SUMS));
     assert_eq!(
-        binary_sums_url(&release_version("0.1.79")?),
-        "https://github.com/tailrocks/velnor-new/releases/download/rust-ci-v0.1.79/BINARY-SHA256SUMS"
+        binary_sums_url(&release_version("0.1.81")?),
+        "https://github.com/tailrocks/velnor-new/releases/download/rust-ci-v0.1.81/BINARY-SHA256SUMS"
     );
     Ok(())
 }
@@ -223,7 +245,7 @@ fn the_action_checks_the_archive_and_the_launcher_checks_the_binary() -> TestRes
 
 #[test]
 fn an_old_lock_with_only_the_raw_digest_still_checks_that_digest_in_both_places() -> TestResult {
-    let text = workflow(&locked("0.1.79")?)?;
+    let text = workflow(&locked("0.1.81")?)?;
     let raw = "10e3511ab3d2f211366c6fd3633474f4a74ee6750b16b52c90758c0e8321dd3e";
     assert!(
         text.contains(&format!("sha256-linux-x64: '{raw}'")),

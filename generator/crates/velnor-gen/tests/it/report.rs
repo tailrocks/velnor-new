@@ -8,17 +8,8 @@ use velnor_rust::{detect, plan};
 
 #[test]
 fn required_check_cannot_duplicate_the_cache_report_display_name() -> TestResult {
-    for (version, name, valid) in [
-        ("0.1.80", "Cache", true),
-        ("0.1.81", "Cache", false),
-        ("0.1.81", "Gate", true),
-    ] {
-        let old = if version == "0.1.80" {
-            "full_run = \"off\"\n"
-        } else {
-            ""
-        };
-        let config = format!("{old}required_check = \"{name}\"\n");
+    for (version, name, valid) in [("0.1.81", "Cache", false), ("0.1.81", "Gate", true)] {
+        let config = format!("required_check = \"{name}\"\n");
         let view = crate::base_save::pinned(version, &config)?;
         let result = velnor_gen::expected_with_notes(&view);
         if valid {
@@ -37,15 +28,10 @@ fn required_check_cannot_duplicate_the_cache_report_display_name() -> TestResult
 
 #[test]
 fn compiler_artifacts_follow_report_support_and_nextest_version() -> TestResult {
-    for helper in ["0.1.80", "0.1.81"] {
+    for helper in ["0.1.81"] {
         for nextest in ["0.9.122", "0.9.123"] {
             for shape in ["one-job", "lint-test", "groups"] {
-                let old = if helper == "0.1.80" {
-                    "full_run = \"off\"\n"
-                } else {
-                    ""
-                };
-                let config = format!("{old}shape = \"{shape}\"\n");
+                let config = format!("shape = \"{shape}\"\n");
                 let mut view = view(&["Cargo.toml", "tools/Cargo.toml"], Some(config.as_bytes()))?;
                 for (path, bytes) in &mut view.files {
                     if path.as_str() == ".velnor/rust-ci.lock" {
@@ -92,10 +78,7 @@ fn compiler_artifacts_follow_report_support_and_nextest_version() -> TestResult 
                         if compiler {
                             cargo += 1;
                             if let Some(separator) = run.find(" -- -D") {
-                                assert!(
-                                    helper == "0.1.80"
-                                        || run.find(flag).is_some_and(|at| at < separator)
-                                );
+                                assert!(run.find(flag).is_some_and(|at| at < separator));
                             }
                         }
                         nextest_commands += usize::from(builds_tests);
@@ -110,12 +93,7 @@ fn compiler_artifacts_follow_report_support_and_nextest_version() -> TestResult 
 
 #[test]
 fn reporting_is_gated_by_helper_version_and_cache_blocks_only_when_configured() -> TestResult {
-    for (version, blocks) in [
-        ("0.1.80", false),
-        ("0.1.80", true),
-        ("0.1.81", false),
-        ("0.1.81", true),
-    ] {
+    for (version, blocks) in [("0.1.81", false), ("0.1.81", true)] {
         let config = format!("cache_check_blocks = {blocks}\n");
         let view = view(&["Cargo.toml", "tools/Cargo.toml"], Some(config.as_bytes()))?;
         let mut facts = detect(&view)?;
@@ -132,17 +110,6 @@ fn reporting_is_gated_by_helper_version_and_cache_blocks_only_when_configured() 
         )?;
         assert_metrics_policy(&parsed)?;
         let cache = plan.jobs.iter().find(|job| job.id.as_str() == "cache");
-        if version == "0.1.80" {
-            assert!(cache.is_none());
-            assert!(
-                parsed["jobs"]
-                    .as_object()
-                    .ok_or("jobs")?
-                    .values()
-                    .all(|job| job["permissions"]["actions"].is_null())
-            );
-            continue;
-        }
         let cache = cache.ok_or("Cache missing")?;
         assert_unified_cache_verdict(&parsed)?;
         assert_eq!(cache.name.as_deref(), Some("Cache"));
@@ -243,9 +210,7 @@ fn report_cache_descriptors_preserve_literal_roots_without_github_expressions() 
         let mut view = view(&[&format!("{root}/Cargo.toml")], None)?;
         let lock = RepoPath::new(".velnor/rust-ci.lock")?;
         let bytes = view.files.get_mut(&lock).ok_or("lock")?;
-        *bytes = String::from_utf8(bytes.clone())?
-            .replace("0.1.79", "0.1.81")
-            .into_bytes();
+        *bytes = String::from_utf8(bytes.clone())?.into_bytes();
         let config = RepoPath::new(".cargo/config.toml")?;
         view.tracked_paths.insert(config.clone());
         view.files
@@ -300,7 +265,7 @@ fn rendered_reports_keep_selection_but_run_after_failed_restores() -> TestResult
     let lock = RepoPath::new(".velnor/rust-ci.lock")?;
     let bytes = view.files.get_mut(&lock).ok_or("lock")?;
     let old = String::from_utf8(bytes.clone())?;
-    *bytes = old.replace("0.1.79", "0.1.81").into_bytes();
+    *bytes = old.into_bytes();
     let text = crate::archive::plain_invocations(&workflow(&view)?);
     let parsed: serde_json::Value = serde_saphyr::from_str(&text)?;
     let job = &parsed["jobs"]["rust"];

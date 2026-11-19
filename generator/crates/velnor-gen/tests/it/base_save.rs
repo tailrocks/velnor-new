@@ -233,22 +233,6 @@ fn the_one_job_lane_saves_after_tests_and_input_audit_and_only_on_the_default_br
 }
 
 #[test]
-fn a_helper_older_than_0_1_81_gets_no_save_no_token_permission_and_no_age_limit() -> TestResult {
-    let text = workflow(&pinned("0.1.79", "full_run = \"off\"\n")?)?;
-    for absent in [
-        "cache decide",
-        "cache trim",
-        "inputs save",
-        "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9\n        with:\n          path: target",
-        "actions: write",
-        "VELNOR_BASE_MAX_AGE_DAYS",
-    ] {
-        assert!(!text.contains(absent), "{absent}");
-    }
-    Ok(())
-}
-
-#[test]
 fn only_the_lint_and_test_lanes_save_and_the_sources_come_from_the_test_lane() -> TestResult {
     let all = jobs("0.1.81", "shape = \"lint-test\"\n")?;
     let saves: Vec<&str> = all
