@@ -44,6 +44,7 @@ fn rendered_run(manifests: &[&str]) -> String {
             reports_ignored: false,
             gate: None,
             plan_outputs: Vec::new(),
+            group_outputs: Vec::new(),
             steps: vec![Step {
                 kind: StepKind::SourcesFetchAll {
                     lane: RootSlug::new("root").unwrap_or_else(|e| unreachable!("{e}")),

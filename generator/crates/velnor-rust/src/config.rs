@@ -3,7 +3,8 @@
 
 use serde::Deserialize;
 use velnor_model::{
-    CiDebugInfo, InputRule, PackageName, PathGlob, RepoPath, RunnerLabel, RustCiConfig, TargetName,
+    CiDebugInfo, InputRule, PackageName, PathGlob, RepoPath,
+    RunnerLabel, RustCiConfig, TargetName,
 };
 
 use crate::config_events::{docs_run, on_main};

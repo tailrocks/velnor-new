@@ -165,6 +165,7 @@ mod step_target_dir;
 mod test_groups;
 mod test_groups_harness;
 mod test_groups_jobs;
+mod test_groups_selection;
 mod test_setup;
 mod tool_pins;
 mod toolchain;
