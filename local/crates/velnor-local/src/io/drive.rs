@@ -93,13 +93,9 @@ pub(super) async fn run(args: RunArgs) -> io::Result<()> {
     summary(&results).map_err(io::Error::other)
 }
 
-async fn run_one(
-    args: &RunArgs,
-    scenario: &str,
-    tag: &str,
-    dir: &Path,
-    slots: &Semaphore,
-) -> io::Result<()> {
+/// Reads the scenario named on the command line (a name under `--scenarios`, or a `.json` path)
+/// and refuses one whose options or fork branches the run could not honour.
+async fn load_scenario(args: &RunArgs, scenario: &str) -> io::Result<Scenario> {
     let path = if Path::new(scenario)
         .extension()
         .is_some_and(|ext| ext == "json")
@@ -117,6 +113,17 @@ async fn run_one(
         .map_err(io::Error::other)?;
     refuse_fork_branches(&scenario.steps, &args.environment.default_branch)
         .map_err(io::Error::other)?;
+    Ok(scenario)
+}
+
+async fn run_one(
+    args: &RunArgs,
+    scenario: &str,
+    tag: &str,
+    dir: &Path,
+    slots: &Semaphore,
+) -> io::Result<()> {
+    let scenario = load_scenario(args, scenario).await?;
     let env = Environment::at(dir, DockerCli)
         .await?
         .with_labels(&args.environment.label);
