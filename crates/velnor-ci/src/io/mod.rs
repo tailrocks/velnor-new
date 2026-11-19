@@ -16,6 +16,7 @@ mod cache_upload;
 mod cold;
 mod configurations;
 mod crates_mirror;
+mod crates_mirror_args;
 mod crates_mirror_dispatch;
 mod crates_mirror_mise;
 mod delta;
@@ -55,6 +56,7 @@ mod release_align;
 mod report;
 mod report_checkout;
 mod report_inputs;
+mod report_sparse;
 mod required;
 mod resolve_qualification;
 mod restored;
@@ -225,7 +227,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::MbxStore => crate::mbx_store::setup(),
         Command::MbxSeed => crate::mbx_seed::setup(),
         Command::ToolsLocal(args) => crate::tools_local::setup(args.verb, &args.key),
-        Command::Prepare => setup::prepare(),
+        Command::Prepare(args) => setup::prepare(&args),
         Command::CheckMetadata => setup::check_metadata(),
         Command::CheckConfigurations(args) => configurations::check(&args),
         Command::Cache(CacheCommand::Decide(args)) => cache::run_decide(&args),

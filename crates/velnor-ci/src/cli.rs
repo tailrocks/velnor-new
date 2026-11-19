@@ -17,7 +17,7 @@ pub use fetch_reports::FetchReportsArgs;
 mod write_request;
 pub use crate::cli_args::{
     BaseFile, BenchCommand, BudgetArgs, CheckConfigurationsArgs, CollectArgs, CompareArgs,
-    CratesMirrorArgs, ImageCommand, PlanArgs, PlanMode, QualificationCommand,
+    CratesMirrorArgs, ImageCommand, PlanArgs, PlanMode, PrepareArgs, QualificationCommand,
     QualificationCompareArgs, ToolsLocalArgs, VerifyCandidateArgs,
 };
 pub use crate::cli_cache::{CacheCommand, DecideArgs, TrimArgs};
@@ -96,9 +96,9 @@ pub enum Command {
     )]
     ResolveQualification(ResolveQualificationArgs),
     #[command(
-        about = "Run after the tools are installed: exit 1 naming each tool that mise does not report at its pinned version, append RUSTUP_AUTO_INSTALL=0 and the CI build profile to $GITHUB_ENV, and write the step output compat to $GITHUB_OUTPUT; run in the checkout"
+        about = "Run after the tools are installed, in the checkout: exit 1 naming each tool that mise does not report at its pinned version, append RUSTUP_AUTO_INSTALL=0 and the CI build profile to $GITHUB_ENV, and write the step output compat and one step output lock_<root> per Cargo root to $GITHUB_OUTPUT (--lock-root and --no-locks narrow the roots). lock_<root> is the SHA-256 of the root's Cargo.lock without the versions of the workspace's own path packages, which the Target cache key uses. Reads .velnor/rust-metadata.json, which velnor-gen generate writes, and fails when it is missing or unreadable"
     )]
-    Prepare,
+    Prepare(PrepareArgs),
     #[command(
         about = "Write the crates mirror under $RUNNER_TEMP and install a Cargo wrapper for every working directory and Cargo home"
     )]

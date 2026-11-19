@@ -8,11 +8,13 @@ use std::process::Command;
 use crate::io::Repo;
 
 mod cargo_directory;
+mod fetch_config;
 mod fixture;
 mod mise;
 mod setup;
 mod toolchain_view;
 mod toolchains;
+mod user_config;
 use fixture::{
     TestResult, active_toolchain, mirror_fixture, repeated_mirror_fixture, rustup_binary,
 };

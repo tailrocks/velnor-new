@@ -15,12 +15,12 @@ This is the model's own critique of the final design against the claim that Veln
 
 # Velnor: is it the fastest possible CI runner for velnor-new?
 
-Review of the [final design](/Users/donbeave/.cache/ci-ambition/pr-worktree/docs/proposed/velnor-runner-architecture.md),
-the [evidence pack](/Users/donbeave/.cache/ci-ambition/pr-worktree/docs/research/velnor-runner-2026-11/evidence.md),
-[decisions](/Users/donbeave/.cache/ci-ambition/pr-worktree/docs/research/velnor-runner-2026-11/decisions.md),
-[delivery plan](/Users/donbeave/.cache/ci-ambition/pr-worktree/docs/research/velnor-runner-2026-11/delivery-plan.md),
-[owner decisions](/Users/donbeave/.cache/ci-ambition/pr-worktree/docs/research/velnor-runner-2026-11/owner-decisions.md),
-[rust-only rulings](/Users/donbeave/.cache/ci-ambition/pr-worktree/docs/research/velnor-runner-2026-11/rust-only-rulings.md)
+Review of the [final design](../../../proposed/velnor-runner-architecture.md),
+the [evidence pack](../evidence.md),
+[decisions](../decisions.md),
+[delivery plan](../delivery-plan.md),
+[owner decisions](../owner-decisions.md),
+[rust-only rulings](../rust-only-rulings.md)
 and the four experiments. Tags follow the design: [M] measured, [E] estimated, [T] target.
 
 ## Verdict
@@ -79,7 +79,7 @@ acknowledges this by dating the goal after the floor fix; the "fastest ever" slo
 
 What is genuinely measured and strong: reflink clone 0.25 s / 2.5 MB and 0 crates in 0.31 s on
 an unchanged tree; cold plain-cargo build 92 s for 357 crates on an idle 96-thread worker
-([experiments/mbx-cache-cluster.md](/Users/donbeave/.cache/ci-ambition/pr-worktree/docs/research/velnor-runner-2026-11/experiments/mbx-cache-cluster.md));
+([experiments/mbx-cache-cluster.md](../experiments/mbx-cache-cluster.md));
 mbx seeding a cold node in 39.9 s vs 92 s cold; hosted-queue dominance (T4/T5); 45% cancelled
 PR runs and three full runs per merge (T1/T7). What is estimated: every goal-stage number,
 the 60–75% exact-tree group hit rate (entry replay, ruling Q11), runner-minutes 110→37 per
@@ -143,7 +143,7 @@ every build experiment ran on nearly idle nodes, while evidence §B measured wor
    changed obligations and the ≈25 s group estimate grows by the full delta.
 8. **Storage and transport are the least-proven layer.** Evidence: RustFS 1.0.0 is two months
    old with open node-return/replication issues (#9480/#8768/#9161); all RustFS numbers are
-   one loaded Mac, single-node ([experiments/rustfs.md](/Users/donbeave/.cache/ci-ambition/pr-worktree/docs/research/velnor-runner-2026-11/experiments/rustfs.md));
+   one loaded Mac, single-node ([experiments/rustfs.md](../experiments/rustfs.md));
    mbx lost to plain cargo on a same-node lockfile change (88.4 s vs 67.4 s [M]) and uploaded
    6.8 GiB for an 11-crate change. The design correctly keeps transports off the verdict path
    until ST06/Lab B3 pass — but then cold-node verdicts pay the 92 s cold build, and the
@@ -187,7 +187,7 @@ All figures [E] from design-measured inputs; none counted in the design's totals
 Two non-gains, for the record: dropping a witness or trusting PR-scope receipts would be
 faster and is correctly refused (decision 11); and blaze is correctly rejected — it built
 none of the five workspaces and produced a clippy false green
-([experiments/blaze.md](/Users/donbeave/.cache/ci-ambition/pr-worktree/docs/research/velnor-runner-2026-11/experiments/blaze.md), [M]).
+([experiments/blaze.md](../experiments/blaze.md), [M]).
 
 ## What to measure first to earn the "fastest" claim
 

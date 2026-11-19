@@ -18,7 +18,7 @@ fn workflow_with_helper(helper: &str) -> Result<String, Box<dyn std::error::Erro
 
 #[test]
 fn a_helper_that_predates_the_member_lock_key_keeps_hashing_the_lock_file() -> TestResult {
-    for helper in ["0.1.83", "0.1.84", "0.1.85"] {
+    for helper in ["0.1.83", "0.1.84", "0.1.85", "0.1.86", "0.1.87"] {
         let text = workflow_with_helper(helper)?;
         assert!(
             text.contains("hashFiles(''Cargo.lock'')"),
@@ -32,7 +32,7 @@ fn a_helper_that_predates_the_member_lock_key_keeps_hashing_the_lock_file() -> T
 
 #[test]
 fn a_helper_with_the_member_lock_key_reads_it_from_the_prepare_step_for_every_root() -> TestResult {
-    let text = workflow_with_helper("0.1.86")?;
+    let text = workflow_with_helper("0.1.88")?;
     assert!(text.contains("velnor-src-${{ runner.os }}-${{ runner.arch }}-all.roots-${{ steps.sources_locks.outputs.hash }}"), "{text}");
     for slug in ["root", "lab"] {
         let lock = format!("steps.prepare.outputs.lock_{slug}");

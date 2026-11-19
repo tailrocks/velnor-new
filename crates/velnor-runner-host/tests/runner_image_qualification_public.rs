@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+#[path = "runner_image_qualification_public/archive_socket.rs"]
+mod archive_socket;
 #[path = "runner_image_qualification_public_extended.rs"]
 mod extended;
 #[path = "runner_image_qualification_fixture.rs"]

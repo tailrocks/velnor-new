@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
     Access, CacheDebug, CacheKey, CargoCommand, Concurrency, Gate, HelperCommand, Host, Job, JobId,
-    MbxRemote, MbxStore, PackageName, PermissionScope, Permissions, PrCi, PrRun,
+    MbxRemote, MbxStore, PackageName, PermissionScope, Permissions, PrCi, PrRun, PrepareLocks,
     PushAfterMergeGroup, RepoFacts, RootSlug, RustRoot, Shape, ShapeDecision, Step, StepKind,
     TargetName, Toolchain, When, WorkflowPlan,
 };
@@ -122,6 +122,7 @@ fn apply_extensions(facts: &RepoFacts, jobs: &mut [Job], single: bool) {
         crate::cargo_log::upload(jobs);
     }
     crate::private_fetch::insert(facts.config.private_sources.as_ref(), jobs);
+    crate::lock_scope::apply(facts, jobs);
     if facts.config.mbx_remote == MbxRemote::GithubActions && facts.private_sources.is_none() {
         add_mbx_remote(jobs);
     }
@@ -274,7 +275,7 @@ pub(crate) fn setup_units(
     }
     let declared = facts.toolchain.as_ref();
     toolchain.extend(rust_additions(declared, root));
-    let prepare = step(StepKind::Helper(HelperCommand::Prepare));
+    let prepare = step(StepKind::Prepare(PrepareLocks::All));
     if declared.is_some_and(|toolchain| toolchain.profile.as_deref() == Some("complete")) {
         toolchain.push(prepare);
         toolchain.extend(tools_save(facts));
@@ -365,6 +366,7 @@ pub(crate) fn job(facts: &RepoFacts, id: JobId) -> Job {
         permissions: Permissions(BTreeMap::from([(PermissionScope::Contents, Access::Read)])),
         timeout_minutes: facts.config.timeout_minutes,
         gate: None,
+        skip_after_merge_group: None,
         plan_outputs: Vec::new(),
         group_outputs: Vec::new(),
         reports_ignored: facts

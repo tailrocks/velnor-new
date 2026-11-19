@@ -11,6 +11,8 @@ use crate::error::CiError;
 use crate::github::GitHubWrite;
 use crate::trusted_roots::BUNDLE_VARIABLE;
 
+use super::crates_mirror_args::with_mirror_config;
+
 const TOKEN_VARIABLE: &str = "VELNOR_PRIVATE_TOKEN";
 const API_VARIABLE: &str = "VELNOR_API_URL";
 const SYSTEM_DIRECTORIES: [&str; 4] = ["/usr/bin", "/bin", "/usr/local/bin", "/opt/homebrew/bin"];
@@ -132,27 +134,29 @@ fn run_fetches(
             super::fetch_credentials::Neutralised::default()
         };
         command.envs(neutralised.environment.iter().map(|(k, v)| (k, v)));
-        if let Some(mirror) = mirror {
-            command.arg("--config").arg(mirror);
-        }
         let directory = manifest
             .parent()
             .filter(|parent| !parent.as_os_str().is_empty());
         if let Some(directory) = directory {
             command.current_dir(directory);
         }
-        command
-            .args(["fetch", "--locked"])
-            .arg("--manifest-path")
-            .arg(manifest.file_name().unwrap_or(manifest.as_os_str()));
+        let mut arguments: Vec<OsString> = vec!["fetch".into(), "--locked".into()];
+        arguments.extend([
+            "--manifest-path".into(),
+            manifest.file_name().unwrap_or(manifest.as_os_str()).into(),
+        ]);
         if with_token {
-            command.args(["--config", "net.offline=false"]);
+            arguments.extend(["--config".into(), "net.offline=false".into()]);
             for config in &neutralised.config {
-                command.args(["--config", config]);
+                arguments.extend(["--config".into(), config.into()]);
             }
         } else {
-            command.arg("--offline");
+            arguments.push("--offline".into());
         }
+        command.args(match mirror {
+            Some(mirror) => with_mirror_config(mirror.as_os_str(), arguments),
+            None => arguments,
+        });
         let status = command
             .status()
             .map_err(|e| CiError::new(format!("cannot run {}: {e}", cargo.display())))?;

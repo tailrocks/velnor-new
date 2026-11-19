@@ -47,6 +47,8 @@ impl PlanOutput {
                 ))
             }
         };
+        let merge_group_ran = event == Some(PUSH)
+            && outputs.get(MERGE_GROUP_SKIP_OUTPUT).map(String::as_str) == Some("true");
         let mut planned = BTreeMap::new();
         let mut test_lanes: BTreeMap<RootSlug, Vec<JobId>> = BTreeMap::new();
         for job in &spec.jobs {
@@ -83,6 +85,7 @@ impl PlanOutput {
                     }
                     JobCondition::ScheduleOrPush => event_is(event, &[SCHEDULE, PUSH])?,
                     JobCondition::DefaultBranchPush => event_is(event, &[PUSH])?,
+                    JobCondition::MergeGroupNotPassed => !merge_group_ran,
                 };
             }
             planned.insert(job.id.clone(), holds);
@@ -94,8 +97,6 @@ impl PlanOutput {
                 }
             }
         }
-        let merge_group_ran = event == Some(PUSH)
-            && outputs.get(MERGE_GROUP_SKIP_OUTPUT).map(String::as_str) == Some("true");
         test_lanes.retain(|_, jobs| !merge_group_ran && !jobs.is_empty());
         Ok(Self {
             planned,
@@ -109,4 +110,34 @@ fn event_is(event: Option<&str>, names: &[&str]) -> Result<bool, String> {
         .filter(|name| !name.is_empty())
         .map(|name| names.contains(&name))
         .ok_or_else(|| "GITHUB_EVENT_NAME is not set".to_owned())
+}
+
+#[cfg(test)]
+mod tests {
+    use velnor_model::{JobCondition, VerdictJob};
+
+    use super::*;
+
+    fn planned(skip: &str, event: &str) -> bool {
+        let job = JobId::from_static("rust-test-default");
+        let spec = VerdictSpec {
+            plan: JobId::from_static("rust-plan"),
+            jobs: vec![VerdictJob {
+                id: job.clone(),
+                when: vec![JobCondition::MergeGroupNotPassed],
+                tests: Vec::new(),
+            }],
+        };
+        let outputs = BTreeMap::from([(MERGE_GROUP_SKIP_OUTPUT.to_owned(), skip.to_owned())]);
+        PlanOutput::resolve(&spec, &outputs, Some(event))
+            .expect("the spec resolves")
+            .planned[&job]
+    }
+
+    #[test]
+    fn a_job_skipped_after_a_passed_queue_run_is_not_planned() {
+        assert!(!planned("true", "push"));
+        assert!(planned("false", "push"));
+        assert!(planned("true", "pull_request"));
+    }
 }

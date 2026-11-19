@@ -52,7 +52,7 @@ Three families hold the work between runs. Each key is built from one typed valu
 **What makes a hit.**
 
 - `compat` is a hash of the `rustc` version, build target, the CI build profile, the repository's `[profile]` tables, `RUSTFLAGS`, the runner image and the workspace path. A different toolchain or profile starts a new line of entries.
-- The lock hash leaves out the version of the workspace's own path packages (helper 0.1.86 or later). A release version bump does not move the key. A dependency bump does, and then the newest entry for the same `compat` is restored.
+- The lock hash leaves out the version of the workspace's own path packages (helper 0.1.88 or later). A release version bump does not move the key. A dependency bump does, and then the newest entry for the same `compat` is restored.
 - A restore is useful only if cargo treats the files as fresh. `velnor-ci inputs save` records each tracked file's content and modification time with the build directory. `inputs restore` sets the time back on files whose bytes did not change. `velnor-ci restored` gives files that share a time distinct times, so cargo picks the same file every run.
 - The CI profile sets `CARGO_INCREMENTAL=0`, `SOURCE_DATE_EPOCH=0` and debug info to `line-tables-only` (`ci_debuginfo`). Every build step uses the same `CARGO_TARGET_DIR`.
 - On the default branch, a restored Target older than seven days is dropped. The run builds cold and selects everything.

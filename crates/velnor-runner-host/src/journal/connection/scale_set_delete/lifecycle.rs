@@ -36,6 +36,7 @@ pub(super) async fn unverified_target(
         labels: serde_json::from_str(&labels).map_err(|_| HostError::Journal)?,
         runner_group_id,
         state: stored_state(connection, connection_id).await?,
+        unverified: true,
     }))
 }
 

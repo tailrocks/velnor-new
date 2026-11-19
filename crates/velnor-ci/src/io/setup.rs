@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 use std::process::Command;
 
@@ -15,6 +15,7 @@ use velnor_rust::{
 
 use super::build_inputs::{image_or_cold, release_of, repository_profile};
 use super::{append_outputs, append_to, current_dir};
+use crate::cli::PrepareArgs;
 use crate::error::CiError;
 use crate::setup::{
     Missing, check_tools, env_lines, missing_toolchain, output_lines, parse_reported,
@@ -25,7 +26,7 @@ const CARGO_DIRECTORY: &str = ".cargo";
 const CARGO_CONFIG: &str = "config.toml";
 pub(super) const OWNED_MARKER: &str = "# velnor-ci owns this file and rewrites it on every prepare";
 
-pub(super) fn prepare() -> Result<String, CiError> {
+pub(super) fn prepare(args: &PrepareArgs) -> Result<String, CiError> {
     let root = current_dir()?;
     let repo_profile = repository_profile(&root)?;
     let wanted: Vec<RepoPath> = mise_files().into_iter().chain([CONFIG_PATH]).collect();
@@ -60,17 +61,23 @@ pub(super) fn prepare() -> Result<String, CiError> {
     write_cargo_config(&root, profile.cargo_config)?;
     append_to(ENV_VARIABLE, &env_lines(&profile))?;
     append_outputs(&output_lines(&digest, !cold_notice.is_empty()))?;
-    append_outputs(&lock_output_lines(&root)?)?;
+    append_outputs(&lock_output_lines(&root, args)?)?;
     Ok(cold_notice)
 }
 
-fn lock_output_lines(root: &Path) -> Result<String, CiError> {
+fn lock_output_lines(root: &Path, args: &PrepareArgs) -> Result<String, CiError> {
     let recorded = read_files(root, &[METADATA_PATH]).map_err(|e| CiError::new(e.to_string()))?;
     let members = recorded_members(recorded.get(&METADATA_PATH).map(Vec::as_slice))
         .map_err(|e| CiError::new(e.to_string()))?;
     let owned: BTreeSet<String> = members.values().flatten().cloned().collect();
+    let wanted = wanted_roots(&members, args)?;
     members
         .keys()
+        .filter(|manifest| {
+            wanted
+                .as_ref()
+                .is_none_or(|slugs| slugs.contains(&RootSlug::of(manifest)))
+        })
         .map(|manifest| {
             let lock = manifest.sibling(&RepoPath::from_static("Cargo.lock"));
             let mut read = read_files(root, std::slice::from_ref(&lock))
@@ -82,6 +89,34 @@ fn lock_output_lines(root: &Path) -> Result<String, CiError> {
             ))
         })
         .collect()
+}
+
+fn wanted_roots(
+    members: &BTreeMap<RepoPath, BTreeSet<String>>,
+    args: &PrepareArgs,
+) -> Result<Option<BTreeSet<RootSlug>>, CiError> {
+    if args.no_locks {
+        return Ok(Some(BTreeSet::new()));
+    }
+    if args.lock_roots.is_empty() {
+        return Ok(None);
+    }
+    let recorded: BTreeSet<RootSlug> = members.keys().map(RootSlug::of).collect();
+    args.lock_roots
+        .iter()
+        .map(|name| {
+            RootSlug::new(name.as_str())
+                .ok()
+                .filter(|slug| recorded.contains(slug))
+                .ok_or_else(|| {
+                    CiError::new(format!(
+                        "--lock-root {name} is not a Cargo root recorded in {METADATA_PATH}; recorded roots: {}",
+                        recorded.iter().map(RootSlug::as_str).collect::<Vec<_>>().join(", ")
+                    ))
+                })
+        })
+        .collect::<Result<_, _>>()
+        .map(Some)
 }
 
 fn check_pinned_tools(root: &Path, pins: &ToolPins) -> Result<(), CiError> {

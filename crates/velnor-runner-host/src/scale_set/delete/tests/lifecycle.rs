@@ -22,6 +22,7 @@ const NAME: &str = "ubuntu-26.04-scale-set";
 struct FakeScaleSetApi {
     sets: BTreeSet<i64>,
     deletes: Vec<i64>,
+    name: &'static str,
 }
 
 impl FakeScaleSetApi {
@@ -29,7 +30,13 @@ impl FakeScaleSetApi {
         Self {
             sets: sets.iter().copied().collect(),
             deletes: Vec::new(),
+            name: NAME,
         }
+    }
+
+    fn named(mut self, name: &'static str) -> Self {
+        self.name = name;
+        self
     }
 
     fn reply(status: u16, body: String) -> Exchange {
@@ -49,11 +56,15 @@ impl Transport for FakeScaleSetApi {
             .and_then(|tail| tail.parse::<i64>().ok());
         Ok(match (request.method, id) {
             (Method::Get, Some(id)) if self.sets.contains(&id) => {
-                Self::reply(200, set_json(id, NAME))
+                Self::reply(200, set_json(id, self.name))
             }
             (Method::Get, Some(_)) => Self::reply(404, String::new()),
             (Method::Get, None) => {
-                let sets: Vec<String> = self.sets.iter().map(|id| set_json(*id, NAME)).collect();
+                let sets: Vec<String> = self
+                    .sets
+                    .iter()
+                    .map(|id| set_json(*id, self.name))
+                    .collect();
                 Self::reply(
                     200,
                     format!(r#"{{"count":{},"value":[{}]}}"#, sets.len(), sets.join(",")),
@@ -148,6 +159,17 @@ async fn a_refused_create_deletes_the_remote_set_it_left_behind() -> TestResult<
     assert_eq!(outcome, Some(ScaleSetDeleteOutcome::Deleted));
     assert_eq!(api.deletes, vec![10]);
     assert_eq!(api.sets, BTreeSet::from([77]));
+    assert_create_can_proceed(&refused).await
+}
+
+#[tokio::test]
+async fn a_refused_create_deletes_a_remote_set_whose_name_differs_from_the_selector()
+-> TestResult<()> {
+    let refused = refused_create(10).await?;
+    let mut api = FakeScaleSetApi::with(&[10]).named("renamed-by-someone");
+    let outcome = recover_intended_delete(&mut api, "admin-token", &refused.scoped).await?;
+    assert_eq!(outcome, Some(ScaleSetDeleteOutcome::Deleted));
+    assert_eq!(api.deletes, vec![10]);
     assert_create_can_proceed(&refused).await
 }
 

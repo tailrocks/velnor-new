@@ -48,6 +48,8 @@ pub(crate) struct ScaleSetDeleteTarget {
     pub(crate) runner_group_id: i64,
 
     pub(crate) state: Option<ScaleSetDeleteState>,
+
+    pub(crate) unverified: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -257,6 +259,7 @@ impl ConnectionJournal {
             labels: intent.labels,
             runner_group_id: intent.runner_group_id,
             state,
+            unverified: false,
         }))
     }
 }
