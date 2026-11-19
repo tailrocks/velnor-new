@@ -153,7 +153,7 @@ pub(super) fn build_steps(
             fields.push(("continue-on-error".to_owned(), Yaml::Bool(true)));
         }
         steps.push(source_prepare);
-        steps.push(workflow_steps::source_identity_step());
+        steps.push(workflow_steps::source_identity_step(pins));
         steps.push(workflow_steps::source_upload_step(product));
     }
     steps.extend([

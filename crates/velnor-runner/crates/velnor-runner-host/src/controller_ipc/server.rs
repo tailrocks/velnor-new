@@ -35,6 +35,11 @@ pub(crate) use state::{
 mod transport;
 pub(super) use transport::{read_drain_token, valid_token};
 
+#[cfg(test)]
+pub(super) fn read_request_for_test(stream: &mut UnixStream) -> Result<Request, HostError> {
+    read_request(stream)
+}
+
 const ACCEPT_PAUSE: Duration = Duration::from_millis(25);
 const IO_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -327,13 +332,17 @@ pub(super) fn connection_census_status(
     )?))
 }
 
+pub(super) fn drain_marker_present(state_path: &Path) -> Result<bool, HostError> {
+    marker_exists(&state_path.join("drain"))
+}
+
 pub(super) fn observation_blocked(
     state: &ControlState,
     state_path: &Path,
     connection_id: &str,
 ) -> Result<bool, HostError> {
     Ok(!state.admission_ready()
-        || marker_exists(&state_path.join("drain"))?
+        || drain_marker_present(state_path)?
         || marker_exists(&state_path.join("connection-drain").join(connection_id))?)
 }
 
