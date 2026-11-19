@@ -40,6 +40,7 @@ const COMPILER_SELECTORS: [(&str, &str); 6] = [
     ("CARGO_BUILD_RUSTC_WRAPPER", ""),
     ("CARGO_BUILD_RUSTC_WORKSPACE_WRAPPER", ""),
 ];
+const TOKEN_GIT_PROTOCOLS: &str = "https:http:file";
 const SERVER_VARIABLE: &str = "VELNOR_SERVER_URL";
 const DEFAULT_SERVER: &str = "https://github.com";
 const REVOKE_PATH: &str = "/installation/token";
@@ -328,6 +329,7 @@ impl Trusted {
                     .iter()
                     .map(|(name, value)| (OsString::from(name), OsString::from(value))),
             );
+            environment.push(("GIT_ALLOW_PROTOCOL".into(), TOKEN_GIT_PROTOCOLS.into()));
             let base = format!(
                 "url.https://x-access-token:{token}@{}/.insteadOf",
                 server.authority
