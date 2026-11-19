@@ -49,7 +49,15 @@ impl<E: Engine + Copy + Send> Driver<'_, E> {
         serde_json::from_slice(&bytes).map_err(io::Error::other)
     }
 
-    async fn save_job_logs(&self, run: u64) -> io::Result<()> {
+    async fn save_job_logs(&self, run: u64, payload: &Value) -> io::Result<()> {
+        let values = crate::conformance::run_values(payload);
+        let runs = self.env.dir.join("runs");
+        fs::create_dir_all(&runs).await?;
+        fs::write(
+            runs.join(format!("{run}.json")),
+            serde_json::to_string(&values).map_err(io::Error::other)?,
+        )
+        .await?;
         let path = format!("/_apis/v1/Message?runid={run}");
         let jobs: Vec<standin::Job> = self.get(Side::Trusted, &path).await?;
         let ids: Vec<u64> = jobs.iter().map(|job| job.request_id).collect();
@@ -148,7 +156,7 @@ impl<E: Engine + Copy + Send> Driver<'_, E> {
             println!("velnor-local {}: {}", self.tag, outcome.line());
             self.outcomes.push(outcome);
             if side == Side::Trusted {
-                self.save_job_logs(id).await?;
+                self.save_job_logs(id, payload).await?;
             }
         }
         if !succeeded && !created {

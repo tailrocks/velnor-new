@@ -14,7 +14,7 @@ use velnor_rust::{
 };
 
 use crate::facts::TestResult;
-use crate::pipeline::{view, workflow};
+use crate::pipeline::{pin_helper, view, workflow};
 use crate::select::{facts, member, name};
 
 fn timings(lint: u64, test: u64, tests: u64) -> Timings {
@@ -214,7 +214,9 @@ fn timed_view(timings: &str, config: &str) -> Result<RepoView, Box<dyn std::erro
 fn a_committed_timings_entry_splits_only_its_own_root_and_the_config_names_the_verdict()
 -> TestResult {
     let entry = r#"{"lab/Cargo.toml": {"lint_build_seconds": 10, "test_build_seconds": 20, "test_seconds": 4}}"#;
-    let text = workflow(&timed_view(entry, "required_check = \"CI passed\"\n")?)?;
+    let mut repo = timed_view(entry, "required_check = \"CI passed\"\n")?;
+    pin_helper(&mut repo, "0.1.97")?;
+    let text = workflow(&repo)?;
     let jobs: Vec<&str> = text
         .lines()
         .skip_while(|line| *line != "jobs:")
@@ -261,8 +263,9 @@ fn a_committed_timings_entry_splits_only_its_own_root_and_the_config_names_the_v
         "required_check = \"\"\n",
         "required_check = \"a\\u0007b\"\n",
     ] {
-        let result = expected_with_notes(&view(&["Cargo.toml"], Some(config.as_bytes()))?)
-            .map(|(files, _)| files);
+        let mut repo = view(&["Cargo.toml"], Some(config.as_bytes()))?;
+        pin_helper(&mut repo, "0.1.97")?;
+        let result = expected_with_notes(&repo).map(|(files, _)| files);
         assert!(invalid(CONFIG_PATH)(result.clone()), "{config}: {result:?}");
     }
     Ok(())
