@@ -161,7 +161,8 @@ mod tests {
             assert_eq!(schema(&journal).await?, expected, "{name}");
             let id = journal.begin("template", name).await?;
             journal.finish(id, Outcome::Done).await?;
-            identities.push(crate::journal_schema::instance_id(&journal.connection().await?).await?);
+            identities
+                .push(crate::journal_schema::instance_id(&journal.connection().await?).await?);
         }
         identities.sort();
         identities.dedup();
