@@ -28,6 +28,7 @@ pub mod metrics;
 mod needs;
 pub mod observed_units;
 pub mod plan;
+pub mod plan_request;
 pub mod platform;
 pub mod preview;
 pub mod private_token;

@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 
-use clap::{Args, Parser, Subcommand};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 use velnor_model::{InvalidId, RepoPath};
 
 mod fetch_reports;
@@ -292,12 +292,40 @@ pub struct PlanArgs {
     )]
     pub full: bool,
     #[arg(
+        long,
+        value_enum,
+        requires = "request",
+        help = "Write the plan contract of a plan request instead of the Rust selection: ci for a push or merge_group run, qualification for a qualification run"
+    )]
+    pub mode: Option<PlanMode>,
+    #[arg(
+        long,
+        value_name = "FILE",
+        requires = "mode",
+        conflicts_with_all = ["changed", "explain", "full", "base_files"],
+        help = "The plan request, as velnor-ci write-request wrote it. Writes plan_id, run_key, not_affected_jobs and the qualification_* values to $GITHUB_OUTPUT, and reads no cargo metadata. The run key comes from the request, else from $GITHUB_RUN_ID and $VELNOR_RUN_KEY_ATTEMPT or $GITHUB_RUN_ATTEMPT. A pull_request, fork or local request, and a qualification phase that has a predecessor, are refused"
+    )]
+    pub request: Option<PathBuf>,
+    #[arg(
+        long,
+        value_name = "BRANCH",
+        requires = "request",
+        help = "The default branch a qualification run must be on; required with --mode qualification"
+    )]
+    pub default_branch: Option<String>,
+    #[arg(
         long = "base-file",
         value_name = "PATH=FILE",
         value_parser = base_file,
         help = "The text a changed Cargo.lock, Cargo.toml or configuration file had before the change: the repository path, an equals sign, and a file holding the old text. Without it a changed Cargo.lock or root Cargo.toml selects everything, and a changed file that makes a check do less (.velnor/rust-ci.toml, a Cargo.toml, a cargo, mise or nextest configuration) counts as adding every such setting it holds, which the run reports as a warning. Repeat for each file"
     )]
     pub base_files: Vec<BaseFile>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum PlanMode {
+    Ci,
+    Qualification,
 }
 
 #[derive(Debug, Clone)]
