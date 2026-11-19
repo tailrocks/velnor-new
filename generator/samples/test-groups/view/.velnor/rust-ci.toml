@@ -1,0 +1,20 @@
+[[test_groups]]
+name = "database"
+filter = "package(app) and test(/^db_/)"
+needs = ["docker"]
+test_threads = 2
+timeout_minutes = 45
+runner = "ubuntu-24.04"
+root = "."
+
+[[test_groups]]
+name = "shell"
+filter = "package(tool) and test(~cargo_)"
+needs = ["cargo"]
+root = "."
+
+[[test_groups]]
+name = "slow"
+filter = "all()"
+test_threads = 1
+root = "lab"

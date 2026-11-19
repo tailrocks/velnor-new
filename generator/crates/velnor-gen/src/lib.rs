@@ -112,6 +112,11 @@ fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, GenerateError> {
             release.version().clone(),
         ));
     }
+    if !facts.config.test_groups.is_empty() && !release.version().at_least((0, 1, 82)) {
+        return Err(GenerateError::TestGroupsHelperTooOld(
+            release.version().clone(),
+        ));
+    }
     if facts.config.pr_ci == PrCi::Label && !release.version().at_least((0, 1, 86)) {
         return Err(GenerateError::PrCiHelperTooOld(release.version().clone()));
     }

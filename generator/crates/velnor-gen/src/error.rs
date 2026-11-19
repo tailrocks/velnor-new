@@ -26,6 +26,7 @@ pub enum GenerateError {
     MbxStoreHelperTooOld(HelperVersion),
     InputsBuildHelperTooOld(HelperVersion),
     PrOnlyChecksHelperTooOld(HelperVersion),
+    TestGroupsHelperTooOld(HelperVersion),
     MergeGroupHelperTooOld(HelperVersion),
     PrCiHelperTooOld(HelperVersion),
     TooManySourceRoots(usize),
@@ -80,6 +81,10 @@ impl fmt::Display for GenerateError {
             Self::PrOnlyChecksHelperTooOld(version) => write!(
                 f,
                 "velnor-ci {version} cannot enforce pr_only_checks; pin velnor-ci 0.1.82 or later with `velnor-gen pin-helper 0.1.82`"
+            ),
+            Self::TestGroupsHelperTooOld(version) => write!(
+                f,
+                "velnor-ci {version} cannot read [[test_groups]] in the configuration; pin velnor-ci 0.1.82 or later with `velnor-gen pin-helper 0.1.82`"
             ),
             Self::MergeGroupHelperTooOld(version) => write!(
                 f,

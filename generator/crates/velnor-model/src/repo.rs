@@ -272,6 +272,7 @@ pub struct RustCiConfig {
     pub mbx_remote: MbxRemote,
     pub push_after_merge_group: PushAfterMergeGroup,
     pub test_setup: Vec<TestSetup>,
+    pub test_groups: Vec<TestGroup>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -280,6 +281,8 @@ pub struct TestSetup {
     pub name: String,
     pub run: String,
 }
+
+pub use crate::test_group::{GroupEvent, GroupRoot, TestGroup, TestNeed};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OnMain {
@@ -390,6 +393,7 @@ impl Default for RustCiConfig {
             mbx_remote: MbxRemote::Off,
             push_after_merge_group: PushAfterMergeGroup::Run,
             test_setup: Vec::new(),
+            test_groups: Vec::new(),
         }
     }
 }

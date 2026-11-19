@@ -21,6 +21,8 @@ mod config_exclude;
 mod config_fork;
 mod config_helper;
 mod config_mirror;
+mod config_test_groups;
+
 mod config_pr_ci;
 mod config_private;
 mod config_test_setup;

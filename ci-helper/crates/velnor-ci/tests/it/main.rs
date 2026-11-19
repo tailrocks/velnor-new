@@ -102,6 +102,7 @@ mod release_record;
 mod release_tag_patterns;
 mod report;
 mod report_accounting;
+mod required_lane;
 mod resolve_cases;
 mod resolve_qualification;
 mod resolve_run;

@@ -3,16 +3,16 @@
 
 use serde::Deserialize;
 use velnor_model::{
-    CiDebugInfo, InputRule, PackageName, PathGlob, RepoPath, RunnerLabel, RustCiConfig, Shape,
-    TargetName,
+    CiDebugInfo, InputRule, PackageName, PathGlob, RepoPath, RunnerLabel, RustCiConfig, TargetName,
 };
 
 use crate::error::{DetectError, Reason};
+use crate::shape::parse_shape;
 use crate::toml_file::table;
 
 pub const CONFIG_PATH: RepoPath = RepoPath::from_static(".velnor/rust-ci.toml");
 
-const KEYS: [&str; 26] = [
+const KEYS: [&str; 27] = [
     "private_sources",
     "cache_check_blocks",
     "cache_debug",
@@ -39,6 +39,7 @@ const KEYS: [&str; 26] = [
     "ci_debuginfo",
     "cache_budget_bytes",
     "test_setup",
+    "test_groups",
 ];
 const TIMEOUT_RANGE: std::ops::RangeInclusive<u16> = 1..=360;
 
@@ -76,6 +77,8 @@ struct RawConfig {
     cache_budget_bytes: Option<u64>,
     #[serde(default)]
     test_setup: Vec<crate::config_test_setup::RawTestSetup>,
+    #[serde(default)]
+    test_groups: Vec<crate::config_test_groups::RawTestGroup>,
 }
 
 #[derive(Deserialize)]
@@ -133,12 +136,14 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
     let ci_debuginfo =
         debuginfo(raw.ci_debuginfo.as_deref(), defaults.ci_debuginfo).map_err(invalid)?;
     let test_setup = crate::config_test_setup::parse(raw.test_setup).map_err(invalid)?;
+    let test_groups = crate::config_test_groups::parse(raw.test_groups).map_err(invalid)?;
     let runner = runner(raw.runner, defaults.runner).map_err(invalid)?;
     let fork_runner = crate::config_fork::fork_runner(raw.fork_runner, &runner).map_err(invalid)?;
     Ok(RustCiConfig {
         cache_budget_bytes: crate::cache_budget::configured_budget(raw.cache_budget_bytes)
             .map_err(invalid)?,
         test_setup,
+        test_groups,
         cache_check_blocks: raw.cache_check_blocks.unwrap_or(false),
         cache_debug: raw.cache_debug.unwrap_or(false).into(),
         mbx_remote: crate::config_cache::mbx_remote(raw.cache).map_err(invalid)?,
@@ -188,20 +193,10 @@ fn harnesses(entries: Vec<String>) -> Result<Vec<(PackageName, TargetName)>, Rea
         .collect()
 }
 
-fn parse_shape(configured: Option<&str>) -> Result<Option<Shape>, Reason> {
-    match configured {
-        None | Some("auto") => Ok(None),
-        Some("one-job") => Ok(Some(Shape::OneJob)),
-        Some("lint-test") => Ok(Some(Shape::LintAndTest)),
-        Some("groups") => Ok(Some(Shape::BuildThenGroups)),
-        Some(other) => Err(Reason::InvalidValue {
-            key: "shape",
-            value: other.to_owned(),
-        }),
-    }
-}
-
-fn runner(configured: Option<String>, default: RunnerLabel) -> Result<RunnerLabel, Reason> {
+pub(crate) fn runner(
+    configured: Option<String>,
+    default: RunnerLabel,
+) -> Result<RunnerLabel, Reason> {
     let Some(label) = configured else {
         return Ok(default);
     };

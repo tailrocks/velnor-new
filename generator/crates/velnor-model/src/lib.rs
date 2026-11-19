@@ -11,6 +11,7 @@ mod plan;
 mod repo;
 mod selection;
 mod steps;
+mod test_group;
 mod verdict;
 
 pub use cache::{CacheKey, CachePath, CacheRoot, Host, LockIdentity};
@@ -38,10 +39,10 @@ pub use plan::{
 };
 pub use repo::{
     CacheDebug, CiDebugInfo, CompileInputs, CratesMirror, CustomHarness, DependencyKind, FullRun,
-    InputRule, MbxRemote, MbxStore, MemberDependency, OnMain, PackageDependency, PolicyTools, PrCi,
-    PrivateSources, PushAfterMergeGroup, RepoFacts, RepoView, RepositoryIdentity, RustCiConfig,
-    RustMember, RustMetadata, RustPackage, RustRoot, Target, TargetKind, TestSetup, Timings,
-    ToolPin, ToolPins, Toolchain, UnownedPackage, Unread, Weakening,
+    GroupEvent, GroupRoot, InputRule, MbxRemote, MbxStore, MemberDependency, OnMain, PackageDependency,
+    PolicyTools, PrCi, PrivateSources, PushAfterMergeGroup, RepoFacts, RepoView, RepositoryIdentity,
+    RustCiConfig, RustMember, RustMetadata, RustPackage, RustRoot, Target, TargetKind, TestGroup,
+    TestNeed, TestSetup, Timings, ToolPin, ToolPins, Toolchain, UnownedPackage, Unread, Weakening,
 };
 pub use selection::{
     AllTrigger, ChangeSet, EventKind, OptionalSteps, RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE,

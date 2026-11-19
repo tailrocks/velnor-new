@@ -57,6 +57,10 @@ pub enum Reason {
     UnknownLockedPackage(String),
     UnknownRoot(RepoPath),
     UnknownTestSetupRoot(String),
+    UnknownTestGroupRoot(String),
+    TestGroupWithoutNextest(String),
+    TestGroupFilter(String),
+    TestGroupSelection(String),
     PrCiWithSkipDraft,
     RustdocflagsString,
     CargoConfigInclude,
@@ -102,6 +106,32 @@ impl Reason {
             Self::HostTupleVersion(version) => write!(
                 f,
                 "build.target uses host-tuple, which Cargo does not support in Rust {version}; use Rust 1.91.0 or newer"
+            ),
+            _ => Ok(()),
+        }
+    }
+
+    fn fmt_test_groups(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::UnknownTestGroupRoot(root) => write!(
+                f,
+                "test_groups names the root {root}, which is not a Cargo root of this repository; name the folder of a root's Cargo.toml, or . for the repository root"
+            ),
+            Self::TestGroupWithoutNextest(name) => write!(
+                f,
+                "test group {name} belongs to a root with no nextest tests; a group runs a nextest filter from the root's archive"
+            ),
+            Self::TestGroupFilter(filter) => write!(
+                f,
+                "test_groups.filter {filter:?} is empty or has a character a generated one-command step cannot carry (a control character, a quote, $, a backtick, a backslash, |, &, ; or <); write nextest's and, or and not instead of &, | and !"
+            ),
+            Self::TestGroupSelection(name) => write!(
+                f,
+                "test group {name} sets paths or events, which choose the groups to run from the plan at run time; that selection is not available yet, so remove them"
+            ),
+            Self::UnknownTestSetupRoot(root) => write!(
+                f,
+                "test_setup names the root {root}, which is not a Cargo root of this repository; name the folder of a root's Cargo.toml, or . for the repository root"
             ),
             _ => Ok(()),
         }
@@ -234,9 +264,13 @@ impl fmt::Display for Reason {
                 f,
                 "has times for {root}, which is not a Cargo root of this repository; run `velnor-ci timings` again"
             ),
-            Self::UnknownTestSetupRoot(root) => write!(
-                f,
-                "test_setup names the root {root}, which is not a Cargo root of this repository; name the folder of a root's Cargo.toml, or . for the repository root"
+            Self::UnknownTestSetupRoot(_)
+            | Self::UnknownTestGroupRoot(_)
+            | Self::TestGroupWithoutNextest(_)
+            | Self::TestGroupFilter(_)
+            | Self::TestGroupSelection(_) => self.fmt_test_groups(f),
+            Self::RustdocflagsString => f.write_str(
+                "rustdoc flags must be set as an array in build.rustdocflags, not as a string and not per target: the generated documentation step adds -D warnings there with --config",
             ),
             Self::MiseOverridesFlags(_) | Self::MiseTemplate | Self::OtherMiseConfig => {
                 self.fmt_mise(f)
@@ -259,7 +293,6 @@ impl fmt::Display for Reason {
             | Self::TargetDirOverlap(_)
             | Self::BuildDirKey(_)
             | Self::RuntimeTargetDir { .. }
-            | Self::RustdocflagsString
             | Self::CargoConfigInclude => self.fmt_cargo_config(f),
             Self::InvalidPatch(key) => write!(
                 f,
