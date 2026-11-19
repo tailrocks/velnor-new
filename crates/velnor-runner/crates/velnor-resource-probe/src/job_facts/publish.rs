@@ -29,7 +29,6 @@ const ROOT_UID: u32 = 0;
 const ROOT_GID: u32 = 0;
 const DIRECTORY_MODE: u32 = 0o555;
 const FILE_MODE: u32 = 0o444;
-const BTRFS_MAGIC: u64 = 0x9123_683e;
 
 mod directories;
 mod files;
