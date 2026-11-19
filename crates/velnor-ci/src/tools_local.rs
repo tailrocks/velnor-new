@@ -347,5 +347,16 @@ pub fn setup(verb: Verb, key: &str) -> Result<String, CiError> {
             .and_then(|mut handle| writeln!(handle, "hit={}", outcome.hit()))
             .map_err(|error| CiError::new(format!("cannot write {file}: {error}")))?;
     }
-    Ok(message(&outcome))
+    finish(verb, &outcome)
+}
+
+/// The text the step prints, or an error when a save that should have happened did not, so that
+/// the workflow can tell a failed save from a skipped one.
+pub fn finish(verb: Verb, outcome: &Outcome) -> Result<String, CiError> {
+    match outcome {
+        Outcome::Failed(reason) if verb == Verb::Save => Err(CiError::new(format!(
+            "tools were not saved to the node store ({reason})"
+        ))),
+        _ => Ok(message(outcome)),
+    }
 }

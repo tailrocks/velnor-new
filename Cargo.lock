@@ -605,7 +605,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7b77c319abfd5219629c45c34c89ba945ed3c5e49fcde9d16b6c3885f118a730"
 dependencies = [
  "const-oid 0.9.6",
- "der 0.7.10",
+ "der",
  "spki",
  "x509-cert",
 ]
@@ -816,12 +816,6 @@ dependencies = [
  "pem-rfc7468",
  "zeroize",
 ]
-
-[[package]]
-name = "der"
-version = "0.8.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a996a108feb8b427a6e12fcf6af4aa83409b79d72c15337d7741368131ee004"
 
 [[package]]
 name = "der_derive"
@@ -3010,7 +3004,7 @@ checksum = "1c6164a3fe384de936dbf73c7141f56c017a3fe02ec7107e67297e61b235fdd9"
 dependencies = [
  "aws-lc-rs",
  "const-oid 0.9.6",
- "der 0.7.10",
+ "der",
  "futures-io",
  "jiff 0.2.38",
  "rustls-pki-types",
@@ -3070,7 +3064,7 @@ checksum = "34e319615ab084c5a5e29ab451a6f717d989db4ce2d68a1c116f5038d33f448b"
 dependencies = [
  "cms",
  "const-oid 0.9.6",
- "der 0.7.10",
+ "der",
  "hex",
  "jiff 0.2.38",
  "rustls-pki-types",
@@ -3240,7 +3234,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d91ed6c858b01f942cd56b37a94b3e0a1798290327d1236e4d9cf4eaca44d29d"
 dependencies = [
  "base64ct",
- "der 0.7.10",
+ "der",
 ]
 
 [[package]]
@@ -4140,7 +4134,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-ci"
-version = "0.1.99"
+version = "0.1.100"
 dependencies = [
  "blake3",
  "clap",
@@ -4164,7 +4158,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-gen"
-version = "0.1.99"
+version = "0.1.100"
 dependencies = [
  "clap",
  "serde-saphyr",
@@ -4243,7 +4237,7 @@ dependencies = [
  "aws-lc-rs",
  "base64 0.23.1",
  "bytes",
- "der 0.8.3",
+ "der",
  "futures-util",
  "jiff 1.0.1",
  "libc",
@@ -4739,7 +4733,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1301e935010a701ae5f8655edc0ad17c44bad3ac5ce8c39185f75453b720ae94"
 dependencies = [
  "const-oid 0.9.6",
- "der 0.7.10",
+ "der",
  "spki",
  "tls_codec",
 ]

@@ -68,6 +68,7 @@ fn conditions(job: &Job) -> Vec<JobCondition> {
         | When::ClearRunLabel
         | When::RestoreToolsUnlessLocal
         | When::SaveToolsUnlessLocal
+        | When::PrimeToolsFromNetwork
         | When::SaveToolsOnDefaultBranch => None,
     };
     gate.into_iter().chain(when).collect()

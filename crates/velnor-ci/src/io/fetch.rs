@@ -52,13 +52,14 @@ pub(super) fn fetch(args: &FetchArgs) -> Result<String, CiError> {
         .filter(|token| !token.is_empty());
     let client = token
         .clone()
-        .map(|token| api_client(token, super::http::DEFAULT_TIMEOUT))
-        .transpose()?;
+        .map(|token| api_client(token, super::http::DEFAULT_TIMEOUT));
     let outcome = fetch_with(args, token.as_deref());
-    let revocation = client.map_or(Ok(()), |github| {
-        github.delete(REVOKE_PATH).map_err(|e| {
-            e.context("the fetch token could not be revoked; it expires within the hour")
-        })
+    let revocation = client.map_or(Ok(()), |client| {
+        client
+            .and_then(|github| github.delete(REVOKE_PATH))
+            .map_err(|e| {
+                e.context("the fetch token could not be revoked; it expires within the hour")
+            })
     });
     outcome?;
     revocation?;

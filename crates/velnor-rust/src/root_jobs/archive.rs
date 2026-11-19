@@ -10,7 +10,7 @@ use super::{ARCHIVE_FILE, ARCHIVE_ID, RootJobs};
 use crate::members::Member;
 use crate::mise::nextest_tool;
 use crate::plan::{CHECKOUT_DEPTH, DEFAULT_GROUP_JOB, TEST_JOB, head, mbx, rust_additions};
-use crate::plan_tools::{mirror_step_on, tools_restore};
+use crate::plan_tools::{mirror_step_on, tools_prime, tools_restore};
 
 impl RootJobs<'_> {
     fn member(&self) -> &Member {
@@ -125,6 +125,10 @@ impl RootJobs<'_> {
         steps.extend(tools_restore(self.facts).into_iter().map(|restore| Step {
             gate: self.lane.steps(),
             ..restore
+        }));
+        steps.extend(tools_prime(self.facts).map(|prime| Step {
+            gate: self.lane.steps(),
+            ..prime
         }));
         steps.push(self.gated(StepKind::InstallTools {
             only: if cargo {

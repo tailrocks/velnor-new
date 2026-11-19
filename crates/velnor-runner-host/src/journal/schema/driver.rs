@@ -153,7 +153,7 @@ pub(in crate::journal) async fn bootstrap_historical_v45(
             return Err(HostError::Journal);
         }
     }
-    super::validate_persisted_schema_v45(conn).await
+    validate_historical_v45(conn).await
 }
 
 #[cfg(test)]
@@ -169,7 +169,7 @@ pub(in crate::journal) async fn bootstrap_historical_v47(
             return Err(HostError::Journal);
         }
     }
-    super::validate_persisted_schema_v46(conn).await
+    validate_historical_v47(conn).await
 }
 
 #[cfg(test)]
@@ -185,8 +185,7 @@ pub(in crate::journal) async fn bootstrap_historical_v48(
             return Err(HostError::Journal);
         }
     }
-    super::validate_persisted_schema_v46(conn).await?;
-    super::jit_interrupted_claims::validate_initial_absence(conn).await
+    validate_historical_v48(conn).await
 }
 
 #[cfg(test)]
@@ -195,6 +194,35 @@ pub(in crate::journal) async fn bootstrap_historical_v46(
 ) -> Result<(), HostError> {
     bootstrap_historical_v45(conn).await?;
     super::jit_interrupted_claims::migrate_v45_to_v46(conn).await?;
+    validate_historical_v46(conn).await
+}
+
+#[cfg(test)]
+pub(in crate::journal) async fn validate_historical_v45(
+    conn: &turso::Connection,
+) -> Result<(), HostError> {
+    super::validate_persisted_schema_v45(conn).await
+}
+
+#[cfg(test)]
+pub(in crate::journal) async fn validate_historical_v46(
+    conn: &turso::Connection,
+) -> Result<(), HostError> {
     super::validate_persisted_schema_v45(conn).await?;
     super::jit_interrupted_claims::validate(conn).await
+}
+
+#[cfg(test)]
+pub(in crate::journal) async fn validate_historical_v47(
+    conn: &turso::Connection,
+) -> Result<(), HostError> {
+    super::validate_persisted_schema_v46(conn).await
+}
+
+#[cfg(test)]
+pub(in crate::journal) async fn validate_historical_v48(
+    conn: &turso::Connection,
+) -> Result<(), HostError> {
+    super::validate_persisted_schema_v46(conn).await?;
+    super::jit_interrupted_claims::validate_initial_absence(conn).await
 }

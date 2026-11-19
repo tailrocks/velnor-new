@@ -3,7 +3,7 @@
 
 use std::collections::BTreeSet;
 
-use velnor_model::{CompileInputs, RepoPath, RepoView, RustMember, RustRoot};
+use velnor_model::{CompileInputs, InputOwner, RepoPath, RepoView, RustMember, RustRoot};
 
 use crate::doc_steps::tokens::{Token, tokens};
 use crate::error::DetectError;
@@ -18,7 +18,10 @@ pub(crate) fn embedded_inputs(view: &RepoView, roots: &[RustRoot]) -> CompileInp
     let mut inputs = CompileInputs::new();
     for member in &members {
         for key in Scan::new(view, member, &members).run() {
-            inputs.entry(key).or_default().insert(member.name.clone());
+            inputs
+                .entry(key)
+                .or_default()
+                .insert(InputOwner::at(member.name.clone(), member.manifest.clone()));
         }
     }
     inputs
@@ -174,8 +177,8 @@ pub(crate) fn locked_and_embedded(
         || Ok(CompileInputs::new()),
         |bytes| parse_inputs_lock(bytes),
     )?;
-    for (file, packages) in embedded_inputs(view, roots) {
-        inputs.entry(file).or_default().extend(packages);
+    for (file, owners) in embedded_inputs(view, roots) {
+        inputs.entry(file).or_default().extend(owners);
     }
     Ok(inputs)
 }

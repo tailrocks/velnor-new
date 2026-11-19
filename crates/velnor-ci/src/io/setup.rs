@@ -59,7 +59,7 @@ pub(super) fn prepare() -> Result<String, CiError> {
     let digest = compat(&inputs);
     write_cargo_config(&root, profile.cargo_config)?;
     append_to(ENV_VARIABLE, &env_lines(&profile))?;
-    append_outputs(&output_lines(&digest))?;
+    append_outputs(&output_lines(&digest, !cold_notice.is_empty()))?;
     append_outputs(&lock_output_lines(&root)?)?;
     Ok(cold_notice)
 }
