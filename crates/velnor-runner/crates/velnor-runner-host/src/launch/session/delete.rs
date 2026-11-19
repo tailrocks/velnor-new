@@ -82,10 +82,6 @@ pub(super) async fn delete_removed_connection_session_with<T: Transport + ?Sized
     }
 }
 
-/// A 404 on the session is "already gone" only when the journal proves this
-/// controller deleted the set that held it: deleting the set takes its
-/// sessions with it, and `disconnect --wait` deletes a created set before the
-/// connection leaves `host.toml`, which is when the session delete runs.
 async fn created_set_deleted_by_us(scoped: &ConnectionJournal) -> bool {
     matches!(
         scoped.scale_set_delete_gate().await,

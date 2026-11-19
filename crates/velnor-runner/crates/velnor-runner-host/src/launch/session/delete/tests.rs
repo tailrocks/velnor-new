@@ -53,8 +53,6 @@ fn queue_session() -> TestResult<QueueSession> {
     )?)
 }
 
-/// A removed connection whose single session is bound and whose zero-header
-/// poll has settled, which is when the controller first tries to delete it.
 async fn ready_to_delete(fixture: &Fixture) -> TestResult<(i64, crate::journal::HeaderAllocation)> {
     fixture
         .journal

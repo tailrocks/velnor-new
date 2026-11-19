@@ -8,12 +8,9 @@ use super::error::{SessionError, reject};
 use super::request::{Method, SessionRequest, Transport};
 use super::retry::{API_QUERY, bearer, execute, fresh_gate, json_content};
 
-/// What the service said about a session delete.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SessionClose {
-    /// HTTP 204: the session was closed by this request.
     Closed,
-    /// HTTP 404: the session, or the scale set that holds it, no longer exists.
     Gone,
 }
 
