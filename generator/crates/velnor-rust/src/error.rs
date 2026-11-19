@@ -151,7 +151,7 @@ impl Reason {
             Self::TargetDirOverlap(value) => write!(f, "build.target-dir {value:?} overlaps tracked checkout content or repository control paths; use an untracked build directory"),
             Self::RuntimeTargetDir { used, rendered } => write!(
                 f,
-                "puts the target directory at {used}, but the generated workflow caches {rendered}; this file was not part of generation, so cargo would write outside the cached target path: remove it, or commit it and regenerate"
+                "puts the target directory at {used}, but the generated workflow caches {rendered}, so cargo would write outside the cached target path: restore the generated target directory, or commit the change and regenerate"
             ),
             Self::BuildDirKey(key) => write!(
                 f,

@@ -217,6 +217,14 @@ fn variable(need: GateNeed) -> &'static str {
     }
 }
 
+fn rustup_add(kind: &str, items: &[String]) -> RenderedStep {
+    RenderedStep {
+        name: format!("Add Rust {kind}s"),
+        run: Some(format!("rustup {kind} add {}", items.join(" "))),
+        ..RenderedStep::default()
+    }
+}
+
 fn step_body(
     kind: &StepKind,
     directory: Option<&RepoPath>,
@@ -258,10 +266,8 @@ fn step_body(
         StepKind::CacheVerify { lane, family } => crate::cache_upload::verify(lane, *family),
         StepKind::CacheTrim { lane, family } => cache_trim(lane, *family),
         StepKind::CacheBudget(bytes) => cache_budget(*bytes),
-        StepKind::RustComponents(components) => {
-            rustup_step("Add Rust components", "component", components)
-        }
-        StepKind::RustTargets(targets) => rustup_step("Add Rust targets", "target", targets),
+        StepKind::RustComponents(components) => rustup_add("component", components),
+        StepKind::RustTargets(targets) => rustup_add("target", targets),
         StepKind::Cargo(command) => cargo_step(command, audit, lane),
         StepKind::Helper(command) => crate::helper_steps::helper_step(*command),
         StepKind::InputsSave(target) => crate::helper_steps::inputs_step("save", target, directory),
@@ -270,6 +276,7 @@ fn step_body(
         }
         StepKind::MbxRemote => crate::helper_steps::mbx_remote_step(),
         StepKind::CratesMirror(mirror) => crate::helper_steps::mirror_step(mirror),
+        StepKind::MbxStore => crate::helper_steps::mbx_store_step(),
         StepKind::TestSetup { name, run } => RenderedStep {
             name: name.clone(),
             run: Some(run.clone()),
@@ -298,14 +305,6 @@ fn step_body(
             run: Some("exit 1".to_owned()),
             ..RenderedStep::default()
         },
-    }
-}
-
-fn rustup_step(name: &str, noun: &str, items: &[String]) -> RenderedStep {
-    RenderedStep {
-        name: name.to_owned(),
-        run: Some(format!("rustup {noun} add {}", items.join(" "))),
-        ..RenderedStep::default()
     }
 }
 

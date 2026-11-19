@@ -82,3 +82,25 @@ fn assert_job_config(root: &Path) -> TestResult {
     assert!(env.contains("VELNOR_CARGO_CONFIG="));
     Ok(())
 }
+
+#[test]
+fn mirror_setup_repeats_from_a_read_only_helper() -> TestResult {
+    use std::os::unix::fs::PermissionsExt;
+    let repo = Repo::empty("crates-mirror-read-only");
+    repo.write_unstaged("ca.pem", "fixture");
+    let helper = repo.root().join("velnor-ci-exec");
+    fs::copy(env!("CARGO_BIN_EXE_velnor-ci"), &helper)?;
+    fs::set_permissions(&helper, fs::Permissions::from_mode(0o555))?;
+    for _ in 0..2 {
+        let output = std::process::Command::new(&helper)
+            .args(["crates-mirror", "--registry", REGISTRY, "--cainfo"])
+            .arg(repo.root().join("ca.pem"))
+            .env("CARGO_HOME", repo.root().join("home"))
+            .env("RUNNER_TEMP", repo.root())
+            .env("GITHUB_ENV", repo.root().join("env"))
+            .env("GITHUB_PATH", repo.root().join("path"))
+            .output()?;
+        assert!(output.status.success(), "{output:?}");
+    }
+    Ok(())
+}
