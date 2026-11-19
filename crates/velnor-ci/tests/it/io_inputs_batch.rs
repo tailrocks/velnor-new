@@ -83,7 +83,7 @@ pub(crate) fn fixture() -> Repo {
         include_str!("../../../../generator/samples/lab/view/mise.lock"),
     );
     let lock = include_str!("../../../../generator/samples/lab/view/.velnor/rust-ci.lock")
-        .replace("0.1.81", "0.1.93");
+        .replace("0.1.93", "0.1.97");
     repo.write(".velnor/rust-ci.lock", &lock);
     for (root, package, target) in [
         ("", "app", "custom-target"),

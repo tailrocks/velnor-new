@@ -1,9 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-//! The Rust packages the routes name, their workspaces and their path dependencies, read from
-//! the manifests of the checkout and, for the base side of an edge, from the base commit.
-
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
@@ -27,7 +24,6 @@ pub(super) struct Units {
     pub(super) edges: Vec<(String, String)>,
 }
 
-/// The workspace members of the routed packages' workspaces, and those packages.
 pub(super) fn load(
     root: &Path,
     routed: &BTreeSet<String>,
@@ -75,7 +71,6 @@ pub(super) fn load(
     Ok(Units { units, edges })
 }
 
-/// The package directories `[workspace] members` names, less `exclude`, plus the root package.
 fn members(
     root: &Path,
     workspace: &str,
@@ -117,8 +112,6 @@ fn members(
     Ok(found)
 }
 
-/// The edges the manifests had at the base commit; an inline `path` only, as the legacy base
-/// edges read it. A manifest the change adds has no base side.
 pub(super) fn base_edges(
     root: &Path,
     base: &str,
@@ -216,7 +209,6 @@ fn dependency_paths(
     paths
 }
 
-/// Each dependency entry as its name (when it inherits from the workspace) or its joined path.
 fn dependency_specs(table: &Table, dir: &str) -> Vec<(Option<String>, Option<String>)> {
     let mut found = Vec::new();
     let mut tables: Vec<&Table> = vec![table];

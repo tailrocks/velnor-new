@@ -161,39 +161,8 @@ pub enum Command {
         about = "Exit 1 unless VELNOR_EVIDENCE_ARTIFACT_ID is a canonical positive decimal integer of at most 16 digits that does not exceed 9007199254740991"
     )]
     ValidateArtifactId,
-    #[command(
-        about = "Run mise install of the pinned GitHub CLI version without ambient mise configuration, environment or hooks; exit 1 when GITHUB_TOKEN is missing or empty or mise fails"
-    )]
-    InstallGh(InstallGhArgs),
-    #[command(
-        about = "Copy the attestation bundle at BUNDLE_PATH to $RUNNER_TEMP/SDK_PREVIEW_RECEIPT.json.sigstore.jsonl with mode 0400; exit 1 unless BUNDLE_PATH is a non-empty regular file that is not a symlink and nothing exists at the destination"
-    )]
-    StageBundle,
     #[command(subcommand, about = "Decide the qualification workflow")]
     Qualification(QualificationCommand),
-}
-
-#[derive(Debug, Args)]
-pub struct InstallGhArgs {
-    #[arg(
-        long,
-        value_parser = plain_version,
-        help = "The exact GitHub CLI version, three dot-separated numbers"
-    )]
-    pub version: String,
-}
-
-fn plain_version(text: &str) -> Result<String, String> {
-    let parts: Vec<&str> = text.split('.').collect();
-    let plain = parts.len() == 3
-        && parts
-            .iter()
-            .all(|part| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit()));
-    if plain {
-        Ok(text.to_owned())
-    } else {
-        Err(format!("{text:?} is not a version like 2.103.3"))
-    }
 }
 
 #[derive(Debug, Subcommand)]

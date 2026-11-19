@@ -4,6 +4,7 @@
 mod audit;
 mod base_expiry;
 mod bench_compare;
+mod bounded;
 mod budget;
 mod budget_window;
 mod cache;
