@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::error::Error;
 use std::fmt;
 
 use crate::error::ReleaseError;
@@ -139,3 +140,5 @@ impl ReleaseError {
         }
     }
 }
+
+impl Error for ReleaseError {}

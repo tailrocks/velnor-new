@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::error::Error;
 use std::fmt;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -397,5 +396,3 @@ impl ReleaseError {
         }
     }
 }
-
-impl Error for ReleaseError {}
