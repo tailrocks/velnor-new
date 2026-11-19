@@ -160,6 +160,9 @@ fn rendered_steps(
         lane,
     ));
     for body in &mut rendered {
+        if let (StepKind::Cargo(_), Some(target)) = (&step.kind, &step.target_dir) {
+            body.env.push(crate::cargo::target_dir_env(target));
+        }
         if matches!(step.kind, StepKind::ReportCaches { .. })
             && let Some(name) = job_name
         {
@@ -221,6 +224,14 @@ fn variable(need: GateNeed) -> &'static str {
     }
 }
 
+fn rustup_add(kind: &str, items: &[String]) -> RenderedStep {
+    RenderedStep {
+        name: format!("Add Rust {kind}s"),
+        run: Some(format!("rustup {kind} add {}", items.join(" "))),
+        ..RenderedStep::default()
+    }
+}
+
 fn step_body(
     kind: &StepKind,
     directory: Option<&RepoPath>,
@@ -262,16 +273,8 @@ fn step_body(
         StepKind::CacheVerify { lane, family } => crate::cache_upload::verify(lane, *family),
         StepKind::CacheTrim { lane, family } => cache_trim(lane, *family),
         StepKind::CacheBudget(bytes) => cache_budget(*bytes),
-        StepKind::RustComponents(components) => RenderedStep {
-            name: "Add Rust components".to_owned(),
-            run: Some(format!("rustup component add {}", components.join(" "))),
-            ..RenderedStep::default()
-        },
-        StepKind::RustTargets(targets) => RenderedStep {
-            name: "Add Rust targets".to_owned(),
-            run: Some(format!("rustup target add {}", targets.join(" "))),
-            ..RenderedStep::default()
-        },
+        StepKind::RustComponents(components) => rustup_add("component", components),
+        StepKind::RustTargets(targets) => rustup_add("target", targets),
         StepKind::Cargo(command) => cargo_step(command, audit, lane),
         StepKind::Helper(command) => crate::helper_steps::helper_step(*command),
         StepKind::InputsSave(target) => crate::helper_steps::inputs_step("save", target, directory),
@@ -279,6 +282,7 @@ fn step_body(
             crate::helper_steps::inputs_step("restore", target, directory)
         }
         StepKind::CratesMirror(mirror) => crate::helper_steps::mirror_step(mirror),
+        StepKind::MbxStore => crate::helper_steps::mbx_store_step(),
         StepKind::TestSetup { name, run } => RenderedStep {
             name: name.clone(),
             run: Some(run.clone()),
@@ -361,7 +365,7 @@ pub(crate) fn install_helper(release: &HelperRelease) -> RenderedStep {
     RenderedStep {
         name: format!("Install velnor-ci {version}"),
         uses: Some(format!("{SETUP_VELNOR_ACTION}@{}", release.action())),
-        uses_comment: Some(format!("rust-ci-v{version}")),
+        uses_comment: Some(version.release_tag()),
         with,
         ..RenderedStep::default()
     }
