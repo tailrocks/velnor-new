@@ -14,7 +14,7 @@ use tokio::fs;
 use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
 
-use super::probe::wait_for;
+use super::probe::{wait_for, wait_online};
 use super::proxy::Proxy;
 use crate::authority::AGENTS_PATH;
 use crate::cli::EnvironmentArgs;
@@ -23,7 +23,7 @@ use crate::side::Side;
 pub(super) use crate::doctor::STANDIN_IMAGE;
 use crate::doctor::{CACHE_IMAGE as LOCAL_IMAGE, RUNNER_IMAGE};
 pub(super) const RUNNER_LABELS: &str = "ubuntu-latest,ubuntu-22.04,ubuntu-24.04,ubuntu-26.04,ubuntu-22.04-arm,ubuntu-24.04-arm,ubuntu-26.04-arm";
-const READY_TIMEOUT: Duration = Duration::from_secs(60);
+pub const READY_TIMEOUT: Duration = Duration::from_secs(60);
 const OPENSSL: &str = "openssl genrsa -out /keys/token.pem 2048 && openssl rsa -in /keys/token.pem -RSAPublicKey_out -outform DER -out /keys/token.pub.der";
 
 pub trait Engine: Sync {
@@ -59,6 +59,7 @@ pub struct Environment<E> {
     pub name: String,
     pub dir: PathBuf,
     engine: E,
+    ready_timeout: Duration,
 }
 
 #[derive(Debug)]
@@ -118,7 +119,18 @@ impl<E: Engine> Environment<E> {
                     let _ = write!(name, "{byte:02x}");
                     name
                 });
-        Ok(Self { name, dir, engine })
+        Ok(Self {
+            name,
+            dir,
+            engine,
+            ready_timeout: READY_TIMEOUT,
+        })
+    }
+
+    #[must_use]
+    pub const fn with_ready_timeout(mut self, ready_timeout: Duration) -> Self {
+        self.ready_timeout = ready_timeout;
+        self
     }
 
     async fn docker(&self, constant: &'static str, values: &[&str]) -> io::Result<String> {
@@ -320,7 +332,7 @@ impl<E: Engine> Environment<E> {
             stub_url: format!("http://{stub}"),
             token,
         };
-        let deadline = tokio::time::Instant::now() + READY_TIMEOUT;
+        let deadline = tokio::time::Instant::now() + self.ready_timeout;
         let sides: Vec<_> = [("", &addresses.cache, args.containers(args.runners))]
             .into_iter()
             .chain(
@@ -341,7 +353,7 @@ impl<E: Engine> Environment<E> {
                     self.name
                 );
                 let what = format!("{prefix}runner {number}");
-                wait_for(proxy, &path, deadline, &what).await?;
+                wait_online(proxy, &path, deadline, &what).await?;
             }
         }
         Ok(addresses)

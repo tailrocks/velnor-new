@@ -210,3 +210,11 @@ fn release_gate_accepts_repeated_literal_pr_only_check_arguments() {
     };
     assert_eq!(args.pr_only_check, ["DCO", "-team's check"]);
 }
+
+#[test]
+fn a_blank_pr_only_check_is_refused_and_names_its_position() {
+    for blank in ["", " "] {
+        let said = protected().gate_with(GREEN, &["DCO".to_owned(), blank.to_owned()]);
+        assert_refused(&said, "--pr-only-check #2 is blank");
+    }
+}

@@ -6,9 +6,9 @@ use std::collections::BTreeMap;
 use velnor_actions_contract::ContractError;
 use velnor_actions_contract::workflow::cache_family::StateUnit;
 use velnor_actions_contract::workflow::cache_family::{
-    CACHE_KEYS_STEP_NAME, CARGO_HOME_EXPR, CacheFamily, RUNNER_TEMP_EXPR, RUNNER_TEMP_SHELL,
-    RootSlug, S256, SOURCES_KEY_OUTPUT, SOURCES_RESTORE_KEYS_OUTPUT, SOURCES_SAVE_OUTPUT,
-    SOURCES_SNAPSHOT_OUTPUT, TRUST_OUTPUT, state_snapshot_output, tofu_providers_key_output,
+    CACHE_KEYS_STEP_NAME, CacheFamily, RootSlug, S256, SOURCES_CACHE_HOME, SOURCES_KEY_OUTPUT,
+    SOURCES_RESTORE_KEYS_OUTPUT, SOURCES_SAVE_OUTPUT, SOURCES_SNAPSHOT_OUTPUT, TRUST_OUTPUT,
+    state_snapshot_output, tofu_providers_key_output,
 };
 use velnor_actions_contract::workflow::state_seal::state_compat_output;
 use velnor_actions_contract::{Step, StepId, StepRole, validate_fetch_root};
@@ -120,7 +120,7 @@ fn compat_header(family: CacheFamily, root_locator: Option<&str>, file: &str) ->
 
 fn sources_commands(fetch_roots: &[String]) -> Result<Vec<String>, PlanSourcesError> {
     let prefix = CacheFamily::Sources.key_prefix();
-    let home = CARGO_HOME_EXPR.replace(RUNNER_TEMP_EXPR, RUNNER_TEMP_SHELL);
+    let home = SOURCES_CACHE_HOME;
     let mut script = compat_header(CacheFamily::Sources, None, "$d/sources-compat");
     script.push(format!(
         "printf '%s\\n' \"{home}\" >> \"$d/sources-compat\""
