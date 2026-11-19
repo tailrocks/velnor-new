@@ -1,15 +1,19 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::HelperRelease;
-use velnor_workflows::{Action, Body, Env, Input, Job, Step, Workflow, WorkflowsPlan};
+use velnor_model::{HelperRelease, github_hosted};
+use velnor_workflows::{
+    Action, Body, CallTarget, CallValue, Env, Job, MatrixSource, Step, Workflow, WorkflowsPlan,
+};
 
+use crate::reusable_on::on;
 use crate::rules::{
-    MAX_WORKFLOW_BYTES, RenderedJob, RenderedMatrix, RenderedStep, RenderedWorkflow, Rule,
-    RuleViolation, Value, check_rules,
+    MAX_WORKFLOW_BYTES, RenderedJob, RenderedMatrix, RenderedMatrixSource, RenderedStep,
+    RenderedWorkflow, Rule, RuleViolation, Value, check_rules,
 };
 use crate::steps::{
-    CACHE_RESTORE, CACHE_SAVE, CHECKOUT, DOWNLOAD_ARTIFACT, MISE, UPLOAD_ARTIFACT, install_helper,
+    ATTEST_BUILD_PROVENANCE, CACHE_RESTORE, CACHE_SAVE, CHECKOUT, DOWNLOAD_ARTIFACT, MISE,
+    UPLOAD_ARTIFACT, install_helper,
 };
 use crate::workflow::yaml_job;
 use crate::yaml::{Yaml, emit, entry, text};
@@ -41,17 +45,7 @@ fn render_one(
     check_rules(&rendered)?;
     let document = [
         entry("name", text(&workflow.name)),
-        entry(
-            "on",
-            Yaml::Map(vec![entry(
-                "workflow_call",
-                Yaml::Map(if workflow.inputs.is_empty() {
-                    Vec::new()
-                } else {
-                    vec![entry("inputs", inputs(&workflow.inputs))]
-                }),
-            )]),
-        ),
+        entry("on", on(&workflow.triggers)),
         entry("permissions", Yaml::Map(Vec::new())),
         entry(
             "jobs",
@@ -75,33 +69,21 @@ fn render_one(
     Ok((format!(".github/workflows/{}.yml", workflow.file), file))
 }
 
-fn inputs(inputs: &[Input]) -> Yaml {
-    Yaml::Map(
-        inputs
-            .iter()
-            .map(|input| {
-                let mut items = Vec::new();
-                if let Some(description) = &input.description {
-                    items.push(entry("description", text(description)));
-                }
-                items.push(entry("required", Yaml::Bool(input.required)));
-                items.push(entry("type", text("string")));
-                entry(&input.name, Yaml::Map(items))
-            })
-            .collect(),
-    )
-}
-
 fn rendered_job(workflow: &Workflow, job: &Job, helper: &HelperRelease) -> RenderedJob {
     let installs = job.helper.then(|| install_helper(helper));
+    let runs_on = job.runner.as_ref().unwrap_or(&workflow.runner).clone();
     RenderedJob {
         id: job.id.clone(),
         needs: job.needs.clone(),
-        condition: workflow
-            .condition
-            .as_deref()
-            .map(|condition| format!("${{{{ {condition} }}}}")),
+        condition: condition(workflow.condition.as_deref(), job.condition.as_deref()),
         environment: job.environment.clone(),
+        uses: job.call.as_ref().map(|call| call_path(&call.target)),
+        with: job
+            .call
+            .iter()
+            .flat_map(|call| call_values(&call.with))
+            .collect(),
+        fork_runner: (!github_hosted(&runs_on)).then(|| workflow.fork_runner.clone()),
         permissions: job.permissions.clone(),
         no_permissions: job.permissions.is_empty(),
         outputs: job
@@ -110,11 +92,19 @@ fn rendered_job(workflow: &Workflow, job: &Job, helper: &HelperRelease) -> Rende
             .map(|(name, value)| (name.clone(), format!("${{{{ {value} }}}}")))
             .collect(),
         matrix: job.matrix.as_ref().map(|matrix| RenderedMatrix {
-            from_output: format!("needs.{}.outputs.{}", matrix.from_job, matrix.from_output),
+            source: match &matrix.source {
+                MatrixSource::Output {
+                    from_job,
+                    from_output,
+                } => {
+                    RenderedMatrixSource::Output(format!("needs.{from_job}.outputs.{from_output}"))
+                }
+                MatrixSource::Axes(axes) => RenderedMatrixSource::Axes(axes.clone()),
+            },
             fail_fast: matrix.fail_fast,
             max_parallel: matrix.max_parallel,
         }),
-        runs_on: workflow.runner.clone(),
+        runs_on,
         timeout_minutes: job.timeout_minutes,
         steps: installs
             .into_iter()
@@ -122,6 +112,37 @@ fn rendered_job(workflow: &Workflow, job: &Job, helper: &HelperRelease) -> Rende
             .collect(),
         ..RenderedJob::default()
     }
+}
+
+/// The workflow `if` and the job `if` both have to hold.
+fn condition(workflow: Option<&str>, job: Option<&str>) -> Option<String> {
+    match (workflow, job) {
+        (None, None) => None,
+        (Some(only), None) | (None, Some(only)) => Some(format!("${{{{ {only} }}}}")),
+        (Some(first), Some(second)) => Some(format!("${{{{ ({first}) && ({second}) }}}}")),
+    }
+}
+
+fn call_path(target: &CallTarget) -> String {
+    match target {
+        CallTarget::Declared(file) => format!("./.github/workflows/{file}.yml"),
+        CallTarget::Local(path) | CallTarget::Pinned(path) => path.clone(),
+    }
+}
+
+fn call_values(items: &[(String, CallValue)]) -> Vec<(String, Value)> {
+    items
+        .iter()
+        .map(|(key, value)| {
+            let value = match value {
+                CallValue::Text(text) => Value::Text(text.clone()),
+                CallValue::Boolean(flag) => Value::Bool(*flag),
+                CallValue::Number(number) => Value::Int(*number),
+                CallValue::Expression(inner) => Value::Expr(format!("${{{{ {inner} }}}}")),
+            };
+            (key.clone(), value)
+        })
+        .collect()
 }
 
 fn pin(action: Action) -> &'static str {
@@ -132,6 +153,7 @@ fn pin(action: Action) -> &'static str {
         Action::DownloadArtifact => DOWNLOAD_ARTIFACT,
         Action::CacheRestore => CACHE_RESTORE,
         Action::CacheSave => CACHE_SAVE,
+        Action::AttestBuildProvenance => ATTEST_BUILD_PROVENANCE,
     }
 }
 

@@ -19,5 +19,6 @@ test = false
 doctest = false
 
 [dependencies]
+velnor-model.workspace = true
 serde.workspace = true
 toml.workspace = true

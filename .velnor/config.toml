@@ -996,6 +996,10 @@ task = "lint-generator-samples"
 inputs = [
   "generator/samples/declared-workflow/expected/.github/workflows/preview-authority.yml",
   "generator/samples/declared-workflow/expected/.github/workflows/rust-ci.yml",
+  "generator/samples/declared-workflows/expected/.github/workflows/build-assets.yml",
+  "generator/samples/declared-workflows/expected/.github/workflows/release-checks.yml",
+  "generator/samples/declared-workflows/expected/.github/workflows/release-follow-up.yml",
+  "generator/samples/declared-workflows/expected/.github/workflows/rust-ci.yml",
   "generator/samples/full-run-cron/expected/.github/workflows/rust-ci.yml",
   "generator/samples/full-run-nightly/expected/.github/workflows/rust-ci.yml",
   "generator/samples/full-run-off/expected/.github/workflows/rust-ci.yml",

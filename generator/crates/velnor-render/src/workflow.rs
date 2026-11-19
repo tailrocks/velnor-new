@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::rules::{RenderedJob, RenderedMatrix, RenderedStep, Value};
+use crate::rules::{RenderedJob, RenderedMatrix, RenderedMatrixSource, RenderedStep, Value};
 use crate::yaml::{Yaml, entry, text};
 use velnor_model::{TESTS_BY_PACKAGE_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT};
 
@@ -42,45 +42,54 @@ pub(crate) fn yaml_job(job: &RenderedJob) -> Yaml {
         ));
     }
     if !job.outputs.is_empty() {
-        items.push(entry(
-            "outputs",
-            Yaml::Map(
-                job.outputs
-                    .iter()
-                    .map(|(name, value)| {
-                        let value = value.clone();
-                        entry(
-                            name,
-                            if name == TESTS_RUN_OUTPUT
-                                || name == TESTS_LISTED_OUTPUT
-                                || name == TESTS_BY_PACKAGE_OUTPUT
-                            {
-                                Yaml::Unread(value)
-                            } else {
-                                Yaml::Expr(value)
-                            },
-                        )
-                    })
-                    .collect(),
-            ),
-        ));
+        items.push(entry("outputs", yaml_outputs(&job.outputs)));
     }
-    items.push(entry("runs-on", runs_on(job)));
+    if job.uses.is_none() {
+        items.push(entry("runs-on", runs_on(job)));
+    }
     if let Some(matrix) = &job.matrix {
         items.push(entry("strategy", yaml_matrix(matrix)));
     }
-    items.extend([entry(
-        "timeout-minutes",
-        Yaml::Int(u64::from(job.timeout_minutes)),
-    )]);
-    items.extend([entry(
-        "steps",
-        Yaml::Seq(job.steps.iter().map(yaml_step).collect()),
-    )]);
+    if let Some(uses) = &job.uses {
+        items.push(entry("uses", text(uses)));
+        if !job.with.is_empty() {
+            items.push(entry("with", values(&job.with)));
+        }
+    } else {
+        items.extend([
+            entry("timeout-minutes", Yaml::Int(u64::from(job.timeout_minutes))),
+            entry(
+                "steps",
+                Yaml::Seq(job.steps.iter().map(yaml_step).collect()),
+            ),
+        ]);
+    }
     match &job.comment {
         Some(comment) => Yaml::Noted(comment.clone(), Box::new(Yaml::Map(items))),
         None => Yaml::Map(items),
     }
+}
+
+fn yaml_outputs(outputs: &[(String, String)]) -> Yaml {
+    Yaml::Map(
+        outputs
+            .iter()
+            .map(|(name, value)| {
+                let value = value.clone();
+                entry(
+                    name,
+                    if name == TESTS_RUN_OUTPUT
+                        || name == TESTS_LISTED_OUTPUT
+                        || name == TESTS_BY_PACKAGE_OUTPUT
+                    {
+                        Yaml::Unread(value)
+                    } else {
+                        Yaml::Expr(value)
+                    },
+                )
+            })
+            .collect(),
+    )
 }
 
 fn yaml_matrix(matrix: &RenderedMatrix) -> Yaml {
@@ -93,7 +102,21 @@ fn yaml_matrix(matrix: &RenderedMatrix) -> Yaml {
     }
     items.push(entry(
         "matrix",
-        Yaml::Expr(format!("${{{{ fromJSON({}) }}}}", matrix.from_output)),
+        match &matrix.source {
+            RenderedMatrixSource::Output(from) => {
+                Yaml::Expr(format!("${{{{ fromJSON({from}) }}}}"))
+            }
+            RenderedMatrixSource::Axes(axes) => Yaml::Map(
+                axes.iter()
+                    .map(|(name, values)| {
+                        entry(
+                            name,
+                            Yaml::Seq(values.iter().map(|value| text(value)).collect()),
+                        )
+                    })
+                    .collect(),
+            ),
+        },
     ));
     Yaml::Map(items)
 }

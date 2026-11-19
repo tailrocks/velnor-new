@@ -55,58 +55,109 @@ run = "bash scripts/ci-fixtures.sh"
 
 `root` is the folder of the Cargo root's `Cargo.toml`, or `.` for the repository root, and it must name a root of this repository. The step runs in that folder. It follows the same gate as the test steps, so a run that selects no tests skips it. A job that runs no tests has none. With `shape = "groups"` the test group job installs only cargo-nextest, so a step there must not need Rust. A `run` value with an expression, a line break or any shell syntax is refused.
 
-## Optional reusable workflows
+## Declared workflows
 
-`.velnor/workflows.toml` makes the generator write one reusable workflow, `.github/workflows/<file>.yml`, for each `[[workflow]]` table. It is off when the file is absent, and then the generated files are byte-identical to the output without this feature. The workflow is called by another workflow, so it has the `workflow_call` trigger and no other trigger. It sets `permissions: {}` at the top, and each job lists only the scopes it names. The file names are `file = "native-checks"` and so on; `rust-ci` and `release` belong to other outputs and are refused. The samples `reusable-workflows` and `declared-workflow` use every key below.
+`.velnor/workflows.toml` makes the generator write one workflow file, `.github/workflows/<file>.yml`, for each `[[workflow]]` table. It is the only place that declares extra workflows: the `[[workflow]]` table of the earlier `fast/1290-source-preview` draft in `rust-ci.toml` is gone, and the reusable-workflow section that stood here is replaced by this one. The file is off when it is absent, and then the generated files are byte-identical to the output without it. `file` is lower case letters, digits and dashes; `rust-ci` and `release` belong to other outputs and are refused. A workflow sets `permissions: {}` at the top, and each job lists only the scopes it names. The samples `reusable-workflows`, `declared-workflow` and `declared-workflows` use every key below.
 
 ```toml
 [[workflow]]
-file = "native-checks"
-name = "Native checks"
-runner = "ubuntu-latest"
+file = "release-checks"
+name = "Release checks"
+runner = "velnor-linux-x64"      # default ubuntu-latest
+fork_runner = "ubuntu-latest"    # default ubuntu-latest, must be GitHub-hosted
+if = "github.event_name != 'merge_group'"
 
-[[workflow.input]]
-name = "sdk_version"
-description = "SDK version to check"
-required = true
+[workflow.on]                    # absent: the workflow is reusable (workflow_call)
+merge_group = true
+schedule = ["23 4 * * 1"]
+
+[workflow.on.push]
+branches = ["main"]
+tags = ["rust-ci-v*"]            # the tag prefix is a value you choose
+
+[workflow.on.pull_request]
+types = ["opened", "synchronize", "reopened"]
+branches = ["main"]
+
+[workflow.on.workflow_dispatch]
+
+[[workflow.on.workflow_dispatch.input]]
+name = "mode"
+type = "choice"
+options = ["quick", "full"]
+default = "quick"
 
 [[workflow.job]]
 id = "plan"
-helper = true
-timeout_minutes = 15
+if = "github.event_name == 'push'"
+timeout_minutes = 5
 permissions = { contents = "read" }
 outputs = { matrix = "steps.plan.outputs.matrix" }
 
 [[workflow.job.step]]
+uses = "checkout"
+
+[[workflow.job.step]]
 id = "plan"
-name = "Plan the checks"
-run = "velnor-ci plan"
-env = { SDK_VERSION = "${{ inputs.sdk_version }}" }
+name = "Plan"
+run = "printenv MODE"
+env = { MODE = "${{ inputs.mode }}" }
 
 [[workflow.job]]
 id = "check"
 needs = ["plan"]
+environment = "release"
 
-[workflow.job.matrix]
+[workflow.job.matrix]            # one source: from_output or axes
 from_output = "plan.matrix"
 fail_fast = false
 max_parallel = 2
 
 [[workflow.job.step]]
-name = "Warm the cache"
-run = "velnor-ci warm"
+name = "Check"
+run = "echo check"
 continue_on_error = true
 env = { TARGET = "${{ matrix.target }}" }
+
+[[workflow.job]]
+id = "assets"
+needs = ["check"]
+uses = "build-assets"            # a workflow declared earlier in this file
+permissions = { contents = "read", id-token = "write", attestations = "write" }
+with = { version = "${{ github.sha }}", dry_run = false }
 ```
 
-- Inputs. Each `[[workflow.input]]` becomes a typed `string` input of `workflow_call`. `required` is `true` unless you set it to `false`.
-- Matrix from a job output. A job with `[workflow.job.matrix]` renders `strategy.matrix: ${{ fromJSON(needs.<job>.outputs.<output>) }}`. `from_output` is `<job>.<output>`; that job must be in the job's `needs` and must declare the output. `fail_fast` and `max_parallel` are optional.
-- Job outputs. `outputs` maps a name to `steps.<step id>.outputs.<name>` of a step of the same job.
-- Per-step `continue_on_error = true` renders `continue-on-error: true` on that step only.
+### Triggers
+
+Every workflow lists its events under `[workflow.on]`. The generator writes them in one fixed order whatever order you list them in: `workflow_call`, `workflow_dispatch`, `schedule`, `push`, `pull_request`, `merge_group`, `workflow_run`. Without `[workflow.on]` the workflow has `workflow_call` alone.
+
+- `workflow_call = true`. The inputs are `[[workflow.input]]` and the outputs are `[[workflow.output]]` of the workflow. An input has `name`, an optional `description`, `type` (`string`, `boolean` or `number`, default `string`), an optional `default` of that type, and `required`, which is `true` unless there is a `default`. A number is a whole number of zero or more. An output has `name`, an optional `description` and `value = "<job>.<output>"`, where the job declares that output (or is a job that calls a workflow with that output); it renders `${{ jobs.<job>.outputs.<output> }}`.
+- `[workflow.on.workflow_dispatch]` with `[[workflow.on.workflow_dispatch.input]]`. The input keys are the same, and `type` may also be `choice` (with `options`, and a `default` that is one of them) or `environment`.
+- `schedule = ["<five-field cron>", ...]`.
+- `[workflow.on.push]` needs `branches` or `tags` or both, which are GitHub filter patterns. An unfiltered `push` is refused. Nothing in the generator knows a tag prefix: `rust-ci-v*`, `v*` and `sdk-preview-*` are all just values.
+- `[workflow.on.pull_request]` needs `types`, and takes optional `branches`. `pull_request_target` does not exist in this model, so a declared workflow never runs fork code with secrets.
+- `merge_group = true`.
+- `[workflow.on.workflow_run]` needs `workflows` (the names of the workflows it follows), takes `types` (default `completed`) and optional `branches`. A `workflow_run` workflow runs in the context of the default branch. Do not check out another ref: `with` cannot read `github.event.*`, so a step cannot name the head of the run it follows.
+- Inputs of `workflow_call` and `workflow_dispatch` are both read as `inputs.<name>`.
+
+### Jobs
+
+- `needs` lists earlier jobs of the workflow. `if` is one expression, with or without `${{ }}`. A workflow `if` and a job `if` both apply: the job gets `(workflow if) && (job if)`.
+- `runner` sets the runner of one job; the workflow `runner` is the default. A runner label is letters, digits, dashes, underscores and dots. A label that is not a GitHub-hosted one gets the fork fence: `runs-on` is `<runner>` for a push, a schedule and a pull request from this repository, and `fork_runner` for a pull request from a fork.
+- `timeout_minutes` is 1 to 360, default 30.
+- `permissions` accepts these scopes: `actions`, `artifact-metadata`, `attestations`, `checks`, `contents`, `deployments`, `id-token`, `issues`, `packages`, `pages`, `pull-requests`, `security-events` and `statuses`, each `read`, `write` or `none` (`id-token` has no `read`). A job with none gets `permissions: {}`. `checkout` needs `contents: read` on a private repository, so name it.
+- `environment = "<name>"` is for step jobs. A deployment environment is what holds secrets and approval.
+- `outputs` maps a name to `steps.<step id>.outputs.<name>` of a step of the same job.
 - `helper = true` puts the pinned `velnor-ci` install step first in the job.
-- A job can set `environment = "<name>"`. `permissions` accepts these scopes: `actions`, `artifact-metadata`, `attestations`, `checks`, `contents`, `deployments`, `id-token`, `issues`, `packages`, `pages`, `pull-requests`, `security-events` and `statuses`, each `read`, `write` or `none` (`id-token` has no `read`).
-- A workflow can set `if = "<expression>"`, with or without `${{ }}`. It is added to every job's `if`.
-- A step is exactly one of `run`, `uses` and `helper`. `uses` names a SHA-pinned action from this list: `checkout`, `mise`, `upload-artifact`, `download-artifact`, `cache-restore` and `cache-save`; `with` sets its inputs. `helper = "<command>"` renders `run: velnor-ci <command>` and needs `helper = true` on its job. A step can set `if`; a name is optional for `uses` and `helper` steps.
-- An `if` may read `needs.<needed job>.result`, `steps.<earlier step id>.outcome` and `github.*`, besides what a value may read. An expression that names a job missing from `needs`, a later or unknown step, or any other context (such as `secrets`) is refused.
-- Every `run` follows the same rules as the other generated workflows: one command, no shell logic, no expression. Pass values through `env`.
-- An `env` value is plain text or exactly one expression. The allowed expressions are `github.token`, `github.repository`, `github.sha`, `inputs.<declared input>`, `matrix.<key>` in a matrix job, `steps.<earlier step id>.outputs.<name>` and `needs.<needed job>.outputs.<declared output>`. Anything else, and any `needs` on a job declared later, is refused with the path of the problem.
+- A matrix has one source. `from_output = "<job>.<output>"` renders `fromJSON(needs.<job>.outputs.<output>)`; that job must be in `needs` and declare the output. `axes = { os = ["a", "b"], ... }` renders a static matrix of up to 256 combinations, and `matrix.<axis>` is then the only matrix key a value may read. `fail_fast` and `max_parallel` are optional.
+- `uses = "<workflow>"` makes the job call a reusable workflow, and then the job has no steps, `runner`, `timeout_minutes`, `environment`, `helper` or `outputs`. `<workflow>` is one of: the `file` of a workflow declared earlier in this file (its inputs are checked, its `boolean` and `number` inputs are written as such, and the job must hold every permission the called jobs ask for); `./.github/workflows/<name>.yml`; or `owner/repo/.github/workflows/<name>.yml@<full commit SHA>`. `with` passes inputs, each plain text or exactly one expression. No `secrets` are passed, ever. A later job reads `needs.<job>.outputs.<name>` for the outputs of a declared workflow.
+
+### Steps
+
+- A step is exactly one of `run`, `uses` and `helper`. A name is optional for `uses` and `helper` steps. `continue_on_error = true` renders `continue-on-error: true` on that step only.
+- `run` is one simple command: no line break, no `;`, `|`, `&`, `$(`, backtick, `if`, `for`, `while` or `case`, and no `${{ }}`. Pass values through `env`. A command that runs `velnor-ci` needs `helper = true` on its job.
+- `helper = "<command>"` renders `run: velnor-ci <command>` and needs `helper = true` on its job.
+- `uses` names a SHA-pinned action from this fixed list: `checkout`, `mise`, `upload-artifact`, `download-artifact`, `cache-restore`, `cache-save` and `attest` (`actions/attest-build-provenance`). `with` sets its inputs. Adding an action is a change to this list, not to the model.
+- Locked inputs: `checkout` always has `persist-credentials: false`; `mise` always has `cache: false` and `cache_save: false`; `attest` always has `push-to-registry: false`. Setting one to anything but `false` is refused, and setting it to `false` is accepted and written once. `attest` is refused unless its job has `id-token = "write"` and `attestations = "write"`.
+- An `if` on a step may read `needs.<needed job>.result`, `steps.<earlier step id>.outcome` and `github.*`, besides what a value may read. An `if` on a job may read `needs`, `inputs` and `github.*` only.
+- An `env` or `with` value is plain text or exactly one expression. The allowed expressions are `github.token`, `github.repository`, `github.sha`, `inputs.<declared input>`, `matrix.<key>` in a matrix job, `steps.<earlier step id>.outputs.<name>` and `needs.<needed job>.outputs.<declared output>`. Anything else (including `secrets` and `github.event.*`), and any `needs` on a job declared later, is refused with the path of the problem.

@@ -9,13 +9,14 @@ pub const SETUP_VELNOR_ACTION: &str = "tailrocks/velnor-new/actions/setup-velnor
 
 pub const APP_TOKEN_ACTION: &str = "actions/create-github-app-token";
 
-pub const ALLOWED_ACTIONS: [&str; 8] = [
+pub const ALLOWED_ACTIONS: [&str; 9] = [
     "actions/checkout",
     APP_TOKEN_ACTION,
     "actions/cache/restore",
     "actions/cache/save",
     "actions/upload-artifact",
     "actions/download-artifact",
+    "actions/attest-build-provenance",
     MISE_ACTION,
     SETUP_VELNOR_ACTION,
 ];
@@ -61,8 +62,16 @@ pub struct RenderedConcurrency {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RenderedMatrixSource {
+    /// `fromJSON(<expression>)`, such as `needs.plan.outputs.matrix`.
+    Output(String),
+    /// Static axes, each with its values.
+    Axes(Vec<(String, Vec<String>)>),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RenderedMatrix {
-    pub from_output: String,
+    pub source: RenderedMatrixSource,
     pub fail_fast: Option<bool>,
     pub max_parallel: Option<u16>,
 }
@@ -80,6 +89,9 @@ pub struct RenderedJob {
     pub concurrency: Option<RenderedConcurrency>,
     pub outputs: Vec<(String, String)>,
     pub matrix: Option<RenderedMatrix>,
+    /// A job that calls a reusable workflow has `uses` and `with` and no runner or steps.
+    pub uses: Option<String>,
+    pub with: Vec<(String, Value)>,
     pub runs_on: String,
     pub fork_runner: Option<String>,
     pub timeout_minutes: u16,

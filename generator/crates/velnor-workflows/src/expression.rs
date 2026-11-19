@@ -3,10 +3,22 @@
 
 use crate::error::{WorkflowsError, refuse};
 
+/// Where an expression is written, which decides the contexts it may read.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Level {
+    /// A job `if`: no matrix, steps or job context.
+    Job,
+    /// A `with` of a job that calls a reusable workflow: the matrix, no steps.
+    Call,
+    Step,
+}
+
 pub(crate) struct Scope<'a> {
     pub(crate) inputs: &'a [&'a str],
     pub(crate) has_matrix: bool,
-    pub(crate) job_level: bool,
+    /// The keys of a static matrix; `None` for a matrix built from an output.
+    pub(crate) matrix_keys: Option<&'a [String]>,
+    pub(crate) level: Level,
     pub(crate) needs: &'a [String],
     pub(crate) needed_outputs: &'a [(&'a str, &'a str)],
     pub(crate) steps: Vec<String>,
@@ -74,7 +86,7 @@ fn allowed(reference: &str, scope: &Scope<'_>, condition: bool) -> bool {
                     _ => false,
                 }
         }
-        "steps" if scope.job_level => false,
+        "steps" if scope.level != Level::Step => false,
         "steps" => {
             scope.steps.iter().any(|step| step == part(1))
                 && match parts.as_slice() {
@@ -85,9 +97,15 @@ fn allowed(reference: &str, scope: &Scope<'_>, condition: bool) -> bool {
         }
         "inputs" => parts.len() == 2 && scope.inputs.contains(&part(1)),
         "matrix" => {
-            !scope.job_level && scope.has_matrix && parts.len() == 2 && is_identifier(part(1), true)
+            scope.level != Level::Job
+                && scope.has_matrix
+                && parts.len() == 2
+                && is_identifier(part(1), true)
+                && scope
+                    .matrix_keys
+                    .is_none_or(|keys| keys.iter().any(|key| key == part(1)))
         }
-        "job" => !scope.job_level && parts.len() == 2,
+        "job" => scope.level == Level::Step && parts.len() == 2,
         "github" => {
             parts.len() >= 2
                 && (condition

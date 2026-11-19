@@ -1,13 +1,18 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
+
+use velnor_model::github_hosted;
+
+use crate::call::{call, refuse_step_keys};
+use crate::check_step::step;
 use crate::error::{WorkflowsError, refuse};
-use crate::expression::{Scope, check, check_condition, is_identifier, whole_expression};
-use crate::helper_call::calls_velnor_ci;
-use crate::plan::{
-    Action, Body, DEFAULT_RUNNER, DEFAULT_TIMEOUT_MINUTES, Env, Input, Job, Matrix, Step, Workflow,
-};
+use crate::expression::{Level, Scope, check_condition, is_identifier};
+use crate::matrix::matrix;
+use crate::plan::{Body, DEFAULT_RUNNER, DEFAULT_TIMEOUT_MINUTES, Job, Output, Step, Workflow};
 use crate::raw::{RawJob, RawStep, RawWorkflow};
+use crate::triggers::triggers;
 
 const RESERVED_FILES: [&str; 2] = ["rust-ci", "release"];
 const PERMISSION_SCOPES: [&str; 13] = [
@@ -27,7 +32,14 @@ const PERMISSION_SCOPES: [&str; 13] = [
 ];
 const MAX_TIMEOUT_MINUTES: u16 = 360;
 
-pub(crate) fn workflow(raw: RawWorkflow) -> Result<Workflow, WorkflowsError> {
+pub(crate) struct Context<'a> {
+    pub(crate) file: &'a str,
+    pub(crate) condition: Option<&'a str>,
+    pub(crate) inputs: &'a [&'a str],
+    pub(crate) workflows: &'a [Workflow],
+}
+
+pub(crate) fn workflow(raw: RawWorkflow, earlier: &[Workflow]) -> Result<Workflow, WorkflowsError> {
     let file = raw.file;
     let valid_file = !file.is_empty()
         && file
@@ -47,23 +59,30 @@ pub(crate) fn workflow(raw: RawWorkflow) -> Result<Workflow, WorkflowsError> {
     if raw.name.trim().is_empty() {
         return refuse(format!("the workflow {file} needs a name"));
     }
-    let mut inputs: Vec<Input> = Vec::new();
-    for input in raw.input {
-        if !is_identifier(&input.name, true) || inputs.iter().any(|seen| seen.name == input.name) {
-            return refuse(format!(
-                "the input {:?} of {file} is not a unique identifier",
-                input.name
-            ));
-        }
-        inputs.push(Input {
-            name: input.name,
-            description: input.description,
-            required: input.required.unwrap_or(true),
-        });
+    let runner = runner_label_of(&file, raw.runner.as_deref().unwrap_or(DEFAULT_RUNNER))?;
+    let fork_runner = runner_label_of(&file, raw.fork_runner.as_deref().unwrap_or(DEFAULT_RUNNER))?;
+    if !github_hosted(&fork_runner) {
+        return refuse(format!(
+            "the fork_runner {fork_runner} of {file} must be a GitHub-hosted runner, because it runs code of pull requests from forks"
+        ));
     }
+    let triggers = triggers(&file, raw.on, raw.input, raw.output)?;
+    let input_names: Vec<&str> = triggers
+        .workflow_call
+        .iter()
+        .flat_map(|call| call.inputs.iter())
+        .chain(triggers.workflow_dispatch.iter().flatten())
+        .map(|input| input.name.as_str())
+        .collect();
+    let ctx = Context {
+        file: &file,
+        condition: raw.condition.as_deref(),
+        inputs: &input_names,
+        workflows: earlier,
+    };
     let mut jobs: Vec<Job> = Vec::new();
     for job in raw.job {
-        let checked = self::job(job, raw.condition.as_deref(), &inputs, &jobs)?;
+        let checked = self::job(job, &ctx, &jobs)?;
         jobs.push(checked);
     }
     if jobs.is_empty() {
@@ -71,25 +90,53 @@ pub(crate) fn workflow(raw: RawWorkflow) -> Result<Workflow, WorkflowsError> {
             "the workflow {file} needs at least one [[workflow.job]]"
         ));
     }
+    if let Some(call) = &triggers.workflow_call {
+        check_outputs(&file, &call.outputs, &jobs)?;
+    }
     Ok(Workflow {
-        file,
-        name: raw.name,
-        runner: raw.runner.unwrap_or_else(|| DEFAULT_RUNNER.to_owned()),
         condition: raw
             .condition
             .map(|text| crate::expression::bare(&text).to_owned()),
-        inputs,
+        name: raw.name,
+        runner,
+        fork_runner,
+        triggers,
         jobs,
+        file,
     })
 }
 
-fn job(
-    raw: RawJob,
-    workflow_condition: Option<&str>,
-    inputs: &[Input],
-    earlier: &[Job],
-) -> Result<Job, WorkflowsError> {
-    let id = raw.id;
+pub(crate) fn runner_label_of(file: &str, label: &str) -> Result<String, WorkflowsError> {
+    let valid = !label.is_empty()
+        && label
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'));
+    if !valid {
+        return refuse(format!(
+            "the runner {label:?} in {file} must be a label of letters, digits, dashes, underscores and dots"
+        ));
+    }
+    Ok(label.to_owned())
+}
+
+fn check_outputs(file: &str, outputs: &[Output], jobs: &[Job]) -> Result<(), WorkflowsError> {
+    for (index, output) in outputs.iter().enumerate() {
+        let declared = jobs
+            .iter()
+            .find(|job| job.id == output.from_job)
+            .is_some_and(|job| job.output_names().any(|name| name == output.from_output));
+        if !declared || outputs[..index].iter().any(|seen| seen.name == output.name) {
+            return refuse(format!(
+                "the workflow output {} of {file} must be a unique name with value <job>.<output> of a declared job output",
+                output.name
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn job(raw: RawJob, ctx: &Context<'_>, earlier: &[Job]) -> Result<Job, WorkflowsError> {
+    let id = raw.id.clone();
     if !is_identifier(&id, true) || earlier.iter().any(|seen| seen.id == id) {
         return refuse(format!("the job id {id:?} is not a unique identifier"));
     }
@@ -100,6 +147,11 @@ fn job(
             ));
         }
     }
+    if raw.uses.is_some() {
+        refuse_step_keys(&raw)?;
+    } else if raw.step.is_empty() {
+        return refuse(format!("job {id} needs at least one [[workflow.job.step]]"));
+    }
     let timeout_minutes = raw.timeout_minutes.unwrap_or(DEFAULT_TIMEOUT_MINUTES);
     if timeout_minutes == 0 || timeout_minutes > MAX_TIMEOUT_MINUTES {
         return refuse(format!(
@@ -107,65 +159,127 @@ fn job(
         ));
     }
     declared_access(&id, &raw.permissions, raw.environment.as_deref())?;
-    let matrix = match raw.matrix {
-        None => None,
-        Some(matrix) => Some(self::matrix(&id, &matrix, &raw.needs, earlier)?),
-    };
+    let runner = raw
+        .runner
+        .as_deref()
+        .map(|label| runner_label_of(ctx.file, label))
+        .transpose()?;
+    let matrix = raw
+        .matrix
+        .map(|matrix| self::matrix(&id, matrix, &raw.needs, earlier))
+        .transpose()?;
     let needed_outputs: Vec<(&str, &str)> = earlier
         .iter()
         .filter(|seen| raw.needs.contains(&seen.id))
-        .flat_map(|seen| {
-            seen.outputs
-                .iter()
-                .map(|(name, _)| (seen.id.as_str(), name.as_str()))
-        })
+        .flat_map(|seen| seen.output_names().map(|name| (seen.id.as_str(), name)))
         .collect();
-    let input_names: Vec<&str> = inputs.iter().map(|input| input.name.as_str()).collect();
+    let axes = matrix.as_ref().and_then(crate::matrix::axis_names);
     let mut scope = Scope {
-        inputs: &input_names,
+        inputs: ctx.inputs,
         has_matrix: matrix.is_some(),
-        job_level: false,
+        matrix_keys: axes.as_deref(),
+        level: Level::Job,
         needs: &raw.needs,
         needed_outputs: &needed_outputs,
         steps: Vec::new(),
     };
-    if let Some(condition) = workflow_condition {
-        let job_scope = Scope {
-            job_level: true,
-            steps: Vec::new(),
-            ..scope
-        };
-        check_condition(condition, &job_scope)?;
+    let condition = scope_conditions(ctx, raw.condition.as_deref(), &scope)?;
+    let mut job = Job {
+        id,
+        needs: raw.needs.clone(),
+        condition,
+        helper: raw.helper,
+        runner,
+        environment: raw.environment.clone(),
+        timeout_minutes,
+        permissions: raw.permissions.clone().into_iter().collect(),
+        outputs: Vec::new(),
+        matrix,
+        steps: Vec::new(),
+        call: None,
+    };
+    if let Some(uses) = &raw.uses {
+        scope.level = Level::Call;
+        job.call = Some(call(
+            &job.id,
+            uses,
+            &raw.with,
+            &job.permissions,
+            ctx,
+            &scope,
+        )?);
+        return Ok(job);
     }
+    if !raw.with.is_empty() {
+        return refuse(format!("job {} sets with without uses", job.id));
+    }
+    scope.level = Level::Step;
+    fill_steps(&mut job, raw.step, raw.outputs, &mut scope)?;
+    Ok(job)
+}
+
+fn fill_steps(
+    job: &mut Job,
+    raw_steps: Vec<RawStep>,
+    outputs: BTreeMap<String, String>,
+    scope: &mut Scope<'_>,
+) -> Result<(), WorkflowsError> {
     let mut steps: Vec<Step> = Vec::new();
-    for step in raw.step {
-        let checked = self::step(&id, raw.helper, step, &scope, &steps)?;
+    for raw_step in raw_steps {
+        let checked = step(&job.id, job.helper, raw_step, scope, &steps)?;
         scope.steps.extend(checked.id.clone());
         steps.push(checked);
     }
-    if steps.is_empty() {
-        return refuse(format!("job {id} needs at least one [[workflow.job.step]]"));
+    require_permissions(&job.id, &steps, &job.permissions)?;
+    job.outputs = outputs
+        .into_iter()
+        .map(|(name, value)| Ok((name.clone(), output(&job.id, &name, &value, &steps)?)))
+        .collect::<Result<_, WorkflowsError>>()?;
+    job.steps = steps;
+    Ok(())
+}
+
+/// Checks the workflow `if` and the job `if` in a job's scope. Returns only the
+/// job's own condition; the renderer joins it with the workflow one.
+fn scope_conditions(
+    ctx: &Context<'_>,
+    own: Option<&str>,
+    scope: &Scope<'_>,
+) -> Result<Option<String>, WorkflowsError> {
+    if let Some(condition) = ctx.condition {
+        check_condition(condition, scope)?;
     }
-    let mut outputs = Vec::new();
-    for (name, value) in raw.outputs {
-        outputs.push((name.clone(), output(&id, &name, &value, &steps)?));
+    own.map(|condition| check_condition(condition, scope))
+        .transpose()
+}
+
+fn require_permissions(
+    job: &str,
+    steps: &[Step],
+    permissions: &[(String, String)],
+) -> Result<(), WorkflowsError> {
+    for step in steps {
+        let Body::Uses(action) = &step.body else {
+            continue;
+        };
+        for (scope, access) in action.needs_permissions() {
+            let granted = permissions
+                .iter()
+                .any(|(name, level)| name == scope && level == access);
+            if !granted {
+                return refuse(format!(
+                    "job {job} uses {}, which needs the permission {scope} = {access:?}; declare it on the job",
+                    step.name
+                ));
+            }
+        }
     }
-    Ok(Job {
-        id,
-        needs: raw.needs,
-        helper: raw.helper,
-        environment: raw.environment,
-        timeout_minutes,
-        permissions: raw.permissions.into_iter().collect(),
-        outputs,
-        matrix,
-        steps,
-    })
+    Ok(())
 }
 
 fn declared_access(
     id: &str,
-    permissions: &std::collections::BTreeMap<String, String>,
+    permissions: &BTreeMap<String, String>,
     environment: Option<&str>,
 ) -> Result<(), WorkflowsError> {
     for (scope, access) in permissions {
@@ -183,42 +297,6 @@ fn declared_access(
     Ok(())
 }
 
-fn matrix(
-    id: &str,
-    raw: &crate::raw::RawMatrix,
-    needs: &[String],
-    earlier: &[Job],
-) -> Result<Matrix, WorkflowsError> {
-    let Some((from_job, from_output)) = raw.from_output.split_once('.') else {
-        return refuse(format!(
-            "job {id} matrix from_output must be <job>.<output>"
-        ));
-    };
-    if !needs.iter().any(|need| need == from_job) {
-        return refuse(format!(
-            "job {id} builds its matrix from the output of {from_job}, so it must list {from_job} in needs"
-        ));
-    }
-    let declared = earlier
-        .iter()
-        .find(|seen| seen.id == from_job)
-        .is_some_and(|seen| seen.outputs.iter().any(|(name, _)| name == from_output));
-    if !declared {
-        return refuse(format!(
-            "job {id} builds its matrix from {from_job}.{from_output}, which {from_job} does not declare as an output"
-        ));
-    }
-    if raw.max_parallel == Some(0) {
-        return refuse(format!("job {id} matrix max_parallel must be at least 1"));
-    }
-    Ok(Matrix {
-        from_job: from_job.to_owned(),
-        from_output: from_output.to_owned(),
-        fail_fast: raw.fail_fast,
-        max_parallel: raw.max_parallel,
-    })
-}
-
 fn output(job: &str, name: &str, value: &str, steps: &[Step]) -> Result<String, WorkflowsError> {
     let reference = value.split('.').collect::<Vec<_>>();
     let known = match reference.as_slice() {
@@ -233,134 +311,4 @@ fn output(job: &str, name: &str, value: &str, steps: &[Step]) -> Result<String, 
         ));
     }
     Ok(value.to_owned())
-}
-
-fn step(
-    job: &str,
-    helper_installed: bool,
-    raw: RawStep,
-    scope: &Scope<'_>,
-    earlier: &[Step],
-) -> Result<Step, WorkflowsError> {
-    if let Some(id) = &raw.id
-        && (!is_identifier(id, true) || earlier.iter().any(|seen| seen.id.as_ref() == Some(id)))
-    {
-        return refuse(format!(
-            "job {job} step id {id:?} is not a unique identifier"
-        ));
-    }
-    let (label, body) = match (raw.run, raw.uses, raw.helper) {
-        (Some(run), None, None) => {
-            if raw
-                .name
-                .as_deref()
-                .is_none_or(|name| name.trim().is_empty())
-                || run.trim().is_empty()
-            {
-                return refuse(format!("a run step of job {job} needs a name and a run"));
-            }
-            if !helper_installed && calls_velnor_ci(&run) {
-                return refuse(format!(
-                    "job {job} runs velnor-ci, so it needs helper = true"
-                ));
-            }
-            (String::new(), Body::Run(run))
-        }
-        (None, Some(name), None) => {
-            let Some(action) = Action::parse(&name) else {
-                return refuse(format!(
-                    "job {job} uses {name:?}, which is not one of the pinned actions {:?}",
-                    Action::NAMES
-                ));
-            };
-            (name, Body::Uses(action))
-        }
-        (None, None, Some(command)) => {
-            if !is_identifier(&command, true) {
-                return refuse(format!("job {job} helper {command:?} is not an identifier"));
-            }
-            if !helper_installed {
-                return refuse(format!(
-                    "job {job} runs the helper command {command}, so it needs helper = true"
-                ));
-            }
-            (command.clone(), Body::Helper(command))
-        }
-        _ => {
-            return refuse(format!(
-                "a step of job {job} needs exactly one of run, uses and helper"
-            ));
-        }
-    };
-    if !raw.with.is_empty() && !matches!(body, Body::Uses(_)) {
-        return refuse(format!("a step of job {job} sets with without uses"));
-    }
-    let raw_with = locked_inputs(job, &body, &label, raw.with)?;
-    let condition = raw
-        .condition
-        .map(|text| check_condition(&text, scope))
-        .transpose()?;
-    Ok(Step {
-        id: raw.id,
-        name: raw.name.unwrap_or(label),
-        condition,
-        body,
-        with: values(job, raw_with, scope)?,
-        continue_on_error: raw.continue_on_error,
-        env: values(job, raw.env, scope)?,
-    })
-}
-
-fn locked_inputs(
-    job: &str,
-    body: &Body,
-    label: &str,
-    mut with: std::collections::BTreeMap<String, String>,
-) -> Result<std::collections::BTreeMap<String, String>, WorkflowsError> {
-    let Body::Uses(action) = body else {
-        return Ok(with);
-    };
-    for (key, value) in &with {
-        if action
-            .locked_off()
-            .iter()
-            .any(|locked| key.eq_ignore_ascii_case(locked))
-            && value != "false"
-        {
-            return refuse(format!(
-                "job {job} sets {key} = {value:?} on {label}, which is always false"
-            ));
-        }
-    }
-    with.retain(|key, _| {
-        !action
-            .locked_off()
-            .iter()
-            .any(|locked| key.eq_ignore_ascii_case(locked))
-    });
-    Ok(with)
-}
-
-fn values(
-    job: &str,
-    table: std::collections::BTreeMap<String, String>,
-    scope: &Scope<'_>,
-) -> Result<Vec<(String, Env)>, WorkflowsError> {
-    let mut items = Vec::new();
-    for (key, value) in table {
-        if !is_identifier(&key, true) {
-            return refuse(format!("job {job} key {key:?} is not an identifier"));
-        }
-        if value.contains("${{") {
-            check(&value, scope)?;
-            items.push((key, Env::Expression(whole_inner(&value))));
-        } else {
-            items.push((key, Env::Text(value)));
-        }
-    }
-    Ok(items)
-}
-
-fn whole_inner(value: &str) -> String {
-    whole_expression(value).unwrap_or_default().to_owned()
 }
