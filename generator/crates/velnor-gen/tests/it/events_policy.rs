@@ -87,9 +87,9 @@ fn the_policy_lane_checks_every_cargo_root_in_its_own_folder() -> TestResult {
         .next()
         .ok_or("no policy job end")?;
     assert_eq!(policy.matches("Dependency policy").count(), 2, "{policy}");
-    assert!(policy.contains("cargo-deny check"), "{policy}");
+    assert!(policy.contains("cargo-deny --locked check"), "{policy}");
     assert!(
-        policy.contains("cargo-deny --manifest-path ''tools/Cargo.toml'' check"),
+        policy.contains("cargo-deny --manifest-path ''tools/Cargo.toml'' --locked check"),
         "{policy}"
     );
     Ok(())
@@ -112,7 +112,8 @@ fn the_policy_lane_runs_machete_once_from_the_repository_root() -> TestResult {
         .split("\n  required:\n")
         .next()
         .ok_or("no policy job end")?;
-    assert_eq!(policy.matches("cargo-machete").count(), 1, "{policy}");
+    assert_eq!(policy.matches("cargo machete").count(), 1, "{policy}");
+    assert!(policy.contains("run -- cargo machete'"), "{policy}");
     assert!(!policy.contains("working-directory"), "{policy}");
     Ok(())
 }

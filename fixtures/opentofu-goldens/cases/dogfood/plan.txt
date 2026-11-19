@@ -1,4 +1,4 @@
-Velnor Actions plan 0.1.80
+Velnor Actions plan 0.1.82
 Repository: <repo>
 
 Detected stacks
@@ -41,37 +41,92 @@ Detected stacks
   Profile .: mbx compile driver (declared), cargo_nextest test runner (declared)
   Nextest profile .: ci (.config/nextest.toml)
     evidence .config/nextest.toml:7 [profile.ci] [durable]
+    evidence .github/workflows/rust-ci.yml:398 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run' [transient]
+    evidence .github/workflows/rust-ci.yml:413 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --profile ci --no-fail-fast --ignore [transient]
+    evidence .github/workflows/rust-ci.yml:418 run: '. "$VELNOR_EXEC" run --require-doctests=$DOCTESTS_KNOWN -- cargo test --doc --workspace --locked --message-format=json-render-diagnostics' [transient]
+    evidence .github/workflows/rust-ci.yml:628 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run' [transient]
+    evidence .github/workflows/rust-ci.yml:635 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --profile ci --no-fail-fast --ignore [transient]
+    evidence .github/workflows/rust-ci.yml:874 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run' [transient]
+    evidence .github/workflows/rust-ci.yml:881 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --profile ci --no-fail-fast --ignore [transient]
+    evidence .github/workflows/rust-ci.yml:1108 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run' [transient]
+    evidence .github/workflows/rust-ci.yml:1115 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --profile ci --no-fail-fast --ignore [transient]
+    evidence .github/workflows/rust-ci.yml:1330 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run' [transient]
+    evidence .github/workflows/rust-ci.yml:1337 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --profile ci --no-fail-fast --ignore [transient]
     evidence .mise/tasks/test:4 cargo nextest run --locked --profile ci --no-tests fail "$@" [durable]
     evidence mise.toml:19 ], mr_boxington = true } [durable]
-    evidence mise.toml:44 wrappers.cargo.command = "mbx" (MBX_CARGO_SHIM_MODE = "1") [durable]
+    evidence mise.toml:45 wrappers.cargo.command = "mbx" (MBX_CARGO_SHIM_MODE = "1") [durable]
   Profile ci-helper: mbx compile driver (declared), cargo_nextest test runner (declared)
   Nextest profile ci-helper: ci (ci-helper/.config/nextest.toml)
     evidence .config/nextest.toml:7 [profile.ci] [durable]
+    evidence .github/workflows/rust-ci.yml:398 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run' [transient]
+    evidence .github/workflows/rust-ci.yml:413 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --profile ci --no-fail-fast --ignore [transient]
+    evidence .github/workflows/rust-ci.yml:418 run: '. "$VELNOR_EXEC" run --require-doctests=$DOCTESTS_KNOWN -- cargo test --doc --workspace --locked --message-format=json-render-diagnostics' [transient]
+    evidence .github/workflows/rust-ci.yml:628 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run' [transient]
+    evidence .github/workflows/rust-ci.yml:635 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --profile ci --no-fail-fast --ignore [transient]
+    evidence .github/workflows/rust-ci.yml:874 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run' [transient]
+    evidence .github/workflows/rust-ci.yml:881 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --profile ci --no-fail-fast --ignore [transient]
+    evidence .github/workflows/rust-ci.yml:1108 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run' [transient]
+    evidence .github/workflows/rust-ci.yml:1115 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --profile ci --no-fail-fast --ignore [transient]
+    evidence .github/workflows/rust-ci.yml:1330 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run' [transient]
+    evidence .github/workflows/rust-ci.yml:1337 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --profile ci --no-fail-fast --ignore [transient]
     evidence .mise/tasks/test:4 cargo nextest run --locked --profile ci --no-tests fail "$@" [durable]
     evidence ci-helper/.config/nextest.toml:3 [profile.ci] [durable]
     evidence mise.toml:19 ], mr_boxington = true } [durable]
-    evidence mise.toml:44 wrappers.cargo.command = "mbx" (MBX_CARGO_SHIM_MODE = "1") [durable]
+    evidence mise.toml:45 wrappers.cargo.command = "mbx" (MBX_CARGO_SHIM_MODE = "1") [durable]
   Profile crates/velnor-runner: mbx compile driver (declared), cargo_nextest test runner (declared)
   Nextest profile crates/velnor-runner: ci (crates/velnor-runner/.config/nextest.toml)
     evidence .config/nextest.toml:7 [profile.ci] [durable]
+    evidence .github/workflows/rust-ci.yml:398 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run' [transient]
+    evidence .github/workflows/rust-ci.yml:413 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --profile ci --no-fail-fast --ignore [transient]
+    evidence .github/workflows/rust-ci.yml:418 run: '. "$VELNOR_EXEC" run --require-doctests=$DOCTESTS_KNOWN -- cargo test --doc --workspace --locked --message-format=json-render-diagnostics' [transient]
+    evidence .github/workflows/rust-ci.yml:628 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run' [transient]
+    evidence .github/workflows/rust-ci.yml:635 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --profile ci --no-fail-fast --ignore [transient]
+    evidence .github/workflows/rust-ci.yml:874 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run' [transient]
+    evidence .github/workflows/rust-ci.yml:881 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --profile ci --no-fail-fast --ignore [transient]
+    evidence .github/workflows/rust-ci.yml:1108 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run' [transient]
+    evidence .github/workflows/rust-ci.yml:1115 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --profile ci --no-fail-fast --ignore [transient]
+    evidence .github/workflows/rust-ci.yml:1330 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run' [transient]
+    evidence .github/workflows/rust-ci.yml:1337 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --profile ci --no-fail-fast --ignore [transient]
     evidence .mise/tasks/test:4 cargo nextest run --locked --profile ci --no-tests fail "$@" [durable]
     evidence crates/velnor-runner/.config/nextest.toml:8 [profile.ci] [durable]
     evidence mise.toml:19 ], mr_boxington = true } [durable]
-    evidence mise.toml:44 wrappers.cargo.command = "mbx" (MBX_CARGO_SHIM_MODE = "1") [durable]
+    evidence mise.toml:45 wrappers.cargo.command = "mbx" (MBX_CARGO_SHIM_MODE = "1") [durable]
   Profile generator: mbx compile driver (declared), cargo_nextest test runner (declared)
   Nextest profile generator: ci (generator/.config/nextest.toml)
     evidence .config/nextest.toml:7 [profile.ci] [durable]
+    evidence .github/workflows/rust-ci.yml:398 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run' [transient]
+    evidence .github/workflows/rust-ci.yml:413 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --profile ci --no-fail-fast --ignore [transient]
+    evidence .github/workflows/rust-ci.yml:418 run: '. "$VELNOR_EXEC" run --require-doctests=$DOCTESTS_KNOWN -- cargo test --doc --workspace --locked --message-format=json-render-diagnostics' [transient]
+    evidence .github/workflows/rust-ci.yml:628 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run' [transient]
+    evidence .github/workflows/rust-ci.yml:635 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --profile ci --no-fail-fast --ignore [transient]
+    evidence .github/workflows/rust-ci.yml:874 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run' [transient]
+    evidence .github/workflows/rust-ci.yml:881 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --profile ci --no-fail-fast --ignore [transient]
+    evidence .github/workflows/rust-ci.yml:1108 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run' [transient]
+    evidence .github/workflows/rust-ci.yml:1115 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --profile ci --no-fail-fast --ignore [transient]
+    evidence .github/workflows/rust-ci.yml:1330 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run' [transient]
+    evidence .github/workflows/rust-ci.yml:1337 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --profile ci --no-fail-fast --ignore [transient]
     evidence .mise/tasks/test:4 cargo nextest run --locked --profile ci --no-tests fail "$@" [durable]
     evidence generator/.config/nextest.toml:13 [profile.ci] [durable]
     evidence mise.toml:19 ], mr_boxington = true } [durable]
-    evidence mise.toml:44 wrappers.cargo.command = "mbx" (MBX_CARGO_SHIM_MODE = "1") [durable]
+    evidence mise.toml:45 wrappers.cargo.command = "mbx" (MBX_CARGO_SHIM_MODE = "1") [durable]
   Profile local: mbx compile driver (declared), cargo_nextest test runner (declared)
   Nextest profile local: ci (local/.config/nextest.toml)
     evidence .config/nextest.toml:7 [profile.ci] [durable]
+    evidence .github/workflows/rust-ci.yml:398 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run' [transient]
+    evidence .github/workflows/rust-ci.yml:413 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --profile ci --no-fail-fast --ignore [transient]
+    evidence .github/workflows/rust-ci.yml:418 run: '. "$VELNOR_EXEC" run --require-doctests=$DOCTESTS_KNOWN -- cargo test --doc --workspace --locked --message-format=json-render-diagnostics' [transient]
+    evidence .github/workflows/rust-ci.yml:628 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run' [transient]
+    evidence .github/workflows/rust-ci.yml:635 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --profile ci --no-fail-fast --ignore [transient]
+    evidence .github/workflows/rust-ci.yml:874 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run' [transient]
+    evidence .github/workflows/rust-ci.yml:881 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --profile ci --no-fail-fast --ignore [transient]
+    evidence .github/workflows/rust-ci.yml:1108 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run' [transient]
+    evidence .github/workflows/rust-ci.yml:1115 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --profile ci --no-fail-fast --ignore [transient]
+    evidence .github/workflows/rust-ci.yml:1330 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run' [transient]
+    evidence .github/workflows/rust-ci.yml:1337 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --profile ci --no-fail-fast --ignore [transient]
     evidence .mise/tasks/test:4 cargo nextest run --locked --profile ci --no-tests fail "$@" [durable]
     evidence local/.config/nextest.toml:8 [profile.ci] [durable]
     evidence mise.toml:19 ], mr_boxington = true } [durable]
-    evidence mise.toml:44 wrappers.cargo.command = "mbx" (MBX_CARGO_SHIM_MODE = "1") [durable]
+    evidence mise.toml:45 wrappers.cargo.command = "mbx" (MBX_CARGO_SHIM_MODE = "1") [durable]
 
 Workflow to generate
   .github/jactionlint.yaml
@@ -87,8 +142,8 @@ Workflow to generate
     - cargo-machete (7 steps)
     - check-generator-samples (7 steps)
     - check-maintenance-helpers (7 steps)
-    - jactionlint (7 steps)
-    - ledger-cli (17 steps)
+    - jactionlint (5 steps)
+    - ledger-cli (15 steps)
     - plan (19 steps)
     - required (10 steps)
     - required-gate (1 steps)
@@ -133,9 +188,7 @@ Workflow to generate
     - state-seal-local (9 steps)
     - state-seal-root (9 steps)
     - tools-producer-06f9acb0 (8 steps)
-    - tools-producer-924ced60 (11 steps)
     - tools-producer-c957c0bd (8 steps)
-    - tools-producer-caf63d48 (9 steps)
     - 29 Rust crate jobs
       Timeout: 45 minutes per crate job
       Obligations: Clippy -> build -> run tests -> doc build -> format check
@@ -376,4 +429,4 @@ Recommendations
   shadowed_nextest_config: .config/nextest.toml shadowed by crates/velnor-runner/.config/nextest.toml; profile selected from crates/velnor-runner/.config/nextest.toml
   shadowed_nextest_config: .config/nextest.toml shadowed by generator/.config/nextest.toml; profile selected from generator/.config/nextest.toml
   shadowed_nextest_config: .config/nextest.toml shadowed by local/.config/nextest.toml; profile selected from local/.config/nextest.toml
-  tool_install_unverified:3 installs skip verification: cargo-machete@0.9.2(no_entry), crane@0.22.1(no_entry), gh@2.103.3(no_entry); install on the CI platform and commit the lock to verify them
+  tool_install_unverified:4 installs skip verification: cargo-machete@0.9.2(no_entry), crane@0.22.1(no_entry), gh@2.103.3(no_entry), rust@1.99.1(no_checksums); install on the CI platform and commit the lock to verify them

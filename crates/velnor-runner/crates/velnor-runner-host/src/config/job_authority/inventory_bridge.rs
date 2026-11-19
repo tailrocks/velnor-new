@@ -216,7 +216,12 @@ fn context_refs(
     let mut refs = Vec::new();
     let branch_event = match event {
         WorkflowEvent::Push | WorkflowEvent::WorkflowDispatch => context.tag_filters.is_empty(),
-        WorkflowEvent::MergeGroup | WorkflowEvent::Schedule => true,
+        WorkflowEvent::MergeGroup | WorkflowEvent::Schedule => {
+            if !context.tag_filters.is_empty() {
+                return Err(HostError::Config);
+            }
+            true
+        }
         WorkflowEvent::PullRequest | WorkflowEvent::Release => false,
     };
     let branches = if context.branch_filters.is_empty() {

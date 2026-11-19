@@ -24,6 +24,7 @@ const execute = new Function("github", "context", "process", `return (async () =
 type Ruleset = Omit<typeof recorded, "bypass_actors" | "conditions"> & { conditions: { ref_name: { include: string[]; exclude: string[] } }; bypass_actors?: unknown[] };
 const baseline = (): Ruleset => structuredClone(recorded), actor = { actor_id: 5762496, actor_type: "Integration", bypass_mode: "always" };
 const releaseRefs = ["refs/tags/rust-ci-v*", "refs/tags/velnor-ci-v*", "refs/tags/velnor-gen-v*"] satisfies [string, string, string];
+const toolsRef = "refs/tags/tools-v*";
 const release = (): Ruleset => ({ ...baseline(), id: recorded.id + 1, name: "release-tags", conditions: { ref_name: { include: [...releaseRefs], exclude: [] } }, rules: [{ type: "creation" }], bypass_actors: [{ ...actor }] });
 type Scenario = { rulesets?: Ruleset[]; token?: string; failure?: "" | "list" | "detail" };
 async function run({ rulesets = [baseline(), release()], token = "admin-read-token", failure = "" }: Scenario = {}) {
@@ -49,6 +50,9 @@ async function run({ rulesets = [baseline(), release()], token = "admin-read-tok
 }
 test("the recorded protection and pinned release app prove the expected tag policy", async () => {
   expect(await run()).toEqual([recorded.id, recorded.id + 1]);
+  const transition = release();
+  transition.conditions.ref_name.include.push(toolsRef);
+  expect(await run({ rulesets: [baseline(), transition] })).toEqual([recorded.id, recorded.id + 1]);
   const reordered = release();
   reordered.conditions.ref_name.include.reverse();
   expect(await run({ rulesets: [baseline(), reordered] })).toEqual([recorded.id, recorded.id + 1]);
@@ -58,6 +62,10 @@ test.each([
   ["an update rule instead of creation", { rules: [{ type: "update" }] }],
   ["a narrowed release ref set", { conditions: { ref_name: { include: [releaseRefs[0]], exclude: [] } } }],
   ["all tags instead of release refs", { conditions: { ref_name: { include: ["~ALL"], exclude: [] } } }],
+  ["tools-v alone instead of the release refs", { conditions: { ref_name: { include: [toolsRef], exclude: [] } } }],
+  ["a bare v ref", { conditions: { ref_name: { include: [...releaseRefs, "refs/tags/v*"], exclude: [] } } }],
+  ["tools-v with a missing legacy ref", { conditions: { ref_name: { include: [releaseRefs[0], releaseRefs[1], toolsRef], exclude: [] } } }],
+  ["tools-v duplicated to hide an absent ref", { conditions: { ref_name: { include: [releaseRefs[0], releaseRefs[1], toolsRef, toolsRef], exclude: [] } } }],
   ["an extra release ref", { conditions: { ref_name: { include: [...releaseRefs, "refs/tags/extra-v*"], exclude: [] } } }],
   ["an excluded release ref", { conditions: { ref_name: { include: [...releaseRefs], exclude: [releaseRefs[0]] } } }],
   ["a duplicate ref hiding an absent ref", { conditions: { ref_name: { include: [releaseRefs[0], releaseRefs[0], releaseRefs[2]], exclude: [] } } }],
@@ -147,7 +155,7 @@ test("daily and manual checks isolate the credential from release and checkout c
   expect(step.uses).toBe("actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3");
   expect(inputs["github-token"]).toBe("${{ secrets.TAG_RULESET_ADMIN_READ_TOKEN }}");
   expect(object(step.env)).toEqual({ TAG_RULESET_ADMIN_READ_TOKEN: inputs["github-token"] });
-  expect(object(jobs.gate).if).toBe("github.event_name == 'push' && startsWith(github.ref, 'refs/tags/rust-ci-v')");
+  expect(object(jobs.gate).if).toBe("github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/rust-ci-v') || startsWith(github.ref, 'refs/tags/tools-v'))");
   for (const [id, job] of Object.entries(jobs)) {
     if (id === "tag-ruleset-drift") continue;
     expect(JSON.stringify(job)).not.toContain("TAG_RULESET_ADMIN_READ_TOKEN");
@@ -169,4 +177,18 @@ test("the maintenance check provisions the project's pinned Bun in its isolated 
   const linux = array(bun.platforms).map(object).find(platform => platform.platform === "linux_x64");
   if (!linux) throw new Error("Bun must be qualified for the maintenance runner");
   expect(array(linux.executables).map(object)).toContainEqual(expect.objectContaining({ name: "bun", path: "bun", probe: { kind: "version", expected: object(mise.tools).bun } }));
+});
+
+function matchesTagFilter(pattern: string, tag: string): boolean {
+  return new RegExp(`^${pattern.replace(/[.]/g, "\\.").replace(/\*/g, "[^/]*")}$`).test(tag);
+}
+test("the release workflow runs on rust-ci-v and tools-v tags and on no other release tag", () => {
+  const tags = array(object(object(workflow.on).push).tags);
+  expect(tags).toEqual(["rust-ci-v*", "tools-v*"]);
+  for (const tag of ["rust-ci-v0.1.84", "tools-v0.1.85"]) {
+    expect(tags.some(pattern => matchesTagFilter(String(pattern), tag))).toBe(true);
+  }
+  for (const tag of ["v0.1.85", "runner-v0.1.85", "actions-v0.1.85", "velnor-ci-v0.1.85", "velnor-gen-v0.1.85"]) {
+    expect(tags.some(pattern => matchesTagFilter(String(pattern), tag))).toBe(false);
+  }
 });

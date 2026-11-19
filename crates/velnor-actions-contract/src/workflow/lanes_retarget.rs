@@ -23,13 +23,17 @@ pub(super) fn retarget(
     if let Some(token) = runs_on {
         token.clone_into(&mut next.runs_on);
     }
-    next.condition = retarget_condition(
-        job.condition.as_deref(),
-        source_id,
-        output_id,
-        runs_on.is_some(),
-        next.check_runner.is_some(),
-    )?;
+    next.condition = if class == LaneClass::Control && runs_on.is_some() {
+        Some(super::fork_fenced_condition(job.condition.as_deref()))
+    } else {
+        retarget_condition(
+            job.condition.as_deref(),
+            source_id,
+            output_id,
+            runs_on.is_some(),
+            next.check_runner.is_some(),
+        )?
+    };
     retarget_check_identity(&mut next, source_id, output_id, lane)?;
     next.needs = expand_needs(&job.needs, map, class, lane);
     Ok(next)

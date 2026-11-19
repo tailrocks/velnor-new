@@ -14,6 +14,8 @@ use crate::host_config::{validate_owned_id, validate_ownership};
 use super::mutation_lifecycle::{
     MutationKind, MutationResult, MutationValue, MutationWait, PendingMutation, wait,
 };
+mod volume_recheck;
+
 use super::resources::{OwnedResources, TrackedContainer};
 use super::{deadline, missing, volume_owned};
 
@@ -366,6 +368,12 @@ impl OwnedResources {
         }
         let identity = format!("volume:{name}");
         self.begin_delete(&identity)?;
+        if !self
+            .volume_unchanged(docker, name, role, &volume, &identity)
+            .await?
+        {
+            return Ok(());
+        }
         let options = RemoveVolumeOptionsBuilder::new().force(false).build();
         match deadline(
             docker.remove_volume(name, Some(options)),
