@@ -16,8 +16,8 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: 'ci-${{ github.workflow_ref }}-${{ github.event_name == ''pull_request'' && startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'' && github.event.pull_request.number || github.run_id }}'
-  cancel-in-progress: '${{ github.event_name == ''pull_request'' && startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'' }}'
+  group: 'ci-${{ github.workflow_ref }}-${{ github.event_name == ''pull_request'' && startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'' && !(github.event.action == ''edited'' && github.event.changes.base.ref.from == null) && github.event.pull_request.number || github.run_id }}'
+  cancel-in-progress: '${{ github.event_name == ''pull_request'' && startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'' && !(github.event.action == ''edited'' && github.event.changes.base.ref.from == null) }}'
 env:
   MISE_AUTO_INSTALL: 'false'
   RUSTUP_AUTO_INSTALL: '0'
@@ -27,7 +27,7 @@ defaults:
 jobs:
   # one job: .velnor/rust-ci-timings.json has no build times for this workspace
   rust:
-    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'' && !(github.event.action == ''edited'' && github.event.changes.base.ref.from == null))) }}'
     permissions:
       contents: read
     outputs:
@@ -151,7 +151,7 @@ jobs:
     name: Required
     needs:
       - rust
-    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (always()) }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'' && !(github.event.action == ''edited'' && github.event.changes.base.ref.from == null))) && (always()) }}'
     permissions:
       contents: read
     runs-on: ubuntu-latest

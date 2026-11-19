@@ -26,14 +26,14 @@ const EVENTS: &str = r"on:
 permissions:
   contents: read
 concurrency:
-  group: ci-${{ github.workflow_ref }}-${{ github.event_name == 'pull_request' && startsWith(github.ref, 'refs/pull/') && github.event.pull_request.state != 'closed' && github.event.pull_request.number || github.run_id }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' && startsWith(github.ref, 'refs/pull/') && github.event.pull_request.state != 'closed' }}
+  group: ci-${{ github.workflow_ref }}-${{ github.event_name == 'pull_request' && startsWith(github.ref, 'refs/pull/') && github.event.pull_request.state != 'closed' && !(github.event.action == 'edited' && github.event.changes.base.ref.from == null) && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' && startsWith(github.ref, 'refs/pull/') && github.event.pull_request.state != 'closed' && !(github.event.action == 'edited' && github.event.changes.base.ref.from == null) }}
 ";
 
 pub(crate) const DENY_MISE: &str = "[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n\"aqua:EmbarkStudios/cargo-deny\" = \"0.18.3\"\n";
 
 const DRAFT: &str = "github.event.pull_request.draft != true";
-const ACTIVE_EVENT: &str = "(github.event_name != 'pull_request' || (startsWith(github.ref, 'refs/pull/') && github.event.pull_request.state != 'closed'))";
+const ACTIVE_EVENT: &str = "(github.event_name != 'pull_request' || (startsWith(github.ref, 'refs/pull/') && github.event.pull_request.state != 'closed' && !(github.event.action == 'edited' && github.event.changes.base.ref.from == null)))";
 
 #[test]
 fn every_ci_job_excludes_closed_pull_requests_and_preserves_other_events() -> TestResult {

@@ -18,7 +18,7 @@ use crate::pipeline::{view, workflow};
 const GUARD: &str =
     "github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch)";
 const EVENTS: &str = "github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch''";
-const ADMISSION: &str = "(github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed''))";
+const ADMISSION: &str = "(github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'' && !(github.event.action == ''edited'' && github.event.changes.base.ref.from == null)))";
 
 fn lane(config: &str, id: &str) -> Result<String, Box<dyn std::error::Error>> {
     jobs("0.1.81", config)?

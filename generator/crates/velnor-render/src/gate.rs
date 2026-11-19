@@ -20,7 +20,7 @@ const NEEDS_JSON: &str = "NEEDS_JSON";
 const GATE_SPEC: &str = "GATE_SPEC";
 const ON_DEFAULT_BRANCH: &str =
     "github.ref == format('refs/heads/{0}', github.event.repository.default_branch)";
-const ACTIVE_EVENT: &str = "(github.event_name != 'pull_request' || (startsWith(github.ref, 'refs/pull/') && github.event.pull_request.state != 'closed'))";
+const ACTIVE_EVENT: &str = "(github.event_name != 'pull_request' || (startsWith(github.ref, 'refs/pull/') && github.event.pull_request.state != 'closed' && !(github.event.action == 'edited' && github.event.changes.base.ref.from == null)))";
 pub(crate) fn sources_step(slug: &RootSlug) -> String {
     format!("sources_{slug}")
 }
