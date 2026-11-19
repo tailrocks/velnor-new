@@ -187,7 +187,10 @@ fn a_listed_agent_with_an_unusable_id_makes_the_inventory_malformed() {
         Ok(None)
     );
     assert_eq!(
-        agent_id(br#"{"value":[{"name":"velnor-x-jit-1","id":9}]}"#, "velnor-x-jit-1"),
+        agent_id(
+            br#"{"value":[{"name":"velnor-x-jit-1","id":9}]}"#,
+            "velnor-x-jit-1"
+        ),
         Ok(Some(9))
     );
 }
