@@ -447,6 +447,7 @@ jobs:
             crates/velnor-runner/Cargo.toml
             generator/Cargo.toml
             local/Cargo.toml
+          VELNOR_CACHE_BUDGET_BYTES: '8000000000'
         run: '. "$VELNOR_EXEC" cache decide --target-dir target'
       - id: save_target_root
         name: Save the target cache
@@ -702,6 +703,7 @@ jobs:
             crates/velnor-runner/Cargo.toml
             generator/Cargo.toml
             local/Cargo.toml
+          VELNOR_CACHE_BUDGET_BYTES: '8000000000'
         run: '. "$VELNOR_EXEC" cache decide --target-dir ci-helper/target'
       - id: save_target_ci_helper
         name: Save the target cache
@@ -999,6 +1001,7 @@ jobs:
             crates/velnor-runner/Cargo.toml
             generator/Cargo.toml
             local/Cargo.toml
+          VELNOR_CACHE_BUDGET_BYTES: '8000000000'
         run: '. "$VELNOR_EXEC" cache decide --target-dir crates/velnor-runner/target'
       - id: save_target_crates_velnor_runner
         name: Save the target cache
@@ -1272,6 +1275,7 @@ jobs:
             crates/velnor-runner/Cargo.toml
             generator/Cargo.toml
             local/Cargo.toml
+          VELNOR_CACHE_BUDGET_BYTES: '8000000000'
         run: '. "$VELNOR_EXEC" cache decide --target-dir generator/target'
       - id: save_target_generator
         name: Save the target cache
@@ -1533,6 +1537,7 @@ jobs:
             crates/velnor-runner/Cargo.toml
             generator/Cargo.toml
             local/Cargo.toml
+          VELNOR_CACHE_BUDGET_BYTES: '8000000000'
         run: '. "$VELNOR_EXEC" cache decide --target-dir local/target'
       - id: save_target_local
         name: Save the target cache

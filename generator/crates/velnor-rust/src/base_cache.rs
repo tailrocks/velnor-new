@@ -173,6 +173,7 @@ pub(crate) fn save_steps(
                     .collect(),
                 target: root.target_dir.clone(),
                 archive,
+                budget_bytes: facts.config.cache_budget_bytes,
             })
         },
         Step {

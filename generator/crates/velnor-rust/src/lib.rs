@@ -142,6 +142,6 @@ pub use weaken::introduced;
 
 pub use cache_budget::{
     CacheEntry, CacheFamily, CacheId, DEFAULT_CACHE_BUDGET_BYTES, Timestamp, budget_plan,
-    cache_family, delta_pull_request,
+    cache_family, delta_pull_request, target_family_prefix,
 };
 pub use private_sources::{cacheable_config, cacheable_lock};
