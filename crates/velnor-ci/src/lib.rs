@@ -32,6 +32,7 @@ pub mod mbx_seed;
 pub mod mbx_seed_copy;
 pub mod mbx_store;
 pub mod merge_group;
+pub mod merge_queue;
 pub mod metrics;
 mod needs;
 pub mod nextest_list;

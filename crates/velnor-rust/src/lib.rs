@@ -54,6 +54,7 @@ mod lock_key;
 mod manifest_diff;
 mod members;
 mod merge_group_skip;
+mod merge_queue_check;
 mod metadata;
 mod metadata_file;
 mod mise;

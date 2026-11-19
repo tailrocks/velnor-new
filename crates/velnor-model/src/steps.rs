@@ -131,6 +131,7 @@ pub enum StepKind {
     MergeGroupPassed {
         required: String,
     },
+    MergeQueueCheck,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

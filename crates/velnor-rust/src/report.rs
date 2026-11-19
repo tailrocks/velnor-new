@@ -115,6 +115,7 @@ pub(crate) fn finish(
     if facts.config.push_after_merge_group == PushAfterMergeGroup::SkipWhenQueueRunPassed {
         crate::merge_group_skip::ask(jobs, single, &facts.config.required_check);
     }
+    crate::merge_queue_check::ask(facts, jobs, single);
     let trim = crate::base_cache::trim_job(facts, jobs);
     let cache = attach(facts, jobs, trim.as_ref());
     if facts.config.cache_check_blocks {
