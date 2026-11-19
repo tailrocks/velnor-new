@@ -2,16 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_actions_contract::{
-    ExecutionMode, ScaleSetSelector, ValidatorKind, VelnorConfig, WorkflowPolicy,
+    ExecutionMode, ScaleSetSelector, ValidatorKind, VelnorConfig,
 };
 use velnor_actions_mise::ToolCatalog;
 use velnor_actions_workflow_renderer::render::{
     CanonicalRuntimeInputs, RenderContext, ValidatorCommand,
 };
-use velnor_actions_workflow_renderer::steps::{MACHETE_STEP_NAME, REQUEST_DIR_PREFIX};
+use velnor_actions_workflow_renderer::steps::REQUEST_DIR_PREFIX;
 use velnor_actions_workflow_renderer::verification_jobs::WorkflowTaskPolicy;
 
-use crate::vectors::{machete_argv, machete_install_argv};
 use crate::OrchestratorError;
 
 use super::REQUEST_DIR;
@@ -68,14 +67,6 @@ fn validator_commands(
     input: &RenderContextInputs<'_>,
 ) -> Result<Vec<ValidatorCommand>, OrchestratorError> {
     let mut validator_commands = Vec::new();
-    if input.config.workflow.policy == WorkflowPolicy::VelnorRepositoryV1 {
-        validator_commands.push(ValidatorCommand {
-            validator: ValidatorKind::CargoMachete,
-            name: MACHETE_STEP_NAME.to_owned(),
-            argv: machete_argv()?,
-            prepare_argv: machete_install_argv()?,
-        });
-    }
     crate::verify::push_verify_commands(
         &mut validator_commands,
         input.verify,

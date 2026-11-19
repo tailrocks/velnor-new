@@ -38,7 +38,7 @@ fn assert_velnor_repository_guards(files: &Files, jobs: &[JobUse]) -> Result<(),
     for path in [CI_PATH, FRESHNESS_PATH] {
         assert!(files.contains_key(path), "{path} is not rendered");
     }
-    for id in ["cargo-machete", "freshness", LEDGER_CLI_JOB_ID, PLAN_JOB_ID] {
+    for id in ["freshness", LEDGER_CLI_JOB_ID, PLAN_JOB_ID] {
         oracle::find(jobs, id)?;
     }
     for id in ["freshness", LEDGER_CLI_JOB_ID, PLAN_JOB_ID] {
