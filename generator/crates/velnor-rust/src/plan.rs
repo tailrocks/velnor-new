@@ -117,6 +117,7 @@ fn helper_job(facts: &RepoFacts, root: &RustRoot) -> Job {
     let mut steps = setup(facts, root, &lane, &HELPER_JOB);
     steps.push(Step {
         directory: root.manifest.parent(),
+        target_dir: Some(root.target_dir.clone()),
         ..step(StepKind::Cargo(CargoCommand::BuildBinary {
             package: PackageName::from_static(HELPER_PACKAGE),
             binary: TargetName::from_static(HELPER_PACKAGE),
@@ -385,6 +386,7 @@ pub(crate) fn step(kind: StepKind) -> Step {
     Step {
         kind,
         directory: None,
+        target_dir: None,
         when: When::Success,
         skip_on_draft: false,
         gate: None,

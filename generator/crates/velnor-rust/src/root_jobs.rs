@@ -82,10 +82,10 @@ impl RootJobs<'_> {
         commands: impl IntoIterator<Item = CargoCommand>,
     ) -> impl Iterator<Item = Step> {
         let lane = self.lane;
-        let directory = self.root.manifest.parent();
+        let root = self.root;
         commands
             .into_iter()
-            .map(move |command| lane.cargo(command, directory.clone()))
+            .map(move |command| lane.cargo(command, Some(root)))
     }
 
     fn saves(&self, job: &JobId, archive: Option<RepoPath>, sources: bool) -> Vec<Step> {
