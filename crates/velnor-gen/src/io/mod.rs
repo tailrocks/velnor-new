@@ -13,7 +13,8 @@ pub use std::process::ExitCode as Exit;
 use clap::{CommandFactory, FromArgMatches};
 use velnor_model::{RepoPath, RepoView};
 use velnor_rust::{
-    METADATA_PATH, build_script_sources, manifests, metadata_roots, reduce_metadata, wanted_files,
+    METADATA_PATH, build_script_sources, is_rust_source, manifests, metadata_roots,
+    reduce_metadata, wanted_files,
 };
 
 mod check;
@@ -273,12 +274,6 @@ pub fn read_checkout(path: &Path) -> Result<Checkout, Error> {
 
 type Recorded = (RepoView, BTreeMap<RepoPath, Vec<u8>>);
 
-fn is_rust_source(path: &str) -> bool {
-    Path::new(path)
-        .extension()
-        .is_some_and(|ext| ext.eq_ignore_ascii_case("rs"))
-}
-
 fn view_from(
     root: &Path,
     tracked_paths: BTreeSet<RepoPath>,
@@ -286,7 +281,7 @@ fn view_from(
 ) -> Result<RepoView, Error> {
     let wanted: Vec<RepoPath> = wanted_files(&tracked_paths)
         .into_iter()
-        .filter(|path| !(symlinks.contains(path) && is_rust_source(path.as_str())))
+        .filter(|path| !(symlinks.contains(path) && is_rust_source(path)))
         .collect();
     Ok(RepoView {
         repository: identity::repository_name(root),

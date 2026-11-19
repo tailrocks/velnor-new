@@ -159,7 +159,8 @@ fn literal_path(literal: &str) -> Option<&str> {
     (!literal.contains('\\')).then_some(literal)
 }
 
-pub(crate) fn is_rust_source(path: &RepoPath) -> bool {
+#[must_use]
+pub fn is_rust_source(path: &RepoPath) -> bool {
     std::path::Path::new(path.as_str())
         .extension()
         .is_some_and(|extension| extension == "rs")
