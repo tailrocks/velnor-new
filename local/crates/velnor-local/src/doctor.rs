@@ -11,6 +11,7 @@ pub const CACHE_IMAGE: &str = "velnor-local/cache-server";
 pub const RUNNER_IMAGE: &str = "velnor-local/runner";
 pub const BUILD_FIX: &str = "velnor-local build";
 pub const DOCKER_FIX: &str = "start OrbStack or Docker Desktop, then check `docker info`";
+pub const LOCAL_DOCKER_FIX: &str = "velnor-local needs a Docker daemon on this machine; to use a remote daemon or dind, run velnor-local and velnor-host inside it (Linux)";
 
 pub const PLAIN_IMAGES: [(&str, &str); 3] = [
     (STANDIN_IMAGE, "local/docker/runner-server"),
@@ -72,7 +73,20 @@ pub fn render(parts: &[Part]) -> String {
 }
 
 #[must_use]
+pub fn is_local(endpoint: &str) -> bool {
+    endpoint.starts_with("unix://")
+}
+
+#[must_use]
 pub fn docker(info: Result<&str, ()>, socket: Result<&str, ()>) -> Part {
+    if let Ok(socket) = socket
+        && !is_local(socket)
+    {
+        return Part::miss(
+            format!("docker: {socket} is not a local socket"),
+            LOCAL_DOCKER_FIX,
+        );
+    }
     let Ok(info) = info else {
         return Part::miss("docker: not reachable", DOCKER_FIX);
     };

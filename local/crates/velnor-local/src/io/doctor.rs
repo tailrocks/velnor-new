@@ -8,8 +8,8 @@ use super::env::{DockerCli, Engine, program};
 use super::supervisor::default_host;
 use crate::cli::DoctorArgs;
 use crate::doctor::{
-    BUILD_FIX, PLAIN_IMAGES, Part, docker, healthy, host, pair_images, plain_images, render,
-    vm_memory,
+    BUILD_FIX, LOCAL_DOCKER_FIX, PLAIN_IMAGES, Part, docker, healthy, host, is_local, pair_images,
+    plain_images, render, vm_memory,
 };
 use crate::images::TARGETS;
 
@@ -57,6 +57,26 @@ async fn host_part(explicit: Option<&Path>) -> Part {
     }
 }
 
+async fn endpoint<E: Engine>(engine: &E) -> io::Result<String> {
+    engine
+        .docker(&[
+            "context",
+            "inspect",
+            "--format",
+            "{{.Endpoints.docker.Host}}",
+        ])
+        .await
+}
+
+pub async fn require_local<E: Engine>(engine: &E) -> io::Result<()> {
+    match endpoint(engine).await {
+        Ok(socket) if !is_local(&socket) => Err(io::Error::other(format!(
+            "docker endpoint {socket} is not a local socket: {LOCAL_DOCKER_FIX}"
+        ))),
+        _ => Ok(()),
+    }
+}
+
 pub async fn inspect<E: Engine>(
     engine: &E,
     velnor_host: Option<&Path>,
@@ -65,16 +85,9 @@ pub async fn inspect<E: Engine>(
     let info = engine
         .docker(&["info", "--format", "{{.OperatingSystem}}|{{.Architecture}}"])
         .await;
-    let socket = engine
-        .docker(&[
-            "context",
-            "inspect",
-            "--format",
-            "{{.Endpoints.docker.Host}}",
-        ])
-        .await;
     let memory = engine.docker(&["info", "--format", "{{.MemTotal}}"]).await;
     let total = memory.ok().and_then(|text| text.trim().parse::<u64>().ok());
+    let socket = endpoint(engine).await;
     let (plain, pair) = if info.is_ok() {
         (
             Some(missing(engine, PLAIN_IMAGES.iter().map(|(tag, _)| *tag)).await),

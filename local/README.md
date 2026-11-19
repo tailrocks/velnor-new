@@ -36,7 +36,7 @@ velnor-local run warm --repo "$LAB" --dir "$STATE" --workflow .github/workflows/
 
 | Part | `ok` when | `fix:` |
 |---|---|---|
-| docker | `docker info` answers and the daemon is linux/arm64; it names OrbStack or Docker and the socket | start OrbStack or Docker Desktop |
+| docker | `docker info` answers, the endpoint is a `unix://` socket and the daemon is linux/arm64; it names OrbStack or Docker and the socket | start OrbStack or Docker Desktop; for a `tcp://` or `ssh://` endpoint see [Remote daemons](#remote-daemons-and-what-still-needs-github) |
 | docker vm memory | `docker info` reports at least one pair's memory plus 1 GiB: the runner (`--runner-memory`, 6g by default) + the dind (2 GiB) + 1 GiB headroom, so 9 GiB by default; `n/a` when it cannot be read | raise OrbStack's Settings > System > Memory limit (it defaults to half the host's RAM, at most 8 GiB, which is just short of one default pair), or lower `--runner-memory` |
 | stand-in, cache server and plain runner images | `velnor-local/runner-server`, `velnor-local/runner` and `velnor-local/cache-server` exist | the `docker build` line of each missing image |
 | pair images | `velnor-local/pair-runner`, `velnor-local/pair-dind` and `velnor-local/pair-probe` exist | `velnor-local build` |
@@ -68,6 +68,14 @@ The production `actions/setup-velnor/action.yml` has no local path at all and is
 `run` also makes the launcher's integrity check pass for that binary, without weakening it. The generated workflow pins the SHA-256 of the released `velnor-ci` for every platform (`VELNOR_HELPER_SHA256`) and refuses any other binary with `velnor-ci integrity check failed`. After `run` copies the checkout into the state directory, it computes the SHA-256 of the file given to `--velnor-ci-binary`, replaces only the linux-arm64 digest in the `.github/workflows/*.yml` of that copy, commits the change there as `velnor-local: pin the local velnor-ci`, and prints a `WARNING` that names the binary, its SHA-256 and the number of pins it rewrote. The check itself is not touched: a job still compares the binary it runs with the pin, and a different binary is still refused. Your checkout is never modified. The digest comes from the command line only, never from the repository under test, the workflow or the job's environment, and nothing outside `local/` mentions the flag. `up` has no copy of the checkout to rewrite, so with `up` a workflow with the pinned launcher still refuses the local binary.
 
 The binary is unverified by design: this is for a developer's own machine, and the SHA-256 in the output is the way to tell a local result from a release result.
+
+## Remote daemons and what still needs GitHub
+
+The Docker daemon must run on the machine that runs `velnor-local`. The authority and the API stub listen on `127.0.0.1`, `velnor-host` is a native process, and the checkout copy is bind-mounted by path, so a daemon with another network namespace or file system (a `tcp://` or `ssh://` endpoint, a remote OrbStack or a dind container reached from the host) cannot reach them. Without this rule `build` fails with a bind-mount stat error and `run` with `runner.server did not connect within 60 s`, after more than a minute. So `doctor` reports `miss` for any endpoint that does not start with `unix://`, and `build`, `up` and `run` stop at once with the same message. The endpoint is the one `docker context inspect` reports, which follows `DOCKER_HOST` and `DOCKER_CONTEXT`. To use a remote daemon or a dind, run `velnor-local` and `velnor-host` inside that machine or container (Linux), so that the daemon is local to them; that is how the #651 proof ran.
+
+"No GitHub" means no scale set and no JIT config. Actions (`actions/checkout` is replaced, the rest are downloaded), `mise` tools and the pinned `velnor-ci` release still come from github.com, so the machine needs internet access.
+
+Pairs are single-use: each job takes a pair and a replacement starts after it, so a run of two jobs on two pairs can show three pairs in `runner/velnor-host.log`. That is expected. If the driver was killed (Ctrl-C twice, `kill -9`), a container such as `<name>-standin` or a pair can stay; `velnor-local down --dir "$STATE"` removes every container, volume and network labelled `velnor-local=<name>`, and so does the next `up` on that directory.
 
 ## The three modes
 

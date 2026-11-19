@@ -11,7 +11,7 @@ use clap::Parser;
 use velnor_local::cli::{Cli, Command};
 use velnor_local::doctor::{Part, healthy, render};
 use velnor_local::images::TARGETS;
-use velnor_local::io::doctor::inspect;
+use velnor_local::io::doctor::{inspect, require_local};
 use velnor_local::io::env::Engine;
 use velnor_local::pairs::Limits;
 
@@ -23,6 +23,7 @@ struct Docker {
     info: Option<&'static str>,
     memory: Option<&'static str>,
     context: bool,
+    endpoint: &'static str,
     images: BTreeSet<&'static str>,
 }
 
@@ -31,9 +32,7 @@ impl Engine for Docker {
         let answer = match args {
             ["info", "--format", "{{.MemTotal}}"] => self.memory.map(str::to_owned),
             ["info", ..] => self.info.map(str::to_owned),
-            ["context", "inspect", ..] => self
-                .context
-                .then(|| "unix:///Users/me/.orbstack/run/docker.sock".to_owned()),
+            ["context", "inspect", ..] => self.context.then(|| self.endpoint.to_owned()),
             ["image", "inspect", .., tag] => {
                 self.images.contains(tag).then(|| "sha256:aa".to_owned())
             }
@@ -61,6 +60,7 @@ fn docker(without: &[&str]) -> Docker {
         info: Some("OrbStack|aarch64"),
         memory: Some("17179869184"),
         context: true,
+        endpoint: "unix:///Users/me/.orbstack/run/docker.sock",
         images: ALL
             .into_iter()
             .filter(|tag| !without.contains(tag))
@@ -149,6 +149,7 @@ async fn unreachable_docker_and_other_architectures_are_misses() {
         info: None,
         memory: None,
         context: true,
+        endpoint: "unix:///var/run/docker.sock",
         images: BTreeSet::new(),
     };
     let (parts, text) = report(&down, &host("doctor-down", true)).await;
@@ -295,4 +296,97 @@ fn doctor_takes_a_runner_memory_that_must_be_a_valid_size() {
         Ok(Command::Doctor(args)) if args.runner_memory == 2 * GIB
     ));
     assert!(Cli::try_parse_from(["velnor-local", "doctor", "--runner-memory", "0"]).is_err());
+}
+
+const REMOTE_FIX: &str = "fix: velnor-local needs a Docker daemon on this machine; to use a remote daemon or dind, run velnor-local and velnor-host inside it (Linux)";
+
+#[tokio::test]
+async fn a_remote_docker_endpoint_is_a_miss_with_the_run_it_inside_fix() {
+    let remote = Docker {
+        endpoint: "tcp://10.0.0.5:2375",
+        ..docker(&[])
+    };
+    let (parts, text) = report(&remote, &host("doctor-remote", true)).await;
+    assert!(!healthy(&parts), "{text}");
+    assert!(
+        text.contains("miss  docker: tcp://10.0.0.5:2375 is not a local socket"),
+        "{text}"
+    );
+    assert!(text.contains(REMOTE_FIX), "{text}");
+    assert_eq!(text.matches("fix:").count(), 1, "{text}");
+    let unreachable = Docker {
+        info: None,
+        ..remote
+    };
+    let (_, text) = report(&unreachable, &host("doctor-remote-down", true)).await;
+    assert!(text.contains("not a local socket"), "{text}");
+    assert!(!text.contains("not reachable"), "{text}");
+}
+
+#[tokio::test]
+async fn local_unix_sockets_stay_ok() {
+    for endpoint in [
+        "unix:///Users/x/.orbstack/run/docker.sock",
+        "unix:///var/run/docker.sock",
+    ] {
+        let local = Docker {
+            endpoint,
+            ..docker(&[])
+        };
+        let (parts, text) = report(&local, &host("doctor-unix", true)).await;
+        assert!(healthy(&parts), "{endpoint}: {text}");
+        assert!(text.contains(&format!("linux/arm64, {endpoint}")), "{text}");
+        assert!(require_local(&local).await.is_ok(), "{endpoint}");
+    }
+}
+
+#[tokio::test]
+async fn build_up_and_run_stop_on_a_remote_endpoint_before_any_work() {
+    let remote = Docker {
+        endpoint: "ssh://me@box",
+        ..docker(&[])
+    };
+    let refused = require_local(&remote).await.map_err(|e| e.to_string());
+    assert!(
+        refused.is_err_and(|message| message.contains("ssh://me@box")
+            && message.contains("needs a Docker daemon on this machine")),
+    );
+    let blind = Docker {
+        context: false,
+        ..docker(&[])
+    };
+    assert!(
+        require_local(&blind).await.is_ok(),
+        "an unreadable context is the later steps' error"
+    );
+}
+
+#[test]
+fn the_cli_refuses_a_remote_daemon_in_build_up_and_run() {
+    if std::process::Command::new("docker")
+        .arg("--version")
+        .output()
+        .is_err()
+    {
+        return;
+    }
+    let dir = temp_dir("remote-cli");
+    let dir = dir.to_string_lossy().into_owned();
+    for args in [
+        vec!["build", "--root", &dir],
+        vec!["up", "--dir", &dir, "--repo", &dir],
+        vec!["run", "hello", "--dir", &dir, "--repo", &dir],
+    ] {
+        let output = std::process::Command::new(env!("CARGO_BIN_EXE_velnor-local"))
+            .args(&args)
+            .env("DOCKER_HOST", "tcp://10.0.0.5:2375")
+            .output()
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        let text = String::from_utf8_lossy(&output.stderr);
+        assert_eq!(output.status.code(), Some(1), "{args:?}: {text}");
+        assert!(
+            text.contains("tcp://10.0.0.5:2375 is not a local socket"),
+            "{args:?}: {text}"
+        );
+    }
 }
