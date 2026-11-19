@@ -20,7 +20,7 @@ const NEEDS_JSON: &str = "NEEDS_JSON";
 const GATE_SPEC: &str = "GATE_SPEC";
 const ON_DEFAULT_BRANCH: &str =
     "github.ref == format('refs/heads/{0}', github.event.repository.default_branch)";
-const ACTIVE_EVENT: &str = "(github.event_name != 'pull_request' || (startsWith(github.ref, 'refs/pull/') && github.event.pull_request.state != 'closed' && !(github.event.action == 'edited' && github.event.changes.base.ref.from == null)))";
+const ACTIVE_EVENT: &str = "(github.event_name != 'pull_request' || (startsWith(github.ref, 'refs/pull/') && github.event.pull_request.state != 'closed'))";
 pub(crate) fn sources_step(slug: &RootSlug) -> String {
     format!("sources_{slug}")
 }
@@ -163,7 +163,11 @@ pub(crate) fn condition(
 }
 
 pub(crate) fn admission(when: When, gate: Option<&Gate>, skip_draft: bool) -> String {
-    match condition(when, gate, Setup::Before, skip_draft, &[]) {
+    let plan_succeeded: Vec<String> = match gate.map(|gate| &gate.from) {
+        Some(PlanFrom::Job(job)) => vec![format!("needs.{job}.result == 'success'")],
+        _ => Vec::new(),
+    };
+    match condition(when, gate, Setup::Before, skip_draft, &plan_succeeded) {
         Some(predicate) => format!(
             "${{{{ {ACTIVE_EVENT} && ({}) }}}}",
             predicate.trim_start_matches("${{ ").trim_end_matches(" }}")

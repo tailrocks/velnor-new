@@ -49,7 +49,7 @@ fn a_helper_that_has_gate_renders_a_verified_gate_without_a_checkout() -> TestRe
     let text = released("0.1.81", &["Cargo.toml", "lab/Cargo.toml"])?;
     let job = required(&text)?;
     assert!(job.contains(
-        "    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'' && !(github.event.action == ''edited'' && github.event.changes.base.ref.from == null))) && (always()) }}'\n"
+        "    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (always()) }}'\n"
     ));
     assert!(!job.contains("Check out"));
     assert!(!job.contains("Fail when a Rust job failed or was cancelled"));
@@ -71,7 +71,7 @@ fn a_helper_without_gate_keeps_the_old_verdict_step() -> TestResult {
     let text = released("0.1.80", &["Cargo.toml", "lab/Cargo.toml"])?;
     let job = required(&text)?;
     assert!(job.contains(
-        "    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'' && !(github.event.action == ''edited'' && github.event.changes.base.ref.from == null))) && (always()) }}'\n"
+        "    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (always()) }}'\n"
     ));
     assert!(job.contains("Fail when a Rust job failed or was cancelled"));
     assert!(!job.contains("velnor-ci gate"));
