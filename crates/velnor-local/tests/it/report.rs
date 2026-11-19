@@ -4,7 +4,7 @@
 use std::path::{Path, PathBuf};
 
 use velnor_local::scenario::{
-    Outcome, distinct, inside, keeps_environment, plan, restores, summary,
+    Metrics, Outcome, distinct, inside, keeps_environment, plan, restores, summary,
 };
 use velnor_local::standin::Job;
 use velnor_local::verdict::{Check, verdict};
@@ -117,7 +117,7 @@ fn every_verdict_line_names_its_scenario_and_carries_the_cache_lines() {
         event: "push".to_owned(),
         conclusion: "failure",
         started: Some(110),
-        metrics: Err("no".to_owned()),
+        metrics: Metrics::Failed("no".to_owned()),
         caches: vec!["job lint: key k found no entry".to_owned()],
         trusted: true,
     };
