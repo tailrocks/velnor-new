@@ -20,3 +20,5 @@ run = "bash scripts/ci-fixtures.sh"
 root = "crates/velnor-runner"
 features = ["local-mode"]
 filter = "package(velnor-runner-host) and (test(~local::) or binary(local_host_public) or binary(local_pair_public))"
+lint = true
+doc = true
