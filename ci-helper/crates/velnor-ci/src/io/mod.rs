@@ -42,6 +42,7 @@ mod resolve_qualification;
 mod restored;
 mod run;
 mod setup;
+mod sources;
 mod timings;
 mod unit_platforms;
 mod units;
@@ -60,7 +61,7 @@ pub use self::restored::{break_time_ties, break_time_ties_with};
 pub use self::timings::write_report;
 use crate::cli::{
     AuditArgs, BenchCommand, CacheCommand, CheckTagArgs, Cli, CollectArgs, Command, CompareArgs,
-    DecideArgs, InputsCommand, ReleaseCommand, ReleaseGateArgs,
+    DecideArgs, InputsCommand, ReleaseCommand, ReleaseGateArgs, SourcesCommand,
 };
 use crate::collect::collect;
 use crate::compare::{compare, compare_across_populations};
@@ -118,6 +119,9 @@ pub fn main() -> ExitCode {
     };
     if let Command::Run(args) = &cli.command {
         return run::run(args);
+    }
+    if let Command::Sources(SourcesCommand::Fetch(args)) = &cli.command {
+        return sources::fetch(args);
     }
     if let Command::LaneGuard(args) = &cli.command {
         return lane_guard::run(args);
@@ -232,7 +236,9 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::VerifyMacProof => preview::cli::verify_mac_proof(),
         Command::RunAuthority(args) => preview::cli::run_authority(&args),
         Command::AdmitPreview => preview::admit::admit_preview(),
-        Command::Run(_) => Err(CiError::new("run is handled before commands")),
+        Command::Run(_) | Command::Sources(_) => {
+            Err(CiError::new("run and sources are handled before commands"))
+        }
         Command::LaneGuard(_) => Err(CiError::new("lane-guard is handled before commands")),
     }
 }

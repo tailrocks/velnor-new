@@ -108,6 +108,7 @@ pub struct RenderedJob {
     pub runs_on: String,
     pub fork_runner: Option<String>,
     pub timeout_minutes: u16,
+    pub env: Vec<(String, Value)>,
     pub steps: Vec<RenderedStep>,
 }
 

@@ -9,8 +9,9 @@ use velnor_model::{
 
 use crate::artifact_steps::{download_step, upload_cargo_log, upload_step};
 use crate::base_steps::{
-    cache_budget, cache_decide, cache_trim, lane_outputs, sources_fetch, sources_locks,
-    trimmed_lane,
+    cache_budget, cache_decide, cache_trim, lane_outputs, sources_fetch, sources_fetch_all,
+    sources_locks, trimmed_lane,
+
 };
 use crate::cache::{path_text, render_key};
 use crate::cargo::{CargoLane, cargo_step, reports_tests};
@@ -55,10 +56,14 @@ pub(crate) fn rendered_job(job: &Job, fork_runner: &RunnerLabel) -> RenderedJob 
         .steps
         .iter()
         .any(|step| matches!(&step.kind, StepKind::Cargo(command) if reports_tests(command)));
+    let mut steps =
+        crate::helper_integrity::secure_steps(job, job_steps(job, restores, audit, tests, lane));
+    let env = crate::cargo::hoist_target_dir(job, &mut steps);
     RenderedJob {
         id: job.id.to_string(),
         name: job.name.clone(),
         comment: job.comment.clone(),
+        env,
         needs: job.needs.iter().map(ToString::to_string).collect(),
         condition: Some(crate::base_steps::audited_lane(
             admission(job.when, job.gate.as_ref(), job.pr),
@@ -103,10 +108,7 @@ pub(crate) fn rendered_job(job: &Job, fork_runner: &RunnerLabel) -> RenderedJob 
             .chain(merge_group_output(job))
             .chain(lane_outputs(&job.steps))
             .collect(),
-        steps: crate::helper_integrity::secure_steps(
-            job,
-            job_steps(job, restores, audit, tests, lane),
-        ),
+        steps,
         ..RenderedJob::default()
     }
 }
@@ -253,6 +255,9 @@ fn step_body(
         StepKind::RustComponents(components) => rustup_add("component", components),
         StepKind::RustTargets(targets) => rustup_add("target", targets),
         StepKind::SourcesFetch { position, .. } => sources_fetch(*position, lane),
+        StepKind::SourcesFetchAll { manifests, .. } => {
+            sources_fetch_all(manifests, lane.cache_debug)
+        }
         StepKind::Cargo(command) => cargo_step(command, audit, lane),
         StepKind::Helper(command) => crate::helper_steps::helper_step(*command),
         StepKind::InputsSave(target) => crate::helper_steps::inputs_step("save", target, directory),
