@@ -97,22 +97,56 @@ pub(crate) fn check_targets(
     root_manifest: &str,
     files: &ReleaseFiles,
 ) -> Result<(), ReleaseError> {
+    check_include_files(binary, files)?;
     let Some(targets) = &files.bin_targets else {
         return Ok(());
     };
     let primary = (binary.package.as_str(), binary.bin.as_str());
-    let wanted = std::iter::once(primary).chain(
-        binary
-            .bins
-            .iter()
-            .map(|extra| (extra.package.as_str(), extra.bin.as_str())),
-    );
-    for (package, bin) in wanted {
-        if !targets.contains(&(root_manifest.to_owned(), package.to_owned(), bin.to_owned())) {
+    let wanted: Vec<(&str, &str)> = std::iter::once(primary)
+        .chain(
+            binary
+                .bins
+                .iter()
+                .map(|extra| (extra.package.as_str(), extra.bin.as_str())),
+        )
+        .collect();
+    let has = |package: &str, bin: &str| {
+        targets.contains(&(root_manifest.to_owned(), package.to_owned(), bin.to_owned()))
+    };
+    for (package, bin) in &wanted {
+        if !has(package, bin) {
             return Err(ReleaseError::BinaryTargetMissing {
                 package: binary.package.clone(),
-                bin: bin.to_owned(),
+                bin: (*bin).to_owned(),
             });
+        }
+    }
+    for (package, _) in &wanted {
+        for (_, bin) in wanted.iter().filter(|(owner, _)| owner != package) {
+            if has(package, bin) {
+                return Err(invalid(
+                    &binary.package,
+                    bin,
+                    "is also a bin of another package built in the same cargo build, which would build both and collide in target/<triple>/release",
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn check_include_files(binary: &Binary, files: &ReleaseFiles) -> Result<(), ReleaseError> {
+    let Some(tracked) = &files.tracked_paths else {
+        return Ok(());
+    };
+    for path in &binary.include {
+        let prefix = format!("{path}/");
+        if tracked.iter().any(|tracked| tracked.starts_with(&prefix)) {
+            return Err(invalid(
+                &binary.package,
+                path,
+                "is a directory, which tar would descend into and break the flat layout of the asset; list its files",
+            ));
         }
     }
     Ok(())

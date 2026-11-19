@@ -206,3 +206,62 @@ fn checks_work_for_a_second_root_binary() -> TestResult {
     );
     Ok(())
 }
+
+#[test]
+fn a_check_may_not_hold_id_token_write_and_id_token_has_no_read() -> TestResult {
+    for (access, expected) in [
+        ("write", CheckProblem::WritesIdToken),
+        (
+            "read",
+            CheckProblem::InvalidAccess {
+                scope: "id-token".to_owned(),
+                access: "read".to_owned(),
+            },
+        ),
+    ] {
+        let checks = format!(
+            "[[checks]]\nname = \"a\"\nrun = \"x\"\n[checks.permissions]\nid-token = \"{access}\"\n"
+        );
+        assert_eq!(problem(&checks)?, Some(expected), "{access}");
+    }
+    let none = "[[checks]]\nname = \"a\"\nrun = \"x\"\n[checks.permissions]\nid-token = \"none\"\n";
+    assert_eq!(problem(none)?, None);
+    Ok(())
+}
+
+#[test]
+fn a_check_accepts_the_token_scopes_github_added() -> TestResult {
+    for scope in ["code-quality", "copilot-requests", "vulnerability-alerts"] {
+        let checks = format!(
+            "[[checks]]\nname = \"a\"\nrun = \"x\"\n[checks.permissions]\n{scope} = \"read\"\n"
+        );
+        assert_eq!(problem(&checks)?, None, "{scope}");
+    }
+    Ok(())
+}
+
+#[test]
+fn two_artifacts_that_publish_the_same_file_name_cannot_share_a_dist_folder() -> TestResult {
+    let binaries = "roots = [\".\", \"tools\"]\n[[binaries]]\npackage = \"app\"\nasset_name = \"{{ platform }}\"\n[[binaries]]\npackage = \"tools\"\nasset_name = \"{{ platform }}\"\n";
+    let check = "[[checks]]\nname = \"q\"\nrun = \"bash q.sh\"\nbefore = \"publish\"\nartifacts = [\"app-linux-x64\", \"tools-linux-x64\"]\n";
+    let error = render(&[APP, TOOLS], Some(&format!("{binaries}{check}")))
+        .err()
+        .ok_or("two artifacts with one file name rendered")?;
+    assert!(
+        matches!(
+            error.downcast_ref::<GenerateError>(),
+            Some(GenerateError::Rules(violations))
+                if violations.iter().any(|RuleViolation { job, rule, .. }| {
+                    job == "check-q" && matches!(rule, Rule::DistFileCollision(file) if file == "linux-x64.tar.gz")
+                })
+        ),
+        "{error}"
+    );
+    render(&[APP, TOOLS], Some(binaries))?;
+    let apart = binaries.replace(
+        "package = \"tools\"\nasset_name = \"{{ platform }}\"",
+        "package = \"tools\"\nasset_name = \"t-{{ platform }}\"",
+    );
+    render(&[APP, TOOLS], Some(&format!("{apart}{check}")))?;
+    Ok(())
+}

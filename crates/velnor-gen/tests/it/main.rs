@@ -157,6 +157,7 @@ mod release_yml_member_digests;
 mod release_yml_multibin;
 mod release_yml_multibin_raw_attest;
 mod release_yml_pairs;
+mod release_yml_private;
 mod release_yml_profile;
 mod release_yml_quoting;
 mod release_yml_raw;

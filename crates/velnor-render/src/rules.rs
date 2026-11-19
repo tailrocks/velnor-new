@@ -153,6 +153,7 @@ pub enum Rule {
     WorkflowTooLarge(usize),
     CacheKeyTooLong(usize),
     OutputNameCollision(String),
+    DistFileCollision(String),
     EnvTooLong(usize),
 }
 
@@ -175,6 +176,13 @@ impl fmt::Display for RuleViolation {
             return write!(
                 f,
                 "the tag job would define the output {name} twice: it is both a released package and the commit output of another package; rename the package"
+            );
+        }
+        if let Rule::DistFileCollision(name) = &self.rule {
+            return write!(
+                f,
+                "job {} downloads two artifacts that both contain {name} into the same dist folder, so one would overwrite the other; give the binaries distinct asset names",
+                self.job
             );
         }
         write!(f, "job {} step {}: ", self.job, self.step + 1)?;
@@ -213,7 +221,9 @@ impl fmt::Display for RuleViolation {
                 "a job that holds the release App token runs mise without --no-config --no-env --no-hooks",
             ),
             Rule::CombinedCacheNotLastStep => f.write_str(crate::combined_cache::MESSAGE),
-            Rule::WorkflowTooLarge(_) | Rule::OutputNameCollision(_) => Ok(()),
+            Rule::WorkflowTooLarge(_)
+            | Rule::OutputNameCollision(_)
+            | Rule::DistFileCollision(_) => Ok(()),
             Rule::CacheKeyTooLong(length) => write!(
                 f,
                 "a cache key can be {length} characters long at run time, and actions/cache allows at most {MAX_CACHE_KEY_CHARACTERS}; shorten the job id or the root directory name"
