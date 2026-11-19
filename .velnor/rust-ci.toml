@@ -15,3 +15,13 @@ cainfo = "/opt/velnor/crates-mirror/ca-bundle.pem"
 root = "."
 name = "Prepare test fixtures"
 run = "bash scripts/ci-fixtures.sh"
+
+[[test_setup]]
+root = "."
+name = "Prepare pinned Mac proof verifier"
+run = "mise --no-config --no-env --no-hooks install aqua:sigstore/cosign@3.1.4"
+
+[[test_setup]]
+root = "."
+name = "Prepare pinned attestation verifier"
+run = "mise --no-config --no-env --no-hooks install gh@2.103.3"

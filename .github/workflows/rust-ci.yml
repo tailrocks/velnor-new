@@ -399,6 +399,12 @@ jobs:
       - name: Prepare test fixtures
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         run: bash scripts/ci-fixtures.sh
+      - name: Prepare pinned Mac proof verifier
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
+        run: 'mise --no-config --no-env --no-hooks install aqua:sigstore/cosign@3.1.4'
+      - name: Prepare pinned attestation verifier
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
+        run: mise --no-config --no-env --no-hooks install gh@2.103.3
       - id: test
         name: Test
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
