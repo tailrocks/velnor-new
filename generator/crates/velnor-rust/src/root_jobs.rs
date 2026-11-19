@@ -18,6 +18,7 @@ use crate::plan::{
     CHECKOUT_DEPTH, DEFAULT_GROUP_JOB, LINT_JOB, RUST_JOB, TEST_JOB, head, job, mirror_step, setup,
     step, tools_restore,
 };
+use crate::root_checks::{check_alone, lint};
 
 const ARCHIVE_ID: JobId = JobId::from_static("nextest-archive");
 const ARCHIVE_FILE: RepoPath = RepoPath::from_static("nextest-archive.tar.zst");
@@ -77,7 +78,10 @@ impl RootJobs<'_> {
         }
     }
 
-    fn cargo(&self, commands: Vec<CargoCommand>) -> impl Iterator<Item = Step> {
+    fn cargo(
+        &self,
+        commands: impl IntoIterator<Item = CargoCommand>,
+    ) -> impl Iterator<Item = Step> {
         let lane = self.lane;
         let directory = self.root.manifest.parent();
         commands
@@ -180,13 +184,22 @@ impl RootJobs<'_> {
     }
 
     fn tests(&self) -> Vec<CargoCommand> {
-        let run = CargoCommand::NextestRun {
-            filter: self.filter(),
-        };
-        self.nextest
-            .then_some(run)
+        self.nextest_run()
             .into_iter()
-            .chain(self.feature_lanes())
+            .chain(self.built_without_nextest())
+            .collect()
+    }
+
+    fn nextest_run(&self) -> Option<CargoCommand> {
+        self.nextest.then(|| CargoCommand::NextestRun {
+            filter: self.filter(),
+            ci_profile: self.root.nextest_ci_profile,
+        })
+    }
+
+    fn built_without_nextest(&self) -> Vec<CargoCommand> {
+        self.feature_lanes()
+            .into_iter()
             .chain(self.direct_harnesses())
             .chain(self.doctests())
             .collect()
@@ -223,8 +236,7 @@ impl RootJobs<'_> {
             self.cargo(
                 [CargoCommand::Doc]
                     .into_iter()
-                    .chain(check_alone(self.root))
-                    .collect(),
+                    .chain(check_alone(self.root)),
             )
         };
         steps.extend(self.cargo(lint()));
@@ -251,7 +263,7 @@ impl RootJobs<'_> {
                     other => after.push(other),
                 }
             }
-            steps.extend(self.cargo(workspace));
+            steps.extend(self.cargo(workspace).map(skip_on_draft));
             steps.extend(self.cargo(after).map(skip_on_draft));
             steps.extend(self.audit());
             steps.extend(saves);
@@ -266,7 +278,7 @@ impl RootJobs<'_> {
         let tests = self.tests();
         let lint_id = self.id(LINT_JOB);
         let mut steps = setup(self.facts, self.root, self.lane, &lint_id);
-        steps.extend(self.cargo(lint().into_iter().chain([CargoCommand::Doc]).collect()));
+        steps.extend(self.cargo(lint().into_iter().chain([CargoCommand::Doc])));
         if tests.is_empty() {
             steps.extend(self.audit());
         }
@@ -283,14 +295,17 @@ impl RootJobs<'_> {
             let test_id = self.id(TEST_JOB);
             let mut steps = setup(self.facts, self.root, self.lane, &test_id);
             let saves = self.saves(&test_id, None, true);
-            let before_tests = self.nextest && !saves.is_empty();
-            if before_tests {
+            let saving = self.nextest && !saves.is_empty();
+            if saving {
                 steps.extend(self.cargo(vec![CargoCommand::NextestBuild]).map(saving_run));
+                steps.extend(self.cargo(self.nextest_run()));
+                steps.extend(self.cargo(self.built_without_nextest()));
                 steps.extend(saves.iter().cloned());
+            } else {
+                steps.extend(self.cargo(tests));
             }
-            steps.extend(self.cargo(tests));
             steps.extend(self.audit());
-            if !before_tests {
+            if !saving {
                 steps.extend(saves);
             }
             jobs.push(self.lane_job(test_id, steps));
@@ -314,21 +329,13 @@ impl RootJobs<'_> {
             name: artifact.clone(),
             file: self.root.manifest.sibling(&ARCHIVE_FILE),
         }));
+        build.extend(self.cargo(self.built_without_nextest()));
+        build.extend(self.audit());
         build.extend(self.saves(
             &build_id,
             Some(self.root.manifest.sibling(&ARCHIVE_FILE)),
             true,
         ));
-        build.extend(
-            self.cargo(
-                self.feature_lanes()
-                    .into_iter()
-                    .chain(self.direct_harnesses())
-                    .chain(self.doctests())
-                    .collect(),
-            ),
-        );
-        build.extend(self.audit());
         let mut group = head(self.facts, CHECKOUT_DEPTH);
         group.extend(mirror_step(self.facts).map(|step| self.gated(step.kind)));
         group.extend(tools_restore(self.facts).map(|restore| Step {
@@ -347,6 +354,7 @@ impl RootJobs<'_> {
             self.cargo(vec![CargoCommand::NextestRunArchive {
                 file: ARCHIVE_FILE,
                 filter: self.filter(),
+                ci_profile: self.root.nextest_ci_profile,
             }])
             .map(|step| Step {
                 when: When::Success,
@@ -359,13 +367,6 @@ impl RootJobs<'_> {
     }
 }
 
-fn lint() -> Vec<CargoCommand> {
-    vec![
-        CargoCommand::FmtCheck,
-        CargoCommand::Clippy { extra: Vec::new() },
-    ]
-}
-
 fn binary_id(package: &PackageName, harness: &CustomHarness) -> String {
     let name = &harness.name;
     match harness.kind {
@@ -375,24 +376,4 @@ fn binary_id(package: &PackageName, harness: &CustomHarness) -> String {
         TargetKind::Bench => format!("{package}::bench/{name}"),
         TargetKind::Test | TargetKind::BuildScript => format!("{package}::{name}"),
     }
-}
-
-fn check_alone(root: &RustRoot) -> Vec<CargoCommand> {
-    root.members
-        .iter()
-        .filter(|member| {
-            member.targets.iter().any(|target| {
-                !target.requires_features
-                    && target.kinds.iter().any(|kind| {
-                        matches!(
-                            kind,
-                            TargetKind::Lib | TargetKind::ProcMacro | TargetKind::Bin
-                        )
-                    })
-            })
-        })
-        .map(|member| CargoCommand::CheckAlone {
-            package: member.name.clone(),
-        })
-        .collect()
 }

@@ -261,6 +261,11 @@ pub struct CompareArgs {
     pub a: PathBuf,
     #[arg(help = "Metrics file of the second run")]
     pub b: PathBuf,
+    #[arg(
+        long,
+        help = "Compare runs of different workflows or events and label the output with the workload caveat; runs of different repositories are never compared"
+    )]
+    pub allow_different_populations: bool,
 }
 
 #[derive(Debug, Args)]

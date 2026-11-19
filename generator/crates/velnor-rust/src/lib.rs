@@ -6,13 +6,16 @@ mod base_cache;
 mod build_profile;
 mod build_script;
 mod build_target;
+mod cache_budget;
 mod cargo_flags;
 mod cargo_lock;
 mod classify;
 mod compat;
 mod config;
 mod config_deny;
+mod config_fork;
 mod config_helper;
+mod config_lists;
 mod config_mirror;
 mod config_roots;
 mod config_test_lane;
@@ -40,6 +43,7 @@ mod repo_profile;
 mod report;
 mod required_job;
 mod required_size;
+mod root_checks;
 mod root_jobs;
 mod roots;
 mod schedule;
@@ -97,4 +101,8 @@ pub use verdict::{
 };
 pub use weaken::introduced;
 
+pub use cache_budget::{
+    CacheEntry, CacheFamily, CacheId, DEFAULT_CACHE_BUDGET_BYTES, Timestamp, budget_plan,
+    cache_family, delta_pull_request,
+};
 pub use private_sources::{cacheable_config, cacheable_lock};
