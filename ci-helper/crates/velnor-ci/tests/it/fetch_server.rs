@@ -277,3 +277,76 @@ fn a_server_with_a_web_port_still_has_its_ssh_forms_authenticated_to_that_port()
     );
     Ok(())
 }
+
+#[test]
+fn a_git_database_config_cannot_enable_executable_transports_or_credential_helpers() -> TestResult {
+    let fixture = Fixture::new("fetch-transports", 0)?;
+    let root = fixture.repo.root().to_path_buf();
+    let database = root.join("db");
+    let git = |args: &[&str]| {
+        std::process::Command::new("/usr/bin/git")
+            .current_dir(&database)
+            .env_clear()
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .args(args)
+            .output()
+    };
+    fs::create_dir_all(&database)?;
+    git(&["init", "-q"])?;
+    let ran = root.join("log/ext.ran");
+    let command = format!("sh -c 'echo ran >> {}; cat >/dev/null' #", ran.display());
+    git(&["config", "protocol.ext.allow", "always"])?;
+    let transport = root.join("ext-transport/x.git");
+    script(&transport, &format!("echo ext >> {}", ran.display()))?;
+    git(&[
+        "config",
+        &format!(
+            "url.ext::{}/.insteadOf",
+            root.join("ext-transport").display()
+        ),
+        "https://example.invalid/",
+    ])?;
+    git(&["config", "credential.helper", &format!("!{command}")])?;
+    script(
+        &root.join("trusted/bin/cargo"),
+        &format!(
+            "cd {} && /usr/bin/git ls-remote https://example.invalid/x.git >/dev/null 2>&1; \
+             printf 'protocol=https\\nhost=example.invalid\\nusername=u\\npassword=p\\n\\n' | /usr/bin/git credential approve",
+            database.display()
+        ),
+    )?;
+    let api = serve(204)?;
+    let output = fixture.run_with(&api, Some(TOKEN), None, &["Cargo.toml"], &[]);
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(fixture.log("ext.ran"), "");
+    Ok(())
+}
+
+#[test]
+fn compiler_selectors_in_the_checkout_cargo_config_are_overridden_during_the_authenticated_fetch()
+-> TestResult {
+    let fixture = Fixture::new("fetch-compiler", 0)?;
+    fixture.repo.write_unstaged(
+        ".cargo/config.toml",
+        "[build]\nrustc = \"./steal.sh\"\nrustc-wrapper = \"./steal.sh\"\nrustc-workspace-wrapper = \"./steal.sh\"\n",
+    );
+    let api = serve(204)?;
+    let output = fixture.run_with(&api, Some(TOKEN), None, &["Cargo.toml"], &[]);
+    assert!(output.status.success(), "{output:?}");
+    let environment = fixture.log("cargo.env");
+    for line in [
+        "RUSTC=rustc",
+        "CARGO_BUILD_RUSTC=rustc",
+        "RUSTC_WRAPPER=",
+        "RUSTC_WORKSPACE_WRAPPER=",
+        "CARGO_BUILD_RUSTC_WRAPPER=",
+        "CARGO_BUILD_RUSTC_WORKSPACE_WRAPPER=",
+    ] {
+        assert!(
+            environment.lines().any(|set| set == line),
+            "{line}\n{environment}"
+        );
+    }
+    Ok(())
+}
