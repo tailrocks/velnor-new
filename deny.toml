@@ -37,3 +37,9 @@ allow = [
     "Unicode-3.0",
 ]
 confidence-threshold = 0.8
+
+# CDLA-Permissive-2.0 is accepted for webpki-roots only (the Mozilla CA data it ships).
+# It is a per-crate exception on purpose: do not add it to the global `allow` list above.
+[[licenses.exceptions]]
+allow = ["CDLA-Permissive-2.0"]
+crate = "webpki-roots"

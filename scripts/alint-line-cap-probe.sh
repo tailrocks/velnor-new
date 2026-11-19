@@ -6,7 +6,7 @@
 set -uo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
-PROBE="$ROOT/ci-helper/crates/velnor-ci/src/alint_line_cap_probe.rs"
+PROBE="$ROOT/crates/velnor-ci/src/alint_line_cap_probe.rs"
 LOG="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/alint-line-cap-probe.log"
 
 cleanup() {

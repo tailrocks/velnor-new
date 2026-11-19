@@ -4,7 +4,7 @@
 
 ## 0. Goal and non-goals
 
-velnor-host (`crates/velnor-runner`) drives one scale-set runner per job on a
+velnor-host (`crates/velnor-runner-*`) drives one scale-set runner per job on a
 Docker engine. The owner wants the same host to also run jobs on the tailrocks
 Hetzner k3s cluster at full capacity with warm caches.
 
@@ -16,7 +16,7 @@ Non-goals: a second host binary, a second journal, a Kubernetes operator or CRD,
 replacing Docker as the default, or running the Mac (macOS) path on Kubernetes.
 
 Evidence base: a read of the current Docker coupling. Counts below come from a
-grep of `crates/velnor-runner` (about 5,150 lines mention "docker"; roughly 50
+grep of `crates/velnor-runner-*` (about 5,150 lines mention "docker"; roughly 50
 non-test source files import `bollard`). Names in backticks are real files or
 types; where this document proposes a name it says so.
 

@@ -32,7 +32,7 @@ lock() { sed -n "s/^$1 = \"\(.*\)\"\$/\1/p" .velnor/runner.lock; }
 docker run --rm --platform linux/arm64 -v "$PWD:/src:ro" -v velnor-arm64-target:/target -v "$STAGES:/out" \
   -e CARGO_TARGET_DIR=/target -e VELNOR_SOURCE_SHA="$(git rev-parse HEAD)" rust:1.99.1-trixie@sha256:8a4e90c7946b74626488b1446f712c0fe0ed1a596cbd3d871684bc9c5433ae07 \
   sh -c 'rustup target add aarch64-unknown-linux-musl \
-    && cargo build --locked --release --manifest-path /src/crates/velnor-runner/Cargo.toml --target aarch64-unknown-linux-musl \
+    && cargo build --locked --release --manifest-path /src/Cargo.toml --target aarch64-unknown-linux-musl \
       -p velnor-resource-probe --bin velnor-resource-probe --bin velnor-storage-init --bin velnor-job-start-hook \
     && mkdir -p /out/resource-probe /out/storage-init /out/job-start-hook /out/job-started-hook \
     && cp /target/aarch64-unknown-linux-musl/release/velnor-resource-probe /out/resource-probe/resource-probe \

@@ -1,8 +1,5 @@
 .firecrawl/
 /target/
-/generator/target/
-/ci-helper/target/
-/local/target/
 /.velnor/archive-guard/
 /generator/samples/.velnor-gen-*/
 .DS_Store

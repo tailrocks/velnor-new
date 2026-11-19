@@ -50,7 +50,7 @@ are separate crates; only the orchestrator composes them. The CLI package declar
 `velnor-actions` binary. Generic package names such as `velnor-model`, `velnor-core`,
 and `velnor-rust` are forbidden.
 
-The generator crates MUST NOT implement a runner, a Scale Set client, or an Actions interpreter. That work lives in the nested `crates/velnor-runner` workspace under the [macOS Scale Set runner](macos-scaleset-runner.md) specification. Kubernetes, a web server, a TUI, a remote cache service, and a deployment system remain out of scope. Generated workflows MAY use a small allowlist of full-SHA-pinned setup actions; Velnor does not execute arbitrary `uses:` actions itself.
+The generator crates MUST NOT implement a runner, a Scale Set client, or an Actions interpreter. That work lives in the nested `crates/velnor-runner-*` workspace under the [macOS Scale Set runner](macos-scaleset-runner.md) specification. Kubernetes, a web server, a TUI, a remote cache service, and a deployment system remain out of scope. Generated workflows MAY use a small allowlist of full-SHA-pinned setup actions; Velnor does not execute arbitrary `uses:` actions itself.
 
 ## Normative specifications
 

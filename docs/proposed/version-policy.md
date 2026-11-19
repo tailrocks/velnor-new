@@ -295,7 +295,7 @@ Refresh only Velnor-owned locks and pins: `Cargo.lock`,
 `mise.toml`, `mise.lock`, or `rust-toolchain.toml`; report recommendations for
 those files for a maintainer to apply.
 
-For the Scale Set runner (`crates/velnor-runner`), `.velnor/runner.lock` MUST be reviewed and
+For the Scale Set runner (`crates/velnor-runner-*`), `.velnor/runner.lock` MUST be reviewed and
 must bind image repository and digest, base distribution, official runner
 version and archive SHA-256, architecture, Docker Desktop/Engine versions, API
 version, GitHub REST API version, and native protocol source revision. Runner
