@@ -14,6 +14,8 @@ use crate::host_config::{validate_owned_id, validate_ownership};
 use super::mutation_lifecycle::{
     MutationKind, MutationResult, MutationValue, MutationWait, PendingMutation, wait,
 };
+mod volume_recheck;
+
 use super::resources::{OwnedResources, TrackedContainer};
 use super::{deadline, missing, volume_owned};
 
@@ -363,20 +365,11 @@ impl OwnedResources {
         }
         let identity = format!("volume:{name}");
         self.begin_delete(&identity)?;
-        let current = match deadline(docker.inspect_volume(name), Duration::from_secs(3)).await? {
-            Ok(current) => current,
-            Err(error) if missing(&error) => {
-                self.finish_delete(&identity)?;
-                return Ok(());
-            }
-            Err(_) => return Err(HostError::Docker),
-        };
-        if !volume_owned(&current, name, &self.run_id, role)
-            || current.created_at != volume.created_at
-            || current.mountpoint != volume.mountpoint
+        if !self
+            .volume_unchanged(docker, name, role, &volume, &identity)
+            .await?
         {
-            self.finish_delete(&identity)?;
-            return Err(HostError::Ownership);
+            return Ok(());
         }
         let options = RemoveVolumeOptionsBuilder::new().force(false).build();
         match deadline(
