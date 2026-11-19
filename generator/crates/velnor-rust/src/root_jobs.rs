@@ -18,6 +18,7 @@ use crate::plan::{
     CHECKOUT_DEPTH, DEFAULT_GROUP_JOB, LINT_JOB, RUST_JOB, TEST_JOB, head, job, mirror_step, setup,
     step, tools_restore,
 };
+use crate::root_checks::{check_alone, lint};
 
 const ARCHIVE_ID: JobId = JobId::from_static("nextest-archive");
 const ARCHIVE_FILE: RepoPath = RepoPath::from_static("nextest-archive.tar.zst");
@@ -83,9 +84,19 @@ impl RootJobs<'_> {
     ) -> impl Iterator<Item = Step> {
         let lane = self.lane;
         let directory = self.root.manifest.parent();
-        commands
-            .into_iter()
-            .map(move |command| lane.cargo(command, directory.clone()))
+        commands.into_iter().flat_map(move |command| {
+            let skipped = match &command {
+                CargoCommand::NextestFeatures {
+                    features, packages, ..
+                } if !packages.is_empty() => {
+                    Some(lane.skipped_lane(features, packages, directory.clone()))
+                }
+                _ => None,
+            };
+            [Some(lane.cargo(command, directory.clone())), skipped]
+                .into_iter()
+                .flatten()
+        })
     }
 
     fn saves(&self, job: &JobId, archive: Option<RepoPath>, sources: bool) -> Vec<Step> {
@@ -174,6 +185,14 @@ impl RootJobs<'_> {
         }
     }
 
+    fn feature_lanes(&self) -> Vec<CargoCommand> {
+        let direct = match self.filter() {
+            FilterRef::AllExcept(binaries) => binaries,
+            FilterRef::All | FilterRef::Expr { .. } => Vec::new(),
+        };
+        crate::config_test_lane::commands(&self.facts.config, self.root, &direct)
+    }
+
     fn tests(&self) -> Vec<CargoCommand> {
         self.nextest_run()
             .into_iter()
@@ -189,7 +208,7 @@ impl RootJobs<'_> {
     }
 
     fn built_without_nextest(&self) -> Vec<CargoCommand> {
-        crate::config_test_lane::commands(&self.facts.config, self.root, self.filter())
+        self.feature_lanes()
             .into_iter()
             .chain(self.direct_harnesses())
             .chain(self.doctests())
@@ -358,13 +377,6 @@ impl RootJobs<'_> {
     }
 }
 
-fn lint() -> Vec<CargoCommand> {
-    vec![
-        CargoCommand::FmtCheck,
-        CargoCommand::Clippy { extra: Vec::new() },
-    ]
-}
-
 fn binary_id(package: &PackageName, harness: &CustomHarness) -> String {
     let name = &harness.name;
     match harness.kind {
@@ -374,24 +386,4 @@ fn binary_id(package: &PackageName, harness: &CustomHarness) -> String {
         TargetKind::Bench => format!("{package}::bench/{name}"),
         TargetKind::Test | TargetKind::BuildScript => format!("{package}::{name}"),
     }
-}
-
-fn check_alone(root: &RustRoot) -> Vec<CargoCommand> {
-    root.members
-        .iter()
-        .filter(|member| {
-            member.targets.iter().any(|target| {
-                !target.requires_features
-                    && target.kinds.iter().any(|kind| {
-                        matches!(
-                            kind,
-                            TargetKind::Lib | TargetKind::ProcMacro | TargetKind::Bin
-                        )
-                    })
-            })
-        })
-        .map(|member| CargoCommand::CheckAlone {
-            package: member.name.clone(),
-        })
-        .collect()
 }

@@ -63,10 +63,13 @@ A package may have tests that exist only under a Cargo feature. A `[[test_lane]]
 [[test_lane]]
 root = "crates/velnor-runner"
 features = ["local-mode"]
+packages = ["velnor-runner-host"]
 filter = "package(velnor-runner-host) and (test(~local::) or binary(local_host_public) or binary(local_pair_public))"
 ```
 
 `root` is the folder of the Cargo root's `Cargo.toml`, or `.` for the repository root. It must name a root of this repository that runs nextest tests. `features` is a non-empty list of distinct feature names, and each name uses letters, digits and `_-+./`. The step is named `Test (features: local-mode)` and runs `cargo-nextest nextest run --workspace --locked --features 'local-mode'` with the same selection as the root's default test step, narrowed by `filter`. It runs after the default test step and reports no test counts, so the default step stays the single source of the job's test counts. With `shape = "groups"` the step runs in the build job, which has Rust, because the archive holds only the default-feature build.
+
+`packages` names the packages of the root whose tests the lane selects. It is required with `filter` and optional without it. The plan narrows a pull request to the changed packages, so a lane whose filter matches nothing there is not broken. When the plan selects none of `packages`, and not the whole workspace, the lane step is skipped and a step named `Skip test lane (features: ...)` prints `skipped: no selected packages`. Otherwise the lane runs with `--no-tests=fail`, so a filter that matches nothing fails the job instead of passing with zero tests. A lane without `filter` runs whenever the plan selects the root.
 
 `filter` is optional. It is a nextest filterset that the generator joins to the plan's selection with `and`, so a lane never runs a test the plan did not select. Without it the lane re-runs the whole selected set with the features. Every generated `run:` value is one command with no shell syntax, so the filterset is one quoted argument and must not contain `|`, `&`, `;`, `<`, a quote, `$`, a backtick, a backslash, a line break or one of the words `if`, `for`, `while`, `case` and `coproc`. Write the nextest operators as words: `or` for `|`, `and` for `&` and `not` for `!`. Binaries that run with `cargo test` because their harness is off stay out of the lane, as they stay out of the default step.
 

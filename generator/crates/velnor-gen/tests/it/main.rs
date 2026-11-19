@@ -29,6 +29,7 @@ mod drift;
 mod events;
 mod events_policy;
 mod facts;
+mod feature_lane_scope;
 mod feature_lanes;
 mod fork_fence;
 mod freshness;

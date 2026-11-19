@@ -275,6 +275,7 @@ pub struct TestLane {
     pub filter: Option<String>,
     pub lint: bool,
     pub doc: bool,
+    pub packages: Vec<PackageName>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

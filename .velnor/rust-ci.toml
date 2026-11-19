@@ -29,6 +29,7 @@ run = "mise --no-config --no-env --no-hooks install gh@2.103.3"
 [[test_lane]]
 root = "crates/velnor-runner"
 features = ["local-mode"]
+packages = ["velnor-runner-host"]
 filter = "package(velnor-runner-host) and (test(~local::) or binary(local_host_public) or binary(local_pair_public))"
 lint = true
 doc = true

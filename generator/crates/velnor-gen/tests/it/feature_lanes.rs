@@ -1,10 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use velnor_model::RepoPath;
+
 use crate::facts::TestResult;
 use crate::pipeline::{view, workflow};
 
-const LANE: &str = "[[test_lane]]\nroot = '.'\nfeatures = ['local-mode']\nfilter = 'test(~local::) or binary(local_host_public)'\n";
+const LANE: &str = "[[test_lane]]\nroot = '.'\nfeatures = ['local-mode']\npackages = ['package-0']\nfilter = 'test(~local::) or binary(local_host_public)'\n";
 const LANE_STEP: &str = "Test (features: local-mode)";
 
 fn jobs_of(config: &str) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
@@ -284,5 +286,101 @@ fn in_every_shape_the_lane_checks_run_in_the_job_that_has_rust() -> TestResult {
             assert_eq!(found[0].0, job, "{shape} {name}");
         }
     }
+    Ok(())
+}
+
+fn lane_filter_error(filter: &str) -> Result<String, Box<dyn std::error::Error>> {
+    let config = LANE.replace(
+        "test(~local::) or binary(local_host_public)",
+        &filter.replace('\'', "''"),
+    );
+    let repo = view(&["Cargo.toml", "tools/Cargo.toml"], Some(config.as_bytes()))?;
+    let error = workflow(&repo)
+        .err()
+        .ok_or_else(|| format!("the filter was accepted: {filter:?}"))?;
+    Ok(error.to_string())
+}
+
+#[test]
+fn every_character_that_could_leave_the_quoted_filter_is_refused_on_its_own() -> TestResult {
+    for forbidden in ['"', '$', '`', '\\', '|', '&', ';', '<'] {
+        let error = lane_filter_error(&format!("test(~a{forbidden}b)"))?;
+        assert!(error.contains("test_lane.filter"), "{forbidden}: {error}");
+    }
+    Ok(())
+}
+
+#[test]
+fn a_filter_ending_in_a_backslash_is_refused() -> TestResult {
+    for filter in ["test(~a)\\", "test(~a) \\", "test(~a\\)"] {
+        let error = lane_filter_error(filter)?;
+        assert!(error.contains("test_lane.filter"), "{filter}: {error}");
+    }
+    Ok(())
+}
+
+#[test]
+fn every_shell_keyword_is_refused_as_a_word_of_the_filter() -> TestResult {
+    for word in ["if", "for", "while", "case", "coproc"] {
+        let error = lane_filter_error(&format!("test(~a) or {word}"))?;
+        assert!(error.contains("test_lane.filter"), "{word}: {error}");
+    }
+    Ok(())
+}
+
+#[test]
+fn a_filter_with_unbalanced_parentheses_is_refused_and_a_balanced_one_is_not() -> TestResult {
+    for filter in [
+        "test(~a)) or (test(~b)",
+        "test(~a) or (test(~b)",
+        "test(~a))",
+        "(test(~a)",
+        ")(",
+    ] {
+        let error = lane_filter_error(filter)?;
+        assert!(error.contains("test_lane.filter"), "{filter}: {error}");
+    }
+    let jobs = jobs_of(&LANE.replace(
+        "test(~local::) or binary(local_host_public)",
+        "(test(~a) or (binary(b))) and not test(~c)",
+    ))?;
+    assert_eq!(steps_named(&jobs, LANE_STEP).len(), 1);
+    Ok(())
+}
+
+#[test]
+fn a_feature_lane_fails_when_its_filter_selects_no_test_and_the_default_step_does_not() -> TestResult
+{
+    let jobs = jobs_of(LANE)?;
+    let lane = steps_named(&jobs, LANE_STEP);
+    let run = lane[0].2["run"].as_str().ok_or("no run")?;
+    assert!(run.ends_with("--no-tests=fail"), "{run}");
+    assert!(!run.contains("--no-tests=pass"), "{run}");
+    let defaults = steps_named(&jobs, "Test");
+    let default_run = defaults[0].2["run"].as_str().ok_or("no run")?;
+    assert!(default_run.ends_with("--no-tests=pass"), "{default_run}");
+    Ok(())
+}
+
+#[test]
+fn a_feature_lane_runs_with_profile_ci_exactly_when_the_root_defines_it() -> TestResult {
+    let lane_run = |nextest: Option<&str>| -> Result<String, Box<dyn std::error::Error>> {
+        let mut repo = view(&["Cargo.toml", "tools/Cargo.toml"], Some(LANE.as_bytes()))?;
+        if let Some(text) = nextest {
+            let path = RepoPath::new(".config/nextest.toml")?;
+            repo.tracked_paths.insert(path.clone());
+            repo.files.insert(path, text.as_bytes().to_vec());
+        }
+        let jobs = crate::yaml_tree::document(&workflow(&repo)?)?["jobs"].clone();
+        let lane = steps_named(&jobs, LANE_STEP);
+        Ok(lane[0].2["run"].as_str().ok_or("no run")?.to_owned())
+    };
+    let with_ci = lane_run(Some("[profile.ci]\nslow-timeout = \"60s\"\n"))?;
+    assert!(
+        with_ci.contains("--features 'local-mode' --profile ci --no-fail-fast"),
+        "{with_ci}"
+    );
+    let without = lane_run(None)?;
+    assert!(!without.contains("--profile"), "{without}");
     Ok(())
 }

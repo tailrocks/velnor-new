@@ -16,20 +16,6 @@ pub(crate) fn excludes(entries: Vec<String>) -> Result<Vec<PathGlob>, Reason> {
         .collect()
 }
 
-pub(crate) fn required_check(
-    configured: Option<String>,
-    default: String,
-) -> Result<String, Reason> {
-    match configured {
-        None => Ok(default),
-        Some(name) if !name.trim().is_empty() && !name.chars().any(char::is_control) => Ok(name),
-        Some(name) => Err(Reason::InvalidValue {
-            key: "required_check",
-            value: name,
-        }),
-    }
-}
-
 pub(crate) fn harnesses(entries: Vec<String>) -> Result<Vec<(PackageName, TargetName)>, Reason> {
     entries
         .into_iter()

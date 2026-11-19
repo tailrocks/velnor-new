@@ -101,8 +101,7 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
     let (non_inputs, inputs) = rules(raw.non_inputs, raw.inputs).map_err(invalid)?;
     let shape = parse_shape(raw.shape.as_deref()).map_err(invalid)?;
     let required_check =
-        crate::config_values::required_check(raw.required_check, defaults.required_check)
-            .map_err(invalid)?;
+        required_check(raw.required_check, defaults.required_check).map_err(invalid)?;
     let default_branch =
         default_branch(raw.default_branch, defaults.default_branch).map_err(invalid)?;
     let on_main = on_main(raw.on_main.as_deref(), defaults.on_main).map_err(invalid)?;
@@ -130,7 +129,7 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
             .map(crate::config_mirror::mirror)
             .transpose()
             .map_err(invalid)?,
-        nextest_harnesses: crate::config_values::harnesses(raw.nextest_harnesses)
+        nextest_harnesses: crate::config_lists::harnesses(raw.nextest_harnesses)
             .map_err(invalid)?,
         default_branch,
         skip_draft_pull_requests: raw
@@ -148,8 +147,19 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         runner,
         fork_runner,
         timeout_minutes,
-        exclude: crate::config_values::excludes(raw.exclude).map_err(invalid)?,
+        exclude: crate::config_lists::excludes(raw.exclude).map_err(invalid)?,
     })
+}
+
+fn required_check(configured: Option<String>, default: String) -> Result<String, Reason> {
+    match configured {
+        None => Ok(default),
+        Some(name) if !name.trim().is_empty() && !name.chars().any(char::is_control) => Ok(name),
+        Some(name) => Err(Reason::InvalidValue {
+            key: "required_check",
+            value: name,
+        }),
+    }
 }
 
 fn parse_shape(configured: Option<&str>) -> Result<Option<Shape>, Reason> {

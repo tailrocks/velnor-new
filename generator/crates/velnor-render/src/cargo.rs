@@ -81,11 +81,13 @@ fn cargo_command(
             &format!("--workspace --locked{nextest}"),
             filter,
             *ci_profile,
+            NO_TESTS_PASS,
         ),
         CargoCommand::NextestFeatures {
             features,
             filter,
             ci_profile,
+            ..
         } => nextest_features(nextest, features, filter, *ci_profile),
         CargoCommand::NextestRunArchive {
             file,
@@ -98,6 +100,7 @@ fn cargo_command(
             ),
             filter,
             *ci_profile,
+            NO_TESTS_PASS,
         ),
         CargoCommand::NextestArchive { file } => (
             BUILD_TESTS_STEP.into(),
@@ -208,6 +211,25 @@ fn cache_debug_env() -> (String, Value) {
     )
 }
 
+fn nextest_features(
+    nextest: &str,
+    features: &[String],
+    filter: &FilterRef,
+    ci_profile: bool,
+) -> (String, String, Vec<(String, Value)>) {
+    let (_, run, env) = nextest_run(
+        &format!("--workspace --locked{nextest}{}", feature_flag(features)),
+        filter,
+        ci_profile,
+        NO_TESTS_FAIL,
+    );
+    (
+        format!("{TEST_STEP} (features: {})", features.join(",")),
+        run,
+        env,
+    )
+}
+
 fn nextest_build(format: &str) -> (String, String, Vec<(String, Value)>) {
     (
         BUILD_TESTS_STEP.into(),
@@ -222,17 +244,24 @@ fn nextest_run(
     scope: &str,
     filter: &FilterRef,
     ci_profile: bool,
+    no_tests: &str,
 ) -> (String, String, Vec<(String, Value)>) {
     let profile = if ci_profile { " --profile ci" } else { "" };
     (
         TEST_STEP.into(),
         format!(
-            "cargo-nextest nextest run {scope}{profile} --no-fail-fast --ignore-default-filter --status-level pass -E \"{}\" --no-tests=pass",
+            "cargo-nextest nextest run {scope}{profile} --no-fail-fast --ignore-default-filter --status-level pass -E \"{}\" --no-tests={no_tests}",
             nextest_filter(filter)
         ),
         vec![],
     )
 }
+
+/// The default step may select nothing, because the plan narrows it to the
+/// changed packages. A feature lane names its tests, so none matching is a
+/// broken filter and must not pass.
+const NO_TESTS_PASS: &str = "pass";
+const NO_TESTS_FAIL: &str = "fail";
 
 fn nextest_filter(filter: &FilterRef) -> String {
     match filter {
@@ -253,24 +282,6 @@ fn nextest_filter(filter: &FilterRef) -> String {
             }
         }
     }
-}
-
-fn nextest_features(
-    nextest: &str,
-    features: &[String],
-    filter: &FilterRef,
-    ci_profile: bool,
-) -> (String, String, Vec<(String, Value)>) {
-    let (_, run, env) = nextest_run(
-        &format!("--workspace --locked{nextest}{}", feature_flag(features)),
-        filter,
-        ci_profile,
-    );
-    (
-        format!("{TEST_STEP} (features: {})", features.join(",")),
-        run,
-        env,
-    )
 }
 
 fn feature_flag(features: &[String]) -> String {

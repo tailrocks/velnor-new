@@ -228,7 +228,8 @@ fn a_recorded_sample_keeps_the_member_manifests_detection_reads() -> TestResult 
 
 #[test]
 fn a_feature_lane_excludes_the_harness_binaries_that_nextest_cannot_run() -> TestResult {
-    let lane = "[[test_lane]]\nroot = '.'\nfeatures = ['x']\nfilter = 'test(~a)'\n";
+    let lane =
+        "[[test_lane]]\nroot = '.'\nfeatures = ['x']\npackages = ['a']\nfilter = 'test(~a)'\n";
     let text = workflow(&view(Some(lane))?)?;
     let step = text
         .lines()
