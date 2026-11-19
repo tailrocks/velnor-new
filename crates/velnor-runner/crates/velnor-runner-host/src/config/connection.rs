@@ -145,6 +145,12 @@ pub struct RepositoryConnection {
     pub scale_set: ScaleSetSelector,
 
     pub source_policy: SourcePolicy,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub organization: Option<String>,
+
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub runner_group: Option<String>,
 }
 
 impl RepositoryConnection {
@@ -163,6 +169,8 @@ impl RepositoryConnection {
             credential_ref,
             scale_set,
             source_policy,
+            organization: None,
+            runner_group: None,
         };
         connection.canonicalize()?;
         connection.validate()?;
@@ -185,6 +193,7 @@ impl RepositoryConnection {
     pub(crate) fn validate(&self) -> Result<(), HostError> {
         if self.repository_id <= 0
             || !valid_repository(&self.repository)
+            || !self.validate_registration()
             || self
                 .source_policy
                 .pull_request_rules
@@ -205,7 +214,14 @@ fn valid_repository(repository: &str) -> bool {
     }
 }
 
-fn valid_repo_part(part: &str) -> bool {
+pub(super) fn valid_group_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= 100
+        && !name.chars().any(char::is_control)
+        && name.trim() == name
+}
+
+pub(super) fn valid_repo_part(part: &str) -> bool {
     !part.is_empty()
         && part.len() <= 100
         && !part.starts_with('.')
@@ -218,6 +234,7 @@ fn valid_repo_part(part: &str) -> bool {
 
 fn valid_label(value: &str) -> bool {
     (1..=64).contains(&value.len())
+        && value != "."
         && !value.starts_with('-')
         && !value.ends_with('-')
         && !value.contains("..")
@@ -229,3 +246,7 @@ fn valid_label(value: &str) -> bool {
 fn is_hosted_label(label: &str) -> bool {
     HOSTED_LABELS.contains(&label)
 }
+
+#[cfg(test)]
+#[path = "connection/tests.rs"]
+mod tests;

@@ -197,11 +197,13 @@ fn row_blocks(row: &IntentRow, observed_docker: &[&str], observed_github: &[&str
         row.docker_id.as_deref(),
         row.cleanup_proven,
         observed_docker,
-    ) || absent(
-        row.github_runner_id.as_deref(),
-        row.cleanup_proven,
-        observed_github,
-    )
+    ) || listed(row.github_runner_id.as_deref(), observed_github)
+}
+
+/// A runner GitHub still lists may still run work, so its row cannot be
+/// released. `observed_github` must come from a real listing of the scale set.
+fn listed(id: Option<&str>, observed: &[&str]) -> bool {
+    id.is_some_and(|value| observed.contains(&value))
 }
 
 fn absent(id: Option<&str>, proven: bool, observed: &[&str]) -> bool {

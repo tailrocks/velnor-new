@@ -81,7 +81,13 @@ const MACHETE_SCAN_CRATES: [&str; 11] = [
     "crates/velnor-actions-cli",
 ];
 
-pub fn deny_argv(workspace_roots: &[String]) -> Result<Vec<String>, SupportCommandError> {
+/// `with_rust` provisions the project Rust toolchain next to cargo-deny, for a
+/// runner image that ships no `cargo` (the scale set), exactly as the scale-set
+/// Rust lanes install it.
+pub fn deny_argv(
+    workspace_roots: &[String],
+    with_rust: bool,
+) -> Result<Vec<String>, SupportCommandError> {
     let mut roots = workspace_roots.to_vec();
     roots.sort();
     roots.dedup();
@@ -99,15 +105,39 @@ pub fn deny_argv(workspace_roots: &[String]) -> Result<Vec<String>, SupportComma
         "cargo",
         &["deny", "--locked", "check"],
     )?;
+    let rust_ref =
+        velnor_actions_mise::project_tool_shell_ref(velnor_actions_mise::PinnedTool::Rust);
+    if with_rust {
+        let exec = IsolatedCommand::mise_exec(
+            &[
+                format!("cargo-deny@{CARGO_DENY_VERSION}"),
+                format!("rust@{rust_ref}"),
+            ],
+            &["cargo", "deny", "--locked", "check"].map(OsString::from),
+        )
+        .map_err(|err| SupportCommandError::Contract {
+            problem: err.to_string(),
+        })?;
+        inner =
+            strings_of(exec.argv()).map_err(|problem| SupportCommandError::Contract { problem })?;
+    }
     if inner.pop().as_deref() != Some("check") {
         return Err(SupportCommandError::Contract {
             problem: "deny_vector_shape_drift".to_owned(),
         });
     }
-    let install = IsolatedCommand::mise_install(&[format!("cargo-deny@{CARGO_DENY_VERSION}")])
-        .map_err(|err| SupportCommandError::Contract {
+    let mut install_specs = vec![format!("cargo-deny@{CARGO_DENY_VERSION}")];
+    if with_rust {
+        install_specs.push(format!(
+            "rust[{}]@{rust_ref}",
+            velnor_actions_mise::RUST_INSTALL_OPTIONS
+        ));
+    }
+    let install = IsolatedCommand::mise_install(&install_specs).map_err(|err| {
+        SupportCommandError::Contract {
             problem: err.to_string(),
-        })?;
+        }
+    })?;
     let install_argv =
         strings_of(install.argv()).map_err(|problem| SupportCommandError::Contract { problem })?;
     let inner_command = join_quoted_argv(&inner)?;

@@ -343,6 +343,7 @@ fn a_root_names_the_dependencies_whose_code_its_own_sources_do_not_hold() -> Tes
                 manifest: manifest.map(path).transpose()?,
                 features: vec![],
                 platform: None,
+                optional: false,
                 rename: None,
             })
         };
@@ -358,6 +359,7 @@ fn a_root_names_the_dependencies_whose_code_its_own_sources_do_not_hold() -> Tes
             manifest: None,
             features: vec![],
             platform: None,
+            optional: false,
             rename: None,
         },
     ];
