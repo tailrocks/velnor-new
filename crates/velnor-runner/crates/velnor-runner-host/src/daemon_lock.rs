@@ -2,8 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::HashMap;
-use std::fs::{self, File, OpenOptions};
-use std::io::Write;
+use std::fs::{self, File};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex, OnceLock};
@@ -24,7 +23,7 @@ mod identity;
 use anchor_io::write_anchor_with;
 use anchor_io::{read_anchor, remove_stale_anchor_temporaries, sync_parent, write_anchor};
 pub(crate) use filesystem::canonical_journal_path;
-use filesystem::{ensure_regular_or_missing, open_lock, private_directory};
+use filesystem::{open_lock, private_directory};
 pub(super) use identity::{engine_id_valid, engine_key, instance_id_valid};
 
 #[cfg(test)]
