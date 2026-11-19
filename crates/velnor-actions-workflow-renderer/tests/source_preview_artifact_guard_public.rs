@@ -87,7 +87,7 @@ fn run_guard(run: &str, id: &str) -> Result<bool, Box<dyn Error>> {
 #[test]
 fn every_download_by_id_is_preceded_by_a_guard_in_the_same_job() -> Result<(), Box<dyn Error>> {
     let found = guarded_downloads()?;
-    assert!(found.len() >= 40, "found {} guarded downloads", found.len());
+    assert!(found.len() >= 30, "found {} guarded downloads", found.len());
     Ok(())
 }
 

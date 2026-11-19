@@ -13,6 +13,10 @@ autotests = false
 name = "poll_statistics"
 path = "tests/poll_statistics.rs"
 
+[[test]]
+name = "zero_assign_time"
+path = "tests/zero_assign_time.rs"
+
 [lib]
 doctest = false
 test = true

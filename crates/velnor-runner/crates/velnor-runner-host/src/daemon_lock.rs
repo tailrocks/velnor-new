@@ -23,6 +23,9 @@ use filesystem::{ensure_regular_or_missing, lock_directory, open_lock, private_d
 pub(super) use identity::{engine_id_valid, engine_key, instance_id_valid};
 
 #[cfg(test)]
+#[path = "daemon_lock/anchor_temporary_tests.rs"]
+mod anchor_temporary_tests;
+#[cfg(test)]
 #[path = "daemon_lock/tests.rs"]
 mod tests;
 
@@ -132,7 +135,8 @@ pub(crate) struct EngineLineageGuard {
 
 #[derive(Debug)]
 struct GuardInner {
-    _lock_file: File,
+    lock_file: File,
+    lock_path: PathBuf,
     engine_id: String,
     anchor_path: PathBuf,
     state: Mutex<Option<Anchor>>,
@@ -183,7 +187,8 @@ impl EngineLineageGuard {
         lock_file.try_lock().map_err(|_| HostError::Lock)?;
         Ok(Self {
             inner: Arc::new(GuardInner {
-                _lock_file: lock_file,
+                lock_file,
+                lock_path,
                 engine_id: engine_id.to_owned(),
                 anchor_path,
                 state: Mutex::new(None),
@@ -197,6 +202,7 @@ impl EngineLineageGuard {
         instance_id: &str,
         revision: u64,
     ) -> Result<(), HostError> {
+        self.ensure_lock_current()?;
         let path = canonical_journal_path(canonical_path)?;
         let path_text = path.to_str().ok_or(HostError::Path)?.to_owned();
         if !instance_id_valid(instance_id) {
@@ -209,7 +215,6 @@ impl EngineLineageGuard {
             instance_id: instance_id.to_owned(),
             revision,
         };
-        let partial_write = has_partial_anchor(&self.inner.anchor_path)?;
         let mut state = self.inner.state.lock().map_err(|_| HostError::Journal)?;
         let current = state.clone();
         let existing = match current {
@@ -224,9 +229,7 @@ impl EngineLineageGuard {
                 if let Some(anchor) = read_anchor(&self.inner.anchor_path)? {
                     anchor
                 } else {
-                    if partial_write {
-                        return Err(HostError::Journal);
-                    }
+                    remove_stale_anchor_temporaries(&self.inner.anchor_path)?;
                     write_anchor(&self.inner.anchor_path, &desired)?;
                     *state = Some(desired);
                     return Ok(());
@@ -242,6 +245,14 @@ impl EngineLineageGuard {
         Ok(())
     }
 
+    fn ensure_lock_current(&self) -> Result<(), HostError> {
+        if lock_file_is_linked_at(&self.inner.lock_file, &self.inner.lock_path) {
+            Ok(())
+        } else {
+            Err(HostError::Lock)
+        }
+    }
+
     pub(crate) fn engine_id(&self) -> &str {
         &self.inner.engine_id
     }
@@ -251,6 +262,7 @@ impl EngineLineageGuard {
     }
 
     pub(crate) fn advance_revision(&self, revision: u64) -> Result<(), HostError> {
+        self.ensure_lock_current()?;
         let mut state = self.inner.state.lock().map_err(|_| HostError::Journal)?;
         let current = state.as_ref().ok_or(HostError::Journal)?;
         if current.revision == revision {
@@ -278,6 +290,30 @@ impl EngineLineageGuard {
         }
         *state = Some(next);
         Ok(())
+    }
+}
+
+fn lock_file_is_linked_at(file: &File, path: &Path) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+
+        let Ok(held) = file.metadata() else {
+            return false;
+        };
+        let Ok(linked) = fs::symlink_metadata(path) else {
+            return false;
+        };
+        !linked.file_type().is_symlink()
+            && linked.is_file()
+            && held.nlink() > 0
+            && linked.dev() == held.dev()
+            && linked.ino() == held.ino()
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = (file, path);
+        false
     }
 }
 
@@ -322,7 +358,12 @@ fn read_anchor(path: &Path) -> Result<Option<Anchor>, HostError> {
     Ok(Some(anchor))
 }
 
-fn has_partial_anchor(path: &Path) -> Result<bool, HostError> {
+/// Removes leftover `.{anchor}.tmp-*` files. Callers hold the lineage lock and the
+/// state mutex, and no anchor is published, so every such file is an unpublished
+/// remnant of a writer that failed or died before `rename`. `remove_file` unlinks a
+/// symlink itself and never follows it; anything that is not a file or symlink is
+/// refused rather than deleted.
+fn remove_stale_anchor_temporaries(path: &Path) -> Result<(), HostError> {
     let parent = path.parent().ok_or(HostError::Path)?;
     let name = path
         .file_name()
@@ -331,18 +372,34 @@ fn has_partial_anchor(path: &Path) -> Result<bool, HostError> {
     let prefix = format!(".{name}.tmp-");
     for entry in fs::read_dir(parent).map_err(|_| HostError::Journal)? {
         let entry = entry.map_err(|_| HostError::Journal)?;
-        if entry
+        if !entry
             .file_name()
             .to_str()
             .is_some_and(|candidate| candidate.starts_with(&prefix))
         {
-            return Ok(true);
+            continue;
         }
+        let stale = entry.path();
+        let metadata = fs::symlink_metadata(&stale).map_err(|_| HostError::Journal)?;
+        if metadata.is_dir() {
+            return Err(HostError::Journal);
+        }
+        fs::remove_file(&stale).map_err(|_| HostError::Journal)?;
     }
-    Ok(false)
+    Ok(())
 }
 
 fn write_anchor(path: &Path, anchor: &Anchor) -> Result<(), HostError> {
+    write_anchor_with(path, anchor, |temporary, anchor| {
+        fs::rename(temporary, anchor)
+    })
+}
+
+fn write_anchor_with(
+    path: &Path,
+    anchor: &Anchor,
+    publish: impl FnOnce(&Path, &Path) -> std::io::Result<()>,
+) -> Result<(), HostError> {
     ensure_regular_or_missing(path)?;
     let bytes = serde_json::to_vec(anchor).map_err(|_| HostError::Journal)?;
     let parent = path.parent().ok_or(HostError::Path)?;
@@ -359,10 +416,17 @@ fn write_anchor(path: &Path, anchor: &Anchor) -> Result<(), HostError> {
         options.mode(0o600);
     }
     let mut file = options.open(&temporary).map_err(|_| HostError::Journal)?;
-    file.write_all(&bytes).map_err(|_| HostError::Journal)?;
-    file.sync_all().map_err(|_| HostError::Journal)?;
-    drop(file);
-    fs::rename(&temporary, path).map_err(|_| HostError::Journal)?;
+    let published = file
+        .write_all(&bytes)
+        .and_then(|()| file.sync_all())
+        .and_then(|()| {
+            drop(file);
+            publish(&temporary, path)
+        });
+    if published.is_err() {
+        fs::remove_file(&temporary).ok();
+        return Err(HostError::Journal);
+    }
     sync_parent(path)
 }
 

@@ -193,7 +193,7 @@ pub(super) async fn has_unresolved_work(connection: &turso::Connection) -> Resul
     }
     let count = scalar_count(
         connection,
-        "SELECT COUNT(*) FROM connection_intents WHERE cleanup_proven = 0",
+        "SELECT COUNT(*) FROM connection_intents AS i WHERE i.cleanup_proven = 0 AND NOT (i.kind = 'session' AND EXISTS (SELECT 1 FROM connection_session_creates AS s WHERE s.intent_id = i.id AND s.state = 'bound'))",
     )
     .await?;
     if count != 0 {
@@ -225,10 +225,22 @@ pub(super) async fn has_unresolved_work(connection: &turso::Connection) -> Resul
     }
     let session_creates = scalar_count(
         connection,
-        "SELECT COUNT(*) FROM connection_session_creates WHERE state IN ('prepared', 'requested', 'uncertain', 'bound')",
+        "SELECT COUNT(*) FROM connection_session_creates WHERE state IN ('prepared', 'requested', 'uncertain')",
     )
     .await?;
-    if session_creates != 0 || crate::journal::capacity_header::has_any_charged(connection).await? {
+    if session_creates != 0 {
+        return Ok(true);
+    }
+    let sessions = bound_sessions(connection, None).await?;
+    if has_charged_outside_sessions(connection, None, &sessions).await? {
+        return Ok(true);
+    }
+    let scale_set_deletes = scalar_count(
+        connection,
+        "SELECT COUNT(*) FROM connection_scale_set_deletes WHERE state IN ('requested', 'uncertain')",
+    )
+    .await?;
+    if scale_set_deletes != 0 {
         return Ok(true);
     }
     let operation_leases = scalar_count(
@@ -260,6 +272,70 @@ pub(super) async fn has_connection_work(
     Ok(result != 0
         || crate::journal::capacity_header::has_charged_connection(connection, connection_id)
             .await?)
+}
+
+#[expect(
+    clippy::struct_field_names,
+    reason = "these fields form one immutable connection and session identity"
+)]
+pub(super) struct BoundSession {
+    pub(super) connection_id: String,
+    pub(super) intent_id: i64,
+    pub(super) scale_set_id: i64,
+    pub(super) session_id: String,
+}
+
+pub(super) async fn bound_sessions(
+    connection: &turso::Connection,
+    connection_id: Option<&str>,
+) -> Result<Vec<BoundSession>, HostError> {
+    let mut rows = connection
+        .query(
+            "SELECT s.connection_id, s.intent_id, s.scale_set_id, s.session_id FROM connection_session_creates AS s JOIN connection_intents AS i ON i.id = s.intent_id WHERE s.state = 'bound' AND i.kind = 'session' AND i.cleanup_proven = 0 AND (?1 IS NULL OR s.connection_id = ?1)",
+            [connection_id],
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let mut sessions = Vec::new();
+    while let Some(row) = rows.next().await.map_err(|_| HostError::Journal)? {
+        sessions.push(BoundSession {
+            connection_id: row.get(0).map_err(|_| HostError::Journal)?,
+            intent_id: row.get(1).map_err(|_| HostError::Journal)?,
+            scale_set_id: row.get(2).map_err(|_| HostError::Journal)?,
+            session_id: row.get(3).map_err(|_| HostError::Journal)?,
+        });
+    }
+    Ok(sessions)
+}
+
+pub(super) async fn has_charged_outside_sessions(
+    connection: &turso::Connection,
+    connection_id: Option<&str>,
+    sessions: &[BoundSession],
+) -> Result<bool, HostError> {
+    let mut rows = connection
+        .query("SELECT 1 FROM capacity_header_meta WHERE singleton = 1", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    if rows.next().await.map_err(|_| HostError::Journal)?.is_none() {
+        return Ok(false);
+    }
+    let ledger = crate::journal::capacity_header::load(connection).await?;
+    let unsettled = ledger.unsettled_allocations();
+    Ok(ledger
+        .charged_allocations()
+        .iter()
+        .filter(|allocation| {
+            connection_id.is_none_or(|id| allocation.connection_id().as_str() == id)
+        })
+        .any(|allocation| {
+            unsettled.contains(allocation)
+                || !sessions.iter().any(|session| {
+                    allocation.connection_id().as_str() == session.connection_id
+                        && allocation.scale_set_id() == session.scale_set_id
+                        && allocation.session_id() == session.session_id
+                })
+        }))
 }
 
 pub(super) fn digest(value: &[u8]) -> String {

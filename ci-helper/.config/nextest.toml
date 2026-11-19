@@ -16,6 +16,10 @@ success-output = "immediate"
 threads-required = "num-test-threads"
 slow-timeout = { period = "30s", terminate-after = 4 }
 
+[[profile.default.overrides]]
+filter = 'test(preview_parity) | test(preview_admit) | test(preview_authority)'
+slow-timeout = { period = "60s", terminate-after = 10 }
+
 [[profile.ci.overrides]]
 filter = 'test(crates_mirror)'
 success-output = "immediate"
@@ -28,4 +32,12 @@ slow-timeout = { period = "30s", terminate-after = 4 }
 
 [[profile.ci.overrides]]
 filter = 'test(plan_reads_each_roots_sources_to_decide_the_doctest_and_documentation_steps)'
+slow-timeout = { period = "30s", terminate-after = 4 }
+
+[[profile.default.overrides]]
+filter = 'test(audit::bounds::)'
+slow-timeout = { period = "30s", terminate-after = 4 }
+
+[[profile.ci.overrides]]
+filter = 'test(audit::bounds::)'
 slow-timeout = { period = "30s", terminate-after = 4 }

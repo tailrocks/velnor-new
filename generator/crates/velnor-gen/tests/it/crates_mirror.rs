@@ -38,7 +38,7 @@ fn mirror_is_explicit_scoped_and_precedes_every_job_tools() -> TestResult {
     for (runner, mirror_runner, enabled) in [
         ("mirror-box", "mirror-box", true),
         ("ubuntu-26.04-scale-set", "ubuntu-26.04-scale-set", true),
-        ("ubuntu-slim", "ubuntu-slim", true),
+        ("ubuntu-999.99", "ubuntu-999.99", true),
         ("xcode-27", "xcode-27", true),
         ("ubuntu-future", "ubuntu-future", true),
         ("ubuntu-latest", "mirror-box", false),
@@ -133,6 +133,24 @@ fn assert_mirror_before_tools(steps: &[serde_json::Value], mirror: Option<usize>
     {
         assert!(mirror.is_some_and(|index| index < restore));
     }
+}
+
+#[test]
+fn machete_runs_through_cargo_with_and_without_the_mirror() -> TestResult {
+    for (runner, mirror_runner) in [
+        ("mirror-box", "mirror-box"),
+        ("ubuntu-latest", "mirror-box"),
+    ] {
+        let text = workflow(&mirrored_repo(runner, mirror_runner, "")?)?;
+        let mirrored = text.contains("\"$VELNOR_EXEC\" crates-mirror");
+        assert_eq!(mirrored, runner == "mirror-box", "{text}");
+        assert!(text.contains("run -- cargo machete'"), "{mirrored}: {text}");
+        assert!(
+            !text.contains("cargo-machete machete"),
+            "{mirrored}: {text}"
+        );
+    }
+    Ok(())
 }
 
 #[test]

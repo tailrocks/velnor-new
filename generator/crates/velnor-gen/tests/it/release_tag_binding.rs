@@ -3,10 +3,10 @@
 
 use std::error::Error;
 
-use velnor_gen::expected_files;
 use velnor_model::RELEASE_WORKFLOW_PATH;
 
 use crate::release_fixture::{APP, APP_TOKEN, LOCK, TOOLS, release_view, steps, uses};
+use crate::release_unguarded::expected_release;
 use crate::yaml_tree::{Node, parse};
 
 type TestResult = Result<(), Box<dyn Error>>;
@@ -21,7 +21,7 @@ fn refuse_steps(version: &str) -> Result<Vec<Step>, Box<dyn Error>> {
         velnor_rust::LOCK_PATH,
         LOCK.replace("0.1.79", version).into_bytes(),
     );
-    let text = expected_files(&view)?
+    let text = expected_release(&view)?
         .remove(&RELEASE_WORKFLOW_PATH)
         .ok_or("no release.yml")?;
     let tree = parse(&text)?;
@@ -130,7 +130,7 @@ fn the_check_runs_before_the_app_token_with_only_the_job_token() -> TestResult {
         velnor_rust::LOCK_PATH,
         LOCK.replace("0.1.79", "0.1.80").into_bytes(),
     );
-    let text = expected_files(&view)?
+    let text = expected_release(&view)?
         .remove(&RELEASE_WORKFLOW_PATH)
         .ok_or("no release.yml")?;
     let tree = parse(&text)?;

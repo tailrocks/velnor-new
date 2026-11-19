@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::DaemonLock;
+use super::{DaemonLock, EngineLineageGuard};
 use crate::error::HostError;
 
 type TestResult<T> = Result<T, Box<dyn std::error::Error>>;
@@ -48,6 +48,36 @@ fn a_daemon_lock_is_held_while_the_state_directory_flock_lives() -> TestResult<(
     drop(first);
     let second = DaemonLock::try_acquire_daemon(state.path())?;
     assert!(second.is_held());
+    Ok(())
+}
+
+#[test]
+fn a_replaced_lineage_lock_file_fails_verification_closed() -> TestResult<()> {
+    let root = tempfile::tempdir()?;
+    let journal = root.path().join("journal.db");
+    std::fs::write(&journal, b"")?;
+    let engine = "engine-1";
+    let first = EngineLineageGuard::acquire_at(engine, root.path())?;
+    first.verify_lineage(&journal, INSTANCE, 1)?;
+    let lock = std::fs::read_dir(root.path())?
+        .map(|entry| entry.map(|entry| entry.path()))
+        .collect::<Result<Vec<_>, _>>()?
+        .into_iter()
+        .find(|path| path.extension().is_some_and(|ext| ext == "lock"))
+        .ok_or("lineage lock file missing")?;
+    assert!(matches!(
+        EngineLineageGuard::acquire_at(engine, root.path()),
+        Err(HostError::Lock)
+    ));
+    first.verify_lineage(&journal, INSTANCE, 1)?;
+    std::fs::remove_file(&lock)?;
+    let second = EngineLineageGuard::acquire_at(engine, root.path())?;
+    assert!(matches!(
+        first.verify_lineage(&journal, INSTANCE, 1),
+        Err(HostError::Lock)
+    ));
+    assert!(matches!(first.advance_revision(2), Err(HostError::Lock)));
+    second.verify_lineage(&journal, INSTANCE, 1)?;
     Ok(())
 }
 
