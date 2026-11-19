@@ -27,6 +27,7 @@ mod registry;
 mod release_plz;
 mod ruleset;
 mod settings;
+mod shipped;
 mod tag;
 mod timeout;
 mod velnor_config;

@@ -57,6 +57,11 @@ impl RootConfig {
         self.unreleased.contains(package)
     }
 
+    /// Whether a `[[package]]` entry names `package`, released or not.
+    pub(crate) fn lists(&self, package: &str) -> bool {
+        self.entries.contains_key(package)
+    }
+
     pub(crate) fn settle_publishing(&mut self, unlisted_member: bool) {
         self.publishes_to_crates_io = self.entries.values().any(|publishes| *publishes)
             || (self.unlisted_publish && unlisted_member);

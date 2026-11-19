@@ -98,6 +98,10 @@ pub enum ReleaseError {
     BinaryNotReleased {
         package: String,
     },
+    UnlistedShipped {
+        binary: String,
+        package: String,
+    },
     EmptyPrBranchPrefix {
         root: String,
     },
@@ -314,6 +318,10 @@ impl ReleaseError {
             Self::BinaryNotReleased { package } => write!(
                 f,
                 ".velnor/release.toml: binary {package} is not a released [[package]] in any release-plz.toml"
+            ),
+            Self::UnlistedShipped { binary, package } => write!(
+                f,
+                "release-plz.toml: {package} is compiled into the shipped binary {binary}, so a change in it changes the binary, but no [[package]] lists it; add one (release = false when the family tag releases the binary)"
             ),
             Self::EmptyAfter => write!(
                 f,
