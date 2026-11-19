@@ -22,8 +22,8 @@ experiments under `../research/velnor-runner-2026-11/experiments/`; and the
 [decision log](../research/velnor-runner-2026-11/decisions.md). Numbers are tagged **[M]** measured,
 **[M, snapshot]** measured once on the cluster and not verifiable from the repository, **[M, proxy]**
 measured on a stand-in that the row names, **[E]** estimated (with the arithmetic), **[C]** read from
-code, or **[T]** target. A target is a goal or a budget (section 1.4). No goal counts as met until
-traces under load support it.
+code, or **[T]** target. A target is a `docs/goals.md` target, a proposed target or a budget (section
+1.4). No target counts as met until traces under load support it.
 
 ## 1. Goal, metric and the contract
 
@@ -44,21 +44,10 @@ the verification system (the contract, the reuse ladder, the label flow, warm st
 claim needs its own race (S2). Every request is one OpenTelemetry trace; nothing in the gate reads
 it.
 
-**Where things stand** [M, measurements report]. These facts describe the generated workflow on main.
-They are not a baseline; the baseline is phase-0 item 8 (section 3).
-
-| Fact | Value |
-|---|---|
-| `Required` on pull requests | Red on almost every run; most merges land through the admin bypass |
-| `Required` on a draft, or on a ready PR without a label | Green, without running tests |
-| Full push `rust` job | 564 s: the 18 "check crate alone" steps 48%, the lane guard 17%, docs 16% |
-| PR quick set (plan, format, lint, policy) | About 90 s |
-| Labelled PR with tests | None has passed; test time is unknown |
-| Merge queue | Configured, never used by `Rust CI` |
-| Commits that touch a path the plan cannot place | 40% of the last 396, so they select everything |
-
-Push-to-merge measured while merges go through the bypass (0.6 min at P50) measures the bypass, not
-CI.
+**Where things stand.** The measured state of the generated workflow on `main` (what is red, what
+merged without tests, what a push job costs) is dated evidence. It is kept, each number with its run,
+in the [delivery plan](../research/velnor-runner-2026-11/delivery-plan.md) (section 3) and the
+measurements report. This document holds the contract. The baseline is phase-0 item 8 (section 3).
 
 ### 1.2 Same confidence: the contract
 
@@ -69,7 +58,9 @@ greens have zero tolerance. "Same confidence" is this contract.
 1. **C1. Every landed commit is verified.** For every commit on `main` and every obligation the
    verification contract lists for it, a passing result exists whose key equals the obligation's
    key at that commit. An *obligation* is one unit: format, lint, docs, a per-crate check, one test
-   binary under one configuration, release bytes, or a named check. The queue uses ALLGREEN.
+   binary under one configuration, release bytes, or a named check. An obligation due before landing
+   has its result before the commit lands. One the owner defers until after landing (Q13) has it
+   before the next release, and its failure turns `main` red. The queue uses ALLGREEN.
    HEADGREEN is unsound with diff selection: each queue entry is tested only on its own diff, so a
    later group's pass does not cover an earlier entry (section 9.4).
 2. **C2. Keys capture every input, by construction:** sources, manifests, toolchain, dependency
@@ -81,7 +72,8 @@ greens have zero tolerance. "Same confidence" is this contract.
    another fixture, so a trace-keyed lookup passed a tree where 12 of 40 fresh runs fail [M]).
 3. **C3. Selection is sound or wide.** The plan comes from a released helper: the pin in
    `.velnor/rust-ci.lock`, installed by commit SHA through `actions/setup-velnor`, with the binary
-   digest checked on every call [C]. What the gate demands comes from the base branch (section 9.3).
+   digest checked on every call [C]. What the gate demands is checked against the base branch by a
+   producer the candidate cannot change (section 9.3).
    A file the plan cannot place selects everything (`AllTrigger::UnknownPath`). Each obligation
    carries its exact expected test IDs; a missing, duplicate or extra ID fails. A head that drops an
    obligation or a test that `main` has fails, unless the owner signed that reduction.
@@ -118,7 +110,7 @@ Witnesses need the node agent (after Q1). Until then, reuse stays on rungs 1–3
 A *false failure* is a required run that fails on inputs where an immediate rerun passes. It costs a
 rerun or a queue ejection, and every queued entry behind an ejection is rebuilt.
 
-- **Budget:** per verification record, at most 3% false failures after phase 0 and 1% at the goals,
+- **Budget:** per verification record, at most 3% false failures after phase 0 and 1% at the proposed targets,
   so each witness may fail falsely about half as often. Each is claimed only after about 300 rerun
   pairs sampled under load (zero disagreements in 299 bound the rate just under 1% at 95%). "Not
   requested" never counts. The rate on the generated workflow is unmeasured; phase-0 item 8 measures
@@ -137,16 +129,24 @@ Targets are budgets until measured (R9).
 
 | | PR verdict P50 / P90 | Push-to-merge P50 / P90 |
 |---|---|---|
-| Goal [T] | ≤ 90 s / ≤ 4 min | ≤ 3 / ≤ 8 min |
+| Proposed target [T] (Q18) | ≤ 90 s / ≤ 4 min | ≤ 3 / ≤ 8 min |
 | Trial budget after phase 0 [T] | about 4 / 9 min | about 9 / 20 min |
 | Baseline | Phase-0 item 8 | Phase-0 item 8 |
 
+- **`docs/goals.md` sets the binding targets:** a run that selects no crate finishes within 1 min; at
+  most 30 s from job start to the first cargo command; the generator's tests under 1 min; an ordinary
+  PR's wait and runner-minutes do not get worse, except for a check correctness needs, with its cost
+  measured and accepted by the owner. The baseline measures these. The proposed targets in the table
+  come from an earlier design round and are not in that file (Q18).
 - No dated target is published before a green, test-running baseline exists. The baseline replaces
   the trial budgets.
-- The "fastest runner" claim waits for the S1–S6 suite (section 12). It runs as a generator-owned
-  benchmark: a workflow replays recent commits on the pinned helper and on a candidate, and a pin
-  bump lands only if the candidate is not slower.
-- Further goals [T], after Q1: job start ≤ 1 s P50 and ≤ 2 s P90 from the broker message; no test over
+- The "fastest runner" claim waits for the S1–S6 suite (section 12), which needs frozen contracts
+  and two executors.
+- **A helper-pin regression check** is separate and earlier: a pin bump replays recent commits on the
+  current pin and on the candidate, and is blocked when the candidate is slower by more than a
+  threshold fixed in advance from the baseline's run-to-run spread.
+
+- Further proposed targets [T], after Q1: job start ≤ 1 s P50 and ≤ 2 s P90 from the broker message; no test over
   60 s alone; per release, zero compiles and about 15 s of publication.
 
 ## 2. Built on velnor-gen
@@ -162,15 +162,17 @@ All of this exists on `main` [C]:
 
 - **One root workspace.** The crates sit flat under `crates/velnor-*`. New code goes there too. There
   is no second Cargo root. `generator/` and `ci-helper/` hold only documentation and samples.
-- **Generated workflows.** velnor-gen writes `rust-ci.yml`, `rust-cache-trim.yml`, `qualification.yml`
-  and `release-rust-ci-tools.yml`. Each carries a digest header (`velnor-render` `header.rs`, `seal`).
-  `ci.yml` (four lint jobs) is the last hand-written workflow; phase 0 deletes it.
+- **Generated workflows.** velnor-gen writes `rust-ci.yml`, `rust-cache-trim.yml`, `qualification.yml`,
+  `tag-ruleset-drift.yml` and `release-rust-ci-tools.yml`. Each carries a digest header
+  (`velnor-render` `header.rs`, `seal`), which no CI step checks until phase-0 item 3. `ci.yml` (four
+  lint jobs) is the last hand-written workflow; phase 0 deletes it.
 - **The dialect.** Every generated `run:` step is one command, usually `velnor-ci …`. Long shell
   lives in launchers carried by environment variables. A workflow uses only the 16 entries of
   `ALLOWED_ACTIONS` (`velnor-render/src/rules.rs`), each pinned to a commit SHA
   (`pinned_actions.rs`).
 - **A released helper.** `.velnor/rust-ci.lock` pins `velnor-ci` and `velnor-gen` by version, commit
-  and digest. A pull request cannot change the helper that plans and gates it.
+  and digest. The lock is part of the candidate tree, so a pull request can pin another release; the
+  trusted verifier treats an older pin as a reduction (section 9.3).
 - **Selection.** `velnor_rust::select` and `select_event` read `.velnor/rust-metadata.json`, run no
   cargo at plan time, and fail closed to "everything" (`RustSelection`, `AllTrigger`,
   `SelectionReason` in `velnor-model`).
@@ -183,7 +185,8 @@ All of this exists on `main` [C]:
   delta layer.
 - **One prior-run lookup.** `velnor-ci merge-group-passed`, switched by the config key
   `ci.skip_push_after_merge_group` and planned through `Step.skip_after_merge_group:
-  Option<PlanFrom>`. It is off in this repository.
+  Option<PlanFrom>`. It answers yes or no for a whole queue run and is off in this repository;
+  phase-0 item 7 replaces it with evidence per obligation.
 
 ### 2.2 Where each design component lives
 
@@ -195,13 +198,13 @@ All of this exists on `main` [C]:
 | Key, definition half | Fixed in the lock: workflow digest, helper digest, toolchain, profile | — | — | Phase 0, item 10 |
 | Key, input half | — | `velnor-ci plan` resolves tree, packages and image. A test-run key that depends on built bytes waits until the build has produced them | The node agent binds the digests it observes | Phase 0, item 10 |
 | Selection and disposition | `RustSelection`, `AllTrigger`, `SelectionReason`; the `[[inputs]]` config key | Each obligation gets a disposition, proposed `Disposition::{Execute, Reused(receipt), Excluded(reason)}`. A reuse hit never turns a package into "not selected", so the gate can always say why something was required and whether it was proven | — | Selection exists; disposition after phase 0 |
-| Label flow | `pr_ci = "label"` (`PrCi::Label`), `PrRun`, `PullRequestType` (gains proposed `Unlabeled`), `StepKind::FailOnDraftRun` and `DraftNotice`; `ClearRunLabel`, `CI_RUN_LABEL` and `CI_AUTO_LABEL` deleted | `Required` fails "CI not requested" on a commit with no verdict | The `velnor-verify` App, later | Phase 0, item 2 |
+| Label flow | `pr_ci = "label"` (`PrCi::Label`), `PrRun`, `PullRequestType` (gains proposed `Unlabeled`), `StepKind::FailOnDraftRun` and `DraftNotice`; `ClearRunLabel`, `CI_RUN_LABEL` and `CI_AUTO_LABEL` deleted | `Required` fails "CI not requested" on a draft, on an unlabelled PR and after the label is removed | The `velnor-verify` App, later | Phase 0, items 0 and 2 |
 | Gate | `VerdictSpec`, `GateNeed`, `required_job.rs` | `velnor-ci gate` → `velnor_rust::decide`, extended to accept a reuse receipt only when its key matches exactly | `Velnor / Verified`, later (section 9.3) | Exists; extension after phase 0 |
-| Base-branch reduction check | The contract, emitted on both trees | The gate compares the head contract with the base contract through `velnor_rust::weaken` and fails on an unsigned reduction | A trusted `workflow_run` verifier, then the App | Phase 0, item 10 |
-| Generator freshness | `StepKind::GeneratorCheck` (defined, never planned) planned for every managed workflow; proposed `GateNeed::Generated` | Runs `velnor-gen check` from the pinned release | — | Phase 0, item 3 |
-| Helper contract | `velnor-gen` `helper_gate.rs` checks feature minima; proposed: it also reads the pinned helper's command schema and refuses to render a command or flag the pin cannot parse | — | — | Phase 0, item 1 |
+| Reduction check | The contract, emitted on both trees | In the workflow, the gate compares the head contract with the base contract through `velnor_rust::weaken` and fails on an unsigned reduction: an accident guard. From `main`, the trusted `workflow_run` verifier repeats the comparison and writes `Velnor / Verified` | The App, later | Phase 0, item 10 and the verifier |
+| Generator freshness | `StepKind::GeneratorCheck` (defined, never planned) planned for every managed workflow; proposed `GateNeed::Generated` | Runs `velnor-gen check` from the pinned release, as a `velnor-ci` subcommand | — | Phase 0, item 3 |
+| Helper contract | `velnor-gen` `helper_gate.rs` checks feature minima; proposed: it also reads the pinned helper's command schema and refuses to render a command or flag the pin cannot parse. End-to-end tests render, plan and preflight with the pinned helper | — | — | Phase 0, item 1 |
 | Lint lane | `[[lint]]` (`config_lint.rs`, `lint_jobs.rs`) takes over the `ci.yml` lint jobs | Lint jobs join `Required`'s needs | — | Phase 0, item 4 |
-| Reuse points | `Step.skip_after_merge_group: Option<PlanFrom>`, generalised to proposed `Step.reuse: Option<ReusePoint>` with `SameSha`, `QueuePassed` and `SameTree` | `velnor-ci merge-group-passed`; proposed verdict lookup and record over GitHub cache entries | A ledger service only on measured need | Rung 2 in phase 0; rungs 1 and 3 after |
+| Reuse points | `Step.skip_after_merge_group: Option<PlanFrom>`, generalised to proposed `Step.reuse: Option<ReusePoint>` with `SameSha`, `QueuePassed` and `SameTree` | `velnor-ci merge-group-passed`; proposed verdict lookup and record over GitHub cache entries | A ledger service only on measured need | Rung 2 in phase 0; rungs 1 and 3 after. Every rung after Q8 |
 | Release gate | The tools release workflow, generated from `.velnor/workflows.toml` | `velnor-ci release-gate`, fail closed | — | Phase 0, item 5 |
 | Branch ruleset | Proposed: a generated branch ruleset and drift check, as `velnor-gen release ruleset` and `release ruleset-drift` already do for the tag rulesets | — | — | Phase 0, item 6 |
 | Closed action set | `ALLOWED_ACTIONS`, `pinned_actions.rs`, the one-command rule | — | Velnor Native implements exactly this dialect (section 6.7) | Exists; Native after Q1 |
@@ -215,52 +218,70 @@ and missing from the other.
 ## 3. Phase 0: correctness first
 
 Correctness is the gap, not speed (R2). Nothing reaches the ruleset until `Required` has been green
-on `main` **with tests running**. The order is strict. Each item becomes a GitHub issue whose "done
-when" checks state on `main`, so work that another session lands first closes the item instead of
-being planned again. The owner confirms the plan before any issue is created (R12).
+on `main` **with tests running**. A red `main` has had several causes; what let each of them land is
+one condition, a change merged without a green, test-running `Required`. Phase 0 removes it first.
+
+Phase 0 starts when the owner freezes the admin bypass to repairs of `main` (Q3). The item numbers
+are the delivery plan's (item 6 is W6); the trusted verifier is N26. The order of work is 0, 1, 2, 4,
+3, 5, 6 (step 1), 8, 9, 10, 7, the verifier, 6 (step 2); the delivery plan has the dependency graph.
+Item 7 follows item 10 because it reads the contract's keys. Item 3 follows item 4 because deleting
+`.velnor/config.toml` makes the generator check report `ci.yml` as an unmarked file. Each item becomes
+a GitHub issue whose "done when" checks state on `main`, so work that another session lands first
+closes the item instead of being planned again. The owner confirms the plan before any issue is
+created (R12).
 
 | # | Item | Done when |
 |---|---|---|
-| 1 | **Green main, and a contract that keeps it green.** When `main` turns red, the usual cause is that the generator rendered a helper command or flag the pinned helper cannot run. velnor-gen reads the pinned helper's command schema and refuses to generate a step the pin cannot parse | Three consecutive push runs are green with `tests_run > 0` and save a target cache; the schema check is red on a known skew and green after the fix |
-| 2 | **An honest `Required`** (section 9.2; Q2) | The lab cases of section 9.2 pass; `ci:run`, `ci:auto`, the quick set and the `ci-run-label` job are gone |
-| 3 | **Generator freshness in the gate.** Plan `StepKind::GeneratorCheck`, run it from the pinned release, make `Required` depend on it. Delete `.velnor/config.toml` and the helper commands only the deleted engine used (`plan --mode`, `write-request`, `resolve-qualification`, `image`) | A hand edit of a generated workflow, or a config change without regeneration, fails `Required`; an unmarked workflow is reported |
-| 4 | **One lint lane.** Move the four `ci.yml` jobs into the generated workflow and delete `ci.yml`: Alint and Jactionlint become `[[lint]]` entries, the generator-samples check joins them, and `cargo deny` and `cargo machete` stay only in `policy` | Every former `ci.yml` failure has a failing counterpart; `ci.yml` is gone |
-| 5 | **Release gate.** The generated tools release requires the exact green push run of the tagged commit (`velnor-ci release-gate`, fail closed) | On a lab tag: a red push blocks; a green push passes; a skipped run, the wrong workflow or an older attempt blocks |
-| 6 | **Ruleset (the owner applies it; Q3, Q4).** Bind `Required` to the GitHub Actions app, remove the bypass, switch the queue to ALLGREEN, allow auto-merge, keep the four existing protections (deletion, non-fast-forward, linear history, pull request). A generated drift check fails if any of it is undone | The read-back matches field by field; a red canary cannot merge; three PRs land through `merge_group` |
-| 7 | **Decide what blocks landing** (Q13), then let the push after a queue merge reuse the queue's result (rung 2) | Twenty queue merges: the push reuses the queue's result and still runs every check the queue did not run |
-| 8 | **The first green baseline**, measured, before any new speed target | At least three runs per class (labelled PR, group, push); timings and `[budget]` committed; every [E] figure in this document replaced or removed |
-| 9 | **Speed quick wins and selection hygiene** (section 4) | A replay of 400 commits shows the unplaced-path share under 5%; an A/B run shows the wall time saved against item 8 |
-| 10 | **The contract in shadow, and the base-branch check** (section 9.3) | For 200 runs, no two results with equal keys differ; a PR that drops a test or an obligation is red unless the owner signed that reduction |
+| 0 | **No green without tests.** A draft and an unlabelled ready PR get a red `Required` at once. The existing run labels stay until item 2 | A draft push and an unlabelled ready PR are red in the lab |
+| 1 | **Green main, and tests that keep it green.** velnor-gen reads the pinned helper's command schema and refuses to generate a step the pin cannot parse. End-to-end tests render, plan and preflight with the pinned helper and nextest, and a manifest edit without regeneration fails a test | Three consecutive push runs are green with tests run and save a target cache; each test was seen red on the fault and green on the fix |
+| 2 | **An honest `Required`** (section 9.2; Q2) | The lab cases of section 9.2 pass; the old run labels, the quick set and the `ci-run-label` job are gone |
+| 3 | **Generator freshness in the gate.** Plan `StepKind::GeneratorCheck`, run it from the pinned release, make `Required` depend on it. Delete `.velnor/config.toml` and the helper commands only the deleted engine used (`plan --mode`, `write-request`, `resolve-qualification`, the `image` group) | The check passes on `main`; a hand edit of a generated workflow, a manifest edit without regeneration, or an unmarked workflow fails `Required` |
+| 4 | **One lint lane.** Alint and Jactionlint become `[[lint]]` entries, `cargo deny` and `cargo machete` stay only in `policy`, and `ci.yml` is deleted. The advisory scan runs on every push to `main` and every night, whatever changed | Every former `ci.yml` failure has a failing counterpart; `ci.yml` is gone |
+| 5 | **Release gate.** The generated tools release requires the green push run of the tagged commit: the workflow file, the exact commit, the latest attempt (`velnor-ci release-gate`, fail closed) | On a lab tag: a red push blocks; a green push passes; a skipped run, another workflow's job of the same name or an older attempt blocks |
+| 6 | **Ruleset (the owner applies it; Q3, Q4, D7).** Step 1: bind `Required` to the GitHub Actions app, remove the bypass, switch the queue to ALLGREEN, keep every other rule; auto-merge is a separate setting. Step 2, after the verifier: also require `Velnor / Verified`. A generated drift check fails if any of it is undone | The read-back matches field by field; a red canary cannot merge; three PRs land through `merge_group`; the lab shows two overlapping entries under ALLGREEN |
+| 7 | **Decide what blocks landing** (Q13), then let the push after a queue merge reuse the queue's result per obligation (rung 2; Q8) | The reuse tests of section 7.5 pass; a shadow run over twenty queue merges shows at least one valid would-hit and no mismatch |
+| 8 | **The first green baseline**, measured with push reuse off, before any new speed target | Cohorts by event, cache state and selection; a percentile is reported only with enough runs; timings and `[budget]` committed; every [E] figure in this document replaced or removed |
+| 9 | **Speed quick wins and selection hygiene** (section 4) | A replay of 400 commits reports the unplaced-path count and the select-everything count apart; an edit to a path goals rule 2 names still selects everything; the wall time saved against item 8 is posted |
+| 10 | **The contract in shadow, and the reduction check** (section 9.3) | For 200 runs, no two results with equal keys differ; a PR that drops a test or an obligation through configuration is red unless the owner signed that reduction |
+| N26 | **The trusted verifier** (section 9.3) | In the lab, a PR that deletes the check step, adds a second `Required` job or pins an older helper cannot merge |
+
+Generator and helper changes reach CI only through a tools release and a re-pin (goals rule 12), so
+the delivery plan groups the items into release trains and names the owner's part in each (D9).
 
 **No runner, platform or storage crates in phase 0** (R7). The `velnor-runner-*` crates get
 correctness fixes only. New runner features wait for Q1 and Q9.
 
 ## 4. Where the time goes
 
-Measured on `main` [M]: a full push `rust` job takes 564 s, of which the 18 alone-checks are 48%, the
-lane guard 17% and docs 16%. A PR quick set takes about 90 s. No labelled PR with tests has passed,
-so test time is unknown. The causes:
+The measurements, each with its run, are in the delivery plan (section 3). No labelled PR with tests
+has passed on the generated workflow, so test time is unknown until phase-0 item 8. The causes:
 
-- **A red main makes every run cold.** Only a green push saves the target cache.
+- **A red main makes runs cold.** A push saves the target cache only when it is green.
 - **The same tree is verified up to three times:** on the PR, in the queue and on the push.
 - **The post-merge tail runs in series in one job:** 18 alone-checks, docs and the lane guard.
-- **Unplaced paths select everything.** 40% of recent commits touched one, mostly
-  `generator/samples/**`, `.github/workflows/**` and `local/**`.
+- **Unplaced paths select everything.** Many commits touch one, mostly under `generator/samples/**`
+  and `local/**`.
 - **Small waste:** rows 8, 9 and 14 of section 5, and `policy` waiting for `rust`.
 
 **Levers, in order** (R8):
 
-1. A green main (phase-0 item 1).
-2. Stop verifying the same tree three times (the reuse ladder, section 7.1).
-3. Move the post-merge tail into the queue, in parallel, and run alone-checks only for crates that
-   are released (Q13).
-4. Map the paths the plan cannot place: `[[inputs]]` entries for `generator/samples/**`,
-   `.github/workflows/**` and `local/**`, proven by replaying 400 commits.
-5. Shape from measured timings, plus the small wins above.
+1. A green main (phase-0 items 0 and 1).
+2. Stop verifying the same tree three times (the reuse ladder, section 7.1). Rung 2 saves lint and
+   test time; builds and cache saves still run.
+3. Decide where the post-merge tail runs (Q13). Steps of one job run in series, so moving the tail
+   into the queue delays every group by its run time unless it goes into a second job, which needs a
+   measured gain (Q7). Alone-checks run only for crates that are released.
+4. Map the paths the plan cannot place with `[[inputs]]` entries, only where a path has a proven
+   owner. The paths goals rule 2 names (the workflow, the toolchain file, cargo configuration) and
+   the `.velnor/` configuration and locks always select everything; a mapping that covers one is a
+   configuration error.
+5. Cheap measured wins: the small waste above, and fetching the base commit on demand for a
+   multi-commit push instead of selecting everything.
+6. Shape from measured timings.
 
 ### 4.1 The latency budget
 
-One labelled PR at the goal [T]. "Today" is the generated `rust-ci.yml` on the ARC scale set.
+One labelled PR at the proposed target [T]. "Today" is the generated `rust-ci.yml` on the ARC scale set.
 
 | Stage | Today | Goal path | Bottleneck removed |
 |---|---|---|---|
@@ -272,7 +293,7 @@ One labelled PR at the goal [T]. "Today" is the generated `rust-ci.yml` on the A
 | 6. Dependency fetch | Crates mirror | 0 s | Node crate store |
 | 7. Compile | Cold while `main` is red; delta layer and mbx otherwise | Only the change's closure | Green main; warm generation (section 8.3) |
 | 8. Tests | Unknown | ≤ 60 s | Per-package keys; the test floor (section 9.6) |
-| 9. Post-merge tail | 18 alone-checks, docs, lane guard: 81% of a full push job | In the queue, in parallel | Lever 3 |
+| 9. Post-merge tail | 18 alone-checks, docs and the lane guard, in series after the merge | Where Q13 puts it; in parallel only in a second job | Lever 3 |
 | 10. Required | `velnor-ci gate` | ≤ 1 s after the last result | — |
 | 11. Queue entry and run | Never used; auto-merge off | ≤ 30 s on a same-tree lookup | Auto-merge; rung 3; the speculative queue (section 11.3) |
 | 12. Merge | GitHub: 19 s enqueue to group and 26 s to merge, medians on this repository's queue [M] | The same | GitHub's queue (decision 7) |
@@ -290,16 +311,16 @@ content, **K** keep deliberately.
 | # | Operation | Today | Action | Mechanism |
 |---|---|---|---|---|
 | 1 | Runs for unrequested pushes (draft, ready without the label) | A ready PR runs the quick set on every push | E | Label flow (section 9.2) |
-| 2 | Runs on an unchanged head (`edited`, an unrelated label) | Each starts a workflow run; most jobs skip | E | No `edited` trigger; an unrelated label keeps the commit's verdict |
+| 2 | Runs on an unchanged head (a title edit, an unrelated label) | Each starts a workflow run whose jobs skip | K, cheap | The ignored-event path: a separately named job in its own concurrency group, so it publishes no `Required` and cancels nothing. The App removes the run |
 | 3 | A rerun of a commit already verified | A full run | R | Rung 1 |
 | 4 | Push N, then N+1 | The older run is cancelled | R unchanged keys | In-flight join, once records exist |
 | 5 | The queue group after the PR | The full suite (when the queue runs) | R | Rung 3 when the tree is equal; per obligation after; the speculative queue |
-| 6 | The push after a queue merge | The full suite plus the post-merge tail | R | Rung 2, with the golden rule of section 7.1 |
-| 7 | 18 alone-checks and docs after merge | 360 s of a 564 s push job | K, moved | Into the queue, in parallel; alone-checks only for released crates (Q13) |
-| 8 | The lane guard lists tests three times | 96 s of a full push job | E | Read the test step's listing |
+| 6 | The push after a queue merge | The full suite plus the post-merge tail | R | Rung 2, per obligation (section 7.1) |
+| 7 | 18 alone-checks and docs after merge | Most of a full push job | K, placed by Q13 | In the queue if the owner decides so, in a second job only on measured gain; alone-checks only for released crates |
+| 8 | The lane guard lists tests three times | Three `nextest list` calls | E | Read the test step's listing |
 | 9 | Feature-lane lint and docs when the lane's package is not selected | They run on the whole workspace | E | Run only when the lane's package is selected |
-| 10 | Unplaced paths select everything | 40% of commits | E | `[[inputs]]` entries (lever 4) |
-| 11 | A shallow checkout cannot reach the base of a multi-commit push or group | The plan selects everything (`AllTrigger::BaseUnavailable`) [C] | E | Selection by "not yet proven" (section 11.3) |
+| 10 | Unplaced paths select everything | Many commits | E | `[[inputs]]` entries for paths with a proven owner (lever 4) |
+| 11 | A shallow checkout cannot reach the base of a multi-commit push or group | The plan selects everything (`AllTrigger::BaseUnavailable`) [C] | E | Fetch the base commit on demand (phase-0 item 9); later, selection by "not yet proven" (section 11.3) |
 | 12 | A red main saves no target cache | Every run compiles cold | E | Green main |
 | 13 | Compiles across PR, queue and push | Each run compiles its own | R | Records; warm generations (after Q1) |
 | 14 | `velnor-ci` tests one at a time | One test group with `max-threads = 1` | E | Isolate the tests that change the environment |
@@ -336,13 +357,15 @@ and a green latest commit to merge (12: 9.2); one core with capability-declaring
 | Lines 11–12: the layout table names `generator/`, `ci-helper/`, `crates/velnor-runner` and "the existing engine in `crates/`" | The code sits in flat `crates/velnor-*` in one root workspace, and the old engine is gone | Q1 |
 | Line 75, rule 11: a workflow is verified locally "with GitHub's official runner, started by the Velnor runner" | Local runs use the executor the project uses | Q1 |
 | Line 43: a fork PR gets no token and only reads caches | No PR comes from a fork (decision 8) | Q6 |
-| Lines 45 and 59: GitHub's free limits, at most 8 GB of GitHub's cache | Native `actions/cache` on node disks and RustFS | A separate decision, not part of Q1 |
+| Lines 45 and 59: GitHub's free limits, at most 8 GB of GitHub's cache | Native `actions/cache` on node disks and RustFS | Q19 |
+| Lines 40–41: a check is skipped only when the change cannot affect it; green means everything selected ran and passed | The reuse ladder satisfies a selected check with a receipt of an earlier run | Q8 |
+| Line 60: an ordinary PR's wait does not get worse, unless correctness needs a check and the owner accepts its measured cost | Phase 0 adds checks to every PR | Q18 |
 
 Two active specifications say the same as line 16: `docs/proposed/macos-scaleset-runner.md` (no
 Actions interpreter; no second workflow interpreter in scope) and `docs/deferred/self-hosted-runner.md`.
-Q1 covers them. The reuse ladder also touches `docs/hard-decisions.md` (HD3: no second skip mechanism
-without owner approval); that is Q8. Lanes stay steps in one job per workspace, as goals rules 4 and
-5 and HD11 require, unless a measured gain earns a split (Q7).
+Q1 covers them. `docs/hard-decisions.md` binds only the old engine, so it does not decide the reuse
+ladder; the goals do (Q8). Lanes stay steps in one job per workspace, as goals rules 4 and 5 require,
+unless a measured gain earns a split (Q7).
 
 ### 6.3 Components
 
@@ -401,7 +424,7 @@ All names in this sketch are proposed.
   A result's trust tier comes from the node that executed it, never from the target name.
 - **Expressions.** For the dialect the expression set is enumerable from velnor-render and tested
   against the official runner in the corpus. The choice of a general evaluator matters only for the
-  full-compatibility stream; it is an open question in the owner sheet.
+  full-compatibility stream (D4).
 
 **Speed per job type** [unmeasured as a difference]: Official adds the Worker's set-up per job and a
 Node start per JavaScript action. Native saves seconds per job. S2 measures it; under 5 s per job at
@@ -452,7 +475,8 @@ either is built.
 ### 6.6 The job path
 
 - **Phase 0 and phase 1.** GitHub Actions runs the generated workflows on the ARC scale set with the
-  official runner. The gate is the `Required` job. Reuse happens inside `velnor-ci` (section 7.1).
+  official runner. The gate is the `Required` job and, once the trusted verifier is required,
+  `Velnor / Verified` (section 9.3). Reuse happens inside `velnor-ci` (section 7.1).
 - **After Q1.** Velnor's dispatcher acquires the same jobs and places them on a node that advertises
   the generation, mirror head and tool store the job needs. Velnor Native runs the job as written.
   Witnesses still need distinct nodes and generations.
@@ -530,8 +554,9 @@ only in the control plane. Agents act under an identity without repository admin
   boundary, a lost lease, duplicate and reordered webhooks, a lost node, the control plane and a site.
   **No fallback** (decision 18): a divergence is fixed forward. The cluster runs only released
   versions.
-- **A bad helper release.** While the gate is the Actions `Required` job, the fix is a re-pin PR that
-  the previous pin verifies. No procedure contains an admin merge.
+- **A bad helper release.** The fix is a PR that pins the previous release. Its own run uses the
+  helper it pins. The verifier treats an older pin as a reduction, so the owner signs it. No
+  procedure contains an admin merge.
 - **A bad Velnor release,** once Velnor executes jobs: redeploy the previous image digest (a deploy,
   not a code path). Recovery when no earlier image can verify is an open question in the owner
   sheet; an emergency stop on the queue and tags is Q16.
@@ -560,15 +585,29 @@ Reuse climbs a ladder, cheapest proof first (R5).
 
 | Rung | Subject | Mechanism | When |
 |---|---|---|---|
-| 1. Same commit | A rerun of a commit already verified | A lookup of its record | After phase 0 |
-| 2. Queue to push | The push after a queue merge | `skip_push_after_merge_group` and `velnor-ci merge-group-passed`, with a golden rule: a step is skipped on push only if the queue ran it | Phase-0 item 7 |
+| 1. Same commit | A rerun of a commit already verified | A lookup of its records | After phase 0 |
+| 2. Queue to push | The push after a queue merge | Records of the queue run, per obligation. It replaces the run-level `velnor-ci merge-group-passed` lookup behind `skip_push_after_merge_group` | Phase-0 item 7 |
 | 3. Same tree | A queue group whose tree equals an already verified tree | A lookup (`ReusePoint::SameTree`, proposed, generalising `Step.skip_after_merge_group`) | After phase 0 |
 | 4. Same obligation key | Per-package and per-test-binary keys | Only after a read audit proves the key covers every input | After Q1 (the node agent) |
 
-**Phase-1 records need no new service.** They are GitHub cache entries keyed by the verdict key, so
-GitHub's own cache scopes enforce the trust rule: a PR reads `main`'s records and writes only its
-own. A separate `velnor-ledger` service comes only when a measured need exists. Reuse beyond rung 2
-is a second skip mechanism under HD3, so it waits for Q8.
+**Rules for every rung.**
+
+- **Evidence is per obligation.** An obligation is reused only when a record shows that this
+  obligation ran and passed, on the source run's latest attempt, and the record's full resolved key
+  equals the request's (section 7.2). A green run is no evidence for a step it did not execute, and
+  the queue and the push can select differently.
+- **Unclassified work runs fresh.** Until the C5 classifier and the Git-metadata census have
+  classified an obligation, it runs on every request.
+- **Shadow first.** A rung turns on after shadow comparisons counted as real would-hits, each
+  re-executed, with no mismatch and at least one hit (C6). The hit rate is published.
+- **Every rung waits for Q8,** because reuse satisfies a selected check with a receipt.
+
+**Phase-1 records need no new service.** They are GitHub cache entries keyed by the full key. A cache
+scope says who may read an entry, not who observed the result, and a queue run cannot read a PR's
+scope. So only two publishers write records others may trust: push runs on `main`, and the trusted
+verifier (section 9.3), which is the path from a PR's result to the queue. Until the lab proves that
+path, rung 3 stays in shadow. A separate `velnor-ledger` service comes only when a measured need
+exists.
 
 ### 7.2 Keys
 
@@ -618,19 +657,21 @@ These need the node agent (after Q1), except scopes, which phase 1 maps onto Git
   fills a slot.
 - **In-flight join.** A request joins the record its key needs. A cancelled request drops its claim;
   execution continues for the others.
-- **Scopes.** A PR's execution writes `candidate` records, reusable by any request with the same key.
-  A record becomes `trusted` only when its tree is on `main` and A1 has passed. In phase 1 the
-  candidate scope is the PR's cache scope and the trusted scope is `main`'s.
+- **Scopes.** A PR's execution yields `candidate` records, reusable by any request with the same key.
+  A record becomes `trusted` only when its tree is on `main` and A1 has passed. In phase 1 a PR run
+  writes nothing that another event can read; the trusted verifier publishes the candidate record of
+  a PR run it verified, and push runs on `main` publish trusted records.
 
 ### 7.4 What a request executes
 
 | Situation | What runs |
 |---|---|
-| A rerun of a verified commit; an unrelated label or a title edit | Nothing new: the commit keeps its verdict |
+| A rerun of a verified commit | Rung 1: obligations with an equal full key resolve by record; C5 and unclassified obligations run |
+| An unrelated label, or a title or body edit | Nothing: the event publishes no check and cancels nothing |
 | Rebase-only push with the same tree | The C5 obligations; the rest resolves by rung 3 |
 | Push N+1 while N runs; stacked or concurrent PRs | N is cancelled at once; each key's record fills once, and others join it |
 | Merge group | Rung 3 when the tree equals a verified tree; otherwise every miss and every C5 obligation |
-| Push to `main` after a queue merge | Rung 2: the queue's result, plus every check the queue did not run; later, audit A1 |
+| Push to `main` after a queue merge | Rung 2: per obligation, what the queue ran and passed on an equal key; everything else runs; later, audit A1 |
 | Release tag | The release gate, then promotion of verified bytes (section 9.5) |
 
 ### 7.5 Soundness cases
@@ -640,9 +681,9 @@ not, how that is detected, and the automatic fallback.
 
 | Reuse | (1) Key complete because | (2) Failure if not | (3) Detected by | (4) Automatic fallback |
 |---|---|---|---|---|
-| Same commit (rung 1) | The commit fixes the tree; the definition half (workflow, helper, toolchain) is equal; C5 runs anyway | A non-tree input changed: a tool, the runner image, an undeclared clock read | Definition half and fingerprint in the key; C5 classification; A1 | Revoke by epoch; full run |
-| Queue to push (rung 2) | The push commit's tree is the group's tree, and the workflow and helper are equal | A step skipped on push that the queue never ran | A golden test: no step is skipped on push unless its condition ran in `merge_group`; `merge-group-passed` checks the exact run | The lookup returns false; full run |
-| Same tree (rung 3) | The tree is every repository input; definition, fingerprint and executor are equal; C5 runs anyway | A non-tree input changed | As rung 1; A2 | Revoke by epoch; full run |
+| Same commit (rung 1) | The commit fixes the tree; the full resolved key is equal (selection, workflow, helper, toolchain, runner image, executor); C5 and unclassified obligations run anyway | A non-tree input changed: a tool, the runner image, an undeclared clock read | Definition half and fingerprint in the key; C5 classification; A1 | Revoke by epoch; full run |
+| Queue to push (rung 2) | The record is per obligation, from the queue run of the same commit on its latest attempt, and its full key equals the push's | A step skipped on push that the queue never ran, or ran under a narrower selection | Tests for an unequal selection, a skipped or cancelled step, an older attempt and a different commit; shadow would-hits re-executed | No record on the key: the step runs |
+| Same tree (rung 3) | The tree is every repository input; selection, definition, fingerprint and executor are equal; the record comes from the trusted verifier or from `main`; C5 and unclassified obligations run anyway | A non-tree input changed | As rung 1; A2 | Revoke by epoch; full run |
 | Per-package record (rung 4) | An enrolled, reviewed contract covering every possible observation, enforced by the read audit on every execution | A read the contract missed, on a branch no audited run took | Executions chosen independently of the key: the 2% sample, A1's re-runs and the nightly reuse-free run; the sibling-file canary | Enrolment revoked; whole-tree key |
 | Candidate record reused across pushes and PRs | Same key, Velnor-observed, two independent witnesses | A PR sandbox leaked state into a result | Sampled re-execution; trusted only after A1 | Candidate reuse off for that class |
 | `velnor verify`, `velnor ship` and counting agent commands (section 9.7) | The same sealed sandbox, command and key as the gate, on cluster nodes, over the node-hashed tree | A Mac or dirty-worktree result treated as evidence | Only T2 node-signed receipts fill slots; T0 and T1 never; arm64 and amd64 keys differ | The label runs what is missing |
@@ -676,8 +717,10 @@ file in the repository root (`rustfmt.toml`, `clippy.toml`, `deny.toml`, `rust-t
   indexed success that is still an open head or a queued group, re-verifies them, and audits every
   commit landed in the window cold.
 - **Audit A1.** For each update of `main`, every new first-parent commit is rebuilt cold, its changed
-  obligations re-run, and results and binary digests compared with its records. One reuse-free run of
-  the full contract covers the tip every night. A1's SLO is 2 h at P90 [T]; a 2 h lag alarms; at 6 h
+  obligations re-run, and results and binary digests compared with its records. A1 keeps a persisted
+  frontier on the first-parent history, so a commit that landed between two audits, or whose push run
+  reused results, is still audited. One reuse-free run of the full contract covers the tip every
+  night. A1's SLO is 2 h at P90 [T]; a 2 h lag alarms; at 6 h
   it pages, the trusted scope stops advancing, the release waits and warm-compile reuse suspends.
   Once A1 exists, the push `Required` job reports it (section 9.1).
 - **Audit A2** runs nightly with the clock shifted 8 and 30 days ahead. **Degraded mode:** with the
@@ -686,7 +729,7 @@ file in the repository root (`rustfmt.toml`, `clippy.toml`, `deny.toml`, `rust-t
 ## 8. Storage and caches
 
 This section is runner-side and waits for Q1. Native `actions/cache` off GitHub's service also
-touches goals.md lines 45 and 59, a separate owner decision.
+touches goals.md lines 45 and 59, which is Q19.
 
 ### 8.1 One storage abstraction, configurable tiers
 
@@ -802,7 +845,7 @@ toolchains and mise tools by digest, images by digest through a registry mirror 
 
 - **One job per workspace.** `rust-ci.yml` runs one `rust` job, then `policy`, then `Required`; the
   lint jobs join after phase-0 item 4. Lanes are steps. A job is split only when it shortens the wait
-  by more than its own start-up time, from measured timings (goals rules 4 and 5, HD11; Q7).
+  by more than its own start-up time, from measured timings (goals rules 4 and 5; Q7).
 - **Parity** is a generator property (section 2.2): the contract and `Required`'s needs come from one
   plan.
 - **The push `Required` job** runs `velnor-ci gate` today. Once A1 exists it also reports A1 for
@@ -816,10 +859,11 @@ toolchains and mise tools by digest, images by digest through a registry mirror 
 
 This is exactly the flow the owner asked for (decision 12, R3).
 
-- **One label, `velnor:verify`.** `ci:run`, `ci:auto`, the `ci-run-label` job and the quick set on
-  unlabelled PRs are deleted. `pr_ci = "label"` is rewritten in place; there is no third mode.
-- **`Required` is never skipped** on a pull-request event, because a skipped required job passes. It is
-  **red** ("CI not requested") on any commit that has no verdict.
+- **One label, `velnor:verify`.** The older run labels, the `ci-run-label` job and the quick set on
+  unlabelled PRs are deleted by phase-0 item 2. `pr_ci = "label"` is rewritten in place; there is no
+  third mode.
+- **`Required` is never skipped** on a pull-request event that counts, because a skipped required job
+  passes. It is **red** ("CI not requested") on any commit of a PR that is a draft or has no label.
 - **Labels come from people or App tokens,** never `GITHUB_TOKEN`, whose label events start no
   workflow.
 
@@ -830,33 +874,53 @@ This is exactly the flow the owner asked for (decision 12, R3).
 | `velnor:verify` added to a ready PR | The latest commit runs | Pending, then green or red |
 | A draft that carries the label becomes ready | The PR is armed; the latest commit runs | Pending, then green or red |
 | Push while labelled | The new commit runs; the previous run is cancelled | Pending, then green or red |
-| Label removed | The run in flight is cancelled | Keeps a verdict it already has; otherwise red |
-| An unrelated label, a title or body edit | Nothing new; the run never hides the commit's verdict | Unchanged |
+| `velnor:verify` removed | The run in flight is cancelled | Red, also when it was green: an unlabelled PR never has a green required check |
+| The base branch changes | The latest commit runs against the new base, if labelled | Pending, then green or red |
+| Another label added or removed; a title or body edit | Nothing | Unchanged: the event publishes no `Required` |
 
-**Generator changes.** `PullRequestType` gains `Unlabeled` (proposed); `Edited` leaves the trigger
-list. One concurrency group per PR stays, so `unlabeled` cancels the run in flight. The run for an
-unrelated label or an unlabel re-reports the commit's existing verdict through a lookup of the
-earlier run on the same SHA (proposed) instead of starting work.
+**Generator changes.** `PullRequestType` gains `Unlabeled` (proposed). `Edited` stays for a change of
+the base branch only. An ignored event (another label, a title or body edit) runs a job with a
+different name in a concurrency group of its own, so it publishes nothing named `Required` and
+cancels nothing. No earlier verdict is looked up by commit SHA in phase 0.
+
+**What the check is attached to.** A check on GitHub belongs to a commit. Two PRs with the same head
+commit therefore share the newest `Required`, and a pull-request run reports on the head commit while
+it tests the merge with the base. Lab A records both. State per PR (label, head, tested tree, base,
+run generation) comes with the App.
 
 **The cost.** An unlabelled PR shows one short red job per push until the App exists. It is accepted,
 because a green check that verified nothing is worse.
 
 **Lab A proves it** on velnor-lab before the ruleset changes: draft red; unarmed red; label → full
-run; push while labelled cancels; unlabel cancels and stays red without a verdict; an unrelated label
-keeps the SHA's verdict; a newer run cannot hide an older red.
+run; push while labelled cancels; green, then unlabel, is red; another label added or removed during
+a run does not cancel it; a base change reruns; two PRs on one commit; a run that completes after an
+unlabel or a push cannot make the head green.
 
 ### 9.3 A PR must not weaken its own gate
 
-Today the workflow and its policy come from the PR's own tree, so a PR can edit `rust-ci.yml` or
-`.velnor/rust-ci.toml` and loosen what `Required` demands. Agents are trusted but fallible, so this
-is the realistic false-green path once the bypass is gone (R4, Q12).
+On `pull_request` and `merge_group` events GitHub runs the candidate's own copy of the workflow, with
+the helper the candidate pins. A check that the workflow runs on itself can be removed by the same
+PR, and a required check bound to the GitHub Actions app accepts a job of that name from any workflow
+file. Agents are trusted but fallible, so this is the realistic false-green path once the bypass is
+gone (R4, Q12).
 
-- **Now (phase-0 item 10):** the gate compares the PR's contract with the **base branch's** contract
-  and fails on any reduction that the owner has not signed for that exact diff. It reuses
-  velnor-gen's "check does less" detection (`velnor_rust::weaken`).
-- **Next:** a trusted `workflow_run` verifier that checks out nothing, runs the released `velnor-gen
-  check` on the tree as data, and writes a shadow `Velnor / Verified` status.
-- **Later:** the `velnor-verify` App makes that status the required check.
+- **Accident guards (phase-0 items 3 and 10).** Inside the workflow, the generator check fails on a
+  stale or hand-edited generated file, and the gate compares the PR's contract with the **base
+  branch's** contract through `velnor_rust::weaken`, failing on a reduction the owner has not signed.
+  They catch mistakes made through configuration. They do not stop a PR that deletes the check step,
+  adds a second workflow with a job named `Required`, or pins an older helper.
+- **The trusted verifier (phase 0).** A generated `workflow_run` workflow, which GitHub always takes
+  from the default branch. It checks out nothing and reads the candidate tree as data. With `main`'s
+  pinned helper it checks generator freshness, the reduction check, the helper pin, and that the
+  `rust-ci.yml` run for that exact commit passed on its latest attempt with its `Required` job. It
+  writes `Velnor / Verified` on PR heads and group heads through an App whose key is a secret of an
+  environment only `main` can use. The ruleset requires that status from that App, so a status a PR's
+  own workflow posts does not count. From then on a PR cannot weaken its own gate.
+- **A signed reduction.** The owner approves a reduction with an SSH signature over the base contract
+  digest, the head contract digest, the sorted list of reductions and an expiry. The verifier checks
+  it against `.velnor/allowed_signers` as it is on the base branch. A rebase or any contract change
+  voids it.
+- **Later:** the `velnor-verify` App service takes over from the verifier workflow.
 
 **The App.** It writes `Velnor / Verified`, bound by `integration_id`, on the PR head and on each
 group's head; only `success` passes. Permissions: `statuses: write`, `checks: write`, `pull_requests:
@@ -865,8 +929,9 @@ read`, `contents: read`, `metadata: read`. Webhooks: `pull_request` (`opened`, `
 `merge_group`, `push` and `check_run` (`rerequested` on `Velnor / Details`). It runs the state machine
 of section 9.2. Every 10 s a reconciler reads the labelled open PRs and the queue, starts what is
 missing, cancels what is unwanted and corrects any status the records do not hold; webhooks only cut
-the delay. `Velnor / Details` is a check run with the full report and is never required. PRs at one
-SHA share a verdict; the merge group verifies its own tree.
+the delay. `Velnor / Details` is a check run with the full report and is never required. The App
+keeps admission per PR, so two PRs at one commit share results but not an armed state; the merge group
+verifies its own tree.
 
 ### 9.4 Merge queue
 
@@ -875,33 +940,36 @@ uses HEADGREEN with two entries built, a 5-minute minimum wait and a 90-minute t
 is off [M]. Phase-0 item 6 changes it.
 
 - **ALLGREEN.** HEADGREEN is unsound with diff selection: a group entry is tested only on its own diff
-  (`merge_group.base_sha..head_sha`), so a later group's pass does not cover an earlier entry.
+  (`merge_group.base_sha..head_sha` [C]), so a later group's pass does not cover an earlier entry.
+  Lab A observes the ranges with two overlapping entries before the ruleset changes.
 - **The minimum wait** applies only until the minimum group size is met. With a minimum of one entry
   it adds no wait.
 - **Depth.** Two entries built and a 90-minute timeout until a group verdict takes ≤ 5 min at P90 and
   paired false failures are ≤ 3%.
-- **Auto-merge.** Agents enable it when they open the PR and stop merging `main` into their branches.
+- **Auto-merge.** A repository setting, separate from the ruleset. Agents enable it when they open the
+  PR and stop merging `main` into their branches.
 - **No bypass.** `bypass_actors` is empty; agents act under an identity that cannot edit the ruleset.
-- **Tree-equal groups.** A replay of 172 queue entries found the group tree equal to the PR-tested
-  tree in 16% of groups, and in 67–83% with auto-merge and the PR verdict on `merge-tree(queue tip,
-  head)` [M, replay]. No verdict depends on the rate.
+- **Tree-equal groups.** How often a group's tree equals the PR-tested tree decides what rung 3 and
+  the speculative queue are worth. It is measured in shadow first (section 11.3). No verdict depends
+  on the rate.
 
 ### 9.5 Release: built once, promoted
 
 A release never rebuilds (decision 10, R10).
 
-- **Now (phase-0 item 5):** the generated tools release is gated on the exact green push run of the
-  tagged commit, through `velnor-ci release-gate`, fail closed. Today its gate checks only that the
-  tag is on the default branch [C].
+- **Now (phase-0 item 5):** the generated tools release is gated on the green push run of the tagged
+  commit, through `velnor-ci release-gate`: the workflow file, the exact commit, the latest attempt,
+  the `Required` job. A missing, pending, skipped or older run blocks. Today its gate checks only that
+  the tag is on the default branch [C].
 - **Next:** the push run on `main` builds the release binaries. A tag promotes those exact bytes after
   the gate instead of rebuilding them.
 - **Squash changes the commit the tools embed** (`VELNOR_COMMIT`), so byte-equal promotion needs a
   signed release manifest that binds the binary digests to the tagged commit (Q15).
 - **Hosting.** Releases stay on GitHub-hosted runners with attestation until the owner decides
-  otherwise (Q5). velnor-render pins hosted release runners (`HOSTED_RUNNER`) and verifies
+  otherwise (Q5): a stated exception to decisions 9 and 10 until promotion lands. velnor-render pins hosted release runners (`HOSTED_RUNNER`) and verifies
   attestations with `--deny-self-hosted-runners` (`release_attest.rs`) [C].
 - **`runner-v`.** `release-plz.toml` declares the runner release group, but no workflow publishes it.
-  Generating one is a phase-1 item (Q17).
+  Generating one waits for the runner-crates decision (Q9, Q17).
 - **Tests stay in the dev profile** [M]: testing the release build costs more CPU, shares few crates
   with the shipped binary and is still not the shipped code (the tools ship as musl with `panic =
   "abort"`, thin LTO and `strip`). Release bytes are one obligation keyed by closure, lockfile,
@@ -981,12 +1049,12 @@ agent-hours, one PR under 400 refactored lines, and every replacing PR deletes w
 
 ### 11.1 Phase 0 and phase 1
 
-Phase 0 is section 3. Phase 1 follows without new owner gates beyond Q8, Q12, Q13, Q15 and Q17:
+Phase 0 is section 3. Phase 1 follows:
 
-- Rungs 1 and 3 of the reuse ladder, with records as GitHub cache entries.
-- The trusted `workflow_run` verifier with a shadow `Velnor / Verified`.
-- The release built on `main` and promoted at tag, with the signed manifest.
-- A generated `runner-v` release workflow.
+- Rungs 1 and 3 of the reuse ladder, with records as GitHub cache entries, after Q8.
+- The audits A1 and A2, the C5 classifier and the Git-metadata census.
+- The release built on `main` and promoted at tag, with the signed manifest (Q15).
+- A generated `runner-v` release workflow, after Q9 (Q17).
 
 ### 11.2 The runner stream (after Q1, Q9 and Q14)
 
@@ -1010,13 +1078,14 @@ No dated milestones are published before the phase-0 baseline (R9).
 Ideas kept for after phase 0 (R13):
 
 - One plan drives three targets: the generated YAML, Velnor Native, and local `velnor verify`.
-- Selection becomes "what is not yet proven" instead of "what the diff touched". It needs no base
+- Selection becomes "what is not yet proven" instead of "what the diff touched", once per-package
+  keys are proven; with whole-tree keys it would select everything on any edit. It needs no base
   commit, so `fetch-depth` stops mattering.
 - Test binaries become the unit of reuse (nextest archive digests).
 - The branch ruleset is generated with a drift check, like the tag rulesets.
 - **Speculative queue:** the label run tests the PR on top of the current queue tip, so the queue
-  group becomes a lookup. It is the cheapest path to the 3 / 8 min push-to-merge goal. It needs
-  measurement first.
+  group becomes a lookup. It may be the cheapest path to the proposed 3 / 8 min push-to-merge target.
+  It needs measurement first.
 - Plan edges (`Step.after`, proposed) let Velnor Native run independent steps of one job at the same
   time.
 
@@ -1040,11 +1109,11 @@ with an independent cold oracle on every contracted case. **Workload:** 300 hist
 replayed at their SHAs and arrival times, every class unweighted. **Baseline:** the generated
 workflow on ARC at the phase-0 baseline. **Budget:** each self-hosted arm gets the same two FI workers
 exclusively; rented arms at most the same vCPU concurrency; every arm reports CPU-seconds,
-GiB-minutes, bytes and cost. The suite runs as a generator-owned benchmark (section 1.4).
+GiB-minutes, bytes and cost. The helper-pin regression check of section 1.4 is separate and earlier.
 
 | # | Benchmark | Setup | Pass |
 |---|---|---|---|
-| S1 | Planted failures | 100 failing edits on every fast path: an older-time edit, an undeclared build-script input, a new sibling file, a clock shift, a stale generation, a data-file change that leaves the binary unchanged, a step skipped on push that the queue never ran, flaky tests at p = 0.05–0.2 | 100% red, or detected at the measured (1−p)² rate; it gates every other run |
+| S1 | Planted failures | 100 failing edits on every fast path: an older-time edit, an undeclared build-script input, a new sibling file, a clock shift, a stale generation, a data-file change that leaves the binary unchanged, a step skipped on push that the queue never ran, flaky tests at p = 0.05–0.2 | 100% red; a flaky test that fails with probability p is caught at the expected 1−(1−p)² rate; it gates every other run |
 | S2 | **Control race** | Native against Official on the same warm workers, mirrors, tool store and generation, ≥ 30 interleaved pairs per job type at 15% and 80% CPU | Per-type deltas with intervals; an executor claim only at ≥ 5 s per job at P50 on ≥ 3 types |
 | S3 | **Head-to-head** | The baseline; **a strong conventional baseline** on the same workers (persistent official-runner agents, reflink-cloned warm target, crates mirror, baked tools, auto-merge, ALLGREEN); Velnor with Official; Velnor Native; Velnor Native with agents' `verify`; rented arms if the owner allows them | The publication rule, on push-to-merge gross and net and on the verdict; every stage timed |
 | S4 | Loaded replay | A day's trace with other organisations' load, A1 and release preparation; then a manifest edit, a cold toolchain, a lost worker, an ejected predecessor | Verdict P90 ≤ 1.5× quiet; merge-path wait P90 ≤ 10 s |
@@ -1062,11 +1131,11 @@ baseline stands in for Buildkite-style agents but keeps the Actions hop, so it b
 
 | Risk | Detection | Containment |
 |---|---|---|
-| `main` stays red because the generator renders what the pinned helper cannot run | The pinned-helper schema check in `velnor-gen check` | Phase-0 item 1: the regeneration fails before it merges |
+| `main` stays red: a change merges without a green, test-running `Required`, or the generator renders what the pinned helper cannot run, or recorded metadata goes stale | The red check on drafts and unlabelled PRs; the schema check and the end-to-end tests | Phase-0 items 0, 1 and 3: the fault fails before it merges |
 | A green check that verified nothing (draft, unlabelled, skipped `Required`) | Lab A; the state-based "done when" of phase-0 item 2 | `Required` is never skipped and is red without a verdict |
-| A PR weakens its own gate | The base-branch contract check | Unsigned reductions fail; the trusted verifier, then the App |
+| A PR weakens its own gate | The trusted verifier's status, produced from `main` | `Velnor / Verified` is required; the checks inside the workflow catch accidents only |
 | Merges keep going through the bypass | Ruleset read-back and the generated drift check | `bypass_actors` empty; no procedure uses an admin merge |
-| A reuse gives a false green | The golden skip rule; shadow re-execution; 2% sampling; audit A1; the enforced read audit | Revoke by epoch; work runs again; landed commits in the window audited cold |
+| A reuse gives a false green | Per-obligation records on the full key; shadow re-execution; 2% sampling; audit A1; the enforced read audit | Revoke by epoch; work runs again; landed commits in the window audited cold |
 | Velnor Native departs from GitHub's semantics | The harness on every change, nightly and per official release; sampled shadow runs | Block the release; fix forward |
 | GitHub changes the protocol | The harness within 14 days of each release; deadlines from the API with an alarm 21 days ahead | Fix before the deadline; a critical update pages at once |
 | A stale status write survives a policy change | The success index; read-back; lab A's partition case | One fenced writer; emergency revocation writes `failure` |
@@ -1086,26 +1155,29 @@ and defaults. The design runs on each default until the owner answers.
 |---|---|---|---|
 | Q1 | Amend `docs/goals.md` line 16 (executor), lines 11–12 (layout) and line 75 (rule 11) so Velnor Native may execute the workflows velnor-gen writes, with GitHub Official as the reference | Approve the narrow text in the owner sheet | Sections 6 and 8; the runner stream |
 | Q2 | The label flow: `velnor:verify`, `ci:run` and `ci:auto` retired, no quick set, unarmed commits red, one short red job per push until the App | Yes, as section 9.2 | Phase-0 item 2 |
-| Q3 | Remove the bypass and bind `Required` to the GitHub Actions app | Yes, after a test-running green `main` | Phase-0 item 6 |
-| Q4 | Use the queue for every merge, with ALLGREEN and auto-merge | Yes | Phase-0 item 6 |
+| Q3 | Freeze the bypass to repairs now; later remove it, bind `Required` to the GitHub Actions app and allow auto-merge | Yes: the freeze now, the ruleset after a test-running green `main` | Phase 0 as a whole; item 6 |
+| Q4 | Switch the queue to ALLGREEN | Yes | Phase-0 item 6 |
+
 | Q5 | Release provenance: hosted and attested, or built by Velnor | Keep hosted for now | Cohort 4; release on Velnor |
 | Q6 | Fork PRs: the generator's fork fence, or no forks | Keep the fence in the generator; velnor-new refuses forks before any job | Section 6.9 |
 | Q7 | Job topology | One job per workspace; split only on measured gain | Section 9.1 |
-| Q8 | Reuse of results despite HD3 | Approve, with the soundness cases of section 7.5 | Rungs 1, 3 and 4 |
+| Q8 | Reuse of a verified result, with one sentence added to `docs/goals.md` | Approve rungs 1 and 2 under the rules of section 7.1; none before the answer | Every rung |
 | Q9 | `velnor-runner-host` | Correctness fixes only; features frozen | New runner features |
 | Q10 | Where evidence lives | Contracts evergreen in `docs/`; dated data in issues | — |
-| Q11 | Who implements | The repository's Claude `exec:*` seats | — |
-| Q12 | Must the gate's rules come from the base branch? | Yes: phase-0 item 10 now, the App later | Section 9.3 |
-| Q13 | Which post-merge checks (docs, alone-checks) must block landing? | Run them in the queue; alone-checks only for released crates | Phase-0 item 7 |
+| Q11 | Who reviews the ten soundness and trust-boundary items | Fable 5.2 at xhigh, named in the issue text; Opus 5.5 high until answered | — |
+| Q12 | A gate the PR cannot weaken | The reduction check, then the trusted verifier in phase 0, the App later | Section 9.3 |
+| Q13 | Which post-merge checks (docs, alone-checks) must block landing? | Run them in the queue, alone-checks only for released crates, decided after the baseline | Phase-0 item 7 |
 | Q14 | May Velnor Native execute the generator's plan for velnor-new without the general Actions protocol? | Yes | Section 6.4 |
 | Q15 | Release subject across a squash (`VELNOR_COMMIT` embedded) | A signed manifest binds the digests to the tagged commit | Release promotion |
 | Q16 | Emergency stop and revocation authority | A scoped, audited hold on the queue and tags | Section 6.10 |
-| Q17 | Generate the `runner-v` release workflow | Yes, in phase 1 | Section 9.5 |
+| Q17 | Generate the `runner-v` release workflow | After Q9 | Section 9.5 |
+| Q18 | The proposed speed targets, and the measured cost of the phase-0 checks | Keep them as proposals; accept the cost after the baseline | Section 1.4 |
+| Q19 | Amend goals.md lines 45 and 59 for a native cache and storage | Yes, after Q1 | Section 8 |
 
-Also open in the sheet, none blocking phase 0: the `velnor-verify` App and an agent identity without
-repository administration (the agent identity is needed now, because labels must not come from
-`GITHUB_TOKEN`); a deploy identity and the node changes; recovery when no earlier Velnor image can
-verify; per-type cutover counts; the general expression evaluator (full-compatibility stream only); a
-Velnor merge train instead of GitHub's queue; compiling before the label; high-clock nodes; one
-compile for both witnesses; rented comparator arms for S3; the agents' `interactive` class priority;
-automatic verification of unpushed commits; agent sandboxes on the cluster; a native arm64 lane.
+Also in the sheet. Blocking phase 0: an agent identity without repository administration and the
+status App (D7), and tool releases by agents (D9). Not blocking phase 0: a deploy identity and the
+node changes (D8); recovery from a bad release (D15); per-type cutover counts; the general expression
+evaluator (D4, asked when the full-compatibility stream is scheduled); a Velnor merge train instead of
+GitHub's queue; high-clock nodes; one compile for both witnesses; rented comparator arms for S3; the
+agents' `interactive` class priority; automatic verification of unpushed commits; agent sandboxes on
+the cluster; a native arm64 lane.
