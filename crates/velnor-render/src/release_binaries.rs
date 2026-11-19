@@ -1,17 +1,19 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{HelperRelease, Platform};
+use velnor_model::{HelperRelease, Platform, PrivateSources};
 use velnor_release::{BinaryFormat, BinaryPlan, Libc, RELEASE_APP_SLUG, ReleasePlan};
 
+use crate::private_steps::release_phase as private_phase;
 use crate::release::{FROM_A_PASSED_PUSH, GATE_IS_READY, HOSTED_RUNNER};
 use crate::release_assets::{
-    COMMIT_FILE, STAGE, archive_packaging, asset, assets, bind_version, quoted, read_version,
+    COMMIT_FILE, STAGE_SHELL, archive_packaging, asset, assets, bind_version, quoted, read_version,
     selection, uploaded, versioned,
 };
 use crate::release_attest::{attest, verify};
 use crate::release_binary_sums::{steps as binary_sums_steps, upload_paths};
 use crate::release_checks::publish_needs;
+use crate::release_context::{BuildContext, Private, package_tag};
 use crate::release_outputs::commit_output;
 use crate::release_raw::{raw_packaging, smoke_steps};
 use crate::release_steps::{
@@ -30,14 +32,18 @@ pub(crate) const PUBLISH_TIMEOUT_MINUTES: u16 = 10;
 pub(crate) const DIST: &str = "dist";
 pub(crate) const SUMS_FILE: &str = "SHA256SUMS";
 
-pub(crate) fn binary_jobs(plan: &ReleasePlan, helper: &HelperRelease) -> Vec<RenderedJob> {
+pub(crate) fn binary_jobs(
+    plan: &ReleasePlan,
+    helper: &HelperRelease,
+    private: Option<&PrivateSources>,
+) -> Vec<RenderedJob> {
     plan.binaries
         .iter()
         .flat_map(|binary| {
             let mut jobs: Vec<RenderedJob> = binary
                 .platforms
                 .iter()
-                .map(|platform| build(binary, *platform))
+                .map(|platform| build(binary, *platform, helper, private))
                 .collect();
             jobs.push(sums(binary));
             if binary.attest {
@@ -85,7 +91,12 @@ pub(crate) fn behind_the_gate(id: String, binary: &BinaryPlan, needs: Vec<String
     }
 }
 
-fn build(binary: &BinaryPlan, platform: Platform) -> RenderedJob {
+fn build(
+    binary: &BinaryPlan,
+    platform: Platform,
+    helper: &HelperRelease,
+    private: Option<&PrivateSources>,
+) -> RenderedJob {
     let (runner, _) = target(platform, binary);
     RenderedJob {
         permissions: permissions(&[("contents", "read")]),
@@ -94,8 +105,12 @@ fn build(binary: &BinaryPlan, platform: Platform) -> RenderedJob {
         steps: build_steps(
             binary,
             platform,
-            &tagged_source(binary),
-            same_commit(binary),
+            BuildContext {
+                source: &tagged_source(binary),
+                same_commit: same_commit(binary),
+                tag: &package_tag(binary),
+                private: private.map(|sources| Private { helper, sources }),
+            },
         ),
         ..behind_the_gate(build_id(&binary.package, platform), binary, Vec::new())
     }
@@ -104,9 +119,14 @@ fn build(binary: &BinaryPlan, platform: Platform) -> RenderedJob {
 pub(crate) fn build_steps(
     binary: &BinaryPlan,
     platform: Platform,
-    source: &str,
-    same_commit: RenderedStep,
+    context: BuildContext<'_>,
 ) -> Vec<RenderedStep> {
+    let BuildContext {
+        source,
+        same_commit,
+        tag,
+        private,
+    } = context;
     let (_, triple) = target(platform, binary);
     let suffix = platform.file_suffix();
     let file = asset(binary, platform);
@@ -124,8 +144,8 @@ pub(crate) fn build_steps(
     let packaging = match binary.format {
         BinaryFormat::Archive => archive_packaging(binary, platform, &file, &release_dir),
         BinaryFormat::Raw => {
-            let mut steps = raw_packaging(binary, platform, triple, &release_dir);
-            steps.extend(smoke_steps(binary, platform));
+            let mut steps = raw_packaging(binary, platform, triple, &release_dir, tag);
+            steps.extend(smoke_steps(binary, platform, tag));
             steps
         }
     };
@@ -148,6 +168,16 @@ pub(crate) fn build_steps(
             format!("Add the {triple} target"),
             format!("rustup target add {triple}"),
         ),
+    ]);
+    if let Some(private) = &private {
+        steps.push(install_helper(private.helper));
+        steps.extend(private_phase(
+            private.sources,
+            &join(&binary.root, "Cargo.toml"),
+        ));
+    }
+    let offline = if private.is_some() { " --offline" } else { "" };
+    steps.extend([
         RenderedStep {
             working_directory: (binary.root != ".").then(|| binary.root.clone()),
             env: if linux {
@@ -158,17 +188,17 @@ pub(crate) fn build_steps(
             ..command(
                 format!("Build {} for {suffix}", binary.package),
                 format!(
-                    "cargo build {profile_flag} --locked --manifest-path Cargo.toml{} --target {triple} --target-dir target",
+                    "cargo build {profile_flag} --locked{offline} --manifest-path Cargo.toml{} --target {triple} --target-dir target",
                     selection(binary)
                 ),
             )
         },
     ]);
-    steps.extend(read_version(binary));
+    steps.extend(read_version(binary, tag));
     if versioned(binary) {
         steps.push(command(
             "Create the stage folder".to_owned(),
-            format!("mkdir {STAGE}"),
+            format!("mkdir \"{STAGE_SHELL}\""),
         ));
     }
     steps.extend(packaging);
@@ -210,7 +240,7 @@ fn sums(binary: &BinaryPlan) -> RenderedJob {
         .iter()
         .map(|platform| download(artifact(binary, *platform)))
         .collect();
-    steps.extend(read_version(binary));
+    steps.extend(read_version(binary, &package_tag(binary)));
     if binary.commit_file {
         steps.push(RenderedStep {
             working_directory: Some(DIST.to_owned()),
@@ -270,16 +300,13 @@ fn publish(plan: &ReleasePlan, binary: &BinaryPlan, helper: &HelperRelease) -> R
             .map(|platform| download(artifact(binary, *platform))),
     );
     steps.push(download(format!("{}-sums", binary.package)));
-    steps.extend(read_version(binary));
+    steps.extend(read_version(binary, &package_tag(binary)));
     steps.push(RenderedStep {
         name: format!("Publish the release of {}", binary.package),
         env: variables(&[
             ("GITHUB_TOKEN", "${{ github.token }}"),
             ("REPOSITORY", "${{ github.repository }}"),
-            (
-                "TAG",
-                &format!("${{{{ needs.tag.outputs.{} }}}}", binary.package),
-            ),
+            ("TAG", &package_tag(binary)),
         ]),
         run: Some(format!(
             "velnor-ci release publish --repo=\"$REPOSITORY\" --tag=\"$TAG\" --app={RELEASE_APP_SLUG} --dir={DIST} {}",
@@ -331,7 +358,14 @@ pub(crate) fn upload(name: String, path: String) -> RenderedStep {
         uses_comment: Some(UPLOAD_VERSION.to_owned()),
         with: vec![
             ("name".to_owned(), Value::Text(name)),
-            ("path".to_owned(), Value::Text(path)),
+            (
+                "path".to_owned(),
+                if path.contains("${{") {
+                    Value::Expr(path)
+                } else {
+                    Value::Text(path)
+                },
+            ),
             (
                 "if-no-files-found".to_owned(),
                 Value::Text("error".to_owned()),

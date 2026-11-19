@@ -9,6 +9,7 @@ use crate::release_assets::{assets, bind_version, read_version, word};
 use crate::release_binaries::{
     DIST, PUBLISH_TIMEOUT_MINUTES, SUMS_FILE, artifact, behind_the_gate, download,
 };
+use crate::release_context::package_tag;
 use crate::release_steps::{install_tool, permissions, variables};
 use crate::rules::{RenderedJob, RenderedStep, Value};
 
@@ -37,7 +38,7 @@ pub(crate) fn verify(binary: &BinaryPlan) -> RenderedJob {
         .map(|platform| download(artifact(binary, *platform)))
         .collect();
     steps.push(download(format!("{}-sums", binary.package)));
-    steps.extend(read_version(binary));
+    steps.extend(read_version(binary, &package_tag(binary)));
     steps.extend(verifications(binary));
     bind_version(&mut steps);
     RenderedJob {

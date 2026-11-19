@@ -84,7 +84,7 @@ fn smoke_runs_the_staged_asset_from_the_stage_folder_when_the_name_has_the_versi
     for step in &smoke {
         assert_eq!(
             step.get("working-directory").and_then(Node::text),
-            Some("stage")
+            Some("${{ runner.temp }}/stage")
         );
     }
     assert_eq!(
