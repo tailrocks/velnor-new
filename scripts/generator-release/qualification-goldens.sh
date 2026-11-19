@@ -991,19 +991,18 @@ capture_release_dogfood() {
       && fixture_git commit -qm "golden"
   ) >"$git_log" 2>&1 || { cat "$git_log" >&2; echo "FATAL: dogfood git setup failed"; exit 2; }
   rm -f "$git_log"
-  for manifest in "$repo/Cargo.toml"; do
-    if ! (
-      cd "$(dirname "$manifest")" || exit 2
-      if [ -n "$OPERATOR_TOOLCHAIN_GUARD" ]; then
-        MISE_TRUSTED_CONFIG_PATHS="$repo/mise.toml" fetch_qualification_cargo_sources
-      else
-        fetch_qualification_cargo_sources
-      fi
-    ); then
-      echo "FATAL: could not fetch dogfood cargo sources for $manifest"
-      exit 2
+  manifest="$repo/Cargo.toml"
+  if ! (
+    cd "$(dirname "$manifest")" || exit 2
+    if [ -n "$OPERATOR_TOOLCHAIN_GUARD" ]; then
+      MISE_TRUSTED_CONFIG_PATHS="$repo/mise.toml" fetch_qualification_cargo_sources
+    else
+      fetch_qualification_cargo_sources
     fi
-  done
+  ); then
+    echo "FATAL: could not fetch dogfood cargo sources for $manifest"
+    exit 2
+  fi
   if ! (cd "$repo" && run_qualification_metadata_candidate "$BIN" generate --output-dir "$preview" >"$out/stdout.txt" 2>"$out/stderr.txt"); then
     echo "FATAL: release candidate dogfood generate failed"
     exit 2
