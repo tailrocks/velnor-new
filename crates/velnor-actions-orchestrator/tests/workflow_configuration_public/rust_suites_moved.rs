@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-//! pull_request/push Rust suites have no emitter in this engine any more, so
+//! `pull_request/push` Rust suites have no emitter in this engine any more, so
 //! the configuration must refuse them instead of dropping them silently.
 
 use std::error::Error;
