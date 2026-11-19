@@ -51,8 +51,7 @@ pub(in crate::journal) async fn recover_at_startup(
             }
             continue;
         }
-        if child_settled || lease_state == ProbeLeaseState::Released
-        {
+        if child_settled || lease_state == ProbeLeaseState::Released {
             return Err(HostError::Journal);
         }
         match lease_state {
