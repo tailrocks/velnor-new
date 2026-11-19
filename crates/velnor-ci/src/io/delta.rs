@@ -12,7 +12,6 @@ use crate::error::CiError;
 
 pub(super) const LIMIT: u64 = 500_000_000;
 const MARKER: &str = ".velnor/delta-marker";
-const INPUTS: &str = ".velnor/inputs.tsv";
 
 pub(super) fn run(command: DeltaCommand) -> Result<String, CiError> {
     let args = match &command {
@@ -133,7 +132,8 @@ fn stage(args: &DeltaArgs, base: &str) -> Result<String, CiError> {
         .parent()
         .filter(|parent| !parent.as_os_str().is_empty())
         .unwrap_or_else(|| Path::new("."));
-    let inputs = match super::input_snapshot::verify(root, &args.target_dir.join(INPUTS)) {
+    let name = crate::inputs::inputs_file(&super::input_scopes::git_prefix(root)?);
+    let inputs = match super::input_snapshot::verify(root, &args.target_dir.join(&name)) {
         Ok(inputs) => inputs,
         Err(error) => return decline(&error.to_string()),
     };
@@ -229,12 +229,12 @@ fn select(
             }
         }
         let node = snapshot::identity(&full)?;
-        if path == Path::new(INPUTS) || original != Some(&node) {
+        if path == inputs.name || original != Some(&node) {
             size = size.saturating_add(node.size());
         }
         current.insert(path, node);
     }
-    if !matches!(current.get(Path::new(INPUTS)), Some(snapshot::Node::File { digest, .. }) if *digest == inputs.digest)
+    if !matches!(current.get(&inputs.name), Some(snapshot::Node::File { digest, .. }) if *digest == inputs.digest)
     {
         return Err(CiError::new(
             "saved inputs changed after source verification",
@@ -253,7 +253,7 @@ fn select(
     let mut nodes: BTreeMap<_, _> = current
         .iter()
         .filter(|(path, node)| {
-            path.as_path() == Path::new(INPUTS) || baseline.nodes.get(*path) != Some(*node)
+            path.as_path() == inputs.name || baseline.nodes.get(*path) != Some(*node)
         })
         .map(|(path, node)| (path.clone(), node.clone()))
         .collect();

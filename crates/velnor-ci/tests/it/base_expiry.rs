@@ -74,6 +74,39 @@ fn restored_reports_an_unreadable_age_as_expired() {
 }
 
 #[test]
+fn expiry_refuses_nested_checkouts_before_removing_any_target() {
+    for born in [Some(today(8)), None] {
+        let repo = built("expiry-nested-checkout", born.as_deref());
+        repo.write_unstaged("safe/.velnor/born", &today(8));
+        repo.write_unstaged("safe/sentinel", "safe cache\n");
+        repo.write_unstaged("target/nested/keep", "nested source\n");
+        repo.git(&["-C", "target/nested", "init", "--quiet"]);
+        repo.git(&["-C", "target/nested", "add", "keep"]);
+        let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+            .args(["restored", "--target-dir", "safe", "--target-dir", "target"])
+            .current_dir(repo.root())
+            .env("VELNOR_BASE_MAX_AGE_DAYS", "7")
+            .output()
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        assert!(!output.status.success(), "{output:?}");
+        assert!(
+            String::from_utf8_lossy(&output.stderr).contains("contains Git checkout"),
+            "{output:?}"
+        );
+        assert_eq!(
+            fs::read_to_string(repo.root().join("target/nested/keep")).unwrap_or_default(),
+            "nested source\n"
+        );
+        assert!(repo.root().join("target/nested/.git").is_dir());
+        assert_eq!(
+            fs::read_to_string(repo.root().join("safe/sentinel")).unwrap_or_default(),
+            "safe cache\n"
+        );
+        assert!(repo.root().join("target/debug/deps/libapp.rlib").is_file());
+    }
+}
+
+#[test]
 fn restored_reports_no_expiry_without_a_limit_or_a_build_directory() {
     let repo = built("report-unlimited", Some("2020-01-01\n"));
     for days in [None, Some("0")] {

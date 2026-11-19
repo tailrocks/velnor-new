@@ -335,7 +335,11 @@ impl Action {
     pub fn needs_permissions(self) -> &'static [(&'static str, &'static str)] {
         match self {
             Self::Checkout => &[("contents", "read")],
-            Self::AttestBuildProvenance => &[("id-token", "write"), ("attestations", "write")],
+            Self::AttestBuildProvenance => &[
+                ("contents", "read"),
+                ("id-token", "write"),
+                ("attestations", "write"),
+            ],
             _ => &[],
         }
     }

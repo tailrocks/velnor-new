@@ -46,6 +46,7 @@ mod declared_workflow;
 mod default_branch;
 mod delta_budget;
 mod delta_cache;
+mod delta_helper;
 mod detect;
 mod doc_steps;
 mod docs_run;
@@ -78,6 +79,9 @@ mod mbx_store;
 
 mod inputs;
 mod inputs_audit_pin;
+mod inputs_order;
+mod inputs_pin;
+mod inputs_spec;
 mod io;
 mod io_files;
 mod io_identity;

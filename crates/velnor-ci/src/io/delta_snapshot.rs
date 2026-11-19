@@ -193,7 +193,7 @@ pub(super) fn validate(path: &Path) -> Result<(), CiError> {
         || path
             .components()
             .any(|component| !matches!(component, Component::Normal(_)))
-        || (path.starts_with(".velnor") && path != Path::new(".velnor/inputs.tsv"))
+        || (path.starts_with(".velnor") && !crate::inputs::is_inputs_file(path))
     {
         return Err(CiError::new(format!(
             "invalid delta relative path {}",
