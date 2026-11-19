@@ -10,6 +10,7 @@ pub mod drive;
 pub mod env;
 mod git;
 mod index_file;
+pub mod job_logs;
 mod keys;
 pub mod local_ci;
 pub mod local_setup;

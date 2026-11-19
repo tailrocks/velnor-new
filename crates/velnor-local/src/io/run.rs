@@ -72,11 +72,8 @@ async fn run(command: Command) -> std::io::Result<()> {
 
 async fn conformance(args: ConformanceArgs) -> std::io::Result<()> {
     let mut logs = Vec::new();
-    let mut entries = fs::read_dir(args.dir.join("logs")).await?;
-    while let Some(entry) = entries.next_entry().await? {
-        let name = entry.file_name().to_string_lossy().into_owned();
-        logs.push((name, fs::read_to_string(entry.path()).await?));
-    }
+    read_logs(&args.dir.join("logs"), "", &mut logs).await?;
+    read_logs(&args.dir.join("logs/jobs"), "jobs/", &mut logs).await?;
     logs.sort();
     let stored = |probe: &str| {
         let text = std::fs::read_to_string(args.conformance.join(format!("{probe}.json"))).ok()?;
@@ -90,6 +87,27 @@ async fn conformance(args: ConformanceArgs) -> std::io::Result<()> {
         return Err(std::io::Error::other(
             "the run does not reproduce every stored probe result",
         ));
+    }
+    Ok(())
+}
+
+async fn read_logs(
+    folder: &Path,
+    prefix: &str,
+    logs: &mut Vec<(String, String)>,
+) -> std::io::Result<()> {
+    let mut entries = match fs::read_dir(folder).await {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        read => read?,
+    };
+    while let Some(entry) = entries.next_entry().await? {
+        if entry.file_type().await?.is_file() {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            logs.push((
+                format!("{prefix}{name}"),
+                fs::read_to_string(entry.path()).await?,
+            ));
+        }
     }
     Ok(())
 }
