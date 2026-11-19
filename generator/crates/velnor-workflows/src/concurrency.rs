@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::error::{WorkflowsError, refuse};
-use crate::plan::Concurrency;
+use crate::plan::{CallTarget, Concurrency, Workflow};
 use crate::raw::RawConcurrency;
 
 const CONTEXTS: [&str; 4] = [
@@ -69,4 +69,44 @@ fn contexts(place: &str, group: &str) -> Result<Vec<&'static str>, WorkflowsErro
 
 fn literal_byte(byte: u8) -> bool {
     byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b':' | b'/')
+}
+
+pub(crate) fn refuse_shared_group(
+    id: &str,
+    caller: [Option<&Concurrency>; 2],
+    target: &CallTarget,
+    declared: &[Workflow],
+) -> Result<(), WorkflowsError> {
+    let CallTarget::Declared(file) = target else {
+        return Ok(());
+    };
+    let Some(callee) = declared.iter().find(|flow| &flow.file == file) else {
+        return Ok(());
+    };
+    let mut called = Vec::new();
+    groups_of(callee, declared, &mut called);
+    let shared = caller.into_iter().flatten().find(|own| {
+        called.iter().any(|other| {
+            other.group == own.group && (own.cancel_in_progress || other.cancel_in_progress)
+        })
+    });
+    match shared {
+        Some(own) => refuse(format!(
+            "job {id} calls {file}, and the caller and the called workflow both use the concurrency group {:?} with cancel-in-progress; GitHub cancels the run on a deadlock, so give the called workflow its own group",
+            own.group
+        )),
+        None => Ok(()),
+    }
+}
+
+fn groups_of<'a>(flow: &'a Workflow, declared: &'a [Workflow], found: &mut Vec<&'a Concurrency>) {
+    found.extend(flow.concurrency.as_ref());
+    for job in &flow.jobs {
+        found.extend(job.concurrency.as_ref());
+        if let Some(CallTarget::Declared(file)) = job.call.as_ref().map(|call| &call.target)
+            && let Some(nested) = declared.iter().find(|other| &other.file == file)
+        {
+            groups_of(nested, declared, found);
+        }
+    }
 }

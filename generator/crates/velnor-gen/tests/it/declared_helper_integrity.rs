@@ -84,3 +84,19 @@ fn a_helper_call_that_is_not_the_plain_command_word_is_refused() -> TestResult {
     }
     Ok(())
 }
+
+#[test]
+fn a_helper_command_the_pinned_velnor_ci_lacks_is_refused() -> TestResult {
+    for (from, to) in [
+        ("run = \"velnor-ci plan\"", "run = \"velnor-ci show-id\""),
+        ("helper = \"validate-artifact-id\"", "helper = \"show-id\""),
+        ("run = \"velnor-ci plan\"", "run = \"velnor-ci --version\""),
+    ] {
+        let message = refusal(&workflow("", PUSH, &HELPER_JOB.replace(from, to)))?;
+        assert!(
+            message.contains("does not have") && message.contains("validate-artifact-id"),
+            "{to}: {message}"
+        );
+    }
+    Ok(())
+}

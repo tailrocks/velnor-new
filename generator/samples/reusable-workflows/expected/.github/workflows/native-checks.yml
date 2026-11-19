@@ -80,6 +80,6 @@ jobs:
         continue-on-error: true
         env:
           TARGET: '${{ matrix.target }}'
-        run: '. "$VELNOR_EXEC" warm'
+        run: '. "$VELNOR_EXEC" prepare'
       - name: Run the check
-        run: '. "$VELNOR_EXEC" check'
+        run: '. "$VELNOR_EXEC" check-metadata'
