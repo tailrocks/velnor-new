@@ -224,6 +224,13 @@ async fn create_and_verify<T: Transport>(
             )
             .await;
         }
+        Err(error) if (400..500).contains(&transport.status) => {
+            scoped
+                .release_rejected_scale_set_create(claim)
+                .await
+                .map_err(map_host)?;
+            return Err(rejected_create_error(error, transport));
+        }
         Err(error) => {
             scoped
                 .mark_scale_set_create_uncertain(claim)
@@ -264,6 +271,14 @@ async fn create_and_verify<T: Transport>(
         .await
         .map_err(map_host)?;
     ensured_from_record(&created)
+}
+
+fn rejected_create_error<T>(error: SessionError, transport: &Recording<T>) -> EnsureError {
+    if transport.status == 403 {
+        EnsureError::Forbidden
+    } else {
+        map_session(error, transport)
+    }
 }
 
 fn reread_created_set<T: Transport>(

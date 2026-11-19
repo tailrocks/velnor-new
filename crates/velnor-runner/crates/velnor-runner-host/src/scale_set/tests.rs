@@ -123,3 +123,11 @@ fn an_organization_never_adopts_a_set_it_did_not_create() {
         ScaleSetLookupAction::Create
     );
 }
+
+#[test]
+fn a_no_effect_create_with_no_set_posts_again() {
+    assert_eq!(
+        lookup_action(ScaleSetCreateState::NoEffect, false, false),
+        ScaleSetLookupAction::Create
+    );
+}
