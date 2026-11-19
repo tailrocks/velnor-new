@@ -142,6 +142,25 @@ fn a_pull_request_copies_only_the_action_store_subset_into_the_private_store() {
 }
 
 #[test]
+fn a_seeded_file_keeps_the_modification_time_and_mode_of_its_source() {
+    let host = host("mbx-seed-mtime");
+    let seed = warm_seed(&host);
+    let source = seed.join("actions/cas/cd/blob2");
+    let old = std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_000_000_000);
+    fs::File::options()
+        .write(true)
+        .open(&source)
+        .and_then(|file| file.set_times(fs::FileTimes::new().set_modified(old)))
+        .and_then(|()| fs::set_permissions(&source, fs::Permissions::from_mode(0o640)))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    run(&host, "pull_request", "refs/pull/1/merge", Some(&seed));
+    let copied = host.root.join("temp/velnor/mbx/actions/cas/cd/blob2");
+    let metadata = fs::metadata(&copied).unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(metadata.modified().ok(), Some(old));
+    assert_eq!(metadata.mode() & 0o777, 0o640);
+}
+
+#[test]
 fn a_second_run_skips_what_is_already_present() {
     let host = host("mbx-seed-again");
     let seed = warm_seed(&host);

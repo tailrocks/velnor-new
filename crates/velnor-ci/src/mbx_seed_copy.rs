@@ -161,7 +161,8 @@ fn transfer(job: &Job) -> Option<Copy> {
         .custom_flags(libc::O_NOFOLLOW)
         .open(&job.from)
         .ok()?;
-    if !source.metadata().ok()?.is_file() {
+    let metadata = source.metadata().ok()?;
+    if !metadata.is_file() {
         return None;
     }
     let name = job.to.file_name()?.to_string_lossy().into_owned();
@@ -175,6 +176,8 @@ fn transfer(job: &Job) -> Option<Copy> {
         .ok()?;
     let done = std::io::copy(&mut source, &mut target)
         .and_then(|_| target.flush())
+        .and_then(|()| target.set_permissions(metadata.permissions()))
+        .and_then(|()| target.set_times(fs::FileTimes::new().set_modified(metadata.modified()?)))
         .and_then(|()| fs::rename(&partial, &job.to));
     match done {
         Ok(()) => Some(Copy::Wrote),
