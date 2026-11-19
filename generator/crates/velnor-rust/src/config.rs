@@ -3,23 +3,27 @@
 
 use serde::Deserialize;
 use velnor_model::{
-    CiDebugInfo, InputRule, PackageName, PathGlob, RepoPath, RunnerLabel, RustCiConfig, Shape,
-    TargetName,
+    CiDebugInfo, InputRule, PackageName, PathGlob, RepoPath, RunnerLabel, RustCiConfig, TargetName,
 };
 
+use crate::config_events::{docs_run, on_main};
 use crate::error::{DetectError, Reason};
+use crate::shape::parse_shape;
 use crate::toml_file::table;
 
 pub const CONFIG_PATH: RepoPath = RepoPath::from_static(".velnor/rust-ci.toml");
 
-const KEYS: [&str; 24] = [
+const KEYS: [&str; 29] = [
+    "private_sources",
     "cache_check_blocks",
     "cache_debug",
+    "cache",
     "ci",
     "runner",
     "fork_runner",
     "crates_mirror",
     "mbx_shared_store",
+    "docs",
     "timeout_minutes",
     "exclude",
     "non_inputs",
@@ -37,6 +41,8 @@ const KEYS: [&str; 24] = [
     "ci_debuginfo",
     "cache_budget_bytes",
     "test_setup",
+    "lint",
+    "test_groups",
 ];
 const TIMEOUT_RANGE: std::ops::RangeInclusive<u16> = 1..=360;
 
@@ -44,11 +50,15 @@ const TIMEOUT_RANGE: std::ops::RangeInclusive<u16> = 1..=360;
 struct RawConfig {
     cache_check_blocks: Option<bool>,
     cache_debug: Option<bool>,
+    cache: Option<crate::config_cache::RawCache>,
+
     ci: Option<crate::config_ci::RawCi>,
     runner: Option<String>,
     fork_runner: Option<String>,
     crates_mirror: Option<crate::config_mirror::RawCratesMirror>,
+    private_sources: Option<crate::config_private::RawPrivateSources>,
     mbx_shared_store: Option<bool>,
+    docs: Option<String>,
     timeout_minutes: Option<u16>,
     #[serde(default)]
     exclude: Vec<String>,
@@ -71,6 +81,9 @@ struct RawConfig {
     cache_budget_bytes: Option<u64>,
     #[serde(default)]
     test_setup: Vec<crate::config_test_setup::RawTestSetup>,
+    #[serde(default)]
+    lint: Vec<crate::config_lint::RawLint>,
+    test_groups: Vec<crate::config_test_groups::RawTestGroup>,
 }
 
 #[derive(Deserialize)]
@@ -117,9 +130,9 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
     let pr_ci = crate::config_pr_ci::parse(raw.pr_ci.as_deref(), skip_draft_pull_requests)
         .map_err(invalid)?;
     let default_branch =
-        default_branch(raw.default_branch, defaults.default_branch).map_err(invalid)?;
-    let on_main =
-        crate::config_events::on_main(raw.on_main.as_deref(), defaults.on_main).map_err(invalid)?;
+        crate::config_branch::default_branch(raw.default_branch, defaults.default_branch)
+            .map_err(invalid)?;
+    let on_main = on_main(raw.on_main.as_deref(), defaults.on_main).map_err(invalid)?;
     let full_run = match raw.full_run {
         None => defaults.full_run,
         Some(value) => crate::config_events::full_run(value).map_err(invalid)?,
@@ -128,20 +141,28 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
     let ci_debuginfo =
         debuginfo(raw.ci_debuginfo.as_deref(), defaults.ci_debuginfo).map_err(invalid)?;
     let test_setup = crate::config_test_setup::parse(raw.test_setup).map_err(invalid)?;
+    let lint = crate::config_lint::parse(raw.lint).map_err(invalid)?;
+    let test_groups = crate::config_test_groups::parse(raw.test_groups).map_err(invalid)?;
     let runner = runner(raw.runner, defaults.runner).map_err(invalid)?;
     let fork_runner = crate::config_fork::fork_runner(raw.fork_runner, &runner).map_err(invalid)?;
     Ok(RustCiConfig {
         cache_budget_bytes: crate::cache_budget::configured_budget(raw.cache_budget_bytes)
             .map_err(invalid)?,
         test_setup,
+        lint,
+        test_groups,
         cache_check_blocks: raw.cache_check_blocks.unwrap_or(false),
         cache_debug: raw.cache_debug.unwrap_or(false).into(),
+        mbx_remote: crate::config_cache::mbx_remote(raw.cache).map_err(invalid)?,
+
         push_after_merge_group: crate::config_ci::push_after_merge_group(raw.ci),
         crates_mirror: raw
             .crates_mirror
             .map(crate::config_mirror::mirror)
             .transpose()
             .map_err(invalid)?,
+        docs_run: docs_run(raw.docs.as_deref()).map_err(invalid)?,
+        private_sources: crate::config_private::optional(raw.private_sources).map_err(invalid)?,
         mbx_store: raw.mbx_shared_store.unwrap_or(false).into(),
         nextest_harnesses: harnesses(raw.nextest_harnesses).map_err(invalid)?,
         default_branch,
@@ -180,20 +201,10 @@ fn harnesses(entries: Vec<String>) -> Result<Vec<(PackageName, TargetName)>, Rea
         .collect()
 }
 
-fn parse_shape(configured: Option<&str>) -> Result<Option<Shape>, Reason> {
-    match configured {
-        None | Some("auto") => Ok(None),
-        Some("one-job") => Ok(Some(Shape::OneJob)),
-        Some("lint-test") => Ok(Some(Shape::LintAndTest)),
-        Some("groups") => Ok(Some(Shape::BuildThenGroups)),
-        Some(other) => Err(Reason::InvalidValue {
-            key: "shape",
-            value: other.to_owned(),
-        }),
-    }
-}
-
-fn runner(configured: Option<String>, default: RunnerLabel) -> Result<RunnerLabel, Reason> {
+pub(crate) fn runner(
+    configured: Option<String>,
+    default: RunnerLabel,
+) -> Result<RunnerLabel, Reason> {
     let Some(label) = configured else {
         return Ok(default);
     };
@@ -218,35 +229,6 @@ fn without_helper_build(label: &str) -> bool {
         .and_then(|digits| digits.parse().ok())
         .unwrap_or(u32::MAX);
     major <= 13 || version.ends_with("-large") || version.ends_with("-intel")
-}
-
-fn default_branch(configured: Option<String>, default: String) -> Result<String, Reason> {
-    match configured {
-        None => Ok(default),
-        Some(name) if branch_name(&name) => Ok(name),
-        Some(name) => Err(Reason::InvalidValue {
-            key: "default_branch",
-            value: name,
-        }),
-    }
-}
-
-fn branch_name(name: &str) -> bool {
-    !name.is_empty()
-        && !name.starts_with(['/', '-'])
-        && !name.ends_with(['/', '.'])
-        && !name.contains("..")
-        && !name.contains("//")
-        && !name.contains("@{")
-        && !name.contains("{{")
-        && !name.contains("}}")
-        && name != "HEAD"
-        && !name.split('/').any(|part| {
-            part.starts_with('.') || part.rsplit_once('.').is_some_and(|(_, ext)| ext == "lock")
-        })
-        && !name
-            .chars()
-            .any(|c| c.is_control() || c.is_whitespace() || "~^:?*[\\".contains(c))
 }
 
 pub(crate) fn excluded(config: &RustCiConfig, manifest: &RepoPath) -> bool {

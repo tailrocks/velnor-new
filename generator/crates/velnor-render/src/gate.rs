@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    CI_AUTO_LABEL, CI_RUN_LABEL, Gate, GateNeed, MERGE_GROUP_SKIP_OUTPUT, MERGE_GROUP_STEP, PlanFrom,
-    PrRun, RootSlug, VerdictSpec, When,
+    CI_AUTO_LABEL, CI_RUN_LABEL, Gate, GateNeed, MERGE_GROUP_SKIP_OUTPUT, MERGE_GROUP_STEP,
+    PlanFrom, PrRun, RootSlug, VerdictSpec, When,
 };
 
 use crate::rules::{RenderedStep, Value};
@@ -21,6 +21,7 @@ const RELATED_EVENT: &str = "(github.event.action != 'labeled' || github.event.l
 const SAME_REPOSITORY: &str = "github.event.pull_request.head.repo.full_name == github.repository";
 const SCHEDULE: &str = "schedule";
 const PUSH: &str = "push";
+const POST_MERGE_EVENTS: &str = "(github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')";
 pub(crate) const TOOLS_STEP: &str = "tools";
 pub(crate) const BASE_STEP: &str = "base";
 pub(crate) const SOURCES_LOCKS_STEP: &str = "sources_locks";
@@ -37,6 +38,8 @@ pub(crate) fn sources_step(lane: &RootSlug) -> String {
 pub(crate) fn sources_fetch_step(position: usize) -> String {
     format!("sources_fetch_{position}")
 }
+
+pub(crate) const SOURCES_FETCH_ALL_STEP: &str = "sources_fetch_all";
 
 pub(crate) fn sources_save_step(lane: &RootSlug) -> String {
     format!("sources_save_{lane}")
@@ -122,11 +125,12 @@ pub(crate) fn condition(
         When::Success => {}
         When::Finalizer => parts.push(NOT_CANCELLED.to_owned()),
         When::Always => parts.push(ALWAYS.to_owned()),
-        When::NotCancelled => {
+        When::NotCancelled | When::NotCancelledPostMerge => {
             parts.push(NOT_CANCELLED.to_owned());
             if setup != Setup::Before {
                 parts.push(SETUP_DONE.to_owned());
             }
+            parts.extend((when == When::NotCancelledPostMerge).then(|| POST_MERGE_EVENTS.to_owned()));
         }
         When::CacheDebug => {
             parts.push(NOT_CANCELLED.to_owned());

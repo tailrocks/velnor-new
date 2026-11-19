@@ -24,6 +24,11 @@ impl HttpGitHub {
     pub(super) fn new(api: String, token: String, timeout: Duration) -> Self {
         let agent = ureq::Agent::config_builder()
             .timeout_global(Some(timeout))
+            .tls_config(
+                ureq::tls::TlsConfig::builder()
+                    .root_certs(crate::trusted_roots::configured_roots())
+                    .build(),
+            )
             .build()
             .into();
         Self { agent, api, token }
