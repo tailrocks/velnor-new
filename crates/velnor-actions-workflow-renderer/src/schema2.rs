@@ -58,6 +58,8 @@ pub mod release_eligibility;
 mod resource_probe_image;
 #[path = "schema2_runner_image_qualification.rs"]
 mod runner_image_qualification;
+#[path = "schema2_rust_ci_gate.rs"]
+mod rust_ci_gate;
 #[path = "schema2_generator_source_qualification.rs"]
 mod source_qualification;
 #[path = "schema2_stable_sources_qualification.rs"]

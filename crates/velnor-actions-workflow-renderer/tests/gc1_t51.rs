@@ -195,6 +195,18 @@ pub(crate) fn ci_runs_json() -> String {
     )
 }
 
+pub(crate) fn rust_ci_runs_json() -> String {
+    format!(
+        "{{\"workflow_runs\":[{{\"path\":\".github/workflows/rust-ci.yml\",\"event\":\"push\",\"head_branch\":\"main\",\"head_sha\":\"{SOURCE_SHA}\",\"head_repository\":{{\"full_name\":\"tailrocks/velnor-new\"}},\"run_number\":4,\"id\":78,\"run_attempt\":1,\"status\":\"completed\",\"conclusion\":\"success\"}}]}}"
+    )
+}
+
+pub(crate) fn rust_ci_jobs_json() -> String {
+    format!(
+        "[{{\"jobs\":[{{\"name\":\"rust-required\",\"run_id\":78,\"run_attempt\":1,\"head_sha\":\"{SOURCE_SHA}\",\"head_branch\":\"main\",\"status\":\"completed\",\"conclusion\":\"success\"}}]}}]"
+    )
+}
+
 pub(crate) fn artifact_response_json() -> String {
     format!(
         "{{\"artifacts\":[{{\"name\":\"velnor-job-image-candidate-2\",\"id\":9,\"expired\":false,\"workflow_run\":{{\"id\":7,\"head_sha\":\"{SOURCE_SHA}\",\"head_branch\":\"main\"}}}}]}}"

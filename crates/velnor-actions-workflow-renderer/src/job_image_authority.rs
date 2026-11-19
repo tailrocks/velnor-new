@@ -202,6 +202,9 @@ artifact_response_path = Path(sys.argv[7])
 archive_attestation_path = Path(sys.argv[8])
 record_attestation_path = Path(sys.argv[9])
 closure_path = Path(sys.argv[10])
+rust_ci_runs_path = Path(sys.argv[11])
+rust_ci_jobs_path = Path(sys.argv[12])
+rust_ci_recheck_path = Path(sys.argv[13])
 try:
     expected_run_id = int(os.environ["VELNOR_RUN_ID"])
     expected_run_attempt = int(os.environ["VELNOR_RUN_ATTEMPT"])
@@ -231,6 +234,12 @@ artifact_response = _read_limited_json(artifact_response_path, 2097152, "Candida
 identity_module.validate_artifact_record(artifact_response, identity)
 ci_runs = _read_limited_json(ci_runs_path, 2097152, "Canonical CI run response")
 ci = identity_module.select_ci_run(ci_runs, identity["source"])
+identity_module.select_rust_ci_gate(
+    _read_limited_json(rust_ci_runs_path, 2097152, "Rust CI run response"),
+    _read_limited_json(rust_ci_jobs_path, 2097152, "Rust CI job response"),
+    _read_limited_json(rust_ci_recheck_path, 2097152, "Rust CI recheck response"),
+    identity["source"],
+)
 hasher = hashlib.sha256()
 archive_size = 0
 with archive_path.open("rb") as archive_stream:
@@ -298,6 +307,9 @@ print("fixed authority body assembled the publication evidence")
 "#;
 
 pub(super) const CI_RUNS_PATH: &str = "$RUNNER_TEMP/velnor-ci-runs.json";
+pub(super) const RUST_CI_RUNS_PATH: &str = "$RUNNER_TEMP/velnor-rust-ci-runs.json";
+pub(super) const RUST_CI_JOBS_PATH: &str = "$RUNNER_TEMP/velnor-rust-ci-jobs.json";
+pub(super) const RUST_CI_RECHECK_PATH: &str = "$RUNNER_TEMP/velnor-rust-ci-recheck.json";
 pub(super) const AUTHENTICATED_SOURCE_FILE: &str = "velnor-authenticated-source.json";
 pub(super) const ARTIFACT_RESPONSE_PATH: &str = "$RUNNER_TEMP/velnor-candidate-artifact.json";
 pub(super) const ARCHIVE_ATTESTATION_PATH: &str = "$RUNNER_TEMP/velnor-archive-attestation.json";
@@ -313,7 +325,7 @@ pub(super) fn assemble_evidence_step(
 ) -> Yaml {
     let authenticated_source = format!("$RUNNER_TEMP/{AUTHENTICATED_SOURCE_FILE}");
     let mut run = format!(
-        "set -euo pipefail\nauthority=\"$VELNOR_IMAGE_AUTHORITY_DIR\"\narchive=\"{archive}\"\nrecord=\"{record}\"\nclosure=\"{closure}\"\nresult=\"{result}\"\nci_runs=\"{CI_RUNS_PATH}\"\nauthenticated_source=\"{authenticated_source}\"\nartifact_response=\"{ARTIFACT_RESPONSE_PATH}\"\narchive_attestation=\"{ARCHIVE_ATTESTATION_PATH}\"\nrecord_attestation=\"{RECORD_ATTESTATION_PATH}\"\npython3 - \"$authority\" \"$record\" \"$archive\" \"$result\" \"$ci_runs\" \"$authenticated_source\" \"$artifact_response\" \"$archive_attestation\" \"$record_attestation\" \"$closure\" <<'{EVIDENCE_MARKER}'\n"
+        "set -euo pipefail\nauthority=\"$VELNOR_IMAGE_AUTHORITY_DIR\"\narchive=\"{archive}\"\nrecord=\"{record}\"\nclosure=\"{closure}\"\nresult=\"{result}\"\nci_runs=\"{CI_RUNS_PATH}\"\nauthenticated_source=\"{authenticated_source}\"\nartifact_response=\"{ARTIFACT_RESPONSE_PATH}\"\narchive_attestation=\"{ARCHIVE_ATTESTATION_PATH}\"\nrecord_attestation=\"{RECORD_ATTESTATION_PATH}\"\nrust_ci_runs=\"{RUST_CI_RUNS_PATH}\"\nrust_ci_jobs=\"{RUST_CI_JOBS_PATH}\"\nrust_ci_recheck=\"{RUST_CI_RECHECK_PATH}\"\npython3 - \"$authority\" \"$record\" \"$archive\" \"$result\" \"$ci_runs\" \"$authenticated_source\" \"$artifact_response\" \"$archive_attestation\" \"$record_attestation\" \"$closure\" \"$rust_ci_runs\" \"$rust_ci_jobs\" \"$rust_ci_recheck\" <<'{EVIDENCE_MARKER}'\n"
     );
     run.push_str(EVIDENCE_PROGRAM);
     run.push_str(EVIDENCE_MARKER);

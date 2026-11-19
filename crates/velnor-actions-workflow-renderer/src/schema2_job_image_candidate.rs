@@ -179,11 +179,12 @@ fn publish_job(hosted: Yaml, artifact_id: &str) -> (String, Yaml) {
     let steps = vec![
         artifact_id_check_step(artifact_id),
         download_step(artifact_id, "candidate"),
+        authority::materialize_step(),
         fetch_ci_runs_step(),
+        fetch_rust_ci_step(),
         fetch_artifact_response_step(),
         fetch_source_inputs_step(),
         verify_attestations_step(&archive, &record),
-        authority::materialize_step(),
         authority::assemble_evidence_step(&archive, &record, &closure, result, artifact_id),
         publication_evidence_upload_step("${{ runner.temp }}/job-image-publication.json"),
     ];
@@ -236,6 +237,6 @@ mod candidate_steps;
 
 use candidate_steps::{
     artifact_id_check_step, checkout_step, download_step, fetch_artifact_response_step,
-    fetch_ci_runs_step, fetch_source_inputs_step, permissions, publication_evidence_upload_step,
-    run_step, upload_step, verify_attestations_step,
+    fetch_ci_runs_step, fetch_rust_ci_step, fetch_source_inputs_step, permissions,
+    publication_evidence_upload_step, run_step, upload_step, verify_attestations_step,
 };

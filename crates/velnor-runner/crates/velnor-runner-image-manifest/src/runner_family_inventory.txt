@@ -1560,6 +1560,7 @@ crates/velnor-actions-workflow-renderer/src/schema2_runner_image_release/authori
 crates/velnor-actions-workflow-renderer/src/schema2_runner_image_release/context.rs
 crates/velnor-actions-workflow-renderer/src/schema2_runner_image_release/release.rs
 crates/velnor-actions-workflow-renderer/src/schema2_runner_spec.rs
+crates/velnor-actions-workflow-renderer/src/schema2_rust_ci_gate.rs
 crates/velnor-actions-workflow-renderer/src/schema2_stable_sources_qualification.rs
 crates/velnor-actions-workflow-renderer/src/selected_mise_verifier.rs
 crates/velnor-actions-workflow-renderer/src/setup.rs

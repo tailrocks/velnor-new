@@ -27,6 +27,9 @@ pub(crate) struct EvidenceInputs {
     pub(crate) record: String,
     pub(crate) archive: Vec<u8>,
     pub(crate) ci_runs: String,
+    pub(crate) rust_ci_runs: String,
+    pub(crate) rust_ci_jobs: String,
+    pub(crate) rust_ci_recheck: String,
     pub(crate) authenticated_source: String,
     pub(crate) artifact_response: String,
     pub(crate) attestation: String,
@@ -46,6 +49,9 @@ pub(crate) fn evidence_inputs() -> EvidenceInputs {
         record,
         archive,
         ci_runs: ci_runs_json(),
+        rust_ci_runs: rust_ci_runs_json(),
+        rust_ci_jobs: rust_ci_jobs_json(),
+        rust_ci_recheck: rust_ci_runs_json(),
         authenticated_source: authenticated_source_json(),
         artifact_response: artifact_response_json(),
         attestation,
@@ -233,6 +239,12 @@ pub(crate) fn run_evidence_program(
         "ci-runs.json",
         inputs.ci_runs.as_bytes(),
     )?;
+    let rust_paths = [
+        ("rust-ci-runs.json", &inputs.rust_ci_runs),
+        ("rust-ci-jobs.json", &inputs.rust_ci_jobs),
+        ("rust-ci-recheck.json", &inputs.rust_ci_recheck),
+    ]
+    .map(|(name, text)| write_bytes(fixture.root.path(), name, text.as_bytes()));
     let source_path = write_bytes(
         fixture.root.path(),
         "authenticated-source.json",
@@ -272,6 +284,7 @@ pub(crate) fn run_evidence_program(
         .arg(&archive_attestation_path)
         .arg(&record_attestation_path)
         .arg(&closure_path)
+        .args(rust_paths.into_iter().collect::<Result<Vec<_>, _>>()?)
         .env("VELNOR_IDENTITY_SOURCE", SOURCE_SHA)
         .env("VELNOR_IDENTITY_REPOSITORY", "tailrocks/velnor-new")
         .env("VELNOR_IDENTITY_REPOSITORY_ID", "1390620900")
