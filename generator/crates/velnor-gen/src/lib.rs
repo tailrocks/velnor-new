@@ -6,6 +6,7 @@ mod drifts;
 mod error;
 pub mod io;
 mod release;
+mod reusable;
 mod workflow_triggers;
 
 pub use crate::release::{release_ruleset, release_ruleset_drift};
@@ -73,6 +74,7 @@ pub fn expected_with_notes(
     let plan = plan(&facts);
     check_required_check(&facts, &plan)?;
     let mut files = render(&plan).map_err(GenerateError::Rules)?;
+    files.extend(reusable::reusable_workflows(view, helper)?);
     let (release, release_notes) = release::release_workflow(view, &facts, helper, &files)?;
     files.extend(release);
     let mut notes = facts.timings_notes;

@@ -1,0 +1,37 @@
+[[workflow]]
+file = "preview-authority"
+name = "Preview authority"
+if = "github.event_name == 'push' && startsWith(github.ref, 'refs/tags/sdk-preview-')"
+
+[[workflow.job]]
+id = "source"
+timeout_minutes = 5
+permissions = { actions = "read", contents = "read" }
+outputs = { artifact_id = "steps.upload.outputs.artifact-id" }
+
+[[workflow.job.step]]
+id = "upload"
+uses = "upload-artifact"
+with = { name = "source", path = "dist" }
+
+[[workflow.job]]
+id = "draft"
+needs = ["source"]
+helper = true
+environment = "generator-source-preview"
+permissions = { actions = "read", contents = "write", checks = "none" }
+outputs = { sign = "steps.draft.outputs.sign" }
+
+[[workflow.job.step]]
+uses = "download-artifact"
+with = { artifact-ids = "${{ needs.source.outputs.artifact_id }}" }
+
+[[workflow.job.step]]
+id = "draft"
+helper = "validate-artifact-id"
+if = "needs.source.result == 'success'"
+env = { ARTIFACT_ID = "${{ needs.source.outputs.artifact_id }}" }
+
+[[workflow.job.step]]
+name = "Show the id"
+run = "velnor-ci show-id"
