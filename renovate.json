@@ -10,7 +10,7 @@
     "**/golden/**",
     "fixtures/**",
     ".github/workflows/qualification.yml",
-    ".github/workflows/release-rust-ci-tools.yml",
+    ".github/workflows/release.yml",
     ".github/workflows/rust-cache-trim.yml",
     ".github/workflows/rust-ci.yml",
     ".github/workflows/tag-ruleset-drift.yml",

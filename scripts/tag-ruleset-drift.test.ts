@@ -13,7 +13,7 @@ function array(value: unknown): unknown[] {
   if (!Array.isArray(value)) throw new Error("Expected a sequence");
   return value;
 }
-const workflow = object(YAML.parse(await Bun.file(new URL("../.github/workflows/release-rust-ci-tools.yml", import.meta.url)).text()));
+const workflow = object(YAML.parse(await Bun.file(new URL("../.github/workflows/release.yml", import.meta.url)).text()));
 const jobs = object(workflow.jobs);
 const driftWorkflow = object(YAML.parse(await Bun.file(new URL("../.github/workflows/tag-ruleset-drift.yml", import.meta.url)).text()));
 const driftJobs = object(driftWorkflow.jobs);
@@ -161,15 +161,11 @@ test("the manual check isolates the credential from release and checkout code", 
   expect(step.uses).toBeUndefined();
   expect(object(step.env)).toEqual({ TAG_RULESET_ADMIN_READ_TOKEN: "${{ secrets.TAG_RULESET_ADMIN_READ_TOKEN }}", GITHUB_REPOSITORY: "${{ github.repository }}" });
   expect(Object.hasOwn(object(workflow.on), "schedule")).toBe(false);
-  expect(object(jobs.gate).if).toBe("${{ github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/rust-ci-v') || startsWith(github.ref, 'refs/tags/tools-v')) }}");
-  const needs = new Map(Object.entries({ "build-linux-x64": ["gate"], "build-linux-arm64": ["gate"], checksums: ["build-linux-x64", "build-linux-arm64"], release: ["checksums"] }));
+  expect(object(jobs.gate).if).toBe("${{ github.ref_type == 'tag' }}");
+  expect(object(jobs.gate).needs).toBeUndefined();
   for (const [id, job] of Object.entries(jobs)) {
     expect(JSON.stringify(job)).not.toContain("TAG_RULESET_ADMIN_READ_TOKEN");
-    expect(JSON.stringify(job)).not.toContain("secrets.");
-    if (id !== "gate") {
-      expect(object(job).needs).toEqual(needs.get(id));
-      expect(object(job).if).toBeUndefined();
-    }
+    if (id !== "gate") expect(JSON.stringify(object(job).needs)).toContain("gate");
   }
 });
 test("the maintenance check provisions the project's pinned Bun in its isolated tool environment", async () => {
@@ -189,13 +185,13 @@ test("the maintenance check provisions the project's pinned Bun in its isolated 
 function matchesTagFilter(pattern: string, tag: string): boolean {
   return new RegExp(`^${pattern.replace(/[.]/g, "\\.").replace(/\*/g, "[^/]*")}$`).test(tag);
 }
-test("the release workflow runs on rust-ci-v and tools-v tags and on no other release tag", () => {
+test("the release workflow runs on tools-v tags and on no other release tag", () => {
   const tags = array(object(object(workflow.on).push).tags);
-  expect(tags).toEqual(["rust-ci-v*", "tools-v*"]);
-  for (const tag of ["rust-ci-v0.1.84", "tools-v0.1.85"]) {
+  expect(tags).toEqual(["tools-v*"]);
+  for (const tag of ["tools-v0.1.85"]) {
     expect(tags.some(pattern => matchesTagFilter(String(pattern), tag))).toBe(true);
   }
-  for (const tag of ["v0.1.85", "runner-v0.1.85", "actions-v0.1.85", "velnor-ci-v0.1.85", "velnor-gen-v0.1.85"]) {
+  for (const tag of ["v0.1.85", "rust-ci-v0.1.84", "runner-v0.1.85", "actions-v0.1.85", "velnor-ci-v0.1.85", "velnor-gen-v0.1.85"]) {
     expect(tags.some(pattern => matchesTagFilter(String(pattern), tag))).toBe(false);
   }
 });

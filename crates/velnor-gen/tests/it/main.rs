@@ -168,6 +168,7 @@ mod release_yml_family;
 mod release_yml_family_attest;
 mod release_yml_family_files;
 mod release_yml_family_keys;
+mod release_yml_family_required_checks;
 mod release_yml_family_tag_push;
 mod release_yml_family_unsupported;
 mod release_yml_finalize;
