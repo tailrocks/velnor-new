@@ -38,8 +38,20 @@ pub(super) fn sample_config(
     let docker_context = toml_basic_string(request.docker_context.unwrap_or("orbstack"));
     let endpoint = toml_basic_string(request.endpoint);
     let platform = toml_basic_string(request.platform);
+    let registration = connection
+        .organization
+        .as_deref()
+        .map_or_else(String::new, |org| {
+            let group = connection
+                .runner_group
+                .as_deref()
+                .map_or_else(String::new, |name| {
+                    format!("runner_group = {}\n", toml_basic_string(name))
+                });
+            format!("organization = {}\n{group}", toml_basic_string(org))
+        });
     format!(
-        "schema = 2\n[[connections]]\nconnection_id = {connection_id}\nrepository_id = {}\nrepository = {repository}\ncredential_ref = {credential_ref}\n[connections.scale_set]\nname = {scale_set_name}\nlabels = {labels}\n[connections.source_policy]\nmode = {source_policy_mode}\nbranches = {branches}\ntag_prefixes = {tag_prefixes}\nevents = {events}\npull_request_rules = {pull_request_rules}\n[host]\nmax_jobs = {}\n[host.resources]\nrunner_cpu_millicores = {}\nrunner_memory_bytes = {}\ndind_cpu_millicores = {}\ndind_memory_bytes = {}\noperational_memory_reserve_bytes = {}\n[docker]\ncontext = {docker_context}\nplatform = {platform}\nendpoint = {endpoint}\n",
+        "schema = 2\n[[connections]]\nconnection_id = {connection_id}\nrepository_id = {}\nrepository = {repository}\ncredential_ref = {credential_ref}\n{registration}[connections.scale_set]\nname = {scale_set_name}\nlabels = {labels}\n[connections.source_policy]\nmode = {source_policy_mode}\nbranches = {branches}\ntag_prefixes = {tag_prefixes}\nevents = {events}\npull_request_rules = {pull_request_rules}\n[host]\nmax_jobs = {}\n[host.resources]\nrunner_cpu_millicores = {}\nrunner_memory_bytes = {}\ndind_cpu_millicores = {}\ndind_memory_bytes = {}\noperational_memory_reserve_bytes = {}\n[docker]\ncontext = {docker_context}\nplatform = {platform}\nendpoint = {endpoint}\n",
         connection.repository_id,
         request.max_jobs.unwrap_or(1),
         request.runner_cpu_millicores,
