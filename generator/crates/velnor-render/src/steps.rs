@@ -279,6 +279,7 @@ fn step_body(
         }
         StepKind::CratesMirror(mirror) => crate::helper_steps::mirror_step(mirror),
         StepKind::MbxStore => crate::helper_steps::mbx_store_step(),
+        StepKind::MbxSeed => crate::helper_steps::mbx_seed_step(),
         StepKind::TestSetup { name, run } => RenderedStep {
             name: name.clone(),
             run: Some(run.clone()),

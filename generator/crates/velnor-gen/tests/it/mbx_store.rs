@@ -76,3 +76,45 @@ fn a_helper_that_cannot_select_the_store_is_refused() -> TestResult {
     );
     Ok(())
 }
+
+const SEED: &str = "\"$VELNOR_EXEC\" mbx-seed";
+
+#[test]
+fn the_pr_seed_follows_the_store_selection_on_pull_requests_and_merge_groups_only() -> TestResult {
+    let text = workflow(&repo("mbx_shared_store = true\n", "0.1.86")?)?;
+    let yaml: serde_json::Value = crate::yaml_tree::document(&text)?;
+    let jobs = yaml["jobs"].as_object().ok_or("jobs missing")?;
+    let mut seeded = 0;
+    for (id, job) in jobs {
+        let steps = job["steps"].as_array().ok_or("steps missing")?;
+        let at = |needle: &str| {
+            steps
+                .iter()
+                .position(|s| s["run"].as_str().is_some_and(|run| run.contains(needle)))
+        };
+        let Some(store) = at(EXEC) else { continue };
+        let seed = at(SEED).ok_or_else(|| format!("{id}: no mbx-seed"))?;
+        assert_eq!(seed, store + 1, "{id}");
+        assert_eq!(
+            steps[seed]["if"].as_str(),
+            Some(
+                "${{ github.event_name == 'pull_request' || github.event_name == 'merge_group' }}"
+            ),
+            "{id}"
+        );
+        seeded += 1;
+    }
+    assert!(seeded > 0);
+    Ok(())
+}
+
+#[test]
+fn an_older_helper_keeps_phase_one_without_a_seed_step() -> TestResult {
+    for helper in ["0.1.84", "0.1.85"] {
+        let text = workflow(&repo("mbx_shared_store = true\n", helper)?)?;
+        assert!(text.contains("mbx-store"), "{helper}");
+        assert!(!text.contains("mbx-seed"), "{helper}");
+    }
+    assert!(!workflow(&repo("", "0.1.86")?)?.contains("mbx-seed"));
+    Ok(())
+}

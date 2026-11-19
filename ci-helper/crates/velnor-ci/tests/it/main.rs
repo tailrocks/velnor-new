@@ -42,6 +42,7 @@ mod io_restore;
 mod io_restore_symlinks;
 mod io_stderr;
 mod logscan;
+mod mbx_seed;
 mod mbx_store;
 mod plan;
 mod plan_api;
