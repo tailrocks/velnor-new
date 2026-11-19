@@ -178,9 +178,13 @@ enum ScaleSetLookupAction {
 
 fn lookup_action(state: ScaleSetCreateState, found: bool) -> ScaleSetLookupAction {
     match (state, found) {
-        (ScaleSetCreateState::Prepared | ScaleSetCreateState::NoEffect, true) => {
-            ScaleSetLookupAction::Adopt
-        }
+        (
+            ScaleSetCreateState::Prepared
+            | ScaleSetCreateState::Requested
+            | ScaleSetCreateState::Uncertain
+            | ScaleSetCreateState::NoEffect,
+            true,
+        ) => ScaleSetLookupAction::Adopt,
         (ScaleSetCreateState::Prepared, false) => ScaleSetLookupAction::Create,
         (ScaleSetCreateState::Created | ScaleSetCreateState::Adopted, true) => {
             ScaleSetLookupAction::Verify
