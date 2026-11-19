@@ -64,7 +64,7 @@ pub(super) fn random_hex(bytes: usize) -> io::Result<String> {
         .fill(&mut random)
         .map_err(|_| io::Error::other("no random bytes"))?;
     Ok(random.iter().fold(String::new(), |mut hex, byte| {
-        let _ = write!(hex, "{byte:02x}");
+        write!(hex, "{byte:02x}").ok();
         hex
     }))
 }
@@ -129,7 +129,7 @@ pub async fn write_private(path: &Path, content: &str) -> io::Result<()> {
     let fresh = path.with_extension(format!("{}.new", random_hex(8)?));
     let written = stage_and_rename(&fresh, path, content).await;
     if written.is_err() {
-        let _ = fs::remove_file(&fresh).await;
+        fs::remove_file(&fresh).await.ok();
     }
     written
 }

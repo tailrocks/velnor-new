@@ -72,7 +72,10 @@ async fn start(dir: &Path, policy: Option<&Path>) -> io::Result<()> {
     .await
     .map(|_| ());
     let pid = std::fs::read_to_string(dir.join("authority/pid")).unwrap_or_default();
-    let _ = Command::new("kill").args(["-KILL", pid.trim()]).status();
+    Command::new("kill")
+        .args(["-KILL", pid.trim()])
+        .status()
+        .ok();
     started
 }
 
@@ -228,7 +231,10 @@ async fn the_authority_is_started_with_every_extra_label() {
     .await;
     let args = std::fs::read_to_string(dir.join("args")).unwrap_or_default();
     let pid = std::fs::read_to_string(dir.join("authority/pid")).unwrap_or_default();
-    let _ = Command::new("kill").args(["-KILL", pid.trim()]).status();
+    Command::new("kill")
+        .args(["-KILL", pid.trim()])
+        .status()
+        .ok();
     started.unwrap_or_else(|e| unreachable!("{e}"));
     assert!(
         args.contains("--label ubuntu-26.04-scale-set --label ci-fast"),

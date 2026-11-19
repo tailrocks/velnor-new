@@ -63,11 +63,12 @@ impl Proxy {
             let upstream = hyper::upgrade::on(&mut response);
             tokio::spawn(async move {
                 if let (Ok(downstream), Ok(upstream)) = tokio::join!(downstream, upstream) {
-                    let _ = tokio::io::copy_bidirectional(
+                    tokio::io::copy_bidirectional(
                         &mut TokioIo::new(downstream),
                         &mut TokioIo::new(upstream),
                     )
-                    .await;
+                    .await
+                    .ok();
                 }
             });
         }

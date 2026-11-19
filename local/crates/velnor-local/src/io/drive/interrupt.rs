@@ -24,7 +24,7 @@ impl Interrupt {
                 _ = terminate.recv() => {}
             }
             first();
-            let _ = raise.send(true);
+            raise.send(true).ok();
             // Later signals are consumed: the teardown the first one started is not cut short.
             loop {
                 tokio::select! {
@@ -38,6 +38,6 @@ impl Interrupt {
 
     pub(super) async fn raised(&self) {
         let mut raised = self.0.clone();
-        let _ = raised.wait_for(|raised| *raised).await;
+        raised.wait_for(|raised| *raised).await.ok();
     }
 }

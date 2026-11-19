@@ -76,11 +76,13 @@ impl ApiStub {
             );
         }
         if write_index(dir, &index).await.is_err() {
-            let _ = fs::rename(&tombstone, &archive).await;
+            fs::rename(&tombstone, &archive).await.ok();
             return Reply::with(500, json!({"message": "cache index is not writable"}), None);
         }
-        let _ = fs::remove_file(&tombstone).await;
-        let _ = fs::remove_dir_all(dir.join("blocks").join(&record.blob)).await;
+        fs::remove_file(&tombstone).await.ok();
+        fs::remove_dir_all(dir.join("blocks").join(&record.blob))
+            .await
+            .ok();
         Reply {
             status: 204,
             body: None,
