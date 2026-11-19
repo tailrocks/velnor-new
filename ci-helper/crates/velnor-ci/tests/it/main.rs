@@ -58,6 +58,7 @@ mod prepare_components;
 mod prepare_configs;
 mod prepare_inputs;
 mod prepare_install;
+mod prepare_lock_key;
 mod preview_authority;
 mod preview_authority_legacy;
 mod preview_authority_world;
