@@ -28,6 +28,7 @@ mod inputs;
 mod manifests;
 mod merge_group;
 mod plan;
+mod plan_request;
 pub mod preview;
 mod private_check;
 pub mod pump;
