@@ -69,6 +69,7 @@ impl VelnorConfig {
         self.check_binary_release_tools(file)?;
         self.check_crate_build_jobs(file)?;
         self.discovery.validate(file)?;
+        self.runner_workspace.validate(file)?;
         self.actions.validate(file)?;
         validate_qualified_tools(&self.qualified_tools, file)?;
         self.check_checks(file)?;
