@@ -1,9 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::error::Error;
 use std::fmt;
 
 use crate::error::{ReleaseError, subject};
+
+impl Error for ReleaseError {}
 
 impl ReleaseError {
     pub(crate) fn fmt_cargo(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -145,6 +148,7 @@ impl ReleaseError {
                 ".velnor/release.toml: binary {package} names profile {profile:?}, which is not a Cargo profile this generator can build with (use letters, digits, `-` and `_`, starting with a letter or `_`, and not dev, test, bench, debug, doc, build-override, package, deps, examples, build or incremental)"
             ),
             Self::Family(error) => write!(f, "{error}"),
+            Self::Group(error) => write!(f, "{error}"),
             Self::InvalidCheck(check, problem) => {
                 write!(f, ".velnor/release.toml: check {check:?} {problem}")
             }
