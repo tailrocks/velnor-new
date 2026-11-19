@@ -75,17 +75,17 @@ jobs:
         env:
           VELNOR_HELPER_INSTALL_TOOLS: &velnor_0 'fail() { printf ''%s\n'' "::error title=setup-velnor::$1"; exit 1; }; resolve_tool() { local path; path="$(command -v "$2")" && [[ "$path" = /* && -f "$path" && -x "$path" ]] || fail "required tool ''$2'' was not found on PATH"; printf ''%s=%s\n'' "$1" "$path" >> "$GITHUB_ENV"; }; for binding in MKTEMP:mktemp CP:cp CHMOD:chmod MKDIR:mkdir ENV:env; do resolve_tool "VELNOR_HELPER_${binding%:*}" "${binding#*:}"; done; if command -v sha256sum > /dev/null; then checksum=sha256sum; arguments=''--check --status''; else checksum=shasum; arguments=''-a 256 --check --status''; fi; resolve_tool VELNOR_HELPER_CHECKSUM "$checksum"; printf ''%s=%s\n'' VELNOR_HELPER_CHECKSUM_ARGUMENTS "$arguments" >> "$GITHUB_ENV"'
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
-      - name: Install velnor-ci 0.1.88
-        uses: tailrocks/velnor-new/actions/setup-velnor@5dbd84e88c11132810803de5bffc862ba42807c5  # tools-v0.1.88
+      - name: Install velnor-ci 0.1.89
+        uses: tailrocks/velnor-new/actions/setup-velnor@4d7e3f8f33037694665e961ade47665d0716ad3c  # tools-v0.1.89
         with:
-          version: '0.1.88'
-          sha256-linux-x64: '2cab09d624461fbfbc0284fb2e289fa677900085e7b25e0b590d1935a08e755d'
-          sha256-linux-arm64: afb4fb64610e500eac7d9b9df5179b55ae9e8804b886065b8d1fdd209e4c278f
+          version: '0.1.89'
+          sha256-linux-x64: d6efb78b7de418ef90c13521856355d2f887f8b884f65157e0bab6105ba12139
+          sha256-linux-arm64: d0f598d8f9efe6bdecef2c0a07180fff14bab688e1c3b8990e9a9b691244b6dd
       - name: Install the released helper launcher
         env:
           VELNOR_HELPER_INSTALL_LAUNCHER: &velnor_1 'directory="$RUNNER_TEMP/velnor-trusted-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$GITHUB_JOB" && "$VELNOR_HELPER_MKDIR" -m 700 "$directory" && "$VELNOR_HELPER_CP" "$RUNNER_TEMP/velnor-ci-bin/velnor-ci" "$directory/velnor-ci" && "$VELNOR_HELPER_CHMOD" 500 "$directory/velnor-ci" && printf ''%s\n'' "$VELNOR_HELPER_LAUNCHER" > "$directory/velnor-ci-exec" && "$VELNOR_HELPER_CHMOD" 500 "$directory/velnor-ci-exec" && printf ''%s=%s\n'' VELNOR_HELPER "$directory/velnor-ci" VELNOR_EXEC "$directory/velnor-ci-exec" VELNOR_HELPER_SHA256 "$VELNOR_HELPER_SHA256" >> "$GITHUB_ENV"'
           VELNOR_HELPER_LAUNCHER: &velnor_2 'directory=$("$VELNOR_HELPER_MKTEMP" -d "$RUNNER_TEMP/velnor-helper.XXXXXXXXXX") && copy=$("$VELNOR_HELPER_MKTEMP" "$directory/velnor-ci.XXXXXXXXXX") && "$VELNOR_HELPER_CP" "$VELNOR_HELPER" "$copy" && "$VELNOR_HELPER_CHMOD" 500 "$copy" && { "$VELNOR_HELPER_ENV" -i PATH=/usr/bin:/bin "$VELNOR_HELPER_CHECKSUM" $VELNOR_HELPER_CHECKSUM_ARGUMENTS <<< "$VELNOR_HELPER_SHA256  $copy" || { printf ''%s\n'' ''velnor-ci integrity check failed'' >&2; exit 1; }; } && exec "$copy" "$@"'
-          VELNOR_HELPER_SHA256: &velnor_3 '${{ runner.os == ''Linux'' && runner.arch == ''X64'' && ''2cab09d624461fbfbc0284fb2e289fa677900085e7b25e0b590d1935a08e755d'' || runner.os == ''Linux'' && runner.arch == ''ARM64'' && ''afb4fb64610e500eac7d9b9df5179b55ae9e8804b886065b8d1fdd209e4c278f'' || '''' }}'
+          VELNOR_HELPER_SHA256: &velnor_3 '${{ runner.os == ''Linux'' && runner.arch == ''X64'' && ''d6efb78b7de418ef90c13521856355d2f887f8b884f65157e0bab6105ba12139'' || runner.os == ''Linux'' && runner.arch == ''ARM64'' && ''d0f598d8f9efe6bdecef2c0a07180fff14bab688e1c3b8990e9a9b691244b6dd'' || '''' }}'
         run: 'eval "$VELNOR_HELPER_INSTALL_LAUNCHER"'
       - name: velnor-ci mbx-store
         run: '. "$VELNOR_EXEC" mbx-store'
@@ -114,12 +114,12 @@ jobs:
         env:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
-      - name: Install velnor-ci 0.1.88
-        uses: tailrocks/velnor-new/actions/setup-velnor@5dbd84e88c11132810803de5bffc862ba42807c5  # tools-v0.1.88
+      - name: Install velnor-ci 0.1.89
+        uses: tailrocks/velnor-new/actions/setup-velnor@4d7e3f8f33037694665e961ade47665d0716ad3c  # tools-v0.1.89
         with:
-          version: '0.1.88'
-          sha256-linux-x64: '2cab09d624461fbfbc0284fb2e289fa677900085e7b25e0b590d1935a08e755d'
-          sha256-linux-arm64: afb4fb64610e500eac7d9b9df5179b55ae9e8804b886065b8d1fdd209e4c278f
+          version: '0.1.89'
+          sha256-linux-x64: d6efb78b7de418ef90c13521856355d2f887f8b884f65157e0bab6105ba12139
+          sha256-linux-arm64: d0f598d8f9efe6bdecef2c0a07180fff14bab688e1c3b8990e9a9b691244b6dd
       - name: Install the released helper launcher
         env:
           VELNOR_HELPER_INSTALL_LAUNCHER: *velnor_1
@@ -134,8 +134,14 @@ jobs:
       - name: 'Configure the crates mirror in $RUNNER_TEMP/velnor-cargo/config.toml'
         if: '${{ runner.environment == ''self-hosted'' && (github.event_name != ''pull_request'' || github.event.pull_request.head.repo.full_name == github.repository) }}'
         run: '. "$VELNOR_EXEC" crates-mirror --registry ''sparse+https://crates-mirror.velnor-system.svc.cluster.local/index/'' --cainfo /opt/velnor/crates-mirror/ca-bundle.pem'
+      - id: toolslocal
+        name: Restore the tools from the node store
+        env:
+          VELNOR_TOOLS_KEY: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
+        run: '. "$VELNOR_EXEC" tools-local restore --key "$VELNOR_TOOLS_KEY"'
       - id: tools
         name: Restore the tools cache
+        if: '${{ steps.toolslocal.outputs.hit != ''true'' }}'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: |
@@ -156,9 +162,14 @@ jobs:
       - name: Add Rust targets
         working-directory: ci-helper
         run: rustup target add aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu
+      - name: Save the tools to the node store
+        if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') }}'
+        env:
+          VELNOR_TOOLS_KEY: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
+        run: '. "$VELNOR_EXEC" tools-local save --key "$VELNOR_TOOLS_KEY"'
       - id: save_tools
         name: Save the tools cache
-        if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && steps.tools.outputs.cache-hit != ''true'' }}'
+        if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && steps.tools.outputs.cache-hit != ''true'' && steps.toolslocal.outputs.hit != ''true'' }}'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: |
@@ -272,12 +283,12 @@ jobs:
         env:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
-      - name: Install velnor-ci 0.1.88
-        uses: tailrocks/velnor-new/actions/setup-velnor@5dbd84e88c11132810803de5bffc862ba42807c5  # tools-v0.1.88
+      - name: Install velnor-ci 0.1.89
+        uses: tailrocks/velnor-new/actions/setup-velnor@4d7e3f8f33037694665e961ade47665d0716ad3c  # tools-v0.1.89
         with:
-          version: '0.1.88'
-          sha256-linux-x64: '2cab09d624461fbfbc0284fb2e289fa677900085e7b25e0b590d1935a08e755d'
-          sha256-linux-arm64: afb4fb64610e500eac7d9b9df5179b55ae9e8804b886065b8d1fdd209e4c278f
+          version: '0.1.89'
+          sha256-linux-x64: d6efb78b7de418ef90c13521856355d2f887f8b884f65157e0bab6105ba12139
+          sha256-linux-arm64: d0f598d8f9efe6bdecef2c0a07180fff14bab688e1c3b8990e9a9b691244b6dd
       - name: Install the released helper launcher
         env:
           VELNOR_HELPER_INSTALL_LAUNCHER: *velnor_1
@@ -292,8 +303,14 @@ jobs:
       - name: 'Configure the crates mirror in $RUNNER_TEMP/velnor-cargo/config.toml'
         if: '${{ runner.environment == ''self-hosted'' && (github.event_name != ''pull_request'' || github.event.pull_request.head.repo.full_name == github.repository) }}'
         run: '. "$VELNOR_EXEC" crates-mirror --registry ''sparse+https://crates-mirror.velnor-system.svc.cluster.local/index/'' --cainfo /opt/velnor/crates-mirror/ca-bundle.pem'
+      - id: toolslocal
+        name: Restore the tools from the node store
+        env:
+          VELNOR_TOOLS_KEY: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
+        run: '. "$VELNOR_EXEC" tools-local restore --key "$VELNOR_TOOLS_KEY"'
       - id: tools
         name: Restore the tools cache
+        if: '${{ steps.toolslocal.outputs.hit != ''true'' }}'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: |
@@ -312,9 +329,14 @@ jobs:
         run: rustup component add clippy rustfmt
       - name: Add Rust targets
         run: rustup target add aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu
+      - name: Save the tools to the node store
+        if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') }}'
+        env:
+          VELNOR_TOOLS_KEY: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
+        run: '. "$VELNOR_EXEC" tools-local save --key "$VELNOR_TOOLS_KEY"'
       - id: save_tools
         name: Save the tools cache
-        if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && steps.tools.outputs.cache-hit != ''true'' }}'
+        if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && steps.tools.outputs.cache-hit != ''true'' && steps.toolslocal.outputs.hit != ''true'' }}'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: |
@@ -548,12 +570,12 @@ jobs:
         env:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
-      - name: Install velnor-ci 0.1.88
-        uses: tailrocks/velnor-new/actions/setup-velnor@5dbd84e88c11132810803de5bffc862ba42807c5  # tools-v0.1.88
+      - name: Install velnor-ci 0.1.89
+        uses: tailrocks/velnor-new/actions/setup-velnor@4d7e3f8f33037694665e961ade47665d0716ad3c  # tools-v0.1.89
         with:
-          version: '0.1.88'
-          sha256-linux-x64: '2cab09d624461fbfbc0284fb2e289fa677900085e7b25e0b590d1935a08e755d'
-          sha256-linux-arm64: afb4fb64610e500eac7d9b9df5179b55ae9e8804b886065b8d1fdd209e4c278f
+          version: '0.1.89'
+          sha256-linux-x64: d6efb78b7de418ef90c13521856355d2f887f8b884f65157e0bab6105ba12139
+          sha256-linux-arm64: d0f598d8f9efe6bdecef2c0a07180fff14bab688e1c3b8990e9a9b691244b6dd
       - name: Install the released helper launcher
         env:
           VELNOR_HELPER_INSTALL_LAUNCHER: *velnor_1
@@ -568,8 +590,14 @@ jobs:
       - name: 'Configure the crates mirror in $RUNNER_TEMP/velnor-cargo/config.toml'
         if: '${{ runner.environment == ''self-hosted'' && (github.event_name != ''pull_request'' || github.event.pull_request.head.repo.full_name == github.repository) }}'
         run: '. "$VELNOR_EXEC" crates-mirror --registry ''sparse+https://crates-mirror.velnor-system.svc.cluster.local/index/'' --cainfo /opt/velnor/crates-mirror/ca-bundle.pem'
+      - id: toolslocal
+        name: Restore the tools from the node store
+        env:
+          VELNOR_TOOLS_KEY: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
+        run: '. "$VELNOR_EXEC" tools-local restore --key "$VELNOR_TOOLS_KEY"'
       - id: tools
         name: Restore the tools cache
+        if: '${{ steps.toolslocal.outputs.hit != ''true'' }}'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: |
@@ -590,9 +618,14 @@ jobs:
       - name: Add Rust targets
         working-directory: ci-helper
         run: rustup target add aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu
+      - name: Save the tools to the node store
+        if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') }}'
+        env:
+          VELNOR_TOOLS_KEY: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
+        run: '. "$VELNOR_EXEC" tools-local save --key "$VELNOR_TOOLS_KEY"'
       - id: save_tools
         name: Save the tools cache
-        if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && steps.tools.outputs.cache-hit != ''true'' }}'
+        if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && steps.tools.outputs.cache-hit != ''true'' && steps.toolslocal.outputs.hit != ''true'' }}'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: |
@@ -782,12 +815,12 @@ jobs:
         env:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
-      - name: Install velnor-ci 0.1.88
-        uses: tailrocks/velnor-new/actions/setup-velnor@5dbd84e88c11132810803de5bffc862ba42807c5  # tools-v0.1.88
+      - name: Install velnor-ci 0.1.89
+        uses: tailrocks/velnor-new/actions/setup-velnor@4d7e3f8f33037694665e961ade47665d0716ad3c  # tools-v0.1.89
         with:
-          version: '0.1.88'
-          sha256-linux-x64: '2cab09d624461fbfbc0284fb2e289fa677900085e7b25e0b590d1935a08e755d'
-          sha256-linux-arm64: afb4fb64610e500eac7d9b9df5179b55ae9e8804b886065b8d1fdd209e4c278f
+          version: '0.1.89'
+          sha256-linux-x64: d6efb78b7de418ef90c13521856355d2f887f8b884f65157e0bab6105ba12139
+          sha256-linux-arm64: d0f598d8f9efe6bdecef2c0a07180fff14bab688e1c3b8990e9a9b691244b6dd
       - name: Install the released helper launcher
         env:
           VELNOR_HELPER_INSTALL_LAUNCHER: *velnor_1
@@ -802,8 +835,14 @@ jobs:
       - name: 'Configure the crates mirror in $RUNNER_TEMP/velnor-cargo/config.toml'
         if: '${{ runner.environment == ''self-hosted'' && (github.event_name != ''pull_request'' || github.event.pull_request.head.repo.full_name == github.repository) }}'
         run: '. "$VELNOR_EXEC" crates-mirror --registry ''sparse+https://crates-mirror.velnor-system.svc.cluster.local/index/'' --cainfo /opt/velnor/crates-mirror/ca-bundle.pem'
+      - id: toolslocal
+        name: Restore the tools from the node store
+        env:
+          VELNOR_TOOLS_KEY: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
+        run: '. "$VELNOR_EXEC" tools-local restore --key "$VELNOR_TOOLS_KEY"'
       - id: tools
         name: Restore the tools cache
+        if: '${{ steps.toolslocal.outputs.hit != ''true'' }}'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: |
@@ -824,9 +863,14 @@ jobs:
       - name: Add Rust targets
         working-directory: crates/velnor-runner
         run: rustup target add aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu
+      - name: Save the tools to the node store
+        if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') }}'
+        env:
+          VELNOR_TOOLS_KEY: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
+        run: '. "$VELNOR_EXEC" tools-local save --key "$VELNOR_TOOLS_KEY"'
       - id: save_tools
         name: Save the tools cache
-        if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && steps.tools.outputs.cache-hit != ''true'' }}'
+        if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && steps.tools.outputs.cache-hit != ''true'' && steps.toolslocal.outputs.hit != ''true'' }}'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: |
@@ -1044,12 +1088,12 @@ jobs:
         env:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
-      - name: Install velnor-ci 0.1.88
-        uses: tailrocks/velnor-new/actions/setup-velnor@5dbd84e88c11132810803de5bffc862ba42807c5  # tools-v0.1.88
+      - name: Install velnor-ci 0.1.89
+        uses: tailrocks/velnor-new/actions/setup-velnor@4d7e3f8f33037694665e961ade47665d0716ad3c  # tools-v0.1.89
         with:
-          version: '0.1.88'
-          sha256-linux-x64: '2cab09d624461fbfbc0284fb2e289fa677900085e7b25e0b590d1935a08e755d'
-          sha256-linux-arm64: afb4fb64610e500eac7d9b9df5179b55ae9e8804b886065b8d1fdd209e4c278f
+          version: '0.1.89'
+          sha256-linux-x64: d6efb78b7de418ef90c13521856355d2f887f8b884f65157e0bab6105ba12139
+          sha256-linux-arm64: d0f598d8f9efe6bdecef2c0a07180fff14bab688e1c3b8990e9a9b691244b6dd
       - name: Install the released helper launcher
         env:
           VELNOR_HELPER_INSTALL_LAUNCHER: *velnor_1
@@ -1064,8 +1108,14 @@ jobs:
       - name: 'Configure the crates mirror in $RUNNER_TEMP/velnor-cargo/config.toml'
         if: '${{ runner.environment == ''self-hosted'' && (github.event_name != ''pull_request'' || github.event.pull_request.head.repo.full_name == github.repository) }}'
         run: '. "$VELNOR_EXEC" crates-mirror --registry ''sparse+https://crates-mirror.velnor-system.svc.cluster.local/index/'' --cainfo /opt/velnor/crates-mirror/ca-bundle.pem'
+      - id: toolslocal
+        name: Restore the tools from the node store
+        env:
+          VELNOR_TOOLS_KEY: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
+        run: '. "$VELNOR_EXEC" tools-local restore --key "$VELNOR_TOOLS_KEY"'
       - id: tools
         name: Restore the tools cache
+        if: '${{ steps.toolslocal.outputs.hit != ''true'' }}'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: |
@@ -1086,9 +1136,14 @@ jobs:
       - name: Add Rust targets
         working-directory: generator
         run: rustup target add aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu
+      - name: Save the tools to the node store
+        if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') }}'
+        env:
+          VELNOR_TOOLS_KEY: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
+        run: '. "$VELNOR_EXEC" tools-local save --key "$VELNOR_TOOLS_KEY"'
       - id: save_tools
         name: Save the tools cache
-        if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && steps.tools.outputs.cache-hit != ''true'' }}'
+        if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && steps.tools.outputs.cache-hit != ''true'' && steps.toolslocal.outputs.hit != ''true'' }}'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: |
@@ -1298,12 +1353,12 @@ jobs:
         env:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
-      - name: Install velnor-ci 0.1.88
-        uses: tailrocks/velnor-new/actions/setup-velnor@5dbd84e88c11132810803de5bffc862ba42807c5  # tools-v0.1.88
+      - name: Install velnor-ci 0.1.89
+        uses: tailrocks/velnor-new/actions/setup-velnor@4d7e3f8f33037694665e961ade47665d0716ad3c  # tools-v0.1.89
         with:
-          version: '0.1.88'
-          sha256-linux-x64: '2cab09d624461fbfbc0284fb2e289fa677900085e7b25e0b590d1935a08e755d'
-          sha256-linux-arm64: afb4fb64610e500eac7d9b9df5179b55ae9e8804b886065b8d1fdd209e4c278f
+          version: '0.1.89'
+          sha256-linux-x64: d6efb78b7de418ef90c13521856355d2f887f8b884f65157e0bab6105ba12139
+          sha256-linux-arm64: d0f598d8f9efe6bdecef2c0a07180fff14bab688e1c3b8990e9a9b691244b6dd
       - name: Install the released helper launcher
         env:
           VELNOR_HELPER_INSTALL_LAUNCHER: *velnor_1
@@ -1318,8 +1373,14 @@ jobs:
       - name: 'Configure the crates mirror in $RUNNER_TEMP/velnor-cargo/config.toml'
         if: '${{ runner.environment == ''self-hosted'' && (github.event_name != ''pull_request'' || github.event.pull_request.head.repo.full_name == github.repository) }}'
         run: '. "$VELNOR_EXEC" crates-mirror --registry ''sparse+https://crates-mirror.velnor-system.svc.cluster.local/index/'' --cainfo /opt/velnor/crates-mirror/ca-bundle.pem'
+      - id: toolslocal
+        name: Restore the tools from the node store
+        env:
+          VELNOR_TOOLS_KEY: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
+        run: '. "$VELNOR_EXEC" tools-local restore --key "$VELNOR_TOOLS_KEY"'
       - id: tools
         name: Restore the tools cache
+        if: '${{ steps.toolslocal.outputs.hit != ''true'' }}'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: |
@@ -1340,9 +1401,14 @@ jobs:
       - name: Add Rust targets
         working-directory: local
         run: rustup target add aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu
+      - name: Save the tools to the node store
+        if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') }}'
+        env:
+          VELNOR_TOOLS_KEY: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
+        run: '. "$VELNOR_EXEC" tools-local save --key "$VELNOR_TOOLS_KEY"'
       - id: save_tools
         name: Save the tools cache
-        if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && steps.tools.outputs.cache-hit != ''true'' }}'
+        if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && steps.tools.outputs.cache-hit != ''true'' && steps.toolslocal.outputs.hit != ''true'' }}'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: |
@@ -1518,12 +1584,12 @@ jobs:
         env:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
-      - name: Install velnor-ci 0.1.88
-        uses: tailrocks/velnor-new/actions/setup-velnor@5dbd84e88c11132810803de5bffc862ba42807c5  # tools-v0.1.88
+      - name: Install velnor-ci 0.1.89
+        uses: tailrocks/velnor-new/actions/setup-velnor@4d7e3f8f33037694665e961ade47665d0716ad3c  # tools-v0.1.89
         with:
-          version: '0.1.88'
-          sha256-linux-x64: '2cab09d624461fbfbc0284fb2e289fa677900085e7b25e0b590d1935a08e755d'
-          sha256-linux-arm64: afb4fb64610e500eac7d9b9df5179b55ae9e8804b886065b8d1fdd209e4c278f
+          version: '0.1.89'
+          sha256-linux-x64: d6efb78b7de418ef90c13521856355d2f887f8b884f65157e0bab6105ba12139
+          sha256-linux-arm64: d0f598d8f9efe6bdecef2c0a07180fff14bab688e1c3b8990e9a9b691244b6dd
       - name: Install the released helper launcher
         env:
           VELNOR_HELPER_INSTALL_LAUNCHER: *velnor_1
@@ -1538,8 +1604,14 @@ jobs:
       - name: 'Configure the crates mirror in $RUNNER_TEMP/velnor-cargo/config.toml'
         if: '${{ runner.environment == ''self-hosted'' && (github.event_name != ''pull_request'' || github.event.pull_request.head.repo.full_name == github.repository) }}'
         run: '. "$VELNOR_EXEC" crates-mirror --registry ''sparse+https://crates-mirror.velnor-system.svc.cluster.local/index/'' --cainfo /opt/velnor/crates-mirror/ca-bundle.pem'
+      - id: toolslocal
+        name: Restore the tools from the node store
+        env:
+          VELNOR_TOOLS_KEY: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
+        run: '. "$VELNOR_EXEC" tools-local restore --key "$VELNOR_TOOLS_KEY"'
       - id: tools
         name: Restore the tools cache
+        if: '${{ steps.toolslocal.outputs.hit != ''true'' }}'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: |
@@ -1558,9 +1630,14 @@ jobs:
         run: rustup component add clippy rustfmt
       - name: Add Rust targets
         run: rustup target add aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu
+      - name: Save the tools to the node store
+        if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') }}'
+        env:
+          VELNOR_TOOLS_KEY: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
+        run: '. "$VELNOR_EXEC" tools-local save --key "$VELNOR_TOOLS_KEY"'
       - id: save_tools
         name: Save the tools cache
-        if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && steps.tools.outputs.cache-hit != ''true'' }}'
+        if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && steps.tools.outputs.cache-hit != ''true'' && steps.toolslocal.outputs.hit != ''true'' }}'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: |
@@ -1742,12 +1819,12 @@ jobs:
         env:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
-      - name: Install velnor-ci 0.1.88
-        uses: tailrocks/velnor-new/actions/setup-velnor@5dbd84e88c11132810803de5bffc862ba42807c5  # tools-v0.1.88
+      - name: Install velnor-ci 0.1.89
+        uses: tailrocks/velnor-new/actions/setup-velnor@4d7e3f8f33037694665e961ade47665d0716ad3c  # tools-v0.1.89
         with:
-          version: '0.1.88'
-          sha256-linux-x64: '2cab09d624461fbfbc0284fb2e289fa677900085e7b25e0b590d1935a08e755d'
-          sha256-linux-arm64: afb4fb64610e500eac7d9b9df5179b55ae9e8804b886065b8d1fdd209e4c278f
+          version: '0.1.89'
+          sha256-linux-x64: d6efb78b7de418ef90c13521856355d2f887f8b884f65157e0bab6105ba12139
+          sha256-linux-arm64: d0f598d8f9efe6bdecef2c0a07180fff14bab688e1c3b8990e9a9b691244b6dd
       - name: Install the released helper launcher
         env:
           VELNOR_HELPER_INSTALL_LAUNCHER: *velnor_1
@@ -1762,8 +1839,14 @@ jobs:
       - name: 'Configure the crates mirror in $RUNNER_TEMP/velnor-cargo/config.toml'
         if: '${{ runner.environment == ''self-hosted'' && (github.event_name != ''pull_request'' || github.event.pull_request.head.repo.full_name == github.repository) }}'
         run: '. "$VELNOR_EXEC" crates-mirror --registry ''sparse+https://crates-mirror.velnor-system.svc.cluster.local/index/'' --cainfo /opt/velnor/crates-mirror/ca-bundle.pem'
+      - id: toolslocal
+        name: Restore the tools from the node store
+        env:
+          VELNOR_TOOLS_KEY: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
+        run: '. "$VELNOR_EXEC" tools-local restore --key "$VELNOR_TOOLS_KEY"'
       - id: tools
         name: Restore the tools cache
+        if: '${{ steps.toolslocal.outputs.hit != ''true'' }}'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: |
@@ -1778,9 +1861,14 @@ jobs:
       - name: 'Configure the crates mirror in $RUNNER_TEMP/velnor-cargo/config.toml'
         if: '${{ runner.environment == ''self-hosted'' && (github.event_name != ''pull_request'' || github.event.pull_request.head.repo.full_name == github.repository) }}'
         run: '. "$VELNOR_EXEC" crates-mirror --registry ''sparse+https://crates-mirror.velnor-system.svc.cluster.local/index/'' --cainfo /opt/velnor/crates-mirror/ca-bundle.pem'
+      - name: Save the tools to the node store
+        if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') }}'
+        env:
+          VELNOR_TOOLS_KEY: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
+        run: '. "$VELNOR_EXEC" tools-local save --key "$VELNOR_TOOLS_KEY"'
       - id: save_tools
         name: Save the tools cache
-        if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && steps.tools.outputs.cache-hit != ''true'' }}'
+        if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && steps.tools.outputs.cache-hit != ''true'' && steps.toolslocal.outputs.hit != ''true'' }}'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: |
@@ -1847,12 +1935,12 @@ jobs:
         env:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
-      - name: Install velnor-ci 0.1.88
-        uses: tailrocks/velnor-new/actions/setup-velnor@5dbd84e88c11132810803de5bffc862ba42807c5  # tools-v0.1.88
+      - name: Install velnor-ci 0.1.89
+        uses: tailrocks/velnor-new/actions/setup-velnor@4d7e3f8f33037694665e961ade47665d0716ad3c  # tools-v0.1.89
         with:
-          version: '0.1.88'
-          sha256-linux-x64: '2cab09d624461fbfbc0284fb2e289fa677900085e7b25e0b590d1935a08e755d'
-          sha256-linux-arm64: afb4fb64610e500eac7d9b9df5179b55ae9e8804b886065b8d1fdd209e4c278f
+          version: '0.1.89'
+          sha256-linux-x64: d6efb78b7de418ef90c13521856355d2f887f8b884f65157e0bab6105ba12139
+          sha256-linux-arm64: d0f598d8f9efe6bdecef2c0a07180fff14bab688e1c3b8990e9a9b691244b6dd
       - name: Install the released helper launcher
         env:
           VELNOR_HELPER_INSTALL_LAUNCHER: *velnor_1
@@ -2034,13 +2122,13 @@ jobs:
         env:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
-      - name: Install velnor-ci 0.1.88
+      - name: Install velnor-ci 0.1.89
         if: '${{ github.event.pull_request.draft != true && (github.event.action != ''labeled'' || github.event.label.name == ''ci:run'' || github.event.label.name == ''ci:auto'') && (github.event.action != ''edited'' || github.event.changes.base != null) && (github.event_name != ''pull_request'' || (github.event.pull_request.head.repo.full_name == github.repository && (contains(github.event.pull_request.labels.*.name, ''ci:run'') || contains(github.event.pull_request.labels.*.name, ''ci:auto'')))) }}'
-        uses: tailrocks/velnor-new/actions/setup-velnor@5dbd84e88c11132810803de5bffc862ba42807c5  # tools-v0.1.88
+        uses: tailrocks/velnor-new/actions/setup-velnor@4d7e3f8f33037694665e961ade47665d0716ad3c  # tools-v0.1.89
         with:
-          version: '0.1.88'
-          sha256-linux-x64: '2cab09d624461fbfbc0284fb2e289fa677900085e7b25e0b590d1935a08e755d'
-          sha256-linux-arm64: afb4fb64610e500eac7d9b9df5179b55ae9e8804b886065b8d1fdd209e4c278f
+          version: '0.1.89'
+          sha256-linux-x64: d6efb78b7de418ef90c13521856355d2f887f8b884f65157e0bab6105ba12139
+          sha256-linux-arm64: d0f598d8f9efe6bdecef2c0a07180fff14bab688e1c3b8990e9a9b691244b6dd
       - name: Install the released helper launcher
         if: '${{ github.event.pull_request.draft != true && (github.event.action != ''labeled'' || github.event.label.name == ''ci:run'' || github.event.label.name == ''ci:auto'') && (github.event.action != ''edited'' || github.event.changes.base != null) && (github.event_name != ''pull_request'' || (github.event.pull_request.head.repo.full_name == github.repository && (contains(github.event.pull_request.labels.*.name, ''ci:run'') || contains(github.event.pull_request.labels.*.name, ''ci:auto'')))) }}'
         env:
@@ -2094,12 +2182,12 @@ jobs:
         env:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
-      - name: Install velnor-ci 0.1.88
-        uses: tailrocks/velnor-new/actions/setup-velnor@5dbd84e88c11132810803de5bffc862ba42807c5  # tools-v0.1.88
+      - name: Install velnor-ci 0.1.89
+        uses: tailrocks/velnor-new/actions/setup-velnor@4d7e3f8f33037694665e961ade47665d0716ad3c  # tools-v0.1.89
         with:
-          version: '0.1.88'
-          sha256-linux-x64: '2cab09d624461fbfbc0284fb2e289fa677900085e7b25e0b590d1935a08e755d'
-          sha256-linux-arm64: afb4fb64610e500eac7d9b9df5179b55ae9e8804b886065b8d1fdd209e4c278f
+          version: '0.1.89'
+          sha256-linux-x64: d6efb78b7de418ef90c13521856355d2f887f8b884f65157e0bab6105ba12139
+          sha256-linux-arm64: d0f598d8f9efe6bdecef2c0a07180fff14bab688e1c3b8990e9a9b691244b6dd
       - name: Install the released helper launcher
         env:
           VELNOR_HELPER_INSTALL_LAUNCHER: *velnor_1

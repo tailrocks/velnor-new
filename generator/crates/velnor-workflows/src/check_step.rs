@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use crate::error::{WorkflowsError, refuse};
 use crate::expression::{Scope, check, check_condition, is_identifier, whole_expression};
 use crate::helper_call::calls_velnor_ci;
-use crate::plan::{Action, Body, Env, Step};
+use crate::plan::{Action, Body, Env, LocalAction, Step};
 use crate::raw::RawStep;
 
 pub(crate) fn step(
@@ -45,6 +45,7 @@ pub(crate) fn step(
             }
             (String::new(), Body::Run(run))
         }
+        (None, Some(name), None) if is_local(&name) => local_action(job, name)?,
         (None, Some(name), None) => {
             let Some(action) = Action::parse(&name) else {
                 return refuse(format!(
@@ -88,6 +89,21 @@ pub(crate) fn step(
         continue_on_error: raw.continue_on_error,
         env: values(job, raw.env, scope)?,
     })
+}
+
+fn local_action(job: &str, name: String) -> Result<(String, Body), WorkflowsError> {
+    let Some(action) = LocalAction::parse(&name) else {
+        return refuse(format!(
+            "job {job} uses the local action {name:?}, which is not allowed; the only local actions are {:?}, and the pinned actions are {:?}",
+            LocalAction::PATHS,
+            Action::NAMES
+        ));
+    };
+    Ok((name, Body::Local(action)))
+}
+
+fn is_local(name: &str) -> bool {
+    name.starts_with('.') || name.starts_with('/') || name.contains('/')
 }
 
 fn locked_inputs(

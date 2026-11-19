@@ -48,6 +48,8 @@ pub(crate) struct RawCase {
     pub(crate) condition: Option<String>,
     pub(crate) timeout_minutes: Option<u16>,
     #[serde(default)]
+    pub(crate) permissions: BTreeMap<String, String>,
+    #[serde(default)]
     pub(crate) step: Vec<RawStep>,
 }
 
