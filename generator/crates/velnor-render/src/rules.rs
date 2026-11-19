@@ -72,6 +72,21 @@ pub struct RenderedConcurrency {
     pub cancel_in_progress: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RenderedMatrixSource {
+    /// `fromJSON(<expression>)`, such as `needs.plan.outputs.matrix`.
+    Output(String),
+    /// Static axes, each with its values.
+    Axes(Vec<(String, Vec<String>)>),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RenderedMatrix {
+    pub source: RenderedMatrixSource,
+    pub fail_fast: Option<bool>,
+    pub max_parallel: Option<u16>,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RenderedJob {
     pub id: String,
@@ -84,6 +99,10 @@ pub struct RenderedJob {
     pub no_permissions: bool,
     pub concurrency: Option<RenderedConcurrency>,
     pub outputs: Vec<(String, String)>,
+    pub matrix: Option<RenderedMatrix>,
+    /// A job that calls a reusable workflow has `uses` and `with` and no runner or steps.
+    pub uses: Option<String>,
+    pub with: Vec<(String, Value)>,
     pub runs_on: String,
     pub fork_runner: Option<String>,
     pub timeout_minutes: u16,

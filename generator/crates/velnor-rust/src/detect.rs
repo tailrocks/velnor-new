@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
     PackageName, PolicyTools, RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE, RepoFacts, RepoPath, RepoView,
-    RepositoryIdentity, RootSlug, RustCiConfig, RustRoot, Toolchain,
+    RepositoryIdentity, RootSlug, RustCiConfig, RustRoot, Toolchain, WORKFLOWS_CONFIG_PATH,
 };
 
 use crate::build_target::{build_targets, check_host_tuple_version};
@@ -32,6 +32,7 @@ pub fn wanted_files(tracked: &BTreeSet<RepoPath>) -> Vec<RepoPath> {
     [
         CONFIG_PATH,
         RELEASE_CONFIG_PATH,
+        WORKFLOWS_CONFIG_PATH,
         LOCK_PATH,
         INPUTS_LOCK,
         TIMINGS_PATH,

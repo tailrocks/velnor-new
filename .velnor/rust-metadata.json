@@ -1770,6 +1770,11 @@
               "manifest": null
             },
             {
+              "name": "blake3",
+              "kind": "normal",
+              "manifest": null
+            },
+            {
               "name": "clap",
               "kind": "normal",
               "manifest": null,
@@ -3433,7 +3438,7 @@
   "manifests": {
     "Cargo.toml": "3a1d26ca60a6e14c8d9bb0da01044d5c3b13aa6b09dc40a01c8fb54cc7a19ea1",
     "ci-helper/Cargo.toml": "fb3550bb8e3743f3be2ecbced69fa2328b3054f2046213a49f006064abf316ec",
-    "ci-helper/crates/velnor-ci/Cargo.toml": "8e03bb53b2877274f82703bdd9e4f56a365db8be1a868cbfb7ee8a6beec4bd75",
+    "ci-helper/crates/velnor-ci/Cargo.toml": "030191a7247281c8b6e7d2dc54ce251c1fb24cd987023b5b807694691e0c9515",
     "crates/velnor-actions-actionlint/Cargo.toml": "7fc5bdb266e2a0f9335b250acecdd1f97ddbcee27322e6f90855b82fad1b6a04",
     "crates/velnor-actions-ansible/Cargo.toml": "df14f689efc7246f0a4043d8032ec785555d71143f1aa85387b09ed34240b7f3",
     "crates/velnor-actions-bun/Cargo.toml": "ad06f4370b77872dcc37f86f92ce558c9d9b30d1c56765aea33d070fa9a564b8",
