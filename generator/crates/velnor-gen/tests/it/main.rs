@@ -75,6 +75,7 @@ mod plan_job;
 mod plan_job_wait;
 mod policy_exceptions;
 mod private_sources;
+mod private_sources_phase;
 mod release_branch_prefix;
 mod release_cargo_include;
 mod release_fixture;

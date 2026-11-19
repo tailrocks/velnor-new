@@ -23,12 +23,8 @@ const PROXY_VARIABLES: [&str; 8] = [
     "NO_PROXY",
     "no_proxy",
 ];
-const GITHUB_URL_FORMS: [&str; 4] = [
-    "https://github.com/",
-    "ssh://git@github.com/",
-    "ssh://github.com/",
-    "git@github.com:",
-];
+const SERVER_VARIABLE: &str = "VELNOR_SERVER_URL";
+const DEFAULT_SERVER: &str = "https://github.com";
 const REVOKE_PATH: &str = "/installation/token";
 const FORK_HINT: &str = "no token was created: a pull request from a fork gets none, and the sources cache did not hold every dependency";
 
@@ -66,7 +62,8 @@ fn fetch_with(args: &FetchArgs, token: Option<&str>) -> Result<(), CiError> {
         rustup_home: std::env::var_os("RUSTUP_HOME"),
     };
     let mirror = super::crates_mirror::runner_config()?;
-    let environment = trusted.environment(&home, &cargo, &git, &inherited, token)?;
+    let server = Server::from_environment()?;
+    let environment = trusted.environment(&home, &cargo, &git, &inherited, token, &server)?;
     run_fetches(
         &cargo,
         &environment,
@@ -125,6 +122,48 @@ fn run_fetches(
         }
     }
     Ok(())
+}
+
+pub(super) struct Server {
+    authority: String,
+    forms: Vec<String>,
+}
+
+impl Server {
+    pub(super) fn from_environment() -> Result<Self, CiError> {
+        let base = std::env::var(SERVER_VARIABLE).unwrap_or_else(|_| DEFAULT_SERVER.to_owned());
+        let authority = base
+            .strip_prefix("https://")
+            .filter(|authority| plain_authority(authority))
+            .ok_or_else(|| {
+                CiError::new(format!(
+                    "{SERVER_VARIABLE} must be https://<host>[:<port>] (github.server_url)"
+                ))
+            })?;
+        let mut forms = vec![format!("https://{authority}/")];
+        if !authority.contains(':') {
+            forms.extend([
+                format!("ssh://git@{authority}/"),
+                format!("ssh://{authority}/"),
+                format!("git@{authority}:"),
+            ]);
+        }
+        Ok(Self {
+            authority: authority.to_owned(),
+            forms,
+        })
+    }
+}
+
+fn plain_authority(authority: &str) -> bool {
+    let (host, port) = authority
+        .split_once(':')
+        .map_or((authority, None), |(host, port)| (host, Some(port)));
+    !host.is_empty()
+        && host
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'.' || b == b'-')
+        && port.is_none_or(|port| !port.is_empty() && port.bytes().all(|b| b.is_ascii_digit()))
 }
 
 pub(super) struct Inherited {
@@ -193,6 +232,7 @@ impl Trusted {
         git: &Path,
         inherited: &Inherited,
         token: Option<&str>,
+        server: &Server,
     ) -> Result<Vec<(OsString, OsString)>, CiError> {
         let home_variable = |value: &Option<OsString>, default: PathBuf, name: &str| match value
             .as_ref()
@@ -239,17 +279,20 @@ impl Trusted {
                 .filter_map(|name| Some((OsString::from(name), non_empty_variable(name)?))),
         );
         if let Some(token) = token {
-            let base = format!("url.https://x-access-token:{token}@github.com/.insteadOf");
+            let base = format!(
+                "url.https://x-access-token:{token}@{}/.insteadOf",
+                server.authority
+            );
             environment.push((
                 "GIT_CONFIG_COUNT".into(),
-                GITHUB_URL_FORMS.len().to_string().into(),
+                server.forms.len().to_string().into(),
             ));
-            for (index, form) in GITHUB_URL_FORMS.iter().enumerate() {
+            for (index, form) in server.forms.iter().enumerate() {
                 environment.push((
                     format!("GIT_CONFIG_KEY_{index}").into(),
                     base.clone().into(),
                 ));
-                environment.push((format!("GIT_CONFIG_VALUE_{index}").into(), (*form).into()));
+                environment.push((format!("GIT_CONFIG_VALUE_{index}").into(), form.into()));
             }
         }
         Ok(environment)

@@ -4,9 +4,9 @@
 use crate::facts::{TestResult, path};
 use crate::pipeline::{view, workflow};
 
-const SECTION: &str = "[private_sources]\napp_id = 'vars.DEPS_APP_ID'\nprivate_key = 'secrets.DEPS_APP_PRIVATE_KEY'\nrepositories = ['acme/shared-lib', 'acme/other-lib']\n";
+pub(crate) const SECTION: &str = "[private_sources]\napp_id = 'vars.DEPS_APP_ID'\nprivate_key = 'secrets.DEPS_APP_PRIVATE_KEY'\nrepositories = ['acme/shared-lib', 'acme/other-lib']\n";
 
-fn private_repo(
+pub(crate) fn private_repo(
     roots: &[&str],
     section: &str,
     helper: &str,
@@ -21,7 +21,7 @@ fn private_repo(
     Ok(repo)
 }
 
-fn jobs(text: &str) -> Result<Vec<serde_json::Value>, Box<dyn std::error::Error>> {
+pub(crate) fn jobs(text: &str) -> Result<Vec<serde_json::Value>, Box<dyn std::error::Error>> {
     let yaml: serde_json::Value = crate::yaml_tree::document(text)?;
     Ok(yaml["jobs"]
         .as_object()
@@ -337,7 +337,7 @@ fn a_merge_queue_entry_gets_the_token_only_when_the_check_before_it_allows_it() 
             "{guard}"
         );
         assert!(
-            guard.contains("github.event_name != 'merge_group' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)"),
+            guard.contains("github.event_name != 'merge_group' && (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]'))"),
             "{guard}"
         );
         assert_eq!(job["permissions"]["pull-requests"], "read", "{job}");
