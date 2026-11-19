@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::fmt::Write;
+
 use velnor_gen::expected_with_notes;
 use velnor_model::{RepoPath, RepoView};
 
@@ -17,9 +19,10 @@ fn locked(
     let mut lock =
         "version = 4\n\n[[package]]\nname = \"package-0\"\nversion = \"0.1.0\"\n".to_owned();
     for (name, source) in sources {
-        lock.push_str(&format!(
+        write!(
+            lock,
             "\n[[package]]\nname = \"{name}\"\nversion = \"1.0.0\"\nsource = \"{source}\"\n"
-        ));
+        )?;
     }
     view.files
         .insert(RepoPath::new("Cargo.lock")?, lock.into_bytes());
