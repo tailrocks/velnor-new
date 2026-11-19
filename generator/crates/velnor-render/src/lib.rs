@@ -51,7 +51,11 @@ pub fn render(plan: &WorkflowPlan) -> Result<BTreeMap<RepoPath, String>, Vec<Rul
 #[must_use]
 pub fn rendered_workflow(plan: &WorkflowPlan) -> RenderedWorkflow {
     RenderedWorkflow {
-        jobs: plan.jobs.iter().map(rendered_job).collect(),
+        jobs: plan
+            .jobs
+            .iter()
+            .map(|job| rendered_job(job, &plan.fork_runner))
+            .collect(),
     }
 }
 
