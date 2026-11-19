@@ -56,6 +56,26 @@ impl KeychainReference {
             Source::File(path) => crate::credential_file::load(path),
         }
     }
+
+    pub(crate) async fn load_until(
+        &self,
+        deadline: tokio::time::Instant,
+    ) -> Result<Zeroizing<Vec<u8>>, HostError> {
+        let reference = self.clone();
+        off_runtime(deadline, move || reference.load()).await
+    }
+}
+
+pub(crate) async fn off_runtime<T, F>(
+    deadline: tokio::time::Instant,
+    load: F,
+) -> Result<T, HostError>
+where
+    T: Send + 'static,
+    F: FnOnce() -> Result<T, HostError> + Send + 'static,
+{
+    let _ = deadline;
+    load()
 }
 
 fn parse_file(path: &str) -> Result<KeychainReference, HostError> {
@@ -110,3 +130,7 @@ fn valid_keychain_component(value: &str) -> bool {
             character.is_whitespace() || character.is_control() || matches!(character, '/' | '\\')
         })
 }
+
+#[cfg(test)]
+#[path = "keychain_reference_tests.rs"]
+mod tests;
