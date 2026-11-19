@@ -103,6 +103,21 @@ pub(crate) fn plan_source(from: &PlanFrom) -> String {
     }
 }
 
+fn delta_conditions(when: When, setup: Setup, parts: &mut Vec<String>) {
+    parts.push("github.event_name == 'pull_request'".to_owned());
+    if when != When::PullRequest {
+        parts.push(NOT_CANCELLED.to_owned());
+        parts.push("github.event.pull_request.head.repo.full_name == github.repository".to_owned());
+        parts.push(SETUP_DONE.to_owned());
+        if setup == Setup::Replanned {
+            parts.push(format!("steps.{REPLAN_STEP}.outcome != 'failure'"));
+        }
+    }
+    if when == When::SaveDeltaDecided {
+        parts.push("steps.delta.outputs.save == 'true'".to_owned());
+    }
+}
+
 pub(crate) const MERGE_GROUP_ASKED_ON: &str = "github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)";
 
 pub(crate) fn merge_group_skipped(from: &PlanFrom) -> String {
@@ -193,6 +208,9 @@ pub(crate) fn condition(
             parts.push(IS_PULL_REQUEST.to_owned());
             parts.push(SAME_REPOSITORY.to_owned());
             parts.push(has_label(CI_RUN_LABEL));
+        }
+        When::PullRequest | When::SaveDelta | When::SaveDeltaDecided => {
+            delta_conditions(when, setup, &mut parts);
         }
         When::SaveToolsOnDefaultBranch
         | When::SaveToolsUnlessLocal

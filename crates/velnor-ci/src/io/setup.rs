@@ -27,6 +27,7 @@ pub(super) const OWNED_MARKER: &str = "# velnor-ci owns this file and rewrites i
 
 pub(super) fn prepare() -> Result<String, CiError> {
     let root = current_dir()?;
+    let repo_profile = repository_profile(&root)?;
     let wanted: Vec<RepoPath> = mise_files().into_iter().chain([CONFIG_PATH]).collect();
     let files = read_files(&root, &wanted).map_err(|e| CiError::new(e.to_string()))?;
     let pins = tool_pins(&files).map_err(|e| CiError::new(e.to_string()))?;
@@ -51,7 +52,7 @@ pub(super) fn prepare() -> Result<String, CiError> {
         rustflags: env_text("RUSTFLAGS").unwrap_or_default(),
         workspace: root.display().to_string(),
         driver: BUILD_DRIVER.to_owned(),
-        repo_profile: repository_profile(&root)?,
+        repo_profile,
         image: image_identity()?,
     };
     let digest = compat(&inputs);

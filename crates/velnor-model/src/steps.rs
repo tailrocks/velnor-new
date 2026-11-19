@@ -1,9 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::cache::CacheKey;
+use crate::cache::{CacheKey, CacheRoot};
 use crate::helper::HelperRelease;
-use crate::ids::{JobId, RepoPath, RootSlug};
+use crate::ids::{JobId, PackageName, RepoPath, RootSlug};
 use crate::lint::LintCommand;
 use crate::plan::CargoCommand;
 use crate::verdict::VerdictSpec;
@@ -66,6 +66,9 @@ pub enum StepKind {
         lane: JobId,
         family: TrimFamily,
     },
+    DeltaPrepare(CacheRoot),
+    DeltaApply(CacheRoot),
+    DeltaStage(CacheRoot, Vec<PackageName>),
     CacheBudget(u64),
     RustComponents(Vec<String>),
     RustTargets(Vec<String>),

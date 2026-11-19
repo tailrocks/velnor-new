@@ -26,6 +26,8 @@ mod resources;
 mod tool_versions;
 
 pub use docker::{Qualification, QualificationSession, open_qualification_session, qualify};
+#[doc(hidden)]
+pub use docker_io::read_logs;
 pub use error::QualificationError;
 pub use probe_image::qualify as qualify_probe;
 pub use probes::DaemonIdentity;
@@ -48,7 +50,7 @@ use bollard::errors::Error as DockerError;
 use bollard::models::{Mount, MountType, Volume};
 use bollard::query_parameters::CreateContainerOptions;
 
-use crate::docker_io::{append, read_logs, wait_success};
+use crate::docker_io::{append, wait_success};
 use crate::host_config::validate_host_config;
 
 use crate::error::QualificationError as HostError;

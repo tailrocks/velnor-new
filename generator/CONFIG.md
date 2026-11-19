@@ -38,6 +38,10 @@ When the flag is true, Format, Lint, Documentation, the single-crate checks, tes
 
 The step fails safe. A non-push event, a missing variable, an API error, an unreadable response, a missing run or a run that failed or is still going all write `skip=false`, and everything runs. The step is `continue-on-error`, so a crash also runs everything.
 
+## Pull request delta cache
+
+A pull request from this repository restores a per-pull-request delta layer after the Target cache and saves it after the last compiling step, and a `rust-cache-trim.yml` workflow trims the deltas of finished pull requests. There is no key for it. It needs a locked `velnor-ci` 0.1.95 or later, because the helper has the `delta` commands. With an older helper (0.1.81 to 0.1.94) the generator silently renders no delta steps and no cleanup workflow; it is not an error, so a repository pinned to an earlier release keeps generating. The layer is also left out when a custom `target-dir` is set, when `Cargo.lock` holds a source that is not proven public, or when it would not fit the budget (the generator reports what it left out).
+
 ## Optional crates mirror
 
 The new generator accepts an explicit mirror in `.velnor/rust-ci.toml`. It is off when the table is absent. It applies only when the configured job runner exactly matches the mirror's runner label. Every emitted mirror step requires the actual runner context to report `runner.environment == 'self-hosted'` and excludes fork pull requests. Hosted runners do not use the mirror, regardless of their label; a missing or unrecognized runner environment also skips setup.

@@ -13,6 +13,8 @@ pub mod collect;
 pub mod compare;
 mod configurations;
 pub mod coverage;
+pub mod delta_cli;
+pub mod delta_trim;
 pub mod error;
 pub mod escape;
 pub mod event;

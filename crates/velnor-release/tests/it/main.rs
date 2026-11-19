@@ -11,6 +11,7 @@ mod cross_root_tags;
 mod defaults;
 mod expressions;
 mod fixture;
+mod group_tags;
 mod hardening;
 mod inheritance;
 mod inventory;

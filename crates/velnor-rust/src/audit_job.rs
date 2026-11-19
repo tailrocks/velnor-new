@@ -20,6 +20,7 @@ pub(crate) fn audit_job(facts: &RepoFacts, units: &[Unit], jobs: &[Job]) -> Opti
         slug: RootSlug::from_static("inputs_audit"),
         plan: Some(PLAN_JOB),
         per_root: false,
+        deltas: false,
     };
     let families: Vec<JobId> = units
         .iter()

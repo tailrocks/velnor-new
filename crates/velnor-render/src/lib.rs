@@ -12,6 +12,8 @@ mod cargo_path;
 mod cargo_target;
 mod checkout_step;
 mod combined_cache;
+mod delta_cleanup;
+mod delta_steps;
 mod draft_steps;
 mod env;
 mod events;
@@ -47,6 +49,7 @@ use std::collections::BTreeMap;
 use velnor_model::{Access, PermissionScope, Permissions, RepoPath, WORKFLOW_PATH, WorkflowPlan};
 
 pub use crate::cache::{RenderedKey, render_key, render_key_with_mise};
+pub use crate::delta_cleanup::{DELTA_CLEANUP_PATH, delta_cleanup};
 use crate::events::{concurrency, triggers};
 pub use crate::pinned_actions::{
     ACTIONS_CACHE, ATTEST_BUILD_PROVENANCE, DOCKER_BUILD_PUSH, DOCKER_LOGIN, DOCKER_SETUP_BUILDX,
@@ -56,9 +59,9 @@ pub use crate::release::{RELEASE_HEADER, render_release};
 pub use crate::reusable::{REUSABLE_HEADER, render_reusable};
 pub use crate::rules::{
     ALLOWED_ACTIONS, APP_TOKEN_ACTION, MAX_CACHE_KEY_CHARACTERS, MAX_ENV_CHARACTERS,
-    MAX_RUN_CHARACTERS, RenderedConcurrency, RenderedContainer, RenderedJob, RenderedMatrix,
-    RenderedMatrixSource, RenderedStep, RenderedWorkflow, Rule, RuleViolation, SETUP_VELNOR_ACTION,
-    Value, check_rules,
+    MAX_RUN_CHARACTERS, MAX_WORKFLOW_BYTES, RenderedConcurrency, RenderedContainer, RenderedJob,
+    RenderedMatrix, RenderedMatrixSource, RenderedStep, RenderedWorkflow, Rule, RuleViolation,
+    SETUP_VELNOR_ACTION, Value, check_rules,
 };
 use crate::steps::rendered_job;
 use crate::workflow::yaml_job;

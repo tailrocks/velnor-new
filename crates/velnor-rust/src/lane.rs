@@ -18,22 +18,25 @@ pub(crate) struct Lane {
     pub(crate) slug: RootSlug,
     pub(crate) plan: Option<JobId>,
     pub(crate) per_root: bool,
+    pub(crate) deltas: bool,
 }
 
 impl Lane {
-    pub(crate) fn root(slug: RootSlug, single: bool) -> Self {
+    pub(crate) fn root(slug: RootSlug, single: bool, deltas: bool) -> Self {
         Self {
             slug,
             plan: (!single).then_some(PLAN_JOB),
             per_root: false,
+            deltas,
         }
     }
 
-    pub(crate) fn policy(single: bool) -> Self {
+    pub(crate) fn policy(single: bool, deltas: bool) -> Self {
         Self {
             slug: RootSlug::from_static("policy"),
             plan: Some(if single { RUST_JOB } else { PLAN_JOB }),
             per_root: false,
+            deltas,
         }
     }
 
@@ -42,6 +45,7 @@ impl Lane {
             slug,
             plan: self.plan.clone(),
             per_root,
+            deltas: self.deltas,
         }
     }
 

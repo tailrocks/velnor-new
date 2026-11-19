@@ -84,6 +84,11 @@ impl CacheRoot {
     pub fn target_dir(&self) -> &RepoPath {
         &self.target_dir
     }
+
+    #[must_use]
+    pub fn delta_dir(&self) -> String {
+        format!("{}.velnor-delta", self.target_dir)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -115,6 +120,7 @@ pub enum CachePath {
     CargoRegistryCache,
     CargoGitDb,
     Target(RepoPath),
+    Delta(CacheRoot),
 }
 
 impl CacheKey {
@@ -137,9 +143,10 @@ impl CacheKey {
                 CachePath::CargoRegistryCache,
                 CachePath::CargoGitDb,
             ],
-            Self::Target { root, .. } | Self::Delta { root, .. } => {
+            Self::Target { root, .. } => {
                 vec![CachePath::Target(root.target_dir().clone())]
             }
+            Self::Delta { root, .. } => vec![CachePath::Delta(root.clone())],
         }
     }
 }
