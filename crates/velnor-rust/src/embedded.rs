@@ -111,20 +111,25 @@ impl<'a> Scan<'a> {
                 continue;
             };
             if *name == "include" {
-                self.follow(resolved.clone());
+                self.follow(&resolved);
             }
             self.reads.insert(Some(resolved));
         }
     }
 
-    fn follow(&mut self, included: RepoPath) {
-        match self.view.files.get_key_value(&included) {
-            Some((path, _)) => self.pending.push(path),
-            None if is_rust_source(&included) && self.view.tracked_paths.contains(&included) => {
-                if let Some(path) = self.view.tracked_paths.get(&included) {
-                    self.pending.push(path);
-                }
-            }
+    fn follow(&mut self, included: &RepoPath) {
+        let held = self
+            .view
+            .files
+            .get_key_value(included)
+            .map(|(path, _)| path);
+        let plain = self
+            .view
+            .tracked_paths
+            .get(included)
+            .filter(|path| is_rust_source(path));
+        match held.or(plain) {
+            Some(path) => self.pending.push(path),
             None => {
                 self.reads.insert(None);
             }
