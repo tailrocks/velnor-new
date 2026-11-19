@@ -19,6 +19,10 @@ fork_runner = "ubuntu-24.04"
 
 `cache_debug = true` in `.velnor/rust-ci.toml` makes every generated cargo step set `CARGO_LOG` from the repository variable `VELNOR_CACHE_DEBUG` and adds a step that uploads the log when that variable is `1`. It is `false` by default, and then the generated workflow reads no repository variable. A repository that sets it also declares `VELNOR_CACHE_DEBUG` to its workflow linter. The key needs a helper release that knows it (`0.1.82` or later), because older helpers reject unknown keys.
 
+## Optional mbx remote cache
+
+`[cache] mbx_remote = "github-actions"` in `.velnor/rust-ci.toml` adds `jdx/mr-boxington-action` (pinned by full SHA) to every generated job that runs Cargo, right after the tools install and before any repository code runs. It uses the action's `github` backend in `objects` mode, keyed per job (`cache-key-suffix: github.job`). The action saves only after a successful push to the default branch; the generator also sets every `save-on-*` input to `"false"`, so a pull request or manual run only restores. The jobs get no write permission, no `id-token` and no secret, and the workflow sets no `MBX_REMOTE_*` variable. The action's post step still runs after the job's Cargo steps. It uses the runner's cache credential, not a repository token, and publishes nothing outside a push to the default branch. The table is off by default, and then the output is unchanged. Allowed values: `"github-actions"`. The key needs a helper release that knows it, because older helpers reject unknown keys.
+
 ## Skip the push run after a merge queue run
 
 `[ci] skip_push_after_merge_group = true` in `.velnor/rust-ci.toml` stops a push to the default branch from repeating checks that the merge queue already ran on the same commit. It is off by default, and then the generated workflow is byte-for-byte what it was without the key. It needs `velnor-ci` 0.1.82 or later.
@@ -59,6 +63,27 @@ Writing the configuration only above the checkout misses temporary directories. 
 
 This repository selects its scale-set runner and names its mirror in this configuration. Its existing engine and maintenance workflows are separate from the new generator and do not consume this setting. Running a generated Rust workflow requires the compatible helper release.
 
+## Optional private dependencies
+
+A project whose crates depend on private repositories names them in `.velnor/rust-ci.toml`. The table is off when absent, and then the generated workflow is unchanged.
+
+```toml
+[private_sources]
+app_id = "vars.DEPS_APP_ID"
+private_key = "secrets.DEPS_APP_PRIVATE_KEY"
+repositories = ["owner/shared-lib"]
+```
+
+`velnor-gen generate` prints a note that suggests this table when `Cargo.lock` locks a dependency from a registry other than crates.io, from a git host that is not github.com, gitlab.com, codeberg.org or bitbucket.org, over ssh, or from a github.com owner that is the owner of this repository. It writes no secret, and it stays silent for crates.io and for public git dependencies of other owners. A git URL with credentials in it gets no suggestion: with `[private_sources]` configured, generation refuses it, so relock with a plain https URL.
+
+`app_id` must be a `vars.` name and `private_key` a `secrets.` name. The variable holds the GitHub App's client ID, which the generated step passes to `actions/create-github-app-token` as `client-id`. `repositories` is a non-empty list of `owner/name` entries with one owner. Anything else is refused. The key needs a helper release of `0.1.86` or later.
+
+Each job that compiles gets three steps after `jdx/mise-action` and before its first compiling cargo command and before any `[[test_setup]]` command, because a setup command is repository code. The steps run when any of those commands runs, not only the first one. The first, which runs on `merge_group` events only, runs `velnor-ci private-token-allowed`. It reads the queue entry from `github.event.merge_group.head_ref` (`gh-readonly-queue/<base>/pr-<number>-<sha>`, anchored on the last segment because the base branch may contain `/`), looks the pull request up with `GET /repos/{repo}/pulls/<number>` and the job's `GITHUB_TOKEN` (the job gets `pull-requests: read`), and writes `allowed=true` only when the pull request's head repository is this repository, its author's login does not end in `[bot]` (the same rule as for a pull request run, applied to every entry in the checkout) and its head sha is the queue entry's sha, and when the live queue ref of that entry still points at `GITHUB_SHA`, the commit this run checked out, so a queue that GitHub rebuilt after a fork entry left cannot authorize a run that still holds the fork's code. It authenticates every queued entry of the same base whose queue commit is in that checkout the same way, reading the checkout's commits beyond the base branch with one `GET /repos/{repo}/compare/<base>...<GITHUB_SHA>` (at most three pages of 100; a longer or unreadable answer fails closed), not one comparison per entry, so a long queue stays far below the 1,000 requests per hour that `GITHUB_TOKEN` allows. A malformed reference, a failed lookup, a fork, a sha mismatch or any other failure writes `allowed=false`, and the step still exits 0. The second creates a read-only token for the listed repositories with `actions/create-github-app-token`. It does not run for pull requests from forks, and it does not run for a pull request opened or pushed by a bot (an actor or pull request author whose login ends in `[bot]`, such as Dependabot or Renovate), because a dependency bot proposes code from a crate registry that nobody has reviewed yet. Such a pull request builds only from the caches, and the token comes at the merge queue, after a person has approved it. On `merge_group` it runs only when the first step wrote `allowed=true`, so a fork pull request that a maintainer enqueues gets no token. The third runs `velnor-ci fetch` with the token in its step environment only. `velnor-ci fetch` runs `cargo fetch --locked` for each Cargo root, gives the token to git through `GIT_CONFIG_*` variables of that command alone, and then revokes it with `DELETE /installation/token`. Before it runs cargo it reads the Cargo config files that cargo would read, with their `include` chains, to find the credential providers they declare; a chain of more than eight files is refused (the fetch runs nothing and the token is revoked) rather than read in part. `velnor-gen generate` itself refuses a Cargo config that has an `include`. The fetch sets `core.hooksPath=/dev/null`, `core.fsmonitor=false`, `core.sshCommand=ssh`, `protocol.ext.allow=never` and an empty `credential.helper` next to the token in its git settings, and `RUSTC`, `CARGO_BUILD_RUSTC` and the four rustc wrapper variables in its environment so that `build.rustc`, `build.rustc-wrapper` and `build.rustc-workspace-wrapper` of any config file cannot start a program, which outrank the config and hooks of a restored `~/.cargo/git` database, so a cached repository's hook cannot run with the token. When `cargo` is a rustup proxy, the fetch asks `rustup show active-toolchain` from `CARGO_HOME`, a directory the checkout does not control, and passes that name as `RUSTUP_TOOLCHAIN`, so a `rust-toolchain.toml` in the checkout cannot select a toolchain of its own; a name that is not a plain toolchain name is refused. The GitHub API client for the queue check and the revocation trusts only the certificates of the PEM bundle that `SSL_CERT_FILE` names, as git does, so a GitHub Enterprise Server behind a private CA works; when the variable is unset, or names a file that is unreadable or holds no certificate (a warning says so), it trusts the built-in Mozilla roots. It starts `cargo` and `git` by absolute path from the tool directories the runner installed, with an environment it builds itself, so a changed `mise.toml` cannot redirect the token. It refuses a `CARGO_HOME` outside those directories. It rewrites the forms of the server `VELNOR_SERVER_URL` names (`github.server_url`; `https://github.com` when unset, and only `https://<host>[:<port>]` is accepted) that a lock file records (`https://<host>/`, `http://<host>/`, `ssh://git@<host>/`, `ssh://<host>/` and `git@<host>:`; the three ssh forms name the host without the web port, so a server at `https://host:8443` has its ssh forms rewritten to `https://host:8443/`) to the authenticated URL, passes the runner's proxy variables (`HTTPS_PROXY`, `HTTP_PROXY`, `ALL_PROXY`, `NO_PROXY` and their lower-case forms) through, runs each fetch in the directory of its manifest so that the `.cargo/config.toml` of a nested root applies, and passes the file `crates_mirror` wrote as `--config` when `VELNOR_CARGO_CONFIG` names it. `velnor-gen generate` refuses a `Cargo.lock` that locks a git dependency from an https URL with credentials in it. The policy job's `cargo-deny` runs after the same fetch phase. The token step keeps the action's post-job revocation, so a cancelled job still revokes the token; the revocation after a completed fetch makes that a warning. Without a token it runs `cargo fetch --locked --offline` and fails with a message that names the fork case when the caches lack a dependency.
+
+With `[private_sources]` the `groups` shape builds and runs the tests in one job and does not upload a nextest archive: workflow artifacts can be downloaded by anyone who can read the repository, and the archive would hold the compiled private code.
+
+Every later cargo command of the job runs with `--offline` and `CARGO_NET_OFFLINE=true`. The token is written to no file, to `$GITHUB_ENV` or to any git configuration.
+
 ## Optional shared MBX store
 
 `mbx_shared_store = true` in `.velnor/rust-ci.toml` makes every job run `velnor-ci mbx-store` right after the helper is installed. It needs `velnor-ci` 0.1.85 or later and is off by default.
@@ -81,6 +106,48 @@ run = "bash scripts/ci-fixtures.sh"
 ```
 
 `root` is the folder of the Cargo root's `Cargo.toml`, or `.` for the repository root, and it must name a root of this repository. The step runs in that folder. It follows the same gate as the test steps, so a run that selects no tests skips it. A job that runs no tests has none. With `shape = "groups"` the test group job installs only cargo-nextest, so a step there must not need Rust. A `run` value with an expression, a line break or any shell syntax is refused.
+
+## Test groups
+
+Heavy or special tests get their own job; every other test stays in the default job. A group names a nextest filterset, what its tests need and the limits of its job.
+
+```toml
+[[test_groups]]
+name = "database"
+filter = "package(app) and test(/^db_/)"
+needs = ["docker"]
+test_threads = 2
+timeout_minutes = 30
+runner = "ubuntu-latest"
+root = "."
+```
+
+- `name` is the job name `rust-test-<name>` (then the root suffix when the repository has several roots). It uses letters, digits, `_` and `-`, at most 40 characters, and is not `default`.
+- `filter` is a nextest filterset. The group job runs the tests the plan selects that this filter matches. Write nextest's `and`, `or` and `not` instead of `&`, `|` and `!`: a generated `run:` value is one command with no `&`, `|`, `;`, quote, `$`, backtick, backslash, `<` or line break. An empty filter is refused.
+- `needs` lists what the job needs before the tests start. `"docker"` adds a step that runs `docker info`, so a runner without Docker fails there. `"cargo"` installs the full toolchain, as the build job does, but restores no target or sources cache. Nothing else is installed: a group with no need installs only cargo-nextest. A test that calls `cargo` may print `Compiling` for its own build, and it must not rebuild the suite.
+- `test_threads` (1 to 256) becomes `--test-threads` for that job only. `timeout_minutes` (1 to 360) and `runner` replace the repository values for that job only.
+- `root` is the folder of the Cargo root's `Cargo.toml`, or `.`. It is required when the repository has several Cargo roots, and it must name a root with nextest tests.
+- `paths` and `events` are in the model but refused for now, because choosing groups at run time needs the plan. A group runs whenever its root is selected.
+
+A repository with any `[[test_groups]]` splits each root that has a group into the archive build job and the test jobs, whatever `shape` is: the group jobs run from the archive of the build job (`shape = "groups"`), and lint and doctests stay on the build job. The default job `rust-test-default` leaves out every group's tests with `and not (<filter>)`, and every group job is a need of the `Required` check. Two groups with one name in one root are refused. The key needs `velnor-ci` 0.1.82 or later, because the helper reads the same file.
+
+## Release binary asset format
+
+`format` in a `[[binaries]]` table of `.velnor/release.toml` selects what the release job uploads for that binary. It is `"archive"` by default, and then the output is unchanged: one musl `<bin>-<platform>.tar.gz` for each platform plus the `SHA256SUMS` file.
+
+`format = "raw"` publishes the bare executable instead, built for the gnu target (`x86_64-unknown-linux-gnu`, `aarch64-unknown-linux-gnu`, `aarch64-apple-darwin`), so a consumer can download it by its exact name. For each platform (`linux-x64`, `linux-arm64`, `macos-arm64`) the release holds three assets:
+
+- `<bin>-<platform>`: the executable, for example `velnor-ci-linux-x64`
+- `<bin>-<platform>.sha256`: one line, `<sha256>  <bin>-<platform>`, as `sha256sum --check` reads it
+- `<bin>-<platform>.provenance.json`: `schema`, `tag`, `repository`, `commit`, `target`, `asset` and `sha256`
+
+The release also carries `SHA256SUMS`, which lists all of these files, because `velnor-ci release publish` checks every file it uploads against it. The gnu build links the glibc of the runner image, so a consumer needs a glibc at least that recent.
+
+```toml
+[[binaries]]
+package = "velnor-ci"
+format = "raw"
+```
 
 ## Declared workflows
 
@@ -194,6 +261,14 @@ Every workflow lists its events under `[workflow.on]`. The generator writes them
 - `helper = true` puts the pinned `velnor-ci` install step first in the job.
 - A matrix has one source. `from_output = "<job>.<output>"` renders `fromJSON(needs.<job>.outputs.<output>)`; that job must be in `needs` and declare the output. `axes = { os = ["a", "b"], ... }` renders a static matrix of up to 256 combinations, and `matrix.<axis>` is then the only matrix key a value may read. `fail_fast` and `max_parallel` are optional.
 - `uses = "<workflow>"` makes the job call a reusable workflow, and then the job has no steps, `runner`, `timeout_minutes`, `environment`, `helper` or `outputs`. `<workflow>` is one of: the `file` of a workflow declared earlier in this file (its inputs are checked, its `boolean` and `number` inputs are written as such, and the job must hold every permission the called jobs ask for); `./.github/workflows/<name>.yml`; or `owner/repo/.github/workflows/<name>.yml@<full commit SHA>` (exactly 40 lower case hex digits). A `./.github/workflows` or pinned callee is not read, so its jobs get no fork fence and its permissions are not checked: a workflow that a `pull_request` or `merge_group` event starts is refused if it calls one, or calls a declared workflow that calls one. Such a call is allowed from `push`, `schedule`, `workflow_dispatch`, `workflow_call` and `workflow_run`. `with` passes inputs, each plain text or exactly one expression. No `secrets` are passed, ever. A later job reads `needs.<job>.outputs.<name>` for the outputs of a declared workflow.
+
+### Cases
+
+A `[[workflow.case]]` is one qualification case that runs on a hosted runner and on a scale-set runner. The generator writes two jobs from it, `<id>-hosted` and `<id>-scale-set`, with the same steps, named `<title> / GitHub hosted` and `<title> / Velnor Scale Set`, and runs them in parallel.
+
+- The workflow needs a `workflow_dispatch` input `mode` of type `choice`, and `hosted_runner` (GitHub-hosted) and `scale_set_runner` (not GitHub-hosted). The scale-set job gets the fork fence of its runner like any other job.
+- `modes` lists the `mode` options that run the case, and defaults to the case `id`. Each job gets `if: inputs.mode == '<mode>'` joined with `||`; a case `if` is joined to it with `&&`.
+- `title` defaults to the `id`. `timeout_minutes` and the `[[workflow.case.step]]` tables follow the job rules above. A case has no `needs`, `permissions`, `environment` or `outputs`; declare a job for those.
 
 ### Steps
 

@@ -1014,6 +1014,7 @@ dependencies = [
  "velnor-gen",
  "velnor-model",
  "velnor-release",
+ "velnor-render",
  "velnor-rust",
  "zip",
 ]

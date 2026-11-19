@@ -102,6 +102,7 @@ pub struct RepoFacts {
     pub timings: BTreeMap<RepoPath, Timings>,
     pub timings_notes: Vec<String>,
     pub private_sources: Option<String>,
+    pub private_suggestion: Option<String>,
     pub unowned: BTreeMap<RepoPath, UnownedPackage>,
     pub policy: PolicyTools,
     pub weakenings: Vec<Weakening>,
@@ -248,6 +249,7 @@ pub struct RustCiConfig {
     pub runner: RunnerLabel,
     pub fork_runner: RunnerLabel,
     pub crates_mirror: Option<CratesMirror>,
+    pub private_sources: Option<PrivateSources>,
     pub mbx_store: MbxStore,
     pub docs_run: DocsRun,
     pub timeout_minutes: u16,
@@ -268,8 +270,10 @@ pub struct RustCiConfig {
     pub cache_budget_bytes: u64,
     pub cache_check_blocks: bool,
     pub cache_debug: CacheDebug,
+    pub mbx_remote: MbxRemote,
     pub push_after_merge_group: PushAfterMergeGroup,
     pub test_setup: Vec<TestSetup>,
+    pub test_groups: Vec<TestGroup>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -278,6 +282,8 @@ pub struct TestSetup {
     pub name: String,
     pub run: String,
 }
+
+pub use crate::test_group::{GroupEvent, GroupRoot, TestGroup, TestNeed};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OnMain {
@@ -292,6 +298,12 @@ pub enum FullRun {
     Nightly,
     Weekly,
     Cron(CronExpr),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MbxRemote {
+    Off,
+    GithubActions,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -365,6 +377,7 @@ impl Default for RustCiConfig {
             runner: RunnerLabel::from_static("ubuntu-latest"),
             fork_runner: RunnerLabel::from_static("ubuntu-latest"),
             crates_mirror: None,
+            private_sources: None,
             mbx_store: MbxStore::Private,
             docs_run: DocsRun::Always,
             timeout_minutes: 30,
@@ -385,8 +398,10 @@ impl Default for RustCiConfig {
             cache_budget_bytes: 8_000_000_000,
             cache_check_blocks: false,
             cache_debug: CacheDebug::Off,
+            mbx_remote: MbxRemote::Off,
             push_after_merge_group: PushAfterMergeGroup::Run,
             test_setup: Vec::new(),
+            test_groups: Vec::new(),
         }
     }
 }
@@ -396,4 +411,12 @@ pub struct CratesMirror {
     pub runner: RunnerLabel,
     pub registry: String,
     pub cainfo: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PrivateSources {
+    pub app_id: String,
+    pub private_key: String,
+    pub owner: String,
+    pub repositories: Vec<String>,
 }
