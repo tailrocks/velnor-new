@@ -148,6 +148,38 @@ fn a_manifest_the_file_does_not_list_is_named_unless_the_config_excludes_it() ->
 }
 
 #[test]
+fn a_manifest_under_the_samples_folder_is_recorded_data_not_a_root() -> TestResult {
+    let files = two_workspaces()?;
+    let text = recorded(&files)?;
+    let mut grown = files.clone();
+    for manifest in [
+        "generator/samples/app/view/Cargo.toml",
+        "generator/samples/app/view/crates/core/Cargo.toml",
+    ] {
+        grown.tracked_paths.insert(path(manifest)?);
+        grown.files.insert(path(manifest)?, b"# sample\n".to_vec());
+    }
+    assert_eq!(
+        recorded_metadata(&grown, Some(text.as_bytes()))?,
+        files.rust_metadata
+    );
+    grown
+        .tracked_paths
+        .insert(path("generator/samples-x/Cargo.toml")?);
+    grown.files.insert(
+        path("generator/samples-x/Cargo.toml")?,
+        b"# real\n".to_vec(),
+    );
+    assert_eq!(
+        recorded_metadata(&grown, Some(text.as_bytes())),
+        Err(MetadataFileError::Unlisted(path(
+            "generator/samples-x/Cargo.toml"
+        )?))
+    );
+    Ok(())
+}
+
+#[test]
 fn a_missing_or_unreadable_file_asks_for_generate() -> TestResult {
     let files = two_workspaces()?;
     let text = recorded(&files)?;

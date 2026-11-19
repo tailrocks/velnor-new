@@ -11,7 +11,7 @@ use std::process::Command as Process;
 pub use std::process::ExitCode as Exit;
 
 use clap::{CommandFactory, FromArgMatches};
-use velnor_model::{RepoPath, RepoView};
+use velnor_model::{RepoPath, RepoView, SAMPLES};
 use velnor_rust::{
     METADATA_PATH, build_script_sources, is_rust_source, manifests, metadata_roots,
     reduce_metadata, wanted_files,
@@ -37,8 +37,8 @@ use pin::pin_helper;
 pub use pin::write_lock;
 pub use recorded::{read_recorded_checkout, write_metadata};
 pub use sample::{
-    Recording, SAMPLE_REPOSITORY, SAMPLES, SampleWriteOutcome, record_sample, recorded_files,
-    recording_of, relocate_metadata, write_sample,
+    Recording, SAMPLE_REPOSITORY, SampleWriteOutcome, record_sample, recorded_files, recording_of,
+    relocate_metadata, write_sample,
 };
 use tracked::{tracked, tracked_sizes};
 use workflows::{ENGINE_CONFIG, workflow_paths};
@@ -315,13 +315,8 @@ pub fn view_of(
 ) -> Result<Recorded, Error> {
     let mut view = view_from(root, tracked_paths, symlinks)?;
     let mut recorded = BTreeMap::new();
-    // Manifests under the samples folder are recorded data, never roots of the checkout.
-    let sample_prefix = format!("{SAMPLES}/");
     let roots = metadata_roots(&view).map_err(Error::Detect)?;
-    for manifest in roots
-        .into_iter()
-        .filter(|manifest| !manifest.as_str().starts_with(&sample_prefix))
-    {
+    for manifest in roots {
         let known = view.rust_metadata.iter().any(|(workspace, metadata)| {
             *workspace == manifest || metadata.members.iter().any(|m| m.manifest == manifest)
         });
