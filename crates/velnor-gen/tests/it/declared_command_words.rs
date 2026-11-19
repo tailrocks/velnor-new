@@ -99,7 +99,10 @@ fn env_and_assignments_cannot_hide_a_repository_script_from_the_write_token_rule
             .map_err(|error| format!("{command:?}: {error}"))?;
         assert!(message.contains("github.token"), "{command:?}: {message}");
     }
-    for command in ["env -C dist gh release create v1", "A=1 gh release create v1"] {
+    for command in [
+        "env -C dist gh release create v1",
+        "A=1 gh release create v1",
+    ] {
         rendered(&job_running(write, command, token))
             .map_err(|error| format!("{command:?}: {error}"))?;
     }

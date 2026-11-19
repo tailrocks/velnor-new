@@ -91,9 +91,9 @@ fn skip_env_options(words: &mut VecDeque<String>) {
                 }
                 _ => {}
             }
-        } else if word.starts_with('-') {
+        } else if let Some(cluster) = word.strip_prefix('-') {
             words.pop_front();
-            skip_short_cluster(words, &word[1..]);
+            skip_short_cluster(words, cluster);
         } else {
             return;
         }
@@ -140,9 +140,9 @@ fn split_into(words: &mut VecDeque<String>, text: &str) {
 /// installs, and the write token rule treats it as repository code.
 /// `cargo run -p velnor-ci` is not the helper either.
 pub(crate) fn calls_velnor_ci(run: &str) -> bool {
-    command_words(run).first().is_some_and(|word| {
-        word.rsplit('/').next() == Some("velnor-ci") && !inside_workspace(word)
-    })
+    command_words(run)
+        .first()
+        .is_some_and(|word| word.rsplit('/').next() == Some("velnor-ci") && !inside_workspace(word))
 }
 
 fn inside_workspace(word: &str) -> bool {

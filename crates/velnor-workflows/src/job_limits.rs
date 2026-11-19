@@ -89,6 +89,28 @@ pub(crate) fn write_token(
     Ok(())
 }
 
+/// A job that reads a secret outside a dispatch-only workflow holds no write permission, so
+/// a run that nobody started by hand never carries a secret and a write token together.
+pub(crate) fn secret_without_write(
+    job: &str,
+    steps: &[Step],
+    permissions: &[(String, String)],
+) -> Result<(), WorkflowsError> {
+    let reads_secret = steps
+        .iter()
+        .flat_map(|step| &step.env)
+        .any(|(_, value)| matches!(value, Env::Expression(inner) if inner.starts_with("secrets.")));
+    if let Some((scope, _)) = permissions
+        .iter()
+        .find(|(_, level)| reads_secret && level == "write")
+    {
+        return refuse(format!(
+            "job {job} reads a secret and holds the write permission {scope}; a workflow that runs on more than workflow_dispatch gives a job that reads a secret read permissions only"
+        ));
+    }
+    Ok(())
+}
+
 /// The cache client rejects a key over 512 characters, and an expression is as long as the
 /// value a caller gives it.
 pub(crate) fn bounded_cache_keys(

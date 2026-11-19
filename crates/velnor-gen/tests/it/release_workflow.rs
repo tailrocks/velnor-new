@@ -138,20 +138,23 @@ fn only_the_release_job_can_write_and_it_checks_out_nothing_and_verifies_before_
         );
     }
     for build in BUILDS {
-        let tag_checks: Vec<&str> = runs(&jobs[build])
+        let tag_checks: Vec<(&str, &str)> = jobs[build]["steps"]
+            .as_array()
             .into_iter()
-            .filter(|run| run.ends_with(" check-tag \"$GITHUB_REF_NAME\""))
+            .flatten()
+            .filter_map(|step| Some((step["run"].as_str()?, step["working-directory"].as_str()?)))
+            .filter(|(run, _)| run.ends_with(" check-tag \"$GITHUB_REF_NAME\""))
             .collect();
         assert_eq!(
             tag_checks,
             [
-                "env -C stage ./velnor-ci check-tag \"$GITHUB_REF_NAME\"",
-                "env -C stage ./velnor-gen check-tag \"$GITHUB_REF_NAME\""
+                ("./velnor-ci check-tag \"$GITHUB_REF_NAME\"", "stage"),
+                ("./velnor-gen check-tag \"$GITHUB_REF_NAME\"", "stage")
             ]
         );
     }
     let writer = runs(&jobs[WRITER]);
-    let verify = position(&writer, "env -C dist sha256sum --check --strict SHA256SUMS")?;
+    let verify = position(&writer, "sha256sum --check --strict SHA256SUMS")?;
     let publish = position(&writer, "gh release create")?;
     assert!(verify < publish);
     assert!(writer[publish].contains(" --prerelease "));
@@ -159,39 +162,44 @@ fn only_the_release_job_can_write_and_it_checks_out_nothing_and_verifies_before_
     assert!(writer[publish].contains(" dist/COMMIT "));
     let sums = runs(&jobs["checksums"]);
     let record = position(&sums, "echo \"$GITHUB_SHA\" > dist/COMMIT")?;
-    let written = position(&sums, "env -C dist sha256sum COMMIT ")?;
+    let written = position(&sums, "sha256sum COMMIT ")?;
     assert!(record < written);
-    assert!(sums[written].ends_with(" > dist/SHA256SUMS"));
+    assert!(sums[written].ends_with(" > SHA256SUMS"));
     Ok(())
 }
 
 #[test]
-fn the_ruleset_drift_check_reads_its_admin_token_only_on_dispatch_and_holds_no_scope() -> TestResult
-{
+fn the_ruleset_drift_check_runs_nightly_and_on_dispatch_and_reads_its_admin_token_in_one_step()
+-> TestResult {
     let workflow = committed(DRIFT)?;
     assert_eq!(
         workflow["on"],
-        serde_json::json!({ "workflow_dispatch": {} })
+        serde_json::json!({
+            "workflow_dispatch": {},
+            "schedule": [{ "cron": "23 4 * * *" }]
+        })
     );
     assert_eq!(workflow["permissions"], serde_json::json!({}));
     let jobs = jobs(&workflow)?;
     assert_eq!(jobs.keys().collect::<Vec<_>>(), [DRIFT]);
     let job = &jobs[DRIFT];
-    assert_eq!(job["permissions"], serde_json::json!({}));
-    let [step] = job["steps"].as_array().ok_or("no steps")?.as_slice() else {
-        return Err("the drift job has more than one step".into());
+    assert_eq!(
+        job["permissions"],
+        serde_json::json!({ "contents": "read" })
+    );
+    assert!(job.get("env").is_none());
+    let steps = job["steps"].as_array().ok_or("no steps")?;
+    let readers: Vec<&Value> = steps
+        .iter()
+        .filter(|step| step["env"].get("TAG_RULESET_ADMIN_READ_TOKEN").is_some())
+        .collect();
+    let [step] = readers.as_slice() else {
+        return Err("exactly one step reads the admin token".into());
     };
     assert_eq!(
         step["env"]["TAG_RULESET_ADMIN_READ_TOKEN"],
         "${{ secrets.TAG_RULESET_ADMIN_READ_TOKEN }}"
     );
-    assert!(step["with"].get("github-token").is_none());
-    let script = step["with"]["script"].as_str().ok_or("no script")?;
-    assert!(script.contains("const admin = getOctokit(process.env.TAG_RULESET_ADMIN_READ_TOKEN);"));
-    assert_eq!(script.matches("await admin.").count(), 2);
-    assert!(!script.contains("await github."));
-    for name in ["protect-tags", "release-tags", "refs/tags/tools-v*"] {
-        assert!(script.contains(name), "{name}");
-    }
+    assert_eq!(step["run"], "node scripts/tag-ruleset-drift.mjs");
     Ok(())
 }

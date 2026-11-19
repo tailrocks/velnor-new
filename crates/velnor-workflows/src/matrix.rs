@@ -28,7 +28,7 @@ pub(crate) fn matrix(
         }
         _ => {
             return refuse(format!(
-                "job {id} matrix needs from_output alone, or axes and include (at least one of them)"
+                "job {id} matrix needs exactly one source: from_output alone, or axes and include (at least one of them)"
             ));
         }
     };
@@ -93,7 +93,7 @@ fn axes_of(
     if axes.is_empty() && include.is_empty() {
         return refuse(format!("job {id} matrix axes must not be empty"));
     }
-    let mut combinations: usize = if axes.is_empty() { 0 } else { 1 };
+    let mut combinations: usize = usize::from(!axes.is_empty());
     for (index, (name, values)) in axes.iter().enumerate() {
         if axes
             .keys()
@@ -106,9 +106,10 @@ fn axes_of(
         }
         let key_ok = matrix_key(name);
         let values_ok = !values.is_empty()
-            && values.iter().enumerate().all(|(index, value)| {
-                plain_value(value) && !values[..index].contains(value)
-            });
+            && values
+                .iter()
+                .enumerate()
+                .all(|(index, value)| plain_value(value) && !values[..index].contains(value));
         if !key_ok || !values_ok {
             return refuse(format!(
                 "job {id} matrix axis {name:?} must be an identifier (not include or exclude) with unique, non-empty values without expressions"

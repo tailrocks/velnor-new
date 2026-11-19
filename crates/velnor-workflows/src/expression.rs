@@ -26,6 +26,8 @@ pub(crate) struct Scope<'a> {
     pub(crate) steps: Vec<String>,
     /// The events of the workflow, as `Triggers::events` lists them.
     pub(crate) events: Vec<&'static str>,
+    /// The events that forbid a secret, as `secret_events::untrusted` lists them.
+    pub(crate) untrusted_events: Vec<&'static str>,
 }
 
 pub(crate) fn is_identifier(text: &str, dashes: bool) -> bool {
@@ -125,7 +127,7 @@ fn allowed(reference: &str, scope: &Scope<'_>, condition: bool) -> bool {
     }
 }
 
-const SECRET_PLACE: &str = "a secret may be read only as the whole value of a step env entry, in a workflow that runs on workflow_dispatch alone";
+const SECRET_PLACE: &str = "a secret may be read only as the whole value of a step env entry, in a workflow that runs on workflow_dispatch, schedule and push to tags only (a push to branches too when the job if or the workflow if contains the default branch gate)";
 
 fn is_secret(reference: &str) -> bool {
     reference
@@ -152,10 +154,10 @@ fn secret_in(
             "the expression {inner} reads {reference}, which is not allowed here; {SECRET_PLACE}"
         ));
     }
-    if scope.events != ["workflow_dispatch"] {
+    if !scope.untrusted_events.is_empty() {
         return refuse(format!(
             "the expression {inner} reads {reference}, but this workflow runs on {}; {SECRET_PLACE}",
-            scope.events.join(", ")
+            scope.untrusted_events.join(", ")
         ));
     }
     let named = reference.strip_prefix("secrets.").is_some_and(secret_name);
