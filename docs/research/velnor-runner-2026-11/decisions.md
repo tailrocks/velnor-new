@@ -1126,6 +1126,15 @@ mostly a lookup. Decisions 1–24 and the gate's meaning are unchanged.
 | A08 variant (c): Mac Docker as an arm64 slot | Rejected: the owner's premise makes Mac results advice; detection of amd64-only flakes would fall from 1−(1−p)² to p | — |
 | A13 Mac signer | Already §8.6: advisory namespace only | 8.6 |
 
+### Group 38: agent-native answer by Gemini 4 Argon
+
+| Idea | Decision | v3 section; plan |
+|---|---|---|
+| A17 negative lookaside | Adopted as advice only; `--rerun-failed` | 8.6; AN12 |
+| A18 builder and verifier subagent as the two witnesses | Adopted: any two qualified T2 runs on distinct nodes and seeds | 8.6 |
+| A15 queue-tip stream | Adopted in `velnor wait` | 8.6; AN12 |
+| A08 option B (Q2): an arm64 Apple microVM as witness 1 under a split key | Rejected: Mac results are advice by the owner's premise; one arm64 slot halves detection of amd64-only flakes; §6.1's fingerprint stays | — |
+
 ## Design review
 
 The eight design critiques and the comparison that verified them are the input here; ids are the

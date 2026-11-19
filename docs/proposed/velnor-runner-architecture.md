@@ -1030,11 +1030,15 @@ and the label then mostly finds the work done. The gate's meaning and decisions 
   tree)` and shows both SHAs; `velnor ship` runs it, pushes, labels with the agent's App identity and
   enables auto-merge, an explicit act under decision 12. The control plane derives the PR's subject
   tree itself, never from the client. `velnor wait` long-polls the verdict and returns the failing
-  test id, its signature and the last log lines.
+  test id, its signature and the last log lines, and streams queue-tip moves so a stale merge base
+  is visible. Any two qualified runs fill a record: a builder agent's run and its verifier
+  subagent's run on another node, with distinct seeds, are its two witnesses.
 - **Ledger first.** `velnor resolve` (and the wrapper, automatically) asks the ledger before running:
   a hit returns its record (44 of 107 agent sessions ran cargo on a tree before editing it [M, Opus
   transcripts]), in-flight work is joined, and the gate re-resolves everything under the current
-  epoch; a stale or unreachable ledger means run fresh. `verify` soaks new or changed test
+  epoch; a stale or unreachable ledger means run fresh. A failed record on an unchanged key comes
+  back as advice (`velnor why-red`: also red on `main`, a known flake, or new on this tree) unless
+  the agent passes `--rerun-failed`; it never satisfies or blocks the gate. `verify` soaks new or changed test
   ids 20 times under seeds and CPU pressure at batch priority; soak runs never fill a slot.
 - **The `interactive` class** sits between gate and PR work, with a per-identity budget (30 CPU-min
   an hour, then demoted to PR class), never touching the merge, gate or A1 reservations.
@@ -1072,8 +1076,8 @@ and the label then mostly finds the work done. The gate's meaning and decisions 
 ## 10. Delivery: per-job-type migration, milestones and deletions
 
 Agents do all the work (decision 15). The [delivery plan](../research/velnor-runner-2026-11/delivery-plan.md)
-(v2, decisions 1–24 and the rulings) sizes about 1252 agent-hours of building and 120 of review,
-about 4.3 days for 12 builders, 4 reviewers and an orchestrator, so coding does not set the dates:
+(v2, decisions 1–24 and the rulings) sizes about 1260 agent-hours of building and 120 of review,
+about 4.4 days for 12 builders, 4 reviewers and an orchestrator, so coding does not set the dates:
 velnor-new's CI and queue, reviews, owner decisions, conformance and parity evidence, capacity, API
 limits, file conflicts and, for the speed claim, the benchmark arms (run one at a time) do. Phase 0
 comes first: an agent PR's cycle falls from 94 to about 34 min at P50 [E].

@@ -249,7 +249,8 @@ two cluster nodes. The results are candidate records with the gate's keys, so th
 them instead of running them. **`velnor ship`** does `verify`, pushes, adds the label with your
 agent identity and turns on auto-merge. **`velnor wait`** follows the verdict and prints the failing
 test, its signature and the last log lines. **`velnor resolve`** asks the ledger, without running
-anything, which checks are already done, running, or still needed.
+anything, which checks are already done, running, or still needed. **`velnor why-red`** says whether
+a failure on an unchanged key is also red on `main`, a known flake, or new on your tree.
 
 **`cargo` goes through Velnor.** `velnor cargo` sits in `mise.toml`'s cargo wrapper slot. A command
 that matches a CI check (`cargo nextest run -p velnor-ci`, `cargo clippy …`) asks the ledger first,
