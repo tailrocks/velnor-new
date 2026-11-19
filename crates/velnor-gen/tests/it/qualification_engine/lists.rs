@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /// Jobs whose engine `&&` chains are written as one step per command.
-pub(super) const CHAINS: [&str; 23] = [
+pub(super) const CHAINS: [&str; 26] = [
+    "cache-default-branch-guard",
+    "empty-cache-hosted",
+    "empty-cache-scale-set",
     "bind-hosted",
     "bind-scale-set",
     "buildx-hosted",
@@ -29,7 +32,8 @@ pub(super) const CHAINS: [&str; 23] = [
 ];
 
 /// Jobs whose generated permissions are narrower than the engine's workflow-level ones.
-pub(super) const NARROWER: [&str; 31] = [
+pub(super) const NARROWER: [&str; 32] = [
+    "cache-default-branch-guard",
     "bind-hosted",
     "bind-scale-set",
     "buildx-hosted",

@@ -339,8 +339,6 @@ fn the_test_prebuild_runs_only_on_a_run_that_can_save() -> TestResult {
     ] {
         assert!(build.contains(needle), "{build}");
     }
-    let older = workflow(&pinned("0.1.79", "full_run = \"off\"\n")?)?;
-    assert!(!older.contains("Build the tests"), "{older}");
     Ok(())
 }
 

@@ -216,7 +216,7 @@ fn commit_file_publishes_the_tag_commit_as_an_asset_listed_in_the_checksums() ->
 }
 
 #[test]
-fn commit_file_before_the_tagged_commit_helper_records_the_verified_commit() -> TestResult {
+fn commit_file_records_the_commit_the_tag_job_recorded() -> TestResult {
     let (_, tree) = render(&[APP], Some(COMMIT))?;
     let record = steps(job(&tree, "sums-app")?)
         .iter()
@@ -224,7 +224,7 @@ fn commit_file_before_the_tagged_commit_helper_records_the_verified_commit() -> 
         .ok_or("no COMMIT step")?;
     assert_eq!(
         record.at(&["env", "COMMIT"]).and_then(Node::text),
-        Some("${{ github.event.workflow_run.head_sha }}")
+        Some("${{ needs.tag.outputs.app_commit }}")
     );
     Ok(())
 }

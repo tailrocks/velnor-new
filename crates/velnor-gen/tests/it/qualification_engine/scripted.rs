@@ -9,7 +9,9 @@ use super::{read, table, text};
 
 /// Jobs whose inline scripts are calls of a checked-in script under `qualification/`: velnor-gen
 /// refuses a multi-line `run`, a loop, a pipe, a `shell` key and a job `env`.
-pub(super) const SCRIPTED: [&str; 8] = [
+pub(super) const SCRIPTED: [&str; 10] = [
+    "mbx-cache-write-hosted",
+    "mbx-cache-read-hosted",
     "ports-a-hosted",
     "ports-a-scale-set",
     "ports-b-hosted",
@@ -21,7 +23,20 @@ pub(super) const SCRIPTED: [&str; 8] = [
 ];
 
 /// Commands of the engine that the script must still hold, verbatim.
-const SCRIPT_KEEPS: [(&str, &[&str]); 3] = [
+const MBX_SCRIPT: &str = "qualification/mbx-cache-roundtrip.sh";
+
+const SCRIPT_KEEPS: [(&str, &[&str]); 4] = [
+    (
+        MBX_SCRIPT,
+        &[
+            "mbx build --manifest-path \"$root/Cargo.toml\"",
+            "jq -e '.objects > 0' \"$RUNNER_TEMP/mbx-object-stats.json\"",
+            "jq -e '.savings.cached_compilations > 0' \"$RUNNER_TEMP/mbx-reuse-stats.json\"",
+            "test \"$CACHE_SAVE_REASON\" = 'workflow_dispatch'",
+            "test \"$CACHE_HIT\" = 'false'",
+            "mise --no-config --no-env --no-hooks exec rust@\"${VELNOR_TOOL_RUST}\" -- mbx clean",
+        ],
+    ),
     (
         "qualification/ports.sh",
         &[
@@ -86,6 +101,30 @@ const MOVED_ENV: [&str; 4] = [
     "SOURCES_METADATA",
     "SOURCES_DOWNLOADED",
 ];
+
+fn pinned(tool: &str) -> String {
+    let prefix = format!("{tool} = {{ version = \"");
+    read("mise.toml")
+        .ok()
+        .and_then(|mise| {
+            mise.lines()
+                .find_map(|line| line.strip_prefix(&prefix).map(str::to_owned))
+        })
+        .and_then(|rest| rest.split('"').next().map(str::to_owned))
+        .unwrap_or_default()
+}
+
+/// The engine reads these two versions from the environment its resolve step filled; velnor-gen
+/// refuses an `env` expression in `with`, so the workflow holds the literal and this test holds it
+/// to `mise.toml`.
+fn resolved(value: &str) -> String {
+    value
+        .replace(
+            "${{ env.VELNOR_TOOL_MR_BOXINGTON }}",
+            &pinned("mr-boxington"),
+        )
+        .replace("${{ env.VELNOR_TOOL_RUST }}", &pinned("rust"))
+}
 
 fn steps_of(job: &Value) -> Vec<&Value> {
     job.get("steps")
@@ -174,6 +213,7 @@ fn scripted_step(
         table(step.get("with"))
             .into_iter()
             .filter(|(key, _)| !IGNORED_WITH.contains(&(action, key.as_str())))
+            .map(|(key, value)| (key, resolved(&value)))
             .collect::<BTreeMap<_, _>>()
     };
     if with(engine) != with(generated) {
@@ -223,12 +263,19 @@ fn scripted_step(
     if image.is_some_and(|image| !script.contains(image)) {
         differ("the script runs another image than the engine");
     }
-    verbatim_body(name, engine_run.as_deref().unwrap_or_default(), &mut differ);
+    verbatim_body(
+        id,
+        name,
+        engine_run.as_deref().unwrap_or_default(),
+        &mut differ,
+    );
 }
 
 /// The two engine verifiers moved into their own files unchanged, and the Mise pin check line by line.
-fn verbatim_body(name: &str, run: &str, differ: &mut impl FnMut(&str)) {
+fn verbatim_body(id: &str, name: &str, run: &str, differ: &mut impl FnMut(&str)) {
+    let mbx = id.starts_with("mbx-cache-");
     let file = match name {
+        "Resolve project tool versions" | "Verify Rust channel manifest" if mbx => MBX_SCRIPT,
         "Resolve project tool versions" => "qualification/stable-sources-resolve-tools.sh",
         "Verify Rust channel manifest" => "qualification/stable-sources-verify-rust.sh",
         "Verify selected ref, version, and binary digest" => "qualification/mise-pin.sh",

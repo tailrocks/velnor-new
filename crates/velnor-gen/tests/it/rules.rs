@@ -188,8 +188,8 @@ fn each_rule_refuses_a_violating_step_with_its_violation() {
 fn only_the_setup_action_of_this_repository_is_allowed_and_only_by_full_commit_sha() {
     let cases = [
         (
-            uses(&format!("{SETUP_ACTION}@rust-ci-v0.1.79")),
-            Rule::ActionNotPinned(format!("{SETUP_ACTION}@rust-ci-v0.1.79")),
+            uses(&format!("{SETUP_ACTION}@rust-ci-v0.1.81")),
+            Rule::ActionNotPinned(format!("{SETUP_ACTION}@rust-ci-v0.1.81")),
         ),
         (
             uses(&format!("{SETUP_ACTION}@main")),

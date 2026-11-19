@@ -69,6 +69,17 @@ The production `actions/setup-velnor/action.yml` has no local path at all and is
 
 The binary is unverified by design: this is for a developer's own machine, and the SHA-256 in the output is the way to tell a local result from a release result.
 
+## Against a throwaway dind
+
+`velnor-local` mounts host paths into the containers and reaches the control ports that `up` publishes on `127.0.0.1`, so it must run on the machine that runs the Docker daemon. To keep a dind daemon from touching your own Docker, start `velnor-local` in a container that shares the dind container's network namespace and sees the same paths:
+
+```sh
+docker run -d --privileged --name dind -e DOCKER_TLS_CERTDIR= -v "$WORK:$WORK" docker:dind
+docker run -d --name driver --network container:dind -e DOCKER_HOST=tcp://127.0.0.1:2375 -v "$WORK:$WORK" debian:trixie-slim sleep infinity
+```
+
+Put the linux/arm64 `velnor-local` (the one in the `velnor-local/cache-server` image), the `docker` client, `git` and `ps` in `driver`, build the three images inside dind, and keep `--repo` and `--dir` under `$WORK`. A program that is not installed is named in the error (`cannot start `docker``). Pointing `DOCKER_HOST` of the Mac at the dind instead fails with `docker port ... no public port`, because the published ports exist only inside the dind.
+
 ## Remote daemons and what still needs GitHub
 
 The Docker daemon must run on the machine that runs `velnor-local`. The authority and the API stub listen on `127.0.0.1`, `velnor-host` is a native process, and the checkout copy is bind-mounted by path, so a daemon with another network namespace or file system (a `tcp://` or `ssh://` endpoint, a remote OrbStack or a dind container reached from the host) cannot reach them. Without this rule `build` fails with a bind-mount stat error and `run` with `runner.server did not connect within 60 s`, after more than a minute. So `doctor` reports `miss` for any endpoint that does not start with `unix://`, and `build`, `up` and `run` stop at once with the same message. The endpoint is the one `docker context inspect` reports, which follows `DOCKER_HOST` and `DOCKER_CONTEXT`. To use a remote daemon or a dind, run `velnor-local` and `velnor-host` inside that machine or container (Linux), so that the daemon is local to them; that is how the #651 proof ran.

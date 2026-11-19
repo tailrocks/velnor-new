@@ -185,7 +185,10 @@ async fn the_sizes_reach_the_authority_process_that_plans_the_pairs() {
     .await;
     let args = std::fs::read_to_string(dir.join("args")).unwrap_or_default();
     let pid = std::fs::read_to_string(dir.join("authority/pid")).unwrap_or_default();
-    let _ = Process::new("kill").args(["-KILL", pid.trim()]).status();
+    Process::new("kill")
+        .args(["-KILL", pid.trim()])
+        .status()
+        .ok();
     assert!(started.is_ok(), "{started:?}");
     assert!(args.contains("--home-bytes 6442450944"), "{args}");
     assert!(args.contains("--work-bytes 8589934592"), "{args}");

@@ -15,24 +15,8 @@ const SETUP_MINUTES: u16 = 5;
 const REQUESTS_PER_ASSETLESS_PUBLISH: u16 = 5;
 const MINUTES_PER_REQUEST: u16 = 5;
 const TOKEN_BOUND_MINUTES: u16 = 50;
-const ASSETLESS_PUBLISH_HELPER: (u64, u64, u64) = (0, 1, 81);
 
-#[must_use]
-pub fn unfinalized_without_binary(plan: &ReleasePlan, helper: &HelperRelease) -> BTreeSet<String> {
-    if helper.version().at_least(ASSETLESS_PUBLISH_HELPER) {
-        return BTreeSet::new();
-    }
-    assetless(plan)
-}
-
-pub(crate) fn without_binary(plan: &ReleasePlan, helper: &HelperRelease) -> BTreeSet<String> {
-    if !helper.version().at_least(ASSETLESS_PUBLISH_HELPER) {
-        return BTreeSet::new();
-    }
-    assetless(plan)
-}
-
-fn assetless(plan: &ReleasePlan) -> BTreeSet<String> {
+pub(crate) fn without_binary(plan: &ReleasePlan) -> BTreeSet<String> {
     plan.roots
         .iter()
         .flat_map(|root| {
@@ -51,7 +35,7 @@ fn assetless(plan: &ReleasePlan) -> BTreeSet<String> {
 }
 
 pub(crate) fn finalize_job(plan: &ReleasePlan, helper: &HelperRelease) -> Option<RenderedJob> {
-    let packages = without_binary(plan, helper);
+    let packages = without_binary(plan);
     if packages.is_empty() {
         return None;
     }

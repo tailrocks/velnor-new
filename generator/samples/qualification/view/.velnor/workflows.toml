@@ -12,7 +12,7 @@ scale_set_runner = "ubuntu-26.04-scale-set"
 name = "mode"
 type = "choice"
 default = "both"
-options = ["both", "features", "js", "artifacts", "buildx", "negative", "composite", "docker-action", "post-fail", "oidc", "cancel", "compose", "bind", "testcontainers", "submodule", "pressure", "mask", "outputs", "js-pin", "services", "container", "cancel-service", "ports", "secret", "mise-pin", "stable-sources"]
+options = ["both", "features", "js", "artifacts", "buildx", "negative", "composite", "docker-action", "post-fail", "oidc", "cancel", "compose", "bind", "testcontainers", "submodule", "pressure", "mask", "outputs", "js-pin", "services", "container", "cancel-service", "ports", "secret", "mise-pin", "stable-sources", "cache", "empty-cache", "mbx-cache-roundtrip"]
 
 
 [[workflow.case]]
@@ -75,6 +75,59 @@ timeout_minutes = 5
 name = "Pinned script"
 uses = "github-script"
 with = { script = "console.log('js-pin-ok')" }
+
+[[workflow.case]]
+id = "empty-cache"
+title = "Empty cache"
+timeout_minutes = 5
+if = "github.ref != format('refs/heads/{0}', github.event.repository.default_branch)"
+permissions = { contents = "read", actions = "write" }
+cache_mode = "write"
+env = { MISE_NO_CONFIG = "1", MISE_NO_ENV = "1" }
+
+[[workflow.case.step]]
+id = "empty"
+name = "Restore absent cache"
+uses = "cache-restore"
+with = { path = "g4-cache.txt", key = "g4-empty-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}", fail-on-cache-miss = "false" }
+
+[[workflow.case.step]]
+name = "Require cache miss"
+run = "test \"$HIT\" != true"
+env = { HIT = "${{ steps.empty.outputs.cache-hit }}" }
+
+[[workflow.case.step]]
+name = "Create spaced directory"
+run = "mkdir -p \"g4 cache\""
+
+[[workflow.case.step]]
+name = "Write spaced path"
+run = "printf '%s\\n' cache-ok > \"g4 cache/note.txt\""
+
+[[workflow.case.step]]
+name = "Save spaced path"
+uses = "cache-save"
+with = { path = "g4 cache/note.txt", key = "g4-space-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}" }
+
+[[workflow.case.step]]
+name = "Remove spaced path"
+run = "rm -f \"g4 cache/note.txt\""
+
+[[workflow.case.step]]
+id = "space"
+name = "Restore spaced path"
+uses = "cache-restore"
+with = { path = "g4 cache/note.txt", key = "g4-space-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}", fail-on-cache-miss = "true" }
+
+[[workflow.case.step]]
+name = "Require spaced content"
+run = "grep -qx cache-ok \"g4 cache/note.txt\""
+env = { HIT = "${{ steps.space.outputs.cache-hit }}" }
+
+[[workflow.case.step]]
+name = "Require spaced hit"
+run = "test \"$HIT\" = true"
+env = { HIT = "${{ steps.space.outputs.cache-hit }}" }
 
 [[workflow.case]]
 id = "composite"
@@ -182,7 +235,7 @@ run = "printf '%s\\n' bind-ok > \"$GITHUB_WORKSPACE/g4-bind.txt\""
 
 [[workflow.case.step]]
 name = "Read it through a bind mount"
-run = "docker run --rm -v \"$GITHUB_WORKSPACE/g4-bind.txt:/g4-bind.txt:ro\" alpine:3.24.4@sha256:0f49f331d9212aff11b932863be4eb01cdf962969aa86dab7d1ee21ac6f5f52b cat /g4-bind.txt > \"$RUNNER_TEMP/g4-bind-out\""
+run = "docker run --rm -v \"$GITHUB_WORKSPACE/g4-bind.txt:/g4-bind.txt:ro\" alpine:3.24.2@sha256:d56c381f961d307a21b3ca004cf1e3910f106644aefb1f43e654c8a56c4fd395 cat /g4-bind.txt > \"$RUNNER_TEMP/g4-bind-out\""
 
 [[workflow.case.step]]
 name = "Require the content"
@@ -529,6 +582,184 @@ needs = ["outputs-scale-set"]
 name = "Check job output"
 run = "test \"$PROOF\" = outputs-ok"
 env = { PROOF = "${{ needs.outputs-scale-set.outputs.proof }}" }
+
+[[workflow.job]]
+id = "cache-scale-set"
+name = "Cache / Velnor Scale Set"
+if = "inputs.mode == 'cache' && github.ref != format('refs/heads/{0}', github.event.repository.default_branch)"
+runner = "ubuntu-26.04-scale-set"
+timeout_minutes = 5
+permissions = { contents = "read", actions = "write" }
+cache_mode = "write"
+env = { MISE_NO_CONFIG = "1", MISE_NO_ENV = "1" }
+
+[[workflow.job.step]]
+name = "Write cache file"
+run = "echo cache-ok > g4-cache.txt"
+
+[[workflow.job.step]]
+name = "Save cache"
+uses = "cache"
+with = { path = "g4-cache.txt", key = "g4-cache-${{ github.run_id }}" }
+
+[[workflow.job]]
+id = "cache-hosted"
+name = "Cache / GitHub hosted"
+if = "inputs.mode == 'cache'"
+runner = "ubuntu-26.04"
+timeout_minutes = 5
+needs = ["cache-scale-set"]
+permissions = { contents = "read", actions = "write" }
+cache_mode = "read"
+
+[[workflow.job.step]]
+name = "Restore cache"
+uses = "cache-restore"
+with = { path = "g4-cache.txt", key = "g4-cache-${{ github.run_id }}", fail-on-cache-miss = "true" }
+
+[[workflow.job.step]]
+name = "Check restore"
+run = "grep -qx cache-ok g4-cache.txt"
+
+[[workflow.job]]
+id = "cache-default-branch-guard"
+name = "Cache qualification / default branch guard"
+if = "(inputs.mode == 'cache' || inputs.mode == 'empty-cache' || inputs.mode == 'mbx-cache-roundtrip') && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)"
+runner = "ubuntu-26.04"
+timeout_minutes = 5
+
+[[workflow.job.step]]
+name = "Reject cache mode on the default branch"
+run = "echo '::error title=cache_qualification_requires_non_default_branch::Dispatch cache qualification modes from a non-default branch. Every cache job is skipped on the default branch.'"
+
+[[workflow.job.step]]
+name = "Fail the guard"
+run = "exit 1"
+
+[[workflow.job]]
+id = "mbx-cache-write-hosted"
+name = "MBX objects cache / branch writer"
+if = "inputs.mode == 'mbx-cache-roundtrip' && github.ref != format('refs/heads/{0}', github.event.repository.default_branch)"
+runner = "ubuntu-26.04"
+timeout_minutes = 5
+permissions = { contents = "read", actions = "write" }
+cache_mode = "write"
+env = { MBX_GC_AUTO = "0", MBX_SHARE_OUT_DIR = "0", ACTIONS_CACHE_MODE = "write", CARGO_HOME = "${{ github.workspace }}/.velnor-mbx-cache-qualification/cargo", MISE_AUTO_INSTALL = "false", MISE_CARGO_HOME = "${{ github.workspace }}/.velnor-mbx-cache-qualification/cargo", MISE_EXEC_AUTO_INSTALL = "false", MISE_LOCKFILE = "0", MISE_NO_CONFIG = "1", MISE_NO_ENV = "1", MISE_NO_HOOKS = "1", MISE_RUSTUP_HOME = "${{ github.workspace }}/.velnor-mbx-cache-qualification/rustup", RUSTUP_HOME = "${{ github.workspace }}/.velnor-mbx-cache-qualification/rustup" }
+
+[[workflow.job.step]]
+name = "Check out"
+uses = "checkout"
+
+[[workflow.job.step]]
+name = "Set up Mise"
+uses = "mise"
+with = { version = "2026.11.1", sha256 = "7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9", install = "false", env = "false" }
+
+[[workflow.job.step]]
+name = "Resolve project tool versions"
+run = "bash qualification/mbx-cache-roundtrip.sh resolve"
+
+[[workflow.job.step]]
+name = "Install pinned Rust toolchain"
+run = "bash qualification/mbx-cache-roundtrip.sh install-rust"
+
+[[workflow.job.step]]
+name = "Verify Rust channel manifest"
+run = "bash qualification/mbx-cache-roundtrip.sh verify-rust"
+
+[[workflow.job.step]]
+name = "Put the verified Rust toolchain on PATH"
+run = "bash qualification/mbx-cache-roundtrip.sh rust-path"
+
+[[workflow.job.step]]
+id = "mbx_cache"
+name = "Restore MBX objects"
+uses = "mr-boxington"
+with = { github-cache-mode = "objects", version = "1.29.2", toolchain = "1.99.1", isolate-objects-cache = "true", cache-generation = "velnor-mbx-1.29.2-share-out-dir-disabled-v1", save-on-workflow-dispatch = "true" }
+
+[[workflow.job.step]]
+id = "mbx-ready"
+name = "Verify MBX action identity and write policy"
+run = "bash qualification/mbx-cache-roundtrip.sh identity-write"
+env = { MBX_VERSION = "${{ steps.mbx_cache.outputs.mbx-version }}", CACHE_SAVE_ELIGIBLE = "${{ steps.mbx_cache.outputs.cache-save-eligible }}", CACHE_SAVE_REASON = "${{ steps.mbx_cache.outputs.cache-save-reason }}", CACHE_HIT = "${{ steps.mbx_cache.outputs.cache-hit }}" }
+
+[[workflow.job.step]]
+name = "Compile MBX cache probe"
+run = "bash qualification/mbx-cache-roundtrip.sh probe"
+
+[[workflow.job.step]]
+name = "Clean MBX workspace outputs"
+if = "always() && steps.mbx-ready.outcome == 'success'"
+run = "bash qualification/mbx-cache-roundtrip.sh clean"
+
+[[workflow.job.step]]
+name = "Sample runner disk after cleanup"
+run = "bash qualification/mbx-cache-roundtrip.sh disk"
+
+[[workflow.job]]
+id = "mbx-cache-read-hosted"
+name = "MBX objects cache / read-only reuse"
+if = "inputs.mode == 'mbx-cache-roundtrip' && github.ref != format('refs/heads/{0}', github.event.repository.default_branch)"
+runner = "ubuntu-26.04"
+timeout_minutes = 5
+needs = ["mbx-cache-write-hosted"]
+permissions = { contents = "read", actions = "read" }
+cache_mode = "read"
+env = { MBX_GC_AUTO = "0", MBX_SHARE_OUT_DIR = "0", ACTIONS_CACHE_MODE = "read", CARGO_HOME = "${{ github.workspace }}/.velnor-mbx-cache-qualification/cargo", MISE_AUTO_INSTALL = "false", MISE_CARGO_HOME = "${{ github.workspace }}/.velnor-mbx-cache-qualification/cargo", MISE_EXEC_AUTO_INSTALL = "false", MISE_LOCKFILE = "0", MISE_NO_CONFIG = "1", MISE_NO_ENV = "1", MISE_NO_HOOKS = "1", MISE_RUSTUP_HOME = "${{ github.workspace }}/.velnor-mbx-cache-qualification/rustup", RUSTUP_HOME = "${{ github.workspace }}/.velnor-mbx-cache-qualification/rustup" }
+
+[[workflow.job.step]]
+name = "Check out"
+uses = "checkout"
+
+[[workflow.job.step]]
+name = "Set up Mise"
+uses = "mise"
+with = { version = "2026.11.1", sha256 = "7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9", install = "false", env = "false" }
+
+[[workflow.job.step]]
+name = "Resolve project tool versions"
+run = "bash qualification/mbx-cache-roundtrip.sh resolve"
+
+[[workflow.job.step]]
+name = "Install pinned Rust toolchain"
+run = "bash qualification/mbx-cache-roundtrip.sh install-rust"
+
+[[workflow.job.step]]
+name = "Verify Rust channel manifest"
+run = "bash qualification/mbx-cache-roundtrip.sh verify-rust"
+
+[[workflow.job.step]]
+name = "Put the verified Rust toolchain on PATH"
+run = "bash qualification/mbx-cache-roundtrip.sh rust-path"
+
+[[workflow.job.step]]
+id = "mbx_cache"
+name = "Restore MBX objects"
+uses = "mr-boxington"
+with = { github-cache-mode = "objects", version = "1.29.2", toolchain = "1.99.1", isolate-objects-cache = "true", cache-generation = "velnor-mbx-1.29.2-share-out-dir-disabled-v1", save-on-workflow-dispatch = "false" }
+
+[[workflow.job.step]]
+id = "mbx-ready"
+name = "Verify MBX action identity and write policy"
+run = "bash qualification/mbx-cache-roundtrip.sh identity-read"
+env = { MBX_VERSION = "${{ steps.mbx_cache.outputs.mbx-version }}", CACHE_SAVE_ELIGIBLE = "${{ steps.mbx_cache.outputs.cache-save-eligible }}", CACHE_SAVE_REASON = "${{ steps.mbx_cache.outputs.cache-save-reason }}", CACHE_HIT = "${{ steps.mbx_cache.outputs.cache-hit }}" }
+
+[[workflow.job.step]]
+name = "Require imported MBX objects"
+run = "bash qualification/mbx-cache-roundtrip.sh require-imported"
+
+[[workflow.job.step]]
+name = "Compile MBX cache probe"
+run = "bash qualification/mbx-cache-roundtrip.sh probe"
+
+[[workflow.job.step]]
+name = "Require reused compilation"
+run = "bash qualification/mbx-cache-roundtrip.sh require-reuse"
+
+[[workflow.job.step]]
+name = "Clean MBX workspace outputs"
+if = "always() && steps.mbx-ready.outcome == 'success'"
+run = "bash qualification/mbx-cache-roundtrip.sh clean"
 
 [[workflow.job]]
 id = "mise-pin-linux-x64"

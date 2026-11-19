@@ -22,7 +22,7 @@ pub(crate) fn saving_facts(
         &manifests.iter().map(String::as_str).collect::<Vec<_>>(),
         Some(format!("shape = \"lint-test\"\ncache_check_blocks = {blocks}\n").as_bytes()),
     )?;
-    let lock = String::from_utf8(HELPER_LOCK.to_vec())?.replacen("0.1.79", "0.1.81", 1);
+    let lock = String::from_utf8(HELPER_LOCK.to_vec())?;
     view.files
         .insert(RepoPath::new(".velnor/rust-ci.lock")?, lock.into_bytes());
     Ok(velnor_rust::detect(&view)?)

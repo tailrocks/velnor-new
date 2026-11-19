@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::cache_mode::CacheMode;
 use crate::check::workflow;
 use crate::error::{WorkflowsError, refuse};
 use crate::raw::RawFile;
@@ -143,6 +144,8 @@ pub struct Job {
     pub timeout_minutes: u16,
     pub concurrency: Option<Concurrency>,
     pub permissions: Vec<(String, String)>,
+    pub cache_mode: Option<CacheMode>,
+    pub env: Vec<(String, Env)>,
     pub outputs: Vec<(String, String)>,
     pub matrix: Option<Matrix>,
     pub container: Option<Container>,
@@ -272,22 +275,26 @@ pub enum Action {
     Mise,
     UploadArtifact,
     DownloadArtifact,
+    Cache,
     CacheRestore,
     CacheSave,
     AttestBuildProvenance,
     GithubScript,
+    MrBoxington,
 }
 
 impl Action {
-    pub const NAMES: [&'static str; 8] = [
+    pub const NAMES: [&'static str; 10] = [
         "checkout",
         "mise",
         "upload-artifact",
         "download-artifact",
+        "cache",
         "cache-restore",
         "cache-save",
         "attest",
         "github-script",
+        "mr-boxington",
     ];
 
     #[must_use]
@@ -297,10 +304,12 @@ impl Action {
             "mise" => Self::Mise,
             "upload-artifact" => Self::UploadArtifact,
             "download-artifact" => Self::DownloadArtifact,
+            "cache" => Self::Cache,
             "cache-restore" => Self::CacheRestore,
             "cache-save" => Self::CacheSave,
             "attest" => Self::AttestBuildProvenance,
             "github-script" => Self::GithubScript,
+            "mr-boxington" => Self::MrBoxington,
             _ => return None,
         })
     }
@@ -313,9 +322,11 @@ impl Action {
             Self::AttestBuildProvenance => &["push-to-registry"],
             Self::UploadArtifact
             | Self::DownloadArtifact
+            | Self::Cache
             | Self::CacheRestore
             | Self::CacheSave
-            | Self::GithubScript => &[],
+            | Self::GithubScript
+            | Self::MrBoxington => &[],
         }
     }
 
@@ -334,6 +345,7 @@ impl Action {
 pub enum Env {
     Text(String),
     Expression(String),
+    Interpolated(String),
 }
 
 impl WorkflowsPlan {

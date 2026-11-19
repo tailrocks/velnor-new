@@ -100,16 +100,13 @@ fn scheduled_budget_runs_after_writers_even_when_a_sibling_or_all_saves_are_skip
         }
     }
     assert!(writers > 1);
-    let old = render("0.1.80", "full_run = \"off\"\n")?;
-    assert!(!old.contains("cache budget"));
-    assert!(!old.contains("rust-trim:"));
     Ok(())
 }
 
 #[test]
 fn a_repository_without_cache_writers_still_budgets_existing_caches() -> TestResult {
     for bytes in [0_u64, 8_000_000_000] {
-        for version in ["0.1.80", "0.1.81"] {
+        for version in ["0.1.81"] {
             let mut repo = crate::base_save::pinned(
                 version,
                 &format!("full_run = \"off\"\ncache_budget_bytes = {bytes}\n"),
@@ -132,11 +129,6 @@ fn a_repository_without_cache_writers_still_budgets_existing_caches() -> TestRes
             }
             let text = workflow(&repo)?;
             assert!(!text.contains("name: Save the"), "{text}");
-            if version == "0.1.80" {
-                assert!(!text.contains("rust-trim:"), "{text}");
-                assert!(!text.contains("cache budget"), "{text}");
-                continue;
-            }
             let all = jobs_of(&text);
             let (_, trim) = all
                 .iter()

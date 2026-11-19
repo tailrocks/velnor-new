@@ -84,6 +84,15 @@ const DOWNLOAD_ARTIFACT: [&str; 10] = [
     "skip-decompress",
     "digest-mismatch",
 ];
+const CACHE: [&str; 7] = [
+    "path",
+    "key",
+    "restore-keys",
+    "upload-chunk-size",
+    "enableCrossOsArchive",
+    "fail-on-cache-miss",
+    "lookup-only",
+];
 const CACHE_RESTORE: [&str; 6] = [
     "path",
     "key",
@@ -118,6 +127,19 @@ const GITHUB_SCRIPT: [&str; 9] = [
     "base-url",
 ];
 
+const MR_BOXINGTON: [&str; 10] = [
+    "backend",
+    "github-cache-mode",
+    "version",
+    "toolchain",
+    "isolate-objects-cache",
+    "cache-generation",
+    "cache-key-suffix",
+    "save-on-pull-request",
+    "save-on-protected-branch",
+    "save-on-workflow-dispatch",
+];
+
 impl Action {
     #[must_use]
     pub fn known_inputs(self) -> &'static [&'static str] {
@@ -126,10 +148,12 @@ impl Action {
             Self::Mise => &MISE,
             Self::UploadArtifact => &UPLOAD_ARTIFACT,
             Self::DownloadArtifact => &DOWNLOAD_ARTIFACT,
+            Self::Cache => &CACHE,
             Self::CacheRestore => &CACHE_RESTORE,
             Self::CacheSave => &CACHE_SAVE,
             Self::AttestBuildProvenance => &ATTEST,
             Self::GithubScript => &GITHUB_SCRIPT,
+            Self::MrBoxington => &MR_BOXINGTON,
         }
     }
 
@@ -137,11 +161,13 @@ impl Action {
     pub fn required_inputs(self) -> &'static [&'static str] {
         match self {
             Self::UploadArtifact => &["path"],
-            Self::CacheRestore | Self::CacheSave => &["path", "key"],
+            Self::Cache | Self::CacheRestore | Self::CacheSave => &["path", "key"],
             Self::GithubScript => &["script"],
-            Self::Checkout | Self::Mise | Self::DownloadArtifact | Self::AttestBuildProvenance => {
-                &[]
-            }
+            Self::Checkout
+            | Self::Mise
+            | Self::DownloadArtifact
+            | Self::AttestBuildProvenance
+            | Self::MrBoxington => &[],
         }
     }
 }

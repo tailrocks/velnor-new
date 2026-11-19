@@ -15,15 +15,6 @@ use crate::required_size::needs_max_bytes;
 
 const VERDICT_JOB: JobId = JobId::from_static("required");
 
-pub(crate) const VERDICT_HELPER: (u64, u64, u64) = (0, 1, 81);
-
-pub(crate) fn has_gate(facts: &RepoFacts) -> bool {
-    facts
-        .helper
-        .as_ref()
-        .is_some_and(|release| release.version().at_least(VERDICT_HELPER))
-}
-
 fn tests_lane(job: &Job) -> Option<RootSlug> {
     job.steps.iter().find_map(|step| match &step.kind {
         StepKind::Cargo(
@@ -112,36 +103,31 @@ pub(crate) fn verdict_job(
     single: bool,
     draft_guard: Option<Step>,
 ) -> Job {
-    let gate = has_gate(facts);
-    let steps: Vec<Step> = if gate {
-        let on_label = facts.config.pr_ci == PrCi::Label;
-        let strict = if on_label {
-            PrRun::Requested
-        } else {
-            PrRun::Always
-        };
-        let install = facts.helper.as_ref().map(|release| Step {
-            pr: strict,
-            ..step(StepKind::InstallHelper(release.clone()))
-        });
-        let plan = if single { RUST_JOB } else { PLAN_JOB };
-        install
-            .into_iter()
-            .chain([Step {
-                pr: strict,
-                ..step(StepKind::Verdict {
-                    spec: spec(plan, jobs),
-                    needs_max_bytes: needs_max_bytes(facts, jobs),
-                })
-            }])
-            .chain(on_label.then(|| Step {
-                pr: PrRun::Unrequested,
-                ..step(StepKind::FailWhenANeedFailed)
-            }))
-            .collect()
+    let on_label = facts.config.pr_ci == PrCi::Label;
+    let strict = if on_label {
+        PrRun::Requested
     } else {
-        vec![step(StepKind::FailWhenANeedFailed)]
+        PrRun::Always
     };
+    let install = facts.helper.as_ref().map(|release| Step {
+        pr: strict,
+        ..step(StepKind::InstallHelper(release.clone()))
+    });
+    let plan = if single { RUST_JOB } else { PLAN_JOB };
+    let steps: Vec<Step> = install
+        .into_iter()
+        .chain([Step {
+            pr: strict,
+            ..step(StepKind::Verdict {
+                spec: spec(plan, jobs),
+                needs_max_bytes: needs_max_bytes(facts, jobs),
+            })
+        }])
+        .chain(on_label.then(|| Step {
+            pr: PrRun::Unrequested,
+            ..step(StepKind::FailWhenANeedFailed)
+        }))
+        .collect();
     Job {
         name: Some(facts.config.required_check.clone()),
         pr: if facts.config.pr_ci == PrCi::Label {
