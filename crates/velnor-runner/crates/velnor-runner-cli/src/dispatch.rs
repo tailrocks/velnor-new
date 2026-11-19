@@ -15,6 +15,8 @@ use crate::state_directory::user_home;
 mod connect;
 mod connect_authority;
 mod connect_config;
+#[cfg(test)]
+mod connect_tests;
 mod connection_state;
 mod credential;
 mod disconnect;

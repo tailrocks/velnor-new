@@ -25,6 +25,9 @@ mod inventory;
 mod ownership;
 #[path = "unbound_retirement/recovery.rs"]
 mod recovery;
+#[cfg(test)]
+#[path = "unbound_retirement/release_ready_tests.rs"]
+mod release_ready_tests;
 #[path = "unbound_retirement/settlement.rs"]
 mod settlement;
 #[path = "unbound_retirement/targets.rs"]
