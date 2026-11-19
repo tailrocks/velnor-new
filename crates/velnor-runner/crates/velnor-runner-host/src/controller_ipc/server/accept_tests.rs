@@ -136,7 +136,7 @@ async fn a_peer_that_never_writes_waits_for_the_read_timeout_before_the_server_g
     let started = Instant::now();
     let mut byte = [0; 1];
     let read = stream.read(&mut byte)?;
-    assert!(started.elapsed() >= IO_TIMEOUT - Duration::from_millis(500));
+    assert!(started.elapsed() >= Duration::from_secs(4));
     assert!(read == 0 || read == 1);
     Ok(())
 }
