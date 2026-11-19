@@ -146,7 +146,7 @@ fn cargo_command(
             locked,
             config,
         } => deny(manifest, *locked, config.as_ref()),
-        CargoCommand::Machete => ("Unused dependencies".into(), "cargo-machete".into(), vec![]),
+        CargoCommand::Machete => ("Unused dependencies".into(), "cargo machete".into(), vec![]),
     }
 }
 
