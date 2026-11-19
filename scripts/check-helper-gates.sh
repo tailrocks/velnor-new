@@ -5,7 +5,8 @@
 # strictly greater than the velnor-ci version already released on the base.
 # A correction may carry `// helper-gate: first in tools-v0.1.N via <commit-ish>` on the
 # gate line or the line directly above it; it passes only when the gate is N, the commit is
-# in tools-v0.1.N, and the commit is not in tools-v0.1.(N-1).
+# in tools-v0.1.N, and the commit is not in tools-v0.1.(N-1). Releases before 0.1.85 are
+# tagged rust-ci-v0.1.N, so the marker may name rust-ci-v0.1.N for those.
 set -euo pipefail
 
 diff_file=""
@@ -34,9 +35,19 @@ case "$patch" in '' | *[!0-9]*) echo "cannot read the velnor-ci version from '$c
 series=${current%.*}
 next="$series.$((patch + 1))"
 
+# Helper releases from 0.1.85 are tagged tools-v<ver>; earlier ones rust-ci-v<ver>.
+release_tag() {
+  if git rev-parse -q --verify "refs/tags/tools-v0.1.$1^{commit}" >/dev/null; then
+    echo "tools-v0.1.$1"
+  else
+    echo "rust-ci-v0.1.$1"
+  fi
+}
+
 verify_correction() {
-  local file=$1 gate=$2 n=$3 commit=$4 tag="tools-v0.1.$3" prev
-  prev="tools-v0.1.$(($3 - 1))"
+  local file=$1 gate=$2 n=$3 commit=$4 tag prev
+  tag=$(release_tag "$n")
+  prev=$(release_tag "$((n - 1))")
   if [ "$gate" != "0.1.$n" ]; then
     echo "$file: marker names $tag but the gate is $gate; the marker must name the gate's release" >&2
     return 1
@@ -78,10 +89,10 @@ report=$(awk -v series="$series" -v patch="$patch" -v next_version="$next" '
     return n
   }
   function marker(line, out,    m) {
-    if (!match(line, /helper-gate: first in tools-v0\.1\.[0-9]+ via [^ ]+/)) return 0
+    if (!match(line, /helper-gate: first in (tools|rust-ci)-v0\.1\.[0-9]+ via [^ ]+/)) return 0
     m = substr(line, RSTART, RLENGTH)
-    match(m, /tools-v0\.1\.[0-9]+/)
-    out["n"] = substr(m, RSTART + 11, RLENGTH - 11)
+    match(m, /0\.1\.[0-9]+/)
+    out["n"] = substr(m, RSTART + 4, RLENGTH - 4)
     out["commit"] = substr(m, index(m, " via ") + 5)
     return 1
   }
@@ -95,7 +106,7 @@ report=$(awk -v series="$series" -v patch="$patch" -v next_version="$next" '
     prevnew = text
     if (!counted || $0 !~ /^\+/) next
     stripped = text
-    sub(/helper-gate: first in tools-v0\.1\.[0-9]+ via [^ ]+/, "", stripped)
+    sub(/helper-gate: first in (tools|rust-ci)-v0\.1\.[0-9]+ via [^ ]+/, "", stripped)
     has = marker(text, mk) || marker(above, mk)
     markN_now = has ? mk["n"] : ""
     markC_now = has ? mk["commit"] : ""

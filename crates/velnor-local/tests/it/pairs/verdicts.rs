@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_local::pairs::{Decision, consumed_agents, decisions, refused_among};
-use velnor_local::scenario::Outcome;
+use velnor_local::scenario::{Metrics, Outcome};
 use velnor_local::verdict::{Check, conclude, verdict};
 
 const ADMITTED: &str = r#"{"pair":"trusted-1","side":"trusted","agent":"a1","allow":true,"reason":null,"ledger":"1-push","run_id":1,"attempt":1,"job":"ci","event":"push","ref":"refs/heads/main","sha":"abc"}"#;
@@ -17,7 +17,7 @@ fn outcome(id: u64, trusted: bool) -> Outcome {
         event: "push".to_owned(),
         conclusion: "success",
         started: Some(112),
-        metrics: Err(String::new()),
+        metrics: Metrics::Failed(String::new()),
         caches: Vec::new(),
         trusted,
     }
@@ -25,7 +25,7 @@ fn outcome(id: u64, trusted: bool) -> Outcome {
 
 fn passing(id: u64, trusted: bool) -> Outcome {
     Outcome {
-        metrics: Ok(std::path::PathBuf::new()),
+        metrics: Metrics::Written(std::path::PathBuf::new()),
         ..outcome(id, trusted)
     }
 }

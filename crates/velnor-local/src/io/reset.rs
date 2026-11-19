@@ -11,7 +11,7 @@ use super::env::{Engine, Environment};
 use super::index_file::{lock_index, read_index, write_index};
 
 const CACHE_DIRECTORY: &str = "cache";
-const RUN_STATE: [&str; 5] = [CACHE_DIRECTORY, "api", "events", "logs", "metrics"];
+const RUN_STATE: [&str; 6] = [CACHE_DIRECTORY, "api", "events", "logs", "metrics", "runs"];
 
 impl<E: Engine> Environment<E> {
     pub async fn reset(&self, keep_cache: bool) -> io::Result<()> {

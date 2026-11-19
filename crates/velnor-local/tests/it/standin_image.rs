@@ -78,3 +78,40 @@ fn the_job_token_expires_when_runner_server_says_not_a_day_later() {
         "the grant must expire timeout-minutes + 10 after queueing"
     );
 }
+
+#[test]
+fn the_runtime_token_carries_neither_the_github_token_nor_a_cache_grant() {
+    let dockerfile = read(DOCKERFILE);
+    let step = dockerfile
+        .split("RUN ")
+        .find(|step| step.contains("sed -i") && step.contains("new Claim(\"github_token\""))
+        .unwrap_or_else(|| unreachable!("no RUN step removes the github_token claim"));
+    for claim in ["github_token", "ac"] {
+        assert!(
+            step.contains(&format!("grep -c 'new Claim(\"{claim}\", ' $f)\" = 1")),
+            "the build does not count the one {claim} claim: {step}"
+        );
+        assert!(
+            step.contains(&format!("-e '/new Claim(\"{claim}\", /d'")),
+            "the build does not delete the {claim} claim: {step}"
+        );
+        assert!(
+            step.contains(&format!("! grep -q 'new Claim(\"{claim}\"'")),
+            "the build does not check that the {claim} claim is gone: {step}"
+        );
+    }
+}
+
+#[test]
+fn the_cache_server_ignores_the_cache_access_claim_the_stand_in_no_longer_signs() {
+    let claims = read("src/token.rs");
+    let verified = claims
+        .split("pub struct Claims")
+        .nth(1)
+        .and_then(|rest| rest.split('}').next())
+        .unwrap_or_else(|| unreachable!("no Claims struct"));
+    assert!(
+        !verified.contains("ac") && !verified.contains("github_token"),
+        "the cache server reads a claim the stand-in no longer signs: {verified}"
+    );
+}

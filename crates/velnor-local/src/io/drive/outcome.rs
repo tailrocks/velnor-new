@@ -11,7 +11,7 @@ use super::Driver;
 use crate::io::RESTORES;
 use crate::io::env::Engine;
 use crate::io::probe::request;
-use crate::scenario::{Outcome, restores};
+use crate::scenario::{Metrics, Outcome, metrics_of, restores};
 use crate::side::Side;
 use crate::standin;
 
@@ -46,7 +46,7 @@ impl<E: Engine + Copy + Send> Driver<'_, E> {
                 event,
                 conclusion,
                 started: None,
-                metrics: Err(String::new()),
+                metrics: Metrics::Failed(String::new()),
                 caches,
                 trusted: false,
             });
@@ -75,16 +75,7 @@ impl<E: Engine + Copy + Send> Driver<'_, E> {
             event,
             conclusion,
             started: github["run_started_at"].as_str().and_then(standin::seconds),
-            metrics: match collected {
-                Ok(done) if done.status.success() && written => Ok(metrics),
-                Ok(done) if done.status.success() => Err(format!(
-                    "{} exited 0 but wrote no {}",
-                    self.args.velnor_ci.display(),
-                    metrics.display()
-                )),
-                Ok(done) => Err(String::from_utf8_lossy(&done.stderr).trim().to_owned()),
-                Err(error) => Err(format!("{}: {error}", self.args.velnor_ci.display())),
-            },
+            metrics: metrics_of(&self.args.velnor_ci, collected, written, metrics),
         })
     }
 }

@@ -157,7 +157,7 @@ Common preparation for each phase follows the existing tool and source ownership
    cache when applicable. Keep their existing independent trust/write rules.
 4. Verify prepared inputs through locked/offline checks before obligations.
 
-The one crate job (a [hard decision](../hard-decisions.md#1-one-job-per-crate-with-parallel-check-steps))
+The one crate job (a former hard decision, removed in #608)
 executes these obligations:
 
 - Sequentially first: the Nextest test-executable build. Nextest is selected

@@ -9,6 +9,7 @@ use velnor_render::RuleViolation;
 use velnor_rust::{DetectError, MAX_SOURCE_ROOTS, MetadataFileError};
 use velnor_workflows::WorkflowsError;
 
+use crate::helper_gate::{CACHE_DEBUG_HELPER, REQUIRED_CHECK_HELPER};
 use crate::{COMPATIBLE_HELPER_SERIES, HELPER_MINIMUM};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -23,6 +24,8 @@ pub enum GenerateError {
     HelperTooOld(HelperVersion),
     MirrorHelperTooOld(HelperVersion),
     HostedHelperTooOld(HelperVersion),
+    CacheDebugHelperTooOld(HelperVersion),
+    RequiredCheckHelperTooOld(HelperVersion),
     InputsLockHelperTooOld(HelperVersion),
     PrivateSourcesHelperTooOld(HelperVersion),
     MbxStoreHelperTooOld(HelperVersion),
@@ -54,11 +57,7 @@ impl fmt::Display for GenerateError {
         match self {
             Self::DeltaStagingCollision(path) => write!(f, "tracked path {path} collides with delta cache staging"),
             Self::Detect(error) => error.fmt(f),
-            Self::IncompatibleHelper(version) => write!(
-                f,
-                "velnor-ci {version} does not fit this velnor-gen, which works with velnor-ci {}.{}.x; pin a compatible release with `velnor-gen pin-helper <version>`",
-                COMPATIBLE_HELPER_SERIES.0, COMPATIBLE_HELPER_SERIES.1
-            ),
+            Self::IncompatibleHelper(version) => write!(f, "{}", incompatible_helper(version)),
             Self::Release(error) => error.fmt(f),
             Self::ReleaseFileNotUtf8(path) => write!(f, "{path} is not UTF-8 text"),
             Self::NoReleaseConfig => write!(
@@ -77,6 +76,8 @@ impl fmt::Display for GenerateError {
                 HELPER_MINIMUM.0, HELPER_MINIMUM.1, HELPER_MINIMUM.2,
                 HELPER_MINIMUM.0, HELPER_MINIMUM.1, HELPER_MINIMUM.2
             ),
+            Self::CacheDebugHelperTooOld(v) => write!(f, "{}", cache_debug_too_old(v)),
+            Self::RequiredCheckHelperTooOld(v) => write!(f, "{}", required_check_too_old(v)),
             Self::MbxStoreHelperTooOld(version) => write!(f, "velnor-ci {version} cannot select the shared MBX store; pin velnor-ci 0.1.85 or later"),
             Self::TooManySourceRoots(roots) => write!(
                 f,
@@ -160,6 +161,27 @@ impl From<DetectError> for GenerateError {
     fn from(error: DetectError) -> Self {
         Self::Detect(error)
     }
+}
+
+fn incompatible_helper(version: &HelperVersion) -> String {
+    format!(
+        "velnor-ci {version} does not fit this velnor-gen, which works with velnor-ci {}.{}.x; pin a compatible release with `velnor-gen pin-helper <version>`",
+        COMPATIBLE_HELPER_SERIES.0, COMPATIBLE_HELPER_SERIES.1
+    )
+}
+
+fn cache_debug_too_old(version: &HelperVersion) -> String {
+    let (major, minor, patch) = CACHE_DEBUG_HELPER;
+    format!(
+        "velnor-ci {version} does not know the cache_debug key of .velnor/rust-ci.toml; pin velnor-ci {major}.{minor}.{patch} or later with `velnor-gen pin-helper {major}.{minor}.{patch}`"
+    )
+}
+
+fn required_check_too_old(version: &HelperVersion) -> String {
+    let (major, minor, patch) = REQUIRED_CHECK_HELPER;
+    format!(
+        "velnor-ci {version} does not name a required_check other than Required for a merge queue run; pin velnor-ci {major}.{minor}.{patch} or later with `velnor-gen pin-helper {major}.{minor}.{patch}`"
+    )
 }
 
 fn modes_too_old(version: &HelperVersion) -> String {

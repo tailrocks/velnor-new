@@ -172,7 +172,8 @@ pub(crate) struct Install {
 
 impl Install {
     pub(crate) fn new(name: &str) -> Result<Self, Box<dyn Error>> {
-        let work = std::env::temp_dir().join(format!("velnor-gen-{name}-{}", std::process::id()));
+        let work =
+            std::env::temp_dir().join(format!("velnor-gen-{name}-{}", crate::io::unique_id()));
         let release = work.join("releases/rust-ci-v1.2.3");
         fs::create_dir_all(&release)?;
         fs::create_dir_all(work.join("temp"))?;

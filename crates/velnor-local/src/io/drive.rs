@@ -116,6 +116,7 @@ async fn load_scenario(args: &RunArgs, scenario: &str) -> io::Result<Scenario> {
         .map_err(io::Error::other)?;
     refuse_fork_branches(&scenario.steps, &args.environment.default_branch)
         .map_err(io::Error::other)?;
+    scenario.refuse_unmodelled().map_err(io::Error::other)?;
     Ok(scenario)
 }
 
@@ -151,7 +152,8 @@ async fn run_one(
         &args.repository,
     )
     .await?;
-    let pin = super::local_ci::pin_workflows(&args.environment, &repo, tag).await?;
+    let pin =
+        super::local_ci::pin_workflows(&args.environment, &repo, tag, args.timeout_scale).await?;
     env.reset(scenario.keeps_cache(args.fresh_cache)).await?;
     let mut environment = args.environment.clone();
     if scenario.has_fork() {
@@ -296,7 +298,7 @@ impl<E: Engine + Copy + Send> Driver<'_, E> {
     }
 
     async fn pin(&self) -> io::Result<()> {
-        super::local_ci::pin_branch(&self.repo, self.pin.as_ref()).await
+        super::local_ci::pin_branch(&self.repo, self.pin.as_ref(), self.args.timeout_scale).await
     }
 
     async fn switch(&self, branch: &str) -> io::Result<()> {

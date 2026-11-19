@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    CargoCommand, FilterRef, GroupFilter, HelperCommand, Job, JobId, Step, StepKind, TestGroup,
+    CargoCommand, FilterRef, GroupFilter, Job, JobId, PrepareLocks, Step, StepKind, TestGroup,
     TestNeed, When,
 };
 
@@ -147,7 +147,7 @@ impl RootJobs<'_> {
                         ..step
                     }),
             );
-            steps.push(self.gated(StepKind::Helper(HelperCommand::Prepare)));
+            steps.push(self.gated(StepKind::Prepare(PrepareLocks::All)));
         }
         steps.push(self.gated(StepKind::DownloadArchive {
             name: artifact.to_owned(),

@@ -164,7 +164,7 @@ fn authority(fixture: &Fixture) -> TestResult<Link> {
     )?)
 }
 
-async fn refreshes(fixture: &Fixture) -> TestResult<Vec<(i64, String)>> {
+pub(super) async fn refreshes(fixture: &Fixture) -> TestResult<Vec<(i64, String)>> {
     let connection = fixture.journal.connection().await?;
     let mut rows = connection
         .query(

@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 use velnor_local::io::local_ci::{pin_branch, pin_workflows};
+use velnor_local::timeout::TimeoutScale;
 
 use crate::local_ci::{ELF_ARM64, binary, parsed};
 use crate::support::temp_dir;
@@ -113,7 +114,7 @@ async fn a_local_dev_binary_is_accepted_by_the_launcher_check_with_the_flag() {
     let file = binary(&temp_dir("dev-binary-file"), &ELF_ARM64);
     let flag = file.display().to_string();
     let args = parsed(&repo, "plain", &["--velnor-ci-binary", &flag]);
-    pin_workflows(&args, &repo, "t")
+    pin_workflows(&args, &repo, "t", TimeoutScale::default())
         .await
         .unwrap_or_else(|e| unreachable!("{e}"));
     let workflow =
@@ -132,7 +133,7 @@ async fn without_the_flag_a_local_binary_is_still_refused_and_the_workflow_is_un
     let repo = checkout("dev-binary-refused");
     let file = binary(&temp_dir("dev-binary-file-2"), &ELF_ARM64);
     let args = parsed(&repo, "plain", &[]);
-    pin_workflows(&args, &repo, "t")
+    pin_workflows(&args, &repo, "t", TimeoutScale::default())
         .await
         .unwrap_or_else(|e| unreachable!("{e}"));
     let workflow =
@@ -151,7 +152,7 @@ async fn the_flag_changes_only_the_linux_arm64_digest_and_the_check_still_refuse
     let other = binary(&temp_dir("dev-binary-other"), b"another build");
     let flag = file.display().to_string();
     let args = parsed(&repo, "plain", &["--velnor-ci-binary", &flag]);
-    pin_workflows(&args, &repo, "t")
+    pin_workflows(&args, &repo, "t", TimeoutScale::default())
         .await
         .unwrap_or_else(|e| unreachable!("{e}"));
     let workflow =
@@ -173,14 +174,18 @@ async fn a_file_that_is_not_a_linux_arm64_binary_is_refused_and_pair_mode_pins_l
     let text = binary(&temp_dir("dev-binary-text"), b"#!/bin/sh\n");
     let flag = text.display().to_string();
     let args = parsed(&repo, "plain", &["--velnor-ci-binary", &flag]);
-    assert!(pin_workflows(&args, &repo, "t").await.is_err());
+    assert!(
+        pin_workflows(&args, &repo, "t", TimeoutScale::default())
+            .await
+            .is_err()
+    );
     assert_eq!(
         std::fs::read_to_string(repo.join(WORKFLOW)).ok(),
         Some(sample())
     );
     let flag = good.display().to_string();
     let args = parsed(&repo, "pair", &["--velnor-ci-binary", &flag]);
-    let pin = pin_workflows(&args, &repo, "t").await;
+    let pin = pin_workflows(&args, &repo, "t", TimeoutScale::default()).await;
     assert!(matches!(pin, Ok(Some(_))), "{pin:?}");
     assert_ne!(
         std::fs::read_to_string(repo.join(WORKFLOW)).ok(),
@@ -195,7 +200,7 @@ async fn a_branch_that_already_exists_in_the_checkout_is_pinned_when_the_driver_
     let file = binary(&temp_dir("dev-binary-file-5"), &ELF_ARM64);
     let flag = file.display().to_string();
     let args = parsed(&repo, "plain", &["--velnor-ci-binary", &flag]);
-    let pin = pin_workflows(&args, &repo, "t")
+    let pin = pin_workflows(&args, &repo, "t", TimeoutScale::default())
         .await
         .unwrap_or_else(|e| unreachable!("{e}"))
         .unwrap_or_else(|| unreachable!("no pin"));
@@ -208,7 +213,7 @@ async fn a_branch_that_already_exists_in_the_checkout_is_pinned_when_the_driver_
         &file
     )));
 
-    pin_branch(&repo, Some(&pin))
+    pin_branch(&repo, Some(&pin), TimeoutScale::default())
         .await
         .unwrap_or_else(|e| unreachable!("{e}"));
 
@@ -217,7 +222,7 @@ async fn a_branch_that_already_exists_in_the_checkout_is_pinned_when_the_driver_
     let output = launch(&workflow, &pinned_digest(&workflow), &file);
     assert!(!refused(&output), "{output:?}");
     let commits = git(&repo, &["rev-list", "--count", "HEAD"]);
-    pin_branch(&repo, Some(&pin))
+    pin_branch(&repo, Some(&pin), TimeoutScale::default())
         .await
         .unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(git(&repo, &["rev-list", "--count", "HEAD"]), commits);
@@ -234,7 +239,7 @@ async fn refusal(repo: &Path, name: &str) -> String {
     let file = binary(&temp_dir(name), &ELF_ARM64);
     let flag = file.display().to_string();
     let args = parsed(repo, "plain", &["--velnor-ci-binary", &flag]);
-    match pin_workflows(&args, repo, "t").await {
+    match pin_workflows(&args, repo, "t", TimeoutScale::default()).await {
         Ok(_) => unreachable!("a symlinked workflow path was accepted"),
         Err(error) => error.to_string(),
     }

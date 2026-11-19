@@ -153,6 +153,7 @@ impl ReleaseError {
             ),
             Self::Family(error) => write!(f, "{error}"),
             Self::Group(error) => write!(f, "{error}"),
+            Self::Shipped(error) => write!(f, "{error}"),
             Self::InvalidCheck(check, problem) => {
                 write!(f, ".velnor/release.toml: check {check:?} {problem}")
             }

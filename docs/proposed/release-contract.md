@@ -181,8 +181,8 @@ Rules:
   comparison cannot be read (it fails closed). `velnor-ci release record` then
   resolves the commit of each recorded
   tag, requires it to equal the verified commit, and exports it as
-  `<package>_commit`; the build jobs compare their checkout with that output
-  (helper 0.1.81+).
+  `<package>_commit`; the build jobs compare their checkout with that output.
+  The generator's 0.1.81 minimum helper floor (#1713) covers this output.
 - Publish only from repository-local generated jobs on fresh GitHub-hosted
   runners, an explicitly preconfigured protected environment, and trusted
   eligible branch/dispatch events. Never publish from PRs,
@@ -290,7 +290,7 @@ its tag pattern, and records every one whose tag exists, whose release is not
 yet published, and which has exactly one draft release that the release App
 created; a draft anyone else created, or a second draft, fails the job. A
 recovered tag passes the same ancestry check as a fresh one, and its package
-output feeds the same finalizer and build jobs (helper 0.1.92+).
+output feeds the same finalizer and build jobs (helper 0.1.93+).
 
 No broad ignore-errors, no success on an empty result, no republishing every
 member after a partial failure. Use release-plz for publication with thin

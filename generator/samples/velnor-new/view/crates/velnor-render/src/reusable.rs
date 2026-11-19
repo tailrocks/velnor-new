@@ -73,7 +73,7 @@ fn render_one(
                 .collect(),
         ),
     ));
-    let file = crate::header::seal(REUSABLE_HEADER, &emit(&document));
+    let file = crate::seal(REUSABLE_HEADER, &emit(&document));
     if file.len() > MAX_WORKFLOW_BYTES {
         return Err(vec![RuleViolation {
             job: String::new(),

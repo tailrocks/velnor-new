@@ -11,7 +11,7 @@ use std::process::Command;
 
 use crate::facts::TestResult;
 use crate::lock::locked;
-use crate::pipeline::{view, workflow};
+use crate::pipeline::{pin_helper, view, workflow};
 
 const DEBUG_LOG: &str = "CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'";
 
@@ -102,7 +102,9 @@ fn the_workflow_reads_no_repository_variable_unless_cache_debug_is_opted_in() ->
 
 #[test]
 fn cargo_logs_fingerprints_only_when_the_repository_variable_is_one() -> TestResult {
-    let text = workflow(&view(&["Cargo.toml"], Some(b"cache_debug = true\n"))?)?;
+    let mut repo = view(&["Cargo.toml"], Some(b"cache_debug = true\n"))?;
+    pin_helper(&mut repo, "0.1.82")?;
+    let text = workflow(&repo)?;
     let cargo: Vec<&str> = steps(&text)
         .into_iter()
         .filter(|step| step.contains(r#""$VELNOR_EXEC" run -- cargo"#))
