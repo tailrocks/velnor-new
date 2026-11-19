@@ -179,6 +179,8 @@ fn measure_population(budget: &SpeedBudget, history: &History, evaluation: &mut 
     let window = history.samples.len();
     let wall = median(history.samples.iter().map(|sample| sample.wall_seconds));
     let runner = median(history.samples.iter().map(|sample| sample.runner_seconds));
+    // A run without a setup measurement leaves the window incomplete, so the
+    // median is missing instead of being computed from fewer runs.
     let setup = history
         .samples
         .iter()

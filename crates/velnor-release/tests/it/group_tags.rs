@@ -9,9 +9,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::fixture::TestResult;
 
-/// The `[[package]]` entries of the repository's `release-plz.toml`, by name.
-/// The file holds grouped members (`git_tag_enable = false`) that the generic
-/// release validator refuses, so it is read as plain TOML.
+/// The `[[package]]` entries of the repository's `release-plz.toml`, by name,
+/// read as plain TOML.
 fn entries() -> Result<BTreeMap<String, toml::Table>, Box<dyn std::error::Error>> {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../release-plz.toml");
     let document: toml::Table = std::fs::read_to_string(path)?.parse()?;

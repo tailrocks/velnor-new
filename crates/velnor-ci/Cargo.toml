@@ -44,8 +44,6 @@ ureq = { version = "=3.5.2", default-features = false, features = ["rustls"] }
 blake3 = { version = "=1.8.7" }
 sha2 = { version = "=0.11.1" }
 toml = { version = "=1.1.8" }
-base64 = { version = "=0.23.1" }
-miniz_oxide = { version = "=0.9.1", default-features = false, features = ["with-alloc"] }
 zip = { version = "=9.0.5", default-features = false, features = ["deflate-flate2"] }
 # Selects zip's pure-Rust deflate backend through feature unification; the archive is read through `zip`.
 flate2 = { version = "=1.1.11", default-features = false, features = ["rust_backend"] }

@@ -4,7 +4,7 @@
 use velnor_ci::budget::{History, Population, Sample, evaluate};
 use velnor_model::SpeedBudget;
 
-fn sample(run_id: u64, wall: u64, runner: u64, setup: Option<u64>) -> Sample {
+pub(crate) fn sample(run_id: u64, wall: u64, runner: u64, setup: Option<u64>) -> Sample {
     Sample {
         run_id,
         wall_seconds: wall,
@@ -14,14 +14,14 @@ fn sample(run_id: u64, wall: u64, runner: u64, setup: Option<u64>) -> Sample {
     }
 }
 
-fn history(population: Population, samples: Vec<Sample>) -> History {
+pub(crate) fn history(population: Population, samples: Vec<Sample>) -> History {
     History {
         population,
         samples,
     }
 }
 
-fn budget(pr_wall: u64, main_wall: u64, runner: u64, setup: u64) -> SpeedBudget {
+pub(crate) fn budget(pr_wall: u64, main_wall: u64, runner: u64, setup: u64) -> SpeedBudget {
     SpeedBudget {
         pr_wall_seconds: pr_wall,
         main_wall_seconds: main_wall,
@@ -186,7 +186,7 @@ fn listing() -> String {
     .to_string()
 }
 
-fn run(started: &str, ended: &str) -> String {
+pub(crate) fn run(started: &str, ended: &str) -> String {
     serde_json::json!({
         "name": "Rust CI", "status": "completed", "conclusion": "success", "run_attempt": 1,
         "event": "pull_request", "head_sha": "abc",
@@ -195,7 +195,7 @@ fn run(started: &str, ended: &str) -> String {
     .to_string()
 }
 
-fn jobs(started: &str, ended: &str, restored: &str) -> String {
+pub(crate) fn jobs(started: &str, ended: &str, restored: &str) -> String {
     serde_json::json!({
         "total_count": 1,
         "jobs": [{

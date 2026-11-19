@@ -174,3 +174,43 @@ fn the_run_history_stops_paging_once_every_population_has_enough_runs() {
         ]
     );
 }
+
+#[test]
+fn a_history_with_no_scheduled_runs_is_read_for_a_bounded_number_of_pages() {
+    let mut fake = FakeGitHub::default();
+    let full = |event: &str, branch: &str, first: u64| -> Vec<Value> {
+        (0..100)
+            .map(|n| {
+                let mut run = listed(first + n, event, branch);
+                run["run_attempt"] = json!(2);
+                run
+            })
+            .collect()
+    };
+    for page in 1..=10_u32 {
+        let first = u64::from(page) * 1000;
+        listing(
+            &mut fake,
+            "pull_request",
+            None,
+            page,
+            &full("pull_request", "feature", first),
+        );
+        listing(
+            &mut fake,
+            "push",
+            Some("main"),
+            page,
+            &full("push", "main", first),
+        );
+        listing(
+            &mut fake,
+            "schedule",
+            None,
+            page,
+            &full("schedule", "main", first),
+        );
+    }
+    let histories = gather(&fake, &repo(), "main", 2).unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(histories.is_empty(), "{histories:?}");
+}

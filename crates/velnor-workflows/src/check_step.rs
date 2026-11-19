@@ -9,6 +9,7 @@ use crate::expression::{
     is_identifier, whole_expression,
 };
 use crate::helper_call::{HELPER_COMMANDS, calls_velnor_ci, subcommand};
+use crate::job_limits::bounded_cache_keys;
 use crate::plan::{Action, Body, Env, LocalAction, Step};
 use crate::raw::RawStep;
 
@@ -89,12 +90,14 @@ pub(crate) fn step(
         .condition
         .map(|text| check_condition(&text, scope))
         .transpose()?;
+    let with = values(job, raw_with, scope, Some(&WITH_INTERPOLATIONS), check)?;
+    bounded_cache_keys(job, &body, &with)?;
     Ok(Step {
         id: raw.id,
         name: raw.name.unwrap_or(label),
         condition,
         body,
-        with: values(job, raw_with, scope, Some(&WITH_INTERPOLATIONS), check)?,
+        with,
         continue_on_error: raw.continue_on_error,
         env: values(job, raw.env, scope, None, check_env)?,
     })

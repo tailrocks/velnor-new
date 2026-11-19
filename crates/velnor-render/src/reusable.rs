@@ -3,8 +3,8 @@
 
 use velnor_model::{HelperRelease, github_hosted};
 use velnor_workflows::{
-    Action, Body, CallTarget, CallValue, Concurrency, Env, Job, MatrixSource, Step, Workflow,
-    WorkflowsPlan,
+    Action, Body, CallTarget, CallValue, Concurrency, Env, Job, Matrix, MatrixSource, Step,
+    Workflow, WorkflowsPlan,
 };
 
 use crate::gate::all_conditions;
@@ -100,7 +100,10 @@ fn rendered_job(workflow: &Workflow, job: &Job, helper: &HelperRelease) -> Rende
         needs: job.needs.clone(),
         condition: call_fence(
             job,
-            condition(workflow.condition.as_deref(), job.condition.as_deref()),
+            matrix_output_guard(
+                job,
+                condition(workflow.condition.as_deref(), job.condition.as_deref()),
+            ),
         ),
         concurrency: job.concurrency.as_ref().map(rendered_concurrency),
         environment: job.environment.clone(),
@@ -176,6 +179,27 @@ fn condition(workflow: Option<&str>, job: Option<&str>) -> Option<String> {
         (Some(only), None) | (None, Some(only)) => Some(format!("${{{{ {only} }}}}")),
         (Some(first), Some(second)) => Some(format!("${{{{ ({first}) && ({second}) }}}}")),
     }
+}
+
+/// `fromJSON` of an output that was never set fails the run while the matrix is expanded, so the
+/// job waits for a non-empty output.
+fn matrix_output_guard(job: &Job, condition: Option<String>) -> Option<String> {
+    let Some(Matrix {
+        source: MatrixSource::Output {
+            from_job,
+            from_output,
+        },
+        ..
+    }) = &job.matrix
+    else {
+        return condition;
+    };
+    all_conditions(
+        Some(format!(
+            "${{{{ needs.{from_job}.outputs.{from_output} != '' }}}}"
+        )),
+        condition,
+    )
 }
 
 /// A call job has no `runs-on` to put the fork fallback on, and the callee may run on a

@@ -1,16 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-mod admit_cases;
-mod admit_cases_runs;
-mod admit_cases_tags;
-mod admit_world;
-mod admit_zip;
 mod audit;
 mod base_expiry;
 mod bench_compare;
 mod budget;
 mod budget_history;
+mod budget_window;
 mod cache;
 mod cache_budget;
 mod cache_flow;
@@ -105,20 +101,7 @@ mod prepare_inputs;
 mod prepare_install;
 mod prepare_lock_key;
 mod prepare_targets;
-mod preview_admit;
-mod preview_admit_deadline;
-mod preview_authority;
-mod preview_authority_world;
-mod preview_cli;
-mod preview_fakes;
 mod preview_helpers;
-mod preview_install_signals;
-mod preview_login;
-mod preview_mutations;
-mod preview_owner_id;
-mod preview_runtime;
-mod preview_sealed;
-mod preview_world;
 mod private_check;
 mod private_queue;
 mod qualification_compare;

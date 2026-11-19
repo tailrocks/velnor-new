@@ -272,7 +272,7 @@ fn with_container_and_service(container: &str, service: &str) -> String {
     CASES.replace(
         "[[workflow.case.step]]\nname = \"Mask canary\"",
         &format!(
-            "[workflow.case.container]\nimage = \"{container}\"\n\n[[workflow.case.service]]\nname = \"redis\"\nimage = \"{service}\"\nports = [\"6379:6379\"]\noptions = \"--health-cmd 'redis-cli ping'\"\n\n[[workflow.case.step]]\nname = \"Mask canary\""
+            "[workflow.case.container]\nimage = \"{container}\"\n\n[[workflow.case.service]]\nname = \"redis\"\nimage = \"{service}\"\nports = [\"6379:6379\"]\noptions = \"--health-cmd \\\"redis-cli ping\\\"\"\n\n[[workflow.case.step]]\nname = \"Mask canary\""
         ),
     )
 }
@@ -337,7 +337,7 @@ fn a_case_container_or_service_without_a_digest_is_refused() -> TestResult {
 fn a_case_service_needs_a_health_check() -> TestResult {
     let pinned = format!("alpine:3@{DIGEST}");
     let cases = with_container_and_service(&pinned, &pinned)
-        .replace("--health-cmd 'redis-cli ping'", "--health-retries 3");
+        .replace("--health-cmd \\\"redis-cli ping\\\"", "--health-retries 3");
     let message = refusal(&format!("{MODES}{cases}"))?;
     assert!(message.contains("--health-cmd"), "{message}");
     Ok(())

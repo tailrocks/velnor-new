@@ -13,6 +13,9 @@ use crate::github::{
 use crate::time::seconds_between;
 
 const PAGE_SIZE: usize = 100;
+/// Runs come newest first, so a window older than this many pages of successful
+/// runs is not a recent measurement.
+const MAX_PAGES: u32 = 10;
 const POPULATIONS: [Population; 3] = [
     Population::PullRequest,
     Population::MainPush,
@@ -38,7 +41,7 @@ fn newest_runs(
     let workflow = path.as_str().rsplit('/').next().unwrap_or_default();
     let (event, branch) = listing(population, default_branch);
     let mut ids = Vec::new();
-    for page in 1_u32.. {
+    for page in 1..=MAX_PAGES {
         let body = github.get(&event_runs_path(
             repo,
             workflow,
