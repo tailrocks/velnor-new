@@ -28,6 +28,7 @@ struct Run {
     pushed: &'static str,
     a: (&'static str, &'static str),
     b: (&'static str, &'static str),
+    ignored: &'static str,
     event: &'static str,
 }
 
@@ -38,6 +39,7 @@ fn passing() -> Run {
         pushed: "skipped",
         a: ("4", "4"),
         b: ("2", "2"),
+        ignored: "0",
         event: "pull_request",
     }
 }
@@ -51,7 +53,11 @@ fn judge(run: &Run) -> Result<(bool, String), Box<dyn std::error::Error>> {
     };
     let plan = owned(&[("rust_root_mode", run.mode), ("rust_root_tests", "run")]);
     let counts = |(tests_run, listed): (&str, &str)| {
-        let mut outputs = owned(&[("tests_run", tests_run), ("tests_listed", listed)]);
+        let mut outputs = owned(&[
+            ("tests_run", tests_run),
+            ("tests_listed", listed),
+            ("tests_ignored", run.ignored),
+        ]);
         if canonical(tests_run) && canonical(listed) {
             outputs.insert(
                 "tests_by_package".to_owned(),
@@ -189,6 +195,13 @@ fn a_package_that_listed_tests_and_ran_none_fails_even_when_another_job_ran() ->
         false,
         "a test job of root listed no tests and ran none",
     )?;
+    let run = Run {
+        a: ("0", "0"),
+        b: ("0", "0"),
+        ignored: "5",
+        ..passing()
+    };
+    expect(&run, true, "Required: pass")?;
     let run = Run {
         a: ("4", "4"),
         b: ("", "2"),
