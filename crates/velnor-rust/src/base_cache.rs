@@ -30,7 +30,8 @@ pub(crate) fn inputs_cli(facts: &RepoFacts) -> InputsCli {
     }
 }
 
-const SOURCES_FETCH_HELPER: (u64, u64, u64) = (0, 1, 86);
+/// `velnor-ci sources fetch --roots` first shipped in tools-v0.1.88; 0.1.86 and 0.1.87 reject it.
+const SOURCES_FETCH_HELPER: (u64, u64, u64) = (0, 1, 88);
 const MEMBER_LOCK_HELPER: (u64, u64, u64) = (0, 1, 86);
 
 pub(crate) fn cache_root(facts: &RepoFacts, root: &RustRoot) -> CacheRoot {

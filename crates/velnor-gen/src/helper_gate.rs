@@ -2,8 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    DocsRun, HelperRelease, HelperVersion, MbxStore, Platform, PrCi, PushAfterMergeGroup,
-    RepoFacts,
+    DocsRun, HelperRelease, HelperVersion, MbxStore, Platform, PrCi, PushAfterMergeGroup, RepoFacts,
 };
 
 use crate::{BUDGET_HELPER, COMPATIBLE_HELPER_SERIES, GenerateError, HELPER_MINIMUM};

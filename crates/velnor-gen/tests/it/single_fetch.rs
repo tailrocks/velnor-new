@@ -2,7 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_gen::{GenerateError, expected_with_notes};
-use velnor_model::{RepoPath, RepoView};
+use velnor_model::{
+    CacheKey, CacheRoot, Concurrency, Host, Job, JobId, Permissions, PrRun, PullRequestType,
+    RepoPath, RepoView, RootSlug, RunnerLabel, Step, StepKind, Triggers, WORKFLOW_PATH, When,
+    WorkflowPlan,
+};
+use velnor_render::render;
 
 use crate::archive::jobs_of;
 use crate::base_save::{names, step};
@@ -44,7 +49,7 @@ fn savers(text: &str) -> Vec<(String, String)> {
 fn a_helper_with_sources_fetch_gets_one_step_listing_every_root_in_order() -> TestResult {
     let text = workflow(&repo(
         &["Cargo.toml", "xtask/Cargo.toml", "tools/Cargo.toml"],
-        "0.1.86",
+        "0.1.88",
     )?)?;
     let savers = savers(&text);
     assert!(savers.len() >= 3, "{}", savers.len());
@@ -77,7 +82,7 @@ fn a_helper_with_sources_fetch_gets_one_step_listing_every_root_in_order() -> Te
 
 #[test]
 fn the_sources_save_still_requires_the_one_fetch_to_succeed() -> TestResult {
-    let text = workflow(&repo(&["Cargo.toml", "xtask/Cargo.toml"], "0.1.86")?)?;
+    let text = workflow(&repo(&["Cargo.toml", "xtask/Cargo.toml"], "0.1.88")?)?;
     let savers = savers(&text);
     assert!(savers.len() >= 2, "{}", savers.len());
     for (id, block) in savers {
@@ -118,7 +123,7 @@ fn a_helper_without_sources_fetch_keeps_one_step_per_root_and_the_sixteen_root_r
 #[test]
 fn the_released_helpers_without_sources_fetch_keep_the_per_root_steps_and_the_limit() -> TestResult
 {
-    for helper in ["0.1.82", "0.1.83", "0.1.84", "0.1.85"] {
+    for helper in ["0.1.82", "0.1.83", "0.1.84", "0.1.85", "0.1.86", "0.1.87"] {
         let text = workflow(&repo(&["Cargo.toml", "xtask/Cargo.toml"], helper)?)?;
         for (id, block) in savers(&text) {
             assert!(step(&block, FETCH_STEP).is_none(), "{helper} {id}");
@@ -141,7 +146,7 @@ fn the_released_helpers_without_sources_fetch_keep_the_per_root_steps_and_the_li
 fn twenty_roots_fit_the_workflow_limit_with_the_single_fetch_step() -> TestResult {
     let manifests = many(20);
     let names: Vec<&str> = manifests.iter().map(String::as_str).collect();
-    let text = workflow(&repo(&names, "0.1.86")?)?;
+    let text = workflow(&repo(&names, "0.1.88")?)?;
     assert!(text.len() <= 500_000, "{} bytes", text.len());
     let savers = savers(&text);
     assert!(savers.len() >= 20, "{}", savers.len());
@@ -155,6 +160,136 @@ fn twenty_roots_fit_the_workflow_limit_with_the_single_fetch_step() -> TestResul
         run.split_whitespace().count(),
         4 + 20,
         "one word per root: {run}"
+    );
+    Ok(())
+}
+
+fn long_roots(count: usize) -> Result<Vec<RepoPath>, Box<dyn std::error::Error>> {
+    (0..count)
+        .map(|index| {
+            Ok(RepoPath::new(format!(
+                "r{index:02}/{}/Cargo.toml",
+                "x".repeat(96)
+            ))?)
+        })
+        .collect()
+}
+
+fn step_of(kind: StepKind) -> Step {
+    Step {
+        kind,
+        directory: None,
+        manifest: None,
+        target_dir: None,
+        when: When::Success,
+        skip_on_draft: false,
+        pr: PrRun::Always,
+        gate: None,
+        reads: None,
+        skip_after_merge_group: None,
+    }
+}
+
+fn render_fetch(manifests: Vec<RepoPath>) -> Result<String, Box<dyn std::error::Error>> {
+    let lane = RootSlug::new("rust")?;
+    let root = CacheRoot::new(&RepoPath::new("Cargo.toml")?, RepoPath::new("target")?);
+    let plan = WorkflowPlan {
+        name: "Rust CI".to_owned(),
+        triggers: Triggers {
+            pull_request: vec![PullRequestType::Opened],
+            push_branch: None,
+            merge_group: false,
+            schedule: None,
+            workflow_dispatch: false,
+        },
+        concurrency: Concurrency::CancelOlderPullRequestRuns,
+        permissions: Permissions::default(),
+        fork_runner: RunnerLabel::new("ubuntu-latest")?,
+        jobs: vec![Job {
+            id: JobId::new("rust")?,
+            name: None,
+            comment: None,
+            needs: Vec::new(),
+            when: When::Success,
+            pr: PrRun::Always,
+            runs_on: RunnerLabel::new("ubuntu-latest")?,
+            permissions: Permissions::default(),
+            timeout_minutes: 10,
+            reports_ignored: false,
+            gate: None,
+            plan_outputs: Vec::new(),
+            group_outputs: Vec::new(),
+            steps: vec![
+                step_of(StepKind::SourcesFetchAll { lane, manifests }),
+                step_of(StepKind::CacheSave(CacheKey::Sources {
+                    host: Host,
+                    lane: root,
+                })),
+            ],
+        }],
+    };
+    let files = render(&plan).map_err(|found| format!("{found:?}"))?;
+    Ok(files.get(&WORKFLOW_PATH).ok_or("no workflow")?.clone())
+}
+
+#[test]
+fn roots_that_overflow_one_run_value_are_fetched_by_chained_steps() -> TestResult {
+    let text = render_fetch(long_roots(20)?)?;
+    let block = jobs_of(&text).into_iter().next().ok_or("no job")?.1;
+    let all = names(&block);
+    let fetches: Vec<&String> = all
+        .iter()
+        .filter(|name| name.starts_with(FETCH_STEP))
+        .collect();
+    assert!(fetches.len() >= 2, "{all:?}");
+    let mut roots = 0;
+    for (index, name) in fetches.iter().enumerate() {
+        let fetch = step(&block, name).ok_or("no fetch")?;
+        let run = fetch
+            .lines()
+            .find_map(|line| line.trim().strip_prefix("run: "))
+            .ok_or("no run")?;
+        assert!(run.chars().count() <= 2_000, "{} characters", run.len());
+        roots += run
+            .split_whitespace()
+            .filter(|word| word.starts_with("./") || *word == ".")
+            .count();
+        let id = |at: usize| match at {
+            0 => "sources_fetch_all".to_owned(),
+            at => format!("sources_fetch_all_{at}"),
+        };
+        assert!(fetch.contains(&format!("id: {}", id(index))), "{fetch}");
+        assert!(fetch.contains("continue-on-error: true"), "{fetch}");
+        if let Some(previous) = index.checked_sub(1) {
+            assert!(
+                fetch.contains(&format!("steps.{}.outcome == ''success''", id(previous))),
+                "{fetch}"
+            );
+        }
+    }
+    assert_eq!(roots, 20, "every root is fetched exactly once");
+    let save = step(&block, SAVE_STEP).ok_or("no save")?;
+    assert!(
+        save.contains(&format!(
+            "steps.sources_fetch_all_{}.outcome == ''success''",
+            fetches.len() - 1
+        )),
+        "{save}"
+    );
+    Ok(())
+}
+
+#[test]
+fn roots_that_fit_one_run_value_keep_the_single_step() -> TestResult {
+    let text = render_fetch(long_roots(3)?)?;
+    let block = jobs_of(&text).into_iter().next().ok_or("no job")?.1;
+    let all = names(&block);
+    assert_eq!(
+        all.iter()
+            .filter(|name| name.starts_with(FETCH_STEP))
+            .count(),
+        1,
+        "{all:?}"
     );
     Ok(())
 }
