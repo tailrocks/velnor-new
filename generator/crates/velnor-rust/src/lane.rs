@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 
 use velnor_model::{
     CargoCommand, Gate, GateNeed, HelperCommand, Job, JobId, PackageName, PlanFrom, PlanRef,
-    RepoFacts, RootSlug, Step, StepKind, When,
+    RepoFacts, RootSlug, RustRoot, Step, StepKind, When,
 };
 
 use crate::plan::{
@@ -61,11 +61,7 @@ impl Lane {
         self.plan.is_some().then(|| self.gate(GateNeed::Selected))
     }
 
-    pub(crate) fn cargo(
-        &self,
-        command: CargoCommand,
-        directory: Option<velnor_model::RepoPath>,
-    ) -> Step {
+    pub(crate) fn cargo(&self, command: CargoCommand, root: Option<&RustRoot>) -> Step {
         let gate = match command {
             CargoCommand::Doctest => Some(self.gate(GateNeed::Doctests)),
             CargoCommand::Doc => Some(self.gate(GateNeed::Docs)),
@@ -84,8 +80,11 @@ impl Lane {
         Step {
             gate,
             reads,
+            directory: root.and_then(|root| root.manifest.parent()),
+            target_dir: root
+                .filter(|_| command.builds())
+                .map(|root| root.target_dir.clone()),
             kind: StepKind::Cargo(command),
-            directory,
             when: When::NotCancelled,
             skip_on_draft: false,
         }
