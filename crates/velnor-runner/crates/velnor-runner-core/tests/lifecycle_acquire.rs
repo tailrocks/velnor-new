@@ -90,3 +90,16 @@ fn provisioning_follows_a_recorded_acquire() {
     assert!(matches!(step.next, WorkerState::Provisioning { .. }));
     assert_eq!(step.effect, Effect::Advance);
 }
+
+#[test]
+fn conflict_after_success_does_not_free_the_slot() {
+    let conflict = WorkerEvent::OwnershipMismatch {
+        epoch: epoch(),
+        reason: OwnershipFailure::ForeignObject,
+    };
+
+    let step = transition(&acquired(), &conflict).expect("a conflict quarantines the worker");
+
+    assert_eq!(step.effect, Effect::KeepCapacity);
+    assert!(step.next.counts_capacity());
+}
