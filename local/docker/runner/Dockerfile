@@ -1,6 +1,9 @@
 # Base image and toolchain package line are those of images/runner/ubuntu-26.04/Dockerfile, the
 # production runner image. tests/it/plain_image.rs fails when either differs from it.
-FROM ubuntu:26.04@sha256:42527649dbc4f9197a6073f426f488cbff0e9cc9f2afce32d91c383e4875634a
+# The base is the multi-arch index (ubuntu:resolute-20261006) whose linux/amd64 manifest is the
+# production pin, so Apple Silicon pulls its own platform. The test checks the platforms below.
+# platforms: linux/amd64=sha256:42527649dbc4f9197a6073f426f488cbff0e9cc9f2afce32d91c383e4875634a linux/arm64=sha256:7f787d965bc0e4cd42b5f74c013515d6e24ce691c881c81c42e4db59a791e5ce
+FROM ubuntu:26.04@sha256:c098726dd9b9733f3e885f8de0ef375206a311b0a317eadc40d347b1115fb944
 ARG RUNNER_VERSION=2.338.0
 ARG RUNNER_SHA256=628b4a7258487b80c1d3c221095a7ded349f5ae0175fd3dfab708d07428f041b
 ENV DEBIAN_FRONTEND=noninteractive

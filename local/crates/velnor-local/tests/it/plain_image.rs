@@ -6,7 +6,7 @@
 //! source of the base image and the toolchain package line; these tests fail when the local copy
 //! drifts from it.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use velnor_local::doctor::{PLAIN_IMAGES, RUNNER_IMAGE};
@@ -41,13 +41,58 @@ fn toolchain(text: &str) -> BTreeSet<&str> {
         .collect()
 }
 
+/// The platforms recorded next to the base pin: `# platforms: linux/amd64=sha256:... linux/arm64=...`.
+fn recorded_platforms(text: &str) -> BTreeMap<&str, &str> {
+    let line = text
+        .lines()
+        .find_map(|line| line.strip_prefix("# platforms: "))
+        .unwrap_or_else(|| unreachable!("no recorded platforms next to the base pin"));
+    line.split_whitespace()
+        .map(|entry| {
+            entry
+                .split_once('=')
+                .unwrap_or_else(|| unreachable!("{entry} is not platform=digest"))
+        })
+        .collect()
+}
+
+fn digest(image: &str) -> &str {
+    image
+        .split_once('@')
+        .unwrap_or_else(|| unreachable!("{image} has no digest"))
+        .1
+}
+
 #[test]
 fn the_plain_runner_image_is_built_from_the_production_base() {
+    let local = dockerfile(LOCAL);
+    let production = dockerfile(PRODUCTION);
+    assert!(base_image(&local).starts_with("ubuntu:26.04@sha256:"));
     assert_eq!(
-        base_image(&dockerfile(LOCAL)),
-        base_image(&dockerfile(PRODUCTION))
+        base_image(&local).split('@').next(),
+        base_image(&production).split('@').next()
     );
-    assert!(base_image(&dockerfile(LOCAL)).starts_with("ubuntu:26.04@sha256:"));
+    // The production pin is the amd64 manifest of the index the plain image pins.
+    assert_eq!(
+        recorded_platforms(&local).get("linux/amd64").copied(),
+        Some(digest(base_image(&production)))
+    );
+}
+
+#[test]
+fn the_plain_runner_base_is_an_index_that_covers_amd64_and_arm64() {
+    let local = dockerfile(LOCAL);
+    let platforms = recorded_platforms(&local);
+    for platform in ["linux/amd64", "linux/arm64"] {
+        assert!(platforms.contains_key(platform), "no {platform} recorded");
+    }
+    // A manifest of one platform is not an index: Apple Silicon would pull amd64 and fail.
+    assert!(
+        !platforms
+            .values()
+            .any(|member| *member == digest(base_image(&local))),
+        "the pin is one platform's manifest, not the index"
+    );
 }
 
 #[test]
