@@ -7,7 +7,7 @@ use std::io::ErrorKind;
 use std::path::{Component, Path};
 
 use super::http::{DEFAULT_TIMEOUT, HttpGitHub};
-use crate::cli::{CheckConfigArgs, PreflightArgs, PublishArgs, RecordArgs};
+use crate::cli::{CheckConfigArgs, FamilyTagArgs, PreflightArgs, PublishArgs, RecordArgs};
 use crate::error::CiError;
 use crate::github::Repo;
 use crate::publish::{Request, SUMS, publish};
@@ -16,6 +16,7 @@ use crate::release::{
     check_manifests, check_tag_patterns, publishes_to_crates_io, recorded, tag_lines,
 };
 use crate::release_commit::tagged_commits;
+use crate::release_family::{family_tag, lines, tag_of, version_of};
 use crate::release_preflight::check_release_source;
 use crate::rulesets::check_tag_rulesets;
 
@@ -31,6 +32,28 @@ pub(super) fn run_preflight(args: &PreflightArgs) -> Result<String, CiError> {
         "release-plz would tag the verified commit {}\n",
         args.verified_commit
     ))
+}
+
+pub(super) fn run_family_tag(args: &FamilyTagArgs) -> Result<String, CiError> {
+    let metadata = args
+        .metadata
+        .iter()
+        .map(|path| {
+            fs::read_to_string(path)
+                .map_err(|e| CiError::new(format!("cannot read {}: {e}", path.display())))
+        })
+        .collect::<Result<Vec<_>, CiError>>()?;
+    let tag = tag_of(&args.tag_pattern, &version_of(&metadata, &args.packages)?)?;
+    let github = HttpGitHub::new(super::api_url(), super::token()?, DEFAULT_TIMEOUT);
+    let outcome = family_tag(
+        &github,
+        &Repo::parse(&args.repo)?,
+        &args.verified_commit,
+        &tag,
+    )?;
+    let text = lines(&outcome);
+    super::append_outputs(&text)?;
+    Ok(text)
 }
 
 pub(super) fn run_record(args: &RecordArgs) -> Result<String, CiError> {

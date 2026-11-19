@@ -20,6 +20,7 @@ pub(crate) struct VelnorConfig {
     pub(crate) after: Vec<String>,
     pub(crate) pr_only_checks: Vec<String>,
     pub(crate) binaries: Vec<Binary>,
+    pub(crate) family_tag: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -39,6 +40,7 @@ struct Raw {
     pr_only_checks: Vec<String>,
     #[serde(default)]
     binaries: Vec<RawBinary>,
+    family_tag: Option<String>,
 }
 
 fn refuse_expressions(key: &str, values: &[&str]) -> Result<(), ReleaseError> {
@@ -62,10 +64,24 @@ pub(crate) fn parse(text: Option<&str>) -> Result<VelnorConfig, ReleaseError> {
             after: None,
             pr_only_checks: Vec::new(),
             binaries: Vec::new(),
+            family_tag: None,
         },
     };
     let after = raw.after.unwrap_or_else(|| vec!["Rust CI".to_owned()]);
     refuse_expressions("pr_only_checks", &text_refs(&raw.pr_only_checks))?;
+    for (index, name) in raw.pr_only_checks.iter().enumerate() {
+        let problem = if name.trim().is_empty() {
+            "is blank; name a required check or remove the entry"
+        } else if raw.pr_only_checks[..index].contains(name) {
+            "repeats an earlier entry; remove the duplicate"
+        } else {
+            continue;
+        };
+        return Err(ReleaseError::InvalidToml {
+            file: ".velnor/release.toml".to_owned(),
+            message: format!("pr_only_checks[{index}] {problem}"),
+        });
+    }
     refuse_expressions("after", &text_refs(&after))?;
     if after.is_empty() || after.iter().any(|name| name.trim().is_empty()) {
         return Err(ReleaseError::EmptyAfter);
@@ -83,6 +99,13 @@ pub(crate) fn parse(text: Option<&str>) -> Result<VelnorConfig, ReleaseError> {
     }) {
         return Err(ReleaseError::UnsafeRoot { root: root.clone() });
     }
+    refuse_expressions(
+        "family_tag",
+        &raw.family_tag
+            .iter()
+            .map(String::as_str)
+            .collect::<Vec<_>>(),
+    )?;
     let binaries = raw
         .binaries
         .into_iter()
@@ -103,6 +126,7 @@ pub(crate) fn parse(text: Option<&str>) -> Result<VelnorConfig, ReleaseError> {
         after,
         pr_only_checks: raw.pr_only_checks,
         binaries,
+        family_tag: raw.family_tag,
     })
 }
 
