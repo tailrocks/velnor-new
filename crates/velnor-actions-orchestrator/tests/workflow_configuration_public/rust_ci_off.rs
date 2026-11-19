@@ -5,13 +5,16 @@ use std::collections::BTreeMap;
 use std::error::Error;
 use std::fs;
 
+use serde_json::Value;
 use sha2::{Digest, Sha256};
 use tempfile::TempDir;
-use velnor_actions_contract::WorkflowPolicy;
+use velnor_actions_contract::{ExecutionMode, WorkflowPolicy, expand_workflow_with_lane_plan};
 use velnor_actions_orchestrator::{finalized_jobs, plan_internal, prepare, render_staged_tree};
 
+use super::maintenance_features::owner_feature_repo;
 use super::non_inputs_checkout_support::rust_repo;
 use super::one_job_per_crate::mbx_repo_for;
+use super::scoped_workspace::commit;
 use super::workflow_configuration_fixture::{git, make_repo};
 
 const CI: &str = ".github/workflows/ci.yml";
@@ -278,5 +281,66 @@ fn ci_false_keeps_ledger_cli_fetch_roots_for_the_repository_workflow() -> Result
     let repo = ci_false_velnor_repo()?;
     let jobs = finalized_jobs(&prepare(repo.path())?)?;
     assert!(jobs.contains_key("ledger-cli"), "{:?}", jobs.keys());
+    Ok(())
+}
+
+fn both_mode_inventory_plan(ci: bool) -> Result<(Vec<Value>, Value), Box<dyn Error>> {
+    let repo = owner_feature_repo(
+        WorkflowPolicy::VelnorRepositoryV1,
+        false,
+        "default",
+        "default",
+    )?;
+    let root = repo.path();
+    let config_path = root.join(".velnor/config.toml");
+    let config = fs::read_to_string(&config_path)?
+        .replace("schema = 1", "schema = 2")
+        .replace(
+            "[[stacks.rust.configurations]]",
+            &format!("[stacks.rust]\nci = {ci}\n[[stacks.rust.configurations]]"),
+        );
+    let config = format!(
+        "{config}\n[execution]\nmode = \"both\"\ndefault_profile = \"hosted\"\nhosted_profile = \"hosted\"\nscale_set_profile = \"local\"\n[execution.profiles.hosted]\nkind = \"github-hosted\"\nlabel = \"ubuntu-26.04\"\nplatform = \"linux/amd64\"\n[execution.profiles.local]\nkind = \"github-scale-set\"\nname = \"ubuntu-26.04-scale-set\"\nlabels = [\"velnor\", \"ubuntu-26.04-scale-set\"]\nplatform = \"linux/amd64\"\n"
+    );
+    fs::write(&config_path, config)?;
+    let head = commit(root, "configure both mode")?;
+    let prepared = prepare(root)?;
+    let plan = expand_workflow_with_lane_plan(
+        &prepared.workflow.ir,
+        &prepared.config,
+        Some(ExecutionMode::Both),
+    )?
+    .lane_plan
+    .ok_or("both-mode fixture produced no lane plan")?;
+    let inventory = serde_json::to_value(plan.inventory())?;
+    let request = serde_json::json!({
+        "schema": 1, "op": "plan-v1", "run_key": "r260002-a1", "base": null,
+        "head": head, "event": "local", "root": root.to_string_lossy(),
+        "lane_inventory": inventory,
+    });
+    let response: Value = serde_json::from_str(&plan_internal(&request.to_string())?)?;
+    let routes = inventory["routes"].as_array().ok_or("routes")?.clone();
+    Ok((routes, response))
+}
+
+#[test]
+fn ci_false_run_time_inventory_is_reproducible_and_has_no_rust_routes() -> Result<(), Box<dyn Error>>
+{
+    let (default_routes, _) = both_mode_inventory_plan(true)?;
+    assert!(
+        default_routes
+            .iter()
+            .any(|route| route.to_string().contains("\"rust-")),
+        "control: the default inventory must route Rust jobs: {default_routes:?}"
+    );
+    let (routes, response) = both_mode_inventory_plan(false)?;
+    assert!(
+        routes.iter().all(|route| {
+            let text = route.to_string();
+            !text.contains("\"rust-") && !text.contains("\"suite-")
+        }),
+        "{routes:?}"
+    );
+    assert!(response["plan"]["jobs"].is_array(), "{response}");
     Ok(())
 }
