@@ -38,6 +38,7 @@ mod declared_jobs;
 mod declared_local_actions;
 mod declared_paths;
 mod declared_rules;
+mod declared_secrets;
 mod declared_strict;
 mod declared_triggers;
 mod declared_workflow;
