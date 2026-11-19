@@ -152,19 +152,8 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         runner,
         fork_runner,
         timeout_minutes,
-        exclude: excludes(raw.exclude).map_err(invalid)?,
+        exclude: crate::config_exclude::excludes(raw.exclude).map_err(invalid)?,
     })
-}
-
-fn excludes(entries: Vec<String>) -> Result<Vec<PathGlob>, Reason> {
-    let invalid = |value| Reason::InvalidValue {
-        key: "exclude",
-        value,
-    };
-    entries
-        .into_iter()
-        .map(|entry| PathGlob::new(entry.trim_end_matches('/')).map_err(|_| invalid(entry)))
-        .collect()
 }
 
 fn harnesses(entries: Vec<String>) -> Result<Vec<(PackageName, TargetName)>, Reason> {

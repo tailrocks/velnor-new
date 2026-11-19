@@ -13,6 +13,7 @@ mod classify;
 mod compat;
 mod config;
 mod config_cache;
+mod config_exclude;
 mod config_fork;
 mod config_helper;
 mod config_mirror;
