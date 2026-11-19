@@ -132,45 +132,51 @@ pub(crate) fn commands(
     root: &RustRoot,
     direct: &[String],
 ) -> Vec<CargoCommand> {
-    config
+    let mut linted = BTreeSet::new();
+    let mut documented = BTreeSet::new();
+    let mut commands = Vec::new();
+    for lane in config
         .test_lanes
         .iter()
         .filter(|lane| lane.root == root.manifest.parent())
-        .flat_map(|lane| {
-            let features = || lane.features.clone();
-            let test = CargoCommand::NextestFeatures {
-                features: features(),
-                packages: lane.packages.clone(),
-                filter: match &lane.filter {
-                    Some(expr) => FilterRef::Expr {
-                        expr: expr.clone(),
-                        except: direct.to_vec(),
-                    },
-                    None if direct.is_empty() => FilterRef::All,
-                    None => FilterRef::AllExcept(direct.to_vec()),
+    {
+        let features = || lane.features.clone();
+        commands.push(CargoCommand::NextestFeatures {
+            features: features(),
+            packages: lane.packages.clone(),
+            filter: match &lane.filter {
+                Some(expr) => FilterRef::Expr {
+                    expr: expr.clone(),
+                    except: direct.to_vec(),
                 },
-                ci_profile: root.nextest_ci_profile,
-            };
-            let guard = lane.filter.as_ref().map(|expr| CargoCommand::LaneGuard {
+                None if direct.is_empty() => FilterRef::All,
+                None => FilterRef::AllExcept(direct.to_vec()),
+            },
+            ci_profile: root.nextest_ci_profile,
+        });
+        if let Some(expr) = &lane.filter {
+            commands.push(CargoCommand::LaneGuard {
                 features: features(),
                 packages: lane.packages.clone(),
                 filter: expr.clone(),
                 except: direct.to_vec(),
             });
-            [
-                Some(test),
-                guard,
-                lane.lint.then(|| CargoCommand::ClippyFeatures {
-                    features: features(),
-                }),
-                lane.doc.then(|| CargoCommand::DocFeatures {
-                    features: features(),
-                }),
-            ]
-            .into_iter()
-            .flatten()
-        })
-        .collect()
+        }
+        // Clippy and rustdoc cover the whole workspace, so lanes that differ only
+        // in their filter would run the same command again.
+        let normalized: BTreeSet<&String> = lane.features.iter().collect();
+        if lane.lint && linted.insert(normalized.clone()) {
+            commands.push(CargoCommand::ClippyFeatures {
+                features: features(),
+            });
+        }
+        if lane.doc && documented.insert(normalized) {
+            commands.push(CargoCommand::DocFeatures {
+                features: features(),
+            });
+        }
+    }
+    commands
 }
 
 pub(crate) fn check(config: &RustCiConfig, rust_roots: &[RustRoot]) -> Result<(), DetectError> {

@@ -4115,12 +4115,10 @@ dependencies = [
 name = "velnor-ci"
 version = "0.1.96"
 dependencies = [
- "base64 0.23.1",
  "blake3",
  "clap",
  "flate2",
  "libc",
- "miniz_oxide",
  "nix",
  "ring",
  "serde",

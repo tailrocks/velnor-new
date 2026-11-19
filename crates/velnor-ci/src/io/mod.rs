@@ -44,7 +44,6 @@ mod manifests;
 mod merge_group;
 mod plan;
 mod plan_request;
-pub mod preview;
 mod private_check;
 pub mod pump;
 mod qualification;
@@ -69,8 +68,9 @@ mod unit_platforms;
 mod units;
 mod write_request;
 
-use std::fs::{self, OpenOptions};
+use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
+use std::os::unix::fs::OpenOptionsExt;
 use std::{path::Path, process::ExitCode};
 
 pub use self::audit::{AuditOptions, audit_inputs};
@@ -233,25 +233,12 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Cache(CacheCommand::Budget(args)) => cache_api::run_budget(&args),
         Command::Restored(args) => small::run_restored(&args),
         Command::ValidateArtifactId => small::run_validate_artifact_id(),
-        Command::InstallGh(args) => small::run_install_gh(&args),
-        Command::StageBundle => small::run_stage_bundle(),
-        Command::VerifyRuntime(args) => preview::cli::verify_runtime(&args),
-        Command::VerifyMacProof => preview::cli::verify_mac_proof(),
-        Command::RunAuthority(args) => preview::cli::run_authority(&args),
-        Command::AdmitPreview => preview::admit::admit_preview(),
         Command::Run(_) | Command::Sources(_) => {
             Err(CiError::new("run and sources are handled before commands"))
         }
         Command::LaneGuard(_) => Err(CiError::new("lane-guard is handled before commands")),
         Command::TestGroups(_) => Err(CiError::new("test-groups is handled before commands")),
     }
-}
-
-pub(super) fn env_path(variable: &str) -> Result<std::path::PathBuf, CiError> {
-    std::env::var_os(variable)
-        .filter(|value| !value.is_empty())
-        .map(std::path::PathBuf::from)
-        .ok_or_else(|| CiError::new(format!("{variable} is not set")))
 }
 
 fn now_seconds() -> i64 {
@@ -319,6 +306,15 @@ fn append_to(variable: &str, outputs: &str) -> Result<(), CiError> {
             .map_err(|e| CiError::new(format!("cannot write {}: {e}", file.display())))?;
     }
     Ok(())
+}
+
+pub(super) fn open_regular(path: &Path) -> Option<File> {
+    let file = OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+        .open(path)
+        .ok()?;
+    file.metadata().ok()?.is_file().then_some(file)
 }
 
 pub fn read_limited(reader: impl Read, limit: u64) -> Result<Vec<u8>, CiError> {

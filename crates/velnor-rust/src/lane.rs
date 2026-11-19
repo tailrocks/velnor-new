@@ -8,7 +8,7 @@ use velnor_model::{
     PrRun, RepoFacts, RootSlug, RustRoot, Step, StepKind, When,
 };
 
-use crate::plan::{CHECKOUT_DEPTH, PLAN_DEPTH, RUST_JOB, head, job, step};
+use crate::plan::{CHECKOUT_DEPTH, PLAN_DEPTH, RUST_JOB, head, job, mbx, step};
 use crate::plan_tools::{mirror_step, tools_install, tools_restore, tools_save};
 
 pub(crate) const PLAN_JOB: JobId = JobId::from_static("rust-plan");
@@ -231,6 +231,7 @@ pub(crate) fn policy_job(facts: &RepoFacts, lane: &Lane) -> Job {
         steps.push(step(StepKind::Helper(HelperCommand::Plan)));
     }
     let policy_gate = lane.plan.is_none().then(|| lane.gate(GateNeed::Policy));
+    steps.extend(mbx(facts, policy_gate.clone()));
     steps.extend(mirror_step(facts).map(|step| Step {
         gate: policy_gate.clone(),
         ..step

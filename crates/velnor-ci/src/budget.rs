@@ -179,12 +179,14 @@ fn measure_population(budget: &SpeedBudget, history: &History, evaluation: &mut 
     let window = history.samples.len();
     let wall = median(history.samples.iter().map(|sample| sample.wall_seconds));
     let runner = median(history.samples.iter().map(|sample| sample.runner_seconds));
-    let setup = median(
-        history
-            .samples
-            .iter()
-            .filter_map(|sample| sample.setup_seconds),
-    );
+    // A run without a setup measurement leaves the window incomplete, so the
+    // median is missing instead of being computed from fewer runs.
+    let setup = history
+        .samples
+        .iter()
+        .map(|sample| sample.setup_seconds)
+        .collect::<Option<Vec<u64>>>()
+        .and_then(median);
     evaluation.medians.push(Medians {
         population: history.population,
         samples: window,

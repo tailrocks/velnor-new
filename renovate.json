@@ -1,8 +1,8 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "description": "Velnor V1: propose ALL updates (major + minor/patch) as reviewed changes; never merge, never touch tool inputs.",
+  "description": "Velnor: propose ALL updates (major + minor/patch) as reviewed changes; never merge. Covers the Cargo dependencies, the Mise pins in mise.toml and .velnor/mise.toml, the [[actions]] pins in .velnor/version-policy.toml; .github is ignored because velnor-gen writes it.",
   "extends": ["config:recommended"],
-  "enabledManagers": ["cargo", "github-actions"],
+  "enabledManagers": ["cargo", "github-actions", "mise", "custom.regex"],
   "ignorePaths": [
     "generator/samples/**",
     "**/expected/**",
@@ -18,6 +18,22 @@
   "github-actions": {
     "enabled": true
   },
+  "mise": {
+    "enabled": true,
+    "managerFilePatterns": ["/^mise\\.toml$/", "/^\\.velnor/mise\\.toml$/"]
+  },
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Action pins recorded in the source version policy: name, version tag and full commit SHA of each [[actions]] entry.",
+      "managerFilePatterns": ["/^\\.velnor/version-policy\\.toml$/"],
+      "matchStrings": [
+        "name = \"(?<packageName>[^/\"]+/[^/\"]+)(?:/[^\"]*)?\"\\nversion = \"(?<currentValue>v[^\"]+)\"\\nsha = \"(?<currentDigest>[0-9a-f]{40})\""
+      ],
+      "datasourceTemplate": "github-tags",
+      "depNameTemplate": "{{{packageName}}}"
+    }
+  ],
   "packageRules": [
     {
       "description": "Cargo majors need explicit migration review (VER-3.2: incompatible = migration, never silent).",
@@ -33,10 +49,15 @@
       "groupName": "cargo minor/patch"
     },
     {
-      "description": "Refresh only Velnor-owned pins/locks; never propose tool-input edits (VER-3.4). Defense-in-depth: mise is not in enabledManagers, so this rule only bites if mise is ever enabled.",
+      "description": "The Rust toolchain and the MBX wrapper are qualified by the owner and mirrored in rust-toolchain.toml and the version policy, so Renovate leaves them alone.",
       "matchManagers": ["mise"],
-      "matchFileNames": ["mise.toml", "mise.lock", "rust-toolchain.toml"],
+      "matchPackageNames": ["rust", "mr-boxington"],
       "enabled": false
+    },
+    {
+      "description": "A bump of a Mise pin is a reviewed change: mise.lock, .velnor/mise.lock and the version policy are refreshed by hand in the same pull request (docs/implemented/update-procedure.md).",
+      "matchManagers": ["mise", "custom.regex"],
+      "labels": ["dependencies", "needs-lock-refresh"]
     },
     {
       "description": "x509-cert 0.3 makes tbs_certificate private (E0616); upgrading is a code change, so hold 0.2.x until that lands.",
