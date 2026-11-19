@@ -201,18 +201,12 @@ fn compare(
             ));
         }
     }
-    cache::head(id, engine, engine_workflow, generated, unexpected);
-    if condition(engine) != condition(generated) {
-        if cache::parenthesised(engine, generated) {
-            note("a case condition is parenthesised");
-        } else {
-            unexpected.push(format!(
-                "{id}: if: engine {:?}, generated {:?}",
-                condition(engine),
-                condition(generated)
-            ));
-        }
-    }
+    cache::head(
+        id,
+        [engine, engine_workflow, generated],
+        &mut note,
+        unexpected,
+    );
     let engine_lane = lane(engine.get("runs-on"));
     if engine_lane.is_none() || engine_lane != lane(generated.get("runs-on")) {
         unexpected.push(format!(

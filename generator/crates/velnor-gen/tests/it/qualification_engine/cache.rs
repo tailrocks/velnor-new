@@ -104,11 +104,21 @@ pub(super) fn apply(id: &str, flat: Vec<StepSignature>) -> (Vec<StepSignature>, 
 
 pub(super) fn head(
     id: &str,
-    engine: &Value,
-    engine_workflow: &Value,
-    generated: &Value,
+    [engine, engine_workflow, generated]: [&Value; 3],
+    note: &mut impl FnMut(&'static str),
     unexpected: &mut Vec<String>,
 ) {
+    if condition(engine) != condition(generated) {
+        if parenthesised(engine, generated) {
+            note("a case condition is parenthesised");
+        } else {
+            unexpected.push(format!(
+                "{id}: if: engine {:?}, generated {:?}",
+                condition(engine),
+                condition(generated)
+            ));
+        }
+    }
     if engine.get("env") != generated.get("env") {
         unexpected.push(format!(
             "{id}: env: engine {:?}, generated {:?}",
@@ -130,7 +140,7 @@ pub(super) fn head(
     }
 }
 
-pub(super) fn parenthesised(engine: &Value, generated: &Value) -> bool {
+fn parenthesised(engine: &Value, generated: &Value) -> bool {
     let generated = condition(generated);
     condition(engine) == generated.as_deref().and_then(unparenthesised)
 }
