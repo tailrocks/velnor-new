@@ -48,6 +48,14 @@ pub(crate) fn edited(base_changed: bool, labels: &[&'static str]) -> Event {
     event
 }
 
+pub(crate) fn converted_to_draft(labels: &[&'static str]) -> Event {
+    let mut event = pull(true, labels);
+    if let Some(pull) = event.pull_request.as_mut() {
+        pull.action = "converted_to_draft";
+    }
+    event
+}
+
 pub(crate) fn labeled(added: &'static str, labels: &[&'static str]) -> Event {
     let mut event = pull(false, labels);
     if let Some(pull) = event.pull_request.as_mut() {

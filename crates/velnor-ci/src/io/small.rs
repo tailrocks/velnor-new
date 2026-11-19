@@ -6,9 +6,9 @@ use super::{
     env_path, expire_old_bases, inputs_batch, now_seconds,
 };
 
-pub(super) fn run_restored(args: crate::cli::RestoredArgs) -> Result<String, CiError> {
+pub(super) fn run_restored(args: &crate::cli::RestoredArgs) -> Result<String, CiError> {
     let root = current_dir()?;
-    let configured = inputs_batch::restored_targets(&args)?;
+    let configured = inputs_batch::restored_targets(args)?;
     let (targets, pending) = if configured.is_empty() {
         cold::targets_with_receipts(&root)?
     } else {

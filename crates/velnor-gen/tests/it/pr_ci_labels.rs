@@ -9,7 +9,9 @@ use crate::events::DENY_MISE;
 use crate::facts::TestResult;
 use crate::gh_expr::evaluate;
 use crate::pr_ci::{LABEL_CONFIG, label_workflow, render};
-use crate::pr_ci_sim::{Event, context, edited, labeled, outcome, pull, state, strings};
+use crate::pr_ci_sim::{
+    Event, context, converted_to_draft, edited, labeled, outcome, pull, state, strings,
+};
 
 #[test]
 fn an_unrelated_label_runs_nothing_whatever_the_pull_request_already_carries() -> TestResult {
@@ -170,6 +172,24 @@ fn a_base_retarget_runs_what_the_labels_request_and_shares_the_pull_request_grou
             if full { "success" } else { "skipped" },
             "{labels:?}"
         );
+    }
+    Ok(())
+}
+
+#[test]
+fn converting_a_requested_run_to_draft_starts_a_run_in_its_group_that_runs_nothing() -> TestResult {
+    let tree = label_workflow()?;
+    assert!(
+        strings(tree.pointer("/on/pull_request/types"))
+            .iter()
+            .any(|kind| kind == "converted_to_draft")
+    );
+    let running = group(&tree, &pull(false, &["ci:run"]))?;
+    let converted = converted_to_draft(&["ci:run"]);
+    assert_eq!(group(&tree, &converted)?, running);
+    let (results, _) = outcome(&tree, &converted, &[])?;
+    for (job, result) in results.iter().filter(|(job, _)| job.as_str() != "required") {
+        assert_eq!(result, "skipped", "{job}");
     }
     Ok(())
 }

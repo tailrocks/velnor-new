@@ -6,7 +6,9 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::process::Command;
 
-use super::prepare::{MISE, OsRelease, Setup, digest, prepare, reported, scratch_root};
+#[cfg(not(target_os = "linux"))]
+use super::prepare::OsRelease;
+use super::prepare::{MISE, Setup, digest, prepare, reported, scratch_root};
 
 fn compat_with(name: &str, change: impl FnOnce(&mut Setup)) -> String {
     let mut setup = Setup::new(reported("1.99.1", Some("0.9.151")));
