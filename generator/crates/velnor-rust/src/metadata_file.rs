@@ -132,7 +132,7 @@ fn dependency_name(kind: DependencyKind) -> &'static str {
 
 pub const VERSIONS_HELPER: (u64, u64, u64) = (0, 1, 81);
 
-const TARGET_DIR_HELPER: (u64, u64, u64) = (0, 1, 82);
+const TARGET_DIR_HELPER: (u64, u64, u64) = (0, 1, 85);
 
 fn pin_at_least(view: &RepoView, minimum: (u64, u64, u64)) -> bool {
     view.files
