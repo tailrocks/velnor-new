@@ -33,6 +33,11 @@ async fn every_plain_runner_turns_the_crates_mirror_off_and_nothing_else_does() 
             is_runner,
             "{name}"
         );
+        assert_eq!(
+            after(call, "-e").contains(&"MISE_SKILLS_FETCH=false"),
+            is_runner,
+            "{name}"
+        );
     }
     assert_eq!(runners, 3);
 }
