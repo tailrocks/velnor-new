@@ -169,7 +169,7 @@ projection and lifecycle behavior but do not qualify image trust or production
 readiness. Do not introduce shell, PATH, mutable-tag, or credential-based
 fallbacks.
 
-Pull-request selection consequence ([hard decision 3](../hard-decisions.md#3-pull-requests-test-only-what-they-affect)):
+Pull-request selection consequence (former hard decision 3, removed in #608):
 a package with a build script is always `undeclared_reads`, and
 `[[stacks.rust.inputs]]` cannot declare build-script inputs, so the
 `velnor-runner-host` and `velnor-runner-cli` crate jobs now run on every pull
