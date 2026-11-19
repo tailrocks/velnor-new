@@ -13,7 +13,7 @@ use crate::toml_file::table;
 
 pub const CONFIG_PATH: RepoPath = RepoPath::from_static(".velnor/rust-ci.toml");
 
-const KEYS: [&str; 22] = [
+const KEYS: [&str; 23] = [
     "cache_check_blocks",
     "cache_debug",
     "runner",
