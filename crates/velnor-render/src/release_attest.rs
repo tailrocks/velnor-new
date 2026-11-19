@@ -13,7 +13,7 @@ use crate::release_context::package_tag;
 use crate::release_steps::{install_tool, permissions, variables};
 use crate::rules::{RenderedJob, RenderedStep, Value};
 
-const GH_VERSION: &str = "2.103.3";
+const GH_VERSION: &str = "2.104.0";
 
 /// The `sums-<package>` step that attests every archive and `SHA256SUMS`.
 pub(crate) fn attest(binary: &BinaryPlan) -> RenderedStep {
