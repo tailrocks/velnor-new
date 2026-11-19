@@ -25,7 +25,7 @@ fork_runner = "ubuntu-24.04"
 
 ## Skip the push run after a merge queue run
 
-`[ci] skip_push_after_merge_group = true` in `.velnor/rust-ci.toml` stops a push to the default branch from repeating checks that the merge queue already ran on the same commit. It is off by default, and then the generated workflow is byte-for-byte what it was without the key. It needs `velnor-ci` 0.1.88 or later, the first release that has the command `merge-group-passed`; an older release is refused at generation. The push is matched to the queue run by commit id, so the merge queue must keep the commit it tested (a squash or a fast-forward merge, as in this repository's ruleset). A queue that rebases or creates a merge commit pushes a different commit, and then the push never skips. A queue run that is still running counts when its `Required` job has already succeeded, and the job is found by the name in `required_check` (`velnor-ci` 0.1.97 or later; an earlier release waits for the whole queue run to complete).
+`[ci] skip_push_after_merge_group = true` in `.velnor/rust-ci.toml` stops a push to the default branch from repeating checks that the merge queue already ran on the same commit. It is off by default, and then the generated workflow is byte-for-byte what it was without the key. It needs `velnor-ci` 0.1.88 or later, the first release that has the command `merge-group-passed`; an older release is refused at generation. The push is matched to the queue run by commit id, so the merge queue must keep the commit it tested (a squash or a fast-forward merge, as in this repository's ruleset). A queue that rebases or creates a merge commit pushes a different commit, and then the push never skips. A queue run that is still running counts when its `Required` job has already succeeded, and the job is found by the name in `required_check` (`velnor-ci` 0.1.98 or later; an earlier release waits for the whole queue run to complete).
 
 ```toml
 [ci]
@@ -366,7 +366,7 @@ commit_file = true
 ```
 
 - `target = "musl"` builds `<arch>-unknown-linux-musl` for the linux platforms of a raw binary, with the musl C compiler installed, so the executable is static. `macos-arm64` keeps `aarch64-apple-darwin`. The default for raw stays `"gnu"`. `target = "musl"` is refused without a linux platform. The archive format accepts `target` too and defaults to musl.
-- `smoke = true` adds two steps to each build job after packing, for the main binary of each platform: `./<asset> --version`, then `./<asset> check-tag "$TAG"`, where `TAG` is the tag the release records for the package. The binary must implement `check-tag <tag>`, which fails when the tag does not name the version of the binary. `smoke` is refused with the archive format.
+- `smoke = true` adds two steps to each build job after packing, for the main binary of each platform: `./<asset> --version`, then `./<asset> check-tag "$TAG"`, where `TAG` is the tag the release records for the package. The binary must implement `check-tag <tag>`, which fails when the tag does not name the version of the binary. With the archive format the same two steps run the built binary from the Cargo target folder before it is packed. The build job holds `contents: read` and no secret.
 - `commit_file = true` adds a `COMMIT` asset holding the commit the tag is on. The `sums-<package>` job writes it before `SHA256SUMS`, so `SHA256SUMS` lists it, an attested release attests and verifies it, and `velnor-ci release publish` uploads it.
 
 ## Release checks
@@ -580,7 +580,7 @@ With `attest = true` a separate `verify-<package>` job verifies every asset and 
 
 A re-run of only the verify or publish job can fail. The artifacts expire after one day, and the attestation is checked against the commit of that run. The failure fails closed: nothing is published. Re-run the whole workflow run, or let the next default-branch run release.
 
-`attest` does not combine with `family_tag` yet: generation refuses the combination.
+With `family_tag`, set `attest` at the top level of `release.toml` instead (see Release family tag).
 
 ## Release binaries and their Cargo profile
 
@@ -615,4 +615,23 @@ Each binary package must be listed in its `release-plz.toml` with `release = fal
 
 A `family` job binds the tag to the commit that the gate verified. It uses `velnor-ci release family-tag`, which needs a helper release of `0.1.83` or later. It creates the tag on that commit, and it refuses the release unless the tag resolves to that commit itself. A published release of the tag on an earlier ancestor commit releases nothing. The build jobs check out the tag, refuse any other commit, and share one `sums-family` and one `publish-family` job, so all binaries of a release share one tag, one commit, one `SHA256SUMS` and one release.
 
-`family_tag` does not combine with `bins`, `include`, `asset_name`, `attest`, `smoke`, `commit_file`, `checksum_files` or `[[checks]]` yet: generation refuses the combination.
+`family_tag` does not combine with `checksum_files` yet: generation refuses the combination. `smoke` works on each binary as in the per-package release. Because one release holds every binary, `attest` and `commit_file` are set once at the top level, as is `checksums_file`, which replaces `member_digests`; generation refuses all three on a binary.
+
+### Family keys
+
+These top-level keys need `family_tag`, and generation refuses them without it.
+
+```toml
+family_tag = "tools-v{{ version }}"
+checksums_file = "BINARY-SHA256SUMS"
+commit_file = true
+attest = true
+family_trigger = "tag_push"
+```
+
+- `checksums_file` names one file that holds the SHA-256 of every binary inside every archive of the family, as `<archive>/<binary>` lines. It is published and listed in `SHA256SUMS`. The name is a plain file name, not `SHA256SUMS` or `COMMIT`, and it needs every binary to use the archive format.
+- `commit_file = true` publishes a `COMMIT` file that holds the commit of the release, listed in `SHA256SUMS`.
+- `attest = true` adds one `actions/attest-build-provenance` step, pinned by commit, to `sums-family`, over every file of the release. Only that job holds `id-token: write` and `attestations: write`. A `verify-family` job holds `attestations: read` and runs a pinned `gh attestation verify` on every file and on `SHA256SUMS`, and `publish-family` needs it.
+- `family_trigger` is `workflow_run` (the default) or `tag_push`. With `tag_push`, `release.yml` starts on `push` of tags that match the family tag, for example `tools-v*`, and has no release-plz job: the `gate` job checks that the tagged commit is on the default branch and that its required checks passed, and the `family` job runs `velnor-ci release family-tag --pushed-tag`, which refuses a tag that is not the one the package versions name. It needs a helper release of `0.1.98` or later, and it is refused while release-plz still releases a package of the roots. `after` does not apply to it. The file is still `release.yml`.
+
+The sample `release-bin-family-tools` renders the tools release of this repository (two binaries, `BINARY-SHA256SUMS`, `COMMIT`, attestation, smoke, tag push).

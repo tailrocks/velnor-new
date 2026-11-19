@@ -8,6 +8,7 @@ use crate::asset_name;
 use crate::bundle::{ExtraBin, RawExtraBin, parse as bundle};
 use crate::check::RawCheck;
 use crate::error::ReleaseError;
+use crate::family_options::{FamilyOptions, FamilyTrigger, family_options};
 use crate::release_plz::valid_package_name;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -55,6 +56,7 @@ pub(crate) struct VelnorConfig {
     pub(crate) pr_only_checks: Vec<String>,
     pub(crate) binaries: Vec<Binary>,
     pub(crate) family_tag: Option<String>,
+    pub(crate) family: FamilyOptions,
     pub(crate) checks: Vec<RawCheck>,
 }
 
@@ -92,6 +94,12 @@ struct Raw {
     #[serde(default)]
     binaries: Vec<RawBinary>,
     family_tag: Option<String>,
+    family_trigger: Option<FamilyTrigger>,
+    checksums_file: Option<String>,
+    #[serde(default)]
+    commit_file: bool,
+    #[serde(default)]
+    attest: bool,
     #[serde(default)]
     checks: Vec<RawCheck>,
 }
@@ -118,6 +126,10 @@ pub(crate) fn parse(text: Option<&str>) -> Result<VelnorConfig, ReleaseError> {
             pr_only_checks: Vec::new(),
             binaries: Vec::new(),
             family_tag: None,
+            family_trigger: None,
+            checksums_file: None,
+            commit_file: false,
+            attest: false,
             checks: Vec::new(),
         },
     };
@@ -160,6 +172,13 @@ pub(crate) fn parse(text: Option<&str>) -> Result<VelnorConfig, ReleaseError> {
             .map(String::as_str)
             .collect::<Vec<_>>(),
     )?;
+    let family = family_options(
+        raw.family_tag.is_some(),
+        raw.family_trigger,
+        raw.checksums_file,
+        raw.commit_file,
+        raw.attest,
+    )?;
     let binaries = raw
         .binaries
         .into_iter()
@@ -181,6 +200,7 @@ pub(crate) fn parse(text: Option<&str>) -> Result<VelnorConfig, ReleaseError> {
         pr_only_checks: raw.pr_only_checks,
         binaries,
         family_tag: raw.family_tag,
+        family,
         checks: raw.checks,
     })
 }
@@ -288,13 +308,6 @@ fn binary(raw: RawBinary) -> Result<Binary, ReleaseError> {
             package: raw.package,
             key: "member_digests",
             format: "archive",
-        });
-    }
-    if format == BinaryFormat::Archive && raw.smoke {
-        return Err(ReleaseError::KeyNeedsFormat {
-            package: raw.package,
-            key: "smoke",
-            format: "raw",
         });
     }
     let (bins, include) = bundle(&raw.package, &bin, raw.bins, raw.include)?;

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::Platform;
-use velnor_release::BinaryPlan;
+use velnor_release::{BinaryFormat, BinaryPlan};
 
 use crate::release_assets::{STAGE, STAGE_SHELL, stem, versioned, word};
 use crate::release_binaries::command;
@@ -89,14 +89,28 @@ pub(crate) fn raw_packaging(
         .collect()
 }
 
-pub(crate) fn smoke_steps(binary: &BinaryPlan, platform: Platform, tag: &str) -> Vec<RenderedStep> {
+pub(crate) fn smoke_steps(
+    binary: &BinaryPlan,
+    platform: Platform,
+    release_dir: &str,
+    tag: &str,
+) -> Vec<RenderedStep> {
     if !binary.smoke {
         return Vec::new();
     }
-    let name = stem(binary, &binary.bin, platform);
-    let executable = word(binary, &format!("./{name}"));
+    let raw = binary.format == BinaryFormat::Raw;
+    let name = if raw {
+        stem(binary, &binary.bin, platform)
+    } else {
+        binary.bin.clone()
+    };
+    let executable = if raw {
+        word(binary, &format!("./{name}"))
+    } else {
+        format!("{release_dir}/{name}")
+    };
     let in_folder = |step: RenderedStep| RenderedStep {
-        working_directory: versioned(binary).then(|| STAGE.to_owned()),
+        working_directory: (raw && versioned(binary)).then(|| STAGE.to_owned()),
         ..step
     };
     vec![

@@ -17,8 +17,12 @@ const GH_VERSION: &str = "2.103.3";
 
 /// The `sums-<package>` step that attests every archive and `SHA256SUMS`.
 pub(crate) fn attest(binary: &BinaryPlan) -> RenderedStep {
+    provenance(format!("Attest the build provenance of {}", binary.package))
+}
+
+pub(crate) fn provenance(name: String) -> RenderedStep {
     RenderedStep {
-        name: format!("Attest the build provenance of {}", binary.package),
+        name,
         uses: Some(format!(
             "{}@{}",
             ATTEST_BUILD_PROVENANCE.action, ATTEST_BUILD_PROVENANCE.commit
@@ -59,20 +63,27 @@ pub(crate) fn verify(binary: &BinaryPlan) -> RenderedJob {
 /// Each path goes through `word`, so a versioned asset name keeps its
 /// `${VERSION}` reference inside double quotes (see #1599).
 pub(crate) fn verifications(binary: &BinaryPlan) -> Vec<RenderedStep> {
-    let mut steps = vec![install_tool(&format!("gh@{GH_VERSION}"))];
-    steps.extend(
+    verification_steps(
         assets(binary)
             .into_iter()
             .chain([SUMS_FILE.to_owned()])
-            .map(|name| RenderedStep {
-                name: format!("Verify the build provenance of {name}"),
-                env: variables(&[("GH_TOKEN", "${{ github.token }}")]),
-                run: Some(format!(
-                    "mise --no-config --no-env --no-hooks exec gh@{GH_VERSION} -- gh attestation verify {} --repo \"$GITHUB_REPOSITORY\" --source-digest \"$GITHUB_SHA\" --source-ref \"$GITHUB_REF\" --signer-workflow \"$GITHUB_REPOSITORY/.github/workflows/release.yml\" --signer-digest \"$GITHUB_SHA\" --deny-self-hosted-runners",
-                    word(binary, &format!("{DIST}/{name}"))
-                )),
-                ..RenderedStep::default()
-            }),
-    );
+            .map(|name| {
+                let path = word(binary, &format!("{DIST}/{name}"));
+                (name, path)
+            })
+            .collect(),
+    )
+}
+
+pub(crate) fn verification_steps(paths: Vec<(String, String)>) -> Vec<RenderedStep> {
+    let mut steps = vec![install_tool(&format!("gh@{GH_VERSION}"))];
+    steps.extend(paths.into_iter().map(|(name, path)| RenderedStep {
+        name: format!("Verify the build provenance of {name}"),
+        env: variables(&[("GH_TOKEN", "${{ github.token }}")]),
+        run: Some(format!(
+            "mise --no-config --no-env --no-hooks exec gh@{GH_VERSION} -- gh attestation verify {path} --repo \"$GITHUB_REPOSITORY\" --source-digest \"$GITHUB_SHA\" --source-ref \"$GITHUB_REF\" --signer-workflow \"$GITHUB_REPOSITORY/.github/workflows/release.yml\" --signer-digest \"$GITHUB_SHA\" --deny-self-hosted-runners"
+        )),
+        ..RenderedStep::default()
+    }));
     steps
 }
