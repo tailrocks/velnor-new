@@ -4,6 +4,7 @@
 use velnor_model::github_hosted;
 
 use crate::error::{WorkflowsError, refuse};
+use crate::helper_call::command_words;
 use crate::plan::{Action, Body, Env, Job, Step};
 
 const MAX_ENVIRONMENT_CHARACTERS: usize = 255;
@@ -54,8 +55,9 @@ const SCRIPT_RUNNERS: [&str; 9] = [
 ];
 
 fn runs_script(run: &str) -> bool {
-    let word = run.split_whitespace().next().unwrap_or_default();
-    word.contains('/') || SCRIPT_RUNNERS.contains(&word)
+    command_words(run)
+        .first()
+        .is_some_and(|word| word.contains('/') || SCRIPT_RUNNERS.contains(&word.as_str()))
 }
 
 /// A step that runs a repository script or a local action never reads `github.token` in a job

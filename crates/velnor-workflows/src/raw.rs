@@ -182,6 +182,8 @@ pub(crate) struct RawJob {
 pub(crate) struct RawMatrix {
     pub(crate) from_output: Option<String>,
     pub(crate) axes: Option<BTreeMap<String, Vec<String>>>,
+    #[serde(default)]
+    pub(crate) include: Vec<BTreeMap<String, String>>,
     pub(crate) fail_fast: Option<bool>,
     pub(crate) max_parallel: Option<u16>,
 }
@@ -200,6 +202,7 @@ pub(crate) struct RawStep {
     pub(crate) with: BTreeMap<String, String>,
     #[serde(default)]
     pub(crate) continue_on_error: bool,
+    pub(crate) working_directory: Option<String>,
     #[serde(default)]
     pub(crate) env: BTreeMap<String, String>,
 }

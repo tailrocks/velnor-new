@@ -30,6 +30,7 @@ mod declared_call_fence;
 mod declared_call_secrets;
 mod declared_calls;
 mod declared_cases;
+mod declared_command_words;
 mod declared_concurrency;
 mod declared_containers;
 mod declared_fixture;
