@@ -89,7 +89,7 @@ impl fmt::Display for GenerateError {
                 f,
                 "velnor-ci {version} does not know the hosted key of .velnor/rust-ci.toml, and reads the file at run time; pin velnor-ci 0.1.99 or later with `velnor-gen pin-helper 0.1.99`"
             ),
-            Self::InputsLockHelperTooOld(version) => write!(f, "velnor-ci {version} cannot read the manifest column of .velnor/rust-inputs.lock; pin velnor-ci 0.1.100 or later with `velnor-gen pin-helper 0.1.100`, or write the lock under the older pin"),
+            Self::InputsLockHelperTooOld(version) => write!(f, "velnor-ci {version} cannot read the manifest column of .velnor/rust-inputs.lock; pin velnor-ci 0.1.101 or later with `velnor-gen pin-helper 0.1.101`, or write the lock under the older pin"),
             Self::PrivateSourcesHelperTooOld(version) => write!(f, "velnor-ci {version} cannot fetch private sources; pin velnor-ci 0.1.86 or later with `velnor-gen pin-helper 0.1.86`"),
             Self::PrCiHelperTooOld(version) => write!(
                 f,
