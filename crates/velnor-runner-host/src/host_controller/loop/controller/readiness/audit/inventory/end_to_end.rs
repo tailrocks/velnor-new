@@ -3,6 +3,8 @@
 
 #[path = "end_to_end/engine.rs"]
 mod engine;
+#[path = "end_to_end/runtime.rs"]
+mod runtime;
 #[path = "end_to_end/refresh.rs"]
 mod refresh;
 #[path = "end_to_end/seed.rs"]
