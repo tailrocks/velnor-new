@@ -11,7 +11,7 @@ use crate::units::Unit;
 
 pub(crate) const AUDIT_JOB: JobId = JobId::from_static("rust-inputs-audit");
 
-const PER_ROOT_AUDIT_HELPER: (u64, u64, u64) = (0, 1, 99);
+const PER_ROOT_AUDIT_HELPER: (u64, u64, u64) = (0, 1, 101);
 
 /// Helpers from this release audit one Cargo root, or one workspace group,
 /// with `inputs audit --root`, so each lane audits what it built and no job

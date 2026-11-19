@@ -8,10 +8,14 @@ use crate::config::rule_matches;
 use crate::lock_affected::lock_affected;
 use crate::manifest_diff::only_dependency_versions_differ;
 use crate::roots::CARGO_LOCK;
+pub(crate) use crate::select_paths::relative;
+use crate::select_paths::{contains, depth};
 use velnor_model::{
-    AllTrigger, ChangeSet, CompileInputs, MemberDependency, PackageName, RepoFacts, RepoPath,
-    RustCiConfig, RustRoot, RustSelection, SelectionReason, Unread,
+    AllTrigger, ChangeSet, CompileInputs, InputOwner, MemberDependency, PackageName, RepoFacts,
+    RepoPath, RustCiConfig, RustRoot, RustSelection, SelectionReason, Unread,
 };
+
+type Pick<'p> = &'p dyn Fn(&PackageName, &RepoPath) -> bool;
 
 #[must_use]
 pub fn select(facts: &RepoFacts, changes: &ChangeSet) -> BTreeMap<RepoPath, RustSelection> {
@@ -203,16 +207,18 @@ impl<'a> Graph<'a> {
 
     fn place(&self, path: &'a RepoPath, walk: &mut Walk<'a>) {
         let text = path.as_str();
-        let locked: Vec<&PackageName> = text
+        let locked: Vec<&InputOwner> = text
             .match_indices('/')
             .map(|(at, _)| &text[..at])
             .chain([text])
             .filter_map(|prefix| self.inputs.get(&Some(RepoPath::new(prefix).ok()?)))
             .flatten()
             .collect();
-        self.seed_named(&locked, path, walk);
-        let everywhere: Vec<&PackageName> = self.inputs.get(&None).into_iter().flatten().collect();
-        self.seed_named(&everywhere, path, walk);
+        let everywhere = self.inputs.get(&None).into_iter().flatten();
+        let listed: Vec<&InputOwner> = locked.iter().copied().chain(everywhere).collect();
+        let pick =
+            |name: &PackageName, manifest: &RepoPath| listed.iter().any(|o| o.is(name, manifest));
+        self.seed_where(&pick, path, walk);
         if self.place_lock(path, walk) {
             return;
         }
@@ -266,7 +272,7 @@ impl<'a> Graph<'a> {
             self.shelters(path, root),
         ) {
             Class::Nothing => {}
-            Class::Packages(names) => self.seed_named(&names, path, walk),
+            Class::Packages(names) => self.seed_where(&|name, _| names.contains(&name), path, walk),
             Class::Global(trigger) => walk.trigger(&trigger),
             Class::Unknown if !locked.is_empty() => {}
             Class::Unknown => {
@@ -343,9 +349,9 @@ impl<'a> Graph<'a> {
             )
     }
 
-    fn seed_named(&self, names: &[&PackageName], path: &RepoPath, walk: &mut Walk<'a>) {
+    fn seed_where(&self, pick: Pick<'_>, path: &RepoPath, walk: &mut Walk<'a>) {
         for (manifest, node) in &self.nodes {
-            if node.root.is_some() && names.contains(&node.name) {
+            if node.root.is_some() && pick(node.name, manifest) {
                 walk.seed(manifest, SelectionReason::Input(path.clone()));
             }
         }
@@ -377,22 +383,4 @@ impl<'a> Walk<'a> {
             slot.get_or_insert_with(|| trigger.clone());
         }
     }
-}
-
-fn depth(directory: Option<&RepoPath>) -> usize {
-    directory.map_or(0, |directory| directory.as_str().len())
-}
-
-pub(crate) fn relative<'p>(directory: Option<&RepoPath>, path: &'p RepoPath) -> Option<&'p str> {
-    match directory {
-        None => Some(path.as_str()),
-        Some(directory) => path
-            .as_str()
-            .strip_prefix(directory.as_str())?
-            .strip_prefix('/'),
-    }
-}
-
-fn contains(directory: Option<&RepoPath>, path: &RepoPath) -> bool {
-    relative(directory, path).is_some()
 }

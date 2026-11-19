@@ -5,6 +5,8 @@ use velnor_model::{
     DocsRun, HelperRelease, HelperVersion, MbxStore, Platform, PrCi, PushAfterMergeGroup, RepoFacts,
 };
 
+use velnor_rust::INPUTS_IDENTITY_HELPER;
+
 use crate::{
     BUDGET_HELPER, COMPATIBLE_HELPER_SERIES, GenerateError, HELPER_MINIMUM, TEST_LANE_HELPER,
 };
@@ -56,6 +58,11 @@ pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, Generate
     }
     if facts.config.hosted_runners.key_written() && !release.version().at_least(HOSTED_HELPER) {
         return Err(GenerateError::HostedHelperTooOld(release.version().clone()));
+    }
+    if facts.inputs_lock_identified && !release.version().at_least(INPUTS_IDENTITY_HELPER) {
+        return Err(GenerateError::InputsLockHelperTooOld(
+            release.version().clone(),
+        ));
     }
     if facts.config.private_sources.is_some() && !release.version().at_least((0, 1, 86)) {
         return Err(GenerateError::PrivateSourcesHelperTooOld(

@@ -20,8 +20,8 @@ use std::time::SystemTime;
 use velnor_gen::io::read_checkout;
 use velnor_model::{CompileInputs, MemberDependency, RepoFacts, RepoPath};
 use velnor_rust::{
-    INPUTS_LOCK, Located, Owner, Owners, add_reads, detect, format_inputs_lock, locate,
-    parse_inputs_lock, rerun_if_changed, unlisted,
+    INPUTS_IDENTITY_HELPER, INPUTS_LOCK, Located, Owner, Owners, add_reads, detect,
+    inputs_lock_text, locate, parse_inputs_lock, rerun_if_changed, unlisted,
 };
 
 use super::unit_platforms::platforms;
@@ -111,16 +111,21 @@ pub fn audit_inputs(directory: &Path, options: &AuditOptions) -> Result<String, 
         .collect();
     setup::complete(&facts, &chosen, &effective, &audit.built, &platforms)?;
     audit.check_stale()?;
+    let identified = facts
+        .helper
+        .as_ref()
+        .is_some_and(|helper| helper.version().at_least(INPUTS_IDENTITY_HELPER));
     let reads: usize = audit.found.values().map(BTreeSet::len).sum();
     let summary = format!("{reads} reads from {} unit files", audit.units);
     if options.write {
-        write_lock(&checkout.root.join(INPUTS_LOCK.as_str()), &audit.found)?;
+        let lock = checkout.root.join(INPUTS_LOCK.as_str());
+        write_lock(&lock, &audit.found, identified)?;
         return Ok(format!("wrote {INPUTS_LOCK}: {summary}\n"));
     }
     if options.root.is_some() {
         listed = within(listed, &facts, &chosen);
     }
-    compare(&audit.found, &listed, &summary)
+    compare(&audit.found, &listed, &summary, identified)
 }
 
 fn gated(facts: &RepoFacts) -> bool {
@@ -140,12 +145,12 @@ fn gated(facts: &RepoFacts) -> bool {
             .any(|package| platformed(&package.dependencies))
 }
 
-fn write_lock(lock: &Path, found: &CompileInputs) -> Result<(), CiError> {
+fn write_lock(lock: &Path, found: &CompileInputs, identified: bool) -> Result<(), CiError> {
     if let Some(parent) = lock.parent() {
         fs::create_dir_all(parent)
             .map_err(|e| CiError::new(format!("cannot create {}: {e}", parent.display())))?;
     }
-    fs::write(lock, format_inputs_lock(found))
+    fs::write(lock, inputs_lock_text(found, identified))
         .map_err(|e| CiError::new(format!("cannot write {}: {e}", lock.display())))
 }
 
@@ -153,6 +158,7 @@ fn compare(
     found: &CompileInputs,
     listed: &CompileInputs,
     summary: &str,
+    identified: bool,
 ) -> Result<String, CiError> {
     let missing = unlisted(found, listed);
     let unread = unlisted(listed, found);
@@ -165,7 +171,7 @@ fn compare(
     ]
     .into_iter()
     .filter(|(_, entries)| !entries.is_empty())
-    .map(|(heading, entries)| format!("{heading}:\n{}", format_inputs_lock(&entries)))
+    .map(|(heading, entries)| format!("{heading}:\n{}", inputs_lock_text(&entries, identified)))
     .collect();
     Err(CiError::new(format!(
         "{INPUTS_LOCK} is stale; run velnor-ci inputs build -- cargo build --workspace --all-targets, then velnor-ci inputs audit --write and commit it\n{}",

@@ -33,7 +33,7 @@ list-wrapper = "no-programs"
 run-wrapper = "no-programs"
 
 [[profile.ci.scripts]]
-filter = 'package(=velnor-runner-host) and (binary(=local_pair_public) or binary(=local_host_public))'
+filter = 'package(=velnor-runner-host) and binary(=local_pair_public)'
 platform = 'cfg(target_os = "linux")'
 run-wrapper = 'local-docker-ci'
 
@@ -63,7 +63,7 @@ filter = "package(=velnor-ci) and (test(io_restore_cargo::) | test(io_restore_co
 slow-timeout = { period = "30s", terminate-after = 1 }
 
 [[profile.default.overrides]]
-filter = 'package(=velnor-ci) and (test(crates_mirror) | test(=audit::migration::targets::a_cross_target_created_by_cargo_at_the_source_root_does_not_hide_source_changes))'
+filter = 'package(=velnor-ci) and (test(crates_mirror) | test(=audit::migration::targets::a_cross_target_created_by_cargo_at_the_source_root_does_not_hide_source_changes) | test(=audit::migration::nextest_discovery_compiles_first_and_executes_the_tests_once))'
 slow-timeout = { period = "30s", terminate-after = 1 }
 
 [[profile.default.overrides]]
@@ -73,7 +73,7 @@ threads-required = "num-test-threads"
 slow-timeout = { period = "30s", terminate-after = 4 }
 
 [[profile.ci.overrides]]
-filter = 'package(=velnor-ci) and (test(crates_mirror) | test(=audit::migration::targets::a_cross_target_created_by_cargo_at_the_source_root_does_not_hide_source_changes))'
+filter = 'package(=velnor-ci) and (test(crates_mirror) | test(=audit::migration::targets::a_cross_target_created_by_cargo_at_the_source_root_does_not_hide_source_changes) | test(=audit::migration::nextest_discovery_compiles_first_and_executes_the_tests_once))'
 slow-timeout = { period = "30s", terminate-after = 1 }
 
 [[profile.ci.overrides]]
@@ -114,6 +114,14 @@ test-group = "velnor-ci-serial"
 [[profile.ci.overrides]]
 filter = "package(=velnor-ci)"
 test-group = "velnor-ci-serial"
+
+[[profile.default.overrides]]
+filter = 'package(=velnor-ci) and (test(=audit::freshness::distinct_declared_trees_cannot_exceed_the_audit_scan_budget) | test(=audit::freshness::repeated_directory_declarations_share_the_audit_scan_budget) | test(=audit::inventory::directly_named_files_do_not_consume_the_directory_walk_budget) | test(=io_plan_docs::plan_treats_sources_over_the_total_size_bound_as_possibly_holding_docs) | test(=release_manifests::an_excluded_example_and_a_nested_workspace_are_not_packages_of_the_root) | test(=resolve_qualification::every_recorded_case_matches_the_legacy_op))'
+slow-timeout = { period = "30s", terminate-after = 1 }
+
+[[profile.ci.overrides]]
+filter = 'package(=velnor-ci) and (test(=audit::freshness::distinct_declared_trees_cannot_exceed_the_audit_scan_budget) | test(=audit::freshness::repeated_directory_declarations_share_the_audit_scan_budget) | test(=audit::inventory::directly_named_files_do_not_consume_the_directory_walk_budget) | test(=io_plan_docs::plan_treats_sources_over_the_total_size_bound_as_possibly_holding_docs) | test(=release_manifests::an_excluded_example_and_a_nested_workspace_are_not_packages_of_the_root) | test(=resolve_qualification::every_recorded_case_matches_the_legacy_op))'
+slow-timeout = { period = "30s", terminate-after = 1 }
 
 [[profile.default.overrides]]
 filter = "package(=velnor-ci) or package(=velnor-gen) or package(=velnor-model) or package(=velnor-release) or package(=velnor-render) or package(=velnor-rust)"

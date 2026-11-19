@@ -270,35 +270,8 @@ pub(crate) fn mbx_seed_step() -> RenderedStep {
 
 pub(crate) fn node_step(kind: &velnor_model::StepKind) -> RenderedStep {
     match kind {
-        velnor_model::StepKind::ToolsLocal(verb) => tools_local_step(*verb),
+        velnor_model::StepKind::ToolsLocal(verb) => crate::tools_steps::tools_local_step(*verb),
         _ => mbx_seed_step(),
-    }
-}
-
-fn tools_local_step(verb: velnor_model::ToolsLocalVerb) -> RenderedStep {
-    let key = crate::cache::render_key(&velnor_model::CacheKey::Tools {
-        host: velnor_model::Host,
-    })
-    .key;
-    let (name, id, word) = match verb {
-        velnor_model::ToolsLocalVerb::Restore => (
-            "Restore the tools from the node store",
-            Some(crate::gate::TOOLS_LOCAL_STEP.to_owned()),
-            "restore",
-        ),
-        velnor_model::ToolsLocalVerb::Save => ("Save the tools to the node store", None, "save"),
-    };
-    RenderedStep {
-        id,
-        name: name.to_owned(),
-        env: vec![(
-            "VELNOR_TOOLS_KEY".to_owned(),
-            crate::rules::Value::Expr(key),
-        )],
-        run: Some(format!(
-            "velnor-ci tools-local {word} --key \"$VELNOR_TOOLS_KEY\""
-        )),
-        ..RenderedStep::default()
     }
 }
 
@@ -343,6 +316,20 @@ pub(crate) fn merge_group_step(required: &str) -> RenderedStep {
             ),
         ],
         run: Some("velnor-ci merge-group-passed".to_owned()),
+        ..RenderedStep::default()
+    }
+}
+
+pub(crate) fn merge_queue_step() -> RenderedStep {
+    RenderedStep {
+        name: "velnor-ci merge-queue-check".to_owned(),
+        condition: Some("${{ github.event_name == 'pull_request' }}".to_owned()),
+        continue_on_error: true,
+        env: vec![(
+            "GITHUB_TOKEN".to_owned(),
+            crate::rules::Value::Expr("${{ github.token }}".to_owned()),
+        )],
+        run: Some("velnor-ci merge-queue-check".to_owned()),
         ..RenderedStep::default()
     }
 }

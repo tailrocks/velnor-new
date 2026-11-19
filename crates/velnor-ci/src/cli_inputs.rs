@@ -87,7 +87,7 @@ pub struct InputsBuildArgs {
 pub struct AuditArgs {
     #[arg(
         long,
-        help = "Write .velnor/rust-inputs.lock, one path<TAB>package line per read, instead of checking it"
+        help = "Write .velnor/rust-inputs.lock, one path<TAB>package line per read, with the package's manifest as a third column when the pinned helper is 0.1.101 or later, instead of checking it"
     )]
     pub write: bool,
     #[arg(

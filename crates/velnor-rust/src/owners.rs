@@ -3,7 +3,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_model::{CompileInputs, PackageName, RepoFacts, RepoPath, RustMember};
+use velnor_model::{CompileInputs, InputOwner, PackageName, RepoFacts, RepoPath, RustMember};
 
 use crate::select::{claims, relative};
 
@@ -35,6 +35,10 @@ impl Owner<'_> {
     #[must_use]
     pub fn directory(&self) -> Option<&RepoPath> {
         self.directory.as_ref()
+    }
+
+    fn input(&self) -> InputOwner {
+        InputOwner::at(self.name.clone(), self.manifest.clone())
     }
 
     fn claims(&self, path: &RepoPath) -> bool {
@@ -225,7 +229,7 @@ pub fn add_reads(
     for read in reads {
         let Some(read) = read else {
             if !tracked.iter().all(|path| owner.claims(path)) {
-                found.entry(None).or_default().insert(owner.name().clone());
+                found.entry(None).or_default().insert(owner.input());
             }
             continue;
         };
@@ -248,7 +252,7 @@ pub fn add_reads(
             found
                 .entry(Some(read.clone()))
                 .or_default()
-                .insert(owner.name().clone());
+                .insert(owner.input());
         }
     }
 }

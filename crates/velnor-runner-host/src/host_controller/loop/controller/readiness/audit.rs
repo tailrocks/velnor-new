@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use bollard::{
     Docker,
@@ -20,13 +20,18 @@ use crate::{
     journal::{StorageCleanupIdentity, StorageRole},
 };
 
+pub(super) type RemoteAuditFuture =
+    std::pin::Pin<Box<dyn std::future::Future<Output = Result<bool, HostError>> + Send>>;
+
 pub(super) type RemoteRunnerAudit = dyn Fn(
-        &RepositoryConnection,
-        Option<&velnor_runner_github::RunnerReference>,
+        RepositoryConnection,
+        Option<velnor_runner_github::RunnerReference>,
         i64,
-    ) -> Result<bool, HostError>
+    ) -> RemoteAuditFuture
     + Send
     + Sync;
+
+const REMOTE_AUDIT_BUDGET: Duration = Duration::from_secs(15);
 
 const IMAGE_KIND_LABEL: &str = "io.velnor.image.kind";
 
@@ -35,22 +40,35 @@ mod inventory;
 pub(super) use inventory::{SettlingAges, audit_inventory_with_remote};
 
 pub(super) fn audit_remote_runner(
-    binding: &RepositoryConnection,
-    expected: Option<&velnor_runner_github::RunnerReference>,
+    binding: RepositoryConnection,
+    expected: Option<velnor_runner_github::RunnerReference>,
     scale_set_id: i64,
-) -> Result<bool, HostError> {
-    let expected = expected.ok_or(HostError::Ownership)?;
-    if expected.runner_scale_set_id != scale_set_id {
-        return Err(HostError::Ownership);
-    }
-    let credential = binding.credential_ref.load()?;
-    let pat = crate::host_controller::connection_pat(&credential)?;
-    let deadline = Instant::now()
-        .checked_add(Duration::from_secs(15))
-        .ok_or(HostError::Endpoint)?;
-    let mut transport =
-        crate::https::HttpsTransport::with_deadline(crate::listen::GITHUB_API, deadline)?;
-    audit_remote_runner_with_transport(binding, expected, scale_set_id, pat, &mut transport)
+) -> RemoteAuditFuture {
+    Box::pin(async move {
+        let expected = expected.ok_or(HostError::Ownership)?;
+        if expected.runner_scale_set_id != scale_set_id {
+            return Err(HostError::Ownership);
+        }
+        let deadline = tokio::time::Instant::now()
+            .checked_add(REMOTE_AUDIT_BUDGET)
+            .ok_or(HostError::Endpoint)?;
+        let credential = binding.credential_ref.load_until(deadline).await?;
+        crate::config::off_runtime(deadline, move || {
+            let pat = crate::host_controller::connection_pat(&credential)?;
+            let mut transport = crate::https::HttpsTransport::with_deadline(
+                crate::listen::GITHUB_API,
+                deadline.into_std(),
+            )?;
+            audit_remote_runner_with_transport(
+                &binding,
+                &expected,
+                scale_set_id,
+                pat,
+                &mut transport,
+            )
+        })
+        .await
+    })
 }
 
 trait ReadinessTransport: Transport {

@@ -42,6 +42,7 @@ mod inputs_batch;
 mod inputs_git;
 mod manifests;
 mod merge_group;
+mod merge_queue;
 mod plan;
 mod plan_request;
 mod private_check;
@@ -206,6 +207,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Release(ReleaseCommand::Align(args)) => release_align::run_align(&args),
         Command::Plan(args) => plan::run_plan(&args),
         Command::MergeGroupPassed => Ok(merge_group::run()),
+        Command::MergeQueueCheck => Ok(merge_queue::run()),
         Command::WriteRequest(args) => write_request::run(&args),
         Command::ResolveQualification(args) => resolve_qualification::run(&args),
         Command::Gate(args) => required::run_gate(&args),

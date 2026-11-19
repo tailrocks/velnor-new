@@ -32,11 +32,25 @@ pub(crate) fn tools_restore(facts: &RepoFacts) -> Vec<Step> {
         },
         ..step(StepKind::CacheRestore(tools_cache_key()))
     };
-    local
-        .then(|| step(StepKind::ToolsLocal(ToolsLocalVerb::Restore)))
-        .into_iter()
-        .chain([network])
-        .collect()
+    let record = || step(StepKind::ToolsLocal(ToolsLocalVerb::RecordRestore));
+    if local {
+        vec![
+            step(StepKind::ToolsLocal(ToolsLocalVerb::Restore)),
+            network,
+            record(),
+        ]
+    } else {
+        vec![network]
+    }
+}
+
+/// On a runner that only runs archived tests, nothing else saves the tools it restored from the
+/// network cache to the node store, so the node stays cold for the lanes that would read it.
+pub(crate) fn tools_prime(facts: &RepoFacts) -> Option<Step> {
+    (!facts.tools.tools.is_empty() && tools_local(facts)).then(|| Step {
+        when: When::PrimeToolsFromNetwork,
+        ..step(StepKind::ToolsLocal(ToolsLocalVerb::Prime))
+    })
 }
 
 pub(crate) fn tools_save(facts: &RepoFacts) -> Vec<Step> {
@@ -52,14 +66,24 @@ pub(crate) fn tools_save(facts: &RepoFacts) -> Vec<Step> {
         },
         ..step(StepKind::CacheSave(tools_cache_key()))
     };
-    local
-        .then(|| Step {
-            when: When::SavingRun,
-            ..step(StepKind::ToolsLocal(ToolsLocalVerb::Save))
-        })
-        .into_iter()
-        .chain([network])
-        .collect()
+    if !local {
+        return vec![network];
+    }
+    let checked = crate::base_cache::checks_saves(facts);
+    let saving = |verb| Step {
+        when: When::SavingRun,
+        ..step(StepKind::ToolsLocal(verb))
+    };
+    let mut steps = vec![
+        saving(if checked {
+            ToolsLocalVerb::SaveChecked
+        } else {
+            ToolsLocalVerb::Save
+        }),
+        network,
+    ];
+    steps.extend(checked.then(|| saving(ToolsLocalVerb::RecordSave)));
+    steps
 }
 
 pub(crate) fn tools_install(facts: &RepoFacts) -> Option<Step> {

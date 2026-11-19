@@ -4,6 +4,7 @@
 use crate::cache_mode::CacheMode;
 use crate::check::workflow;
 use crate::error::{WorkflowsError, refuse};
+use crate::matrix_runner::MatrixRunner;
 use crate::raw::RawFile;
 
 pub(crate) const DEFAULT_RUNNER: &str = "ubuntu-latest";
@@ -142,7 +143,10 @@ pub struct Job {
     pub condition: Option<String>,
     pub helper: bool,
     pub runner: Option<String>,
-    /// True only when the runner of this job is declared `hosted = true`.
+    /// Set instead of `runner` when `runs-on` reads a matrix axis.
+    pub matrix_runner: Option<MatrixRunner>,
+    /// True only when the runner of this job is declared `hosted = true`, or, for a matrix
+    /// runner, when every label of the axis is.
     pub hosted: bool,
     pub environment: Option<String>,
     pub timeout_minutes: u16,

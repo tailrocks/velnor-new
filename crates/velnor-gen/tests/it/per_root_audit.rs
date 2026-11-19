@@ -23,7 +23,7 @@ fn pinned(version: &str) -> Result<String, Box<dyn Error>> {
 
 #[test]
 fn a_helper_with_the_per_root_audit_audits_each_unit_in_its_own_lane() -> TestResult {
-    let text = pinned("0.1.99")?;
+    let text = pinned("0.1.101")?;
     assert!(!text.contains("rust-inputs-audit"), "{text}");
     let invocations = crate::archive::plain_invocations(&text);
     assert!(
@@ -47,7 +47,7 @@ fn a_helper_with_the_per_root_audit_audits_each_unit_in_its_own_lane() -> TestRe
 
 #[test]
 fn an_older_helper_keeps_the_separate_audit_job() -> TestResult {
-    let text = pinned("0.1.98")?;
+    let text = pinned("0.1.100")?;
     assert!(text.contains("rust-inputs-audit:"), "{text}");
     assert!(!text.contains("inputs audit --root"), "{text}");
     Ok(())

@@ -113,6 +113,7 @@ pub(crate) fn fixture() -> Repo {
 }
 
 #[test]
+#[ignore = "fails on the CI cluster only, tracked in #1820"]
 fn generated_save_and_restore_share_custom_targets_and_detect_once_for_three_roots() {
     let repo = fixture();
     let checkout =

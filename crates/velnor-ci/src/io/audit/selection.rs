@@ -3,7 +3,7 @@
 
 use std::collections::BTreeSet;
 
-use velnor_model::{CompileInputs, PackageName, RepoFacts, RustRoot};
+use velnor_model::{CompileInputs, InputOwner, RepoFacts, RustMember, RustRoot};
 
 use crate::error::CiError;
 
@@ -50,22 +50,25 @@ pub(super) fn selected(
 
 /// The lock lines of packages that are members of the selected roots.
 pub(super) fn within(listed: CompileInputs, facts: &RepoFacts, chosen: &[bool]) -> CompileInputs {
-    let members: BTreeSet<&PackageName> = facts
+    let members: Vec<&RustMember> = facts
         .rust_roots
         .iter()
         .zip(chosen)
         .filter(|(_, chosen)| **chosen)
         .flat_map(|(root, _)| &root.members)
-        .map(|member| &member.name)
         .collect();
     listed
         .into_iter()
-        .filter_map(|(path, packages)| {
-            let packages: BTreeSet<PackageName> = packages
+        .filter_map(|(path, owners)| {
+            let owners: BTreeSet<InputOwner> = owners
                 .into_iter()
-                .filter(|package| members.contains(package))
+                .filter(|owner| {
+                    members
+                        .iter()
+                        .any(|member| owner.is(&member.name, &member.manifest))
+                })
                 .collect();
-            (!packages.is_empty()).then_some((path, packages))
+            (!owners.is_empty()).then_some((path, owners))
         })
         .collect()
 }

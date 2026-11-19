@@ -60,6 +60,7 @@ fn rendered_run(manifests: &[&str]) -> String {
                 pr: PrRun::Always,
                 skip_on_draft: false,
                 skip_after_merge_group: None,
+                skip_when_cold: false,
                 gate: None,
                 reads: None,
             }],

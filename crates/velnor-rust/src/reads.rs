@@ -4,11 +4,13 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Component, Path, PathBuf};
 
-use velnor_model::{CompileInputs, PackageName, RepoPath};
+use velnor_model::{CompileInputs, InputOwner, PackageName, RepoPath};
 
 use crate::error::{DetectError, Reason};
 
 pub const INPUTS_LOCK: RepoPath = RepoPath::from_static(".velnor/rust-inputs.lock");
+/// The first `velnor-ci` that reads a lock line naming its package's manifest.
+pub const INPUTS_IDENTITY_HELPER: (u64, u64, u64) = (0, 1, 101);
 const REPOSITORY: &str = ".";
 
 #[must_use]
@@ -104,13 +106,32 @@ pub fn normalize(path: &Path) -> PathBuf {
 pub fn unlisted(found: &CompileInputs, listed: &CompileInputs) -> CompileInputs {
     found
         .iter()
-        .filter_map(|(path, packages)| {
-            let missing: BTreeSet<PackageName> = packages
+        .filter_map(|(path, owners)| {
+            let missing: BTreeSet<InputOwner> = owners
                 .iter()
-                .filter(|package| !listed.get(path).is_some_and(|l| l.contains(*package)))
+                .filter(|owner| {
+                    !listed
+                        .get(path)
+                        .is_some_and(|l| l.iter().any(|entry| entry.same_package(owner)))
+                })
                 .cloned()
                 .collect();
             (!missing.is_empty()).then(|| (path.clone(), missing))
+        })
+        .collect()
+}
+
+/// The inputs with every manifest dropped: the name-only lines a velnor-ci before 0.1.101 reads.
+#[must_use]
+pub fn without_identity(inputs: &CompileInputs) -> CompileInputs {
+    inputs
+        .iter()
+        .map(|(path, owners)| {
+            let named = owners
+                .iter()
+                .map(|owner| InputOwner::named(owner.name.clone()))
+                .collect();
+            (path.clone(), named)
         })
         .collect()
 }
@@ -119,13 +140,34 @@ pub fn unlisted(found: &CompileInputs, listed: &CompileInputs) -> CompileInputs 
 pub fn format_inputs_lock(inputs: &CompileInputs) -> String {
     inputs
         .iter()
-        .flat_map(|(path, packages)| {
-            packages.iter().map(move |package| match path {
-                Some(path) => format!("{path}\t{package}\n"),
-                None => format!("{REPOSITORY}\t{package}\n"),
+        .flat_map(|(path, owners)| {
+            owners.iter().map(move |owner| {
+                let path = path.as_ref().map_or(REPOSITORY, RepoPath::as_str);
+                match &owner.manifest {
+                    Some(manifest) => format!("{path}\t{}\t{manifest}\n", owner.name),
+                    None => format!("{path}\t{}\n", owner.name),
+                }
             })
         })
         .collect()
+}
+
+/// The lock text a velnor-ci pinned in the repository can read: manifests only if `identified`.
+#[must_use]
+pub fn inputs_lock_text(inputs: &CompileInputs, identified: bool) -> String {
+    if identified {
+        format_inputs_lock(inputs)
+    } else {
+        format_inputs_lock(&without_identity(inputs))
+    }
+}
+
+/// Whether any line of the lock carries a manifest, which a velnor-ci before 0.1.101 refuses.
+#[must_use]
+pub fn lock_is_identified(bytes: &[u8]) -> bool {
+    bytes
+        .split(|byte| *byte == b'\n')
+        .any(|line| line.split(|byte| *byte == b'\t').count() >= 3)
 }
 
 pub fn parse_inputs_lock(bytes: &[u8]) -> Result<CompileInputs, DetectError> {
@@ -133,15 +175,23 @@ pub fn parse_inputs_lock(bytes: &[u8]) -> Result<CompileInputs, DetectError> {
     let text = std::str::from_utf8(bytes).map_err(|_| invalid(Reason::NotUtf8))?;
     let mut inputs: CompileInputs = BTreeMap::new();
     for (index, line) in text.lines().enumerate() {
-        let entry = line.split_once('\t').and_then(|(path, package)| {
+        let entry = line.split_once('\t').and_then(|(path, rest)| {
             let path = match path {
                 REPOSITORY => None,
                 path => Some(RepoPath::new(path).ok()?),
             };
-            Some((path, PackageName::new(package).ok()?))
+            let (package, manifest) = match rest.split_once('\t') {
+                Some((package, manifest)) => (package, Some(RepoPath::new(manifest).ok()?)),
+                None => (rest, None),
+            };
+            let owner = InputOwner {
+                name: PackageName::new(package).ok()?,
+                manifest,
+            };
+            Some((path, owner))
         });
-        let (path, package) = entry.ok_or_else(|| invalid(Reason::LockLine(index + 1)))?;
-        inputs.entry(path).or_default().insert(package);
+        let (path, owner) = entry.ok_or_else(|| invalid(Reason::LockLine(index + 1)))?;
+        inputs.entry(path).or_default().insert(owner);
     }
     Ok(inputs)
 }

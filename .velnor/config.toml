@@ -41,7 +41,7 @@ packages = ["velnor-ci"]
 complete = true
 
 [[stacks.rust.inputs]]
-globs = ["crates/velnor-gen/**", "crates/velnor-model/**", "crates/velnor-release/**", "crates/velnor-render/**", "crates/velnor-rust/**", "generator/**", ".github/workflows/release-rust-ci-tools.yml", ".github/workflows/tag-ruleset-drift.yml", ".velnor/workflows.toml"]
+globs = ["crates/velnor-gen/**", "crates/velnor-model/**", "crates/velnor-release/**", "crates/velnor-render/**", "crates/velnor-rust/**", "generator/**", ".github/workflows/release.yml", ".velnor/release.toml", ".github/workflows/tag-ruleset-drift.yml", ".velnor/workflows.toml"]
 packages = ["velnor-model", "velnor-rust", "velnor-render", "velnor-gen", "velnor-release"]
 complete = true
 

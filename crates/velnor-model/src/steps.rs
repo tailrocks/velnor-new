@@ -119,6 +119,7 @@ pub enum StepKind {
     ReportCaches {
         caches: Vec<CacheKey>,
         nextest_artifacts: bool,
+        node_tools: ToolsTelemetry,
     },
     UploadMetrics,
     DownloadMetrics,
@@ -132,6 +133,7 @@ pub enum StepKind {
     MergeGroupPassed {
         required: String,
     },
+    MergeQueueCheck,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -144,6 +146,17 @@ pub struct GroupFilter {
 pub enum ToolsLocalVerb {
     Restore,
     Save,
+    SaveChecked,
+    Prime,
+    RecordRestore,
+    RecordSave,
+}
+
+/// Which tools steps the cache telemetry reads in place of the cache action's own.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct ToolsTelemetry {
+    pub restore: bool,
+    pub save: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

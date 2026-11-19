@@ -3,11 +3,11 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_model::{RepoFacts, RustSelection, SelectionReason};
+use velnor_model::{InputOwner, RepoFacts, RustSelection, SelectionReason};
 use velnor_rust::{DetectError, INPUTS_LOCK, Reason, dep_info_paths, detect, rerun_if_changed};
 
 use crate::facts::{TestResult, lib, repo};
-use crate::select::{assert_selects, changed, glob, name, path, some, two_roots, unknown};
+use crate::select::{assert_selects, changed, glob, name, named, path, some, two_roots, unknown};
 
 #[test]
 fn dep_info_and_build_script_output_become_the_paths_they_list() {
@@ -42,7 +42,7 @@ fn locked(facts: &mut RepoFacts, entries: &[(&str, &str)]) {
             .compile_inputs
             .entry(Some(path(file)))
             .or_default()
-            .insert(name(package));
+            .insert(InputOwner::named(name(package)));
     }
 }
 
@@ -112,7 +112,7 @@ fn a_path_the_inputs_lock_lists_selects_its_packages_even_when_rules_ignore_it()
     let mut everywhere = two_roots();
     everywhere
         .compile_inputs
-        .insert(None, BTreeSet::from([name("cli")]));
+        .insert(None, BTreeSet::from([InputOwner::named(name("cli"))]));
     assert_selects(
         &everywhere,
         vec![
@@ -139,9 +139,9 @@ fn the_inputs_lock_becomes_facts_and_a_bad_line_or_an_unknown_package_is_an_erro
     assert_eq!(
         detect(&view(".\tapp\nREADME.md\tapp\nshared/a.txt\tapp\n")?)?.compile_inputs,
         BTreeMap::from([
-            (None, BTreeSet::from([name("app")])),
-            (Some(path("README.md")), BTreeSet::from([name("app")])),
-            (Some(path("shared/a.txt")), BTreeSet::from([name("app")])),
+            (None, BTreeSet::from([named("app")])),
+            (Some(path("README.md")), BTreeSet::from([named("app")])),
+            (Some(path("shared/a.txt")), BTreeSet::from([named("app")])),
         ])
     );
     for (lock, reason) in [
@@ -325,7 +325,7 @@ fn a_nested_package_is_not_charged_with_its_ancestors_scan() -> TestResult {
         facts
             .compile_inputs
             .get(&Some(path(file)))
-            .map(|names| names.iter().map(ToString::to_string).collect())
+            .map(|owners| owners.iter().map(|owner| owner.name.to_string()).collect())
     };
     assert_eq!(owners("docs/top.md"), Some(vec!["top".to_owned()]));
     assert_eq!(owners("docs/inner.md"), Some(vec!["inner".to_owned()]));
@@ -367,7 +367,7 @@ fn a_target_source_outside_the_package_directory_attributes_its_includes() -> Te
             .get(&Some(path(file)))
             .into_iter()
             .flatten()
-            .map(ToString::to_string)
+            .map(|owner| owner.name.to_string())
             .collect();
         assert_eq!(names, ["app"], "{file}");
     }
@@ -390,9 +390,10 @@ fn a_symlinked_rust_source_fails_closed_instead_of_being_skipped() -> TestResult
     view.tracked_paths.insert(linked.clone());
     view.symlinks.insert(linked);
     let facts = detect(&view)?;
+    let app = InputOwner::at(name("app"), path("crates/app/Cargo.toml"));
     assert_eq!(
         facts.compile_inputs.get(&None),
-        Some(&BTreeSet::from([name("app")]))
+        Some(&BTreeSet::from([app]))
     );
     Ok(())
 }

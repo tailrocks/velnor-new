@@ -12,13 +12,13 @@ use crate::yaml_tree::document;
 
 type TestResult = Result<(), Box<dyn Error>>;
 
-const WORKFLOW: &str = ".github/workflows/release-rust-ci-tools.yml";
+const WORKFLOW: &str = ".github/workflows/release.yml";
 const ACTION: &str = "actions/setup-velnor/action.yml";
+const SUMS_JOB: &str = "sums-family";
+const PUBLISH_JOB: &str = "publish-family";
 const SUMS: &str = "SHA256SUMS";
 const BINARY_SUMS: &str = "BINARY-SHA256SUMS";
 const COMMIT: &str = "COMMIT";
-const BUILDS: [&str; 2] = ["build-linux-x64", "build-linux-arm64"];
-const WRITE_SUMS: &str = "sha256sum COMMIT ";
 const WRITE_BINARY_SUMS: &str = "sha256sum velnor-ci-";
 
 fn parse(path: &str) -> Result<Value, Box<dyn Error>> {
@@ -87,34 +87,44 @@ fn setup_archives(script: &str) -> Result<BTreeSet<String>, Box<dyn Error>> {
         .collect())
 }
 
+fn build_runs(workflow: &Value) -> Result<Vec<&str>, Box<dyn Error>> {
+    let jobs = workflow["jobs"].as_object().ok_or("no jobs")?;
+    let mut all = Vec::new();
+    for id in jobs.keys().filter(|id| id.starts_with("build-")) {
+        all.extend(runs(workflow, id)?);
+    }
+    Ok(all)
+}
+
 fn archives_produced(
     workflow: &Value,
     targets: &BTreeSet<String>,
     expected: &BTreeSet<String>,
 ) -> Result<BTreeSet<String>, Box<dyn Error>> {
-    let mut produced = BTreeSet::new();
-    for build in BUILDS {
-        let job = &workflow["jobs"][build];
-        let target = job["env"]["TARGET"]
-            .as_str()
-            .ok_or_else(|| format!("{build} sets no TARGET"))?;
-        assert!(targets.contains(target), "{target}");
-        let archiving: Vec<&str> = runs(workflow, build)?
-            .into_iter()
-            .filter(|run| run.starts_with("tar "))
-            .collect();
-        assert_eq!(archiving.len(), 2, "{build}");
-        produced.extend(
-            archiving
-                .into_iter()
-                .flat_map(|run| names(run, "dist/"))
-                .map(|name| name.replace("$TARGET", target)),
-        );
-    }
+    let built = build_runs(workflow)?;
+    let added: BTreeSet<String> = built
+        .iter()
+        .filter_map(|run| run.strip_prefix("rustup target add "))
+        .map(str::to_owned)
+        .collect();
+    assert_eq!(&added, targets);
+    let produced: BTreeSet<String> = built
+        .iter()
+        .filter(|run| run.starts_with("tar -czf "))
+        .filter_map(|run| run.split_whitespace().nth(2))
+        .map(str::to_owned)
+        .collect();
     assert!(produced.is_superset(expected), "{produced:?} {expected:?}");
     assert_eq!(produced.len(), 2 * targets.len(), "{produced:?}");
-
     Ok(produced)
+}
+
+fn words_before_redirect(run: &str, skip: usize) -> BTreeSet<String> {
+    run.split_whitespace()
+        .skip(skip)
+        .take_while(|word| *word != ">")
+        .map(str::to_owned)
+        .collect()
 }
 
 fn checksums_cover(
@@ -123,44 +133,31 @@ fn checksums_cover(
     produced: &BTreeSet<String>,
     expected: &BTreeSet<String>,
 ) -> TestResult {
-    let listed: BTreeSet<String> = runs(workflow, "checksums")?
-        .into_iter()
-        .find(|run| run.starts_with(WRITE_SUMS) && run.ends_with("> SHA256SUMS"))
-        .map(|run| {
-            run.split_whitespace()
-                .skip(1)
-                .map(str::to_owned)
-                .collect::<Vec<_>>()
-        })
-        .ok_or("the checksums job never writes SHA256SUMS")?
-        .into_iter()
-        .take_while(|word| word != ">")
-        .collect();
-    let mut without_sums = published.clone();
-    without_sums.remove(SUMS);
-    assert_eq!(listed, without_sums);
+    let listed = words_before_redirect(
+        run_starting(workflow, SUMS_JOB, "sha256sum ", "> SHA256SUMS")?,
+        1,
+    );
+    assert_eq!(&listed, published);
 
-    let binary: BTreeSet<String> = run_starting(
-        workflow,
-        "checksums",
-        WRITE_BINARY_SUMS,
-        "> ../dist/BINARY-SHA256SUMS",
-    )?
-    .split_whitespace()
-    .skip(1)
-    .take_while(|word| *word != ">")
-    .map(str::to_owned)
-    .collect();
+    let binary = words_before_redirect(
+        run_starting(
+            workflow,
+            SUMS_JOB,
+            WRITE_BINARY_SUMS,
+            "> ../dist/BINARY-SHA256SUMS",
+        )?,
+        1,
+    );
     for name in expected {
         assert!(binary.contains(&format!("{name}/velnor-ci")), "{binary:?}");
     }
     assert_eq!(binary.len(), produced.len(), "{binary:?}");
 
-    let uploaded = workflow["jobs"]["checksums"]["steps"]
+    let uploaded = workflow["jobs"][SUMS_JOB]["steps"]
         .as_array()
-        .ok_or("the checksums job has no steps")?
+        .ok_or("the sums job has no steps")?
         .iter()
-        .filter(|step| step["name"] == "Upload SHA256SUMS")
+        .filter(|step| step["name"] == "Upload family-sums")
         .filter_map(|step| step["with"]["path"].as_str())
         .flat_map(|path| names(&path.replace('\n', " "), "dist/"))
         .collect::<BTreeSet<_>>();
@@ -172,7 +169,7 @@ fn checksums_cover(
 }
 
 #[test]
-fn the_release_tag_prefixes_the_setup_action_tries_start_the_release_workflow() -> TestResult {
+fn the_release_tag_prefix_the_setup_action_tries_first_starts_the_release_workflow() -> TestResult {
     let action = parse(ACTION)?;
     let workflow = parse(WORKFLOW)?;
     let script = action_script(&action)?;
@@ -186,17 +183,13 @@ fn the_release_tag_prefixes_the_setup_action_tries_start_the_release_workflow() 
         .map(|prefix| format!("{prefix}*"))
         .collect();
     assert_eq!(prefixes, ["tools-v*", "rust-ci-v*"]);
-    let pushed: BTreeSet<&str> = workflow["on"]["push"]["tags"]
+    let pushed: Vec<&str> = workflow["on"]["push"]["tags"]
         .as_array()
         .ok_or("the workflow does not start on tags")?
         .iter()
         .filter_map(Value::as_str)
         .collect();
-    assert!(
-        prefixes
-            .iter()
-            .all(|prefix| pushed.contains(prefix.as_str()))
-    );
+    assert_eq!(pushed, [prefixes[0].as_str()]);
     Ok(())
 }
 
@@ -214,27 +207,24 @@ fn the_release_publishes_every_archive_the_setup_action_downloads_with_its_check
         "{expected:?}"
     );
 
-    let targets: BTreeSet<String> = BUILDS
-        .iter()
-        .filter_map(|build| workflow["jobs"][build]["env"]["TARGET"].as_str())
-        .map(str::to_owned)
-        .collect();
     let script_triples: BTreeSet<String> = between(script, "triple=", ';')
         .into_iter()
         .map(str::to_owned)
         .collect();
-    assert_eq!(targets, script_triples);
 
-    let produced = archives_produced(&workflow, &targets, &expected)?;
+    let produced = archives_produced(&workflow, &script_triples, &expected)?;
 
-    let published = names(
-        run_starting(&workflow, "release", "gh release create", "")?,
-        "dist/",
-    );
+    let published: BTreeSet<String> =
+        run_starting(&workflow, PUBLISH_JOB, "velnor-ci release publish", "")?
+            .split_whitespace()
+            .skip(3)
+            .filter(|word| !word.starts_with("--"))
+            .map(str::to_owned)
+            .collect();
     let wanted: BTreeSet<String> = produced
         .iter()
         .cloned()
-        .chain([SUMS, BINARY_SUMS, COMMIT].map(str::to_owned))
+        .chain([BINARY_SUMS, COMMIT].map(str::to_owned))
         .collect();
     assert_eq!(published, wanted);
 

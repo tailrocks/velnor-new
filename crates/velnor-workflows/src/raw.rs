@@ -158,6 +158,8 @@ pub(crate) struct RawJob {
     pub(crate) helper: bool,
     pub(crate) runner: Option<String>,
     pub(crate) hosted: Option<bool>,
+    #[serde(default)]
+    pub(crate) runner_labels: BTreeMap<String, bool>,
     pub(crate) environment: Option<String>,
     pub(crate) timeout_minutes: Option<u16>,
     pub(crate) concurrency: Option<RawConcurrency>,

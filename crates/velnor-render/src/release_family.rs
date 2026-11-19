@@ -191,6 +191,13 @@ fn tag_job(
             .into_iter()
             .chain(tag_needs(plan))
             .collect(),
+        environment_note: source.tag_push.then(|| {
+            let (before, after) = family.tag_affixes();
+            format!(
+                "A tag push deploys from the tag ref: the release environment must allow {} in its deployment branch and tag policy, or this job never starts.",
+                format_args!("{before}*{after}")
+            )
+        }),
         ..after_the_gate_with("family", source.passed)
     }
 }
