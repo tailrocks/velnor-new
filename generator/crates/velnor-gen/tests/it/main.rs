@@ -28,6 +28,7 @@ mod declared_calls;
 mod declared_concurrency;
 mod declared_fixture;
 mod declared_helper_integrity;
+mod declared_image_jobs;
 mod declared_jobs;
 mod declared_paths;
 mod declared_rules;
