@@ -66,6 +66,7 @@ fn commands(facts: &RepoFacts, lint: &LintJob) -> Vec<LintCommand> {
 fn lint_job(facts: &RepoFacts, lint: &LintJob) -> Job {
     let mut steps = vec![step(StepKind::Checkout {
         depth: CHECKOUT_DEPTH,
+        sparse: None,
     })];
     steps.extend(install(facts, lint));
     steps.extend(

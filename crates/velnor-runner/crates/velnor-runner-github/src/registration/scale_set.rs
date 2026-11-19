@@ -193,10 +193,8 @@ where
     };
     let exchange = execute(transport, &request)?;
     match exchange.status {
-        200 => {
-            decode_one(&exchange.body, None, call.name, call.expected_labels)
-                .map(ScaleSetObserved::Found)
-        }
+        200 => decode_one(&exchange.body, None, call.name, call.expected_labels)
+            .map(ScaleSetObserved::Found),
         404 => Ok(ScaleSetObserved::Missing),
         status => Err(other_status(status)),
     }

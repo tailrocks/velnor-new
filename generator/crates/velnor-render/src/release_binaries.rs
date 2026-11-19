@@ -8,6 +8,7 @@ use crate::release::{FROM_A_PASSED_PUSH, GATE_IS_READY, HOSTED_RUNNER, VERIFIED_
 use crate::release_assets::{
     STAGE, asset, assets, bind_version, pack, quoted, read_version, selection, uploaded, versioned,
 };
+use crate::release_attest::{attest, verifications};
 use crate::release_checks::publish_needs;
 use crate::release_outputs::commit_output;
 use crate::release_raw::raw_packaging;
@@ -229,13 +230,21 @@ fn sums(binary: &BinaryPlan) -> RenderedJob {
             )
         });
     }
+    if binary.attest {
+        steps.push(attest(binary));
+    }
     steps.push(upload(
         format!("{}-sums", binary.package),
         format!("{DIST}/{SUMS_FILE}"),
     ));
     bind_version(&mut steps);
     RenderedJob {
-        no_permissions: true,
+        no_permissions: !binary.attest,
+        permissions: if binary.attest {
+            permissions(&[("attestations", "write"), ("id-token", "write")])
+        } else {
+            Vec::new()
+        },
         runs_on: HOSTED_RUNNER.to_owned(),
         timeout_minutes: PUBLISH_TIMEOUT_MINUTES,
         steps,
@@ -253,6 +262,9 @@ fn publish(plan: &ReleasePlan, binary: &BinaryPlan, helper: &HelperRelease) -> R
     );
     steps.push(download(format!("{}-sums", binary.package)));
     steps.extend(read_version(binary));
+    if binary.attest {
+        steps.extend(verifications(binary));
+    }
     steps.push(RenderedStep {
         name: format!("Publish the release of {}", binary.package),
         env: variables(&[
@@ -271,7 +283,11 @@ fn publish(plan: &ReleasePlan, binary: &BinaryPlan, helper: &HelperRelease) -> R
     });
     bind_version(&mut steps);
     RenderedJob {
-        permissions: permissions(&[("contents", "write")]),
+        permissions: if binary.attest {
+            permissions(&[("attestations", "read"), ("contents", "write")])
+        } else {
+            permissions(&[("contents", "write")])
+        },
         runs_on: HOSTED_RUNNER.to_owned(),
         timeout_minutes: PUBLISH_TIMEOUT_MINUTES,
         steps,

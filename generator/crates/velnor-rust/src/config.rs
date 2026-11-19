@@ -3,51 +3,23 @@
 
 use serde::Deserialize;
 use velnor_model::{
-    CiDebugInfo, InputRule, PackageName, PathGlob, RepoPath, RunnerLabel, RustCiConfig, TargetName,
+    CheckoutScope, CiDebugInfo, InputRule, PackageName, PathGlob, RepoPath, RunnerLabel,
+    RustCiConfig, TargetName,
 };
 
 use crate::config_events::{docs_run, on_main};
+use crate::config_keys::KEYS;
 use crate::error::{DetectError, Reason};
 use crate::shape::parse_shape;
 use crate::toml_file::table;
 
 pub const CONFIG_PATH: RepoPath = RepoPath::from_static(".velnor/rust-ci.toml");
 
-const KEYS: [&str; 29] = [
-    "private_sources",
-    "cache_check_blocks",
-    "cache_debug",
-    "cache",
-    "ci",
-    "runner",
-    "fork_runner",
-    "crates_mirror",
-    "mbx_shared_store",
-    "docs",
-    "timeout_minutes",
-    "exclude",
-    "non_inputs",
-    "inputs",
-    "default_ignores",
-    "shape",
-    "required_check",
-    "nextest_harnesses",
-    "default_branch",
-    "skip_draft_pull_requests",
-    "pr_ci",
-    "on_main",
-    "full_run",
-    "helper",
-    "ci_debuginfo",
-    "cache_budget_bytes",
-    "test_setup",
-    "lint",
-    "test_groups",
-];
 const TIMEOUT_RANGE: std::ops::RangeInclusive<u16> = 1..=360;
 
 #[derive(Deserialize)]
 struct RawConfig {
+    sparse_checkout: Option<bool>,
     cache_check_blocks: Option<bool>,
     cache_debug: Option<bool>,
     cache: Option<crate::config_cache::RawCache>,
@@ -59,6 +31,7 @@ struct RawConfig {
     private_sources: Option<crate::config_private::RawPrivateSources>,
     mbx_shared_store: Option<bool>,
     docs: Option<String>,
+    check_alone: Option<String>,
     timeout_minutes: Option<u16>,
     #[serde(default)]
     exclude: Vec<String>,
@@ -135,6 +108,11 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         cache_budget_bytes: crate::cache_budget::configured_budget(raw.cache_budget_bytes)
             .map_err(invalid)?,
         test_setup,
+        checkout: if raw.sparse_checkout.unwrap_or(false) {
+            CheckoutScope::Sparse
+        } else {
+            CheckoutScope::Full
+        },
         lint,
         test_groups,
         cache_check_blocks: raw.cache_check_blocks.unwrap_or(false),
@@ -147,7 +125,8 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
             .map(crate::config_mirror::mirror)
             .transpose()
             .map_err(invalid)?,
-        docs_run: docs_run(raw.docs.as_deref()).map_err(invalid)?,
+        docs_run: docs_run("docs", raw.docs.as_deref()).map_err(invalid)?,
+        check_alone_run: docs_run("check_alone", raw.check_alone.as_deref()).map_err(invalid)?,
         private_sources: crate::config_private::optional(raw.private_sources).map_err(invalid)?,
         mbx_store: raw.mbx_shared_store.unwrap_or(false).into(),
         nextest_harnesses: harnesses(raw.nextest_harnesses).map_err(invalid)?,
