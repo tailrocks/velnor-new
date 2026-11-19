@@ -22,6 +22,7 @@ pub(crate) struct Settings {
 #[derive(Debug, Clone, Deserialize)]
 pub(crate) struct PackageEntry {
     pub(crate) name: String,
+    pub(crate) version_group: Option<String>,
     #[serde(flatten)]
     pub(crate) settings: Settings,
 }

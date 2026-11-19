@@ -231,7 +231,7 @@ fn a_feature_lane_excludes_the_harness_binaries_that_nextest_cannot_run() -> Tes
     let lane =
         "[[test_lane]]\nroot = '.'\nfeatures = ['x']\npackages = ['a']\nfilter = 'test(~a)'\n";
     let mut repo = view(Some(lane))?;
-    crate::pipeline::pin_helper(&mut repo, "0.1.86")?;
+    crate::pipeline::pin_helper(&mut repo, "0.1.93")?;
     let text = workflow(&repo)?;
     let step = text
         .lines()

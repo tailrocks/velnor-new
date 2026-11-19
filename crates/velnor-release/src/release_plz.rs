@@ -5,6 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::error::ReleaseError;
 use crate::git_ref;
+use crate::groups::{check_groups, followed_groups, is_follower};
 use crate::settings::{Document, Settings, executable_key};
 use crate::tag::{PACKAGE_WILDCARD, TagPattern, checked};
 use crate::timeout;
@@ -15,6 +16,9 @@ const DEFAULT_PR_BRANCH_PREFIX: &str = "release-plz-";
 pub(crate) struct Package {
     pub(crate) name: String,
     pub(crate) tag_pattern: TagPattern,
+    /// The `version_group` of a package that shares its lead's tag, set only
+    /// for a group whose followers turn their own tag and release off.
+    pub(crate) group: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -33,6 +37,18 @@ pub(crate) struct RootConfig {
 }
 
 impl RootConfig {
+    /// The packages that own a tag: one per `version_group`, every other
+    /// package on its own.
+    pub(crate) fn tag_owners(&self) -> impl Iterator<Item = &Package> {
+        let mut seen = BTreeSet::new();
+        self.packages.iter().filter(move |package| {
+            package
+                .group
+                .as_ref()
+                .is_none_or(|group| seen.insert(group))
+        })
+    }
+
     pub(crate) fn releases(&self, package: &str) -> bool {
         !self.unreleased.contains(package)
     }
@@ -60,6 +76,7 @@ fn check_package(
     root: &str,
     package: Option<&str>,
     settings: &Settings,
+    follower: bool,
 ) -> Result<(), ReleaseError> {
     if let Some(value) = &settings.publish_timeout
         && !timeout::is_duration(value)
@@ -87,7 +104,7 @@ fn check_package(
         ("git_tag_enable", settings.git_tag_enable),
         ("git_release_enable", settings.git_release_enable),
     ] {
-        if value == Some(false) {
+        if value == Some(false) && !follower {
             let (root, package) = owned();
             return Err(ReleaseError::ReleaseSwitchOff {
                 root,
@@ -132,11 +149,11 @@ pub(crate) fn valid_package_name(name: &str) -> bool {
         && bytes.all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
 }
 
-fn publishes(workspace: &Settings, released: &[(String, Settings)]) -> bool {
+fn publishes(workspace: &Settings, released: &[Released]) -> bool {
     (workspace.release != Some(false) && workspace.publishes_to_crates_io())
         || released
             .iter()
-            .any(|(_, settings)| settings.publishes_to_crates_io())
+            .any(|(_, settings, _)| settings.publishes_to_crates_io())
 }
 
 fn parse_document(root: &str, text: &str) -> Result<Document, ReleaseError> {
@@ -155,10 +172,11 @@ fn parse_document(root: &str, text: &str) -> Result<Document, ReleaseError> {
     }
 }
 
-fn released_packages(
-    root: &str,
-    document: &Document,
-) -> Result<Vec<(String, Settings)>, ReleaseError> {
+/// A released package: its name, its settings over the workspace's, and its
+/// `version_group`.
+pub(crate) type Released = (String, Settings, Option<String>);
+
+fn released_packages(root: &str, document: &Document) -> Result<Vec<Released>, ReleaseError> {
     let mut released = Vec::new();
     for (index, entry) in document.package.iter().enumerate() {
         if document.package[..index]
@@ -178,7 +196,7 @@ fn released_packages(
         }
         let effective = entry.settings.over(&document.workspace);
         if effective.release != Some(false) {
-            released.push((entry.name.clone(), effective));
+            released.push((entry.name.clone(), effective, entry.version_group.clone()));
         }
     }
     Ok(released)
@@ -205,7 +223,7 @@ fn workspace_tags(
         });
     };
     let pattern = checked(template, PACKAGE_WILDCARD, root, None)?;
-    check_package(root, None, workspace)?;
+    check_package(root, None, workspace, false)?;
     Ok(vec![pattern])
 }
 
@@ -248,7 +266,8 @@ pub(crate) fn read(root: &str, text: &str) -> Result<RootConfig, ReleaseError> {
     }
     let released = released_packages(root, &document)?;
     let mut packages = Vec::new();
-    for (name, settings) in &released {
+    let followed = followed_groups(&released);
+    for (name, settings, group) in &released {
         let Some(template) = settings.git_tag_name.as_deref() else {
             return Err(ReleaseError::MissingGitTagName {
                 root: root.to_owned(),
@@ -256,12 +275,20 @@ pub(crate) fn read(root: &str, text: &str) -> Result<RootConfig, ReleaseError> {
             });
         };
         let tag_pattern = checked(template, name, root, Some(name))?;
-        check_package(root, Some(name), settings)?;
+        let group = group.clone().filter(|group| followed.contains(group));
+        check_package(
+            root,
+            Some(name),
+            settings,
+            group.is_some() && is_follower(settings),
+        )?;
         packages.push(Package {
             name: name.clone(),
             tag_pattern,
+            group,
         });
     }
+    check_groups(root, &released, &packages)?;
     let workspace_tags = workspace_tags(root, workspace, released.is_empty())?;
     let publishes_to_crates_io = publishes(workspace, &released);
     let entries = document
@@ -283,7 +310,7 @@ pub(crate) fn read(root: &str, text: &str) -> Result<RootConfig, ReleaseError> {
         .collect();
     let listed_nanos = released
         .iter()
-        .map(|(_, settings)| settings.registry_check_and_publish_nanos())
+        .map(|(_, settings, _)| settings.registry_check_and_publish_nanos())
         .fold(0u128, u128::saturating_add);
     Ok(RootConfig {
         listed_nanos,

@@ -70,7 +70,7 @@ Three families hold the work between runs. Each key is built from one typed valu
 
 **MBX store.** MBX (Mr. Boxington) is a cargo wrapper that a project pins in `mise.toml`; it keeps a store of compiler results. Two settings feed that store:
 
-- `mbx_shared_store = true`: when the runner host sets `VELNOR_MBX_SHARED_DIR`, a push or schedule on the default branch uses that per-node directory. A pull request, a fork or a merge queue run never gets it. They can copy missing files from the read-only `VELNOR_MBX_SEED_DIR` into a private store. With helper 0.1.89 or later, `velnor-ci tools-local` also restores `mise` and `rustup` from the node's store, and the network cache is used only when that misses.
+- `mbx_shared_store = true`: when the runner host sets `VELNOR_MBX_SHARED_DIR`, a push, schedule or `workflow_dispatch` on the default branch uses that per-node directory. A pull request, a fork or a merge queue run never gets it. They can copy missing files from the read-only `VELNOR_MBX_SEED_DIR` into a private store. With helper 0.1.89 or later, `velnor-ci tools-local` also restores `mise` and `rustup` from the node's store, and the network cache is used only when that misses.
 - `[cache] mbx_remote = "github-actions"`: adds `jdx/mr-boxington-action`, which saves only after a push to the default branch. It is refused when the project has private dependencies.
 
 **Debug a recompile.** `velnor-ci report` ends every cargo job and writes `ci-metrics.json`. The `Cache` check turns red when a crate was compiled although the restored cache held it, and when a save failed. It is advisory unless `cache_check_blocks = true`. To see why cargo rebuilt a crate, set `cache_debug = true`, regenerate, and set the repository variable `VELNOR_CACHE_DEBUG` to `1`. The jobs then set `CARGO_LOG` to the fingerprint log and upload it as `velnor-cargo-log-<job>` for three days.
@@ -111,7 +111,7 @@ The numbers in [`goals.md`](goals.md) section "Targets" are the budget: a run th
 - `Cache` fails on compiled-but-cached crates and failed saves. `Cache maintenance` enforces `cache_budget_bytes`.
 - `velnor-ci bench collect` turns a run into a metrics file, and `velnor-ci bench compare` prints a table for two of them. Use them to compare runs before and after a change.
 
-No merged check compares wall time with a limit yet.
+Set the `budget` table (see Settings) to turn four of these into a check. The `rust-budget` job compares the median and the latest of the last successful runs with the wall-time, runner-time and setup-time limits you set, and fails on a breach or on a measurement it does not have. It runs on the default branch or the scheduled run, never on a pull request, and never fails the required check.
 
 ## Settings
 
@@ -121,7 +121,7 @@ Every key of `.velnor/rust-ci.toml`, with its default. `generator/CONFIG.md` has
 |---|---|---|
 | `shape` | `"auto"` | `one-job`, `lint-test`, `groups` or `auto` |
 | `test_groups` | none | `[[test_groups]]` entries, see above |
-| `test_lane` | none | `[[test_lane]]` feature test lanes; a lane with `filter` also gets a `Test lane guard` step, see `generator/CONFIG.md` |
+| `test_lane` | none | `[[test_lane]]` feature test lanes; a lane with `filter` also gets a `Test lane guard` step, and any lane needs velnor-ci 0.1.93 or later, see `generator/CONFIG.md` |
 | `on_main` | `"affected"` | what a push or merge queue run selects: `affected` or `everything` |
 | `full_run` | `"nightly"` | `off`, `hourly`, `nightly`, `weekly` or a cron expression |
 | `pr_ci` | `"always"` | `always` or `label` |
