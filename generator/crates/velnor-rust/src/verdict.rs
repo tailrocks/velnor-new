@@ -307,6 +307,11 @@ pub fn verdict(
             ));
         } else {
             for job in counts.iter().flatten() {
+                if job.listed == 0 && job.run == 0 {
+                    out.problems.push(format!(
+                        "a test job of {slug} listed no tests and ran none, though its selected packages have tests"
+                    ));
+                }
                 for (name, package) in &job.packages {
                     if package.listed > 0 && package.run == 0 {
                         out.problems.push(format!(

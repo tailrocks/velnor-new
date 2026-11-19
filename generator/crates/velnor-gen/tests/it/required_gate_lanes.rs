@@ -174,7 +174,21 @@ fn a_package_that_listed_tests_and_ran_none_fails_even_when_another_job_ran() ->
         b: ("0", "0"),
         ..passing()
     };
-    expect(&run, true, "Required: pass")?;
+    expect(
+        &run,
+        false,
+        "a test job of root listed no tests and ran none",
+    )?;
+    let run = Run {
+        a: ("4", "4"),
+        b: ("0", "0"),
+        ..passing()
+    };
+    expect(
+        &run,
+        false,
+        "a test job of root listed no tests and ran none",
+    )?;
     let run = Run {
         a: ("4", "4"),
         b: ("", "2"),
