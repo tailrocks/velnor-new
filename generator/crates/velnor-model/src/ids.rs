@@ -72,7 +72,7 @@ pub fn github_hosted(label: &str) -> bool {
     let label = label.to_ascii_lowercase();
     ["ubuntu-", "macos-", "windows-"].iter().any(|prefix| {
         label.strip_prefix(prefix).is_some_and(|version| {
-            let version = version.split("-arm").next().unwrap_or(version);
+            let version = version.strip_suffix("-arm").unwrap_or(version);
             version == "latest" || version.chars().all(|c| c.is_ascii_digit() || c == '.')
         })
     })
