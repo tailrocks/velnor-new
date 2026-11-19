@@ -3,9 +3,11 @@
 
 use std::collections::BTreeSet;
 
-use velnor_model::{CacheRoot, RepoFacts, RepoPath, RootSlug, RustRoot, Step, StepKind, Timings};
+use velnor_model::{
+    CacheRoot, InputsCli, RepoFacts, RepoPath, RootSlug, RustRoot, Step, StepKind, Timings,
+};
 
-use crate::base_cache::cache_root;
+use crate::base_cache::{cache_root, inputs_cli};
 use crate::plan::step;
 use crate::roots::CARGO_LOCK;
 
@@ -93,21 +95,42 @@ pub(crate) fn units(facts: &RepoFacts) -> Vec<Unit> {
     units
 }
 
-pub(crate) fn restore_file_times(units: &[Unit]) -> Vec<Step> {
+pub(crate) fn restore_file_times(facts: &RepoFacts, units: &[Unit]) -> Vec<Step> {
+    let cli = inputs_cli(facts);
+    let entries = |unit: &Unit| -> Vec<(RepoPath, RepoPath)> {
+        if unit.grouped {
+            vec![(RepoPath::from_static("Cargo.toml"), unit.target_dir.clone())]
+        } else {
+            unit.roots
+                .iter()
+                .map(|root| (root.manifest.clone(), root.target_dir.clone()))
+                .collect()
+        }
+    };
+    if cli == InputsCli::Batched {
+        let roots = units.iter().flat_map(entries).collect();
+        return vec![step(StepKind::InputsRestore { roots, cli })];
+    }
     units
         .iter()
         .flat_map(|unit| {
             if unit.grouped {
                 vec![Step {
                     directory: None,
-                    ..step(StepKind::InputsRestore(unit.target_dir.clone()))
+                    ..step(StepKind::InputsRestore {
+                        roots: entries(unit),
+                        cli,
+                    })
                 }]
             } else {
                 unit.roots
                     .iter()
                     .map(|root| Step {
                         directory: root.manifest.parent(),
-                        ..step(StepKind::InputsRestore(root.target_dir.clone()))
+                        ..step(StepKind::InputsRestore {
+                            roots: vec![(root.manifest.clone(), root.target_dir.clone())],
+                            cli,
+                        })
                     })
                     .collect()
             }

@@ -5,6 +5,7 @@ use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
+use super::input_target::check_removal_target;
 use crate::cache::{KEEP_NEWEST, born_expired, should_save, trim};
 use crate::error::CiError;
 use crate::github::Repo;
@@ -176,13 +177,20 @@ pub fn expire_old_bases(targets: &[PathBuf], now_seconds: i64) -> Result<Expiry,
             report: String::new(),
         });
     };
-    let mut removed = Vec::new();
+    let mut expired = Vec::new();
     for target in targets {
         let born = match fs::read_to_string(target.join(BORN_FILE)) {
             Ok(born) if born_expired(&born, now_seconds, days) => born.trim().to_owned(),
             Err(_) if target.is_dir() => "unknown".to_owned(),
             Ok(_) | Err(_) => continue,
         };
+        expired.push((target, born));
+    }
+    for (target, _) in &expired {
+        check_removal_target(target)?;
+    }
+    let mut removed = Vec::new();
+    for (target, born) in expired {
         fs::remove_dir_all(target)
             .map_err(|e| CiError::new(format!("cannot remove {}: {e}", target.display())))?;
         removed.push(format!("{} (born {born})", target.display()));
@@ -216,4 +224,51 @@ pub(super) fn run_trim(prefix: &str, keep: Option<usize>) -> Result<String, CiEr
         keep.unwrap_or(KEEP_NEWEST),
         super::now_seconds(),
     )
+}
+
+fn budget_limit() -> Result<Option<u64>, CiError> {
+    match std::env::var("VELNOR_CACHE_BUDGET_BYTES") {
+        Ok(text) if !text.trim().is_empty() => text
+            .trim()
+            .parse()
+            .map(Some)
+            .map_err(|_| CiError::new("VELNOR_CACHE_BUDGET_BYTES is not a number of bytes")),
+        _ => Ok(None),
+    }
+}
+
+pub(super) fn run_decide(args: &crate::cli_cache::DecideArgs) -> Result<String, CiError> {
+    let (target, archive) = super::inputs_batch::cache_paths(args)?;
+    let root = super::current_dir()?;
+    let target = super::cache_paths::validated(&root, &target)?;
+    let temp = std::env::var_os("RUNNER_TEMP")
+        .filter(|dir| !dir.is_empty())
+        .ok_or_else(|| {
+            CiError::new("set RUNNER_TEMP to the directory containing velnor-run.log")
+        })?;
+    let log_path = Path::new(&temp).join("velnor-run.log");
+    let log = fs::read(&log_path)
+        .map_err(|e| CiError::new(format!("cannot read {}: {e}", log_path.display())))?;
+    let manifests = super::cache_paths::list("VELNOR_CACHE_MANIFESTS")?
+        .unwrap_or_else(|| args.manifest_path.clone());
+    let refusal = super::cache_sources::refusal(&root, &manifests)?;
+    let sources = refusal.is_none();
+    let decision = if let Some(reason) = refusal {
+        Decision {
+            save: false,
+            report: reason,
+        }
+    } else {
+        let counts = super::activity::activity()?
+            .unwrap_or_else(|| crate::logscan::scan(&String::from_utf8_lossy(&log)));
+        decide_counts(
+            &counts,
+            &target,
+            archive.as_deref(),
+            super::now_seconds(),
+            budget_limit()?,
+        )?
+    };
+    super::append_outputs(&format!("save={}\nsources={sources}\n", decision.save))?;
+    Ok(decision.report)
 }

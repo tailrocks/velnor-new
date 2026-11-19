@@ -20,7 +20,7 @@ use crate::gate::{
     PLAN_STEP, Setup, admission, all_conditions, condition, merge_group_skipped, output, plan_read,
     plan_source, sources_step, verdict_step,
 };
-use crate::helper_steps::restored_step;
+use crate::helper_steps::{inputs_step, restore_inputs_step, restored_targets_step};
 use crate::permission_pairs;
 use crate::rules::{RenderedJob, RenderedStep, SETUP_VELNOR_ACTION, Value};
 use crate::tests::Tests;
@@ -188,6 +188,11 @@ fn rendered_steps(
             condition(step.when, step.gate.as_ref(), setup, step.pr, &extra),
         );
         body.working_directory = step.directory.as_ref().map(ToString::to_string);
+        if matches!(step.kind, StepKind::InputsSave { .. })
+            && step.when != velnor_model::When::SaveBase
+        {
+            body.id = None;
+        }
     }
     if let (Some(plan), StepKind::Cargo(command), Some(main)) =
         (&step.reads, &step.kind, rendered.last_mut())
@@ -234,9 +239,9 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
             target,
             archive,
             manifests,
+            cli,
             budget_bytes,
-        } => cache_decide(target, archive.as_ref(), manifests, *budget_bytes),
-        StepKind::RestoredTargets { expiry, targets } => restored_step(*expiry, targets),
+        } => cache_decide(target, archive.as_ref(), manifests, *cli, *budget_bytes),
         StepKind::SourcesLocks(locks) => sources_locks(locks),
         StepKind::CacheResult(lanes) => crate::cache_upload::result(lanes),
         StepKind::CacheVerify { lane, family } => crate::cache_upload::verify(lane, *family),
@@ -260,10 +265,13 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
         ),
         StepKind::Helper(command) => crate::helper_steps::helper_step(*command),
         StepKind::TestGroupsCheck(groups) => crate::helper_steps::test_groups_step(groups),
-        StepKind::InputsSave(target) => crate::helper_steps::inputs_step("save", target, directory),
-        StepKind::InputsRestore(target) => {
-            crate::helper_steps::inputs_step("restore", target, directory)
-        }
+        StepKind::InputsSave { target, cli } => inputs_step("save", target, directory, *cli),
+        StepKind::InputsRestore { roots, cli } => restore_inputs_step(roots, directory, *cli),
+        StepKind::RestoredTargets {
+            targets,
+            expiry,
+            cli,
+        } => restored_targets_step(targets, *expiry, *cli),
         StepKind::MbxRemote => crate::helper_steps::mbx_remote_step(),
         StepKind::CratesMirror(mirror) => crate::helper_steps::mirror_step(mirror),
         StepKind::MbxStore => crate::helper_steps::mbx_store_step(),
@@ -329,7 +337,10 @@ fn cache_step(action: &str, verb: &str, key: &CacheKey, fallbacks: bool) -> Rend
     let rendered = render_key(key);
     let paths: Vec<String> = key.paths().iter().map(path_text).collect();
     let mut with = vec![
-        ("path".to_owned(), Value::Text(paths.join("\n"))),
+        (
+            "path".to_owned(),
+            crate::cache::action_path(&paths.join("\n")),
+        ),
         ("key".to_owned(), Value::Expr(rendered.key)),
     ];
     if fallbacks && !rendered.restore_keys.is_empty() {

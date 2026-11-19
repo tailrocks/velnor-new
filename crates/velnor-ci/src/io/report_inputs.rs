@@ -3,7 +3,7 @@
 
 use crate::cargo_artifacts::{ArtifactTap, ProgressKind};
 use crate::error::CiError;
-use crate::inputs::{RESTORE_WITNESS, SNAPSHOT, SYMLINK_MODE};
+use crate::inputs::{SYMLINK_MODE, snapshot_file, witness_file};
 use crate::report::{Hit, LaneMetrics};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -38,12 +38,14 @@ fn collect_root(
     let directory = root.manifest.parent();
     let root_text = directory.as_ref().map_or(".", RepoPath::as_str);
     let root_path = checkout.join(directory.as_ref().map_or("", RepoPath::as_str));
-    let (_, current) = super::inputs::worktree_files(&root_path)?;
+    let prefix = super::input_scopes::git_prefix(&root_path)?;
+    let scope = crate::scope::Scope::new(&prefix, &facts.compile_inputs, Some(facts));
+    let (_, current) = super::input_scopes::scoped_files(&root_path, Some(&scope))?;
     let lock = root.manifest.sibling(&RepoPath::from_static("Cargo.lock"));
     let symlink_lock = report.symlink_locks.contains(&lock);
     let target = checkout.join(root.target_dir.as_str());
-    let saved = read_snapshot(&target.join(SNAPSHOT))?;
-    let saved_witness = read_witness(&target.join(RESTORE_WITNESS))?;
+    let saved = read_snapshot(&target.join(snapshot_file(&prefix)))?;
+    let saved_witness = read_witness(&target.join(witness_file(&prefix)))?;
     let usable = saved.is_some();
     let unverifiable_links = !current.links.is_empty()
         || current.unverifiable_links > 0
@@ -250,19 +252,15 @@ fn unchanged(
             .iter()
             .map(|input| (&input.file.path, &input.file))
             .collect();
-        let scope = crate::scope::Scope::new(
-            root.manifest.parent().as_ref().map_or("", RepoPath::as_str),
-            facts
-                .compile_inputs
-                .keys()
-                .flatten()
-                .map(ToString::to_string)
-                .collect(),
-        );
+        let prefix = root
+            .manifest
+            .parent()
+            .map_or_else(String::new, |directory| format!("{directory}/"));
+        let scope = crate::scope::Scope::new(&prefix, &facts.compile_inputs, Some(facts));
         let current: BTreeMap<_, _> = current
             .iter()
             .filter(|(path, _)| {
-                scope.contains(path)
+                scope.contains_bytes(path.as_bytes())
                     || RepoPath::new(path.as_str()).is_ok_and(|path| {
                         facts
                             .config

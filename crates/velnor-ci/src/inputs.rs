@@ -5,10 +5,46 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::error::CiError;
+use crate::scope::Scope;
 
-pub const INPUTS_FILE: &str = ".velnor/inputs.tsv";
-pub const SNAPSHOT: &str = ".velnor/restored-inputs.tsv";
-pub const RESTORE_WITNESS: &str = ".velnor/restored-inputs-witness.tsv";
+#[must_use]
+pub fn inputs_file(prefix: &str) -> String {
+    prefixed(".velnor/inputs", prefix)
+}
+
+#[must_use]
+pub fn snapshot_file(prefix: &str) -> String {
+    prefixed(".velnor/restored-inputs", prefix)
+}
+
+#[must_use]
+pub fn witness_file(prefix: &str) -> String {
+    prefixed(".velnor/restored-inputs-witness", prefix)
+}
+
+#[must_use]
+pub fn is_inputs_file(path: &std::path::Path) -> bool {
+    let Some(name) = path
+        .strip_prefix(".velnor")
+        .ok()
+        .and_then(|name| name.to_str())
+    else {
+        return false;
+    };
+    name == "inputs.tsv"
+        || name
+            .strip_prefix("inputs-")
+            .and_then(|rest| rest.strip_suffix(".tsv"))
+            .is_some_and(|hash| hash.len() == 64 && hash.bytes().all(|b| b.is_ascii_hexdigit()))
+}
+
+fn prefixed(stem: &str, prefix: &str) -> String {
+    if prefix.is_empty() {
+        format!("{stem}.tsv")
+    } else {
+        format!("{stem}-{}.tsv", velnor_rust::sha256_hex(prefix.as_bytes()))
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -59,10 +95,10 @@ enum Entry {
 }
 
 #[must_use]
-pub fn parse_ls_files(staged: &[u8]) -> Tracked {
+pub fn parse_ls_files(staged: &[u8], scope: &Scope) -> Tracked {
     let mut tracked = Tracked::default();
     for record in staged.split(|byte| *byte == 0).filter(|r| !r.is_empty()) {
-        match parse_ls_files_record(record) {
+        match parse_ls_files_record(record, scope) {
             Entry::File(file) => tracked.files.push(file),
             Entry::Link(link) => tracked.links.push(link),
             Entry::Unsupported => tracked.unsupported += 1,
@@ -79,10 +115,13 @@ pub fn is_representable(text: &str) -> bool {
     !text.is_empty() && !text.contains(['\t', '\n', '\r'])
 }
 
-fn parse_ls_files_record(record: &[u8]) -> Entry {
+fn parse_ls_files_record(record: &[u8], scope: &Scope) -> Entry {
     let Some(tab) = record.iter().position(|byte| *byte == b'\t') else {
         return Entry::Skipped;
     };
+    if !scope.contains_bytes(&record[tab + 1..]) {
+        return Entry::Skipped;
+    }
     let Ok(meta) = std::str::from_utf8(&record[..tab]) else {
         return Entry::Skipped;
     };
@@ -161,7 +200,7 @@ pub fn parse_inputs(text: &str) -> Result<Vec<SavedInput>, CiError> {
         .map(|(index, line)| {
             parse_inputs_line(line).ok_or_else(|| {
                 CiError::new(format!(
-                    "{INPUTS_FILE} line {} is not `path<TAB>blob<TAB>mtime_ns<TAB>mode`: `{line}`",
+                    "inputs snapshot line {} is not `path<TAB>blob<TAB>mtime_ns<TAB>mode`: `{line}`",
                     index + 1
                 ))
             })

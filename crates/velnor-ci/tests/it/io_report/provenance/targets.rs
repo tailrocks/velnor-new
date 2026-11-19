@@ -1,13 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{RESTORE_WITNESS, Repo, SNAPSHOT};
+use super::{Repo, snapshot_file, witness_file};
 use serde_json::json;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::process::Command;
-use velnor_ci::inputs::INPUTS_FILE;
+use velnor_ci::inputs::inputs_file;
 use velnor_ci::report::LaneMetrics;
 use velnor_ci::telemetry::INVOCATIONS;
 
@@ -120,8 +120,11 @@ fn configured_target_warm_report_ignores_default_target_decoy() -> ResultTest {
     inputs(&repo, "", "save")?;
     inputs(&repo, "", "restore")?;
     fs::create_dir_all(repo.root().join("target/.velnor"))?;
-    fs::write(repo.root().join("target").join(SNAPSHOT), "malformed\n")?;
-    fs::write(repo.root().join("target").join(RESTORE_WITNESS), "stale\n")?;
+    fs::write(
+        repo.root().join("target").join(snapshot_file("")),
+        "malformed\n",
+    )?;
+    fs::write(repo.root().join("target").join(witness_file("")), "stale\n")?;
     let metrics = report(&repo, "", HIT)?;
     assert!(metrics.caches[0].usable, "{metrics:?}");
     assert!(metrics.caches[0].usable_same_lock, "{metrics:?}");
@@ -142,7 +145,7 @@ fn configured_target_restore_miss_rejects_stale_snapshot() -> ResultTest {
     inputs(&repo, "", "save")?;
     inputs(&repo, "", "restore")?;
     let target = repo.root().join("cache-output");
-    assert!(target.join(SNAPSHOT).is_file());
+    assert!(target.join(snapshot_file("")).is_file());
     let metrics = report(
         &repo,
         "",
@@ -151,10 +154,10 @@ fn configured_target_restore_miss_rejects_stale_snapshot() -> ResultTest {
     assert!(!metrics.caches[0].usable, "{metrics:?}");
     assert!(!metrics.caches[0].usable_same_lock, "{metrics:?}");
     assert!(metrics.violations.is_empty(), "{metrics:?}");
-    fs::remove_file(target.join(INPUTS_FILE))?;
+    fs::remove_file(target.join(inputs_file("")))?;
     inputs(&repo, "", "restore")?;
-    assert!(!target.join(SNAPSHOT).exists());
-    assert!(!target.join(RESTORE_WITNESS).exists());
+    assert!(!target.join(snapshot_file("")).exists());
+    assert!(!target.join(witness_file("")).exists());
     let metrics = report(&repo, "", HIT)?;
     assert!(!metrics.caches[0].usable, "{metrics:?}");
     assert!(metrics.violations.is_empty(), "{metrics:?}");
@@ -167,8 +170,8 @@ fn nested_configured_target_keeps_root_scope_and_pre_cargo_witness() -> ResultTe
     inputs(&repo, "nested/", "save")?;
     inputs(&repo, "nested/", "restore")?;
     let target = repo.root().join("cache-output");
-    let snapshot = fs::read(target.join(SNAPSHOT))?;
-    let witness = fs::read(target.join(RESTORE_WITNESS))?;
+    let snapshot = fs::read(target.join(snapshot_file("nested/")))?;
+    let witness = fs::read(target.join(witness_file("nested/")))?;
     repo.write("sibling.txt", "outside root changed during Cargo\n");
     let metrics = report(&repo, "nested/", HIT)?;
     assert_eq!(metrics.invocations[0].root, "nested");
@@ -183,8 +186,8 @@ fn nested_configured_target_keeps_root_scope_and_pre_cargo_witness() -> ResultTe
     );
     repo.write("nested/src/lib.rs", "pub fn changed_during_cargo() {}\n");
     inputs(&repo, "nested/", "save")?;
-    assert_eq!(fs::read(target.join(SNAPSHOT))?, snapshot);
-    assert_eq!(fs::read(target.join(RESTORE_WITNESS))?, witness);
+    assert_eq!(fs::read(target.join(snapshot_file("nested/")))?, snapshot);
+    assert_eq!(fs::read(target.join(witness_file("nested/")))?, witness);
     let metrics = report(&repo, "nested/", HIT)?;
     assert!(metrics.caches[0].usable_same_lock, "{metrics:?}");
     assert!(
@@ -194,7 +197,13 @@ fn nested_configured_target_keeps_root_scope_and_pre_cargo_witness() -> ResultTe
             .any(|line| line.contains("changed during Cargo")),
         "{metrics:?}"
     );
-    assert!(!repo.root().join("nested/target").join(SNAPSHOT).exists());
+    assert!(
+        !repo
+            .root()
+            .join("nested/target")
+            .join(snapshot_file("nested/"))
+            .exists()
+    );
     assert!(!Path::new(&metrics.invocations[0].root).is_absolute());
     Ok(())
 }
