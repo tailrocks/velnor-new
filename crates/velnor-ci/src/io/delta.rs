@@ -54,11 +54,12 @@ fn apply(args: &DeltaArgs, base: &str) -> Result<String, CiError> {
     }
     let cutoff = snapshot::now_ns()?;
     let recorded = snapshot::recorded_inventory(&args.target_dir);
-    let baseline =
-        snapshot::capture(&args.target_dir, base, recorded.as_ref()).and_then(|baseline| {
+    let baseline = snapshot::capture(&args.target_dir, base, recorded.as_ref(), cutoff).and_then(
+        |(baseline, read)| {
             snapshot::validate_times(&baseline.nodes, cutoff)?;
-            Ok(baseline)
-        });
+            Ok((baseline, read))
+        },
+    );
     let manifest = snapshot::read::<Manifest>(&args.staging_dir.join(MANIFEST));
     let mut report = if let Err(error) = &baseline {
         cold(&args.target_dir, error)?
@@ -85,8 +86,11 @@ fn apply(args: &DeltaArgs, base: &str) -> Result<String, CiError> {
     };
     tree::remove_node(&args.staging_dir)?;
     snapshot::replace(&args.target_dir.join(MARKER), Some(b""))?;
+    if let Ok((baseline, read)) = &baseline {
+        report = format!("{report}read {read} of {} base files\n", baseline.files());
+    }
     let bytes = baseline
-        .and_then(|baseline| snapshot::encode(&baseline))
+        .and_then(|(baseline, _)| snapshot::encode(&baseline))
         .ok();
     snapshot::replace(&args.target_dir.join(BASELINE), bytes.as_deref())?;
     if bytes.is_none() {
@@ -153,8 +157,8 @@ fn stage(args: &DeltaArgs, base: &str) -> Result<String, CiError> {
         }
         _ => return decline("no valid base inventory"),
     };
-    let manifest = match select(args, base, &baseline, cutoff, inputs) {
-        Ok(manifest) => manifest,
+    let (manifest, read, files) = match select(args, base, &baseline, cutoff, inputs) {
+        Ok(selected) => selected,
         Err(error) => return decline(&error.to_string()),
     };
     let bytes = match snapshot::encode(&manifest) {
@@ -174,7 +178,7 @@ fn stage(args: &DeltaArgs, base: &str) -> Result<String, CiError> {
     }
     super::append_outputs("save=true\n")?;
     Ok(format!(
-        "staged {} cumulative delta files, {size} bytes\n",
+        "staged {} cumulative delta files, {size} bytes; read {read} of {files} files\n",
         manifest
             .nodes
             .values()
@@ -210,9 +214,10 @@ fn select(
     baseline: &Snapshot,
     cutoff: u64,
     inputs: super::input_snapshot::VerifiedInputs,
-) -> Result<Manifest, CiError> {
+) -> Result<(Manifest, usize, usize), CiError> {
     let mut current = BTreeMap::new();
     let mut size = 0_u64;
+    let (mut read, mut files) = (0, 0);
     for path in tree::paths(&args.target_dir)? {
         let full = args.target_dir.join(&path);
         let stat = snapshot::stat(&full)?;
@@ -230,7 +235,14 @@ fn select(
                 return Err(CiError::new("delta exceeds its byte limit"));
             }
         }
-        let node = snapshot::identity(&full)?;
+        let changed = snapshot::change_time(&full)?;
+        let node = if let Some(node) = baseline.unchanged(&path, &stat, changed) {
+            node.clone()
+        } else {
+            read += usize::from(!stat.directory());
+            snapshot::identity(&full)?
+        };
+        files += usize::from(!stat.directory());
         if path == inputs.name || original != Some(&node) {
             size = size.saturating_add(node.size());
         }
@@ -266,12 +278,13 @@ fn select(
             }
         }
     }
-    Ok(Manifest {
+    let manifest = Manifest {
         base: base.to_owned(),
         nodes,
         removed,
         sources: inputs.sources,
-    })
+    };
+    Ok((manifest, read, files))
 }
 
 pub(super) fn safe_path(path: &Path) -> Result<(), CiError> {
