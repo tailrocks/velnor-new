@@ -10,8 +10,8 @@ license.workspace = true
 autotests = false
 
 [lib]
-doctest = false
-test = false
+doctest = true
+test = true
 
 [package.metadata.velnor]
 v1-task-owner = "repository-maintenance"
