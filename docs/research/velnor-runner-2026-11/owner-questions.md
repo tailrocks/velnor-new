@@ -26,7 +26,7 @@ This sheet lists every question in the Velnor plan that only the owner can answe
   - (b) As above, but keep the format and lint quick set on unlabelled PRs, with `Required` still red.
   - (c) Keep `ci:run` and `ci:auto`, and only make `Required` red without a verdict.
 - **Recommendation.** (a). The cost is one short red job per push on unlabelled PRs until the Velnor App exists. Eight of nine models chose (a).
-- **Default.** (a). It is your flow from decisions 12, 15 and 17; this question confirms the label name and the deletions.
+- **Default.** (a). It is your flow from decision 12; this question confirms the label name and the deletions.
 - **Needed by.** W2. Also answers the old D16 (draft label arms at "ready": yes) and D19 (compile before the label: no).
 
 ### 2. Q13: Which checks must pass before a change lands
@@ -74,7 +74,7 @@ This sheet lists every question in the Velnor plan that only the owner can answe
 ### 5. Q12: The gate's rules come from the base branch
 
 - **Question.** Today the workflow and its policy come from the PR's own tree, so a PR can edit `rust-ci.yml` or `.velnor/rust-ci.toml` and loosen what `Required` demands. Make the gate compare the PR's verification contract with main's, and fail on any reduction you have not signed for that exact diff?
-- **At stake.** Once the bypass is gone, this is the realistic way a false green gets in: an agent "fixes" a red test by weakening the check. Decision 8 says agents are trusted but fallible.
+- **At stake.** Once the bypass is gone, this is the realistic way a false green gets in: an agent "fixes" a red test by weakening the check. Agents do all the work (decision 15), and an agent can be wrong.
 - **Options.**
   - (a) The contract check in phase 0 (W10), then a trusted verifier, then the Velnor App.
   - (b) Wait for the App.

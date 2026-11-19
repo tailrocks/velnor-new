@@ -32,7 +32,7 @@ All nine models agree, and six call it the most important change. The plan's cen
 Nothing reaches the ruleset until `Required` has been green on main **with tests running**. The order is:
 
 1. **Green main, and a contract that keeps it green.** Every time main went red after the cutover, the cause was the same kind of thing: the generator rendered a helper command or flag the pinned helper could not run. The fix is structural. velnor-gen reads the **pinned helper's command schema** and refuses to generate a step the pin cannot parse, so a regeneration that the pin cannot run fails before it merges.
-2. **An honest `Required`** (owner decisions 15–17, R3).
+2. **An honest `Required`** (owner decision 12, R3).
 3. **Generator freshness in the gate.** `StepKind::GeneratorCheck` exists but nothing plans it; plan it, run it from the pinned release, and make `Required` depend on it. Delete `.velnor/config.toml` and the helper commands that only the deleted engine used.
 4. **One lint lane.** Move the four `ci.yml` jobs into `[[lint]]` and delete `ci.yml`.
 5. **Release gate.** The generated tools release requires the exact green push run of the tagged commit (`velnor-ci release-gate`, fail closed). #1608 is superseded by doing this in the generated workflow.
@@ -54,9 +54,9 @@ Each item is written as an issue whose "done when" checks state on main, so work
 
 ### R4. A PR must not be able to weaken its own gate
 
-Today the workflow and its policy come from the PR's own tree, so a PR can edit `rust-ci.yml` or `.velnor/rust-ci.toml` and loosen what `Required` demands. Owner decision 8 says agents are trusted but fallible, so this is the realistic false-green path once the bypass is gone.
+Today the workflow and its policy come from the PR's own tree, so a PR can edit `rust-ci.yml` or `.velnor/rust-ci.toml` and loosen what `Required` demands. Agents do the work (decision 15), and an agent can be wrong, so this is the realistic false-green path once the bypass is gone.
 
-- **Now (phase 0, W10):** the gate compares the PR's contract with the **base branch's** contract and fails on any reduction that is not signed by the owner for that exact diff (owner decision 17; it reuses velnor-gen's existing "check does less" detection).
+- **Now (phase 0, W10):** the gate compares the PR's contract with the **base branch's** contract and fails on any reduction that is not signed by the owner for that exact diff (this answers the old question D17; it reuses velnor-gen's existing "check does less" detection).
 - **Next:** a trusted `workflow_run` verifier that checks out nothing, runs the released `velnor-gen check` on the tree as data, and writes a shadow `Velnor / Verified` status.
 - **Later:** the `velnor-verify` GitHub App makes that status the required check.
 

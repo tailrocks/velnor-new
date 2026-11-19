@@ -244,8 +244,8 @@ numbers are about the steady state after step 8 of the order, not the first week
 
 ## 6. How agents fit in
 
-Agents write most of the code here. Owner decision 8 says they are trusted but fallible. So the
-gate must hold against honest mistakes by agents.
+Agents write most of the code here. Every author is a project member (owner decision 8), so no
+author is hostile, but an agent can still be wrong. So the gate must hold against honest mistakes.
 
 - A later plan item (R13) lets one plan drive three targets: the generated YAML, Velnor Native,
   and a local `velnor verify` that agents run before they push.
