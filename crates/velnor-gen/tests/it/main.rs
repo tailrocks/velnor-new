@@ -17,6 +17,7 @@ mod cache_key_defects;
 mod cache_key_inputs;
 mod cache_keys;
 mod cache_lock_identity;
+mod cache_mode_default;
 mod cache_mode_scan;
 mod call_fork_fence;
 mod cargo_flags;

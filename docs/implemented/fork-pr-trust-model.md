@@ -44,13 +44,24 @@ review is the trust root for the committed `needs` set"
   `consumer_gate_rejects_attacker_manifests`).
 - Forge the asset digest: a wrong `VELNOR_ASSET_SHA256` fails
   `sha256sum -c` in the Acquire step (`pins.rs:192-198`) — red, not green.
-- Poison shared caches: every generated workflow declares `cache-mode: read`
-  and only named writers (the tools producers, the tofu providers producers
-  and `sources-producer`) declare job-level `cache-mode: write`, each gated to
-  a protected default-branch push. Pull requests, forks and merge groups never
-  write, and the default branch restores only the `trusted` scope. Tools saves keep their trust gate
-  and never re-store an exact hit (`gate-4-tool-compilation-reuse.md`,
-  R13).
+- Poison shared caches: absent means read. A job with no `cache-mode` key gets
+  GitHub's default, which is `write` on a trusted trigger, so the renderer
+  writes `cache-mode: read` on every generated job that does not declare a mode
+  (`crates/velnor-render/src/workflow.rs`, `cache_mode`). Write only in jobs
+  that declare `cache_mode = "write"`; today those are the four
+  `qualification.yml` cache jobs, dispatch-only and gated off the default
+  branch, so test writes never pollute the cache of the default branch. The
+  gate is enforced at generation: a write mode on a job whose `if` lacks
+  `github.ref != format('refs/heads/{0}', github.event.repository.default_branch)`
+  is refused (`crates/velnor-workflows/src/job_env.rs`). Velnor's runner does
+  not decide this: GitHub's cache service enforces the effective mode through
+  scoped tokens, and a restricted trigger such as a fork pull request is read
+  by GitHub's own default as well. A job that calls a reusable workflow has no
+  `cache-mode` of its own, because GitHub documents none for a caller job. Its
+  callee jobs, when Velnor generates them, carry theirs. A hand-written callee
+  can still request write. The test
+  `cache_mode_default::no_generated_job_leaves_the_cache_mode_to_the_default`
+  fails when a generated job has no mode or an undeclared write.
 - Fake validator conclusions at runtime: `needs` conclusions are
   server-side; any observed-vs-expected divergence fails closed
   (`needs_channel.rs:81-83`).

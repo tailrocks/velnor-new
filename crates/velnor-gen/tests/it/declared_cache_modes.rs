@@ -75,7 +75,11 @@ fn a_job_cache_mode_is_written_as_the_github_key() -> TestResult {
         assert!(at("cache-mode") < at("steps"), "{keys:?}");
     }
     let plain = rendered(&one_job("", run_step()))?;
-    assert!(job(&plain, "check")?.get("cache-mode").is_none());
+    assert_eq!(
+        job(&plain, "check")?.get("cache-mode").and_then(Node::text),
+        Some("read"),
+        "an undeclared job must not be left to the default, which is write on a trusted trigger"
+    );
     Ok(())
 }
 
