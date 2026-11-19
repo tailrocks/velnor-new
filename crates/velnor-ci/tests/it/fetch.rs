@@ -238,6 +238,28 @@ fn a_token_that_cannot_be_revoked_fails_the_step() -> TestResult {
 }
 
 #[test]
+fn a_malformed_api_url_still_runs_the_fetch_and_reports_the_missing_revocation() -> TestResult {
+    let fixture = Fixture::new("fetch-bad-api", 0)?;
+    let api = serve(204)?;
+    let output = fixture.run_with(
+        &api,
+        Some(TOKEN),
+        None,
+        &["Cargo.toml"],
+        &[("VELNOR_API_URL", "ftp://not-the-api.invalid")],
+    );
+    assert!(!output.status.success());
+    assert!(!fixture.log("cargo.args").is_empty(), "the fetch never ran");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("revoked") && stderr.contains("VELNOR_API_URL"),
+        "{stderr}"
+    );
+    assert!(api.requests.lock().map_err(|e| e.to_string())?.is_empty());
+    Ok(())
+}
+
+#[test]
 fn every_github_url_form_a_lock_file_records_is_authenticated_and_nothing_else() -> TestResult {
     let fixture = Fixture::new("fetch-urls", 0)?;
     let mut urls = URLS.to_vec();
