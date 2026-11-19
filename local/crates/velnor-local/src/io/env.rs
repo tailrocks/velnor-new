@@ -14,7 +14,7 @@ use tokio::fs;
 use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
 
-use super::probe::wait_for;
+use super::probe::{wait_for, wait_online};
 use super::proxy::Proxy;
 use crate::authority::AGENTS_PATH;
 use crate::cli::EnvironmentArgs;
@@ -341,7 +341,7 @@ impl<E: Engine> Environment<E> {
                     self.name
                 );
                 let what = format!("{prefix}runner {number}");
-                wait_for(proxy, &path, deadline, &what).await?;
+                wait_online(proxy, &path, deadline, &what).await?;
             }
         }
         Ok(addresses)

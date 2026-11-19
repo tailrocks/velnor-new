@@ -27,21 +27,58 @@ pub(super) async fn request(
     ok.then(|| bytes.to_vec())
 }
 
+/// Transport health: the endpoint answered with an HTTP success.
 pub(super) async fn wait_for(
     proxy: &Proxy,
     path: &str,
     deadline: tokio::time::Instant,
     what: &str,
 ) -> io::Result<()> {
+    poll(proxy, path, deadline, what, |_| Ok(())).await
+}
+
+/// Runner readiness: the answer must be JSON with `"online": true`.
+pub(super) async fn wait_online(
+    proxy: &Proxy,
+    path: &str,
+    deadline: tokio::time::Instant,
+    what: &str,
+) -> io::Result<()> {
+    poll(
+        proxy,
+        path,
+        deadline,
+        what,
+        |body| match serde_json::from_slice::<serde_json::Value>(body) {
+            Ok(answer) if answer["online"] == true => Ok(()),
+            Ok(answer) if answer["online"] == false => Err("offline".to_owned()),
+            Ok(_) => Err("answer has no boolean `online`".to_owned()),
+            Err(error) => Err(format!("malformed answer: {error}")),
+        },
+    )
+    .await
+}
+
+async fn poll(
+    proxy: &Proxy,
+    path: &str,
+    deadline: tokio::time::Instant,
+    what: &str,
+    accept: impl Fn(&[u8]) -> Result<(), String>,
+) -> io::Result<()> {
+    let mut last = "no answer".to_owned();
     loop {
-        if let Ok(Some(_)) =
+        if let Ok(Some(body)) =
             tokio::time::timeout_at(deadline, request(proxy, "GET", path, "")).await
         {
-            return Ok(());
+            match accept(&body) {
+                Ok(()) => return Ok(()),
+                Err(reason) => last = reason,
+            }
         }
         if tokio::time::Instant::now() >= deadline {
             return Err(io::Error::other(format!(
-                "{what} did not connect within 60 s"
+                "{what} did not connect within 60 s (last state: {last})"
             )));
         }
         tokio::time::sleep(Duration::from_millis(200)).await;
