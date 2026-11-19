@@ -4,7 +4,7 @@
 use serde_json::Value;
 
 /// Compact JSON with object keys in byte order, the form every Velnor request uses.
-pub(super) fn bytes(value: &Value) -> Vec<u8> {
+pub(crate) fn bytes(value: &Value) -> Vec<u8> {
     let mut out = Vec::with_capacity(256);
     write(value, &mut out);
     out

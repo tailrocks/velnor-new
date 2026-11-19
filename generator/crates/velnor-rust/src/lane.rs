@@ -4,14 +4,12 @@
 use std::collections::BTreeSet;
 
 use velnor_model::{
-    CargoCommand, Gate, GateNeed, HelperCommand, Job, JobId, PackageName, PlanFrom, PlanRef,
-    RepoFacts, RootSlug, RustRoot, Step, StepKind, When,
+    CargoCommand, Gate, GateNeed, HelperCommand, Job, JobId, PackageName, PlanFrom, PlanRef, PrCi,
+    PrRun, RepoFacts, RootSlug, RustRoot, Step, StepKind, When,
 };
 
-use crate::plan::{
-    CHECKOUT_DEPTH, PLAN_DEPTH, head, job, mirror_step, step, tools_install, tools_restore,
-    tools_save,
-};
+use crate::plan::{CHECKOUT_DEPTH, PLAN_DEPTH, head, job, step};
+use crate::plan_tools::{mirror_step, tools_install, tools_restore, tools_save};
 
 pub(crate) const PLAN_JOB: JobId = JobId::from_static("rust-plan");
 const POLICY_JOB: JobId = JobId::from_static("policy");
@@ -43,7 +41,15 @@ impl Lane {
             need,
             from: self.from(),
             package: None,
+            group: None,
         }
+    }
+
+    pub(crate) fn group_job(&self, group: JobId) -> Option<Gate> {
+        self.plan.is_some().then(|| Gate {
+            group: Some(group),
+            ..self.gate(GateNeed::Group)
+        })
     }
 
     fn package_gate(&self, package: PackageName) -> Gate {
@@ -87,8 +93,19 @@ impl Lane {
             kind: StepKind::Cargo(command),
             when: When::NotCancelled,
             skip_on_draft: false,
+            skip_after_merge_group: None,
+            pr: PrRun::Always,
         }
     }
+}
+
+pub(crate) fn used_group_outputs(jobs: &[Job]) -> Vec<(RootSlug, JobId)> {
+    let used: BTreeSet<(RootSlug, JobId)> = jobs
+        .iter()
+        .filter_map(|job| job.gate.as_ref())
+        .filter_map(|gate| Some((gate.slug.clone(), gate.group.clone()?)))
+        .collect();
+    used.into_iter().collect()
 }
 
 pub(crate) fn used_outputs(jobs: &[Job]) -> Vec<(RootSlug, GateNeed)> {
@@ -114,12 +131,17 @@ pub(crate) fn used_outputs(jobs: &[Job]) -> Vec<(RootSlug, GateNeed)> {
     used.into_iter().collect()
 }
 
-pub(crate) fn plan_job(facts: &RepoFacts, outputs: Vec<(RootSlug, GateNeed)>) -> Job {
+pub(crate) fn plan_job(
+    facts: &RepoFacts,
+    outputs: Vec<(RootSlug, GateNeed)>,
+    group_outputs: Vec<(RootSlug, JobId)>,
+) -> Job {
     let mut steps = head(facts, PLAN_DEPTH, None);
     steps.push(step(StepKind::Helper(HelperCommand::Plan)));
     Job {
         plan_outputs: outputs,
-        skip_on_draft: false,
+        group_outputs,
+        pr: crate::plan::quick(facts),
         steps,
         ..job(facts, PLAN_JOB)
     }
@@ -145,18 +167,15 @@ pub(crate) fn policy_job(facts: &RepoFacts, lane: &Lane) -> Job {
     }));
     if !facts.tools.tools.is_empty() {
         steps.extend(
-            [
-                tools_restore(facts),
-                tools_install(facts),
-                mirror_step(facts),
-                tools_save(facts),
-            ]
-            .into_iter()
-            .flatten()
-            .map(|step| Step {
-                gate: policy_gate.clone(),
-                ..step
-            }),
+            tools_restore(facts)
+                .into_iter()
+                .chain(tools_install(facts))
+                .chain(mirror_step(facts))
+                .chain(tools_save(facts))
+                .map(|step| Step {
+                    gate: policy_gate.clone(),
+                    ..step
+                }),
         );
     }
     if facts.policy.deny {
@@ -164,6 +183,7 @@ pub(crate) fn policy_job(facts: &RepoFacts, lane: &Lane) -> Job {
             lane.cargo(
                 CargoCommand::Deny {
                     manifest: root.manifest.clone(),
+                    config: facts.deny_configs.get(&root.manifest).cloned(),
                 },
                 None,
             )
@@ -175,6 +195,11 @@ pub(crate) fn policy_job(facts: &RepoFacts, lane: &Lane) -> Job {
     Job {
         needs: lane.plan.clone().into_iter().collect(),
         gate: lane.plan.is_some().then(|| lane.gate(GateNeed::Policy)),
+        pr: if facts.config.pr_ci == PrCi::Label {
+            PrRun::Quick
+        } else {
+            crate::plan::full(facts)
+        },
         steps,
         ..job(facts, POLICY_JOB)
     }

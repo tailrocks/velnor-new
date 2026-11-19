@@ -3,7 +3,7 @@
 
 use std::path::Path;
 
-use super::{Error, Exit, read_tracked, toplevel};
+use super::{Error, Exit, read_checkout};
 use crate::{release_ruleset, release_ruleset_drift};
 
 pub(super) fn print(root: &Path) -> Exit {
@@ -36,15 +36,13 @@ pub(super) fn drift(root: &Path, live: &Path) -> Exit {
 }
 
 fn ruleset_drift(root: &Path, live: &Path) -> Result<Vec<String>, Error> {
-    let root = toplevel(root)?;
-    let view = read_tracked(&root)?;
+    let view = read_checkout(root)?.view;
     let live =
         std::fs::read_to_string(live).map_err(|error| Error::File(live.to_path_buf(), error))?;
     release_ruleset_drift(&view, &live).map_err(Error::Generate)
 }
 
 fn ruleset(root: &Path) -> Result<String, Error> {
-    let root = toplevel(root)?;
-    let view = read_tracked(&root)?;
+    let view = read_checkout(root)?.view;
     release_ruleset(&view).map_err(Error::Generate)
 }

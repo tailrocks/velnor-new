@@ -302,14 +302,6 @@ async fn has_other_session_work(
     Ok(active != 0)
 }
 
-/// Drain predicate for one connection: any work except its own live session.
-///
-/// The session, its `bound` create row and its header charge are the
-/// connection's standing presence, not work. They are deleted only after the
-/// connection leaves `host.toml`, so counting them would make a drain wait
-/// that runs before the removal never finish. Everything else, including a
-/// scale-set create in flight, still counts, as in `has_other_session_work`.
-/// With no single bound session this is plain `has_connection_work`.
 pub(in crate::journal::connection) async fn has_work_besides_bound_session(
     connection: &turso::Connection,
     connection_id: &str,

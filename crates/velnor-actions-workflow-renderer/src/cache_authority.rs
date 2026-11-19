@@ -8,7 +8,7 @@ use velnor_actions_contract::workflow::{
 
 use crate::{RenderError, yaml::Yaml};
 
-pub const WORKFLOW_CACHE_MODE_KEY: &str = "cache-mode";
+pub(crate) const WORKFLOW_CACHE_MODE_KEY: &str = "cache-mode";
 
 pub(crate) fn bind_workflow_cache_mode(path: &str, document: &mut Yaml) -> Result<(), RenderError> {
     if !crate::workflow_size::is_workflow_path(path) {

@@ -1,14 +1,19 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-pub(crate) const KEYS: [&str; 23] = [
+pub(crate) const KEYS: [&str; 31] = [
     "sparse_checkout",
+    "private_sources",
     "cache_check_blocks",
     "cache_debug",
+    "cache",
+    "ci",
     "runner",
     "fork_runner",
     "crates_mirror",
     "mbx_shared_store",
+    "docs",
+    "check_alone",
     "timeout_minutes",
     "exclude",
     "non_inputs",
@@ -19,10 +24,13 @@ pub(crate) const KEYS: [&str; 23] = [
     "nextest_harnesses",
     "default_branch",
     "skip_draft_pull_requests",
+    "pr_ci",
     "on_main",
     "full_run",
     "helper",
     "ci_debuginfo",
     "cache_budget_bytes",
     "test_setup",
+    "lint",
+    "test_groups",
 ];

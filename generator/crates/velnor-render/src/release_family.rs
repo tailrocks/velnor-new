@@ -8,9 +8,10 @@ use crate::release::{
     FROM_A_PASSED_PUSH, GATE_IS_READY, HOSTED_RUNNER, VERIFIED_COMMIT, after_the_gate,
     newest_check, only_while_newest,
 };
+use crate::release_assets::asset;
 use crate::release_binaries::{
-    BUILD_TIMEOUT_MINUTES, DIST, PUBLISH_TIMEOUT_MINUTES, SUMS_FILE, artifact, asset, build_steps,
-    command, download, target, upload,
+    BUILD_TIMEOUT_MINUTES, DIST, PUBLISH_TIMEOUT_MINUTES, SUMS_FILE, artifact, build_steps,
+    command, download, download_to, target, upload,
 };
 use crate::release_steps::{
     TOOLCHAIN, app_token, checkout, expression, join, permissions, shell_word, variables,
@@ -19,6 +20,9 @@ use crate::rules::{RenderedJob, RenderedStep, Value};
 use crate::steps::install_helper;
 
 const TAG_STEP: &str = "family";
+const VERSIONS_JOB: &str = "family-versions";
+const VERSIONS_ARTIFACT: &str = "family-versions";
+const VERSIONS_DIR: &str = "family-versions";
 const TAG_OUTPUT: &str = "needs.family.outputs.tag";
 const COMMIT_OUTPUT: &str = "needs.family.outputs.commit";
 const BUILD_OUTPUT: &str = "needs.family.outputs.build == 'true'";
@@ -28,7 +32,7 @@ pub(crate) fn family_jobs(
     family: &FamilyPlan,
     helper: &HelperRelease,
 ) -> Vec<RenderedJob> {
-    let mut jobs = vec![tag_job(plan, family, helper)];
+    let mut jobs = vec![versions_job(plan, helper), tag_job(plan, family, helper)];
     jobs.extend(plan.binaries.iter().flat_map(|binary| {
         binary
             .platforms
@@ -53,9 +57,8 @@ fn after_the_family(id: &str, needs: Vec<String>) -> RenderedJob {
     }
 }
 
-fn tag_job(plan: &ReleasePlan, family: &FamilyPlan, helper: &HelperRelease) -> RenderedJob {
-    let roots: Vec<&str> = plan
-        .binaries
+fn family_roots(plan: &ReleasePlan) -> Vec<&str> {
+    plan.binaries
         .iter()
         .map(|binary| binary.root.as_str())
         .fold(Vec::new(), |mut seen, root| {
@@ -63,10 +66,16 @@ fn tag_job(plan: &ReleasePlan, family: &FamilyPlan, helper: &HelperRelease) -> R
                 seen.push(root);
             }
             seen
-        });
-    let files: Vec<String> = (0..roots.len())
-        .map(|index| format!("\"$RUNNER_TEMP/family-{index}.json\""))
-        .collect();
+        })
+}
+
+fn version_files(plan: &ReleasePlan) -> Vec<String> {
+    (0..family_roots(plan).len())
+        .map(|index| format!("{VERSIONS_DIR}/family-{index}.json"))
+        .collect()
+}
+
+fn versions_job(plan: &ReleasePlan, helper: &HelperRelease) -> RenderedJob {
     let mut steps = vec![
         checkout(VERIFIED_COMMIT, 1),
         install_helper(helper),
@@ -75,21 +84,48 @@ fn tag_job(plan: &ReleasePlan, family: &FamilyPlan, helper: &HelperRelease) -> R
             "Install the Rust toolchain".to_owned(),
             format!("rustup toolchain install {TOOLCHAIN} --profile minimal --no-self-update"),
         ),
+        command(
+            "Make the versions folder".to_owned(),
+            format!("mkdir {VERSIONS_DIR}"),
+        ),
     ];
-    steps.extend(roots.iter().zip(&files).map(|(root, file)| RenderedStep {
-        env: vec![(
-            "RUSTUP_TOOLCHAIN".to_owned(),
-            Value::Text(TOOLCHAIN.to_owned()),
-        )],
-        ..command(
-            format!("Read the versions of the binaries of {root}"),
-            format!(
-                "cargo metadata --no-deps --locked --format-version 1 --manifest-path {} > {file}",
-                shell_word(&join(root, "Cargo.toml"))
-            ),
-        )
-    }));
-    steps.push(app_token(&[("contents", "write")]));
+    steps.extend(family_roots(plan).into_iter().zip(version_files(plan)).map(
+        |(root, file)| RenderedStep {
+            env: vec![(
+                "RUSTUP_TOOLCHAIN".to_owned(),
+                Value::Text(TOOLCHAIN.to_owned()),
+            )],
+            ..command(
+                format!("Read the versions of the binaries of {root}"),
+                format!(
+                    "cargo metadata --no-deps --locked --format-version 1 --manifest-path {} > {file}",
+                    shell_word(&join(root, "Cargo.toml"))
+                ),
+            )
+        },
+    ));
+    steps.push(upload(
+        VERSIONS_ARTIFACT.to_owned(),
+        VERSIONS_DIR.to_owned(),
+    ));
+    only_while_newest(&mut steps);
+    RenderedJob {
+        permissions: permissions(&[("contents", "read")]),
+        timeout_minutes: TAG_JOB_BASE_MINUTES,
+        steps,
+        environment: None,
+        ..after_the_gate(VERSIONS_JOB)
+    }
+}
+
+fn tag_job(plan: &ReleasePlan, family: &FamilyPlan, helper: &HelperRelease) -> RenderedJob {
+    let files = version_files(plan);
+    let mut steps = vec![
+        install_helper(helper),
+        newest_check(),
+        download_to(VERSIONS_ARTIFACT.to_owned(), VERSIONS_DIR),
+        app_token(&[("contents", "write")]),
+    ];
     let packages: Vec<String> = plan
         .binaries
         .iter()
@@ -125,12 +161,13 @@ fn tag_job(plan: &ReleasePlan, family: &FamilyPlan, helper: &HelperRelease) -> R
             .collect(),
         timeout_minutes: TAG_JOB_BASE_MINUTES,
         steps,
+        needs: vec!["gate".to_owned(), VERSIONS_JOB.to_owned()],
         ..after_the_gate("family")
     }
 }
 
 fn build(binary: &BinaryPlan, platform: velnor_model::Platform) -> RenderedJob {
-    let (runner, _) = target(platform);
+    let (runner, _) = target(platform, binary.format);
     let source = format!("refs/tags/${{{{ {TAG_OUTPUT} }}}}");
     let check = RenderedStep {
         env: variables(&[

@@ -185,30 +185,50 @@ fn fetched(job: &velnor_model::Job) -> Option<String> {
     job.steps
         .iter()
         .filter_map(|step| match &step.kind {
-            StepKind::SourcesFetch { position, .. } => Some(*position),
+            StepKind::SourcesFetch { position, .. } => {
+                Some((*position, crate::gate::sources_fetch_step(*position)))
+            }
+            StepKind::SourcesFetchAll { .. } => {
+                Some((0, crate::gate::SOURCES_FETCH_ALL_STEP.to_owned()))
+            }
             _ => None,
         })
-        .max()
-        .map(|last| {
-            format!(
-                "${{{{ steps.{}.outcome == 'success' }}}}",
-                crate::gate::sources_fetch_step(last)
-            )
-        })
+        .max_by_key(|(position, _)| *position)
+        .map(|(_, id)| format!("${{{{ steps.{id}.outcome == 'success' }}}}"))
 }
 
-pub(crate) fn sources_fetch(position: usize, cache_debug: bool) -> RenderedStep {
+pub(crate) fn sources_fetch_all(manifests: &[RepoPath], cache_debug: bool) -> RenderedStep {
+    let roots: Vec<String> = manifests
+        .iter()
+        .map(|manifest| {
+            manifest.parent().map_or_else(
+                || ".".to_owned(),
+                |directory| crate::release_steps::shell_word(&format!("./{directory}")),
+            )
+        })
+        .collect();
     RenderedStep {
         env: cache_debug
             .then(crate::cargo::cache_debug_env)
             .into_iter()
             .collect(),
-        id: Some(crate::gate::sources_fetch_step(position)),
-        name: format!("Fetch the sources of root {position}"),
+        id: Some(crate::gate::SOURCES_FETCH_ALL_STEP.to_owned()),
+        name: "Fetch the sources of every root".to_owned(),
         continue_on_error: true,
-        run: Some(format!("{} cargo fetch --locked", crate::steps::RUN)),
+        run: Some(format!(
+            "velnor-ci sources fetch --roots {}",
+            roots.join(" ")
+        )),
         ..RenderedStep::default()
     }
+}
+
+pub(crate) fn sources_fetch(position: usize, lane: crate::cargo::CargoLane) -> RenderedStep {
+    let mut fetch = crate::cargo::cargo_fetch(lane);
+    fetch.id = Some(crate::gate::sources_fetch_step(position));
+    fetch.name = format!("Fetch the sources of root {position}");
+    fetch.continue_on_error = true;
+    fetch
 }
 
 pub(crate) fn job_setup(job: &velnor_model::Job) -> (bool, bool) {

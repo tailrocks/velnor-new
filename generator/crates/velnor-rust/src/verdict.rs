@@ -4,9 +4,13 @@
 use std::collections::BTreeMap;
 
 use velnor_model::{
-    GateNeed, JobCondition, JobId, RootSlug, TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT,
-    TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, VerdictSpec,
+    GateNeed, JobCondition, JobId, MERGE_GROUP_SKIP_OUTPUT, RootSlug, TESTS_BY_PACKAGE_OUTPUT,
+    TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, VerdictSpec, group_output_name,
 };
+
+#[path = "verdict_counts.rs"]
+mod verdict_counts;
+use verdict_counts::{counts, number};
 
 const SCHEDULE: &str = "schedule";
 const PUSH: &str = "push";
@@ -166,6 +170,9 @@ impl PlanOutput {
                             }
                         }
                     }
+                    JobCondition::Group(slug, name) => {
+                        flag(group_output_name(slug, name), "run", "skip")?
+                    }
                     JobCondition::Policy => {
                         let slug = RootSlug::from_static("policy");
                         let deny = flag(GateNeed::Deny.output_name(&slug), "run", "skip")?;
@@ -191,7 +198,9 @@ impl PlanOutput {
                 }
             }
         }
-        test_lanes.retain(|_, jobs| !jobs.is_empty());
+        let merge_group_ran = event == Some(PUSH)
+            && outputs.get(MERGE_GROUP_SKIP_OUTPUT).map(String::as_str) == Some("true");
+        test_lanes.retain(|_, jobs| !merge_group_ran && !jobs.is_empty());
         Ok(Self {
             planned,
             test_lanes,
@@ -314,13 +323,21 @@ pub fn verdict(
                         "a test job of {slug} listed no tests and ran none, though its selected packages have tests"
                     ));
                 }
-                for (name, package) in &job.packages {
-                    if package.listed > 0 && package.run == 0 {
-                        out.problems.push(format!(
-                            "package {name} of {slug} listed {} tests and ran none",
-                            package.listed
-                        ));
-                    }
+            }
+            // The default job and the group jobs each run part of one package:
+            // `run` adds up, and `listed` is the most any job saw.
+            let mut lane: BTreeMap<&str, PackageCounts> = BTreeMap::new();
+            for (name, package) in counts.iter().flatten().flat_map(|job| &job.packages) {
+                let total = lane.entry(name).or_default();
+                total.run = total.run.saturating_add(package.run);
+                total.listed = total.listed.max(package.listed);
+            }
+            for (name, package) in lane {
+                if package.listed > 0 && package.run == 0 {
+                    out.problems.push(format!(
+                        "package {name} of {slug} listed {} tests and ran none",
+                        package.listed
+                    ));
                 }
             }
         }
@@ -362,42 +379,6 @@ pub fn decide(spec: &VerdictSpec, needs: &BTreeMap<JobId, Need>, event: Option<&
     }
     out.passed = out.problems.is_empty();
     out
-}
-
-fn counts(need: Option<&Need>) -> Option<TestCounts> {
-    let need = need?;
-    let packages = parse_package_counts(need.outputs.get(TESTS_BY_PACKAGE_OUTPUT)?)?;
-    let run = number(need.outputs.get(TESTS_RUN_OUTPUT)?)?;
-    let listed = number(need.outputs.get(TESTS_LISTED_OUTPUT)?)?;
-    let summed_run = packages
-        .values()
-        .try_fold(0u64, |total, package| total.checked_add(package.run))?;
-    let summed_listed = packages
-        .values()
-        .try_fold(0u64, |total, package| total.checked_add(package.listed))?;
-    if run != summed_run || listed != summed_listed {
-        return None;
-    }
-    let ignored = match need.outputs.get(TESTS_IGNORED_OUTPUT).map(String::as_str) {
-        None | Some("") => None,
-        Some(text) => Some(number(text)?),
-    };
-    Some(TestCounts {
-        run,
-        listed,
-        ignored,
-        packages,
-    })
-}
-
-fn number(text: &str) -> Option<u64> {
-    if text.is_empty()
-        || (text.len() > 1 && text.starts_with('0'))
-        || !text.bytes().all(|byte| byte.is_ascii_digit())
-    {
-        return None;
-    }
-    text.parse().ok()
 }
 
 #[cfg(test)]

@@ -10,7 +10,8 @@ use ureq::http::Response;
 use crate::error::CiError;
 use crate::preview::authority::Client;
 use crate::preview::json::{Res, parse, require};
-use crate::preview::net::Net;
+use crate::preview::login::Login;
+use crate::preview::net::{Net, api_allowed};
 use crate::preview::{MAX_JSON, REPOSITORY};
 
 const API: &str = "api.github.com";
@@ -34,6 +35,7 @@ pub struct Transport {
     token: String,
     deadline: Instant,
     agent: ureq::Agent,
+    actor: Option<Login>,
 }
 
 fn failure() -> CiError {
@@ -57,6 +59,12 @@ fn split(url: &str) -> Res<&str> {
 impl Transport {
     #[must_use]
     pub fn new(token: String) -> Self {
+        Self::with_total(token, TOTAL)
+    }
+
+    /// Like [`Transport::new`], with `total` as the time everything it does may take.
+    #[must_use]
+    pub fn with_total(token: String, total: Duration) -> Self {
         let agent = ureq::Agent::config_builder()
             .max_redirects(0)
             .http_status_as_error(false)
@@ -65,9 +73,17 @@ impl Transport {
             .into();
         Self {
             token,
-            deadline: Instant::now() + TOTAL,
+            deadline: Instant::now() + total,
             agent,
+            actor: None,
         }
+    }
+
+    /// Also allow `GET /users/<actor>`, and no other account.
+    #[must_use]
+    pub fn with_actor(mut self, actor: Option<Login>) -> Self {
+        self.actor = actor;
+        self
     }
 
     fn remaining(&self) -> Res<Duration> {
@@ -137,8 +153,7 @@ impl Transport {
 
 impl Net for Transport {
     fn api(&self, path: &str) -> Res<Value> {
-        let base = format!("/repos/{REPOSITORY}");
-        require(path == base || path.starts_with(&format!("{base}/")))?;
+        require(api_allowed(self.actor.as_ref(), path))?;
         let response = self.get(&format!("https://{API}{path}"), true)?;
         self.json(response, &[200])
     }
