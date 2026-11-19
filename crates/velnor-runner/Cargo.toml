@@ -72,4 +72,15 @@ broken_intra_doc_links = "deny"
 private_intra_doc_links = "deny"
 
 [profile.dev.package.turso_core]
-opt-level = 1
+opt-level = 3
+debug-assertions = false
+overflow-checks = false
+
+[profile.dev.package.turso_parser]
+opt-level = 3
+debug-assertions = false
+overflow-checks = false
+
+[profile.dev.package.libmimalloc-sys]
+opt-level = 3
+debug-assertions = false

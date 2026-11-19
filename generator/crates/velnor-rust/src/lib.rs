@@ -16,6 +16,7 @@ mod config;
 mod config_branch;
 mod config_cache;
 
+mod config_budget;
 mod config_ci;
 mod config_events;
 mod config_exclude;
@@ -84,6 +85,7 @@ mod toml_file;
 mod toolchain;
 mod unowned;
 mod verdict;
+mod verdict_plan;
 mod weaken;
 mod weaken_nextest;
 mod weaken_scope;
@@ -93,7 +95,7 @@ pub use base_cache::{MAX_SOURCE_ROOTS, source_roots_over_limit};
 pub use build_profile::{BuildProfile, build_profile, rustc_release};
 pub use build_script::{SilentBuildScript, build_script_sources, silent_build_scripts};
 pub use compat::{BUILD_DRIVER, COMPAT_SCHEMA, CompatInputs, compat};
-pub use config::{CONFIG_PATH, ci_debuginfo};
+pub use config::{CONFIG_PATH, budget, ci_debuginfo};
 pub use config_keys::KEYS;
 pub use credentials::reject_release_credential_hooks;
 pub use detect::{cargo_files, detect, manifests, metadata_roots, wanted_files};
@@ -103,7 +105,10 @@ pub use error::{DetectError, Reason};
 pub use external_config::external_config_profile;
 pub use group_runs::{GroupPlan, GroupRun, group_runs, plan_groups};
 pub use lint_error::LintFault;
-pub use lock::{LOCK_PATH, LockError, commit_url, pin_lock, release_version, sums_url};
+pub use lock::{
+    LOCK_PATH, LockError, binary_sums_url, commit_url, lists_binary_sums, pin_lock,
+    release_version, sums_url,
+};
 pub use lock_affected::lock_affected;
 pub use lock_key::lock_key;
 pub use metadata::{MetadataError, reduce_metadata};
@@ -129,9 +134,10 @@ pub use suggest_groups::suggest_groups;
 pub use timings::{TIMINGS_PATH, render_timings, root_job_ids};
 pub use toolchain::{TOOLCHAIN_PLAIN, TOOLCHAIN_TOML, toolchain};
 pub use verdict::{
-    JobResult, Need, PackageCounts, PlanOutput, TestCounts, Verdict, decide, encode_package_counts,
-    package_token, verdict,
+    JobResult, PackageCounts, TestCounts, Verdict, decide, encode_package_counts, package_token,
+    verdict,
 };
+pub use verdict_plan::{Need, PlanOutput};
 pub use weaken::introduced;
 
 pub use cache_budget::{
