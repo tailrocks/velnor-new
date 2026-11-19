@@ -13,6 +13,10 @@ autotests = false
 doctest = false
 test = false
 
+[[test]]
+name = "lifecycle_acquire"
+path = "tests/lifecycle_acquire.rs"
+
 [lints]
 workspace = true
 
