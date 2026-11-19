@@ -1,12 +1,5 @@
 .mise-version
 .velnor/config.toml
-.velnor/qualification/homebrew/formula-spec.json
-.velnor/qualification/homebrew/jackin/cutover-author-policy.json
-.velnor/qualification/homebrew/jackin/transition.json
-.velnor/qualification/homebrew/preview-a-source-admission.json
-.velnor/qualification/homebrew/preview-a.json
-.velnor/qualification/homebrew/preview-d.json
-.velnor/qualification/homebrew/preview-plan.json
 .velnor/runner.lock
 .velnor/version-policy.toml
 Cargo.lock
