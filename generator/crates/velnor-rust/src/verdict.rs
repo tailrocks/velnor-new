@@ -4,9 +4,13 @@
 use std::collections::BTreeMap;
 
 use velnor_model::{
-    GateNeed, JobCondition, JobId, RootSlug, TESTS_BY_PACKAGE_OUTPUT, TESTS_LISTED_OUTPUT,
-    TESTS_RUN_OUTPUT, VerdictSpec,
+    GateNeed, JobCondition, JobId, MERGE_GROUP_SKIP_OUTPUT, RootSlug, TESTS_BY_PACKAGE_OUTPUT,
+    TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, VerdictSpec,
 };
+
+#[path = "verdict_counts.rs"]
+mod verdict_counts;
+use verdict_counts::{counts, number};
 
 const SCHEDULE: &str = "schedule";
 const PUSH: &str = "push";
@@ -50,12 +54,14 @@ pub struct PackageCounts {
     pub listed: u64,
 }
 
-pub(crate) const PACKAGE_COUNTS_LIMIT: usize = 32_768;
+/// GitHub caps one job output at 1 MB; the gate bounds the whole needs JSON separately.
+pub(crate) const PACKAGE_COUNTS_LIMIT: usize = 1_000_000;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TestCounts {
     pub run: u64,
     pub listed: u64,
+    pub ignored: Option<u64>,
     pub packages: BTreeMap<String, PackageCounts>,
 }
 
@@ -189,7 +195,9 @@ impl PlanOutput {
                 }
             }
         }
-        test_lanes.retain(|_, jobs| !jobs.is_empty());
+        let merge_group_ran = event == Some(PUSH)
+            && outputs.get(MERGE_GROUP_SKIP_OUTPUT).map(String::as_str) == Some("true");
+        test_lanes.retain(|_, jobs| !merge_group_ran && !jobs.is_empty());
         Ok(Self {
             planned,
             test_lanes,
@@ -307,13 +315,26 @@ pub fn verdict(
             ));
         } else {
             for job in counts.iter().flatten() {
-                for (name, package) in &job.packages {
-                    if package.listed > 0 && package.run == 0 {
-                        out.problems.push(format!(
-                            "package {name} of {slug} listed {} tests and ran none",
-                            package.listed
-                        ));
-                    }
+                if job.listed == 0 && job.run == 0 && job.ignored == Some(0) {
+                    out.problems.push(format!(
+                        "a test job of {slug} listed no tests and ran none, though its selected packages have tests"
+                    ));
+                }
+            }
+            // The default job and the group jobs each run part of one package:
+            // `run` adds up, and `listed` is the most any job saw.
+            let mut lane: BTreeMap<&str, PackageCounts> = BTreeMap::new();
+            for (name, package) in counts.iter().flatten().flat_map(|job| &job.packages) {
+                let total = lane.entry(name).or_default();
+                total.run = total.run.saturating_add(package.run);
+                total.listed = total.listed.max(package.listed);
+            }
+            for (name, package) in lane {
+                if package.listed > 0 && package.run == 0 {
+                    out.problems.push(format!(
+                        "package {name} of {slug} listed {} tests and ran none",
+                        package.listed
+                    ));
                 }
             }
         }
@@ -357,33 +378,6 @@ pub fn decide(spec: &VerdictSpec, needs: &BTreeMap<JobId, Need>, event: Option<&
     out
 }
 
-fn counts(need: Option<&Need>) -> Option<TestCounts> {
-    let need = need?;
-    let packages = parse_package_counts(need.outputs.get(TESTS_BY_PACKAGE_OUTPUT)?)?;
-    let run = number(need.outputs.get(TESTS_RUN_OUTPUT)?)?;
-    let listed = number(need.outputs.get(TESTS_LISTED_OUTPUT)?)?;
-    let summed_run = packages
-        .values()
-        .try_fold(0u64, |total, package| total.checked_add(package.run))?;
-    let summed_listed = packages
-        .values()
-        .try_fold(0u64, |total, package| total.checked_add(package.listed))?;
-    if run != summed_run || listed != summed_listed {
-        return None;
-    }
-    Some(TestCounts {
-        run,
-        listed,
-        packages,
-    })
-}
-
-fn number(text: &str) -> Option<u64> {
-    if text.is_empty()
-        || (text.len() > 1 && text.starts_with('0'))
-        || !text.bytes().all(|byte| byte.is_ascii_digit())
-    {
-        return None;
-    }
-    text.parse().ok()
-}
+#[cfg(test)]
+#[path = "verdict_package_map.rs"]
+mod package_map_size;

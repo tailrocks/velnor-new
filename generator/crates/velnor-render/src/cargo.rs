@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    BUILD_TESTS_STEP, CargoCommand, FilterRef, LINT_STEP, RepoPath, TEST_STEP, TargetKind,
-    TargetName,
+    BUILD_TESTS_STEP, CargoCommand, FilterRef, Job, LINT_STEP, RepoPath, StepKind, TEST_STEP,
+    TargetKind, TargetName,
 };
 
 use crate::gate::CACHE_DEBUG_ON;
@@ -19,6 +19,7 @@ const DOC_RUN: &str =
 pub(crate) struct CargoLane {
     pub(crate) artifacts: ArtifactFormat,
     pub(crate) cache_debug: bool,
+    pub(crate) offline: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -44,8 +45,41 @@ impl ArtifactFormat {
     }
 }
 
+pub(crate) fn cargo_lane(job: &Job) -> CargoLane {
+    let artifacts = job
+        .steps
+        .iter()
+        .find_map(|step| match step.kind {
+            StepKind::ReportCaches {
+                nextest_artifacts, ..
+            } => Some(if nextest_artifacts {
+                ArtifactFormat::All
+            } else {
+                ArtifactFormat::CargoOnly
+            }),
+            _ => None,
+        })
+        .unwrap_or(ArtifactFormat::Disabled);
+    CargoLane {
+        artifacts,
+        cache_debug: job
+            .steps
+            .iter()
+            .any(|step| step.kind == StepKind::UploadCargoLog),
+        offline: job
+            .steps
+            .iter()
+            .any(|step| matches!(step.kind, StepKind::PrivateFetch { .. })),
+    }
+}
+
 pub(crate) fn cargo_step(command: &CargoCommand, audit: bool, lane: CargoLane) -> RenderedStep {
     let (name, run, env) = cargo_command(command, lane.artifacts);
+    let run = if lane.offline {
+        run.replacen(" --locked", " --locked --offline", 1)
+    } else {
+        run
+    };
     let prefix = if matches!(command, CargoCommand::Doctest) {
         RUN_DOCTESTS
     } else {
@@ -57,6 +91,7 @@ pub(crate) fn cargo_step(command: &CargoCommand, audit: bool, lane: CargoLane) -
         env: env
             .into_iter()
             .chain(lane.cache_debug.then(cache_debug_env))
+            .chain(lane.offline.then(offline_env))
             .collect(),
         run: Some(format!(
             "{prefix} {}{run}",
@@ -84,11 +119,13 @@ fn cargo_command(
         CargoCommand::NextestRunArchive {
             file,
             filter,
+            threads,
             ci_profile,
         } => nextest_run(
             &format!(
-                "--archive-file '{}' --extract-to . --extract-overwrite --workspace-remap .",
-                file.as_str().replace('\'', "'\\''")
+                "--archive-file '{}' --extract-to . --extract-overwrite --workspace-remap .{}",
+                file.as_str().replace('\'', "'\\''"),
+                threads.map_or_else(String::new, |count| format!(" --test-threads {count}"))
             ),
             filter,
             *ci_profile,
@@ -171,6 +208,62 @@ fn clippy(cargo: &str, extra: &[String]) -> (String, String, Vec<(String, Value)
     )
 }
 
+pub(crate) fn cargo_fetch(lane: CargoLane) -> RenderedStep {
+    let offline = if lane.offline { " --offline" } else { "" };
+    RenderedStep {
+        env: lane
+            .cache_debug
+            .then(cache_debug_env)
+            .into_iter()
+            .chain(lane.offline.then(offline_env))
+            .collect(),
+        run: Some(format!("{RUN} cargo fetch --locked{offline}")),
+        ..RenderedStep::default()
+    }
+}
+
+fn offline_env() -> (String, Value) {
+    (
+        "CARGO_NET_OFFLINE".to_owned(),
+        Value::Text("true".to_owned()),
+    )
+}
+
+pub(crate) fn hoist_target_dir(job: &Job, steps: &mut [RenderedStep]) -> Vec<(String, Value)> {
+    let Some(target) = shared_target_dir(job) else {
+        return Vec::new();
+    };
+    let hoisted = target_dir_env(target);
+    for step in steps {
+        step.env.retain(|entry| *entry != hoisted);
+    }
+    vec![hoisted]
+}
+
+fn shared_target_dir(job: &Job) -> Option<&RepoPath> {
+    if job.steps.iter().any(|step| {
+        matches!(
+            step.kind,
+            StepKind::Cargo(CargoCommand::NextestRunArchive { .. })
+        )
+    }) {
+        return None;
+    }
+    let mut building = job
+        .steps
+        .iter()
+        .filter(|step| matches!(&step.kind, StepKind::Cargo(command) if command.builds()));
+    let first = building.next()?;
+    let target = first.target_dir.as_ref()?;
+    let one_root = building
+        .all(|step| step.target_dir.as_ref() == Some(target) && step.directory == first.directory)
+        && job
+            .steps
+            .iter()
+            .all(|step| step.directory.is_none() || step.directory == first.directory);
+    one_root.then_some(target)
+}
+
 pub(crate) fn target_dir_env(target: &RepoPath) -> (String, Value) {
     (
         "CARGO_TARGET_DIR".to_owned(),
@@ -181,7 +274,7 @@ pub(crate) fn target_dir_env(target: &RepoPath) -> (String, Value) {
     )
 }
 
-fn cache_debug_env() -> (String, Value) {
+pub(crate) fn cache_debug_env() -> (String, Value) {
     (
         "CARGO_LOG".to_owned(),
         Value::Expr(format!(
@@ -219,12 +312,29 @@ fn nextest_run(
 fn nextest_filter(filter: &FilterRef) -> String {
     match filter {
         FilterRef::All => "$TEST_FILTER".to_owned(),
-        FilterRef::AllExcept(binaries) => binaries
-            .iter()
-            .fold("($TEST_FILTER)".to_owned(), |text, id| {
-                format!("{text} - binary_id(={id})")
-            }),
+        FilterRef::AllExcept(binaries) => without_binaries("($TEST_FILTER)".to_owned(), binaries),
+        FilterRef::Group {
+            include,
+            exclude,
+            except,
+        } => {
+            let selected = include
+                .iter()
+                .fold("($TEST_FILTER)".to_owned(), |text, expr| {
+                    format!("({text} and ({expr}))")
+                });
+            let owned = exclude
+                .iter()
+                .fold(selected, |text, expr| format!("({text} and not ({expr}))"));
+            without_binaries(owned, except)
+        }
     }
+}
+
+fn without_binaries(base: String, binaries: &[String]) -> String {
+    binaries
+        .iter()
+        .fold(base, |text, id| format!("{text} - binary_id(={id})"))
 }
 
 fn feature_flag(features: &[String]) -> String {
@@ -252,13 +362,13 @@ fn deny(manifest: &RepoPath) -> (String, String, Vec<(String, Value)>) {
     match manifest.parent() {
         None => (
             "Dependency policy".into(),
-            "cargo-deny check".into(),
+            "cargo-deny --locked check".into(),
             vec![],
         ),
         Some(directory) => (
             format!("Dependency policy ({directory})"),
             format!(
-                "cargo-deny --manifest-path '{}' check",
+                "cargo-deny --manifest-path '{}' --locked check",
                 manifest.as_str().replace('\'', "'\\''")
             ),
             vec![],

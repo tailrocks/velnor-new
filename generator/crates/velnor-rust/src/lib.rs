@@ -9,22 +9,41 @@ mod build_target;
 mod cache_budget;
 mod cargo_flags;
 mod cargo_lock;
+mod cargo_log;
 mod classify;
 mod compat;
 mod config;
+mod config_branch;
+mod config_cache;
+
+mod config_ci;
+mod config_events;
+mod config_exclude;
 mod config_fork;
 mod config_helper;
+mod config_lint;
 mod config_mirror;
+mod config_test_groups;
+
+mod config_pr_ci;
+mod config_private;
 mod config_test_setup;
 mod credentials;
 mod detect;
 mod doc_steps;
+mod docs_post_merge;
+mod embedded;
 mod error;
+mod error_config;
+mod external_config;
 mod harness;
 mod lane;
+mod lint_jobs;
 mod lock;
 mod lock_affected;
+mod lock_key;
 mod manifest_diff;
+mod merge_group_skip;
 mod metadata;
 mod metadata_file;
 mod mise;
@@ -33,6 +52,7 @@ mod os_pins;
 mod owners;
 mod plan;
 mod policy;
+mod private_fetch;
 mod private_sources;
 mod reads;
 mod repo_profile;
@@ -59,6 +79,7 @@ mod weaken_nextest;
 mod weaken_scope;
 mod weaken_targets;
 
+pub use base_cache::{MAX_SOURCE_ROOTS, source_roots_over_limit};
 pub use build_profile::{BuildProfile, build_profile, rustc_release};
 pub use build_script::{SilentBuildScript, build_script_sources, silent_build_scripts};
 pub use compat::{BUILD_DRIVER, COMPAT_SCHEMA, CompatInputs, compat};
@@ -66,13 +87,16 @@ pub use config::{CONFIG_PATH, ci_debuginfo};
 pub use credentials::reject_release_credential_hooks;
 pub use detect::{cargo_files, detect, manifests, metadata_roots, wanted_files};
 pub use doc_steps::{member_sources, optional_steps, root_sources};
+pub use embedded::is_plain_source;
 pub use error::{DetectError, Reason};
+pub use external_config::external_config_profile;
 pub use lock::{LOCK_PATH, LockError, commit_url, pin_lock, release_version, sums_url};
 pub use lock_affected::lock_affected;
+pub use lock_key::lock_key;
 pub use metadata::{MetadataError, reduce_metadata};
 pub use metadata_file::{
-    METADATA_PATH, MetadataFileError, VERSIONS_HELPER, metadata_file, recorded_metadata,
-    recorded_roots, recorded_target_dirs,
+    METADATA_PATH, MetadataFileError, VERSIONS_HELPER, metadata_file, recorded_members,
+    recorded_metadata, recorded_roots, recorded_target_dirs,
 };
 pub use mise::{MISE_CONFIGS, MISE_LOCK, check_tools, mise_files, tool_pins};
 pub use owners::{Owner, Owners, add_reads};

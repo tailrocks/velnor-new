@@ -142,9 +142,6 @@ pub(super) async fn adopt(
         let current = record(connection, request).await?;
         if let Some(current) = current {
             match current.state {
-                ScaleSetCreateState::Requested | ScaleSetCreateState::Uncertain => {
-                    return Err(HostError::Journal);
-                }
                 ScaleSetCreateState::Created | ScaleSetCreateState::Adopted => {
                     let receipt = current.receipt.as_ref().ok_or(HostError::Journal)?;
                     if !same_remote(receipt, &observed.0) {
@@ -152,7 +149,10 @@ pub(super) async fn adopt(
                     }
                     return Ok(current);
                 }
-                ScaleSetCreateState::Prepared | ScaleSetCreateState::NoEffect => {
+                ScaleSetCreateState::Prepared
+                | ScaleSetCreateState::Requested
+                | ScaleSetCreateState::Uncertain
+                | ScaleSetCreateState::NoEffect => {
                     write_receipt(
                         connection,
                         current.id,
