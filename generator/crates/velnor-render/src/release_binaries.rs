@@ -29,7 +29,7 @@ const UPLOAD_VERSION: &str = "v7.0.2";
 const DOWNLOAD_ARTIFACT: &str =
     "actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333";
 const DOWNLOAD_VERSION: &str = "v8.0.2";
-const BUILD_TIMEOUT_MINUTES: u16 = 60;
+pub(crate) const BUILD_TIMEOUT_MINUTES: u16 = 60;
 pub(crate) const PUBLISH_TIMEOUT_MINUTES: u16 = 10;
 pub(crate) const DIST: &str = "dist";
 pub(crate) const SUMS_FILE: &str = "SHA256SUMS";
@@ -90,7 +90,28 @@ pub(crate) fn behind_the_gate(id: String, binary: &BinaryPlan, needs: Vec<String
 }
 
 fn build(binary: &BinaryPlan, platform: Platform, helper: &HelperRelease) -> RenderedJob {
-    let (runner, triple) = target(platform, binary);
+    let (runner, _) = target(platform, binary);
+    RenderedJob {
+        permissions: permissions(&[("contents", "read")]),
+        runs_on: runner.to_owned(),
+        timeout_minutes: BUILD_TIMEOUT_MINUTES,
+        steps: build_steps(
+            binary,
+            platform,
+            &tagged_source(binary),
+            same_commit(binary, helper),
+        ),
+        ..behind_the_gate(build_id(&binary.package, platform), binary, Vec::new())
+    }
+}
+
+pub(crate) fn build_steps(
+    binary: &BinaryPlan,
+    platform: Platform,
+    source: &str,
+    same_commit: RenderedStep,
+) -> Vec<RenderedStep> {
+    let (_, triple) = target(platform, binary);
     let suffix = platform.file_suffix();
     let file = asset(binary, platform);
     let release_dir = shell_word(&format!(
@@ -109,9 +130,9 @@ fn build(binary: &BinaryPlan, platform: Platform, helper: &HelperRelease) -> Ren
     let mut steps = vec![
         RenderedStep {
             id: Some("source".to_owned()),
-            ..checkout(&tagged_source(binary), 1)
+            ..checkout(source, 1)
         },
-        same_commit(binary, helper),
+        same_commit,
     ];
     if linux {
         steps.push(command(
@@ -154,13 +175,7 @@ fn build(binary: &BinaryPlan, platform: Platform, helper: &HelperRelease) -> Ren
         uploaded(binary, platform),
     ));
     bind_version(&mut steps);
-    RenderedJob {
-        permissions: permissions(&[("contents", "read")]),
-        runs_on: runner.to_owned(),
-        timeout_minutes: BUILD_TIMEOUT_MINUTES,
-        steps,
-        ..behind_the_gate(build_id(&binary.package, platform), binary, Vec::new())
-    }
+    steps
 }
 
 fn tag_commit(binary: &BinaryPlan, helper: &HelperRelease) -> String {
@@ -330,7 +345,7 @@ pub(crate) fn command(name: String, run: String) -> RenderedStep {
     }
 }
 
-fn upload(name: String, path: String) -> RenderedStep {
+pub(crate) fn upload(name: String, path: String) -> RenderedStep {
     RenderedStep {
         name: format!("Upload {name}"),
         uses: Some(UPLOAD_ARTIFACT.to_owned()),

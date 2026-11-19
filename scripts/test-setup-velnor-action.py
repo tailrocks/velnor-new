@@ -24,7 +24,6 @@ ARCHIVE = "velnor-ci-x86_64-unknown-linux-musl.tar.gz"
 PLATFORMS = (
     ("Linux", "X64", "x86_64-unknown-linux-musl", "SHA256_LINUX_X64"),
     ("Linux", "ARM64", "aarch64-unknown-linux-musl", "SHA256_LINUX_ARM64"),
-    ("macOS", "ARM64", "aarch64-apple-darwin", "SHA256_MACOS_ARM64"),
 )
 
 STUB_CURL = """#!/bin/sh
@@ -155,7 +154,6 @@ class SetupVelnorInstallTests(unittest.TestCase):
             "VERSION": "0.1.79",
             "SHA256_LINUX_X64": "",
             "SHA256_LINUX_ARM64": "",
-            "SHA256_MACOS_ARM64": "",
             digest_variable: expected_digest,
             "RELEASES": "https://github.com/tailrocks/velnor-new/releases/download",
             "RUNNER_OS": runner[0],

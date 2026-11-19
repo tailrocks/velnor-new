@@ -4,21 +4,29 @@
 use std::fmt;
 
 use crate::key_length::longest_cache_key;
+use crate::pinned_actions::{
+    ALINT, ATTEST_BUILD_PROVENANCE, DOCKER_BUILD_PUSH, DOCKER_LOGIN, DOCKER_SETUP_BUILDX,
+    credential_rules, pin_rules,
+};
 
 pub const SETUP_VELNOR_ACTION: &str = "tailrocks/velnor-new/actions/setup-velnor";
 
 pub const APP_TOKEN_ACTION: &str = "actions/create-github-app-token";
 
-pub const ALLOWED_ACTIONS: [&str; 9] = [
+pub const ALLOWED_ACTIONS: [&str; 13] = [
     "actions/checkout",
     APP_TOKEN_ACTION,
     "actions/cache/restore",
     "actions/cache/save",
     "actions/upload-artifact",
     "actions/download-artifact",
-    ATTEST_ACTION,
     MISE_ACTION,
     SETUP_VELNOR_ACTION,
+    ATTEST_BUILD_PROVENANCE.action,
+    ALINT.action,
+    DOCKER_LOGIN.action,
+    DOCKER_SETUP_BUILDX.action,
+    DOCKER_BUILD_PUSH.action,
 ];
 
 pub(crate) const ATTEST_ACTION: &str = "actions/attest-build-provenance";
@@ -96,6 +104,14 @@ pub enum Rule {
     NotExactlyOneOfRunAndUses,
     ActionNotAllowed(String),
     ActionNotPinned(String),
+    ActionPinMismatch {
+        action: String,
+        commit: &'static str,
+    },
+    LiteralCredential {
+        action: String,
+        input: String,
+    },
     MiseActionInTokenJob,
     MiseReadsRepositoryConfig,
     TokenJobRunnerNotX64(String),
@@ -147,6 +163,14 @@ impl fmt::Display for RuleViolation {
             Rule::ActionNotPinned(action) => {
                 write!(f, "action {action} is not pinned to a full commit SHA")
             }
+            Rule::ActionPinMismatch { action, commit } => write!(
+                f,
+                "action {action} is accepted only at commit {commit}; use that commit"
+            ),
+            Rule::LiteralCredential { action, input } => write!(
+                f,
+                "action {action} input {input} is a literal; pass it through a secrets or env expression"
+            ),
             Rule::MiseActionInTokenJob => f.write_str(
                 "a job that holds the release App token uses jdx/mise-action, which reads the repository's mise config",
             ),
@@ -251,6 +275,7 @@ fn step_rules(step: &RenderedStep) -> Vec<Rule> {
     if let Some(uses) = &step.uses {
         action_rules(uses, &mut rules);
     }
+    credential_rules(step, &mut rules);
     if let Some(length) = longest_cache_key(step)
         && length > MAX_CACHE_KEY_CHARACTERS
     {
@@ -317,7 +342,9 @@ fn action_rules(uses: &str, rules: &mut Vec<Rule>) {
         && reference
             .bytes()
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte));
-    if !pinned {
+    if pinned {
+        pin_rules(action, reference, rules);
+    } else {
         rules.push(Rule::ActionNotPinned(uses.to_owned()));
     }
 }

@@ -134,6 +134,7 @@ impl ReleaseError {
             Self::InvalidCheck(check, problem) => {
                 write!(f, ".velnor/release.toml: check {check:?} {problem}")
             }
+            Self::Family(error) => write!(f, "{error}"),
             _ => self.fmt_binary(f),
         }
     }

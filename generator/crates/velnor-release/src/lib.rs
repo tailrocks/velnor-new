@@ -9,12 +9,15 @@ mod collisions;
 mod error;
 mod error_binary;
 mod error_cargo;
+mod error_family;
+mod family;
 mod git_ref;
 mod hazards;
 mod lock_version;
 mod members;
 mod mise;
 mod plan;
+mod reality;
 mod registry;
 mod release_plz;
 mod ruleset;
@@ -28,6 +31,8 @@ pub use asset_name::{asset_name_uses_version, expand_asset_name};
 pub use bundle::ExtraBin;
 pub use check::{CheckArtifact, CheckPlan, CheckProblem, CheckStage};
 pub use error::ReleaseError;
+pub use error_family::FamilyError;
+pub use family::FamilyPlan;
 pub use hazards::{
     refuse_cargo_config, refuse_external_commands, shadowed_by_extensionless_config,
 };

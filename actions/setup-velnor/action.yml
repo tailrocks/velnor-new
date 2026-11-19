@@ -13,7 +13,7 @@ inputs:
     required: false
     default: ''
   sha256-macos-arm64:
-    description: The SHA-256 of the macos-arm64 archive (velnor-ci-aarch64-apple-darwin.tar.gz). Required on macOS ARM64 runners.
+    description: Ignored. velnor-ci has no macOS build since 2026-11-19; the input stays so generated workflows keep passing it.
     required: false
     default: ''
 runs:
@@ -25,7 +25,6 @@ runs:
         VERSION: ${{ inputs.version }}
         SHA256_LINUX_X64: ${{ inputs.sha256-linux-x64 }}
         SHA256_LINUX_ARM64: ${{ inputs.sha256-linux-arm64 }}
-        SHA256_MACOS_ARM64: ${{ inputs.sha256-macos-arm64 }}
         RELEASES: https://github.com/tailrocks/velnor-new/releases/download
       run: |
         set -euo pipefail
@@ -37,7 +36,6 @@ runs:
         case "$RUNNER_OS-$RUNNER_ARCH" in
           Linux-X64) platform=linux-x64; triple=x86_64-unknown-linux-musl; expected="$SHA256_LINUX_X64" ;;
           Linux-ARM64) platform=linux-arm64; triple=aarch64-unknown-linux-musl; expected="$SHA256_LINUX_ARM64" ;;
-          macOS-ARM64) platform=macos-arm64; triple=aarch64-apple-darwin; expected="$SHA256_MACOS_ARM64" ;;
           *) fail "velnor-ci has no build for $RUNNER_OS $RUNNER_ARCH" ;;
         esac
         [ -n "$expected" ] || fail "no SHA-256 was given for $platform"

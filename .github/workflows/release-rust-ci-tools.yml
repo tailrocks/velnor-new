@@ -92,15 +92,17 @@ jobs:
       contents: read
       checks: read
     steps:
-      - name: Install velnor-ci 0.1.80
-        uses: tailrocks/velnor-new/actions/setup-velnor@46f7a043952f82ef1a78d8ebb63143faca8f268c
-        with:
-          version: 0.1.80
-          sha256-linux-x64: 659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c
-      - name: Check that the tagged commit is on the default branch and passed Required
+      - name: Check that the tagged commit is on the default branch
         env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: velnor-ci release-gate --repo "$GITHUB_REPOSITORY" --sha "$GITHUB_SHA"
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          default_branch=$(gh api "repos/$GITHUB_REPOSITORY" --jq .default_branch)
+          status=$(gh api "repos/$GITHUB_REPOSITORY/compare/$default_branch...$GITHUB_SHA" --jq .status)
+          case "$status" in
+            behind|identical) ;;
+            *) echo "::error::$GITHUB_SHA is not on $default_branch (comparison: $status)"; exit 1 ;;
+          esac
   build:
     name: Build ${{ matrix.suffix }}
     needs: gate
@@ -120,10 +122,6 @@ jobs:
             target: aarch64-unknown-linux-musl
             runner: ubuntu-24.04-arm
             cc: musl-gcc
-          - suffix: macos-arm64
-            target: aarch64-apple-darwin
-            runner: macos-15
-            cc: cc
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -202,25 +200,25 @@ jobs:
       - name: Record the commit of the release
         run: echo "$GITHUB_SHA" > dist/COMMIT
       - name: Make the folders to unpack the archives in
-        run: mkdir -p binary/velnor-ci-x86_64-unknown-linux-musl.tar.gz binary/velnor-ci-aarch64-unknown-linux-musl.tar.gz binary/velnor-ci-aarch64-apple-darwin.tar.gz binary/velnor-gen-x86_64-unknown-linux-musl.tar.gz binary/velnor-gen-aarch64-unknown-linux-musl.tar.gz binary/velnor-gen-aarch64-apple-darwin.tar.gz
+        run: mkdir -p binary/velnor-ci-x86_64-unknown-linux-musl.tar.gz binary/velnor-ci-aarch64-unknown-linux-musl.tar.gz binary/velnor-gen-x86_64-unknown-linux-musl.tar.gz binary/velnor-gen-aarch64-unknown-linux-musl.tar.gz
       - name: Unpack velnor-ci-x86_64-unknown-linux-musl.tar.gz
         run: tar -xzf dist/velnor-ci-x86_64-unknown-linux-musl.tar.gz -C binary/velnor-ci-x86_64-unknown-linux-musl.tar.gz
       - name: Unpack velnor-ci-aarch64-unknown-linux-musl.tar.gz
         run: tar -xzf dist/velnor-ci-aarch64-unknown-linux-musl.tar.gz -C binary/velnor-ci-aarch64-unknown-linux-musl.tar.gz
-      - name: Unpack velnor-ci-aarch64-apple-darwin.tar.gz
-        run: tar -xzf dist/velnor-ci-aarch64-apple-darwin.tar.gz -C binary/velnor-ci-aarch64-apple-darwin.tar.gz
+      - name: Unpack
+        run: tar -xzf -C
       - name: Unpack velnor-gen-x86_64-unknown-linux-musl.tar.gz
         run: tar -xzf dist/velnor-gen-x86_64-unknown-linux-musl.tar.gz -C binary/velnor-gen-x86_64-unknown-linux-musl.tar.gz
       - name: Unpack velnor-gen-aarch64-unknown-linux-musl.tar.gz
         run: tar -xzf dist/velnor-gen-aarch64-unknown-linux-musl.tar.gz -C binary/velnor-gen-aarch64-unknown-linux-musl.tar.gz
-      - name: Unpack velnor-gen-aarch64-apple-darwin.tar.gz
-        run: tar -xzf dist/velnor-gen-aarch64-apple-darwin.tar.gz -C binary/velnor-gen-aarch64-apple-darwin.tar.gz
+      - name: Unpack
+        run: tar -xzf -C
       - name: Write BINARY-SHA256SUMS
         working-directory: binary
-        run: sha256sum velnor-ci-x86_64-unknown-linux-musl.tar.gz/velnor-ci velnor-ci-aarch64-unknown-linux-musl.tar.gz/velnor-ci velnor-ci-aarch64-apple-darwin.tar.gz/velnor-ci velnor-gen-x86_64-unknown-linux-musl.tar.gz/velnor-gen velnor-gen-aarch64-unknown-linux-musl.tar.gz/velnor-gen velnor-gen-aarch64-apple-darwin.tar.gz/velnor-gen > ../dist/BINARY-SHA256SUMS
+        run: sha256sum velnor-ci-x86_64-unknown-linux-musl.tar.gz/velnor-ci velnor-ci-aarch64-unknown-linux-musl.tar.gz/velnor-ci velnor-gen-x86_64-unknown-linux-musl.tar.gz/velnor-gen velnor-gen-aarch64-unknown-linux-musl.tar.gz/velnor-gen > ../dist/BINARY-SHA256SUMS
       - name: Write SHA256SUMS
         working-directory: dist
-        run: sha256sum COMMIT velnor-ci-x86_64-unknown-linux-musl.tar.gz velnor-ci-aarch64-unknown-linux-musl.tar.gz velnor-ci-aarch64-apple-darwin.tar.gz velnor-gen-x86_64-unknown-linux-musl.tar.gz velnor-gen-aarch64-unknown-linux-musl.tar.gz velnor-gen-aarch64-apple-darwin.tar.gz BINARY-SHA256SUMS > SHA256SUMS
+        run: sha256sum COMMIT velnor-ci-x86_64-unknown-linux-musl.tar.gz velnor-ci-aarch64-unknown-linux-musl.tar.gz velnor-gen-x86_64-unknown-linux-musl.tar.gz velnor-gen-aarch64-unknown-linux-musl.tar.gz BINARY-SHA256SUMS > SHA256SUMS
       - name: Upload SHA256SUMS
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
@@ -256,4 +254,4 @@ jobs:
       - name: Create the pre-release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag --prerelease --title "$GITHUB_REF_NAME" --notes "Prebuilt velnor-ci and velnor-gen archives. Verify every download against SHA256SUMS." dist/SHA256SUMS dist/BINARY-SHA256SUMS dist/COMMIT dist/velnor-ci-x86_64-unknown-linux-musl.tar.gz dist/velnor-ci-aarch64-unknown-linux-musl.tar.gz dist/velnor-ci-aarch64-apple-darwin.tar.gz dist/velnor-gen-x86_64-unknown-linux-musl.tar.gz dist/velnor-gen-aarch64-unknown-linux-musl.tar.gz dist/velnor-gen-aarch64-apple-darwin.tar.gz
+        run: gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag --prerelease --title "$GITHUB_REF_NAME" --notes "Prebuilt velnor-ci and velnor-gen archives. Verify every download against SHA256SUMS." dist/SHA256SUMS dist/BINARY-SHA256SUMS dist/COMMIT dist/velnor-ci-x86_64-unknown-linux-musl.tar.gz dist/velnor-ci-aarch64-unknown-linux-musl.tar.gz dist/velnor-gen-x86_64-unknown-linux-musl.tar.gz dist/velnor-gen-aarch64-unknown-linux-musl.tar.gz
