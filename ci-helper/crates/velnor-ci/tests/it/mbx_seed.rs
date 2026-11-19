@@ -108,7 +108,7 @@ fn a_pull_request_copies_only_the_action_store_subset_into_the_private_store() {
         "{}",
         message(&outcome)
     );
-    assert!(fs::read_dir(store.join("actions/cas/ab")).map_or(false, |d| d.count() == 1));
+    assert!(fs::read_dir(store.join("actions/cas/ab")).is_ok_and(|d| d.count() == 1));
 }
 
 #[test]
@@ -235,5 +235,5 @@ fn a_private_store_that_is_a_symlink_is_refused() {
         outcome,
         Outcome::Rejected("private store path is not a directory")
     );
-    assert!(tree(&victim).is_empty());
+    assert_eq!(tree(&victim), Vec::<String>::new());
 }

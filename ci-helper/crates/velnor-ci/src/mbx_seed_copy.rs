@@ -50,6 +50,7 @@ fn list(from: &Path, to: &Path, jobs: &mut Vec<Job>) {
     }
 }
 
+#[must_use]
 pub fn copy_subset(seed: &Path, store: &Path, threads: usize) -> Copied {
     let mut total = Copied::default();
     for subset in SUBSETS {
