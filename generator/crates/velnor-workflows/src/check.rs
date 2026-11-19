@@ -145,9 +145,9 @@ fn check_outputs(file: &str, outputs: &[Output], jobs: &[Job]) -> Result<(), Wor
     Ok(())
 }
 
-fn job(raw: RawJob, ctx: &Context<'_>, earlier: &[Job]) -> Result<Job, WorkflowsError> {
-    let id = raw.id.clone();
-    if !is_identifier(&id, true) || earlier.iter().any(|seen| seen.id == id) {
+fn job_shape(raw: &RawJob, earlier: &[Job]) -> Result<u16, WorkflowsError> {
+    let id = &raw.id;
+    if !is_identifier(id, true) || earlier.iter().any(|seen| seen.id == *id) {
         return refuse(format!("the job id {id:?} is not a unique identifier"));
     }
     for need in &raw.needs {
@@ -158,7 +158,7 @@ fn job(raw: RawJob, ctx: &Context<'_>, earlier: &[Job]) -> Result<Job, Workflows
         }
     }
     if raw.uses.is_some() {
-        refuse_step_keys(&raw)?;
+        refuse_step_keys(raw)?;
     } else if raw.step.is_empty() {
         return refuse(format!("job {id} needs at least one [[workflow.job.step]]"));
     }
@@ -168,6 +168,12 @@ fn job(raw: RawJob, ctx: &Context<'_>, earlier: &[Job]) -> Result<Job, Workflows
             "job {id} timeout_minutes must be 1 to {MAX_TIMEOUT_MINUTES}"
         ));
     }
+    Ok(timeout_minutes)
+}
+
+fn job(raw: RawJob, ctx: &Context<'_>, earlier: &[Job]) -> Result<Job, WorkflowsError> {
+    let id = raw.id.clone();
+    let timeout_minutes = job_shape(&raw, earlier)?;
     declared_access(&id, &raw.permissions, raw.environment.as_deref())?;
     let job_concurrency = raw
         .concurrency
