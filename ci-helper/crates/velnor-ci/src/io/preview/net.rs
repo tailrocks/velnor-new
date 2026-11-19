@@ -26,6 +26,8 @@ const REDIRECTS: usize = 10;
 const ARTIFACT_HOPS: usize = 4;
 const ARTIFACT_LIMIT: u64 = 257 * 1024 * 1024;
 const USER_AGENT: &str = "velnor-source-preview";
+/// The one path outside the repository that a source preview check reads.
+const ACTOR_PATH: &str = "/users/donbeave";
 
 /// The real network for the source preview helpers. A deadline of 180 seconds covers
 /// everything it does. The token goes only to `api.github.com` and `uploads.github.com`.
@@ -57,6 +59,12 @@ fn split(url: &str) -> Res<&str> {
 impl Transport {
     #[must_use]
     pub fn new(token: String) -> Self {
+        Self::with_total(token, TOTAL)
+    }
+
+    /// Like [`Transport::new`], with `total` as the time everything it does may take.
+    #[must_use]
+    pub fn with_total(token: String, total: Duration) -> Self {
         let agent = ureq::Agent::config_builder()
             .max_redirects(0)
             .http_status_as_error(false)
@@ -65,7 +73,7 @@ impl Transport {
             .into();
         Self {
             token,
-            deadline: Instant::now() + TOTAL,
+            deadline: Instant::now() + total,
             agent,
         }
     }
@@ -138,7 +146,7 @@ impl Transport {
 impl Net for Transport {
     fn api(&self, path: &str) -> Res<Value> {
         let base = format!("/repos/{REPOSITORY}");
-        require(path == base || path.starts_with(&format!("{base}/")))?;
+        require(path == base || path.starts_with(&format!("{base}/")) || path == ACTOR_PATH)?;
         let response = self.get(&format!("https://{API}{path}"), true)?;
         self.json(response, &[200])
     }

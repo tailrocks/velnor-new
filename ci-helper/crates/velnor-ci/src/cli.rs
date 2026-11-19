@@ -99,6 +99,10 @@ pub enum Command {
     )]
     RunAuthority(RunAuthorityArgs),
     #[command(
+        about = "Admit the source preview of the tag-push run: the run is the owner's push of the annotated tag sdk-preview-GITHUB_SHA under the protected tag rulesets, GITHUB_SHA is on main and its ci.yml and source qualification runs, and both producer payload runs, jobs and artifacts, succeeded and are the ones the tag annotation names. Then download both payloads, check them (ZIP, size, sha256, ELF or Mach-O header), link them as $RUNNER_TEMP/velnor-actions-<target>, write $RUNNER_TEMP/source-preview-metadata.json and source_sha to $GITHUB_OUTPUT. Reads GH_TOKEN, RUNNER_TEMP, GITHUB_OUTPUT, the GITHUB_* variables of the run and AUTHORITY_REPOSITORY, AUTHORITY_PATH, AUTHORITY_REF and AUTHORITY_SHA; exits 1 on any failed check"
+    )]
+    AdmitPreview,
+    #[command(
         about = "Write .velnor/rust-ci-timings.json from the last successful runs of the generated workflow on the default branch: the median of at least three ordinary runs, one entry per Cargo root, counting only jobs that ran on the runner in .velnor/rust-ci.toml (default ubuntu-latest); writes nothing with fewer; reads GITHUB_TOKEN; run in the checkout"
     )]
     Timings(TimingsArgs),

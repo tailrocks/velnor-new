@@ -39,7 +39,7 @@ fn rename_exclusive(from: &Path, to: &Path) -> Res<()> {
     })
 }
 
-fn random_name() -> Res<String> {
+pub(super) fn random_name() -> Res<String> {
     use std::io::Read;
     let mut bytes = [0_u8; 16];
     File::open("/dev/urandom")

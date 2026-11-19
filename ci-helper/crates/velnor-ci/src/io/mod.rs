@@ -208,6 +208,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::VerifyRuntime(args) => preview::cli::verify_runtime(&args),
         Command::VerifyMacProof => preview::cli::verify_mac_proof(),
         Command::RunAuthority(args) => preview::cli::run_authority(&args),
+        Command::AdmitPreview => preview::admit::admit_preview(),
         Command::Run(_) => Err(CiError::new("run is handled before commands")),
     }
 }
