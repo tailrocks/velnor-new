@@ -42,6 +42,7 @@ mod helper_source;
 mod helper_startup;
 mod helper_tool_paths;
 mod helper_workflow_size;
+mod mbx_store;
 
 mod inputs;
 mod inputs_audit_pin;
@@ -69,6 +70,7 @@ mod no_programs;
 mod patch;
 mod pipeline;
 mod plan_job;
+mod plan_job_wait;
 mod policy_exceptions;
 mod release_branch_prefix;
 mod release_cargo_include;
