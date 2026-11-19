@@ -7,6 +7,7 @@ use std::fmt;
 use crate::cron::CronExpr;
 use crate::helper::HelperRelease;
 use crate::ids::{PackageName, PathGlob, RepoPath, RunnerLabel, TargetName};
+use crate::lint::LintJob;
 use crate::plan::Shape;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -273,6 +274,7 @@ pub struct RustCiConfig {
     pub mbx_remote: MbxRemote,
     pub push_after_merge_group: PushAfterMergeGroup,
     pub test_setup: Vec<TestSetup>,
+    pub lint: Vec<LintJob>,
     pub test_groups: Vec<TestGroup>,
 }
 
@@ -401,6 +403,7 @@ impl Default for RustCiConfig {
             mbx_remote: MbxRemote::Off,
             push_after_merge_group: PushAfterMergeGroup::Run,
             test_setup: Vec::new(),
+            lint: Vec::new(),
             test_groups: Vec::new(),
         }
     }

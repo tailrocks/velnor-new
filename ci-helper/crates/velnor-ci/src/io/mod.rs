@@ -24,6 +24,7 @@ mod fetch_toolchain;
 mod git;
 mod git_witness;
 mod http;
+mod image_candidate;
 mod inputs;
 mod manifests;
 mod merge_group;
@@ -32,6 +33,7 @@ mod plan_request;
 pub mod preview;
 mod private_check;
 pub mod pump;
+mod qualification;
 mod recording;
 mod registry;
 mod release;
@@ -62,7 +64,8 @@ pub use self::restored::{break_time_ties, break_time_ties_with};
 pub use self::timings::write_report;
 use crate::cli::{
     AuditArgs, BenchCommand, CacheCommand, CheckTagArgs, Cli, CollectArgs, Command, CompareArgs,
-    DecideArgs, InputsCommand, ReleaseCommand, ReleaseGateArgs, SourcesCommand,
+    DecideArgs, ImageCommand, InputsCommand, QualificationCommand, ReleaseCommand,
+    ReleaseGateArgs, SourcesCommand,
 };
 use crate::collect::collect;
 use crate::compare::{compare, compare_across_populations};
@@ -202,9 +205,15 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::WriteRequest(args) => write_request::run(&args),
         Command::ResolveQualification(args) => resolve_qualification::run(&args),
         Command::Gate(args) => required::run_gate(&args),
+        Command::Qualification(QualificationCommand::Compare(args)) => {
+            qualification::run_compare(&args)
+        }
         Command::FetchReports(args) => fetch_reports::run_fetch_reports(&args),
         Command::Timings(args) => timings::run_timings(&args),
         Command::CratesMirror(args) => crates_mirror::setup(&args),
+        Command::Image(ImageCommand::VerifyCandidate(args)) => {
+            image_candidate::verify_candidate(&args)
+        }
         Command::Fetch(args) => fetch::fetch(&args),
         Command::PrivateTokenAllowed => private_check::run(),
         Command::MbxStore => crate::mbx_store::setup(),
@@ -233,6 +242,24 @@ fn run(cli: Cli) -> Result<String, CiError> {
             let ties = cold_on_failure(&targets, "restored", || break_time_ties(&root))?;
             Ok(expiry.report + &ties)
         }
+        Command::ValidateArtifactId => {
+            crate::preview_helpers::validate_artifact_id(
+                &std::env::var(crate::preview_helpers::ARTIFACT_ID_VARIABLE).unwrap_or_default(),
+            )?;
+            Ok(String::new())
+        }
+        Command::InstallGh(args) => {
+            crate::preview_helpers::install_gh(
+                &args.version,
+                std::env::var(TOKEN_VARIABLE).ok().as_deref(),
+            )?;
+            Ok(String::new())
+        }
+        Command::StageBundle => {
+            let bundle = env_path("BUNDLE_PATH")?;
+            crate::preview_helpers::stage_bundle(&bundle, &env_path("RUNNER_TEMP")?)?;
+            Ok(String::new())
+        }
         Command::VerifyRuntime(args) => preview::cli::verify_runtime(&args),
         Command::VerifyMacProof => preview::cli::verify_mac_proof(),
         Command::RunAuthority(args) => preview::cli::run_authority(&args),
@@ -242,6 +269,13 @@ fn run(cli: Cli) -> Result<String, CiError> {
         }
         Command::LaneGuard(_) => Err(CiError::new("lane-guard is handled before commands")),
     }
+}
+
+fn env_path(variable: &str) -> Result<std::path::PathBuf, CiError> {
+    std::env::var_os(variable)
+        .filter(|value| !value.is_empty())
+        .map(std::path::PathBuf::from)
+        .ok_or_else(|| CiError::new(format!("{variable} is not set")))
 }
 
 fn now_seconds() -> i64 {

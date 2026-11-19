@@ -117,6 +117,8 @@ pub enum Command {
         about = "Run after every cache and after velnor-ci inputs restore: every action that must follow the restores. Gives each tracked file that shares its modification time with another tracked file a distinct time, one microsecond below the time it had and ordered by path, so that cargo, which picks the newest file of a package by time alone, names the same file after every restore. When VELNOR_BASE_MAX_AGE_DAYS is a positive number, first removes every restored target directory whose target/.velnor/born date is more than that many days old, so the run builds cold. Writes the step output expired=true when it removed one (an unreadable born date counts as expired) and expired=false otherwise, so a later step can plan a full run"
     )]
     Restored(crate::cli_cache::RestoredArgs),
+    #[command(subcommand, about = "Check job image candidates")]
+    Image(ImageCommand),
     #[command(
         subcommand,
         about = "Decide whether the run saves the build directory, and delete the older entries of its family"
@@ -148,6 +150,61 @@ pub enum Command {
         about = "Write .velnor/rust-ci-timings.json from the last successful runs of the generated workflow on the default branch: the median of at least three ordinary runs, one entry per Cargo root, counting only jobs that ran on the runner in .velnor/rust-ci.toml (default ubuntu-latest); writes nothing with fewer; reads GITHUB_TOKEN; run in the checkout"
     )]
     Timings(TimingsArgs),
+    #[command(
+        about = "Exit 1 unless VELNOR_EVIDENCE_ARTIFACT_ID is a canonical positive decimal integer of at most 16 digits that does not exceed 9007199254740991"
+    )]
+    ValidateArtifactId,
+    #[command(
+        about = "Run mise install of the pinned GitHub CLI version without ambient mise configuration, environment or hooks; exit 1 when GITHUB_TOKEN is missing or empty or mise fails"
+    )]
+    InstallGh(InstallGhArgs),
+    #[command(
+        about = "Copy the attestation bundle at BUNDLE_PATH to $RUNNER_TEMP/SDK_PREVIEW_RECEIPT.json.sigstore.jsonl with mode 0400; exit 1 unless BUNDLE_PATH is a non-empty regular file that is not a symlink and nothing exists at the destination"
+    )]
+    StageBundle,
+    #[command(subcommand, about = "Decide the qualification workflow")]
+    Qualification(QualificationCommand),
+}
+
+#[derive(Debug, Args)]
+pub struct InstallGhArgs {
+    #[arg(
+        long,
+        value_parser = plain_version,
+        help = "The exact GitHub CLI version, three dot-separated numbers"
+    )]
+    pub version: String,
+}
+
+fn plain_version(text: &str) -> Result<String, String> {
+    let parts: Vec<&str> = text.split('.').collect();
+    let plain = parts.len() == 3
+        && parts
+            .iter()
+            .all(|part| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit()));
+    if plain {
+        Ok(text.to_owned())
+    } else {
+        Err(format!("{text:?} is not a version like 2.103.3"))
+    }
+}
+
+#[derive(Debug, Subcommand)]
+pub enum QualificationCommand {
+    #[command(
+        about = "Read the needs context from NEEDS_JSON and exit 1 unless every --lane job succeeded, which is the verdict of the qualification compare job. Fails when NEEDS_JSON is unset or invalid, a lane is missing from needs, or a lane result is missing, skipped, cancelled, failure or unknown. Prints a table and appends it to $GITHUB_STEP_SUMMARY"
+    )]
+    Compare(QualificationCompareArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct QualificationCompareArgs {
+    #[arg(
+        long,
+        default_values = ["verify-hosted", "verify-scale-set"],
+        help = "Job id of a lane the compare job needs; repeat for each lane"
+    )]
+    pub lane: Vec<String>,
 }
 
 #[derive(Debug, Args)]
@@ -443,4 +500,26 @@ pub struct CratesMirrorArgs {
     pub registry: String,
     #[arg(long)]
     pub cainfo: PathBuf,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum ImageCommand {
+    #[command(
+        about = "Check a job image candidate: exit 1 unless the OCI archive is a bounded linux/amd64 image whose blobs, layer DiffIDs and graph match the candidate record, the record's archive hash and size match the archive bytes, the build inputs under --root hash to the recorded values, and the record's source commit, ref and workflow identity equal the current GITHUB_* environment and its Buildx version equals buildx_version in .velnor/runner.lock. Prints PASS on success"
+    )]
+    VerifyCandidate(VerifyCandidateArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct VerifyCandidateArgs {
+    #[arg(
+        long,
+        default_value = ".",
+        help = "Source checkout the record's inputs hash against"
+    )]
+    pub root: PathBuf,
+    #[arg(long, help = "The candidate OCI archive")]
+    pub archive: PathBuf,
+    #[arg(long, help = "The candidate record JSON")]
+    pub record: PathBuf,
 }
