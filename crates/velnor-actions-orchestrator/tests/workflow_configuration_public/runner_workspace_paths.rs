@@ -288,5 +288,5 @@ fn a_shellcheck_killed_without_output_is_not_a_clean_report() {
         stdout: Vec::new(),
         stderr: Vec::new(),
     };
-    assert!(!shellcheck_report(&killed).is_empty());
+    assert_ne!(shellcheck_report(&killed), "");
 }
