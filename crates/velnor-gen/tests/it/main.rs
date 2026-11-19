@@ -125,6 +125,7 @@ mod needs_size;
 mod needs_size_plan;
 mod nextest_profile;
 mod no_programs;
+mod node_store_cache;
 mod patch;
 mod pipeline;
 mod plan_job;

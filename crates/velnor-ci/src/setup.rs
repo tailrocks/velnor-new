@@ -11,6 +11,7 @@ use crate::error::CiError;
 
 const LINE_LIMIT: usize = 4096;
 pub const COMPAT: &str = "compat";
+pub const COLD: &str = "cold";
 
 #[derive(Debug, Deserialize)]
 pub struct Installed {
@@ -51,9 +52,16 @@ pub fn env_lines(profile: &BuildProfile) -> String {
         .concat()
 }
 
+/// `cold` is set when the run could not read its image identity: its key matches no other run,
+/// so a workflow can skip the save that no run could ever restore.
 #[must_use]
-pub fn output_lines(compat: &str) -> String {
-    format!("{COMPAT}={compat}\n")
+pub fn output_lines(compat: &str, cold: bool) -> String {
+    let cold = if cold {
+        format!("{COLD}=true\n")
+    } else {
+        String::new()
+    };
+    format!("{COMPAT}={compat}\n{cold}")
 }
 
 fn required(pin: &ToolPin, platform: MisePlatform<'_>) -> Result<Vec<String>, CiError> {

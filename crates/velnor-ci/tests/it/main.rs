@@ -98,6 +98,7 @@ mod plan_main_groups;
 mod plan_modes;
 mod platform;
 mod prepare;
+mod prepare_cold;
 mod prepare_compat;
 mod prepare_components;
 mod prepare_configs;

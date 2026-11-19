@@ -24,6 +24,10 @@ const PUSH: &str = "push";
 const POST_MERGE_EVENTS: &str = "(github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')";
 pub(crate) const TOOLS_STEP: &str = "tools";
 pub(crate) const TOOLS_LOCAL_STEP: &str = "toolslocal";
+pub(crate) const TOOLS_LOCAL_SAVE_STEP: &str = "toolslocalsave";
+pub(crate) const TOOLS_RESTORED_STEP: &str = "tools_restored";
+pub(crate) const TOOLS_SAVED_STEP: &str = "save_tools_node";
+pub(crate) const PREPARE_COLD: &str = "steps.prepare.outputs.cold != 'true'";
 pub(crate) const BASE_STEP: &str = "base";
 pub(crate) const SOURCES_LOCKS_STEP: &str = "sources_locks";
 const SAVING_EVENTS: &str = "(github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')";
@@ -219,7 +223,8 @@ pub(crate) fn condition(
         }
         When::SaveToolsOnDefaultBranch
         | When::SaveToolsUnlessLocal
-        | When::RestoreToolsUnlessLocal => tools_parts(when, &mut parts),
+        | When::RestoreToolsUnlessLocal
+        | When::PrimeToolsFromNetwork => tools_parts(when, &mut parts),
     }
     parts.extend(pr_parts(pr));
     parts.extend(extra.iter().cloned());
@@ -234,6 +239,13 @@ pub(crate) fn condition(
 }
 
 fn tools_parts(when: When, parts: &mut Vec<String>) {
+    if when == When::PrimeToolsFromNetwork {
+        parts.push(ON_DEFAULT_BRANCH.to_owned());
+        parts.push(SAVING_EVENTS.to_owned());
+        parts.push(format!("steps.{TOOLS_LOCAL_STEP}.outputs.hit != 'true'"));
+        parts.push(format!("steps.{TOOLS_STEP}.outputs.cache-hit == 'true'"));
+        return;
+    }
     if when != When::RestoreToolsUnlessLocal {
         parts.push(ON_DEFAULT_BRANCH.to_owned());
         parts.push(format!("steps.{TOOLS_STEP}.outputs.cache-hit != 'true'"));

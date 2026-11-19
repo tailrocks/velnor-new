@@ -75,6 +75,7 @@ pub(crate) fn save(facts: &RepoFacts, root: &RustRoot, lane: &Lane, job: &JobId)
         },
         Step {
             when: When::SaveDeltaDecided,
+            skip_when_cold: crate::base_cache::checks_saves(facts),
             ..step(StepKind::CacheSave(CacheKey::Delta {
                 job: job.clone(),
                 root: cache_root,

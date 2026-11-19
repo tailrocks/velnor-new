@@ -47,6 +47,7 @@ mod rule_messages;
 mod rules;
 mod steps;
 mod tests;
+mod tools_steps;
 mod workflow;
 mod yaml;
 

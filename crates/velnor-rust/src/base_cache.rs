@@ -17,6 +17,16 @@ const TRIM_JOB: JobId = JobId::from_static("rust-trim");
 
 const SAVING_HELPER: (u64, u64, u64) = (0, 1, 81);
 const BATCHED_HELPER: (u64, u64, u64) = (0, 1, 97);
+/// The first `velnor-ci` that writes `cold=true` from `prepare` when it cannot read the OS
+/// identity, and that exits non-zero when a trusted node-store save fails.
+const CHECKED_SAVES_HELPER: (u64, u64, u64) = (0, 1, 100);
+
+pub(crate) fn checks_saves(facts: &RepoFacts) -> bool {
+    facts
+        .helper
+        .as_ref()
+        .is_some_and(|helper| helper.version().at_least(CHECKED_SAVES_HELPER))
+}
 
 pub(crate) fn inputs_cli(facts: &RepoFacts) -> InputsCli {
     let batched = facts
@@ -197,6 +207,7 @@ pub(crate) fn save_steps(
         },
         Step {
             when: When::SaveBaseDecided,
+            skip_when_cold: checks_saves(facts),
             ..step(StepKind::CacheSave(target))
         },
     ];
