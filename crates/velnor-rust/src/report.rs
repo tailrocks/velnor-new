@@ -123,7 +123,7 @@ pub(crate) fn finish(
     draft_guard: Option<Step>,
 ) {
     if facts.config.push_after_merge_group == PushAfterMergeGroup::SkipWhenQueueRunPassed {
-        crate::merge_group_skip::ask(jobs, single, &facts.config.required_check);
+        crate::merge_group_skip::ask(facts, jobs, single);
     }
     crate::merge_queue_check::ask(facts, jobs, single);
     let trim = crate::base_cache::trim_job(facts, jobs);
