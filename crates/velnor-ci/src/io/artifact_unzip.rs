@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs::{self, OpenOptions};
-use std::io::{self, Cursor, Read, Write};
+use std::io::{self, Read, Seek, Write};
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -34,7 +34,7 @@ impl Budget {
 }
 
 pub(super) fn extract(
-    bytes: &[u8],
+    archive: impl Read + Seek,
     name: &str,
     reports: &Path,
     budget: &Budget,
@@ -43,7 +43,7 @@ pub(super) fn extract(
     let destination = reports.join(name);
     remove(&staging)?;
     let mut drawn = 0;
-    let written = write_members(bytes, &staging, budget, &mut drawn).and_then(|()| {
+    let written = write_members(archive, &staging, budget, &mut drawn).and_then(|()| {
         remove(&destination)?;
         fs::rename(&staging, &destination)
             .map_err(|e| CiError::new(format!("cannot move {}: {e}", staging.display())))
@@ -67,12 +67,12 @@ fn remove(path: &Path) -> Result<(), CiError> {
 }
 
 fn write_members(
-    bytes: &[u8],
+    archive: impl Read + Seek,
     staging: &Path,
     budget: &Budget,
     drawn: &mut u64,
 ) -> Result<(), CiError> {
-    let mut archive = zip::ZipArchive::new(Cursor::new(bytes))
+    let mut archive = zip::ZipArchive::new(archive)
         .map_err(|e| CiError::new(format!("not a zip archive: {e}")))?;
     if archive.len() > MEMBER_COUNT {
         return Err(CiError::new(format!(

@@ -86,24 +86,30 @@ fn fetch_jobs(
     attempt: u32,
 ) -> Result<Vec<ApiJob>, CiError> {
     let mut all = Vec::new();
-    let mut page = 1;
-    loop {
+    let mut advertised = None;
+    for page in 1.. {
         let body = github.get(&jobs_path(repo, run_id, attempt, page))?;
         let ApiJobs { total_count, jobs } = parse(&body, "jobs")?;
+        if advertised.is_some_and(|first| first != total_count) {
+            return Err(CiError::new(format!(
+                "run {run_id} jobs listing changed during pagination; refusing inconsistent jobs data"
+            )));
+        }
+        advertised = Some(total_count);
         let empty = jobs.is_empty();
         all.extend(jobs);
-        if all.len() >= total_count {
-            return Ok(all);
+        if all.len() == total_count {
+            break;
         }
-        if empty {
+        if empty || all.len() > total_count {
             return Err(CiError::new(format!(
                 "run {run_id} lists {total_count} jobs and returned {} by page {page}; \
                  refusing incomplete jobs data",
                 all.len()
             )));
         }
-        page += 1;
     }
+    Ok(all)
 }
 
 fn predates(at: &str, attempt_start: &str) -> bool {
