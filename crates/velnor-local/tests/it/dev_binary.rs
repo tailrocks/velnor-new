@@ -122,7 +122,7 @@ async fn a_local_dev_binary_is_accepted_by_the_launcher_check_with_the_flag() {
     assert!(!refused(&output), "{output:?}");
     assert_eq!(
         git(&repo, &["log", "-1", "--format=%s"]),
-        "velnor-local: pin the local velnor-ci"
+        "velnor-local: rewrite the workflows of this run"
     );
     assert_eq!(git(&repo, &["status", "--porcelain"]), "");
 }
@@ -208,7 +208,7 @@ async fn a_branch_that_already_exists_in_the_checkout_is_pinned_when_the_driver_
         &file
     )));
 
-    pin_branch(&repo, &pin)
+    pin_branch(&repo, Some(&pin))
         .await
         .unwrap_or_else(|e| unreachable!("{e}"));
 
@@ -217,7 +217,7 @@ async fn a_branch_that_already_exists_in_the_checkout_is_pinned_when_the_driver_
     let output = launch(&workflow, &pinned_digest(&workflow), &file);
     assert!(!refused(&output), "{output:?}");
     let commits = git(&repo, &["rev-list", "--count", "HEAD"]);
-    pin_branch(&repo, &pin)
+    pin_branch(&repo, Some(&pin))
         .await
         .unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(git(&repo, &["rev-list", "--count", "HEAD"]), commits);
