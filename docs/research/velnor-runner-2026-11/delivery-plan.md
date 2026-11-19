@@ -23,8 +23,8 @@ Code was re-read at velnor-new `d6be276a6c` and velnor-legacy `1b9fc038`. Labels
 
 - **Fleet assumed:** N = 12 builder agents, 4 reviewer agents and 1 orchestrator, around the clock.
   Only the owner's decisions are human. Section 7.6 explains why more builders buy almost nothing.
-- **Total work:** about 1260 agent-hours of building plus about 120 of review (section 3.2's sum),
-  about 4.4 days of fleet time (1260 ÷ 12 builders ≈ 105 h). Coding does not set the dates.
+- **Total work:** about 1272 agent-hours of building plus about 120 of review (section 3.2's sum),
+  about 4.4 days of fleet time (1272 ÷ 12 builders ≈ 106 h). Coding does not set the dates.
 - **What sets the dates (decision 15):** (a) velnor-new's own CI and merge queue; (b) review gates
   and owner decisions, including engine releases; (c) evidence: conformance pairs, gate parity and
   clean reuse comparisons; (d) free cluster capacity, GitHub API limits and shared-file conflicts.
@@ -363,6 +363,7 @@ The full push run stays until A1 replaces it (V05): it is today's third executio
 | AN10 | Hooks through check names | `hk.pkl`'s fmt, clippy and deny steps call `velnor check <name>`; local races remote, first red reported, local green provisional (Opus) | AN01, DG07 | 6 | mid | Hook keys equal the gate's; overhead ≤ 50 ms at P90 | The hooks' raw cargo lines |
 | AN11 | Ejection prediction (lab) | Pairwise `merge-tree` of labelled heads at batch priority, results only in `Velnor / Details`; count ejections first (Opus, Carbon) | L06 | 8 | mid | Dropped if fewer than 2% of 100 groups are ejected for semantic conflicts | — |
 | AN12 | Failure lookaside and queue-tip stream | Failed records on an unchanged key returned as advice with `why-red` classes, `--rerun-failed`; `velnor wait` streams queue-tip moves (Argon, Fable) | AN04 | 8 | mid | Repeat failures returned in < 50 ms; never a gate input | — |
+| AN13 | Receipt-coverage parity | Shadow: a receipt minted by `verify` must equal what the label would have run for the exact subject; planted failures blocked; every path timed (Sol, Astra) | AN04, L06 | 12 | strong | Exact-subject parity on 100 labelled heads before the label relies on it | — |
 | AN09 | Per-test-case receipts (stretch) | Receipt per (binary digest, test id, definition), shadow against whole-binary runs (Fable) | AN04, DG03 | 30 | strong | 3,000 clean, then 2% sampled; no slot before | — |
 | V12 | C5 classifier | The trusted planner's scan for clock, randomness, network and event reads | G03 | 6 | strong | The 11 clock-reading test files are C5 | — |
 | V14 | No-`.git` census | Find obligations that need Git metadata (`root.rs:22` runs `git rev-parse --show-toplevel`); give them a read-only repository at the subject commit, keyed by it | G03 | 4 | mid | Every obligation passes without `.git` or is listed and keyed by commit | — |
@@ -462,7 +463,7 @@ arms run one at a time on the same two FI workers, so arms, not agents, set the 
 | V15 | Fast-red lane | Non-minting incremental build, `cargo check`, changed and historically failing tests first; failure to `Velnor / Details`, twins cancelled | V03 | 6 | mid | Never writes `success`; time to first red measured | — |
 | C12 | Twin generations | Each landed tip built cold twice on two nodes, sealed only on equal digests; witness 2 over the twin | C05, C06 | 8 | strong | Witness-2 delta equals witness 1's on 50 sequential commits | — |
 
-**Sum:** 172 items, about 1260 agent-hours of building plus about 120 of review (about 110 PRs ×
+**Sum:** 173 items, about 1272 agent-hours of building plus about 120 of review (about 110 PRs ×
 0.7 h, plus 30 strong reviews × 1.5 h).
 
 ### 3.3 Owner decisions

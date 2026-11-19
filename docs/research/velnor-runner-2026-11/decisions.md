@@ -1135,6 +1135,15 @@ mostly a lookup. Decisions 1–24 and the gate's meaning are unchanged.
 | A15 queue-tip stream | Adopted in `velnor wait` | 8.6; AN12 |
 | A08 option B (Q2): an arm64 Apple microVM as witness 1 under a split key | Rejected: Mac results are advice by the owner's premise; one arm64 slot halves detection of amd64-only flakes; §6.1's fingerprint stays | — |
 
+### Group 39: agent-native answer by GPT-6.2-Sol
+
+| Idea | Decision | v3 section; plan |
+|---|---|---|
+| A06 host, execution and target triples | Adopted | 8.6 |
+| C9 does saved work vanish | Settled: it moves earlier and is charged once, to the claimant | 8.6 |
+| Q8 label authorisation per SHA or per PR | Settled by ruling Q9 (a verdict belongs to its commit); a lab A case added, no owner question | 8.2 |
+| Step S4: one receipt covers a later labelled request | Adopted as a shadow parity item | AN13 |
+
 ## Design review
 
 The eight design critiques and the comparison that verified them are the input here; ids are the

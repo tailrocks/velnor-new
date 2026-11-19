@@ -918,7 +918,8 @@ does.
 - **No bypass.** `bypass_actors` is empty (an admin bypass carried 7 of 136 merges in three days
   [M]); agents act under an identity that cannot edit the ruleset; no procedure uses an admin merge.
 - **Lab A proves it first:** draft → ready with a carried label, removal racing a completion, a
-  superseding push, group destruction, lost events, a partitioned stale write, the ruleset read-back.
+  superseding push, group destruction, lost events, a partitioned stale write, the ruleset read-back,
+  and a relabel that republishes nothing (a verdict belongs to its commit, ruling Q9).
 - **Transition.** Step 0, now: today's two contexts bound to 15368, `bypass_actors: []`, ALLGREEN,
   depth 2, timeout 90 min, minimum wait 0. Step 1: `velnor-ci release-gate` released and both release
   entry points migrated (section 8.4). Step 2: the App in shadow on every PR head and group. Step 3,
@@ -1025,7 +1026,9 @@ and the label then mostly finds the work done. The gate's meaning and decisions 
   slot; a Mac key signs only in an advisory namespace); T2 a cluster candidate, node-signed, which may
   fill one witness slot; T3 trusted, on `main` after A1. The gate is unchanged: two T2-or-better
   witnesses per new key on distinct nodes, seeds and generations, then A1; an arm64 key never equals
-  an amd64 key, so a Mac pass proves nothing to the gate and a Mac fail is a useful red.
+  an amd64 key, so a Mac pass proves nothing to the gate and a Mac fail is a useful red. The planner
+  keeps host, execution and target triples apart: a cross-built arm64 binary satisfies only its own
+  released obligation. Work run early is charged once, to the claimant, in the runner-minutes.
 - **Verify and ship.** `velnor verify` fills both slots on two nodes against `merge-tree(queue tip,
   tree)` and shows both SHAs; `velnor ship` runs it, pushes, labels with the agent's App identity and
   enables auto-merge, an explicit act under decision 12. The control plane derives the PR's subject
@@ -1076,7 +1079,7 @@ and the label then mostly finds the work done. The gate's meaning and decisions 
 ## 10. Delivery: per-job-type migration, milestones and deletions
 
 Agents do all the work (decision 15). The [delivery plan](../research/velnor-runner-2026-11/delivery-plan.md)
-(v2, decisions 1–24 and the rulings) sizes about 1260 agent-hours of building and 120 of review,
+(v2, decisions 1–24 and the rulings) sizes about 1272 agent-hours of building and 120 of review,
 about 4.4 days for 12 builders, 4 reviewers and an orchestrator, so coding does not set the dates:
 velnor-new's CI and queue, reviews, owner decisions, conformance and parity evidence, capacity, API
 limits, file conflicts and, for the speed claim, the benchmark arms (run one at a time) do. Phase 0
