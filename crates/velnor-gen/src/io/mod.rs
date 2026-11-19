@@ -19,6 +19,7 @@ use velnor_rust::{
 
 mod check;
 mod error;
+mod exit;
 mod identity;
 mod pin;
 pub use identity::repository_name;
@@ -29,10 +30,11 @@ mod tracked;
 mod workflows;
 
 use crate::cli::{Cli, Command, ReleaseCommand};
-use crate::{Drift, check_tag, notes, plan_generate};
+use crate::{Drift, notes, plan_generate};
 use check::cargo_metadata;
 pub use check::check_metadata;
 pub use error::Error;
+use exit::{finish, tag_verdict};
 use pin::pin_helper;
 pub use pin::write_lock;
 pub use recorded::{read_recorded_checkout, write_metadata};
@@ -61,32 +63,6 @@ where
         .version(version_text())
         .try_get_matches_from(args)?;
     Cli::from_arg_matches(&matches)
-}
-
-fn tag_verdict(tag: &str) -> Exit {
-    match check_tag(env!("CARGO_PKG_VERSION"), tag) {
-        Ok(message) => {
-            println!("{message}");
-            Exit::SUCCESS
-        }
-        Err(message) => {
-            eprintln!("velnor-gen: {message}");
-            Exit::from(1)
-        }
-    }
-}
-
-fn finish(result: Result<String, Error>) -> Exit {
-    match result {
-        Ok(message) => {
-            println!("{message}");
-            Exit::SUCCESS
-        }
-        Err(error) => {
-            eprintln!("velnor-gen: {error}");
-            Exit::from(2)
-        }
-    }
 }
 
 #[must_use]

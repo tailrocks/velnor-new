@@ -1,0 +1,3 @@
+# Read by cargo-machete (the policy lane runs it from the repository root), ripgrep and fd.
+# These are recorded manifests without sources; machete would report every dependency as unused.
+generator/samples/velnor-new/view/crates/

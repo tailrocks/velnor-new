@@ -10,6 +10,7 @@ pub mod io;
 mod plan_render;
 mod release;
 mod reusable;
+mod sparse_hint;
 mod workflow_triggers;
 
 pub use crate::release::{release_ruleset, release_ruleset_drift};
@@ -17,14 +18,15 @@ pub use drifts::{Drift, drift};
 pub use error::GenerateError;
 use helper_gate::check_helper;
 pub use helper_gate::require_compatible;
+pub use sparse_hint::{SPARSE_SUGGESTION_BYTES, sparse_note};
 pub use velnor_workflows::HELPER_COMMANDS;
 
 use std::collections::BTreeMap;
 use std::io::Write;
 
-use velnor_model::{CacheKey, CheckoutScope, FullRun, OnMain, RepoPath, RepoView, StepKind};
+use velnor_model::{CacheKey, FullRun, OnMain, RepoPath, RepoView, StepKind};
 use velnor_rust::{
-    METADATA_PATH, bytes_outside_lanes, check_tools, detect, metadata_file, silent_build_scripts,
+    METADATA_PATH, check_tools, detect, metadata_file, silent_build_scripts,
     source_roots_over_limit, suggest_groups as suggested_groups,
 };
 
@@ -66,29 +68,6 @@ pub fn notes(view: &RepoView) -> Result<Vec<String>, GenerateError> {
                 .map(velnor_rust::SilentBuildScript::note),
         )
         .collect())
-}
-
-pub const SPARSE_SUGGESTION_BYTES: u64 = 100 * 1024 * 1024;
-
-pub fn sparse_note(
-    view: &RepoView,
-    sizes: &BTreeMap<RepoPath, u64>,
-) -> Result<Option<String>, GenerateError> {
-    let facts = detect(view)?;
-    if facts.config.checkout == CheckoutScope::Sparse {
-        return Ok(None);
-    }
-    Ok(bytes_outside_lanes(&facts, sizes)
-        .filter(|bytes| *bytes > SPARSE_SUGGESTION_BYTES)
-        .map(|bytes| {
-            format!(
-                "{} MiB of tracked files lie outside the paths Rust jobs read; set sparse_checkout = true in .velnor/rust-ci.toml so each job checks out only what it reads (needs velnor-ci {}.{}.{} or newer to name the [[inputs]] line a test that reads an unlisted file needs; see CONFIG.md)",
-                bytes / (1024 * 1024),
-                SPARSE_HINT_HELPER.0,
-                SPARSE_HINT_HELPER.1,
-                SPARSE_HINT_HELPER.2
-            )
-        }))
 }
 
 pub fn suggest_groups(view: &RepoView) -> Result<(String, Vec<String>), GenerateError> {

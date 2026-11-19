@@ -78,12 +78,6 @@ sha = "88acf2bb50552c7c508cbac13e5f8c576b95b1de"
 reviewed = "2026-10-26"
 
 [[actions]]
-name = "asamarts/alint"
-version = "v0.22.1"
-sha = "5054852d00d47affc9ea71440240147d9999f4d3"
-reviewed = "2026-11-19"
-
-[[actions]]
 name = "aws-actions/configure-aws-credentials"
 version = "v6.3.0"
 sha = "e1253824e5c10ff9df46874f81ed3ec929e19cfd"

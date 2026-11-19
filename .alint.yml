@@ -1,4 +1,5 @@
-# Repository policy, enforced by asamarts/alint as its own CI job.
+# Repository policy, enforced by asamarts/alint as the generated lint-alint job
+# (`[[lint]]` in .velnor/rust-ci.toml; the pin is in mise.toml).
 # Local rules cover generic file/path requirements and agent-instruction
 # file integrity only, plus the `no-doctests` content rule (decision X76).
 # No dependency-architecture, Rust-syntax, or test-layout claims: Alint

@@ -71,8 +71,8 @@
     },
     {
       "description": "The alint pin is a reviewed policy pin; changes need policy review.",
-      "matchManagers": ["github-actions"],
-      "matchPackageNames": ["asamarts/alint"],
+      "matchManagers": ["mise"],
+      "matchPackageNames": ["asamarts/alint", "github:asamarts/alint"],
       "labels": ["dependencies", "policy-review"]
     }
   ],

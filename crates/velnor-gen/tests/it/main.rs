@@ -199,6 +199,7 @@ mod release_yml_security;
 mod release_yml_smoke;
 mod render_empty_key;
 mod rendered_expressions;
+mod repo_lint_jobs;
 mod repo_profile_include;
 mod repo_sample;
 mod report;
