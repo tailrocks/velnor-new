@@ -3,6 +3,7 @@
 
 mod archive;
 mod base_cache_rules;
+mod base_cache_visibility;
 mod base_expiry;
 mod base_safety;
 mod base_save;
@@ -78,6 +79,7 @@ mod helper_tool_paths;
 mod helper_workflow_size;
 mod lane_guard_steps;
 mod mbx_store;
+mod rules_render;
 
 mod inputs;
 mod inputs_audit_pin;
