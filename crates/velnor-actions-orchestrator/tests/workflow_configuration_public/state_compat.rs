@@ -144,7 +144,9 @@ fn compat_is_the_same_on_every_runner_class() -> Result<(), Box<dyn Error>> {
         let hosted = job_compat(&jobs, hosted_repo.path(), hosted_temp.path(), dir)?;
         let scale = job_compat(&scale_jobs, scale_repo.path(), scale_temp.path(), dir)?;
         if hosted != scale {
-            return Err(format!("{dir}: hosted compat {hosted} != scale-set compat {scale}").into());
+            return Err(
+                format!("{dir}: hosted compat {hosted} != scale-set compat {scale}").into(),
+            );
         }
     }
     let hosted = plan_outputs(&jobs, hosted_repo.path(), hosted_temp.path())?;
@@ -158,6 +160,34 @@ fn compat_is_the_same_on_every_runner_class() -> Result<(), Box<dyn Error>> {
     };
     if compats(&hosted).is_empty() || compats(&hosted) != compats(&scale) {
         return Err("plan compat outputs differ between runner classes".into());
+    }
+    Ok(())
+}
+
+#[test]
+fn state_cache_paths_and_the_store_do_not_name_the_runner_temp() -> Result<(), Box<dyn Error>> {
+    let repo = declared_input_repo()?;
+    let jobs = finalized_jobs(&prepare(repo.path())?)?;
+    let mut restores = 0;
+    for step in jobs.values().flat_map(|job| &job.steps) {
+        let StepKind::Action { with, env, .. } = &step.kind else {
+            continue;
+        };
+        if step.role == Some(StepRole::MbxBundleRestore) {
+            restores += 1;
+            let path = with.get("path").ok_or("state restore lost its path")?;
+            if path.contains("runner.temp") {
+                return Err(format!("state cache path depends on the runner class: {path}").into());
+            }
+        }
+        if let Some(store) = env.get("MBX_CACHE_DIR")
+            && store.contains("runner.temp")
+        {
+            return Err(format!("MBX_CACHE_DIR depends on the runner class: {store}").into());
+        }
+    }
+    if restores == 0 {
+        return Err("no state restore step was rendered".into());
     }
     Ok(())
 }
