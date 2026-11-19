@@ -222,7 +222,6 @@ impl ControlState {
         coordinator: &mut SessionObservationCoordinator,
         request: &ObservationStart<'_>,
     ) -> Result<SessionObservationReply, HostError> {
-        coordinator.tickets.remove(request.connection_id);
         let Some(binding) = self.current_binding(request.connection_id)? else {
             return Ok(session_observation::reply(
                 SessionObservationStatus::Missing,
@@ -338,3 +337,8 @@ impl ControlState {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod observation_start_tests;
+#[cfg(test)]
+mod session_poll_receipt_tests;

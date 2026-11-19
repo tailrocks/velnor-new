@@ -20,8 +20,8 @@ use std::time::Duration;
 use std::{error::Error, fs};
 
 use fixture::{
-    ApiFault, ApiPlan, ContainerRole, DockerApiFixture, GitFixture, ImageFault, ImageRole,
-    OuterMutation, Probe,
+    ApiFault, ApiPlan, ContainerRole, DockerApiFixture, ExtraPrivilege, GitFixture, ImageFault,
+    ImageRole, OuterMutation, Probe,
 };
 use support::*;
 
@@ -269,6 +269,30 @@ fn public_qualifier_removes_owned_containers_rejected_for_configuration() -> Tes
         plan.fault = Some(ApiFault::WrongOwnedConfig(role));
         let (output, state) = qualify(&git, git.source_sha(), plan)?;
         assert_failed_and_cleaned(&output, &state);
+    }
+    Ok(())
+}
+
+#[test]
+fn public_qualifier_rejects_extra_privileges_on_every_tool_role() -> TestResult<()> {
+    for role in [
+        "runner-listener",
+        "dind-docker-cli",
+        "runner-node",
+        "runner-socket-query",
+        "dind",
+    ] {
+        for privilege in [
+            ExtraPrivilege::CapAdd,
+            ExtraPrivilege::HostPid,
+            ExtraPrivilege::Device,
+        ] {
+            let git = GitFixture::new()?;
+            let mut plan = ApiPlan::new(git.source_sha());
+            plan.fault = Some(ApiFault::ExtraPrivilege(role, privilege));
+            let (output, state) = qualify(&git, git.source_sha(), plan)?;
+            assert_failed_and_cleaned(&output, &state);
+        }
     }
     Ok(())
 }

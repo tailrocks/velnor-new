@@ -122,7 +122,7 @@ fn more_than_one_job_start_a_plan_job_that_installs_nothing_and_every_lane_waits
             );
         }
         assert!(text.contains(&format!(
-            "    needs:\n      - rust-plan\n      - rust-inputs-audit\n    if: '${{{{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && needs.rust-plan.outputs.rust_{slug}_mode != ''none'') && (needs.rust-inputs-audit.result == ''success'' || needs.rust-inputs-audit.result == ''skipped'') }}}}'\n"
+            "    needs:\n      - rust-plan\n      - rust-inputs-audit\n    if: '${{{{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && needs.rust-plan.result == ''success'' && needs.rust-plan.outputs.rust_{slug}_mode != ''none'') && (needs.rust-inputs-audit.result == ''success'' || needs.rust-inputs-audit.result == ''skipped'') }}}}'\n"
         )));
     }
     assert!(!text.contains("_doctests"), "{text}");
@@ -295,11 +295,15 @@ fn checkout_depths<'t>(text: &'t str, job: &str) -> Vec<&'t str> {
 }
 
 #[test]
-fn no_job_asks_for_pull_requests_access_and_every_job_reads_contents_only() -> TestResult {
+fn only_the_cache_job_asks_for_pull_requests_access_and_others_read_contents() -> TestResult {
     let multi = workflow(&view(&["Cargo.toml", "lab/Cargo.toml"], None)?)?;
     let single = workflow(&view(&["Cargo.toml"], None)?)?;
     for text in [&multi, &single] {
-        assert!(!text.contains("pull-requests"), "{text}");
+        assert_eq!(
+            job_permissions(text, "rust-trim"),
+            ["pull-requests: read", "actions: write"]
+        );
+        assert_eq!(text.matches("pull-requests").count(), 1, "{text}");
     }
     for job in ["rust-plan", "required"] {
         assert_eq!(job_permissions(&multi, job), ["contents: read"], "{job}");
@@ -357,7 +361,7 @@ fn the_single_job_policy_lane_reads_the_rust_jobs_plan_and_checks_out_one_commit
         ["contents: read"],
         "{text}"
     );
-    assert!(!text.contains("pull-requests"), "{text}");
+    assert_eq!(text.matches("pull-requests").count(), 1, "{text}");
     Ok(())
 }
 

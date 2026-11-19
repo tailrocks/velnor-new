@@ -23,6 +23,9 @@ use transport::{
     marker_exists, private_state_directory, read_request, remove_owned_socket, remove_stale_socket,
     trusted_peer, write_response,
 };
+#[cfg(test)]
+#[path = "server/accept_tests.rs"]
+mod accept_tests;
 #[path = "server/bind.rs"]
 mod bind;
 #[path = "server/requests.rs"]
@@ -34,6 +37,11 @@ pub(crate) use state::{
 #[path = "server/transport.rs"]
 mod transport;
 pub(super) use transport::{read_drain_token, valid_token};
+
+#[cfg(test)]
+pub(super) fn read_request_for_test(stream: &mut UnixStream) -> Result<Request, HostError> {
+    read_request(stream)
+}
 
 const ACCEPT_PAUSE: Duration = Duration::from_millis(25);
 const IO_TIMEOUT: Duration = Duration::from_secs(5);
@@ -127,6 +135,10 @@ fn serve(
         match listener.accept() {
             Ok((mut stream, _)) => {
                 if trusted_peer(&stream) {
+                    if let Err(error) = stream.set_nonblocking(false) {
+                        eprintln!("host control blocking mode setup failed: {error}");
+                        continue;
+                    }
                     if let Err(error) = stream.set_read_timeout(Some(IO_TIMEOUT)) {
                         eprintln!("host control read timeout setup failed: {error}");
                         continue;
@@ -327,13 +339,17 @@ pub(super) fn connection_census_status(
     )?))
 }
 
+pub(super) fn drain_marker_present(state_path: &Path) -> Result<bool, HostError> {
+    marker_exists(&state_path.join("drain"))
+}
+
 pub(super) fn observation_blocked(
     state: &ControlState,
     state_path: &Path,
     connection_id: &str,
 ) -> Result<bool, HostError> {
     Ok(!state.admission_ready()
-        || marker_exists(&state_path.join("drain"))?
+        || drain_marker_present(state_path)?
         || marker_exists(&state_path.join("connection-drain").join(connection_id))?)
 }
 

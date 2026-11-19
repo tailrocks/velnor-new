@@ -29,6 +29,7 @@ pub(crate) fn member(package: &str, directory: &str, dependencies: &[(&str, &str
                 name: name(package),
                 kind: DependencyKind::Normal,
                 platform: None,
+                optional: false,
                 manifest: path(&format!("{directory}/Cargo.toml")),
             })
             .collect(),
@@ -43,6 +44,7 @@ pub(crate) fn facts(roots: Vec<(&str, Vec<RustMember>)>) -> RepoFacts {
         .map(|(manifest, members)| RustRoot {
             manifest: path(manifest),
             target_dir: path("target"),
+            nextest_ci_profile: false,
             members,
             depends_on: Vec::new(),
             external_dependencies: Vec::new(),
