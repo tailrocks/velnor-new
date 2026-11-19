@@ -48,7 +48,8 @@ fn trust_follows_the_event_and_the_default_branch() {
         ("push", "refs/tags/main", false),
         ("pull_request", "refs/pull/1/merge", false),
         ("pull_request_target", "refs/heads/main", false),
-        ("workflow_dispatch", "refs/heads/main", false),
+        ("workflow_dispatch", "refs/heads/main", true),
+        ("workflow_dispatch", "refs/heads/feature", false),
         ("", "", false),
     ];
     for (event, git_ref, expected) in cases {
