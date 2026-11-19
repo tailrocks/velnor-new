@@ -9,8 +9,8 @@ use velnor_model::{
 
 use crate::cache::render_key;
 use crate::cache_upload::{SOURCES_KEY_OUTPUT, key_id};
-use crate::gate::BASE_STEP;
 use crate::gate::sources_save_step;
+use crate::gate::{BASE_STEP, SOURCES_LOCKS_STEP};
 use crate::release_steps::shell_word;
 use crate::rules::{RenderedStep, Value};
 
@@ -49,6 +49,19 @@ pub(crate) fn cache_decide(
     }
 }
 
+pub(crate) fn sources_locks(locks: &[RepoPath]) -> RenderedStep {
+    RenderedStep {
+        id: Some(SOURCES_LOCKS_STEP.to_owned()),
+        name: "Hash the sources lockfiles".to_owned(),
+        env: vec![(
+            "SOURCES_LOCKS".to_owned(),
+            Value::Expr(crate::cache::hash_files(locks)),
+        )],
+        run: Some("echo \"hash=$SOURCES_LOCKS\" >> \"$GITHUB_OUTPUT\"".to_owned()),
+        ..RenderedStep::default()
+    }
+}
+
 pub(crate) fn lane_outputs(steps: &[Step]) -> Vec<(String, String)> {
     cache_lane_outputs(steps)
         .into_iter()
@@ -58,9 +71,9 @@ pub(crate) fn lane_outputs(steps: &[Step]) -> Vec<(String, String)> {
                     render_key(key).restore_keys.pop()?
                 }
                 CacheLaneOutput::BaseSave => format!("${{{{ steps.{BASE_STEP}.outputs.save }}}}"),
-                CacheLaneOutput::SourcesSaved(CacheKey::Sources { root, .. }) => format!(
+                CacheLaneOutput::SourcesSaved(CacheKey::Sources { lane, .. }) => format!(
                     "${{{{ steps.{}.outcome == 'success' }}}}",
-                    sources_save_step(root.slug())
+                    sources_save_step(lane.slug())
                 ),
                 CacheLaneOutput::SourcesSaved(_) => return None,
                 CacheLaneOutput::SavedKey(key) => {
@@ -155,11 +168,41 @@ pub(crate) fn audited_save(
             step.kind,
             StepKind::CacheDecide { .. } | StepKind::CacheSave(CacheKey::Target { .. })
         );
-    let extra = audited.then(|| "${{ steps.restored.outputs.expired != 'true' || needs.rust-inputs-audit.result == 'success' }}".to_owned());
+    let extra = if audited {
+        Some("${{ steps.restored.outputs.expired != 'true' || needs.rust-inputs-audit.result == 'success' }}".to_owned())
+    } else if matches!(step.kind, StepKind::CacheSave(CacheKey::Sources { .. })) {
+        fetched(job)
+    } else {
+        None
+    };
     for body in &mut bodies {
         body.condition = crate::gate::all_conditions(body.condition.take(), extra.clone());
     }
     bodies
+}
+
+fn fetched(job: &velnor_model::Job) -> Option<String> {
+    job.steps
+        .iter()
+        .filter_map(|step| match &step.kind {
+            StepKind::SourcesFetch { position, .. } => Some(*position),
+            _ => None,
+        })
+        .max()
+        .map(|last| {
+            format!(
+                "${{{{ steps.{}.outcome == 'success' }}}}",
+                crate::gate::sources_fetch_step(last)
+            )
+        })
+}
+
+pub(crate) fn sources_fetch(position: usize, lane: crate::cargo::CargoLane) -> RenderedStep {
+    let mut fetch = crate::cargo::cargo_fetch(lane);
+    fetch.id = Some(crate::gate::sources_fetch_step(position));
+    fetch.name = format!("Fetch the sources of root {position}");
+    fetch.continue_on_error = true;
+    fetch
 }
 
 pub(crate) fn job_setup(job: &velnor_model::Job) -> (bool, bool) {

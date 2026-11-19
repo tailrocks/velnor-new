@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    CacheKey, CacheRoot, Concurrency, Host, Job, JobId, Permissions, PullRequestType, RepoPath,
-    RootSlug, RunnerLabel, Step, StepKind, Triggers, WORKFLOW_PATH, When, WorkflowPlan,
+    CacheKey, CacheRoot, Concurrency, Host, Job, JobId, Permissions, PrRun, PullRequestType,
+    RepoPath, RootSlug, RunnerLabel, Step, StepKind, Triggers, WORKFLOW_PATH, When, WorkflowPlan,
 };
 use velnor_render::{RenderedKey, render, render_key, render_key_with_mise};
 
@@ -49,13 +49,13 @@ fn each_family_renders_its_key_and_ordered_fallbacks() -> TestResult {
     );
     let sources = render_key(&CacheKey::Sources {
         host: Host,
-        root: root("lab/Cargo.toml")?,
+        lane: root("lab/Cargo.toml")?,
     });
     assert_eq!(
         sources,
         RenderedKey {
-            key: format!("velnor-src-{HOST}-lab-${{{{ hashFiles('lab/Cargo.lock') }}}}"),
-            restore_keys: vec![format!("velnor-src-{HOST}-lab-")],
+            key: format!("velnor-src-{HOST}-all.roots-${{{{ steps.sources_locks.outputs.hash }}}}"),
+            restore_keys: vec![format!("velnor-src-{HOST}-all.roots-")],
         }
     );
     let lock = "${{ hashFiles('Cargo.lock') }}";
@@ -141,17 +141,8 @@ fn a_directory_name_cannot_close_or_open_an_expression_in_a_key() -> TestResult 
 
 #[test]
 fn a_quote_in_a_directory_name_is_doubled_inside_the_hash_files_literal() -> TestResult {
-    let sources = render_key(&CacheKey::Sources {
-        host: Host,
-        root: root("a'b/Cargo.toml")?,
-    });
-    assert!(
-        sources
-            .key
-            .ends_with("-${{ hashFiles('a''b/Cargo.lock') }}"),
-        "{}",
-        sources.key
-    );
+    let hash = crate::shared_sources::locks_hash(&["a'b/Cargo.toml"])?;
+    assert_eq!(hash, "${{ hashFiles('a''b/Cargo.lock') }}");
     Ok(())
 }
 
@@ -167,7 +158,7 @@ fn a_root_slug_never_holds_a_dash_so_a_job_and_a_root_cannot_blur() {
 fn a_save_step_renders_the_same_key_without_fallbacks() -> TestResult {
     let key = CacheKey::Sources {
         host: Host,
-        root: root("Cargo.toml")?,
+        lane: root("Cargo.toml")?,
     };
     let plan = WorkflowPlan {
         name: "Rust CI".to_owned(),
@@ -187,7 +178,7 @@ fn a_save_step_renders_the_same_key_without_fallbacks() -> TestResult {
             comment: None,
             needs: Vec::new(),
             when: When::Success,
-            skip_on_draft: false,
+            pr: PrRun::Always,
             runs_on: RunnerLabel::new("ubuntu-latest")?,
             permissions: Permissions::default(),
             timeout_minutes: 10,
@@ -199,7 +190,7 @@ fn a_save_step_renders_the_same_key_without_fallbacks() -> TestResult {
                 directory: None,
                 target_dir: None,
                 when: When::Success,
-                skip_on_draft: false,
+                pr: PrRun::Always,
                 gate: None,
                 reads: None,
             }],

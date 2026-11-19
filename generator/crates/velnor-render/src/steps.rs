@@ -8,15 +8,18 @@ use velnor_model::{
 };
 
 use crate::artifact_steps::{download_step, upload_cargo_log, upload_step};
-use crate::base_steps::{cache_budget, cache_decide, cache_trim, lane_outputs, trimmed_lane};
+use crate::base_steps::{
+    cache_budget, cache_decide, cache_trim, lane_outputs, sources_fetch, sources_locks,
+    trimmed_lane,
+};
 use crate::cache::{path_text, render_key};
-use crate::cargo::{ArtifactFormat, CargoLane, cargo_step, reports_tests};
+use crate::cargo::{CargoLane, cargo_step, reports_tests};
 use crate::gate::{
     PLAN_STEP, Setup, admission, all_conditions, condition, output, plan_read, plan_source,
     sources_step, verdict_step,
 };
+use crate::helper_steps::restored_step;
 use crate::permission_pairs;
-use crate::private_steps::render as private_step;
 use crate::rules::{RenderedJob, RenderedStep, SETUP_VELNOR_ACTION, Value};
 
 pub(crate) const PREPARE_STEP: &str = "prepare";
@@ -32,43 +35,14 @@ pub(crate) const DOWNLOAD_ARTIFACT: &str =
 
 pub(crate) const TEST_STEP_ID: &str = "test";
 pub(crate) const MISE_VERSION: &str = "2026.11.10";
-const IS_DRAFT: &str = "${{ github.event.pull_request.draft == true }}";
 const CACHE_RESTORE: &str = "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
 const CACHE_SAVE: &str = "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
 const A_NEED_FAILED: &str =
     "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}";
 
-fn cargo_lane(job: &Job) -> CargoLane {
-    let artifacts = job
-        .steps
-        .iter()
-        .find_map(|step| match step.kind {
-            StepKind::ReportCaches {
-                nextest_artifacts, ..
-            } => Some(if nextest_artifacts {
-                ArtifactFormat::All
-            } else {
-                ArtifactFormat::CargoOnly
-            }),
-            _ => None,
-        })
-        .unwrap_or(ArtifactFormat::Disabled);
-    CargoLane {
-        artifacts,
-        cache_debug: job
-            .steps
-            .iter()
-            .any(|step| step.kind == StepKind::UploadCargoLog),
-        offline: job
-            .steps
-            .iter()
-            .any(|step| matches!(step.kind, StepKind::PrivateFetch { .. })),
-    }
-}
-
 pub(crate) fn rendered_job(job: &Job, fork_runner: &RunnerLabel) -> RenderedJob {
     let (restores, audit) = crate::base_steps::job_setup(job);
-    let lane = cargo_lane(job);
+    let lane = crate::cargo::cargo_lane(job);
     let tests = job
         .steps
         .iter()
@@ -79,7 +53,7 @@ pub(crate) fn rendered_job(job: &Job, fork_runner: &RunnerLabel) -> RenderedJob 
         comment: job.comment.clone(),
         needs: job.needs.iter().map(ToString::to_string).collect(),
         condition: Some(crate::base_steps::audited_lane(
-            admission(job.when, job.gate.as_ref(), job.skip_on_draft),
+            admission(job.when, job.gate.as_ref(), job.pr),
             job,
         )),
         runs_on: job.runs_on.as_str().to_owned(),
@@ -187,7 +161,7 @@ fn rendered_steps(
                 step.when,
                 step.gate.as_ref(),
                 setup,
-                step.skip_on_draft,
+                step.pr,
                 &saved_unless_hit(&step.kind),
             ),
         );
@@ -217,22 +191,27 @@ fn rendered_steps(
 
 fn saved_unless_hit(kind: &StepKind) -> Vec<String> {
     match kind {
-        StepKind::CacheSave(CacheKey::Sources { root, .. }) => vec![format!(
+        StepKind::CacheSave(CacheKey::Sources { lane, .. }) => vec![format!(
             "steps.{}.outputs.cache-hit != 'true'",
-            sources_step(root.slug())
+            sources_step(lane.slug())
         )],
+        StepKind::SourcesFetch { lane, position } => {
+            let mut terms = vec![format!(
+                "steps.{}.outputs.cache-hit != 'true'",
+                sources_step(lane)
+            )];
+            if let Some(previous) = position.checked_sub(1) {
+                terms.push(format!(
+                    "steps.{}.outcome == 'success'",
+                    crate::gate::sources_fetch_step(previous)
+                ));
+            }
+            terms
+        }
         StepKind::CacheTrim { lane, family } => vec![trimmed_lane(lane, *family)],
         StepKind::PrivateCheck { cached }
         | StepKind::PrivateToken { cached, .. }
-        | StepKind::PrivateFetch { cached, .. }
-            if !cached.is_empty() =>
-        {
-            let misses: Vec<String> = cached
-                .iter()
-                .map(|slug| format!("steps.{}.outputs.cache-hit != 'true'", sources_step(slug)))
-                .collect();
-            vec![format!("({})", misses.join(" || "))]
-        }
+        | StepKind::PrivateFetch { cached, .. } => crate::private_steps::unless_hit(cached),
         _ => Vec::new(),
     }
 }
@@ -287,15 +266,15 @@ fn step_body(
             archive,
             manifests,
         } => cache_decide(target, archive.as_ref(), manifests),
-        StepKind::RestoredTargets { expiry, targets } => {
-            crate::helper_steps::restored_step(*expiry, targets)
-        }
+        StepKind::RestoredTargets { expiry, targets } => restored_step(*expiry, targets),
+        StepKind::SourcesLocks(locks) => sources_locks(locks),
         StepKind::CacheResult(lanes) => crate::cache_upload::result(lanes),
         StepKind::CacheVerify { lane, family } => crate::cache_upload::verify(lane, *family),
         StepKind::CacheTrim { lane, family } => cache_trim(lane, *family),
         StepKind::CacheBudget(bytes) => cache_budget(*bytes),
         StepKind::RustComponents(components) => rustup_add("component", components),
         StepKind::RustTargets(targets) => rustup_add("target", targets),
+        StepKind::SourcesFetch { position, .. } => sources_fetch(*position, lane),
         StepKind::Cargo(command) => cargo_step(command, audit, lane),
         StepKind::Helper(command) => crate::helper_steps::helper_step(*command),
         StepKind::InputsSave(target) => crate::helper_steps::inputs_step("save", target, directory),
@@ -306,7 +285,7 @@ fn step_body(
         StepKind::MbxStore => crate::helper_steps::mbx_store_step(),
         StepKind::PrivateCheck { .. }
         | StepKind::PrivateToken { .. }
-        | StepKind::PrivateFetch { .. } => private_step(kind),
+        | StepKind::PrivateFetch { .. } => crate::private_steps::render(kind),
         StepKind::MbxSeed => crate::helper_steps::mbx_seed_step(),
         StepKind::TestSetup { name, run } => RenderedStep {
             name: name.clone(),
@@ -319,12 +298,9 @@ fn step_body(
             ..RenderedStep::default()
         },
         StepKind::InstallHelper(release) => install_helper(release),
-        StepKind::FailOnDraftRun => RenderedStep {
-            name: "Fail on a draft pull request, whose jobs were skipped".to_owned(),
-            condition: Some(IS_DRAFT.to_owned()),
-            run: Some("exit 1".to_owned()),
-            ..RenderedStep::default()
-        },
+        StepKind::FailOnDraftRun => crate::draft_steps::fail_on_draft(),
+        StepKind::DraftNotice => crate::draft_steps::draft_notice(),
+        StepKind::ClearRunLabel => crate::draft_steps::clear_run_label(),
         StepKind::UploadCargoLog => upload_cargo_log(),
         StepKind::Verdict {
             spec,

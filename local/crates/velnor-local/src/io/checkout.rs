@@ -20,11 +20,12 @@ pub(super) async fn git(repo: &Path, args: &[&str], input: Option<&[u8]>) -> io:
     program("git", &[&head[..], args].concat(), input).await
 }
 
-pub(super) async fn copy_checkout(
+pub async fn copy_checkout(
     checkout: &Path,
     copy: &Path,
     default: &str,
     tag: &str,
+    repository: &str,
 ) -> io::Result<()> {
     if fs::metadata(copy).await.is_ok() {
         fs::remove_dir_all(copy).await?;
@@ -35,6 +36,8 @@ pub(super) async fn copy_checkout(
         None,
     )
     .await?;
+    let hosted = format!("https://github.com/{repository}");
+    git(copy, &["remote", "set-url", "origin", &hosted], None).await?;
     let changes = git(checkout, &["diff", "HEAD", "--binary"], None).await?;
     if !changes.is_empty() {
         git(copy, &["apply", "--index"], Some(&changes)).await?;

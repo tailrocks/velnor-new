@@ -231,7 +231,7 @@ fn an_exact_sources_hit_skips_the_token_and_the_fetch_and_a_partial_hit_fetches(
         let restores: Vec<&str> = steps[..token]
             .iter()
             .filter_map(|s| s["id"].as_str())
-            .filter(|id| id.starts_with("sources_"))
+            .filter(|id| id.starts_with("sources_") && *id != "sources_locks")
             .collect();
         let guards = [&steps[token], &steps[token + 1], &steps[token - 1]]
             .map(|step| step["if"].as_str().unwrap_or_default().to_owned());

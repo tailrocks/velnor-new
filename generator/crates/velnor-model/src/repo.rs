@@ -261,6 +261,7 @@ pub struct RustCiConfig {
     pub nextest_harnesses: Vec<(PackageName, TargetName)>,
     pub default_branch: String,
     pub skip_draft_pull_requests: bool,
+    pub pr_ci: PrCi,
     pub on_main: OnMain,
     pub full_run: FullRun,
     pub helper: Option<RepoPath>,
@@ -291,6 +292,12 @@ pub enum FullRun {
     Nightly,
     Weekly,
     Cron(CronExpr),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PrCi {
+    Always,
+    Label,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -348,6 +355,7 @@ impl Default for RustCiConfig {
             nextest_harnesses: Vec::new(),
             default_branch: "main".to_owned(),
             skip_draft_pull_requests: false,
+            pr_ci: PrCi::Always,
             on_main: OnMain::Affected,
             full_run: FullRun::Nightly,
             helper: None,

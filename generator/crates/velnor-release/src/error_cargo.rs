@@ -3,7 +3,7 @@
 
 use std::fmt;
 
-use crate::error::ReleaseError;
+use crate::error::{ReleaseError, subject};
 
 impl ReleaseError {
     pub(crate) fn fmt_cargo(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -130,6 +130,15 @@ impl ReleaseError {
             Self::ReleasePlzVersionsConflict { first, second } => write!(
                 f,
                 "mise.toml selects release-plz {first} and {second}; every selector must resolve to one version"
+            ),
+            Self::PublishWithGitOnly { root, package } => write!(
+                f,
+                "{root}/release-plz.toml: {} sets publish = true together with git_only = true, which release-plz refuses",
+                subject(package.as_ref())
+            ),
+            Self::NestedReleasePlzRoot { root } => write!(
+                f,
+                "{root}/release-plz.toml: release root {root} is not the git root, and release-plz 0.4.3 cannot update or open a release PR from a root below the git root (it fails with \"failed to open repository\" because it looks for the git repository in the manifest directory, whatever git_only or publish say); fold the packages of {root} into the git-root Cargo workspace and release them from the root release-plz.toml with one [[package]] entry and git_tag_name per package"
             ),
             Self::InvalidProfile(package, profile) => write!(
                 f,

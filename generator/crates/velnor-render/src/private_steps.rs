@@ -1,8 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{PrivateSources, RepoPath, StepKind};
+use velnor_model::{PrivateSources, RepoPath, RootSlug, StepKind};
 
+use crate::gate::sources_step;
 use crate::release_steps::{APP_TOKEN_COMMIT, APP_TOKEN_VERSION, shell_word};
 use crate::rules::{APP_TOKEN_ACTION, RenderedStep, Value};
 
@@ -17,6 +18,17 @@ pub(crate) fn render(kind: &StepKind) -> RenderedStep {
         StepKind::PrivateFetch { manifests, .. } => fetch(manifests),
         _ => RenderedStep::default(),
     }
+}
+
+pub(crate) fn unless_hit(cached: &[RootSlug]) -> Vec<String> {
+    if cached.is_empty() {
+        return Vec::new();
+    }
+    let misses: Vec<String> = cached
+        .iter()
+        .map(|slug| format!("steps.{}.outputs.cache-hit != 'true'", sources_step(slug)))
+        .collect();
+    vec![format!("({})", misses.join(" || "))]
 }
 
 fn check() -> RenderedStep {

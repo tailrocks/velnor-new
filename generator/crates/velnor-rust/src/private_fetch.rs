@@ -8,7 +8,10 @@ use velnor_model::{
 
 use crate::plan::step;
 
-pub(crate) fn insert(sources: &PrivateSources, jobs: &mut [Job]) {
+pub(crate) fn insert(sources: Option<&PrivateSources>, jobs: &mut [Job]) {
+    let Some(sources) = sources else {
+        return;
+    };
     for job in jobs {
         let Some(first) = job.steps.iter().position(compiles) else {
             continue;
@@ -27,7 +30,7 @@ pub(crate) fn insert(sources: &PrivateSources, jobs: &mut [Job]) {
         let cached: Vec<RootSlug> = job.steps[..first]
             .iter()
             .filter_map(|step| match &step.kind {
-                StepKind::CacheRestore(CacheKey::Sources { root, .. }) => Some(root.slug().clone()),
+                StepKind::CacheRestore(CacheKey::Sources { lane, .. }) => Some(lane.slug().clone()),
                 _ => None,
             })
             .collect();

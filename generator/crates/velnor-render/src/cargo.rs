@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    BUILD_TESTS_STEP, CargoCommand, FilterRef, LINT_STEP, RepoPath, TEST_STEP, TargetKind,
-    TargetName,
+    BUILD_TESTS_STEP, CargoCommand, FilterRef, Job, LINT_STEP, RepoPath, StepKind, TEST_STEP,
+    TargetKind, TargetName,
 };
 
 use crate::gate::CACHE_DEBUG_ON;
@@ -42,6 +42,34 @@ impl ArtifactFormat {
             Self::Disabled | Self::CargoOnly => "",
             Self::All => " --cargo-message-format=json-render-diagnostics",
         }
+    }
+}
+
+pub(crate) fn cargo_lane(job: &Job) -> CargoLane {
+    let artifacts = job
+        .steps
+        .iter()
+        .find_map(|step| match step.kind {
+            StepKind::ReportCaches {
+                nextest_artifacts, ..
+            } => Some(if nextest_artifacts {
+                ArtifactFormat::All
+            } else {
+                ArtifactFormat::CargoOnly
+            }),
+            _ => None,
+        })
+        .unwrap_or(ArtifactFormat::Disabled);
+    CargoLane {
+        artifacts,
+        cache_debug: job
+            .steps
+            .iter()
+            .any(|step| step.kind == StepKind::UploadCargoLog),
+        offline: job
+            .steps
+            .iter()
+            .any(|step| matches!(step.kind, StepKind::PrivateFetch { .. })),
     }
 }
 
@@ -178,6 +206,20 @@ fn clippy(cargo: &str, extra: &[String]) -> (String, String, Vec<(String, Value)
     )
 }
 
+pub(crate) fn cargo_fetch(lane: CargoLane) -> RenderedStep {
+    let offline = if lane.offline { " --offline" } else { "" };
+    RenderedStep {
+        env: lane
+            .cache_debug
+            .then(cache_debug_env)
+            .into_iter()
+            .chain(lane.offline.then(offline_env))
+            .collect(),
+        run: Some(format!("{RUN} cargo fetch --locked{offline}")),
+        ..RenderedStep::default()
+    }
+}
+
 fn offline_env() -> (String, Value) {
     (
         "CARGO_NET_OFFLINE".to_owned(),
@@ -195,7 +237,7 @@ pub(crate) fn target_dir_env(target: &RepoPath) -> (String, Value) {
     )
 }
 
-fn cache_debug_env() -> (String, Value) {
+pub(crate) fn cache_debug_env() -> (String, Value) {
     (
         "CARGO_LOG".to_owned(),
         Value::Expr(format!(
@@ -266,13 +308,13 @@ fn deny(manifest: &RepoPath) -> (String, String, Vec<(String, Value)>) {
     match manifest.parent() {
         None => (
             "Dependency policy".into(),
-            "cargo-deny check".into(),
+            "cargo-deny --locked check".into(),
             vec![],
         ),
         Some(directory) => (
             format!("Dependency policy ({directory})"),
             format!(
-                "cargo-deny --manifest-path '{}' check",
+                "cargo-deny --manifest-path '{}' --locked check",
                 manifest.as_str().replace('\'', "'\\''")
             ),
             vec![],

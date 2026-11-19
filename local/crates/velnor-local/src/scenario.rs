@@ -12,6 +12,8 @@ pub const DEFAULT_BRANCH: &str = "{default}";
 #[serde(deny_unknown_fields)]
 pub struct Scenario {
     pub description: String,
+    #[serde(default)]
+    pub fresh_cache: bool,
     pub steps: Vec<Step>,
 }
 
@@ -88,6 +90,11 @@ impl Step {
 impl Scenario {
     pub fn parse(bytes: &[u8]) -> Result<Self, String> {
         serde_json::from_slice(bytes).map_err(|e| format!("not a scenario: {e}"))
+    }
+
+    #[must_use]
+    pub fn keeps_cache(&self, fresh_cache: bool) -> bool {
+        !fresh_cache && !self.fresh_cache
     }
 
     #[must_use]
