@@ -3,6 +3,7 @@
 
 mod build;
 mod freshness;
+mod groups;
 mod inventory;
 mod options;
 mod setup;
@@ -22,12 +23,12 @@ use velnor_rust::{
     parse_inputs_lock, rerun_if_changed, unlisted,
 };
 
-use super::groups::{group_dirs, shared_groups, workspaces};
 use super::unit_platforms::platforms;
 use super::units::{UnitFile, apart, profile};
 use crate::coverage::{Built, Fingerprint, Unit, UnitKind};
 use crate::error::CiError;
 use crate::platform::Platforms;
+use groups::{group_dirs, shared_groups, workspaces};
 
 mod dep_info;
 

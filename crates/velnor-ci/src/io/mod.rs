@@ -31,7 +31,6 @@ mod fetch_reports;
 mod fetch_toolchain;
 mod git;
 mod git_witness;
-mod groups;
 mod http;
 mod image_candidate;
 mod input_snapshot;

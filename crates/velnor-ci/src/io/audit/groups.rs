@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use velnor_model::RepoFacts;
 use velnor_rust::normalize;
 
-use super::units::{MetadataInvocation, Workspace, own_workspace, workspace};
+use super::super::units::{MetadataInvocation, Workspace, own_workspace, workspace};
 use crate::error::CiError;
 
 pub(super) fn shared_groups(facts: &RepoFacts) -> Vec<Vec<usize>> {

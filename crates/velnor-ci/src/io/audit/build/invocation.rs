@@ -3,8 +3,8 @@
 
 use std::path::{Path, PathBuf};
 
-use super::super::super::groups::root_workspace;
 use super::super::super::units::{MetadataInvocation, Workspace};
+use super::super::groups::root_workspace;
 use crate::error::CiError;
 
 pub(super) struct Invocation {
