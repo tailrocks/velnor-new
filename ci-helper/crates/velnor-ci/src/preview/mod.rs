@@ -14,6 +14,7 @@ pub mod admit;
 pub mod attest;
 pub mod authority;
 pub mod json;
+pub mod login;
 pub mod net;
 pub mod record;
 pub mod release;

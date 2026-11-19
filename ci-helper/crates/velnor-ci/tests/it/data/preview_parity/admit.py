@@ -5,7 +5,7 @@
 # into the job) against a recorded GitHub, for the parity test of velnor-ci admit-preview.
 # Usage:
 #   python3 -I -S admit.py RENDERER_SRC_DIR CASES_JSON
-# CASES_JSON is {"cases": [{"api", "zips", "env"}]}; each case runs with exactly its
+# CASES_JSON is {"cases": [{"api", "zips", "env", "owner_login"}]}; each case runs with exactly its
 # environment, in one interpreter. Prints one JSON line, a list with one
 # {"ok": bool, "calls": [GET paths of api.github.com]} per case.
 import copy
@@ -80,7 +80,6 @@ http.client.HTTPSConnection = Connection
 ssl.create_default_context = lambda *args, **kwargs: None
 names = ("artifact", "tag", "authority", "source")
 text = "\n".join(open(renderer + "/schema2_generator_source_preview_" + name + ".py").read() for name in names)
-code = compile(text, "admit", "exec")
 results = []
 for case in json.load(open(cases_path))["cases"]:
     world.clear()
@@ -88,14 +87,22 @@ for case in json.load(open(cases_path))["cases"]:
     calls.clear()
     os.environ.clear()
     os.environ.update(case["env"])
+    # The legacy script pins the owner's login twice: `OWNER_LOGIN = "..."` in the tag source,
+    # and `path == "/users/..."` in the request allowlist of the source source. The case names
+    # the account the deployment is pinned to; the script is otherwise run as written.
+    pinned = re.search(r'^OWNER_LOGIN = "(.*)"$', text, flags=re.M).group(1)
+    assert text.count('path == "/users/' + pinned + '"') == 1
+    owner = case["owner_login"]
+    script = text.replace('OWNER_LOGIN = "' + pinned + '"', "OWNER_LOGIN = " + json.dumps(owner))
+    script = script.replace('path == "/users/' + pinned + '"', 'path == "/users/' + owner + '"')
     namespace = {"__name__": "legacy_admit"}
-    exec(code, namespace)
+    exec(compile(script, "admit", "exec"), namespace)
     ok = False
     try:
         namespace["main"]()
         ok = True
-    except Exception:
-        pass
+    except Exception as error:
+        print(repr(error), file=sys.stderr)
     signal.setitimer(signal.ITIMER_REAL, 0)
     results.append({"ok": ok, "calls": list(calls)})
 print(json.dumps(results))

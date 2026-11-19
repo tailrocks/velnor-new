@@ -22,7 +22,9 @@ use crate::preview_world::{
 
 pub(crate) const MAIN: &str = "5555555555555555555555555555555555555555";
 pub(crate) const RUN: u64 = 5000;
-pub(crate) const USER: &str = "/users/donbeave";
+/// The neutral owner of the fixtures. The helper and the legacy script both take it from the run.
+pub(crate) const OWNER: &str = "octo-owner";
+pub(crate) const USER: &str = "/users/octo-owner";
 const PUBLICATION: &str = ".github/workflows/source-preview-publication.yml";
 const AUTHORITY: &str = "7777777777777777777777777777777777777777";
 
@@ -46,6 +48,8 @@ pub(crate) struct AdmitWorld {
     pub api: BTreeMap<String, Value>,
     pub zips: BTreeMap<u64, Vec<u8>>,
     pub vars: BTreeMap<String, String>,
+    /// The login the legacy script is pinned to; the helper reads it from `vars`.
+    pub owner: String,
 }
 
 impl AdmitWorld {
@@ -101,6 +105,7 @@ impl AdmitWorld {
             api: BTreeMap::new(),
             zips: BTreeMap::new(),
             vars: BTreeMap::new(),
+            owner: OWNER.to_owned(),
         };
         world.environment();
         world.account();
@@ -125,7 +130,7 @@ impl AdmitWorld {
             ),
             ("GITHUB_WORKFLOW_SHA", SOURCE.to_owned()),
             ("GITHUB_ACTOR_ID", "139017".to_owned()),
-            ("GITHUB_TRIGGERING_ACTOR", "donbeave".to_owned()),
+            ("GITHUB_TRIGGERING_ACTOR", OWNER.to_owned()),
             ("GITHUB_RUN_ID", RUN.to_string()),
             ("GITHUB_RUN_ATTEMPT", "1".to_owned()),
             ("AUTHORITY_REPOSITORY", REPO.to_owned()),
@@ -143,7 +148,7 @@ impl AdmitWorld {
         let mut cargo = lock_blob("[workspace.package]\nversion = \"0.1.82\"\n");
         cargo["path"] = json!("Cargo.toml");
         self.set(&format!("/contents/Cargo.toml?ref={SOURCE}"), cargo);
-        self.set(USER, json!({"id": 139_017, "login": "donbeave"}));
+        self.set(USER, json!({"id": 139_017, "login": OWNER}));
         self.set(
             &format!("/actions/runs/{RUN}"),
             json!({"id": RUN, "run_attempt": 1, "head_sha": SOURCE, "head_branch": tag, "event": "push",
@@ -343,5 +348,5 @@ pub(crate) fn world_json(world: &AdmitWorld) -> Value {
         .iter()
         .map(|(id, zip)| (id.to_string(), hex(zip)))
         .collect();
-    json!({"api": world.api, "zips": zips})
+    json!({"api": world.api, "zips": zips, "owner_login": world.owner})
 }

@@ -14,6 +14,7 @@ use velnor_ci::io::preview::admit::publish;
 use crate::admit_cases::all;
 use crate::admit_world::{AdmitWorld, world_json};
 use crate::preview_admit::{helper, tree};
+use crate::preview_login::owned_by;
 use crate::support::fresh_dir;
 
 fn renderer() -> PathBuf {
@@ -148,6 +149,47 @@ fn preview_parity_admit_happy_path_matches_the_legacy_script() {
     assert!(old.ok && new.ok);
     assert_eq!(old.files.len(), 3);
     same(&old, &new, "happy path");
+}
+
+#[test]
+fn preview_parity_admit_for_another_owner_makes_the_same_user_request() {
+    if !python_ready() {
+        eprintln!("skipped: python3 with tomllib is not available");
+        return;
+    }
+    for login in ["octo-owner", "Mona-Lisa-9"] {
+        let world = owned_by(login);
+        let (old, new) = one(&world, &format!("owner-{login}"), &[]);
+        assert!(old.ok && new.ok, "{login}");
+        let user = format!("/users/{login}");
+        assert_eq!(
+            old.calls.iter().filter(|c| **c == user).count(),
+            1,
+            "{login}"
+        );
+        same(&old, &new, login);
+    }
+}
+
+#[test]
+fn preview_parity_admit_for_a_different_actor_the_helper_only_asks_for_that_account() {
+    if !python_ready() {
+        eprintln!("skipped: python3 with tomllib is not available");
+        return;
+    }
+    // The legacy script is pinned to one login and refuses any other actor without a
+    // request; the helper has only the actor, so it asks GitHub who that is and refuses
+    // because the account is not the pinned id.
+    let mut world = AdmitWorld::new();
+    world
+        .vars
+        .insert("GITHUB_TRIGGERING_ACTOR".to_owned(), "mallory".to_owned());
+    let (old, new) = one(&world, "actor", &[]);
+    assert!(!old.ok && !new.ok);
+    let mut asked = old.calls.clone();
+    asked.push("/users/mallory".to_owned());
+    assert_eq!(new.calls, asked);
+    assert_eq!((old.files, old.output), (new.files, new.output));
 }
 
 #[test]

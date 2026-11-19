@@ -27,10 +27,9 @@ use super::json::{Field, Res, require};
 use super::{MAX_PAYLOAD, REPOSITORY, REPOSITORY_ID, SIGNER_WORKFLOW};
 use crate::error::CiError;
 
-/// The only account that may push a preview tag.
+/// The only account that may push a preview tag, by its immutable id. Its login is the
+/// run's `GITHUB_TRIGGERING_ACTOR`, which `admit_tag` checks against this account.
 pub const ACTOR_ID: u64 = 139_017;
-pub const ACTOR_LOGIN: &str = "donbeave";
-pub const ACTOR_PATH: &str = "/users/donbeave";
 const REPOSITORY_OWNER_ID: u64 = 78_806_509;
 
 /// What the job admitted: the metadata for the later jobs, and both payloads.

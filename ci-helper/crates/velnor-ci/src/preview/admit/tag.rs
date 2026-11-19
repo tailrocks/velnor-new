@@ -6,11 +6,12 @@ use std::collections::BTreeSet;
 use serde_json::{Value, json};
 
 use super::clock::{checked_time, tagger_time};
-use super::{ACTOR_ID, ACTOR_LOGIN, ACTOR_PATH, decimal};
+use super::{ACTOR_ID, decimal};
 use crate::preview::authority::Client;
 use crate::preview::authority::model::positive;
 use crate::preview::authority::modes::Inputs;
 use crate::preview::json::{Field, Res, canonical, hex64, is_hex, parse, require};
+use crate::preview::login::Login;
 use crate::preview::{REPOSITORY, REPOSITORY_ID, SIGNER_WORKFLOW};
 
 const CREATION_RULESET: u64 = 26_696_396;
@@ -177,11 +178,12 @@ pub fn admit_tag(client: &dyn Client, inputs: &Inputs, source: &str, version: &s
             && var("GITHUB_REF") == format!("refs/tags/{tag}")
             && var("GITHUB_WORKFLOW_REF") == reference
             && var("GITHUB_WORKFLOW_SHA") == source
-            && var("GITHUB_ACTOR_ID") == ACTOR_ID.to_string()
-            && var("GITHUB_TRIGGERING_ACTOR") == ACTOR_LOGIN,
+            && var("GITHUB_ACTOR_ID") == ACTOR_ID.to_string(),
     )?;
-    let owner = client.api(ACTOR_PATH)?;
-    require(owner.at("id").is_u(ACTOR_ID) && owner.at("login").is_s(ACTOR_LOGIN))?;
+    // The login is the run's triggering actor; the account it names must be the pinned id.
+    let login = Login::parse(var("GITHUB_TRIGGERING_ACTOR"))?;
+    let owner = client.api(&login.path())?;
+    require(owner.at("id").is_u(ACTOR_ID) && owner.at("login").is_s(login.as_str()))?;
     let run_id = decimal(inputs, "GITHUB_RUN_ID")?;
     let attempt = decimal(inputs, "GITHUB_RUN_ATTEMPT")?;
     let run = client.get(&format!("/actions/runs/{run_id}"))?;

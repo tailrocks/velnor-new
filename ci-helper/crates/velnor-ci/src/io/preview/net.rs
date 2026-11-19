@@ -10,7 +10,8 @@ use ureq::http::Response;
 use crate::error::CiError;
 use crate::preview::authority::Client;
 use crate::preview::json::{Res, parse, require};
-use crate::preview::net::Net;
+use crate::preview::login::Login;
+use crate::preview::net::{Net, api_allowed};
 use crate::preview::{MAX_JSON, REPOSITORY};
 
 const API: &str = "api.github.com";
@@ -26,8 +27,6 @@ const REDIRECTS: usize = 10;
 const ARTIFACT_HOPS: usize = 4;
 const ARTIFACT_LIMIT: u64 = 257 * 1024 * 1024;
 const USER_AGENT: &str = "velnor-source-preview";
-/// The one path outside the repository that a source preview check reads.
-const ACTOR_PATH: &str = "/users/donbeave";
 
 /// The real network for the source preview helpers. A deadline of 180 seconds covers
 /// everything it does. The token goes only to `api.github.com` and `uploads.github.com`.
@@ -36,6 +35,7 @@ pub struct Transport {
     token: String,
     deadline: Instant,
     agent: ureq::Agent,
+    actor: Option<Login>,
 }
 
 fn failure() -> CiError {
@@ -75,7 +75,15 @@ impl Transport {
             token,
             deadline: Instant::now() + total,
             agent,
+            actor: None,
         }
+    }
+
+    /// Also allow `GET /users/<actor>`, and no other account.
+    #[must_use]
+    pub fn with_actor(mut self, actor: Option<Login>) -> Self {
+        self.actor = actor;
+        self
     }
 
     fn remaining(&self) -> Res<Duration> {
@@ -145,8 +153,7 @@ impl Transport {
 
 impl Net for Transport {
     fn api(&self, path: &str) -> Res<Value> {
-        let base = format!("/repos/{REPOSITORY}");
-        require(path == base || path.starts_with(&format!("{base}/")) || path == ACTOR_PATH)?;
+        require(api_allowed(self.actor.as_ref(), path))?;
         let response = self.get(&format!("https://{API}{path}"), true)?;
         self.json(response, &[200])
     }

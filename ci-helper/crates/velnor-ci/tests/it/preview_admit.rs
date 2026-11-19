@@ -78,7 +78,7 @@ fn a_valid_tag_push_is_admitted_after_these_requests_in_this_order() {
     ]
     .iter()
     .map(|s| match *s {
-        "USER" => "/users/donbeave".to_owned(),
+        "USER" => "/users/octo-owner".to_owned(),
         other => format!("{R}{other}"),
     })
     .collect();

@@ -15,6 +15,7 @@ use crate::error::CiError;
 use crate::preview::admit::{Admission, admit};
 use crate::preview::authority::modes::Inputs;
 use crate::preview::json::{Res, canonical};
+use crate::preview::login::Login;
 
 /// The whole job takes at most this long, as the legacy script's alarm made it.
 const TOTAL: Duration = Duration::from_secs(120);
@@ -86,7 +87,12 @@ pub fn admit_preview() -> Res<String> {
     let vars: BTreeMap<String, String> = std::env::vars().collect();
     let root = PathBuf::from(required(&vars, "RUNNER_TEMP")?);
     let output = PathBuf::from(required(&vars, "GITHUB_OUTPUT")?);
-    let net = Transport::with_total(required(&vars, "GH_TOKEN")?.to_owned(), TOTAL);
+    // An unusable login leaves the account path closed; the admission then refuses it.
+    let actor = vars
+        .get("GITHUB_TRIGGERING_ACTOR")
+        .and_then(|login| Login::parse(login).ok());
+    let net =
+        Transport::with_total(required(&vars, "GH_TOKEN")?.to_owned(), TOTAL).with_actor(actor);
     let admission =
         admit(&net, &Inputs { vars }).map_err(|e| e.context("source preview admission failed"))?;
     publish(&root, &output, &admission)
