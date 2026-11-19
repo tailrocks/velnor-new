@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    CacheKey, CargoCommand, GateNeed, HelperCommand, HelperRelease, Job, RepoPath, Step, StepKind,
-    TESTS_BY_PACKAGE_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT,
+    CacheKey, CargoCommand, GateNeed, HelperCommand, HelperRelease, Job, RepoPath, RunnerLabel,
+    Step, StepKind, TESTS_BY_PACKAGE_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, github_hosted,
 };
 
 use crate::artifact_steps::{download_step, upload_cargo_log, upload_step};
@@ -36,7 +36,7 @@ const CACHE_SAVE: &str = "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1
 const A_NEED_FAILED: &str =
     "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}";
 
-pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
+pub(crate) fn rendered_job(job: &Job, fork_runner: &RunnerLabel) -> RenderedJob {
     let (restores, audit) = crate::base_steps::job_setup(job);
     let artifacts = job
         .steps
@@ -73,6 +73,7 @@ pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
             job,
         )),
         runs_on: job.runs_on.as_str().to_owned(),
+        fork_runner: (!github_hosted(job.runs_on.as_str())).then(|| fork_runner.to_string()),
         permissions: permission_pairs(&job.permissions),
         timeout_minutes: job.timeout_minutes,
         outputs: job
