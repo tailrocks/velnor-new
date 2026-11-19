@@ -17,7 +17,7 @@ pub(in super::super) fn scale_set_delete(
     binding: &RepositoryConnection,
     token: &str,
 ) -> Result<CreatedSetDeletion, HostError> {
-    let _daemon = DaemonLock::try_acquire(&state.join("daemon.lock"))?;
+    let _daemon = DaemonLock::try_acquire_daemon(state)?;
     let _admission = DaemonLock::try_acquire(&state.join("admission.lock"))?;
     let marker = state
         .join("connection-drain")
@@ -47,3 +47,7 @@ pub(in super::super) fn scale_set_delete(
         ScaleSetDeleteGate::Owned(_) => CreatedSetDeletion::ControllerOffline,
     })
 }
+
+#[cfg(test)]
+#[path = "scale_set_delete_tests.rs"]
+mod tests;
