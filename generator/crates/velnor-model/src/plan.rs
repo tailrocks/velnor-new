@@ -21,6 +21,7 @@ pub struct WorkflowPlan {
     pub triggers: Triggers,
     pub concurrency: Concurrency,
     pub permissions: Permissions,
+    pub fork_runner: RunnerLabel,
     pub jobs: Vec<Job>,
 }
 
@@ -63,6 +64,7 @@ pub struct Permissions(pub BTreeMap<PermissionScope, Access>);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum PermissionScope {
+    PullRequests,
     Actions,
     Contents,
 }
@@ -94,6 +96,7 @@ pub struct Job {
 pub struct Step {
     pub kind: StepKind,
     pub directory: Option<RepoPath>,
+    pub target_dir: Option<RepoPath>,
     pub when: When,
     pub skip_on_draft: bool,
     pub gate: Option<Gate>,
@@ -223,6 +226,7 @@ pub enum CargoCommand {
     NextestBuild,
     NextestRun {
         filter: FilterRef,
+        ci_profile: bool,
     },
     NextestArchive {
         file: RepoPath,
@@ -230,6 +234,7 @@ pub enum CargoCommand {
     NextestRunArchive {
         file: RepoPath,
         filter: FilterRef,
+        ci_profile: bool,
     },
     TestTarget {
         package: PackageName,
@@ -246,6 +251,14 @@ pub enum CargoCommand {
 }
 
 impl CargoCommand {
+    #[must_use]
+    pub fn builds(&self) -> bool {
+        !matches!(
+            self,
+            Self::FmtCheck | Self::Deny { .. } | Self::Machete | Self::NextestRunArchive { .. }
+        )
+    }
+
     #[must_use]
     pub fn plan_values(&self) -> &'static [GateNeed] {
         match self {

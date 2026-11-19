@@ -1,8 +1,18 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+#[path = "runner_log_cleanup/helper_cases.rs"]
+mod helper_cases;
+#[path = "runner_log_cleanup/helper_scenario.rs"]
+mod helper_scenario;
+#[path = "runner_log_cleanup/helper_seed.rs"]
+mod helper_seed;
+#[path = "runner_log_cleanup/helper_stub.rs"]
+mod helper_stub;
 #[path = "runner_log_cleanup/seed.rs"]
 mod seed;
+#[path = "runner_log_cleanup/seed_images.rs"]
+mod seed_images;
 #[path = "runner_log_cleanup/state_mode.rs"]
 mod state_mode;
 
@@ -15,6 +25,11 @@ use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
+use self::helper_scenario::read_diagnostics_files;
+pub(crate) use self::helper_scenario::{
+    CancelledObservation, HelperSpec, Kind, run_cancelled_before_start_scenario,
+};
+use self::helper_stub::{VolumeState, write_volume_response};
 use serde_json::{Value, json};
 use velnor_runner_host::{
     CompletionWorker, HostError, Journal, RepositoryConnection, WorkflowEvent, connect_unix,
@@ -49,6 +64,7 @@ struct StubState {
     runner_present: bool,
     exec_creates: usize,
     exec_inspected: usize,
+    volumes: VolumeState,
 }
 
 struct LocalDockerStub {
@@ -85,6 +101,7 @@ fn spawn_docker_stub(
         runner_present: true,
         exec_creates: 0,
         exec_inspected: 0,
+        volumes: VolumeState::default(),
     }));
     let (thread_stop, thread_entered, thread_release, thread_state) = (
         Arc::clone(&stopping),
@@ -128,14 +145,15 @@ fn handle_connection(
     stream.set_nonblocking(false)?;
     stream.set_read_timeout(Some(Duration::from_secs(5)))?;
     stream.set_write_timeout(Some(Duration::from_secs(5)))?;
-    let (method, path) = read_http_request(stream)?;
+    let (method, path, query) = read_http_request(stream)?;
     if method == "POST" && path == format!("containers/{DIND_ID}/stop") {
         dind_stop_entered.store(true, Ordering::Release);
-        for _ in 0..400 {
-            if release_dind_stop.load(Ordering::Acquire) {
-                break;
-            }
+        let released = (0..400).any(|_| {
             thread::sleep(Duration::from_millis(5));
+            release_dind_stop.load(Ordering::Acquire)
+        });
+        if !released {
+            return Err(std::io::Error::other("dind stop was never released"));
         }
         stream.write_all(
             b"HTTP/1.1 204 No Content\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
@@ -145,10 +163,11 @@ fn handle_connection(
     let mut guard = state
         .lock()
         .map_err(|_| std::io::Error::other("stub state poisoned"))?;
+    guard.volumes.query = query;
     write_route_response(stream, &method, &path, &mut guard)
 }
 
-fn read_http_request(stream: &mut UnixStream) -> std::io::Result<(String, String)> {
+fn read_http_request(stream: &mut UnixStream) -> std::io::Result<(String, String, String)> {
     let mut header = Vec::with_capacity(512);
     let mut byte = [0_u8; 1];
     while !header.ends_with(b"\r\n\r\n") {
@@ -173,13 +192,18 @@ fn read_http_request(stream: &mut UnixStream) -> std::io::Result<(String, String
     if content_len > 0 {
         stream.read_exact(&mut vec![0_u8; content_len])?;
     }
-    let clean = raw_path.split('?').next().unwrap_or(raw_path);
+    let (clean, query) = raw_path.split_once('?').unwrap_or((raw_path, ""));
     let stripped = clean.strip_prefix('/').unwrap_or(clean);
     let api_path = match stripped.split_once('/') {
-        Some((ver, rest)) if ver.starts_with('v') => rest.to_owned(),
+        Some((ver, rest))
+            if ver.starts_with('v')
+                && ver[1..].bytes().all(|b| b.is_ascii_digit() || b == b'.') =>
+        {
+            rest.to_owned()
+        }
         _ => stripped.to_owned(),
     };
-    Ok((method, api_path))
+    Ok((method, api_path, query.to_owned()))
 }
 
 fn container_labels(role: &str) -> Value {
@@ -192,7 +216,7 @@ fn container_labels(role: &str) -> Value {
     })
 }
 
-fn write_json(
+pub(super) fn write_json(
     stream: &mut UnixStream,
     status: u16,
     reason: &str,
@@ -214,7 +238,7 @@ fn write_route_response(
     path: &str,
     state: &mut StubState,
 ) -> std::io::Result<()> {
-    let info = json!({"ID": "engine-1", "DockerRootDir": "/var/lib/docker", "OSType": "linux", "Architecture": "aarch64"});
+    let info = json!({"ID": "engine-1", "DockerRootDir": "/var/lib/docker", "OSType": "linux", "Architecture": "aarch64", "NCPU": 4, "MemTotal": 8_589_934_592_i64});
     match (method, path) {
         ("GET", "info") => write_json(stream, 200, "OK", &info),
         ("GET", p) if p.starts_with("images/") && p.ends_with("/json") => {
@@ -240,7 +264,7 @@ fn write_route_response(
             )?;
             stream.shutdown(std::net::Shutdown::Both)
         }
-        ("GET", p) if p == format!("containers/{DIND_ID}/json") => {
+        ("GET", p) if p == format!("containers/{DIND_ID}/json") && !state.volumes.dind_removed => {
             let body = json!({"Id": DIND_ID, "Name": format!("/{PRIVATE_VOLUME}-dind"), "Config": {"Labels": container_labels("dind")}, "Mounts": [{"Type": "volume", "Name": format!("{PRIVATE_VOLUME}-home"), "Destination": "/home/runner", "RW": true}], "State": {"Running": true, "ExitCode": 0}});
             write_json(stream, 200, "OK", &body)
         }
@@ -282,7 +306,7 @@ fn write_exec_response(
             let body = json!({"ID": exec_id, "ContainerID": DIND_ID, "Running": false, "ExitCode": state.exit_code});
             write_json(stream, 200, "OK", &body)
         }
-        _ => write_json(stream, 404, "Not Found", &json!({"message": "unknown"})),
+        _ => write_volume_response(stream, method, path, &mut state.volumes),
     }
 }
 
@@ -373,26 +397,4 @@ pub(super) fn run_runner_log_cleanup_scenario(
         capture_state,
         runner_logs_projection,
     })
-}
-
-fn read_opt_json(path: &Path) -> TestResult<Option<Value>> {
-    path.exists()
-        .then(|| Ok(serde_json::from_slice(&std::fs::read(path)?)?))
-        .transpose()
-}
-
-fn read_diagnostics_files(state_dir: &Path) -> TestResult<(Option<Value>, Option<Value>)> {
-    for entry in std::fs::read_dir(state_dir.join("completion-diagnostics"))
-        .into_iter()
-        .flatten()
-    {
-        let path = entry?.path();
-        if path.is_dir() {
-            return Ok((
-                read_opt_json(&path.join("i1-r2-runner-log-state.json"))?,
-                read_opt_json(&path.join("i1-g1-runner-logs.json"))?,
-            ));
-        }
-    }
-    Ok((None, None))
 }
