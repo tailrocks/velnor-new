@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod advice;
 pub mod cli;
 mod delta_cache;
 mod drifts;
@@ -13,6 +14,7 @@ mod reusable;
 mod workflow_triggers;
 
 pub use crate::release::{release_ruleset, release_ruleset_drift};
+pub use advice::{NO_FULL_RUN_NOTE, SPARSE_SUGGESTION_BYTES, notes, sparse_note, suggest_groups};
 pub use drifts::{Drift, drift};
 pub use error::GenerateError;
 use helper_gate::check_helper;
@@ -22,15 +24,11 @@ pub use velnor_workflows::HELPER_COMMANDS;
 use std::collections::BTreeMap;
 use std::io::Write;
 
-use velnor_model::{CacheKey, CheckoutScope, FullRun, OnMain, RepoPath, RepoView, StepKind};
-use velnor_rust::{
-    METADATA_PATH, bytes_outside_lanes, check_tools, detect, metadata_file, silent_build_scripts,
-    source_roots_over_limit, suggest_groups as suggested_groups,
-};
+use velnor_model::{CacheKey, RepoPath, RepoView, StepKind};
+use velnor_rust::{METADATA_PATH, check_tools, detect, metadata_file, source_roots_over_limit};
 
 use crate::plan_render::plan_and_render;
 
-pub const NO_FULL_RUN_NOTE: &str = "on_main is \"affected\" and full_run is \"off\", so no run ever selects everything and a gap in selection would go unnoticed";
 pub const COMPATIBLE_HELPER_SERIES: (u64, u64) = (0, 1);
 pub const HELPER_MINIMUM: (u64, u64, u64) = (0, 1, 81);
 pub const TAG_PUSH_HELPER: (u64, u64, u64) = (0, 1, 98);
@@ -52,48 +50,6 @@ pub fn generated_with_notes(
         metadata_file(view).map_err(GenerateError::Metadata)?,
     );
     Ok((files, notes))
-}
-
-pub fn notes(view: &RepoView) -> Result<Vec<String>, GenerateError> {
-    let config = detect(view)?.config;
-    let blind = config.on_main == OnMain::Affected && config.full_run == FullRun::Off;
-    Ok(blind
-        .then(|| NO_FULL_RUN_NOTE.to_owned())
-        .into_iter()
-        .chain(
-            silent_build_scripts(view)
-                .iter()
-                .map(velnor_rust::SilentBuildScript::note),
-        )
-        .collect())
-}
-
-pub const SPARSE_SUGGESTION_BYTES: u64 = 100 * 1024 * 1024;
-
-pub fn sparse_note(
-    view: &RepoView,
-    sizes: &BTreeMap<RepoPath, u64>,
-) -> Result<Option<String>, GenerateError> {
-    let facts = detect(view)?;
-    if facts.config.checkout == CheckoutScope::Sparse {
-        return Ok(None);
-    }
-    Ok(bytes_outside_lanes(&facts, sizes)
-        .filter(|bytes| *bytes > SPARSE_SUGGESTION_BYTES)
-        .map(|bytes| {
-            format!(
-                "{} MiB of tracked files lie outside the paths Rust jobs read; set sparse_checkout = true in .velnor/rust-ci.toml so each job checks out only what it reads (needs velnor-ci {}.{}.{} or newer to name the [[inputs]] line a test that reads an unlisted file needs; see CONFIG.md)",
-                bytes / (1024 * 1024),
-                SPARSE_HINT_HELPER.0,
-                SPARSE_HINT_HELPER.1,
-                SPARSE_HINT_HELPER.2
-            )
-        }))
-}
-
-pub fn suggest_groups(view: &RepoView) -> Result<(String, Vec<String>), GenerateError> {
-    let facts = detect(view)?;
-    Ok((suggested_groups(&facts), facts.timings_notes))
 }
 
 pub fn expected_files(view: &RepoView) -> Result<BTreeMap<RepoPath, String>, GenerateError> {
