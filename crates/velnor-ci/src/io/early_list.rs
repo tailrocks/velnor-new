@@ -57,8 +57,7 @@ impl EarlyList {
         match state {
             State::Running(handle) => handle.join().ok().flatten(),
             State::Idle if wanted => list_matches(&self.argv),
-            State::Idle => None,
-            State::Taken => None,
+            State::Idle | State::Taken => None,
         }
     }
 }
