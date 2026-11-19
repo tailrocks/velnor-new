@@ -614,7 +614,7 @@
           "path": "/repo/crates/velnor-gen",
           "registry": null,
           "rename": null,
-          "req": "=0.1.103",
+          "req": "=0.1.104",
           "source": null,
           "target": null,
           "uses_default_features": true
@@ -717,7 +717,7 @@
       "edition": "2024",
       "features": {},
       "homepage": null,
-      "id": "path+file:///repo/crates/velnor-ci#0.1.103",
+      "id": "path+file:///repo/crates/velnor-ci#0.1.104",
       "keywords": [],
       "license": "Apache-2.0",
       "license_file": null,
@@ -780,7 +780,7 @@
           "test": true
         }
       ],
-      "version": "0.1.103"
+      "version": "0.1.104"
     },
     {
       "authors": [],
@@ -921,7 +921,7 @@
       "edition": "2024",
       "features": {},
       "homepage": null,
-      "id": "path+file:///repo/crates/velnor-gen#0.1.103",
+      "id": "path+file:///repo/crates/velnor-gen#0.1.104",
       "keywords": [],
       "license": "Apache-2.0",
       "license_file": null,
@@ -978,13 +978,26 @@
           "test": true
         }
       ],
-      "version": "0.1.103"
+      "version": "0.1.104"
     },
     {
       "authors": [],
       "categories": [],
       "default_run": null,
-      "dependencies": [],
+      "dependencies": [
+        {
+          "features": [],
+          "kind": null,
+          "name": "sha2",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "=0.11.1",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        }
+      ],
       "description": null,
       "documentation": null,
       "edition": "2024",
@@ -1141,18 +1154,6 @@
           "registry": null,
           "rename": null,
           "req": "=1.0.154",
-          "source": "registry+https://github.com/rust-lang/crates.io-index",
-          "target": null,
-          "uses_default_features": true
-        },
-        {
-          "features": [],
-          "kind": null,
-          "name": "sha2",
-          "optional": false,
-          "registry": null,
-          "rename": null,
-          "req": "=0.11.1",
           "source": "registry+https://github.com/rust-lang/crates.io-index",
           "target": null,
           "uses_default_features": true
@@ -3693,8 +3694,8 @@
     "path+file:///repo/crates/velnor-archive-guard#0.1.82",
     "path+file:///repo/crates/velnor-runner-image-manifest#0.1.0",
     "path+file:///repo/crates/velnor-cache-rules#0.0.0",
-    "path+file:///repo/crates/velnor-ci#0.1.103",
-    "path+file:///repo/crates/velnor-gen#0.1.103",
+    "path+file:///repo/crates/velnor-ci#0.1.104",
+    "path+file:///repo/crates/velnor-gen#0.1.104",
     "path+file:///repo/crates/velnor-model#0.0.0",
     "path+file:///repo/crates/velnor-release#0.0.0",
     "path+file:///repo/crates/velnor-render#0.0.0",
@@ -3713,8 +3714,8 @@
     "path+file:///repo/crates/velnor-archive-guard#0.1.82",
     "path+file:///repo/crates/velnor-runner-image-manifest#0.1.0",
     "path+file:///repo/crates/velnor-cache-rules#0.0.0",
-    "path+file:///repo/crates/velnor-ci#0.1.103",
-    "path+file:///repo/crates/velnor-gen#0.1.103",
+    "path+file:///repo/crates/velnor-ci#0.1.104",
+    "path+file:///repo/crates/velnor-gen#0.1.104",
     "path+file:///repo/crates/velnor-model#0.0.0",
     "path+file:///repo/crates/velnor-release#0.0.0",
     "path+file:///repo/crates/velnor-render#0.0.0",

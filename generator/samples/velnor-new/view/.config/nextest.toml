@@ -91,9 +91,21 @@ slow-timeout = { period = "30s", terminate-after = 4 }
 filter = 'package(=velnor-ci) and test(plan_reads_each_roots_sources_to_decide_the_doctest_and_documentation_steps)'
 slow-timeout = { period = "30s", terminate-after = 4 }
 
+# Every delta_baseline test runs velnor-ci subprocesses on real trees, and the staging test
+# waits out the 2 s racy-ctime margin on purpose: both run past the 2 s default.
+[[profile.default.overrides]]
+filter = 'package(=velnor-ci) and test(delta_baseline::)'
+slow-timeout = { period = "30s", terminate-after = 1 }
+
 [[profile.default.overrides]]
 filter = 'package(=velnor-ci) and test(audit::bounds::)'
 slow-timeout = { period = "30s", terminate-after = 4 }
+
+# Every delta_baseline test runs velnor-ci subprocesses on real trees, and the staging test
+# waits out the 2 s racy-ctime margin on purpose: both run past the 2 s default.
+[[profile.ci.overrides]]
+filter = 'package(=velnor-ci) and test(delta_baseline::)'
+slow-timeout = { period = "30s", terminate-after = 1 }
 
 [[profile.ci.overrides]]
 filter = 'package(=velnor-ci) and test(audit::bounds::)'
