@@ -1,0 +1,16 @@
+            "[package]\nname = \"t\"\nedition = \"2024\"\n\n[dependencies]\na = { path = \"../a\" }\n",
+        ),
+        ("tools/Cargo.lock", "version = 4\n"),
+        ("tools/src/main.rs", "fn main() {}\n"),
+    command.current_dir(repo.root());
+    for variable in [
+        "GITHUB_OUTPUT",
+        "GITHUB_STEP_SUMMARY",
+        .current_dir(repo.root().join("b"))
+        .args(["plan", "--explain", "--changed", "a/src/lib.rs"])
+        .env("GITHUB_OUTPUT", &outputs)
+        .output()
+        .current_dir(repo.root())
+        .args(["plan", "--changed", "Cargo.lock", "--base-file"])
+        .arg("Cargo.lock=/nonexistent/old-lock")
+        .output()

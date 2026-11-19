@@ -1,0 +1,4 @@
+        "a b-", "x..y-", "a@{-", "a~-", "a:-", "a?-", "/a-", "a\\\\b-",
+    ] {
+        let to = format!("[workspace]\npr_branch_prefix = \"{prefix}\"\n");
+        let error = refusal(&plz_edited("[workspace]\n", &to)?);

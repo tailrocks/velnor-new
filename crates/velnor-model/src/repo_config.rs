@@ -76,6 +76,8 @@ pub struct TestLane {
     pub root: Option<RepoPath>,
     pub features: Vec<String>,
     pub filter: Option<String>,
+    pub lint: bool,
+    pub doc: bool,
     pub packages: Vec<PackageName>,
 }
 

@@ -1,0 +1,4 @@
+        .current_dir(&listed.top)
+        .output()
+        .map_err(|e| CiError::new(e.to_string()))?;
+    if !tracked.status.success() || !tracked.stdout.is_empty() {

@@ -1,0 +1,8 @@
+        .current_dir(root)
+        .env("GITHUB_EVENT_NAME", event)
+        .env("PLAN_RESULT", plan)
+        .env("SELECTION_RESULT", selection)
+        .current_dir(repo.path())
+        .env("GITHUB_EVENT_NAME", "workflow_dispatch")
+        .env("PLAN_RESULT", "skipped")
+        .env("GITHUB_OUTPUT", &output)

@@ -1,0 +1,4 @@
+        "../escape".to_owned(),
+        "a/b".to_owned(),
+    ] {
+        let output = run(workspace.path(), runner.path(), &id, "prepare")?;

@@ -1,0 +1,8 @@
+    if !path.starts_with('/') || path.contains("//") || path.contains("..") {
+        return Err(ProbeError::Invalid("attachment_path"));
+    }
+    let root = open(
+        if component.is_empty() || component == "." || component == ".." {
+            return Err(ProbeError::Invalid("attachment_path"));
+        }
+        descriptor = openat(

@@ -3,7 +3,7 @@
 
 use bollard::{API_DEFAULT_VERSION, Docker};
 
-use super::{Plan, supervise};
+use super::{Plan, Side, local_ci_for, supervise};
 use crate::error::HostError;
 
 fn plan(policy: &str) -> Plan {
@@ -33,4 +33,32 @@ async fn a_policy_that_does_not_load_stops_the_host_before_any_pair_starts() {
         );
         assert!(!state.path().join("decisions.jsonl").exists());
     }
+}
+
+#[tokio::test]
+async fn a_local_ci_file_that_does_not_load_stops_the_host_before_any_pair_starts() {
+    let state = tempfile::tempdir().expect("state");
+    let socket = state.path().join("docker.sock");
+    let _listener = std::os::unix::net::UnixListener::bind(&socket).expect("socket");
+    let docker = Docker::connect_with_unix(socket.to_str().expect("path"), 1, API_DEFAULT_VERSION)
+        .expect("docker");
+    let mut planned = plan("policy.json");
+    planned.policy = None;
+    planned.platform = "linux/arm64".to_owned();
+    planned.local_ci = Some(state.path().join("missing").display().to_string());
+    let outcome = supervise(docker, planned, state.path(), async {}).await;
+    assert!(matches!(outcome, Err(HostError::Config)), "{outcome:?}");
+    assert!(!state.path().join("decisions.jsonl").exists());
+}
+
+#[test]
+fn only_the_trusted_side_is_given_the_local_ci_path() {
+    let mut planned = plan("policy.json");
+    assert_eq!(local_ci_for(&planned, Side::Trusted), None);
+    planned.local_ci = Some("/x/velnor-ci".to_owned());
+    assert_eq!(
+        local_ci_for(&planned, Side::Trusted).as_deref(),
+        Some("/x/velnor-ci")
+    );
+    assert_eq!(local_ci_for(&planned, Side::Untrusted), None);
 }

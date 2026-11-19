@@ -1,0 +1,37 @@
+#[path = "homebrew_adoption_seed_public/candidate.rs"]
+mod homebrew_adoption_seed_public_candidate;
+#[path = "homebrew_adoption_seed_public/deletions.rs"]
+mod homebrew_adoption_seed_public_deletions;
+
+use std::{error::Error, fs, io, path::Path, process::Command};
+#[path = "../../test_support/root_cargo_lock.rs"]
+mod root_cargo_lock;
+
+use sha2::{Digest, Sha256};
+    let transition = serde_json::from_slice(include_bytes!(
+        "../../../.velnor/qualification/homebrew/jackin/transition.json"
+    ))?;
+    let host_sha = current_executable_sha256()?;
+    let manifest = release_manifest(VERSION, SOURCE_SHA, &host_sha);
+    let lock_text = include_str!("../../test_support/generator_074.lock");
+    fs::write(&lock_path, lock_text)?;
+    fs::write(
+        temp.path().join(".velnor/controller-approvals.json"),
+        include_str!("../../test_support/controller_approval_074.json"),
+    )?;
+    let published_lock: GeneratorLock =
+        velnor_actions_mise::catalog::lock::parse_generator_lock(lock_text)?;
+            fs::create_dir_all(path.parent().ok_or_else(|| {
+                io::Error::other(format!("rendered path has no parent: {}", file.path))
+            })?)?;
+            fs::write(path, file.bytes.as_bytes())?;
+        }
+            .current_dir(temp.path())
+            .env_clear()
+            .env("PATH", path)
+            .env("HOME", &home)
+    fs::create_dir_all(path.parent().ok_or_else(|| {
+        io::Error::other(format!("manifest path has no parent: {}", path.display()))
+    })?)?;
+    fs::write(path, text)?;
+    Ok(())

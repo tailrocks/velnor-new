@@ -41,6 +41,7 @@ pub(super) fn setup_command(root: &Path, registry: &str) -> Command {
     command
         .args(["crates-mirror", "--registry", registry, "--cainfo"])
         .arg(root.join("ca.pem"))
+        .env_remove("VELNOR_CRATES_MIRROR")
         .env("CARGO_HOME", root.join("home"))
         .env("RUNNER_TEMP", root)
         .env("GITHUB_ENV", root.join("env"))

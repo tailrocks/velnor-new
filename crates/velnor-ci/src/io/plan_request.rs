@@ -33,6 +33,7 @@ pub(super) fn run(args: &PlanArgs, mode: PlanMode, request: &Path) -> Result<Str
             attempt_override: override_attempt.as_deref(),
             run_attempt: attempt.as_deref(),
         },
+        &super::current_dir()?,
     )?;
     append_outputs(&written)?;
     Ok(String::new())

@@ -1,0 +1,14 @@
+        .parent()
+        .ok_or_else(|| CiError::new("invalid Cargo wrapper path"))?;
+    let proxy = fresh_directory(directory)?;
+    delegate_entries(&original, &proxy, "command-wrappers")?;
+        std::env::current_dir()
+            .map_err(|error| failed(&error))?
+            .join(shim)
+    };
+fn fresh_directory(parent: &Path) -> Result<PathBuf, CiError> {
+    for sequence in 0u64.. {
+        let directory = parent.join(format!("mise-{}-{sequence}", std::process::id()));
+        match std::fs::create_dir(&directory) {
+            Ok(()) => return Ok(directory),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}

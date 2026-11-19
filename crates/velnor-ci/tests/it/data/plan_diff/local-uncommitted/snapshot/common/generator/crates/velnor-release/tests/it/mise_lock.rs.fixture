@@ -1,0 +1,12 @@
+            "https://github.com/release-plz/release-plz/releases/download/../../../../evil/x/releases/download/v1/x",
+            api,
+        ),
+        (
+            "https://github.com/release-plz/release-plz/releases/download/\\\\..\\\\evil/x",
+            api,
+        ),
+        (
+            "https://api.github.com/repos/release-plz/release-plz/releases/assets/../../../../evil/x",
+        ),
+    ] {
+        files.mise_lock = lock(url, url_api);

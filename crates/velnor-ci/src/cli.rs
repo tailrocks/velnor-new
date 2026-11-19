@@ -407,7 +407,7 @@ pub struct PlanArgs {
         value_name = "FILE",
         requires = "mode",
         conflicts_with_all = ["changed", "explain", "full", "base_files"],
-        help = "The plan request, as velnor-ci write-request wrote it. Writes plan_id, run_key, not_affected_jobs and the qualification_* values to $GITHUB_OUTPUT, and reads no cargo metadata. The run key comes from the request, else from $GITHUB_RUN_ID and $VELNOR_RUN_KEY_ATTEMPT or $GITHUB_RUN_ATTEMPT. A pull_request, fork or local request, and a qualification phase that has a predecessor, are refused"
+        help = "The plan request, as velnor-ci write-request wrote it. Writes plan_id, run_key, not_affected_jobs and the qualification_* values to $GITHUB_OUTPUT, and runs neither cargo nor mise. The run key comes from the request, else from $GITHUB_RUN_ID and $VELNOR_RUN_KEY_ATTEMPT or $GITHUB_RUN_ATTEMPT. A pull_request, fork or local request lists in not_affected_jobs the rust-* and check-* jobs its diff does not reach, read from the git checkout in the working directory, .velnor/config.toml, the manifests and the request's lane inventory (which it requires); when git cannot say what changed every job runs. A qualification phase that has a predecessor is refused"
     )]
     pub request: Option<PathBuf>,
     #[arg(
@@ -459,8 +459,8 @@ pub struct CheckTagArgs {
 }
 
 pub use crate::cli_release::{
-    CheckConfigArgs, FamilyTagArgs, PreflightArgs, PublishArgs, RecordArgs, ReleaseCommand,
-    ReleaseGateArgs,
+    AlignArgs, CheckConfigArgs, FamilyTagArgs, PreflightArgs, PublishArgs, RecordArgs,
+    ReleaseCommand, ReleaseGateArgs,
 };
 
 #[derive(Debug, Args)]

@@ -340,6 +340,12 @@ pub(super) async fn serve(args: SuperviseArgs) -> io::Result<()> {
     };
     let served = accept(listener, handler);
     tokio::pin!(served);
+    let options = (
+        args.policy,
+        args.limits(),
+        args.sizes.storage(),
+        args.velnor_ci_binary.as_deref(),
+    );
     let Some(path) = args.velnor_host else {
         write_private(&dir.join("address"), &address.to_string()).await?;
         return tokio::select! {
@@ -350,7 +356,7 @@ pub(super) async fn serve(args: SuperviseArgs) -> io::Result<()> {
     };
     let counts = (args.pairs, args.fork_pairs);
     let address = address.to_string();
-    let mut child = host::spawn(&host_env, &path, &address, &token, counts, args.policy).await?;
+    let mut child = host::spawn(&host_env, &path, &address, &token, counts, options).await?;
     write_private(&dir.join("address"), &address).await?;
     tokio::select! {
         served = &mut served => return served,

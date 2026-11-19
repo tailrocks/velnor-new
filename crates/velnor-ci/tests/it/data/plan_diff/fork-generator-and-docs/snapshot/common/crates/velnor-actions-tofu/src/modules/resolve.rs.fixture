@@ -1,0 +1,4 @@
+            ".." => {
+                stack.pop()?;
+            }
+            _ => stack.push(segment),

@@ -1,0 +1,8 @@
+    include_bytes!("../../../../samples/helper-lock/view/.velnor/rust-ci.lock");
+
+const WORKFLOW: &str = ".github/workflows/rust-ci.yml";
+
+        b"exclude = [\"../lab\"]\n",
+        b"runner = \"macos-13\"\n",
+        b"runner = \"macos-14-large\"\n",
+        b"runner = \"macos-15-intel\"\n",

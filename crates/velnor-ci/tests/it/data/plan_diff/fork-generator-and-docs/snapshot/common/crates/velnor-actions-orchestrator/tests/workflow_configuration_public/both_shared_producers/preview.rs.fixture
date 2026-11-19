@@ -1,0 +1,31 @@
+    fs::create_dir_all(old.parent().ok_or("old action parent")?)?;
+    fs::create_dir_all(custom.parent().ok_or("custom action parent")?)?;
+    fs::write(
+        &old,
+        format!(
+    fs::create_dir_all(old.parent().ok_or("old action parent")?)?;
+    fs::write(&old, b"name: custom preview\n")?;
+    let prepared = prepare(root)?;
+    velnor_actions_orchestrator::generate(&prepared, &GenerateOptions::default())?;
+    let helper_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../velnor-actions-workflow-renderer/src/native_helper");
+    let integrity = Command::new("/usr/bin/python3")
+        .args(["-I", "-c", "import base64,json,pathlib,sys,zlib; p=json.loads(zlib.decompress(base64.b64decode(sys.argv[1].split(chr(34))[1]))); d=pathlib.Path(sys.argv[2]); b=pathlib.Path(sys.argv[3]); assert p[:2] == [(d/'source_preview_setup.py').read_text(),b.read_text()]; identity=json.loads(bytes.fromhex(sys.argv[1].split(chr(34))[-2])); assert identity['channel']=='source-preview' and identity['source_sha']==sys.argv[4] and identity['receipt_sha256']==sys.argv[5]", script])
+        .arg(helper_dir)
+        .arg(std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../velnor-actions-mise/src/source_preview/source_preview_bootstrap.py"))
+        .arg(SOURCE)
+        .arg(RECEIPT)
+        .status()?;
+        .current_dir(candidate.path())
+        .env_clear()
+        .env("RUNNER_TEMP", temp.path())
+        .env("GH_TOKEN", "canary-token")
+        .current_dir(candidate.path())
+        .env_clear()
+        .env("RUNNER_TEMP", temp.path())
+        .env("GH_TOKEN", "canary-token")
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../velnor-actions-workflow-renderer");
+    let keys = serde_json::to_string(
+        &velnor_actions_contract::config::project_tool_resolver::PROJECT_TOOL_KEYS
+            .iter()

@@ -1,0 +1,4 @@
+        validate_link_target_in_root(Path::new("/checkout"), "config/link", "../../escape"),
+        "escaping link admitted",
+    );
+    Ok(())

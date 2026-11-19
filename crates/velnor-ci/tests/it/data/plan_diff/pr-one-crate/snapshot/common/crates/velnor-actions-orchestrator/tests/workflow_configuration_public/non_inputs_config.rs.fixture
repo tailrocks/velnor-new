@@ -1,0 +1,14 @@
+            "pub const D: &str = include_str!(\"../../../docs/x.md\");\n",
+        )?;
+        put(root, "docs/x.md", "x\n")
+    })
+        std::os::unix::fs::symlink("../docs/guide.md", root.join("links/guide.md"))?;
+        Ok(())
+    })
+}
+const A8_ESCAPE: &str = "pub fn d() -> std::path::PathBuf {\n    std::path::Path::new(env!(\"CARGO_MANIFEST_DIR\")).join(\"../../docs/x\")\n}\n";
+
+const A8_OUTSIDE: &str = "pub const D: &str = include_str!(\"/srv/docs/x.md\");\n";
+
+const A8_COMPLETE_RULE: &str =
+    "\n[[stacks.rust.inputs]]\nglobs = [\"apps/a8/**\"]\npackages = [\"a8\"]\ncomplete = true\n";

@@ -49,6 +49,12 @@ pub fn main() -> ExitCode {
 }
 
 async fn run(command: Command) -> std::io::Result<()> {
+    if matches!(
+        command,
+        Command::Up(_) | Command::Run(_) | Command::Build(_)
+    ) {
+        super::doctor::require_local(&DockerCli).await?;
+    }
     match command {
         Command::CacheServer(args) => run_cache_server(args).await,
         Command::ApiStub(args) => run_api_stub(args).await,
