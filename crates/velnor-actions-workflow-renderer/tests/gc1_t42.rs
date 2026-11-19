@@ -4,7 +4,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::io;
-
 use velnor_actions_actionlint::actions::MISE_ACTION_SHA;
 use velnor_actions_contract::config::jactionlint_verifier::jactionlint_verifier_script;
 use velnor_actions_contract::{
@@ -146,7 +145,9 @@ pub(crate) fn pins() -> ProductReleasePins {
 
 fn request() -> Result<Schema2WorkflowRequest, Box<dyn Error>> {
     Ok(Schema2WorkflowRequest {
+        scale_set_jobs: std::collections::BTreeSet::new(),
         runner_image_family: None,
+        pr_ci: velnor_actions_contract::PrCiMode::Off,
         version: "0.1.55".to_owned(),
         hosted_label: "ubuntu-26.04".to_owned(),
         scale_set: Schema2WorkflowRequest::canonical_scale_set()?,
@@ -158,8 +159,7 @@ fn request() -> Result<Schema2WorkflowRequest, Box<dyn Error>> {
 }
 
 fn rendered() -> Result<Vec<RenderedFile>, Box<dyn Error>> {
-    let request = request()?;
-    Ok(render_schema2_product_release_workflows(&request)?)
+    Ok(render_schema2_product_release_workflows(&request()?)?)
 }
 
 fn rendered_with(pins: ProductReleasePins) -> Result<Vec<RenderedFile>, Box<dyn Error>> {

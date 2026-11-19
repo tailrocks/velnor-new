@@ -59,6 +59,7 @@ mod weaken_nextest;
 mod weaken_scope;
 mod weaken_targets;
 
+pub use base_cache::{MAX_SOURCE_ROOTS, source_roots_over_limit};
 pub use build_profile::{BuildProfile, build_profile, rustc_release};
 pub use build_script::{SilentBuildScript, build_script_sources, silent_build_scripts};
 pub use compat::{BUILD_DRIVER, COMPAT_SCHEMA, CompatInputs, compat};
@@ -72,7 +73,7 @@ pub use lock_affected::lock_affected;
 pub use metadata::{MetadataError, reduce_metadata};
 pub use metadata_file::{
     METADATA_PATH, MetadataFileError, VERSIONS_HELPER, metadata_file, recorded_metadata,
-    recorded_roots,
+    recorded_roots, recorded_target_dirs,
 };
 pub use mise::{MISE_CONFIGS, MISE_LOCK, check_tools, mise_files, tool_pins};
 pub use owners::{Owner, Owners, add_reads};

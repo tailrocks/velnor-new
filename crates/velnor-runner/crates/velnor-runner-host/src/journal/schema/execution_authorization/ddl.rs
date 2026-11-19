@@ -230,7 +230,22 @@ pub(super) async fn validate_objects(connection: &turso::Connection) -> Result<(
         connection,
         PROOF_TABLE,
         DECISION_TABLE,
-        guards::PROOF_TRANSITION_GUARDS,
+        &[
+            guards::PROOF_TRANSITION_GUARDS.to_vec(),
+            guards::v52_proof_transition_guards(),
+        ],
+    )
+    .await
+}
+
+pub(super) async fn validate_current_objects(
+    connection: &turso::Connection,
+) -> Result<(), HostError> {
+    validate_objects_with_tables(
+        connection,
+        PROOF_TABLE,
+        DECISION_TABLE,
+        &[guards::PROOF_TRANSITION_GUARDS.to_vec()],
     )
     .await
 }
@@ -240,16 +255,25 @@ pub(super) async fn validate_v27_objects(connection: &turso::Connection) -> Resu
         connection,
         legacy_v27::PROOF_TABLE,
         legacy_v27::DECISION_TABLE,
-        guards::PROOF_TRANSITION_GUARDS,
+        &[guards::PROOF_TRANSITION_GUARDS.to_vec()],
     )
     .await
+}
+
+pub(super) async fn upgrade_v53(connection: &turso::Connection) -> Result<(), HostError> {
+    guards::upgrade_v53(connection).await
+}
+
+#[cfg(test)]
+pub(super) fn v52_proof_transition_guards() -> Vec<(&'static str, &'static str)> {
+    guards::v52_proof_transition_guards()
 }
 
 async fn validate_objects_with_tables(
     connection: &turso::Connection,
     proof_table: &str,
     decision_table: &str,
-    proof_transition_guards: &[(&str, &str)],
+    proof_transition_guard_sets: &[Vec<(&str, &str)>],
 ) -> Result<(), HostError> {
     for (kind, name, expected) in TABLE_OBJECTS.iter().chain(guards::OBJECTS.iter()) {
         let expected = match *name {
@@ -268,11 +292,15 @@ async fn validate_objects_with_tables(
             return Err(HostError::Journal);
         }
     }
-    for (name, expected) in proof_transition_guards {
-        let actual = object_sql(connection, "trigger", name).await?;
-        if normalize(&actual) != normalize(expected) {
-            return Err(HostError::Journal);
+    let mut guards_match = false;
+    for guard_set in proof_transition_guard_sets {
+        if proof_transition_guards_match(connection, guard_set).await? {
+            guards_match = true;
+            break;
         }
+    }
+    if !guards_match {
+        return Err(HostError::Journal);
     }
     for (name, expected) in guards::DECISION_TRANSITION_GUARDS {
         let actual = object_sql(connection, "trigger", name).await?;
@@ -281,6 +309,19 @@ async fn validate_objects_with_tables(
         }
     }
     validate_revision_triggers(connection).await
+}
+
+async fn proof_transition_guards_match(
+    connection: &turso::Connection,
+    proof_transition_guards: &[(&str, &str)],
+) -> Result<bool, HostError> {
+    for (name, expected) in proof_transition_guards {
+        let actual = object_sql(connection, "trigger", name).await?;
+        if normalize(&actual) != normalize(expected) {
+            return Ok(false);
+        }
+    }
+    Ok(true)
 }
 
 pub(super) async fn upgrade_v28(connection: &turso::Connection) -> Result<(), HostError> {

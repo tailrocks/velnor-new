@@ -112,6 +112,7 @@ fn pins() -> ProductReleasePins {
 
 fn rendered() -> Result<Vec<velnor_actions_workflow_renderer::RenderedFile>, Box<dyn Error>> {
     let mut request = Schema2WorkflowRequest {
+        scale_set_jobs: std::collections::BTreeSet::new(),
         runner_image_family: Some(MacRunnerQualificationConfig {
             runner_id: 2,
             companion_workflow_path: ".github/workflows/qualify-runner-family.yml".to_owned(),
@@ -132,6 +133,7 @@ fn rendered() -> Result<Vec<velnor_actions_workflow_renderer::RenderedFile>, Box
         mbx_qualification: None,
         mise_pin_qualification: None,
         product_release: Some(pins()),
+        pr_ci: velnor_actions_contract::PrCiMode::Off,
     };
     request
         .runner_image_family
