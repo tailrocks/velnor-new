@@ -21,8 +21,10 @@ mod http;
 mod inputs;
 mod manifests;
 mod plan;
+pub mod preview;
 pub mod pump;
 mod recording;
+mod registry;
 mod release;
 mod report;
 mod report_checkout;
@@ -215,6 +217,9 @@ fn run(cli: Cli) -> Result<String, CiError> {
             let ties = cold_on_failure(&targets, "restored", || break_time_ties(&root))?;
             Ok(expiry.report + &ties)
         }
+        Command::VerifyRuntime(args) => preview::cli::verify_runtime(&args),
+        Command::VerifyMacProof => preview::cli::verify_mac_proof(),
+        Command::RunAuthority(args) => preview::cli::run_authority(&args),
         Command::Run(_) => Err(CiError::new("run is handled before commands")),
         Command::LaneGuard(_) => Err(CiError::new("lane-guard is handled before commands")),
         Command::TestGroups(_) => Err(CiError::new("test-groups is handled before commands")),

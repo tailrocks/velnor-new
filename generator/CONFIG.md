@@ -87,6 +87,24 @@ root = "."
 
 A repository with any `[[test_groups]]` splits each root that has a group into the archive build job and the test jobs, whatever `shape` is: the group jobs run from the archive of the build job (`shape = "groups"`), and lint and doctests stay on the build job. The default job `rust-test-default` leaves out every group's tests with `and not (<filter>)`, and every group job is a need of the `Required` check. Two groups with one name in one root are refused. A root with two or more groups gets a step `velnor-ci test-groups check` in its build job, after the archive is built and before it is uploaded: it lists the workspace once per group with `cargo-nextest`, under the group's filter, and fails naming every test that two groups select (ignored tests are exempt), so the overlap is found at run time, not guessed from the filters. The key needs `velnor-ci` 0.1.82 or later, because the helper reads the same file.
 
+## Release binaries and their Cargo profile
+
+`.velnor/release.toml` lists the binaries that `release.yml` builds, packs and publishes, one `[[binaries]]` entry per package.
+
+```toml
+[[binaries]]
+package = "velnor-ci"
+bin = "velnor-ci"
+platforms = ["linux-x64", "linux-arm64", "macos-arm64"]
+profile = "release-tools"
+```
+
+`profile` is optional and per binary. When it is unset, the build step runs `cargo build --release` and the pack step reads `target/<triple>/release/`. When it is set, the build step runs `cargo build --profile <profile>` instead of `--release`, and the pack step reads `target/<triple>/<profile>/` (under the root's own `target` folder for a root other than `.`). The checksum and publish jobs read only the packed archives, so they do not depend on the profile. A binary that sets no `profile` keeps `--release` even when another binary in the same file sets one.
+
+Use it when a binary needs settings that `[profile.release]` must not carry, such as a size-tuned `opt-level`, thin LTO, `strip` and `panic = "abort"` kept for a few tools in a workspace whose other members stay at the release defaults. Declare the profile in the workspace root `Cargo.toml` with `inherits = "release"`.
+
+The generator refuses a name that is empty, does not start with a letter or `_`, holds anything beyond letters, digits, `-` and `_`, or is one Cargo reserves or that collides with a `target` subfolder: `dev`, `test`, `bench`, `debug`, `doc`, `build-override`, `package`, `deps`, `examples`, `build` and `incremental`. The generator cannot read the manifest, because its view of the repository holds only the files it renders from, so it does not check that the profile is defined. A profile that is missing from the root `Cargo.toml` fails in the build step with Cargo's `profile ... is not defined` error, and the release job stops before it publishes.
+
 ## Release family tag
 
 `family_tag` in `.velnor/release.toml` is opt-in. Without it the generated `release.yml` is unchanged. It sets one tag for every `[[binaries]]` entry, for example `family_tag = "tools-v{{ version }}"`. The pattern holds `{{ version }}` once and no `{{ package }}`. The version is the version of the binary packages, read from `cargo metadata` at the verified commit, and every binary must have the same one.
