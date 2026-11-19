@@ -161,7 +161,9 @@ fn an_archive_release_is_not_pinned_without_a_verified_complete_binary_digest_fi
 fn a_linux_only_archive_release_is_pinned() -> TestResult {
     let linux = |text: &str| -> String {
         text.lines()
-            .filter(|line| line.contains("linux") || line.ends_with("SUMS") || line.ends_with("COMMIT"))
+            .filter(|line| {
+                line.contains("linux") || line.ends_with("SUMS") || line.ends_with("COMMIT")
+            })
             .flat_map(|line| [line, "\n"])
             .collect()
     };
@@ -170,7 +172,10 @@ fn a_linux_only_archive_release_is_pinned() -> TestResult {
         "501023317acc4d029a91ce011d5ac710e07432d040d17dfd0ce88d4c0a6b132a",
     );
     let lock = pin_lock("0.1.79", COMMIT_FILE, &sums, Some(&linux(BINARY_SUMS)))?;
-    assert!(lock.contains("linux-x64") && !lock.contains("d8a670bd"), "{lock}");
+    assert!(
+        lock.contains("linux-x64") && !lock.contains("d8a670bd"),
+        "{lock}"
+    );
     Ok(())
 }
 

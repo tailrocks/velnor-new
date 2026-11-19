@@ -8,11 +8,11 @@ use crate::release::{
     FROM_A_PASSED_PUSH, GATE_IS_READY, HOSTED_RUNNER, VERIFIED_COMMIT, after_the_gate,
     newest_check, only_while_newest,
 };
+use crate::release_assets::asset;
 use crate::release_binaries::{
     BUILD_TIMEOUT_MINUTES, DIST, PUBLISH_TIMEOUT_MINUTES, SUMS_FILE, artifact, build_steps,
     command, download, target, upload,
 };
-use crate::release_assets::asset;
 use crate::release_steps::{
     TOOLCHAIN, app_token, checkout, expression, join, permissions, shell_word, variables,
 };
