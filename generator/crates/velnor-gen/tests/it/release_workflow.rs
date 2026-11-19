@@ -133,7 +133,7 @@ fn the_release_dag_gates_the_tag_with_a_pinned_release_before_building() -> Test
       contents: read
       checks: read
     steps:
-      - name: Check that the tagged commit is on the default branch
+      - name: Check that the tagged commit is on the default branch and passed Required
         env:
           GH_TOKEN: ${{{{ github.token }}}}
         run: |
@@ -142,7 +142,16 @@ fn the_release_dag_gates_the_tag_with_a_pinned_release_before_building() -> Test
     let text = gate.join("\n");
     assert!(text.starts_with(&header), "{text}");
     assert!(!text.contains("uses:"), "{text}");
-    assert!(text.contains("compare/$default_branch...$GITHUB_SHA"));
+    for needle in [
+        "compare/$default_branch...$GITHUB_SHA",
+        "event=push&branch=$default_branch",
+        "select(.path == \".github/workflows/rust-ci.yml\")",
+        "select(.name == \\\"Required\\\" and .app.slug == \\\"github-actions\\\"",
+        "grep -qvxE 'success|skipped|^$'",
+        "grep -qx success",
+    ] {
+        assert!(text.contains(needle), "{needle}");
+    }
     assert_eq!(values(gate, "needs"), [] as [&str; 0]);
     for (id, dependency) in [
         ("build", "gate"),

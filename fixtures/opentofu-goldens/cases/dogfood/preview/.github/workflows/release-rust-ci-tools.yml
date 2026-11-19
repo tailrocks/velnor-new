@@ -103,9 +103,14 @@ jobs:
             behind|identical) ;;
             *) echo "::error::$GITHUB_SHA is not on $default_branch (comparison: $status)"; exit 1 ;;
           esac
-          conclusions=$(gh api --paginate "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/check-runs?per_page=100" \
-            --jq '.check_runs[] | select(.name == "Required" and .app.slug == "github-actions") | .conclusion // "pending"')
-          echo "Required check runs on $GITHUB_SHA: ${conclusions//$'\n'/ }"
+          run_ids=$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$GITHUB_SHA&event=push&branch=$default_branch&per_page=100" \
+            --jq '.workflow_runs[] | select(.path == ".github/workflows/rust-ci.yml") | .id')
+          conclusions=""
+          for run_id in $run_ids; do
+            conclusions+=$(gh api --paginate "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/check-runs?per_page=100" \
+              --jq ".check_runs[] | select(.name == \"Required\" and .app.slug == \"github-actions\" and (.details_url | contains(\"/actions/runs/$run_id/\"))) | .conclusion // \"pending\"")$'\n'
+          done
+          echo "Required check runs of the push runs on $GITHUB_SHA: ${conclusions//$'\n'/ }"
           if echo "$conclusions" | grep -qvxE 'success|skipped|^$'; then
             echo "::error::a Required check run on $GITHUB_SHA did not succeed"; exit 1
           fi
@@ -129,10 +134,6 @@ jobs:
             target: aarch64-unknown-linux-musl
             runner: ubuntu-24.04-arm
             cc: musl-gcc
-          - suffix: macos-arm64
-            target: aarch64-apple-darwin
-            runner: macos-15
-            cc: cc
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -214,7 +215,7 @@ jobs:
         run: echo "$GITHUB_SHA" > dist/COMMIT
       - name: Write SHA256SUMS
         working-directory: dist
-        run: sha256sum COMMIT velnor-ci-linux-x64 velnor-ci-linux-arm64 velnor-ci-macos-arm64 velnor-gen-linux-x64 velnor-gen-linux-arm64 velnor-gen-macos-arm64 > SHA256SUMS
+        run: sha256sum COMMIT velnor-ci-linux-x64 velnor-ci-linux-arm64 velnor-gen-linux-x64 velnor-gen-linux-arm64 > SHA256SUMS
       - name: Upload SHA256SUMS
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
@@ -249,4 +250,4 @@ jobs:
       - name: Create the pre-release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag --prerelease --title "$GITHUB_REF_NAME" --notes "Prebuilt velnor-ci and velnor-gen. Verify every download against SHA256SUMS." dist/SHA256SUMS dist/COMMIT dist/velnor-ci-linux-x64 dist/velnor-ci-linux-arm64 dist/velnor-ci-macos-arm64 dist/velnor-gen-linux-x64 dist/velnor-gen-linux-arm64 dist/velnor-gen-macos-arm64
+        run: gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag --prerelease --title "$GITHUB_REF_NAME" --notes "Prebuilt velnor-ci and velnor-gen. Verify every download against SHA256SUMS." dist/SHA256SUMS dist/COMMIT dist/velnor-ci-linux-x64 dist/velnor-ci-linux-arm64 dist/velnor-gen-linux-x64 dist/velnor-gen-linux-arm64
