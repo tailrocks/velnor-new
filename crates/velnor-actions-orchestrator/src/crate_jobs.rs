@@ -60,10 +60,7 @@ pub(crate) struct CrateBuild {
     pub(crate) drivers: BTreeMap<String, RenderDriver>,
 }
 
-#[expect(
-    clippy::too_many_arguments,
-    reason = "one call site; the private-source wiring joins the existing inputs"
-)]
+#[expect(clippy::too_many_arguments, reason = "one call site")]
 pub(crate) fn build_for_workflow(
     config: &VelnorConfig,
     label: &str,
