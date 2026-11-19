@@ -44,6 +44,10 @@ pub enum ReleaseCommand {
         about = "Bind one family tag to the verified commit. Read the version of every named package from the cargo metadata files, exit 1 unless they are all one version, replace {{ version }} in the tag pattern with it, create the tag on the verified commit when it does not exist, and exit 1 unless the tag is on the verified commit itself. A published release of the tag on an earlier ancestor commit is no release (build=false); otherwise create the one draft release the tag needs. Print and write to $GITHUB_OUTPUT tag, commit and build. Reads GITHUB_TOKEN, which needs contents: write"
     )]
     FamilyTag(FamilyTagArgs),
+    #[command(
+        about = "Inside the lead's release pull request, set the version of each --member package of the follower workspace, and its entry in the follower's Cargo.lock and in the lead's Cargo.lock when present, to the version of --lead-package, and move the exact `=` pins on those packages in both workspaces with it. Reads and writes files only, with no network and no cargo. Does nothing when everything already matches. Exit 1 before writing anything on a manifest that is not valid TOML, a version that is not a plain MAJOR.MINOR.PATCH or is inherited from the workspace, a member that is not a package of the follower workspace, a member already ahead of the lead, a pin that is not exact, or a follower without a Cargo.lock"
+    )]
+    Align(AlignArgs),
 }
 
 #[derive(Debug, Args)]
@@ -67,6 +71,28 @@ pub struct FamilyTagArgs {
     pub packages: Vec<String>,
     #[arg(required = true, help = "Output files of cargo metadata --no-deps")]
     pub metadata: Vec<PathBuf>,
+}
+
+#[derive(Debug, Args)]
+pub struct AlignArgs {
+    #[arg(
+        long,
+        help = "Root Cargo.toml of the lead workspace, whose release-plz root tags the group"
+    )]
+    pub lead: PathBuf,
+    #[arg(
+        long,
+        help = "Package of the lead workspace whose version the group takes"
+    )]
+    pub lead_package: String,
+    #[arg(long, help = "Root Cargo.toml of the follower workspace")]
+    pub follower: PathBuf,
+    #[arg(
+        long = "member",
+        required = true,
+        help = "Package of the follower workspace that belongs to the release group; repeat for each"
+    )]
+    pub members: Vec<String>,
 }
 
 #[derive(Debug, Args)]
