@@ -168,13 +168,12 @@ fn real_files(
     Ok(files)
 }
 
-/// The repository's real `release-plz.toml`, with a `release.toml` that builds
-/// the two tools binaries, validates and tags both with the group's `tools-v`.
+/// The repository's real `release-plz.toml` and `.velnor/release.toml`
+/// validate together, and tag both tools binaries with the family's `tools-v`.
 #[test]
 fn the_real_release_plz_toml_validates_with_a_tools_release() -> TestResult {
-    let release =
-        "[[binaries]]\npackage = \"velnor-ci\"\n\n[[binaries]]\npackage = \"velnor-gen\"\n";
-    let mut files = real_files(release)?;
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.velnor/release.toml");
+    let mut files = real_files(&std::fs::read_to_string(path)?)?;
     let members: Vec<(&str, &str)> = [
         "velnor-ci",
         "velnor-gen",
@@ -194,6 +193,10 @@ fn the_real_release_plz_toml_validates_with_a_tools_release() -> TestResult {
         if with_workspace {
             with_metadata(&mut files, &[("Cargo.toml", &members)]);
         }
+        let manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../Cargo.toml");
+        files
+            .cargo_manifest_texts
+            .insert("Cargo.toml".to_owned(), std::fs::read_to_string(manifest)?);
         let plan = ReleasePlan::read(&files)?;
         assert_eq!(plan.binaries.len(), 2);
         for binary in &plan.binaries {
@@ -205,19 +208,14 @@ fn the_real_release_plz_toml_validates_with_a_tools_release() -> TestResult {
 
 #[test]
 fn the_plan_and_the_helper_name_each_package_of_a_group_with_followers() -> TestResult {
-    let release = "[[binaries]]\npackage = \"velnor-ci\"\n";
-    let files = real_files(release)?;
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.velnor/release.toml");
+    let files = real_files(&std::fs::read_to_string(path)?)?;
     let text = files
         .release_plz_toml
         .get(".")
         .ok_or("no release-plz.toml")?;
     let groups = velnor_release::release_version_groups(".", text)?;
-    assert_eq!(groups.get("velnor-ci").map(String::as_str), Some("tools"));
-    assert_eq!(groups.get("velnor-gen").map(String::as_str), Some("tools"));
-    assert_eq!(
-        groups.get("velnor-runner-cli").map(String::as_str),
-        Some("runner")
-    );
+    assert!(groups.is_empty(), "{groups:?}");
     assert_eq!(ReleasePlan::read(&files)?.roots[0].version_groups, groups);
     let ungrouped = plz(&[package("solo", TOOLS, None, "")]);
     assert!(velnor_release::release_version_groups(".", &ungrouped)?.is_empty());

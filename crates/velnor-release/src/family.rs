@@ -19,6 +19,7 @@ pub struct FamilyPlan {
     pub checksums_file: Option<String>,
     pub commit_file: bool,
     pub attest: bool,
+    pub required_checks: bool,
 }
 
 impl FamilyPlan {
@@ -103,6 +104,7 @@ pub(crate) fn plan_family(
         checksums_file: config.family.checksums_file.clone(),
         commit_file: config.family.commit_file,
         attest: config.family.attest,
+        required_checks: config.family.required_checks,
     };
     Ok((plan, binaries))
 }

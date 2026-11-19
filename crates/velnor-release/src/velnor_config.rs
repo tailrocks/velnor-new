@@ -8,6 +8,7 @@ use crate::asset_name;
 use crate::bundle::{ExtraBin, RawExtraBin, parse as bundle};
 use crate::check::RawCheck;
 use crate::error::ReleaseError;
+use crate::error_family::FamilyError;
 use crate::family_options::{FamilyOptions, FamilyTrigger, family_options};
 use crate::release_plz::valid_package_name;
 
@@ -100,6 +101,7 @@ struct Raw {
     commit_file: bool,
     #[serde(default)]
     attest: bool,
+    family_required_checks: Option<bool>,
     #[serde(default)]
     checks: Vec<RawCheck>,
 }
@@ -130,6 +132,7 @@ pub(crate) fn parse(text: Option<&str>) -> Result<VelnorConfig, ReleaseError> {
             checksums_file: None,
             commit_file: false,
             attest: false,
+            family_required_checks: None,
             checks: Vec::new(),
         },
     };
@@ -178,7 +181,11 @@ pub(crate) fn parse(text: Option<&str>) -> Result<VelnorConfig, ReleaseError> {
         raw.checksums_file,
         raw.commit_file,
         raw.attest,
+        raw.family_required_checks,
     )?;
+    if !family.required_checks && !raw.pr_only_checks.is_empty() {
+        return Err(FamilyError::RequiredChecksOffWithPrOnlyChecks.into());
+    }
     let binaries = raw
         .binaries
         .into_iter()
