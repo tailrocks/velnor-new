@@ -57,10 +57,12 @@ async fn a_404_without_an_intent_is_still_an_error() -> TestResult<()> {
     assert_eq!(outcome, None);
     assert_eq!(script.requests(), 0);
     assert_eq!(delete_state(&fixture).await?, None);
-    assert_eq!(
-        lookup_action(ScaleSetCreateState::Created, false),
-        ScaleSetLookupAction::Hold
-    );
+    for organization in [false, true] {
+        assert_eq!(
+            lookup_action(ScaleSetCreateState::Created, false, organization),
+            ScaleSetLookupAction::Hold
+        );
+    }
     Ok(())
 }
 
