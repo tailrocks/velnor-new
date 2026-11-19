@@ -1,11 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsStr;
 use std::path::Path;
 
-use velnor_model::RepoPath;
+use velnor_model::{RepoPath, RepoView};
 
 use super::{Error, program};
 
@@ -39,4 +39,14 @@ pub(super) fn tracked(root: &Path) -> Result<(BTreeSet<RepoPath>, BTreeSet<RepoP
         paths.insert(path);
     }
     Ok((paths, symlinks))
+}
+
+pub(super) fn tracked_sizes(root: &Path, view: &RepoView) -> BTreeMap<RepoPath, u64> {
+    view.tracked_paths
+        .iter()
+        .filter_map(|path| {
+            let metadata = std::fs::symlink_metadata(root.join(path.as_str())).ok()?;
+            metadata.is_file().then(|| (path.clone(), metadata.len()))
+        })
+        .collect()
 }

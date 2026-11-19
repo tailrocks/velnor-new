@@ -55,6 +55,7 @@ mod release_align;
 mod report;
 mod report_checkout;
 mod report_inputs;
+mod report_sparse;
 mod required;
 mod resolve_qualification;
 mod restored;
