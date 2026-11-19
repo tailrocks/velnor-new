@@ -6,10 +6,16 @@ use std::path::PathBuf;
 use clap::{Args, Parser, Subcommand};
 use velnor_model::{InvalidId, RepoPath};
 
+mod fetch_reports;
 mod gate;
 mod report;
+mod resolve_qualification;
+pub use fetch_reports::FetchReportsArgs;
+mod write_request;
 pub use gate::GateArgs;
 pub use report::ReportArgs;
+pub use resolve_qualification::ResolveQualificationArgs;
+pub use write_request::WriteRequestArgs;
 
 #[derive(Debug, Parser)]
 #[command(
@@ -42,7 +48,13 @@ pub enum Command {
         about = "The required check: read the needs context from NEEDS_JSON, and the spec in the variable --spec-env names, and the plan outputs of the plan job the spec names, then exit 1 unless every job the plan scheduled succeeded, no job it did not schedule failed, and every package that listed tests in a selected test job ran at least one. Fails when the plan job failed, a plan output is missing or invalid, a job is missing from needs, or a result is cancelled or unknown. Prints a table and appends it to $GITHUB_STEP_SUMMARY"
     )]
     Gate(GateArgs),
-    #[command(about = "Exit 1 unless the tag is rust-ci-v followed by the version of this program")]
+    #[command(
+        about = "Download every report artifact the plan expects, all at once from one listing of the run: read the artifact names from matrix.include[].artifact_id of <run-dir>/plan.json, list the run's artifacts, download each expected one over --connections connections (three attempts each) and extract it to <run-dir>/reports/<artifact name>. Every expected artifact is attempted before the command fails; exit 1 names each one that was never uploaded, expired or could not be downloaded, and a missing or malformed plan.json. Reads GITHUB_TOKEN, which needs actions: read"
+    )]
+    FetchReports(FetchReportsArgs),
+    #[command(
+        about = "Exit 1 unless the tag is rust-ci-v or tools-v followed by the version of this program"
+    )]
     CheckTag(CheckTagArgs),
     #[command(
         subcommand,
@@ -53,6 +65,14 @@ pub enum Command {
         about = "Select the Rust packages the changed files affect, and write rust_<root>_mode, rust_<root>_packages, rust_<root>_test_filter, rust_<root>_package_args (the package selection for cargo doc: --workspace for all, -p <name> for each selected package, empty for none), rust_<root>_doctests and rust_<root>_docs (run or skip; both run when GITHUB_EVENT_NAME is schedule) and rust_<root>_doctests_known (true when a fenced doctest was found, false otherwise) for each Cargo root to $GITHUB_OUTPUT; run in the checkout. Reads .velnor/rust-metadata.json instead of running cargo and fails when a Cargo.toml changed after velnor-gen generate wrote it. Fails when default_branch in .velnor/rust-ci.toml differs from repository.default_branch of the event payload. On a pull_request event, and on a push or merge_group event when on_main is \"affected\", it lists the changed files with git diff between the parents of the merge commit that is checked out (fetch-depth: 2, HEAD must be GITHUB_SHA) and reads the base text of a changed Cargo.lock or root Cargo.toml from the first parent with git show; it needs no token and no network, and selects everything when git cannot tell. Any other event, and a push or merge_group event when on_main is \"everything\", selects everything. --changed replaces the git listing"
     )]
     Plan(PlanArgs),
+    #[command(
+        about = "Write the plan request file the planner reads, from the run's context: the event name and payload, the commit, the repository and, on a workflow_dispatch run, the qualification inputs and the runner's GITHUB_* values. Each context value is an argument that defaults to its GITHUB_* variable. Needs no VELNOR_REQUEST_FILE. The file is written once, under $RUNNER_TEMP, and an existing file is an error"
+    )]
+    WriteRequest(WriteRequestArgs),
+    #[command(
+        about = "On a workflow_dispatch qualification run, resolve the predecessor the request names: re-read that run attempt through the GitHub API (default branch, event, conclusion, workflow path, repository), walk its receipt artifacts, derive the source delta from git for useful_delta, and write $RUNNER_TEMP/velnor/qualification-cache-admission.json. Writes nothing for a phase with no predecessor. Reads GH_TOKEN (or GITHUB_TOKEN) and GITHUB_API_URL; run in the checkout"
+    )]
+    ResolveQualification(ResolveQualificationArgs),
     #[command(
         about = "Run after the tools are installed: exit 1 naming each tool that mise does not report at its pinned version, append RUSTUP_AUTO_INSTALL=0 and the CI build profile to $GITHUB_ENV, and write the step output compat to $GITHUB_OUTPUT; run in the checkout"
     )]
@@ -66,6 +86,10 @@ pub enum Command {
     )]
     MbxStore,
     #[command(
+        about = "On a pull request or any other untrusted event, when VELNOR_MBX_SEED_DIR names an absolute, existing, symlink-free directory owned by this user or root and not world-writable, copy its actions/{cas,executable-identities,task-manifests,action-results} files that are missing into the private store $RUNNER_TEMP/velnor/mbx, in parallel and without ever writing to the seed, then append MBX_CACHE_DIR for that store to $GITHUB_ENV and log the files, bytes and seconds. Without the variable, with an empty seed, on a trusted event, or when a check fails (with a warning), it changes nothing and MBX builds cold"
+    )]
+    MbxSeed,
+    #[command(
         about = "Run after the tools are installed, in the directory of a Cargo root: exit 1 unless .velnor/rust-metadata.json is exactly what velnor-gen generate writes for that root, which reads cargo metadata --no-deps --offline"
     )]
     CheckMetadata,
@@ -73,6 +97,10 @@ pub enum Command {
         about = "Resolve every requested feature configuration afresh, then cargo check each distinct full package feature map once, offline and locked"
     )]
     CheckConfigurations(CheckConfigurationsArgs),
+    #[command(
+        about = "Run in the directory of a Cargo root after the feature test lane: exit 1 unless the lane filter selects every test that exists only with the features, as cargo-nextest lists them. Lists the workspace three times (default features, the features, and the features under the filter) with cargo-nextest, so the build is the lane's own; ignored tests are exempt, and a listing error fails the guard"
+    )]
+    LaneGuard(LaneGuardArgs),
     #[command(
         about = "Run after every cache and after velnor-ci inputs restore: every action that must follow the restores. Gives each tracked file that shares its modification time with another tracked file a distinct time, one microsecond below the time it had and ordered by path, so that cargo, which picks the newest file of a package by time alone, names the same file after every restore. When VELNOR_BASE_MAX_AGE_DAYS is a positive number, first removes every restored target directory whose target/.velnor/born date is more than that many days old, so the run builds cold. Writes the step output expired=true when it removed one (an unreadable born date counts as expired) and expired=false otherwise, so a later step can plan a full run"
     )]
@@ -141,6 +169,28 @@ pub struct CheckConfigurationsArgs {
         help = "JSON array of named feature configurations; without a file, check the default configuration"
     )]
     pub configurations: Option<PathBuf>,
+}
+
+#[derive(Debug, Args)]
+pub struct LaneGuardArgs {
+    #[arg(
+        long,
+        value_parser = clap::builder::NonEmptyStringValueParser::new(),
+        help = "Comma-separated features the lane step passes to cargo"
+    )]
+    pub features: String,
+    #[arg(
+        long,
+        value_parser = clap::builder::NonEmptyStringValueParser::new(),
+        help = "The lane's own nextest filter expression"
+    )]
+    pub filter: String,
+    #[arg(
+        long,
+        value_parser = clap::builder::NonEmptyStringValueParser::new(),
+        help = "Nextest binary id the lane never lists; repeatable"
+    )]
+    pub except_binary: Vec<String>,
 }
 
 #[derive(Debug, Args)]
@@ -227,7 +277,8 @@ pub struct CheckTagArgs {
 }
 
 pub use crate::cli_release::{
-    CheckConfigArgs, PreflightArgs, PublishArgs, RecordArgs, ReleaseCommand, ReleaseGateArgs,
+    CheckConfigArgs, FamilyTagArgs, PreflightArgs, PublishArgs, RecordArgs, ReleaseCommand,
+    ReleaseGateArgs,
 };
 
 #[derive(Debug, Args)]

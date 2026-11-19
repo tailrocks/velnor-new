@@ -34,6 +34,7 @@ pub enum Api {
     Run { id: u64 },
     RunJobs { id: u64, attempt: Option<u32> },
     JobLog { id: u64 },
+    Tarball { repository: String },
     NotImplemented,
 }
 
@@ -59,6 +60,11 @@ pub fn route(method: &str, path: &str) -> Api {
         ("GET", ["repos", _, _, "contents", rest]) => {
             let path = percent_decode_str(rest).decode_utf8_lossy().into_owned();
             (!path.is_empty()).then_some(Api::Contents { path })
+        }
+        ("GET", ["repos", owner, repo, "tarball", reference]) if !reference.is_empty() => {
+            Some(Api::Tarball {
+                repository: format!("{owner}/{repo}"),
+            })
         }
         ("GET", ["repos", _, _, "actions", "caches"]) => Some(Api::CacheList),
         ("GET", ["repos", _, _, "actions", rest]) => actions(rest),

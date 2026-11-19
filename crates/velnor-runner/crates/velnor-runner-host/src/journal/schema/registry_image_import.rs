@@ -24,7 +24,6 @@ const TABLE: &str = concat!(
 const INDEX: &str = "CREATE INDEX image_import_registry_engine_state ON image_import_registry(engine_id, state, id)";
 
 pub(super) async fn migrate_v41_to_v42(conn: &turso::Connection) -> Result<(), HostError> {
-    super::validate_persisted_schema_v41(conn).await?;
     for sql in [TABLE, INDEX] {
         conn.execute(sql, ())
             .await
@@ -34,7 +33,7 @@ pub(super) async fn migrate_v41_to_v42(conn: &turso::Connection) -> Result<(), H
     conn.execute("PRAGMA user_version = 42", ())
         .await
         .map_err(|_| HostError::Journal)?;
-    super::validate_persisted_schema_v42(conn).await
+    Ok(())
 }
 
 pub(super) async fn validate(conn: &turso::Connection) -> Result<(), HostError> {

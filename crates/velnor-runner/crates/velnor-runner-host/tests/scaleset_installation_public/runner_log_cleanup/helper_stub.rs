@@ -11,6 +11,7 @@ use super::{DIND_ID, PRIVATE_VOLUME, write_json};
 
 pub(super) const ENGINE_DIGEST: &str =
     "b52bdf3b3388b9a5564e3c9873ed2a2c4ed4a5af1078ab1b1445e94c3dd0114f";
+const NETWORK_ID: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const ROLES: [(&str, &str); 5] = [
     ("", "shared-run"),
     ("-home", "runner-home"),
@@ -82,6 +83,7 @@ pub(super) struct VolumeState {
     pub(super) volumes: Vec<String>,
     pub(super) dind_removed: bool,
     pub(super) query: String,
+    network_present: bool,
     helpers: Vec<Helper>,
     stops: Vec<String>,
     list_calls: usize,
@@ -163,8 +165,13 @@ impl VolumeState {
                 .enumerate()
                 .map(|(index, spec)| build_helper(index, spec, instance_id))
                 .collect(),
+            network_present: true,
             ..Self::default()
         }
+    }
+
+    pub(super) const fn network_left(&self) -> usize {
+        self.network_present as usize
     }
 
     fn present(&self) -> impl Iterator<Item = &Helper> {
@@ -323,6 +330,22 @@ pub(super) fn write_volume_response(
                 Some(role) => write_json(stream, 200, "OK", &volume_body(name, role)),
                 None => write_json(stream, 404, "Not Found", &missing),
             }
+        }
+        ("GET", ["networks", key])
+            if state.network_present
+                && (*key == super::seed::network_name() || *key == NETWORK_ID) =>
+        {
+            let labels: Value = serde_json::from_str(super::seed::NETWORK_LABELS)?;
+            write_json(
+                stream,
+                200,
+                "OK",
+                &json!({"Name": super::seed::network_name(), "Id": NETWORK_ID, "Driver": "bridge", "Scope": "local", "Internal": false, "Attachable": false, "Ingress": false, "EnableIPv4": true, "EnableIPv6": false, "Containers": {}, "Labels": labels}),
+            )
+        }
+        ("DELETE", ["networks", key]) if state.network_present && *key == NETWORK_ID => {
+            state.network_present = false;
+            no_content(stream)
         }
         ("DELETE", ["volumes", name]) if state.holds(name) => write_json(
             stream,
