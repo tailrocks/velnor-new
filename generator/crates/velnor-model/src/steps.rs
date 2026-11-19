@@ -63,6 +63,7 @@ pub enum StepKind {
         cached: Vec<crate::ids::RootSlug>,
     },
     MbxStore,
+    MbxSeed,
     TestSetup {
         name: String,
         run: String,
