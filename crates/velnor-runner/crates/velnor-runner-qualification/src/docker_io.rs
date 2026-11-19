@@ -40,8 +40,6 @@ pub async fn read_logs(
     id: &str,
     timeout: Duration,
 ) -> Result<Vec<u8>, HostError> {
-    // bollard's log decoder hides a frame header whose payload never arrives, so the
-    // logs endpoint is read as raw bytes and the multiplexed frames are checked here.
     let raw_docker = docker.clone().with_request_modifier(|mut request| {
         let uri = request.uri().to_string();
         if let Some(position) = uri.rfind("/export") {

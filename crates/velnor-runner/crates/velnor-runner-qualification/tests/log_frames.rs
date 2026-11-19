@@ -67,10 +67,10 @@ fn logs(body: Vec<u8>) -> Result<Vec<u8>, velnor_runner_qualification::Qualifica
     result
 }
 
-fn rand_tag() -> u64 {
-    let mut random = [0_u8; 8];
-    getrandom::fill(&mut random).unwrap();
-    u64::from_ne_bytes(random)
+fn rand_tag() -> String {
+    static NEXT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+    let sequence = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    format!("{}x{sequence}", std::process::id())
 }
 
 #[test]
