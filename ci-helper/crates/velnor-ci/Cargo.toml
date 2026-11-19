@@ -15,7 +15,6 @@ workspace = true
 
 [lib]
 path = "src/lib.rs"
-test = false
 doctest = false
 
 [[bin]]
