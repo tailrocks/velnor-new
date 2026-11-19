@@ -359,7 +359,9 @@ private-daemon cases (nothing of one request visible to the next; process, mount
 proofs) or refuses the class. Lifecycle, recovery, tri-state proofs (`Unknown` is never absent) and
 teardown are in the contract; conformance runs per backend. A microVM or Apple Containerization
 backend declares `kernel: Separate`, `dir_entry: [VirtioFs]` or `[DiskImage]` and
-`snapshot_restore`: a new implementation of this trait and nothing else.
+`snapshot_restore`: a new implementation of this trait and nothing else. Direct namespace and cgroup
+slots in the node agent, instead of a pod per sandbox, are a Kubernetes-backend candidate measured
+against warm pods (provision to first step under load, section 11).
 
 ### 5.5 The job path
 
@@ -529,8 +531,9 @@ is well designed for this architecture.
   record passes only when every slot passes, and a receipt fills one slot of one record. Audit
   re-execution writes to an audit stream, never a slot. A failed record is shown, never reused.
 - **Order.** nextest 0.9.151 is pinned (`mise.toml:24`) with no shuffled order configured, so the
-  agent lists a binary's tests and runs them in seeded batches through filter expressions; until
-  that is built and measured, no order difference is claimed. A fanned-out witness records its shard
+  agent either lists a binary's tests and runs them in seeded batches through filter expressions, or
+  runs a digest-pinned nextest patched with a seed option, whichever costs ≤ 1.5 s per binary
+  (measured); until then no order difference is claimed. A fanned-out witness records its shard
   layout in the execution manifest; fan-out stays off for receipt runs until lab C and the batching
   measurement of section 11 show equal results, then splits long binaries longest-first across 2–4
   nodes by test ID.
@@ -652,9 +655,14 @@ pub trait BlobStore: Send + Sync {
   in one erasure set, with no WAN-aware placement); between sites, asynchronous replication of
   content-addressed buckets, as warmth only (queue- and scanner-driven, no documented multi-writer
   policy). Keys are single-writer by construction: blobs are named by hash, names live only in
-  Velnor's index. Each worker gives RustFS one drive on its own device or partition, never the L0
-  filesystem; parity is explicit (EC:1 at three drives survives one node loss for reads and writes,
-  EC:2 at four or five); the layout is immutable, so growth adds pools.
+  Velnor's index. Each worker gives RustFS one drive on its own device or logical volume, never the
+  L0 filesystem; parity is explicit; the layout is immutable, so growth adds pools. **The sites are
+  uneven** [M, evidence §B.1.4]: FI's three workers each have one 3.5 TB data disk wholly in VG
+  `data`, LV `rancher` (XFS, which cannot shrink), so each is drained and its VG rebuilt with a
+  second LV, one node at a time (L0 is cache, so nothing is lost); EC:1 over three drives then
+  survives one node loss. DE has two workers, so its cluster survives a drive loss but not a node
+  loss: there it is cache-only, and a lost node costs misses. FI is the home site of the status
+  writer, the cache index and the release buckets.
 - **Defaults per platform:**
 
   | Platform | Tiers | Notes |
@@ -756,7 +764,9 @@ path, with inputs proven by content, independently of cargo's freshness:
   verified state and starting cold, under load, and the wait threshold comes from those queue
   observations; a bounded transfer joins the verdict path only where
   measured faster at the same provenance bar.
-- **Variants.** Overlayfs and compressed layers are lab candidates; no hard-linked `deps/` base;
+- **Variants.** Incremental compilation stays off for every minting witness (ruling Q17) until lab
+  B4 shows zero differences; it serves only the fast-red lane. Overlayfs and compressed layers are
+  lab candidates; no hard-linked `deps/` base;
   `-Z checksum-freshness` is nightly-only; `CARGO_INCREMENTAL=0` on every receipt or shipped build
   (lab B4); blaze rejected (it built none of the five workspaces and missed a clippy `deny` [M]).
 - **Standing canaries** (lab B2, then hourly): the Q16 reproduction (a source file changed to a
@@ -801,8 +811,8 @@ jobs, each still saving about 20 s.
 ### 7.5 Budgets
 
 The last three verified generations per root, then least-recently-used; 40% of a node's data
-volume, alert at 70%. FI workers have one 3.5 TB data disk each, DE workers 32–50 TB (§B.1.4), so a
-FI worker's RustFS drive is a partition of that disk. The runner workspace's target is 10.6 GiB [M].
+volume, alert at 70%. FI workers have one 3.5 TB data disk each, DE workers 32–50 TB (§B.1.4); a FI
+worker's RustFS drive is a second LV after the rebuild of section 7.1. The runner workspace's target is 10.6 GiB [M].
 Every store has garbage collection and a budget kept by Velnor; `mbx-cache` starts at 300 GiB per
 site, and its metadata (PostgreSQL) is per site, so replicating its blobs does not make it
 cross-site.
@@ -993,8 +1003,8 @@ would build the product once per closure, not per tip; it is a lab item. macOS l
 ## 10. Delivery: per-job-type migration, milestones and deletions
 
 Agents do all the work (decision 15). The [delivery plan](../research/velnor-runner-2026-11/delivery-plan.md)
-(v2, decisions 1–24 and the rulings) sizes about 936 agent-hours of building and 120 of review,
-about 3.2 days for 12 builders, 4 reviewers and an orchestrator, so coding does not set the dates:
+(v2, decisions 1–24 and the rulings) sizes about 962 agent-hours of building and 120 of review,
+about 3.3 days for 12 builders, 4 reviewers and an orchestrator, so coding does not set the dates:
 velnor-new's CI and queue, reviews, owner decisions, conformance and parity evidence, capacity, API
 limits and file conflicts do. Phase 0 comes first: an agent PR's cycle falls from 94 to about 34 min
 at P50 [E]. Its first ten items are listed there.
@@ -1122,7 +1132,7 @@ where release bytes are built (D12).
 | D3 | Apply the first ruleset update now: two contexts bound to 15368, empty `bypass_actors`, ALLGREEN, depth 2, timeout 90, minimum wait 0? | An admin bypass carried 7 of 136 merges in three days, and three commits with a failed `Required` sit on `main` | Yes; depth 4 and timeout 15 min only once a group verdict takes ≤ 5 min at P90 and paired false failures are ≤ 3% | hour 2 |
 | D4 | Which evaluator ships: A, velnor-legacy's port of the legacy `Expressions2`, or B, a port of the new `Sdk/Expressions` and `WorkflowParser`? | v2.338.2 computes the new evaluator in compare mode but returns the legacy result; Velnor refuses every job where the two differ, so on accepted jobs A and B give the same answer | Recommend B: it complies with decision 3 and ruling Q4, and correctness is equal because differing jobs are refused. Default A until you answer, because it matches the latest runner and costs 3 h against 28; only one ships | day 3 |
 | D7 | Create the `velnor-verify` App (section 8.2's permissions and webhooks) and an agent identity without repository administration? | Today agents label and merge under the owner's identity, which can edit the ruleset | Yes; its status becomes the gate after lab A and parity | day 2 |
-| D8 | A deploy identity for `velnor-system`, and the node changes (XFS work directories, reservations, taints, a RustFS device or partition per worker)? | Job directories sit on the ext4 OS disk, where a warm target copy costs 8.6 s and 10.75 GiB | Yes | hour 6 |
+| D8 | A deploy identity for `velnor-system`, and the node changes (XFS work directories, reservations, taints, and a rebuild of each FI worker's data volume to give RustFS its own LV)? | Job directories sit on the ext4 OS disk, where a warm target copy costs 8.6 s and 10.75 GiB | Yes | hour 6 |
 | D11 | The per-type cutover counts of section 10.1? | Cohort 1 needs 150 replayed pairs per type | Yes, as written | day 1 |
 | D14 | Delete the engine crates from velnor-new once velnor-gen's workflow replaces the engine's CI? | The engine's orchestrator and renderer are about 275k lines | Only after checking for other consumers | day 8 |
 | D15 | Approve the recovery path for a bad Velnor release, with no admin merge? | A release that fails every job also blocks the PR that fixes it | Yes: redeploy the previous image digest; if none can verify, the pre-approved break-glass verifier writes a green only after two full cold passes on two nodes (section 5.9) | day 1 |

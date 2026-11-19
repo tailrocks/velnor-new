@@ -23,8 +23,8 @@ Code was re-read at velnor-new `d6be276a6c` and velnor-legacy `1b9fc038`. Labels
 
 - **Fleet assumed:** N = 12 builder agents, 4 reviewer agents and 1 orchestrator, around the clock.
   Only the owner's decisions are human. Section 7.6 explains why more builders buy almost nothing.
-- **Total work:** about 936 agent-hours of building plus about 120 of review (section 3.2's sum),
-  about 3.2 days of fleet time (936 ÷ 12 builders ≈ 78 h). Coding does not set the dates.
+- **Total work:** about 962 agent-hours of building plus about 120 of review (section 3.2's sum),
+  about 3.3 days of fleet time (962 ÷ 12 builders ≈ 80 h). Coding does not set the dates.
 - **What sets the dates (decision 15):** (a) velnor-new's own CI and merge queue; (b) review gates
   and owner decisions, including engine releases; (c) evidence: conformance pairs, gate parity and
   clean reuse comparisons; (d) free cluster capacity, GitHub API limits and shared-file conflicts.
@@ -342,7 +342,7 @@ The full push run stays until A1 replaces it (V05): it is today's third executio
 |---|---|---|---|---|---|---|---|
 | V01 | Ledger core | Plans, whole-tree keys with the execution fingerprint, verification records with witness slots, joins with priority inheritance, epochs | X01, G03 | 16 | strong | One receipt cannot fill two slots; a cancelled claimant's work continues for the other | — |
 | V02 | Observation and signing | Node agent observation; receipts binding every executed binary's digest, generation, node, slot, epoch; signer daemon; append-only log | P04, V01 | 12 | strong | A forged report mints 0 receipts; a receipt without digests is rejected | — |
-| V03 | Witness scheduler | Distinct node, attempt and order seed (seeded batches through nextest filter expressions; overhead measured); a different generation or cold; shard layout in the execution manifest, fan-out off for receipts until lab C | V01, V02 | 8 | strong | Two witnesses on one node or one generation are refused; the seeded order is reproducible | — |
+| V03 | Witness scheduler | Distinct node, attempt and order seed (seeded filter batches, or a digest-pinned nextest patched with a seed option, whichever costs ≤ 1.5 s per binary); a different generation or cold; shard layout in the execution manifest, fan-out off for receipts until lab C | V01, V02 | 8 | strong | Two witnesses on one node or one generation are refused; the seeded order is reproducible | — |
 | V04 | Exact-tree records | Shadow with re-execution, then on per kind after the evidence matrix | V03 | 6 | strong | 3,000 clean per obligation kind | — |
 | V05 | Audit A1 | Journalled request per first-parent commit; gap reconciliation; results bound to commit and proof set; reserved share; the push `Required` reports it and, when the audit is unclaimed, takes its exclusive lease and runs it cold instead of waiting; the waiting slot is charged | V02 | 8 | strong | An intermediate commit with no push run is audited; a planted stale result is caught within the SLO | The full push run (B09 of plan v1) |
 | V06 | Audit A2 | Nightly, the clock shifted 8 and 30 days | V05 | 4 | mid | A planted date bomb fails | — |
@@ -378,7 +378,8 @@ The full push run stays until A1 replaces it (V05): it is today's third executio
 | ST01 | `velnor-storage` | `BlobStore`, local and S3 backends, capability declaration | X01 | 10 | mid | Kit passes on local, RustFS and MinIO | — |
 | ST02 | Tiers and routes | Configuration; defaults: `local` on Docker and macOS, node NVMe → site RustFS → replication on Kubernetes, all routes `local` until ST06 passes | ST01 | 4 | mid | A misrouted, stalled or degraded tier is slower, never wrong | — |
 | ST03 | Cache index | `repository × scope × key × version`, insert-if-absent, GitHub's lookup order, scope from the job token, home-site writer; GitHub's eviction (7 days unused, size cap) as LRU in the index, S3 lifecycle only a backstop; content-defined chunks of about 1 MiB over the uncompressed archive; user keys never used as object names | ST01, V01 | 14 | strong | Concurrent saves, L0 stale prefix against L1 exact, PR-to-`main` isolation, disconnected site | — |
-| ST04 | RustFS per site | One cluster per site, pinned version, manifests owned by Velnor (the operator is 0.0.8); one drive per worker on its own device or partition, never the L0 filesystem; parity explicit (EC:1 at 3 drives, EC:2 at 4–5); layout fixed up front; `strict` durability on every bucket; node agents hold credentials, jobs get presigned URLs | ST01, D8 | 8 | mid | Kit passes against it; a startup with a shared or mis-sized layout is refused | — |
+| S03 | FI volume rebuild | `vgs`/`lvs` on velnor-241, -5, -190 (K27); then one node at a time: drain, rebuild VG `data` with an L0 LV and a RustFS LV, rejoin | D8 | 4 | mid | 0 free extents confirmed first; each node rejoins with both LVs; no job lost | The single-LV layout |
+| ST04 | RustFS per site | One cluster per site, pinned version, manifests owned by Velnor (the operator is 0.0.8); one drive per worker on its own device or LV, never the L0 filesystem (FI after S03's rebuild); DE cache-only (two nodes); parity explicit (EC:1 at 3 drives, EC:2 at 4–5); layout fixed up front; `strict` durability on every bucket; node agents hold credentials, jobs get presigned URLs | ST01, D8, S03 | 8 | mid | Kit passes against it; a startup with a shared or mis-sized layout is refused | — |
 | ST06 | RustFS phase-1 cluster test | On the real workers: (1) node loss and return, including #9480's sequence (a node away for a minute, then a drive replaced on another node) and a rolling restart, reads and writes checked throughout; (2) replication DE↔FI over WireGuard at 35 ms: throughput, lag, existing-object backfill (#8768) and an `rc` resync; (3) Linux fsync cost per durability mode (`strict`, `relaxed`) on XFS NVMe, for 16 KiB, 1 MiB and 2 GiB objects; (4) the 8.7 GiB target snapshot by multipart PUT and GET against the 92 s cold build and the 39.9 s mbx seed; (5) 1 MiB chunk PUT and GET rates under 16 and 64 clients | ST04 | 10 | strong | Each part reports [M]; pass: no data loss or lasting unavailability in (1), replication converges in (2), a snapshot GET plus clone beats a cold build in (4). On a failed part its route stays `local` (or moves to another S3 store), and the failure is filed upstream | — |
 | ST07 | Site replication | Bucket replication of content-addressed buckets DE↔FI, monitored lag, resync runbook with `rc` | ST06 | 4 | mid | Lag reported; a stalled backfill alarms and costs only misses | — |
 | ST05 | Cache endpoint for Official | Cache v2 route for the Worker, after the runner-source check | ST03, O01 | 10 | strong | Conformance cache cases pass under Official | — |
@@ -391,6 +392,8 @@ The full push run stays until A1 replaces it (V05): it is today's third executio
 | T03 | Parallel helper tests | ci-helper and archive-guard tests in parallel | — | 4 | mid | ci-helper ≤ 10 s | `test-threads = 1` |
 | T04 | Fixture and profile | Fold the 89-s fixture; lab B1's four-way matrix | — | 6 | mid | Numbers for the profile override | The separate fixture build |
 | T05 | Git differential speed | A sealed no-checkout fixture cloned per accepted glob, batching and sharding of `non_inputs_differential.rs` with the original assertions | — | 6 | mid | The full suite still runs; time measured against 679 s | — |
+| T07 | Split monolithic crates | `velnor-ci` (15.2k source, 25.7k test lines) and `velnor-gen` (about 27.5k) into leaf crates of about 10k lines along module lines, so a non-incremental edit recompiles less | — | 12 | mid | Same test IDs; edit-to-test time on 30 replayed diffs measured | The monolithic crates |
+| P08 | Namespace slots (lab) | Direct namespace and cgroup v2 slots in the node agent as a Kubernetes-backend variant, against warm pods: 200 provision-to-first-step cycles at 80% CPU (K17) | P04 | 10 | strong | Same kit and proofs; adopted only if faster at P90 | — |
 | T06 | One `tests/it` per package | 356 binaries → one per package | — | 8 | mid | Same test IDs; link passes counted | The separate binaries |
 | S01 | Cluster policy | Priority classes, the reserved merge path (a pair of distinct warm slots for a group that misses), A1's share, memory watermark requeue, PID limits, per-org quotas | D8 | 6 | mid | No OOM in a week; batch requeued first | — |
 | S02 | Control plane | Three k3s servers across failure domains; a third-site witness for shared fences | D8 | 4 | mid | Server and site loss drills pass | — |
@@ -425,7 +428,7 @@ arms run one at a time on the same two FI workers, so arms, not agents, set the 
 | V15 | Fast-red lane | Non-minting incremental build, `cargo check`, changed and historically failing tests first; failure to `Velnor / Details`, twins cancelled | V03 | 6 | mid | Never writes `success`; time to first red measured | — |
 | C12 | Twin generations | Each landed tip built cold twice on two nodes, sealed only on equal digests; witness 2 over the twin | C05, C06 | 8 | strong | Witness-2 delta equals witness 1's on 50 sequential commits | — |
 
-**Sum:** 137 items, about 936 agent-hours of building plus about 120 of review (about 110 PRs ×
+**Sum:** 140 items, about 962 agent-hours of building plus about 120 of review (about 110 PRs ×
 0.7 h, plus 30 strong reviews × 1.5 h).
 
 ### 3.3 Owner decisions
@@ -648,7 +651,9 @@ configuration stands (days 10–14, P90 13.5–18), with BM04 last. The claim is
 day 15 (P90 19), only if section 11's pass rules hold.
 
 Then: **F01 at day 6.5**, after one real release on Velnor; **compile reuse graduated on the helper
-and generator roots at day 7.5** (C05 h28–h42, C07 replay plus two production days); **the read
+and generator roots at day 7.5** (C05 h28–h42, C07 replay plus two production days), only if replay
+delivers 3,000 comparisons per root within 72 h under multi-org load (K15): from production alone it
+takes 25–50 days [E, Gemini 4 Argon], and later dates move with it; **the read
 audit's shadow (V07 from h44) and contracts (V08) enrol per-root keys at day 10, the goal**; stretch
 items at day 16–18. At P90, two more fix loops and a late D7 or D8 move the App gate to day 6.5,
 step 4 to 7.5, F01 to 9 and the goal to 13.5.

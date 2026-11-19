@@ -977,6 +977,17 @@ cluster test.
 | G26 stamping, O32 release tails, K23 | Adopted as lab R06 and timing R05 | 8.4; plan R05, R06 |
 | C02, C03, C04 | Unresolved: no arm has run; safe default is no claim against those comparators | 11 |
 
+### Group 29: fastest-runner critique by Gemini 4 Argon
+
+| Point | Decision | v3 section |
+|---|---|---|
+| O29, K27 FI and DE layout | Verified (evidence §B.1.4): FI data disks wholly in one XFS LV; DE has two workers. FI volumes rebuilt one node at a time; DE RustFS cache-only; FI is the home site | 7.1, 7.5, 13 (D8); plan S03 |
+| G14 incremental witness 1 | Rejected: ruling Q17 keeps every minting build non-incremental until lab B4 shows zero differences | 7.3 |
+| G19, O33 | Adopted as a V03 option, measured at ≤ 1.5 s per binary | 6.2 |
+| G11 namespace slots | Adopted as a lab variant of the Kubernetes backend | 5.4; plan P08 |
+| G12 crate splits | Adopted as repository work | plan T07 |
+| O13 graduation dates | Accepted: graduation and later dates are conditional on 72 h of replay capacity | plan 4.3 |
+
 ## Design review
 
 The eight design critiques and the comparison that verified them are the input here; ids are the
