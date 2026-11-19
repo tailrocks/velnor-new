@@ -19,7 +19,7 @@ mod probe;
 mod proxy;
 mod reply;
 mod reset;
-mod run;
+pub mod run;
 pub mod status;
 pub mod supervisor;
 
