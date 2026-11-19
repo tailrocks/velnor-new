@@ -106,7 +106,7 @@ jobs:
       base_prefix: 'velnor-tgt-rust-root.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-'
       base_save: '${{ steps.base.outputs.save }}'
       target_key: '${{ steps.target_key.outputs.key }}'
-      sources_prefix: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-root-'
+      sources_prefix: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-all.roots-'
       sources_saved: '${{ steps.sources_save_root.outcome == ''success'' }}'
       sources_key: '${{ steps.sources_root_key.outputs.key }}'
     runs-on: ubuntu-latest
@@ -165,6 +165,11 @@ jobs:
         run: '. "$VELNOR_EXEC" prepare'
       - name: velnor-ci check-metadata
         run: '. "$VELNOR_EXEC" check-metadata'
+      - id: sources_locks
+        name: Hash the sources lockfiles
+        env:
+          SOURCES_LOCKS: '${{ hashFiles(''Cargo.lock'', ''ci-helper/Cargo.lock'', ''crates/velnor-runner/Cargo.lock'', ''generator/Cargo.lock'', ''local/Cargo.lock'') }}'
+        run: 'echo "hash=$SOURCES_LOCKS" >> "$GITHUB_OUTPUT"'
       - id: sources_root
         name: Restore the sources cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -173,8 +178,8 @@ jobs:
             ~/.cargo/registry/index
             ~/.cargo/registry/cache
             ~/.cargo/git/db
-          key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-root-${{ hashFiles(''Cargo.lock'') }}'
-          restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-root-'
+          key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-all.roots-${{ steps.sources_locks.outputs.hash }}'
+          restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-all.roots-'
       - id: target_root
         name: Restore the target cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -324,9 +329,38 @@ jobs:
         env:
           CACHE_KEY: 'velnor-tgt-rust-root.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''Cargo.lock'') }}-${{ github.sha }}-${{ github.run_id }}'
         run: 'echo "key=$CACHE_KEY" >> "$GITHUB_OUTPUT"'
+      - id: sources_fetch_0
+        name: Fetch the sources of root 0
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && success() && steps.base.outputs.sources == ''true'' && steps.sources_root.outputs.cache-hit != ''true'' }}'
+        continue-on-error: true
+        run: '. "$VELNOR_EXEC" run -- cargo fetch --locked'
+      - id: sources_fetch_1
+        name: Fetch the sources of root 1
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && success() && steps.base.outputs.sources == ''true'' && steps.sources_root.outputs.cache-hit != ''true'' && steps.sources_fetch_0.outcome == ''success'' }}'
+        continue-on-error: true
+        working-directory: ci-helper
+        run: '. "$VELNOR_EXEC" run -- cargo fetch --locked'
+      - id: sources_fetch_2
+        name: Fetch the sources of root 2
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && success() && steps.base.outputs.sources == ''true'' && steps.sources_root.outputs.cache-hit != ''true'' && steps.sources_fetch_1.outcome == ''success'' }}'
+        continue-on-error: true
+        working-directory: crates/velnor-runner
+        run: '. "$VELNOR_EXEC" run -- cargo fetch --locked'
+      - id: sources_fetch_3
+        name: Fetch the sources of root 3
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && success() && steps.base.outputs.sources == ''true'' && steps.sources_root.outputs.cache-hit != ''true'' && steps.sources_fetch_2.outcome == ''success'' }}'
+        continue-on-error: true
+        working-directory: generator
+        run: '. "$VELNOR_EXEC" run -- cargo fetch --locked'
+      - id: sources_fetch_4
+        name: Fetch the sources of root 4
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && success() && steps.base.outputs.sources == ''true'' && steps.sources_root.outputs.cache-hit != ''true'' && steps.sources_fetch_3.outcome == ''success'' }}'
+        continue-on-error: true
+        working-directory: local
+        run: '. "$VELNOR_EXEC" run -- cargo fetch --locked'
       - id: sources_save_root
         name: Save the sources cache
-        if: '${{ !cancelled() && success() && steps.restored.outcome == ''success'' && steps.replan.outcome != ''failure'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') && steps.base.outputs.sources == ''true'' && steps.sources_root.outputs.cache-hit != ''true'' }}'
+        if: '${{ (!cancelled() && success() && steps.restored.outcome == ''success'' && steps.replan.outcome != ''failure'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') && steps.base.outputs.sources == ''true'' && steps.sources_root.outputs.cache-hit != ''true'') && (steps.sources_fetch_4.outcome == ''success'') }}'
         continue-on-error: true
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
@@ -334,19 +368,19 @@ jobs:
             ~/.cargo/registry/index
             ~/.cargo/registry/cache
             ~/.cargo/git/db
-          key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-root-${{ hashFiles(''Cargo.lock'') }}'
+          key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-all.roots-${{ steps.sources_locks.outputs.hash }}'
       - id: sources_root_key
         name: Record the sources cache key
-        if: '${{ !cancelled() && success() && steps.restored.outcome == ''success'' && steps.replan.outcome != ''failure'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') && steps.base.outputs.sources == ''true'' && steps.sources_root.outputs.cache-hit != ''true'' }}'
+        if: '${{ (!cancelled() && success() && steps.restored.outcome == ''success'' && steps.replan.outcome != ''failure'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') && steps.base.outputs.sources == ''true'' && steps.sources_root.outputs.cache-hit != ''true'') && (steps.sources_fetch_4.outcome == ''success'') }}'
         env:
-          CACHE_KEY: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-root-${{ hashFiles(''Cargo.lock'') }}'
+          CACHE_KEY: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-all.roots-${{ steps.sources_locks.outputs.hash }}'
         run: 'echo "key=$CACHE_KEY" >> "$GITHUB_OUTPUT"'
       - id: report_cache_metrics
         name: Report cache telemetry
         if: '${{ !cancelled() }}'
         continue-on-error: true
         env:
-          VELNOR_REPORT_CACHES: '[{"family":"tools","restore_step":"tools","root":null,"save_step":"save_tools"},{"family":"sources","restore_step":"sources_root","root":".","save_step":"sources_save_root"},{"family":"target","restore_step":"target_root","root":".","save_step":"save_target_root"}]'
+          VELNOR_REPORT_CACHES: '[{"family":"tools","restore_step":"tools","root":null,"save_step":"save_tools"},{"family":"sources","restore_step":"sources_root","root":null,"save_step":"sources_save_root"},{"family":"target","restore_step":"target_root","root":".","save_step":"save_target_root"}]'
           VELNOR_REPORT_STEPS: '${{ toJSON(steps) }}'
           VELNOR_REPORT_DEFAULT_BRANCH: '${{ github.event.repository.default_branch }}'
           VELNOR_TESTS_RUN: '${{ steps.test.outputs.tests_run }}'
@@ -381,7 +415,7 @@ jobs:
       base_prefix: 'velnor-tgt-rust-ci_helper.ci_helper.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-'
       base_save: '${{ steps.base.outputs.save }}'
       target_key: '${{ steps.target_key.outputs.key }}'
-      sources_prefix: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-ci_helper-'
+      sources_prefix: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-all.roots-'
       sources_saved: '${{ steps.sources_save_ci_helper.outcome == ''success'' }}'
       sources_key: '${{ steps.sources_ci_helper_key.outputs.key }}'
     runs-on: ubuntu-latest
@@ -443,6 +477,11 @@ jobs:
       - name: velnor-ci check-metadata
         working-directory: ci-helper
         run: '. "$VELNOR_EXEC" check-metadata'
+      - id: sources_locks
+        name: Hash the sources lockfiles
+        env:
+          SOURCES_LOCKS: '${{ hashFiles(''Cargo.lock'', ''ci-helper/Cargo.lock'', ''crates/velnor-runner/Cargo.lock'', ''generator/Cargo.lock'', ''local/Cargo.lock'') }}'
+        run: 'echo "hash=$SOURCES_LOCKS" >> "$GITHUB_OUTPUT"'
       - id: sources_ci_helper
         name: Restore the sources cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -451,8 +490,8 @@ jobs:
             ~/.cargo/registry/index
             ~/.cargo/registry/cache
             ~/.cargo/git/db
-          key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-ci_helper-${{ hashFiles(''ci-helper/Cargo.lock'') }}'
-          restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-ci_helper-'
+          key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-all.roots-${{ steps.sources_locks.outputs.hash }}'
+          restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-all.roots-'
       - id: target_ci_helper
         name: Restore the target cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -545,9 +584,38 @@ jobs:
         env:
           CACHE_KEY: 'velnor-tgt-rust-ci_helper.ci_helper.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''ci-helper/Cargo.lock'') }}-${{ github.sha }}-${{ github.run_id }}'
         run: 'echo "key=$CACHE_KEY" >> "$GITHUB_OUTPUT"'
+      - id: sources_fetch_0
+        name: Fetch the sources of root 0
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && success() && steps.base.outputs.sources == ''true'' && steps.sources_ci_helper.outputs.cache-hit != ''true'' }}'
+        continue-on-error: true
+        run: '. "$VELNOR_EXEC" run -- cargo fetch --locked'
+      - id: sources_fetch_1
+        name: Fetch the sources of root 1
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && success() && steps.base.outputs.sources == ''true'' && steps.sources_ci_helper.outputs.cache-hit != ''true'' && steps.sources_fetch_0.outcome == ''success'' }}'
+        continue-on-error: true
+        working-directory: ci-helper
+        run: '. "$VELNOR_EXEC" run -- cargo fetch --locked'
+      - id: sources_fetch_2
+        name: Fetch the sources of root 2
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && success() && steps.base.outputs.sources == ''true'' && steps.sources_ci_helper.outputs.cache-hit != ''true'' && steps.sources_fetch_1.outcome == ''success'' }}'
+        continue-on-error: true
+        working-directory: crates/velnor-runner
+        run: '. "$VELNOR_EXEC" run -- cargo fetch --locked'
+      - id: sources_fetch_3
+        name: Fetch the sources of root 3
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && success() && steps.base.outputs.sources == ''true'' && steps.sources_ci_helper.outputs.cache-hit != ''true'' && steps.sources_fetch_2.outcome == ''success'' }}'
+        continue-on-error: true
+        working-directory: generator
+        run: '. "$VELNOR_EXEC" run -- cargo fetch --locked'
+      - id: sources_fetch_4
+        name: Fetch the sources of root 4
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && success() && steps.base.outputs.sources == ''true'' && steps.sources_ci_helper.outputs.cache-hit != ''true'' && steps.sources_fetch_3.outcome == ''success'' }}'
+        continue-on-error: true
+        working-directory: local
+        run: '. "$VELNOR_EXEC" run -- cargo fetch --locked'
       - id: sources_save_ci_helper
         name: Save the sources cache
-        if: '${{ !cancelled() && success() && steps.restored.outcome == ''success'' && steps.replan.outcome != ''failure'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') && steps.base.outputs.sources == ''true'' && steps.sources_ci_helper.outputs.cache-hit != ''true'' }}'
+        if: '${{ (!cancelled() && success() && steps.restored.outcome == ''success'' && steps.replan.outcome != ''failure'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') && steps.base.outputs.sources == ''true'' && steps.sources_ci_helper.outputs.cache-hit != ''true'') && (steps.sources_fetch_4.outcome == ''success'') }}'
         continue-on-error: true
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
@@ -555,19 +623,19 @@ jobs:
             ~/.cargo/registry/index
             ~/.cargo/registry/cache
             ~/.cargo/git/db
-          key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-ci_helper-${{ hashFiles(''ci-helper/Cargo.lock'') }}'
+          key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-all.roots-${{ steps.sources_locks.outputs.hash }}'
       - id: sources_ci_helper_key
         name: Record the sources cache key
-        if: '${{ !cancelled() && success() && steps.restored.outcome == ''success'' && steps.replan.outcome != ''failure'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') && steps.base.outputs.sources == ''true'' && steps.sources_ci_helper.outputs.cache-hit != ''true'' }}'
+        if: '${{ (!cancelled() && success() && steps.restored.outcome == ''success'' && steps.replan.outcome != ''failure'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') && steps.base.outputs.sources == ''true'' && steps.sources_ci_helper.outputs.cache-hit != ''true'') && (steps.sources_fetch_4.outcome == ''success'') }}'
         env:
-          CACHE_KEY: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-ci_helper-${{ hashFiles(''ci-helper/Cargo.lock'') }}'
+          CACHE_KEY: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-all.roots-${{ steps.sources_locks.outputs.hash }}'
         run: 'echo "key=$CACHE_KEY" >> "$GITHUB_OUTPUT"'
       - id: report_cache_metrics
         name: Report cache telemetry
         if: '${{ !cancelled() }}'
         continue-on-error: true
         env:
-          VELNOR_REPORT_CACHES: '[{"family":"tools","restore_step":"tools","root":null,"save_step":"save_tools"},{"family":"sources","restore_step":"sources_ci_helper","root":"ci-helper","save_step":"sources_save_ci_helper"},{"family":"target","restore_step":"target_ci_helper","root":"ci-helper","save_step":"save_target_ci_helper"}]'
+          VELNOR_REPORT_CACHES: '[{"family":"tools","restore_step":"tools","root":null,"save_step":"save_tools"},{"family":"sources","restore_step":"sources_ci_helper","root":null,"save_step":"sources_save_ci_helper"},{"family":"target","restore_step":"target_ci_helper","root":"ci-helper","save_step":"save_target_ci_helper"}]'
           VELNOR_REPORT_STEPS: '${{ toJSON(steps) }}'
           VELNOR_REPORT_DEFAULT_BRANCH: '${{ github.event.repository.default_branch }}'
           VELNOR_TESTS_RUN: '${{ steps.test.outputs.tests_run }}'
@@ -602,7 +670,7 @@ jobs:
       base_prefix: 'velnor-tgt-rust-crates_velnor_runner.crates_velnor_runner.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-'
       base_save: '${{ steps.base.outputs.save }}'
       target_key: '${{ steps.target_key.outputs.key }}'
-      sources_prefix: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-crates_velnor_runner-'
+      sources_prefix: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-all.roots-'
       sources_saved: '${{ steps.sources_save_crates_velnor_runner.outcome == ''success'' }}'
       sources_key: '${{ steps.sources_crates_velnor_runner_key.outputs.key }}'
     runs-on: ubuntu-latest
@@ -664,6 +732,11 @@ jobs:
       - name: velnor-ci check-metadata
         working-directory: crates/velnor-runner
         run: '. "$VELNOR_EXEC" check-metadata'
+      - id: sources_locks
+        name: Hash the sources lockfiles
+        env:
+          SOURCES_LOCKS: '${{ hashFiles(''Cargo.lock'', ''ci-helper/Cargo.lock'', ''crates/velnor-runner/Cargo.lock'', ''generator/Cargo.lock'', ''local/Cargo.lock'') }}'
+        run: 'echo "hash=$SOURCES_LOCKS" >> "$GITHUB_OUTPUT"'
       - id: sources_crates_velnor_runner
         name: Restore the sources cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -672,8 +745,8 @@ jobs:
             ~/.cargo/registry/index
             ~/.cargo/registry/cache
             ~/.cargo/git/db
-          key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-crates_velnor_runner-${{ hashFiles(''crates/velnor-runner/Cargo.lock'') }}'
-          restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-crates_velnor_runner-'
+          key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-all.roots-${{ steps.sources_locks.outputs.hash }}'
+          restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-all.roots-'
       - id: target_crates_velnor_runner
         name: Restore the target cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -808,9 +881,38 @@ jobs:
         env:
           CACHE_KEY: 'velnor-tgt-rust-crates_velnor_runner.crates_velnor_runner.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''crates/velnor-runner/Cargo.lock'') }}-${{ github.sha }}-${{ github.run_id }}'
         run: 'echo "key=$CACHE_KEY" >> "$GITHUB_OUTPUT"'
+      - id: sources_fetch_0
+        name: Fetch the sources of root 0
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && success() && steps.base.outputs.sources == ''true'' && steps.sources_crates_velnor_runner.outputs.cache-hit != ''true'' }}'
+        continue-on-error: true
+        run: '. "$VELNOR_EXEC" run -- cargo fetch --locked'
+      - id: sources_fetch_1
+        name: Fetch the sources of root 1
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && success() && steps.base.outputs.sources == ''true'' && steps.sources_crates_velnor_runner.outputs.cache-hit != ''true'' && steps.sources_fetch_0.outcome == ''success'' }}'
+        continue-on-error: true
+        working-directory: ci-helper
+        run: '. "$VELNOR_EXEC" run -- cargo fetch --locked'
+      - id: sources_fetch_2
+        name: Fetch the sources of root 2
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && success() && steps.base.outputs.sources == ''true'' && steps.sources_crates_velnor_runner.outputs.cache-hit != ''true'' && steps.sources_fetch_1.outcome == ''success'' }}'
+        continue-on-error: true
+        working-directory: crates/velnor-runner
+        run: '. "$VELNOR_EXEC" run -- cargo fetch --locked'
+      - id: sources_fetch_3
+        name: Fetch the sources of root 3
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && success() && steps.base.outputs.sources == ''true'' && steps.sources_crates_velnor_runner.outputs.cache-hit != ''true'' && steps.sources_fetch_2.outcome == ''success'' }}'
+        continue-on-error: true
+        working-directory: generator
+        run: '. "$VELNOR_EXEC" run -- cargo fetch --locked'
+      - id: sources_fetch_4
+        name: Fetch the sources of root 4
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && success() && steps.base.outputs.sources == ''true'' && steps.sources_crates_velnor_runner.outputs.cache-hit != ''true'' && steps.sources_fetch_3.outcome == ''success'' }}'
+        continue-on-error: true
+        working-directory: local
+        run: '. "$VELNOR_EXEC" run -- cargo fetch --locked'
       - id: sources_save_crates_velnor_runner
         name: Save the sources cache
-        if: '${{ !cancelled() && success() && steps.restored.outcome == ''success'' && steps.replan.outcome != ''failure'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') && steps.base.outputs.sources == ''true'' && steps.sources_crates_velnor_runner.outputs.cache-hit != ''true'' }}'
+        if: '${{ (!cancelled() && success() && steps.restored.outcome == ''success'' && steps.replan.outcome != ''failure'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') && steps.base.outputs.sources == ''true'' && steps.sources_crates_velnor_runner.outputs.cache-hit != ''true'') && (steps.sources_fetch_4.outcome == ''success'') }}'
         continue-on-error: true
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
@@ -818,19 +920,19 @@ jobs:
             ~/.cargo/registry/index
             ~/.cargo/registry/cache
             ~/.cargo/git/db
-          key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-crates_velnor_runner-${{ hashFiles(''crates/velnor-runner/Cargo.lock'') }}'
+          key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-all.roots-${{ steps.sources_locks.outputs.hash }}'
       - id: sources_crates_velnor_runner_key
         name: Record the sources cache key
-        if: '${{ !cancelled() && success() && steps.restored.outcome == ''success'' && steps.replan.outcome != ''failure'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') && steps.base.outputs.sources == ''true'' && steps.sources_crates_velnor_runner.outputs.cache-hit != ''true'' }}'
+        if: '${{ (!cancelled() && success() && steps.restored.outcome == ''success'' && steps.replan.outcome != ''failure'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') && steps.base.outputs.sources == ''true'' && steps.sources_crates_velnor_runner.outputs.cache-hit != ''true'') && (steps.sources_fetch_4.outcome == ''success'') }}'
         env:
-          CACHE_KEY: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-crates_velnor_runner-${{ hashFiles(''crates/velnor-runner/Cargo.lock'') }}'
+          CACHE_KEY: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-all.roots-${{ steps.sources_locks.outputs.hash }}'
         run: 'echo "key=$CACHE_KEY" >> "$GITHUB_OUTPUT"'
       - id: report_cache_metrics
         name: Report cache telemetry
         if: '${{ !cancelled() }}'
         continue-on-error: true
         env:
-          VELNOR_REPORT_CACHES: '[{"family":"tools","restore_step":"tools","root":null,"save_step":"save_tools"},{"family":"sources","restore_step":"sources_crates_velnor_runner","root":"crates/velnor-runner","save_step":"sources_save_crates_velnor_runner"},{"family":"target","restore_step":"target_crates_velnor_runner","root":"crates/velnor-runner","save_step":"save_target_crates_velnor_runner"}]'
+          VELNOR_REPORT_CACHES: '[{"family":"tools","restore_step":"tools","root":null,"save_step":"save_tools"},{"family":"sources","restore_step":"sources_crates_velnor_runner","root":null,"save_step":"sources_save_crates_velnor_runner"},{"family":"target","restore_step":"target_crates_velnor_runner","root":"crates/velnor-runner","save_step":"save_target_crates_velnor_runner"}]'
           VELNOR_REPORT_STEPS: '${{ toJSON(steps) }}'
           VELNOR_REPORT_DEFAULT_BRANCH: '${{ github.event.repository.default_branch }}'
           VELNOR_TESTS_RUN: '${{ steps.test.outputs.tests_run }}'
@@ -865,7 +967,7 @@ jobs:
       base_prefix: 'velnor-tgt-rust-generator.generator.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-'
       base_save: '${{ steps.base.outputs.save }}'
       target_key: '${{ steps.target_key.outputs.key }}'
-      sources_prefix: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-generator-'
+      sources_prefix: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-all.roots-'
       sources_saved: '${{ steps.sources_save_generator.outcome == ''success'' }}'
       sources_key: '${{ steps.sources_generator_key.outputs.key }}'
     runs-on: ubuntu-latest
@@ -927,6 +1029,11 @@ jobs:
       - name: velnor-ci check-metadata
         working-directory: generator
         run: '. "$VELNOR_EXEC" check-metadata'
+      - id: sources_locks
+        name: Hash the sources lockfiles
+        env:
+          SOURCES_LOCKS: '${{ hashFiles(''Cargo.lock'', ''ci-helper/Cargo.lock'', ''crates/velnor-runner/Cargo.lock'', ''generator/Cargo.lock'', ''local/Cargo.lock'') }}'
+        run: 'echo "hash=$SOURCES_LOCKS" >> "$GITHUB_OUTPUT"'
       - id: sources_generator
         name: Restore the sources cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -935,8 +1042,8 @@ jobs:
             ~/.cargo/registry/index
             ~/.cargo/registry/cache
             ~/.cargo/git/db
-          key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-generator-${{ hashFiles(''generator/Cargo.lock'') }}'
-          restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-generator-'
+          key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-all.roots-${{ steps.sources_locks.outputs.hash }}'
+          restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-all.roots-'
       - id: target_generator
         name: Restore the target cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -1047,9 +1154,38 @@ jobs:
         env:
           CACHE_KEY: 'velnor-tgt-rust-generator.generator.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''generator/Cargo.lock'') }}-${{ github.sha }}-${{ github.run_id }}'
         run: 'echo "key=$CACHE_KEY" >> "$GITHUB_OUTPUT"'
+      - id: sources_fetch_0
+        name: Fetch the sources of root 0
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && success() && steps.base.outputs.sources == ''true'' && steps.sources_generator.outputs.cache-hit != ''true'' }}'
+        continue-on-error: true
+        run: '. "$VELNOR_EXEC" run -- cargo fetch --locked'
+      - id: sources_fetch_1
+        name: Fetch the sources of root 1
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && success() && steps.base.outputs.sources == ''true'' && steps.sources_generator.outputs.cache-hit != ''true'' && steps.sources_fetch_0.outcome == ''success'' }}'
+        continue-on-error: true
+        working-directory: ci-helper
+        run: '. "$VELNOR_EXEC" run -- cargo fetch --locked'
+      - id: sources_fetch_2
+        name: Fetch the sources of root 2
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && success() && steps.base.outputs.sources == ''true'' && steps.sources_generator.outputs.cache-hit != ''true'' && steps.sources_fetch_1.outcome == ''success'' }}'
+        continue-on-error: true
+        working-directory: crates/velnor-runner
+        run: '. "$VELNOR_EXEC" run -- cargo fetch --locked'
+      - id: sources_fetch_3
+        name: Fetch the sources of root 3
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && success() && steps.base.outputs.sources == ''true'' && steps.sources_generator.outputs.cache-hit != ''true'' && steps.sources_fetch_2.outcome == ''success'' }}'
+        continue-on-error: true
+        working-directory: generator
+        run: '. "$VELNOR_EXEC" run -- cargo fetch --locked'
+      - id: sources_fetch_4
+        name: Fetch the sources of root 4
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && success() && steps.base.outputs.sources == ''true'' && steps.sources_generator.outputs.cache-hit != ''true'' && steps.sources_fetch_3.outcome == ''success'' }}'
+        continue-on-error: true
+        working-directory: local
+        run: '. "$VELNOR_EXEC" run -- cargo fetch --locked'
       - id: sources_save_generator
         name: Save the sources cache
-        if: '${{ !cancelled() && success() && steps.restored.outcome == ''success'' && steps.replan.outcome != ''failure'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') && steps.base.outputs.sources == ''true'' && steps.sources_generator.outputs.cache-hit != ''true'' }}'
+        if: '${{ (!cancelled() && success() && steps.restored.outcome == ''success'' && steps.replan.outcome != ''failure'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') && steps.base.outputs.sources == ''true'' && steps.sources_generator.outputs.cache-hit != ''true'') && (steps.sources_fetch_4.outcome == ''success'') }}'
         continue-on-error: true
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
@@ -1057,19 +1193,19 @@ jobs:
             ~/.cargo/registry/index
             ~/.cargo/registry/cache
             ~/.cargo/git/db
-          key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-generator-${{ hashFiles(''generator/Cargo.lock'') }}'
+          key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-all.roots-${{ steps.sources_locks.outputs.hash }}'
       - id: sources_generator_key
         name: Record the sources cache key
-        if: '${{ !cancelled() && success() && steps.restored.outcome == ''success'' && steps.replan.outcome != ''failure'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') && steps.base.outputs.sources == ''true'' && steps.sources_generator.outputs.cache-hit != ''true'' }}'
+        if: '${{ (!cancelled() && success() && steps.restored.outcome == ''success'' && steps.replan.outcome != ''failure'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') && steps.base.outputs.sources == ''true'' && steps.sources_generator.outputs.cache-hit != ''true'') && (steps.sources_fetch_4.outcome == ''success'') }}'
         env:
-          CACHE_KEY: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-generator-${{ hashFiles(''generator/Cargo.lock'') }}'
+          CACHE_KEY: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-all.roots-${{ steps.sources_locks.outputs.hash }}'
         run: 'echo "key=$CACHE_KEY" >> "$GITHUB_OUTPUT"'
       - id: report_cache_metrics
         name: Report cache telemetry
         if: '${{ !cancelled() }}'
         continue-on-error: true
         env:
-          VELNOR_REPORT_CACHES: '[{"family":"tools","restore_step":"tools","root":null,"save_step":"save_tools"},{"family":"sources","restore_step":"sources_generator","root":"generator","save_step":"sources_save_generator"},{"family":"target","restore_step":"target_generator","root":"generator","save_step":"save_target_generator"}]'
+          VELNOR_REPORT_CACHES: '[{"family":"tools","restore_step":"tools","root":null,"save_step":"save_tools"},{"family":"sources","restore_step":"sources_generator","root":null,"save_step":"sources_save_generator"},{"family":"target","restore_step":"target_generator","root":"generator","save_step":"save_target_generator"}]'
           VELNOR_REPORT_STEPS: '${{ toJSON(steps) }}'
           VELNOR_REPORT_DEFAULT_BRANCH: '${{ github.event.repository.default_branch }}'
           VELNOR_TESTS_RUN: '${{ steps.test.outputs.tests_run }}'
@@ -1104,7 +1240,7 @@ jobs:
       base_prefix: 'velnor-tgt-rust-local.local.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-'
       base_save: '${{ steps.base.outputs.save }}'
       target_key: '${{ steps.target_key.outputs.key }}'
-      sources_prefix: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-local-'
+      sources_prefix: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-all.roots-'
       sources_saved: '${{ steps.sources_save_local.outcome == ''success'' }}'
       sources_key: '${{ steps.sources_local_key.outputs.key }}'
     runs-on: ubuntu-latest
@@ -1166,6 +1302,11 @@ jobs:
       - name: velnor-ci check-metadata
         working-directory: local
         run: '. "$VELNOR_EXEC" check-metadata'
+      - id: sources_locks
+        name: Hash the sources lockfiles
+        env:
+          SOURCES_LOCKS: '${{ hashFiles(''Cargo.lock'', ''ci-helper/Cargo.lock'', ''crates/velnor-runner/Cargo.lock'', ''generator/Cargo.lock'', ''local/Cargo.lock'') }}'
+        run: 'echo "hash=$SOURCES_LOCKS" >> "$GITHUB_OUTPUT"'
       - id: sources_local
         name: Restore the sources cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -1174,8 +1315,8 @@ jobs:
             ~/.cargo/registry/index
             ~/.cargo/registry/cache
             ~/.cargo/git/db
-          key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-local-${{ hashFiles(''local/Cargo.lock'') }}'
-          restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-local-'
+          key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-all.roots-${{ steps.sources_locks.outputs.hash }}'
+          restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-all.roots-'
       - id: target_local
         name: Restore the target cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -1274,9 +1415,38 @@ jobs:
         env:
           CACHE_KEY: 'velnor-tgt-rust-local.local.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''local/Cargo.lock'') }}-${{ github.sha }}-${{ github.run_id }}'
         run: 'echo "key=$CACHE_KEY" >> "$GITHUB_OUTPUT"'
+      - id: sources_fetch_0
+        name: Fetch the sources of root 0
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && success() && steps.base.outputs.sources == ''true'' && steps.sources_local.outputs.cache-hit != ''true'' }}'
+        continue-on-error: true
+        run: '. "$VELNOR_EXEC" run -- cargo fetch --locked'
+      - id: sources_fetch_1
+        name: Fetch the sources of root 1
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && success() && steps.base.outputs.sources == ''true'' && steps.sources_local.outputs.cache-hit != ''true'' && steps.sources_fetch_0.outcome == ''success'' }}'
+        continue-on-error: true
+        working-directory: ci-helper
+        run: '. "$VELNOR_EXEC" run -- cargo fetch --locked'
+      - id: sources_fetch_2
+        name: Fetch the sources of root 2
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && success() && steps.base.outputs.sources == ''true'' && steps.sources_local.outputs.cache-hit != ''true'' && steps.sources_fetch_1.outcome == ''success'' }}'
+        continue-on-error: true
+        working-directory: crates/velnor-runner
+        run: '. "$VELNOR_EXEC" run -- cargo fetch --locked'
+      - id: sources_fetch_3
+        name: Fetch the sources of root 3
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && success() && steps.base.outputs.sources == ''true'' && steps.sources_local.outputs.cache-hit != ''true'' && steps.sources_fetch_2.outcome == ''success'' }}'
+        continue-on-error: true
+        working-directory: generator
+        run: '. "$VELNOR_EXEC" run -- cargo fetch --locked'
+      - id: sources_fetch_4
+        name: Fetch the sources of root 4
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && success() && steps.base.outputs.sources == ''true'' && steps.sources_local.outputs.cache-hit != ''true'' && steps.sources_fetch_3.outcome == ''success'' }}'
+        continue-on-error: true
+        working-directory: local
+        run: '. "$VELNOR_EXEC" run -- cargo fetch --locked'
       - id: sources_save_local
         name: Save the sources cache
-        if: '${{ !cancelled() && success() && steps.restored.outcome == ''success'' && steps.replan.outcome != ''failure'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') && steps.base.outputs.sources == ''true'' && steps.sources_local.outputs.cache-hit != ''true'' }}'
+        if: '${{ (!cancelled() && success() && steps.restored.outcome == ''success'' && steps.replan.outcome != ''failure'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') && steps.base.outputs.sources == ''true'' && steps.sources_local.outputs.cache-hit != ''true'') && (steps.sources_fetch_4.outcome == ''success'') }}'
         continue-on-error: true
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
@@ -1284,19 +1454,19 @@ jobs:
             ~/.cargo/registry/index
             ~/.cargo/registry/cache
             ~/.cargo/git/db
-          key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-local-${{ hashFiles(''local/Cargo.lock'') }}'
+          key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-all.roots-${{ steps.sources_locks.outputs.hash }}'
       - id: sources_local_key
         name: Record the sources cache key
-        if: '${{ !cancelled() && success() && steps.restored.outcome == ''success'' && steps.replan.outcome != ''failure'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') && steps.base.outputs.sources == ''true'' && steps.sources_local.outputs.cache-hit != ''true'' }}'
+        if: '${{ (!cancelled() && success() && steps.restored.outcome == ''success'' && steps.replan.outcome != ''failure'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') && steps.base.outputs.sources == ''true'' && steps.sources_local.outputs.cache-hit != ''true'') && (steps.sources_fetch_4.outcome == ''success'') }}'
         env:
-          CACHE_KEY: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-local-${{ hashFiles(''local/Cargo.lock'') }}'
+          CACHE_KEY: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-all.roots-${{ steps.sources_locks.outputs.hash }}'
         run: 'echo "key=$CACHE_KEY" >> "$GITHUB_OUTPUT"'
       - id: report_cache_metrics
         name: Report cache telemetry
         if: '${{ !cancelled() }}'
         continue-on-error: true
         env:
-          VELNOR_REPORT_CACHES: '[{"family":"tools","restore_step":"tools","root":null,"save_step":"save_tools"},{"family":"sources","restore_step":"sources_local","root":"local","save_step":"sources_save_local"},{"family":"target","restore_step":"target_local","root":"local","save_step":"save_target_local"}]'
+          VELNOR_REPORT_CACHES: '[{"family":"tools","restore_step":"tools","root":null,"save_step":"save_tools"},{"family":"sources","restore_step":"sources_local","root":null,"save_step":"sources_save_local"},{"family":"target","restore_step":"target_local","root":"local","save_step":"save_target_local"}]'
           VELNOR_REPORT_STEPS: '${{ toJSON(steps) }}'
           VELNOR_REPORT_DEFAULT_BRANCH: '${{ github.event.repository.default_branch }}'
           VELNOR_TESTS_RUN: '${{ steps.test.outputs.tests_run }}'
@@ -1374,6 +1544,11 @@ jobs:
         run: '. "$VELNOR_EXEC" prepare'
       - name: velnor-ci check-metadata
         run: '. "$VELNOR_EXEC" check-metadata'
+      - id: sources_locks
+        name: Hash the sources lockfiles
+        env:
+          SOURCES_LOCKS: '${{ hashFiles(''Cargo.lock'', ''ci-helper/Cargo.lock'', ''crates/velnor-runner/Cargo.lock'', ''generator/Cargo.lock'', ''local/Cargo.lock'') }}'
+        run: 'echo "hash=$SOURCES_LOCKS" >> "$GITHUB_OUTPUT"'
       - id: sources_root
         name: Restore the sources cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -1382,8 +1557,8 @@ jobs:
             ~/.cargo/registry/index
             ~/.cargo/registry/cache
             ~/.cargo/git/db
-          key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-root-${{ hashFiles(''Cargo.lock'') }}'
-          restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-root-'
+          key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-all.roots-${{ steps.sources_locks.outputs.hash }}'
+          restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-all.roots-'
       - id: target_root
         name: Restore the target cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -1396,16 +1571,6 @@ jobs:
       - name: velnor-ci check-metadata
         working-directory: ci-helper
         run: '. "$VELNOR_EXEC" check-metadata'
-      - id: sources_ci_helper
-        name: Restore the sources cache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          path: |
-            ~/.cargo/registry/index
-            ~/.cargo/registry/cache
-            ~/.cargo/git/db
-          key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-ci_helper-${{ hashFiles(''ci-helper/Cargo.lock'') }}'
-          restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-ci_helper-'
       - id: target_ci_helper
         name: Restore the target cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -1418,16 +1583,6 @@ jobs:
       - name: velnor-ci check-metadata
         working-directory: crates/velnor-runner
         run: '. "$VELNOR_EXEC" check-metadata'
-      - id: sources_crates_velnor_runner
-        name: Restore the sources cache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          path: |
-            ~/.cargo/registry/index
-            ~/.cargo/registry/cache
-            ~/.cargo/git/db
-          key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-crates_velnor_runner-${{ hashFiles(''crates/velnor-runner/Cargo.lock'') }}'
-          restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-crates_velnor_runner-'
       - id: target_crates_velnor_runner
         name: Restore the target cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -1440,16 +1595,6 @@ jobs:
       - name: velnor-ci check-metadata
         working-directory: generator
         run: '. "$VELNOR_EXEC" check-metadata'
-      - id: sources_generator
-        name: Restore the sources cache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          path: |
-            ~/.cargo/registry/index
-            ~/.cargo/registry/cache
-            ~/.cargo/git/db
-          key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-generator-${{ hashFiles(''generator/Cargo.lock'') }}'
-          restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-generator-'
       - id: target_generator
         name: Restore the target cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -1462,16 +1607,6 @@ jobs:
       - name: velnor-ci check-metadata
         working-directory: local
         run: '. "$VELNOR_EXEC" check-metadata'
-      - id: sources_local
-        name: Restore the sources cache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          path: |
-            ~/.cargo/registry/index
-            ~/.cargo/registry/cache
-            ~/.cargo/git/db
-          key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-local-${{ hashFiles(''local/Cargo.lock'') }}'
-          restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-local-'
       - id: target_local
         name: Restore the target cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -1546,7 +1681,7 @@ jobs:
         if: '${{ !cancelled() }}'
         continue-on-error: true
         env:
-          VELNOR_REPORT_CACHES: '[{"family":"tools","restore_step":"tools","root":null,"save_step":"save_tools"},{"family":"sources","restore_step":"sources_root","root":".","save_step":"sources_save_root"},{"family":"target","restore_step":"target_root","root":".","save_step":"save_target_root"},{"family":"sources","restore_step":"sources_ci_helper","root":"ci-helper","save_step":"sources_save_ci_helper"},{"family":"target","restore_step":"target_ci_helper","root":"ci-helper","save_step":"save_target_ci_helper"},{"family":"sources","restore_step":"sources_crates_velnor_runner","root":"crates/velnor-runner","save_step":"sources_save_crates_velnor_runner"},{"family":"target","restore_step":"target_crates_velnor_runner","root":"crates/velnor-runner","save_step":"save_target_crates_velnor_runner"},{"family":"sources","restore_step":"sources_generator","root":"generator","save_step":"sources_save_generator"},{"family":"target","restore_step":"target_generator","root":"generator","save_step":"save_target_generator"},{"family":"sources","restore_step":"sources_local","root":"local","save_step":"sources_save_local"},{"family":"target","restore_step":"target_local","root":"local","save_step":"save_target_local"}]'
+          VELNOR_REPORT_CACHES: '[{"family":"tools","restore_step":"tools","root":null,"save_step":"save_tools"},{"family":"sources","restore_step":"sources_root","root":null,"save_step":"sources_save_root"},{"family":"target","restore_step":"target_root","root":".","save_step":"save_target_root"},{"family":"target","restore_step":"target_ci_helper","root":"ci-helper","save_step":"save_target_ci_helper"},{"family":"target","restore_step":"target_crates_velnor_runner","root":"crates/velnor-runner","save_step":"save_target_crates_velnor_runner"},{"family":"target","restore_step":"target_generator","root":"generator","save_step":"save_target_generator"},{"family":"target","restore_step":"target_local","root":"local","save_step":"save_target_local"}]'
           VELNOR_REPORT_STEPS: '${{ toJSON(steps) }}'
           VELNOR_REPORT_DEFAULT_BRANCH: '${{ github.event.repository.default_branch }}'
         run: '. "$VELNOR_EXEC" report'
