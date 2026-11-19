@@ -27,7 +27,9 @@ pub(super) fn save_inputs_scoped(
     scope: Option<&Scope>,
 ) -> Result<String, CiError> {
     let (top, tracked) = scoped_files(root, scope)?;
-    let identity = super::delta_source::identity_of(&source_files(root)?).unwrap_or_default();
+    let identity =
+        super::delta_source::identity_of(&top_level_files(&top, &Scope::default(), false)?)
+            .unwrap_or_default();
     let relative = target.join(inputs_file(&git_prefix(root)?));
     let path = root.join(&relative);
     check_snapshot_parent(&path)?;

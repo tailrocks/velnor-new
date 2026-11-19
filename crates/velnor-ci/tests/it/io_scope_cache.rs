@@ -181,7 +181,10 @@ fn a_valid_cached_scope_saves_current_modification_times() {
     assert!(output.status.success(), "{output:?}");
     let snapshot = fs::read_to_string(repo.root().join("custom-target/.velnor/inputs.tsv"))
         .unwrap_or_else(|e| unreachable!("{e}"));
-    let saved = velnor_ci::inputs::parse_inputs(&snapshot).unwrap_or_else(|e| unreachable!("{e}"));
+    let body = snapshot
+        .split_once('\n')
+        .map_or_else(|| unreachable!("{snapshot}"), |(_, body)| body);
+    let saved = velnor_ci::inputs::parse_inputs(body).unwrap_or_else(|e| unreachable!("{e}"));
     let expected = Command::new("git")
         .arg("-C")
         .arg(repo.root())

@@ -22,6 +22,22 @@ pub fn witness_file(prefix: &str) -> String {
     prefixed(".velnor/restored-inputs-witness", prefix)
 }
 
+#[must_use]
+pub fn is_inputs_file(path: &std::path::Path) -> bool {
+    let Some(name) = path
+        .strip_prefix(".velnor")
+        .ok()
+        .and_then(|name| name.to_str())
+    else {
+        return false;
+    };
+    name == "inputs.tsv"
+        || name
+            .strip_prefix("inputs-")
+            .and_then(|rest| rest.strip_suffix(".tsv"))
+            .is_some_and(|hash| hash.len() == 64 && hash.bytes().all(|b| b.is_ascii_hexdigit()))
+}
+
 fn prefixed(stem: &str, prefix: &str) -> String {
     if prefix.is_empty() {
         format!("{stem}.tsv")
