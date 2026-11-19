@@ -39,7 +39,8 @@ pub(crate) fn release_workflow(
             helper.version().clone(),
         ));
     }
-    if plan.family.is_some() && !helper.version().at_least((0, 1, 83)) {
+    // helper-gate: first in tools-v0.1.85 via bd00dd340b
+    if plan.family.is_some() && !helper.version().at_least((0, 1, 85)) {
         return Err(GenerateError::FamilyTagHelperTooOld(
             helper.version().clone(),
         ));

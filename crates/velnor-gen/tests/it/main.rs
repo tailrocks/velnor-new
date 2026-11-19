@@ -79,6 +79,7 @@ mod golden_modes;
 mod harness;
 mod harness_kinds;
 mod harness_undecided;
+mod helper_floors;
 mod helper_integrity;
 mod helper_perl_environment;
 mod helper_release_tag;

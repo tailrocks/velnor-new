@@ -71,7 +71,7 @@ fn the_check_adds_no_permission_to_the_plan_job() -> TestResult {
 
 #[test]
 fn a_helper_before_the_command_gets_no_check_and_the_workflow_still_renders() -> TestResult {
-    for version in ["0.1.86", "0.1.98", "0.1.99"] {
+    for version in ["0.1.88", "0.1.98", "0.1.99"] {
         assert!(!calls_it(&jobs(version, LABEL_CONFIG)?), "{version}");
     }
     Ok(())

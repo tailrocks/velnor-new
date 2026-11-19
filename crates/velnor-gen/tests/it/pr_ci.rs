@@ -30,7 +30,7 @@ pub(crate) fn render(version: &str, config: &str) -> Result<String, Box<dyn std:
 
 pub(crate) fn label_workflow() -> Result<Json, Box<dyn std::error::Error>> {
     Ok(crate::yaml_tree::document(&render(
-        "0.1.86",
+        "0.1.88",
         LABEL_CONFIG,
     )?)?)
 }
@@ -38,8 +38,8 @@ pub(crate) fn label_workflow() -> Result<Json, Box<dyn std::error::Error>> {
 #[test]
 fn an_unset_pr_ci_renders_the_same_workflow_as_always_and_none_of_the_label_machinery() -> TestResult
 {
-    let unset = render("0.1.86", "shape = \"lint-test\"\n")?;
-    let always = render("0.1.86", "shape = \"lint-test\"\npr_ci = \"always\"\n")?;
+    let unset = render("0.1.88", "shape = \"lint-test\"\n")?;
+    let always = render("0.1.88", "shape = \"lint-test\"\npr_ci = \"always\"\n")?;
     assert_eq!(unset, always);
     for word in ["labeled", "ci:run", "ci:auto", RESET, "draft"] {
         assert!(!unset.contains(word), "{word}");
@@ -96,7 +96,7 @@ impl Runs {
             Self::Quick => Vec::new(),
             Self::Everything => vec![
                 "Resolve released helper tools",
-                "Install velnor-ci 0.1.86",
+                "Install velnor-ci 0.1.88",
                 "Install the released helper launcher",
                 GATE,
             ],
@@ -217,7 +217,7 @@ fn a_failure_in_the_quick_set_fails_required_and_the_full_run_leaves_the_verdict
 #[test]
 fn required_on_a_merge_group_or_a_push_to_main_needs_every_lane_and_allows_no_skip() -> TestResult {
     let label = label_workflow()?;
-    let always = crate::yaml_tree::document(&render("0.1.86", "shape = \"lint-test\"\n")?)?;
+    let always = crate::yaml_tree::document(&render("0.1.88", "shape = \"lint-test\"\n")?)?;
     let needs = strings(label.pointer("/jobs/required/needs"));
     let expected: Vec<String> = label
         .get("jobs")
@@ -319,19 +319,19 @@ fn pr_ci_label_is_refused_with_skip_draft_an_unknown_value_or_a_helper_that_does
     let refused =
         |version: &str, config: &str| render(version, config).err().map(|e| e.to_string());
     let both = refused(
-        "0.1.86",
+        "0.1.88",
         "pr_ci = \"label\"\nskip_draft_pull_requests = true\n",
     );
     assert!(both.is_some_and(|text| text.contains("skip_draft_pull_requests")));
-    let unknown = refused("0.1.86", "pr_ci = \"sometimes\"\n");
+    let unknown = refused("0.1.88", "pr_ci = \"sometimes\"\n");
     assert!(unknown.is_some_and(|text| text.contains("pr_ci")));
-    assert!(render("0.1.86", LABEL_CONFIG).is_ok());
+    assert!(render("0.1.88", LABEL_CONFIG).is_ok());
     assert!(render("0.1.81", "shape = \"lint-test\"\n").is_ok());
 }
 
 #[test]
 fn a_one_job_workflow_lints_a_ready_pull_request_and_tests_only_on_request() -> TestResult {
-    let text = render("0.1.86", "pr_ci = \"label\"\nshape = \"one-job\"\n")?;
+    let text = render("0.1.88", "pr_ci = \"label\"\nshape = \"one-job\"\n")?;
     let tree = crate::yaml_tree::document(&text)?;
     let steps = tree
         .pointer("/jobs/rust/steps")
@@ -375,10 +375,12 @@ fn a_one_job_workflow_lints_a_ready_pull_request_and_tests_only_on_request() -> 
 
 #[test]
 fn no_released_helper_gets_label_mode_because_none_parses_the_pr_ci_key() {
-    for released in ["0.1.81", "0.1.82", "0.1.83", "0.1.84", "0.1.85"] {
+    for released in [
+        "0.1.81", "0.1.82", "0.1.83", "0.1.84", "0.1.85", "0.1.86", "0.1.87",
+    ] {
         let refusal = render(released, LABEL_CONFIG).err().map(|e| e.to_string());
         assert!(
-            refusal.is_some_and(|text| text.contains("pin velnor-ci 0.1.86 or later")),
+            refusal.is_some_and(|text| text.contains("pin velnor-ci 0.1.88 or later")),
             "velnor-ci {released} must be refused"
         );
         assert!(

@@ -24,7 +24,7 @@ fn two_direct_harnesses() -> Result<velnor_model::RepoView, Box<dyn std::error::
 fn two_direct_harnesses_with(
     config: &str,
 ) -> Result<velnor_model::RepoView, Box<dyn std::error::Error>> {
-    let mut repo = private_repo(&["Cargo.toml"], config, "0.1.86")?;
+    let mut repo = private_repo(&["Cargo.toml"], config, "0.1.88")?;
     let root = path("Cargo.toml")?;
     let second = RepoPath::new("crates/b/Cargo.toml")?;
     let mut member = repo.rust_metadata[&root].members[0].clone();
@@ -111,7 +111,7 @@ fn the_phase_runs_when_any_direct_harness_runs_not_only_the_first_one() -> TestR
 
 #[test]
 fn bot_pull_requests_get_no_token_and_the_fetch_learns_the_server() -> TestResult {
-    let repo = private_repo(&["Cargo.toml"], SECTION, "0.1.86")?;
+    let repo = private_repo(&["Cargo.toml"], SECTION, "0.1.88")?;
     let mut checked = 0;
     for job in jobs(&workflow(&repo)?)? {
         for step in job["steps"].as_array().into_iter().flatten() {
