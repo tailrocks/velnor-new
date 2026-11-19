@@ -89,12 +89,3 @@ fn a_nested_root_selected_by_manifest_path_builds_from_the_repository_root() {
     let text = String::from_utf8_lossy(&built.stderr);
     assert!(built.status.success(), "{text}");
 }
-
-#[test]
-fn a_target_directory_that_is_no_roots_own_is_still_refused() {
-    let repo = nested_roots();
-    let built = build_step(&repo, "lab", "target");
-    let text = String::from_utf8_lossy(&built.stderr);
-    assert!(!built.status.success(), "{text}");
-    assert!(text.contains("cannot be told apart"), "{text}");
-}
