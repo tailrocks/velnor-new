@@ -288,7 +288,7 @@ fn check_step(pins: &ProductReleasePins) -> Result<Yaml, RenderError> {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used)]
+#[expect(clippy::unwrap_used, clippy::expect_used, reason = "test code")]
 mod required_job_tests {
     use super::REQUIRED_JOB_JQ;
     use std::io::Write;
