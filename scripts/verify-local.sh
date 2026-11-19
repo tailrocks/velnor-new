@@ -48,7 +48,6 @@ GENERATED_RUN_LOG="$LOG_DIR/generated-run.log"
 GENERATED_DIFF_LOG="$LOG_DIR/generated-diff.log"
 CRATE_LIST_LOG="$LOG_DIR/crate-list.log"
 TEST_MEMBER_LIST_LOG="$LOG_DIR/test-member-list.log"
-RUNNER_TEST_MEMBER_LIST_LOG="$LOG_DIR/runner-test-member-list.log"
 INTEGRATION_LOG="$LOG_DIR/integration.log"
 echo "verify-local: log directory: $LOG_DIR"
 
