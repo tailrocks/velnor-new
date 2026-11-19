@@ -212,9 +212,9 @@ This sheet lists every question in the Velnor plan that only the owner can answe
 
 ### 20. Q11: Which models implement and review
 
-- **Question.** The backlog names an implementation and a review model per issue. Use only the seats the repository's `exec:*` labels define?
-- **Recommendation.** Yes. Use Fable only where the item is genuinely hard, such as soundness and trust boundaries.
-- **Default.** Yes.
+- **Question.** The backlog names an implementation and a review model per issue. The repository's labels define three seats (`exec:haiku`, `exec:sonnet`, `exec:opus`) with efforts low, medium and high. Add an `exec:fable` seat for the ten hardest reviews (the label flow, the base-branch check, the ledger's soundness and trust boundaries)?
+- **Recommendation.** Yes. Everything else stays on the three existing seats.
+- **Default.** No new seat; those ten reviews use Opus at high effort.
 
 ### 21. Q7: Job shape
 
@@ -281,5 +281,5 @@ All other decisions stand as written.
 | 17 | Q16 | Emergency stop | R | You plus an audited hold | You only |
 | 18 | Q6 | Forks in the product | — | Keep the fence in velnor-gen | Same |
 | 19 | Q10 | Where dated evidence lives | — | Issues; evergreen docs | Same |
-| 20 | Q11 | Models per issue | backlog | `exec:*` seats only | Same |
+| 20 | Q11 | Models per issue | backlog | Add `exec:fable` for ten hard reviews | Opus high |
 | 21 | Q7 | Job shape | W8 | Split only on measured gain | Same |

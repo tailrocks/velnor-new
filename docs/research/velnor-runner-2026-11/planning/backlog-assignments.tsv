@@ -1,10 +1,13 @@
-group	streams	author	reviewer
-G1	V	opus-5.5	gemini-4-argon
-G2	L RV	fable-5.2	gpt-6.2-astra
-G3	X	gpt-6.2-sol	opus-5.5
-G4	H O	gpt-6.2-astra	fable-5.2
-G5	P F	muse-wonder-full-1.0	gemini-4-carbon
-G6	A	muse-wonder-1.0	gemini-4-neon
-G7	ST	gemini-4-neon	muse-wonder-full-1.0
-G8	C T S	gemini-4-carbon	muse-wonder-1.0
-G9	B G R	gemini-4-argon	gpt-6.2-sol
+group	phase	streams	items	agent_h	impl_default	review_default	gates
+G0	0	W	10	79	per item: exec:opus or exec:sonnet, effort:high	opus-5.5 high; fable-5.2 xhigh for W2 W10	Q2 Q3 Q4 Q7 Q12 Q13
+G1	1	V	14	95	exec:sonnet effort:high	sonnet-5.5 low; opus-5.5 high or fable-5.2 xhigh for V01 V04 DG03	Q8
+G2	1	L H	3	22	exec:sonnet effort:high	sonnet-5.5 low; fable-5.2 xhigh for N26	Q12 D7
+G3	1	DG AN B	8	52	exec:sonnet effort:high	sonnet-5.5 low	Q10
+G4	1	R A T BM	13	98	exec:sonnet effort:high	sonnet-5.5 low; opus-5.5 high for release trust	Q5 Q9 Q15 Q17
+G5	2	G RV P O X A	35	241	exec:opus effort:high	opus-5.5 high	Q1 Q5 Q9 Q14
+G6	2	H	8	54	exec:sonnet effort:high	sonnet-5.5 low	Q1
+G7	2	L	7	39	exec:opus effort:high	opus-5.5 high; fable-5.2 xhigh for L03	D7 Q12 Q16
+G8	2	V C	17	139	exec:opus effort:high	opus-5.5 high; fable-5.2 xhigh for V07 V08 C05	Q1 Q8 D8
+G9	2	ST S R	11	84	exec:sonnet effort:high	sonnet-5.5 low	Q1 Q5 D8
+G10	2	AN DG	15	168	exec:sonnet effort:high	sonnet-5.5 low	Q1 Q8 D8
+G11	3	BM F X	25	208	exec:opus effort:high	opus-5.5 high	Q1 Q9 Q14 D4 D20 D22
