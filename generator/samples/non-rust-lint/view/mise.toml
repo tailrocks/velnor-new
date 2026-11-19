@@ -1,0 +1,13 @@
+[tools]
+rust = "1.99.1"
+"aqua:nextest-rs/nextest/cargo-nextest" = "0.9.151"
+"github:asamarts/alint" = "0.22.1"
+jactionlint = "2.4.0"
+shellcheck = "0.11.0"
+
+[settings]
+lockfile = true
+
+[tasks.lint-generator-samples]
+description = "Lint the workflows in the expected output of the generator samples"
+run = "jactionlint --format gcc --strict-exit --no-online"

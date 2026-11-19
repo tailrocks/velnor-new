@@ -104,6 +104,10 @@ fn binding() -> TestResult<RepositoryConnection> {
     )?)
 }
 
+pub(crate) async fn scope(journal: &Journal) -> TestResult<ConnectionJournal> {
+    Ok(journal.connection_scope(&binding()?).await?)
+}
+
 pub(crate) async fn started_pairs(
     journal: &Journal,
     docker: &Docker,
@@ -190,6 +194,22 @@ pub(crate) async fn initializer(
     .await
 }
 
+pub(crate) async fn attach_handoff(journal: &Journal, pair: Pair) -> TestResult<()> {
+    let ready = "b".repeat(64);
+    let evidence = "c".repeat(64);
+    let reservation = pair.reservation;
+    execute(
+        journal,
+        &format!("INSERT INTO capacity_reservation_storage_handoffs (reservation_id, connection_id, operation_id, generation, helper_name, helper_id, engine_id, docker_root_digest, metadata_volume_name, metadata_volume_id, operation_key, layout_digest, ready_digest, state) SELECT reservation_id, connection_id, operation_id, generation, helper_name, helper_id, engine_id, docker_root_digest, metadata_volume, metadata_volume_id, operation_key, metadata_layout_digest, '{ready}', 'ready_held' FROM capacity_reservation_storage_initialization WHERE reservation_id = {reservation}"),
+    )
+    .await?;
+    execute(
+        journal,
+        &format!("UPDATE capacity_reservation_storage_handoffs SET state = 'attached', mount_evidence_digest = '{evidence}', runner_container_id = (SELECT container_id FROM capacity_reservation_bootstrap_containers WHERE reservation_id = {reservation} AND role = 'runner'), dind_container_id = (SELECT container_id FROM capacity_reservation_bootstrap_containers WHERE reservation_id = {reservation} AND role = 'dind') WHERE reservation_id = {reservation} AND state = 'ready_held'"),
+    )
+    .await
+}
+
 pub(crate) async fn execute(journal: &Journal, sql: &str) -> TestResult<()> {
     journal.connection().await?.execute(sql, ()).await?;
     Ok(())
@@ -209,16 +229,24 @@ async fn trigger_sql(journal: &Journal, names: &[&str]) -> TestResult<Vec<String
 }
 
 pub(crate) async fn unguarded(journal: &Journal, statements: &[String]) -> TestResult<()> {
+    let words: std::collections::BTreeSet<String> = statements
+        .iter()
+        .flat_map(|sql| sql.split(|c: char| !(c.is_ascii_alphanumeric() || c == '_')))
+        .map(str::to_ascii_lowercase)
+        .collect();
     let connection = journal.connection().await?;
     let mut rows = connection
         .query(
-            "SELECT name, sql FROM sqlite_schema WHERE type = 'trigger' ORDER BY rowid",
+            "SELECT name, tbl_name, sql FROM sqlite_schema WHERE type = 'trigger' ORDER BY rowid",
             (),
         )
         .await?;
     let mut saved = Vec::new();
     while let Some(row) = rows.next().await? {
-        saved.push((row.get::<String>(0)?, row.get::<String>(1)?));
+        let table: String = row.get(1)?;
+        if words.contains(&table.to_ascii_lowercase()) {
+            saved.push((row.get::<String>(0)?, row.get::<String>(2)?));
+        }
     }
     for (name, _) in &saved {
         execute(journal, &format!("DROP TRIGGER {name}")).await?;

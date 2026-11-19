@@ -6,7 +6,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::process::Command;
 
-use super::prepare::{MISE, Setup, digest, prepare, reported, scratch_root};
+use super::prepare::{MISE, OsRelease, Setup, digest, prepare, reported, scratch_root};
 
 fn compat_with(name: &str, change: impl FnOnce(&mut Setup)) -> String {
     let mut setup = Setup::new(reported("1.99.1", Some("0.9.151")));
@@ -72,6 +72,48 @@ fn compat_follows_the_runner_image() {
     assert_ne!(new, old);
     assert_ne!(new, unset);
     assert_eq!(new, image(Some("ubuntu24")));
+}
+
+#[test]
+fn compat_follows_the_distro_in_os_release() {
+    let release = |name: &str, body: &str| {
+        let dir = scratch_root("os-release");
+        fs::create_dir_all(&dir).unwrap_or_else(|e| unreachable!("{e}"));
+        let path = dir.join(name);
+        fs::write(&path, body).unwrap_or_else(|e| unreachable!("{e}"));
+        let path: &'static str = Box::leak(path.display().to_string().into_boxed_str());
+        compat_with("compat-os-release", |setup| {
+            setup.env.push(("VELNOR_OS_RELEASE", path));
+        })
+    };
+    let base = release("a", "ID=ubuntu\nVERSION_ID=\"24.04\"\n");
+    assert_eq!(base, release("b", "ID=ubuntu\nVERSION_ID=\"24.04\"\n"));
+    assert_ne!(base, release("c", "ID=ubuntu\nVERSION_ID=\"22.04\"\n"));
+    assert_ne!(base, release("d", "ID=debian\nVERSION_ID=\"24.04\"\n"));
+}
+
+#[test]
+fn an_unreadable_os_release_fails_prepare_instead_of_sharing_a_digest() {
+    let missing = scratch_root("os-release-missing").join("no-such-os-release");
+    let missing: &'static str = Box::leak(missing.display().to_string().into_boxed_str());
+    let mut setup = Setup::new(reported("1.99.1", Some("0.9.151")));
+    setup.env.push(("ImageOS", "ubuntu24"));
+    setup.env.push(("VELNOR_OS_RELEASE", missing));
+    let run = prepare("compat-no-os-release", &setup);
+    assert!(!run.output.status.success(), "{:?}", run.output);
+    let stderr = String::from_utf8_lossy(&run.output.stderr);
+    assert!(stderr.contains("os-release"), "{stderr}");
+    assert!(run.outputs.is_empty(), "{}", run.outputs);
+}
+
+#[cfg(not(target_os = "linux"))]
+#[test]
+fn a_platform_without_os_release_still_prepares_with_its_own_identity() {
+    let mut setup = Setup::new(reported("1.99.1", Some("0.9.151")));
+    setup.os_release = OsRelease::Platform;
+    let run = prepare("compat-no-os-release-platform", &setup);
+    assert!(run.output.status.success(), "{:?}", run.output);
+    assert_ne!(digest(&run), "");
 }
 
 #[test]
@@ -241,4 +283,34 @@ fn prepare_asks_git_which_of_the_read_configs_are_tracked() {
         args,
         "--literal-pathspecs ls-files -z -- .cargo/config.toml nested/.cargo/config.toml\n"
     );
+}
+
+#[test]
+fn prepare_refuses_a_tracked_target_dir_that_differs_from_the_one_recorded_at_generation() {
+    let run_with_recorded = |name: &str, recorded: &'static str| {
+        let mut setup = Setup::new(reported("1.99.1", Some("0.9.151")));
+        setup.repo_cargo_config = Some("[build]\ntarget-dir = \"moved\"\n");
+        setup.populate = Some(Box::new(move |checkout| {
+            git_add(checkout, &[".cargo/config.toml"]);
+            fs::write(
+                checkout.join(".velnor/rust-metadata.json"),
+                format!(
+                    "{{\"roots\":{{\"Cargo.toml\":{{\"target_dir\":\"{recorded}\",\"members\":[]}}}},\"manifests\":{{}},\"layout\":\"\"}}"
+                ),
+            )
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        }));
+        prepare(name, &setup)
+    };
+    let moved = run_with_recorded("recorded-target-moved", "out");
+    assert!(!moved.output.status.success(), "{:?}", moved.output);
+    let stderr = String::from_utf8_lossy(&moved.output.stderr);
+    assert!(
+        stderr.contains("moved") && stderr.contains("out"),
+        "{stderr}"
+    );
+    assert!(stderr.contains(".cargo/config.toml"), "{stderr}");
+
+    let same = run_with_recorded("recorded-target-same", "moved");
+    assert!(same.output.status.success(), "{:?}", same.output);
 }

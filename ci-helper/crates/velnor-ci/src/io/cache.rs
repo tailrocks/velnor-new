@@ -31,7 +31,7 @@ pub fn decide(
     now_seconds: i64,
 ) -> Result<Decision, CiError> {
     let counts = scan(log.ok_or_else(|| CiError::new("velnor-run.log is missing"))?);
-    decide_counts(&counts, target, archive, now_seconds)
+    decide_counts(&counts, target, archive, now_seconds, None)
 }
 
 pub(super) fn decide_counts(
@@ -39,6 +39,7 @@ pub(super) fn decide_counts(
     target: &Path,
     archive: Option<&Path>,
     now_seconds: i64,
+    budget_bytes: Option<u64>,
 ) -> Result<Decision, CiError> {
     if !should_save(counts) {
         return Ok(Decision {
@@ -50,6 +51,16 @@ pub(super) fn decide_counts(
     let removed = remove_incremental(target)?;
     if let Some(archive) = archive {
         remove_file(archive)?;
+    }
+    let size = directory_size(target)?;
+    if let Some(budget) = budget_bytes.filter(|budget| size > *budget) {
+        return Ok(Decision {
+            save: false,
+            report: format!(
+                "::notice::{} is {size} bytes, more than the repository cache budget of {budget} bytes; saving nothing\n",
+                target.display()
+            ),
+        });
     }
     let born = target.join(BORN_FILE);
     if !born.is_file() {
@@ -63,10 +74,9 @@ pub(super) fn decide_counts(
     Ok(Decision {
         save: true,
         report: format!(
-            "{} crates compiled, checked or documented; saving {}: {} bytes, removed {removed} incremental directories\n",
+            "{} crates compiled, checked or documented; saving {}: {size} bytes, removed {removed} incremental directories\n",
             counts.crates_compiled(),
             target.display(),
-            directory_size(target)?
         ),
     })
 }
@@ -212,7 +222,19 @@ pub(super) fn run_trim(prefix: &str, keep: Option<usize>) -> Result<String, CiEr
         &reference,
         prefix,
         keep.unwrap_or(KEEP_NEWEST),
+        super::now_seconds(),
     )
+}
+
+fn budget_limit() -> Result<Option<u64>, CiError> {
+    match std::env::var("VELNOR_CACHE_BUDGET_BYTES") {
+        Ok(text) if !text.trim().is_empty() => text
+            .trim()
+            .parse()
+            .map(Some)
+            .map_err(|_| CiError::new("VELNOR_CACHE_BUDGET_BYTES is not a number of bytes")),
+        _ => Ok(None),
+    }
 }
 
 pub(super) fn run_decide(args: &crate::cli_cache::DecideArgs) -> Result<String, CiError> {
@@ -239,7 +261,13 @@ pub(super) fn run_decide(args: &crate::cli_cache::DecideArgs) -> Result<String, 
     } else {
         let counts = super::activity::activity()?
             .unwrap_or_else(|| crate::logscan::scan(&String::from_utf8_lossy(&log)));
-        decide_counts(&counts, &target, archive.as_deref(), super::now_seconds())?
+        decide_counts(
+            &counts,
+            &target,
+            archive.as_deref(),
+            super::now_seconds(),
+            budget_limit()?,
+        )?
     };
     super::append_outputs(&format!("save={}\nsources={sources}\n", decision.save))?;
     Ok(decision.report)

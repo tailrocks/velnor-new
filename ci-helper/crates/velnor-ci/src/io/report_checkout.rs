@@ -45,7 +45,10 @@ pub(super) fn read(directory: &Path) -> Result<ReportCheckout, CiError> {
         .collect();
     let wanted: Vec<_> = wanted_files(&tracked_paths)
         .into_iter()
-        .filter(|path| !symlink_locks.contains(path))
+        .filter(|path| {
+            !symlink_locks.contains(path)
+                && !(symlinks.contains(path) && path.as_str().ends_with(".rs"))
+        })
         .collect();
     let mut view = RepoView {
         repository: velnor_gen::io::repository_name(&tracked.top),

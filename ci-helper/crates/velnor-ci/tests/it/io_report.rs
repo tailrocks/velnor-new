@@ -328,7 +328,7 @@ mod policy;
 mod provenance;
 mod target_identity;
 
-fn fixture(name: &str) -> Result<Repo, Box<dyn std::error::Error>> {
+pub(crate) fn fixture(name: &str) -> Result<Repo, Box<dyn std::error::Error>> {
     let repo = Repo::new(name);
     repo.write_all(&[
         (

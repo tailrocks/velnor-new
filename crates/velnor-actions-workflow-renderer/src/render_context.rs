@@ -37,7 +37,7 @@ pub const UPLOAD_STEP_CONDITION: &str = "always()";
 pub const PLAN_JOB_ID: &str = CONTRACT_PLAN_JOB_ID;
 pub const TASK_JOB_ID: &str = "velnor-task";
 pub const CANDIDATE_JOB_ID: &str = "candidate";
-pub const ALINT_USES: &str = "asamarts/alint@d61e4c802b02ac811224b35c59a62cfe5176f4d0";
+pub const ALINT_USES: &str = "asamarts/alint@5054852d00d47affc9ea71440240147d9999f4d3";
 
 #[derive(Debug, Clone)]
 pub struct RenderContext {
@@ -52,6 +52,7 @@ pub struct RenderContext {
     pub preseed: bool,
     pub workflow_tasks: Vec<crate::verification_jobs::WorkflowTaskPolicy>,
     pub lane_plan: Option<LanePlan>,
+    pub scale_set_support_jobs: std::collections::BTreeSet<String>,
     pub pull_request_cache_policy: PullRequestCachePolicy,
     pub mise_quiet: bool,
     pub plan_consumer_env: BTreeMap<String, String>,
@@ -59,6 +60,7 @@ pub struct RenderContext {
     pub standalone_tools_donors: BTreeMap<String, Job>,
     pub max_parallel_jobs: u32,
     pub non_inputs: velnor_actions_contract::NonInputs,
+    pub pr_ci: velnor_actions_contract::PrCiMode,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

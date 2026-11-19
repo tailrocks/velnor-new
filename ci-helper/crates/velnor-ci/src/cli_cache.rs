@@ -18,6 +18,18 @@ pub enum CacheCommand {
     Verify(VerifyArgs),
     #[command(about = "Fail the Cache check when a lane could not verify its uploads")]
     Check(CheckArgs),
+    #[command(about = "Enforce the repository cache budget while protecting newest bases")]
+    Budget(BudgetArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct BudgetArgs {
+    #[arg(long)]
+    pub dry_run: bool,
+    #[arg(long, help = "Repository as owner/name, default GITHUB_REPOSITORY")]
+    pub repo: Option<String>,
+    #[arg(long, default_value_t = velnor_rust::DEFAULT_CACHE_BUDGET_BYTES, value_parser = clap::value_parser!(u64).range(0..=velnor_rust::DEFAULT_CACHE_BUDGET_BYTES))]
+    pub budget_bytes: u64,
 }
 
 #[derive(Debug, Args)]

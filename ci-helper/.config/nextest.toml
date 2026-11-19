@@ -13,15 +13,30 @@ slow-timeout = { period = "2s", terminate-after = 1 }
 [[profile.default.overrides]]
 filter = "test(io_restore_cargo::) | test(io_restore_cold_cargo::) | test(io_raw_paths::) | test(io_cold_targets::) | test(io_shared_targets::) | test(io_foreign_targets::) | test(io_restored_targets::) | test(io_snapshot_storage::) | test(io_inputs_scope::) | test(io_inputs_batch::) | test(io_scope_cache::) | test(io_scope_cache_races::) | test(io_scope_cache_paths::)"
 slow-timeout = { period = "30s", terminate-after = 1 }
+
+[[profile.default.overrides]]
+filter = 'test(crates_mirror) | test(=audit::migration::targets::a_cross_target_created_by_cargo_at_the_source_root_does_not_hide_source_changes)'
+slow-timeout = { period = "30s", terminate-after = 1 }
+
 [[profile.default.overrides]]
 filter = 'test(crates_mirror)'
 success-output = "immediate"
 threads-required = "num-test-threads"
+slow-timeout = { period = "30s", terminate-after = 4 }
+
+[[profile.default.overrides]]
+filter = 'test(preview_parity) | test(preview_admit) | test(preview_authority)'
+slow-timeout = { period = "60s", terminate-after = 10 }
+
+[[profile.ci.overrides]]
+filter = 'test(crates_mirror) | test(=audit::migration::targets::a_cross_target_created_by_cargo_at_the_source_root_does_not_hide_source_changes)'
+slow-timeout = { period = "30s", terminate-after = 1 }
 
 [[profile.ci.overrides]]
 filter = 'test(crates_mirror)'
 success-output = "immediate"
 threads-required = "num-test-threads"
+slow-timeout = { period = "30s", terminate-after = 4 }
 
 [[profile.default.overrides]]
 filter = 'test(plan_reads_each_roots_sources_to_decide_the_doctest_and_documentation_steps)'
@@ -29,4 +44,12 @@ slow-timeout = { period = "30s", terminate-after = 4 }
 
 [[profile.ci.overrides]]
 filter = 'test(plan_reads_each_roots_sources_to_decide_the_doctest_and_documentation_steps)'
+slow-timeout = { period = "30s", terminate-after = 4 }
+
+[[profile.default.overrides]]
+filter = 'test(audit::bounds::)'
+slow-timeout = { period = "30s", terminate-after = 4 }
+
+[[profile.ci.overrides]]
+filter = 'test(audit::bounds::)'
 slow-timeout = { period = "30s", terminate-after = 4 }

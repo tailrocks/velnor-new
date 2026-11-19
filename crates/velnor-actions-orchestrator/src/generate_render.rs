@@ -14,7 +14,7 @@ use crate::prepare::GenerationPreparation;
 use crate::workflow::scale_set_selector_for_dispatch;
 
 use super::{
-    cache_authority_audit, cache_cleanup_emit, mise_task_suites_emit, runner_labels,
+    cache_authority_audit, runner_labels,
     rust_install_audit,
 };
 
@@ -36,6 +36,8 @@ pub(super) fn render_all(
     let ir = expansion.ir;
     let mut render_context = prep.workflow.context.clone();
     render_context.lane_plan = expansion.lane_plan;
+    render_context.scale_set_support_jobs =
+        velnor_actions_contract::workflow::scale_set_support_jobs(&prep.config);
     render_context.scale_set_selector = scale_set_selector_for_dispatch(&prep.config, dispatch)?;
     let mut lint_input = prep.workflow.lint_config.clone();
     lint_input.runner_labels = runner_labels::collect(
@@ -59,20 +61,6 @@ pub(super) fn render_all(
     )?;
     let lint_config = rehead_lint_config_marker(&render_jactionlint_yaml(&lint_input)?, version)?;
     let mut extra = rendered.schema2_files.clone();
-    extra.extend(crate::release_emit::release_files(prep, &mise)?);
-    extra.extend(crate::publish_emit::publish_files(prep, &mise)?);
-    extra.extend(crate::premerge_event_proof_emit::files(prep)?);
-    extra.extend(crate::binary_release_emit::files(prep)?);
-    extra.extend(crate::binary_preview_emit::files(prep)?);
-    extra.extend(crate::freshness_emit::freshness_files(prep)?);
-    extra.extend(crate::freshness_emit::upgrades::upgrades_files(prep)?);
-    extra.extend(cache_cleanup_emit::files(prep)?);
-    extra.extend(crate::owned_tool_publication::files(prep)?);
-    extra.extend(crate::tofu_apply_emit::tofu_apply_files(prep)?);
-    extra.extend(crate::review_completion_workflow_emit::files(prep)?);
-    extra.extend(crate::routing::extra_files(&prep.config, version)?);
-    extra.extend(crate::rust_suites_emit::suite_workflow_files(prep)?);
-    extra.extend(mise_task_suites_emit::suite_workflow_files(prep)?);
     extra.extend(verifier_actions.files());
     if let Some(dco) = &prep.config.dco {
         extra.push(velnor_actions_workflow_renderer::dco::render_dco_yml(

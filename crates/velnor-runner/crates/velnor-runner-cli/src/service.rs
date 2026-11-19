@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 
 use crate::args::ServiceAction;
+use crate::dispatch::home_unresolved;
 use crate::state_directory::create_private_dir_all;
 use filesystem::write_plist;
 use plist::{plist_path, render_plist};
@@ -31,7 +32,10 @@ struct InstalledPlist {
 pub(crate) fn service(action: ServiceAction, state: &Path) -> ExitCode {
     match action {
         ServiceAction::Install => install(state),
-        ServiceAction::Start => start(state, &log_dir()),
+        ServiceAction::Start => match log_dir() {
+            Some(logs) => start(state, &logs),
+            None => home_unresolved(),
+        },
         ServiceAction::Stop => stop(state),
         ServiceAction::Uninstall => uninstall(state),
     }
@@ -78,8 +82,8 @@ fn uninstall(state: &Path) -> ExitCode {
 fn installed_plist(state: &Path) -> Option<InstalledPlist> {
     let uid = read_uid()?;
     let binary = std::env::current_exe().ok()?;
-    let path = plist_path();
-    let expected = render_plist(&binary, state, &log_dir())?;
+    let path = plist_path()?;
+    let expected = render_plist(&binary, state, &log_dir()?)?;
     let identity = open_expected_file(&path, expected.as_bytes()).ok()??;
     Some(InstalledPlist {
         uid,
@@ -90,11 +94,21 @@ fn installed_plist(state: &Path) -> Option<InstalledPlist> {
 }
 
 fn install(state: &Path) -> ExitCode {
+    let (Some(path), Some(logs)) = (plist_path(), log_dir()) else {
+        return home_unresolved();
+    };
+    install_to(rustix::process::geteuid().as_raw(), state, &path, &logs)
+}
+
+fn install_to(euid: u32, state: &Path, path: &Path, logs: &Path) -> ExitCode {
+    if euid == 0 {
+        eprintln!("Service configuration is different.");
+        return ExitCode::from(1);
+    }
     let Ok(bin) = std::env::current_exe() else {
         return ExitCode::from(1);
     };
-    let path = plist_path();
-    if !write_plist(&bin, state, &path, &log_dir()) {
+    if !write_plist(&bin, state, path, logs) {
         return ExitCode::from(1);
     }
     println!("{}", path.display());
@@ -144,7 +158,7 @@ mod tests {
     use std::os::unix::fs::PermissionsExt;
     use std::path::Path;
 
-    use super::start;
+    use super::{install_to, start};
 
     fn mode(path: &Path) -> std::io::Result<u32> {
         Ok(std::fs::metadata(path)?.permissions().mode() & 0o777)
@@ -162,6 +176,21 @@ mod tests {
         let _ = start(&root.join("state"), &logs);
         assert_eq!(mode(&logs)?, 0o700);
         assert_eq!(mode(&parent)?, 0o755);
+        Ok(())
+    }
+
+    #[test]
+    fn install_refuses_root_and_writes_no_plist() -> std::io::Result<()> {
+        let temp = tempfile::tempdir()?;
+        let root = temp.path().canonicalize()?;
+        let plist = root.join("LaunchAgents").join("host.plist");
+        let code = install_to(0, &root.join("state"), &plist, &root.join("logs"));
+        assert_eq!(
+            format!("{code:?}"),
+            format!("{:?}", std::process::ExitCode::from(1))
+        );
+        assert!(!plist.exists());
+        assert!(!root.join("LaunchAgents").exists());
         Ok(())
     }
 }

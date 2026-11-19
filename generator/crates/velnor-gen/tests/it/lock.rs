@@ -14,7 +14,7 @@ use crate::pipeline::{view, workflow};
 type TestResult = Result<(), Box<dyn Error>>;
 
 pub(crate) const SUMS: &str = "\
-4679c5492ab36252ccae31aab4f6c8a454ef2ab0e30d4dcdd3d6080d49c1cbe6  COMMIT
+0e5bd0f714140aa32270568a463b252853b828318ed29e3bad93a1bf18ce2fbd  COMMIT
 10e3511ab3d2f211366c6fd3633474f4a74ee6750b16b52c90758c0e8321dd3e  velnor-ci-linux-x64
 56d836fd2ae8135b5306f154b3287dfe81328f7a89b0528b3b912fab6e6916a6  velnor-ci-linux-arm64
 39431db3aeccf193088fa8845896c627e3da004f683d4d4699d3d697c808c607  velnor-ci-macos-arm64
@@ -23,10 +23,10 @@ pub(crate) const SUMS: &str = "\
 85e98f573e84d03701c0275e60f54a8f8b07c7c02b6b773cf25d973b960339a7  velnor-gen-macos-arm64
 ";
 
-const COMMIT: &str = "1793cf84b5924e2542a03b0fb2580e7395b2f4cb";
-pub(crate) const COMMIT_FILE: &str = "1793cf84b5924e2542a03b0fb2580e7395b2f4cb\n";
+const COMMIT: &str = "1390e6f6a4b64e1f33dbddfbeedcd097db32ec36";
+pub(crate) const COMMIT_FILE: &str = "1390e6f6a4b64e1f33dbddfbeedcd097db32ec36\n";
 
-fn with_lock(lock: &str) -> Result<RepoView, Box<dyn Error>> {
+pub(crate) fn with_lock(lock: &str) -> Result<RepoView, Box<dyn Error>> {
     let mut view = view(&["Cargo.toml"], Some(b"full_run = \"off\"\n"))?;
     view.tracked_paths.insert(LOCK_PATH);
     view.files.insert(LOCK_PATH, lock.as_bytes().to_vec());
@@ -34,7 +34,7 @@ fn with_lock(lock: &str) -> Result<RepoView, Box<dyn Error>> {
 }
 
 pub(crate) fn locked(version: &str) -> Result<RepoView, Box<dyn Error>> {
-    with_lock(&pin_lock(version, COMMIT_FILE, SUMS)?)
+    with_lock(&pin_lock(version, COMMIT_FILE, SUMS, None)?)
 }
 
 #[test]
@@ -43,7 +43,7 @@ fn pin_helper_writes_the_lock_file_the_sample_repository_commits() -> TestResult
         .join("../../samples/helper-lock/view")
         .join(LOCK_PATH.as_str());
     assert_eq!(
-        pin_lock("0.1.79", COMMIT_FILE, SUMS)?,
+        pin_lock("0.1.79", COMMIT_FILE, SUMS, None)?,
         fs::read_to_string(sample)?
     );
     Ok(())
@@ -61,7 +61,7 @@ fn a_release_whose_sums_do_not_cover_both_programs_on_every_platform_is_not_pinn
     let short = SUMS.replacen("10e3511a", "10E3511A", 1);
     let cases = [
         (without("velnor-ci-linux-arm64"), "0.1.79"),
-        (without("velnor-gen-macos-arm64"), "0.1.79"),
+        (without("velnor-gen-linux-x64"), "0.1.79"),
         (twice, "0.1.79"),
         (short, "0.1.79"),
         (SUMS.to_owned(), "0.1"),
@@ -71,9 +71,34 @@ fn a_release_whose_sums_do_not_cover_both_programs_on_every_platform_is_not_pinn
         (String::new(), "0.1.79"),
     ];
     for (sums, version) in cases {
-        let result = pin_lock(version, COMMIT_FILE, &sums);
+        let result = pin_lock(version, COMMIT_FILE, &sums, None);
         assert!(result.is_err(), "{version} with {sums:?} gave {result:?}");
     }
+}
+
+fn linux_only_sums() -> String {
+    SUMS.lines()
+        .filter(|line| !line.contains("macos"))
+        .flat_map(|line| [line, "\n"])
+        .collect()
+}
+
+#[test]
+fn a_release_without_macos_is_pinned_and_gives_the_action_no_macos_digest() -> TestResult {
+    let lock = pin_lock("0.1.79", COMMIT_FILE, &linux_only_sums(), None)?;
+    assert!(!lock.contains("macos"), "{lock}");
+    let text = workflow(&with_lock(&lock)?)?;
+    assert!(text.contains("sha256-linux-x64:"), "{text}");
+    assert!(text.contains("sha256-linux-arm64:"), "{text}");
+    assert!(!text.contains("macos"), "{text}");
+    Ok(())
+}
+
+#[test]
+fn a_release_with_macos_still_hands_the_action_its_digest() -> TestResult {
+    let text = workflow(&locked("0.1.79")?)?;
+    assert!(text.contains("sha256-macos-arm64:"), "{text}");
+    Ok(())
 }
 
 #[test]
@@ -89,7 +114,7 @@ fn a_commit_that_does_not_match_the_digest_sha256sums_lists_for_it_is_not_pinned
         (COMMIT, SUMS),
         (COMMIT_FILE, unlisted.as_str()),
     ] {
-        let result = pin_lock("0.1.79", commit, sums);
+        let result = pin_lock("0.1.79", commit, sums, None);
         assert!(result.is_err(), "{commit:?} gave {result:?}");
     }
 }
@@ -104,7 +129,7 @@ fn a_release_whose_commit_is_not_a_full_lowercase_sha_is_not_pinned() {
         &COMMIT.to_uppercase(),
         &format!("{}g", &COMMIT[..39]),
     ] {
-        let result = pin_lock("0.1.79", commit, SUMS);
+        let result = pin_lock("0.1.79", commit, SUMS, None);
         assert!(result.is_err(), "{commit:?} gave {result:?}");
     }
 }
@@ -163,7 +188,7 @@ fn a_locked_helper_is_installed_by_the_pinned_action_after_tool_resolution_and_n
 
 #[test]
 fn a_lock_file_that_is_not_exactly_what_pin_helper_writes_is_rejected() -> TestResult {
-    let good = pin_lock("0.1.79", COMMIT_FILE, SUMS)?;
+    let good = pin_lock("0.1.79", COMMIT_FILE, SUMS, None)?;
     let ci = "10e3511ab3d2f211366c6fd3633474f4a74ee6750b16b52c90758c0e8321dd3e";
     let generator = "61ec20debeae57cce969660e66c72315c59ce3cee84659540aee1942aad52628";
     let cases = [

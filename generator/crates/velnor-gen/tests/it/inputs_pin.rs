@@ -54,7 +54,7 @@ fn the_released_helper_gets_only_the_commands_it_has() -> TestResult {
 
 #[test]
 fn a_helper_with_the_batched_commands_gets_them() -> TestResult {
-    for version in ["0.1.82", "0.1.100"] {
+    for version in ["0.1.93", "0.1.100"] {
         let text = two_roots(version, "")?;
         for batched in ["restore-all", "--scope-cache"] {
             assert!(text.contains(batched), "{version}: {batched}");

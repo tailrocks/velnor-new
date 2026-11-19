@@ -189,6 +189,36 @@ fn jobs_on_later_pages_are_collected() {
 }
 
 #[test]
+fn jobs_missing_from_the_advertised_count_are_refused() {
+    let advertised = r#"{"total_count": 1, "jobs": []}"#;
+    let mut fake = FakeGitHub::recorded();
+    fake.respond(jobs_path(&repo(), RUN_ID, 1, 1), advertised);
+    let message = error_text(collect(&fake, &repo(), RUN_ID, false));
+    assert!(message.contains("incomplete"), "{message}");
+}
+
+#[test]
+fn an_empty_page_before_the_advertised_count_is_refused() {
+    let first = JOBS.replace("\"total_count\": 3", "\"total_count\": 4");
+    let second = r#"{"total_count": 4, "jobs": []}"#;
+    let mut fake = FakeGitHub::recorded();
+    fake.respond(jobs_path(&repo(), RUN_ID, 1, 1), &first);
+    fake.respond(jobs_path(&repo(), RUN_ID, 1, 2), second);
+    let message = error_text(collect(&fake, &repo(), RUN_ID, false));
+    assert!(message.contains("incomplete"), "{message}");
+}
+
+#[test]
+fn an_advertised_count_of_zero_is_complete() {
+    let none = r#"{"total_count": 0, "jobs": []}"#;
+    let mut fake = FakeGitHub::recorded();
+    fake.respond(jobs_path(&repo(), RUN_ID, 1, 1), none);
+    let metrics = collect(&fake, &repo(), RUN_ID, false).unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(metrics.jobs.len(), 0);
+    assert_eq!(metrics.runner_seconds, Some(0));
+}
+
+#[test]
 fn a_missing_job_log_fails_the_collection_and_names_the_job() {
     let mut fake = FakeGitHub::default();
     fake.respond(velnor_ci::github::run_path(&repo(), RUN_ID), RUN);

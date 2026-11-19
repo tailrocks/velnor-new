@@ -168,7 +168,7 @@ fn validate_cache_path(layer: &str, path: &str) -> Result<(), RenderError> {
 }
 
 fn sources_subset_ok(path: &str) -> bool {
-    const HOME: &str = velnor_actions_contract::workflow::cache_family::CARGO_HOME_EXPR;
+    const HOME: &str = velnor_actions_contract::workflow::cache_family::SOURCES_CACHE_HOME;
     if path.contains("..") || is_never_archive_path(path) {
         return false;
     }

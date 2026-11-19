@@ -18,14 +18,17 @@ fn plain(run: &str) -> String {
 }
 
 fn trusted_before_restore(step: &serde_json::Value) -> bool {
+    if step["id"] == "sources_locks" {
+        return true;
+    }
     if let Some(uses) = step["uses"].as_str() {
         return matches!(
             uses,
             "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
-                | "tailrocks/velnor-new/actions/setup-velnor@1793cf84b5924e2542a03b0fb2580e7395b2f4cb"
+                | "tailrocks/velnor-new/actions/setup-velnor@1390e6f6a4b64e1f33dbddfbeedcd097db32ec36"
                 | "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9"
                 | "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9"
-                | "jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c"
+                | "jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d"
         );
     }
     step["run"].as_str().map(plain).is_some_and(|run| {
@@ -59,7 +62,7 @@ fn released_helper_restores_inputs_after_checkout_and_cache_before_repository_co
                 .get_mut(&path(".velnor/rust-ci.lock")?)
                 .ok_or("missing helper lock")?;
             *lock = String::from_utf8(lock.clone())?
-                .replace("0.1.81", "0.1.82")
+                .replace("0.1.81", "0.1.93")
                 .into_bytes();
             let yaml: serde_json::Value = serde_saphyr::from_str(&workflow(&repo)?)?;
             let jobs = yaml["jobs"].as_object().ok_or("missing jobs")?;
@@ -98,7 +101,7 @@ fn released_helper_restores_inputs_after_checkout_and_cache_before_repository_co
 
 #[test]
 fn custom_target_cache_and_inputs_restore_use_the_configured_directory() -> TestResult {
-    let mut repo = locked("0.1.82")?;
+    let mut repo = locked("0.1.93")?;
     let path = RepoPath::new(".cargo/config.toml")?;
     repo.tracked_paths.insert(path.clone());
     repo.files
@@ -131,7 +134,7 @@ fn custom_target_cache_and_inputs_restore_use_the_configured_directory() -> Test
 
 #[test]
 fn inputs_restore_uses_each_cached_target_directory_from_any_working_directory() -> TestResult {
-    let mut repo = locked("0.1.82")?;
+    let mut repo = locked("0.1.93")?;
     let more = view(&["Cargo.toml", "lab/Cargo.toml"], None)?;
     repo.rust_metadata = more.rust_metadata;
     repo.tracked_paths.extend(more.tracked_paths);

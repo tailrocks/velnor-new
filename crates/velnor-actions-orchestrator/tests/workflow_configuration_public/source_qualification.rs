@@ -165,7 +165,7 @@ fn assert_manual_native_validator_step(rendered: &str) -> Result<(), Box<dyn Err
     Ok(())
 }
 
-fn generator_config(enabled: bool) -> String {
+pub(super) fn generator_config(enabled: bool) -> String {
     let workflows = if enabled {
         "workflows = [\"generator_release\"]\n"
     } else {

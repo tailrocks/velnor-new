@@ -3,20 +3,22 @@
 
 use std::collections::BTreeMap;
 
-use velnor_model::{HelperRelease, RELEASE_WORKFLOW_PATH, RepoPath};
-use velnor_release::{ReleasePlan, TAG_JOB_BASE_MINUTES, publish_budget_minutes};
+use velnor_model::{HelperRelease, RELEASE_PLZ_FILE, RELEASE_WORKFLOW_PATH, RepoPath};
+use velnor_release::{RELEASE_APP_SLUG, ReleasePlan, TAG_JOB_BASE_MINUTES, publish_budget_minutes};
 
 use crate::release_binaries::binary_jobs;
+use crate::release_checks::{publish_stage, tag_needs, tag_stage};
+use crate::release_family::family_jobs;
 use crate::release_finalize::{finalize_job, without_binary};
 use crate::release_outputs::{commit_outputs, output_collisions};
 use crate::release_steps::{
-    APP_TOKEN_OUTPUT, TAGGED_COMMIT_HELPER, app_token, checkout, expression, install_release_plz,
-    label, permissions, refuse_commands, release_plz_arguments, release_plz_step, shell_word,
-    variables,
+    APP_TOKEN_OUTPUT, RECORD_RECOVERY_HELPER, TAGGED_COMMIT_HELPER, TOOLCHAIN, app_token, checkout,
+    expression, install_release_plz, join, label, permissions, refuse_commands,
+    release_plz_arguments, release_plz_step, shell_word, variables,
 };
 use crate::rules::{
     MAX_WORKFLOW_BYTES, RenderedConcurrency, RenderedJob, RenderedStep, RenderedWorkflow, Rule,
-    RuleViolation, check_rules,
+    RuleViolation, Value, check_rules,
 };
 use crate::steps::install_helper;
 use crate::workflow::yaml_job;
@@ -47,8 +49,14 @@ pub fn render_release(
     if !collisions.is_empty() {
         return Err(collisions);
     }
-    let mut jobs = vec![gate(plan, helper), release_pr(plan, helper), tag_job];
-    jobs.extend(binary_jobs(plan, helper));
+    let mut jobs = vec![gate(plan, helper), release_pr(plan, helper)];
+    jobs.extend(tag_stage(plan));
+    jobs.push(tag_job);
+    jobs.extend(match &plan.family {
+        Some(family) => family_jobs(plan, family, helper),
+        None => binary_jobs(plan, helper),
+    });
+    jobs.extend(publish_stage(plan));
     jobs.extend(finalize_job(plan, helper));
     let rendered = RenderedWorkflow { jobs };
     check_rules(&rendered)?;
@@ -77,7 +85,7 @@ pub fn render_release(
             ),
         ),
     ];
-    let file = format!("{RELEASE_HEADER}{}", emit(&workflow));
+    let file = crate::header::seal(RELEASE_HEADER, &emit(&workflow));
     if file.len() > MAX_WORKFLOW_BYTES {
         return Err(vec![RuleViolation {
             job: String::new(),
@@ -207,7 +215,7 @@ fn release_pr(plan: &ReleasePlan, helper: &HelperRelease) -> RenderedJob {
     }
 }
 
-fn only_while_newest(steps: &mut [RenderedStep]) {
+pub(crate) fn only_while_newest(steps: &mut [RenderedStep]) {
     let after_newest = steps
         .iter()
         .position(|step| step.id.as_deref() == Some("newest"))
@@ -240,7 +248,7 @@ fn tag(plan: &ReleasePlan, helper: &HelperRelease) -> RenderedJob {
             ),
         )
     }));
-    steps.push(record(helper, &files));
+    steps.push(record(plan, helper, &files));
     only_while_newest(&mut steps);
     let mut scopes = vec![("contents", "read")];
     if helper.version().at_least(TAGGED_COMMIT_HELPER) {
@@ -256,7 +264,7 @@ fn tag(plan: &ReleasePlan, helper: &HelperRelease) -> RenderedJob {
         }),
         permissions: permissions(&scopes),
         outputs: plan
-            .binaries
+            .tagged_binaries()
             .iter()
             .map(|binary| binary.package.clone())
             .chain(without_binary(plan, helper))
@@ -265,6 +273,10 @@ fn tag(plan: &ReleasePlan, helper: &HelperRelease) -> RenderedJob {
                 (package, output)
             })
             .chain(commit_outputs(plan, helper))
+            .collect(),
+        needs: [String::from("gate")]
+            .into_iter()
+            .chain(tag_needs(plan))
             .collect(),
         timeout_minutes: u16::try_from(
             u64::from(TAG_JOB_BASE_MINUTES).saturating_add(publish_budget_minutes(&plan.roots)),
@@ -299,7 +311,7 @@ fn source_preflight(plan: &ReleasePlan, helper: &HelperRelease) -> Option<Render
     })
 }
 
-fn record(helper: &HelperRelease, files: &[String]) -> RenderedStep {
+fn record(plan: &ReleasePlan, helper: &HelperRelease, files: &[String]) -> RenderedStep {
     let files = files.join(" ");
     if !helper.version().at_least(TAGGED_COMMIT_HELPER) {
         return RenderedStep {
@@ -309,22 +321,44 @@ fn record(helper: &HelperRelease, files: &[String]) -> RenderedStep {
             ..RenderedStep::default()
         };
     }
+    let recovers = helper.version().at_least(RECORD_RECOVERY_HELPER);
+    let mut env = variables(&[
+        ("GITHUB_TOKEN", "${{ github.token }}"),
+        ("REPOSITORY", "${{ github.repository }}"),
+        ("COMMIT", VERIFIED_COMMIT),
+    ]);
+    let mut run =
+        "velnor-ci release record --repo=\"$REPOSITORY\" --verified-commit=\"$COMMIT\"".to_owned();
+    if recovers {
+        env.push((
+            "RUSTUP_TOOLCHAIN".to_owned(),
+            Value::Text(TOOLCHAIN.to_owned()),
+        ));
+        run = format!("{run} --app={RELEASE_APP_SLUG} {}", record_configs(plan));
+    }
     RenderedStep {
         id: Some("record".to_owned()),
         name: "Record the released packages and the commits their tags are on".to_owned(),
-        env: variables(&[
-            ("GITHUB_TOKEN", "${{ github.token }}"),
-            ("REPOSITORY", "${{ github.repository }}"),
-            ("COMMIT", VERIFIED_COMMIT),
-        ]),
-        run: Some(format!(
-            "velnor-ci release record --repo=\"$REPOSITORY\" --verified-commit=\"$COMMIT\" {files}"
-        )),
+        env,
+        run: Some(format!("{run} {files}")),
         ..RenderedStep::default()
     }
 }
 
-fn newest_check() -> RenderedStep {
+fn record_configs(plan: &ReleasePlan) -> String {
+    plan.roots
+        .iter()
+        .map(|root| {
+            format!(
+                "--config={}",
+                shell_word(&join(&root.root, RELEASE_PLZ_FILE))
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+pub(crate) fn newest_check() -> RenderedStep {
     RenderedStep {
         id: Some("newest".to_owned()),
         name: "Check that the verified commit is still the newest on the default branch".to_owned(),

@@ -3,13 +3,13 @@
 
 use crate::error::HostError;
 
+mod container_absences;
 mod creation_targets;
 mod dispatch_deadlines;
 mod shape;
 pub(in crate::journal) use shape::UNBOUND_SHAPE;
 
 pub(super) async fn migrate_v50_to_v51(conn: &turso::Connection) -> Result<(), HostError> {
-    super::validate_persisted_schema_v50(conn).await?;
     creation_targets::migrate_history(conn).await?;
     creation_targets::install(conn).await?;
     replace_shape_guards(conn, UNBOUND_SHAPE).await?;
@@ -25,6 +25,9 @@ pub(super) async fn validate(conn: &turso::Connection) -> Result<(), HostError> 
     if super::journal_version(conn).await? >= 52 {
         dispatch_deadlines::validate(conn).await?;
     }
+    if super::journal_version(conn).await? >= 56 {
+        container_absences::validate(conn).await?;
+    }
     Ok(())
 }
 
@@ -35,6 +38,10 @@ pub(super) async fn migrate_v51_to_v52(conn: &turso::Connection) -> Result<(), H
         .await
         .map_err(|_| HostError::Journal)?;
     validate(conn).await
+}
+
+pub(super) async fn migrate_v55_to_v56(conn: &turso::Connection) -> Result<(), HostError> {
+    container_absences::migrate(conn).await
 }
 
 const VERSION: i64 = 43;
@@ -135,7 +142,6 @@ fn objects(shape: &str) -> Vec<(&'static str, String, String)> {
 }
 
 pub(super) async fn migrate_v42_to_v43(conn: &turso::Connection) -> Result<(), HostError> {
-    super::validate_persisted_schema_v42(conn).await?;
     conn.execute("DROP VIEW physical_attempt_terminal_proofs", ())
         .await
         .map_err(|_| HostError::Journal)?;
@@ -147,25 +153,23 @@ pub(super) async fn migrate_v42_to_v43(conn: &turso::Connection) -> Result<(), H
     conn.execute("PRAGMA user_version = 43", ())
         .await
         .map_err(|_| HostError::Journal)?;
-    super::validate_persisted_schema_v43(conn).await
+    Ok(())
 }
 
 pub(super) async fn migrate_v43_to_v44(conn: &turso::Connection) -> Result<(), HostError> {
-    super::validate_persisted_schema_v43(conn).await?;
     replace_shape_guards(conn, SHAPE_V44).await?;
     conn.execute("PRAGMA user_version = 44", ())
         .await
         .map_err(|_| HostError::Journal)?;
-    super::validate_persisted_schema_v44(conn).await
+    Ok(())
 }
 
 pub(super) async fn migrate_v44_to_v45(conn: &turso::Connection) -> Result<(), HostError> {
-    super::validate_persisted_schema_v44(conn).await?;
     replace_shape_guards(conn, SHAPE_V45).await?;
     conn.execute("PRAGMA user_version = 45", ())
         .await
         .map_err(|_| HostError::Journal)?;
-    super::validate_persisted_schema_v45(conn).await
+    Ok(())
 }
 
 async fn replace_shape_guards(conn: &turso::Connection, shape: &str) -> Result<(), HostError> {

@@ -364,3 +364,38 @@ fn missing_snapshot_restore_discards_target_through_foreign_untracked_cache_link
 fn save_allows_target_through_foreign_untracked_cache_link() {
     foreign_cache_link("save", false);
 }
+
+#[test]
+fn a_corrupt_git_index_fails_restored_instead_of_a_partial_cold_build() {
+    let repo = Repo::new("cold-corrupt-index");
+    repo.write("src/lib.rs", "pub fn one() {}\n");
+    repo.write("app/Cargo.toml", "[package]\n");
+    stale_target(&repo, "target");
+    stale_target(&repo, "app/target");
+    std::fs::write(repo.root().join(".git/index"), b"not an index")
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let output = helper(&repo, &["restored"]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!output.status.success(), "{stdout}{stderr}");
+    assert!(!stdout.contains("building cold"), "{stdout}");
+    assert!(stderr.contains("tracked Cargo manifests"), "{stderr}");
+}
+
+#[test]
+fn restored_without_git_on_the_path_fails_instead_of_a_partial_cold_build() {
+    let repo = Repo::new("cold-no-git");
+    repo.write("src/lib.rs", "pub fn one() {}\n");
+    repo.write("rust/Cargo.toml", "[package]\n");
+    stale_target(&repo, "rust/target");
+    let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        .arg("restored")
+        .current_dir(repo.root())
+        .env("PATH", "")
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(!output.status.success(), "{stdout}");
+    assert!(!stdout.contains("building cold"), "{stdout}");
+    assert!(repo.root().join("rust/target").exists());
+}

@@ -181,11 +181,10 @@ fn same_directory(actual: &Path, expected: &Path) -> bool {
 pub(super) fn verify_downloads(metrics: &mut LaneMetrics, log: &[u8]) -> Result<(), CiError> {
     for invocation in &mut metrics.invocations {
         let progress = progress(invocation, log)?;
-        let exact_sources = metrics.caches.iter().any(|cache| {
-            cache.family == "sources"
-                && cache.root.as_deref() == Some(invocation.root.as_str())
-                && cache.hit == Hit::Exact
-        });
+        let exact_sources = metrics
+            .caches
+            .iter()
+            .any(|cache| cache.exact_sources_for(&invocation.root));
         let (downloads, diagnostics, errors) =
             artifact_evidence::downloads(invocation, &invocation.root, &progress, exact_sources);
         invocation.downloads = downloads;
