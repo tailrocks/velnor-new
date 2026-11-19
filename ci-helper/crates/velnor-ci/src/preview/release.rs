@@ -70,6 +70,23 @@ pub fn verify_annotated_tag(net: &dyn Net, preview: &Value) -> Res<String> {
     Ok(sha.to_owned())
 }
 
+/// The release holds exactly these four assets, each once.
+fn require_exactly(release: &Value, names: &[&str; 4]) -> Res<()> {
+    let assets = release
+        .at("assets")
+        .as_array()
+        .ok_or_else(|| CiError::new("assets"))?;
+    require(assets.len() == names.len())?;
+    let mut have: Vec<&str> = assets
+        .iter()
+        .filter_map(|a| a.at("name").as_str())
+        .collect();
+    let mut want = names.to_vec();
+    have.sort_unstable();
+    want.sort_unstable();
+    require(have == want)
+}
+
 /// Port of `download_verified_release`.
 pub fn download_verified_release(net: &dyn Net, preview: &Value) -> Res<Release> {
     let id = preview.at("release_id");
@@ -89,19 +106,7 @@ pub fn download_verified_release(net: &dyn Net, preview: &Value) -> Res<Release>
         linux,
         darwin,
     ];
-    let assets = release
-        .at("assets")
-        .as_array()
-        .ok_or_else(|| CiError::new("assets"))?;
-    require(assets.len() == names.len())?;
-    let mut have: Vec<&str> = assets
-        .iter()
-        .filter_map(|a| a.at("name").as_str())
-        .collect();
-    let mut want = names.to_vec();
-    have.sort_unstable();
-    want.sort_unstable();
-    require(have == want)?;
+    require_exactly(&release, &names)?;
     let tag = preview.at("tag").text();
     let prefix = format!("https://github.com/{REPOSITORY}/releases/download/{tag}/");
     let (receipt_size, receipt_digest) = asset_metadata(

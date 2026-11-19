@@ -88,13 +88,19 @@ pub fn is_semver(text: &str) -> bool {
 }
 
 #[must_use]
-pub fn digest(data: &[u8]) -> String {
-    use fmt::Write as _;
-    let mut text = String::with_capacity(64);
-    for byte in Sha256::digest(data) {
-        let _ = write!(text, "{byte:02x}");
+pub fn hex(bytes: &[u8]) -> String {
+    const DIGITS: &[u8; 16] = b"0123456789abcdef";
+    let mut text = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        text.push(char::from(DIGITS[usize::from(byte >> 4)]));
+        text.push(char::from(DIGITS[usize::from(byte & 15)]));
     }
     text
+}
+
+#[must_use]
+pub fn digest(data: &[u8]) -> String {
+    hex(&Sha256::digest(data))
 }
 
 struct Unique(Value);

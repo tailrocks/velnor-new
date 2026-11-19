@@ -57,19 +57,14 @@ fn keys_of(value: &Value) -> BTreeSet<&str> {
         .map_or_else(BTreeSet::new, |m| m.keys().map(String::as_str).collect())
 }
 
-/// Port of `verify_pair`: the receipt is canonical, says what the source, candidate and
-/// payloads say, comes from successful runs, and carries a valid attestation.
-pub fn verify_pair(
-    ctx: &Ctx<'_>,
+/// What a receipt must say about the source, the candidate, the payloads and its two runs.
+fn check_receipt(
+    receipt: &Value,
     source: &Value,
     candidate: &Value,
     release_id: u64,
     payloads: &BTreeMap<String, Vec<u8>>,
-    receipt_bytes: &[u8],
-    bundle: &[u8],
-) -> Res<Pair> {
-    let receipt = parse(receipt_bytes, usize::MAX)?;
-    require(canonical(&receipt) == receipt_bytes)?;
+) -> Res<()> {
     let mut want = keys_of(source);
     want.remove("targets");
     want.extend([
@@ -79,7 +74,7 @@ pub fn verify_pair(
         "draft",
         "signer",
     ]);
-    require(keys_of(&receipt) == want)?;
+    require(keys_of(receipt) == want)?;
     for (key, value) in source.as_object().into_iter().flatten() {
         if key != "targets" {
             require(receipt.at(key) == value)?;
@@ -97,6 +92,24 @@ pub fn verify_pair(
         }
         positive(run.at("run_attempt"))?;
     }
+    Ok(())
+}
+
+/// Port of `verify_pair`: the receipt is canonical, says what the source, candidate and
+/// payloads say, comes from successful runs, and carries a valid attestation.
+pub fn verify_pair(
+    ctx: &Ctx<'_>,
+    source: &Value,
+    candidate: &Value,
+    release_id: u64,
+    payloads: &BTreeMap<String, Vec<u8>>,
+    receipt_bytes: &[u8],
+    bundle: &[u8],
+) -> Res<Pair> {
+    let receipt = parse(receipt_bytes, usize::MAX)?;
+    require(canonical(&receipt) == receipt_bytes)?;
+    check_receipt(&receipt, source, candidate, release_id, payloads)?;
+    let origin = source.at("source");
     let attempts = [
         origin.at("run_attempt").as_u64(),
         receipt.at("draft").at("run_attempt").as_u64(),

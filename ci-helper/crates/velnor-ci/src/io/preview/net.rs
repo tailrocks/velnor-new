@@ -110,7 +110,7 @@ impl Transport {
         }
         let mut reader = response.body_mut().as_reader();
         let mut result = Vec::new();
-        let mut chunk = [0_u8; 65_536];
+        let mut chunk = vec![0_u8; 65_536];
         loop {
             require(Instant::now() <= self.deadline)?;
             let count = reader.read(&mut chunk).map_err(|_| failure())?;

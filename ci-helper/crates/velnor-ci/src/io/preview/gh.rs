@@ -19,7 +19,7 @@ use serde_json::Value;
 use crate::error::CiError;
 use crate::preview::REPOSITORY;
 use crate::preview::attest::{Attestor, Authority, Subject, check_verified};
-use crate::preview::json::{Res, digest, parse, require};
+use crate::preview::json::{Res, digest, hex, parse, require};
 
 const MAX_GH_BYTES: u64 = 104_857_600;
 const MAX_OUTPUT: usize = 16_777_216;
@@ -98,7 +98,7 @@ struct Scratch(PathBuf);
 
 impl Drop for Scratch {
     fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.0);
+        drop(fs::remove_dir_all(&self.0));
     }
 }
 
@@ -107,7 +107,7 @@ fn scratch(root: &Path) -> Res<Scratch> {
     fs::File::open("/dev/urandom")
         .and_then(|mut f| f.read_exact(&mut random))
         .map_err(|_| error("random"))?;
-    let name: String = random.iter().map(|b| format!("{b:02x}")).collect();
+    let name = hex(&random);
     let path = root.join(format!("source-preview-stage-{name}"));
     DirBuilder::new()
         .mode(0o700)
@@ -131,7 +131,7 @@ fn capture(mut command: Command, deadline: Instant) -> Res<Vec<u8>> {
         let (sender, receiver) = mpsc::channel();
         thread::spawn(move || {
             let mut out = Vec::new();
-            let mut chunk = [0_u8; 65_536];
+            let mut chunk = vec![0_u8; 65_536];
             let result = loop {
                 match stdout.read(&mut chunk) {
                     Ok(0) => break Ok(out),
@@ -144,7 +144,7 @@ fn capture(mut command: Command, deadline: Instant) -> Res<Vec<u8>> {
                     Err(_) => break Err(()),
                 }
             };
-            let _ = sender.send(result);
+            drop(sender.send(result));
         });
         let wait = deadline.saturating_duration_since(Instant::now());
         let output = receiver
@@ -152,21 +152,17 @@ fn capture(mut command: Command, deadline: Instant) -> Res<Vec<u8>> {
             .map_err(|_| error("timeout"))?
             .map_err(|()| error("output"))?;
         loop {
-            match child.try_wait().map_err(|_| error("wait"))? {
-                Some(status) => {
-                    require(status.success())?;
-                    return Ok(output);
-                }
-                None => {
-                    require(Instant::now() < deadline)?;
-                    thread::sleep(Duration::from_millis(5));
-                }
+            if let Some(status) = child.try_wait().map_err(|_| error("wait"))? {
+                require(status.success())?;
+                return Ok(output);
             }
+            require(Instant::now() < deadline)?;
+            thread::sleep(Duration::from_millis(5));
         }
     })();
     if child.try_wait().ok().flatten().is_none() {
-        let _ = killpg(group, Signal::SIGKILL);
-        let _ = child.wait();
+        killpg(group, Signal::SIGKILL).unwrap_or_default();
+        drop(child.wait());
     }
     outcome
 }

@@ -27,6 +27,16 @@ fn run(world: World, host: Host) -> Result<velnor_ci::preview::runtime::Verified
     verify_runtime(&net, &attestor, host, PUBLIC, PUBLIC_RUN, 1).map_err(|e| e.to_string())
 }
 
+fn put(world: &mut World, suffix: &str, pointer: &str, value: Value) {
+    edit(world, suffix, |v| {
+        if let Some(slot) = v.pointer_mut(pointer) {
+            *slot = value;
+        } else {
+            unreachable!("{suffix} {pointer}");
+        }
+    });
+}
+
 fn edit(world: &mut World, suffix: &str, change: impl FnOnce(&mut Value)) {
     let path = World::path(suffix);
     let value = world
@@ -38,35 +48,33 @@ fn edit(world: &mut World, suffix: &str, change: impl FnOnce(&mut Value)) {
 
 /// Each mutation breaks one thing the legacy script checks. All of them must be refused.
 pub(crate) const MUTATIONS: &[Mutation] = &[
-    ("repository id changed", |w| {
-        edit(w, "", |v| v["id"] = json!(1))
-    }),
+    ("repository id changed", |w| put(w, "", "/id", json!(1))),
     ("default branch is not main", |w| {
-        edit(w, "", |v| v["default_branch"] = json!("dev"))
+        put(w, "", "/default_branch", json!("dev"));
     }),
     ("main moved past the public source", |w| {
-        edit(w, "/commits/main", |v| v["sha"] = json!(PARENT))
+        put(w, "/commits/main", "/sha", json!(PARENT));
     }),
     ("public run is for another commit", |w| {
         edit(w, &format!("/actions/runs/{PUBLIC_RUN}/attempts/1"), |v| {
-            v["head_sha"] = json!(PARENT)
-        })
+            v["head_sha"] = json!(PARENT);
+        });
     }),
     ("public run is a pull request", |w| {
         edit(w, &format!("/actions/runs/{PUBLIC_RUN}/attempts/1"), |v| {
-            v["event"] = json!("pull_request")
-        })
+            v["event"] = json!("pull_request");
+        });
     }),
     ("public run is another workflow", |w| {
         edit(w, &format!("/actions/runs/{PUBLIC_RUN}/attempts/1"), |v| {
-            v["path"] = json!(".github/workflows/ci.yml@refs/heads/main")
-        })
+            v["path"] = json!(".github/workflows/ci.yml@refs/heads/main");
+        });
     }),
     ("public run failed", |w| {
         edit(w, &format!("/actions/runs/{PUBLIC_RUN}/attempts/1"), |v| {
             v["status"] = json!("completed");
             v["conclusion"] = json!("failure");
-        })
+        });
     }),
     ("the base lock does not approve the preview", |w| {
         let text = "[runtime-preview-staged]\nschema = 3\n";
@@ -96,64 +104,72 @@ pub(crate) const MUTATIONS: &[Mutation] = &[
         edit(
             w,
             &format!("/contents/.velnor/generator.lock?ref={PUBLIC}"),
-            |v| v["content"] = json!("%%%"),
-        )
+            |v| {
+                v["content"] = json!("%%%");
+            },
+        );
     }),
     ("the lock size lies", |w| {
         edit(
             w,
             &format!("/contents/.velnor/generator.lock?ref={PUBLIC}"),
-            |v| v["size"] = json!(3),
-        )
+            |v| {
+                v["size"] = json!(3);
+            },
+        );
     }),
     ("the preview does not descend from the parent", |w| {
         edit(w, &format!("/compare/{SOURCE}...{PARENT}"), |v| {
-            v["status"] = json!("diverged")
-        })
+            v["status"] = json!("diverged");
+        });
     }),
     ("the compare merge base is another commit", |w| {
         edit(w, &format!("/compare/{SOURCE}...{PARENT}"), |v| {
-            v["merge_base_commit"]["sha"] = json!(PARENT)
-        })
+            v["merge_base_commit"]["sha"] = json!(PARENT);
+        });
     }),
     ("the preview source is not behind the authority", |w| {
         edit(w, &format!("/compare/{AUTHORITY}...{SOURCE}"), |v| {
-            v["status"] = json!("behind")
-        })
+            v["status"] = json!("behind");
+        });
     }),
     ("ci run failed", |w| {
         edit(w, "/actions/runs/600/attempts/1", |v| {
-            v["conclusion"] = json!("failure")
-        })
+            v["conclusion"] = json!("failure");
+        });
     }),
     ("ci run is on another branch", |w| {
         edit(w, "/actions/runs/600/attempts/1", |v| {
-            v["head_branch"] = json!("feature")
-        })
+            v["head_branch"] = json!("feature");
+        });
     }),
     ("ci run is another repository", |w| {
         edit(w, "/actions/runs/600/attempts/1", |v| {
-            v["head_repository"]["full_name"] = json!("evil/velnor-new")
-        })
+            v["head_repository"]["full_name"] = json!("evil/velnor-new");
+        });
     }),
     ("qualification is not a dispatch", |w| {
         edit(w, "/actions/runs/700/attempts/1", |v| {
-            v["event"] = json!("push")
-        })
+            v["event"] = json!("push");
+        });
     }),
     ("the Required job failed", |w| {
         edit(
             w,
             "/actions/runs/600/attempts/1/jobs?per_page=100&page=1",
-            |v| v["jobs"][0]["conclusion"] = json!("failure"),
-        )
+            |v| {
+                v["jobs"][0]["conclusion"] = json!("failure");
+            },
+        );
     }),
     ("the Required job is for another commit", |w| {
         edit(
             w,
             "/actions/runs/600/attempts/1/jobs?per_page=100&page=1",
-            |v| v["jobs"][0]["head_sha"] = json!(PARENT),
-        )
+            |v| {
+                v["jobs"][0]["head_sha"] = json!(PARENT);
+            },
+        );
     }),
     ("the Required job appears twice", |w| {
         edit(
@@ -169,65 +185,73 @@ pub(crate) const MUTATIONS: &[Mutation] = &[
                     .push(twin);
                 v["total_count"] = json!(2);
             },
-        )
+        );
     }),
     ("the job list lies about its total", |w| {
         edit(
             w,
             "/actions/runs/600/attempts/1/jobs?per_page=100&page=1",
-            |v| v["total_count"] = json!(2),
-        )
+            |v| {
+                v["total_count"] = json!(2);
+            },
+        );
     }),
     ("the qualification job is not the pinned one", |w| {
         edit(
             w,
             "/actions/runs/800/attempts/1/jobs?per_page=100&page=1",
-            |v| v["jobs"][1]["id"] = json!(1),
-        )
+            |v| {
+                v["jobs"][1]["id"] = json!(1);
+            },
+        );
     }),
     ("the producer artifact expired", |w| {
-        edit(w, "/actions/artifacts/11", |v| v["expired"] = json!(true))
+        put(w, "/actions/artifacts/11", "/expired", json!(true));
     }),
     ("the producer artifact has another digest", |w| {
         edit(w, "/actions/artifacts/13", |v| {
-            v["digest"] = json!("sha256:00")
-        })
+            v["digest"] = json!("sha256:00");
+        });
     }),
     ("the producer artifact belongs to another run", |w| {
         edit(w, "/actions/artifacts/11", |v| {
-            v["workflow_run"]["id"] = json!(1)
-        })
+            v["workflow_run"]["id"] = json!(1);
+        });
     }),
     ("the draft job failed", |w| {
         edit(
             w,
             "/actions/runs/500/attempts/2/jobs?per_page=100&page=1",
-            |v| v["jobs"][0]["conclusion"] = json!("cancelled"),
-        )
+            |v| {
+                v["jobs"][0]["conclusion"] = json!("cancelled");
+            },
+        );
     }),
     ("the publisher job id is not the pinned one", |w| {
-        edit(w, "/actions/jobs/7003", |v| v["id"] = json!(7004))
+        put(w, "/actions/jobs/7003", "/id", json!(7004));
     }),
     ("the publisher job ran for another run", |w| {
-        edit(w, "/actions/jobs/7003", |v| v["run_id"] = json!(501))
+        put(w, "/actions/jobs/7003", "/run_id", json!(501));
     }),
     ("the tag is lightweight", |w| {
         edit(w, &format!("/git/ref/tags/sdk-preview-{SOURCE}"), |v| {
-            v["object"]["type"] = json!("commit")
-        })
+            v["object"]["type"] = json!("commit");
+        });
     }),
     ("the tag points at another commit", |w| {
         edit(
             w,
             &format!("/git/tags/{}", crate::preview_world::TAG_OID),
-            |v| v["object"]["sha"] = json!(PARENT),
-        )
+            |v| {
+                v["object"]["sha"] = json!(PARENT);
+            },
+        );
     }),
     ("the release is not immutable", |w| {
-        edit(w, "/releases/9000", |v| v["immutable"] = json!(false))
+        put(w, "/releases/9000", "/immutable", json!(false));
     }),
     ("the release is a draft", |w| {
-        edit(w, "/releases/9000", |v| v["draft"] = json!(true))
+        put(w, "/releases/9000", "/draft", json!(true));
     }),
     ("the release has an extra asset", |w| {
         edit(w, "/releases/9000", |v| {
@@ -236,17 +260,17 @@ pub(crate) const MUTATIONS: &[Mutation] = &[
                 .as_array_mut()
                 .unwrap_or_else(|| unreachable!())
                 .push(extra);
-        })
+        });
     }),
     ("a release asset is not uploaded", |w| {
         edit(w, "/releases/9000", |v| {
-            v["assets"][2]["state"] = json!("starter")
-        })
+            v["assets"][2]["state"] = json!("starter");
+        });
     }),
     ("a release asset has another url", |w| {
         edit(w, "/releases/9000", |v| {
-            v["assets"][2]["browser_download_url"] = json!("https://evil.example/x")
-        })
+            v["assets"][2]["browser_download_url"] = json!("https://evil.example/x");
+        });
     }),
     ("a payload body differs from its digest", |w| {
         let url = w
@@ -272,12 +296,12 @@ pub(crate) const MUTATIONS: &[Mutation] = &[
         "the attestation certificate names another signer digest",
         |w| {
             w.attestation[0]["verificationResult"]["signature"]["certificate"]["buildSignerDigest"] =
-                json!(PARENT)
+                json!(PARENT);
         },
     ),
     ("the attestation certificate is for another trigger", |w| {
         w.attestation[0]["verificationResult"]["signature"]["certificate"]["buildTrigger"] =
-            json!("workflow_dispatch")
+            json!("workflow_dispatch");
     }),
     ("the attestation has a fourth subject", |w| {
         let subject = json!({"name": "extra", "digest": {"sha256": "00"}});
@@ -288,7 +312,7 @@ pub(crate) const MUTATIONS: &[Mutation] = &[
     }),
     ("the attestation covers another payload digest", |w| {
         w.attestation[0]["verificationResult"]["statement"]["subject"][1]["digest"]["sha256"] =
-            json!("00")
+            json!("00");
     }),
     ("there are two attestations", |w| {
         let first = w.attestation[0].clone();

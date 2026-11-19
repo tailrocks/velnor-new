@@ -10,7 +10,7 @@ use std::time::Instant;
 use nix::unistd::geteuid;
 
 use crate::error::CiError;
-use crate::preview::json::{Res, require};
+use crate::preview::json::{Res, hex, require};
 use crate::preview::runtime::Verified;
 
 const FINAL_NAME: &str = "source-preview-runtime";
@@ -34,7 +34,7 @@ fn rename_exclusive(from: &Path, to: &Path) -> Res<()> {
         .create(to)
         .map_err(|_| error("rename"))?;
     fs::rename(from, to).map_err(|_| {
-        let _ = fs::remove_dir(to);
+        drop(fs::remove_dir(to));
         error("rename")
     })
 }
@@ -45,7 +45,7 @@ fn random_name() -> Res<String> {
     File::open("/dev/urandom")
         .and_then(|mut f| f.read_exact(&mut bytes))
         .map_err(|_| error("random"))?;
-    Ok(bytes.iter().map(|b| format!("{b:02x}")).collect())
+    Ok(hex(&bytes))
 }
 
 fn write_all(directory: &Path, name: &str, data: &[u8], deadline: Instant) -> Res<()> {
@@ -66,7 +66,6 @@ fn write_all(directory: &Path, name: &str, data: &[u8], deadline: Instant) -> Re
 /// of this user with no other link.
 pub fn write_outputs(path: &Path, text: &str) -> Res<()> {
     let mut file = OpenOptions::new()
-        .write(true)
         .append(true)
         .custom_flags(libc::O_NOFOLLOW)
         .open(path)
@@ -113,14 +112,14 @@ pub fn install(
             .map_err(|_| error("sync"))?;
         require(Instant::now() < deadline)?;
         rename_exclusive(&temporary, &committed)?;
-        current = committed.clone();
+        current.clone_from(&committed);
         require(Instant::now() < deadline)?;
         emit()
     })();
     if result.is_err() {
         let now = fs::symlink_metadata(&current).ok();
         if now.is_some_and(|m| (m.dev(), m.ino()) == (created.dev(), created.ino())) {
-            let _ = fs::remove_dir_all(&current);
+            drop(fs::remove_dir_all(&current));
         }
     }
     result.map(|()| committed)

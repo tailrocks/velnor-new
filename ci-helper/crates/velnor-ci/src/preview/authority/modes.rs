@@ -218,14 +218,13 @@ fn draft(
     )?;
     let selected = prepare_pair(ctx, &source, &decision, &payloads)?;
     verify_tag(client, source.at("source_sha").text())?;
-    let mut out = String::new();
-    for key in [
+    let mut out: String = [
         "darwin_payload_artifact_id",
         "linux_payload_artifact_id",
         "source_artifact_id",
-    ] {
-        out.push_str(&format!("{key}={}\n", candidate.at(key)));
-    }
+    ]
+    .map(|key| format!("{key}={}\n", candidate.at(key)))
+    .concat();
     match &selected {
         Selection::Sign => out.push_str("sign=true\n"),
         Selection::Reuse(pair) => {
@@ -236,14 +235,15 @@ fn draft(
     append(inputs.output()?, &out)
 }
 
-fn prepare(
+/// The decision file the draft step left, checked against the source, the payloads and the
+/// environment, and the draft and admit jobs it names. Returns the decision and the candidate.
+fn read_decision(
     ctx: &Ctx<'_>,
     inputs: &Inputs,
     base: &Path,
     source: &Value,
     payloads: &BTreeMap<String, Vec<u8>>,
-) -> Res<()> {
-    let client = ctx.client;
+) -> Res<(Value, Value)> {
     let bytes = read_file(
         &base.join("source-preview-decision"),
         "source-preview-decision.json",
@@ -252,24 +252,14 @@ fn prepare(
     let decision = parse(&bytes, usize::MAX)?;
     require(canonical(&decision) == bytes)?;
     let origin = source.at("source");
-    let keys = decision.as_object().map(|m| {
-        m.keys()
-            .map(String::as_str)
-            .collect::<std::collections::BTreeSet<_>>()
-    });
-    require(
-        keys == Some(
-            ["source", "candidate", "release_id", "targets", "draft"]
-                .into_iter()
-                .collect(),
-        ),
-    )?;
-    require(decision.at("source") == source)?;
-    let draft = decision.at("draft");
     let key_set = |v: &Value| {
         v.as_object()
             .map(|m| m.keys().cloned().collect::<std::collections::BTreeSet<_>>())
     };
+    let wanted = ["source", "candidate", "release_id", "targets", "draft"];
+    require(key_set(&decision) == Some(wanted.iter().map(|k| (*k).to_owned()).collect()))?;
+    require(decision.at("source") == source)?;
+    let draft = decision.at("draft");
     require(key_set(draft).is_some() && key_set(draft) == key_set(origin))?;
     for key in ["workflow_path", "workflow_ref", "workflow_sha", "run_id"] {
         require(draft.at(key) == origin.at(key))?;
@@ -292,30 +282,49 @@ fn prepare(
         source.at("source_sha").text(),
         positive(origin.at("run_id"))?,
     );
-    successful_job(
-        client,
-        sha,
-        run_id,
-        origin.at("run_attempt").as_u64().unwrap_or(0),
-        ADMIT,
-        false,
-    )?;
-    successful_job(client, sha, run_id, draft_attempt, DRAFT, false)?;
+    let first = origin.at("run_attempt").as_u64().unwrap_or(0);
+    successful_job(ctx.client, sha, run_id, first, ADMIT, false)?;
+    successful_job(ctx.client, sha, run_id, draft_attempt, DRAFT, false)?;
+    Ok((decision, candidate))
+}
+
+/// Where the signed pair is: the artifact the attest job uploaded, or the release.
+fn read_signed(
+    ctx: &Ctx<'_>,
+    inputs: &Inputs,
+    base: &Path,
+    source: &Value,
+) -> Res<(Vec<u8>, Vec<u8>)> {
+    match inputs.req("PAIR_ORIGIN")? {
+        "artifact" => read_pair(&base.join("source-preview-signed")),
+        "release" => {
+            let id = positive_text(inputs.req("PAIR_ID")?)?;
+            released_pair(
+                ctx.client,
+                &ctx.client.get(&format!("/releases/{id}"))?,
+                source,
+            )
+        }
+        _ => Err(CiError::new("source preview pair origin")),
+    }
+}
+
+fn prepare(
+    ctx: &Ctx<'_>,
+    inputs: &Inputs,
+    base: &Path,
+    source: &Value,
+    payloads: &BTreeMap<String, Vec<u8>>,
+) -> Res<()> {
+    let client = ctx.client;
+    let (decision, candidate) = read_decision(ctx, inputs, base, source, payloads)?;
+    let sha = source.at("source_sha").text();
     let release_id = positive(decision.at("release_id"))?;
     let selected = match inputs.req("SIGN")? {
         "true" => Selection::Sign,
         "false" => {
-            let origin_kind = inputs.req("PAIR_ORIGIN")?;
             let pair_id = positive_text(inputs.req("PAIR_ID")?)?;
-            let (receipt, bundle) = match origin_kind {
-                "artifact" => read_pair(&base.join("source-preview-signed"))?,
-                "release" => released_pair(
-                    client,
-                    &client.get(&format!("/releases/{pair_id}"))?,
-                    source,
-                )?,
-                _ => return Err(CiError::new("source preview pair origin")),
-            };
+            let (receipt, bundle) = read_signed(ctx, inputs, base, source)?;
             require(
                 digest(&receipt) == inputs.req("RECEIPT_SHA256")?
                     && digest(&bundle) == inputs.req("BUNDLE_SHA256")?,
@@ -323,7 +332,7 @@ fn prepare(
             let mut pair = verify_pair(
                 ctx, source, &candidate, release_id, payloads, &receipt, &bundle,
             )?;
-            pair.origin = if origin_kind == "artifact" {
+            pair.origin = if inputs.req("PAIR_ORIGIN")? == "artifact" {
                 "artifact"
             } else {
                 "release"
@@ -357,20 +366,8 @@ fn publish(
     source: &Value,
     payloads: &BTreeMap<String, Vec<u8>>,
 ) -> Res<()> {
-    let client = ctx.client;
     let origin_kind = inputs.req("PAIR_ORIGIN")?;
-    let (receipt_bytes, bundle) = match origin_kind {
-        "artifact" => read_pair(&base.join("source-preview-signed"))?,
-        "release" => released_pair(
-            client,
-            &client.get(&format!(
-                "/releases/{}",
-                positive_text(inputs.req("PAIR_ID")?)?
-            ))?,
-            source,
-        )?,
-        _ => return Err(CiError::new("source preview pair origin")),
-    };
+    let (receipt_bytes, bundle) = read_signed(ctx, inputs, base, source)?;
     let receipt = parse(&receipt_bytes, usize::MAX)?;
     if origin_kind == "release" {
         require(

@@ -26,10 +26,7 @@ pub(crate) const SIGNER: &str = ".github/workflows/product-release-generator.yml
 pub(crate) const PUBLIC_RUN: u64 = 1000;
 
 pub(crate) fn sha(data: &[u8]) -> String {
-    Sha256::digest(data)
-        .iter()
-        .map(|b| format!("{b:02x}"))
-        .collect()
+    velnor_ci::preview::json::hex(&Sha256::digest(data))
 }
 
 pub(crate) fn linux_payload() -> Vec<u8> {
@@ -68,10 +65,19 @@ fn record(receipt: &[u8], bundle: &[u8]) -> Value {
     put("candidate_source_artifact_id", json!(101));
     put("publisher_run_attempt", json!(3));
     put("publisher_job_id", json!(7003));
+    add_runs(&mut map, &tag_ref);
+    add_targets(&mut map);
+    Value::Object(map)
+}
+
+fn add_runs(map: &mut Map<String, Value>, tag_ref: &str) {
+    let mut put = |key: &str, value: Value| {
+        map.insert(key.to_owned(), value);
+    };
     for (role, path, git_ref, run, attempt) in [
-        ("source", SIGNER, tag_ref.as_str(), 500, 1),
-        ("draft", SIGNER, tag_ref.as_str(), 500, 2),
-        ("signer", SIGNER, tag_ref.as_str(), 500, 3),
+        ("source", SIGNER, tag_ref, 500, 1),
+        ("draft", SIGNER, tag_ref, 500, 2),
+        ("signer", SIGNER, tag_ref, 500, 3),
         ("ci", ".github/workflows/ci.yml", "refs/heads/main", 600, 1),
         (
             "qualification",
@@ -90,6 +96,12 @@ fn record(receipt: &[u8], bundle: &[u8]) -> Value {
         put(&format!("{role}_run_id"), json!(run));
         put(&format!("{role}_run_attempt"), json!(attempt));
     }
+}
+
+fn add_targets(map: &mut Map<String, Value>) {
+    let mut put = |key: &str, value: Value| {
+        map.insert(key.to_owned(), value);
+    };
     for (key, target, name, data, run, artifact, candidate, job) in [
         (
             "linux",
@@ -132,15 +144,16 @@ fn record(receipt: &[u8], bundle: &[u8]) -> Value {
         put(&format!("{key}_payload_size"), json!(data.len()));
         put(&format!("{key}_payload_sha256"), json!(sha(&data)));
     }
-    Value::Object(map)
 }
 
 fn toml_of(record: &Value, table: &str) -> String {
-    let mut text = format!("[{table}]\n");
-    for (key, value) in record.as_object().into_iter().flatten() {
-        text.push_str(&format!("{key} = {value}\n"));
-    }
-    text
+    let body: String = record
+        .as_object()
+        .into_iter()
+        .flatten()
+        .map(|(key, value)| [key.as_str(), " = ", &value.to_string(), "\n"].concat())
+        .collect();
+    format!("[{table}]\n{body}")
 }
 
 fn base64(data: &[u8]) -> String {
@@ -261,7 +274,7 @@ impl World {
         let count = jobs.len();
         self.set(
             &format!("/actions/runs/{run}/attempts/{attempt}/jobs?per_page=100&page=1"),
-            json!({"total_count": count, "jobs": jobs}),
+            json!({"total_count": count, "jobs": Value::Array(jobs)}),
         );
     }
 

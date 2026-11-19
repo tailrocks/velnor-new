@@ -167,6 +167,42 @@ fn write(path: &Path, data: &[u8]) {
     fs::write(path, data).unwrap_or_else(|e| unreachable!("{e}"));
 }
 
+fn fake_client(tag: &str) -> FakeClient {
+    let client = FakeClient {
+        api: RefCell::new(BTreeMap::new()),
+        zips: BTreeMap::new(),
+        writes: RefCell::new(Vec::new()),
+        deadline: Instant::now() + Duration::from_secs(180),
+    };
+    client.set(
+        &format!("/git/ref/tags/{tag}"),
+        json!({"object": {"type": "tag", "sha": TAG_OID}}),
+    );
+    client.set(
+        &format!("/git/tags/{TAG_OID}"),
+        json!({"tag": tag, "object": {"type": "commit", "sha": SOURCE}}),
+    );
+    client.set(
+        "/git/ref/heads/main",
+        json!({"object": {"type": "commit", "sha": MAIN}}),
+    );
+    client.set(
+        &format!("/compare/{SOURCE}...{MAIN}"),
+        json!({"status": "ahead", "merge_base_commit": {"sha": SOURCE}}),
+    );
+    for (run_attempt, name) in [(1, "Admit"), (2, "Draft"), (3, "Attest")] {
+        client.set(
+            &format!("/actions/runs/500/attempts/{run_attempt}"),
+            json!({"id": 500, "run_attempt": run_attempt, "head_sha": SOURCE, "head_branch": tag, "event": "push",
+                   "path": format!("{SIGNER}@refs/tags/{tag}"), "head_repository": {"full_name": REPO}}),
+        );
+        let full = format!("Source preview publication / {name} source preview");
+        client.set(&format!("/actions/runs/500/attempts/{run_attempt}/jobs?per_page=100&page=1"), json!({"total_count": 1, "jobs": [job(5000 + run_attempt, run_attempt, &full, "success")]}));
+    }
+    client.set("/releases?per_page=100&page=1", json!([]));
+    client
+}
+
 impl Scenario {
     fn new(name: &str, attempt: u64) -> Self {
         let root = fs::canonicalize(fresh_dir("velnor-ci-authority", name))
@@ -188,38 +224,7 @@ impl Scenario {
             &darwin_payload(),
         );
         let tag = format!("sdk-preview-{SOURCE}");
-        let client = FakeClient {
-            api: RefCell::new(BTreeMap::new()),
-            zips: BTreeMap::new(),
-            writes: RefCell::new(Vec::new()),
-            deadline: Instant::now() + Duration::from_secs(180),
-        };
-        client.set(
-            &format!("/git/ref/tags/{tag}"),
-            json!({"object": {"type": "tag", "sha": TAG_OID}}),
-        );
-        client.set(
-            &format!("/git/tags/{TAG_OID}"),
-            json!({"tag": tag, "object": {"type": "commit", "sha": SOURCE}}),
-        );
-        client.set(
-            "/git/ref/heads/main",
-            json!({"object": {"type": "commit", "sha": MAIN}}),
-        );
-        client.set(
-            &format!("/compare/{SOURCE}...{MAIN}"),
-            json!({"status": "ahead", "merge_base_commit": {"sha": SOURCE}}),
-        );
-        for (run_attempt, name) in [(1, "Admit"), (2, "Draft"), (3, "Attest")] {
-            client.set(
-                &format!("/actions/runs/500/attempts/{run_attempt}"),
-                json!({"id": 500, "run_attempt": run_attempt, "head_sha": SOURCE, "head_branch": tag, "event": "push",
-                       "path": format!("{SIGNER}@refs/tags/{tag}"), "head_repository": {"full_name": REPO}}),
-            );
-            let full = format!("Source preview publication / {name} source preview");
-            client.set(&format!("/actions/runs/500/attempts/{run_attempt}/jobs?per_page=100&page=1"), json!({"total_count": 1, "jobs": [job(5000 + run_attempt, run_attempt, &full, "success")]}));
-        }
-        client.set("/releases?per_page=100&page=1", json!([]));
+        let client = fake_client(&tag);
         let vars: BTreeMap<String, String> = [
             ("GITHUB_SHA", SOURCE.to_owned()),
             ("GITHUB_REPOSITORY", REPO.to_owned()),
@@ -336,7 +341,7 @@ fn signed_up(attempt: u64) -> Scenario {
     })
     .unwrap_or_else(|e| unreachable!("{e}"));
     let mut next = Scenario::new(&format!("flow{attempt}-prepare"), attempt);
-    next.base = s.base.clone();
+    next.base.clone_from(&s.base);
     next.client = FakeClient {
         api: RefCell::new(s.client.api.borrow().clone()),
         zips: BTreeMap::new(),
@@ -449,25 +454,27 @@ fn every_broken_precondition_of_draft_is_refused() {
         ("tag is lightweight", |s| {
             s.client
                 .update(&format!("/git/ref/tags/sdk-preview-{SOURCE}"), |v| {
-                    v["object"]["type"] = json!("commit")
-                })
+                    v["object"]["type"] = json!("commit");
+                });
         }),
         ("main is not ahead of the source", |s| {
             s.client
                 .update(&format!("/compare/{SOURCE}...{MAIN}"), |v| {
-                    v["status"] = json!("diverged")
-                })
+                    v["status"] = json!("diverged");
+                });
         }),
         ("admit job failed", |s| {
             s.client.update(
                 "/actions/runs/500/attempts/1/jobs?per_page=100&page=1",
-                |v| v["jobs"][0]["conclusion"] = json!("failure"),
-            )
+                |v| {
+                    v["jobs"][0]["conclusion"] = json!("failure");
+                },
+            );
         }),
         ("admit run is another branch", |s| {
             s.client.update("/actions/runs/500/attempts/1", |v| {
-                v["head_branch"] = json!("main")
-            })
+                v["head_branch"] = json!("main");
+            });
         }),
         ("a release of the tag exists with another marker", |s| {
             s.client.set(
@@ -488,14 +495,14 @@ fn every_broken_precondition_of_draft_is_refused() {
             s.client.set(
                 "/releases?per_page=100&page=1",
                 json!([{"id": 1, "tag_name": "a"}, {"id": 1, "tag_name": "b"}]),
-            )
+            );
         }),
         ("a payload is not an executable of the target", |s| {
             write(
                 &s.base
                     .join(format!("source-preview-payload-darwin/{DARWIN_NAME}")),
                 &linux_payload(),
-            )
+            );
         }),
     ];
     for (name, change) in cases {
@@ -635,7 +642,7 @@ fn preview_parity_authority_draft_and_prepare_write_what_the_legacy_script_write
     let decision =
         |s: &Scenario| fs::read(s.temp.join("source-preview-decision.json")).unwrap_or_default();
     assert_eq!(decision(&old), decision(&new));
-    assert!(!decision(&new).is_empty());
+    assert!(decision(&new).len() > 2);
     assert_eq!(
         created,
         new.client.api.borrow()[&format!("{R}/releases/9000")]
@@ -673,7 +680,7 @@ fn preview_parity_authority_draft_and_prepare_write_what_the_legacy_script_write
                 .unwrap_or_else(|e| unreachable!("{e}"));
         }
         let receipt = fs::read(next.temp.join("SDK_PREVIEW_RECEIPT.json")).unwrap_or_default();
-        assert!(!receipt.is_empty());
+        assert!(receipt.len() > 2);
         fs::write(scenario.temp.join("receipt.copy"), &receipt)
             .unwrap_or_else(|e| unreachable!("{e}"));
         fs::write(scenario.temp.join("prepare-outputs.copy"), next.outputs())

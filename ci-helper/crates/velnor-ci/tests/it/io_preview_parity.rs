@@ -54,7 +54,7 @@ fn world_json(world: &World) -> Value {
     let assets: BTreeMap<&String, String> = world
         .assets
         .iter()
-        .map(|(url, body)| (url, body.iter().map(|b| format!("{b:02x}")).collect()))
+        .map(|(url, body)| (url, velnor_ci::preview::json::hex(body)))
         .collect();
     json!({"api": world.api, "assets": assets, "public_source": PUBLIC, "public_run": PUBLIC_RUN})
 }
