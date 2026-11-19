@@ -12,11 +12,20 @@ use crate::tag::{VERSION, is_tag_name};
 
 pub type Versions = BTreeMap<(String, String), String>;
 
-pub fn check_release_versions(
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExpectedRelease {
+    pub package: String,
+    pub version: String,
+    pub tag: String,
+    pub publishes_to_crates_io: bool,
+}
+
+pub fn expected_releases(
     files: &[(String, String)],
     metadata: &BTreeMap<RepoPath, RustMetadata>,
     versions: &Versions,
-) -> Result<(), String> {
+) -> Result<Vec<ExpectedRelease>, String> {
+    let mut expected = Vec::new();
     for config in read_all(files)? {
         let Some((workspace, known)) = owner(&config.root, metadata) else {
             continue;
@@ -43,7 +52,21 @@ pub fn check_release_versions(
                     config.root
                 ));
             }
+            expected.push(ExpectedRelease {
+                publishes_to_crates_io: config.publishes(&name),
+                package: name,
+                version: version.clone(),
+                tag,
+            });
         }
     }
-    Ok(())
+    Ok(expected)
+}
+
+pub fn check_release_versions(
+    files: &[(String, String)],
+    metadata: &BTreeMap<RepoPath, RustMetadata>,
+    versions: &Versions,
+) -> Result<(), String> {
+    expected_releases(files, metadata, versions).map(drop)
 }

@@ -75,6 +75,26 @@ pub(crate) fn mirror_step(mirror: &CratesMirror) -> RenderedStep {
 }
 }
 
+pub(crate) fn mbx_store_step() -> RenderedStep {
+    RenderedStep {
+        name: "velnor-ci mbx-store".to_owned(),
+        run: Some("velnor-ci mbx-store".to_owned()),
+        ..RenderedStep::default()
+    }
+}
+
+pub(crate) fn mbx_seed_step() -> RenderedStep {
+    RenderedStep {
+        name: "velnor-ci mbx-seed".to_owned(),
+        condition: Some(
+            "${{ github.event_name == 'pull_request' || github.event_name == 'merge_group' }}"
+                .to_owned(),
+        ),
+        run: Some("velnor-ci mbx-seed".to_owned()),
+        ..RenderedStep::default()
+    }
+}
+
 pub(crate) fn restored_step(
     expiry: velnor_model::BaseExpiry,
     targets: &[RepoPath],

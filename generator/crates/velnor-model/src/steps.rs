@@ -35,6 +35,7 @@ pub enum StepKind {
         lane: JobId,
         family: TrimFamily,
     },
+    CacheBudget(u64),
     RustComponents(Vec<String>),
     RustTargets(Vec<String>),
     UploadArchive {
@@ -52,6 +53,8 @@ pub enum StepKind {
     InputsSave(RepoPath),
     InputsRestore(RepoPath),
     CratesMirror(crate::repo::CratesMirror),
+    MbxStore,
+    MbxSeed,
     TestSetup {
         name: String,
         run: String,
