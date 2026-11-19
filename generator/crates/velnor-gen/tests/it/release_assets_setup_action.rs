@@ -77,7 +77,7 @@ fn setup_archives(script: &str) -> Result<BTreeSet<String>, Box<dyn Error>> {
         .copied()
         .ok_or("the action does not name its archive")?;
     let triples: BTreeSet<&str> = between(script, "triple=", ';').into_iter().collect();
-    assert_eq!(triples.len(), 3, "{triples:?}");
+    assert_eq!(triples.len(), 2, "{triples:?}");
     Ok(triples
         .into_iter()
         .map(|triple| template.replace("$triple", triple))

@@ -47,7 +47,7 @@ const CI_BINARIES: [(&str, &str, &str); 3] = [
 ];
 
 const ARCHIVE_SUMS: &str = "\
-4679c5492ab36252ccae31aab4f6c8a454ef2ab0e30d4dcdd3d6080d49c1cbe6  COMMIT
+0e5bd0f714140aa32270568a463b252853b828318ed29e3bad93a1bf18ce2fbd  COMMIT
 4e9a485939165d82a9ebd49078778ca47137f344524ce8d87d03116760d5bb6d  BINARY-SHA256SUMS
 b91a87ecac8eda2809f202b4566d886273d7b34d6ef29f726751fcbc8bb3d502  velnor-ci-x86_64-unknown-linux-musl.tar.gz
 5ff173c7729c981f5e85d9506d5e496729eefaeabf54ab475d814a4955de0830  velnor-ci-aarch64-unknown-linux-musl.tar.gz
@@ -131,7 +131,7 @@ fn an_archive_release_is_not_pinned_without_a_verified_complete_binary_digest_fi
         .collect();
     let no_archive: String = ARCHIVE_SUMS
         .lines()
-        .filter(|line| !line.contains("velnor-ci-aarch64-apple-darwin"))
+        .filter(|line| !line.contains("velnor-ci-aarch64-unknown-linux-musl"))
         .flat_map(|line| [line, "\n"])
         .collect();
     let short_binary: String = BINARY_SUMS
@@ -155,6 +155,24 @@ fn an_archive_release_is_not_pinned_without_a_verified_complete_binary_digest_fi
         let result = pin_lock("0.1.79", COMMIT_FILE, &sums, binary);
         assert!(result.is_err(), "{sums:?} with {binary:?} gave {result:?}");
     }
+}
+
+#[test]
+fn a_linux_only_archive_release_is_pinned() -> TestResult {
+    let linux = |text: &str| -> String {
+        text.lines()
+            .filter(|line| line.contains("linux") || line.ends_with("SUMS") || line.ends_with("COMMIT"))
+            .flat_map(|line| [line, "\n"])
+            .collect()
+    };
+    let lock = pin_lock(
+        "0.1.79",
+        COMMIT_FILE,
+        &linux(ARCHIVE_SUMS),
+        Some(&linux(BINARY_SUMS)),
+    )?;
+    assert!(lock.contains("linux-x64") && !lock.contains("d8a670bd"), "{lock}");
+    Ok(())
 }
 
 #[test]

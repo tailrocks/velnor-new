@@ -225,7 +225,7 @@ fn only_the_release_job_can_write_and_it_checks_out_nothing_and_verifies_before_
     assert!(verify < publish);
     assert!(runs[publish].contains(" --prerelease "));
     let published = runs[publish].matches(" dist/").count();
-    assert_eq!(published, 9);
+    assert_eq!(published, 7);
     assert!(runs[publish].contains(" dist/COMMIT "));
     assert!(
         !runs

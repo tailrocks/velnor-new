@@ -85,7 +85,7 @@ fn linux_only_sums() -> String {
 
 #[test]
 fn a_release_without_macos_is_pinned_and_gives_the_action_no_macos_digest() -> TestResult {
-    let lock = pin_lock("0.1.79", COMMIT_FILE, &linux_only_sums())?;
+    let lock = pin_lock("0.1.79", COMMIT_FILE, &linux_only_sums(), None)?;
     assert!(!lock.contains("macos"), "{lock}");
     let text = workflow(&with_lock(&lock)?)?;
     assert!(text.contains("sha256-linux-x64:"), "{text}");
