@@ -3,8 +3,8 @@
 
 use std::collections::BTreeMap;
 
-use velnor_model::{HelperRelease, RELEASE_WORKFLOW_PATH, RepoPath};
-use velnor_release::{ReleasePlan, TAG_JOB_BASE_MINUTES, publish_budget_minutes};
+use velnor_model::{HelperRelease, RELEASE_PLZ_FILE, RELEASE_WORKFLOW_PATH, RepoPath};
+use velnor_release::{RELEASE_APP_SLUG, ReleasePlan, TAG_JOB_BASE_MINUTES, publish_budget_minutes};
 
 use crate::release_binaries::binary_jobs;
 use crate::release_checks::{publish_stage, tag_needs, tag_stage};
@@ -12,12 +12,13 @@ use crate::release_family::family_jobs;
 use crate::release_finalize::{finalize_job, without_binary};
 use crate::release_outputs::{commit_outputs, output_collisions};
 use crate::release_steps::{
-    APP_TOKEN_OUTPUT, app_token, checkout, expression, install_release_plz, label, permissions,
-    refuse_commands, release_plz_arguments, release_plz_step, shell_word, variables,
+    APP_TOKEN_OUTPUT, RECORD_RECOVERY_HELPER, TOOLCHAIN, app_token, checkout, expression,
+    install_release_plz, join, label, permissions, refuse_commands, release_plz_arguments,
+    release_plz_step, shell_word, variables,
 };
 use crate::rules::{
     MAX_WORKFLOW_BYTES, RenderedConcurrency, RenderedJob, RenderedStep, RenderedWorkflow, Rule,
-    RuleViolation, check_rules,
+    RuleViolation, Value, check_rules,
 };
 use crate::steps::install_helper;
 use crate::workflow::yaml_job;
@@ -247,7 +248,7 @@ fn tag(plan: &ReleasePlan, helper: &HelperRelease) -> RenderedJob {
             ),
         )
     }));
-    steps.push(record(&files));
+    steps.push(record(plan, helper, &files));
     only_while_newest(&mut steps);
     let mut scopes = vec![("contents", "read"), ("pull-requests", "read")];
     if plan.roots.iter().any(|root| root.publishes_to_crates_io) {
@@ -304,21 +305,43 @@ fn source_preflight(plan: &ReleasePlan) -> RenderedStep {
     }
 }
 
-fn record(files: &[String]) -> RenderedStep {
+fn record(plan: &ReleasePlan, helper: &HelperRelease, files: &[String]) -> RenderedStep {
     let files = files.join(" ");
+    let recovers = helper.version().at_least(RECORD_RECOVERY_HELPER);
+    let mut env = variables(&[
+        ("GITHUB_TOKEN", "${{ github.token }}"),
+        ("REPOSITORY", "${{ github.repository }}"),
+        ("COMMIT", VERIFIED_COMMIT),
+    ]);
+    let mut run =
+        "velnor-ci release record --repo=\"$REPOSITORY\" --verified-commit=\"$COMMIT\"".to_owned();
+    if recovers {
+        env.push((
+            "RUSTUP_TOOLCHAIN".to_owned(),
+            Value::Text(TOOLCHAIN.to_owned()),
+        ));
+        run = format!("{run} --app={RELEASE_APP_SLUG} {}", record_configs(plan));
+    }
     RenderedStep {
         id: Some("record".to_owned()),
         name: "Record the released packages and the commits their tags are on".to_owned(),
-        env: variables(&[
-            ("GITHUB_TOKEN", "${{ github.token }}"),
-            ("REPOSITORY", "${{ github.repository }}"),
-            ("COMMIT", VERIFIED_COMMIT),
-        ]),
-        run: Some(format!(
-            "velnor-ci release record --repo=\"$REPOSITORY\" --verified-commit=\"$COMMIT\" {files}"
-        )),
+        env,
+        run: Some(format!("{run} {files}")),
         ..RenderedStep::default()
     }
+}
+
+fn record_configs(plan: &ReleasePlan) -> String {
+    plan.roots
+        .iter()
+        .map(|root| {
+            format!(
+                "--config={}",
+                shell_word(&join(&root.root, RELEASE_PLZ_FILE))
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 pub(crate) fn newest_check() -> RenderedStep {

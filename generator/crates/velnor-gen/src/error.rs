@@ -74,7 +74,7 @@ impl fmt::Display for GenerateError {
             ),
             Self::BudgetHelperTooOld(version) => write!(
                 f,
-                "velnor-ci {version} cannot check the speed budget; pin velnor-ci 0.1.91 or later with `velnor-gen pin-helper 0.1.91`"
+                "velnor-ci {version} cannot check the speed budget; pin velnor-ci 0.1.92 or later with `velnor-gen pin-helper 0.1.92`"
             ),
             Self::PrOnlyChecksHelperTooOld(version) => write!(
                 f,

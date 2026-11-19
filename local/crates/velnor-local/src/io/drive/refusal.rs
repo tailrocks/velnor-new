@@ -6,6 +6,7 @@ use std::time::Duration;
 use tokio::fs;
 
 use super::Driver;
+use crate::io::env::Engine;
 use crate::io::probe::request;
 use crate::pairs::{DECISIONS, decisions, refused_among};
 use crate::side::Side;
@@ -14,7 +15,7 @@ use crate::standin;
 const POLL: Duration = Duration::from_secs(1);
 pub(super) const CANCEL_GRACE: Duration = Duration::from_secs(60);
 
-impl Driver<'_> {
+impl<E: Engine + Copy + Send> Driver<'_, E> {
     pub(super) async fn refused_after(&self, side: Side, event: &str, known: &[standin::Run]) {
         loop {
             if self.refused_here(side, event, known).await {

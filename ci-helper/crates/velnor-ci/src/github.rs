@@ -251,6 +251,11 @@ pub fn tag_ref_path(repo: &Repo, tag: &str) -> String {
 }
 
 #[must_use]
+pub fn release_by_tag_path(repo: &Repo, tag: &str) -> String {
+    format!("/repos/{repo}/releases/tags/{}", encode(tag))
+}
+
+#[must_use]
 pub fn tag_object_path(repo: &Repo, sha: &str) -> String {
     format!("/repos/{repo}/git/tags/{sha}")
 }

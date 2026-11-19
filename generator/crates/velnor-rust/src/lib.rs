@@ -103,7 +103,10 @@ pub use error::{DetectError, Reason};
 pub use external_config::external_config_profile;
 pub use group_runs::{GroupPlan, GroupRun, group_runs, plan_groups};
 pub use lint_error::LintFault;
-pub use lock::{LOCK_PATH, LockError, commit_url, pin_lock, release_version, sums_url};
+pub use lock::{
+    LOCK_PATH, LockError, binary_sums_url, commit_url, lists_binary_sums, pin_lock,
+    release_version, sums_url,
+};
 pub use lock_affected::lock_affected;
 pub use lock_key::lock_key;
 pub use metadata::{MetadataError, reduce_metadata};
@@ -137,6 +140,6 @@ pub use weaken::introduced;
 
 pub use cache_budget::{
     CacheEntry, CacheFamily, CacheId, DEFAULT_CACHE_BUDGET_BYTES, Timestamp, budget_plan,
-    cache_family, delta_pull_request,
+    cache_family, delta_pull_request, target_family_prefix,
 };
 pub use private_sources::{cacheable_config, cacheable_lock};
