@@ -3,7 +3,8 @@
 
 use velnor_model::{
     CacheKey, CargoCommand, GateNeed, HelperCommand, HelperRelease, Job, RepoPath, RunnerLabel,
-    Step, StepKind, TESTS_BY_PACKAGE_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, github_hosted,
+    Step, StepKind, TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT,
+    TESTS_RUN_OUTPUT, github_hosted,
 };
 
 use crate::artifact_steps::{download_step, upload_cargo_log, upload_step};
@@ -29,7 +30,7 @@ pub(crate) const DOWNLOAD_ARTIFACT: &str =
     "actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333";
 
 pub(crate) const TEST_STEP_ID: &str = "test";
-pub(crate) const MISE_VERSION: &str = "2026.11.9";
+pub(crate) const MISE_VERSION: &str = "2026.11.10";
 const IS_DRAFT: &str = "${{ github.event.pull_request.draft == true }}";
 const CACHE_RESTORE: &str = "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
 const CACHE_SAVE: &str = "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
@@ -90,12 +91,16 @@ pub(crate) fn rendered_job(job: &Job, fork_runner: &RunnerLabel) -> RenderedJob 
                     .any(|step| {
                         matches!(&step.kind, StepKind::Cargo(command) if reports_tests(command))
                     })
-                    .then_some([
-                        TESTS_RUN_OUTPUT,
-                        TESTS_LISTED_OUTPUT,
-                        TESTS_BY_PACKAGE_OUTPUT,
-                    ])
+                    .then(|| {
+                        [
+                            Some(TESTS_RUN_OUTPUT),
+                            Some(TESTS_LISTED_OUTPUT),
+                            job.reports_ignored.then_some(TESTS_IGNORED_OUTPUT),
+                            Some(TESTS_BY_PACKAGE_OUTPUT),
+                        ]
+                    })
                     .into_iter()
+                    .flatten()
                     .flatten()
                     .map(|name| {
                         (

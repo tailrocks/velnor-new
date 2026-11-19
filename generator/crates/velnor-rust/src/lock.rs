@@ -111,7 +111,9 @@ pub(crate) fn parse_lock(bytes: &[u8]) -> Result<HelperRelease, LockError> {
     check_digests(&lock.ci)?;
     let mut digests = BTreeMap::new();
     for platform in Platform::ALL {
-        digests.insert(platform, digest(&lock.ci, platform)?);
+        if lock.ci.contains_key(platform.file_suffix()) || Platform::REQUIRED.contains(&platform) {
+            digests.insert(platform, digest(&lock.ci, platform)?);
+        }
     }
     HelperRelease::new(version, commit, digests).map_err(|error| LockError(error.to_string()))
 }
@@ -133,9 +135,12 @@ fn digests(
     let mut found = BTreeMap::new();
     for platform in Platform::ALL {
         let name = format!("{program}-{}", platform.file_suffix());
-        let sum = listed
-            .get(name.as_str())
-            .ok_or_else(|| LockError(format!("SHA256SUMS lists no {name}")))?;
+        let Some(sum) = listed.get(name.as_str()) else {
+            if Platform::REQUIRED.contains(&platform) {
+                return Err(LockError(format!("SHA256SUMS lists no {name}")));
+            }
+            continue;
+        };
         Sha256::new(*sum)
             .map_err(|_| LockError(format!("SHA256SUMS has no SHA-256 for {name}")))?;
         found.insert(platform.file_suffix().to_owned(), (*sum).to_owned());
@@ -144,14 +149,20 @@ fn digests(
 }
 
 fn check_digests(found: &BTreeMap<String, String>) -> Result<(), LockError> {
-    if found.len() != Platform::ALL.len() {
+    let known = |name: &String| Platform::ALL.iter().any(|p| p.file_suffix() == name);
+    let complete = Platform::REQUIRED
+        .iter()
+        .all(|p| found.contains_key(p.file_suffix()));
+    if !found.keys().all(known) || !complete {
         return Err(LockError(format!(
-            "a program must list exactly the platforms {}",
-            Platform::ALL.map(Platform::file_suffix).join(", ")
+            "a program must list the platforms {} and may list {}",
+            Platform::REQUIRED.map(Platform::file_suffix).join(", "),
+            Platform::MacosArm64.file_suffix()
         )));
     }
     Platform::ALL
         .into_iter()
+        .filter(|platform| found.contains_key(platform.file_suffix()))
         .try_for_each(|platform| digest(found, platform).map(drop))
 }
 

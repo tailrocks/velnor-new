@@ -15,7 +15,6 @@ path = "tests/job_hook_public.rs"
 
 [lib]
 doctest = false
-test = false
 
 [[bin]]
 name = "velnor-resource-probe"

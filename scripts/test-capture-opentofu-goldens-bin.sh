@@ -461,7 +461,10 @@ case "$guard_copy" in
   /*) ;;
   *) exit 88 ;;
 esac
-printf changed >>"$guard_copy" || exit 88
+guard_mutated="$guard_copy.mutated.$$"
+cp -p "$guard_copy" "$guard_mutated" || exit 88
+printf changed >>"$guard_mutated" || exit 88
+mv -f "$guard_mutated" "$guard_copy" || exit 88
 if command -v sha256sum >/dev/null 2>&1; then
   changed_sha="$(sha256sum "$guard_copy" | awk 'NR == 1 { print $1; next } { exit 1 } END { if (NR != 1) exit 1 }')" || exit 88
 else
