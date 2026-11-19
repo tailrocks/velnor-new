@@ -182,7 +182,6 @@ fn step_of(kind: StepKind) -> Step {
         manifest: None,
         target_dir: None,
         when: When::Success,
-        skip_on_draft: false,
         pr: PrRun::Always,
         gate: None,
         reads: None,
