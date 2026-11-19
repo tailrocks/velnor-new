@@ -68,7 +68,7 @@ pub fn sums_url(version: &HelperVersion) -> String {
 
 #[must_use]
 pub fn binary_sums_url(version: &HelperVersion) -> String {
-    format!("{RELEASES}/rust-ci-v{version}/{BINARY_SUMS}")
+    format!("{RELEASES}/{}/{BINARY_SUMS}", version.release_tag())
 }
 
 #[must_use]
