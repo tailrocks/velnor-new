@@ -47,7 +47,11 @@ pub fn every_root_target(root: &Path) -> Result<Vec<PathBuf>, CiError> {
 
 pub(super) fn targets_with_receipts(root: &Path) -> Result<(Vec<PathBuf>, Pending), CiError> {
     let pending = restored_targets::read(root)?;
-    let listed = tracked_paths(root)?;
+    let listed = tracked_paths(root).map_err(|e| {
+        CiError::new(format!(
+            "cannot list the tracked Cargo manifests, so the cached target directories cannot all be found and cleared: {e}"
+        ))
+    })?;
     let mut targets = if listed
         .top
         .join(METADATA_PATH.as_str())
