@@ -249,6 +249,7 @@ pub struct RustCiConfig {
     pub fork_runner: RunnerLabel,
     pub crates_mirror: Option<CratesMirror>,
     pub mbx_store: MbxStore,
+    pub docs_run: DocsRun,
     pub timeout_minutes: u16,
     pub exclude: Vec<PathGlob>,
     pub non_inputs: Vec<PathGlob>,
@@ -328,6 +329,12 @@ impl From<bool> for CacheDebug {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DocsRun {
+    Always,
+    PostMerge,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MbxStore {
     Private,
     Shared,
@@ -359,6 +366,7 @@ impl Default for RustCiConfig {
             fork_runner: RunnerLabel::from_static("ubuntu-latest"),
             crates_mirror: None,
             mbx_store: MbxStore::Private,
+            docs_run: DocsRun::Always,
             timeout_minutes: 30,
             exclude: Vec::new(),
             non_inputs: Vec::new(),

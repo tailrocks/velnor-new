@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    CI_AUTO_LABEL, CI_RUN_LABEL, Gate, GateNeed, MERGE_GROUP_SKIP_OUTPUT, MERGE_GROUP_STEP, PlanFrom,
-    PrRun, RootSlug, VerdictSpec, When,
+    CI_AUTO_LABEL, CI_RUN_LABEL, Gate, GateNeed, MERGE_GROUP_SKIP_OUTPUT, MERGE_GROUP_STEP,
+    PlanFrom, PrRun, RootSlug, VerdictSpec, When,
 };
 
 use crate::rules::{RenderedStep, Value};
@@ -127,6 +127,15 @@ pub(crate) fn condition(
             if setup != Setup::Before {
                 parts.push(SETUP_DONE.to_owned());
             }
+        }
+        When::NotCancelledPostMerge => {
+            parts.push(NOT_CANCELLED.to_owned());
+            if setup != Setup::Before {
+                parts.push(SETUP_DONE.to_owned());
+            }
+            parts.push(format!(
+                "(github.event_name == '{PUSH}' || github.event_name == '{SCHEDULE}' || github.event_name == 'workflow_dispatch')"
+            ));
         }
         When::CacheDebug => {
             parts.push(NOT_CANCELLED.to_owned());

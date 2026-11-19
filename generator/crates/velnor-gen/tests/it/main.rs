@@ -37,6 +37,7 @@ mod declared_workflow;
 mod default_branch;
 mod detect;
 mod doc_steps;
+mod docs_run;
 mod drift;
 mod events;
 mod events_policy;

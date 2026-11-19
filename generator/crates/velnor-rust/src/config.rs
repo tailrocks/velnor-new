@@ -12,7 +12,7 @@ use crate::toml_file::table;
 
 pub const CONFIG_PATH: RepoPath = RepoPath::from_static(".velnor/rust-ci.toml");
 
-const KEYS: [&str; 24] = [
+const KEYS: [&str; 25] = [
     "cache_check_blocks",
     "cache_debug",
     "ci",
@@ -20,6 +20,7 @@ const KEYS: [&str; 24] = [
     "fork_runner",
     "crates_mirror",
     "mbx_shared_store",
+    "docs",
     "timeout_minutes",
     "exclude",
     "non_inputs",
@@ -49,6 +50,7 @@ struct RawConfig {
     fork_runner: Option<String>,
     crates_mirror: Option<crate::config_mirror::RawCratesMirror>,
     mbx_shared_store: Option<bool>,
+    docs: Option<String>,
     timeout_minutes: Option<u16>,
     #[serde(default)]
     exclude: Vec<String>,
@@ -142,6 +144,7 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
             .map(crate::config_mirror::mirror)
             .transpose()
             .map_err(invalid)?,
+        docs_run: crate::config_events::docs_run(raw.docs.as_deref()).map_err(invalid)?,
         mbx_store: raw.mbx_shared_store.unwrap_or(false).into(),
         nextest_harnesses: harnesses(raw.nextest_harnesses).map_err(invalid)?,
         default_branch,

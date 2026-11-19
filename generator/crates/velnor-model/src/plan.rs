@@ -216,6 +216,7 @@ pub enum When {
     #[default]
     Success,
     NotCancelled,
+    NotCancelledPostMerge,
     Finalizer,
     Always,
     Scheduled,

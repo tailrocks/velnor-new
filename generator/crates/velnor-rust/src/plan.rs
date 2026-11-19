@@ -4,10 +4,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
-    Access, CacheDebug, CacheKey, CargoCommand, Concurrency, HelperCommand, Host, Job, JobId,
-    MbxStore, PackageName, PermissionScope, Permissions, PrCi, PrRun, PullRequestType, RepoFacts,
-    RootSlug, RustRoot, Shape, ShapeDecision, Step, StepKind, TargetName, Toolchain, Triggers,
-    PushAfterMergeGroup, When, WorkflowPlan,
+    Access, CacheDebug, CacheKey, CargoCommand, Concurrency, DocsRun, HelperCommand, Host, Job,
+    JobId, MbxStore, PackageName, PermissionScope, Permissions, PrCi, PrRun, PullRequestType,
+    PushAfterMergeGroup, RepoFacts, RootSlug, RustRoot, Shape, ShapeDecision, Step, StepKind,
+    TargetName, Toolchain, Triggers, When, WorkflowPlan,
 };
 
 use crate::audit_job::audit_job;
@@ -88,6 +88,13 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
     }
     if facts.config.push_after_merge_group == PushAfterMergeGroup::SkipWhenQueueRunPassed {
         crate::merge_group_skip::apply(&mut jobs, single);
+    }
+    if facts.config.docs_run == DocsRun::PostMerge {
+        for step in jobs.iter_mut().flat_map(|job| job.steps.iter_mut()) {
+            if step.kind == StepKind::Cargo(CargoCommand::Doc) {
+                step.when = When::NotCancelledPostMerge;
+            }
+        }
     }
     crate::report::finish(facts, &mut jobs, single, draft_guard);
     WorkflowPlan {
