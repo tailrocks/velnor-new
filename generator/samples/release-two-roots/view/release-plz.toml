@@ -4,7 +4,11 @@ git_release_draft = true
 release_always = false
 semver_check = false
 git_only = true
-pr_branch_prefix = "release-plz-app-"
 
 [[package]]
 name = "app"
+git_tag_name = "app-v{{ version }}"
+
+[[package]]
+name = "tools"
+git_tag_name = "tools-v{{ version }}"

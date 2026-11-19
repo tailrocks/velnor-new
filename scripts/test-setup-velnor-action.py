@@ -107,7 +107,6 @@ class SetupVelnorInstallTests(unittest.TestCase):
             "VERSION": "0.1.79",
             "SHA256_LINUX_X64": expected_digest,
             "SHA256_LINUX_ARM64": "",
-            "SHA256_MACOS_ARM64": "",
             "RELEASES": "https://github.com/tailrocks/velnor-new/releases/download",
             "RUNNER_OS": "Linux",
             "RUNNER_ARCH": "X64",

@@ -82,6 +82,7 @@ mod validation;
 pub(super) use validation::validate;
 
 pub(super) async fn migrate_v53_to_v54(conn: &turso::Connection) -> Result<(), HostError> {
+    super::validate_persisted_schema_v53(conn).await?;
     conn.execute("DROP TRIGGER pre_jit_cleanup_progress_update_guard", ())
         .await
         .map_err(|_| HostError::Journal)?;

@@ -100,7 +100,15 @@ fn mapping(lines: &mut Vec<Line>, start: usize, indent: usize) -> Result<(Node, 
     let mut at = start;
     while at < lines.len() && lines[at].0 == indent && !lines[at].1.starts_with("- ") {
         let (key, value) = split(&lines[at].1)?;
-        if value.is_empty() {
+        if value == "|" {
+            let mut text = Vec::new();
+            at += 1;
+            while at < lines.len() && lines[at].0 > indent {
+                text.push(lines[at].1.clone());
+                at += 1;
+            }
+            items.push((key, Node::Scalar(text.join("\n"))));
+        } else if value.is_empty() {
             let nested = lines
                 .get(at + 1)
                 .filter(|next| next.0 > indent)

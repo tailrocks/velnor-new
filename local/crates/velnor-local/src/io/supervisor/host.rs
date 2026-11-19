@@ -23,12 +23,13 @@ pub(super) const LOG: &str = "velnor-host.log";
 pub(super) const PID: &str = "pid";
 pub(super) const PLAN: &str = "plan.json";
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Pairs {
     pub host: PathBuf,
     pub trusted: u16,
     pub untrusted: u16,
     pub policy: Option<PathBuf>,
+    pub labels: Vec<String>,
 }
 
 pub(super) fn runner_dir(dir: &Path) -> PathBuf {
@@ -103,6 +104,7 @@ pub(crate) async fn pairs(args: &EnvironmentArgs) -> io::Result<Option<Pairs>> {
         trusted: args.runners,
         untrusted: args.fork_runners,
         policy,
+        labels: args.label.clone(),
     }))
 }
 
@@ -129,6 +131,9 @@ impl Pairs {
         if self.policy.is_some() {
             arguments.extend(["--policy".to_owned(), "--repo".to_owned()]);
             arguments.push(repo.display().to_string());
+        }
+        for label in &self.labels {
+            arguments.extend(["--label".to_owned(), label.clone()]);
         }
         arguments
     }

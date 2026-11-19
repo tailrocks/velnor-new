@@ -55,6 +55,10 @@ fn scale_set_json(disable_update: bool) -> String {
     )
 }
 
+fn foreign_group_json() -> String {
+    scale_set_json(true).replacen("{\"id\":10,", "{\"id\":10,\"runnerGroupId\":2,", 1)
+}
+
 struct Script {
     replies: VecDeque<(u16, String)>,
     seen: Vec<(Method, String)>,
@@ -241,6 +245,29 @@ async fn a_set_that_never_existed_leaves_no_unverified_id() -> TestResult<()> {
     let (outcome, _transport, journal) = run(&dir, vec![(500, String::new())]).await?;
     assert!(outcome.is_err(), "outcome: {outcome:?}");
     assert_eq!(unverified_remote_ids(&journal).await?, Vec::<i64>::new());
+    Ok(())
+}
+
+#[tokio::test]
+async fn create_refuses_a_set_from_a_foreign_runner_group() -> TestResult<()> {
+    let dir = tempfile::tempdir()?;
+    let (outcome, transport, journal) = run(&dir, vec![(200, foreign_group_json())]).await?;
+    assert_eq!(outcome, Err(EnsureError::Rejected));
+    assert_eq!(transport.seen.len(), 1, "a rejected set is not re-read");
+    assert_eq!(bound_scale_set_ids(&journal).await?, Vec::<i64>::new());
+    assert_eq!(intent_states(&journal).await?, ["uncertain"]);
+    Ok(())
+}
+
+#[tokio::test]
+async fn conflict_lookup_refuses_to_adopt_a_foreign_runner_group_set() -> TestResult<()> {
+    let dir = tempfile::tempdir()?;
+    let page = format!(r#"{{"count":1,"value":[{}]}}"#, foreign_group_json());
+    let (outcome, transport, journal) = run(&dir, vec![(409, String::new()), (200, page)]).await?;
+    assert_eq!(outcome, Err(EnsureError::Rejected));
+    let methods: Vec<Method> = transport.seen.iter().map(|(method, _)| *method).collect();
+    assert_eq!(methods, [Method::Post, Method::Get]);
+    assert_eq!(bound_scale_set_ids(&journal).await?, Vec::<i64>::new());
     Ok(())
 }
 

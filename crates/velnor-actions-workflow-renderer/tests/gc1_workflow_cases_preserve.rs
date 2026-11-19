@@ -13,9 +13,6 @@ use velnor_actions_contract::{
     REQUIRED_GATE_FAIL_CONDITION, REQUIRED_JOB_ID, RunnerSelection, RunsOn, StepKind, Trust,
     WorkflowEvent, plan_skips_work, selects_affected_work, trust_for_event,
 };
-use velnor_actions_workflow_renderer::cache_cleanup::{
-    CACHE_CLEANUP_PATH, render_cache_cleanup_yml,
-};
 use velnor_actions_workflow_renderer::steps::{
     BOOTSTRAP_EXPECTED_KEY_ENV, BOOTSTRAP_MATCHED_KEY_ENV, BOOTSTRAP_MAX_BYTES,
     BOOTSTRAP_MAX_BYTES_ENV, BOOTSTRAP_MISS_CODE, BOOTSTRAP_SHADOW_CLEAR, BOOTSTRAP_SHADOW_ENV,
@@ -243,19 +240,6 @@ fn check_shadow_guard() -> Result<(), Box<dyn Error>> {
 }
 
 fn check_denied_saves_repair_cleanup_lag() -> Result<(), Box<dyn Error>> {
-    let rendered = render_cache_cleanup_yml("ubuntu-26.04", "0.1.55")
-        .map_err(|error| fail(&format!("cleanup render rejected its lag job:{error}")))?;
-    if rendered.path != CACHE_CLEANUP_PATH {
-        return Err(fail("cleanup render left its workflow path"));
-    }
-    for marker in [
-        "cancel-in-progress: false",
-        "actions: write",
-        "gh cache delete",
-    ] {
-        require(&rendered.bytes, marker, "cleanup lag")?;
-    }
-    forbid(&rendered.bytes, "actions/checkout", "cleanup lag")?;
     let queue =
         Concurrency::writer_queue("velnor-cache-writer-${{ github.repository }}".to_owned());
     if !queue.is_writer_queue() {

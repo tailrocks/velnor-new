@@ -10,6 +10,7 @@
     reason = "documentation comments are intentionally absent from this codebase"
 )]
 mod acquire;
+mod assign_time;
 mod error;
 mod paths;
 mod poll;
@@ -42,9 +43,9 @@ pub use registration::{
     ScaleSetObserved, ScaleSetView, accept_scale_set, admin_connection, admin_token_is_fresh,
     create_body, create_runner_scale_set, delete_runner_scale_set, ensure_runner_absent,
     enterprise_registration_token_path, get_runner_by_name, get_runner_scale_set,
-    get_runner_scale_set_by_id, http_create_body, list_runner_groups, observe_runner_by_name,
-    observe_runner_scale_set_by_id, organization_registration_token_path, product_create_labels,
-    registration_token, remove_runner, repository_registration_token_path,
+    get_runner_scale_set_by_id, http_create_body, list_runner_groups, list_scale_set_runners,
+    observe_runner_by_name, observe_runner_scale_set_by_id, organization_registration_token_path,
+    product_create_labels, registration_token, remove_runner, repository_registration_token_path,
 };
 pub use runner::{JitResult, RunnerReference};
 pub use secret::EncodedJit;

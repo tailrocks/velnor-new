@@ -12,6 +12,7 @@ const STATE_INDEX_DDL: &str =
     "CREATE INDEX IF NOT EXISTS doctor_probe_state ON doctor_probe_requests(state, request_id)";
 const LINK_GUARD: &str = "CREATE TRIGGER IF NOT EXISTS doctor_probe_link_guard BEFORE UPDATE OF child_operation_id ON doctor_probe_requests WHEN OLD.child_operation_id IS NOT NULL OR NEW.child_operation_id IS NULL OR OLD.state != 'queued' OR NEW.state != 'running' OR NOT EXISTS (SELECT 1 FROM resource_probe_operations AS p JOIN host_operation_leases AS l ON l.singleton = 1 AND l.operation_id = p.operation_id WHERE p.operation_id = NEW.child_operation_id AND p.instance_id = NEW.instance_id AND p.engine_id = NEW.engine_id AND p.docker_root_digest = NEW.docker_root_digest AND p.role = 'resource-probe' AND p.phase = 'prepared' AND p.container_id IS NULL AND l.state = 'reserved' AND l.engine_id = NEW.engine_id AND l.docker_root_digest = NEW.docker_root_digest) BEGIN SELECT RAISE(ABORT, 'invalid Doctor probe child'); END";
 const TRANSITION_GUARD: &str = "CREATE TRIGGER IF NOT EXISTS doctor_probe_transition_guard BEFORE UPDATE ON doctor_probe_requests WHEN OLD.request_id != NEW.request_id OR OLD.nonce != NEW.nonce OR OLD.instance_id != NEW.instance_id OR OLD.engine_id != NEW.engine_id OR OLD.docker_root_digest != NEW.docker_root_digest OR OLD.active_slot != NEW.active_slot OR (OLD.child_operation_id IS NOT NEW.child_operation_id AND NOT (OLD.state = 'queued' AND NEW.state = 'running' AND OLD.child_operation_id IS NULL AND NEW.child_operation_id IS NOT NULL)) OR (OLD.state != NEW.state AND NOT ((OLD.state = 'queued' AND NEW.state IN ('running', 'failed')) OR (OLD.state = 'running' AND NEW.state IN ('recovering', 'uncertain', 'completed', 'failed', 'stale')) OR (OLD.state = 'recovering' AND NEW.state IN ('uncertain', 'completed', 'failed', 'stale')) OR (OLD.state = 'uncertain' AND NEW.state IN ('recovering', 'stale')) OR (OLD.state = 'completed' AND NEW.state = 'stale'))) BEGIN SELECT RAISE(ABORT, 'invalid Doctor probe transition'); END";
+// The transition guard text that shipped through schema 52; databases below 57 may still carry it.
 const TRANSITION_GUARD_V52: &str = "CREATE TRIGGER IF NOT EXISTS doctor_probe_transition_guard BEFORE UPDATE ON doctor_probe_requests WHEN OLD.request_id != NEW.request_id OR OLD.nonce != NEW.nonce OR OLD.instance_id != NEW.instance_id OR OLD.engine_id != NEW.engine_id OR OLD.docker_root_digest != NEW.docker_root_digest OR OLD.active_slot != NEW.active_slot OR (OLD.child_operation_id IS NOT NEW.child_operation_id AND NOT (OLD.state = 'queued' AND NEW.state = 'running' AND OLD.child_operation_id IS NULL AND NEW.child_operation_id IS NOT NULL)) OR (OLD.state != NEW.state AND NOT ((OLD.state = 'queued' AND NEW.state IN ('running', 'failed')) OR (OLD.state = 'running' AND NEW.state IN ('recovering', 'uncertain', 'completed', 'failed', 'stale')) OR (OLD.state = 'recovering' AND NEW.state IN ('uncertain', 'completed', 'failed', 'stale')) OR (OLD.state = 'uncertain' AND NEW.state = 'recovering') OR (OLD.state = 'completed' AND NEW.state = 'stale'))) BEGIN SELECT RAISE(ABORT, 'invalid Doctor probe transition'); END";
 const TERMINAL_GUARD: &str = "CREATE TRIGGER IF NOT EXISTS doctor_probe_terminal_guard BEFORE UPDATE OF state ON doctor_probe_requests WHEN NEW.state IN ('completed', 'failed', 'stale') AND NEW.child_operation_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM resource_probe_operations AS p WHERE p.operation_id = NEW.child_operation_id AND p.phase IN ('removed', 'aborted') AND NOT EXISTS (SELECT 1 FROM host_operation_leases AS l WHERE l.singleton = 1 AND l.operation_id = p.operation_id AND l.state != 'released') AND ((NEW.state = 'completed' AND p.phase = 'removed') OR NEW.state IN ('failed', 'stale'))) BEGIN SELECT RAISE(ABORT, 'Doctor probe still charged'); END";
 const NO_DELETE_GUARD: &str = "CREATE TRIGGER IF NOT EXISTS doctor_probe_no_delete BEFORE DELETE ON doctor_probe_requests BEGIN SELECT RAISE(ABORT, 'immutable Doctor probe ticket'); END";
@@ -35,6 +36,7 @@ pub(super) async fn bootstrap(connection: &turso::Connection) -> Result<(), Host
 }
 
 pub(super) async fn migrate_v56_to_v57(connection: &turso::Connection) -> Result<(), HostError> {
+    validate_existing_transition_guard(connection).await?;
     connection
         .execute("DROP TRIGGER IF EXISTS doctor_probe_transition_guard", ())
         .await
@@ -48,6 +50,28 @@ pub(super) async fn migrate_v56_to_v57(connection: &turso::Connection) -> Result
         .await
         .map_err(|_| HostError::Journal)?;
     validate(connection).await
+}
+
+async fn validate_existing_transition_guard(
+    connection: &turso::Connection,
+) -> Result<(), HostError> {
+    let mut rows = connection
+        .query(
+            "SELECT sql FROM sqlite_schema WHERE type = 'trigger' AND name = 'doctor_probe_transition_guard'",
+            (),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let Some(row) = rows.next().await.map_err(|_| HostError::Journal)? else {
+        return Ok(());
+    };
+    let sql: String = row.get(0).map_err(|_| HostError::Journal)?;
+    let actual = canonical_sql(&sql);
+    if actual == canonical_sql(TRANSITION_GUARD) || actual == canonical_sql(TRANSITION_GUARD_V52) {
+        Ok(())
+    } else {
+        Err(HostError::Journal)
+    }
 }
 
 pub(super) async fn validate(connection: &turso::Connection) -> Result<(), HostError> {
@@ -255,4 +279,51 @@ fn canonical_sql(sql: &str) -> String {
         }
     }
     normalized
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::journal::Journal;
+
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+    async fn rewind_to_version_56(path: &std::path::Path, guard: Option<&str>) -> TestResult {
+        let journal = Journal::open(path).await?;
+        let connection = journal.connection().await?;
+        connection
+            .execute("DROP TRIGGER doctor_probe_transition_guard", ())
+            .await?;
+        if let Some(sql) = guard {
+            connection.execute(sql, ()).await?;
+        }
+        connection.execute("PRAGMA user_version = 56", ()).await?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn an_altered_transition_guard_is_refused_before_it_is_replaced() -> TestResult {
+        let state = tempfile::tempdir()?;
+        let path = state.path().join("launch.db");
+        rewind_to_version_56(
+            &path,
+            Some(
+                "CREATE TRIGGER doctor_probe_transition_guard BEFORE UPDATE ON doctor_probe_requests BEGIN SELECT 1; END",
+            ),
+        )
+        .await?;
+        assert!(
+            Journal::open(&path).await.is_err(),
+            "a weakened transition guard must be refused, not silently replaced"
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn an_absent_transition_guard_still_migrates_on_rerun() -> TestResult {
+        let state = tempfile::tempdir()?;
+        let path = state.path().join("launch.db");
+        rewind_to_version_56(&path, None).await?;
+        Journal::open(&path).await?;
+        Ok(())
+    }
 }

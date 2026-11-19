@@ -9,7 +9,10 @@ use crate::paths::query_escape;
 use crate::session::{API_QUERY, bearer, execute, json_content, user_agent};
 use crate::{Method, SessionError, SessionRequest, Transport, WireError, scale_set_path};
 
-use super::{CreateLabel, ScaleSetView, accept_scale_set_labels, other_status, outgoing_json};
+use super::{
+    CreateLabel, ScaleSetView, accept_scale_set_group, accept_scale_set_labels, other_status,
+    outgoing_json,
+};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[must_use]
@@ -145,7 +148,12 @@ where
     if exchange.status != 200 {
         return Err(other_status(exchange.status));
     }
-    decode_page(&exchange.body, call.name, call.expected_labels)
+    decode_page(
+        &exchange.body,
+        call.runner_group_id,
+        call.name,
+        call.expected_labels,
+    )
 }
 
 pub fn get_runner_scale_set_by_id<T>(
@@ -166,7 +174,7 @@ where
     if exchange.status != 200 {
         return Err(other_status(exchange.status));
     }
-    decode_one(&exchange.body, call.name, call.expected_labels)
+    decode_one(&exchange.body, None, call.name, call.expected_labels)
 }
 
 pub fn observe_runner_scale_set_by_id<T>(
@@ -185,9 +193,8 @@ where
     };
     let exchange = execute(transport, &request)?;
     match exchange.status {
-        200 => {
-            decode_one(&exchange.body, call.name, call.expected_labels).map(ScaleSetObserved::Found)
-        }
+        200 => decode_one(&exchange.body, None, call.name, call.expected_labels)
+            .map(ScaleSetObserved::Found),
         404 => Ok(ScaleSetObserved::Missing),
         status => Err(other_status(status)),
     }
@@ -242,7 +249,12 @@ where
     } else {
         call.labels.iter().map(|label| label.name.clone()).collect()
     };
-    decode_one(&exchange.body, call.name, &expected_labels)
+    decode_one(
+        &exchange.body,
+        Some(call.runner_group_id),
+        call.name,
+        &expected_labels,
+    )
 }
 
 fn admin_headers(admin_token: &str) -> Result<Vec<(String, String)>, SessionError> {
@@ -260,6 +272,7 @@ fn name_query(runner_group_id: i64, name: &str) -> String {
 
 fn decode_page(
     body: &[u8],
+    requested_group: i64,
     expected_name: &str,
     expected_labels: &[String],
 ) -> Result<ScaleSetFound, SessionError> {
@@ -274,6 +287,7 @@ fn decode_page(
         1 => {
             let view = sets.pop().ok_or(WireError::Malformed)?;
             accept_scale_set_labels(&view, expected_name, expected_labels)?;
+            accept_scale_set_group(&view, requested_group)?;
             Ok(ScaleSetFound::Found(view))
         }
         _ => Err(SessionError::from(WireError::RegistrationRejected)),
@@ -282,11 +296,15 @@ fn decode_page(
 
 fn decode_one(
     body: &[u8],
+    requested_group: Option<i64>,
     expected_name: &str,
     expected_labels: &[String],
 ) -> Result<ScaleSetView, SessionError> {
     let view: ScaleSetView = serde_json::from_slice(body).map_err(|_| WireError::Malformed)?;
     accept_scale_set_labels(&view, expected_name, expected_labels)?;
+    if let Some(group) = requested_group {
+        accept_scale_set_group(&view, group)?;
+    }
     Ok(view)
 }
 
