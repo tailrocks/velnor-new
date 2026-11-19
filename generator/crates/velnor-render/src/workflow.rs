@@ -69,6 +69,9 @@ pub(crate) fn yaml_job(job: &RenderedJob) -> Yaml {
         entry("runs-on", runs_on(job)),
         entry("timeout-minutes", Yaml::Int(u64::from(job.timeout_minutes))),
     ]);
+    if !job.env.is_empty() {
+        items.push(entry("env", values(&job.env)));
+    }
     items.extend([entry(
         "steps",
         Yaml::Seq(job.steps.iter().map(yaml_step).collect()),

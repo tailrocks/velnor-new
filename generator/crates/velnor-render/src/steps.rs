@@ -67,10 +67,15 @@ pub(crate) fn rendered_job(job: &Job, fork_runner: &RunnerLabel) -> RenderedJob 
         .steps
         .iter()
         .any(|step| matches!(&step.kind, StepKind::Cargo(command) if reports_tests(command)));
+    let job_target = shared_target_dir(job);
     RenderedJob {
         id: job.id.to_string(),
         name: job.name.clone(),
         comment: job.comment.clone(),
+        env: job_target
+            .map(crate::cargo::target_dir_env)
+            .into_iter()
+            .collect(),
         needs: job.needs.iter().map(ToString::to_string).collect(),
         condition: Some(crate::base_steps::audited_lane(
             admission(job.when, job.gate.as_ref(), job.skip_on_draft),
@@ -112,10 +117,33 @@ pub(crate) fn rendered_job(job: &Job, fork_runner: &RunnerLabel) -> RenderedJob 
             .collect(),
         steps: crate::helper_integrity::secure_steps(
             job,
-            job_steps(job, restores, audit, tests, lane),
+            job_steps(job, restores, audit, tests, lane, job_target),
         ),
         ..RenderedJob::default()
     }
+}
+
+fn shared_target_dir(job: &Job) -> Option<&RepoPath> {
+    if job
+        .steps
+        .iter()
+        .any(|step| matches!(step.kind, StepKind::Cargo(CargoCommand::NextestRunArchive { .. })))
+    {
+        return None;
+    }
+    let mut building = job
+        .steps
+        .iter()
+        .filter(|step| matches!(&step.kind, StepKind::Cargo(command) if command.builds()));
+    let first = building.next()?;
+    let target = first.target_dir.as_ref()?;
+    let one_root = building.all(|step| {
+        step.target_dir.as_ref() == Some(target) && step.directory == first.directory
+    }) && job
+        .steps
+        .iter()
+        .all(|step| step.directory.is_none() || step.directory == first.directory);
+    one_root.then_some(target)
 }
 
 fn job_steps(
@@ -124,6 +152,7 @@ fn job_steps(
     audit: bool,
     tests: bool,
     lane: CargoLane,
+    job_target: Option<&RepoPath>,
 ) -> Vec<RenderedStep> {
     job.steps
         .iter()
@@ -133,7 +162,13 @@ fn job_steps(
             Some(crate::base_steps::audited_save(
                 job,
                 step,
-                rendered_steps(step, setup, audit, tests, lane, job.name.as_deref()),
+                rendered_steps(
+                    step,
+                    setup,
+                    (audit, tests, lane),
+                    job.name.as_deref(),
+                    job_target,
+                ),
             ))
         })
         .flatten()
@@ -143,10 +178,9 @@ fn job_steps(
 fn rendered_steps(
     step: &Step,
     setup: Setup,
-    audit: bool,
-    tests: bool,
-    lane: CargoLane,
+    (audit, tests, lane): (bool, bool, CargoLane),
     job_name: Option<&str>,
+    job_target: Option<&RepoPath>,
 ) -> Vec<RenderedStep> {
     let mut rendered = Vec::new();
     if audit && step.kind == StepKind::Cargo(CargoCommand::Doctest) {
@@ -160,7 +194,9 @@ fn rendered_steps(
         lane,
     ));
     for body in &mut rendered {
-        if let (StepKind::Cargo(_), Some(target)) = (&step.kind, &step.target_dir) {
+        if let (StepKind::Cargo(_), Some(target)) = (&step.kind, &step.target_dir)
+            && job_target != Some(target)
+        {
             body.env.push(crate::cargo::target_dir_env(target));
         }
         if matches!(step.kind, StepKind::ReportCaches { .. })
