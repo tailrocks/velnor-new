@@ -135,6 +135,30 @@ fn family_builds_check_out_the_family_tag_and_refuse_another_commit() -> TestRes
 }
 
 #[test]
+fn family_builds_stamp_the_verified_commit_into_the_binaries() -> TestResult {
+    let tree = family()?;
+    for (id, build) in jobs(&tree)?
+        .into_iter()
+        .filter(|(id, _)| id.starts_with("build-"))
+    {
+        let cargo = steps(build)
+            .iter()
+            .find(|step| {
+                step.get("run")
+                    .and_then(Node::text)
+                    .is_some_and(|run| run.starts_with("cargo build"))
+            })
+            .ok_or("no cargo build step")?;
+        assert_eq!(
+            cargo.at(&["env", "VELNOR_COMMIT"]).and_then(Node::text),
+            Some("${{ github.sha }}"),
+            "{id}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn family_job_binds_the_tag_to_the_verified_commit_with_the_helper() -> TestResult {
     let tree = family()?;
     let family = job(&tree, "family")?;

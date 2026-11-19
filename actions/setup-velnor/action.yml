@@ -97,7 +97,13 @@ runs:
         [ -n "$verified" ] || fail "SHA-256 mismatch for velnor-ci $VERSION $platform: expected $expected, downloaded $(digest "$staging/$archive"). velnor-ci was not installed"
         extract="$staging/extract"
         mkdir "$extract"
-        (ulimit -f "$((MAX_BYTES / 1024 + 1))"; tar --extract --gzip --no-same-owner --no-recursion --file "$staging/$archive" --directory "$extract" velnor-ci) || fail "extracting velnor-ci from $archive failed. velnor-ci was not installed"
+        listing="$(env -u TAR_OPTIONS tar --list --gzip --file "$staging/$archive")" || fail "reading the members of $archive failed. velnor-ci was not installed"
+        named=0
+        while IFS= read -r member; do
+          if [ "$member" = velnor-ci ]; then named=$((named + 1)); fi
+        done <<< "$listing"
+        [ "$named" -eq 1 ] || fail "$archive must hold exactly one velnor-ci member, found $named. velnor-ci was not installed"
+        (ulimit -f "$((MAX_BYTES / 1024 + 1))"; env -u TAR_OPTIONS tar --extract --gzip --no-same-owner --no-recursion --file "$staging/$archive" --directory "$extract" velnor-ci) || fail "extracting velnor-ci from $archive failed. velnor-ci was not installed"
         [ -f "$extract/velnor-ci" ] && [ ! -L "$extract/velnor-ci" ] || fail "$archive does not hold velnor-ci as a regular file. velnor-ci was not installed"
         copy_extracted "$extract/velnor-ci" "$staging/velnor-ci" || fail "velnor-ci in $archive is larger than $MAX_BYTES bytes. velnor-ci was not installed"
         bin="$RUNNER_TEMP/velnor-ci-bin"

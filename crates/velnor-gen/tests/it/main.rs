@@ -66,6 +66,7 @@ mod feature_lane_dedup;
 mod feature_lane_scope;
 mod feature_lanes;
 mod fixed_uses;
+mod fixed_uses_comment;
 mod fork_fence;
 mod fork_fence_invariant;
 mod freshness;
