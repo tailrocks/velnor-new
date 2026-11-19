@@ -251,6 +251,7 @@ pub struct RustCiConfig {
     pub crates_mirror: Option<CratesMirror>,
     pub private_sources: Option<PrivateSources>,
     pub mbx_store: MbxStore,
+    pub docs_run: DocsRun,
     pub timeout_minutes: u16,
     pub exclude: Vec<PathGlob>,
     pub non_inputs: Vec<PathGlob>,
@@ -340,6 +341,12 @@ impl From<bool> for CacheDebug {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DocsRun {
+    Always,
+    PostMerge,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MbxStore {
     Private,
     Shared,
@@ -372,6 +379,7 @@ impl Default for RustCiConfig {
             crates_mirror: None,
             private_sources: None,
             mbx_store: MbxStore::Private,
+            docs_run: DocsRun::Always,
             timeout_minutes: 30,
             exclude: Vec::new(),
             non_inputs: Vec::new(),

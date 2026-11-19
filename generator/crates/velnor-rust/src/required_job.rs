@@ -46,6 +46,7 @@ fn conditions(job: &Job) -> Vec<JobCondition> {
         When::ScheduledOrPush => Some(JobCondition::ScheduleOrPush),
         When::Success
         | When::NotCancelled
+        | When::NotCancelledPostMerge
         | When::Finalizer
         | When::SaveBase
         | When::SaveBaseDecided

@@ -29,6 +29,7 @@ mod config_test_setup;
 mod credentials;
 mod detect;
 mod doc_steps;
+mod docs_post_merge;
 mod embedded;
 mod error;
 mod external_config;

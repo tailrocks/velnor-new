@@ -38,11 +38,12 @@ pub use plan::{
     When, WorkflowPlan,
 };
 pub use repo::{
-    CacheDebug, CiDebugInfo, CompileInputs, CratesMirror, CustomHarness, DependencyKind, FullRun,
-    GroupEvent, GroupRoot, InputRule, MbxRemote, MbxStore, MemberDependency, OnMain, PackageDependency,
-    PolicyTools, PrCi, PrivateSources, PushAfterMergeGroup, RepoFacts, RepoView, RepositoryIdentity,
-    RustCiConfig, RustMember, RustMetadata, RustPackage, RustRoot, Target, TargetKind, TestGroup,
-    TestNeed, TestSetup, Timings, ToolPin, ToolPins, Toolchain, UnownedPackage, Unread, Weakening,
+    CacheDebug, CiDebugInfo, CompileInputs, CratesMirror, CustomHarness, DependencyKind, DocsRun,
+    FullRun, GroupEvent, GroupRoot, InputRule, MbxRemote, MbxStore, MemberDependency, OnMain,
+    PackageDependency, PolicyTools, PrCi, PrivateSources, PushAfterMergeGroup, RepoFacts, RepoView,
+    RepositoryIdentity, RustCiConfig, RustMember, RustMetadata, RustPackage, RustRoot, Target,
+    TargetKind, TestGroup, TestNeed, TestSetup, Timings, ToolPin, ToolPins, Toolchain,
+    UnownedPackage, Unread, Weakening,
 };
 pub use selection::{
     AllTrigger, ChangeSet, EventKind, OptionalSteps, RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE,

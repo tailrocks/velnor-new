@@ -6,13 +6,14 @@ use velnor_model::{
     CiDebugInfo, InputRule, PackageName, PathGlob, RepoPath, RunnerLabel, RustCiConfig, TargetName,
 };
 
+use crate::config_events::{docs_run, on_main};
 use crate::error::{DetectError, Reason};
 use crate::shape::parse_shape;
 use crate::toml_file::table;
 
 pub const CONFIG_PATH: RepoPath = RepoPath::from_static(".velnor/rust-ci.toml");
 
-const KEYS: [&str; 27] = [
+const KEYS: [&str; 28] = [
     "private_sources",
     "cache_check_blocks",
     "cache_debug",
@@ -22,6 +23,7 @@ const KEYS: [&str; 27] = [
     "fork_runner",
     "crates_mirror",
     "mbx_shared_store",
+    "docs",
     "timeout_minutes",
     "exclude",
     "non_inputs",
@@ -55,6 +57,7 @@ struct RawConfig {
     crates_mirror: Option<crate::config_mirror::RawCratesMirror>,
     private_sources: Option<crate::config_private::RawPrivateSources>,
     mbx_shared_store: Option<bool>,
+    docs: Option<String>,
     timeout_minutes: Option<u16>,
     #[serde(default)]
     exclude: Vec<String>,
@@ -126,8 +129,7 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         .map_err(invalid)?;
     let default_branch =
         default_branch(raw.default_branch, defaults.default_branch).map_err(invalid)?;
-    let on_main =
-        crate::config_events::on_main(raw.on_main.as_deref(), defaults.on_main).map_err(invalid)?;
+    let on_main = on_main(raw.on_main.as_deref(), defaults.on_main).map_err(invalid)?;
     let full_run = match raw.full_run {
         None => defaults.full_run,
         Some(value) => crate::config_events::full_run(value).map_err(invalid)?,
@@ -154,6 +156,7 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
             .map(crate::config_mirror::mirror)
             .transpose()
             .map_err(invalid)?,
+        docs_run: docs_run(raw.docs.as_deref()).map_err(invalid)?,
         private_sources: crate::config_private::optional(raw.private_sources).map_err(invalid)?,
         mbx_store: raw.mbx_shared_store.unwrap_or(false).into(),
         nextest_harnesses: harnesses(raw.nextest_harnesses).map_err(invalid)?,
