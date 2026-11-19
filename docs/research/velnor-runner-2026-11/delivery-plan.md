@@ -23,8 +23,8 @@ Code was re-read at velnor-new `d6be276a6c` and velnor-legacy `1b9fc038`. Labels
 
 - **Fleet assumed:** N = 12 builder agents, 4 reviewer agents and 1 orchestrator, around the clock.
   Only the owner's decisions are human. Section 7.6 explains why more builders buy almost nothing.
-- **Total work:** about 912 agent-hours of building plus about 120 of review (section 3.2's sum),
-  about 3.2 days of fleet time (912 ÷ 12 builders ≈ 76 h). Coding does not set the dates.
+- **Total work:** about 936 agent-hours of building plus about 120 of review (section 3.2's sum),
+  about 3.2 days of fleet time (936 ÷ 12 builders ≈ 78 h). Coding does not set the dates.
 - **What sets the dates (decision 15):** (a) velnor-new's own CI and merge queue; (b) review gates
   and owner decisions, including engine releases; (c) evidence: conformance pairs, gate parity and
   clean reuse comparisons; (d) free cluster capacity, GitHub API limits and shared-file conflicts.
@@ -363,7 +363,7 @@ The full push run stays until A1 replaces it (V05): it is today's third executio
 | C02 | Crates store | Site mirror plus a read-only registry per lockfile, by checksum | D8 | 4 | mid | 0 downloads on a hit | — |
 | C03 | Git mirror and bundle | Node mirror on webhooks; site bundle seeding (from GitHub until ST06 passes) | D8, ST01 | 6 | mid | Fetch ≤ 0.5 s; after ST06 a wiped node seeds without GitHub | — |
 | C04 | XFS volumes | Work volumes with project quotas | D8 | 6 | mid | Quota enforced | ext4 `emptyDir` work dirs |
-| C05 | Verified generations | Builder per site; input manifest; changed set against it; coverage rule; time stamps; dep-info blob check | C04, P01, V02 | 14 | strong | Section 7.3's canaries rebuild and fail as they must | — |
+| C05 | Verified generations | Builder per site; input manifest; changed set against it; coverage rule; per-unit read sets traced during the generation build (fingerprints removed where a read meets Δ); time stamps; dep-info blob check | C04, P01, V02 | 14 | strong | Section 7.3's canaries rebuild and fail as they must | — |
 | C06 | Reproducibility audit | One commit cold on 2 nodes; digests per unit | C05 | 4 | mid | Equal, or the unit is listed and its dependants stay cold | — |
 | C07 | Compile-reuse shadow | Cold second witness; warm-against-cold digest comparisons per root | C05, V03 | 6 | strong | 3,000 clean per root, then the second witness moves to another generation | — |
 | C08 | mbx-cache head-to-head | Lab B3 crossover under load; kill rule | C05 | 6 | mid | Measured; kept or deleted | mbx-cache if it loses |
@@ -403,7 +403,8 @@ The full push run stays until A1 replaces it (V05): it is today's third executio
 | R02 | One release authority | `velnor-ci release-gate` with `--app-check` and `--push-check` at the tools release and both product entry points; released and pinned | RV03 | 12 | strong | Missing or stale proof, wrong source, skipped audit and changed ruleset refused at both entry points | The embedded product eligibility shell |
 | R03 | Smoke shipped bytes | x86_64; aarch64 under qemu | R01 | 4 | mid | Smoke on the published digest | `--version`-only checks |
 | R04 | Build once, promote | Release-bytes obligation; durable product claims by group SHA; promotion by digest | R02, R03, V04 | 16 | strong | 0 crates compiled at tag; digests equal the receipt | Tag-time `cargo build` jobs; the per-push preview rebuild |
-| R05 | Promotion timing | Time upload, gate, attestation and read-back in the dry runs | R04 | 3 | cheap | The 15 s estimate replaced by [M] | — |
+| R05 | Release timing | Dispatch to published and read back, ready bytes to published, cold and warm group release builds of both tools (musl x86_64 and aarch64 under qemu), artifact upload at 100 MB and 1.48 GB | R04 | 4 | mid | The 15 s estimate replaced by [M]; zero tag compiles | — |
+| R06 | Stamp after link (lab) | Patch the commit into a fixed ELF note before smoke tests and attestation, so product bytes build once per closure | R04 | 8 | strong | Patched bytes pass the same smoke and `gh attestation verify`; needed for the ≤ 20 stretch | — |
 | F01 | Final deletion | After cohort 4 has served one real release, and P07 | cohort 4, P07 | 8 | mid | No production path through ARC; the official runner only behind `velnor-official`; `rg` finds no dangling references | ARC's velnor-new scale set (Helm release) and the `local`/`hosted` profiles; wrapper parts RV05 rejected; `images/resource-probe`, `velnor-runner-qualification`; the Turso journal; the rest of `crates/velnor-runner` not moved by RV01 or RV05. **Keeps** `images/runner`, `.velnor/runner.lock`, `velnor-official`, and `images/dind` if P05 uses it |
 
 **BM: proving the speed (design section 11).** Dates follow the system the run needs, and self-hosted
@@ -414,6 +415,7 @@ arms run one at a time on the same two FI workers, so arms, not agents, set the 
 | BM01 | S1 planted failures | 100 failing edits on every fast path (older-time edit, undeclared build-script input, sibling file, clock shift, stale generation, seeded flakes) | L08, C05, V04 | 10 | strong | 100% red or detected at (1−p)²; reruns on every fast-path change | — |
 | BM02 | S2 control race | Native against Official on the same warm workers and generation, ≥ 30 interleaved pairs per job type at 15% and 80% CPU; the same on today's ARC with phase 0 | O01, X16, cohort 2 | 10 | strong | Per-job-type deltas with intervals published | — |
 | BM03 | S3 head-to-head harness | Replay driver for 300 heads at arrival times on every arm; per-class clocks gross and net of GitHub | B15, L08 | 16 | strong | Two dry arms reproduce the 85-min proxy within its interval | — |
+| BM10 | RBE arm (optional) | Bazel `rules_rust` with a remote executor for the cold-build lane only, reported as a subgraph | BM03, D22 | 16 | strong | Same compile outputs and test IDs on the lane | — |
 | BM07 | Strong conventional baseline arm | The official runner on persistent agents on the two FI workers: reflink-cloned warm target, crates mirror, baked tool image, gates on the cluster, auto-merge, ALLGREEN | BM03, C04 | 12 | mid | Same expected test IDs as the inventory | — |
 | BM04 | S4 loaded replay | The 2026-11-18 trace with other organisations' load, A1 and release preparation | BM03 | 6 | mid | Verdict P90 ≤ 1.5× quiet; merge-path wait P90 ≤ 10 s | — |
 | BM05 | S5 census | C5 classifier and read audit on `main` and 300 heads | V07, V12 | 6 | strong | C5 and whole-tree shares published; goals restated | — |
@@ -423,7 +425,7 @@ arms run one at a time on the same two FI workers, so arms, not agents, set the 
 | V15 | Fast-red lane | Non-minting incremental build, `cargo check`, changed and historically failing tests first; failure to `Velnor / Details`, twins cancelled | V03 | 6 | mid | Never writes `success`; time to first red measured | — |
 | C12 | Twin generations | Each landed tip built cold twice on two nodes, sealed only on equal digests; witness 2 over the twin | C05, C06 | 8 | strong | Witness-2 delta equals witness 1's on 50 sequential commits | — |
 
-**Sum:** 135 items, about 912 agent-hours of building plus about 120 of review (about 110 PRs ×
+**Sum:** 137 items, about 936 agent-hours of building plus about 120 of review (about 110 PRs ×
 0.7 h, plus 30 strong reviews × 1.5 h).
 
 ### 3.3 Owner decisions

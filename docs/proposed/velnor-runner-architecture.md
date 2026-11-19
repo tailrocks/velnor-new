@@ -462,8 +462,9 @@ only in the control plane, and agents act under an identity without repository a
   previous immutable image digest (a deploy, not a code path); the fix PR is verified by that
   release like any other. (2) If no earlier image can verify, the owner-pre-approved **break-glass
   verifier** runs: a minimal released binary that takes the status writer's fence, executes the full
-  inventory cold on one node with the reference-qualified executor, and writes `Velnor / Verified`
-  only if every obligation passes, with an audit record and a page. It is a real green on the exact
+  inventory cold twice, on two nodes, with the reference-qualified executor (the same two-witness
+  proof as section 6.2), and writes `Velnor / Verified` only if every obligation passes in both, with
+  an audit record and a page. It is a real green on the exact
   tree; `bypass_actors` stays empty, and no procedure contains an admin merge.
 - **Control plane:** one k3s server today (§B.1.5); a whole-cluster dependency waits for three servers
   and a third-site witness for shared fences.
@@ -736,8 +737,12 @@ path, with inputs proven by content, independently of cargo's freshness:
    third-party units, whose inputs are the checksummed crate, features, profile, toolchain and
    declared environment, are reused.
 4. Unchanged paths keep M_G's times; every path in Δ is stamped later than G's newest output.
-5. After cargo runs, each dep-info input of every unit it did not rebuild is checked against M_G by
-   blob id (`velnor-ci` `io/audit/dep_info.rs`); a mismatch fails the build and retires G.
+5. Each unit's read set is its dep-info plus every path its build script, proc macro or `rustc`
+   opened, listed or failed to find while G was built, traced by the node agent. Before cargo runs,
+   any unit whose read set meets Δ has its fingerprint removed, so it and its dependants rebuild,
+   even when another unit declared the path. After cargo runs, each dep-info input of every unit it
+   did not rebuild is checked against M_G by blob id (`io/audit/dep_info.rs`); a mismatch fails the
+   build and retires G.
 6. Toolchain, profile, environment and fingerprint are in G's key; another one means another
    generation or a cold build.
 
@@ -988,7 +993,7 @@ would build the product once per closure, not per tip; it is a lab item. macOS l
 ## 10. Delivery: per-job-type migration, milestones and deletions
 
 Agents do all the work (decision 15). The [delivery plan](../research/velnor-runner-2026-11/delivery-plan.md)
-(v2, decisions 1–24 and the rulings) sizes about 912 agent-hours of building and 120 of review,
+(v2, decisions 1–24 and the rulings) sizes about 936 agent-hours of building and 120 of review,
 about 3.2 days for 12 builders, 4 reviewers and an orchestrator, so coding does not set the dates:
 velnor-new's CI and queue, reviews, owner decisions, conformance and parity evidence, capacity, API
 limits and file conflicts do. Phase 0 comes first: an agent PR's cycle falls from 94 to about 34 min
@@ -1078,6 +1083,9 @@ arrival-block bootstrap intervals for the P50 and the P90 difference, at simulta
 strictly below zero, per class; each self-hosted pair is interleaved at least five times and
 reported as median and range. A tie, an unrun arm, a lost class or a win only in the light class
 narrows the sentence, and any false green or skipped work disqualifies the arm or configuration.
+No claim is made against Buildkite-style agents, rented runners or Bazel and Buck2 remote execution
+until S3 has run that arm; an RBE arm (Bazel `rules_rust` with a remote executor) is reported as a
+subgraph result for the cold-build lane only.
 
 Component labs carry the rest: twin independence (K08), group reuse and GitHub's share (K09, K10),
 hardware (K11), floor inventory (K12), page cache (K13), overhead (K14), graduation (K15), storage
@@ -1117,7 +1125,7 @@ where release bytes are built (D12).
 | D8 | A deploy identity for `velnor-system`, and the node changes (XFS work directories, reservations, taints, a RustFS device or partition per worker)? | Job directories sit on the ext4 OS disk, where a warm target copy costs 8.6 s and 10.75 GiB | Yes | hour 6 |
 | D11 | The per-type cutover counts of section 10.1? | Cohort 1 needs 150 replayed pairs per type | Yes, as written | day 1 |
 | D14 | Delete the engine crates from velnor-new once velnor-gen's workflow replaces the engine's CI? | The engine's orchestrator and renderer are about 275k lines | Only after checking for other consumers | day 8 |
-| D15 | Approve the recovery path for a bad Velnor release, with no admin merge? | A release that fails every job also blocks the PR that fixes it | Yes: redeploy the previous image digest; if none can verify, the pre-approved break-glass verifier writes a green only after a full cold pass (section 5.9) | day 1 |
+| D15 | Approve the recovery path for a bad Velnor release, with no admin merge? | A release that fails every job also blocks the PR that fixes it | Yes: redeploy the previous image digest; if none can verify, the pre-approved break-glass verifier writes a green only after two full cold passes on two nodes (section 5.9) | day 1 |
 | D16 | Does a `velnor:verify` label added while the PR was a draft start verification when it becomes ready? | An agent opens a draft, labels it early, then marks it ready; today nothing would run until it re-labels or pushes | Recommend yes: the label states intent and the reconciler can read it from state. Default no, the literal reading of decision 12's step 2 | day 2 |
 | D19 | May Velnor compile and test a ready PR's pushes before the label, at idle priority, so the label finds the work done? Decision 12 says an unlabelled push starts nothing | An agent pushes, then labels 2 min later; today the label starts a 15–25 s compile and the tests | About 15–25 s off label-to-verdict [E], for about 5–10 runner-min per speculated head, 45% of which are superseded | No: keep decision 12. Use pre-push `velnor verify` (decision 10c) instead, which gives the same lookup when the agent asks for it | day 3 |
 | D22 | May the benchmark rent comparator arms (one of Namespace, Blacksmith or Depot, and GitHub larger runners) and run velnor-new's replayed heads on them? | Without a rented arm, "fastest" can only mean faster than our own baselines | None directly; it decides how wide the claim can be | Yes, one rented arm and GitHub larger runners, measurement only, for about a week; nothing they produce counts as a verdict | day 5 |

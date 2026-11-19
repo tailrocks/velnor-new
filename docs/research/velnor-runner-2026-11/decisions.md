@@ -966,6 +966,17 @@ cluster test.
 | G20, G21, G23, G24 | Adopted | 7.3, 8.5, 9 |
 | C01 | Settled as an estimate: historical baselines cannot be ranked; 10–40× is [E] | 1.1 |
 
+### Group 28: fastest-runner critique by GPT-6.2-Sol
+
+| Point | Decision | v3 section |
+|---|---|---|
+| O31 recovery proof | Accepted: break-glass runs two cold passes on two nodes | 5.9, 13 |
+| O14 overlapping consumers | Accepted: per-unit read sets traced during the generation build force rebuilds | 7.3; plan C05 |
+| O15 narrow keys | Already the design (reviewed contracts); the observed-pathset question is listed for adjudication (X01) | 6.1 |
+| G25 RBE lane | Rejected for production (a second build system and new keys); kept as an optional subgraph arm | 11; plan BM10 |
+| G26 stamping, O32 release tails, K23 | Adopted as lab R06 and timing R05 | 8.4; plan R05, R06 |
+| C02, C03, C04 | Unresolved: no arm has run; safe default is no claim against those comparators | 11 |
+
 ## Design review
 
 The eight design critiques and the comparison that verified them are the input here; ids are the
