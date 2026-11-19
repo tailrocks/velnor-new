@@ -278,7 +278,7 @@ jobs:
       - name: Install rust
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
-          version: '2026.11.9'
+          version: '2026.11.10'
           install_args: rust
           cache: false
       - name: Add the x86_64-unknown-linux-musl target
@@ -323,7 +323,7 @@ jobs:
       - name: Install rust
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
-          version: '2026.11.9'
+          version: '2026.11.10'
           install_args: rust
           cache: false
       - name: Add the aarch64-unknown-linux-musl target
@@ -366,7 +366,7 @@ jobs:
       - name: Install rust
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
-          version: '2026.11.9'
+          version: '2026.11.10'
           install_args: rust
           cache: false
       - name: Add the aarch64-apple-darwin target
@@ -495,7 +495,7 @@ jobs:
       - name: Install rust
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
-          version: '2026.11.9'
+          version: '2026.11.10'
           install_args: rust
           cache: false
       - name: Add the x86_64-unknown-linux-musl target
@@ -539,7 +539,7 @@ jobs:
       - name: Install rust
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
-          version: '2026.11.9'
+          version: '2026.11.10'
           install_args: rust
           cache: false
       - name: Add the aarch64-apple-darwin target
