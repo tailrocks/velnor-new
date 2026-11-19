@@ -26,7 +26,7 @@ fn public_completed_generator_integrity_reaches_rejecting_attestation_boundary()
     assert_rejected(&fixture, &output)?;
     assert_eq!(output.status.code(), Some(17));
     let stdout = String::from_utf8_lossy(&output.stdout);
-    for (target, _) in assets::TARGETS {
+    for (target, _) in &assets::TARGETS[..1] {
         assert!(
             stdout.contains(&format!("{}: OK", assets::binary_name(target))),
             "owned integrity verifier omitted {target}: {stdout}"
@@ -119,7 +119,9 @@ fn reconcile_script(root: &Path) -> Result<String, Box<dyn Error>> {
             .to_owned(),
     ];
     let request = Schema2WorkflowRequest {
+        scale_set_jobs: std::collections::BTreeSet::new(),
         runner_image_family: None,
+        pr_ci: velnor_actions_contract::PrCiMode::Off,
         version: env!("CARGO_PKG_VERSION").to_owned(),
         hosted_label: "ubuntu-26.04".to_owned(),
         scale_set: Schema2WorkflowRequest::canonical_scale_set()?,

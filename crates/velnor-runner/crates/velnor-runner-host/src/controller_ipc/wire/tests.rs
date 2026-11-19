@@ -5,7 +5,9 @@ use std::error::Error;
 use std::io::Write;
 use std::os::unix::net::UnixStream;
 
-use super::{MAX_REQUEST_BYTES, Request, Target};
+use super::{
+    MAX_REQUEST_BYTES, Request, Response, ScaleSetDeleteReply, ScaleSetDeleteStatus, Target,
+};
 use crate::config::{
     ConnectionId, KeychainReference, PullRequestRule, RepositoryConnection, ScaleSetSelector,
     SourcePolicy, SourcePolicyMode, WorkflowEvent,
@@ -62,6 +64,11 @@ fn binding_requests() -> Result<Vec<Request>, Box<dyn Error>> {
             binding: binding.clone(),
             token: TOKEN.to_owned(),
         },
+        Request::ScaleSetDeleteStart {
+            binding: binding.clone(),
+            token: TOKEN.to_owned(),
+            nonce: TOKEN.to_owned(),
+        },
         Request::Detached {
             binding,
             token: TOKEN.to_owned(),
@@ -110,4 +117,29 @@ fn a_body_over_the_request_cap_is_still_refused() {
         docker_root_digest: String::new(),
     };
     assert!(request.encode().is_err());
+}
+
+#[test]
+fn scale_set_delete_replies_round_trip() -> TestResult {
+    for status in [
+        ScaleSetDeleteStatus::Pending,
+        ScaleSetDeleteStatus::Deleted,
+        ScaleSetDeleteStatus::NotOwned,
+        ScaleSetDeleteStatus::Refused { status: 403 },
+        ScaleSetDeleteStatus::Uncertain,
+        ScaleSetDeleteStatus::Stale,
+    ] {
+        let response = Response {
+            scale_set_delete: Some(ScaleSetDeleteReply { status }),
+            ..Response::default()
+        };
+        let bytes = response.encode().map_err(|()| "encode refused")?;
+        let decoded = Response::decode_with_limit(&bytes, 4096).map_err(|()| "decode refused")?;
+        assert_eq!(
+            decoded.scale_set_delete,
+            Some(ScaleSetDeleteReply { status })
+        );
+        assert_eq!(decoded.value, None);
+    }
+    Ok(())
 }

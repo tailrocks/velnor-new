@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::release_plz::RootConfig;
+
 pub const TAG_JOB_BASE_MINUTES: u16 = 30;
 pub(crate) const TOKEN_LIFETIME_MINUTES: u64 = 60;
 pub(crate) const TOKEN_MARGIN_MINUTES: u64 = 10;
@@ -84,4 +86,17 @@ pub(crate) fn minutes_ceil(nanos: u128) -> u64 {
 
 pub(crate) fn default_publish_nanos() -> u128 {
     u128::from(DEFAULT_PUBLISH_MINUTES) * 60 * NANOS_PER_SECOND
+}
+
+pub(crate) fn publish_budget(config: &RootConfig, inherited: &[String]) -> u128 {
+    let publishing = inherited
+        .iter()
+        .filter(|package| config.publishes(package))
+        .count();
+    let none_known = config.publishes_to_crates_io && publishing == 0 && config.packages.is_empty();
+    let publishing = publishing.max(usize::from(none_known)) as u128;
+    config
+        .listed_nanos
+        .saturating_add(publishing.saturating_mul(config.unlisted_check_nanos))
+        .saturating_add(publishing.saturating_mul(config.unlisted_publish_nanos))
 }

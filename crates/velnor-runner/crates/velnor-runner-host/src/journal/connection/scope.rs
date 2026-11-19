@@ -6,6 +6,8 @@ use crate::error::HostError;
 use crate::journal::Journal;
 
 use super::ConnectionJournal;
+use super::scale_set_delete::has_pending_scale_set_delete;
+use super::session::has_work_besides_bound_session;
 use super::storage::{
     connection_record, digest, has_ambiguous_legacy_work, has_connection_work, in_transaction,
     read_transaction,
@@ -112,7 +114,9 @@ impl Journal {
             if stored_identity != identity {
                 return Err(HostError::Journal);
             }
-            if has_connection_work(connection, connection_id).await? {
+            if has_connection_work(connection, connection_id).await?
+                || has_pending_scale_set_delete(connection, connection_id).await?
+            {
                 return Ok(false);
             }
             if retired {
@@ -184,7 +188,9 @@ impl Journal {
             if stored_identity != identity {
                 return Err(HostError::Journal);
             }
-            if has_connection_work(connection, connection_id).await? {
+            if has_connection_work(connection, connection_id).await?
+                || has_pending_scale_set_delete(connection, connection_id).await?
+            {
                 return Ok(false);
             }
             if !retired {
@@ -219,7 +225,8 @@ impl ConnectionJournal {
             if has_ambiguous_legacy_work(connection).await? {
                 return Ok(false);
             }
-            let active = has_connection_work(connection, self.connection_id.as_str()).await?;
+            let active =
+                has_work_besides_bound_session(connection, self.connection_id.as_str()).await?;
             Ok(!active)
         })
         .await

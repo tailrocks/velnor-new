@@ -15,7 +15,6 @@ path = "tests/velnor_contract.rs"
 
 [lib]
 doctest = false
-test = false
 
 [lints]
 workspace = true
@@ -45,3 +44,7 @@ path = "tests/reusable_attestation_binding_public.rs"
 [[test]]
 name = "source_preview_pair_public"
 path = "tests/source_preview_pair_public.rs"
+
+[[test]]
+name = "control_placement_public"
+path = "tests/control_placement_public.rs"

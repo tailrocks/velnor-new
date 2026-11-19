@@ -4,10 +4,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
-use crate::cron::CronExpr;
 use crate::helper::HelperRelease;
-use crate::ids::{PackageName, PathGlob, RepoPath, RunnerLabel, TargetName};
-use crate::plan::Shape;
+use crate::ids::{PackageName, RepoPath, TargetName};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RepoView {
@@ -56,6 +54,7 @@ pub struct PackageDependency {
     pub name: PackageName,
     pub kind: DependencyKind,
     pub platform: Option<String>,
+    pub optional: bool,
     pub manifest: Option<RepoPath>,
     pub features: Vec<String>,
     pub rename: Option<String>,
@@ -101,8 +100,10 @@ pub struct RepoFacts {
     pub timings: BTreeMap<RepoPath, Timings>,
     pub timings_notes: Vec<String>,
     pub private_sources: Option<String>,
+    pub private_suggestion: Option<String>,
     pub unowned: BTreeMap<RepoPath, UnownedPackage>,
     pub policy: PolicyTools,
+    pub deny_configs: BTreeMap<RepoPath, RepoPath>,
     pub weakenings: Vec<Weakening>,
 }
 
@@ -179,6 +180,7 @@ pub type CompileInputs = BTreeMap<Option<RepoPath>, BTreeSet<PackageName>>;
 pub struct RustRoot {
     pub manifest: RepoPath,
     pub target_dir: RepoPath,
+    pub nextest_ci_profile: bool,
     pub members: Vec<RustMember>,
     pub depends_on: Vec<RepoPath>,
     pub external_dependencies: Vec<PackageName>,
@@ -213,6 +215,7 @@ pub struct MemberDependency {
     pub name: PackageName,
     pub kind: DependencyKind,
     pub platform: Option<String>,
+    pub optional: bool,
     pub manifest: RepoPath,
 }
 
@@ -240,107 +243,7 @@ pub struct ToolPin {
     pub prebuilt: BTreeSet<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RustCiConfig {
-    pub runner: RunnerLabel,
-    pub crates_mirror: Option<CratesMirror>,
-    pub timeout_minutes: u16,
-    pub exclude: Vec<PathGlob>,
-    pub non_inputs: Vec<PathGlob>,
-    pub inputs: Vec<InputRule>,
-    pub default_ignores: bool,
-    pub shape: Option<Shape>,
-    pub required_check: String,
-    pub nextest_harnesses: Vec<(PackageName, TargetName)>,
-    pub default_branch: String,
-    pub skip_draft_pull_requests: bool,
-    pub on_main: OnMain,
-    pub full_run: FullRun,
-    pub helper: Option<RepoPath>,
-    pub ci_debuginfo: CiDebugInfo,
-    pub cache_budget_bytes: u64,
-    pub cache_check_blocks: bool,
-    pub cache_debug: CacheDebug,
-    pub test_setup: Vec<TestSetup>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TestSetup {
-    pub root: Option<RepoPath>,
-    pub name: String,
-    pub run: String,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum OnMain {
-    Affected,
-    Everything,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum FullRun {
-    Off,
-    Hourly,
-    Nightly,
-    Weekly,
-    Cron(CronExpr),
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CacheDebug {
-    Off,
-    On,
-}
-
-impl From<bool> for CacheDebug {
-    fn from(on: bool) -> Self {
-        if on { Self::On } else { Self::Off }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CiDebugInfo {
-    Full,
-    LineTablesOnly,
-    None,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct InputRule {
-    pub glob: PathGlob,
-    pub packages: Vec<PackageName>,
-}
-
-impl Default for RustCiConfig {
-    fn default() -> Self {
-        Self {
-            runner: RunnerLabel::from_static("ubuntu-latest"),
-            crates_mirror: None,
-            timeout_minutes: 30,
-            exclude: Vec::new(),
-            non_inputs: Vec::new(),
-            inputs: Vec::new(),
-            default_ignores: true,
-            shape: None,
-            required_check: "Required".to_owned(),
-            nextest_harnesses: Vec::new(),
-            default_branch: "main".to_owned(),
-            skip_draft_pull_requests: false,
-            on_main: OnMain::Affected,
-            full_run: FullRun::Nightly,
-            helper: None,
-            ci_debuginfo: CiDebugInfo::LineTablesOnly,
-            cache_budget_bytes: 8_000_000_000,
-            cache_check_blocks: false,
-            cache_debug: CacheDebug::Off,
-            test_setup: Vec::new(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CratesMirror {
-    pub runner: RunnerLabel,
-    pub registry: String,
-    pub cainfo: String,
-}
+pub use crate::repo_config::{
+    CacheDebug, CiDebugInfo, CratesMirror, DocsRun, FullRun, InputRule, MbxRemote, MbxStore,
+    OnMain, PrCi, PrivateSources, PushAfterMergeGroup, RustCiConfig, TestSetup,
+};
