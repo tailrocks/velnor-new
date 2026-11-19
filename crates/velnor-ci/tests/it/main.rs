@@ -87,6 +87,7 @@ mod prepare_configs;
 mod prepare_inputs;
 mod prepare_install;
 mod prepare_lock_key;
+mod prepare_targets;
 mod preview_admit;
 mod preview_admit_deadline;
 mod preview_authority;
