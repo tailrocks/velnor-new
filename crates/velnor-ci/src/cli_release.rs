@@ -213,6 +213,12 @@ pub struct RecordArgs {
         help = "A release-plz.toml of a Cargo root, once per root; gives the tag of each package at the version the checkout holds; needs RUSTUP_TOOLCHAIN"
     )]
     pub config: Vec<PathBuf>,
+    #[arg(
+        long = "version-groups",
+        value_name = "FILE",
+        help = "A release-plz.toml, once per Cargo root: packages of one version_group that share the lead's tag are one release, not a duplicate tag"
+    )]
+    pub version_groups: Vec<PathBuf>,
 }
 
 #[derive(Debug, Args)]

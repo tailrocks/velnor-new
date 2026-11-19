@@ -52,6 +52,7 @@ pub struct RootPlan {
     pub inherited: Vec<String>,
     pub publish_budget_nanos: u128,
     pub workspace_tags: Vec<TagPattern>,
+    pub version_groups: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -285,6 +286,11 @@ fn plan_roots(
                 root: config.root,
                 pr_branch_prefix: config.pr_branch_prefix,
                 publishes_to_crates_io: config.publishes_to_crates_io,
+                version_groups: config
+                    .packages
+                    .iter()
+                    .filter_map(|package| Some((package.name.clone(), package.group.clone()?)))
+                    .collect(),
                 packages: config
                     .packages
                     .into_iter()

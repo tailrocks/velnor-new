@@ -95,6 +95,11 @@ const GITHUB_HOSTED: &[&str] = &[
     "windows-11-vs2026-arm",
 ];
 
+/// True when `label` is spelled like a GitHub-hosted runner label.
+///
+/// The spelling is the only evidence: a self-hosted runner registered under
+/// one of these names also passes. The fork fence is therefore not a boundary
+/// for such a runner; see "Fork pull requests" in `generator/CONFIG.md`.
 #[must_use]
 pub fn github_hosted(label: &str) -> bool {
     GITHUB_HOSTED.contains(&label.to_ascii_lowercase().as_str())

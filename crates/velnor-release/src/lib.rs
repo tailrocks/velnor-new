@@ -46,7 +46,7 @@ pub use plan::{
     BinaryPlan, ReleaseFiles, ReleasePlan, RootPlan, check_publish_budget,
     check_release_plz_configs, publish_budget_minutes,
 };
-pub use release_plz::{release_pr_branch_prefix, release_tag_patterns};
+pub use release_plz::{release_pr_branch_prefix, release_tag_patterns, release_version_groups};
 pub use ruleset::{
     RELEASE_APP_ID, RELEASE_APP_SLUG, ruleset_drift, ruleset_json, ruleset_ref, ruleset_refs,
 };

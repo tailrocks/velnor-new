@@ -16,9 +16,9 @@ use crate::release_gate::gate;
 use crate::release_outputs::{commit_outputs, output_collisions};
 use crate::release_source::{Source, source_of};
 use crate::release_steps::{
-    RECORD_RECOVERY_HELPER, TOOLCHAIN, app_token, checkout, expression, install_release_plz, join,
-    label, permissions, refuse_commands, release_plz_arguments, release_plz_step, shell_word,
-    variables,
+    RECORD_GROUPS_HELPER, RECORD_RECOVERY_HELPER, TOOLCHAIN, app_token, checkout, expression,
+    install_release_plz, join, label, permissions, refuse_commands, release_plz_arguments,
+    release_plz_step, shell_word, variables,
 };
 use crate::rules::{
     MAX_WORKFLOW_BYTES, RenderedConcurrency, RenderedJob, RenderedStep, RenderedWorkflow, Rule,
@@ -301,6 +301,16 @@ fn record(plan: &ReleasePlan, helper: &HelperRelease, files: &[String]) -> Rende
             Value::Text(TOOLCHAIN.to_owned()),
         ));
         run = format!("{run} --app={RELEASE_APP_SLUG} {}", record_configs(plan));
+    }
+    if helper.version().at_least(RECORD_GROUPS_HELPER) {
+        for root in plan
+            .roots
+            .iter()
+            .filter(|root| !root.version_groups.is_empty())
+        {
+            let file = shell_word(&join(&root.root, RELEASE_PLZ_FILE));
+            run = format!("{run} --version-groups={file}");
+        }
     }
     RenderedStep {
         id: Some("record".to_owned()),

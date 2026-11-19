@@ -85,6 +85,7 @@ pub(crate) struct Setup {
     pub release: &'static str,
     pub env: Vec<(&'static str, &'static str)>,
     pub os_release: OsRelease,
+    pub cargo_home: Option<std::ffi::OsString>,
 }
 
 impl Setup {
@@ -104,6 +105,7 @@ impl Setup {
             release: "1.99.1",
             env: Vec::new(),
             os_release: OsRelease::Fixture,
+            cargo_home: None,
         }
     }
 }
@@ -161,7 +163,7 @@ fn write_os_release(dir: &Path) -> PathBuf {
 fn prepare_in(dir: &Path, setup: &Setup) -> Run {
     let checkout = dir.join("checkout");
     let bin = dir.join("bin");
-    let cargo_home = dir.join("cargo-home");
+    let cargo_home = dir.join(setup.cargo_home.as_deref().unwrap_or("cargo-home".as_ref()));
     fs::create_dir_all(checkout.join(".velnor")).unwrap_or_else(|e| unreachable!("{e}"));
     fs::create_dir_all(&bin).unwrap_or_else(|e| unreachable!("{e}"));
     if let Some(text) = setup.repo_cargo_config {
