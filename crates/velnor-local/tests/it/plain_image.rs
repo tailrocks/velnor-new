@@ -11,8 +11,8 @@ use std::path::Path;
 
 use velnor_local::doctor::{PLAIN_IMAGES, RUNNER_IMAGE};
 
-const LOCAL: &str = "../../docker/runner/Dockerfile";
-const PRODUCTION: &str = "../../../images/runner/ubuntu-26.04/Dockerfile";
+const LOCAL: &str = "../../local/docker/runner/Dockerfile";
+const PRODUCTION: &str = "../../images/runner/ubuntu-26.04/Dockerfile";
 
 fn dockerfile(relative: &str) -> String {
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(relative);

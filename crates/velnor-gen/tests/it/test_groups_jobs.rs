@@ -25,7 +25,13 @@ fn a_group_renders_as_a_test_job_with_its_own_limits_and_steps() -> TestResult {
         ["rust-test", "rust-test-database", "rust-test-default"]
     );
     let group = job(&workflow, "rust-test-database")?;
-    assert_eq!(group["runs-on"], "ubuntu-24.04");
+    let runs_on = group["runs-on"].as_str().unwrap_or_default();
+    assert!(
+        runs_on.contains("head.repo.full_name == github.repository")
+            && runs_on.contains("'velnor-box'")
+            && runs_on.contains("'ubuntu-latest'"),
+        "{runs_on}"
+    );
     assert_eq!(group["timeout-minutes"], 45);
     assert!(needs(group).contains(&"rust-plan") && needs(group).contains(&"rust-test"));
     let run = run_of(group, "Test")?;

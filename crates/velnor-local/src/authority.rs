@@ -262,6 +262,27 @@ fn next_free<'a>(
     None
 }
 
+/// The entry that admits run `id` of `side` as the job-start check would, without claiming it.
+#[must_use]
+pub fn dispatched<'a>(
+    entries: &'a [Entry],
+    side: Side,
+    runs: &[Run],
+    id: u64,
+) -> Option<&'a Entry> {
+    let run = runs.iter().find(|run| run.id == id)?;
+    let facts = Facts {
+        id,
+        attempt: 0,
+        event: run.event_name.clone().unwrap_or_default(),
+        git_ref: run.git_ref.clone().unwrap_or_default(),
+        sha: run.sha.clone().unwrap_or_default(),
+        workflow: run.file_name.clone(),
+        jobs: Vec::new(),
+    };
+    admit(entries, side, &facts, runs).ok()
+}
+
 pub fn claim(entries: &mut [Entry], id: &str, facts: &Facts) -> bool {
     let Some(entry) = entries.iter_mut().find(|entry| entry.id == id) else {
         return false;

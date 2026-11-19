@@ -92,14 +92,7 @@ impl<B: Backend> Authority<B> {
     pub async fn open(backend: B, token: String, dir: &Path) -> io::Result<Self> {
         fs::create_dir_all(dir).await?;
         let path = dir.join(LEDGER);
-        let kept = match fs::read_to_string(&path).await {
-            Err(error) if error.kind() == io::ErrorKind::NotFound => String::new(),
-            read => read?,
-        };
-        let entries = kept
-            .lines()
-            .map(|line| serde_json::from_str(line).map_err(io::Error::other))
-            .collect::<io::Result<_>>()?;
+        let entries = read_ledger(dir).await?;
         let key = hmac::Key::new(hmac::HMAC_SHA256, token.as_bytes());
         let expected = hmac::sign(&key, format!("Bearer {token}").as_bytes());
         Ok(Self {
@@ -285,6 +278,17 @@ impl<B: Backend> Authority<B> {
             &json!({"name": name, "deleted": deleted}),
         ))
     }
+}
+
+/// The events the driver recorded in the authority folder `dir`, none when it has recorded none.
+pub async fn read_ledger(dir: &Path) -> io::Result<Vec<Entry>> {
+    let kept = match fs::read_to_string(dir.join(LEDGER)).await {
+        Err(error) if error.kind() == io::ErrorKind::NotFound => String::new(),
+        read => read?,
+    };
+    kept.lines()
+        .map(|line| serde_json::from_str(line).map_err(io::Error::other))
+        .collect()
 }
 
 fn is_plain_relative(path: &str) -> bool {

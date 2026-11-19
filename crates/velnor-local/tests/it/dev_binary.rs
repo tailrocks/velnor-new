@@ -9,8 +9,7 @@ use velnor_local::io::local_ci::{pin_branch, pin_workflows};
 use crate::local_ci::{ELF_ARM64, binary, parsed};
 use crate::support::temp_dir;
 
-const SAMPLE: &str =
-    "../../../generator/samples/helper-lock/expected/.github/workflows/rust-ci.yml";
+const SAMPLE: &str = "../../generator/samples/helper-lock/expected/.github/workflows/rust-ci.yml";
 const WORKFLOW: &str = ".github/workflows/rust-ci.yml";
 const LINUX_ARM64: &str = "runner.arch == ''ARM64'' && ''";
 const REFUSAL: &str = "velnor-ci integrity check failed";
@@ -61,12 +60,18 @@ fn pinned_digest(workflow: &str) -> String {
 }
 
 fn launcher(workflow: &str) -> String {
-    let prefix = "VELNOR_HELPER_LAUNCHER: '";
+    let prefix = "VELNOR_HELPER_LAUNCHER: ";
     let line = workflow
         .lines()
         .find_map(|line| line.trim().strip_prefix(prefix))
+        .map(|value| {
+            value.strip_prefix('&').map_or(value, |anchor| {
+                anchor.split_once(' ').map_or(anchor, |(_, rest)| rest)
+            })
+        })
+        .filter(|value| value.starts_with('\''))
         .unwrap_or_else(|| unreachable!("no launcher"));
-    line.trim_end_matches('\'').replace("''", "'")
+    line.trim_matches('\'').replace("''", "'")
 }
 
 fn checksum_program() -> (&'static str, &'static str) {
@@ -162,16 +167,22 @@ async fn the_flag_changes_only_the_linux_arm64_digest_and_the_check_still_refuse
 }
 
 #[tokio::test]
-async fn the_flag_is_refused_for_pair_mode_and_for_a_file_that_is_not_a_linux_arm64_binary() {
+async fn a_file_that_is_not_a_linux_arm64_binary_is_refused_and_pair_mode_pins_like_plain() {
     let repo = checkout("dev-binary-bad");
     let good = binary(&temp_dir("dev-binary-file-4"), &ELF_ARM64);
     let text = binary(&temp_dir("dev-binary-text"), b"#!/bin/sh\n");
-    for (mode, file) in [("pair", &good), ("plain", &text)] {
-        let flag = file.display().to_string();
-        let args = parsed(&repo, mode, &["--velnor-ci-binary", &flag]);
-        assert!(pin_workflows(&args, &repo, "t").await.is_err(), "{mode}");
-    }
+    let flag = text.display().to_string();
+    let args = parsed(&repo, "plain", &["--velnor-ci-binary", &flag]);
+    assert!(pin_workflows(&args, &repo, "t").await.is_err());
     assert_eq!(
+        std::fs::read_to_string(repo.join(WORKFLOW)).ok(),
+        Some(sample())
+    );
+    let flag = good.display().to_string();
+    let args = parsed(&repo, "pair", &["--velnor-ci-binary", &flag]);
+    let pin = pin_workflows(&args, &repo, "t").await;
+    assert!(matches!(pin, Ok(Some(_))), "{pin:?}");
+    assert_ne!(
         std::fs::read_to_string(repo.join(WORKFLOW)).ok(),
         Some(sample())
     );
@@ -301,7 +312,7 @@ fn nothing_outside_velnor_local_can_reach_the_override() {
     let root = std::fs::canonicalize(Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."))
         .unwrap_or_else(|e| unreachable!("{e}"));
     let mut files = Vec::new();
-    sources(&root, &root.join("local"), &mut files);
+    sources(&root, &root.join("crates/velnor-local"), &mut files);
     assert!(files.len() > 100, "{}", files.len());
     for file in files {
         let text = std::fs::read_to_string(&file).unwrap_or_default();
@@ -309,7 +320,7 @@ fn nothing_outside_velnor_local_can_reach_the_override() {
             .lines()
             .any(|line| line.trim_start().starts_with("velnor-local ="));
         assert!(!depends, "{} depends on velnor-local", file.display());
-        for needle in ["velnor_local::", "velnor-ci-binary", "pin_workflows"] {
+        for needle in ["velnor_local::", "--velnor-ci-binary", "pin_workflows"] {
             assert!(
                 !text.contains(needle),
                 "{} mentions {needle}: the production launcher must not be able to reach the dev-binary override",

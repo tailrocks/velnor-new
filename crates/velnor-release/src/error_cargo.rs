@@ -147,6 +147,10 @@ impl ReleaseError {
                 f,
                 ".velnor/release.toml: binary {package} names profile {profile:?}, which is not a Cargo profile this generator can build with (use letters, digits, `-` and `_`, starting with a letter or `_`, and not dev, test, bench, debug, doc, build-override, package, deps, examples, build or incremental)"
             ),
+            Self::UndefinedProfile(package, profile, manifest) => write!(
+                f,
+                ".velnor/release.toml: binary {package} builds with profile {profile:?}, which {manifest} and the tracked .cargo/config files do not define; add [profile.{profile}] with inherits = \"release\" to {manifest}"
+            ),
             Self::Family(error) => write!(f, "{error}"),
             Self::Group(error) => write!(f, "{error}"),
             Self::InvalidCheck(check, problem) => {

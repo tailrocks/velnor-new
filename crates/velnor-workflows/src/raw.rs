@@ -18,6 +18,7 @@ pub(crate) struct RawWorkflow {
     pub(crate) file: String,
     pub(crate) name: String,
     pub(crate) runner: Option<String>,
+    pub(crate) hosted: Option<bool>,
     pub(crate) fork_runner: Option<String>,
     pub(crate) hosted_runner: Option<String>,
     pub(crate) scale_set_runner: Option<String>,
@@ -156,6 +157,7 @@ pub(crate) struct RawJob {
     #[serde(default)]
     pub(crate) helper: bool,
     pub(crate) runner: Option<String>,
+    pub(crate) hosted: Option<bool>,
     pub(crate) environment: Option<String>,
     pub(crate) timeout_minutes: Option<u16>,
     pub(crate) concurrency: Option<RawConcurrency>,

@@ -188,6 +188,7 @@ async fn run_api_stub(args: ApiStubArgs) -> std::io::Result<()> {
         diff_limit_bytes: args.diff_limit_bytes,
         local_setup: args.local_setup_velnor,
         job_cache_admin: args.job_cache_admin,
+        ledger: args.ledger,
         token_key: match &args.token_key {
             Some(path) => Some(fs::read(path).await?),
             None => None,

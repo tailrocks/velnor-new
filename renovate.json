@@ -1,6 +1,6 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "description": "Velnor: propose ALL updates (major + minor/patch) as reviewed changes; never merge. Covers the Cargo dependencies, the Mise pins in mise.toml and .velnor/mise.toml, the [[actions]] pins in .velnor/version-policy.toml; .github is ignored because velnor-gen writes it.",
+  "description": "Velnor: propose ALL updates (major + minor/patch) as reviewed changes; never merge. Covers the Cargo dependencies, the Mise pins in mise.toml and .velnor/mise.toml, the [[actions]] pins in .velnor/version-policy.toml; the workflows velnor-gen writes under .github/workflows are ignored, so only the hand-maintained ci.yml gets action-pin updates.",
   "extends": ["config:recommended"],
   "enabledManagers": ["cargo", "github-actions", "mise", "custom.regex"],
   "ignorePaths": [
@@ -9,7 +9,11 @@
     "**/goldens/**",
     "**/golden/**",
     "fixtures/**",
-    ".github/workflows/**",
+    ".github/workflows/qualification.yml",
+    ".github/workflows/release.yml",
+    ".github/workflows/rust-cache-trim.yml",
+    ".github/workflows/rust-ci.yml",
+    ".github/workflows/tag-ruleset-drift.yml",
     ".github/actions/**"
   ],
   "cargo": {

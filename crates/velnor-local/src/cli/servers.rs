@@ -55,6 +55,11 @@ pub struct ApiStubArgs {
         help = "Public half of runner.server's token signing key, PKCS#1 RSAPublicKey DER, as for cache-server. A job whose github.token is a grant it signed (actions: write, an event that is not a pull request) may list and delete the caches of its repository, as GitHub lets a job with that permission"
     )]
     pub token_key: Option<PathBuf>,
+    #[arg(
+        long,
+        help = "The authority folder, read only, whose ledger.jsonl holds the events the driver dispatched. A job grant counts only for a run the ledger admits; without it no job is granted"
+    )]
+    pub ledger: Option<PathBuf>,
     #[command(flatten)]
     pub control: ControlArgs,
 }

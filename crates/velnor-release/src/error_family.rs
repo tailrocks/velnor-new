@@ -18,6 +18,11 @@ pub enum FamilyError {
     Unsupported {
         key: &'static str,
     },
+    AssetNameCollision {
+        first: String,
+        second: String,
+        file: String,
+    },
     NeedsFamilyTag {
         key: &'static str,
     },
@@ -34,6 +39,8 @@ pub enum FamilyError {
     TagPushWithReleasedPackage {
         package: String,
     },
+    RequiredChecksNeedTagPush,
+    RequiredChecksOffWithPrOnlyChecks,
 }
 
 impl fmt::Display for FamilyError {
@@ -55,6 +62,14 @@ impl fmt::Display for FamilyError {
                 f,
                 ".velnor/release.toml: binary {package} is released by release-plz under its own tag; with family_tag set, give it a [[package]] with release = false in release-plz.toml so that the family tag is its only tag"
             ),
+            Self::AssetNameCollision {
+                first,
+                second,
+                file,
+            } => write!(
+                f,
+                ".velnor/release.toml: with family_tag set, binaries {first} and {second} both publish the file {file:?} under one tag; give them different bin names or an asset_name that uses {{{{ bin }}}}"
+            ),
             Self::Unsupported { key } => write!(
                 f,
                 ".velnor/release.toml: family_tag does not support {key} yet; remove it or release the binaries under their own tags"
@@ -74,6 +89,14 @@ impl fmt::Display for FamilyError {
             Self::ChecksumsNeedArchives { package } => write!(
                 f,
                 ".velnor/release.toml: checksums_file digests the binaries inside archives, but binary {package} is raw; use format = \"archive\" or remove checksums_file"
+            ),
+            Self::RequiredChecksNeedTagPush => write!(
+                f,
+                ".velnor/release.toml: family_required_checks applies only to family_trigger = \"tag_push\""
+            ),
+            Self::RequiredChecksOffWithPrOnlyChecks => write!(
+                f,
+                ".velnor/release.toml: family_required_checks = false skips the required-checks gate, so pr_only_checks has nothing to apply to; remove one of them"
             ),
             Self::TagPushWithReleasedPackage { package } => write!(
                 f,

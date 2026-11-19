@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::cron::CronExpr;
+use crate::hosted::HostedRunners;
 use crate::ids::{PackageName, PathGlob, RepoPath, RootSlug, RunnerLabel, TargetName};
 use crate::lint::LintJob;
 use crate::plan::Shape;
@@ -11,6 +12,8 @@ use crate::test_group::TestGroup;
 pub struct RustCiConfig {
     pub runner: RunnerLabel,
     pub fork_runner: RunnerLabel,
+    /// Labels declared `hosted = true`; every other runner is self-hosted and fenced.
+    pub hosted_runners: HostedRunners,
     pub crates_mirror: Option<CratesMirror>,
     pub private_sources: Option<PrivateSources>,
     pub mbx_store: MbxStore,
@@ -196,6 +199,7 @@ impl Default for RustCiConfig {
         Self {
             runner: RunnerLabel::from_static("ubuntu-latest"),
             fork_runner: RunnerLabel::from_static("ubuntu-latest"),
+            hosted_runners: HostedRunners::new(vec![RunnerLabel::from_static("ubuntu-latest")]),
             crates_mirror: None,
             private_sources: None,
             mbx_store: MbxStore::Private,

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{MisePlatform, RunnerLabel, github_hosted};
+use velnor_model::{MisePlatform, RunnerLabel, looks_github_hosted};
 
 use crate::error::Reason;
 
@@ -30,7 +30,7 @@ pub(crate) fn fork_runner(
         Some(primary) => lock_platform(&fork).as_ref() == Some(&primary),
         None => lock_platform(&fork).as_deref() == Some("linux-x64"),
     };
-    if github_hosted(fork.as_str()) && compatible {
+    if looks_github_hosted(fork.as_str()) && compatible {
         Ok(fork)
     } else {
         Err(invalid())
@@ -38,9 +38,8 @@ pub(crate) fn fork_runner(
 }
 
 pub(crate) fn expression_safe(runner: &RunnerLabel) -> bool {
-    github_hosted(runner.as_str())
-        || runner
-            .as_str()
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+    runner
+        .as_str()
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
 }
