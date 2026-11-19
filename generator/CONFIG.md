@@ -315,6 +315,15 @@ Every entry lands at the top level of the asset, flat and by its file name: the 
 
 Both keys are absent by default, and then the generated workflow is byte-identical to one generated without this feature. The `SHA256SUMS` file still covers the archives, not their members. With `attest = true` each archive is its own attestation subject, so the binary, the helper, `LICENSE` and `NOTICE` travel in one verified file.
 
+## Optional family tag for binary releases
+
+`family_tag` in `.velnor/release.toml` gives every `[[binaries]]` entry of a release one tag, such as `tools-v0.1.80`, bound to the verified source commit. Its value holds one `{{ version }}` and no `{{ package }}`, and the repository needs at least one `[[binaries]]` entry. Without it, each binary keeps its own release-plz tag.
+
+- A `family` job reads the version of every binary from `cargo metadata` at the verified commit, and all must agree. It runs `velnor-ci release family-tag`, which creates the tag on the verified commit, refuses unless the tag resolves to that commit, and opens one draft release. A run at a version that already has a release does nothing.
+- Build jobs check out `refs/tags/<family tag>` and refuse any commit other than the verified one. The `sums-family` and `publish-family` jobs publish the assets of every binary under the one tag.
+- The generator refuses a binary that release-plz still releases under its own tag, and a helper older than `velnor-ci` 0.1.83.
+- Binary packages are `release = false` in release-plz, so their version is bumped by hand or by a pull request.
+
 ## Release binary asset format
 
 `format` in a `[[binaries]]` table of `.velnor/release.toml` selects what the release job uploads for that binary. It is `"archive"` by default: one `<bin>-<target-triple>.tar.gz` for each platform plus the `SHA256SUMS` file.
