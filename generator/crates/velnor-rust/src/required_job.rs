@@ -117,11 +117,7 @@ pub(crate) fn verdict_job(
         name: Some(facts.config.required_check.clone()),
         skip_on_draft: false,
         needs: jobs.iter().map(|job| job.id.clone()).collect(),
-        when: if gate {
-            When::Always
-        } else {
-            When::NotCancelled
-        },
+        when: When::Always,
         steps: draft_guard.into_iter().chain(steps).collect(),
         ..job(facts, VERDICT_JOB)
     }

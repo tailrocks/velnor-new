@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fmt;
+use std::time::Duration;
 
 use serde::Deserialize;
 
@@ -12,6 +13,7 @@ pub trait GitHub {
 }
 
 pub trait GitHubWrite: GitHub {
+    fn wait(&self, duration: Duration);
     fn upload(&self, url: &str, bytes: &[u8]) -> Result<String, CiError>;
     fn patch(&self, path: &str, json: &str) -> Result<String, CiError>;
     fn delete(&self, path: &str) -> Result<(), CiError>;

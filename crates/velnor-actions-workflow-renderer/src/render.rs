@@ -186,7 +186,7 @@ pub fn finalize_jobs(
         ctx.pull_request_cache_policy,
         &ctx.standalone_tools_donors,
     )?;
-    crate::sources_producer::add_sources_producer(&mut jobs)?;
+    crate::sources_producer::add_sources_producer(&mut jobs, &ctx.runs_on)?;
     crate::tofu_producer::add_tofu_providers_producers(&mut jobs)?;
     crate::state_seal::add_state_seal_jobs(&mut jobs)?;
     crate::tofu_stage::stage_tofu_jobs(&mut jobs, ctx.max_parallel_jobs);
@@ -289,6 +289,7 @@ fn merged_jobs(
         &workflow_task_ids,
     )?;
     crate::required_gate::insert_required_gate(&mut jobs)?;
+    crate::support_placement::apply(&mut jobs, ctx)?;
     msrv::check_no_msrv(&jobs)?;
     support::check_candidate_invariants(&jobs)?;
     support::check_final_gate(&jobs)?;
@@ -326,7 +327,8 @@ fn render_merged(
     shared.files.extend(task_files);
     let all_jobs = jobs.clone();
     let mut jobs = jobs;
-    let state_seal = crate::render_state_seal::split_state_seal(ir, &mut shared, &mut jobs)?;
+    let state_seal =
+        crate::render_state_seal::split_state_seal(ir, &mut shared, &mut jobs, &ctx.runs_on)?;
     execution_boundaries::validate_required_verdict(&shared.jobs, phase, &ctx.authority_steps)?;
     execution_boundaries::validate_trusted_plan(&shared.jobs, policy, phase, &ctx.authority_steps)?;
     match emit::emit_shared(
