@@ -25,6 +25,7 @@ pub(crate) struct Binary {
     pub(crate) bins: Vec<ExtraBin>,
     pub(crate) include: Vec<String>,
     pub(crate) format: BinaryFormat,
+    pub(crate) attest: bool,
     pub(crate) profile: Option<String>,
     pub(crate) asset_name: Option<String>,
 }
@@ -46,6 +47,8 @@ struct RawBinary {
     bin: Option<String>,
     platforms: Option<Vec<String>>,
     format: Option<BinaryFormat>,
+    #[serde(default)]
+    attest: bool,
     profile: Option<String>,
     asset_name: Option<String>,
     #[serde(default)]
@@ -250,6 +253,7 @@ fn binary(raw: RawBinary) -> Result<Binary, ReleaseError> {
         bins,
         include,
         format,
+        attest: raw.attest,
         profile,
         asset_name: raw.asset_name,
     })

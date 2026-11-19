@@ -27,6 +27,9 @@ on:
           - mask
           - outputs
           - js-pin
+          - services
+          - container
+          - cancel-service
           - cache
           - empty-cache
           - mbx-cache-roundtrip
@@ -608,6 +611,108 @@ jobs:
         run: 'echo "::add-mask::g4-mask-canary"'
       - name: Mask canary
         run: echo g4-mask-canary
+  services-hosted:
+    name: Services / GitHub hosted
+    if: '${{ inputs.mode == ''features'' || inputs.mode == ''services'' }}'
+    permissions: {}
+    runs-on: ubuntu-26.04
+    services:
+      redis:
+        image: 'redis:8.10.2-alpine@sha256:2d3814be5e9b06a30a0be54770b7e12052e7e79ec85271aefd34875c1f393b23'
+        ports:
+          - '6379:6379'
+        options: '--health-cmd "redis-cli ping" --health-interval 5s --health-timeout 5s --health-retries 12'
+    timeout-minutes: 5
+    steps:
+      - name: Localhost port
+        run: nc -z -w 1 127.0.0.1 6379
+  services-scale-set:
+    name: Services / Velnor Scale Set
+    if: '${{ inputs.mode == ''features'' || inputs.mode == ''services'' }}'
+    permissions: {}
+    runs-on: '${{ (!startsWith(github.event_name, ''pull_request'') || github.event.pull_request.head.repo.full_name == github.repository) && ''ubuntu-26.04-scale-set'' || ''ubuntu-26.04'' }}'
+    services:
+      redis:
+        image: 'redis:8.10.2-alpine@sha256:2d3814be5e9b06a30a0be54770b7e12052e7e79ec85271aefd34875c1f393b23'
+        ports:
+          - '6379:6379'
+        options: '--health-cmd "redis-cli ping" --health-interval 5s --health-timeout 5s --health-retries 12'
+    timeout-minutes: 5
+    steps:
+      - name: Localhost port
+        run: nc -z -w 1 127.0.0.1 6379
+  container-hosted:
+    name: Container / GitHub hosted
+    if: '${{ inputs.mode == ''container'' }}'
+    permissions: {}
+    runs-on: ubuntu-26.04
+    container:
+      image: 'alpine:3.24.2@sha256:d56c381f961d307a21b3ca004cf1e3910f106644aefb1f43e654c8a56c4fd395'
+    services:
+      redis:
+        image: 'redis:8.10.2-alpine@sha256:2d3814be5e9b06a30a0be54770b7e12052e7e79ec85271aefd34875c1f393b23'
+        ports:
+          - '6379:6379'
+        options: '--health-cmd "redis-cli ping" --health-interval 5s --health-timeout 5s --health-retries 12'
+    timeout-minutes: 5
+    steps:
+      - name: Service DNS
+        run: nc -z -w 1 redis 6379
+  container-scale-set:
+    name: Container / Velnor Scale Set
+    if: '${{ inputs.mode == ''container'' }}'
+    permissions: {}
+    runs-on: '${{ (!startsWith(github.event_name, ''pull_request'') || github.event.pull_request.head.repo.full_name == github.repository) && ''ubuntu-26.04-scale-set'' || ''ubuntu-26.04'' }}'
+    container:
+      image: 'alpine:3.24.2@sha256:d56c381f961d307a21b3ca004cf1e3910f106644aefb1f43e654c8a56c4fd395'
+    services:
+      redis:
+        image: 'redis:8.10.2-alpine@sha256:2d3814be5e9b06a30a0be54770b7e12052e7e79ec85271aefd34875c1f393b23'
+        ports:
+          - '6379:6379'
+        options: '--health-cmd "redis-cli ping" --health-interval 5s --health-timeout 5s --health-retries 12'
+    timeout-minutes: 5
+    steps:
+      - name: Service DNS
+        run: nc -z -w 1 redis 6379
+  cancel-service-hosted:
+    name: Cancel service / GitHub hosted
+    if: '${{ inputs.mode == ''cancel-service'' }}'
+    permissions: {}
+    runs-on: ubuntu-26.04
+    services:
+      redis:
+        image: 'redis:8.10.2-alpine@sha256:2d3814be5e9b06a30a0be54770b7e12052e7e79ec85271aefd34875c1f393b23'
+        ports:
+          - '6379:6379'
+        options: '--health-cmd "redis-cli ping" --health-interval 5s --health-timeout 5s --health-retries 12'
+    timeout-minutes: 5
+    steps:
+      - name: Probe service
+        run: nc -z -w 1 127.0.0.1 6379
+      - name: Announce service
+        run: echo service-up
+      - name: Sleep until cancelled
+        run: sleep 900
+  cancel-service-scale-set:
+    name: Cancel service / Velnor Scale Set
+    if: '${{ inputs.mode == ''cancel-service'' }}'
+    permissions: {}
+    runs-on: '${{ (!startsWith(github.event_name, ''pull_request'') || github.event.pull_request.head.repo.full_name == github.repository) && ''ubuntu-26.04-scale-set'' || ''ubuntu-26.04'' }}'
+    services:
+      redis:
+        image: 'redis:8.10.2-alpine@sha256:2d3814be5e9b06a30a0be54770b7e12052e7e79ec85271aefd34875c1f393b23'
+        ports:
+          - '6379:6379'
+        options: '--health-cmd "redis-cli ping" --health-interval 5s --health-timeout 5s --health-retries 12'
+    timeout-minutes: 5
+    steps:
+      - name: Probe service
+        run: nc -z -w 1 127.0.0.1 6379
+      - name: Announce service
+        run: echo service-up
+      - name: Sleep until cancelled
+        run: sleep 900
   verify-hosted:
     name: Verify / GitHub hosted / Linux x64
     if: '${{ inputs.mode == ''both'' }}'
@@ -746,7 +851,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Restore cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           fail-on-cache-miss: 'true'
           key: 'g4-cache-${{ github.run_id }}'

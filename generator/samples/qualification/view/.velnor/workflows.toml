@@ -12,7 +12,7 @@ scale_set_runner = "ubuntu-26.04-scale-set"
 name = "mode"
 type = "choice"
 default = "both"
-options = ["both", "features", "js", "artifacts", "buildx", "negative", "composite", "docker-action", "post-fail", "oidc", "cancel", "compose", "bind", "testcontainers", "submodule", "pressure", "mask", "outputs", "js-pin", "cache", "empty-cache", "mbx-cache-roundtrip"]
+options = ["both", "features", "js", "artifacts", "buildx", "negative", "composite", "docker-action", "post-fail", "oidc", "cancel", "compose", "bind", "testcontainers", "submodule", "pressure", "mask", "outputs", "js-pin", "services", "container", "cancel-service", "cache", "empty-cache", "mbx-cache-roundtrip"]
 
 
 [[workflow.case]]
@@ -353,6 +353,63 @@ run = "echo \"::add-mask::g4-mask-canary\""
 name = "Mask canary"
 run = "echo g4-mask-canary"
 
+[[workflow.case]]
+id = "services"
+title = "Services"
+modes = ["features", "services"]
+timeout_minutes = 5
+
+[[workflow.case.service]]
+name = "redis"
+image = "redis:8.10.2-alpine@sha256:2d3814be5e9b06a30a0be54770b7e12052e7e79ec85271aefd34875c1f393b23"
+ports = ["6379:6379"]
+options = "--health-cmd \"redis-cli ping\" --health-interval 5s --health-timeout 5s --health-retries 12"
+
+[[workflow.case.step]]
+name = "Localhost port"
+run = "nc -z -w 1 127.0.0.1 6379"
+
+[[workflow.case]]
+id = "container"
+title = "Container"
+timeout_minutes = 5
+
+[workflow.case.container]
+image = "alpine:3.24.2@sha256:d56c381f961d307a21b3ca004cf1e3910f106644aefb1f43e654c8a56c4fd395"
+
+[[workflow.case.service]]
+name = "redis"
+image = "redis:8.10.2-alpine@sha256:2d3814be5e9b06a30a0be54770b7e12052e7e79ec85271aefd34875c1f393b23"
+ports = ["6379:6379"]
+options = "--health-cmd \"redis-cli ping\" --health-interval 5s --health-timeout 5s --health-retries 12"
+
+[[workflow.case.step]]
+name = "Service DNS"
+run = "nc -z -w 1 redis 6379"
+
+[[workflow.case]]
+id = "cancel-service"
+title = "Cancel service"
+timeout_minutes = 5
+
+[[workflow.case.service]]
+name = "redis"
+image = "redis:8.10.2-alpine@sha256:2d3814be5e9b06a30a0be54770b7e12052e7e79ec85271aefd34875c1f393b23"
+ports = ["6379:6379"]
+options = "--health-cmd \"redis-cli ping\" --health-interval 5s --health-timeout 5s --health-retries 12"
+
+[[workflow.case.step]]
+name = "Probe service"
+run = "nc -z -w 1 127.0.0.1 6379"
+
+[[workflow.case.step]]
+name = "Announce service"
+run = "echo service-up"
+
+[[workflow.case.step]]
+name = "Sleep until cancelled"
+run = "sleep 900"
+
 [[workflow.job]]
 id = "verify-hosted"
 name = "Verify / GitHub hosted / Linux x64"
@@ -510,7 +567,7 @@ cache_mode = "read"
 
 [[workflow.job.step]]
 name = "Restore cache"
-uses = "cache"
+uses = "cache-restore"
 with = { path = "g4-cache.txt", key = "g4-cache-${{ github.run_id }}", fail-on-cache-miss = "true" }
 
 [[workflow.job.step]]

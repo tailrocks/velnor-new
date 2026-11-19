@@ -11,6 +11,8 @@ use serde_json::Value;
 use crate::declared_fixture::{TestResult, rendered_text};
 use crate::yaml_tree::document;
 
+mod shapes;
+
 const SCALE_SET: &str = "ubuntu-26.04-scale-set";
 const HOSTED: &str = "ubuntu-26.04";
 
@@ -31,6 +33,12 @@ const NEWLINE_REPLACED: [(&str, &str); 1] = [(
     "printf '%s\n' cache-ok > \"g4 cache/note.txt\"",
     "printf '%s\\n' cache-ok > \"g4 cache/note.txt\"",
 )];
+
+const RESTORE_ONLY: (&str, &str, &str) = (
+    "cache-hosted",
+    "actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+    "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+);
 
 const MESSAGE_REPLACED: [(&str, &str); 1] = [(
     "echo '::error title=cache_qualification_requires_non_default_branch::Dispatch cache qualification modes from a non-default branch; every cache job is skipped on the default branch.'",
@@ -64,7 +72,7 @@ const CHAINS: [&str; 24] = [
     "outputs-scale-set",
 ];
 
-const NARROWER: [&str; 24] = [
+const NARROWER: [&str; 30] = [
     "cache-default-branch-guard",
     "bind-hosted",
     "bind-scale-set",
@@ -72,6 +80,10 @@ const NARROWER: [&str; 24] = [
     "buildx-scale-set",
     "cancel-hosted",
     "cancel-scale-set",
+    "cancel-service-hosted",
+    "cancel-service-scale-set",
+    "container-hosted",
+    "container-scale-set",
     "js-pin-hosted",
     "js-pin-scale-set",
     "expect-fail-hosted",
@@ -84,6 +96,8 @@ const NARROWER: [&str; 24] = [
     "pressure-b-scale-set",
     "pressure-c-hosted",
     "pressure-c-scale-set",
+    "services-hosted",
+    "services-scale-set",
     "compare",
     "outputs-hosted",
     "outputs-scale-set",
@@ -211,6 +225,26 @@ fn unparenthesised(condition: &str) -> Option<String> {
     Some(format!("{mode} && {gate}"))
 }
 
+fn restore_only(id: &str, steps: Vec<StepSignature>) -> (Vec<StepSignature>, bool) {
+    let (job, from, to) = RESTORE_ONLY;
+    let mut restored = false;
+    let steps = steps
+        .into_iter()
+        .map(|step| {
+            if id == job && step.uses.as_deref() == Some(from) {
+                restored = true;
+                StepSignature {
+                    uses: Some(to.to_owned()),
+                    ..step
+                }
+            } else {
+                step
+            }
+        })
+        .collect();
+    (steps, restored)
+}
+
 fn replace_runs(steps: Vec<StepSignature>, table: &[(&str, &str)]) -> (Vec<StepSignature>, bool) {
     let mut replaced = false;
     let steps = steps
@@ -292,6 +326,12 @@ fn compare_head(pair: &Pair<'_>, kinds: &mut Kinds, unexpected: &mut Vec<String>
     let mut note = |kind: &'static str| {
         kinds.entry(kind).or_default().insert(id.to_owned());
     };
+    let (unrolled, looped) = shapes::unroll(engine);
+    let engine = &unrolled;
+    if looped {
+        note("a retry loop is written as plain probes");
+    }
+    shapes::compare(id, engine, generated, &mut note, unexpected);
     for key in ["name", "timeout-minutes", "needs", "outputs", "env"] {
         if engine.get(key) != generated.get(key) {
             unexpected.push(format!(
@@ -334,9 +374,9 @@ fn compare_head(pair: &Pair<'_>, kinds: &mut Kinds, unexpected: &mut Vec<String>
     }
     if engine_lane == Some("scale-set") {
         note("runs-on gets the fork fence");
-        if engine.pointer("/defaults/run/shell").is_some() {
-            note("defaults.run.shell is not written");
-        }
+    }
+    if engine.pointer("/defaults/run/shell").is_some() {
+        note("defaults.run.shell is not written");
     }
     let from_engine = permissions(engine, engine_workflow);
     let from_generated = permissions(generated, generated_workflow);
@@ -364,11 +404,13 @@ fn compare_steps(pair: &Pair<'_>, kinds: &mut Kinds, unexpected: &mut Vec<String
     let mut note = |kind: &'static str| {
         kinds.entry(kind).or_default().insert(id.to_owned());
     };
-    let (chains, flat) = engine_steps(engine);
+    let (unrolled, _) = shapes::unroll(engine);
+    let (chains, flat) = engine_steps(&unrolled);
     let (flat, piped) = replace_pipes(flat);
     let (flat, ored) = replace_runs(flat, &OR_REPLACED);
     let (flat, worded) = replace_runs(flat, &MESSAGE_REPLACED);
     let (flat, escaped) = replace_runs(flat, &NEWLINE_REPLACED);
+    let (flat, restored) = restore_only(id, flat);
     if flat != gen_steps(generated) {
         unexpected.push(format!(
             "{id}: steps: engine {flat:#?}, generated {:#?}",
@@ -380,13 +422,17 @@ fn compare_steps(pair: &Pair<'_>, kinds: &mut Kinds, unexpected: &mut Vec<String
         ("an || is written as one test", ored),
         ("a semicolon in a message is a full stop", worded),
         ("a line feed in a printf format is written as \\n", escaped),
+        (
+            "a restore-only actions/cache is actions/cache/restore",
+            restored,
+        ),
     ] {
         if happened {
             note(kind);
         }
     }
     if chains.len()
-        != engine
+        != unrolled
             .get("steps")
             .map_or(0, |steps| steps.as_array().map_or(0, Vec::len))
         || flat.len() != chains.len()
@@ -625,7 +671,7 @@ fn every_declared_qualification_job_matches_the_engine_job_but_for_the_listed_di
         .collect();
     let listed = |kind: &str| kinds.get(kind).cloned().unwrap_or_default();
     assert_eq!(listed("runs-on gets the fork fence"), scale_sets);
-    assert_eq!(listed("defaults.run.shell is not written"), scale_sets);
+    shapes::assert_notes(&kinds, &scale_sets);
     assert_eq!(
         listed("a pipe is written as two steps"),
         BTreeSet::from(["outputs-scale-set".to_owned()])
@@ -633,6 +679,10 @@ fn every_declared_qualification_job_matches_the_engine_job_but_for_the_listed_di
     let empty = set(&["empty-cache-hosted", "empty-cache-scale-set"]);
     assert_eq!(listed("an || is written as one test"), empty);
     assert_eq!(listed("a case condition is parenthesised"), empty);
+    assert_eq!(
+        listed("a restore-only actions/cache is actions/cache/restore"),
+        set(&["cache-hosted"])
+    );
     assert_eq!(
         listed("a line feed in a printf format is written as \\n"),
         empty

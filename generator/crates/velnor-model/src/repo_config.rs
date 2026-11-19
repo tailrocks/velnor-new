@@ -15,6 +15,7 @@ pub struct RustCiConfig {
     pub private_sources: Option<PrivateSources>,
     pub mbx_store: MbxStore,
     pub docs_run: DocsRun,
+    pub check_alone_run: DocsRun,
     pub timeout_minutes: u16,
     pub exclude: Vec<PathGlob>,
     pub non_inputs: Vec<PathGlob>,
@@ -38,6 +39,7 @@ pub struct RustCiConfig {
     pub test_setup: Vec<TestSetup>,
     pub lint: Vec<LintJob>,
     pub test_groups: Vec<TestGroup>,
+    pub checkout: CheckoutScope,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -142,6 +144,7 @@ impl Default for RustCiConfig {
             private_sources: None,
             mbx_store: MbxStore::Private,
             docs_run: DocsRun::Always,
+            check_alone_run: DocsRun::Always,
             timeout_minutes: 30,
             exclude: Vec::new(),
             non_inputs: Vec::new(),
@@ -165,6 +168,7 @@ impl Default for RustCiConfig {
             test_setup: Vec::new(),
             lint: Vec::new(),
             test_groups: Vec::new(),
+            checkout: CheckoutScope::Full,
         }
     }
 }
@@ -182,4 +186,10 @@ pub struct PrivateSources {
     pub private_key: String,
     pub owner: String,
     pub repositories: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CheckoutScope {
+    Full,
+    Sparse,
 }

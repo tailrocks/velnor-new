@@ -63,6 +63,7 @@ fn a_family_release_refuses_the_keys_it_cannot_publish_yet() -> TestResult {
             "[[binaries]]\npackage = \"app\"\ninclude = [\"LICENSE\"]\n",
             "include",
         ),
+        ("[[binaries]]\npackage = \"app\"\nattest = true\n", "attest"),
     ] {
         assert_eq!(refused_key(binaries)?, key);
     }

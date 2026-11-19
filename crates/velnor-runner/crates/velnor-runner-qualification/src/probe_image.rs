@@ -13,6 +13,16 @@ use super::{create_options, deadline, read_logs, remaining, wait_success};
 use crate::error::QualificationError as HostError;
 use crate::probe_record::ProbeRecord;
 
+pub(super) fn canonical_docker_root(path: &str) -> bool {
+    path.starts_with('/')
+        && path != "/"
+        && path.len() <= 4096
+        && !path.chars().any(char::is_control)
+        && path[1..]
+            .split('/')
+            .all(|part| !part.is_empty() && part != "." && part != "..")
+}
+
 pub async fn qualify(
     docker: &Docker,
     image: &str,
@@ -20,6 +30,9 @@ pub async fn qualify(
     healthcheck: Option<bollard::models::HealthConfig>,
     end: Instant,
 ) -> Result<(), HostError> {
+    if !canonical_docker_root(root) {
+        return Err(HostError::Identity);
+    }
     let mut resources = OwnedResources::new(&[(image, healthcheck)])?;
     let result = match remaining(end) {
         Ok(limit) => deadline(run(docker, image, root, &mut resources), limit)
@@ -40,7 +53,7 @@ pub(super) async fn run(
     root: &str,
     resources: &mut OwnedResources,
 ) -> Result<(), HostError> {
-    if !root.starts_with('/') || root.chars().any(char::is_control) {
+    if !canonical_docker_root(root) {
         return Err(HostError::Identity);
     }
     let end = Instant::now() + Duration::from_secs(30);

@@ -8,6 +8,7 @@ use crate::release::{FROM_A_PASSED_PUSH, GATE_IS_READY, HOSTED_RUNNER, VERIFIED_
 use crate::release_assets::{
     STAGE, asset, assets, bind_version, pack, quoted, read_version, selection, uploaded, versioned,
 };
+use crate::release_attest::{attest, verify};
 use crate::release_checks::publish_needs;
 use crate::release_outputs::commit_output;
 use crate::release_raw::raw_packaging;
@@ -38,6 +39,9 @@ pub(crate) fn binary_jobs(plan: &ReleasePlan, helper: &HelperRelease) -> Vec<Ren
                 .map(|platform| build(binary, *platform, helper))
                 .collect();
             jobs.push(sums(binary));
+            if binary.attest {
+                jobs.push(verify(binary));
+            }
             jobs.push(publish(plan, binary, helper));
             jobs
         })
@@ -72,7 +76,7 @@ pub(crate) fn build_id(package: &str, platform: Platform) -> String {
     format!("build-{package}-{}", platform.file_suffix())
 }
 
-fn behind_the_gate(id: String, binary: &BinaryPlan, needs: Vec<String>) -> RenderedJob {
+pub(crate) fn behind_the_gate(id: String, binary: &BinaryPlan, needs: Vec<String>) -> RenderedJob {
     let mut all = vec!["gate".to_owned(), "tag".to_owned()];
     all.extend(needs);
     RenderedJob {
@@ -229,13 +233,21 @@ fn sums(binary: &BinaryPlan) -> RenderedJob {
             )
         });
     }
+    if binary.attest {
+        steps.push(attest(binary));
+    }
     steps.push(upload(
         format!("{}-sums", binary.package),
         format!("{DIST}/{SUMS_FILE}"),
     ));
     bind_version(&mut steps);
     RenderedJob {
-        no_permissions: true,
+        no_permissions: !binary.attest,
+        permissions: if binary.attest {
+            permissions(&[("attestations", "write"), ("id-token", "write")])
+        } else {
+            Vec::new()
+        },
         runs_on: HOSTED_RUNNER.to_owned(),
         timeout_minutes: PUBLISH_TIMEOUT_MINUTES,
         steps,
@@ -278,7 +290,11 @@ fn publish(plan: &ReleasePlan, binary: &BinaryPlan, helper: &HelperRelease) -> R
         ..behind_the_gate(
             format!("publish-{}", binary.package),
             binary,
-            [format!("sums-{}", binary.package)]
+            [format!(
+                "{}-{}",
+                if binary.attest { "verify" } else { "sums" },
+                binary.package
+            )]
                 .into_iter()
                 .chain(publish_needs(plan, binary))
                 .collect(),

@@ -120,9 +120,9 @@ fn a_cache_writer_must_be_gated_off_the_default_branch() -> TestResult {
 fn the_cache_actions_render_at_their_pins() -> TestResult {
     let steps = format!(
         "{}{}{}",
-        with_step("cache", "{ path = \"a\", key = \"k\" }"),
         with_step("cache-save", "{ path = \"a\", key = \"k\" }"),
         with_step("cache-restore", "{ path = \"a\", key = \"k\" }"),
+        with_step("cache", "{ path = \"a\", key = \"k\" }"),
     );
     let tree = rendered(&one_job("", &steps))?;
     let uses: Vec<&str> = job(&tree, "check")?
@@ -136,9 +136,9 @@ fn the_cache_actions_render_at_their_pins() -> TestResult {
     assert_eq!(
         uses,
         [
-            format!("actions/cache@{pin}"),
             format!("actions/cache/save@{pin}"),
-            format!("actions/cache/restore@{pin}")
+            format!("actions/cache/restore@{pin}"),
+            format!("actions/cache@{pin}")
         ]
     );
     Ok(())

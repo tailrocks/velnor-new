@@ -126,8 +126,8 @@ fn pair(
         matrix: None,
         uses: None,
         with: BTreeMap::new(),
-        container: None,
-        service: Vec::new(),
+        container: case.container.clone(),
+        service: case.service.clone(),
         step: case.step.clone(),
     };
     Ok([

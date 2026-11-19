@@ -49,6 +49,9 @@ pub(crate) struct RawCase {
     pub(crate) timeout_minutes: Option<u16>,
     #[serde(default)]
     pub(crate) permissions: BTreeMap<String, String>,
+    pub(crate) container: Option<RawContainer>,
+    #[serde(default)]
+    pub(crate) service: Vec<RawService>,
     #[serde(default)]
     pub(crate) env: BTreeMap<String, String>,
     pub(crate) cache_mode: Option<String>,
@@ -203,7 +206,7 @@ pub(crate) struct RawStep {
     pub(crate) env: BTreeMap<String, String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct RawContainer {
     pub(crate) image: String,
@@ -212,7 +215,7 @@ pub(crate) struct RawContainer {
     pub(crate) env: BTreeMap<String, String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct RawService {
     pub(crate) name: String,

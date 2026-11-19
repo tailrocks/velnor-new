@@ -46,11 +46,14 @@ async fn journal_below_the_table(version: i64) -> TestResult<tempfile::TempDir> 
 }
 
 #[tokio::test]
-async fn journals_below_the_table_upgrade_to_v58_and_gain_it() -> TestResult {
+async fn journals_below_the_table_upgrade_to_current_and_gain_it() -> TestResult {
     for version in [57_i64, 52] {
         let directory = journal_below_the_table(version).await?;
         let path = directory.path().join("journal.db");
-        assert_eq!(scalar(&path, "PRAGMA user_version").await?, 58);
+        assert_eq!(
+            scalar(&path, "PRAGMA user_version").await?,
+            crate::journal::schema::JOURNAL_VERSION
+        );
         let tables =
             format!("SELECT COUNT(*) FROM sqlite_schema WHERE type = 'table' AND name = '{TABLE}'");
         assert_eq!(scalar(&path, &tables).await?, 1);
@@ -61,7 +64,7 @@ async fn journals_below_the_table_upgrade_to_v58_and_gain_it() -> TestResult {
 }
 
 #[tokio::test]
-async fn a_v58_journal_missing_the_table_is_rejected() -> TestResult {
+async fn a_current_journal_missing_the_table_is_rejected() -> TestResult {
     let directory = tempfile::tempdir()?;
     let path = directory.path().join("journal.db");
     execute(&path, &[&format!("DROP TABLE {TABLE}")]).await?;
@@ -70,7 +73,7 @@ async fn a_v58_journal_missing_the_table_is_rejected() -> TestResult {
 }
 
 #[tokio::test]
-async fn a_v58_journal_with_a_widened_table_is_rejected() -> TestResult {
+async fn a_current_journal_with_a_widened_table_is_rejected() -> TestResult {
     let directory = tempfile::tempdir()?;
     let path = directory.path().join("journal.db");
     execute(
@@ -87,7 +90,7 @@ async fn a_v58_journal_with_a_widened_table_is_rejected() -> TestResult {
 
 #[tokio::test]
 async fn versions_above_the_migration_chain_stay_fail_closed() -> TestResult {
-    for version in [59_i64, 60, 1000] {
+    for version in [crate::journal::schema::JOURNAL_VERSION + 1, 1000] {
         let directory = tempfile::tempdir()?;
         let path = directory.path().join("journal.db");
         execute(&path, &[&format!("PRAGMA user_version = {version}")]).await?;

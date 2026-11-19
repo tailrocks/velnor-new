@@ -23,4 +23,11 @@ pub struct FetchReportsArgs {
         help = "Artifacts downloaded at the same time"
     )]
     pub connections: u8,
+    #[arg(
+        long,
+        default_value_t = 1 << 30,
+        value_parser = clap::value_parser!(u64).range(1..),
+        help = "Bytes all report artifacts together may extract to before the fetch fails"
+    )]
+    pub max_extract_bytes: u64,
 }
