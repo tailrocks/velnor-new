@@ -9,7 +9,7 @@ use velnor_model::{
     RepoFacts, Step, StepKind, When,
 };
 
-fn attach(facts: &RepoFacts, jobs: &mut [Job], maintenance: Option<&Job>) -> Option<Job> {
+fn attach(facts: &RepoFacts, jobs: &mut [Job], maintenance: Option<&Job>) -> Job {
     let nextest_artifacts = crate::mise::nextest_tool(&facts.tools)
         .and_then(|name| facts.tools.tools.get(name))
         .is_some_and(|pin| {
@@ -63,7 +63,7 @@ fn attach(facts: &RepoFacts, jobs: &mut [Job], maintenance: Option<&Job>) -> Opt
         .permissions
         .0
         .insert(PermissionScope::Actions, Access::Read);
-    Some(cache)
+    cache
 }
 
 fn attach_metrics(job: &mut Job, nextest_artifacts: bool) {
@@ -114,13 +114,13 @@ pub(crate) fn finish(
     let trim = crate::base_cache::trim_job(facts, jobs);
     let cache = attach(facts, jobs, trim.as_ref());
     if facts.config.cache_check_blocks {
-        jobs.extend(cache.clone());
+        jobs.push(cache.clone());
     }
     let required = crate::required_job::verdict_job(facts, jobs, single, draft_guard);
     jobs.extend(trim);
     jobs.push(required);
     jobs.extend(label_reset(facts));
     if !facts.config.cache_check_blocks {
-        jobs.extend(cache);
+        jobs.push(cache);
     }
 }

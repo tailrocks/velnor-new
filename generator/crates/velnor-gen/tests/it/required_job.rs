@@ -67,21 +67,18 @@ fn a_helper_that_has_gate_renders_a_verified_gate_without_a_checkout() -> TestRe
 
 #[test]
 fn the_required_job_cannot_be_skipped_when_the_run_is_cancelled() -> TestResult {
-    for version in ["0.1.81"] {
-        let text = released(version, &["Cargo.toml", "lab/Cargo.toml"])?;
-        let job = required(&text)?;
-        let condition = job
-            .lines()
-            .find_map(|line| line.strip_prefix("    if: "))
-            .ok_or("no job condition")?;
-        assert!(condition.contains("always()"), "{version}: {condition}");
-        assert!(!condition.contains("cancelled()"), "{version}: {condition}");
-        assert!(
-            job.contains("velnor-ci gate")
-                || job.contains("contains(needs.*.result, ''cancelled'')"),
-            "{version}: the job must fail when a needed job was cancelled"
-        );
-    }
+    let text = released("0.1.81", &["Cargo.toml", "lab/Cargo.toml"])?;
+    let job = required(&text)?;
+    let condition = job
+        .lines()
+        .find_map(|line| line.strip_prefix("    if: "))
+        .ok_or("no job condition")?;
+    assert!(condition.contains("always()"), "{condition}");
+    assert!(!condition.contains("cancelled()"), "{condition}");
+    assert!(
+        job.contains("velnor-ci gate") || job.contains("contains(needs.*.result, ''cancelled'')"),
+        "the job must fail when a needed job was cancelled"
+    );
     Ok(())
 }
 

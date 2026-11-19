@@ -184,7 +184,12 @@ fn expression_syntax_in_repository_values_is_never_evaluated_by_github() -> Test
     let Err(GenerateError::Rules(violations)) = expected_with_notes(&unsaved) else {
         return Err("a root named with expression syntax was rendered".into());
     };
-    assert!(!violations.is_empty());
+    assert!(
+        violations
+            .iter()
+            .any(|violation| violation.rule == Rule::ExpressionInRun),
+        "{violations:?}"
+    );
     assert!(
         violations
             .iter()
