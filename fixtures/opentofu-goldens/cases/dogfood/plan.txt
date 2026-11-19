@@ -5,134 +5,83 @@ Detected stacks
   Rust: selected
   Tofu: not detected (strong evidence; add [stacks.tofu] roots to enable)
     evidence: mise-tool:opentofu
-  Mise check maintenance-helpers: test-maintenance-helpers (runner: ubuntu-26.04, target: x86_64-unknown-linux-gnu)
-  Mise check generator-samples: lint-generator-samples (runner: ubuntu-26.04, target: x86_64-unknown-linux-gnu)
   Workspace crates: 31
     - velnor-actions-actionlint (crates/velnor-actions-actionlint/Cargo.toml) [lib; depends on velnor-actions-contract]
     - velnor-actions-ansible (crates/velnor-actions-ansible/Cargo.toml) [lib; depends on velnor-actions-contract]
     - velnor-actions-bun (crates/velnor-actions-bun/Cargo.toml) [lib; depends on velnor-actions-contract]
-    - velnor-actions-cli (crates/velnor-actions-cli/Cargo.toml) [bin, example, test; depends on velnor-actions-contract, velnor-actions-freshness, velnor-actions-mise, velnor-actions-orchestrator, velnor-archive-guard]
-    - velnor-actions-contract (crates/velnor-actions-contract/Cargo.toml) [example, lib, test]
+    - velnor-actions-cli (crates/velnor-actions-cli/Cargo.toml) [bin, example, test; depends on velnor-actions-contract, velnor-actions-mise, velnor-actions-orchestrator, velnor-archive-guard, velnor-freshness, velnor-runner-host]
+    - velnor-actions-contract (crates/velnor-actions-contract/Cargo.toml) [example, lib, test; depends on velnor-runner-image-manifest]
     - velnor-actions-dbt (crates/velnor-actions-dbt/Cargo.toml) [lib; depends on velnor-actions-contract]
-    - velnor-actions-freshness (crates/velnor-actions-freshness/Cargo.toml) [lib]
     - velnor-actions-gradle (crates/velnor-actions-gradle/Cargo.toml) [lib]
     - velnor-actions-mise (crates/velnor-actions-mise/Cargo.toml) [lib, test; depends on velnor-actions-contract, velnor-actions-tofu]
     - velnor-actions-orchestrator (crates/velnor-actions-orchestrator/Cargo.toml) [lib, test; depends on velnor-actions-actionlint, velnor-actions-ansible, velnor-actions-bun, velnor-actions-contract, velnor-actions-dbt, velnor-actions-gradle, velnor-actions-mise, velnor-actions-rust, velnor-actions-tofu, velnor-actions-workflow-renderer, velnor-archive-guard]
     - velnor-actions-rust (crates/velnor-actions-rust/Cargo.toml) [lib, test; depends on velnor-actions-contract]
     - velnor-actions-tofu (crates/velnor-actions-tofu/Cargo.toml) [lib; depends on velnor-actions-contract]
     - velnor-actions-workflow-renderer (crates/velnor-actions-workflow-renderer/Cargo.toml) [lib, test; depends on velnor-actions-actionlint, velnor-actions-bun, velnor-actions-contract, velnor-actions-dbt, velnor-actions-mise, velnor-actions-rust, velnor-actions-tofu]
-    - velnor-archive-guard (crates/velnor-archive-guard/Cargo.toml) [bin, example, lib, test; depends on velnor-actions-mise]
-    - velnor-cache-rules (local/crates/velnor-cache-rules/Cargo.toml) [lib, test]
-    - velnor-ci (ci-helper/crates/velnor-ci/Cargo.toml) [bin, lib, test]
-    - velnor-gen (generator/crates/velnor-gen/Cargo.toml) [bin, lib, test; depends on velnor-model, velnor-release, velnor-render, velnor-rust, velnor-workflows]
-    - velnor-local (local/crates/velnor-local/Cargo.toml) [bin, lib, test; depends on velnor-cache-rules]
-    - velnor-model (generator/crates/velnor-model/Cargo.toml) [lib]
-    - velnor-release (generator/crates/velnor-release/Cargo.toml) [lib, test; depends on velnor-model]
-    - velnor-render (generator/crates/velnor-render/Cargo.toml) [lib; depends on velnor-model, velnor-release, velnor-workflows]
-    - velnor-resource-probe (crates/velnor-runner/crates/velnor-resource-probe/Cargo.toml) [bin, lib, test]
-    - velnor-runner-attestation (crates/velnor-runner/crates/velnor-runner-attestation/Cargo.toml) [bin]
-    - velnor-runner-cli (crates/velnor-runner/crates/velnor-runner-cli/Cargo.toml) [bin, lib; depends on velnor-runner-core, velnor-runner-host]
-    - velnor-runner-core (crates/velnor-runner/crates/velnor-runner-core/Cargo.toml) [lib, test]
-    - velnor-runner-github (crates/velnor-runner/crates/velnor-runner-github/Cargo.toml) [lib, test; depends on velnor-runner-core]
-    - velnor-runner-host (crates/velnor-runner/crates/velnor-runner-host/Cargo.toml) [bin, example, lib, test; depends on velnor-resource-probe, velnor-runner-core, velnor-runner-github, velnor-runner-image-manifest, velnor-runner-qualification]
-    - velnor-runner-image-manifest (crates/velnor-runner/crates/velnor-runner-image-manifest/Cargo.toml) [lib, test]
-    - velnor-runner-qualification (crates/velnor-runner/crates/velnor-runner-qualification/Cargo.toml) [lib, test]
-    - velnor-rust (generator/crates/velnor-rust/Cargo.toml) [lib; depends on velnor-model]
-    - velnor-workflows (generator/crates/velnor-workflows/Cargo.toml) [lib; depends on velnor-model]
+    - velnor-archive-guard (crates/velnor-archive-guard/Cargo.toml) [bin, example, lib, test; depends on velnor-actions-mise, velnor-runner-image-manifest]
+    - velnor-cache-rules (crates/velnor-cache-rules/Cargo.toml) [lib, test]
+    - velnor-ci (crates/velnor-ci/Cargo.toml) [bin, lib, test; depends on velnor-gen, velnor-model, velnor-release, velnor-render, velnor-rust]
+    - velnor-freshness (crates/velnor-freshness/Cargo.toml) [bin, lib, test]
+    - velnor-gen (crates/velnor-gen/Cargo.toml) [bin, lib, test; depends on velnor-model, velnor-release, velnor-render, velnor-rust, velnor-workflows]
+    - velnor-local (crates/velnor-local/Cargo.toml) [bin, lib, test; depends on velnor-cache-rules]
+    - velnor-model (crates/velnor-model/Cargo.toml) [lib]
+    - velnor-release (crates/velnor-release/Cargo.toml) [lib, test; depends on velnor-model]
+    - velnor-render (crates/velnor-render/Cargo.toml) [lib; depends on velnor-model, velnor-release, velnor-workflows]
+    - velnor-resource-probe (crates/velnor-resource-probe/Cargo.toml) [bin, lib, test]
+    - velnor-runner-attestation (crates/velnor-runner-attestation/Cargo.toml) [bin]
+    - velnor-runner-cli (crates/velnor-runner-cli/Cargo.toml) [bin, lib, test; depends on velnor-runner-core, velnor-runner-host]
+    - velnor-runner-core (crates/velnor-runner-core/Cargo.toml) [lib, test]
+    - velnor-runner-github (crates/velnor-runner-github/Cargo.toml) [lib, test; depends on velnor-runner-core]
+    - velnor-runner-host (crates/velnor-runner-host/Cargo.toml) [bin, example, lib, test; depends on velnor-resource-probe, velnor-runner-core, velnor-runner-github, velnor-runner-image-manifest, velnor-runner-qualification]
+    - velnor-runner-image-manifest (crates/velnor-runner-image-manifest/Cargo.toml) [lib, test]
+    - velnor-runner-qualification (crates/velnor-runner-qualification/Cargo.toml) [lib, test]
+    - velnor-rust (crates/velnor-rust/Cargo.toml) [lib; depends on velnor-model]
+    - velnor-workflows (crates/velnor-workflows/Cargo.toml) [lib; depends on velnor-model]
   Profile .: mbx compile driver (declared), cargo_nextest test runner (declared)
   Nextest profile .: ci (.config/nextest.toml)
-    evidence .config/nextest.toml:7 [profile.ci] [durable]
-    evidence .github/workflows/rust-ci.yml:398 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run' [transient]
-    evidence .github/workflows/rust-ci.yml:413 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --profile ci --no-fail-fast --ignore [transient]
-    evidence .github/workflows/rust-ci.yml:418 run: '. "$VELNOR_EXEC" run --require-doctests=$DOCTESTS_KNOWN -- cargo test --doc --workspace --locked --message-format=json-render-diagnostics' [transient]
-    evidence .github/workflows/rust-ci.yml:628 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run' [transient]
-    evidence .github/workflows/rust-ci.yml:635 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --profile ci --no-fail-fast --ignore [transient]
-    evidence .github/workflows/rust-ci.yml:874 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run' [transient]
-    evidence .github/workflows/rust-ci.yml:881 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --profile ci --no-fail-fast --ignore [transient]
-    evidence .github/workflows/rust-ci.yml:1108 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run' [transient]
-    evidence .github/workflows/rust-ci.yml:1115 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --profile ci --no-fail-fast --ignore [transient]
-    evidence .github/workflows/rust-ci.yml:1330 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run' [transient]
-    evidence .github/workflows/rust-ci.yml:1337 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --profile ci --no-fail-fast --ignore [transient]
+    evidence .config/nextest.toml:19 [profile.ci] [durable]
+    evidence .github/workflows/qualification-gen.yml:40 - mbx-cache-roundtrip [transient]
+    evidence .github/workflows/qualification-gen.yml:958 if: '${{ (inputs.mode == ''cache'' || inputs.mode == ''empty-cache'' || inputs.mode == ''mbx-cache-roundtrip'') && github.ref == format(''refs/heads/{0}'', gith [transient]
+    evidence .github/workflows/qualification-gen.yml:967 mbx-cache-write-hosted: [transient]
+    evidence .github/workflows/qualification-gen.yml:969 if: '${{ inputs.mode == ''mbx-cache-roundtrip'' && github.ref != format(''refs/heads/{0}'', github.event.repository.default_branch) }}' [transient]
+    evidence .github/workflows/qualification-gen.yml:978 CARGO_HOME: '${{ github.workspace }}/.velnor-mbx-cache-qualification/cargo' [transient]
+    evidence .github/workflows/qualification-gen.yml:982 MISE_CARGO_HOME: '${{ github.workspace }}/.velnor-mbx-cache-qualification/cargo' [transient]
+    evidence .github/workflows/qualification-gen.yml:988 MISE_RUSTUP_HOME: '${{ github.workspace }}/.velnor-mbx-cache-qualification/rustup' [transient]
+    evidence .github/workflows/qualification-gen.yml:989 RUSTUP_HOME: '${{ github.workspace }}/.velnor-mbx-cache-qualification/rustup' [transient]
+    evidence .github/workflows/qualification-gen.yml:1016 cache-generation: velnor-mbx-1.29.2-share-out-dir-disabled-v1 [transient]
+    evidence .github/workflows/qualification-gen.yml:1022 - id: mbx-ready [transient]
+    evidence .github/workflows/qualification-gen.yml:1028 MBX_VERSION: '${{ steps.mbx_cache.outputs.mbx-version }}' [transient]
+    evidence .github/workflows/qualification-gen.yml:1033 if: '${{ always() && steps.mbx-ready.outcome == ''success'' }}' [transient]
+    evidence .github/workflows/qualification-gen.yml:1037 mbx-cache-read-hosted: [transient]
+    evidence .github/workflows/qualification-gen.yml:1040 - mbx-cache-write-hosted [transient]
+    evidence .github/workflows/qualification-gen.yml:1041 if: '${{ inputs.mode == ''mbx-cache-roundtrip'' && github.ref != format(''refs/heads/{0}'', github.event.repository.default_branch) }}' [transient]
+    evidence .github/workflows/qualification-gen.yml:1050 CARGO_HOME: '${{ github.workspace }}/.velnor-mbx-cache-qualification/cargo' [transient]
+    evidence .github/workflows/qualification-gen.yml:1054 MISE_CARGO_HOME: '${{ github.workspace }}/.velnor-mbx-cache-qualification/cargo' [transient]
+    evidence .github/workflows/qualification-gen.yml:1060 MISE_RUSTUP_HOME: '${{ github.workspace }}/.velnor-mbx-cache-qualification/rustup' [transient]
+    evidence .github/workflows/qualification-gen.yml:1061 RUSTUP_HOME: '${{ github.workspace }}/.velnor-mbx-cache-qualification/rustup' [transient]
+    evidence .github/workflows/qualification-gen.yml:1088 cache-generation: velnor-mbx-1.29.2-share-out-dir-disabled-v1 [transient]
+    evidence .github/workflows/qualification-gen.yml:1094 - id: mbx-ready [transient]
+    evidence .github/workflows/qualification-gen.yml:1100 MBX_VERSION: '${{ steps.mbx_cache.outputs.mbx-version }}' [transient]
+    evidence .github/workflows/qualification-gen.yml:1109 if: '${{ always() && steps.mbx-ready.outcome == ''success'' }}' [transient]
+    evidence .github/workflows/rust-ci.yml:83 - name: velnor-ci mbx-store [transient]
+    evidence .github/workflows/rust-ci.yml:84 run: '. "$VELNOR_EXEC" mbx-store' [transient]
+    evidence .github/workflows/rust-ci.yml:85 - name: velnor-ci mbx-seed [transient]
+    evidence .github/workflows/rust-ci.yml:87 run: '. "$VELNOR_EXEC" mbx-seed' [transient]
+    evidence .github/workflows/rust-ci.yml:309 run: '. "$VELNOR_EXEC" run -- velnor-ci inputs build -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-d [transient]
+    evidence .github/workflows/rust-ci.yml:324 run: '. "$VELNOR_EXEC" run -- velnor-ci inputs build -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --profile  [transient]
+    evidence .github/workflows/rust-ci.yml:329 run: '. "$VELNOR_EXEC" run -- velnor-ci inputs build -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --features [transient]
+    evidence .github/workflows/rust-ci.yml:346 run: '. "$VELNOR_EXEC" run --require-doctests=$DOCTESTS_KNOWN -- velnor-ci inputs build -- cargo test --doc --workspace --locked --message-format=json-render-di [transient]
+    evidence .github/workflows/rust-ci.yml:496 - name: velnor-ci mbx-store [transient]
+    evidence .github/workflows/rust-ci.yml:497 run: '. "$VELNOR_EXEC" mbx-store' [transient]
+    evidence .github/workflows/rust-ci.yml:498 - name: velnor-ci mbx-seed [transient]
+    evidence .github/workflows/rust-ci.yml:500 run: '. "$VELNOR_EXEC" mbx-seed' [transient]
     evidence .mise/tasks/test:4 cargo nextest run --locked --profile ci --no-tests fail "$@" [durable]
     evidence mise.toml:19 ], mr_boxington = true } [durable]
-    evidence mise.toml:45 wrappers.cargo.command = "mbx" (MBX_CARGO_SHIM_MODE = "1") [durable]
-  Profile ci-helper: mbx compile driver (declared), cargo_nextest test runner (declared)
-  Nextest profile ci-helper: ci (ci-helper/.config/nextest.toml)
-    evidence .config/nextest.toml:7 [profile.ci] [durable]
-    evidence .github/workflows/rust-ci.yml:398 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run' [transient]
-    evidence .github/workflows/rust-ci.yml:413 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --profile ci --no-fail-fast --ignore [transient]
-    evidence .github/workflows/rust-ci.yml:418 run: '. "$VELNOR_EXEC" run --require-doctests=$DOCTESTS_KNOWN -- cargo test --doc --workspace --locked --message-format=json-render-diagnostics' [transient]
-    evidence .github/workflows/rust-ci.yml:628 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run' [transient]
-    evidence .github/workflows/rust-ci.yml:635 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --profile ci --no-fail-fast --ignore [transient]
-    evidence .github/workflows/rust-ci.yml:874 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run' [transient]
-    evidence .github/workflows/rust-ci.yml:881 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --profile ci --no-fail-fast --ignore [transient]
-    evidence .github/workflows/rust-ci.yml:1108 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run' [transient]
-    evidence .github/workflows/rust-ci.yml:1115 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --profile ci --no-fail-fast --ignore [transient]
-    evidence .github/workflows/rust-ci.yml:1330 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run' [transient]
-    evidence .github/workflows/rust-ci.yml:1337 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --profile ci --no-fail-fast --ignore [transient]
-    evidence .mise/tasks/test:4 cargo nextest run --locked --profile ci --no-tests fail "$@" [durable]
-    evidence ci-helper/.config/nextest.toml:3 [profile.ci] [durable]
-    evidence mise.toml:19 ], mr_boxington = true } [durable]
-    evidence mise.toml:45 wrappers.cargo.command = "mbx" (MBX_CARGO_SHIM_MODE = "1") [durable]
-  Profile crates/velnor-runner: mbx compile driver (declared), cargo_nextest test runner (declared)
-  Nextest profile crates/velnor-runner: ci (crates/velnor-runner/.config/nextest.toml)
-    evidence .config/nextest.toml:7 [profile.ci] [durable]
-    evidence .github/workflows/rust-ci.yml:398 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run' [transient]
-    evidence .github/workflows/rust-ci.yml:413 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --profile ci --no-fail-fast --ignore [transient]
-    evidence .github/workflows/rust-ci.yml:418 run: '. "$VELNOR_EXEC" run --require-doctests=$DOCTESTS_KNOWN -- cargo test --doc --workspace --locked --message-format=json-render-diagnostics' [transient]
-    evidence .github/workflows/rust-ci.yml:628 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run' [transient]
-    evidence .github/workflows/rust-ci.yml:635 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --profile ci --no-fail-fast --ignore [transient]
-    evidence .github/workflows/rust-ci.yml:874 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run' [transient]
-    evidence .github/workflows/rust-ci.yml:881 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --profile ci --no-fail-fast --ignore [transient]
-    evidence .github/workflows/rust-ci.yml:1108 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run' [transient]
-    evidence .github/workflows/rust-ci.yml:1115 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --profile ci --no-fail-fast --ignore [transient]
-    evidence .github/workflows/rust-ci.yml:1330 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run' [transient]
-    evidence .github/workflows/rust-ci.yml:1337 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --profile ci --no-fail-fast --ignore [transient]
-    evidence .mise/tasks/test:4 cargo nextest run --locked --profile ci --no-tests fail "$@" [durable]
-    evidence crates/velnor-runner/.config/nextest.toml:8 [profile.ci] [durable]
-    evidence mise.toml:19 ], mr_boxington = true } [durable]
-    evidence mise.toml:45 wrappers.cargo.command = "mbx" (MBX_CARGO_SHIM_MODE = "1") [durable]
-  Profile generator: mbx compile driver (declared), cargo_nextest test runner (declared)
-  Nextest profile generator: ci (generator/.config/nextest.toml)
-    evidence .config/nextest.toml:7 [profile.ci] [durable]
-    evidence .github/workflows/rust-ci.yml:398 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run' [transient]
-    evidence .github/workflows/rust-ci.yml:413 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --profile ci --no-fail-fast --ignore [transient]
-    evidence .github/workflows/rust-ci.yml:418 run: '. "$VELNOR_EXEC" run --require-doctests=$DOCTESTS_KNOWN -- cargo test --doc --workspace --locked --message-format=json-render-diagnostics' [transient]
-    evidence .github/workflows/rust-ci.yml:628 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run' [transient]
-    evidence .github/workflows/rust-ci.yml:635 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --profile ci --no-fail-fast --ignore [transient]
-    evidence .github/workflows/rust-ci.yml:874 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run' [transient]
-    evidence .github/workflows/rust-ci.yml:881 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --profile ci --no-fail-fast --ignore [transient]
-    evidence .github/workflows/rust-ci.yml:1108 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run' [transient]
-    evidence .github/workflows/rust-ci.yml:1115 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --profile ci --no-fail-fast --ignore [transient]
-    evidence .github/workflows/rust-ci.yml:1330 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run' [transient]
-    evidence .github/workflows/rust-ci.yml:1337 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --profile ci --no-fail-fast --ignore [transient]
-    evidence .mise/tasks/test:4 cargo nextest run --locked --profile ci --no-tests fail "$@" [durable]
-    evidence generator/.config/nextest.toml:13 [profile.ci] [durable]
-    evidence mise.toml:19 ], mr_boxington = true } [durable]
-    evidence mise.toml:45 wrappers.cargo.command = "mbx" (MBX_CARGO_SHIM_MODE = "1") [durable]
-  Profile local: mbx compile driver (declared), cargo_nextest test runner (declared)
-  Nextest profile local: ci (local/.config/nextest.toml)
-    evidence .config/nextest.toml:7 [profile.ci] [durable]
-    evidence .github/workflows/rust-ci.yml:398 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run' [transient]
-    evidence .github/workflows/rust-ci.yml:413 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --profile ci --no-fail-fast --ignore [transient]
-    evidence .github/workflows/rust-ci.yml:418 run: '. "$VELNOR_EXEC" run --require-doctests=$DOCTESTS_KNOWN -- cargo test --doc --workspace --locked --message-format=json-render-diagnostics' [transient]
-    evidence .github/workflows/rust-ci.yml:628 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run' [transient]
-    evidence .github/workflows/rust-ci.yml:635 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --profile ci --no-fail-fast --ignore [transient]
-    evidence .github/workflows/rust-ci.yml:874 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run' [transient]
-    evidence .github/workflows/rust-ci.yml:881 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --profile ci --no-fail-fast --ignore [transient]
-    evidence .github/workflows/rust-ci.yml:1108 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run' [transient]
-    evidence .github/workflows/rust-ci.yml:1115 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --profile ci --no-fail-fast --ignore [transient]
-    evidence .github/workflows/rust-ci.yml:1330 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run' [transient]
-    evidence .github/workflows/rust-ci.yml:1337 run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --profile ci --no-fail-fast --ignore [transient]
-    evidence .mise/tasks/test:4 cargo nextest run --locked --profile ci --no-tests fail "$@" [durable]
-    evidence local/.config/nextest.toml:8 [profile.ci] [durable]
-    evidence mise.toml:19 ], mr_boxington = true } [durable]
-    evidence mise.toml:45 wrappers.cargo.command = "mbx" (MBX_CARGO_SHIM_MODE = "1") [durable]
+    evidence mise.toml:48 wrappers.cargo.command = "mbx" (MBX_CARGO_SHIM_MODE = "1") [durable]
 
 Workflow to generate
   .github/jactionlint.yaml
   .github/workflows/ci.yml
-  .github/workflows/freshness.yml
   .github/dco.yml
   Workflow: CI (velnor-repository-v1)
   Push branch: main
@@ -141,22 +90,20 @@ Workflow to generate
     - alint (3 steps)
     - cargo-deny (6 steps)
     - cargo-machete (7 steps)
-    - check-generator-samples (7 steps)
-    - check-maintenance-helpers (7 steps)
-    - jactionlint (5 steps)
-    - ledger-cli (15 steps)
-    - plan (19 steps)
+    - jactionlint (7 steps)
+    - ledger-cli (17 steps)
+    - plan (15 steps)
     - required (10 steps)
     - required-gate (1 steps)
     - rust-velnor-actions-actionlint (28 steps)
     - rust-velnor-actions-ansible (28 steps)
     - rust-velnor-actions-bun (28 steps)
-    - rust-velnor-actions-cli (34 steps)
+    - rust-velnor-actions-cli (30 steps)
     - rust-velnor-actions-contract (29 steps)
     - rust-velnor-actions-dbt (28 steps)
     - rust-velnor-actions-gradle (28 steps)
     - rust-velnor-actions-mise (29 steps)
-    - rust-velnor-actions-orchestrator (34 steps)
+    - rust-velnor-actions-orchestrator (30 steps)
     - rust-velnor-actions-rust (29 steps)
     - rust-velnor-actions-tofu (28 steps)
     - rust-velnor-actions-workflow-renderer (30 steps)
@@ -168,7 +115,7 @@ Workflow to generate
     - rust-velnor-release (29 steps)
     - rust-velnor-render (28 steps)
     - rust-velnor-resource-probe (29 steps)
-    - rust-velnor-runner-attestation (28 steps)
+    - rust-velnor-runner-attestation (29 steps)
     - rust-velnor-runner-cli (29 steps)
     - rust-velnor-runner-core (29 steps)
     - rust-velnor-runner-github (29 steps)
@@ -178,19 +125,13 @@ Workflow to generate
     - rust-velnor-runner-qualification (29 steps)
     - rust-velnor-rust (28 steps)
     - rust-velnor-workflows (28 steps)
-    - sources-producer (15 steps)
-    - state-producer-ci-helper (35 steps)
-    - state-producer-crates-velnor-runner (83 steps)
-    - state-producer-generator (65 steps)
-    - state-producer-local (41 steps)
-    - state-producer-root (101 steps)
-    - state-seal-ci-helper (9 steps)
-    - state-seal-crates-velnor-runner (9 steps)
-    - state-seal-generator (9 steps)
-    - state-seal-local (9 steps)
+    - sources-producer (11 steps)
+    - state-producer-root (209 steps)
     - state-seal-root (9 steps)
-    - tools-producer-06f9acb0 (8 steps)
-    - tools-producer-c957c0bd (8 steps)
+    - tools-producer-15df22ff (11 steps)
+    - tools-producer-8fb609c1 (8 steps)
+    - tools-producer-a9a62f35 (8 steps)
+    - tools-producer-b4e30ac5 (9 steps)
     - 30 Rust crate jobs
       Timeout: 45 minutes per crate job
       Obligations: Clippy -> build -> run tests -> doc build -> format check
@@ -226,11 +167,6 @@ Workflow to generate
         - rust-velnor-rust
         - rust-velnor-workflows
       Obligations:
-        - stack/rust/ci-helper/crates/velnor-ci/build/default
-        - stack/rust/ci-helper/crates/velnor-ci/clippy/default
-        - stack/rust/ci-helper/crates/velnor-ci/doc/default
-        - stack/rust/ci-helper/crates/velnor-ci/fmt/default
-        - stack/rust/ci-helper/crates/velnor-ci/nextest/default
         - stack/rust/crates/velnor-actions-actionlint/build/default
         - stack/rust/crates/velnor-actions-actionlint/clippy/default
         - stack/rust/crates/velnor-actions-actionlint/doc/default
@@ -285,91 +221,97 @@ Workflow to generate
         - stack/rust/crates/velnor-actions-workflow-renderer/doc/default
         - stack/rust/crates/velnor-actions-workflow-renderer/fmt/default
         - stack/rust/crates/velnor-actions-workflow-renderer/nextest/default
-        - stack/rust/crates/velnor-runner/crates/velnor-resource-probe/build/default
-        - stack/rust/crates/velnor-runner/crates/velnor-resource-probe/clippy/default
-        - stack/rust/crates/velnor-runner/crates/velnor-resource-probe/doc/default
-        - stack/rust/crates/velnor-runner/crates/velnor-resource-probe/fmt/default
-        - stack/rust/crates/velnor-runner/crates/velnor-resource-probe/nextest/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-attestation/build/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-attestation/clippy/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-attestation/doc/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-attestation/fmt/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-cli/build/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-cli/clippy/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-cli/doc/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-cli/fmt/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-cli/nextest/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-core/build/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-core/clippy/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-core/doc/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-core/fmt/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-core/nextest/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-github/build/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-github/clippy/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-github/doc/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-github/fmt/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-github/nextest/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-host/build/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-host/build/local-mode
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-host/clippy/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-host/clippy/local-mode
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-host/doc/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-host/doc/local-mode
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-host/fmt/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-host/fmt/local-mode
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-host/nextest/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-host/nextest/local-mode
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-image-manifest/build/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-image-manifest/clippy/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-image-manifest/doc/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-image-manifest/fmt/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-image-manifest/nextest/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-qualification/build/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-qualification/clippy/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-qualification/doc/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-qualification/fmt/default
-        - stack/rust/crates/velnor-runner/crates/velnor-runner-qualification/nextest/default
-        - stack/rust/generator/crates/velnor-gen/build/default
-        - stack/rust/generator/crates/velnor-gen/clippy/default
-        - stack/rust/generator/crates/velnor-gen/doc/default
-        - stack/rust/generator/crates/velnor-gen/fmt/default
-        - stack/rust/generator/crates/velnor-gen/nextest/default
-        - stack/rust/generator/crates/velnor-model/build/default
-        - stack/rust/generator/crates/velnor-model/clippy/default
-        - stack/rust/generator/crates/velnor-model/doc/default
-        - stack/rust/generator/crates/velnor-model/fmt/default
-        - stack/rust/generator/crates/velnor-release/build/default
-        - stack/rust/generator/crates/velnor-release/clippy/default
-        - stack/rust/generator/crates/velnor-release/doc/default
-        - stack/rust/generator/crates/velnor-release/fmt/default
-        - stack/rust/generator/crates/velnor-release/nextest/default
-        - stack/rust/generator/crates/velnor-render/build/default
-        - stack/rust/generator/crates/velnor-render/clippy/default
-        - stack/rust/generator/crates/velnor-render/doc/default
-        - stack/rust/generator/crates/velnor-render/fmt/default
-        - stack/rust/generator/crates/velnor-rust/build/default
-        - stack/rust/generator/crates/velnor-rust/clippy/default
-        - stack/rust/generator/crates/velnor-rust/doc/default
-        - stack/rust/generator/crates/velnor-rust/fmt/default
-        - stack/rust/generator/crates/velnor-workflows/build/default
-        - stack/rust/generator/crates/velnor-workflows/clippy/default
-        - stack/rust/generator/crates/velnor-workflows/doc/default
-        - stack/rust/generator/crates/velnor-workflows/fmt/default
-        - stack/rust/local/crates/velnor-cache-rules/build/default
-        - stack/rust/local/crates/velnor-cache-rules/clippy/default
-        - stack/rust/local/crates/velnor-cache-rules/doc/default
-        - stack/rust/local/crates/velnor-cache-rules/fmt/default
-        - stack/rust/local/crates/velnor-cache-rules/nextest/default
-        - stack/rust/local/crates/velnor-local/build/default
-        - stack/rust/local/crates/velnor-local/clippy/default
-        - stack/rust/local/crates/velnor-local/doc/default
-        - stack/rust/local/crates/velnor-local/fmt/default
-        - stack/rust/local/crates/velnor-local/nextest/default
+        - stack/rust/crates/velnor-cache-rules/build/default
+        - stack/rust/crates/velnor-cache-rules/clippy/default
+        - stack/rust/crates/velnor-cache-rules/doc/default
+        - stack/rust/crates/velnor-cache-rules/fmt/default
+        - stack/rust/crates/velnor-cache-rules/nextest/default
+        - stack/rust/crates/velnor-ci/build/default
+        - stack/rust/crates/velnor-ci/clippy/default
+        - stack/rust/crates/velnor-ci/doc/default
+        - stack/rust/crates/velnor-ci/fmt/default
+        - stack/rust/crates/velnor-ci/nextest/default
+        - stack/rust/crates/velnor-gen/build/default
+        - stack/rust/crates/velnor-gen/clippy/default
+        - stack/rust/crates/velnor-gen/doc/default
+        - stack/rust/crates/velnor-gen/fmt/default
+        - stack/rust/crates/velnor-gen/nextest/default
+        - stack/rust/crates/velnor-local/build/default
+        - stack/rust/crates/velnor-local/clippy/default
+        - stack/rust/crates/velnor-local/doc/default
+        - stack/rust/crates/velnor-local/fmt/default
+        - stack/rust/crates/velnor-local/nextest/default
+        - stack/rust/crates/velnor-model/build/default
+        - stack/rust/crates/velnor-model/clippy/default
+        - stack/rust/crates/velnor-model/doc/default
+        - stack/rust/crates/velnor-model/fmt/default
+        - stack/rust/crates/velnor-release/build/default
+        - stack/rust/crates/velnor-release/clippy/default
+        - stack/rust/crates/velnor-release/doc/default
+        - stack/rust/crates/velnor-release/fmt/default
+        - stack/rust/crates/velnor-release/nextest/default
+        - stack/rust/crates/velnor-render/build/default
+        - stack/rust/crates/velnor-render/clippy/default
+        - stack/rust/crates/velnor-render/doc/default
+        - stack/rust/crates/velnor-render/fmt/default
+        - stack/rust/crates/velnor-resource-probe/build/default
+        - stack/rust/crates/velnor-resource-probe/clippy/default
+        - stack/rust/crates/velnor-resource-probe/doc/default
+        - stack/rust/crates/velnor-resource-probe/fmt/default
+        - stack/rust/crates/velnor-resource-probe/nextest/default
+        - stack/rust/crates/velnor-runner-attestation/build/default
+        - stack/rust/crates/velnor-runner-attestation/clippy/default
+        - stack/rust/crates/velnor-runner-attestation/doc/default
+        - stack/rust/crates/velnor-runner-attestation/fmt/default
+        - stack/rust/crates/velnor-runner-attestation/nextest/default
+        - stack/rust/crates/velnor-runner-cli/build/default
+        - stack/rust/crates/velnor-runner-cli/clippy/default
+        - stack/rust/crates/velnor-runner-cli/doc/default
+        - stack/rust/crates/velnor-runner-cli/fmt/default
+        - stack/rust/crates/velnor-runner-cli/nextest/default
+        - stack/rust/crates/velnor-runner-core/build/default
+        - stack/rust/crates/velnor-runner-core/clippy/default
+        - stack/rust/crates/velnor-runner-core/doc/default
+        - stack/rust/crates/velnor-runner-core/fmt/default
+        - stack/rust/crates/velnor-runner-core/nextest/default
+        - stack/rust/crates/velnor-runner-github/build/default
+        - stack/rust/crates/velnor-runner-github/clippy/default
+        - stack/rust/crates/velnor-runner-github/doc/default
+        - stack/rust/crates/velnor-runner-github/fmt/default
+        - stack/rust/crates/velnor-runner-github/nextest/default
+        - stack/rust/crates/velnor-runner-host/build/default
+        - stack/rust/crates/velnor-runner-host/build/local-mode
+        - stack/rust/crates/velnor-runner-host/clippy/default
+        - stack/rust/crates/velnor-runner-host/clippy/local-mode
+        - stack/rust/crates/velnor-runner-host/doc/default
+        - stack/rust/crates/velnor-runner-host/doc/local-mode
+        - stack/rust/crates/velnor-runner-host/fmt/default
+        - stack/rust/crates/velnor-runner-host/fmt/local-mode
+        - stack/rust/crates/velnor-runner-host/nextest/default
+        - stack/rust/crates/velnor-runner-host/nextest/local-mode
+        - stack/rust/crates/velnor-runner-image-manifest/build/default
+        - stack/rust/crates/velnor-runner-image-manifest/clippy/default
+        - stack/rust/crates/velnor-runner-image-manifest/doc/default
+        - stack/rust/crates/velnor-runner-image-manifest/fmt/default
+        - stack/rust/crates/velnor-runner-image-manifest/nextest/default
+        - stack/rust/crates/velnor-runner-qualification/build/default
+        - stack/rust/crates/velnor-runner-qualification/clippy/default
+        - stack/rust/crates/velnor-runner-qualification/doc/default
+        - stack/rust/crates/velnor-runner-qualification/fmt/default
+        - stack/rust/crates/velnor-runner-qualification/nextest/default
+        - stack/rust/crates/velnor-rust/build/default
+        - stack/rust/crates/velnor-rust/clippy/default
+        - stack/rust/crates/velnor-rust/doc/default
+        - stack/rust/crates/velnor-rust/fmt/default
+        - stack/rust/crates/velnor-workflows/build/default
+        - stack/rust/crates/velnor-workflows/clippy/default
+        - stack/rust/crates/velnor-workflows/doc/default
+        - stack/rust/crates/velnor-workflows/fmt/default
   Parallel: 30 execution jobs; dependencies preserved; no matrix fan-out
-  Critical path: stack/rust/ci-helper/crates/velnor-ci/build/default -> stack/rust/ci-helper/crates/velnor-ci/nextest/default (2 tasks)
+  Critical path: stack/rust/crates/velnor-actions-cli/build/default -> stack/rust/crates/velnor-actions-cli/nextest/default (2 tasks)
   Clippy memory groups: 2; barriers: 1
   Cache layers: Mise tools, Cargo sources, MBX compilation objects
-  Jactionlint: 2.4.0 pinned, profile default
+  Jactionlint: 2.6.0 pinned, profile default
   Action pins: 9
     - actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6
     - actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -377,10 +319,9 @@ Workflow to generate
     - actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
     - actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
     - actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
-    - asamarts/alint@d61e4c802b02ac811224b35c59a62cfe5176f4d0
-    - jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
+    - asamarts/alint@5054852d00d47affc9ea71440240147d9999f4d3
+    - jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
     - jdx/mr-boxington-action@88acf2bb50552c7c508cbac13e5f8c576b95b1de
-  Ineligible: stack/rust/ci-helper/crates/velnor-ci/doctest/default has no test targets; no test command emitted
   Ineligible: stack/rust/crates/velnor-actions-actionlint/doctest/default has no test targets; no test command emitted
   Ineligible: stack/rust/crates/velnor-actions-actionlint/nextest/default has no test targets; no test command emitted
   Ineligible: stack/rust/crates/velnor-actions-ansible/doctest/default has no test targets; no test command emitted
@@ -399,28 +340,28 @@ Workflow to generate
   Ineligible: stack/rust/crates/velnor-actions-tofu/doctest/default has no test targets; no test command emitted
   Ineligible: stack/rust/crates/velnor-actions-tofu/nextest/default has no test targets; no test command emitted
   Ineligible: stack/rust/crates/velnor-actions-workflow-renderer/doctest/default has no test targets; no test command emitted
-  Ineligible: stack/rust/crates/velnor-runner/crates/velnor-resource-probe/doctest/default has no test targets; no test command emitted
-  Ineligible: stack/rust/crates/velnor-runner/crates/velnor-runner-attestation/doctest/default has no test targets; no test command emitted
-  Ineligible: stack/rust/crates/velnor-runner/crates/velnor-runner-attestation/nextest/default has no test targets; no test command emitted
-  Ineligible: stack/rust/crates/velnor-runner/crates/velnor-runner-cli/doctest/default has no test targets; no test command emitted
-  Ineligible: stack/rust/crates/velnor-runner/crates/velnor-runner-core/doctest/default has no test targets; no test command emitted
-  Ineligible: stack/rust/crates/velnor-runner/crates/velnor-runner-github/doctest/default has no test targets; no test command emitted
-  Ineligible: stack/rust/crates/velnor-runner/crates/velnor-runner-host/doctest/default has no test targets; no test command emitted
-  Ineligible: stack/rust/crates/velnor-runner/crates/velnor-runner-host/doctest/local-mode has no test targets; no test command emitted
-  Ineligible: stack/rust/crates/velnor-runner/crates/velnor-runner-image-manifest/doctest/default has no test targets; no test command emitted
-  Ineligible: stack/rust/crates/velnor-runner/crates/velnor-runner-qualification/doctest/default has no test targets; no test command emitted
-  Ineligible: stack/rust/generator/crates/velnor-gen/doctest/default has no test targets; no test command emitted
-  Ineligible: stack/rust/generator/crates/velnor-model/doctest/default has no test targets; no test command emitted
-  Ineligible: stack/rust/generator/crates/velnor-model/nextest/default has no test targets; no test command emitted
-  Ineligible: stack/rust/generator/crates/velnor-release/doctest/default has no test targets; no test command emitted
-  Ineligible: stack/rust/generator/crates/velnor-render/doctest/default has no test targets; no test command emitted
-  Ineligible: stack/rust/generator/crates/velnor-render/nextest/default has no test targets; no test command emitted
-  Ineligible: stack/rust/generator/crates/velnor-rust/doctest/default has no test targets; no test command emitted
-  Ineligible: stack/rust/generator/crates/velnor-rust/nextest/default has no test targets; no test command emitted
-  Ineligible: stack/rust/generator/crates/velnor-workflows/doctest/default has no test targets; no test command emitted
-  Ineligible: stack/rust/generator/crates/velnor-workflows/nextest/default has no test targets; no test command emitted
-  Ineligible: stack/rust/local/crates/velnor-cache-rules/doctest/default has no test targets; no test command emitted
-  Ineligible: stack/rust/local/crates/velnor-local/doctest/default has no test targets; no test command emitted
+  Ineligible: stack/rust/crates/velnor-cache-rules/doctest/default has no test targets; no test command emitted
+  Ineligible: stack/rust/crates/velnor-ci/doctest/default has no test targets; no test command emitted
+  Ineligible: stack/rust/crates/velnor-gen/doctest/default has no test targets; no test command emitted
+  Ineligible: stack/rust/crates/velnor-local/doctest/default has no test targets; no test command emitted
+  Ineligible: stack/rust/crates/velnor-model/doctest/default has no test targets; no test command emitted
+  Ineligible: stack/rust/crates/velnor-model/nextest/default has no test targets; no test command emitted
+  Ineligible: stack/rust/crates/velnor-release/doctest/default has no test targets; no test command emitted
+  Ineligible: stack/rust/crates/velnor-render/doctest/default has no test targets; no test command emitted
+  Ineligible: stack/rust/crates/velnor-render/nextest/default has no test targets; no test command emitted
+  Ineligible: stack/rust/crates/velnor-resource-probe/doctest/default has no test targets; no test command emitted
+  Ineligible: stack/rust/crates/velnor-runner-attestation/doctest/default has no test targets; no test command emitted
+  Ineligible: stack/rust/crates/velnor-runner-cli/doctest/default has no test targets; no test command emitted
+  Ineligible: stack/rust/crates/velnor-runner-core/doctest/default has no test targets; no test command emitted
+  Ineligible: stack/rust/crates/velnor-runner-github/doctest/default has no test targets; no test command emitted
+  Ineligible: stack/rust/crates/velnor-runner-host/doctest/default has no test targets; no test command emitted
+  Ineligible: stack/rust/crates/velnor-runner-host/doctest/local-mode has no test targets; no test command emitted
+  Ineligible: stack/rust/crates/velnor-runner-image-manifest/doctest/default has no test targets; no test command emitted
+  Ineligible: stack/rust/crates/velnor-runner-qualification/doctest/default has no test targets; no test command emitted
+  Ineligible: stack/rust/crates/velnor-rust/doctest/default has no test targets; no test command emitted
+  Ineligible: stack/rust/crates/velnor-rust/nextest/default has no test targets; no test command emitted
+  Ineligible: stack/rust/crates/velnor-workflows/doctest/default has no test targets; no test command emitted
+  Ineligible: stack/rust/crates/velnor-workflows/nextest/default has no test targets; no test command emitted
   Pull-request execution narrows crate obligations through its event-time affected-work plan.
 
 Required-check migration
@@ -434,8 +375,4 @@ Recommendations
   mise.lock is read-only input; Velnor never modifies it
   mise.toml is read-only input; Velnor never modifies it
   rust-toolchain.toml is read-only input; Velnor never modifies it
-  shadowed_nextest_config: .config/nextest.toml shadowed by ci-helper/.config/nextest.toml; profile selected from ci-helper/.config/nextest.toml
-  shadowed_nextest_config: .config/nextest.toml shadowed by crates/velnor-runner/.config/nextest.toml; profile selected from crates/velnor-runner/.config/nextest.toml
-  shadowed_nextest_config: .config/nextest.toml shadowed by generator/.config/nextest.toml; profile selected from generator/.config/nextest.toml
-  shadowed_nextest_config: .config/nextest.toml shadowed by local/.config/nextest.toml; profile selected from local/.config/nextest.toml
-  tool_install_unverified:4 installs skip verification: cargo-machete@0.9.2(no_entry), crane@0.22.1(no_entry), gh@2.103.3(no_entry), rust@1.99.1(no_checksums); install on the CI platform and commit the lock to verify them
+  tool_install_unverified:4 installs skip verification: cargo-machete@0.9.2(no_entry), crane@0.22.1(no_entry), gh@2.103.3(no_entry), gh@2.104.0(no_entry); install on the CI platform and commit the lock to verify them

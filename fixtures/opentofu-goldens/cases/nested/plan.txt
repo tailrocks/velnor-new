@@ -22,9 +22,9 @@ Workflow to generate
     - rust-a (21 steps)
     - rust-lib (21 steps)
     - sources-producer (12 steps)
-    - tools-producer-36cc6f04 (9 steps)
-    - tools-producer-67ffdb60 (10 steps)
-    - tools-producer-dc27f1ea (11 steps)
+    - tools-producer-0881ca11 (10 steps)
+    - tools-producer-08cd385b (9 steps)
+    - tools-producer-f14cc554 (11 steps)
     - 2 Rust crate jobs
       Timeout: 5 minutes per crate job
       Obligations: Clippy -> run tests -> doctests -> doc build -> format check
@@ -46,14 +46,14 @@ Workflow to generate
   Critical path: stack/rust/crates/a/clippy/default (1 tasks)
   Clippy memory groups: 1; barriers: 0
   Cache layers: Mise tools, Cargo sources
-  Jactionlint: 2.4.0 pinned, profile correctness
+  Jactionlint: 2.6.0 pinned, profile correctness
   Action pins: 6
     - actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
     - actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
     - actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
     - actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
     - actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
-    - jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
+    - jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
   Pull-request execution narrows crate obligations through its event-time affected-work plan.
 
 Required-check migration
@@ -69,4 +69,4 @@ Recommendations
   nextest_recommendation: no explicit test-runner usage; defaulting to `cargo test`
   persist_evidence: no MBX or Nextest usage detected; to adopt either, add a durable signal
   rust-toolchain.toml not found; Velnor will not create it
-  tool_install_unverified:2 installs skip verification (no mise.lock): gh@2.103.3, shellcheck@0.11.0; install on the CI platform and commit the resulting lock
+  tool_install_unverified:2 installs skip verification (no mise.lock): gh@2.104.0, shellcheck@0.11.0; install on the CI platform and commit the resulting lock
