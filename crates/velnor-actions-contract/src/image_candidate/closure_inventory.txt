@@ -1481,7 +1481,6 @@ crates/velnor-actions-workflow-renderer/src/render_fallback.rs
 crates/velnor-actions-workflow-renderer/src/render_required_verdict_step.rs
 crates/velnor-actions-workflow-renderer/src/render_state_seal.rs
 crates/velnor-actions-workflow-renderer/src/required_gate.rs
-crates/velnor-actions-workflow-renderer/src/required_gate_fork_tests.rs
 crates/velnor-actions-workflow-renderer/src/review_completion.rs
 crates/velnor-actions-workflow-renderer/src/review_completion_steps.rs
 crates/velnor-actions-workflow-renderer/src/root_api.rs
