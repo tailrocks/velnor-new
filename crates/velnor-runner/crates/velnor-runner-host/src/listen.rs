@@ -72,16 +72,7 @@ pub(crate) fn link_from_admin(
     binding: &RepositoryConnection,
     verified_scope: &VerifiedRepositoryScope,
 ) -> Result<Link, EnsureError> {
-    let (owner, name) = binding
-        .repository
-        .split_once('/')
-        .ok_or(EnsureError::Rejected)?;
-    if owner.is_empty()
-        || name.is_empty()
-        || verified_scope.id() != binding.repository_id
-        || verified_scope.owner() != owner
-        || verified_scope.name() != name
-    {
+    if !binding.matches_scope(verified_scope) {
         return Err(EnsureError::Rejected);
     }
     let base = admin.expose_url().to_owned();
@@ -124,20 +115,32 @@ impl Link {
         binding: &RepositoryConnection,
         pat: &str,
     ) -> Result<(), HostError> {
-        let (owner, repo) = binding
-            .repository
-            .split_once('/')
-            .ok_or(HostError::Config)?;
+        let target = binding.registration_target()?;
         let mut transport = HttpsTransport::new(GITHUB_API)?;
+        if let Some((owner, name)) = binding.repository.split_once('/') {
+            let live = velnor_runner_github::workflow_run::get_repository_scope(
+                &mut transport,
+                velnor_runner_github::workflow_run::RepositoryTarget {
+                    id: binding.repository_id,
+                    owner,
+                    name,
+                },
+                pat,
+            )
+            .map_err(|_| HostError::Endpoint)?;
+            if !binding.matches_scope(&live) {
+                return Err(HostError::Identity);
+            }
+        }
         let registration = velnor_runner_github::registration_token(
             &mut transport,
             &velnor_runner_github::RegistrationTokenCall {
-                scope: velnor_runner_github::RegistrationScope::Repository { owner, repo },
+                scope: target.scope(),
                 pat,
             },
         )
         .map_err(|_| HostError::Endpoint)?;
-        let config_url = format!("https://github.com/{owner}/{repo}");
+        let config_url = target.config_url();
         let admin = velnor_runner_github::admin_connection(
             &mut transport,
             &velnor_runner_github::AdminConnectionCall {

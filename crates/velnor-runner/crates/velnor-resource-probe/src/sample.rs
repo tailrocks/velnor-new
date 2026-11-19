@@ -58,7 +58,7 @@ pub fn sample() -> Result<ProbeRecord, ProbeError> {
         docker_root_fs_type_name,
         docker_root_filesystem_id: filesystem.filesystem_id,
         guest_boot_id,
-        docker_root_free_bytes: filesystem.free_bytes,
+        docker_root_free_bytes: filesystem.record_free_bytes,
         docker_root_total_bytes: filesystem.total_bytes,
         docker_root_available_bytes: filesystem.available_bytes,
         docker_root_inode_total: filesystem.total_inodes,

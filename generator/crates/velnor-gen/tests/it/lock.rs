@@ -14,7 +14,7 @@ use crate::pipeline::{view, workflow};
 type TestResult = Result<(), Box<dyn Error>>;
 
 pub(crate) const SUMS: &str = "\
-4679c5492ab36252ccae31aab4f6c8a454ef2ab0e30d4dcdd3d6080d49c1cbe6  COMMIT
+0e5bd0f714140aa32270568a463b252853b828318ed29e3bad93a1bf18ce2fbd  COMMIT
 10e3511ab3d2f211366c6fd3633474f4a74ee6750b16b52c90758c0e8321dd3e  velnor-ci-linux-x64
 56d836fd2ae8135b5306f154b3287dfe81328f7a89b0528b3b912fab6e6916a6  velnor-ci-linux-arm64
 39431db3aeccf193088fa8845896c627e3da004f683d4d4699d3d697c808c607  velnor-ci-macos-arm64
@@ -23,8 +23,8 @@ pub(crate) const SUMS: &str = "\
 85e98f573e84d03701c0275e60f54a8f8b07c7c02b6b773cf25d973b960339a7  velnor-gen-macos-arm64
 ";
 
-const COMMIT: &str = "1793cf84b5924e2542a03b0fb2580e7395b2f4cb";
-pub(crate) const COMMIT_FILE: &str = "1793cf84b5924e2542a03b0fb2580e7395b2f4cb\n";
+const COMMIT: &str = "1390e6f6a4b64e1f33dbddfbeedcd097db32ec36";
+pub(crate) const COMMIT_FILE: &str = "1390e6f6a4b64e1f33dbddfbeedcd097db32ec36\n";
 
 fn with_lock(lock: &str) -> Result<RepoView, Box<dyn Error>> {
     let mut view = view(&["Cargo.toml"], Some(b"full_run = \"off\"\n"))?;
