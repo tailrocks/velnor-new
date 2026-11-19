@@ -6,7 +6,7 @@ use velnor_release::{FamilyTrigger, ReleasePlan};
 use crate::release::{FROM_A_PASSED_PUSH, VERIFIED_COMMIT};
 
 const PUSHED_TAG: &str = "github.ref_type == 'tag'";
-const PUSHED_COMMIT: &str = "${{ github.sha }}";
+pub(crate) const PUSHED_COMMIT: &str = "${{ github.sha }}";
 
 #[derive(Clone, Copy)]
 pub(crate) struct Source {
