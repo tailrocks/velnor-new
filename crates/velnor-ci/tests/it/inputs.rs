@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_ci::inputs::{Tracked, TrackedFile, parse_inputs, parse_ls_files};
+use velnor_ci::scope::Scope;
+use velnor_model::CompileInputs;
 
 #[test]
 fn regular_files_and_symlinks_at_stage_zero_with_a_writable_path_are_tracked() {
@@ -17,7 +19,10 @@ fn regular_files_and_symlinks_at_stage_zero_with_a_writable_path_are_tracked() {
         format!("100644 {blob} 0\tline\nbreak.rs"),
     ];
     let staged = records.join("\0") + "\0";
-    let tracked = parse_ls_files(staged.as_bytes());
+    let tracked = parse_ls_files(
+        staged.as_bytes(),
+        &Scope::new("", &CompileInputs::new(), None),
+    );
     let file = |path: &str, mode: &str| TrackedFile {
         path: path.to_owned(),
         blob: blob.to_owned(),
@@ -37,6 +42,22 @@ fn regular_files_and_symlinks_at_stage_zero_with_a_writable_path_are_tracked() {
             submodules: 1,
         }
     );
+    let mut raw = Vec::new();
+    for root in ["app", "app-sibling", "other"] {
+        for mode in ["100644", "120000", "160000"] {
+            raw.extend_from_slice(format!("{mode} {blob} 0\t{root}/odd").as_bytes());
+            raw.extend_from_slice(b"\xff\0");
+        }
+    }
+    assert_eq!(
+        parse_ls_files(&raw, &Scope::new("app/", &CompileInputs::new(), None)),
+        Tracked {
+            unsupported: 1,
+            unverifiable_links: 1,
+            submodules: 1,
+            ..Tracked::default()
+        }
+    );
 }
 
 #[test]
@@ -47,7 +68,7 @@ fn a_corrupt_inputs_file_is_an_error_that_names_the_line() {
     assert_eq!(
         error.map_err(|e| e.to_string()),
         Err(
-            ".velnor/inputs.tsv line 2 is not `path<TAB>blob<TAB>mtime_ns<TAB>mode`: `src/main.rs\tdef\tyesterday\t100644`"
+            "inputs snapshot line 2 is not `path<TAB>blob<TAB>mtime_ns<TAB>mode`: `src/main.rs\tdef\tyesterday\t100644`"
                 .to_owned()
         )
     );

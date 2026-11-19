@@ -4,7 +4,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use toml::Value;
-use velnor_model::{ChangeSet, PathGlob, RepoFacts, RepoPath, RustRoot, Weakening};
+use velnor_model::{ChangeSet, DocsRun, PathGlob, RepoFacts, RepoPath, RustRoot, Weakening};
 
 use crate::cargo_flags::flag_tokens;
 use crate::config::{CONFIG_PATH, parse};
@@ -120,6 +120,18 @@ fn in_file(file: &RepoPath, bytes: &[u8]) -> Vec<Weakening> {
                 found.extend(globs("non_inputs", &config.non_inputs, &|glob| {
                     format!("stops a change to {glob} from selecting any package")
                 }));
+                if config.docs_run == DocsRun::PostMerge {
+                    found.push(make(
+                        "docs = \"post_merge\"".to_owned(),
+                        "skips Documentation on pull requests and in the merge queue, so a rustdoc failure is found only after the merge".to_owned(),
+                    ));
+                }
+                if config.check_alone_run == DocsRun::PostMerge {
+                    found.push(make(
+                        "check_alone = \"post_merge\"".to_owned(),
+                        "skips the per-crate alone checks on pull requests and in the merge queue, so a missing feature declaration is found only after the merge".to_owned(),
+                    ));
+                }
                 found
             },
         );

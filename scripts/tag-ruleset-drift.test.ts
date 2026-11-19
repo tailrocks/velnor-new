@@ -3,6 +3,7 @@
 "use strict";
 import { expect, test } from "bun:test";
 import { TOML, YAML } from "bun";
+import { checkTagRulesets } from "./tag-ruleset-drift.mjs";
 import recorded from "../fixtures/tag-ruleset-drift/protect-tags.json";
 function object(value: unknown): Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) throw new Error("Expected a mapping");
@@ -14,13 +15,11 @@ function array(value: unknown): unknown[] {
 }
 const workflow = object(YAML.parse(await Bun.file(new URL("../.github/workflows/release-rust-ci-tools.yml", import.meta.url)).text()));
 const jobs = object(workflow.jobs);
-const drift = object(jobs["tag-ruleset-drift"]);
+const driftWorkflow = object(YAML.parse(await Bun.file(new URL("../.github/workflows/tag-ruleset-drift.yml", import.meta.url)).text()));
+const driftJobs = object(driftWorkflow.jobs);
+const drift = object(driftJobs["tag-ruleset-drift"]);
 const steps = array(drift.steps).map(object);
-const step = steps.find(value => value.name === "Check tag immutability rulesets");
-if (!step) throw new Error("Tag ruleset drift step is missing");
-const inputs = object(step.with);
-if (typeof inputs.script !== "string") throw new Error("Drift script is missing");
-const execute = new Function("github", "context", "process", `return (async () => {${inputs.script}\n})();`);
+const checkout = steps[0], step = steps[1];
 type Ruleset = Omit<typeof recorded, "bypass_actors" | "conditions"> & { conditions: { ref_name: { include: string[]; exclude: string[] } }; bypass_actors?: unknown[] };
 const baseline = (): Ruleset => structuredClone(recorded), actor = { actor_id: 5762496, actor_type: "Integration", bypass_mode: "always" };
 const releaseRefs = ["refs/tags/rust-ci-v*", "refs/tags/velnor-ci-v*", "refs/tags/velnor-gen-v*"] satisfies [string, string, string];
@@ -45,7 +44,11 @@ async function run({ rulesets = [baseline(), release()], token = "admin-read-tok
       return { data };
     },
   };
-  await execute(github, { repo: { owner: "tailrocks", repo: "velnor-new" } }, { env: { TAG_RULESET_ADMIN_READ_TOKEN: token } });
+  const getOctokit = (auth: string) => {
+    expect(auth).toBe(token);
+    return github;
+  };
+  await checkTagRulesets({ context: { repo: { owner: "tailrocks", repo: "velnor-new" } }, process: { env: { TAG_RULESET_ADMIN_READ_TOKEN: token } }, getOctokit });
   return detailed;
 }
 test("the recorded protection and pinned release app prove the expected tag policy", async () => {
@@ -145,22 +148,26 @@ test("API failures and absent owner credentials fail the check", async () => {
   await expect(run({ failure: "detail" })).rejects.toThrow("Detail unavailable");
   await expect(run({ token: "" })).rejects.toThrow("Provision TAG_RULESET_ADMIN_READ_TOKEN");
 });
-test("daily and manual checks isolate the credential from release and checkout code", () => {
-  const events = object(workflow.on);
-  expect(object(array(events.schedule)[0]).cron).toBe("23 4 * * *");
-  expect(Object.hasOwn(events, "workflow_dispatch")).toBe(true);
-  expect(drift.if).toBe("(github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)");
-  expect(drift).toMatchObject({ permissions: {}, "timeout-minutes": 5 });
-  expect(steps).toHaveLength(1);
-  expect(step.uses).toBe("actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3");
-  expect(inputs["github-token"]).toBe("${{ secrets.TAG_RULESET_ADMIN_READ_TOKEN }}");
-  expect(object(step.env)).toEqual({ TAG_RULESET_ADMIN_READ_TOKEN: inputs["github-token"] });
-  expect(object(jobs.gate).if).toBe("github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/rust-ci-v') || startsWith(github.ref, 'refs/tags/tools-v'))");
+test("the manual check isolates the credential from release and checkout code", () => {
+  expect(driftWorkflow.on).toEqual({ workflow_dispatch: {} });
+  expect(driftWorkflow.permissions).toEqual({});
+  expect(Object.keys(driftJobs)).toEqual(["tag-ruleset-drift"]);
+  expect(drift.if).toBe("${{ github.ref == format('refs/heads/{0}', github.event.repository.default_branch) }}");
+  expect(drift).toMatchObject({ permissions: { contents: "read" }, "timeout-minutes": 5 });
+  expect(steps).toHaveLength(2);
+  expect(object(checkout.with)["persist-credentials"]).toBe(false);
+  expect(checkout.env).toBeUndefined();
+  expect(step.run).toBe("node scripts/tag-ruleset-drift.mjs");
+  expect(step.uses).toBeUndefined();
+  expect(object(step.env)).toEqual({ TAG_RULESET_ADMIN_READ_TOKEN: "${{ secrets.TAG_RULESET_ADMIN_READ_TOKEN }}", GITHUB_REPOSITORY: "${{ github.repository }}" });
+  expect(Object.hasOwn(object(workflow.on), "schedule")).toBe(false);
+  expect(object(jobs.gate).if).toBe("${{ github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/rust-ci-v') || startsWith(github.ref, 'refs/tags/tools-v')) }}");
+  const needs = new Map(Object.entries({ "build-linux-x64": ["gate"], "build-linux-arm64": ["gate"], checksums: ["build-linux-x64", "build-linux-arm64"], release: ["checksums"] }));
   for (const [id, job] of Object.entries(jobs)) {
-    if (id === "tag-ruleset-drift") continue;
     expect(JSON.stringify(job)).not.toContain("TAG_RULESET_ADMIN_READ_TOKEN");
+    expect(JSON.stringify(job)).not.toContain("secrets.");
     if (id !== "gate") {
-      expect(object(job).needs).toBe(new Map(Object.entries({ build: "gate", checksums: "build", release: "checksums" })).get(id));
+      expect(object(job).needs).toEqual(needs.get(id));
       expect(object(job).if).toBeUndefined();
     }
   }

@@ -2,25 +2,23 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{
-    CiError, TOKEN_VARIABLE, append_outputs, break_time_ties, cache_paths, cold_on_failure,
-    current_dir, env_path, every_root_target, expire_old_bases, now_seconds,
+    CiError, TOKEN_VARIABLE, append_outputs, break_time_ties, cold, cold_on_failure, current_dir,
+    env_path, expire_old_bases, inputs_batch, now_seconds,
 };
 
-pub(super) fn run_restored(args: crate::cli_cache::RestoredArgs) -> Result<String, CiError> {
+pub(super) fn run_restored(args: &crate::cli::RestoredArgs) -> Result<String, CiError> {
     let root = current_dir()?;
-    let configured = cache_paths::list("VELNOR_CACHE_TARGETS")?.unwrap_or(args.target_dir);
-    let targets = if configured.is_empty() {
-        every_root_target(&root)?
+    let configured = inputs_batch::restored_targets(args)?;
+    let (targets, pending) = if configured.is_empty() {
+        cold::targets_with_receipts(&root)?
     } else {
-        configured
-            .iter()
-            .map(|target| cache_paths::validated(&root, target))
-            .collect::<Result<Vec<_>, _>>()?
+        cold::explicit_targets_with_receipts(&root, &configured)?
     };
     let expiry = expire_old_bases(&targets, now_seconds())?;
     append_outputs(&format!("expired={}\n", expiry.expired))?;
-    let ties = cold_on_failure(&targets, "restored", || break_time_ties(&root))?;
-    Ok(expiry.report + &ties)
+    let report = cold_on_failure(&targets, "restored", || break_time_ties(&root))?;
+    pending.consume()?;
+    Ok(expiry.report + &report)
 }
 
 pub(super) fn run_validate_artifact_id() -> Result<String, CiError> {

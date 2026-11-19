@@ -293,7 +293,7 @@ pub(crate) fn setup_units(
         })));
         toolchain.extend(crate::delta_cache::restore(facts, unit, family, lane));
     }
-    toolchain.extend(crate::units::restore_file_times(units));
+    toolchain.extend(crate::units::restore_file_times(facts, units));
     toolchain.extend(restored(facts));
     steps.extend(toolchain.into_iter().map(|step| Step {
         gate: lane.steps(),

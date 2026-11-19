@@ -335,3 +335,46 @@ fn an_artifact_name_that_is_not_a_plain_file_name_is_refused() {
     assert!(stderr(&output).contains("../escape"));
     assert_eq!(served.count(""), 0);
 }
+
+#[test]
+fn a_long_generated_artifact_name_is_expected_and_reported_not_uploaded() {
+    let served = serve(routes(&recorded(), ARCHIVE));
+    let long = format!("velnor-crate-r44491127982-a1-{}", "x".repeat(200));
+    let plan = json!({"matrix": {"include": [{"artifact_id": long, "matrix_key": "m-0"}]}});
+    let dir = run_dir("long-name", Some(&plan.to_string()));
+    let output = fetch(&served, &dir);
+    assert_eq!(output.status.code(), Some(1), "{output:?}");
+    let message = stderr(&output);
+    assert!(
+        message.contains("not uploaded") && !message.contains("plain file name"),
+        "{message}"
+    );
+
+    let too_long = format!("velnor-crate-r44491127982-a1-{}", "x".repeat(300));
+    let plan = json!({"matrix": {"include": [{"artifact_id": too_long, "matrix_key": "m-0"}]}});
+    let dir = run_dir("too-long-name", Some(&plan.to_string()));
+    let output = fetch(&served, &dir);
+    assert_eq!(output.status.code(), Some(1), "{output:?}");
+    assert!(stderr(&output).contains("plain file name"));
+}
+
+#[test]
+fn a_listed_artifact_that_answers_404_is_retried_but_a_410_is_final() {
+    let listing = recorded();
+    let late = id_of(&listing, "velnor-crate-r44491127982-a1-rust-velnor-gen");
+    let gone = id_of(&listing, "velnor-crate-r44491127982-a1-rust-velnor-ci");
+    let mut table = routes(&listing, ARCHIVE);
+    table.insert(
+        format!("/blob/{late}"),
+        vec![Reply::status(404), Reply::ok(ARCHIVE)],
+    );
+    table.insert(format!("/blob/{gone}"), vec![Reply::status(410)]);
+    let served = serve(table);
+    let dir = run_dir("late-404", Some(PLAN));
+    let output = fetch(&served, &dir);
+    assert_eq!(output.status.code(), Some(1), "{output:?}");
+    assert_eq!(served.count(&format!("/blob/{late}")), 2);
+    assert_eq!(served.count(&format!("/blob/{gone}")), 1);
+    assert!(fetched(&dir).contains("velnor-crate-r44491127982-a1-rust-velnor-gen"));
+    assert!(!fetched(&dir).contains("velnor-crate-r44491127982-a1-rust-velnor-ci"));
+}

@@ -17,6 +17,9 @@ const ACTION: &str = "actions/setup-velnor/action.yml";
 const SUMS: &str = "SHA256SUMS";
 const BINARY_SUMS: &str = "BINARY-SHA256SUMS";
 const COMMIT: &str = "COMMIT";
+const BUILDS: [&str; 2] = ["build-linux-x64", "build-linux-arm64"];
+const WRITE_SUMS: &str = "env -C dist sha256sum ";
+const WRITE_BINARY_SUMS: &str = "env -C binary sha256sum ";
 
 fn parse(path: &str) -> Result<Value, Box<dyn Error>> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
@@ -89,32 +92,25 @@ fn archives_produced(
     targets: &BTreeSet<String>,
     expected: &BTreeSet<String>,
 ) -> Result<BTreeSet<String>, Box<dyn Error>> {
-    let archiving: Vec<&Value> = workflow["jobs"]["build"]["steps"]
-        .as_array()
-        .ok_or("the build job has no steps")?
-        .iter()
-        .filter(|step| {
-            step["run"]
-                .as_str()
-                .is_some_and(|run| run.starts_with("tar "))
-        })
-        .collect();
-    assert_eq!(archiving.len(), 2);
-    assert!(
-        archiving
-            .iter()
-            .all(|step| step["env"]["TARGET"] == "${{ matrix.target }}")
-    );
-    let produced: BTreeSet<String> = archiving
-        .iter()
-        .filter_map(|step| step["run"].as_str())
-        .flat_map(|run| names(run, "dist/"))
-        .flat_map(|name| {
-            targets
-                .iter()
-                .map(move |target| name.replace("$TARGET", target))
-        })
-        .collect();
+    let mut produced = BTreeSet::new();
+    for build in BUILDS {
+        let job = &workflow["jobs"][build];
+        let target = job["env"]["TARGET"]
+            .as_str()
+            .ok_or_else(|| format!("{build} sets no TARGET"))?;
+        assert!(targets.contains(target), "{target}");
+        let archiving: Vec<&str> = runs(workflow, build)?
+            .into_iter()
+            .filter(|run| run.starts_with("tar "))
+            .collect();
+        assert_eq!(archiving.len(), 2, "{build}");
+        produced.extend(
+            archiving
+                .into_iter()
+                .flat_map(|run| names(run, "dist/"))
+                .map(|name| name.replace("$TARGET", target)),
+        );
+    }
     assert!(produced.is_superset(expected), "{produced:?} {expected:?}");
     assert_eq!(produced.len(), 2 * targets.len(), "{produced:?}");
 
@@ -129,10 +125,10 @@ fn checksums_cover(
 ) -> TestResult {
     let listed: BTreeSet<String> = runs(workflow, "checksums")?
         .into_iter()
-        .find(|run| run.starts_with("sha256sum ") && run.ends_with("> SHA256SUMS"))
+        .find(|run| run.starts_with(WRITE_SUMS) && run.ends_with("> dist/SHA256SUMS"))
         .map(|run| {
             run.split_whitespace()
-                .skip(1)
+                .skip(4)
                 .map(str::to_owned)
                 .collect::<Vec<_>>()
         })
@@ -147,11 +143,11 @@ fn checksums_cover(
     let binary: BTreeSet<String> = run_starting(
         workflow,
         "checksums",
-        "sha256sum ",
-        "> ../dist/BINARY-SHA256SUMS",
+        WRITE_BINARY_SUMS,
+        "> dist/BINARY-SHA256SUMS",
     )?
     .split_whitespace()
-    .skip(1)
+    .skip(4)
     .take_while(|word| *word != ">")
     .map(str::to_owned)
     .collect();
@@ -218,11 +214,10 @@ fn the_release_publishes_every_archive_the_setup_action_downloads_with_its_check
         "{expected:?}"
     );
 
-    let targets: BTreeSet<String> = workflow["jobs"]["build"]["strategy"]["matrix"]["include"]
-        .as_array()
-        .ok_or("the build job has no matrix")?
+    let targets: BTreeSet<String> = BUILDS
         .iter()
-        .filter_map(|entry| entry["target"].as_str().map(str::to_owned))
+        .filter_map(|build| workflow["jobs"][build]["env"]["TARGET"].as_str())
+        .map(str::to_owned)
         .collect();
     let script_triples: BTreeSet<String> = between(script, "triple=", ';')
         .into_iter()

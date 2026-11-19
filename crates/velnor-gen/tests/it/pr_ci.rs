@@ -48,7 +48,7 @@ fn an_unset_pr_ci_renders_the_same_workflow_as_always_and_none_of_the_label_mach
 }
 
 #[test]
-fn the_label_mode_starts_on_exactly_the_default_types_plus_labeled_and_keeps_edited_for_a_base_retarget()
+fn the_label_mode_starts_on_exactly_the_default_types_plus_draft_conversion_and_labeled_and_keeps_edited_for_a_base_retarget()
 -> TestResult {
     let tree = label_workflow()?;
     assert_eq!(
@@ -59,6 +59,7 @@ fn the_label_mode_starts_on_exactly_the_default_types_plus_labeled_and_keeps_edi
             "reopened",
             "ready_for_review",
             "edited",
+            "converted_to_draft",
             "labeled"
         ]
     );
