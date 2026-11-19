@@ -92,6 +92,7 @@ fn source_qualification_verify_fetches_absent_pr_base() -> Result<(), Box<dyn Er
         .env("GITHUB_WORKSPACE", &clone)
         .env("PR_HEAD_SHA", &head)
         .env("PR_BASE_SHA", &base)
+        .env("PR_BASE_REF", "main")
         .env("RUNNER_TEMP", &runner_temp)
         .status()?;
     if !status.success() {

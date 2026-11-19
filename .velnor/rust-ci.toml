@@ -5,6 +5,7 @@ runner = "ubuntu-26.04-scale-set"
 exclude = ["fixtures/**"]
 required_check = "Required"
 mbx_shared_store = true
+docs = "post_merge"
 helper = { path = "ci-helper" }
 
 [[inputs]]

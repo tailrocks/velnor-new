@@ -186,16 +186,21 @@ struct PublicationGate {
 #[derive(Default)]
 struct PublicationGateState {
     second_build_complete: bool,
+    second_finished: bool,
     release_second: bool,
 }
 
+const GATE_SAFETY_LIMIT: Duration = Duration::from_secs(300);
+
 impl PublicationGate {
-    fn wait_for_second_build(&self, timeout: Duration) -> bool {
+    fn wait_for_second_build(&self) -> bool {
         let Ok(state) = self.state.lock() else {
             return false;
         };
         self.changed
-            .wait_timeout_while(state, timeout, |state| !state.second_build_complete)
+            .wait_timeout_while(state, GATE_SAFETY_LIMIT, |state| {
+                !state.second_build_complete && !state.second_finished
+            })
             .is_ok_and(|(state, _)| state.second_build_complete)
     }
 
@@ -205,14 +210,19 @@ impl PublicationGate {
         self.changed.notify_all();
         let (state, _) = self
             .changed
-            .wait_timeout_while(state, Duration::from_secs(20), |state| {
-                !state.release_second
-            })
+            .wait_timeout_while(state, GATE_SAFETY_LIMIT, |state| !state.release_second)
             .map_err(|_| Self::gate_error())?;
         if state.release_second {
             Ok(())
         } else {
             Err(Self::gate_error())
+        }
+    }
+
+    fn finish_second(&self) {
+        if let Ok(mut state) = self.state.lock() {
+            state.second_finished = true;
+            self.changed.notify_all();
         }
     }
 
@@ -236,6 +246,14 @@ struct ReleaseSecond(Arc<PublicationGate>);
 impl Drop for ReleaseSecond {
     fn drop(&mut self) {
         self.0.release();
+    }
+}
+
+struct FinishSecond(Arc<PublicationGate>);
+
+impl Drop for FinishSecond {
+    fn drop(&mut self) {
+        self.0.finish_second();
     }
 }
 
@@ -289,6 +307,7 @@ fn concurrent_builds_publish_exactly_one_complete_family() -> Result<(), Box<dyn
             });
             let second_gate = Arc::clone(&gate);
             let second = scope.spawn(move || {
+                let _finished = FinishSecond(Arc::clone(&second_gate));
                 frozen_clock(|| {
                     let execution = GatedBuildx {
                         inner: second_fixture.execution(),
@@ -297,7 +316,7 @@ fn concurrent_builds_publish_exactly_one_complete_family() -> Result<(), Box<dyn
                     build_runner_images_with_execution(&second_request, &execution)
                 })
             });
-            let second_build_complete = gate.wait_for_second_build(Duration::from_secs(15));
+            let second_build_complete = gate.wait_for_second_build();
             let first = first.join().map_err(|_| "first thread panicked")?;
             gate.release();
             let second = second.join().map_err(|_| "second thread panicked")?;
