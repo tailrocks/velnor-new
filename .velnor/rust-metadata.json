@@ -1350,7 +1350,7 @@
               "optional": true
             },
             {
-              "name": "velnor-actions-freshness",
+              "name": "velnor-freshness",
               "kind": "normal",
               "manifest": "crates/velnor-actions-freshness/Cargo.toml",
               "optional": true
@@ -1671,7 +1671,7 @@
           ]
         },
         {
-          "name": "velnor-actions-freshness",
+          "name": "velnor-freshness",
           "version": "0.1.82",
           "manifest": "crates/velnor-actions-freshness/Cargo.toml",
           "dependencies": [

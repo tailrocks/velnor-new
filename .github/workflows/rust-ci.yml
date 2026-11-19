@@ -412,10 +412,10 @@ jobs:
           CARGO_TARGET_DIR: '${{ github.workspace }}/target'
         run: '. "$VELNOR_EXEC" run -- cargo check -p velnor-actions-dbt --locked --message-format=json-render-diagnostics'
       - name: Check velnor-actions-freshness alone
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' -p velnor-actions-freshness '') || contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' --workspace '')) }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' -p velnor-freshness '') || contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' --workspace '')) }}'
         env:
           CARGO_TARGET_DIR: '${{ github.workspace }}/target'
-        run: '. "$VELNOR_EXEC" run -- cargo check -p velnor-actions-freshness --locked --message-format=json-render-diagnostics'
+        run: '. "$VELNOR_EXEC" run -- cargo check -p velnor-freshness --locked --message-format=json-render-diagnostics'
       - name: Check velnor-actions-gradle alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' -p velnor-actions-gradle '') || contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' --workspace '')) }}'
         env:

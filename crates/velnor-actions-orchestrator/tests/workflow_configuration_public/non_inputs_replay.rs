@@ -60,7 +60,7 @@ const NOT_AFFECTED_HOSTED: [&str; 10] = [
 
 const RUN_HOSTED: [&str; 10] = [
     "velnor-actions-cli",
-    "velnor-actions-freshness",
+    "velnor-freshness",
     "velnor-actions-mise",
     "velnor-actions-orchestrator",
     "velnor-actions-tofu",

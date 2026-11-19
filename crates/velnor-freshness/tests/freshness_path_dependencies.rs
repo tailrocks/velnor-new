@@ -10,7 +10,7 @@ use std::{
 
 use serde_json::Value;
 
-#[path = "freshness_path_fixture.rs"]
+#[path = "freshness_path_dependencies/fixture.rs"]
 mod fixture;
 
 type FileSnapshot = Vec<(PathBuf, Vec<u8>)>;
@@ -277,7 +277,10 @@ fn freshness_rows(repo: &Path) -> Result<Vec<Value>, Box<dyn Error>> {
         .arg(repo)
         .env_clear()
         .env("PATH", "/usr/bin:/bin")
-        .env("VELNOR_ACTIONS_BIN", env!("CARGO_BIN_EXE_velnor-actions"))
+        .env(
+            "VELNOR_FRESHNESS_BIN",
+            env!("CARGO_BIN_EXE_velnor-freshness"),
+        )
         .output()?;
     let stdout = String::from_utf8(output.stdout)?;
     let rows = stdout
