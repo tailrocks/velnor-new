@@ -20,9 +20,9 @@ use crate::worker::{WorkerContainerRole, WorkerIdentityNames, WorkerVolumeRole};
 
 use super::io::{MetadataUpload, upload_to_metadata};
 use super::layout;
+use super::local_ci;
 use super::remove::{Removed, remove_labelled};
 use super::request::{LocalPairRequest, Validated, validate};
-use super::local_ci;
 use super::storage::{self, Sizes};
 
 pub const ENVIRONMENT_LABEL: &str = "velnor-local";
