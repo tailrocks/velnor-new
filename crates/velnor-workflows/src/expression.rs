@@ -267,18 +267,24 @@ impl ResultType {
     }
 
     pub(crate) fn fits(self, kind: Option<&InputKind>) -> bool {
-        match (self, kind) {
+        !matches!(
+            (self, kind),
             (Self::Text, Some(InputKind::Boolean | InputKind::Number))
-            | (Self::Boolean, Some(InputKind::Number)) => false,
-            _ => true,
-        }
+                | (Self::Boolean, Some(InputKind::Number))
+        )
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum Operator {
+    None,
+    Negation,
+    Comparison,
+    Logical,
+}
+
 struct TopLevel {
-    logical: bool,
-    comparison: bool,
-    negated: bool,
+    operator: Operator,
     call: Option<String>,
     quoted_whole: bool,
 }
@@ -286,9 +292,11 @@ struct TopLevel {
 fn top_level(expression: &str) -> TopLevel {
     let characters: Vec<char> = expression.chars().collect();
     let mut found = TopLevel {
-        logical: false,
-        comparison: false,
-        negated: characters.first() == Some(&'!') && characters.get(1) != Some(&'='),
+        operator: if characters.first() == Some(&'!') && characters.get(1) != Some(&'=') {
+            Operator::Negation
+        } else {
+            Operator::None
+        },
         call: None,
         quoted_whole: false,
     };
@@ -312,9 +320,11 @@ fn top_level(expression: &str) -> TopLevel {
                     closed_at = Some(index);
                 }
             }
-            '&' | '|' if depth == 0 && next == Some(c) => found.logical = true,
-            '=' | '!' if depth == 0 && next == Some('=') => found.comparison = true,
-            '<' | '>' if depth == 0 => found.comparison = true,
+            '&' | '|' if depth == 0 && next == Some(c) => found.operator = Operator::Logical,
+            '=' | '!' if depth == 0 && next == Some('=') => {
+                found.operator = found.operator.max(Operator::Comparison);
+            }
+            '<' | '>' if depth == 0 => found.operator = found.operator.max(Operator::Comparison),
             _ => {}
         }
     }
@@ -343,11 +353,10 @@ fn single_reference(expression: &str) -> bool {
 pub(crate) fn result_type(expression: &str) -> Option<ResultType> {
     let expression = expression.trim();
     let found = top_level(expression);
-    if found.logical {
-        return None;
-    }
-    if found.comparison || found.negated {
-        return Some(ResultType::Boolean);
+    match found.operator {
+        Operator::Logical => return None,
+        Operator::Comparison | Operator::Negation => return Some(ResultType::Boolean),
+        Operator::None => {}
     }
     if found.quoted_whole {
         return Some(ResultType::Text);
