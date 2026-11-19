@@ -60,30 +60,37 @@ async fn a_plain_runner_registers_the_extra_labels() {
     );
 }
 
+async fn api_stub_command(name: &str, asked: bool) -> String {
+    let dir = temp_dir(name);
+    let docker = FakeDocker::default();
+    let env = Environment::at(&dir, &docker)
+        .await
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let args = EnvironmentArgs {
+        job_cache_admin: asked,
+        ..plain(&dir)
+    };
+    assert!(env.up(&dir, &args).await.is_err());
+    let stubs: Vec<String> = docker
+        .started()
+        .iter()
+        .filter(|call| call.iter().any(|arg| arg == "api-stub"))
+        .map(|call| call.join(" "))
+        .collect();
+    assert_eq!(stubs.len(), 1, "{stubs:?}");
+    stubs[0].clone()
+}
+
 #[tokio::test]
-async fn the_api_stub_serves_job_cache_administration_only_when_asked() {
-    for (asked, expected) in [(false, false), (true, true)] {
-        let dir = temp_dir(&format!("environment-job-cache-admin-{asked}"));
-        let docker = FakeDocker::default();
-        let env = Environment::at(&dir, &docker)
-            .await
-            .unwrap_or_else(|e| unreachable!("{e}"));
-        let args = EnvironmentArgs {
-            job_cache_admin: asked,
-            ..plain(&dir)
-        };
-        assert!(env.up(&dir, &args).await.is_err());
-        let stubs: Vec<String> = docker
-            .started()
-            .iter()
-            .filter(|call| call.iter().any(|arg| arg == "api-stub"))
-            .map(|call| call.join(" "))
-            .collect();
-        assert_eq!(stubs.len(), 1, "{stubs:?}");
-        assert_eq!(
-            stubs[0].contains("--job-cache-admin"),
-            expected,
-            "{stubs:?}"
-        );
-    }
+async fn the_api_stub_verifies_job_grants_with_the_token_key_the_cache_server_uses() {
+    let stub = api_stub_command("environment-job-grants", false).await;
+    assert!(stub.contains("--token-key /keys/token.pub.der"), "{stub}");
+    assert!(stub.contains("/keys/token.pub.der:ro"), "{stub}");
+    assert!(!stub.contains("--job-cache-admin"), "{stub}");
+}
+
+#[tokio::test]
+async fn the_override_reaches_the_api_stub_only_when_asked() {
+    let stub = api_stub_command("environment-job-cache-admin", true).await;
+    assert!(stub.contains("--job-cache-admin"), "{stub}");
 }

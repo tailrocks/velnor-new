@@ -1,95 +1,167 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-//! `--job-cache-admin`: the job port serves the cache list and delete that `velnor-ci cache
-//! budget` and the cache maintenance job call, from the cache server's index.
+//! Cache administration on the job port mirrors GitHub: a job lists and deletes `actions/caches`
+//! only with `actions: write` on an event that is not a pull request. runner.server hands such a
+//! job a signed grant as `github.token`; `--job-cache-admin` grants every job instead.
 
-use super::{CACHES, LIMIT, keys};
-use crate::support::{Harness, MAIN, PULL_2, Stub, temp_dir};
+use super::{CACHES, LIMIT, archives, keys};
+use crate::support::{Harness, MAIN, PULL_2, Stub, job_token, temp_dir};
 
-fn job_stub(harness: &Harness, name: &str) -> Stub {
-    Stub::job_cache_admin(
-        &temp_dir(&format!("{name}-repo")),
-        &temp_dir(&format!("{name}-state")),
-        harness.dir(),
-    )
+fn stub(harness: &Harness, name: &str, override_all: bool) -> Stub {
+    let (repo, state) = (
+        temp_dir(&format!("{name}-repo")),
+        temp_dir(&format!("{name}-state")),
+    );
+    if override_all {
+        Stub::job_cache_admin(&repo, &state, harness.dir())
+    } else {
+        Stub::job_grants(&repo, &state, harness.dir())
+    }
 }
 
-#[tokio::test]
-async fn a_job_lists_the_cache_entries_page_by_page_as_the_helper_asks() {
-    let harness = Harness::new("job-admin-list", LIMIT).await;
+async fn seeded(name: &str) -> Harness {
+    let harness = Harness::new(name, LIMIT).await;
     harness.register(2).await;
     for key in ["a", "b", "c"] {
         harness.save(MAIN, key, key.as_bytes()).await;
     }
     harness.save(PULL_2, "pr", b"p").await;
-    let stub = job_stub(&harness, "job-admin-list");
+    harness
+}
+
+async fn refused(stub: &Stub, harness: &Harness, bearer: Option<&str>) {
+    let before = archives(harness);
+    let id = stub
+        .call_as("GET", CACHES, "x")
+        .await
+        .json()
+        .get("actions_caches")
+        .and_then(|list| list.get(0))
+        .map_or_else(|| "1".to_owned(), |entry| entry["id"].to_string());
+    for (method, path) in [
+        ("GET", format!("{CACHES}?per_page=100")),
+        ("DELETE", format!("{CACHES}/{id}")),
+    ] {
+        let reply = match bearer {
+            Some(bearer) => stub.call_as(method, &path, bearer).await,
+            None => stub.call(method, &path).await,
+        };
+        assert_eq!(reply.status, 403, "{method} with {bearer:?}");
+    }
+    assert_eq!(archives(harness), before);
+    assert_eq!(harness.restore(MAIN, "a").await["ok"], true);
+}
+
+#[tokio::test]
+async fn a_push_job_with_actions_write_lists_page_by_page_and_deletes() {
+    let harness = seeded("job-admin-push").await;
+    let stub = stub(&harness, "job-admin-push", false);
+    let token = job_token("push-actions-write");
 
     let first = stub
-        .call_as("GET", &format!("{CACHES}?&per_page=2&page=1"), "job-token")
+        .call_as("GET", &format!("{CACHES}?&per_page=2&page=1"), &token)
         .await;
     let second = stub
-        .call_as("GET", &format!("{CACHES}?&per_page=2&page=2"), "job-token")
+        .call_as("GET", &format!("{CACHES}?&per_page=2&page=2"), &token)
         .await;
     let past = stub
-        .call_as("GET", &format!("{CACHES}?&per_page=2&page=3"), "job-token")
+        .call_as("GET", &format!("{CACHES}?&per_page=2&page=3"), &token)
         .await;
 
     assert_eq!(first.status, 200);
     assert_eq!(first.json()["total_count"], 4);
-    assert_eq!(keys(&first.json()).len(), 2);
     assert!(first.link().contains("rel=\"next\""));
-    assert_eq!(keys(&second.json()).len(), 2);
     assert!(!second.link().contains("rel=\"next\""));
     assert_eq!(past.status, 200);
-    assert_eq!(keys(&past.json()), Vec::<String>::new());
     let mut all = keys(&first.json());
     all.extend(keys(&second.json()));
     all.sort_unstable();
     assert_eq!(all, ["a", "b", "c", "pr"]);
-}
+    assert_eq!(keys(&past.json()), Vec::<String>::new());
 
-#[tokio::test]
-async fn a_job_deletes_a_cache_entry_by_id_and_the_cache_server_no_longer_restores_it() {
-    let harness = Harness::new("job-admin-delete", LIMIT).await;
-    harness.register(1).await;
-    harness.save(MAIN, "tools", b"1234").await;
-    harness.save(MAIN, "target", b"123456").await;
-    let stub = job_stub(&harness, "job-admin-delete");
-    let listed = stub.call_as("GET", CACHES, "job-token").await.json();
-    let id = listed["actions_caches"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .find(|entry| entry["key"] == "tools")
-        .map(|entry| entry["id"].clone())
-        .unwrap_or_default();
-
+    let id = first.json()["actions_caches"][0]["id"].clone();
     let deleted = stub
-        .call_as("DELETE", &format!("{CACHES}/{id}"), "job-token")
+        .call_as("DELETE", &format!("{CACHES}/{id}"), &token)
         .await;
     let again = stub
-        .call_as("DELETE", &format!("{CACHES}/{id}"), "job-token")
+        .call_as("DELETE", &format!("{CACHES}/{id}"), &token)
         .await;
-    let after = stub.call_as("GET", CACHES, "job-token").await.json();
-
+    let after = stub.call_as("GET", CACHES, &token).await.json();
     assert_eq!(deleted.status, 204);
     assert_eq!(again.status, 404);
-    assert_eq!(keys(&after), ["target"]);
-    assert_eq!(harness.restore(MAIN, "tools").await["ok"], false);
-    assert_eq!(harness.restore(MAIN, "target").await["ok"], true);
+    assert_eq!(after["total_count"], 3);
 }
 
 #[tokio::test]
-async fn the_job_token_is_accepted_whatever_it_holds_even_an_empty_one() {
-    let harness = Harness::new("job-admin-token", LIMIT).await;
-    harness.save(MAIN, "tools", b"1234").await;
-    let stub = job_stub(&harness, "job-admin-token");
+async fn a_push_job_without_actions_write_gets_403() {
+    let harness = seeded("job-admin-read").await;
+    let stub = stub(&harness, "job-admin-read", false);
+    refused(&stub, &harness, Some(&job_token("push-actions-read"))).await;
+}
 
-    // `github.token` is empty in a local run, so the helper sends "Bearer ".
-    for bearer in ["", "ghs_job", "not even a token"] {
+#[tokio::test]
+async fn a_pull_request_job_with_actions_write_gets_403() {
+    let harness = seeded("job-admin-pr").await;
+    let stub = stub(&harness, "job-admin-pr", false);
+    for name in [
+        "pull-request-actions-write",
+        "pull-request-target-actions-write",
+    ] {
+        refused(&stub, &harness, Some(&job_token(name))).await;
+    }
+}
+
+#[tokio::test]
+async fn a_schedule_job_with_actions_write_is_granted_like_a_push() {
+    let harness = seeded("job-admin-schedule").await;
+    let stub = stub(&harness, "job-admin-schedule", false);
+    let listed = stub
+        .call_as("GET", CACHES, &job_token("schedule-actions-write"))
+        .await;
+    assert_eq!(listed.status, 200);
+}
+
+#[tokio::test]
+async fn the_override_grants_every_job_whatever_it_carries() {
+    let harness = seeded("job-admin-override").await;
+    let stub = stub(&harness, "job-admin-override", true);
+
+    for bearer in [
+        "",
+        "ghs_job",
+        job_token("pull-request-actions-write").as_str(),
+    ] {
         let reply = stub.call_as("GET", CACHES, bearer).await;
         assert_eq!(reply.status, 200, "bearer {bearer:?}");
     }
     assert_eq!(stub.get(CACHES).await.status, 200);
+    let id = stub.get(CACHES).await.json()["actions_caches"][0]["id"].clone();
+    assert_eq!(
+        stub.call_as("DELETE", &format!("{CACHES}/{id}"), "")
+            .await
+            .status,
+        204
+    );
+}
+
+#[tokio::test]
+async fn an_unknown_token_gets_403() {
+    let harness = seeded("job-admin-unknown").await;
+    let stub = stub(&harness, "job-admin-unknown", false);
+    let signed = ["expired", "tampered", "other-repository", "wrong-marker"].map(job_token);
+    let unsigned = [None, Some(""), Some("ghs_job"), Some("a.b.c")];
+    for bearer in unsigned {
+        refused(&stub, &harness, bearer).await;
+    }
+    for token in &signed {
+        refused(&stub, &harness, Some(token)).await;
+    }
+}
+
+#[tokio::test]
+async fn the_control_token_does_not_unlock_the_job_port() {
+    let harness = seeded("job-admin-control").await;
+    let stub = stub(&harness, "job-admin-control", false);
+    refused(&stub, &harness, Some("test-control")).await;
 }

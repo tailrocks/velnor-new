@@ -47,9 +47,14 @@ pub struct ApiStubArgs {
     pub local_setup_velnor: bool,
     #[arg(
         long,
-        help = "Serve cache listing and deletion on the job port as well, for workflows whose cache maintenance job calls `velnor-ci cache budget`. Any bearer token is accepted there, so a job of any scope can list and delete the caches of every scope. Without it only the control port serves them and the job port answers 403"
+        help = "Grant every job cache listing and deletion on the job port, whatever its token, event or permissions: an override for tests of the cache API. Without it a job needs a grant signed by --token-key, and a pull request job never gets one"
     )]
     pub job_cache_admin: bool,
+    #[arg(
+        long,
+        help = "Public half of runner.server's token signing key, PKCS#1 RSAPublicKey DER, as for cache-server. A job whose github.token is a grant it signed (actions: write, an event that is not a pull request) may list and delete the caches of its repository, as GitHub lets a job with that permission"
+    )]
+    pub token_key: Option<PathBuf>,
     #[command(flatten)]
     pub control: ControlArgs,
 }

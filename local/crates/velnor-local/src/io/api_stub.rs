@@ -10,12 +10,10 @@ use serde_json::{Value, json};
 use tokio::fs;
 use tokio::sync::Mutex;
 
+use super::Body;
 use super::git::Git;
 use super::local_setup;
 use super::reply::{Reply, gzip_response, redirect, response, text_response};
-use super::{
-    Body, lock_index, now, read_index, recover_tombstones, remove_if_present, write_index,
-};
 use crate::rest::{
     self, Api, COMPARE_COMMITS_DEFAULT, COMPARE_FILES_CAP, CONTENTS_LIMIT_BYTES, Commit,
     Comparison, DEFAULT_PER_PAGE, DIRECTORY_LIMIT, MAX_PER_PAGE, PULL_FILES_CAP, Page, Site,
@@ -23,6 +21,7 @@ use crate::rest::{
 };
 
 mod actions;
+mod caches;
 
 pub use actions::{Answer, HttpStandIn, StandIn};
 
@@ -37,9 +36,13 @@ pub struct ApiStubConfig {
     pub diff_limit_bytes: usize,
     pub standin: Option<std::sync::Arc<dyn StandIn>>,
     pub local_setup: bool,
-    /// Serve the cache list and delete on the job port too. Off, only the control port serves
-    /// them (#1208), so a job cannot touch the caches of another scope.
+    /// Grant every job the cache list and delete, whatever it carries. Without it only a job
+    /// with a signed grant gets them (see `token_key`), and the control port always does.
     pub job_cache_admin: bool,
+    /// Public half of runner.server's token signing key. A job whose `github.token` is a grant
+    /// signed by it (`actions: write`, no pull request event) may list and delete the caches of
+    /// its repository. Without it no job is granted.
+    pub token_key: Option<Vec<u8>>,
 }
 
 #[derive(Debug)]
@@ -70,11 +73,12 @@ impl ApiStub {
 
     pub async fn handle(&self, request: Request<Body>) -> Response<Body> {
         let route = rest::route(request.method().as_str(), request.uri().path());
-        if !self.config.job_cache_admin && matches!(route, Api::CacheList | Api::CacheDelete { .. })
+        if matches!(route, Api::CacheList | Api::CacheDelete { .. })
+            && !self.job_may_administer(&request)
         {
             return super::json_response(
                 403,
-                &json!({"message": "this path is served only on the control port"}),
+                &json!({"message": "cache administration needs a job with actions: write on an event that is not a pull request"}),
             );
         }
         self.dispatch(request, route).await
@@ -325,56 +329,6 @@ impl ApiStub {
         found
             .into_iter()
             .find(|candidate| candidate.path == target && candidate.kind() == "file")
-    }
-
-    async fn cache_list(&self, call: &Call<'_>) -> Reply {
-        let Ok(index) = read_index(&self.config.cache_dir).await else {
-            return Reply::with(500, json!({"message": "cache index is unreadable"}), None);
-        };
-        let listed = index.listed(call.site.repository, now());
-        let entries = rest::cache_list(&listed, &call.params);
-        let page = Page::from_query(&call.params, DEFAULT_PER_PAGE, MAX_PER_PAGE);
-        Reply::with(
-            200,
-            json!({"total_count": entries.len(), "actions_caches": page.slice(&entries)}),
-            page.link(entries.len(), call.host, call.path, &call.params),
-        )
-    }
-
-    async fn cache_delete(&self, call: &Call<'_>, id: u64) -> Reply {
-        let dir = &self.config.cache_dir;
-        let Ok(_lock) = lock_index(dir).await else {
-            return Reply::with(500, json!({"message": "cache index is locked"}), None);
-        };
-        let Ok(mut index) = read_index(dir).await else {
-            return Reply::with(500, json!({"message": "cache index is unreadable"}), None);
-        };
-        recover_tombstones(dir, &index).await;
-        let Some(record) = index.delete(call.site.repository, id) else {
-            return Reply::missing();
-        };
-        let archive = dir.join("archives").join(&record.blob);
-        let tombstone = dir
-            .join("archives")
-            .join(format!("{}.deleted", record.blob));
-        if remove_if_present(fs::rename(&archive, &tombstone).await).is_err() {
-            return Reply::with(
-                500,
-                json!({"message": "cache archive could not be removed"}),
-                None,
-            );
-        }
-        if write_index(dir, &index).await.is_err() {
-            let _ = fs::rename(&tombstone, &archive).await;
-            return Reply::with(500, json!({"message": "cache index is not writable"}), None);
-        }
-        let _ = fs::remove_file(&tombstone).await;
-        let _ = fs::remove_dir_all(dir.join("blocks").join(&record.blob)).await;
-        Reply {
-            status: 204,
-            body: None,
-            link: None,
-        }
     }
 }
 

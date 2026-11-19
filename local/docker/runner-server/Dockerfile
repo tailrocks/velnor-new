@@ -21,6 +21,10 @@ RUN sed -i \
       src/Runner.Server/contextTemplate.yml \
     && grep -q "||startsWith(server.ref,'refs/pull/') }}:" src/Runner.Server/contextTemplate.yml \
     && grep -q "|| 'refs/pull/')\[1\]" src/Runner.Server/contextTemplate.yml
+COPY job-grant.cs.snippet /job-grant.cs.snippet
+RUN test "$(grep -c 'if(!string.IsNullOrEmpty(github_token?.Value) ||' src/Runner.Server/Controllers/MessageController.cs)" = 1 \
+    && sed -i '/if(!string.IsNullOrEmpty(github_token?.Value) ||/e cat /job-grant.cs.snippet' src/Runner.Server/Controllers/MessageController.cs \
+    && grep -q 'new Claim("velnor", "job-cache-admin")' src/Runner.Server/Controllers/MessageController.cs
 COPY WorkflowObjectConverter.cs src/Runner.Server/Controllers/WorkflowObjectConverter.cs
 RUN cd src && dotnet msbuild dir.proj -t:GenerateConstant \
     && dotnet publish Runner.Client -c Release --no-self-contained -p:BUILD_OS=Any -p:RuntimeFrameworkVersion=8.0.0 -o /out

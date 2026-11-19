@@ -151,16 +151,19 @@ impl<E: Engine> Environment<E> {
         super::keys::control(&token).await?;
         let checkout = format!("{}:/repo:ro", repo.display());
         let state = mount("api", "/api");
+        let der = mount("keys/token.pub.der", "/keys/token.pub.der:ro");
         let control = mount("keys/control", "/keys/control:ro");
         let data = mount("cache", "/data");
         self.side("", args.containers(args.runners), local).await?;
         let stub = words(
             "api-stub --listen 0.0.0.0:80 --repo /repo --dir /api --cache-dir /data --standin runner-server:80 \
-             --control-listen 0.0.0.0:81 --control-token /keys/control",
+             --control-listen 0.0.0.0:81 --control-token /keys/control --token-key /keys/token.pub.der",
         );
         let mounts = [
             "-v",
             &checkout,
+            "-v",
+            &der,
             "-v",
             &state,
             "-v",
