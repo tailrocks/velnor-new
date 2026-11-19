@@ -1,0 +1,13 @@
+#[path = "maintenance_input_validation.rs"]
+mod validation;
+
+use super::scoped_workspace::{
+        let path = "docs/reviews/selection.md";
+        put(repo.root(), path, "before\n")?;
+        let base = commit(repo.root(), "base documentation")?;
+        if operation == "rename" {
+    Ok(Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .canonicalize()?)
+}
+

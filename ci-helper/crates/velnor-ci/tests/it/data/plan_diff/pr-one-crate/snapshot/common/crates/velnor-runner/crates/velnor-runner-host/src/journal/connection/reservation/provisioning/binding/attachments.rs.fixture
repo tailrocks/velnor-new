@@ -1,0 +1,3 @@
+        && value.split('/').all(|part| part != ".." && part != ".")
+}
+

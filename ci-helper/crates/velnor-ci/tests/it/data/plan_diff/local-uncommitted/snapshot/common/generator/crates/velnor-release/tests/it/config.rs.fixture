@@ -1,0 +1,8 @@
+    for root in ["/etc", "../outside", "a/../b"] {
+        let mut files = files();
+        files.release_toml = Some(format!("roots = [{root:?}]\n"));
+        assert!(
+    for name in ["../x", "\u{e9}foo", "a b", "1app", ""] {
+        let bad = plz_edited("name = \"app\"", &format!("name = {name:?}"))?;
+        assert!(
+            matches!(refusal(&bad), Some(ReleaseError::InvalidPackageName { .. })),

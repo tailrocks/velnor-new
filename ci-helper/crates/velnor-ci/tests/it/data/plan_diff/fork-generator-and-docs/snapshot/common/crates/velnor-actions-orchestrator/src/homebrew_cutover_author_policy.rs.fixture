@@ -1,0 +1,7 @@
+    include_bytes!("../../../.velnor/qualification/homebrew/jackin/cutover-author-policy.json");
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[path = "homebrew_cutover_author_policy_tests.rs"]
+mod tests;
+

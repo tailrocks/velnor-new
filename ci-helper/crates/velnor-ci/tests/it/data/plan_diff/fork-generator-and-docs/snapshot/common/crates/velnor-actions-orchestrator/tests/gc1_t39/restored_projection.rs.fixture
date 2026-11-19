@@ -1,0 +1,4 @@
+    for lane in ["", ".", "..", "a/b", "a\\b"] {
+        if qualified.lane_target_dir(&state, lane).is_ok()
+            || qualified.lane_build_dir(&state, lane).is_ok()
+        {

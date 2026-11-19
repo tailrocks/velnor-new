@@ -1,0 +1,12 @@
+            ["port", ..] => Err(io::Error::other("no public port")),
+            _ => Ok(String::new()),
+        };
+        std::future::ready(answer)
+    assert!(open("runners-no-fork", Ok("")).await.is_ok());
+}
+
+#[tokio::test]
+    let failed = open("runners-fork-stopped", Ok("abc123")).await;
+    let message = failed
+        .err()
+        .map(|error| error.to_string())

@@ -1,0 +1,40 @@
+            .current_dir(&root)
+            .env("CARGO_HOME", root.join("cargo-home"))
+            .output()
+            .expect("cargo metadata");
+        "[package]\nname=\"probe_app\"\nversion=\"1.0.0\"\nedition=\"2021\"\n[dependencies]\nprobe_escape={path=\"../outside\",version=\"1\"}\n",
+    );
+    write(&root, "src/lib.rs", "pub fn app() {}\n");
+    write(
+        .current_dir(&root)
+        .env("CARGO_HOME", root.join("cargo-home"))
+        .output()
+        .expect("cargo metadata");
+    let known = BTreeSet::from(["../outside/Cargo.toml".to_owned()]);
+    let request = ReleaseRequest {
+        metadata_json: &json,
+        repo_root: &root,
+        root.join("../outside").to_string_lossy().to_string().into();
+    let forged = serde_json::to_string(&altered).expect("JSON");
+    let forged_request = ReleaseRequest {
+        metadata_json: &forged,
+        "[package]\nname=\"order_a\"\nversion=\"1.0.0\"\nedition=\"2021\"\n[dev-dependencies]\norder_b={path=\"../b\",version=\"=1.0.0\"}\n",
+    );
+    write(
+        &root,
+        .current_dir(&root)
+        .env("CARGO_HOME", root.join("cargo-home"))
+        .output()
+        .expect("cargo metadata");
+        manifest_hint: "../invalid",
+        scope: &scope,
+        enabled: false,
+        affected: &empty,
+        "[package]\nname='probe_app'\nversion='1.0.0'\nedition='2021'\n[dependencies]\nprobe_back={path='../a\\b',version='1'}\n",
+    );
+    write(&root, "app/src/lib.rs", "pub fn app() {}\n");
+    write(
+        .current_dir(&root)
+        .env("CARGO_HOME", root.join("cargo-home"))
+        .output()
+        .expect("cargo metadata");

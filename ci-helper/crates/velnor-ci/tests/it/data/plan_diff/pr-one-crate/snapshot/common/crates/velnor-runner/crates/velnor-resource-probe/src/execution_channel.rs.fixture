@@ -1,0 +1,4 @@
+        if component.is_empty() || component == "." || component == ".." {
+            return Err(ProbeError::Invalid("execution_channel_path"));
+        }
+        current = File::from(

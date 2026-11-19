@@ -1,0 +1,30 @@
+    let target = cache_paths::validated(&current_dir()?, &args.target_dir)?;
+    let manifests = cache_paths::list("VELNOR_CACHE_MANIFESTS")?.unwrap_or(args.manifest_path);
+    let refusal = cache_sources::refusal(&current_dir()?, &manifests)?;
+    let sources = refusal.is_none();
+    let decision = if let Some(reason) = refusal {
+        Decision {
+            save_inputs(&current_dir()?, &args.target_dir)
+        }
+        Command::Inputs(InputsCommand::Restore(args)) => {
+            let root = current_dir()?;
+            cold_on_failure(
+                &[cache_paths::validated(&root, &args.target_dir)?],
+                "inputs restore",
+            &current_dir()?,
+            &AuditOptions {
+                write,
+                ..AuditOptions::default()
+        Command::Inputs(InputsCommand::Build(args)) => audit::build(&current_dir()?, &args),
+        Command::ReleaseGate(args) => run_release_gate(&args),
+        Command::CheckTag(CheckTagArgs { tag }) => check_tag(env!("CARGO_PKG_VERSION"), &tag),
+        Command::Release(ReleaseCommand::Record(args)) => release::run_record(&args),
+            let root = current_dir()?;
+            let configured = cache_paths::list("VELNOR_CACHE_TARGETS")?.unwrap_or(args.target_dir);
+            let targets = if configured.is_empty() {
+                every_root_target(&root)
+fn current_dir() -> Result<std::path::PathBuf, CiError> {
+    std::env::current_dir()
+        .map_err(|e| CiError::new(format!("cannot read the working directory: {e}")))
+}
+

@@ -1,0 +1,4 @@
+                        || part.split('/').any(|part| part == "..")
+                }) {
+                    return Err(runner_unsupported("copy_path"));
+                }

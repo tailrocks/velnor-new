@@ -1,0 +1,48 @@
+        source: include_str!("../runner_image_authority_identity.py"),
+    },
+    FixedSource {
+        path: "runner_image_authority_candidate.py",
+        source: include_str!("../runner_image_authority_candidate.py"),
+    },
+    FixedSource {
+        path: "runner_image_authority_custody.py",
+        source: include_str!("../runner_image_authority_custody.py"),
+    },
+    FixedSource {
+        path: "runner_image_authority_publish.py",
+        source: include_str!("../runner_image_authority_publish.py"),
+    },
+    FixedSource {
+        path: "runner_image_authority_driver.py",
+        source: include_str!("../runner_image_authority_driver.py"),
+    },
+];
+
+            source: include_str!("../job_image_authority_identity.py"),
+        },
+        FixedSource {
+            path: "job_image_authority_record.py",
+            source: include_str!("../job_image_authority_record.py"),
+        },
+        FixedSource {
+            path: "job_image_authority_oci.py",
+            source: include_str!("../job_image_authority_oci.py"),
+        },
+        FixedSource {
+            path: "job_image_authority_tar.py",
+            source: include_str!("../job_image_authority_tar.py"),
+        },
+        FixedSource {
+            path: "job_image_authority_registry.py",
+            source: include_str!("../runner_shared_job_image_authority_registry.py"),
+        },
+        FixedSource {
+            path: "job_image_authority_publish.py",
+            source: include_str!("../runner_shared_job_image_authority_publish.py"),
+        },
+        FixedSource {
+            path: "job_image_authority_transport.py",
+            source: include_str!("../runner_shared_job_image_authority_transport.py"),
+        },
+    ];
+    files.extend(FILES);

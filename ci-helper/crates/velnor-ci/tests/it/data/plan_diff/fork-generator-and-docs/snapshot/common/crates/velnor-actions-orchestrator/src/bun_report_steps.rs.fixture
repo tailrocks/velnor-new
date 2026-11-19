@@ -1,0 +1,8 @@
+const VERIFY_JS: &str = concat!(
+    "const t=await Bun.stdin.text();",
+    "const e=t.split(\"\\n\").filter(l=>l.length>0).map(l=>JSON.parse(l));",
+    "const f=c=>{console.error(\"velnor: \"+c);process.exit(1)};",
+    "const n=[...new Set(r.map(x=>x.name))].sort();",
+    "if(r.length!==n.length)f(\"playwright_blob_project_mismatch:\"+p+\":\"+n.join(\",\"));",
+    "if(n.length===0&&want===\"\")f(\"playwright_blob_project_mismatch:\"+p+\":empty_unsharded_blob\");",
+    "if(p!==\"\"&&n.length>0){",

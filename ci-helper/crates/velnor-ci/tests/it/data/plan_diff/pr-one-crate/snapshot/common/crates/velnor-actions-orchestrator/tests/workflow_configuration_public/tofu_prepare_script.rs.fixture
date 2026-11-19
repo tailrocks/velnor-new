@@ -1,0 +1,5 @@
+        cache.join(".."),
+        cache.join("../../victim"),
+        PathBuf::from(format!("{}/", cache.join("slug").display())),
+    ];
+    for path in refused {

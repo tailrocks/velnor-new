@@ -1,0 +1,12 @@
+        concat!(
+            module_path!(),
+            "::a_slow_removed_connection_retirement_does_not_hold_the_next_connection_poll"
+        ),
+        concat!(
+            module_path!(),
+            "::a_previous_slow_poll_does_not_spend_the_next_connections_retirement_budget"
+        ),
+    let script = format!("#!{}\n{}", executable.trim(), include_str!("curl.ts"));
+    let script_path = dir.path().join("curl.ts");
+    fs::write(&script_path, script)?;
+    fs::set_permissions(&script_path, fs::Permissions::from_mode(0o700))?;

@@ -1,0 +1,7 @@
+plan_id=plan-r44491127982-a1
+run_key=r44491127982-a1
+not_affected_jobs=,rust-velnor-actions-actionlint,rust-velnor-actions-ansible,rust-velnor-actions-bun,rust-velnor-actions-contract,rust-velnor-actions-dbt,rust-velnor-actions-gradle,rust-velnor-actions-rust,rust-velnor-cache-rules,rust-velnor-gen,rust-velnor-model,rust-velnor-release,rust-velnor-render,rust-velnor-resource-probe,rust-velnor-runner-attestation,rust-velnor-runner-core,rust-velnor-runner-github,rust-velnor-runner-image-manifest,rust-velnor-runner-qualification,rust-velnor-rust,
+qualification_campaign=
+qualification_phase=
+qualification_cache_enabled=false
+qualification_cache_write=false

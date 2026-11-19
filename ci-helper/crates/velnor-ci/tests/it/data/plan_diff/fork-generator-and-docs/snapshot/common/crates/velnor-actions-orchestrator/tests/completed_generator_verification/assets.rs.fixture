@@ -1,0 +1,8 @@
+    include_str!("../../../../scripts/generator-release/create-release-manifest.sh");
+
+pub(super) fn binary_name(target: &str) -> String {
+    format!("velnor-actions-{}-{target}", env!("CARGO_PKG_VERSION"))
+        .current_dir(root)
+        .env_clear()
+        .env("PATH", std::env::var_os("PATH").ok_or("PATH missing")?)
+        .env("GITHUB_REPOSITORY", "tailrocks/velnor-new")

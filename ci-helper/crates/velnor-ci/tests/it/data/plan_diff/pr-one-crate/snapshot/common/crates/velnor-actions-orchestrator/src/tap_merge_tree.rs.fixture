@@ -1,0 +1,4 @@
+                    && !path.split('/').any(|part| matches!(part, "." | ".."))
+            })
+            .ok_or_else(|| internal("tap_merge_tree_path_invalid"))?;
+        let mode = entry["mode"]
