@@ -238,6 +238,24 @@ fn run(cli: Cli) -> Result<String, CiError> {
             let ties = cold_on_failure(&targets, "restored", || break_time_ties(&root))?;
             Ok(expiry.report + &ties)
         }
+        Command::ValidateArtifactId => {
+            crate::preview_helpers::validate_artifact_id(
+                &std::env::var(crate::preview_helpers::ARTIFACT_ID_VARIABLE).unwrap_or_default(),
+            )?;
+            Ok(String::new())
+        }
+        Command::InstallGh(args) => {
+            crate::preview_helpers::install_gh(
+                &args.version,
+                std::env::var(TOKEN_VARIABLE).ok().as_deref(),
+            )?;
+            Ok(String::new())
+        }
+        Command::StageBundle => {
+            let bundle = env_path("BUNDLE_PATH")?;
+            crate::preview_helpers::stage_bundle(&bundle, &env_path("RUNNER_TEMP")?)?;
+            Ok(String::new())
+        }
         Command::VerifyRuntime(args) => preview::cli::verify_runtime(&args),
         Command::VerifyMacProof => preview::cli::verify_mac_proof(),
         Command::RunAuthority(args) => preview::cli::run_authority(&args),
@@ -247,6 +265,13 @@ fn run(cli: Cli) -> Result<String, CiError> {
         }
         Command::LaneGuard(_) => Err(CiError::new("lane-guard is handled before commands")),
     }
+}
+
+fn env_path(variable: &str) -> Result<std::path::PathBuf, CiError> {
+    std::env::var_os(variable)
+        .filter(|value| !value.is_empty())
+        .map(std::path::PathBuf::from)
+        .ok_or_else(|| CiError::new(format!("{variable} is not set")))
 }
 
 fn now_seconds() -> i64 {
