@@ -65,5 +65,5 @@ jobs:
         env:
           ARTIFACT_ID: '${{ needs.source.outputs.artifact_id }}'
         run: '. "$VELNOR_EXEC" validate-artifact-id'
-      - name: Show the id
-        run: '. "$VELNOR_EXEC" show-id'
+      - name: Validate the id again
+        run: '. "$VELNOR_EXEC" validate-artifact-id'

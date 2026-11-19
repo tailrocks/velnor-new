@@ -121,6 +121,10 @@ fn a_static_matrix_refuses_unknown_keys_and_a_second_source() -> TestResult {
             "axes = { include = [\"a\"], arch = [\"a\"] }".to_owned(),
             "include",
         ),
+        (
+            "axes = { arch = [\"a\"], ARCH = [\"b\"] }".to_owned(),
+            "only by case",
+        ),
         ("axes = { arch = [] }".to_owned(), "arch"),
         ("axes = { arch = [\"a\", \"a\"] }".to_owned(), "arch"),
         (
