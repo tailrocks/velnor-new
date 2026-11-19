@@ -258,16 +258,10 @@ fn step_body(
         StepKind::CacheVerify { lane, family } => crate::cache_upload::verify(lane, *family),
         StepKind::CacheTrim { lane, family } => cache_trim(lane, *family),
         StepKind::CacheBudget(bytes) => cache_budget(*bytes),
-        StepKind::RustComponents(components) => RenderedStep {
-            name: "Add Rust components".to_owned(),
-            run: Some(format!("rustup component add {}", components.join(" "))),
-            ..RenderedStep::default()
-        },
-        StepKind::RustTargets(targets) => RenderedStep {
-            name: "Add Rust targets".to_owned(),
-            run: Some(format!("rustup target add {}", targets.join(" "))),
-            ..RenderedStep::default()
-        },
+        StepKind::RustComponents(components) => {
+            rustup_step("Add Rust components", "component", components)
+        }
+        StepKind::RustTargets(targets) => rustup_step("Add Rust targets", "target", targets),
         StepKind::Cargo(command) => cargo_step(command, audit, lane),
         StepKind::Helper(command) => crate::helper_steps::helper_step(*command),
         StepKind::InputsSave(target) => crate::helper_steps::inputs_step("save", target, directory),
@@ -304,6 +298,14 @@ fn step_body(
             run: Some("exit 1".to_owned()),
             ..RenderedStep::default()
         },
+    }
+}
+
+fn rustup_step(name: &str, noun: &str, items: &[String]) -> RenderedStep {
+    RenderedStep {
+        name: name.to_owned(),
+        run: Some(format!("rustup {noun} add {}", items.join(" "))),
+        ..RenderedStep::default()
     }
 }
 
