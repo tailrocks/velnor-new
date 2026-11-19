@@ -33,13 +33,9 @@ fn a_helper_that_predates_the_member_lock_key_keeps_hashing_the_lock_file() -> T
 #[test]
 fn a_helper_with_the_member_lock_key_reads_it_from_the_prepare_step_for_every_root() -> TestResult {
     let text = workflow_with_helper("0.1.86")?;
-    assert!(!text.contains("Cargo.lock"), "{text}");
+    assert!(text.contains("velnor-src-${{ runner.os }}-${{ runner.arch }}-all.roots-${{ steps.sources_locks.outputs.hash }}"), "{text}");
     for slug in ["root", "lab"] {
         let lock = format!("steps.prepare.outputs.lock_{slug}");
-        let sources = format!(
-            "velnor-src-${{{{ runner.os }}}}-${{{{ runner.arch }}}}-{slug}-${{{{ {lock} }}}}'"
-        );
-        assert!(text.contains(&sources), "{sources}\n{text}");
         let target = format!(
             "${{{{ steps.prepare.outputs.compat }}}}-${{{{ {lock} }}}}-${{{{ github.sha }}}}"
         );
@@ -50,25 +46,10 @@ fn a_helper_with_the_member_lock_key_reads_it_from_the_prepare_step_for_every_ro
 }
 
 #[test]
-fn the_member_lock_key_replaces_only_the_lock_segment_of_the_key() -> TestResult {
+fn the_member_lock_key_replaces_only_the_lock_segment_of_the_target_key() -> TestResult {
     let manifest = RepoPath::new("lab/Cargo.toml")?;
     let file = CacheRoot::new(&manifest, RepoPath::new("target")?);
     let members = file.clone().with_lock_identity(LockIdentity::Members);
-    let key = |root: &CacheRoot| {
-        render_key(&CacheKey::Sources {
-            host: Host,
-            root: root.clone(),
-        })
-    };
-    assert_eq!(
-        key(&file).key,
-        "velnor-src-${{ runner.os }}-${{ runner.arch }}-lab-${{ hashFiles('lab/Cargo.lock') }}"
-    );
-    assert_eq!(
-        key(&members).key,
-        "velnor-src-${{ runner.os }}-${{ runner.arch }}-lab-${{ steps.prepare.outputs.lock_lab }}"
-    );
-    assert_eq!(key(&file).restore_keys, key(&members).restore_keys);
     let target = |root: &CacheRoot| {
         Ok::<_, Box<dyn std::error::Error>>(render_key(&CacheKey::Target {
             job: JobId::new("rust-lint")?,

@@ -68,7 +68,7 @@ pub enum CacheKey {
     },
     Sources {
         host: Host,
-        root: CacheRoot,
+        lane: CacheRoot,
     },
     Target {
         job: JobId,

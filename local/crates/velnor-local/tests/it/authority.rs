@@ -339,6 +339,7 @@ fn authority_has_no_address_option_and_run_takes_keep() {
         "fork_pairs",
         "policy",
         "repo",
+        "label",
     ]
     .map(str::to_owned);
     assert_eq!(supervise, Some((true, names.to_vec())));
