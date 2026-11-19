@@ -18,7 +18,7 @@ pub fn should_save(scan: &LogScan) -> bool {
 #[must_use]
 pub fn born_expired(born: &str, now_seconds: i64, max_age_days: u64) -> bool {
     let Some(born_seconds) = parse_utc(&format!("{}T00:00:00Z", born.trim())) else {
-        return !in_use_since.is_some_and(|since| accessed.is_some_and(|at| at > since));
+        return true;
     };
     let max = i64::try_from(max_age_days).unwrap_or(i64::MAX / SECONDS_PER_DAY);
     now_seconds - born_seconds > max.saturating_mul(SECONDS_PER_DAY)
@@ -67,7 +67,7 @@ pub fn stale_entries(
         .into_iter()
         .skip(keep)
         .filter(|(_, _, accessed)| {
-            true
+            !in_use_since.is_some_and(|since| accessed.is_some_and(|at| at > since))
         })
         .map(|(_, id, _)| id)
         .collect()
