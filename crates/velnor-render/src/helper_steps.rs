@@ -178,6 +178,18 @@ pub(crate) fn inputs_step(
     rendered
 }
 
+pub(crate) fn audit_root_step(directory: Option<&RepoPath>) -> RenderedStep {
+    let directory = directory.map_or(".", RepoPath::as_str);
+    RenderedStep {
+        name: format!("velnor-ci inputs audit --root {directory}"),
+        run: Some(format!(
+            "velnor-ci inputs audit --root {}",
+            shell_word(directory)
+        )),
+        ..RenderedStep::default()
+    }
+}
+
 pub(crate) fn helper_step(command: HelperCommand) -> RenderedStep {
     let arguments = match command {
         HelperCommand::Plan => "plan",

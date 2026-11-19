@@ -90,4 +90,11 @@ pub struct AuditArgs {
         help = "Write .velnor/rust-inputs.lock, one path<TAB>package line per read, instead of checking it"
     )]
     pub write: bool,
+    #[arg(
+        long,
+        value_name = "DIR",
+        conflicts_with = "write",
+        help = "Audit only the Cargo root whose manifest is in DIR (. for the repository root), plus every root of its workspace group, so each lane that built a root audits it. Other roots are neither read nor required to be built, and only the lock lines of the audited packages are compared"
+    )]
+    pub root: Option<String>,
 }

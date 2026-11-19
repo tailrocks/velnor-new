@@ -126,6 +126,7 @@ mod needs_size_plan;
 mod nextest_profile;
 mod no_programs;
 mod patch;
+mod per_root_audit;
 mod pipeline;
 mod plan_job;
 mod plan_job_wait;

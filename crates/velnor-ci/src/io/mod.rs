@@ -187,10 +187,11 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Inputs(InputsCommand::RestoreAll(args)) => {
             inputs_batch::restore_args(&current_dir()?, &args)
         }
-        Command::Inputs(InputsCommand::Audit(AuditArgs { write })) => audit_inputs(
+        Command::Inputs(InputsCommand::Audit(AuditArgs { write, root })) => audit_inputs(
             &current_dir()?,
             &AuditOptions {
                 write,
+                root,
                 ..AuditOptions::default()
             },
         ),

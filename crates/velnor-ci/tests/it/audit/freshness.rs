@@ -171,6 +171,7 @@ fn repeated_directory_declarations_share_the_audit_scan_budget() {
         repo.root(),
         &velnor_ci::io::AuditOptions {
             write: true,
+            root: None,
             max_directory_entries: 8,
         },
     );
@@ -213,6 +214,7 @@ fn distinct_declared_trees_cannot_exceed_the_audit_scan_budget() {
         repo.root(),
         &velnor_ci::io::AuditOptions {
             write: true,
+            root: None,
             max_directory_entries: 8,
         },
     );

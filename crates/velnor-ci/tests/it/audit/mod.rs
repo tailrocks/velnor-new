@@ -15,6 +15,7 @@ mod managed_target;
 mod migration;
 mod optional;
 mod partial;
+mod per_root;
 mod reads;
 mod stand_ins;
 
