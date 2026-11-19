@@ -1,4 +1,4 @@
-roots = [".", "tools"]
+roots = ["."]
 after = ["CI", "Qualification", "Rust CI"]
 
 [[binaries]]

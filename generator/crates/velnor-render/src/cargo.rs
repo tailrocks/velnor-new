@@ -2,23 +2,25 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    BUILD_TESTS_STEP, CargoCommand, FilterRef, LINT_STEP, PackageName, RepoPath, TEST_STEP,
+    BUILD_TESTS_STEP, CargoCommand, FilterRef, Job, LINT_STEP, RepoPath, StepKind, TEST_STEP,
     TargetKind, TargetName,
 };
 
+use crate::cargo_features::NO_TESTS_PASS;
 use crate::gate::CACHE_DEBUG_ON;
 use crate::rules::{RenderedStep, Value};
 use crate::steps::{RUN, RUN_DOCTESTS, TEST_STEP_ID};
 
 const FINGERPRINT_LOG: &str =
     "cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info";
-const DOC_RUN: &str =
+pub(crate) const DOC_RUN: &str =
     "cargo doc --workspace --no-deps --locked --config 'build.rustdocflags=[\"-D\",\"warnings\"]'";
 
 #[derive(Clone, Copy)]
 pub(crate) struct CargoLane {
     pub(crate) artifacts: ArtifactFormat,
     pub(crate) cache_debug: bool,
+    pub(crate) offline: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -44,8 +46,41 @@ impl ArtifactFormat {
     }
 }
 
+pub(crate) fn cargo_lane(job: &Job) -> CargoLane {
+    let artifacts = job
+        .steps
+        .iter()
+        .find_map(|step| match step.kind {
+            StepKind::ReportCaches {
+                nextest_artifacts, ..
+            } => Some(if nextest_artifacts {
+                ArtifactFormat::All
+            } else {
+                ArtifactFormat::CargoOnly
+            }),
+            _ => None,
+        })
+        .unwrap_or(ArtifactFormat::Disabled);
+    CargoLane {
+        artifacts,
+        cache_debug: job
+            .steps
+            .iter()
+            .any(|step| step.kind == StepKind::UploadCargoLog),
+        offline: job
+            .steps
+            .iter()
+            .any(|step| matches!(step.kind, StepKind::PrivateFetch { .. })),
+    }
+}
+
 pub(crate) fn cargo_step(command: &CargoCommand, audit: bool, lane: CargoLane) -> RenderedStep {
     let (name, run, env) = cargo_command(command, lane.artifacts);
+    let run = if lane.offline {
+        run.replacen(" --locked", " --locked --offline", 1)
+    } else {
+        run
+    };
     let prefix = if matches!(command, CargoCommand::Doctest) {
         RUN_DOCTESTS
     } else {
@@ -57,6 +92,7 @@ pub(crate) fn cargo_step(command: &CargoCommand, audit: bool, lane: CargoLane) -
         env: env
             .into_iter()
             .chain(lane.cache_debug.then(cache_debug_env))
+            .chain(lane.offline.then(offline_env))
             .collect(),
         run: Some(format!(
             "{prefix} {}{run}",
@@ -75,7 +111,9 @@ fn cargo_command(
     match command {
         CargoCommand::FmtCheck => ("Format".into(), "cargo-fmt --all --check".into(), vec![]),
         CargoCommand::Clippy { extra } => clippy(cargo, extra),
-        CargoCommand::ClippyFeatures { features } => clippy_features(cargo, features),
+        CargoCommand::ClippyFeatures { features } => {
+            crate::cargo_features::clippy_features(cargo, features)
+        }
         CargoCommand::NextestBuild => nextest_build(nextest),
         CargoCommand::NextestRun { filter, ci_profile } => nextest_run(
             &format!("--workspace --locked{nextest}"),
@@ -88,15 +126,17 @@ fn cargo_command(
             filter,
             ci_profile,
             ..
-        } => nextest_features(nextest, features, filter, *ci_profile),
+        } => crate::cargo_features::nextest_features(nextest, features, filter, *ci_profile),
         CargoCommand::NextestRunArchive {
             file,
             filter,
+            threads,
             ci_profile,
         } => nextest_run(
             &format!(
-                "--archive-file '{}' --extract-to . --extract-overwrite --workspace-remap .",
-                file.as_str().replace('\'', "'\\''")
+                "--archive-file '{}' --extract-to . --extract-overwrite --workspace-remap .{}",
+                file.as_str().replace('\'', "'\\''"),
+                threads.map_or_else(String::new, |count| format!(" --test-threads {count}"))
             ),
             filter,
             *ci_profile,
@@ -115,14 +155,24 @@ fn cargo_command(
             target,
             kind,
             features,
-        } => test_target(package, target, *kind, features, cargo),
+        } => (
+            format!("Test {package} {target}"),
+            format!(
+                "cargo test -p {package} --locked{cargo} {}{}",
+                test_selector(*kind, target),
+                feature_flag(features)
+            ),
+            vec![],
+        ),
         CargoCommand::Doctest => (
             "Doctests".into(),
             format!("cargo test --doc --workspace --locked{cargo}"),
             vec![],
         ),
+        CargoCommand::DocFeatures { features } => {
+            crate::cargo_features::doc_features(cargo, features)
+        }
         CargoCommand::Doc => ("Documentation".into(), format!("{DOC_RUN}{cargo}"), vec![]),
-        CargoCommand::DocFeatures { features } => doc_features(cargo, features),
         CargoCommand::CheckAlone { package } => (
             format!("Check {package} alone"),
             format!("cargo check -p {package} --locked{cargo}"),
@@ -138,31 +188,9 @@ fn cargo_command(
             format!("cargo build --workspace --all-targets --locked{cargo}"),
             vec![],
         ),
-        CargoCommand::Deny {
-            manifest,
-            locked,
-            config,
-        } => deny(manifest, *locked, config.as_ref()),
+        CargoCommand::Deny { manifest, config } => deny(manifest, config.as_ref()),
         CargoCommand::Machete => ("Unused dependencies".into(), "cargo machete".into(), vec![]),
     }
-}
-
-fn test_target(
-    package: &PackageName,
-    target: &TargetName,
-    kind: TargetKind,
-    features: &[String],
-    cargo: &str,
-) -> (String, String, Vec<(String, Value)>) {
-    (
-        format!("Test {package} {target}"),
-        format!(
-            "cargo test -p {package} --locked{cargo} {}{}",
-            test_selector(kind, target),
-            feature_flag(features)
-        ),
-        vec![],
-    )
 }
 
 fn inventory_prefix(command: &CargoCommand, audit: bool) -> &'static str {
@@ -181,7 +209,7 @@ fn inventory_prefix(command: &CargoCommand, audit: bool) -> &'static str {
     }
 }
 
-fn clippy(cargo: &str, extra: &[String]) -> (String, String, Vec<(String, Value)>) {
+pub(crate) fn clippy(cargo: &str, extra: &[String]) -> (String, String, Vec<(String, Value)>) {
     (
         LINT_STEP.into(),
         [format!(
@@ -195,48 +223,78 @@ fn clippy(cargo: &str, extra: &[String]) -> (String, String, Vec<(String, Value)
     )
 }
 
-fn clippy_features(cargo: &str, features: &[String]) -> (String, String, Vec<(String, Value)>) {
-    let (name, run, env) = clippy(&format!("{cargo}{}", feature_flag(features)), &[]);
+pub(crate) fn cargo_fetch(lane: CargoLane) -> RenderedStep {
+    let offline = if lane.offline { " --offline" } else { "" };
+    RenderedStep {
+        env: lane
+            .cache_debug
+            .then(cache_debug_env)
+            .into_iter()
+            .chain(lane.offline.then(offline_env))
+            .collect(),
+        run: Some(format!("{RUN} cargo fetch --locked{offline}")),
+        ..RenderedStep::default()
+    }
+}
+
+fn offline_env() -> (String, Value) {
     (
-        format!("{name} (features: {})", features.join(",")),
-        run,
-        env,
+        "CARGO_NET_OFFLINE".to_owned(),
+        Value::Text("true".to_owned()),
     )
 }
 
-fn doc_features(cargo: &str, features: &[String]) -> (String, String, Vec<(String, Value)>) {
+pub(crate) fn hoist_target_dir(job: &Job, steps: &mut [RenderedStep]) -> Vec<(String, Value)> {
+    let Some(target) = shared_target_dir(job) else {
+        return Vec::new();
+    };
+    let hoisted = target_dir_env(target);
+    for step in steps {
+        step.env.retain(|entry| *entry != hoisted);
+    }
+    vec![hoisted]
+}
+
+fn shared_target_dir(job: &Job) -> Option<&RepoPath> {
+    if job.steps.iter().any(|step| {
+        matches!(
+            step.kind,
+            StepKind::Cargo(CargoCommand::NextestRunArchive { .. })
+        )
+    }) {
+        return None;
+    }
+    let mut building = job
+        .steps
+        .iter()
+        .filter(|step| matches!(&step.kind, StepKind::Cargo(command) if command.builds()));
+    let first = building.next()?;
+    let target = first.target_dir.as_ref()?;
+    let one_root = building
+        .all(|step| step.target_dir.as_ref() == Some(target) && step.directory == first.directory)
+        && job
+            .steps
+            .iter()
+            .all(|step| step.directory.is_none() || step.directory == first.directory);
+    one_root.then_some(target)
+}
+
+pub(crate) fn target_dir_env(target: &RepoPath) -> (String, Value) {
     (
-        format!("Documentation (features: {})", features.join(",")),
-        format!("{DOC_RUN}{cargo}{}", feature_flag(features)),
-        vec![],
+        "CARGO_TARGET_DIR".to_owned(),
+        Value::Expr(format!(
+            "${{{{ github.workspace }}}}/{}",
+            target.as_str().replace("${{", "${{ '${{' }}")
+        )),
     )
 }
 
-fn cache_debug_env() -> (String, Value) {
+pub(crate) fn cache_debug_env() -> (String, Value) {
     (
         "CARGO_LOG".to_owned(),
         Value::Expr(format!(
             "${{{{ {CACHE_DEBUG_ON} && '{FINGERPRINT_LOG}' || '' }}}}"
         )),
-    )
-}
-
-fn nextest_features(
-    nextest: &str,
-    features: &[String],
-    filter: &FilterRef,
-    ci_profile: bool,
-) -> (String, String, Vec<(String, Value)>) {
-    let (_, run, env) = nextest_run(
-        &format!("--workspace --locked{nextest}{}", feature_flag(features)),
-        filter,
-        ci_profile,
-        NO_TESTS_FAIL,
-    );
-    (
-        format!("{TEST_STEP} (features: {})", features.join(",")),
-        run,
-        env,
     )
 }
 
@@ -250,7 +308,7 @@ fn nextest_build(format: &str) -> (String, String, Vec<(String, Value)>) {
     )
 }
 
-fn nextest_run(
+pub(crate) fn nextest_run(
     scope: &str,
     filter: &FilterRef,
     ci_profile: bool,
@@ -267,34 +325,36 @@ fn nextest_run(
     )
 }
 
-/// The default step may select nothing, because the plan narrows it to the
-/// changed packages. A feature lane names its tests, so none matching is a
-/// broken filter and must not pass.
-const NO_TESTS_PASS: &str = "pass";
-const NO_TESTS_FAIL: &str = "fail";
-
 fn nextest_filter(filter: &FilterRef) -> String {
     match filter {
         FilterRef::All => "$TEST_FILTER".to_owned(),
-        FilterRef::AllExcept(binaries) => binaries
-            .iter()
-            .fold("($TEST_FILTER)".to_owned(), |text, id| {
-                format!("{text} - binary_id(={id})")
-            }),
-        FilterRef::Expr { expr, except } => {
-            let both = format!("($TEST_FILTER) and ({expr})");
-            if except.is_empty() {
-                both
-            } else {
-                except.iter().fold(format!("({both})"), |text, id| {
-                    format!("{text} - binary_id(={id})")
-                })
-            }
+        FilterRef::AllExcept(binaries) => without_binaries("($TEST_FILTER)".to_owned(), binaries),
+        FilterRef::Expr { expr, except } => crate::cargo_features::expr(expr, except),
+        FilterRef::Group {
+            include,
+            exclude,
+            except,
+        } => {
+            let selected = include
+                .iter()
+                .fold("($TEST_FILTER)".to_owned(), |text, expr| {
+                    format!("({text} and ({expr}))")
+                });
+            let owned = exclude
+                .iter()
+                .fold(selected, |text, expr| format!("({text} and not ({expr}))"));
+            without_binaries(owned, except)
         }
     }
 }
 
-fn feature_flag(features: &[String]) -> String {
+pub(crate) fn without_binaries(base: String, binaries: &[String]) -> String {
+    binaries
+        .iter()
+        .fold(base, |text, id| format!("{text} - binary_id(={id})"))
+}
+
+pub(crate) fn feature_flag(features: &[String]) -> String {
     if features.is_empty() {
         String::new()
     } else {
@@ -315,29 +375,26 @@ fn test_selector(kind: TargetKind, target: &TargetName) -> String {
     }
 }
 
-fn deny(
-    manifest: &RepoPath,
-    locked: bool,
-    config: Option<&RepoPath>,
-) -> (String, String, Vec<(String, Value)>) {
-    let quoted = |path: &RepoPath| path.as_str().replace('\'', "'\\''");
-    let locked = if locked { " --locked" } else { "" };
-    let config = config.map_or_else(String::new, |path| format!(" --config '{}'", quoted(path)));
-    match manifest.parent() {
-        None => (
-            "Dependency policy".into(),
-            format!("cargo-deny{locked}{config} check"),
-            vec![],
-        ),
-        Some(directory) => (
-            format!("Dependency policy ({directory})"),
-            format!(
-                "cargo-deny{locked} --manifest-path '{}'{config} check",
-                quoted(manifest)
-            ),
-            vec![],
-        ),
-    }
+fn deny(manifest: &RepoPath, config: Option<&RepoPath>) -> (String, String, Vec<(String, Value)>) {
+    let directory = manifest.parent();
+    let name = directory.as_ref().map_or_else(
+        || "Dependency policy".to_owned(),
+        |directory| format!("Dependency policy ({directory})"),
+    );
+    let manifest_arg = directory.map_or_else(String::new, |_| {
+        format!(
+            " --manifest-path '{}'",
+            manifest.as_str().replace('\'', "'\\''")
+        )
+    });
+    let config_arg = config.map_or_else(String::new, |path| {
+        format!(" --config '{}'", path.as_str().replace('\'', "'\\''"))
+    });
+    (
+        name,
+        format!("cargo-deny{manifest_arg}{config_arg} --locked check"),
+        vec![],
+    )
 }
 
 pub(crate) fn reports_tests(command: &CargoCommand) -> bool {

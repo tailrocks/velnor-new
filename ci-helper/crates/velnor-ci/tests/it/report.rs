@@ -25,6 +25,7 @@ fn cache_waste_rules_respect_restored_provenance_and_root() {
         ("dependency-compiled", false),
         ("download", true),
         ("other-root-download", false),
+        ("shared-sources-download", true),
         ("save-failed", true),
     ] {
         let mut value = lane();
@@ -41,12 +42,15 @@ fn cache_waste_rules_respect_restored_provenance_and_root() {
                     value["invocations"][0]["compilations"][0]["dependencies"] = json!(["serde"]);
                 }
             }
-            "download" | "other-root-download" => {
+            "download" | "other-root-download" | "shared-sources-download" => {
                 value["caches"][0]["family"] = json!("sources");
                 value["caches"][0]["hit"] = json!("exact");
                 value["invocations"][0]["downloads"] = json!(["serde v1.0.0"]);
                 if case == "other-root-download" {
                     value["caches"][0]["root"] = json!("tools");
+                }
+                if case == "shared-sources-download" {
+                    value["caches"][0]["root"] = json!(null);
                 }
             }
             "save-failed" => {

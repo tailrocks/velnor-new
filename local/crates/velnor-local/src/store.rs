@@ -188,7 +188,28 @@ impl Index {
     }
 }
 
+fn is_pull_request_scope(scope: &str) -> bool {
+    scope.starts_with("refs/pull/")
+}
+
 impl Index {
+    /// Drops what belongs to the run that just ended and keeps the cache
+    /// content: the registered pull request bases (pull request numbers
+    /// restart at 1 and the next run may use another default branch), the
+    /// reservations that were never committed (they are keyed by the old
+    /// run's writer and would block the same keys for an hour) and the entries
+    /// saved in a pull request's scope (the next run's pull request 2 is
+    /// another pull request, and must not restore this one's cache). Returns
+    /// the dropped records so the caller can remove their archives.
+    pub fn end_run(&mut self) -> Vec<Record> {
+        self.pull_request_bases.clear();
+        let (dropped, kept) = std::mem::take(&mut self.records)
+            .into_iter()
+            .partition(|record| !record.committed || is_pull_request_scope(&record.scope));
+        self.records = kept;
+        dropped
+    }
+
     #[must_use]
     pub fn listed(&self, repository: &str, now: u64) -> Vec<Record> {
         let live: HashSet<EntryId> = self

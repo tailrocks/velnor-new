@@ -5,7 +5,3 @@ packages = ["single-crate"]
 filter = "test(~local::) or binary(local_host_public) or binary(local_pair_public)"
 lint = true
 doc = true
-
-[deny]
-locked = true
-config = "deny.toml"

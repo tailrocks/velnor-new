@@ -74,6 +74,9 @@ pub async fn open_qualification_session(
     journal_path: PathBuf,
     root: String,
 ) -> Result<QualificationSession, HostError> {
+    if !super::probe_image::canonical_docker_root(&root) {
+        return Err(HostError::Identity);
+    }
     tokio::spawn(async move {
         let daemon = probes::inspect_outer(&docker).await?;
         if daemon.root != root {

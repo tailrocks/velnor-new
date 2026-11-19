@@ -7,7 +7,9 @@ use crate::workflow_triggers::{WorkflowFacts, workflow_facts};
 use velnor_model::{
     HelperRelease, RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE, RepoFacts, RepoPath, RepoView, TargetKind,
 };
-use velnor_release::{ReleaseFiles, ReleasePlan, ruleset_drift, ruleset_json};
+use velnor_release::{
+    ReleaseFiles, ReleasePlan, check_publish_budget, ruleset_drift, ruleset_json,
+};
 use velnor_render::{Owner, owner_of, render_release, unfinalized_without_binary};
 use velnor_rust::{MISE_CONFIGS, MISE_LOCK, reject_release_credential_hooks};
 
@@ -33,10 +35,15 @@ pub(crate) fn release_workflow(
         return Err(GenerateError::ReleaseToolchainPath);
     }
     let reality = Reality { facts, generated };
-    let plan =
-        ReleasePlan::read(&release_files(view, Some(&reality))?).map_err(GenerateError::Release)?;
+    let plan = read_plan(&release_files(view, Some(&reality))?)?;
+    check_publish_budget(&plan.roots).map_err(GenerateError::Release)?;
     if !plan.pr_only_checks.is_empty() && !helper.version().at_least((0, 1, 82)) {
         return Err(GenerateError::PrOnlyChecksHelperTooOld(
+            helper.version().clone(),
+        ));
+    }
+    if plan.family.is_some() && !helper.version().at_least((0, 1, 83)) {
+        return Err(GenerateError::FamilyTagHelperTooOld(
             helper.version().clone(),
         ));
     }
@@ -69,11 +76,18 @@ pub(crate) fn release_workflow(
     Ok((files, notes))
 }
 
+fn read_plan(files: &ReleaseFiles) -> Result<ReleasePlan, GenerateError> {
+    let plan = ReleasePlan::read(files).map_err(GenerateError::Release)?;
+    plan.refuse_roots_below_git_root()
+        .map_err(GenerateError::Release)?;
+    Ok(plan)
+}
+
 pub fn release_ruleset(view: &RepoView) -> Result<String, GenerateError> {
     if !view.files.contains_key(&RELEASE_CONFIG_PATH) {
         return Err(GenerateError::NoReleaseConfig);
     }
-    let plan = ReleasePlan::read(&release_files(view, None)?).map_err(GenerateError::Release)?;
+    let plan = read_plan(&release_files(view, None)?)?;
     Ok(ruleset_json(&plan))
 }
 
@@ -81,7 +95,7 @@ pub fn release_ruleset_drift(view: &RepoView, live: &str) -> Result<Vec<String>,
     if !view.files.contains_key(&RELEASE_CONFIG_PATH) {
         return Err(GenerateError::NoReleaseConfig);
     }
-    let plan = ReleasePlan::read(&release_files(view, None)?).map_err(GenerateError::Release)?;
+    let plan = read_plan(&release_files(view, None)?)?;
     Ok(ruleset_drift(&plan, live))
 }
 
@@ -228,7 +242,7 @@ fn release_files(
         cargo_configs,
         toolchain_files,
         symlinks: view.symlinks.iter().map(ToString::to_string).collect(),
-        rust_metadata: reality.map(|_| view.rust_metadata.clone()),
+        rust_metadata: (!view.rust_metadata.is_empty()).then(|| view.rust_metadata.clone()),
         bin_targets: reality.map(|known| bin_targets(known.facts)),
         cargo_manifest_texts,
         cargo_manifests: reality.map(|known| cargo_manifests(known.facts)),

@@ -17,17 +17,21 @@ use super::proxy::Proxy;
 use crate::cli::{EnvironmentArgs, RunArgs};
 use crate::event::{NO_COMMIT, Push, Repository};
 use crate::pairs::{DECISIONS, decisions};
+use crate::pin::Sha256;
 use crate::scenario::{
     Outcome, Scenario, Step, distinct, inside, keeps_environment, overlapping, plan, summary,
 };
 use crate::side::{fork_heads, push_event, refuse_fork_branches};
 use crate::verdict::{Check, conclude, verdict};
 
+mod interrupt;
 mod outcome;
 mod pulls;
 mod refusal;
 mod send;
 mod steps;
+
+use interrupt::Interrupt;
 
 #[derive(Debug)]
 struct Driver<'a> {
@@ -36,6 +40,7 @@ struct Driver<'a> {
     addresses: Addresses,
     authority: Proxy,
     repo: PathBuf,
+    pin: Option<Sha256>,
     pushed: BTreeMap<String, String>,
     pulls: Vec<pulls::Pull>,
     events: usize,
@@ -54,21 +59,18 @@ pub(super) async fn run(args: RunArgs) -> io::Result<()> {
     let args = Arc::new(args);
     let slots = Arc::new(Semaphore::new(usize::from(args.parallel)));
     let closer = Arc::clone(&slots);
-    let interrupt = tokio::spawn(async move {
-        if tokio::signal::ctrl_c().await.is_ok() {
-            closer.close();
-        }
-    });
+    let interrupt = Arc::new(Interrupt::watch(move || closer.close())?);
     let mut running = JoinSet::new();
     let mut spawned = BTreeMap::new();
     for (name, stem, dir) in planned {
         let (args, slots) = (Arc::clone(&args), Arc::clone(&slots));
+        let interrupt = Arc::clone(&interrupt);
         let task = (stem.clone(), dir.clone());
         let handle = running.spawn(async move {
             let Ok(_slot) = slots.acquire().await else {
                 return (stem, Err("interrupted before it started".to_owned()));
             };
-            let result = run_one(&args, &name, &stem, &dir, &slots).await;
+            let result = run_one(&args, &name, &stem, &dir, (&slots, &interrupt)).await;
             (stem, result.map_err(|error| error.to_string()))
         });
         spawned.insert(handle.id(), task);
@@ -89,17 +91,12 @@ pub(super) async fn run(args: RunArgs) -> io::Result<()> {
             }
         }
     }
-    interrupt.abort();
     summary(&results).map_err(io::Error::other)
 }
 
-async fn run_one(
-    args: &RunArgs,
-    scenario: &str,
-    tag: &str,
-    dir: &Path,
-    slots: &Semaphore,
-) -> io::Result<()> {
+/// Reads the scenario named on the command line (a name under `--scenarios`, or a `.json` path)
+/// and refuses one whose options or fork branches the run could not honour.
+async fn load_scenario(args: &RunArgs, scenario: &str) -> io::Result<Scenario> {
     let path = if Path::new(scenario)
         .extension()
         .is_some_and(|ext| ext == "json")
@@ -117,7 +114,20 @@ async fn run_one(
         .map_err(io::Error::other)?;
     refuse_fork_branches(&scenario.steps, &args.environment.default_branch)
         .map_err(io::Error::other)?;
-    let env = Environment::at(dir, DockerCli).await?;
+    Ok(scenario)
+}
+
+async fn run_one(
+    args: &RunArgs,
+    scenario: &str,
+    tag: &str,
+    dir: &Path,
+    (slots, interrupt): (&Semaphore, &Interrupt),
+) -> io::Result<()> {
+    let scenario = load_scenario(args, scenario).await?;
+    let env = Environment::at(dir, DockerCli)
+        .await?
+        .with_labels(&args.environment.label);
     if !inside(&fs::canonicalize(&args.environment.dir).await?, &env.dir) {
         return Err(io::Error::other(format!(
             "{} leads outside the state directory",
@@ -131,14 +141,16 @@ async fn run_one(
         ));
     }
     let repo = env.dir.join("repo");
-    copy_checkout(&args.repo, &repo, &args.environment.default_branch, tag).await?;
-    for directory in ["cache", "api", "events", "logs", "metrics"] {
-        match fs::remove_dir_all(env.dir.join(directory)).await {
-            Err(error) if error.kind() != io::ErrorKind::NotFound => return Err(error),
-            _ => {}
-        }
-        fs::create_dir_all(env.dir.join(directory)).await?;
-    }
+    copy_checkout(
+        &args.repo,
+        &repo,
+        &args.environment.default_branch,
+        tag,
+        &args.repository,
+    )
+    .await?;
+    let pin = super::local_ci::pin_workflows(&args.environment, &repo, tag).await?;
+    env.reset(scenario.keeps_cache(args.fresh_cache)).await?;
     let mut environment = args.environment.clone();
     if scenario.has_fork() {
         environment.fork_runners = environment.fork_runners.max(1);
@@ -148,8 +160,8 @@ async fn run_one(
         return Err(io::Error::other("interrupted before it started"));
     }
     let (outcomes, up_at, up_seconds, replayed) = tokio::select! {
-        session = session(args, &environment, &env, repo, &scenario, tag, pairs.as_ref()) => session,
-        _ = tokio::signal::ctrl_c() => (
+        session = session(args, &environment, &env, (repo, pin), &scenario, tag, pairs.as_ref()) => session,
+        () = interrupt.raised() => (
             Vec::new(), 0, 0.0, Err(io::Error::new(io::ErrorKind::Interrupted, "interrupted")),
         ),
     };
@@ -193,7 +205,7 @@ async fn session<'a>(
     args: &'a RunArgs,
     environment: &EnvironmentArgs,
     env: &'a Environment<DockerCli>,
-    repo: PathBuf,
+    (repo, pin): (PathBuf, Option<Sha256>),
     scenario: &Scenario,
     tag: &'a str,
     pairs: Option<&super::supervisor::Pairs>,
@@ -230,6 +242,7 @@ async fn session<'a>(
         addresses,
         authority,
         repo,
+        pin,
         pushed: BTreeMap::new(),
         pulls: Vec::new(),
         events: 0,
@@ -280,11 +293,24 @@ impl Driver<'_> {
         Ok(())
     }
 
-    async fn on_branch(&self, branch: &str) -> io::Result<()> {
-        if self.git(&["switch", "-q", branch]).await.is_err() {
-            let base = &self.args.environment.default_branch;
-            self.git(&["switch", "-q", "-c", branch, base]).await?;
+    async fn pin(&self) -> io::Result<()> {
+        match &self.pin {
+            Some(pin) => super::local_ci::pin_branch(&self.repo, pin).await,
+            None => Ok(()),
         }
+    }
+
+    async fn switch(&self, branch: &str) -> io::Result<()> {
+        self.git(&["switch", "-q", branch]).await?;
+        self.pin().await
+    }
+
+    async fn on_branch(&self, branch: &str) -> io::Result<()> {
+        if self.git(&["switch", "-q", branch]).await.is_ok() {
+            return self.pin().await;
+        }
+        let base = &self.args.environment.default_branch;
+        self.git(&["switch", "-q", "-c", branch, base]).await?;
         Ok(())
     }
 
@@ -332,7 +358,7 @@ impl Driver<'_> {
     }
 
     async fn push(&mut self, branch: &str) -> io::Result<()> {
-        self.git(&["switch", "-q", branch]).await?;
+        self.switch(branch).await?;
         let after = self.git(&["rev-parse", "HEAD"]).await?;
         let before = self.pushed.get(branch).map_or(NO_COMMIT, String::as_str);
         let commits = changes(&self.repo, branch, before, &after).await?;

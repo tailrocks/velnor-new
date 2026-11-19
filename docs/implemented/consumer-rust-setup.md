@@ -179,15 +179,7 @@ Nothing needs to be declared in `.velnor/config.toml`. `mr_boxington = true`
 in `mise.toml` is durable evidence for `compile_driver = mbx`, so generation
 selects:
 
-- the MBX compile driver in every crate job, and in the state producer job
-  when `[stacks.rust] compiled_state` is not `"off"`;
-- the compiled-state writer: when the producer is generated, one
-  `state-producer-<root>` job per Cargo root compiles the crate jobs' lane
-  records and uploads one handoff artifact, and one `state-seal-<root>` job
-  saves, attests and retires the previous generation, on trusted pushes;
-  crate jobs restore and import read-only with
-  `MBX_BUILD_SCRIPT_EXECUTION=1`; see
-  [compiled-state persistence](../proposed/compiled-state-persistence.md);
+- the MBX compile driver in every crate job;
 - the opaque bundle transport: `mbx cache export --group velnor --format
   directory` and `mbx cache import`, never a Cargo `target/` cache (the MBX
   action is install-only, no `github-cache-mode`).
@@ -241,6 +233,8 @@ entries. Keep one flag set per repository: the profile above.
 Never set `CARGO_TARGET_DIR`, `build.target-dir`, `build.build-dir` or
 `rustc-wrapper` in a repository. MBX manages `target/` only when none of them
 is set; with any of them it leaves the directory alone and never collects it.
+The generated workflow is the one exception: it sets `CARGO_TARGET_DIR` on each
+step that builds a root, to that root's cached target directory.
 
 ## 5. Developer machines: MBX garbage collection
 

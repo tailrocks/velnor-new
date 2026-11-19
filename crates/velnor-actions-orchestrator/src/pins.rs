@@ -20,9 +20,6 @@ use velnor_actions_workflow_renderer::setup::{
     MISE_BINARY_SHA256_LINUX_X64, MISE_BINARY_SHA256_MACOS_ARM64, MISE_BINARY_SHA256_MACOS_X64,
 };
 
-#[path = "pins_consumer_evidence.rs"]
-mod consumer_evidence;
-pub(crate) use consumer_evidence::consumer_evidence_helper;
 
 #[path = "pins_mise_pin_qualification.rs"]
 mod mise_pin_qualification;

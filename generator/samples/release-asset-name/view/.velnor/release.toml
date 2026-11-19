@@ -1,0 +1,6 @@
+after = ["CI", "Rust CI"]
+
+[[binaries]]
+package = "app"
+platforms = ["linux-x64", "macos-arm64"]
+asset_name = "{{ bin }}-{{ version }}-{{ target }}"

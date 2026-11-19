@@ -1,10 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fmt::{Display, Formatter};
-
-use serde::de::Error as DeError;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 
 use crate::error::HostError;
 use crate::worker::{ResourceBudget, ResourceBudgetConfig};
@@ -12,7 +9,9 @@ use crate::worker::{ResourceBudget, ResourceBudgetConfig};
 mod connection;
 mod developer_images;
 mod job_authority;
+mod keychain_reference;
 mod platform;
+mod registration;
 mod release_read;
 mod source_policy;
 
@@ -24,6 +23,7 @@ pub(crate) use job_authority::{
 pub use job_authority::{
     ApprovedJobAuthorityPolicy, JobAuthorityRole, build_job_authority_policy_json,
 };
+pub use keychain_reference::KeychainReference;
 pub use platform::RunnerPlatform;
 use release_read::{ReleaseReadConfig, validate_release_read};
 pub use source_policy::{PullRequestRule, SourcePolicy, SourcePolicyMode, WorkflowEvent};
@@ -47,75 +47,6 @@ pub struct HostConfig {
     pub host: HostLimits,
 
     pub docker: DockerConfig,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct KeychainReference {
-    service: String,
-    account: String,
-}
-
-impl KeychainReference {
-    pub fn parse(value: &str) -> Result<Self, HostError> {
-        let Some(pair) = value.strip_prefix("keychain:") else {
-            return Err(HostError::Config);
-        };
-        let Some((service, account)) = pair.split_once('/') else {
-            return Err(HostError::Config);
-        };
-        if !valid_keychain_component(service)
-            || !valid_keychain_component(account)
-            || account.contains('/')
-        {
-            return Err(HostError::Config);
-        }
-        Ok(Self {
-            service: service.to_owned(),
-            account: account.to_owned(),
-        })
-    }
-
-    #[must_use]
-    pub fn service(&self) -> &str {
-        &self.service
-    }
-
-    #[must_use]
-    pub fn account(&self) -> &str {
-        &self.account
-    }
-}
-
-impl Display for KeychainReference {
-    fn fmt(&self, formatter: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(formatter, "keychain:{}/{}", self.service, self.account)
-    }
-}
-
-impl Serialize for KeychainReference {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_str(&self.to_string())
-    }
-}
-
-impl<'de> Deserialize<'de> for KeychainReference {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let value = String::deserialize(deserializer)?;
-        Self::parse(&value).map_err(D::Error::custom)
-    }
-}
-
-fn valid_keychain_component(value: &str) -> bool {
-    !value.is_empty()
-        && !value.chars().any(|character| {
-            character.is_whitespace() || character.is_control() || matches!(character, '/' | '\\')
-        })
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]

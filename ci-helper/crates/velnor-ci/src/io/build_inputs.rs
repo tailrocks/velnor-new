@@ -2,23 +2,26 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use velnor_gen::io::read_files;
 use velnor_model::RepoPath;
 use velnor_rust::{
-    METADATA_PATH, cargo_config_paths, check_runtime_configs, recorded_roots, repo_profile,
-    rustc_release,
+    METADATA_PATH, cargo_config_paths, check_runtime_configs, external_config_profile,
+    recorded_roots, recorded_target_dirs, repo_profile, rustc_release,
 };
 
 use crate::error::CiError;
 
 const OS_RELEASE: &str = "/etc/os-release";
+const OS_RELEASE_OVERRIDE: &str = "VELNOR_OS_RELEASE";
 
 pub(super) fn repository_profile(root: &Path) -> Result<String, CiError> {
     let recorded = read_files(root, &[METADATA_PATH]).map_err(|e| CiError::new(e.to_string()))?;
     let roots = recorded_roots(recorded.get(&METADATA_PATH).map(Vec::as_slice))
+        .map_err(|e| CiError::new(e.to_string()))?;
+    let recorded_dirs = recorded_target_dirs(recorded.get(&METADATA_PATH).map(Vec::as_slice))
         .map_err(|e| CiError::new(e.to_string()))?;
     let mut files = BTreeMap::new();
     for path in cargo_config_paths(&roots) {
@@ -27,8 +30,46 @@ pub(super) fn repository_profile(root: &Path) -> Result<String, CiError> {
         }
     }
     let tracked = tracked_among(root, &files);
-    check_runtime_configs(&roots, &files, &tracked).map_err(|e| CiError::new(e.to_string()))?;
-    repo_profile(&files).map_err(|e| CiError::new(e.to_string()))
+    check_runtime_configs(&roots, &files, &tracked, &recorded_dirs)
+        .map_err(|e| CiError::new(e.to_string()))?;
+    let inside = repo_profile(&files).map_err(|e| CiError::new(e.to_string()))?;
+    let outside = external_config_profile(&external_configs(root)?).map_err(CiError::new)?;
+    Ok(format!("{inside}{outside}"))
+}
+
+fn external_configs(root: &Path) -> Result<Vec<(String, Vec<u8>)>, CiError> {
+    let mut folders: Vec<PathBuf> = root
+        .ancestors()
+        .skip(1)
+        .map(|folder| folder.join(".cargo"))
+        .collect();
+    let home = std::env::var_os("CARGO_HOME")
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".cargo")));
+    if let Some(home) = home
+        && !folders.contains(&home)
+    {
+        folders.push(home);
+    }
+    let mut found = Vec::new();
+    for folder in folders {
+        for name in ["config", "config.toml"] {
+            let file = folder.join(name);
+            match std::fs::read(&file) {
+                Ok(bytes) if bytes.starts_with(super::setup::OWNED_MARKER.as_bytes()) => {}
+                Ok(bytes) => found.push((file.display().to_string(), bytes)),
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                Err(e) => {
+                    return Err(CiError::new(format!(
+                        "cannot read {}: {e}; the base cache key must cover every Cargo config Cargo reads",
+                        file.display()
+                    )));
+                }
+            }
+        }
+    }
+    Ok(found)
 }
 
 fn tracked_among(root: &Path, files: &BTreeMap<RepoPath, Vec<u8>>) -> BTreeSet<RepoPath> {
@@ -68,14 +109,28 @@ pub(super) fn release_of(verbose: &str) -> Result<(u32, u32), CiError> {
     rustc_release(verbose).ok_or_else(|| CiError::new("rustc -vV reports no release".to_owned()))
 }
 
-pub(super) fn image_identity() -> String {
+pub(super) fn image_identity() -> Result<String, CiError> {
     let image_os = std::env::var("ImageOS").unwrap_or_default();
-    let os_release = std::fs::read_to_string(OS_RELEASE).unwrap_or_default();
+    let explicit = std::env::var_os(OS_RELEASE_OVERRIDE);
+    if explicit.is_none() && !cfg!(target_os = "linux") {
+        return Ok(format!("{image_os}|{}|", std::env::consts::OS));
+    }
+    let path = explicit.unwrap_or_else(|| OS_RELEASE.into());
+    let os_release = std::fs::read_to_string(&path).map_err(|e| {
+        CiError::new(format!(
+            "cannot read the OS identity from {}: {e}; without it the cache cannot tell runner images apart, so prepare fails rather than share a cache",
+            Path::new(&path).display()
+        ))
+    })?;
     let field = |name: &str| {
         os_release
             .lines()
             .find_map(|line| line.strip_prefix(name)?.strip_prefix('='))
             .map_or_else(String::new, |value| value.trim_matches('"').to_owned())
     };
-    format!("{image_os}|{}|{}", field("ID"), field("VERSION_ID"))
+    Ok(format!(
+        "{image_os}|{}|{}",
+        field("ID"),
+        field("VERSION_ID")
+    ))
 }
