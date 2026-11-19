@@ -214,6 +214,7 @@ impl Stub {
                 local_setup: false,
                 job_cache_admin,
                 token_key,
+                ledger: None,
             }),
         }
     }
@@ -235,6 +236,7 @@ impl Stub {
                 local_setup,
                 job_cache_admin: false,
                 token_key: None,
+                ledger: None,
             }),
         }
     }
@@ -253,6 +255,7 @@ impl Stub {
                 local_setup: false,
                 job_cache_admin: false,
                 token_key: None,
+                ledger: None,
             }),
         }
     }
