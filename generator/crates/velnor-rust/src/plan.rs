@@ -84,11 +84,9 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
         jobs.insert(1, helper_job(facts, root));
     }
     if facts.config.cache_debug == CacheDebug::On {
-        upload_cargo_logs(&mut jobs);
+        crate::cargo_log::upload(&mut jobs);
     }
-    if let Some(sources) = &facts.config.private_sources {
-        crate::private_fetch::insert(sources, &mut jobs);
-    }
+    crate::private_fetch::insert(facts.config.private_sources.as_ref(), &mut jobs);
     crate::report::finish(facts, &mut jobs, single, draft_guard);
     WorkflowPlan {
         name: "Rust CI".to_owned(),
@@ -314,33 +312,6 @@ pub(crate) fn setup_roots(
         ..step
     }));
     steps
-}
-
-fn upload_cargo_logs(jobs: &mut [Job]) {
-    for job in jobs {
-        if job
-            .steps
-            .iter()
-            .any(|step| matches!(step.kind, StepKind::Cargo(_)))
-        {
-            let gate = job
-                .steps
-                .iter()
-                .find(|step| {
-                    matches!(
-                        step.kind,
-                        StepKind::Helper(HelperCommand::Restored(..))
-                            | StepKind::RestoredTargets { .. }
-                    )
-                })
-                .and_then(|step| step.gate.clone());
-            job.steps.push(Step {
-                when: When::CacheDebug,
-                gate,
-                ..step(StepKind::UploadCargoLog)
-            });
-        }
-    }
 }
 
 fn breaks_ties(facts: &RepoFacts) -> bool {

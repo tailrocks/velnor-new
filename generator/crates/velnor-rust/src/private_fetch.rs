@@ -8,7 +8,10 @@ use velnor_model::{
 
 use crate::plan::step;
 
-pub(crate) fn insert(sources: &PrivateSources, jobs: &mut [Job]) {
+pub(crate) fn insert(sources: Option<&PrivateSources>, jobs: &mut [Job]) {
+    let Some(sources) = sources else {
+        return;
+    };
     for job in jobs {
         let Some(first) = job.steps.iter().position(compiles) else {
             continue;

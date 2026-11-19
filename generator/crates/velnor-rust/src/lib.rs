@@ -9,6 +9,7 @@ mod build_target;
 mod cache_budget;
 mod cargo_flags;
 mod cargo_lock;
+mod cargo_log;
 mod classify;
 mod compat;
 mod config;

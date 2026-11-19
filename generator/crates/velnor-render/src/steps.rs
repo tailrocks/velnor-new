@@ -13,7 +13,7 @@ use crate::base_steps::{
     trimmed_lane,
 };
 use crate::cache::{path_text, render_key};
-use crate::cargo::{ArtifactFormat, CargoLane, cargo_step, reports_tests};
+use crate::cargo::{CargoLane, cargo_step, reports_tests};
 use crate::gate::{
     PLAN_STEP, Setup, admission, all_conditions, condition, output, plan_read, plan_source,
     sources_step, verdict_step,
@@ -40,37 +40,9 @@ const CACHE_SAVE: &str = "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1
 const A_NEED_FAILED: &str =
     "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}";
 
-fn cargo_lane(job: &Job) -> CargoLane {
-    let artifacts = job
-        .steps
-        .iter()
-        .find_map(|step| match step.kind {
-            StepKind::ReportCaches {
-                nextest_artifacts, ..
-            } => Some(if nextest_artifacts {
-                ArtifactFormat::All
-            } else {
-                ArtifactFormat::CargoOnly
-            }),
-            _ => None,
-        })
-        .unwrap_or(ArtifactFormat::Disabled);
-    CargoLane {
-        artifacts,
-        cache_debug: job
-            .steps
-            .iter()
-            .any(|step| step.kind == StepKind::UploadCargoLog),
-        offline: job
-            .steps
-            .iter()
-            .any(|step| matches!(step.kind, StepKind::PrivateFetch { .. })),
-    }
-}
-
 pub(crate) fn rendered_job(job: &Job, fork_runner: &RunnerLabel) -> RenderedJob {
     let (restores, audit) = crate::base_steps::job_setup(job);
-    let lane = cargo_lane(job);
+    let lane = crate::cargo::cargo_lane(job);
     let tests = job
         .steps
         .iter()
