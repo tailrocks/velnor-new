@@ -296,6 +296,8 @@ fn validate_connections(connections: &[RepositoryConnection]) -> Result<(), Host
 
 fn unix_endpoint(endpoint: &str) -> bool {
     endpoint.starts_with("unix://")
-        && !endpoint.chars().any(|ch| ch.is_control() || ch.is_whitespace())
+        && !endpoint
+            .chars()
+            .any(|ch| ch.is_control() || ch.is_whitespace())
         && crate::docker_client::unix_socket_path(endpoint).is_ok()
 }
