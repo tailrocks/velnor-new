@@ -6,7 +6,7 @@ use std::fmt;
 
 use crate::cron::CronExpr;
 use crate::helper::HelperRelease;
-use crate::ids::{JobId, PackageName, PathGlob, RepoPath, RunnerLabel, TargetName};
+use crate::ids::{PackageName, PathGlob, RepoPath, RunnerLabel, TargetName};
 use crate::plan::Shape;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -56,6 +56,7 @@ pub struct PackageDependency {
     pub name: PackageName,
     pub kind: DependencyKind,
     pub platform: Option<String>,
+    pub optional: bool,
     pub manifest: Option<RepoPath>,
     pub features: Vec<String>,
     pub rename: Option<String>,
@@ -214,6 +215,7 @@ pub struct MemberDependency {
     pub name: PackageName,
     pub kind: DependencyKind,
     pub platform: Option<String>,
+    pub optional: bool,
     pub manifest: RepoPath,
 }
 
@@ -246,6 +248,7 @@ pub struct RustCiConfig {
     pub runner: RunnerLabel,
     pub fork_runner: RunnerLabel,
     pub crates_mirror: Option<CratesMirror>,
+    pub mbx_store: MbxStore,
     pub timeout_minutes: u16,
     pub exclude: Vec<PathGlob>,
     pub non_inputs: Vec<PathGlob>,
@@ -274,49 +277,7 @@ pub struct TestSetup {
     pub run: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TestGroup {
-    pub name: JobId,
-    pub filter: String,
-    pub needs: Vec<TestNeed>,
-    pub test_threads: Option<u16>,
-    pub timeout_minutes: Option<u16>,
-    pub runner: Option<RunnerLabel>,
-    pub paths: Vec<PathGlob>,
-    pub events: Vec<GroupEvent>,
-    pub root: GroupRoot,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum TestNeed {
-    Docker,
-    Cargo,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum GroupEvent {
-    PullRequest,
-    Push,
-    MergeGroup,
-    Schedule,
-    WorkflowDispatch,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum GroupRoot {
-    OnlyRoot,
-    Folder(Option<RepoPath>),
-}
-
-impl TestGroup {
-    #[must_use]
-    pub fn belongs_to(&self, root: &RustRoot, root_count: usize) -> bool {
-        match &self.root {
-            GroupRoot::OnlyRoot => root_count == 1,
-            GroupRoot::Folder(folder) => *folder == root.manifest.parent(),
-        }
-    }
-}
+pub use crate::test_group::{GroupEvent, GroupRoot, TestGroup, TestNeed};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OnMain {
@@ -346,6 +307,18 @@ impl From<bool> for CacheDebug {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MbxStore {
+    Private,
+    Shared,
+}
+
+impl From<bool> for MbxStore {
+    fn from(shared: bool) -> Self {
+        if shared { Self::Shared } else { Self::Private }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CiDebugInfo {
     Full,
     LineTablesOnly,
@@ -364,6 +337,7 @@ impl Default for RustCiConfig {
             runner: RunnerLabel::from_static("ubuntu-latest"),
             fork_runner: RunnerLabel::from_static("ubuntu-latest"),
             crates_mirror: None,
+            mbx_store: MbxStore::Private,
             timeout_minutes: 30,
             exclude: Vec::new(),
             non_inputs: Vec::new(),

@@ -39,7 +39,9 @@ pub enum Command {
         about = "Print the [[test_groups]] that would shorten the wait, from .velnor/rust-ci-timings.json: one for each test binary that takes more than a third of its root's test time; writes nothing"
     )]
     SuggestGroups,
-    #[command(about = "Exit 1 unless the tag is rust-ci-v followed by the version of this program")]
+    #[command(
+        about = "Exit 1 unless the tag is rust-ci-v or tools-v followed by the version of this program"
+    )]
     CheckTag {
         #[arg(help = "The release tag")]
         tag: String,

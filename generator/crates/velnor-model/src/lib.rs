@@ -11,6 +11,7 @@ mod plan;
 mod repo;
 mod selection;
 mod steps;
+mod test_group;
 mod verdict;
 
 pub use cache::{CacheKey, CachePath, CacheRoot, Host};
@@ -31,15 +32,15 @@ pub use ids::{
 pub use plan::{
     Access, BUILD_TESTS_STEP, CargoCommand, Concurrency, FilterRef, Gate, GateNeed, Job, LINT_STEP,
     PermissionScope, Permissions, PlanFrom, PlanRef, PullRequestType, Shape, ShapeDecision, Step,
-    TEST_STEP, TESTS_BY_PACKAGE_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, Triggers, When,
-    WorkflowPlan,
+    TEST_STEP, TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT,
+    TESTS_RUN_OUTPUT, Triggers, When, WorkflowPlan,
 };
 pub use repo::{
     CacheDebug, CiDebugInfo, CompileInputs, CratesMirror, CustomHarness, DependencyKind, FullRun,
-    GroupEvent, GroupRoot, InputRule, MemberDependency, OnMain, PackageDependency, PolicyTools,
-    RepoFacts, RepoView, RepositoryIdentity, RustCiConfig, RustMember, RustMetadata, RustPackage,
-    RustRoot, Target, TargetKind, TestGroup, TestNeed, TestSetup, Timings, ToolPin, ToolPins,
-    Toolchain, UnownedPackage, Unread, Weakening,
+    GroupEvent, GroupRoot, InputRule, MbxStore, MemberDependency, OnMain, PackageDependency,
+    PolicyTools, RepoFacts, RepoView, RepositoryIdentity, RustCiConfig, RustMember, RustMetadata,
+    RustPackage, RustRoot, Target, TargetKind, TestGroup, TestNeed, TestSetup, Timings, ToolPin,
+    ToolPins, Toolchain, UnownedPackage, Unread, Weakening,
 };
 pub use selection::{
     AllTrigger, ChangeSet, EventKind, OptionalSteps, RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE,

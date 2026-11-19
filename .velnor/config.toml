@@ -266,7 +266,7 @@ exclude = ["fixtures/**", "crates/**/tests/fixtures/**"]
 default_profile = "local"
 hosted_profile = "hosted"
 scale_set_profile = "local"
-workflows = ["qualification", "image_release", "macos_binary_release", "generator_release"]
+workflows = ["qualification", "image_release", "generator_release"]
 
 [execution.profiles.hosted]
 kind = "github-hosted"
@@ -278,6 +278,38 @@ kind = "github-scale-set"
 name = "ubuntu-26.04-scale-set"
 labels = ["velnor", "ubuntu-26.04-scale-set"]
 platform = "linux/amd64"
+
+[execution.overrides.plan]
+profile = "local"
+role = "control"
+
+[execution.overrides.alint]
+profile = "local"
+role = "control"
+
+[execution.overrides.cargo-deny]
+profile = "local"
+role = "control"
+
+[execution.overrides.cargo-machete]
+profile = "local"
+role = "control"
+
+[execution.overrides.jactionlint]
+profile = "local"
+role = "control"
+
+[execution.overrides.ledger-cli]
+profile = "local"
+role = "control"
+
+[execution.overrides.required-gate]
+profile = "local"
+role = "control"
+
+[execution.overrides.required]
+profile = "local"
+role = "control"
 
 [[checks]]
 id = "maintenance-helpers"
@@ -973,8 +1005,12 @@ inputs = [
   "generator/samples/lab/expected/.github/workflows/rust-ci.yml",
   "generator/samples/release-bin/expected/.github/workflows/release.yml",
   "generator/samples/release-bin/expected/.github/workflows/rust-ci.yml",
+  "generator/samples/release-bin-family/expected/.github/workflows/release.yml",
+  "generator/samples/release-bin-family/expected/.github/workflows/rust-ci.yml",
   "generator/samples/release-bin-merge-commit/expected/.github/workflows/release.yml",
   "generator/samples/release-bin-merge-commit/expected/.github/workflows/rust-ci.yml",
+  "generator/samples/release-bin-profile/expected/.github/workflows/release.yml",
+  "generator/samples/release-bin-profile/expected/.github/workflows/rust-ci.yml",
   "generator/samples/release-two-roots/expected/.github/workflows/release.yml",
   "generator/samples/release-two-roots/expected/.github/workflows/rust-ci.yml",
   "generator/samples/policy-lane/expected/.github/workflows/rust-ci.yml",
