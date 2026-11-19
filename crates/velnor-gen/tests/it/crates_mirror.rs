@@ -32,7 +32,7 @@ fn mirrored_repo(
     let old = String::from_utf8(repo.files[&lock].clone())?;
     repo.files.insert(
         lock,
-        old.replace("0.1.81", if hosted { "0.1.98" } else { "0.1.93" })
+        old.replace("0.1.81", if hosted { "0.1.99" } else { "0.1.93" })
             .into_bytes(),
     );
     Ok(repo)
@@ -100,7 +100,7 @@ fn mirror_is_explicit_scoped_and_precedes_every_job_tools() -> TestResult {
             repo.files.insert(
                 lock,
                 old.replace("0.1.93", "0.1.92")
-                    .replace("0.1.98", "0.1.92")
+                    .replace("0.1.99", "0.1.92")
                     .into_bytes(),
             );
             assert!(

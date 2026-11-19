@@ -144,12 +144,16 @@ fn the_hosted_key_needs_the_helper_that_reads_it_at_run_time() -> TestResult {
     let config = b"runner = 'my-box'\nhosted = false\n";
     let mut repo = view(&["Cargo.toml"], Some(config))?;
     assert!(workflow(&repo).is_ok());
-    crate::pipeline::pin_helper(&mut repo, "0.1.97")?;
-    let message = workflow(&repo).err().ok_or("0.1.97 accepted")?.to_string();
-    assert!(
-        message.contains("pin velnor-ci 0.1.98 or later"),
-        "{message}"
-    );
+    for old in ["0.1.97", "0.1.98"] {
+        crate::pipeline::pin_helper(&mut repo, old)?;
+        let message = workflow(&repo).err().ok_or(old)?.to_string();
+        assert!(
+            message.contains("pin velnor-ci 0.1.99 or later"),
+            "{old}: {message}"
+        );
+    }
+    crate::pipeline::pin_helper(&mut repo, "0.1.99")?;
+    assert!(workflow(&repo).is_ok());
     let plain = view(&["Cargo.toml"], Some(b"runner = 'my-box'\n"))?;
     assert!(
         workflow(&plain).is_ok(),

@@ -11,6 +11,7 @@ mod error_binary;
 mod error_cargo;
 mod error_family;
 mod family;
+mod family_options;
 mod git_ref;
 mod groups;
 mod hazards;
@@ -35,6 +36,7 @@ pub use check::{CheckArtifact, CheckPlan, CheckProblem, CheckStage};
 pub use error::ReleaseError;
 pub use error_family::FamilyError;
 pub use family::FamilyPlan;
+pub use family_options::FamilyTrigger;
 pub use groups::GroupError;
 pub use hazards::{
     refuse_cargo_config, refuse_external_commands, shadowed_by_extensionless_config,

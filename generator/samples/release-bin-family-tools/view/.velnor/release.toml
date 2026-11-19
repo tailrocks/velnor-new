@@ -1,0 +1,17 @@
+roots = ["."]
+after = ["CI", "Qualification", "Rust CI"]
+family_tag = "tools-v{{ version }}"
+family_trigger = "tag_push"
+checksums_file = "BINARY-SHA256SUMS"
+commit_file = true
+attest = true
+
+[[binaries]]
+package = "app"
+platforms = ["linux-x64", "linux-arm64"]
+smoke = true
+
+[[binaries]]
+package = "tools"
+platforms = ["linux-x64", "linux-arm64"]
+smoke = true

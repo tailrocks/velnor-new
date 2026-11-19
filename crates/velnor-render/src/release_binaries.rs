@@ -142,10 +142,14 @@ pub(crate) fn build_steps(
     );
     let linux = triple.ends_with("linux-musl");
     let packaging = match binary.format {
-        BinaryFormat::Archive => archive_packaging(binary, platform, &file, &release_dir),
+        BinaryFormat::Archive => {
+            let mut steps = smoke_steps(binary, platform, &release_dir, tag);
+            steps.extend(archive_packaging(binary, platform, &file, &release_dir));
+            steps
+        }
         BinaryFormat::Raw => {
             let mut steps = raw_packaging(binary, platform, triple, &release_dir, tag);
-            steps.extend(smoke_steps(binary, platform, tag));
+            steps.extend(smoke_steps(binary, platform, &release_dir, tag));
             steps
         }
     };

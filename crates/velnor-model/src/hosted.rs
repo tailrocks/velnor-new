@@ -22,7 +22,7 @@ impl HostedRunners {
         }
     }
 
-    /// Records that `rust-ci.toml` wrote a `hosted` key, which a `velnor-ci` before 0.1.98
+    /// Records that `rust-ci.toml` wrote a `hosted` key, which a `velnor-ci` before 0.1.99
     /// refuses to read.
     #[must_use]
     pub fn with_key_written(self, key_written: bool) -> Self {

@@ -4,8 +4,8 @@
 use std::collections::BTreeMap;
 
 use velnor_model::{
-    Access, FullRun, Job, PermissionScope, Permissions, PrCi, PullRequestType, RepoFacts, Step,
-    StepKind, Triggers, When,
+    Access, FullRun, Job, JobId, PermissionScope, Permissions, PrCi, PullRequestType, RepoFacts,
+    Step, StepKind, Triggers, When,
 };
 
 use crate::plan::{BUDGET_JOB, CHECKOUT_DEPTH, job, step};
@@ -14,7 +14,7 @@ use crate::schedule::schedule;
 const BUDGET_RUNS: usize = 10;
 const BUDGET_TIMEOUT_MINUTES: u16 = 10;
 
-pub(crate) fn budget_job(facts: &RepoFacts) -> Option<Job> {
+pub(crate) fn budget_job(facts: &RepoFacts, after: &JobId) -> Option<Job> {
     if !facts.config.budget.is_some_and(|budget| budget.enabled()) {
         return None;
     }
@@ -31,6 +31,7 @@ pub(crate) fn budget_job(facts: &RepoFacts) -> Option<Job> {
     steps.push(step(StepKind::Budget { last: BUDGET_RUNS }));
     Some(Job {
         name: Some("Speed budget".to_owned()),
+        needs: vec![after.clone()],
         when: if facts.config.full_run == FullRun::Off {
             When::DefaultBranchPush
         } else {

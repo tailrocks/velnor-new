@@ -70,6 +70,7 @@ mod policy;
 mod private_fetch;
 mod private_sources;
 mod reads;
+mod reexports;
 mod repo_profile;
 mod report;
 mod required_job;
@@ -131,6 +132,7 @@ pub use reads::{
     INPUTS_LOCK, Located, dep_info_paths, format_inputs_lock, locate, normalize, parse_inputs_lock,
     rerun_if_changed, unlisted,
 };
+pub use reexports::*;
 pub use repo_profile::{cargo_config_paths, check_runtime_configs, repo_profile};
 pub use required_job::tests_expected;
 pub use select::{select, unknown_paths, unread_packages};
@@ -140,15 +142,3 @@ pub use shape::{SECOND_JOB_COST_SECONDS, SHARD_THRESHOLD_SECONDS, decide_shape};
 pub use suggest_groups::suggest_groups;
 pub use timings::{TIMINGS_PATH, render_timings, root_job_ids};
 pub use toolchain::{TOOLCHAIN_PLAIN, TOOLCHAIN_TOML, toolchain};
-pub use verdict::{
-    JobResult, PackageCounts, TestCounts, Verdict, decide, encode_package_counts, package_token,
-    verdict,
-};
-pub use verdict_plan::{Need, PlanOutput};
-pub use weaken::introduced;
-
-pub use cache_budget::{
-    CacheEntry, CacheFamily, CacheId, DEFAULT_CACHE_BUDGET_BYTES, Timestamp, budget_plan,
-    cache_family, delta_pull_request, target_family_prefix,
-};
-pub use private_sources::{cacheable_config, cacheable_lock};

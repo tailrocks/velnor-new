@@ -19,6 +19,7 @@ mod job_limits;
 mod matrix;
 mod plan;
 mod raw;
+mod secret_events;
 mod triggers;
 mod workflow_run;
 

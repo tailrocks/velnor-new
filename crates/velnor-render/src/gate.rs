@@ -255,6 +255,14 @@ fn requested_here() -> String {
     )
 }
 
+pub(crate) fn check_name(name: Option<&String>, pr: PrRun) -> Option<String> {
+    let name = name.filter(|_| pr == PrRun::Related)?;
+    let quoted = name.replace('\'', "''");
+    Some(format!(
+        "${{{{ {RELATED_EVENT} && '{quoted}' || '{quoted} (ignored event)' }}}}"
+    ))
+}
+
 fn pr_parts(pr: PrRun) -> Vec<String> {
     match pr {
         PrRun::Always => Vec::new(),

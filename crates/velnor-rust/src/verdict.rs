@@ -161,45 +161,21 @@ impl Verdict {
     }
 }
 
-fn record(out: &mut Verdict, plan: &PlanOutput, job: &JobId, message: String) {
-    if plan.advisory.contains(job) {
-        out.warnings.push(message);
-    } else {
-        out.problems.push(message);
-    }
-}
-
-fn judge(
-    out: &mut Verdict,
-    plan: &PlanOutput,
-    job: &JobId,
-    scheduled: bool,
-    result: Option<&JobResult>,
-) {
+fn judge(out: &mut Verdict, job: &JobId, scheduled: bool, result: Option<&JobResult>) {
     match (scheduled, result) {
         (_, None) => out.problems.push(format!("{job} has no result in needs")),
         (true, Some(JobResult::Success)) | (false, Some(JobResult::Skipped)) => {}
-        (true, Some(other)) => record(
-            out,
-            plan,
-            job,
-            format!(
-                "{job} was scheduled by the plan and its result is {}",
-                other.name()
-            ),
-        ),
+        (true, Some(other)) => out.problems.push(format!(
+            "{job} was scheduled by the plan and its result is {}",
+            other.name()
+        )),
         (false, Some(JobResult::Success)) => out
             .warnings
             .push(format!("{job} ran although the plan did not schedule it")),
-        (false, Some(other)) => record(
-            out,
-            plan,
-            job,
-            format!(
-                "{job} was not scheduled by the plan and its result is {}",
-                other.name()
-            ),
-        ),
+        (false, Some(other)) => out.problems.push(format!(
+            "{job} was not scheduled by the plan and its result is {}",
+            other.name()
+        )),
     }
 }
 
@@ -228,7 +204,7 @@ pub fn verdict(
             .to_owned(),
             shown.to_owned(),
         ));
-        judge(&mut out, plan, job, *scheduled, result);
+        judge(&mut out, job, *scheduled, result);
     }
     for (slug, jobs) in &plan.test_lanes {
         let counts: Vec<Option<TestCounts>> = jobs

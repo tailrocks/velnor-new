@@ -121,8 +121,10 @@ pub(crate) fn finish(
         jobs.push(cache.clone());
     }
     let required = crate::required_job::verdict_job(facts, jobs, single, draft_guard);
+    let budget = crate::plan_budget::budget_job(facts, &required.id);
     jobs.extend(trim);
     jobs.push(required);
+    jobs.extend(budget);
     jobs.extend(label_reset(facts));
     if !facts.config.cache_check_blocks {
         jobs.push(cache);

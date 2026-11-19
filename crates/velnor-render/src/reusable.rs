@@ -129,7 +129,10 @@ fn rendered_job(workflow: &Workflow, job: &Job, helper: &HelperRelease) -> Rende
                 } => {
                     RenderedMatrixSource::Output(format!("needs.{from_job}.outputs.{from_output}"))
                 }
-                MatrixSource::Axes(axes) => RenderedMatrixSource::Axes(axes.clone()),
+                MatrixSource::Axes { axes, include } => RenderedMatrixSource::Axes {
+                    axes: axes.clone(),
+                    include: include.clone(),
+                },
             },
             fail_fast: matrix.fail_fast,
             max_parallel: matrix.max_parallel,
@@ -293,6 +296,7 @@ fn rendered_step(step: &Step) -> RenderedStep {
             .as_deref()
             .map(|condition| format!("${{{{ {condition} }}}}")),
         continue_on_error: step.continue_on_error,
+        working_directory: step.working_directory.clone(),
         uses,
         uses_comment,
         with: values(&step.with)

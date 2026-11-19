@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::error::{WorkflowsError, refuse};
+use crate::helper_call::command_words;
 use crate::plan::{Action, Body, Env, Job, Step};
 
 const MAX_ENVIRONMENT_CHARACTERS: usize = 255;
@@ -52,8 +53,9 @@ const SCRIPT_RUNNERS: [&str; 9] = [
 ];
 
 fn runs_script(run: &str) -> bool {
-    let word = run.split_whitespace().next().unwrap_or_default();
-    word.contains('/') || SCRIPT_RUNNERS.contains(&word)
+    command_words(run)
+        .first()
+        .is_some_and(|word| word.contains('/') || SCRIPT_RUNNERS.contains(&word.as_str()))
 }
 
 /// A step that runs a repository script or a local action never reads `github.token` in a job
@@ -81,6 +83,28 @@ pub(crate) fn write_token(
                 step.name
             ));
         }
+    }
+    Ok(())
+}
+
+/// A job that reads a secret outside a dispatch-only workflow holds no write permission, so
+/// a run that nobody started by hand never carries a secret and a write token together.
+pub(crate) fn secret_without_write(
+    job: &str,
+    steps: &[Step],
+    permissions: &[(String, String)],
+) -> Result<(), WorkflowsError> {
+    let reads_secret = steps
+        .iter()
+        .flat_map(|step| &step.env)
+        .any(|(_, value)| matches!(value, Env::Expression(inner) if inner.starts_with("secrets.")));
+    if let Some((scope, _)) = permissions
+        .iter()
+        .find(|(_, level)| reads_secret && level == "write")
+    {
+        return refuse(format!(
+            "job {job} reads a secret and holds the write permission {scope}; a workflow that runs on more than workflow_dispatch gives a job that reads a secret read permissions only"
+        ));
     }
     Ok(())
 }

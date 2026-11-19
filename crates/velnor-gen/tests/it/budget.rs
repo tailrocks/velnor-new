@@ -90,35 +90,23 @@ fn a_budget_of_zero_renders_no_job() -> TestResult {
 }
 
 #[test]
-fn the_budget_job_is_advisory_in_the_required_check() -> TestResult {
-    let files = budgeted("0.1.92", "[budget]\nmain_wall_seconds = 600\n")?;
-    let text = workflow(&files)?;
-    let required = text
-        .split("  required:")
-        .nth(1)
-        .ok_or("the required job is missing")?;
-    assert!(
-        required.contains("--job rust-budget=schedule+advisory"),
-        "a breach must not fail the required check\n{required}"
-    );
-    Ok(())
-}
-
-#[test]
-fn the_budget_job_is_advisory_on_a_default_branch_run_too() -> TestResult {
-    let files = budgeted(
-        "0.1.92",
+fn the_budget_job_runs_after_the_required_check_and_the_check_does_not_wait_for_it() -> TestResult {
+    for config in [
+        "[budget]\nmain_wall_seconds = 600\n",
         "full_run = \"off\"\n[budget]\nmain_wall_seconds = 600\n",
-    )?;
-    let text = workflow(&files)?;
-    let required = text
-        .split("  required:")
-        .nth(1)
-        .ok_or("the required job is missing")?;
-    assert!(
-        required.contains("--job rust-budget=default-branch-push+advisory"),
-        "a breach must not fail the required check\n{required}"
-    );
+    ] {
+        let files = budgeted("0.1.92", config)?;
+        let tree = crate::yaml_tree::document(&workflow(&files)?)?;
+        let required = tree.pointer("/jobs/required").ok_or("no required job")?;
+        assert!(
+            !required.to_string().contains("rust-budget"),
+            "the gate waits for the advisory scan\n{required}"
+        );
+        assert_eq!(
+            tree.pointer("/jobs/rust-budget/needs"),
+            Some(&serde_json::json!(["required"]))
+        );
+    }
     Ok(())
 }
 

@@ -1045,19 +1045,23 @@ run = 'cp "target/$TARGET/release-tools/velnor-gen" stage/velnor-gen'
 
 [[workflow.job.step]]
 name = "Run velnor-ci"
-run = "env -C stage ./velnor-ci --version"
+run = "./velnor-ci --version"
+working_directory = "stage"
 
 [[workflow.job.step]]
 name = "Run velnor-gen"
-run = "env -C stage ./velnor-gen --version"
+run = "./velnor-gen --version"
+working_directory = "stage"
 
 [[workflow.job.step]]
 name = "Check the tag against the version of velnor-ci"
-run = 'env -C stage ./velnor-ci check-tag "$GITHUB_REF_NAME"'
+run = './velnor-ci check-tag "$GITHUB_REF_NAME"'
+working_directory = "stage"
 
 [[workflow.job.step]]
 name = "Check the tag against the version of velnor-gen"
-run = 'env -C stage ./velnor-gen check-tag "$GITHUB_REF_NAME"'
+run = './velnor-gen check-tag "$GITHUB_REF_NAME"'
+working_directory = "stage"
 
 [[workflow.job.step]]
 name = "Archive velnor-ci"
@@ -1127,19 +1131,23 @@ run = 'cp "target/$TARGET/release-tools/velnor-gen" stage/velnor-gen'
 
 [[workflow.job.step]]
 name = "Run velnor-ci"
-run = "env -C stage ./velnor-ci --version"
+run = "./velnor-ci --version"
+working_directory = "stage"
 
 [[workflow.job.step]]
 name = "Run velnor-gen"
-run = "env -C stage ./velnor-gen --version"
+run = "./velnor-gen --version"
+working_directory = "stage"
 
 [[workflow.job.step]]
 name = "Check the tag against the version of velnor-ci"
-run = 'env -C stage ./velnor-ci check-tag "$GITHUB_REF_NAME"'
+run = './velnor-ci check-tag "$GITHUB_REF_NAME"'
+working_directory = "stage"
 
 [[workflow.job.step]]
 name = "Check the tag against the version of velnor-gen"
-run = 'env -C stage ./velnor-gen check-tag "$GITHUB_REF_NAME"'
+run = './velnor-gen check-tag "$GITHUB_REF_NAME"'
+working_directory = "stage"
 
 [[workflow.job.step]]
 name = "Archive velnor-ci"
@@ -1195,11 +1203,13 @@ run = "tar -xzf dist/velnor-gen-aarch64-unknown-linux-musl.tar.gz -C binary/veln
 
 [[workflow.job.step]]
 name = "Write BINARY-SHA256SUMS"
-run = "env -C binary sha256sum velnor-ci-x86_64-unknown-linux-musl.tar.gz/velnor-ci velnor-ci-aarch64-unknown-linux-musl.tar.gz/velnor-ci velnor-gen-x86_64-unknown-linux-musl.tar.gz/velnor-gen velnor-gen-aarch64-unknown-linux-musl.tar.gz/velnor-gen > dist/BINARY-SHA256SUMS"
+run = "sha256sum velnor-ci-x86_64-unknown-linux-musl.tar.gz/velnor-ci velnor-ci-aarch64-unknown-linux-musl.tar.gz/velnor-ci velnor-gen-x86_64-unknown-linux-musl.tar.gz/velnor-gen velnor-gen-aarch64-unknown-linux-musl.tar.gz/velnor-gen > ../dist/BINARY-SHA256SUMS"
+working_directory = "binary"
 
 [[workflow.job.step]]
 name = "Write SHA256SUMS"
-run = "env -C dist sha256sum COMMIT velnor-ci-x86_64-unknown-linux-musl.tar.gz velnor-ci-aarch64-unknown-linux-musl.tar.gz velnor-gen-x86_64-unknown-linux-musl.tar.gz velnor-gen-aarch64-unknown-linux-musl.tar.gz BINARY-SHA256SUMS > dist/SHA256SUMS"
+run = "sha256sum COMMIT velnor-ci-x86_64-unknown-linux-musl.tar.gz velnor-ci-aarch64-unknown-linux-musl.tar.gz velnor-gen-x86_64-unknown-linux-musl.tar.gz velnor-gen-aarch64-unknown-linux-musl.tar.gz BINARY-SHA256SUMS > SHA256SUMS"
+working_directory = "dist"
 
 [[workflow.job.step]]
 name = "Upload SHA256SUMS"
@@ -1225,7 +1235,8 @@ with = { name = "SHA256SUMS", path = "dist" }
 
 [[workflow.job.step]]
 name = "Verify every file against SHA256SUMS"
-run = "env -C dist sha256sum --check --strict SHA256SUMS"
+run = "sha256sum --check --strict SHA256SUMS"
+working_directory = "dist"
 
 [[workflow.job.step]]
 name = "Create the pre-release"
@@ -1239,6 +1250,7 @@ runner = "ubuntu-24.04"
 hosted = true
 
 [workflow.on]
+schedule = ["23 4 * * *"]
 
 [workflow.on.workflow_dispatch]
 

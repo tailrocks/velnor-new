@@ -49,13 +49,20 @@ pub(crate) async fn apply_config_transition<E: TransitionEffects>(
         .collect())
 }
 
+const RELEASE_READER_LOAD_BUDGET: std::time::Duration = std::time::Duration::from_secs(10);
+
 pub(super) async fn apply_config(
     current: &mut HostConfig,
     pending_retirements: &mut Vec<RepositoryConnection>,
     next: HostConfig,
     effects: &mut JournalEffects<'_>,
 ) -> bool {
-    if let Err(error) = ImageAuthority::load(&next) {
+    let candidate = next.clone();
+    let deadline = tokio::time::Instant::now() + RELEASE_READER_LOAD_BUDGET;
+    if let Err(error) =
+        crate::config::off_runtime(deadline, move || ImageAuthority::load(&candidate).map(drop))
+            .await
+    {
         eprintln!("host controller release-reader reload held: {error}");
         return false;
     }
