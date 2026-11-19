@@ -334,6 +334,9 @@ mod runner_family_copy_sources;
 #[path = "workflow_configuration_public/image_platform_selection.rs"]
 mod image_platform_selection;
 
+#[path = "workflow_configuration_public/pr_ci_label.rs"]
+mod pr_ci_label;
+
 #[path = "workflow_configuration_public/runner_workspace_paths.rs"]
 mod runner_workspace_paths;
 

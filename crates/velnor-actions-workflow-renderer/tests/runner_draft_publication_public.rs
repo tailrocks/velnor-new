@@ -133,6 +133,7 @@ fn rendered() -> Result<Vec<velnor_actions_workflow_renderer::RenderedFile>, Box
         mbx_qualification: None,
         mise_pin_qualification: None,
         product_release: Some(pins()),
+        pr_ci: velnor_actions_contract::PrCiMode::Off,
     };
     request
         .runner_image_family

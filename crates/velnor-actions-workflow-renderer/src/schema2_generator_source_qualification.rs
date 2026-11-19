@@ -24,7 +24,35 @@ use jobs::{
 
 pub(super) const WORKFLOW_PATH: &str = ".github/workflows/source-qualification.yml";
 
+/// Source qualification binds to the pull request's base and head, so it runs
+/// at PR time for every non-draft PR and never on `merge_group`.
+const SOURCE_QUALIFICATION_JOBS: [&str; 6] = [
+    "plan",
+    "selection",
+    "ordinary-harness",
+    "keep-harness",
+    "generation-checks",
+    "source-qualification",
+];
 const SOURCES_CARGO_HOME: &str = velnor_actions_contract::workflow::cache_family::CARGO_HOME_EXPR;
+
+fn triggers() -> Yaml {
+    Yaml::Map(vec![
+        (
+            "pull_request".to_owned(),
+            Yaml::Map(vec![(
+                "types".to_owned(),
+                Yaml::Seq(
+                    crate::render::EXPECTED_PR_TYPES
+                        .iter()
+                        .map(|kind| Yaml::str(*kind))
+                        .collect(),
+                ),
+            )]),
+        ),
+        ("workflow_dispatch".to_owned(), Yaml::Map(Vec::new())),
+    ])
+}
 
 pub(super) fn render(
     request: &Schema2WorkflowRequest,
@@ -68,26 +96,9 @@ pub(super) fn render(
         GATHER_JOB_ID.to_owned(),
         routing::gather_job(&request.control_runner(GATHER_JOB_ID)?, plan)?,
     ));
-    Ok(Yaml::Map(vec![
+    let mut document = Yaml::Map(vec![
         ("name".to_owned(), Yaml::str("Source qualification")),
-        (
-            "on".to_owned(),
-            Yaml::Map(vec![
-                (
-                    "pull_request".to_owned(),
-                    Yaml::Map(vec![(
-                        "types".to_owned(),
-                        Yaml::Seq(
-                            crate::render::EXPECTED_PR_TYPES
-                                .iter()
-                                .map(|kind| Yaml::str(*kind))
-                                .collect(),
-                        ),
-                    )]),
-                ),
-                ("workflow_dispatch".to_owned(), Yaml::Map(Vec::new())),
-            ]),
-        ),
+        ("on".to_owned(), triggers()),
         ("permissions".to_owned(), read_permissions()),
         (
             "concurrency".to_owned(),
@@ -100,7 +111,17 @@ pub(super) fn render(
             ]),
         ),
         ("jobs".to_owned(), Yaml::Map(jobs)),
-    ]))
+    ]);
+    crate::pr_ci::apply(
+        &mut document,
+        request.pr_ci,
+        crate::pr_ci::PrCiShape {
+            quick: &SOURCE_QUALIFICATION_JOBS,
+            claim: false,
+            merge_group: false,
+        },
+    )?;
+    Ok(document)
 }
 
 fn read_permissions() -> Yaml {
