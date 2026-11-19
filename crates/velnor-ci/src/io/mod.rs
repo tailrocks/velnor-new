@@ -264,21 +264,12 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Cache(CacheCommand::Budget(args)) => cache_api::run_budget(&args),
         Command::Restored(args) => small::run_restored(args),
         Command::ValidateArtifactId => small::run_validate_artifact_id(),
-        Command::InstallGh(args) => small::run_install_gh(&args),
-        Command::StageBundle => small::run_stage_bundle(),
         Command::Run(_) | Command::Sources(_) => {
             Err(CiError::new("run and sources are handled before commands"))
         }
         Command::LaneGuard(_) => Err(CiError::new("lane-guard is handled before commands")),
         Command::TestGroups(_) => Err(CiError::new("test-groups is handled before commands")),
     }
-}
-
-pub(super) fn env_path(variable: &str) -> Result<std::path::PathBuf, CiError> {
-    std::env::var_os(variable)
-        .filter(|value| !value.is_empty())
-        .map(std::path::PathBuf::from)
-        .ok_or_else(|| CiError::new(format!("{variable} is not set")))
 }
 
 fn now_seconds() -> i64 {
