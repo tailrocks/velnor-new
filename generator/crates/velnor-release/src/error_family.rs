@@ -9,6 +9,7 @@ pub enum FamilyError {
     TagWithPackage { template: String },
     WithoutBinaries,
     BinaryReleasedByReleasePlz { package: String },
+    Unsupported { key: &'static str },
 }
 
 impl fmt::Display for FamilyError {
@@ -29,6 +30,10 @@ impl fmt::Display for FamilyError {
             Self::BinaryReleasedByReleasePlz { package } => write!(
                 f,
                 ".velnor/release.toml: binary {package} is released by release-plz under its own tag; with family_tag set, give it a [[package]] with release = false in release-plz.toml so that the family tag is its only tag"
+            ),
+            Self::Unsupported { key } => write!(
+                f,
+                ".velnor/release.toml: family_tag does not support {key} yet; remove it or release the binaries under their own tags"
             ),
         }
     }

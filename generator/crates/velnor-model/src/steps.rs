@@ -4,6 +4,7 @@
 use crate::cache::CacheKey;
 use crate::helper::HelperRelease;
 use crate::ids::{JobId, RepoPath, RootSlug};
+use crate::lint::LintCommand;
 use crate::plan::CargoCommand;
 use crate::verdict::VerdictSpec;
 
@@ -32,6 +33,8 @@ pub enum StepKind {
     InstallTools {
         only: Option<String>,
     },
+    InstallMise,
+    Lint(LintCommand),
     CacheRestore(CacheKey),
     CacheSave(CacheKey),
     RestoredTargets {
@@ -42,6 +45,10 @@ pub enum StepKind {
     SourcesFetch {
         lane: RootSlug,
         position: usize,
+    },
+    SourcesFetchAll {
+        lane: RootSlug,
+        manifests: Vec<RepoPath>,
     },
     CacheDecide {
         manifests: Vec<RepoPath>,
@@ -70,11 +77,25 @@ pub enum StepKind {
     },
     Cargo(CargoCommand),
     Helper(HelperCommand),
+    TestGroupsCheck(Vec<GroupFilter>),
     InputsSave(RepoPath),
     InputsRestore(RepoPath),
     CratesMirror(crate::repo::CratesMirror),
+    PrivateCheck {
+        cached: Vec<crate::ids::RootSlug>,
+    },
+    PrivateToken {
+        sources: crate::repo::PrivateSources,
+        cached: Vec<crate::ids::RootSlug>,
+    },
+    PrivateFetch {
+        manifests: Vec<RepoPath>,
+        cached: Vec<crate::ids::RootSlug>,
+    },
+    MbxRemote,
     MbxStore,
     MbxSeed,
+    ToolsLocal(ToolsLocalVerb),
     TestSetup {
         name: String,
         run: String,
@@ -83,6 +104,8 @@ pub enum StepKind {
     InstallHelper(HelperRelease),
     FailWhenANeedFailed,
     FailOnDraftRun,
+    DraftNotice,
+    ClearRunLabel,
     Verdict {
         spec: VerdictSpec,
         needs_max_bytes: usize,
@@ -101,6 +124,18 @@ pub enum StepKind {
     Budget {
         last: usize,
     },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GroupFilter {
+    pub name: String,
+    pub filter: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ToolsLocalVerb {
+    Restore,
+    Save,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -123,4 +158,5 @@ pub enum HelperCommand {
     CheckMetadata,
     Restored(BaseExpiry),
     InputsAudit,
+    MergeGroupPassed,
 }

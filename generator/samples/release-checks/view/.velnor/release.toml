@@ -1,0 +1,32 @@
+after = ["CI", "Rust CI"]
+
+[[binaries]]
+package = "app"
+platforms = ["linux-x64", "macos-arm64"]
+
+[[checks]]
+name = "Verify release inputs"
+run = "bash scripts/verify-release-inputs.sh"
+
+[[checks]]
+name = "Qualify linux"
+run = "bash scripts/qualify-linux.sh"
+before = "publish"
+artifacts = ["app-linux-x64"]
+[checks.permissions]
+actions = "read"
+
+[[checks]]
+name = "Qualify macOS"
+run = "bash scripts/qualify-macos.sh"
+before = "publish"
+artifacts = ["app-macos-arm64"]
+runs_on = "macos-15"
+timeout_minutes = 20
+
+[[checks]]
+name = "Candidate manifest"
+run = "bash scripts/candidate-manifest.sh"
+before = "publish"
+artifacts = ["app-linux-x64", "app-macos-arm64"]
+needs = ["Qualify linux", "Qualify macOS"]

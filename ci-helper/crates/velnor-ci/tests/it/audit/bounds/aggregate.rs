@@ -52,22 +52,22 @@ fn dep_info_budget_is_per_cargo_root() {
     repo.git(&["add", "--all"]);
 
     let mut index = 0;
-    // 7 MiB in each root: 14 MiB in total, above the old 8 MiB aggregate.
-    write_dep_info_files(&repo, "rust/target/debug", "app/src/lib.rs", 7, &mut index);
-    write_dep_info_files(&repo, "target-tools/debug", "src/main.rs", 7, &mut index);
+    // 60 MiB in each root: 120 MiB in total, above the 64 MiB aggregate.
+    write_dep_info_files(&repo, "rust/target/debug", "app/src/lib.rs", 60, &mut index);
+    write_dep_info_files(&repo, "target-tools/debug", "src/main.rs", 60, &mut index);
     let under_limit = audit(&repo, &["--write"]);
     assert!(under_limit.status.success(), "{under_limit:?}");
     let lock = repo.root().join(".velnor/rust-inputs.lock");
     let before = fs::read(&lock).unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(before, b"shared/greeting.txt\tapp\n");
 
-    // 9 MiB in one root is over its own limit even though the other holds 7.
-    write_dep_info_files(&repo, "rust/target/debug", "app/src/lib.rs", 2, &mut index);
+    // 65 MiB in one root is over its own limit even though the other holds 60.
+    write_dep_info_files(&repo, "rust/target/debug", "app/src/lib.rs", 5, &mut index);
     let over_limit = audit(&repo, &["--write"]);
     assert_eq!(over_limit.status.code(), Some(1), "{over_limit:?}");
     let error = String::from_utf8_lossy(&over_limit.stderr);
     assert!(
-        error.contains("target data of one Cargo root exceeds 8388608 bytes"),
+        error.contains("target data of one Cargo root exceeds 67108864 bytes"),
         "{error}"
     );
     assert_eq!(

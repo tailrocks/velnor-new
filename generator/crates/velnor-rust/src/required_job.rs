@@ -4,8 +4,8 @@
 use std::collections::BTreeSet;
 
 use velnor_model::{
-    CargoCommand, GateNeed, Job, JobCondition, JobId, RepoFacts, RootSlug, RustRoot, RustSelection,
-    Step, StepKind, VerdictJob, VerdictSpec, When,
+    CargoCommand, GateNeed, Job, JobCondition, JobId, PrCi, PrRun, RepoFacts, RootSlug, RustRoot,
+    RustSelection, Step, StepKind, VerdictJob, VerdictSpec, When,
 };
 
 use crate::harness::uses_nextest;
@@ -34,11 +34,22 @@ fn tests_lane(job: &Job) -> Option<RootSlug> {
 }
 
 fn conditions(job: &Job) -> Vec<JobCondition> {
-    let gate = job.gate.as_ref().and_then(|gate| match gate.need {
-        GateNeed::Selected => Some(JobCondition::Lane(gate.slug.clone())),
-        GateNeed::Policy => Some(JobCondition::Policy),
-        _ => None,
-    });
+    let gate: Vec<JobCondition> = job
+        .gate
+        .iter()
+        .flat_map(|gate| match gate.need {
+            GateNeed::Selected => vec![JobCondition::Lane(gate.slug.clone())],
+            GateNeed::Group => std::iter::once(JobCondition::Lane(gate.slug.clone()))
+                .chain(
+                    gate.group
+                        .iter()
+                        .map(|name| JobCondition::Group(gate.slug.clone(), name.clone())),
+                )
+                .collect(),
+            GateNeed::Policy => vec![JobCondition::Policy],
+            _ => Vec::new(),
+        })
+        .collect();
     let when = match job.when {
         When::FullAudit => Some(JobCondition::ScheduleOrDispatch),
         When::FullAuditOrPush => Some(JobCondition::ScheduleOrPushOrDispatch),
@@ -47,6 +58,7 @@ fn conditions(job: &Job) -> Vec<JobCondition> {
         When::DefaultBranchPush => Some(JobCondition::DefaultBranchPush),
         When::Success
         | When::NotCancelled
+        | When::NotCancelledPostMerge
         | When::Finalizer
         | When::SaveBase
         | When::SaveBaseDecided
@@ -56,6 +68,9 @@ fn conditions(job: &Job) -> Vec<JobCondition> {
         | When::SavingRun
         | When::Always
         | When::CacheDebug
+        | When::ClearRunLabel
+        | When::RestoreToolsUnlessLocal
+        | When::SaveToolsUnlessLocal
         | When::SaveToolsOnDefaultBranch => None,
     };
     let advisory = (job.id == crate::plan::BUDGET_JOB).then_some(JobCondition::Advisory);
@@ -99,24 +114,41 @@ pub(crate) fn verdict_job(
 ) -> Job {
     let gate = has_gate(facts);
     let steps: Vec<Step> = if gate {
-        let install = facts
-            .helper
-            .as_ref()
-            .map(|release| step(StepKind::InstallHelper(release.clone())));
+        let on_label = facts.config.pr_ci == PrCi::Label;
+        let strict = if on_label {
+            PrRun::Requested
+        } else {
+            PrRun::Always
+        };
+        let install = facts.helper.as_ref().map(|release| Step {
+            pr: strict,
+            ..step(StepKind::InstallHelper(release.clone()))
+        });
         let plan = if single { RUST_JOB } else { PLAN_JOB };
         install
             .into_iter()
-            .chain([step(StepKind::Verdict {
-                spec: spec(plan, jobs),
-                needs_max_bytes: needs_max_bytes(facts, jobs),
-            })])
+            .chain([Step {
+                pr: strict,
+                ..step(StepKind::Verdict {
+                    spec: spec(plan, jobs),
+                    needs_max_bytes: needs_max_bytes(facts, jobs),
+                })
+            }])
+            .chain(on_label.then(|| Step {
+                pr: PrRun::Unrequested,
+                ..step(StepKind::FailWhenANeedFailed)
+            }))
             .collect()
     } else {
         vec![step(StepKind::FailWhenANeedFailed)]
     };
     Job {
         name: Some(facts.config.required_check.clone()),
-        skip_on_draft: false,
+        pr: if facts.config.pr_ci == PrCi::Label {
+            PrRun::Related
+        } else {
+            PrRun::Always
+        },
         needs: jobs.iter().map(|job| job.id.clone()).collect(),
         when: When::Always,
         steps: draft_guard.into_iter().chain(steps).collect(),

@@ -3,11 +3,12 @@
 
 use std::error::Error;
 
-use velnor_gen::{expected_files, expected_with_notes};
+use velnor_gen::expected_with_notes;
 use velnor_model::RELEASE_WORKFLOW_PATH;
 use velnor_rust::LOCK_PATH;
 
 use crate::release_fixture::{APP, LOCK, Root, TOOLS, release_view, steps};
+use crate::release_unguarded::expected_release;
 use crate::release_yml_binaries::{job, permissions};
 use crate::yaml_tree::{Node, parse};
 
@@ -19,7 +20,7 @@ fn render_with(helper: &str, roots: &[Root], config: &str) -> Result<Node, Box<d
     let mut view = release_view(roots, Some(config))?;
     view.files
         .insert(LOCK_PATH, LOCK.replace("0.1.79", helper).into_bytes());
-    let text = expected_files(&view)?
+    let text = expected_release(&view)?
         .remove(&RELEASE_WORKFLOW_PATH)
         .ok_or("no release.yml")?;
     Ok(parse(&text)?)

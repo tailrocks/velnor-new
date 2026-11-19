@@ -3,7 +3,10 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_model::{GateNeed, JobCondition, JobId, RootSlug, VerdictSpec};
+use velnor_model::{
+    GateNeed, JobCondition, JobId, MERGE_GROUP_SKIP_OUTPUT, RootSlug, VerdictSpec,
+    group_output_name,
+};
 
 const SCHEDULE: &str = "schedule";
 const PUSH: &str = "push";
@@ -64,6 +67,9 @@ impl PlanOutput {
                             }
                         }
                     }
+                    JobCondition::Group(slug, name) => {
+                        flag(group_output_name(slug, name), "run", "skip")?
+                    }
                     JobCondition::Policy => {
                         let slug = RootSlug::from_static("policy");
                         let deny = flag(GateNeed::Deny.output_name(&slug), "run", "skip")?;
@@ -94,7 +100,9 @@ impl PlanOutput {
                 }
             }
         }
-        test_lanes.retain(|_, jobs| !jobs.is_empty());
+        let merge_group_ran = event == Some(PUSH)
+            && outputs.get(MERGE_GROUP_SKIP_OUTPUT).map(String::as_str) == Some("true");
+        test_lanes.retain(|_, jobs| !merge_group_ran && !jobs.is_empty());
         Ok(Self {
             planned,
             test_lanes,

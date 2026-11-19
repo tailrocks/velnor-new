@@ -18,8 +18,9 @@ pub use runners::{
     remove_runner,
 };
 pub use scale_set::{
-    ScaleSetById, ScaleSetByName, ScaleSetCreate, ScaleSetFound, create_runner_scale_set,
-    get_runner_scale_set, get_runner_scale_set_by_id,
+    ScaleSetById, ScaleSetByName, ScaleSetCreate, ScaleSetDelete, ScaleSetDeleteStatus,
+    ScaleSetFound, ScaleSetObserved, create_runner_scale_set, delete_runner_scale_set,
+    get_runner_scale_set, get_runner_scale_set_by_id, observe_runner_scale_set_by_id,
 };
 pub use token::{
     RegistrationScope, RegistrationToken, RegistrationTokenCall,
@@ -104,8 +105,20 @@ pub struct ScaleSetView {
     #[serde(default)]
     pub labels: Vec<Label>,
 
+    #[serde(default, rename = "runnerGroupId", alias = "RunnerGroupId")]
+    pub runner_group_id: Option<i64>,
+
     #[serde(rename = "runnerSetting", alias = "RunnerSetting")]
     pub runner_setting: RunnerSetting,
+}
+
+fn accept_scale_set_group(view: &ScaleSetView, requested_group: i64) -> Result<(), WireError> {
+    match view.runner_group_id {
+        Some(group) if requested_group > 0 && group != requested_group => {
+            Err(WireError::RegistrationRejected)
+        }
+        _ => Ok(()),
+    }
 }
 
 pub fn accept_scale_set(view: &ScaleSetView, expected_name: &str) -> Result<(), WireError> {
