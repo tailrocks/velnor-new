@@ -89,7 +89,7 @@ fn released_worker_may_reserve_again_with_a_new_intent() {
 }
 
 #[test]
-fn concurrent_reserve_and_release_keep_the_count_exact() {
+fn concurrent_reserves_after_releases_only_refill_the_released_slots() {
     let capacity = Arc::new(Mutex::new(Capacity::new(4)));
     for raw in 1..=4 {
         let mut guard = capacity.lock().expect("lock");
@@ -99,41 +99,52 @@ fn concurrent_reserve_and_release_keep_the_count_exact() {
         guard.store(worker(raw), cleaning()).expect("store");
     }
 
-    let mut handles = Vec::new();
-    for raw in 1..=4 {
-        let capacity = Arc::clone(&capacity);
-        handles.push(thread::spawn(move || {
-            for round in 0..50 {
-                let mut guard = capacity.lock().expect("lock");
-                let _ = guard.reserve(worker(raw), intent(100 + round), Epoch::new(2), 9, 9);
-            }
-        }));
+    let releases: Vec<_> = (1..=2)
+        .map(|raw| {
+            let capacity = Arc::clone(&capacity);
+            thread::spawn(move || {
+                capacity
+                    .lock()
+                    .expect("lock")
+                    .release(worker(raw), &proof())
+                    .expect("release original");
+            })
+        })
+        .collect();
+    for handle in releases {
+        handle.join().expect("release thread");
     }
-    for raw in 1..=2 {
-        let capacity = Arc::clone(&capacity);
-        handles.push(thread::spawn(move || {
-            capacity
-                .lock()
-                .expect("lock")
-                .release(worker(raw), &proof())
-                .expect("release original");
-        }));
-    }
-    for handle in handles {
-        handle.join().expect("thread");
+
+    let reserves: Vec<_> = (1..=4)
+        .map(|raw| {
+            let capacity = Arc::clone(&capacity);
+            thread::spawn(move || {
+                for round in 0..50 {
+                    let unique = 1000 * raw + round;
+                    let _ = capacity.lock().expect("lock").reserve(
+                        worker(raw),
+                        intent(unique),
+                        Epoch::new(2),
+                        9,
+                        9,
+                    );
+                }
+            })
+        })
+        .collect();
+    for handle in reserves {
+        handle.join().expect("reserve thread");
     }
 
     let guard = capacity.lock().expect("lock");
-    let released = [worker(1), worker(2)];
-    let mut live = 0;
-    for raw in 1..=4 {
-        let id = worker(raw);
-        if released.contains(&id) {
-            continue;
-        }
-        assert_eq!(guard.state(id), Some(&cleaning()));
-        live += 1;
+    for raw in 1..=2 {
+        assert!(matches!(
+            guard.state(worker(raw)),
+            Some(WorkerState::Reserved { .. })
+        ));
     }
-    assert!(guard.occupancy() >= live);
-    assert!(guard.occupancy() <= 4);
+    for raw in 3..=4 {
+        assert_eq!(guard.state(worker(raw)), Some(&cleaning()));
+    }
+    assert_eq!(guard.occupancy(), 4);
 }
