@@ -26,11 +26,6 @@ async fn scalar(path: &Path, query: &str) -> TestResult<i64> {
     Ok(rows.next().await?.ok_or("missing row")?.get::<i64>(0)?)
 }
 
-/// A journal in the shape the given schema version really had: v57 is the
-/// current shape without the table (the later steps drop and recreate their
-/// own objects, so they re-run cleanly), and v52 is the oldest
-/// shape this chain still starts from, built by the helper the v52 to v53
-/// migration tests use. Reopening it runs the real intermediate migrations.
 async fn journal_below_the_table(version: i64) -> TestResult<tempfile::TempDir> {
     let directory = tempfile::tempdir()?;
     let path = directory.path().join("journal.db");
