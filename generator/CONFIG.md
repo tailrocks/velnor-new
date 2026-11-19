@@ -179,7 +179,7 @@ The pinned velnor-ci reads `.velnor/rust-ci.toml` at run time and rejects a key 
 
 ## Unused dependencies
 
-The policy lane runs `cargo-machete` once from the repository root when the repository's `mise.toml` pins `cargo-machete`. It needs no `rust-ci.toml` entry. The pin is the opt-in, so the lane installs the tool through the same pinned mise path as every other tool.
+The policy lane runs `cargo-machete` once from the repository root when the repository's `mise.toml` pins `cargo-machete`. It needs no `rust-ci.toml` entry. The pin is the opt-in, so the lane installs the tool through the same pinned mise path as every other tool. `cargo machete` reads every `Cargo.toml` below the root, not only the workspace members, and it skips what `.gitignore` and `.ignore` exclude. A repository that tracks manifests which are not crates (test samples, fixtures) lists them in a root `.ignore`; velnor-new does so for `generator/samples/velnor-new/view/crates/`.
 ## Optional speed budget
 
 The new generator accepts a speed budget in `.velnor/rust-ci.toml`. It is off when the table is absent, and every key is off when it is `0`. The generator emits a `rust-budget` job when at least one key is set. The job runs on the scheduled full run when `full_run` is set, and on every push to the default branch when it is not. It never runs on a pull request. It runs after the required check has ended, also when a job before it was skipped, and only when the required check succeeded. The required check does not wait for it, so its failure never fails the required check. A run that failed the budget is not a sample for the next run, so a breach clears with the next run that is fast again.
