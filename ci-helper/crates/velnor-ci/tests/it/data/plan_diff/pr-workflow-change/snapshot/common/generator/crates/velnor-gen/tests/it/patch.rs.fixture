@@ -1,0 +1,16 @@
+            "[workspace]\n\n[patch.crates-io]\nmid = { path = \"../vendor/./mid\" }\nalias-patch = { package = \"alias\", path = \"../vendor/alias\" }\n",
+        ),
+        (
+            ".cargo/config.toml",
+                "[package]\nname = \"mid\"\n\n[dependencies]\nbase = { path = \"../../b/base\" }\n",
+            ),
+        ],
+    )?;
+    for (folder, expected) in [("../vendor/mid", true), ("../../outside", false)] {
+        let manifest = format!("[patch.crates-io]\nmid = {{ path = \"{folder}\" }}\n");
+        let facts = detect(&two_roots(&[("a/Cargo.toml", &manifest)])?)?;
+        let dependencies = &facts.rust_roots[0].members[0].dependencies;
+        "[patch.crates-io]\nmid = { path = \"../../outside\" }\n",
+    ] {
+        detect(&two_roots(&[("a/Cargo.toml", text)])?)?;
+    }

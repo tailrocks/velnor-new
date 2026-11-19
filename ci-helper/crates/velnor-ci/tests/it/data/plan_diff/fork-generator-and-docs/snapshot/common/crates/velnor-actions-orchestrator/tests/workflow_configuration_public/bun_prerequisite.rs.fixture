@@ -1,0 +1,14 @@
+        include_str!("../../../../mise.toml"),
+    )?;
+    fs::write(
+        root.join("mise.lock"),
+        include_str!("../../../../mise.lock"),
+    )?;
+    Ok(())
+}
+#[path = "bun_prerequisite_cache.rs"]
+mod cache;
+
+#[path = "bun_prerequisite_contract.rs"]
+mod contract;
+

@@ -1,0 +1,8 @@
+        .any(|segment| segment.is_empty() || segment == "." || segment == "..")
+    {
+        return Err(observation_identity(
+            "unit_observation.member_name",
+        || value.contains("..")
+    {
+        return Err(observation_identity(
+            "unit_observation.observation_session_id",

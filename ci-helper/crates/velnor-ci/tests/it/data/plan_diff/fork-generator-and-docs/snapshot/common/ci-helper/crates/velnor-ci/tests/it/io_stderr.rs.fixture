@@ -1,0 +1,4 @@
+        .current_dir(repo.root())
+        .args(["inputs", "audit"])
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));

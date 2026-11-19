@@ -1,0 +1,6 @@
+const EXECUTOR_TEMPLATE: &str = include_str!("native_helper/source_preview_exec.py");
+const SETUP: &str = include_str!("native_helper/source_preview_setup.py");
+const LOADER: &str = include_str!("native_helper/source_preview_loader.py");
+
+fn executor() -> &'static str {
+    static EXECUTOR: OnceLock<String> = OnceLock::new();

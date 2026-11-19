@@ -1,0 +1,18 @@
+#[path = "fixture/barriers.rs"]
+mod barriers;
+#[path = "fixture/http.rs"]
+mod http;
+#[path = "fixture/initializer.rs"]
+mod initializer;
+
+pub(crate) use barriers::{CreateBarrier, DeleteBarrier};
+        include!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/src/launch/jit_conflict/tests/binding.rs"
+        ));
+    }
+        include!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/src/launch/jit_conflict/tests/storage_seed.rs"
+        ));
+    }

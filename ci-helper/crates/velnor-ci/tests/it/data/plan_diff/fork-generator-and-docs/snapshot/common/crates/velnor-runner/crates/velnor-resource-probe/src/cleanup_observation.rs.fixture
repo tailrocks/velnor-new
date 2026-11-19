@@ -1,0 +1,10 @@
+                || part == ".."
+                || part.bytes().any(|byte| {
+                    !(byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-' | b'.'))
+                })
+        let parent = current.as_ref().unwrap_or(root);
+        match openat(
+            parent,
+            component,
+            OFlags::PATH | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC,
+            Mode::empty(),

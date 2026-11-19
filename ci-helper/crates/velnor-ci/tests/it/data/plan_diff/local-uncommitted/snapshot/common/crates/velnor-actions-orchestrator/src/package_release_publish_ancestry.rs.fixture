@@ -1,0 +1,12 @@
+        api.get_json(&api.route(&format!("compare/{base}...{head}?per_page=1&page=2")))?;
+    let reported_base = response.pointer("/base_commit/sha").and_then(Value::as_str);
+    let merge_base = response
+        .pointer("/merge_base_commit/sha")
+                    .any(|parent| parent.get("sha").and_then(Value::as_str) == Some(base))
+            })
+        {
+            return Err(internal("package_publish_preview_compare_head_mismatch"));
+        api.get_json(&api.route(&format!("compare/{base}...{head}?per_page=1&page={count}")))?;
+    if response.pointer("/commits/0/sha").and_then(Value::as_str) != Some(head) {
+        return Err(internal("package_publish_preview_compare_head_mismatch"));
+    }

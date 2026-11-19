@@ -1,0 +1,4 @@
+        if root.split('/').any(|segment| segment == "..") {
+            return Err(ContractError::identity("tofu_cli_argv", "traversal_root"));
+        }
+        argv.push(OsString::from("-chdir"));

@@ -1,0 +1,9 @@
+            .all(|part| !part.is_empty() && part != "." && part != "..")
+        && Path::new(path)
+            .components()
+            .all(|component| matches!(component, Component::Normal(part) if !part.is_empty()))
+        .parent()
+        .and_then(Path::parent)
+        .filter(|home| home.is_absolute())
+        .ok_or_else(|| internal("container_runtime_home"))
+}

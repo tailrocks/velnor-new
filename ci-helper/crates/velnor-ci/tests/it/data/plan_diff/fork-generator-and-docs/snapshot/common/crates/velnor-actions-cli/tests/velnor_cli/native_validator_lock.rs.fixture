@@ -1,0 +1,16 @@
+    let mut parsed: toml::Value = toml::from_str(include_str!("../../../../mise.lock"))?;
+    for name in ["jactionlint", "shellcheck"] {
+        parsed["tools"][name][0]["platforms.linux-x64"]["url"] =
+            toml::Value::String("https://127.0.0.1:1/archive.tar.gz".into());
+    let version = concat!("velnor-actions ", env!("CARGO_PKG_VERSION"));
+    fs::write(
+        evidence.join("cli-identity.txt"),
+        format!(
+        .current_dir(&checkout)
+        .env_remove("HTTPS_PROXY")
+        .env_remove("https_proxy")
+        .env_remove("ALL_PROXY")
+        .current_dir(root)
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_AUTHOR_NAME", "Fixture")

@@ -1,0 +1,4 @@
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
+    let mut known = workflow_names(&root.join(".github/workflows"))?;
+    known.insert("Rust CI".to_owned());
+    let mut checked = 0;

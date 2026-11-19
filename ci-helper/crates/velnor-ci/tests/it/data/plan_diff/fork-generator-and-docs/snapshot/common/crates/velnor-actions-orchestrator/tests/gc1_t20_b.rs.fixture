@@ -1,0 +1,8 @@
+        ("escape", vec![raw_tar_member("../evil", b'0', "", b"evil")]),
+        ("absolute", vec![raw_tar_member("/evil", b'0', "", b"evil")]),
+        (
+            "abs-link",
+            vec![raw_tar_member("state/build/evil", b'2', "../../evil", &[])],
+        ),
+    ];
+    for (case, members) in &raw_hostile {

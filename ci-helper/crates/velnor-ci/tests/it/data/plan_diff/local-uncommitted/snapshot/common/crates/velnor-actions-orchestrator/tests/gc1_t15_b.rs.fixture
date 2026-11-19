@@ -1,0 +1,8 @@
+    for id in ["ghost", "../escape", "", ".", ".."] {
+        if qualified.qualified_shared_tool_home(id).is_ok()
+            || qualified.qualified_shared_prefix(id).is_ok()
+            || qualified
+    "../escape".clone_into(&mut escaping.id);
+    if escaping.validate("qualified_tools", &escaping.id).is_ok() {
+        return Err(fail("escaping tool identity validated"));
+    }

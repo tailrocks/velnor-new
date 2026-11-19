@@ -1,0 +1,8 @@
+        concat!(
+            "set -eu; PATH=\"{}\"; export PATH; ",
+            "f=\"$RUNNER_TEMP/velnor/ledger-cli/velnor-actions\"; ",
+            "[ -f \"$f\" ] && [ ! -L \"$f\" ]; ",
+        concat!(
+            "set -eu; ",
+            "bin=\"$CARGO_TARGET_DIR/debug/velnor-actions\"; ",
+            "smoke=\"$RUNNER_TEMP/velnor/ledger-cli-smoke.txt\"; ",

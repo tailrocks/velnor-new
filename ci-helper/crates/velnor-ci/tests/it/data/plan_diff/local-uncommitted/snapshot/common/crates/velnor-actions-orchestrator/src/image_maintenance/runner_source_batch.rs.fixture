@@ -1,0 +1,7 @@
+                .any(|part| part.is_empty() || part == "." || part == "..")
+        {
+            return Err(internal("runner_image_source_path"));
+        }
+#[path = "runner_source_batch_tests.rs"]
+mod tests;
+

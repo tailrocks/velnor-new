@@ -1,0 +1,16 @@
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
+}
+
+fn git(dir: &Path, args: &[&str]) -> Result<String, Box<dyn Error>> {
+        .current_dir(dir)
+        .args(["-c", "user.name=Test", "-c", "user.email=test@example.com"])
+        .args(args)
+        .output()?;
+        .current_dir(dir)
+        .args(["rev-parse", rev])
+        .output()
+        .ok()
+        .current_dir(&clone)
+        .env("GITHUB_EVENT_NAME", "pull_request")
+        .env("GITHUB_SHA", &merged)
+        .env("GITHUB_REPOSITORY", "tailrocks/velnor-new")

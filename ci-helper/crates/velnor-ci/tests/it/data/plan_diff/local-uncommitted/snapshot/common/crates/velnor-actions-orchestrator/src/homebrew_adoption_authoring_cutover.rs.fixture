@@ -1,0 +1,10 @@
+        &std::env::current_dir().map_err(|_| internal("homebrew_adoption_current_directory"))?,
+    )?;
+    let (parent, target) = output::fresh_output_path(output_dir, &root)?;
+    let transition = seed::load_transition(transition_id)?;
+    let manifest =
+        crate::safe_read::read_event_file(manifest_path, MAX_MANIFEST_BYTES)?.into_bytes();
+        &parent,
+        &target,
+        &transition.transition_id,
+        &tip,

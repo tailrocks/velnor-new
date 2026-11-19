@@ -1,0 +1,8 @@
+        if std::path::Path::new(profile.socket_path()).parent()
+            != Some(std::path::Path::new(&sdk.runtime_dir))
+        {
+            return Err(bad(
+                && part != ".."
+                && part
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'))

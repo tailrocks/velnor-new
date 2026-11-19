@@ -1,0 +1,8 @@
+        && !path.split('/').any(|seg| seg.is_empty() || seg == "..")
+        && !path.contains("${{");
+    if ok {
+        Ok(())
+        && !dir.split('/').any(|seg| seg.is_empty() || seg == "..");
+    if ok {
+        Ok(())
+    } else {

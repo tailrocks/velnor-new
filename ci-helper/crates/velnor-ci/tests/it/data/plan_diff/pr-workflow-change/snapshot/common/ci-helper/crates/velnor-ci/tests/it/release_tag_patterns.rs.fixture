@@ -1,0 +1,4 @@
+        .current_dir(&dir)
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let _ignored = std::fs::remove_dir_all(&dir);

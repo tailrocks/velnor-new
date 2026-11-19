@@ -1,0 +1,4 @@
+            r#"[ "$pinned" = 0 ] || {{ set --; for e in "$rh/toolchains"/* "$rh/toolchains"/.[!.]* "$rh/toolchains"/..?*; do if [ -e "$e" ] || [ -L "$e" ]; then set -- "$@" "$e"; fi; done; {entries}; }}"#
+        ),
+    ]
+}
