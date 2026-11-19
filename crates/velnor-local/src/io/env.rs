@@ -150,6 +150,7 @@ impl<E: Engine> Environment<E> {
         local: &LocalCi,
     ) -> io::Result<Addresses> {
         super::pair::private_folder(&self.dir.join("keys")).await?;
+        super::pair::private_folder(&self.dir.join("authority")).await?;
         for directory in ["cache", "api"] {
             fs::create_dir_all(self.dir.join(directory)).await?;
         }
@@ -165,10 +166,12 @@ impl<E: Engine> Environment<E> {
         let der = mount("keys/token.pub.der", "/keys/token.pub.der:ro");
         let control = mount("keys/control", "/keys/control:ro");
         let data = mount("cache", "/data");
+        let ledger = mount("authority", "/authority:ro");
         self.side("", args.containers(args.runners), local).await?;
         let stub = words(
             "api-stub --listen 0.0.0.0:80 --repo /repo --dir /api --cache-dir /data --standin runner-server:80 \
-             --control-listen 0.0.0.0:81 --control-token /keys/control --token-key /keys/token.pub.der",
+             --control-listen 0.0.0.0:81 --control-token /keys/control --token-key /keys/token.pub.der \
+             --ledger /authority",
         );
         let mounts = [
             "-v",
@@ -181,6 +184,8 @@ impl<E: Engine> Environment<E> {
             &data,
             "-v",
             &control,
+            "-v",
+            &ledger,
             LOCAL_IMAGE,
         ];
         let branch = ["--default-branch", &args.default_branch];
