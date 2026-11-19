@@ -19,6 +19,7 @@ fn is_check(kind: &StepKind) -> bool {
                     | CargoCommand::CheckAlone { .. }
                     | CargoCommand::NextestRun { .. }
                     | CargoCommand::NextestFeatures { .. }
+                    | CargoCommand::LaneGuard { .. }
                     | CargoCommand::NextestRunArchive { .. }
                     | CargoCommand::TestTarget { .. }
                     | CargoCommand::Doctest

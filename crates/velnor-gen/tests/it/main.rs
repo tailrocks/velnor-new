@@ -73,6 +73,7 @@ mod helper_source;
 mod helper_startup;
 mod helper_tool_paths;
 mod helper_workflow_size;
+mod lane_guard_steps;
 mod mbx_store;
 
 mod inputs;

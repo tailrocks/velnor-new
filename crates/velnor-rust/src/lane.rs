@@ -117,7 +117,10 @@ impl Lane {
             | CargoCommand::TestTarget { ref package, .. } => {
                 Some(self.package_gate(vec![package.clone()]))
             }
-            CargoCommand::NextestFeatures { ref packages, .. } if !packages.is_empty() => {
+            CargoCommand::NextestFeatures { ref packages, .. }
+            | CargoCommand::LaneGuard { ref packages, .. }
+                if !packages.is_empty() =>
+            {
                 Some(self.package_gate(packages.clone()))
             }
             _ => self.steps(),
