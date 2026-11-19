@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
 use std::fs::OpenOptions;
 use std::io::{Read, Write};
 use std::os::unix::process::CommandExt;
@@ -22,7 +21,7 @@ use crate::cli::RunArgs;
 use crate::setup::DoctestCount;
 use crate::stream::separate_group;
 use crate::tests_run::{
-    TestCounts, apply_runnable, list_argv, output_lines, runnable_matches, runs_nextest,
+    Listing, TestCounts, apply_runnable, list_argv, output_lines, runnable_matches, runs_nextest,
 };
 
 const TEMP_VARIABLE: &str = "RUNNER_TEMP";
@@ -78,7 +77,7 @@ fn open_log(path: &Path) -> std::io::Result<std::fs::File> {
 
 pub(super) fn run(args: &RunArgs) -> ExitCode {
     match execute(args) {
-        Ok(code) => code,
+        Ok(code) => ExitCode::from(code),
         Err((code, message)) => {
             eprintln!("velnor-ci: {message}");
             ExitCode::from(code)
@@ -86,7 +85,7 @@ pub(super) fn run(args: &RunArgs) -> ExitCode {
     }
 }
 
-fn execute(args: &RunArgs) -> Result<ExitCode, (u8, String)> {
+pub(super) fn execute(args: &RunArgs) -> Result<u8, (u8, String)> {
     let path = log_path()?;
     let started = Instant::now();
     let mut invocation =
@@ -162,9 +161,9 @@ fn execute(args: &RunArgs) -> Result<ExitCode, (u8, String)> {
         Some(error) if code == 0 => Err(write_error(error)),
         Some(error) => {
             eprintln!("velnor-ci: cannot write {}: {error}", path.display());
-            Ok(ExitCode::from(u8::try_from(code).unwrap_or(1)))
+            Ok(u8::try_from(code).unwrap_or(1))
         }
-        None => Ok(ExitCode::from(u8::try_from(code).unwrap_or(1))),
+        None => Ok(u8::try_from(code).unwrap_or(1)),
     }
 }
 
@@ -244,7 +243,7 @@ fn forward(mut signals: Signals, pid: Option<Pid>, own_group: bool) {
     });
 }
 
-fn list_matches(argv: &[String]) -> Option<BTreeMap<String, u64>> {
+fn list_matches(argv: &[String]) -> Option<Listing> {
     let argv = list_argv(argv)?;
     let mut command = Command::new(&argv[0]);
     command
