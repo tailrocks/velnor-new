@@ -190,7 +190,7 @@ struct PublicationGateState {
     release_second: bool,
 }
 
-const GATE_SAFETY_LIMIT: Duration = Duration::from_secs(600);
+const GATE_SAFETY_LIMIT: Duration = Duration::from_secs(300);
 
 impl PublicationGate {
     fn wait_for_second_build(&self) -> bool {
