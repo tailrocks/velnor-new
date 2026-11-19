@@ -14,7 +14,7 @@ use crate::plan::{job, step};
 const TRIM_JOB: JobId = JobId::from_static("rust-trim");
 
 const SAVING_HELPER: (u64, u64, u64) = (0, 1, 81);
-const SOURCES_FETCH_HELPER: (u64, u64, u64) = (0, 1, 85);
+const SOURCES_FETCH_HELPER: (u64, u64, u64) = (0, 1, 86);
 
 pub(crate) fn writes_base(facts: &RepoFacts) -> bool {
     facts.private_sources.is_none() && has_saving_helper(facts)
