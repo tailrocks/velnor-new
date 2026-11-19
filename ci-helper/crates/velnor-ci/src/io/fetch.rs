@@ -175,13 +175,12 @@ impl Server {
             format!("https://{authority}/"),
             format!("http://{authority}/"),
         ];
-        if !authority.contains(':') {
-            forms.extend([
-                format!("ssh://git@{authority}/"),
-                format!("ssh://{authority}/"),
-                format!("git@{authority}:"),
-            ]);
-        }
+        let host = authority.split(':').next().unwrap_or(authority);
+        forms.extend([
+            format!("ssh://git@{host}/"),
+            format!("ssh://{host}/"),
+            format!("git@{host}:"),
+        ]);
         Ok(Self {
             authority: authority.to_owned(),
             forms,

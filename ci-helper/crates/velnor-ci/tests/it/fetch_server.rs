@@ -243,3 +243,37 @@ fn a_rustup_proxy_whose_active_toolchain_is_a_path_runs_nothing_and_still_revoke
     assert_eq!(api.requests.lock().map_err(|e| e.to_string())?.len(), 1);
     Ok(())
 }
+
+#[test]
+fn a_server_with_a_web_port_still_has_its_ssh_forms_authenticated_to_that_port() -> TestResult {
+    let fixture = Fixture::new("fetch-ghes-port", 0)?;
+    let urls = [
+        "https://github.corp:8443/acme/private.git",
+        "ssh://git@github.corp/acme/private.git",
+        "ssh://github.corp/acme/private.git",
+        "git@github.corp:acme/private.git",
+        "https://github.corp/acme/other.git",
+    ];
+    fs::write(fixture.repo.root().join("urls"), urls.join(" "))?;
+    let api = serve(204)?;
+    let output = fixture.run_with(
+        &api,
+        Some(TOKEN),
+        None,
+        &["Cargo.toml"],
+        &[("VELNOR_SERVER_URL", "https://github.corp:8443")],
+    );
+    assert!(output.status.success(), "{output:?}");
+    let authenticated = format!("https://x-access-token:{TOKEN}@github.corp:8443/acme/private.git");
+    assert_eq!(
+        fixture.log("cargo.urls").lines().collect::<Vec<_>>(),
+        [
+            authenticated.as_str(),
+            authenticated.as_str(),
+            authenticated.as_str(),
+            authenticated.as_str(),
+            "https://github.corp/acme/other.git"
+        ]
+    );
+    Ok(())
+}
