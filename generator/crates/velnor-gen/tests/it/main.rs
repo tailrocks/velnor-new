@@ -69,6 +69,7 @@ mod no_programs;
 mod patch;
 mod pipeline;
 mod plan_job;
+mod plan_job_wait;
 mod policy_exceptions;
 mod release_branch_prefix;
 mod release_cargo_include;
