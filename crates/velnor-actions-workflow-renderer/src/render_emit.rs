@@ -97,7 +97,11 @@ fn emit_state_seal(
     let mbx_jobs = crate::mbx_gc_policy::jobs_with_mbx_objects(&sealed.jobs);
     let mut document = document::workflow_to_yaml(&sealed.ir, &sealed.shared, ctx, &mbx_jobs)?;
     let cache_outputs = crate::cache_plan_outputs::consumed(&sealed.jobs, false)?;
-    matrix::attach_state_seal_plan_outputs(&mut document, &cache_outputs)?;
+    let plan_attempt_read = sealed.jobs.iter().any(|(id, job)| {
+        crate::document_env::plan_attempt_value(id, job, &sealed.jobs)
+            .is_some_and(|value| value.contains("needs.plan.outputs.plan_attempt"))
+    });
+    matrix::attach_state_seal_plan_outputs(&mut document, &cache_outputs, plan_attempt_read)?;
     let bytes = fallback::render_checked_workflow(
         STATE_SEAL_WORKFLOW_PATH,
         &document,
@@ -116,19 +120,24 @@ fn source_qualification_plan(
     ctx: &RenderContext,
 ) -> Result<Option<crate::source_qualification_plan::SourceQualificationPlan>, RenderError> {
     const CLI: &str = "rust-velnor-actions-cli";
-    let routes = match &ctx.lane_plan {
-        Some(plan) => match plan.output_ids(CLI) {
-            Ok(routes) => routes,
-            Err(_) => return Ok(None),
-        },
-        None if jobs.contains_key(CLI) => vec![CLI.to_owned()],
-        None => return Ok(None),
+    let routes = if ctx.rust_ci {
+        let routes = match &ctx.lane_plan {
+            Some(plan) => match plan.output_ids(CLI) {
+                Ok(routes) => routes,
+                Err(_) => return Ok(None),
+            },
+            None if jobs.contains_key(CLI) => vec![CLI.to_owned()],
+            None => return Ok(None),
+        };
+        if routes.is_empty() || routes.iter().any(|id| !jobs.contains_key(id)) {
+            return Err(RenderError::InvalidWorkflow(
+                "source_qualification_cli_route".to_owned(),
+            ));
+        }
+        routes
+    } else {
+        Vec::new()
     };
-    if routes.is_empty() || routes.iter().any(|id| !jobs.contains_key(id)) {
-        return Err(RenderError::InvalidWorkflow(
-            "source_qualification_cli_route".to_owned(),
-        ));
-    }
     let crate::yaml::Yaml::Map(root) = document else {
         return Err(RenderError::InvalidWorkflow(
             "source_qualification_plan_document".to_owned(),

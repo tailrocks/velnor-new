@@ -137,6 +137,8 @@ mod preview_gh_lane;
 mod release_bun_prerequisite;
 #[path = "workflow_configuration_public/report_upload.rs"]
 mod report_upload;
+#[path = "workflow_configuration_public/rust_ci_off.rs"]
+mod rust_ci_off;
 #[path = "workflow_configuration_public/rust_tree_pin_jobs.rs"]
 mod rust_tree_pin_jobs;
 #[path = "workflow_configuration_public/rust_tree_pin_rendered.rs"]

@@ -144,7 +144,7 @@ fn crate_lines(out: &mut String, prep: &GenerationPreparation, jobs: &BTreeMap<S
             &format!("      Timeout: {minutes} minutes per crate job"),
         );
     }
-    let kinds = present_kinds(&prep.discovery.proposals);
+    let kinds = present_kinds(&prep.ci_discovery.proposals);
     if !kinds.is_empty() {
         push(out, &format!("      Obligations: {}", kinds.join(" -> ")));
     }
@@ -208,7 +208,7 @@ fn critical_path_lines(out: &mut String, prep: &GenerationPreparation) {
 }
 
 fn clippy_lines(out: &mut String, prep: &GenerationPreparation) {
-    let memory = &prep.discovery.clippy_memory;
+    let memory = &prep.ci_discovery.clippy_memory;
     push(
         out,
         &format!(
@@ -221,10 +221,10 @@ fn clippy_lines(out: &mut String, prep: &GenerationPreparation) {
 
 fn cache_layers(prep: &GenerationPreparation) -> String {
     let mut layers = vec!["Mise tools"];
-    if !crate::source_prep::lockful_roots(&prep.root, &prep.discovery.workspaces).is_empty() {
+    if !crate::source_prep::lockful_roots(&prep.root, &prep.ci_discovery.workspaces).is_empty() {
         layers.push("Cargo sources");
     }
-    if prep.discovery.workspaces.iter().any(|workspace| {
+    if prep.ci_discovery.workspaces.iter().any(|workspace| {
         workspace.profile.compile_driver == velnor_actions_rust::CompileDriver::Mbx
     }) {
         layers.push("MBX compilation objects");
@@ -233,7 +233,7 @@ fn cache_layers(prep: &GenerationPreparation) -> String {
 }
 
 fn ineligible_lines(out: &mut String, prep: &GenerationPreparation) {
-    for task in &prep.discovery.proposals {
+    for task in &prep.ci_discovery.proposals {
         if task.no_targets {
             push(
                 out,
@@ -247,7 +247,7 @@ fn ineligible_lines(out: &mut String, prep: &GenerationPreparation) {
 }
 
 fn feature_lines(out: &mut String, prep: &GenerationPreparation) {
-    for fallback in &prep.discovery.feature_fallbacks {
+    for fallback in &prep.ci_discovery.feature_fallbacks {
         let requested = fallback.requested.join(",");
         if fallback.used_defaults() {
             push(
@@ -302,10 +302,10 @@ fn migration_section(out: &mut String) {
 fn recommendations_section(out: &mut String, prep: &GenerationPreparation) {
     out.push('\n');
     push(out, "Recommendations");
-    if prep.discovery.recommendations.is_empty() {
+    if prep.ci_discovery.recommendations.is_empty() {
         push(out, "  (none)");
     }
-    for recommendation in &prep.discovery.recommendations {
+    for recommendation in &prep.ci_discovery.recommendations {
         push(out, &format!("  {recommendation}"));
     }
 }

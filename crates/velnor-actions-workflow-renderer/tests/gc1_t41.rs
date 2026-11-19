@@ -131,6 +131,7 @@ fn context(jobs: &BTreeMap<String, Job>) -> Result<RenderContext, Box<dyn Error>
         max_parallel_jobs: config.workflow.max_parallel_jobs,
         non_inputs: velnor_actions_contract::NonInputs::default(),
         pr_ci: velnor_actions_contract::PrCiMode::Off,
+        rust_ci: true,
     })
 }
 

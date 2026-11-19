@@ -61,6 +61,7 @@ pub struct RenderContext {
     pub max_parallel_jobs: u32,
     pub non_inputs: velnor_actions_contract::NonInputs,
     pub pr_ci: velnor_actions_contract::PrCiMode,
+    pub rust_ci: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

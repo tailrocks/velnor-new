@@ -84,23 +84,23 @@ fn plan_internal_inner(
     let mut warnings = Vec::new();
     warnings.extend(crate::evidence::workspace_drift_warnings(
         &prep.root,
-        &prep.discovery.workspaces,
+        &prep.ci_discovery.workspaces,
         &prep.runner_label,
     ));
-    let universe = select_universe(&prep.discovery, &mut warnings)?;
+    let universe = select_universe(&prep.ci_discovery, &mut warnings)?;
     let mut evidence = ChangeEvidence::default();
     let changed = classify_changed(
         &prep.root,
         request.event,
         request.base.as_deref(),
         &request.head,
-        &prep.discovery,
+        &prep.ci_discovery,
         &mut warnings,
         &mut evidence,
     );
     let mut plan = build_plan(
         &request,
-        &prep.discovery,
+        &prep.ci_discovery,
         &prep.root,
         prep.config.workflow.policy,
         &universe,
@@ -116,7 +116,7 @@ fn plan_internal_inner(
     plan.jobs.extend(crate::select::images::dispositions(
         &prep.root,
         &prep.config.images,
-        &prep.discovery,
+        &prep.ci_discovery,
         request.event,
         changed.as_ref(),
         &evidence,
@@ -128,7 +128,7 @@ fn plan_internal_inner(
     ] {
         plan.jobs.extend(dispositions(
             &prep.config,
-            &prep.discovery,
+            &prep.ci_discovery,
             request.event,
             changed.as_ref(),
             &evidence,
@@ -136,7 +136,7 @@ fn plan_internal_inner(
     }
     plan.jobs.extend(crate::select::bun::dispositions(
         &prep.config,
-        &prep.discovery,
+        &prep.ci_discovery,
         request.event,
         changed.as_ref(),
         &evidence,

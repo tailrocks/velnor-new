@@ -35,6 +35,7 @@ pub(crate) struct WorkflowBuildInput<'a> {
     pub(crate) label: &'a str,
     pub(crate) discovery: &'a Discovery,
     pub(crate) fetch_roots: &'a [String],
+    pub(crate) ledger_fetch_roots: &'a [String],
     pub(crate) consumer_release_version: &'a str,
     pub(crate) published_generator_lock: Option<&'a GeneratorLock>,
     pub(crate) approved_release:
@@ -196,11 +197,13 @@ fn prepare_workflow(input: &WorkflowBuildInput<'_>) -> Result<PreparedWorkflow, 
     wire_w1::vet_step_syntax(StepSyntax::JobMatrix)?;
     wire_w1::vet_step_syntax(StepSyntax::NativeParallelism)?;
     wire_w1::vet_step_syntax(StepSyntax::CacheMode)?;
-    crate::rust_suites_emit::validate_suites_against_repo(
-        input.root,
-        input.config,
-        input.discovery,
-    )?;
+    if input.config.stacks.rust_ci_enabled() {
+        crate::rust_suites_emit::validate_suites_against_repo(
+            input.root,
+            input.config,
+            input.discovery,
+        )?;
+    }
     let catalog = input.catalog;
     let policy = input.config.workflow.policy;
     let (report_helper_version, acquire) = controller_acquisition(input, policy)?;
@@ -317,6 +320,7 @@ fn build_workflow_jobs(
         input.discovery,
         &prepared.catalog,
         input.fetch_roots,
+        input.ledger_fetch_roots,
         prepared.acquire.as_ref(),
         &prepared.report_helper_version,
         prepared.generator_version,

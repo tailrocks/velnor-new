@@ -78,6 +78,7 @@ pub(super) fn render_context(
             .as_ref()
             .map(|execution| execution.pr_ci)
             .unwrap_or_default(),
+        rust_ci: input.config.stacks.rust_ci_enabled(),
     })
 }
 

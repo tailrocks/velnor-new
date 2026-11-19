@@ -21,10 +21,12 @@ pub(super) fn ledger_cli_job(
     private: Option<&PrivateWiring>,
 ) -> Result<Job, OrchestratorError> {
     let &CrateJobInputs {
-        label, fetch_roots, ..
+        label,
+        ledger_fetch_roots,
+        ..
     } = input;
     let catalog = &input.catalog.clone().with_rust_mr_boxington(false);
-    let roots = crate::source_prep::crate_fetch_roots("", fetch_roots, false);
+    let roots = crate::source_prep::crate_fetch_roots("", ledger_fetch_roots, false);
     if roots.is_empty() {
         return Err(OrchestratorError::Contract {
             problem: "ledger_cli_requires_root_cargo_lock".to_owned(),

@@ -283,6 +283,7 @@ pub(crate) fn attach_plan_outputs(
 pub(crate) fn attach_state_seal_plan_outputs(
     document: &mut Yaml,
     cache: &[(String, String)],
+    plan_attempt_read: bool,
 ) -> Result<(), RenderError> {
     let Yaml::Map(entries) = document else {
         return Err(matrix_invalid("matrix_without_document"));
@@ -294,8 +295,14 @@ pub(crate) fn attach_state_seal_plan_outputs(
     else {
         return Err(matrix_invalid("matrix_without_jobs"));
     };
-    let mut outputs = vec![plan_attempt_output()];
+    let mut outputs = Vec::new();
+    if plan_attempt_read {
+        outputs.push(plan_attempt_output());
+    }
     outputs.extend(crate::cache_plan_outputs::output_entries(cache));
+    if outputs.is_empty() {
+        return Ok(());
+    }
     insert_job_key(jobs, PLAN_JOB_ID, "outputs", Yaml::Map(outputs))
 }
 
