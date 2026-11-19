@@ -173,7 +173,7 @@ fn cargo_command(
             format!("cargo build --workspace --all-targets --locked{cargo}"),
             vec![],
         ),
-        CargoCommand::Deny { manifest } => deny(manifest),
+        CargoCommand::Deny { manifest, config } => deny(manifest, config.as_ref()),
         CargoCommand::Machete => ("Unused dependencies".into(), "cargo machete".into(), vec![]),
     }
 }
@@ -358,22 +358,26 @@ fn test_selector(kind: TargetKind, target: &TargetName) -> String {
     }
 }
 
-fn deny(manifest: &RepoPath) -> (String, String, Vec<(String, Value)>) {
-    match manifest.parent() {
-        None => (
-            "Dependency policy".into(),
-            "cargo-deny --locked check".into(),
-            vec![],
-        ),
-        Some(directory) => (
-            format!("Dependency policy ({directory})"),
-            format!(
-                "cargo-deny --manifest-path '{}' --locked check",
-                manifest.as_str().replace('\'', "'\\''")
-            ),
-            vec![],
-        ),
-    }
+fn deny(manifest: &RepoPath, config: Option<&RepoPath>) -> (String, String, Vec<(String, Value)>) {
+    let directory = manifest.parent();
+    let name = directory.as_ref().map_or_else(
+        || "Dependency policy".to_owned(),
+        |directory| format!("Dependency policy ({directory})"),
+    );
+    let manifest_arg = directory.map_or_else(String::new, |_| {
+        format!(
+            " --manifest-path '{}'",
+            manifest.as_str().replace('\'', "'\\''")
+        )
+    });
+    let config_arg = config.map_or_else(String::new, |path| {
+        format!(" --config '{}'", path.as_str().replace('\'', "'\\''"))
+    });
+    (
+        name,
+        format!("cargo-deny{manifest_arg}{config_arg} --locked check"),
+        vec![],
+    )
 }
 
 pub(crate) fn reports_tests(command: &CargoCommand) -> bool {
