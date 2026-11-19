@@ -31,11 +31,8 @@ fn suggestions(view: &RepoView) -> Result<Vec<String>, Box<dyn std::error::Error
 }
 
 #[test]
-fn private_registries_and_private_git_hosts_suggest_the_section() -> TestResult {
+fn private_github_sources_suggest_the_section() -> TestResult {
     let cases = [
-        ("registry+https://registry.example.invalid/index", None),
-        ("sparse+https://registry.example.invalid/index/", None),
-        ("git+https://git.example.invalid/acme/lib?rev=1#abc", None),
         ("git+ssh://git@github.com/other/lib#abc", None),
         (
             "git+https://github.com/acme/shared-lib?branch=main#abc",
@@ -47,6 +44,28 @@ fn private_registries_and_private_git_hosts_suggest_the_section() -> TestResult 
         assert_eq!(found.len(), 1, "{source}: {found:?}");
         assert!(found[0].contains("dep"), "{found:?}");
         assert!(found[0].contains("Cargo.lock"), "{found:?}");
+    }
+    Ok(())
+}
+
+#[test]
+fn sources_the_github_token_cannot_authenticate_are_not_told_to_add_the_section() -> TestResult {
+    let cases = [
+        "registry+https://registry.example.invalid/index",
+        "sparse+https://registry.example.invalid/index/",
+        "git+https://git.example.invalid/acme/lib?rev=1#abc",
+        "git+ssh://git@gitlab.com/acme/private#abc",
+    ];
+    for source in cases {
+        let view = with_source(source, None)?;
+        assert!(suggestions(&view)?.is_empty(), "{source}");
+        let notes = expected_with_notes(&view)?.1;
+        let found: Vec<_> = notes
+            .iter()
+            .filter(|note| note.contains("not a github.com repository"))
+            .collect();
+        assert_eq!(found.len(), 1, "{source}: {notes:?}");
+        assert!(found[0].contains("dep") && found[0].contains("Cargo.lock"));
     }
     Ok(())
 }
@@ -74,7 +93,7 @@ fn public_dependencies_and_configured_repositories_suggest_nothing() -> TestResu
 
 #[test]
 fn the_suggestion_names_the_key_names_and_holds_no_secret() -> TestResult {
-    let view = with_source("registry+https://registry.example.invalid/index", None)?;
+    let view = with_source("git+ssh://git@github.com/other/lib#abc", None)?;
     let found = suggestions(&view)?;
     let note = found.first().ok_or("no suggestion")?;
     for part in ["app_id", "private_key", "repositories", "vars.", "secrets."] {

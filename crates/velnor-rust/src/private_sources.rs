@@ -144,31 +144,31 @@ pub(crate) fn private_suggestion(
     config: &RustCiConfig,
     roots: &[RustRoot],
 ) -> Option<String> {
-    if config.private_sources.is_some() {
-        return None;
+    if let Some(sources) = &config.private_sources {
+        return crate::private_lock::mismatch(view, sources, roots);
     }
     let owner = match &view.repository {
         RepositoryIdentity::Named(name) => name.split('/').next().filter(|_| name.contains('/')),
         RepositoryIdentity::Unhosted => None,
     };
-    let found = roots.iter().find_map(|root| {
-        let lock = root.manifest.sibling(&CARGO_LOCK);
-        let bytes = view.files.get(&lock)?;
-        let document = table(bytes).ok()?;
-        document
-            .get("package")
-            .and_then(toml::Value::as_array)?
-            .iter()
-            .filter_map(toml::Value::as_table)
-            .find_map(|package| {
-                let source = package.get("source").and_then(toml::Value::as_str)?;
-                let name = package.get("name").and_then(toml::Value::as_str)?;
-                private_looking(source, owner).then(|| format!("{lock} locks {name}"))
-            })
-    })?;
-    Some(format!(
-        "{found} from a source that looks private; to build it, add a [private_sources] table to .velnor/rust-ci.toml with app_id = 'vars.<NAME>', private_key = 'secrets.<NAME>' and repositories = ['owner/name'] (see CONFIG.md)"
-    ))
+    let looking: Vec<(RepoPath, String, String)> =
+        crate::private_lock::locked_packages(view, roots)
+            .into_iter()
+            .filter(|(_, _, source)| private_looking(source, owner))
+            .collect();
+    if let Some((lock, name, _)) = looking
+        .iter()
+        .find(|(_, _, source)| crate::private_lock::github_repository(source).is_some())
+    {
+        return Some(format!(
+            "{lock} locks {name} from a source that looks private; to build it, add a [private_sources] table to .velnor/rust-ci.toml with app_id = 'vars.<NAME>', private_key = 'secrets.<NAME>' and repositories = ['owner/name'] (see CONFIG.md)"
+        ));
+    }
+    looking.first().map(|(lock, name, _)| {
+        format!(
+            "{lock} locks {name} from a source that looks private but is not a github.com repository; [private_sources] creates a GitHub App token for repositories on the workflow's GitHub server only, so it cannot authenticate this source unless GitHub Enterprise Server hosts it, and a cold fetch needs its credentials another way"
+        )
+    })
 }
 
 fn private_looking(source: &str, owner: Option<&str>) -> bool {

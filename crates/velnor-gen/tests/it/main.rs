@@ -102,6 +102,7 @@ mod job_setup_env;
 mod mise_safety;
 
 mod detect_private;
+mod detect_private_lock;
 mod job_shape;
 mod job_target_dir;
 mod job_trust_boundary;
