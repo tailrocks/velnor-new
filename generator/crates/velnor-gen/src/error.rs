@@ -25,6 +25,7 @@ pub enum GenerateError {
     InputsBuildHelperTooOld(HelperVersion),
     PrOnlyChecksHelperTooOld(HelperVersion),
     TooManySourceRoots(usize),
+    FamilyTagHelperTooOld(HelperVersion),
     Metadata(MetadataFileError),
     Rules(Vec<RuleViolation>),
 }
@@ -56,7 +57,7 @@ impl fmt::Display for GenerateError {
                 RELEASE_HELPER_MINIMUM.0, RELEASE_HELPER_MINIMUM.1, RELEASE_HELPER_MINIMUM.2,
                 RELEASE_HELPER_MINIMUM.0, RELEASE_HELPER_MINIMUM.1, RELEASE_HELPER_MINIMUM.2
             ),
-            Self::MbxStoreHelperTooOld(version) => write!(f, "velnor-ci {version} cannot select the shared MBX store; pin velnor-ci 0.1.84 or later"),
+            Self::MbxStoreHelperTooOld(version) => write!(f, "velnor-ci {version} cannot select the shared MBX store; pin velnor-ci 0.1.85 or later"),
             Self::TooManySourceRoots(roots) => write!(
                 f,
                 "the repository has {roots} Cargo roots, and the shared Sources cache makes every saving lane fetch every root, which keeps the generated workflow within its size limit only up to {MAX_SOURCE_ROOTS} roots; reduce the Cargo roots to {MAX_SOURCE_ROOTS} or fewer, or wait for tailrocks/velnor-new#1362 (velnor-ci sources fetch --roots), which replaces the per-root steps"
@@ -69,6 +70,10 @@ impl fmt::Display for GenerateError {
             Self::PrOnlyChecksHelperTooOld(version) => write!(
                 f,
                 "velnor-ci {version} cannot enforce pr_only_checks; pin velnor-ci 0.1.82 or later with `velnor-gen pin-helper 0.1.82`"
+            ),
+            Self::FamilyTagHelperTooOld(version) => write!(
+                f,
+                "velnor-ci {version} cannot bind a family tag; pin velnor-ci 0.1.83 or later with `velnor-gen pin-helper 0.1.83`"
             ),
             Self::Metadata(error) => error.fmt(f),
             Self::Rules(violations) => {
