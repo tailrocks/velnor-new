@@ -229,8 +229,6 @@ fn fetched(job: &velnor_model::Job) -> Option<String> {
 
 const FETCH_ROOTS: &str = "velnor-ci sources fetch --roots";
 
-/// Packs the roots into as few `sources fetch --roots` commands as fit the run limit,
-/// counting the launcher prefix that `secure_steps` later puts in front of the helper.
 fn fetch_chunks(manifests: &[RepoPath]) -> Vec<Vec<String>> {
     let budget = MAX_RUN_CHARACTERS
         - crate::helper_integrity::INVOCATION_PREFIX.len()
@@ -302,7 +300,6 @@ pub(crate) fn sources_fetch_all(manifests: &[RepoPath], cache_debug: bool) -> Re
         .unwrap_or_default()
 }
 
-/// The fetch steps after the first, for roots that do not fit one run value.
 pub(crate) fn sources_fetch_all_rest(
     manifests: &[RepoPath],
     cache_debug: bool,

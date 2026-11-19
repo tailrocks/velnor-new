@@ -100,6 +100,7 @@ mod job_trust_boundary;
 mod lint_checks;
 mod lint_gate;
 mod lint_lane;
+mod lint_merge_group;
 mod lock;
 mod lock_affected;
 mod lock_archive;
