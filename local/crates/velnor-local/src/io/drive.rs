@@ -17,6 +17,7 @@ use super::proxy::Proxy;
 use crate::cli::{EnvironmentArgs, RunArgs};
 use crate::event::{NO_COMMIT, Push, Repository};
 use crate::pairs::{DECISIONS, decisions};
+use crate::pin::Sha256;
 use crate::scenario::{
     Outcome, Scenario, Step, distinct, inside, keeps_environment, overlapping, plan, summary,
 };
@@ -39,6 +40,7 @@ struct Driver<'a> {
     addresses: Addresses,
     authority: Proxy,
     repo: PathBuf,
+    pin: Option<Sha256>,
     pushed: BTreeMap<String, String>,
     pulls: Vec<pulls::Pull>,
     events: usize,
@@ -147,7 +149,7 @@ async fn run_one(
         &args.repository,
     )
     .await?;
-    super::local_ci::pin_workflows(&args.environment, &repo, tag).await?;
+    let pin = super::local_ci::pin_workflows(&args.environment, &repo, tag).await?;
     env.reset(scenario.keeps_cache(args.fresh_cache)).await?;
     let mut environment = args.environment.clone();
     if scenario.has_fork() {
@@ -158,7 +160,7 @@ async fn run_one(
         return Err(io::Error::other("interrupted before it started"));
     }
     let (outcomes, up_at, up_seconds, replayed) = tokio::select! {
-        session = session(args, &environment, &env, repo, &scenario, tag, pairs.as_ref()) => session,
+        session = session(args, &environment, &env, (repo, pin), &scenario, tag, pairs.as_ref()) => session,
         () = interrupt.raised() => (
             Vec::new(), 0, 0.0, Err(io::Error::new(io::ErrorKind::Interrupted, "interrupted")),
         ),
@@ -203,7 +205,7 @@ async fn session<'a>(
     args: &'a RunArgs,
     environment: &EnvironmentArgs,
     env: &'a Environment<DockerCli>,
-    repo: PathBuf,
+    (repo, pin): (PathBuf, Option<Sha256>),
     scenario: &Scenario,
     tag: &'a str,
     pairs: Option<&super::supervisor::Pairs>,
@@ -240,6 +242,7 @@ async fn session<'a>(
         addresses,
         authority,
         repo,
+        pin,
         pushed: BTreeMap::new(),
         pulls: Vec::new(),
         events: 0,
@@ -290,11 +293,24 @@ impl Driver<'_> {
         Ok(())
     }
 
-    async fn on_branch(&self, branch: &str) -> io::Result<()> {
-        if self.git(&["switch", "-q", branch]).await.is_err() {
-            let base = &self.args.environment.default_branch;
-            self.git(&["switch", "-q", "-c", branch, base]).await?;
+    async fn pin(&self) -> io::Result<()> {
+        match &self.pin {
+            Some(pin) => super::local_ci::pin_branch(&self.repo, pin).await,
+            None => Ok(()),
         }
+    }
+
+    async fn switch(&self, branch: &str) -> io::Result<()> {
+        self.git(&["switch", "-q", branch]).await?;
+        self.pin().await
+    }
+
+    async fn on_branch(&self, branch: &str) -> io::Result<()> {
+        if self.git(&["switch", "-q", branch]).await.is_ok() {
+            return self.pin().await;
+        }
+        let base = &self.args.environment.default_branch;
+        self.git(&["switch", "-q", "-c", branch, base]).await?;
         Ok(())
     }
 
@@ -342,7 +358,7 @@ impl Driver<'_> {
     }
 
     async fn push(&mut self, branch: &str) -> io::Result<()> {
-        self.git(&["switch", "-q", branch]).await?;
+        self.switch(branch).await?;
         let after = self.git(&["rev-parse", "HEAD"]).await?;
         let before = self.pushed.get(branch).map_or(NO_COMMIT, String::as_str);
         let commits = changes(&self.repo, branch, before, &after).await?;
