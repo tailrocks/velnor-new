@@ -6,7 +6,7 @@ use std::error::Error;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::{Command, Output, Stdio};
 use std::sync::OnceLock;
 
 use velnor_actions_orchestrator::{prepare, render_staged_tree};
@@ -229,14 +229,19 @@ fn shellcheck(script: &str) -> Result<Option<String>, Box<dyn Error>> {
         .take()
         .ok_or("shellcheck stdin")?
         .write_all(script.as_bytes())?;
-    let output = child.wait_with_output()?;
+    Ok(Some(shellcheck_report(&child.wait_with_output()?)))
+}
+
+fn shellcheck_report(output: &Output) -> String {
     if output.status.success() {
-        return Ok(Some(String::new()));
+        return String::new();
     }
-    Ok(Some(
-        String::from_utf8_lossy(&output.stdout).into_owned()
-            + &String::from_utf8_lossy(&output.stderr),
-    ))
+    format!(
+        "shellcheck {}\n{}{}",
+        output.status,
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    )
 }
 
 fn assert_shellcheck_clean(tree: &BTreeMap<String, String>) -> Result<(), Box<dyn Error>> {
@@ -272,4 +277,16 @@ fn several_manifests_keep_the_loop_and_pass_shellcheck() -> Result<(), Box<dyn E
         assert!(script.contains("--manifest-path \"$GITHUB_WORKSPACE/$manifest\""));
     }
     assert_shellcheck_clean(&tree)
+}
+
+#[cfg(unix)]
+#[test]
+fn a_shellcheck_killed_without_output_is_not_a_clean_report() {
+    use std::os::unix::process::ExitStatusExt;
+    let killed = Output {
+        status: std::process::ExitStatus::from_raw(9),
+        stdout: Vec::new(),
+        stderr: Vec::new(),
+    };
+    assert!(!shellcheck_report(&killed).is_empty());
 }
