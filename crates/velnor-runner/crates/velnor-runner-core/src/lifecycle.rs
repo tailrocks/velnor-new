@@ -25,6 +25,12 @@ pub enum WorkerState {
         epoch: Epoch,
     },
 
+    Acquired {
+        intent: AcquireIntentId,
+
+        epoch: Epoch,
+    },
+
     Provisioning {
         intent: ProvisionIntentId,
 
@@ -53,6 +59,8 @@ pub enum WorkerState {
         epoch: Epoch,
 
         reason: OwnershipFailure,
+
+        owned: Option<OwnedIds>,
     },
 
     Released,
@@ -65,6 +73,7 @@ impl WorkerState {
             Self::Reserved { epoch, .. }
             | Self::Acquiring { epoch, .. }
             | Self::AcquisitionUncertain { epoch, .. }
+            | Self::Acquired { epoch, .. }
             | Self::Provisioning { epoch, .. }
             | Self::IdleAssignable { epoch }
             | Self::Running { epoch }
@@ -72,6 +81,15 @@ impl WorkerState {
             | Self::Cleaning { epoch, .. }
             | Self::Quarantined { epoch, .. } => Some(*epoch),
             Self::Released => None,
+        }
+    }
+
+    #[must_use]
+    pub const fn owned(&self) -> Option<&OwnedIds> {
+        match self {
+            Self::Cleaning { owned, .. } => Some(owned),
+            Self::Quarantined { owned, .. } => owned.as_ref(),
+            _ => None,
         }
     }
 
@@ -180,7 +198,11 @@ fn quarantine(
         return Err(StateError::IllegalTransition);
     }
     Ok(Transition {
-        next: WorkerState::Quarantined { epoch, reason },
+        next: WorkerState::Quarantined {
+            epoch,
+            reason,
+            owned: state.owned().cloned(),
+        },
         effect: Effect::KeepCapacity,
     })
 }
@@ -224,7 +246,13 @@ fn step(state: &WorkerState, event: &WorkerEvent) -> Result<Transition, StateErr
             next: state.clone(),
             effect: Effect::Idempotent,
         }),
-        (WorkerState::Acquiring { .. }, WorkerEvent::Acquired { .. }) => Ok(Transition {
+        (WorkerState::Acquiring { intent, epoch }, WorkerEvent::Acquired { .. }) => {
+            Ok(advance(WorkerState::Acquired {
+                intent: *intent,
+                epoch: *epoch,
+            }))
+        }
+        (WorkerState::Acquired { .. }, WorkerEvent::Acquired { .. }) => Ok(Transition {
             next: state.clone(),
             effect: Effect::Idempotent,
         }),
@@ -237,7 +265,7 @@ fn step(state: &WorkerState, event: &WorkerEvent) -> Result<Transition, StateErr
                 effect: Effect::KeepCapacity,
             })
         }
-        (WorkerState::Acquiring { epoch, .. }, WorkerEvent::ProvisionStarted { intent, .. }) => {
+        (WorkerState::Acquired { epoch, .. }, WorkerEvent::ProvisionStarted { intent, .. }) => {
             Ok(advance(WorkerState::Provisioning {
                 intent: *intent,
                 epoch: *epoch,

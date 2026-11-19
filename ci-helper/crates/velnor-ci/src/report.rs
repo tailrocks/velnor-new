@@ -25,6 +25,15 @@ pub struct Cache {
     pub save: SaveOutcome,
 }
 
+impl Cache {
+    #[must_use]
+    pub fn exact_sources_for(&self, root: &str) -> bool {
+        self.family == "sources"
+            && self.hit == Hit::Exact
+            && self.root.as_deref().is_none_or(|owner| owner == root)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SaveOutcome {
@@ -104,11 +113,10 @@ pub fn waste(metrics: &LaneMetrics) -> Vec<String> {
             }
         }
         if !invocation.downloads.is_empty()
-            && metrics.caches.iter().any(|cache| {
-                cache.family == "sources"
-                    && cache.root.as_deref() == Some(&invocation.root)
-                    && cache.hit == Hit::Exact
-            })
+            && metrics
+                .caches
+                .iter()
+                .any(|cache| cache.exact_sources_for(&invocation.root))
         {
             violations.push(format!(
                 "{}: downloaded on an exact sources hit: {}",
@@ -138,11 +146,10 @@ pub fn waste(metrics: &LaneMetrics) -> Vec<String> {
 fn git_waste(metrics: &LaneMetrics, invocation: &Invocation) -> Option<String> {
     let repositories = invocation.verified_git_downloads.as_ref()?;
     (!repositories.is_empty()
-        && metrics.caches.iter().any(|cache| {
-            cache.family == "sources"
-                && cache.root.as_deref() == Some(&invocation.root)
-                && cache.hit == Hit::Exact
-        }))
+        && metrics
+            .caches
+            .iter()
+            .any(|cache| cache.exact_sources_for(&invocation.root)))
     .then(|| {
         format!(
             "{}: Git sources fetched on an exact sources hit: {}",

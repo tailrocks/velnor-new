@@ -84,7 +84,21 @@ fn unowned(platform: &str) -> Repo {
     unit(&repo, "mid/src/lib.rs", "");
     unit(&repo, ".velnor/rust-ci.toml", "exclude = [\"mid\"]\n");
     finish(&repo);
+    built_mid(&repo);
     repo
+}
+
+fn built_mid(repo: &Repo) {
+    unit(
+        repo,
+        &format!("{TRIPLE}/deps/mid-f0000000000000aa.d"),
+        "out.d: ../mid/src/lib.rs\n",
+    );
+    unit(
+        repo,
+        &format!("{TRIPLE}/.fingerprint/mid-f0000000000000aa/lib-mid"),
+        "",
+    );
 }
 
 fn behind_an_inactive_edge() -> Repo {

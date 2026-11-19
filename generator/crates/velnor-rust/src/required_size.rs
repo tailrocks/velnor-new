@@ -3,7 +3,8 @@
 
 use velnor_model::{
     CargoCommand, GateNeed, Job, RepoFacts, RootSlug, StepKind, TESTS_BY_PACKAGE_OUTPUT,
-    TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, cache_lane_outputs, json_char_bytes, json_string_bytes,
+    TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, cache_lane_outputs,
+    json_char_bytes, json_string_bytes,
 };
 
 const PACKAGE_ENTRY_BYTES: usize = 43;
@@ -31,6 +32,11 @@ pub(crate) fn needs_max_bytes<'a>(
         let counters = match tests {
             Some(slug) => property_bytes(TESTS_RUN_OUTPUT, 20)
                 .saturating_add(property_bytes(TESTS_LISTED_OUTPUT, 20))
+                .saturating_add(if job.reports_ignored {
+                    property_bytes(TESTS_IGNORED_OUTPUT, 20)
+                } else {
+                    0
+                })
                 .saturating_add(property_bytes(
                     TESTS_BY_PACKAGE_OUTPUT,
                     package_map_bytes(facts, slug.as_ref()),

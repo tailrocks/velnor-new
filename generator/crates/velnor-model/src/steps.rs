@@ -3,7 +3,7 @@
 
 use crate::cache::CacheKey;
 use crate::helper::HelperRelease;
-use crate::ids::{JobId, RepoPath};
+use crate::ids::{JobId, RepoPath, RootSlug};
 use crate::plan::CargoCommand;
 use crate::verdict::VerdictSpec;
 
@@ -20,6 +20,11 @@ pub enum StepKind {
     RestoredTargets {
         expiry: BaseExpiry,
         targets: Vec<RepoPath>,
+    },
+    SourcesLocks(Vec<RepoPath>),
+    SourcesFetch {
+        lane: RootSlug,
+        position: usize,
     },
     CacheDecide {
         manifests: Vec<RepoPath>,
@@ -52,6 +57,7 @@ pub enum StepKind {
     InputsRestore(RepoPath),
     CratesMirror(crate::repo::CratesMirror),
     MbxStore,
+    MbxSeed,
     TestSetup {
         name: String,
         run: String,
@@ -60,6 +66,8 @@ pub enum StepKind {
     InstallHelper(HelperRelease),
     FailWhenANeedFailed,
     FailOnDraftRun,
+    DraftNotice,
+    ClearRunLabel,
     Verdict {
         spec: VerdictSpec,
         needs_max_bytes: usize,

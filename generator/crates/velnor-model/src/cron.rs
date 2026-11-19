@@ -33,6 +33,54 @@ impl CronExpr {
     pub fn as_str(&self) -> &str {
         &self.0
     }
+
+    #[must_use]
+    pub fn shortest_gap_minutes(&self) -> u32 {
+        let fields: Vec<&str> = self.0.split(' ').collect();
+        let minutes = expand(fields[0], FIELD_RANGES[0]);
+        let hours = expand(fields[1], FIELD_RANGES[1]);
+        let mut times: Vec<u32> = hours
+            .iter()
+            .flat_map(|hour| minutes.iter().map(move |minute| hour * 60 + minute))
+            .collect();
+        times.sort_unstable();
+        let wrap = times
+            .first()
+            .zip(times.last())
+            .map_or(MINUTES_PER_DAY, |(first, last)| {
+                first + MINUTES_PER_DAY - last
+            });
+        times
+            .windows(2)
+            .map(|pair| pair[1] - pair[0])
+            .fold(wrap, u32::min)
+    }
+}
+
+const MINUTES_PER_DAY: u32 = 24 * 60;
+
+fn expand(field: &str, (low, high): (u32, u32)) -> Vec<u32> {
+    let mut values: Vec<u32> = field
+        .split(',')
+        .flat_map(|item| {
+            let (base, step) = match item.split_once('/') {
+                Some((base, step)) => (base, number(step).unwrap_or(1)),
+                None => (item, 1),
+            };
+            let (from, to) = if base == "*" {
+                (low, high)
+            } else if let Some((from, to)) = base.split_once('-') {
+                (number(from).unwrap_or(low), number(to).unwrap_or(high))
+            } else {
+                let start = number(base).unwrap_or(low);
+                (start, if item.contains('/') { high } else { start })
+            };
+            (from..=to).step_by(step.max(1) as usize)
+        })
+        .collect();
+    values.sort_unstable();
+    values.dedup();
+    values
 }
 
 impl fmt::Display for CronExpr {

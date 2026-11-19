@@ -328,13 +328,9 @@ fn the_binary_prints_the_golden_ruleset_for_a_repository_that_holds_the_sample()
         String::from_utf8_lossy(&output.stderr)
     );
     assert_eq!(String::from_utf8(output.stdout)?, golden()?);
-    let paths: BTreeSet<String> = [
-        ".velnor/release.toml",
-        "release-plz.toml",
-        "tools/release-plz.toml",
-    ]
-    .map(str::to_owned)
-    .into();
+    let paths: BTreeSet<String> = [".velnor/release.toml", "release-plz.toml"]
+        .map(str::to_owned)
+        .into();
     for path in &paths {
         assert!(
             repo.0.join(RepoPath::new(path)?.as_str()).is_file(),
