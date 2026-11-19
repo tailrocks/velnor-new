@@ -120,6 +120,8 @@ fn pair(
         timeout_minutes: case.timeout_minutes,
         concurrency: None,
         permissions: case.permissions.clone(),
+        env: case.env.clone(),
+        cache_mode: case.cache_mode.clone(),
         outputs: BTreeMap::new(),
         matrix: None,
         uses: None,

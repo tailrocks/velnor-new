@@ -4,7 +4,10 @@
 use std::collections::BTreeMap;
 
 use crate::error::{WorkflowsError, refuse};
-use crate::expression::{Scope, check, check_condition, is_identifier, whole_expression};
+use crate::expression::{
+    Scope, WITH_INTERPOLATIONS, check, check_condition, check_interpolated, is_identifier,
+    whole_expression,
+};
 use crate::helper_call::calls_velnor_ci;
 use crate::plan::{Action, Body, Env, LocalAction, Step};
 use crate::raw::RawStep;
@@ -85,9 +88,9 @@ pub(crate) fn step(
         name: raw.name.unwrap_or(label),
         condition,
         body,
-        with: values(job, raw_with, scope)?,
+        with: values(job, raw_with, scope, Some(&WITH_INTERPOLATIONS))?,
         continue_on_error: raw.continue_on_error,
-        env: values(job, raw.env, scope)?,
+        env: values(job, raw.env, scope, None)?,
     })
 }
 
@@ -140,13 +143,21 @@ fn values(
     job: &str,
     table: BTreeMap<String, String>,
     scope: &Scope<'_>,
+    interpolations: Option<&[&str]>,
 ) -> Result<Vec<(String, Env)>, WorkflowsError> {
     let mut items = Vec::new();
     for (key, value) in table {
         if !is_identifier(&key, true) {
             return refuse(format!("job {job} key {key:?} is not an identifier"));
         }
-        if value.contains("${{") {
+        let whole = whole_expression(&value);
+        let interpolated = interpolations.filter(|allowed| {
+            value.contains("${{") && whole.is_none_or(|inner| allowed.contains(&inner))
+        });
+        if let Some(allowed) = interpolated {
+            check_interpolated(&format!("job {job} with {key}"), &value, allowed)?;
+            items.push((key, Env::Interpolated(value)));
+        } else if value.contains("${{") {
             check(&value, scope)?;
             items.push((key, Env::Expression(whole_inner(&value))));
         } else {

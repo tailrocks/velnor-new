@@ -10,6 +10,7 @@ mod containers;
 mod error;
 mod expression;
 mod helper_call;
+mod job_env;
 mod matrix;
 mod plan;
 mod raw;
@@ -17,7 +18,7 @@ mod triggers;
 
 pub use error::WorkflowsError;
 pub use plan::{
-    Action, Body, Call, CallTarget, CallValue, Concurrency, Container, Env, Input, InputKind, Job,
-    LocalAction, Matrix, MatrixSource, Output, PullRequest, Push, Service, Step, Triggers,
-    Workflow, WorkflowCall, WorkflowRun, WorkflowsPlan,
+    Action, Body, CacheMode, Call, CallTarget, CallValue, Concurrency, Container, Env, Input,
+    InputKind, Job, LocalAction, Matrix, MatrixSource, Output, PullRequest, Push, Service, Step,
+    Triggers, Workflow, WorkflowCall, WorkflowRun, WorkflowsPlan,
 };

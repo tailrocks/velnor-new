@@ -124,12 +124,53 @@ pub struct Job {
     pub timeout_minutes: u16,
     pub concurrency: Option<Concurrency>,
     pub permissions: Vec<(String, String)>,
+    pub cache_mode: Option<CacheMode>,
+    pub env: Vec<(String, Env)>,
     pub outputs: Vec<(String, String)>,
     pub matrix: Option<Matrix>,
     pub container: Option<Container>,
     pub services: Vec<Service>,
     pub steps: Vec<Step>,
     pub call: Option<Call>,
+}
+
+/// The `cache-mode` of a job: what the Actions cache service lets it do.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CacheMode {
+    Read,
+    Write,
+    WriteOnly,
+    None,
+}
+
+impl CacheMode {
+    pub const NAMES: [&'static str; 4] = ["read", "write", "write-only", "none"];
+
+    #[must_use]
+    pub fn parse(name: &str) -> Option<Self> {
+        Some(match name {
+            "read" => Self::Read,
+            "write" => Self::Write,
+            "write-only" => Self::WriteOnly,
+            "none" => Self::None,
+            _ => return None,
+        })
+    }
+
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Read => Self::NAMES[0],
+            Self::Write => Self::NAMES[1],
+            Self::WriteOnly => Self::NAMES[2],
+            Self::None => Self::NAMES[3],
+        }
+    }
+
+    #[must_use]
+    pub fn writes(self) -> bool {
+        matches!(self, Self::Write | Self::WriteOnly)
+    }
 }
 
 /// A job that calls a reusable workflow instead of running steps.
@@ -253,22 +294,26 @@ pub enum Action {
     Mise,
     UploadArtifact,
     DownloadArtifact,
+    Cache,
     CacheRestore,
     CacheSave,
     AttestBuildProvenance,
     GithubScript,
+    MrBoxington,
 }
 
 impl Action {
-    pub const NAMES: [&'static str; 8] = [
+    pub const NAMES: [&'static str; 10] = [
         "checkout",
         "mise",
         "upload-artifact",
         "download-artifact",
+        "cache",
         "cache-restore",
         "cache-save",
         "attest",
         "github-script",
+        "mr-boxington",
     ];
 
     #[must_use]
@@ -278,10 +323,12 @@ impl Action {
             "mise" => Self::Mise,
             "upload-artifact" => Self::UploadArtifact,
             "download-artifact" => Self::DownloadArtifact,
+            "cache" => Self::Cache,
             "cache-restore" => Self::CacheRestore,
             "cache-save" => Self::CacheSave,
             "attest" => Self::AttestBuildProvenance,
             "github-script" => Self::GithubScript,
+            "mr-boxington" => Self::MrBoxington,
             _ => return None,
         })
     }
@@ -294,9 +341,11 @@ impl Action {
             Self::AttestBuildProvenance => &["push-to-registry"],
             Self::UploadArtifact
             | Self::DownloadArtifact
+            | Self::Cache
             | Self::CacheRestore
             | Self::CacheSave
-            | Self::GithubScript => &[],
+            | Self::GithubScript
+            | Self::MrBoxington => &[],
         }
     }
 
@@ -314,6 +363,7 @@ impl Action {
 pub enum Env {
     Text(String),
     Expression(String),
+    Interpolated(String),
 }
 
 impl WorkflowsPlan {

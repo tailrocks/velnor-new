@@ -156,3 +156,31 @@ pub(crate) fn check_condition(value: &str, scope: &Scope<'_>) -> Result<String, 
         Some(reference) => Err(refused(inner, &reference)),
     }
 }
+
+pub(crate) const WITH_INTERPOLATIONS: [&str; 3] =
+    ["github.run_id", "github.run_attempt", "github.job"];
+pub(crate) const ENV_INTERPOLATIONS: [&str; 1] = ["github.workspace"];
+
+pub(crate) fn check_interpolated(
+    what: &str,
+    value: &str,
+    allowed: &[&str],
+) -> Result<(), WorkflowsError> {
+    let names = allowed.join(", ");
+    let mut rest = value;
+    while let Some((_, after)) = rest.split_once("${{") {
+        let Some((inner, tail)) = after.split_once("}}") else {
+            return refuse(format!(
+                "{what} {value:?} has a ${{{{ that is never closed; the only expressions allowed inside text here are {names}"
+            ));
+        };
+        let inner = inner.trim();
+        if !allowed.contains(&inner) {
+            return refuse(format!(
+                "{what} {value:?} interpolates {inner}, which is not allowed; the only expressions allowed inside text here are {names}"
+            ));
+        }
+        rest = tail;
+    }
+    Ok(())
+}

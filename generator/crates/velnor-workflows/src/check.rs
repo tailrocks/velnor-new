@@ -12,6 +12,7 @@ use crate::concurrency::concurrency;
 use crate::containers::{container, services};
 use crate::error::{WorkflowsError, refuse};
 use crate::expression::{Level, Scope, check_condition, is_identifier};
+use crate::job_env::{cache_mode, job_env};
 use crate::matrix::matrix;
 use crate::plan::{
     Body, DEFAULT_RUNNER, DEFAULT_TIMEOUT_MINUTES, Job, Output, Step, Triggers, Workflow,
@@ -215,6 +216,12 @@ fn job(raw: RawJob, ctx: &Context<'_>, earlier: &[Job]) -> Result<Job, Workflows
         steps: Vec::new(),
     };
     let condition = scope_conditions(ctx, raw.condition.as_deref(), &scope)?;
+    let env = job_env(&id, raw.env.clone())?;
+    let cache_mode = cache_mode(
+        &id,
+        raw.cache_mode.as_deref(),
+        &[condition.as_deref(), ctx.condition],
+    )?;
     let mut job = Job {
         id,
         name: raw.name.clone(),
@@ -226,6 +233,8 @@ fn job(raw: RawJob, ctx: &Context<'_>, earlier: &[Job]) -> Result<Job, Workflows
         timeout_minutes,
         concurrency: job_concurrency,
         permissions: raw.permissions.clone().into_iter().collect(),
+        cache_mode,
+        env,
         outputs: Vec::new(),
         matrix,
         container: raw

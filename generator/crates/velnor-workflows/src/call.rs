@@ -16,6 +16,8 @@ pub(crate) fn refuse_step_keys(raw: &RawJob) -> Result<(), WorkflowsError> {
         (!raw.step.is_empty(), "step"),
         (raw.helper, "helper"),
         (raw.environment.is_some(), "environment"),
+        (!raw.env.is_empty(), "env"),
+        (raw.cache_mode.is_some(), "cache_mode"),
         (raw.runner.is_some(), "runner"),
         (raw.timeout_minutes.is_some(), "timeout_minutes"),
         (!raw.outputs.is_empty(), "outputs"),

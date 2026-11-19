@@ -39,6 +39,9 @@ pub(crate) fn yaml_job(job: &RenderedJob) -> Yaml {
     if let Some(concurrency) = &job.concurrency {
         items.push(entry("concurrency", yaml_concurrency(concurrency)));
     }
+    if let Some(mode) = &job.cache_mode {
+        items.push(entry("cache-mode", text(mode)));
+    }
     if !job.outputs.is_empty() {
         items.push(entry("outputs", yaml_outputs(&job.outputs)));
     }

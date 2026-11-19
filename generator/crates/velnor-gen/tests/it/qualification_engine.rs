@@ -22,7 +22,25 @@ const PIPE_REPLACED: [(&str, [&str; 2]); 1] = [(
     ],
 )];
 
-const CHAINS: [&str; 21] = [
+const OR_REPLACED: [(&str, &str); 1] = [(
+    "test -z \"$HIT\" || test \"$HIT\" = false",
+    "test \"$HIT\" != true",
+)];
+
+const NEWLINE_REPLACED: [(&str, &str); 1] = [(
+    "printf '%s\n' cache-ok > \"g4 cache/note.txt\"",
+    "printf '%s\\n' cache-ok > \"g4 cache/note.txt\"",
+)];
+
+const MESSAGE_REPLACED: [(&str, &str); 1] = [(
+    "echo '::error title=cache_qualification_requires_non_default_branch::Dispatch cache qualification modes from a non-default branch; every cache job is skipped on the default branch.'",
+    "echo '::error title=cache_qualification_requires_non_default_branch::Dispatch cache qualification modes from a non-default branch. Every cache job is skipped on the default branch.'",
+)];
+
+const CHAINS: [&str; 24] = [
+    "cache-default-branch-guard",
+    "empty-cache-hosted",
+    "empty-cache-scale-set",
     "bind-hosted",
     "bind-scale-set",
     "buildx-hosted",
@@ -46,7 +64,8 @@ const CHAINS: [&str; 21] = [
     "outputs-scale-set",
 ];
 
-const NARROWER: [&str; 23] = [
+const NARROWER: [&str; 24] = [
+    "cache-default-branch-guard",
     "bind-hosted",
     "bind-scale-set",
     "buildx-hosted",
@@ -171,15 +190,48 @@ fn replace_pipes(steps: Vec<StepSignature>) -> (Vec<StepSignature>, bool) {
     (out, replaced)
 }
 
+fn expression(value: &Value) -> String {
+    text(value)
+        .trim()
+        .trim_start_matches("${{")
+        .trim_end_matches("}}")
+        .trim()
+        .to_owned()
+}
+
 fn condition(job: &Value) -> Option<String> {
-    job.get("if").map(|value| {
-        text(value)
-            .trim()
-            .trim_start_matches("${{")
-            .trim_end_matches("}}")
-            .trim()
-            .to_owned()
-    })
+    job.get("if").map(expression)
+}
+
+fn unparenthesised(condition: &str) -> Option<String> {
+    let (mode, gate) = condition
+        .strip_prefix('(')?
+        .strip_suffix(')')?
+        .split_once(") && (")?;
+    Some(format!("{mode} && {gate}"))
+}
+
+fn replace_runs(steps: Vec<StepSignature>, table: &[(&str, &str)]) -> (Vec<StepSignature>, bool) {
+    let mut replaced = false;
+    let steps = steps
+        .into_iter()
+        .map(|step| {
+            let hit = table
+                .iter()
+                .find(|(from, _)| step.run.as_deref() == Some(from));
+            match hit {
+                Some((_, to)) => {
+                    replaced = true;
+                    StepSignature {
+                        run: Some((*to).to_owned()),
+                        ..step
+                    }
+                }
+                None => step,
+            }
+        })
+        .collect();
+    (steps, replaced)
 }
 
 fn lane(runs_on: Option<&Value>) -> Option<&'static str> {
@@ -219,19 +271,28 @@ fn offered(generated: &Value) -> BTreeSet<String> {
         .collect()
 }
 
-fn compare(
-    id: &str,
-    engine: &Value,
-    engine_workflow: &Value,
-    generated: &Value,
-    generated_workflow: &Value,
-    kinds: &mut BTreeMap<&'static str, BTreeSet<String>>,
-    unexpected: &mut Vec<String>,
-) {
+type Kinds = BTreeMap<&'static str, BTreeSet<String>>;
+
+struct Pair<'a> {
+    id: &'a str,
+    engine: &'a Value,
+    engine_workflow: &'a Value,
+    generated: &'a Value,
+    generated_workflow: &'a Value,
+}
+
+fn compare_head(pair: &Pair<'_>, kinds: &mut Kinds, unexpected: &mut Vec<String>) {
+    let Pair {
+        id,
+        engine,
+        engine_workflow,
+        generated,
+        generated_workflow,
+    } = *pair;
     let mut note = |kind: &'static str| {
         kinds.entry(kind).or_default().insert(id.to_owned());
     };
-    for key in ["name", "timeout-minutes", "needs", "outputs"] {
+    for key in ["name", "timeout-minutes", "needs", "outputs", "env"] {
         if engine.get(key) != generated.get(key) {
             unexpected.push(format!(
                 "{id}: {key}: engine {:?}, generated {:?}",
@@ -240,12 +301,28 @@ fn compare(
             ));
         }
     }
-    if condition(engine) != condition(generated) {
+    let engine_mode = engine.get("cache-mode");
+    let inherited = engine_mode.or_else(|| engine_workflow.get("cache-mode"));
+    let mode_differs = match generated.get("cache-mode") {
+        Some(mode) => Some(mode) != inherited,
+        None => engine_mode.is_some(),
+    };
+    if mode_differs {
         unexpected.push(format!(
-            "{id}: if: engine {:?}, generated {:?}",
-            condition(engine),
-            condition(generated)
+            "{id}: cache-mode: engine {inherited:?}, generated {:?}",
+            generated.get("cache-mode")
         ));
+    }
+    let generated_condition = condition(generated);
+    if condition(engine) != generated_condition {
+        if condition(engine) == generated_condition.as_deref().and_then(unparenthesised) {
+            note("a case condition is parenthesised");
+        } else {
+            unexpected.push(format!(
+                "{id}: if: engine {:?}, generated {generated_condition:?}",
+                condition(engine)
+            ));
+        }
     }
     let engine_lane = lane(engine.get("runs-on"));
     if engine_lane.is_none() || engine_lane != lane(generated.get("runs-on")) {
@@ -275,16 +352,38 @@ fn compare(
             ));
         }
     }
+}
+
+fn compare_steps(pair: &Pair<'_>, kinds: &mut Kinds, unexpected: &mut Vec<String>) {
+    let Pair {
+        id,
+        engine,
+        generated,
+        ..
+    } = *pair;
+    let mut note = |kind: &'static str| {
+        kinds.entry(kind).or_default().insert(id.to_owned());
+    };
     let (chains, flat) = engine_steps(engine);
     let (flat, piped) = replace_pipes(flat);
+    let (flat, ored) = replace_runs(flat, &OR_REPLACED);
+    let (flat, worded) = replace_runs(flat, &MESSAGE_REPLACED);
+    let (flat, escaped) = replace_runs(flat, &NEWLINE_REPLACED);
     if flat != gen_steps(generated) {
         unexpected.push(format!(
             "{id}: steps: engine {flat:#?}, generated {:#?}",
             gen_steps(generated)
         ));
     }
-    if piped {
-        note("a pipe is written as two steps");
+    for (kind, happened) in [
+        ("a pipe is written as two steps", piped),
+        ("an || is written as one test", ored),
+        ("a semicolon in a message is a full stop", worded),
+        ("a line feed in a printf format is written as \\n", escaped),
+    ] {
+        if happened {
+            note(kind);
+        }
     }
     if chains.len()
         != engine
@@ -293,6 +392,163 @@ fn compare(
         || flat.len() != chains.len()
     {
         note("an && chain is written as steps");
+    }
+}
+
+const SCRIPTED: [&str; 2] = ["mbx-cache-write-hosted", "mbx-cache-read-hosted"];
+const SCRIPT: &str = "qualification/mbx-cache-roundtrip.sh";
+const IDENTITY_STEP: &str = "Verify MBX action identity and write policy";
+
+const PHASES: [(&str, &str); 9] = [
+    ("Resolve project tool versions", "resolve"),
+    ("Install pinned Rust toolchain", "install-rust"),
+    ("Verify Rust channel manifest", "verify-rust"),
+    ("Put the verified Rust toolchain on PATH", "rust-path"),
+    ("Require imported MBX objects", "require-imported"),
+    ("Compile MBX cache probe", "probe"),
+    ("Require reused compilation", "require-reuse"),
+    ("Clean MBX workspace outputs", "clean"),
+    ("Sample runner disk after cleanup", "disk"),
+];
+
+const SPLICED_ENV: &str = "'\"${VELNOR_TOOL_RUST+VELNOR_TOOL_RUST=\"$VELNOR_TOOL_RUST\"}\"'";
+const SPLICED_VERSION: &str = "'\"${VELNOR_TOOL_RUST}\"'";
+
+struct Pins {
+    mbx: String,
+    rust: String,
+}
+
+fn pinned(mise: &str, tool: &str) -> Result<String, Box<dyn Error>> {
+    let prefix = format!("{tool} = {{ version = \"");
+    let line = mise
+        .lines()
+        .find_map(|line| line.strip_prefix(&prefix))
+        .ok_or_else(|| format!("mise.toml pins no {tool}"))?;
+    Ok(line.split('"').next().unwrap_or_default().to_owned())
+}
+
+fn resolved(value: &str, pins: &Pins) -> String {
+    value
+        .replace("${{ env.VELNOR_TOOL_MR_BOXINGTON }}", &pins.mbx)
+        .replace("${{ env.VELNOR_TOOL_RUST }}", &pins.rust)
+}
+
+fn engine_body(run: &str) -> (Option<&str>, String) {
+    match run
+        .starts_with("function_env_unset=()")
+        .then(|| run.split_once(" -c '"))
+        .flatten()
+    {
+        Some((wrapper, rest)) => (
+            Some(wrapper),
+            rest.strip_suffix('\'')
+                .unwrap_or(rest)
+                .replace("'\\''", "'")
+                .replace(
+                    SPLICED_ENV,
+                    "${VELNOR_TOOL_RUST+VELNOR_TOOL_RUST=\"$VELNOR_TOOL_RUST\"}",
+                )
+                .replace(SPLICED_VERSION, "${VELNOR_TOOL_RUST}"),
+        ),
+        None => (None, run.to_owned()),
+    }
+}
+
+fn steps_of(job: &Value) -> &[Value] {
+    job.get("steps")
+        .and_then(Value::as_array)
+        .map_or(&[], Vec::as_slice)
+}
+
+fn scripted_run(
+    id: &str,
+    name: &str,
+    engine_run: &str,
+    generated_run: Option<&str>,
+    script: &str,
+    unexpected: &mut Vec<String>,
+) {
+    let phase = if name == IDENTITY_STEP {
+        Some(if id.contains("write") {
+            "identity-write"
+        } else {
+            "identity-read"
+        })
+    } else {
+        PHASES
+            .iter()
+            .find(|(step, _)| *step == name)
+            .map(|(_, phase)| *phase)
+    };
+    let (wrapper, body) = engine_body(engine_run);
+    let expected = phase.map(|phase| format!("bash {SCRIPT} {phase}"));
+    if expected.is_none() || generated_run != expected.as_deref() {
+        unexpected.push(format!(
+            "{id}: {name}: run {generated_run:?}, expected {expected:?}"
+        ));
+    }
+    if !script.contains(&body) || wrapper.is_some_and(|wrapper| !script.contains(wrapper)) {
+        unexpected.push(format!(
+            "{id}: {name}: the script does not hold the engine run verbatim"
+        ));
+    }
+}
+
+fn compare_scripted(pair: &Pair<'_>, script: &str, pins: &Pins, unexpected: &mut Vec<String>) {
+    let id = pair.id;
+    let (engine, generated) = (steps_of(pair.engine), steps_of(pair.generated));
+    if engine.len() != generated.len() {
+        unexpected.push(format!(
+            "{id}: {} engine steps, {} generated",
+            engine.len(),
+            generated.len()
+        ));
+        return;
+    }
+    for (engine, generated) in engine.iter().zip(generated) {
+        let name = engine.get("name").map(text).unwrap_or_default();
+        for (key, same) in [
+            ("name", engine.get("name") == generated.get("name")),
+            ("id", engine.get("id") == generated.get("id")),
+            ("uses", engine.get("uses") == generated.get("uses")),
+            (
+                "env",
+                table(engine.get("env")) == table(generated.get("env")),
+            ),
+            (
+                "if",
+                engine.get("if").map(expression) == generated.get("if").map(expression),
+            ),
+            (
+                "with",
+                table(engine.get("with"))
+                    .into_iter()
+                    .map(|(k, v)| (k, resolved(&v, pins)))
+                    .collect::<BTreeMap<_, _>>()
+                    == table(generated.get("with")),
+            ),
+        ] {
+            if !same {
+                unexpected.push(format!(
+                    "{id}: {name}: {key}: engine {engine:?}, generated {generated:?}"
+                ));
+            }
+        }
+        match engine.get("run").map(text) {
+            Some(run) => scripted_run(
+                id,
+                &name,
+                &run,
+                generated.get("run").and_then(Value::as_str),
+                script,
+                unexpected,
+            ),
+            None if generated.get("run").is_some() => {
+                unexpected.push(format!("{id}: {name}: a run where the engine has a uses"));
+            }
+            None => {}
+        }
     }
 }
 
@@ -333,20 +589,31 @@ fn every_declared_qualification_job_matches_the_engine_job_but_for_the_listed_di
         .and_then(Value::as_object)
         .ok_or("no generated jobs")?;
     let offered = offered(&generated);
+    let script = read(SCRIPT)?;
+    let mise = read("mise.toml")?;
+    let pins = Pins {
+        mbx: pinned(&mise, "mr-boxington")?,
+        rust: pinned(&mise, "rust")?,
+    };
     let mut kinds = BTreeMap::new();
     let mut unexpected = Vec::new();
     for (id, job) in generated_jobs {
-        match engine_jobs.get(id) {
-            Some(engine_job) => compare(
-                id,
-                engine_job,
-                &engine,
-                job,
-                &generated,
-                &mut kinds,
-                &mut unexpected,
-            ),
-            None => unexpected.push(format!("{id}: the engine has no such job")),
+        let Some(engine_job) = engine_jobs.get(id) else {
+            unexpected.push(format!("{id}: the engine has no such job"));
+            continue;
+        };
+        let pair = Pair {
+            id,
+            engine: engine_job,
+            engine_workflow: &engine,
+            generated: job,
+            generated_workflow: &generated,
+        };
+        compare_head(&pair, &mut kinds, &mut unexpected);
+        if SCRIPTED.contains(&id.as_str()) {
+            compare_scripted(&pair, &script, &pins, &mut unexpected);
+        } else {
+            compare_steps(&pair, &mut kinds, &mut unexpected);
         }
     }
     undeclared(engine_jobs, generated_jobs, &offered, &mut unexpected);
@@ -362,6 +629,17 @@ fn every_declared_qualification_job_matches_the_engine_job_but_for_the_listed_di
     assert_eq!(
         listed("a pipe is written as two steps"),
         BTreeSet::from(["outputs-scale-set".to_owned()])
+    );
+    let empty = set(&["empty-cache-hosted", "empty-cache-scale-set"]);
+    assert_eq!(listed("an || is written as one test"), empty);
+    assert_eq!(listed("a case condition is parenthesised"), empty);
+    assert_eq!(
+        listed("a line feed in a printf format is written as \\n"),
+        empty
+    );
+    assert_eq!(
+        listed("a semicolon in a message is a full stop"),
+        set(&["cache-default-branch-guard"])
     );
     assert_eq!(listed("an && chain is written as steps"), set(&CHAINS));
     assert_eq!(listed("permissions are narrower"), set(&NARROWER));
@@ -381,5 +659,22 @@ fn the_committed_workflow_and_the_sample_are_what_the_repository_config_renders(
         read("generator/samples/qualification/expected/.github/workflows/qualification-gen.yml")?,
         rendered
     );
+    Ok(())
+}
+
+#[test]
+fn the_mbx_script_parses_and_refuses_an_unknown_phase() -> TestResult {
+    let script = repo(SCRIPT);
+    let parsed = std::process::Command::new("/bin/bash")
+        .arg("-n")
+        .arg(&script)
+        .status()?;
+    assert!(parsed.success());
+    let unknown = std::process::Command::new("/bin/bash")
+        .arg(&script)
+        .arg("no-such-phase")
+        .output()?;
+    assert_eq!(unknown.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&unknown.stderr).contains("no-such-phase"));
     Ok(())
 }
