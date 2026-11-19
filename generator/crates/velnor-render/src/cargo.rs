@@ -76,15 +76,22 @@ fn cargo_command(
         CargoCommand::FmtCheck => ("Format".into(), "cargo-fmt --all --check".into(), vec![]),
         CargoCommand::Clippy { extra } => clippy(cargo, extra),
         CargoCommand::NextestBuild => nextest_build(nextest),
-        CargoCommand::NextestRun { filter } => {
-            nextest_run(&format!("--workspace --locked{nextest}"), filter)
-        }
-        CargoCommand::NextestRunArchive { file, filter } => nextest_run(
+        CargoCommand::NextestRun { filter, ci_profile } => nextest_run(
+            &format!("--workspace --locked{nextest}"),
+            filter,
+            *ci_profile,
+        ),
+        CargoCommand::NextestRunArchive {
+            file,
+            filter,
+            ci_profile,
+        } => nextest_run(
             &format!(
                 "--archive-file '{}' --extract-to . --extract-overwrite --workspace-remap .",
                 file.as_str().replace('\'', "'\\''")
             ),
             filter,
+            *ci_profile,
         ),
         CargoCommand::NextestArchive { file } => (
             BUILD_TESTS_STEP.into(),
@@ -130,7 +137,7 @@ fn cargo_command(
             vec![],
         ),
         CargoCommand::Deny { manifest } => deny(manifest),
-        CargoCommand::Machete => ("Unused dependencies".into(), "cargo-machete".into(), vec![]),
+        CargoCommand::Machete => ("Unused dependencies".into(), "cargo machete".into(), vec![]),
     }
 }
 
@@ -164,6 +171,16 @@ fn clippy(cargo: &str, extra: &[String]) -> (String, String, Vec<(String, Value)
     )
 }
 
+pub(crate) fn target_dir_env(target: &RepoPath) -> (String, Value) {
+    (
+        "CARGO_TARGET_DIR".to_owned(),
+        Value::Expr(format!(
+            "${{{{ github.workspace }}}}/{}",
+            target.as_str().replace("${{", "${{ '${{' }}")
+        )),
+    )
+}
+
 fn cache_debug_env() -> (String, Value) {
     (
         "CARGO_LOG".to_owned(),
@@ -183,11 +200,16 @@ fn nextest_build(format: &str) -> (String, String, Vec<(String, Value)>) {
     )
 }
 
-fn nextest_run(scope: &str, filter: &FilterRef) -> (String, String, Vec<(String, Value)>) {
+fn nextest_run(
+    scope: &str,
+    filter: &FilterRef,
+    ci_profile: bool,
+) -> (String, String, Vec<(String, Value)>) {
+    let profile = if ci_profile { " --profile ci" } else { "" };
     (
         TEST_STEP.into(),
         format!(
-            "cargo-nextest nextest run {scope} --no-fail-fast --ignore-default-filter --status-level pass -E \"{}\" --no-tests=pass",
+            "cargo-nextest nextest run {scope}{profile} --no-fail-fast --ignore-default-filter --status-level pass -E \"{}\" --no-tests=pass",
             nextest_filter(filter)
         ),
         vec![],
@@ -230,13 +252,13 @@ fn deny(manifest: &RepoPath) -> (String, String, Vec<(String, Value)>) {
     match manifest.parent() {
         None => (
             "Dependency policy".into(),
-            "cargo-deny check".into(),
+            "cargo-deny --locked check".into(),
             vec![],
         ),
         Some(directory) => (
             format!("Dependency policy ({directory})"),
             format!(
-                "cargo-deny --manifest-path '{}' check",
+                "cargo-deny --manifest-path '{}' --locked check",
                 manifest.as_str().replace('\'', "'\\''")
             ),
             vec![],

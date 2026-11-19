@@ -1,0 +1,12 @@
+{
+ "pull_request": {
+  "base": {
+   "sha": "a"
+  },
+  "head": {
+   "repo": {
+    "fork": false
+   }
+  }
+ }
+}
