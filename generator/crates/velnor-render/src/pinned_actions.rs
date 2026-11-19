@@ -48,12 +48,21 @@ pub const PINNED_ACTIONS: [PinnedAction; 5] = [
     DOCKER_BUILD_PUSH,
 ];
 
-/// Inputs that carry a credential. A literal value is refused: the value must
-/// be an expression over `secrets`, `env` or the job token.
-const CREDENTIAL_INPUTS: [(&str, &str); 3] = [
-    (DOCKER_LOGIN.action, "password"),
-    (DOCKER_BUILD_PUSH.action, "github-token"),
-    (ATTEST_BUILD_PROVENANCE.action, "github-token"),
+#[derive(Clone, Copy)]
+enum Shape {
+    Reference,
+    KeyedReferences,
+}
+
+const CREDENTIAL_INPUTS: [(&str, &str, Shape); 4] = [
+    (DOCKER_LOGIN.action, "password", Shape::Reference),
+    (DOCKER_BUILD_PUSH.action, "github-token", Shape::Reference),
+    (DOCKER_BUILD_PUSH.action, "secrets", Shape::KeyedReferences),
+    (
+        ATTEST_BUILD_PROVENANCE.action,
+        "github-token",
+        Shape::Reference,
+    ),
 ];
 
 pub(crate) fn pin_rules(action: &str, reference: &str, rules: &mut Vec<Rule>) {
@@ -74,8 +83,10 @@ pub(crate) fn credential_rules(step: &RenderedStep, rules: &mut Vec<Rule>) {
     for (name, value) in &step.with {
         let credential = CREDENTIAL_INPUTS
             .iter()
-            .any(|(guarded, input)| *guarded == action && input == name);
-        if credential && !from_secret_or_env(value) {
+            .find(|(guarded, input, _)| *guarded == action && input.eq_ignore_ascii_case(name));
+        if let Some((_, _, shape)) = credential
+            && !is_secret_reference(value, *shape)
+        {
             rules.push(Rule::LiteralCredential {
                 action: action.to_owned(),
                 input: name.clone(),
@@ -84,11 +95,40 @@ pub(crate) fn credential_rules(step: &RenderedStep, rules: &mut Vec<Rule>) {
     }
 }
 
-fn from_secret_or_env(value: &Value) -> bool {
-    match value {
-        Value::Expr(text) | Value::BoundedExpr { text, .. } => {
-            text.contains("secrets.") || text.contains("env.") || text.contains("github.token")
+fn is_secret_reference(value: &Value, shape: Shape) -> bool {
+    let (Value::Expr(text) | Value::BoundedExpr { text, .. }) = value else {
+        return false;
+    };
+    match shape {
+        Shape::Reference => single_reference(text),
+        Shape::KeyedReferences => {
+            text.lines().any(|line| !line.is_empty())
+                && text.lines().filter(|line| !line.is_empty()).all(|line| {
+                    line.split_once('=').is_some_and(|(id, reference)| {
+                        name_chars(id) && single_reference(reference)
+                    })
+                })
         }
-        Value::Text(_) | Value::Int(_) | Value::Bool(_) => false,
     }
+}
+
+fn single_reference(text: &str) -> bool {
+    let Some(inner) = text
+        .strip_prefix("${{")
+        .and_then(|rest| rest.strip_suffix("}}"))
+    else {
+        return false;
+    };
+    let path = inner.trim();
+    path == "github.token"
+        || ["secrets.", "env."]
+            .iter()
+            .any(|root| path.strip_prefix(root).is_some_and(name_chars))
+}
+
+fn name_chars(text: &str) -> bool {
+    !text.is_empty()
+        && text.bytes().all(|byte| {
+            byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-' || byte == b'.'
+        })
 }

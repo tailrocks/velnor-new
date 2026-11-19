@@ -188,6 +188,110 @@ fn the_other_credential_inputs_refuse_a_literal_too() {
     }
 }
 
+fn password_literal(action: &str, input: &str) -> Rule {
+    Rule::LiteralCredential {
+        action: action.to_owned(),
+        input: input.to_owned(),
+    }
+}
+
+#[test]
+fn a_credential_expression_must_be_a_single_secret_reference() {
+    let login = at(&DOCKER_LOGIN, DOCKER_LOGIN.commit);
+    let refused = [
+        "${{ 'literal-password' || secrets.TOKEN }}",
+        "${{ github.event.head_commit.message || secrets.TOKEN }}",
+        "${{ format('secrets.X') }}",
+        "${{ secrets.TOKEN }}literal",
+        "literal${{ secrets.TOKEN }}",
+        "${{ secrets.TOKEN }}${{ github.event.issue.title }}",
+        "${{ secrets['TOKEN'] }}",
+        "${{ secrets.TOKEN == 'x' }}",
+        "secrets.TOKEN",
+    ];
+    for text in refused {
+        assert_eq!(
+            rules_of(step(
+                &login,
+                vec![("password", Value::Expr(text.to_owned()))]
+            )),
+            [password_literal(DOCKER_LOGIN.action, "password")],
+            "{text}"
+        );
+    }
+    for text in [
+        "${{ secrets.TOKEN }}",
+        "${{secrets.TOKEN}}",
+        "${{ env.REGISTRY_TOKEN }}",
+        "${{ github.token }}",
+    ] {
+        assert_eq!(
+            rules_of(step(
+                &login,
+                vec![("password", Value::Expr(text.to_owned()))]
+            )),
+            Vec::<Rule>::new(),
+            "{text}"
+        );
+    }
+}
+
+#[test]
+fn credential_input_names_match_case_insensitively() {
+    let login = at(&DOCKER_LOGIN, DOCKER_LOGIN.commit);
+    for name in ["PASSWORD", "Password"] {
+        assert_eq!(
+            rules_of(step(
+                &login,
+                vec![(name, Value::Text("hunter2".to_owned()))]
+            )),
+            [password_literal(DOCKER_LOGIN.action, name)],
+            "{name}"
+        );
+    }
+    let build = at(&DOCKER_BUILD_PUSH, DOCKER_BUILD_PUSH.commit);
+    assert_eq!(
+        rules_of(step(
+            &build,
+            vec![("Github-Token", Value::Text("ghp_literal".to_owned()))]
+        )),
+        [password_literal(DOCKER_BUILD_PUSH.action, "Github-Token")]
+    );
+}
+
+#[test]
+fn the_build_secrets_input_accepts_only_secret_references() {
+    let build = at(&DOCKER_BUILD_PUSH, DOCKER_BUILD_PUSH.commit);
+    let literal = password_literal(DOCKER_BUILD_PUSH.action, "secrets");
+    for value in [
+        Value::Text("GIT_AUTH_TOKEN=ghp_literal".to_owned()),
+        Value::Text("GIT_AUTH_TOKEN=${{ secrets.TOKEN }}".to_owned()),
+        Value::Expr("GIT_AUTH_TOKEN=ghp_literal".to_owned()),
+        Value::Expr("A=${{ secrets.A }}\nB=literal".to_owned()),
+        Value::Expr("A=${{ 'literal' || secrets.A }}".to_owned()),
+        Value::Expr("${{ secrets.A }}".to_owned()),
+    ] {
+        assert_eq!(
+            rules_of(step(&build, vec![("secrets", value.clone())])),
+            std::slice::from_ref(&literal),
+            "{value:?}"
+        );
+    }
+    for value in [
+        "GIT_AUTH_TOKEN=${{ secrets.TOKEN }}",
+        "A=${{ secrets.A }}\nB=${{ env.B }}",
+    ] {
+        assert_eq!(
+            rules_of(step(
+                &build,
+                vec![("secrets", Value::Expr(value.to_owned()))]
+            )),
+            Vec::<Rule>::new(),
+            "{value}"
+        );
+    }
+}
+
 #[test]
 fn a_rendered_new_action_carries_its_tag_in_a_trailing_comment() -> TestResult {
     let mut rendered = step(
