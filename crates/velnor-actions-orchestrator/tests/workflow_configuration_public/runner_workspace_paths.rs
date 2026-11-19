@@ -4,6 +4,8 @@
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::fs;
+use std::io::Write;
+use std::process::{Command, Stdio};
 
 use velnor_actions_orchestrator::{prepare, render_staged_tree};
 
@@ -78,7 +80,7 @@ fn repository_root_runner_workspace_uses_the_root_manifest() -> Result<(), Box<d
     assert_eq!(count(&tree, "for manifest in Cargo.toml Cargo.toml"), 0);
     for needle in [
         "--manifest-path Cargo.toml",
-        "for manifest in Cargo.toml; do",
+        "--manifest-path \\\"$GITHUB_WORKSPACE/Cargo.toml\\\" > /dev/null",
         "target/release/velnor-host",
     ] {
         assert!(count(&tree, needle) > 0, "root render lost {needle}");
@@ -93,4 +95,105 @@ fn malformed_runner_workspace_roots_are_rejected() -> Result<(), Box<dyn Error>>
         assert!(prepare(repo.path()).is_err(), "accepted {root}");
     }
     Ok(())
+}
+
+const QUALIFICATION_MARKER: &str = "prefetch-locked-sources-for-qualification-workspaces";
+
+fn collect_scripts(value: &serde_json::Value, found: &mut Vec<String>) {
+    match value {
+        serde_json::Value::String(text)
+            if text.contains(QUALIFICATION_MARKER) && text.contains("cargo metadata --locked") =>
+        {
+            found.push(text.clone());
+        }
+        serde_json::Value::Array(items) => {
+            for item in items {
+                collect_scripts(item, found);
+            }
+        }
+        serde_json::Value::Object(map) => {
+            for item in map.values() {
+                collect_scripts(item, found);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn qualification_scripts(tree: &BTreeMap<String, String>) -> Result<Vec<String>, Box<dyn Error>> {
+    let mut found = Vec::new();
+    for (path, text) in tree {
+        if std::path::Path::new(path)
+            .extension()
+            .is_some_and(|ext| ext == "yml")
+            && text.contains(QUALIFICATION_MARKER)
+        {
+            let parsed: serde_json::Value = serde_saphyr::from_str(text)?;
+            collect_scripts(&parsed, &mut found);
+        }
+    }
+    assert!(!found.is_empty(), "no qualification script rendered");
+    Ok(found)
+}
+
+fn shellcheck(script: &str) -> Result<Option<String>, Box<dyn Error>> {
+    let spawned = Command::new("shellcheck")
+        .args(["--shell=bash", "--severity=style", "-"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn();
+    let mut child = match spawned {
+        Ok(child) => child,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error.into()),
+    };
+    child
+        .stdin
+        .take()
+        .ok_or("shellcheck stdin")?
+        .write_all(script.as_bytes())?;
+    let output = child.wait_with_output()?;
+    if output.status.success() {
+        return Ok(Some(String::new()));
+    }
+    Ok(Some(
+        String::from_utf8_lossy(&output.stdout).into_owned()
+            + &String::from_utf8_lossy(&output.stderr),
+    ))
+}
+
+fn assert_shellcheck_clean(tree: &BTreeMap<String, String>) -> Result<(), Box<dyn Error>> {
+    for script in qualification_scripts(tree)? {
+        if let Some(report) = shellcheck(&script)? {
+            assert!(
+                report.is_empty(),
+                "shellcheck rejected the script:\n{report}"
+            );
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn repository_root_runner_workspace_renders_no_single_item_loop() -> Result<(), Box<dyn Error>> {
+    let tree = rendered(Some(""))?;
+    for script in qualification_scripts(&tree)? {
+        assert!(
+            !script.contains("for manifest in"),
+            "single-item loop: {script}"
+        );
+        assert!(script.contains("--manifest-path \"$GITHUB_WORKSPACE/Cargo.toml\""));
+    }
+    assert_shellcheck_clean(&tree)
+}
+
+#[test]
+fn several_manifests_keep_the_loop_and_pass_shellcheck() -> Result<(), Box<dyn Error>> {
+    let tree = rendered(Some("crates/velnor-rig"))?;
+    for script in qualification_scripts(&tree)? {
+        assert!(script.contains("for manifest in Cargo.toml crates/velnor-rig/Cargo.toml; do"));
+        assert!(script.contains("--manifest-path \"$GITHUB_WORKSPACE/$manifest\""));
+    }
+    assert_shellcheck_clean(&tree)
 }
