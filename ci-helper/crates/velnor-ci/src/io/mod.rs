@@ -17,6 +17,7 @@ mod crates_mirror_dispatch;
 mod crates_mirror_mise;
 mod fetch;
 mod fetch_credentials;
+mod fetch_toolchain;
 mod git;
 mod git_witness;
 mod http;

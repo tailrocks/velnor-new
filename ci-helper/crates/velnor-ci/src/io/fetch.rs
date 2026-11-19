@@ -25,6 +25,10 @@ const FORWARDED_VARIABLES: [&str; 9] = [
     "NO_PROXY",
     "no_proxy",
 ];
+/// Restored Cargo git databases carry their own hooks and config; these command-line
+/// settings outrank them, so a hook a cached repository holds cannot run with the token.
+const GUARDED_GIT_SETTINGS: [(&str, &str); 2] =
+    [("core.hooksPath", "/dev/null"), ("core.fsmonitor", "false")];
 const SERVER_VARIABLE: &str = "VELNOR_SERVER_URL";
 const DEFAULT_SERVER: &str = "https://github.com";
 const REVOKE_PATH: &str = "/installation/token";
@@ -65,7 +69,12 @@ fn fetch_with(args: &FetchArgs, token: Option<&str>) -> Result<(), CiError> {
     };
     let mirror = super::crates_mirror::runner_config()?;
     let server = Server::from_environment()?;
-    let environment = trusted.environment(&home, &cargo, &git, &inherited, token, &server)?;
+    let mut environment = trusted.environment(&home, &cargo, &git, &inherited, token, &server)?;
+    if token.is_some()
+        && let Some(toolchain) = super::fetch_toolchain::pin(&cargo, &environment)?
+    {
+        environment.push(("RUSTUP_TOOLCHAIN".into(), toolchain));
+    }
     run_fetches(
         &cargo,
         &environment,
@@ -308,16 +317,20 @@ impl Trusted {
                 "url.https://x-access-token:{token}@{}/.insteadOf",
                 server.authority
             );
-            environment.push((
-                "GIT_CONFIG_COUNT".into(),
-                server.forms.len().to_string().into(),
-            ));
-            for (index, form) in server.forms.iter().enumerate() {
-                environment.push((
-                    format!("GIT_CONFIG_KEY_{index}").into(),
-                    base.clone().into(),
-                ));
-                environment.push((format!("GIT_CONFIG_VALUE_{index}").into(), form.into()));
+            let mut settings: Vec<(String, String)> = server
+                .forms
+                .iter()
+                .map(|form| (base.clone(), form.clone()))
+                .collect();
+            settings.extend(
+                GUARDED_GIT_SETTINGS
+                    .iter()
+                    .map(|(key, value)| ((*key).to_owned(), (*value).to_owned())),
+            );
+            environment.push(("GIT_CONFIG_COUNT".into(), settings.len().to_string().into()));
+            for (index, (key, value)) in settings.into_iter().enumerate() {
+                environment.push((format!("GIT_CONFIG_KEY_{index}").into(), key.into()));
+                environment.push((format!("GIT_CONFIG_VALUE_{index}").into(), value.into()));
             }
         }
         Ok(environment)

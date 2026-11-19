@@ -154,3 +154,92 @@ fn an_include_chain_deeper_than_the_scanner_reads_runs_nothing_and_still_revokes
     assert_eq!(api.requests.lock().map_err(|e| e.to_string())?.len(), 1);
     Ok(())
 }
+
+#[test]
+fn a_hook_in_a_restored_git_database_never_runs_during_the_authenticated_fetch() -> TestResult {
+    let fixture = Fixture::new("fetch-hooks", 0)?;
+    let root = fixture.repo.root().to_path_buf();
+    let database = root.join("db");
+    let git = |args: &[&str]| {
+        std::process::Command::new("/usr/bin/git")
+            .current_dir(&database)
+            .env_clear()
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .args(["-c", "user.name=a", "-c", "user.email=a@b.c"])
+            .args(args)
+            .output()
+    };
+    fs::create_dir_all(&database)?;
+    git(&["init", "-q"])?;
+    git(&["commit", "-q", "--allow-empty", "-m", "x"])?;
+    let ran = root.join("log/hook.ran");
+    script(
+        &database.join(".git/hooks/reference-transaction"),
+        &format!("echo \"$GIT_CONFIG_KEY_0\" >> {}", ran.display()),
+    )?;
+    script(
+        &root.join("trusted/bin/cargo"),
+        &format!(
+            "cd {} && /usr/bin/git update-ref refs/heads/moved HEAD",
+            database.display()
+        ),
+    )?;
+    let api = serve(204)?;
+    let output = fixture.run_with(&api, Some(TOKEN), None, &["Cargo.toml"], &[]);
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(fixture.log("hook.ran"), "");
+    Ok(())
+}
+
+fn through_a_rustup_proxy(
+    fixture: &Fixture,
+    active: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let bin = fixture.repo.root().join("trusted/bin");
+    fs::remove_file(bin.join("cargo"))?;
+    let log = fixture.repo.root().join("log");
+    script(
+        &bin.join("rustup"),
+        &format!(
+            "case \"$0\" in *rustup) echo '{active} (default)' ;; *) env > {log}/cargo.env; echo \"$*\" > {log}/cargo.args ;; esac",
+            log = log.display()
+        ),
+    )?;
+    std::os::unix::fs::symlink("rustup", bin.join("cargo"))?;
+    Ok(())
+}
+
+#[test]
+fn a_rustup_proxy_cargo_is_pinned_to_the_runner_toolchain_not_the_checkouts() -> TestResult {
+    let fixture = Fixture::new("fetch-rustup", 0)?;
+    through_a_rustup_proxy(&fixture, "stable-test")?;
+    fixture.repo.write_unstaged(
+        "rust-toolchain.toml",
+        "[toolchain]\npath = \"/tmp/hostile-toolchain\"\n",
+    );
+    let api = serve(204)?;
+    let output = fixture.run_with(&api, Some(TOKEN), None, &["Cargo.toml"], &[]);
+    assert!(output.status.success(), "{output:?}");
+    assert!(
+        fixture
+            .log("cargo.env")
+            .lines()
+            .any(|line| line == "RUSTUP_TOOLCHAIN=stable-test"),
+        "{}",
+        fixture.log("cargo.env")
+    );
+    Ok(())
+}
+
+#[test]
+fn a_rustup_proxy_whose_active_toolchain_is_a_path_runs_nothing_and_still_revokes() -> TestResult {
+    let fixture = Fixture::new("fetch-rustup-path", 0)?;
+    through_a_rustup_proxy(&fixture, "/tmp/hostile-toolchain")?;
+    let api = serve(204)?;
+    let output = fixture.run_with(&api, Some(TOKEN), None, &["Cargo.toml"], &[]);
+    assert!(!output.status.success(), "{output:?}");
+    assert_eq!(fixture.log("cargo.args"), "");
+    assert_eq!(api.requests.lock().map_err(|e| e.to_string())?.len(), 1);
+    Ok(())
+}
