@@ -4,7 +4,7 @@
 use serde::Deserialize;
 use velnor_model::{
     CiDebugInfo, CronExpr, FullRun, InputRule, OnMain, PackageName, PathGlob, RepoPath,
-    RunnerLabel, RustCiConfig, Shape, SpeedBudget, TargetName,
+    RunnerLabel, RustCiConfig, Shape, SpeedBudget,
 };
 
 use crate::error::{DetectError, Reason};
@@ -134,7 +134,8 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
             .transpose()
             .map_err(invalid)?,
         mbx_store: raw.mbx_shared_store.unwrap_or(false).into(),
-        nextest_harnesses: harnesses(raw.nextest_harnesses).map_err(invalid)?,
+        nextest_harnesses: crate::config_lists::harnesses(raw.nextest_harnesses)
+            .map_err(invalid)?,
         default_branch,
         skip_draft_pull_requests: raw
             .skip_draft_pull_requests
@@ -151,36 +152,8 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         runner,
         fork_runner,
         timeout_minutes,
-        exclude: excludes(raw.exclude).map_err(invalid)?,
+        exclude: crate::config_lists::excludes(raw.exclude).map_err(invalid)?,
     })
-}
-
-fn excludes(entries: Vec<String>) -> Result<Vec<PathGlob>, Reason> {
-    let invalid = |value| Reason::InvalidValue {
-        key: "exclude",
-        value,
-    };
-    entries
-        .into_iter()
-        .map(|entry| PathGlob::new(entry.trim_end_matches('/')).map_err(|_| invalid(entry)))
-        .collect()
-}
-
-fn harnesses(entries: Vec<String>) -> Result<Vec<(PackageName, TargetName)>, Reason> {
-    entries
-        .into_iter()
-        .map(|entry| {
-            let invalid = || Reason::InvalidValue {
-                key: "nextest_harnesses",
-                value: entry.clone(),
-            };
-            let (package, target) = entry.split_once(':').ok_or_else(invalid)?;
-            Ok((
-                PackageName::new(package).map_err(|_| invalid())?,
-                TargetName::new(target).map_err(|_| invalid())?,
-            ))
-        })
-        .collect()
 }
 
 fn parse_shape(configured: Option<&str>) -> Result<Option<Shape>, Reason> {

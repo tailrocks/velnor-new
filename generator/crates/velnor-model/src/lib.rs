@@ -38,9 +38,8 @@ pub use repo::{
     CacheDebug, CiDebugInfo, CompileInputs, CratesMirror, CustomHarness, DependencyKind, FullRun,
     InputRule, MbxStore, MemberDependency, OnMain, PackageDependency, PolicyTools, RepoFacts,
     RepoView, RepositoryIdentity, RustCiConfig, RustMember, RustMetadata, RustPackage, RustRoot,
-    SpeedBudget,
-    Target, TargetKind, TestSetup, Timings, ToolPin, ToolPins, Toolchain, UnownedPackage, Unread,
-    Weakening,
+    SpeedBudget, Target, TargetKind, TestSetup, Timings, ToolPin, ToolPins, Toolchain,
+    UnownedPackage, Unread, Weakening,
 };
 pub use selection::{
     AllTrigger, ChangeSet, EventKind, OptionalSteps, RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE,

@@ -15,6 +15,7 @@ mod config;
 mod config_budget;
 mod config_fork;
 mod config_helper;
+mod config_lists;
 mod config_mirror;
 mod config_test_setup;
 mod credentials;

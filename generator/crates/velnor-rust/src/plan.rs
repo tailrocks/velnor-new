@@ -6,9 +6,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use velnor_model::{
     Access, CacheDebug, CacheKey, CacheRoot, CargoCommand, Concurrency, FullRun, HelperCommand,
     Host, Job, JobId, MbxStore, PackageName, PermissionScope, Permissions, PullRequestType,
-    RepoFacts,
-    RootSlug, RustRoot, Shape, ShapeDecision, Step, StepKind, TargetName, Toolchain, Triggers,
-    When, WorkflowPlan,
+    RepoFacts, RootSlug, RustRoot, Shape, ShapeDecision, Step, StepKind, TargetName, Toolchain,
+    Triggers, When, WorkflowPlan,
 };
 
 use crate::audit_job::audit_job;
