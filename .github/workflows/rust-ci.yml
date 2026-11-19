@@ -377,7 +377,7 @@ jobs:
           CARGO_TARGET_DIR: '${{ github.workspace }}/target'
         run: '. "$VELNOR_EXEC" run -- cargo-clippy clippy --workspace --all-targets --locked --message-format=json-render-diagnostics -- -D warnings'
       - name: Documentation
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (steps.replan.outputs.rust_root_mode || needs.rust-plan.outputs.rust_root_mode) != ''none'' && (steps.replan.outputs.rust_root_docs || needs.rust-plan.outputs.rust_root_docs) == ''run'' && (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args) != '''' }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') && (steps.replan.outputs.rust_root_mode || needs.rust-plan.outputs.rust_root_mode) != ''none'' && (steps.replan.outputs.rust_root_docs || needs.rust-plan.outputs.rust_root_docs) == ''run'' && (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args) != '''' }}'
         env:
           CARGO_TARGET_DIR: '${{ github.workspace }}/target'
         run: '. "$VELNOR_EXEC" run -- cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'' --message-format=json-render-diagnostics'
@@ -719,7 +719,7 @@ jobs:
           CARGO_TARGET_DIR: '${{ github.workspace }}/ci-helper/target'
         run: '. "$VELNOR_EXEC" run -- cargo-clippy clippy --workspace --all-targets --locked --message-format=json-render-diagnostics -- -D warnings'
       - name: Documentation
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (steps.replan.outputs.rust_ci_helper_mode || needs.rust-plan.outputs.rust_ci_helper_mode) != ''none'' && (steps.replan.outputs.rust_ci_helper_docs || needs.rust-plan.outputs.rust_ci_helper_docs) == ''run'' && (steps.replan.outputs.rust_ci_helper_package_args || needs.rust-plan.outputs.rust_ci_helper_package_args) != '''' }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') && (steps.replan.outputs.rust_ci_helper_mode || needs.rust-plan.outputs.rust_ci_helper_mode) != ''none'' && (steps.replan.outputs.rust_ci_helper_docs || needs.rust-plan.outputs.rust_ci_helper_docs) == ''run'' && (steps.replan.outputs.rust_ci_helper_package_args || needs.rust-plan.outputs.rust_ci_helper_package_args) != '''' }}'
         working-directory: ci-helper
         env:
           CARGO_TARGET_DIR: '${{ github.workspace }}/ci-helper/target'
@@ -986,7 +986,7 @@ jobs:
           CARGO_TARGET_DIR: '${{ github.workspace }}/crates/velnor-runner/target'
         run: '. "$VELNOR_EXEC" run -- cargo-clippy clippy --workspace --all-targets --locked --message-format=json-render-diagnostics -- -D warnings'
       - name: Documentation
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (steps.replan.outputs.rust_crates_velnor_runner_mode || needs.rust-plan.outputs.rust_crates_velnor_runner_mode) != ''none'' && (steps.replan.outputs.rust_crates_velnor_runner_docs || needs.rust-plan.outputs.rust_crates_velnor_runner_docs) == ''run'' && (steps.replan.outputs.rust_crates_velnor_runner_package_args || needs.rust-plan.outputs.rust_crates_velnor_runner_package_args) != '''' }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') && (steps.replan.outputs.rust_crates_velnor_runner_mode || needs.rust-plan.outputs.rust_crates_velnor_runner_mode) != ''none'' && (steps.replan.outputs.rust_crates_velnor_runner_docs || needs.rust-plan.outputs.rust_crates_velnor_runner_docs) == ''run'' && (steps.replan.outputs.rust_crates_velnor_runner_package_args || needs.rust-plan.outputs.rust_crates_velnor_runner_package_args) != '''' }}'
         working-directory: crates/velnor-runner
         env:
           CARGO_TARGET_DIR: '${{ github.workspace }}/crates/velnor-runner/target'
@@ -1295,7 +1295,7 @@ jobs:
           CARGO_TARGET_DIR: '${{ github.workspace }}/generator/target'
         run: '. "$VELNOR_EXEC" run -- cargo-clippy clippy --workspace --all-targets --locked --message-format=json-render-diagnostics -- -D warnings'
       - name: Documentation
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (steps.replan.outputs.rust_generator_mode || needs.rust-plan.outputs.rust_generator_mode) != ''none'' && (steps.replan.outputs.rust_generator_docs || needs.rust-plan.outputs.rust_generator_docs) == ''run'' && (steps.replan.outputs.rust_generator_package_args || needs.rust-plan.outputs.rust_generator_package_args) != '''' }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') && (steps.replan.outputs.rust_generator_mode || needs.rust-plan.outputs.rust_generator_mode) != ''none'' && (steps.replan.outputs.rust_generator_docs || needs.rust-plan.outputs.rust_generator_docs) == ''run'' && (steps.replan.outputs.rust_generator_package_args || needs.rust-plan.outputs.rust_generator_package_args) != '''' }}'
         working-directory: generator
         env:
           CARGO_TARGET_DIR: '${{ github.workspace }}/generator/target'
@@ -1592,7 +1592,7 @@ jobs:
           CARGO_TARGET_DIR: '${{ github.workspace }}/local/target'
         run: '. "$VELNOR_EXEC" run -- cargo-clippy clippy --workspace --all-targets --locked --message-format=json-render-diagnostics -- -D warnings'
       - name: Documentation
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (steps.replan.outputs.rust_local_mode || needs.rust-plan.outputs.rust_local_mode) != ''none'' && (steps.replan.outputs.rust_local_docs || needs.rust-plan.outputs.rust_local_docs) == ''run'' && (steps.replan.outputs.rust_local_package_args || needs.rust-plan.outputs.rust_local_package_args) != '''' }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') && (steps.replan.outputs.rust_local_mode || needs.rust-plan.outputs.rust_local_mode) != ''none'' && (steps.replan.outputs.rust_local_docs || needs.rust-plan.outputs.rust_local_docs) == ''run'' && (steps.replan.outputs.rust_local_package_args || needs.rust-plan.outputs.rust_local_package_args) != '''' }}'
         working-directory: local
         env:
           CARGO_TARGET_DIR: '${{ github.workspace }}/local/target'
