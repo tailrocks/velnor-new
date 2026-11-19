@@ -23,8 +23,8 @@ const REAP_RESERVE: Duration = Duration::from_millis(300);
 
 mod control;
 pub(crate) use control::{
-    reactivate_connection_until, run_internal, wait_for_connection_detached_until,
-    wait_for_connection_drain_until, wait_for_drain_until,
+    delete_created_scale_set_until, reactivate_connection_until, run_internal,
+    wait_for_connection_detached_until, wait_for_connection_drain_until, wait_for_drain_until,
 };
 
 enum ChildWait {

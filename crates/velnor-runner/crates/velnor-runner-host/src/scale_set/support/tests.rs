@@ -8,13 +8,14 @@ use velnor_runner_github::{
     workflow_run::{RepositoryTarget, get_repository_scope},
 };
 
-use super::{Recording, create_and_verify};
+use super::{CreateIds, Recording, create_and_verify};
 use crate::{
     config::HostConfig,
     journal::{ExistingScaleSetObservation, Journal, ScaleSetCreateRequest, ScaleSetCreateState},
     scale_set::EnsureError,
 };
 
+mod outcomes;
 mod refusal;
 
 const CONFIG: &str = r#"schema = 2
@@ -57,6 +58,10 @@ fn scale_set_json(disable_update: bool) -> String {
     )
 }
 
+fn foreign_group_json() -> String {
+    scale_set_json(true).replacen("{\"id\":10,", "{\"id\":10,\"runnerGroupId\":2,", 1)
+}
+
 struct Script {
     replies: VecDeque<(u16, String)>,
     seen: Vec<(Method, String)>,
@@ -86,9 +91,17 @@ async fn run(
     dir: &tempfile::TempDir,
     replies: Vec<(u16, String)>,
 ) -> TestResult<(Result<i64, EnsureError>, Script, Journal)> {
+    run_with(dir, replies, true).await
+}
+
+async fn run_with(
+    dir: &tempfile::TempDir,
+    replies: Vec<(u16, String)>,
+    adopt_on_conflict: bool,
+) -> TestResult<(Result<i64, EnsureError>, Script, Journal)> {
     let journal = Journal::open(&dir.path().join("launch.db")).await?;
     journal.bind_engine("engine-test").await?;
-    let (outcome, transport) = attempt(&journal, replies).await?;
+    let (outcome, transport) = attempt_with(&journal, replies, 0, adopt_on_conflict).await?;
     Ok((outcome, transport, journal))
 }
 
@@ -96,13 +109,22 @@ async fn attempt(
     journal: &Journal,
     replies: Vec<(u16, String)>,
 ) -> TestResult<(Result<i64, EnsureError>, Script)> {
-    attempt_after(journal, replies, 0).await
+    attempt_with(journal, replies, 0, true).await
 }
 
 async fn attempt_after(
     journal: &Journal,
     replies: Vec<(u16, String)>,
     earlier_status: u16,
+) -> TestResult<(Result<i64, EnsureError>, Script)> {
+    attempt_with(journal, replies, earlier_status, true).await
+}
+
+async fn attempt_with(
+    journal: &Journal,
+    replies: Vec<(u16, String)>,
+    earlier_status: u16,
+    adopt_on_conflict: bool,
 ) -> TestResult<(Result<i64, EnsureError>, Script)> {
     let config = HostConfig::parse(CONFIG)?;
     let binding = config.connections().first().ok_or("connection")?;
@@ -121,9 +143,13 @@ async fn attempt_after(
     )?;
     let mut transport = Recording::new(Script::new(replies));
     transport.status = earlier_status;
+    let ids = CreateIds {
+        pat: "pat",
+        scope: &scope,
+        adopt_on_conflict,
+    };
     let outcome = create_and_verify(
-        "pat",
-        &scope,
+        ids,
         &mut transport,
         "admin-token",
         &scoped,
@@ -202,133 +228,93 @@ async fn create_refuses_a_post_body_that_keeps_updates_enabled() -> TestResult<(
     Ok(())
 }
 
-fn methods(transport: &Script) -> Vec<Method> {
-    transport.seen.iter().map(|(method, _)| *method).collect()
+async fn unverified_remote_ids(journal: &Journal) -> TestResult<Vec<i64>> {
+    let connection = journal.connection().await?;
+    let mut rows = connection
+        .query(
+            "SELECT remote_id FROM connection_scale_set_unverified ORDER BY remote_id",
+            (),
+        )
+        .await?;
+    let mut ids = Vec::new();
+    while let Some(row) = rows.next().await? {
+        ids.push(row.get::<i64>(0)?);
+    }
+    Ok(ids)
 }
 
 #[tokio::test]
-async fn a_refused_create_is_forbidden_and_can_be_posted_again() -> TestResult<()> {
+async fn refused_reread_keeps_the_created_id_without_binding_it() -> TestResult<()> {
     let dir = tempfile::tempdir()?;
-    let (outcome, transport, journal) = run(&dir, vec![(403, String::new())]).await?;
-    assert_eq!(outcome, Err(EnsureError::Forbidden));
-    assert_eq!(methods(&transport), [Method::Post]);
-    assert_eq!(intent_states(&journal).await?, ["prepared"]);
-
-    let (outcome, transport) = attempt(
-        &journal,
-        vec![(200, scale_set_json(true)), (200, scale_set_json(true))],
+    let (outcome, _transport, journal) = run(
+        &dir,
+        vec![(200, scale_set_json(true)), (200, scale_set_json(false))],
     )
     .await?;
-    assert_eq!(outcome, Ok(10));
-    assert_eq!(methods(&transport), [Method::Post, Method::Get]);
+    assert!(outcome.is_err(), "outcome: {outcome:?}");
+    assert_eq!(unverified_remote_ids(&journal).await?, [10]);
+    assert_eq!(bound_scale_set_ids(&journal).await?, Vec::<i64>::new());
+    assert_eq!(intent_states(&journal).await?, ["uncertain"]);
     Ok(())
 }
 
 #[tokio::test]
-async fn other_definite_refusals_are_not_uncertain() -> TestResult<()> {
-    for status in [400, 401, 404, 422] {
-        let dir = tempfile::tempdir()?;
-        let (outcome, _transport, journal) = run(&dir, vec![(status, String::new())]).await?;
-        assert_eq!(
-            outcome,
-            Err(EnsureError::Unexpected {
-                status,
-                step: "runnerscalesets"
-            })
-        );
-        assert_eq!(intent_states(&journal).await?, ["prepared"]);
-    }
+async fn refused_post_body_keeps_the_created_id_without_binding_it() -> TestResult<()> {
+    let dir = tempfile::tempdir()?;
+    let (outcome, _transport, journal) = run(&dir, vec![(200, scale_set_json(false))]).await?;
+    assert!(outcome.is_err(), "outcome: {outcome:?}");
+    assert_eq!(unverified_remote_ids(&journal).await?, [10]);
+    assert_eq!(bound_scale_set_ids(&journal).await?, Vec::<i64>::new());
     Ok(())
 }
 
 #[tokio::test]
-async fn a_server_error_create_stays_uncertain() -> TestResult<()> {
+async fn a_set_that_never_existed_leaves_no_unverified_id() -> TestResult<()> {
     let dir = tempfile::tempdir()?;
     let (outcome, _transport, journal) = run(&dir, vec![(500, String::new())]).await?;
     assert!(outcome.is_err(), "outcome: {outcome:?}");
-    assert_eq!(intent_states(&journal).await?, ["uncertain"]);
-    let (outcome, transport) = attempt(&journal, vec![(200, scale_set_json(true))]).await?;
-    assert_eq!(outcome, Err(EnsureError::Uncertain));
-    assert!(transport.seen.is_empty(), "an uncertain row must not post");
+    assert_eq!(unverified_remote_ids(&journal).await?, Vec::<i64>::new());
     Ok(())
 }
 
 #[tokio::test]
-async fn a_conflict_whose_set_is_gone_can_be_posted_again() -> TestResult<()> {
+async fn create_refuses_a_set_from_a_foreign_runner_group() -> TestResult<()> {
     let dir = tempfile::tempdir()?;
-    let empty = r#"{"count":0,"value":[]}"#.to_owned();
-    let (outcome, transport, journal) = run(&dir, vec![(409, String::new()), (200, empty)]).await?;
-    assert_eq!(outcome, Err(EnsureError::Uncertain));
-    assert_eq!(methods(&transport), [Method::Post, Method::Get]);
-    assert_eq!(intent_states(&journal).await?, ["no_effect"]);
+    let (outcome, transport, journal) = run(&dir, vec![(200, foreign_group_json())]).await?;
+    assert_eq!(outcome, Err(EnsureError::Rejected));
+    assert_eq!(transport.seen.len(), 1, "a rejected set is not re-read");
+    assert_eq!(bound_scale_set_ids(&journal).await?, Vec::<i64>::new());
+    assert_eq!(intent_states(&journal).await?, ["uncertain"]);
+    Ok(())
+}
 
-    let (outcome, transport) = attempt(
-        &journal,
-        vec![(200, scale_set_json(true)), (200, scale_set_json(true))],
+#[tokio::test]
+async fn conflict_lookup_refuses_to_adopt_a_foreign_runner_group_set() -> TestResult<()> {
+    let dir = tempfile::tempdir()?;
+    let page = format!(r#"{{"count":1,"value":[{}]}}"#, foreign_group_json());
+    let (outcome, transport, journal) = run(&dir, vec![(409, String::new()), (200, page)]).await?;
+    assert_eq!(outcome, Err(EnsureError::Rejected));
+    let methods: Vec<Method> = transport.seen.iter().map(|(method, _)| *method).collect();
+    assert_eq!(methods, [Method::Post, Method::Get]);
+    assert_eq!(bound_scale_set_ids(&journal).await?, Vec::<i64>::new());
+    Ok(())
+}
+
+#[tokio::test]
+async fn an_organization_create_conflict_never_adopts_the_existing_set() -> TestResult<()> {
+    let dir = tempfile::tempdir()?;
+    let (outcome, transport, journal) = run_with(
+        &dir,
+        vec![(409, "{}".to_owned()), (200, scale_set_json(true))],
+        false,
     )
     .await?;
-    assert_eq!(outcome, Ok(10));
-    assert_eq!(methods(&transport), [Method::Post, Method::Get]);
-    Ok(())
-}
-
-#[tokio::test]
-async fn a_transport_failure_stays_uncertain() -> TestResult<()> {
-    let dir = tempfile::tempdir()?;
-    let (outcome, _transport, journal) = run(&dir, Vec::new()).await?;
     assert_eq!(outcome, Err(EnsureError::Uncertain));
-    assert_eq!(intent_states(&journal).await?, ["uncertain"]);
+    assert_eq!(transport.seen.len(), 1, "no lookup after the conflict");
+    assert_eq!(bound_scale_set_ids(&journal).await?, Vec::<i64>::new());
     Ok(())
 }
 
-#[tokio::test]
-async fn a_reset_does_not_reuse_an_earlier_refusal_status() -> TestResult<()> {
-    for earlier in [403, 404, 409] {
-        let dir = tempfile::tempdir()?;
-        let journal = Journal::open(&dir.path().join("launch.db")).await?;
-        journal.bind_engine("engine-test").await?;
-        let (outcome, _transport) = attempt_after(&journal, Vec::new(), earlier).await?;
-        assert_eq!(outcome, Err(EnsureError::Uncertain), "earlier {earlier}");
-        assert_eq!(
-            intent_states(&journal).await?,
-            ["uncertain"],
-            "earlier {earlier}"
-        );
-    }
-    Ok(())
-}
-
-#[tokio::test]
-async fn a_malformed_success_body_stays_uncertain() -> TestResult<()> {
-    let dir = tempfile::tempdir()?;
-    let (outcome, _transport, journal) = run(&dir, vec![(200, "{".to_owned())]).await?;
-    assert!(outcome.is_err(), "outcome: {outcome:?}");
-    assert_eq!(intent_states(&journal).await?, ["uncertain"]);
-    Ok(())
-}
-
-#[tokio::test]
-async fn a_released_row_adopts_a_set_that_appears_later() -> TestResult<()> {
-    let dir = tempfile::tempdir()?;
-    let (outcome, _transport, journal) = run(&dir, vec![(403, String::new())]).await?;
-    assert_eq!(outcome, Err(EnsureError::Forbidden));
-    assert_eq!(intent_states(&journal).await?, ["prepared"]);
-
-    let config = HostConfig::parse(CONFIG)?;
-    let binding = config.connections().first().ok_or("connection")?;
-    let scoped = journal.connection_scope(binding).await?;
-    let request = ScaleSetCreateRequest::new(binding, 1)?;
-    let labels = ["velnor".to_owned(), "ubuntu-26.04-scale-set".to_owned()];
-    let observed = ExistingScaleSetObservation::verified(
-        &request,
-        10,
-        "ubuntu-26.04-scale-set",
-        &labels,
-        true,
-    )?;
-    let adopted = scoped.adopt_scale_set(&request, observed).await?;
-    assert_eq!(adopted.state(), ScaleSetCreateState::Adopted);
-    assert_eq!(intent_states(&journal).await?, ["adopted"]);
-    assert_eq!(bound_scale_set_ids(&journal).await?, [10]);
-    Ok(())
+fn methods(transport: &Script) -> Vec<Method> {
+    transport.seen.iter().map(|(method, _)| *method).collect()
 }

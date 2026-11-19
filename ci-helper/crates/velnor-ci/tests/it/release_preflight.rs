@@ -111,6 +111,20 @@ fn a_pull_request_that_is_not_a_release_pr_is_not_asked_about() {
 }
 
 #[test]
+fn a_hundred_pull_requests_on_the_commit_are_refused() {
+    let mut fake = FakeGitHub::default();
+    let items: Vec<(u64, &str, &str)> = (1..=100).map(|n| (n, "feature/x", PR_HEAD)).collect();
+    pulls(&mut fake, &items);
+    let error = check(&fake).err().unwrap_or_default();
+    assert!(
+        error.contains("100 or more pull requests") && error.contains(VERIFIED),
+        "{error}"
+    );
+    pulls(&mut fake, &items[..99]);
+    assert_eq!(check(&fake), Ok(()));
+}
+
+#[test]
 fn an_api_error_fails_closed() {
     let fake = FakeGitHub::default();
     assert!(check(&fake).is_err());

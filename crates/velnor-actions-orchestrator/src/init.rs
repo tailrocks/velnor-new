@@ -178,7 +178,7 @@ const SAMPLE_BODY: &str = r#"schema = 1
 
 # Optional exact action-pin overrides. Omitted names use Velnor's bundled latest pins.
 # [actions.overrides]
-# "jdx/mise-action" = { version = "v5.2.6", sha = "f5be966e4a917d54244728e6a5fdcd1d93a35e6c" }
+# "jdx/mise-action" = { version = "v5.2.9", sha = "236a21c3b91f5db6d4e174b348674a0f0caac06d" }
 # "actions/checkout" = { version = "v7.0.1", sha = "3d3c42e5aac5ba805825da76410c181273ba90b1" }
 # "actions/cache/restore" = { version = "v6.1.0", sha = "55cc8345863c7cc4c66a329aec7e433d2d1c52a9" }
 # "actions/cache/save" = { version = "v6.1.0", sha = "55cc8345863c7cc4c66a329aec7e433d2d1c52a9" }

@@ -14,19 +14,6 @@ pub(crate) const VERIFY_RUST_MANIFEST_STEP: &str =
     velnor_actions_workflow_renderer::VERIFY_RUST_TOOLCHAIN_STEP;
 pub(crate) const VERIFY_RESTORED_RUST_STEP: &str = verifier_builders::VERIFY_RESTORED_RUST_STEP;
 
-pub(crate) fn toolchain_script(
-    version: &str,
-    phase: ToolchainPhase,
-    manifests: &[(&str, &str, &str)],
-) -> String {
-    verifier_builders::toolchain_script(
-        version,
-        phase,
-        manifests,
-        verifier_builders::TreeCheck::FileByFile,
-    )
-}
-
 pub(crate) fn verifier_shell_step(
     catalog: &ToolCatalog,
     phase: ToolchainPhase,

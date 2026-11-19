@@ -23,10 +23,15 @@ use transport::{
     marker_exists, private_state_directory, read_request, remove_owned_socket, remove_stale_socket,
     trusted_peer, write_response,
 };
+#[cfg(test)]
+#[path = "server/accept_tests.rs"]
+mod accept_tests;
 #[path = "server/bind.rs"]
 mod bind;
 #[path = "server/requests.rs"]
 mod requests;
+#[path = "server/scale_set_delete.rs"]
+mod scale_set_delete;
 mod state;
 pub(crate) use state::{
     ControlState, ControllerReadinessProof, SessionPollReceipt, SetupReceiptInput,
@@ -132,6 +137,10 @@ fn serve(
         match listener.accept() {
             Ok((mut stream, _)) => {
                 if trusted_peer(&stream) {
+                    if let Err(error) = stream.set_nonblocking(false) {
+                        eprintln!("host control blocking mode setup failed: {error}");
+                        continue;
+                    }
                     if let Err(error) = stream.set_read_timeout(Some(IO_TIMEOUT)) {
                         eprintln!("host control read timeout setup failed: {error}");
                         continue;
@@ -150,14 +159,7 @@ fn serve(
                             docker_root_digest,
                         ))
                     });
-                    let response = response.unwrap_or(Response {
-                        value: None,
-                        doctor_probe: None,
-                        readiness: None,
-                        session_observation: None,
-                        setup_receipt: None,
-                        connection_census: None,
-                    });
+                    let response = response.unwrap_or_default();
                     if let Err(error) = write_response(&mut stream, response) {
                         eprintln!("host control response failed: {error}");
                     }
@@ -332,45 +334,37 @@ pub(super) fn connection_census_status(
     )?))
 }
 
+pub(super) fn drain_marker_present(state_path: &Path) -> Result<bool, HostError> {
+    marker_exists(&state_path.join("drain"))
+}
+
 pub(super) fn observation_blocked(
     state: &ControlState,
     state_path: &Path,
     connection_id: &str,
 ) -> Result<bool, HostError> {
     Ok(!state.admission_ready()
-        || marker_exists(&state_path.join("drain"))?
+        || drain_marker_present(state_path)?
         || marker_exists(&state_path.join("connection-drain").join(connection_id))?)
 }
 
 pub(super) fn observation_response(reply: SessionObservationReply) -> Response {
     Response {
-        value: None,
-        doctor_probe: None,
-        readiness: None,
         session_observation: Some(reply),
-        setup_receipt: None,
-        connection_census: None,
+        ..Response::default()
     }
 }
 
 pub(super) fn setup_receipt_response(reply: SetupReceiptReply) -> Response {
     Response {
-        value: None,
-        doctor_probe: None,
-        readiness: None,
-        session_observation: None,
         setup_receipt: Some(reply),
-        connection_census: None,
+        ..Response::default()
     }
 }
 
 pub(super) fn census_response(reply: ConnectionCensusReply) -> Response {
     Response {
-        value: None,
-        doctor_probe: None,
-        readiness: None,
-        session_observation: None,
-        setup_receipt: None,
         connection_census: Some(reply),
+        ..Response::default()
     }
 }

@@ -1,11 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-#[cfg(target_os = "linux")]
 use crate::ProbeError;
 
-#[cfg(target_os = "linux")]
-pub(crate) fn docker_root_capacity(
+pub fn docker_root_capacity(
     total_blocks: u64,
     free_blocks: u64,
     available_blocks: u64,
@@ -27,4 +25,18 @@ pub(crate) fn docker_root_capacity(
         return Err(ProbeError::Invalid("docker_root_capacity"));
     }
     Ok((free, total, available))
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct StatvfsCounts {
+    pub blocks: u64,
+    pub bfree: u64,
+    pub bavail: u64,
+    pub frsize: u64,
+}
+
+pub fn record_free_bytes(counts: &StatvfsCounts) -> Result<u64, ProbeError> {
+    let (_, _, available) =
+        docker_root_capacity(counts.blocks, counts.bfree, counts.bavail, counts.frsize)?;
+    Ok(available)
 }

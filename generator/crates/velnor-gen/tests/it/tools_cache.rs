@@ -10,7 +10,7 @@ use crate::events::DENY_MISE;
 use crate::facts::{TestResult, lock_pinned_tools};
 use crate::pipeline::{view, workflow};
 
-const KEY: &str = "          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}'\n";
+const KEY: &str = "          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'\n";
 const SAVE_IF: &str = "        if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && steps.tools.outputs.cache-hit != ''true'' }}'\n";
 
 fn names(job: &str) -> Vec<&str> {
@@ -48,7 +48,7 @@ fn a_lane_restores_the_tools_before_mise_runs_and_saves_only_a_default_branch_mi
     assert_eq!(lane.matches(KEY).count(), 2, "{lane}");
     assert_eq!(lane.matches(SAVE_IF).count(), 1, "{lane}");
     assert!(lane.contains("      - id: tools\n        name: Restore the tools cache\n"));
-    assert!(!lane.contains("velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-'"));
+    assert_eq!(lane.matches("velnor-tools-").count(), 2, "{lane}");
     for path in ["~/.local/share/mise", "~/.rustup"] {
         assert_eq!(lane.matches(&format!("            {path}\n")).count(), 2);
     }

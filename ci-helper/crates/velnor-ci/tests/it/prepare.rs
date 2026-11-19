@@ -63,6 +63,12 @@ pub(crate) struct Toolchain {
 
 pub(crate) type Populate = Box<dyn Fn(&Path) + Send + Sync>;
 
+#[derive(PartialEq, Eq)]
+pub(crate) enum OsRelease {
+    Fixture,
+    Platform,
+}
+
 pub(crate) struct Setup {
     pub json: String,
     pub mise_toml: String,
@@ -77,6 +83,7 @@ pub(crate) struct Setup {
     pub populate: Option<Populate>,
     pub release: &'static str,
     pub env: Vec<(&'static str, &'static str)>,
+    pub os_release: OsRelease,
 }
 
 impl Setup {
@@ -95,6 +102,7 @@ impl Setup {
             populate: None,
             release: "1.99.1",
             env: Vec::new(),
+            os_release: OsRelease::Fixture,
         }
     }
 }
@@ -141,6 +149,12 @@ fn record_default_root(checkout: &Path) {
         &checkout.join(".velnor/rust-metadata.json"),
         "{\"roots\":{\"Cargo.toml\":{\"members\":[]}},\"manifests\":{},\"layout\":\"\"}",
     );
+}
+
+fn write_os_release(dir: &Path) -> PathBuf {
+    let path = dir.join("os-release");
+    fs::write(&path, "ID=ubuntu\nVERSION_ID=\"24.04\"\n").unwrap_or_else(|e| unreachable!("{e}"));
+    path
 }
 
 fn prepare_in(dir: &Path, setup: &Setup) -> Run {
@@ -207,6 +221,9 @@ fn prepare_in(dir: &Path, setup: &Setup) -> Run {
         .env("CARGO_HOME", &cargo_home)
         .env("GITHUB_ENV", &env_file)
         .env("GITHUB_OUTPUT", &outputs);
+    if setup.os_release == OsRelease::Fixture {
+        command.env("VELNOR_OS_RELEASE", write_os_release(dir));
+    }
     for (name, value) in &setup.env {
         command.env(name, value);
     }
@@ -238,9 +255,13 @@ pub(crate) fn prepare_declared(name: &str, json: &str, declared: Option<&Declare
 }
 
 pub(crate) fn digest(run: &Run) -> &str {
+    output(run, "compat")
+}
+
+pub(crate) fn output<'a>(run: &'a Run, name: &str) -> &'a str {
     run.outputs
-        .strip_prefix("compat=")
-        .and_then(|rest| rest.strip_suffix('\n'))
+        .lines()
+        .find_map(|line| line.strip_prefix(name)?.strip_prefix('='))
         .unwrap_or_default()
 }
 

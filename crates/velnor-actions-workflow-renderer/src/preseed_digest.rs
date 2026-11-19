@@ -10,7 +10,7 @@ use super::PRESEED_BUILD_OUTPUT;
 const SOURCE_BOUND_HELPER_DIGEST_TAG: &str = "preseed-helper-inputs-v1";
 
 #[must_use]
-pub fn source_bound_helper_digest_input(
+pub(super) fn source_bound_helper_digest_input(
     build: &[String],
     target: &str,
     toolchain: &str,

@@ -38,7 +38,7 @@ fn mirror_is_explicit_scoped_and_precedes_every_job_tools() -> TestResult {
     for (runner, mirror_runner, enabled) in [
         ("mirror-box", "mirror-box", true),
         ("ubuntu-26.04-scale-set", "ubuntu-26.04-scale-set", true),
-        ("ubuntu-slim", "ubuntu-slim", true),
+        ("ubuntu-999.99", "ubuntu-999.99", true),
         ("xcode-27", "xcode-27", true),
         ("ubuntu-future", "ubuntu-future", true),
         ("ubuntu-latest", "mirror-box", false),
@@ -136,6 +136,24 @@ fn assert_mirror_before_tools(steps: &[serde_json::Value], mirror: Option<usize>
 }
 
 #[test]
+fn machete_runs_through_cargo_with_and_without_the_mirror() -> TestResult {
+    for (runner, mirror_runner) in [
+        ("mirror-box", "mirror-box"),
+        ("ubuntu-latest", "mirror-box"),
+    ] {
+        let text = workflow(&mirrored_repo(runner, mirror_runner, "")?)?;
+        let mirrored = text.contains("\"$VELNOR_EXEC\" crates-mirror");
+        assert_eq!(mirrored, runner == "mirror-box", "{text}");
+        assert!(text.contains("run -- cargo machete'"), "{mirrored}: {text}");
+        assert!(
+            !text.contains("cargo-machete machete"),
+            "{mirrored}: {text}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn in_job_planning_selects_work_before_configuring_the_mirror() -> TestResult {
     for shape in ["one-job", "lint-test", "groups"] {
         let config = format!("runner = 'mirror-box'\nshape = '{shape}'\n{MIRROR}");
@@ -160,18 +178,18 @@ fn in_job_planning_selects_work_before_configuring_the_mirror() -> TestResult {
         for (job_id, job) in jobs {
             let steps = job["steps"].as_array().ok_or("steps missing")?;
             let plan = steps.iter().position(|step| step["id"] == "plan");
-            let selection = if shape == "one-job" && job_id == "rust" {
-                Some(
-                    "steps.plan.outcome == 'success' && steps.plan.outputs.rust_root_mode != 'none'",
-                )
-            } else if shape == "one-job" && job_id == "policy" {
-                Some(
-                    "steps.plan.outcome == 'success' && (steps.plan.outputs.rust_deny == 'run' || steps.plan.outputs.rust_machete == 'run')",
+            let (selection, owns_plan) = if shape == "one-job" && job_id == "rust" {
+                (
+                    Some(
+                        "steps.plan.outcome == 'success' && steps.plan.outputs.rust_root_mode != 'none'",
+                    ),
+                    true,
                 )
             } else {
-                None
+                (None, false)
             };
-            let expected = selection.map_or_else(
+            let policy_lane = shape == "one-job" && job_id == "policy";
+            let expected = selection.as_ref().map_or_else(
                 || MIRROR_GUARD.to_owned(),
                 |selected| {
                     format!(
@@ -206,8 +224,10 @@ fn in_job_planning_selects_work_before_configuring_the_mirror() -> TestResult {
                     &format!("{shape}: {job_id}: {step}"),
                 );
             }
-            if selection.is_some() {
-                assert!(plan.is_some(), "{shape}: {job_id}: plan missing");
+            if selection.is_some() || policy_lane {
+                if owns_plan {
+                    assert!(plan.is_some(), "{shape}: {job_id}: plan missing");
+                }
                 assert!(saw_mirror, "{shape}: {job_id}: mirror missing");
             }
         }

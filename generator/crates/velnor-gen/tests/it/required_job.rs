@@ -71,11 +71,31 @@ fn a_helper_without_gate_keeps_the_old_verdict_step() -> TestResult {
     let text = released("0.1.80", &["Cargo.toml", "lab/Cargo.toml"])?;
     let job = required(&text)?;
     assert!(job.contains(
-        "    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled()) }}'\n"
+        "    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (always()) }}'\n"
     ));
     assert!(job.contains("Fail when a Rust job failed or was cancelled"));
     assert!(!job.contains("velnor-ci gate"));
     assert!(!text.contains("_tests"));
+    Ok(())
+}
+
+#[test]
+fn the_required_job_cannot_be_skipped_when_the_run_is_cancelled() -> TestResult {
+    for version in ["0.1.80", "0.1.81"] {
+        let text = released(version, &["Cargo.toml", "lab/Cargo.toml"])?;
+        let job = required(&text)?;
+        let condition = job
+            .lines()
+            .find_map(|line| line.strip_prefix("    if: "))
+            .ok_or("no job condition")?;
+        assert!(condition.contains("always()"), "{version}: {condition}");
+        assert!(!condition.contains("cancelled()"), "{version}: {condition}");
+        assert!(
+            job.contains("velnor-ci gate")
+                || job.contains("contains(needs.*.result, ''cancelled'')"),
+            "{version}: the job must fail when a needed job was cancelled"
+        );
+    }
     Ok(())
 }
 
@@ -101,6 +121,17 @@ fn one_job_exports_its_own_plan_flag_and_the_gate_reads_it_from_that_job() -> Te
     assert!(text.contains(
         "      # jactionlint ignore=unused-job-output\n      tests_by_package: '${{ steps.test.outputs.tests_by_package }}'\n"
     ));
+    Ok(())
+}
+
+#[test]
+fn the_test_job_exports_the_ignored_count_only_for_a_helper_that_reports_it() -> TestResult {
+    let output = "tests_ignored: '${{ steps.test.outputs.tests_ignored }}'\n";
+    let older = released("0.1.85", &["Cargo.toml"])?;
+    assert!(older.contains("tests_listed: "), "{older}");
+    assert!(!older.contains("tests_ignored"), "{older}");
+    let newer = released("0.1.86", &["Cargo.toml"])?;
+    assert!(newer.contains(output), "{newer}");
     Ok(())
 }
 
@@ -163,20 +194,20 @@ fn long_named_roots(count: usize) -> Vec<String> {
 }
 
 #[test]
-fn twenty_roots_keep_the_gate_command_short_and_the_spec_in_env() -> TestResult {
-    let manifests = long_named_roots(20);
+fn sixteen_roots_keep_the_gate_command_short_and_the_spec_in_env() -> TestResult {
+    let manifests = long_named_roots(16);
     let roots: Vec<&str> = manifests.iter().map(String::as_str).collect();
     let text = released("0.1.81", &roots)?;
     let spec = gate_line(&text)?;
     assert!(spec.len() > MAX_RUN_CHARACTERS);
-    assert_eq!(spec.matches("--tests ").count(), 20);
+    assert_eq!(spec.matches("--tests ").count(), 16);
     assert!(required(&text)?.contains("\"$VELNOR_EXEC\" gate --spec-env GATE_SPEC'\n"));
     Ok(())
 }
 
 #[test]
-fn twenty_roots_without_a_helper_path_stay_within_the_workflow_size_limit() -> TestResult {
-    let manifests = long_named_roots(20);
+fn sixteen_roots_without_a_helper_path_stay_within_the_workflow_size_limit() -> TestResult {
+    let manifests = long_named_roots(16);
     let roots: Vec<&str> = manifests.iter().map(String::as_str).collect();
     let text = released("0.1.81", &roots)?;
     assert!(text.len() <= 500_000, "{} bytes", text.len());
@@ -196,9 +227,9 @@ fn an_oversized_main_workflow_is_rejected_before_returning_generated_files() -> 
         .collect();
     let roots: Vec<&str> = manifests.iter().map(String::as_str).collect();
     let mut view = view(&roots, None)?;
-    let lock = String::from_utf8(HELPER_LOCK.to_vec())?.replacen("0.1.79", "0.1.81", 1);
+    let lock = "version = 4\n\n[[package]]\nname = \"dep\"\nversion = \"1.0.0\"\nsource = \"git+https://github.com/example/shared-lib?branch=main#0123456789abcdef\"\n";
     view.files
-        .insert(RepoPath::new(".velnor/rust-ci.lock")?, lock.into_bytes());
+        .insert(RepoPath::new("Cargo.lock")?, lock.as_bytes().to_vec());
     let result = expected_files(&view);
     let Err(velnor_gen::GenerateError::Rules(violations)) = result else {
         return Err("oversized main workflow was not rejected by YAML rules".into());

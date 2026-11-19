@@ -69,6 +69,7 @@ pub(super) async fn claim(
 pub(super) async fn mark_uncertain(
     scope: &ConnectionJournal,
     claim: ScaleSetCreateClaim,
+    remote_id: Option<i64>,
 ) -> Result<ScaleSetCreateRecord, HostError> {
     let request = verify_claim(scope, &claim)?;
     in_transaction(scope.journal_ref(), async |connection| {
@@ -76,6 +77,15 @@ pub(super) async fn mark_uncertain(
         let current = require_row(connection, request, claim.id).await?;
         require_state(&current, ScaleSetCreateState::Requested)?;
         update_state(connection, current.id, "uncertain").await?;
+        if let Some(remote_id) = remote_id.filter(|id| *id > 0) {
+            connection
+                .execute(
+                    "INSERT INTO connection_scale_set_unverified (connection_id, remote_id) VALUES (?1, ?2)",
+                    (request.connection_id.as_str(), remote_id),
+                )
+                .await
+                .map_err(|_| HostError::Journal)?;
+        }
         record(connection, request).await?.ok_or(HostError::Journal)
     })
     .await
@@ -162,9 +172,6 @@ pub(super) async fn adopt(
         let current = record(connection, request).await?;
         if let Some(current) = current {
             match current.state {
-                ScaleSetCreateState::Requested | ScaleSetCreateState::Uncertain => {
-                    return Err(HostError::Journal);
-                }
                 ScaleSetCreateState::Created | ScaleSetCreateState::Adopted => {
                     let receipt = current.receipt.as_ref().ok_or(HostError::Journal)?;
                     if !same_remote(receipt, &observed.0) {
@@ -172,7 +179,10 @@ pub(super) async fn adopt(
                     }
                     return Ok(current);
                 }
-                ScaleSetCreateState::Prepared | ScaleSetCreateState::NoEffect => {
+                ScaleSetCreateState::Prepared
+                | ScaleSetCreateState::Requested
+                | ScaleSetCreateState::Uncertain
+                | ScaleSetCreateState::NoEffect => {
                     write_receipt(
                         connection,
                         current.id,

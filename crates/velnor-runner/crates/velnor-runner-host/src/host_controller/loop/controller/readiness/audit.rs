@@ -8,8 +8,8 @@ use bollard::{
     models::{ContainerInspectResponse, Volume},
 };
 use velnor_runner_github::{
-    AdminConnectionCall, RegistrationScope, RegistrationTokenCall, Transport, admin_connection,
-    get_runner_by_name, registration_token,
+    AdminConnectionCall, RegistrationTokenCall, Transport, admin_connection, get_runner_by_name,
+    registration_token,
     workflow_run::{RepositoryTarget, get_repository_scope},
 };
 
@@ -43,10 +43,7 @@ pub(super) fn audit_remote_runner(
     if expected.runner_scale_set_id != scale_set_id {
         return Err(HostError::Ownership);
     }
-    let credential = crate::keychain::load_secret(
-        binding.credential_ref.service(),
-        binding.credential_ref.account(),
-    )?;
+    let credential = binding.credential_ref.load()?;
     let pat = crate::host_controller::connection_pat(&credential)?;
     let deadline = Instant::now()
         .checked_add(Duration::from_secs(15))
@@ -96,18 +93,16 @@ fn audit_remote_runner_with_transport<T: ReadinessTransport>(
     {
         return Err(HostError::Ownership);
     }
+    let target = binding.registration_target()?;
     let registration = registration_token(
         transport,
         &RegistrationTokenCall {
-            scope: RegistrationScope::Repository {
-                owner,
-                repo: repository,
-            },
+            scope: target.scope(),
             pat,
         },
     )
     .map_err(|_| HostError::Endpoint)?;
-    let config_url = format!("https://github.com/{owner}/{repository}");
+    let config_url = target.config_url();
     let admin = admin_connection(
         transport,
         &AdminConnectionCall {

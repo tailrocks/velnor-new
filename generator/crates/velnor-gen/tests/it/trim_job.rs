@@ -57,12 +57,13 @@ fn one_trim_job_alone_holds_actions_write_and_runs_only_after_a_default_branch_s
         trim.contains("    needs:\n      - rust-lint\n      - rust-test\n"),
         "{trim}"
     );
-    let condition = format!(
-        "    if: '${{{{ {ADMISSION} && (!cancelled() && {GUARD} && ({EVENTS})) && (needs.rust-lint.outputs.base_save == ''true'' || needs.rust-test.outputs.base_save == ''true'' || (needs.rust-test.outputs.sources_saved == ''true'' || needs.rust-test.outputs.sources_key != '''')) }}}}'\n"
-    );
+    let condition =
+        format!("    if: '${{{{ {ADMISSION} && (!cancelled() && {GUARD} && ({EVENTS})) }}}}'\n");
     assert!(trim.contains(&condition), "{trim}");
     assert!(
-        trim.contains("    permissions:\n      actions: write\n    runs-on:"),
+        trim.contains(
+            "    permissions:\n      pull-requests: read\n      actions: write\n    runs-on:"
+        ),
         "{trim}"
     );
     assert!(!trim.contains("checkout"), "{trim}");
@@ -134,51 +135,46 @@ fn needed(block: &str) -> Vec<String> {
     ids
 }
 
-fn admitted(condition: &str) -> Vec<(String, String)> {
-    let mut found = Vec::new();
-    let mut rest = condition;
-    while let Some(at) = rest.find("needs.") {
-        rest = &rest[at + "needs.".len()..];
-        let Some((id, tail)) = rest.split_once(".outputs.") else {
-            break;
-        };
-        let name = tail.split(' ').next().unwrap_or("");
-        if tail.contains("== ''true''") && matches!(name, "base_save" | "sources_saved") {
-            found.push((id.to_owned(), name.to_owned()));
+fn the_budget_runs_without_a_save_and_each_trim_keeps_its_lane_guard(block: &str, lanes: &[&str]) {
+    let condition = job_if(block);
+    assert!(!condition.contains("needs."), "{condition}");
+    for id in lanes {
+        for (name, guard) in [
+            (
+                format!("Delete the older {id} entries"),
+                format!("needs.{id}.outputs.base_save == ''true''"),
+            ),
+            (
+                format!("Delete the older {id} sources entries"),
+                format!(
+                    "needs.{id}.outputs.sources_prefix != '''' && (needs.{id}.outputs.sources_saved == ''true'' || needs.{id}.outputs.sources_key != '''')"
+                ),
+            ),
+        ] {
+            let command = step(block, &name).unwrap_or("");
+            assert!(command.contains(&guard), "{name}: {block}");
         }
     }
-    found
-}
-
-fn the_job_requires_each_needed_lane_to_have_saved(block: &str) {
-    let needs = needed(block);
-    let condition = job_if(block);
-    let found = admitted(&condition);
-    for id in &needs {
-        assert!(
-            found.contains(&(id.clone(), "base_save".to_owned())),
-            "{condition} misses the target save of {id}"
-        );
-    }
-    assert!(
-        found.iter().all(|(id, _)| needs.contains(id)),
-        "{condition}"
-    );
+    let budget = step(block, "Enforce the repository cache budget").unwrap_or("");
+    assert!(budget.contains("velnor-ci cache budget"), "{block}");
+    assert!(!budget.contains("    if:"), "{budget}");
+    assert!(!budget.contains("base_save"), "{budget}");
 }
 
 #[test]
-fn a_single_lane_trim_job_runs_only_when_that_lane_saved() -> TestResult {
+fn a_single_lane_budget_runs_without_a_save_and_guards_its_trims() -> TestResult {
     let block = lane("", "rust-trim")?;
     let condition = job_if(&block);
     assert!(condition.contains("!cancelled()"), "{condition}");
     assert!(condition.contains(GUARD), "{condition}");
     assert!(condition.contains(EVENTS), "{condition}");
-    the_job_requires_each_needed_lane_to_have_saved(&block);
+    assert_eq!(needed(&block), ["rust".to_owned()]);
+    the_budget_runs_without_a_save_and_each_trim_keeps_its_lane_guard(&block, &["rust"]);
     Ok(())
 }
 
 #[test]
-fn a_two_root_trim_job_runs_only_when_one_of_its_lanes_saved() -> TestResult {
+fn a_two_root_budget_waits_for_both_lanes_and_guards_their_trims() -> TestResult {
     let mut repo = view(&["Cargo.toml", "lab/Cargo.toml"], Some(b""))?;
     repo.files.insert(
         LOCK_PATH,
@@ -192,9 +188,16 @@ fn a_two_root_trim_job_runs_only_when_one_of_its_lanes_saved() -> TestResult {
         .ok_or("no trim job")?;
     assert_eq!(
         needed(&trim),
-        ["rust-root".to_owned(), "rust-lab".to_owned()]
+        [
+            "rust-root".to_owned(),
+            "rust-lab".to_owned(),
+            "rust-inputs-audit".to_owned()
+        ]
     );
-    the_job_requires_each_needed_lane_to_have_saved(&trim);
+    the_budget_runs_without_a_save_and_each_trim_keeps_its_lane_guard(
+        &trim,
+        &["rust-root", "rust-lab"],
+    );
     Ok(())
 }
 
@@ -219,7 +222,7 @@ fn target_publication_follows_its_test_build_and_input_audit() -> TestResult {
                 "{order:?}"
             );
         } else {
-            assert!(save < run, "{order:?}");
+            assert!(run < save, "{order:?}");
         }
     }
     let order = names(&lane("", "rust")?);
@@ -377,16 +380,16 @@ fn a_run_that_saved_only_sources_still_admits_the_trim_job_and_trims_them() -> T
     assert!(!find("rust-lint")?.contains("sources_saved"));
     let trim = find("rust-trim")?;
     let condition = job_if(trim);
-    let sources_only = condition
-        .replace("needs.rust-lint.outputs.base_save == ''true''", "false")
-        .replace("needs.rust-test.outputs.base_save == ''true''", "false");
-    assert!(
-        sources_only
-            .contains("false || false || (needs.rust-test.outputs.sources_saved == ''true''"),
-        "{condition}"
-    );
+    assert!(!condition.contains("needs."), "{condition}");
     let prune =
         step(trim, "Delete the older rust-test sources entries").ok_or("no sources trim")?;
     assert!(prune.contains("sources_prefix"), "{prune}");
+    assert!(
+        prune.contains("needs.rust-test.outputs.sources_saved == ''true''"),
+        "{prune}"
+    );
+    assert!(!prune.contains("base_save"), "{prune}");
+    let budget = step(trim, "Enforce the repository cache budget").ok_or("no budget")?;
+    assert!(!budget.contains("    if:"), "{budget}");
     Ok(())
 }

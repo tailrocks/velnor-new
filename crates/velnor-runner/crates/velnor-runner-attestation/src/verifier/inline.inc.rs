@@ -1,42 +1,23 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-async fn qualify_checksum_target_bytes(
+async fn qualify_subject_bytes(
     bundle_bytes: &[u8],
-    checksum_bytes: &[u8],
     expected: &ExpectedClaims,
-    checksum_subject: &ExpectedSubject,
-    target_subject: &ExpectedSubject,
+    subject: &ExpectedSubject,
+    peer: &ExpectedSubject,
     state_directory: &std::path::Path,
     deadline: Instant,
 ) -> Result<(), Box<dyn Error>> {
     if bundle_bytes.len() > MAX_BUNDLE_BYTES {
         return Err("verification bundle exceeds bound".into());
     }
-    if checksum_bytes.len() > MAX_CHECKSUM_BYTES {
-        return Err("checksum asset exceeds bound".into());
-    }
     let bundle: Bundle = serde_json::from_slice(bundle_bytes)?;
-    let checksum_text = std::str::from_utf8(checksum_bytes)?;
-    let mut target_digests = Vec::new();
-    for line in checksum_text.lines() {
-        let fields: Vec<&str> = line.split_whitespace().collect();
-        if fields.len() != 2 {
-            return Err("checksum list has unsupported row format".into());
-        }
-        if fields[1] == target_subject.name {
-            target_digests.push(fields[0]);
-        }
-    }
-    if target_digests.len() != 1 || target_digests[0] != target_subject.digest {
-        return Err("signed checksum list target digest missing, duplicated, or mismatched".into());
-    }
-    let digest = Sha256Hash::from_hex(target_digests[0])?;
+    let digest = Sha256Hash::from_hex(&subject.digest)?;
     let trusted_root = load_public_good_trusted_root(state_directory).await?;
     let expected = expected.clone();
-    let checksum_subject = checksum_subject.clone();
-    let target_subject = target_subject.clone();
-    let checksum_bytes = checksum_bytes.to_vec();
+    let subject = subject.clone();
+    let peer = peer.clone();
     tokio::task::spawn_blocking(move || -> Result<(), std::io::Error> {
         if Instant::now() >= deadline {
             return Err(std::io::Error::new(
@@ -51,13 +32,9 @@ async fn qualify_checksum_target_bytes(
         )
         .skip_sct();
         verifier
-            .verify(checksum_bytes.as_slice(), &bundle, &policy)
-            .map_err(verification_io_error)?;
-        validate_claims(&bundle, &expected, &checksum_subject).map_err(verification_io_error)?;
-        verifier
             .verify(digest, &bundle, &policy)
             .map_err(verification_io_error)?;
-        validate_claims(&bundle, &expected, &target_subject).map_err(verification_io_error)?;
+        validate_claims(&bundle, &expected, &subject, &peer).map_err(verification_io_error)?;
         if Instant::now() >= deadline {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::TimedOut,
@@ -76,10 +53,9 @@ pub(crate) struct InlineVerifyRequest {
     schema: u8,
     state_directory: String,
     bundle_base64: String,
-    checksum_base64: String,
     expected: ExpectedClaims,
-    checksum_subject: ExpectedSubject,
-    target_subject: ExpectedSubject,
+    subject: ExpectedSubject,
+    peer_subject: ExpectedSubject,
 }
 
 #[derive(Debug, Serialize)]
@@ -88,36 +64,30 @@ pub(crate) struct InlineVerifyResponse {
     result: &'static str,
 }
 
-pub(crate) async fn verify_inline_checksum_target(
+pub(crate) async fn verify_inline_subject(
     request: InlineVerifyRequest,
     deadline: Instant,
 ) -> Result<InlineVerifyResponse, Box<dyn Error>> {
-    if request.schema != 2 {
+    if request.schema != 3 {
         return Err("unsupported request schema".into());
     }
     let state_directory = validate_state_directory(&request.state_directory)?;
     let bundle_bytes = base64::engine::general_purpose::STANDARD.decode(&request.bundle_base64)?;
-    let checksum_bytes =
-        base64::engine::general_purpose::STANDARD.decode(&request.checksum_base64)?;
     if bundle_bytes.len() > MAX_BUNDLE_BYTES {
         return Err("verification bundle exceeds bound".into());
     }
-    if checksum_bytes.len() > MAX_CHECKSUM_BYTES {
-        return Err("checksum asset exceeds bound".into());
-    }
-    validate_expected_inputs(&request.expected, &request.checksum_subject, &request.target_subject)?;
-    qualify_checksum_target_bytes(
+    validate_expected_inputs(&request.expected, &request.subject, &request.peer_subject)?;
+    qualify_subject_bytes(
         &bundle_bytes,
-        &checksum_bytes,
         &request.expected,
-        &request.checksum_subject,
-        &request.target_subject,
+        &request.subject,
+        &request.peer_subject,
         &state_directory,
         deadline,
     )
     .await?;
     Ok(InlineVerifyResponse {
-        schema: 2,
+        schema: 3,
         result: "verified",
     })
 }
@@ -148,24 +118,21 @@ fn validate_state_directory(value: &str) -> Result<std::path::PathBuf, Box<dyn E
 
 fn validate_expected_inputs(
     expected: &ExpectedClaims,
-    checksum: &ExpectedSubject,
-    target: &ExpectedSubject,
+    subject: &ExpectedSubject,
+    peer: &ExpectedSubject,
 ) -> Result<(), Box<dyn Error>> {
     for value in [
         &expected.signer,
         &expected.source,
         &expected.source_ref,
         &expected.build_config,
-        &checksum.name,
-        &target.name,
+        &subject.name,
+        &peer.name,
     ] {
         if value.is_empty() || value.len() > 4096 {
             return Err("expected claim value is empty or exceeds byte limit".into());
         }
     }
-
-
-
     for commit_id in [
         &expected.signer_digest,
         &expected.source_digest,
@@ -175,7 +142,7 @@ fn validate_expected_inputs(
             return Err("expected Git commit ID is malformed".into());
         }
     }
-    for digest in [&checksum.digest, &target.digest] {
+    for digest in [&subject.digest, &peer.digest] {
         if !is_lower_hex(digest, 64) {
             return Err("expected SHA-256 digest is malformed".into());
         }
