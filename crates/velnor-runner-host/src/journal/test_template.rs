@@ -60,7 +60,7 @@ pub(super) fn seed(path: &Path, key: &str) -> Seed {
     }
 }
 
-fn seed_from(root: &Path, stamp: &str, path: &Path, key: &str) -> Seed {
+pub(super) fn seed_from(root: &Path, stamp: &str, path: &Path, key: &str) -> Seed {
     if path.exists() {
         return Seed::Existing;
     }
@@ -116,7 +116,7 @@ pub(super) fn publish(path: &Path, key: &str) {
     }
 }
 
-fn publish_into(root: &Path, stamp: &str, path: &Path, key: &str) -> io::Result<()> {
+pub(super) fn publish_into(root: &Path, stamp: &str, path: &Path, key: &str) -> io::Result<()> {
     match fs::symlink_metadata(root) {
         Ok(meta) if meta.is_dir() => {}
         Ok(_) => return Err(io::Error::other("journal template root is not a directory")),
