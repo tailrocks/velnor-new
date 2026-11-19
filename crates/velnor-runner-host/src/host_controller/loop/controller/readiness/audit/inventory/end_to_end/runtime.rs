@@ -5,7 +5,10 @@ use std::time::Duration;
 
 use tokio::time::Instant;
 
-use super::{RefreshDependencies, SettlingAges, TestResult, audit_inventory_with_remote, engine, world};
+use super::super::super::RemoteAuditFuture;
+use super::{
+    RefreshDependencies, SettlingAges, TestResult, audit_inventory_with_remote, engine, world,
+};
 
 const STALL: Duration = Duration::from_millis(1500);
 
@@ -17,9 +20,15 @@ async fn a_stalled_remote_audit_does_not_block_the_controller_runtime() -> TestR
         tokio::time::sleep(Duration::from_millis(50)).await;
         started.elapsed()
     });
-    let stalled = |_: &_, _: Option<&_>, _: i64| {
-        std::thread::sleep(STALL);
-        Ok(true)
+    let stalled = |_, _, _| -> RemoteAuditFuture {
+        Box::pin(async {
+            let deadline = Instant::now() + STALL * 4;
+            crate::config::off_runtime(deadline, || {
+                std::thread::sleep(STALL);
+                Ok(true)
+            })
+            .await
+        })
     };
     audit_inventory_with_remote(
         &world.docker,
