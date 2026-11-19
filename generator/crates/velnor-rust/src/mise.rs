@@ -99,15 +99,13 @@ fn validate_config(config: &RepoPath, bytes: &[u8]) -> Result<(), DetectError> {
         .get("tools")
         .and_then(Value::as_table)
         .is_some_and(|tools| tools.values().any(runs_a_command));
-    let templates = parsed
-        .iter()
-        .any(|(key, value)| {
-            if ["tools", "vars"].contains(&key.as_str()) {
-                has_unsafe_template(value)
-            } else {
-                has_template(value)
-            }
-        });
+    let templates = parsed.iter().any(|(key, value)| {
+        if ["tools", "vars"].contains(&key.as_str()) {
+            runs_exec(value)
+        } else {
+            has_template(value)
+        }
+    });
     if let Some(name) = unknown
         .or(unknown_setting)
         .or(unknown_cargo_setting)
@@ -246,16 +244,11 @@ fn has_template(value: &Value) -> bool {
     }
 }
 
-fn has_unsafe_template(value: &Value) -> bool {
+fn runs_exec(value: &Value) -> bool {
     match value {
-        Value::String(text) => {
-            has_template(value)
-                && ["exec", "env", "read_file", "cwd", "config_root", "mise"]
-                    .iter()
-                    .any(|name| text.contains(name))
-        }
-        Value::Array(items) => items.iter().any(has_unsafe_template),
-        Value::Table(items) => items.values().any(has_unsafe_template),
+        Value::String(text) => has_template(value) && text.contains("exec("),
+        Value::Array(items) => items.iter().any(runs_exec),
+        Value::Table(items) => items.values().any(runs_exec),
         _ => false,
     }
 }
