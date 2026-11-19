@@ -14,8 +14,10 @@ pub(super) fn invalidate(target: &Path, saved: &SourceSnapshot) -> Result<usize,
         .filter(|parent| !parent.as_os_str().is_empty())
         .unwrap_or_else(|| Path::new("."));
     let root = fs::canonicalize(directory).map_err(|e| failure(directory, &e))?;
-    let text =
-        fs::read_to_string(target.join(".velnor/inputs.tsv")).map_err(|e| failure(target, &e))?;
+    let text = fs::read_to_string(target.join(crate::inputs::inputs_file(
+        &super::input_scopes::git_prefix(&root)?,
+    )))
+    .map_err(|e| failure(target, &e))?;
     if super::input_snapshot::decode(&text)?.source_identity != saved.identity {
         return Err(CiError::new(
             "delta sources differ from the saved input identity",

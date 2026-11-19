@@ -3,8 +3,8 @@
 
 use velnor_model::{
     BASE_PREFIX_OUTPUT, BASE_SAVE_OUTPUT, BaseExpiry, CacheKey, CacheLaneOutput, HelperCommand,
-    JobId, RepoPath, SOURCES_PREFIX_OUTPUT, SOURCES_SAVED_OUTPUT, Step, StepKind, TrimFamily,
-    cache_lane_outputs,
+    InputsCli, JobId, RepoPath, SOURCES_PREFIX_OUTPUT, SOURCES_SAVED_OUTPUT, Step, StepKind,
+    TrimFamily, cache_lane_outputs,
 };
 
 use crate::cache::render_key;
@@ -12,7 +12,7 @@ use crate::cache_upload::{SOURCES_KEY_OUTPUT, key_id};
 use crate::gate::sources_save_step;
 use crate::gate::{BASE_STEP, SOURCES_LOCKS_STEP};
 use crate::release_steps::shell_word;
-use crate::rules::{RenderedStep, Value};
+use crate::rules::{MAX_RUN_CHARACTERS, RenderedStep, Value};
 
 const MAX_BASE_AGE_DAYS: u64 = 7;
 const BASE_AGE_VARIABLE: &str = "VELNOR_BASE_MAX_AGE_DAYS";
@@ -23,9 +23,10 @@ pub(crate) fn cache_decide(
     target: &RepoPath,
     archive: Option<&RepoPath>,
     manifests: &[RepoPath],
+    cli: InputsCli,
     budget_bytes: u64,
 ) -> RenderedStep {
-    RenderedStep {
+    let mut rendered = RenderedStep {
         id: Some(BASE_STEP.to_owned()),
         name: "Decide whether to save the build directory".to_owned(),
         env: vec![
@@ -53,7 +54,30 @@ pub(crate) fn cache_decide(
             ))
         )),
         ..RenderedStep::default()
+    };
+    if cli == InputsCli::PerRoot {
+        return rendered;
     }
+    rendered.condition = Some("${{ steps.inputs_save.outcome == 'success' }}".to_owned());
+    if target.as_str().contains("${{")
+        || archive.is_some_and(|path| path.as_str().contains("${{"))
+        || rendered
+            .run
+            .as_ref()
+            .is_some_and(|run| run.chars().count() > MAX_RUN_CHARACTERS)
+    {
+        let target = crate::helper_steps::hex_path(target.as_str());
+        let archive = archive.map_or_else(
+            || "null".to_owned(),
+            |path| format!("\"{}\"", crate::helper_steps::hex_path(path.as_str())),
+        );
+        rendered.env.push((
+            "VELNOR_CACHE_PATHS".to_owned(),
+            Value::Text(format!("[\"{target}\",{archive}]")),
+        ));
+        rendered.run = Some("velnor-ci cache decide --paths-env VELNOR_CACHE_PATHS".to_owned());
+    }
+    rendered
 }
 
 pub(crate) fn sources_locks(locks: &[RepoPath]) -> RenderedStep {

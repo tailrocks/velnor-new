@@ -687,6 +687,11 @@
               "manifest": null
             },
             {
+              "name": "tera",
+              "kind": "normal",
+              "manifest": null
+            },
+            {
               "name": "toml",
               "kind": "normal",
               "manifest": null
@@ -1962,7 +1967,7 @@
     }
   },
   "manifests": {
-    "Cargo.toml": "10f8a2355fe5207acac573728a61c27e3baff5171c506dfb9bbd16e2345d18c8",
+    "Cargo.toml": "944dce0737fb2774bd5c9190fee2b212e9460ef8b7892b6ae765cb924ef5e6d4",
     "crates/velnor-archive-guard/Cargo.toml": "356ce922bab3fde3d252c3ce4c1df930585520a280fb8c51ba0641b8bab5d67a",
     "crates/velnor-cache-rules/Cargo.toml": "b1f91a7da1743297b500893e7ce85fb1cfb03f2f854c757beabba023089930e2",
     "crates/velnor-ci/Cargo.toml": "21dc4c7c2cdb08f4f794a704dbcf68e1e79e88f47aa993abf4943a4811202800",
@@ -1979,7 +1984,7 @@
     "crates/velnor-runner-host/Cargo.toml": "2d8678129a9804d031cc246cfc82442d33a34a151b26db3a2704994653a8ef64",
     "crates/velnor-runner-image-manifest/Cargo.toml": "88138fa1bdeb8d4db2fbcf5f126cfb43aa182904d1e40ae8a09e848999d6da04",
     "crates/velnor-runner-qualification/Cargo.toml": "ceefa102f9e966829b637c466f4a22b411b377e813070808ec2e84e878f5f2f3",
-    "crates/velnor-rust/Cargo.toml": "e94a06ddc959217f1d0e955626704344b1bde461c09dcf242505116b5990aa6b",
+    "crates/velnor-rust/Cargo.toml": "5e8773ce8e9f74dbf90e98642945018ac85b8eb70dd90d2253be000ad923b3b1",
     "crates/velnor-workflows/Cargo.toml": "26ef029ca472eafa3858636f2fdf6cf1d2643b0132ba22313a3c9a5e79a8050f"
   },
   "layout": "3da07944745aff682012b55c358c3fe5949cb246ecfeb5950bc6e599b9cec844"

@@ -23,6 +23,7 @@ mod helper_integrity;
 mod helper_steps;
 mod key_length;
 mod lint_steps;
+mod permission_yaml;
 mod pinned_actions;
 mod private_steps;
 mod release;
@@ -31,6 +32,7 @@ mod release_attest;
 mod release_binaries;
 mod release_binary_sums;
 mod release_checks;
+mod release_context;
 mod release_family;
 mod release_finalize;
 mod release_outputs;
@@ -38,6 +40,7 @@ mod release_raw;
 mod release_steps;
 mod reusable;
 mod reusable_on;
+mod rule_messages;
 mod rules;
 mod steps;
 mod tests;
@@ -46,11 +49,13 @@ mod yaml;
 
 use std::collections::BTreeMap;
 
-use velnor_model::{Access, PermissionScope, Permissions, RepoPath, WORKFLOW_PATH, WorkflowPlan};
+use velnor_model::{RepoPath, WORKFLOW_PATH, WorkflowPlan};
 
 pub use crate::cache::{RenderedKey, render_key, render_key_with_mise};
 pub use crate::delta_cleanup::{DELTA_CLEANUP_PATH, delta_cleanup};
 use crate::events::{concurrency, triggers};
+pub(crate) use crate::permission_yaml::permission_pairs;
+use crate::permission_yaml::permissions;
 pub use crate::pinned_actions::{
     ACTIONS_CACHE, ATTEST_BUILD_PROVENANCE, DOCKER_BUILD_PUSH, DOCKER_LOGIN, DOCKER_SETUP_BUILDX,
     GITHUB_SCRIPT, MR_BOXINGTON, PINNED_ACTIONS, PinnedAction,
@@ -123,32 +128,4 @@ pub fn render_workflow(
     Ok(BTreeMap::from([(WORKFLOW_PATH, file)]))
 }
 
-pub(crate) fn permission_pairs(permissions: &Permissions) -> Vec<(String, String)> {
-    permissions
-        .0
-        .iter()
-        .map(|(scope, access)| {
-            let scope = match scope {
-                PermissionScope::PullRequests => "pull-requests",
-                PermissionScope::Actions => "actions",
-                PermissionScope::Contents => "contents",
-            };
-            let access = match access {
-                Access::None => "none",
-                Access::Read => "read",
-                Access::Write => "write",
-            };
-            (scope.to_owned(), access.to_owned())
-        })
-        .collect()
-}
-
-pub(crate) fn permissions(permissions: &Permissions) -> Yaml {
-    Yaml::Map(
-        permission_pairs(permissions)
-            .iter()
-            .map(|(scope, access)| entry(scope, text(access)))
-            .collect(),
-    )
-}
 mod report;

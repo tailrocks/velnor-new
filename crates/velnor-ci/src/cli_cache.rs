@@ -44,10 +44,24 @@ pub struct DecideArgs {
         help = "Detected Cargo root manifests contributing to this job"
     )]
     pub manifest_path: Vec<PathBuf>,
-    #[arg(long, help = "The build directory the cache saves")]
-    pub target_dir: PathBuf,
-    #[arg(long, help = "A nextest archive file to remove before the save")]
+    #[arg(
+        long,
+        required_unless_present = "paths_env",
+        conflicts_with = "paths_env",
+        help = "The build directory the cache saves"
+    )]
+    pub target_dir: Option<PathBuf>,
+    #[arg(
+        long,
+        conflicts_with = "paths_env",
+        help = "A nextest archive file to remove before the save"
+    )]
     pub archive: Option<PathBuf>,
+    #[arg(
+        long,
+        help = "Environment variable containing JSON [hex target, optional hex archive] paths"
+    )]
+    pub paths_env: Option<String>,
 }
 
 #[derive(Debug, Args)]
@@ -56,12 +70,6 @@ pub struct TrimArgs {
     pub prefix: String,
     #[arg(long, help = "Entries to keep, default 2")]
     pub keep: Option<usize>,
-}
-
-#[derive(Debug, Args)]
-pub struct RestoredArgs {
-    #[arg(long, help = "Configured target directories restored in this job")]
-    pub target_dir: Vec<PathBuf>,
 }
 
 #[derive(Debug, Args)]

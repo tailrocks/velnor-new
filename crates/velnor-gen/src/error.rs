@@ -29,6 +29,8 @@ pub enum GenerateError {
     TestGroupsHelperTooOld(HelperVersion),
     MergeGroupHelperTooOld(HelperVersion),
     PrCiHelperTooOld(HelperVersion),
+    DocsHelperTooOld(HelperVersion),
+    CheckAloneHelperTooOld(HelperVersion),
     TooManySourceRoots(usize),
     FamilyTagHelperTooOld(HelperVersion),
     TestLaneHelperTooOld(HelperVersion),
@@ -95,6 +97,14 @@ impl fmt::Display for GenerateError {
             Self::MergeGroupHelperTooOld(version) => write!(
                 f,
                 "velnor-ci {version} cannot tell whether a merge_group run passed, which skip_push_after_merge_group needs; pin velnor-ci 0.1.82 or later with `velnor-gen pin-helper 0.1.82`"
+            ),
+            Self::DocsHelperTooOld(version) => write!(
+                f,
+                "velnor-ci {version} does not know the docs key of .velnor/rust-ci.toml; pin velnor-ci 0.1.88 or later with `velnor-gen pin-helper 0.1.88`"
+            ),
+            Self::CheckAloneHelperTooOld(version) => write!(
+                f,
+                "velnor-ci {version} does not know the check_alone key of .velnor/rust-ci.toml; pin velnor-ci 0.1.91 or later with `velnor-gen pin-helper 0.1.91`"
             ),
             Self::TestLaneHelperTooOld(version) => write!(
                 f,
