@@ -1199,6 +1199,16 @@
               "requires_features": false
             },
             {
+              "name": "moved_control_jobs_provisioning",
+              "kinds": [
+                "test"
+              ],
+              "tests": true,
+              "doctest": false,
+              "source": "crates/velnor-actions-orchestrator/tests/moved_control_jobs_provisioning.rs",
+              "requires_features": false
+            },
+            {
               "name": "task_report_public",
               "kinds": [
                 "test"
@@ -3334,7 +3344,7 @@
     "crates/velnor-actions-freshness/Cargo.toml": "599ba78bcef762ac75ccc17c932bf7288b68fd41d6d6808fb03f3fb62862b6b1",
     "crates/velnor-actions-gradle/Cargo.toml": "837cbc05ffb13c48d287c397b3574241e41a4ac712ae2f028e844f4f0734d0fc",
     "crates/velnor-actions-mise/Cargo.toml": "c31fa725f5990e6acd09b6ee1ce1da210162971d26ea7c827b466aea355c9b31",
-    "crates/velnor-actions-orchestrator/Cargo.toml": "4aba866d9b62b2df902f4dad1e1be9d2cdb7dcfb83959fede996b0eaf8efd272",
+    "crates/velnor-actions-orchestrator/Cargo.toml": "ba030619136bf3bc556f1990fec8cfde3e1bc9c9d1ce57ad5286898485ba4a76",
     "crates/velnor-actions-rust/Cargo.toml": "11fbaf88ae2f673b88b381dca3caee85eae3353011cc01b32d0aa8f145af2ea1",
     "crates/velnor-actions-tofu/Cargo.toml": "546762cc8455efea21812d906724c1be02c13637d7e7465b64e06e6c135c8272",
     "crates/velnor-actions-workflow-renderer/Cargo.toml": "b00dbc220719ed8f7749213295465e6f5efbad2f41e3e438982d508ec327ffc0",
@@ -3358,5 +3368,5 @@
     "local/crates/velnor-cache-rules/Cargo.toml": "f3c549575677f1bb0241725787ea1458f5754cf0e36fa0dedc6ed18ece9996aa",
     "local/crates/velnor-local/Cargo.toml": "d6c37d4efee766f87f78e45ec36d93cc4d1d845ecb4117f0ec8b53d6eed51724"
   },
-  "layout": "66e852d4a8e1411180c6d791467360533cbbfb0de1d4d17c9234b02860fb5b13"
+  "layout": "47c215d2f5d35d1be5a900d9e28a47ab988c8ee95a2ac3f78b89d47428673a77"
 }
