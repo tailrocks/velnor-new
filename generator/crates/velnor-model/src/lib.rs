@@ -52,4 +52,4 @@ pub use selection::{
 };
 pub use verdict::{JobCondition, VerdictJob, VerdictSpec};
 
-pub use steps::{BaseExpiry, HelperCommand, StepKind, TrimFamily};
+pub use steps::{BaseExpiry, HelperCommand, StepKind, ToolsLocalVerb, TrimFamily};

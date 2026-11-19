@@ -223,6 +223,8 @@ pub enum When {
     ScheduledOrPush,
     CacheDebug,
     SaveToolsOnDefaultBranch,
+    RestoreToolsUnlessLocal,
+    SaveToolsUnlessLocal,
     SaveBase,
     SaveBaseDecided,
     SaveSources,

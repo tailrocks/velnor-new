@@ -93,7 +93,7 @@ impl RootJobs<'_> {
         let mirror = || mirror_step_on(self.facts, &runner).map(|step| self.gated(step.kind));
         let mut steps = head(self.facts, CHECKOUT_DEPTH);
         steps.extend(mirror());
-        steps.extend(tools_restore(self.facts).map(|restore| Step {
+        steps.extend(tools_restore(self.facts).into_iter().map(|restore| Step {
             gate: self.lane.steps(),
             ..restore
         }));

@@ -11,7 +11,6 @@ use crate::artifact_steps::{download_step, upload_cargo_log, upload_step};
 use crate::base_steps::{
     cache_budget, cache_decide, cache_trim, lane_outputs, sources_fetch, sources_fetch_all,
     sources_locks, trimmed_lane,
-
 };
 use crate::cache::{path_text, render_key};
 use crate::cargo::{CargoLane, cargo_step, reports_tests};
@@ -271,6 +270,7 @@ fn step_body(
         | StepKind::PrivateToken { .. }
         | StepKind::PrivateFetch { .. } => crate::private_steps::render(kind),
         StepKind::MbxSeed => crate::helper_steps::mbx_seed_step(),
+        StepKind::ToolsLocal(verb) => crate::helper_steps::tools_local_step(*verb),
         StepKind::TestSetup { name, run } => RenderedStep {
             name: name.clone(),
             run: Some(run.clone()),
