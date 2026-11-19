@@ -4,7 +4,6 @@
 use velnor_model::github_hosted;
 
 use crate::error::{WorkflowsError, refuse};
-use crate::helper_call::calls_velnor_ci;
 use crate::plan::{Action, Body, Env, Job, Step};
 
 const MAX_ENVIRONMENT_CHARACTERS: usize = 255;
@@ -50,8 +49,17 @@ pub(crate) fn containers_on_linux(
     Ok(())
 }
 
-/// A step that runs repository code, a `run` other than `velnor-ci` or a local action, never
-/// reads `github.token` in a job that can write.
+const SCRIPT_RUNNERS: [&str; 9] = [
+    "bash", "dash", "make", "node", "perl", "python", "python3", "ruby", "sh",
+];
+
+fn runs_script(run: &str) -> bool {
+    let word = run.split_whitespace().next().unwrap_or_default();
+    word.contains('/') || SCRIPT_RUNNERS.contains(&word)
+}
+
+/// A step that runs a repository script or a local action never reads `github.token` in a job
+/// that can write. Other commands, such as `gh release create`, are the job's own work.
 pub(crate) fn write_token(
     job: &str,
     steps: &[Step],
@@ -62,7 +70,7 @@ pub(crate) fn write_token(
     }
     for step in steps {
         let runs_repository_code = match &step.body {
-            Body::Run(run) => !calls_velnor_ci(run),
+            Body::Run(run) => runs_script(run),
             Body::Local(_) => true,
             Body::Uses(_) | Body::Helper(_) => false,
         };

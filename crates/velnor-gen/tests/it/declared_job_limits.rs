@@ -87,6 +87,8 @@ fn a_write_token_is_not_given_to_a_repository_command() -> TestResult {
         publish,
     ))?;
     rendered(&one_job("", write, RUN))?;
+    let release = "[[workflow.job.step]]\nname = \"Release\"\nrun = \"gh release create v1 --verify-tag\"\nenv = { GH_TOKEN = \"${{ github.token }}\" }\n";
+    rendered(&one_job("", write, release))?;
     let helper = "[[workflow.job.step]]\nname = \"Plan\"\nrun = \"velnor-ci plan\"\nenv = { GH_TOKEN = \"${{ github.token }}\" }\n";
     rendered(&one_job("", &format!("helper = true\n{write}"), helper))?;
     Ok(())
