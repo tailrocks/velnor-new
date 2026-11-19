@@ -18,12 +18,15 @@ pub(crate) fn lane_view(
     Ok(repo)
 }
 
-fn jobs_of(config: &str) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+pub(crate) fn jobs_of(config: &str) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
     let repo = lane_view("0.1.93", config)?;
     Ok(crate::yaml_tree::document(&workflow(&repo)?)?["jobs"].clone())
 }
 
-fn steps_named(jobs: &serde_json::Value, name: &str) -> Vec<(String, usize, serde_json::Value)> {
+pub(crate) fn steps_named(
+    jobs: &serde_json::Value,
+    name: &str,
+) -> Vec<(String, usize, serde_json::Value)> {
     let mut found = Vec::new();
     for (id, job) in jobs.as_object().into_iter().flatten() {
         for (index, step) in job["steps"].as_array().into_iter().flatten().enumerate() {
@@ -216,44 +219,6 @@ fn a_lane_with_lint_and_doc_runs_clippy_and_rustdoc_with_the_features_in_the_sam
         let step = &steps_named(&jobs, name)[0];
         assert_eq!(step.2["working-directory"], lane[0].2["working-directory"]);
     }
-    Ok(())
-}
-
-#[test]
-fn lanes_with_the_same_features_share_one_lint_step_and_one_doc_step() -> TestResult {
-    let lane = |features: &str, filter: &str, lint: bool| {
-        format!(
-            "[[test_lane]]\nroot = '.'\nfeatures = [{features}]\npackages = ['package-0']\nfilter = '{filter}'\nlint = {lint}\ndoc = {lint}\n"
-        )
-    };
-    let config = format!(
-        "{}{}{}",
-        lane("'a', 'b'", "test(~one)", true),
-        lane("'b', 'a'", "test(~two)", true),
-        lane("'c'", "test(~three)", true),
-    );
-    let jobs = jobs_of(&config)?;
-    for (name, count) in [
-        ("Test (features: a,b)", 1),
-        ("Test (features: b,a)", 1),
-        ("Test (features: c)", 1),
-        ("Lint (features: a,b)", 1),
-        ("Lint (features: b,a)", 0),
-        ("Lint (features: c)", 1),
-        ("Documentation (features: a,b)", 1),
-        ("Documentation (features: b,a)", 0),
-        ("Documentation (features: c)", 1),
-    ] {
-        assert_eq!(steps_named(&jobs, name).len(), count, "{name}");
-    }
-    let off_first = format!(
-        "{}{}",
-        lane("'a'", "test(~one)", false),
-        lane("'a'", "test(~two)", true)
-    );
-    let jobs = jobs_of(&off_first)?;
-    assert_eq!(steps_named(&jobs, "Lint (features: a)").len(), 1);
-    assert_eq!(steps_named(&jobs, "Documentation (features: a)").len(), 1);
     Ok(())
 }
 

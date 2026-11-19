@@ -105,14 +105,14 @@ fn unowned_directories(facts: &RepoFacts, roots: &[RustRoot]) -> Option<Vec<Stri
     Some(directories)
 }
 
-fn toolchain_directory(facts: &RepoFacts) -> Option<Option<String>> {
+fn toolchain_directory(facts: &RepoFacts) -> Option<Vec<String>> {
     let Some(path) = facts
         .toolchain
         .as_ref()
         .and_then(|toolchain| toolchain.path.as_deref())
         .filter(|path| !path.starts_with('/'))
     else {
-        return Some(None);
+        return Some(Vec::new());
     };
     let path = path
         .strip_prefix("./")
@@ -121,7 +121,7 @@ fn toolchain_directory(facts: &RepoFacts) -> Option<Option<String>> {
     if path.split('/').any(|part| matches!(part, "" | "." | "..")) {
         return None;
     }
-    Some(Some(format!("/{}/", escaped(path))))
+    Some(vec![format!("/{}/", escaped(path))])
 }
 
 fn escaped(text: &str) -> String {
