@@ -1,0 +1,11 @@
+#[path = "records/qualification.rs"]
+mod qualification;
+pub(super) use qualification::{qualification_attestation, qualification_proof};
+#[path = "records/attestation.rs"]
+mod attestation;
+pub(super) use attestation::{AttestationInput, attestation, workflow_uri};
+
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let semantic = IMAGE_CANDIDATE_SOURCE_INPUTS
+        .iter()
+        .copied()

@@ -1,0 +1,17 @@
+const COMMIT: &str = include_str!("github_history_fixtures/rest-git-commit.json");
+const REFERENCE: &str = include_str!("github_history_fixtures/rest-git-ref.json");
+const HEAD_OID: &str = "ea9238fcf2892578ddd23d6f283038ea269bd14a";
+
+#[test]
+            .all(|parent| parent.get("type").is_none())
+    );
+    let read: CommitResponse = serde_json::from_str(COMMIT).expect("GET commit DTO");
+    let created: CommitCreateResponse =
+            .map(|parent| parent.sha.as_str())
+            .collect::<Vec<_>>(),
+        expected
+    );
+            .map(|parent| parent.sha.as_str())
+            .collect::<Vec<_>>(),
+        expected
+    );

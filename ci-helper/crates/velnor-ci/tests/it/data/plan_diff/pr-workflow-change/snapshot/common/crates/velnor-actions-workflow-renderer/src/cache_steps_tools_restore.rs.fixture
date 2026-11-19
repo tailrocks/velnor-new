@@ -1,0 +1,4 @@
+const INSTALLS_VERIFY_SCRIPT: &str = include_str!("cache_steps_tools_installs_verify.sh");
+
+pub(crate) const INSTALLS_VERIFY_NAME: &str = "Re-verify restored Mise installs";
+

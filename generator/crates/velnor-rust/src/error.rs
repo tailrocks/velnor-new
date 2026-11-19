@@ -57,6 +57,9 @@ pub enum Reason {
     UnknownLockedPackage(String),
     UnknownRoot(RepoPath),
     UnknownTestSetupRoot(String),
+    UnknownTestLaneRoot(String),
+    TestLaneWithoutNextest(String),
+    UnknownTestLanePackage(String),
     Lint(crate::lint_error::LintFault),
     LintDuplicate(String),
     LintKeyForeign {
@@ -79,7 +82,6 @@ pub enum Reason {
     BuildExecutable,
     UnpinnedTool(&'static str),
     HelperBox(RepoPath),
-    HelperSourceRelease,
     MbxRemotePrivate(String),
     CargoCredentialProvider(String),
     LockedUrlCredentials(String),
@@ -185,9 +187,6 @@ impl Reason {
             Self::PrCiWithSkipDraft => f.write_str(
                 "pr_ci = \"label\" and skip_draft_pull_requests = true both decide what a draft pull request runs; remove skip_draft_pull_requests, because pr_ci = \"label\" already runs nothing on a draft",
             ),
-            Self::HelperSourceRelease => f.write_str(
-                "helper.path requires velnor-ci 0.1.81 or newer for input restoration and cache tie-breaking; run `velnor-gen pin-helper 0.1.81`",
-            ),
             Self::MbxRemotePrivate(cause) => write!(
                 f,
                 "cache.mbx_remote is refused: fork pull requests can restore that cache and this repository has private dependencies ({cause}); remove cache.mbx_remote"
@@ -282,6 +281,9 @@ impl fmt::Display for Reason {
             Self::UnknownTestGroupRoot(_)
             | Self::TestGroupWithoutNextest(_)
             | Self::TestGroupFilter(_) => self.fmt_test_groups(f),
+            Self::UnknownTestLaneRoot(_)
+            | Self::TestLaneWithoutNextest(_)
+            | Self::UnknownTestLanePackage(_) => self.fmt_test_lane(f),
             Self::UnknownTestSetupRoot(root) => write!(
                 f,
                 "test_setup names the root {root}, which is not a Cargo root of this repository; name the folder of a root's Cargo.toml, or . for the repository root"
@@ -299,7 +301,6 @@ impl fmt::Display for Reason {
             ),
             Self::UnpinnedTool(_)
             | Self::HelperBox(_)
-            | Self::HelperSourceRelease
             | Self::MbxRemotePrivate(_)
             | Self::PrCiWithSkipDraft => self.fmt_setup(f),
             Self::BuildExecutable

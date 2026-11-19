@@ -44,9 +44,9 @@ pub use repo::{
     CacheDebug, CheckoutScope, CiDebugInfo, CompileInputs, CratesMirror, CustomHarness,
     DependencyKind, DocsRun, FullRun, InputRule, MbxRemote, MbxStore, MemberDependency, OnMain,
     PackageDependency, PolicyTools, PrCi, PrivateSources, PushAfterMergeGroup, RepoFacts, RepoView,
-    RepositoryIdentity, RustCiConfig, RustMember, RustMetadata, RustPackage, RustRoot, Target,
-    TargetKind, TestSetup, Timings, ToolPin, ToolPins, Toolchain, UnownedPackage, Unread,
-    Weakening,
+    RepositoryIdentity, RustCiConfig, RustMember, RustMetadata, RustPackage, RustRoot, SpeedBudget,
+    Target, TargetKind, TestLane, TestSetup, Timings, ToolPin, ToolPins, Toolchain, UnownedPackage,
+    Unread, Weakening,
 };
 pub use selection::{
     AllTrigger, ChangeSet, EventKind, OptionalSteps, RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE,
@@ -56,4 +56,8 @@ pub use selection::{
 pub use test_group::{GroupEvent, GroupRoot, TestGroup, TestNeed};
 pub use verdict::{JobCondition, VerdictJob, VerdictSpec};
 
-pub use steps::{BaseExpiry, GroupFilter, HelperCommand, StepKind, ToolsLocalVerb, TrimFamily};
+pub use steps::{
+    BUDGET_JOB, BUDGET_MAIN_WALL, BUDGET_OUTPUTS, BUDGET_PR_WALL, BUDGET_RUNNER, BUDGET_SETUP,
+    BUDGET_STEP, BaseExpiry, GroupFilter, HelperCommand, RUN_RUNNER, RUN_WALL, StepKind,
+    ToolsLocalVerb, TrimFamily,
+};

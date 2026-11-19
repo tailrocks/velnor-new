@@ -1,0 +1,15 @@
+            .current_dir(&self.workspace)
+            .env("PATH", path)
+            .env("RUNNER_TEMP", &self.runner)
+            .env("GITHUB_WORKSPACE", &self.workspace)
+        let parent = self.scratch.join("pack");
+        std::fs::create_dir_all(self.payload().parent().ok_or_else(|| fail("no parent"))?)?;
+        self.stub_export(
+            &parent.join("state"),
+            &[(gc1_mbx_stub::EXPORT_MARK_ENV, mark)],
+        )?;
+        let mut tar = Command::new("tar")
+            .arg(&parent)
+            .arg("state")
+            .stdout(Stdio::piped())
+            .spawn()?;

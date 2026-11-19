@@ -1,0 +1,29 @@
+const IDENTITY: &str = include_str!("job_image_authority_identity.py");
+const REGISTRY: &str = include_str!("job_image_authority_registry.py");
+const PUBLISH: &str = include_str!("job_image_authority_publish.py");
+const RECORD: &str = include_str!("job_image_authority_record.py");
+const OCI: &str = include_str!("job_image_authority_oci.py");
+const TAR: &str = include_str!("job_image_authority_tar.py");
+
+#[derive(Debug)]
+struct AuthorityFile {
+                    with body.open("rb") as stream:
+                        while chunk := stream.read(65536):
+                            connection.send(chunk)
+                else:
+    with path.open("rb") as stream:
+        raw = stream.read(limit + 1)
+    if len(raw) > limit:
+        raise publish_module.AuthorityError(f"{label} exceeds its size limit.")
+with archive_path.open("rb") as archive_stream:
+    while chunk := archive_stream.read(1048576):
+        hasher.update(chunk)
+        archive_size += len(chunk)
+with closure_path.open("rb") as closure_stream:
+    closure_raw = closure_stream.read(1048577)
+if len(closure_raw) > 1048576:
+    raise publish_module.AuthorityError("Candidate closure exceeds its size limit.")
+#[path = "job_image_authority_verify.rs"]
+mod verify;
+
+pub(super) use verify::verify_candidate_step;

@@ -114,6 +114,16 @@ pub(crate) fn merge_group_skipped(from: &PlanFrom) -> String {
     }
 }
 
+fn event_gate(when: When) -> String {
+    match when {
+        When::Scheduled => format!("github.event_name == '{SCHEDULE}'"),
+        When::ScheduledOrPush => {
+            format!("(github.event_name == '{SCHEDULE}' || github.event_name == '{PUSH}')")
+        }
+        _ => format!("(github.event_name == '{PUSH}' && {ON_DEFAULT_BRANCH})"),
+    }
+}
+
 pub(crate) fn condition(
     when: When,
     gate: Option<&Gate>,
@@ -140,10 +150,9 @@ pub(crate) fn condition(
                 parts.push(SETUP_DONE.to_owned());
             }
         }
-        When::Scheduled => parts.push(format!("github.event_name == '{SCHEDULE}'")),
-        When::ScheduledOrPush => parts.push(format!(
-            "(github.event_name == '{SCHEDULE}' || github.event_name == '{PUSH}')"
-        )),
+        When::Scheduled | When::ScheduledOrPush | When::DefaultBranchPush => {
+            parts.push(event_gate(when));
+        }
         When::SaveBase | When::SaveBaseDecided | When::SaveSources => {
             parts.push(NOT_CANCELLED.to_owned());
             if setup != Setup::Before {
@@ -308,11 +317,21 @@ fn gate_parts(gate: &Gate, replanned: bool) -> Vec<String> {
             runs(GateNeed::Deny),
             runs(GateNeed::Machete)
         )),
-        GateNeed::PackageArgs if gate.package.is_some() => {
-            parts.extend(gate.package.iter().map(|package| {
-                let args = format!("format(' {{0}} ', {})", read(GateNeed::PackageArgs));
-                format!("(contains({args}, ' -p {package} ') || contains({args}, ' --workspace '))")
-            }));
+        GateNeed::PackageArgs if !gate.packages.is_empty() => {
+            let args = format!("format(' {{0}} ', {})", read(GateNeed::PackageArgs));
+            let selected = gate
+                .packages
+                .iter()
+                .map(|package| format!("contains({args}, ' -p {package} ')"))
+                .chain([format!("contains({args}, ' --workspace ')")])
+                .collect::<Vec<_>>()
+                .join(" || ");
+            if gate.unselected {
+                parts.push(format!("{} != 'none'", read(GateNeed::Selected)));
+                parts.push(format!("!({selected})"));
+            } else {
+                parts.push(format!("({selected})"));
+            }
         }
         GateNeed::TestFilter
         | GateNeed::PackageArgs

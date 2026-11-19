@@ -5,16 +5,18 @@ use std::collections::BTreeMap;
 
 use velnor_model::github_hosted;
 
-use crate::call::{call, refuse_step_keys};
+use crate::call::{call, rank, refuse_step_keys};
 use crate::cases::cases;
 use crate::check_step::step;
-use crate::concurrency::concurrency;
+use crate::concurrency::{concurrency, refuse_shared_group};
 use crate::containers::{container, services};
 use crate::error::{WorkflowsError, refuse};
 use crate::expression::{Level, Scope, check_condition, is_identifier};
+use crate::job_env::{JobExtras, job_env};
 use crate::matrix::matrix;
 use crate::plan::{
-    Body, DEFAULT_RUNNER, DEFAULT_TIMEOUT_MINUTES, Job, Output, Step, Triggers, Workflow,
+    Body, Concurrency, DEFAULT_RUNNER, DEFAULT_TIMEOUT_MINUTES, Job, Output, Step, Triggers,
+    Workflow,
 };
 use crate::raw::{RawJob, RawStep, RawWorkflow};
 use crate::triggers::triggers;
@@ -43,6 +45,7 @@ pub(crate) struct Context<'a> {
     pub(crate) inputs: &'a [&'a str],
     pub(crate) workflows: &'a [Workflow],
     pub(crate) triggers: &'a Triggers,
+    pub(crate) concurrency: Option<&'a Concurrency>,
 }
 
 pub(crate) fn workflow(raw: RawWorkflow, earlier: &[Workflow]) -> Result<Workflow, WorkflowsError> {
@@ -80,17 +83,18 @@ pub(crate) fn workflow(raw: RawWorkflow, earlier: &[Workflow]) -> Result<Workflo
         .chain(triggers.workflow_dispatch.iter().flatten())
         .map(|input| input.name.as_str())
         .collect();
+    let workflow_concurrency = raw
+        .concurrency
+        .map(|raw| concurrency(&format!("the workflow {file}"), raw))
+        .transpose()?;
     let ctx = Context {
         file: &file,
         condition: raw.condition.as_deref(),
         inputs: &input_names,
         workflows: earlier,
         triggers: &triggers,
+        concurrency: workflow_concurrency.as_ref(),
     };
-    let workflow_concurrency = raw
-        .concurrency
-        .map(|raw| concurrency(&format!("the workflow {file}"), raw))
-        .transpose()?;
     let mut jobs: Vec<Job> = Vec::new();
     let mut raw_jobs = cases(
         &file,
@@ -181,9 +185,16 @@ fn job_shape(raw: &RawJob, earlier: &[Job]) -> Result<u16, WorkflowsError> {
     Ok(timeout_minutes)
 }
 
+fn needed_outputs<'a>(needs: &[String], earlier: &'a [Job]) -> Vec<(&'a str, &'a str)> {
+    earlier
+        .iter()
+        .filter(|seen| needs.contains(&seen.id))
+        .flat_map(|seen| seen.output_names().map(|name| (seen.id.as_str(), name)))
+        .collect()
+}
+
 fn job(raw: RawJob, ctx: &Context<'_>, earlier: &[Job]) -> Result<Job, WorkflowsError> {
     let id = raw.id.clone();
-    let raw_id = id.clone();
     let timeout_minutes = job_shape(&raw, earlier)?;
     declared_access(&id, &raw.permissions, raw.environment.as_deref())?;
     let job_concurrency = raw
@@ -199,11 +210,7 @@ fn job(raw: RawJob, ctx: &Context<'_>, earlier: &[Job]) -> Result<Job, Workflows
         .matrix
         .map(|matrix| self::matrix(&id, matrix, &raw.needs, earlier))
         .transpose()?;
-    let needed_outputs: Vec<(&str, &str)> = earlier
-        .iter()
-        .filter(|seen| raw.needs.contains(&seen.id))
-        .flat_map(|seen| seen.output_names().map(|name| (seen.id.as_str(), name)))
-        .collect();
+    let needed_outputs = needed_outputs(&raw.needs, earlier);
     let axes = matrix.as_ref().and_then(crate::matrix::axis_names);
     let mut scope = Scope {
         inputs: ctx.inputs,
@@ -213,10 +220,15 @@ fn job(raw: RawJob, ctx: &Context<'_>, earlier: &[Job]) -> Result<Job, Workflows
         needs: &raw.needs,
         needed_outputs: &needed_outputs,
         steps: Vec::new(),
+        events: ctx.triggers.events(),
     };
     let condition = scope_conditions(ctx, raw.condition.as_deref(), &scope)?;
+    let JobExtras { env, cache_mode } = job_env(
+        &id,
+        (&raw.env, raw.cache_mode.as_deref()),
+        [condition.as_deref(), ctx.condition],
+    )?;
     let mut job = Job {
-        id,
         name: raw.name.clone(),
         needs: raw.needs.clone(),
         condition,
@@ -226,15 +238,15 @@ fn job(raw: RawJob, ctx: &Context<'_>, earlier: &[Job]) -> Result<Job, Workflows
         timeout_minutes,
         concurrency: job_concurrency,
         permissions: raw.permissions.clone().into_iter().collect(),
+        cache_mode,
+        env,
         outputs: Vec::new(),
         matrix,
-        container: raw
-            .container
-            .map(|raw| container(&raw_id, raw))
-            .transpose()?,
-        services: services(&raw_id, raw.service)?,
+        container: raw.container.map(|raw| container(&id, raw)).transpose()?,
+        services: services(&id, raw.service)?,
         steps: Vec::new(),
         call: None,
+        id,
     };
     if let Some(uses) = &raw.uses {
         scope.level = Level::Call;
@@ -246,6 +258,14 @@ fn job(raw: RawJob, ctx: &Context<'_>, earlier: &[Job]) -> Result<Job, Workflows
             ctx,
             &scope,
         )?);
+        if let Some(call) = &job.call {
+            refuse_shared_group(
+                &job.id,
+                [job.concurrency.as_ref(), ctx.concurrency],
+                &call.target,
+                ctx.workflows,
+            )?;
+        }
         return Ok(job);
     }
     if !raw.with.is_empty() {
@@ -303,7 +323,7 @@ fn require_permissions(
         for (scope, access) in action.needs_permissions() {
             let granted = permissions
                 .iter()
-                .any(|(name, level)| name == scope && level == access);
+                .any(|(name, level)| name == scope && rank(level) >= rank(access));
             if !granted {
                 return refuse(format!(
                     "job {job} uses {}, which needs the permission {scope} = {access:?}; declare it on the job",

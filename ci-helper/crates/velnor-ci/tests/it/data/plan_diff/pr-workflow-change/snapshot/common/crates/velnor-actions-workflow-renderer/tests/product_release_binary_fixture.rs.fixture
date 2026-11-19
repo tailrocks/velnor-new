@@ -1,0 +1,8 @@
+            .current_dir(&self.workspace)
+            .env("PATH", path)
+            .env("BUILD_MODE", self.mode.tool_value())
+            .env("BUILD_LOG", &self.build_log)
+    let repository = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    for name in ["LICENSE", "NOTICE"] {
+        fs::copy(repository.join(name), workspace.join(name))?;
+    }

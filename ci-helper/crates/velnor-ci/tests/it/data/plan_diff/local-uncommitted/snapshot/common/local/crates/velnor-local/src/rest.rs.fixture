@@ -1,0 +1,8 @@
+                .split_once("...")
+                .filter(|(base, head)| !base.is_empty() && !head.is_empty())
+                .map(|(base, head)| Api::Compare {
+                    base: base.to_owned(),
+            ".." => {
+                parts.pop()?;
+            }
+            name => parts.push(name),

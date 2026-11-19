@@ -30,7 +30,7 @@ pub(crate) fn view_with(
     helper: &str,
 ) -> Result<velnor_model::RepoView, Box<dyn std::error::Error>> {
     let mut view = view(roots, Some(config.as_bytes()))?;
-    let lock = String::from_utf8(HELPER_LOCK.to_vec())?.replacen("0.1.79", helper, 1);
+    let lock = String::from_utf8(HELPER_LOCK.to_vec())?.replacen("0.1.81", helper, 1);
     view.files
         .insert(RepoPath::new(".velnor/rust-ci.lock")?, lock.into_bytes());
     Ok(view)

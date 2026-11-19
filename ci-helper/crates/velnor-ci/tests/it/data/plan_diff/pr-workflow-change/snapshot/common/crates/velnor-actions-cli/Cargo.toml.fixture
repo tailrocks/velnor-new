@@ -1,0 +1,166 @@
+# SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+# SPDX-License-Identifier: Apache-2.0
+
+[package]
+name = "velnor-actions-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+autotests = false
+
+[[bin]]
+name = "velnor-actions"
+path = "src/main.rs"
+test = false
+
+[[example]]
+name = "image-publication-fixture"
+path = "examples/image_publication_fixture.rs"
+test = false
+required-features = ["generator"]
+
+[[example]]
+name = "qualification-diagnostics"
+path = "examples/qualification_diagnostics.rs"
+test = false
+required-features = ["generator"]
+
+[[test]]
+name = "native_image_candidate_inventory_public"
+path = "tests/native_image_candidate_inventory_public.rs"
+required-features = ["generator"]
+
+[[test]]
+name = "ledger_helper_public"
+path = "tests/ledger_helper_public.rs"
+
+[[test]]
+name = "lane_execution_both"
+path = "tests/lane_execution_both.rs"
+required-features = ["generator"]
+
+[[test]]
+name = "velnor_cli"
+path = "tests/velnor_cli.rs"
+required-features = ["generator"]
+
+[[test]]
+name = "api2026_pull_context_public"
+path = "tests/api2026_pull_context_public.rs"
+required-features = ["generator"]
+
+[[test]]
+name = "preview_source_selection_public"
+path = "tests/preview_source_selection_public.rs"
+required-features = ["generator"]
+
+[[test]]
+name = "candidate_freshness_public"
+path = "tests/candidate_freshness_public.rs"
+required-features = ["generator"]
+
+[[test]]
+name = "bun_private_repository_public"
+path = "tests/bun_private_repository_public.rs"
+required-features = ["generator"]
+
+[[test]]
+name = "bun_assets_handoff_public"
+path = "tests/bun_assets_handoff_public.rs"
+required-features = ["generator"]
+
+[[test]]
+name = "check_runtime_identity_public"
+path = "tests/check_runtime_identity_public.rs"
+required-features = ["generator"]
+
+[[test]]
+name = "preview_cross_job_identity_public"
+path = "tests/preview_cross_job_identity_public.rs"
+required-features = ["generator"]
+
+[[test]]
+name = "review_completion_public"
+path = "tests/review_completion_public.rs"
+required-features = ["generator"]
+
+[[test]]
+name = "pin_mirror_public"
+path = "tests/pin_mirror_public.rs"
+required-features = ["generator"]
+
+[features]
+default = ["generator"]
+generator = [
+    "ledger-helper",
+    "dep:serde_json",
+    "dep:base64",
+    "dep:sha2",
+    "dep:tempfile",
+    "dep:toml",
+    "dep:rustix",
+    "dep:velnor-actions-mise",
+    "dep:velnor-actions-orchestrator",
+    "dep:velnor-actions-freshness",
+    "dep:clap",
+    "dep:velnor-runner-host",
+    "dep:tokio",
+]
+ledger-helper = ["dep:velnor-actions-contract"]
+
+[[test]]
+name = "runner_image_admission_public"
+path = "tests/runner_image_admission_public.rs"
+required-features = ["generator"]
+
+[[test]]
+name = "check_job_source_public"
+path = "tests/check_job_source_public.rs"
+required-features = ["generator"]
+
+[[test]]
+name = "image_publication_public"
+path = "tests/image_publication_public.rs"
+required-features = ["generator"]
+
+[[test]]
+name = "mac_signer_early_public"
+path = "tests/mac_signer_early_public.rs"
+required-features = ["generator"]
+
+[dependencies]
+rustix = { version = "=1.1.6", features = ["fs", "process"], optional = true }
+toml = { version = "=1.1.8", optional = true }
+base64 = { workspace = true, optional = true }
+sha2 = { version = "=0.11.1", optional = true }
+tempfile = { version = "=3.27.0", optional = true }
+velnor-actions-mise = { version = "=0.1.81", path = "../velnor-actions-mise", optional = true }
+serde_json = { workspace = true, optional = true }
+velnor-actions-contract = { version = "=0.1.81", path = "../velnor-actions-contract", optional = true }
+velnor-actions-orchestrator = { version = "=0.1.81", path = "../velnor-actions-orchestrator", optional = true }
+velnor-actions-freshness = { version = "=0.1.81", path = "../velnor-actions-freshness", optional = true }
+clap = { version = "=4.6.7", features = ["derive"], optional = true }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+velnor-runner-host = { version = "=0.1.0", path = "../velnor-runner/crates/velnor-runner-host", optional = true }
+tokio = { version = "=1.53.3", features = ["rt-multi-thread", "time"], optional = true }
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+base64 = { workspace = true }
+velnor-archive-guard = { version = "=0.1.81", path = "../velnor-archive-guard" }
+serde-saphyr = "=2.1.0"
+velnor-actions-contract = { version = "=0.1.81", path = "../velnor-actions-contract" }
+velnor-actions-mise = { version = "=0.1.81", path = "../velnor-actions-mise" }
+proc-macro2 = "=1.0.107"
+flate2 = { version = "=1.1.10", default-features = false, features = ["rust_backend"] }
+tar = { version = "=0.4.46", default-features = false }
+sha1-checked = { version = "=0.10.0", default-features = false }
+rustix = { version = "=1.1.6", features = ["fs", "process"] }
+sha2 = "=0.11.1"
+syn = { version = "=3.0.9", features = ["full", "visit"] }
+tempfile = "=3.27.0"
+toml = "=1.1.8"

@@ -1,0 +1,7 @@
+#[path = "../src/resource_probe_release/exact_semver.rs"]
+mod exact_semver;
+use exact_semver::is_exact_semver;
+#[path = "../src/resource_probe_release/runner_manifest.rs"]
+mod runner_manifest;
+
+use serde_json::{Value, json};

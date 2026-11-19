@@ -8,7 +8,7 @@ pub(crate) fn apply(facts: &RepoFacts, jobs: &mut [Job]) {
     let alone = facts.config.check_alone_run == DocsRun::PostMerge;
     for step in jobs.iter_mut().flat_map(|job| job.steps.iter_mut()) {
         let deferred = match step.kind {
-            StepKind::Cargo(CargoCommand::Doc) => docs,
+            StepKind::Cargo(CargoCommand::Doc | CargoCommand::DocFeatures { .. }) => docs,
             StepKind::Cargo(CargoCommand::CheckAlone { .. }) => alone,
             _ => false,
         };

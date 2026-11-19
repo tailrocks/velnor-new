@@ -76,7 +76,12 @@ pub(crate) fn triggers(
                 "the schedule {cron:?} of {file} is not a unique five-field cron expression"
             ));
         };
-        if parsed.shortest_gap_minutes() < MIN_SCHEDULE_GAP_MINUTES {
+        let Some(gap) = parsed.shortest_gap_minutes() else {
+            return refuse(format!(
+                "the schedule {cron:?} of {file} never runs, because no day matches its day, month and weekday fields"
+            ));
+        };
+        if gap < MIN_SCHEDULE_GAP_MINUTES {
             return refuse(format!(
                 "the schedule {cron:?} of {file} runs more often than every {MIN_SCHEDULE_GAP_MINUTES} minutes, which is the shortest interval GitHub runs a schedule at; use at least 5 minutes between runs"
             ));
@@ -120,7 +125,7 @@ fn filtered(
         let (paths, paths_ignore) = path_filters(file, "push", push.paths, push.paths_ignore)?;
         triggers.push = Some(Push {
             branches: branch_patterns(file, "push branches", push.branches)?,
-            tags: patterns(file, "push tags", push.tags)?,
+            tags: filter_patterns(file, "push tags", push.tags)?,
             paths,
             paths_ignore,
         });
@@ -210,6 +215,19 @@ fn branch_patterns(
             "{what} of {file} has {EVERY_PATH:?}, which is redundant; omit branches to match every branch"
         ));
     }
+    filter_patterns(file, what, values)
+}
+
+fn filter_patterns(
+    file: &str,
+    what: &str,
+    values: Vec<String>,
+) -> Result<Vec<String>, WorkflowsError> {
+    if !values.is_empty() && values.iter().all(|value| value.starts_with('!')) {
+        return refuse(format!(
+            "{what} of {file} has only negative patterns; GitHub requires at least one pattern that does not start with '!'"
+        ));
+    }
     patterns(file, what, values)
 }
 
@@ -237,7 +255,7 @@ fn path_filters(
         ));
     }
     Ok((
-        patterns(file, &format!("{event} paths"), paths)?,
+        filter_patterns(file, &format!("{event} paths"), paths)?,
         patterns(file, &format!("{event} paths_ignore"), ignored)?,
     ))
 }

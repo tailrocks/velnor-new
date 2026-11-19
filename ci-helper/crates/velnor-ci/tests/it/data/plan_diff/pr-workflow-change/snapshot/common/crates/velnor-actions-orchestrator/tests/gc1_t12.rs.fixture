@@ -1,0 +1,9 @@
+    if let Some(parent) = full.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    fs::write(&full, bytes)?;
+    fs::set_permissions(&full, fs::Permissions::from_mode(0o644))?;
+    bad_root.roots = vec!["../escape".to_owned()];
+    reject_parts("escaping root", &bad_root, &["cargo"])?;
+    Ok(())
+}

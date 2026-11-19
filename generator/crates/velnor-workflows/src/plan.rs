@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::cache_mode::CacheMode;
 use crate::check::workflow;
 use crate::error::{WorkflowsError, refuse};
 use crate::raw::RawFile;
@@ -42,6 +43,25 @@ pub struct Triggers {
     pub pull_request: Option<PullRequest>,
     pub merge_group: bool,
     pub workflow_run: Option<WorkflowRun>,
+}
+
+impl Triggers {
+    /// The names of the events that start the workflow, in the order the file writes them.
+    #[must_use]
+    pub fn events(&self) -> Vec<&'static str> {
+        [
+            (self.workflow_call.is_some(), "workflow_call"),
+            (self.workflow_dispatch.is_some(), "workflow_dispatch"),
+            (!self.schedule.is_empty(), "schedule"),
+            (self.push.is_some(), "push"),
+            (self.pull_request.is_some(), "pull_request"),
+            (self.merge_group, "merge_group"),
+            (self.workflow_run.is_some(), "workflow_run"),
+        ]
+        .into_iter()
+        .filter_map(|(present, name)| present.then_some(name))
+        .collect()
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -124,6 +144,8 @@ pub struct Job {
     pub timeout_minutes: u16,
     pub concurrency: Option<Concurrency>,
     pub permissions: Vec<(String, String)>,
+    pub cache_mode: Option<CacheMode>,
+    pub env: Vec<(String, Env)>,
     pub outputs: Vec<(String, String)>,
     pub matrix: Option<Matrix>,
     pub container: Option<Container>,
@@ -253,22 +275,26 @@ pub enum Action {
     Mise,
     UploadArtifact,
     DownloadArtifact,
+    Cache,
     CacheRestore,
     CacheSave,
     AttestBuildProvenance,
     GithubScript,
+    MrBoxington,
 }
 
 impl Action {
-    pub const NAMES: [&'static str; 8] = [
+    pub const NAMES: [&'static str; 10] = [
         "checkout",
         "mise",
         "upload-artifact",
         "download-artifact",
+        "cache",
         "cache-restore",
         "cache-save",
         "attest",
         "github-script",
+        "mr-boxington",
     ];
 
     #[must_use]
@@ -278,10 +304,12 @@ impl Action {
             "mise" => Self::Mise,
             "upload-artifact" => Self::UploadArtifact,
             "download-artifact" => Self::DownloadArtifact,
+            "cache" => Self::Cache,
             "cache-restore" => Self::CacheRestore,
             "cache-save" => Self::CacheSave,
             "attest" => Self::AttestBuildProvenance,
             "github-script" => Self::GithubScript,
+            "mr-boxington" => Self::MrBoxington,
             _ => return None,
         })
     }
@@ -294,9 +322,11 @@ impl Action {
             Self::AttestBuildProvenance => &["push-to-registry"],
             Self::UploadArtifact
             | Self::DownloadArtifact
+            | Self::Cache
             | Self::CacheRestore
             | Self::CacheSave
-            | Self::GithubScript => &[],
+            | Self::GithubScript
+            | Self::MrBoxington => &[],
         }
     }
 
@@ -304,6 +334,7 @@ impl Action {
     #[must_use]
     pub fn needs_permissions(self) -> &'static [(&'static str, &'static str)] {
         match self {
+            Self::Checkout => &[("contents", "read")],
             Self::AttestBuildProvenance => &[("id-token", "write"), ("attestations", "write")],
             _ => &[],
         }
@@ -314,6 +345,7 @@ impl Action {
 pub enum Env {
     Text(String),
     Expression(String),
+    Interpolated(String),
 }
 
 impl WorkflowsPlan {
@@ -334,6 +366,7 @@ impl WorkflowsPlan {
             }
             workflows.push(checked);
         }
+        crate::workflow_run::check_chains(&workflows)?;
         Ok(Self { workflows })
     }
 }

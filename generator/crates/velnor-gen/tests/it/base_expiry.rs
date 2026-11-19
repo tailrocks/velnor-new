@@ -1,9 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::base_save::{jobs, names, pinned, step, steps};
+use crate::base_save::{jobs, names, step, steps};
 use crate::facts::TestResult;
-use crate::pipeline::workflow;
 
 const REF_IS_MAIN: &str =
     "github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch)";
@@ -85,14 +84,6 @@ fn the_steps_after_the_restore_read_the_full_plan_when_there_is_one_and_the_firs
         .next()
         .ok_or("no head")?;
     assert!(!first_plan.contains("steps.replan"), "{first_plan}");
-    Ok(())
-}
-
-#[test]
-fn a_repository_that_saves_no_base_plans_nothing_again() -> TestResult {
-    let text = workflow(&pinned("0.1.79", "full_run = \"off\"\n")?)?;
-    assert!(!text.contains("plan --full"), "{text}");
-    assert!(!text.contains("steps.replan"), "{text}");
     Ok(())
 }
 

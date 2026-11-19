@@ -12,11 +12,9 @@ const IMPLICIT_CI_PROFILE: &str =
 const DEFAULT_PROFILE_ONLY: &str = "[profile.default]\nslow-timeout = \"60s\"\n";
 const UNPARSEABLE: &str = "[profile.ci\n";
 
-const RUN_WITH_CI: &str =
-    "cargo-nextest nextest run --workspace --locked --profile ci --no-fail-fast";
-const RUN_WITHOUT_CI: &str = "cargo-nextest nextest run --workspace --locked --no-fail-fast";
-const BUILD_WITHOUT_CI: &str =
-    "cargo-nextest nextest run --workspace --locked --ignore-default-filter --no-run";
+const RUN_WITH_CI: &str = "cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --profile ci --no-fail-fast";
+const RUN_WITHOUT_CI: &str = "cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --no-fail-fast";
+const BUILD_WITHOUT_CI: &str = "cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run";
 const ARCHIVE_RUN_WITH_CI: &str = "--workspace-remap . --profile ci --no-fail-fast";
 const ARCHIVE_WITHOUT_CI: &str = "cargo-nextest nextest archive --workspace --locked";
 

@@ -1,0 +1,14 @@
+        .current_dir(root)
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_TERMINAL_PROMPT", "0")
+    let parent = harness
+        .directory
+        .parent()
+        .ok_or("harness parent is missing")?;
+    let temp = Builder::new()
+        .prefix("diagnostics-cli-original.")
+        .tempdir_in(parent)?;
+    fs::set_permissions(temp.path(), fs::Permissions::from_mode(0o700))?;
+    let path = temp.path().join("velnor-actions");
+    copy_executable(diagnostic, &path)?;

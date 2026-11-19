@@ -309,7 +309,7 @@ Follow the rules the repo already wrote. Do not invent new ones.
 - **Push to main and merge_group:** read all tiers. Only push to the protected default branch writes the shared Tier 0 generation and Tier 1. Merge groups never write shared state. Current policy already states this split (evidence §C.3: pull requests, forks and merge groups never write cache). Keep it.
 - **Fork PR:** restore only. Give forks a separate slot family and a separate node label. Never mount the shared writable store into a fork job. Never cache any output built from a private dependency for a fork (`docs/goals.md:43`). The job-start hook (§3.2) enforces the mount set per trust scope. A job that asks for a store outside its scope fails before it runs repository code.
 - **Content keys only:** mbx and cargo key on input content. A wrong or stale entry can waste time. It cannot change the program that runs, because the compiler still checks fingerprints before it reuses an object. The `Cache` check from `docs/goals.md:67` must still run: report crates compiled versus crates the warm store held, and turn red when a held crate compiles. A red Cache check blocks nothing. It stops silent cache rot.
-- **Attestation:** the state-seal chain attests bundles with `actions/attest` and verifies with `gh attestation verify` before a consumer trusts a key (evidence §C.3). Node-local stores need the same property with less machinery: the node agent signs each shared generation with a cluster key at write time and verifies the signature on mount. Drop the GitHub round trip. Keep the rule that only default-branch writes create shared generations.
+- **Attestation:** the state seal chain attests bundles with `actions/attest` and verifies with `gh attestation verify` before a consumer trusts a key (evidence §C.3). Node-local stores need the same property with less machinery: the node agent signs each shared generation with a cluster key at write time and verifies the signature on mount. Drop the GitHub round trip. Keep the rule that only default-branch writes create shared generations.
 
 ### 4.5 Expected hit rates and the limiter behind each number
 
@@ -326,7 +326,7 @@ Report hit rate per run from runner one. Use crates compiled and crates download
 
 Check the arithmetic before you believe a target. Maintenance-helpers compiles 104 crates cold in 486 s [E T10]. If 90% hit, 10 crates compile. At the cold average of 4.7 s per crate that is 47 s, plus test time the cache cannot remove **[Est]**. So a 60–120 s warm job is consistent. A claim of 10 s would fail the limit check and would mean the tests did not run. Apply the same bound everywhere: a cache can remove compile and download time only. It cannot remove test execution, clippy analysis of changed crates or doc builds of changed crates.
 
-Fix the state-seal failures as part of this work, even though Tier 2 shrinks. Seven failures stop at `Check state tip` and nine at Clippy or parallel checks (evidence T9d). The tip check compares `GITHUB_SHA` to the live `main` ref after a chain of up to five 60 min producers (evidence §C.3). Shorten the chain or re-check the tip at seal time only. A seal that usually fails trains everyone to ignore the one signal that says the cache broke.
+Fix the state seal failures as part of this work, even though Tier 2 shrinks. Seven failures stop at `Check state tip` and nine at Clippy or parallel checks (evidence T9d). The tip check compares `GITHUB_SHA` to the live `main` ref after a chain of up to five 60 min producers (evidence §C.3). Shorten the chain or re-check the tip at seal time only. A seal that usually fails trains everyone to ignore the one signal that says the cache broke.
 
 ## 5. Workflow design: select less, shard the rest, verify each tree once
 
@@ -334,7 +334,7 @@ Fix the state-seal failures as part of this work, even though Tier 2 shrinks. Se
 
 Eight jobs still run on GitHub-hosted `ubuntu-26.04`: Plan, Ledger CLI, Cargo Deny, Jactionlint, Cargo Machete, Alint, Required verdict and Required (evidence §C.1). Their durations are short (0.2–0.9 min [E T3]) and their queues are long (p90 21–26 min [E T4]). The runner ruleset needs only the two `Required` names. Nothing in those jobs needs a GitHub-hosted machine. The repo kept them hosted to keep credentials and signatures off shared nodes (RESULT.md: "Stays on hosted runners by design").
 
-Move all eight to the scale set. Run them in pods with no Docker socket, no write token and a read-only cache mount. Plan and the lint jobs need network access to the API and to crates only. Required verdict needs the plan artifact and the per-crate reports. None needs `id-token: write` or `attestations: write`. Keep state-seal producers, release and publish jobs hosted. Those hold the signing keys. The gate does not.
+Move all eight to the scale set. Run them in pods with no Docker socket, no write token and a read-only cache mount. Plan and the lint jobs need network access to the API and to crates only. Required verdict needs the plan artifact and the per-crate reports. None needs `id-token: write` or `attestations: write`. Keep state seal producers, release and publish jobs hosted. Those hold the signing keys. The gate does not.
 
 `velnor-actions` v0.1.81 already moves these jobs (per the owner's decided context). Treat that release as Phase 0 (§8) and measure it before you build anything else. Expected effect **[Est from E]**: the 11-18 PR pattern loses 57.0 min of gate queue and keeps the 10.7 min fan-out, so wall falls from 71.8 min to about 15 min. On an 11-17 pattern, wall falls from 16.0 min to about 10 min. The limiter after this move is the fan-out itself. That is what the rest of this section attacks.
 
@@ -535,7 +535,7 @@ Baseline for all targets (scale-set era, evidence T2): PR wall median 26.7 min, 
 
 ### Phase 0 — Move the gate onto the cluster (days, no new code)
 
-Ship `velnor-actions` v0.1.81. Move Plan, Ledger CLI, Cargo Deny, Jactionlint, Cargo Machete, Alint, Required verdict and Required to the scale set in locked-down pods (§5.1). Keep state-seal, release and publish hosted.
+Ship `velnor-actions` v0.1.81. Move Plan, Ledger CLI, Cargo Deny, Jactionlint, Cargo Machete, Alint, Required verdict and Required to the scale set in locked-down pods (§5.1). Keep state seal, release and publish hosted.
 
 - **Target:** PR wall median under 15 min and p90 under 30 min over 20 merges. Hosted queue in CI reaches zero. Fan-out span stays near 9 min.
 - **Detect failure:** any `Required` job waits over 2 min for a pod, or the gate pods gain a Docker socket or write token in review. Audit the pod spec in the same PR.

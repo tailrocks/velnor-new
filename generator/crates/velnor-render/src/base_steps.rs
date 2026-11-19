@@ -23,20 +23,27 @@ pub(crate) fn cache_decide(
     target: &RepoPath,
     archive: Option<&RepoPath>,
     manifests: &[RepoPath],
+    budget_bytes: u64,
 ) -> RenderedStep {
     RenderedStep {
         id: Some(BASE_STEP.to_owned()),
         name: "Decide whether to save the build directory".to_owned(),
-        env: vec![(
-            "VELNOR_CACHE_MANIFESTS".to_owned(),
-            Value::Text(
-                manifests
-                    .iter()
-                    .map(ToString::to_string)
-                    .collect::<Vec<_>>()
-                    .join("\n"),
+        env: vec![
+            (
+                "VELNOR_CACHE_MANIFESTS".to_owned(),
+                Value::Text(
+                    manifests
+                        .iter()
+                        .map(ToString::to_string)
+                        .collect::<Vec<_>>()
+                        .join("\n"),
+                ),
             ),
-        )],
+            (
+                "VELNOR_CACHE_BUDGET_BYTES".to_owned(),
+                Value::Text(budget_bytes.to_string()),
+            ),
+        ],
         run: Some(format!(
             "velnor-ci cache decide --target-dir {}{}",
             shell_word(target.as_str()),
@@ -105,18 +112,19 @@ pub(crate) fn cache_trim(lane: &JobId, family: TrimFamily) -> RenderedStep {
             SOURCES_PREFIX_OUTPUT,
         ),
     };
+    let env = vec![
+        (
+            "CACHE_PREFIX".to_owned(),
+            Value::Expr(format!("${{{{ needs.{lane}.outputs.{output} }}}}")),
+        ),
+        (
+            "GITHUB_TOKEN".to_owned(),
+            Value::Expr("${{ github.token }}".to_owned()),
+        ),
+    ];
     RenderedStep {
         name,
-        env: vec![
-            (
-                "CACHE_PREFIX".to_owned(),
-                Value::Expr(format!("${{{{ needs.{lane}.outputs.{output} }}}}")),
-            ),
-            (
-                "GITHUB_TOKEN".to_owned(),
-                Value::Expr("${{ github.token }}".to_owned()),
-            ),
-        ],
+        env,
         run: Some("velnor-ci cache trim --prefix \"$CACHE_PREFIX\"".to_owned()),
         ..RenderedStep::default()
     }
@@ -246,12 +254,13 @@ pub(crate) fn job_setup(job: &velnor_model::Job) -> (bool, bool) {
 }
 
 pub(crate) fn cache_budget(bytes: u64) -> RenderedStep {
+    let env = vec![(
+        "GITHUB_TOKEN".to_owned(),
+        Value::Expr("${{ github.token }}".to_owned()),
+    )];
     RenderedStep {
         name: "Enforce the repository cache budget".to_owned(),
-        env: vec![(
-            "GITHUB_TOKEN".to_owned(),
-            Value::Expr("${{ github.token }}".to_owned()),
-        )],
+        env,
         run: Some(format!("velnor-ci cache budget --budget-bytes {bytes}")),
         ..RenderedStep::default()
     }

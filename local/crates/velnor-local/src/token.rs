@@ -37,8 +37,8 @@ pub fn verify(token: &str, public_key_der: &[u8], now: u64) -> Result<Claims, St
     Ok(claims)
 }
 
-/// What runner.server signs into the `github.token` of a job that has `actions: write` on an
-/// event that is not a pull request, and into no other job's token.
+/// What runner.server signs into the `github.token` of a job that has `actions: read` or
+/// `actions: write` on an event that is not a pull request, and into no other job's token.
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 pub struct JobGrant {
     pub velnor: String,
@@ -50,13 +50,25 @@ pub struct JobGrant {
 
 const GRANT_MARKER: &str = "job-cache-admin";
 
+/// What a cache API call needs of the job's `actions` permission, as on GitHub: listing needs
+/// `read`, deleting needs `write`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Level {
+    Read,
+    Write,
+}
+
 impl JobGrant {
-    /// Whether the job may list and delete the caches of `repository`, as GitHub lets a job that
-    /// has `actions: write`. A pull request, a fork's too, is untrusted whatever it carries.
+    /// Whether the job may make a call that needs `level` on the caches of `repository`. A pull
+    /// request, a fork's too, is untrusted whatever it carries.
     #[must_use]
-    pub fn allows(&self, repository: &str) -> bool {
+    pub fn allows(&self, repository: &str, level: Level) -> bool {
+        let permitted = match level {
+            Level::Read => matches!(self.actions.as_str(), "read" | "write"),
+            Level::Write => self.actions == "write",
+        };
         self.velnor == GRANT_MARKER
-            && self.actions == "write"
+            && permitted
             && !self.event.starts_with("pull_request")
             && self.repository.eq_ignore_ascii_case(repository)
     }

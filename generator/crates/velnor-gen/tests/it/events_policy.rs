@@ -26,7 +26,6 @@ fn the_policy_lane_installs_the_helper_it_plans_and_runs_with() -> TestResult {
             std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
                 .join("../../samples/helper-lock/view/.velnor/rust-ci.lock"),
         )?)?
-        .replace("0.1.79", "0.1.81")
         .into_bytes(),
     );
     let text = workflow(&multi)?;

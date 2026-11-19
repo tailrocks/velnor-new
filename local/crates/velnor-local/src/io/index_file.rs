@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use tokio::fs;
 
-use crate::store::Index;
+use crate::store::{Index, Record};
 
 static WRITES: AtomicU64 = AtomicU64::new(0);
 
@@ -67,10 +67,33 @@ pub(super) async fn recover_tombstones(dir: &Path, index: &Index) {
         let Some(blob) = name.strip_suffix(".deleted") else {
             continue;
         };
-        let _ = if index.blob(blob, true).is_some() {
+        let recovered = if index.blob(blob, true).is_some() {
             fs::rename(entry.path(), archives.join(blob)).await
         } else {
             fs::remove_file(entry.path()).await
         };
+        if let Err(error) = recovered {
+            eprintln!("cache-server: the tombstone {name} is not recoverable: {error:?}");
+        }
+    }
+}
+
+pub(super) async fn remove_gone(dir: &Path, gone: Vec<Record>) {
+    for record in gone {
+        let archive =
+            remove_if_present(fs::remove_file(dir.join("archives").join(&record.blob)).await);
+        if let Err(error) = archive {
+            eprintln!(
+                "cache-server: the archive of {} is not removable: {error:?}",
+                record.blob
+            );
+        }
+        let blocks = dir.join("blocks").join(&record.blob);
+        if let Err(error) = remove_if_present(fs::remove_dir_all(blocks).await) {
+            eprintln!(
+                "cache-server: the blocks of {} are not removable: {error:?}",
+                record.blob
+            );
+        }
     }
 }

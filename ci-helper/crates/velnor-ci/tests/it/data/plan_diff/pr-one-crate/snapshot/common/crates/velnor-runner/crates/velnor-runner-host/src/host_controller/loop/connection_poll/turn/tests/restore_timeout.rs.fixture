@@ -1,0 +1,8 @@
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../../mise.toml"),
+    )?)?;
+    let version = config
+        .get("tools")
+    let (_, script) = include_str!("restore_curl.ts")
+        .split_once('\n')
+        .ok_or("script")?;
+    fs::write(&curl, format!("#!{}\n{script}", bun.trim()))?;

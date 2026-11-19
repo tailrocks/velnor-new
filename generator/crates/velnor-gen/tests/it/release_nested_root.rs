@@ -15,8 +15,7 @@ const TWO_ROOTS: &str = "roots = [\".\", \"tools\"]\n";
 
 fn view(roots: &[Root], release_toml: &str) -> Result<velnor_model::RepoView, Box<dyn Error>> {
     let mut view = release_view(roots, Some(release_toml))?;
-    view.files
-        .insert(LOCK_PATH, LOCK.replace("0.1.79", "0.1.81").into_bytes());
+    view.files.insert(LOCK_PATH, LOCK.as_bytes().to_vec());
     Ok(view)
 }
 

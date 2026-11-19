@@ -285,3 +285,42 @@ async fn an_organization_create_conflict_never_adopts_the_existing_set() -> Test
     assert_eq!(bound_scale_set_ids(&journal).await?, Vec::<i64>::new());
     Ok(())
 }
+
+#[tokio::test]
+async fn a_forbidden_create_is_reported_and_can_post_again() -> TestResult<()> {
+    let dir = tempfile::tempdir()?;
+    let (outcome, transport, journal) = run(&dir, vec![(403, String::new())]).await?;
+    assert_eq!(outcome, Err(EnsureError::Forbidden));
+    assert_eq!(transport.seen.len(), 1);
+    assert_eq!(intent_states(&journal).await?, ["prepared"]);
+    drop(journal);
+    let (retry, transport, journal) = run(
+        &dir,
+        vec![(200, scale_set_json(true)), (200, scale_set_json(true))],
+    )
+    .await?;
+    assert_eq!(retry, Ok(10));
+    assert_eq!(transport.seen[0].0, Method::Post);
+    assert_eq!(bound_scale_set_ids(&journal).await?, [10]);
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_conflict_with_an_empty_lookup_posts_create_again() -> TestResult<()> {
+    let dir = tempfile::tempdir()?;
+    let empty = r#"{"count":0,"value":[]}"#.to_owned();
+    let (outcome, _transport, journal) =
+        run(&dir, vec![(409, String::new()), (200, empty)]).await?;
+    assert_eq!(outcome, Err(EnsureError::Uncertain));
+    assert_eq!(intent_states(&journal).await?, ["no_effect"]);
+    drop(journal);
+    let (retry, transport, journal) = run(
+        &dir,
+        vec![(200, scale_set_json(true)), (200, scale_set_json(true))],
+    )
+    .await?;
+    assert_eq!(retry, Ok(10));
+    assert_eq!(transport.seen[0].0, Method::Post);
+    assert_eq!(bound_scale_set_ids(&journal).await?, [10]);
+    Ok(())
+}

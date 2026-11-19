@@ -1,0 +1,7 @@
+        include_str!("../../../scripts/generator-release/create-release-manifest.sh")
+    )
+}
+
+#[path = "schema2_generator_release_manifest_publish.rs"]
+mod publish;
+

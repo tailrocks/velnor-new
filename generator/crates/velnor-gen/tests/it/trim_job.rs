@@ -102,14 +102,6 @@ fn one_trim_job_alone_holds_actions_write_and_runs_only_after_a_default_branch_s
     Ok(())
 }
 
-#[test]
-fn a_repository_that_saves_nothing_gets_no_trim_job() -> TestResult {
-    let text =
-        crate::pipeline::workflow(&crate::base_save::pinned("0.1.79", "full_run = \"off\"\n")?)?;
-    assert!(!text.contains("rust-trim"), "{text}");
-    Ok(())
-}
-
 fn job_if(block: &str) -> String {
     block
         .lines()
@@ -178,7 +170,7 @@ fn a_two_root_budget_waits_for_both_lanes_and_guards_their_trims() -> TestResult
     let mut repo = view(&["Cargo.toml", "lab/Cargo.toml"], Some(b""))?;
     repo.files.insert(
         LOCK_PATH,
-        pin_lock("0.1.81", COMMIT_FILE, SUMS)?.into_bytes(),
+        pin_lock("0.1.81", COMMIT_FILE, SUMS, None)?.into_bytes(),
     );
     let text = workflow(&repo)?;
     let trim = jobs_of(&text)

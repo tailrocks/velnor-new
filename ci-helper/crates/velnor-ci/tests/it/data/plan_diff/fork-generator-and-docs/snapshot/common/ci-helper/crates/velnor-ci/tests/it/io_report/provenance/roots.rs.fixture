@@ -1,0 +1,4 @@
+                .current_dir(repo.root().join(name))
+                .output()?;
+            assert!(output.status.success(), "{output:?}");
+        }

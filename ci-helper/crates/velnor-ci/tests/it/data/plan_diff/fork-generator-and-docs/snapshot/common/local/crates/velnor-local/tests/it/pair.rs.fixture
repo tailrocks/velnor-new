@@ -1,0 +1,4 @@
+const REAL_LOCK: &str = include_str!("../../../../../.velnor/runner.lock");
+
+#[derive(Debug)]
+struct Registration {

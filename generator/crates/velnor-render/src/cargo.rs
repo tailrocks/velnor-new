@@ -2,17 +2,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    BUILD_TESTS_STEP, CargoCommand, FilterRef, Job, LINT_STEP, RepoPath, StepKind, TEST_STEP,
-    TargetKind, TargetName,
+    BUILD_TESTS_STEP, CargoCommand, FilterRef, Job, LINT_STEP, PackageName, RepoPath, StepKind,
+    TEST_STEP, TargetKind, TargetName,
 };
 
+use crate::cargo_features::NO_TESTS_PASS;
+pub(crate) use crate::cargo_target::{hoist_target_dir, target_dir_env};
 use crate::gate::CACHE_DEBUG_ON;
 use crate::rules::{RenderedStep, Value};
 use crate::steps::{RUN, RUN_DOCTESTS, TEST_STEP_ID};
 
 const FINGERPRINT_LOG: &str =
     "cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info";
-const DOC_RUN: &str =
+pub(crate) const DOC_RUN: &str =
     "cargo doc --workspace --no-deps --locked --config 'build.rustdocflags=[\"-D\",\"warnings\"]'";
 
 #[derive(Clone, Copy)]
@@ -110,12 +112,22 @@ fn cargo_command(
     match command {
         CargoCommand::FmtCheck => ("Format".into(), "cargo-fmt --all --check".into(), vec![]),
         CargoCommand::Clippy { extra } => clippy(cargo, extra),
+        CargoCommand::ClippyFeatures { features } => {
+            crate::cargo_features::clippy_features(cargo, features)
+        }
         CargoCommand::NextestBuild => nextest_build(nextest),
         CargoCommand::NextestRun { filter, ci_profile } => nextest_run(
             &format!("--workspace --locked{nextest}"),
             filter,
             *ci_profile,
+            NO_TESTS_PASS,
         ),
+        CargoCommand::NextestFeatures {
+            features,
+            filter,
+            ci_profile,
+            ..
+        } => crate::cargo_features::nextest_features(nextest, features, filter, *ci_profile),
         CargoCommand::NextestRunArchive {
             file,
             filter,
@@ -129,34 +141,23 @@ fn cargo_command(
             ),
             filter,
             *ci_profile,
+            NO_TESTS_PASS,
         ),
-        CargoCommand::NextestArchive { file } => (
-            BUILD_TESTS_STEP.into(),
-            format!(
-                "cargo-nextest nextest archive --workspace --locked{nextest} --archive-file '{}'",
-                file.as_str().replace('\'', "'\\''")
-            ),
-            vec![],
-        ),
+        CargoCommand::NextestArchive { file } => nextest_archive(nextest, file),
         CargoCommand::TestTarget {
             package,
             target,
             kind,
             features,
-        } => (
-            format!("Test {package} {target}"),
-            format!(
-                "cargo test -p {package} --locked{cargo} {}{}",
-                test_selector(*kind, target),
-                feature_flag(features)
-            ),
-            vec![],
-        ),
+        } => test_target(cargo, package, target, *kind, features),
         CargoCommand::Doctest => (
             "Doctests".into(),
             format!("cargo test --doc --workspace --locked{cargo}"),
             vec![],
         ),
+        CargoCommand::DocFeatures { features } => {
+            crate::cargo_features::doc_features(cargo, features)
+        }
         CargoCommand::Doc => ("Documentation".into(), format!("{DOC_RUN}{cargo}"), vec![]),
         CargoCommand::CheckAlone { package } => (
             format!("Check {package} alone"),
@@ -178,6 +179,35 @@ fn cargo_command(
     }
 }
 
+fn nextest_archive(nextest: &str, file: &RepoPath) -> (String, String, Vec<(String, Value)>) {
+    (
+        BUILD_TESTS_STEP.into(),
+        format!(
+            "cargo-nextest nextest archive --workspace --locked{nextest} --archive-file '{}'",
+            file.as_str().replace('\'', "'\\''")
+        ),
+        vec![],
+    )
+}
+
+fn test_target(
+    cargo: &str,
+    package: &PackageName,
+    target: &TargetName,
+    kind: TargetKind,
+    features: &[String],
+) -> (String, String, Vec<(String, Value)>) {
+    (
+        format!("Test {package} {target}"),
+        format!(
+            "cargo test -p {package} --locked{cargo} {}{}",
+            test_selector(kind, target),
+            feature_flag(features)
+        ),
+        vec![],
+    )
+}
+
 fn inventory_prefix(command: &CargoCommand, audit: bool) -> &'static str {
     if audit
         && !matches!(
@@ -194,7 +224,7 @@ fn inventory_prefix(command: &CargoCommand, audit: bool) -> &'static str {
     }
 }
 
-fn clippy(cargo: &str, extra: &[String]) -> (String, String, Vec<(String, Value)>) {
+pub(crate) fn clippy(cargo: &str, extra: &[String]) -> (String, String, Vec<(String, Value)>) {
     (
         LINT_STEP.into(),
         [format!(
@@ -229,51 +259,6 @@ fn offline_env() -> (String, Value) {
     )
 }
 
-pub(crate) fn hoist_target_dir(job: &Job, steps: &mut [RenderedStep]) -> Vec<(String, Value)> {
-    let Some(target) = shared_target_dir(job) else {
-        return Vec::new();
-    };
-    let hoisted = target_dir_env(target);
-    for step in steps {
-        step.env.retain(|entry| *entry != hoisted);
-    }
-    vec![hoisted]
-}
-
-fn shared_target_dir(job: &Job) -> Option<&RepoPath> {
-    if job.steps.iter().any(|step| {
-        matches!(
-            step.kind,
-            StepKind::Cargo(CargoCommand::NextestRunArchive { .. })
-        )
-    }) {
-        return None;
-    }
-    let mut building = job
-        .steps
-        .iter()
-        .filter(|step| matches!(&step.kind, StepKind::Cargo(command) if command.builds()));
-    let first = building.next()?;
-    let target = first.target_dir.as_ref()?;
-    let one_root = building
-        .all(|step| step.target_dir.as_ref() == Some(target) && step.directory == first.directory)
-        && job
-            .steps
-            .iter()
-            .all(|step| step.directory.is_none() || step.directory == first.directory);
-    one_root.then_some(target)
-}
-
-pub(crate) fn target_dir_env(target: &RepoPath) -> (String, Value) {
-    (
-        "CARGO_TARGET_DIR".to_owned(),
-        Value::Expr(format!(
-            "${{{{ github.workspace }}}}/{}",
-            target.as_str().replace("${{", "${{ '${{' }}")
-        )),
-    )
-}
-
 pub(crate) fn cache_debug_env() -> (String, Value) {
     (
         "CARGO_LOG".to_owned(),
@@ -293,16 +278,17 @@ fn nextest_build(format: &str) -> (String, String, Vec<(String, Value)>) {
     )
 }
 
-fn nextest_run(
+pub(crate) fn nextest_run(
     scope: &str,
     filter: &FilterRef,
     ci_profile: bool,
+    no_tests: &str,
 ) -> (String, String, Vec<(String, Value)>) {
     let profile = if ci_profile { " --profile ci" } else { "" };
     (
         TEST_STEP.into(),
         format!(
-            "cargo-nextest nextest run {scope}{profile} --no-fail-fast --ignore-default-filter --status-level pass -E \"{}\" --no-tests=pass",
+            "cargo-nextest nextest run {scope}{profile} --no-fail-fast --ignore-default-filter --status-level pass -E \"{}\" --no-tests={no_tests}",
             nextest_filter(filter)
         ),
         vec![],
@@ -313,6 +299,7 @@ fn nextest_filter(filter: &FilterRef) -> String {
     match filter {
         FilterRef::All => "$TEST_FILTER".to_owned(),
         FilterRef::AllExcept(binaries) => without_binaries("($TEST_FILTER)".to_owned(), binaries),
+        FilterRef::Expr { expr, except } => crate::cargo_features::expr(expr, except),
         FilterRef::Group {
             include,
             exclude,
@@ -331,13 +318,13 @@ fn nextest_filter(filter: &FilterRef) -> String {
     }
 }
 
-fn without_binaries(base: String, binaries: &[String]) -> String {
+pub(crate) fn without_binaries(base: String, binaries: &[String]) -> String {
     binaries
         .iter()
         .fold(base, |text, id| format!("{text} - binary_id(={id})"))
 }
 
-fn feature_flag(features: &[String]) -> String {
+pub(crate) fn feature_flag(features: &[String]) -> String {
     if features.is_empty() {
         String::new()
     } else {

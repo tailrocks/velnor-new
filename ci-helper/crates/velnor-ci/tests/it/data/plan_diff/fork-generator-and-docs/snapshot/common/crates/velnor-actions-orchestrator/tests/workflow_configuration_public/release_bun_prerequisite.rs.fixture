@@ -1,0 +1,8 @@
+    let mise = include_str!("../../../../mise.toml").replace("bun = \"1.4.4\"", "bun = \"1.5.7\"");
+    fs::write(repo.path().join("mise.toml"), mise)?;
+    fs::write(
+        repo.path().join("mise.lock"),
+        include_str!("../../../../mise.lock"),
+    )?;
+
+    let tree = render_staged_tree(&prepare(repo.path())?)?;

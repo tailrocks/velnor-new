@@ -61,7 +61,7 @@ fn output(files: &[(&str, &str)]) -> String {
     files
         .iter()
         .fold(String::new(), |mut text, (name, content)| {
-            let _ = writeln!(text, "{name} {}", STANDARD.encode(content));
+            writeln!(text, "{name} {}", STANDARD.encode(content)).ok();
             text
         })
 }

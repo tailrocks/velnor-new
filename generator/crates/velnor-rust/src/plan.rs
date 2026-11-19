@@ -5,9 +5,9 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
     Access, CacheDebug, CacheKey, CargoCommand, Concurrency, HelperCommand, Host, Job, JobId,
-    MbxRemote, MbxStore, PackageName, PermissionScope, Permissions, PrCi, PrRun, PullRequestType,
+    MbxRemote, MbxStore, PackageName, PermissionScope, Permissions, PrCi, PrRun,
     PushAfterMergeGroup, RepoFacts, RootSlug, RustRoot, Shape, ShapeDecision, Step, StepKind,
-    TargetName, Toolchain, Triggers, When, WorkflowPlan,
+    TargetName, Toolchain, When, WorkflowPlan,
 };
 
 use crate::audit_job::audit_job;
@@ -18,10 +18,10 @@ use crate::error::{DetectError, Reason};
 use crate::lane::{
     Lane, PLAN_JOB, expose_read_outputs, plan_job, policy_job, used_group_outputs, used_outputs,
 };
+use crate::plan_budget::{budget_job, draft_guard, triggers};
 use crate::plan_tools::{mirror_step, tools_install, tools_restore, tools_save};
-use crate::required_job::{expose_in_single, gate_outputs, has_gate};
+use crate::required_job::{expose_in_single, gate_outputs};
 use crate::root_jobs::root_jobs;
-use crate::schedule::schedule;
 use crate::shape::decide_shape;
 
 pub(crate) const RUST_JOB: JobId = JobId::from_static("rust");
@@ -31,9 +31,9 @@ pub(crate) const MBX_SEED_HELPER: (u64, u64, u64) = (0, 1, 86);
 pub(crate) const TOOLS_LOCAL_HELPER: (u64, u64, u64) = (0, 1, 89);
 pub(crate) const DEFAULT_GROUP_JOB: JobId = JobId::from_static("rust-test-default");
 pub(crate) const HELPER_JOB: JobId = JobId::from_static("rust-helper");
+pub(crate) const BUDGET_JOB: JobId = JobId::from_static(velnor_model::BUDGET_JOB);
 pub(crate) const CHECKOUT_DEPTH: u32 = 1;
 pub(crate) const PLAN_DEPTH: u32 = 2;
-const TIE_BREAKING_HELPER: (u64, u64, u64) = (0, 1, 81);
 const IGNORED_COUNT_HELPER: (u64, u64, u64) = (0, 1, 86);
 
 #[must_use]
@@ -72,42 +72,22 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
         jobs.push(policy_job(facts, &Lane::policy(single)));
     }
     jobs.extend(crate::lint_jobs::lint_jobs(facts));
-    let draft_guard = match facts.config.pr_ci {
-        PrCi::Label => Some(step(StepKind::DraftNotice)),
-        PrCi::Always => facts
-            .config
-            .skip_draft_pull_requests
-            .then(|| step(StepKind::FailOnDraftRun)),
-    };
-    let gate = has_gate(facts);
+    let draft_guard = draft_guard(facts);
     if single {
-        if gate {
-            expose_in_single(&mut jobs);
-        }
+        expose_in_single(&mut jobs);
         expose_read_outputs(&mut jobs, &RUST_JOB);
     } else {
         let mut used = used_outputs(&jobs);
-        if gate {
-            used.extend(gate_outputs(&jobs));
-            used.sort();
-            used.dedup();
-        }
+        used.extend(gate_outputs(&jobs));
+        used.sort();
+        used.dedup();
         jobs.insert(0, plan_job(facts, used, used_group_outputs(&jobs)));
     }
     if let Some(root) = helper_root {
         jobs.insert(1, helper_job(facts, root));
     }
-    if facts.config.cache_debug == CacheDebug::On {
-        crate::cargo_log::upload(&mut jobs);
-    }
-    crate::private_fetch::insert(facts.config.private_sources.as_ref(), &mut jobs);
-    if facts.config.mbx_remote == MbxRemote::GithubActions && facts.private_sources.is_none() {
-        add_mbx_remote(&mut jobs);
-    }
-    if facts.config.push_after_merge_group == PushAfterMergeGroup::SkipWhenQueueRunPassed {
-        crate::merge_group_skip::apply(&mut jobs, single);
-    }
-    crate::docs_post_merge::apply(facts, &mut jobs);
+    apply_extensions(facts, &mut jobs, single);
+    jobs.extend(budget_job(facts));
     crate::report::finish(facts, &mut jobs, single, draft_guard);
     WorkflowPlan {
         name: "Rust CI".to_owned(),
@@ -122,23 +102,18 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
     }
 }
 
-fn triggers(facts: &RepoFacts) -> Triggers {
-    Triggers {
-        pull_request: PullRequestType::ALL
-            .into_iter()
-            .chain(
-                facts
-                    .config
-                    .skip_draft_pull_requests
-                    .then_some(PullRequestType::ConvertedToDraft),
-            )
-            .chain((facts.config.pr_ci == PrCi::Label).then_some(PullRequestType::Labeled))
-            .collect(),
-        push_branch: Some(facts.config.default_branch.clone()),
-        merge_group: true,
-        schedule: schedule(facts),
-        workflow_dispatch: true,
+fn apply_extensions(facts: &RepoFacts, jobs: &mut [Job], single: bool) {
+    if facts.config.cache_debug == CacheDebug::On {
+        crate::cargo_log::upload(jobs);
     }
+    crate::private_fetch::insert(facts.config.private_sources.as_ref(), jobs);
+    if facts.config.mbx_remote == MbxRemote::GithubActions && facts.private_sources.is_none() {
+        add_mbx_remote(jobs);
+    }
+    if facts.config.push_after_merge_group == PushAfterMergeGroup::SkipWhenQueueRunPassed {
+        crate::merge_group_skip::apply(jobs, single);
+    }
+    crate::docs_post_merge::apply(facts, jobs);
 }
 
 fn helper_job(facts: &RepoFacts, root: &RustRoot) -> Job {
@@ -300,9 +275,7 @@ pub(crate) fn setup_roots(
             host: Host,
         })));
     }
-    if breaks_ties(facts) {
-        toolchain.extend(restore_file_times(roots));
-    }
+    toolchain.extend(restore_file_times(roots));
     toolchain.extend(restored(facts));
     steps.extend(toolchain.into_iter().map(|step| Step {
         gate: lane.steps(),
@@ -334,13 +307,6 @@ fn add_mbx_remote(jobs: &mut [Job]) {
             job.steps.insert(at + 1, cache);
         }
     }
-}
-
-fn breaks_ties(facts: &RepoFacts) -> bool {
-    facts
-        .helper
-        .as_ref()
-        .is_some_and(|helper| helper.version().at_least(TIE_BREAKING_HELPER))
 }
 
 fn restore_file_times(roots: &[RustRoot]) -> impl Iterator<Item = Step> {

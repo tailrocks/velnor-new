@@ -14,7 +14,7 @@ pub trait Engine: Sync {
     fn logged(&self, args: &[&str], log: &Path) -> impl Future<Output = io::Result<bool>> + Send;
 }
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct DockerCli;
 
 impl Engine for DockerCli {
@@ -32,13 +32,18 @@ impl Engine for DockerCli {
             .stdout(log.try_clone()?)
             .stderr(log)
             .status()
-            .await?;
+            .await
+            .map_err(|error| spawn_error("docker", &error))?;
         Ok(status.success())
     }
 }
 
 pub(in crate::io) fn words(text: &'static str) -> Vec<&'static str> {
     text.split_whitespace().collect()
+}
+
+fn spawn_error(program: &str, error: &io::Error) -> io::Error {
+    io::Error::new(error.kind(), format!("cannot start `{program}`: {error}"))
 }
 
 pub(in crate::io) async fn program(
@@ -52,7 +57,8 @@ pub(in crate::io) async fn program(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true)
-        .spawn()?;
+        .spawn()
+        .map_err(|error| spawn_error(program, &error))?;
     if let (Some(input), Some(mut stdin)) = (input, child.stdin.take()) {
         stdin.write_all(input).await?;
     }

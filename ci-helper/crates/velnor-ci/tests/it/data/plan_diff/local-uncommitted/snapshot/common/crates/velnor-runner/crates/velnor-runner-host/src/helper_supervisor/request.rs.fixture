@@ -1,0 +1,3 @@
+            .all(|component| !component.is_empty() && component != "." && component != "..")
+}
+

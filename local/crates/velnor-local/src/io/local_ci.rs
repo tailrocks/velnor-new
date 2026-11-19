@@ -31,7 +31,7 @@ fn refused(reason: impl std::fmt::Display) -> io::Error {
     io::Error::other(format!("{FLAG} {reason}"))
 }
 
-async fn checked(path: &Path) -> io::Result<PathBuf> {
+pub(in crate::io) async fn checked(path: &Path) -> io::Result<PathBuf> {
     let path = fs::canonicalize(path)
         .await
         .map_err(|error| refused(format!("{}: {error}", path.display())))?;
@@ -69,7 +69,8 @@ async fn checked(path: &Path) -> io::Result<PathBuf> {
 /// What `--velnor-ci-binary` adds to the containers, each as docker arguments. Empty without it.
 #[derive(Debug, Default)]
 pub(super) struct LocalCi {
-    /// For the trusted runners: the binary, read-only.
+    /// For the trusted plain runners: the binary, read-only. In pair mode velnor-host puts it in the
+    /// pair's runner itself, so this stays empty.
     pub(super) runner: Vec<String>,
     /// For the trusted runner.server: where it sends action downloads.
     pub(super) standin: Vec<String>,
@@ -81,11 +82,6 @@ async fn binary(args: &EnvironmentArgs) -> io::Result<Option<PathBuf>> {
     let Some(binary) = &args.velnor_ci_binary else {
         return Ok(None);
     };
-    if args.runner != RunnerMode::Plain {
-        return Err(refused(
-            "needs --runner plain: velnor-host owns the pair containers and mounts nothing from the host into them",
-        ));
-    }
     checked(binary).await.map(Some)
 }
 
@@ -163,40 +159,70 @@ async fn write_workflow(path: &Path, text: &str) -> io::Result<()> {
     file.flush().await
 }
 
-pub async fn pin_workflows(args: &EnvironmentArgs, repo: &Path, tag: &str) -> io::Result<()> {
+async fn rewrite_workflows(repo: &Path, pin: &Sha256) -> io::Result<(usize, bool)> {
+    let (mut pinned, mut changed) = (0, false);
+    for path in workflow_files(repo).await? {
+        let text = read_workflow(&path).await?;
+        let (rewritten, count) = rewrite(&text, pin);
+        if rewritten != text {
+            write_workflow(&path, &rewritten).await?;
+            changed = true;
+        }
+        pinned += count;
+    }
+    Ok((pinned, changed))
+}
+
+async fn commit_pin(repo: &Path) -> io::Result<()> {
+    git(repo, &["add", "-A"], None).await?;
+    git(repo, &["commit", "-q", "-m", COMMIT], None).await?;
+    Ok(())
+}
+
+/// Pins the workflows of the branch checked out in `repo` to `pin`, and commits the change when it
+/// rewrote anything. The driver calls it after every switch, because a branch that already exists
+/// in the checkout carries the release digest.
+pub async fn pin_branch(repo: &Path, pin: &Sha256) -> io::Result<()> {
+    if rewrite_workflows(repo, pin).await?.1 {
+        commit_pin(repo).await?;
+    }
+    Ok(())
+}
+
+pub async fn pin_workflows(
+    args: &EnvironmentArgs,
+    repo: &Path,
+    tag: &str,
+) -> io::Result<Option<Sha256>> {
     let Some(binary) = binary(args).await? else {
-        return Ok(());
+        return Ok(None);
     };
     let pin = Sha256::of(&fs::read(&binary).await?);
-    let mut pinned = 0;
-    for path in workflow_files(repo).await? {
-        let (text, count) = rewrite(&read_workflow(&path).await?, &pin);
-        if count > 0 {
-            write_workflow(&path, &text).await?;
-            pinned += count;
-        }
-    }
+    let (pinned, changed) = rewrite_workflows(repo, &pin).await?;
     println!(
         "velnor-local {tag}: WARNING: --velnor-ci-binary replaces the pinned velnor-ci release with {} (SHA-256 {}) in this run's copy of the workflows, {pinned} pin(s) rewritten; the integrity check itself runs unchanged, and this run does not test a release",
         binary.display(),
         pin.as_str()
     );
-    if pinned > 0 {
-        git(repo, &["add", "-A"], None).await?;
-        git(repo, &["commit", "-q", "-m", COMMIT], None).await?;
+    if changed {
+        commit_pin(repo).await?;
     }
-    Ok(())
+    Ok(Some(pin))
 }
 
 pub(super) async fn flags(args: &EnvironmentArgs) -> io::Result<LocalCi> {
     let Some(binary) = binary(args).await? else {
         return Ok(LocalCi::default());
     };
-    Ok(LocalCi {
-        runner: vec![
+    let runner = match args.runner {
+        RunnerMode::Plain => vec![
             "-v".to_owned(),
             format!("{}:{MOUNT_DIR}/velnor-ci:ro", binary.display()),
         ],
+        RunnerMode::Pair => Vec::new(),
+    };
+    Ok(LocalCi {
+        runner,
         standin: vec!["-e".to_owned(), TARBALLS.to_owned()],
         stub: vec!["--local-setup-velnor".to_owned()],
     })

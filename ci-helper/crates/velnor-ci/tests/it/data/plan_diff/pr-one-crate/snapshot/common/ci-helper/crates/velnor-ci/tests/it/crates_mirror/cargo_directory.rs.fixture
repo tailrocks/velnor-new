@@ -1,0 +1,16 @@
+        .current_dir(root.join("consumer"))
+        .env("MIRROR_CARGO_RECORD", root.join("recorded-cargo.txt"))
+        .env("VELNOR_CARGO_CONFIG", config)
+        .env("VELNOR_CARGO_WRAPPER", &wrapper)
+    let directory = recorded.parent().ok_or("cargo executable has no parent")?;
+    let output = Command::new(directory.join("rustc"))
+        .args(["-vV"])
+        .output()?;
+    let directory = recorded.parent().ok_or("cargo executable has no parent")?;
+    let wrapper = fs::canonicalize(root.join("velnor-cargo/cargo"))?;
+    let output = Command::new(&recorded)
+        .args([
+        .current_dir(root.join("consumer"))
+        .env(
+            "PATH",
+            std::env::join_paths([

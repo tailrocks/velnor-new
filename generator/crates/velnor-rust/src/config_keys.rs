@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-pub(crate) const KEYS: [&str; 31] = [
+pub const KEYS: [&str; 33] = [
     "sparse_checkout",
     "private_sources",
     "cache_check_blocks",
@@ -33,4 +33,6 @@ pub(crate) const KEYS: [&str; 31] = [
     "test_setup",
     "lint",
     "test_groups",
+    "test_lane",
+    "budget",
 ];

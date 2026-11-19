@@ -42,6 +42,14 @@ pub(crate) fn runs(job: &Node) -> Vec<&str> {
         .collect()
 }
 
+fn triple(platform: &str) -> &'static str {
+    match platform {
+        "linux-x64" => "x86_64-unknown-linux-musl",
+        "linux-arm64" => "aarch64-unknown-linux-musl",
+        _ => "aarch64-apple-darwin",
+    }
+}
+
 fn build_ids(package: &str, platforms: &[&str]) -> Vec<String> {
     platforms
         .iter()
@@ -84,7 +92,7 @@ fn release_yml_has_one_build_job_per_binary_and_platform_then_sums_and_publish()
     assert!(
         jobs(&without)?
             .iter()
-            .all(|(id, _)| matches!(*id, "gate" | "release-pr" | "tag"))
+            .all(|(id, _)| matches!(*id, "gate" | "release-pr" | "tag" | "finalize"))
     );
     Ok(())
 }
@@ -182,11 +190,11 @@ fn release_yml_build_packs_the_named_bin_and_uploads_exactly_that_file() -> Test
     assert_eq!(
         runs(build),
         [
-            "test \"$CHECKED_OUT\" = \"$COMMIT\"",
+            "test -n \"$COMMIT\" -a \"$CHECKED_OUT\" = \"$COMMIT\"",
             "sudo apt-get install --yes musl-tools",
             "rustup target add aarch64-unknown-linux-musl",
             "cargo build --release --locked --manifest-path Cargo.toml --package app --bin rg --target aarch64-unknown-linux-musl --target-dir target",
-            "tar -czf rg-linux-arm64.tar.gz -C target/aarch64-unknown-linux-musl/release rg",
+            "tar -czf rg-aarch64-unknown-linux-musl.tar.gz -C target/aarch64-unknown-linux-musl/release rg",
         ]
     );
     let upload = steps(build).last().ok_or("no steps")?;
@@ -196,7 +204,7 @@ fn release_yml_build_packs_the_named_bin_and_uploads_exactly_that_file() -> Test
     );
     assert_eq!(
         upload.at(&["with", "path"]).and_then(Node::text),
-        Some("rg-linux-arm64.tar.gz")
+        Some("rg-aarch64-unknown-linux-musl.tar.gz")
     );
     assert_eq!(
         upload
@@ -205,7 +213,7 @@ fn release_yml_build_packs_the_named_bin_and_uploads_exactly_that_file() -> Test
         Some("error")
     );
     let publish = job(&tree, "publish-app")?;
-    assert!(runs(publish)[0].ends_with(" --dir=dist rg-linux-arm64.tar.gz"));
+    assert!(runs(publish)[0].ends_with(" --dir=dist rg-aarch64-unknown-linux-musl.tar.gz"));
     Ok(())
 }
 
@@ -216,11 +224,11 @@ fn release_yml_builds_a_root_package_from_its_own_manifest_and_target_directory(
     assert_eq!(
         runs(build),
         [
-            "test \"$CHECKED_OUT\" = \"$COMMIT\"",
+            "test -n \"$COMMIT\" -a \"$CHECKED_OUT\" = \"$COMMIT\"",
             "sudo apt-get install --yes musl-tools",
             "rustup target add x86_64-unknown-linux-musl",
             "cargo build --release --locked --manifest-path Cargo.toml --package tools --bin tools --target x86_64-unknown-linux-musl --target-dir target",
-            "tar -czf tools-linux-x64.tar.gz -C tools/target/x86_64-unknown-linux-musl/release tools",
+            "tar -czf tools-x86_64-unknown-linux-musl.tar.gz -C tools/target/x86_64-unknown-linux-musl/release tools",
         ]
     );
     Ok(())
@@ -256,7 +264,7 @@ fn release_yml_sums_has_no_permissions_and_hashes_exactly_the_builds_of_its_pack
         );
         let files: Vec<String> = platforms
             .iter()
-            .map(|p| format!("{package}-{p}.tar.gz"))
+            .map(|p| format!("{package}-{}.tar.gz", triple(p)))
             .collect();
         assert_eq!(
             runs(sums),
@@ -294,9 +302,12 @@ fn release_yml_publish_checks_out_nothing_runs_one_command_and_holds_only_conten
     for (package, files) in [
         (
             "app",
-            "app-linux-x64.tar.gz app-linux-arm64.tar.gz app-macos-arm64.tar.gz",
+            "app-x86_64-unknown-linux-musl.tar.gz app-aarch64-unknown-linux-musl.tar.gz app-aarch64-apple-darwin.tar.gz",
         ),
-        ("tools", "tools-linux-x64.tar.gz tools-macos-arm64.tar.gz"),
+        (
+            "tools",
+            "tools-x86_64-unknown-linux-musl.tar.gz tools-aarch64-apple-darwin.tar.gz",
+        ),
     ] {
         let publish = job(&tree, &format!("publish-{package}"))?;
         assert_eq!(
@@ -350,7 +361,8 @@ fn release_yml_publish_checks_out_nothing_runs_one_command_and_holds_only_conten
 fn release_yml_tag_exports_the_released_tag_of_each_binary_package_only() -> TestResult {
     let (_, tree) = two_binaries()?;
     let outputs = job(&tree, "tag")?.get("outputs").ok_or("no outputs")?;
-    assert_eq!(outputs.keys(), ["app", "tools"]);
+    let keys = outputs.keys();
+    assert_eq!(keys, ["app", "tools", "app_commit", "tools_commit"]);
     for package in ["app", "tools"] {
         assert_eq!(
             outputs.get(package).and_then(Node::text),
@@ -358,7 +370,8 @@ fn release_yml_tag_exports_the_released_tag_of_each_binary_package_only() -> Tes
         );
     }
     let (_, without) = two_roots()?;
-    assert!(job(&without, "tag")?.get("outputs").is_none());
+    let kept = job(&without, "tag")?.get("outputs").map(Node::keys);
+    assert_eq!(kept, Some(vec!["app", "tools"]));
     Ok(())
 }
 

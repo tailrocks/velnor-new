@@ -8,7 +8,7 @@ use velnor_workflows::{
 };
 
 use crate::gate::all_conditions;
-use crate::pinned_actions::GITHUB_SCRIPT;
+use crate::pinned_actions::{ACTIONS_CACHE, GITHUB_SCRIPT, MR_BOXINGTON, PinnedAction};
 use crate::reusable_on::on;
 use crate::rules::{
     MAX_WORKFLOW_BYTES, RenderedConcurrency, RenderedContainer, RenderedJob, RenderedMatrix,
@@ -73,7 +73,7 @@ fn render_one(
                 .collect(),
         ),
     ));
-    let file = format!("{REUSABLE_HEADER}{}", emit(&document));
+    let file = crate::header::seal(REUSABLE_HEADER, &emit(&document));
     if file.len() > MAX_WORKFLOW_BYTES {
         return Err(vec![RuleViolation {
             job: String::new(),
@@ -154,6 +154,8 @@ fn rendered_job(workflow: &Workflow, job: &Job, helper: &HelperRelease) -> Rende
             .collect(),
         runs_on,
         timeout_minutes: job.timeout_minutes,
+        cache_mode: job.cache_mode.map(|mode| mode.name().to_owned()),
+        env: values(&job.env),
         steps: match installs {
             Some(install) => crate::helper_integrity::secure_with(
                 helper,
@@ -207,6 +209,10 @@ fn call_values(items: &[(String, CallValue)]) -> Vec<(String, Value)> {
         .collect()
 }
 
+fn pinned(pin: PinnedAction) -> String {
+    format!("{}@{}", pin.action, pin.commit)
+}
+
 fn pin(action: Action) -> String {
     let fixed = match action {
         Action::Checkout => CHECKOUT,
@@ -216,9 +222,9 @@ fn pin(action: Action) -> String {
         Action::CacheRestore => CACHE_RESTORE,
         Action::CacheSave => CACHE_SAVE,
         Action::AttestBuildProvenance => ATTEST_BUILD_PROVENANCE,
-        Action::GithubScript => {
-            return format!("{}@{}", GITHUB_SCRIPT.action, GITHUB_SCRIPT.commit);
-        }
+        Action::Cache => return pinned(ACTIONS_CACHE),
+        Action::GithubScript => return pinned(GITHUB_SCRIPT),
+        Action::MrBoxington => return pinned(MR_BOXINGTON),
     };
     fixed.to_owned()
 }
@@ -230,6 +236,7 @@ fn values(items: &[(String, Env)]) -> Vec<(String, Value)> {
             let value = match value {
                 Env::Text(value) => Value::Text(value.clone()),
                 Env::Expression(inner) => Value::Expr(format!("${{{{ {inner} }}}}")),
+                Env::Interpolated(text) => Value::Expr(text.clone()),
             };
             (key.clone(), value)
         })

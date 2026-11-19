@@ -68,11 +68,11 @@ fn release_yml_quotes_a_root_with_a_space_in_the_build_commands() -> TestResult 
     assert_eq!(
         runs(job(&tree, "build-tools-linux-x64")?),
         [
-            "test \"$CHECKED_OUT\" = \"$COMMIT\"",
+            "test -n \"$COMMIT\" -a \"$CHECKED_OUT\" = \"$COMMIT\"",
             "sudo apt-get install --yes musl-tools",
             "rustup target add x86_64-unknown-linux-musl",
             "cargo build --release --locked --manifest-path Cargo.toml --package tools --bin tools --target x86_64-unknown-linux-musl --target-dir target",
-            "tar -czf tools-linux-x64.tar.gz -C 'my tools/target/x86_64-unknown-linux-musl/release' tools",
+            "tar -czf tools-x86_64-unknown-linux-musl.tar.gz -C 'my tools/target/x86_64-unknown-linux-musl/release' tools",
         ]
     );
     Ok(())

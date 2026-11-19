@@ -1,0 +1,6 @@
+    let original = fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../.velnor/runner.lock"
+    ))?;
+    for (key, value, expected) in [
+        (

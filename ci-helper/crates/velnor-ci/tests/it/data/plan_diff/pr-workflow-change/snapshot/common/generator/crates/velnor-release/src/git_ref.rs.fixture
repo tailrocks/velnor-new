@@ -1,0 +1,4 @@
+        && !name.contains("..")
+        && !name.contains("@{")
+        && !name.chars().any(forbidden)
+        && name.split('/').all(valid_component)

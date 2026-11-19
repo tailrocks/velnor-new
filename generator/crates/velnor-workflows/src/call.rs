@@ -16,6 +16,8 @@ pub(crate) fn refuse_step_keys(raw: &RawJob) -> Result<(), WorkflowsError> {
         (!raw.step.is_empty(), "step"),
         (raw.helper, "helper"),
         (raw.environment.is_some(), "environment"),
+        (!raw.env.is_empty(), "env"),
+        (raw.cache_mode.is_some(), "cache_mode"),
         (raw.runner.is_some(), "runner"),
         (raw.timeout_minutes.is_some(), "timeout_minutes"),
         (!raw.outputs.is_empty(), "outputs"),
@@ -84,6 +86,7 @@ pub(crate) fn call(
         ));
     }
     if let Some(flow) = callee {
+        within_nesting_limit(id, flow, ctx.workflows)?;
         grants_enough(id, flow, permissions)?;
     }
     Ok(Call {
@@ -232,7 +235,38 @@ fn value(
     }
 }
 
-fn rank(access: &str) -> u8 {
+const MAX_NESTING_LEVELS: usize = 10;
+
+fn levels(flow: &Workflow, declared: &[Workflow]) -> usize {
+    1 + flow
+        .jobs
+        .iter()
+        .filter_map(|job| job.call.as_ref())
+        .filter_map(|call| match &call.target {
+            CallTarget::Declared(file) => declared.iter().find(|other| &other.file == file),
+            CallTarget::Local(_) | CallTarget::Pinned(_) => None,
+        })
+        .map(|other| levels(other, declared))
+        .max()
+        .unwrap_or(0)
+}
+
+fn within_nesting_limit(
+    id: &str,
+    callee: &Workflow,
+    declared: &[Workflow],
+) -> Result<(), WorkflowsError> {
+    let chain = 1 + levels(callee, declared);
+    if chain > MAX_NESTING_LEVELS {
+        return refuse(format!(
+            "job {id} calls {}, which makes a chain of {chain} workflows; GitHub allows {MAX_NESTING_LEVELS} levels, the top-level workflow and nine reusable ones",
+            callee.file
+        ));
+    }
+    Ok(())
+}
+
+pub(crate) fn rank(access: &str) -> u8 {
     match access {
         "write" => 2,
         "read" => 1,

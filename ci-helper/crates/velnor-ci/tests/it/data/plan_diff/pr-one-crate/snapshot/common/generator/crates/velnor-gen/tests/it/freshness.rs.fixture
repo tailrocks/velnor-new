@@ -1,0 +1,12 @@
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../samples/helper-source/view");
+    fs::copy(sample.join("mise.toml"), root.join("mise.toml"))?;
+    fs::copy(sample.join("mise.lock"), root.join("mise.lock"))?;
+    fs::write(root.join("build.rs"), "fn main() {}\n")?;
+    let cargo_dir = cargo.parent().ok_or("cargo executable has no parent")?;
+    let search_path = std::env::join_paths([
+        cargo_dir,
+        std::path::Path::new("/usr/bin"),
+            .current_dir(&root)
+            .env("PATH", &search_path)
+            .env("MISE_TRUSTED_CONFIG_PATHS", &root)
+            .output()
