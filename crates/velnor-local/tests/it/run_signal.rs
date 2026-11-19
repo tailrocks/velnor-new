@@ -11,8 +11,9 @@ use std::time::{Duration, Instant};
 
 use crate::support::temp_dir;
 
-/// A `docker` that records every call and blocks on `network create`, where `up` is waiting.
-const DOCKER: &str = "#!/bin/sh\necho \"$*\" >> \"$DOCKER_LOG\"\n[ \"$1 $2\" = \"network create\" ] && sleep 120\nexit 0\n";
+/// A `docker` that records every call, answers the endpoint query with a local socket and blocks
+/// on `network create`, where `up` is waiting.
+const DOCKER: &str = "#!/bin/sh\necho \"$*\" >> \"$DOCKER_LOG\"\n[ \"$1\" = context ] && echo unix:///var/run/docker.sock\n[ \"$1 $2\" = \"network create\" ] && sleep 120\nexit 0\n";
 
 fn run(dir: &Path, bin: &Path, log: &Path) -> Child {
     let git = |args: &[&str]| {
