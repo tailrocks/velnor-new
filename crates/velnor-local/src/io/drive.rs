@@ -296,10 +296,7 @@ impl<E: Engine + Copy + Send> Driver<'_, E> {
     }
 
     async fn pin(&self) -> io::Result<()> {
-        match &self.pin {
-            Some(pin) => super::local_ci::pin_branch(&self.repo, pin).await,
-            None => Ok(()),
-        }
+        super::local_ci::pin_branch(&self.repo, self.pin.as_ref()).await
     }
 
     async fn switch(&self, branch: &str) -> io::Result<()> {
