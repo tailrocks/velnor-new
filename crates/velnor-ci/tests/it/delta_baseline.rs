@@ -5,7 +5,7 @@ use std::fs;
 use std::process::{Command, Output};
 use std::time::{Duration, SystemTime};
 
-use super::delta::{compiled, manifest, run, set_time, success};
+use super::delta::{compiled, manifest, run, set_time, success, time};
 use crate::io::Repo;
 
 const INVENTORY: &str = "target/.velnor/delta-inventory.json";
@@ -100,4 +100,66 @@ fn a_file_that_changed_since_the_inventory_is_hashed_afresh_and_belongs_to_the_b
     let nodes = manifest(&repo)["nodes"].clone();
     assert!(nodes.get("debug/deps/changed.rlib").is_none(), "{nodes}");
     assert!(nodes.get("debug/deps/same.rlib").is_none(), "{nodes}");
+}
+
+const FILES: usize = 500;
+
+fn restored_base(repo: &Repo) {
+    let stamp = SystemTime::now() - Duration::from_secs(3600);
+    for index in 0..FILES {
+        let path = format!("target/debug/deps/lib{index}.rlib");
+        repo.write_unstaged(&path, &format!("rlib {index}"));
+        set_time(repo, &path, stamp);
+    }
+    save_base(repo);
+}
+
+fn stdout(output: &Output) -> String {
+    success(output);
+    String::from_utf8_lossy(&output.stdout).into_owned()
+}
+
+#[test]
+fn a_big_restored_base_is_read_only_where_its_files_changed() {
+    let repo = Repo::new("delta-inventory-count");
+    restored_base(&repo);
+    for index in [3, 77, 401] {
+        let path = format!("target/debug/deps/lib{index}.rlib");
+        repo.write_unstaged(&path, &format!("rebuilt {index}"));
+    }
+    let report = stdout(&run(&repo, "apply", "base").0);
+    assert!(
+        report.contains(&format!("read 3 of {FILES} base files\n")),
+        "{report}"
+    );
+}
+
+#[test]
+fn staging_reads_only_files_the_build_touched_and_still_sees_hidden_rewrites() {
+    let repo = Repo::new("delta-stage-count");
+    restored_base(&repo);
+    // A change time this recent proves nothing, so let the restored files age past it.
+    std::thread::sleep(Duration::from_millis(2200));
+    let report = stdout(&run(&repo, "apply", "base").0);
+    assert!(
+        report.contains(&format!("read 0 of {FILES} base files\n")),
+        "{report}"
+    );
+    compiled(&repo);
+    repo.write_unstaged("target/debug/deps/new0.rlib", "new");
+    repo.write_unstaged("target/debug/deps/new1.rlib", "new");
+    // Same size, same time, other bytes: only the change time can tell.
+    let hidden = "target/debug/deps/lib9.rlib";
+    let stamp = time(&repo, hidden);
+    repo.write_unstaged(hidden, "RLIB 9");
+    set_time(&repo, hidden, stamp);
+    let (output, saved) = run(&repo, "stage", "base");
+    let report = stdout(&output);
+    assert_eq!(saved, "save=true\n");
+    // The two new outputs, the rewritten file and the inputs record `compiled` saved.
+    let expected = format!("read 4 of {} files\n", FILES + 3);
+    assert!(report.contains(&expected), "{report}");
+    let nodes = manifest(&repo)["nodes"].clone();
+    assert!(nodes.get("debug/deps/lib9.rlib").is_some(), "{nodes}");
+    assert!(nodes.get("debug/deps/lib10.rlib").is_none(), "{nodes}");
 }
