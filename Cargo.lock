@@ -3595,10 +3595,10 @@ dependencies = [
  "tokio",
  "toml",
  "velnor-actions-contract",
- "velnor-actions-freshness",
  "velnor-actions-mise",
  "velnor-actions-orchestrator",
  "velnor-archive-guard",
+ "velnor-freshness",
  "velnor-runner-host",
 ]
 
@@ -3624,21 +3624,6 @@ dependencies = [
  "thiserror",
  "toml",
  "velnor-actions-contract",
-]
-
-[[package]]
-name = "velnor-actions-freshness"
-version = "0.1.82"
-dependencies = [
- "flate2",
- "rustix 1.1.6",
- "rustls",
- "rustls-native-certs",
- "serde",
- "serde_json",
- "syn 3.0.9",
- "toml",
- "ureq",
 ]
 
 [[package]]
@@ -3758,6 +3743,22 @@ dependencies = [
  "tempfile",
  "velnor-actions-mise",
  "velnor-runner-image-manifest",
+]
+
+[[package]]
+name = "velnor-freshness"
+version = "0.1.82"
+dependencies = [
+ "flate2",
+ "rustix 1.1.6",
+ "rustls",
+ "rustls-native-certs",
+ "serde",
+ "serde_json",
+ "syn 3.0.9",
+ "tempfile",
+ "toml",
+ "ureq",
 ]
 
 [[package]]

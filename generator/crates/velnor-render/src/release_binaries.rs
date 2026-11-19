@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{HelperRelease, Platform};
-use velnor_release::{BinaryPlan, RELEASE_APP_SLUG, ReleasePlan};
+use velnor_release::{BinaryFormat, BinaryPlan, RELEASE_APP_SLUG, ReleasePlan};
 
 use crate::release::{FROM_A_PASSED_PUSH, GATE_IS_READY, HOSTED_RUNNER, VERIFIED_COMMIT};
 use crate::release_outputs::commit_output;
@@ -39,16 +39,43 @@ pub(crate) fn binary_jobs(plan: &ReleasePlan, helper: &HelperRelease) -> Vec<Ren
         .collect()
 }
 
-pub(crate) fn target(platform: Platform) -> (&'static str, &'static str) {
-    match platform {
-        Platform::LinuxX64 => ("ubuntu-24.04", "x86_64-unknown-linux-musl"),
-        Platform::LinuxArm64 => ("ubuntu-24.04-arm", "aarch64-unknown-linux-musl"),
-        Platform::MacosArm64 => ("macos-15", "aarch64-apple-darwin"),
+pub(crate) fn target(platform: Platform, format: BinaryFormat) -> (&'static str, &'static str) {
+    match (platform, format) {
+        (Platform::LinuxX64, BinaryFormat::Archive) => {
+            ("ubuntu-24.04", "x86_64-unknown-linux-musl")
+        }
+        (Platform::LinuxX64, BinaryFormat::Raw) => ("ubuntu-24.04", "x86_64-unknown-linux-gnu"),
+        (Platform::LinuxArm64, BinaryFormat::Archive) => {
+            ("ubuntu-24.04-arm", "aarch64-unknown-linux-musl")
+        }
+        (Platform::LinuxArm64, BinaryFormat::Raw) => {
+            ("ubuntu-24.04-arm", "aarch64-unknown-linux-gnu")
+        }
+        (Platform::MacosArm64, _) => ("macos-15", "aarch64-apple-darwin"),
     }
 }
 
+fn raw_name(binary: &BinaryPlan, platform: Platform) -> String {
+    format!("{}-{}", binary.bin, platform.file_suffix())
+}
+
 pub(crate) fn asset(binary: &BinaryPlan, platform: Platform) -> String {
-    format!("{}-{}.tar.gz", binary.bin, platform.file_suffix())
+    match binary.format {
+        BinaryFormat::Archive => format!("{}.tar.gz", raw_name(binary, platform)),
+        BinaryFormat::Raw => raw_name(binary, platform),
+    }
+}
+
+fn published_files(binary: &BinaryPlan, platform: Platform) -> Vec<String> {
+    let name = raw_name(binary, platform);
+    match binary.format {
+        BinaryFormat::Archive => vec![asset(binary, platform)],
+        BinaryFormat::Raw => vec![
+            name.clone(),
+            format!("{name}.sha256"),
+            format!("{name}.provenance.json"),
+        ],
+    }
 }
 
 pub(crate) fn artifact(binary: &BinaryPlan, platform: Platform) -> String {
@@ -70,7 +97,7 @@ fn behind_the_gate(id: String, binary: &BinaryPlan, needs: Vec<String>) -> Rende
 }
 
 fn build(binary: &BinaryPlan, platform: Platform, helper: &HelperRelease) -> RenderedJob {
-    let (runner, _) = target(platform);
+    let (runner, _) = target(platform, binary.format);
     RenderedJob {
         permissions: permissions(&[("contents", "read")]),
         runs_on: runner.to_owned(),
@@ -95,7 +122,7 @@ pub(crate) fn build_steps(
     source: &str,
     same_commit: RenderedStep,
 ) -> Vec<RenderedStep> {
-    let (_, triple) = target(platform);
+    let (_, triple) = target(platform, binary.format);
     let suffix = platform.file_suffix();
     let file = asset(binary, platform);
     let profile = binary.profile.as_deref();
@@ -109,6 +136,13 @@ pub(crate) fn build_steps(
         |name| format!("--profile {name}"),
     );
     let linux = triple.ends_with("linux-musl");
+    let packaging = match binary.format {
+        BinaryFormat::Archive => vec![command(
+            format!("Pack {file}"),
+            format!("tar -czf {file} -C {release_dir} {}", binary.bin),
+        )],
+        BinaryFormat::Raw => raw_packaging(binary, platform, triple, &release_dir),
+    };
     let mut steps = vec![
         RenderedStep {
             id: Some("source".to_owned()),
@@ -143,13 +177,65 @@ pub(crate) fn build_steps(
                 ),
             )
         },
-        command(
-            format!("Pack {file}"),
-            format!("tar -czf {file} -C {release_dir} {}", binary.bin),
-        ),
-        upload(artifact(binary, platform), file),
     ]);
+    steps.extend(packaging);
+    steps.push(upload(
+        artifact(binary, platform),
+        published_files(binary, platform).join("\n"),
+    ));
     steps
+}
+
+fn raw_packaging(
+    binary: &BinaryPlan,
+    platform: Platform,
+    triple: &str,
+    release_dir: &str,
+) -> Vec<RenderedStep> {
+    let name = raw_name(binary, platform);
+    let checksum = if platform == Platform::MacosArm64 {
+        "shasum -a 256"
+    } else {
+        "sha256sum"
+    };
+    let (before, after) = binary
+        .tag_pattern
+        .as_str()
+        .split_once("{{ version }}")
+        .unwrap_or_default();
+    let version = if after.is_empty() {
+        format!("$tag[{}:]", before.len())
+    } else {
+        format!("$tag[{}:-{}]", before.len(), after.len())
+    };
+    let record = format!(
+        "jq -e -R -s --arg repository \"$REPOSITORY\" --arg commit \"$COMMIT\" --arg tag \"$TAG\" --arg target {triple} --arg asset {name} --rawfile rust {name}.rustc '{{schema: 1}} + capture(\"\\\\A(?<sha256>[0-9a-f]{{64}})  {name}\\\\n\\\\z\") + {{tag: $tag, version: {version}, repository: $repository, commit: $commit, target: $target, asset: $asset, toolchain: {{rust: $rust[0:-1]}}}}' {name}.sha256 > {name}.provenance.json"
+    );
+    vec![
+        command(
+            format!("Name {} for {}", binary.bin, platform.file_suffix()),
+            format!("cp {release_dir}/{} {name}", binary.bin),
+        ),
+        command(
+            format!("Checksum {name}"),
+            format!("{checksum} {name} > {name}.sha256"),
+        ),
+        command(
+            format!("Record the rustc version for {name}"),
+            format!("rustc --version > {name}.rustc"),
+        ),
+        RenderedStep {
+            env: variables(&[
+                ("REPOSITORY", "${{ github.repository }}"),
+                ("COMMIT", "${{ steps.source.outputs.commit }}"),
+                (
+                    "TAG",
+                    &format!("${{{{ needs.tag.outputs.{} }}}}", binary.package),
+                ),
+            ]),
+            ..command(format!("Record provenance of {name}"), record)
+        },
+    ]
 }
 
 fn same_commit(binary: &BinaryPlan, helper: &HelperRelease) -> RenderedStep {
@@ -263,7 +349,7 @@ fn assets(binary: &BinaryPlan) -> Vec<String> {
     binary
         .platforms
         .iter()
-        .map(|platform| asset(binary, *platform))
+        .flat_map(|platform| published_files(binary, *platform))
         .collect()
 }
 

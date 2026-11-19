@@ -26,8 +26,8 @@ const EVENTS: &str = r"on:
 permissions:
   contents: read
 concurrency:
-  group: ci-${{ github.workflow_ref }}-${{ github.event_name == 'pull_request' && startsWith(github.ref, 'refs/pull/') && github.event.pull_request.state != 'closed' && !(github.event.action == 'edited' && github.event.changes.base.ref.from == null) && github.event.pull_request.number || github.run_id }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' && startsWith(github.ref, 'refs/pull/') && github.event.pull_request.state != 'closed' && !(github.event.action == 'edited' && github.event.changes.base.ref.from == null) }}
+  group: ci-${{ github.workflow_ref }}-${{ github.event_name == 'pull_request' && startsWith(github.ref, 'refs/pull/') && github.event.pull_request.state != 'closed' && !(github.event.action == 'edited' && github.event.changes.base == null) && github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' && startsWith(github.ref, 'refs/pull/') && github.event.pull_request.state != 'closed' && !(github.event.action == 'edited' && github.event.changes.base == null) }}
 ";
 
 pub(crate) const DENY_MISE: &str = "[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n\"aqua:EmbarkStudios/cargo-deny\" = \"0.18.3\"\n";
@@ -251,7 +251,7 @@ fn the_policy_lane_exists_only_for_a_deny_config_or_a_pinned_machete() -> TestRe
     );
     let deny = with(&[("deny.toml", ""), ("mise.toml", DENY_MISE)], None)?;
     assert!(deny.contains("  policy:\n"), "{deny}");
-    assert!(deny.contains("cargo-deny check"), "{deny}");
+    assert!(deny.contains("cargo-deny --locked check"), "{deny}");
     assert!(!deny.contains("cargo machete"), "{deny}");
     assert!(deny.contains("      - policy\n"), "{deny}");
     let machete = with(
