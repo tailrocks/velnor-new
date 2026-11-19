@@ -42,7 +42,7 @@ pub(crate) struct Listing {
 
 #[must_use]
 pub(crate) fn runnable_matches(bytes: &[u8]) -> Option<Listing> {
-    let listed: Listed = serde_json::from_slice(bytes).ok()?;
+    let listed = parse(bytes)?;
     let mut packages = BTreeMap::new();
     let mut ignored = 0u64;
     for suite in listed.rust_suites.into_values() {
@@ -76,10 +76,48 @@ pub(crate) fn runnable_matches(bytes: &[u8]) -> Option<Listing> {
     Some(Listing { packages, ignored })
 }
 
+fn parse(bytes: &[u8]) -> Option<Listed> {
+    serde_json::from_slice(bytes).ok().or_else(|| {
+        let last = bytes
+            .split(|byte| *byte == b'\n')
+            .rfind(|line| !line.trim_ascii().is_empty())?;
+        serde_json::from_slice(last).ok()
+    })
+}
+
 fn add(into: &mut BTreeMap<String, u64>, name: &str, count: u64) -> Option<()> {
     if count > 0 {
         let total = into.get(name).copied().unwrap_or(0_u64);
         into.insert(name.to_owned(), total.checked_add(count)?);
     }
     Some(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::runnable_matches;
+
+    const LISTING: &str = r#"{"rust-build-meta":{},"test-count":1,"rust-suites":{"a::lib":{"package-name":"a","testcases":{"t":{"filter-match":{"status":"matches"}}}}}}"#;
+
+    #[test]
+    fn listing_alone_parses() {
+        let listing = runnable_matches(LISTING.as_bytes()).expect("parses");
+        assert_eq!(listing.packages.get("a"), Some(&1));
+    }
+
+    #[test]
+    fn listing_after_cargo_json_messages_parses() {
+        let stdout = format!(
+            "{{\"reason\":\"compiler-artifact\",\"package_id\":\"a\"}}\n{{\"reason\":\"build-finished\",\"success\":true}}\n{LISTING}\n"
+        );
+        let listing = runnable_matches(stdout.as_bytes()).expect("parses");
+        assert_eq!(listing.packages.get("a"), Some(&1));
+    }
+
+    #[test]
+    fn cargo_json_without_a_listing_fails_closed() {
+        let stdout = "{\"reason\":\"build-finished\",\"success\":true}\n";
+        assert_eq!(runnable_matches(stdout.as_bytes()), None);
+        assert_eq!(runnable_matches(b""), None);
+    }
 }
