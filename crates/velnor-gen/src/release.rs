@@ -58,8 +58,13 @@ pub(crate) fn release_workflow(
             reject_release_credential_hooks(view, &detected.manifest)?;
         }
     }
-    let files = render_release(&plan, helper, &facts.config.default_branch)
-        .map_err(GenerateError::Rules)?;
+    let files = render_release(
+        &plan,
+        helper,
+        &facts.config.default_branch,
+        facts.config.private_sources.as_ref(),
+    )
+    .map_err(GenerateError::Rules)?;
     Ok((files, Vec::new()))
 }
 
@@ -231,6 +236,13 @@ fn release_files(
         symlinks: view.symlinks.iter().map(ToString::to_string).collect(),
         rust_metadata: (!view.rust_metadata.is_empty()).then(|| view.rust_metadata.clone()),
         bin_targets: reality.map(|known| bin_targets(known.facts)),
+        tracked_paths: reality.map(|_| {
+            view.tracked_paths
+                .iter()
+                .chain(view.files.keys())
+                .map(ToString::to_string)
+                .collect()
+        }),
         cargo_manifest_texts,
         cargo_manifests: reality.map(|known| cargo_manifests(known.facts)),
         workflow_names: workflows.as_deref().map(workflow_names),

@@ -165,15 +165,7 @@ fn the_inputs_lock_becomes_facts_and_a_bad_line_or_an_unknown_package_is_an_erro
 }
 
 fn embedding(files: &[(&str, &str)], check: &[(&str, &[&str])]) -> TestResult {
-    embedding_with_links(&[], files, check)
-}
-
-fn embedding_with_links(
-    links: &[&str],
-    files: &[(&str, &str)],
-    check: &[(&str, &[&str])],
-) -> TestResult {
-    let mut view = repo(
+    let view = repo(
         vec![(
             "Cargo.toml",
             vec![
@@ -185,10 +177,6 @@ fn embedding_with_links(
         )],
         files,
     )?;
-    for link in links {
-        view.tracked_paths.insert(path(link));
-        view.symlinks.insert(path(link));
-    }
     let facts = detect(&view)?;
     let selected = |changed_file: &str| {
         let changes = velnor_model::ChangeSet {
@@ -256,16 +244,155 @@ fn an_embedded_path_that_cannot_be_resolved_selects_its_crate_on_any_change() ->
 }
 
 #[test]
-fn a_crate_with_a_symlinked_source_is_selected_by_any_change_because_its_target_is_unread()
--> TestResult {
-    embedding_with_links(
-        &["crates/app/src/shared.rs"],
+fn a_file_an_included_file_embeds_selects_the_crate() -> TestResult {
+    embedding(
         &[
-            ("crates/app/src/lib.rs", ""),
+            ("crates/app/src/lib.rs", "include!(\"gen.rs\");"),
+            (
+                "crates/app/src/gen.rs",
+                "const A: &str = include_str!(\"../../../docs/guide.md\");\ninclude!(\"deep.rs\");",
+            ),
+            (
+                "crates/app/src/deep.rs",
+                "const B: &str = include_str!(\"../../../docs/deep.md\");",
+            ),
             ("crates/tool/src/lib.rs", ""),
-            ("crates/reader/src/lib.rs", ""),
-            ("crates/left/src/lib.rs", ""),
         ],
-        &[("docs/shared.rs", &["app"]), ("docs/other.md", &["app"])],
+        &[
+            ("docs/guide.md", &["app"]),
+            ("docs/deep.md", &["app"]),
+            ("docs/other.md", &[]),
+        ],
     )
+}
+
+#[test]
+fn an_included_file_the_view_cannot_read_fails_closed() -> TestResult {
+    embedding(
+        &[
+            ("crates/app/src/lib.rs", "include!(\"body.inc\");"),
+            ("crates/tool/src/lib.rs", ""),
+        ],
+        &[("docs/other.md", &["app"])],
+    )
+}
+
+#[test]
+fn a_comment_between_the_macro_and_its_bang_does_not_hide_it() -> TestResult {
+    embedding(
+        &[
+            (
+                "crates/app/src/lib.rs",
+                "const A: &str = include_str/* generated */!(\"../../../docs/guide.md\");\nconst B: &str = include_str // x\n!(\"../../../docs/b.md\");",
+            ),
+            (
+                "crates/tool/src/lib.rs",
+                "// include_str!(\"../../../docs/commented.md\")\nconst S: &str = \"include_str!(\\\"../../../docs/quoted.md\\\")\";",
+            ),
+        ],
+        &[
+            ("docs/guide.md", &["app"]),
+            ("docs/b.md", &["app"]),
+            ("docs/commented.md", &[]),
+            ("docs/quoted.md", &[]),
+        ],
+    )
+}
+
+#[test]
+fn a_nested_package_is_not_charged_with_its_ancestors_scan() -> TestResult {
+    let view = repo(
+        vec![(
+            "Cargo.toml",
+            vec![
+                lib("top", "Cargo.toml")?,
+                lib("inner", "crates/inner/Cargo.toml")?,
+            ],
+        )],
+        &[
+            (
+                "src/lib.rs",
+                "const A: &str = include_str!(\"../docs/top.md\");",
+            ),
+            (
+                "crates/inner/src/lib.rs",
+                "const B: &str = include_str!(\"../../../docs/inner.md\");",
+            ),
+        ],
+    )?;
+    let facts = detect(&view)?;
+    let owners = |file: &str| -> Option<Vec<String>> {
+        facts
+            .compile_inputs
+            .get(&Some(path(file)))
+            .map(|names| names.iter().map(ToString::to_string).collect())
+    };
+    assert_eq!(owners("docs/top.md"), Some(vec!["top".to_owned()]));
+    assert_eq!(owners("docs/inner.md"), Some(vec!["inner".to_owned()]));
+    assert!(
+        !facts.compile_inputs.contains_key(&None),
+        "{:?}",
+        facts.compile_inputs
+    );
+    Ok(())
+}
+
+#[test]
+fn a_target_source_outside_the_package_directory_attributes_its_includes() -> TestResult {
+    let mut app = lib("app", "crates/app/Cargo.toml")?;
+    for target in &mut app.targets {
+        target.source = Some(path("shared/app_lib.rs"));
+    }
+    let view = repo(
+        vec![(
+            "Cargo.toml",
+            vec![app, lib("tool", "crates/tool/Cargo.toml")?],
+        )],
+        &[
+            (
+                "shared/app_lib.rs",
+                "const A: &str = include_str!(\"../docs/guide.md\");\nmod more;",
+            ),
+            (
+                "shared/more.rs",
+                "const B: &str = include_str!(\"../docs/more.md\");",
+            ),
+            ("crates/tool/src/lib.rs", ""),
+        ],
+    )?;
+    let facts = detect(&view)?;
+    for file in ["docs/guide.md", "docs/more.md"] {
+        let names: Vec<String> = facts
+            .compile_inputs
+            .get(&Some(path(file)))
+            .into_iter()
+            .flatten()
+            .map(ToString::to_string)
+            .collect();
+        assert_eq!(names, ["app"], "{file}");
+    }
+    Ok(())
+}
+
+#[test]
+fn a_symlinked_rust_source_fails_closed_instead_of_being_skipped() -> TestResult {
+    let mut view = repo(
+        vec![(
+            "Cargo.toml",
+            vec![
+                lib("app", "crates/app/Cargo.toml")?,
+                lib("tool", "crates/tool/Cargo.toml")?,
+            ],
+        )],
+        &[("crates/tool/src/lib.rs", "")],
+    )?;
+    let linked = path("crates/app/src/lib.rs");
+    view.tracked_paths.insert(linked.clone());
+    view.symlinks.insert(linked);
+    let facts = detect(&view)?;
+    assert_eq!(
+        facts.compile_inputs.get(&None),
+        Some(&BTreeSet::from([name("app")]))
+    );
+    Ok(())
 }

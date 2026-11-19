@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::asset_name::checked;
 use crate::bundle::check_targets;
 use crate::error::ReleaseError;
 use crate::error_family::FamilyError;
@@ -42,9 +43,9 @@ pub(crate) fn plan_family(
             bin: binary.bin.clone(),
             root,
             platforms: binary.platforms.clone(),
-            extra_bins: Vec::new(),
-            include: Vec::new(),
-            asset_name: None,
+            extra_bins: binary.bins.clone(),
+            include: binary.include.clone(),
+            asset_name: checked(binary, &tag_pattern)?,
             format: binary.format,
             libc: binary.libc,
             smoke: false,
@@ -75,13 +76,7 @@ pub(crate) fn plan_family(
 }
 
 fn unsupported(binary: &Binary) -> Option<&'static str> {
-    if !binary.bins.is_empty() {
-        Some("bins")
-    } else if !binary.include.is_empty() {
-        Some("include")
-    } else if binary.asset_name.is_some() {
-        Some("asset_name")
-    } else if binary.attest {
+    if binary.attest {
         Some("attest")
     } else if binary.smoke {
         Some("smoke")

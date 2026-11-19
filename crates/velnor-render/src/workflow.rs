@@ -223,7 +223,12 @@ fn yaml_step(step: &RenderedStep) -> Yaml {
         items.push(entry("with", values(&step.with)));
     }
     if let Some(directory) = &step.working_directory {
-        items.push(entry("working-directory", text(directory)));
+        let value = if directory.contains("${{") {
+            Yaml::Expr(directory.clone())
+        } else {
+            text(directory)
+        };
+        items.push(entry("working-directory", value));
     }
     if !step.env.is_empty() {
         items.push(entry("env", values(&step.env)));

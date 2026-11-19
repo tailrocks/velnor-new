@@ -9,10 +9,11 @@ use std::time::{Duration, Instant};
 
 use crate::error::CiError;
 use crate::mbx_seed_copy::{Copied, SUBSETS, copy_subset};
-use crate::mbx_store::trusted_event;
+use crate::mbx_store::{trusted_event, writable_by_job};
 
 pub const SEED_DIR_ENV: &str = "VELNOR_MBX_SEED_DIR";
 pub const PRIVATE_STORE: &str = "velnor/mbx";
+pub const SEED_BUDGET: Duration = Duration::from_secs(20);
 
 #[derive(Debug, Clone, Copy)]
 pub struct Inputs<'a> {
@@ -23,6 +24,7 @@ pub struct Inputs<'a> {
     pub runner_temp: &'a Path,
     pub owner: u32,
     pub threads: usize,
+    pub budget: Duration,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -50,10 +52,11 @@ pub fn select(inputs: &Inputs<'_>) -> Outcome {
         Ok(seed) => seed,
         Err(reason) => return Outcome::Rejected(reason),
     };
-    if !SUBSETS
-        .iter()
-        .any(|name| has_entries(&seed.join("actions").join(name)))
-    {
+    let actions = seed.join("actions");
+    if fs::symlink_metadata(&actions).is_ok_and(|metadata| metadata.file_type().is_symlink()) {
+        return Outcome::Rejected("actions is a symlink");
+    }
+    if !SUBSETS.iter().any(|name| has_entries(&actions.join(name))) {
         return Outcome::Empty;
     }
     let store = match private_store(inputs.runner_temp) {
@@ -62,9 +65,10 @@ pub fn select(inputs: &Inputs<'_>) -> Outcome {
     };
     let started = Instant::now();
     let copied = copy_subset(
-        &seed.join("actions"),
+        &actions,
         &store.join("actions"),
         inputs.threads,
+        started + inputs.budget,
     );
     Outcome::Seeded {
         store,
@@ -74,7 +78,8 @@ pub fn select(inputs: &Inputs<'_>) -> Outcome {
 }
 
 fn has_entries(dir: &Path) -> bool {
-    fs::read_dir(dir).is_ok_and(|mut entries| entries.next().is_some())
+    fs::symlink_metadata(dir).is_ok_and(|metadata| metadata.is_dir())
+        && fs::read_dir(dir).is_ok_and(|mut entries| entries.next().is_some())
 }
 
 fn validated(dir: &Path, owner: u32) -> Result<PathBuf, &'static str> {
@@ -106,6 +111,9 @@ fn validated(dir: &Path, owner: u32) -> Result<PathBuf, &'static str> {
     }
     if metadata.mode() & 0o002 != 0 {
         return Err("world-writable");
+    }
+    if writable_by_job(dir) {
+        return Err("writable by this job");
     }
     Ok(dir.to_path_buf())
 }
@@ -145,15 +153,32 @@ pub fn message(outcome: &Outcome) -> String {
             store,
             copied,
             elapsed,
-        } => format!(
-            "velnor: MBX seeded {} with {} files, {} bytes in {:.2}s ({} already present)\n",
-            store.display(),
-            copied.files,
-            copied.bytes,
-            elapsed.as_secs_f64(),
-            copied.present
-        ),
+        } => seeded_message(store, copied, *elapsed),
     }
+}
+
+fn seeded_message(store: &Path, copied: &Copied, elapsed: Duration) -> String {
+    let failed = if copied.failed > 0 {
+        format!(
+            "::warning::{} seed entries failed to copy; MBX builds them cold\n",
+            copied.failed
+        )
+    } else {
+        String::new()
+    };
+    let expired = if copied.expired {
+        "::warning::MBX seeding stopped at the startup budget; the rest builds cold\n"
+    } else {
+        ""
+    };
+    format!(
+        "velnor: MBX seeded {} with {} files, {} bytes in {:.2}s ({} already present)\n{failed}{expired}",
+        store.display(),
+        copied.files,
+        copied.bytes,
+        elapsed.as_secs_f64(),
+        copied.present
+    )
 }
 
 pub fn setup() -> Result<String, CiError> {
@@ -173,6 +198,7 @@ pub fn setup() -> Result<String, CiError> {
         runner_temp: &runner_temp,
         owner: owner_of(&runner_temp)?,
         threads: std::thread::available_parallelism().map_or(4, |n| n.get().min(16)),
+        budget: SEED_BUDGET,
     });
     let lines = env_lines(&outcome);
     if !lines.is_empty() {
