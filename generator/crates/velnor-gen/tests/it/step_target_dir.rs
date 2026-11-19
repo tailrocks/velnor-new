@@ -48,9 +48,9 @@ fn builds(step: &Value) -> bool {
         .skip(1)
         .find(|segment| segment.starts_with("cargo"))
         .is_some_and(|command| {
-            !NON_BUILDING.iter().any(|tool| {
-                command == *tool || command.starts_with(&format!("{tool} "))
-            })
+            !NON_BUILDING
+                .iter()
+                .any(|tool| command == *tool || command.starts_with(&format!("{tool} ")))
         })
 }
 
