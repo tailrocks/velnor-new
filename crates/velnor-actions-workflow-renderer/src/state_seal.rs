@@ -3,8 +3,8 @@ use std::collections::BTreeMap;
 use velnor_actions_actionlint::actions::ATTEST_USES;
 use velnor_actions_contract::workflow::cache_family::state_snapshot_plan_expr;
 use velnor_actions_contract::workflow::cache_family::{
-    COMPLETE_STATE_TRANSPORT_EXPR, CacheFamily, RUNNER_TEMP_EXPR, RUNNER_TEMP_SHELL, RootSlug,
-    StateScope, StateTrust, StateUnit, outer_entry_bound,
+    COMPLETE_STATE_TRANSPORT_EXPR, CacheFamily, RootSlug, STATE_RUNNER_TEMP, StateScope,
+    StateTrust, StateUnit, outer_entry_bound,
 };
 use velnor_actions_contract::workflow::cache_family_mbx::MBX_BUNDLE_ROOT_ENV;
 use velnor_actions_contract::workflow::state_seal::{
@@ -250,8 +250,8 @@ fn transport_dir() -> Result<String, RenderError> {
 
 fn transport_file() -> Result<String, RenderError> {
     COMPLETE_STATE_TRANSPORT_EXPR
-        .strip_prefix(RUNNER_TEMP_EXPR)
-        .map(|rest| format!("{RUNNER_TEMP_SHELL}{rest}"))
+        .starts_with(&format!("{STATE_RUNNER_TEMP}/"))
+        .then(|| COMPLETE_STATE_TRANSPORT_EXPR.to_owned())
         .ok_or_else(|| invalid("transport_not_runner_temp"))
 }
 

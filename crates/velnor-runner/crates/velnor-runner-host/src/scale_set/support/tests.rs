@@ -8,7 +8,7 @@ use velnor_runner_github::{
     workflow_run::{RepositoryTarget, get_repository_scope},
 };
 
-use super::{Recording, create_and_verify};
+use super::{CreateIds, Recording, create_and_verify};
 use crate::{
     config::HostConfig,
     journal::{Journal, ScaleSetCreateRequest},
@@ -55,6 +55,10 @@ fn scale_set_json(disable_update: bool) -> String {
     )
 }
 
+fn foreign_group_json() -> String {
+    scale_set_json(true).replacen("{\"id\":10,", "{\"id\":10,\"runnerGroupId\":2,", 1)
+}
+
 struct Script {
     replies: VecDeque<(u16, String)>,
     seen: Vec<(Method, String)>,
@@ -84,6 +88,14 @@ async fn run(
     dir: &tempfile::TempDir,
     replies: Vec<(u16, String)>,
 ) -> TestResult<(Result<i64, EnsureError>, Script, Journal)> {
+    run_with(dir, replies, true).await
+}
+
+async fn run_with(
+    dir: &tempfile::TempDir,
+    replies: Vec<(u16, String)>,
+    adopt_on_conflict: bool,
+) -> TestResult<(Result<i64, EnsureError>, Script, Journal)> {
     let journal = Journal::open(&dir.path().join("launch.db")).await?;
     journal.bind_engine("engine-test").await?;
     let config = HostConfig::parse(CONFIG)?;
@@ -102,9 +114,13 @@ async fn run(
         "pat",
     )?;
     let mut transport = Recording::new(Script::new(replies));
+    let ids = CreateIds {
+        pat: "pat",
+        scope: &scope,
+        adopt_on_conflict,
+    };
     let outcome = create_and_verify(
-        "pat",
-        &scope,
+        ids,
         &mut transport,
         "admin-token",
         &scoped,
@@ -179,6 +195,93 @@ async fn create_refuses_a_post_body_that_keeps_updates_enabled() -> TestResult<(
     let dir = tempfile::tempdir()?;
     let (outcome, _transport, journal) = run(&dir, vec![(200, scale_set_json(false))]).await?;
     assert!(outcome.is_err(), "outcome: {outcome:?}");
+    assert_eq!(bound_scale_set_ids(&journal).await?, Vec::<i64>::new());
+    Ok(())
+}
+
+async fn unverified_remote_ids(journal: &Journal) -> TestResult<Vec<i64>> {
+    let connection = journal.connection().await?;
+    let mut rows = connection
+        .query(
+            "SELECT remote_id FROM connection_scale_set_unverified ORDER BY remote_id",
+            (),
+        )
+        .await?;
+    let mut ids = Vec::new();
+    while let Some(row) = rows.next().await? {
+        ids.push(row.get::<i64>(0)?);
+    }
+    Ok(ids)
+}
+
+#[tokio::test]
+async fn refused_reread_keeps_the_created_id_without_binding_it() -> TestResult<()> {
+    let dir = tempfile::tempdir()?;
+    let (outcome, _transport, journal) = run(
+        &dir,
+        vec![(200, scale_set_json(true)), (200, scale_set_json(false))],
+    )
+    .await?;
+    assert!(outcome.is_err(), "outcome: {outcome:?}");
+    assert_eq!(unverified_remote_ids(&journal).await?, [10]);
+    assert_eq!(bound_scale_set_ids(&journal).await?, Vec::<i64>::new());
+    assert_eq!(intent_states(&journal).await?, ["uncertain"]);
+    Ok(())
+}
+
+#[tokio::test]
+async fn refused_post_body_keeps_the_created_id_without_binding_it() -> TestResult<()> {
+    let dir = tempfile::tempdir()?;
+    let (outcome, _transport, journal) = run(&dir, vec![(200, scale_set_json(false))]).await?;
+    assert!(outcome.is_err(), "outcome: {outcome:?}");
+    assert_eq!(unverified_remote_ids(&journal).await?, [10]);
+    assert_eq!(bound_scale_set_ids(&journal).await?, Vec::<i64>::new());
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_set_that_never_existed_leaves_no_unverified_id() -> TestResult<()> {
+    let dir = tempfile::tempdir()?;
+    let (outcome, _transport, journal) = run(&dir, vec![(500, String::new())]).await?;
+    assert!(outcome.is_err(), "outcome: {outcome:?}");
+    assert_eq!(unverified_remote_ids(&journal).await?, Vec::<i64>::new());
+    Ok(())
+}
+
+#[tokio::test]
+async fn create_refuses_a_set_from_a_foreign_runner_group() -> TestResult<()> {
+    let dir = tempfile::tempdir()?;
+    let (outcome, transport, journal) = run(&dir, vec![(200, foreign_group_json())]).await?;
+    assert_eq!(outcome, Err(EnsureError::Rejected));
+    assert_eq!(transport.seen.len(), 1, "a rejected set is not re-read");
+    assert_eq!(bound_scale_set_ids(&journal).await?, Vec::<i64>::new());
+    assert_eq!(intent_states(&journal).await?, ["uncertain"]);
+    Ok(())
+}
+
+#[tokio::test]
+async fn conflict_lookup_refuses_to_adopt_a_foreign_runner_group_set() -> TestResult<()> {
+    let dir = tempfile::tempdir()?;
+    let page = format!(r#"{{"count":1,"value":[{}]}}"#, foreign_group_json());
+    let (outcome, transport, journal) = run(&dir, vec![(409, String::new()), (200, page)]).await?;
+    assert_eq!(outcome, Err(EnsureError::Rejected));
+    let methods: Vec<Method> = transport.seen.iter().map(|(method, _)| *method).collect();
+    assert_eq!(methods, [Method::Post, Method::Get]);
+    assert_eq!(bound_scale_set_ids(&journal).await?, Vec::<i64>::new());
+    Ok(())
+}
+
+#[tokio::test]
+async fn an_organization_create_conflict_never_adopts_the_existing_set() -> TestResult<()> {
+    let dir = tempfile::tempdir()?;
+    let (outcome, transport, journal) = run_with(
+        &dir,
+        vec![(409, "{}".to_owned()), (200, scale_set_json(true))],
+        false,
+    )
+    .await?;
+    assert_eq!(outcome, Err(EnsureError::Uncertain));
+    assert_eq!(transport.seen.len(), 1, "no lookup after the conflict");
     assert_eq!(bound_scale_set_ids(&journal).await?, Vec::<i64>::new());
     Ok(())
 }

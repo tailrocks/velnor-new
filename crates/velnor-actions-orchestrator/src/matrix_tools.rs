@@ -47,7 +47,7 @@ impl SuiteName {
             Self::WorkflowRenderer => "velnor-actions-workflow-renderer",
             Self::Actionlint => "velnor-actions-actionlint",
             Self::ArchiveGuard => "velnor-archive-guard",
-            Self::Freshness => "velnor-actions-freshness",
+            Self::Freshness => "velnor-freshness",
         }
     }
 }

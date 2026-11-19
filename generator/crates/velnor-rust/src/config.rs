@@ -3,21 +3,28 @@
 
 use serde::Deserialize;
 use velnor_model::{
-    CiDebugInfo, CronExpr, FullRun, InputRule, OnMain, PackageName, PathGlob, RepoPath,
-    RunnerLabel, RustCiConfig, Shape,
+    CiDebugInfo, InputRule, PackageName, PathGlob, RepoPath, RunnerLabel, RustCiConfig, TargetName,
 };
 
+use crate::config_events::{docs_run, on_main};
 use crate::error::{DetectError, Reason};
+use crate::shape::parse_shape;
 use crate::toml_file::table;
 
 pub const CONFIG_PATH: RepoPath = RepoPath::from_static(".velnor/rust-ci.toml");
 
-const KEYS: [&str; 23] = [
+const KEYS: [&str; 31] = [
+    "private_sources",
     "cache_check_blocks",
     "cache_debug",
+    "cache",
+    "ci",
     "runner",
     "fork_runner",
     "crates_mirror",
+    "mbx_shared_store",
+    "docs",
+    "check_alone",
     "timeout_minutes",
     "exclude",
     "non_inputs",
@@ -28,14 +35,16 @@ const KEYS: [&str; 23] = [
     "nextest_harnesses",
     "default_branch",
     "skip_draft_pull_requests",
+    "pr_ci",
     "on_main",
     "full_run",
     "helper",
     "ci_debuginfo",
     "cache_budget_bytes",
     "test_setup",
+    "lint",
+    "test_groups",
     "test_lane",
-    "deny",
 ];
 const TIMEOUT_RANGE: std::ops::RangeInclusive<u16> = 1..=360;
 
@@ -43,9 +52,16 @@ const TIMEOUT_RANGE: std::ops::RangeInclusive<u16> = 1..=360;
 struct RawConfig {
     cache_check_blocks: Option<bool>,
     cache_debug: Option<bool>,
+    cache: Option<crate::config_cache::RawCache>,
+
+    ci: Option<crate::config_ci::RawCi>,
     runner: Option<String>,
     fork_runner: Option<String>,
     crates_mirror: Option<crate::config_mirror::RawCratesMirror>,
+    private_sources: Option<crate::config_private::RawPrivateSources>,
+    mbx_shared_store: Option<bool>,
+    docs: Option<String>,
+    check_alone: Option<String>,
     timeout_minutes: Option<u16>,
     #[serde(default)]
     exclude: Vec<String>,
@@ -60,6 +76,7 @@ struct RawConfig {
     nextest_harnesses: Vec<String>,
     default_branch: Option<String>,
     skip_draft_pull_requests: Option<bool>,
+    pr_ci: Option<String>,
     on_main: Option<String>,
     full_run: Option<String>,
     helper: Option<crate::config_helper::RawHelper>,
@@ -68,8 +85,11 @@ struct RawConfig {
     #[serde(default)]
     test_setup: Vec<crate::config_test_setup::RawTestSetup>,
     #[serde(default)]
+    lint: Vec<crate::config_lint::RawLint>,
+    #[serde(default)]
+    test_groups: Vec<crate::config_test_groups::RawTestGroup>,
+    #[serde(default)]
     test_lane: Vec<crate::config_test_lane::RawTestLane>,
-    deny: Option<crate::config_deny::RawDeny>,
 }
 
 #[derive(Deserialize)]
@@ -89,52 +109,59 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         .try_into()
         .map_err(|error: toml::de::Error| invalid(Reason::Syntax(error.message().to_owned())))?;
     let defaults = RustCiConfig::default();
-    let timeout_minutes = raw.timeout_minutes.unwrap_or(defaults.timeout_minutes);
-    if !TIMEOUT_RANGE.contains(&timeout_minutes) {
-        return Err(invalid(Reason::OutOfRange {
-            key: "timeout_minutes",
-            value: timeout_minutes,
-            min: *TIMEOUT_RANGE.start(),
-            max: *TIMEOUT_RANGE.end(),
-        }));
-    }
+    let timeout_minutes =
+        timeout(raw.timeout_minutes, defaults.timeout_minutes).map_err(invalid)?;
     let (non_inputs, inputs) = rules(raw.non_inputs, raw.inputs).map_err(invalid)?;
     let shape = parse_shape(raw.shape.as_deref()).map_err(invalid)?;
     let required_check =
         required_check(raw.required_check, defaults.required_check).map_err(invalid)?;
+    let skip_draft_pull_requests = raw
+        .skip_draft_pull_requests
+        .unwrap_or(defaults.skip_draft_pull_requests);
+    let pr_ci = crate::config_pr_ci::parse(raw.pr_ci.as_deref(), skip_draft_pull_requests)
+        .map_err(invalid)?;
     let default_branch =
-        default_branch(raw.default_branch, defaults.default_branch).map_err(invalid)?;
+        crate::config_branch::default_branch(raw.default_branch, defaults.default_branch)
+            .map_err(invalid)?;
     let on_main = on_main(raw.on_main.as_deref(), defaults.on_main).map_err(invalid)?;
     let full_run = match raw.full_run {
         None => defaults.full_run,
-        Some(value) => full_run(value).map_err(invalid)?,
+        Some(value) => crate::config_events::full_run(value).map_err(invalid)?,
     };
     let helper = crate::config_helper::path(raw.helper).map_err(invalid)?;
     let ci_debuginfo =
         debuginfo(raw.ci_debuginfo.as_deref(), defaults.ci_debuginfo).map_err(invalid)?;
-    let tests =
-        crate::config_roots::parse(raw.test_setup, raw.test_lane, raw.deny).map_err(invalid)?;
+    let test_setup = crate::config_test_setup::parse(raw.test_setup).map_err(invalid)?;
+    let lint = crate::config_lint::parse(raw.lint).map_err(invalid)?;
+    let test_groups = crate::config_test_groups::parse(raw.test_groups).map_err(invalid)?;
+    let test_lanes = crate::config_test_lane::parse(raw.test_lane).map_err(invalid)?;
     let runner = runner(raw.runner, defaults.runner).map_err(invalid)?;
     let fork_runner = crate::config_fork::fork_runner(raw.fork_runner, &runner).map_err(invalid)?;
     Ok(RustCiConfig {
         cache_budget_bytes: crate::cache_budget::configured_budget(raw.cache_budget_bytes)
             .map_err(invalid)?,
-        test_setup: tests.0,
-        test_lanes: tests.1,
-        deny: tests.2,
+        test_setup,
+        lint,
+        test_groups,
+        test_lanes,
         cache_check_blocks: raw.cache_check_blocks.unwrap_or(false),
         cache_debug: raw.cache_debug.unwrap_or(false).into(),
+        mbx_remote: crate::config_cache::mbx_remote(raw.cache).map_err(invalid)?,
+
+        push_after_merge_group: crate::config_ci::push_after_merge_group(raw.ci),
         crates_mirror: raw
             .crates_mirror
             .map(crate::config_mirror::mirror)
             .transpose()
             .map_err(invalid)?,
-        nextest_harnesses: crate::config_lists::harnesses(raw.nextest_harnesses)
-            .map_err(invalid)?,
+        docs_run: docs_run("docs", raw.docs.as_deref()).map_err(invalid)?,
+        check_alone_run: docs_run("check_alone", raw.check_alone.as_deref()).map_err(invalid)?,
+        private_sources: crate::config_private::optional(raw.private_sources).map_err(invalid)?,
+        mbx_store: raw.mbx_shared_store.unwrap_or(false).into(),
+        nextest_harnesses: harnesses(raw.nextest_harnesses).map_err(invalid)?,
         default_branch,
-        skip_draft_pull_requests: raw
-            .skip_draft_pull_requests
-            .unwrap_or(defaults.skip_draft_pull_requests),
+        skip_draft_pull_requests,
+        pr_ci,
         on_main,
         full_run,
         helper,
@@ -147,8 +174,22 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         runner,
         fork_runner,
         timeout_minutes,
-        exclude: crate::config_lists::excludes(raw.exclude).map_err(invalid)?,
+        exclude: crate::config_exclude::excludes(raw.exclude).map_err(invalid)?,
     })
+}
+
+fn timeout(configured: Option<u16>, default: u16) -> Result<u16, Reason> {
+    let minutes = configured.unwrap_or(default);
+    if TIMEOUT_RANGE.contains(&minutes) {
+        Ok(minutes)
+    } else {
+        Err(Reason::OutOfRange {
+            key: "timeout_minutes",
+            value: minutes,
+            min: *TIMEOUT_RANGE.start(),
+            max: *TIMEOUT_RANGE.end(),
+        })
+    }
 }
 
 fn required_check(configured: Option<String>, default: String) -> Result<String, Reason> {
@@ -162,20 +203,27 @@ fn required_check(configured: Option<String>, default: String) -> Result<String,
     }
 }
 
-fn parse_shape(configured: Option<&str>) -> Result<Option<Shape>, Reason> {
-    match configured {
-        None | Some("auto") => Ok(None),
-        Some("one-job") => Ok(Some(Shape::OneJob)),
-        Some("lint-test") => Ok(Some(Shape::LintAndTest)),
-        Some("groups") => Ok(Some(Shape::BuildThenGroups)),
-        Some(other) => Err(Reason::InvalidValue {
-            key: "shape",
-            value: other.to_owned(),
-        }),
-    }
+fn harnesses(entries: Vec<String>) -> Result<Vec<(PackageName, TargetName)>, Reason> {
+    entries
+        .into_iter()
+        .map(|entry| {
+            let invalid = || Reason::InvalidValue {
+                key: "nextest_harnesses",
+                value: entry.clone(),
+            };
+            let (package, target) = entry.split_once(':').ok_or_else(invalid)?;
+            Ok((
+                PackageName::new(package).map_err(|_| invalid())?,
+                TargetName::new(target).map_err(|_| invalid())?,
+            ))
+        })
+        .collect()
 }
 
-fn runner(configured: Option<String>, default: RunnerLabel) -> Result<RunnerLabel, Reason> {
+pub(crate) fn runner(
+    configured: Option<String>,
+    default: RunnerLabel,
+) -> Result<RunnerLabel, Reason> {
     let Some(label) = configured else {
         return Ok(default);
     };
@@ -189,32 +237,6 @@ fn runner(configured: Option<String>, default: RunnerLabel) -> Result<RunnerLabe
         })
 }
 
-fn on_main(configured: Option<&str>, default: OnMain) -> Result<OnMain, Reason> {
-    match configured {
-        None => Ok(default),
-        Some("affected") => Ok(OnMain::Affected),
-        Some("everything") => Ok(OnMain::Everything),
-        Some(other) => Err(Reason::InvalidValue {
-            key: "on_main",
-            value: other.to_owned(),
-        }),
-    }
-}
-
-fn full_run(value: String) -> Result<FullRun, Reason> {
-    Ok(match value.as_str() {
-        "off" => FullRun::Off,
-        "hourly" => FullRun::Hourly,
-        "nightly" => FullRun::Nightly,
-        "weekly" => FullRun::Weekly,
-        _ => FullRun::Cron(
-            CronExpr::new(value.clone()).map_err(|_| Reason::InvalidValue {
-                key: "full_run",
-                value,
-            })?,
-        ),
-    })
-}
 fn without_helper_build(label: &str) -> bool {
     let label = label.to_ascii_lowercase();
     let Some(version) = label.strip_prefix("macos-") else {
@@ -226,35 +248,6 @@ fn without_helper_build(label: &str) -> bool {
         .and_then(|digits| digits.parse().ok())
         .unwrap_or(u32::MAX);
     major <= 13 || version.ends_with("-large") || version.ends_with("-intel")
-}
-
-fn default_branch(configured: Option<String>, default: String) -> Result<String, Reason> {
-    match configured {
-        None => Ok(default),
-        Some(name) if branch_name(&name) => Ok(name),
-        Some(name) => Err(Reason::InvalidValue {
-            key: "default_branch",
-            value: name,
-        }),
-    }
-}
-
-fn branch_name(name: &str) -> bool {
-    !name.is_empty()
-        && !name.starts_with(['/', '-'])
-        && !name.ends_with(['/', '.'])
-        && !name.contains("..")
-        && !name.contains("//")
-        && !name.contains("@{")
-        && !name.contains("{{")
-        && !name.contains("}}")
-        && name != "HEAD"
-        && !name.split('/').any(|part| {
-            part.starts_with('.') || part.rsplit_once('.').is_some_and(|(_, ext)| ext == "lock")
-        })
-        && !name
-            .chars()
-            .any(|c| c.is_control() || c.is_whitespace() || "~^:?*[\\".contains(c))
 }
 
 pub(crate) fn excluded(config: &RustCiConfig, manifest: &RepoPath) -> bool {

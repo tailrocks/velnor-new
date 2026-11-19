@@ -10,20 +10,18 @@ use serde_json::Value;
 use crate::error::HostError;
 
 const MAX_BUNDLE_BYTES: usize = 2_000_000;
-const MAX_CHECKSUM_BYTES: usize = 64 * 1024;
 const MAX_REQUEST_BYTES: usize = 3 * 1024 * 1024;
 const MAX_STATE_DIRECTORY_BYTES: usize = 4096;
-const REQUEST_SCHEMA: u8 = 2;
+const REQUEST_SCHEMA: u8 = 3;
 
 #[derive(Serialize)]
 struct Request<'a> {
     schema: u8,
     state_directory: &'a str,
     bundle_base64: String,
-    checksum_base64: String,
     expected: Expected<'a>,
-    checksum_subject: Subject<'a>,
-    target_subject: Subject<'a>,
+    subject: SubjectRef<'a>,
+    peer_subject: SubjectRef<'a>,
 }
 
 #[derive(Serialize)]
@@ -37,28 +35,23 @@ struct Expected<'a> {
     build_config_digest: &'a str,
 }
 
-#[derive(Serialize)]
-struct Subject<'a> {
-    name: &'a str,
-    digest: &'a str,
+#[derive(Serialize, Clone, Copy)]
+pub(crate) struct SubjectRef<'a> {
+    pub(crate) name: &'a str,
+    pub(crate) digest: &'a str,
 }
 
-pub(crate) struct ChecksumTarget<'a> {
+pub(crate) struct SubjectCheck<'a> {
     pub(crate) state_directory: &'a Path,
     pub(crate) bundle: &'a Value,
-    pub(crate) checksum_bytes: &'a [u8],
     pub(crate) source_sha: &'a str,
     pub(crate) authority_sha: &'a str,
-    pub(crate) checksum_digest: &'a str,
-    pub(crate) target_name: &'a str,
-    pub(crate) target_digest: &'a str,
+    pub(crate) subject: SubjectRef<'a>,
+    pub(crate) peer_subject: SubjectRef<'a>,
 }
 
-pub(super) fn encode(target: &ChecksumTarget<'_>) -> Result<Vec<u8>, HostError> {
-    if target.checksum_bytes.is_empty()
-        || target.checksum_bytes.len() > MAX_CHECKSUM_BYTES
-        || target.target_name.is_empty()
-    {
+pub(super) fn encode(target: &SubjectCheck<'_>) -> Result<Vec<u8>, HostError> {
+    if target.subject.name.is_empty() || target.peer_subject.name.is_empty() {
         return Err(HostError::Identity);
     }
     let state_directory = target.state_directory.to_str().ok_or(HostError::Path)?;
@@ -82,16 +75,9 @@ pub(super) fn encode(target: &ChecksumTarget<'_>) -> Result<Vec<u8>, HostError> 
         schema: REQUEST_SCHEMA,
         state_directory,
         bundle_base64: base64::engine::general_purpose::STANDARD.encode(bundle_bytes),
-        checksum_base64: base64::engine::general_purpose::STANDARD.encode(target.checksum_bytes),
         expected,
-        checksum_subject: Subject {
-            name: "SHA256SUMS",
-            digest: target.checksum_digest,
-        },
-        target_subject: Subject {
-            name: target.target_name,
-            digest: target.target_digest,
-        },
+        subject: target.subject,
+        peer_subject: target.peer_subject,
     };
     let bytes = serde_json::to_vec(&request).map_err(|_| HostError::Identity)?;
     if bytes.len() > MAX_REQUEST_BYTES {

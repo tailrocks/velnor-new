@@ -28,7 +28,7 @@ use velnor_actions_workflow_renderer::toolchain_env::{checked_task_env, credenti
 
 const MBX_VERSION: &str = "1.91.0";
 const RUST_VERSION: &str = "1.89.0";
-const NEXTEST_VERSION: &str = "0.9.151";
+const NEXTEST_VERSION: &str = "0.9.152";
 const RECOVER_STEP: &str = "Recover state snapshot";
 
 fn fail(message: &str) -> Box<dyn Error> {

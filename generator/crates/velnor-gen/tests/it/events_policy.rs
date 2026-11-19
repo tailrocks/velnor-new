@@ -87,9 +87,14 @@ fn the_policy_lane_checks_every_cargo_root_in_its_own_folder() -> TestResult {
         .next()
         .ok_or("no policy job end")?;
     assert_eq!(policy.matches("Dependency policy").count(), 2, "{policy}");
-    assert!(policy.contains("cargo-deny check"), "{policy}");
     assert!(
-        policy.contains("cargo-deny --manifest-path ''tools/Cargo.toml'' check"),
+        policy.contains("cargo-deny --config ''deny.toml'' --locked check"),
+        "{policy}"
+    );
+    assert!(
+        policy.contains(
+            "cargo-deny --manifest-path ''tools/Cargo.toml'' --config ''deny.toml'' --locked check"
+        ),
         "{policy}"
     );
     Ok(())
@@ -115,5 +120,158 @@ fn the_policy_lane_runs_machete_once_from_the_repository_root() -> TestResult {
     assert_eq!(policy.matches("cargo machete").count(), 1, "{policy}");
     assert!(policy.contains("run -- cargo machete'"), "{policy}");
     assert!(!policy.contains("working-directory"), "{policy}");
+    Ok(())
+}
+
+#[test]
+fn cargo_deny_configs_enable_the_policy_lane_and_require_a_pin() -> TestResult {
+    for (manifest, config) in [
+        ("Cargo.toml", "deny.toml"),
+        ("Cargo.toml", ".deny.toml"),
+        ("Cargo.toml", ".cargo/deny.toml"),
+        ("Cargo.toml", ".config/deny.toml"),
+        ("lab/Cargo.toml", "lab/.cargo/deny.toml"),
+        ("lab/Cargo.toml", ".config/deny.toml"),
+    ] {
+        let mut repo = view(&[manifest], None)?;
+        repo.tracked_paths.insert(RepoPath::new(config)?);
+        let error = workflow(&repo).err().ok_or("missing pin accepted")?;
+        assert!(
+            error.to_string().contains("cargo-deny"),
+            "{config}: {error}"
+        );
+        repo.files
+            .insert(RepoPath::new("mise.toml")?, DENY_MISE.as_bytes().to_vec());
+        let text = workflow(&repo)?;
+        assert!(text.contains("cargo-deny"), "{config}: {text}");
+        if manifest.starts_with("lab/") {
+            assert!(
+                text.contains("cargo-deny --manifest-path ''lab/Cargo.toml'' --config"),
+                "{text}"
+            );
+        }
+    }
+    for config in [
+        "docs/deny.toml",
+        "lab/other/deny.toml",
+        ".cargo/deny.toml.extra",
+    ] {
+        let mut repo = view(&["lab/Cargo.toml"], None)?;
+        repo.tracked_paths.insert(RepoPath::new(config)?);
+        repo.files
+            .insert(RepoPath::new("mise.toml")?, DENY_MISE.as_bytes().to_vec());
+        assert!(!workflow(&repo)?.contains("cargo-deny"), "{config}");
+    }
+    Ok(())
+}
+
+#[test]
+fn changes_to_cargo_deny_configs_select_policy() -> TestResult {
+    let tools = PolicyTools {
+        deny: false,
+        machete: false,
+    };
+    for name in [
+        "deny.toml",
+        ".deny.toml",
+        ".cargo/deny.toml",
+        ".config/deny.toml",
+        "lab/.cargo/deny.toml",
+    ] {
+        let changed = BTreeSet::from([RepoPath::new(name)?]);
+        assert!(policy_runs(tools, &changed, false, true).deny, "{name}");
+    }
+    for name in [
+        "deny.toml.extra",
+        ".deny.toml.bak",
+        ".cargo/deny.toml.extra",
+    ] {
+        let changed = BTreeSet::from([RepoPath::new(name)?]);
+        assert!(!policy_runs(tools, &changed, false, true).deny, "{name}");
+    }
+    Ok(())
+}
+
+#[test]
+fn each_cargo_root_uses_its_nearest_deny_config_with_stable_precedence() -> TestResult {
+    let mut repo = view(&["Cargo.toml", "lab/Cargo.toml", "other/Cargo.toml"], None)?;
+    for config in [
+        "deny.toml",
+        ".config/deny.toml",
+        "lab/.config/deny.toml",
+        "lab/.deny.toml",
+    ] {
+        repo.tracked_paths.insert(RepoPath::new(config)?);
+    }
+    repo.files
+        .insert(RepoPath::new("mise.toml")?, DENY_MISE.as_bytes().to_vec());
+    let text = workflow(&repo)?;
+    assert!(
+        text.contains("cargo-deny --config ''deny.toml'' --locked check"),
+        "{text}"
+    );
+    assert!(
+        text.contains(
+            "cargo-deny --manifest-path ''lab/Cargo.toml'' --config ''lab/.deny.toml'' --locked check"
+        ),
+        "{text}"
+    );
+    assert!(
+        text.contains(
+            "cargo-deny --manifest-path ''other/Cargo.toml'' --config ''deny.toml'' --locked check"
+        ),
+        "{text}"
+    );
+
+    repo.tracked_paths.remove(&RepoPath::new("lab/.deny.toml")?);
+    let text = workflow(&repo)?;
+    assert!(
+        text.contains(
+            "cargo-deny --manifest-path ''lab/Cargo.toml'' --config ''lab/.config/deny.toml'' --locked check"
+        ),
+        "{text}"
+    );
+    Ok(())
+}
+
+#[test]
+fn a_cargo_root_without_a_config_keeps_the_default_command() -> TestResult {
+    let mut repo = view(&["lab/Cargo.toml", "other/Cargo.toml"], None)?;
+    repo.tracked_paths
+        .insert(RepoPath::new("lab/.config/deny.toml")?);
+    repo.files
+        .insert(RepoPath::new("mise.toml")?, DENY_MISE.as_bytes().to_vec());
+    let text = workflow(&repo)?;
+    assert!(
+        text.contains("cargo-deny --manifest-path ''other/Cargo.toml'' --locked check"),
+        "{text}"
+    );
+    assert!(
+        text.contains(
+            "cargo-deny --manifest-path ''lab/Cargo.toml'' --config ''lab/.config/deny.toml'' --locked check"
+        ),
+        "{text}"
+    );
+    Ok(())
+}
+
+#[test]
+fn a_deny_config_with_a_quote_is_passed_as_one_checkout_relative_argument() -> TestResult {
+    let mut repo = view(&["lab's/Cargo.toml"], None)?;
+    repo.tracked_paths
+        .insert(RepoPath::new("lab's/.config/deny.toml")?);
+    repo.files
+        .insert(RepoPath::new("mise.toml")?, DENY_MISE.as_bytes().to_vec());
+    let text = workflow(&repo)?;
+    let parsed = serde_saphyr::from_str::<serde_json::Value>(&text)?;
+    let steps = parsed["jobs"]["policy"]["steps"]
+        .as_array()
+        .ok_or("no policy steps")?;
+    assert!(
+        steps
+            .iter()
+            .all(|step| step.get("working-directory").is_none())
+    );
+    assert!(steps.iter().any(|step| step["run"].as_str() == Some(r#". "$VELNOR_EXEC" run -- cargo-deny --manifest-path 'lab'\''s/Cargo.toml' --config 'lab'\''s/.config/deny.toml' --locked check"#)));
     Ok(())
 }

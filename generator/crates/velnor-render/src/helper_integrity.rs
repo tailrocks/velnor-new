@@ -8,6 +8,8 @@ use crate::yaml::{Yaml, entry, text};
 
 pub(crate) const DEFAULT_SHELL: &str = "bash -p {0}";
 
+pub(crate) const SHELLCHECK_IGNORE: &str = "jactionlint ignore=shellcheck";
+
 pub(crate) const INVOCATION_PREFIX: &str = ". \"$VELNOR_EXEC\" ";
 
 pub(crate) fn defaults(jobs: &[RenderedJob]) -> Option<Yaml> {
@@ -35,6 +37,10 @@ pub(crate) fn secure_steps(job: &Job, steps: Vec<RenderedStep>) -> Vec<RenderedS
     }) else {
         return steps;
     };
+    secure_with(release, steps)
+}
+
+pub(crate) fn secure_with(release: &HelperRelease, steps: Vec<RenderedStep>) -> Vec<RenderedStep> {
     let mut secured = Vec::new();
     for mut step in steps {
         if step
