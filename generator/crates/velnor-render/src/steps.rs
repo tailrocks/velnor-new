@@ -156,6 +156,9 @@ fn rendered_steps(
         lane,
     ));
     for body in &mut rendered {
+        if let (StepKind::Cargo(_), Some(target)) = (&step.kind, &step.target_dir) {
+            body.env.push(crate::cargo::target_dir_env(target));
+        }
         if matches!(step.kind, StepKind::ReportCaches { .. })
             && let Some(name) = job_name
         {
@@ -373,7 +376,7 @@ pub(crate) fn install_helper(release: &HelperRelease) -> RenderedStep {
     RenderedStep {
         name: format!("Install velnor-ci {version}"),
         uses: Some(format!("{SETUP_VELNOR_ACTION}@{}", release.action())),
-        uses_comment: Some(format!("rust-ci-v{version}")),
+        uses_comment: Some(version.release_tag()),
         with,
         ..RenderedStep::default()
     }
