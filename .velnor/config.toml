@@ -743,7 +743,6 @@ inputs = [
   "crates/velnor-freshness/src/inventory/pins_mirrors.rs",
   "crates/velnor-freshness/src/inventory/shape.rs",
   "crates/velnor-freshness/src/lib.rs",
-  "crates/velnor-freshness/src/main.rs",
   "crates/velnor-freshness/src/members.rs",
   "crates/velnor-freshness/src/patterns.rs",
   "crates/velnor-freshness/src/pin_diff.rs",
