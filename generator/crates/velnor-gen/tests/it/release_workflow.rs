@@ -14,8 +14,7 @@ type TestResult = Result<(), Box<dyn Error>>;
 
 const WORKFLOW: &str = ".github/workflows/release-rust-ci-tools.yml";
 const WRITER: &str = "release";
-const TAG_PUSH: &str =
-    "    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/rust-ci-v')";
+const TAG_PUSH: &str = "    if: github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/rust-ci-v') || startsWith(github.ref, 'refs/tags/tools-v'))";
 const PINNED: (&str, &str) = (
     "0.1.80",
     "659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c",
