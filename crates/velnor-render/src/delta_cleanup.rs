@@ -46,9 +46,9 @@ pub fn delta_cleanup(helper: &HelperRelease, workflow: &str) -> Option<String> {
         ],
         ..RenderedJob::default()
     };
-    Some(format!(
-        "{GENERATED_HEADER}{}",
-        emit(&[
+    Some(crate::header::seal(
+        GENERATED_HEADER,
+        &emit(&[
             entry("name", text("Rust cache cleanup")),
             entry(
                 "on",

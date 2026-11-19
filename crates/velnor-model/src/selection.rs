@@ -101,6 +101,7 @@ pub enum SkipReason {
     NoDoctestLibrary,
     NoFencedDocs,
     NoDocs,
+    PostMergeOnly,
 }
 
 impl fmt::Display for SkipReason {
@@ -111,6 +112,9 @@ impl fmt::Display for SkipReason {
                 "no doc comment has a code fence and no doc attribute sets the text"
             }
             Self::NoDocs => "no doc comment or doc attribute exists",
+            Self::PostMergeOnly => {
+                "docs = \"post_merge\" in .velnor/rust-ci.toml runs it only after the merge"
+            }
         })
     }
 }

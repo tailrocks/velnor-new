@@ -3,11 +3,13 @@
 
 use std::collections::BTreeMap;
 
-use velnor_model::{HelperRelease, RELEASE_PLZ_FILE, RELEASE_WORKFLOW_PATH, RepoPath};
+use velnor_model::{
+    HelperRelease, PrivateSources, RELEASE_PLZ_FILE, RELEASE_WORKFLOW_PATH, RepoPath,
+};
 use velnor_release::{RELEASE_APP_SLUG, ReleasePlan, TAG_JOB_BASE_MINUTES, publish_budget_minutes};
 
 use crate::release_binaries::binary_jobs;
-use crate::release_checks::{publish_stage, tag_needs, tag_stage};
+use crate::release_checks::{dist_collisions, publish_stage, tag_needs, tag_stage};
 use crate::release_family::family_jobs;
 use crate::release_finalize::{finalize_job, without_binary};
 use crate::release_outputs::{commit_outputs, output_collisions};
@@ -43,9 +45,11 @@ pub fn render_release(
     plan: &ReleasePlan,
     helper: &HelperRelease,
     branch: &str,
+    private: Option<&PrivateSources>,
 ) -> Result<BTreeMap<RepoPath, String>, Vec<RuleViolation>> {
     let tag_job = tag(plan, helper);
-    let collisions = output_collisions(plan, &tag_job.id);
+    let mut collisions = output_collisions(plan, &tag_job.id);
+    collisions.extend(dist_collisions(plan));
     if !collisions.is_empty() {
         return Err(collisions);
     }
@@ -53,8 +57,8 @@ pub fn render_release(
     jobs.extend(tag_stage(plan));
     jobs.push(tag_job);
     jobs.extend(match &plan.family {
-        Some(family) => family_jobs(plan, family, helper),
-        None => binary_jobs(plan, helper),
+        Some(family) => family_jobs(plan, family, helper, private),
+        None => binary_jobs(plan, helper, private),
     });
     jobs.extend(publish_stage(plan));
     jobs.extend(finalize_job(plan, helper));

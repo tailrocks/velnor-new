@@ -10,8 +10,9 @@ use velnor_model::{
     AllTrigger, ChangeSet, EventKind, RepoFacts, RepoPath, RustRoot, RustSelection,
 };
 use velnor_rust::{
-    cargo_files, detect, introduced, member_sources, optional_steps, plan_groups, policy_runs,
-    root_sources, select_event, selects_by_diff, tests_expected, unknown_paths, unread_packages,
+    cargo_files, defer_post_merge_docs, detect, introduced, member_sources, optional_steps,
+    plan_groups, policy_runs, root_sources, select_event, selects_by_diff, tests_expected,
+    unknown_paths, unread_packages,
 };
 
 use super::{
@@ -50,7 +51,10 @@ pub(super) fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
     let (selections, changes, kind) =
         choose(args, &checkout, &facts, name.as_deref(), event.as_ref())?;
     let groups = plan_groups(&facts, kind, &changes.paths, &selections);
-    let steps = plan_steps(&facts, &checkout, &selections, full)?;
+    let steps: Steps = plan_steps(&facts, &checkout, &selections, full)?
+        .into_iter()
+        .map(|(root, steps)| (root, defer_post_merge_docs(&facts.config, kind, steps)))
+        .collect();
     let everything = selections.values().any(|selection| {
         matches!(selection, RustSelection::All(trigger) if !matches!(trigger, AllTrigger::MostPackages(_)))
     });
