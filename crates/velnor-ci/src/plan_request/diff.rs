@@ -1,16 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-//! `not_affected_jobs` for a `pull_request`, `fork` or `local` request: the crate and check jobs the
-//! diff does not reach, chosen the way the legacy planner chooses them, from the files the
-//! event changes, the manifests and sources of the checkout, `.velnor/config.toml` and the
-//! tasks the request's lane inventory gives each job.
-//!
-//! Where git or the checkout cannot tell what changed, every job runs, as it does in the
-//! legacy planner (its `all_changed` warnings). Two cases it narrows and this does not: a
-//! changed mise or toolchain declaration whose declared versions did not change, and a tracked
-//! symlink. Both run every job.
-
 mod changes;
 mod claims;
 mod config;
@@ -123,7 +113,6 @@ fn toplevel(checkout: &Path) -> Result<PathBuf, CiError> {
     Ok(PathBuf::from(text.trim()))
 }
 
-/// The jobs by logical id, each with the package directories and checks its tasks belong to.
 fn jobs(
     inventory: &LaneInventory,
     config: &config::Config,
@@ -163,7 +152,6 @@ enum Owner<'a> {
     Check(&'a str),
 }
 
-/// `stack/rust/<package dir>/<kind>/<configuration>` or `stack/mise/<check id>/<kind>/<configuration>`.
 fn task_owner(task: &str) -> Option<Owner<'_>> {
     let (rest, check) = match task.strip_prefix("stack/rust/") {
         Some(rest) => (rest, false),
@@ -181,7 +169,6 @@ fn task_owner(task: &str) -> Option<Owner<'_>> {
     })
 }
 
-/// The package directories and check ids the diff affects, or the reason every job runs.
 fn select(
     root: &Path,
     input: &Input<'_>,
@@ -292,7 +279,6 @@ fn added_files(root: &Path, input: &Input<'_>, base: &str) -> Result<BTreeSet<St
     )?)
 }
 
-/// The files a check reads: its declared inputs and the one mise configuration of its directory.
 fn check_inputs(root: &Path, check: &config::Check) -> Result<Vec<String>, String> {
     let prefix = if check.directory == "." {
         String::new()
