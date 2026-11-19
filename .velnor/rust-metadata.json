@@ -2571,6 +2571,16 @@
               "requires_features": false
             },
             {
+              "name": "log_frames",
+              "kinds": [
+                "test"
+              ],
+              "tests": true,
+              "doctest": false,
+              "source": "crates/velnor-runner-qualification/tests/log_frames.rs",
+              "requires_features": false
+            },
+            {
               "name": "probe_root",
               "kinds": [
                 "test"
@@ -3555,5 +3565,5 @@
     "crates/velnor-rust/Cargo.toml": "e94a06ddc959217f1d0e955626704344b1bde461c09dcf242505116b5990aa6b",
     "crates/velnor-workflows/Cargo.toml": "26ef029ca472eafa3858636f2fdf6cf1d2643b0132ba22313a3c9a5e79a8050f"
   },
-  "layout": "e03ebc35a1eb35a2ca3072723d291297d5038f6aff8689fd2e712f89c11518de"
+  "layout": "dc97157b2534c2ae7d2bd013c0da5592c8daac7693b64d04a837a791b020721e"
 }
