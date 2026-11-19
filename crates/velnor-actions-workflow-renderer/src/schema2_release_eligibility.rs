@@ -288,7 +288,7 @@ fn check_step(pins: &ProductReleasePins) -> Result<Yaml, RenderError> {
 }
 
 #[cfg(test)]
-#[expect(clippy::unwrap_used, clippy::expect_used, reason = "test code")]
+#[expect(clippy::unwrap_used, reason = "test code")]
 mod required_job_tests {
     use super::REQUIRED_JOB_JQ;
     use std::io::Write;
@@ -303,14 +303,27 @@ mod required_job_tests {
     fn select(jobs: &[String]) -> Result<String, String> {
         let pages = format!("[{{\"jobs\":[{}]}}]", jobs.join(","));
         let mut child = Command::new("jq")
-            .args(["-c", "--argjson", "run_id", "7", "--argjson", "run_attempt", "1"])
+            .args([
+                "-c",
+                "--argjson",
+                "run_id",
+                "7",
+                "--argjson",
+                "run_attempt",
+                "1",
+            ])
             .args(["--arg", "source_sha", "abc", REQUIRED_JOB_JQ])
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
             .expect("jq");
-        child.stdin.take().unwrap().write_all(pages.as_bytes()).unwrap();
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(pages.as_bytes())
+            .unwrap();
         let out = child.wait_with_output().unwrap();
         if out.status.success() {
             Ok(String::from_utf8(out.stdout).unwrap())
@@ -335,7 +348,11 @@ mod required_job_tests {
 
     #[test]
     fn zero_or_two_non_skipped_required_jobs_fail_closed() {
-        assert!(select(&[job("skipped")]).unwrap_err().contains("expected one"));
+        assert!(
+            select(&[job("skipped")])
+                .unwrap_err()
+                .contains("expected one")
+        );
         assert!(select(&[job("success"), job("success")]).is_err());
         assert!(select(&[job("success"), job("failure")]).is_err());
     }
