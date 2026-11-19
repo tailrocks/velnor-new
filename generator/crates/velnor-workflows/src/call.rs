@@ -19,6 +19,8 @@ pub(crate) fn refuse_step_keys(raw: &RawJob) -> Result<(), WorkflowsError> {
         (raw.runner.is_some(), "runner"),
         (raw.timeout_minutes.is_some(), "timeout_minutes"),
         (!raw.outputs.is_empty(), "outputs"),
+        (raw.container.is_some(), "container"),
+        (!raw.service.is_empty(), "service"),
     ]
     .into_iter()
     .find_map(|(set, name)| set.then_some(name));
