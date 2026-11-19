@@ -31,7 +31,7 @@ fn refused(reason: impl std::fmt::Display) -> io::Error {
     io::Error::other(format!("{FLAG} {reason}"))
 }
 
-async fn checked(path: &Path) -> io::Result<PathBuf> {
+pub(in crate::io) async fn checked(path: &Path) -> io::Result<PathBuf> {
     let path = fs::canonicalize(path)
         .await
         .map_err(|error| refused(format!("{}: {error}", path.display())))?;
@@ -69,7 +69,8 @@ async fn checked(path: &Path) -> io::Result<PathBuf> {
 /// What `--velnor-ci-binary` adds to the containers, each as docker arguments. Empty without it.
 #[derive(Debug, Default)]
 pub(super) struct LocalCi {
-    /// For the trusted runners: the binary, read-only.
+    /// For the trusted plain runners: the binary, read-only. In pair mode velnor-host puts it in the
+    /// pair's runner itself, so this stays empty.
     pub(super) runner: Vec<String>,
     /// For the trusted runner.server: where it sends action downloads.
     pub(super) standin: Vec<String>,
@@ -81,11 +82,6 @@ async fn binary(args: &EnvironmentArgs) -> io::Result<Option<PathBuf>> {
     let Some(binary) = &args.velnor_ci_binary else {
         return Ok(None);
     };
-    if args.runner != RunnerMode::Plain {
-        return Err(refused(
-            "needs --runner plain: velnor-host owns the pair containers and mounts nothing from the host into them",
-        ));
-    }
     checked(binary).await.map(Some)
 }
 
@@ -192,11 +188,15 @@ pub(super) async fn flags(args: &EnvironmentArgs) -> io::Result<LocalCi> {
     let Some(binary) = binary(args).await? else {
         return Ok(LocalCi::default());
     };
-    Ok(LocalCi {
-        runner: vec![
+    let runner = match args.runner {
+        RunnerMode::Plain => vec![
             "-v".to_owned(),
             format!("{}:{MOUNT_DIR}/velnor-ci:ro", binary.display()),
         ],
+        RunnerMode::Pair => Vec::new(),
+    };
+    Ok(LocalCi {
+        runner,
         standin: vec!["-e".to_owned(), TARBALLS.to_owned()],
         stub: vec!["--local-setup-velnor".to_owned()],
     })

@@ -32,6 +32,7 @@ pub struct Pairs {
     pub labels: Vec<String>,
     pub limits: Limits,
     pub storage: Sizes,
+    pub local_ci: Option<PathBuf>,
 }
 
 pub(super) fn runner_dir(dir: &Path) -> PathBuf {
@@ -108,6 +109,10 @@ pub(crate) async fn pairs(args: &EnvironmentArgs) -> io::Result<Option<Pairs>> {
     for tag in [RUNNER_TAG, DIND_TAG] {
         image(tag).await?;
     }
+    let local_ci = match &args.velnor_ci_binary {
+        Some(binary) => Some(super::super::local_ci::checked(binary).await?),
+        None => None,
+    };
     Ok(Some(Pairs {
         host,
         trusted: args.runners,
@@ -116,6 +121,7 @@ pub(crate) async fn pairs(args: &EnvironmentArgs) -> io::Result<Option<Pairs>> {
         labels: args.label.clone(),
         limits: args.limits(),
         storage: args.storage.storage(),
+        local_ci,
     }))
 }
 
@@ -155,6 +161,12 @@ impl Pairs {
         }
         for label in &self.labels {
             arguments.extend(["--label".to_owned(), label.clone()]);
+        }
+        if let Some(binary) = &self.local_ci {
+            arguments.extend([
+                "--velnor-ci-binary".to_owned(),
+                binary.display().to_string(),
+            ]);
         }
         arguments
     }
@@ -212,7 +224,7 @@ pub(super) async fn spawn(
     authority: &str,
     token: &str,
     (trusted, untrusted): (u16, u16),
-    (policy, limits, storage): (bool, Limits, Sizes),
+    (policy, limits, storage, local_ci): (bool, Limits, Sizes, Option<&Path>),
 ) -> io::Result<Child> {
     let state = runner_dir(&env.dir);
     fs::create_dir_all(&state).await?;
@@ -233,6 +245,13 @@ pub(super) async fn spawn(
         (Side::Trusted, env.network(Side::Trusted), trusted),
         (Side::Untrusted, env.network(Side::Untrusted), untrusted),
     ];
+    let local_ci = local_ci
+        .map(|binary| {
+            binary
+                .to_str()
+                .ok_or_else(|| io::Error::other("--velnor-ci-binary is not valid UTF-8"))
+        })
+        .transpose()?;
     let planned = plan(&PlanInput {
         environment: &env.name,
         authority,
@@ -244,6 +263,7 @@ pub(super) async fn spawn(
         policy: policy.then_some(POLICY),
         limits,
         storage,
+        local_ci,
     })
     .to_string();
     write_plan(&state, &planned).await?;

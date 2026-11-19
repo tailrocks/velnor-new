@@ -5,7 +5,7 @@ use crate::error::HostError;
 use crate::journal::{StorageProvisioningRole, StorageRole};
 
 use super::super::plan::Plan;
-use super::{GIB, Sizes, charge_bytes, driver_opts, plan};
+use super::{GIB, Sizes, charge_bytes, driver_opts, on_tmpfs, plan};
 
 const TOKEN: &str = "0123456789abcdef0123456789abcdef";
 
@@ -77,4 +77,9 @@ fn plan_storage_is_optional_and_bounded() {
         let refused = Plan::parse(plan_json(&storage(home)).as_bytes());
         assert!(matches!(refused, Err(HostError::Config)), "{home}");
     }
+}
+
+#[test]
+fn the_metadata_volume_is_not_a_size_limited_tmpfs() {
+    assert!(!on_tmpfs(StorageRole::EngineMetadata));
 }

@@ -161,6 +161,7 @@ pub struct PlanInput<'a> {
     pub policy: Option<&'a str>,
     pub limits: Limits,
     pub storage: Sizes,
+    pub local_ci: Option<&'a str>,
 }
 
 #[must_use]
@@ -173,7 +174,7 @@ pub fn plan(input: &PlanInput<'_>) -> Value {
             json!({"side": side.name(), "network": network, "pairs": pairs})
         })
         .collect();
-    json!({
+    let mut planned = json!({
         "environment": input.environment,
         "authority": format!("http://{}", input.authority),
         "token": input.token,
@@ -194,7 +195,11 @@ pub fn plan(input: &PlanInput<'_>) -> Value {
         },
         "sides": sides,
         "policy": input.policy,
-    })
+    });
+    if let Some(binary) = input.local_ci {
+        planned["local_ci"] = json!(binary);
+    }
+    planned
 }
 
 #[must_use]

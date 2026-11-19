@@ -105,6 +105,11 @@ pub struct SuperviseArgs {
     pub runner_cpu_millicores: u64,
     #[command(flatten)]
     pub sizes: SuperviseSizes,
+    #[arg(
+        long,
+        help = "Absolute path of the linux-arm64 velnor-ci that velnor-host puts into each trusted pair's runner at /opt/velnor/local; `up --velnor-ci-binary` checked it"
+    )]
+    pub velnor_ci_binary: Option<PathBuf>,
 }
 
 impl SuperviseArgs {

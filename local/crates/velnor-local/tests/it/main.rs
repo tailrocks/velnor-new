@@ -22,6 +22,7 @@ mod pair;
 mod pair_inputs;
 mod pairs;
 mod pairs_host;
+mod pairs_local_ci;
 mod plain_image;
 mod policy;
 mod removal_audit;

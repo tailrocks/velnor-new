@@ -98,6 +98,8 @@ struct Raw {
     sides: Vec<SidePlan>,
     #[serde(default)]
     policy: Option<String>,
+    #[serde(default)]
+    local_ci: Option<String>,
 }
 
 pub struct Plan {
@@ -112,6 +114,7 @@ pub struct Plan {
     pub storage: Sizes,
     pub sides: Vec<SidePlan>,
     pub policy: Option<String>,
+    pub local_ci: Option<String>,
 }
 
 impl std::fmt::Debug for Plan {
@@ -150,7 +153,12 @@ impl Plan {
                         .all(|seen| seen.side != side.side && seen.network != side.network)
             })
             && raw.sides.iter().any(|side| side.pairs > 0);
-        if !(32..=128).contains(&raw.token.len()) || !token_plain || !sides_valid {
+        let local_ci_valid = raw
+            .local_ci
+            .as_deref()
+            .is_none_or(super::request::valid_local_ci);
+        if !(32..=128).contains(&raw.token.len()) || !token_plain || !sides_valid || !local_ci_valid
+        {
             return Err(HostError::Config);
         }
         Ok(Self {
@@ -165,6 +173,7 @@ impl Plan {
             storage: raw.storage.unwrap_or_default().checked()?,
             sides: raw.sides,
             policy: raw.policy,
+            local_ci: raw.local_ci,
         })
     }
 }
@@ -184,3 +193,7 @@ pub fn check_state(state: &Path) -> Result<(), HostError> {
     }
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "plan_tests.rs"]
+mod tests;

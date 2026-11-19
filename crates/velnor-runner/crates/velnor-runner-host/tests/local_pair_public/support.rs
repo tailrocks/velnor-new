@@ -250,6 +250,7 @@ pub(crate) fn request(environment: &str, network: &str, image: &str) -> LocalPai
         home_bytes: 2_147_483_648,
         work_bytes: 2_147_483_648,
         tmp_bytes: 2_147_483_648,
+        local_ci: None,
     }
 }
 

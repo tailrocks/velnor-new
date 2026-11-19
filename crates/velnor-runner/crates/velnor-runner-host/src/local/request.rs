@@ -32,6 +32,8 @@ pub struct LocalPairRequest {
     pub home_bytes: u64,
     pub work_bytes: u64,
     pub tmp_bytes: u64,
+    #[serde(default)]
+    pub local_ci: Option<String>,
 }
 
 pub(super) struct Validated {
@@ -50,6 +52,10 @@ pub(super) fn validate(request: &LocalPairRequest) -> Result<Validated, HostErro
         || !image_id(&request.runner_image)
         || !image_id(&request.dind_image)
         || request.sequence == 0
+        || request
+            .local_ci
+            .as_deref()
+            .is_some_and(|path| request.side != "trusted" || !valid_local_ci(path))
     {
         return Err(HostError::Config);
     }
@@ -79,6 +85,12 @@ pub(super) fn validate(request: &LocalPairRequest) -> Result<Validated, HostErro
         pair,
         sizes,
     })
+}
+
+const MAX_LOCAL_CI_PATH: usize = 4096;
+
+pub(super) fn valid_local_ci(path: &str) -> bool {
+    path.starts_with('/') && path.len() <= MAX_LOCAL_CI_PATH && !path.contains('\0')
 }
 
 fn valid_environment(value: &str) -> bool {

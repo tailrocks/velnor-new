@@ -10,9 +10,11 @@ use bollard::Docker;
 use tokio::sync::watch;
 use tokio::task::JoinSet;
 
+use crate::config::RunnerPlatform;
 use crate::error::HostError;
 
 use super::authority::Client;
+use super::local_ci;
 use super::minted::MintedAgents;
 use super::pair::{ENVIRONMENT_LABEL, PAIR_LABEL};
 use super::plan::{Plan, Side};
@@ -60,6 +62,7 @@ impl Supervisor {
             home_bytes: self.plan.storage.home,
             work_bytes: self.plan.storage.work,
             tmp_bytes: self.plan.storage.tmp,
+            local_ci: local_ci_for(&self.plan, slot.side),
         }
     }
 
@@ -125,6 +128,10 @@ impl Supervisor {
     }
 }
 
+fn local_ci_for(plan: &Plan, side: Side) -> Option<String> {
+    plan.local_ci.clone().filter(|_| side == Side::Trusted)
+}
+
 pub(super) async fn stopped(stop: &mut watch::Receiver<bool>) {
     while !*stop.borrow_and_update() {
         if stop.changed().await.is_err() {
@@ -156,6 +163,10 @@ pub async fn supervise(
         pairs_removed: AtomicUsize::new(0),
         agents_removed: AtomicUsize::new(0),
     });
+    if let Some(path) = &supervisor.plan.local_ci {
+        let platform = RunnerPlatform::parse(&supervisor.plan.platform).ok_or(HostError::Config)?;
+        local_ci::load(path, platform).await?;
+    }
     supervisor.preflight()?;
     supervisor.sweep().await?;
     let (stop_tx, stop_rx) = watch::channel(false);

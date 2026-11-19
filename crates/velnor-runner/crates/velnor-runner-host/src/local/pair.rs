@@ -22,6 +22,7 @@ use super::io::{MetadataUpload, upload_to_metadata};
 use super::layout;
 use super::remove::{Removed, remove_labelled};
 use super::request::{LocalPairRequest, Validated, validate};
+use super::local_ci;
 use super::storage::{self, Sizes};
 
 pub const ENVIRONMENT_LABEL: &str = "velnor-local";
@@ -136,6 +137,9 @@ async fn create_and_start(
         .await?;
     }
     prefill_metadata(docker, request, validated).await?;
+    if let Some(path) = &request.local_ci {
+        publish_local_ci(docker, request, validated, path).await?;
+    }
     let plan = storage::plan(request.sequence, &validated.sizes);
     let context = PairSpecContext {
         plan: &plan,
@@ -168,6 +172,7 @@ async fn create_and_start(
         validated.platform,
         &context,
         labels("runner"),
+        request.local_ci.is_some(),
     )?;
     let runner_id = create(docker, runner).await?;
     start(docker, &runner_id).await?;
@@ -181,6 +186,7 @@ fn runner_create(
     platform: RunnerPlatform,
     context: &PairSpecContext<'_>,
     labels: HashMap<String, String>,
+    local_ci: bool,
 ) -> Result<PairCreate, HostError> {
     let mut runner = create_body(
         names.container_name(WorkerContainerRole::Runner),
@@ -196,6 +202,18 @@ fn runner_create(
         .env
         .get_or_insert_default()
         .push(CRATES_MIRROR_OFF.to_owned());
+    if local_ci {
+        runner
+            .config
+            .host_config
+            .as_mut()
+            .ok_or(HostError::Identity)?
+            .mounts
+            .get_or_insert_default()
+            .push(layout::local_ci_mount(
+                names.volume_name(WorkerVolumeRole::RunnerMetadata),
+            ));
+    }
     Ok(runner)
 }
 
@@ -250,6 +268,26 @@ async fn prefill_metadata(
         &validated.pair,
         &volume,
         MetadataUpload::Initialize(layout::metadata_archive()?),
+    )
+    .await
+}
+
+async fn publish_local_ci(
+    docker: &Docker,
+    request: &LocalPairRequest,
+    validated: &Validated,
+    path: &str,
+) -> Result<(), HostError> {
+    let binary = local_ci::load(path, validated.platform).await?;
+    let volume = validated
+        .names
+        .volume_name(WorkerVolumeRole::RunnerMetadata);
+    upload_to_metadata(
+        docker,
+        request,
+        &validated.pair,
+        &volume,
+        MetadataUpload::LocalCi(layout::local_ci_archive(&binary)?),
     )
     .await
 }

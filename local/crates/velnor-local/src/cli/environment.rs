@@ -54,7 +54,7 @@ pub struct EnvironmentArgs {
     pub velnor_host: Option<PathBuf>,
     #[arg(
         long,
-        help = "linux-arm64 velnor-ci that setup-velnor installs instead of the pinned release, with a warning that names its SHA-256. Mounted read-only into the trusted plain runners only; needs --runner plain, because velnor-host owns the pair containers. The workflow stays unmodified and still pins the release"
+        help = "linux-arm64 velnor-ci that setup-velnor installs instead of the pinned release, with a warning that names its SHA-256. Read-only in the trusted runners only: mounted into the plain runners, or with --runner pair copied by velnor-host into the trusted pairs' runner volume and mounted at the same path. The workflow stays unmodified and still pins the release"
     )]
     pub velnor_ci_binary: Option<PathBuf>,
     #[arg(

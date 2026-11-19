@@ -86,6 +86,7 @@ fn input(sides: &[(Side, String, u16)], limits: Limits) -> PlanInput<'_> {
         policy: None,
         limits,
         storage: Sizes::default(),
+        local_ci: None,
     }
 }
 

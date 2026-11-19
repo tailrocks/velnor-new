@@ -46,6 +46,7 @@ fn planned(storage: Sizes) -> serde_json::Value {
         policy: None,
         limits: Limits::default(),
         storage,
+        local_ci: None,
     })
 }
 
