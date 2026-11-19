@@ -122,6 +122,7 @@ mod release_yml_keys;
 mod release_yml_limits;
 mod release_yml_profile;
 mod release_yml_quoting;
+mod release_yml_raw;
 mod release_yml_security;
 mod render_empty_key;
 mod rendered_expressions;
