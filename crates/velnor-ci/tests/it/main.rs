@@ -163,6 +163,7 @@ mod setup_mise_identity;
 mod setup_pure;
 mod sources_fetch;
 mod sources_fetch_contract;
+mod sparse_checkout_state;
 mod support;
 mod telemetry;
 mod test_groups;
