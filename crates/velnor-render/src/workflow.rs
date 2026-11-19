@@ -83,7 +83,7 @@ pub(crate) fn yaml_job(job: &RenderedJob) -> Yaml {
             Yaml::Seq(job.steps.iter().map(yaml_step).collect()),
         )]);
     }
-    match job_notes(job) {
+    match job.comment.clone() {
         Some(notes) => Yaml::Noted(notes, Box::new(Yaml::Map(items))),
         None => Yaml::Map(items),
     }
@@ -170,21 +170,6 @@ fn yaml_matrix(matrix: &RenderedMatrix) -> Yaml {
     Yaml::Map(items)
 }
 
-fn job_notes(job: &RenderedJob) -> Option<String> {
-    let launches_helper = job.steps.iter().any(|step| {
-        step.run
-            .as_deref()
-            .is_some_and(|run| run.starts_with(crate::helper_integrity::INVOCATION_PREFIX))
-    });
-    let notes: Vec<&str> = job
-        .comment
-        .as_deref()
-        .into_iter()
-        .chain(launches_helper.then_some(crate::helper_integrity::SHELLCHECK_IGNORE))
-        .collect();
-    (!notes.is_empty()).then(|| notes.join("\n"))
-}
-
 fn runs_on(job: &RenderedJob) -> Yaml {
     match &job.fork_runner {
         Some(fork) => Yaml::Expr(format!(
@@ -239,7 +224,19 @@ fn yaml_step(step: &RenderedStep) -> Yaml {
         };
         items.push(entry("run", value));
     }
-    Yaml::Map(items)
+    let rendered = Yaml::Map(items);
+    if step
+        .run
+        .as_deref()
+        .is_some_and(|run| run.starts_with(crate::helper_integrity::INVOCATION_PREFIX))
+    {
+        Yaml::Noted(
+            crate::helper_integrity::SHELLCHECK_IGNORE.to_owned(),
+            Box::new(rendered),
+        )
+    } else {
+        rendered
+    }
 }
 
 fn pairs(items: &[(String, String)]) -> Yaml {

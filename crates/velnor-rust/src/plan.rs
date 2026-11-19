@@ -4,7 +4,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
-    Access, CacheDebug, CacheKey, CargoCommand, Concurrency, HelperCommand, Host, Job, JobId,
+    Access, CacheDebug, CacheKey, CargoCommand, Concurrency, Gate, HelperCommand, Host, Job, JobId,
     MbxRemote, MbxStore, PackageName, PermissionScope, Permissions, PrCi, PrRun,
     PushAfterMergeGroup, RepoFacts, RootSlug, RustRoot, Shape, ShapeDecision, Step, StepKind,
     TargetName, Toolchain, When, WorkflowPlan,
@@ -188,17 +188,27 @@ pub(crate) fn head(facts: &RepoFacts, depth: u32, sparse: Option<Vec<String>>) -
             .iter()
             .map(|release| step(StepKind::InstallHelper(release.clone()))),
     );
-    if facts.config.mbx_store == MbxStore::Shared {
-        steps.push(step(StepKind::MbxStore));
-        if facts
-            .helper
-            .as_ref()
-            .is_some_and(|release| release.version().at_least(MBX_SEED_HELPER))
-        {
-            steps.push(step(StepKind::MbxSeed));
-        }
-    }
     steps
+}
+
+/// The shared-store steps. A job that plans runs them after the plan, so a
+/// run that selects nothing never seeds: `seed_gate` is the job's selection.
+pub(crate) fn mbx(facts: &RepoFacts, seed_gate: Option<Gate>) -> Vec<Step> {
+    if facts.config.mbx_store != MbxStore::Shared {
+        return Vec::new();
+    }
+    let seed = facts
+        .helper
+        .as_ref()
+        .is_some_and(|release| release.version().at_least(MBX_SEED_HELPER))
+        .then(|| Step {
+            gate: seed_gate,
+            ..step(StepKind::MbxSeed)
+        });
+    [Some(step(StepKind::MbxStore)), seed]
+        .into_iter()
+        .flatten()
+        .collect()
 }
 
 pub(crate) fn rust_additions(declared: Option<&Toolchain>, root: &RustRoot) -> Vec<Step> {
@@ -253,6 +263,7 @@ pub(crate) fn setup_units(
     if lane.plan.is_none() {
         steps.push(step(StepKind::Helper(HelperCommand::Plan)));
     }
+    steps.extend(mbx(facts, lane.steps()));
     let mut toolchain: Vec<Step> = mirror_step(facts)
         .into_iter()
         .chain(tools_restore(facts))
