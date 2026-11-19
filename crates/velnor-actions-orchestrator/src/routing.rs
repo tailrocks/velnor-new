@@ -158,5 +158,6 @@ fn workflow_request(
             .runner_image_family
             .as_ref()
             .and_then(|family| family.mac_qualification.clone()),
+        pr_ci: execution.pr_ci,
     })
 }

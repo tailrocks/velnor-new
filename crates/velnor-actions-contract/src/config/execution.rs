@@ -38,6 +38,22 @@ impl ExecutionMode {
     }
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum PrCiMode {
+    #[default]
+    Off,
+
+    Label,
+}
+
+impl PrCiMode {
+    #[must_use]
+    pub const fn is_off(&self) -> bool {
+        matches!(self, Self::Off)
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum ProfileKind {
@@ -128,6 +144,9 @@ pub struct ExecutionConfig {
 
     #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
     pub workflows: BTreeSet<RoutingWorkflow>,
+
+    #[serde(default, skip_serializing_if = "PrCiMode::is_off")]
+    pub pr_ci: PrCiMode,
 }
 
 impl ExecutionConfig {
@@ -154,6 +173,7 @@ impl ExecutionConfig {
             parity: None,
             overrides: BTreeMap::new(),
             workflows: BTreeSet::new(),
+            pr_ci: PrCiMode::Off,
         };
         config.validate("config.toml")?;
         Ok(config)
