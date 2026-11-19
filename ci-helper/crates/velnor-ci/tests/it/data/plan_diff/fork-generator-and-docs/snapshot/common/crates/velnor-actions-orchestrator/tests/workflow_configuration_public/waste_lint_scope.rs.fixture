@@ -1,0 +1,4 @@
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let files = files_of_repo(&root)?;
+    let scanned = |path: &str| {
+        path != CI_PATH

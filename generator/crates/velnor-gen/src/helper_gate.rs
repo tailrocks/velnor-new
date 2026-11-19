@@ -28,7 +28,7 @@ pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, Generate
     if facts.config.pr_ci == PrCi::Label && !release.version().at_least((0, 1, 86)) {
         return Err(GenerateError::PrCiHelperTooOld(release.version().clone()));
     }
-    if facts.config.crates_mirror.is_some() && !release.version().at_least((0, 1, 82)) {
+    if facts.config.crates_mirror.is_some() && !release.version().at_least((0, 1, 93)) {
         return Err(GenerateError::MirrorHelperTooOld(release.version().clone()));
     }
     if facts.config.private_sources.is_some() && !release.version().at_least((0, 1, 86)) {

@@ -1,0 +1,10 @@
+#[path = "poll_statistics/hook_event_ref.rs"]
+mod hook_event_ref;
+#[path = "poll_statistics/zero_request_id.rs"]
+mod zero_request_id;
+
+use common::{QUEUE, Script, exchange, header};
+const STATISTICS_ONLY: &str = include_str!("fixtures/scaleset/message_stats_only.json");
+const STATISTICS: &str = r#""statistics":{"totalAcquiredJobs":0,"totalAssignedJobs":2,"totalAvailableJobs":1,"totalBusyRunners":1,"totalIdleRunners":1,"totalRegisteredRunners":2,"totalRunningJobs":1}"#;
+const VALID_JOB_BODY: &str = r#"[{"messageType":"JobAvailable","runnerRequestId":41}]"#;
+

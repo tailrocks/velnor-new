@@ -1,0 +1,8 @@
+        || path.split('/').any(|seg| seg == "..")
+        || path.chars().any(char::is_control);
+    if bad {
+        return Err(GitArgError::BadPath {
+    if let Some((base, head)) = text.split_once("...") {
+        check_rev(base, allow_short)?;
+        return check_rev(head, allow_short);
+    }

@@ -1,0 +1,31 @@
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join(relative);
+    std::fs::read(&path).unwrap_or_else(|e| unreachable!("{}: {e}", path.display()))
+}
+    let observed: Value = serde_json::from_slice(&read("conformance/event-payload.json"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let leg = &observed["legs"][leg];
+    let fields = leg["fields"].as_object().into_iter().flatten();
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../scenarios");
+    let mut names = Vec::new();
+    for entry in std::fs::read_dir(&dir).unwrap_or_else(|e| unreachable!("{e}")) {
+        let path = entry.unwrap_or_else(|e| unreachable!("{e}")).path();
+        Scenario::parse(&read("scenarios/fork.json")).unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(fork.has_fork());
+    let story = Scenario::parse(&read("scenarios/story.json"))
+        .unwrap_or_else(|e| unreachable!("{e}"))
+        .on_default_branch("main");
+    let shape: Vec<String> = story
+    let warm = Scenario::parse(&read("scenarios/warm.json"))
+        .unwrap_or_else(|e| unreachable!("{e}"))
+        .on_default_branch("trunk");
+    assert_eq!(
+    let escape = br#"{"description": "x", "steps": [{"commit": {"branch": "b", "append": "../outside", "line": "x"}}]}"#;
+    let escape = Scenario::parse(escape).unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(escape.refuse_options(["main"]).is_err());
+}
+        !Scenario::parse(&read("scenarios/story.json"))
+            .unwrap_or_else(|e| unreachable!("{e}"))
+            .has_fork()
+    );

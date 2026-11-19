@@ -1,0 +1,4 @@
+        .current_dir(workspace)
+        .env("RUNNER_TEMP", runner_temp)
+        .env("GITHUB_WORKSPACE", workspace)
+        .env("GITHUB_ENV", runner_temp.join("github_env"))

@@ -1,0 +1,4 @@
+#[path = "../src/cache_coverage_replay.rs"]
+mod cache_coverage_replay;
+
+use std::error::Error;

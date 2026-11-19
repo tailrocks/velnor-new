@@ -1,0 +1,4 @@
+        .and_then(|shas| shas.split_once(".."))
+        .map_or((None, None), |(old, new)| {
+            (Some(old.to_owned()), Some(new.to_owned()))
+        });

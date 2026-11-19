@@ -1,0 +1,9 @@
+const PREPARE_TEMPLATE: &str = include_str!("schema2_release_prepare.sh");
+const PUBLISH_TEMPLATE: &str = include_str!("schema2_release_publish.sh");
+const RELEASE_CONFIRMATION_BUDGET_SECONDS: u16 = 120;
+
+pub(super) const PUBLISH_STEP_ID: &str = "publish-family-release";
+const RUNNER_DRAFT_VERIFY: &str = include_str!("schema2_runner_draft_verify.sh");
+
+fn download_commands(family: Family, runner: bool) -> Result<String, RenderError> {
+    match family {

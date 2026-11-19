@@ -1,0 +1,4 @@
+            .current_dir(&root)
+            .env(
+                "MISE_IGNORED_CONFIG_PATHS",
+                with_path(

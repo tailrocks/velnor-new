@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! `velnor-ci plan --mode <ci|qualification> --request FILE`: the plan contract of the
-//! legacy `plan-v1` op, for the runs that need no diff, from the request `write-request`
-//! writes. It reads no cargo metadata and runs neither cargo nor mise.
+//! legacy `plan-v1` op, from the request `write-request` writes. It runs neither cargo nor
+//! mise. A `pull_request`, `fork` or `local` request narrows `not_affected_jobs` by its diff (see
+//! `diff`); a `push`, `merge_group` or qualification run selects every job.
 //!
 //! What it writes are the step outputs the generated workflows read: `plan_id`, `run_key`,
 //! `not_affected_jobs` and the `qualification_*` values that need no task digest. The
@@ -11,7 +12,10 @@
 //! digests the engine computes from a closure and a tool catalog; they stay with the
 //! engine and are not written here.
 
+mod diff;
 mod qualification;
+
+use std::path::Path;
 
 use serde::Deserialize;
 use serde_json::Value;
@@ -61,12 +65,16 @@ struct Request {
     op: Option<String>,
     #[serde(default)]
     run_key: String,
+    #[serde(default)]
+    base: Option<String>,
     head: String,
     event: Event,
     #[serde(default)]
     qualification: Option<Dispatch>,
     #[serde(default)]
     repository: Option<String>,
+    #[serde(default)]
+    lane_inventory: Option<diff::LaneInventory>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -86,6 +94,7 @@ pub fn outputs(
     mode: Mode,
     default_branch: Option<&str>,
     source: &RunKeySource<'_>,
+    checkout: &Path,
 ) -> Result<String, CiError> {
     let request = parse(request_json)?;
     let run_key = run_key(&request.run_key, source)?;
@@ -104,20 +113,18 @@ pub fn outputs(
         context.bind_run(&run_key)?;
     }
     check_context(&request)?;
-    if matches!(
-        request.event,
-        Event::PullRequest | Event::Fork | Event::Local
-    ) {
-        return Err(internal(
-            "diff_selection_not_supported: only push, merge_group and qualification runs select every job",
-        ));
-    }
+    let not_affected = match request.event {
+        Event::PullRequest => selected(&request, diff::Event::PullRequest, checkout)?,
+        Event::Fork => selected(&request, diff::Event::Fork, checkout)?,
+        Event::Local => selected(&request, diff::Event::Local, checkout)?,
+        Event::Push | Event::MergeGroup | Event::Qualification => String::new(),
+    };
     let context = request.qualification.as_ref();
     let line = |name: &str, value: &str| format!("{name}={value}\n");
     Ok([
         line("plan_id", &format!("plan-{run_key}")),
         line("run_key", &run_key),
-        line("not_affected_jobs", ""),
+        line("not_affected_jobs", &not_affected),
         line(
             "qualification_campaign",
             context.map_or("", |value| value.campaign.as_str()),
@@ -133,6 +140,18 @@ pub fn outputs(
         line("qualification_cache_write", "false"),
     ]
     .concat())
+}
+
+fn selected(request: &Request, event: diff::Event, checkout: &Path) -> Result<String, CiError> {
+    diff::not_affected_jobs(
+        &diff::Input {
+            event,
+            base: request.base.as_deref(),
+            head: &request.head,
+            inventory: request.lane_inventory.as_ref(),
+        },
+        checkout,
+    )
 }
 
 fn flag(value: bool) -> &'static str {

@@ -114,19 +114,6 @@ fn recorded(case: &str) -> String {
 }
 
 #[test]
-fn a_pull_request_is_refused_rather_than_planned_without_its_diff() {
-    for event in ["pull_request", "fork", "local"] {
-        let request = recorded("push-rust-only")
-            .replace("\"event\":\"push\"", &format!("\"event\":\"{event}\""));
-        let stderr = refusal(&request, "ci", &[]);
-        assert!(
-            stderr.contains("diff_selection_not_supported"),
-            "{event}: {stderr}"
-        );
-    }
-}
-
-#[test]
 fn a_phase_with_a_predecessor_is_refused_rather_than_planned_without_its_cache_directive() {
     let request = recorded("qualification-cold").replace(
         "\"phase\":\"cold\"",

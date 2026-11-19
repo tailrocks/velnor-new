@@ -1,0 +1,37 @@
+#[path = "diagnostics/runner_log_state.rs"]
+mod runner_log_state;
+#[path = "diagnostics/runner_logs.rs"]
+mod runner_logs;
+#[path = "diagnostics/stage.rs"]
+mod stage;
+#[path = "diagnostics/worker.rs"]
+mod worker;
+use crate::error::HostError;
+
+    parent: OwnedFd,
+    scope: OwnedFd,
+    journal_identity: String,
+    connection_id: String,
+        if connection_id.is_empty() || matches!(connection_id, "." | "..") {
+            return Err(HostError::Ownership);
+        }
+        let canonical = std::fs::canonicalize(state).map_err(|_| HostError::Path)?;
+        let parent =
+            stage::open_private_child(&current, SCOPE_DIRECTORY, started, deadline, &cancelled)?;
+        let scope = stage::open_private_child(
+            &parent,
+            &scope_component(connection_id),
+            started,
+            deadline,
+            parent,
+            scope,
+            journal_identity,
+            connection_id: connection_id.to_owned(),
+#[path = "diagnostics/record.rs"]
+mod record;
+
+pub(crate) use record::{DiagnosticRecord, RecordIdentity, diagnostic_record_fields};
+#[path = "diagnostics/capture.rs"]
+mod capture;
+pub(in crate::launch) use capture::{
+    NativeCaptureRequest, RunnerLogWriteContext, capture_native, delete_after_capture,

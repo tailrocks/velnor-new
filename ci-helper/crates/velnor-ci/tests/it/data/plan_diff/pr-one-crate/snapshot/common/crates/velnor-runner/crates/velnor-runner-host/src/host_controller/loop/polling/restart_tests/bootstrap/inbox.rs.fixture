@@ -1,0 +1,8 @@
+#[path = "inbox_fake.rs"]
+mod fake;
+
+#[tokio::test(flavor = "multi_thread")]
+    if fake::isolated(concat!(
+        module_path!(),
+        "::draining_completion_unlocks_bootstrap_retirement_without_another_restart"
+    ))? {

@@ -1,0 +1,64 @@
+    parent: &OwnedFd,
+    stages: &mut Vec<Stage>,
+) -> Result<(), OrchestratorError> {
+    for stage in stages.drain(..) {
+        let stat = match statat(parent, &stage.name) {
+            Ok(s) => s,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(e) => return Err(io_error(e)),
+        let current = statat(parent, &stage.name).map_err(io_error)?;
+        if !Identity::from_stat(&current).same_object(&stage.identity) {
+            return Err(invalid("owned_staging_directory_replaced_refusing_cleanup"));
+        }
+        ufs::unlinkat(parent, &stage.name, AtFlags::REMOVEDIR).map_err(io_error)?;
+    }
+    Ok(())
+}
+pub(super) fn remove_tree(parent: &OwnedFd) -> Result<(), OrchestratorError> {
+    let mut names = Vec::new();
+    for entry in Dir::read_from(parent).map_err(io_error)? {
+        let e = entry.map_err(io_error)?;
+        let n = e
+            .file_name()
+        if n != "." && n != ".." {
+            names.push(n.to_owned());
+        }
+    }
+        let stat = statat(parent, &name).map_err(io_error)?;
+        match FileType::from_raw_mode(stat.st_mode) {
+            FileType::Directory => {
+                let child = openat_dir(parent, &name).map_err(io_error)?;
+                remove_tree(&child)?;
+                ufs::unlinkat(parent, &name, AtFlags::REMOVEDIR).map_err(io_error)?;
+            }
+            FileType::RegularFile => {
+                ufs::unlinkat(parent, &name, AtFlags::empty()).map_err(io_error)?;
+            }
+            _ => return Err(invalid("stage_contains_special_file")),
+        }
+pub(super) fn openat_dir(parent: &impl AsFd, name: &str) -> Result<OwnedFd, std::io::Error> {
+    ufs::openat(
+        parent,
+        name,
+        OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC,
+        Mode::empty(),
+pub(super) fn statat(parent: &impl AsFd, name: &str) -> Result<rustix::fs::Stat, std::io::Error> {
+    ufs::statat(parent, name, AtFlags::SYMLINK_NOFOLLOW).map_err(Into::into)
+}
+pub(super) fn rename_noreplace(
+    parent: &impl AsFd,
+    source: &str,
+    destination: &str,
+) -> Result<(), std::io::Error> {
+    ufs::renameat_with(parent, source, parent, destination, RenameFlags::NOREPLACE)
+        .map_err(Into::into)
+}
+pub(super) fn random_stage_name() -> Result<String, OrchestratorError> {
+    File::open("/dev/urandom")
+        .and_then(|mut f| f.read_exact(&mut random))
+        .map_err(io_error)?;
+    let mut out = String::from(".velnor-seed-");
+        && value != ".."
+        && value
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'.' | b'-'))

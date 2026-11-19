@@ -1,0 +1,20 @@
+            Some((parent, _)) => dir = parent.to_owned(),
+            None if dir.is_empty() => break,
+            None => dir = String::new(),
+        }
+            ".." => {
+                parts.pop()?;
+            }
+            other => parts.push(other),
+        Some((parent, _)) => specs.insert(format!(":(glob){parent}/**")),
+        None => specs.insert(src_path.to_owned()),
+    };
+}
+                "../outside/the/repo.rs",
+            ],
+        );
+        assert_eq!(
+                    "crates/a/../shared/lib.rs",
+                    "crates/a/./src/x.rs",
+                ]
+            ),

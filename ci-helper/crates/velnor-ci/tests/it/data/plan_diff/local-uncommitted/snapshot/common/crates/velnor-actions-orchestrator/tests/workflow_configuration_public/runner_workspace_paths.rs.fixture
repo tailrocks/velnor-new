@@ -1,0 +1,4 @@
+    for root in ["/abs", "crates/x/", "crates/../x", "a//b", "a b", "./x"] {
+        let repo = workflow_configuration_fixture::make_repo(&config(Some(root)))?;
+        assert!(prepare(repo.path()).is_err(), "accepted {root}");
+    }

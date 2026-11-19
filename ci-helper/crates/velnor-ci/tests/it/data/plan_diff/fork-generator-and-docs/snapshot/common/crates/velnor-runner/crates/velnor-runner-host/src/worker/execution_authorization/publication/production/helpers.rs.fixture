@@ -1,0 +1,4 @@
+                    .all(|part| !part.is_empty() && part != "." && part != "..")))
+}
+
+pub(super) fn valid_operation_id(value: &str) -> bool {

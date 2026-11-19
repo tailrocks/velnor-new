@@ -1,0 +1,7 @@
+        &["docs", ".."][..],
+        &["docs", "/"],
+        &["docs", "/tmp/...json"],
+        &["docs", "x/..json"],
+    ] {
+        assert!(plan(&names(escaping), root).is_err(), "{escaping:?}");
+    }

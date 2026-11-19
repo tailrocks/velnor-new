@@ -1,0 +1,16 @@
+        "../cache-output"
+    };
+    repo.write(
+        &path(".cargo/config.toml"),
+        "../cache-output"
+    };
+    let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        .args(["inputs", action, "--target-dir", target])
+        .current_dir(repo.root().join(root))
+        .output()?;
+    assert!(output.status.success(), "{output:?}");
+    Ok(())
+        .current_dir(repo.root())
+        .env("RUNNER_TEMP", repo.root())
+        .env_remove("CARGO_TARGET_DIR");
+    if cli {

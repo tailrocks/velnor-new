@@ -1,0 +1,4 @@
+const INVENTORY: &str = include_str!("closure_inventory.txt");
+
+static INPUTS: OnceLock<Vec<&str>> = OnceLock::new();
+

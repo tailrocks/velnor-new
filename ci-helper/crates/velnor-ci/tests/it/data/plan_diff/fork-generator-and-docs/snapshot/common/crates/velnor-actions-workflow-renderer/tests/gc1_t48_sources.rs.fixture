@@ -1,0 +1,9 @@
+pub(super) const IDENTITY_SOURCE: &str = include_str!("../src/job_image_authority_identity.py");
+pub(super) const REGISTRY_SOURCE: &str = include_str!("../src/job_image_authority_registry.py");
+pub(super) const PUBLISH_SOURCE: &str = include_str!("../src/job_image_authority_publish.py");
+pub(super) const RECORD_SOURCE: &str = include_str!("../src/job_image_authority_record.py");
+pub(super) const OCI_SOURCE: &str = include_str!("../src/job_image_authority_oci.py");
+pub(super) const TAR_SOURCE: &str = include_str!("../src/job_image_authority_tar.py");
+
+pub(super) const IDENTITY_FILE: &str = "job_image_authority_identity.py";
+pub(super) const REGISTRY_FILE: &str = "job_image_authority_registry.py";

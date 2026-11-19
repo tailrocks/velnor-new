@@ -1,0 +1,22 @@
+    unit(&repo, OUTPUT, "cargo:rerun-if-changed=../../shared\n");
+    repo.set_mtime(OUTPUT, UNIX_EPOCH + Duration::from_mins(50_000_000));
+    repo.write_unstaged("driver/cargo.rs", r#"use std::fs::{self, File, FileTimes};
+use std::time::{Duration, UNIX_EPOCH};
+    let marker = fs::read_dir("target/.velnor-input-inventories").unwrap()
+        .map(|entry| entry.unwrap().path())
+        .find(|path| path.file_name().unwrap().to_string_lossy().starts_with(".build-clock-"))
+        .unwrap();
+        "cargo:rerun-if-changed=../../shared\n"
+    } else {
+        "cargo:rerun-if-changed=../../shared\ncargo:rustc-env=CLOCK_OUTPUT=changed\n"
+    };
+    fs::write(output, text).unwrap();
+    File::options().write(true).open(output).unwrap().set_times(FileTimes::new().set_modified(modified)).unwrap();
+        .current_dir(repo.root())
+        .args(["--edition=2024", "driver/cargo.rs", "-o", "driver/cargo"])
+        .output()
+        .unwrap_or_else(|error| unreachable!("{error}"));
+        .current_dir(repo.root().join("rust"))
+        .env("CLOCK_CASE", mode)
+        .args(["inputs", "build", "--"])
+        .arg(repo.root().join("driver/cargo"))

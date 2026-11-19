@@ -1,0 +1,23 @@
+        .current_dir(root)
+        .env_clear()
+        .env(CHILD_CASE_ENV, test_name)
+        .env(CHILD_OPERATION_ENV, operation)
+        let Some(parent) = fields.next().and_then(|field| field.parse::<i32>().ok()) else {
+            continue;
+        };
+        let Some(group) = fields.next().and_then(|field| field.parse::<i32>().ok()) else {
+        if pid > 1 && parent >= 0 && group > 1 {
+            rows.push((pid, parent, group));
+        }
+    }
+
+    for (pid, parent, _) in &rows {
+        children.entry(*parent).or_insert_with(Vec::new).push(*pid);
+    }
+    let mut descendants = HashSet::new();
+    let mut pending = VecDeque::from([root_group]);
+    while let Some(parent) = pending.pop_front() {
+        if let Some(processes) = children.get(&parent) {
+            for pid in processes {
+                if descendants.insert(*pid) {
+                    pending.push_back(*pid);
