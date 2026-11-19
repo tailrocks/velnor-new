@@ -140,7 +140,7 @@ Every key of `.velnor/rust-ci.toml`, with its default. `generator/CONFIG.md` has
 | `cache_debug` | `false` | cargo fingerprint log, see above |
 | `ci_debuginfo` | `"line-tables-only"` | `full`, `line-tables-only` or `none` |
 | `private_sources` | none | private dependencies, see above |
-| `crates_mirror` | none | a crates mirror for a self-hosted runner |
+| `crates_mirror` | none | a crates mirror for a self-hosted runner (needs `velnor-ci` 0.1.93) |
 | `runner` | `"ubuntu-latest"` | the runner label of every job |
 | `fork_runner` | `"ubuntu-latest"` | the hosted runner for fork pull requests when `runner` is self-hosted |
 | `timeout_minutes` | `30` | job time limit, 1 to 360 |
