@@ -39,6 +39,7 @@ turso = { version = "=0.8.3", default-features = false, features = ["mimalloc"] 
 zeroize = { version = "=1.9.1", features = ["derive"] }
 getrandom = { version = "=0.4.3" }
 toml = { version = "=1.1.8" }
+tera = { version = "=2.4.0" }
 sha1_smol = { version = "=1.0.1" }
 flate2 = { version = "=1.1.11" }
 velnor-model = { version = "=0.0.0", path = "crates/velnor-model" }

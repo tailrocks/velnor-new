@@ -58,7 +58,10 @@ pub(crate) fn save(facts: &RepoFacts, root: &RustRoot, lane: &Lane, job: &JobId)
         Step {
             directory: root.manifest.parent(),
             when: When::SaveDelta,
-            ..step(StepKind::InputsSave(root.target_dir.clone()))
+            ..step(StepKind::InputsSave {
+                target: root.target_dir.clone(),
+                cli: crate::base_cache::inputs_cli(facts),
+            })
         },
         Step {
             when: When::SaveDelta,

@@ -4,7 +4,7 @@
 use velnor_model::Platform;
 use velnor_release::BinaryPlan;
 
-use crate::release_assets::{STAGE, stem, versioned, word};
+use crate::release_assets::{STAGE, STAGE_SHELL, stem, versioned, word};
 use crate::release_binaries::command;
 use crate::release_steps::variables;
 use crate::rules::RenderedStep;
@@ -14,19 +14,15 @@ pub(crate) fn bin_names(binary: &BinaryPlan) -> impl Iterator<Item = &str> {
         .chain(binary.extra_bins.iter().map(|extra| extra.bin.as_str()))
 }
 
-fn sidecar_pattern(name: &str, staged: bool) -> String {
-    if staged {
-        "\"\\\\A(?<sha256>[0-9a-f]{64})  \" + $asset + \"\\\\n\\\\z\"".to_owned()
-    } else {
-        format!("\"\\\\A(?<sha256>[0-9a-f]{{64}})  {name}\\\\n\\\\z\"")
-    }
-}
+const SIDECAR_PATTERN: &str =
+    "\"\\\\A(?<sha256>[0-9a-f]{64})  \\\\Q\" + $asset + \"\\\\E\\\\n\\\\z\"";
 
 pub(crate) fn raw_packaging(
     binary: &BinaryPlan,
     platform: Platform,
     triple: &str,
     release_dir: &str,
+    tag: &str,
 ) -> Vec<RenderedStep> {
     let checksum = if platform == Platform::MacosArm64 {
         "shasum -a 256"
@@ -55,14 +51,13 @@ pub(crate) fn raw_packaging(
             let copy_to = word(
                 binary,
                 &if staged {
-                    format!("{STAGE}/{name}")
+                    format!("{STAGE_SHELL}/{name}")
                 } else {
                     name.clone()
                 },
             );
-            let pattern = sidecar_pattern(&name, staged);
             let record = format!(
-                "jq -e -R -s --arg repository \"$REPOSITORY\" --arg commit \"$COMMIT\" --arg tag \"$TAG\" --arg target {triple} --arg asset {file} --rawfile rust {rustc} '{{schema: 1}} + capture({pattern}) + {{tag: $tag, version: {version}, repository: $repository, commit: $commit, target: $target, asset: $asset, toolchain: {{rust: $rust[0:-1]}}}}' {sum} > {provenance}"
+                "jq -e -R -s --arg repository \"$REPOSITORY\" --arg commit \"$COMMIT\" --arg tag \"$TAG\" --arg target {triple} --arg asset {file} --rawfile rust {rustc} '{{schema: 1}} + capture({SIDECAR_PATTERN}) + {{tag: $tag, version: {version}, repository: $repository, commit: $commit, target: $target, asset: $asset, toolchain: {{rust: $rust[0:-1]}}}}' {sum} > {provenance}"
             );
             let in_folder = |step: RenderedStep| RenderedStep {
                 working_directory: folder.clone(),
@@ -85,10 +80,7 @@ pub(crate) fn raw_packaging(
                     env: variables(&[
                         ("REPOSITORY", "${{ github.repository }}"),
                         ("COMMIT", "${{ steps.source.outputs.commit }}"),
-                        (
-                            "TAG",
-                            &format!("${{{{ needs.tag.outputs.{} }}}}", binary.package),
-                        ),
+                        ("TAG", tag),
                     ]),
                     ..in_folder(command(format!("Record provenance of {name}"), record))
                 },
@@ -97,7 +89,7 @@ pub(crate) fn raw_packaging(
         .collect()
 }
 
-pub(crate) fn smoke_steps(binary: &BinaryPlan, platform: Platform) -> Vec<RenderedStep> {
+pub(crate) fn smoke_steps(binary: &BinaryPlan, platform: Platform, tag: &str) -> Vec<RenderedStep> {
     if !binary.smoke {
         return Vec::new();
     }
@@ -113,10 +105,7 @@ pub(crate) fn smoke_steps(binary: &BinaryPlan, platform: Platform) -> Vec<Render
             format!("{executable} --version"),
         )),
         RenderedStep {
-            env: variables(&[(
-                "TAG",
-                &format!("${{{{ needs.tag.outputs.{} }}}}", binary.package),
-            )]),
+            env: variables(&[("TAG", tag)]),
             ..in_folder(command(
                 format!("Check the tag against the version of {name}"),
                 format!("{executable} check-tag \"$TAG\""),

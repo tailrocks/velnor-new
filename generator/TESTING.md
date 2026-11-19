@@ -18,7 +18,7 @@
 
 ## Samples
 
-A sample is a folder `samples/<name>/` with `view/` (the files the generator reads), `manifests.txt` (the tracked `Cargo.toml` and `Cargo.lock` paths), `symlinks.txt` (the tracked symbolic links, which may be empty but must be a regular file), `cargo-metadata/<root>.json` (recorded output) and `expected/` (the files the generator must write). A sample without `symlinks.txt` is rejected, and a sample that records a symbolic link where the generator reads a file is rejected too, because a live checkout with that link is refused.
+A sample is a folder `samples/<name>/` with `view/` (the files the generator reads), `manifests.txt` (the tracked `Cargo.toml` and `Cargo.lock` paths), `symlinks.txt` (the tracked symbolic links, which may be empty but must be a regular file), `cargo-metadata/<root>.json` (recorded output) and `expected/` (the files the generator must write). A sample without `symlinks.txt` is rejected, and a sample that records a symbolic link where the generator reads a file is rejected too, because a live checkout with that link is refused. A symbolic link at a Rust source path is the exception: the generator does not read it, and the crate that holds it is selected by any change, because the file it points at is unknown.
 
 Record a sample from a real checkout. Never type one by hand.
 

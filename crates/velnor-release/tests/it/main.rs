@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod budget_sum;
+mod bundle_hazards;
 mod cargo_features;
 mod cargo_precedence;
 mod cargo_scope;
@@ -27,3 +28,4 @@ mod sources;
 mod symlinks;
 mod tags;
 mod token_hardening;
+mod version_groups;

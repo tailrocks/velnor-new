@@ -5,7 +5,7 @@ use crate::GENERATED_HEADER;
 use crate::release::LINT_IGNORE;
 use crate::rules::{RenderedJob, RenderedStep, Value};
 use crate::steps::install_helper;
-use crate::workflow::yaml_job;
+use crate::workflow::{ShellcheckMarks, yaml_job};
 use crate::yaml::{Yaml, emit, entry, text};
 use velnor_model::{HelperRelease, RepoPath};
 
@@ -46,9 +46,9 @@ pub fn delta_cleanup(helper: &HelperRelease, workflow: &str) -> Option<String> {
         ],
         ..RenderedJob::default()
     };
-    Some(format!(
-        "{GENERATED_HEADER}{}",
-        emit(&[
+    Some(crate::header::seal(
+        GENERATED_HEADER,
+        &emit(&[
             entry("name", text("Rust cache cleanup")),
             entry(
                 "on",
@@ -74,7 +74,7 @@ pub fn delta_cleanup(helper: &HelperRelease, workflow: &str) -> Option<String> {
                     entry("cancel-in-progress", Yaml::Bool(false))
                 ])
             ),
-            entry("jobs", Yaml::Map(vec![entry("rust-trim", yaml_job(&job))])),
+            entry("jobs", Yaml::Map(vec![entry("rust-trim", yaml_job(&job, ShellcheckMarks::Jobs))])),
         ])
     ))
 }

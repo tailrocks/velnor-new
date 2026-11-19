@@ -31,7 +31,7 @@ pub enum Outcome {
 #[must_use]
 pub fn trusted_event(event_name: &str, git_ref: &str, default_branch: Option<&str>) -> bool {
     match event_name {
-        "push" | "schedule" => default_branch
+        "push" | "schedule" | "workflow_dispatch" => default_branch
             .filter(|branch| !branch.is_empty())
             .is_some_and(|branch| git_ref.strip_prefix("refs/heads/") == Some(branch)),
         _ => false,
@@ -102,7 +102,12 @@ fn probe_writable(dir: &Path) -> Result<(), &'static str> {
     Err("not writable")
 }
 
-fn random_u64() -> u64 {
+#[must_use]
+pub fn writable_by_job(dir: &Path) -> bool {
+    nix::unistd::access(dir, nix::unistd::AccessFlags::W_OK).is_ok()
+}
+
+pub(crate) fn random_u64() -> u64 {
     use std::hash::{BuildHasher, Hasher};
     let mut hasher = std::collections::hash_map::RandomState::new().build_hasher();
     hasher.write_u32(std::process::id());

@@ -6,6 +6,10 @@ use std::path::PathBuf;
 use clap::{Args, Parser, Subcommand};
 
 mod fetch_reports;
+pub use crate::cli_inputs::{
+    AuditArgs, InputsArgs, InputsBatchArgs, InputsBuildArgs, InputsCommand, InputsSaveArgs,
+    RestoredArgs,
+};
 mod gate;
 mod report;
 mod resolve_qualification;
@@ -13,8 +17,8 @@ pub use fetch_reports::FetchReportsArgs;
 mod write_request;
 pub use crate::cli_args::{
     BaseFile, BenchCommand, BudgetArgs, CheckConfigurationsArgs, CollectArgs, CompareArgs,
-    CratesMirrorArgs, ImageCommand, PlanArgs, PlanMode, PreviewGhArgs, QualificationCommand,
-    QualificationCompareArgs, RunAuthorityArgs, ToolsLocalArgs, VerifyCandidateArgs,
+    CratesMirrorArgs, ImageCommand, PlanArgs, PlanMode, QualificationCommand,
+    QualificationCompareArgs, ToolsLocalArgs, VerifyCandidateArgs,
 };
 pub use crate::cli_cache::{CacheCommand, DecideArgs, TrimArgs};
 pub use gate::GateArgs;
@@ -135,7 +139,7 @@ pub enum Command {
     #[command(
         about = "Run after every cache and after velnor-ci inputs restore: every action that must follow the restores. Gives each tracked file that shares its modification time with another tracked file a distinct time, one microsecond below the time it had and ordered by path, so that cargo, which picks the newest file of a package by time alone, names the same file after every restore. When VELNOR_BASE_MAX_AGE_DAYS is a positive number, first removes every restored target directory whose target/.velnor/born date is more than that many days old, so the run builds cold. Writes the step output expired=true when it removed one (an unreadable born date counts as expired) and expired=false otherwise, so a later step can plan a full run"
     )]
-    Restored(crate::cli_cache::RestoredArgs),
+    Restored(RestoredArgs),
     #[command(subcommand, about = "Check job image candidates")]
     Image(ImageCommand),
     #[command(
@@ -150,22 +154,6 @@ pub enum Command {
     #[command(subcommand, about = "Work on the shared Sources cache")]
     Sources(SourcesCommand),
     #[command(
-        about = "Verify the source preview runtime SDK that .velnor/generator.lock at PUBLIC_SOURCE pins (run PUBLIC_RUN_ID attempt PUBLIC_RUN_ATTEMPT of the image workflow): the lock change was approved by the parent commit, the preview's runs, jobs, annotated tag, immutable release, digests and Sigstore attestation (gh attestation verify with the pinned gh, signer pinned to the publication workflow commit) all match. Then install the SDK under $RUNNER_TEMP/source-preview-runtime (linux, darwin, receipt.json, bundle.json, identity.json) and write linux_sha256 and darwin_sha256 to $GITHUB_OUTPUT, which must be empty. Reads GH_TOKEN, RUNNER_TEMP, GITHUB_OUTPUT; exits 1 on any failed check"
-    )]
-    VerifyRuntime(PreviewGhArgs),
-    #[command(
-        about = "Run the verified Linux SDK in $RUNNER_TEMP/source-preview-runtime: copy it into a sealed memory file, check its sha256 equals VERIFIED_LINUX_SHA256, and exec it as `image-maintenance verify-mac-attestation` with PRODUCER_RUN_ID, PRODUCER_RUN_ATTEMPT, PRODUCER_ARTIFACT_ID and PUBLISHER_ARTIFACT_ID and only an allowlist of the environment. Linux only; exits 1 when a check fails"
-    )]
-    VerifyMacProof,
-    #[command(
-        about = "Run one step of the source preview publication (draft, prepare or publish): check the admitted source metadata and payloads in the working directory against the run, the annotated tag and the GitHub release, and write the step outputs to $GITHUB_OUTPUT. Reads GH_TOKEN, the AUTHORITY_* variables, SOURCE_ARTIFACT_ID, LINUX_PAYLOAD_ARTIFACT_ID, DARWIN_PAYLOAD_ARTIFACT_ID and, for prepare and publish, SIGN, PAIR_ORIGIN, PAIR_ID, RECEIPT_SHA256 and BUNDLE_SHA256; exits 1 on any failed check"
-    )]
-    RunAuthority(RunAuthorityArgs),
-    #[command(
-        about = "Admit the source preview of the tag-push run: the run is the owner's push of the annotated tag sdk-preview-GITHUB_SHA under the protected tag rulesets, GITHUB_SHA is on main and its ci.yml and source qualification runs, and both producer payload runs, jobs and artifacts, succeeded and are the ones the tag annotation names. Then download both payloads, check them (ZIP, size, sha256, ELF or Mach-O header), link them as $RUNNER_TEMP/velnor-actions-<target>, write $RUNNER_TEMP/source-preview-metadata.json and source_sha to $GITHUB_OUTPUT. Reads GH_TOKEN, RUNNER_TEMP, GITHUB_OUTPUT, RELEASE_OWNER_ID (required, no default: the numeric account id of the release owner, which GITHUB_ACTOR_ID, the triggering actor account and the creation ruleset must name; exits 1 before any request when it is missing, empty, not a number or 0), the GITHUB_* variables of the run and AUTHORITY_REPOSITORY, AUTHORITY_PATH, AUTHORITY_REF and AUTHORITY_SHA; exits 1 on any failed check"
-    )]
-    AdmitPreview,
-    #[command(
         about = "Write .velnor/rust-ci-timings.json from the last successful runs of the generated workflow on the default branch: the median of at least three ordinary runs, one entry per Cargo root, counting only jobs that ran on the runner in .velnor/rust-ci.toml (default ubuntu-latest); writes nothing with fewer; reads GITHUB_TOKEN; run in the checkout"
     )]
     Timings(TimingsArgs),
@@ -173,39 +161,8 @@ pub enum Command {
         about = "Exit 1 unless VELNOR_EVIDENCE_ARTIFACT_ID is a canonical positive decimal integer of at most 16 digits that does not exceed 9007199254740991"
     )]
     ValidateArtifactId,
-    #[command(
-        about = "Run mise install of the pinned GitHub CLI version without ambient mise configuration, environment or hooks; exit 1 when GITHUB_TOKEN is missing or empty or mise fails"
-    )]
-    InstallGh(InstallGhArgs),
-    #[command(
-        about = "Copy the attestation bundle at BUNDLE_PATH to $RUNNER_TEMP/SDK_PREVIEW_RECEIPT.json.sigstore.jsonl with mode 0400; exit 1 unless BUNDLE_PATH is a non-empty regular file that is not a symlink and nothing exists at the destination"
-    )]
-    StageBundle,
     #[command(subcommand, about = "Decide the qualification workflow")]
     Qualification(QualificationCommand),
-}
-
-#[derive(Debug, Args)]
-pub struct InstallGhArgs {
-    #[arg(
-        long,
-        value_parser = plain_version,
-        help = "The exact GitHub CLI version, three dot-separated numbers"
-    )]
-    pub version: String,
-}
-
-fn plain_version(text: &str) -> Result<String, String> {
-    let parts: Vec<&str> = text.split('.').collect();
-    let plain = parts.len() == 3
-        && parts
-            .iter()
-            .all(|part| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit()));
-    if plain {
-        Ok(text.to_owned())
-    } else {
-        Err(format!("{text:?} is not a version like 2.103.3"))
-    }
 }
 
 #[derive(Debug, Subcommand)]
@@ -343,47 +300,3 @@ pub use crate::cli_release::{
     AlignArgs, CheckConfigArgs, FamilyTagArgs, PreflightArgs, PublishArgs, RecordArgs,
     ReleaseCommand, ReleaseGateArgs,
 };
-
-#[derive(Debug, Args)]
-pub struct InputTimesArgs {
-    #[arg(long, default_value = "target")]
-    pub target_dir: PathBuf,
-}
-
-#[derive(Debug, Subcommand)]
-pub enum InputsCommand {
-    #[command(
-        about = "Capture directory inputs and bind them to build outputs for inputs audit. Known Cargo compiler commands may run twice to establish inventories; tests precompile and execute once, and arbitrary commands execute once. Bootstrap uses --workspace or explicit -p package selections and refuses to invalidate unselected packages"
-    )]
-    Build(InputsBuildArgs),
-    #[command(
-        about = "Write target/.velnor/inputs.tsv: path, blob id of the bytes on disk, modification time in nanoseconds and mode of every regular tracked file in the worktree; paths a TSV field cannot hold are counted and left out"
-    )]
-    Save(InputTimesArgs),
-    #[command(
-        about = "Set the saved modification time on every tracked file whose path, bytes on disk and mode equal the saved ones; report changed, new, deleted, absent and left-out files"
-    )]
-    Restore(InputTimesArgs),
-    #[command(
-        about = "Run after velnor-ci inputs build -- cargo build --workspace --all-targets in every Cargo root: read cargo's dep-info and build script output, and exit 1 when .velnor/rust-inputs.lock does not list a file that a package read at compile time from outside its own directory, lists a line nothing reads, or the build is incomplete: every unit an all-targets build makes (each target, its test harness when it is tested, each build script run, and the library and build script run of each path dependency outside the workspaces wherever cargo built it) needs a current unit, identified by cargo's fingerprint, in each dev-profile directory (debug or <triple>/debug) that holds a test harness of a member, with proc-macro libraries in the host debug directory (targets that need features are skipped). A unit with a cargo fingerprint and no dep-info, and Cargo roots whose target directories hold one another, are refused. Only the features, target and profile of that build are seen. Files that tests read at run time, and files a build script reads without naming them with cargo:rerun-if-changed, are not seen here; declare them with [[inputs]] in .velnor/rust-ci.toml"
-    )]
-    Audit(AuditArgs),
-}
-
-#[derive(Debug, Args)]
-pub struct InputsBuildArgs {
-    /// Additional source directory outside the repository to inventory before the build; repeat for each directory
-    #[arg(long)]
-    pub directory: Vec<PathBuf>,
-    #[arg(last = true, required = true, num_args = 1.., value_name = "COMMAND")]
-    pub command: Vec<String>,
-}
-
-#[derive(Debug, Args)]
-pub struct AuditArgs {
-    #[arg(
-        long,
-        help = "Write .velnor/rust-inputs.lock, one path<TAB>package line per read, instead of checking it"
-    )]
-    pub write: bool,
-}

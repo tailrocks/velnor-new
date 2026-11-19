@@ -139,6 +139,15 @@ fn a_run_without_a_token_an_event_or_a_checkout_is_refused() {
 }
 
 #[test]
+fn a_request_that_is_a_fifo_is_refused_instead_of_waiting_for_a_writer() {
+    let mut world = World::new("warm");
+    world.quirk = Some(Quirk::RequestIsAFifo);
+    let got = run_helper(&mut world, BIN);
+    assert_eq!(got.error, "unreadable_event_payload");
+    assert_eq!(got.requests, Vec::<String>::new());
+}
+
+#[test]
 fn an_event_payload_that_cannot_be_read_is_refused_before_anything_is_asked() {
     let mut world = World::new("warm");
     world

@@ -1,27 +1,16 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-//! `velnor-ci plan --mode <ci|qualification> --request FILE`: the plan contract of the
-//! legacy `plan-v1` op, from the request `write-request` writes. It runs neither cargo nor
-//! mise. A `pull_request`, `fork` or `local` request narrows `not_affected_jobs` by its diff (see
-//! `diff`); a `push`, `merge_group` or qualification run selects every job.
-//!
-//! What it writes are the step outputs the generated workflows read: `plan_id`, `run_key`,
-//! `not_affected_jobs` and the `qualification_*` values that need no task digest. The
-//! task graph, `plan.json`, `matrix.json` and `qualification_cache_directives` carry task
-//! digests the engine computes from a closure and a tool catalog; they stay with the
-//! engine and are not written here.
-
 mod diff;
 mod qualification;
 
 use std::path::Path;
 
 use serde::Deserialize;
-use serde_json::Value;
 
 use crate::error::CiError;
-use crate::write_request::internal;
+use crate::resolve_qualification::strict;
+use crate::write_request::{internal, lanes};
 use qualification::Dispatch;
 
 const SCHEMA: u32 = 1;
@@ -33,15 +22,14 @@ pub enum Mode {
     Qualification,
 }
 
-/// The values the run key comes from when the request carries none.
 #[derive(Debug, Clone, Copy, Default)]
-pub struct RunKeySource<'a> {
+pub struct RunSource<'a> {
+    pub github_sha: Option<&'a str>,
     pub run_id: Option<&'a str>,
     pub attempt_override: Option<&'a str>,
     pub run_attempt: Option<&'a str>,
 }
 
-/// The fields the legacy request has; any other key is refused, as the legacy op does.
 const FIELDS: [&str; 11] = [
     "schema",
     "op",
@@ -56,8 +44,6 @@ const FIELDS: [&str; 11] = [
     "lane_inventory",
 ];
 
-/// The fields the contract outputs depend on; `base`, `root`, the lane inventory and the
-/// named check lanes only matter to the task graph, which this mode does not build.
 #[derive(Debug, Deserialize)]
 struct Request {
     schema: u32,
@@ -67,6 +53,8 @@ struct Request {
     run_key: String,
     #[serde(default)]
     base: Option<String>,
+    #[serde(rename = "root", default)]
+    _root: Option<String>,
     head: String,
     event: Event,
     #[serde(default)]
@@ -88,12 +76,11 @@ enum Event {
     Qualification,
 }
 
-/// The step outputs for a request, in the order the legacy op writes them.
 pub fn outputs(
     request_json: &str,
     mode: Mode,
     default_branch: Option<&str>,
-    source: &RunKeySource<'_>,
+    source: &RunSource<'_>,
     checkout: &Path,
 ) -> Result<String, CiError> {
     let request = parse(request_json)?;
@@ -109,6 +96,7 @@ pub fn outputs(
             .as_deref()
             .ok_or_else(|| internal("missing_qualification_repository"))?;
         context.validate_for(branch, repository, &request.head)?;
+        context.bind_current_sha(source.github_sha)?;
         context.require_no_predecessor()?;
         context.bind_run(&run_key)?;
     }
@@ -159,8 +147,7 @@ fn flag(value: bool) -> &'static str {
 }
 
 fn parse(text: &str) -> Result<Request, CiError> {
-    let value: Value = serde_json::from_str(text)
-        .map_err(|error| internal(&format!("malformed_request:{error}")))?;
+    let value = strict::parse(text)?;
     if let Some(unknown) = value
         .as_object()
         .and_then(|fields| fields.keys().find(|key| !FIELDS.contains(&key.as_str())))
@@ -169,6 +156,8 @@ fn parse(text: &str) -> Result<Request, CiError> {
             "malformed_request:unknown field `{unknown}`"
         )));
     }
+    lanes::check_request_fields(&value)
+        .map_err(|error| internal(&format!("malformed_request:{error}")))?;
     let request: Request = serde_json::from_value(value)
         .map_err(|error| internal(&format!("malformed_request:{error}")))?;
     if request.schema != SCHEMA {
@@ -199,7 +188,7 @@ fn check_context(request: &Request) -> Result<(), CiError> {
     }
 }
 
-fn run_key(explicit: &str, source: &RunKeySource<'_>) -> Result<String, CiError> {
+fn run_key(explicit: &str, source: &RunSource<'_>) -> Result<String, CiError> {
     if !explicit.trim().is_empty() {
         return if is_run_key(explicit) {
             Ok(explicit.to_owned())

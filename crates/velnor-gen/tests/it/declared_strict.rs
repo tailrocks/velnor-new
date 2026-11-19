@@ -140,7 +140,10 @@ fn a_pinned_action_takes_only_its_own_inputs_and_needs_its_required_ones() -> Te
         ("checkout", "with = { Fetch-Depth = \"1\", ref = \"main\" }"),
         ("upload-artifact", "with = { path = \"dist\" }"),
         ("cache-restore", "with = { path = \"x\", key = \"k\" }"),
-        ("github-script", "with = { script = \"return 1\" }"),
+        (
+            "github-script",
+            "with = { script = \"console.log('one')\" }",
+        ),
     ] {
         rendered(&steps_of(action, with, read))?;
     }
@@ -216,5 +219,45 @@ fn workflow_run_chains_stop_at_three_levels_and_never_loop() -> TestResult {
     );
     let looped = "[[workflow]]\nfile = \"one\"\nname = \"One\"\n[workflow.on.workflow_run]\nworkflows = [\"Two\"]\n\n[[workflow.job]]\nid = \"check\"\n[[workflow.job.step]]\nname = \"Check\"\nrun = \"echo ok\"\n\n[[workflow]]\nfile = \"two\"\nname = \"Two\"\n[workflow.on.workflow_run]\nworkflows = [\"One\"]\n\n[[workflow.job]]\nid = \"check\"\n[[workflow.job.step]]\nname = \"Check\"\nrun = \"echo ok\"\n";
     assert!(refusal(looped)?.contains("follows itself"));
+    Ok(())
+}
+
+#[test]
+fn a_github_script_token_must_be_a_secret_reference() -> TestResult {
+    let read = "permissions = { contents = \"read\" }";
+    let literal = "with = { script = \"console.log('x')\", github-token = \"ghp_abcdef\" }";
+    let message = refusal(&steps_of("github-script", literal, read))?;
+    assert!(
+        message.contains("github-token") && message.contains("github-script"),
+        "{message}"
+    );
+    let reference =
+        "with = { script = \"console.log('x')\", github-token = \"${{ github.token }}\" }";
+    rendered(&steps_of("github-script", reference, read))?;
+    Ok(())
+}
+
+#[test]
+fn a_github_script_script_is_one_plain_console_log() -> TestResult {
+    let read = "permissions = { contents = \"read\" }";
+    for script in [
+        "return 1",
+        "console.log('a'); console.log('b')",
+        "console.log('a' + b)",
+        "console.log(`${process.env.X}`)",
+        "console.log('it\\\\'s')",
+        "console.log('${{ github.token }}')",
+        "for (;;) {}",
+        "console.log(require('fs'))",
+        "console.log('a')\\nconsole.log('b')",
+    ] {
+        let with = format!("with = {{ script = \"{script}\" }}");
+        let message = refusal(&steps_of("github-script", &with, read))?;
+        assert!(message.contains("console.log"), "{script}: {message}");
+    }
+    for script in ["console.log('js-pin-ok')", "console.log(\\\"ok\\\");"] {
+        let with = format!("with = {{ script = \"{script}\" }}");
+        rendered(&steps_of("github-script", &with, read))?;
+    }
     Ok(())
 }

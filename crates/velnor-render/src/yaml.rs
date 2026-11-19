@@ -42,12 +42,7 @@ fn entries(out: &mut String, items: &[(String, Yaml)], indent: usize, shared: &m
     for (key, value) in items {
         let value = match value {
             Yaml::Noted(note, inner) => {
-                for line in note.lines() {
-                    out.push_str(&" ".repeat(indent));
-                    out.push_str("# ");
-                    out.push_str(line);
-                    out.push('\n');
-                }
+                comment(out, note, indent);
                 inner
             }
             other => other,
@@ -68,6 +63,15 @@ fn entries(out: &mut String, items: &[(String, Yaml)], indent: usize, shared: &m
     }
 }
 
+fn comment(out: &mut String, note: &str, indent: usize) {
+    for line in note.lines() {
+        out.push_str(&" ".repeat(indent));
+        out.push_str("# ");
+        out.push_str(line);
+        out.push('\n');
+    }
+}
+
 fn nested(out: &mut String, value: &Yaml, indent: usize, shared: &mut Anchors) {
     match value {
         Yaml::Map(items) if !items.is_empty() => {
@@ -77,6 +81,13 @@ fn nested(out: &mut String, value: &Yaml, indent: usize, shared: &mut Anchors) {
         Yaml::Seq(items) if !items.is_empty() => {
             out.push('\n');
             for item in items {
+                let item = match item {
+                    Yaml::Noted(note, inner) => {
+                        comment(out, note, indent);
+                        inner.as_ref()
+                    }
+                    other => other,
+                };
                 out.push_str(&" ".repeat(indent));
                 out.push('-');
                 let mut block = String::new();

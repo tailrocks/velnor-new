@@ -9,6 +9,7 @@ use crate::expression::{
     is_identifier, whole_expression,
 };
 use crate::helper_call::{HELPER_COMMANDS, calls_velnor_ci, subcommand};
+use crate::job_limits::bounded_cache_keys;
 use crate::plan::{Action, Body, Env, LocalAction, Step};
 use crate::raw::RawStep;
 
@@ -51,7 +52,7 @@ pub(crate) fn step(
             }
             (String::new(), Body::Run(run))
         }
-        (None, Some(name), None) if is_local(&name) => local_action(job, name)?,
+        (None, Some(name), None) if is_local(&name) => local_action(job, name, earlier)?,
         (None, Some(name), None) => {
             let Some(action) = Action::parse(&name) else {
                 return refuse(format!(
@@ -83,19 +84,65 @@ pub(crate) fn step(
         return refuse(format!("a step of job {job} sets with without uses"));
     }
     declared_inputs(job, &body, &label, &raw.with)?;
+    plain_script(job, &body, &raw.with)?;
     let raw_with = locked_inputs(job, &body, &label, raw.with)?;
     let condition = raw
         .condition
         .map(|text| check_condition(&text, scope))
         .transpose()?;
+    let with = values(job, raw_with, scope, Some(&WITH_INTERPOLATIONS), check)?;
+    bounded_cache_keys(job, &body, &with)?;
     Ok(Step {
         id: raw.id,
         name: raw.name.unwrap_or(label),
         condition,
         body,
-        with: values(job, raw_with, scope, Some(&WITH_INTERPOLATIONS), check)?,
+        with,
         continue_on_error: raw.continue_on_error,
         env: values(job, raw.env, scope, None, check_env)?,
+    })
+}
+
+fn plain_script(
+    job: &str,
+    body: &Body,
+    with: &BTreeMap<String, String>,
+) -> Result<(), WorkflowsError> {
+    if !matches!(body, Body::Uses(Action::GithubScript)) {
+        return Ok(());
+    }
+    let Some((_, script)) = with
+        .iter()
+        .find(|(key, _)| key.eq_ignore_ascii_case("script"))
+    else {
+        return Ok(());
+    };
+    if is_log_line(script) {
+        return Ok(());
+    }
+    refuse(format!(
+        "job {job} sets the github-script script {script:?}, which is not allowed; a script is exactly one console.log('<plain text>') statement, because decisions and loops live in the helper"
+    ))
+}
+
+fn is_log_line(script: &str) -> bool {
+    let script = script.trim();
+    let script = script.strip_suffix(';').unwrap_or(script);
+    let Some(argument) = script
+        .strip_prefix("console.log(")
+        .and_then(|rest| rest.strip_suffix(')'))
+    else {
+        return false;
+    };
+    ['\'', '"'].into_iter().any(|quote| {
+        argument
+            .strip_prefix(quote)
+            .and_then(|rest| rest.strip_suffix(quote))
+            .is_some_and(|text| {
+                !text.contains(|c: char| {
+                    c == quote || c.is_control() || matches!(c, '\\' | '`' | '$')
+                })
+            })
     })
 }
 
@@ -145,7 +192,21 @@ fn declared_inputs(
     Ok(())
 }
 
-fn local_action(job: &str, name: String) -> Result<(String, Body), WorkflowsError> {
+fn checks_out_workspace(step: &Step) -> bool {
+    matches!(step.body, Body::Uses(Action::Checkout))
+        && step.condition.is_none()
+        && !step.continue_on_error
+        && !step
+            .with
+            .iter()
+            .any(|(key, _)| key.eq_ignore_ascii_case("path"))
+}
+
+fn local_action(
+    job: &str,
+    name: String,
+    earlier: &[Step],
+) -> Result<(String, Body), WorkflowsError> {
     let Some(action) = LocalAction::parse(&name) else {
         return refuse(format!(
             "job {job} uses the local action {name:?}, which is not allowed; the only local actions are {:?}, and the pinned actions are {:?}",
@@ -153,6 +214,11 @@ fn local_action(job: &str, name: String) -> Result<(String, Body), WorkflowsErro
             Action::NAMES
         ));
     };
+    if !earlier.iter().any(checks_out_workspace) {
+        return refuse(format!(
+            "job {job} uses the local action {name:?} without an earlier unconditional checkout step into the default workspace; a local action is read from the checked out repository"
+        ));
+    }
     Ok((name, Body::Local(action)))
 }
 

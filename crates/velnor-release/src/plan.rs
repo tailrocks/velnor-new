@@ -8,7 +8,6 @@ use velnor_model::{Platform, RepoPath, RustMetadata};
 use crate::bundle::{ExtraBin, check_targets};
 use crate::check::{CheckPlan, plan_checks};
 use crate::error::ReleaseError;
-use crate::error_family::FamilyError;
 use crate::family::{FamilyPlan, plan_binaries_and_family};
 use crate::hazards::{
     cargo_config, nightly_manifest, shadowed_by_extensionless_config, symlink_on_config_path,
@@ -37,6 +36,7 @@ pub struct ReleaseFiles {
     pub cargo_manifests: Option<BTreeSet<String>>,
     pub cargo_manifest_texts: BTreeMap<String, String>,
     pub bin_targets: Option<BTreeSet<(String, String, String)>>,
+    pub tracked_paths: Option<BTreeSet<String>>,
     pub rust_metadata: Option<BTreeMap<RepoPath, RustMetadata>>,
     pub workflow_names: Option<BTreeSet<String>>,
     pub push_workflows: Option<BTreeSet<String>>,
@@ -90,7 +90,7 @@ pub struct ReleasePlan {
 pub(crate) fn check_unique(configs: &[RootConfig]) -> Result<(), ReleaseError> {
     let mut tags: BTreeMap<&TagPattern, Vec<String>> = BTreeMap::new();
     for config in configs {
-        for package in &config.packages {
+        for package in config.tag_owners() {
             tags.entry(&package.tag_pattern)
                 .or_default()
                 .push(package.name.clone());
@@ -111,25 +111,27 @@ pub(crate) fn check_unique(configs: &[RootConfig]) -> Result<(), ReleaseError> {
             packages,
         });
     }
-    let mut all: Vec<(&str, &TagPattern, Option<&str>)> = Vec::new();
+    let mut all: Vec<(&str, &TagPattern, Option<&str>, Option<&str>)> = Vec::new();
     for config in configs {
         let root = config.root.as_str();
-        all.extend(
-            config
-                .packages
-                .iter()
-                .map(|package| (root, &package.tag_pattern, Some(package.name.as_str()))),
-        );
+        all.extend(config.packages.iter().map(|package| {
+            (
+                root,
+                &package.tag_pattern,
+                Some(package.name.as_str()),
+                package.group.as_deref(),
+            )
+        }));
         all.extend(
             config
                 .workspace_tags
                 .iter()
                 .filter(|pattern| !pattern.as_str().contains(PACKAGE_WILDCARD))
-                .map(|pattern| (root, pattern, None)),
+                .map(|pattern| (root, pattern, None, None)),
         );
     }
-    for (index, (root, pattern, name)) in all.iter().enumerate() {
-        for (other_root, other_pattern, other_name) in &all[index + 1..] {
+    for (index, (root, pattern, name, group)) in all.iter().enumerate() {
+        for (other_root, other_pattern, other_name, other_group) in &all[index + 1..] {
             let same_root = root == other_root;
             if let (Some(name), Some(other_name)) = (name, other_name)
                 && name == other_name
@@ -139,8 +141,9 @@ pub(crate) fn check_unique(configs: &[RootConfig]) -> Result<(), ReleaseError> {
                     roots: vec![(*root).to_owned(), (*other_root).to_owned()],
                 });
             }
+            let same_group = group.is_some() && root == other_root && group == other_group;
             let both_listed = name.is_some() && other_name.is_some();
-            if (both_listed || !same_root) && other_pattern.may_collide(pattern) {
+            if !same_group && (both_listed || !same_root) && other_pattern.may_collide(pattern) {
                 return Err(ReleaseError::TagsMayCollide {
                     first: pattern.as_str().to_owned(),
                     second: other_pattern.as_str().to_owned(),
@@ -364,9 +367,6 @@ impl ReleasePlan {
             toolchain_path(file, text)?;
         }
         let (family, binaries) = plan_binaries_and_family(&config, &configs, files)?;
-        if family.is_some() && !config.checks.is_empty() {
-            return Err(FamilyError::Unsupported { key: "[[checks]]" }.into());
-        }
         let checks = plan_checks(config.checks, &binaries)?;
         let roots = plan_roots(configs, files.rust_metadata.as_ref());
         Ok(ReleasePlan {

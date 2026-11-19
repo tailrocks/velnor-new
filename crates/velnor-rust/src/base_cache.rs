@@ -4,9 +4,9 @@
 use std::collections::BTreeMap;
 
 use velnor_model::{
-    Access, BaseExpiry, CacheKey, CacheRoot, HelperCommand, Host, Job, JobId, LockIdentity,
-    PermissionScope, Permissions, RepoFacts, RepoPath, RootSlug, RustRoot, Step, StepKind,
-    TrimFamily, When,
+    Access, BaseExpiry, CacheKey, CacheRoot, HelperCommand, Host, InputsCli, Job, JobId,
+    LockIdentity, PermissionScope, Permissions, RepoFacts, RepoPath, RootSlug, RustRoot, Step,
+    StepKind, TrimFamily, When,
 };
 
 use crate::lane::Lane;
@@ -16,6 +16,20 @@ use crate::units::Unit;
 const TRIM_JOB: JobId = JobId::from_static("rust-trim");
 
 const SAVING_HELPER: (u64, u64, u64) = (0, 1, 81);
+const BATCHED_HELPER: (u64, u64, u64) = (0, 1, 97);
+
+pub(crate) fn inputs_cli(facts: &RepoFacts) -> InputsCli {
+    let batched = facts
+        .helper
+        .as_ref()
+        .is_some_and(|helper| helper.version().at_least(BATCHED_HELPER));
+    if batched {
+        InputsCli::Batched
+    } else {
+        InputsCli::PerRoot
+    }
+}
+
 const SOURCES_FETCH_HELPER: (u64, u64, u64) = (0, 1, 86);
 const MEMBER_LOCK_HELPER: (u64, u64, u64) = (0, 1, 86);
 
@@ -108,6 +122,7 @@ pub(crate) fn restored(facts: &RepoFacts) -> Vec<Step> {
                 .iter()
                 .map(|unit| unit.target_dir.clone())
                 .collect(),
+            cli: inputs_cli(facts),
         }
     } else {
         StepKind::Helper(HelperCommand::Restored(expiry))
@@ -161,7 +176,10 @@ pub(crate) fn save_steps(
         Step {
             directory: unit.directory(),
             when: When::SaveBase,
-            ..step(StepKind::InputsSave(unit.target_dir.clone()))
+            ..step(StepKind::InputsSave {
+                target: unit.target_dir.clone(),
+                cli: inputs_cli(facts),
+            })
         },
         Step {
             when: When::SaveBase,
@@ -173,6 +191,7 @@ pub(crate) fn save_steps(
                     .collect(),
                 target: unit.target_dir.clone(),
                 archive,
+                cli: inputs_cli(facts),
                 budget_bytes: facts.config.cache_budget_bytes,
             })
         },

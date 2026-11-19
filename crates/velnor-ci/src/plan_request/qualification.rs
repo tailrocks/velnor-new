@@ -1,9 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-//! The qualification dispatch context a plan request carries, re-validated as the legacy
-//! `plan-v1` op does before it plans: the same checks in the same order, the same codes.
-
 use serde::Deserialize;
 
 use crate::error::CiError;
@@ -111,7 +108,17 @@ impl Dispatch {
         Ok(())
     }
 
-    /// The run the context names is the run being planned.
+    pub(super) fn bind_current_sha(&self, current: Option<&str>) -> Result<(), CiError> {
+        if current == Some(self.source_sha.as_str()) {
+            Ok(())
+        } else {
+            Err(invalid(
+                "qualification.binding",
+                "source_sha_not_current_run",
+            ))
+        }
+    }
+
     pub(super) fn bind_run(&self, run_key: &str) -> Result<(), CiError> {
         if run_key == format!("r{}-a{}", self.run_id, self.run_attempt) {
             Ok(())
@@ -120,8 +127,6 @@ impl Dispatch {
         }
     }
 
-    /// A phase with a predecessor needs the admission `resolve-qualification` stages and the
-    /// cache directive built from it; neither is in the helper yet.
     pub(super) fn require_no_predecessor(&self) -> Result<(), CiError> {
         if self.phase.needs_predecessor() {
             return Err(internal(&format!(

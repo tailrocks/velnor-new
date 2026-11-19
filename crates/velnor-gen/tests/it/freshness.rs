@@ -15,11 +15,11 @@ use crate::pipeline::{view, workflow};
 
 const DEBUG_LOG: &str = "CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'";
 
-fn steps(text: &str) -> Vec<&str> {
+pub(crate) fn steps(text: &str) -> Vec<&str> {
     text.split("\n      - ").skip(1).collect()
 }
 
-fn named<'t>(text: &'t str, name: &str) -> Vec<&'t str> {
+pub(crate) fn named<'t>(text: &'t str, name: &str) -> Vec<&'t str> {
     steps(text)
         .into_iter()
         .filter(|step| {
@@ -39,7 +39,7 @@ fn names_of(lane: &str) -> Vec<&str> {
 #[test]
 fn every_lane_restores_the_file_times_of_its_root_between_the_caches_and_the_restored_step()
 -> TestResult {
-    let mut repo = locked("0.1.93")?;
+    let mut repo = locked("0.1.97")?;
     repo.files.insert(
         RepoPath::new(".velnor/rust-ci.toml")?,
         b"full_run = \"nightly\"\n".to_vec(),
@@ -70,12 +70,8 @@ fn every_lane_restores_the_file_times_of_its_root_between_the_caches_and_the_res
     }
     let audit = &text[text.find("  rust-inputs-audit:").ok_or("no audit job")?..];
     let audited = named(audit, "velnor-ci inputs restore");
-    assert_eq!(audited.len(), 2, "{audit}");
-    assert!(
-        audited
-            .iter()
-            .any(|s| s.contains("working-directory: lab\n"))
-    );
+    assert_eq!(audited.len(), 1, "{audit}");
+    assert!(audited.iter().any(|s| s.contains("/lab")));
     assert!(audited.iter().any(|s| !s.contains("working-directory")));
     Ok(())
 }
