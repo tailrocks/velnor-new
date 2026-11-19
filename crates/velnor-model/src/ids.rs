@@ -95,13 +95,16 @@ const GITHUB_HOSTED: &[&str] = &[
     "windows-11-vs2026-arm",
 ];
 
-/// True when `label` is spelled like a GitHub-hosted runner label.
+/// True when `label` is spelled exactly like a GitHub-hosted runner label.
 ///
-/// The spelling is the only evidence: a self-hosted runner registered under
-/// one of these names also passes. The fork fence is therefore not a boundary
-/// for such a runner; see "Fork pull requests" in `generator/CONFIG.md`.
+/// The spelling is never proof that a runner is hosted: a self-hosted runner can be
+/// registered under any name. A runner is open to fork pull requests only when
+/// `hosted = true` is declared for it. This function serves two other purposes: the
+/// generator refuses an undeclared runner whose label looks GitHub-hosted, so that a
+/// repository must say which it is, and it checks that `fork_runner` names a GitHub
+/// label. See "Fork pull requests" in `generator/CONFIG.md`.
 #[must_use]
-pub fn github_hosted(label: &str) -> bool {
+pub fn looks_github_hosted(label: &str) -> bool {
     GITHUB_HOSTED.contains(&label.to_ascii_lowercase().as_str())
 }
 

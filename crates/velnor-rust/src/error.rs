@@ -57,6 +57,7 @@ pub enum Reason {
     UnknownLockedPackage(String),
     UnknownRoot(RepoPath),
     UnknownTestSetupRoot(String),
+    Hosting(crate::config_hosting::HostingError),
     DuplicateGroup(String),
     GroupRootTwice {
         name: String,
@@ -270,6 +271,7 @@ impl fmt::Display for Reason {
             Self::MissingTable(table) => write!(f, "missing table [{table}]"),
             Self::MissingKey(key) => write!(f, "missing key {key}"),
             Self::InvalidValue { key, value } => write!(f, "invalid value {value:?} for {key}"),
+            Self::Hosting(error) => error.fmt(f),
             Self::OutOfRange {
                 key,
                 value,

@@ -22,6 +22,7 @@ pub enum GenerateError {
     HelperNotPinned,
     HelperTooOld(HelperVersion),
     MirrorHelperTooOld(HelperVersion),
+    HostedHelperTooOld(HelperVersion),
     PrivateSourcesHelperTooOld(HelperVersion),
     MbxStoreHelperTooOld(HelperVersion),
     PrOnlyChecksHelperTooOld(HelperVersion),
@@ -82,6 +83,10 @@ impl fmt::Display for GenerateError {
             Self::MirrorHelperTooOld(version) => write!(
                 f,
                 "velnor-ci {version} cannot configure crates_mirror or disable it with VELNOR_CRATES_MIRROR=off; pin velnor-ci 0.1.93 or later with `velnor-gen pin-helper 0.1.93`"
+            ),
+            Self::HostedHelperTooOld(version) => write!(
+                f,
+                "velnor-ci {version} does not know the hosted key of .velnor/rust-ci.toml, and reads the file at run time; pin velnor-ci 0.1.99 or later with `velnor-gen pin-helper 0.1.99`"
             ),
             Self::PrivateSourcesHelperTooOld(version) => write!(f, "velnor-ci {version} cannot fetch private sources; pin velnor-ci 0.1.86 or later with `velnor-gen pin-helper 0.1.86`"),
             Self::PrCiHelperTooOld(version) => write!(

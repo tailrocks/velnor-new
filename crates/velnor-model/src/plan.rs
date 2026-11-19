@@ -4,6 +4,7 @@
 use std::collections::BTreeMap;
 
 use crate::cron::CronExpr;
+use crate::hosted::HostedRunners;
 use crate::ids::{JobId, PackageName, RepoPath, RootSlug, RunnerLabel, TargetName};
 use crate::repo::TargetKind;
 use crate::steps::StepKind;
@@ -25,6 +26,7 @@ pub struct WorkflowPlan {
     pub concurrency: Concurrency,
     pub permissions: Permissions,
     pub fork_runner: RunnerLabel,
+    pub hosted_runners: HostedRunners,
     pub jobs: Vec<Job>,
 }
 

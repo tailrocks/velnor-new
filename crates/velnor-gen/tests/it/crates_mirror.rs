@@ -13,6 +13,7 @@ fn mirrored_repo(
     mirror_runner: &str,
     shape: &str,
 ) -> Result<velnor_model::RepoView, Box<dyn std::error::Error>> {
+    let hosted = velnor_model::looks_github_hosted(runner);
     let mut repo = view(&["Cargo.toml", "tools/Cargo.toml"], None)?;
     repo.files
         .get_mut(&path("mise.toml")?)
@@ -21,15 +22,19 @@ fn mirrored_repo(
     repo.files.insert(
         path(".velnor/rust-ci.toml")?,
         format!(
-            "runner = '{runner}'\n{shape}{}",
+            "runner = '{runner}'\n{}{shape}{}",
+            if hosted { "hosted = true\n" } else { "" },
             MIRROR.replace("mirror-box", mirror_runner)
         )
         .into_bytes(),
     );
     let lock = path(".velnor/rust-ci.lock")?;
     let old = String::from_utf8(repo.files[&lock].clone())?;
-    repo.files
-        .insert(lock, old.replace("0.1.81", "0.1.93").into_bytes());
+    repo.files.insert(
+        lock,
+        old.replace("0.1.81", if hosted { "0.1.99" } else { "0.1.93" })
+            .into_bytes(),
+    );
     Ok(repo)
 }
 
@@ -92,8 +97,12 @@ fn mirror_is_explicit_scoped_and_precedes_every_job_tools() -> TestResult {
                 }
                 assert!(saw_mise);
             }
-            repo.files
-                .insert(lock, old.replace("0.1.93", "0.1.92").into_bytes());
+            repo.files.insert(
+                lock,
+                old.replace("0.1.93", "0.1.92")
+                    .replace("0.1.99", "0.1.92")
+                    .into_bytes(),
+            );
             assert!(
                 workflow(&repo).is_err_and(|error| error
                     .to_string()

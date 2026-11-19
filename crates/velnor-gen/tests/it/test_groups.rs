@@ -15,7 +15,7 @@ filter = 'package(package-0) and test(/^db_/)'
 needs = ['docker']
 test_threads = 2
 timeout_minutes = 45
-runner = 'ubuntu-24.04'
+runner = 'velnor-box'
 ";
 
 pub(crate) const SHELL: &str = "[[test_groups]]
@@ -104,7 +104,7 @@ fn the_test_groups_table_parses_every_field() -> TestResult {
     assert_eq!(groups[0].timeout_minutes, Some(45));
     assert_eq!(
         groups[0].runner.as_ref().map(ToString::to_string),
-        Some("ubuntu-24.04".to_owned())
+        Some("velnor-box".to_owned())
     );
     assert_eq!(groups[0].root, GroupRoot::OnlyRoot);
     assert_eq!(groups[1].needs, [TestNeed::Cargo]);
