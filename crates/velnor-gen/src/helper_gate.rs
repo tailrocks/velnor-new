@@ -1,7 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{HelperRelease, HelperVersion, MbxStore, PrCi, PushAfterMergeGroup, RepoFacts};
+use velnor_model::{
+    DocsRun, HelperRelease, HelperVersion, MbxStore, PrCi, PushAfterMergeGroup, RepoFacts,
+};
 
 use crate::{BUDGET_HELPER, COMPATIBLE_HELPER_SERIES, GenerateError, HELPER_MINIMUM};
 
@@ -21,6 +23,15 @@ pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, Generate
     }
     if facts.config.pr_ci == PrCi::Label && !release.version().at_least((0, 1, 86)) {
         return Err(GenerateError::PrCiHelperTooOld(release.version().clone()));
+    }
+    if facts.config.docs_run == DocsRun::PostMerge && !release.version().at_least((0, 1, 88)) {
+        return Err(GenerateError::DocsHelperTooOld(release.version().clone()));
+    }
+    if facts.config.check_alone_run == DocsRun::PostMerge && !release.version().at_least((0, 1, 91))
+    {
+        return Err(GenerateError::CheckAloneHelperTooOld(
+            release.version().clone(),
+        ));
     }
     if facts.config.crates_mirror.is_some() && !release.version().at_least((0, 1, 93)) {
         return Err(GenerateError::MirrorHelperTooOld(release.version().clone()));

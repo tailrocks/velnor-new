@@ -43,8 +43,9 @@ fn an_asset_name_with_version_and_target_names_every_file_after_the_tag_version(
     let build = job(&tree, "build-app-linux-x64")?;
     let build_runs = runs(build);
     assert!(build_runs.contains(&version), "{build_runs:?}");
-    let pack =
-        format!("tar -czf \"stage/{linux}\" -C target/x86_64-unknown-linux-musl/release app");
+    let pack = format!(
+        "tar -czf \"$RUNNER_TEMP/stage/{linux}\" -C target/x86_64-unknown-linux-musl/release app"
+    );
     assert!(build_runs.contains(&pack.as_str()), "{build_runs:?}");
     let reader = steps(build)
         .iter()
@@ -58,7 +59,7 @@ fn an_asset_name_with_version_and_target_names_every_file_after_the_tag_version(
         .last()
         .and_then(|step| step.at(&["with", "path"]))
         .and_then(Node::text);
-    assert_eq!(upload, Some("stage/*"));
+    assert_eq!(upload, Some("${{ runner.temp }}/stage/*"));
 
     let sums = runs(job(&tree, "sums-app")?);
     assert!(sums.contains(&version), "{sums:?}");

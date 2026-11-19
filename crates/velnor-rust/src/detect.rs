@@ -216,7 +216,7 @@ fn check_build_targets(
     let rust_version = crate::mise::rust_tool(tools)
         .and_then(|name| tools.tools.get(name))
         .and_then(|pin| pin.requested.first())
-        .map(String::as_str)
+        .map(|request| request.version.as_str())
         .or(toolchain.and_then(|pinned| pinned.channel.as_deref().or(pinned.path.as_deref())))
         .unwrap_or("an unspecified Rust toolchain");
     for root in rust_roots {

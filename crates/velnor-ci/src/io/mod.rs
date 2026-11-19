@@ -230,7 +230,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Cache(CacheCommand::Trim(args)) => cache::run_trim(&args.prefix, args.keep),
         Command::Cache(CacheCommand::TrimDeltas(args)) => delta_trim::run(args.run_id),
         Command::Cache(CacheCommand::Budget(args)) => cache_api::run_budget(&args),
-        Command::Restored(args) => small::run_restored(args),
+        Command::Restored(args) => small::run_restored(&args),
         Command::ValidateArtifactId => small::run_validate_artifact_id(),
         Command::InstallGh(args) => small::run_install_gh(&args),
         Command::StageBundle => small::run_stage_bundle(),

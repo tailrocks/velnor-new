@@ -4,14 +4,14 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
-    Access, CacheDebug, CacheKey, CargoCommand, Concurrency, HelperCommand, Host, InputsCli, Job,
-    JobId, MbxRemote, MbxStore, PackageName, PermissionScope, Permissions, PrCi, PrRun,
+    Access, CacheDebug, CacheKey, CargoCommand, Concurrency, HelperCommand, Host, Job, JobId,
+    MbxRemote, MbxStore, PackageName, PermissionScope, Permissions, PrCi, PrRun,
     PushAfterMergeGroup, RepoFacts, RootSlug, RustRoot, Shape, ShapeDecision, Step, StepKind,
     TargetName, Toolchain, When, WorkflowPlan,
 };
 
 use crate::audit_job::audit_job;
-use crate::base_cache::{inputs_cli, restored, sources_locks};
+use crate::base_cache::{restored, sources_locks};
 use crate::config::CONFIG_PATH;
 use crate::detect::HELPER_PACKAGE;
 use crate::error::{DetectError, Reason};

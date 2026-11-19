@@ -153,6 +153,7 @@ pub enum Rule {
     WorkflowTooLarge(usize),
     CacheKeyTooLong(usize),
     OutputNameCollision(String),
+    DistFileCollision(String),
     EnvTooLong(usize),
 }
 
@@ -165,17 +166,8 @@ pub struct RuleViolation {
 
 impl fmt::Display for RuleViolation {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if let Rule::WorkflowTooLarge(bytes) = &self.rule {
-            return write!(
-                f,
-                "the workflow is {bytes} bytes, and GitHub does not start a workflow file above {MAX_WORKFLOW_BYTES} bytes; reduce the workflow size"
-            );
-        }
-        if let Rule::OutputNameCollision(name) = &self.rule {
-            return write!(
-                f,
-                "the tag job would define the output {name} twice: it is both a released package and the commit output of another package; rename the package"
-            );
+        if let Some(message) = crate::rule_messages::whole_workflow(&self.rule, &self.job) {
+            return f.write_str(&message);
         }
         write!(f, "job {} step {}: ", self.job, self.step + 1)?;
         match &self.rule {
@@ -213,7 +205,9 @@ impl fmt::Display for RuleViolation {
                 "a job that holds the release App token runs mise without --no-config --no-env --no-hooks",
             ),
             Rule::CombinedCacheNotLastStep => f.write_str(crate::combined_cache::MESSAGE),
-            Rule::WorkflowTooLarge(_) | Rule::OutputNameCollision(_) => Ok(()),
+            Rule::WorkflowTooLarge(_)
+            | Rule::OutputNameCollision(_)
+            | Rule::DistFileCollision(_) => Ok(()),
             Rule::CacheKeyTooLong(length) => write!(
                 f,
                 "a cache key can be {length} characters long at run time, and actions/cache allows at most {MAX_CACHE_KEY_CHARACTERS}; shorten the job id or the root directory name"
