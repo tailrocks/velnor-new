@@ -12,6 +12,27 @@ fn temp(file: &str) -> std::path::PathBuf {
     Path::new(&std::env::var("RUNNER_TEMP").unwrap_or_default()).join(file)
 }
 
+/// The Cargo command that `velnor-ci inputs build [--directory <dir>]... -- <command>` wraps, or
+/// `argv` itself. The wrapper only inventories inputs around the command, so the report, the
+/// cache audit and the Cargo root come from the command it runs.
+pub(super) fn cargo_command(argv: &[String]) -> &[String] {
+    let wrapper = argv
+        .first()
+        .and_then(|program| Path::new(program).file_name())
+        .is_some_and(|name| name == "velnor-ci")
+        && argv.get(1).is_some_and(|word| word == "inputs")
+        && argv.get(2).is_some_and(|word| word == "build");
+    let inner = argv
+        .iter()
+        .position(|word| word == "--")
+        .and_then(|separator| argv.get(separator + 1..))
+        .filter(|inner| !inner.is_empty());
+    match inner {
+        Some(inner) if wrapper => inner,
+        _ => argv,
+    }
+}
+
 pub(super) fn start_invocation(argv: &[String]) -> Result<Invocation, CiError> {
     let execution = execution(argv)?;
     Ok(Invocation {
