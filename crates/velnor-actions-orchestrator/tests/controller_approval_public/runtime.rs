@@ -37,10 +37,10 @@ fn shipped_controller_080_accepts_its_lock_and_renders_qualified_identities()
     let approvals = include_str!("../../../../.velnor/controller-approvals.json");
     let lock = include_str!("../../../../.velnor/generator.lock");
     let value: Value = serde_json::from_str(approvals)?;
-    assert_eq!(value["active"]["version"], "0.1.80");
+    assert_eq!(value["active"]["version"], "0.1.81");
     assert_eq!(
         value["active"]["commit"],
-        "b71a0045e42f6a8b620aa9283d0106bed622fe3b"
+        "7d9340921fbe06bb23ca5f02c071c65870c39277"
     );
     assert!(value["staged"].is_null());
     let ci = rendered_ci(approvals, lock)?;
