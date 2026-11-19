@@ -51,7 +51,7 @@ pub(crate) fn step(
             }
             (String::new(), Body::Run(run))
         }
-        (None, Some(name), None) if is_local(&name) => local_action(job, name)?,
+        (None, Some(name), None) if is_local(&name) => local_action(job, name, earlier)?,
         (None, Some(name), None) => {
             let Some(action) = Action::parse(&name) else {
                 return refuse(format!(
@@ -145,7 +145,21 @@ fn declared_inputs(
     Ok(())
 }
 
-fn local_action(job: &str, name: String) -> Result<(String, Body), WorkflowsError> {
+fn checks_out_workspace(step: &Step) -> bool {
+    matches!(step.body, Body::Uses(Action::Checkout))
+        && step.condition.is_none()
+        && !step.continue_on_error
+        && !step
+            .with
+            .iter()
+            .any(|(key, _)| key.eq_ignore_ascii_case("path"))
+}
+
+fn local_action(
+    job: &str,
+    name: String,
+    earlier: &[Step],
+) -> Result<(String, Body), WorkflowsError> {
     let Some(action) = LocalAction::parse(&name) else {
         return refuse(format!(
             "job {job} uses the local action {name:?}, which is not allowed; the only local actions are {:?}, and the pinned actions are {:?}",
@@ -153,6 +167,11 @@ fn local_action(job: &str, name: String) -> Result<(String, Body), WorkflowsErro
             Action::NAMES
         ));
     };
+    if !earlier.iter().any(checks_out_workspace) {
+        return refuse(format!(
+            "job {job} uses the local action {name:?} without an earlier unconditional checkout step into the default workspace; a local action is read from the checked out repository"
+        ));
+    }
     Ok((name, Body::Local(action)))
 }
 
