@@ -33,6 +33,7 @@ const RUN_FLAGS: &[&str] = &[
     "--nocapture",
 ];
 const RUN_OPTIONS: &[&str] = &[
+    "--cargo-message-format",
     "--failure-output",
     "--final-status-level",
     "--flaky-result",
