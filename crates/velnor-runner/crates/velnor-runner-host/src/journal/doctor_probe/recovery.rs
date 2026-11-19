@@ -32,10 +32,13 @@ pub(in crate::journal) async fn recover_at_startup(
         }
         let operation_id = operation_id.ok_or(HostError::Journal)?;
         let phase = ProbePhase::parse(&phase.ok_or(HostError::Journal)?)?;
-        let lease_state = ProbeLeaseState::parse(&lease_state.ok_or(HostError::Journal)?)?;
-        if matches!(phase, ProbePhase::Removed | ProbePhase::Aborted)
-            && lease_state == ProbeLeaseState::Released
-        {
+        let child_settled = matches!(phase, ProbePhase::Removed | ProbePhase::Aborted);
+        let lease_state = match lease_state {
+            Some(lease_state) => ProbeLeaseState::parse(&lease_state)?,
+            None if child_settled => ProbeLeaseState::Released,
+            None => return Err(HostError::Journal),
+        };
+        if child_settled && lease_state == ProbeLeaseState::Released {
             let changed = connection
                 .execute(
                     "UPDATE doctor_probe_requests SET state = 'stale' WHERE request_id = ?1 AND state IN ('running', 'recovering', 'uncertain') AND child_operation_id = ?2",
@@ -48,8 +51,7 @@ pub(in crate::journal) async fn recover_at_startup(
             }
             continue;
         }
-        if matches!(phase, ProbePhase::Removed | ProbePhase::Aborted)
-            || lease_state == ProbeLeaseState::Released
+        if child_settled || lease_state == ProbeLeaseState::Released
         {
             return Err(HostError::Journal);
         }
