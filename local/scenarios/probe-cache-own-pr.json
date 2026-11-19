@@ -1,5 +1,6 @@
 {
   "description": "The cache-own-pr probe of the lab: a pull request, then a second commit pushed to it.",
+  "fresh_cache": true,
   "steps": [
     {
       "commit": {

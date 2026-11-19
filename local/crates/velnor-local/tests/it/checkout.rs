@@ -3,7 +3,7 @@
 
 use std::path::Path;
 
-use velnor_local::io::checkout::copy_untracked;
+use velnor_local::io::checkout::{copy_checkout, copy_untracked};
 use velnor_local::scenario::overlapping;
 
 #[test]
@@ -72,4 +72,36 @@ async fn untracked_files_and_inside_links_are_copied_and_escaping_links_are_refu
             "{escaping}"
         );
     }
+}
+
+#[tokio::test]
+async fn the_copy_names_the_hosted_repository_as_its_origin() {
+    let root = crate::support::temp_dir("copy-origin");
+    let (checkout, copy) = (root.join("checkout"), root.join("copy"));
+    std::fs::create_dir_all(&checkout).unwrap_or_else(|e| unreachable!("{e}"));
+    let git = |dir: &Path, args: &[&str]| {
+        let out = std::process::Command::new("git")
+            .arg("-C")
+            .arg(dir)
+            .args(["-c", "user.name=t", "-c", "user.email=t@localhost"])
+            .args(args)
+            .output()
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        assert!(out.status.success(), "git {args:?}");
+        String::from_utf8_lossy(&out.stdout).trim().to_owned()
+    };
+    git(&checkout, &["init", "-q", "-b", "main"]);
+    std::fs::write(checkout.join("a.txt"), "a").unwrap_or_else(|e| unreachable!("{e}"));
+    git(&checkout, &["add", "-A"]);
+    git(&checkout, &["commit", "-q", "-m", "first"]);
+    let copied = copy_checkout(&checkout, &copy, "main", "t", "tailrocks/velnor-new").await;
+    assert!(copied.is_ok(), "{copied:?}");
+    assert_eq!(
+        git(&copy, &["remote", "get-url", "origin"]),
+        "https://github.com/tailrocks/velnor-new"
+    );
+    assert_eq!(
+        git(&copy, &["rev-parse", "HEAD"]),
+        git(&checkout, &["rev-parse", "HEAD"])
+    );
 }

@@ -59,14 +59,13 @@ if [[ ! -f "$INV" ]]; then
   echo "check-freshness: missing inventory: $INV" >&2
   exit 1
 fi
-if [[ -n "${VELNOR_ACTIONS_BIN:-}" && -x "$VELNOR_ACTIONS_BIN" ]]; then
+if [[ -n "${VELNOR_FRESHNESS_BIN:-}" && -x "$VELNOR_FRESHNESS_BIN" ]]; then
   exec env \
-    VELNOR_INTERNAL_OP=repo-policy-v1 \
     VELNOR_REPO_POLICY_ACTION=freshness \
     VELNOR_REPO_POLICY_ROOT="$ROOT" \
     VELNOR_REPO_POLICY_CHECK_UPSTREAM="$CHECK_UPSTREAM" \
     VELNOR_REPO_POLICY_WITH_ADVISORIES="$WITH_ADVISORIES" \
-    "$VELNOR_ACTIONS_BIN"
+    "$VELNOR_FRESHNESS_BIN"
 fi
 
 if ! command -v mise >/dev/null 2>&1; then
@@ -86,9 +85,8 @@ MBX_POLICY="$(awk -v key=mr-boxington -f "$PROJECT_ROOT/scripts/toml-tool-pin.aw
   exit 1
 }
 env \
-  VELNOR_INTERNAL_OP=repo-policy-v1 \
   VELNOR_REPO_POLICY_ACTION=freshness \
   VELNOR_REPO_POLICY_ROOT="$ROOT" \
   VELNOR_REPO_POLICY_CHECK_UPSTREAM="$CHECK_UPSTREAM" \
   VELNOR_REPO_POLICY_WITH_ADVISORIES="$WITH_ADVISORIES" \
-  mise exec "rust@$RUST_POLICY" "mr-boxington@$MBX_POLICY" -- cargo run --quiet --locked -p velnor-actions-cli --bin velnor-actions
+  mise exec "rust@$RUST_POLICY" "mr-boxington@$MBX_POLICY" -- cargo run --quiet --locked -p velnor-freshness --bin velnor-freshness

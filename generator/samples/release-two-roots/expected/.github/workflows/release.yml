@@ -102,11 +102,11 @@ jobs:
           CARGO_BUILD_RUSTC_WORKSPACE_WRAPPER: ''
           CARGO_BUILD_RUSTC: rustc
           RUSTC: rustc
-        run: 'velnor-ci release check-config release-plz.toml tools/release-plz.toml --tag-pattern release-plz.toml ''app-v{{ version }}'' --tag-pattern release-plz.toml ''{{ package }}-v{{ version }}'' --tag-pattern tools/release-plz.toml ''tools-v{{ version }}'' --tag-pattern tools/release-plz.toml ''{{ package }}-v{{ version }}'' --repo="$REPOSITORY" --manifests'
+        run: 'velnor-ci release check-config release-plz.toml --tag-pattern release-plz.toml ''app-v{{ version }}'' --tag-pattern release-plz.toml ''tools-v{{ version }}'' --tag-pattern release-plz.toml ''{{ package }}-v{{ version }}'' --repo="$REPOSITORY" --manifests'
       - id: app
         name: Create the release App token
         if: '${{ steps.newest.outputs.newest == ''true'' }}'
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510  # v3.3.0
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc  # v3.4.0
         with:
           client-id: '${{ secrets.RELEASE_APP_ID }}'
           private-key: '${{ secrets.RELEASE_APP_PRIVATE_KEY }}'
@@ -126,18 +126,6 @@ jobs:
           CARGO_BUILD_RUSTC: rustc
           RUSTC: rustc
         run: '"$RUNNER_TEMP/release-plz" release-pr --forge github --git-token "$GITHUB_TOKEN" --manifest-path Cargo.toml --config release-plz.toml'
-      - name: Open the release pull request of tools
-        if: '${{ steps.newest.outputs.newest == ''true'' }}'
-        env:
-          GITHUB_TOKEN: '${{ steps.app.outputs.token }}'
-          RUSTUP_TOOLCHAIN: stable
-          RUSTC_WRAPPER: ''
-          RUSTC_WORKSPACE_WRAPPER: ''
-          CARGO_BUILD_RUSTC_WRAPPER: ''
-          CARGO_BUILD_RUSTC_WORKSPACE_WRAPPER: ''
-          CARGO_BUILD_RUSTC: rustc
-          RUSTC: rustc
-        run: '"$RUNNER_TEMP/release-plz" release-pr --forge github --git-token "$GITHUB_TOKEN" --manifest-path tools/Cargo.toml --config tools/release-plz.toml'
   tag:
     needs:
       - gate
@@ -200,18 +188,18 @@ jobs:
           CARGO_BUILD_RUSTC_WORKSPACE_WRAPPER: ''
           CARGO_BUILD_RUSTC: rustc
           RUSTC: rustc
-        run: 'velnor-ci release check-config release-plz.toml tools/release-plz.toml --tag-pattern release-plz.toml ''app-v{{ version }}'' --tag-pattern release-plz.toml ''{{ package }}-v{{ version }}'' --tag-pattern tools/release-plz.toml ''tools-v{{ version }}'' --tag-pattern tools/release-plz.toml ''{{ package }}-v{{ version }}'' --branch-prefix release-plz.toml release-plz-app- --branch-prefix tools/release-plz.toml release-plz-tools- --repo="$REPOSITORY" --manifests --released-versions'
+        run: 'velnor-ci release check-config release-plz.toml --tag-pattern release-plz.toml ''app-v{{ version }}'' --tag-pattern release-plz.toml ''tools-v{{ version }}'' --tag-pattern release-plz.toml ''{{ package }}-v{{ version }}'' --branch-prefix release-plz.toml release-plz- --repo="$REPOSITORY" --manifests --released-versions'
       - name: Check that release-plz would tag the verified commit
         if: '${{ steps.newest.outputs.newest == ''true'' }}'
         env:
           GITHUB_TOKEN: '${{ github.token }}'
           REPOSITORY: '${{ github.repository }}'
           COMMIT: '${{ github.event.workflow_run.head_sha }}'
-        run: 'velnor-ci release preflight --repo="$REPOSITORY" --verified-commit="$COMMIT" --branch-prefix=release-plz-app- --branch-prefix=release-plz-tools-'
+        run: 'velnor-ci release preflight --repo="$REPOSITORY" --verified-commit="$COMMIT" --branch-prefix=release-plz-'
       - id: app
         name: Create the release App token
         if: '${{ steps.newest.outputs.newest == ''true'' }}'
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510  # v3.3.0
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc  # v3.4.0
         with:
           client-id: '${{ secrets.RELEASE_APP_ID }}'
           private-key: '${{ secrets.RELEASE_APP_PRIVATE_KEY }}'
@@ -231,18 +219,6 @@ jobs:
           CARGO_BUILD_RUSTC: rustc
           RUSTC: rustc
         run: '"$RUNNER_TEMP/release-plz" release --forge github --git-token "$GITHUB_TOKEN" --manifest-path Cargo.toml --config release-plz.toml -o json > "$RUNNER_TEMP/release-0.json"'
-      - name: Tag the releases of tools
-        if: '${{ steps.newest.outputs.newest == ''true'' }}'
-        env:
-          GITHUB_TOKEN: '${{ steps.app.outputs.token }}'
-          RUSTUP_TOOLCHAIN: stable
-          RUSTC_WRAPPER: ''
-          RUSTC_WORKSPACE_WRAPPER: ''
-          CARGO_BUILD_RUSTC_WRAPPER: ''
-          CARGO_BUILD_RUSTC_WORKSPACE_WRAPPER: ''
-          CARGO_BUILD_RUSTC: rustc
-          RUSTC: rustc
-        run: '"$RUNNER_TEMP/release-plz" release --forge github --git-token "$GITHUB_TOKEN" --manifest-path tools/Cargo.toml --config tools/release-plz.toml -o json > "$RUNNER_TEMP/release-1.json"'
       - id: record
         name: Record the released packages and the commits their tags are on
         if: '${{ steps.newest.outputs.newest == ''true'' }}'
@@ -250,7 +226,7 @@ jobs:
           GITHUB_TOKEN: '${{ github.token }}'
           REPOSITORY: '${{ github.repository }}'
           COMMIT: '${{ github.event.workflow_run.head_sha }}'
-        run: 'velnor-ci release record --repo="$REPOSITORY" --verified-commit="$COMMIT" "$RUNNER_TEMP/release-0.json" "$RUNNER_TEMP/release-1.json"'
+        run: 'velnor-ci release record --repo="$REPOSITORY" --verified-commit="$COMMIT" "$RUNNER_TEMP/release-0.json"'
   build-app-linux-x64:
     needs:
       - gate
@@ -276,7 +252,7 @@ jobs:
       - name: Install the musl C compiler
         run: sudo apt-get install --yes musl-tools
       - name: Install rust
-        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
+        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
         with:
           version: '2026.11.10'
           install_args: rust
@@ -321,7 +297,7 @@ jobs:
       - name: Install the musl C compiler
         run: sudo apt-get install --yes musl-tools
       - name: Install rust
-        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
+        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
         with:
           version: '2026.11.10'
           install_args: rust
@@ -364,7 +340,7 @@ jobs:
           CHECKED_OUT: '${{ steps.source.outputs.commit }}'
         run: 'test -n "$COMMIT" -a "$CHECKED_OUT" = "$COMMIT"'
       - name: Install rust
-        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
+        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
         with:
           version: '2026.11.10'
           install_args: rust
@@ -493,7 +469,7 @@ jobs:
       - name: Install the musl C compiler
         run: sudo apt-get install --yes musl-tools
       - name: Install rust
-        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
+        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
         with:
           version: '2026.11.10'
           install_args: rust
@@ -501,12 +477,11 @@ jobs:
       - name: Add the x86_64-unknown-linux-musl target
         run: rustup target add x86_64-unknown-linux-musl
       - name: Build tools for linux-x64
-        working-directory: tools
         env:
           TARGET_CC: musl-gcc
         run: cargo build --release --locked --manifest-path Cargo.toml --package tools --bin tools --target x86_64-unknown-linux-musl --target-dir target
       - name: Pack tools-linux-x64.tar.gz
-        run: tar -czf tools-linux-x64.tar.gz -C tools/target/x86_64-unknown-linux-musl/release tools
+        run: tar -czf tools-linux-x64.tar.gz -C target/x86_64-unknown-linux-musl/release tools
       - name: Upload tools-linux-x64
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
@@ -537,7 +512,7 @@ jobs:
           CHECKED_OUT: '${{ steps.source.outputs.commit }}'
         run: 'test -n "$COMMIT" -a "$CHECKED_OUT" = "$COMMIT"'
       - name: Install rust
-        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
+        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
         with:
           version: '2026.11.10'
           install_args: rust
@@ -545,10 +520,9 @@ jobs:
       - name: Add the aarch64-apple-darwin target
         run: rustup target add aarch64-apple-darwin
       - name: Build tools for macos-arm64
-        working-directory: tools
         run: cargo build --release --locked --manifest-path Cargo.toml --package tools --bin tools --target aarch64-apple-darwin --target-dir target
       - name: Pack tools-macos-arm64.tar.gz
-        run: tar -czf tools-macos-arm64.tar.gz -C tools/target/aarch64-apple-darwin/release tools
+        run: tar -czf tools-macos-arm64.tar.gz -C target/aarch64-apple-darwin/release tools
       - name: Upload tools-macos-arm64
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
         with:
