@@ -92,14 +92,14 @@ pub(crate) fn workflow(raw: RawWorkflow, earlier: &[Workflow]) -> Result<Workflo
         .map(|raw| concurrency(&format!("the workflow {file}"), raw))
         .transpose()?;
     let mut jobs: Vec<Job> = Vec::new();
-    let mut raw_jobs = raw.job;
-    raw_jobs.extend(cases(
+    let mut raw_jobs = cases(
         &file,
         raw.hosted_runner.as_deref(),
         raw.scale_set_runner.as_deref(),
         raw.case,
         &triggers,
-    )?);
+    )?;
+    raw_jobs.extend(raw.job);
     for job in raw_jobs {
         let checked = self::job(job, &ctx, &jobs)?;
         jobs.push(checked);
