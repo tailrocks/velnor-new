@@ -1011,7 +1011,10 @@ and the label then mostly finds the work done. The gate's meaning and decisions 
   `velnord`, keeps state (≤ 50 ms added per call at P90 [T]). Verbs: `velnor verify`, `velnor ship`,
   `velnor check <name>`, `velnor resolve`, `velnor wait`. A command the planner maps to an inventory
   obligation (its argv shape, package selection and features) is *counting*; anything else is
-  scratch and runs locally as advice. The first release only counts and journals (no cluster part).
+  scratch and runs locally as advice. The verbs are the contract; the wrapper only maps exact argv
+  shapes (a wrong mapping is a miss, never a wrong hit) and stays only if count-only data show agents
+  use it. Every verb has `--json`, and `velnor resolve --json` prints the planned vector without
+  running anything. The first release only counts and journals (no cluster part).
 - **Trees, not pushes.** The daemon snapshots the worktree as a Git tree through a private index
   (tracked and untracked, never ignored files) and sends a thin pack against the node mirror under
   `refs/velnor/wip/` (seven-day expiry, secret scan on the delta); the node hashes the whole staged

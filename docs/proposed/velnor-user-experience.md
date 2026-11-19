@@ -252,6 +252,9 @@ test, its signature and the last log lines. **`velnor resolve`** asks the ledger
 anything, which checks are already done, running, or still needed. **`velnor why-red`** says whether
 a failure on an unchanged key is also red on `main`, a known flake, or new on your tree.
 
+Every command takes `--json` for agents; `velnor resolve --json` prints the planned checks and why
+each would run or be reused, without running anything.
+
 **`cargo` goes through Velnor.** `velnor cargo` sits in `mise.toml`'s cargo wrapper slot. A command
 that matches a CI check (`cargo nextest run -p velnor-ci`, `cargo clippy …`) asks the ledger first,
 then runs on a warm cluster node in the `interactive` class and shows a trust tier; anything else

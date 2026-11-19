@@ -1144,6 +1144,14 @@ mostly a lookup. Decisions 1–24 and the gate's meaning are unchanged.
 | Q8 label authorisation per SHA or per PR | Settled by ruling Q9 (a verdict belongs to its commit); a lab A case added, no owner question | 8.2 |
 | Step S4: one receipt covers a later labelled request | Adopted as a shadow parity item | AN13 |
 
+### Group 40: agent-native answer by GPT-6.2-Astra
+
+| Idea | Decision | v3 section |
+|---|---|---|
+| C3 explicit CLI first, shim only if earned | Settled: the verbs are the contract; the wrapper maps exact argv only and stays if count-only data show use | 8.6 |
+| `velnor plan --json` | Adopted as `velnor resolve --json` | 8.6; UX 5 |
+| Three trust levels | Folded into T0–T3 (T0 and T1 are both diagnostics) | 8.6 |
+
 ## Design review
 
 The eight design critiques and the comparison that verified them are the input here; ids are the
