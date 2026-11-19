@@ -115,19 +115,6 @@ pub(in crate::journal) async fn has_charged_connection(
         .any(|allocation| allocation.connection_id().as_str() == connection_id))
 }
 
-pub(in crate::journal) async fn has_any_charged(
-    connection: &turso::Connection,
-) -> Result<bool, HostError> {
-    let mut rows = connection
-        .query("SELECT 1 FROM capacity_header_meta WHERE singleton = 1", ())
-        .await
-        .map_err(|_| HostError::Journal)?;
-    if rows.next().await.map_err(|_| HostError::Journal)?.is_none() {
-        return Ok(false);
-    }
-    Ok(!load(connection).await?.charged_allocations().is_empty())
-}
-
 pub(in crate::journal) async fn save(
     connection: &turso::Connection,
     ledger: &HeaderLedger,
