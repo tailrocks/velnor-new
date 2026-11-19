@@ -17,7 +17,7 @@ pub(crate) fn mirror(raw: RawCratesMirror) -> Result<velnor_model::CratesMirror,
     let invalid = |key, value| Reason::InvalidValue { key, value };
     let runner = RunnerLabel::new(raw.runner.clone())
         .map_err(|_| invalid("crates_mirror.runner", raw.runner))?;
-    if hosted(runner.as_str()) {
+    if velnor_model::github_hosted(runner.as_str()) {
         return Err(invalid("crates_mirror.runner", runner.to_string()));
     }
     if !raw.registry.starts_with("sparse+https://")
@@ -50,15 +50,5 @@ pub(crate) fn mirror(raw: RawCratesMirror) -> Result<velnor_model::CratesMirror,
         runner,
         registry: raw.registry,
         cainfo: raw.cainfo,
-    })
-}
-
-fn hosted(label: &str) -> bool {
-    let label = label.to_ascii_lowercase();
-    ["ubuntu-", "macos-", "windows-"].iter().any(|prefix| {
-        label.strip_prefix(prefix).is_some_and(|version| {
-            let version = version.split("-arm").next().unwrap_or(version);
-            version == "latest" || version.chars().all(|c| c.is_ascii_digit() || c == '.')
-        })
     })
 }

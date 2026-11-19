@@ -49,6 +49,7 @@ fn known_subjects(ctx: &FreshnessContext) -> std::collections::BTreeSet<String> 
             .map(str::to_owned)
     }));
     subjects.extend(ctx.supported.iter().cloned());
+    subjects.extend(super::advisories::ignored_advisory_ids(ctx));
     if let Some(default) = ctx.runner.get("default").and_then(Value::as_str) {
         subjects.insert(default.to_owned());
     }
