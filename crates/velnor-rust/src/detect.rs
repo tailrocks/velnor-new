@@ -98,7 +98,7 @@ fn is_release_plz_config(path: &RepoPath) -> bool {
 pub fn metadata_roots(view: &RepoView) -> Result<Vec<RepoPath>, DetectError> {
     let config = config(view)?;
     let mut manifests: Vec<RepoPath> = tracked_manifests(&view.tracked_paths)
-        .filter(|manifest| !excluded(&config, manifest))
+        .filter(|manifest| !manifest.in_samples() && !excluded(&config, manifest))
         .cloned()
         .collect();
     manifests.sort_by_key(|manifest| (manifest.as_str().matches('/').count(), manifest.clone()));

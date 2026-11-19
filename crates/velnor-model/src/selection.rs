@@ -13,6 +13,18 @@ pub const RELEASE_WORKFLOW_PATH: RepoPath = RepoPath::from_static(".github/workf
 pub const RELEASE_CONFIG_PATH: RepoPath = RepoPath::from_static(".velnor/release.toml");
 pub const WORKFLOWS_CONFIG_PATH: RepoPath = RepoPath::from_static(".velnor/workflows.toml");
 pub const RELEASE_PLZ_FILE: &str = "release-plz.toml";
+/// Recorded sample checkouts: data under this folder, never roots of the checkout that holds it.
+pub const SAMPLES: &str = "generator/samples";
+
+impl RepoPath {
+    /// Whether the path is inside the recorded samples folder.
+    #[must_use]
+    pub fn in_samples(&self) -> bool {
+        self.as_str()
+            .strip_prefix(SAMPLES)
+            .is_some_and(|rest| rest.starts_with('/'))
+    }
+}
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ChangeSet {

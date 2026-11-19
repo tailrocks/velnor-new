@@ -6,7 +6,7 @@ use std::fs;
 use std::io::{ErrorKind, Write};
 use std::path::{Path, PathBuf};
 
-use velnor_model::{RepoPath, RepoView};
+use velnor_model::{RepoPath, RepoView, SAMPLES};
 use velnor_rust::{MetadataError, cargo_files, is_plain_source, manifests, wanted_files};
 
 use crate::expected_with_notes;
@@ -16,7 +16,6 @@ use staged::StagedSample;
 
 mod staged;
 
-pub const SAMPLES: &str = "generator/samples";
 pub const SAMPLE_REPOSITORY: &str = "/repo";
 
 pub fn record_sample(
