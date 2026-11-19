@@ -117,7 +117,7 @@ impl fmt::Display for GenerateError {
             ),
             Self::TagPushHelperTooOld(version) => write!(
                 f,
-                "velnor-ci {version} cannot check a pushed family tag, which family_trigger = \"tag_push\" needs; pin velnor-ci 0.1.97 or later with `velnor-gen pin-helper 0.1.97`"
+                "velnor-ci {version} cannot check a pushed family tag, which family_trigger = \"tag_push\" needs; pin velnor-ci 0.1.98 or later with `velnor-gen pin-helper 0.1.98`"
             ),
             Self::Metadata(error) => error.fmt(f),
             Self::Workflows(error) => error.fmt(f),

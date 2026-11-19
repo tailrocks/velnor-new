@@ -102,14 +102,14 @@ fn the_family_job_refuses_a_pushed_tag_that_is_not_the_family_tag_of_the_version
 
 #[test]
 fn tag_push_needs_a_helper_that_checks_the_pushed_tag() -> TestResult {
-    match generate("0.1.96", &tools_like(TAG_PUSH)) {
+    match generate("0.1.97", &tools_like(TAG_PUSH)) {
         Err(error) => assert!(matches!(
             error.downcast::<GenerateError>().map(|error| *error),
             Ok(GenerateError::TagPushHelperTooOld(_))
         )),
         Ok(_) => return Err("an old helper was accepted".into()),
     }
-    assert!(generate("0.1.96", &tools_like("commit_file = true\n")).is_ok());
+    assert!(generate("0.1.97", &tools_like("commit_file = true\n")).is_ok());
     Ok(())
 }
 
