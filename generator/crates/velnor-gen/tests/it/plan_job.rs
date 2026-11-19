@@ -298,11 +298,15 @@ fn checkout_depths<'t>(text: &'t str, job: &str) -> Vec<&'t str> {
 }
 
 #[test]
-fn no_job_asks_for_pull_requests_access_and_every_job_reads_contents_only() -> TestResult {
+fn only_the_cache_job_asks_for_pull_requests_access_and_others_read_contents() -> TestResult {
     let multi = workflow(&view(&["Cargo.toml", "lab/Cargo.toml"], None)?)?;
     let single = workflow(&view(&["Cargo.toml"], None)?)?;
     for text in [&multi, &single] {
-        assert!(!text.contains("pull-requests"), "{text}");
+        assert_eq!(
+            job_permissions(text, "rust-trim"),
+            ["pull-requests: read", "actions: write"]
+        );
+        assert_eq!(text.matches("pull-requests").count(), 1, "{text}");
     }
     for job in ["rust-plan", "required"] {
         assert_eq!(job_permissions(&multi, job), ["contents: read"], "{job}");
@@ -360,7 +364,7 @@ fn the_single_job_policy_lane_plans_itself_from_git_with_two_commits() -> TestRe
         ["contents: read"],
         "{text}"
     );
-    assert!(!text.contains("pull-requests"), "{text}");
+    assert_eq!(text.matches("pull-requests").count(), 1, "{text}");
     Ok(())
 }
 

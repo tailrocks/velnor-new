@@ -80,8 +80,7 @@ pub fn parse_mac_runner_qualification(
         || !bounded_text(&receipt.outer_daemon.id)
         || !bounded_text(&receipt.inner_daemon_id)
         || receipt.outer_daemon.id == receipt.inner_daemon_id
-        || !receipt.outer_daemon.root.starts_with('/')
-        || !bounded_text(&receipt.outer_daemon.root)
+        || !canonical_absolute_nonroot(&receipt.outer_daemon.root)
         || !bounded_text(&receipt.outer_daemon.store)
         || [
             &receipt.versions.runner,
@@ -125,6 +124,15 @@ fn hex(value: &str, length: usize) -> bool {
         && value
             .bytes()
             .all(|value| value.is_ascii_digit() || (b'a'..=b'f').contains(&value))
+}
+
+fn canonical_absolute_nonroot(path: &str) -> bool {
+    bounded_text(path)
+        && path != "/"
+        && path.strip_prefix('/').is_some_and(|rest| {
+            rest.split('/')
+                .all(|part| !part.is_empty() && part != "." && part != "..")
+        })
 }
 
 fn bounded_text(value: &str) -> bool {

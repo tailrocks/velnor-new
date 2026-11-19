@@ -101,9 +101,7 @@ fn saves_nothing(source: &str, view: &RepoView) -> TestResult {
         "Save the sources cache",
         "cache decide",
         "Build the tests",
-        "rust-trim",
         "repository.private",
-        "actions: write",
         "Explain the skipped base cache saves",
     ] {
         assert!(!text.contains(absent), "{source}: still has {absent}");
@@ -167,6 +165,51 @@ fn a_cargo_config_registry_or_source_saves_no_base_cache() -> TestResult {
             "{config}: {notes:?}"
         );
     }
+    Ok(())
+}
+
+#[test]
+fn public_repositories_with_private_dependencies_still_budget_their_tools_caches() -> TestResult {
+    let text = text_of(&with_lock_file(GIT)?)?;
+    let trim = block(&text, "rust-trim").ok_or("no trim job")?;
+    assert_eq!(text.matches("\"$VELNOR_EXEC\" cache budget").count(), 1);
+    assert!(!trim.contains("cache trim"), "{trim}");
+    assert!(!trim.contains("download-artifact"), "{trim}");
+    assert!(!trim.contains("checkout"), "{trim}");
+    assert!(!trim.contains("cargo "), "{trim}");
+    let required = block(&text, "required").ok_or("no required")?;
+    assert!(!required.contains("rust-trim"), "{required}");
+    let condition = trim
+        .lines()
+        .find(|line| line.trim_start().starts_with("if: "))
+        .ok_or("no job condition")?;
+    for needle in [
+        "github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch)",
+        "github.event_name == ''push''",
+        "!cancelled()",
+    ] {
+        assert!(condition.contains(needle), "{condition}");
+    }
+    assert!(!condition.contains("repository.private"), "{condition}");
+    assert!(!condition.contains("needs."), "{condition}");
+    for name in [
+        "Install velnor-ci 0.1.81",
+        "Enforce the repository cache budget",
+    ] {
+        let command = step(&trim, name).ok_or("no cleanup command")?;
+        assert!(!command.contains("    if:"), "{command}");
+        assert!(!command.contains("base_save"), "{command}");
+    }
+    let all = jobs_of(&text);
+    let mut writers = 0;
+    for (id, lane) in all {
+        if lane.contains("name: Save the") {
+            writers += 1;
+            assert!(trim.contains(&format!("      - {id}\n")), "{id}: {trim}");
+        }
+    }
+    assert!(writers > 0);
+    assert!(trim.contains("actions: write"), "{trim}");
     Ok(())
 }
 

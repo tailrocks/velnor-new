@@ -110,6 +110,7 @@ fn plan_with(facts: &RepoFacts, deltas: bool) -> WorkflowPlan {
         },
         concurrency: Concurrency::CancelOlderPullRequestRuns,
         permissions: Permissions(BTreeMap::from([(PermissionScope::Contents, Access::Read)])),
+        fork_runner: facts.config.fork_runner.clone(),
         jobs,
     }
 }

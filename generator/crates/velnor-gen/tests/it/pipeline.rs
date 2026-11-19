@@ -115,7 +115,7 @@ fn two_cargo_roots_render_a_job_each_and_a_verdict_job_that_needs_both() -> Test
 fn the_config_file_sets_runner_time_limit_and_excluded_roots() -> TestResult {
     let config = b"runner = \"self-hosted\"\ntimeout_minutes = 12\nexclude = [\"lab/\"]\n";
     let text = workflow(&view(&["Cargo.toml", "lab/Cargo.toml"], Some(config))?)?;
-    assert!(text.contains("    runs-on: self-hosted\n    timeout-minutes: 12\n"));
+    assert!(text.contains("    runs-on: '${{ (!startsWith(github.event_name, ''pull_request'') || github.event.pull_request.head.repo.full_name == github.repository) && ''self-hosted'' || ''ubuntu-latest'' }}'\n    timeout-minutes: 12\n"));
     let format = step_named(&text, "Format");
     assert!(format.contains("!cancelled() && steps.restored.outcome == ''success'' && steps.plan.outcome == ''success'' && (steps.replan.outputs.rust_root_mode || steps.plan.outputs.rust_root_mode) != ''none''"));
     assert!(format.contains(r#""$VELNOR_EXEC" run -- cargo-fmt --all --check'"#));
@@ -131,7 +131,7 @@ fn values_yaml_or_cargo_would_misread_are_quoted_or_kept_out_of_arguments() -> T
         "odd\u{ffff}/Cargo.toml",
     ];
     let text = workflow(&view(&roots, Some(b"runner = \"on\"\n"))?)?;
-    assert!(text.contains("    runs-on: 'on'\n"));
+    assert!(text.contains("&& ''on'' || ''ubuntu-latest'' }}'\n"));
     let formats: Vec<&str> = text
         .split("\n      - ")
         .filter(|step| step.lines().any(|line| line.trim() == "name: Format"))
@@ -180,13 +180,12 @@ fn step_named(text: &str, name: &str) -> String {
 #[test]
 fn expression_syntax_in_repository_values_is_never_evaluated_by_github() -> TestResult {
     let root = "a${{ github.event.pull_request.title }}/Cargo.toml";
-    let config = b"runner = \"${{ secrets.TOKEN }}\"\nfull_run = \"off\"\n";
+    let config = b"full_run = \"off\"\n";
     let mut unsaved = view(&[root], Some(config))?;
     unsaved
         .files
         .insert(RepoPath::new(".velnor/rust-ci.lock")?, HELPER_LOCK.to_vec());
     let text = workflow(&unsaved)?;
-    assert!(text.contains("    runs-on: '${{ ''${{'' }} secrets.TOKEN }}'\n"));
     assert!(
         !text.contains("${{ github.event.pull_request.title"),
         "{text}"

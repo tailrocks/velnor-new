@@ -24,6 +24,7 @@ impl GitHub for Api {
     }
 }
 impl GitHubWrite for Api {
+    fn wait(&self, _: std::time::Duration) {}
     fn upload(&self, _: &str, _: &[u8]) -> Result<String, CiError> {
         unreachable!()
     }

@@ -38,6 +38,7 @@ pub enum StepKind {
     DeltaPrepare(CacheRoot),
     DeltaApply(CacheRoot),
     DeltaStage(CacheRoot, Vec<PackageName>),
+    CacheBudget(u64),
     RustComponents(Vec<String>),
     RustTargets(Vec<String>),
     UploadArchive {
