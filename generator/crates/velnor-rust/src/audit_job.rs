@@ -35,7 +35,7 @@ pub(crate) fn audit_job(facts: &RepoFacts, jobs: &[Job]) -> Option<Job> {
     steps.push(step(StepKind::Helper(HelperCommand::InputsAudit)));
     Some(Job {
         when,
-        skip_on_draft: false,
+        pr: crate::plan::quick(facts),
         needs: vec![PLAN_JOB],
         steps,
         ..job(facts, AUDIT_JOB)

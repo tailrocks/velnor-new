@@ -197,7 +197,7 @@ pub(crate) fn trim_job(facts: &RepoFacts, jobs: &[Job]) -> Option<Job> {
         name: Some("Cache maintenance".to_owned()),
         needs,
         when: When::SaveBase,
-        skip_on_draft: false,
+        pr: crate::plan::quick(facts),
         permissions: Permissions(BTreeMap::from([
             (PermissionScope::Actions, Access::Write),
             (PermissionScope::PullRequests, Access::Read),
