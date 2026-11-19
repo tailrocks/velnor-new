@@ -211,6 +211,7 @@ fn every_shipped_scenario_parses_and_the_story_runs_in_the_order_the_issue_gives
             "probe-token",
             "scheduled-run",
             "story",
+            "velnor-new",
             "warm"
         ]
     );

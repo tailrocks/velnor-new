@@ -74,9 +74,14 @@ pub(super) fn gathered_files(
     workspaces: &[Workspace],
     shared: &[Vec<usize>],
     groups: &[PathBuf],
+    chosen: &[bool],
 ) -> Result<Vec<(UnitFile, PathBuf, Vec<usize>)>, CiError> {
     let mut files: Vec<(UnitFile, PathBuf, Vec<usize>)> = Vec::new();
-    for (index, workspace) in workspaces.iter().enumerate() {
+    for (index, workspace) in workspaces
+        .iter()
+        .enumerate()
+        .filter(|(index, _)| chosen[*index])
+    {
         files.extend(
             unit_files(&workspace.target_directory)?
                 .into_iter()
@@ -84,7 +89,7 @@ pub(super) fn gathered_files(
         );
     }
     for (indices, directory) in shared.iter().zip(groups) {
-        if indices.len() < 2 {
+        if indices.len() < 2 || !chosen[indices[0]] {
             continue;
         }
         files.extend(
@@ -104,6 +109,7 @@ pub(super) fn gathered_files(
 
 pub(super) fn complete(
     facts: &RepoFacts,
+    chosen: &[bool],
     effective: &[PathBuf],
     built: &[Built],
     platforms: &[Platforms],
@@ -111,10 +117,12 @@ pub(super) fn complete(
     let gaps: Vec<String> = facts
         .rust_roots
         .iter()
+        .zip(chosen)
         .zip(effective)
         .zip(built)
         .zip(platforms)
-        .flat_map(|(((root, directory), built), platform)| {
+        .filter(|((((_, chosen), _), _), _)| **chosen)
+        .flat_map(|((((root, _), directory), built), platform)| {
             gaps(root, &facts.unowned, built, platform)
                 .into_iter()
                 .map(|gap| {

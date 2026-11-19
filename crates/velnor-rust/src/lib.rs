@@ -82,6 +82,7 @@ mod roots;
 mod schedule;
 mod select;
 mod select_event;
+mod select_paths;
 mod sha256;
 mod shape;
 mod sibling_features;
@@ -131,8 +132,9 @@ pub use owners::{Owner, Owners, add_reads};
 pub use plan::{check_required_check, plan, plan_without_deltas};
 pub use policy::{PolicyRuns, policy_runs};
 pub use reads::{
-    INPUTS_LOCK, Located, dep_info_paths, format_inputs_lock, locate, normalize, parse_inputs_lock,
-    rerun_if_changed, unlisted,
+    INPUTS_IDENTITY_HELPER, INPUTS_LOCK, Located, dep_info_paths, format_inputs_lock,
+    inputs_lock_text, locate, lock_is_identified, normalize, parse_inputs_lock, rerun_if_changed,
+    unlisted, without_identity,
 };
 pub use reexports::*;
 pub use repo_profile::{cargo_config_paths, check_runtime_configs, repo_profile};

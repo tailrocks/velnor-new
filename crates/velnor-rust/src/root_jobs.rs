@@ -8,7 +8,7 @@ use velnor_model::{
     StepKind, When,
 };
 
-use crate::audit_job::{AuditLocation, audit_when};
+use crate::audit_job::{AuditLocation, audit_when, audits_per_root};
 use crate::base_cache::{save_steps, saving_run};
 use crate::lane::Lane;
 use crate::members::{Member, check_alone, lint};
@@ -45,8 +45,9 @@ pub(crate) fn root_jobs(
         lane,
         members,
         suffixed,
-        audit: if suffixed
-            || (decision.shape != Shape::OneJob && crate::base_cache::writes_base(facts))
+        audit: if !audits_per_root(facts)
+            && (suffixed
+                || (decision.shape != Shape::OneJob && crate::base_cache::writes_base(facts)))
         {
             AuditLocation::Separate
         } else {
@@ -157,10 +158,20 @@ impl RootJobs<'_> {
             return None;
         }
         let when = audit_when(self.facts)?;
+        let kind = if audits_per_root(self.facts) {
+            StepKind::InputsAuditRoot(
+                self.unit
+                    .roots
+                    .first()
+                    .and_then(|root| root.manifest.parent()),
+            )
+        } else {
+            StepKind::Helper(HelperCommand::InputsAudit)
+        };
         Some(Step {
             when,
             gate: self.lane.steps(),
-            ..step(StepKind::Helper(HelperCommand::InputsAudit))
+            ..step(kind)
         })
     }
 

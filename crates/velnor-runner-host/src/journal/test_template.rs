@@ -7,6 +7,9 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
+#[path = "test_template/prune.rs"]
+mod prune;
+
 const SUFFIXES: [&str; 3] = ["", "-wal", "-shm"];
 
 fn root() -> io::Result<(PathBuf, String)> {
@@ -60,7 +63,7 @@ pub(super) fn seed(path: &Path, key: &str) -> Seed {
     }
 }
 
-fn seed_from(root: &Path, stamp: &str, path: &Path, key: &str) -> Seed {
+pub(super) fn seed_from(root: &Path, stamp: &str, path: &Path, key: &str) -> Seed {
     if path.exists() {
         return Seed::Existing;
     }
@@ -116,7 +119,7 @@ pub(super) fn publish(path: &Path, key: &str) {
     }
 }
 
-fn publish_into(root: &Path, stamp: &str, path: &Path, key: &str) -> io::Result<()> {
+pub(super) fn publish_into(root: &Path, stamp: &str, path: &Path, key: &str) -> io::Result<()> {
     match fs::symlink_metadata(root) {
         Ok(meta) if meta.is_dir() => {}
         Ok(_) => return Err(io::Error::other("journal template root is not a directory")),
@@ -141,33 +144,15 @@ fn publish_into(root: &Path, stamp: &str, path: &Path, key: &str) -> io::Result<
     if published.is_err() {
         fs::remove_dir_all(&staging).ok();
     }
-    for entry in fs::read_dir(root)?.flatten() {
-        if entry.file_name().to_str() != Some(stamp) {
-            fs::remove_dir_all(entry.path()).ok();
-        }
-    }
-    Ok(())
+    prune::prune_except(root, stamp)
 }
 
 mod tests {
-    use super::super::{Journal, Outcome};
+    use super::super::{IntentState, Journal, Outcome};
+    use super::prune::prune_except;
     use super::{Seed, install, publish_into, seed_from};
 
     type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
-
-    async fn schema(journal: &Journal) -> TestResult<(i64, Vec<String>)> {
-        let connection = journal.connection().await?;
-        let mut rows = connection.query("PRAGMA user_version", ()).await?;
-        let version: i64 = rows.next().await?.ok_or("user_version")?.get(0)?;
-        let mut rows = connection
-            .query("SELECT name FROM sqlite_schema ORDER BY name", ())
-            .await?;
-        let mut objects = Vec::new();
-        while let Some(row) = rows.next().await? {
-            objects.push(row.get(0)?);
-        }
-        Ok((version, objects))
-    }
 
     #[test]
     fn a_symlinked_template_root_is_refused_and_its_target_is_not_pruned() -> TestResult {
@@ -205,27 +190,57 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn pruning_removes_stale_stamps_deeply_and_never_follows_a_link() -> TestResult {
+        let directory = tempfile::tempdir()?;
+        let outside = directory.path().join("outside");
+        std::fs::create_dir_all(&outside)?;
+        std::fs::write(outside.join("precious"), b"x")?;
+        let root = directory.path().join("root");
+        std::fs::create_dir_all(root.join("keep").join("key"))?;
+        std::fs::create_dir_all(root.join("old").join("key").join("deep"))?;
+        std::fs::write(root.join("old").join("key").join("deep").join("db"), b"x")?;
+        std::os::unix::fs::symlink(&outside, root.join("link"))?;
+        prune_except(&root, "keep")?;
+        assert!(root.join("keep").join("key").is_dir());
+        assert!(!root.join("old").exists());
+        assert!(std::fs::symlink_metadata(root.join("link")).is_err());
+        assert!(outside.join("precious").exists());
+        Ok(())
+    }
+
+    #[test]
+    fn pruning_through_a_root_swapped_for_a_link_is_refused() -> TestResult {
+        let directory = tempfile::tempdir()?;
+        let target = directory.path().join("target");
+        std::fs::create_dir_all(target.join("victim"))?;
+        let root = directory.path().join("root");
+        std::os::unix::fs::symlink(&target, &root)?;
+        assert!(prune_except(&root, "keep").is_err());
+        assert!(target.join("victim").exists());
+        Ok(())
+    }
+
     #[tokio::test(flavor = "multi_thread")]
-    async fn a_journal_copied_from_the_template_matches_a_freshly_bootstrapped_one() -> TestResult {
+    async fn a_journal_copied_from_the_template_behaves_like_a_freshly_bootstrapped_one()
+    -> TestResult {
         let directory = tempfile::tempdir()?;
         let fresh = directory.path().join("fresh.db");
-        drop(Journal::open_bootstrapped(&fresh).await?);
-        let reopened = Journal::open_bootstrapped(&fresh).await?;
-        let fresh_connection = reopened.connection().await?;
-        let expected = schema(&reopened).await?;
-        assert_eq!(expected.0, Journal::current_schema_version_for_test());
-        assert!(
-            expected.1.len() > 100,
-            "the schema holds hundreds of objects"
-        );
-        let mut identities = vec![crate::journal_schema::instance_id(&fresh_connection).await?];
+        let reference = Journal::open_bootstrapped(&fresh).await?;
+        let mut identities = vec![reference.instance_id().await?];
         for name in ["first.db", "second.db"] {
-            let journal = Journal::open(&directory.path().join(name)).await?;
-            assert_eq!(schema(&journal).await?, expected, "{name}");
+            let path = directory.path().join(name);
+            let journal = Journal::open(&path).await?;
+            let before = journal.revision().await?;
             let id = journal.begin("template", name).await?;
+            assert_eq!(journal.read(id).await?, IntentState::Pending);
             journal.finish(id, Outcome::Done).await?;
-            identities
-                .push(crate::journal_schema::instance_id(&journal.connection().await?).await?);
+            assert_eq!(journal.read(id).await?, IntentState::Done);
+            assert!(journal.revision().await? > before, "{name}");
+            identities.push(journal.instance_id().await?);
+            drop(journal);
+            let reopened = Journal::open(&path).await?;
+            assert_eq!(reopened.read(id).await?, IntentState::Done, "{name}");
         }
         identities.sort();
         identities.dedup();

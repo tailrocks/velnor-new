@@ -26,8 +26,7 @@ mod resources;
 mod tool_versions;
 
 pub use docker::{Qualification, QualificationSession, open_qualification_session, qualify};
-#[doc(hidden)]
-pub use docker_io::read_logs;
+use docker_io::read_logs;
 pub use error::QualificationError;
 pub use probe_image::qualify as qualify_probe;
 pub use probes::DaemonIdentity;

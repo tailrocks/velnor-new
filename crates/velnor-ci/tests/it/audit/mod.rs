@@ -11,10 +11,12 @@ mod guards;
 mod identity;
 mod inventory;
 mod links;
+mod lock_identity;
 mod managed_target;
 mod migration;
 mod optional;
 mod partial;
+mod per_root;
 mod reads;
 mod stand_ins;
 

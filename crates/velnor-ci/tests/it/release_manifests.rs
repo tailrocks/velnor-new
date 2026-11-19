@@ -125,9 +125,13 @@ fn an_excluded_example_and_a_nested_workspace_are_not_packages_of_the_root() {
     let checkout = Checkout::new("excluded ' quote");
     let marker = checkout.0.join("wrapper-ran");
     checkout.write("shadow/cargo", "#!/bin/sh\nexit 99\n");
-    let search = std::env::join_paths(std::iter::once(checkout.0.join("shadow")).chain(
-        std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default()),
-    ))
+    let wrapper = std::env::var_os("VELNOR_CARGO_WRAPPER").map(std::path::PathBuf::from);
+    let search = std::env::join_paths(
+        std::iter::once(checkout.0.join("shadow")).chain(
+            std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default())
+                .filter(|dir| wrapper.as_deref() != Some(dir.join("cargo").as_path())),
+        ),
+    )
     .unwrap_or_else(|e| unreachable!("{e}"));
     let cargo = std::env::split_paths(&search)
         .map(|dir| dir.join("cargo"))

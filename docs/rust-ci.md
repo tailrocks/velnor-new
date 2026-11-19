@@ -8,26 +8,19 @@ This page is for a project that runs `velnor-gen`. It says what the generated wo
 
 ### What a run selects
 
-The first step of a run is `velnor-ci plan`. It lists the changed files, finds the packages that own them, and adds every package that depends on one of them. Each later step runs only for the packages and roots the plan selected. A run that selects no package skips the Rust steps. `velnor-ci plan --explain` prints each selected package with its reason, each step it left out and why, and what to add to the config for a file it cannot place.
+The first step of a run is `velnor-ci plan`. It lists the changed files, finds the packages that own them, and adds every package that depends on one of them. Each later step runs only for the packages and roots the plan selected. A run that selects no package skips the Rust steps. When more than half of the packages are selected, the run selects everything. `velnor-ci plan --explain` prints each selected package with its reason, each step it left out and why, and what to add to the config for a file it cannot place.
 
 - A pull request is judged by its diff. A push to the default branch and a merge queue run are judged by their diff when `on_main = "affected"` (the default), and select everything when `on_main = "everything"`.
-- A scheduled run and a manual run select everything. `full_run` sets the schedule: `"nightly"` (default), `"hourly"`, `"weekly"`, `"off"` or a cron expression. The minute and hour come from the repository name, so projects do not start together.
+- A scheduled run and a manual run select everything. `full_run` sets the schedule: `"nightly"` (default), `"hourly"`, `"weekly"`, `"off"` or a cron expression. For the built-in schedules `"hourly"`, `"nightly"` and `"weekly"`, the minute, hour and weekday come from a hash of the repository name, so projects do not start together. A cron expression runs as written.
 - These changes select everything: a toolchain file, a Cargo config, a root `Cargo.toml` (unless only workspace dependency versions changed together with the lock), `mise.toml`, `mise.lock`, `.velnor/rust-ci.toml`, the generated workflow, and any file the plan cannot place. A changed `Cargo.lock` selects the packages that reach a changed entry, and everything when that cannot be told.
-- `docs/`, `LICENSES/`, `NOTICE`, `CODEOWNERS`, `LICENSE*` and root-level `*.md` files select nothing (`default_ignores = true`). `inputs` and `non_inputs` map other files to packages or to nothing.
-- When more than half of the packages are selected, the run selects everything.
-- Documentation and doctest steps run only when the project has doc comments or doctests.
+- `docs/`, `LICENSES/`, `NOTICE`, `CODEOWNERS`, `LICENSE*` and root-level `*.md` files select nothing (`default_ignores = true`), except a file inside a package directory or inside a Cargo root below the repository top, because the build can read it. `inputs` and `non_inputs` map other files to packages or to nothing.
+- Documentation and doctest steps run only when the project has doc comments or doctests. On a full run they always run. They also always run when a procedural macro or build script generates code, or a dependency comes from outside the repository, because the generator cannot see every doc comment then.
 
 ### One job by default
 
-The default shape is one job, `rust`, for each Cargo root. The generator never makes a job per crate. A crate gets a step (`Check <crate> alone`), not a job. The job count grows with Cargo roots and test groups only. A second job costs start-up time, so the generator adds one only when it pays (`crates/velnor-rust/src/shape.rs`).
+The default shape is one job, `rust`, for each Cargo root. The generator never makes a job per crate. A crate gets a step (`Check <crate> alone`), not a job. The job count grows with Cargo roots, test groups and `[[lint]]` entries only. A second job costs start-up time, so the generator adds one only when it pays (`crates/velnor-rust/src/shape.rs`). The `shape` key chooses the layout; the table of the three shapes and the rule for `auto` is in [`generator/CONFIG.md`](../generator/CONFIG.md#run-selection).
 
-| `shape` | Jobs | Chosen when |
-|---|---|---|
-| `one-job` | `rust` | `auto` and `.velnor/rust-ci-timings.json` has no entry for the root, or the shorter of its lint build and test build takes 5 s or less |
-| `lint-test` | `rust-lint`, `rust-test` | `auto` and the shorter build takes more than 5 s |
-| `groups` | `rust-lint`, `rust-test` (builds the tests once), `rust-test-default`, `rust-test-<name>` | `shape = "groups"`, or the root has a `[[test_groups]]` entry |
-
-`velnor-ci timings --repo owner/name` writes the timings file from the medians of at least three runs on the default branch. The generator writes the reason for the chosen shape into the workflow. A project with one root and one job has no `rust-plan` job; its plan is a step. Any other layout adds `rust-plan` first, and with several roots every job id gets a root suffix.
+`velnor-ci timings --repo owner/name` writes the timings file from the medians of at least three of the ten most recent first-attempt runs that pushed to the default branch or ran for a pull request into it. The generator writes the reason for the chosen shape into the workflow. A project with one root and one job has no `rust-plan` job; its plan is a step. Any other layout adds `rust-plan` first, and with several roots every job id gets a root suffix.
 
 ### Test groups
 
@@ -40,11 +33,11 @@ filter = "package(app) and test(/^db_/)"
 needs = ["docker"]
 ```
 
-The tests are built once and handed on as a nextest archive. `rust-test-default` runs everything that no group takes. With two or more groups in a root, `velnor-ci test-groups check` fails the build job when one test falls in two groups. `velnor-gen suggest-groups` reads the timings file and prints a group for every test binary that takes more than a third of its root's test time. Nothing creates groups on its own. The other keys of a group are `test_threads`, `timeout_minutes`, `runner`, `root`, `paths` and `events`.
+The tests are built once and handed on as a nextest archive. `rust-test-default` runs everything that no group takes. With two or more groups in a root, `velnor-ci test-groups check` fails the build job when one test falls in two groups. `velnor-gen suggest-groups` reads the timings file and prints a group for every test binary that takes more than a third of its root's test time. Nothing creates groups on its own. The other keys of a group are `needs`, `test_threads`, `timeout_minutes`, `runner`, `hosted` (with a `runner`, needs `velnor-ci` 0.1.99), `root`, `paths` and `events`.
 
 ### Always present
 
-`Required` (named by `required_check`) is the one check to require in a ruleset. It passes only when every selected job ran and passed. `Cache` reports cache waste. `Cache maintenance` (`rust-trim`) runs on the default branch only. A `policy` job runs `cargo-deny` when the project has a `deny.toml` and `cargo-machete` when `mise.toml` pins it, and `[[lint]]` entries add non-Rust lint jobs.
+`Required` (named by `required_check`) is the one check to require in a ruleset. It passes only when every selected job ran and passed. `Cache` reports cache waste. `Cache maintenance` (`rust-trim`) runs on the default branch only, and only when the pinned helper is velnor-ci 0.1.81 or later. A `policy` job runs `cargo-deny` when the project has a `deny.toml` and `cargo-machete` when `mise.toml` pins it, and `[[lint]]` entries add non-Rust lint jobs.
 
 ## Caches
 
@@ -64,13 +57,13 @@ Three families hold the work between runs. Each key is built from one typed valu
 - The CI profile sets `CARGO_INCREMENTAL=0`, `SOURCE_DATE_EPOCH=0` and debug info to `line-tables-only` (`ci_debuginfo`). Every build step uses the same `CARGO_TARGET_DIR`.
 - On the default branch, a restored Target older than seven days is dropped. The run builds cold and selects everything.
 
-**What can write.** Only `push`, `schedule` and `workflow_dispatch` runs on the default branch save a cache. A pull request, a merge queue run and a fork pull request only restore. A save needs at least one compiled, checked or documented crate, and incremental directories are removed first. When `Cargo.lock` holds a dependency that is not proven public, no Target or Sources entry is saved. The two newest entries of a group are kept. `Cache maintenance` keeps the repository under `cache_budget_bytes` (default and maximum 8 GB of GitHub's 10 GB).
+**What can write.** Only `push`, `schedule` and `workflow_dispatch` runs on the default branch save a cache. A pull request, a merge queue run and a fork pull request only restore. A save needs at least one compiled, checked or documented crate, and incremental directories are removed first. When `Cargo.lock` holds a dependency that is not proven public, no Target or Sources entry is saved. The two newest entries of a group are kept. `Cache maintenance` prunes the repository towards `cache_budget_bytes` (default and maximum 8 GB of GitHub's 10 GB) on a best-effort basis. It deletes only entries it may delete (retired or superseded entries, idle pull request deltas, Target and Sources entries beyond the newest two of a group, and idle Tools entries), so it can stay over budget when the entries it must keep are larger than the budget.
 
 **PR delta cache (helper 0.1.95 or later).** A pull request from this repository restores the Target entry, then a small per-pull-request delta layer (`velnor-dlt-` keys) on top of it. After the last compiling step the lane stages what the pull request changed in `target.velnor-delta` and saves it, so the next push to the same pull request starts from that work instead of the default branch's Target. A `Rust CI` cleanup workflow trims the deltas of a finished pull request. The lanes get these steps only when the lock pins `velnor-ci` 0.1.95 or later. An older helper (0.1.81 to 0.1.94) is not refused: the generator silently leaves the delta steps out and the output is what it was without the layer.
 
 **MBX store.** MBX (Mr. Boxington) is a cargo wrapper that a project pins in `mise.toml`; it keeps a store of compiler results. Two settings feed that store:
 
-- `mbx_shared_store = true`: when the runner host sets `VELNOR_MBX_SHARED_DIR`, a push, schedule or `workflow_dispatch` on the default branch uses that per-node directory. A pull request, a fork or a merge queue run never gets it. They can copy missing files from the read-only `VELNOR_MBX_SEED_DIR` into a private store. With helper 0.1.89 or later, `velnor-ci tools-local` also restores `mise` and `rustup` from the node's store, and the network cache is used only when that misses.
+- `mbx_shared_store = true`: when the runner host sets `VELNOR_MBX_SHARED_DIR`, a push, schedule or `workflow_dispatch` on the default branch uses that per-node directory. A pull request, a fork or a merge queue run never gets it. They can copy missing files from the read-only `VELNOR_MBX_SEED_DIR` into a private store. With helper 0.1.89 or later, `velnor-ci tools-local` also restores `mise` and `rustup` from the node's store, and the network cache is used only when that misses. A lane that restores from the node store reports it to the cache telemetry as a tools hit. A job that only runs archived tests and restored the tools from the network cache on a trusted event saves them to the node store too, so the next run on that node hits. With helper 0.1.100 or later, a failed save to the node store fails the Cache check, not the lane, and a run that could not read `/etc/os-release` saves no target or delta cache, because no later run could restore it.
 - `[cache] mbx_remote = "github-actions"`: adds `jdx/mr-boxington-action`, which saves only after a push to the default branch. It is refused when the project has private dependencies.
 
 **Debug a recompile.** `velnor-ci report` ends every cargo job and writes `ci-metrics.json`. The `Cache` check turns red when a crate was compiled although the restored cache held it, and when a save failed. It is advisory unless `cache_check_blocks = true`. To see why cargo rebuilt a crate, set `cache_debug = true`, regenerate, and set the repository variable `VELNOR_CACHE_DEBUG` to `1`. The jobs then set `CARGO_LOG` to the fingerprint log and upload it as `velnor-cargo-log-<job>` for three days.
@@ -111,7 +104,7 @@ The numbers in [`goals.md`](goals.md) section "Targets" are the budget: a run th
 - `Cache` fails on compiled-but-cached crates and failed saves. `Cache maintenance` enforces `cache_budget_bytes`.
 - `velnor-ci bench collect` turns a run into a metrics file, and `velnor-ci bench compare` prints a table for two of them. Use them to compare runs before and after a change.
 
-Set the `budget` table (see Settings) to turn four of these into a check. The `rust-budget` job compares the median and the latest of the last successful runs with the wall-time, runner-time and setup-time limits you set, and fails on a breach or on a measurement it does not have. It runs on the default branch or the scheduled run, never on a pull request, and never fails the required check.
+Set the `budget` table (see Settings) to turn four of these into a check. The `rust-budget` job compares the run that executes it, and the median of that run and the last successful runs before it, with the wall-time, runner-time and setup-time limits you set, and fails on a breach or on a measurement it does not have. It runs on the default branch or the scheduled run, never on a pull request, also when a job before it was skipped and only when the required check succeeded, and never fails the required check. A run that failed is not a sample, so a breach ends with the next run that is fast again.
 
 ## Settings
 
@@ -127,8 +120,8 @@ Every key of `.velnor/rust-ci.toml`, with its default. `generator/CONFIG.md` has
 | `pr_ci` | `"always"` | `always` or `label` |
 | `skip_draft_pull_requests` | `false` | draft pull requests run nothing |
 | `ci` | none | table; `skip_push_after_merge_group = true` skips checks the merge queue already ran |
-| `docs` | `"always"` | `post_merge` runs `cargo doc` only after a merge |
-| `check_alone` | `"always"` | `post_merge` runs the per-crate `Check <crate> alone` steps only after a merge |
+| `docs` | `"always"` | `post_merge` runs `cargo doc` only on a `push`, `schedule` or `workflow_dispatch` run, not on a pull request or a merge queue run |
+| `check_alone` | `"always"` | `post_merge` runs the per-crate `Check <crate> alone` steps only on a `push`, `schedule` or `workflow_dispatch` run, not on a pull request or a merge queue run |
 | `sparse_checkout` | `false` | each Rust lane job checks out only the paths its lane reads |
 | `inputs`, `non_inputs`, `exclude` | none | map files to packages, map files to nothing, or leave Cargo manifests out |
 | `default_ignores` | `true` | documentation and licence files select nothing |
@@ -139,7 +132,7 @@ Every key of `.velnor/rust-ci.toml`, with its default. `generator/CONFIG.md` has
 | `cache` | none | table; `mbx_remote = "github-actions"` |
 | `mbx_shared_store` | `false` | use the node's MBX store, see above |
 | `cache_budget_bytes` | `8000000000` | cache budget, at most 8 GB |
-| `budget` | none | table; `pr_wall_seconds`, `main_wall_seconds`, `runner_seconds`, `setup_seconds` bound the speed of the workflow, checked by `rust-budget` on the default branch or the scheduled run (needs `velnor-ci` 0.1.92) |
+| `budget` | none | table; `pr_wall_seconds`, `main_wall_seconds`, `runner_seconds`, `setup_seconds` bound the speed, checked by `rust-budget` (needs `velnor-ci` 0.1.92) |
 | `cache_check_blocks` | `false` | the `Cache` check joins `Required` |
 | `cache_debug` | `false` | cargo fingerprint log, see above |
 | `ci_debuginfo` | `"line-tables-only"` | `full`, `line-tables-only` or `none` |
@@ -147,7 +140,7 @@ Every key of `.velnor/rust-ci.toml`, with its default. `generator/CONFIG.md` has
 | `crates_mirror` | none | a crates mirror for a self-hosted runner (needs `velnor-ci` 0.1.93) |
 | `runner` | `"ubuntu-latest"` | the runner label of every job |
 | `hosted` | `true` when `runner` is not set | `true` opens `runner` to fork pull requests, `false` fences it; required when `runner` is spelled like a GitHub-hosted label; needs `velnor-ci` 0.1.99 |
-| `fork_runner` | `"ubuntu-latest"` | the hosted runner for fork pull requests when `runner` is self-hosted |
+| `fork_runner` | platform-dependent: `"ubuntu-latest"`, `"ubuntu-24.04-arm"` for a Linux arm64 `runner`, `"macos-15"` for an Apple silicon macOS `runner` | the hosted runner for fork pull requests when `runner` is self-hosted |
 | `timeout_minutes` | `30` | job time limit, 1 to 360 |
 | `required_check` | `"Required"` | the name of the one required check |
 | `default_branch` | `"main"` | must equal the repository's default branch, or the run fails |

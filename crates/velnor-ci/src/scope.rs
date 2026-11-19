@@ -4,6 +4,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 use velnor_model::{CompileInputs, PackageName, RepoFacts, RepoPath};
 
+type Packages<'a> = BTreeSet<(&'a PackageName, &'a RepoPath)>;
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Scope {
@@ -24,9 +26,13 @@ impl Scope {
             listed
                 .iter()
                 .filter(|(_, owners)| {
-                    packages
-                        .as_ref()
-                        .is_none_or(|packages| owners.iter().any(|owner| packages.contains(owner)))
+                    packages.as_ref().is_none_or(|packages| {
+                        owners.iter().any(|owner| {
+                            packages
+                                .iter()
+                                .any(|(name, manifest)| owner.is(name, manifest))
+                        })
+                    })
                 })
                 .map(|(path, _)| path.as_ref().map_or_else(String::new, ToString::to_string)),
         );
@@ -42,11 +48,7 @@ impl Scope {
                 .any(|listed| within(path, listed.as_bytes()))
     }
 
-    fn include_packages<'a>(
-        &mut self,
-        facts: &'a RepoFacts,
-        manifest: &str,
-    ) -> BTreeSet<&'a PackageName> {
+    fn include_packages<'a>(&mut self, facts: &'a RepoFacts, manifest: &str) -> Packages<'a> {
         let mut packages: BTreeMap<_, _> = facts
             .rust_roots
             .iter()
@@ -74,7 +76,7 @@ impl Scope {
             if found.insert(manifest)
                 && let Some((name, dependencies)) = packages.get(manifest)
             {
-                names.insert(*name);
+                names.insert((*name, manifest));
                 pending.extend(dependencies.iter().map(|dependency| &dependency.manifest));
             }
         }

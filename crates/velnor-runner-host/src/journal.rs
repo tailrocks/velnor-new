@@ -20,6 +20,10 @@ pub(in crate::journal) mod request_lifecycle;
 #[cfg(test)]
 pub(crate) use request_lifecycle::RunnerJitClaim;
 
+#[cfg(test)]
+mod historical;
+#[cfg(test)]
+mod historical_tests;
 mod resource_probe;
 mod scale_set_create;
 mod schema;

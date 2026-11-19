@@ -72,9 +72,45 @@ fn the_budget_job_runs_on_the_schedule_when_a_full_run_is_scheduled() -> TestRes
         .nth(1)
         .ok_or("the budget job is missing")?;
     assert!(
-        job.contains("(github.event_name == ''schedule'')"),
+        job.contains("github.event_name == ''schedule''"),
         "the job runs on the schedule and on nothing else\n{job}"
     );
+    Ok(())
+}
+
+#[test]
+fn the_budget_job_runs_when_an_ancestor_was_skipped_but_not_when_the_run_was_cancelled()
+-> TestResult {
+    for (config, event) in [
+        (
+            "full_run = \"off\"\n[budget]\nmain_wall_seconds = 600\n",
+            "github.event_name == ''push''",
+        ),
+        (
+            "full_run = \"nightly\"\n[budget]\nmain_wall_seconds = 600\n",
+            "github.event_name == ''schedule''",
+        ),
+    ] {
+        let files = budgeted("0.1.92", config)?;
+        let text = workflow(&files)?;
+        let job = text
+            .split("  rust-budget:")
+            .nth(1)
+            .ok_or("the budget job is missing")?;
+        let condition = job
+            .lines()
+            .find(|line| line.trim_start().starts_with("if:"))
+            .ok_or("the budget job has no condition")?;
+        assert!(
+            condition.contains("!cancelled()"),
+            "without a status function a skipped ancestor skips the job\n{condition}"
+        );
+        assert!(condition.contains(event), "{condition}");
+        assert!(
+            condition.contains("needs.required.result == ''success''"),
+            "a failed gate is not measured\n{condition}"
+        );
+    }
     Ok(())
 }
 

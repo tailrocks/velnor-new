@@ -1,0 +1,16 @@
+diff --git a/crates/velnor-rust/src/reads.rs b/crates/velnor-rust/src/reads.rs
+--- a/crates/velnor-rust/src/reads.rs
++++ b/crates/velnor-rust/src/reads.rs
+@@ -1,2 +1,2 @@
+-pub const INPUTS_IDENTITY_HELPER: (u64, u64, u64) = (0, 1, 99);
++pub const INPUTS_IDENTITY_HELPER: (u64, u64, u64) = (0, 1, 101);
+diff --git a/crates/velnor-gen/src/error.rs b/crates/velnor-gen/src/error.rs
+--- a/crates/velnor-gen/src/error.rs
++++ b/crates/velnor-gen/src/error.rs
+@@ -1,1 +1,1 @@
++write!(f, "velnor-ci {version} cannot read it; pin velnor-ci 0.1.101 or later with `velnor-gen pin-helper 0.1.101`")
+diff --git a/crates/velnor-gen/tests/it/x.rs b/crates/velnor-gen/tests/it/x.rs
+--- a/crates/velnor-gen/tests/it/x.rs
++++ b/crates/velnor-gen/tests/it/x.rs
+@@ -1,1 +1,1 @@
++let helper_pin = "0.1.50";

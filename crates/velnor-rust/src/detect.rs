@@ -4,7 +4,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
-    PackageName, RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE, RepoFacts, RepoPath, RepoView,
+    InputOwner, PackageName, RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE, RepoFacts, RepoPath, RepoView,
     RepositoryIdentity, RootSlug, RustCiConfig, RustRoot, Toolchain, WORKFLOWS_CONFIG_PATH,
 };
 
@@ -119,6 +119,10 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
         }
     }
     let compile_inputs = crate::embedded::locked_and_embedded(view, &rust_roots)?;
+    let inputs_lock_identified = view
+        .files
+        .get(&INPUTS_LOCK)
+        .is_some_and(|bytes| crate::reads::lock_is_identified(bytes));
     let named = config.inputs.iter().flat_map(|input| &input.packages);
     if let Some(package) = unknown_package(&rust_roots, named) {
         return Err(DetectError::invalid(
@@ -126,7 +130,7 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
             Reason::UnknownInputPackage(package),
         ));
     }
-    if let Some(package) = unknown_package(&rust_roots, compile_inputs.values().flatten()) {
+    if let Some(package) = unknown_owner(&rust_roots, compile_inputs.values().flatten()) {
         return Err(DetectError::invalid(
             &INPUTS_LOCK,
             Reason::UnknownLockedPackage(package),
@@ -173,6 +177,7 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
         config,
         helper,
         compile_inputs,
+        inputs_lock_identified,
         unowned,
     })
 }
@@ -302,6 +307,23 @@ fn unknown_package<'p>(
                 .any(|member| member.name == **package)
         })
         .map(ToString::to_string)
+}
+
+fn unknown_owner<'p>(
+    roots: &[RustRoot],
+    mut owners: impl Iterator<Item = &'p InputOwner>,
+) -> Option<String> {
+    owners
+        .find(|owner| {
+            !roots
+                .iter()
+                .flat_map(|root| &root.members)
+                .any(|member| owner.is(&member.name, &member.manifest))
+        })
+        .map(|owner| match &owner.manifest {
+            Some(manifest) => format!("{} ({manifest})", owner.name),
+            None => owner.name.to_string(),
+        })
 }
 
 fn config(view: &RepoView) -> Result<RustCiConfig, DetectError> {

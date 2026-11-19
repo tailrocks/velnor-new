@@ -178,6 +178,18 @@ pub(crate) fn inputs_step(
     rendered
 }
 
+pub(crate) fn audit_root_step(directory: Option<&RepoPath>) -> RenderedStep {
+    let directory = directory.map_or(".", RepoPath::as_str);
+    RenderedStep {
+        name: format!("velnor-ci inputs audit --root {directory}"),
+        run: Some(format!(
+            "velnor-ci inputs audit --root {}",
+            shell_word(directory)
+        )),
+        ..RenderedStep::default()
+    }
+}
+
 pub(crate) fn helper_step(command: HelperCommand) -> RenderedStep {
     let arguments = match command {
         HelperCommand::Plan => "plan",
@@ -258,35 +270,8 @@ pub(crate) fn mbx_seed_step() -> RenderedStep {
 
 pub(crate) fn node_step(kind: &velnor_model::StepKind) -> RenderedStep {
     match kind {
-        velnor_model::StepKind::ToolsLocal(verb) => tools_local_step(*verb),
+        velnor_model::StepKind::ToolsLocal(verb) => crate::tools_steps::tools_local_step(*verb),
         _ => mbx_seed_step(),
-    }
-}
-
-fn tools_local_step(verb: velnor_model::ToolsLocalVerb) -> RenderedStep {
-    let key = crate::cache::render_key(&velnor_model::CacheKey::Tools {
-        host: velnor_model::Host,
-    })
-    .key;
-    let (name, id, word) = match verb {
-        velnor_model::ToolsLocalVerb::Restore => (
-            "Restore the tools from the node store",
-            Some(crate::gate::TOOLS_LOCAL_STEP.to_owned()),
-            "restore",
-        ),
-        velnor_model::ToolsLocalVerb::Save => ("Save the tools to the node store", None, "save"),
-    };
-    RenderedStep {
-        id,
-        name: name.to_owned(),
-        env: vec![(
-            "VELNOR_TOOLS_KEY".to_owned(),
-            crate::rules::Value::Expr(key),
-        )],
-        run: Some(format!(
-            "velnor-ci tools-local {word} --key \"$VELNOR_TOOLS_KEY\""
-        )),
-        ..RenderedStep::default()
     }
 }
 

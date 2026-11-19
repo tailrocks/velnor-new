@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    CI_AUTO_LABEL, CI_RUN_LABEL, Gate, GateNeed, MERGE_GROUP_SKIP_OUTPUT, MERGE_GROUP_STEP,
+    CI_AUTO_LABEL, CI_RUN_LABEL, Gate, GateNeed, JobId, MERGE_GROUP_SKIP_OUTPUT, MERGE_GROUP_STEP,
     PlanFrom, PrRun, RootSlug, VerdictSpec, When, group_output_name,
 };
 
@@ -24,6 +24,10 @@ const PUSH: &str = "push";
 const POST_MERGE_EVENTS: &str = "(github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')";
 pub(crate) const TOOLS_STEP: &str = "tools";
 pub(crate) const TOOLS_LOCAL_STEP: &str = "toolslocal";
+pub(crate) const TOOLS_LOCAL_SAVE_STEP: &str = "toolslocalsave";
+pub(crate) const TOOLS_RESTORED_STEP: &str = "tools_restored";
+pub(crate) const TOOLS_SAVED_STEP: &str = "save_tools_node";
+pub(crate) const PREPARE_COLD: &str = "steps.prepare.outputs.cold != 'true'";
 pub(crate) const BASE_STEP: &str = "base";
 pub(crate) const SOURCES_LOCKS_STEP: &str = "sources_locks";
 const SAVING_EVENTS: &str = "(github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')";
@@ -136,7 +140,7 @@ pub(crate) fn merge_group_skipped(from: &PlanFrom, setup: Setup) -> String {
 
 fn event_gate(when: When) -> String {
     match when {
-        When::Scheduled => format!("github.event_name == '{SCHEDULE}'"),
+        When::Scheduled | When::ScheduledAfterNeeds => format!("github.event_name == '{SCHEDULE}'"),
         When::ScheduledOrPush => {
             format!("(github.event_name == '{SCHEDULE}' || github.event_name == '{PUSH}')")
         }
@@ -172,6 +176,9 @@ pub(crate) fn condition(
         }
         When::Scheduled | When::ScheduledOrPush | When::DefaultBranchPush => {
             parts.push(event_gate(when));
+        }
+        When::ScheduledAfterNeeds | When::DefaultBranchPushAfterNeeds => {
+            parts.extend([NOT_CANCELLED.to_owned(), event_gate(when)]);
         }
         When::SaveBase | When::SaveBaseDecided | When::SaveSources => {
             parts.push(NOT_CANCELLED.to_owned());
@@ -219,7 +226,8 @@ pub(crate) fn condition(
         }
         When::SaveToolsOnDefaultBranch
         | When::SaveToolsUnlessLocal
-        | When::RestoreToolsUnlessLocal => tools_parts(when, &mut parts),
+        | When::RestoreToolsUnlessLocal
+        | When::PrimeToolsFromNetwork => tools_parts(when, &mut parts),
     }
     parts.extend(pr_parts(pr));
     parts.extend(extra.iter().cloned());
@@ -234,6 +242,13 @@ pub(crate) fn condition(
 }
 
 fn tools_parts(when: When, parts: &mut Vec<String>) {
+    if when == When::PrimeToolsFromNetwork {
+        parts.push(ON_DEFAULT_BRANCH.to_owned());
+        parts.push(SAVING_EVENTS.to_owned());
+        parts.push(format!("steps.{TOOLS_LOCAL_STEP}.outputs.hit != 'true'"));
+        parts.push(format!("steps.{TOOLS_STEP}.outputs.cache-hit == 'true'"));
+        return;
+    }
     if when != When::RestoreToolsUnlessLocal {
         parts.push(ON_DEFAULT_BRANCH.to_owned());
         parts.push(format!("steps.{TOOLS_STEP}.outputs.cache-hit != 'true'"));
@@ -282,12 +297,13 @@ fn pr_parts(pr: PrRun) -> Vec<String> {
     }
 }
 
-pub(crate) fn admission(when: When, gate: Option<&Gate>, pr: PrRun) -> String {
-    let plan_succeeded: Vec<String> = match gate.map(|gate| &gate.from) {
+pub(crate) fn admission(when: When, gate: Option<&Gate>, pr: PrRun, needs: &[JobId]) -> String {
+    let mut plan_succeeded: Vec<String> = match gate.map(|gate| &gate.from) {
         Some(PlanFrom::Job(job)) => vec![format!("needs.{job}.result == 'success'")],
         Some(PlanFrom::WorkJob(_)) => vec![NOT_CANCELLED.to_owned()],
         _ => Vec::new(),
     };
+    plan_succeeded.extend(crate::gate_needs::succeeded(when, needs));
     match condition(when, gate, Setup::Before, pr, &plan_succeeded) {
         Some(predicate) => format!(
             "${{{{ {ACTIVE_EVENT} && ({}) }}}}",

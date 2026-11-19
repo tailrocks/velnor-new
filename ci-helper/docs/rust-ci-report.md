@@ -96,6 +96,12 @@ package and available configuration context. Three such observations in one
 context make the check fail verification, because it cannot prove that Cargo
 respected the compilation limit. This is uncertainty rather than proof that
 one identical unit compiled three times.
+An identical unit compiled twice in one job fails the check, and so does one
+compiled in two jobs that run the same kind of command. The lint job and the
+test-archive job of the split (`cargo clippy`/`check`/`doc` against `cargo build`/
+`test`/`nextest archive`) are parallel by design, each with its own target cache,
+so both compile the host units that the two commands build alike: proc-macro
+crates and the crates only they need. That pair is not a violation.
 Named target selectors and command purpose distinguish fallback observations,
 so separate test or binary targets do not become repeated compilations of one
 unit. Unhashed documentation outputs cannot establish compiler identity and

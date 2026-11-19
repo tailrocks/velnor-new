@@ -65,7 +65,7 @@ pub(crate) fn rendered_job(job: &Job, plan: &WorkflowPlan) -> RenderedJob {
         env,
         needs: job.needs.iter().map(ToString::to_string).collect(),
         condition: Some(crate::base_steps::audited_lane(
-            admission(job.when, job.gate.as_ref(), job.pr),
+            admission(job.when, job.gate.as_ref(), job.pr, &job.needs),
             job,
         )),
         runs_on: job.runs_on.as_str().to_owned(),
@@ -183,6 +183,10 @@ fn rendered_steps(
         }
         let mut extra = saved_unless_hit(&step.kind);
         extra.extend(
+            step.skip_when_cold
+                .then(|| crate::gate::PREPARE_COLD.to_owned()),
+        );
+        extra.extend(
             step.skip_after_merge_group
                 .as_ref()
                 .map(|from| merge_group_skipped(from, setup)),
@@ -224,7 +228,9 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
     let kind = &step.kind;
     let directory = step.directory.as_ref();
     match kind {
-        StepKind::ReportCaches { caches, .. } => crate::report::lane(caches, tests.first_id()),
+        StepKind::ReportCaches {
+            caches, node_tools, ..
+        } => crate::report::lane(caches, *node_tools, tests.first_id()),
         StepKind::UploadMetrics => crate::report::artifact(true),
         StepKind::DownloadMetrics => crate::report::artifact(false),
         StepKind::CheckMetrics {
@@ -268,6 +274,9 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
             reports_tests(command).then(|| tests.id(step.reads.as_ref().map(|plan| &plan.slug))),
         ),
         StepKind::Helper(command) => crate::helper_steps::helper_step(*command),
+        StepKind::InputsAuditRoot(directory) => {
+            crate::helper_steps::audit_root_step(directory.as_ref())
+        }
         StepKind::MergeGroupPassed { required } => crate::helper_steps::merge_group_step(required),
         StepKind::MergeQueueCheck => crate::helper_steps::merge_queue_step(),
         StepKind::TestGroupsCheck(groups) => crate::helper_steps::test_groups_step(groups),

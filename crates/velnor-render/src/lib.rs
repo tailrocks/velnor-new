@@ -18,6 +18,7 @@ mod draft_steps;
 mod env;
 mod events;
 mod gate;
+mod gate_needs;
 mod header;
 mod helper_integrity;
 mod helper_steps;
@@ -47,6 +48,7 @@ mod rule_messages;
 mod rules;
 mod steps;
 mod tests;
+mod tools_steps;
 mod workflow;
 mod yaml;
 

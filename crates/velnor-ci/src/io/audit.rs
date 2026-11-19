@@ -6,6 +6,7 @@ mod freshness;
 mod groups;
 mod inventory;
 mod options;
+mod selection;
 mod setup;
 
 pub(crate) use build::build;
@@ -19,8 +20,8 @@ use std::time::SystemTime;
 use velnor_gen::io::read_checkout;
 use velnor_model::{CompileInputs, MemberDependency, RepoFacts, RepoPath};
 use velnor_rust::{
-    INPUTS_LOCK, Located, Owner, Owners, add_reads, detect, format_inputs_lock, locate,
-    parse_inputs_lock, rerun_if_changed, unlisted,
+    INPUTS_IDENTITY_HELPER, INPUTS_LOCK, Located, Owner, Owners, add_reads, detect,
+    inputs_lock_text, locate, parse_inputs_lock, rerun_if_changed, unlisted,
 };
 
 use super::unit_platforms::platforms;
@@ -29,6 +30,7 @@ use crate::coverage::{Built, Fingerprint, Unit, UnitKind};
 use crate::error::CiError;
 use crate::platform::Platforms;
 use groups::{group_dirs, shared_groups, workspaces};
+use selection::{selected, within};
 
 mod dep_info;
 
@@ -58,7 +60,7 @@ pub(super) struct Audit<'a> {
 pub fn audit_inputs(directory: &Path, options: &AuditOptions) -> Result<String, CiError> {
     let failed = |e: &dyn std::fmt::Display| CiError::new(e.to_string());
     let mut checkout = read_checkout(directory).map_err(|e| failed(&e))?;
-    let listed = checkout
+    let mut listed = checkout
         .view
         .files
         .remove(&INPUTS_LOCK)
@@ -67,9 +69,10 @@ pub fn audit_inputs(directory: &Path, options: &AuditOptions) -> Result<String, 
         .map_err(|e| failed(&e))?
         .unwrap_or_default();
     let facts = detect(&checkout.view).map_err(|e| failed(&e))?;
-    let workspaces = workspaces(&facts, &checkout.root)?;
+    let workspaces = workspaces(&facts, &checkout.root, options.inherit_target_dir)?;
     let shared = shared_groups(&facts);
     apart(&workspaces, &shared)?;
+    let chosen = selected(&facts, &shared, options.root.as_deref())?;
     let groups = group_dirs(&facts, &checkout.root);
     let mut audit = setup::begin(
         &checkout,
@@ -78,7 +81,7 @@ pub fn audit_inputs(directory: &Path, options: &AuditOptions) -> Result<String, 
         &groups,
         options.max_directory_entries,
     );
-    for (unit, file, indices) in setup::gathered_files(&workspaces, &shared, &groups)? {
+    for (unit, file, indices) in setup::gathered_files(&workspaces, &shared, &groups, &chosen)? {
         audit.record(&indices, &file, unit)?;
     }
     audit.orphans();
@@ -106,15 +109,23 @@ pub fn audit_inputs(directory: &Path, options: &AuditOptions) -> Result<String, 
                 )
         })
         .collect();
-    setup::complete(&facts, &effective, &audit.built, &platforms)?;
+    setup::complete(&facts, &chosen, &effective, &audit.built, &platforms)?;
     audit.check_stale()?;
+    let identified = facts
+        .helper
+        .as_ref()
+        .is_some_and(|helper| helper.version().at_least(INPUTS_IDENTITY_HELPER));
     let reads: usize = audit.found.values().map(BTreeSet::len).sum();
     let summary = format!("{reads} reads from {} unit files", audit.units);
     if options.write {
-        write_lock(&checkout.root.join(INPUTS_LOCK.as_str()), &audit.found)?;
+        let lock = checkout.root.join(INPUTS_LOCK.as_str());
+        write_lock(&lock, &audit.found, identified)?;
         return Ok(format!("wrote {INPUTS_LOCK}: {summary}\n"));
     }
-    compare(&audit.found, &listed, &summary)
+    if options.root.is_some() {
+        listed = within(listed, &facts, &chosen);
+    }
+    compare(&audit.found, &listed, &summary, identified)
 }
 
 fn gated(facts: &RepoFacts) -> bool {
@@ -134,12 +145,12 @@ fn gated(facts: &RepoFacts) -> bool {
             .any(|package| platformed(&package.dependencies))
 }
 
-fn write_lock(lock: &Path, found: &CompileInputs) -> Result<(), CiError> {
+fn write_lock(lock: &Path, found: &CompileInputs, identified: bool) -> Result<(), CiError> {
     if let Some(parent) = lock.parent() {
         fs::create_dir_all(parent)
             .map_err(|e| CiError::new(format!("cannot create {}: {e}", parent.display())))?;
     }
-    fs::write(lock, format_inputs_lock(found))
+    fs::write(lock, inputs_lock_text(found, identified))
         .map_err(|e| CiError::new(format!("cannot write {}: {e}", lock.display())))
 }
 
@@ -147,6 +158,7 @@ fn compare(
     found: &CompileInputs,
     listed: &CompileInputs,
     summary: &str,
+    identified: bool,
 ) -> Result<String, CiError> {
     let missing = unlisted(found, listed);
     let unread = unlisted(listed, found);
@@ -159,7 +171,7 @@ fn compare(
     ]
     .into_iter()
     .filter(|(_, entries)| !entries.is_empty())
-    .map(|(heading, entries)| format!("{heading}:\n{}", format_inputs_lock(&entries)))
+    .map(|(heading, entries)| format!("{heading}:\n{}", inputs_lock_text(&entries, identified)))
     .collect();
     Err(CiError::new(format!(
         "{INPUTS_LOCK} is stale; run velnor-ci inputs build -- cargo build --workspace --all-targets, then velnor-ci inputs audit --write and commit it\n{}",

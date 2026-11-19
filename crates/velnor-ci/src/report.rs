@@ -191,10 +191,8 @@ pub fn check(lanes: &[LaneMetrics]) -> Result<String, CiError> {
 
 fn compilation_repeats(lanes: &[LaneMetrics]) -> Result<Vec<String>, CiError> {
     let mut events = BTreeMap::new();
-    let mut units = BTreeMap::new();
     let mut unknown = BTreeMap::new();
     for invocation in lanes.iter().flat_map(|lane| &lane.invocations) {
-        crate::observed_units::collect(invocation, &mut units);
         let mut covered = BTreeSet::new();
         for artifact in invocation
             .artifacts
@@ -240,11 +238,7 @@ fn compilation_repeats(lanes: &[LaneMetrics]) -> Result<Vec<String>, CiError> {
             format!("{root}: {package} v{version} compiled {count} times for {config}")
         },
     ));
-    violations.extend(units.into_iter().filter(|(_, (_, count))| *count > 1).map(
-        |(_, (package, count))| {
-            format!("{package}: identical observed compilation unit executed {count} times")
-        },
-    ));
+    violations.extend(crate::observed_units::repeats(lanes));
     Ok(violations)
 }
 
