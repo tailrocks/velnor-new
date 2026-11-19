@@ -83,10 +83,46 @@ impl fmt::Debug for ScaleSetCreate<'_> {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[must_use]
+pub struct ScaleSetDelete<'a> {
+    pub scale_set_id: i64,
+
+    pub admin_token: &'a str,
+}
+
+impl fmt::Debug for ScaleSetDelete<'_> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("ScaleSetDelete")
+            .field("scale_set_id", &self.scale_set_id)
+            .field("admin_token", &"[redacted]")
+            .finish()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[must_use]
 pub enum ScaleSetFound {
     NotFound,
+
+    Found(ScaleSetView),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[must_use]
+pub enum ScaleSetDeleteStatus {
+    Deleted,
+
+    NotFound,
+
+    Refused(u16),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[must_use]
+pub enum ScaleSetObserved {
+    Missing,
 
     Found(ScaleSetView),
 }
@@ -131,6 +167,55 @@ where
         return Err(other_status(exchange.status));
     }
     decode_one(&exchange.body, call.name, call.expected_labels)
+}
+
+pub fn observe_runner_scale_set_by_id<T>(
+    transport: &mut T,
+    call: &ScaleSetById<'_>,
+) -> Result<ScaleSetObserved, SessionError>
+where
+    T: Transport + ?Sized,
+{
+    let request = SessionRequest {
+        method: Method::Get,
+        path: format!("{}/{}", scale_set_path(), call.scale_set_id),
+        query: Some(API_QUERY.to_owned()),
+        headers: admin_headers(call.admin_token)?,
+        body: Vec::new(),
+    };
+    let exchange = execute(transport, &request)?;
+    match exchange.status {
+        200 => {
+            decode_one(&exchange.body, call.name, call.expected_labels).map(ScaleSetObserved::Found)
+        }
+        404 => Ok(ScaleSetObserved::Missing),
+        status => Err(other_status(status)),
+    }
+}
+
+pub fn delete_runner_scale_set<T>(
+    transport: &mut T,
+    call: &ScaleSetDelete<'_>,
+) -> Result<ScaleSetDeleteStatus, SessionError>
+where
+    T: Transport + ?Sized,
+{
+    if call.scale_set_id <= 0 {
+        return Err(WireError::RegistrationRejected.into());
+    }
+    let request = SessionRequest {
+        method: Method::Delete,
+        path: format!("{}/{}", scale_set_path(), call.scale_set_id),
+        query: Some(API_QUERY.to_owned()),
+        headers: admin_headers(call.admin_token)?,
+        body: Vec::new(),
+    };
+    match execute(transport, &request)?.status {
+        204 => Ok(ScaleSetDeleteStatus::Deleted),
+        404 => Ok(ScaleSetDeleteStatus::NotFound),
+        status @ (400 | 401 | 403 | 409 | 422) => Ok(ScaleSetDeleteStatus::Refused(status)),
+        _ => Err(SessionError::Uncertain),
+    }
 }
 
 pub fn create_runner_scale_set<T>(

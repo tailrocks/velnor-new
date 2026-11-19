@@ -15,6 +15,7 @@ use crate::journal::{
 };
 use crate::listen::{Link, link_from_admin};
 
+pub(crate) mod delete;
 mod support;
 
 use support::{
