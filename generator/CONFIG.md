@@ -109,6 +109,9 @@ run = "bash scripts/ci-fixtures.sh"
 
 `root` is the folder of the Cargo root's `Cargo.toml`, or `.` for the repository root, and it must name a root of this repository. The step runs in that folder. It follows the same gate as the test steps, so a run that selects no tests skips it. A job that runs no tests has none. With `shape = "groups"` the test group job installs only cargo-nextest, so a step there must not need Rust. A `run` value with an expression, a line break or any shell syntax is refused.
 
+## Optional sparse checkout
+
+`sparse_checkout = true` in `.velnor/rust-ci.toml` makes the checkout step of each Rust lane job list only what that lane reads: its root and its members, the roots it depends on, the lockfiles and tool files at the repository top, `.cargo/`, `.config/`, `.velnor/`, and every path of the inputs lock and of declared `[[inputs]]`. It is `false` by default, and then the generated workflow is unchanged. The plan, policy and audit-plan jobs keep the full tree. The lane keeps a full checkout when a root manifest sits at the repository top, when the inputs lock has a repository-wide read, or when `[[test_setup]]` is set, because those reads are unknown. A test that reads a tracked file outside the list fails with a missing file; add that path under `[[inputs]]`.
 ## Test groups
 
 Heavy or special tests get their own job; every other test stays in the default job. A group names a nextest filterset, what its tests need and the limits of its job.

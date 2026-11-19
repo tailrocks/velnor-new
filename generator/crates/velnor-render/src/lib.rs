@@ -6,6 +6,7 @@ mod base_steps;
 mod cache;
 mod cache_upload;
 mod cargo;
+mod checkout_step;
 mod combined_cache;
 mod draft_steps;
 mod env;

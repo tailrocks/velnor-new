@@ -173,6 +173,7 @@ mod shared_sources;
 mod single_fetch;
 mod skip_push;
 mod source_roots_limit;
+mod sparse_checkout;
 mod step_target_dir;
 mod suggest_groups;
 mod test_groups;
