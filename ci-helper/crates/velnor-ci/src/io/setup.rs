@@ -1,14 +1,16 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeSet;
 use std::path::Path;
 use std::process::Command;
 
 use velnor_gen::io::read_files;
-use velnor_model::{RepoPath, ToolPins, Toolchain};
+use velnor_model::{LOCK_OUTPUT_PREFIX, RepoPath, RootSlug, ToolPins, Toolchain};
 use velnor_rust::{
-    BUILD_DRIVER, CONFIG_PATH, CompatInputs, TOOLCHAIN_PLAIN, TOOLCHAIN_TOML, build_profile,
-    ci_debuginfo, compat, mise_files, tool_pins, toolchain,
+    BUILD_DRIVER, CONFIG_PATH, CompatInputs, METADATA_PATH, TOOLCHAIN_PLAIN, TOOLCHAIN_TOML,
+    build_profile, ci_debuginfo, compat, lock_key, mise_files, recorded_members, tool_pins,
+    toolchain,
 };
 
 use super::build_inputs::{image_identity, release_of, repository_profile};
@@ -56,7 +58,28 @@ pub(super) fn prepare() -> Result<String, CiError> {
     write_cargo_config(&root, profile.cargo_config)?;
     append_to(ENV_VARIABLE, &env_lines(&profile))?;
     append_outputs(&output_lines(&digest))?;
+    append_outputs(&lock_output_lines(&root)?)?;
     Ok(String::new())
+}
+
+fn lock_output_lines(root: &Path) -> Result<String, CiError> {
+    let recorded = read_files(root, &[METADATA_PATH]).map_err(|e| CiError::new(e.to_string()))?;
+    let members = recorded_members(recorded.get(&METADATA_PATH).map(Vec::as_slice))
+        .map_err(|e| CiError::new(e.to_string()))?;
+    let owned: BTreeSet<String> = members.values().flatten().cloned().collect();
+    members
+        .keys()
+        .map(|manifest| {
+            let lock = manifest.sibling(&RepoPath::from_static("Cargo.lock"));
+            let mut read = read_files(root, std::slice::from_ref(&lock))
+                .map_err(|e| CiError::new(e.to_string()))?;
+            let digest = lock_key(read.remove(&lock).as_deref(), &owned);
+            Ok(format!(
+                "{LOCK_OUTPUT_PREFIX}{}={digest}\n",
+                RootSlug::of(manifest)
+            ))
+        })
+        .collect()
 }
 
 fn check_pinned_tools(root: &Path, pins: &ToolPins) -> Result<(), CiError> {

@@ -14,6 +14,7 @@ mod cache_compat;
 mod cache_key_defects;
 mod cache_key_inputs;
 mod cache_keys;
+mod cache_lock_identity;
 mod cargo_flags;
 mod cargo_lock;
 mod classify;

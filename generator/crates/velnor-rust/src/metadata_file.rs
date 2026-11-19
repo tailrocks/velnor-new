@@ -213,6 +213,27 @@ pub fn recorded_roots(recorded: Option<&[u8]>) -> Result<Vec<RepoPath>, Metadata
     file.roots.keys().map(|root| path_of(root)).collect()
 }
 
+pub fn recorded_members(
+    recorded: Option<&[u8]>,
+) -> Result<BTreeMap<RepoPath, BTreeSet<String>>, MetadataFileError> {
+    let bytes = recorded.ok_or(MetadataFileError::Missing)?;
+    let file: File = serde_json::from_slice(bytes)
+        .map_err(|error| MetadataFileError::Unreadable(error.to_string()))?;
+    file.roots
+        .into_iter()
+        .map(|(root, entry)| {
+            Ok((
+                path_of(&root)?,
+                entry
+                    .members
+                    .into_iter()
+                    .map(|member| member.name)
+                    .collect(),
+            ))
+        })
+        .collect()
+}
+
 pub fn recorded_metadata(
     view: &RepoView,
     recorded: Option<&[u8]>,

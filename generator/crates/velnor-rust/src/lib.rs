@@ -24,6 +24,7 @@ mod harness;
 mod lane;
 mod lock;
 mod lock_affected;
+mod lock_key;
 mod manifest_diff;
 mod metadata;
 mod metadata_file;
@@ -69,10 +70,11 @@ pub use doc_steps::{member_sources, optional_steps, root_sources};
 pub use error::{DetectError, Reason};
 pub use lock::{LOCK_PATH, LockError, commit_url, pin_lock, release_version, sums_url};
 pub use lock_affected::lock_affected;
+pub use lock_key::lock_key;
 pub use metadata::{MetadataError, reduce_metadata};
 pub use metadata_file::{
-    METADATA_PATH, MetadataFileError, VERSIONS_HELPER, metadata_file, recorded_metadata,
-    recorded_roots,
+    METADATA_PATH, MetadataFileError, VERSIONS_HELPER, metadata_file, recorded_members,
+    recorded_metadata, recorded_roots,
 };
 pub use mise::{MISE_CONFIGS, MISE_LOCK, check_tools, mise_files, tool_pins};
 pub use owners::{Owner, Owners, add_reads};

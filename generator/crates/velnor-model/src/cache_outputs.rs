@@ -41,7 +41,7 @@ impl CacheLaneOutput {
                 .fold(0_usize, |bytes, segment| {
                     bytes
                         .saturating_add(match segment {
-                            CacheKeySegment::Lock(_) => 64,
+                            CacheKeySegment::Lock(_) | CacheKeySegment::RootLock(_) => 64,
                             CacheKeySegment::Commit => 40,
                             CacheKeySegment::RunId => 20,
                             _ => segment.json_content_max_bytes(),

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{CacheKey, CacheKeySegment, CachePath, RepoPath};
+use velnor_model::{CacheKey, CacheKeySegment, CachePath, LOCK_OUTPUT_PREFIX, RepoPath};
 
 use crate::steps::{MISE_VERSION, PREPARE_STEP};
 
@@ -32,6 +32,9 @@ pub fn render_key_with_mise(key: &CacheKey, mise_version: &str) -> RenderedKey {
             CacheKeySegment::TargetOwner { job, root } => format!("{job}.{root}.{HOST}"),
             CacheKeySegment::Compat => format!("${{{{ steps.{PREPARE_STEP}.outputs.compat }}}}"),
             CacheKeySegment::Lock(path) => hash_files(path),
+            CacheKeySegment::RootLock(root) => {
+                format!("${{{{ steps.{PREPARE_STEP}.outputs.{LOCK_OUTPUT_PREFIX}{root} }}}}")
+            }
             CacheKeySegment::Mise => format!("mise{mise_version}"),
             CacheKeySegment::Commit => COMMIT.to_owned(),
             CacheKeySegment::RunId => RUN_ID.to_owned(),

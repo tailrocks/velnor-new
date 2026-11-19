@@ -13,6 +13,14 @@ pub struct CacheRoot {
     slug: RootSlug,
     manifest: RepoPath,
     target_dir: RepoPath,
+    lock: LockIdentity,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum LockIdentity {
+    #[default]
+    File,
+    Members,
 }
 
 impl CacheRoot {
@@ -22,7 +30,19 @@ impl CacheRoot {
             slug: RootSlug::of(manifest),
             manifest: manifest.clone(),
             target_dir,
+            lock: LockIdentity::File,
         }
+    }
+
+    #[must_use]
+    pub fn with_lock_identity(mut self, lock: LockIdentity) -> Self {
+        self.lock = lock;
+        self
+    }
+
+    #[must_use]
+    pub fn lock_identity(&self) -> LockIdentity {
+        self.lock
     }
 
     #[must_use]

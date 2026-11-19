@@ -4,14 +4,13 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
-    Access, CacheDebug, CacheKey, CacheRoot, CargoCommand, Concurrency, HelperCommand, Host, Job,
-    JobId, PackageName, PermissionScope, Permissions, PullRequestType, RepoFacts, RootSlug,
-    RustRoot, Shape, ShapeDecision, Step, StepKind, TargetName, Toolchain, Triggers, When,
-    WorkflowPlan,
+    Access, CacheDebug, CacheKey, CargoCommand, Concurrency, HelperCommand, Host, Job, JobId,
+    PackageName, PermissionScope, Permissions, PullRequestType, RepoFacts, RootSlug, RustRoot,
+    Shape, ShapeDecision, Step, StepKind, TargetName, Toolchain, Triggers, When, WorkflowPlan,
 };
 
 use crate::audit_job::audit_job;
-use crate::base_cache::restored;
+use crate::base_cache::{cache_root, restored};
 use crate::config::CONFIG_PATH;
 use crate::detect::HELPER_PACKAGE;
 use crate::error::{DetectError, Reason};
@@ -264,7 +263,7 @@ pub(crate) fn setup_roots(
         toolchain.push(prepare);
     }
     for (root, family) in roots.iter().zip(families) {
-        let cache_root = CacheRoot::new(&root.manifest, root.target_dir.clone());
+        let cache_root = cache_root(facts, root);
         toolchain.extend([
             Step {
                 directory: root.manifest.parent(),

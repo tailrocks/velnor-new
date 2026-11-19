@@ -4,8 +4,8 @@
 use std::collections::BTreeMap;
 
 use velnor_model::{
-    Access, BaseExpiry, CacheKey, CacheRoot, HelperCommand, Host, Job, JobId, PermissionScope,
-    Permissions, RepoFacts, RepoPath, RustRoot, Step, StepKind, TrimFamily, When,
+    Access, BaseExpiry, CacheKey, CacheRoot, HelperCommand, Host, Job, JobId, LockIdentity,
+    PermissionScope, Permissions, RepoFacts, RepoPath, RustRoot, Step, StepKind, TrimFamily, When,
 };
 
 use crate::lane::Lane;
@@ -14,6 +14,20 @@ use crate::plan::{job, step};
 const TRIM_JOB: JobId = JobId::from_static("rust-trim");
 
 const SAVING_HELPER: (u64, u64, u64) = (0, 1, 81);
+const MEMBER_LOCK_HELPER: (u64, u64, u64) = (0, 1, 84);
+
+pub(crate) fn cache_root(facts: &RepoFacts, root: &RustRoot) -> CacheRoot {
+    let lock = if facts
+        .helper
+        .as_ref()
+        .is_some_and(|helper| helper.version().at_least(MEMBER_LOCK_HELPER))
+    {
+        LockIdentity::Members
+    } else {
+        LockIdentity::File
+    };
+    CacheRoot::new(&root.manifest, root.target_dir.clone()).with_lock_identity(lock)
+}
 
 pub(crate) fn writes_base(facts: &RepoFacts) -> bool {
     facts.private_sources.is_none() && has_saving_helper(facts)
@@ -72,7 +86,7 @@ pub(crate) fn save_steps(
     if !writes_base(facts) {
         return Vec::new();
     }
-    let cache_root = CacheRoot::new(&root.manifest, root.target_dir.clone());
+    let cache_root = cache_root(facts, root);
     let target = CacheKey::Target {
         job: job.clone(),
         root: cache_root.clone(),
