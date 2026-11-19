@@ -174,7 +174,6 @@ impl ControlState {
             .lock()
             .map_err(|_| HostError::Journal)?;
         coordinator.invalidate_connection(connection_id);
-        let setup_removed = coordinator.setup_receipts.remove(connection_id).is_some();
         let removed = self
             .session_polls
             .write()
@@ -184,7 +183,7 @@ impl ControlState {
             .write()
             .map_err(|_| HostError::Journal)?
             .remove(connection_id);
-        if removed.is_some() || setup_removed {
+        if removed.is_some() {
             self.clear_readiness()?;
         }
         Ok(())

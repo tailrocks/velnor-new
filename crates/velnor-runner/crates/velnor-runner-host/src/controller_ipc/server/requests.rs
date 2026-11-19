@@ -10,7 +10,7 @@ use crate::{
 
 use super::super::wire::{DoctorProbeReply, Request, Response, Target};
 use super::{
-    ControlState, configured_exactly, connection_id_present, target_marker,
+    ControlState, configured_exactly, connection_id_present, drain_marker_present, target_marker,
     transport::{marker_exists, read_drain_token},
 };
 
@@ -293,9 +293,9 @@ async fn current_readiness(
     engine_id: &str,
     docker_root_digest: &str,
 ) -> Result<crate::readiness::Readiness, HostError> {
-    let Some((_, config_sha256)) = crate::readiness_scan::controller_config(state_path) else {
-        return Ok(crate::readiness::Readiness::Reconciling);
-    };
+    let config_sha256 = crate::readiness_scan::controller_config(state_path)
+        .map(|(_, config_sha256)| config_sha256)
+        .unwrap_or_default();
     let response = controller_readiness(
         journal,
         state,
@@ -340,7 +340,9 @@ async fn controller_readiness(
     requested: ControllerIdentity<'_>,
     observed: ControllerIdentity<'_>,
 ) -> Result<Response, HostError> {
-    let readiness = if requested.engine_id != observed.engine_id
+    let readiness = if drain_marker_present(state_path)? {
+        crate::readiness::Readiness::Draining
+    } else if requested.engine_id != observed.engine_id
         || requested.docker_root_digest != observed.docker_root_digest
     {
         crate::readiness::Readiness::Reconciling
@@ -382,3 +384,7 @@ fn readiness_response(readiness: crate::readiness::Readiness) -> Response {
         ..Response::default()
     }
 }
+
+#[cfg(test)]
+#[path = "requests/tests.rs"]
+mod tests;

@@ -53,6 +53,7 @@ fn release_family_publish_jobs_hold_contents_write_without_a_checkout() -> Resul
 
     let binary_request = Schema2WorkflowRequest {
         runner_image_family: None,
+        pr_ci: velnor_actions_contract::PrCiMode::Off,
         workflows: BTreeSet::from([RoutingWorkflow::MacosBinaryRelease]),
         ..request()?
     };

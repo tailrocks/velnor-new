@@ -16,7 +16,7 @@ const TABLE: &str = concat!(
 const NAME: &str = "connection_scale_set_deletes";
 
 pub(super) async fn migrate_v57_to_v58(conn: &turso::Connection) -> Result<(), HostError> {
-    super::validate_persisted_schema_v52(conn).await?;
+    super::validate_persisted_schema_v53(conn).await?;
     conn.execute(TABLE, ())
         .await
         .map_err(|_| HostError::Journal)?;
