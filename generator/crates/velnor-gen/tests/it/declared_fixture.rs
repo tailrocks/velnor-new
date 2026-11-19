@@ -27,16 +27,19 @@ run = "echo ok"
 "#;
 
 pub(crate) fn rendered_file(config: &str, file: &str) -> Result<Node, Box<dyn Error>> {
+    Ok(parse(&rendered_text(config, file)?)?)
+}
+
+pub(crate) fn rendered_text(config: &str, file: &str) -> Result<String, Box<dyn Error>> {
     let mut view = release_view(&[], None)?;
     view.files.insert(
         RepoPath::new(".velnor/workflows.toml")?,
         config.as_bytes().to_vec(),
     );
     let mut files = expected_files(&view)?;
-    let text = files
+    Ok(files
         .remove(&RepoPath::new(format!(".github/workflows/{file}.yml"))?)
-        .ok_or("not rendered")?;
-    Ok(parse(&text)?)
+        .ok_or("not rendered")?)
 }
 
 pub(crate) fn rendered(config: &str) -> Result<Node, Box<dyn Error>> {
