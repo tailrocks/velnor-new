@@ -51,6 +51,7 @@ mod remote;
 mod request_ledger;
 mod request_reservations;
 mod scale_set_create;
+mod scale_set_unverified;
 mod session;
 mod session_refresh;
 mod source_authorization;
@@ -68,7 +69,7 @@ mod tamper_tests;
 mod validation;
 mod worker_health;
 
-pub(super) const JOURNAL_VERSION: i64 = 52;
+pub(super) const JOURNAL_VERSION: i64 = 53;
 use current_columns::CURRENT_COLUMNS;
 pub(super) use validation::validate_persisted_schema_v35;
 
@@ -135,7 +136,8 @@ async fn validate_persisted_schema(conn: &turso::Connection) -> Result<(), HostE
     unbound_retirement::validate(conn).await?;
     jit_interrupted_claims::validate(conn).await?;
     jit_claim_deadline::validate(conn).await?;
-    jit_tombstone_completion::validate(conn).await
+    jit_tombstone_completion::validate(conn).await?;
+    scale_set_unverified::validate(conn).await
 }
 
 #[cfg(test)]
