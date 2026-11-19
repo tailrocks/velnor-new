@@ -3,17 +3,14 @@
 
 use std::io;
 use std::net::SocketAddr;
-use std::time::Duration;
 
 use tokio::fs;
 
 use super::{Addresses, Engine, Environment};
 use crate::authority::AGENTS_PATH;
 use crate::cli::EnvironmentArgs;
-use crate::io::probe::wait_for;
+use crate::io::probe::{wait_for, wait_online};
 use crate::io::proxy::Proxy;
-
-const READY_TIMEOUT: Duration = Duration::from_secs(60);
 
 impl<E: Engine> Environment<E> {
     pub(in crate::io) async fn published(&self, role: &str) -> io::Result<String> {
@@ -57,7 +54,7 @@ impl<E: Engine> Environment<E> {
             stub_url: format!("http://{stub}"),
             token,
         };
-        let deadline = tokio::time::Instant::now() + READY_TIMEOUT;
+        let deadline = tokio::time::Instant::now() + self.ready_timeout;
         let sides: Vec<_> = [("", &addresses.cache, args.containers(args.runners))]
             .into_iter()
             .chain(
@@ -78,7 +75,7 @@ impl<E: Engine> Environment<E> {
                     self.name
                 );
                 let what = format!("{prefix}runner {number}");
-                wait_for(proxy, &path, deadline, &what).await?;
+                wait_online(proxy, &path, deadline, &what).await?;
             }
         }
         Ok(addresses)

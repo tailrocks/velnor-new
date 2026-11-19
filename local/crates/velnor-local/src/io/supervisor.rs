@@ -3,6 +3,7 @@
 
 mod host;
 mod online;
+mod pid;
 mod process;
 
 use std::io;
@@ -33,6 +34,7 @@ use crate::cli::SuperviseArgs;
 use crate::pairs::DECISIONS;
 use crate::side::Side;
 use host::{LOG, PID, PLAN, POLICY, read_policy, runner_dir, store_policy};
+use pid::recorded_pid;
 use process::{command_of, send};
 
 const START_TIMEOUT: Duration = Duration::from_secs(20);
@@ -215,14 +217,9 @@ async fn ours(pid: &str, dir: &Path, binary: &str) -> io::Result<bool> {
     }))
 }
 
-async fn stop_host(dir: &Path) -> io::Result<Option<String>> {
+async fn stop_host(dir: &Path, pid: Option<String>) -> io::Result<Option<String>> {
     let runner = runner_dir(dir);
-    let pid = fs::read_to_string(runner.join(PID)).await;
-    let Some(pid) = pid
-        .ok()
-        .map(|pid| pid.trim().to_owned())
-        .filter(|pid| pid.parse::<u32>().is_ok())
-    else {
+    let Some(pid) = pid else {
         return Ok(None);
     };
     let expected = format!(" --state {} local", runner.display());
@@ -286,12 +283,9 @@ async fn terminate(dir: &Path, pid: &str, binary: &str) -> io::Result<()> {
 
 pub(super) async fn stop(dir: &Path) -> io::Result<Option<String>> {
     let authority = authority_dir(dir);
-    let pid = fs::read_to_string(authority.join("pid")).await;
-    if let Some(pid) = pid
-        .ok()
-        .map(|pid| pid.trim().to_owned())
-        .filter(|pid| pid.parse::<u32>().is_ok())
-    {
+    let pid = recorded_pid(&authority.join("pid")).await?;
+    recorded_pid(&runner_dir(dir).join(PID)).await?;
+    if let Some(pid) = pid {
         let binary = match fs::read_to_string(authority.join("binary")).await {
             Ok(binary) => Some(binary),
             Err(error) if error.kind() == io::ErrorKind::NotFound => None,
@@ -311,7 +305,8 @@ pub(super) async fn stop(dir: &Path) -> io::Result<Option<String>> {
     forget(&authority.join("pid")).await?;
     forget(&authority.join("binary")).await?;
     forget(&authority.join("address")).await?;
-    stop_host(dir).await
+    let host_pid = recorded_pid(&runner_dir(dir).join(PID)).await?;
+    stop_host(dir, host_pid).await
 }
 
 pub(super) async fn serve(args: SuperviseArgs) -> io::Result<()> {

@@ -282,6 +282,8 @@ fn a_control_token_without_a_control_listener_is_refused() {
     assert!(!parse(&["--control-listen", "127.0.0.1:81"]));
 }
 
+mod plain_ready;
+
 struct Published(String);
 
 impl velnor_local::io::env::Engine for Published {

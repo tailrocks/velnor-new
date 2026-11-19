@@ -36,4 +36,5 @@ mod status;
 mod store;
 mod supervisor;
 mod supervisor_down;
+mod supervisor_pid;
 mod support;

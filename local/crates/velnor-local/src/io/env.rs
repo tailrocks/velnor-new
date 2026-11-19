@@ -4,6 +4,7 @@
 use std::fmt::Write as _;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use serde_json::Value;
 use tokio::fs;
@@ -21,6 +22,7 @@ pub(super) use crate::doctor::STANDIN_IMAGE;
 use crate::doctor::{CACHE_IMAGE as LOCAL_IMAGE, RUNNER_IMAGE};
 pub use engine::{DockerCli, Engine};
 pub(super) use engine::{program, words};
+pub const READY_TIMEOUT: Duration = Duration::from_secs(60);
 const OPENSSL: &str = "openssl genrsa -out /keys/token.pem 2048 && openssl rsa -in /keys/token.pem -RSAPublicKey_out -outform DER -out /keys/token.pub.der";
 
 #[derive(Debug)]
@@ -29,6 +31,7 @@ pub struct Environment<E> {
     pub dir: PathBuf,
     labels: String,
     engine: E,
+    ready_timeout: Duration,
 }
 
 #[derive(Debug)]
@@ -69,12 +72,19 @@ impl<E: Engine> Environment<E> {
             dir,
             labels: labels(&[]),
             engine,
+            ready_timeout: READY_TIMEOUT,
         })
     }
 
     #[must_use]
     pub fn with_labels(mut self, extra: &[String]) -> Self {
         self.labels = labels(extra);
+        self
+    }
+
+    #[must_use]
+    pub const fn with_ready_timeout(mut self, ready_timeout: Duration) -> Self {
+        self.ready_timeout = ready_timeout;
         self
     }
 
