@@ -151,3 +151,37 @@ timeout_minutes = 5
 name = "Report"
 run = "echo released"
 env = { REPOSITORY = "${{ github.repository }}" }
+
+# One build job for two targets: the runner comes from the matrix, and each label of the axis
+# is declared. Both are GitHub-hosted, so a pull request from a fork may run the job; one
+# `false` label would give `runs-on` the fork fence.
+[[workflow]]
+file = "tools-build"
+name = "Tools build"
+runner = "ubuntu-24.04"
+hosted = true
+
+[workflow.on.pull_request]
+types = ["opened", "synchronize"]
+
+[[workflow.job]]
+id = "build"
+runner = "${{ matrix.runner }}"
+runner_labels = { "ubuntu-24.04" = true, "ubuntu-24.04-arm" = true }
+timeout_minutes = 30
+permissions = { contents = "read" }
+
+[workflow.job.matrix]
+fail_fast = false
+include = [
+  { target = "x86_64-unknown-linux-musl", runner = "ubuntu-24.04", suffix = "x64" },
+  { target = "aarch64-unknown-linux-musl", runner = "ubuntu-24.04-arm", suffix = "arm64" },
+]
+
+[[workflow.job.step]]
+uses = "checkout"
+
+[[workflow.job.step]]
+name = "Build"
+run = "cargo build --release --locked --target \"$TARGET\""
+env = { TARGET = "${{ matrix.target }}", SUFFIX = "${{ matrix.suffix }}" }

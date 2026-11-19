@@ -33,9 +33,16 @@ pub(crate) fn containers_on_linux(
         .iter()
         .filter(|job| job.container.is_some() || !job.services.is_empty())
     {
-        let primary = job.runner.as_deref().unwrap_or(runner);
+        let primary: Vec<&str> = match &job.matrix_runner {
+            Some(matrix) => matrix
+                .labels
+                .iter()
+                .map(|(label, _)| label.as_str())
+                .collect(),
+            None => vec![job.runner.as_deref().unwrap_or(runner)],
+        };
         let fork = (!job.hosted).then_some(fork_runner);
-        for label in std::iter::once(primary).chain(fork) {
+        for label in primary.into_iter().chain(fork) {
             let label_lower = label.to_ascii_lowercase();
             if label_lower.starts_with("macos") || label_lower.starts_with("windows") {
                 return refuse(format!(

@@ -121,6 +121,8 @@ pub struct RenderedJob {
     pub uses: Option<String>,
     pub with: Vec<(String, Value)>,
     pub runs_on: String,
+    /// When set, `runs-on` is `matrix.<axis>` and `runs_on` is unused.
+    pub runs_on_axis: Option<String>,
     pub fork_runner: Option<String>,
     pub timeout_minutes: u16,
     pub env: Vec<(String, Value)>,

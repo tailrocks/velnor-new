@@ -113,6 +113,7 @@ fn rendered_job(workflow: &Workflow, job: &Job, helper: &HelperRelease) -> Rende
             .iter()
             .flat_map(|call| call_values(&call.with))
             .collect(),
+        runs_on_axis: job.matrix_runner.as_ref().map(|runner| runner.axis.clone()),
         fork_runner: (!job.hosted).then(|| workflow.fork_runner.clone()),
         permissions: job.permissions.clone(),
         no_permissions: job.permissions.is_empty(),

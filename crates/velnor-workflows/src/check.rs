@@ -193,23 +193,19 @@ fn needed_outputs<'a>(needs: &[String], earlier: &'a [Job]) -> Vec<(&'a str, &'a
         .collect()
 }
 
-fn job(raw: RawJob, ctx: &Context<'_>, earlier: &[Job]) -> Result<Job, WorkflowsError> {
+fn job(mut raw: RawJob, ctx: &Context<'_>, earlier: &[Job]) -> Result<Job, WorkflowsError> {
     let id = raw.id.clone();
     let timeout_minutes = job_shape(&raw, earlier)?;
     declared_access(&id, &raw.permissions, raw.environment.as_deref())?;
+    let matrix = raw
+        .matrix
+        .take()
+        .map(|matrix| self::matrix(&id, matrix, &raw.needs, earlier))
+        .transpose()?;
+    let chosen = crate::hosting::of_job(ctx, &id, &raw, matrix.as_ref())?;
     let job_concurrency = raw
         .concurrency
         .map(|raw| concurrency(&format!("job {id}"), raw))
-        .transpose()?;
-    let runner = raw
-        .runner
-        .as_deref()
-        .map(|label| runner_label_of(ctx.file, label))
-        .transpose()?;
-    let hosted = crate::hosting::of_job(ctx, &id, runner.as_deref(), raw.hosted)?;
-    let matrix = raw
-        .matrix
-        .map(|matrix| self::matrix(&id, matrix, &raw.needs, earlier))
         .transpose()?;
     let needed_outputs = needed_outputs(&raw.needs, earlier);
     let axes = matrix.as_ref().and_then(crate::matrix::axis_names);
@@ -236,8 +232,9 @@ fn job(raw: RawJob, ctx: &Context<'_>, earlier: &[Job]) -> Result<Job, Workflows
         needs: raw.needs.clone(),
         condition,
         helper: raw.helper,
-        runner,
-        hosted,
+        runner: chosen.runner,
+        matrix_runner: chosen.matrix_runner,
+        hosted: chosen.hosted,
         environment: raw.environment.clone(),
         timeout_minutes,
         concurrency: job_concurrency,

@@ -216,13 +216,17 @@ fn launches_helper(step: &RenderedStep) -> bool {
 }
 
 fn runs_on(job: &RenderedJob) -> Yaml {
-    match &job.fork_runner {
-        Some(fork) => Yaml::Expr(format!(
-            "${{{{ {SAME_REPOSITORY} && {} || {} }}}}",
-            literal(&job.runs_on),
+    let primary = match &job.runs_on_axis {
+        Some(axis) => format!("matrix.{axis}"),
+        None => literal(&job.runs_on),
+    };
+    match (&job.fork_runner, &job.runs_on_axis) {
+        (Some(fork), _) => Yaml::Expr(format!(
+            "${{{{ {SAME_REPOSITORY} && {primary} || {} }}}}",
             literal(fork)
         )),
-        None => text(&job.runs_on),
+        (None, Some(_)) => Yaml::Expr(format!("${{{{ {primary} }}}}")),
+        (None, None) => text(&job.runs_on),
     }
 }
 
