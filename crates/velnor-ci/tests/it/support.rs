@@ -5,7 +5,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
+use std::process::{Command, Output, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{Duration, Instant};
 
 use nix::errno::Errno;
 use nix::sys::signal::kill;
@@ -14,6 +16,34 @@ use velnor_ci::collect::collect;
 use velnor_ci::error::CiError;
 use velnor_ci::github::{GitHub, Repo, job_log_path, jobs_path, run_path};
 use velnor_ci::metrics::RunMetrics;
+
+pub(crate) fn output_within(command: &mut Command, limit: Duration) -> Option<Output> {
+    let mut child = command
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .ok()?;
+    let deadline = Instant::now() + limit;
+    loop {
+        if child.try_wait().ok()?.is_some() {
+            return child.wait_with_output().ok();
+        }
+        if Instant::now() >= deadline {
+            child.kill().ok();
+            child.wait().ok();
+            return None;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+}
+
+pub(crate) fn make_fifo(path: &Path) {
+    let made = Command::new("mkfifo")
+        .arg(path)
+        .status()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(made.success());
+}
 
 pub(crate) const RUN: &str = include_str!("data/run.json");
 pub(crate) const JOBS: &str = include_str!("data/jobs.json");

@@ -1,10 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-//! The parts of `.velnor/config.toml` that decide which jobs a diff affects: the Rust input
-//! rules and non-inputs, and the named mise checks. A configuration that declares a stack or
-//! a job family this selection does not cover is refused rather than planned without it.
-
 use toml::{Table, Value};
 
 use super::glob;
