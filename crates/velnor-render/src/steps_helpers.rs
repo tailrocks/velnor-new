@@ -5,6 +5,13 @@ use super::{CacheKey, GateNeed, RenderedStep, StepKind, sources_step, trimmed_la
 
 pub(super) fn saved_unless_hit(kind: &StepKind) -> Vec<String> {
     match kind {
+        StepKind::CacheRestore(CacheKey::Delta { root, .. }) => vec![
+            format!("steps.delta_base_{}.outcome == 'success'", root.slug()),
+            format!(
+                "steps.target_{}.outputs.cache-matched-key != ''",
+                root.slug()
+            ),
+        ],
         StepKind::CacheSave(CacheKey::Sources { lane, .. }) => vec![format!(
             "steps.{}.outputs.cache-hit != 'true'",
             sources_step(lane.slug())

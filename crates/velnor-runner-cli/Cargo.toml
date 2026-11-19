@@ -35,6 +35,10 @@ name = "velnor_runner_cli"
 path = "src/lib.rs"
 
 [[test]]
+name = "daemon_lock_process"
+path = "tests/daemon_lock_process.rs"
+
+[[test]]
 name = "home_resolution_public"
 path = "tests/home_resolution_public.rs"
 

@@ -85,19 +85,16 @@ fn classify(key: &str) -> Option<(CacheFamily, &str)> {
         if !hex(tail, 8) {
             return None;
         }
-        rest
+        let (pull, group) = rest.split_once('-')?;
+        if !pull.strip_prefix("pr").is_some_and(numeric) {
+            return None;
+        }
+        group
     };
     let (prefix, compat) = group.rsplit_once('-')?;
-    if family == CacheFamily::Target {
-        let (owner, platform) = prefix.rsplit_once('.')?;
-        let (job, root) = owner.rsplit_once('.')?;
-        return (hex(compat, 16) && host(platform) && !job.is_empty() && !root.is_empty())
-            .then_some((family, group));
-    }
-    let (prefix, arch) = prefix.rsplit_once('-')?;
-    let (prefix, os) = prefix.rsplit_once('-')?;
-    let (job, root) = prefix.rsplit_once('-')?;
-    (hex(compat, 16) && host(&format!("{os}-{arch}")) && !job.is_empty() && !root.is_empty())
+    let (owner, platform) = prefix.rsplit_once('.')?;
+    let (job, root) = owner.rsplit_once('.')?;
+    (hex(compat, 16) && host(platform) && !job.is_empty() && !root.is_empty())
         .then_some((family, group))
 }
 

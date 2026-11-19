@@ -3,7 +3,7 @@
 
 use crate::cargo_artifacts::{ArtifactTap, ProgressKind};
 use crate::error::CiError;
-use crate::inputs::{RESTORE_WITNESS, SNAPSHOT, SYMLINK_MODE, parse_inputs};
+use crate::inputs::{RESTORE_WITNESS, SNAPSHOT, SYMLINK_MODE};
 use crate::report::{Hit, LaneMetrics};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -94,7 +94,7 @@ struct RootInputs<'a> {
 
 fn read_snapshot(path: &Path) -> Result<Option<Vec<crate::inputs::SavedInput>>, CiError> {
     match fs::read_to_string(path) {
-        Ok(text) => parse_inputs(&text).map(Some),
+        Ok(text) => super::input_snapshot::decode(&text).map(|snapshot| Some(snapshot.inputs)),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
         Err(error) => Err(ci(format!("cannot read {}: {error}", path.display()))),
     }

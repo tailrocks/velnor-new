@@ -7,7 +7,7 @@ use velnor_release::{ReleasePlan, RootPlan};
 use crate::rules::{APP_TOKEN_ACTION, RenderedStep, Value};
 use crate::steps::{CHECKOUT, MISE, MISE_VERSION};
 
-pub(crate) const RECORD_RECOVERY_HELPER: (u64, u64, u64) = (0, 1, 92);
+pub(crate) const RECORD_RECOVERY_HELPER: (u64, u64, u64) = (0, 1, 93);
 pub(crate) const COMMIT_OUTPUT_SUFFIX: &str = "_commit";
 pub(crate) const APP_TOKEN_COMMIT: &str = "f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc";
 pub(crate) const APP_TOKEN_VERSION: &str = "v3.4.0";

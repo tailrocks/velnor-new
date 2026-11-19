@@ -3,8 +3,7 @@
 
 use std::time::Duration;
 
-use bollard::container::LogOutput;
-use bollard::query_parameters::{LogsOptionsBuilder, WaitContainerOptionsBuilder};
+use bollard::query_parameters::WaitContainerOptionsBuilder;
 use futures_util::StreamExt;
 
 use crate::error::QualificationError as HostError;
@@ -34,31 +33,60 @@ pub(super) async fn wait_success(
     deadline(wait, timeout).await?
 }
 
-pub(super) async fn read_logs(
+const RAW_LIMIT: usize = 64 * 1024;
+
+pub async fn read_logs(
     docker: &bollard::Docker,
     id: &str,
     timeout: Duration,
 ) -> Result<Vec<u8>, HostError> {
-    let options = LogsOptionsBuilder::new()
-        .follow(false)
-        .stdout(true)
-        .stderr(true)
-        .timestamps(false)
-        .tail("all")
-        .build();
-    let read = async {
-        let mut stream = docker.logs(id, Some(options));
-        let mut output = Vec::with_capacity(512);
-        while let Some(item) = stream.next().await {
-            match item.map_err(|_| HostError::Docker)? {
-                LogOutput::StdOut { message } => append(&mut output, &message)?,
-                LogOutput::StdErr { message } if message.is_empty() => {}
-                _ => return Err(HostError::Docker),
+    let raw_docker = docker.clone().with_request_modifier(|mut request| {
+        let uri = request.uri().to_string();
+        if let Some(position) = uri.rfind("/export") {
+            let logs = format!(
+                "{}/logs?follow=false&stdout=true&stderr=true&timestamps=false&tail=all",
+                &uri[..position]
+            );
+            if let Ok(parsed) = logs.parse() {
+                *request.uri_mut() = parsed;
             }
         }
-        Ok(output)
+        request
+    });
+    let read = async {
+        let mut stream = raw_docker.export_container(id);
+        let mut raw = Vec::with_capacity(512);
+        while let Some(item) = stream.next().await {
+            let chunk = item.map_err(|_| HostError::Docker)?;
+            if raw.len().saturating_add(chunk.len()) > RAW_LIMIT {
+                return Err(HostError::Frame);
+            }
+            raw.extend_from_slice(&chunk);
+        }
+        parse_frames(&raw)
     };
     deadline(read, timeout).await?
+}
+
+fn parse_frames(mut raw: &[u8]) -> Result<Vec<u8>, HostError> {
+    let mut output = Vec::with_capacity(512);
+    while !raw.is_empty() {
+        let (header, rest) = raw.split_at_checked(8).ok_or(HostError::Frame)?;
+        let length = u32::from_be_bytes([header[4], header[5], header[6], header[7]]);
+        let length = usize::try_from(length).map_err(|_| HostError::Frame)?;
+        if header[1..4] != [0, 0, 0] || length > rest.len() {
+            return Err(HostError::Frame);
+        }
+        let (payload, rest) = rest.split_at(length);
+        match header[0] {
+            1 => append(&mut output, payload)?,
+            2 if payload.is_empty() => {}
+            2 => return Err(HostError::Docker),
+            _ => return Err(HostError::Frame),
+        }
+        raw = rest;
+    }
+    Ok(output)
 }
 
 pub(super) fn append(output: &mut Vec<u8>, bytes: &[u8]) -> Result<(), HostError> {

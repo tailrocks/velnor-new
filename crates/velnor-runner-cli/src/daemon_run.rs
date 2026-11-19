@@ -12,7 +12,7 @@ const RETRY: Duration = Duration::from_secs(5);
 const MAX_CONFIG_BYTES: u64 = 1_048_576;
 
 pub(crate) fn run_daemon(state: &Path) -> ExitCode {
-    let Ok(lock) = DaemonLock::try_acquire(&state.join("daemon.lock")) else {
+    let Ok(lock) = DaemonLock::try_acquire_daemon(state) else {
         eprintln!("daemon already running");
         return ExitCode::from(1);
     };
