@@ -6,17 +6,18 @@ use std::time::Duration;
 use bollard::models::{ImageInspect, SystemInfo};
 use bytes::Bytes;
 use http_body_util::{BodyExt, Full};
-use hyper::{Method, Request, body::Body, client::conn::http1};
+use hyper::{Method, Request, client::conn::http1};
 use hyper_util::rt::TokioIo;
 use velnor_runner_image_manifest::{ImageKind, strict_json};
 
 use super::identity::{SelectedDaemon, selected_daemon};
+use crate::docker_client::{MAX_DOCKER_BODY_BYTES, collect_bounded};
 use crate::error::HostError;
 #[path = "raw_digest_pull/decoder.rs"]
 mod decoder;
 use decoder::PullDecoder;
 
-const MAX_BODY: usize = 4 * 1024 * 1024;
+const MAX_BODY: usize = MAX_DOCKER_BODY_BYTES;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(20);
 const PULL_TIMEOUT: Duration = Duration::from_mins(30);
 
@@ -336,29 +337,7 @@ impl ImageSession {
                 .await
                 .map_err(|_| HostError::Docker)?;
             let status = response.status();
-            if response
-                .body()
-                .size_hint()
-                .upper()
-                .is_some_and(|size| size > MAX_BODY as u64)
-            {
-                return Err(HostError::Frame);
-            }
-            let mut body = response.into_body();
-            let mut bytes = Vec::new();
-            while let Some(frame) = body.frame().await {
-                let frame = frame.map_err(|_| HostError::Docker)?;
-                if let Some(data) = frame.data_ref() {
-                    if bytes
-                        .len()
-                        .checked_add(data.len())
-                        .is_none_or(|size| size > MAX_BODY)
-                    {
-                        return Err(HostError::Frame);
-                    }
-                    bytes.extend_from_slice(data);
-                }
-            }
+            let bytes = collect_bounded(response, MAX_BODY).await?;
             Ok((status, bytes))
         })
         .await

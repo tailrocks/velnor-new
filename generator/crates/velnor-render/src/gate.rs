@@ -15,18 +15,23 @@ const SCHEDULE: &str = "schedule";
 const PUSH: &str = "push";
 pub(crate) const TOOLS_STEP: &str = "tools";
 pub(crate) const BASE_STEP: &str = "base";
+pub(crate) const SOURCES_LOCKS_STEP: &str = "sources_locks";
 const SAVING_EVENTS: &str = "(github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')";
 const NEEDS_JSON: &str = "NEEDS_JSON";
 const GATE_SPEC: &str = "GATE_SPEC";
 const ON_DEFAULT_BRANCH: &str =
     "github.ref == format('refs/heads/{0}', github.event.repository.default_branch)";
 const ACTIVE_EVENT: &str = "(github.event_name != 'pull_request' || (startsWith(github.ref, 'refs/pull/') && github.event.pull_request.state != 'closed'))";
-pub(crate) fn sources_step(slug: &RootSlug) -> String {
-    format!("sources_{slug}")
+pub(crate) fn sources_step(lane: &RootSlug) -> String {
+    format!("sources_{lane}")
 }
 
-pub(crate) fn sources_save_step(slug: &RootSlug) -> String {
-    format!("sources_save_{slug}")
+pub(crate) fn sources_fetch_step(position: usize) -> String {
+    format!("sources_fetch_{position}")
+}
+
+pub(crate) fn sources_save_step(lane: &RootSlug) -> String {
+    format!("sources_save_{lane}")
 }
 
 pub(crate) fn verdict_step(spec: &VerdictSpec, needs_max_bytes: usize) -> RenderedStep {
@@ -133,6 +138,14 @@ pub(crate) fn condition(
                 parts.push(format!("steps.{BASE_STEP}.outputs.save == 'true'"));
             }
         }
+        When::FetchSources => {
+            parts.push(NOT_CANCELLED.to_owned());
+            if setup != Setup::Before {
+                parts.push(SETUP_DONE.to_owned());
+            }
+            parts.push("success()".to_owned());
+            parts.push(format!("steps.{BASE_STEP}.outputs.sources == 'true'"));
+        }
         When::FullAudit => {
             let expired = if setup == Setup::Before { "" } else { " || steps.restored.outputs.expired == 'true'" };
             parts.push(format!("(github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'{expired})"));
@@ -163,7 +176,11 @@ pub(crate) fn condition(
 }
 
 pub(crate) fn admission(when: When, gate: Option<&Gate>, skip_draft: bool) -> String {
-    match condition(when, gate, Setup::Before, skip_draft, &[]) {
+    let plan_succeeded: Vec<String> = match gate.map(|gate| &gate.from) {
+        Some(PlanFrom::Job(job)) => vec![format!("needs.{job}.result == 'success'")],
+        _ => Vec::new(),
+    };
+    match condition(when, gate, Setup::Before, skip_draft, &plan_succeeded) {
         Some(predicate) => format!(
             "${{{{ {ACTIVE_EVENT} && ({}) }}}}",
             predicate.trim_start_matches("${{ ").trim_end_matches(" }}")

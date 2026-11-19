@@ -3,7 +3,11 @@
 
 use crate::rules::{RenderedJob, RenderedStep, Value};
 use crate::yaml::{Yaml, entry, text};
-use velnor_model::{TESTS_BY_PACKAGE_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT};
+use velnor_model::{
+    TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT,
+};
+
+const SAME_REPOSITORY: &str = "(!startsWith(github.event_name, 'pull_request') || github.event.pull_request.head.repo.full_name == github.repository)";
 
 pub(crate) fn yaml_job(job: &RenderedJob) -> Yaml {
     let mut items = Vec::new();
@@ -51,6 +55,7 @@ pub(crate) fn yaml_job(job: &RenderedJob) -> Yaml {
                             name,
                             if name == TESTS_RUN_OUTPUT
                                 || name == TESTS_LISTED_OUTPUT
+                                || name == TESTS_IGNORED_OUTPUT
                                 || name == TESTS_BY_PACKAGE_OUTPUT
                             {
                                 Yaml::Unread(value)
@@ -64,17 +69,47 @@ pub(crate) fn yaml_job(job: &RenderedJob) -> Yaml {
         ));
     }
     items.extend([
-        entry("runs-on", text(&job.runs_on)),
+        entry("runs-on", runs_on(job)),
         entry("timeout-minutes", Yaml::Int(u64::from(job.timeout_minutes))),
     ]);
     items.extend([entry(
         "steps",
         Yaml::Seq(job.steps.iter().map(yaml_step).collect()),
     )]);
-    match &job.comment {
-        Some(comment) => Yaml::Noted(comment.clone(), Box::new(Yaml::Map(items))),
+    match job_notes(job) {
+        Some(notes) => Yaml::Noted(notes, Box::new(Yaml::Map(items))),
         None => Yaml::Map(items),
     }
+}
+
+fn job_notes(job: &RenderedJob) -> Option<String> {
+    let launches_helper = job.steps.iter().any(|step| {
+        step.run
+            .as_deref()
+            .is_some_and(|run| run.starts_with(crate::helper_integrity::INVOCATION_PREFIX))
+    });
+    let notes: Vec<&str> = job
+        .comment
+        .as_deref()
+        .into_iter()
+        .chain(launches_helper.then_some(crate::helper_integrity::SHELLCHECK_IGNORE))
+        .collect();
+    (!notes.is_empty()).then(|| notes.join("\n"))
+}
+
+fn runs_on(job: &RenderedJob) -> Yaml {
+    match &job.fork_runner {
+        Some(fork) => Yaml::Expr(format!(
+            "${{{{ {SAME_REPOSITORY} && {} || {} }}}}",
+            literal(&job.runs_on),
+            literal(fork)
+        )),
+        None => text(&job.runs_on),
+    }
+}
+
+fn literal(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "''"))
 }
 
 fn yaml_step(step: &RenderedStep) -> Yaml {
