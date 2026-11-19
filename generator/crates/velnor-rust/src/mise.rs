@@ -92,7 +92,16 @@ pub fn tool_pins(files: &BTreeMap<RepoPath, Vec<u8>>) -> Result<ToolPins, Detect
 fn validate_config(config: &RepoPath, bytes: &[u8]) -> Result<(), DetectError> {
     let parsed = table(bytes).map_err(|reason| DetectError::invalid(config, reason))?;
     let unknown = parsed.keys().find(|key| {
-        !["tools", "settings", "min_version", "tasks", "wrappers"].contains(&key.as_str())
+        ![
+            "tools",
+            "settings",
+            "min_version",
+            "tasks",
+            "task_templates",
+            "vars",
+            "wrappers",
+        ]
+        .contains(&key.as_str())
     });
     let settings = parsed.get("settings").and_then(Value::as_table);
     let unknown_setting = settings.and_then(|settings| {
@@ -104,22 +113,32 @@ fn validate_config(config: &RepoPath, bytes: &[u8]) -> Result<(), DetectError> {
         .and_then(|settings| settings.get("cargo"))
         .and_then(Value::as_table)
         .and_then(|cargo| cargo.keys().find(|key| key.as_str() != "binstall"));
+    let vars_directive = parsed
+        .get("vars")
+        .and_then(Value::as_table)
+        .and_then(|vars| vars.keys().find(|key| key.starts_with('_')));
     let postinstall = parsed
         .get("tools")
         .and_then(Value::as_table)
         .is_some_and(|tools| tools.values().any(runs_a_command));
-    let templates = parsed.values().any(has_template);
+    let templates = parsed
+        .iter()
+        .filter(|(key, _)| !matches!(key.as_str(), "tasks" | "task_templates"))
+        .any(|(_, value)| has_template(value));
     if let Some(name) = unknown
         .or(unknown_setting)
         .or(unknown_cargo_setting)
+        .or(vars_directive)
         .map(String::as_str)
         .or(postinstall.then_some("tools.postinstall"))
-        .or(templates.then_some("template"))
     {
         return Err(DetectError::invalid(
             config,
             Reason::MiseOverridesFlags(name.to_owned()),
         ));
+    }
+    if templates {
+        return Err(DetectError::invalid(config, Reason::MiseTemplate));
     }
     Ok(())
 }
@@ -142,14 +161,24 @@ pub fn check_tools(facts: &RepoFacts) -> Result<(), DetectError> {
     if let Some((file, mise)) = toolchain_conflict(facts) {
         return Err(DetectError::ToolchainConflict { file, mise });
     }
-    let rust_pins = rust_tool(&facts.tools)
-        .and_then(|name| facts.tools.tools.get(name))
-        .map_or(1, |pin| pin.requested.len());
+    if let Some(channel) = facts
+        .toolchain
+        .as_ref()
+        .and_then(|file| file.channel.clone())
+        && rust_tool(&facts.tools).is_none()
+    {
+        return Err(DetectError::RustPinRequired {
+            channel,
+            path: facts.tools.configs.first().cloned().unwrap_or(MISE_CONFIG),
+        });
+    }
+    let rust_pin = rust_tool(&facts.tools).and_then(|name| facts.tools.tools.get(name));
+    let rust_pins = rust_pin.map_or(1, |pin| pin.requested.len());
     let selectors = RUST_TOOLS
         .iter()
         .filter(|name| facts.tools.tools.contains_key(**name))
         .count();
-    if rust_pins != 1 || selectors > 1 {
+    if rust_pins != 1 || selectors > 1 || rust_pin.is_some_and(|pin| !pin.os_filters.is_empty()) {
         return Err(DetectError::invalid(
             facts.tools.configs.first().unwrap_or(&MISE_CONFIG),
             Reason::InvalidValue {

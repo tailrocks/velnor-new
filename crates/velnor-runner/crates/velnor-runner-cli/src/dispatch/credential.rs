@@ -52,7 +52,10 @@ where
         (reference, Some(text))
     };
 
-    store(reference.service(), reference.account(), &secret).map_err(ConnectError::Secret)?;
+    let Some((service, account)) = reference.keychain_parts() else {
+        return Err(ConnectError::Config);
+    };
+    store(service, account, &secret).map_err(ConnectError::Secret)?;
     if let Some(text) = update {
         persist(state, &text)?;
     }

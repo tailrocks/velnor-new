@@ -1,7 +1,46 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::HashMap;
+use std::sync::{Mutex, OnceLock};
+
+const MEMO_LIMIT: usize = 4096;
+
+struct Memo(OnceLock<Mutex<HashMap<String, String>>>);
+
+impl Memo {
+    const fn new() -> Self {
+        Self(OnceLock::new())
+    }
+
+    fn get_or_compute(&self, sql: &str, compute: impl FnOnce(&str) -> String) -> String {
+        let table = self.0.get_or_init(|| Mutex::new(HashMap::new()));
+        if let Some(hit) = table
+            .lock()
+            .ok()
+            .and_then(|entries| entries.get(sql).cloned())
+        {
+            return hit;
+        }
+        let computed = compute(sql);
+        if let Ok(mut entries) = table.lock() {
+            if entries.len() >= MEMO_LIMIT {
+                entries.clear();
+            }
+            entries.insert(sql.to_owned(), computed.clone());
+        }
+        computed
+    }
+}
+
+static NORMALIZED: Memo = Memo::new();
+static NORMALIZED_V40: Memo = Memo::new();
+
 pub(super) fn normalize(sql: &str) -> String {
+    NORMALIZED.get_or_compute(sql, normalize_uncached)
+}
+
+fn normalize_uncached(sql: &str) -> String {
     if has_sql_comment(sql) {
         return sql.to_owned();
     }
@@ -42,6 +81,10 @@ pub(super) fn normalize(sql: &str) -> String {
 mod v40_aliases;
 
 pub(super) fn normalize_v40_guard_aliases(sql: &str) -> String {
+    NORMALIZED_V40.get_or_compute(sql, normalize_v40_guard_aliases_uncached)
+}
+
+fn normalize_v40_guard_aliases_uncached(sql: &str) -> String {
     let normalized = normalize(sql);
     if has_sql_comment(sql) {
         return normalized;

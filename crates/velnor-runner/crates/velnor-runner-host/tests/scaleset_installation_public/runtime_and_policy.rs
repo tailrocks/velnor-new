@@ -3,6 +3,8 @@
 
 #[path = "offer_and_assigned.rs"]
 mod offer_and_assigned;
+#[path = "schedule_merge_group_filters.rs"]
+mod schedule_merge_group_filters;
 
 use serde::Serialize;
 use serde_json::{Value, json};

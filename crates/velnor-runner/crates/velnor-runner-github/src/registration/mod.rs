@@ -14,7 +14,8 @@ pub use admin::{
 pub use groups::{RunnerGroup, list_runner_groups};
 pub use runners::{
     RunnerAbsenceReceipt, RunnerObservationOperation, RunnerRemovalStatus, RunnerResponseReceipt,
-    ensure_runner_absent, get_runner_by_name, observe_runner_by_name, remove_runner,
+    ensure_runner_absent, get_runner_by_name, list_scale_set_runners, observe_runner_by_name,
+    remove_runner,
 };
 pub use scale_set::{
     ScaleSetById, ScaleSetByName, ScaleSetCreate, ScaleSetFound, create_runner_scale_set,

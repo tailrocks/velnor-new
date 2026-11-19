@@ -52,7 +52,9 @@ fn release_family_publish_jobs_hold_contents_write_without_a_checkout() -> Resul
     assert_publish_has_no_checkout(images, "build-images", "publish-images", None)?;
 
     let binary_request = Schema2WorkflowRequest {
+        scale_set_jobs: std::collections::BTreeSet::new(),
         runner_image_family: None,
+        pr_ci: velnor_actions_contract::PrCiMode::Off,
         workflows: BTreeSet::from([RoutingWorkflow::MacosBinaryRelease]),
         ..request()?
     };

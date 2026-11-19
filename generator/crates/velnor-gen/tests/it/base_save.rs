@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{RepoView, Target, TargetKind, TargetName};
+use velnor_model::{RepoPath, RepoView, Target, TargetKind, TargetName};
 use velnor_rust::{LOCK_PATH, pin_lock};
 
 use crate::archive::jobs_of;
@@ -71,6 +71,44 @@ fn with_library(config: &str, tested: bool) -> Result<RepoView, Box<dyn std::err
         }
     }
     Ok(repo)
+}
+
+fn with_doctests_and_harness(config: &str) -> Result<RepoView, Box<dyn std::error::Error>> {
+    let mut repo = pinned("0.1.81", config)?;
+    repo.files.insert(
+        RepoPath::new("Cargo.toml")?,
+        b"[package]\nname = \"package-0\"\n[[test]]\nname = \"custom\"\nharness = false\n".to_vec(),
+    );
+    for metadata in repo.rust_metadata.values_mut() {
+        for member in &mut metadata.members {
+            member.targets.push(Target {
+                name: TargetName::new("lib")?,
+                kinds: vec![TargetKind::Lib],
+                tests: false,
+                doctest: true,
+                source: None,
+                requires_features: false,
+            });
+            member.targets.push(Target {
+                name: TargetName::new("custom")?,
+                kinds: vec![TargetKind::Test],
+                tests: true,
+                doctest: false,
+                source: None,
+                requires_features: false,
+            });
+        }
+    }
+    Ok(repo)
+}
+
+fn lane_building_doctests(config: &str) -> Result<String, Box<dyn std::error::Error>> {
+    let repo = with_doctests_and_harness(config)?;
+    jobs_of(&workflow(&repo)?)
+        .into_iter()
+        .find(|(_, block)| block.contains("name: Doctests"))
+        .map(|(_, block)| block)
+        .ok_or_else(|| "no lane builds the doctests".into())
 }
 
 fn run_command(step: &str) -> Option<String> {
@@ -150,9 +188,9 @@ fn the_one_job_lane_saves_after_tests_and_input_audit_and_only_on_the_default_br
         .position(|name| name == "Test")
         .ok_or("no test")?;
     assert!(build < tested && tested < audit);
-    let saved: Vec<&str> = order[audit + 1..audit + 7]
+    let saved: Vec<&str> = order[audit + 1..audit + 8]
         .iter()
-        .map(String::as_str)
+        .filter_map(|name| (!name.starts_with("Fetch")).then_some(name.as_str()))
         .collect();
     assert_eq!(
         saved,
@@ -318,5 +356,45 @@ fn the_test_prebuild_ignores_a_nextest_default_filter() -> TestResult {
         run,
         "velnor-ci run -- velnor-ci inputs build -- cargo-nextest nextest run --workspace --locked --ignore-default-filter --no-run"
     );
+    Ok(())
+}
+
+#[test]
+fn the_saving_lane_builds_the_doctests_and_the_direct_harnesses_before_the_target_save()
+-> TestResult {
+    for config in ["", "shape = \"lint-test\"\n", "shape = \"groups\"\n"] {
+        let lane = lane_building_doctests(config)?;
+        let order = names(&lane);
+        let save = order
+            .iter()
+            .position(|name| name == "Save the target cache")
+            .ok_or("no target save")?;
+        for built in ["Doctests", "Test package-0 custom"] {
+            let index = order.iter().position(|name| name == built).ok_or(built)?;
+            assert!(
+                index < save,
+                "{config}: {built} is built after the save: {order:?}"
+            );
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn the_lane_runs_the_nextest_run_before_the_direct_harnesses_and_the_doctests() -> TestResult {
+    for config in ["", "shape = \"lint-test\"\n"] {
+        let order = names(&lane_building_doctests(config)?);
+        let run = order
+            .iter()
+            .position(|name| name == "Test")
+            .ok_or("no nextest run")?;
+        for built in ["Doctests", "Test package-0 custom"] {
+            let index = order.iter().position(|name| name == built).ok_or(built)?;
+            assert!(
+                run < index,
+                "{config}: the nextest run is after {built}: {order:?}"
+            );
+        }
+    }
     Ok(())
 }

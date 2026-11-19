@@ -290,3 +290,82 @@ fn timed_out_deletes_remain_unresolved_after_missing_or_replacement() {
         std::fs::remove_dir_all(directory).unwrap();
     }
 }
+
+#[test]
+fn volume_replaced_after_ownership_check_is_not_deleted() {
+    let (directory, address, state, name) = recovery_fixture(true);
+    let journal = directory.join("ownership.json");
+    {
+        let mut state = state.lock().unwrap();
+        state.block_delete = false;
+        let mut replacement = state.resources[&name].clone();
+        replacement["Labels"]["io.velnor.runner-image-qualifier.run"] = json!("wrong");
+        replacement["CreatedAt"] = json!("2026-01-01T00:00:00Z");
+        state.swap_volume_after_get = Some(replacement);
+    }
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    let docker =
+        bollard::Docker::connect_with_socket(&address, 30, bollard::API_DEFAULT_VERSION).unwrap();
+    let result = runtime.block_on(open_qualification_session(
+        docker,
+        journal.clone(),
+        "/var/lib/docker".into(),
+    ));
+    let state = state.lock().unwrap();
+    assert!(result.is_err());
+    assert!(!state.delete_started);
+    assert_eq!(
+        state.resources[&name]["Labels"]["io.velnor.runner-image-qualifier.run"],
+        "wrong"
+    );
+    assert!(state.resources.contains_key("unrelated-sentinel"));
+    drop(state);
+    std::fs::remove_dir_all(directory).unwrap();
+}
+
+#[test]
+fn renamed_tracked_container_is_removed_by_id_only_when_owned() {
+    for owned in [true, false] {
+        let (directory, address, state, name) = recovery_fixture(false);
+        let journal = directory.join("ownership.json");
+        {
+            let mut state = state.lock().unwrap();
+            state.block_delete = false;
+            let mut renamed = state.resources.remove(&name).unwrap();
+            renamed["Name"] = json!("/renamed");
+            if !owned {
+                renamed["Config"]["Labels"]["io.velnor.runner-image-qualifier.run"] =
+                    json!("wrong");
+            }
+            state.resources.insert("renamed".into(), renamed);
+        }
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let docker =
+            bollard::Docker::connect_with_socket(&address, 30, bollard::API_DEFAULT_VERSION)
+                .unwrap();
+        let result = runtime.block_on(open_qualification_session(
+            docker,
+            journal.clone(),
+            "/var/lib/docker".into(),
+        ));
+        let state = state.lock().unwrap();
+        assert!(state.resources.contains_key("unrelated-sentinel"));
+        if owned {
+            assert!(result.is_ok());
+            assert!(!state.resources.contains_key("renamed"));
+        } else {
+            assert!(result.is_err());
+            assert!(state.resources.contains_key("renamed"));
+            assert!(!state.delete_started);
+            assert!(journal.exists());
+        }
+        drop(state);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+}

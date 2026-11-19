@@ -8,7 +8,7 @@ use velnor_runner_github::{
     workflow_run::{RepositoryTarget, get_repository_scope},
 };
 
-use super::{Recording, create_and_verify};
+use super::{CreateIds, Recording, create_and_verify};
 use crate::{
     config::HostConfig,
     journal::{Journal, ScaleSetCreateRequest},
@@ -88,6 +88,14 @@ async fn run(
     dir: &tempfile::TempDir,
     replies: Vec<(u16, String)>,
 ) -> TestResult<(Result<i64, EnsureError>, Script, Journal)> {
+    run_with(dir, replies, true).await
+}
+
+async fn run_with(
+    dir: &tempfile::TempDir,
+    replies: Vec<(u16, String)>,
+    adopt_on_conflict: bool,
+) -> TestResult<(Result<i64, EnsureError>, Script, Journal)> {
     let journal = Journal::open(&dir.path().join("launch.db")).await?;
     journal.bind_engine("engine-test").await?;
     let config = HostConfig::parse(CONFIG)?;
@@ -106,9 +114,13 @@ async fn run(
         "pat",
     )?;
     let mut transport = Recording::new(Script::new(replies));
+    let ids = CreateIds {
+        pat: "pat",
+        scope: &scope,
+        adopt_on_conflict,
+    };
     let outcome = create_and_verify(
-        "pat",
-        &scope,
+        ids,
         &mut transport,
         "admin-token",
         &scoped,
@@ -206,6 +218,21 @@ async fn conflict_lookup_refuses_to_adopt_a_foreign_runner_group_set() -> TestRe
     assert_eq!(outcome, Err(EnsureError::Rejected));
     let methods: Vec<Method> = transport.seen.iter().map(|(method, _)| *method).collect();
     assert_eq!(methods, [Method::Post, Method::Get]);
+    assert_eq!(bound_scale_set_ids(&journal).await?, Vec::<i64>::new());
+    Ok(())
+}
+
+#[tokio::test]
+async fn an_organization_create_conflict_never_adopts_the_existing_set() -> TestResult<()> {
+    let dir = tempfile::tempdir()?;
+    let (outcome, transport, journal) = run_with(
+        &dir,
+        vec![(409, "{}".to_owned()), (200, scale_set_json(true))],
+        false,
+    )
+    .await?;
+    assert_eq!(outcome, Err(EnsureError::Uncertain));
+    assert_eq!(transport.seen.len(), 1, "no lookup after the conflict");
     assert_eq!(bound_scale_set_ids(&journal).await?, Vec::<i64>::new());
     Ok(())
 }
