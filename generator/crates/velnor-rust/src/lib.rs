@@ -13,7 +13,11 @@ mod cargo_log;
 mod classify;
 mod compat;
 mod config;
+mod config_cache;
+
+mod config_ci;
 mod config_events;
+mod config_exclude;
 mod config_fork;
 mod config_helper;
 mod config_mirror;
@@ -30,7 +34,9 @@ mod harness;
 mod lane;
 mod lock;
 mod lock_affected;
+mod lock_key;
 mod manifest_diff;
+mod merge_group_skip;
 mod metadata;
 mod metadata_file;
 mod mise;
@@ -79,10 +85,11 @@ pub use error::{DetectError, Reason};
 pub use external_config::external_config_profile;
 pub use lock::{LOCK_PATH, LockError, commit_url, pin_lock, release_version, sums_url};
 pub use lock_affected::lock_affected;
+pub use lock_key::lock_key;
 pub use metadata::{MetadataError, reduce_metadata};
 pub use metadata_file::{
-    METADATA_PATH, MetadataFileError, VERSIONS_HELPER, metadata_file, recorded_metadata,
-    recorded_roots, recorded_target_dirs,
+    METADATA_PATH, MetadataFileError, VERSIONS_HELPER, metadata_file, recorded_members,
+    recorded_metadata, recorded_roots, recorded_target_dirs,
 };
 pub use mise::{MISE_CONFIGS, MISE_LOCK, check_tools, mise_files, tool_pins};
 pub use owners::{Owner, Owners, add_reads};

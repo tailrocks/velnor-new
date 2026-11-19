@@ -71,6 +71,7 @@ pub enum Reason {
     UnpinnedTool(&'static str),
     HelperBox(RepoPath),
     HelperSourceRelease,
+    MbxRemotePrivate(String),
     CargoCredentialProvider(String),
     LockedUrlCredentials(String),
     TargetDirOutside(String),
@@ -121,6 +122,10 @@ impl Reason {
             ),
             Self::HelperSourceRelease => f.write_str(
                 "helper.path requires velnor-ci 0.1.81 or newer for input restoration and cache tie-breaking; run `velnor-gen pin-helper 0.1.81`",
+            ),
+            Self::MbxRemotePrivate(cause) => write!(
+                f,
+                "cache.mbx_remote is refused: fork pull requests can restore that cache and this repository has private dependencies ({cause}); remove cache.mbx_remote"
             ),
             _ => Ok(()),
         }
@@ -244,6 +249,7 @@ impl fmt::Display for Reason {
             Self::UnpinnedTool(_)
             | Self::HelperBox(_)
             | Self::HelperSourceRelease
+            | Self::MbxRemotePrivate(_)
             | Self::PrCiWithSkipDraft => self.fmt_setup(f),
             Self::BuildExecutable
             | Self::CargoCredentialProvider(_)

@@ -7,6 +7,7 @@ use velnor_model::{HelperVersion, RELEASE_CONFIG_PATH, RepoPath};
 use velnor_release::ReleaseError;
 use velnor_render::RuleViolation;
 use velnor_rust::{DetectError, MAX_SOURCE_ROOTS, MetadataFileError};
+use velnor_workflows::WorkflowsError;
 
 use crate::{COMPATIBLE_HELPER_SERIES, RELEASE_HELPER_MINIMUM};
 
@@ -25,10 +26,12 @@ pub enum GenerateError {
     MbxStoreHelperTooOld(HelperVersion),
     InputsBuildHelperTooOld(HelperVersion),
     PrOnlyChecksHelperTooOld(HelperVersion),
+    MergeGroupHelperTooOld(HelperVersion),
     PrCiHelperTooOld(HelperVersion),
     TooManySourceRoots(usize),
     FamilyTagHelperTooOld(HelperVersion),
     Metadata(MetadataFileError),
+    Workflows(WorkflowsError),
     Rules(Vec<RuleViolation>),
 }
 
@@ -78,11 +81,16 @@ impl fmt::Display for GenerateError {
                 f,
                 "velnor-ci {version} cannot enforce pr_only_checks; pin velnor-ci 0.1.82 or later with `velnor-gen pin-helper 0.1.82`"
             ),
+            Self::MergeGroupHelperTooOld(version) => write!(
+                f,
+                "velnor-ci {version} cannot tell whether a merge_group run passed, which skip_push_after_merge_group needs; pin velnor-ci 0.1.82 or later with `velnor-gen pin-helper 0.1.82`"
+            ),
             Self::FamilyTagHelperTooOld(version) => write!(
                 f,
                 "velnor-ci {version} cannot bind a family tag; pin velnor-ci 0.1.83 or later with `velnor-gen pin-helper 0.1.83`"
             ),
             Self::Metadata(error) => error.fmt(f),
+            Self::Workflows(error) => error.fmt(f),
             Self::Rules(violations) => {
                 f.write_str("the generated workflow breaks the YAML rules:")?;
                 for violation in violations {

@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
     PackageName, PolicyTools, RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE, RepoFacts, RepoPath, RepoView,
-    RepositoryIdentity, RootSlug, RustCiConfig, RustRoot, Toolchain,
+    RepositoryIdentity, RootSlug, RustCiConfig, RustRoot, Toolchain, WORKFLOWS_CONFIG_PATH,
 };
 
 use crate::build_target::{build_targets, check_host_tuple_version};
@@ -16,7 +16,7 @@ use crate::lock::{LOCK_PATH, parse_lock};
 use crate::mise::{MISE_CONFIGS, MISE_LOCK, tool_pins};
 use crate::os_pins::pinned_for_runner;
 use crate::policy::DENY_CONFIG;
-use crate::private_sources::{private_sources, private_suggestion, refuse_locked_credentials};
+use crate::private_sources::{private_suggestion, refuse_locked_credentials};
 use crate::reads::INPUTS_LOCK;
 use crate::roots::{CARGO_LOCK, is_cargo_config, is_cargo_lock, rust_roots};
 use crate::timings::{TIMINGS_PATH, usable_timings};
@@ -32,6 +32,7 @@ pub fn wanted_files(tracked: &BTreeSet<RepoPath>) -> Vec<RepoPath> {
     [
         CONFIG_PATH,
         RELEASE_CONFIG_PATH,
+        WORKFLOWS_CONFIG_PATH,
         LOCK_PATH,
         INPUTS_LOCK,
         TIMINGS_PATH,
@@ -160,6 +161,8 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
     refuse_locked_credentials(view, &config, &rust_roots)?;
     let (timings, timings_notes) = usable_timings(view.files.get(&TIMINGS_PATH), &rust_roots);
     let policy = policy_tools(view, config.runner.as_str())?;
+    let weakenings = weakenings(&view.files, &rust_roots);
+    let private_sources = crate::config_cache::private_sources(view, &rust_roots, &config)?;
     let repository = match &view.repository {
         RepositoryIdentity::Named(name) if config.full_run.is_hashed() => name.clone(),
         RepositoryIdentity::Unhosted if config.full_run.is_hashed() => {
@@ -172,9 +175,9 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
         repository,
         timings,
         timings_notes,
-        private_sources: private_sources(view, &rust_roots),
+        private_sources,
         private_suggestion: private_suggestion(view, &config, &rust_roots),
-        weakenings: weakenings(&view.files, &rust_roots),
+        weakenings,
         rust_roots,
         toolchain,
         tools,

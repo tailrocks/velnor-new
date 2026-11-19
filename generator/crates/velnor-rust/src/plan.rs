@@ -4,14 +4,14 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
-    Access, CacheDebug, CacheKey, CacheRoot, CargoCommand, Concurrency, HelperCommand, Host, Job,
-    JobId, MbxStore, PackageName, PermissionScope, Permissions, PrCi, PrRun, PullRequestType,
-    RepoFacts, RootSlug, RustRoot, Shape, ShapeDecision, Step, StepKind, TargetName, Toolchain,
-    Triggers, When, WorkflowPlan,
+    Access, CacheDebug, CacheKey, CargoCommand, Concurrency, HelperCommand, Host, Job, JobId,
+    MbxRemote, MbxStore, PackageName, PermissionScope, Permissions, PrCi, PrRun, PullRequestType,
+    PushAfterMergeGroup, RepoFacts, RootSlug, RustRoot, Shape, ShapeDecision, Step, StepKind,
+    TargetName, Toolchain, Triggers, When, WorkflowPlan,
 };
 
 use crate::audit_job::audit_job;
-use crate::base_cache::{restored, sources_locks};
+use crate::base_cache::{cache_root, restored, sources_locks};
 use crate::config::CONFIG_PATH;
 use crate::detect::HELPER_PACKAGE;
 use crate::error::{DetectError, Reason};
@@ -87,6 +87,12 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
         crate::cargo_log::upload(&mut jobs);
     }
     crate::private_fetch::insert(facts.config.private_sources.as_ref(), &mut jobs);
+    if facts.config.mbx_remote == MbxRemote::GithubActions && facts.private_sources.is_none() {
+        add_mbx_remote(&mut jobs);
+    }
+    if facts.config.push_after_merge_group == PushAfterMergeGroup::SkipWhenQueueRunPassed {
+        crate::merge_group_skip::apply(&mut jobs, single);
+    }
     crate::report::finish(facts, &mut jobs, single, draft_guard);
     WorkflowPlan {
         name: "Rust CI".to_owned(),
@@ -285,7 +291,7 @@ pub(crate) fn setup_roots(
         toolchain.push(prepare);
     }
     for (index, (root, family)) in roots.iter().zip(families).enumerate() {
-        let cache_root = CacheRoot::new(&root.manifest, root.target_dir.clone());
+        let cache_root = cache_root(facts, root);
         toolchain.push(Step {
             directory: root.manifest.parent(),
             ..step(StepKind::Helper(HelperCommand::CheckMetadata))
@@ -312,6 +318,31 @@ pub(crate) fn setup_roots(
         ..step
     }));
     steps
+}
+
+fn add_mbx_remote(jobs: &mut [Job]) {
+    for job in jobs {
+        if !job
+            .steps
+            .iter()
+            .any(|step| matches!(step.kind, StepKind::Cargo(_)))
+        {
+            continue;
+        }
+        if let Some(at) = job
+            .steps
+            .iter()
+            .position(|step| matches!(step.kind, StepKind::InstallTools { .. }))
+        {
+            let installed = &job.steps[at];
+            let cache = Step {
+                gate: installed.gate.clone(),
+                pr: installed.pr,
+                ..step(StepKind::MbxRemote)
+            };
+            job.steps.insert(at + 1, cache);
+        }
+    }
 }
 
 fn breaks_ties(facts: &RepoFacts) -> bool {
@@ -370,6 +401,8 @@ pub(crate) fn step(kind: StepKind) -> Step {
         directory: None,
         target_dir: None,
         when: When::Success,
+        skip_on_draft: false,
+        skip_after_merge_group: None,
         pr: PrRun::Always,
         gate: None,
         reads: None,

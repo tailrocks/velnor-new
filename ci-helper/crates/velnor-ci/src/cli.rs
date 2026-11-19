@@ -66,6 +66,10 @@ pub enum Command {
     )]
     Plan(PlanArgs),
     #[command(
+        about = "On a push, write the step output skip=true to $GITHUB_OUTPUT when a merge_group run of this same workflow (GITHUB_WORKFLOW_REF) already succeeded on GITHUB_SHA, and skip=false otherwise. Fails safe: any other event, missing variable or API error writes skip=false and exits 0. Reads GITHUB_TOKEN, which needs actions: read"
+    )]
+    MergeGroupPassed,
+    #[command(
         about = "Write the plan request file the planner reads, from the run's context: the event name and payload, the commit, the repository and, on a workflow_dispatch run, the qualification inputs and the runner's GITHUB_* values. Each context value is an argument that defaults to its GITHUB_* variable. Needs no VELNOR_REQUEST_FILE. The file is written once, under $RUNNER_TEMP, and an existing file is an error"
     )]
     WriteRequest(WriteRequestArgs),
@@ -134,6 +138,10 @@ pub enum Command {
         about = "Run one step of the source preview publication (draft, prepare or publish): check the admitted source metadata and payloads in the working directory against the run, the annotated tag and the GitHub release, and write the step outputs to $GITHUB_OUTPUT. Reads GH_TOKEN, the AUTHORITY_* variables, SOURCE_ARTIFACT_ID, LINUX_PAYLOAD_ARTIFACT_ID, DARWIN_PAYLOAD_ARTIFACT_ID and, for prepare and publish, SIGN, PAIR_ORIGIN, PAIR_ID, RECEIPT_SHA256 and BUNDLE_SHA256; exits 1 on any failed check"
     )]
     RunAuthority(RunAuthorityArgs),
+    #[command(
+        about = "Admit the source preview of the tag-push run: the run is the owner's push of the annotated tag sdk-preview-GITHUB_SHA under the protected tag rulesets, GITHUB_SHA is on main and its ci.yml and source qualification runs, and both producer payload runs, jobs and artifacts, succeeded and are the ones the tag annotation names. Then download both payloads, check them (ZIP, size, sha256, ELF or Mach-O header), link them as $RUNNER_TEMP/velnor-actions-<target>, write $RUNNER_TEMP/source-preview-metadata.json and source_sha to $GITHUB_OUTPUT. Reads GH_TOKEN, RUNNER_TEMP, GITHUB_OUTPUT, RELEASE_OWNER_ID (required, no default: the numeric account id of the release owner, which GITHUB_ACTOR_ID, the triggering actor account and the creation ruleset must name; exits 1 before any request when it is missing, empty, not a number or 0), the GITHUB_* variables of the run and AUTHORITY_REPOSITORY, AUTHORITY_PATH, AUTHORITY_REF and AUTHORITY_SHA; exits 1 on any failed check"
+    )]
+    AdmitPreview,
     #[command(
         about = "Write .velnor/rust-ci-timings.json from the last successful runs of the generated workflow on the default branch: the median of at least three ordinary runs, one entry per Cargo root, counting only jobs that ran on the runner in .velnor/rust-ci.toml (default ubuntu-latest); writes nothing with fewer; reads GITHUB_TOKEN; run in the checkout"
     )]

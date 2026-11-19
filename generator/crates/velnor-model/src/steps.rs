@@ -67,6 +67,7 @@ pub enum StepKind {
         manifests: Vec<RepoPath>,
         cached: Vec<crate::ids::RootSlug>,
     },
+    MbxRemote,
     MbxStore,
     MbxSeed,
     TestSetup {
@@ -116,4 +117,5 @@ pub enum HelperCommand {
     CheckMetadata,
     Restored(BaseExpiry),
     InputsAudit,
+    MergeGroupPassed,
 }
