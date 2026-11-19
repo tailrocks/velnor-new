@@ -290,7 +290,7 @@ its tag pattern, and records every one whose tag exists, whose release is not
 yet published, and which has exactly one draft release that the release App
 created; a draft anyone else created, or a second draft, fails the job. A
 recovered tag passes the same ancestry check as a fresh one, and its package
-output feeds the same finalizer and build jobs (helper 0.1.92+).
+output feeds the same finalizer and build jobs (helper 0.1.93+).
 
 No broad ignore-errors, no success on an empty result, no republishing every
 member after a partial failure. Use release-plz for publication with thin
