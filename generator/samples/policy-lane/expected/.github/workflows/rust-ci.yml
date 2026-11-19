@@ -289,7 +289,7 @@ jobs:
         run: '. "$VELNOR_EXEC" run -- cargo-deny check'
       - name: Unused dependencies
         if: '${{ !cancelled() && steps.plan.outcome == ''success'' && steps.plan.outputs.rust_machete == ''run'' }}'
-        run: '. "$VELNOR_EXEC" run -- cargo-machete'
+        run: '. "$VELNOR_EXEC" run -- cargo-machete machete'
       - id: report_cache_metrics
         name: Report cache telemetry
         if: '${{ !cancelled() }}'
