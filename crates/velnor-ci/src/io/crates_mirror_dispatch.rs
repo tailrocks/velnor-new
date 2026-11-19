@@ -7,6 +7,7 @@ use std::process::{Command, ExitStatus};
 use crate::error::CiError;
 
 use super::crates_mirror::{CONFIG_ENV, REAL_ENV, WRAPPER_ENV, failed};
+use super::crates_mirror_args::with_mirror_config;
 use super::crates_mirror_mise::{self as mise, LaunchPhase};
 
 const RUSTUP_ENV: &str = "VELNOR_CARGO_RUSTUP";
@@ -81,9 +82,7 @@ pub(super) fn forward() -> Result<ExitStatus, CiError> {
     }
     mise::native_environment(&mut command);
     command
-        .arg("--config")
-        .arg(config)
-        .args(args)
+        .args(with_mirror_config(&config, args.collect()))
         .env("PATH", path)
         .env(REAL_ENV, cargo.executable)
         .env("CARGO", directory.join("cargo"))
