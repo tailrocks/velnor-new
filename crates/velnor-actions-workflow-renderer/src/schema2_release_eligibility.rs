@@ -14,6 +14,9 @@ pub(super) const REPOSITORY: &str = "tailrocks/velnor-new";
 pub(super) const WORKFLOW_PATH: &str = ".github/workflows/product-release.yml";
 const CI_WORKFLOW_PATH: &str = ".github/workflows/ci.yml";
 const CI_WORKFLOW_API_ID: &str = "ci.yml";
+const RUST_CI_WORKFLOW_PATH: &str = ".github/workflows/rust-ci.yml";
+const RUST_CI_WORKFLOW_API_ID: &str = "rust-ci.yml";
+const RUST_REQUIRED_JOB_NAME: &str = "rust-required";
 
 const LATEST_RUN_JQ: &str = r#"
   [ .[] | (.workflow_runs // [])[] |
@@ -48,6 +51,20 @@ const REQUIRED_JOB_JQ: &str = r#"
           and .head_branch == "main"
         then .
         else error("Required job identity mismatch")
+        end
+    end
+"#;
+
+const GATE_JOB_JQ: &str = r#"
+  [ .[].jobs[]? | select(.name == $job_name) ] as $matched
+  | if ($matched | length) != 1 then error("expected one gate job")
+    else $matched[0]
+      | if .run_id == $run_id
+          and .run_attempt == $run_attempt
+          and .head_sha == $source_sha
+          and .head_branch == "main"
+        then .
+        else error("gate job identity mismatch")
         end
     end
 "#;
@@ -120,6 +137,10 @@ fn render_function(require_checkout: bool, workflow_path: &str, event: &str) -> 
         .replace("@EVENT@", event)
         .replace("@CI_WORKFLOW_PATH@", CI_WORKFLOW_PATH)
         .replace("@CI_WORKFLOW_API_ID@", CI_WORKFLOW_API_ID)
+        .replace("@RUST_CI_WORKFLOW_PATH@", RUST_CI_WORKFLOW_PATH)
+        .replace("@RUST_CI_WORKFLOW_API_ID@", RUST_CI_WORKFLOW_API_ID)
+        .replace("@RUST_REQUIRED_JOB_NAME@", RUST_REQUIRED_JOB_NAME)
+        .replace("@GATE_JOB_JQ@", GATE_JOB_JQ)
         .replace("@LATEST_RUN_JQ@", LATEST_RUN_JQ)
         .replace("@REQUIRED_JOB_JQ@", REQUIRED_JOB_JQ)
         .replace("@CI_RUN_LISTING_FUNCTION@", &ci_run_lookup::bash_function())
@@ -136,6 +157,7 @@ fn render_function(require_checkout: bool, workflow_path: &str, event: &str) -> 
 const ELIGIBILITY_FUNCTION: &str = r#"release_eligibility() {
 local -r repository='@REPOSITORY@'
 local -r ci_workflow_path='@CI_WORKFLOW_PATH@'
+local -r rust_ci_workflow_path='@RUST_CI_WORKFLOW_PATH@'
 local -r source_sha="${GITHUB_SHA-}"
 local -r authority_sha="${GITHUB_WORKFLOW_SHA-}"
 
@@ -220,6 +242,58 @@ assert_required_job() {
   [[ "$actual_branch" == 'main' ]] || fail 'Required job is not on main'
 }
 
+latest_gate_run() {
+  local label="$1" workflow_path="$2" api_id="$3" listing
+  listing="$(list_exact_source_ci_runs 'release eligibility' gh_api --paginate --slurp -X GET \
+    "repos/$repository/actions/workflows/$api_id/runs?head_sha=$source_sha&per_page=100")" \
+    || fail "$label run lookup failed"
+  printf '%s\n' "$listing" | jq -c \
+      --arg source_sha "$source_sha" \
+      --arg workflow_path "$workflow_path" \
+      --arg repository "$repository" \
+      '@LATEST_RUN_JQ@' \
+    || fail "$label run response is invalid"
+}
+
+verify_gate() {
+  local label="$1" workflow_path="$2" api_id="$3" job_name="$4"
+  local gate_run gate_id gate_attempt jobs job again
+  gate_run="$(latest_gate_run "$label" "$workflow_path" "$api_id")" \
+    || fail "latest $label run lookup failed"
+  [[ "$gate_run" != 'null' ]] || fail "latest exact-source $label run is missing"
+  [[ "$(jq -er '.status' <<<"$gate_run")" == 'completed' ]] \
+    || fail "latest exact-source $label run is not complete"
+  [[ "$(jq -er '.conclusion' <<<"$gate_run")" == 'success' ]] \
+    || fail "latest exact-source $label run did not succeed"
+  gate_id="$(jq -er '.id' <<<"$gate_run")" || fail "latest $label run ID is invalid"
+  gate_attempt="$(jq -er '.run_attempt' <<<"$gate_run")" \
+    || fail "latest $label run attempt is invalid"
+  jobs="$(gh_api --paginate --slurp -X GET \
+    "repos/$repository/actions/runs/$gate_id/attempts/$gate_attempt/jobs?per_page=100")" \
+    || fail "$job_name job lookup failed"
+  job="$(printf '%s\n' "$jobs" | jq -c \
+    --argjson run_id "$gate_id" \
+    --argjson run_attempt "$gate_attempt" \
+    --arg source_sha "$source_sha" \
+    --arg job_name "$job_name" \
+    '@GATE_JOB_JQ@')" || fail "$job_name job response is invalid"
+  [[ "$(jq -er '.status' <<<"$job")" == 'completed' ]] || fail "$job_name job is not complete"
+  [[ "$(jq -er '.conclusion' <<<"$job")" == 'success' ]] || fail "$job_name job did not succeed"
+  [[ "$(jq -er '.run_id' <<<"$job")" == "$gate_id" ]] || fail "$job_name job has a different run ID"
+  [[ "$(jq -er '.head_sha' <<<"$job")" == "$source_sha" ]] \
+    || fail "$job_name job has a different source SHA"
+  again="$(latest_gate_run "$label" "$workflow_path" "$api_id")" \
+    || fail "$label recheck failed"
+  [[ "$(jq -er '.id' <<<"$again")" == "$gate_id" ]] \
+    || fail "latest $label run changed during eligibility check"
+  [[ "$(jq -er '.run_attempt' <<<"$again")" == "$gate_attempt" ]] \
+    || fail "latest $label attempt changed during eligibility check"
+  [[ "$(jq -er '.status' <<<"$again")" == 'completed' ]] \
+    || fail "latest $label run restarted during eligibility check"
+  [[ "$(jq -er '.conclusion' <<<"$again")" == 'success' ]] \
+    || fail "latest $label run changed during eligibility check"
+}
+
 assert_current_tip
 run="$(latest_ci_run)" || fail 'latest CI run lookup failed'
 [[ "$run" != 'null' ]] || fail 'latest exact-source CI run is missing'
@@ -244,6 +318,7 @@ latest_conclusion="$(jq -er '.conclusion' <<<"$latest_again")" \
 [[ "$latest_attempt" == "$run_attempt" ]] || fail 'latest CI attempt changed during eligibility check'
 [[ "$latest_status" == 'completed' ]] || fail 'latest CI run restarted during eligibility check'
 [[ "$latest_conclusion" == 'success' ]] || fail 'latest CI run changed during eligibility check'
+verify_gate 'Rust CI' "$rust_ci_workflow_path" '@RUST_CI_WORKFLOW_API_ID@' '@RUST_REQUIRED_JOB_NAME@'
 assert_current_tip
 {
   printf 'source_sha=%s\n' "$source_sha"
