@@ -3,7 +3,8 @@
 
 use serde::Deserialize;
 use velnor_model::{
-    CiDebugInfo, InputRule, PackageName, PathGlob, RepoPath, RunnerLabel, RustCiConfig, TargetName,
+    CiDebugInfo, InputRule, PackageName, PathGlob, RepoPath,
+    RunnerLabel, RustCiConfig, TargetName,
 };
 
 use crate::config_events::{docs_run, on_main};
@@ -83,6 +84,7 @@ struct RawConfig {
     test_setup: Vec<crate::config_test_setup::RawTestSetup>,
     #[serde(default)]
     lint: Vec<crate::config_lint::RawLint>,
+    #[serde(default)]
     test_groups: Vec<crate::config_test_groups::RawTestGroup>,
 }
 

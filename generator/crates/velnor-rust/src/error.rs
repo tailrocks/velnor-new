@@ -66,7 +66,6 @@ pub enum Reason {
     UnknownTestGroupRoot(String),
     TestGroupWithoutNextest(String),
     TestGroupFilter(String),
-    TestGroupSelection(String),
     PrCiWithSkipDraft,
     RustdocflagsString,
     CargoConfigInclude,
@@ -130,10 +129,6 @@ impl Reason {
             Self::TestGroupFilter(filter) => write!(
                 f,
                 "test_groups.filter {filter:?} is empty or has a character a generated one-command step cannot carry (a control character, a quote, $, a backtick, a backslash, |, &, ; or <); write nextest's and, or and not instead of &, | and !"
-            ),
-            Self::TestGroupSelection(name) => write!(
-                f,
-                "test group {name} sets paths or events, which choose the groups to run from the plan at run time; that selection is not available yet, so remove them"
             ),
             Self::UnknownTestSetupRoot(root) => write!(
                 f,
@@ -270,11 +265,13 @@ impl fmt::Display for Reason {
                 f,
                 "has times for {root}, which is not a Cargo root of this repository; run `velnor-ci timings` again"
             ),
-            Self::UnknownTestSetupRoot(_)
-            | Self::UnknownTestGroupRoot(_)
+            Self::UnknownTestGroupRoot(_)
             | Self::TestGroupWithoutNextest(_)
-            | Self::TestGroupFilter(_)
-            | Self::TestGroupSelection(_) => self.fmt_test_groups(f),
+            | Self::TestGroupFilter(_) => self.fmt_test_groups(f),
+            Self::UnknownTestSetupRoot(root) => write!(
+                f,
+                "test_setup names the root {root}, which is not a Cargo root of this repository; name the folder of a root's Cargo.toml, or . for the repository root"
+            ),
             Self::RustdocflagsString => f.write_str(
                 "rustdoc flags must be set as an array in build.rustdocflags, not as a string and not per target: the generated documentation step adds -D warnings there with --config",
             ),

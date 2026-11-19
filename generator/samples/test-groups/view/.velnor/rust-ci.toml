@@ -5,6 +5,8 @@ needs = ["docker"]
 test_threads = 2
 timeout_minutes = 45
 runner = "ubuntu-24.04"
+paths = ["app/migrations/**"]
+events = ["push", "schedule"]
 root = "."
 
 [[test_groups]]

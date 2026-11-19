@@ -3,6 +3,7 @@
 
 use crate::ids::{JobId, PathGlob, RepoPath, RunnerLabel};
 use crate::repo::RustRoot;
+use crate::selection::EventKind;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TestGroup {
@@ -32,6 +33,19 @@ pub enum GroupEvent {
     WorkflowDispatch,
 }
 
+impl GroupEvent {
+    #[must_use]
+    pub fn kind(self) -> EventKind {
+        match self {
+            Self::PullRequest => EventKind::PullRequest,
+            Self::Push => EventKind::Push,
+            Self::MergeGroup => EventKind::MergeGroup,
+            Self::Schedule => EventKind::Schedule,
+            Self::WorkflowDispatch => EventKind::WorkflowDispatch,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GroupRoot {
     OnlyRoot,
@@ -39,6 +53,11 @@ pub enum GroupRoot {
 }
 
 impl TestGroup {
+    #[must_use]
+    pub fn selects(&self) -> bool {
+        !self.paths.is_empty() || !self.events.is_empty()
+    }
+
     #[must_use]
     pub fn belongs_to(&self, root: &RustRoot, root_count: usize) -> bool {
         match &self.root {
