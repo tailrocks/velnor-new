@@ -44,24 +44,45 @@ review is the trust root for the committed `needs` set"
   `consumer_gate_rejects_attacker_manifests`).
 - Forge the asset digest: a wrong `VELNOR_ASSET_SHA256` fails
   `sha256sum -c` in the Acquire step (`pins.rs:192-198`) — red, not green.
-- Poison shared caches: absent means read. A job with no `cache-mode` key gets
-  GitHub's default, which is `write` on a trusted trigger, so the renderer
-  writes `cache-mode: read` on every generated job that does not declare a mode
-  (`crates/velnor-render/src/workflow.rs`, `cache_mode`). Write only in jobs
-  that declare `cache_mode = "write"`; today those are the four
-  `qualification.yml` cache jobs, dispatch-only and gated off the default
-  branch, so test writes never pollute the cache of the default branch. The
-  gate is enforced at generation: a write mode on a job whose `if` lacks
+- Poison shared caches: a job with no `cache-mode` key gets GitHub's default,
+  which is `write` on a trusted trigger, so the renderer never leaves the key
+  out. It writes `read` on every generated job that neither declares a mode nor
+  saves, and `write` on a generated job that saves to the Actions cache
+  service (an `actions/cache/save` step, `StepKind::saves_to_cache_service`,
+  `crates/velnor-render/src/cache.rs` `saving_mode`). What the mode controls,
+  from GitHub's reference and the velnor-lab probe (velnor-lab#383): `read`
+  permits restores and denies saves at the cache service; the denied save logs
+  `Failed to save: Unable to reserve cache ... cache write denied: token has
+  no writable scopes` as a warning and the step still succeeds. It does not
+  gate the REST API: a `read` job with `actions: write` deleted a cache entry,
+  so the trim jobs stay `read`. GitHub accepts only the four literals, not an
+  expression (a workflow with `cache-mode: ${{ ... }}` is rejected as a
+  workflow-file issue, and `jactionlint` 2.6.0 refuses it too), so a mode is
+  one value for every event of the job and cannot be `read` on a pull request
+  and `write` on the default branch. The event gate therefore lives on the
+  save steps: each save of a generated job carries the default-branch gate
+  (`github.ref == format('refs/heads/{0}', github.event.repository.default_branch)`
+  with a push, schedule or dispatch event) or the same-repository pull request
+  gate (`github.event.pull_request.head.repo.full_name == github.repository`,
+  the per-PR delta), so a fork pull request never reaches a save. A same-repository
+  pull request writes only its own `refs/pull/<n>/merge` scope, which neither
+  the default branch nor another pull request restores. Declared writers
+  (`cache_mode = "write"` in `.velnor/workflows.toml`, today the four
+  `qualification.yml` cache jobs) are a different kind: dispatch-only and gated
+  off the default branch so test writes never pollute it. `generate` refuses a
+  write mode on a declared job whose `if` lacks
   `github.ref != format('refs/heads/{0}', github.event.repository.default_branch)`
-  is refused (`crates/velnor-workflows/src/job_env.rs`). Velnor's runner does
-  not decide this: GitHub's cache service enforces the effective mode through
-  scoped tokens, and a restricted trigger such as a fork pull request is read
-  by GitHub's own default as well. A job that calls a reusable workflow has no
-  `cache-mode` of its own, because GitHub documents none for a caller job. Its
-  callee jobs, when Velnor generates them, carry theirs. A hand-written callee
-  can still request write. The test
-  `cache_mode_default::no_generated_job_leaves_the_cache_mode_to_the_default`
-  fails when a generated job has no mode or an undeclared write.
+  (`crates/velnor-workflows/src/job_env.rs`), and a declared job that saves
+  (`cache`, `cache-save`) without a writing mode
+  (`job_limits::saves_need_write`). Velnor's runner does not decide any of this:
+  GitHub's cache service enforces the effective mode through scoped tokens. A
+  job that calls a reusable workflow has no `cache-mode` of its own, because
+  GitHub documents none for a caller job. Its callee jobs, when Velnor
+  generates them, carry theirs. A hand-written callee can still request write.
+  The test `cache_mode_default::no_generated_job_leaves_the_cache_mode_to_the_default`
+  fails when a generated job that saves does not write, when a write has no
+  save step or declaration, or when a save step of a write job is reachable
+  from a fork pull request.
 - Fake validator conclusions at runtime: `needs` conclusions are
   server-side; any observed-vs-expected divergence fails closed
   (`needs_channel.rs:81-83`).

@@ -137,6 +137,16 @@ pub enum StepKind {
     MergeQueueCheck,
 }
 
+impl StepKind {
+    /// Whether the step saves to the Actions cache service, which `cache-mode: read` denies. The
+    /// trim steps delete over the REST API with the job token, which the mode does not gate, and
+    /// the node-local stores and the scope-cache directory are not the service.
+    #[must_use]
+    pub fn saves_to_cache_service(&self) -> bool {
+        matches!(self, Self::CacheSave(_))
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GroupFilter {
     pub name: String,

@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::cache_mode::CacheMode;
 use crate::error::{WorkflowsError, refuse};
 use crate::plan::{Action, Body, Env, Job, Step};
 use crate::wrappers::{Invoked, invoked};
@@ -142,6 +143,25 @@ pub(crate) fn bounded_cache_keys(
                 "job {job} sets the cache key {name} to an expression, whose length is not bounded; write it as text, with github.run_id, github.run_attempt and github.job as the only expressions"
             ));
         }
+    }
+    Ok(())
+}
+
+/// A job whose `cache-mode` is not a writing one has its cache saves denied at the cache
+/// service, with only a warning in the log. Refuse that at generation: the job either declares
+/// `cache_mode = "write"` (and so its `if` keeps it off the default branch) or does not save.
+pub(crate) fn saves_need_write(
+    job: &str,
+    steps: &[Step],
+    mode: Option<CacheMode>,
+) -> Result<(), WorkflowsError> {
+    let saves = steps
+        .iter()
+        .any(|step| matches!(step.body, Body::Uses(Action::Cache | Action::CacheSave)));
+    if saves && !mode.is_some_and(CacheMode::writes) {
+        return refuse(format!(
+            "job {job} saves to the cache (cache or cache-save) without cache_mode \"write\"; a job without a writing cache-mode reads only, and its save is denied with a warning"
+        ));
     }
     Ok(())
 }

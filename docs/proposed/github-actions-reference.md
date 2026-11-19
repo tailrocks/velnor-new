@@ -242,7 +242,7 @@ For the private Bun registry fence, the [runner expression implementation](https
     - `read`: permit cache restores and deny saves at the service boundary; pinned-client handling is specified below.
     - `write-only`: write cache entries without restoring existing entries.
     - `none`: disable all cache reads and writes.
-  - Whether `cache-mode` accepts `${{ }}` expressions is UNCONFIRMED: the workflow-syntax and dependency-caching pages list only the four literals. Details and the enforcement and default rules are in entry 5 below.
+  - `cache-mode` does not accept `${{ }}` expressions: a workflow file with one is rejected by GitHub (a run with zero jobs and the file path as its title, velnor-lab#383, probe-cache-mode-expr.yml), as the workflow-syntax and dependency-caching pages imply by listing only the four literals. Details and the enforcement and default rules are in entry 5 below.
 - **Velnor Implementation**:
   - `velnor-actions-contract` defines `CacheMode` (`Read`, `Write`, `WriteOnly`, `None`, `Expression(String)`) and optional `cache_mode: Option<CacheMode>` on both `WorkflowIr` and `Job`, with `CacheMode::for_pull_request_policy(PullRequestCachePolicy)` mapping `PullRequestCachePolicy::ReadOnly` to `CacheMode::Expression("${{ github.event_name == 'pull_request' && 'read' || 'write' }}")` and `PullRequestCachePolicy::SharedSeed` to `CacheMode::Write`.
   - `velnor-actions-workflow-renderer` emits top-level and job-level `cache-mode:` when `cache_mode` is `Some(...)` and omits it when `None`.
@@ -296,7 +296,8 @@ Platform behavior comes from GitHub's [dependency caching reference](https://doc
 - Trusted triggers default to `write` and restricted low-trust triggers to `read`. The documented default does not establish `pull_request` behavior; use explicit Velnor policy.
 - Pinned toolkit 6.1.0 does not inspect `ACTIONS_CACHE_MODE`. A denied save still attempts reservation and emits a warning; denied restore uses its generic failure path. Do not mistake service denial for skipped client work.
 - A reusable workflow cannot exceed its caller's explicit mode; without one, a callee can request `write`. Explicit write access on a restricted trigger restores poisoning risk.
-- Expression support remains unqualified: the platform references list literals, and pinned `jactionlint` rejects expressions. Velnor must use qualified syntax.
+- Expressions are rejected (see entry 3), so a job has one mode for every event; per-event limits belong on the save steps.
+- Observed on a same-repository pull request (velnor-lab#383): under `cache-mode: read`, `actions/cache/restore` hit, `actions/cache/save` logged the warning `Failed to save: Unable to reserve cache with key ... cache write denied: token has no writable scopes` and succeeded, and a REST `DELETE /actions/caches` with `actions: write` still deleted an entry. The mode gates the cache service token, not the REST API.
 
 #### 5.6 Compression and archive construction
 

@@ -3,7 +3,10 @@
 
 //! A job with no `cache-mode` key gets GitHub's default, and on a trusted trigger that is
 //! `write`. So the renderer writes `cache-mode: read` on every job that does not declare a mode,
-//! and a write only comes from a declaration (`cache_mode = "write"` in `.velnor/workflows.toml`).
+//! and a job that saves (`actions/cache/save`, `actions/cache`) writes. GitHub accepts only the four
+//! literals for `cache-mode`, not an expression, so a mode holds for every event of the job; the
+//! save steps carry the event gate. A declared write (`cache_mode = "write"` in
+//! `.velnor/workflows.toml`) stays the qualification jobs' own, gated off the default branch.
 
 use std::collections::BTreeSet;
 use std::error::Error;
@@ -47,7 +50,26 @@ fn declared_writers(config: &str) -> Result<BTreeSet<String>, Box<dyn Error>> {
     Ok(writers)
 }
 
-/// What is wrong with the `cache-mode` of each job of one rendered workflow.
+/// The default branch gate and the same-repository gate: a save step in a generated job carries
+/// one of them, so a pull request from a fork never reaches it.
+const SAVE_GATES: [&str; 2] = [
+    "github.ref == format('refs/heads/{0}', github.event.repository.default_branch)",
+    "github.event.pull_request.head.repo.full_name == github.repository",
+];
+
+/// A step that saves to the Actions cache service: the save action, or the combined action whose
+/// post step saves. The REST delete of a trim is not one (GitHub does not gate it by the mode).
+fn saves(step: &crate::yaml_tree::Node) -> bool {
+    let uses = step.get("uses").and_then(crate::yaml_tree::Node::text);
+    uses.is_some_and(|uses| {
+        uses.starts_with("actions/cache/save@") || uses.starts_with("actions/cache@")
+    })
+}
+
+/// What is wrong with the `cache-mode` of each job of one rendered workflow. GitHub accepts only
+/// the four literals (not an expression), so a mode is one value for every event of the job:
+/// a job that saves must write, and its save steps must be gated off fork pull requests; any
+/// other job must read unless it declares a write.
 fn violations(text: &str, writers: &BTreeSet<String>) -> Result<Vec<String>, Box<dyn Error>> {
     let tree = parse(text)?;
     let mut found = Vec::new();
@@ -55,12 +77,35 @@ fn violations(text: &str, writers: &BTreeSet<String>) -> Result<Vec<String>, Box
     for id in jobs.keys() {
         let job = jobs.get(id).ok_or("job vanished")?;
         let mode = job.get("cache-mode").and_then(crate::yaml_tree::Node::text);
+        let savers: Vec<_> = job
+            .get("steps")
+            .map(|steps| steps.items().iter().filter(|step| saves(step)).collect())
+            .unwrap_or_default();
+        let writes = matches!(mode, Some("write" | "write-only"));
         match mode {
             None if job.get("uses").is_none() => found.push(format!("{id}: no cache-mode")),
-            Some("write" | "write-only") if !writers.contains(id) => {
-                found.push(format!("{id}: writes the cache without declaring it"));
+            _ if !savers.is_empty() && !writes => {
+                found.push(format!("{id}: saves the cache but its mode is {mode:?}"));
+            }
+            _ if writes && savers.is_empty() && !writers.contains(id) => {
+                found.push(format!(
+                    "{id}: writes the cache without a save step or a declaration"
+                ));
             }
             _ => {}
+        }
+        if writes && !writers.contains(id) {
+            for step in savers {
+                let gate = step
+                    .get("if")
+                    .and_then(crate::yaml_tree::Node::text)
+                    .unwrap_or("");
+                if !SAVE_GATES.iter().any(|gate_text| gate.contains(gate_text)) {
+                    found.push(format!(
+                        "{id}: a save step is reachable from a fork pull request"
+                    ));
+                }
+            }
         }
     }
     Ok(found)
@@ -133,17 +178,33 @@ fn no_generated_job_leaves_the_cache_mode_to_the_default() -> TestResult {
 }
 
 #[test]
-fn the_scan_catches_a_missing_mode_and_an_undeclared_write() -> TestResult {
+fn the_scan_catches_each_way_a_mode_can_be_wrong() -> TestResult {
     let none = BTreeSet::new();
     let declared = BTreeSet::from(["save".to_owned()]);
-    let plain = "jobs:\n  a:\n    cache-mode: read\n    runs-on: x\n  save:\n    cache-mode: write\n    runs-on: x\n  call:\n    uses: ./w.yml\n";
-    assert_eq!(violations(plain, &declared)?, Vec::<String>::new());
+    let gate = SAVE_GATES[0];
+    let plain = format!(
+        "jobs:\n  a:\n    cache-mode: read\n    runs-on: x\n  save:\n    cache-mode: write\n    runs-on: x\n  call:\n    uses: ./w.yml\n  saver:\n    cache-mode: write\n    steps:\n      - uses: actions/cache/save@x\n        if: ${{{{ {gate} }}}}\n"
+    );
+    assert_eq!(violations(&plain, &declared)?, Vec::<String>::new());
     assert_eq!(
-        violations(plain, &none)?,
-        ["save: writes the cache without declaring it"]
+        violations(&plain, &none)?,
+        ["save: writes the cache without a save step or a declaration"]
     );
     let bare = plain.replace("    cache-mode: read\n", "");
     assert_eq!(violations(&bare, &declared)?, ["a: no cache-mode"]);
+    let read_saver = plain.replace(
+        "  saver:\n    cache-mode: write",
+        "  saver:\n    cache-mode: read",
+    );
+    assert_eq!(
+        violations(&read_saver, &declared)?,
+        ["saver: saves the cache but its mode is Some(\"read\")"]
+    );
+    let open_save = plain.replace(&format!("        if: ${{{{ {gate} }}}}\n"), "");
+    assert_eq!(
+        violations(&open_save, &declared)?,
+        ["saver: a save step is reachable from a fork pull request"]
+    );
     Ok(())
 }
 

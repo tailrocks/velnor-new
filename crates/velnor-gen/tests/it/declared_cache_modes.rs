@@ -14,6 +14,11 @@ fn one_job(header: &str, steps: &str) -> String {
     )
 }
 
+/// The header of a job that saves: a write mode, kept off the default branch.
+fn writer() -> String {
+    format!("cache_mode = \"write\"\nif = \"{GATE}\"\n")
+}
+
 fn run_step() -> &'static str {
     "[[workflow.job.step]]\nname = \"Check\"\nrun = \"echo ok\"\n"
 }
@@ -128,7 +133,7 @@ fn the_cache_actions_render_at_their_pins() -> TestResult {
         with_step("cache-restore", "{ path = \"a\", key = \"k\" }"),
         with_step("cache", "{ path = \"a\", key = \"k\" }"),
     );
-    let tree = rendered(&one_job("", &steps))?;
+    let tree = rendered(&one_job(&writer(), &steps))?;
     let uses: Vec<&str> = job(&tree, "check")?
         .get("steps")
         .ok_or("no steps")?
@@ -152,7 +157,7 @@ fn the_cache_actions_render_at_their_pins() -> TestResult {
 fn a_with_value_may_interpolate_the_run_and_job_identity() -> TestResult {
     let key = "g4-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}";
     let config = one_job(
-        "",
+        &writer(),
         &with_step(
             "cache-save",
             &format!("{{ path = \"a b/c\", key = \"{key}\" }}"),
@@ -224,17 +229,35 @@ fn a_cache_key_is_measured_with_the_longest_job_id_and_attempt_it_can_hold() -> 
     for uses in ["cache", "cache-save", "cache-restore"] {
         let key = format!("{padding}-${{{{ github.job }}}}-${{{{ github.run_attempt }}}}");
         let config = one_job(
-            "",
+            &writer(),
             &with_step(uses, &format!("{{ path = \"a\", key = \"{key}\" }}")),
         );
         let message = refusal(&config)?;
         assert!(message.contains("cache key"), "{uses}: {message}");
         let short = format!("{}-${{{{ github.job }}}}", "k".repeat(300));
         let config = one_job(
-            "",
+            &writer(),
             &with_step(uses, &format!("{{ path = \"a\", key = \"{short}\" }}")),
         );
         rendered(&config)?;
     }
+    Ok(())
+}
+
+#[test]
+fn a_job_that_saves_must_declare_a_writing_cache_mode() -> TestResult {
+    for uses in ["cache", "cache-save"] {
+        let step = with_step(uses, "{ path = \"a\", key = \"k\" }");
+        for header in ["", "cache_mode = \"read\"\n", "cache_mode = \"none\"\n"] {
+            let message = refusal(&one_job(header, &step))?;
+            assert!(
+                message.contains("check") && message.contains("cache_mode \"write\""),
+                "{uses} {header:?}: {message}"
+            );
+        }
+        rendered(&one_job(&writer(), &step))?;
+    }
+    let restore = with_step("cache-restore", "{ path = \"a\", key = \"k\" }");
+    rendered(&one_job("", &restore))?;
     Ok(())
 }
