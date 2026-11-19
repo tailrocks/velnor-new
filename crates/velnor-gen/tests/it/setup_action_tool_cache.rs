@@ -167,7 +167,7 @@ fn a_special_file_in_the_tool_cache_is_not_read_and_the_download_is_used() -> Te
     fs::create_dir_all(&entry)?;
     let fifo = entry.join(ARCHIVE);
     assert!(
-        Command::new("/usr/bin/mkfifo")
+        Command::new(program("mkfifo"))
             .arg(&fifo)
             .status()?
             .success()
