@@ -42,7 +42,6 @@ fn token(sources: &PrivateSources) -> RenderedStep {
                 "permission-contents".to_owned(),
                 Value::Text("read".to_owned()),
             ),
-            ("skip-token-revoke".to_owned(), Value::Bool(true)),
         ],
         ..RenderedStep::default()
     }

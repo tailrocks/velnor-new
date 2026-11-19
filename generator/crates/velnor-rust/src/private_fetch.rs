@@ -14,10 +14,7 @@ pub(crate) fn insert(sources: &PrivateSources, jobs: &mut [Job]) {
         };
         let mut manifests: Vec<RepoPath> = Vec::new();
         for step in job.steps.iter().filter(|step| compiles(step)) {
-            let manifest = step.directory.as_ref().map_or_else(
-                || RepoPath::from_static("Cargo.toml"),
-                |directory| directory.child("Cargo.toml"),
-            );
+            let manifest = manifest(step);
             if !manifests.contains(&manifest) {
                 manifests.push(manifest);
             }
@@ -45,11 +42,20 @@ pub(crate) fn insert(sources: &PrivateSources, jobs: &mut [Job]) {
     }
 }
 
+fn manifest(step: &Step) -> RepoPath {
+    if let StepKind::Cargo(CargoCommand::Deny { manifest }) = &step.kind {
+        return manifest.clone();
+    }
+    step.directory.as_ref().map_or_else(
+        || RepoPath::from_static("Cargo.toml"),
+        |directory| directory.child("Cargo.toml"),
+    )
+}
+
 fn compiles(step: &Step) -> bool {
     matches!(&step.kind, StepKind::Cargo(command) if !matches!(
         command,
         CargoCommand::FmtCheck
-            | CargoCommand::Deny { .. }
             | CargoCommand::Machete
             | CargoCommand::NextestRunArchive { .. }
     ))

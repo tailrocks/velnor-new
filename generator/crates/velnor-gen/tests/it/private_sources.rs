@@ -92,6 +92,10 @@ fn assert_phase(
     );
     let create = &steps[token];
     assert_eq!(create["with"]["permission-contents"], "read");
+    assert!(
+        create["with"].get("skip-token-revoke").is_none(),
+        "the action's post-job revocation must stay on as the backstop for a cancelled fetch: {create}"
+    );
     assert_eq!(create["with"]["owner"], "acme");
     assert_eq!(
         create["with"]["repositories"].as_str().map(str::trim_end),
@@ -248,5 +252,46 @@ fn an_exact_sources_hit_skips_the_token_and_the_fetch_and_a_partial_hit_fetches(
         assert!(guards[0].contains("head.repo.full_name == github.repository"));
     }
     assert!(checked > 0, "{text}");
+    Ok(())
+}
+
+#[test]
+fn the_dependency_policy_job_fetches_before_cargo_deny_resolves_the_graph() -> TestResult {
+    let mut repo = private_repo(&["Cargo.toml", "tools/Cargo.toml"], SECTION, "0.1.86")?;
+    for (name, text) in [("deny.toml", ""), ("mise.toml", crate::events::DENY_MISE)] {
+        let name = path(name)?;
+        repo.tracked_paths.insert(name.clone());
+        repo.files.insert(name, text.as_bytes().to_vec());
+    }
+    let text = workflow(&repo)?;
+    let mut checked = 0;
+    for job in jobs(&text)? {
+        let steps = job["steps"].as_array().ok_or("steps missing")?;
+        let deny: Vec<usize> = steps
+            .iter()
+            .enumerate()
+            .filter(|(_, step)| {
+                step["run"]
+                    .as_str()
+                    .is_some_and(|run| run.contains("cargo-deny"))
+            })
+            .map(|(index, _)| index)
+            .collect();
+        let Some(first) = deny.first() else { continue };
+        checked += 1;
+        let token = steps.iter().position(|s| s["id"] == "private-token");
+        assert!(token.is_some_and(|token| token + 1 < *first), "{job}");
+        let fetch = steps[token.unwrap_or_default() + 1]["run"]
+            .as_str()
+            .unwrap_or_default();
+        assert!(
+            fetch.contains("Cargo.toml") && fetch.contains("tools/Cargo.toml"),
+            "{fetch}"
+        );
+        for index in deny {
+            assert_eq!(steps[index]["env"]["CARGO_NET_OFFLINE"], "true", "{job}");
+        }
+    }
+    assert_eq!(checked, 1, "{text}");
     Ok(())
 }

@@ -3,6 +3,8 @@
 
 use velnor_model::{RepoPath, RepoView, RepositoryIdentity, RustCiConfig, RustRoot};
 
+use crate::error::{DetectError, Reason};
+
 use crate::roots::{CARGO_LOCK, is_cargo_config};
 use crate::toml_file::table;
 use crate::weaken_scope::reaches_a_check;
@@ -31,6 +33,43 @@ pub(crate) fn private_sources(view: &RepoView, roots: &[RustRoot]) -> Option<Str
         format!(
             "base caches are not saved because this repository has private dependencies ({cause})"
         )
+    })
+}
+
+pub(crate) fn refuse_locked_credentials(
+    view: &RepoView,
+    config: &RustCiConfig,
+    roots: &[RustRoot],
+) -> Result<(), DetectError> {
+    if config.private_sources.is_none() {
+        return Ok(());
+    }
+    match locked_credentials(view, roots) {
+        Some((lock, name)) => Err(DetectError::invalid(
+            &lock,
+            Reason::LockedUrlCredentials(name),
+        )),
+        None => Ok(()),
+    }
+}
+
+fn locked_credentials(view: &RepoView, roots: &[RustRoot]) -> Option<(RepoPath, String)> {
+    roots.iter().find_map(|root| {
+        let lock = root.manifest.sibling(&CARGO_LOCK);
+        let document = table(view.files.get(&lock)?).ok()?;
+        let name = document
+            .get("package")
+            .and_then(toml::Value::as_array)?
+            .iter()
+            .filter_map(toml::Value::as_table)
+            .find_map(|package| {
+                let source = package.get("source").and_then(toml::Value::as_str)?;
+                let (scheme, tail) = source.strip_prefix("git+")?.split_once("://")?;
+                let authority = tail.split('/').next().unwrap_or("");
+                (scheme != "ssh" && authority.contains('@'))
+                    .then(|| package.get("name").and_then(toml::Value::as_str))?
+            })?;
+        Some((lock, name.to_owned()))
     })
 }
 

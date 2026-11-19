@@ -12,6 +12,22 @@ use crate::github::GitHubWrite;
 const TOKEN_VARIABLE: &str = "VELNOR_PRIVATE_TOKEN";
 const API_VARIABLE: &str = "VELNOR_API_URL";
 const SYSTEM_DIRECTORIES: [&str; 4] = ["/usr/bin", "/bin", "/usr/local/bin", "/opt/homebrew/bin"];
+const PROXY_VARIABLES: [&str; 8] = [
+    "HTTPS_PROXY",
+    "https_proxy",
+    "HTTP_PROXY",
+    "http_proxy",
+    "ALL_PROXY",
+    "all_proxy",
+    "NO_PROXY",
+    "no_proxy",
+];
+const GITHUB_URL_FORMS: [&str; 4] = [
+    "https://github.com/",
+    "ssh://git@github.com/",
+    "ssh://github.com/",
+    "git@github.com:",
+];
 const REVOKE_PATH: &str = "/installation/token";
 const FORK_HINT: &str = "no token was created: a pull request from a fork gets none, and the sources cache did not hold every dependency";
 
@@ -45,8 +61,15 @@ fn fetch_with(args: &FetchArgs, token: Option<&str>) -> Result<(), CiError> {
         cargo_home: std::env::var_os("CARGO_HOME"),
         rustup_home: std::env::var_os("RUSTUP_HOME"),
     };
+    let mirror = super::crates_mirror::runner_config()?;
     let environment = trusted.environment(&home, &cargo, &git, &inherited, token)?;
-    run_fetches(&cargo, &environment, &args.manifest_path, token.is_some())
+    run_fetches(
+        &cargo,
+        &environment,
+        mirror.as_deref(),
+        &args.manifest_path,
+        token.is_some(),
+    )
 }
 
 fn api_client(token: String) -> Result<impl GitHubWrite, CiError> {
@@ -64,6 +87,7 @@ fn api_client(token: String) -> Result<impl GitHubWrite, CiError> {
 fn run_fetches(
     cargo: &Path,
     environment: &[(OsString, OsString)],
+    mirror: Option<&Path>,
     manifests: &[PathBuf],
     with_token: bool,
 ) -> Result<(), CiError> {
@@ -71,10 +95,20 @@ fn run_fetches(
         let mut command = Command::new(cargo);
         command
             .env_clear()
-            .envs(environment.iter().map(|(k, v)| (k, v)))
+            .envs(environment.iter().map(|(k, v)| (k, v)));
+        if let Some(mirror) = mirror {
+            command.arg("--config").arg(mirror);
+        }
+        let directory = manifest
+            .parent()
+            .filter(|parent| !parent.as_os_str().is_empty());
+        if let Some(directory) = directory {
+            command.current_dir(directory);
+        }
+        command
             .args(["fetch", "--locked"])
             .arg("--manifest-path")
-            .arg(manifest);
+            .arg(manifest.file_name().unwrap_or(manifest.as_os_str()));
         if !with_token {
             command.arg("--offline");
         }
@@ -199,18 +233,31 @@ impl Trusted {
             ("GIT_CONFIG_GLOBAL".into(), "/dev/null".into()),
             ("GIT_TERMINAL_PROMPT".into(), "0".into()),
         ];
+        environment.extend(
+            PROXY_VARIABLES
+                .iter()
+                .filter_map(|name| Some((OsString::from(name), non_empty_variable(name)?))),
+        );
         if let Some(token) = token {
-            environment.extend([
-                ("GIT_CONFIG_COUNT".into(), "1".into()),
-                (
-                    "GIT_CONFIG_KEY_0".into(),
-                    format!("url.https://x-access-token:{token}@github.com/.insteadOf").into(),
-                ),
-                ("GIT_CONFIG_VALUE_0".into(), "https://github.com/".into()),
-            ]);
+            let base = format!("url.https://x-access-token:{token}@github.com/.insteadOf");
+            environment.push((
+                "GIT_CONFIG_COUNT".into(),
+                GITHUB_URL_FORMS.len().to_string().into(),
+            ));
+            for (index, form) in GITHUB_URL_FORMS.iter().enumerate() {
+                environment.push((
+                    format!("GIT_CONFIG_KEY_{index}").into(),
+                    base.clone().into(),
+                ));
+                environment.push((format!("GIT_CONFIG_VALUE_{index}").into(), (*form).into()));
+            }
         }
         Ok(environment)
     }
+}
+
+fn non_empty_variable(name: &str) -> Option<OsString> {
+    std::env::var_os(name).filter(|value| !value.is_empty())
 }
 
 pub(super) fn search_path() -> Vec<PathBuf> {

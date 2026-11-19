@@ -16,6 +16,13 @@ use crate::io::Repo;
 type TestResult = Result<(), Box<dyn Error>>;
 
 const TOKEN: &str = "ghs_recorded_installation_token";
+const URLS: [&str; 5] = [
+    "https://github.com/acme/private.git",
+    "ssh://git@github.com/acme/private.git",
+    "ssh://github.com/acme/private.git",
+    "git@github.com:acme/private.git",
+    "https://example.invalid/acme/public.git",
+];
 
 fn script(path: &Path, body: &str) -> TestResult {
     fs::create_dir_all(path.parent().ok_or("parent")?)?;
@@ -76,8 +83,9 @@ impl Fixture {
         script(
             &trusted.join("cargo"),
             &format!(
-                "env > {log}/cargo.env\necho \"$*\" > {log}/cargo.args\ngit ls-remote > /dev/null 2>&1\nexit {cargo_exit}",
-                log = log.display()
+                "env > {log}/cargo.env\necho \"$*\" > {log}/cargo.args\npwd -P > {log}/cargo.pwd\nfor url in {urls}; do /usr/bin/git ls-remote --get-url \"$url\" >> {log}/cargo.urls; done\ngit ls-remote > /dev/null 2>&1\nexit {cargo_exit}",
+                log = log.display(),
+                urls = URLS.join(" ")
             ),
         )?;
         script(
@@ -95,6 +103,17 @@ impl Fixture {
     }
 
     fn run(&self, api: &Api, token: Option<&str>, home: Option<&str>) -> Output {
+        self.run_with(api, token, home, &["Cargo.toml"], &[])
+    }
+
+    fn run_with(
+        &self,
+        api: &Api,
+        token: Option<&str>,
+        home: Option<&str>,
+        manifests: &[&str],
+        extra: &[(&str, &str)],
+    ) -> Output {
         let root = self.repo.root();
         let path = format!(
             "{}:{}:/usr/bin:/bin",
@@ -104,7 +123,8 @@ impl Fixture {
         let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
         command
             .current_dir(root)
-            .args(["fetch", "--manifest-path", "Cargo.toml", "--trusted-dir"])
+            .arg("fetch")
+            .arg("--trusted-dir")
             .arg(root.join("trusted"))
             .env_clear()
             .env("PATH", path)
@@ -114,6 +134,10 @@ impl Fixture {
             .env("GIT_CONFIG_VALUE_0", "hostile-config")
             .env("CARGO_HTTP_PROXY", "http://hostile-proxy.invalid")
             .env("CARGO_NET_OFFLINE", "false");
+        for manifest in manifests {
+            command.args(["--manifest-path", manifest]);
+        }
+        command.envs(extra.iter().copied());
         if let Some(token) = token {
             command.env("VELNOR_PRIVATE_TOKEN", token);
         }
@@ -196,5 +220,100 @@ fn a_token_that_cannot_be_revoked_fails_the_step() -> TestResult {
     let output = fixture.run(&api, Some(TOKEN), None);
     assert!(!output.status.success());
     assert!(String::from_utf8_lossy(&output.stderr).contains("revoked"));
+    Ok(())
+}
+
+#[test]
+fn every_github_url_form_a_lock_file_records_is_authenticated_and_nothing_else() -> TestResult {
+    let fixture = Fixture::new("fetch-urls", 0)?;
+    let api = serve(204)?;
+    let output = fixture.run(&api, Some(TOKEN), None);
+    assert!(output.status.success(), "{output:?}");
+    let authenticated = format!("https://x-access-token:{TOKEN}@github.com/acme/private.git");
+    let urls = fixture.log("cargo.urls");
+    assert_eq!(
+        urls.lines().collect::<Vec<_>>(),
+        [
+            authenticated.as_str(),
+            authenticated.as_str(),
+            authenticated.as_str(),
+            authenticated.as_str(),
+            "https://example.invalid/acme/public.git"
+        ]
+    );
+    Ok(())
+}
+
+#[test]
+fn the_runner_proxy_reaches_cargo_and_git_but_a_checkout_cargo_setting_does_not() -> TestResult {
+    let fixture = Fixture::new("fetch-proxy", 0)?;
+    let api = serve(204)?;
+    let proxy = [
+        ("HTTPS_PROXY", "http://proxy.runner.invalid:3128"),
+        ("https_proxy", "http://proxy.runner.invalid:3128"),
+        ("ALL_PROXY", "socks5://proxy.runner.invalid:1080"),
+        ("NO_PROXY", "127.0.0.1,.cluster.local"),
+    ];
+    let output = fixture.run_with(&api, Some(TOKEN), None, &["Cargo.toml"], &proxy);
+    assert!(output.status.success(), "{output:?}");
+    for environment in [fixture.log("cargo.env"), fixture.log("git.env")] {
+        for (name, value) in proxy {
+            assert!(environment.contains(&format!("{name}={value}")), "{name}");
+        }
+        assert!(!environment.contains("hostile"), "{environment}");
+    }
+    Ok(())
+}
+
+#[test]
+fn each_manifest_is_fetched_from_its_own_directory_so_its_cargo_config_applies() -> TestResult {
+    let fixture = Fixture::new("fetch-nested", 0)?;
+    fixture.repo.write_unstaged("tools/Cargo.toml", "");
+    let api = serve(204)?;
+    let output = fixture.run_with(&api, Some(TOKEN), None, &["tools/Cargo.toml"], &[]);
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(
+        fixture.log("cargo.args").trim(),
+        "fetch --locked --manifest-path Cargo.toml"
+    );
+    assert!(fixture.log("cargo.pwd").trim().ends_with("/tools"));
+    Ok(())
+}
+
+const MIRROR: &str = "# velnor-ci crates-mirror owns this file\n[source.crates-io]\nreplace-with = \"velnor-crates-mirror\"\n[source.velnor-crates-mirror]\nregistry = \"sparse+https://mirror.invalid/\"\n[http]\ncainfo = \"/etc/ssl/mirror.pem\"\n";
+
+#[test]
+fn the_crates_mirror_the_runner_configured_is_used_and_any_other_config_is_refused() -> TestResult {
+    let fixture = Fixture::new("fetch-mirror", 0)?;
+    let config = fixture.repo.root().join("velnor-cargo/config.toml");
+    fs::create_dir_all(config.parent().ok_or("parent")?)?;
+    fs::write(&config, MIRROR)?;
+    let api = serve(204)?;
+    let path = config.display().to_string();
+    let output = fixture.run_with(
+        &api,
+        Some(TOKEN),
+        None,
+        &["Cargo.toml"],
+        &[("VELNOR_CARGO_CONFIG", &path)],
+    );
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(
+        fixture.log("cargo.args").trim(),
+        format!("--config {path} fetch --locked --manifest-path Cargo.toml")
+    );
+    assert!(!fixture.log("cargo.env").contains("VELNOR_CARGO_CONFIG"));
+    let refused = Fixture::new("fetch-mirror-refused", 0)?;
+    let other = refused.repo.root().join("config.toml");
+    fs::write(&other, format!("{MIRROR}[credential-alias]\nx = \"y\"\n"))?;
+    let output = refused.run_with(
+        &api,
+        Some(TOKEN),
+        None,
+        &["Cargo.toml"],
+        &[("VELNOR_CARGO_CONFIG", &other.display().to_string())],
+    );
+    assert!(!output.status.success());
+    assert_eq!(refused.log("cargo.args"), "");
     Ok(())
 }

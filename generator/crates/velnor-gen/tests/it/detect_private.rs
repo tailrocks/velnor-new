@@ -94,3 +94,30 @@ fn a_repository_with_the_section_is_not_told_to_add_it() -> TestResult {
     assert_eq!(suggestions(&view)?, Vec::<String>::new());
     Ok(())
 }
+
+#[test]
+fn a_locked_url_with_credentials_is_refused_because_the_token_cannot_replace_it() -> TestResult {
+    let section = b"[private_sources]\napp_id = 'vars.A'\nprivate_key = 'secrets.K'\nrepositories = ['acme/lib']\n".to_vec();
+    for (source, refused) in [
+        ("git+https://deploy@github.com/acme/lib#abc", true),
+        ("git+https://deploy:hunter2@github.com/acme/lib#abc", true),
+        ("git+https://github.com/acme/lib#abc", false),
+        ("git+ssh://git@github.com/acme/lib#abc", false),
+    ] {
+        let mut view = with_source(source, None)?;
+        view.files
+            .insert(RepoPath::new(".velnor/rust-ci.toml")?, section.clone());
+        let outcome = expected_with_notes(&view);
+        if refused {
+            let message = outcome.err().ok_or("accepted")?.to_string();
+            assert!(
+                message.contains("credentials") && message.contains("dep"),
+                "{message}"
+            );
+            assert!(!message.contains("hunter2"), "{message}");
+        } else {
+            assert!(outcome.is_ok(), "{source}");
+        }
+    }
+    Ok(())
+}
