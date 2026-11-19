@@ -5,7 +5,9 @@ use std::collections::BTreeMap;
 use std::error::Error;
 use std::fs;
 use std::io::Write;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::OnceLock;
 
 use velnor_actions_orchestrator::{prepare, render_staged_tree};
 
@@ -142,8 +144,74 @@ fn shellcheck_required() -> bool {
         .any(|name| std::env::var(name).is_ok_and(|value| value == "true"))
 }
 
+/// Candidate `mise` executables, absolute paths first: the test process may
+/// run with a PATH that holds no mise at all.
+fn mise_candidates() -> Vec<PathBuf> {
+    let mut found: Vec<PathBuf> = std::env::var_os("MISE_EXE")
+        .map(PathBuf::from)
+        .into_iter()
+        .collect();
+    let data_dir = std::env::var_os("MISE_DATA_DIR")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("XDG_DATA_HOME").map(|dir| PathBuf::from(dir).join("mise")))
+        .or_else(|| {
+            std::env::var_os("HOME").map(|dir| PathBuf::from(dir).join(".local/share/mise"))
+        });
+    found.extend(data_dir.map(|dir| dir.join("bin/mise")));
+    found.push(PathBuf::from("mise"));
+    found
+}
+
+/// The shellcheck pinned by `mise.toml`, resolved through mise from the
+/// repository root. The mise shim on PATH cannot be used: CI runs the tests
+/// with `MISE_NO_CONFIG=1`, so the shim has no version to pick.
+fn pinned_shellcheck() -> Result<PathBuf, String> {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let mut last = String::from("no mise executable found");
+    for mise in mise_candidates() {
+        match Command::new(&mise)
+            .args(["which", "shellcheck"])
+            .current_dir(&root)
+            .env_remove("MISE_NO_CONFIG")
+            .output()
+        {
+            Ok(output) if output.status.success() => {
+                let path = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+                if !path.is_empty() {
+                    return Ok(PathBuf::from(path));
+                }
+                last = format!("{} which shellcheck printed nothing", mise.display());
+            }
+            Ok(output) => {
+                last = format!(
+                    "{} which shellcheck failed: {}",
+                    mise.display(),
+                    String::from_utf8_lossy(&output.stderr).trim()
+                );
+            }
+            Err(error) => last = format!("{}: {error}", mise.display()),
+        }
+    }
+    Err(last)
+}
+
+/// `Ok(path)` runs that binary; outside CI a missing pin falls back to PATH.
+fn shellcheck_program() -> Result<PathBuf, String> {
+    static PROGRAM: OnceLock<Result<PathBuf, String>> = OnceLock::new();
+    PROGRAM
+        .get_or_init(|| match pinned_shellcheck() {
+            Ok(path) => Ok(path),
+            Err(reason) if shellcheck_required() => Err(format!(
+                "shellcheck is required in CI; install it via mise (mise.toml pins shellcheck): {reason}"
+            )),
+            Err(_) => Ok(PathBuf::from("shellcheck")),
+        })
+        .clone()
+}
+
 fn shellcheck(script: &str) -> Result<Option<String>, Box<dyn Error>> {
-    let spawned = Command::new("shellcheck")
+    let program = shellcheck_program()?;
+    let spawned = Command::new(program)
         .args(["--shell=bash", "--severity=style", "-"])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
@@ -151,13 +219,7 @@ fn shellcheck(script: &str) -> Result<Option<String>, Box<dyn Error>> {
         .spawn();
     let mut child = match spawned {
         Ok(child) => child,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            if shellcheck_required() {
-                return Err(
-                    "shellcheck is required in CI; install it via mise (mise.toml pins shellcheck)"
-                        .into(),
-                );
-            }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound && !shellcheck_required() => {
             return Ok(None);
         }
         Err(error) => return Err(error.into()),
