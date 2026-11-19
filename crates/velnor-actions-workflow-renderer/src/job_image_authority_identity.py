@@ -238,10 +238,12 @@ def select_rust_ci_gate(runs, jobs, recheck, source):
         raise AuthorityError("Rust CI job response has an incorrect format.")
     matches = [
         job for page in jobs for job in page["jobs"]
-        if isinstance(job, dict) and job.get("name") == RUST_REQUIRED_JOB
+        if isinstance(job, dict)
+        and job.get("name") == RUST_REQUIRED_JOB
+        and job.get("conclusion") != "skipped"
     ]
     if len(matches) != 1:
-        raise AuthorityError("The Rust CI run must have exactly one `rust-required` job.")
+        raise AuthorityError("The Rust CI run must have exactly one non-skipped `rust-required` job.")
     job = matches[0]
     if (
         job.get("run_id") != selected["run_id"]

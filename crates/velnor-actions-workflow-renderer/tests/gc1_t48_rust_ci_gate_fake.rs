@@ -48,9 +48,20 @@ case "$url" in
       *) page "$(entry 102 7 $rust completed '"success"')" ;;
     esac ;;
   repos/tailrocks/velnor-new/actions/runs/101/attempts/1/jobs*)
-    printf '[{"jobs":[%s]}]\n' "$(jobs 101 Required success)" ;;
+    case "$VELNOR_FAKE_CI_JOBS" in
+      skipped_last) printf '[{"jobs":[%s,%s]}]\n' "$(jobs 101 Required success)" "$(jobs 101 Required skipped)" ;;
+      skipped_first) printf '[{"jobs":[%s,%s]}]\n' "$(jobs 101 Required skipped)" "$(jobs 101 Required success)" ;;
+      only_skipped) printf '[{"jobs":[%s]}]\n' "$(jobs 101 Required skipped)" ;;
+      two_live) printf '[{"jobs":[%s,%s]}]\n' "$(jobs 101 Required success)" "$(jobs 101 Required success)" ;;
+      live_and_red) printf '[{"jobs":[%s,%s]}]\n' "$(jobs 101 Required success)" "$(jobs 101 Required failure)" ;;
+      *) printf '[{"jobs":[%s]}]\n' "$(jobs 101 Required success)" ;;
+    esac ;;
   repos/tailrocks/velnor-new/actions/runs/102/attempts/1/jobs*)
     case "$VELNOR_FAKE_RUST_JOB" in
+      skipped_last) printf '[{"jobs":[%s,%s]}]\n' "$(jobs 102 "$VELNOR_FAKE_GATE_JOB" success)" "$(jobs 102 "$VELNOR_FAKE_GATE_JOB" skipped)" ;;
+      skipped_first) printf '[{"jobs":[%s,%s]}]\n' "$(jobs 102 "$VELNOR_FAKE_GATE_JOB" skipped)" "$(jobs 102 "$VELNOR_FAKE_GATE_JOB" success)" ;;
+      only_skipped) printf '[{"jobs":[%s]}]\n' "$(jobs 102 "$VELNOR_FAKE_GATE_JOB" skipped)" ;;
+      live_and_red) printf '[{"jobs":[%s,%s]}]\n' "$(jobs 102 "$VELNOR_FAKE_GATE_JOB" success)" "$(jobs 102 "$VELNOR_FAKE_GATE_JOB" failure)" ;;
       duplicate) printf '[{"jobs":[%s,%s]}]\n' "$(jobs 102 "$VELNOR_FAKE_GATE_JOB" success)" "$(jobs 102 "$VELNOR_FAKE_GATE_JOB" success)" ;;
       absent) printf '[{"jobs":[%s]}]\n' "$(jobs 102 rust-lint success)" ;;
       *) printf '[{"jobs":[%s]}]\n' "$(jobs 102 "$VELNOR_FAKE_GATE_JOB" "${VELNOR_FAKE_RUST_JOB:-success}")" ;;
@@ -101,6 +112,15 @@ pub(crate) fn run_gate_script(
     script: &str,
     rust_run: &str,
     rust_job: &str,
+) -> Result<(bool, String, String), Box<dyn Error>> {
+    run_gate_script_with_ci(script, rust_run, rust_job, "single")
+}
+
+pub(crate) fn run_gate_script_with_ci(
+    script: &str,
+    rust_run: &str,
+    rust_job: &str,
+    ci_jobs: &str,
 ) -> Result<(bool, String, String), Box<dyn Error>> {
     let temp = tempfile::tempdir()?;
     let bin = temp.path().join("bin");
@@ -169,6 +189,7 @@ pub(crate) fn run_gate_script(
         .env("VELNOR_FAKE_SOURCE", &head)
         .env("VELNOR_FAKE_RUST_RUN", rust_run)
         .env("VELNOR_FAKE_RUST_JOB", rust_job)
+        .env("VELNOR_FAKE_CI_JOBS", ci_jobs)
         .env("VELNOR_FAKE_STATE", temp.path().join("state"))
         .output()?;
     Ok((
@@ -213,3 +234,11 @@ pub(crate) const FAIL_CLOSED_CASES: [(&str, &str, &str); 9] = [
         "latest Rust CI run changed during eligibility check",
     ),
 ];
+
+pub(crate) const CI_ELIGIBLE: [&str; 2] = ["skipped_last", "skipped_first"];
+
+pub(crate) const CI_AMBIGUOUS: [&str; 3] = ["only_skipped", "two_live", "live_and_red"];
+
+pub(crate) const RUST_ELIGIBLE: [&str; 2] = ["skipped_last", "skipped_first"];
+
+pub(crate) const RUST_AMBIGUOUS: [&str; 3] = ["only_skipped", "live_and_red", "duplicate"];

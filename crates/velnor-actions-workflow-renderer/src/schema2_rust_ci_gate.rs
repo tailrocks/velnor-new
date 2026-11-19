@@ -8,8 +8,8 @@ const WORKFLOW_API_ID: &str = "rust-ci.yml";
 const REQUIRED_JOB_NAME: &str = "rust-required";
 
 const GATE_JOB_JQ: &str = r#"
-  [ .[].jobs[]? | select(.name == $job_name) ] as $matched
-  | if ($matched | length) != 1 then error("expected one gate job")
+  [ .[].jobs[]? | select(.name == $job_name and .conclusion != "skipped") ] as $matched
+  | if ($matched | length) != 1 then error("expected one non-skipped gate job")
     else $matched[0]
       | if .run_id == $run_id
           and .run_attempt == $run_attempt

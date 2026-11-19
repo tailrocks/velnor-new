@@ -148,6 +148,53 @@ fn image_publication_needs_a_green_rust_required_job_on_the_same_source()
 }
 
 #[test]
+fn image_publication_ignores_a_skipped_rust_required_job() -> Result<(), Box<dyn Error>> {
+    let latest = runs(&[green(102, 7)]);
+    for (label, entries) in [
+        (
+            "skipped last",
+            vec![job(&gate(), 102, "success"), job(&gate(), 102, "skipped")],
+        ),
+        (
+            "skipped first",
+            vec![job(&gate(), 102, "skipped"), job(&gate(), 102, "success")],
+        ),
+    ] {
+        let verdict = decide(latest.clone(), jobs(&entries), latest.clone())?;
+        assert_eq!(verdict, "OK 102 1", "{label}");
+    }
+    for (label, entries, reason) in [
+        (
+            "only skipped",
+            vec![job(&gate(), 102, "skipped")],
+            "exactly one non-skipped `rust-required` job",
+        ),
+        (
+            "two live",
+            vec![job(&gate(), 102, "success"), job(&gate(), 102, "success")],
+            "exactly one non-skipped `rust-required` job",
+        ),
+        (
+            "live and red",
+            vec![job(&gate(), 102, "success"), job(&gate(), 102, "failure")],
+            "exactly one non-skipped `rust-required` job",
+        ),
+        (
+            "red beside skipped",
+            vec![job(&gate(), 102, "failure"), job(&gate(), 102, "skipped")],
+            "has no `success` conclusion",
+        ),
+    ] {
+        let verdict = decide(latest.clone(), jobs(&entries), latest.clone())?;
+        assert!(
+            verdict.starts_with("REJECTED") && verdict.contains(reason),
+            "{label}: {verdict}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn image_publication_rejects_an_ambiguous_or_shifting_rust_required_job()
 -> Result<(), Box<dyn Error>> {
     let latest = runs(&[green(102, 7)]);
@@ -155,12 +202,12 @@ fn image_publication_rejects_an_ambiguous_or_shifting_rust_required_job()
         (
             "duplicate",
             jobs(&[job(&gate(), 102, "success"), job(&gate(), 102, "success")]),
-            "exactly one `rust-required` job",
+            "exactly one non-skipped `rust-required` job",
         ),
         (
             "missing",
             jobs(&[job("rust-lint", 102, "success")]),
-            "exactly one `rust-required` job",
+            "exactly one non-skipped `rust-required` job",
         ),
         (
             "red",
