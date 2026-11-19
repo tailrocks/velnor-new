@@ -363,7 +363,7 @@ fn input_timestamps_save_and_restore_in_the_configured_target_directory() -> Tes
             "app",
         ),
     ] {
-        let mut view = rooted_at("0.1.93", manifest, &[])?;
+        let mut view = rooted_at("0.1.97", manifest, &[])?;
         crate::cache_key_defects::with_config(
             &mut view,
             config,

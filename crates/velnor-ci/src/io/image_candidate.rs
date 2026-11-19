@@ -103,7 +103,8 @@ fn locked_buildx(root: &Path) -> Result<String, CiError> {
 }
 
 pub(super) fn verify_candidate(args: &VerifyCandidateArgs) -> Result<String, CiError> {
-    let env: HashMap<String, String> = std::env::vars()
+    let env: HashMap<String, String> = std::env::vars_os()
+        .filter_map(|(name, value)| Some((name.into_string().ok()?, value.into_string().ok()?)))
         .filter(|(name, _)| name.starts_with("GITHUB_"))
         .collect();
     verify_with(args, &env)

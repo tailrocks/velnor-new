@@ -7,6 +7,7 @@ use flate2::bufread::GzDecoder;
 
 #[derive(Debug)]
 enum State<R: BufRead> {
+    First(R),
     Between(R),
     Inside(Box<GzDecoder<R>>),
     Finished,
@@ -20,7 +21,7 @@ pub struct GzipMembers<R: BufRead> {
 impl<R: BufRead> GzipMembers<R> {
     pub fn new(inner: R) -> Self {
         Self {
-            state: State::Between(inner),
+            state: State::First(inner),
         }
     }
 }
@@ -44,6 +45,9 @@ impl<R: BufRead> Read for GzipMembers<R> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         loop {
             match std::mem::replace(&mut self.state, State::Finished) {
+                State::First(reader) => {
+                    self.state = State::Inside(Box::new(GzDecoder::new(reader)));
+                }
                 State::Between(mut reader) => {
                     if skip_zeros(&mut reader)? {
                         self.state = State::Inside(Box::new(GzDecoder::new(reader)));

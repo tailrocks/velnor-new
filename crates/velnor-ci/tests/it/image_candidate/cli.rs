@@ -1,7 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::ffi::OsStr;
 use std::fs;
+use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::symlink;
 use std::path::PathBuf;
 use std::process::Command;
@@ -66,6 +68,14 @@ impl Candidate {
     }
 
     fn run(&self, env: &[(&str, Option<&str>)]) -> (bool, String, String) {
+        self.run_with(env, &[])
+    }
+
+    fn run_with(
+        &self,
+        env: &[(&str, Option<&str>)],
+        raw: &[(&str, &[u8])],
+    ) -> (bool, String, String) {
         let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
         command
             .env_clear()
@@ -96,6 +106,9 @@ impl Candidate {
             }
         }
         command.envs(vars);
+        for (name, value) in raw {
+            command.env(name, OsStr::from_bytes(value));
+        }
         let output = command.output().unwrap_or_else(|e| unreachable!("{e}"));
         (
             output.status.success(),
@@ -134,6 +147,20 @@ fn an_attested_candidate_whose_record_matches_everything_passes() {
     assert_eq!(
         stdout,
         "PASS: Candidate record has the same source inputs and OCI archive identities.\n"
+    );
+}
+
+#[test]
+fn a_non_utf8_environment_entry_is_ignored_unless_a_needed_variable_holds_it() {
+    let candidate = Candidate::new("non-utf8-env", &archive());
+    let (ok, _, stderr) = candidate.run_with(&[], &[("GITHUB_UNRELATED", b"\xff\xfe")]);
+    assert!(ok, "{stderr}");
+    let (ok, _, stderr) =
+        candidate.run_with(&[("GITHUB_REF", None)], &[("GITHUB_REF", b"refs/\xff")]);
+    assert!(!ok);
+    assert!(
+        stderr.contains("GitHub source ref is missing or incorrect."),
+        "{stderr}"
     );
 }
 

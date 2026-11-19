@@ -96,6 +96,8 @@ fn lay(world: &World, request_name: &str) -> Laid {
         fs::write(root.join("target.json"), &bytes).unwrap_or_else(|e| unreachable!("{e}"));
         std::os::unix::fs::symlink(root.join("target.json"), &request)
             .unwrap_or_else(|e| unreachable!("{e}"));
+    } else if world.quirk == Some(Quirk::RequestIsAFifo) {
+        crate::support::make_fifo(&request);
     } else {
         fs::write(&request, &bytes).unwrap_or_else(|e| unreachable!("{e}"));
     }
