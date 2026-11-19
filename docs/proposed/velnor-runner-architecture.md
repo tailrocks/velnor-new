@@ -280,15 +280,15 @@ pub enum Role { Production, Reference } // Reference: conformance, shadow, diff;
 
 - **Velnor Native** is the default and the recommendation: steps run natively, the closed action set
   without Node, next to the node's mirror, stores and generations.
-- **GitHub Official** runs the latest official runner (`Runner.Worker`, JavaScript actions on Node)
-  in the same sandboxes, pools, label flow, ledger and caches; Velnor's dispatcher drives both, ARC
-  neither. For an *acquired job* (release, image, scheduled) the Worker gets GitHub's job message and
-  completes it against GitHub's run service, as v2.338.2 does (`JobRunner.cs` `CompleteJobAsync`);
-  the dispatcher owns the lease. An *obligation* has no GitHub job: Velnor synthesises a job message
-  from the released command and serves the run-service, Results and cache endpoints it names from
-  the node agent. The command runs under `velnor-ci obligation exec`, which reports exits and the
-  test inventory over a channel the sandbox cannot write, so the receipt comes from observation,
-  not the Worker. This mode passes its own conformance cases before it may be selected.
+- **GitHub Official** runs the latest official runner in the same sandboxes, pools, ledger and
+  caches; Velnor's dispatcher drives both, ARC neither. An *acquired job* (release, image, scheduled)
+  completes against GitHub's run service as v2.338.2 does (`JobRunner.cs`); the dispatcher owns the
+  lease. An *obligation* gets a job message Velnor synthesises, with run-service, Results and cache
+  endpoints served by the node agent; the command runs under `velnor-ci obligation exec`, which
+  reports exits and the test inventory over a channel the sandbox cannot write, so the receipt comes
+  from observation. This mode passes its own conformance cases before it may be selected. It runs
+  with `ACTIONS_RUNNER_ACTION_ARCHIVE_CACHE` (`Constants.cs:327`) on a read-only store filled by
+  pinned SHA, in both roles, removing 4.4 s of action downloads per job [M].
 - **Targets** (D05). Clients name where work runs with `--target` or `VELNOR_TARGET` (`local`,
   `k8s://de`, `k8s://fi`, `docker://host`), authenticated over mTLS with the agent identity; a URL
   scheme maps to a declared capability set, and a result's trust tier comes from the signer class of
@@ -300,10 +300,8 @@ pub enum Role { Production, Reference } // Reference: conformance, shadow, diff;
   so a deliberate switch re-runs verification and can never produce a false green.
 - **Reference role** (decision 19): the conformance gate, sampled shadow runs and "run both ways and
   diff", writing only to an isolated reference namespace.
-- **APIs** (decision 3), as v2.338.2 implements them (broker-session ownership and the connectivity
-  probe included): scale-set sessions, broker long-poll, JIT configuration, run-service acquire,
-  renew and complete, Results twirp, cache v2, artifacts v4, OIDC. Out: the AES legacy session,
-  legacy pipelines, cache v1, artifacts v3.
+- **APIs** (decision 3), as v2.338.2 implements them: scale-set sessions, broker long-poll, JIT
+  configuration, run-service acquire, renew and complete, Results, cache v2, artifacts v4, OIDC.
 - **Expressions (owner question D4).** At v2.338.2 the Worker returns the legacy `Expressions2`
   result on every path, even with the new evaluator in compare mode. The oracle runs in compare mode
   and Velnor refuses any job on which GitHub's two evaluators differ, so on every accepted job both
@@ -312,17 +310,10 @@ pub enum Role { Production, Reference } // Reference: conformance, shadow, diff;
   (about 28; ruling Q4). Until the owner answers the default is A, matching what the latest runner
   returns; B is built in parallel, and only the chosen one ships (decision 18).
 
-`velnor-official` runs with `ACTIONS_RUNNER_ACTION_ARCHIVE_CACHE` (`Constants.cs:327`) on a
-read-only store filled by pinned SHA and covered by the tool-store digest, in both roles, as GitHub's
-own images do; it removes 4.4 s of action downloads per Official job [M], and S2 runs with it.
-
-**Speed per job type** [unmeasured as a difference; paired runs on the same backend, tool store,
-generation and warm or cold mix measure it, section 5.7]. Official adds Worker set-up (4–5 s per job
-[M, ARC era]), Node start per JavaScript action (87–147 ms [M]) and GitHub's cache until the cache
-endpoint is qualified. Tool installs and the 44–61 s cache restore measured under ARC are not
-charged to it: both executors share the tool store and generations. So Native saves seconds per
-Actions job (release, image, scheduled), not on PR or group verdicts; section 11's control race
-measures it, and a difference under 5 s per job at P50 earns no executor claim.
+**Speed per job type** [unmeasured as a difference]: Official adds Worker set-up (4–5 s per job [M,
+ARC era]), Node start per JavaScript action (87–147 ms [M]) and GitHub's cache until ST05; both share
+tool store and generations. Native saves seconds per Actions job, not on verdicts; S2 measures it,
+and under 5 s per job at P50 earns no executor claim.
 
 ### 5.4 The platform abstraction
 
@@ -608,7 +599,7 @@ not, how that is detected, and the automatic fallback.
 | Whole-tree record (rebase-only push, re-run, identical group tree, same-SHA push) | The tree is every repository input; definition, fingerprint and executor equal; C5 runs anyway | A non-tree input changed: a tool, the kernel, an undeclared clock read | Execution fingerprint in the key; C5 classification; A1; A2 | Revoke by epoch; full run |
 | Per-root or per-package record | An enrolled, reviewed contract covering every possible observation, enforced by the read audit on every execution | A read the contract missed, on a branch no audited run took | Only executions chosen independently of the key: the 2% sample, A1's key-independent re-runs and the nightly reuse-free run; the sibling-file canary | Enrolment revoked; whole-tree key |
 | Candidate record reused across pushes and PRs | Same key, Velnor-observed, two independent witnesses | A PR sandbox leaked state into a result | Sampled re-execution; trusted only after A1 | Candidate reuse off for that class |
-| `velnor verify` before the push | Same sealed Linux sandbox and key as CI | A developer machine's result | Only Velnor-executed results count; Mac runs never do | Runs in CI |
+| `velnor verify`, `velnor ship` and counting agent commands (section 8.6) | The same sealed sandbox, released command graph and key as the gate, on cluster nodes, over the node-hashed tree | A Mac or dirty-worktree result treated as evidence | Only T2 node-signed receipts fill slots; T0 and T1 never; arm64 and amd64 keys differ | The label runs what is missing |
 | Warm compile over a generation | Section 7.3: inputs proven by content against the generation's manifest; every changed, added or removed path either declared by a unit's dep-info or the root builds cold; every unit cargo did not rebuild has dep-info inputs with unchanged blob ids | A stale `OUT_DIR`, build-script or proc-macro output, or an older-time file cargo skips | Until graduation the second witness builds cold and the binary digests must equal; A1's cold digests; the standing canaries of section 7.3 | Retire the generation; build cold |
 | `mbx-cache` units for a cold or mismatched node | mbx's per-crate keys | A missed input in mbx's key | A1; the builder's cold rebuilds; digests equal before a unit enters a generation | Server retired; plain cargo |
 | `actions/cache` entries | The user's key and version, resolved by the authoritative index with GitHub's scope and order | A user key that omits an input (as on GitHub) | Conformance against the official runner; content hash on every read | Treated as a miss; never used by a receipt-minting obligation |
@@ -1009,6 +1000,45 @@ qemu.
 - **Fan-out** spreads a suite longest-first across free threads when that beats its longest test
   plus moving binaries; a copy racing a slow shard is an extra witness (section 6.2).
 
+### 8.6 Agents verify through Velnor
+
+An agent's verification runs through Velnor, on warm cluster nodes in the gate's own sealed
+sandbox, so it counts; a Mac result is advice only; agents ask the ledger before running anything;
+and the label then mostly finds the work done. The gate's meaning and decisions 1–24 do not change.
+
+- **Front end.** `velnor cargo` takes the `mise.toml` cargo wrapper slot, and a per-user daemon,
+  `velnord`, keeps state (≤ 50 ms added per call at P90 [T]). Verbs: `velnor verify`, `velnor ship`,
+  `velnor check <name>`, `velnor resolve`, `velnor wait`. A command the planner maps to an inventory
+  obligation (its argv shape, package selection and features) is *counting*; anything else is
+  scratch and runs locally as advice. The first release only counts and journals (no cluster part).
+- **Trees, not pushes.** The daemon snapshots the worktree as a Git tree through a private index
+  (tracked and untracked, never ignored files) and sends a thin pack against the node mirror under
+  `refs/velnor/wip/` (seven-day expiry, secret scan on the delta); the node hashes the whole staged
+  tree before step 1. A later commit, push or PR of the same tree has the same key.
+- **Where it runs.** Counting commands go to a warm node of the agent's site in the `interactive`
+  class; per command class, a replay of 200 recorded commands sets the route (remote by default where
+  its P50 is within 1 s of the Mac's: today's Mac nextest P50 is 7.2 s [M, agent transcripts]). The
+  Mac keeps a non-minting fast-red lane (incremental, changed tests first), shown as advice.
+- **Trust tiers, shown to users:** T0 Mac native and T1 sealed Linux on a Mac, advice only (never a
+  slot; a Mac key signs only in an advisory namespace); T2 a cluster candidate, node-signed, which may
+  fill one witness slot; T3 trusted, on `main` after A1. The gate is unchanged: two T2-or-better
+  witnesses per new key on distinct nodes, seeds and generations, then A1; an arm64 key never equals
+  an amd64 key, so a Mac pass proves nothing to the gate and a Mac fail is a useful red.
+- **Verify and ship.** `velnor verify` fills both slots on two nodes against `merge-tree(queue tip,
+  tree)` and shows both SHAs; `velnor ship` runs it, pushes, labels with the agent's App identity and
+  enables auto-merge, an explicit act under decision 12. The control plane derives the PR's subject
+  tree itself, never from the client. `velnor wait` long-polls the verdict and returns the failing
+  test id, its signature and the last log lines.
+- **Ledger first.** `velnor resolve` (and the wrapper, automatically) asks the ledger before running:
+  a hit returns its record, in-flight work is joined, and the gate re-resolves everything under the
+  current epoch; a stale or unreachable ledger means run fresh. `verify` soaks new or changed test
+  ids 20 times under seeds and CPU pressure at batch priority; soak runs never fill a slot.
+- **The `interactive` class** sits between gate and PR work, with a per-identity budget (30 CPU-min
+  an hour, then demoted to PR class), never touching the merge, gate or A1 reservations.
+- **The PR verdict becomes a lookup:** the label resolves the head's own vector; hits read, misses
+  and C5 run; its floor is the C5 critical path plus about 3 s [E]. Continuous verification of
+  unpushed commits would start work no one asked for, so it is owner question D23, default off.
+
 ## 9. The cluster
 
 - **Role.** k3s deploys the dispatchers, node agents, site services, RustFS and mirrors, and enforces
@@ -1039,8 +1069,8 @@ qemu.
 ## 10. Delivery: per-job-type migration, milestones and deletions
 
 Agents do all the work (decision 15). The [delivery plan](../research/velnor-runner-2026-11/delivery-plan.md)
-(v2, decisions 1–24 and the rulings) sizes about 1126 agent-hours of building and 120 of review,
-about 3.9 days for 12 builders, 4 reviewers and an orchestrator, so coding does not set the dates:
+(v2, decisions 1–24 and the rulings) sizes about 1238 agent-hours of building and 120 of review,
+about 4.3 days for 12 builders, 4 reviewers and an orchestrator, so coding does not set the dates:
 velnor-new's CI and queue, reviews, owner decisions, conformance and parity evidence, capacity, API
 limits, file conflicts and, for the speed claim, the benchmark arms (run one at a time) do. Phase 0
 comes first: an agent PR's cycle falls from 94 to about 34 min at P50 [E].
@@ -1177,6 +1207,10 @@ where release bytes are built (D12).
 | D14 | Delete the engine crates from velnor-new once velnor-gen's workflow replaces the engine's CI? | The engine's orchestrator and renderer are about 275k lines | — | Only after checking for other consumers | day 8 |
 | D15 | Approve the recovery path for a bad Velnor release, with no admin merge? | A release that fails every job also blocks the PR that fixes it | — | Yes: redeploy the previous image digest; if none can verify, the pre-approved break-glass verifier writes a green only after two full cold passes on two nodes (section 5.9) | day 1 |
 | D16 | Does a `velnor:verify` label added while the PR was a draft start verification when it becomes ready? | An agent opens a draft, labels it early, then marks it ready; today nothing would run until it re-labels or pushes | — | Recommend yes: the label states intent and the reconciler can read it from state. Default no, the literal reading of decision 12's step 2 | day 2 |
+| D23 | May `velnord` verify an agent's committed, unpushed work automatically (no explicit `verify`), at batch priority, opt-in per worktree? Decision 12 starts verification only by the label, and an agent's explicit request | An agent commits, keeps editing for two minutes, then ships; today nothing runs until it asks | First red at commit plus 1–2 min; label about 35 s → 3–5 s [E]; at least 70% of commits are superseded, about 21 runner-hours a day at the goal, 265 with whole-tree keys [E, Fable] | Not yet: explicit `verify` and `ship` first; ask again with a month's commit rate, cost per head and cluster slack. Default off | day 10 |
+| D24 | May the agents' `interactive` class outrank PR-class work, including other organisations' CI? Section 9 ranks other organisations' CI equal to PR work | Ten agents each run a 10 s test while ChainArgos' PRs fill the cluster | Keeps an agent's loop near the Mac's 7.2 s P50 under load [M, E] | Yes, within a per-identity budget (30 CPU-min an hour) and never above merge, gate or A1. Default: equal to PR work | day 6 |
+| D25 | May agents work inside cluster sandboxes (a sticky, non-minting shell beside the mirror and generations), or on a dedicated agent worker? | An agent's build waits on a 61 s Mac edit-build when a warm node has the generation | The whole local-to-remote gap; a dedicated worker about $200 a month [E, Carbon] | A two-agent pilot after `verify` ships; the shell never mints. Default no | day 10 |
+| D26 | Should a native arm64 lane exist for the shipped aarch64 binaries (Hetzner Ampere nodes, or a `linux/arm64` worker), additive only? Decision 9 pauses macOS; aarch64 musl bytes get only a qemu smoke test | A memory-ordering bug that shows only on arm64 hardware | No verdict time; arm64 coverage natively | Not now; an advisory lane when aarch64 releases matter. Default nothing built | day 10 |
 | D17 | Who may approve a reduction (an obligation or test removed from the inventory, or quarantined by owner exception)? | A PR deletes a slow test file; the head plan lists fewer tests than `main`'s | — | Recommend: only the owner, through a signed inventory entry. Default: no reduction is accepted | day 3 |
 | D18 | May Velnor land merges itself (a merge train that fast-forwards `main` by compare-and-swap after verifying the exact resulting tree), instead of GitHub's merge queue? Decision 7 keeps GitHub's queue | A green PR waits 19 s for GitHub to form its group and 26 s to merge it, even when the group's tree was verified seconds earlier | About 45 s per merge [M: medians of 19 s and 26 s], about half the 85 s goal estimate, more in bursts | Not now. Measure GitHub's share on 50–200 auto-merged PRs and shadow a compare-and-swap train for tree-match and latency; bring the numbers back before changing decision 7 | day 8 |
 | D19 | May Velnor compile and test a ready PR's pushes before the label, at idle priority, so the label finds the work done? Decision 12 says an unlabelled push starts nothing | An agent pushes, then labels 2 min later; today the label starts a 15–25 s compile and the tests | About 15–25 s off label-to-verdict [E], for about 5–10 runner-min per speculated head, 45% of which are superseded | No: keep decision 12. Use pre-push `velnor verify` (decision 10c) instead, which gives the same lookup when the agent asks for it | day 3 |

@@ -209,7 +209,8 @@ qualified actions.
 |---|---|---|
 | Open a draft, push many commits | Nothing runs | No status. GitHub shows "Expected — waiting for status", which blocks |
 | Mark it ready for review | Nothing runs | No status |
-| Add the `velnor:verify` label | Velnor checks your head merged with the merge-queue tip (or `main`) | `pending`, then `success` or `failure` |
+| Before the label (agent's choice) | `velnor verify` or `velnor ship` checks your tree on the cluster, two witnesses on two nodes; nothing runs on its own | No status: the records wait in the ledger |
+| Add the `velnor:verify` label | Velnor resolves your head merged with the merge-queue tip (or `main`); what `verify` already ran is a lookup, the rest and the clock- or network-reading checks run | `pending`, then `success` or `failure`, often within seconds |
 | Push again while labelled | The old run is cancelled at once; the new head is checked, reusing every unchanged result | No status on the new commit until written |
 | Remove the label | Velnor cancels and stops. Nothing is written | Unchanged: a verdict stays true for its commit |
 | "Re-run" on `Velnor / Details` | Re-runs only the failed checks of that commit | `pending`, then the result |
@@ -241,12 +242,20 @@ turns a verified head red. So agents add the label only when they create the PR.
 The design names `velnor verify` and the "run both and diff" mode. **Proposed — owner to confirm:**
 one `velnor` binary with the commands below, their names and their output.
 
-**`velnor verify` before pushing** (a stretch item, about day 16–18). It runs your commit, merged
-with the queue tip, in the same sealed Linux sandbox and with the same keys as CI, on the cluster.
-Its results are stored as candidate records, so when you push and label, the PR reuses them and
-the verdict follows within about 10 s (target). **Proposed — owner to confirm:** the commit reaches
-the cluster as an uploaded bundle, not as a pushed branch; and `--local` runs on your Mac for quick
-feedback that never counts.
+**`velnor verify` before pushing** (about day 6.5, after exact-tree records). It snapshots your
+worktree as a Git tree (tracked and untracked files, never ignored ones), sends only the new objects
+to the node mirror, and runs the tree merged with the queue tip in the gate's own sealed sandbox, on
+two cluster nodes. The results are candidate records with the gate's keys, so the label later reads
+them instead of running them. **`velnor ship`** does `verify`, pushes, adds the label with your
+agent identity and turns on auto-merge. **`velnor wait`** follows the verdict and prints the failing
+test, its signature and the last log lines. **`velnor resolve`** asks the ledger, without running
+anything, which checks are already done, running, or still needed.
+
+**`cargo` goes through Velnor.** `velnor cargo` sits in `mise.toml`'s cargo wrapper slot. A command
+that matches a CI check (`cargo nextest run -p velnor-ci`, `cargo clippy …`) asks the ledger first,
+then runs on a warm cluster node in the `interactive` class and shows a trust tier; anything else
+runs on your Mac as before, as advice. Your Mac also runs a quick local pass in parallel to find
+reds early; its green never counts.
 
 ```console
 $ velnor verify
@@ -402,9 +411,22 @@ things slower.
 
 ## 9. What agents do differently
 
+**Trust tiers** (shown on every result):
+
+| Tier | Where it ran | Counts at the gate? |
+|---|---|---|
+| T0 | Your Mac, plain | No: advice |
+| T1 | A sealed Linux sandbox on your Mac | No: advice, used only to spot duplicates and reds |
+| T2 | A cluster node, the gate's sealed sandbox | Yes: fills one of a key's two witness slots |
+| T3 | On `main` after the cold audit A1 | Yes: trusted |
+
+**The agent loop:** ask (`velnor resolve`), edit, run `cargo` as usual (counting commands run on the
+cluster), `velnor verify`, then `velnor ship`; the label then finds almost everything done.
+
 - **Push freely.** Drafts and unlabelled PRs run nothing, so intermediate commits cost nothing.
-- **Verify before pushing** with `velnor verify` (once it exists, about day 16–18), so the PR's
-  verdict is mostly reuse.
+- **Verify before pushing** with `velnor verify` or `velnor ship` (about day 6.5), so the PR's
+  verdict is mostly a lookup. Nothing verifies on its own: automatic verification of unpushed
+  commits is owner question D23, default off.
 - **Label deliberately.** Add `velnor:verify` when the PR is ready, with the agent's App identity,
   never `GITHUB_TOKEN`. Under D16's default, a label added during draft does not start CI at
   "ready"; re-apply it. Nothing adds the label automatically.

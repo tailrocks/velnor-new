@@ -1091,6 +1091,29 @@ The rejected Dagger ideas stay rejected for the reasons in `velnor-vs-dagger.md`
 TTL reuse for evidence, client-written cache, semantic equivalence, dirty-tree sync, rerun until
 green, in-memory evidence, in-runner agents, credential-conditional reuse).
 
+### Group 36: agent-native answer by Claude Fable 5.2
+
+The owner's central idea, from the nine agent-native answers (`agent-native-comparison.md`, ids
+A01–A27): agents' local verification runs through Velnor on warm cluster nodes in the gate's sealed
+sandbox, so it counts; Mac results are advice; agents query the ledger first; the PR verdict becomes
+mostly a lookup. Decisions 1–24 and the gate's meaning are unchanged.
+
+| Idea | Decision | v3 section; plan |
+|---|---|---|
+| A01 front end (wrapper slot, `velnord`, verbs) | Adopted; count-only first | 8.6; AN01 |
+| A02 tree snapshots, thin pack, wip refs | Adopted; ignored files never sent; C4 settled: a tree is a tree, committed or not | 8.6; AN02 |
+| A03 remote by default, routed by replay | Adopted (C2 settled: counting commands remote where P50 within 1 s of the Mac) | 8.6; AN03, AN06 |
+| A05 trust tiers, fixed witness count | Adopted: T0/T1 advice, T2 one slot, T3 trusted; two witnesses and A1 unchanged | 8.6; AN05 |
+| A09 continuous verification | Owner question D23 (decision 12), default off (C1) | 13 |
+| A11 flake soak | Adopted; never a slot | 8.6; AN07 |
+| A12 `interactive` class | Adopted below gate; outranking other organisations' CI is D24 | 8.6, 13 |
+| A14 verdict as lookup; A15 verify and ship | Adopted; `verify` fills both slots by default (C5 settled); V11 subsumed | 8.6; AN04 |
+| A16 `velnor wait` | Adopted | 8.6; AN04 |
+| A19 per-test-case receipts | Shadow stretch item | AN09 |
+| A20 agents in cluster sandboxes | Owner question D25, default no | 13 |
+| A21 dev traffic feeds graduation | Adopted (shadow pairs) | AN08 |
+| A07 arm64 lane | Owner question D26, default nothing built | 13 |
+
 ## Design review
 
 The eight design critiques and the comparison that verified them are the input here; ids are the

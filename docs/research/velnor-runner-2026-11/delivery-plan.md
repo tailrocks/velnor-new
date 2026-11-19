@@ -23,8 +23,8 @@ Code was re-read at velnor-new `d6be276a6c` and velnor-legacy `1b9fc038`. Labels
 
 - **Fleet assumed:** N = 12 builder agents, 4 reviewer agents and 1 orchestrator, around the clock.
   Only the owner's decisions are human. Section 7.6 explains why more builders buy almost nothing.
-- **Total work:** about 1126 agent-hours of building plus about 120 of review (section 3.2's sum),
-  about 3.9 days of fleet time (1126 ÷ 12 builders ≈ 94 h). Coding does not set the dates.
+- **Total work:** about 1238 agent-hours of building plus about 120 of review (section 3.2's sum),
+  about 4.3 days of fleet time (1238 ÷ 12 builders ≈ 103 h). Coding does not set the dates.
 - **What sets the dates (decision 15):** (a) velnor-new's own CI and merge queue; (b) review gates
   and owner decisions, including engine releases; (c) evidence: conformance pairs, gate parity and
   clean reuse comparisons; (d) free cluster capacity, GitHub API limits and shared-file conflicts.
@@ -352,7 +352,15 @@ The full push run stays until A1 replaces it (V05): it is today's third executio
 | V08 | Per-root keys | Dependency contracts per obligation, always including every tracked file in each ancestor directory of the root (`rustfmt.toml`, `clippy.toml`, `deny.toml`, `rust-toolchain.toml`, `Cargo.*`, `mise.*`) and `.cargo/`, `.config/`, `.github/`, `.velnor/`; enforced by V07 on every execution; the sibling-file canary | V07, V04 | 12 | strong | 3,000 clean per kind; the canary is caught | — |
 | V09 | Flake sampler | 300 paired reruns | B15 | 3 | cheap | Rate with an interval | — |
 | V10 | Queue-tip speculation | Shadow, then on | V04 | 8 | strong | ≥ 60% match over 50 merges, else deleted | — |
-| V11 | `velnor verify` | Pre-push verify of the exact candidate tree and predicted queue base in the sealed sandbox, both witnesses, either backend | V04 | 10 | strong | Verdict ≤ 10 s after a preflighted push | — |
+| AN01 | `velnord` and `velnor cargo`, count-only | Daemon plus the `mise.toml` cargo wrapper slot; maps argv to inventory obligations or scratch; local journal of argv, tree, toolchain, outcome; no cluster part (Fable, Opus) | G03 | 14 | mid | ≤ 50 ms added per call at P90; 95% of a week's cargo calls journalled | — |
+| AN02 | Tree snapshots and wip refs | Private index (tracked and untracked, never ignored), `git write-tree`, thin pack to the node mirror under `refs/velnor/wip/` with seven-day expiry, secret scan on the delta (Fable) | AN01, C03 | 10 | strong | A later commit of the same tree hits the same key; ignored files never sent | — |
+| AN03 | Remote counting lane | Counting commands run on warm nodes in the `interactive` class with a per-identity budget; output streamed; T2 candidate receipts (Fable) | AN02, V03, S01 | 18 | strong | Interactive wait P90 ≤ 5 s at 80% load; merge, gate and A1 reservations untouched | — |
+| AN04 | `velnor verify`, `ship`, `resolve`, `wait` | Verify fills both slots on two nodes against the queue-tip merge, showing both SHAs; ship pushes, labels with the agent identity, enables auto-merge; resolve and wait read the ledger (Fable) | AN03, V04, L02 | 24 | strong | 50 shipped PRs: label to green ≤ 10 s P50; zero slot fills from T0 or T1 | V11 (subsumed) |
+| AN05 | Trust tiers | T0–T3 on every record and in the CLI and `Velnor / Details`; Mac keys only in an advisory namespace (Fable) | AN01, V02 | 8 | strong | No T0 or T1 result can reach a slot | — |
+| AN06 | Routing by replay | Replay 200 recorded agent commands per class; remote by default only where its P50 is within 1 s of the Mac's (Fable) | AN03 | 6 | mid | Published routing table | — |
+| AN07 | Flake soak in verify | New or changed test ids 20× under seeds and CPU pressure at batch; feeds V16; never a slot (Fable) | AN04, V16 | 6 | mid | A planted 10% flake is found in ≥ 80% of soaks | — |
+| AN08 | Dev runs feed graduation | Each counting dev run paired with a batch-priority shadow re-execution toward the 3,000 comparisons (Fable) | AN03, V04 | 6 | mid | One disagreement suspends the class | — |
+| AN09 | Per-test-case receipts (stretch) | Receipt per (binary digest, test id, definition), shadow against whole-binary runs (Fable) | AN04, DG03 | 30 | strong | 3,000 clean, then 2% sampled; no slot before | — |
 | V12 | C5 classifier | The trusted planner's scan for clock, randomness, network and event reads | G03 | 6 | strong | The 11 clock-reading test files are C5 | — |
 | V14 | No-`.git` census | Find obligations that need Git metadata (`root.rs:22` runs `git rev-parse --show-toplevel`); give them a read-only repository at the subject commit, keyed by it | G03 | 4 | mid | Every obligation passes without `.git` or is listed and keyed by commit | — |
 | V13 | Per-package keys (stretch) | Contracts per package closure | V08 | 16 | strong | 3,000 clean per kind | — |
@@ -451,7 +459,7 @@ arms run one at a time on the same two FI workers, so arms, not agents, set the 
 | V15 | Fast-red lane | Non-minting incremental build, `cargo check`, changed and historically failing tests first; failure to `Velnor / Details`, twins cancelled | V03 | 6 | mid | Never writes `success`; time to first red measured | — |
 | C12 | Twin generations | Each landed tip built cold twice on two nodes, sealed only on equal digests; witness 2 over the twin | C05, C06 | 8 | strong | Witness-2 delta equals witness 1's on 50 sequential commits | — |
 
-**Sum:** 161 items, about 1126 agent-hours of building plus about 120 of review (about 110 PRs ×
+**Sum:** 169 items, about 1238 agent-hours of building plus about 120 of review (about 110 PRs ×
 0.7 h, plus 30 strong reviews × 1.5 h).
 
 ### 3.3 Owner decisions
@@ -470,6 +478,10 @@ arms run one at a time on the same two FI workers, so arms, not agents, set the 
 | D15 | Recovery: redeploy the previous image; the pre-approved break-glass verifier if none can verify; never an admin merge | day 1 | Redeploy only |
 | D16 | A label carried from draft arms the PR at `ready_for_review`; recommended yes | day 2 | No |
 | D17 | Who approves a reduction in the inventory; recommended the owner only | day 3 | None accepted |
+| D23 | Automatic verification of unpushed commits (decision 12); recommended not yet | day 10 | Off |
+| D24 | `interactive` above PR-class and other organisations' CI, within a budget | day 6 | Equal to PR work |
+| D25 | Agents in cluster sandboxes or on a dedicated worker; recommended a two-agent pilot | day 10 | No |
+| D26 | A native arm64 lane for aarch64 binaries; recommended not now | day 10 | Nothing built |
 | D18 | A Velnor merge train in place of GitHub's queue (decision 7); recommended not now, BM14 first | day 8 | GitHub's queue |
 | D19 | Pre-label compile and test of ready PRs (decision 12); recommended no, use `velnor verify` | day 3 | No |
 | D20 | One high-clock node per site now; recommended for BM15 only, then verdict classes at ≥ 1.15 | day 4 | No rental |
@@ -573,7 +585,7 @@ flowchart LR
     V02-->V05-->V06
     V02-->V07-->V08
     V04-->V10
-    V08-->V11
+    V04-->AN04
   end
   subgraph C[Generations, checkout, mirrors]
     C04-->C05-->C06 & C07 & C08
@@ -744,6 +756,7 @@ is [E] except the goal and stretch rows, which are [T].
 | 4.8 (7) | Cohort 4. **Deletes:** hosted release labels; later the state seal and prune | — | — | — | Release dry runs |
 | 5.2 (7.5) | Step 4: obligations verify PRs and groups (whole-tree keys, cold second witness); A1 replaces the push run. **Deletes:** PR and group Actions gates, the interim label step, the full push run | ≈ 6 / 18 | ≈ 9 / 30 | ≈ 110 | Parity report; A1 live |
 | 6.5 (9) | **F01.** **Deletes:** ARC's velnor-new scale set, the Turso journal, unkept `crates/velnor-runner`. **Keeps** the official runner image and `velnor-official` | ≈ 4 / 12 | ≈ 7 / 22 | ≈ 90 | One real release on Velnor; review |
+| 6.5 (9) | `velnor verify` and `ship` (AN04): agents' runs fill witnesses; the label becomes mostly a lookup | ≈ 4 / 12 | ≈ 7 / 22 | ≈ 90 | Exact-tree records; App gate |
 | 7.5 (10) | Compile reuse graduated on the helper and generator roots | ≈ 2.5 / 8 | ≈ 5 / 15 | ≈ 80 | 3,000 comparisons per root |
 | 10 (13.5) | **Goal:** per-root keys enrolled; floor fixed | **≤ 90 s / ≤ 4 min** | **≤ 3 / ≤ 8 min** | **≤ 50** | Contracts; evidence |
 | 15 (19) | **Speed claim published** if S1–S6 pass; otherwise the claim stays "designed to cut push-to-merge" | — | — | — | Arms run one at a time on two workers |
