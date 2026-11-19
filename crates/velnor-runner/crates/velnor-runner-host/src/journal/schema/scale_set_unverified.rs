@@ -19,6 +19,14 @@ const OBJECTS: &[(&str, &str, &str)] = &[
 pub(super) async fn migrate_v58_to_v59(conn: &turso::Connection) -> Result<(), HostError> {
     super::validate_persisted_schema_v53(conn).await?;
     super::scale_set_delete::validate(conn).await?;
+    for (kind, name, _) in OBJECTS.iter().rev() {
+        conn.execute(
+            &format!("DROP {} IF EXISTS {name}", kind.to_uppercase()),
+            (),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    }
     for (_, _, sql) in OBJECTS {
         conn.execute(sql, ())
             .await
