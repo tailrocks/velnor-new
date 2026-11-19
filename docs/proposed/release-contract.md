@@ -182,7 +182,7 @@ Rules:
   resolves the commit of each recorded
   tag, requires it to equal the verified commit, and exports it as
   `<package>_commit`; the build jobs compare their checkout with that output
-  (helper 0.1.81+).
+  (helper 0.1.92+).
 - Publish only from repository-local generated jobs on fresh GitHub-hosted
   runners, an explicitly preconfigured protected environment, and trusted
   eligible branch/dispatch events. Never publish from PRs,
@@ -281,6 +281,16 @@ Recovery is per operation and per package:
 | Tag exists, crate absent | Report collision/incomplete release, never success |
 | Version exists with wrong ownership or contents | Stop; no overwrite, delete, yank, rebrand, or version switch without an explicit separately authorized remedy |
 | Cancellation/crash | Retain a durable incomplete receipt and revalidate before resuming |
+
+release-plz prints its JSON only after every package of a root is done, and
+returns early for a tag that exists, so a rerun after a partial failure gets
+nothing back for the packages the first run released. The tag job therefore
+also derives the tag of each released package from the checked-out version and
+its tag pattern, and records every one whose tag exists, whose release is not
+yet published, and which has exactly one draft release that the release App
+created; a draft anyone else created, or a second draft, fails the job. A
+recovered tag passes the same ancestry check as a fresh one, and its package
+output feeds the same finalizer and build jobs (helper 0.1.92+).
 
 No broad ignore-errors, no success on an empty result, no republishing every
 member after a partial failure. Use release-plz for publication with thin

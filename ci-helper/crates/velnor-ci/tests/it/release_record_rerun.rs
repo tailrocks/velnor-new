@@ -7,25 +7,30 @@ use std::io::{BufRead, BufReader, Write};
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
 
-use velnor_ci::github::{compare_path, release_by_tag_path, tag_ref_path};
+use velnor_ci::github::{release_by_tag_path, tag_ref_path};
 
 use crate::support::repo;
 
 const MERGE: &str = "1111111111111111111111111111111111111111";
-const APP_COMMIT: &str = "2222222222222222222222222222222222222222";
-const TOOLS_COMMIT: &str = "3333333333333333333333333333333333333333";
 const PLZ: &str = "[workspace]\ngit_tag_name = \"{{ package }}-v{{ version }}\"\ngit_release_draft = true\nrelease_always = false\nsemver_check = false\npublish_no_verify = true\n";
 const ONLY_TOOLS: &str =
     r#"{"releases":[{"package_name":"tools","prs":[],"tag":"tools-v0.1.0","version":"0.1.0"}]}"#;
 const NOTHING: &str = r#"{"releases":[]}"#;
 
+static CHECKOUTS: AtomicUsize = AtomicUsize::new(0);
+
 struct Checkout(PathBuf);
 
 impl Checkout {
     fn new() -> Self {
-        let dir = std::env::temp_dir().join(format!("velnor-ci-rerun-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!(
+            "velnor-ci-rerun-{}-{}",
+            std::process::id(),
+            CHECKOUTS.fetch_add(1, Ordering::Relaxed)
+        ));
         fs::remove_dir_all(&dir).ok();
         fs::create_dir_all(&dir).unwrap_or_else(|e| unreachable!("{e}"));
         let checkout = Self(dir);
@@ -110,12 +115,8 @@ fn draft(author: &str, kind: &str) -> String {
 fn api(author: &str, kind: &str) -> String {
     let repo = repo();
     let mut responses = BTreeMap::new();
-    for (tag, sha) in [("app-v0.1.0", APP_COMMIT), ("tools-v0.1.0", TOOLS_COMMIT)] {
-        responses.insert(tag_ref_path(&repo, tag), commit(sha));
-        responses.insert(
-            compare_path(&repo, sha, MERGE),
-            r#"{"status":"ahead"}"#.to_owned(),
-        );
+    for tag in ["app-v0.1.0", "tools-v0.1.0"] {
+        responses.insert(tag_ref_path(&repo, tag), commit(MERGE));
     }
     responses.insert(
         "/repos/tailrocks/velnor-new/releases?per_page=100&page=1".to_owned(),
@@ -159,7 +160,7 @@ fn a_rerun_after_a_failed_second_root_records_the_draft_the_first_root_created()
     assert_eq!(
         fs::read_to_string(&output).unwrap_or_default(),
         format!(
-            "app=app-v0.1.0\ntools=tools-v0.1.0\napp_commit={APP_COMMIT}\ntools_commit={TOOLS_COMMIT}\n"
+            "app=app-v0.1.0\ntools=tools-v0.1.0\napp_commit={MERGE}\ntools_commit={MERGE}\n"
         )
     );
 }
