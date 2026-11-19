@@ -68,8 +68,8 @@ fn pin_helper_writes_the_lock_inside_the_repository_and_never_through_a_symbolic
 }
 
 #[test]
-fn pin_helper_writes_the_lock_under_the_root_it_is_given_even_inside_another_repository() -> TestResult
-{
+fn pin_helper_writes_the_lock_under_the_root_it_is_given_even_inside_another_repository()
+-> TestResult {
     let outer = Scratch::new("pin-root-outer")?;
     fs::create_dir_all(outer.repo().join(".git"))?;
     let sample = outer.repo().join("generator/samples/sample/view");
