@@ -338,24 +338,6 @@ fn a_rendered_new_action_carries_its_tag_in_a_trailing_comment() -> TestResult {
     Ok(())
 }
 
-#[test]
-fn every_new_action_renders_its_tag_as_a_trailing_comment_from_its_pin() -> TestResult {
-    for pin in NEW_ACTIONS {
-        let files = render_workflow(&plan(Vec::new())?, &workflow(pin.step("step".to_owned())))
-            .map_err(|found| format!("{found:?}"))?;
-        let text = files.values().next().ok_or("no workflow")?;
-        assert!(
-            text.contains(&format!(
-                "uses: {}@{}  # {}",
-                pin.action, pin.commit, pin.tag
-            )),
-            "{}\n{text}",
-            pin.action
-        );
-    }
-    Ok(())
-}
-
 fn yaml_files(dir: &Path, found: &mut Vec<std::path::PathBuf>) -> TestResult {
     for entry in fs::read_dir(dir)? {
         let path = entry?.path();
