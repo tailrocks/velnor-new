@@ -18,8 +18,8 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: 'ci-${{ github.workflow_ref }}-${{ github.event_name == ''pull_request'' && startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'' && github.event.pull_request.number || github.run_id }}'
-  cancel-in-progress: '${{ github.event_name == ''pull_request'' && startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'' }}'
+  group: 'ci-${{ github.workflow_ref }}-${{ github.event_name == ''pull_request'' && startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'' && !(github.event.action == ''edited'' && github.event.changes.base.ref.from == null) && github.event.pull_request.number || github.run_id }}'
+  cancel-in-progress: '${{ github.event_name == ''pull_request'' && startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'' && !(github.event.action == ''edited'' && github.event.changes.base.ref.from == null) }}'
 env:
   MISE_AUTO_INSTALL: 'false'
   RUSTUP_AUTO_INSTALL: '0'
@@ -71,7 +71,7 @@ jobs:
           VELNOR_HELPER_INSTALL_TOOLS: &velnor_0 'fail() { printf ''%s\n'' "::error title=setup-velnor::$1"; exit 1; }; resolve_tool() { local path; path="$(command -v "$2")" && [[ "$path" = /* && -f "$path" && -x "$path" ]] || fail "required tool ''$2'' was not found on PATH"; printf ''%s=%s\n'' "$1" "$path" >> "$GITHUB_ENV"; }; for binding in MKTEMP:mktemp CP:cp CHMOD:chmod MKDIR:mkdir ENV:env; do resolve_tool "VELNOR_HELPER_${binding%:*}" "${binding#*:}"; done; if command -v sha256sum > /dev/null; then checksum=sha256sum; arguments=''--check --status''; else checksum=shasum; arguments=''-a 256 --check --status''; fi; resolve_tool VELNOR_HELPER_CHECKSUM "$checksum"; printf ''%s=%s\n'' VELNOR_HELPER_CHECKSUM_ARGUMENTS "$arguments" >> "$GITHUB_ENV"'
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
       - name: Install velnor-ci 0.1.81
-        uses: tailrocks/velnor-new/actions/setup-velnor@1793cf84b5924e2542a03b0fb2580e7395b2f4cb  # rust-ci-v0.1.81
+        uses: tailrocks/velnor-new/actions/setup-velnor@a87c35aed5b68dd3e82b36df3e8d7364311abba8  # rust-ci-v0.1.81
         with:
           version: '0.1.81'
           sha256-linux-x64: '10e3511ab3d2f211366c6fd3633474f4a74ee6750b16b52c90758c0e8321dd3e'
@@ -122,7 +122,7 @@ jobs:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
       - name: Install velnor-ci 0.1.81
-        uses: tailrocks/velnor-new/actions/setup-velnor@1793cf84b5924e2542a03b0fb2580e7395b2f4cb  # rust-ci-v0.1.81
+        uses: tailrocks/velnor-new/actions/setup-velnor@a87c35aed5b68dd3e82b36df3e8d7364311abba8  # rust-ci-v0.1.81
         with:
           version: '0.1.81'
           sha256-linux-x64: '10e3511ab3d2f211366c6fd3633474f4a74ee6750b16b52c90758c0e8321dd3e'
@@ -141,11 +141,11 @@ jobs:
           path: |
             ~/.local/share/mise
             ~/.rustup
-          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.9-${{ hashFiles(''mise.lock'') }}'
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
       - name: Install tools
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
-          version: '2026.11.9'
+          version: '2026.11.10'
           cache: false
       - name: Add Rust components
         run: rustup component add clippy rustfmt
@@ -159,7 +159,7 @@ jobs:
           path: |
             ~/.local/share/mise
             ~/.rustup
-          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.9-${{ hashFiles(''mise.lock'') }}'
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
       - id: prepare
         name: velnor-ci prepare
         run: '. "$VELNOR_EXEC" prepare'
@@ -397,7 +397,7 @@ jobs:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
       - name: Install velnor-ci 0.1.81
-        uses: tailrocks/velnor-new/actions/setup-velnor@1793cf84b5924e2542a03b0fb2580e7395b2f4cb  # rust-ci-v0.1.81
+        uses: tailrocks/velnor-new/actions/setup-velnor@a87c35aed5b68dd3e82b36df3e8d7364311abba8  # rust-ci-v0.1.81
         with:
           version: '0.1.81'
           sha256-linux-x64: '10e3511ab3d2f211366c6fd3633474f4a74ee6750b16b52c90758c0e8321dd3e'
@@ -416,11 +416,11 @@ jobs:
           path: |
             ~/.local/share/mise
             ~/.rustup
-          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.9-${{ hashFiles(''mise.lock'') }}'
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
       - name: Install tools
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
-          version: '2026.11.9'
+          version: '2026.11.10'
           cache: false
       - name: Add Rust components
         working-directory: ci-helper
@@ -436,7 +436,7 @@ jobs:
           path: |
             ~/.local/share/mise
             ~/.rustup
-          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.9-${{ hashFiles(''mise.lock'') }}'
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
       - id: prepare
         name: velnor-ci prepare
         run: '. "$VELNOR_EXEC" prepare'
@@ -618,7 +618,7 @@ jobs:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
       - name: Install velnor-ci 0.1.81
-        uses: tailrocks/velnor-new/actions/setup-velnor@1793cf84b5924e2542a03b0fb2580e7395b2f4cb  # rust-ci-v0.1.81
+        uses: tailrocks/velnor-new/actions/setup-velnor@a87c35aed5b68dd3e82b36df3e8d7364311abba8  # rust-ci-v0.1.81
         with:
           version: '0.1.81'
           sha256-linux-x64: '10e3511ab3d2f211366c6fd3633474f4a74ee6750b16b52c90758c0e8321dd3e'
@@ -637,11 +637,11 @@ jobs:
           path: |
             ~/.local/share/mise
             ~/.rustup
-          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.9-${{ hashFiles(''mise.lock'') }}'
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
       - name: Install tools
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
-          version: '2026.11.9'
+          version: '2026.11.10'
           cache: false
       - name: Add Rust components
         working-directory: crates/velnor-runner
@@ -657,7 +657,7 @@ jobs:
           path: |
             ~/.local/share/mise
             ~/.rustup
-          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.9-${{ hashFiles(''mise.lock'') }}'
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
       - id: prepare
         name: velnor-ci prepare
         run: '. "$VELNOR_EXEC" prepare'
@@ -881,7 +881,7 @@ jobs:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
       - name: Install velnor-ci 0.1.81
-        uses: tailrocks/velnor-new/actions/setup-velnor@1793cf84b5924e2542a03b0fb2580e7395b2f4cb  # rust-ci-v0.1.81
+        uses: tailrocks/velnor-new/actions/setup-velnor@a87c35aed5b68dd3e82b36df3e8d7364311abba8  # rust-ci-v0.1.81
         with:
           version: '0.1.81'
           sha256-linux-x64: '10e3511ab3d2f211366c6fd3633474f4a74ee6750b16b52c90758c0e8321dd3e'
@@ -900,11 +900,11 @@ jobs:
           path: |
             ~/.local/share/mise
             ~/.rustup
-          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.9-${{ hashFiles(''mise.lock'') }}'
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
       - name: Install tools
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
-          version: '2026.11.9'
+          version: '2026.11.10'
           cache: false
       - name: Add Rust components
         working-directory: generator
@@ -920,7 +920,7 @@ jobs:
           path: |
             ~/.local/share/mise
             ~/.rustup
-          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.9-${{ hashFiles(''mise.lock'') }}'
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
       - id: prepare
         name: velnor-ci prepare
         run: '. "$VELNOR_EXEC" prepare'
@@ -1120,7 +1120,7 @@ jobs:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
       - name: Install velnor-ci 0.1.81
-        uses: tailrocks/velnor-new/actions/setup-velnor@1793cf84b5924e2542a03b0fb2580e7395b2f4cb  # rust-ci-v0.1.81
+        uses: tailrocks/velnor-new/actions/setup-velnor@a87c35aed5b68dd3e82b36df3e8d7364311abba8  # rust-ci-v0.1.81
         with:
           version: '0.1.81'
           sha256-linux-x64: '10e3511ab3d2f211366c6fd3633474f4a74ee6750b16b52c90758c0e8321dd3e'
@@ -1139,11 +1139,11 @@ jobs:
           path: |
             ~/.local/share/mise
             ~/.rustup
-          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.9-${{ hashFiles(''mise.lock'') }}'
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
       - name: Install tools
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
-          version: '2026.11.9'
+          version: '2026.11.10'
           cache: false
       - name: Add Rust components
         working-directory: local
@@ -1159,7 +1159,7 @@ jobs:
           path: |
             ~/.local/share/mise
             ~/.rustup
-          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.9-${{ hashFiles(''mise.lock'') }}'
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
       - id: prepare
         name: velnor-ci prepare
         run: '. "$VELNOR_EXEC" prepare'
@@ -1331,7 +1331,7 @@ jobs:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
       - name: Install velnor-ci 0.1.81
-        uses: tailrocks/velnor-new/actions/setup-velnor@1793cf84b5924e2542a03b0fb2580e7395b2f4cb  # rust-ci-v0.1.81
+        uses: tailrocks/velnor-new/actions/setup-velnor@a87c35aed5b68dd3e82b36df3e8d7364311abba8  # rust-ci-v0.1.81
         with:
           version: '0.1.81'
           sha256-linux-x64: '10e3511ab3d2f211366c6fd3633474f4a74ee6750b16b52c90758c0e8321dd3e'
@@ -1350,11 +1350,11 @@ jobs:
           path: |
             ~/.local/share/mise
             ~/.rustup
-          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.9-${{ hashFiles(''mise.lock'') }}'
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
       - name: Install tools
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
-          version: '2026.11.9'
+          version: '2026.11.10'
           cache: false
       - name: Add Rust components
         run: rustup component add clippy rustfmt
@@ -1368,7 +1368,7 @@ jobs:
           path: |
             ~/.local/share/mise
             ~/.rustup
-          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.9-${{ hashFiles(''mise.lock'') }}'
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
       - id: prepare
         name: velnor-ci prepare
         run: '. "$VELNOR_EXEC" prepare'
@@ -1582,7 +1582,7 @@ jobs:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
       - name: Install velnor-ci 0.1.81
-        uses: tailrocks/velnor-new/actions/setup-velnor@1793cf84b5924e2542a03b0fb2580e7395b2f4cb  # rust-ci-v0.1.81
+        uses: tailrocks/velnor-new/actions/setup-velnor@a87c35aed5b68dd3e82b36df3e8d7364311abba8  # rust-ci-v0.1.81
         with:
           version: '0.1.81'
           sha256-linux-x64: '10e3511ab3d2f211366c6fd3633474f4a74ee6750b16b52c90758c0e8321dd3e'
@@ -1764,7 +1764,7 @@ jobs:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
       - name: Install velnor-ci 0.1.81
-        uses: tailrocks/velnor-new/actions/setup-velnor@1793cf84b5924e2542a03b0fb2580e7395b2f4cb  # rust-ci-v0.1.81
+        uses: tailrocks/velnor-new/actions/setup-velnor@a87c35aed5b68dd3e82b36df3e8d7364311abba8  # rust-ci-v0.1.81
         with:
           version: '0.1.81'
           sha256-linux-x64: '10e3511ab3d2f211366c6fd3633474f4a74ee6750b16b52c90758c0e8321dd3e'
@@ -1804,7 +1804,7 @@ jobs:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
       - name: Install velnor-ci 0.1.81
-        uses: tailrocks/velnor-new/actions/setup-velnor@1793cf84b5924e2542a03b0fb2580e7395b2f4cb  # rust-ci-v0.1.81
+        uses: tailrocks/velnor-new/actions/setup-velnor@a87c35aed5b68dd3e82b36df3e8d7364311abba8  # rust-ci-v0.1.81
         with:
           version: '0.1.81'
           sha256-linux-x64: '10e3511ab3d2f211366c6fd3633474f4a74ee6750b16b52c90758c0e8321dd3e'
