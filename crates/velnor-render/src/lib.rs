@@ -67,7 +67,7 @@ pub use crate::rules::{
     SETUP_VELNOR_ACTION, Value, check_rules,
 };
 use crate::steps::rendered_job;
-use crate::workflow::yaml_job;
+use crate::workflow::{ShellcheckMarks, yaml_job};
 use crate::yaml::{Yaml, emit, entry, text};
 
 pub use crate::header::{Owner, VELNOR_GEN_MARKER, owner_of, seal};
@@ -94,6 +94,21 @@ pub fn render_workflow(
     rendered: &RenderedWorkflow,
 ) -> Result<BTreeMap<RepoPath, String>, Vec<RuleViolation>> {
     check_rules(rendered)?;
+    let mut file = document(plan, rendered, ShellcheckMarks::Steps);
+    if file.len() > rules::MAX_WORKFLOW_BYTES {
+        file = document(plan, rendered, ShellcheckMarks::Jobs);
+    }
+    if file.len() > rules::MAX_WORKFLOW_BYTES {
+        return Err(vec![RuleViolation {
+            job: String::new(),
+            step: 0,
+            rule: Rule::WorkflowTooLarge(file.len()),
+        }]);
+    }
+    Ok(BTreeMap::from([(WORKFLOW_PATH, file)]))
+}
+
+fn document(plan: &WorkflowPlan, rendered: &RenderedWorkflow, marks: ShellcheckMarks) -> String {
     let workflow: Vec<_> = [
         Some(entry("name", text(&plan.name))),
         Some(entry("on", triggers(&plan.triggers))),
@@ -107,7 +122,7 @@ pub fn render_workflow(
                 rendered
                     .jobs
                     .iter()
-                    .map(|job| (job.id.clone(), yaml_job(job)))
+                    .map(|job| (job.id.clone(), yaml_job(job, marks)))
                     .collect(),
             ),
         )),
@@ -115,15 +130,7 @@ pub fn render_workflow(
     .into_iter()
     .flatten()
     .collect();
-    let file = seal(GENERATED_HEADER, &emit(&workflow));
-    if file.len() > rules::MAX_WORKFLOW_BYTES {
-        return Err(vec![RuleViolation {
-            job: String::new(),
-            step: 0,
-            rule: Rule::WorkflowTooLarge(file.len()),
-        }]);
-    }
-    Ok(BTreeMap::from([(WORKFLOW_PATH, file)]))
+    seal(GENERATED_HEADER, &emit(&workflow))
 }
 
 mod report;

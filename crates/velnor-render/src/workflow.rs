@@ -14,7 +14,16 @@ use velnor_model::{
 /// True for every event except a pull request from a fork.
 pub(crate) const SAME_REPOSITORY: &str = "(!startsWith(github.event_name, 'pull_request') || github.event.pull_request.head.repo.full_name == github.repository)";
 
-pub(crate) fn yaml_job(job: &RenderedJob) -> Yaml {
+/// Where the generated workflow tells jactionlint that ShellCheck cannot follow
+/// the launcher: on each launcher step, or, when that would push the file past
+/// the size GitHub accepts, once on each job that has one.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ShellcheckMarks {
+    Steps,
+    Jobs,
+}
+
+pub(crate) fn yaml_job(job: &RenderedJob, marks: ShellcheckMarks) -> Yaml {
     let mut items = Vec::new();
     if let Some(name) = &job.name {
         items.push(entry("name", text(name)));
@@ -80,10 +89,15 @@ pub(crate) fn yaml_job(job: &RenderedJob) -> Yaml {
         }
         items.extend([entry(
             "steps",
-            Yaml::Seq(job.steps.iter().map(yaml_step).collect()),
+            Yaml::Seq(
+                job.steps
+                    .iter()
+                    .map(|step| yaml_step(step, marks))
+                    .collect(),
+            ),
         )]);
     }
-    match job.comment.clone() {
+    match job_notes(job, marks) {
         Some(notes) => Yaml::Noted(notes, Box::new(Yaml::Map(items))),
         None => Yaml::Map(items),
     }
@@ -170,6 +184,23 @@ fn yaml_matrix(matrix: &RenderedMatrix) -> Yaml {
     Yaml::Map(items)
 }
 
+fn job_notes(job: &RenderedJob, marks: ShellcheckMarks) -> Option<String> {
+    let launches_helper = marks == ShellcheckMarks::Jobs && job.steps.iter().any(launches_helper);
+    let notes: Vec<&str> = job
+        .comment
+        .as_deref()
+        .into_iter()
+        .chain(launches_helper.then_some(crate::helper_integrity::SHELLCHECK_IGNORE))
+        .collect();
+    (!notes.is_empty()).then(|| notes.join("\n"))
+}
+
+fn launches_helper(step: &RenderedStep) -> bool {
+    step.run
+        .as_deref()
+        .is_some_and(|run| run.starts_with(crate::helper_integrity::INVOCATION_PREFIX))
+}
+
 fn runs_on(job: &RenderedJob) -> Yaml {
     match &job.fork_runner {
         Some(fork) => Yaml::Expr(format!(
@@ -185,7 +216,7 @@ fn literal(value: &str) -> String {
     format!("'{}'", value.replace('\'', "''"))
 }
 
-fn yaml_step(step: &RenderedStep) -> Yaml {
+fn yaml_step(step: &RenderedStep, marks: ShellcheckMarks) -> Yaml {
     let mut items = Vec::new();
     if let Some(id) = &step.id {
         items.push(entry("id", text(id)));
@@ -225,11 +256,7 @@ fn yaml_step(step: &RenderedStep) -> Yaml {
         items.push(entry("run", value));
     }
     let rendered = Yaml::Map(items);
-    if step
-        .run
-        .as_deref()
-        .is_some_and(|run| run.starts_with(crate::helper_integrity::INVOCATION_PREFIX))
-    {
+    if marks == ShellcheckMarks::Steps && launches_helper(step) {
         Yaml::Noted(
             crate::helper_integrity::SHELLCHECK_IGNORE.to_owned(),
             Box::new(rendered),

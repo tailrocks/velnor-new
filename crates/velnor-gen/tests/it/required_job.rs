@@ -198,6 +198,26 @@ fn sixteen_roots_without_a_helper_path_stay_within_the_workflow_size_limit() -> 
 }
 
 #[test]
+fn a_workflow_too_large_to_mark_each_launcher_step_marks_the_jobs_instead() -> TestResult {
+    let manifests = long_named_roots(16);
+    let roots: Vec<&str> = manifests.iter().map(String::as_str).collect();
+    let text = released("0.1.81", &roots)?;
+    assert!(text.len() <= 500_000, "{} bytes", text.len());
+    let marks: Vec<&str> = text
+        .lines()
+        .filter(|line| line.trim() == "# jactionlint ignore=shellcheck")
+        .collect();
+    assert!(!marks.is_empty(), "{text}");
+    assert!(
+        marks
+            .iter()
+            .all(|line| *line == "  # jactionlint ignore=shellcheck"),
+        "{marks:?}"
+    );
+    Ok(())
+}
+
+#[test]
 fn an_oversized_main_workflow_is_rejected_before_returning_generated_files() -> TestResult {
     let manifests: Vec<String> = (0..60)
         .map(|index| {
