@@ -161,3 +161,27 @@ fn a_workflow_file_name_may_contain_an_at_sign() {
     let other = fake(&runs(&[("merge_group", SHA, "completed", "success")]));
     assert!(!skip_push(&other, &context).skip);
 }
+
+fn runs_with_ids(entries: &[(u64, &str, &str)]) -> String {
+    let runs: Vec<_> = entries
+        .iter()
+        .map(|(id, status, conclusion)| {
+            json!({"id": id, "event": "merge_group", "head_sha": SHA, "status": status, "conclusion": conclusion})
+        })
+        .collect();
+    json!({"total_count": runs.len(), "workflow_runs": runs}).to_string()
+}
+
+#[test]
+fn only_the_latest_merge_group_run_on_this_commit_decides() {
+    let older_passed_newer_failed = fake(&runs_with_ids(&[
+        (1, "completed", "success"),
+        (2, "completed", "failure"),
+    ]));
+    assert!(!skip_push(&older_passed_newer_failed, &context()).skip);
+    let older_failed_newer_passed = fake(&runs_with_ids(&[
+        (2, "completed", "success"),
+        (1, "completed", "failure"),
+    ]));
+    assert!(skip_push(&older_failed_newer_passed, &context()).skip);
+}

@@ -44,7 +44,6 @@ fn commit(sha: &str) -> bool {
     sha.len() == 40 && sha.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
-/// Whether a `merge_group` run of this workflow already passed on this commit.
 /// Never fails: whatever it cannot establish means "run everything".
 #[must_use]
 pub fn skip_push(github: &impl GitHub, context: &Context) -> SkipPush {
@@ -68,20 +67,21 @@ pub fn skip_push(github: &impl GitHub, context: &Context) -> SkipPush {
         Ok(page) => page,
         Err(error) => return run_everything(error.to_string()),
     };
-    let passed = page
+    let latest = page
         .items
         .iter()
         .filter(|run| run.event == "merge_group" && run.head_sha == context.sha)
-        .any(|run| {
-            if run.status == "completed" {
-                run.conclusion.as_deref() == Some("success")
-            } else {
-                context
-                    .required
-                    .as_deref()
-                    .is_some_and(|name| required_job_passed(github, &repo, run.id, name))
-            }
-        });
+        .max_by_key(|run| run.id);
+    let passed = latest.is_some_and(|run| {
+        if run.status == "completed" {
+            run.conclusion.as_deref() == Some("success")
+        } else {
+            context
+                .required
+                .as_deref()
+                .is_some_and(|name| required_job_passed(github, &repo, run.id, name))
+        }
+    });
     if passed {
         SkipPush {
             skip: true,

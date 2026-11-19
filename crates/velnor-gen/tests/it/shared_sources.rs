@@ -76,6 +76,7 @@ pub(crate) fn locks_hash(manifests: &[&str]) -> Result<String, Box<dyn std::erro
             timeout_minutes: 10,
             reports_ignored: false,
             gate: None,
+            skip_after_merge_group: None,
             plan_outputs: Vec::new(),
             group_outputs: Vec::new(),
             steps: vec![Step {
