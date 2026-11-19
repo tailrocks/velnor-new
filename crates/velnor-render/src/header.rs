@@ -44,7 +44,7 @@ fn digest_verifies(contents: &[u8]) -> bool {
         .is_some_and(|hex| hex == digest(body).as_bytes())
 }
 
-/// Files written before the digest existed carry exactly one of our two
+/// Files written before the digest existed carry exactly one of our
 /// headers and no digest line; a marker that is anything else stays forged.
 fn is_legacy_undigested(first: &[u8], contents: &[u8]) -> bool {
     let has_digest_line = contents
@@ -52,7 +52,7 @@ fn is_legacy_undigested(first: &[u8], contents: &[u8]) -> bool {
         .nth(1)
         .is_some_and(|second| second.starts_with(DIGEST_PREFIX.as_bytes()));
     !has_digest_line
-        && [crate::GENERATED_HEADER, crate::RELEASE_HEADER]
+        && [crate::GENERATED_HEADER, crate::RELEASE_HEADER, crate::REUSABLE_HEADER]
             .iter()
             .any(|header| header.trim_end_matches('\n').as_bytes() == first)
 }
