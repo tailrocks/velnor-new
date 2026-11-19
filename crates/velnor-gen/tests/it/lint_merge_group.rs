@@ -9,6 +9,7 @@ use crate::lint_lane::{IDS, LINT, MISE};
 use crate::pipeline::{view, workflow};
 
 const SKIP: &str = "needs.rust-plan.outputs.skip_push != 'true'";
+const MERGE_GROUP_SKIP: &str = "steps.merge_group.outputs.skip != 'true'";
 
 fn repo(roots: &[&str], knob: bool) -> Result<RepoView, Box<dyn std::error::Error>> {
     let config = format!(
@@ -57,10 +58,40 @@ fn planned_lint_jobs_wait_for_the_plan_and_skip_every_step_after_a_queue_run() -
 }
 
 #[test]
-fn lint_jobs_are_untouched_without_the_knob_and_in_a_single_job_workflow() -> TestResult {
+fn a_single_job_lint_job_asks_the_queue_itself_and_skips_every_step_after_a_queue_run() -> TestResult
+{
+    let all = jobs(&["Cargo.toml"], true)?;
+    for id in IDS {
+        let job = &all[id];
+        assert!(job["needs"].is_null(), "{id}: {job}");
+        assert_eq!(job["permissions"]["actions"], "read", "{id}: {job}");
+        let steps = job["steps"].as_array().ok_or("steps")?;
+        let ask = steps
+            .iter()
+            .position(|step| step["name"] == "velnor-ci merge-group-passed")
+            .ok_or("merge-group-passed step")?;
+        let checkout = steps
+            .iter()
+            .position(|step| {
+                step["uses"]
+                    .as_str()
+                    .is_some_and(|uses| uses.starts_with("actions/checkout"))
+            })
+            .ok_or("checkout step")?;
+        assert!(ask < checkout, "{id}: {job}");
+        for step in &steps[ask + 1..] {
+            let when = step["if"].as_str().unwrap_or_default();
+            assert!(when.contains(MERGE_GROUP_SKIP), "{id} {step}");
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn lint_jobs_are_untouched_without_the_knob() -> TestResult {
     for (roots, knob) in [
         (&["Cargo.toml", "lab/Cargo.toml"][..], false),
-        (&["Cargo.toml"][..], true),
+        (&["Cargo.toml"][..], false),
     ] {
         let all = jobs(roots, knob)?;
         for id in IDS {
