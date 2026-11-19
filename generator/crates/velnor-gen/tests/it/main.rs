@@ -65,6 +65,7 @@ mod lock_affected;
 mod lock_consistency;
 mod main_and_scheduled;
 mod metadata_file;
+mod mise_install;
 mod mise_names;
 mod needs_size;
 mod needs_size_plan;
