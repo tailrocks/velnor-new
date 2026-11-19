@@ -6,8 +6,10 @@ use velnor_runner_github::{Exchange, Method, SessionRequest, Transport, Transpor
 use super::{
     Fixture, Reply, ScaleSetDeleteOutcome, Script, TestResult, delete_state, found, list, ok,
 };
-use crate::journal::{ConnectionJournal, Journal, ScaleSetCreateState, ScaleSetDeleteGate};
-use crate::scale_set::delete::recover_intended_delete;
+use crate::journal::{
+    ConnectionJournal, Journal, ScaleSetCreateRequest, ScaleSetCreateState, ScaleSetDeleteGate,
+};
+use crate::scale_set::delete::{finish_recovered_delete, recover_intended_delete};
 use crate::scale_set::{ScaleSetLookupAction, lookup_action};
 
 async fn intend_and_crash(fixture: &Fixture) -> TestResult<ConnectionJournal> {
@@ -125,5 +127,35 @@ async fn the_intent_is_committed_before_the_delete_is_issued() -> TestResult<()>
     assert_eq!(outcome, ScaleSetDeleteOutcome::Deleted);
     assert_eq!(spy.state_at_delete, vec![Some("requested".to_owned())]);
     assert_eq!(delete_state(&fixture).await?.as_deref(), Some("deleted"));
+    Ok(())
+}
+
+async fn next_lookup(fixture: &Fixture) -> TestResult<ScaleSetLookupAction> {
+    let request = ScaleSetCreateRequest::new(&fixture.binding, 1)?;
+    let scoped = fixture.journal.connection_scope(&fixture.binding).await?;
+    let record = scoped.prepare_scale_set_create(&request).await?;
+    Ok(lookup_action(record.state(), false, false))
+}
+
+#[tokio::test]
+async fn a_recovered_delete_lets_setup_create_a_new_set() -> TestResult<()> {
+    let fixture = super::fixture(true).await?;
+    let restarted = intend_and_crash(&fixture).await?;
+    let (outcome, _) = recover(&restarted, vec![found(), ok(204)]).await?;
+    assert_eq!(outcome, Some(ScaleSetDeleteOutcome::Deleted));
+    finish_recovered_delete(&fixture.journal, &fixture.binding, outcome).await?;
+    assert_eq!(next_lookup(&fixture).await?, ScaleSetLookupAction::Create);
+    assert_eq!(delete_state(&fixture).await?, None);
+    Ok(())
+}
+
+#[tokio::test]
+async fn an_uncertain_recovery_keeps_the_created_set_held() -> TestResult<()> {
+    let fixture = super::fixture(true).await?;
+    let restarted = intend_and_crash(&fixture).await?;
+    let (outcome, _) = recover(&restarted, vec![ok(500)]).await?;
+    assert_eq!(outcome, Some(ScaleSetDeleteOutcome::Uncertain));
+    finish_recovered_delete(&fixture.journal, &fixture.binding, outcome).await?;
+    assert_eq!(next_lookup(&fixture).await?, ScaleSetLookupAction::Hold);
     Ok(())
 }

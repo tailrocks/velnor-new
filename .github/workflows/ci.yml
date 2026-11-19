@@ -11,6 +11,26 @@ name: CI
   push:
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      campaign:
+        type: string
+        required: true
+      phase:
+        type: choice
+        required: true
+        options:
+          - cold
+          - control
+          - third
+          - useful_delta
+          - warm
+      predecessor_run_attempt:
+        type: string
+        required: false
+      predecessor_run_id:
+        type: string
+        required: false
   merge_group:
 permissions:
   contents: read
