@@ -18,6 +18,7 @@ mod local_ci;
 mod local_setup;
 mod online;
 mod pair;
+mod plain_image;
 mod pair_inputs;
 mod pairs;
 mod pairs_host;
