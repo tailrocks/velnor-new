@@ -49,9 +49,7 @@ fn the_record_step_runs_after_the_tag_steps_and_names_the_config_so_a_rerun_reco
         .and_then(Node::text)
         .ok_or("no run")?;
     assert!(
-        run.contains(
-            " --app=velnor-release --config=release-plz.toml "
-        ),
+        run.contains(" --app=velnor-release --config=release-plz.toml "),
         "{run}"
     );
     let all = names(&tag);

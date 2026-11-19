@@ -12,9 +12,9 @@ use crate::release_family::family_jobs;
 use crate::release_finalize::{finalize_job, without_binary};
 use crate::release_outputs::{commit_outputs, output_collisions};
 use crate::release_steps::{
-    APP_TOKEN_OUTPUT, RECORD_RECOVERY_HELPER, TAGGED_COMMIT_HELPER, TOOLCHAIN, app_token, checkout, expression,
-    install_release_plz, join, label, permissions, refuse_commands, release_plz_arguments,
-    release_plz_step, shell_word, variables,
+    APP_TOKEN_OUTPUT, RECORD_RECOVERY_HELPER, TAGGED_COMMIT_HELPER, TOOLCHAIN, app_token, checkout,
+    expression, install_release_plz, join, label, permissions, refuse_commands,
+    release_plz_arguments, release_plz_step, shell_word, variables,
 };
 use crate::rules::{
     MAX_WORKFLOW_BYTES, RenderedConcurrency, RenderedJob, RenderedStep, RenderedWorkflow, Rule,

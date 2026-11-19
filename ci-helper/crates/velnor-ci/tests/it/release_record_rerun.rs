@@ -159,9 +159,7 @@ fn a_rerun_after_a_failed_second_root_records_the_draft_the_first_root_created()
     assert_eq!(result.status.code(), Some(0), "{result:?}");
     assert_eq!(
         fs::read_to_string(&output).unwrap_or_default(),
-        format!(
-            "app=app-v0.1.0\ntools=tools-v0.1.0\napp_commit={MERGE}\ntools_commit={MERGE}\n"
-        )
+        format!("app=app-v0.1.0\ntools=tools-v0.1.0\napp_commit={MERGE}\ntools_commit={MERGE}\n")
     );
 }
 

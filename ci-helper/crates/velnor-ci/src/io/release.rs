@@ -108,7 +108,9 @@ fn expected_tags(configs: &[std::path::PathBuf]) -> Result<BTreeMap<String, Stri
     let roots: Vec<String> = configs.iter().map(|path| root_of(&top, path)).collect();
     let known = super::manifests::read(&top, &roots)?;
     let mut tags = BTreeMap::new();
-    for release in expected_releases(&files, &known.metadata, &known.versions).map_err(CiError::new)? {
+    for release in
+        expected_releases(&files, &known.metadata, &known.versions).map_err(CiError::new)?
+    {
         if let Some(other) = tags.insert(release.package.clone(), release.tag.clone()) {
             return Err(CiError::new(format!(
                 "package {} is released as {other} and as {}",
