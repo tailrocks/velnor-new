@@ -10,14 +10,10 @@ use zeroize::Zeroizing;
 
 use crate::error::HostError;
 use crate::keychain::read_secret;
-
-/// Mode bits a credential file may carry: owner read/write, group read.
 const ALLOWED_MODE: u32 = 0o640;
 const READ_BITS: u32 = 0o440;
 const GROUP_READ: u32 = 0o040;
 const ROOT: u32 = 0;
-
-/// Who the process runs as, as far as file access is concerned.
 pub(crate) struct Identity {
     pub(crate) euid: u32,
     pub(crate) egid: u32,
@@ -37,15 +33,6 @@ impl Identity {
         }
     }
 }
-
-/// The access rule for a credential file, applied to the opened file's own metadata.
-///
-/// - No world access, no group write, no exec or setuid/setgid/sticky bits, and at least one
-///   read bit set.
-/// - Owned by the effective user or by root. Kubernetes secret volume files are owned by root.
-/// - If group-readable, the group must be ours: the egid or a supplementary group. Kubernetes
-///   gives the pod `fsGroup` as a supplementary group and mounts the files as root:fsGroup with
-///   `defaultMode: 0440`.
 pub(crate) fn permits(mode: u32, uid: u32, gid: u32, identity: &Identity) -> bool {
     let mode = mode & 0o7777;
     mode & !ALLOWED_MODE == 0
@@ -53,10 +40,6 @@ pub(crate) fn permits(mode: u32, uid: u32, gid: u32, identity: &Identity) -> boo
         && (uid == identity.euid || uid == ROOT)
         && (mode & GROUP_READ == 0 || gid == identity.egid || identity.groups.contains(&gid))
 }
-
-/// Symlinks are followed on purpose: kubelet lays a Secret volume out as `token -> ..data/token`
-/// with `..data` itself a symlink. The checks run on the opened descriptor, so they apply to the
-/// final target and cannot be raced by swapping the link after the check.
 pub(crate) fn load(path: &Path) -> Result<Zeroizing<Vec<u8>>, HostError> {
     let fd = rustix::fs::open(
         path,
@@ -76,8 +59,28 @@ pub(crate) fn load(path: &Path) -> Result<Zeroizing<Vec<u8>>, HostError> {
     {
         return Err(HostError::Keychain);
     }
+    if has_extended_acl(&file) {
+        return Err(HostError::Keychain);
+    }
     let secret = read_secret(&mut file)?;
     Ok(secret.into_bytes())
+}
+
+#[cfg(target_os = "linux")]
+fn has_extended_acl(file: &File) -> bool {
+    const ACCESS_ACL: &str = "system.posix_acl_access";
+    const NFS4_ACL: &str = "system.nfs4_acl";
+    [ACCESS_ACL, NFS4_ACL].into_iter().any(|name| {
+        !matches!(
+            rustix::fs::fgetxattr(file, name, &mut []),
+            Err(rustix::io::Errno::NODATA | rustix::io::Errno::NOTSUP)
+        )
+    })
+}
+
+#[cfg(not(target_os = "linux"))]
+const fn has_extended_acl(_file: &File) -> bool {
+    false
 }
 
 #[cfg(test)]

@@ -60,7 +60,8 @@ impl KeychainReference {
 
 fn parse_file(path: &str) -> Result<KeychainReference, HostError> {
     let path = Path::new(path);
-    let clean = path.is_absolute()
+    let clean = cfg!(target_os = "linux")
+        && path.is_absolute()
         && path.file_name().is_some()
         && !path.to_string_lossy().chars().any(char::is_control)
         && path

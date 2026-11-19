@@ -73,7 +73,6 @@ fn symlink_to_a_valid_file_is_followed_and_the_target_is_checked() -> R {
 
 #[test]
 fn kubelet_secret_volume_layout_loads() -> R {
-    // `token -> ..data/token`, `..data -> ..2026_11_19`, as kubelet lays out a Secret volume.
     let dir = tempfile::tempdir()?;
     let stamp = dir.path().join("..2026_11_19");
     std::fs::create_dir(&stamp)?;
@@ -89,9 +88,6 @@ fn kubelet_secret_volume_layout_loads() -> R {
 
 #[test]
 fn group_readable_0440_and_0400_files_owned_by_the_caller_load() -> R {
-    // Kubernetes secret volumes are root:fsGroup with defaultMode 0440. Root ownership cannot be
-    // simulated without privileges, so this checks the same mode with the caller's own uid and gid
-    // (the group is the egid, as fsGroup is for the pod); `permits_*` below covers uid 0.
     let dir = tempfile::tempdir()?;
     for mode in [0o440, 0o400, 0o640] {
         let path = write(dir.path(), &format!("ok{mode:o}"), TOKEN, mode)?;
@@ -124,20 +120,16 @@ fn permits_root_owned_secret_volume_files_in_the_pods_group() {
 
 #[test]
 fn permits_refuses_other_users_foreign_groups_and_loose_modes() {
-    // Owned by another non-root user, whatever the mode.
     assert!(!permits(0o100_600, 4242, 10001, &pod()));
     assert!(!permits(0o100_440, 4242, 10001, &pod()));
-    // Group-readable, but the group is not ours.
     assert!(!permits(0o100_440, 0, 4242, &pod()));
     assert!(!permits(0o100_640, 10001, 4242, &pod()));
-    // World-accessible or group-writable.
     for mode in [
         0o644, 0o604, 0o660, 0o664, 0o666, 0o001, 0o770, 0o2640, 0o4640,
     ] {
         assert!(!permits(0o100_000 | mode, 0, 10001, &pod()), "{mode:o}");
         assert!(!permits(0o100_000 | mode, 10001, 10001, &pod()), "{mode:o}");
     }
-    // Nobody can read it.
     assert!(!permits(0o100_000, 10001, 10001, &pod()));
 }
 
@@ -159,6 +151,7 @@ fn empty_oversize_and_non_token_content_are_refused_without_leaking() -> R {
     Ok(())
 }
 
+#[cfg(target_os = "linux")]
 #[test]
 fn reference_round_trips_and_never_prints_the_value() -> R {
     let dir = tempfile::tempdir()?;
@@ -172,6 +165,7 @@ fn reference_round_trips_and_never_prints_the_value() -> R {
     Ok(())
 }
 
+#[cfg(target_os = "linux")]
 #[test]
 fn reference_load_fails_closed_on_bad_mode() -> R {
     let dir = tempfile::tempdir()?;
@@ -192,4 +186,42 @@ fn relative_traversal_and_empty_file_references_do_not_parse() {
         assert!(KeychainReference::parse(text).is_err(), "{text}");
     }
     assert!(KeychainReference::parse("keychain:svc/acct").is_ok());
+}
+
+#[cfg(not(target_os = "linux"))]
+#[test]
+fn file_references_are_rejected_outside_linux() {
+    assert!(KeychainReference::parse("file:/run/secrets/token").is_err());
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn a_file_with_an_extended_acl_is_refused() -> R {
+    let dir = tempfile::tempdir()?;
+    let path = write(dir.path(), "token", TOKEN, 0o640)?;
+    let mut acl = 2_u32.to_le_bytes().to_vec();
+    for (tag, perm, id) in [
+        (1_u16, 6_u16, u32::MAX),
+        (2, 4, 12345),
+        (4, 4, u32::MAX),
+        (0x10, 4, u32::MAX),
+        (0x20, 0, u32::MAX),
+    ] {
+        acl.extend(tag.to_le_bytes());
+        acl.extend(perm.to_le_bytes());
+        acl.extend(id.to_le_bytes());
+    }
+    let file = std::fs::File::open(&path)?;
+    if rustix::fs::fsetxattr(
+        &file,
+        "system.posix_acl_access",
+        &acl,
+        rustix::fs::XattrFlags::empty(),
+    )
+    .is_err()
+    {
+        return Ok(());
+    }
+    assert!(load(&path).is_err());
+    Ok(())
 }
