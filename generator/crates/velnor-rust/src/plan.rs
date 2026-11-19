@@ -11,7 +11,7 @@ use velnor_model::{
 };
 
 use crate::audit_job::audit_job;
-use crate::base_cache::restored;
+use crate::base_cache::{restored, sources_locks};
 use crate::config::CONFIG_PATH;
 use crate::detect::HELPER_PACKAGE;
 use crate::error::{DetectError, Reason};
@@ -283,23 +283,24 @@ pub(crate) fn setup_roots(
         toolchain.extend(tools_save(facts));
         toolchain.push(prepare);
     }
-    for (root, family) in roots.iter().zip(families) {
+    for (index, (root, family)) in roots.iter().zip(families).enumerate() {
         let cache_root = CacheRoot::new(&root.manifest, root.target_dir.clone());
-        toolchain.extend([
-            Step {
-                directory: root.manifest.parent(),
-                ..step(StepKind::Helper(HelperCommand::CheckMetadata))
-            },
-            step(StepKind::CacheRestore(CacheKey::Sources {
+        toolchain.push(Step {
+            directory: root.manifest.parent(),
+            ..step(StepKind::Helper(HelperCommand::CheckMetadata))
+        });
+        if index == 0 {
+            toolchain.push(sources_locks(facts));
+            toolchain.push(step(StepKind::CacheRestore(CacheKey::Sources {
                 host: Host,
-                root: cache_root.clone(),
-            })),
-            step(StepKind::CacheRestore(CacheKey::Target {
-                job: family.clone(),
-                root: cache_root,
-                host: Host,
-            })),
-        ]);
+                lane: cache_root.clone(),
+            })));
+        }
+        toolchain.push(step(StepKind::CacheRestore(CacheKey::Target {
+            job: family.clone(),
+            root: cache_root,
+            host: Host,
+        })));
     }
     if breaks_ties(facts) {
         toolchain.extend(restore_file_times(roots));

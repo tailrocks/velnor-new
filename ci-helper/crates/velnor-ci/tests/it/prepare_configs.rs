@@ -280,3 +280,56 @@ fn prepare_fails_closed_when_the_recorded_metadata_is_missing() {
     assert_eq!(run.outputs, "");
     assert_eq!(run.env_file, "");
 }
+
+fn home_config(text: Option<&'static str>) -> Setup {
+    let mut setup = Setup::new(reported("1.99.1", Some("0.9.151")));
+    setup.cargo_config = text;
+    setup
+}
+
+#[test]
+fn a_cargo_home_config_outside_the_checkout_changes_the_compat_digest() {
+    let none = digest(&prepare("home_cfg", &home_config(None))).to_owned();
+    let one = prepare(
+        "home_cfg",
+        &home_config(Some("[build]\nrustflags = [\"-Cx\"]\n")),
+    );
+    let two = prepare(
+        "home_cfg",
+        &home_config(Some("[build]\nrustflags = [\"-Cy\"]\n")),
+    );
+    assert!(one.output.status.success(), "{:?}", one.output);
+    assert_ne!(none, digest(&one));
+    assert_ne!(digest(&one), digest(&two));
+}
+
+#[test]
+fn a_foreign_config_above_the_checkout_changes_the_compat_digest() {
+    let build = |text: &'static str| {
+        let mut setup = Setup::new(reported("1.99.1", Some("0.9.151")));
+        setup.rust_ci_toml = Some("ci_debuginfo = \"full\"\n");
+        setup.populate = Some(Box::new(move |base| {
+            write(base.parent().unwrap_or(base), ".cargo/config.toml", text);
+        }));
+        digest(&prepare("above_cfg", &setup)).to_owned()
+    };
+    assert_ne!(build("[net]\nretry = 2\n"), build("[net]\nretry = 3\n"));
+}
+
+#[test]
+fn an_unreadable_or_including_external_config_fails_closed() {
+    let mut unreadable = home_config(None);
+    unreadable.populate = Some(Box::new(|base| {
+        let home = base.parent().unwrap_or(base).join("cargo-home/config.toml");
+        fs::create_dir_all(home).unwrap_or_else(|e| unreachable!("{e}"));
+    }));
+    let run = prepare("unreadable_cfg", &unreadable);
+    assert_eq!(run.output.status.code(), Some(1), "{:?}", run.output);
+    assert_eq!(run.outputs, "");
+    let run = prepare(
+        "include_cfg",
+        &home_config(Some("include = \"other.toml\"\n")),
+    );
+    assert_eq!(run.output.status.code(), Some(1), "{:?}", run.output);
+    assert_eq!(run.outputs, "");
+}
