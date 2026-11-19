@@ -29,7 +29,10 @@ fn family_attestation_runs_in_the_sums_job_alone_with_the_only_id_token() -> Tes
         .iter()
         .find(|step| uses(step).is_some_and(|u| u.starts_with(ATTEST)))
         .ok_or("no attest step")?;
-    let (_, sha) = uses(attest).ok_or("no uses")?.split_once('@').ok_or("unpinned")?;
+    let (_, sha) = uses(attest)
+        .ok_or("no uses")?
+        .split_once('@')
+        .ok_or("unpinned")?;
     assert!(sha.len() == 40 && sha.bytes().all(|b| b.is_ascii_hexdigit()));
     assert_eq!(
         attest.at(&["with", "subject-path"]).and_then(Node::text),
@@ -47,7 +50,8 @@ fn family_attestation_runs_in_the_sums_job_alone_with_the_only_id_token() -> Tes
                 permissions(other)
                     .iter()
                     .all(|(scope, access)| scope != "id-token"
-                        && (scope != "attestations" || (id == "verify-family" && access == "read"))),
+                        && (scope != "attestations"
+                            || (id == "verify-family" && access == "read"))),
                 "{id}"
             );
         }
@@ -75,7 +79,9 @@ fn publish_waits_for_a_verification_of_every_family_file() -> TestResult {
         "dist/SHA256SUMS",
     ] {
         assert!(
-            verified.iter().any(|run| run.contains(&format!("verify {file} "))),
+            verified
+                .iter()
+                .any(|run| run.contains(&format!("verify {file} "))),
             "{file}"
         );
     }

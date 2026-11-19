@@ -5,16 +5,35 @@ use std::fmt;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FamilyError {
-    InvalidTag { template: String },
-    TagWithPackage { template: String },
+    InvalidTag {
+        template: String,
+    },
+    TagWithPackage {
+        template: String,
+    },
     WithoutBinaries,
-    BinaryReleasedByReleasePlz { package: String },
-    Unsupported { key: &'static str },
-    NeedsFamilyTag { key: &'static str },
-    BinaryKeyBelongsToFamily { key: &'static str, instead: &'static str },
-    InvalidChecksumsFile { name: String },
-    ChecksumsNeedArchives { package: String },
-    TagPushWithReleasedPackage { package: String },
+    BinaryReleasedByReleasePlz {
+        package: String,
+    },
+    Unsupported {
+        key: &'static str,
+    },
+    NeedsFamilyTag {
+        key: &'static str,
+    },
+    BinaryKeyBelongsToFamily {
+        key: &'static str,
+        instead: &'static str,
+    },
+    InvalidChecksumsFile {
+        name: String,
+    },
+    ChecksumsNeedArchives {
+        package: String,
+    },
+    TagPushWithReleasedPackage {
+        package: String,
+    },
 }
 
 impl fmt::Display for FamilyError {

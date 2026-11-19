@@ -5,10 +5,11 @@ use crate::asset_name::checked;
 use crate::bundle::check_targets;
 use crate::error::ReleaseError;
 use crate::error_family::FamilyError;
+use crate::family_options::FamilyTrigger;
 use crate::plan::{BinaryPlan, ReleaseFiles, ReleasePlan, RootPlan, manifest_of, plan_binaries};
 use crate::release_plz::RootConfig;
 use crate::tag::{TagPattern, family};
-use crate::velnor_config::{Binary, BinaryFormat, FamilyTrigger, VelnorConfig};
+use crate::velnor_config::{Binary, BinaryFormat, VelnorConfig};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FamilyPlan {

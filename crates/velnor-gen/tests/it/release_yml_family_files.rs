@@ -26,7 +26,12 @@ fn a_tools_like_family_publishes_the_archives_commit_and_binary_checksums() -> T
         .ok_or("no publish")?;
     let published: BTreeSet<&str> = words(publish)
         .into_iter()
-        .filter(|word| !word.starts_with("--") && !word.starts_with("velnor-ci") && *word != "release" && *word != "publish")
+        .filter(|word| {
+            !word.starts_with("--")
+                && !word.starts_with("velnor-ci")
+                && *word != "release"
+                && *word != "publish"
+        })
         .collect();
     assert_eq!(
         published,
@@ -45,7 +50,10 @@ fn a_tools_like_family_publishes_the_archives_commit_and_binary_checksums() -> T
         .iter()
         .find(|step| step.get("run").and_then(Node::text) == Some("echo \"$COMMIT\" > COMMIT"))
         .ok_or("no COMMIT step")?;
-    assert_eq!(record.get("working-directory").and_then(Node::text), Some("dist"));
+    assert_eq!(
+        record.get("working-directory").and_then(Node::text),
+        Some("dist")
+    );
     assert_eq!(
         record.at(&["env", "COMMIT"]).and_then(Node::text),
         Some("${{ needs.family.outputs.commit }}")
@@ -91,7 +99,12 @@ fn smoke_runs_each_built_binary_before_packing_in_a_job_with_no_secrets() -> Tes
     let (_, tree) = generate(HELPER, &tools_like(EXTRAS))?;
     for (package, platform, triple, dir) in [
         ("app", "linux-x64", "x86_64-unknown-linux-musl", "target"),
-        ("tools", "linux-arm64", "aarch64-unknown-linux-musl", "tools/target"),
+        (
+            "tools",
+            "linux-arm64",
+            "aarch64-unknown-linux-musl",
+            "tools/target",
+        ),
     ] {
         let build = job(&tree, &format!("build-{package}-{platform}"))?;
         let commands = runs(build);
@@ -121,12 +134,11 @@ fn smoke_runs_each_built_binary_before_packing_in_a_job_with_no_secrets() -> Tes
             [("contents".to_owned(), "read".to_owned())]
         );
         for step in steps(build) {
-            assert!(
-                step.get("env").is_none_or(|env| env
-                    .keys()
+            assert!(step.get("env").is_none_or(|env| {
+                env.keys()
                     .into_iter()
-                    .all(|key| !key.contains("TOKEN") && !key.contains("SECRET"))),
-            );
+                    .all(|key| !key.contains("TOKEN") && !key.contains("SECRET"))
+            }),);
         }
     }
     Ok(())

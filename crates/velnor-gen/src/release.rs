@@ -50,9 +50,7 @@ pub(crate) fn release_workflow(
         .is_some_and(|family| family.trigger == FamilyTrigger::TagPush)
         && !helper.version().at_least(crate::TAG_PUSH_HELPER)
     {
-        return Err(GenerateError::TagPushHelperTooOld(
-            helper.version().clone(),
-        ));
+        return Err(GenerateError::TagPushHelperTooOld(helper.version().clone()));
     }
     for root in &plan.roots {
         let manifest = if root.root == "." {

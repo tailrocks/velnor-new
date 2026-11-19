@@ -48,13 +48,30 @@ fn the_gate_reads_the_pushed_commit_and_requires_it_on_the_default_branch() -> T
     let (_, tree) = generate(HELPER, &tools_like(TAG_PUSH))?;
     let gate = job(&tree, "gate")?;
     let commands = runs(gate);
-    assert!(commands.iter().any(|run| run.contains("compare/$DEFAULT_BRANCH...$COMMIT")));
+    assert!(
+        commands
+            .iter()
+            .any(|run| run.contains("compare/$DEFAULT_BRANCH...$COMMIT"))
+    );
     let check = steps(gate)
         .iter()
-        .find(|step| step.get("run").and_then(Node::text).is_some_and(|run| run.starts_with("velnor-ci release-gate")))
+        .find(|step| {
+            step.get("run")
+                .and_then(Node::text)
+                .is_some_and(|run| run.starts_with("velnor-ci release-gate"))
+        })
         .ok_or("no release-gate")?;
-    assert_eq!(check.at(&["env", "COMMIT"]).and_then(Node::text), Some("${{ github.sha }}"));
-    assert_eq!(permissions(gate).iter().filter(|(_, access)| access != "read").count(), 0);
+    assert_eq!(
+        check.at(&["env", "COMMIT"]).and_then(Node::text),
+        Some("${{ github.sha }}")
+    );
+    assert_eq!(
+        permissions(gate)
+            .iter()
+            .filter(|(_, access)| access != "read")
+            .count(),
+        0
+    );
     Ok(())
 }
 
@@ -72,8 +89,14 @@ fn the_family_job_refuses_a_pushed_tag_that_is_not_the_family_tag_of_the_version
         .iter()
         .find(|step| step.get("run").and_then(Node::text) == Some(command))
         .ok_or("no step")?;
-    assert_eq!(step.at(&["env", "PUSHED_TAG"]).and_then(Node::text), Some("${{ github.ref_name }}"));
-    assert_eq!(step.at(&["env", "COMMIT"]).and_then(Node::text), Some("${{ github.sha }}"));
+    assert_eq!(
+        step.at(&["env", "PUSHED_TAG"]).and_then(Node::text),
+        Some("${{ github.ref_name }}")
+    );
+    assert_eq!(
+        step.at(&["env", "COMMIT"]).and_then(Node::text),
+        Some("${{ github.sha }}")
+    );
     Ok(())
 }
 
@@ -97,7 +120,9 @@ fn tag_push_is_refused_when_release_plz_still_releases_a_package() -> TestResult
     assert!(
         matches!(
             error,
-            GenerateError::Release(ReleaseError::Family(FamilyError::TagPushWithReleasedPackage { .. }))
+            GenerateError::Release(ReleaseError::Family(
+                FamilyError::TagPushWithReleasedPackage { .. }
+            ))
         ),
         "{error}"
     );

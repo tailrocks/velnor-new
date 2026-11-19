@@ -5,9 +5,7 @@ use velnor_model::HelperRelease;
 use velnor_release::{BinaryPlan, FamilyPlan, RELEASE_APP_SLUG, ReleasePlan};
 
 use crate::release::HOSTED_RUNNER;
-use crate::release_assets::{
-    COMMIT_FILE, bind_version, published_files, read_version, word,
-};
+use crate::release_assets::{COMMIT_FILE, bind_version, published_files, read_version, word};
 use crate::release_attest::{provenance, verification_steps};
 use crate::release_binaries::{
     DIST, PUBLISH_TIMEOUT_MINUTES, SUMS_FILE, artifact, build_id, download, upload,
@@ -146,7 +144,10 @@ pub(crate) fn verify(plan: &ReleasePlan, family: &FamilyPlan, source: &Source) -
     steps.extend(read_family_version(plan));
     let paths = files(plan, family, Some(DIST))
         .into_iter()
-        .chain([(SUMS_FILE.to_owned(), shell_word(&format!("{DIST}/{SUMS_FILE}")))])
+        .chain([(
+            SUMS_FILE.to_owned(),
+            shell_word(&format!("{DIST}/{SUMS_FILE}")),
+        )])
         .collect();
     steps.extend(verification_steps(paths));
     bind_version(&mut steps);

@@ -86,9 +86,7 @@ pub(crate) fn expected_release_nested(
         .is_some_and(|family| family.trigger == FamilyTrigger::TagPush)
         && !helper.version().at_least(velnor_gen::TAG_PUSH_HELPER)
     {
-        return Err(GenerateError::TagPushHelperTooOld(
-            helper.version().clone(),
-        ));
+        return Err(GenerateError::TagPushHelperTooOld(helper.version().clone()));
     }
     let mut files = render_release(&plan, &helper, "main", None).map_err(GenerateError::Rules)?;
     files.retain(|path, _| *path == RELEASE_WORKFLOW_PATH);

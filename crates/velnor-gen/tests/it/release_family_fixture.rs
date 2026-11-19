@@ -33,7 +33,10 @@ pub(crate) fn generate_releasing(
     let mut view = release_view(&[APP, TOOLS], Some(config))?;
     view.files
         .insert(LOCK_PATH, LOCK.replace("0.1.81", helper).into_bytes());
-    for (root, path) in [(&APP, "release-plz.toml"), (&TOOLS, "tools/release-plz.toml")] {
+    for (root, path) in [
+        (&APP, "release-plz.toml"),
+        (&TOOLS, "tools/release-plz.toml"),
+    ] {
         let text = RELEASE_PLZ
             .replace("{prefix}", root.prefix)
             .replace("{package}", root.package)

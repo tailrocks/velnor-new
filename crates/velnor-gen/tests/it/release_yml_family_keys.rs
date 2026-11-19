@@ -6,7 +6,7 @@ use std::error::Error;
 use velnor_gen::GenerateError;
 use velnor_release::{FamilyError, ReleaseError};
 
-use crate::release_family_fixture::{generate, refused, tools_like, HELPER};
+use crate::release_family_fixture::{HELPER, generate, refused, tools_like};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -20,12 +20,25 @@ fn family_error(config: &str) -> Result<FamilyError, Box<dyn Error>> {
 #[test]
 fn a_family_key_without_family_tag_is_refused() -> TestResult {
     for (config, key) in [
-        ("checksums_file = \"SUMS\"\n[[binaries]]\npackage = \"app\"\n", "checksums_file"),
-        ("commit_file = true\n[[binaries]]\npackage = \"app\"\n", "commit_file"),
+        (
+            "checksums_file = \"SUMS\"\n[[binaries]]\npackage = \"app\"\n",
+            "checksums_file",
+        ),
+        (
+            "commit_file = true\n[[binaries]]\npackage = \"app\"\n",
+            "commit_file",
+        ),
         ("attest = true\n[[binaries]]\npackage = \"app\"\n", "attest"),
-        ("family_trigger = \"tag_push\"\n[[binaries]]\npackage = \"app\"\n", "family_trigger"),
+        (
+            "family_trigger = \"tag_push\"\n[[binaries]]\npackage = \"app\"\n",
+            "family_trigger",
+        ),
     ] {
-        assert_eq!(family_error(config)?, FamilyError::NeedsFamilyTag { key }, "{key}");
+        assert_eq!(
+            family_error(config)?,
+            FamilyError::NeedsFamilyTag { key },
+            "{key}"
+        );
     }
     Ok(())
 }
@@ -42,7 +55,10 @@ fn a_binary_key_that_belongs_to_the_whole_family_names_the_top_level_key() -> Te
         );
         let name = key.split(' ').next().unwrap_or_default();
         match family_error(&config)? {
-            FamilyError::BinaryKeyBelongsToFamily { key, instead: found } => {
+            FamilyError::BinaryKeyBelongsToFamily {
+                key,
+                instead: found,
+            } => {
                 assert_eq!((key, found), (name, instead));
             }
             other => return Err(format!("unexpected: {other}").into()),
@@ -53,7 +69,16 @@ fn a_binary_key_that_belongs_to_the_whole_family_names_the_top_level_key() -> Te
 
 #[test]
 fn checksums_file_must_be_a_plain_new_name_over_archives() -> TestResult {
-    for name in ["SHA256SUMS", "COMMIT", "a/b", "-x", ".x", "a b", "", "${{ github.ref }}"] {
+    for name in [
+        "SHA256SUMS",
+        "COMMIT",
+        "a/b",
+        "-x",
+        ".x",
+        "a b",
+        "",
+        "${{ github.ref }}",
+    ] {
         let config = tools_like(&format!("checksums_file = {name:?}\n"));
         assert!(refused(&config).is_ok(), "{name:?}");
     }
