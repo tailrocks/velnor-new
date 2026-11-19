@@ -78,6 +78,7 @@ pub(crate) fn locks_hash(manifests: &[&str]) -> Result<String, Box<dyn std::erro
             steps: vec![Step {
                 kind: StepKind::SourcesLocks(locks),
                 directory: None,
+                target_dir: None,
                 when: When::Success,
                 skip_on_draft: false,
                 gate: None,
