@@ -287,5 +287,4 @@ added	scripts/test_source_publication_records.py
 added	scripts/test_source_qualification_execution.py
 added	scripts/test_source_release_transaction.py
 added	scripts/test_source_semver_capsule.py
-added	velnor-actions-ci-performance-goal.md
 added	velnor-actions-ci-performance-spec.md

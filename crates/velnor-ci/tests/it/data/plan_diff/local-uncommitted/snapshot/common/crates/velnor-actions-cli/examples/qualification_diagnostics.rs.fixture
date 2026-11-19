@@ -1,0 +1,37 @@
+#[path = "qualification_diagnostics/collector.rs"]
+mod collector;
+#[path = "qualification_diagnostics/executable.rs"]
+mod executable;
+#[path = "qualification_diagnostics/oracle.rs"]
+mod oracle;
+
+use collector::{is_generate_command, is_plan_command};
+include!("../src/entry.rs");
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum DiagnosticsMode {
+    let Some(root) = std::env::current_dir()
+        .ok()
+        .and_then(|path| path.canonicalize().ok())
+    else {
+    let current = std::env::current_dir()?.canonicalize()?;
+    if current.file_name() != Some(OsStr::new("nested")) {
+        return Ok(());
+    }
+    let parent = path
+        .parent()
+        .ok_or_else(|| std::io::Error::other("guard parent is missing"))?;
+    let parent_metadata = fs::symlink_metadata(parent)?;
+    if !parent_metadata.file_type().is_dir()
+        || parent_metadata.uid() != rustix::process::geteuid().as_raw()
+        || parent_metadata.permissions().mode() & 0o077 != 0
+        || fs::canonicalize(parent)? != parent
+    {
+        return Err(std::io::Error::other(
+            "copied guard parent must be a private real directory",
+        ));
+    }
+    let replacement_path = parent.join("archive-guard.replacement");
+    let bytes = fs::read(path)?;
+    let mut replacement = OpenOptions::new()
+        .write(true)

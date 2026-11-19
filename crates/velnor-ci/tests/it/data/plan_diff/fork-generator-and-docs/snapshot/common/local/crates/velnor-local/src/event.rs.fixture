@@ -1,0 +1,4 @@
+        payload["compare"] = json!(format!("{}...{}", push.before, push.after));
+        payload["pusher"] = json!({"name": SENDER});
+        payload["head_commit"] = json!({"id": push.after});
+        payload["commits"] = push

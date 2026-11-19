@@ -385,7 +385,7 @@ fn the_ledger_helper_feature_compiles_only_the_contract_crate() -> TestResult {
     for generator in [
         "velnor-actions-orchestrator",
         "velnor-actions-workflow-renderer",
-        "velnor-actions-freshness",
+        "velnor-freshness",
         "velnor-actions-mise",
         "velnor-actions-tofu",
         "clap",

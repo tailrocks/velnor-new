@@ -1,0 +1,4 @@
+        .current_dir(root)
+        .env_clear()
+        .env("PATH", path)
+        .env("RUNNER_TEMP", runner_temp)

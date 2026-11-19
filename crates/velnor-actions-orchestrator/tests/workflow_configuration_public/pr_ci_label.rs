@@ -25,7 +25,11 @@ fn config(pr_ci: Option<&str>) -> String {
 }
 
 fn render(pr_ci: Option<&str>) -> Result<BTreeMap<String, String>, Box<dyn Error>> {
-    let repo = workflow_configuration_fixture::make_repo(&config(pr_ci))?;
+    render_config(&config(pr_ci))
+}
+
+fn render_config(config: &str) -> Result<BTreeMap<String, String>, Box<dyn Error>> {
+    let repo = workflow_configuration_fixture::make_repo(config)?;
     fs::write(
         repo.path().join("Cargo.toml"),
         "[package]\nname = \"velnor-actions-cli\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
@@ -198,5 +202,36 @@ fn pr_ci_label_runs_merge_group_except_source_qualification() -> Result<(), Box<
 fn pr_ci_rejects_unknown_modes() -> Result<(), Box<dyn Error>> {
     let repo = workflow_configuration_fixture::make_repo(&config(Some("always")))?;
     assert!(prepare(repo.path()).is_err());
+    Ok(())
+}
+
+#[test]
+fn pr_ci_label_keeps_the_fork_fence_on_a_scale_set_gate_and_its_hosted_twin()
+-> Result<(), Box<dyn Error>> {
+    let fenced = format!(
+        "{}\n[execution.overrides.\"required-gate\"]\nprofile = \"local\"\nrole = \"control\"\n",
+        config(Some("label")).replace("[execution]\n", "[execution]\nmode = \"both\"\n")
+    );
+    let tree = render_config(&fenced)?;
+    let ci = text(&tree, WORKFLOW_PATH)?;
+    let admission = velnor_actions_contract::config::EPHEMERAL_CHECK_ADMISSION_CONDITION;
+    let gate = rendered_job_block(ci, "required-gate")?;
+    assert!(
+        gate.contains(&format!(
+            "    if: ${{{{ always() && ({ADMIT_GATE}) && ({admission}) }}}}\n"
+        )),
+        "{gate}"
+    );
+    let twin = rendered_job_block(ci, "required-gate-fork")?;
+    assert!(
+        twin.contains(&format!(
+            "    if: ${{{{ always() && ({ADMIT_GATE}) && !({admission}) }}}}\n"
+        )),
+        "{twin}"
+    );
+    assert!(
+        twin.contains("needs.required.result != 'success'"),
+        "{twin}"
+    );
     Ok(())
 }

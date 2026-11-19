@@ -1,0 +1,8 @@
+include!("tuf_state/cache_impl.inc.rs");
+include!("tuf_state/cache_storage.inc.rs");
+
+include!("tuf_state/generation.inc.rs");
+include!("tuf_state/lock.inc.rs");
+include!("tuf_state/path.inc.rs");
+include!("tuf_state/files.inc.rs");
+

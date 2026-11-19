@@ -2,7 +2,7 @@
 
 **Status:** Implemented. Gates 0 through 8 are implemented, verified, and dogfooded.
 
-The implementation followed Gates 0–8 in order. V1 gates and dogfooding have passed; runner development in nested `crates/velnor-runner` is governed by [macOS Scale Set runner](macos-scaleset-runner.md). Parallel scheduling and safe omission rules are normative in the [parallelism and affected-work contract](parallelism-and-selection-contract.md).
+The implementation followed Gates 0–8 in order. V1 gates and dogfooding have passed; runner development in nested `crates/velnor-runner-*` is governed by [macOS Scale Set runner](macos-scaleset-runner.md). Parallel scheduling and safe omission rules are normative in the [parallelism and affected-work contract](parallelism-and-selection-contract.md).
 
 ## Work packages and merge gates
 
@@ -57,8 +57,7 @@ Policy fixtures are committed policy tests per [rust-quality
 test, literal-substring ownership tests, Alint-generic plus Clippy sizes,
 human-reviewed snapshots); custom linters are forbidden and Alint stays
 generic-only, with one exception: the `no-doctests` content rule in
-`.alint.yml` fails on a doc code fence (owner standing grant 2026-11-02,
-velnor-fast-ci GOAL.md, decision X76).
+`.alint.yml` fails on a doc code fence.
 
 An implementation gate passes only when all listed proofs pass on the named CI runner and the result is recorded with the code. A skipped, cancelled, missing, or infrastructure-failed proof does not pass a gate.
 

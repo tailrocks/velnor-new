@@ -1,0 +1,4 @@
+            || name == ".."
+            || name.contains('/')
+            || name.contains('\\')
+            || name.as_bytes().contains(&0)

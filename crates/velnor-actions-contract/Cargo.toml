@@ -15,13 +15,12 @@ path = "tests/velnor_contract.rs"
 
 [lib]
 doctest = false
-test = false
 
 [lints]
 workspace = true
 
 [dependencies]
-velnor-runner-image-manifest = { version = "=0.1.0", path = "../velnor-runner/crates/velnor-runner-image-manifest" }
+velnor-runner-image-manifest = { version = "=0.1.0", path = "../velnor-runner-image-manifest" }
 semver = { version = "=1.0.28" }
 serde = { workspace = true }
 serde_json = { workspace = true }

@@ -1,0 +1,4 @@
+            include_bytes!("../../../.velnor/qualification/homebrew/jackin/transition.json"),
+        )?;
+    if !seed_pull_context_matches(
+        protected_transition.transition(),

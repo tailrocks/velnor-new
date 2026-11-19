@@ -1,0 +1,4 @@
+        .current_dir(root)
+        .args(["-c", "user.name=Test", "-c", "user.email=test@example.com"])
+        .args(args);
+    command

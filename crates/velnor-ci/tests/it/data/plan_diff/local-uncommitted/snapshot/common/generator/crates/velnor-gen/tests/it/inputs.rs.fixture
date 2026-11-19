@@ -1,0 +1,4 @@
+        ("/repo", package("/repo/a/Cargo.toml", "/repo/../b")),
+        ("/repo", package("/repo/a/Cargo.toml", "/repository/b")),
+        ("/repo", package("/other/a/Cargo.toml", "/repo/b")),
+        ("/other", package("/repo/a/Cargo.toml", "/repo/b")),

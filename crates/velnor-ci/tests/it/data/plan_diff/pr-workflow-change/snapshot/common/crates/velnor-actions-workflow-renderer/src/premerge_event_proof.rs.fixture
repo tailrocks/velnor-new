@@ -1,0 +1,8 @@
+        include_str!("premerge_event_probe.py")
+    );
+    let chunks = source.as_bytes().chunks(9000);
+    let count = chunks.len();
+        include_str!("premerge_source.py")
+    )
+}
+

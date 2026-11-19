@@ -1,0 +1,12 @@
+        || pattern.split('/').any(|segment| segment == "..")
+        || !pattern.bytes().all(is_glob_byte);
+    if malformed {
+        return Err(IndexError::MalformedPattern(pattern.to_owned()));
+    while let Some((parent, _)) = prefix.rsplit_once('/') {
+        if matches_glob(pattern, parent) {
+            return true;
+        }
+        prefix = parent;
+    }
+    false
+}

@@ -116,7 +116,7 @@ completed local update-set checks. Required pull-request and protected-main
 hosted checks remain separate publication gates:
 
 ```yaml
-uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c # v5.2.6
+uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d # v5.2.9
 uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
 uses: jdx/mr-boxington-action@88acf2bb50552c7c508cbac13e5f8c576b95b1de # v1.7.3
@@ -295,7 +295,7 @@ Refresh only Velnor-owned locks and pins: `Cargo.lock`,
 `mise.toml`, `mise.lock`, or `rust-toolchain.toml`; report recommendations for
 those files for a maintainer to apply.
 
-For the Scale Set runner (`crates/velnor-runner`), `.velnor/runner.lock` MUST be reviewed and
+For the Scale Set runner (`crates/velnor-runner-*`), `.velnor/runner.lock` MUST be reviewed and
 must bind image repository and digest, base distribution, official runner
 version and archive SHA-256, architecture, Docker Desktop/Engine versions, API
 version, GitHub REST API version, and native protocol source revision. Runner

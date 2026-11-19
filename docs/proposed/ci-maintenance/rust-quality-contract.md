@@ -11,7 +11,7 @@ file/path, required-file, and line-count rules. V1 has no custom Rust
 source-structure, Cargo-architecture, or test-layout linter. Automatic stack
 detection, composition, `[stacks].ignore`, and the stack-neutral
 `workflow.policy` belong to the workflow contract. Runner implementations in
-nested `crates/velnor-runner` are governed by `docs/proposed/macos-scaleset-runner.md`,
+nested `crates/velnor-runner-*` are governed by `docs/proposed/macos-scaleset-runner.md`,
 which defines its own workspace lints, rust version, and quality invariants.
 
 The words **MUST**, **MUST NOT**, **SHOULD**, and **MAY** are normative.
@@ -255,7 +255,7 @@ optional heavyweight dependency, platform separation, stable API, or measured
 rebuild reduction. Pure model code MUST NOT depend on UI, database, HTTP,
 platform, or process crates. Do not create wrapper or `utils` crates only to
 meet a count. The allowed dependency directions are architectural requirements
-reviewed from Cargo metadata through this mechanism allowlist only: (1) a `cargo-metadata` edge test over the manifest graph, (2) an exact workspace member-set test, (3) literal-substring ownership tests over declared paths, (4) sizes via generic Alint line-count rules plus Clippy `too_many_lines`, (5) human-reviewed insta snapshots. Custom linters are forbidden; Alint stays generic-only, with one content exception: the `no-doctests` regex rule over `crates/**/src/**/*.rs` (velnor-fast-ci decision X76, owner standing grant 2026-11-02).
+reviewed from Cargo metadata through this mechanism allowlist only: (1) a `cargo-metadata` edge test over the manifest graph, (2) an exact workspace member-set test, (3) literal-substring ownership tests over declared paths, (4) sizes via generic Alint line-count rules plus Clippy `too_many_lines`, (5) human-reviewed insta snapshots. Custom linters are forbidden; Alint stays generic-only, with one content exception: the `no-doctests` regex rule over `crates/**/src/**/*.rs`.
 
 Timeless principles (spec §3.2): separation of concerns per §1,
 `pub(crate)` by default, one authoritative implementation, KISS/YAGNI (no
@@ -350,13 +350,12 @@ full-SHA pin (repository-structure alint, distinct
 from workflow-syntax jactionlint):
 
 ```yaml
-- uses: asamarts/alint@d61e4c802b02ac811224b35c59a62cfe5176f4d0 # v0.21.0
+- uses: asamarts/alint@5054852d00d47affc9ea71440240147d9999f4d3 # v0.22.1
 ```
 
 It runs only the generic rules configured in `.alint.yml`: file/path rules,
 required-file rules, line-count rules, and the `no-doctests` content rule that
-forbids doctests in crate sources (velnor-fast-ci decision X76, owner standing
-grant 2026-11-02). Alint MUST run as its own job even
+forbids doctests in crate sources. Alint MUST run as its own job even
 when no product crate is selected. Dependency policy, Rust formatting/Clippy,
 and workflow-security checks remain separate verification jobs. The final
 required status depends on the Alint job and every other required job.

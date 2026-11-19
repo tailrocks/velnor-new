@@ -1,0 +1,15 @@
+    let mut parts = vec![".."; from.len() - shared];
+    parts.extend(&to[shared..]);
+    parts.join("/")
+}
+            "pub fn up() -> Option<&'static std::path::Path> {\n    std::path::Path::new(env!(\"CARGO_MANIFEST_DIR\")).parent()\n}\n"
+        }
+        Forcing::ReadsSibling => {
+            "pub const SIBLING: &str = include_str!(\"../../velnor-actions-mise/src/lib.rs\");\n"
+        }
+        Forcing::None | Forcing::BuildScript => "pub fn f() {}\n",
+    }
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.velnor/config.toml");
+    let config: toml::Value = toml::from_str(&fs::read_to_string(root)?)?;
+    let rules = config["stacks"]["rust"]["inputs"]
+        .as_array()

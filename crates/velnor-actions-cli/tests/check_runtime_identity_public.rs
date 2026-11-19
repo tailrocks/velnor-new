@@ -15,8 +15,8 @@ use velnor_actions_contract::{Plan, ReleaseTarget, plan_json_bytes};
 use velnor_actions_mise::current_mise_binary;
 use velnor_actions_orchestrator::plan_internal;
 
-const APPROVALS: &str = include_str!("../../test_support/controller_approval_074.json");
-const GENERATOR_LOCK: &str = include_str!("../../test_support/generator_074.lock");
+const APPROVALS: &str = include_str!("../../velnor-test-support/controller_approval_074.json");
+const GENERATOR_LOCK: &str = include_str!("../../velnor-test-support/generator_074.lock");
 const CHECK_ID: &str = "runtime-fixture";
 const JOB_ID: &str = "check-runtime-fixture";
 const RUN_KEY: &str = "r260001-a1";
@@ -26,9 +26,10 @@ const UNQUALIFIED_MISE: &[u8] = b"unqualified-runtime\n";
 mod identity_support;
 use identity_support::{git, git_output};
 
-#[path = "check_runtime_identity_progress.rs"]
-mod progress;
-
+#[cfg_attr(
+    all(target_os = "linux", target_arch = "aarch64"),
+    ignore = "old-engine release binaries have no linux-arm64 target; P4 runs velnor-gen workflows (velnor-ci ships linux-arm64)"
+)]
 #[test]
 fn exported_execute_check_binds_current_runtime_and_rejects_stale_plan()
 -> Result<(), Box<dyn Error>> {

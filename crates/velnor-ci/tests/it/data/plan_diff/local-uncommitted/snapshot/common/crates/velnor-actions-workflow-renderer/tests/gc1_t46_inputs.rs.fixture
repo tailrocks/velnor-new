@@ -1,0 +1,4 @@
+        concat!(
+            "{{\"repository\":\"tailrocks/velnor-new\",\"repository_id\":1390620900,",
+            "\"event\":\"workflow_dispatch\",\"workflow_ref\":\"{workflow_ref}\",",
+            "\"ref\":\"refs/heads/main\",\"authority_commit\":\"{source}\",",

@@ -1,7 +1,5 @@
 [[test_lane]]
 root = "."
 features = ["local-mode"]
-
-[deny]
-locked = true
-config = "deny.toml"
+lint = true
+doc = true

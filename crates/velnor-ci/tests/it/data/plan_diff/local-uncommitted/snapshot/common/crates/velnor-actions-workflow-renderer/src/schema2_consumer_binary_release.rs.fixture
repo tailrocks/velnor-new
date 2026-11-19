@@ -1,0 +1,10 @@
+#[path = "schema2_consumer_stable_source.rs"]
+mod source;
+#[path = "schema2_consumer_stable_tag.rs"]
+mod tag;
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConsumerStableReleaseSpec {
+            .any(|part| part.is_empty() || part == "." || part == "..")
+        || !stable
+            .manifest_path
+            .bytes()

@@ -1,0 +1,4 @@
+pub const TOFU_PROVIDERS_PREPARE_SCRIPT: &str = concat!(
+    "set -eu; ",
+    "cd -P \"$RUNNER_TEMP\"; ",
+    "v=\"$PWD/velnor\"; ",

@@ -1,0 +1,4 @@
+            .current_dir(root),
+        PROCESS_OUTPUT_CAP,
+        LIVE_SCAN_TIMEOUT,
+    )

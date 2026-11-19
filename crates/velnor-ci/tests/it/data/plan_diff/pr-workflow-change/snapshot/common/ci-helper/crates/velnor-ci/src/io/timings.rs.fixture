@@ -1,0 +1,13 @@
+use super::{api_url, current_dir, http, token};
+use crate::cli::TimingsArgs;
+use crate::error::CiError;
+use crate::github::Repo;
+    let root = current_dir()?;
+    let checkout = read_checkout(&root).map_err(|e| CiError::new(e.to_string()))?;
+    let (roots, runner) = current_setup(&checkout.view)?;
+    let report = gather(
+    if let Some(parent) = file.parent() {
+        fs::create_dir_all(parent).map_err(failed)?;
+    }
+    fs::write(&file, text).map_err(failed)
+}

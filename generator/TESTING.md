@@ -14,7 +14,7 @@
 - A rule test is a table of inputs and outputs, not one test per case.
 - No test starts a program found through `PATH` or touches the network. `.config/nextest.toml` wraps every test binary, when nextest lists it and when it runs it, in `env PATH=/nonexistent`, and `no_programs` fails if `git`, `cargo` or `sh` can still be found through `PATH`. A program named by an absolute path is not blocked. The `io` module is tested by the real runs.
 - One behavior is tested at one layer.
-- A test that runs longer than 2 s fails the suite (`.config/nextest.toml`). Tests that build a temporary repository and run real cargo or git get 10 s.
+- A test that runs longer than 2 s fails the suite. `.config/nextest.toml` sets that limit on `profile.default`, and `profile.ci` inherits it. The same file gives 10 s, on both profiles, only to `release_cargo_include::a_cargo_config_include_is_refused_in_every_form_in_a_real_repository`, `release_cargo_include::a_cargo_config_key_off_the_harmless_list_is_refused_in_a_real_repository`, `release_cargo_include::a_cargo_config_of_harmless_keys_is_accepted_in_a_real_repository`, `release_symlink::a_committed_cargo_symlink_hiding_a_credential_provider_is_refused_in_a_real_repository` and `release_nested_toolchain::a_root_toolchain_taken_from_a_path_is_refused_in_a_real_repository`. Other tests that run real git in a temporary repository, including `the_binary_prints_the_golden_ruleset_for_a_repository_that_holds_the_sample`, keep the 2 s timeout.
 
 ## Samples
 
@@ -23,13 +23,13 @@ A sample is a folder `samples/<name>/` with `view/` (the files the generator rea
 Record a sample from a real checkout. Never type one by hand.
 
 ```sh
-cd generator && cargo run -p velnor-gen -- --root .. record-sample <checkout> <name>
+cargo run -p velnor-gen -- --root . record-sample <checkout> <name>
 ```
 
 Add one sample for each behavior a change introduces, not one for each case. After a change of the output, rewrite `expected/` and review its diff in the pull request, because that diff is the review of what users get.
 
 ```sh
-cd generator && UPDATE_GOLDENS=1 cargo nextest run
+UPDATE_GOLDENS=1 cargo nextest run
 ```
 
 The check `generator-samples` lints every `expected/` workflow with `jactionlint`.

@@ -1,0 +1,4 @@
+        .current_dir(&work)
+        .env_clear()
+        .env("PATH", path)
+        .status()?;

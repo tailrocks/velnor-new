@@ -1,0 +1,4 @@
+const RUNNER_PROFILE: &str = include_str!("seccomp/runner-v1.json");
+
+static RUNNER_SECURITY_OPT: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+

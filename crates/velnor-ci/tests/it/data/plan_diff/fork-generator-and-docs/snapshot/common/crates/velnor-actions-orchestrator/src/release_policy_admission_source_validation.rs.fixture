@@ -1,0 +1,4 @@
+            .any(|part| matches!(part, "" | "." | ".."))
+        || entry.path.contains('\\')
+        || !matches!(entry.mode.as_str(), "100644" | "100755")
+        || !identity::is_git_sha(&entry.sha)

@@ -1,0 +1,20 @@
+                let lexical = normalize(&path.parent().unwrap_or(path).join(target));
+                excluded(&lexical, root, targets)
+            }
+            Kind::File | Kind::Directory | Kind::Other => false,
+        .ancestors()
+        .find(|ancestor| entries.contains_key(*ancestor))?
+        .to_path_buf();
+    let relative = path.strip_prefix(&root).ok()?.to_path_buf();
+                root = root.parent()?.to_path_buf();
+            }
+            Component::CurDir => {}
+            Component::ParentDir | Component::RootDir | Component::Prefix(_) => return None,
+            .parent()
+            .zip(directory.file_name())
+            .is_some_and(|(parent, name)| {
+                entries
+                    .get(parent)
+                    .and_then(|children| children.get(Path::new(name)))
+                    == Some(&Kind::Directory)
+            })

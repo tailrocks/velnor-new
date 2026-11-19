@@ -1,0 +1,14 @@
+        if input.starts_with("../") {
+            input.drain(..3);
+        } else if input.starts_with("./") || input.starts_with("/./") {
+            input.drain(..2);
+        } else if input.starts_with("/../") {
+            input.drain(..3);
+            remove_last_path_segment(&mut output);
+        } else if input == "/.." {
+            "/".clone_into(&mut input);
+            remove_last_path_segment(&mut output);
+        } else if input == "." || input == ".." {
+            input.clear();
+        } else {
+            let segment_end = if let Some(after_root) = input.strip_prefix('/') {

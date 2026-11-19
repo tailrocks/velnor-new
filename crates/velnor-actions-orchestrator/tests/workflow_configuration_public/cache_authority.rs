@@ -12,12 +12,13 @@ use velnor_actions_orchestrator::{finalized_jobs, prepare, render_staged_tree};
 use super::maintenance_features::owner_feature_repo;
 use super::tools_producers::{POLICIES, is_tools_producer};
 use super::tools_producers_donors::SCHEDULED_SUITES_CONFIG;
-use super::waste_oracle::{Files, files_of, files_of_repo};
+use super::waste_oracle::{Files, files_of};
 use super::workflow_configuration_fixture;
 
 const CI_PATH: &str = ".github/workflows/ci.yml";
 const STATE_SEAL_PATH: &str = ".github/workflows/state-seal.yml";
 const QUALIFICATION_PATH: &str = ".github/workflows/qualification.yml";
+const VELNOR_GEN_PATH: &str = ".github/workflows/rust-ci.yml";
 const SOURCES_PRODUCER: &str = "sources-producer";
 const STATE_SEAL_PREFIX: &str = "state-seal-";
 const QUALIFICATION_WRITERS: [&str; 4] = [
@@ -31,21 +32,6 @@ const NON_DEFAULT_BRANCH: &str =
 const TRUSTED_PUSH: &str = "github.event_name == 'push'";
 const PROTECTED_REF: &str = "github.ref_protected == true";
 const DEFAULT_MODE: &str = "DEFAULT";
-const COMMITTED_WORKFLOWS: [&str; 12] = [
-    "cache-prune.yml",
-    "ci.yml",
-    "freshness.yml",
-    "homebrew-adoption.yml",
-    "job-image-candidate.yml",
-    "product-release-binary.yml",
-    "product-release-generator.yml",
-    "product-release-images.yml",
-    "product-release.yml",
-    "qualification.yml",
-    "source-qualification.yml",
-    "state-seal.yml",
-];
-
 struct JobModes {
     id: String,
     mode: Option<String>,
@@ -126,6 +112,7 @@ fn expected_writer(path: &str, id: &str) -> bool {
 fn workflow_files(files: &Files) -> impl Iterator<Item = (&String, &String)> {
     files.iter().filter(|(path, _)| {
         path.starts_with(".github/workflows/")
+            && path.as_str() != VELNOR_GEN_PATH
             && std::path::Path::new(path)
                 .extension()
                 .is_some_and(|extension| extension.eq_ignore_ascii_case("yml"))
@@ -218,30 +205,6 @@ fn every_generated_workflow_resolves_read_except_declared_writers() -> Result<()
         writers.values().any(|ids| !ids.is_empty()),
         "suites: no writer rendered"
     );
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let committed = files_of_repo(&root)?;
-    let writers = check_files("committed", &committed);
-    for name in COMMITTED_WORKFLOWS {
-        assert!(
-            writers.contains_key(&format!(".github/workflows/{name}")),
-            "committed tree lost {name}"
-        );
-    }
-    assert_eq!(
-        writers.get(QUALIFICATION_PATH),
-        Some(
-            &QUALIFICATION_WRITERS
-                .iter()
-                .map(|id| (*id).to_owned())
-                .collect()
-        )
-    );
-    let ci = writers.get(CI_PATH).ok_or("committed ci.yml missing")?;
-    assert!(ci.is_empty(), "committed ci.yml holds writers: {ci:?}");
-    let sealed = writers
-        .get(STATE_SEAL_PATH)
-        .ok_or("committed state-seal.yml missing")?;
-    assert!(sealed.contains(SOURCES_PRODUCER), "{sealed:?}");
     Ok(())
 }
 

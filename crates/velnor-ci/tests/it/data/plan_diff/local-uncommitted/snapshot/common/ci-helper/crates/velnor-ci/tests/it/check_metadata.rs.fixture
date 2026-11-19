@@ -1,0 +1,8 @@
+        .current_dir(dir)
+        .status()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(status.success());
+        .current_dir(dir)
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"))
+}

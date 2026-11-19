@@ -1,0 +1,10 @@
+    include_bytes!("../../../velnor-archive-guard/tests/fixtures/buildkit-attested-probe.oci.tar");
+const RUNNER: &str =
+    include_str!("../../../velnor-archive-guard/tests/fixtures/runner-family/buildkit-worker.json");
+const DIND: &str =
+    include_str!("../../../velnor-archive-guard/tests/fixtures/runner-family/buildkit-dind.json");
+const PROBE: &str =
+    include_str!("../../../velnor-archive-guard/tests/fixtures/runner-family/buildkit-probe.json");
+
+pub(super) fn make(role: &str, source: &str, revision: &str) -> Result<Vec<u8>, Box<dyn Error>> {
+    let mut files = read_archive()?;

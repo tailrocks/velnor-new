@@ -9,9 +9,6 @@ pub(crate) mod rust_install_audit;
 #[path = "cache_authority_audit.rs"]
 pub(crate) mod cache_authority_audit;
 
-#[path = "mise_task_suites_emit.rs"]
-mod mise_task_suites_emit;
-
 use velnor_actions_contract::ExecutionMode;
 use velnor_actions_workflow_renderer::guard;
 use velnor_actions_workflow_renderer::render::RenderedTree;
@@ -145,9 +142,6 @@ fn reject_symlink(path: &Path) -> Result<(), OrchestratorError> {
     }
     Ok(())
 }
-
-#[path = "cache_cleanup_emit.rs"]
-mod cache_cleanup_emit;
 
 #[path = "generate_leaf_links.rs"]
 mod leaf_links;

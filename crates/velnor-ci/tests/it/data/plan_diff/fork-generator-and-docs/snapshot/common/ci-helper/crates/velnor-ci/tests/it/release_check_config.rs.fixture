@@ -1,0 +1,4 @@
+            .current_dir(&dir)
+            .status()
+            .unwrap_or_else(|e| unreachable!("{e}"))
+            .code()

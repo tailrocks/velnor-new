@@ -1,0 +1,4 @@
+    if source.split('/').any(|part| part == "..") {
+        return Err(DockerfileProblem::ContextEscape(source.to_owned()));
+    }
+    Ok(())

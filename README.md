@@ -1,8 +1,10 @@
 # Velnor
 
-Velnor provides a stack-generic GitHub Actions workflow generator (`crates/velnor-actions-*`) and runner support via the Runner Scale Set controller (`crates/velnor-runner`). It scans repositories for registered stacks (Rust and OpenTofu in V1) and plans all detected, supported stacks unless `.velnor/config.toml` excludes them. TypeScript, Bun, and other stacks can be added later through dedicated adapters. Rust analysis, OpenTofu analysis, Mise integration, generic workflow rendering, orchestration, and CLI are separate crates, while macOS Runner Scale Set host supervision lives in `crates/velnor-runner`. Gates 0–8 are implemented and dogfooded.
+Velnor provides a stack-generic GitHub Actions workflow generator (`crates/velnor-actions-*`) and runner support via the Runner Scale Set controller (`crates/velnor-runner-*`). It scans repositories for registered stacks (Rust and OpenTofu in V1) and plans all detected, supported stacks unless `.velnor/config.toml` excludes them. TypeScript, Bun, and other stacks can be added later through dedicated adapters. Rust analysis, OpenTofu analysis, Mise integration, generic workflow rendering, orchestration, and CLI are separate crates, while macOS Runner Scale Set host supervision lives in `crates/velnor-runner-*`. Gates 0–8 are implemented and dogfooded.
 
 See the [documentation index](docs/README.md) for specifications, Runner Scale Set architecture, and implemented status.
+
+For the Rust CI generator, see [how Velnor keeps Rust CI fast](docs/rust-ci.md).
 
 The CLI is implemented (`crates/velnor-actions-cli`):
 
@@ -47,8 +49,8 @@ Historical freshness evidence checked on 2026-10-17 records Mise 2026.10.13,
 Rust 1.98.1, Nextest 0.9.148, and release-plz 0.3.172. The workflow
 pins in that evidence were `jdx/mise-action` v5.2.0 and `asamarts/alint` v0.18.4. See
 [`freshness-evidence-2026-10-17.md`](docs/implemented/freshness-evidence-2026-10-17.md).
-The current catalog selects Mise 2026.11.1, ALint 0.21.0, Rust 1.99.1,
-MBX 1.29.2, GitHub CLI 2.103.3, Nextest 0.9.151, and release-plz 0.4.3.
+The current catalog selects Mise 2026.11.1, ALint 0.22.1, Rust 1.99.1,
+MBX 1.29.2, GitHub CLI 2.104.0, Nextest 0.9.152, and release-plz 0.4.3.
 The earlier Mise 2026.10.19 qualification record is retained in
 [`mise-2026-10-19-qualification.md`](docs/implemented/mise-2026-10-19-qualification.md).
 The latest source captures and scoped runtime evidence for the refreshed Mise,
@@ -58,8 +60,8 @@ The prior source capture from 2026-10-25 remains in
 [`freshness-evidence-2026-10-25.md`](docs/implemented/freshness-evidence-2026-10-25.md).
 The selected stable compiler and workspace MSRV are both Rust 1.99.1 and
 1.99, respectively. `mise.toml` remains a read-only local developer input.
-The workflow pins `jdx/mise-action` v5.2.6 to reviewed commit
-`f5be966e4a917d54244728e6a5fdcd1d93a35e6c`; the action's
+The workflow pins `jdx/mise-action` v5.2.9 to reviewed commit
+`236a21c3b91f5db6d4e174b348674a0f0caac06d`; the action's
 `persist_github_token` default is false, and Velnor leaves it unset. This
 supersedes issue #6's earlier v5.0.1 target.
 
@@ -121,4 +123,4 @@ or a historical signed qualification.
 - Explain selected, executed, reused, skipped, and invalidated work.
 - Dogfood Velnor by generating and checking its own committed CI workflow.
 
-Runner support: macOS-hosted Docker execution and official GitHub Actions Runner Scale Set supervision live in `crates/velnor-runner` and are governed by `docs/proposed/macos-scaleset-runner.md`.
+Runner support: macOS-hosted Docker execution and official GitHub Actions Runner Scale Set supervision live in `crates/velnor-runner-*` and are governed by `docs/proposed/macos-scaleset-runner.md`.

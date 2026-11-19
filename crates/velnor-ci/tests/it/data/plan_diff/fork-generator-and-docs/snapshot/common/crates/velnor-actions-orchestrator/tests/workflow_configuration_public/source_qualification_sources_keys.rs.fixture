@@ -1,0 +1,4 @@
+        .current_dir(repo)
+        .output()?;
+    Ok(String::from_utf8(listing.stdout)?
+        .lines()

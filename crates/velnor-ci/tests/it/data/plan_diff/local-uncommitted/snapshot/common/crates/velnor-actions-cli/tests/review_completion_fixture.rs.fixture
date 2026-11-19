@@ -1,0 +1,14 @@
+#[path = "review_completion_fixture/comment_editor.rs"]
+mod comment_editor;
+#[path = "review_completion_fixture/dispositions.rs"]
+mod dispositions;
+#[path = "review_completion_fixture/review_content.rs"]
+mod review_content;
+
+const REPOSITORY: &str = "jackin-project/homebrew-tap";
+    let mut sonar_text = concat!(
+        "Issues  \n",
+        "![](https://sonarsource.github.io/sonarcloud-github-static-resources/v2/common/passed.svg '') [0 New issues](https://sonarcloud.io/project/issues?id=jackin-project_homebrew-tap&pullRequest=514&issueStatuses=OPEN,CONFIRMED&sinceLeakPeriod=true)  \n",
+        "![](https://sonarsource.github.io/sonarcloud-github-static-resources/v2/common/accepted.svg '') [0 Accepted issues](https://sonarcloud.io/project/issues?id=jackin-project_homebrew-tap&pullRequest=514&issueStatuses=ACCEPTED)\n\n",
+const GH: &str = include_str!("review_completion_fixture/gh_transport.sh");
+

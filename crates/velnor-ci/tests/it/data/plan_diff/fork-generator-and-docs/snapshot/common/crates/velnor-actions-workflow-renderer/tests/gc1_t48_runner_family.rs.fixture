@@ -1,0 +1,12 @@
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let gh = dir.path().join("gh");
+    fs::write(
+        &gh,
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let script = r#"sleep() { SECONDS=$((SECONDS + 1201)); }
+gh() { case "$*" in *workflows/ci.yml/runs*) if (( SECONDS > 1200 )) && [[ "$WAIT_FOREVER" != 1 ]]; then cat "$FIXTURE/complete"; else cat "$FIXTURE/pending"; fi ;; *actions/runs/31/artifacts*) cat "$FIXTURE/artifacts";; *) return 1;; esac; }
+source "$RESOLVER"
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let script = r#"sleep() { SECONDS=$((SECONDS + 1201)); }
+gh() { case "$*" in *git/ref/heads/main*) printf '{"ref":"refs/heads/main","object":{"type":"commit","sha":"%s"}}\n' "$GITHUB_SHA";; *workflows/*/runs*) if (( SECONDS > WAIT_UNTIL )) && [[ "$WAIT_FOREVER" != 1 ]]; then cat "$FIXTURE/$VELNOR_FAMILY_DISCOVERY_PHASE-complete"; else cat "$FIXTURE/$VELNOR_FAMILY_DISCOVERY_PHASE-pending"; fi;; *runs/31/artifacts*) cat "$FIXTURE/producer-artifact";; *runs/41/artifacts*) cat "$FIXTURE/qualification-artifact";; *runs/41/attempts/3/jobs*) cat "$FIXTURE/jobs";; *) return 1;; esac; }
+source "$RESOLVER"
