@@ -27,7 +27,7 @@ fn a_helper_that_predates_the_member_lock_key_keeps_hashing_the_lock_file() -> T
 
 #[test]
 fn a_helper_with_the_member_lock_key_reads_it_from_the_prepare_step_for_every_root() -> TestResult {
-    let text = workflow_with_helper("0.1.84")?;
+    let text = workflow_with_helper("0.1.85")?;
     assert!(!text.contains("Cargo.lock"), "{text}");
     for slug in ["root", "lab"] {
         let lock = format!("steps.prepare.outputs.lock_{slug}");

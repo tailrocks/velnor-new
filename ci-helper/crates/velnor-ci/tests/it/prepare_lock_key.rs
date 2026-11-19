@@ -118,7 +118,7 @@ fn workspace(version: &'static str, registry_version: &'static str) -> String {
 fn a_member_version_bump_keeps_the_lock_key() {
     let members = ["app", "core"];
     let before = key(&workspace("0.1.83", "1.0.229"), &members);
-    let after = key(&workspace("0.1.84", "1.0.229"), &members);
+    let after = key(&workspace("0.1.85", "1.0.229"), &members);
     assert_eq!(before, after);
 }
 
@@ -136,7 +136,7 @@ fn a_registry_version_change_during_a_bump_moves_the_lock_key() {
     let members = ["app", "core"];
     assert_ne!(
         key(&workspace("0.1.83", "1.0.229"), &members),
-        key(&workspace("0.1.84", "1.0.230"), &members)
+        key(&workspace("0.1.85", "1.0.230"), &members)
     );
 }
 
@@ -229,6 +229,6 @@ fn a_lock_that_does_not_parse_is_keyed_by_its_bytes() {
 #[test]
 fn a_member_the_metadata_does_not_list_keeps_its_version() {
     let listed = key(&workspace("0.1.83", "1.0.229"), &["app", "core"]);
-    let unlisted = key(&workspace("0.1.84", "1.0.229"), &["app"]);
+    let unlisted = key(&workspace("0.1.85", "1.0.229"), &["app"]);
     assert_ne!(listed, unlisted);
 }
