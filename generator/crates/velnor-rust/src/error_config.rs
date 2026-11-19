@@ -12,10 +12,7 @@ impl Reason {
                 f,
                 "test_setup names the root {root}, which is not a Cargo root of this repository; name the folder of a root's Cargo.toml, or . for the repository root"
             ),
-            Self::LintToolUnpinned(tool) => write!(
-                f,
-                "lint needs {tool}, which mise.toml does not pin; pin it there and run `mise lock`"
-            ),
+            Self::Lint(fault) => write!(f, "{fault}"),
             Self::LintDuplicate(id) => write!(
                 f,
                 "two lint entries get the job id {id}; set id on one of them"

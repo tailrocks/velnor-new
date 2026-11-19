@@ -199,6 +199,55 @@ async fn create_refuses_a_post_body_that_keeps_updates_enabled() -> TestResult<(
     Ok(())
 }
 
+async fn unverified_remote_ids(journal: &Journal) -> TestResult<Vec<i64>> {
+    let connection = journal.connection().await?;
+    let mut rows = connection
+        .query(
+            "SELECT remote_id FROM connection_scale_set_unverified ORDER BY remote_id",
+            (),
+        )
+        .await?;
+    let mut ids = Vec::new();
+    while let Some(row) = rows.next().await? {
+        ids.push(row.get::<i64>(0)?);
+    }
+    Ok(ids)
+}
+
+#[tokio::test]
+async fn refused_reread_keeps_the_created_id_without_binding_it() -> TestResult<()> {
+    let dir = tempfile::tempdir()?;
+    let (outcome, _transport, journal) = run(
+        &dir,
+        vec![(200, scale_set_json(true)), (200, scale_set_json(false))],
+    )
+    .await?;
+    assert!(outcome.is_err(), "outcome: {outcome:?}");
+    assert_eq!(unverified_remote_ids(&journal).await?, [10]);
+    assert_eq!(bound_scale_set_ids(&journal).await?, Vec::<i64>::new());
+    assert_eq!(intent_states(&journal).await?, ["uncertain"]);
+    Ok(())
+}
+
+#[tokio::test]
+async fn refused_post_body_keeps_the_created_id_without_binding_it() -> TestResult<()> {
+    let dir = tempfile::tempdir()?;
+    let (outcome, _transport, journal) = run(&dir, vec![(200, scale_set_json(false))]).await?;
+    assert!(outcome.is_err(), "outcome: {outcome:?}");
+    assert_eq!(unverified_remote_ids(&journal).await?, [10]);
+    assert_eq!(bound_scale_set_ids(&journal).await?, Vec::<i64>::new());
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_set_that_never_existed_leaves_no_unverified_id() -> TestResult<()> {
+    let dir = tempfile::tempdir()?;
+    let (outcome, _transport, journal) = run(&dir, vec![(500, String::new())]).await?;
+    assert!(outcome.is_err(), "outcome: {outcome:?}");
+    assert_eq!(unverified_remote_ids(&journal).await?, Vec::<i64>::new());
+    Ok(())
+}
+
 #[tokio::test]
 async fn create_refuses_a_set_from_a_foreign_runner_group() -> TestResult<()> {
     let dir = tempfile::tempdir()?;

@@ -19,11 +19,6 @@ pub const ATTEST_BUILD_PROVENANCE: PinnedAction = PinnedAction {
     commit: "4d101475d8b20a2381f78447822ac1eab6504dd8",
     tag: "v4.2.2",
 };
-pub const ALINT: PinnedAction = PinnedAction {
-    action: "asamarts/alint",
-    commit: "5054852d00d47affc9ea71440240147d9999f4d3",
-    tag: "v0.22.1",
-};
 pub const DOCKER_LOGIN: PinnedAction = PinnedAction {
     action: "docker/login-action",
     commit: "8aa5831fb8d48d8f76594c7ddde61ae58019f550",
@@ -57,9 +52,8 @@ pub const ACTIONS_CACHE: PinnedAction = PinnedAction {
     tag: "v6.1.0",
 };
 
-pub const PINNED_ACTIONS: [PinnedAction; 8] = [
+pub const PINNED_ACTIONS: [PinnedAction; 7] = [
     ATTEST_BUILD_PROVENANCE,
-    ALINT,
     DOCKER_LOGIN,
     DOCKER_SETUP_BUILDX,
     DOCKER_BUILD_PUSH,

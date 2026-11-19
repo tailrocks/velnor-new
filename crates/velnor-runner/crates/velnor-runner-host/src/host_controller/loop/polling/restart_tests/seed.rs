@@ -186,25 +186,8 @@ pub(super) async fn reservation_at_storage_initialization(
 }
 
 async fn unguarded(journal: &Journal, statements: &str) -> TestResult<()> {
-    let connection = journal.connection().await?;
-    let mut rows = connection
-        .query(
-            "SELECT name, sql FROM sqlite_schema WHERE type = 'trigger' ORDER BY rowid",
-            (),
-        )
-        .await?;
-    let mut saved = Vec::new();
-    while let Some(row) = rows.next().await? {
-        saved.push((row.get::<String>(0)?, row.get::<String>(1)?));
-    }
-    for (name, _) in &saved {
-        execute(journal, &format!("DROP TRIGGER {name}")).await?;
-    }
-    execute_all(journal, statements).await?;
-    for (_, sql) in saved {
-        execute(journal, &sql).await?;
-    }
-    Ok(())
+    let rows: Vec<String> = statements.split(";\n").map(str::to_owned).collect();
+    crate::launch::bootstrap::unbound_pair_fixtures::seed::unguarded(journal, &rows).await
 }
 
 async fn execute_all(journal: &Journal, rows: &str) -> TestResult<()> {

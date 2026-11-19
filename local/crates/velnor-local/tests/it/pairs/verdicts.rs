@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_local::pairs::{Decision, decisions, refused_among};
+use velnor_local::pairs::{Decision, consumed_agents, decisions, refused_among};
 use velnor_local::scenario::Outcome;
 use velnor_local::verdict::{Check, conclude, verdict};
 
@@ -156,4 +156,13 @@ fn a_refusal_counts_only_for_the_runs_the_event_created_on_its_side() {
     assert!(!refused_among(&all, true, &[9]));
     assert!(refused_among(&all, false, &[9]));
     assert!(!refused_among(&[line("trusted", 5, true)], true, &[5]));
+}
+
+#[test]
+fn every_agent_that_took_a_job_start_decision_is_consumed_even_when_refused() {
+    let text = [ADMITTED, REFUSED, FORK, ""].join("\n");
+    let consumed = consumed_agents(&text).unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(consumed.into_iter().collect::<Vec<_>>(), ["a1", "a2", "a3"]);
+    assert!(consumed_agents("").is_ok_and(|none| none.is_empty()));
+    assert!(consumed_agents("{not json").is_err());
 }

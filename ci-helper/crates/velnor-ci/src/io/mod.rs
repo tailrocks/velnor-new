@@ -6,6 +6,7 @@ mod archive_witness;
 mod artifact_api;
 mod artifact_unzip;
 mod audit;
+mod budget;
 mod build_inputs;
 mod cache;
 pub mod cache_api;
@@ -147,6 +148,17 @@ pub fn main() -> ExitCode {
     }
 }
 
+fn budget_limit() -> Result<Option<u64>, CiError> {
+    match std::env::var("VELNOR_CACHE_BUDGET_BYTES") {
+        Ok(text) if !text.trim().is_empty() => text
+            .trim()
+            .parse()
+            .map(Some)
+            .map_err(|_| CiError::new("VELNOR_CACHE_BUDGET_BYTES is not a number of bytes")),
+        _ => Ok(None),
+    }
+}
+
 fn run_decide(args: DecideArgs) -> Result<String, CiError> {
     let temp = std::env::var_os("RUNNER_TEMP")
         .filter(|dir| !dir.is_empty())
@@ -168,7 +180,13 @@ fn run_decide(args: DecideArgs) -> Result<String, CiError> {
     } else {
         let counts = activity::activity()?
             .unwrap_or_else(|| crate::logscan::scan(&String::from_utf8_lossy(&log)));
-        cache::decide_counts(&counts, &target, args.archive.as_deref(), now_seconds())?
+        cache::decide_counts(
+            &counts,
+            &target,
+            args.archive.as_deref(),
+            now_seconds(),
+            budget_limit()?,
+        )?
     };
     append_outputs(&format!("save={}\nsources={sources}\n", decision.save))?;
     Ok(decision.report)
@@ -179,6 +197,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Report(args) => report::run_report(&args),
         Command::Bench(BenchCommand::Collect(args)) => run_collect(&args),
         Command::Bench(BenchCommand::Compare(args)) => run_compare(&args),
+        Command::Bench(BenchCommand::Budget(args)) => budget::run_budget(&args),
         Command::Inputs(InputsCommand::Save(args)) => {
             save_inputs(&current_dir()?, &args.target_dir)
         }

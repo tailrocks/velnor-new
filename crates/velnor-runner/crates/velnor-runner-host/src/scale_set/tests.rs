@@ -69,7 +69,7 @@ async fn adopt_after_crash(uncertain: bool) -> TestResult<(String, String)> {
         .await?
         .ok_or("claim")?;
     if uncertain {
-        scoped.mark_scale_set_create_uncertain(claim).await?;
+        scoped.mark_scale_set_create_uncertain(claim, None).await?;
     }
     let labels = request.selector_labels().to_vec();
     let observed = ExistingScaleSetObservation::verified(

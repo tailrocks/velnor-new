@@ -151,7 +151,7 @@ fn groups_unknown_keys_ties_order_and_byte_overflow_keep_their_contract() {
     isolated.id = 201;
     entries.push(isolated);
     let deleted = plan(&entries, 0);
-    assert_eq!(deleted.len(), 4);
+    assert_eq!(deleted.len(), 6);
     assert!(deleted.iter().all(|id| *id < 200));
     let mut malformed = base(300, "tgt");
     malformed.key.push_str("-bad");
@@ -304,4 +304,46 @@ fn retired_per_root_sources_entries_are_deleted_within_any_budget() {
     ];
     assert_eq!(plan(&entries, 0), [11, 12, 13, 1]);
     assert_eq!(plan(&entries, 1_000), [11, 12, 13]);
+}
+
+fn with_compat(id: u64, compat: char) -> CacheEntry {
+    let mut entry = base(id, "tgt");
+    entry.key = entry
+        .key
+        .replace(&"b".repeat(16), &compat.to_string().repeat(16));
+    entry
+}
+
+#[test]
+fn a_target_entry_of_an_older_compatibility_family_is_deleted_whatever_the_budget() {
+    let entries = [
+        with_compat(1, 'a'),
+        with_compat(2, 'a'),
+        with_compat(3, 'b'),
+        with_compat(4, 'b'),
+    ];
+    assert_eq!(plan(&entries, u64::MAX), [1, 2]);
+    assert_eq!(plan(&entries, 0), [1, 2]);
+    assert_eq!(
+        plan(&[with_compat(2, 'a'), with_compat(1, 'b')], u64::MAX),
+        [1]
+    );
+    let mut other_job = with_compat(5, 'a');
+    other_job.key =
+        target_key(5, "rust-lint", "Cargo.toml").replace(&"b".repeat(16), &"a".repeat(16));
+    assert_eq!(
+        plan(&[other_job, with_compat(3, 'b')], u64::MAX),
+        Vec::<u64>::new()
+    );
+}
+
+#[test]
+fn a_sources_lock_restored_within_a_day_survives_even_when_two_newer_locks_exist() {
+    let entries = [base(1, "src"), base(2, "src"), base(3, "src")];
+    assert_eq!(plan(&entries, 0), [1]);
+    for (idle, expected) in [(DAY - 1, vec![]), (DAY, vec![1]), (2 * DAY, vec![1])] {
+        let mut restored = entries.clone();
+        restored[0].last_accessed_at = NOW - idle;
+        assert_eq!(plan(&restored, 0), expected, "idle {idle}");
+    }
 }

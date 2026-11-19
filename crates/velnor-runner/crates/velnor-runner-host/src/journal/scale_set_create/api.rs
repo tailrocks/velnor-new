@@ -27,8 +27,9 @@ impl ConnectionJournal {
     pub(crate) async fn mark_scale_set_create_uncertain(
         &self,
         claim: ScaleSetCreateClaim,
+        remote_id: Option<i64>,
     ) -> Result<ScaleSetCreateRecord, HostError> {
-        super::storage::mark_uncertain(self, claim).await
+        super::storage::mark_uncertain(self, claim, remote_id).await
     }
 
     pub(crate) async fn release_rejected_scale_set_create(

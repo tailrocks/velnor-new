@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+pub mod budget;
 pub mod cache;
 pub mod cargo_artifacts;
 pub mod cargo_package;
@@ -43,6 +44,7 @@ pub mod release_commit;
 pub mod release_family;
 pub mod release_preflight;
 pub mod release_published;
+pub mod release_recover;
 pub mod report;
 mod report_caches;
 pub mod reports;

@@ -51,13 +51,13 @@ max_parallel = 2
 
 [[workflow.job.step]]
 name = "Warm the cache"
-run = "velnor-ci warm"
+run = "velnor-ci prepare"
 continue_on_error = true
 env = { TARGET = "${{ matrix.target }}" }
 
 [[workflow.job.step]]
 name = "Run the check"
-run = "velnor-ci check"
+run = "velnor-ci check-metadata"
 "#;
 
 fn view_with(config: Option<&str>) -> Result<velnor_model::RepoView, Box<dyn Error>> {
@@ -237,9 +237,9 @@ fn check_job_running(command: &str) -> String {
             "needs = [\"plan\"]\nhelper = true\n",
             "needs = [\"plan\"]\n",
         )
-        .replace("run = \"velnor-ci warm\"", "run = \"echo warm\"")
+        .replace("run = \"velnor-ci prepare\"", "run = \"echo warm\"")
         .replace(
-            "run = \"velnor-ci check\"",
+            "run = \"velnor-ci check-metadata\"",
             &format!("run = '''{command}'''"),
         )
 }

@@ -11,6 +11,10 @@ use serde_json::Value;
 use crate::declared_fixture::{TestResult, rendered_text};
 use crate::yaml_tree::document;
 
+mod lists;
+mod scripted;
+mod shapes;
+
 const SCALE_SET: &str = "ubuntu-26.04-scale-set";
 const HOSTED: &str = "ubuntu-26.04";
 
@@ -21,56 +25,6 @@ const PIPE_REPLACED: [(&str, [&str; 2]); 1] = [(
         "grep -qx path-ok \"$RUNNER_TEMP/g4-path-out\"",
     ],
 )];
-
-const CHAINS: [&str; 21] = [
-    "bind-hosted",
-    "bind-scale-set",
-    "buildx-hosted",
-    "buildx-scale-set",
-    "compose-hosted",
-    "compose-scale-set",
-    "expect-fail-hosted",
-    "expect-fail-scale-set",
-    "mask-hosted",
-    "mask-scale-set",
-    "pressure-a-hosted",
-    "pressure-a-scale-set",
-    "pressure-b-hosted",
-    "pressure-b-scale-set",
-    "pressure-c-hosted",
-    "pressure-c-scale-set",
-    "submodule-hosted",
-    "submodule-scale-set",
-    "testcontainers-hosted",
-    "testcontainers-scale-set",
-    "outputs-scale-set",
-];
-
-const NARROWER: [&str; 23] = [
-    "bind-hosted",
-    "bind-scale-set",
-    "buildx-hosted",
-    "buildx-scale-set",
-    "cancel-hosted",
-    "cancel-scale-set",
-    "js-pin-hosted",
-    "js-pin-scale-set",
-    "expect-fail-hosted",
-    "expect-fail-scale-set",
-    "mask-hosted",
-    "mask-scale-set",
-    "pressure-a-hosted",
-    "pressure-a-scale-set",
-    "pressure-b-hosted",
-    "pressure-b-scale-set",
-    "pressure-c-hosted",
-    "pressure-c-scale-set",
-    "compare",
-    "outputs-hosted",
-    "outputs-scale-set",
-    "verify-hosted",
-    "verify-scale-set",
-];
 
 fn set(ids: &[&str]) -> BTreeSet<String> {
     ids.iter().map(|id| (*id).to_owned()).collect()
@@ -231,6 +185,12 @@ fn compare(
     let mut note = |kind: &'static str| {
         kinds.entry(kind).or_default().insert(id.to_owned());
     };
+    let (unrolled, looped) = shapes::unroll(engine);
+    let engine = &unrolled;
+    if looped {
+        note("a retry loop is written as plain probes");
+    }
+    shapes::compare(id, engine, generated, &mut note, unexpected);
     for key in ["name", "timeout-minutes", "needs", "outputs"] {
         if engine.get(key) != generated.get(key) {
             unexpected.push(format!(
@@ -257,9 +217,9 @@ fn compare(
     }
     if engine_lane == Some("scale-set") {
         note("runs-on gets the fork fence");
-        if engine.pointer("/defaults/run/shell").is_some() {
-            note("defaults.run.shell is not written");
-        }
+    }
+    if engine.pointer("/defaults/run/shell").is_some() {
+        note("defaults.run.shell is not written");
     }
     let from_engine = permissions(engine, engine_workflow);
     let from_generated = permissions(generated, generated_workflow);
@@ -274,6 +234,11 @@ fn compare(
                 "{id}: permissions: engine {from_engine:?}, generated {from_generated:?}"
             ));
         }
+    }
+    if scripted::SCRIPTED.contains(&id) {
+        note("a script replaces inline commands");
+        scripted::scripted_steps(id, engine, generated, unexpected);
+        return;
     }
     let (chains, flat) = engine_steps(engine);
     let (flat, piped) = replace_pipes(flat);
@@ -358,13 +323,20 @@ fn every_declared_qualification_job_matches_the_engine_job_but_for_the_listed_di
         .collect();
     let listed = |kind: &str| kinds.get(kind).cloned().unwrap_or_default();
     assert_eq!(listed("runs-on gets the fork fence"), scale_sets);
-    assert_eq!(listed("defaults.run.shell is not written"), scale_sets);
+    shapes::assert_notes(&kinds, &scale_sets);
     assert_eq!(
         listed("a pipe is written as two steps"),
         BTreeSet::from(["outputs-scale-set".to_owned()])
     );
-    assert_eq!(listed("an && chain is written as steps"), set(&CHAINS));
-    assert_eq!(listed("permissions are narrower"), set(&NARROWER));
+    assert_eq!(
+        listed("a script replaces inline commands"),
+        set(&scripted::SCRIPTED)
+    );
+    assert_eq!(
+        listed("an && chain is written as steps"),
+        set(&lists::CHAINS)
+    );
+    assert_eq!(listed("permissions are narrower"), set(&lists::NARROWER));
     Ok(())
 }
 

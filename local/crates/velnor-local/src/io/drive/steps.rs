@@ -9,9 +9,10 @@ use tokio::fs;
 use tokio::process::Command;
 
 use super::Driver;
+use crate::io::env::Engine;
 use crate::scenario::{next_patch, with_path};
 
-impl Driver<'_> {
+impl<E: Engine + Copy + Send> Driver<'_, E> {
     pub(super) async fn update_lock(
         &self,
         branch: &str,
@@ -71,7 +72,7 @@ impl Driver<'_> {
 
     pub(super) async fn schedule(&mut self, cron: &str) -> io::Result<()> {
         let branch = self.args.environment.default_branch.clone();
-        self.git(&["switch", "-q", &branch]).await?;
+        self.switch(&branch).await?;
         let sha = self.git(&["rev-parse", "HEAD"]).await?;
         let workflow = self.args.workflow.as_deref().unwrap_or_default();
         let payload = self.repository().schedule(cron, workflow);
@@ -84,7 +85,7 @@ impl Driver<'_> {
         branch: &str,
         inputs: &BTreeMap<String, serde_json::Value>,
     ) -> io::Result<()> {
-        self.git(&["switch", "-q", branch]).await?;
+        self.switch(branch).await?;
         let sha = self.git(&["rev-parse", "HEAD"]).await?;
         let workflow = self.args.workflow.as_deref().ok_or_else(|| {
             io::Error::other(

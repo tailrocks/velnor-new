@@ -4,9 +4,7 @@
 use std::collections::BTreeMap;
 
 use velnor_model::{JobId, RepoPath, VerdictSpec};
-use velnor_render::{
-    ALINT, ALLOWED_ACTIONS, RenderedJob, RenderedStep, RenderedWorkflow, check_rules,
-};
+use velnor_render::{ALLOWED_ACTIONS, RenderedJob, RenderedStep, RenderedWorkflow, check_rules};
 use velnor_rust::{Need, decide};
 
 use crate::facts::TestResult;
@@ -144,15 +142,9 @@ fn the_gate_refuses_a_lint_job_it_was_not_generated_with() -> TestResult {
 }
 
 #[test]
-fn a_lint_workflow_obeys_rule_nine_and_only_the_pinned_alint_action_joins_the_fixed_list()
--> TestResult {
+fn a_lint_workflow_obeys_rule_nine_and_adds_no_action_to_the_fixed_list() -> TestResult {
     rendered(LINT)?;
-    assert!(ALLOWED_ACTIONS.contains(&"asamarts/alint"));
-    let step = |uses: &str| RenderedStep {
-        name: "Run alint".to_owned(),
-        uses: Some(uses.to_owned()),
-        ..RenderedStep::default()
-    };
+    assert!(!ALLOWED_ACTIONS.contains(&"asamarts/alint"));
     let job = |steps| RenderedWorkflow {
         jobs: vec![RenderedJob {
             id: "lint-alint".to_owned(),
@@ -160,17 +152,14 @@ fn a_lint_workflow_obeys_rule_nine_and_only_the_pinned_alint_action_joins_the_fi
             ..RenderedJob::default()
         }],
     };
+    let step = |uses: &str| RenderedStep {
+        name: "Run alint".to_owned(),
+        uses: Some(uses.to_owned()),
+        ..RenderedStep::default()
+    };
     assert!(
         check_rules(&job(vec![step(&format!(
             "asamarts/alint@{}",
-            ALINT.commit
-        ))]))
-        .is_ok()
-    );
-    assert!(check_rules(&job(vec![step("asamarts/alint@v0.22.1")])).is_err());
-    assert!(
-        check_rules(&job(vec![step(&format!(
-            "asamarts/other@{}",
             "a".repeat(40)
         ))]))
         .is_err()

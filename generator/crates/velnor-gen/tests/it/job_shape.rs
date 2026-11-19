@@ -70,7 +70,7 @@ pub(crate) fn target(kind: TargetKind) -> Target {
     }
 }
 
-fn with_targets(package: &str, kinds: &[TargetKind]) -> RustMember {
+pub(crate) fn with_targets(package: &str, kinds: &[TargetKind]) -> RustMember {
     RustMember {
         targets: kinds.iter().map(|kind| target(*kind)).collect(),
         ..member(package, &format!("crates/{package}"), &[])
