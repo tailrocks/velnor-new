@@ -125,11 +125,7 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
     let declared_runner = raw.runner.is_some();
     let hosted_key = raw.hosted.is_some() || test_groups.iter().any(|group| group.hosted.is_some());
     let runner = runner(raw.runner, defaults.runner).map_err(invalid)?;
-    let crates_mirror = raw
-        .crates_mirror
-        .map(crate::config_mirror::mirror)
-        .transpose()
-        .map_err(invalid)?;
+    let crates_mirror = crate::config_mirror::optional(raw.crates_mirror).map_err(invalid)?;
     let hosted_runners = crate::config_hosting::resolve(
         (&runner, raw.hosted.or((!declared_runner).then_some(true))),
         crates_mirror.as_ref(),
@@ -137,10 +133,9 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
     )
     .map_err(invalid)?;
     let fork_runner = crate::config_fork::fork_runner(raw.fork_runner, &runner).map_err(invalid)?;
-    let mbx_remote = crate::config_cache::mbx_remote(raw.cache.as_ref()).map_err(invalid)?;
-    let mbx_store = raw.mbx_shared_store.unwrap_or(false).into();
-    let mbx =
-        crate::config_cache::mbx(raw.cache.as_ref(), mbx_remote, mbx_store).map_err(invalid)?;
+    let (mbx_remote, mbx_store, mbx) =
+        crate::config_cache::mbx_settings(raw.cache.as_ref(), raw.mbx_shared_store)
+            .map_err(invalid)?;
     Ok(RustCiConfig {
         workspace_groups,
         external_workflows,

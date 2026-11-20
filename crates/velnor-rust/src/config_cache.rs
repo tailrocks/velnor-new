@@ -25,11 +25,16 @@ pub(crate) fn mbx_remote(raw: Option<&RawCache>) -> Result<MbxRemote, Reason> {
     }
 }
 
-pub(crate) fn mbx(
+pub(crate) fn mbx_settings(
     raw: Option<&RawCache>,
-    remote: MbxRemote,
-    store: MbxStore,
-) -> Result<MbxMode, Reason> {
+    shared_store: Option<bool>,
+) -> Result<(MbxRemote, MbxStore, MbxMode), Reason> {
+    let remote = mbx_remote(raw)?;
+    let store = shared_store.unwrap_or(false).into();
+    Ok((remote, store, mbx(raw, remote, store)?))
+}
+
+fn mbx(raw: Option<&RawCache>, remote: MbxRemote, store: MbxStore) -> Result<MbxMode, Reason> {
     match raw.and_then(|cache| cache.mbx) {
         None => Ok(MbxMode::Default),
         Some(true) => Ok(MbxMode::Required),
