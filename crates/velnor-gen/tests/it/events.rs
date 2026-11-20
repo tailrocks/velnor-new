@@ -177,4 +177,3 @@ fn a_default_branch_with_a_filter_character_is_escaped_so_the_push_filter_matche
 }
 
 mod policy;
-

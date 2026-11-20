@@ -204,4 +204,3 @@ impl Drop for WorktreeScratch {
 }
 
 mod metadata;
-

@@ -201,4 +201,3 @@ fn position(order: &[String], name: &str) -> Result<usize, Box<dyn std::error::E
 }
 
 mod publication;
-
