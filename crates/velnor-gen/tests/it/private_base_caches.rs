@@ -188,7 +188,11 @@ fn the_sources_cache_saves_the_cargo_downloads_and_nothing_that_holds_a_credenti
 
 #[test]
 fn an_older_helper_or_a_config_that_names_registries_keeps_the_refusal() -> TestResult {
-    for (helper, config, lock) in [("0.1.110", "", GIT_LOCK), ("0.1.107", "", GIT_LOCK), ("0.1.88", "", GIT_LOCK)] {
+    for (helper, config, lock) in [
+        ("0.1.110", "", GIT_LOCK),
+        ("0.1.107", "", GIT_LOCK),
+        ("0.1.88", "", GIT_LOCK),
+    ] {
         let repo = consumer(helper, lock, config)?;
         let (text, notes) = text_and_notes(&repo)?;
         for absent in [
