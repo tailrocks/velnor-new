@@ -4,6 +4,7 @@
 use std::fs;
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
 
 use crate::error::CiError;
 
@@ -50,26 +51,50 @@ pub(super) fn resolve(link: &Path, checkout: &Path) -> Result<PathBuf, CiError> 
     )))
 }
 
+fn mbx_setting(key: &str) -> Option<PathBuf> {
+    let output = Command::new("mbx")
+        .args(["settings", "get", key])
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .output()
+        .ok()
+        .filter(|output| output.status.success())?;
+    let text = String::from_utf8(output.stdout).ok()?;
+    let text = text.trim();
+    (!text.is_empty()).then(|| PathBuf::from(text))
+}
+
+fn env_path(name: &str) -> Option<PathBuf> {
+    std::env::var_os(name)
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+}
+
+fn setting(env: &str, key: &str) -> Option<PathBuf> {
+    env_path(env).or_else(|| mbx_setting(key))
+}
+
+fn default_cache_dir() -> Option<PathBuf> {
+    if let Some(xdg) = env_path("XDG_CACHE_HOME") {
+        return Some(xdg.join("mbx"));
+    }
+    let home = env_path("HOME")?;
+    Some(if cfg!(target_os = "macos") {
+        home.join("Library/Caches/mbx")
+    } else {
+        home.join(".cache/mbx")
+    })
+}
+
 fn allowed_roots(checkout: &Path) -> Vec<PathBuf> {
-    let var = |name: &str| std::env::var_os(name).filter(|value| !value.is_empty());
-    let home = var("HOME").map(PathBuf::from);
-    let cache_dirs: Vec<PathBuf> = match var("MBX_CACHE_DIR") {
-        Some(dir) => vec![PathBuf::from(dir)],
-        None => var("XDG_CACHE_HOME")
-            .map(|dir| PathBuf::from(dir).join("mbx"))
-            .into_iter()
-            .chain(home.iter().map(|home| home.join(".cache/mbx")))
-            .chain(home.iter().map(|home| home.join("Library/Caches/mbx")))
-            .collect(),
-    };
-    let target_root = var("MBX_TARGET_ROOT").map(PathBuf::from).map(|root| {
-        cache_dirs
-            .first()
-            .map_or_else(|| root.clone(), |cache| cache.join(&root))
+    let cache_dir = setting("MBX_CACHE_DIR", "cache_dir").or_else(default_cache_dir);
+    let target_root = setting("MBX_TARGET_ROOT", "target.root").map(|root| match &cache_dir {
+        Some(cache) => cache.join(&root),
+        None => root,
     });
     let mut roots = vec![checkout.to_path_buf()];
-    roots.extend(var("RUNNER_TEMP").map(PathBuf::from));
-    roots.extend(cache_dirs.into_iter().map(|dir| dir.join("targets")));
+    roots.extend(env_path("RUNNER_TEMP"));
+    roots.extend(cache_dir.map(|dir| dir.join("targets")));
     roots.extend(target_root);
     let mut roots: Vec<PathBuf> = roots
         .into_iter()

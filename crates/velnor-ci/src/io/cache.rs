@@ -276,6 +276,11 @@ pub(super) fn run_decide(args: &crate::cli_cache::DecideArgs) -> Result<String, 
             save: false,
             report: reason,
         }
+    } else if let Some(linked) = linked_target_notice(&target) {
+        Decision {
+            save: false,
+            report: linked,
+        }
     } else {
         let recorded = super::activity::invocations()?;
         let counts = super::activity::activity(recorded.as_deref())?
@@ -305,6 +310,23 @@ pub(super) fn run_decide(args: &crate::cli_cache::DecideArgs) -> Result<String, 
         );
     }
     Ok(report)
+}
+
+fn linked_target_notice(target: &Path) -> Option<String> {
+    fs::symlink_metadata(target)
+        .ok()
+        .filter(|metadata| metadata.file_type().is_symlink())?;
+    let leads_to = fs::canonicalize(target).map_or_else(
+        |_| "an unresolved directory".to_owned(),
+        |resolved| resolved.display().to_string(),
+    );
+    Some(command_line(
+        "notice",
+        &format!(
+            "{} is a link to {leads_to}; saving it would archive the link, not the build directory, and a fresh runner would restore a dangling link; saving nothing (turn off mbx managed target views with `mbx settings set target.views false` on lanes that save this cache)",
+            target.display()
+        ),
+    ))
 }
 
 fn over_budget(target: &Path, size: u64, budget: u64, pruning: &str) -> String {

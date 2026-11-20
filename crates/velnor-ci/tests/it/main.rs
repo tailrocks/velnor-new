@@ -98,6 +98,7 @@ mod io_shared_targets;
 mod io_snapshot_storage;
 mod io_stderr;
 mod io_target_case;
+mod io_target_link_roots;
 mod lane_guard;
 mod lane_guard_generated;
 mod logscan;

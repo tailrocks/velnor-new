@@ -17,12 +17,14 @@ struct Env<'a> {
 }
 
 fn restored(repo: &Repo, env: &Env<'_>) -> Output {
+    let stub = super::io_target_link_roots::mbx_stub();
     let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
     command
         .args(["restored", "--target-dir", "target"])
         .current_dir(repo.root())
         .env_remove("MBX_TARGET_ROOT")
         .env_remove("XDG_CACHE_HOME")
+        .env("PATH", super::io_target_link_roots::stub_path(&stub))
         .env("MBX_CACHE_DIR", env.cache)
         .env("RUNNER_TEMP", env.temp)
         .env("HOME", env.home);
