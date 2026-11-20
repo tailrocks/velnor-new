@@ -187,6 +187,7 @@ impl RootJobs<'_> {
             steps.push(self.gated(StepKind::TestSetup {
                 name: "Check that Docker answers".to_owned(),
                 run: "docker info".to_owned(),
+                before_build: false,
             }));
         }
         steps.extend(

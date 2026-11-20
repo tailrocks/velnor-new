@@ -99,6 +99,7 @@ impl Lane {
             ..step(StepKind::TestSetup {
                 name: format!("Skip test lane ({})", features.label()),
                 run: "echo 'skipped: no selected packages'".to_owned(),
+                before_build: false,
             })
         }
     }

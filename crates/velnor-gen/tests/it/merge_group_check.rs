@@ -110,6 +110,7 @@ fn test_setup_and_the_advisory_fetch_are_checks_and_other_steps_are_not() {
         StepKind::TestSetup {
             name: String::from("setup"),
             run: String::from("true"),
+            before_build: false,
         }
         .is_check()
     );
@@ -121,4 +122,16 @@ fn test_setup_and_the_advisory_fetch_are_checks_and_other_steps_are_not() {
         .is_check()
     );
     assert!(!StepKind::MergeQueueCheck.is_check());
+}
+
+#[test]
+fn a_build_phase_setup_is_not_a_check_because_the_archive_build_it_guards_is_not_one() {
+    assert!(
+        !StepKind::TestSetup {
+            name: String::from("setup"),
+            run: String::from("true"),
+            before_build: true,
+        }
+        .is_check()
+    );
 }
