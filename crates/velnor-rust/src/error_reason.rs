@@ -48,7 +48,7 @@ impl Reason {
             ),
             Self::UnknownRoot(root) => write!(
                 f,
-                "has times for {root}, which is not a Cargo root of this repository; run `velnor-ci timings` again"
+                "has times for {root}, which is not a Cargo root of this repository; run `velnor-ci timings --repo owner/name` again"
             ),
             _ => Ok(()),
         }
