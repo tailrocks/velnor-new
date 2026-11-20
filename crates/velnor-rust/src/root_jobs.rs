@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod archive;
+mod lanes;
 
 use velnor_model::{
     CargoCommand, HelperCommand, Job, JobId, RepoFacts, RepoPath, Shape, ShapeDecision, Step,
@@ -31,6 +32,34 @@ struct RootJobs<'a> {
     audit: AuditLocation,
 }
 
+fn builder<'a>(
+    facts: &'a RepoFacts,
+    unit: &'a Unit,
+    shape: Shape,
+    suffixed: bool,
+    lane: &'a Lane,
+) -> RootJobs<'a> {
+    let members: Vec<Member> = unit
+        .roots
+        .iter()
+        .map(|root| Member::new(root, lane, facts, unit.grouped))
+        .collect();
+    RootJobs {
+        facts,
+        unit,
+        lane,
+        members,
+        suffixed,
+        audit: if !audits_per_root(facts)
+            && (suffixed || (shape != Shape::OneJob && crate::base_cache::writes_base(facts)))
+        {
+            AuditLocation::Separate
+        } else {
+            AuditLocation::Inline
+        },
+    }
+}
+
 pub(crate) fn root_jobs(
     facts: &RepoFacts,
     unit: &Unit,
@@ -38,26 +67,7 @@ pub(crate) fn root_jobs(
     suffixed: bool,
     lane: &Lane,
 ) -> Vec<Job> {
-    let members: Vec<Member> = unit
-        .roots
-        .iter()
-        .map(|root| Member::new(root, lane, facts, unit.grouped))
-        .collect();
-    let builder = RootJobs {
-        facts,
-        unit,
-        lane,
-        members,
-        suffixed,
-        audit: if !audits_per_root(facts)
-            && (suffixed
-                || (decision.shape != Shape::OneJob && crate::base_cache::writes_base(facts)))
-        {
-            AuditLocation::Separate
-        } else {
-            AuditLocation::Inline
-        },
-    };
+    let builder = builder(facts, unit, decision.shape, suffixed, lane);
     let comment = Some(decision.reason);
     match decision.shape {
         Shape::OneJob => vec![Job {
@@ -67,6 +77,16 @@ pub(crate) fn root_jobs(
         Shape::LintAndTest => builder.split(comment, false),
         Shape::BuildThenGroups => builder.split(comment, !unit.grouped),
     }
+}
+
+pub(crate) fn lane_jobs(
+    facts: &RepoFacts,
+    unit: &Unit,
+    shape: Shape,
+    suffixed: bool,
+    lane: &Lane,
+) -> Vec<Job> {
+    builder(facts, unit, shape, suffixed, lane).parallel_lanes()
 }
 
 impl RootJobs<'_> {

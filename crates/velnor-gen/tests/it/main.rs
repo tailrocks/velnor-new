@@ -98,6 +98,8 @@ mod helper_tool_paths;
 mod helper_workflow_size;
 mod hosted_key;
 mod lane_guard_steps;
+mod lane_parallel_job;
+mod lane_parallel_size;
 mod mbx_store;
 mod resolve_links;
 mod rules_render;

@@ -10,6 +10,7 @@ use velnor_rust::INPUTS_IDENTITY_HELPER;
 
 use crate::{
     BUDGET_HELPER, COMPATIBLE_HELPER_SERIES, GenerateError, HELPER_MINIMUM, TEST_LANE_HELPER,
+    TEST_LANE_JOB_HELPER,
 };
 
 /// The first `velnor-ci` whose `.velnor/rust-ci.toml` parser accepts the `hosted` key.
@@ -94,6 +95,7 @@ pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, Generate
             release.version().clone(),
         ));
     }
+    check_lane_job(facts, release)?;
     if facts.config.mbx_store == MbxStore::Shared && !release.version().at_least((0, 1, 85)) {
         return Err(GenerateError::MbxStoreHelperTooOld(
             release.version().clone(),
@@ -125,6 +127,16 @@ pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, Generate
         ));
     }
     Ok(release)
+}
+
+fn check_lane_job(facts: &RepoFacts, release: &HelperRelease) -> Result<(), GenerateError> {
+    let written = facts.config.test_lanes.iter().any(|lane| lane.job_written);
+    if written && !release.version().at_least(TEST_LANE_JOB_HELPER) {
+        return Err(GenerateError::TestLaneJobHelperTooOld(
+            release.version().clone(),
+        ));
+    }
+    Ok(())
 }
 
 pub fn require_compatible(version: &HelperVersion) -> Result<(), GenerateError> {
