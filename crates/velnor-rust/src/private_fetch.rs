@@ -64,7 +64,7 @@ pub(crate) fn insert(sources: Option<&PrivateSources>, jobs: &mut [Job]) {
 /// `!cancelled()` compile steps still ran, offline, and buried the real error under a
 /// "you are in the offline mode" failure. The order is unchanged, so the token still comes
 /// before any repository code and is never in the environment of a compile step.
-fn status<'a>(mut compiling: impl Iterator<Item = &'a Step>) -> When {
+pub(crate) fn status<'a>(mut compiling: impl Iterator<Item = &'a Step>) -> When {
     if compiling.any(|step| step.when == When::NotCancelled) {
         When::NotCancelled
     } else {
@@ -92,7 +92,7 @@ fn advisory_fetch(steps: &[Step]) -> Vec<StepKind> {
     }
 }
 
-fn shared_gate<'a>(steps: impl Iterator<Item = &'a Step>) -> Option<Gate> {
+pub(crate) fn shared_gate<'a>(steps: impl Iterator<Item = &'a Step>) -> Option<Gate> {
     let mut gates = steps.map(|step| step.gate.as_ref());
     let first = gates.next()??;
     let mut shared = first.clone();
@@ -139,7 +139,7 @@ fn runs_repository_code(step: &Step) -> bool {
     compiles(step) || matches!(step.kind, StepKind::TestSetup { .. })
 }
 
-fn compiles(step: &Step) -> bool {
+pub(crate) fn compiles(step: &Step) -> bool {
     matches!(&step.kind, StepKind::Cargo(command) if !matches!(
         command,
         CargoCommand::FmtCheck

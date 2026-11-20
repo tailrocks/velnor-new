@@ -119,6 +119,18 @@ pub(super) const RUST_CI: &[KeyGate] = &[
     gate(RustCi, "private_sources.private_key", (0, 1, 88)),
     // helper-gate: first in tools-v0.1.88 via eb3f4deda4
     gate(RustCi, "private_sources.repositories", (0, 1, 88)),
+    // First released in tools-v0.1.109 (not tagged yet when this gate was written).
+    gate(RustCi, "release_assets", (0, 1, 109)),
+    // First released in tools-v0.1.109 (not tagged yet when this gate was written).
+    gate(RustCi, "release_assets.asset", (0, 1, 109)),
+    // First released in tools-v0.1.109 (not tagged yet when this gate was written).
+    gate(RustCi, "release_assets.dest", (0, 1, 109)),
+    // First released in tools-v0.1.109 (not tagged yet when this gate was written).
+    gate(RustCi, "release_assets.repo", (0, 1, 109)),
+    // First released in tools-v0.1.109 (not tagged yet when this gate was written).
+    gate(RustCi, "release_assets.sha256", (0, 1, 109)),
+    // First released in tools-v0.1.109 (not tagged yet when this gate was written).
+    gate(RustCi, "release_assets.tag", (0, 1, 109)),
     gate(RustCi, "required_check", HELPER_MINIMUM),
     gate(RustCi, "runner", HELPER_MINIMUM),
     gate(RustCi, "shape", HELPER_MINIMUM),
