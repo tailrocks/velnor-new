@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 
 use velnor_gen::{
     Drift, ExternalWorkflowError, GenerateError, drift, expected_files, external_skips,
-    plan_generate,
+    generated_files, plan_generate,
 };
 use velnor_model::{RepoPath, RepoView};
 use velnor_render::seal;
@@ -139,8 +139,22 @@ fn plan(
     files: &Disk,
     engine_configured: bool,
 ) -> Result<(Vec<Drift>, String), Box<dyn std::error::Error>> {
+    let mut view = view.clone();
+    for (workspace, metadata) in view.rust_metadata.clone() {
+        for manifest in
+            std::iter::once(workspace).chain(metadata.members.into_iter().map(|m| m.manifest))
+        {
+            view.files.entry(manifest).or_default();
+        }
+    }
+    let view = &view;
+    let mut disk: Disk = generated_files(view)?
+        .into_iter()
+        .map(|(path, text)| (path, text.into_bytes()))
+        .collect();
+    disk.extend(files.clone());
     let mut out = Vec::new();
-    let (_, drifts) = plan_generate(view, files, engine_configured, &mut out)?;
+    let (_, drifts) = plan_generate(view, &disk, engine_configured, &mut out)?;
     Ok((drifts, String::from_utf8(out)?))
 }
 
