@@ -67,6 +67,7 @@ mod delta_cache;
 mod delta_helper;
 mod detect;
 mod doc_steps;
+mod docs_on_pr;
 mod docs_run;
 mod draft_skip_matrix;
 mod drift;
