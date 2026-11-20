@@ -13,6 +13,7 @@ pub mod cache_api;
 mod cache_paths;
 mod cache_prune;
 mod cache_sources;
+mod cache_target_link;
 mod cache_upload;
 mod cold;
 mod configurations;
