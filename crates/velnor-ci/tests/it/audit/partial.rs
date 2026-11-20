@@ -41,7 +41,7 @@ fn a_build_script_run_with_a_fingerprint_and_no_output_makes_the_audit_refuse() 
     refuses(
         &audit(&repo, &["--write"]),
         &format!(
-            "/{DEBUG} for lib target  (build script run with a cargo fingerprint and no output);"
+            "/{DEBUG} for lib target  (build script run with a cargo fingerprint and no output (unit f0000000000000e1));"
         ),
     );
     assert!(!written(&repo));
