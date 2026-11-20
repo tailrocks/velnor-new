@@ -3,13 +3,16 @@
 
 //! The SHA-256 of the mise binary every generated `jdx/mise-action` step installs.
 //!
-//! The action's `sha256` input compares the installed executable with one digest. A job whose
-//! runner labels all name one platform gets that platform's digest as a literal. Any other job
-//! (an unknown label, a matrix runner, a fork runner of another architecture) keeps a run-time
+//! The action's `sha256` input compares the installed executable with one digest, and a non-empty
+//! input makes the action skip its signed-archive check. That check also covers `mise-shim.exe`,
+//! which the Windows archive ships beside `mise.exe` and which only the signed check verifies.
+//! Windows therefore carries no digest: its selection is empty and the signed check runs. A job
+//! whose runner labels all name one platform gets that platform's digest as a literal. Any other
+//! job (an unknown label, a matrix runner, a fork runner of another architecture) keeps a run-time
 //! selection by `runner.os` and `runner.arch`, which is longer (about 500 bytes a step, and a
-//! workflow of many roots has to stay under the 500 000 byte limit). A platform without a row
-//! selects a text that matches no binary, so the action fails with a SHA256 mismatch instead of
-//! installing an unchecked binary.
+//! workflow of many roots has to stay under the 500 000 byte limit). A non-Windows platform
+//! without a row selects a text that matches no binary, so the action fails with a SHA256
+//! mismatch instead of installing an unchecked binary.
 //!
 //! The table is checked in, next to [`MISE_VERSION`], because Velnor owns the mise pin (mise is
 //! not a project-declared catalog tool, see hard decision 4). A version without a row does not
@@ -29,7 +32,7 @@ use crate::steps::MISE_VERSION;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MiseBinary {
     pub version: &'static str,
-    pub sha256: [(&'static str, &'static str); 6],
+    pub sha256: [(&'static str, &'static str); 4],
 }
 
 /// Every mise release the renderer can pin. Rewrite the row with
@@ -44,14 +47,6 @@ pub const MISE_BINARIES: &[MiseBinary] = &[MiseBinary {
         (
             "Linux-X64",
             "b603a4f48563fc379a794d9ea2cf9f709ed276c9141068604cb0c59fa3e674a9",
-        ),
-        (
-            "Windows-ARM64",
-            "60b9518958e796a5bf57e782135b845318c4dc47d21a6c7e4628b6a4c55cecfc",
-        ),
-        (
-            "Windows-X64",
-            "a448e986baedc177173b5f63c81343269eef6fef8e3e916b6151580a80e115aa",
         ),
         (
             "macOS-ARM64",
@@ -141,7 +136,9 @@ fn selecting(binary: &MiseBinary) -> Value {
             ))
         })
         .collect();
-    Value::Expr(format!("${{{{ {chain}'{NO_DIGEST}' }}}}"))
+    Value::Expr(format!(
+        "${{{{ runner.os != 'Windows' && ({chain}'{NO_DIGEST}') || '' }}}}"
+    ))
 }
 
 /// Narrows the run-time digest selection of every mise step of `job` to the one digest of the
