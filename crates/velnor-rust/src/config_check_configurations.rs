@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use serde::Deserialize;
-use velnor_model::{CheckConfigurations, RepoPath, RustCiConfig, RustRoot};
+use velnor_model::{CheckConfigurations, RepoPath, RepoView, RustCiConfig, RustRoot};
 
-use crate::config::CONFIG_PATH;
+use crate::config::{CONFIG_PATH, rule_matches};
 use crate::error::{DetectError, Reason};
 
 #[derive(Deserialize)]
@@ -49,21 +49,46 @@ fn entry(raw: RawCheckConfigurations) -> Result<CheckConfigurations, Reason> {
     })
 }
 
-pub(crate) fn check(config: &RustCiConfig, rust_roots: &[RustRoot]) -> Result<(), DetectError> {
-    match config.check_configurations.iter().find(|entry| {
+pub(crate) fn check(
+    view: &RepoView,
+    config: &RustCiConfig,
+    rust_roots: &[RustRoot],
+) -> Result<(), DetectError> {
+    let invalid = |reason| DetectError::invalid(&CONFIG_PATH, reason);
+    if let Some(entry) = config.check_configurations.iter().find(|entry| {
         !rust_roots
             .iter()
             .any(|root| root.manifest.parent() == entry.root)
     }) {
-        Some(entry) => Err(DetectError::invalid(
-            &CONFIG_PATH,
-            Reason::UnknownCheckConfigurationsRoot(
-                entry
-                    .root
-                    .as_ref()
-                    .map_or_else(|| ".".to_owned(), ToString::to_string),
-            ),
-        )),
-        None => Ok(()),
+        return Err(invalid(Reason::UnknownCheckConfigurationsRoot(
+            entry
+                .root
+                .as_ref()
+                .map_or_else(|| ".".to_owned(), ToString::to_string),
+        )));
     }
+    for file in config
+        .check_configurations
+        .iter()
+        .filter_map(CheckConfigurations::file)
+    {
+        let reason = if !view.tracked_paths.contains(&file) {
+            Some("a file that is not tracked in the repository")
+        } else if config
+            .non_inputs
+            .iter()
+            .any(|glob| rule_matches(glob, &file))
+        {
+            Some("a file that a non_inputs rule ignores")
+        } else {
+            None
+        };
+        if let Some(reason) = reason {
+            return Err(invalid(Reason::InvalidValue {
+                key: "check_configurations.configurations",
+                value: format!("{file}, {reason}"),
+            }));
+        }
+    }
+    Ok(())
 }

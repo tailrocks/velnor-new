@@ -54,6 +54,13 @@ pub(crate) fn classify<'c>(
     if let Some(trigger) = global(path, is_root_manifest) {
         return Class::Global(trigger);
     }
+    if config
+        .check_configurations
+        .iter()
+        .any(|check| check.file().as_ref() == Some(path))
+    {
+        return Class::Unknown;
+    }
     // velnor-gen owns this workflow and it runs no Rust code; rust-ci.yml is matched above.
     if generated {
         return Class::Nothing;

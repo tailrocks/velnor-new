@@ -173,7 +173,6 @@ pub(crate) fn check_tests(
         ));
     }
     crate::config_test_setup::check(config, rust_roots)?;
-    crate::config_check_configurations::check(config, rust_roots)?;
     check(config, rust_roots)
 }
 
