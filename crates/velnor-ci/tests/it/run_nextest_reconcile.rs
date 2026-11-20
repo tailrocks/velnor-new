@@ -55,7 +55,7 @@ END";
     let (_, written, _) = run_with_output("tests-run-idle", script, &counts, &NEXTEST_RUN);
     assert_eq!(
         written,
-        "existing=1\ntests_run=1\ntests_listed=3\ntests_ignored=0\ntests_by_package=idle=0/2 kept=1/1\n"
+        "existing=1\nbuilt=true\ntests_run=1\ntests_listed=3\ntests_ignored=0\ntests_by_package=idle=0/2 kept=1/1\n"
     );
 }
 

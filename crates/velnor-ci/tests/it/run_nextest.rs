@@ -190,7 +190,7 @@ fn run_reports_a_run_without_tests_as_zero() {
     assert!(output.status.success(), "{output:?}");
     assert_eq!(
         written,
-        "existing=1\ntests_run=0\ntests_listed=0\ntests_ignored=0\ntests_by_package=\n"
+        "existing=1\nbuilt=true\ntests_run=0\ntests_listed=0\ntests_ignored=0\ntests_by_package=\n"
     );
 }
 

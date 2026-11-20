@@ -45,7 +45,31 @@ fn build_log(compile_failed: bool, success: bool) -> String {
 }
 
 fn lane_with_log(name: &str, log: &str) -> Result<LaneMetrics, Box<dyn std::error::Error>> {
+    run_lane(name, log, &json!([]), NOT_RESTORED, false)
+}
+
+const NOT_RESTORED: &str = r#"{"restore":{"outcome":"skipped","outputs":{}}}"#;
+
+// A target cache restored from the same lock: crates compiled again on top of it are waste.
+fn warm_lane_with_log(name: &str, log: &str) -> Result<LaneMetrics, Box<dyn std::error::Error>> {
+    let plan = json!([{"family":"target","root":".","restore_step":"restore","save_step":"save"}]);
+    let hit = r#"{"restore":{"outcome":"success","outputs":{"cache-primary-key":"key","cache-matched-key":"key","cache-hit":"true"}}}"#;
+    run_lane(name, log, &plan, hit, true)
+}
+
+fn run_lane(
+    name: &str,
+    log: &str,
+    cache: &Value,
+    steps: &str,
+    restore: bool,
+) -> Result<LaneMetrics, Box<dyn std::error::Error>> {
     let repo = super::fixture(name)?;
+    if restore {
+        repo.git(&["add", "."]);
+        assert!(super::cli(&repo, &["inputs", "save"]).status.success());
+        assert!(super::cli(&repo, &["inputs", "restore"]).status.success());
+    }
     let root = fs::canonicalize(repo.root())?;
     let mut invocation = crate::report::lane()["invocations"][0].clone();
     invocation["root"] = json!(root);
@@ -66,11 +90,7 @@ fn lane_with_log(name: &str, log: &str) -> Result<LaneMetrics, Box<dyn std::erro
         repo.root().join("velnor-invocations.jsonl"),
         format!("{invocation}\n"),
     )?;
-    super::report(
-        &repo,
-        &json!([]),
-        r#"{"restore":{"outcome":"skipped","outputs":{}}}"#,
-    )
+    super::report(&repo, cache, steps)
 }
 
 #[test]
@@ -105,6 +125,48 @@ fn successful_build_with_missing_artifact_evidence_still_fails() -> super::Resul
             .to_string()
             .contains("demo v0.1.0: progress has no matching artifact evidence"),
         "{error}"
+    );
+    Ok(())
+}
+
+// Real cargo with `--message-format=json-render-diagnostics` (what the generated workflows pass)
+// emits no `compiler-message` for a rustc error; it prints `error: could not compile` instead.
+// `other` compiled fine but its artifact line is missing: that is a missing-evidence fault the
+// failed `demo` unit does not explain.
+#[test]
+fn render_diagnostics_failure_does_not_excuse_an_unrelated_unit() -> super::ResultTest {
+    let log = build_log(false, false).replace(
+        "   Compiling demo v0.1.0\n",
+        "   Compiling demo v0.1.0\n   Compiling other v1.0.0\n",
+    );
+    let metrics = lane_with_log("report-render-diag-unrelated", &log)?;
+    assert!(
+        metrics
+            .verification_errors
+            .iter()
+            .any(|message| message
+                .contains("other v1.0.0: progress has no matching artifact evidence")),
+        "errors={:?} diagnostics={:?}",
+        metrics.verification_errors,
+        metrics.diagnostics
+    );
+    Ok(())
+}
+
+// `serde` compiled on a warm, same-lock target cache while `demo` failed: the failed crate must
+// not hide the recompilation of the crate that compiled fine.
+#[test]
+fn failed_crate_does_not_excuse_a_warm_recompile_of_another_crate() -> super::ResultTest {
+    let metrics = warm_lane_with_log("report-failed-warm-recompile", &build_log(false, false))?;
+    let violations = velnor_ci::report::waste(&metrics);
+    assert!(
+        violations
+            .iter()
+            .any(|line| line.contains("serde v1.0.200 compiled despite usable restored inputs")),
+        "{violations:?} {:?} {:?} {:?}",
+        metrics.diagnostics,
+        metrics.caches,
+        metrics.invocations[0].compilations
     );
     Ok(())
 }
