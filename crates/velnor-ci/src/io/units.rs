@@ -11,10 +11,13 @@ use velnor_rust::{NESTED_ROOTS_FOLDER, resolve};
 use crate::cache_prune::is_hash;
 use crate::error::CiError;
 
+mod build_dir;
 mod built;
 mod fill;
 #[cfg(test)]
 mod layout_tests;
+
+pub(super) use build_dir::refuse_arguments;
 
 const MAX_TARGET_DEPTH: usize = 64;
 /// A target directory after a full build and test run holds one directory per
@@ -344,7 +347,9 @@ fn metadata(
         command.current_dir(manifest.parent().unwrap_or(manifest));
     }
     if own_target {
-        command.env_remove("CARGO_TARGET_DIR");
+        command
+            .env_remove("CARGO_TARGET_DIR")
+            .env_remove("CARGO_BUILD_BUILD_DIR");
     }
     let output = command
         .args([
@@ -364,6 +369,8 @@ fn metadata(
             String::from_utf8_lossy(&output.stderr).trim()
         )));
     }
-    serde_json::from_slice(&output.stdout)
-        .map_err(|e| CiError::new(format!("cargo metadata printed no workspace: {e}")))
+    let workspace: Workspace = serde_json::from_slice(&output.stdout)
+        .map_err(|e| CiError::new(format!("cargo metadata printed no workspace: {e}")))?;
+    build_dir::refuse(&workspace, &output.stdout)?;
+    Ok(workspace)
 }

@@ -9,7 +9,9 @@ use crate::error::CiError;
 use super::crates_mirror::{CONFIG_ENV, REAL_ENV, WRAPPER_ENV, failed};
 use super::crates_mirror_args::with_mirror_config;
 use super::crates_mirror_depth::wrapper_ancestors;
+use super::crates_mirror_mbx as mbx;
 use super::crates_mirror_mise::{self as mise, LaunchPhase};
+use super::crates_mirror_mode as mode;
 
 const RUSTUP_ENV: &str = "VELNOR_CARGO_RUSTUP";
 const DEPTH_ENV: &str = "VELNOR_CARGO_DEPTH";
@@ -36,8 +38,8 @@ pub(super) fn forward() -> Result<ExitStatus, CiError> {
         std::env::var_os(WRAPPER_ENV)
             .ok_or_else(|| CiError::new("missing VELNOR_CARGO_WRAPPER"))?,
     );
-    let config =
-        std::env::var_os(CONFIG_ENV).ok_or_else(|| CiError::new("missing VELNOR_CARGO_CONFIG"))?;
+    let mirror_off = mode::mirror_off()?;
+    let config = std::env::var_os(CONFIG_ENV);
     let paths: Vec<_> =
         std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default()).collect();
     let args: Vec<_> = std::env::args_os().skip(1).collect();
@@ -47,14 +49,22 @@ pub(super) fn forward() -> Result<ExitStatus, CiError> {
         if let Some(executable) = proxy(&cargo, "mise")? {
             return mise::launch(&executable, &cargo, &wrapper, &args);
         }
+        if mbx::required() {
+            return Err(mbx::refused(&cargo));
+        }
         Some(cargo)
     } else {
         None
     };
-    if matches!(phase, LaunchPhase::Activated)
-        && let Some(status) = mise::after_activation(&wrapper, &args)?
-    {
-        return Ok(status);
+    if matches!(phase, LaunchPhase::ReadyNative) && mbx::required() {
+        return Err(mbx::refused(&find_cargo(&paths, &wrapper, &phase)?));
+    }
+    if matches!(phase, LaunchPhase::Activated) {
+        match mise::after_activation(&wrapper, &args)? {
+            Some(status) => return Ok(status),
+            None if mbx::required() => return Err(mbx::wrapper_missing()),
+            None => {}
+        }
     }
     let mut args = args.into_iter().peekable();
     let selected = if args
@@ -88,6 +98,7 @@ pub(super) fn forward() -> Result<ExitStatus, CiError> {
         std::iter::once(directory.as_path()).chain(paths.iter().map(PathBuf::as_path)),
     )
     .map_err(|error| CiError::new(format!("cannot configure Cargo PATH: {error}")))?;
+    let config = mode::require_config(mirror_off, config)?;
     let mut command = Command::new(directory.join(SAVED));
     if let Some(toolchain) = cargo.toolchain {
         command.env("RUSTUP_TOOLCHAIN", toolchain);
@@ -99,7 +110,10 @@ pub(super) fn forward() -> Result<ExitStatus, CiError> {
     }
     mise::native_environment(&mut command);
     command
-        .args(with_mirror_config(&config, args.collect()))
+        .args(match &config {
+            Some(config) => with_mirror_config(config, args.collect()),
+            None => args.collect(),
+        })
         .env("PATH", path)
         .env(REAL_ENV, cargo.executable)
         .env(DEPTH_ENV, (depth + 1).to_string())
@@ -263,7 +277,7 @@ fn actual_cargo(
     })
 }
 
-fn proxy(cargo: &Path, name: &str) -> Result<Option<PathBuf>, CiError> {
+pub(super) fn proxy(cargo: &Path, name: &str) -> Result<Option<PathBuf>, CiError> {
     let executable = std::fs::canonicalize(cargo).map_err(|e| failed(&e))?;
     if executable.file_stem().is_some_and(|stem| stem == name) {
         return Ok(Some(executable));
@@ -296,13 +310,13 @@ fn query(command: &mut Command) -> Result<String, CiError> {
 }
 
 #[cfg(unix)]
-fn is_executable(path: &Path) -> bool {
+pub(super) fn is_executable(path: &Path) -> bool {
     use std::os::unix::fs::PermissionsExt;
     path.metadata()
         .is_ok_and(|metadata| metadata.permissions().mode() & 0o111 != 0)
 }
 
 #[cfg(not(unix))]
-fn is_executable(_path: &Path) -> bool {
+pub(super) fn is_executable(_path: &Path) -> bool {
     true
 }

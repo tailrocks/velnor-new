@@ -13,6 +13,7 @@ use crate::shape::Shape;
 
 pub use crate::setup_phase::SetupPhase;
 use crate::test_group::TestGroup;
+use crate::trusted::TrustedRunners;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RustCiConfig {
@@ -20,6 +21,7 @@ pub struct RustCiConfig {
     pub fork_runner: RunnerLabel,
     /// Labels declared `hosted = true`; every other runner is self-hosted and fenced.
     pub hosted_runners: HostedRunners,
+    pub trusted_runners: TrustedRunners,
     pub crates_mirror: Option<CratesMirror>,
     pub private_sources: Option<PrivateSources>,
     pub release_assets: Vec<crate::ReleaseAsset>,
@@ -51,6 +53,7 @@ pub struct RustCiConfig {
     pub mbx: MbxMode,
     pub push_after_merge_group: PushAfterMergeGroup,
     pub test_setup: Vec<TestSetup>,
+    pub check_configurations: Vec<crate::CheckConfigurations>,
     pub test_lanes: Vec<TestLane>,
     pub budget: Option<SpeedBudget>,
     pub lint: Vec<LintJob>,
@@ -234,7 +237,6 @@ pub struct TestSetup {
     pub root: Option<RepoPath>,
     pub name: String,
     pub run: String,
-    /// The `phase` key, if written. `None` and `Some(Test)` run before the tests only.
     pub phase: Option<SetupPhase>,
 }
 
@@ -330,6 +332,7 @@ impl Default for RustCiConfig {
             runner: RunnerLabel::from_static("ubuntu-latest"),
             fork_runner: RunnerLabel::from_static("ubuntu-latest"),
             hosted_runners: HostedRunners::new(vec![RunnerLabel::from_static("ubuntu-latest")]),
+            trusted_runners: TrustedRunners::default(),
             crates_mirror: None,
             private_sources: None,
             mbx_store: MbxStore::Private,
@@ -358,6 +361,7 @@ impl Default for RustCiConfig {
             mbx: MbxMode::Default,
             push_after_merge_group: PushAfterMergeGroup::Run,
             test_setup: Vec::new(),
+            check_configurations: Vec::new(),
             test_lanes: Vec::new(),
             budget: None,
             lint: Vec::new(),

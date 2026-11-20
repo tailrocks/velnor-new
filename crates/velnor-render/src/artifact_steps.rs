@@ -1,9 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::release_steps::shell_word;
 use crate::rules::{RenderedStep, Value};
 use crate::steps::{DOWNLOAD_ARTIFACT, UPLOAD_ARTIFACT};
-use velnor_model::RepoPath;
+use velnor_model::{GroupUpload, RepoPath};
 
 const CARGO_LOG_ARTIFACT: &str = "velnor-cargo-log";
 const RUN_LOG_FILE: &str = "velnor-run.log";
@@ -68,6 +69,60 @@ pub(crate) fn download_step(name: &str, into: Option<&RepoPath>) -> RenderedStep
         name: "Download the tests".to_owned(),
         uses: Some(DOWNLOAD_ARTIFACT.to_owned()),
         with,
+        ..RenderedStep::default()
+    }
+}
+
+pub(crate) fn group_artifact(upload: &GroupUpload) -> RenderedStep {
+    RenderedStep {
+        name: format!("Upload {}", upload.name),
+        condition: Some(format!(
+            "${{{{ steps.{}.outcome == 'success' }}}}",
+            stage_id(upload)
+        )),
+        uses: Some(UPLOAD_ARTIFACT.to_owned()),
+        with: vec![
+            ("name".to_owned(), Value::Text(upload.name.clone())),
+            ("path".to_owned(), Value::Expr(stage_expression(upload))),
+            (
+                "retention-days".to_owned(),
+                Value::Int(u64::from(upload.retention_days)),
+            ),
+            (
+                "if-no-files-found".to_owned(),
+                Value::Text("warn".to_owned()),
+            ),
+            ("overwrite".to_owned(), Value::Bool(true)),
+        ],
+        ..RenderedStep::default()
+    }
+}
+
+fn stage_id(upload: &GroupUpload) -> String {
+    format!("artifact_stage_{}", upload.position)
+}
+
+fn stage_directory(upload: &GroupUpload) -> String {
+    format!("velnor-artifacts/{}", upload.position)
+}
+
+fn stage_expression(upload: &GroupUpload) -> String {
+    format!("${{{{ runner.temp }}}}/{}", stage_directory(upload))
+}
+
+pub(crate) fn group_stage(upload: &GroupUpload) -> RenderedStep {
+    let mut run = format!(
+        "velnor-ci artifacts stage --into \"$RUNNER_TEMP/{}\"",
+        stage_directory(upload)
+    );
+    for path in &upload.paths {
+        run.push_str(" --path ");
+        run.push_str(&shell_word(path));
+    }
+    RenderedStep {
+        id: Some(stage_id(upload)),
+        name: format!("Stage {} for upload", upload.name),
+        run: Some(run),
         ..RenderedStep::default()
     }
 }

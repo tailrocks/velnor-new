@@ -39,6 +39,7 @@ mod release_family;
 mod release_family_publish;
 mod release_finalize;
 mod release_gate;
+mod release_optional;
 mod release_outputs;
 mod release_raw;
 mod release_source;
@@ -77,8 +78,8 @@ pub use crate::reusable::{REUSABLE_HEADER, render_reusable};
 pub use crate::rules::{
     ALLOWED_ACTIONS, APP_TOKEN_ACTION, MAX_CACHE_KEY_CHARACTERS, MAX_ENV_CHARACTERS,
     MAX_RUN_CHARACTERS, MAX_WORKFLOW_BYTES, RenderedConcurrency, RenderedContainer, RenderedJob,
-    RenderedMatrix, RenderedMatrixSource, RenderedStep, RenderedWorkflow, Rule, RuleViolation,
-    SETUP_VELNOR_ACTION, Value, check_rules,
+    RenderedMatrix, RenderedMatrixSource, RenderedStep, RenderedTrusted, RenderedWorkflow, Rule,
+    RuleViolation, SETUP_VELNOR_ACTION, Value, check_rules,
 };
 use crate::steps::rendered_job;
 use crate::workflow::{ShellcheckMarks, yaml_job};
@@ -113,11 +114,10 @@ pub fn render_workflow(
         file = document(plan, rendered, ShellcheckMarks::Jobs);
     }
     if file.len() > rules::MAX_WORKFLOW_BYTES {
-        return Err(vec![RuleViolation {
-            job: String::new(),
-            step: 0,
-            rule: Rule::WorkflowTooLarge(file.len()),
-        }]);
+        return Err(vec![rule_messages::size_report::too_large(
+            WORKFLOW_PATH.as_str(),
+            &file,
+        )]);
     }
     Ok(BTreeMap::from([(WORKFLOW_PATH, file)]))
 }
@@ -146,5 +146,4 @@ fn document(plan: &WorkflowPlan, rendered: &RenderedWorkflow, marks: ShellcheckM
     .collect();
     seal(GENERATED_HEADER, &emit(&workflow))
 }
-
 mod report;
