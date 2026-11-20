@@ -303,3 +303,16 @@ fn two_ungrouped_roots_sharing_a_build_directory_are_refused() {
     );
     assert!(!repo.root().join(".velnor/rust-inputs.lock").exists());
 }
+
+#[test]
+fn a_relative_build_directory_is_built_from_a_subdirectory_as_cargo_writes_it() {
+    let repo = workspace_below_the_root();
+    let built = velnor_ci()
+        .current_dir(repo.root().join("rust/app"))
+        .env("CARGO_BUILD_BUILD_DIR", "../build")
+        .args(["inputs", "build", "--", "cargo", "build"])
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(built.status.success(), "{built:?}");
+    assert!(repo.root().join("rust/build/debug").is_dir(), "{built:?}");
+}
