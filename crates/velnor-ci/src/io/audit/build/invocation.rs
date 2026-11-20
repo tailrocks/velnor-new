@@ -6,6 +6,8 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+use velnor_model::RustRoot;
+
 use super::super::super::units::{MetadataInvocation, Workspace, refuse_arguments};
 use super::super::groups::root_workspace;
 use crate::error::CiError;
@@ -261,6 +263,33 @@ impl Invocation {
     }
 }
 
+/// The members of the deepest Cargo root that holds the invocation: the workspace cargo builds.
+pub(super) fn invoked_members<'a>(
+    roots: &'a [RustRoot],
+    repository: &Path,
+    location: &Path,
+) -> BTreeSet<&'a str> {
+    roots
+        .iter()
+        .filter_map(|root| {
+            let directory = root.manifest.parent().map_or_else(
+                || repository.to_path_buf(),
+                |parent| repository.join(parent.as_str()),
+            );
+            location
+                .starts_with(&directory)
+                .then_some((directory.components().count(), root))
+        })
+        .max_by_key(|(depth, _)| *depth)
+        .map(|(_, root)| {
+            root.members
+                .iter()
+                .map(|member| member.name.as_str())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 fn subcommand(words: &[&str]) -> Option<usize> {
     let mut index = usize::from(
         words
@@ -292,5 +321,11 @@ fn subcommand(words: &[&str]) -> Option<usize> {
 }
 
 #[cfg(test)]
+#[path = "invocation/members.rs"]
+mod members;
+#[cfg(test)]
 #[path = "invocation/preflight.rs"]
 mod preflight;
+#[cfg(test)]
+#[path = "invocation/selection.rs"]
+mod selection;

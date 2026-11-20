@@ -24,7 +24,7 @@ use super::options::max_entries_from_env;
 use super::timing;
 use crate::cli::InputsBuildArgs;
 use crate::error::CiError;
-use invocation::Invocation;
+use invocation::{Invocation, invoked_members};
 
 const TARGET_VARIABLE: &str = "CARGO_TARGET_DIR";
 
@@ -120,11 +120,9 @@ impl Builder<'_> {
     }
 
     fn members(&self) -> BTreeSet<&str> {
-        self.facts
-            .rust_roots
-            .iter()
-            .flat_map(|root| root.members.iter().map(|member| member.name.as_str()))
-            .collect()
+        let repository =
+            fs::canonicalize(&self.repository).unwrap_or_else(|_| self.repository.clone());
+        invoked_members(&self.facts.rust_roots, &repository, &self.location)
     }
 
     fn marker_directories(&self) -> Vec<PathBuf> {
