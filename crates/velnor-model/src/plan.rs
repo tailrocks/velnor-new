@@ -9,6 +9,7 @@ use crate::hosted::HostedRunners;
 use crate::ids::{JobId, PackageName, RepoPath, RootSlug, RunnerLabel, TargetName};
 use crate::repo::{LaneFeatures, TargetKind};
 use crate::steps::StepKind;
+use crate::test_group::NoTests;
 
 pub const LINT_STEP: &str = "Lint";
 pub const TEST_STEP: &str = "Test";
@@ -327,6 +328,7 @@ pub enum CargoCommand {
         filter: FilterRef,
         threads: Option<u16>,
         ci_profile: bool,
+        no_tests: NoTests,
     },
     TestTarget {
         package: PackageName,

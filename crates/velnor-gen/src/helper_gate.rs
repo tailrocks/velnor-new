@@ -28,6 +28,10 @@ pub(crate) const REQUIRED_CHECK_HELPER: (u64, u64, u64) = (0, 1, 97);
 // First released in tools-v0.1.108 (not tagged yet when this gate was written).
 pub(crate) const RESTORE_CACHE_HELPER: (u64, u64, u64) = (0, 1, 108);
 
+/// The first `velnor-ci` whose `.velnor/rust-ci.toml` parser accepts `no_tests` in a `[[test_groups]]` table.
+// First released in tools-v0.1.108 (not tagged yet when this gate was written).
+pub(crate) const NO_TESTS_HELPER: (u64, u64, u64) = (0, 1, 108);
+
 /// The first `velnor-ci` whose `.velnor/rust-ci.toml` parser accepts `phase` in a `[[test_setup]]` table.
 // First released in tools-v0.1.108 (not tagged yet when this gate was written).
 pub(crate) const SETUP_PHASE_HELPER: (u64, u64, u64) = (0, 1, 108);
@@ -141,7 +145,7 @@ pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, Generate
 }
 
 fn check_key_gates(facts: &RepoFacts, release: &HelperRelease) -> Result<(), GenerateError> {
-    check_restore_cache(facts, release)?;
+    check_test_group_keys(facts, release)?;
     check_setup_phase(facts, release)
 }
 
@@ -167,6 +171,25 @@ fn check_setup_phase(facts: &RepoFacts, release: &HelperRelease) -> Result<(), G
         .any(|setup| setup.phase.is_some());
     if written && !release.version().at_least(SETUP_PHASE_HELPER) {
         return Err(GenerateError::SetupPhaseHelperTooOld(
+            release.version().clone(),
+        ));
+    }
+    Ok(())
+}
+
+fn check_test_group_keys(facts: &RepoFacts, release: &HelperRelease) -> Result<(), GenerateError> {
+    check_restore_cache(facts, release)?;
+    check_no_tests(facts, release)
+}
+
+fn check_no_tests(facts: &RepoFacts, release: &HelperRelease) -> Result<(), GenerateError> {
+    let written = facts
+        .config
+        .test_groups
+        .iter()
+        .any(|group| group.no_tests.is_some());
+    if written && !release.version().at_least(NO_TESTS_HELPER) {
+        return Err(GenerateError::NoTestsHelperTooOld(
             release.version().clone(),
         ));
     }

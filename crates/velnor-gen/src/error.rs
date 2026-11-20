@@ -10,7 +10,8 @@ use velnor_rust::{DetectError, MAX_SOURCE_ROOTS, MetadataFileError};
 use velnor_workflows::WorkflowsError;
 
 use crate::helper_gate::{
-    CACHE_DEBUG_HELPER, REQUIRED_CHECK_HELPER, RESTORE_CACHE_HELPER, SETUP_PHASE_HELPER,
+    CACHE_DEBUG_HELPER, NO_TESTS_HELPER, REQUIRED_CHECK_HELPER, RESTORE_CACHE_HELPER,
+    SETUP_PHASE_HELPER,
 };
 use crate::{
     COMPATIBLE_HELPER_SERIES, HELPER_MINIMUM, TEST_LANE_FLAGS_HELPER, TEST_LANE_JOB_HELPER,
@@ -47,6 +48,7 @@ pub enum GenerateError {
     TestLaneHelperTooOld(HelperVersion),
     TestLaneKeyHelperTooOld(LaneKey, HelperVersion),
     RestoreCacheHelperTooOld(HelperVersion),
+    NoTestsHelperTooOld(HelperVersion),
     SetupPhaseHelperTooOld(HelperVersion),
     HelperLockLacksMacos {
         version: HelperVersion,
@@ -140,6 +142,7 @@ impl fmt::Display for GenerateError {
             ),
             Self::TestLaneKeyHelperTooOld(key, version) => f.write_str(&lane_key_too_old(*key, version)),
             Self::RestoreCacheHelperTooOld(version) => f.write_str(&restore_cache_too_old(version)),
+            Self::NoTestsHelperTooOld(version) => f.write_str(&no_tests_too_old(version)),
             Self::SetupPhaseHelperTooOld(version) => f.write_str(&setup_phase_too_old(version)),
             Self::HelperLockLacksMacos { version, runner } => write!(
                 f,
@@ -223,6 +226,13 @@ fn setup_phase_too_old(version: &HelperVersion) -> String {
     let (major, minor, patch) = SETUP_PHASE_HELPER;
     format!(
         "velnor-ci {version} does not know the phase key of a [[test_setup]] table in .velnor/rust-ci.toml; pin velnor-ci {major}.{minor}.{patch} or later with `velnor-gen pin-helper {major}.{minor}.{patch}`"
+    )
+}
+
+fn no_tests_too_old(version: &HelperVersion) -> String {
+    let (major, minor, patch) = NO_TESTS_HELPER;
+    format!(
+        "velnor-ci {version} does not know the no_tests key of a [[test_groups]] table in .velnor/rust-ci.toml; pin velnor-ci {major}.{minor}.{patch} or later with `velnor-gen pin-helper {major}.{minor}.{patch}`"
     )
 }
 

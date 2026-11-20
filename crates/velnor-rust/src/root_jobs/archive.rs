@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    CacheKey, CargoCommand, FilterRef, GroupFilter, Host, Job, JobId, PrepareLocks, Step, StepKind,
-    TestGroup, TestNeed, When,
+    CacheKey, CargoCommand, FilterRef, GroupFilter, Host, Job, JobId, NoTests, PrepareLocks, Step,
+    StepKind, TestGroup, TestNeed, When,
 };
 
 use super::{ARCHIVE_FILE, ARCHIVE_ID, RootJobs};
@@ -197,6 +197,7 @@ impl RootJobs<'_> {
                     filter,
                     threads: group.and_then(|group| group.test_threads),
                     ci_profile: self.member().root.nextest_ci_profile,
+                    no_tests: group.map_or(NoTests::Pass, TestGroup::no_tests_mode),
                 }],
             )
             .into_iter()
