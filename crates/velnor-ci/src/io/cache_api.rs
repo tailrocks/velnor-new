@@ -10,6 +10,7 @@ use velnor_rust::{CacheEntry, budget_plan, cache_family, delta_pull_request};
 use crate::cache::{MAX_PAGES, encode, foreign_entries, stale_entries};
 use crate::cli_cache::BudgetArgs;
 use crate::error::CiError;
+use crate::escape::escape_data;
 use crate::github::{GitHubWrite, Repo};
 use crate::time::parse_utc;
 
@@ -112,8 +113,9 @@ pub fn trim(
     delete_entries(github, repo, &stale)?;
     let warning = if truncated {
         format!(
-            "::warning::cache trim stopped after {MAX_PAGES} pages ({} entries) for {prefix}; the rest is trimmed by the next run\n",
-            entries.len()
+            "::warning::cache trim stopped after {MAX_PAGES} pages ({} entries) for {}; the rest is trimmed by the next run\n",
+            entries.len(),
+            escape_data(prefix)
         )
     } else {
         String::new()

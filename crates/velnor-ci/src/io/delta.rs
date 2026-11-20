@@ -9,6 +9,7 @@ use super::delta_snapshot::{self as snapshot, BASELINE, MANIFEST, Manifest, Snap
 use super::delta_tree as tree;
 use crate::delta_cli::{DeltaArgs, DeltaCommand};
 use crate::error::CiError;
+use crate::escape::escape_data;
 
 pub(super) const LIMIT: u64 = 500_000_000;
 const MARKER: &str = ".velnor/delta-marker";
@@ -49,7 +50,7 @@ fn apply(args: &DeltaArgs, base: &str) -> Result<String, CiError> {
     if let Err(error) = safe_path(&args.target_dir) {
         return Ok(format!(
             "::notice::{}; skipping delta reuse\n",
-            cleanup(&args.staging_dir, &error)
+            escape_data(&cleanup(&args.staging_dir, &error))
         ));
     }
     let cutoff = snapshot::now_ns()?;
@@ -122,7 +123,12 @@ fn compiled(args: &DeltaArgs) -> bool {
 
 fn decline(reason: &str) -> Result<String, CiError> {
     super::append_outputs("save=false\n")?;
-    Ok(format!("::notice::{reason}; saving no delta\n"))
+    Ok(notice(reason))
+}
+
+/// The notice that a run saves no delta. The reason can name a path from the restored target.
+fn notice(reason: &str) -> String {
+    format!("::notice::{}; saving no delta\n", escape_data(reason))
 }
 
 fn stage(args: &DeltaArgs, base: &str) -> Result<String, CiError> {
@@ -316,4 +322,17 @@ pub(super) fn safe_path(path: &Path) -> Result<(), CiError> {
 
 pub(super) fn failure(path: &Path, error: &std::io::Error) -> CiError {
     CiError::new(format!("{}: {error}", path.display()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::notice;
+
+    #[test]
+    fn notice_keeps_a_reason_with_a_line_break_on_one_line() {
+        assert_eq!(
+            notice("a\n::stop-commands::b"),
+            "::notice::a%0A::stop-commands::b; saving no delta\n"
+        );
+    }
 }

@@ -7,6 +7,7 @@ use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};
 use std::path::{Component, Path, PathBuf};
 
 use crate::error::CiError;
+use crate::escape::file_value;
 
 pub const SHARED_DIR_ENV: &str = "VELNOR_MBX_SHARED_DIR";
 pub const SHIMS_DIR_NAME: &str = "velnor-mbx-shims";
@@ -164,16 +165,15 @@ fn current_uid(runner_temp: &Path) -> Result<u32, &'static str> {
     Err("cannot determine the current user")
 }
 
-#[must_use]
-pub fn env_lines(outcome: &Outcome) -> String {
-    match outcome {
+pub fn env_lines(outcome: &Outcome) -> Result<String, CiError> {
+    Ok(match outcome {
         Outcome::Shared { dir, shims } => format!(
             "MBX_CACHE_DIR={}\nMBX_SHIMS_DIR={}\n",
-            dir.display(),
-            shims.display()
+            file_value(&dir.display().to_string())?,
+            file_value(&shims.display().to_string())?
         ),
         _ => String::new(),
-    }
+    })
 }
 
 #[must_use]
@@ -212,7 +212,7 @@ pub fn setup() -> Result<String, CiError> {
         shared_dir: shared.as_deref(),
         runner_temp: &runner_temp,
     });
-    let lines = env_lines(&outcome);
+    let lines = env_lines(&outcome)?;
     if !lines.is_empty() {
         let file = var("GITHUB_ENV").ok_or_else(|| CiError::new("set GITHUB_ENV"))?;
         fs::OpenOptions::new()
@@ -223,4 +223,31 @@ pub fn setup() -> Result<String, CiError> {
             .map_err(|error| CiError::new(format!("cannot write {file}: {error}")))?;
     }
     Ok(message(&outcome))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Outcome, env_lines};
+    use std::path::PathBuf;
+
+    fn shared(dir: &str) -> Outcome {
+        Outcome::Shared {
+            dir: PathBuf::from(dir),
+            shims: PathBuf::from("/runner/shims"),
+        }
+    }
+
+    #[test]
+    fn env_lines_writes_a_clean_store_path() {
+        let lines = env_lines(&shared("/runner/mbx"));
+        assert_eq!(
+            lines.as_deref().ok(),
+            Some("MBX_CACHE_DIR=/runner/mbx\nMBX_SHIMS_DIR=/runner/shims\n")
+        );
+    }
+
+    #[test]
+    fn env_lines_refuses_a_store_path_that_would_add_a_variable() {
+        assert!(env_lines(&shared("/runner/mbx\nGITHUB_PATH=/evil")).is_err());
+    }
 }

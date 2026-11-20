@@ -10,6 +10,7 @@ use super::input_target::check_removal_target;
 use crate::cache::{KEEP_NEWEST, born_expired, should_save, trim};
 use crate::cache_prune::UsedUnits;
 use crate::error::CiError;
+use crate::escape::escape_data;
 use crate::github::Repo;
 use crate::logscan::scan;
 use crate::time::date_text;
@@ -70,10 +71,7 @@ pub(super) fn decide_counts(
     if let Some(budget) = budget_bytes.filter(|budget| size > *budget) {
         return Ok(Decision {
             save: false,
-            report: format!(
-                "::notice::{} is {size} bytes, more than the repository cache budget of {budget} bytes; saving nothing ({pruning})\n",
-                target.display()
-            ),
+            report: over_budget(target, size, budget, &pruning),
         });
     }
     let born = target.join(BORN_FILE);
@@ -292,8 +290,33 @@ pub(super) fn run_decide(args: &crate::cli_cache::DecideArgs) -> Result<String, 
         && let Err(error) = super::delta_snapshot::record_inventory(&target)
     {
         super::delta_snapshot::forget_inventory(&target)?;
-        report =
-            format!("{report}::notice::{error}; pull requests will read the whole restored base\n");
+        report = format!(
+            "{report}::notice::{}; pull requests will read the whole restored base\n",
+            escape_data(&error.to_string())
+        );
     }
     Ok(report)
+}
+
+/// The notice that a target directory is too big to save. Its path and the names it pruned come
+/// from the checkout or a restored cache, so both are escaped.
+fn over_budget(target: &Path, size: u64, budget: u64, pruning: &str) -> String {
+    format!(
+        "::notice::{} is {size} bytes, more than the repository cache budget of {budget} bytes; saving nothing ({})\n",
+        escape_data(&target.display().to_string()),
+        escape_data(pruning)
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::over_budget;
+    use std::path::Path;
+
+    #[test]
+    fn over_budget_notice_keeps_pruned_names_on_one_line() {
+        let text = over_budget(Path::new("/w/target"), 9, 1, "removed \n::stop-commands::x");
+        assert_eq!(text.lines().count(), 1);
+        assert!(text.starts_with("::notice::/w/target is 9 bytes"));
+    }
 }

@@ -6,6 +6,7 @@ use std::process::ExitCode;
 
 use crate::cli::CratesMirrorArgs;
 use crate::error::CiError;
+use crate::escape::file_value;
 
 pub(super) const CONFIG_ENV: &str = "VELNOR_CARGO_CONFIG";
 pub(super) const WRAPPER_ENV: &str = "VELNOR_CARGO_WRAPPER";
@@ -42,6 +43,8 @@ pub(super) fn setup(args: &CratesMirrorArgs) -> Result<String, CiError> {
     .join("velnor-cargo");
     std::fs::create_dir_all(&directory).map_err(|e| failed(&e))?;
     let directory = std::fs::canonicalize(directory).map_err(|e| failed(&e))?;
+    // The directory and the two paths under it go to GITHUB_PATH and GITHUB_ENV.
+    file_value(&directory.display().to_string())?;
     let wrapper = directory.join("cargo");
     let config = directory.join("config.toml");
     let quoted = |text: &str| serde_json::to_string(text).map_err(|e| CiError::new(e.to_string()));

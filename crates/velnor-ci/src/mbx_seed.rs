@@ -8,6 +8,7 @@ use std::path::{Component, Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use crate::error::CiError;
+use crate::escape::file_value;
 use crate::mbx_seed_copy::{Copied, SUBSETS, copy_subset};
 use crate::mbx_store::{trusted_event, writable_by_job};
 
@@ -132,12 +133,16 @@ fn private_store(runner_temp: &Path) -> Result<PathBuf, &'static str> {
     Ok(store)
 }
 
-#[must_use]
-pub fn env_lines(outcome: &Outcome) -> String {
-    match outcome {
-        Outcome::Seeded { store, .. } => format!("MBX_CACHE_DIR={}\n", store.display()),
+pub fn env_lines(outcome: &Outcome) -> Result<String, CiError> {
+    Ok(match outcome {
+        Outcome::Seeded { store, .. } => {
+            format!(
+                "MBX_CACHE_DIR={}\n",
+                file_value(&store.display().to_string())?
+            )
+        }
         _ => String::new(),
-    }
+    })
 }
 
 #[must_use]
@@ -200,7 +205,7 @@ pub fn setup() -> Result<String, CiError> {
         threads: std::thread::available_parallelism().map_or(4, |n| n.get().min(16)),
         budget: SEED_BUDGET,
     });
-    let lines = env_lines(&outcome);
+    let lines = env_lines(&outcome)?;
     if !lines.is_empty() {
         let file = var("GITHUB_ENV").ok_or_else(|| CiError::new("set GITHUB_ENV"))?;
         fs::OpenOptions::new()
