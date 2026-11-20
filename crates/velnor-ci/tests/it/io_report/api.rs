@@ -184,7 +184,8 @@ fn tools_save_under_a_new_key_after_a_miss_is_looked_up_under_the_saved_key() ->
             } else {
                 json!([])
             };
-            json!({"total_count":entries.as_array().map_or(0, Vec::len),"actions_caches":entries}).to_string()
+            json!({"total_count":entries.as_array().map_or(0, Vec::len),"actions_caches":entries})
+                .to_string()
         };
         let api = crate::io::serve(BTreeMap::from([
             (
