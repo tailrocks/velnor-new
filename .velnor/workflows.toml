@@ -392,6 +392,7 @@ run = "nc -z -w 1 redis 6379"
 id = "cancel-service"
 title = "Cancel service"
 timeout_minutes = 5
+permissions = { contents = "read", actions = "write" }
 
 [[workflow.case.service]]
 name = "redis"
@@ -408,8 +409,21 @@ name = "Announce service"
 run = "echo service-up"
 
 [[workflow.case.step]]
-name = "Sleep until cancelled"
-run = "sleep 900"
+name = "Sleep before the cancel"
+run = "sleep 10"
+
+[[workflow.case.step]]
+name = "Cancel the run mid-step"
+run = 'curl --fail --silent --show-error --request POST --header "Accept: application/vnd.github+json" --header "Authorization: Bearer $GITHUB_TOKEN" "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/cancel"'
+env = { GITHUB_TOKEN = "${{ github.token }}" }
+
+[[workflow.case.step]]
+name = "Wait for the cancel"
+run = "sleep 120"
+
+[[workflow.case.step]]
+name = "Fail when the cancel was not delivered"
+run = "exit 1"
 
 [[workflow.case]]
 id = "ports-a"
@@ -472,6 +486,20 @@ run = "echo '::error title=unknown_qualification_mode::The mode is not one that 
 [[workflow.job.step]]
 name = "Fail the guard"
 run = "exit 1"
+
+[[workflow.job]]
+id = "cancel-service-check"
+name = "Check cancel-service / cancelled, not timed out"
+if = "always() && inputs.mode == 'cancel-service'"
+runner = "ubuntu-26.04"
+timeout_minutes = 5
+needs = ["cancel-service-hosted", "cancel-service-scale-set"]
+permissions = { contents = "read", actions = "read" }
+
+[[workflow.job.step]]
+name = "Check the cancelled runs"
+run = "bash qualification/cancel-service-check.sh"
+env = { GITHUB_TOKEN = "${{ github.token }}" }
 
 [[workflow.job]]
 id = "stable-sources-guard"
