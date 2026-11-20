@@ -262,13 +262,20 @@ pub struct LaneGuardArgs {
 #[derive(Debug, Subcommand)]
 pub enum ArtifactsCommand {
     #[command(
-        about = "Run in the workspace (GITHUB_WORKSPACE, else the current directory) right before an actions/upload-artifact step, which follows symbolic links and so can publish files from outside the workspace. Walks each --path without following links, from its longest part before the first wildcard down through every directory below it, and removes every symbolic link it meets (only the link, never its target), printing one ::warning:: per removal; a path that does not exist is skipped, and a link that cannot be removed or a directory that cannot be read fails the step with exit 1"
+        about = "Run in the workspace (GITHUB_WORKSPACE, else the current directory) right before an actions/upload-artifact step, which follows symbolic links and so can publish files from outside the workspace, and which reads the workspace later than this step runs. Walks each --path without following links, copies only the regular files that the path selects into a fresh --into directory (any earlier content is removed) with their paths relative to the workspace, and the upload then publishes only that directory. Symbolic links, devices, sockets and pipes are skipped, as is every file whose path has a part that looks like a secret (a .env file, a key, a token, a password, credentials) and, without a warning, every hidden file, printing one ::warning:: per skipped entry, so nothing that changes in the workspace after this step can change what is uploaded; a path that does not exist selects nothing, and an --into directory that cannot be created or a copy that cannot be written fails the step with exit 1"
     )]
-    Check(ArtifactsCheckArgs),
+    Stage(ArtifactsStageArgs),
 }
 
 #[derive(Debug, Args)]
-pub struct ArtifactsCheckArgs {
+pub struct ArtifactsStageArgs {
+    #[arg(
+        long,
+        required = true,
+        value_name = "DIR",
+        help = "The staging directory, under RUNNER_TEMP; it is emptied first and the upload step names exactly this directory"
+    )]
+    pub into: std::path::PathBuf,
     #[arg(
         long = "path",
         required = true,

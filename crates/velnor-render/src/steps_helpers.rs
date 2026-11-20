@@ -70,7 +70,7 @@ pub(super) fn leading_steps(step: &Step, audit: bool, lane: CargoLane) -> Vec<Re
             None,
         )],
         StepKind::UploadGroupArtifact(upload) => {
-            vec![crate::artifact_steps::group_guard(upload)]
+            vec![crate::artifact_steps::group_stage(upload)]
         }
         _ => Vec::new(),
     }

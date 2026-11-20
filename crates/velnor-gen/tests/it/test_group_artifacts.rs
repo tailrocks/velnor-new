@@ -23,9 +23,9 @@ fn uploads(job: &Value) -> Vec<&Value> {
         .iter()
         .filter(|step| {
             step["uses"] == UPLOAD
-                && !step["with"]["path"]
+                && step["with"]["path"]
                     .as_str()
-                    .is_some_and(|path| path.contains("runner.temp"))
+                    .is_some_and(|path| path.contains("velnor-artifacts/"))
         })
         .collect()
 }
@@ -195,13 +195,13 @@ fn a_failure_artifact_is_uploaded_after_the_tests_under_the_default_token_only()
     assert_eq!(upload.len(), 1, "{upload:?}");
     let upload = upload[0];
     assert_eq!(
-        upload["if"], "${{ (steps.artifact_guard_0.outcome == 'success') && (failure()) }}",
+        upload["if"], "${{ (steps.artifact_stage_0.outcome == 'success') && (failure()) }}",
         "{upload}"
     );
     assert_eq!(upload["with"]["name"], "database-failures");
     assert_eq!(
         upload["with"]["path"],
-        "app/target/nextest/ci/junit.xml\napp/tests/snapshots/\n"
+        "${{ runner.temp }}/velnor-artifacts/0"
     );
     assert_eq!(upload["with"]["retention-days"], 5);
     assert_eq!(upload["with"]["if-no-files-found"], "warn");
@@ -254,7 +254,7 @@ fn an_always_artifact_renders_always_and_each_partition_gets_its_own_name() -> T
         assert_eq!(found.len(), 2, "{found:?}");
         assert_eq!(
             found[0]["if"],
-            "${{ (steps.artifact_guard_0.outcome == 'success') && (always()) }}"
+            "${{ (steps.artifact_stage_0.outcome == 'success') && (always()) }}"
         );
         assert_eq!(
             found[0]["with"]["name"],
@@ -262,7 +262,7 @@ fn an_always_artifact_renders_always_and_each_partition_gets_its_own_name() -> T
         );
         assert_eq!(
             found[1]["if"],
-            "${{ (steps.artifact_guard_1.outcome == 'success') && (failure()) }}"
+            "${{ (steps.artifact_stage_1.outcome == 'success') && (failure()) }}"
         );
         assert_eq!(found[1]["with"]["name"], format!("logs-{index}"));
         assert_eq!(found[1]["with"]["retention-days"], 1);
@@ -270,7 +270,7 @@ fn an_always_artifact_renders_always_and_each_partition_gets_its_own_name() -> T
     Ok(())
 }
 
-fn guard_before(job: &Value, upload: &Value) -> Result<Value, String> {
+fn stage_before(job: &Value, upload: &Value) -> Result<Value, String> {
     let all = steps(job);
     let at = all
         .iter()
@@ -282,7 +282,7 @@ fn guard_before(job: &Value, upload: &Value) -> Result<Value, String> {
 }
 
 #[test]
-fn a_guard_removes_symbolic_links_right_before_every_upload_and_shares_its_condition() -> TestResult
+fn a_stage_step_copies_the_files_right_before_every_upload_and_shares_its_condition() -> TestResult
 {
     let config = group(&format!(
         "partitions = 2\nartifacts = [{}, {{ name = 'logs', paths = ['logs/', 'app/out/*.log'], when = 'failure' }}]\n",
@@ -294,21 +294,28 @@ fn a_guard_removes_symbolic_links_right_before_every_upload_and_shares_its_condi
         let found = uploads(job);
         assert_eq!(found.len(), 2, "{found:?}");
         let expected = [
-            ("always()", "artifact_guard_0", "--path junit.xml"),
+            ("always()", "artifact_stage_0", 0, "--path junit.xml"),
             (
                 "failure()",
-                "artifact_guard_1",
+                "artifact_stage_1",
+                1,
                 "--path logs/ --path 'app/out/*.log'",
             ),
         ];
-        for (upload, (condition, id, paths)) in found.into_iter().zip(expected) {
-            let guard = guard_before(job, upload)?;
-            assert_eq!(guard["id"], id, "{guard}");
-            assert_eq!(guard["if"], format!("${{{{ {condition} }}}}"), "{guard}");
+        for (upload, (condition, id, position, paths)) in found.into_iter().zip(expected) {
+            let stage = stage_before(job, upload)?;
+            assert_eq!(stage["id"], id, "{stage}");
+            assert_eq!(stage["if"], format!("${{{{ {condition} }}}}"), "{stage}");
             assert_eq!(
-                guard["run"],
-                format!(". \"$VELNOR_EXEC\" artifacts check {paths}"),
-                "{guard}"
+                stage["run"],
+                format!(
+                    ". \"$VELNOR_EXEC\" artifacts stage --into \"$RUNNER_TEMP/velnor-artifacts/{position}\" {paths}"
+                ),
+                "{stage}"
+            );
+            assert_eq!(
+                upload["with"]["path"],
+                format!("${{{{ runner.temp }}}}/velnor-artifacts/{position}")
             );
             assert_eq!(
                 upload["if"],
@@ -338,5 +345,44 @@ fn a_helper_older_than_the_artifacts_release_refuses_the_key() -> TestResult {
         "{message}"
     );
     rendered_with(&config, "0.1.110")?;
+    Ok(())
+}
+
+#[test]
+fn a_wildcard_that_can_match_a_secret_name_is_refused_naming_the_secret() -> TestResult {
+    for (path, secret) in [
+        ("secr*/**", "secret"),
+        ("app/s*/x.xml", "secret"),
+        ("app/*ecrets/x.xml", "secret"),
+        ("app/.e*/x.xml", ".env"),
+        ("app/.s*h/x.xml", ".ssh"),
+        ("app/tok*/x.xml", "token"),
+        ("app/pass*/x.xml", "password"),
+        ("cred*/x.xml", "credential"),
+        ("app/id_*/x.xml", "id_rsa"),
+        ("app/.g*/x.xml", ".git"),
+        ("app/*.p*", ".pypirc"),
+    ] {
+        let config = artifacts(&format!(
+            "{{ name = 'a', paths = ['{path}'], when = 'failure' }}"
+        ));
+        let message = refused(&config, HELPER)?;
+        assert!(
+            message.contains("test_groups.artifacts.paths") && message.contains(secret),
+            "{path:?}: {message}"
+        );
+    }
+    for path in [
+        "target/nextest/*/junit.xml",
+        "app/*/report.xml",
+        "logs/**/*.log",
+        "app/out/*.xml",
+        "app/junit-*.xml",
+    ] {
+        let config = artifacts(&format!(
+            "{{ name = 'a', paths = ['{path}'], when = 'failure' }}"
+        ));
+        rendered_with(&config, HELPER)?;
+    }
     Ok(())
 }

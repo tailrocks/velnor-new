@@ -4,7 +4,10 @@
 use std::collections::BTreeSet;
 
 use serde::Deserialize;
-use velnor_model::{ARTIFACT_RETENTION_DEFAULT, ArtifactWhen, GroupArtifact, RustCiConfig};
+use velnor_model::{
+    ARTIFACT_RETENTION_DEFAULT, ArtifactWhen, GroupArtifact, RustCiConfig, aliased_secret,
+    secret_like,
+};
 
 use crate::config_test_groups::ranged;
 use crate::error::Reason;
@@ -14,28 +17,6 @@ const PATHS_MAX: usize = 16;
 const ARTIFACTS_MAX: usize = 8;
 const RETENTION_RANGE: std::ops::RangeInclusive<u16> = 1..=90;
 const RESERVED_PREFIXES: [&str; 2] = ["nextest-archive", "velnor-"];
-const SECRET_WORDS: [&str; 6] = ["key", "secret", "token", "password", "passwd", "credential"];
-const SECRET_SUFFIXES: [&str; 8] = [
-    ".pem",
-    ".key",
-    ".p12",
-    ".pfx",
-    ".jks",
-    ".keystore",
-    ".gpg",
-    ".asc",
-];
-const SECRET_PREFIXES: [&str; 5] = [".env", "id_rsa", "id_ed25519", "id_ecdsa", "id_dsa"];
-const SECRET_NAMES: [&str; 8] = [
-    ".netrc",
-    ".npmrc",
-    ".pypirc",
-    ".git-credentials",
-    ".ssh",
-    ".aws",
-    ".gnupg",
-    ".kube",
-];
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -46,11 +27,11 @@ pub(crate) struct RawTestArtifact {
     retention_days: Option<u16>,
 }
 
-fn refused(key: &'static str, value: &str, fix: &'static str) -> Reason {
+fn refused(key: &'static str, value: &str, fix: impl Into<String>) -> Reason {
     Reason::TestGroupArtifact {
         key,
         value: value.to_owned(),
-        fix,
+        fix: fix.into(),
     }
 }
 
@@ -90,6 +71,9 @@ fn artifact(raw: RawTestArtifact) -> Result<GroupArtifact, Reason> {
     }
     for path in &raw.paths {
         if let Some(fix) = path_fault(path) {
+            return Err(refused("test_groups.artifacts.paths", path, fix));
+        }
+        if let Some(fix) = alias_fault(path) {
             return Err(refused("test_groups.artifacts.paths", path, fix));
         }
     }
@@ -197,16 +181,6 @@ fn path_fault(path: &str) -> Option<&'static str> {
         )
 }
 
-fn secret_like(segment: &str) -> bool {
-    let lower = segment.to_ascii_lowercase();
-    SECRET_WORDS.iter().any(|word| lower.contains(word))
-        || SECRET_SUFFIXES.iter().any(|suffix| lower.ends_with(suffix))
-        || SECRET_PREFIXES
-            .iter()
-            .any(|prefix| lower.starts_with(prefix))
-        || SECRET_NAMES.contains(&lower.as_str())
-}
-
 pub(crate) fn check_unique(config: &RustCiConfig) -> Result<(), Reason> {
     let mut seen = BTreeSet::new();
     for group in &config.test_groups {
@@ -226,4 +200,14 @@ pub(crate) fn check_unique(config: &RustCiConfig) -> Result<(), Reason> {
         }
     }
     Ok(())
+}
+
+fn alias_fault(path: &str) -> Option<String> {
+    path.split('/').find_map(|segment| {
+        aliased_secret(segment).map(|secret| {
+            format!(
+                "the part {segment:?} can match {secret:?}, a name that may hold a secret, and anyone who can read the repository can download an artifact; name the report files without a wildcard that reaches a secret name"
+            )
+        })
+    })
 }

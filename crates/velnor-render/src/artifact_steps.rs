@@ -78,12 +78,12 @@ pub(crate) fn group_artifact(upload: &GroupUpload) -> RenderedStep {
         name: format!("Upload {}", upload.name),
         condition: Some(format!(
             "${{{{ steps.{}.outcome == 'success' }}}}",
-            guard_id(upload)
+            stage_id(upload)
         )),
         uses: Some(UPLOAD_ARTIFACT.to_owned()),
         with: vec![
             ("name".to_owned(), Value::Text(upload.name.clone())),
-            ("path".to_owned(), Value::Text(upload.paths.join("\n"))),
+            ("path".to_owned(), Value::Expr(stage_expression(upload))),
             (
                 "retention-days".to_owned(),
                 Value::Int(u64::from(upload.retention_days)),
@@ -98,19 +98,30 @@ pub(crate) fn group_artifact(upload: &GroupUpload) -> RenderedStep {
     }
 }
 
-fn guard_id(upload: &GroupUpload) -> String {
-    format!("artifact_guard_{}", upload.position)
+fn stage_id(upload: &GroupUpload) -> String {
+    format!("artifact_stage_{}", upload.position)
 }
 
-pub(crate) fn group_guard(upload: &GroupUpload) -> RenderedStep {
-    let mut run = "velnor-ci artifacts check".to_owned();
+fn stage_directory(upload: &GroupUpload) -> String {
+    format!("velnor-artifacts/{}", upload.position)
+}
+
+fn stage_expression(upload: &GroupUpload) -> String {
+    format!("${{{{ runner.temp }}}}/{}", stage_directory(upload))
+}
+
+pub(crate) fn group_stage(upload: &GroupUpload) -> RenderedStep {
+    let mut run = format!(
+        "velnor-ci artifacts stage --into \"$RUNNER_TEMP/{}\"",
+        stage_directory(upload)
+    );
     for path in &upload.paths {
         run.push_str(" --path ");
         run.push_str(&shell_word(path));
     }
     RenderedStep {
-        id: Some(guard_id(upload)),
-        name: format!("Remove symbolic links from {}", upload.name),
+        id: Some(stage_id(upload)),
+        name: format!("Stage {} for upload", upload.name),
         run: Some(run),
         ..RenderedStep::default()
     }

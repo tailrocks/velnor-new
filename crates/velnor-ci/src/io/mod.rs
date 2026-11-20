@@ -91,7 +91,7 @@ pub use self::inputs_batch::restore_inputs_batch_with;
 pub use self::restored::{break_time_ties, break_time_ties_with};
 pub use self::scope_cache::ScopeCacheIo;
 pub use self::timings::write_report;
-use crate::artifact_guard;
+use crate::artifact_stage;
 use crate::cli::{
     ArtifactsCommand, AuditArgs, BenchCommand, CacheCommand, CheckTagArgs, Cli, CollectArgs,
     Command, CompareArgs, ImageCommand, InputsCommand, QualificationCommand, ReleaseCommand,
@@ -161,8 +161,8 @@ pub fn main() -> ExitCode {
     if let Command::LaneGuard(args) = &cli.command {
         return lane_guard::run(args);
     }
-    if let Command::Artifacts(ArtifactsCommand::Check(args)) = &cli.command {
-        return artifact_guard::run(args);
+    if let Command::Artifacts(ArtifactsCommand::Stage(args)) = &cli.command {
+        return artifact_stage::run(args);
     }
     if let Command::TestGroups(TestGroupsCommand::Check(args)) = &cli.command {
         return test_groups::run(args);

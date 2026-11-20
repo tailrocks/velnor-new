@@ -95,7 +95,7 @@ pub enum Reason {
     TestGroupArtifact {
         key: &'static str,
         value: String,
-        fix: &'static str,
+        fix: String,
     },
     ArtifactNameTaken(String),
     PrCiWithSkipDraft,

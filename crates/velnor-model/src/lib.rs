@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod artifact_paths;
 mod budget_mode;
 mod cache;
 mod cache_layout;
@@ -27,6 +28,9 @@ mod test_group;
 mod token_permission;
 mod verdict;
 
+pub use artifact_paths::{
+    aliased_secret, path_matches, secret_like, secret_path, segment_matches, selects,
+};
 pub use budget_mode::{BUDGET_JOB_NAME, BUDGET_MODES_HELPER, ModeBudget, Selection, SelectionName};
 pub use cache::{CacheKey, CachePath, CacheRoot, Host, LockIdentity};
 pub use cache_layout::{
