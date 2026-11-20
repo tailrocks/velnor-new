@@ -222,6 +222,23 @@ fn the_remote_mbx_cache_follows_the_declaration() -> TestResult {
 }
 
 #[test]
+fn the_remote_mbx_cache_is_refused_when_private_credentials_sit_beside_a_public_declaration()
+-> TestResult {
+    let both = format!(
+        "{DECLARED}[cache]\nmbx_remote = \"github-actions\"\n[private_sources]\napp_id = 'vars.APP_ID'\nprivate_key = 'secrets.APP_KEY'\nrepositories = ['acme/other']\n"
+    );
+    let refused = render(&locked(&pinned_source(), &both, "0.1.110")?)
+        .err()
+        .ok_or("a fork-readable cache was accepted beside private credentials")?
+        .to_string();
+    assert!(
+        refused.contains("mbx_remote") && refused.contains("private submodule"),
+        "{refused}"
+    );
+    Ok(())
+}
+
+#[test]
 fn the_declaration_needs_the_helper_that_checks_it() -> TestResult {
     for (version, refused) in [("0.1.107", true), ("0.1.109", true), ("0.1.110", false)] {
         let outcome = render(&locked(&pinned_source(), DECLARED, version)?);

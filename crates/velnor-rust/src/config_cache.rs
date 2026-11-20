@@ -50,10 +50,15 @@ pub(crate) fn private_sources(
     config: &RustCiConfig,
 ) -> Result<Option<String>, DetectError> {
     let cause = crate::private_sources::private_cause(view, config, roots);
-    match (config.mbx_remote, &cause) {
+    let credentialed = (config.private_sources.is_some()
+        && !crate::private_sources::declared_public(config).is_empty())
+    .then_some(
+        "[private_sources] credentials can fetch a private submodule of a [public_sources] repository",
+    );
+    match (config.mbx_remote, cause.as_deref().or(credentialed)) {
         (MbxRemote::GithubActions, Some(cause)) => Err(DetectError::invalid(
             &CONFIG_PATH,
-            Reason::MbxRemotePrivate(cause.clone()),
+            Reason::MbxRemotePrivate(cause.to_owned()),
         )),
         _ => Ok(cause.map(|cause| crate::private_sources::note(&cause))),
     }
