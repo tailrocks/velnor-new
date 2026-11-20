@@ -3,7 +3,7 @@
 
 use velnor_model::{
     Access, CacheKey, CargoCommand, Gate, GateNeed, Job, PermissionScope, PrivateSources, RepoPath,
-    RootSlug, Step, StepKind,
+    RootSlug, Step, StepKind, When,
 };
 
 use crate::plan::step;
@@ -34,6 +34,7 @@ pub(crate) fn insert(sources: Option<&PrivateSources>, jobs: &mut [Job]) {
                 _ => None,
             })
             .collect();
+        let when = status(job.steps.iter().filter(|step| compiles(step)));
         let gate = shared_gate(job.steps.iter().filter(|step| runs_repository_code(step)));
         let mut kinds = advisory_fetch(&job.steps);
         kinds.extend([
@@ -48,12 +49,26 @@ pub(crate) fn insert(sources: Option<&PrivateSources>, jobs: &mut [Job]) {
         ]);
         let phase = kinds.into_iter().map(|kind| Step {
             gate: gate.clone(),
+            when,
             ..step(kind)
         });
         job.steps.splice(first..first, phase);
         job.permissions
             .0
             .insert(PermissionScope::PullRequests, Access::Read);
+    }
+}
+
+/// The phase carries the status gate of the compile steps it serves. Under the implicit
+/// `success()` an earlier failure (a Format diff) would skip the token and the fetch while the
+/// `!cancelled()` compile steps still ran, offline, and buried the real error under a
+/// "you are in the offline mode" failure. The order is unchanged, so the token still comes
+/// before any repository code and is never in the environment of a compile step.
+pub(crate) fn status<'a>(mut compiling: impl Iterator<Item = &'a Step>) -> When {
+    if compiling.any(|step| step.when == When::NotCancelled) {
+        When::NotCancelled
+    } else {
+        When::Success
     }
 }
 
@@ -124,7 +139,7 @@ fn runs_repository_code(step: &Step) -> bool {
     compiles(step) || matches!(step.kind, StepKind::TestSetup { .. })
 }
 
-fn compiles(step: &Step) -> bool {
+pub(crate) fn compiles(step: &Step) -> bool {
     matches!(&step.kind, StepKind::Cargo(command) if !matches!(
         command,
         CargoCommand::FmtCheck

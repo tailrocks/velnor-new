@@ -9,7 +9,7 @@ use velnor_model::{
     RustRoot, Shape, ShapeDecision, TestGroup, TestNeed, group_output_name,
 };
 
-use crate::config::{CONFIG_PATH, runner};
+use crate::config::{CONFIG_PATH, TIMEOUT_RANGE, runner};
 use crate::error::{DetectError, Reason};
 use crate::harness::uses_nextest;
 
@@ -18,7 +18,6 @@ pub(crate) const NAME_MAX_LENGTH: usize = 40;
 const FORBIDDEN_CHARACTERS: [char; 8] = ['"', '$', '`', '\\', '|', '&', ';', '<'];
 const FORBIDDEN_WORDS: [&str; 5] = ["if", "for", "while", "case", "coproc"];
 const THREADS_RANGE: std::ops::RangeInclusive<u16> = 1..=256;
-const TIMEOUT_RANGE: std::ops::RangeInclusive<u16> = 1..=360;
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -51,7 +50,7 @@ fn invalid(key: &'static str, value: &str) -> Reason {
     }
 }
 
-fn ranged(
+pub(crate) fn ranged(
     key: &'static str,
     value: Option<u16>,
     range: &std::ops::RangeInclusive<u16>,

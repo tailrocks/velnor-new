@@ -57,7 +57,7 @@ fn jobs(workflow: &Value) -> Vec<(&String, &Value)> {
 fn a_build_phase_setup_runs_before_the_first_compiling_step_of_every_job_that_compiles()
 -> TestResult {
     for shape in SHAPES {
-        let workflow = rendered(&format!("shape = '{shape}'\n{}", build_phase()), "0.1.108")?;
+        let workflow = rendered(&format!("shape = '{shape}'\n{}", build_phase()), "0.1.109")?;
         let mut checked = Vec::new();
         for (id, job) in jobs(&workflow) {
             let first = steps(job).iter().position(compiles);
@@ -91,7 +91,7 @@ fn a_build_phase_setup_runs_before_the_first_compiling_step_of_every_job_that_co
 fn the_build_phase_setup_has_the_gate_of_the_lint_step_it_precedes() -> TestResult {
     let workflow = rendered(
         &format!("shape = 'lint-test'\n{}", build_phase()),
-        "0.1.108",
+        "0.1.109",
     )?;
     let lint = &workflow["jobs"]["rust-lint"];
     let setup = &steps(lint)[setups(lint)[0]];
@@ -108,10 +108,10 @@ fn the_build_phase_setup_has_the_gate_of_the_lint_step_it_precedes() -> TestResu
 fn without_the_key_or_with_the_test_phase_the_setup_still_runs_only_before_the_tests() -> TestResult
 {
     for shape in SHAPES {
-        let plain = rendered(&format!("shape = '{shape}'\n{SETUP}"), "0.1.108")?;
+        let plain = rendered(&format!("shape = '{shape}'\n{SETUP}"), "0.1.109")?;
         let test = rendered(
             &format!("shape = '{shape}'\n{SETUP}phase = 'test'\n"),
-            "0.1.108",
+            "0.1.109",
         )?;
         assert_eq!(plain, test, "{shape}");
         for (id, job) in jobs(&plain) {
@@ -142,7 +142,7 @@ fn a_setup_of_another_root_stays_out_of_this_roots_jobs() -> TestResult {
     let workflow = document(&workflow(&view_with(
         &["Cargo.toml", "tools/Cargo.toml"],
         &config,
-        "0.1.108",
+        "0.1.109",
     )?)?)?;
     for (id, job) in jobs(&workflow) {
         assert_eq!(
@@ -158,7 +158,7 @@ fn a_setup_of_another_root_stays_out_of_this_roots_jobs() -> TestResult {
 fn private_sources_put_the_token_and_the_fetch_before_a_build_phase_setup() -> TestResult {
     for shape in SHAPES.into_iter().filter(|shape| *shape != "groups") {
         let config = format!("shape = '{shape}'\n{SECTION}{}", build_phase());
-        let text = workflow(&private_repo(&["Cargo.toml"], &config, "0.1.108")?)?;
+        let text = workflow(&private_repo(&["Cargo.toml"], &config, "0.1.109")?)?;
         let parsed = document(&text)?;
         let mut checked = 0;
         for (id, job) in jobs(&parsed) {
@@ -188,7 +188,7 @@ fn private_sources_put_the_token_and_the_fetch_before_a_build_phase_setup() -> T
         // The setup adds no token or verdict step after repository code: the findings are
         // exactly those of the same repository without any setup step.
         let bare = format!("shape = '{shape}'\n{SECTION}");
-        let without = workflow(&private_repo(&["Cargo.toml"], &bare, "0.1.108")?)?;
+        let without = workflow(&private_repo(&["Cargo.toml"], &bare, "0.1.109")?)?;
         assert_eq!(violations(&text)?, violations(&without)?, "{shape}");
     }
     Ok(())
@@ -202,7 +202,7 @@ fn the_phase_key_needs_a_helper_that_reads_it_and_a_known_value() -> TestResult 
             .ok_or("accepted on a helper that does not read the key")?
             .to_string();
         assert!(
-            error.contains("phase") && error.contains("0.1.108"),
+            error.contains("phase") && error.contains("0.1.109"),
             "{error}"
         );
     }
@@ -210,7 +210,7 @@ fn the_phase_key_needs_a_helper_that_reads_it_and_a_known_value() -> TestResult 
     let error = workflow(&view_with(
         &["Cargo.toml"],
         &format!("{SETUP}phase = 'lint'\n"),
-        "0.1.108",
+        "0.1.109",
     )?)
     .err()
     .ok_or("an unknown phase was accepted")?

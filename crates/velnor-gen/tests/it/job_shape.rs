@@ -298,12 +298,14 @@ const LAB: &str = r#"{"lab/Cargo.toml": {"lint_build_seconds": 10, "test_build_s
 const GONE: &str =
     r#"{"gone/Cargo.toml": {"lint_build_seconds": 1, "test_build_seconds": 1, "test_seconds": 1}}"#;
 
-/// The notes that are not the `shape = "auto"` note of an untimed root.
+/// The notes that are not the `shape = "auto"` note of an untimed root or the note about the
+/// fixture's helper restoring the tools unverified.
 fn without_auto_note(notes: &[String]) -> Vec<&str> {
     notes
         .iter()
         .map(String::as_str)
         .filter(|note| !note.starts_with("shape = \"auto\""))
+        .filter(|note| !note.starts_with("the pinned velnor-ci restores the tools cache"))
         .collect()
 }
 

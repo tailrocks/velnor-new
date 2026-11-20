@@ -11,12 +11,16 @@ mod helper;
 mod hosted;
 mod ids;
 mod lint;
+mod mbx;
+mod mbx_config;
 mod mise;
 mod plan;
+mod release_asset;
 mod repo;
 mod repo_config;
 mod sealed;
 mod selection;
+mod setup_phase;
 mod shape;
 mod steps;
 mod test_group;
@@ -42,6 +46,8 @@ pub use ids::{
     RunnerLabel, Sha256, TargetName, looks_github_hosted,
 };
 pub use lint::{LintCommand, LintJob, LintKind};
+pub use mbx::MbxMode;
+pub use mbx_config::{MBX_TOOL, MbxConflict, MbxDeclaration, MbxRule, mbx_declaration};
 pub use mise::MisePlatform;
 pub use plan::{
     Access, BUILD_TESTS_STEP, BUILT_OUTPUT, CI_AUTO_LABEL, CI_RUN_LABEL, CargoCommand, Concurrency,
@@ -50,6 +56,7 @@ pub use plan::{
     TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, Triggers,
     When, WorkflowPlan, group_output_name,
 };
+pub use release_asset::{ReleaseAsset, ReleaseAssetError, ReleaseAssetPart};
 pub use repo::{
     CacheDebug, CheckoutScope, CiDebugInfo, CompileInputs, CratesMirror, CustomHarness,
     DependencyKind, DocsRun, FullRun, InputOwner, InputRule, LaneFeatures, LaneJob,
@@ -72,5 +79,5 @@ pub use verdict::{JobCondition, VerdictJob, VerdictSpec};
 
 pub use steps::{
     BUDGET_JOB, BaseExpiry, GroupFilter, HelperCommand, InputsCli, PrepareLocks, StepKind,
-    ToolsLocalVerb, ToolsTelemetry, TrimFamily,
+    ToolsLocalVerb, ToolsTelemetry, TrimFamily, VerifiedSave,
 };
