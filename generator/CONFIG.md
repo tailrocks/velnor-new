@@ -235,6 +235,20 @@ job = "parallel"
 
 The pinned velnor-ci reads `.velnor/rust-ci.toml` at run time and rejects a key it does not know, so any `[[test_lane]]` needs velnor-ci 0.1.93 or later, the first release that accepts the key and runs `lane-guard`. `velnor-gen generate` refuses an older pin when the file has a lane, filtered or not.
 
+## cargo-deny policy lane
+
+A `deny.toml` (or `.deny.toml`, `.cargo/deny.toml`, `.config/deny.toml`) that the lane can read enables the policy lane's `cargo-deny` on its Cargo root. The `[policy]` table of `.velnor/rust-ci.toml` says it explicitly, and it needs velnor-ci 0.1.108 or later (`velnor-gen pin-helper 0.1.108` fixes an older pin; an older helper rejects the table):
+
+- `deny = true` runs the lane. It is a generation error when no such config exists.
+- `deny = false` turns the lane off, even with a `deny.toml` present. The lane runs no `cargo-deny` and no `cargo-deny fetch db`, a change to `deny.toml` selects no policy run, and the generation report prints `cargo-deny policy is off ([policy] deny = false); deny.toml is ignored`.
+- Unset (the default) runs the lane exactly when a config exists, as it did before the table.
+- `deny_checks = ["advisories", "bans", "licenses", "sources"]` (optional) lists the checks the command runs, as `cargo-deny --locked check <checks>`. Each name appears once and at least one is listed; the command gives them in the fixed order above. Without the key the command is `cargo-deny --locked check`, which runs all four. To drop only the offline advisory check, write `deny_checks = ["bans", "licenses", "sources"]`.
+
+```toml
+[policy]
+deny = false
+```
+
 ## Unused dependencies
 
 The policy lane runs `cargo-machete` once from the repository root when the repository's `mise.toml` pins `cargo-machete`. It needs no `rust-ci.toml` entry. The pin is the opt-in, so the lane installs the tool through the same pinned mise path as every other tool. `cargo machete` reads every `Cargo.toml` below the root, not only the workspace members, and it skips what `.gitignore` and `.ignore` exclude. A repository that tracks manifests which are not crates (test samples, fixtures) lists them in a root `.ignore`; velnor-new does so for `generator/samples/velnor-new/view/crates/`.

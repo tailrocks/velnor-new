@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    BUILD_TESTS_STEP, CargoCommand, FilterRef, Job, LINT_STEP, LaneFeatures, RepoPath, StepKind,
-    TEST_STEP, TargetKind, TargetName,
+    BUILD_TESTS_STEP, CargoCommand, DenyCheck, FilterRef, Job, LINT_STEP, LaneFeatures, RepoPath,
+    StepKind, TEST_STEP, TargetKind, TargetName,
 };
 
 use crate::cargo_features::NO_TESTS_PASS;
@@ -202,7 +202,11 @@ fn cargo_command(
             format!("cargo build{path} --workspace --all-targets --locked{cargo}"),
             vec![],
         ),
-        CargoCommand::Deny { manifest, config } => deny(manifest, config.as_ref()),
+        CargoCommand::Deny {
+            manifest,
+            config,
+            checks,
+        } => deny(manifest, config.as_ref(), checks.as_deref()),
         CargoCommand::Machete => ("Unused dependencies".into(), "cargo machete".into(), vec![]),
     }
 }
@@ -360,7 +364,11 @@ pub(crate) fn test_selector(kind: TargetKind, target: &TargetName) -> String {
     }
 }
 
-fn deny(manifest: &RepoPath, config: Option<&RepoPath>) -> (String, String, Vec<(String, Value)>) {
+fn deny(
+    manifest: &RepoPath,
+    config: Option<&RepoPath>,
+    checks: Option<&[DenyCheck]>,
+) -> (String, String, Vec<(String, Value)>) {
     let directory = manifest.parent();
     let name = directory.as_ref().map_or_else(
         || "Dependency policy".to_owned(),
@@ -375,9 +383,14 @@ fn deny(manifest: &RepoPath, config: Option<&RepoPath>) -> (String, String, Vec<
     let config_arg = config.map_or_else(String::new, |path| {
         format!(" --config '{}'", path.as_str().replace('\'', "'\\''"))
     });
+    let checks_arg: String = checks
+        .unwrap_or_default()
+        .iter()
+        .map(|check| [" ", check.name()].concat())
+        .collect();
     (
         name,
-        format!("cargo-deny{manifest_arg}{config_arg} --locked check"),
+        format!("cargo-deny{manifest_arg}{config_arg} --locked check{checks_arg}"),
         vec![],
     )
 }

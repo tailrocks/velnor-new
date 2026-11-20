@@ -63,6 +63,7 @@ struct RawConfig {
     workspace_groups: Vec<crate::groups::RawGroup>,
     #[serde(default)]
     test_lane: Vec<crate::config_test_lane::RawTestLane>,
+    policy: Option<crate::config_policy::RawPolicy>,
 }
 
 #[derive(Deserialize)]
@@ -126,6 +127,7 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
     let fork_runner = crate::config_fork::fork_runner(raw.fork_runner, &runner).map_err(invalid)?;
     Ok(RustCiConfig {
         workspace_groups,
+        policy: crate::config_policy::parse(raw.policy).map_err(invalid)?,
         budget: crate::config_budget::parse(bytes).map_err(invalid)?,
         cache_budget_bytes: crate::cache_budget::configured_budget(raw.cache_budget_bytes)
             .map_err(invalid)?,

@@ -25,6 +25,7 @@ mod config_hosting;
 mod config_keys;
 mod config_lint;
 mod config_mirror;
+mod config_policy;
 mod config_pr_ci;
 mod config_private;
 mod config_test_groups;

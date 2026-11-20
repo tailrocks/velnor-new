@@ -32,6 +32,10 @@ pub(crate) const RESTORE_CACHE_HELPER: (u64, u64, u64) = (0, 1, 108);
 // First released in tools-v0.1.108 (not tagged yet when this gate was written).
 pub(crate) const NO_TESTS_HELPER: (u64, u64, u64) = (0, 1, 108);
 
+/// The first `velnor-ci` whose `.velnor/rust-ci.toml` parser accepts the `[policy]` table.
+// First released in tools-v0.1.108 (not tagged yet when this gate was written).
+pub(crate) const POLICY_TABLE_HELPER: (u64, u64, u64) = (0, 1, 108);
+
 pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, GenerateError> {
     let release = facts
         .helper
@@ -104,9 +108,7 @@ pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, Generate
             release.version().clone(),
         ));
     }
-    check_lane_job(facts, release)?;
-    check_lane_flags(facts, release)?;
-    check_test_group_keys(facts, release)?;
+    check_table_keys(facts, release)?;
     if facts.config.mbx_store == MbxStore::Shared && !release.version().at_least((0, 1, 85)) {
         return Err(GenerateError::MbxStoreHelperTooOld(
             release.version().clone(),
@@ -138,6 +140,21 @@ pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, Generate
         ));
     }
     Ok(release)
+}
+
+/// The keys of the `[[test_lane]]`, `[[test_groups]]` and `[policy]` tables that a helper must know.
+fn check_table_keys(facts: &RepoFacts, release: &HelperRelease) -> Result<(), GenerateError> {
+    check_lane_job(facts, release)?;
+    check_lane_flags(facts, release)?;
+    check_test_group_keys(facts, release)?;
+    check_policy_table(facts, release)
+}
+
+fn check_policy_table(facts: &RepoFacts, release: &HelperRelease) -> Result<(), GenerateError> {
+    if facts.config.policy.is_some() && !release.version().at_least(POLICY_TABLE_HELPER) {
+        return Err(GenerateError::PolicyHelperTooOld(release.version().clone()));
+    }
+    Ok(())
 }
 
 fn check_restore_cache(facts: &RepoFacts, release: &HelperRelease) -> Result<(), GenerateError> {

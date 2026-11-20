@@ -110,6 +110,7 @@ fn the_policy_tools_run_for_their_own_triggers() -> TestResult {
     let both = PolicyTools {
         deny: true,
         machete: true,
+        deny_off: false,
     };
     let cases: [Case<'_>; 11] = [
         (&["README.md"], false, false, (false, false)),
@@ -149,10 +150,12 @@ fn a_source_change_runs_the_policy_lane_when_machete_is_pinned() -> TestResult {
     let deny_only = PolicyTools {
         deny: true,
         machete: false,
+        deny_off: false,
     };
     let machete = PolicyTools {
         deny: false,
         machete: true,
+        deny_off: false,
     };
     assert_eq!(
         policy_runs(deny_only, &changed, false, true),

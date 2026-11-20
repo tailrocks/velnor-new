@@ -255,6 +255,11 @@ pub(crate) fn policy_job(facts: &RepoFacts, lane: &Lane) -> Job {
                 CargoCommand::Deny {
                     manifest: root.manifest.clone(),
                     config: facts.deny_configs.get(&root.manifest).cloned(),
+                    checks: facts
+                        .config
+                        .policy
+                        .as_ref()
+                        .and_then(|policy| policy.deny_checks.clone()),
                 },
                 None,
             )

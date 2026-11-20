@@ -7,7 +7,7 @@ use crate::budget_mode::SelectionName;
 use crate::cron::CronExpr;
 use crate::hosted::HostedRunners;
 use crate::ids::{JobId, PackageName, RepoPath, RootSlug, RunnerLabel, TargetName};
-use crate::repo::{LaneFeatures, TargetKind};
+use crate::repo::{DenyCheck, LaneFeatures, TargetKind};
 use crate::steps::StepKind;
 use crate::test_group::NoTests;
 
@@ -341,6 +341,8 @@ pub enum CargoCommand {
     Deny {
         manifest: RepoPath,
         config: Option<RepoPath>,
+        /// The checks to run; `None` runs `cargo deny check` with all of them.
+        checks: Option<Vec<DenyCheck>>,
     },
     Machete,
 }

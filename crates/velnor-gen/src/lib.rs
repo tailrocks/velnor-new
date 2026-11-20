@@ -98,6 +98,10 @@ pub fn expected_with_notes(
     notes.extend(facts.private_suggestion);
     notes.extend(release_notes);
     notes.extend(budget_notes);
+    notes.extend(velnor_rust::deny_off_note(
+        facts.policy,
+        &facts.deny_configs,
+    ));
     notes.extend(reusable_notes);
     notes.extend(
         excluded

@@ -6,6 +6,7 @@ use crate::cron::CronExpr;
 use crate::hosted::HostedRunners;
 use crate::ids::{PackageName, PathGlob, RepoPath, RootSlug, RunnerLabel, TargetName};
 use crate::lint::LintJob;
+use crate::policy_table::PolicyTable;
 use crate::shape::Shape;
 use crate::test_group::TestGroup;
 
@@ -47,6 +48,8 @@ pub struct RustCiConfig {
     pub test_groups: Vec<TestGroup>,
     pub checkout: CheckoutScope,
     pub workspace_groups: Vec<WorkspaceGroup>,
+    /// The `[policy]` table; `None` when the table is absent.
+    pub policy: Option<PolicyTable>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -343,6 +346,7 @@ impl Default for RustCiConfig {
             test_groups: Vec::new(),
             checkout: CheckoutScope::Full,
             workspace_groups: Vec::new(),
+            policy: None,
         }
     }
 }

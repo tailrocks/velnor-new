@@ -56,6 +56,9 @@ impl Reason {
 
     fn fmt_setup(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::PolicyDenyWithoutConfig => f.write_str(
+                "[policy] deny = true needs a cargo-deny config (deny.toml, .deny.toml, .cargo/deny.toml or .config/deny.toml) that the lane can read; add one, or remove deny = true",
+            ),
             Self::UnpinnedTool(tool) => write!(
                 f,
                 "is present but {tool} is not pinned in mise.toml, so the policy lane could not run it; pin it there"
@@ -184,6 +187,7 @@ impl fmt::Display for Reason {
                 "[env] sets {name}: cargo passes it to the compilers and clippy the checks run, and with force = true it replaces what the step sets, so a check could pass without checking; remove it, or set it without force and with a name that does not start with CLIPPY, RUST or CARGO"
             ),
             Self::UnpinnedTool(_)
+            | Self::PolicyDenyWithoutConfig
             | Self::HelperBox(_)
             | Self::MbxRemotePrivate(_)
             | Self::PrCiWithSkipDraft => self.fmt_setup(f),

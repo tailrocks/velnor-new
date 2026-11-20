@@ -114,6 +114,8 @@ pub struct RepoFacts {
 pub struct PolicyTools {
     pub deny: bool,
     pub machete: bool,
+    /// `[policy] deny = false` turns the lane off, so a changed `deny.toml` selects nothing.
+    pub deny_off: bool,
 }
 
 impl PolicyTools {
@@ -306,6 +308,7 @@ pub struct ToolLock {
     pub prebuilt: BTreeSet<String>,
 }
 
+pub use crate::policy_table::{DenyCheck, DenyLane, PolicyTable};
 pub use crate::repo_config::{
     CacheDebug, CheckoutScope, CiDebugInfo, CratesMirror, DocsRun, FullRun, InputRule,
     LaneFeatures, LaneJob, LaneKeysWritten, MbxRemote, MbxStore, OnMain, PrCi, PrivateSources,
