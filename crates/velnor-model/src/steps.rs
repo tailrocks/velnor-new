@@ -226,7 +226,9 @@ impl StepKind {
     pub fn saves_to_cache_service(&self) -> bool {
         matches!(
             self,
-            Self::CacheSave(_) | Self::MbxRemote { .. } | Self::ToolsLocal(ToolsLocalVerb::AnchorSave)
+            Self::CacheSave(_)
+                | Self::MbxRemote { .. }
+                | Self::ToolsLocal(ToolsLocalVerb::AnchorSave)
         )
     }
 }

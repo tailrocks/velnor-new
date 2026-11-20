@@ -34,8 +34,8 @@ pub use crate::lock_check::{
     RunningGenerator, check_generator_entry, lock_version, running_platform, verify_release,
 };
 pub use crate::lock_key::lock_key;
-pub use crate::mbx_pin::exact_release;
 pub use crate::mbx_layout::{Layout, Provider, Split, check_mbx};
+pub use crate::mbx_pin::exact_release;
 pub use crate::metadata::{MetadataError, reduce_metadata};
 pub use crate::metadata_file::{
     METADATA_PATH, MetadataFileError, metadata_file, recorded_members, recorded_metadata,
