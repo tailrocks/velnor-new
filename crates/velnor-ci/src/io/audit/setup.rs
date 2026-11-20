@@ -60,7 +60,7 @@ pub(super) fn begin<'a>(
             .collect(),
         roots: workspaces
             .iter()
-            .map(|workspace| workspace.workspace_root.clone())
+            .map(|workspace| workspace.root.clone())
             .collect(),
         members,
         found: CompileInputs::new(),

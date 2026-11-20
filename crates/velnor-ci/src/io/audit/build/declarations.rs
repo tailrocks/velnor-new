@@ -33,8 +33,8 @@ pub(super) fn declarations(
     let active = workspaces
         .iter()
         .enumerate()
-        .filter(|(_, workspace)| location.starts_with(&workspace.workspace_root))
-        .max_by_key(|(_, workspace)| workspace.workspace_root.components().count())
+        .filter(|(_, workspace)| location.starts_with(&workspace.root))
+        .max_by_key(|(_, workspace)| workspace.root.components().count())
         .map(|(index, _)| index);
     for (_, workspace) in workspaces
         .iter()
@@ -43,9 +43,7 @@ pub(super) fn declarations(
     {
         let mut bases: BTreeMap<String, BTreeSet<PathBuf>> = BTreeMap::new();
         for root in &facts.rust_roots {
-            if repository.join(root.manifest.as_str()).parent()
-                == Some(workspace.workspace_root.as_path())
-            {
+            if repository.join(root.manifest.as_str()).parent() == Some(workspace.root.as_path()) {
                 for member in &root.members {
                     if let Some(base) = repository.join(member.manifest.as_str()).parent() {
                         bases

@@ -31,7 +31,7 @@ impl Fixture {
         let store = target.join(inventory::STORE);
         fs::create_dir_all(&store).unwrap_or_else(|e| unreachable!("{e}"));
         let workspaces = vec![Workspace {
-            workspace_root: root.clone(),
+            root: root.clone(),
             build_directory: target.clone(),
             target_directory: target.clone(),
         }];

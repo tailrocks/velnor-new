@@ -1,26 +1,39 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
-use super::{UnitFile, unchecked_unit_files, unit_files_apart};
+use super::{UnitFile, Workspace, built, directory_limit, scan, unit_files};
 use crate::error::CiError;
 
 #[derive(Deserialize)]
-struct Printed {
+pub(super) struct Printed {
     workspace_root: PathBuf,
     target_directory: PathBuf,
     build_directory: Option<PathBuf>,
 }
 
-#[derive(Deserialize)]
-#[serde(from = "Printed")]
-pub(in crate::io) struct Workspace {
-    pub(in crate::io) workspace_root: PathBuf,
-    pub(in crate::io) target_directory: PathBuf,
-    pub(in crate::io) build_directory: PathBuf,
+pub(in crate::io) fn unchecked_unit_files(
+    target: &Path,
+) -> Result<Vec<(UnitFile, PathBuf)>, CiError> {
+    Ok(scan(target, directory_limit()?)?.0)
+}
+
+pub(in crate::io) fn unit_files_apart(
+    target: &Path,
+    build: &Path,
+) -> Result<Vec<(UnitFile, PathBuf)>, CiError> {
+    if target == build {
+        return unit_files(target);
+    }
+    let limit = directory_limit()?;
+    let (mut found, target_built) = scan(target, limit)?;
+    let (more, build_built) = scan(build, limit)?;
+    found.extend(more);
+    built::refuse_without_units(build, target_built || build_built, &found)?;
+    Ok(found)
 }
 
 impl From<Printed> for Workspace {
@@ -29,7 +42,7 @@ impl From<Printed> for Workspace {
             build_directory: printed
                 .build_directory
                 .unwrap_or_else(|| printed.target_directory.clone()),
-            workspace_root: printed.workspace_root,
+            root: printed.workspace_root,
             target_directory: printed.target_directory,
         }
     }

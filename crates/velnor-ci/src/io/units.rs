@@ -5,6 +5,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use serde::Deserialize;
 use velnor_rust::{NESTED_ROOTS_FOLDER, resolve};
 
 use crate::cache_prune::is_hash;
@@ -18,7 +19,7 @@ mod layout_tests;
 mod workspace;
 
 pub(super) use build_dir::refuse_arguments;
-pub(super) use workspace::Workspace;
+pub(super) use workspace::{unchecked_unit_files, unit_files_apart};
 
 const MAX_TARGET_DEPTH: usize = 64;
 /// A target directory after a full build and test run holds one directory per
@@ -29,6 +30,14 @@ const MAX_TARGET_DIRECTORIES: usize = 1_000_000;
 /// The largest value `VELNOR_TARGET_MAX_DIRECTORIES` may raise the bound to.
 const TARGET_DIRECTORIES_CEILING: usize = 10_000_000;
 const MAX_TARGET_DIRECTORIES_VARIABLE: &str = "VELNOR_TARGET_MAX_DIRECTORIES";
+
+#[derive(Deserialize)]
+#[serde(from = "workspace::Printed")]
+pub(super) struct Workspace {
+    pub(super) root: PathBuf,
+    pub(super) target_directory: PathBuf,
+    pub(super) build_directory: PathBuf,
+}
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(super) enum UnitFile {
@@ -60,25 +69,6 @@ pub(super) enum UnitFile {
 
 pub(super) fn unit_files(target: &Path) -> Result<Vec<(UnitFile, PathBuf)>, CiError> {
     unit_files_within(target, directory_limit()?)
-}
-
-pub(super) fn unchecked_unit_files(target: &Path) -> Result<Vec<(UnitFile, PathBuf)>, CiError> {
-    Ok(scan(target, directory_limit()?)?.0)
-}
-
-pub(super) fn unit_files_apart(
-    target: &Path,
-    build: &Path,
-) -> Result<Vec<(UnitFile, PathBuf)>, CiError> {
-    if target == build {
-        return unit_files(target);
-    }
-    let limit = directory_limit()?;
-    let (mut found, target_built) = scan(target, limit)?;
-    let (built, build_built) = scan(build, limit)?;
-    found.extend(built);
-    built::refuse_without_units(build, target_built || build_built, &found)?;
-    Ok(found)
 }
 
 fn directory_limit() -> Result<usize, CiError> {
@@ -324,9 +314,9 @@ pub(super) fn apart(workspaces: &[Workspace], shared: &[Vec<usize>]) -> Result<(
                 return Err(CiError::new(format!(
                     "the target directory {} of the Cargo root {} holds the target directory {} of the Cargo root {}, so their units cannot be told apart; give each Cargo root its own target directory, outside the others",
                     holder.display(),
-                    workspaces[outer].workspace_root.display(),
+                    workspaces[outer].root.display(),
                     held.display(),
-                    workspaces[inner].workspace_root.display()
+                    workspaces[inner].root.display()
                 )));
             }
         }

@@ -47,7 +47,7 @@ pub(super) fn exclusions(workspaces: &[Workspace]) -> Result<BTreeSet<PathBuf>, 
     workspaces
         .iter()
         .flat_map(|workspace| {
-            let mut excluded = vec![workspace.workspace_root.join("target")];
+            let mut excluded = vec![workspace.root.join("target")];
             excluded.extend(workspace.directories());
             excluded
         })

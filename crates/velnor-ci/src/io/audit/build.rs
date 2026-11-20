@@ -194,7 +194,7 @@ impl Builder<'_> {
         self.workspaces
             .iter()
             .filter_map(|workspace| {
-                let root = fs::canonicalize(&workspace.workspace_root).ok()?;
+                let root = fs::canonicalize(&workspace.root).ok()?;
                 self.location
                     .starts_with(&root)
                     .then_some((root.components().count(), workspace))
