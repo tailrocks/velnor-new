@@ -28,7 +28,7 @@ fn publish_optional(api: &Path, dir: &Dir, optional: &str) -> Output {
 }
 
 #[test]
-fn release_publish_takes_an_optional_asset_that_is_present_and_skips_one_that_is_not() {
+fn release_publish_takes_an_optional_asset_that_is_present() {
     let (api, fake) = serve();
     let id = fake.app_draft();
     let dir = Dir::new("publish-optional");
@@ -39,7 +39,10 @@ fn release_publish_takes_an_optional_asset_that_is_present_and_skips_one_that_is
     assert_eq!(output.status.code(), Some(0), "{output:?}");
     assert!(!fake.is_draft(id));
     assert_eq!(fake.assets(id), published_digests());
+}
 
+#[test]
+fn release_publish_skips_an_optional_asset_that_is_not_in_the_directory() {
     let (api, fake) = serve();
     let id = fake.app_draft();
     let dir = Dir::new("publish-optional-missing");
