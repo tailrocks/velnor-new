@@ -15,8 +15,11 @@
 # that mise's install docs (https://mise.jdx.dev/installing-mise.html, "GitHub
 # releases") pass to `minisign -P`. To rotate it, copy the new minisign.pub from the
 # jdx/mise repository over scripts/mise-minisign.pub after checking it against
-# that documentation page, then run `--check`. The check itself is
-# scripts/minisign_verify.py (standard library only: no minisign binary needed).
+# that documentation page, then run `--check`. The check is the real `minisign`
+# tool, `minisign -V -m SHASUMS256.txt -x SHASUMS256.txt.minisig -p
+# scripts/mise-minisign.pub`, the way mise's own docs verify; mise.toml pins it
+# (`mise install`, or run this script through `mise exec --`). A missing minisign
+# stops the script like a failed check does. There is no bypass flag.
 #
 # Usage: scripts/mise-binary-digests.sh [VERSION] [--check|--write] [--sums FILE [--sig FILE]]
 #   VERSION  the mise release; defaults to MISE_VERSION in crates/velnor-render/src/steps.rs
@@ -30,9 +33,10 @@ set -eu
 
 root=$(cd "$(dirname "$0")/.." && pwd)
 exec python3 -I - "$root" "$@" <<'PY'
-import importlib.util
 import re
+import subprocess
 import sys
+import tempfile
 import urllib.request
 
 root, args = sys.argv[1], sys.argv[2:]
@@ -64,9 +68,8 @@ if version is None:
 if not re.fullmatch(r"\d{4}\.\d{1,2}\.\d{1,3}", version):
     sys.exit(f"{version} is not a mise release version")
 
-spec = importlib.util.spec_from_file_location("minisign_verify", f"{root}/scripts/minisign_verify.py")
-minisign = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(minisign)
+class SignatureError(Exception):
+    pass
 
 
 def read(path):
@@ -80,18 +83,37 @@ def download(name):
         return response.read()
 
 
+def verify(raw, signature):
+    # The bytes are read once; minisign checks a private copy of exactly those
+    # bytes, so what is verified is what is parsed below.
+    with tempfile.TemporaryDirectory(prefix="mise-binary-digests.") as work:
+        manifest, signed = f"{work}/SHASUMS256.txt", f"{work}/SHASUMS256.txt.minisig"
+        for path, data in ((manifest, raw), (signed, signature)):
+            with open(path, "wb") as handle:
+                handle.write(data)
+        try:
+            result = subprocess.run(
+                ["minisign", "-V", "-m", manifest, "-x", signed, "-p", f"{root}/scripts/mise-minisign.pub"],
+                capture_output=True,
+                text=True,
+                timeout=60,
+            )
+        except FileNotFoundError:
+            raise SignatureError("minisign is not installed (mise install minisign)")
+        if result.returncode != 0:
+            raise SignatureError(f"minisign exited {result.returncode}: {result.stderr.strip()}")
+
+
 # Fail closed: the digests below are read only from bytes whose signature verified.
 try:
     if sums:
         raw, signature = read(sums), read(sig or sums + ".minisig")
     else:
         raw, signature = download("SHASUMS256.txt"), download("SHASUMS256.txt.minisig")
-    minisign.verify(
-        read(f"{root}/scripts/mise-minisign.pub").decode(), signature.decode(), raw
-    )
-except (OSError, UnicodeDecodeError, minisign.SignatureError) as error:
+    verify(raw, signature)
+    text = raw.decode()
+except (OSError, UnicodeDecodeError, SignatureError, subprocess.SubprocessError) as error:
     sys.exit(f"SHASUMS256.txt of mise {version}: signature check failed, nothing trusted: {error}")
-text = raw.decode()
 
 digests = {}
 for line in text.splitlines():
