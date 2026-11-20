@@ -234,8 +234,8 @@ mod tests_run {
         let (output, written, _) = run_with_output("tests-run-zero", script, &NEXTEST_RUN);
         assert!(output.status.success(), "{output:?}");
         assert_eq!(
-            without_built(&written),
-            "existing=1\ntests_run=0\ntests_listed=0\n"
+            written,
+            "existing=1\nbuilt=true\ntests_run=0\ntests_listed=0\n"
         );
     }
 
@@ -247,8 +247,8 @@ mod tests_run {
         let (output, written, _) = run_with_output("tests-run-filtered", &script, &NEXTEST_RUN);
         assert!(output.status.success(), "{output:?}");
         assert_eq!(
-            without_built(&written),
-            "existing=1\ntests_run=0\ntests_listed=4\n"
+            written,
+            "existing=1\nbuilt=true\ntests_run=0\ntests_listed=4\n"
         );
     }
 
