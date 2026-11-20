@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use serde::Deserialize;
-use velnor_rust::{NESTED_ROOTS_FOLDER, resolve};
+use velnor_rust::NESTED_ROOTS_FOLDER;
 
 use crate::cache_prune::is_hash;
 use crate::error::CiError;
@@ -16,9 +16,11 @@ mod built;
 mod fill;
 #[cfg(test)]
 mod layout_tests;
+mod separation;
 mod workspace;
 
 pub(super) use build_dir::refuse_arguments;
+pub(super) use separation::apart;
 pub(super) use workspace::{build_unit_files, unit_files_apart};
 
 const MAX_TARGET_DEPTH: usize = 64;
@@ -287,44 +289,6 @@ fn split(stem: &str) -> Option<(&str, &str)> {
             .bytes()
             .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f')))
     .then_some((name, hash))
-}
-
-pub(super) fn apart(workspaces: &[Workspace], shared: &[Vec<usize>]) -> Result<(), CiError> {
-    let directories: Vec<PathBuf> = workspaces
-        .iter()
-        .map(|w| {
-            resolve(&w.target_directory).map_err(|error| {
-                CiError::new(format!(
-                    "cannot resolve {}: {error}",
-                    w.target_directory.display()
-                ))
-            })
-        })
-        .collect::<Result<_, _>>()?;
-    for (outer, holder) in directories.iter().enumerate() {
-        for (inner, held) in directories.iter().enumerate() {
-            if outer == inner
-                || !held.starts_with(holder)
-                || held.starts_with(holder.join(NESTED_ROOTS_FOLDER))
-            {
-                continue;
-            }
-            let grouped = held == holder
-                && shared
-                    .iter()
-                    .any(|group| group.contains(&outer) && group.contains(&inner));
-            if !grouped {
-                return Err(CiError::new(format!(
-                    "the target directory {} of the Cargo root {} holds the target directory {} of the Cargo root {}, so their units cannot be told apart; give each Cargo root its own target directory, outside the others",
-                    holder.display(),
-                    workspaces[outer].root.display(),
-                    held.display(),
-                    workspaces[inner].root.display()
-                )));
-            }
-        }
-    }
-    Ok(())
 }
 
 pub(super) struct MetadataInvocation<'a> {
