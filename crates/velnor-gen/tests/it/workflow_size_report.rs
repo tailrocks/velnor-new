@@ -62,3 +62,65 @@ fn the_largest_jobs_reported_for_an_oversized_workflow_add_up_to_its_bytes() -> 
     );
     Ok(())
 }
+
+fn largest_jobs(job_text: &str) -> Result<Vec<(String, usize)>, String> {
+    let (_, list) = job_text
+        .split_once("the largest are ")
+        .ok_or("no largest jobs list")?;
+    list.split(", ")
+        .map(|entry| {
+            let (id, bytes) = entry
+                .strip_suffix(" bytes")
+                .and_then(|rest| rest.rsplit_once(' '))
+                .ok_or_else(|| format!("unparsed entry {entry}"))?;
+            let bytes = bytes.parse::<usize>().map_err(|error| error.to_string())?;
+            Ok((id.to_owned(), bytes))
+        })
+        .collect()
+}
+
+fn size_violation(jobs: Vec<RenderedJob>) -> Result<String, Box<dyn std::error::Error>> {
+    let plan = crate::rules::plan(Vec::new())?;
+    let errors = render_workflow(&plan, &RenderedWorkflow { jobs })
+        .err()
+        .ok_or("the workflow should be over the size limit")?;
+    let violation = errors
+        .into_iter()
+        .find(|violation| matches!(violation.rule, Rule::WorkflowTooLarge(_)))
+        .ok_or("no size violation")?;
+    Ok(violation.job)
+}
+
+#[test]
+fn a_comment_above_the_first_job_is_charged_to_that_job() -> TestResult {
+    let note = "x".repeat(40_000);
+    let first = RenderedJob {
+        comment: Some(note.clone()),
+        ..job("first", 1)
+    };
+    let text = size_violation(vec![first, job("heavy", STEPS)])?;
+    let sizes = largest_jobs(&text)?;
+    let (_, first_bytes) = sizes
+        .iter()
+        .find(|(id, _)| id == "first")
+        .ok_or("first job is not in the largest list")?;
+    assert!(*first_bytes >= note.len(), "first is {first_bytes} bytes: {text}");
+    Ok(())
+}
+
+#[test]
+fn a_comment_above_a_later_job_is_not_charged_to_the_job_before_it() -> TestResult {
+    let note = "x".repeat(40_000);
+    let last = RenderedJob {
+        comment: Some(note.clone()),
+        ..job("last", 1)
+    };
+    let text = size_violation(vec![job("heavy", STEPS), last])?;
+    let sizes = largest_jobs(&text)?;
+    let (_, last_bytes) = sizes
+        .iter()
+        .find(|(id, _)| id == "last")
+        .ok_or("last job is not in the largest list")?;
+    assert!(*last_bytes >= note.len(), "last is {last_bytes} bytes: {text}");
+    Ok(())
+}
