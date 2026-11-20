@@ -19,7 +19,7 @@ mod layout_tests;
 mod workspace;
 
 pub(super) use build_dir::refuse_arguments;
-pub(super) use workspace::{unchecked_unit_files, unit_files_apart};
+pub(super) use workspace::{build_unit_files, unit_files_apart};
 
 const MAX_TARGET_DEPTH: usize = 64;
 /// A target directory after a full build and test run holds one directory per
@@ -364,6 +364,12 @@ fn metadata(
         command
             .env_remove("CARGO_TARGET_DIR")
             .env_remove("CARGO_BUILD_BUILD_DIR");
+    } else if invocation.is_none()
+        && let Some(build) = std::env::var_os("CARGO_BUILD_BUILD_DIR")
+            .map(PathBuf::from)
+            .filter(|build| build.is_relative())
+    {
+        command.env("CARGO_BUILD_BUILD_DIR", build_dir::step_relative(&build)?);
     }
     let output = command
         .args([

@@ -21,6 +21,18 @@ pub(in crate::io) fn unchecked_unit_files(
     Ok(scan(target, directory_limit()?, None)?.0)
 }
 
+pub(in crate::io) fn build_unit_files(
+    workspaces: &[Workspace],
+    directory: &Path,
+) -> Result<Vec<(UnitFile, PathBuf)>, CiError> {
+    if workspaces.iter().any(|workspace| {
+        workspace.target_directory == directory && workspace.build_directory == directory
+    }) {
+        return unit_files(directory);
+    }
+    unchecked_unit_files(directory)
+}
+
 fn inside<'a>(outer: &Path, inner: &'a Path) -> Option<&'a Path> {
     inner.starts_with(outer).then_some(inner)
 }
@@ -84,9 +96,9 @@ impl Workspace {
         unit_files_apart(&self.target_directory, &self.build_directory)
     }
 
-    pub(in crate::io) fn unchecked_units(&self) -> Result<Vec<(UnitFile, PathBuf)>, CiError> {
+    pub(in crate::io) fn build_units(&self) -> Result<Vec<(UnitFile, PathBuf)>, CiError> {
         if self.target_directory == self.build_directory {
-            return unchecked_unit_files(&self.target_directory);
+            return unit_files(&self.target_directory);
         }
         Ok(apart(&self.target_directory, &self.build_directory)?.found)
     }

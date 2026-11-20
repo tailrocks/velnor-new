@@ -20,6 +20,7 @@ mod new_layout;
 mod optional;
 mod partial;
 mod per_root;
+mod plain_build;
 mod reads;
 mod selection;
 mod separate_build;

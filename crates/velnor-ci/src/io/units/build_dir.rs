@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 use serde::Deserialize;
 use toml::{Table, Value};
@@ -19,6 +19,24 @@ struct Member {
 struct Printed {
     #[serde(default)]
     packages: Vec<Member>,
+}
+
+pub(super) fn step_relative(relative: &Path) -> Result<PathBuf, CiError> {
+    let directory = std::env::current_dir()
+        .map_err(|e| CiError::new(format!("cannot read the working directory: {e}")))?;
+    Ok(directory
+        .join(relative)
+        .components()
+        .fold(PathBuf::new(), |mut path, part| {
+            match part {
+                Component::ParentDir => {
+                    path.pop();
+                }
+                Component::CurDir => {}
+                other => path.push(other),
+            }
+            path
+        }))
 }
 
 pub(super) fn refuse(workspace: &Workspace, metadata: &[u8]) -> Result<(), CiError> {

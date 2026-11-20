@@ -171,9 +171,9 @@ fn an_untrusted_build_output_in_a_build_directory_inside_the_target_is_invalidat
 }
 
 #[test]
-fn a_relative_build_directory_that_the_workspace_and_the_command_read_differently_is_refused() {
+fn a_relative_build_directory_names_the_same_directory_for_the_workspace_and_the_command() {
     let repo = workspace_below_the_root();
-    let refused = velnor_ci()
+    let built = velnor_ci()
         .current_dir(repo.root())
         .env("CARGO_BUILD_BUILD_DIR", "build")
         .args([
@@ -187,11 +187,22 @@ fn a_relative_build_directory_that_the_workspace_and_the_command_read_differentl
         ])
         .output()
         .unwrap_or_else(|e| unreachable!("{e}"));
-    assert_eq!(refused.status.code(), Some(1), "{refused:?}");
-    assert!(
-        String::from_utf8_lossy(&refused.stderr).contains("build directory"),
-        "{refused:?}"
-    );
+    assert!(built.status.success(), "{built:?}");
+    assert!(repo.root().join("build/debug").is_dir(), "{built:?}");
+}
+
+#[test]
+fn a_relative_build_directory_is_audited_from_the_step_directory_as_cargo_writes_it() {
+    let repo = built_in(APART, &[]);
+    stamp(&repo, APART);
+    let written = velnor_ci()
+        .current_dir(repo.root().join("rust/app"))
+        .env("CARGO_BUILD_BUILD_DIR", "../build")
+        .args(["inputs", "audit", "--write"])
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(written.status.success(), "{written:?}");
+    assert_eq!(lock(&repo), ".\tlib\n");
 }
 
 #[test]
