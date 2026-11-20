@@ -225,7 +225,10 @@ const FULL_LANE: &str =
 #[test]
 fn a_failed_check_after_the_build_saves_nothing() -> TestResult {
     for variant in BOTH {
-        for check in ["'Lint (features: local-mode)'", "'Documentation (features: local-mode)'"] {
+        for check in [
+            "'Lint (features: local-mode)'",
+            "'Documentation (features: local-mode)'",
+        ] {
             for (event, test_failed) in [("schedule", true), ("push", false)] {
                 let ending = Ending {
                     event,
