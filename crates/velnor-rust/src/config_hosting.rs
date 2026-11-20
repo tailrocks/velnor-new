@@ -85,3 +85,12 @@ pub(crate) fn resolve(
             .collect(),
     ))
 }
+
+pub(crate) fn hosted_flags(
+    declared_runner: bool,
+    hosted: Option<bool>,
+    test_groups: &[TestGroup],
+) -> (bool, bool) {
+    let hosted_key = hosted.is_some() || test_groups.iter().any(|group| group.hosted.is_some());
+    (declared_runner, hosted_key)
+}

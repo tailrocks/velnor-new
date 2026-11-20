@@ -10,6 +10,7 @@ use velnor_model::{
 };
 
 use crate::config_events::{docs_run, on_main};
+use crate::config_hosting::hosted_flags;
 use crate::config_keys::KEYS;
 use crate::error::{DetectError, Reason};
 use crate::shape::parse_shape;
@@ -125,12 +126,11 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
     let test_lanes = crate::config_test_lane::parse(raw.test_lane).map_err(invalid)?;
     let external_workflows =
         crate::config_external::parse(raw.external_workflows).map_err(invalid)?;
-    let declared_runner = raw.runner.is_some();
-    let hosted_key = raw.hosted.is_some() || test_groups.iter().any(|group| group.hosted.is_some());
+    let (declared, hosted_key) = hosted_flags(raw.runner.is_some(), raw.hosted, &test_groups);
     let runner = runner(raw.runner, defaults.runner).map_err(invalid)?;
     let crates_mirror = crate::config_mirror::optional(raw.crates_mirror).map_err(invalid)?;
     let hosted_runners = crate::config_hosting::resolve(
-        (&runner, raw.hosted.or((!declared_runner).then_some(true))),
+        (&runner, raw.hosted.or((!declared).then_some(true))),
         crates_mirror.as_ref(),
         &test_groups,
     )
