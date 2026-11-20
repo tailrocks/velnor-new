@@ -205,7 +205,10 @@ fn cache_metrics(
             continue;
         }
         let key = if saving {
-            cache.saved_key.as_deref().unwrap_or(cache.requested_key.as_str())
+            cache
+                .saved_key
+                .as_deref()
+                .unwrap_or(cache.requested_key.as_str())
         } else if let Some(key) = &cache.matched_key {
             key.as_str()
         } else {

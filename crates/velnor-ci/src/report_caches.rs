@@ -50,7 +50,12 @@ pub(crate) fn observe_caches(
                 .save_key_step
                 .as_ref()
                 .filter(|_| save != SaveOutcome::NotAttempted)
-                .map(|id| steps[id]["outputs"]["key"].as_str().unwrap_or_default().to_owned());
+                .map(|id| {
+                    steps[id]["outputs"]["key"]
+                        .as_str()
+                        .unwrap_or_default()
+                        .to_owned()
+                });
             Cache {
                 family: plan.family,
                 root: plan.root,
