@@ -22,6 +22,14 @@ pub(super) fn collect_local(metrics: &mut LaneMetrics, log: &[u8], runner_temp: 
         .map(|invocation| invocation.started_at)
         .min();
     let store = std::env::var_os("MBX_CACHE_DIR").filter(|dir| !dir.is_empty());
+    let unparsed = mbx_unparsed_lines(log);
+    if let Some(first) = unparsed.first() {
+        metrics.diagnostics.push(format!(
+            "MBX lookup summary not understood, {} line(s) not counted; first: {}",
+            unparsed.len(),
+            crate::escape::escape(first, false)
+        ));
+    }
     metrics.mbx = MbxEvidence {
         declared: crate::mbx_declared::declared_in(Path::new(".")),
         store_primed: store
@@ -29,14 +37,8 @@ pub(super) fn collect_local(metrics: &mut LaneMetrics, log: &[u8], runner_temp: 
             .is_some_and(|(dir, start)| has_entry_before(Path::new(&dir), start)),
         seed_truncated: mbx_seed_truncated(log),
         sessions: mbx_sessions(log),
+        unparsed: u64::try_from(unparsed.len()).unwrap_or(u64::MAX),
     };
-    let unparsed = mbx_unparsed_lines(log);
-    if let Some(first) = unparsed.first() {
-        metrics.diagnostics.push(format!(
-            "MBX lookup summary not understood, {} line(s) not counted; first: {first}",
-            unparsed.len()
-        ));
-    }
     metrics.toolchain_installs = fs::read_to_string(runner_temp.join(TOOLCHAIN_INSTALLS))
         .map(|text| {
             text.lines()

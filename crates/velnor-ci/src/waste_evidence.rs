@@ -32,12 +32,18 @@ pub struct MbxEvidence {
     #[serde(default)]
     pub seed_truncated: bool,
     pub sessions: Vec<MbxSession>,
+    #[serde(default)]
+    pub unparsed: u64,
 }
 
 impl MbxEvidence {
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        !self.declared && !self.store_primed && !self.seed_truncated && self.sessions.is_empty()
+        !self.declared
+            && !self.store_primed
+            && !self.seed_truncated
+            && self.sessions.is_empty()
+            && self.unparsed == 0
     }
 }
 
@@ -47,13 +53,16 @@ pub fn mbx_seed_truncated(log: &[u8]) -> bool {
     String::from_utf8_lossy(log).contains("MBX seeding stopped at the startup budget")
 }
 
-/// The summary text of an `mbx[cache]:` lookup line. Both forms are accepted: 1.30.0 prints
-/// `mbx[cache]: object cache: H hits, M misses; ...` in some runs and `mbx[cache]: H hits, M misses; ...`
-/// in others. Lines that are not lookup summaries (`mbx[cache]: 28.53s session`) return `None`.
-fn lookup_summary(line: &str) -> Option<&str> {
+fn cache_text(line: &str) -> Option<&str> {
     let text = line.split_once("mbx[cache]: ")?.1;
-    let text = text.strip_prefix("object cache: ").unwrap_or(text);
-    (text.starts_with(|c: char| c.is_ascii_digit()) && text.contains(" hits")).then_some(text)
+    Some(text.strip_prefix("object cache: ").unwrap_or(text))
+}
+
+fn is_session_duration(text: &str) -> bool {
+    text.split_once(';')
+        .map_or(text, |(head, _)| head)
+        .trim_end()
+        .ends_with(" session")
 }
 
 fn parse_lookup_summary(summary: &str) -> Option<MbxSession> {
@@ -77,23 +86,22 @@ fn parse_lookup_summary(summary: &str) -> Option<MbxSession> {
     (seen[0] && seen[1]).then_some(session)
 }
 
-/// The `mbx[cache]:` lookup summaries in a job log, parsed. A summary that does not parse is
-/// absent here and listed by [`mbx_unparsed_lines`]; it is never counted as zero.
 #[must_use]
 pub fn mbx_sessions(log: &[u8]) -> Vec<MbxSession> {
     String::from_utf8_lossy(log)
         .lines()
-        .filter_map(|line| parse_lookup_summary(lookup_summary(line)?))
+        .filter_map(|line| parse_lookup_summary(cache_text(line)?))
         .collect()
 }
 
-/// The lookup summary lines that `mbx_sessions` could not parse.
 #[must_use]
 pub fn mbx_unparsed_lines(log: &[u8]) -> Vec<String> {
     String::from_utf8_lossy(log)
         .lines()
         .filter(|line| {
-            lookup_summary(line).is_some_and(|summary| parse_lookup_summary(summary).is_none())
+            cache_text(line).is_some_and(|text| {
+                !is_session_duration(text) && parse_lookup_summary(text).is_none()
+            })
         })
         .map(|line| line.trim().to_owned())
         .collect()
@@ -133,6 +141,7 @@ pub fn waste(metrics: &LaneMetrics) -> Vec<String> {
         .sum();
     if metrics.mbx.store_primed
         && !metrics.mbx.seed_truncated
+        && metrics.mbx.unparsed == 0
         && sessions.iter().all(|session| session.hits == 0)
         && lookups > 0
         && compiled_registry_unit(metrics)
@@ -144,6 +153,7 @@ pub fn waste(metrics: &LaneMetrics) -> Vec<String> {
     }
     if metrics.mbx.declared
         && metrics.mbx.sessions.is_empty()
+        && metrics.mbx.unparsed == 0
         && metrics
             .invocations
             .iter()

@@ -212,3 +212,124 @@ fn report_records_that_the_checkout_declares_mbx() -> ResultTest {
     );
     Ok(())
 }
+
+const SINGULAR_SUMMARY: &str = "mbx[cache]: object cache: 3 hit, 0 miss; 0 B downloaded";
+const ZERO_HIT_SUMMARY: &str = "mbx[cache]: object cache: 0 hits, 5 misses; 0 B downloaded";
+const PARTIAL_SUMMARY: &str = "mbx[cache]: object cache: 4 hits, many misses; 0 B downloaded";
+
+fn registry_compiled_unit() -> serde_json::Value {
+    json!({
+        "package_id":"registry+https://example.invalid/index#serde@1.0.0",
+        "manifest_path":"/registry/serde/Cargo.toml",
+        "target":{"name":"serde","kind":["lib"],"crate_types":["lib"],"src_path":"/registry/serde/src/lib.rs"},
+        "profile":{"opt_level":"0","debuginfo":2,"debug_assertions":true,"overflow_checks":true,"test":false},
+        "features":[],"filenames":["target/debug/deps/libserde-hash.rmeta"],"fresh":false
+    })
+}
+
+fn lane_with_mbx_log(
+    name: &str,
+    log: &str,
+    declared: bool,
+    primed: bool,
+) -> Result<velnor_ci::report::LaneMetrics, Box<dyn std::error::Error>> {
+    let repo = fixture(name)?;
+    if declared {
+        repo.write("mise.toml", "[wrappers.cargo]\ncommand = \"mbx\"\n");
+    }
+    if primed {
+        primed_store(&repo)?;
+    }
+    let root = fs::canonicalize(repo.root())?;
+    let mut invocation = crate::report::lane()["invocations"][0].clone();
+    invocation["root"] = json!(root);
+    invocation["argv"] = json!(["cargo", "build", "--workspace"]);
+    invocation["started_at"] = json!(2_000_000);
+    invocation["compilations"] = json!([]);
+    invocation["progress"] = serde_json::Value::Null;
+    invocation["log_start"] = json!(0);
+    invocation["log_end"] = json!(log.len());
+    invocation["artifacts"] = json!([registry_compiled_unit()]);
+    fs::write(repo.root().join("velnor-run.log"), log)?;
+    fs::write(
+        repo.root().join("velnor-invocations.jsonl"),
+        format!("{invocation}\n"),
+    )?;
+    with_store(&repo, primed)
+}
+
+fn unparsed_warning(metrics: &velnor_ci::report::LaneMetrics, first: &str) -> bool {
+    metrics.diagnostics.iter().any(|line| {
+        line == &format!("MBX lookup summary not understood, 1 line(s) not counted; first: {first}")
+    })
+}
+
+fn waste_gates(metrics: &velnor_ci::report::LaneMetrics) -> Vec<&String> {
+    metrics
+        .violations
+        .iter()
+        .filter(|line| line.contains("MBX object cache") || line.contains("compiled without mbx"))
+        .collect()
+}
+
+#[test]
+fn a_singular_mbx_summary_is_unparsed_with_a_warning_and_never_a_silent_zero() -> ResultTest {
+    let metrics = lane_with_mbx_log(
+        "report-mbx-singular",
+        &format!("{SINGULAR_SUMMARY}\n"),
+        true,
+        false,
+    )?;
+    assert!(metrics.mbx.sessions.is_empty(), "{metrics:?}");
+    assert_eq!(metrics.mbx.unparsed, 1, "{metrics:?}");
+    assert!(
+        unparsed_warning(&metrics, SINGULAR_SUMMARY),
+        "{:?}",
+        metrics.diagnostics
+    );
+    assert!(waste_gates(&metrics).is_empty(), "{:?}", metrics.violations);
+    let silent = lane_with_mbx_log("report-mbx-no-summary", "", true, false)?;
+    assert_eq!(silent.mbx.unparsed, 0);
+    assert!(
+        silent
+            .violations
+            .iter()
+            .any(|line| line.contains("compiled without mbx")),
+        "{:?}",
+        silent.violations
+    );
+    Ok(())
+}
+
+#[test]
+fn partial_mbx_evidence_does_not_fire_the_zero_hit_gate() -> ResultTest {
+    let whole = lane_with_mbx_log(
+        "report-mbx-zero-hit",
+        &format!("{ZERO_HIT_SUMMARY}\n"),
+        true,
+        true,
+    )?;
+    assert!(
+        whole
+            .violations
+            .iter()
+            .any(|line| line.contains("MBX object cache: 0 hits")),
+        "{:?}",
+        whole.violations
+    );
+    let partial = lane_with_mbx_log(
+        "report-mbx-partial",
+        &format!("{ZERO_HIT_SUMMARY}\n{PARTIAL_SUMMARY}\n"),
+        true,
+        true,
+    )?;
+    assert_eq!(partial.mbx.sessions.len(), 1, "{partial:?}");
+    assert_eq!(partial.mbx.unparsed, 1, "{partial:?}");
+    assert!(
+        unparsed_warning(&partial, PARTIAL_SUMMARY),
+        "{:?}",
+        partial.diagnostics
+    );
+    assert!(waste_gates(&partial).is_empty(), "{:?}", partial.violations);
+    Ok(())
+}
