@@ -1,5 +1,3 @@
-"""Parse the pinned MBX object-cache summary without dropping marked rows."""
-
 from __future__ import annotations
 
 import re
@@ -80,7 +78,6 @@ def _local_store_mib(value: str, unit: str) -> float:
 
 
 def parse_mbx_summary(line: str) -> dict[str, Any] | None:
-    """Return one summary; malformed lines carrying its marker fail visibly."""
     markers = list(MBX_MARKER.finditer(line))
     if not markers:
         return None
