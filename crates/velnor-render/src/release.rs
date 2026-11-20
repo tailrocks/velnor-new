@@ -104,7 +104,7 @@ pub fn render_release(
     ];
     let file = crate::seal(RELEASE_HEADER, &emit(&workflow));
     if file.len() > MAX_WORKFLOW_BYTES {
-        return Err(vec![crate::size_report::too_large(
+        return Err(vec![crate::rule_messages::size_report::too_large(
             RELEASE_WORKFLOW_PATH.as_str(),
             file.len(),
             &rendered.jobs,

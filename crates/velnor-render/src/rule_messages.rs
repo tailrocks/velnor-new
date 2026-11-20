@@ -3,6 +3,9 @@
 
 use crate::rules::{MAX_WORKFLOW_BYTES, Rule};
 
+#[path = "size_report.rs"]
+pub(crate) mod size_report;
+
 pub(crate) fn whole_workflow(rule: &Rule, job: &str) -> Option<String> {
     match rule {
         Rule::WorkflowTooLarge(bytes) => {

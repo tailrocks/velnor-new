@@ -42,6 +42,8 @@ pub(crate) const ATTEST_BUILD_PROVENANCE: &str =
     "actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8";
 
 pub(crate) const MISE_VERSION: &str = "2026.11.10";
+#[path = "chained_save.rs"]
+mod chained_save;
 #[path = "steps_helpers.rs"]
 mod steps_helpers;
 use steps_helpers::{rustup_add, saved_unless_hit, variable};
@@ -225,7 +227,7 @@ fn rendered_steps(
                 .as_ref()
                 .map(|from| merge_group_skipped(from, setup)),
         );
-        body.condition = crate::chained_save::combined(
+        body.condition = chained_save::combined(
             around.chained,
             step,
             setup,

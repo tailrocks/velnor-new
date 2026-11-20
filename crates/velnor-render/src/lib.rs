@@ -10,7 +10,6 @@ mod cargo;
 mod cargo_features;
 mod cargo_path;
 mod cargo_target;
-mod chained_save;
 mod checkout_step;
 mod combined_cache;
 mod delta_cleanup;
@@ -52,7 +51,6 @@ mod rules;
 mod save_condition;
 mod save_gate;
 mod selection_name;
-mod size_report;
 mod steps;
 mod tests;
 mod token_commands;
@@ -115,7 +113,7 @@ pub fn render_workflow(
         file = document(plan, rendered, ShellcheckMarks::Jobs);
     }
     if file.len() > rules::MAX_WORKFLOW_BYTES {
-        return Err(vec![size_report::too_large(
+        return Err(vec![rule_messages::size_report::too_large(
             WORKFLOW_PATH.as_str(),
             file.len(),
             &rendered.jobs,
