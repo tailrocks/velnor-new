@@ -18,6 +18,7 @@ use velnor_model::BUILT_OUTPUT;
 
 use super::append_outputs;
 use super::early_list::EarlyList;
+use super::exec_diagnostics;
 use super::pump::{Capture, pump_counted};
 use crate::cli::RunArgs;
 use crate::escape::stderr_line;
@@ -158,6 +159,7 @@ pub(super) fn execute(args: &RunArgs) -> Result<u8, (u8, String)> {
     let mut log = log
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
+    exec_diagnostics::record(&mut log, &path, &args.command, code, invocation.log_start);
     if let Err(error) = writeln!(log, "velnor-ci run: exit {code}") {
         lost = lost.or(Some(error));
     }

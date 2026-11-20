@@ -32,6 +32,7 @@ mod delta_source;
 mod delta_tree;
 mod delta_trim;
 mod early_list;
+mod exec_diagnostics;
 mod fetch;
 mod fetch_credentials;
 mod fetch_real_cargo;

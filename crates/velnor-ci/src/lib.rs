@@ -24,6 +24,7 @@ pub mod delta_trim;
 pub mod error;
 pub mod escape;
 pub mod event;
+mod exec_failure;
 pub mod gate;
 pub mod github;
 pub mod image_candidate;
