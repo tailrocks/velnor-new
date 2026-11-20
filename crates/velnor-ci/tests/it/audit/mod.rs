@@ -4,6 +4,7 @@
 mod boundary;
 mod bounds;
 mod build_clock;
+mod build_directory;
 mod freshness;
 mod gated;
 mod groups;
@@ -40,7 +41,9 @@ pub(super) fn command(program: impl AsRef<OsStr>) -> Command {
 
 pub(super) fn velnor_ci() -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
-    command.env_remove("CARGO_TARGET_DIR");
+    command
+        .env_remove("CARGO_TARGET_DIR")
+        .env_remove("CARGO_BUILD_BUILD_DIR");
     command
 }
 
@@ -122,7 +125,7 @@ pub(super) fn own_units(repo: &Repo, target: &str, left_out: &[&str]) {
     own_units_in(repo, target, target, left_out);
 }
 
-const OWN_UNITS: [(&str, bool, &str, &str, &str); 12] = [
+const OWN_UNITS: &[(&str, bool, &str, &str, &str)] = &[
     (
         "app",
         false,
@@ -211,7 +214,7 @@ const OWN_UNITS: [(&str, bool, &str, &str, &str); 12] = [
 
 pub(super) fn own_units_in(repo: &Repo, host: &str, target: &str, left_out: &[&str]) {
     placed(repo, target);
-    for (key, on_host, file, text, fingerprint) in OWN_UNITS {
+    for &(key, on_host, file, text, fingerprint) in OWN_UNITS {
         if left_out.contains(&key) {
             continue;
         }

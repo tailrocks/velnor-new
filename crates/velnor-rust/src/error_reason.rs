@@ -48,7 +48,7 @@ impl Reason {
             ),
             Self::UnknownRoot(root) => write!(
                 f,
-                "has times for {root}, which is not a Cargo root of this repository; run `velnor-ci timings` again"
+                "has times for {root}, which is not a Cargo root of this repository; run `velnor-ci timings --repo owner/name` again"
             ),
             _ => Ok(()),
         }
@@ -166,6 +166,9 @@ impl fmt::Display for Reason {
             Self::UnknownTestGroupRoot(_)
             | Self::TestGroupWithoutNextest(_)
             | Self::TestGroupFilter(_)
+            | Self::PartitionsWithoutNextest(_)
+            | Self::TestGroupArtifact { .. }
+            | Self::ArtifactNameTaken(_)
             | Self::TestGroupRestoreWithoutCargo(_)
             | Self::TestGroupsWithPrivateSources => self.fmt_test_groups(f),
             Self::UnknownTestLaneRoot(_)

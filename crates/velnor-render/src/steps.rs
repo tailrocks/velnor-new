@@ -17,8 +17,8 @@ use crate::cache::cache_step;
 use crate::cargo::{CargoLane, cargo_step, reports_tests};
 use crate::checkout_step::checkout_step;
 use crate::gate::{
-    PLAN_STEP, Setup, admission, all_conditions, condition, merge_group_skipped, output, plan_read,
-    plan_source, sources_step, verdict_step,
+    PLAN_STEP, Setup, admission, condition, merge_group_skipped, output, plan_read, plan_source,
+    sources_step, verdict_step,
 };
 use crate::helper_steps::{inputs_step, restore_inputs_step, restored_targets_step};
 pub(crate) use crate::install_steps::install_helper;
@@ -42,9 +42,11 @@ pub(crate) const ATTEST_BUILD_PROVENANCE: &str =
     "actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8";
 
 pub(crate) const MISE_VERSION: &str = "2026.11.10";
+#[path = "chained_save.rs"]
+mod chained_save;
 #[path = "steps_helpers.rs"]
 mod steps_helpers;
-use steps_helpers::{rustup_add, saved_unless_hit, variable};
+use steps_helpers::{leading_steps, rustup_add, saved_unless_hit, variable};
 
 pub(crate) const CACHE_RESTORE: &str =
     "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
@@ -155,6 +157,7 @@ fn job_steps(
             let around = Around {
                 id: gate.id(index),
                 saved_after: gate.required(),
+                chained: job.chained_saves,
                 job_name: job.name.as_deref(),
             };
             let mut rendered = rendered_steps(step, setup, audit, tests, lane, around);
@@ -183,6 +186,7 @@ struct Around<'a> {
     /// The id a compile or audit step gets so a save can wait for it.
     id: Option<&'a str>,
     saved_after: &'a [String],
+    chained: bool,
     job_name: Option<&'a str>,
 }
 
@@ -195,16 +199,7 @@ fn rendered_steps(
     around: Around<'_>,
 ) -> Vec<RenderedStep> {
     let job_name = around.job_name;
-    let mut rendered = Vec::new();
-    if audit && step.kind == StepKind::Cargo(CargoCommand::Doctest) {
-        rendered.push(cargo_step(
-            &CargoCommand::BuildAll,
-            step.manifest.as_ref(),
-            true,
-            lane,
-            None,
-        ));
-    }
+    let mut rendered = leading_steps(step, audit, lane);
     let mut body = step_body(step, audit, tests, lane);
     if body.id.is_none() {
         body.id = around.id.map(str::to_owned);
@@ -239,16 +234,13 @@ fn rendered_steps(
                 .as_ref()
                 .map(|from| merge_group_skipped(from, setup)),
         );
-        body.condition = all_conditions(
+        body.condition = chained_save::combined(
+            around.chained,
+            step,
+            setup,
+            &extra,
+            around.saved_after,
             body.condition.take(),
-            condition(
-                step.when,
-                step.gate.as_ref(),
-                setup,
-                step.pr,
-                &extra,
-                around.saved_after,
-            ),
         );
         body.working_directory = step.directory.as_ref().map(ToString::to_string);
         body.shared |= matches!(step.when, velnor_model::When::SaveVerifiedTools(_));
@@ -312,6 +304,7 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
         StepKind::InstallMise => install_mise(),
         StepKind::Lint(command) => crate::lint_steps::lint_step(command),
         StepKind::UploadArchive { name, file } => upload_step(name, file),
+        StepKind::UploadGroupArtifact(upload) => crate::artifact_steps::group_artifact(upload),
         StepKind::DownloadArchive { name, into } => download_step(name, into.as_ref()),
         StepKind::CacheRestore(key) => cache_step(CACHE_RESTORE, "Restore", key, true),
         StepKind::CacheLookup(key) => crate::tools_steps::tools_lookup(key),
