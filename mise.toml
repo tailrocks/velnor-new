@@ -60,6 +60,11 @@ run = '''
 set -eu
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
+# Resolve the repo-pinned jactionlint once, from the repository root: the
+# sample directories below have no mise config, so a tool looked up there
+# is missing on a developer machine.
+JA="$(mise which jactionlint)"
+test -n "$JA" || { echo "lint-generator-samples: mise cannot resolve jactionlint from $ROOT" >&2; exit 1; }
 # Each sample is linted as its own repository: jactionlint resolves the
 # workflow_run names against the git root's workflows, so inside this
 # repository it would check a sample against Velnor's own workflows. The
@@ -79,7 +84,7 @@ for EXPECTED in generator/samples/*/expected; do
   git -C "$SAMPLE" init -q
   # The repository's config supplies the self-hosted runner labels (velnor,
   # ubuntu-26.04-scale-set) that the generated workflows use; the sample has none.
-  (cd "$SAMPLE" && echo "$FILES" | xargs jactionlint --config-file "$ROOT/.github/jactionlint.yaml" --profile correctness --format gcc --strict-exit --no-online --shellcheck= --pyflakes=)
+  (cd "$SAMPLE" && echo "$FILES" | xargs "$JA" --config-file "$ROOT/.github/jactionlint.yaml" --profile correctness --format gcc --strict-exit --no-online --shellcheck= --pyflakes=)
   CHECKED=$((CHECKED + 1))
 done
 test "$CHECKED" -gt 0
