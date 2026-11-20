@@ -67,8 +67,14 @@ fn mise_version_file_matches_the_version_policy_and_the_minimum_mise_toml_requir
         .and_then(|tools| tools.get("mise"))
         .and_then(toml::Value::as_str)
         .ok_or("version-policy.toml has no [tools] mise pin")?;
-    assert_eq!(file, minimum, ".mise-version differs from mise.toml min_version");
-    assert_eq!(file, pinned, ".mise-version differs from version-policy.toml");
+    assert_eq!(
+        file, minimum,
+        ".mise-version differs from mise.toml min_version"
+    );
+    assert_eq!(
+        file, pinned,
+        ".mise-version differs from version-policy.toml"
+    );
     Ok(())
 }
 
