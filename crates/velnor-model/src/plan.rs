@@ -173,8 +173,7 @@ impl Gate {
                 own(self.need),
                 own(GateNeed::PackageArgs),
             ],
-            GateNeed::Deny => vec![own(GateNeed::Deny)],
-            GateNeed::Machete => vec![own(GateNeed::Machete)],
+            GateNeed::Deny | GateNeed::Machete | GateNeed::Lint => vec![own(self.need)],
             GateNeed::PackageArgs if self.unselected => {
                 vec![own(GateNeed::Selected), own(GateNeed::PackageArgs)]
             }
@@ -202,6 +201,7 @@ pub enum GateNeed {
     Policy,
     TestsExpected,
     Group,
+    Lint,
 }
 
 impl GateNeed {
@@ -224,6 +224,7 @@ impl GateNeed {
             Self::Policy => "policy",
             Self::TestsExpected => "tests",
             Self::Group => "group",
+            Self::Lint => return format!("lint_{slug}"),
         };
         if self.is_global() {
             format!("rust_{name}")

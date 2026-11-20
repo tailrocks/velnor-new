@@ -25,6 +25,7 @@ pub use crate::excluded_lock::{ExcludedLockFinding, excluded_lock_findings};
 pub use crate::external_config::external_config_profile;
 pub use crate::group_runs::{GroupPlan, GroupRun, group_runs, plan_groups};
 pub use crate::lint_error::LintFault;
+pub use crate::lint_inputs::lint_runs;
 pub use crate::lock::{
     LOCK_PATH, LockError, binary_sums_url, commit_url, lists_binary_sums, pin_lock,
     release_version, sums_url,

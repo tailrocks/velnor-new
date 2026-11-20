@@ -77,14 +77,18 @@ pub(crate) fn ask(facts: &RepoFacts, jobs: &mut [Job], single: bool) {
     }
     if let Some(release) = facts.helper.as_ref().filter(|_| single) {
         for job in jobs.iter_mut().filter(|job| is_lint_job(job)) {
+            let installs = !job
+                .steps
+                .iter()
+                .any(|step| matches!(step.kind, StepKind::InstallHelper(_)));
             job.steps.splice(
                 0..0,
-                [
-                    step(StepKind::InstallHelper(release.clone())),
-                    step(StepKind::MergeGroupPassed {
+                installs
+                    .then(|| step(StepKind::InstallHelper(release.clone())))
+                    .into_iter()
+                    .chain([step(StepKind::MergeGroupPassed {
                         required: required.to_owned(),
-                    }),
-                ],
+                    })]),
             );
             job.permissions
                 .0

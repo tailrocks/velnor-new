@@ -133,6 +133,7 @@ mod job_target_dir;
 mod job_trust_boundary;
 mod lint_checks;
 mod lint_gate;
+mod lint_inputs;
 mod lint_lane;
 mod lint_merge_group;
 mod lock;

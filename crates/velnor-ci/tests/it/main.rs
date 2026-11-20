@@ -71,6 +71,7 @@ mod io_plan_docs;
 mod io_plan_forged;
 mod io_plan_groups;
 mod io_plan_helper_pin;
+mod io_plan_lint;
 mod io_plan_policy;
 mod io_plan_summary;
 mod io_policy;

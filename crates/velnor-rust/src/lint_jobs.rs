@@ -1,18 +1,33 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{Job, LintCommand, LintJob, LintKind, RepoFacts, Step, StepKind};
+use velnor_model::{
+    Gate, GateNeed, HelperCommand, Job, LintCommand, LintJob, LintKind, PlanFrom, RepoFacts, Step,
+    StepKind,
+};
 
+use crate::lane::PLAN_JOB;
 use crate::lint_tools::{ALINT, JACTIONLINT, NODE, SHELLCHECK, usable};
-use crate::plan::{CHECKOUT_DEPTH, job, quick, step};
+use crate::plan::{CHECKOUT_DEPTH, PLAN_DEPTH, job, quick, step};
 
-pub(crate) fn lint_jobs(facts: &RepoFacts) -> Vec<Job> {
+pub(crate) fn lint_jobs(facts: &RepoFacts, single: bool) -> Vec<Job> {
     facts
         .config
         .lint
         .iter()
-        .map(|lint| lint_job(facts, lint))
+        .map(|lint| lint_job(facts, lint, single))
         .collect()
+}
+
+fn gate(lint: &LintJob, from: PlanFrom) -> Gate {
+    Gate {
+        slug: lint.slug(),
+        need: GateNeed::Lint,
+        from,
+        packages: Vec::new(),
+        unselected: false,
+        group: None,
+    }
 }
 
 fn resolved(facts: &RepoFacts, name: &str) -> String {
@@ -63,21 +78,39 @@ fn commands(facts: &RepoFacts, lint: &LintJob) -> Vec<LintCommand> {
     }
 }
 
-fn lint_job(facts: &RepoFacts, lint: &LintJob) -> Job {
+fn lint_job(facts: &RepoFacts, lint: &LintJob, single: bool) -> Job {
+    let declared = !lint.inputs.is_empty();
+    let planned = declared && !single;
+    let own_plan = declared && single;
     let mut steps = vec![step(StepKind::Checkout {
-        depth: CHECKOUT_DEPTH,
+        depth: if own_plan { PLAN_DEPTH } else { CHECKOUT_DEPTH },
         sparse: None,
     })];
-    steps.extend(install(facts, lint));
-    steps.extend(
+    if own_plan {
+        steps.extend(
+            facts
+                .helper
+                .iter()
+                .map(|release| step(StepKind::InstallHelper(release.clone()))),
+        );
+        steps.push(step(StepKind::Helper(HelperCommand::Plan)));
+    }
+    let work = install(facts, lint).into_iter().chain(
         commands(facts, lint)
             .into_iter()
             .map(|command| step(StepKind::Lint(command))),
     );
+    let step_gate = own_plan.then(|| gate(lint, PlanFrom::ThisJob));
+    steps.extend(work.map(|step| Step {
+        gate: step_gate.clone(),
+        ..step
+    }));
     Job {
         name: Some(lint.name.clone()),
         timeout_minutes: lint.timeout_minutes,
         pr: quick(facts),
+        needs: if planned { vec![PLAN_JOB] } else { Vec::new() },
+        gate: planned.then(|| gate(lint, PlanFrom::Job(PLAN_JOB))),
         steps,
         ..job(facts, lint.id.clone())
     }

@@ -10,9 +10,9 @@ use velnor_model::{
     AllTrigger, ChangeSet, EventKind, RepoFacts, RepoPath, RustRoot, RustSelection,
 };
 use velnor_rust::{
-    cargo_files, defer_post_merge_docs, detect, introduced, is_workflow_file, member_sources,
-    optional_steps, plan_groups, policy_runs, root_sources, select_event, selects_by_diff,
-    tests_expected, unknown_paths, unread_packages,
+    cargo_files, defer_post_merge_docs, detect, introduced, is_workflow_file, lint_runs,
+    member_sources, optional_steps, plan_groups, policy_runs, root_sources, select_event,
+    selects_by_diff, tests_expected, unknown_paths, unread_packages,
 };
 
 use super::{
@@ -24,8 +24,8 @@ use crate::error::CiError;
 use crate::escape::stderr_line;
 use crate::event::{Event, check_default_branch, parse_event};
 use crate::plan::{
-    Steps, explain, group_explanation, group_outputs, outputs, tests_outputs, warnings, weakened,
-    workspace_group_outputs,
+    Steps, explain, group_explanation, group_outputs, lint_outputs, outputs, tests_outputs,
+    warnings, weakened, workspace_group_outputs,
 };
 use crate::summary::{group_summary, summary};
 
@@ -48,8 +48,12 @@ pub(super) fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
     }
     let name = std::env::var(EVENT_VARIABLE).ok();
     let full = args.full || name.as_deref() == Some(SCHEDULED);
-    let (selections, changes, kind) =
-        choose(args, &checkout, &facts, name.as_deref(), event.as_ref())?;
+    let Chosen {
+        selections,
+        changes,
+        kind,
+        listed,
+    } = choose(args, &checkout, &facts, name.as_deref(), event.as_ref())?;
     let groups = plan_groups(&facts, kind, &changes.paths, &selections);
     let steps: Steps = plan_steps(&facts, &checkout, &selections, full)?
         .into_iter()
@@ -74,6 +78,7 @@ pub(super) fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
         .collect();
     let outputs = outputs(&selections, &steps, policy)?
         + &tests_outputs(&expected)
+        + &lint_outputs(&lint_runs(&facts, kind, listed.then_some(&changes.paths)))
         + &group_outputs(&groups)
         + &workspace_group_outputs(&facts.config.workspace_groups, &selections);
     append_outputs(&outputs)?;
@@ -146,13 +151,21 @@ fn event_kind(name: Option<&str>, manual: bool) -> EventKind {
     }
 }
 
+struct Chosen {
+    selections: BTreeMap<RepoPath, RustSelection>,
+    changes: ChangeSet,
+    kind: EventKind,
+    /// The changed files were listed, so `changes.paths` is the whole change and not a default.
+    listed: bool,
+}
+
 fn choose(
     args: &PlanArgs,
     checkout: &Checkout,
     facts: &RepoFacts,
     name: Option<&str>,
     event: Option<&Event>,
-) -> Result<(BTreeMap<RepoPath, RustSelection>, ChangeSet, EventKind), CiError> {
+) -> Result<Chosen, CiError> {
     let kind = if args.full {
         EventKind::WorkflowDispatch
     } else {
@@ -163,8 +176,14 @@ fn choose(
     } else {
         None
     };
+    let listed = diff.is_some();
     let (selections, changes) = select_event(facts, kind, || diff);
-    Ok((selections, changes, kind))
+    Ok(Chosen {
+        selections,
+        changes,
+        kind,
+        listed,
+    })
 }
 
 fn changes(

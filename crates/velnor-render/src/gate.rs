@@ -344,6 +344,7 @@ pub(crate) fn gate_parts(gate: &Gate, replanned: bool) -> Vec<String> {
                 }),
             );
         }
+        GateNeed::Lint => parts.push(runs(GateNeed::Lint)),
         GateNeed::Deny => parts.push(runs(GateNeed::Deny)),
         GateNeed::Machete => parts.push(runs(GateNeed::Machete)),
         GateNeed::Policy => parts.push(format!(

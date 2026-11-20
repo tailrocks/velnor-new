@@ -52,6 +52,7 @@ mod groups;
 mod harness;
 mod lane;
 mod lint_error;
+mod lint_inputs;
 mod lint_jobs;
 mod lint_tasks;
 mod lint_tools;

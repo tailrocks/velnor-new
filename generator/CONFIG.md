@@ -483,7 +483,7 @@ A repository with any `[[test_groups]]` splits each root that has a group into t
 
 ## Non-Rust lint jobs
 
-A `[[lint]]` entry adds one job to the generated workflow for a check that is not a Cargo lane. Each entry becomes the job `lint-<id>`. The job checks out the repository at depth 1, installs only the tools it names, and runs commands. It has `contents: read` and no other permission (plus `actions: read` in a single-job workflow with `skip_push_after_merge_group`), no `needs` (it starts with the plan job, not after it), and the same fork fence as every other job: a pull request from a fork runs it on `fork_runner`. A generated `run:` value is one command with no shell logic, and a lint job adds no action to the fixed list: every tool it runs comes from `mise.toml`, checksummed in `mise.lock`. A lint job runs on every ready pull request, also when `pr_ci` is `label`.
+A `[[lint]]` entry adds one job to the generated workflow for a check that is not a Cargo lane. Each entry becomes the job `lint-<id>`. The job checks out the repository at depth 1, installs only the tools it names, and runs commands. It has `contents: read` and no other permission (plus `actions: read` in a single-job workflow with `skip_push_after_merge_group`), no `needs` (it starts with the plan job, not after it; a lint with `inputs` waits for the plan job), and the same fork fence as every other job: a pull request from a fork runs it on `fork_runner`. A generated `run:` value is one command with no shell logic, and a lint job adds no action to the fixed list: every tool it runs comes from `mise.toml`, checksummed in `mise.lock`. A lint job runs on every ready pull request, also when `pr_ci` is `label`, unless the entry declares `inputs` (below).
 
 ```toml
 [[lint]]
@@ -510,6 +510,7 @@ timeout_minutes = 5
 | `id` | all | Job id suffix. Defaults to the kind, or to the task name for `mise-task`. Two entries cannot share it. |
 | `name` | all | Job name. Defaults to `Jactionlint`, `Alint` or `Mise task <task>`. |
 | `timeout_minutes` | all | 1 to 360, default 10. |
+| `inputs` | all | Globs of the files the lint reads, in the grammar of `[[inputs]] glob` (a `*` is one whole path segment, a trailing `/**` is everything below a folder). A non-empty list. Without the key the lint runs on every pull request. The key needs `velnor-ci` 0.1.110 or later. |
 | `config` | `jactionlint`, `alint` | Configuration file. Required for `alint`. |
 | `probe` | `alint` | A script run with `bash` after alint, for rules alint cannot express. |
 | `task` | `mise-task` | The mise task, run as `mise run --force --skip-tools <task>`, so a task with fresh `sources` and `outputs` still runs. It must be a key of `[tasks]` in `mise.toml` or a file in a mise task folder (`mise-tasks`, `.mise-tasks`, `mise/tasks`, `.mise/tasks`, `.config/mise/tasks`); generation fails otherwise. |
@@ -521,9 +522,24 @@ timeout_minutes = 5
 
 Every tool a lint entry needs is checked at generation. The tool must be pinned in `mise.toml` by its basename (`jactionlint`) or in full (`aqua:owner/tool/jactionlint`); a basename that matches two configured tools is refused until the entry names one in full. At least one of its requests must apply to the runner's operating system (the `os` key of the pin), and `mise.lock` must hold an entry that covers every version requested for that system. A `shellcheck` pin that is filtered out for the runner is treated as absent.
 
+### Skipping a lint on an unrelated pull request
+
+A lint with `inputs` runs on a pull request only when the plan finds a changed file that matches one of its globs. The plan also runs it when the change touches the generated workflow (`.github/workflows/rust-ci.yml`), `.velnor/rust-ci.toml`, or the entry's own `config` or `probe` file. The plan runs it on every `push`, `merge_group`, `schedule` and `workflow_dispatch` run, and on a pull request whose changed files it cannot list: a failure to list them runs the lint, it never skips it.
+
+```toml
+[[lint]]
+kind = "mise-task"
+id = "validate-hk"
+task = "validate-hk"
+tools = ["hk"]
+inputs = ["hk.pkl", "mise.toml"]
+```
+
+The plan job writes one output `lint_<id>` (the id without the `lint-` prefix, lowercased, with every character that is not a letter or digit written as `_`) with the value `run` or `skip`, and the lint job waits for the plan job and carries that output as its condition. Two entries whose ids give one output name are refused. In a workflow without a plan job (the single-job shape) the lint job checks out two commits, installs `velnor-ci` and runs the plan itself, and every later step carries the condition, so a skipped lint costs a checkout and a plan step, not a tool install. A lint without `inputs` is generated as before and writes no output.
+
 ### One required check
 
-The `Required` job (named by `required_check`) lists every lint job in `needs` and in its gate spec with no condition, next to the Rust lanes. A lint job that failed, was cancelled, was skipped or is absent from `needs` fails the gate, and a job in `needs` that the spec does not name fails it too. A ruleset therefore requires one check name for the Rust lanes and the lint lane together.
+The `Required` job (named by `required_check`) lists every lint job in `needs` and in its gate spec, next to the Rust lanes, with no condition for a lint without `inputs`. A lint job without `inputs` that failed, was cancelled, was skipped or is absent from `needs` fails the gate, and a job in `needs` that the spec does not name fails it too. A lint job with `inputs` is expected exactly when its plan output is `run`: the gate takes a skipped job as passing when the output is `skip` and fails it when the output is `run`. A ruleset therefore requires one check name for the Rust lanes and the lint lane together.
 
 ## Optional extra binaries and files in a release asset
 

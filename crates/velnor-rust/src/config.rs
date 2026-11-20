@@ -309,7 +309,7 @@ fn rules(
 const ANY_SEGMENT: &str = "*";
 const REST: &str = "**";
 
-fn rule_glob(key: &'static str, entry: String) -> Result<PathGlob, Reason> {
+pub(crate) fn rule_glob(key: &'static str, entry: String) -> Result<PathGlob, Reason> {
     let invalid = |value: String| Reason::InvalidValue { key, value };
     let (segments, _) = shape(&entry);
     let grammatical = segments

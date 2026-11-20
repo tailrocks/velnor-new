@@ -70,6 +70,9 @@ impl PlanOutput {
                     JobCondition::Group(slug, name) => {
                         flag(group_output_name(slug, name), "run", "skip")?
                     }
+                    JobCondition::Lint(slug) => {
+                        flag(GateNeed::Lint.output_name(slug), "run", "skip")?
+                    }
                     JobCondition::Policy => {
                         let slug = RootSlug::from_static("policy");
                         let deny = flag(GateNeed::Deny.output_name(&slug), "run", "skip")?;

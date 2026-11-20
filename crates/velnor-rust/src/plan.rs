@@ -71,7 +71,7 @@ fn plan_with(facts: &RepoFacts, deltas: bool) -> WorkflowPlan {
     if facts.policy.any() {
         jobs.push(policy_job(facts, &Lane::policy(single, deltas)));
     }
-    jobs.extend(crate::lint_jobs::lint_jobs(facts));
+    jobs.extend(crate::lint_jobs::lint_jobs(facts, single));
     let draft_guard = draft_guard(facts);
     if single {
         expose_in_single(&mut jobs);

@@ -1,14 +1,42 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::ids::{JobId, RepoPath};
+use crate::ids::{JobId, PathGlob, RepoPath, RootSlug};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LintJob {
     pub id: JobId,
     pub name: String,
     pub timeout_minutes: u16,
+    /// Globs of the files the lint reads. Empty means the lint runs on every pull request.
+    pub inputs: Vec<PathGlob>,
     pub kind: LintKind,
+}
+
+const JOB_PREFIX: &str = "lint-";
+
+impl LintJob {
+    /// The plan output name part of this lint: its id without the job prefix, as a slug.
+    #[must_use]
+    pub fn slug(&self) -> RootSlug {
+        let tail = self
+            .id
+            .as_str()
+            .strip_prefix(JOB_PREFIX)
+            .unwrap_or(self.id.as_str());
+        RootSlug::new(
+            tail.chars()
+                .map(|c| {
+                    if c.is_ascii_alphanumeric() {
+                        c.to_ascii_lowercase()
+                    } else {
+                        '_'
+                    }
+                })
+                .collect::<String>(),
+        )
+        .unwrap_or_else(|_| RootSlug::from_static("lint"))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
