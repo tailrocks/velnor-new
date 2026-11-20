@@ -71,6 +71,7 @@ fn every_cargo_command_has_its_check_classification() {
                 filter: FilterRef::All,
                 threads: None,
                 ci_profile: true,
+                no_tests: velnor_model::NoTests::Pass,
             },
             true,
         ),

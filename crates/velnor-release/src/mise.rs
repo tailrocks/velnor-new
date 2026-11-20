@@ -164,6 +164,14 @@ fn linux_x64_download(entry: &toml::Value, wanted: &str) -> Option<ReleasePlzDow
     })
 }
 
+pub(crate) fn declares_mbx(mise_tomls: &[String]) -> bool {
+    let tables: Vec<Table> = mise_tomls
+        .iter()
+        .filter_map(|text| text.parse::<Table>().ok())
+        .collect();
+    velnor_model::mbx_declaration(&tables, velnor_model::MbxRule::Strict).declared()
+}
+
 pub(crate) fn check(
     mise_tomls: &[String],
     mise_lock: &str,
