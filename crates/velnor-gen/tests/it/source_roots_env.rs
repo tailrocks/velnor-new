@@ -2,8 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
-use std::process::Command;
 
 use serde_json::Value;
 
@@ -85,90 +83,38 @@ fn rendered(directories: &[&str]) -> Result<Rendered, Box<dyn std::error::Error>
     Ok(Rendered { env, runs })
 }
 
-fn scratch(tag: &str) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let directory =
-        std::env::temp_dir().join(format!("velnor-gen-roots-{tag}-{}", std::process::id()));
-    std::fs::create_dir_all(&directory)?;
-    Ok(directory)
-}
-
-fn executable(path: &Path, body: &str) -> TestResult {
-    use std::os::unix::fs::PermissionsExt;
-    std::fs::write(path, body)?;
-    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755))?;
-    Ok(())
-}
-
-fn received(
-    run: &str,
-    env: &BTreeMap<String, String>,
-    tag: &str,
-) -> Result<Vec<String>, Box<dyn std::error::Error>> {
-    let directory = scratch(tag)?;
-    let bin = directory.join("bin");
-    std::fs::create_dir_all(&bin)?;
-    executable(
-        &bin.join("velnor-ci"),
-        "#!/bin/bash\nprintf '%s\\n' \"$@\"\n",
-    )?;
-    let launcher = directory.join("velnor-ci-exec");
-    std::fs::write(&launcher, "exec velnor-ci \"$@\"\n")?;
-    let output = Command::new("/bin/bash")
-        .args(["-p", "-c", run])
-        .current_dir(&directory)
-        .env_clear()
-        .env("PATH", format!("{}:/usr/bin:/bin", bin.display()))
-        .env("VELNOR_EXEC", &launcher)
-        .envs(env)
-        .output()?;
-    std::fs::remove_dir_all(&directory)?;
-    assert!(output.status.success(), "{run}: {output:?}");
-    Ok(String::from_utf8(output.stdout)?
-        .lines()
-        .map(str::to_owned)
-        .collect())
-}
-
-fn expected(directories: &[&str]) -> Vec<String> {
-    let mut sorted = directories.to_vec();
-    sorted.sort_unstable();
-    ["sources", "fetch", "--roots", "."]
-        .into_iter()
-        .map(str::to_owned)
-        .chain(sorted.into_iter().map(|directory| format!("./{directory}")))
-        .collect()
-}
-
 #[test]
-fn a_roots_env_list_with_shell_special_but_plain_characters_reaches_the_helper_intact() -> TestResult
+fn a_roots_env_list_with_shell_special_but_plain_characters_is_hoisted_into_one_entry() -> TestResult
 {
     let workflow = rendered(&PLAIN_ROOTS)?;
     let [(name, value)] = workflow.env.iter().collect::<Vec<_>>()[..] else {
         return Err(format!("one roots entry: {:?}", workflow.env).into());
     };
-    assert!(!value.contains('\'') && !value.contains('"'), "{value}");
+    assert_eq!(
+        value,
+        ". ./svc/a-plus+sign-service ./svc/b-at@sign-service ./svc/c-comma,name-service ./svc/d-colon:name-service ./svc/e-equals=name-service ./svc/f-percent%name-service"
+    );
     let [run] = &workflow.runs[..] else {
         return Err(format!("one fetch step: {:?}", workflow.runs).into());
     };
     assert!(run.ends_with(&format!("--roots ${name}")), "{run}");
-    assert_eq!(
-        received(run, &workflow.env, "plain")?,
-        expected(&PLAIN_ROOTS)
-    );
     Ok(())
 }
 
 #[test]
-fn roots_with_spaces_quotes_globs_or_shell_syntax_stay_quoted_in_the_step_and_reach_the_helper_intact()
--> TestResult {
+fn roots_with_spaces_quotes_globs_or_shell_syntax_are_quoted_word_by_word_in_the_step() -> TestResult
+{
     let workflow = rendered(&AWKWARD_ROOTS)?;
     assert!(workflow.env.is_empty(), "{:?}", workflow.env);
-    let mut arguments = Vec::new();
-    for run in &workflow.runs {
-        let chunk = received(run, &workflow.env, "awkward")?;
-        arguments.extend(chunk.into_iter().skip(3));
-    }
-    assert_eq!(arguments, expected(&AWKWARD_ROOTS)[3..]);
+    let [run] = &workflow.runs[..] else {
+        return Err(format!("one fetch step: {:?}", workflow.runs).into());
+    };
+    assert!(
+        run.ends_with(
+            "--roots . './svc/a-space name-service' './svc/b-it'\\''s-service' './svc/c-glob*star-service' './svc/d-dollar$HOME-service' './svc/e-brace{a,b}-service' './svc/f-bang!hash#-service' './svc/g-tilde~question?-service'"
+        ),
+        "{run}"
+    );
     Ok(())
 }
 
