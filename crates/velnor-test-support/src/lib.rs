@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod ci_env;
+pub mod gh_expr;
 mod real_cargo;
 
 pub use ci_env::ci_safe_cargo_env;

@@ -106,8 +106,7 @@ pub fn render_release(
     if file.len() > MAX_WORKFLOW_BYTES {
         return Err(vec![crate::rule_messages::size_report::too_large(
             RELEASE_WORKFLOW_PATH.as_str(),
-            file.len(),
-            &rendered.jobs,
+            &file,
         )]);
     }
     Ok(BTreeMap::from([(RELEASE_WORKFLOW_PATH, file)]))

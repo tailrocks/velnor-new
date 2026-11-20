@@ -8,7 +8,7 @@ use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-use velnor_model::{path_matches, secret_path, segment_matches};
+use velnor_model::{FILESYSTEM_CASE, path_matches, secret_path, segment_matches, selects};
 
 use crate::cli::ArtifactsStageArgs;
 use crate::error::CiError;
@@ -16,10 +16,13 @@ use crate::escape::escape;
 
 const PREFIX: &str = "velnor-ci artifacts stage";
 const WORKSPACE_VARIABLE: &str = "GITHUB_WORKSPACE";
+const REFUSED_NAME_CHARACTERS: &[char] = &[':', '"', '<', '>', '|', '*', '?', '\r', '\n'];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Skip {
+    HardLink,
     Link,
+    Name,
     Secret,
     Special,
     Unreadable,
@@ -28,6 +31,12 @@ pub enum Skip {
 impl Skip {
     fn reason(self) -> &'static str {
         match self {
+            Self::HardLink => {
+                "a file with more than one hard link, which may be a second name for a file outside the workspace"
+            }
+            Self::Name => {
+                "a name with a character that actions/upload-artifact rejects (one of : \" < > | * ? or a line break)"
+            }
             Self::Link => {
                 "a symbolic link, which the upload could follow out of the workspace; only regular files are staged"
             }
@@ -113,6 +122,14 @@ fn fresh(into: &Path) -> Result<(), CiError> {
     .map_err(|error| failure("create", into, into, &error))
 }
 
+fn refused_name(segments: &[&str]) -> bool {
+    segments.iter().any(|segment| {
+        segment
+            .chars()
+            .any(|c| REFUSED_NAME_CHARACTERS.contains(&c))
+    })
+}
+
 fn hidden(segments: &[&str]) -> bool {
     segments.iter().any(|segment| segment.starts_with('.'))
 }
@@ -122,7 +139,7 @@ fn leads(pattern: &[&str], path: &[&str]) -> bool {
         (_, None) | (Some((&"**", _)), _) => true,
         (None, Some(_)) => false,
         (Some((head, tail)), Some((first, rest))) => {
-            segment_matches(head, first) && leads(tail, rest)
+            segment_matches(head, first, FILESYSTEM_CASE) && leads(tail, rest)
         }
     }
 }
@@ -145,7 +162,7 @@ impl Walk<'_> {
             let mut relative = within.to_vec();
             relative.push(name);
             let segments: Vec<&str> = relative.iter().map(String::as_str).collect();
-            let hit = inside || path_matches(&self.parts, &segments);
+            let hit = inside || path_matches(&self.parts, &segments, FILESYSTEM_CASE);
             let Ok(kind) = entry.file_type() else {
                 continue;
             };
@@ -171,7 +188,7 @@ impl Walk<'_> {
     }
 
     fn selected(&self, segments: &[&str]) -> bool {
-        velnor_model::selects(&self.parts, segments)
+        selects(&self.parts, segments, FILESYSTEM_CASE)
     }
 
     fn skip(&mut self, relative: &[String], skip: Skip) {
@@ -196,6 +213,10 @@ impl Walk<'_> {
             self.skip(relative, Skip::Link);
             return Ok(());
         }
+        if refused_name(&segments) {
+            self.skip(relative, Skip::Name);
+            return Ok(());
+        }
         let source = match open(path) {
             Ok(Some(source)) => source,
             Ok(None) => {
@@ -207,6 +228,10 @@ impl Walk<'_> {
                 return Ok(());
             }
         };
+        if !source.metadata().is_ok_and(|meta| meta.nlink() == 1) {
+            self.skip(relative, Skip::HardLink);
+            return Ok(());
+        }
         self.copy(source, relative)
     }
 
