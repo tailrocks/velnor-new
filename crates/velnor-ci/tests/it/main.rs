@@ -185,6 +185,7 @@ mod timings_runs;
 mod timings_setup;
 mod tools_local;
 mod tools_verify;
+mod tools_verify_bounds;
 mod trusted_roots;
 mod unit_test_targets;
 mod unowned;

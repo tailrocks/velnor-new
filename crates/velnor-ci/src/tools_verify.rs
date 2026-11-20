@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs;
+use std::io::Read;
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
@@ -12,6 +13,23 @@ use crate::tree_removal::remove_tree;
 
 const FORMAT: &str = "velnor-tools-anchor-v1";
 const ANCHOR_MAX_BYTES: u64 = 1024;
+const FILE_MAX_BYTES: u64 = 2 << 30;
+const TREE_MAX_BYTES: u64 = 16 << 30;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Limits {
+    pub file_bytes: u64,
+    pub tree_bytes: u64,
+}
+
+impl Default for Limits {
+    fn default() -> Self {
+        Self {
+            file_bytes: FILE_MAX_BYTES,
+            tree_bytes: TREE_MAX_BYTES,
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
 pub enum Verb {
@@ -45,7 +63,13 @@ fn field(hasher: &mut blake3::Hasher, bytes: &[u8]) {
     hasher.update(bytes);
 }
 
-fn entry(hasher: &mut blake3::Hasher, root: &Path, path: &Path) -> Result<(), String> {
+fn entry(
+    hasher: &mut blake3::Hasher,
+    root: &Path,
+    path: &Path,
+    limits: &Limits,
+    spent: &mut u64,
+) -> Result<(), String> {
     let relative = path.strip_prefix(root).unwrap_or(path);
     let metadata = fs::symlink_metadata(path)
         .map_err(|error| format!("cannot stat {}: {error}", relative.display()))?;
@@ -58,13 +82,31 @@ fn entry(hasher: &mut blake3::Hasher, root: &Path, path: &Path) -> Result<(), St
         field(hasher, relative.as_os_str().as_bytes());
         field(hasher, target.as_os_str().as_bytes());
     } else if kind.is_file() {
+        let length = metadata.len();
+        if length > limits.file_bytes {
+            return Err(format!(
+                "{} is larger than the file limit",
+                relative.display()
+            ));
+        }
+        if metadata.blocks().saturating_mul(512) < length {
+            return Err(format!("{} is a sparse file", relative.display()));
+        }
+        *spent = spent.saturating_add(length);
+        if *spent > limits.tree_bytes {
+            return Err(format!(
+                "the tree is larger than the limit at {}",
+                relative.display()
+            ));
+        }
+        let file = fs::File::open(path)
+            .map_err(|error| format!("cannot open {}: {error}", relative.display()))?;
         let mut content = blake3::Hasher::new();
-        content
-            .update_reader(
-                fs::File::open(path)
-                    .map_err(|error| format!("cannot open {}: {error}", relative.display()))?,
-            )
+        let read = std::io::copy(&mut file.take(length.saturating_add(1)), &mut content)
             .map_err(|error| format!("cannot read {}: {error}", relative.display()))?;
+        if read != length {
+            return Err(format!("{} changed while it was read", relative.display()));
+        }
         field(hasher, b"f");
         field(hasher, relative.as_os_str().as_bytes());
         field(hasher, &mode);
@@ -80,7 +122,7 @@ fn entry(hasher: &mut blake3::Hasher, root: &Path, path: &Path) -> Result<(), St
             .map_err(|error| format!("cannot list {}: {error}", relative.display()))?;
         children.sort_by(|a, b| a.as_os_str().as_bytes().cmp(b.as_os_str().as_bytes()));
         for child in children {
-            entry(hasher, root, &child)?;
+            entry(hasher, root, &child, limits, spent)?;
         }
     } else {
         return Err(format!(
@@ -92,6 +134,11 @@ fn entry(hasher: &mut blake3::Hasher, root: &Path, path: &Path) -> Result<(), St
 }
 
 pub fn digest(home: &Path) -> Result<String, String> {
+    digest_within(home, &Limits::default())
+}
+
+pub fn digest_within(home: &Path, limits: &Limits) -> Result<String, String> {
+    let mut spent = 0;
     let mut hasher = blake3::Hasher::new();
     for path in HOME_PATHS {
         let root = home.join(path);
@@ -99,7 +146,7 @@ pub fn digest(home: &Path) -> Result<String, String> {
         if fs::symlink_metadata(&root).is_err() {
             field(&mut hasher, b"absent");
         } else {
-            entry(&mut hasher, home, &root)?;
+            entry(&mut hasher, home, &root, limits, &mut spent)?;
         }
     }
     Ok(hasher.finalize().to_hex().to_string())

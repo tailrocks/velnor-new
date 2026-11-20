@@ -6,6 +6,7 @@ use std::io::Write;
 use std::path::PathBuf;
 
 use crate::error::CiError;
+use crate::escape::inert;
 use crate::mbx_store::trusted_event;
 use crate::tools_verify::{Anchor, Discard, Verb, Verdict, check, record, reset};
 
@@ -28,7 +29,7 @@ fn reason(discard: &Discard) -> String {
         Discard::NoAnchor => "no anchor was restored for this key".to_owned(),
         Discard::BadAnchor => "the anchor is malformed".to_owned(),
         Discard::Mismatch => "they differ from the anchor".to_owned(),
-        Discard::Unreadable(why) => why.clone(),
+        Discard::Unreadable(why) => inert(why),
         Discard::Untrusted => "this is not a trusted default-branch run".to_owned(),
     }
 }

@@ -10,14 +10,14 @@ use velnor_ci::tools_verify_step::{Context, run};
 
 use crate::io::Repo;
 
-struct Job {
+pub(crate) struct Job {
     _repo: Repo,
-    root: PathBuf,
-    home: PathBuf,
+    pub(crate) root: PathBuf,
+    pub(crate) home: PathBuf,
     anchor: PathBuf,
 }
 
-fn job(name: &str) -> Job {
+pub(crate) fn job(name: &str) -> Job {
     let repo = Repo::empty(name);
     let root = fs::canonicalize(repo.root()).unwrap_or_else(|e| unreachable!("{e}"));
     let home = root.join("home");
@@ -59,16 +59,16 @@ fn restored(job: &Job) -> Anchor<'_> {
     }
 }
 
-fn recorded(job: &Job) {
+pub(crate) fn recorded(job: &Job) {
     let verdict = record(&job.home, &restored(job), true).unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(verdict, Verdict::Recorded);
 }
 
-fn checked(job: &Job) -> Verdict {
+pub(crate) fn checked(job: &Job) -> Verdict {
     check(&job.home, &restored(job)).unwrap_or_else(|e| unreachable!("{e}"))
 }
 
-fn discarded(job: &Job) -> bool {
+pub(crate) fn discarded(job: &Job) -> bool {
     [".local/share/mise", ".rustup"]
         .iter()
         .all(|path| fs::symlink_metadata(job.home.join(path)).is_err())
@@ -277,7 +277,7 @@ fn only_a_directory_mode_changing_is_a_mismatch() {
     assert_eq!(checked(&job), Verdict::Discarded(Discard::Mismatch));
 }
 
-fn context(job: &Job, anchor_restored: bool, event: &str) -> Context {
+pub(crate) fn context(job: &Job, anchor_restored: bool, event: &str) -> Context {
     Context {
         home: job.home.clone(),
         runner_temp: job.root.clone(),
