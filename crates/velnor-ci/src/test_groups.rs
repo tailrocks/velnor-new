@@ -20,7 +20,7 @@ pub fn run(args: &TestGroupsCheckArgs) -> ExitCode {
             ExitCode::SUCCESS
         }
         Err(error) => {
-            eprintln!("{}", escape(&error.to_string(), false));
+            eprintln!("{error}");
             ExitCode::FAILURE
         }
     }
