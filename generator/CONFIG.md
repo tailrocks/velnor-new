@@ -560,7 +560,7 @@ timeout_minutes = 5
 | `id` | all | Job id suffix. Defaults to the kind, or to the task name for `mise-task`. Two entries cannot share it. |
 | `name` | all | Job name. Defaults to `Jactionlint`, `Alint`, `Mise task <task>` or `Generated workflows`. |
 | `timeout_minutes` | all | 1 to 360, default 10. |
-| `inputs` | `jactionlint`, `alint`, `mise-task` | Globs of the files the lint reads, in the grammar of `[[inputs]] glob` (a `*` is one whole path segment, a trailing `/**` is everything below a folder). A non-empty list. Without the key the lint runs on every pull request. The key needs `velnor-ci` 0.1.110 or later. |
+| `inputs` | `jactionlint`, `alint`, `mise-task` | Globs of the files the lint reads, in the grammar of `[[inputs]] glob` (a `*` is one whole path segment, a trailing `/**` is everything below a folder; an entry without a `*` also covers everything below it, so `cfg` is `cfg/**`, and a list that matches no tracked file runs the lint, both from `velnor-ci` 0.1.111). A non-empty list. Without the key the lint runs on every pull request. The key needs `velnor-ci` 0.1.110 or later. |
 | `config` | `jactionlint`, `alint` | Configuration file. Required for `alint`. |
 | `probe` | `alint` | A script run with `bash` after alint, for rules alint cannot express. |
 | `task` | `mise-task` | The mise task, run as `mise run --force --skip-tools <task>`, so a task with fresh `sources` and `outputs` still runs. It must be a key of `[tasks]` in `mise.toml` or a file in a mise task folder (`mise-tasks`, `.mise-tasks`, `mise/tasks`, `.mise/tasks`, `.config/mise/tasks`); generation fails otherwise. |

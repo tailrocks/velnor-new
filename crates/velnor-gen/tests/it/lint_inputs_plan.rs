@@ -16,16 +16,32 @@ fn changed(paths: &[&str]) -> Result<BTreeSet<RepoPath>, Box<dyn std::error::Err
         .collect()
 }
 
+fn tracked() -> BTreeSet<RepoPath> {
+    [
+        "hk.pkl",
+        "mise.toml",
+        "tools/a/b.sh",
+        "rules/a.yml",
+        "a/b/x.yml",
+        "cfg/check.yml",
+    ]
+    .iter()
+    .filter_map(|path| RepoPath::new(*path).ok())
+    .collect()
+}
+
 fn runs_of(
     event: EventKind,
     paths: Option<&[&str]>,
 ) -> Result<Vec<(String, bool)>, Box<dyn std::error::Error>> {
     let facts = detect(&repo(&["Cargo.toml"], DECLARED)?)?;
     let paths = paths.map(changed).transpose()?;
-    Ok(lint_runs(&facts, event, paths.as_ref(), &BTreeSet::new())
-        .into_iter()
-        .map(|(slug, run)| (slug.to_string(), run))
-        .collect())
+    Ok(
+        lint_runs(&facts, event, paths.as_ref(), &tracked(), &BTreeSet::new())
+            .into_iter()
+            .map(|(slug, run)| (slug.to_string(), run))
+            .collect(),
+    )
 }
 
 fn hk(event: EventKind, paths: Option<&[&str]>) -> Result<bool, Box<dyn std::error::Error>> {
@@ -104,6 +120,7 @@ fn the_tool_manifests_and_the_task_files_of_a_lint_count_as_its_inputs() -> Test
             &facts,
             EventKind::PullRequest,
             Some(&paths),
+            &tracked(),
             &BTreeSet::new(),
         );
         Ok(*runs.values().next().ok_or("no decision")?)
@@ -125,6 +142,7 @@ fn the_tool_manifests_and_the_task_files_of_a_lint_count_as_its_inputs() -> Test
         &facts,
         EventKind::PullRequest,
         Some(&paths),
+        &tracked(),
         &BTreeSet::new(),
     );
     assert_eq!(runs.values().copied().collect::<Vec<_>>(), [false]);
@@ -141,6 +159,7 @@ fn the_declared_config_and_probe_of_a_lint_count_as_its_inputs() -> TestResult {
             &facts,
             EventKind::PullRequest,
             Some(&paths),
+            &tracked(),
             &BTreeSet::new(),
         );
         Ok(*runs.values().next().ok_or("no decision")?)
@@ -159,7 +178,13 @@ fn a_tracked_symlink_that_an_input_or_implicit_file_reaches_runs_the_lint() -> T
     let paths = changed(&["real/hk.pkl"])?;
     let decide = |link: &str| -> Result<bool, Box<dyn std::error::Error>> {
         let links = changed(&[link])?;
-        let runs = lint_runs(&facts, EventKind::PullRequest, Some(&paths), &links);
+        let runs = lint_runs(
+            &facts,
+            EventKind::PullRequest,
+            Some(&paths),
+            &tracked(),
+            &links,
+        );
         Ok(*runs.values().next().ok_or("no decision")?)
     };
     for link in [
@@ -194,6 +219,7 @@ fn a_changed_path_that_is_an_ancestor_of_an_input_runs_the_lint() -> TestResult 
             &facts,
             EventKind::PullRequest,
             Some(&paths),
+            &tracked(),
             &BTreeSet::new(),
         );
         assert_eq!(runs.values().copied().collect::<Vec<_>>(), [true], "{path}");
@@ -203,8 +229,33 @@ fn a_changed_path_that_is_an_ancestor_of_an_input_runs_the_lint() -> TestResult 
         &facts,
         EventKind::PullRequest,
         Some(&paths),
+        &tracked(),
         &BTreeSet::new(),
     );
     assert_eq!(runs.values().copied().collect::<Vec<_>>(), [false]);
+    Ok(())
+}
+
+#[test]
+fn a_plain_path_input_covers_everything_below_it_and_a_dead_list_runs_the_lint() -> TestResult {
+    let config = "[[lint]]\nkind = 'mise-task'\nid = 'hk'\ntask = 'hk'\ninputs = ['cfg']\n";
+    let facts = detect(&repo(&["Cargo.toml"], config)?)?;
+    let tracked = changed(&["cfg/a/b.pkl", "src/lib.rs"])?;
+    let decide =
+        |path: &str, tracked: &BTreeSet<RepoPath>| -> Result<bool, Box<dyn std::error::Error>> {
+            let paths = changed(&[path])?;
+            let runs = lint_runs(
+                &facts,
+                EventKind::PullRequest,
+                Some(&paths),
+                tracked,
+                &BTreeSet::new(),
+            );
+            Ok(*runs.values().next().ok_or("no decision")?)
+        };
+    assert!(decide("cfg/a/b.pkl", &tracked)?);
+    assert!(!decide("cfgx/a.pkl", &tracked)?);
+    assert!(!decide("src/lib.rs", &tracked)?);
+    assert!(decide("src/lib.rs", &changed(&["src/lib.rs"])?)?);
     Ok(())
 }

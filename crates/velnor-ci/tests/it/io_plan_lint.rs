@@ -168,3 +168,56 @@ fn plan_reports_no_lint_line_for_a_lint_that_runs() {
     assert!(!text.contains("lint-hk"), "{text}");
     assert!(!String::from_utf8_lossy(&output.stdout).contains("left out: lint-hk"));
 }
+
+fn folder_repo(name: &str, inputs: &str) -> Repo {
+    let repo = lint_repo(name);
+    repo.write_all(&[
+        (
+            ".velnor/rust-ci.toml",
+            &format!("[[lint]]\nkind = 'mise-task'\nid = 'hk'\ntask = 'hk'\ninputs = {inputs}\n"),
+        ),
+        ("cfg/hk.pkl", "x\n"),
+        ("cfg/sub/deep.pkl", "x\n"),
+        ("cfgx/other.pkl", "x\n"),
+    ]);
+    repo
+}
+
+#[test]
+fn plan_runs_a_lint_whose_input_is_a_folder_when_a_file_below_it_changed() {
+    let repo = folder_repo("lint-folder-run", "['cfg']");
+    for changed in ["cfg/hk.pkl", "cfg/sub/deep.pkl"] {
+        assert_eq!(
+            lint_lines(&repo, Some("pull_request"), &[changed]),
+            "lint_hk=run ",
+            "{changed}"
+        );
+    }
+}
+
+#[test]
+fn plan_skips_a_lint_whose_input_is_a_folder_when_only_a_sibling_prefix_changed() {
+    let repo = folder_repo("lint-folder-skip", "['cfg']");
+    assert_eq!(
+        lint_lines(&repo, Some("pull_request"), &["cfgx/other.pkl"]),
+        "lint_hk=skip "
+    );
+}
+
+#[test]
+fn plan_runs_a_lint_none_of_whose_inputs_matches_a_tracked_file() {
+    let repo = folder_repo("lint-dead-inputs", "['cfgg', 'nothing/**', 'a/*/x.yml']");
+    assert_eq!(
+        lint_lines(&repo, Some("pull_request"), &["a/src/lib.rs"]),
+        "lint_hk=run "
+    );
+}
+
+#[test]
+fn plan_still_skips_a_lint_when_only_an_optional_input_is_untracked() {
+    let repo = folder_repo("lint-optional-input", "['cfg/hk.pkl', 'cfg/hk.local.pkl']");
+    assert_eq!(
+        lint_lines(&repo, Some("pull_request"), &["a/src/lib.rs"]),
+        "lint_hk=skip "
+    );
+}

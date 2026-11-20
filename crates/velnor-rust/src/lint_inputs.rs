@@ -16,6 +16,7 @@ pub fn lint_runs(
     facts: &RepoFacts,
     event: EventKind,
     changed: Option<&BTreeSet<RepoPath>>,
+    tracked: &BTreeSet<RepoPath>,
     symlinks: &BTreeSet<RepoPath>,
 ) -> BTreeMap<RootSlug, bool> {
     facts
@@ -23,7 +24,7 @@ pub fn lint_runs(
         .lint
         .iter()
         .filter(|lint| !lint.inputs.is_empty())
-        .map(|lint| (lint.slug(), runs(lint, event, changed, symlinks)))
+        .map(|lint| (lint.slug(), runs(lint, event, changed, tracked, symlinks)))
         .collect()
 }
 
@@ -31,15 +32,35 @@ fn runs(
     lint: &LintJob,
     event: EventKind,
     changed: Option<&BTreeSet<RepoPath>>,
+    tracked: &BTreeSet<RepoPath>,
     symlinks: &BTreeSet<RepoPath>,
 ) -> bool {
     let Some(changed) = changed.filter(|_| event == EventKind::PullRequest) else {
         return true;
     };
+    if !has_tracked_input(lint, tracked, symlinks) {
+        return true;
+    }
     symlinks
         .iter()
         .chain(changed)
         .any(|path| reached(lint, path))
+}
+
+fn has_tracked_input(
+    lint: &LintJob,
+    tracked: &BTreeSet<RepoPath>,
+    symlinks: &BTreeSet<RepoPath>,
+) -> bool {
+    tracked.iter().any(|path| {
+        lint.inputs.iter().any(|glob| {
+            if symlinks.contains(path) {
+                reaches(glob, path)
+            } else {
+                covers(glob, path)
+            }
+        })
+    })
 }
 
 fn implicit(lint: &LintJob, path: &RepoPath) -> bool {
@@ -59,8 +80,12 @@ fn own_files(lint: &LintJob) -> impl Iterator<Item = &RepoPath> {
     config.into_iter().chain(probe)
 }
 
-fn reached(lint: &LintJob, path: &RepoPath) -> bool {
+fn declared(lint: &LintJob, path: &RepoPath) -> bool {
     lint.inputs.iter().any(|glob| reaches(glob, path))
+}
+
+fn reached(lint: &LintJob, path: &RepoPath) -> bool {
+    declared(lint, path)
         || implicit(lint, path)
         || below_one(lint, path)
         || (matches!(lint.kind, LintKind::MiseTask { .. })
@@ -78,18 +103,32 @@ fn below_one(lint: &LintJob, path: &RepoPath) -> bool {
 }
 
 fn reaches(glob: &PathGlob, path: &RepoPath) -> bool {
+    matches(glob, path, true)
+}
+
+fn covers(glob: &PathGlob, path: &RepoPath) -> bool {
+    matches(glob, path, false)
+}
+
+fn matches(glob: &PathGlob, path: &RepoPath, ancestors: bool) -> bool {
     let pattern: Vec<&str> = glob.as_str().split('/').collect();
     let segments: Vec<&str> = path.as_str().split('/').collect();
-    let open = pattern.len() > 1 && pattern.last() == Some(&"**");
-    let fixed = if open {
+    let trailing = pattern.len() > 1 && pattern.last() == Some(&"**");
+    let fixed = if trailing {
         &pattern[..pattern.len() - 1]
     } else {
         &pattern[..]
     };
+    let open = trailing || !glob.as_str().contains('*');
     let shared = fixed.len().min(segments.len());
     let agrees = fixed[..shared]
         .iter()
         .zip(&segments)
         .all(|(want, got)| want == got || *want == "*");
-    agrees && (segments.len() <= fixed.len() || open)
+    agrees
+        && if segments.len() < fixed.len() {
+            ancestors
+        } else {
+            segments.len() == fixed.len() || open
+        }
 }

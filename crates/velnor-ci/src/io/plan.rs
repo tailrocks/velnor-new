@@ -80,6 +80,7 @@ pub(super) fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
         &facts,
         kind,
         listed.then_some(&changes.paths),
+        &checkout.view.tracked_paths,
         &checkout.view.symlinks,
     );
     let skipped: Vec<String> = facts
