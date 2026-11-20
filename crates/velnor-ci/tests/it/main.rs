@@ -182,6 +182,7 @@ mod test_groups;
 mod ties;
 mod time;
 mod timings;
+mod timings_composite;
 mod timings_groups;
 mod timings_runs;
 mod timings_setup;
