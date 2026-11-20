@@ -12,6 +12,7 @@ LINE_FENCE = re.compile(r"[ \t]*" + CONTAINER + r"(?:```|~~~)")
 LINE_INDENT = re.compile(QUOTE + r" {5,}\S")
 ATTR_INDENT = re.compile(r" {4,}\S|(?:[ \t]*>)+ {5,}\S")
 LIST_INDENT = re.compile(r"[ \t]*" + CONTAINER + r"(?:[-*+]|\d{1,9}[.)]) {5,}\S")
+ORDERED_LEAD = re.compile(r"[ \t]*(\d{1,9})[.)](?=[ \t])")
 BLOCK_MARGIN = re.compile(r"[ \t]*\*")
 QUOTE_START = re.compile(r"[ \t]*>")
 HRULE = re.compile(r"(?:-[ \t]*){3,}|(?:\*[ \t]*){3,}|(?:_[ \t]*){3,}")
@@ -113,11 +114,16 @@ def prose(line):
     )
 
 
+def list_interrupts(prev, text):
+    ordered = ORDERED_LEAD.match(text)
+    return not (ordered and int(ordered.group(1)) != 1 and prose(prev))
+
+
 def markdown_hit(lines, indent):
     prev = None
     for k, line in enumerate(lines):
         text = line.replace("\t", "    ")
-        if LINE_FENCE.match(text) or LIST_INDENT.match(text):
+        if LINE_FENCE.match(text) or (LIST_INDENT.match(text) and list_interrupts(prev, text)):
             return k
         if indent.match(text) and not (prose(prev) and not QUOTE_START.match(text)):
             return k
