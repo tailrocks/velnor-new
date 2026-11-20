@@ -22,6 +22,7 @@ pub(crate) fn apply(facts: &RepoFacts, jobs: &mut [Job]) {
     }
 }
 
+#[derive(Clone, Copy)]
 enum After {
     Tools,
     Helper,

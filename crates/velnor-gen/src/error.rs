@@ -82,8 +82,7 @@ impl fmt::Display for GenerateError {
             ),
             Self::CacheDebugHelperTooOld(v) => write!(f, "{}", cache_debug_too_old(v)),
             Self::RequiredCheckHelperTooOld(v) => write!(f, "{}", required_check_too_old(v)),
-            Self::MbxKeyHelperTooOld(version) => write!(f, "velnor-ci {version} rejects the cache.mbx key; pin velnor-ci 0.1.108 or later with `velnor-gen pin-helper 0.1.108`"),
-            Self::MbxStoreHelperTooOld(version) => write!(f, "velnor-ci {version} cannot select the shared MBX store; pin velnor-ci 0.1.85 or later"),
+            Self::MbxKeyHelperTooOld(v) | Self::MbxStoreHelperTooOld(v) => write!(f, "{}", mbx_too_old(self, v)),
             Self::TooManySourceRoots(roots) => write!(
                 f,
                 "the repository has {roots} Cargo roots, and the shared Sources cache makes every saving lane fetch every root, which keeps the generated workflow within its size limit only up to {MAX_SOURCE_ROOTS} roots; reduce the Cargo roots to {MAX_SOURCE_ROOTS} or fewer, or pin velnor-ci 0.1.88 or later with `velnor-gen pin-helper 0.1.88`, whose `velnor-ci sources fetch --roots` replaces the per-root steps (tailrocks/velnor-new#1362)"
@@ -174,6 +173,18 @@ fn incompatible_helper(version: &HelperVersion) -> String {
         "velnor-ci {version} does not fit this velnor-gen, which works with velnor-ci {}.{}.x; pin a compatible release with `velnor-gen pin-helper <version>`",
         COMPATIBLE_HELPER_SERIES.0, COMPATIBLE_HELPER_SERIES.1
     )
+}
+
+fn mbx_too_old(error: &GenerateError, version: &HelperVersion) -> String {
+    if matches!(error, GenerateError::MbxKeyHelperTooOld(_)) {
+        format!(
+            "velnor-ci {version} rejects the cache.mbx key; pin velnor-ci 0.1.108 or later with `velnor-gen pin-helper 0.1.108`"
+        )
+    } else {
+        format!(
+            "velnor-ci {version} cannot select the shared MBX store; pin velnor-ci 0.1.85 or later"
+        )
+    }
 }
 
 fn cache_debug_too_old(version: &HelperVersion) -> String {

@@ -98,9 +98,7 @@ pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, Generate
             release.version().clone(),
         ));
     }
-    if facts.config.mbx.written() && !release.version().at_least(MBX_KEY_HELPER) {
-        return Err(GenerateError::MbxKeyHelperTooOld(release.version().clone()));
-    }
+    check_mbx_key(facts, release)?;
     check_lane_job(facts, release)?;
     if facts.config.mbx_store == MbxStore::Shared && !release.version().at_least((0, 1, 85)) {
         return Err(GenerateError::MbxStoreHelperTooOld(
@@ -133,6 +131,13 @@ pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, Generate
         ));
     }
     Ok(release)
+}
+
+fn check_mbx_key(facts: &RepoFacts, release: &HelperRelease) -> Result<(), GenerateError> {
+    if facts.config.mbx.written() && !release.version().at_least(MBX_KEY_HELPER) {
+        return Err(GenerateError::MbxKeyHelperTooOld(release.version().clone()));
+    }
+    Ok(())
 }
 
 fn check_lane_job(facts: &RepoFacts, release: &HelperRelease) -> Result<(), GenerateError> {
