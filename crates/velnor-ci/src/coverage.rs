@@ -61,6 +61,16 @@ pub struct Unit {
     pub source: RepoPath,
 }
 
+/// Why a build-script run has no current output. Keyed by (configuration, package, unit hash)
+/// in `Built::run_gaps`; a run without an entry has no output to explain.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum RunGap {
+    /// The output exists, but a `rerun-if-changed` input changed after the run.
+    Stale { input: String, more: usize },
+    /// The output is older than the compiled build script that should have written it.
+    Older,
+}
+
 #[derive(Debug, Default)]
 pub struct Built {
     pub units: BTreeSet<Unit>,
@@ -68,6 +78,7 @@ pub struct Built {
     pub scripts: BTreeSet<(String, RepoPath)>,
     pub builders: BTreeSet<(String, PackageName)>,
     pub orphans: BTreeSet<(String, String, Fingerprint)>,
+    pub run_gaps: BTreeMap<(String, String, String), RunGap>,
     pub placed: BTreeSet<String>,
 }
 
@@ -198,17 +209,42 @@ fn orphans<'b>(
         .iter()
         .filter(move |(at, package, _)| at == configuration && owned.contains(package.as_str()))
         .map(|(_, package, fingerprint)| {
-            format!(
-                "{package} target {} ({})",
-                fingerprint.target,
-                match fingerprint.kind {
-                    UnitKind::Normal => "normal unit with a cargo fingerprint and no dep-info",
-                    UnitKind::Harness =>
-                        "test harness unit with a cargo fingerprint and no dep-info",
-                    UnitKind::Run => "build script run with a cargo fingerprint and no output",
+            let what = match fingerprint.kind {
+                UnitKind::Normal => "normal unit with a cargo fingerprint and no dep-info",
+                UnitKind::Harness => "test harness unit with a cargo fingerprint and no dep-info",
+                UnitKind::Run => {
+                    let gap = built.run_gaps.get(&(
+                        configuration.to_owned(),
+                        package.clone(),
+                        fingerprint.target.clone(),
+                    ));
+                    return format!(
+                        "{package} target  ({})",
+                        run_reason(gap, &fingerprint.target)
+                    );
                 }
-            )
+            };
+            format!("{package} target {} ({what})", fingerprint.target)
         })
+}
+
+fn run_reason(gap: Option<&RunGap>, unit: &str) -> String {
+    match gap {
+        Some(RunGap::Stale { input, more }) => {
+            let more = if *more == 0 {
+                String::new()
+            } else {
+                format!(", and {more} more")
+            };
+            format!(
+                "output stale: input {input} changed after it ran{more} (unit {unit}); produce build-script inputs before the first compile step, e.g. [[test_setup]] phase = \"build\""
+            )
+        }
+        Some(RunGap::Older) => format!("output older than its build script (unit {unit})"),
+        None => {
+            format!("build script run with a cargo fingerprint and no output (unit {unit})")
+        }
+    }
 }
 
 fn missing(group: &Group<'_>, configuration: &str, built: &Built) -> Option<String> {

@@ -108,6 +108,13 @@ fn play(
     };
     context.set("steps.audit_1.outcome", outcome);
     context.job_ok &= outcome != "failure";
+    if let Some(record) = step(&lane, "Record that the build can be saved") {
+        let recorded = runs(&condition_of(record)?, &context)?;
+        context.set(
+            "steps.saveable.outcome",
+            if recorded { "success" } else { "skipped" },
+        );
+    }
     let mut saves = Vec::new();
     for name in SAVES.iter().copied() {
         let block = step(&lane, name).ok_or_else(|| format!("no {name} ({variant:?})"))?;

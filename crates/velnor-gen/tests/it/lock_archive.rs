@@ -63,9 +63,13 @@ const BINARY_SUMS: &str = "\
 a7e9a4897a81bb86338896573e43b79b4f05e34a489549f1687117dd456648ba  velnor-ci-aarch64-apple-darwin.tar.gz/velnor-ci
 ";
 
-fn archive_lock() -> Result<String, Box<dyn Error>> {
+pub(crate) fn archive_lock() -> Result<String, Box<dyn Error>> {
+    archive_lock_at("0.1.81")
+}
+
+pub(crate) fn archive_lock_at(version: &str) -> Result<String, Box<dyn Error>> {
     Ok(pin_lock(
-        "0.1.81",
+        version,
         COMMIT_FILE,
         ARCHIVE_SUMS,
         Some(BINARY_SUMS),
