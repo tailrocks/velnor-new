@@ -68,7 +68,7 @@ impl Check {
             Self::Plain => [
                 "Runner mode plain: job-start check: none (plain containers).",
                 "Executed: every step of every job above except actions/checkout, by GitHub's official runner in linux/arm64 containers.",
-                "Stood in: runner.server queued the jobs and replaced actions/checkout with a checkout of the local copy; the cache server decided every cache hit, miss and refusal with velnor-cache-rules; the API stub answered GITHUB_API_URL; every Ubuntu label ran on the one Ubuntu 24.04 runner image.",
+                "Stood in: runner.server queued the jobs and replaced actions/checkout with a checkout of the local copy; the cache server decided every cache hit, miss and refusal with velnor-cache-rules; the API stub answered GITHUB_API_URL; every Ubuntu label ran on the one Ubuntu 26.04 runner image.",
                 "Not exercised: velnor-host pairs, the job-start check, scale set acquire, GitHub JIT, journal, GitHub runner deletion proof.",
             ],
             Self::Pairs(_) => [

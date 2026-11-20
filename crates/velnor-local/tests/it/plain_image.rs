@@ -9,10 +9,11 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use velnor_local::doctor::{PLAIN_IMAGES, RUNNER_IMAGE};
+use velnor_local::doctor::{CACHE_IMAGE, PLAIN_IMAGES, RUNNER_IMAGE};
 
 const LOCAL: &str = "../../local/docker/runner/Dockerfile";
 const PRODUCTION: &str = "../../images/runner/ubuntu-26.04/Dockerfile";
+const CACHE_DOCKERFILE: &str = "../../local/docker/velnor-local/Dockerfile";
 
 fn dockerfile(relative: &str) -> String {
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(relative);
@@ -160,5 +161,36 @@ fn the_plain_runner_user_is_the_production_user() {
     for flag in ["--uid 1000", "--gid 1000", "--shell /bin/bash"] {
         assert!(user_command(&production).contains(flag), "{flag}");
         assert!(user_command(&local).contains(flag), "plain image: {flag}");
+    }
+}
+
+#[test]
+fn the_cache_server_image_is_built_from_the_repository_root() {
+    let (_, build) = PLAIN_IMAGES
+        .iter()
+        .find(|(image, _)| *image == CACHE_IMAGE)
+        .unwrap_or_else(|| unreachable!("no build command for {CACHE_IMAGE}"));
+    let words: Vec<&str> = build.split_whitespace().collect();
+    assert_eq!(
+        words.as_slice(),
+        ["-f", "local/docker/velnor-local/Dockerfile", "."]
+    );
+    let context = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let context = context.join(words[2]);
+    for line in dockerfile(CACHE_DOCKERFILE).lines() {
+        let Some(copy) = line.strip_prefix("COPY ") else {
+            continue;
+        };
+        if copy.starts_with("--from") {
+            continue;
+        }
+        let sources = copy.split_whitespace().collect::<Vec<_>>();
+        for source in &sources[..sources.len() - 1] {
+            assert!(
+                context.join(source).exists(),
+                "{source} is not under the build context {}",
+                context.display()
+            );
+        }
     }
 }

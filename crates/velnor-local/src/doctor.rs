@@ -16,7 +16,7 @@ pub const LOCAL_DOCKER_FIX: &str = "velnor-local needs a Docker daemon on this m
 pub const PLAIN_IMAGES: [(&str, &str); 3] = [
     (STANDIN_IMAGE, "local/docker/runner-server"),
     (RUNNER_IMAGE, "local/docker/runner"),
-    (CACHE_IMAGE, "-f local/docker/velnor-local/Dockerfile local"),
+    (CACHE_IMAGE, "-f local/docker/velnor-local/Dockerfile ."),
 ];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
