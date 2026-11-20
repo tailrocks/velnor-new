@@ -123,24 +123,17 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
     let test_lanes = crate::config_test_lane::parse(raw.test_lane).map_err(invalid)?;
     let external_workflows =
         crate::config_external::parse(raw.external_workflows).map_err(invalid)?;
-    let declared_runner = raw.runner.is_some();
-    let hosted_key = raw.hosted.is_some() || test_groups.iter().any(|group| group.hosted.is_some());
-    let runner = runner(raw.runner, defaults.runner).map_err(invalid)?;
-    let mirror_key = crate::config_trusted::mirror_key(raw.crates_mirror.as_ref());
-    let crates_mirror = crate::config_mirror::optional(raw.crates_mirror).map_err(invalid)?;
-    let hosted_runners = crate::config_hosting::resolve(
-        (&runner, raw.hosted.or((!declared_runner).then_some(true))),
-        crates_mirror.as_ref(),
-        &test_groups,
-    )
-    .map_err(invalid)?;
-    let fork_runner = crate::config_fork::fork_runner(raw.fork_runner, &runner).map_err(invalid)?;
-    let trusted_runners = crate::config_trusted::resolve(
-        (raw.trusted_runner, mirror_key),
-        (&runner, &fork_runner, &hosted_runners),
-        crates_mirror.as_ref(),
-        &test_groups,
-    )
+    let runner = runner(raw.runner.clone(), defaults.runner).map_err(invalid)?;
+    let runners = crate::config_trusted::Declared {
+        runner: &runner,
+        explicit_runner: raw.runner.is_some(),
+        hosted: raw.hosted,
+        fork_runner: raw.fork_runner,
+        trusted_runner: raw.trusted_runner,
+        crates_mirror: raw.crates_mirror,
+        test_groups: &test_groups,
+    }
+    .resolve()
     .map_err(invalid)?;
     let (mbx_remote, mbx_store, mbx) =
         crate::config_cache::mbx_settings(raw.cache.as_ref(), raw.mbx_shared_store)
@@ -161,9 +154,9 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         mbx_remote,
         mbx,
         push_after_merge_group: crate::config_ci::push_after_merge_group(raw.ci),
-        crates_mirror,
-        hosted_runners: hosted_runners.with_key_written(hosted_key),
-        trusted_runners,
+        crates_mirror: runners.crates_mirror,
+        hosted_runners: runners.hosted,
+        trusted_runners: runners.trusted,
         docs_run: docs_run("docs", raw.docs.as_deref()).map_err(invalid)?,
         check_alone_run: docs_run("check_alone", raw.check_alone.as_deref()).map_err(invalid)?,
         private_sources,
@@ -183,7 +176,7 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         inputs,
         default_ignores: raw.default_ignores.unwrap_or(defaults.default_ignores),
         runner,
-        fork_runner,
+        fork_runner: runners.fork,
         timeout_minutes,
         root_timeouts: crate::config_root_timeouts::parse(raw.root_timeouts).map_err(invalid)?,
         exclude: crate::config_exclude::excludes(raw.exclude).map_err(invalid)?,

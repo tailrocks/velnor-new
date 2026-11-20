@@ -18,8 +18,54 @@ pub(crate) struct Fixed<'a> {
     groups: &'a [TestGroup],
 }
 
-pub(crate) fn mirror_key(mirror: Option<&RawCratesMirror>) -> Option<String> {
-    mirror.and_then(|mirror| mirror.trusted_runner.clone())
+pub(crate) struct Declared<'a> {
+    pub(crate) runner: &'a RunnerLabel,
+    pub(crate) explicit_runner: bool,
+    pub(crate) hosted: Option<bool>,
+    pub(crate) fork_runner: Option<String>,
+    pub(crate) trusted_runner: Option<String>,
+    pub(crate) crates_mirror: Option<RawCratesMirror>,
+    pub(crate) test_groups: &'a [TestGroup],
+}
+
+pub(crate) struct Runners {
+    pub(crate) crates_mirror: Option<CratesMirror>,
+    pub(crate) hosted: HostedRunners,
+    pub(crate) fork: RunnerLabel,
+    pub(crate) trusted: TrustedRunners,
+}
+
+impl Declared<'_> {
+    pub(crate) fn resolve(self) -> Result<Runners, Reason> {
+        let mirror_key = self
+            .crates_mirror
+            .as_ref()
+            .and_then(|mirror| mirror.trusted_runner.clone());
+        let crates_mirror = crate::config_mirror::optional(self.crates_mirror)?;
+        let hosted_key =
+            self.hosted.is_some() || self.test_groups.iter().any(|group| group.hosted.is_some());
+        let hosted_runners = crate::config_hosting::resolve(
+            (
+                self.runner,
+                self.hosted.or((!self.explicit_runner).then_some(true)),
+            ),
+            crates_mirror.as_ref(),
+            self.test_groups,
+        )?;
+        let fork_runner = crate::config_fork::fork_runner(self.fork_runner, self.runner)?;
+        let trusted_runners = resolve(
+            (self.trusted_runner, mirror_key),
+            (self.runner, &fork_runner, &hosted_runners),
+            crates_mirror.as_ref(),
+            self.test_groups,
+        )?;
+        Ok(Runners {
+            crates_mirror,
+            hosted: hosted_runners.with_key_written(hosted_key),
+            fork: fork_runner,
+            trusted: trusted_runners,
+        })
+    }
 }
 
 fn lock_platform(label: &RunnerLabel) -> Option<String> {
