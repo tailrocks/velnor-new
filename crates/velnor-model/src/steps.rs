@@ -109,7 +109,10 @@ pub enum StepKind {
     AdvisoryFetch {
         configs: Vec<Option<RepoPath>>,
     },
-    MbxRemote,
+    MbxRemote {
+        from_pin: bool,
+    },
+    MbxPin,
     MbxPrivate,
     MbxStore,
     MbxSeed,
@@ -193,6 +196,7 @@ impl StepKind {
             | Self::PrivateToken { .. }
             | Self::PrivateFetch { .. }
             | Self::MbxRemote { .. }
+            | Self::MbxPin
             | Self::MbxPrivate
             | Self::MbxStore { .. }
             | Self::MbxSeed { .. }
@@ -222,7 +226,9 @@ impl StepKind {
     pub fn saves_to_cache_service(&self) -> bool {
         matches!(
             self,
-            Self::CacheSave(_) | Self::MbxRemote | Self::ToolsLocal(ToolsLocalVerb::AnchorSave)
+            Self::CacheSave(_)
+                | Self::MbxRemote { .. }
+                | Self::ToolsLocal(ToolsLocalVerb::AnchorSave)
         )
     }
 }

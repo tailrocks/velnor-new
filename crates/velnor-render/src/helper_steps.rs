@@ -293,10 +293,29 @@ pub(crate) fn mbx_local_step(kind: &velnor_model::StepKind) -> RenderedStep {
     }
 }
 
-pub(crate) fn mbx_remote_step() -> RenderedStep {
+pub(crate) const MBX_PIN_STEP: &str = "mbx-pin";
+
+pub(crate) fn mbx_pin_step() -> RenderedStep {
+    RenderedStep {
+        name: "Read the mbx release from mise.toml".to_owned(),
+        id: Some(MBX_PIN_STEP.to_owned()),
+        run: Some("velnor-ci mise-pin mr-boxington".to_owned()),
+        ..RenderedStep::default()
+    }
+}
+
+pub(crate) fn mbx_remote_step(from_pin: bool) -> RenderedStep {
     use crate::rules::Value;
     let text = |key: &str, value: &str| (key.to_owned(), Value::Text(value.to_owned()));
     let expr = |key: &str, value: &str| (key.to_owned(), Value::Expr(value.to_owned()));
+    let version = if from_pin {
+        expr(
+            "version",
+            &format!("${{{{ steps.{MBX_PIN_STEP}.outputs.version }}}}"),
+        )
+    } else {
+        text("version", MBX_VERSION)
+    };
     RenderedStep {
         name: "Set up the mbx cache".to_owned(),
         uses: Some(format!("{MBX_ACTION}@{MBX_ACTION_SHA}")),
@@ -307,7 +326,7 @@ pub(crate) fn mbx_remote_step() -> RenderedStep {
         with: vec![
             text("backend", "github"),
             text("github-cache-mode", "objects"),
-            text("version", MBX_VERSION),
+            version,
             // Each job restores only its own generated prefixes.
             expr("cache-generation", "v1-${{ github.job }}"),
             // Same-repository pull requests save; fork pull requests never do.
