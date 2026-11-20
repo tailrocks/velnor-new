@@ -13,6 +13,7 @@ const READ_ANCHOR: &str = "${{ steps.toolsread.outputs.anchor }}";
 const RECORDED: &str = "${{ steps.toolsrecord.outputs.digest }}";
 const STORES: &[&str] = &["mbx_shared_store = true\n", "mbx_shared_store = false\n"];
 const PREFIX: &str = "velnor-tools-anchor-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles('mise.lock') }}-";
+const RUN: &str = "${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}";
 const TOOLS_KEY: &str = "velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles('mise.lock') }}-";
 
 fn render(
@@ -117,10 +118,7 @@ fn the_plan_job_finds_the_newest_anchor_by_prefix() -> TestResult {
     let find = named(&steps, "Find the anchor").ok_or("no find")?;
     assert!(text(find, "uses").starts_with("actions/cache/restore@"));
     assert_eq!(find["with"]["restore-keys"], PREFIX);
-    assert_eq!(
-        find["with"]["key"],
-        format!("{PREFIX}${{{{ github.run_id }}}}-${{{{ github.job }}}}")
-    );
+    assert_eq!(find["with"]["key"], format!("{PREFIX}{RUN}"));
     let read = named(&steps, "Read the anchor").ok_or("no read")?;
     assert!(text(read, "run").ends_with("tools-verify read"));
     assert_eq!(
@@ -142,10 +140,7 @@ fn a_tools_entry_is_named_by_the_anchor_it_must_equal() -> TestResult {
                 let key = text(&step["with"], "key");
                 let uses = text(&step, "uses");
                 if key.starts_with(PREFIX) {
-                    assert!(
-                        key == format!("{PREFIX}${{{{ github.run_id }}}}-${{{{ github.job }}}}"),
-                        "{config:?} {id}: {key}"
-                    );
+                    assert!(key == format!("{PREFIX}{RUN}"), "{config:?} {id}: {key}");
                     anchors += 1;
                     continue;
                 }
@@ -239,6 +234,11 @@ fn a_new_anchor_is_saved_with_the_tools_it_names() -> TestResult {
             assert!(
                 condition.contains("github.event.repository.default_branch"),
                 "{config:?} {id}: {condition}"
+            );
+            let save_anchor = text(&steps[anchor], "if");
+            assert!(
+                save_anchor.contains("github.event.repository.default_branch"),
+                "{config:?} {id}: {save_anchor}"
             );
             checked += 1;
         }

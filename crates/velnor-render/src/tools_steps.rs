@@ -14,7 +14,7 @@ const ANCHOR_STEP: &str = "toolsanchor";
 const READ_STEP: &str = "toolsread";
 const ANCHOR_DIR: &str = "${{ runner.temp }}/velnor-tools-anchor";
 const ANCHOR_OUTPUT: &str = "tools_anchor";
-const ANCHOR_RUN: &str = "${{ github.run_id }}-${{ github.job }}";
+const ANCHOR_RUN: &str = "${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}";
 
 pub(crate) fn anchor_expression(anchor: &ToolsAnchor) -> String {
     match anchor {
