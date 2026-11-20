@@ -138,3 +138,66 @@ fn the_old_layout_is_still_read() {
         Some(UnitFile::BuildOutput { .. })
     ));
 }
+
+fn target_with(files: &[&str]) -> std::path::PathBuf {
+    static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    let root = std::env::temp_dir().join(format!(
+        "velnor-units-built-{}-{}",
+        std::process::id(),
+        NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    ));
+    for file in files {
+        let path = root.join(file);
+        fs::create_dir_all(path.parent().unwrap_or_else(|| unreachable!()))
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        fs::write(path, "").unwrap_or_else(|e| unreachable!("{e}"));
+    }
+    root
+}
+
+#[test]
+fn a_built_target_directory_with_no_unit_in_a_known_layout_is_refused() {
+    let root = target_with(&[
+        "debug/CACHEDIR.TAG",
+        "debug/units/dep/libdep.rlib",
+        "debug/units/dep/libdep.rmeta",
+    ]);
+    let refused = unit_files_within(&root, 100);
+    fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+    let message = refused
+        .expect_err("a built target without units must be refused")
+        .to_string();
+    assert!(
+        message.contains("found no units in") && message.contains("unknown cargo layout?"),
+        "{message}"
+    );
+}
+
+#[test]
+fn a_target_directory_nothing_was_built_in_is_not_refused() {
+    let root = target_with(&[
+        "debug/CACHEDIR.TAG",
+        "debug/.rustc_info.json",
+        "debug/.cargo-lock",
+    ]);
+    let found = unit_files_within(&root, 100);
+    fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(found.unwrap_or_else(|e| unreachable!("{e}")).len(), 2);
+}
+
+#[test]
+fn a_built_target_directory_with_units_in_either_layout_is_not_refused() {
+    for layout in [
+        "debug/.fingerprint/dep-5c64b2dee9af80ce/lib-dep",
+        "debug/build/dep/5c64b2dee9af80ce/fingerprint/lib-dep",
+    ] {
+        let root = target_with(&[layout, "debug/out/libdep.rlib"]);
+        let found = unit_files_within(&root, 100);
+        fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+        assert_eq!(
+            found.unwrap_or_else(|e| unreachable!("{e}")).len(),
+            1,
+            "{layout}"
+        );
+    }
+}
