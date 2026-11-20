@@ -6,7 +6,7 @@ use std::io::Write;
 use std::path::PathBuf;
 
 use crate::error::CiError;
-use crate::escape::inert;
+use crate::escape::{escape, inert};
 use crate::mbx_store::trusted_event;
 use crate::tools_verify::{Anchor, Discard, Verb, Verdict, check, record, reset};
 
@@ -22,6 +22,14 @@ pub struct Context {
     pub event_name: String,
     pub git_ref: String,
     pub default_branch: Option<String>,
+    pub cache_key: String,
+    pub repository: String,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct Remedy<'a> {
+    pub key: &'a str,
+    pub repository: &'a str,
 }
 
 fn reason(discard: &Discard) -> String {
@@ -34,18 +42,37 @@ fn reason(discard: &Discard) -> String {
     }
 }
 
+fn delete_hint(remedy: Remedy<'_>) -> String {
+    if remedy.key.is_empty() {
+        return String::new();
+    }
+    let quoted = format!("'{}'", remedy.key.replace('\'', "'\\''"));
+    let command = format!("gh cache delete {quoted} -R {}", remedy.repository);
+    escape(
+        &format!(". The restored Actions cache entry is {quoted}; delete it with `{command}`"),
+        false,
+    )
+}
+
 #[must_use]
-pub fn message(verdict: &Verdict) -> String {
+pub fn message(verdict: &Verdict, remedy: Remedy<'_>) -> String {
     match verdict {
         Verdict::Reset => "velnor: cleared any leftover tools anchor".to_owned(),
         Verdict::NothingRestored => {
             "velnor: no tool directories are present, so none are verified".to_owned()
         }
         Verdict::Verified => "velnor: the restored tools equal the anchor".to_owned(),
-        Verdict::Discarded(why) => format!(
-            "::notice::the restored tools were discarded ({}); they install from scratch",
-            reason(why)
-        ),
+        Verdict::Discarded(why) => {
+            let hint = if *why == Discard::Mismatch {
+                delete_hint(remedy)
+            } else {
+                String::new()
+            };
+            format!(
+                "::notice::the restored tools were discarded ({}); they install from scratch{hint}",
+                reason(why)
+            )
+        }
         Verdict::Recorded => "velnor: recorded the tools anchor".to_owned(),
         Verdict::Matches => "velnor: the tools equal the anchor, so they may be saved".to_owned(),
         Verdict::Differs(why) => format!("::notice::the tools are not saved ({})", reason(why)),
@@ -95,7 +122,11 @@ pub fn run(verb: Verb, context: &Context) -> Result<String, CiError> {
             .and_then(|mut handle| handle.write_all(outputs(&verdict).as_bytes()))
             .map_err(|error| CiError::new(format!("cannot write {}: {error}", path.display())))?;
     }
-    Ok(format!("{}\n", message(&verdict)))
+    let remedy = Remedy {
+        key: &context.cache_key,
+        repository: &context.repository,
+    };
+    Ok(format!("{}\n", message(&verdict, remedy)))
 }
 
 pub fn setup(verb: Verb) -> Result<String, CiError> {
@@ -119,6 +150,8 @@ pub fn setup(verb: Verb) -> Result<String, CiError> {
             event_name: var("GITHUB_EVENT_NAME").unwrap_or_default(),
             git_ref: var("GITHUB_REF").unwrap_or_default(),
             default_branch,
+            cache_key: var("VELNOR_TOOLS_CACHE_KEY").unwrap_or_default(),
+            repository: var("GITHUB_REPOSITORY").unwrap_or_else(|| "<owner/repo>".to_owned()),
         },
     )
 }
