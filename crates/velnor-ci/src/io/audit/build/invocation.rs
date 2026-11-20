@@ -270,14 +270,18 @@ fn subcommand(words: &[&str]) -> Option<usize> {
     while let Some(word) = words.get(index) {
         match *word {
             "-q" | "--quiet" | "--verbose" | "--locked" | "--offline" | "--frozen" => index += 1,
-            "--color" | "--config" | "-Z" => {
+            "--color" | "--config" | "-Z" | "-C" | "-j" | "--jobs" | "--manifest-path" => {
                 words.get(index + 1)?;
                 index += 2;
             }
             value
                 if value.starts_with("--color=")
                     || value.starts_with("--config=")
+                    || value.starts_with("--jobs=")
+                    || value.starts_with("--manifest-path=")
                     || value.starts_with("-Z") && value.len() > 2
+                    || value.starts_with("-C") && value.len() > 2
+                    || value.starts_with("-j") && value.len() > 2
                     || value.starts_with('-')
                         && value.len() > 1
                         && value[1..].chars().all(|character| character == 'v') =>
@@ -291,6 +295,9 @@ fn subcommand(words: &[&str]) -> Option<usize> {
     None
 }
 
+#[cfg(test)]
+#[path = "invocation/label.rs"]
+mod label;
 #[cfg(test)]
 #[path = "invocation/preflight.rs"]
 mod preflight;
