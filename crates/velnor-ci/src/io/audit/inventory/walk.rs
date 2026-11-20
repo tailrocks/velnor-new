@@ -18,8 +18,6 @@ pub(in crate::io::audit) fn scan(
     })
 }
 
-// `open` lists one directory. It is a parameter so tests can make a listing
-// fail deterministically.
 pub(super) fn scan_with(
     root: &Path,
     targets: &BTreeSet<PathBuf>,
@@ -38,8 +36,6 @@ pub(super) fn scan_with(
         reserve(remaining)?;
         let listing = match open(&directory) {
             Ok(listing) => listing,
-            // Listed as a directory, then removed before it was opened. Like a
-            // vanished entry (see `kind`), it is dropped from its parent below.
             Err(error) if error.kind() == io::ErrorKind::NotFound && directory != root => {
                 vanished.push(directory);
                 continue;
@@ -81,14 +77,6 @@ pub(super) fn scan_with(
     Ok(entries)
 }
 
-// `None` means the entry was listed but removed before it could be classified.
-//
-// Skipping it cannot hide a real input. The walk records what the tree holds
-// when it looks, and the audit compares that record with the saved one. An
-// entry the saved record has and the tree no longer has is a missing child, so
-// the audit goes stale. An entry the saved record never had is not covered by
-// it, and a walk that ran a moment earlier or later would not have listed it
-// either. Entries that stay in the tree are never skipped: their stat succeeds.
 fn kind(path: &Path) -> io::Result<Option<Kind>> {
     let metadata = match fs::symlink_metadata(path) {
         Ok(metadata) => metadata,
@@ -116,7 +104,6 @@ fn kind(path: &Path) -> io::Result<Option<Kind>> {
     }
 }
 
-// A link target that vanished after it was resolved is not a directory to walk.
 fn is_directory(path: &Path) -> io::Result<bool> {
     match fs::metadata(path) {
         Ok(metadata) => Ok(metadata.is_dir()),
