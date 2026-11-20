@@ -140,6 +140,18 @@ With `velnor-ci` 0.1.86 or later in the lock, `mbx_shared_store = true` also ren
 
 `check_alone = "post_merge"` does the same for the per-crate `Check <crate> alone` steps. They compile each crate with only its own feature set, so their dependency artifacts differ from the workspace lint and build steps and a pull request rarely finds them in the mbx cache. They keep their value as the check that a crate declares every feature it needs, and the run after the merge keeps that check. The default is `"always"`. The key needs `velnor-ci` 0.1.97 or later in the lock, and the same weakening and reuse rules apply.
 
+## Cargo wrapper
+
+`mise.toml` routes every `cargo` through MBX with the owner standard layout: `mr_boxington = true` on the `rust` tool and this wrapper:
+
+```toml
+[wrappers.cargo]
+command = "mbx"
+env = { MBX_CARGO_SHIM_MODE = "1" }
+```
+
+The generator accepts this exact layout as the standard. `velnor-ci plan --explain` and the review of a change do not name it as a weakening. The match is exact: `command` must be `"mbx"`, `env` must hold only `MBX_CARGO_SHIM_MODE = "1"`, and the wrapper may not add `args` or other keys. Any other cargo wrapper is still named as a weakening, because it runs cargo through a program or with settings the generator cannot vouch for. That covers another command, another env value, an extra env key, an `args` list, a missing `env`, and a wrapper for `cargo-nextest` or another `cargo-*` tool. The `rustc` and `rustdoc` wrappers are always named.
+
 ## Test setup steps
 
 A test that needs a fixture, such as a built example executable or a provisioned service, declares one step per fixture. The generator runs each step before the first test step of every job of that root, in the order written. Each step is one command, because a generated `run:` value is one command with no shell logic; the logic lives in a script the repository commits. The script exports variables to later steps through `$GITHUB_ENV`.

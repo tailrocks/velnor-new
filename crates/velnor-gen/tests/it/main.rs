@@ -274,6 +274,7 @@ mod untracked_config;
 mod unused_anchors;
 mod version;
 mod weaken;
+mod weaken_mbx;
 mod weaken_more;
 mod weaken_nextest;
 mod weaken_review;

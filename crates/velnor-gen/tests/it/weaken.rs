@@ -82,9 +82,9 @@ fn a_setting_that_makes_a_check_do_less_is_accepted_and_named() -> TestResult {
         ),
         (
             "mise.toml",
-            "[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n\n[wrappers.cargo]\ncommand = \"mbx\"\n",
-            "[wrappers.cargo] command = \"mbx\"",
-            "runs cargo through \"mbx\"",
+            "[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n\n[wrappers.cargo]\ncommand = \"sccache\"\n",
+            "[wrappers.cargo] command = \"sccache\"",
+            "runs cargo through \"sccache\"",
         ),
         (
             ".cargo/config.toml",
