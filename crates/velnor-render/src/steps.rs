@@ -357,7 +357,7 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
         } => restored_targets_step(targets, *expiry, *cli),
         StepKind::MbxRemote => crate::helper_steps::mbx_remote_step(),
         StepKind::CratesMirror(mirror) => crate::helper_steps::mirror_step(mirror),
-        StepKind::MbxStore => crate::helper_steps::mbx_store_step(),
+        StepKind::MbxStore | StepKind::MbxPrivate => crate::helper_steps::mbx_local_step(kind),
         StepKind::PrivateCheck { .. }
         | StepKind::PrivateToken { .. }
         | StepKind::PrivateFetch { .. }

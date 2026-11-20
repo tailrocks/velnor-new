@@ -64,11 +64,11 @@ fn the_host_tuple_target_requires_rust_191_or_newer() -> TestResult {
     ] {
         for (mise, toolchain) in [
             (
-                "[tools]\nrust = \"1.90.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n",
+                "[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n\n[tools]\nrust = { version = \"1.90.0\", mr_boxington = true }\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n",
                 None,
             ),
             (
-                "[tools]\nrust = \"1.90.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n",
+                "[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n\n[tools]\nrust = { version = \"1.90.0\", mr_boxington = true }\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n",
                 Some("1.90.0\n"),
             ),
             (
@@ -89,11 +89,11 @@ fn the_host_tuple_target_requires_rust_191_or_newer() -> TestResult {
         }
         for (mise, toolchain) in [
             (
-                "[tools]\nrust = \"1.91.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n",
+                "[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n\n[tools]\nrust = { version = \"1.91.0\", mr_boxington = true }\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n",
                 None,
             ),
             (
-                "[tools]\nrust = \"1.91.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n",
+                "[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n\n[tools]\nrust = { version = \"1.91.0\", mr_boxington = true }\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n",
                 Some("1.91.0\n"),
             ),
         ] {
@@ -161,7 +161,7 @@ fn a_supported_pre_release_nightly_can_use_the_host_tuple_target() -> TestResult
             (".cargo/config.toml", "[build]\ntarget = \"host-tuple\"\n"),
             (
                 "mise.toml",
-                "[tools]\nrust = \"nightly-2025-10-01\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n",
+                "[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n\n[tools]\nrust = { version = \"nightly-2025-10-01\", mr_boxington = true }\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n",
             ),
         ],
     )?;
@@ -173,7 +173,7 @@ fn a_supported_pre_release_nightly_can_use_the_host_tuple_target() -> TestResult
 fn floating_rust_channels_can_use_the_host_tuple_target() -> TestResult {
     for channel in ["stable", "beta", "nightly"] {
         let mise = format!(
-            "[tools]\nrust = \"{channel}\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n"
+            "[wrappers.cargo]\ncommand = \"mbx\"\nenv = {{ MBX_CARGO_SHIM_MODE = \"1\" }}\n\n[tools]\nrust = {{ version = \"{channel}\", mr_boxington = true }}\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n"
         );
         let repo = with(
             &["Cargo.toml"],
@@ -202,7 +202,7 @@ fn host_qualified_release_channels_can_use_the_host_tuple_target() -> TestResult
                 (
                     "mise.toml",
                     &format!(
-                        "[tools]\nrust = \"{channel}\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n"
+                        "[wrappers.cargo]\ncommand = \"mbx\"\nenv = {{ MBX_CARGO_SHIM_MODE = \"1\" }}\n\n[tools]\nrust = {{ version = \"{channel}\", mr_boxington = true }}\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n"
                     ),
                 ),
             ],

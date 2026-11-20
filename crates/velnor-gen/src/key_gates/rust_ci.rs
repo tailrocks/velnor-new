@@ -49,6 +49,8 @@ pub(super) const RUST_CI: &[KeyGate] = &[
     gate(RustCi, "budget.setup_seconds", (0, 1, 92)),
     // helper-gate: first in tools-v0.1.88 via 08d1b3495d
     gate(RustCi, "cache", (0, 1, 88)),
+    // First released in tools-v0.1.109 (not tagged yet when this gate was written).
+    gate(RustCi, "cache.mbx", (0, 1, 109)),
     // helper-gate: first in tools-v0.1.88 via 08d1b3495d
     gate(RustCi, "cache.mbx_remote", (0, 1, 88)),
     // helper-gate: first in rust-ci-v0.1.82 via c0d0b51181

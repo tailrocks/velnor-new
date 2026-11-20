@@ -110,6 +110,7 @@ pub enum StepKind {
         configs: Vec<Option<RepoPath>>,
     },
     MbxRemote,
+    MbxPrivate,
     MbxStore,
     MbxSeed,
     ToolsLocal(ToolsLocalVerb),
@@ -192,6 +193,7 @@ impl StepKind {
             | Self::PrivateToken { .. }
             | Self::PrivateFetch { .. }
             | Self::MbxRemote { .. }
+            | Self::MbxPrivate
             | Self::MbxStore { .. }
             | Self::MbxSeed { .. }
             | Self::ToolsLocal(_)

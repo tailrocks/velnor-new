@@ -121,6 +121,36 @@ fn declaration_reads_the_owner_layout_and_nothing_else() -> Result<(), Box<dyn s
             "[wrappers.cargo]\ncommand = \"sccache-wrap\"\n",
             false,
         ),
+        (
+            "wrapper by path",
+            "[wrappers.cargo]\ncommand = \"./bin/mbx\"\n",
+            true,
+        ),
+        (
+            "wrapper with arguments",
+            "[wrappers.cargo]\ncommand = \"mbx --x\"\n",
+            true,
+        ),
+        (
+            "wrapper that only starts like mbx",
+            "[wrappers.cargo]\ncommand = \"mbx-wrapper\"\n",
+            false,
+        ),
+        (
+            "option on another tool",
+            "[tools]\nnode = { version = \"24\", mr_boxington = true }\n",
+            true,
+        ),
+        (
+            "option in a list of requests",
+            "[tools]\nnode = [{ version = \"24\", mr_boxington = true }]\n",
+            true,
+        ),
+        (
+            "a list of versions without the option",
+            "[tools]\nrust = [\"1.100.0\"]\n",
+            false,
+        ),
         ("unreadable", "[tools\n", false),
     ] {
         let directory = std::env::temp_dir().join(format!(
@@ -140,5 +170,62 @@ fn declaration_reads_the_owner_layout_and_nothing_else() -> Result<(), Box<dyn s
     let found = declared_in(&empty);
     fs::remove_dir_all(&empty)?;
     assert!(!found, "no mise config declares nothing");
+    Ok(())
+}
+
+#[test]
+fn declaration_never_drops_a_file_when_two_files_set_the_mbx_keys()
+-> Result<(), Box<dyn std::error::Error>> {
+    let standard = "[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n";
+    for (name, files, expected) in [
+        (
+            "standard wrapper and another wrapper",
+            [
+                ("mise.toml", standard),
+                (".mise.toml", "[wrappers.cargo]\ncommand = \"sccache\"\n"),
+            ],
+            true,
+        ),
+        (
+            "another wrapper and standard wrapper",
+            [
+                ("mise.toml", "[wrappers.cargo]\ncommand = \"sccache\"\n"),
+                (".mise.toml", standard),
+            ],
+            true,
+        ),
+        (
+            "option in the hidden file only",
+            [
+                ("mise.toml", "[tools]\nrust = \"1.99.1\"\n"),
+                (
+                    ".mise.toml",
+                    "[tools]\nrust = { version = \"1.99.1\", mr_boxington = true }\n",
+                ),
+            ],
+            true,
+        ),
+        (
+            "unrelated files",
+            [
+                ("mise.toml", "[tools]\nrust = \"1.99.1\"\n"),
+                (".mise.toml", "[tools]\nnode = \"24\"\n"),
+            ],
+            false,
+        ),
+    ] {
+        let directory = std::env::temp_dir().join(format!(
+            "velnor-mbx-split-{}-{}",
+            std::process::id(),
+            name.replace(' ', "-")
+        ));
+        fs::create_dir_all(&directory)?;
+        for (file, text) in files {
+            fs::write(directory.join(file), text)?;
+        }
+        let found = declared_in(&directory);
+        fs::remove_dir_all(&directory)?;
+        assert_eq!(found, expected, "{name}");
+    }
     Ok(())
 }

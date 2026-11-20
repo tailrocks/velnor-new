@@ -121,7 +121,7 @@ fn family_builds_check_out_the_family_tag_and_refuse_another_commit() -> TestRes
             Some("refs/tags/${{ needs.family.outputs.tag }}"),
             "{id}"
         );
-        let check = all[1].get("run").and_then(Node::text).ok_or("no check")?;
+        let check = all[2].get("run").and_then(Node::text).ok_or("no check")?;
         assert!(check.contains("\"$CHECKED_OUT\" = \"$VERIFIED\""), "{id}");
         assert!(check.contains("\"$FAMILY\" = \"$VERIFIED\""), "{id}");
         let condition = build.get("if").and_then(Node::text).ok_or("no if")?;
