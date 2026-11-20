@@ -115,6 +115,7 @@ pub struct PolicyTools {
     pub deny: bool,
     pub machete: bool,
     pub deny_off: bool,
+    pub licenses: bool,
 }
 
 impl PolicyTools {

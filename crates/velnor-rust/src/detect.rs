@@ -166,7 +166,11 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
         .policy
         .as_ref()
         .map_or(DenyLane::Auto, |policy| policy.deny);
-    let policy = policy_tools(view, &deny_configs, config.runner.as_str(), lane)?;
+    let checks = config
+        .policy
+        .as_ref()
+        .and_then(|policy| policy.deny_checks.as_deref());
+    let policy = policy_tools(view, &deny_configs, config.runner.as_str(), lane, checks)?;
     let weakenings = weakenings(&view.files, &rust_roots);
     let private_sources = crate::config_cache::private_sources(view, &rust_roots, &config)?;
     let repository = repository_identity(view, &config)?;
