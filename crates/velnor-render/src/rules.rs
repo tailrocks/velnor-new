@@ -3,10 +3,18 @@
 
 use std::fmt;
 
-use crate::key_length::longest_cache_key;
 use crate::pinned_actions::{
     ACTIONS_CACHE, ATTEST_BUILD_PROVENANCE, DOCKER_BUILD_PUSH, DOCKER_LOGIN, DOCKER_SETUP_BUILDX,
-    GITHUB_SCRIPT, MR_BOXINGTON, credential_rules, pin_rules,
+    GITHUB_SCRIPT, MR_BOXINGTON,
+};
+
+mod check;
+mod model;
+
+pub use check::check_rules;
+pub use model::{
+    RenderedConcurrency, RenderedContainer, RenderedJob, RenderedMatrix, RenderedMatrixSource,
+    RenderedStep, RenderedWorkflow, Value,
 };
 
 pub const SETUP_VELNOR_ACTION: &str = "tailrocks/velnor-new/actions/setup-velnor";
@@ -42,98 +50,6 @@ pub const MAX_ENV_CHARACTERS: usize = 100_000;
 
 const FORBIDDEN_WORDS: [&str; 5] = ["if", "for", "while", "case", "coproc"];
 const FORBIDDEN_SYMBOLS: [&str; 9] = ["|", "&", "&&", "||", ";", "$(", "`", "<(", ">("];
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Value {
-    Text(String),
-    Expr(String),
-    BoundedExpr { text: String, max_bytes: usize },
-    Int(u64),
-    Bool(bool),
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct RenderedStep {
-    pub id: Option<String>,
-    pub name: String,
-    pub condition: Option<String>,
-    pub continue_on_error: bool,
-    pub uses: Option<String>,
-    pub uses_comment: Option<String>,
-    pub with: Vec<(String, Value)>,
-    pub working_directory: Option<String>,
-    pub env: Vec<(String, Value)>,
-    pub shell: Option<String>,
-    pub run: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RenderedConcurrency {
-    pub group: String,
-    pub cancel_in_progress: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum RenderedMatrixSource {
-    /// `fromJSON(<expression>)`, such as `needs.plan.outputs.matrix`.
-    Output(String),
-    /// Static axes, each with its values.
-    Axes {
-        axes: Vec<(String, Vec<String>)>,
-        include: Vec<Vec<(String, String)>>,
-    },
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RenderedMatrix {
-    pub source: RenderedMatrixSource,
-    pub fail_fast: Option<bool>,
-    pub max_parallel: Option<u16>,
-}
-
-/// A job `container:` or one service; `ports` is empty for a job container.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RenderedContainer {
-    pub image: String,
-    pub ports: Vec<String>,
-    pub options: Option<String>,
-    pub env: Vec<(String, String)>,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct RenderedJob {
-    pub id: String,
-    pub name: Option<String>,
-    pub check_name: Option<String>,
-    pub comment: Option<String>,
-    pub needs: Vec<String>,
-    pub condition: Option<String>,
-    pub environment: Option<String>,
-    pub environment_note: Option<String>,
-    pub permissions: Vec<(String, String)>,
-    pub no_permissions: bool,
-    pub concurrency: Option<RenderedConcurrency>,
-    pub outputs: Vec<(String, String)>,
-    pub matrix: Option<RenderedMatrix>,
-    pub container: Option<RenderedContainer>,
-    pub services: Vec<(String, RenderedContainer)>,
-    /// A job that calls a reusable workflow has `uses` and `with` and no runner or steps.
-    pub uses: Option<String>,
-    pub with: Vec<(String, Value)>,
-    pub runs_on: String,
-    /// When set, `runs-on` is `matrix.<axis>` and `runs_on` is unused.
-    pub runs_on_axis: Option<String>,
-    pub fork_runner: Option<String>,
-    pub timeout_minutes: u16,
-    pub env: Vec<(String, Value)>,
-    pub cache_mode: Option<String>,
-    pub steps: Vec<RenderedStep>,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct RenderedWorkflow {
-    pub jobs: Vec<RenderedJob>,
-}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Rule {
@@ -232,166 +148,5 @@ impl fmt::Display for RuleViolation {
                 "runner {runner:?} is not a linux x64 runner, and the pinned mise digest is for linux x64 only; set rust-ci runner to ubuntu-latest or another ubuntu x64 label for releases"
             ),
         }
-    }
-}
-
-pub fn check_rules(workflow: &RenderedWorkflow) -> Result<(), Vec<RuleViolation>> {
-    let violations: Vec<RuleViolation> = workflow
-        .jobs
-        .iter()
-        .flat_map(|job| {
-            let holds_token = holds_app_token(job);
-            let last = job.steps.len().saturating_sub(1);
-            let step_violations = job.steps.iter().enumerate().flat_map(move |(index, step)| {
-                let mut rules = step_rules(step);
-                if crate::combined_cache::before_last(step, index, last) {
-                    rules.push(Rule::CombinedCacheNotLastStep);
-                }
-                if holds_token {
-                    token_step_rules(step, &mut rules);
-                }
-                rules.into_iter().map(move |rule| RuleViolation {
-                    job: job.id.clone(),
-                    step: index,
-                    rule,
-                })
-            });
-            let runner = (holds_token && !is_linux_x64(&job.runs_on)).then(|| RuleViolation {
-                job: job.id.clone(),
-                step: 0,
-                rule: Rule::TokenJobRunnerNotX64(job.runs_on.clone()),
-            });
-            step_violations.chain(runner)
-        })
-        .collect();
-    if violations.is_empty() {
-        Ok(())
-    } else {
-        Err(violations)
-    }
-}
-
-fn holds_app_token(job: &RenderedJob) -> bool {
-    job.steps.iter().any(|step| {
-        ![
-            crate::private_steps::TOKEN_STEP,
-            crate::release_asset_steps::TOKEN_STEP,
-        ]
-        .contains(&step.id.as_deref().unwrap_or_default())
-            && step
-                .uses
-                .as_deref()
-                .is_some_and(|uses| uses.split('@').next() == Some(APP_TOKEN_ACTION))
-    })
-}
-
-fn is_linux_x64(runner: &str) -> bool {
-    runner == "ubuntu-latest" || (runner.starts_with("ubuntu-") && !runner.contains("arm"))
-}
-
-fn token_step_rules(step: &RenderedStep, rules: &mut Vec<Rule>) {
-    if step
-        .uses
-        .as_deref()
-        .is_some_and(|uses| uses.split('@').next() == Some(MISE_ACTION))
-    {
-        rules.push(Rule::MiseActionInTokenJob);
-    }
-    if let Some(run) = step.run.as_deref() {
-        rules.extend(crate::token_commands::rules(run));
-    }
-}
-
-fn step_rules(step: &RenderedStep) -> Vec<Rule> {
-    let mut rules = Vec::new();
-    if let Some(run) = step.run.as_deref() {
-        run_rules(run, &mut rules);
-    }
-    if step.run.is_some() == step.uses.is_some() {
-        rules.push(Rule::NotExactlyOneOfRunAndUses);
-    }
-    if step.shell.is_some() {
-        rules.push(Rule::ShellKey);
-    }
-    if let Some(uses) = &step.uses {
-        action_rules(uses, &mut rules);
-    }
-    credential_rules(step, &mut rules);
-    if let Some(length) = longest_cache_key(step)
-        && length > MAX_CACHE_KEY_CHARACTERS
-    {
-        rules.push(Rule::CacheKeyTooLong(length));
-    }
-    if let Some(length) = longest_env(step)
-        && length > MAX_ENV_CHARACTERS
-    {
-        rules.push(Rule::EnvTooLong(length));
-    }
-    rules
-}
-
-fn longest_env(step: &RenderedStep) -> Option<usize> {
-    step.env
-        .iter()
-        .filter_map(|(_, value)| match value {
-            Value::Text(text) => Some(text.len()),
-            Value::BoundedExpr { max_bytes, .. } => Some(*max_bytes),
-            _ => None,
-        })
-        .max()
-}
-
-fn run_rules(run: &str, rules: &mut Vec<Rule>) {
-    if run.contains('\n') {
-        rules.push(Rule::MultiLineRun);
-    }
-    let command = run
-        .strip_prefix(crate::helper_integrity::INVOCATION_PREFIX)
-        .unwrap_or(run);
-    for word in FORBIDDEN_WORDS {
-        if has_word(run, word) {
-            rules.push(Rule::ForbiddenSyntax(word));
-        }
-    }
-    for symbol in FORBIDDEN_SYMBOLS {
-        if command.contains(symbol) {
-            rules.push(Rule::ForbiddenSyntax(symbol));
-        }
-    }
-    if run.chars().count() > MAX_RUN_CHARACTERS {
-        rules.push(Rule::RunTooLong);
-    }
-    if run.contains("${{") {
-        rules.push(Rule::ExpressionInRun);
-    }
-}
-
-fn has_word(run: &str, word: &str) -> bool {
-    run.match_indices(word).any(|(start, _)| {
-        let before = run[..start].chars().next_back();
-        let after = run[start + word.len()..].chars().next();
-        before.is_none_or(char::is_whitespace) && after.is_some_and(char::is_whitespace)
-    })
-}
-
-fn action_rules(uses: &str, rules: &mut Vec<Rule>) {
-    if uses.starts_with("./") {
-        if velnor_workflows::LocalAction::parse(uses).is_none() {
-            rules.push(Rule::ActionNotAllowed(uses.to_owned()));
-        }
-        return;
-    }
-    let (action, reference) = uses.split_once('@').unwrap_or((uses, ""));
-    if !ALLOWED_ACTIONS.contains(&action) {
-        rules.push(Rule::ActionNotAllowed(action.to_owned()));
-    }
-    let pinned = reference.len() == 40
-        && reference
-            .bytes()
-            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte));
-    if pinned {
-        pin_rules(action, reference, rules);
-    } else {
-        rules.push(Rule::ActionNotPinned(uses.to_owned()));
     }
 }

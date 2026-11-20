@@ -8,6 +8,7 @@ use crate::error::CiError;
 
 use super::crates_mirror::{CONFIG_ENV, REAL_ENV, WRAPPER_ENV, failed};
 use super::crates_mirror_args::with_mirror_config;
+use super::crates_mirror_depth::wrapper_ancestors;
 use super::crates_mirror_mise::{self as mise, LaunchPhase};
 
 const RUSTUP_ENV: &str = "VELNOR_CARGO_RUSTUP";
@@ -19,10 +20,12 @@ const SAVED: &str = "velnor-cargo-real";
 const RESERVED: [&str; 3] = ["cargo", "config.toml", "config.toml.velnor-crates-mirror"];
 
 pub(super) fn forward() -> Result<ExitStatus, CiError> {
+    // The environment counter can be dropped by a shim, so the process tree is also counted.
     let depth = std::env::var(DEPTH_ENV)
         .ok()
         .and_then(|depth| depth.parse::<u32>().ok())
-        .unwrap_or(0);
+        .unwrap_or(0)
+        .max(wrapper_ancestors(MAX_DEPTH));
     if depth >= MAX_DEPTH {
         return Err(CiError::new(format!(
             "the Cargo mirror wrapper was entered {depth} times in one chain: a `cargo` found on PATH forwards back into the wrapper ({}); put the real cargo ahead of it or remove the shim",

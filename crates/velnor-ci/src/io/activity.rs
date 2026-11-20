@@ -6,7 +6,7 @@ use crate::telemetry::{INVOCATIONS, Invocation};
 use std::collections::BTreeSet;
 use std::fs;
 
-pub(super) fn activity() -> Result<Option<crate::logscan::LogScan>, CiError> {
+pub(super) fn invocations() -> Result<Option<Vec<Invocation>>, CiError> {
     let text = match fs::read_to_string(
         std::path::Path::new(&std::env::var("RUNNER_TEMP").unwrap_or_default()).join(INVOCATIONS),
     ) {
@@ -14,10 +14,18 @@ pub(super) fn activity() -> Result<Option<crate::logscan::LogScan>, CiError> {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(error) => return Err(CiError::new(error.to_string())),
     };
-    let invocations = text
-        .lines()
+    text.lines()
         .map(|line| serde_json::from_str(line).map_err(|error| CiError::new(error.to_string())))
-        .collect::<Result<Vec<Invocation>, _>>()?;
+        .collect::<Result<Vec<Invocation>, _>>()
+        .map(Some)
+}
+
+pub(super) fn activity(
+    invocations: Option<&[Invocation]>,
+) -> Result<Option<crate::logscan::LogScan>, CiError> {
+    let Some(invocations) = invocations else {
+        return Ok(None);
+    };
     if invocations.is_empty()
         || invocations
             .iter()
@@ -26,7 +34,7 @@ pub(super) fn activity() -> Result<Option<crate::logscan::LogScan>, CiError> {
         return Ok(None);
     }
     let mut counts = crate::logscan::LogScan::default();
-    for invocation in &invocations {
+    for invocation in invocations {
         let before = counts.crates_compiled();
         for event in invocation.progress.iter().flatten() {
             match event.kind {

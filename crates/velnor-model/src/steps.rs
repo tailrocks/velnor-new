@@ -147,7 +147,7 @@ impl StepKind {
     /// the node-local stores and the scope-cache directory are not the service.
     #[must_use]
     pub fn saves_to_cache_service(&self) -> bool {
-        matches!(self, Self::CacheSave(_))
+        matches!(self, Self::CacheSave(_) | Self::MbxRemote)
     }
 }
 

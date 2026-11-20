@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod archive;
+mod auto_shape_note;
 mod base_cache_rules;
 mod base_cache_visibility;
 mod base_expiry;
@@ -66,6 +67,7 @@ mod draft_skip_matrix;
 mod drift;
 mod events;
 mod events_policy;
+mod excluded_lock;
 mod facts;
 mod feature_lane_dedup;
 mod feature_lane_scope;
@@ -94,6 +96,7 @@ mod helper_workflow_size;
 mod hosted_key;
 mod lane_guard_steps;
 mod mbx_store;
+mod resolve_links;
 mod rules_render;
 
 mod inputs;
@@ -256,6 +259,7 @@ mod tools_cache;
 mod tools_local;
 mod trim_job;
 mod unowned;
+mod untracked_config;
 mod unused_anchors;
 mod version;
 mod weaken;
