@@ -21,6 +21,7 @@ mod cache_prune_layout;
 mod cache_retention_flow;
 mod io_cold_foreign;
 mod io_gate;
+mod run_escape;
 
 mod cache_safety;
 mod cache_upload;
@@ -199,6 +200,7 @@ mod timings_setup;
 mod tools_home_clear;
 mod tools_local;
 mod tools_verify;
+mod tools_verify_anchor;
 mod tools_verify_bounds;
 mod tools_verify_notice;
 mod trusted_event_parity;

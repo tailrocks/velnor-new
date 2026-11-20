@@ -188,15 +188,19 @@ fn seeded_message(store: &Path, copied: &Copied, elapsed: Duration) -> String {
 }
 
 pub fn record_truncation(runner_temp: &Path, outcome: &Outcome) -> Result<(), CiError> {
-    let Outcome::Seeded { copied, .. } = outcome else {
-        return Ok(());
-    };
-    if !copied.expired {
-        return Ok(());
-    }
     let marker = runner_temp.join(SEED_TRUNCATED);
-    fs::write(&marker, b"")
-        .map_err(|error| CiError::new(format!("cannot write {}: {error}", marker.display())))
+    if matches!(outcome, Outcome::Seeded { copied, .. } if copied.expired) {
+        return fs::write(&marker, b"")
+            .map_err(|error| CiError::new(format!("cannot write {}: {error}", marker.display())));
+    }
+    match fs::remove_file(&marker) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(CiError::new(format!(
+            "cannot remove {}: {error}",
+            marker.display()
+        ))),
+    }
 }
 
 pub fn setup() -> Result<String, CiError> {

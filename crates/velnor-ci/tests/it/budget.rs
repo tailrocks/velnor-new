@@ -324,3 +324,25 @@ fn a_window_with_one_run_that_lacks_the_setup_metric_fails_closed() {
     );
     assert_eq!(evaluation.medians[0].setup_seconds, None);
 }
+
+#[test]
+fn a_slow_job_name_with_a_line_break_stays_on_one_line_of_the_report() {
+    let hostile = "build\n::stop-commands::token";
+    let slow = |run_id: u64, seconds: u64| Sample {
+        jobs: vec![(hostile.to_owned(), seconds)],
+        ..sample(run_id, 900, 800, Some(300))
+    };
+    let histories = vec![history(
+        Population::PullRequest,
+        vec![slow(2, 900), slow(1, 100)],
+    )];
+    let limits = budget(0, 0, 0, 0);
+    let report = velnor_ci::budget::report(&limits, &evaluate(&limits, &histories));
+    assert!(
+        report
+            .lines()
+            .all(|line| !line.starts_with("::stop-commands::")),
+        "{report}"
+    );
+    assert!(report.contains("%0A::stop-commands::token"), "{report}");
+}

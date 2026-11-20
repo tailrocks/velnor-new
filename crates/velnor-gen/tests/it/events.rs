@@ -4,7 +4,7 @@
 use std::collections::BTreeSet;
 
 use velnor_gen::expected_files;
-use velnor_model::{PolicyTools, RepoPath};
+use velnor_model::{DenyChecks, PolicyTools, RepoPath};
 use velnor_rust::{CONFIG_PATH, PolicyRuns, policy_runs};
 
 use crate::facts::TestResult;
