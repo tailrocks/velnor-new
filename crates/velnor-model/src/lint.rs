@@ -8,7 +8,6 @@ pub struct LintJob {
     pub id: JobId,
     pub name: String,
     pub timeout_minutes: u16,
-    /// Globs of the files the lint reads. Empty means the lint runs on every pull request.
     pub inputs: Vec<PathGlob>,
     pub kind: LintKind,
 }
@@ -16,7 +15,6 @@ pub struct LintJob {
 const JOB_PREFIX: &str = "lint-";
 
 impl LintJob {
-    /// The plan output name part of this lint: its id without the job prefix, as a slug.
     #[must_use]
     pub fn slug(&self) -> RootSlug {
         let tail = self

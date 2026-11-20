@@ -2,20 +2,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    Gate, GateNeed, HelperCommand, Job, LintCommand, LintJob, LintKind, PlanFrom, RepoFacts, Step,
-    StepKind,
+    Gate, GateNeed, Job, LintCommand, LintJob, LintKind, PlanFrom, RepoFacts, Step, StepKind,
 };
 
 use crate::lane::PLAN_JOB;
 use crate::lint_tools::{ALINT, JACTIONLINT, NODE, SHELLCHECK, usable};
-use crate::plan::{CHECKOUT_DEPTH, PLAN_DEPTH, job, quick, step};
+use crate::plan::{CHECKOUT_DEPTH, job, quick, step};
 
-pub(crate) fn lint_jobs(facts: &RepoFacts, single: bool) -> Vec<Job> {
+pub(crate) fn lint_jobs(facts: &RepoFacts) -> Vec<Job> {
     facts
         .config
         .lint
         .iter()
-        .map(|lint| lint_job(facts, lint, single))
+        .map(|lint| lint_job(facts, lint))
         .collect()
 }
 
@@ -78,33 +77,18 @@ fn commands(facts: &RepoFacts, lint: &LintJob) -> Vec<LintCommand> {
     }
 }
 
-fn lint_job(facts: &RepoFacts, lint: &LintJob, single: bool) -> Job {
-    let declared = !lint.inputs.is_empty();
-    let planned = declared && !single;
-    let own_plan = declared && single;
+fn lint_job(facts: &RepoFacts, lint: &LintJob) -> Job {
+    let planned = !lint.inputs.is_empty();
     let mut steps = vec![step(StepKind::Checkout {
-        depth: if own_plan { PLAN_DEPTH } else { CHECKOUT_DEPTH },
+        depth: CHECKOUT_DEPTH,
         sparse: None,
     })];
-    if own_plan {
-        steps.extend(
-            facts
-                .helper
-                .iter()
-                .map(|release| step(StepKind::InstallHelper(release.clone()))),
-        );
-        steps.push(step(StepKind::Helper(HelperCommand::Plan)));
-    }
-    let work = install(facts, lint).into_iter().chain(
+    steps.extend(install(facts, lint));
+    steps.extend(
         commands(facts, lint)
             .into_iter()
             .map(|command| step(StepKind::Lint(command))),
     );
-    let step_gate = own_plan.then(|| gate(lint, PlanFrom::ThisJob));
-    steps.extend(work.map(|step| Step {
-        gate: step_gate.clone(),
-        ..step
-    }));
     Job {
         name: Some(lint.name.clone()),
         timeout_minutes: lint.timeout_minutes,

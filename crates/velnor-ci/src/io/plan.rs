@@ -155,7 +155,6 @@ struct Chosen {
     selections: BTreeMap<RepoPath, RustSelection>,
     changes: ChangeSet,
     kind: EventKind,
-    /// The changed files were listed, so `changes.paths` is the whole change and not a default.
     listed: bool,
 }
 

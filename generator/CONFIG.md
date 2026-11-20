@@ -534,7 +534,7 @@ Every tool a lint entry needs is checked at generation. The tool must be pinned 
 
 ### Skipping a lint on an unrelated pull request
 
-A lint with `inputs` runs on a pull request only when the plan finds a changed file that matches one of its globs. The plan also runs it when the change touches the generated workflow (`.github/workflows/rust-ci.yml`), `.velnor/rust-ci.toml`, or the entry's own `config` or `probe` file. The plan runs it on every `push`, `merge_group`, `schedule` and `workflow_dispatch` run, and on a pull request whose changed files it cannot list: a failure to list them runs the lint, it never skips it.
+A lint with `inputs` runs on a pull request only when the plan finds a changed file that matches one of its globs. The plan also runs it when the change touches the generated workflow (`.github/workflows/rust-ci.yml`), `.velnor/rust-ci.toml`, `mise.toml`, `.mise.toml`, `mise.lock`, the entry's own `config` or `probe` file, or, for a `mise-task`, any file in a mise task folder (`mise-tasks`, `.mise-tasks`, `mise/tasks`, `.mise/tasks`, `.config/mise/tasks`). The plan runs it on every `push`, `merge_group`, `schedule` and `workflow_dispatch` run, and on a pull request whose changed files it cannot list: a failure to list them runs the lint, it never skips it.
 
 ```toml
 [[lint]]
@@ -545,7 +545,7 @@ tools = ["hk"]
 inputs = ["hk.pkl", "mise.toml"]
 ```
 
-The plan job writes one output `lint_<id>` (the id without the `lint-` prefix, lowercased, with every character that is not a letter or digit written as `_`) with the value `run` or `skip`, and the lint job waits for the plan job and carries that output as its condition. Two entries whose ids give one output name are refused. In a workflow without a plan job (the single-job shape) the lint job checks out two commits, installs `velnor-ci` and runs the plan itself, and every later step carries the condition, so a skipped lint costs a checkout and a plan step, not a tool install. A lint without `inputs` is generated as before and writes no output.
+The plan job writes one output `lint_<id>` (the id without the `lint-` prefix, lowercased, with every character that is not a letter or digit written as `_`) with the value `run` or `skip`, and the lint job waits for the plan job and carries that output as its condition, so a skipped lint never allocates a runner. A workflow with any lint that declares `inputs` always has a plan job, also for one Cargo root: the one-job shape without a plan job is not used. Two entries whose ids give one output name are refused. A lint without `inputs` is generated as before and writes no output.
 
 ### One required check
 

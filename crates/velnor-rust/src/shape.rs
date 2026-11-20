@@ -119,6 +119,7 @@ pub(crate) fn single_job(facts: &RepoFacts, units: &[Unit], decisions: &[ShapeDe
         && decisions[0].shape == Shape::OneJob
         && helper_root(facts).is_none()
         && !crate::config_test_lane::has_parallel(&facts.config)
+        && facts.config.lint.iter().all(|lint| lint.inputs.is_empty())
 }
 
 /// Whether the planned workflow has a plan job. Only the jobs that follow a plan

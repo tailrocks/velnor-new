@@ -6,11 +6,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use velnor_model::{EventKind, LintJob, LintKind, RepoFacts, RepoPath, RootSlug, WORKFLOW_PATH};
 
 use crate::config::{CONFIG_PATH, rule_matches};
+use crate::lint_tasks::TASK_FOLDERS;
+use crate::mise::{MISE_CONFIGS, MISE_LOCK};
 
-/// Whether each lint that declares `inputs` runs.
-///
-/// Only a pull request with a known list of changed files can skip a lint: every other event,
-/// and a pull request whose changed files could not be listed (`changed` is `None`), runs it.
 #[must_use]
 pub fn lint_runs(
     facts: &RepoFacts,
@@ -32,11 +30,17 @@ fn runs(lint: &LintJob, event: EventKind, changed: Option<&BTreeSet<RepoPath>>) 
     };
     changed.iter().any(|path| {
         lint.inputs.iter().any(|glob| rule_matches(glob, path))
-            || [&WORKFLOW_PATH, &CONFIG_PATH]
-                .into_iter()
-                .chain(own_files(lint))
-                .any(|own| own == path)
+            || implicit(lint, path)
+            || task_file(lint, path)
     })
+}
+
+fn implicit(lint: &LintJob, path: &RepoPath) -> bool {
+    [WORKFLOW_PATH, CONFIG_PATH, MISE_LOCK]
+        .iter()
+        .chain(&MISE_CONFIGS)
+        .chain(own_files(lint))
+        .any(|own| own == path)
 }
 
 fn own_files(lint: &LintJob) -> impl Iterator<Item = &RepoPath> {
@@ -46,4 +50,11 @@ fn own_files(lint: &LintJob) -> impl Iterator<Item = &RepoPath> {
         LintKind::MiseTask { .. } => (None, None),
     };
     config.into_iter().chain(probe)
+}
+
+fn task_file(lint: &LintJob, path: &RepoPath) -> bool {
+    matches!(lint.kind, LintKind::MiseTask { .. })
+        && TASK_FOLDERS
+            .iter()
+            .any(|folder| path.as_str().starts_with(folder))
 }

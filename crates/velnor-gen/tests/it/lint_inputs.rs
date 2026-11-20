@@ -167,40 +167,37 @@ fn the_required_gate_treats_a_lint_the_plan_skipped_as_passing() -> TestResult {
 }
 
 #[test]
-fn a_single_job_workflow_plans_inside_the_lint_job_and_gates_its_steps() -> TestResult {
-    let text = single()?;
-    let all = jobs(&text)?;
+fn a_single_root_workflow_with_lint_inputs_gets_a_plan_job_and_gates_the_lint_job() -> TestResult {
+    let all = jobs(&single()?)?;
     let job = &all["lint-hk"];
-    assert!(job["needs"].is_null(), "{job}");
-    assert!(job["if"].as_str().is_some_and(|c| !c.contains("lint_hk")));
-    let steps = job["steps"].as_array().ok_or("no steps")?;
-    let plan = steps
-        .iter()
-        .position(|step| step["id"] == "plan")
-        .ok_or("the lint job runs no plan step")?;
-    let checkout = steps
-        .iter()
-        .position(|step| {
-            step["uses"]
-                .as_str()
-                .is_some_and(|uses| uses.starts_with("actions/checkout"))
-        })
-        .ok_or("no checkout")?;
-    assert!(checkout < plan);
-    assert_eq!(steps[checkout]["with"]["fetch-depth"], 2);
-    let gated = "steps.plan.outputs.lint_hk == 'run'";
-    assert!(steps.len() > plan + 1);
-    for step in &steps[plan + 1..] {
-        let when = step["if"].as_str().unwrap_or_default();
-        assert!(when.contains(gated), "{step}");
+    assert_eq!(job["needs"], serde_json::json!(["rust-plan"]), "{job}");
+    assert!(
+        job["if"]
+            .as_str()
+            .is_some_and(|condition| condition.contains(OUTPUT)),
+        "{job}"
+    );
+    let plain = jobs(&workflow(&repo(&["Cargo.toml"], LINT)?)?)?;
+    assert!(plain["rust-plan"].is_null(), "no plan job without inputs");
+    Ok(())
+}
+
+#[test]
+fn a_lint_job_keeps_unique_step_ids_with_the_merge_group_skip() -> TestResult {
+    let config = format!("[ci]\nskip_push_after_merge_group = true\n\n{DECLARED}");
+    let mut repo = repo(&["Cargo.toml"], &config)?;
+    pin_helper(&mut repo, "0.1.110")?;
+    let all = jobs(&workflow(&repo)?)?;
+    for id in ["lint-hk", "lint-jactionlint"] {
+        let ids: Vec<&str> = all[id]["steps"]
+            .as_array()
+            .ok_or("no steps")?
+            .iter()
+            .filter_map(|step| step["id"].as_str())
+            .collect();
+        let unique: BTreeSet<&str> = ids.iter().copied().collect();
+        assert_eq!(ids.len(), unique.len(), "{id}: {ids:?}");
     }
-    let other = &all["lint-jactionlint"];
-    assert!(other["steps"].as_array().is_some_and(|steps| {
-        steps.iter().all(|step| {
-            step["id"] != "plan" && !step["if"].as_str().unwrap_or_default().contains("lint_")
-        })
-    }));
-    assert!(spec(&text)?.jobs.iter().all(|job| job.when.is_empty()));
     Ok(())
 }
 
@@ -339,6 +336,33 @@ fn every_event_but_a_pull_request_with_a_known_change_runs_the_lint() -> TestRes
 fn a_lint_without_inputs_has_no_plan_decision() -> TestResult {
     let all = runs_of(EventKind::PullRequest, Some(&["README.md"]))?;
     assert_eq!(all, [("hk".to_owned(), false)]);
+    Ok(())
+}
+
+#[test]
+fn the_tool_manifests_and_the_task_files_of_a_lint_count_as_its_inputs() -> TestResult {
+    let bare = "[[lint]]\nkind = 'mise-task'\nid = 'hk'\ntask = 'lint-generator-samples'\ntools = ['jactionlint']\ninputs = ['hk.pkl']\n";
+    let facts = detect(&repo(&["Cargo.toml"], bare)?)?;
+    let hk = |path: &str| -> Result<bool, Box<dyn std::error::Error>> {
+        let paths = changed(&[path])?;
+        let runs = lint_runs(&facts, EventKind::PullRequest, Some(&paths));
+        Ok(*runs.values().next().ok_or("no decision")?)
+    };
+    for path in [
+        "mise.toml",
+        "mise.lock",
+        ".mise.toml",
+        "mise-tasks/check",
+        ".config/mise/tasks/lint/hk",
+    ] {
+        assert!(hk(path)?, "{path}");
+    }
+    assert!(!hk("src/lib.rs")?);
+    let alint = "[[lint]]\nkind = 'alint'\nconfig = '.alint.yml'\ninputs = ['rules/**']\n";
+    let facts = detect(&repo(&["Cargo.toml"], alint)?)?;
+    let paths = changed(&["mise-tasks/check"])?;
+    let runs = lint_runs(&facts, EventKind::PullRequest, Some(&paths));
+    assert_eq!(runs.values().copied().collect::<Vec<_>>(), [false]);
     Ok(())
 }
 
