@@ -1,6 +1,6 @@
 # How Velnor keeps Rust CI fast
 
-This page is for a project that runs `velnor-gen`. It says what the generated workflow does and which setting changes it. Every setting lives in `.velnor/rust-ci.toml`. The full reference is [`generator/CONFIG.md`](../generator/CONFIG.md), the exact cache keys are in [`rust-ci-cache-keys.md`](rust-ci-cache-keys.md), and the promises and targets are in [`goals.md`](goals.md).
+This page is for a project that runs `velnor-gen`. It says what the generated workflow does and which setting changes it. Every setting lives in `.velnor/rust-ci.toml`. The full reference is [`generator/CONFIG.md`](../generator/CONFIG.md), the exact cache keys are in [`rust-ci-cache-keys.md`](rust-ci-cache-keys.md), and the promises and targets are in [`goals.md`](goals.md). A project that moves from the velnor-actions engine starts with [`migrating-to-velnor-gen.md`](migrating-to-velnor-gen.md).
 
 `velnor-gen generate` writes `.github/workflows/rust-ci.yml` and `.velnor/rust-metadata.json`. `velnor-gen check` exits 1 when either file is out of date. Generation needs a pinned helper: `velnor-gen pin-helper <version>` writes `.velnor/rust-ci.lock` in the `--root` directory (the one that holds `.velnor/`), and stages it only when that directory is itself a git repository root. Every decision at run time is made by one program, `velnor-ci`, so each generated `run:` step is one command.
 
