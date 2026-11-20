@@ -3,6 +3,7 @@
 
 use std::error::Error;
 use std::fs;
+use std::os::unix::fs::symlink;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -10,13 +11,22 @@ const CARGO_TOML: &str = "[package]\nname = \"probe\"\nversion = \"0.0.0\"\nedit
 const MAIN: &str = "fn main() { println!(\"{}\", env!(\"VELNOR_ARCHIVE_GUARD_FINGERPRINT\")); }\n";
 const MANIFEST: &str = "file Cargo.toml\ntree crates/probe/src\noptional .cargo/config.toml\noptional rust-toolchain\n";
 
+#[derive(Clone, Copy)]
+enum Layout {
+    OutsideRoot,
+    InRoot,
+    NestedInRoot,
+    SymlinkedIntoRoot,
+    SymlinkResolved,
+}
+
 struct Probe {
     root: PathBuf,
     target: PathBuf,
 }
 
 impl Probe {
-    fn new(base: &Path, in_root_target: bool) -> Result<Self, Box<dyn Error>> {
+    fn new(base: &Path, layout: Layout) -> Result<Self, Box<dyn Error>> {
         let root = base.join("root");
         let krate = root.join("crates/probe");
         fs::create_dir_all(krate.join("src"))?;
@@ -38,10 +48,20 @@ impl Probe {
             "[workspace]\nmembers = [\"crates/probe\"]\nresolver = \"2\"\n",
         )?;
         fs::write(root.join("scripts/archive-guard-inputs.txt"), MANIFEST)?;
-        let target = if in_root_target {
-            root.join("target")
-        } else {
-            base.join("target")
+        let real = base.join("real-target");
+        let target = match layout {
+            Layout::OutsideRoot => base.join("target"),
+            Layout::InRoot => root.join("target"),
+            Layout::NestedInRoot => root.join("target/velnor-roots/probe-slug"),
+            Layout::SymlinkedIntoRoot | Layout::SymlinkResolved => {
+                fs::create_dir(&real)?;
+                symlink(&real, root.join("target"))?;
+                if matches!(layout, Layout::SymlinkedIntoRoot) {
+                    root.join("target")
+                } else {
+                    real
+                }
+            }
         };
         fs::copy(own.join("../../Cargo.lock"), root.join("Cargo.lock"))?;
         Ok(Self { root, target })
@@ -68,11 +88,9 @@ impl Probe {
     }
 }
 
-#[test]
-fn optional_input_created_after_the_first_build_reruns_the_build_script()
--> Result<(), Box<dyn Error>> {
+fn assert_created_inputs_are_noticed(layout: Layout) -> Result<(), Box<dyn Error>> {
     let temp = tempfile::tempdir()?;
-    let probe = Probe::new(&temp.path().canonicalize()?, false)?;
+    let probe = Probe::new(&temp.path().canonicalize()?, layout)?;
     probe.build()?;
     assert_eq!(probe.embedded()?, probe.expected()?);
 
@@ -95,10 +113,9 @@ fn optional_input_created_after_the_first_build_reruns_the_build_script()
     Ok(())
 }
 
-#[test]
-fn absent_optional_inputs_leave_an_unchanged_crate_fresh() -> Result<(), Box<dyn Error>> {
+fn assert_unchanged_crate_is_fresh(layout: Layout) -> Result<(), Box<dyn Error>> {
     let temp = tempfile::tempdir()?;
-    let probe = Probe::new(&temp.path().canonicalize()?, true)?;
+    let probe = Probe::new(&temp.path().canonicalize()?, layout)?;
     probe.build()?;
     let second = probe.build()?;
     assert!(
@@ -106,4 +123,63 @@ fn absent_optional_inputs_leave_an_unchanged_crate_fresh() -> Result<(), Box<dyn
         "an unchanged crate rebuilt: {second}"
     );
     Ok(())
+}
+
+#[test]
+fn optional_input_created_with_the_target_outside_the_root_is_noticed() -> Result<(), Box<dyn Error>>
+{
+    assert_created_inputs_are_noticed(Layout::OutsideRoot)
+}
+
+#[test]
+fn optional_root_input_created_with_the_target_in_the_root_is_noticed() -> Result<(), Box<dyn Error>>
+{
+    assert_created_inputs_are_noticed(Layout::InRoot)
+}
+
+#[test]
+fn optional_root_input_created_with_a_nested_root_target_is_noticed() -> Result<(), Box<dyn Error>>
+{
+    assert_created_inputs_are_noticed(Layout::NestedInRoot)
+}
+
+#[test]
+fn optional_root_input_created_with_a_symlinked_target_is_noticed() -> Result<(), Box<dyn Error>> {
+    assert_created_inputs_are_noticed(Layout::SymlinkedIntoRoot)
+}
+
+#[test]
+fn optional_root_input_created_with_a_resolved_symlink_target_is_noticed()
+-> Result<(), Box<dyn Error>> {
+    assert_created_inputs_are_noticed(Layout::SymlinkResolved)
+}
+
+#[test]
+fn absent_optional_inputs_leave_an_unchanged_crate_fresh_outside_the_root()
+-> Result<(), Box<dyn Error>> {
+    assert_unchanged_crate_is_fresh(Layout::OutsideRoot)
+}
+
+#[test]
+fn absent_optional_inputs_leave_an_unchanged_crate_fresh_in_the_root() -> Result<(), Box<dyn Error>>
+{
+    assert_unchanged_crate_is_fresh(Layout::InRoot)
+}
+
+#[test]
+fn absent_optional_inputs_leave_an_unchanged_crate_fresh_with_a_nested_root_target()
+-> Result<(), Box<dyn Error>> {
+    assert_unchanged_crate_is_fresh(Layout::NestedInRoot)
+}
+
+#[test]
+fn absent_optional_inputs_leave_an_unchanged_crate_fresh_with_a_symlinked_target()
+-> Result<(), Box<dyn Error>> {
+    assert_unchanged_crate_is_fresh(Layout::SymlinkedIntoRoot)
+}
+
+#[test]
+fn absent_optional_inputs_leave_an_unchanged_crate_fresh_with_a_resolved_symlink_target()
+-> Result<(), Box<dyn Error>> {
+    assert_unchanged_crate_is_fresh(Layout::SymlinkResolved)
 }
