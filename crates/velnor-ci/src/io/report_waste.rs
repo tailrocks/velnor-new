@@ -43,8 +43,13 @@ pub(super) fn collect_local(metrics: &mut LaneMetrics, log: &[u8], runner_temp: 
 }
 
 fn sessions(metrics: &mut LaneMetrics, log: &[u8], runner_temp: &Path) -> (Vec<MbxSession>, u64) {
+    let unrecorded = super::mbx_reports::unrecorded(runner_temp);
     let Some(reports) = super::mbx_reports::read(runner_temp) else {
-        return summaries(metrics, log);
+        let (sessions, unparsed) = summaries(metrics, log);
+        return (
+            sessions,
+            unparsed.saturating_add(unrecorded_sessions(metrics, unrecorded)),
+        );
     };
     if reports.overflowed {
         metrics.verification_errors.push(format!(
@@ -80,8 +85,19 @@ fn sessions(metrics: &mut LaneMetrics, log: &[u8], runner_temp: &Path) -> (Vec<M
     let unknown = u64::try_from(reports.unreadable.len() + missing).unwrap_or(u64::MAX);
     (
         reports.sessions.into_iter().chain(text).collect(),
-        unparsed.saturating_add(unknown),
+        unparsed
+            .saturating_add(unknown)
+            .saturating_add(unrecorded_sessions(metrics, unrecorded)),
     )
+}
+
+fn unrecorded_sessions(metrics: &mut LaneMetrics, count: u64) -> u64 {
+    if count > 0 {
+        metrics.verification_errors.push(format!(
+            "MBX stats could not be recorded for {count} session(s): the stats directory could not be written. Those commands ran without a report; the MBX session counts are incomplete."
+        ));
+    }
+    count
 }
 
 fn summaries(metrics: &mut LaneMetrics, log: &[u8]) -> (Vec<MbxSession>, u64) {

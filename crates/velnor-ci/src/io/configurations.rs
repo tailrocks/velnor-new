@@ -25,7 +25,7 @@ pub(super) fn check(args: &CheckConfigurationsArgs) -> Result<String, CiError> {
     };
     let mut resolutions: Vec<ResolvedFeatures> = Vec::new();
     for configuration in &configurations {
-        let output = cargo(&args.manifest_path, configuration, "metadata")?
+        let output = cargo(&args.manifest_path, configuration, "metadata")
             .output()
             .map_err(|e| CiError::new(format!("cannot run cargo metadata: {e}")))?;
         if !output.status.success() {
@@ -65,7 +65,7 @@ pub(super) fn check(args: &CheckConfigurationsArgs) -> Result<String, CiError> {
     );
     for index in representatives {
         let configuration = &configurations[index];
-        let status = cargo(&args.manifest_path, configuration, "check")?
+        let status = cargo(&args.manifest_path, configuration, "check")
             .status()
             .map_err(|e| CiError::new(format!("cannot run cargo check: {e}")))?;
         if !status.success() {
@@ -100,15 +100,10 @@ fn report_targets(configurations: &[Configuration], resolutions: &[ResolvedFeatu
     }
 }
 
-fn cargo(
-    manifest: &Path,
-    configuration: &Configuration,
-    operation: &str,
-) -> Result<Command, CiError> {
+fn cargo(manifest: &Path, configuration: &Configuration, operation: &str) -> Command {
     let mut command = Command::new("cargo");
     command.arg(operation);
-    super::mbx_reports::assign(&mut command, &["cargo".to_owned(), operation.to_owned()])
-        .map_err(CiError::new)?;
+    super::mbx_reports::assign(&mut command, &["cargo".to_owned(), operation.to_owned()]);
     if operation == "metadata" {
         command.args(["--format-version", "1"]);
     } else {
@@ -125,5 +120,5 @@ fn cargo(
             .arg("--features")
             .arg(configuration.features.join(","));
     }
-    Ok(command)
+    command
 }

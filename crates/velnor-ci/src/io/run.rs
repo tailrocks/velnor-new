@@ -228,7 +228,7 @@ fn spawn_child(argv: &[String]) -> Result<(std::process::Child, bool), (u8, Stri
         .env("CARGO_TERM_QUIET", "false")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    super::mbx_reports::assign(&mut command, argv).map_err(|error| (2, error))?;
+    super::mbx_reports::assign(&mut command, argv);
     if runs_nextest(argv) {
         for name in STEP_FILE_VARIABLES.iter().copied() {
             command.env_remove(name);

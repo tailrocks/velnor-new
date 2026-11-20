@@ -148,7 +148,8 @@ fn a_session_inside_an_enclosing_mbx_session_gets_no_report_path() -> ResultTest
 }
 
 #[test]
-fn a_session_whose_expected_report_cannot_be_recorded_is_not_run() -> ResultTest {
+fn a_session_whose_expected_report_cannot_be_recorded_still_runs_and_counts_as_unparsed()
+-> ResultTest {
     let repo = fixture("mbx-reports-unrecordable")?;
     cargo(&repo, "build", &report_json(5, 1, 0, 0), "compiled")?;
     let directory = repo.root().join("velnor-mbx-reports");
@@ -170,11 +171,45 @@ fn a_session_whose_expected_report_cannot_be_recorded_is_not_run() -> ResultTest
         .output()?;
     fs::set_permissions(&directory, fs::Permissions::from_mode(0o755))?;
     let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
-    assert!(!output.status.success(), "{stderr}");
+    assert!(output.status.success(), "{stderr}");
     assert!(
         stderr.contains("cannot record the expected MBX report"),
         "{stderr}"
     );
-    assert_eq!(report(&repo)?.mbx.sessions, [session(1, 0, 0)]);
+    let metrics = report(&repo)?;
+    assert_eq!(metrics.mbx.sessions, [session(1, 0, 0)], "{metrics:?}");
+    assert_eq!(metrics.mbx.unparsed, 1, "{metrics:?}");
+    assert!(
+        metrics
+            .verification_errors
+            .iter()
+            .any(|line| line.contains("MBX stats could not be recorded for 1 session(s)")),
+        "{:?}",
+        metrics.verification_errors
+    );
+    Ok(())
+}
+
+#[test]
+fn an_unwritable_stats_directory_with_no_other_session_is_unparsed_not_silent() -> ResultTest {
+    let repo = fixture("mbx-reports-unwritable")?;
+    let directory = repo.root().join("velnor-mbx-reports");
+    fs::create_dir_all(&directory)?;
+    fs::set_permissions(&directory, fs::Permissions::from_mode(0o555))?;
+    let ran = cargo(&repo, "build", &report_json(5, 1, 0, 0), "compiled");
+    let metrics = report(&repo);
+    fs::set_permissions(&directory, fs::Permissions::from_mode(0o755))?;
+    ran?;
+    let metrics = metrics?;
+    assert!(metrics.mbx.sessions.is_empty(), "{metrics:?}");
+    assert_eq!(metrics.mbx.unparsed, 1, "{metrics:?}");
+    assert!(
+        metrics
+            .verification_errors
+            .iter()
+            .any(|line| line.contains("MBX stats could not be recorded for 1 session(s)")),
+        "{:?}",
+        metrics.verification_errors
+    );
     Ok(())
 }

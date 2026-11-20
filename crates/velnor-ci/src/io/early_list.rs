@@ -72,9 +72,7 @@ fn list_matches(argv: &[String]) -> Option<Listing> {
     for name in STEP_FILE_VARIABLES.iter().copied() {
         command.env_remove(name);
     }
-    if super::mbx_reports::assign(&mut command, &argv).is_err() {
-        return None;
-    }
+    super::mbx_reports::assign(&mut command, &argv);
     let output = command.output().ok()?;
     if !output.status.success() {
         drop(std::io::stderr().write_all(&output.stderr));
