@@ -203,7 +203,6 @@ noise object cache: x hits\n";
 
 #[test]
 fn mbx_1_30_0_summary_without_the_object_cache_label_is_parsed() {
-    // Printed by `mbx 1.30.0` on a local `cargo build -p velnor-cache-rules` (2026-11-20).
     let log = b"   Compiling velnor-cache-rules v0.0.0 (/checkout/crates/velnor-cache-rules)\n\
 mbx[cache]: 1 hits, 0 misses; 0 B downloaded, 0 B uploaded, 0 B stored locally\n\
 mbx[savings]: rustc believes it compiled everything. it is down 42d 20h across 102194 builds. let it believe.\n";

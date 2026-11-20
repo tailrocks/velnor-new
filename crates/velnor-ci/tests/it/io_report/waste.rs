@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{Repo, ResultTest, fixture, read};
+use super::{Repo, ResultTest, fixture, read, report};
 use serde_json::json;
 use std::collections::BTreeMap;
 use std::fs;
@@ -209,6 +209,79 @@ fn report_records_that_the_checkout_declares_mbx() -> ResultTest {
             .any(|line| line.contains("compiled without mbx")),
         "{:?}",
         metrics.violations
+    );
+    Ok(())
+}
+
+const UNPARSED_SUMMARY: &str = "mbx[cache]: object cache: 3 hits, many misses; 0 B downloaded";
+
+fn serde_compiled_unit() -> serde_json::Value {
+    json!({
+        "package_id":"registry+https://example.invalid/index#serde@1.0.0",
+        "manifest_path":"/registry/serde/Cargo.toml",
+        "target":{"name":"serde","kind":["lib"],"crate_types":["lib"],"src_path":"/registry/serde/src/lib.rs"},
+        "profile":{"opt_level":"0","debuginfo":2,"debug_assertions":true,"overflow_checks":true,"test":false},
+        "features":[],"filenames":["target/debug/deps/libserde-hash.rmeta"],"fresh":false
+    })
+}
+
+fn lane_with_mbx_log(
+    name: &str,
+    log: &str,
+    declared: bool,
+) -> Result<velnor_ci::report::LaneMetrics, Box<dyn std::error::Error>> {
+    let repo = fixture(name)?;
+    if declared {
+        repo.write("mise.toml", "[wrappers.cargo]\ncommand = \"mbx\"\n");
+    }
+    let root = fs::canonicalize(repo.root())?;
+    let mut invocation = crate::report::lane()["invocations"][0].clone();
+    invocation["root"] = json!(root);
+    invocation["argv"] = json!(["cargo", "build", "--workspace"]);
+    invocation["compilations"] = json!([]);
+    invocation["progress"] = serde_json::Value::Null;
+    invocation["log_start"] = json!(0);
+    invocation["log_end"] = json!(log.len());
+    invocation["artifacts"] = json!([serde_compiled_unit()]);
+    fs::write(repo.root().join("velnor-run.log"), log)?;
+    fs::write(
+        repo.root().join("velnor-invocations.jsonl"),
+        format!("{invocation}\n"),
+    )?;
+    report(&repo, &json!([]), "{}")
+}
+
+#[test]
+fn an_unparsed_mbx_summary_is_reported_and_never_as_compiled_without_mbx() -> ResultTest {
+    let metrics = lane_with_mbx_log(
+        "report-mbx-unparsed-summary",
+        &format!("{UNPARSED_SUMMARY}\n"),
+        true,
+    )?;
+    assert!(metrics.mbx.sessions.is_empty(), "{metrics:?}");
+    assert_eq!(metrics.mbx.unparsed, 1, "{metrics:?}");
+    assert!(
+        metrics.diagnostics.iter().any(|line| line
+            == "MBX lookup summary not understood, 1 line(s) not counted; first: mbx[cache]: object cache: 3 hits, many misses; 0 B downloaded"),
+        "{:?}",
+        metrics.diagnostics
+    );
+    assert!(
+        !metrics
+            .violations
+            .iter()
+            .any(|line| line.contains("compiled without mbx")),
+        "{:?}",
+        metrics.violations
+    );
+    let silent = lane_with_mbx_log("report-mbx-no-summary", "", true)?;
+    assert!(
+        silent
+            .violations
+            .iter()
+            .any(|line| line.contains("compiled without mbx")),
+        "{:?}",
+        silent.violations
     );
     Ok(())
 }

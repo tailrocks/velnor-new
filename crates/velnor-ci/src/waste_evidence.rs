@@ -1,13 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-//! Evidence and rules for the waste a green lane hides: a sources miss that had a saved entry, an
-//! MBX session with no hits on a primed store, a toolchain install on an exact tools hit.
-
 use crate::report::{Hit, LaneMetrics};
 use serde::{Deserialize, Serialize};
 
-/// `prepare` appends one line per `rustup component add` or `rustup target add` it had to run.
 pub const TOOLCHAIN_INSTALLS: &str = "velnor-toolchain-installs.txt";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -21,24 +17,21 @@ pub struct MbxSession {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct MbxEvidence {
-    /// The checkout declares that cargo runs through MBX (mise `mr_boxington` or the cargo wrapper).
     #[serde(default)]
     pub declared: bool,
-    /// `MBX_CACHE_DIR` named a store that held an entry older than the first cargo invocation.
     pub store_primed: bool,
     pub sessions: Vec<MbxSession>,
+    #[serde(default)]
+    pub unparsed: u64,
 }
 
 impl MbxEvidence {
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        !self.declared && !self.store_primed && self.sessions.is_empty()
+        !self.declared && !self.store_primed && self.sessions.is_empty() && self.unparsed == 0
     }
 }
 
-/// The summary text of an `mbx[cache]:` lookup line. Both forms are accepted: 1.30.0 prints
-/// `mbx[cache]: object cache: H hits, M misses; ...` in some runs and `mbx[cache]: H hits, M misses; ...`
-/// in others. Lines that are not lookup summaries (`mbx[cache]: 28.53s session`) return `None`.
 fn lookup_summary(line: &str) -> Option<&str> {
     let text = line.split_once("mbx[cache]: ")?.1;
     let text = text.strip_prefix("object cache: ").unwrap_or(text);
@@ -66,8 +59,6 @@ fn parse_lookup_summary(summary: &str) -> Option<MbxSession> {
     (seen[0] && seen[1]).then_some(session)
 }
 
-/// The `mbx[cache]:` lookup summaries in a job log, parsed. A summary that does not parse is
-/// absent here and listed by [`mbx_unparsed_lines`]; it is never counted as zero.
 #[must_use]
 pub fn mbx_sessions(log: &[u8]) -> Vec<MbxSession> {
     String::from_utf8_lossy(log)
@@ -76,7 +67,6 @@ pub fn mbx_sessions(log: &[u8]) -> Vec<MbxSession> {
         .collect()
 }
 
-/// The lookup summary lines that `mbx_sessions` could not parse.
 #[must_use]
 pub fn mbx_unparsed_lines(log: &[u8]) -> Vec<String> {
     String::from_utf8_lossy(log)
@@ -132,6 +122,7 @@ pub fn waste(metrics: &LaneMetrics) -> Vec<String> {
     }
     if metrics.mbx.declared
         && metrics.mbx.sessions.is_empty()
+        && metrics.mbx.unparsed == 0
         && metrics
             .invocations
             .iter()
