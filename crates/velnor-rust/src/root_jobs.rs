@@ -20,7 +20,7 @@ const ARCHIVE_FILE: RepoPath = RepoPath::from_static("nextest-archive.tar.zst");
 /// The first `velnor-ci` whose test step records the build in `steps.<test>.outputs.built`,
 /// so a save waits for that record and the lane needs no separate build step.
 // First released in tools-v0.1.107 (not tagged yet when this gate was written).
-const BUILT_RECORD_HELPER: (u64, u64, u64) = (0, 1, 107);
+pub(crate) const BUILT_RECORD_HELPER: (u64, u64, u64) = (0, 1, 107);
 
 struct RootJobs<'a> {
     facts: &'a RepoFacts,

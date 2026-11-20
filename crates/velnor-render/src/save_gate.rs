@@ -5,10 +5,13 @@
 //!
 //! A save does not wait for the whole job to succeed: a failing test must not cost
 //! the next run its warm target. It waits for the steps that compile the build it
-//! captures, and for the compile-input audit when one ran before it.
+//! captures, and for the compile-input audit when one is required. The conditions
+//! themselves come from `save_condition`, for every shape of job.
 
 use velnor_model::{CargoCommand, HelperCommand, Job, Step, StepKind, When};
 
+use crate::gate::Setup;
+use crate::save_condition::{Audited, Built, Compiled, audit_passed, audit_runs, builds_finished};
 use crate::tests::Tests;
 
 const BUILD_ID: &str = "build";
@@ -19,6 +22,8 @@ const AUDIT_ID: &str = "audit";
 pub(crate) struct SaveGate {
     ids: Vec<Option<String>>,
     required: Vec<String>,
+    /// What an audit waits for before it runs, by step index.
+    audit_runs: Vec<Option<String>>,
 }
 
 fn is_save(step: &Step) -> bool {
@@ -49,54 +54,63 @@ impl SaveGate {
     pub(crate) fn of(job: &Job) -> Self {
         let mut gate = Self {
             ids: vec![None; job.steps.len()],
-            required: Vec::new(),
+            audit_runs: vec![None; job.steps.len()],
+            ..Self::default()
         };
         let Some(first) = job.steps.iter().position(is_save) else {
             return gate;
         };
-        let saved_here = &job.steps[first].gate;
-        let (mut builds, mut audits) = (0, 0);
-        let mut required = Vec::new();
-        // A job with its own build step keeps the step ids; otherwise its test steps
-        // record the build (`built` output) and are the steps the saves wait for.
-        let legacy = job
-            .steps
-            .iter()
-            .any(|step| matches!(&step.kind, StepKind::Cargo(CargoCommand::NextestBuild)));
+        let saved_here = job.steps[first].gate.as_ref();
+        // Only a job whose pinned helper records the build (`Job::records_build`) and that has
+        // no build step of its own saves after its test steps (`built` output). Any other job
+        // keeps the build steps, whatever steps it happens to have.
+        let legacy = !job.records_build
+            || job
+                .steps
+                .iter()
+                .any(|step| matches!(&step.kind, StepKind::Cargo(CargoCommand::NextestBuild)));
         let tests = Tests::of(job);
+        let restores = crate::base_steps::job_setup(job).0;
+        let (mut compiled, mut audits) = (Vec::<Compiled>::new(), Vec::new());
+        let mut replanned = false;
         for (index, step) in job.steps.iter().enumerate().take(first) {
+            let setup = Setup::of(restores, replanned);
+            replanned |= step.kind == StepKind::Helper(HelperCommand::PlanFull);
             if !legacy && is_test_run(step) {
-                builds += 1;
                 let test = tests.id(step.reads.as_ref().map(|plan| &plan.slug));
-                required.push(if &step.gate == saved_here {
-                    format!("steps.{test}.outputs.built == 'true'")
-                } else {
-                    format!("(steps.{test}.outcome != 'failure' || steps.{test}.outputs.built == 'true')")
+                compiled.push(Compiled {
+                    built: Built::Recorded(test),
+                    gate: step.gate.clone(),
+                    setup,
                 });
-                continue;
-            }
-            let (prefix, count) = if is_build(step) {
-                (BUILD_ID, &mut builds)
+            } else if is_build(step) {
+                let id = format!("{BUILD_ID}_{}", compiled.len() + 1);
+                gate.ids[index] = Some(id.clone());
+                compiled.push(Compiled {
+                    built: Built::Step(id),
+                    gate: step.gate.clone(),
+                    setup,
+                });
             } else if is_audit(step) {
-                (AUDIT_ID, &mut audits)
-            } else {
-                continue;
-            };
-            *count += 1;
-            let id = format!("{prefix}_{count}");
-            // A build of another root is skipped, not failed, when the plan leaves
-            // that root out; only a build of the saved root must have run.
-            required.push(if prefix == BUILD_ID && &step.gate == saved_here {
-                format!("steps.{id}.outcome == 'success'")
-            } else {
-                format!("steps.{id}.outcome != 'failure'")
-            });
-            gate.ids[index] = Some(id);
+                let id = format!("{AUDIT_ID}_{}", audits.len() + 1);
+                gate.ids[index] = Some(id.clone());
+                if !compiled.is_empty() {
+                    let before = audit_runs(&compiled, saved_here);
+                    gate.audit_runs[index] = Some(format!("${{{{ {} }}}}", before.join(" && ")));
+                }
+                audits.push(Audited {
+                    id,
+                    when: step.when,
+                    setup,
+                });
+            }
         }
-        if builds == 0 {
+        if compiled.is_empty() {
             gate.ids.fill(None);
+            gate.audit_runs.fill(None);
         } else {
-            gate.required = required;
+            gate.required = builds_finished(&compiled, saved_here);
+            gate.required.extend(audits.iter().map(audit_passed));
         }
         gate
     }
@@ -107,6 +121,12 @@ impl SaveGate {
 
     pub(crate) fn required(&self) -> &[String] {
         &self.required
+    }
+
+    /// The condition an audit adds to its own: it runs after a failed test, once the
+    /// builds before it finished, so a save never follows an audit that did not run.
+    pub(crate) fn audit_runs(&self, index: usize) -> Option<&str> {
+        self.audit_runs.get(index)?.as_deref()
     }
 }
 

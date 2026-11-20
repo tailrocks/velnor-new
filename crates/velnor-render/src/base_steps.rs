@@ -191,6 +191,7 @@ pub(crate) fn audited_save(
     job: &velnor_model::Job,
     step: &Step,
     mut bodies: Vec<RenderedStep>,
+    audit_runs: Option<&str>,
 ) -> Vec<RenderedStep> {
     let audited = job
         .needs
@@ -209,6 +210,8 @@ pub(crate) fn audited_save(
     };
     for body in &mut bodies {
         body.condition = crate::gate::all_conditions(body.condition.take(), extra.clone());
+        body.condition =
+            crate::gate::all_conditions(audit_runs.map(str::to_owned), body.condition.take());
     }
     bodies
 }
