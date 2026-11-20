@@ -14,7 +14,7 @@ use velnor_rust::reduce_metadata;
 use crate::error::CiError;
 
 const TOOLCHAIN: &str = "RUSTUP_TOOLCHAIN";
-const PROGRAM_VARIABLES: [&str; 6] = [
+const PROGRAM_VARIABLES: &[&str] = &[
     "RUSTC_WRAPPER",
     "RUSTC_WORKSPACE_WRAPPER",
     "CARGO_BUILD_RUSTC_WRAPPER",
@@ -72,7 +72,7 @@ pub(super) fn read(top: &Path, roots: &[String]) -> Result<Workspaces, CiError> 
             .arg(repository.join(&manifest))
             .current_dir(&repository)
             .env(TOOLCHAIN, &toolchain);
-        for variable in PROGRAM_VARIABLES {
+        for variable in PROGRAM_VARIABLES.iter().copied() {
             command.env_remove(variable);
         }
         let output = command

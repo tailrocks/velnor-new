@@ -19,7 +19,7 @@ use crate::release_fixture::release_view;
 type TestResult = Result<(), Box<dyn Error>>;
 
 const RUNS_ON_FENCE: &str = "github.event.pull_request.head.repo.full_name == github.repository";
-const EVENTS: [&str; 3] = ["pull_request", "pull_request_target", "workflow_call"];
+const EVENTS: &[&str] = &["pull_request", "pull_request_target", "workflow_call"];
 
 fn github_hosted(label: &str) -> bool {
     ["ubuntu-", "macos-", "windows-"].iter().any(|family| {

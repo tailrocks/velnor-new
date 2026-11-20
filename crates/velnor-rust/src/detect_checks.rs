@@ -97,7 +97,7 @@ pub(crate) fn check_setup_files(
     Ok(())
 }
 
-const MISE_FOLDERS: [&str; 5] = [".config/", ".mise/", "mise/", "rtx/", ".rtx/"];
+const MISE_FOLDERS: &[&str] = &[".config/", ".mise/", "mise/", "rtx/", ".rtx/"];
 
 fn other_mise_config(path: &RepoPath) -> bool {
     let text = path.as_str();
