@@ -133,6 +133,7 @@ fn a_toolchain_install_on_an_exact_tools_hit_is_waste() {
     for (hit, installs, expected) in [
         ("exact", json!(["component rust-src"]), true),
         ("exact", json!(["target wasm32-unknown-unknown"]), true),
+        ("exact", json!(["toolchain 1.99.1"]), true),
         ("exact", json!([]), false),
         ("miss", json!(["component rust-src"]), false),
         ("fallback", json!(["component rust-src"]), false),
