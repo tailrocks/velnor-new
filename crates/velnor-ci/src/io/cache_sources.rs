@@ -17,6 +17,34 @@ pub(super) struct Admission {
     pub(super) refusal: Option<String>,
     pub(super) log: String,
     pub(super) mismatch: Option<String>,
+    pub(super) private_sources: bool,
+}
+
+pub(super) fn cargo_home() -> Option<PathBuf> {
+    std::env::var_os("CARGO_HOME")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".cargo")))
+}
+
+fn refused(path: &Path, not_private: Option<&CiError>) -> Admission {
+    let why = not_private.map_or_else(String::new, |error| {
+        format!(" and the repository is not proven private ({error})")
+    });
+    Admission {
+        refusal: Some(format!(
+            "{}\n",
+            escape(
+                &format!(
+                    "base caches are not saved because dependency sources in {} are not proven public{why}",
+                    path.display()
+                ),
+                false,
+            )
+        )),
+        log: String::new(),
+        mismatch: None,
+        private_sources: false,
+    }
 }
 
 pub(super) fn refusal(
@@ -25,20 +53,6 @@ pub(super) fn refusal(
     api: &str,
     deadline: Deadline,
 ) -> Result<Admission, CiError> {
-    let refused = |path: &Path| Admission {
-        refusal: Some(format!(
-            "{}\n",
-            escape(
-                &format!(
-                    "base caches are not saved because dependency sources in {} are not proven public",
-                    path.display()
-                ),
-                false,
-            )
-        )),
-        log: String::new(),
-        mismatch: None,
-    };
     if std::env::vars_os().any(|(key, _)| {
         let key = key.to_string_lossy();
         key.starts_with("CARGO_SOURCE_")
@@ -46,15 +60,14 @@ pub(super) fn refusal(
             || key == "CARGO_REGISTRY_INDEX"
             || key == "CARGO_BUILD_TARGET_DIR"
     }) {
-        return Ok(refused(Path::new("Cargo environment")));
+        return Ok(refused(Path::new("Cargo environment"), None));
     }
-    let cargo_home = std::env::var_os("CARGO_HOME")
-        .map(PathBuf::from)
-        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".cargo")));
-    let Some(cargo_home) = cargo_home else {
-        return Ok(refused(Path::new("CARGO_HOME")));
+    let Some(cargo_home) = cargo_home() else {
+        return Ok(refused(Path::new("CARGO_HOME"), None));
     };
     let mut git: Vec<PinnedGit> = Vec::new();
+    let mut private_sources = false;
+    let mut verdict: Option<Result<(), CiError>> = None;
     for manifest in manifests {
         let directory = root
             .join(manifest)
@@ -62,10 +75,16 @@ pub(super) fn refusal(
             .map(Path::to_path_buf)
             .ok_or_else(|| CiError::new("manifest has no parent"))?;
         let lock = directory.join("Cargo.lock");
-        match read_lock(&lock) {
-            Some(LockAdmission::Public) => {}
-            Some(LockAdmission::ProbeGithub(found)) => merge_pinned(&mut git, found),
-            Some(LockAdmission::Refused) | None => return Ok(refused(&lock)),
+        let admission = read_lock(&lock);
+        if !matches!(admission, Some(LockAdmission::Public)) {
+            let private = read_public(&lock, velnor_rust::cacheable_private_lock)
+                .then(|| verdict.get_or_insert_with(super::private_repo::confirmed));
+            match (private, admission) {
+                (Some(Ok(())), _) => private_sources = true,
+                (_, Some(LockAdmission::ProbeGithub(found))) => merge_pinned(&mut git, found),
+                (Some(Err(error)), _) => return Ok(refused(&lock, Some(error))),
+                (None, _) => return Ok(refused(&lock, None)),
+            }
         }
         for dir in directory
             .ancestors()
@@ -77,16 +96,16 @@ pub(super) fn refusal(
                 match fs::symlink_metadata(&path) {
                     Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
                     Ok(meta) if meta.is_file() => {}
-                    _ => return Ok(refused(&path)),
+                    _ => return Ok(refused(&path, None)),
                 }
                 if !read_public(&path, velnor_rust::cacheable_config) {
-                    return Ok(refused(&path));
+                    return Ok(refused(&path, None));
                 }
             }
         }
     }
     let Ok((declared, undeclared)) = declared_only(root, git) else {
-        return Ok(refused(&root.join(CONFIG_PATH.as_str())));
+        return Ok(refused(&root.join(CONFIG_PATH.as_str()), None));
     };
     if !undeclared.is_empty() {
         return Ok(Admission {
@@ -103,19 +122,22 @@ pub(super) fn refusal(
             ),
             log: String::new(),
             mismatch: None,
+            private_sources: false,
         });
     }
     let git = declared;
     let verdicts = std::env::var(VERDICTS_VARIABLE)
         .ok()
         .and_then(|text| Verdicts::parse(&text));
-    Ok(probe(
+    let mut admission = probe(
         api,
         &git,
         env_token().as_deref(),
         verdicts.as_ref(),
         deadline,
-    ))
+    );
+    admission.private_sources = private_sources;
+    Ok(admission)
 }
 
 pub(super) struct UnreadableDeclaration;
@@ -194,6 +216,7 @@ fn probe(
         refusal: (!refusal.is_empty()).then(|| refusal.concat()),
         log: log.concat(),
         mismatch: (!mismatch.is_empty()).then(|| mismatch.concat()),
+        private_sources: false,
     }
 }
 
