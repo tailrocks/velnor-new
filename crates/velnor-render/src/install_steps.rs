@@ -106,20 +106,23 @@ pub(crate) fn install_generator_step(release: &HelperRelease) -> RenderedStep {
 }
 
 pub(crate) fn generator_check_step(from_source: bool) -> RenderedStep {
-    let (name, run) = if from_source {
-        (
-            "Check the generated workflow with velnor-gen built from the checkout",
-            "cargo run --locked --package velnor-gen -- check --verify-release",
-        )
-    } else {
-        (
-            "Check the generated workflow",
-            "velnor-gen check --verify-release",
-        )
-    };
+    if !from_source {
+        return RenderedStep {
+            name: "Check the generated workflow".to_owned(),
+            run: Some("velnor-gen check --verify-release".to_owned()),
+            ..RenderedStep::default()
+        };
+    }
     RenderedStep {
-        name: name.to_owned(),
-        run: Some(run.to_owned()),
+        name: "Check the generated workflow with velnor-gen built from the checkout".to_owned(),
+        run: Some(
+            "cargo run --locked --target \"$VELNOR_GEN_TARGET\" --package velnor-gen -- check --verify-release"
+                .to_owned(),
+        ),
+        env: vec![(
+            "VELNOR_GEN_TARGET".to_owned(),
+            Value::Expr(choice(|platform| Some(platform.host_triple().to_owned()))),
+        )],
         ..RenderedStep::default()
     }
 }

@@ -8,7 +8,8 @@ use velnor_model::{
 use crate::lane::PLAN_JOB;
 use crate::lint_tools::{ALINT, JACTIONLINT, NODE, RUST, SHELLCHECK, usable};
 use crate::mbx_pin::MBX_TOOL;
-use crate::plan::{CHECKOUT_DEPTH, job, quick, step};
+use crate::plan::{CHECKOUT_DEPTH, job, mbx, quick, step};
+use crate::plan_tools::mirror_step;
 
 pub(crate) fn lint_jobs(facts: &RepoFacts) -> Vec<Job> {
     facts
@@ -90,24 +91,37 @@ fn generated_check_tools(facts: &RepoFacts) -> Vec<String> {
 
 fn generated_check_job(facts: &RepoFacts, lint: &LintJob, from_source: bool) -> Job {
     let tools = generated_check_tools(facts);
-    let steps = std::iter::once(step(StepKind::Checkout {
+    let mut steps = vec![step(StepKind::Checkout {
         depth: CHECKOUT_DEPTH,
         sparse: None,
-    }))
-    .chain((!tools.is_empty()).then(|| {
-        step(StepKind::InstallTools {
+    })];
+    if from_source {
+        steps.extend(
+            facts
+                .helper
+                .iter()
+                .map(|release| step(StepKind::InstallHelper(release.clone()))),
+        );
+        steps.extend(mbx(facts, None));
+        steps.extend(mirror_step(facts));
+    }
+    if !tools.is_empty() {
+        steps.push(step(StepKind::InstallTools {
             only: Some(tools.join(" ")),
-        })
-    }))
-    .chain(
-        facts
-            .helper
-            .iter()
-            .filter(|_| !from_source)
-            .map(|release| step(StepKind::InstallGenerator(release.clone()))),
-    )
-    .chain([step(StepKind::GeneratorCheck { from_source })])
-    .collect();
+        }));
+        if from_source {
+            steps.extend(mirror_step(facts));
+        }
+    }
+    if !from_source {
+        steps.extend(
+            facts
+                .helper
+                .iter()
+                .map(|release| step(StepKind::InstallGenerator(release.clone()))),
+        );
+    }
+    steps.push(step(StepKind::GeneratorCheck { from_source }));
     Job {
         name: Some(lint.name.clone()),
         timeout_minutes: lint.timeout_minutes,
