@@ -274,4 +274,3 @@ fn an_inventory_notice_keeps_an_entry_name_with_a_line_break_on_one_line() {
     );
     assert!(stdout.contains("odd%0A::stop-commands::token"), "{stdout}");
 }
-
