@@ -8,7 +8,8 @@ use velnor_model::{
     CargoCommand, FilterRef, LaneJob, PackageName, RepoPath, RustCiConfig, RustRoot, TestLane,
 };
 
-use crate::config::CONFIG_PATH;
+use crate::config::{CONFIG_PATH, TIMEOUT_RANGE};
+use crate::config_test_groups::ranged;
 use crate::error::{DetectError, Reason};
 use crate::harness::uses_nextest;
 
@@ -28,6 +29,7 @@ pub(crate) struct RawTestLane {
     #[serde(default)]
     packages: Vec<String>,
     job: Option<String>,
+    timeout_minutes: Option<u16>,
 }
 
 pub(crate) fn parse(raw: Vec<RawTestLane>) -> Result<Vec<TestLane>, Reason> {
@@ -63,6 +65,11 @@ fn lane(raw: RawTestLane) -> Result<TestLane, Reason> {
         });
     }
     let packages = lane_packages(&raw)?;
+    let timeout_minutes = ranged(
+        "test_lane.timeout_minutes",
+        raw.timeout_minutes,
+        &TIMEOUT_RANGE,
+    )?;
     let job = match raw.job.as_deref() {
         None | Some("inline") => LaneJob::Inline,
         Some("parallel") => LaneJob::Parallel,
@@ -82,6 +89,7 @@ fn lane(raw: RawTestLane) -> Result<TestLane, Reason> {
         packages,
         job,
         job_written: raw.job.is_some(),
+        timeout_minutes,
     })
 }
 
@@ -154,6 +162,7 @@ pub(crate) fn commands(
 
 pub(crate) struct ParallelLane {
     pub(crate) features: Vec<String>,
+    pub(crate) timeout_minutes: Option<u16>,
     pub(crate) commands: Vec<CargoCommand>,
 }
 
@@ -165,6 +174,7 @@ pub(crate) fn parallel(
     lanes_of(config, root, LaneJob::Parallel)
         .map(|lane| ParallelLane {
             features: lane.features.clone(),
+            timeout_minutes: lane.timeout_minutes,
             commands: lane_commands(
                 lane,
                 root,

@@ -3,6 +3,7 @@
 
 mod archive;
 mod lanes;
+mod timeouts;
 
 use velnor_model::{
     CargoCommand, HelperCommand, Job, JobId, RepoFacts, RepoPath, Shape, ShapeDecision, Step,
@@ -181,6 +182,7 @@ impl RootJobs<'_> {
             },
             gate: self.lane.job(),
             steps,
+            timeout_minutes: self.timeout_minutes(),
             ..job(self.facts, id)
         }
     }
@@ -313,10 +315,10 @@ impl RootJobs<'_> {
             steps.extend(self.audit());
             steps.extend(saves);
         }
-        Job {
+        self.inline_lanes_timeout(Job {
             pr: crate::plan::quick(self.facts),
             ..self.lane_job(job_id, steps)
-        }
+        })
     }
 
     fn split(&self, comment: Option<String>, archive: bool) -> Vec<Job> {
@@ -380,7 +382,7 @@ impl RootJobs<'_> {
             if !saving {
                 steps.extend(saves);
             }
-            jobs.push(self.lane_job(test_id, steps));
+            jobs.push(self.inline_lanes_timeout(self.lane_job(test_id, steps)));
         }
         jobs
     }

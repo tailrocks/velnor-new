@@ -19,6 +19,7 @@ impl RootJobs<'_> {
                 let id = lane_id(&lane.features, &taken);
                 taken.push(id.clone());
                 let id = self.id(id);
+                let timeout = lane.timeout_minutes;
                 let mut steps = self.setup(&id);
                 let tests = self
                     .cargo(member, lane.commands)
@@ -28,7 +29,11 @@ impl RootJobs<'_> {
                 steps.extend(self.member_steps(member, tests));
                 steps.extend(self.audit());
                 steps.extend(self.saves(&id, None, false));
-                jobs.push(self.lane_job(id, steps));
+                let mut job = self.lane_job(id, steps);
+                if let Some(minutes) = timeout {
+                    job.timeout_minutes = minutes;
+                }
+                jobs.push(job);
             }
         }
         jobs

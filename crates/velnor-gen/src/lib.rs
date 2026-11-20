@@ -38,6 +38,10 @@ pub const TEST_LANE_HELPER: (u64, u64, u64) = (0, 1, 93);
 /// The first release whose `velnor-ci` accepts `job` in a `[[test_lane]]` table.
 // First released in tools-v0.1.107 (not tagged yet when this gate was written).
 pub const TEST_LANE_JOB_HELPER: (u64, u64, u64) = (0, 1, 107);
+/// The first release whose `velnor-ci` accepts `timeout_minutes` in a `[[test_lane]]` and the
+/// `[root_timeouts]` table.
+// First released in tools-v0.1.108 (not tagged yet when this gate was written).
+pub const ROOT_TIMEOUT_HELPER: (u64, u64, u64) = (0, 1, 108);
 pub const SPARSE_HINT_HELPER: (u64, u64, u64) = (0, 1, 103);
 
 pub fn generated_files(view: &RepoView) -> Result<BTreeMap<RepoPath, String>, GenerateError> {
