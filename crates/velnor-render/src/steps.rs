@@ -292,9 +292,7 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
     let kind = &step.kind;
     let directory = step.directory.as_ref();
     match kind {
-        StepKind::ReportCaches {
-            caches, node_tools, ..
-        } => crate::report::lane(caches, *node_tools, tests.first_id()),
+        StepKind::ReportCaches { .. } => crate::report::lane(kind, tests.first_id()),
         StepKind::UploadMetrics => crate::report::artifact(true),
         StepKind::DownloadMetrics => crate::report::artifact(false),
         StepKind::CheckMetrics {

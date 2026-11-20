@@ -9,6 +9,25 @@ use velnor_model::{
     PushAfterMergeGroup, RepoFacts, Step, StepKind, ToolsLocalVerb, ToolsTelemetry, When,
 };
 
+// First released in tools-v0.1.110 (not tagged yet when this gate was written).
+const NOT_GENERATED_HELPER: (u64, u64, u64) = (0, 1, 110);
+
+fn not_generated(facts: &RepoFacts) -> Option<String> {
+    let refused = facts.private_sources.is_some()
+        && facts
+            .helper
+            .as_ref()
+            .is_some_and(|helper| helper.version().at_least(NOT_GENERATED_HELPER))
+        && !crate::base_cache::writes_base(facts);
+    refused.then(|| {
+        if facts.config.private_sources.is_some() {
+            "private dependencies".to_owned()
+        } else {
+            "private dependencies; declare [private_sources]".to_owned()
+        }
+    })
+}
+
 fn attach(facts: &RepoFacts, jobs: &mut [Job], maintenance: Option<&Job>) -> Job {
     let nextest_artifacts = crate::mise::nextest_tool(&facts.tools)
         .and_then(|name| facts.tools.tools.get(name))
@@ -19,6 +38,7 @@ fn attach(facts: &RepoFacts, jobs: &mut [Job], maintenance: Option<&Job>) -> Job
                         .is_ok_and(|version| version.at_least((0, 9, 123)))
                 })
         });
+    let not_generated = not_generated(facts);
     let mut producers = Vec::new();
     for job in jobs {
         let saves = job
@@ -33,7 +53,7 @@ fn attach(facts: &RepoFacts, jobs: &mut [Job], maintenance: Option<&Job>) -> Job
         {
             continue;
         }
-        attach_metrics(job, nextest_artifacts);
+        attach_metrics(job, nextest_artifacts, not_generated.as_deref());
         producers.push(&*job);
     }
     producers.extend(maintenance);
@@ -66,7 +86,7 @@ fn attach(facts: &RepoFacts, jobs: &mut [Job], maintenance: Option<&Job>) -> Job
     cache
 }
 
-fn attach_metrics(job: &mut Job, nextest_artifacts: bool) {
+fn attach_metrics(job: &mut Job, nextest_artifacts: bool, not_generated: Option<&str>) {
     let caches = job
         .steps
         .iter()
@@ -75,6 +95,11 @@ fn attach_metrics(job: &mut Job, nextest_artifacts: bool) {
             _ => None,
         })
         .collect();
+    let saves_cache = job
+        .steps
+        .iter()
+        .any(|step| matches!(&step.kind, StepKind::CacheSave(key) if key.family() != "tools"));
+    let not_generated = not_generated.filter(|_| !saves_cache).map(str::to_owned);
     let has = |verb| {
         job.steps
             .iter()
@@ -90,6 +115,7 @@ fn attach_metrics(job: &mut Job, nextest_artifacts: bool) {
                 caches,
                 nextest_artifacts,
                 node_tools,
+                not_generated,
             },
             StepKind::UploadMetrics,
         ]
