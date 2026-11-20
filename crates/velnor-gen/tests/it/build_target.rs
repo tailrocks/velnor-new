@@ -64,11 +64,11 @@ fn the_host_tuple_target_requires_rust_191_or_newer() -> TestResult {
     ] {
         for (mise, toolchain) in [
             (
-                "[tools]\nrust = \"1.90.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n",
+                "[tools]\nrust = { version = \"1.90.0\", mr_boxington = true }\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n\n[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n",
                 None,
             ),
             (
-                "[tools]\nrust = \"1.90.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n",
+                "[tools]\nrust = { version = \"1.90.0\", mr_boxington = true }\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n\n[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n",
                 Some("1.90.0\n"),
             ),
             (
@@ -89,11 +89,11 @@ fn the_host_tuple_target_requires_rust_191_or_newer() -> TestResult {
         }
         for (mise, toolchain) in [
             (
-                "[tools]\nrust = \"1.91.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n",
+                "[tools]\nrust = { version = \"1.91.0\", mr_boxington = true }\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n\n[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n",
                 None,
             ),
             (
-                "[tools]\nrust = \"1.91.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n",
+                "[tools]\nrust = { version = \"1.91.0\", mr_boxington = true }\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n\n[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n",
                 Some("1.91.0\n"),
             ),
         ] {

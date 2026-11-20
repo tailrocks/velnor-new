@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{Job, MbxRemote, MbxStore, RepoFacts, Step, StepKind};
+use velnor_model::{HelperCommand, Job, MbxRemote, MbxStore, RepoFacts, Step, StepKind};
 
 use crate::plan::step;
 
@@ -17,14 +17,14 @@ pub(crate) fn apply(facts: &RepoFacts, jobs: &mut [Job]) {
             insert(job, &[StepKind::MbxRemote], After::Tools);
         }
         if private {
-            insert(job, &[StepKind::MbxPrivate], After::Before);
+            insert(job, &[StepKind::MbxPrivate], After::Helper);
         }
     }
 }
 
 enum After {
     Tools,
-    Before,
+    Helper,
 }
 
 fn compiles(job: &Job) -> bool {
@@ -52,7 +52,16 @@ fn insert(job: &mut Job, kinds: &[StepKind], place: After) {
         .collect();
     let index = match place {
         After::Tools => at + 1,
-        After::Before => at,
+        After::Helper => job
+            .steps
+            .iter()
+            .rposition(|step| {
+                matches!(
+                    step.kind,
+                    StepKind::InstallHelper(_) | StepKind::Helper(HelperCommand::Plan)
+                )
+            })
+            .map_or(at, |helper| (helper + 1).min(at)),
     };
     job.steps.splice(index..index, steps);
 }
