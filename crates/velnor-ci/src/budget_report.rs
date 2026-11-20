@@ -4,6 +4,7 @@
 use velnor_model::{ModeBudget, Selection, SpeedBudget};
 
 use crate::budget::Evaluation;
+use crate::escape::escape;
 
 fn limit(seconds: u64) -> String {
     if seconds == 0 {
@@ -109,7 +110,7 @@ pub fn report(budget: &SpeedBudget, evaluation: &Evaluation) -> String {
     for job in &evaluation.slowest_jobs {
         lines.push(format!(
             "  {} ({}): {}s, median {}s, +{}s",
-            job.name,
+            escape(&job.name, false),
             job.group().name(),
             job.seconds,
             job.median,

@@ -115,6 +115,7 @@ pub struct RepoFacts {
 pub struct PolicyTools {
     pub deny: bool,
     pub machete: bool,
+    pub deny_off: bool,
 }
 
 impl PolicyTools {
@@ -307,6 +308,7 @@ pub struct ToolLock {
     pub prebuilt: BTreeSet<String>,
 }
 
+pub use crate::policy_table::{DenyCheck, DenyLane, PolicyTable};
 pub use crate::repo_config::{
     CacheDebug, CheckoutScope, CiDebugInfo, CratesMirror, DocsRun, FullRun, InputRule,
     LaneFeatures, LaneJob, LaneKeysWritten, MbxRemote, MbxStore, OnMain, PrCi, PrivateSources,

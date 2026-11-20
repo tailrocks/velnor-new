@@ -69,3 +69,22 @@ fn a_cold_apply_keeps_an_entry_name_with_a_line_break_on_one_line() {
     let stdout = assert_no_runner_command(&delta(&repo, "apply", "target"));
     assert!(stdout.contains("delta apply failed"), "{stdout}");
 }
+
+#[test]
+fn a_delta_base_with_a_line_break_stays_on_one_line() {
+    let repo = Repo::new("delta-escape-base");
+    let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        .args(["delta", "prepare", "--target-dir", "target"])
+        .args(["--staging-dir", "delta", "--package", "app"])
+        .current_dir(repo.root())
+        .env("BASE_CACHE_KEY", "base\n::stop-commands::token")
+        .env("GITHUB_OUTPUT", repo.root().join("delta-output"))
+        .env("RUNNER_TEMP", repo.root())
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let stdout = assert_no_runner_command(&output);
+    assert!(
+        stdout.contains("delta base: base%0A::stop-commands::token"),
+        "{stdout}"
+    );
+}
