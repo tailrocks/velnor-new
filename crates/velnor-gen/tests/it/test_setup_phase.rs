@@ -135,8 +135,10 @@ fn without_the_key_or_with_the_test_phase_the_setup_still_runs_only_before_the_t
 }
 
 #[test]
-fn a_build_phase_setup_of_a_grouped_root_runs_before_that_roots_first_compiling_step() -> TestResult {
-    const GROUP: &str = "[[workspace_groups]]\nname = \"tools\"\nroots = [\"tools/a\", \"tools/b\"]\n";
+fn a_build_phase_setup_of_a_grouped_root_runs_before_that_roots_first_compiling_step() -> TestResult
+{
+    const GROUP: &str =
+        "[[workspace_groups]]\nname = \"tools\"\nroots = [\"tools/a\", \"tools/b\"]\n";
     const ROOTS: [&str; 3] = ["Cargo.toml", "tools/a/Cargo.toml", "tools/b/Cargo.toml"];
     for shape in ["one-job", "lint-test"] {
         let config = format!(
@@ -154,7 +156,10 @@ fn a_build_phase_setup_of_a_grouped_root_runs_before_that_roots_first_compiling_
                         .is_some_and(|run| run.contains("tools/a/Cargo.toml"))
             };
             match steps(job).iter().position(compiles_a) {
-                None => assert!(setups(job).is_empty(), "{shape} {id}: setup without a root a step"),
+                None => assert!(
+                    setups(job).is_empty(),
+                    "{shape} {id}: setup without a root a step"
+                ),
                 Some(first) => {
                     checked += 1;
                     assert_eq!(setups(job), vec![first - 1], "{shape} {id}");
