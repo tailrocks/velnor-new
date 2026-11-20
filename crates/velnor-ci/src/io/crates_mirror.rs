@@ -6,7 +6,7 @@ use std::process::ExitCode;
 
 use crate::cli::CratesMirrorArgs;
 use crate::error::CiError;
-use crate::escape::{escape, file_value};
+use crate::escape::{escape, file_value, stderr_line};
 
 use super::crates_mirror_mode::{self as mode, Mirror, Mode};
 
@@ -206,7 +206,7 @@ pub(super) fn run() -> ExitCode {
             .and_then(|code| u8::try_from(code).ok())
             .map_or(ExitCode::FAILURE, ExitCode::from),
         Err(error) => {
-            eprintln!("{error}");
+            eprintln!("{}", stderr_line(&error.to_string()));
             ExitCode::FAILURE
         }
     }
