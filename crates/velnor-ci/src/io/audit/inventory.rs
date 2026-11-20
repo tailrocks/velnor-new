@@ -17,6 +17,7 @@ use serde::{Deserialize, Serialize};
 use velnor_rust::{normalize, sha256_hex};
 
 use super::super::units::Workspace;
+use crate::error::CiError;
 
 pub(super) const LIMIT: usize = 100_000;
 pub(super) const STORE: &str = ".velnor-input-inventories";
@@ -41,7 +42,7 @@ pub(super) struct Receipt {
     pub(super) digest: String,
 }
 
-pub(super) fn exclusions(workspaces: &[Workspace]) -> BTreeSet<PathBuf> {
+pub(super) fn exclusions(workspaces: &[Workspace]) -> Result<BTreeSet<PathBuf>, CiError> {
     workspaces
         .iter()
         .flat_map(|workspace| {
@@ -50,8 +51,13 @@ pub(super) fn exclusions(workspaces: &[Workspace]) -> BTreeSet<PathBuf> {
                 workspace.target_directory.clone(),
             ]
         })
-        .map(|target| velnor_rust::resolve(&target))
+        .map(|target| velnor_rust::resolve(&target).map_err(|error| unresolved(&target, &error)))
         .collect()
+}
+
+/// A path the audit cannot resolve (a symbolic link loop, or an unreadable directory).
+pub(super) fn unresolved(path: &Path, error: &io::Error) -> CiError {
+    CiError::new(format!("cannot resolve {}: {error}", path.display()))
 }
 
 pub(super) fn excluded(path: &Path, root: &Path, targets: &BTreeSet<PathBuf>) -> bool {
@@ -109,23 +115,8 @@ pub(super) fn scan(
             reserve(remaining)?;
             let entry = entry?;
             let path = entry.path();
-            let metadata = fs::symlink_metadata(&path)?;
-            let kind = if metadata.is_symlink() {
-                let resolved = match fs::canonicalize(&path) {
-                    Ok(resolved) => Some(resolved),
-                    Err(error) if unresolved_link(&error) => None,
-                    Err(error) => return Err(error),
-                };
-                Kind::Link {
-                    target: fs::read_link(&path)?,
-                    resolved,
-                }
-            } else if metadata.is_dir() {
-                Kind::Directory
-            } else if metadata.is_file() {
-                Kind::File
-            } else {
-                Kind::Other
+            let Some(kind) = kind(&path)? else {
+                continue;
             };
             if !excluded_entry(&path, &kind, &root, targets) {
                 match &kind {
@@ -133,7 +124,7 @@ pub(super) fn scan(
                     Kind::Link {
                         resolved: Some(resolved),
                         ..
-                    } if fs::metadata(resolved)?.is_dir() => pending.push(resolved.clone()),
+                    } if is_directory(resolved)? => pending.push(resolved.clone()),
                     Kind::File | Kind::Link { .. } | Kind::Other => {}
                 }
             }
@@ -142,6 +133,50 @@ pub(super) fn scan(
         entries.insert(directory, children);
     }
     Ok(entries)
+}
+
+// `None` means the entry was listed but removed before it could be classified.
+//
+// Skipping it cannot hide a real input. The walk records what the tree holds
+// when it looks, and the audit compares that record with the saved one. An
+// entry the saved record has and the tree no longer has is a missing child, so
+// the audit goes stale. An entry the saved record never had is not covered by
+// it, and a walk that ran a moment earlier or later would not have listed it
+// either. Entries that stay in the tree are never skipped: their stat succeeds.
+fn kind(path: &Path) -> io::Result<Option<Kind>> {
+    let metadata = match fs::symlink_metadata(path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error),
+    };
+    if !metadata.is_symlink() {
+        return Ok(Some(if metadata.is_dir() {
+            Kind::Directory
+        } else if metadata.is_file() {
+            Kind::File
+        } else {
+            Kind::Other
+        }));
+    }
+    let resolved = match fs::canonicalize(path) {
+        Ok(resolved) => Some(resolved),
+        Err(error) if unresolved_link(&error) => None,
+        Err(error) => return Err(error),
+    };
+    match fs::read_link(path) {
+        Ok(target) => Ok(Some(Kind::Link { target, resolved })),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(error),
+    }
+}
+
+// A link target that vanished after it was resolved is not a directory to walk.
+fn is_directory(path: &Path) -> io::Result<bool> {
+    match fs::metadata(path) {
+        Ok(metadata) => Ok(metadata.is_dir()),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error),
+    }
 }
 
 fn reserve(remaining: &mut usize) -> io::Result<()> {
@@ -305,4 +340,45 @@ pub(super) fn load(output: &Path) -> io::Result<Arc<Evidence>> {
         cache.insert(receipt.digest, Arc::clone(&parsed));
     });
     Ok(parsed)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::{fs, thread};
+
+    use super::*;
+
+    // Racing test: a churn thread creates and removes entries while `scan` lists
+    // the same directory, so some entries are listed and then gone before their
+    // stat. Every scan must still succeed.
+    #[test]
+    fn an_entry_removed_during_the_walk_is_not_an_error() {
+        let root = std::env::temp_dir().join(format!("velnor-scan-vanish-{}", std::process::id()));
+        fs::create_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+        let names: Vec<PathBuf> = (0..64)
+            .map(|index| root.join(format!("entry-{index}")))
+            .collect();
+        let stop = AtomicBool::new(false);
+        let failure = thread::scope(|scope| {
+            scope.spawn(|| {
+                while !stop.load(Ordering::Relaxed) {
+                    for name in &names {
+                        let _ = fs::write(name, b"");
+                        let _ = fs::remove_file(name);
+                    }
+                }
+            });
+            let mut remaining = usize::MAX;
+            let failure =
+                (0..2_000).find_map(|_| scan(&root, &BTreeSet::new(), &mut remaining).err());
+            stop.store(true, Ordering::Relaxed);
+            failure
+        });
+        fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+        assert!(
+            failure.is_none(),
+            "scan failed on a vanished entry: {failure:?}"
+        );
+    }
 }

@@ -22,6 +22,7 @@ pub(super) struct Capture {
 impl Capture {
     fn publish(&mut self, batch: ArtifactBatch, counts: Option<TestCounts>) {
         self.observations.artifacts.extend(batch.artifacts);
+        self.observations.build_scripts.extend(batch.build_scripts);
         self.observations.progress.extend(batch.progress);
         self.observations.tests.extend(batch.tests);
         self.observations.rejected += batch.rejected;

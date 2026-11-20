@@ -20,7 +20,7 @@ pub(super) fn begin<'a>(
     workspaces: &[Workspace],
     groups: &[PathBuf],
     max_directory_entries: usize,
-) -> Audit<'a> {
+) -> Result<Audit<'a>, CiError> {
     let mut members: BTreeMap<String, Vec<usize>> = BTreeMap::new();
     for (index, root) in facts.rust_roots.iter().enumerate() {
         for member in &root.members {
@@ -30,11 +30,11 @@ pub(super) fn begin<'a>(
                 .push(index);
         }
     }
-    Audit {
+    Ok(Audit {
         repository: &checkout.root,
         owners: Owners::new(facts, &checkout.view.tracked_paths),
         tracked: &checkout.view.tracked_paths,
-        freshness: super::freshness::Freshness::new(workspaces, groups, max_directory_entries),
+        freshness: super::freshness::Freshness::new(workspaces, groups, max_directory_entries)?,
         fingerprints: BTreeMap::new(),
         names: BTreeMap::new(),
         runs: BTreeMap::new(),
@@ -67,7 +67,7 @@ pub(super) fn begin<'a>(
         stale: Vec::new(),
         units: 0,
         built: workspaces.iter().map(|_| Built::default()).collect(),
-    }
+    })
 }
 
 pub(super) fn gathered_files(
