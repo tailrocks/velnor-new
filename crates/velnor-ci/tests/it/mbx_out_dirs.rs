@@ -5,6 +5,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use velnor_ci::mbx_seed_copy::SUBSETS;
 use velnor_test_support::{ci_safe_cargo_env, real_cargo};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -102,16 +103,9 @@ fn tar(args: &[&str]) -> TestResult {
     Ok(())
 }
 
-const SEEDED: [&str; 4] = [
-    "cas",
-    "executable-identities",
-    "task-manifests",
-    "action-results",
-];
-
 fn copy_seeded_subsets(from: &Path, to: &Path) -> TestResult {
     fs::create_dir_all(to.join("actions"))?;
-    for subset in SEEDED {
+    for subset in SUBSETS {
         let source = from.join("actions").join(subset);
         if source.exists() {
             let status = Command::new("cp")
