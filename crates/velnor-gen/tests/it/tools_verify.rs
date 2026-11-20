@@ -190,3 +190,47 @@ fn an_older_helper_keeps_the_unverified_restore_and_generation_says_so() -> Test
     }
     Ok(())
 }
+
+#[test]
+fn every_tools_save_at_0_1_109_is_gated_to_the_default_branch() -> TestResult {
+    for config in STORES {
+        let mut saves = 0;
+        for (id, steps) in jobs_of(&workflow(&repo_for(config, "0.1.109")?)?)? {
+            for step in steps.iter().filter(|step| saves_tools(step)) {
+                saves += 1;
+                let condition = text(step, "if");
+                assert!(condition.contains(ON_DEFAULT), "{config:?} {id}: {condition}");
+            }
+        }
+        assert_ne!(saves, 0, "{config:?}");
+    }
+    Ok(())
+}
+
+#[test]
+fn the_node_store_prime_copies_only_tools_the_verify_step_checked() -> TestResult {
+    let config = "shape = \"groups\"\nmbx_shared_store = true\n";
+    let mut primes = 0;
+    for (id, steps) in jobs_of(&workflow(&repo_for(config, "0.1.109")?)?)? {
+        let Some(prime) = steps
+            .iter()
+            .position(|step| step["name"] == "Prime the node store with the tools")
+        else {
+            continue;
+        };
+        primes += 1;
+        let verify = steps
+            .iter()
+            .position(|step| text(step, "run").ends_with(CHECK))
+            .ok_or_else(|| format!("{id}: no verify step"))?;
+        assert!(verify < prime, "{id}");
+        let condition = text(&steps[prime], "if");
+        assert!(
+            condition.contains("steps.toolsverify.outputs.verified == 'true'"),
+            "{id}: {condition}"
+        );
+        assert!(condition.contains(ON_DEFAULT), "{id}: {condition}");
+    }
+    assert_ne!(primes, 0);
+    Ok(())
+}
