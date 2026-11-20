@@ -122,9 +122,9 @@ pub fn clean_cargo_env(command: &mut Command) -> &mut Command {
 /// usable; it changes nothing when the child's directory selects no rust tool.
 pub fn keep_mise_cargo_home(command: &mut Command) -> &mut Command {
     if std::env::var_os("MISE_CARGO_HOME").is_none() {
-        let home = std::env::var_os("CARGO_HOME").map(PathBuf::from).or_else(|| {
-            std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".cargo"))
-        });
+        let home = std::env::var_os("CARGO_HOME")
+            .map(PathBuf::from)
+            .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".cargo")));
         if let Some(home) = home {
             command.env("MISE_CARGO_HOME", home);
         }
