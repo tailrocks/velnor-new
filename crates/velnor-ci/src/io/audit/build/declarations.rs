@@ -128,7 +128,7 @@ fn trusted(
     }
     for path in directories {
         let matched = inventory::scan(path, targets, &mut budget)
-            .and_then(|entries| inventory::view(&entries, &fs::canonicalize(path)?, targets))
+            .and_then(|scan| inventory::view(&scan.entries, &fs::canonicalize(path)?, targets))
             .and_then(|entries| inventory::matches(output, path, &entries, targets));
         match matched {
             Ok(true) => {}

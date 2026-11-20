@@ -8,8 +8,8 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use super::super::options::{MAX_ENTRIES_CEILING, MAX_ENTRIES_VARIABLE};
-use super::handle::{self, Opened, Origin};
-use super::{Entries, Kind, excluded_entry};
+use super::handle::{self, Observed, Opened, Origin};
+use super::{Kind, Scan, excluded_entry};
 
 pub(in crate::io::audit) struct Budget {
     remaining: usize,
@@ -47,14 +47,14 @@ pub(in crate::io::audit) fn scan(
     root: &Path,
     targets: &BTreeSet<PathBuf>,
     budget: &mut Budget,
-) -> io::Result<Entries> {
+) -> io::Result<Scan> {
     scan_with(root, targets, budget, &Probe::default())
 }
 
-pub(super) struct Probe<'a> {
-    pub(super) before_open: &'a dyn Fn(&Path) -> io::Result<()>,
-    pub(super) after_open: &'a dyn Fn(&Path),
-    pub(super) listed: &'a dyn Fn(&OsStr),
+pub(in crate::io::audit) struct Probe<'a> {
+    pub(in crate::io::audit) before_open: &'a dyn Fn(&Path) -> io::Result<()>,
+    pub(in crate::io::audit) after_open: &'a dyn Fn(&Path),
+    pub(in crate::io::audit) listed: &'a dyn Fn(&OsStr),
 }
 
 impl Default for Probe<'_> {
@@ -72,14 +72,14 @@ struct Pending {
     origin: Origin,
 }
 
-pub(super) fn scan_with(
+pub(in crate::io::audit) fn scan_with(
     root: &Path,
     targets: &BTreeSet<PathBuf>,
     budget: &mut Budget,
     probe: &Probe<'_>,
-) -> io::Result<Entries> {
+) -> io::Result<Scan> {
     let root = fs::canonicalize(root)?;
-    let mut entries = Entries::new();
+    let mut scan = Scan::default();
     let mut pending = vec![Pending {
         path: root.clone(),
         origin: Origin::Path,
@@ -104,7 +104,7 @@ pub(super) fn scan_with(
                 };
                 let replacement = handle::kind_at(parent, name, &directory)?;
                 settle(
-                    &mut entries,
+                    &mut scan,
                     &mut pending,
                     &directory,
                     parent,
@@ -125,15 +125,16 @@ pub(super) fn scan_with(
         let mut children = BTreeMap::new();
         for name in names {
             let path = directory.join(&name);
-            let Some(kind) = handle::kind_at(&listing, &name, &path)? else {
+            let Some(Observed { kind, modified }) = handle::kind_at(&listing, &name, &path)? else {
                 continue;
             };
             pending.extend(queue(&kind, &path, &listing, &name, (&root, targets))?);
+            scan.modified.insert(path, modified);
             children.insert(PathBuf::from(name), kind);
         }
-        entries.insert(directory, children);
+        scan.entries.insert(directory, children);
     }
-    Ok(entries)
+    Ok(scan)
 }
 
 /// What to walk next for a classified child: a directory through its parent's
@@ -172,29 +173,32 @@ fn queue(
 /// sits there (a link, a file) is inventoried in its place, and a directory that
 /// reappeared fails the scan, because it was not walked.
 fn settle(
-    entries: &mut Entries,
+    scan: &mut Scan,
     pending: &mut Vec<Pending>,
     directory: &Path,
     parent: &Opened,
     name: &OsStr,
-    replacement: Option<Kind>,
+    replacement: Option<Observed>,
     (root, targets): (&Path, &BTreeSet<PathBuf>),
 ) -> io::Result<()> {
     let children = directory
         .parent()
-        .and_then(|container| entries.get_mut(container));
+        .and_then(|container| scan.entries.get_mut(container));
     let key = Path::new(name);
     match replacement {
         None => {
+            scan.modified.remove(directory);
             if let Some(children) = children {
                 children.remove(key);
             }
         }
-        Some(Kind::Directory) => {
-            return Err(changed(directory));
-        }
-        Some(kind) => {
+        Some(Observed {
+            kind: Kind::Directory,
+            ..
+        }) => return Err(changed(directory)),
+        Some(Observed { kind, modified }) => {
             pending.extend(queue(&kind, directory, parent, name, (root, targets))?);
+            scan.modified.insert(directory.to_path_buf(), modified);
             if let Some(children) = children {
                 children.insert(key.to_path_buf(), kind);
             }

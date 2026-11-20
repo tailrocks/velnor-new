@@ -5,8 +5,17 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::{fs, thread};
 
 use super::super::options::MAX_ENTRIES_VARIABLE;
-use super::walk::{Probe, scan_with};
+use super::walk::{Probe, scan_with as walk};
 use super::*;
+
+fn scan_with(
+    root: &Path,
+    targets: &BTreeSet<PathBuf>,
+    budget: &mut Budget,
+    probe: &Probe<'_>,
+) -> io::Result<Entries> {
+    walk(root, targets, budget, probe).map(|scan| scan.entries)
+}
 
 fn scan_with_open_failing(kind: io::ErrorKind) -> io::Result<Entries> {
     let root =

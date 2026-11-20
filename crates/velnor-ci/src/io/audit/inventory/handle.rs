@@ -6,10 +6,11 @@ use std::io;
 use std::os::unix::ffi::OsStringExt;
 use std::path::Path;
 use std::rc::Rc;
+use std::time::{Duration, SystemTime};
 
 use nix::dir::Dir;
 use nix::fcntl::{AtFlags, OFlag, openat, readlinkat};
-use nix::sys::stat::{Mode, SFlag, fstatat};
+use nix::sys::stat::{FileStat, Mode, SFlag, fstatat};
 
 use super::Kind;
 use super::walk::unresolved_link;
@@ -60,31 +61,62 @@ pub(super) fn names(
     Ok(names)
 }
 
-pub(super) fn kind_at(directory: &Dir, name: &OsStr, path: &Path) -> io::Result<Option<Kind>> {
+pub(super) struct Observed {
+    pub(super) kind: Kind,
+    pub(super) modified: Option<SystemTime>,
+}
+
+fn modified(stat: &FileStat) -> SystemTime {
+    let seconds = i64::from(stat.st_mtime);
+    let nanos = Duration::from_nanos(u64::try_from(stat.st_mtime_nsec).unwrap_or(0));
+    match u64::try_from(seconds) {
+        Ok(seconds) => SystemTime::UNIX_EPOCH + Duration::from_secs(seconds) + nanos,
+        Err(_) => SystemTime::UNIX_EPOCH - Duration::from_secs(seconds.unsigned_abs()) + nanos,
+    }
+}
+
+fn format_of(stat: &FileStat) -> SFlag {
+    SFlag::from_bits_truncate(stat.st_mode) & SFlag::S_IFMT
+}
+
+pub(super) fn kind_at(directory: &Dir, name: &OsStr, path: &Path) -> io::Result<Option<Observed>> {
     let stat = match fstatat(directory, name, AtFlags::AT_SYMLINK_NOFOLLOW) {
         Ok(stat) => stat,
         Err(nix::errno::Errno::ENOENT) => return Ok(None),
         Err(errno) => return Err(failure(errno)),
     };
-    let format = SFlag::from_bits_truncate(stat.st_mode) & SFlag::S_IFMT;
+    let format = format_of(&stat);
     if format != SFlag::S_IFLNK {
-        return Ok(Some(if format == SFlag::S_IFDIR {
+        let kind = if format == SFlag::S_IFDIR {
             Kind::Directory
         } else if format == SFlag::S_IFREG {
             Kind::File
         } else {
             Kind::Other
-        }));
+        };
+        let modified = (format != SFlag::S_IFDIR).then(|| modified(&stat));
+        return Ok(Some(Observed { kind, modified }));
     }
     let resolved = match std::fs::canonicalize(path) {
         Ok(resolved) => Some(resolved),
         Err(error) if unresolved_link(&error) => None,
         Err(error) => return Err(error),
     };
+    let followed = match fstatat(directory, name, AtFlags::empty()) {
+        Ok(followed) => followed,
+        Err(nix::errno::Errno::ENOENT | nix::errno::Errno::ELOOP | nix::errno::Errno::ENOTDIR) => {
+            stat
+        }
+        Err(errno) => return Err(failure(errno)),
+    };
+    let modified = (format_of(&followed) != SFlag::S_IFDIR).then(|| modified(&followed));
     match readlinkat(directory, name) {
-        Ok(target) => Ok(Some(Kind::Link {
-            target: target.into(),
-            resolved,
+        Ok(target) => Ok(Some(Observed {
+            kind: Kind::Link {
+                target: target.into(),
+                resolved,
+            },
+            modified,
         })),
         Err(nix::errno::Errno::ENOENT) => Ok(None),
         Err(errno) => Err(failure(errno)),

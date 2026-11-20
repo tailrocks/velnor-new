@@ -11,7 +11,7 @@ use velnor_rust::{Located, locate};
 
 use super::super::units::Workspace;
 use super::Audit;
-use super::inventory::{self, Budget, Entries, Kind};
+use super::inventory::{self, Budget, Entries, Kind, Modified};
 use crate::error::CiError;
 
 pub(super) struct Freshness {
@@ -54,8 +54,8 @@ impl Freshness {
         let key = (root.clone(), targets.clone());
         if !self.directories.contains_key(&key) {
             let scanned = inventory::scan(&root, targets, &mut self.budget)?;
-            let entries = inventory::view(&scanned, &root, targets)?;
-            let Some(newest) = newest_file(&entries)? else {
+            let entries = inventory::view(&scanned.entries, &root, targets)?;
+            let Some(newest) = newest_file(&entries, &scanned.modified)? else {
                 return Ok(true);
             };
             self.directories.insert(key.clone(), (newest, entries));
@@ -149,28 +149,31 @@ impl Audit<'_> {
     }
 }
 
-/// The newest modification time of the files in a scanned snapshot. `None` means
-/// a listed entry has vanished since the scan, so the snapshot no longer matches
-/// the tree and the inputs are stale.
-fn newest_file(entries: &Entries) -> io::Result<Option<SystemTime>> {
+/// The newest modification time of the files in a scanned snapshot, as recorded
+/// from the opened directories during the walk. `None` means a listed entry has
+/// vanished since the scan, so the snapshot no longer matches the tree and the
+/// inputs are stale.
+fn newest_file(entries: &Entries, modified: &Modified) -> io::Result<Option<SystemTime>> {
     let mut newest = SystemTime::UNIX_EPOCH;
     for (directory, children) in entries {
         for (name, kind) in children {
             let path = directory.join(name);
-            let Some(metadata) = stat(&path, kind)? else {
+            if !present(&path, kind)? {
                 return Ok(None);
-            };
-            if !metadata.is_dir() {
-                newest = newest.max(metadata.modified()?);
+            }
+            match modified.get(&path) {
+                Some(Some(time)) => newest = newest.max(*time),
+                Some(None) => {}
+                None => return Ok(None),
             }
         }
     }
     Ok(Some(newest))
 }
 
-/// Stats a scanned entry. `None` means it vanished after the scan. Any other
-/// error is still an error.
-fn stat(path: &Path, kind: &Kind) -> io::Result<Option<fs::Metadata>> {
+/// Whether a scanned entry still exists. Any error other than it vanishing is
+/// still an error.
+fn present(path: &Path, kind: &Kind) -> io::Result<bool> {
     let metadata = match fs::metadata(path) {
         Ok(metadata) => Ok(metadata),
         Err(error)
@@ -182,8 +185,8 @@ fn stat(path: &Path, kind: &Kind) -> io::Result<Option<fs::Metadata>> {
         Err(error) => Err(error),
     };
     match metadata {
-        Ok(metadata) => Ok(Some(metadata)),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
+        Ok(_) => Ok(true),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
         Err(error) => Err(error),
     }
 }
@@ -202,7 +205,7 @@ mod tests {
 
     use super::*;
 
-    fn snapshot(name: &str) -> (PathBuf, Entries) {
+    fn snapshot(name: &str) -> (PathBuf, inventory::Scan) {
         let root =
             std::env::temp_dir().join(format!("velnor-freshness-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
@@ -215,25 +218,70 @@ mod tests {
                 .unwrap_or_else(|e| unreachable!("{e}"));
         }
         let mut budget = Budget::new(usize::MAX);
-        let entries = inventory::scan(&root, &BTreeSet::new(), &mut budget)
+        let scan = inventory::scan(&root, &BTreeSet::new(), &mut budget)
             .unwrap_or_else(|e| unreachable!("{e}"));
-        (root, entries)
+        (root, scan)
     }
 
     #[test]
     fn a_snapshot_whose_entries_all_remain_has_a_newest_file() {
-        let (root, entries) = snapshot("control");
-        let newest = newest_file(&entries);
+        let (root, scan) = snapshot("control");
+        let newest = newest_file(&scan.entries, &scan.modified);
         fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
         assert!(matches!(newest, Ok(Some(_))), "{newest:?}");
     }
 
     #[test]
     fn an_entry_removed_after_the_scan_is_reported_as_vanished_not_as_an_error() {
-        let (root, entries) = snapshot("vanished");
+        let (root, scan) = snapshot("vanished");
         fs::remove_file(root.join("gone.txt")).unwrap_or_else(|e| unreachable!("{e}"));
-        let newest = newest_file(&entries);
+        let newest = newest_file(&scan.entries, &scan.modified);
         fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
         assert!(matches!(newest, Ok(None)), "{newest:?}");
+    }
+
+    #[test]
+    fn the_newest_time_is_the_opened_directory_s_not_a_swapped_in_path_s() {
+        let root = fs::canonicalize(std::env::temp_dir())
+            .unwrap_or_else(|e| unreachable!("{e}"))
+            .join(format!("velnor-freshness-swap-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let original = root.join("d");
+        fs::create_dir_all(&original).unwrap_or_else(|e| unreachable!("{e}"));
+        let set = |path: &Path, time: SystemTime| {
+            fs::write(path, b"").unwrap_or_else(|e| unreachable!("{e}"));
+            fs::File::open(path)
+                .and_then(|file| file.set_times(fs::FileTimes::new().set_modified(time)))
+                .unwrap_or_else(|e| unreachable!("{e}"));
+        };
+        let future = UNIX_EPOCH + std::time::Duration::from_secs(4_000_000_000);
+        set(&original.join("f"), future);
+        let swapped = std::sync::atomic::AtomicBool::new(false);
+        let mut budget = Budget::new(usize::MAX);
+        let scan = inventory::scan_with(
+            &root,
+            &BTreeSet::new(),
+            &mut budget,
+            &inventory::Probe {
+                after_open: &|directory| {
+                    if directory.ends_with("d")
+                        && !swapped.swap(true, std::sync::atomic::Ordering::Relaxed)
+                    {
+                        fs::rename(directory, directory.with_file_name("d.aside"))
+                            .unwrap_or_else(|e| unreachable!("{e}"));
+                        fs::create_dir_all(directory).unwrap_or_else(|e| unreachable!("{e}"));
+                        set(&directory.join("f"), UNIX_EPOCH);
+                    }
+                },
+                ..inventory::Probe::default()
+            },
+        )
+        .unwrap_or_else(|e| unreachable!("{e}"));
+        let newest = newest_file(&scan.entries, &scan.modified);
+        fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+        assert!(
+            matches!(newest, Ok(Some(time)) if time == future),
+            "the swapped-in path hid the newer time held by the opened directory: {newest:?}"
+        );
     }
 }

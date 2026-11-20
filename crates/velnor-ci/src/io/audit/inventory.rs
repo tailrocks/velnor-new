@@ -7,6 +7,8 @@ mod walk;
 
 pub(super) use evidence::{Evidence, State, state};
 pub(super) use walk::{Budget, scan, unresolved_link};
+#[cfg(test)]
+pub(super) use walk::{Probe, scan_with};
 
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
@@ -24,6 +26,13 @@ use crate::error::CiError;
 
 pub(super) const STORE: &str = ".velnor-input-inventories";
 pub(super) type Entries = BTreeMap<PathBuf, BTreeMap<PathBuf, Kind>>;
+pub(super) type Modified = BTreeMap<PathBuf, Option<SystemTime>>;
+
+#[derive(Default)]
+pub(super) struct Scan {
+    pub(super) entries: Entries,
+    pub(super) modified: Modified,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(super) enum Kind {
