@@ -49,6 +49,50 @@ pub fn decode(text: &str) -> Option<RestoredUnits> {
     Some(units)
 }
 
+pub fn cascade(units: &mut RestoredUnits, fingerprints: &[(String, String, BTreeSet<String>)]) {
+    loop {
+        let gaps = gap_crates(units, fingerprints);
+        let forced: Vec<String> = fingerprints
+            .iter()
+            .filter(|(hash, _, dependencies)| {
+                !units.missing_input.contains(hash)
+                    && dependencies
+                        .iter()
+                        .any(|name| gaps.contains(&crate_name(name)))
+            })
+            .map(|(hash, _, _)| hash.clone())
+            .collect();
+        if forced.is_empty() {
+            return;
+        }
+        for hash in forced {
+            units.present.remove(&hash);
+            units.missing_input.insert(hash);
+        }
+    }
+}
+
+fn gap_crates(
+    units: &RestoredUnits,
+    fingerprints: &[(String, String, BTreeSet<String>)],
+) -> BTreeSet<String> {
+    let (gaps, held): (Vec<_>, Vec<_>) = fingerprints
+        .iter()
+        .partition(|(hash, _, _)| units.missing_input.contains(hash));
+    let held: BTreeSet<String> = held
+        .iter()
+        .map(|(_, package, _)| crate_name(package))
+        .collect();
+    gaps.iter()
+        .map(|(_, package, _)| crate_name(package))
+        .filter(|name| !held.contains(name))
+        .collect()
+}
+
+fn crate_name(package: &str) -> String {
+    package.replace('-', "_")
+}
+
 pub fn classify(invocation: &mut Invocation, restored: &RestoredUnits) {
     for compilation in invocation
         .compilations
@@ -101,7 +145,7 @@ pub fn base_gaps(metrics: &LaneMetrics) -> Vec<String> {
             let packages = packages.into_iter().collect::<Vec<_>>().join(", ");
             if missing_input {
                 format!(
-                    "{root}: dependency packages whose restored dep-info names a file outside target/ that is missing (for example mbx build-script outputs in a cache directory this job did not have; MBX_SHARE_OUT_DIR=0 keeps them under target/): {packages}"
+                    "{root}: dependency packages whose restored dep-info names a file outside target/ that is missing (for example mbx build-script outputs in a cache directory this job did not have; MBX_SHARE_OUT_DIR=0 keeps them under target/), and packages that rebuild because such a dependency is rebuilt: {packages}"
                 )
             } else {
                 format!(
