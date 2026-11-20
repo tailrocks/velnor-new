@@ -62,7 +62,7 @@ impl RootJobs<'_> {
             true,
         ));
         let mut jobs = vec![
-            self.lane_job(build_id.clone(), build),
+            self.inline_lanes_timeout(self.lane_job(build_id.clone(), build)),
             self.archive_runner(
                 self.id(DEFAULT_GROUP_JOB),
                 &build_id,

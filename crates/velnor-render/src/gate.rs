@@ -21,6 +21,7 @@ const PULL_REQUEST_LABELS: &str = "github.event.pull_request.labels.*.name";
 const RELATED_EVENT: &str = "(github.event.action != 'labeled' || github.event.label.name == 'ci:run' || github.event.label.name == 'ci:auto') && (github.event.action != 'edited' || github.event.changes.base != null)";
 const SAME_REPOSITORY: &str = "github.event.pull_request.head.repo.full_name == github.repository";
 const POST_MERGE_EVENTS: &str = "(github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')";
+pub(crate) const NOT_SELF_HOSTED: &str = "runner.environment != 'self-hosted'";
 pub(crate) const TOOLS_STEP: &str = "tools";
 pub(crate) const TOOLS_LOCAL_STEP: &str = "toolslocal";
 pub(crate) const TOOLS_LOCAL_SAVE_STEP: &str = "toolslocalsave";
@@ -30,6 +31,7 @@ pub(crate) const TOOLS_SAVED_STEP: &str = "save_tools_node";
 pub(crate) const PREPARE_COLD: &str = "steps.prepare.outputs.cold != 'true'";
 pub(crate) const BASE_STEP: &str = "base";
 pub(crate) const SOURCES_LOCKS_STEP: &str = "sources_locks";
+pub(crate) const SAVING_EVENTS: &str = "(github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')";
 const NEEDS_JSON: &str = "NEEDS_JSON";
 const GATE_SPEC: &str = "GATE_SPEC";
 pub(crate) const ON_DEFAULT_BRANCH: &str =
@@ -221,7 +223,8 @@ pub(crate) fn condition(
         | When::SaveToolsUnlessLocal
         | When::LookupToolsOnNodeHit
         | When::RestoreToolsUnlessLocal
-        | When::PrimeToolsFromNetwork => tools_parts(when, &mut parts),
+        | When::PrimeToolsFromNetwork
+        | When::SaveVerifiedTools(_) => crate::tools_steps::tools_parts(when, &mut parts),
     }
     parts.extend(pr_parts(pr));
     parts.extend(extra.iter().cloned());
@@ -232,30 +235,6 @@ pub(crate) fn condition(
         None
     } else {
         Some(format!("${{{{ {} }}}}", parts.join(" && ")))
-    }
-}
-
-/// On a node miss the lookup is skipped, so its empty output leaves the network restore in charge.
-fn tools_parts(when: When, parts: &mut Vec<String>) {
-    let on_default = ON_DEFAULT_BRANCH.to_owned();
-    let node_miss = format!("steps.{TOOLS_LOCAL_STEP}.outputs.hit != 'true'");
-    let network_miss = format!("steps.{TOOLS_STEP}.outputs.cache-hit != 'true'");
-    let lookup_miss = format!("steps.{TOOLS_LOOKUP_STEP}.outputs.cache-hit != 'true'");
-    match when {
-        When::PrimeToolsFromNetwork => parts.extend([
-            on_default,
-            POST_MERGE_EVENTS.to_owned(),
-            node_miss,
-            format!("steps.{TOOLS_STEP}.outputs.cache-hit == 'true'"),
-        ]),
-        When::LookupToolsOnNodeHit => parts.extend([
-            on_default,
-            format!("steps.{TOOLS_LOCAL_STEP}.outputs.hit == 'true'"),
-        ]),
-        When::SaveToolsOnDefaultBranch => parts.extend([on_default, network_miss]),
-        When::SaveToolsUnlessLocal => parts.extend([on_default, network_miss, lookup_miss]),
-        When::RestoreToolsUnlessLocal => parts.push(node_miss),
-        _ => {}
     }
 }
 

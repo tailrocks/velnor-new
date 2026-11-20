@@ -11,6 +11,8 @@ mod helper;
 mod hosted;
 mod ids;
 mod lint;
+mod mbx;
+mod mbx_config;
 mod mise;
 mod plan;
 mod release_asset;
@@ -18,6 +20,7 @@ mod repo;
 mod repo_config;
 mod sealed;
 mod selection;
+mod setup_phase;
 mod shape;
 mod steps;
 mod test_group;
@@ -43,6 +46,8 @@ pub use ids::{
     RunnerLabel, Sha256, TargetName, looks_github_hosted,
 };
 pub use lint::{LintCommand, LintJob, LintKind};
+pub use mbx::MbxMode;
+pub use mbx_config::{MBX_TOOL, MbxConflict, MbxDeclaration, MbxRule, mbx_declaration};
 pub use mise::MisePlatform;
 pub use plan::{
     Access, BUILD_TESTS_STEP, BUILT_OUTPUT, CI_AUTO_LABEL, CI_RUN_LABEL, CargoCommand, Concurrency,
@@ -57,8 +62,8 @@ pub use repo::{
     DependencyKind, DocsRun, FullRun, InputOwner, InputRule, LaneFeatures, LaneJob,
     LaneKeysWritten, MbxRemote, MbxStore, MemberDependency, OnMain, PackageDependency, PolicyTools,
     PrCi, PrivateSources, PushAfterMergeGroup, RepoFacts, RepoView, RepositoryIdentity,
-    RustCiConfig, RustMember, RustMetadata, RustPackage, RustRoot, SpeedBudget, Target, TargetKind,
-    TestLane, TestSetup, Timings, ToolLock, ToolPin, ToolPins, ToolRequest, Toolchain,
+    RustCiConfig, RustMember, RustMetadata, RustPackage, RustRoot, SetupPhase, SpeedBudget, Target,
+    TargetKind, TestLane, TestSetup, Timings, ToolLock, ToolPin, ToolPins, ToolRequest, Toolchain,
     UnownedPackage, Unread, Weakening, WorkspaceGroup,
 };
 pub use sealed::{Owner, VELNOR_GEN_MARKER, lf_normalized, owner_of, seal};
@@ -77,5 +82,5 @@ pub use verdict::{JobCondition, VerdictJob, VerdictSpec};
 
 pub use steps::{
     BUDGET_JOB, BaseExpiry, GroupFilter, GroupUpload, HelperCommand, InputsCli, PrepareLocks,
-    StepKind, ToolsLocalVerb, ToolsTelemetry, TrimFamily,
+    StepKind, ToolsLocalVerb, ToolsTelemetry, TrimFamily, VerifiedSave,
 };

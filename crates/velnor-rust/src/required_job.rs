@@ -79,7 +79,8 @@ fn conditions(job: &Job) -> Vec<JobCondition> {
         | When::SaveToolsUnlessLocal
         | When::LookupToolsOnNodeHit
         | When::PrimeToolsFromNetwork
-        | When::SaveToolsOnDefaultBranch => None,
+        | When::SaveToolsOnDefaultBranch
+        | When::SaveVerifiedTools(_) => None,
     };
     gate.into_iter().chain(when).chain(skip).collect()
 }

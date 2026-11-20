@@ -4,7 +4,7 @@
 use crate::command_scan::segments;
 use crate::wrappers::{Invoked, invoked};
 
-pub const HELPER_COMMANDS: [&str; 34] = [
+pub const HELPER_COMMANDS: [&str; 36] = [
     "report",
     "bench",
     "inputs",
@@ -26,6 +26,7 @@ pub const HELPER_COMMANDS: [&str; 34] = [
     "mbx-store",
     "mbx-seed",
     "tools-local",
+    "tools-verify",
     "check-metadata",
     "check-configurations",
     "lane-guard",
@@ -37,6 +38,7 @@ pub const HELPER_COMMANDS: [&str; 34] = [
     "run",
     "sources",
     "timings",
+    "mise-pin",
     "validate-artifact-id",
     "qualification",
 ];
