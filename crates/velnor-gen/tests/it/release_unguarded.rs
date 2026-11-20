@@ -9,7 +9,7 @@ use velnor_model::{
     CommitSha, HelperRelease, HelperVersion, Platform, RELEASE_CONFIG_PATH, RELEASE_WORKFLOW_PATH,
     RepoPath, RepoView, Sha256,
 };
-use velnor_release::{FamilyTrigger, ReleaseFiles, ReleasePlan};
+use velnor_release::{ReleaseFiles, ReleasePlan};
 use velnor_render::render_release;
 use velnor_rust::LOCK_PATH;
 
@@ -75,30 +75,7 @@ pub(crate) fn expected_release_nested(
     if !helper.version().at_least(velnor_gen::HELPER_MINIMUM) {
         return Err(GenerateError::HelperTooOld(helper.version().clone()));
     }
-    if plan.family.is_some() && !helper.version().at_least((0, 1, 85)) {
-        return Err(GenerateError::FamilyTagHelperTooOld(
-            helper.version().clone(),
-        ));
-    }
-    if plan
-        .family
-        .as_ref()
-        .is_some_and(|family| family.trigger == FamilyTrigger::TagPush)
-        && !helper.version().at_least(velnor_gen::TAG_PUSH_HELPER)
-    {
-        return Err(GenerateError::TagPushHelperTooOld(helper.version().clone()));
-    }
-    // helper-gate: first in tools-v0.1.108 via e876eb2db5
-    if plan
-        .binaries
-        .iter()
-        .any(|binary| !binary.optional_platforms.is_empty())
-        && !helper.version().at_least(velnor_gen::OPTIONAL_ASSET_HELPER)
-    {
-        return Err(GenerateError::OptionalAssetsHelperTooOld(
-            helper.version().clone(),
-        ));
-    }
+    velnor_gen::check_config_keys(view, helper.version())?;
     let mut files = render_release(&plan, &helper, "main", None).map_err(GenerateError::Rules)?;
     files.retain(|path, _| *path == RELEASE_WORKFLOW_PATH);
     Ok(files)

@@ -47,6 +47,7 @@ pub struct ReleaseFiles {
     pub workflow_names: Option<BTreeSet<String>>,
     pub push_workflows: Option<BTreeSet<String>>,
     pub mise_lock: String,
+    pub mbx_opt_out: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -67,8 +68,6 @@ pub struct BinaryPlan {
     pub bin: String,
     pub root: String,
     pub platforms: Vec<Platform>,
-    /// The platforms in `platforms` whose build and files are optional: a failed build never fails
-    /// the release, and the release holds a file of one only when its build produced it.
     pub optional_platforms: Vec<Platform>,
     pub extra_bins: Vec<ExtraBin>,
     pub include: Vec<String>,
@@ -248,7 +247,7 @@ impl ReleasePlan {
             release_plz_version: release_plz.version,
             release_plz_url: release_plz.url,
             release_plz_sha256: release_plz.sha256,
-            mbx: mise::declares_mbx(&files.mise_tomls),
+            mbx: !files.mbx_opt_out && mise::declares_mbx(&files.mise_tomls),
         })
     }
 }

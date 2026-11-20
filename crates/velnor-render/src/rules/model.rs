@@ -23,6 +23,7 @@ pub struct RenderedStep {
     pub env: Vec<(String, Value)>,
     pub shell: Option<String>,
     pub run: Option<String>,
+    pub shared: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -83,7 +84,6 @@ pub struct RenderedJob {
     pub runs_on_axis: Option<String>,
     pub fork_runner: Option<String>,
     pub timeout_minutes: u16,
-    /// A failed job does not fail the workflow run.
     pub continue_on_error: bool,
     pub env: Vec<(String, Value)>,
     pub cache_mode: Option<String>,

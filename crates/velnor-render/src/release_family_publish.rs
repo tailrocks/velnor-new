@@ -43,8 +43,6 @@ fn artifact_downloads(plan: &ReleasePlan) -> Vec<RenderedStep> {
         .collect()
 }
 
-/// The files of the release that a successful build of every required platform produces, and the
-/// family's own files, with the path of each, or only the files of the optional platforms.
 fn files(
     plan: &ReleasePlan,
     family: &FamilyPlan,

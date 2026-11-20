@@ -4,15 +4,16 @@
 use std::error::Error;
 
 use velnor_gen::GenerateError;
-use velnor_release::{FamilyError, ReleaseError};
+use velnor_release::{CheckProblem, FamilyError, ReleaseError};
 
 use crate::release_family_fixture::{generate, refused};
+use crate::release_fixture::steps;
 use crate::release_yml_binaries::{job, runs};
 use crate::yaml_tree::Node;
 
 type TestResult = Result<(), Box<dyn Error>>;
 
-const OPTIONAL_HELPER: &str = "0.1.108";
+const OPTIONAL_HELPER: &str = "0.1.109";
 const HEAD: &str = "family_tag = \"tools-v{{ version }}\"\nroots = [\".\", \"tools\"]\nchecksums_file = \"BINARY-SHA256SUMS\"\ncommit_file = true\nattest = true\n";
 const BINARY: &str = "[[binaries]]\npackage = \"app\"\nsmoke = true\nplatforms = [\"linux-x64\", \"linux-arm64\", \"macos-arm64\"]\noptional_platforms = [\"macos-arm64\"]\n[[binaries]]\npackage = \"tools\"\nsmoke = true\nplatforms = [\"linux-x64\", \"linux-arm64\", \"macos-arm64\"]\noptional_platforms = [\"macos-arm64\"]\n";
 const APP_MACOS: &str = "app-aarch64-apple-darwin.tar.gz";
@@ -249,18 +250,59 @@ fn a_release_without_optional_platforms_renders_none_of_it() -> TestResult {
     Ok(())
 }
 
+fn refusal_at(helper: &str, config: &str) -> Result<GenerateError, Box<dyn Error>> {
+    match generate(helper, config) {
+        Ok(_) => Err("the configuration was accepted".into()),
+        Err(error) => match error.downcast::<GenerateError>() {
+            Ok(error) => Ok(*error),
+            Err(other) => Err(other),
+        },
+    }
+}
+
 #[test]
 fn optional_platforms_need_a_helper_that_publishes_optional_files() -> TestResult {
-    let error = refused(&config())?;
+    let error = refusal_at("0.1.108", &config())?;
     assert!(
-        matches!(error, GenerateError::OptionalAssetsHelperTooOld(_)),
+        matches!(
+            error,
+            GenerateError::ConfigKeyHelperTooOld {
+                key: "binaries.optional_platforms",
+                ..
+            }
+        ),
         "{error}"
     );
-    assert!(error.to_string().contains("pin-helper 0.1.108"), "{error}");
-    generate("0.1.107", &config())
-        .err()
-        .ok_or("accepted under 0.1.107")?;
+    assert!(error.to_string().contains("pin-helper 0.1.109"), "{error}");
     generate(OPTIONAL_HELPER, &config())?;
+    Ok(())
+}
+
+#[test]
+fn a_publish_check_cannot_require_an_optional_artifact() -> TestResult {
+    let checks = "[[checks]]\nname = \"qualify\"\nrun = \"x\"\nbefore = \"publish\"\nartifacts = [\"app-macos-arm64\"]\n";
+    let error = refusal_at(OPTIONAL_HELPER, &format!("{HEAD}{BINARY}{checks}"))?;
+    assert!(
+        matches!(
+            &error,
+            GenerateError::Release(ReleaseError::InvalidCheck(name, CheckProblem::OptionalArtifact(artifact)))
+                if name == "qualify" && artifact == "app-macos-arm64"
+        ),
+        "{error}"
+    );
+    Ok(())
+}
+
+#[test]
+fn an_optional_build_is_verified_when_the_checksums_list_it_not_when_it_downloaded() -> TestResult {
+    let tree = rendered()?;
+    let verify = job(&tree, "verify-family")?;
+    let name = format!("Verify the build provenance of {APP_MACOS}");
+    let step = steps(verify)
+        .iter()
+        .find(|step| step.get("name").and_then(Node::text) == Some(name.as_str()))
+        .ok_or("no provenance step for the optional build")?;
+    assert!(step.get("if").is_none(), "{step:?}");
     Ok(())
 }
 

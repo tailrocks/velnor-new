@@ -10,7 +10,7 @@ use crate::release_binaries::{
     BUILD_TIMEOUT_MINUTES, build_steps, command, download_to, target, upload,
 };
 use crate::release_checks::tag_needs;
-use crate::release_context::{BuildContext, Private};
+use crate::release_context::{BuildContext, Private, private_mbx_store};
 use crate::release_family_publish::{publish, sums, verify};
 use crate::release_optional::is_optional;
 use crate::release_source::{Source, source_of};
@@ -86,7 +86,11 @@ fn version_files(plan: &ReleasePlan) -> Vec<String> {
 }
 
 fn versions_job(plan: &ReleasePlan, helper: &HelperRelease, source: &Source) -> RenderedJob {
-    let mut steps = vec![checkout(source.verified, 1), install_helper(helper)];
+    let mut steps = vec![checkout(source.verified, 1)];
+    if plan.mbx {
+        steps.push(private_mbx_store(VERSIONS_JOB));
+    }
+    steps.push(install_helper(helper));
     if !source.tag_push {
         steps.push(newest_check());
     }

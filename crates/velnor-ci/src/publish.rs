@@ -24,7 +24,6 @@ pub struct Request {
     pub tag: PlainName,
     pub app: PlainName,
     pub names: Vec<PlainName>,
-    /// Files published when present in `files` and skipped, with a notice, when not.
     pub optional: Vec<PlainName>,
     pub files: BTreeMap<String, Vec<u8>>,
     pub assetless: bool,
@@ -68,10 +67,18 @@ pub fn publish(
     let named = format!("release {} ({})", release.tag_name, release.id);
     let upload = upload_url(repo, &release)?;
     let present = assets(github, repo, release.id)?;
+    let stale: Vec<&ApiAsset> = present
+        .iter()
+        .filter(|asset| {
+            request.optional.iter().any(|name| name.as_str() == asset.name)
+                && !files.iter().any(|file| file.name == asset.name)
+        })
+        .collect();
     let foreign: Vec<&str> = present
         .iter()
         .map(|asset| asset.name.as_str())
         .filter(|name| !files.iter().any(|file| file.name == *name))
+        .filter(|name| !stale.iter().any(|asset| asset.name == *name))
         .collect();
     if !foreign.is_empty() {
         return Err(CiError::new(format!(
@@ -80,6 +87,13 @@ pub fn publish(
         )));
     }
     let mut report = skipped;
+    for asset in stale {
+        github.delete(&format!("/repos/{repo}/releases/assets/{}", asset.id))?;
+        report.push(format!(
+            "removed stale optional {} ({}), which the draft held from an earlier attempt",
+            asset.name, asset.id
+        ));
+    }
     for file in &files {
         match present.iter().find(|asset| asset.name == file.name) {
             Some(asset) if holds(asset, file) => {

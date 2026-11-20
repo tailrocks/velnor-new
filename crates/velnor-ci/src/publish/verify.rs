@@ -15,7 +15,6 @@ pub(super) struct File<'a> {
     pub(super) bytes: &'a [u8],
 }
 
-/// The files to publish, with `SHA256SUMS` last, and a notice for each optional file that is missing.
 pub(super) fn verify(request: &Request) -> Result<(Vec<File<'_>>, Vec<String>), CiError> {
     if request.assetless {
         return if request.names.is_empty() && request.optional.is_empty() {

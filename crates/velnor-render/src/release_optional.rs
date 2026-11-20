@@ -1,12 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-//! Optional platforms of a family release (`optional_platforms` in `.velnor/release.toml`).
-//!
-//! An optional build has `continue-on-error`, so a failed build never fails the run. The jobs that
-//! collect its files keep running without it (`always()`) but still need every required job to
-//! have succeeded, and each step that reads one of its files runs only when the file exists.
-
 use velnor_model::Platform;
 use velnor_release::{BinaryPlan, ReleasePlan};
 
@@ -22,7 +16,6 @@ pub(crate) fn is_optional(binary: &BinaryPlan, platform: Platform) -> bool {
     binary.optional_platforms.contains(&platform)
 }
 
-/// The files that exist only when the optional build of `platform` succeeded.
 pub(crate) fn optional_files(binary: &BinaryPlan) -> Vec<String> {
     binary
         .optional_platforms
@@ -31,7 +24,6 @@ pub(crate) fn optional_files(binary: &BinaryPlan) -> Vec<String> {
         .collect()
 }
 
-/// `hashFiles` is empty for a path that matches no file.
 pub(crate) fn exists(name: &str) -> String {
     format!("hashFiles('{DIST}/{name}') != ''")
 }
@@ -48,7 +40,6 @@ pub(crate) fn download_optional(name: String) -> RenderedStep {
     }
 }
 
-/// A download step for an artifact: a missing optional artifact is not an error.
 pub(crate) fn artifact_download(name: String, optional: bool) -> RenderedStep {
     if optional {
         download_optional(name)
@@ -63,8 +54,6 @@ pub(crate) fn has_optional(plan: &ReleasePlan) -> bool {
         .any(|binary| !binary.optional_platforms.is_empty())
 }
 
-/// A family job that waits for every build and runs although an optional one failed, but only when
-/// every required build succeeded.
 pub(crate) fn after_the_builds(
     id: &str,
     plan: &ReleasePlan,
