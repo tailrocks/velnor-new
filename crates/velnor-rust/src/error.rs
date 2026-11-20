@@ -84,6 +84,7 @@ pub enum Reason {
     UnknownTestGroupRoot(String),
     TestGroupWithoutNextest(String),
     TestGroupFilter(String),
+    TestGroupRestoreWithoutCargo(String),
     TestGroupsWithPrivateSources,
     PrCiWithSkipDraft,
     RustdocflagsString,

@@ -162,6 +162,7 @@ impl fmt::Display for Reason {
             Self::UnknownTestGroupRoot(_)
             | Self::TestGroupWithoutNextest(_)
             | Self::TestGroupFilter(_)
+            | Self::TestGroupRestoreWithoutCargo(_)
             | Self::TestGroupsWithPrivateSources => self.fmt_test_groups(f),
             Self::UnknownTestLaneRoot(_)
             | Self::TestLaneWithoutNextest(_)
