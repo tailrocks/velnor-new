@@ -379,9 +379,6 @@ fn supplied_source_fingerprint_must_be_the_correct_value_or_unset() -> Result<()
         );
     }
     let (succeeded, stderr) = build_given_supplied_fingerprint(&probe, &expected)?;
-    assert!(
-        succeeded,
-        "the correct {SUPPLIED} was refused: {stderr}"
-    );
+    assert!(succeeded, "the correct {SUPPLIED} was refused: {stderr}");
     Ok(())
 }
