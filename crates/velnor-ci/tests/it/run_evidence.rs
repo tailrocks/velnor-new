@@ -71,7 +71,7 @@ fn quiet_nonfresh_artifacts_save_the_cache_without_counting_verbose_artifacts_tw
         ("verbose", false, true),
         ("targets", false, false),
     ] {
-        let temp = std::env::temp_dir().join(format!("velnor-quiet-{}-{name}", std::process::id()));
+        let temp = crate::scratch_path("velnor-quiet", name);
         let program = crate::run_capture::fixture(&temp, true, false).expect("fixture");
         fs::write(&program, "#!/bin/sh\ncat events\n").expect("program");
         fs::write(
@@ -234,8 +234,7 @@ fn non_unicode_compiler_selectors_are_rejected_before_execution_but_unrelated_va
 #[test]
 fn rejected_oversized_output_cannot_establish_zero_cache_activity() {
     for active in [false, true] {
-        let temp =
-            std::env::temp_dir().join(format!("velnor-oversized-{}-{active}", std::process::id()));
+        let temp = crate::scratch_path("velnor-oversized", &active.to_string());
         let program = crate::run_capture::fixture(&temp, false, false).expect("fixture");
         fs::write(&program, "#!/bin/sh\ncat events\n").expect("program");
         let mut artifact = crate::cargo_artifacts::record(false);

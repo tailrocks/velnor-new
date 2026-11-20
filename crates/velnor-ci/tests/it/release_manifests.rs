@@ -12,8 +12,7 @@ struct Checkout(PathBuf);
 
 impl Checkout {
     fn new(name: &str) -> Self {
-        let dir =
-            std::env::temp_dir().join(format!("velnor-ci-manifests-{}-{name}", std::process::id()));
+        let dir = crate::scratch_path("velnor-ci-manifests", name);
         fs::remove_dir_all(&dir).ok();
         fs::create_dir_all(&dir).unwrap_or_else(|e| unreachable!("{e}"));
         Self(dir)

@@ -17,7 +17,7 @@ const STEP_FILES: [&str; 5] = [
 ];
 
 fn scratch(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("velnor-ci-{name}-{}", std::process::id()));
+    let dir = crate::scratch_path("velnor-ci", name);
     fs::remove_dir_all(&dir).ok();
     fs::create_dir_all(&dir).unwrap_or_else(|e| unreachable!("{e}"));
     dir
