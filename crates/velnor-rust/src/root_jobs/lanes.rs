@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{Job, JobId};
+use velnor_model::{Job, JobId, LaneFeatures};
 
 use super::RootJobs;
 
@@ -35,9 +35,22 @@ impl RootJobs<'_> {
     }
 }
 
-fn lane_id(features: &[String], taken: &[JobId]) -> JobId {
+/// Flags are part of the id, so lanes differing only by a flag get distinct jobs and cache keys.
+fn lane_words(features: &LaneFeatures) -> String {
+    let mut words = Vec::new();
+    if features.all {
+        words.push("all-features".to_owned());
+    }
+    if features.no_default {
+        words.push("no-default".to_owned());
+    }
+    words.extend(features.names.iter().cloned());
+    words.join("-")
+}
+
+fn lane_id(features: &LaneFeatures, taken: &[JobId]) -> JobId {
     let mut slug = String::new();
-    for c in features.join("-").chars() {
+    for c in lane_words(features).chars() {
         let c = if c.is_ascii_alphanumeric() {
             c.to_ascii_lowercase()
         } else {
