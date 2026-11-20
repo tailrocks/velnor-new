@@ -29,3 +29,22 @@ fn a_truncated_seed_is_recorded_for_the_report_and_a_complete_one_is_not() {
     assert!(record_truncation(&temp, &whole).is_ok());
     assert!(!seed_truncated(&temp));
 }
+
+#[test]
+fn a_complete_seed_clears_a_marker_left_by_an_earlier_run() {
+    let host = host("mbx-seed-truncation-stale");
+    let seed = warm_seed(&host);
+    let temp = host.root.join("temp");
+    let cut = run_within(
+        &host,
+        "pull_request",
+        "refs/pull/1/merge",
+        Some(&seed),
+        Duration::ZERO,
+    );
+    assert!(record_truncation(&temp, &cut).is_ok());
+    assert!(seed_truncated(&temp));
+    let whole = run(&host, "pull_request", "refs/pull/1/merge", Some(&seed));
+    assert!(record_truncation(&temp, &whole).is_ok());
+    assert!(!seed_truncated(&temp));
+}

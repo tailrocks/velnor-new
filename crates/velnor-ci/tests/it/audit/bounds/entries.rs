@@ -8,17 +8,19 @@ use std::time::{Duration, UNIX_EPOCH};
 use super::super::{inventory, own_units, unit, velnor_ci, workspace_below_the_root};
 use crate::io::Repo;
 
-const VARIABLE: &str = "VELNOR_AUDIT_MAX_ENTRIES";
+pub(super) const VARIABLE: &str = "VELNOR_AUDIT_MAX_ENTRIES";
 
-/// A workspace whose build output declares `shared/first`, so the audit scans
-/// that tree on every run. The tree holds `entries` empty files.
-fn declared_tree(entries: usize) -> Repo {
+const LINKS_PER_INODE: usize = 10_000;
+
+pub(super) fn declared_tree(entries: usize) -> Repo {
     let repo = workspace_below_the_root();
     let directory = repo.root().join("shared/first");
     fs::create_dir_all(&directory).unwrap_or_else(|e| unreachable!("{e}"));
-    let seed = directory.join("seed");
-    fs::write(&seed, "").unwrap_or_else(|e| unreachable!("{e}"));
     for index in 0..entries {
+        let seed = directory.join(format!("seed-{}", index / LINKS_PER_INODE));
+        if index % LINKS_PER_INODE == 0 {
+            fs::write(&seed, "").unwrap_or_else(|e| unreachable!("{e}"));
+        }
         fs::hard_link(&seed, directory.join(index.to_string()))
             .unwrap_or_else(|e| unreachable!("{e}"));
     }
@@ -35,7 +37,7 @@ fn declared_tree(entries: usize) -> Repo {
     repo
 }
 
-fn audit_within(repo: &Repo, limit: Option<&str>) -> Output {
+pub(super) fn audit_within(repo: &Repo, limit: Option<&str>) -> Output {
     let mut command = velnor_ci();
     command
         .env_remove(VARIABLE)
