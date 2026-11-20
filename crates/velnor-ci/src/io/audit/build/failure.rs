@@ -14,10 +14,41 @@ use crate::error::CiError;
 
 const MARKER: &str = "failed-inputs-build.json";
 
+#[derive(PartialEq, Serialize, Deserialize)]
+struct Run {
+    id: String,
+    attempt: Option<String>,
+}
+
+impl Run {
+    fn current() -> Option<Self> {
+        let id = std::env::var("GITHUB_RUN_ID")
+            .ok()
+            .filter(|id| !id.is_empty())?;
+        let attempt = std::env::var("GITHUB_RUN_ATTEMPT")
+            .ok()
+            .filter(|attempt| !attempt.is_empty());
+        Some(Self { id, attempt })
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 pub(super) struct Failure {
-    pub(super) command: String,
-    pub(super) selection: Selection,
+    command: String,
+    #[serde(default)]
+    selection: Option<Selection>,
+    #[serde(default)]
+    run: Option<Run>,
+}
+
+impl Failure {
+    pub(super) fn new(command: String, selection: Option<Selection>) -> Self {
+        Self {
+            command,
+            selection,
+            run: Run::current(),
+        }
+    }
 }
 
 fn marker(directory: &Path) -> PathBuf {
@@ -64,9 +95,13 @@ pub(super) fn earlier_failure(
     directories.iter().find_map(|directory| {
         let bytes = fs::read(marker(directory)).ok()?;
         let failure: Failure = serde_json::from_slice(&bytes).ok()?;
+        if Run::current().is_some_and(|current| failure.run.as_ref() != Some(&current)) {
+            return None;
+        }
+        let selection = failure.selection.as_ref()?;
         packages
             .iter()
-            .any(|package| failure.selection.selects(package))
+            .any(|package| selection.selects(package))
             .then_some(failure.command)
     })
 }

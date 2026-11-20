@@ -78,15 +78,15 @@ pub(crate) fn build(directory: &Path, args: &InputsBuildArgs) -> Result<String, 
     let marker = builder.marker_directories();
     match builder.audit(&invocation) {
         Ok(()) => {
-            failure::clear_failure(&marker)?;
+            if let Err(error) = failure::clear_failure(&marker) {
+                eprintln!("velnor-ci: {error}");
+            }
             timing::report();
             Ok(String::new())
         }
-        Err(error) => {
-            let failed = failure::Failure {
-                command: invocation.label(),
-                selection: invocation.selection(),
-            };
+        Err(Stop::Refused(error)) => Err(error),
+        Err(Stop::Failed(error)) => {
+            let failed = failure::Failure::new(invocation.label(), invocation.selection());
             match failure::record_failure(&marker, &failed) {
                 Ok(()) => Err(error),
                 Err(record) => Err(CiError::new(format!("{error}; {record}"))),
@@ -95,8 +95,19 @@ pub(crate) fn build(directory: &Path, args: &InputsBuildArgs) -> Result<String, 
     }
 }
 
+enum Stop {
+    Refused(CiError),
+    Failed(CiError),
+}
+
+impl From<CiError> for Stop {
+    fn from(error: CiError) -> Self {
+        Self::Failed(error)
+    }
+}
+
 impl Builder<'_> {
-    fn audit(&mut self, invocation: &Invocation) -> Result<(), CiError> {
+    fn audit(&mut self, invocation: &Invocation) -> Result<(), Stop> {
         if let Some(preflight) = &invocation.preflight {
             self.stabilize(preflight, true, true)?;
         }
@@ -129,7 +140,7 @@ impl Builder<'_> {
         command: &[String],
         replayable: bool,
         invalidate: bool,
-    ) -> Result<(), CiError> {
+    ) -> Result<(), Stop> {
         self.targets.extend(timing::phase("proven", || {
             generated::proven(&self.workspaces)
         })?);
@@ -149,17 +160,17 @@ impl Builder<'_> {
             self.declared
                 .extend(declared.iter().flat_map(|unit| unit.paths.iter().cloned()));
             if invalidate {
-                let selection = Invocation::new(command).selection();
+                let selection = Invocation::new(command).selection().unwrap_or_default();
                 let outside: BTreeSet<&str> = declared
                     .iter()
                     .filter(|unit| !unit.trusted && !selection.selects(&unit.package))
                     .map(|unit| unit.package.as_str())
                     .collect();
                 if !outside.is_empty() {
-                    return Err(outside_selection(
+                    return Err(Stop::Refused(outside_selection(
                         &outside,
                         failure::earlier_failure(&self.marker_directories(), &outside),
-                    ));
+                    )));
                 }
                 declarations::invalidate(&declared)?;
             }
@@ -173,9 +184,9 @@ impl Builder<'_> {
                 return Ok(());
             }
         }
-        Err(CiError::new(
+        Err(Stop::Failed(CiError::new(
             "build directory declarations did not stabilize after two compiler passes; a compiler pass must leave declared directory membership unchanged before inputs can be audited",
-        ))
+        )))
     }
 
     fn capture(&self) -> Result<(Evidence, bool), CiError> {

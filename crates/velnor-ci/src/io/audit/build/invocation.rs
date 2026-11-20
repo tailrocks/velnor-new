@@ -9,7 +9,7 @@ use super::super::super::units::{MetadataInvocation, Workspace, refuse_arguments
 use super::super::groups::root_workspace;
 use crate::error::CiError;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Default, Serialize, Deserialize)]
 pub(super) struct Selection {
     all: bool,
     packages: Vec<String>,
@@ -48,7 +48,10 @@ impl Invocation {
         }
     }
 
-    pub(super) fn selection(&self) -> Selection {
+    pub(super) fn selection(&self) -> Option<Selection> {
+        if !self.cargo_program() {
+            return None;
+        }
         let words: Vec<&str> = self
             .command
             .iter()
@@ -74,7 +77,14 @@ impl Invocation {
                 packages.push(name.to_owned());
             }
         }
-        Selection { all, packages }
+        Some(Selection { all, packages })
+    }
+
+    fn cargo_program(&self) -> bool {
+        Path::new(&self.command[0])
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| matches!(name, "cargo" | "cargo-nextest" | "cargo-clippy"))
     }
 
     pub(super) fn new(command: &[String]) -> Self {
