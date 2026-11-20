@@ -5,7 +5,7 @@ mod evidence;
 mod walk;
 
 pub(super) use evidence::{Evidence, State, state};
-pub(super) use walk::{scan, unresolved_link};
+pub(super) use walk::{Budget, scan, unresolved_link};
 
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
@@ -21,7 +21,6 @@ use velnor_rust::{normalize, sha256_hex};
 use super::super::units::Workspace;
 use crate::error::CiError;
 
-pub(super) const LIMIT: usize = 100_000;
 pub(super) const STORE: &str = ".velnor-input-inventories";
 pub(super) type Entries = BTreeMap<PathBuf, BTreeMap<PathBuf, Kind>>;
 
