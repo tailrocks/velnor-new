@@ -239,6 +239,22 @@ fn the_remote_mbx_cache_is_refused_when_private_credentials_sit_beside_a_public_
 }
 
 #[test]
+fn private_credentials_beside_a_public_declaration_keep_the_base_caches_off_without_the_remote_cache()
+-> TestResult {
+    let both = format!(
+        "{DECLARED}[private_sources]\napp_id = 'vars.APP_ID'\nprivate_key = 'secrets.APP_KEY'\nrepositories = ['acme/other']\n"
+    );
+    let output = render(&locked(&pinned_source(), &both, "0.1.110")?)?;
+    assert!(!output.saves_bases(), "{}", output.workflow);
+    assert!(
+        output.note("private submodule").is_some(),
+        "{:?}",
+        output.notes
+    );
+    Ok(())
+}
+
+#[test]
 fn the_declaration_needs_the_helper_that_checks_it() -> TestResult {
     for (version, refused) in [("0.1.107", true), ("0.1.109", true), ("0.1.110", false)] {
         let outcome = render(&locked(&pinned_source(), DECLARED, version)?);
