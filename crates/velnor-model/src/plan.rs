@@ -9,8 +9,8 @@ use crate::hosted::HostedRunners;
 use crate::ids::{JobId, PackageName, RepoPath, RootSlug, RunnerLabel, TargetName};
 use crate::repo::{LaneFeatures, TargetKind};
 use crate::steps::StepKind;
-use crate::trusted::TrustedRunners;
 use crate::test_group::NoTests;
+use crate::trusted::TrustedRunners;
 
 pub const LINT_STEP: &str = "Lint";
 pub const TEST_STEP: &str = "Test";
