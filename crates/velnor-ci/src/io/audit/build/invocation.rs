@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -48,7 +49,7 @@ impl Invocation {
         }
     }
 
-    pub(super) fn selection(&self) -> Option<Selection> {
+    pub(super) fn selection(&self, members: &BTreeSet<&str>) -> Option<Selection> {
         if !self.cargo_program() {
             return None;
         }
@@ -77,6 +78,7 @@ impl Invocation {
                 packages.push(name.to_owned());
             }
         }
+        packages.retain(|name| members.contains(name.as_str()));
         Some(Selection { all, packages })
     }
 

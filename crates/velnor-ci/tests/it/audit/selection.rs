@@ -313,3 +313,28 @@ fn a_marker_without_a_run_identity_is_ignored_when_the_run_has_one() {
     let stderr = refusal_after_a_failed_lib_build(None, Some(("1001", "1")));
     assert!(!stderr.contains(NAMED), "{stderr}");
 }
+
+#[test]
+fn a_failed_build_records_only_package_names_that_are_workspace_members() {
+    let repo = prepared_project();
+    let failing = [
+        "cargo",
+        "build",
+        "-p",
+        "lib",
+        "-p",
+        "git+https://example.invalid/app#app@0.1.0",
+        "-p",
+        "no-such-member",
+        "--all-targets",
+        "--offline",
+        "--no-such-flag",
+    ];
+    let failed = wrapped_in(&repo, &failing, None);
+    assert!(!failed.status.success(), "{failed:?}");
+    let marker = repo
+        .root()
+        .join("rust/target/.velnor-input-inventories/failed-inputs-build.json");
+    let recorded = fs::read_to_string(&marker).unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(recorded.contains(r#""packages":["lib"]"#), "{recorded}");
+}
