@@ -139,6 +139,10 @@ mod tests {
         let metrics: LaneMetrics =
             serde_json::from_value(lane).unwrap_or_else(|error| unreachable!("{error}"));
         let verdict = check(&[metrics]);
-        assert!(verdict.is_ok(), "{}", verdict.err().map(|e| e.to_string()).unwrap_or_default());
+        assert!(
+            verdict.is_ok(),
+            "{}",
+            verdict.err().map(|e| e.to_string()).unwrap_or_default()
+        );
     }
 }
