@@ -3,6 +3,7 @@
 
 use crate::bundle::check_targets;
 use crate::error::ReleaseError;
+use crate::error_family::FamilyError;
 use crate::members::{inherited_tag, owner};
 use crate::release_plz::RootConfig;
 use crate::velnor_config::VelnorConfig;
@@ -16,6 +17,12 @@ pub(crate) fn plan_binaries(
 ) -> Result<Vec<BinaryPlan>, ReleaseError> {
     let mut binaries = Vec::new();
     for binary in &config.binaries {
+        if !binary.optional_platforms.is_empty() {
+            return Err(FamilyError::NeedsFamilyTag {
+                key: "optional_platforms",
+            }
+            .into());
+        }
         let (root, tag_pattern) = configs
             .iter()
             .find_map(|candidate| {
@@ -41,6 +48,7 @@ pub(crate) fn plan_binaries(
             bin: binary.bin.clone(),
             root,
             platforms: binary.platforms.clone(),
+            optional_platforms: Vec::new(),
             extra_bins: binary.bins.clone(),
             include: binary.include.clone(),
             format: binary.format,

@@ -14,6 +14,8 @@ pub(crate) const CI: &str = "velnor-ci";
 pub(crate) const GENERATOR: &str = "velnor-gen";
 const BINARY_SUMS: &str = "BINARY-SHA256SUMS";
 
+pub(crate) const GENERATOR_BINARY_RELEASE: (u64, u64, u64) = (0, 1, 111);
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LockError(String);
 
@@ -46,6 +48,14 @@ pub(crate) struct Lock {
     pub(crate) ci_binary: Option<BTreeMap<String, String>>,
     #[serde(rename = "velnor-gen")]
     pub(crate) generator: BTreeMap<String, String>,
+    /// The digests of the velnor-gen executables inside the archives, which `check` compares
+    /// with the running binary. `[velnor-gen]` keeps the archive digests the install step checks.
+    #[serde(
+        rename = "velnor-gen-binary",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub(crate) generator_binary: Option<BTreeMap<String, String>>,
 }
 
 pub fn release_version(text: &str) -> Result<HelperVersion, LockError> {
@@ -99,14 +109,20 @@ pub fn pin_lock(
     } else {
         Form::Raw
     };
-    let ci_binary = match (form, binary_sums) {
-        (Form::Archive, Some(binary_sums)) => Some(binary_digests(binary_sums, &listed)?),
+    let (ci_binary, generator_binary) = match (form, binary_sums) {
+        (Form::Archive, Some(binary_sums)) => {
+            let (ci, generator) = binary_digests(binary_sums, &listed)?;
+            (
+                ci,
+                generator.filter(|_| version.at_least(GENERATOR_BINARY_RELEASE)),
+            )
+        }
         (Form::Archive, None) => {
             return Err(LockError(format!(
                 "SHA256SUMS lists archives, so {BINARY_SUMS} is needed for the binary digests"
             )));
         }
-        (Form::Raw, None) => None,
+        (Form::Raw, None) => (None, None),
         (Form::Raw, Some(_)) => {
             return Err(LockError(format!(
                 "SHA256SUMS lists no archives, so {BINARY_SUMS} has nothing to describe"
@@ -119,6 +135,7 @@ pub fn pin_lock(
         ci: digests(CI, form, &listed)?,
         ci_binary,
         generator: digests(GENERATOR, form, &listed)?,
+        generator_binary,
     };
     toml::to_string(&lock).map_err(|error| LockError(error.to_string()))
 }
@@ -149,10 +166,13 @@ fn lists_archives(listed: &BTreeMap<&str, &str>) -> bool {
         .any(|name| listed.contains_key(name.as_str()))
 }
 
-fn binary_digests(
-    binary_sums: &str,
-    listed: &BTreeMap<&str, &str>,
-) -> Result<BTreeMap<String, String>, LockError> {
+type Binaries = (
+    Option<BTreeMap<String, String>>,
+    Option<BTreeMap<String, String>>,
+);
+
+/// The velnor-ci binary digests and, when the release lists any, the velnor-gen ones.
+fn binary_digests(binary_sums: &str, listed: &BTreeMap<&str, &str>) -> Result<Binaries, LockError> {
     let expected = listed
         .get(BINARY_SUMS)
         .ok_or_else(|| LockError(format!("SHA256SUMS lists no {BINARY_SUMS}")))?;
@@ -163,9 +183,29 @@ fn binary_digests(
         )));
     }
     let binaries = listed_sums(binary_sums)?;
+    let ci = program_binaries(CI, &binaries)?;
+    let generator = if Platform::ALL
+        .iter()
+        .any(|platform| binaries.contains_key(binary_member(GENERATOR, *platform).as_str()))
+    {
+        Some(program_binaries(GENERATOR, &binaries)?)
+    } else {
+        None
+    };
+    Ok((Some(ci), generator))
+}
+
+fn binary_member(program: &str, platform: Platform) -> String {
+    format!("{}/{program}", archive(program, platform))
+}
+
+fn program_binaries(
+    program: &str,
+    binaries: &BTreeMap<&str, &str>,
+) -> Result<BTreeMap<String, String>, LockError> {
     let mut found = BTreeMap::new();
     for platform in Platform::ALL {
-        let name = format!("{}/{CI}", archive(CI, platform));
+        let name = binary_member(program, platform);
         let Some(sum) = binaries.get(name.as_str()) else {
             if Platform::REQUIRED.contains(&platform) {
                 return Err(LockError(format!("{BINARY_SUMS} lists no {name}")));
@@ -218,7 +258,9 @@ pub(crate) fn parse_lock(bytes: &[u8]) -> Result<HelperRelease, LockError> {
     match &lock.ci_binary {
         Some(binary) => {
             check_digests(binary)?;
-            Ok(release.with_binary_digests(platform_digests(binary)?))
+            Ok(release
+                .with_binary_digests(platform_digests(binary)?)
+                .with_generator_digests(platform_digests(&lock.generator)?))
         }
         None => Ok(release),
     }

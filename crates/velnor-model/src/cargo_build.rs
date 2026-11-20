@@ -30,4 +30,28 @@ impl CargoCommand {
             | Self::Machete => false,
         }
     }
+
+    #[must_use]
+    pub const fn is_compile_check(&self) -> bool {
+        match self {
+            Self::Clippy { .. }
+            | Self::CheckAlone { .. }
+            | Self::ClippyFeatures { .. }
+            | Self::DocFeatures { .. }
+            | Self::Doc => true,
+            Self::BuildBinary { .. }
+            | Self::BuildAll
+            | Self::NextestBuild
+            | Self::NextestArchive { .. }
+            | Self::FmtCheck
+            | Self::NextestRun { .. }
+            | Self::NextestFeatures { .. }
+            | Self::LaneGuard { .. }
+            | Self::NextestRunArchive { .. }
+            | Self::TestTarget { .. }
+            | Self::Doctest
+            | Self::Deny { .. }
+            | Self::Machete => false,
+        }
+    }
 }

@@ -3,7 +3,7 @@
 
 use crate::rules::{RenderedStep, Value};
 use crate::steps::{DOWNLOAD_ARTIFACT, UPLOAD_ARTIFACT};
-use velnor_model::CacheKey;
+use velnor_model::{CacheKey, StepKind};
 
 const REPORT_STEP: &str = "report_cache_metrics";
 
@@ -34,16 +34,25 @@ pub(crate) fn cache_id(key: &CacheKey, restore: bool) -> String {
     )
 }
 
-pub(crate) fn lane(
-    caches: &[CacheKey],
-    node_tools: velnor_model::ToolsTelemetry,
-    test_id: Option<String>,
-) -> RenderedStep {
+pub(crate) fn lane(kind: &StepKind, test_id: Option<String>) -> RenderedStep {
+    let StepKind::ReportCaches {
+        caches,
+        node_tools,
+        not_generated,
+        ..
+    } = kind
+    else {
+        return RenderedStep::default();
+    };
     let caches: Vec<_> = caches.iter().map(|key| {
         let root = match key { CacheKey::Tools { .. } | CacheKey::Sources { .. } => None, CacheKey::Target { root, .. } | CacheKey::Delta { root, .. } => Some(root.label().to_owned()) };
         let tools = matches!(key, CacheKey::Tools { .. });
         let step = |restore: bool, node: bool, id: &str| if tools && node { id.to_owned() } else { cache_id(key, restore) };
-        serde_json::json!({"family":key.family(),"root":root,"restore_step":step(true, node_tools.restore, crate::gate::TOOLS_RESTORED_STEP),"save_step":step(false, node_tools.save, crate::gate::TOOLS_SAVED_STEP)})
+        let mut plan = serde_json::json!({"family":key.family(),"root":root,"restore_step":step(true, node_tools.restore, crate::gate::TOOLS_RESTORED_STEP),"save_step":step(false, node_tools.save, crate::gate::TOOLS_SAVED_STEP)});
+        if let (false, Some(reason)) = (tools, not_generated) {
+            plan["not_generated"] = serde_json::Value::String(reason.to_owned());
+        }
+        plan
     }).collect();
     RenderedStep {
         id: Some(REPORT_STEP.to_owned()),

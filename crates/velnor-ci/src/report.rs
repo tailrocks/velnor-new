@@ -24,6 +24,8 @@ pub struct Cache {
     pub usable: bool,
     pub usable_same_lock: bool,
     pub save: SaveOutcome,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub not_generated: Option<String>,
     /// A miss on a key that the cache inventory already listed, on a ref this job may read, when
     /// the job started. `None` when the inventory was not consulted.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -106,7 +108,7 @@ pub fn waste(metrics: &LaneMetrics) -> Vec<String> {
             .map(|event| event.package.as_str())
             .collect();
         for event in &invocation.compilations {
-            if (same_lock && !event.workspace)
+            if (same_lock && !event.workspace && event.restored != Some(false))
                 || (warm
                     && event.workspace
                     && (event.unchanged
@@ -172,6 +174,7 @@ fn git_waste(metrics: &LaneMetrics, invocation: &Invocation) -> Option<String> {
 pub fn check(lanes: &[LaneMetrics]) -> Result<String, CiError> {
     let mut identities = BTreeSet::new();
     let mut violations = Vec::new();
+    let mut notices = Vec::new();
     for lane in lanes {
         validate_evidence(lane)?;
         if !identities.insert(&lane.lane) {
@@ -188,12 +191,21 @@ pub fn check(lanes: &[LaneMetrics]) -> Result<String, CiError> {
         }
         violations.extend(lane.violations.iter().cloned());
         violations.extend(waste(lane));
+        notices.extend(crate::restored_units::base_gaps(lane));
     }
     violations.extend(compilation_repeats(lanes)?);
     violations.sort();
     violations.dedup();
     if violations.is_empty() {
-        Ok(format!("Cache: {} lanes checked, no waste\n", lanes.len()))
+        let mut text = format!("Cache: {} lanes checked, no waste\n", lanes.len());
+        notices.sort();
+        notices.dedup();
+        for notice in notices {
+            text.push_str("::notice::");
+            text.push_str(&notice);
+            text.push('\n');
+        }
+        Ok(text)
     } else {
         Err(CiError::new(violations.join("\n")))
     }
@@ -281,7 +293,7 @@ impl LaneMetrics {
         let mut text = vec!["| Cache | Requested key | Matched key | Hit | Archive bytes | Save |\n|---|---|---|---|---|---|\n".to_owned()];
         for cache in &self.caches {
             text.push(format!(
-                "| {} | `{}` | `{}` | {:?} | {} | {:?} |\n",
+                "| {} | `{}` | `{}` | {:?} | {} | {} |\n",
                 cache.family,
                 cache.requested_key,
                 cache.matched_key.as_deref().unwrap_or("none"),
@@ -289,7 +301,10 @@ impl LaneMetrics {
                 cache
                     .bytes
                     .map_or_else(|| "unknown".to_owned(), |bytes| bytes.to_string()),
-                cache.save
+                match &cache.not_generated {
+                    Some(reason) => format!("not generated ({reason})"),
+                    None => format!("{:?}", cache.save),
+                }
             ));
         }
         let events: Vec<&Compilation> = self

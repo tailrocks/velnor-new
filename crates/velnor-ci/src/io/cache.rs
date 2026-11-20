@@ -10,6 +10,7 @@ use super::input_target::check_removal_target;
 use crate::cache::{KEEP_NEWEST, born_expired, should_save, trim};
 use crate::cache_prune::UsedUnits;
 use crate::error::CiError;
+use crate::escape::{command_line, escape};
 use crate::github::Repo;
 use crate::logscan::scan;
 use crate::time::date_text;
@@ -70,10 +71,7 @@ pub(super) fn decide_counts(
     if let Some(budget) = budget_bytes.filter(|budget| size > *budget) {
         return Ok(Decision {
             save: false,
-            report: format!(
-                "::notice::{} is {size} bytes, more than the repository cache budget of {budget} bytes; saving nothing ({pruning})\n",
-                target.display()
-            ),
+            report: over_budget(target, size, budget, &pruning),
         });
     }
     let born = target.join(BORN_FILE);
@@ -88,9 +86,15 @@ pub(super) fn decide_counts(
     Ok(Decision {
         save: true,
         report: format!(
-            "{} crates compiled, checked or documented; saving {}: {size} bytes, removed {removed} incremental directories; {pruning}\n",
-            counts.crates_compiled(),
-            target.display(),
+            "{}\n",
+            escape(
+                &format!(
+                    "{} crates compiled, checked or documented; saving {}: {size} bytes, removed {removed} incremental directories; {pruning}",
+                    counts.crates_compiled(),
+                    target.display(),
+                ),
+                false,
+            )
         ),
     })
 }
@@ -265,35 +269,102 @@ pub(super) fn run_decide(args: &crate::cli_cache::DecideArgs) -> Result<String, 
         .map_err(|e| CiError::new(format!("cannot read {}: {e}", log_path.display())))?;
     let manifests = super::cache_paths::list("VELNOR_CACHE_MANIFESTS")?
         .unwrap_or_else(|| args.manifest_path.clone());
-    let refusal = super::cache_sources::refusal(&root, &manifests)?;
-    let sources = refusal.is_none();
-    let decision = if let Some(reason) = refusal {
+    let deadline = crate::public_probe::Deadline::after(std::time::Duration::from_secs(
+        args.public_probe_seconds,
+    ));
+    let admission =
+        super::cache_sources::refusal(&root, &manifests, &args.public_probe_api, deadline)?;
+    let leak = admission
+        .private_sources
+        .then(|| {
+            super::cache_credentials::saved_root().map_or_else(
+                || Some("HOME is not set".to_owned()),
+                |home| super::cache_credentials::find(&home),
+            )
+        })
+        .flatten();
+    let sources = admission.refusal.is_none() && leak.is_none();
+    let (probe_log, mismatch) = (admission.log, admission.mismatch);
+    let decision = if let Some(reason) = admission.refusal {
         Decision {
             save: false,
             report: reason,
+        }
+    } else if let Some(linked) = linked_target_notice(&target) {
+        Decision {
+            save: false,
+            report: linked,
         }
     } else {
         let recorded = super::activity::invocations()?;
         let counts = super::activity::activity(recorded.as_deref())?
             .unwrap_or_else(|| crate::logscan::scan(&String::from_utf8_lossy(&log)));
         let used = recorded.as_deref().and_then(UsedUnits::from_invocations);
-        decide_counts(
+        let decision = decide_counts(
             &counts,
             &target,
             archive.as_deref(),
             super::now_seconds(),
             budget_limit()?,
             used.as_ref(),
-        )?
+        )?;
+        match &leak {
+            Some(why) => Decision {
+                report: format!(
+                    "{}the sources cache is not saved because a credential could be inside it: {why}\n",
+                    decision.report
+                ),
+                ..decision
+            },
+            None => decision,
+        }
     };
     super::append_outputs(&format!("save={}\nsources={sources}\n", decision.save))?;
-    let mut report = decision.report;
+    if let Some(mismatch) = mismatch {
+        return Err(CiError::new(format!(
+            "{probe_log}{}{mismatch}",
+            decision.report
+        )));
+    }
+    let mut report = probe_log + &decision.report;
     if decision.save
         && let Err(error) = super::delta_snapshot::record_inventory(&target)
     {
         super::delta_snapshot::forget_inventory(&target)?;
-        report =
-            format!("{report}::notice::{error}; pull requests will read the whole restored base\n");
+        report = format!(
+            "{report}{}",
+            command_line(
+                "notice",
+                &format!("{error}; pull requests will read the whole restored base")
+            )
+        );
     }
     Ok(report)
+}
+
+fn linked_target_notice(target: &Path) -> Option<String> {
+    fs::symlink_metadata(target)
+        .ok()
+        .filter(|metadata| metadata.file_type().is_symlink())?;
+    let leads_to = fs::canonicalize(target).map_or_else(
+        |_| "an unresolved directory".to_owned(),
+        |resolved| resolved.display().to_string(),
+    );
+    Some(command_line(
+        "notice",
+        &format!(
+            "{} is a link to {leads_to}; saving it would archive the link, not the build directory, and a fresh runner would restore a dangling link; saving nothing (turn off mbx managed target views with `mbx settings set target.views false` on lanes that save this cache)",
+            target.display()
+        ),
+    ))
+}
+
+fn over_budget(target: &Path, size: u64, budget: u64, pruning: &str) -> String {
+    command_line(
+        "notice",
+        &format!(
+            "{} is {size} bytes, more than the repository cache budget of {budget} bytes; saving nothing ({pruning})",
+            target.display()
+        ),
+    )
 }

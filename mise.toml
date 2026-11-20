@@ -79,19 +79,20 @@ for EXPECTED in generator/samples/*/expected; do
   git -C "$SAMPLE" init -q
   # The repository's config supplies the self-hosted runner labels (velnor,
   # ubuntu-26.04-scale-set) that the generated workflows use; the sample has none.
-  (cd "$SAMPLE" && echo "$FILES" | xargs jactionlint --config-file "$ROOT/.github/jactionlint.yaml" --profile correctness --format gcc --strict-exit --no-online --shellcheck= --pyflakes=)
+  (cd "$SAMPLE" && echo "$FILES" | xargs jactionlint --config-file "$ROOT/.github/jactionlint.yaml" --format gcc --strict-exit --no-online --shellcheck= --pyflakes=)
   CHECKED=$((CHECKED + 1))
 done
 test "$CHECKED" -gt 0
 '''
 
 [tasks.lint-parity-verify-candidate]
-description = "Run the unit tests of the parity verifier (scripts/parity-verify-candidate.py)"
+description = "Run the unit tests of the parity verifier and of the hosted-phase MBX summary parser"
 run = '''
 set -eu
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
 python3 -m unittest scripts/test_parity_verify_candidate.py
+python3 scripts/hosted_phase_measurement/tests/test_mbx_summary.py
 '''
 
 [tasks.validate-hk]
