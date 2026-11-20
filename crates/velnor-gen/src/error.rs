@@ -9,7 +9,7 @@ use velnor_render::RuleViolation;
 use velnor_rust::{DetectError, MAX_SOURCE_ROOTS, MetadataFileError};
 use velnor_workflows::WorkflowsError;
 
-use crate::helper_gate::{CACHE_DEBUG_HELPER, REQUIRED_CHECK_HELPER};
+use crate::helper_gate::{CACHE_DEBUG_HELPER, GENERATED_CHECK_HELPER, REQUIRED_CHECK_HELPER};
 use crate::{COMPATIBLE_HELPER_SERIES, HELPER_MINIMUM};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -38,6 +38,7 @@ pub enum GenerateError {
     PrCiHelperTooOld(HelperVersion),
     DocsHelperTooOld(HelperVersion),
     CheckAloneHelperTooOld(HelperVersion),
+    GeneratedCheckHelperTooOld(HelperVersion),
     TooManySourceRoots(usize),
     FamilyTagHelperTooOld(HelperVersion),
     TagPushHelperTooOld(HelperVersion),
@@ -125,6 +126,12 @@ impl fmt::Display for GenerateError {
             Self::CheckAloneHelperTooOld(version) => write!(
                 f,
                 "velnor-ci {version} does not know the check_alone key of .velnor/rust-ci.toml; pin velnor-ci 0.1.97 or later with `velnor-gen pin-helper 0.1.97`"
+            ),
+            Self::GeneratedCheckHelperTooOld(version) => write!(
+                f,
+                "velnor-ci {version} does not know kind = \"generated-check\" in a [[lint]] entry of .velnor/rust-ci.toml; pin velnor-ci {}.{}.{} or later with `velnor-gen pin-helper {}.{}.{}`",
+                GENERATED_CHECK_HELPER.0, GENERATED_CHECK_HELPER.1, GENERATED_CHECK_HELPER.2,
+                GENERATED_CHECK_HELPER.0, GENERATED_CHECK_HELPER.1, GENERATED_CHECK_HELPER.2,
             ),
             Self::TestLaneHelperTooOld(version) => write!(
                 f,

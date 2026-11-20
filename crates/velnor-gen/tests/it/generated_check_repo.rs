@@ -13,7 +13,8 @@ use crate::facts::TestResult;
 use crate::generated_check::CHECK;
 use crate::golden::samples;
 use crate::io::unique_id;
-use crate::lock_archive::archive_lock;
+use crate::generated_check::CHECK_HELPER;
+use crate::lock_archive::archive_lock_at;
 use crate::release_symlink::git;
 
 const WORKFLOW: &str = ".github/workflows/rust-ci.yml";
@@ -83,7 +84,7 @@ fn fixture() -> Result<Fixture, Box<dyn Error>> {
         ".velnor/rust-ci.toml",
         &format!("runner = 'ubuntu-26.04-scale-set'\n\n{CHECK}"),
     )?;
-    fixture.write(".velnor/rust-ci.lock", &archive_lock()?)?;
+    fixture.write(".velnor/rust-ci.lock", &archive_lock_at(CHECK_HELPER)?)?;
     let metadata = fs::read_to_string(sample.join("cargo-metadata/Cargo.toml.json"))?
         .replace("/repo", &repo.display().to_string());
     fs::write(fixture.base.join("bin/metadata.json"), metadata)?;

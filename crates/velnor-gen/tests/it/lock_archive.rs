@@ -64,12 +64,12 @@ a7e9a4897a81bb86338896573e43b79b4f05e34a489549f1687117dd456648ba  velnor-ci-aarc
 ";
 
 pub(crate) fn archive_lock() -> Result<String, Box<dyn Error>> {
-    Ok(pin_lock(
-        "0.1.81",
-        COMMIT_FILE,
-        ARCHIVE_SUMS,
-        Some(BINARY_SUMS),
-    )?)
+    archive_lock_at("0.1.81")
+}
+
+/// The archive lock pinned at `version`, for a test whose config needs that helper.
+pub(crate) fn archive_lock_at(version: &str) -> Result<String, Box<dyn Error>> {
+    Ok(pin_lock(version, COMMIT_FILE, ARCHIVE_SUMS, Some(BINARY_SUMS))?)
 }
 
 #[test]

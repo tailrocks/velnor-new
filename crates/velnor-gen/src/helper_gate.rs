@@ -18,6 +18,8 @@ const MERGE_GROUP_HELPER: (u64, u64, u64) = (0, 1, 103);
 /// The first `velnor-ci` whose `.velnor/rust-ci.toml` parser accepts the `cache_debug` key.
 // helper-gate: first in rust-ci-v0.1.82 via bfc3528bd7
 pub(crate) const CACHE_DEBUG_HELPER: (u64, u64, u64) = (0, 1, 82);
+/// The first `velnor-ci` whose `.velnor/rust-ci.toml` parser accepts `kind = "generated-check"`.
+pub(crate) const GENERATED_CHECK_HELPER: (u64, u64, u64) = (0, 1, 107);
 /// The first `velnor-ci` that names the `required_check` check when it reads a queued run.
 // helper-gate: first in tools-v0.1.97 via af11477df1
 pub(crate) const REQUIRED_CHECK_HELPER: (u64, u64, u64) = (0, 1, 97);
@@ -121,6 +123,17 @@ pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, Generate
         && !release.version().at_least(BUDGET_MODES_HELPER)
     {
         return Err(GenerateError::BudgetModesHelperTooOld(
+            release.version().clone(),
+        ));
+    }
+    if facts
+        .config
+        .lint
+        .iter()
+        .any(|lint| lint.kind == LintKind::GeneratedCheck)
+        && !release.version().at_least(GENERATED_CHECK_HELPER)
+    {
+        return Err(GenerateError::GeneratedCheckHelperTooOld(
             release.version().clone(),
         ));
     }

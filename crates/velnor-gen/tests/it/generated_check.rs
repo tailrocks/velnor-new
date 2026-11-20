@@ -10,10 +10,12 @@ use crate::facts::TestResult;
 use crate::lint_gate::{needs_of, spec, verdict};
 use crate::lint_lane::{LINT, repo, runs};
 use crate::lock::{COMMIT_FILE, SUMS};
-use crate::lock_archive::archive_lock;
+use crate::lock_archive::archive_lock_at;
 use crate::pipeline::workflow;
 
 pub(crate) const CHECK: &str = "[[lint]]\nkind = 'generated-check'\n";
+/// The first helper that reads `kind = "generated-check"`; every check fixture pins it.
+pub(crate) const CHECK_HELPER: &str = "0.1.107";
 const ID: &str = "lint-generated-check";
 const X64: &str = "2a3ff18c1c5fc61a10aa66976ccf1fe669daa4af4eafec260b4c87d81afdf8f9";
 const ARM64: &str = "300f6b8a0d89cfe0643433710d7df3453c3524e7ff84c7dfc84854a78c7e120c";
@@ -26,7 +28,7 @@ fn locked(config: &str, lock: &str) -> Result<RepoView, Box<dyn std::error::Erro
 }
 
 fn rendered(config: &str) -> Result<String, Box<dyn std::error::Error>> {
-    workflow(&locked(config, &archive_lock()?)?)
+    workflow(&locked(config, &archive_lock_at(CHECK_HELPER)?)?)
 }
 
 fn job(text: &str) -> Result<Value, Box<dyn std::error::Error>> {
@@ -93,7 +95,7 @@ fn the_check_runs_the_pinned_release_after_its_digest_is_verified_and_never_a_bu
     let env = &install["env"];
     assert_eq!(
         env["VELNOR_GEN_RELEASE"],
-        "https://github.com/tailrocks/velnor-new/releases/download/rust-ci-v0.1.81"
+        "https://github.com/tailrocks/velnor-new/releases/download/tools-v0.1.107"
     );
     let archive = env["VELNOR_GEN_ARCHIVE"].as_str().ok_or("no archive")?;
     let digest = env["VELNOR_GEN_SHA256"].as_str().ok_or("no digest")?;
@@ -172,7 +174,7 @@ fn the_check_is_off_unless_a_lint_entry_asks_for_it() -> TestResult {
 
 #[test]
 fn a_lock_without_archive_digests_cannot_install_velnor_gen_so_generation_stops() -> TestResult {
-    let raw = velnor_rust::pin_lock("0.1.81", COMMIT_FILE, SUMS, None)?;
+    let raw = velnor_rust::pin_lock(CHECK_HELPER, COMMIT_FILE, SUMS, None)?;
     let result = expected_files(&locked(CHECK, &raw)?);
     assert!(
         matches!(result, Err(GenerateError::GeneratorNotLocked(_))),
