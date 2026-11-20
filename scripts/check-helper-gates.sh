@@ -1,16 +1,4 @@
 #!/usr/bin/env bash
-# Usage: check-helper-gates.sh <base-ref>            diff <base-ref>...HEAD
-#        check-helper-gates.sh --diff FILE --current 0.1.N
-# Fails when an added or changed helper-version gate in the generator crates disagrees with the
-# velnor-ci version this tree builds (crates/velnor-ci/Cargo.toml at HEAD, or --current).
-# A correction may carry `// helper-gate: first in tools-v0.1.N via <commit-ish>` on the
-# gate line or the line directly above it; it passes only when the gate is N, the commit is
-# in tools-v0.1.N, and the commit is not in tools-v0.1.(N-1). Releases before 0.1.85 are
-# tagged rust-ci-v0.1.N, so the marker may name rust-ci-v0.1.N for those.
-# Convention: a gate above the tree's velnor-ci version is unreleased and carries no marker; a gate at
-# or below it must carry `// helper-gate: first in tools-v0.1.N via <commit>`. In the release bump that
-# sets the version to N, the tag does not exist yet, so the marker commit only has to be in HEAD.
-# Any other helper-gate marker, and any prose "First released in" / "not tagged yet" line, is rejected.
 set -euo pipefail
 
 diff_file=""
@@ -39,13 +27,11 @@ case "$patch" in '' | *[!0-9]*) echo "cannot read the velnor-ci version from '$c
 series=${current%.*}
 next="$series.$((patch + 1))"
 
-# A gate is released when its version is at or below the velnor-ci version this tree builds.
 is_released() {
   local v=$1
   [ "${v%.*}" = "$series" ] && [ "${v##*.}" -le "$patch" ]
 }
 
-# Helper releases from 0.1.85 are tagged tools-v<ver>; earlier ones rust-ci-v<ver>.
 release_tag() {
   if git rev-parse -q --verify "refs/tags/tools-v0.1.$1^{commit}" >/dev/null; then
     echo "tools-v0.1.$1"
@@ -91,7 +77,7 @@ verify_correction() {
   echo "helper gate correction: OK ($gate first in $tag via $commit)"
 }
 
-report=$(awk -v series="$series" -v patch="$patch" -v next_version="$next" '
+report=$(awk -v series="$series" -v patch="$patch" '
   function versions(line, out,    rest, n, v) {
     n = 0
     rest = line
@@ -112,20 +98,34 @@ report=$(awk -v series="$series" -v patch="$patch" -v next_version="$next" '
     out["commit"] = substr(m, index(m, " via ") + 5)
     return 1
   }
-  /^diff --git / { file = $4; sub(/^b\//, "", file); counted = (file ~ /^crates\/velnor-(gen|render|rust)\/src\//); prevnew = ""; next }
-  /^@@/ { prevnew = ""; next }
+  function strip(line,    s) {
+    s = line
+    sub(/helper-gate: first in (tools|rust-ci)-v0\.1\.[0-9]+ via [^ ]+/, "", s)
+    return s
+  }
+  /^diff --git / { file = $4; sub(/^b\//, "", file); counted = (file ~ /^crates\/velnor-(gen|render|rust)\/src\//); prevnew = ""; prevadded = 0; next }
+  /^@@/ { prevnew = ""; prevadded = 0; next }
   /^\+\+\+ |^--- / { next }
   /^-/ { if (counted) removed[file SUBSEP substr($0, 2)] = 1; next }
   /^[ +]/ {
     text = substr($0, 2)
     above = prevnew
+    aboveadded = prevadded
     prevnew = text
-    if ($0 !~ /^\+/) next
-    if (tolower(text) ~ /first released in|not tagged yet/) { printf "PROSE\t%s\t%s\n", file, text; next }
+    prevadded = ($0 ~ /^\+/)
+    if (!prevadded) {
+      if (!counted || !aboveadded || !marker(above, am) || versions(strip(above), av) > 0) next
+      added[++count] = file SUBSEP strip(text)
+      markN[count] = am["n"]
+      markC[count] = am["commit"]
+      ctx[count] = 1
+      delete am
+      next
+    }
+    if (tolower(text) ~ /^[ \t]*(\/\/|\/\*|\*).*(first released in|not tagged yet)/) { printf "PROSE\t%s\t%s\n", file, text; next }
     if (text ~ /helper-gate:/ && !marker(text, probe_mk)) { printf "MARKER\t%s\t%s\n", file, text; next }
     if (!counted) next
-    stripped = text
-    sub(/helper-gate: first in (tools|rust-ci)-v0\.1\.[0-9]+ via [^ ]+/, "", stripped)
+    stripped = strip(text)
     has = marker(text, mk) || marker(above, mk)
     markN_now = has ? mk["n"] : ""
     markC_now = has ? mk["commit"] : ""
@@ -139,7 +139,7 @@ report=$(awk -v series="$series" -v patch="$patch" -v next_version="$next" '
   END {
     for (i = 1; i <= count; i++) {
       split(added[i], parts, SUBSEP)
-      if (added[i] in removed) continue
+      if (!ctx[i] && added[i] in removed) continue
       n = versions(parts[2], found)
       for (k = 1; k <= n; k++) {
         if ((added[i] SUBSEP found[k]) in seen) continue
