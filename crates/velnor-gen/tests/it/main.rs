@@ -246,6 +246,7 @@ mod save_gate_outcomes;
 mod select;
 mod setup_action;
 mod setup_action_cache;
+mod setup_action_guard;
 mod setup_action_orphans;
 mod setup_action_owner;
 mod setup_action_swap;
