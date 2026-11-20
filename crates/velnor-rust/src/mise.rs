@@ -143,7 +143,7 @@ pub(crate) fn nextest_tool(pins: &ToolPins) -> Option<&str> {
 
 pub(crate) const MISE_CONFIG: RepoPath = RepoPath::from_static("mise.toml");
 const MBX_TOOL: &str = "mr-boxington";
-// helper-gate: first in tools-v0.1.108 via d518291133
+// First released in tools-v0.1.108 (not tagged yet when this gate was written).
 pub(crate) const MBX_PIN_HELPER: (u64, u64, u64) = (0, 1, 108);
 
 #[must_use]
