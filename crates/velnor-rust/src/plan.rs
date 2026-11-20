@@ -113,8 +113,8 @@ fn apply_extensions(facts: &RepoFacts, jobs: &mut [Job], single: bool) {
     if facts.config.cache_debug == CacheDebug::On {
         crate::cargo_log::upload(jobs);
     }
-    crate::private_fetch::insert(facts.config.private_sources.as_ref(), jobs);
-    crate::release_assets::insert(&facts.config, jobs);
+    crate::private_fetch::insert(facts, jobs);
+    crate::release_assets::insert(facts, jobs);
     crate::lock_scope::apply(facts, jobs);
     crate::mbx_steps::apply(facts, jobs);
     if facts.config.push_after_merge_group == PushAfterMergeGroup::SkipWhenQueueRunPassed {
