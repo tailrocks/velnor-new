@@ -33,7 +33,7 @@ fn compiling_jobs(version: &str) -> Result<Vec<Vec<String>>, Box<dyn std::error:
 #[test]
 fn a_helper_that_ships_the_setting_keeps_build_script_outputs_under_target() -> TestResult {
     let jobs = compiling_jobs("0.1.111")?;
-    assert!(!jobs.is_empty());
+    assert_ne!(jobs.len(), 0);
     for runs in jobs {
         assert_eq!(runs, [STORE_RUN, OUT_DIRS_RUN]);
     }
@@ -44,7 +44,7 @@ fn a_helper_that_ships_the_setting_keeps_build_script_outputs_under_target() -> 
 fn an_older_helper_renders_the_private_store_step_byte_for_byte_as_before() -> TestResult {
     for version in ["0.1.88", "0.1.109", "0.1.110"] {
         let jobs = compiling_jobs(version)?;
-        assert!(!jobs.is_empty(), "{version}");
+        assert_ne!(jobs.len(), 0, "{version}");
         for runs in jobs {
             assert_eq!(runs, [STORE_RUN], "{version}");
         }
