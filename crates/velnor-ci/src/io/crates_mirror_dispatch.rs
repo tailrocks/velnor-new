@@ -37,8 +37,10 @@ pub(super) fn forward() -> Result<ExitStatus, CiError> {
         std::env::var_os(WRAPPER_ENV)
             .ok_or_else(|| CiError::new("missing VELNOR_CARGO_WRAPPER"))?,
     );
-    let config = std::env::var_os(CONFIG_ENV).filter(|config| !config.is_empty());
-    let mirror_off = std::env::var(DISABLE_ENV).is_ok_and(|value| value == "off");
+    let exported_config = std::env::var_os(CONFIG_ENV);
+    let config = exported_config.clone().filter(|config| !config.is_empty());
+    let mirror_off = std::env::var(DISABLE_ENV).is_ok_and(|value| value == "off")
+        || exported_config.is_some_and(|config| config.is_empty());
     let paths: Vec<_> =
         std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default()).collect();
     let args: Vec<_> = std::env::args_os().skip(1).collect();

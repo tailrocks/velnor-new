@@ -62,6 +62,7 @@ fn run_wrapper_with(
     let env = fs::read_to_string(root.join("env"))?;
     let config = env
         .lines()
+        .rev()
         .find_map(|line| line.strip_prefix("VELNOR_CARGO_CONFIG="))
         .map(str::to_owned);
     let mirror_off = env.lines().any(|line| line == "VELNOR_CRATES_MIRROR=off");

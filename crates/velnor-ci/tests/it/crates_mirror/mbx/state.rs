@@ -143,3 +143,19 @@ fn undeclared_mbx_continues_with_plain_cargo_when_mise_never_created_its_wrapper
     assert!(String::from_utf8_lossy(&output.stdout).contains("plain-cargo-ran"));
     Ok(())
 }
+
+#[test]
+fn a_cargo_run_after_a_mirror_off_setup_uses_plain_crates_io_through_the_earlier_wrapper()
+-> TestResult {
+    let repo = configured_repo("crates-mirror-off-after-on")?;
+    let off = setup_command(repo.root(), REGISTRY)
+        .current_dir(repo.root())
+        .env("VELNOR_CRATES_MIRROR", "off")
+        .output()?;
+    assert!(off.status.success(), "{off:?}");
+    let plain = plain_cargo(&repo)?;
+    let output = run_wrapper_with(repo.root(), &plain, false, &[])?;
+    assert!(output.status.success(), "{output:?}");
+    assert!(String::from_utf8_lossy(&output.stdout).contains("plain-cargo-ran"));
+    Ok(())
+}

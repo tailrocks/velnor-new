@@ -6,7 +6,8 @@ use std::os::unix::fs::{MetadataExt, PermissionsExt, symlink};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use velnor_ci::mbx_seed::{Inputs, Outcome, env_lines, message, select};
+use velnor_ci::mbx_seed::{Inputs, Outcome, env_lines, message, record_truncation, select};
+use velnor_ci::waste_evidence::seed_truncated;
 
 use crate::io::Repo;
 
@@ -386,4 +387,26 @@ fn a_seeded_file_never_keeps_a_setuid_or_setgid_bit_from_its_source() {
         .unwrap_or_else(|e| unreachable!("{e}"))
         .mode();
     assert_eq!(mode & 0o6000, 0, "copied mode {mode:o} keeps setuid/setgid");
+}
+
+#[test]
+fn a_truncated_seed_is_recorded_for_the_report_and_a_complete_one_is_not() {
+    let host = host("mbx-seed-truncation-record");
+    let seed = warm_seed(&host);
+    let temp = host.root.join("temp");
+    let cut = run_within(
+        &host,
+        "pull_request",
+        "refs/pull/1/merge",
+        Some(&seed),
+        Duration::ZERO,
+    );
+    assert!(!seed_truncated(&temp));
+    assert!(record_truncation(&temp, &cut).is_ok());
+    assert!(seed_truncated(&temp));
+    fs::remove_file(temp.join(velnor_ci::waste_evidence::SEED_TRUNCATED))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let whole = run(&host, "pull_request", "refs/pull/1/merge", Some(&seed));
+    assert!(record_truncation(&temp, &whole).is_ok());
+    assert!(!seed_truncated(&temp));
 }
