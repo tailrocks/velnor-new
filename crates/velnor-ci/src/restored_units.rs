@@ -101,7 +101,7 @@ pub fn base_gaps(metrics: &LaneMetrics) -> Vec<String> {
             let packages = packages.into_iter().collect::<Vec<_>>().join(", ");
             if missing_input {
                 format!(
-                    "{root}: dependency packages whose restored dep-info names a file outside target/ that is missing (mbx keeps build-script outputs in its cache directory unless MBX_SHARE_OUT_DIR=0, and the job's store started empty): {packages}"
+                    "{root}: dependency packages whose restored dep-info names a file outside target/ that is missing (for example mbx build-script outputs in a cache directory this job did not have; MBX_SHARE_OUT_DIR=0 keeps them under target/): {packages}"
                 )
             } else {
                 format!(

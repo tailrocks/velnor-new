@@ -46,8 +46,15 @@ fn names_missing_file<'a>(dep_info: &Path, inside: impl Iterator<Item = &'a Path
         let named = Path::new(named);
         named.is_absolute()
             && !inside.iter().any(|root| named.starts_with(root))
-            && fs::symlink_metadata(named)
-                .is_err_and(|error| error.kind() == std::io::ErrorKind::NotFound)
+            && !cargo_unpacks(named)
+            && fs::metadata(named).is_err_and(|error| error.kind() == std::io::ErrorKind::NotFound)
+    })
+}
+
+fn cargo_unpacks(path: &Path) -> bool {
+    let parts: Vec<_> = path.components().map(|part| part.as_os_str()).collect();
+    parts.windows(2).any(|pair| {
+        (pair[0] == "registry" && pair[1] == "src") || (pair[0] == "git" && pair[1] == "checkouts")
     })
 }
 

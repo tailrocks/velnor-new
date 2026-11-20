@@ -125,8 +125,6 @@ fn copy_seeded_subsets(from: &Path, to: &Path) -> TestResult {
     Ok(())
 }
 
-/// Builds cold into a fresh store, then rebuilds from the saved target in a
-/// store that holds only what `mbx-seed` copies (`seeded`) or nothing.
 fn rebuild_from_base(
     name: &str,
     setting: Option<(&str, &str)>,

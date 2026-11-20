@@ -125,6 +125,9 @@ restored. `inputs restore` records those units as `missing-input` in
 names the reason, not as waste. Cargo marks such a unit dirty, and the usual
 cause is mbx keeping build-script output in an `out-dirs` store the job did not
 have; the generated `Keep mbx build-script outputs in target` step prevents it.
+Files under `registry/src` and `git/checkouts` do not count: Cargo unpacks them
+again, and the Sources cache does not hold them. A path that is a dangling
+symbolic link counts as missing.
 
 Besides compiled-despite-restored-inputs and download waste, the report names
 five more avoidable costs, each only when the evidence shows it was avoidable:
