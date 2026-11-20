@@ -70,9 +70,10 @@
       "labels": ["dependencies", "needs-lock-refresh"]
     },
     {
-      "description": "Exact `=x.y.z` cargo pins are intentional and must never be bumped by Renovate. Pins are release-coupled (velnor-gen in crates/velnor-ci, moved only by the tools release), or held for an advisory or a compile break (rustix 1.1.6 for RUSTSEC-2026-0486, der 0.7 in velnor-runner-attestation). Bumps are made by hand in a reviewed change.",
+      "description": "release-coupled: bumped by the tools release only. velnor-gen is pinned exactly in crates/velnor-ci so the release moves both together.",
       "matchManagers": ["cargo"],
-      "matchCurrentValue": "/^=/",
+      "matchPackageNames": ["velnor-gen"],
+      "matchFileNames": ["crates/velnor-ci/Cargo.toml"],
       "enabled": false
     },
     {
