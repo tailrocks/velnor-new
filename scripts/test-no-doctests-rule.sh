@@ -50,6 +50,9 @@ check block_fence_code  pass '/** prose */\nfn f() { let s = "```"; }\n'
 check plain_block_fence pass '/* ```\n * not a doc\n */\nfn f() {}\n'
 check empty_block_code  pass '/**/\nfn f() { let s = "```"; }\n'
 check block_star_close  pass '/** prose **/\nfn f() { let s = "```"; }\n'
+check nested_block_fence fail '/** outer /* nested */\n * ```\n * let x = 1;\n * ```\n */\nfn f() {}\n'
+check str_block_literal pass 'fn f() { let s = "/** ```"; }\n'
+check str_inner_literal pass 'fn f() { let s = "/*! ~~~"; }\n'
 
 if [ "$fails" -ne 0 ]; then
   echo "no-doctests fixtures: $fails failing"
