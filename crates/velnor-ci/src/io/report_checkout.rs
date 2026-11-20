@@ -95,7 +95,7 @@ pub(super) fn read(directory: &Path) -> Result<ReportCheckout, CiError> {
 
 #[cfg(test)]
 mod tests {
-    use super::gitlinks;
+    use super::{gitlinks, read};
     use std::path::{Path, PathBuf};
     use std::process::Command;
 
@@ -142,5 +142,81 @@ mod tests {
             .map(|path| path.as_str().to_owned())
             .collect();
         assert_eq!(found, ["vendor/lib"]);
+    }
+
+    #[test]
+    fn a_configurations_file_inside_a_submodule_is_refused_by_the_runtime_check() {
+        let directory: PathBuf =
+            std::env::temp_dir().join(format!("velnor-ci-submodule-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&directory);
+        let submodule = directory.join("vendor/lib");
+        std::fs::create_dir_all(&submodule).unwrap_or_else(|e| unreachable!("{e}"));
+        std::fs::write(submodule.join("configurations.json"), "{}\n")
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        git(&submodule, &["init", "--quiet"]);
+        git(&submodule, &["add", "configurations.json"]);
+        git(
+            &submodule,
+            &[
+                "-c",
+                "user.name=velnor-test",
+                "-c",
+                "user.email=velnor-test@example.invalid",
+                "-c",
+                "commit.gpgsign=false",
+                "commit",
+                "--quiet",
+                "-m",
+                "init",
+            ],
+        );
+        std::fs::write(
+            directory.join("Cargo.toml"),
+            "[package]\nname = 'app'\nversion = '0.1.0'\nedition = '2024'\n",
+        )
+        .unwrap_or_else(|e| unreachable!("{e}"));
+        std::fs::create_dir_all(directory.join("src")).unwrap_or_else(|e| unreachable!("{e}"));
+        std::fs::write(directory.join("src/lib.rs"), "\n").unwrap_or_else(|e| unreachable!("{e}"));
+        std::fs::write(
+            directory.join("Cargo.lock"),
+            "version = 4\n\n[[package]]\nname = \"app\"\nversion = \"0.1.0\"\n",
+        )
+        .unwrap_or_else(|e| unreachable!("{e}"));
+        std::fs::create_dir_all(directory.join(".velnor")).unwrap_or_else(|e| unreachable!("{e}"));
+        std::fs::write(
+            directory.join(".velnor/rust-ci.toml"),
+            "[[check_configurations]]\nroot = '.'\nconfigurations = 'vendor/lib/configurations.json'\n",
+        )
+        .unwrap_or_else(|e| unreachable!("{e}"));
+        std::fs::write(
+            directory.join(".gitmodules"),
+            "[submodule \"vendor/lib\"]\n\tpath = vendor/lib\n\turl = ./vendor/lib\n",
+        )
+        .unwrap_or_else(|e| unreachable!("{e}"));
+        git(&directory, &["init", "--quiet"]);
+        git(
+            &directory,
+            &[
+                "add",
+                ".gitmodules",
+                "Cargo.toml",
+                "Cargo.lock",
+                "src/lib.rs",
+                ".velnor/rust-ci.toml",
+            ],
+        );
+        git(&directory, &["add", "vendor/lib"]);
+        git(&directory, &["submodule", "init", "--quiet"]);
+        velnor_gen::io::write_metadata(&directory).unwrap_or_else(|e| unreachable!("{e}"));
+        let outcome = read(&directory)
+            .map_err(|e| e.to_string())
+            .and_then(|report| {
+                velnor_rust::detect(&report.checkout.view).map_err(|e| e.to_string())
+            });
+        let _ = std::fs::remove_dir_all(&directory);
+        let error = outcome
+            .err()
+            .unwrap_or_else(|| unreachable!("the submodule path was accepted"));
+        assert!(error.contains("submodule"), "{error}");
     }
 }
