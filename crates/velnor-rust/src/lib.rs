@@ -39,6 +39,7 @@ mod embedded;
 mod error;
 mod error_config;
 mod error_lane;
+mod excluded_lock;
 mod external_config;
 mod group_runs;
 mod groups;
