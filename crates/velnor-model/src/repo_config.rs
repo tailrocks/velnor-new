@@ -11,6 +11,8 @@ use crate::lint::LintJob;
 use crate::mbx::MbxMode;
 use crate::policy_table::PolicyTable;
 use crate::shape::Shape;
+
+pub use crate::setup_phase::SetupPhase;
 use crate::test_group::TestGroup;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -235,6 +237,8 @@ pub struct TestSetup {
     pub root: Option<RepoPath>,
     pub name: String,
     pub run: String,
+    /// The `phase` key, if written. `None` and `Some(Test)` run before the tests only.
+    pub phase: Option<SetupPhase>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

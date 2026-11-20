@@ -312,5 +312,6 @@ pub use crate::policy_table::{DenyCheck, DenyLane, PolicyTable};
 pub use crate::repo_config::{
     CacheDebug, CheckoutScope, CiDebugInfo, CratesMirror, DocsRun, FullRun, InputRule,
     LaneFeatures, LaneJob, LaneKeysWritten, MbxRemote, MbxStore, OnMain, PrCi, PrivateSources,
-    PushAfterMergeGroup, RustCiConfig, SpeedBudget, TestLane, TestSetup, WorkspaceGroup,
+    PushAfterMergeGroup, RustCiConfig, SetupPhase, SpeedBudget, TestLane, TestSetup,
+    WorkspaceGroup,
 };

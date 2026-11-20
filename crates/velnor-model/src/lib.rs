@@ -21,6 +21,7 @@ mod repo;
 mod repo_config;
 mod sealed;
 mod selection;
+mod setup_phase;
 mod shape;
 mod steps;
 mod test_group;
@@ -62,7 +63,7 @@ pub use repo::{
     DenyLane, DependencyKind, DocsRun, FullRun, InputOwner, InputRule, LaneFeatures, LaneJob,
     LaneKeysWritten, MbxRemote, MbxStore, MemberDependency, OnMain, PackageDependency, PolicyTable,
     PolicyTools, PrCi, PrivateSources, PushAfterMergeGroup, RepoFacts, RepoView,
-    RepositoryIdentity, RustCiConfig, RustMember, RustMetadata, RustPackage, RustRoot, SpeedBudget,
+    RepositoryIdentity, RustCiConfig, RustMember, RustMetadata, RustPackage, RustRoot, SetupPhase, SpeedBudget,
     Target, TargetKind, TestLane, TestSetup, Timings, ToolLock, ToolPin, ToolPins, ToolRequest,
     Toolchain, UnownedPackage, Unread, Weakening, WorkspaceGroup,
 };
