@@ -75,19 +75,45 @@ pub(crate) fn build(directory: &Path, args: &InputsBuildArgs) -> Result<String, 
         declared: BTreeSet::new(),
         location,
     };
-    if let Some(preflight) = &invocation.preflight {
-        builder.stabilize(preflight, true, true)?;
+    let marker = builder.marker_directories();
+    match builder.audit(&invocation) {
+        Ok(()) => {
+            failure::clear_failure(&marker)?;
+            timing::report();
+            Ok(String::new())
+        }
+        Err(error) => {
+            let failed = failure::Failure {
+                command: invocation.label(),
+                selection: invocation.selection(),
+            };
+            match failure::record_failure(&marker, &failed) {
+                Ok(()) => Err(error),
+                Err(record) => Err(CiError::new(format!("{error}; {record}"))),
+            }
+        }
     }
-    builder.stabilize(
-        &invocation.command,
-        invocation.compiler,
-        invocation.cargo && invocation.preflight.is_none(),
-    )?;
-    timing::report();
-    Ok(String::new())
 }
 
 impl Builder<'_> {
+    fn audit(&mut self, invocation: &Invocation) -> Result<(), CiError> {
+        if let Some(preflight) = &invocation.preflight {
+            self.stabilize(preflight, true, true)?;
+        }
+        self.stabilize(
+            &invocation.command,
+            invocation.compiler,
+            invocation.cargo && invocation.preflight.is_none(),
+        )
+    }
+
+    fn marker_directories(&self) -> Vec<PathBuf> {
+        self.target_directory().map_or_else(
+            || self.directories.clone(),
+            |target| vec![target.to_path_buf()],
+        )
+    }
+
     fn declared(&self) -> Result<Vec<declarations::Declared>, CiError> {
         declarations::declarations(
             &self.repository,
@@ -123,16 +149,16 @@ impl Builder<'_> {
             self.declared
                 .extend(declared.iter().flat_map(|unit| unit.paths.iter().cloned()));
             if invalidate {
-                let invocation = Invocation::new(command);
+                let selection = Invocation::new(command).selection();
                 let outside: BTreeSet<&str> = declared
                     .iter()
-                    .filter(|unit| !unit.trusted && !invocation.selects(&unit.package))
+                    .filter(|unit| !unit.trusted && !selection.selects(&unit.package))
                     .map(|unit| unit.package.as_str())
                     .collect();
                 if !outside.is_empty() {
                     return Err(outside_selection(
                         &outside,
-                        failure::earlier_failure(&self.directories),
+                        failure::earlier_failure(&self.marker_directories(), &outside),
                     ));
                 }
                 declarations::invalidate(&declared)?;
@@ -242,10 +268,9 @@ impl Builder<'_> {
             Invocation::new(command).compiler,
         )?;
         if !status.success() {
-            failure::record_failure(&self.directories, &Invocation::new(command).label())?;
             return Err(CiError::new(format!("build command failed: {status}")));
         }
-        failure::clear_failure(&self.directories)
+        Ok(())
     }
 
     fn record(
@@ -304,7 +329,6 @@ impl Builder<'_> {
     }
 }
 
-/// Packages named in the refusal before the list is cut off.
 const LISTED_PACKAGES: usize = 20;
 
 fn outside_selection(packages: &BTreeSet<&str>, earlier: Option<String>) -> CiError {
