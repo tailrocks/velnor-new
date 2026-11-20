@@ -3,7 +3,7 @@
 
 use serde_json::{Value, json};
 use velnor_ci::report::{LaneMetrics, check, waste};
-use velnor_ci::waste_evidence::{mbx_sessions, mbx_unparsed_lines};
+use velnor_ci::waste_evidence::{mbx_seed_truncated, mbx_sessions, mbx_unparsed_lines};
 
 fn metrics(value: Value) -> LaneMetrics {
     serde_json::from_value(value).unwrap_or_else(|error| unreachable!("{error}"))
@@ -227,4 +227,29 @@ mbx[cache]: 28.53s session; 2m 37s estimated compiler time avoided\n";
         "{:?}",
         mbx_unparsed_lines(log)
     );
+}
+
+#[test]
+fn an_empty_mbx_session_after_a_truncated_seed_is_not_waste() {
+    for (truncated, expected) in [(false, true), (true, false)] {
+        let mut value = quiet();
+        value["invocations"][0]["artifacts"] =
+            json!([artifact("target/debug/deps/libserde-abc.rlib")]);
+        value["mbx"] = mbx(true, &[(0, 0, 567)]);
+        value["mbx"]["seed_truncated"] = json!(truncated);
+        let found = waste(&metrics(value));
+        assert_eq!(
+            found.iter().any(|line| line.contains("MBX object cache")),
+            expected,
+            "{truncated}: {found:?}"
+        );
+    }
+}
+
+#[test]
+fn a_seed_stopped_at_the_startup_budget_is_read_from_the_job_log() {
+    let stopped = b"2026-11-20T10:18:10Z ##[warning]MBX seeding stopped at the startup budget; the rest builds cold\n";
+    let seeded = b"2026-11-20T10:18:10Z velnor: MBX seeded /t/mbx with 5 files, 9 bytes in 0.01s (0 already present)\n";
+    assert!(mbx_seed_truncated(stopped));
+    assert!(!mbx_seed_truncated(seeded));
 }
