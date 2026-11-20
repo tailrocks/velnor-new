@@ -11,6 +11,7 @@ use velnor_rust::{Located, Owner, add_reads, locate, rerun_if_changed};
 
 use super::super::units::{UnitFile, profile};
 use super::Audit;
+use super::freshness::Cause;
 use crate::coverage::{Fingerprint, RunGap, Unit, UnitKind};
 use crate::error::CiError;
 
@@ -179,13 +180,13 @@ impl Audit<'_> {
                         || self.repository.to_path_buf(),
                         |d| self.repository.join(d.as_str()),
                     );
-                    if let Some(first) = self
+                    if let Some((first, cause)) = self
                         .changed_inputs(&base, &paths, built, file, true, 1)?
                         .into_iter()
                         .next()
                     {
                         if gap.is_none() {
-                            gap = Some(self.stale_gap(&base, &paths, built, file, first));
+                            gap = Some(self.stale_gap(&base, &paths, built, file, first, cause));
                         }
                         continue;
                     }
@@ -223,8 +224,6 @@ impl Audit<'_> {
         Ok(())
     }
 
-    /// Names the first changed input of a stale run and counts the others. The count reads
-    /// every declared input, but only for a run that is already reported as stale.
     fn stale_gap(
         &mut self,
         base: &Path,
@@ -232,13 +231,16 @@ impl Audit<'_> {
         built: SystemTime,
         output: &Path,
         first: String,
+        cause: Cause,
     ) -> RunGap {
-        let all = self
-            .changed_inputs(base, paths, built, output, true, usize::MAX)
-            .unwrap_or_else(|_| vec![first.clone()]);
-        RunGap::Stale {
-            input: first,
-            more: all.len().saturating_sub(1),
+        let scratch = self.freshness.scratch();
+        let shared = std::mem::replace(&mut self.freshness, scratch);
+        let all = self.changed_inputs(base, paths, built, output, true, usize::MAX);
+        self.freshness = shared;
+        let more = all.map_or(0, |all| all.len().saturating_sub(1));
+        match cause {
+            Cause::Changed => RunGap::Stale { input: first, more },
+            Cause::Unproven => RunGap::Unproven { input: first, more },
         }
     }
 

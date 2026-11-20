@@ -4,6 +4,7 @@
 use std::collections::BTreeSet;
 use std::fs;
 use std::process::Output;
+use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use super::{audit, own_units, unit, velnor_ci, workspace_below_the_root};
@@ -20,7 +21,6 @@ fn refused_with(output: &Output, texts: &[&str]) {
     }
 }
 
-/// The unit hashes of the `lib` build-script runs with an output under `target/debug`.
 fn lib_runs(repo: &Repo) -> BTreeSet<String> {
     fs::read_dir(repo.root().join(DEBUG).join("build"))
         .unwrap_or_else(|e| unreachable!("{e}"))
@@ -80,20 +80,27 @@ fn an_input_changed_between_two_steps_names_the_input_and_the_stale_unit() {
     repo.write_unstaged("rust/lib/asset.txt", "second\n");
     repo.set_mtime(
         "rust/lib/asset.txt",
-        SystemTime::now() + Duration::from_secs(100),
+        SystemTime::now() + Duration::from_secs(1),
     );
+    thread::sleep(Duration::from_secs(1));
     let build = build_step(&repo, &["build", "--workspace", "--all-targets"]);
     assert!(build.status.success(), "{build:?}");
     let after = lib_runs(&repo);
     assert_eq!(after.len(), 2, "{after:?}");
     let stale = before.iter().next().unwrap_or_else(|| unreachable!());
+    let current = after
+        .difference(&before)
+        .next()
+        .unwrap_or_else(|| unreachable!());
 
+    let output = audit(&repo, &["--write"]);
     refused_with(
-        &audit(&repo, &["--write"]),
+        &output,
         &[&format!(
-            "output stale: input asset.txt changed after it ran (unit {stale}); produce build-script inputs before the first compile step, e.g. [[test_setup]] phase = \"build\""
+            "output stale: input asset.txt changed after it ran (unit {stale}); produce build-script inputs before the first compile step, e.g. a [[test_setup]] table with phase = \"build\""
         )],
     );
+    assert!(!String::from_utf8_lossy(&output.stderr).contains(current.as_str()));
     assert!(!repo.root().join(".velnor/rust-inputs.lock").exists());
 }
 
