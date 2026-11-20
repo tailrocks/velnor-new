@@ -145,16 +145,16 @@ pub(super) const RUST_CI: &[KeyGate] = &[
     gate(RustCi, "sparse_checkout", (0, 1, 92)),
     // helper-gate: first in tools-v0.1.90 via 85f4392434
     gate(RustCi, "test_groups", (0, 1, 90)),
-    // First released in tools-v0.1.109 (not tagged yet when this gate was written).
-    gate(RustCi, "test_groups.artifacts", (0, 1, 109)),
-    // First released in tools-v0.1.109 (not tagged yet when this gate was written).
-    gate(RustCi, "test_groups.artifacts.name", (0, 1, 109)),
-    // First released in tools-v0.1.109 (not tagged yet when this gate was written).
-    gate(RustCi, "test_groups.artifacts.paths", (0, 1, 109)),
-    // First released in tools-v0.1.109 (not tagged yet when this gate was written).
-    gate(RustCi, "test_groups.artifacts.retention_days", (0, 1, 109)),
-    // First released in tools-v0.1.109 (not tagged yet when this gate was written).
-    gate(RustCi, "test_groups.artifacts.when", (0, 1, 109)),
+    // First released in tools-v0.1.110 (not tagged yet when this gate was written).
+    gate(RustCi, "test_groups.artifacts", (0, 1, 110)),
+    // First released in tools-v0.1.110 (not tagged yet when this gate was written).
+    gate(RustCi, "test_groups.artifacts.name", (0, 1, 110)),
+    // First released in tools-v0.1.110 (not tagged yet when this gate was written).
+    gate(RustCi, "test_groups.artifacts.paths", (0, 1, 110)),
+    // First released in tools-v0.1.110 (not tagged yet when this gate was written).
+    gate(RustCi, "test_groups.artifacts.retention_days", (0, 1, 110)),
+    // First released in tools-v0.1.110 (not tagged yet when this gate was written).
+    gate(RustCi, "test_groups.artifacts.when", (0, 1, 110)),
     // helper-gate: first in tools-v0.1.90 via 85f4392434
     gate(RustCi, "test_groups.events", (0, 1, 90)),
     // helper-gate: first in tools-v0.1.90 via 85f4392434
@@ -169,8 +169,8 @@ pub(super) const RUST_CI: &[KeyGate] = &[
     gate(RustCi, "test_groups.no_tests", (0, 1, 107)),
     // helper-gate: first in tools-v0.1.90 via 85f4392434
     gate(RustCi, "test_groups.paths", (0, 1, 90)),
-    // First released in tools-v0.1.109 (not tagged yet when this gate was written).
-    gate(RustCi, "test_groups.partitions", (0, 1, 109)),
+    // First released in tools-v0.1.110 (not tagged yet when this gate was written).
+    gate(RustCi, "test_groups.partitions", (0, 1, 110)),
     // helper-gate: first in tools-v0.1.107 via ffac3edc63
     gate(RustCi, "test_groups.restore_cache", (0, 1, 107)),
     // helper-gate: first in tools-v0.1.90 via 85f4392434

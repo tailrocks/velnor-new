@@ -10,7 +10,7 @@ use crate::pipeline::{HELPER_LOCK, workflow};
 use crate::test_groups::{job, needs, run_of, step, steps, view_with};
 use crate::yaml_tree::document;
 
-pub(crate) const HELPER: &str = "0.1.109";
+pub(crate) const HELPER: &str = "0.1.110";
 
 pub(crate) fn group(extra: &str) -> String {
     format!(
@@ -203,7 +203,7 @@ fn a_helper_older_than_the_partitions_release_refuses_the_key() -> TestResult {
         let message = refused(&group("partitions = 2\n"), helper)?;
         assert!(
             message.contains(helper)
-                && message.contains("0.1.109")
+                && message.contains("0.1.110")
                 && message.contains("partitions"),
             "{message}"
         );

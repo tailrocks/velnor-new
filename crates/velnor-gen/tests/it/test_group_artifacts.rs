@@ -332,9 +332,9 @@ fn a_helper_older_than_the_artifacts_release_refuses_the_key() -> TestResult {
     let config = artifacts(&entry("when = 'failure'"));
     let message = refused(&config, "0.1.107")?;
     assert!(
-        message.contains("0.1.107") && message.contains("0.1.109") && message.contains("artifacts"),
+        message.contains("0.1.107") && message.contains("0.1.110") && message.contains("artifacts"),
         "{message}"
     );
-    rendered_with(&config, "0.1.109")?;
+    rendered_with(&config, "0.1.110")?;
     Ok(())
 }
