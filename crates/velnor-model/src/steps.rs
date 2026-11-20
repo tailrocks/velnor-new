@@ -241,6 +241,7 @@ pub struct GroupFilter {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ToolsLocalVerb {
+    Clear,
     Restore,
     Save,
     SaveChecked,
