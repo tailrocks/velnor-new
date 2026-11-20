@@ -104,6 +104,10 @@ With `[private_sources]` the `groups` shape builds and runs the tests in one job
 
 Every later cargo command of the job runs with `--offline` and `CARGO_NET_OFFLINE=true`. The token is written to no file, to `$GITHUB_ENV` or to any git configuration.
 
+The token phase runs the real `cargo` and `git`. It never runs a mise shim or a command wrapper found on `PATH` or in the repository (it skips those and falls through to the next candidate); when no real `cargo` is left, the fetch fails closed, and the token is still revoked. Mise's trust variables are not forwarded to the fetch.
+
+A job that runs `cargo-deny` gets one extra step before the token phase, `cargo-deny fetch db`, which has no token and no `GIT_CONFIG_*` or `CARGO_NET_OFFLINE` environment. It loads the RustSec advisory database that the `--offline` deny check then reads, so the `advisories` check works on a fresh runner. Without `[private_sources]` the step is absent.
+
 ## Workspace groups
 
 A repository with many small Cargo workspaces can check several of them in one job set, when the project asks for it. A group names the workspaces that share one job set; a workspace that no group names keeps its own jobs.
