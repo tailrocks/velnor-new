@@ -199,6 +199,7 @@ mod tools_home_clear;
 mod tools_local;
 mod tools_verify;
 mod tools_verify_bounds;
+mod tools_verify_notice;
 mod trusted_roots;
 mod unit_test_targets;
 mod unowned;
