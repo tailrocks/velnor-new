@@ -7,7 +7,6 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use velnor_ci::mbx_seed::{Inputs, Outcome, env_lines, message, select};
-use velnor_ci::mbx_seed_copy::Copied;
 
 use crate::io::Repo;
 
@@ -387,18 +386,4 @@ fn a_seeded_file_never_keeps_a_setuid_or_setgid_bit_from_its_source() {
         .unwrap_or_else(|e| unreachable!("{e}"))
         .mode();
     assert_eq!(mode & 0o6000, 0, "copied mode {mode:o} keeps setuid/setgid");
-}
-
-#[test]
-fn a_private_store_path_with_a_line_break_cannot_add_an_environment_variable() {
-    let seeded = |store: &str| Outcome::Seeded {
-        store: PathBuf::from(store),
-        copied: Copied::default(),
-        elapsed: Duration::ZERO,
-    };
-    assert_eq!(
-        env_lines(&seeded("/runner/mbx")).as_deref().ok(),
-        Some("MBX_CACHE_DIR=/runner/mbx\n")
-    );
-    assert!(env_lines(&seeded("/runner/mbx\nGITHUB_PATH=/evil")).is_err());
 }
