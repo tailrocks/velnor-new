@@ -23,6 +23,7 @@ pub struct RenderedStep {
     pub env: Vec<(String, Value)>,
     pub shell: Option<String>,
     pub run: Option<String>,
+    pub shared: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
