@@ -48,6 +48,7 @@ mod inputs;
 mod inputs_batch;
 mod inputs_git;
 mod manifests;
+mod mbx_reports;
 mod merge_group;
 mod merge_queue;
 mod plan;
