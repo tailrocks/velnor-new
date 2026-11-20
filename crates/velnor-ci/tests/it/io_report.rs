@@ -327,6 +327,7 @@ mod evidence;
 mod policy;
 mod provenance;
 mod target_identity;
+mod waste;
 mod wrapped;
 
 pub(crate) fn fixture(name: &str) -> Result<Repo, Box<dyn std::error::Error>> {

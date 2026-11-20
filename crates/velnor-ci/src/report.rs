@@ -3,6 +3,7 @@
 
 use crate::error::CiError;
 use crate::telemetry::{Compilation, Invocation};
+use crate::waste_evidence::MbxEvidence;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -23,6 +24,10 @@ pub struct Cache {
     pub usable: bool,
     pub usable_same_lock: bool,
     pub save: SaveOutcome,
+    /// A miss on a key that the cache inventory already listed, on a ref this job may read, when
+    /// the job started. `None` when the inventory was not consulted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub entry_before_job: Option<bool>,
 }
 
 impl Cache {
@@ -67,6 +72,10 @@ pub struct LaneMetrics {
     pub diagnostics: Vec<String>,
     #[serde(default)]
     pub verification_errors: Vec<String>,
+    #[serde(default, skip_serializing_if = "MbxEvidence::is_empty")]
+    pub mbx: MbxEvidence,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub toolchain_installs: Vec<String>,
     pub violations: Vec<String>,
 }
 
@@ -140,6 +149,7 @@ pub fn waste(metrics: &LaneMetrics) -> Vec<String> {
                 )
             }),
     );
+    violations.extend(crate::waste_evidence::waste(metrics));
     violations
 }
 

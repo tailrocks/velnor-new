@@ -52,6 +52,7 @@ pub(crate) fn observe_caches(
                 usable: false,
                 usable_same_lock: false,
                 save,
+                entry_before_job: None,
             }
         })
         .collect();
