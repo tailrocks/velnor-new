@@ -300,6 +300,8 @@ pub(crate) fn mbx_remote_step() -> RenderedStep {
                 "save-on-pull-request",
                 "${{ github.event.pull_request.head.repo.full_name == github.repository }}",
             ),
+            // Off: only non-default protected branches. Default-branch pushes
+            // save by the action's built-in rule, which needs no input.
             text("save-on-protected-branch", "false"),
             text("save-on-workflow-dispatch", "false"),
         ],
