@@ -80,11 +80,48 @@ async fn the_run_copy_has_no_job_level_cache_mode_and_the_notice_counts_the_keys
     assert!(text.contains("      - name: Lint\n"), "{text}");
     assert_eq!(git(&repo, &["rev-list", "--count", "HEAD"]), "2");
 
-    let (stripped, count) = strip(WORKFLOW);
+    let (stripped, count) = strip(WORKFLOW).unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(count, 2);
     assert_eq!(stripped, text);
     assert_eq!(
         notice("t", ".github/workflows/ci.yml", count),
         "velnor-local t: dropped 2 job-level cache-mode key(s) from .github/workflows/ci.yml: the stand-in does not model GitHub's cache-mode; cache writes are governed by velnor-local's own cache server"
     );
+}
+
+#[test]
+fn cache_mode_is_stripped_when_the_jobs_key_has_a_trailing_comment() {
+    let text = "jobs: # all jobs\n  rust:\n    runs-on: x\n    cache-mode: write\n    steps:\n      - run: x\n";
+    let (out, count) = strip(text);
+    assert_eq!(count, 1, "{out}");
+    assert!(!out.contains("cache-mode"), "{out}");
+}
+
+#[test]
+fn a_job_written_as_a_flow_mapping_with_cache_mode_is_refused_by_name() {
+    let text = "jobs:\n  rust: {runs-on: x, cache-mode: write}\n";
+    let error = strip(text).expect_err("a flow job with cache-mode is refused");
+    assert!(error.contains("`rust`"), "{error}");
+}
+
+#[test]
+fn a_flow_job_without_cache_mode_is_left_as_written() {
+    let text = "jobs:\n  rust: {runs-on: x}\n  lint:\n    runs-on: y\n    cache-mode: read\n";
+    let (out, count) = strip(text).expect("no flow job has cache-mode");
+    assert_eq!(count, 1);
+    assert_eq!(out, "jobs:\n  rust: {runs-on: x}\n  lint:\n    runs-on: y\n");
+}
+
+#[test]
+fn a_jobs_map_written_as_a_flow_mapping_with_cache_mode_is_refused() {
+    let text = "jobs: {rust: {runs-on: x, cache-mode: write}}\n";
+    let error = strip(text).expect_err("a flow jobs map with cache-mode is refused");
+    assert!(error.contains("the jobs map"), "{error}");
+}
+
+#[test]
+fn a_multi_line_flow_job_with_cache_mode_is_refused_by_name() {
+    let text = "jobs:\n  rust: {\n    runs-on: x,\n    cache-mode: write }\n";
+    let error = strip(text).expect_err("a multi-line flow job with cache-mode is refused");
+    assert!(error.contains("`rust`"), "{error}");
 }

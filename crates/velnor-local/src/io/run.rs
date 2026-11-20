@@ -74,7 +74,7 @@ async fn conformance(args: ConformanceArgs) -> std::io::Result<()> {
     let mut logs = Vec::new();
     read_logs(&args.dir.join("logs"), "", &mut logs).await?;
     read_logs(&args.dir.join("logs/jobs"), "jobs/", &mut logs).await?;
-    logs.sort();
+    order_logs(&mut logs);
     let stored = |probe: &str| {
         let text = std::fs::read_to_string(args.conformance.join(format!("{probe}.json"))).ok()?;
         serde_json::from_str(&text).ok()
@@ -90,6 +90,11 @@ async fn conformance(args: ConformanceArgs) -> std::io::Result<()> {
         ));
     }
     Ok(())
+}
+
+/// Orders the logs by their run number, so run 9 comes before run 10, then by name.
+pub fn order_logs(logs: &mut [(String, String)]) {
+    logs.sort();
 }
 
 /// The placeholder values of the run that wrote a log: a job log under `logs/jobs/` takes the

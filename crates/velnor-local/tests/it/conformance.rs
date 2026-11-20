@@ -231,3 +231,57 @@ fn a_log_under_logs_jobs_takes_the_values_of_its_run() {
     );
     assert_eq!(log_values(&dir, "jobs/9-7.log"), Values::new());
 }
+
+fn observation_log(hit: &str) -> String {
+    format!("{{\"legs\": {{\"default-branch\": {{\"hit\": \"{hit}\"}}}}, \"probe\": \"cache-keys\"}}")
+}
+
+#[test]
+fn a_wrong_observation_of_a_leg_is_not_hidden_by_a_later_log() {
+    let mut logs = vec![
+        ("10-push.log".to_owned(), observation_log("false")),
+        ("9-push.log".to_owned(), observation_log("true")),
+    ];
+    velnor_local::io::run::order_logs(&mut logs);
+    let stored = |_: &str| Some(json!({"legs": {"default-branch": {"hit": "true"}}}));
+    let (lines, reproduced) = report(&logs, &stored, &no_values);
+    assert!(!reproduced, "{lines:?}");
+    assert_eq!(
+        lines,
+        ["cache-keys / default-branch: conflicting observations (9-push.log, 10-push.log)"]
+    );
+}
+
+#[test]
+fn two_logs_that_agree_on_a_leg_reproduce_it() {
+    let logs = [
+        ("9-push.log".to_owned(), observation_log("true")),
+        ("10-push.log".to_owned(), observation_log("true")),
+    ];
+    let stored = |_: &str| Some(json!({"legs": {"default-branch": {"hit": "true"}}}));
+    let (lines, reproduced) = report(&logs, &stored, &no_values);
+    assert_eq!(
+        lines,
+        ["cache-keys / default-branch (9-push.log, 10-push.log): reproduced"]
+    );
+    assert!(reproduced);
+}
+
+#[test]
+fn logs_are_ordered_by_run_number_then_name() {
+    let mut logs: Vec<(String, String)> = [
+        "10-push.log",
+        "jobs/10-7.log",
+        "9-push.log",
+        "jobs/9-7.log",
+    ]
+    .into_iter()
+    .map(|name| (name.to_owned(), String::new()))
+    .collect();
+    velnor_local::io::run::order_logs(&mut logs);
+    let names: Vec<&str> = logs.iter().map(|(name, _)| name.as_str()).collect();
+    assert_eq!(
+        names,
+        ["9-push.log", "jobs/9-7.log", "10-push.log", "jobs/10-7.log"]
+    );
+}
