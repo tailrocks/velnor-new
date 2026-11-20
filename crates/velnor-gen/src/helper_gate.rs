@@ -106,8 +106,7 @@ pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, Generate
     }
     check_lane_job(facts, release)?;
     check_lane_flags(facts, release)?;
-    check_restore_cache(facts, release)?;
-    check_setup_phase(facts, release)?;
+    check_key_gates(facts, release)?;
     if facts.config.mbx_store == MbxStore::Shared && !release.version().at_least((0, 1, 85)) {
         return Err(GenerateError::MbxStoreHelperTooOld(
             release.version().clone(),
@@ -139,6 +138,11 @@ pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, Generate
         ));
     }
     Ok(release)
+}
+
+fn check_key_gates(facts: &RepoFacts, release: &HelperRelease) -> Result<(), GenerateError> {
+    check_restore_cache(facts, release)?;
+    check_setup_phase(facts, release)
 }
 
 fn check_restore_cache(facts: &RepoFacts, release: &HelperRelease) -> Result<(), GenerateError> {

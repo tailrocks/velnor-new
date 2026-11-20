@@ -38,7 +38,7 @@ pub(crate) fn inserted(
             .collect();
         steps.splice(first..first, setup);
     }
-    let Some(first) = steps.iter().position(|step| tests(step)) else {
+    let Some(first) = steps.iter().position(tests) else {
         return steps;
     };
     let (when, pr) = (steps[first].when, steps[first].pr);

@@ -129,10 +129,8 @@ fn without_the_key_or_with_the_test_phase_the_setup_still_runs_only_before_the_t
                 .ok_or("no test step")?;
             assert_eq!(setup + 1, first_test, "{shape} {id}");
         }
-        for id in ["rust-lint"] {
-            if let Some(lint) = plain["jobs"].get(id) {
-                assert!(setups(lint).is_empty(), "{shape} {id}");
-            }
+        if let Some(lint) = plain["jobs"].get("rust-lint") {
+            assert!(setups(lint).is_empty(), "{shape}: lint job");
         }
     }
     Ok(())
@@ -140,7 +138,7 @@ fn without_the_key_or_with_the_test_phase_the_setup_still_runs_only_before_the_t
 
 #[test]
 fn a_setup_of_another_root_stays_out_of_this_roots_jobs() -> TestResult {
-    let config = format!("{}", build_phase().replace("root = '.'", "root = 'tools'"));
+    let config = build_phase().replace("root = '.'", "root = 'tools'");
     let workflow = document(&workflow(&view_with(
         &["Cargo.toml", "tools/Cargo.toml"],
         &config,
