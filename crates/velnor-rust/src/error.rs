@@ -57,6 +57,7 @@ pub enum Reason {
     UnknownLockedPackage(String),
     UnknownRoot(RepoPath),
     UnknownTestSetupRoot(String),
+    UnknownRootTimeoutRoot(String),
     Hosting(crate::config_hosting::HostingError),
     DuplicateGroup(String),
     GroupRootTwice {

@@ -8,16 +8,16 @@ use serde_json::{Value, json};
 
 use crate::io::Repo as Checkout;
 
-const SERDE: &str = "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.0";
-const APP: &str = "path+file:///work/app#app@0.1.0";
-const SERDE_HASH: &str = "aaaaaaaaaaaaaaaa";
-const SERDE_SCRIPT_HASH: &str = "bbbbbbbbbbbbbbbb";
-const SERDE_RUN_HASH: &str = "cccccccccccccccc";
-const APP_HASH: &str = "dddddddddddddddd";
-const OLD_HASH: &str = "eeeeeeeeeeeeeeee";
-const DEBUG: &str = "target/debug";
+pub(crate) const SERDE: &str = "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.0";
+pub(crate) const APP: &str = "path+file:///work/app#app@0.1.0";
+pub(crate) const SERDE_HASH: &str = "aaaaaaaaaaaaaaaa";
+pub(crate) const SERDE_SCRIPT_HASH: &str = "bbbbbbbbbbbbbbbb";
+pub(crate) const SERDE_RUN_HASH: &str = "cccccccccccccccc";
+pub(crate) const APP_HASH: &str = "dddddddddddddddd";
+pub(crate) const OLD_HASH: &str = "eeeeeeeeeeeeeeee";
+pub(crate) const DEBUG: &str = "target/debug";
 
-fn artifact(package: &str, kind: &str, file: &str) -> Value {
+pub(crate) fn artifact(package: &str, kind: &str, file: &str) -> Value {
     let mut record = crate::cargo_artifacts::record(false);
     record["package_id"] = json!(package);
     record["target"]["kind"] = json!([kind]);
@@ -104,7 +104,7 @@ fn kept_dependency_units() -> Vec<String> {
     .collect()
 }
 
-fn decide(repo: &Checkout, records: &[Value], budget: Option<&str>) -> (Output, String) {
+pub(crate) fn decide(repo: &Checkout, records: &[Value], budget: Option<&str>) -> (Output, String) {
     let temp = repo.root().join("runner-temp");
     fs::create_dir_all(&temp).unwrap_or_else(|e| unreachable!("{e}"));
     fs::write(temp.join("velnor-run.log"), "   Compiling serde v1.0.0\n")
@@ -131,7 +131,7 @@ fn decide(repo: &Checkout, records: &[Value], budget: Option<&str>) -> (Output, 
     (output, fs::read_to_string(&outputs).unwrap_or_default())
 }
 
-fn exists(repo: &Checkout, path: &str) -> bool {
+pub(crate) fn exists(repo: &Checkout, path: &str) -> bool {
     repo.root().join(path).exists()
 }
 

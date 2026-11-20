@@ -21,10 +21,13 @@ pub enum Invoked {
     Opaque(Vec<String>),
 }
 
+/// How many shell scripts may nest (`sh -c "sh -c '...'"`) before the scan gives up.
 const MAX_DEPTH: usize = 8;
+/// How many wrappers may precede one command before the scan gives up.
+const MAX_CHAIN: usize = 32;
 
 /// Words that run what follows them, or that the scan does not follow into.
-const OPAQUE: [&str; 20] = [
+const OPAQUE: [&str; 34] = [
     "eval",
     "source",
     ".",
@@ -45,6 +48,20 @@ const OPAQUE: [&str; 20] = [
     "trap",
     "script",
     "coproc",
+    "unbuffer",
+    "fakeroot",
+    "numactl",
+    "strace",
+    "ltrace",
+    "valgrind",
+    "runuser",
+    "pkexec",
+    "systemd-run",
+    "faketime",
+    "chronic",
+    "cpulimit",
+    "bwrap",
+    "firejail",
 ];
 const RESERVED: [&str; 15] = [
     "if", "then", "else", "elif", "fi", "for", "while", "until", "do", "done", "case", "esac",
@@ -96,6 +113,7 @@ fn scan(text: &str, depth: usize, found: &mut Vec<Invoked>) {
 }
 
 fn unwrap(mut words: VecDeque<Word>, depth: usize, found: &mut Vec<Invoked>) {
+    let mut chain = 0;
     loop {
         while words.front().is_some_and(|word| assignment(&word.text)) {
             words.pop_front();
@@ -104,13 +122,13 @@ fn unwrap(mut words: VecDeque<Word>, depth: usize, found: &mut Vec<Invoked>) {
             return;
         };
         let snapshot: Vec<String> = words.iter().map(|word| word.text.clone()).collect();
-        let next = if depth > MAX_DEPTH || first.dynamic {
+        let next = if depth > MAX_DEPTH || chain > MAX_CHAIN || first.dynamic {
             Next::Opaque
         } else {
             step(&mut words)
         };
         match next {
-            Next::Continue => {}
+            Next::Continue => chain += 1,
             Next::Nothing => return,
             Next::Plain => {
                 found.push(Invoked::Command(snapshot));

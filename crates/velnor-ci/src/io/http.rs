@@ -190,6 +190,29 @@ impl GitHubWrite for HttpGitHub {
 }
 
 impl HttpGitHub {
+    /// Open the content of a release asset. The API answers with a redirect to signed storage,
+    /// and the agent drops the `Authorization` header when it follows it.
+    pub(super) fn open_asset(&self, path: &str) -> Result<Box<dyn Read + Send>, CiError> {
+        let url = format!("{}{path}", self.api);
+        let what = format!("GET {path}");
+        let mut response = self
+            .agent
+            .get(&url)
+            .config()
+            .redirect_auth_headers(ureq::config::RedirectAuthHeaders::Never)
+            .build()
+            .header("Authorization", format!("Bearer {}", self.token))
+            .header("Accept", "application/octet-stream")
+            .header("X-GitHub-Api-Version", "2022-11-28")
+            .header("User-Agent", "velnor-ci")
+            .call()
+            .map_err(|e| CiError::new(format!("{what}: {e}")))?;
+        if is_failure(response.status()) {
+            return Err(status_error(&what, &mut response));
+        }
+        Ok(Box::new(response.into_body().into_reader()))
+    }
+
     /// The body of a GET of `path`, `None` on any failure or a body over `limit` bytes.
     pub(super) fn get_bytes(&self, path: &str, limit: u64) -> Option<Vec<u8>> {
         let url = format!("{}{path}", self.api);

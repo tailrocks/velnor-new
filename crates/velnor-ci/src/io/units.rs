@@ -8,9 +8,13 @@ use std::process::Command;
 use serde::Deserialize;
 use velnor_rust::{NESTED_ROOTS_FOLDER, resolve};
 
+use crate::cache_prune::is_hash;
 use crate::error::CiError;
 
+mod built;
 mod fill;
+#[cfg(test)]
+mod layout_tests;
 
 const MAX_TARGET_DEPTH: usize = 64;
 /// A target directory after a full build and test run holds one directory per
@@ -87,6 +91,7 @@ fn unit_files_within(target: &Path, limit: usize) -> Result<Vec<(UnitFile, PathB
     let mut found = Vec::new();
     let mut pending = vec![(target.to_path_buf(), 0)];
     let mut directories = 1;
+    let mut built = false;
     while let Some((directory, depth)) = pending.pop() {
         let entries = match fs::read_dir(&directory) {
             Ok(entries) => entries,
@@ -128,13 +133,25 @@ fn unit_files_within(target: &Path, limit: usize) -> Result<Vec<(UnitFile, PathB
                 .strip_prefix(target)
                 .ok()
                 .and_then(unit_file)
-                .filter(|_| kind.is_file())
+                .filter(|_| kind.is_file() && !generated(&path))
             {
                 found.push((unit, path));
+            } else if kind.is_file() && built::output(&entry.file_name()) {
+                built = true;
             }
         }
     }
+    built::refuse_without_units(target, built, &found)?;
     Ok(found)
+}
+
+/// A file in the `out` folder of a unit that ran a build script. That folder is the script's
+/// `OUT_DIR`, so a `.d` file there is generated content, not dep-info.
+fn generated(file: &Path) -> bool {
+    let Some(out) = file.parent().filter(|out| out.ends_with("out")) else {
+        return false;
+    };
+    out.parent().is_some_and(|unit| unit.join("run").is_dir())
 }
 
 fn unit_file(relative: &Path) -> Option<UnitFile> {
@@ -148,6 +165,9 @@ fn unit_file(relative: &Path) -> Option<UnitFile> {
             name: (*directory).to_owned(),
             root: *name == ".rustc_info.json",
         });
+    }
+    if let Some(unit) = unit_in_new_layout(folders, name) {
+        return Some(unit);
     }
     let configuration = |depth: usize| {
         folders
@@ -191,6 +211,48 @@ fn unit_file(relative: &Path) -> Option<UnitFile> {
                 stem: stem.to_owned(),
             })
         }
+    }
+}
+
+/// A file of a unit in the layout Cargo 1.100 writes: `<configuration>/build/<package>/<hash>/`
+/// with the unit's `fingerprint`, its `out` files (outputs and dep-info), and for the run of a
+/// build script its `run` folder, whose `stdout` is what older Cargo wrote to `output`.
+fn unit_in_new_layout(folders: &[&str], name: &str) -> Option<UnitFile> {
+    let [configuration @ .., "build", package, hash, kind] = folders else {
+        return None;
+    };
+    if configuration.is_empty() || !is_hash(hash) {
+        return None;
+    }
+    let configuration = configuration.join("/");
+    let (package, hash) = ((*package).to_owned(), (*hash).to_owned());
+    match (*kind, name) {
+        ("fingerprint", _) => Some(UnitFile::Fingerprint {
+            configuration,
+            package,
+            hash,
+            name: name.to_owned(),
+        }),
+        ("run", "stdout") => Some(UnitFile::BuildOutput {
+            configuration,
+            package,
+            hash,
+        }),
+        ("out", _) => {
+            let stem = name.strip_suffix(".d")?;
+            if stem.starts_with("build_script_") {
+                return Some(UnitFile::Script {
+                    profile: profile(&configuration).to_owned(),
+                    package,
+                });
+            }
+            Some(UnitFile::DepInfo {
+                configuration: Some(configuration),
+                hash: Some(hash),
+                stem: stem.to_owned(),
+            })
+        }
+        _ => None,
     }
 }
 

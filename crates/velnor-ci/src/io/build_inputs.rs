@@ -8,7 +8,7 @@ use std::process::Command;
 use velnor_gen::io::read_files;
 use velnor_model::RepoPath;
 use velnor_rust::{
-    METADATA_PATH, cargo_config_paths, check_runtime_configs, external_config_profile,
+    LOCK_PATH, METADATA_PATH, cargo_config_paths, check_runtime_configs, external_config_profile,
     recorded_roots, recorded_target_dirs, repo_profile, rustc_release,
 };
 
@@ -24,7 +24,9 @@ pub(super) fn repository_profile(root: &Path) -> Result<String, CiError> {
         .map_err(|e| CiError::new(e.to_string()))?;
     let recorded_dirs = recorded_target_dirs(recorded.get(&METADATA_PATH).map(Vec::as_slice))
         .map_err(|e| CiError::new(e.to_string()))?;
-    let mut files = BTreeMap::new();
+    // The helper pin decides the default target folder of a root outside the repository root, so
+    // the check reads the lock beside the configs, as the generator did when it recorded the folder.
+    let mut files = read_files(root, &[LOCK_PATH]).map_err(|e| CiError::new(e.to_string()))?;
     for path in cargo_config_paths(&roots) {
         if let Some(bytes) = read_config(root, &path)? {
             files.insert(path, bytes);
