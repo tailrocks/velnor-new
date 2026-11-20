@@ -52,7 +52,7 @@ fn needs_a_clean_job(step: &Value, inherited: &str) -> Option<&'static str> {
 }
 
 pub(crate) fn violations(workflow: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
-    let parsed: Value = serde_saphyr::from_str(workflow)?;
+    let parsed: Value = crate::yaml_tree::document(workflow)?;
     let mut found = Vec::new();
     let workflow_env = text(&parsed["env"]);
     for (id, job) in parsed["jobs"].as_object().ok_or("jobs")? {

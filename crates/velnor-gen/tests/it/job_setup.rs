@@ -17,7 +17,7 @@ fn every_job_installs_every_pinned_tool_and_needs_a_real_nextest_pin() -> TestRe
     pinned.tracked_paths.insert(other.clone());
     pinned.files.insert(
         other.clone(),
-        b"[tools]\n\"core:rust\" = \"1.99.1\"\n\"cargo:cargo-nextest\" = \"0.9.151\"\nprotoc = \"31.1\"\n".to_vec(),
+        b"[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n\n[tools]\nmr-boxington = \"v1.30.0\"\n\"core:rust\" = { version = \"1.99.1\", mr_boxington = true }\n\"cargo:cargo-nextest\" = \"0.9.151\"\nprotoc = \"31.1\"\n".to_vec(),
     );
     let text = workflow(&pinned)?;
     assert!(text.contains("        uses: jdx/mise-action@"));
@@ -25,7 +25,7 @@ fn every_job_installs_every_pinned_tool_and_needs_a_real_nextest_pin() -> TestRe
     let mut unpinned = pinned;
     unpinned.files.insert(
         other.clone(),
-        b"[tools]\nrust = \"1.99.1\"\nnextest-helper = \"1\"\n".to_vec(),
+        b"[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n\n[tools]\nrust = { version = \"1.99.1\", mr_boxington = true }\nmr-boxington = \"v1.30.0\"\nnextest-helper = \"1\"\n".to_vec(),
     );
     crate::facts::lock_pinned_tools(&mut unpinned)?;
     assert_eq!(
@@ -179,7 +179,7 @@ fn a_mise_configuration_may_not_change_what_the_steps_run() -> TestResult {
         mise_env.files.insert(
             mise.clone(),
             format!(
-                "[tools]\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n\n[env]\n{variable} = \"x\"\n"
+                "[wrappers.cargo]\ncommand = \"mbx\"\nenv = {{ MBX_CARGO_SHIM_MODE = \"1\" }}\n\n[tools]\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n\n[env]\n{variable} = \"x\"\n"
             )
             .into_bytes(),
         );
@@ -231,7 +231,7 @@ fn a_toolchain_channel_that_mise_does_not_pin_is_an_error() -> TestResult {
         .insert(file, b"[toolchain]\nchannel = \"1.99.1\"\n".to_vec());
     view.files.insert(
         RepoPath::new("mise.toml")?,
-        b"[tools]\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n".to_vec(),
+        b"[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n\n[tools]\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n".to_vec(),
     );
     crate::facts::lock_pinned_tools(&mut view)?;
     assert_eq!(
@@ -273,7 +273,7 @@ fn a_rust_pin_with_an_os_filter_is_an_error() -> TestResult {
 fn a_path_toolchain_stands_alone_and_a_nested_toolchain_file_is_an_error() -> TestResult {
     let file = RepoPath::new("rust-toolchain.toml")?;
     let mise = RepoPath::new("mise.toml")?;
-    let nextest_only = b"[tools]\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n";
+    let nextest_only = b"[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n\n[tools]\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n";
     let mut path_toolchain = view(&["Cargo.toml"], None)?;
     path_toolchain.tracked_paths.insert(file.clone());
     path_toolchain

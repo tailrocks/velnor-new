@@ -8,7 +8,10 @@ use crate::cron::CronExpr;
 use crate::hosted::HostedRunners;
 use crate::ids::{PackageName, PathGlob, RepoPath, RootSlug, RunnerLabel, TargetName};
 use crate::lint::LintJob;
+use crate::mbx::MbxMode;
 use crate::shape::Shape;
+
+pub use crate::setup_phase::SetupPhase;
 use crate::test_group::TestGroup;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -45,6 +48,7 @@ pub struct RustCiConfig {
     pub cache_check_blocks: bool,
     pub cache_debug: CacheDebug,
     pub mbx_remote: MbxRemote,
+    pub mbx: MbxMode,
     pub push_after_merge_group: PushAfterMergeGroup,
     pub test_setup: Vec<TestSetup>,
     pub test_lanes: Vec<TestLane>,
@@ -230,6 +234,8 @@ pub struct TestSetup {
     pub root: Option<RepoPath>,
     pub name: String,
     pub run: String,
+    /// The `phase` key, if written. `None` and `Some(Test)` run before the tests only.
+    pub phase: Option<SetupPhase>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -349,6 +355,7 @@ impl Default for RustCiConfig {
             cache_check_blocks: false,
             cache_debug: CacheDebug::Off,
             mbx_remote: MbxRemote::Off,
+            mbx: MbxMode::Default,
             push_after_merge_group: PushAfterMergeGroup::Run,
             test_setup: Vec::new(),
             test_lanes: Vec::new(),

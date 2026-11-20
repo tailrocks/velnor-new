@@ -8,7 +8,7 @@ use crate::facts::TestResult;
 use crate::pipeline::{view, workflow};
 
 const SCALE_SET: &str = "ubuntu-26.04-scale-set";
-pub(crate) const MISE: &str = "[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\njactionlint = \"2.4.0\"\nshellcheck = \"0.11.0\"\n\"github:asamarts/alint\" = \"0.22.1\"\n\n[tasks.lint-generator-samples]\nrun = \"jactionlint\"\n\n[tasks.check]\nrun = \"true\"\n";
+pub(crate) const MISE: &str = "[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n\n[tools]\nrust = { version = \"1.99.1\", mr_boxington = true }\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\njactionlint = \"2.4.0\"\nshellcheck = \"0.11.0\"\n\"github:asamarts/alint\" = \"0.22.1\"\n\n[tasks.lint-generator-samples]\nrun = \"jactionlint\"\n\n[tasks.check]\nrun = \"true\"\n";
 pub(crate) const LINT: &str = "[[lint]]\nkind = 'jactionlint'\nconfig = '.github/jactionlint.yaml'\n\n[[lint]]\nkind = 'alint'\nconfig = '.alint.yml'\nprobe = 'scripts/alint-line-cap-probe.sh'\n\n[[lint]]\nkind = 'mise-task'\ntask = 'lint-generator-samples'\ntools = ['jactionlint']\ntimeout_minutes = 5\n";
 pub(crate) const IDS: &[&str] = &[
     "lint-jactionlint",

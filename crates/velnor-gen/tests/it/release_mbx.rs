@@ -14,13 +14,20 @@ use crate::yaml_tree::{Node, parse};
 type TestResult = Result<(), Box<dyn Error>>;
 
 const MISE_ACTION: &str = "jdx/mise-action@";
-const MBX_MISE: &str = "[tools]\nrust = { version = \"1.99.1\", mr_boxington = true }\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n\"aqua:release-plz/release-plz\" = \"0.4.3\"\n\n[wrappers.cargo]\ncommand = \"mbx\"\n";
+const MBX_MISE: &str = "[tools]\nrust = { version = \"1.99.1\", mr_boxington = true }\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n\"aqua:release-plz/release-plz\" = \"0.4.3\"\n\n[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n";
+const UNDECLARED_MISE: &str = "[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n\"aqua:release-plz/release-plz\" = \"0.4.3\"\n";
 
-fn release_yml(mise: Option<&str>) -> Result<Node, Box<dyn Error>> {
+fn release_yml(mise: Option<&str>, config: Option<&[u8]>) -> Result<Node, Box<dyn Error>> {
     let mut view = release_view(&[APP], Some("[[binaries]]\npackage = \"app\"\n"))?;
     if let Some(text) = mise {
         view.files
             .insert(RepoPath::new("mise.toml")?, text.as_bytes().to_vec());
+    }
+    if let Some(bytes) = config {
+        view.files
+            .insert(RepoPath::new(".velnor/rust-ci.toml")?, bytes.to_vec());
+        // `[cache] mbx` needs the helper that reads it.
+        crate::pipeline::pin_helper(&mut view, "0.1.109")?;
     }
     let mut files = expected_release(&view)?;
     let text = files
@@ -45,7 +52,7 @@ fn is_mise(step: &Node) -> bool {
 
 #[test]
 fn mbx_build_installs_the_mise_tools_before_cargo() -> TestResult {
-    let tree = release_yml(Some(MBX_MISE))?;
+    let tree = release_yml(Some(MBX_MISE), None)?;
     let builds: Vec<(&str, &Node)> = jobs(&tree)?
         .into_iter()
         .filter(|(id, _)| id.starts_with("build-"))
@@ -83,7 +90,7 @@ fn mbx_build_installs_the_mise_tools_before_cargo() -> TestResult {
 
 #[test]
 fn undeclared_build_keeps_the_rust_only_install() -> TestResult {
-    let tree = release_yml(None)?;
+    let tree = release_yml(Some(UNDECLARED_MISE), Some(b"[cache]\nmbx = false\n"))?;
     for (id, job) in jobs(&tree)? {
         if !id.starts_with("build-") {
             continue;
@@ -94,6 +101,31 @@ fn undeclared_build_keeps_the_rust_only_install() -> TestResult {
             .find(|step| is_mise(step))
             .ok_or_else(|| format!("{id}: no mise install step"))?;
         assert_eq!(install_args(install), Some("rust"), "{id}");
+    }
+    Ok(())
+}
+
+#[test]
+fn a_wrapper_that_is_not_the_exact_mbx_command_never_selects_the_full_install_under_the_opt_out()
+-> TestResult {
+    for command in ["./bin/mbx", "/tmp/evil/mbx", "mbx --x", "mbx"] {
+        let mise = format!("{UNDECLARED_MISE}\n[wrappers.cargo]\ncommand = \"{command}\"\n");
+        let tree = release_yml(Some(&mise), Some(b"[cache]\nmbx = false\n"))?;
+        let mut builds = 0;
+        for (id, job) in jobs(&tree)? {
+            for step in steps(job) {
+                assert_ne!(
+                    step.get("name").and_then(Node::text),
+                    Some("Install tools"),
+                    "{command}: {id}"
+                );
+                if is_mise(step) {
+                    assert_eq!(install_args(step), Some("rust"), "{command}: {id}");
+                    builds += 1;
+                }
+            }
+        }
+        assert_ne!(builds, 0, "{command}");
     }
     Ok(())
 }
@@ -154,7 +186,10 @@ fn assert_private_before_cargo(tree: &Node, expect: &[&str]) -> TestResult {
 
 #[test]
 fn every_cargo_job_makes_a_fresh_private_store_first() -> TestResult {
-    assert_private_before_cargo(&release_yml(Some(MBX_MISE))?, &["build-app-linux-x64"])?;
+    assert_private_before_cargo(
+        &release_yml(Some(MBX_MISE), None)?,
+        &["build-app-linux-x64"],
+    )?;
     assert_private_before_cargo(
         &family_yml()?,
         &[
@@ -167,7 +202,7 @@ fn every_cargo_job_makes_a_fresh_private_store_first() -> TestResult {
 
 #[test]
 fn no_release_job_shares_restores_or_saves_an_mbx_store() -> TestResult {
-    for tree in [release_yml(Some(MBX_MISE))?, family_yml()?] {
+    for tree in [release_yml(Some(MBX_MISE), None)?, family_yml()?] {
         for (id, job) in jobs(&tree)? {
             for step in steps(job) {
                 let used = uses(step).unwrap_or_default();
@@ -187,7 +222,8 @@ fn no_release_job_shares_restores_or_saves_an_mbx_store() -> TestResult {
 
 #[test]
 fn undeclared_release_sets_no_mbx_store() -> TestResult {
-    for (id, job) in jobs(&release_yml(None)?)? {
+    let tree = release_yml(Some(UNDECLARED_MISE), Some(b"[cache]\nmbx = false\n"))?;
+    for (id, job) in jobs(&tree)? {
         for step in steps(job) {
             assert!(!run(step).contains("MBX_CACHE_DIR"), "{id}");
         }

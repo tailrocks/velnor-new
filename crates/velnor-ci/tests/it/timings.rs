@@ -235,9 +235,16 @@ fn a_root_whose_steps_cannot_be_read_gets_no_entry() {
     }
     let report = gather(&fake, &repo, &roots(), &runner()).unwrap_or_else(|e| unreachable!("{e}"));
     assert!(report.timings.is_empty());
-    assert_eq!(report.notes.len(), 2);
+    assert_eq!(report.notes.len(), 5);
     assert!(
-        report.notes[0].contains("0 of 3 runs"),
+        report.notes[3].contains("0 of 3 runs"),
+        "{:?}",
+        report.notes
+    );
+    assert!(
+        report.notes[..3]
+            .iter()
+            .all(|note| note.contains("different number of step groups")),
         "{:?}",
         report.notes
     );

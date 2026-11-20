@@ -49,6 +49,8 @@ pub(super) const RUST_CI: &[KeyGate] = &[
     gate(RustCi, "budget.setup_seconds", (0, 1, 92)),
     // helper-gate: first in tools-v0.1.88 via 08d1b3495d
     gate(RustCi, "cache", (0, 1, 88)),
+    // First released in tools-v0.1.109 (not tagged yet when this gate was written).
+    gate(RustCi, "cache.mbx", (0, 1, 109)),
     // helper-gate: first in tools-v0.1.88 via 08d1b3495d
     gate(RustCi, "cache.mbx_remote", (0, 1, 88)),
     // helper-gate: first in rust-ci-v0.1.82 via c0d0b51181
@@ -197,6 +199,8 @@ pub(super) const RUST_CI: &[KeyGate] = &[
     gate(RustCi, "test_setup.root", (0, 1, 82)),
     // helper-gate: first in rust-ci-v0.1.82 via f304690c07
     gate(RustCi, "test_setup.run", (0, 1, 82)),
+    // First released in tools-v0.1.109 (not tagged yet when this gate was written).
+    gate(RustCi, "test_setup.phase", (0, 1, 109)),
     gate(RustCi, "timeout_minutes", HELPER_MINIMUM),
     // helper-gate: first in tools-v0.1.96 via 61067c17fc
     gate(RustCi, "workspace_groups", (0, 1, 96)),

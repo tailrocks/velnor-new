@@ -26,6 +26,7 @@ pub const HELPER_COMMANDS: &[&str] = &[
     "mbx-store",
     "mbx-seed",
     "tools-local",
+    "tools-verify",
     "check-metadata",
     "check-configurations",
     "lane-guard",
@@ -37,6 +38,7 @@ pub const HELPER_COMMANDS: &[&str] = &[
     "run",
     "sources",
     "timings",
+    "mise-pin",
     "validate-artifact-id",
     "qualification",
 ];

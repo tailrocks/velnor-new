@@ -37,6 +37,30 @@ fork_runner = "ubuntu-24.04"
 
 `cache_debug = true` in `.velnor/rust-ci.toml` makes every generated cargo step set `CARGO_LOG` from the repository variable `VELNOR_CACHE_DEBUG` and adds a step that uploads the log when that variable is `1`. It is `false` by default, and then the generated workflow reads no repository variable. A repository that sets it also declares `VELNOR_CACHE_DEBUG` to its workflow linter. The key needs a helper release that knows it (`0.1.82` or later), because older helpers reject unknown keys.
 
+## mbx by default
+
+Every generated job that builds with Cargo runs cargo through mbx, with its own private store. The generator does not put `mbx` in the cargo commands; it requires that the repository's `mise.toml` has one of two accepted layouts, because `mise-action` then makes `cargo` on `PATH` the mbx wrapper in every step, including the direct `cargo-clippy` and `cargo-nextest` binaries that call `cargo` back. The native layout is the one the mbx docs recommend and the one the refusal shows first:
+
+```toml
+[tools]
+rust = { version = "1.99.1", mr_boxington = true }
+mr-boxington = { version = "v1.30.0", workflow = "release.yml@refs/heads/main" }
+```
+
+The explicit layout adds the exact wrapper below to the same two entries. It is also accepted:
+
+```toml
+[wrappers.cargo]
+command = "mbx"
+env = { MBX_CARGO_SHIM_MODE = "1" }
+```
+
+Generation fails, and names what is missing with this snippet, when the pin of `mr-boxington` (one request, no `os` filter) or `mr_boxington = true` on the pinned rust tool is absent. It also fails when a `[wrappers.cargo]` is present that is neither the exact wrapper nor absent. A `command = "mbx"` wrapper without `MBX_CARGO_SHIM_MODE = "1"` is refused with its own message: without the env, `cargo -V` and `cargo --list` print mbx's own output, so the fix is to add the env or to delete the wrapper and use the native layout. Run `mise lock` after adding them, because the tools cache and the prebuilt check read `mise.lock`. The exact wrapper is not reported as a setting that makes a check do less.
+
+Each job with a building Cargo step gets the step `Private mbx store` (`echo "MBX_CACHE_DIR=$RUNNER_TEMP/mbx" >> "$GITHUB_ENV"`) before the tools restore, so mbx keeps its results in an empty per-job directory and never reads a store another job or event wrote. A job that builds nothing (fmt, cargo-deny, cargo-machete, a run of a prebuilt test archive) gets none. No store is set when `mbx_shared_store = true` or `[cache] mbx_remote` is configured: their wiring below is unchanged.
+
+`[cache] mbx = false` turns all of this off. It needs no layout, sets no store and is listed among the settings that make a check do less. It is refused with `mbx_shared_store = true` or `[cache] mbx_remote`. `mbx = true` is the default written down. Either value needs `velnor-ci` 0.1.109 or later in the lock, because an older helper rejects the key; `velnor-gen pin-helper 0.1.109` fixes an older pin. Without the key, the output needs no new helper. A release build uses mbx only for the exact layout and never with `mbx = false`. A tool whose key ends in `mr-boxington` next to the `mr-boxington` pin is refused. Declared workflows are not covered.
+
 ## Optional mbx remote cache
 
 `[cache] mbx_remote = "github-actions"` in `.velnor/rust-ci.toml` adds `jdx/mr-boxington-action` (pinned by full SHA) to every generated job that builds with Cargo (a fmt, cargo-deny or cargo-machete lane, or a run of a prebuilt test archive, gets none), right after the tools install and before any repository code runs. It uses the action's `github` backend in `objects` mode, pinned to mbx `1.30.0` (the `mr-boxington` pin of `mise.toml`) with `version`. Each job's restores are scoped to its own generation (`cache-generation: v1-<job>`), so a job never warm-starts from another job's entry. The action saves after a successful push to the default branch (a built-in rule of the action; no input controls it) and after a successful pull request from the same repository (`save-on-pull-request` is set by comparing the head repository with `github.repository`, and that save is scoped to the pull request's own merge ref, so main and other pull requests cannot restore it). `save-on-protected-branch` and `save-on-workflow-dispatch` are rendered `false`, so a push to another protected branch, a schedule, a merge queue run, a manual run and a fork pull request only restore. Restores match the job's generation prefix, so a pull request with no entry of its own restores the default branch's latest entry. The step runs with `continue-on-error: true`, so a failed export or save never fails the Cargo lane. The objects cache holds only what mbx compiled, so the saving needs the build commands to run under `mbx`; the generated Cargo steps do not, so a repository that opts in must route its build through `mbx` (its own `[wrappers.cargo]`) for the cache to fill. The jobs get no write permission, no `id-token` and no secret, and the workflow sets no `MBX_REMOTE_*` variable. The action's post step still runs after the job's Cargo steps. It uses the runner's cache credential, not a repository token, and writes only this repository's own caches, from a push to the default branch or a same-repository pull request. The table is off by default, and then the output is unchanged. Allowed values: `"github-actions"`. The key needs velnor-ci 0.1.88 or later, because older helpers reject unknown keys, and `velnor-gen pin-helper 0.1.88` fixes an older pin. The `mbx-remote-cache` sample is pinned to the current release.
@@ -175,7 +199,7 @@ With `velnor-ci` 0.1.86 or later in the lock, `mbx_shared_store = true` also ren
 
 ## Cargo wrapper
 
-`mise.toml` routes every `cargo` through MBX with the owner standard layout: `mr_boxington = true` on the `rust` tool and this wrapper:
+`mise.toml` routes every `cargo` through MBX with the owner standard layout: `mr_boxington = true` on the `rust` tool, and either no cargo wrapper (the native layout) or this wrapper (the explicit layout):
 
 ```toml
 [wrappers.cargo]
@@ -197,6 +221,21 @@ run = "bash scripts/prepare-fixtures.sh"
 ```
 
 `root` is the folder of the Cargo root's `Cargo.toml`, or `.` for the repository root, and it must name a root of this repository. The step runs in that folder. It follows the same gate as the test steps, so a run that selects no tests skips it. A job that runs no tests has none. With `shape = "groups"` the test group job installs only cargo-nextest, so a step there must not need Rust. A `run` value with an expression, a line break or any shell syntax is refused.
+
+By default a step runs only before the tests, so a lint, doc or check step does not see its output. A package whose `build.rs` reads the fixture then fails `cargo clippy` before the setup has run. Add `phase = "build"` to the step:
+
+```toml
+[[test_setup]]
+root = "."
+name = "Unpack the fixtures"
+run = "bash scripts/unpack-fixtures.sh"
+phase = "build"
+```
+
+- `phase` is `"test"` (default) or `"build"`. A step with `phase = "build"` runs in every job of its root that compiles or runs tests, directly before the first cargo step that compiles the package or runs its tests: `cargo clippy`, `cargo doc`, the build of the tests or of the nextest archive, a feature lane, the test steps. It does not run before `cargo fmt`, cargo-machete or cargo-deny, and a job with only those has no such step. In the `groups` shape it runs in the lint job, the build job and each group job. Steps of both phases keep the order written inside their phase, and the `build` steps come first. A step with `phase = "build"` is not repeated before the tests of the same job.
+- The step has the gate of the cargo steps it precedes, so a run that selects nothing for the root skips it.
+- Placement never puts repository code ahead of a token or verdict step that was not already behind repository code: the step sits directly before the first cargo step, which is repository code already, and the `[private_sources]` token phase goes in front of it. The step does not see the token (see Optional private dependencies).
+- The key needs `velnor-ci` 0.1.109 or later, because `velnor-ci` reads the same file. Generation refuses an older pin when any step writes the key, `"test"` too. A step without the key renders as before.
 
 ## Per-root time limits
 
@@ -399,6 +438,19 @@ The retired `.velnor/config.toml` still makes `velnor-gen check` skip every unow
 ## Helper from this repository
 
 `helper = { path = "tools/velnor-ci" }` names a folder of this repository that holds the source of `velnor-ci`. The generated workflow then builds the helper from that folder instead of using a release. A trailing `/` is removed. The path must be a valid repository path.
+
+## Checking the helper lock
+
+`velnor-gen check` reads `.velnor/rust-ci.lock` before it compares the generated files. Offline it refuses a lock whose `[velnor-gen]` entry disagrees with itself or with the running binary. Each message starts with the field it names: `version:`, `commit:` or `[velnor-gen] <platform>`. A `[velnor-gen]` digest that is not 64 lowercase hex digits, or that lacks a required platform, is refused the same way. The checks are these:
+
+- The `version` and `commit` must be well-formed (a numeric `MAJOR.MINOR.PATCH` and 40 lowercase hex digits).
+- A running `velnor-gen` that is a release build of the lock's commit (it stamps that commit with `VELNOR_COMMIT`) must have the lock's version. Its own SHA-256 must equal the lock's digest for its platform, when that platform is listed.
+- A running release build of the lock's version but another commit is refused: the lock names the wrong commit.
+- A local build stamps no commit (`unknown`). Its bytes are not the published binary, so nothing about it is compared, and a newer or older release that the lock does not pin is not compared either.
+
+Offline, `check` cannot tell that a lock names a wrong version or commit when the running binary is a different release. That needs the network.
+
+`velnor-gen check --verify-release` also downloads `SHA256SUMS`, `COMMIT` and, when it is listed, `BINARY-SHA256SUMS` of the lock's release and pins the release again from them. It refuses a lock that differs from what the release publishes, and names the first field that differs (`commit:` or `[velnor-ci]`, `[velnor-ci-binary]`, `[velnor-gen]` with the platform). It needs the network and fails without it, so it is not run by default.
 
 ## Test groups
 
