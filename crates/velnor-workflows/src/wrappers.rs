@@ -60,6 +60,7 @@ const RESERVED: [&str; 15] = [
 /// `dash`, `zsh`, `ksh` and `ash` with `-c` run their script, which is read the same way when
 /// it holds no `$` or backtick. Everything the scan cannot follow is `Opaque`, so a wrapper
 /// that is not known, an option that is not known and an unreadable script fail closed.
+#[must_use]
 pub fn invoked(run: &str) -> Vec<Invoked> {
     let mut found = Vec::new();
     scan(run, 0, &mut found);
