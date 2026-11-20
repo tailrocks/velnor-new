@@ -36,6 +36,7 @@ mod compile_inputs_identity;
 mod concurrency;
 mod crates_mirror;
 mod credential_hooks;
+mod decide_verdict;
 mod declared_attestation;
 mod declared_cache_modes;
 mod declared_call_fence;

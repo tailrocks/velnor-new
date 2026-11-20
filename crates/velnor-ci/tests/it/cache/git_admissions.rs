@@ -60,3 +60,36 @@ fn an_unpinned_git_source_needs_a_confirmed_private_repository() {
     assert_eq!(written, "save=true\nsources=true\n", "{output:?}");
     assert_eq!(mock.requests().len(), 0, "{:?}", mock.requests());
 }
+
+#[test]
+fn an_empty_or_unset_verdict_refuses_a_private_source_even_with_a_token() {
+    let mock = serve(public("acme/shared-lib"));
+    let sources = [(
+        "secret",
+        "git+ssh://git@github.com/acme/private#abc".to_owned(),
+    )];
+    for verdict in [Some(""), None] {
+        let mut env = vec![("GITHUB_TOKEN", "token")];
+        env.extend(verdict.map(|value| ("VELNOR_REPOSITORY_PRIVATE", value)));
+        let (output, written) = decide_with(&sources, &mock.url, &env);
+        refused(&output, &written);
+    }
+    assert_eq!(mock.requests().len(), 0, "{:?}", mock.requests());
+}
+
+#[test]
+fn an_all_pinned_github_lock_with_a_true_verdict_is_admitted_by_the_private_arm() {
+    let mock = serve(public("acme/shared-lib"));
+    let (_repo, home) = empty_home("git-admission-all-pinned");
+    let sources = [("dep", git("acme/shared-lib", SHA))];
+    let (output, written) = decide_with(
+        &sources,
+        &mock.url,
+        &[("VELNOR_REPOSITORY_PRIVATE", "true"), ("HOME", &home)],
+    );
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(written, "save=true\nsources=true\n", "{output:?}");
+    assert_eq!(mock.requests().len(), 0, "{:?}", mock.requests());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(!stdout.contains("is public"), "{stdout}");
+}

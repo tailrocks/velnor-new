@@ -5,8 +5,8 @@ use std::collections::BTreeMap;
 
 use velnor_model::{
     Access, BaseExpiry, CacheKey, CacheRoot, HelperCommand, Host, InputsCli, Job, JobId,
-    LockIdentity, PermissionScope, Permissions, PlanFrom, RepoFacts, RepoPath, RootSlug, RustRoot,
-    Step, StepKind, TrimFamily, When,
+    LockIdentity, PermissionScope, Permissions, PlanFrom, PrivateVerdict, RepoFacts, RepoPath,
+    RootSlug, RustRoot, Step, StepKind, TrimFamily, When,
 };
 
 use crate::lane::Lane;
@@ -62,13 +62,25 @@ pub(crate) fn writes_base(facts: &RepoFacts) -> bool {
     has_saving_helper(facts) && (facts.private_sources.is_none() || private_base(facts))
 }
 
+fn has_private_base_helper(facts: &RepoFacts) -> bool {
+    facts
+        .helper
+        .as_ref()
+        .is_some_and(|helper| helper.version().at_least(PRIVATE_BASE_HELPER))
+}
+
 pub(crate) fn private_base(facts: &RepoFacts) -> bool {
-    facts.private_sources.is_some()
-        && facts.private_base_caches
-        && facts
-            .helper
-            .as_ref()
-            .is_some_and(|helper| helper.version().at_least(PRIVATE_BASE_HELPER))
+    facts.private_sources.is_some() && facts.private_base_caches && has_private_base_helper(facts)
+}
+
+fn private_verdict(facts: &RepoFacts) -> PrivateVerdict {
+    if private_base(facts) {
+        PrivateVerdict::Checked
+    } else if has_private_base_helper(facts) {
+        PrivateVerdict::Cleared
+    } else {
+        PrivateVerdict::Unset
+    }
 }
 
 pub(crate) fn private_only(facts: &RepoFacts, step: Step) -> Step {
@@ -254,6 +266,7 @@ pub(crate) fn save_steps(
                     .public_sources
                     .as_ref()
                     .map(|_| lane.plan.clone().map_or(PlanFrom::ThisJob, PlanFrom::Job)),
+                private: private_verdict(facts),
             })
         },
         Step {
