@@ -135,8 +135,6 @@ pub(super) fn scan_with(
     Ok(entries)
 }
 
-/// What to walk next for a classified child: a directory through its parent's
-/// handle, or the directory a link resolves to.
 fn queue(
     kind: &Kind,
     path: &Path,
@@ -166,10 +164,6 @@ fn queue(
     })
 }
 
-/// A queued directory could not be opened because its entry changed after it was
-/// classified. A vanished entry is dropped from its parent. Anything else that now
-/// sits there (a link, a file) is inventoried in its place, and a directory that
-/// reappeared fails the scan, because it was not walked.
 fn settle(
     entries: &mut Entries,
     pending: &mut Vec<Pending>,
