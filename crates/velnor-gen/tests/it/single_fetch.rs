@@ -4,8 +4,8 @@
 use velnor_gen::{GenerateError, expected_with_notes};
 use velnor_model::{
     CacheKey, CacheRoot, Concurrency, Host, Job, JobId, Permissions, PrRun, PullRequestType,
-    RepoPath, RepoView, RootSlug, RunnerLabel, Step, StepKind, Triggers, WORKFLOW_PATH, When,
-    WorkflowPlan,
+    RepoPath, RepoView, RootSlug, RunnerLabel, SetupOrder, Step, StepKind, Triggers, WORKFLOW_PATH,
+    When, WorkflowPlan,
 };
 use velnor_render::render;
 
@@ -185,7 +185,7 @@ fn step_of(kind: StepKind) -> Step {
         pr: PrRun::Always,
         gate: None,
         reads: None,
-        after_setup: false,
+        setup_order: SetupOrder::Unordered,
         skip_after_merge_group: None,
         skip_when_cold: false,
         private_repo: false,

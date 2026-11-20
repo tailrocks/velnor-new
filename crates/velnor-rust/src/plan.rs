@@ -6,8 +6,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use velnor_model::{
     Access, CacheDebug, CacheKey, CargoCommand, Concurrency, Gate, HelperCommand, Host, Job, JobId,
     MbxStore, PackageName, PermissionScope, Permissions, PrCi, PrRun, PrepareLocks,
-    PushAfterMergeGroup, RepoFacts, RootSlug, RustRoot, Step, StepKind, TargetName, Toolchain,
-    When, WorkflowPlan,
+    PushAfterMergeGroup, RepoFacts, RootSlug, RustRoot, SetupOrder, Step, StepKind, TargetName,
+    Toolchain, When, WorkflowPlan,
 };
 
 use crate::audit_job::audit_job;
@@ -386,6 +386,6 @@ pub(crate) fn step(kind: StepKind) -> Step {
         gate: None,
         reads: None,
         hosted_only: false,
-        after_setup: false,
+        setup_order: SetupOrder::Unordered,
     }
 }

@@ -10,7 +10,7 @@ use clap::Parser;
 use velnor_ci::cli::{Cli, Command as CiCommand, SourcesCommand};
 use velnor_model::{
     Concurrency, Job, JobId, Permissions, PrRun, PullRequestType, RepoPath, RootSlug, RunnerLabel,
-    Step, StepKind, Triggers, WORKFLOW_PATH, When, WorkflowPlan,
+    SetupOrder, Step, StepKind, Triggers, WORKFLOW_PATH, When, WorkflowPlan,
 };
 use velnor_render::render;
 
@@ -77,7 +77,7 @@ pub(crate) fn plan(
                 hosted_only: false,
                 gate: None,
                 reads: None,
-                after_setup: false,
+                setup_order: SetupOrder::Unordered,
             }],
         }],
     }

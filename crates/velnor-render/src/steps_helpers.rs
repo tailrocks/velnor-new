@@ -7,7 +7,7 @@ use super::{
     CacheKey, CargoCommand, CargoLane, GateNeed, RenderedStep, Setup, Step, StepKind, cargo_step,
     merge_group_skipped, sources_step, trimmed_lane,
 };
-use velnor_model::RepoPath;
+use velnor_model::{RepoPath, SetupOrder};
 
 pub(super) fn saved_unless_hit(kind: &StepKind) -> Vec<String> {
     match kind {
@@ -109,7 +109,7 @@ pub(super) fn after_setup(
     step: &Step,
     setups: &BTreeMap<Option<RepoPath>, Vec<String>>,
 ) -> Vec<String> {
-    if !step.after_setup {
+    if step.setup_order != SetupOrder::AfterSetup {
         return Vec::new();
     }
     if matches!(step.kind, StepKind::TestSetup { .. }) {

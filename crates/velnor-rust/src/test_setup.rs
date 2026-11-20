@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{CargoCommand, RepoFacts, RustRoot, Step, StepKind, TestSetup};
+use velnor_model::{CargoCommand, RepoFacts, RustRoot, SetupOrder, Step, StepKind, TestSetup};
 
 use crate::lane::Lane;
 use crate::plan::step;
@@ -45,7 +45,7 @@ pub(crate) fn before_builds(facts: &RepoFacts, root: &RustRoot, mut steps: Vec<S
         .into_iter()
         .map(|setup| Step {
             gate: gate.clone(),
-            after_setup: true,
+            setup_order: SetupOrder::AfterSetup,
             ..setup_step(root, setup, when, pr)
         })
         .collect();
@@ -77,7 +77,7 @@ pub(crate) fn before_tests(
         .into_iter()
         .map(|setup| Step {
             gate: lane.steps(),
-            after_setup: true,
+            setup_order: SetupOrder::AfterSetup,
             ..setup_step(root, setup, when, pr)
         })
         .collect();
@@ -116,7 +116,7 @@ fn checked(facts: &RepoFacts, root: &RustRoot, lane: &Lane, mut steps: Vec<Step>
         })
         .map(|check| Step {
             gate: lane.steps(),
-            after_setup: true,
+            setup_order: SetupOrder::AfterSetup,
             ..check
         })
         .collect();
@@ -145,7 +145,9 @@ pub(crate) fn gate_job(steps: &mut [Step]) {
                 building |= *before_build;
                 testing |= !*before_build;
             }
-            StepKind::Cargo(_) if building || (testing && tests(step)) => step.after_setup = true,
+            StepKind::Cargo(_) if building || (testing && tests(step)) => {
+                step.setup_order = SetupOrder::AfterSetup;
+            }
             _ => {}
         }
     }

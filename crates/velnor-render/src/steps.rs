@@ -4,8 +4,8 @@
 use std::collections::BTreeMap;
 
 use velnor_model::{
-    CacheKey, CargoCommand, GateNeed, HelperCommand, Job, RepoPath, Step, StepKind, WorkflowPlan,
-    group_output_name,
+    CacheKey, CargoCommand, GateNeed, HelperCommand, Job, RepoPath, SetupOrder, Step, StepKind,
+    WorkflowPlan, group_output_name,
 };
 
 use crate::artifact_steps::{download_step, upload_cargo_log, upload_step};
@@ -49,9 +49,7 @@ mod chained_save;
 mod steps_helpers;
 #[path = "steps_outputs.rs"]
 mod steps_outputs;
-use steps_helpers::{
-    after_setup, extra_conditions, leading_steps, root_key, rustup_add, variable,
-};
+use steps_helpers::{after_setup, extra_conditions, leading_steps, root_key, rustup_add, variable};
 use steps_outputs::{merge_group_output, test_outputs};
 
 pub(crate) const CACHE_RESTORE: &str =
@@ -134,8 +132,9 @@ fn job_steps(
             |(replanned, setups), (index, step)| {
                 let setup = Setup::of(restores, *replanned);
                 *replanned |= step.kind == StepKind::Helper(HelperCommand::PlanFull);
-                let own = (step.after_setup && matches!(step.kind, StepKind::TestSetup { .. }))
-                    .then(|| format!("test_setup_{index}"));
+                let own = (step.setup_order == SetupOrder::AfterSetup
+                    && matches!(step.kind, StepKind::TestSetup { .. }))
+                .then(|| format!("test_setup_{index}"));
                 let around = Around {
                     id: gate.id(index).or(own.as_deref()),
                     saved_after: gate.required(),
