@@ -170,6 +170,7 @@ mod patch;
 mod per_root_audit;
 mod pin_policy;
 mod pipeline;
+mod plan_gated;
 mod plan_job;
 mod plan_job_wait;
 mod policy_deny_key;

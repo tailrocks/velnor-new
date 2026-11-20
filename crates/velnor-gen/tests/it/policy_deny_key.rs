@@ -121,6 +121,7 @@ fn the_parser_keeps_the_written_policy_table() -> TestResult {
         Some(PolicyTable {
             deny: DenyLane::Off,
             deny_checks: Some(vec![DenyCheck::Bans]),
+            gate_on_plan: false,
         })
     );
     assert_eq!(detect(&repo(b"", true, "0.1.111")?)?.config.policy, None);

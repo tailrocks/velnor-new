@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::path::Path;
 
 use velnor_model::{
     EventKind, LintJob, LintKind, PathGlob, RepoFacts, RepoPath, RootSlug, WORKFLOW_PATH,
@@ -22,7 +23,7 @@ pub fn lint_runs(
         .config
         .lint
         .iter()
-        .filter(|lint| !lint.inputs.is_empty())
+        .filter(|lint| lint.planned())
         .map(|lint| (lint.slug(), runs(lint, event, changed, symlinks)))
         .collect()
 }
@@ -59,7 +60,21 @@ fn own_files(lint: &LintJob) -> impl Iterator<Item = &RepoPath> {
     config.into_iter().chain(probe)
 }
 
+const GENERATOR_FOLDERS: [&str; 3] = [".github/", ".velnor/", "generator/"];
+
+fn inert(path: &RepoPath) -> bool {
+    !GENERATOR_FOLDERS
+        .iter()
+        .any(|folder| path.as_str().starts_with(folder))
+        && Path::new(path.as_str())
+            .extension()
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("md"))
+}
+
 fn reached(lint: &LintJob, path: &RepoPath) -> bool {
+    if lint.kind == LintKind::GeneratedCheck {
+        return !inert(path);
+    }
     lint.inputs.iter().any(|glob| reaches(glob, path))
         || implicit(lint, path)
         || below_one(lint, path)
