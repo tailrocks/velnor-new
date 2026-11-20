@@ -50,7 +50,12 @@ pub(crate) fn repository_conditions(step: &Step) -> Vec<String> {
 /// `$GITHUB_ENV`, so the step always sets it itself: to the privacy step's answer, or to an
 /// empty string that refuses every private source.
 pub(crate) fn decide_env(step: &Step) -> Vec<(String, Value)> {
-    let StepKind::CacheDecide { private, .. } = &step.kind else {
+    let StepKind::CacheDecide {
+        private,
+        sources_restore,
+        ..
+    } = &step.kind
+    else {
         return Vec::new();
     };
     let value = match private {
@@ -60,7 +65,17 @@ pub(crate) fn decide_env(step: &Step) -> Vec<(String, Value)> {
             Value::Expr(format!("${{{{ steps.{PRIVACY_STEP}.outputs.private }}}}"))
         }
     };
-    vec![("VELNOR_REPOSITORY_PRIVATE".to_owned(), value)]
+    let mut env = vec![("VELNOR_REPOSITORY_PRIVATE".to_owned(), value)];
+    if let Some(lane) = sources_restore {
+        env.push((
+            "VELNOR_SOURCES_RESTORED".to_owned(),
+            Value::Expr(format!(
+                "${{{{ steps.{}.outputs.cache-hit }}}}",
+                sources_step(lane)
+            )),
+        ));
+    }
+    env
 }
 
 fn api_env() -> Vec<(String, Value)> {

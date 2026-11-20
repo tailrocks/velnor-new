@@ -16,6 +16,10 @@ pub(crate) struct CachePlan {
     not_generated: Option<String>,
 }
 
+pub(crate) fn privacy_unavailable(steps: &Value) -> bool {
+    steps["private_repo"]["outputs"]["unavailable"] == "true"
+}
+
 pub(crate) fn observe_caches(
     plans: Vec<CachePlan>,
     steps: &Value,
@@ -105,7 +109,7 @@ fn restore(step: &Value) -> Result<(String, Option<String>, Option<Hit>), &'stat
 
 #[cfg(test)]
 mod tests {
-    use super::{CachePlan, observe_caches};
+    use super::{CachePlan, observe_caches, privacy_unavailable};
     use crate::report::{LaneMetrics, SaveOutcome, check};
     use serde_json::json;
 
@@ -145,5 +149,44 @@ mod tests {
             "{}",
             verdict.err().map(|e| e.to_string()).unwrap_or_default()
         );
+    }
+
+    fn skipped_lane(privacy: serde_json::Value) -> LaneMetrics {
+        let mut lane = json!({
+            "schema": 1,
+            "lane": "rust",
+            "caches": [],
+            "invocations": [],
+            "downloaded": 0,
+            "first_cargo_seconds": null,
+            "slowest_tests": [],
+            "tests_run": null,
+            "diagnostics": [],
+            "violations": [],
+        });
+        lane["privacy_unavailable"] = privacy;
+        serde_json::from_value(lane).unwrap_or_else(|error| unreachable!("{error}"))
+    }
+
+    #[test]
+    fn only_an_unavailable_privacy_lookup_is_carried_into_the_metrics() {
+        let step = |outputs| json!({"private_repo": {"outcome": "success", "outputs": outputs}});
+        assert!(privacy_unavailable(&step(
+            json!({"private": "false", "unavailable": "true"})
+        )));
+        assert!(!privacy_unavailable(&step(json!({"private": "false"}))));
+        assert!(!privacy_unavailable(&step(json!({"private": "true"}))));
+        assert!(!privacy_unavailable(&json!({})));
+    }
+
+    #[test]
+    fn an_unavailable_privacy_verdict_fails_the_cache_check() {
+        let verdict = check(&[skipped_lane(json!(true))]);
+        let message = verdict.err().map(|e| e.to_string()).unwrap_or_default();
+        assert!(
+            message.contains("privacy lookup was unavailable"),
+            "{message}"
+        );
+        assert!(check(&[skipped_lane(json!(false))]).is_ok());
     }
 }

@@ -74,7 +74,10 @@ fn a_private_repository_is_reported_private_with_the_job_token() -> TestResult {
     Ok(())
 }
 
-fn not_private(cases: &[(&str, u16, &str, Option<&str>)]) -> TestResult {
+const CONFIRMED_NOT_PRIVATE: &str = "private=false\n";
+const UNAVAILABLE: &str = "private=false\nunavailable=true\n";
+
+fn not_private(cases: &[(&str, u16, &str, Option<&str>)], expected: &str) -> TestResult {
     for (label, status, body, token) in cases {
         let outcome = verdict(&format!("pr-{label}"), *status, body, *token)?;
         assert!(
@@ -82,7 +85,7 @@ fn not_private(cases: &[(&str, u16, &str, Option<&str>)]) -> TestResult {
             "{label}: {:?}",
             outcome.output
         );
-        assert_eq!(outcome.written, "private=false\n", "{label}");
+        assert_eq!(outcome.written, expected, "{label}");
         if token.is_none() {
             assert!(outcome.requests().is_empty(), "{label}");
         }
@@ -92,45 +95,54 @@ fn not_private(cases: &[(&str, u16, &str, Option<&str>)]) -> TestResult {
 
 #[test]
 fn a_public_or_internal_repository_is_reported_not_private() -> TestResult {
-    not_private(&[
-        ("public", 200, PUBLIC, Some(TOKEN)),
-        ("internal", 200, INTERNAL, Some(TOKEN)),
-    ])
+    not_private(
+        &[
+            ("public", 200, PUBLIC, Some(TOKEN)),
+            ("internal", 200, INTERNAL, Some(TOKEN)),
+        ],
+        CONFIRMED_NOT_PRIVATE,
+    )
 }
 
 #[test]
 fn a_failed_lookup_is_reported_not_private_and_still_exits_zero() -> TestResult {
-    not_private(&[
-        ("not-found", 404, r#"{"message":"Not Found"}"#, Some(TOKEN)),
-        ("malformed", 200, "not json", Some(TOKEN)),
-    ])
+    not_private(
+        &[
+            ("not-found", 404, r#"{"message":"Not Found"}"#, Some(TOKEN)),
+            ("malformed", 200, "not json", Some(TOKEN)),
+        ],
+        UNAVAILABLE,
+    )
 }
 
 #[test]
 fn an_answer_that_does_not_prove_privacy_of_this_repository_is_reported_not_private() -> TestResult
 {
-    not_private(&[
-        ("another-repository", 200, OTHER, Some(TOKEN)),
-        (
-            "no-private-field",
-            200,
-            r#"{"full_name":"acme/app"}"#,
-            Some(TOKEN),
-        ),
-        (
-            "no-visibility",
-            200,
-            r#"{"full_name":"acme/app","private":true}"#,
-            Some(TOKEN),
-        ),
-        (
-            "no-full-name",
-            200,
-            r#"{"private":true,"visibility":"private"}"#,
-            Some(TOKEN),
-        ),
-        ("no-token", 200, PRIVATE, None),
-    ])
+    not_private(
+        &[
+            ("another-repository", 200, OTHER, Some(TOKEN)),
+            (
+                "no-private-field",
+                200,
+                r#"{"full_name":"acme/app"}"#,
+                Some(TOKEN),
+            ),
+            (
+                "no-visibility",
+                200,
+                r#"{"full_name":"acme/app","private":true}"#,
+                Some(TOKEN),
+            ),
+            (
+                "no-full-name",
+                200,
+                r#"{"private":true,"visibility":"private"}"#,
+                Some(TOKEN),
+            ),
+            ("no-token", 200, PRIVATE, None),
+        ],
+        UNAVAILABLE,
+    )
 }
 
 #[test]
@@ -155,7 +167,7 @@ fn the_job_token_goes_only_to_an_https_api_or_a_loopback_host() -> TestResult {
             .env("VELNOR_API_URL", api)
             .output()?;
         assert!(output.status.success(), "{api}: {output:?}");
-        assert_eq!(fs::read_to_string(&outputs)?, "private=false\n", "{api}");
+        assert_eq!(fs::read_to_string(&outputs)?, UNAVAILABLE, "{api}");
         assert!(
             String::from_utf8_lossy(&output.stderr).contains("set VELNOR_API_URL"),
             "{api}: {output:?}"

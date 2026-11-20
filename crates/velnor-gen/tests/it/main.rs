@@ -183,6 +183,7 @@ mod pr_ci_labels;
 mod pr_ci_queue;
 mod pr_ci_sim;
 mod private_base_caches;
+mod private_base_shadowed_config;
 mod private_sources;
 mod private_sources_advisory;
 mod private_sources_phase;

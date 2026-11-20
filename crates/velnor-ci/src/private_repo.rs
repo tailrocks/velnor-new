@@ -13,31 +13,47 @@ struct Repository {
     visibility: Option<String>,
 }
 
-pub fn require_private(repository: &str, github: &dyn GitHub) -> Result<(), CiError> {
-    let repo = Repo::parse(repository)?;
+#[derive(Debug)]
+pub enum Rejection {
+    Unavailable(CiError),
+    NotPrivate(CiError),
+}
+
+impl std::fmt::Display for Rejection {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Unavailable(error) | Self::NotPrivate(error) => error.fmt(f),
+        }
+    }
+}
+
+pub fn require_private(repository: &str, github: &dyn GitHub) -> Result<(), Rejection> {
+    let unavailable = |message: String| Rejection::Unavailable(CiError::new(message));
+    let repo = Repo::parse(repository).map_err(Rejection::Unavailable)?;
     let path = format!("/repos/{repo}");
-    let text = github.get(&path)?;
+    let text = github.get(&path).map_err(Rejection::Unavailable)?;
     let answer: Repository = serde_json::from_str(&text)
-        .map_err(|e| CiError::new(format!("GET {path} is not readable: {e}")))?;
+        .map_err(|e| unavailable(format!("GET {path} is not readable: {e}")))?;
     let Some(name) = answer.full_name.as_deref() else {
-        return Err(CiError::new(format!(
+        return Err(unavailable(format!(
             "GET {path} did not name the repository, so it cannot prove {repository} private"
         )));
     };
     if !name.eq_ignore_ascii_case(repository) {
-        return Err(CiError::new(format!(
+        return Err(unavailable(format!(
             "GET {path} answered for {name}, not for {repository}"
         )));
     }
+    let confirmed = |message: String| Rejection::NotPrivate(CiError::new(message));
     match (answer.private, answer.visibility.as_deref()) {
         (true, Some("private")) => Ok(()),
-        (true, None) => Err(CiError::new(format!(
+        (true, None) => Err(unavailable(format!(
             "GET {path} did not state the visibility of {repository}, and only a private repository can keep private dependencies in its caches"
         ))),
-        (true, Some(visibility)) => Err(CiError::new(format!(
+        (true, Some(visibility)) => Err(confirmed(format!(
             "{repository} has the visibility {visibility}, and only a private repository can keep private dependencies in its caches"
         ))),
-        (false, _) => Err(CiError::new(format!(
+        (false, _) => Err(confirmed(format!(
             "{repository} is not private, and a cache of a public repository can be read by a fork"
         ))),
     }

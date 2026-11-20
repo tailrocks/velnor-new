@@ -155,6 +155,11 @@ fn the_helpers_verdict_gates_every_restore_and_every_save_of_the_base_caches() -
     for token in ["GITHUB_TOKEN", "github.token", "VELNOR_API_URL"] {
         assert!(!decide.contains(token), "{token}: {decide}");
     }
+    assert!(
+        decide.contains("VELNOR_SOURCES_RESTORED: '${{ steps.sources_")
+            && decide.contains(".outputs.cache-hit }}'"),
+        "{decide}"
+    );
     let fetch = step(&lane, "Fetch the sources of every root").ok_or("no sources fetch")?;
     assert!(fetch.contains("CARGO_NET_OFFLINE: 'true'"), "{fetch}");
     Ok(())
