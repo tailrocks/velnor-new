@@ -20,7 +20,7 @@ pub(super) fn report_json(version: u64, hits: u64, misses: u64, unconsulted: u64
 }
 
 pub(super) fn cargo(repo: &Repo, subcommand: &str, report: &str, stderr: &str) -> ResultTest {
-    cargo_with(repo, subcommand, report, stderr, None, true, false)
+    cargo_with(repo, subcommand, report, stderr, None, true, None)
 }
 
 pub(super) fn cargo_with(
@@ -30,7 +30,7 @@ pub(super) fn cargo_with(
     stderr: &str,
     inherited: Option<&std::path::Path>,
     enabled: bool,
-    inside_session: bool,
+    socket: Option<&std::path::Path>,
 ) -> ResultTest {
     let bin = repo.root().join("fake-bin");
     let cargo = bin.join("cargo");
@@ -52,8 +52,8 @@ pub(super) fn cargo_with(
     if let Some(path) = inherited {
         command.env("MBX_STATS_REPORT", path);
     }
-    if inside_session {
-        command.env("MBX_SOCKET", repo.root().join("cache-agent.sock"));
+    if let Some(socket) = socket {
+        command.env("MBX_SOCKET", socket);
     }
     let output = command.output()?;
     assert!(output.status.success(), "{output:?}");
@@ -138,7 +138,7 @@ fn a_command_that_runs_tests_gets_no_report_path_and_counts_from_its_summary() -
         line,
         Some(&inherited),
         true,
-        false,
+        None,
     )?;
     assert!(!inherited.exists());
     let metrics = report(&repo)?;
@@ -319,7 +319,7 @@ fn with_the_switch_off_an_inherited_report_path_never_reaches_the_child() -> Res
         "compiled",
         Some(&inherited),
         false,
-        false,
+        None,
     )?;
     assert!(!inherited.exists());
     Ok(())
