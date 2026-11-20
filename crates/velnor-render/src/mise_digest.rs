@@ -136,25 +136,24 @@ fn selecting(binary: &MiseBinary) -> Value {
     Value::Expr(format!("${{{{ {chain}'{NO_DIGEST}' }}}}"))
 }
 
-/// Narrows the run-time digest selection of every mise step of `jobs` to the one digest of the
+/// Narrows the run-time digest selection of every mise step of `job` to the one digest of the
 /// job's runner platform, when the labels of the job name exactly one platform.
-pub(crate) fn pin_to_runner_platform(jobs: &mut [RenderedJob]) {
-    for job in jobs {
-        let Some(digest) = runner_digest(job) else {
-            continue;
-        };
-        for step in job.steps.iter_mut().filter(|step| {
-            step.uses
-                .as_deref()
-                .is_some_and(|uses| uses.split('@').next() == Some(crate::rules::MISE_ACTION))
-        }) {
-            for (key, value) in &mut step.with {
-                if key == "sha256" && *value == pinned_sha256() {
-                    *value = Value::Text(digest.to_owned());
-                }
+pub(crate) fn pin_to_runner_platform(mut job: RenderedJob) -> RenderedJob {
+    let Some(digest) = runner_digest(&job) else {
+        return job;
+    };
+    for step in job.steps.iter_mut().filter(|step| {
+        step.uses
+            .as_deref()
+            .is_some_and(|uses| uses.split('@').next() == Some(crate::rules::MISE_ACTION))
+    }) {
+        for (key, value) in &mut step.with {
+            if key == "sha256" && *value == pinned_sha256() {
+                *value = Value::Text(digest.to_owned());
             }
         }
     }
+    job
 }
 
 fn runner_digest(job: &RenderedJob) -> Option<&'static str> {

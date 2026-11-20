@@ -59,10 +59,6 @@ mod tools_steps;
 mod workflow;
 mod yaml;
 
-use std::collections::BTreeMap;
-
-use velnor_model::{RepoPath, WORKFLOW_PATH, WorkflowPlan};
-
 pub use crate::cache::{RenderedKey, render_key, render_key_with_mise};
 pub use crate::delta_cleanup::{DELTA_CLEANUP_PATH, delta_cleanup};
 use crate::events::{concurrency, triggers};
@@ -85,6 +81,8 @@ pub use crate::rules::{
 use crate::steps::rendered_job;
 use crate::workflow::{ShellcheckMarks, yaml_job};
 use crate::yaml::{Yaml, emit, entry, text};
+use std::collections::BTreeMap;
+use velnor_model::{RepoPath, WORKFLOW_PATH, WorkflowPlan};
 
 pub use velnor_model::{Owner, VELNOR_GEN_MARKER, lf_normalized, owner_of, seal};
 pub const GENERATED_HEADER: &str =
@@ -96,13 +94,13 @@ pub fn render(plan: &WorkflowPlan) -> Result<BTreeMap<RepoPath, String>, Vec<Rul
 
 #[must_use]
 pub fn rendered_workflow(plan: &WorkflowPlan) -> RenderedWorkflow {
-    let mut jobs: Vec<_> = plan
-        .jobs
-        .iter()
-        .map(|job| rendered_job(job, plan))
-        .collect();
-    crate::mise_digest::pin_to_runner_platform(&mut jobs);
-    RenderedWorkflow { jobs }
+    RenderedWorkflow {
+        jobs: plan
+            .jobs
+            .iter()
+            .map(|job| rendered_job(job, plan))
+            .collect(),
+    }
 }
 
 pub fn render_workflow(
