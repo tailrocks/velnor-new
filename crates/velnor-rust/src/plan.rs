@@ -147,7 +147,8 @@ fn helper_job(facts: &RepoFacts, root: &RustRoot, deltas: bool) -> Job {
             binary: TargetName::from_static(HELPER_PACKAGE),
         }))
     });
-    let steps = crate::test_setup::before_builds(facts, root, steps);
+    let mut steps = crate::test_setup::before_builds(facts, root, steps);
+    crate::test_setup::gate_job(&mut steps);
     Job {
         needs: vec![PLAN_JOB],
         gate: lane.job(),

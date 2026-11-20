@@ -275,3 +275,48 @@ fn a_nested_root_test_in_a_workspace_group_waits_for_its_own_setup() -> TestResu
     }
     Ok(())
 }
+
+fn grouped_jobs(phase: &str) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+    let config = format!(
+        "[[workspace_groups]]\nname = 'tools'\nroots = ['tools/a', 'tools/b']\n\
+        [[test_setup]]\nroot = 'tools/b'\nname = 'Prepare b'\nrun = 'bash scripts/b.sh'\n{phase}"
+    );
+    let mut repo = view(
+        &["Cargo.toml", "tools/a/Cargo.toml", "tools/b/Cargo.toml"],
+        Some(config.as_bytes()),
+    )?;
+    crate::pipeline::pin_helper(&mut repo, "0.1.109")?;
+    Ok(crate::yaml_tree::document(&workflow(&repo)?)?["jobs"].clone())
+}
+
+#[test]
+fn a_failed_setup_of_one_grouped_root_stops_the_other_roots_later_cargo_steps() -> TestResult {
+    for (phase, cargo) in [("", "nextest run"), ("phase = 'build'\n", "cargo")] {
+        let jobs = grouped_jobs(phase)?;
+        let mut checked_a = 0;
+        for (id, job) in jobs.as_object().into_iter().flatten() {
+            let steps = job["steps"].as_array().map(Vec::as_slice).unwrap_or_default();
+            let Some(index) = steps.iter().position(|step| step["name"] == "Prepare b") else {
+                continue;
+            };
+            let setup_id = steps[index]["id"].as_str().ok_or("the setup has no id")?;
+            let waits = format!("steps.{setup_id}.outcome == 'success'");
+            for step in steps.iter().skip(index + 1) {
+                let run = step["run"].as_str().unwrap_or_default();
+                if !run.contains(cargo) || run.contains("--no-run") {
+                    continue;
+                }
+                checked_a += usize::from(run.contains("tools/a"));
+                assert!(
+                    step["if"].as_str().is_some_and(|text| text.contains(&waits)),
+                    "{id} ({phase}): a cargo step runs after a failed setup of another root: {step}"
+                );
+            }
+        }
+        assert!(
+            phase.is_empty() || checked_a > 0,
+            "no step of tools/a follows the setup of tools/b"
+        );
+    }
+    Ok(())
+}

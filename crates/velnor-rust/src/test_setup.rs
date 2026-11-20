@@ -41,9 +41,6 @@ pub(crate) fn before_builds(facts: &RepoFacts, root: &RustRoot, mut steps: Vec<S
     };
     let gate = shared_gate(steps.iter().filter(|step| owned(step)));
     let (when, pr) = (steps[first].when, steps[first].pr);
-    gate_cargo_from(&mut steps, first, |step| {
-        matches!(step.kind, StepKind::Cargo(_))
-    });
     let setup: Vec<Step> = setups
         .into_iter()
         .map(|setup| Step {
@@ -76,7 +73,6 @@ pub(crate) fn before_tests(
         return steps;
     };
     let (when, pr) = (steps[first].when, steps[first].pr);
-    gate_cargo_from(&mut steps, first, tests);
     let setup: Vec<Step> = setups
         .into_iter()
         .map(|setup| Step {
@@ -140,12 +136,16 @@ fn archives(step: &Step) -> bool {
     )
 }
 
-/// A cargo step from the first setup on waits for the setup before it: a setup that fails stops
-/// the job's compiling and test steps.
-fn gate_cargo_from(steps: &mut [Step], first: usize, gated: impl Fn(&Step) -> bool) {
-    for later in steps.iter_mut().skip(first) {
-        if gated(later) {
-            later.after_setup = true;
+pub(crate) fn gate_job(steps: &mut [Step]) {
+    let (mut building, mut testing) = (false, false);
+    for step in steps {
+        match &step.kind {
+            StepKind::TestSetup { before_build, .. } => {
+                building |= *before_build;
+                testing |= !*before_build;
+            }
+            StepKind::Cargo(_) if building || (testing && tests(step)) => step.after_setup = true,
+            _ => {}
         }
     }
 }

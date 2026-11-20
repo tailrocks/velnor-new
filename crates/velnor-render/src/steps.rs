@@ -138,11 +138,7 @@ fn job_steps(
                     saved_after: gate.required(),
                     chained: job.chained_saves,
                     job_name: job.name.as_deref(),
-                    after_setup: step
-                        .after_setup
-                        .then(|| setups.get(&root_key(step)))
-                        .flatten()
-                        .map(String::as_str),
+                    after_setup: after_setup(step, setups),
                 };
                 let mut rendered = rendered_steps(step, setup, audit, tests, lane, around);
                 let tools_key = matches!(
@@ -171,20 +167,30 @@ fn job_steps(
 }
 
 /// What the job around a step adds to it.
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 struct Around<'a> {
     /// The id a compile or audit step gets so a save can wait for it.
     id: Option<&'a str>,
     saved_after: &'a [String],
     chained: bool,
     job_name: Option<&'a str>,
-    after_setup: Option<&'a str>,
+    after_setup: Vec<String>,
 }
 
 fn root_key(step: &Step) -> Option<RepoPath> {
     step.directory
         .clone()
         .or_else(|| step.manifest.as_ref().and_then(RepoPath::parent))
+}
+
+fn after_setup(step: &Step, setups: &BTreeMap<Option<RepoPath>, String>) -> Vec<String> {
+    if !step.after_setup {
+        return Vec::new();
+    }
+    if matches!(step.kind, StepKind::TestSetup { .. }) {
+        return setups.get(&root_key(step)).cloned().into_iter().collect();
+    }
+    setups.values().cloned().collect()
 }
 
 fn setup_succeeded(id: &str) -> String {
@@ -222,7 +228,7 @@ fn rendered_steps(
             ));
         }
         let mut extra = saved_unless_hit(&step.kind);
-        extra.extend(around.after_setup.map(setup_succeeded));
+        extra.extend(around.after_setup.iter().map(String::as_str).map(setup_succeeded));
         extra.extend(
             step.hosted_only
                 .then(|| crate::gate::NOT_SELF_HOSTED.to_owned()),
