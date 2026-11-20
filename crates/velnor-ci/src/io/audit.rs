@@ -62,6 +62,7 @@ pub(super) struct Audit<'a> {
 }
 
 pub fn audit_inputs(directory: &Path, options: &AuditOptions) -> Result<String, CiError> {
+    inventory::raise_open_file_limit();
     let failed = |e: &dyn std::fmt::Display| CiError::new(e.to_string());
     let mut checkout = read_checkout(directory).map_err(|e| failed(&e))?;
     let mut listed = checkout

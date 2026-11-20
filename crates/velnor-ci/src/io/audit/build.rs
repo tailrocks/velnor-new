@@ -44,6 +44,7 @@ struct Builder<'a> {
 type Identities = BTreeMap<PathBuf, (String, SystemTime)>;
 
 pub(crate) fn build(directory: &Path, args: &InputsBuildArgs) -> Result<String, CiError> {
+    inventory::raise_open_file_limit();
     let checkout = read_checkout(directory).map_err(|e| CiError::new(e.to_string()))?;
     let facts = detect(&checkout.view).map_err(|e| CiError::new(e.to_string()))?;
     let standalone = standalone(&facts);
@@ -221,7 +222,7 @@ impl Builder<'_> {
             }
             match inventory::scan(root, &self.targets, &mut budget) {
                 Ok(found) => evidence.entries.extend(found),
-                Err(error) if budget.overflowed() => {
+                Err(error) if budget.fatal() => {
                     return Err(CiError::new(error.to_string()));
                 }
                 Err(_) => return Ok((evidence, false)),

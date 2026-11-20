@@ -9,12 +9,13 @@ use std::path::{Path, PathBuf};
 
 use super::super::options::{MAX_ENTRIES_CEILING, MAX_ENTRIES_VARIABLE};
 use super::handle::{self, Current, Opened, Origin};
+use super::descriptors::open_file_limit;
 use super::{Entries, Kind, excluded_entry};
 
 pub(in crate::io::audit) struct Budget {
     remaining: usize,
     limit: usize,
-    overflowed: bool,
+    fatal: bool,
 }
 
 impl Budget {
@@ -22,17 +23,17 @@ impl Budget {
         Self {
             remaining: limit,
             limit,
-            overflowed: false,
+            fatal: false,
         }
     }
 
-    pub(in crate::io::audit) fn overflowed(&self) -> bool {
-        self.overflowed
+    pub(in crate::io::audit) fn fatal(&self) -> bool {
+        self.fatal
     }
 
     fn reserve(&mut self) -> io::Result<()> {
         let Some(remaining) = self.remaining.checked_sub(1) else {
-            self.overflowed = true;
+            self.fatal = true;
             return Err(io::Error::other(format!(
                 "audit freshness scan limit exceeded: more than {} entries; raise it with {MAX_ENTRIES_VARIABLE} (at most {MAX_ENTRIES_CEILING})",
                 self.limit
@@ -79,9 +80,33 @@ pub(super) fn scan_with(
     probe: &Probe<'_>,
 ) -> io::Result<Entries> {
     let root = fs::canonicalize(root)?;
+    let mut depth = 0;
+    walk(&root, targets, budget, probe, &mut depth).map_err(|error| {
+        if !descriptors_exhausted(&error) {
+            return error;
+        }
+        budget.fatal = true;
+        io::Error::other(format!(
+            "directory tree deeper than {depth} levels with pending siblings exceeds the open-file limit ({}); raise the open-file limit",
+            open_file_limit()
+        ))
+    })
+}
+
+fn descriptors_exhausted(error: &io::Error) -> bool {
+    matches!(error.raw_os_error(), Some(libc::EMFILE | libc::ENFILE))
+}
+
+fn walk(
+    root: &Path,
+    targets: &BTreeSet<PathBuf>,
+    budget: &mut Budget,
+    probe: &Probe<'_>,
+    depth: &mut usize,
+) -> io::Result<Entries> {
     let mut entries = Entries::new();
     let mut pending = vec![Pending {
-        path: root.clone(),
+        path: root.to_path_buf(),
         origin: Origin::Path,
     }];
     let mut visited = BTreeSet::new();
@@ -90,6 +115,9 @@ pub(super) fn scan_with(
         origin,
     }) = pending.pop()
     {
+        *depth = directory
+            .strip_prefix(root)
+            .map_or(0, |relative| relative.components().count());
         if !visited.insert(directory.clone()) {
             continue;
         }
@@ -109,7 +137,7 @@ pub(super) fn scan_with(
                         &parent,
                         &name,
                         current,
-                        (&root, targets),
+                        (root, targets),
                     )?,
                 }
                 continue;
@@ -130,7 +158,7 @@ pub(super) fn scan_with(
             let Some(kind) = handle::kind_at(&listing, &name, &path)? else {
                 continue;
             };
-            pending.extend(queue(&kind, &path, &listing, &name, (&root, targets))?);
+            pending.extend(queue(&kind, &path, &listing, &name, (root, targets))?);
             children.insert(PathBuf::from(name), kind);
         }
         let (parent, name) = handle::locate(&origin, &directory)?;
@@ -159,7 +187,7 @@ pub(super) fn scan_with(
                     &parent,
                     &name,
                     current,
-                    (&root, targets),
+                    (root, targets),
                 )?;
             }
         }
