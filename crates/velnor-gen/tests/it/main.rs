@@ -76,6 +76,8 @@ mod fixed_uses_comment;
 mod fork_fence;
 mod fork_fence_invariant;
 mod freshness;
+mod generated_check;
+mod generated_check_repo;
 mod generated_selection;
 mod gh_expr;
 mod golden;

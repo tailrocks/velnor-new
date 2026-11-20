@@ -124,16 +124,23 @@ pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, Generate
             release.version().clone(),
         ));
     }
-    if facts
+    require_generator_digests(facts, release)?;
+    Ok(release)
+}
+
+fn require_generator_digests(
+    facts: &RepoFacts,
+    release: &HelperRelease,
+) -> Result<(), GenerateError> {
+    let wanted = facts
         .config
         .lint
         .iter()
-        .any(|lint| lint.kind == LintKind::GeneratedCheck)
-        && release.generator_digests().is_none()
-    {
+        .any(|lint| lint.kind == LintKind::GeneratedCheck);
+    if wanted && release.generator_digests().is_none() {
         return Err(GenerateError::GeneratorNotLocked(release.version().clone()));
     }
-    Ok(release)
+    Ok(())
 }
 
 pub fn require_compatible(version: &HelperVersion) -> Result<(), GenerateError> {

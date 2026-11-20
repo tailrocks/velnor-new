@@ -1,12 +1,17 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
+use std::fs;
+use std::path::Path;
+use std::process::Command;
 
+use velnor_gen::io::{add_manifests, read_files};
 use velnor_gen::{Drift, drift};
-use velnor_model::RepoPath;
+use velnor_model::{RepoPath, RepoView, RepositoryIdentity};
 use velnor_render::{Owner, RELEASE_HEADER, VELNOR_GEN_MARKER, owner_of, seal};
+use velnor_rust::{METADATA_PATH, build_script_sources, recorded_metadata, wanted_files};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -196,15 +201,84 @@ fn a_crlf_checkout_of_a_sealed_file_is_still_owned_and_not_drift() -> TestResult
 }
 
 #[test]
-fn every_workflow_velnor_gen_writes_is_sealed_so_check_finds_no_drift() -> TestResult {
+fn every_workflow_velnor_gen_renders_carries_a_seal_that_verifies() -> TestResult {
     let repo = crate::base_save::pinned("0.1.102", "")?;
     let expected = velnor_gen::expected_files(&repo)?;
     assert!(expected.contains_key(&velnor_render::DELTA_CLEANUP_PATH));
-    let on_disk: BTreeMap<RepoPath, Vec<u8>> = expected
+    for (file, text) in &expected {
+        assert_eq!(owner_of(text.as_bytes()), Owner::VelnorGen, "{file}");
+    }
+    Ok(())
+}
+
+fn committed_view(root: &Path) -> Result<RepoView, Box<dyn Error>> {
+    let git = crate::setup_action::program("git");
+    let listing = Command::new(git)
+        .args(["ls-files", "-s", "-z"])
+        .current_dir(root)
+        .output()?;
+    assert!(listing.status.success(), "git ls-files failed");
+    let mut tracked = BTreeSet::new();
+    let mut symlinks = BTreeSet::new();
+    for entry in listing
+        .stdout
+        .split(|byte| *byte == 0)
+        .filter(|e| !e.is_empty())
+    {
+        let text = String::from_utf8(entry.to_vec())?;
+        let (meta, name) = text.split_once('\t').ok_or("unreadable git index entry")?;
+        let path = RepoPath::new(name)?;
+        if meta.starts_with("120000") {
+            symlinks.insert(path.clone());
+        }
+        tracked.insert(path);
+    }
+    let mut view = RepoView {
+        repository: RepositoryIdentity::Named("tailrocks/velnor-new".to_owned()),
+        files: read_files(root, &wanted_files(&tracked))?,
+        tracked_paths: tracked,
+        symlinks,
+        rust_metadata: BTreeMap::new(),
+    };
+    add_manifests(&mut view, |paths| read_files(root, paths))?;
+    let recorded = read_files(root, &[METADATA_PATH])?;
+    view.rust_metadata = recorded_metadata(&view, recorded.get(&METADATA_PATH).map(Vec::as_slice))?;
+    let roots: Vec<RepoPath> = view.rust_metadata.keys().cloned().collect();
+    view.files.extend(read_files(root, &roots)?);
+    for source in build_script_sources(&view) {
+        view.files.extend(read_files(root, &[source])?);
+    }
+    Ok(view)
+}
+
+#[test]
+fn the_workflows_committed_in_this_repository_are_what_its_own_config_generates() -> TestResult {
+    let root = fs::canonicalize(Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."))?;
+    let view = committed_view(&root)?;
+    let expected = velnor_gen::generated_files(&view)?;
+    let committed: Vec<RepoPath> = view
+        .tracked_paths
         .iter()
-        .map(|(file, text)| (file.clone(), text.as_bytes().to_vec()))
+        .filter(|path| {
+            path.as_str().starts_with(".github/workflows/")
+                && matches!(path.as_str().rsplit('.').next(), Some("yml" | "yaml"))
+        })
+        .chain(std::iter::once(&METADATA_PATH))
+        .cloned()
         .collect();
-    assert_eq!(drift(&expected, &on_disk, false), vec![]);
+    let on_disk = read_files(&root, &committed)?;
+    assert!(
+        on_disk.contains_key(&RepoPath::new(".github/workflows/rust-ci.yml")?),
+        "the committed Rust CI workflow was not read"
+    );
+    let engine = view
+        .tracked_paths
+        .contains(&RepoPath::new(".velnor/config.toml")?);
+    let drifts: Vec<String> = drift(&expected, &on_disk, engine)
+        .iter()
+        .map(ToString::to_string)
+        .collect();
+    assert_eq!(drifts, Vec::<String>::new());
     Ok(())
 }
 

@@ -73,10 +73,7 @@ impl fmt::Display for GenerateError {
             Self::HelperNotPinned => f.write_str(
                 "velnor-ci is not pinned: every generated job runs it, so pin a release with `velnor-gen pin-helper <version>`",
             ),
-            Self::GeneratorNotLocked(version) => write!(
-                f,
-                "the generated-check lint installs the pinned velnor-gen archive, but .velnor/rust-ci.lock pins velnor-ci {version} without archive digests; repin with `velnor-gen pin-helper <version>` to a release that ships archives"
-            ),
+            Self::GeneratorNotLocked(v) => write!(f, "{}", generator_not_locked(v)),
             Self::HelperTooOld(version) => write!(
                 f,
                 "velnor-ci {version} is older than this generator supports; pin velnor-ci {}.{}.{} or later with `velnor-gen pin-helper {}.{}.{}`",
@@ -174,6 +171,12 @@ fn incompatible_helper(version: &HelperVersion) -> String {
     format!(
         "velnor-ci {version} does not fit this velnor-gen, which works with velnor-ci {}.{}.x; pin a compatible release with `velnor-gen pin-helper <version>`",
         COMPATIBLE_HELPER_SERIES.0, COMPATIBLE_HELPER_SERIES.1
+    )
+}
+
+fn generator_not_locked(version: &HelperVersion) -> String {
+    format!(
+        "the generated-check lint installs the pinned velnor-gen archive, but .velnor/rust-ci.lock pins velnor-ci {version} without archive digests; repin with `velnor-gen pin-helper <version>` to a release that ships archives"
     )
 }
 
