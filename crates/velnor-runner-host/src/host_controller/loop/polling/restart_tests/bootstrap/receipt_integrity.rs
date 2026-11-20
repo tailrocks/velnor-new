@@ -82,19 +82,34 @@ async fn receipt_after_delete() -> TestResult<Prepared> {
     Ok(case)
 }
 
+async fn rejects_named(corruption: Corruption) -> TestResult<()> {
+    rejects(corruption)
+        .await
+        .map_err(|error| format!("{corruption:?}: {error}").into())
+}
+
 #[tokio::test(flavor = "multi_thread")]
-async fn reopening_rejects_corrupt_creation_receipts_without_rewriting_them() -> TestResult<()> {
-    for corruption in [
-        Corruption::Digest,
-        Corruption::Canonicality,
-        Corruption::RowIdentity,
-        Corruption::Labels,
-    ] {
-        rejects(corruption)
-            .await
-            .map_err(|error| format!("{corruption:?}: {error}"))?;
-    }
-    Ok(())
+async fn reopening_rejects_corrupt_creation_receipts_without_rewriting_them_digest()
+-> TestResult<()> {
+    rejects_named(Corruption::Digest).await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn reopening_rejects_corrupt_creation_receipts_without_rewriting_them_canonicality()
+-> TestResult<()> {
+    rejects_named(Corruption::Canonicality).await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn reopening_rejects_corrupt_creation_receipts_without_rewriting_them_row_identity()
+-> TestResult<()> {
+    rejects_named(Corruption::RowIdentity).await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn reopening_rejects_corrupt_creation_receipts_without_rewriting_them_labels()
+-> TestResult<()> {
+    rejects_named(Corruption::Labels).await
 }
 
 async fn rejects(corruption: Corruption) -> TestResult<()> {
