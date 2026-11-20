@@ -2,6 +2,37 @@
 
 Read this file first, then `docs/roadmap.md`, `docs/goals.md`, `AGENTS.md`, and the body of epic #574.
 
+## State at 2026-11-20 ~03:00Z
+
+This section is the newest. Where an older section disagrees, this one wins.
+
+**Helper pin.** Main pins velnor-ci 0.1.106. The older sections below still say 0.1.103.
+
+**Main CI.** Main fails only on flaky or environment-dependent tests. Fixes are in progress. Open items from the latest comments on #1555:
+- `run_waits_for_all_open_pipes_within_one_shared_grace_period` is timing-flaky. It runs 2.4 to 2.8 s against a 1.9 s bound. A replacement that checks events, not elapsed time, is proposed.
+- `run_reports_a_run_without_tests_as_zero` and the `could not lock config file` race share scratch directory names. The fix is in #1985. It is not merged yet.
+- `repo_sample` test `the_recorded_repository_sample_...` runs close to its 2 s limit under the ci profile. It is still open.
+
+Done: `audit::bounds::breadth` (#1505). The `unbound_retirement` flake was not reproduced. The golden and trim_job tests pass on `32c952849`.
+
+**Build cache.** The target directory is 8.43 GB. The budget is 8 GB. So the target cache is never saved. A prune-before-save step is in progress. The sources cache saves fine.
+
+**Per-step audit overhead.** The pre-cargo audit runs on every step. It takes 580 s of a 1402 s push. A fix is in progress. See #1305, comment 7028144116.
+
+**Qualification.** 13 of 21 modes are green. The other 6 fail only on the scale set. The cause is missing image tools: node, npm, nc, the compose plugin, and git-lfs. An image change is prepared. It needs owner approval. See #1456, comment 7028290102.
+
+**Security.** MBX shared-store poisoning is confirmed (#1680). The stopgap draft PR #1986 is on hold. The trusted-pool plan waits for the owner.
+
+**Owner questions.** The current list is in `~/.cache/velnor-owner-report.md`. That file is local only.
+
+**Merge tooling.** The scripts live in `~/.local/share/velnor-agent/`:
+- `mergenow.sh`
+- `fast-merge-sweep.sh`
+- `release-tools.sh`
+- `hold.list`, which now contains 1986. Keep it there until #1986 is decided.
+
+**Do not delete.** The branch `g4-submodule-fixture` is a qualification fixture. Never delete it.
+
 ## 1. Where things stand
 
 Sources: `gh pr list`, `gh run list` on main, the `tools-v*` tags, `origin/main` files, the owner-questions file of 2026-11-19, and the agent scripts in `~/.local/share/velnor-agent/`.
