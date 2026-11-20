@@ -11,8 +11,10 @@ CONTAINER = r"(?:>[ \t]*|(?:[-*+]|\d{1,9}[.)])[ \t]+)*"
 LINE_FENCE = re.compile(r"[ \t]*" + CONTAINER + r"(?:```|~~~)")
 LINE_INDENT = re.compile(QUOTE + r" {5,}\S")
 ATTR_INDENT = re.compile(r" {4,}\S|(?:[ \t]*>)+ {5,}\S")
-BLOCK_FENCE = re.compile(r"^[ \t]*\*?[ \t]*" + CONTAINER + r"(?:```|~~~)", re.M)
-BLOCK_INDENT = re.compile(r"^[ \t]*\*?" + QUOTE + r" {5,}\S", re.M)
+LIST_INDENT = re.compile(r"[ \t]*" + CONTAINER + r"(?:[-*+]|\d{1,9}[.)]) {5,}\S")
+BLOCK_MARGIN = re.compile(r"[ \t]*\*?")
+QUOTE_START = re.compile(r"[ \t]*>")
+HRULE = re.compile(r"(?:-[ \t]*){3,}|(?:\*[ \t]*){3,}|(?:_[ \t]*){3,}")
 DOC_OPEN = re.compile(r"/\*(?:!|\*(?![*/]))")
 ATTR_START = re.compile(r"#\s*!?\s*\[")
 DOC_EQ = re.compile(r"\s*=(?!=)")
@@ -71,8 +73,26 @@ def skip_char(src, i):
     return None
 
 
+def prose(line):
+    if line is None:
+        return False
+    text = re.sub("^" + CONTAINER, "", line.strip(), count=1)
+    return bool(text) and not text.startswith("#") and not HRULE.fullmatch(text)
+
+
+def markdown_hit(lines, indent):
+    prev = None
+    for k, line in enumerate(lines):
+        if LINE_FENCE.match(line) or LIST_INDENT.match(line):
+            return k
+        if indent.match(line) and not (prose(prev) and not QUOTE_START.match(line)):
+            return k
+        prev = line
+    return None
+
+
 def value_has_fence(value):
-    return any(LINE_FENCE.match(line) or ATTR_INDENT.match(line) for line in value.split("\n"))
+    return markdown_hit(value.split("\n"), ATTR_INDENT) is not None
 
 
 def plain_value(literal):
@@ -84,6 +104,22 @@ def raw_value(literal, prefix):
     return literal[hashes + prefix + 1 : len(literal) - hashes - 1]
 
 
+def line_run(src, i):
+    run = []
+    pos = i
+    joinable = not src[src.rfind("\n", 0, i) + 1 : i].strip()
+    while True:
+        k = src.find("\n", pos)
+        end = len(src) if k < 0 else k
+        run.append((pos, src[pos + 3 : end]))
+        j = end + 1
+        while j < len(src) and src[j] in " \t":
+            j += 1
+        if not joinable or end >= len(src) or not LINE_DOC.match(src, j):
+            return run, end
+        pos = j
+
+
 def doc_findings(src):
     i = 0
     attr_depth = 0
@@ -91,19 +127,24 @@ def doc_findings(src):
     while i < len(src):
         c = src[i]
         if src.startswith("//", i):
-            k = src.find("\n", i)
-            end = len(src) if k < 0 else k
             if LINE_DOC.match(src, i):
-                body = src[i + 3 : end]
-                if LINE_FENCE.match(body) or LINE_INDENT.match(body):
-                    yield i
+                run, end = line_run(src, i)
+                hit = markdown_hit([body for _, body in run], LINE_INDENT)
+                if hit is not None:
+                    yield run[hit][0]
+            else:
+                k = src.find("\n", i)
+                end = len(src) if k < 0 else k
             i = end
         elif src.startswith("/*", i):
             end = block_end(src, i)
             if DOC_OPEN.match(src, i):
-                body = src[i + 3 : end]
-                if BLOCK_FENCE.search(body) or BLOCK_INDENT.search(body):
-                    yield i
+                start = i + 3
+                lines = src[start:end].split("\n")
+                stripped = [BLOCK_MARGIN.sub("", line, count=1) for line in lines]
+                hit = markdown_hit(stripped, LINE_INDENT)
+                if hit is not None:
+                    yield start + sum(len(line) + 1 for line in lines[:hit])
             i = end
         elif c == '"':
             end = skip_string(src, i)
