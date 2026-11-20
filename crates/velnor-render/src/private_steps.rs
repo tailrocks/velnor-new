@@ -48,7 +48,10 @@ pub(crate) fn repository_conditions(step: &Step) -> Vec<String> {
 
 pub(crate) fn decide_env(step: &Step) -> Vec<(String, Value)> {
     if step.private_repo && matches!(step.kind, StepKind::CacheDecide { .. }) {
-        api_env()
+        vec![(
+            "VELNOR_REPOSITORY_PRIVATE".to_owned(),
+            Value::Expr(format!("${{{{ steps.{PRIVACY_STEP}.outputs.private }}}}")),
+        )]
     } else {
         Vec::new()
     }

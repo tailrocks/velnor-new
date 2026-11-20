@@ -70,6 +70,7 @@ mod resolve_qualification;
 mod restored;
 mod restored_targets;
 mod run;
+mod saved_git_config;
 mod scope_cache;
 mod setup;
 mod small;

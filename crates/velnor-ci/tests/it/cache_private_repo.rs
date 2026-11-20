@@ -4,7 +4,7 @@
 use std::fs;
 use std::process::{Command, Output};
 
-use crate::fetch::{Api, TestResult, serve, serve_body};
+use crate::fetch::{Api, TestResult, serve_body};
 use crate::io::Repo as Checkout;
 
 const COMPILED: &str =
@@ -164,36 +164,29 @@ fn the_job_token_goes_only_to_an_https_api_or_a_loopback_host() -> TestResult {
     Ok(())
 }
 
-pub(crate) fn decide_with(
-    repo: &Checkout,
-    api: Option<&Api>,
-    token: Option<&str>,
-) -> (Output, String) {
-    decide_in(repo, api, token, None)
+pub(crate) fn decide_with(repo: &Checkout, verdict: Option<&str>) -> (Output, String) {
+    decide_in(repo, verdict, None)
 }
 
 pub(crate) fn decide_in(
     repo: &Checkout,
-    api: Option<&Api>,
-    token: Option<&str>,
+    verdict: Option<&str>,
     cargo_home: Option<&str>,
 ) -> (Output, String) {
-    decide_env(repo, api, token, cargo_home, true)
+    decide_env(repo, verdict, cargo_home, true)
 }
 
 pub(crate) fn decide_without_home(
     repo: &Checkout,
-    api: Option<&Api>,
-    token: Option<&str>,
+    verdict: Option<&str>,
     cargo_home: Option<&str>,
 ) -> (Output, String) {
-    decide_env(repo, api, token, cargo_home, false)
+    decide_env(repo, verdict, cargo_home, false)
 }
 
 fn decide_env(
     repo: &Checkout,
-    api: Option<&Api>,
-    token: Option<&str>,
+    verdict: Option<&str>,
     cargo_home: Option<&str>,
     home: bool,
 ) -> (Output, String) {
@@ -213,11 +206,8 @@ fn decide_env(
     if home {
         command.env("HOME", repo.root().join("home"));
     }
-    if let Some(api) = api {
-        command.env("VELNOR_API_URL", &api.url);
-    }
-    if let Some(token) = token {
-        command.env("GITHUB_TOKEN", token);
+    if let Some(verdict) = verdict {
+        command.env("VELNOR_REPOSITORY_PRIVATE", verdict);
     }
     if let Some(cargo_home) = cargo_home {
         command.env("CARGO_HOME", repo.root().join(cargo_home));
@@ -246,70 +236,66 @@ fn refused(repo: &Checkout, output: &Output, written: &str) {
 }
 
 #[test]
-fn a_private_repository_saves_the_base_caches_for_private_git_sources() -> TestResult {
+fn a_confirmed_private_repository_saves_the_base_caches_for_private_git_sources() {
     let repo = private_checkout("decide-private-repo", GIT_LOCK);
-    let api = serve_body(200, PRIVATE)?;
-    let (output, written) = decide_with(&repo, Some(&api), Some(TOKEN));
+    let (output, written) = decide_with(&repo, Some("true"));
     assert!(output.status.success(), "{output:?}");
     assert_eq!(written, "save=true\nsources=true\n", "{output:?}");
     assert!(!repo.root().join("target/debug/incremental").exists());
-    let requests = api.requests.lock().map_err(|e| e.to_string())?.clone();
-    assert_eq!(
-        requests,
-        [format!(
-            "get /repos/acme/app http/1.1 | authorization: bearer {TOKEN}"
-        )]
-    );
-    Ok(())
 }
 
-fn refuses_git_sources(cases: &[(&str, u16, &str, Option<&str>)]) -> TestResult {
-    for (label, status, body, token) in cases {
+#[test]
+fn any_verdict_but_true_keeps_refusing_private_git_sources() {
+    for (label, verdict) in [
+        ("false", Some("false")),
+        ("empty", Some("")),
+        ("garbage", Some("yes")),
+        ("unset", None),
+    ] {
         let repo = private_checkout(&format!("decide-refused-{label}"), GIT_LOCK);
-        let api = serve_body(*status, body)?;
-        let (output, written) = decide_with(&repo, Some(&api), *token);
+        let (output, written) = decide_with(&repo, verdict);
         refused(&repo, &output, &written);
     }
+}
+
+#[test]
+fn the_decision_holds_no_token_and_asks_the_api_nothing() -> TestResult {
+    let repo = private_checkout("decide-no-token", GIT_LOCK);
+    let api = serve_body(200, PRIVATE)?;
+    let temp = repo.root().join("runner-temp");
+    fs::create_dir_all(&temp)?;
+    fs::write(temp.join("velnor-run.log"), COMPILED)?;
+    let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        .args(["cache", "decide", "--target-dir", "target"])
+        .env_clear()
+        .env("PATH", "/usr/bin:/bin")
+        .env("RUNNER_TEMP", &temp)
+        .env("GITHUB_OUTPUT", repo.root().join("github-output"))
+        .env("GITHUB_REPOSITORY", "acme/app")
+        .env("GITHUB_TOKEN", TOKEN)
+        .env("VELNOR_API_URL", &api.url)
+        .env("HOME", repo.root().join("home"))
+        .current_dir(repo.root())
+        .output()?;
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(
+        fs::read_to_string(repo.root().join("github-output"))?,
+        "save=false\nsources=false\n"
+    );
+    assert!(api.requests.lock().map_err(|e| e.to_string())?.is_empty());
     Ok(())
 }
 
-#[test]
-fn a_public_or_internal_repository_keeps_refusing_private_git_sources() -> TestResult {
-    refuses_git_sources(&[
-        ("public", 200, PUBLIC, Some(TOKEN)),
-        ("internal", 200, INTERNAL, Some(TOKEN)),
-    ])
-}
-
-#[test]
-fn an_unverifiable_repository_keeps_refusing_private_git_sources() -> TestResult {
-    refuses_git_sources(&[
-        ("api-error", 500, "oops", Some(TOKEN)),
-        ("another-repository", 200, OTHER, Some(TOKEN)),
-    ])
-}
-
-#[test]
-fn no_token_or_no_api_refuses_private_git_sources() -> TestResult {
-    refuses_git_sources(&[("no-token", 200, PRIVATE, None)])?;
-    let repo = private_checkout("decide-no-api", GIT_LOCK);
-    let (output, written) = decide_with(&repo, None, Some(TOKEN));
-    refused(&repo, &output, &written);
-    Ok(())
-}
-
-fn refuses_lock(cases: &[(&str, &str)]) -> TestResult {
+fn refuses_lock(cases: &[(&str, &str)]) {
     for (label, lock) in cases {
         let repo = private_checkout(&format!("decide-private-other-{label}"), lock);
-        let api = serve_body(200, PRIVATE)?;
-        let (output, written) = decide_with(&repo, Some(&api), Some(TOKEN));
+        let (output, written) = decide_with(&repo, Some("true"));
         refused(&repo, &output, &written);
     }
-    Ok(())
 }
 
 #[test]
-fn a_private_repository_still_refuses_a_registry_or_a_patch() -> TestResult {
+fn a_private_repository_still_refuses_a_registry_or_a_patch() {
     refuses_lock(&[
         (
             "registry",
@@ -321,11 +307,11 @@ fn a_private_repository_still_refuses_a_registry_or_a_patch() -> TestResult {
                 "{GIT_LOCK}[[patch.unused]]\nname = \"secret\"\nversion = \"1.0.0\"\nsource = \"git+https://example.com/private#123\"\n"
             ),
         ),
-    ])
+    ]);
 }
 
 #[test]
-fn a_private_repository_still_refuses_a_git_url_with_credentials() -> TestResult {
+fn a_private_repository_still_refuses_a_git_url_with_credentials() {
     refuses_lock(&[
         (
             "credentials-in-url",
@@ -335,32 +321,26 @@ fn a_private_repository_still_refuses_a_git_url_with_credentials() -> TestResult
             "token-in-url",
             "version = 4\n[[package]]\nname = \"dep\"\nversion = \"1.0.0\"\nsource = \"git+https://ghp_abc@github.com/acme/shared-lib#123\"\n",
         ),
-    ])
+    ]);
 }
 
 #[test]
-fn a_cargo_config_with_registries_or_sources_is_refused_even_in_a_private_repository() -> TestResult
-{
+fn a_cargo_config_with_registries_or_sources_is_refused_even_in_a_private_repository() {
     for config in [
         "[registries.private]\nindex = \"sparse+https://registry.example.invalid/\"\n",
         "[source.mirror]\nregistry = \"https://registry.example.invalid/\"\n",
     ] {
         let repo = private_checkout("decide-private-config", GIT_LOCK);
         repo.write_unstaged(".cargo/config.toml", config);
-        let api = serve_body(200, PRIVATE)?;
-        let (output, written) = decide_with(&repo, Some(&api), Some(TOKEN));
+        let (output, written) = decide_with(&repo, Some("true"));
         refused(&repo, &output, &written);
     }
-    Ok(())
 }
 
 #[test]
-fn a_public_lock_asks_no_question_of_the_api() -> TestResult {
-    let repo = private_checkout("decide-public-lock-no-api", "version = 4\n");
-    let api = serve(500)?;
-    let (output, written) = decide_with(&repo, Some(&api), Some(TOKEN));
+fn a_public_lock_needs_no_verdict() {
+    let repo = private_checkout("decide-public-lock-no-verdict", "version = 4\n");
+    let (output, written) = decide_with(&repo, None);
     assert!(output.status.success(), "{output:?}");
     assert_eq!(written, "save=true\nsources=true\n");
-    assert!(api.requests.lock().map_err(|e| e.to_string())?.is_empty());
-    Ok(())
 }

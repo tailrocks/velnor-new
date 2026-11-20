@@ -14,7 +14,7 @@ const CREDENTIAL_FILES: &[&str] = &[
     "credentials.toml",
     "hosts.yml",
 ];
-const GIT_CONFIG: &str = "config";
+const GIT_CONFIGS: &[&str] = &["config", "config.worktree"];
 const MAX_CONFIG_BYTES: u64 = 1 << 20;
 const MAX_DEPTH: usize = 12;
 const MAX_ENTRIES: usize = 2_000_000;
@@ -74,8 +74,12 @@ fn walk(directory: &Path, depth: usize, budget: &mut usize) -> Option<String> {
         }
         if kind.is_dir() {
             subdirectories.push(path);
-        } else if kind.is_file() && name == GIT_CONFIG && holds_credential(&path) {
-            return Some(format!("{} holds a credential", path.display()));
+        } else if kind.is_file() && GIT_CONFIGS.contains(&name.as_str()) && holds_credential(&path)
+        {
+            return Some(format!(
+                "{} holds a credential or a transport setting",
+                path.display()
+            ));
         }
     }
     subdirectories
@@ -93,28 +97,5 @@ fn holds_credential(path: &Path) -> bool {
     let Ok(text) = fs::read_to_string(path) else {
         return true;
     };
-    text.lines().any(|line| {
-        let line = line.trim().to_ascii_lowercase();
-        line.starts_with("extraheader")
-            || line.contains("authorization")
-            || line.contains("password")
-            || line.contains("token")
-            || userinfo(&line)
-    })
-}
-
-fn userinfo(line: &str) -> bool {
-    line.match_indices("http").any(|(at, _)| {
-        let rest = &line[at..];
-        let Some(rest) = rest
-            .strip_prefix("https://")
-            .or_else(|| rest.strip_prefix("http://"))
-        else {
-            return false;
-        };
-        rest.split(['/', ' ', '\t'])
-            .next()
-            .unwrap_or("")
-            .contains('@')
-    })
+    !crate::io::saved_git_config::is_plain(&text)
 }

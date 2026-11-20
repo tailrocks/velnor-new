@@ -56,7 +56,7 @@ pub(super) fn refusal(root: &Path, manifests: &[PathBuf]) -> Result<Sources, CiE
             if !read_public(&lock, velnor_rust::cacheable_private_lock) {
                 return Ok(refused(&lock, None));
             }
-            if let Err(error) = verdict.get_or_insert_with(super::private_repo::require) {
+            if let Err(error) = verdict.get_or_insert_with(super::private_repo::confirmed) {
                 return Ok(refused(&lock, Some(error)));
             }
             private_sources = true;

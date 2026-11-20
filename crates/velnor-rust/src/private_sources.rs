@@ -176,7 +176,10 @@ pub(crate) fn only_private_git(view: &RepoView, roots: &[RustRoot]) -> bool {
             .files
             .iter()
             .filter(|(path, _)| is_cargo_config(path) && reaches_a_check(path, roots))
-            .any(|(path, bytes)| configured_source(path, bytes).is_some())
+            .any(|(_, bytes)| {
+                !std::str::from_utf8(bytes)
+                    .is_ok_and(|text| cacheable_config(text).unwrap_or(false))
+            })
 }
 
 pub fn cacheable_config(text: &str) -> Result<bool, crate::lock::LockError> {

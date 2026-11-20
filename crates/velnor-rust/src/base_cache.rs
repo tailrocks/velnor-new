@@ -79,8 +79,15 @@ pub(crate) fn private_only(facts: &RepoFacts, step: Step) -> Step {
     }
 }
 
-pub(crate) fn privacy_check(facts: &RepoFacts) -> Option<Step> {
-    private_base(facts).then(|| step(StepKind::RepositoryPrivacy))
+pub(crate) fn privacy_check(facts: &RepoFacts) -> Vec<Step> {
+    if private_base(facts) {
+        vec![
+            step(StepKind::RepositoryPrivacy),
+            step(StepKind::PrivateCheck { cached: Vec::new() }),
+        ]
+    } else {
+        Vec::new()
+    }
 }
 
 pub const MAX_SOURCE_ROOTS: usize = 16;

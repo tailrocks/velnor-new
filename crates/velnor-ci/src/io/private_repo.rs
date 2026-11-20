@@ -8,6 +8,7 @@ use crate::error::CiError;
 
 const REPOSITORY_VARIABLE: &str = "GITHUB_REPOSITORY";
 const TOKEN_VARIABLE: &str = "GITHUB_TOKEN";
+const VERDICT_VARIABLE: &str = "VELNOR_REPOSITORY_PRIVATE";
 const LOOKUP_TIMEOUT: Duration = Duration::from_secs(30);
 
 fn variable(name: &str) -> Result<String, CiError> {
@@ -21,6 +22,15 @@ pub(super) fn require() -> Result<(), CiError> {
     let repository = variable(REPOSITORY_VARIABLE)?;
     let github = super::fetch::api_client(variable(TOKEN_VARIABLE)?, LOOKUP_TIMEOUT)?;
     crate::private_repo::require_private(&repository, &github)
+}
+
+pub(super) fn confirmed() -> Result<(), CiError> {
+    match std::env::var(VERDICT_VARIABLE).as_deref() {
+        Ok("true") => Ok(()),
+        _ => Err(CiError::new(
+            "the repository was not confirmed private before the build",
+        )),
+    }
 }
 
 pub(super) fn run() -> Result<String, CiError> {

@@ -149,13 +149,12 @@ fn the_helpers_verdict_gates_every_restore_and_every_save_of_the_base_caches() -
     }
     let decide = step(&lane, "Decide whether to save the build directory").ok_or("no decide")?;
     assert!(
-        decide.contains("GITHUB_TOKEN: '${{ github.token }}'"),
+        decide.contains("VELNOR_REPOSITORY_PRIVATE: '${{ steps.private_repo.outputs.private }}'"),
         "{decide}"
     );
-    assert!(
-        decide.contains("VELNOR_API_URL: '${{ github.api_url }}'"),
-        "{decide}"
-    );
+    for token in ["GITHUB_TOKEN", "github.token", "VELNOR_API_URL"] {
+        assert!(!decide.contains(token), "{token}: {decide}");
+    }
     let fetch = step(&lane, "Fetch the sources of every root").ok_or("no sources fetch")?;
     assert!(fetch.contains("CARGO_NET_OFFLINE: 'true'"), "{fetch}");
     Ok(())
@@ -262,5 +261,50 @@ fn a_repository_without_private_dependencies_has_no_verdict_step() -> TestResult
     assert!(text.contains("Save the target cache"));
     assert!(!text.contains("cache private-repo"));
     assert!(!text.contains("private_repo"));
+    Ok(())
+}
+
+#[test]
+fn the_merge_queue_check_runs_before_either_base_cache_restore() -> TestResult {
+    let lane = lane(&workflow(&consumer("0.1.110", GIT_LOCK, "")?)?)?;
+    let names = names(&lane);
+    let at = |name: &str| names.iter().position(|each| each == name);
+    let check = at("Check that the merge queue entry is not from a fork");
+    assert!(check.is_some(), "{names:?}");
+    assert_eq!(
+        names
+            .iter()
+            .filter(|each| *each == "Check that the merge queue entry is not from a fork")
+            .count(),
+        1,
+        "{names:?}"
+    );
+    for restore in ["Restore the sources cache", "Restore the target cache"] {
+        assert!(check < at(restore), "{restore}: {names:?}");
+    }
+    let check = step(&lane, "Check that the merge queue entry is not from a fork")
+        .ok_or("no merge queue check")?;
+    assert!(!check.contains("cache-hit"), "{check}");
+    Ok(())
+}
+
+#[test]
+fn a_cargo_config_the_runtime_would_refuse_keeps_the_generated_refusal() -> TestResult {
+    for config in [
+        "[registry]\ndefault = \"private\"\n",
+        "paths = [\"../shared\"]\n",
+        "[patch.crates-io]\nfoo = { path = \"../foo\" }\n",
+    ] {
+        let mut repo = consumer("0.1.110", GIT_LOCK, "")?;
+        repo.files
+            .insert(path(".cargo/config.toml")?, config.as_bytes().to_vec());
+        let (text, notes) = text_and_notes(&repo)?;
+        assert!(!text.contains("Save the target cache"), "{config}");
+        assert!(!text.contains("cache private-repo"), "{config}");
+        assert!(
+            notes.iter().any(|note| note.contains(REFUSED_NOTE)),
+            "{config}: {notes:?}"
+        );
+    }
     Ok(())
 }
