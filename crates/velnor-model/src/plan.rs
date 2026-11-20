@@ -8,9 +8,13 @@ use crate::cron::CronExpr;
 use crate::hosted::HostedRunners;
 use crate::ids::{JobId, PackageName, RepoPath, RootSlug, RunnerLabel, TargetName};
 use crate::plan_gate::{Gate, GateNeed, PlanFrom};
-use crate::repo::{LaneFeatures, TargetKind};
+use crate::repo::{DenyCheck, LaneFeatures, TargetKind};
 use crate::steps::{StepKind, VerifiedSave};
 use crate::test_group::NoTests;
+use crate::trusted::TrustedRunners;
+
+mod filter;
+pub use filter::FilterRef;
 
 pub const LINT_STEP: &str = "Lint";
 pub const TEST_STEP: &str = "Test";
@@ -32,6 +36,7 @@ pub struct WorkflowPlan {
     pub permissions: Permissions,
     pub fork_runner: RunnerLabel,
     pub hosted_runners: HostedRunners,
+    pub trusted_runners: TrustedRunners,
     pub jobs: Vec<Job>,
 }
 
@@ -251,6 +256,7 @@ pub enum CargoCommand {
     Deny {
         manifest: RepoPath,
         config: Option<RepoPath>,
+        checks: Option<Vec<DenyCheck>>,
     },
     Machete,
 }
@@ -284,19 +290,4 @@ impl CargoCommand {
             _ => &[],
         }
     }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum FilterRef {
-    All,
-    AllExcept(Vec<String>),
-    Expr {
-        expr: String,
-        except: Vec<String>,
-    },
-    Group {
-        include: Option<String>,
-        exclude: Vec<String>,
-        except: Vec<String>,
-    },
 }
