@@ -16,6 +16,7 @@ use crate::escape::escape;
 
 const PREFIX: &str = "velnor-ci artifacts stage";
 const WORKSPACE_VARIABLE: &str = "GITHUB_WORKSPACE";
+const REFUSED_NAME_CHARACTERS: &[char] = &[':', '"', '<', '>', '|', '*', '?', '\r', '\n'];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Skip {
@@ -121,6 +122,14 @@ fn fresh(into: &Path) -> Result<(), CiError> {
     .map_err(|error| failure("create", into, into, &error))
 }
 
+fn refused_name(segments: &[&str]) -> bool {
+    segments.iter().any(|segment| {
+        segment
+            .chars()
+            .any(|c| REFUSED_NAME_CHARACTERS.contains(&c))
+    })
+}
+
 fn hidden(segments: &[&str]) -> bool {
     segments.iter().any(|segment| segment.starts_with('.'))
 }
@@ -204,6 +213,10 @@ impl Walk<'_> {
             self.skip(relative, Skip::Link);
             return Ok(());
         }
+        if refused_name(&segments) {
+            self.skip(relative, Skip::Name);
+            return Ok(());
+        }
         let source = match open(path) {
             Ok(Some(source)) => source,
             Ok(None) => {
@@ -215,6 +228,10 @@ impl Walk<'_> {
                 return Ok(());
             }
         };
+        if !source.metadata().is_ok_and(|meta| meta.nlink() == 1) {
+            self.skip(relative, Skip::HardLink);
+            return Ok(());
+        }
         self.copy(source, relative)
     }
 

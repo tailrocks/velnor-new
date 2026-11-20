@@ -57,9 +57,11 @@ pub const FILESYSTEM_CASE: Case = if cfg!(target_os = "linux") {
 };
 
 #[must_use]
-pub fn segment_matches(pattern: &str, text: &str, _case: Case) -> bool {
-    let pattern = pattern.to_ascii_lowercase();
-    let text = text.to_ascii_lowercase();
+pub fn segment_matches(pattern: &str, text: &str, case: Case) -> bool {
+    let (pattern, text) = match case {
+        Case::Exact => (pattern.to_owned(), text.to_owned()),
+        Case::Folded => (pattern.to_ascii_lowercase(), text.to_ascii_lowercase()),
+    };
     let mut parts = pattern.split('*');
     let first = parts.next().unwrap_or_default();
     let Some(mut rest) = text.strip_prefix(first) else {

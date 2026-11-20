@@ -71,6 +71,16 @@ fn the_ci_metrics_name_prefix_belongs_to_the_generated_report_jobs() -> TestResu
         );
     }
     rendered_with(&one("ci-metrics", "junit.xml"), HELPER)?;
+    let split = |name: &str| {
+        group(&format!(
+            "partitions = 2\nartifacts = [{{ name = '{name}', paths = ['junit.xml'], when = 'failure' }}]\n"
+        ))
+    };
+    for name in ["ci-metrics", "velnor"] {
+        let message = refused(&split(name), HELPER)?;
+        assert!(message.contains(&format!("{name}-1")), "{name}: {message}");
+    }
+    rendered_with(&split("nextest"), HELPER)?;
     Ok(())
 }
 
