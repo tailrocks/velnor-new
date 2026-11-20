@@ -11,6 +11,7 @@ pub const KEYS: &[&str] = &[
     "runner",
     "hosted",
     "fork_runner",
+    "trusted_runner",
     "crates_mirror",
     "mbx_shared_store",
     "docs",
@@ -39,6 +40,7 @@ pub const KEYS: &[&str] = &[
     "test_lane",
     "budget",
     "workspace_groups",
+    "policy",
     "external_workflows",
     "release_assets",
 ];
