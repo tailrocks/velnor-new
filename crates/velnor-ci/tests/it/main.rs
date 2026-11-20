@@ -47,6 +47,7 @@ mod delta_tree;
 mod delta_trim;
 mod event;
 mod fetch;
+mod fetch_real_cargo;
 mod fetch_reports;
 mod fetch_server;
 mod gate;
