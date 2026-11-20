@@ -3,11 +3,21 @@
 
 use crate::rules::{MAX_WORKFLOW_BYTES, Rule};
 
+#[path = "size_report.rs"]
+pub(crate) mod size_report;
+
 pub(crate) fn whole_workflow(rule: &Rule, job: &str) -> Option<String> {
     match rule {
-        Rule::WorkflowTooLarge(bytes) => Some(format!(
-            "the workflow is {bytes} bytes, and GitHub does not start a workflow file above {MAX_WORKFLOW_BYTES} bytes; reduce the workflow size"
-        )),
+        Rule::WorkflowTooLarge(bytes) => {
+            let detail = if job.is_empty() {
+                String::new()
+            } else {
+                format!(" ({job})")
+            };
+            Some(format!(
+                "the workflow is {bytes} bytes, and GitHub does not start a workflow file above {MAX_WORKFLOW_BYTES} bytes{detail}; reduce the workflow size"
+            ))
+        }
         Rule::OutputNameCollision(name) => Some(format!(
             "the tag job would define the output {name} twice: it is both a released package and the commit output of another package; rename the package"
         )),
