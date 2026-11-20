@@ -60,7 +60,11 @@ fn a_directory_replaced_by_a_regular_file_before_it_is_opened_is_recorded_as_tha
         panic!("scan failed on a directory replaced by a file: {entries:?}");
     };
     let children = root_children(&entries);
-    assert_eq!(children.get(Path::new("sub")), Some(&Kind::File), "{children:?}");
+    assert_eq!(
+        children.get(Path::new("sub")),
+        Some(&Kind::File),
+        "{children:?}"
+    );
     assert_eq!(entries.len(), 1, "{:?}", entries.keys());
 }
 
@@ -84,6 +88,89 @@ fn a_directory_replaced_by_a_symbolic_link_before_it_is_opened_is_recorded_as_th
         "{children:?}"
     );
     assert_eq!(entries.len(), 1, "{:?}", entries.keys());
+}
+
+#[test]
+fn a_directory_replaced_by_a_link_to_itself_before_it_is_opened_is_recorded_as_that_link() {
+    let entries = scan_racing(
+        "replaced-loop",
+        |directory: &Path| -> io::Result<fs::ReadDir> {
+            fs::remove_dir(directory)?;
+            std::os::unix::fs::symlink(directory, directory)?;
+            fs::read_dir(directory)
+        },
+    );
+    let Ok(entries) = entries else {
+        panic!("scan failed on a directory replaced by a cyclic link: {entries:?}");
+    };
+    let children = root_children(&entries);
+    assert!(
+        matches!(
+            children.get(Path::new("sub")),
+            Some(Kind::Link { resolved: None, .. })
+        ),
+        "{children:?}"
+    );
+    assert_eq!(entries.len(), 1, "{:?}", entries.keys());
+}
+
+fn assert_link_to_directory_recorded(entries: io::Result<Entries>) {
+    let Ok(entries) = entries else {
+        panic!("scan failed on a directory replaced by a link to a directory: {entries:?}");
+    };
+    let children = root_children(&entries);
+    assert!(
+        matches!(
+            children.get(Path::new("sub")),
+            Some(Kind::Link {
+                resolved: Some(_),
+                ..
+            })
+        ),
+        "the replaced directory must be recorded as the link it now is: {children:?}"
+    );
+    assert!(
+        entries.keys().any(|path| path.ends_with("elsewhere")),
+        "the link target must be walked as a stable scan would: {:?}",
+        entries.keys()
+    );
+    assert!(
+        !entries.keys().any(|path| path.ends_with("sub")),
+        "the link must not be recorded as a directory: {:?}",
+        entries.keys()
+    );
+}
+
+fn replace_with_link_to_directory(directory: &Path) -> io::Result<()> {
+    let elsewhere = directory.with_file_name("elsewhere");
+    fs::create_dir(&elsewhere)?;
+    fs::write(elsewhere.join("inner.txt"), b"")?;
+    fs::remove_dir(directory)?;
+    std::os::unix::fs::symlink(elsewhere, directory)
+}
+
+#[test]
+fn a_directory_replaced_by_a_link_to_a_directory_before_it_is_opened_is_recorded_as_that_link() {
+    assert_link_to_directory_recorded(scan_racing(
+        "replaced-dir-link",
+        |directory: &Path| -> io::Result<fs::ReadDir> {
+            replace_with_link_to_directory(directory)?;
+            fs::read_dir(directory)
+        },
+    ));
+}
+
+#[test]
+fn a_directory_replaced_by_a_link_to_a_directory_just_after_it_is_opened_is_recorded_as_that_link()
+{
+    assert_link_to_directory_recorded(scan_racing(
+        "opened-then-replaced",
+        |directory: &Path| -> io::Result<fs::ReadDir> {
+            let listing = fs::read_dir(directory)?;
+            replace_with_link_to_directory(directory)?;
+            Ok(listing)
+        },
+    ));
 }
 
 #[test]

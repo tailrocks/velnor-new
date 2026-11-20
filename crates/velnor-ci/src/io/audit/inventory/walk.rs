@@ -61,14 +61,37 @@ pub(super) fn scan_with(
             continue;
         }
         budget.reserve()?;
+        // A queued directory was a real one (never a link) when it was listed. A
+        // successful open may have followed a replacement link, so revalidate it too.
         let listing = match open(&directory) {
-            Ok(listing) => listing,
+            Ok(listing) if directory == root => listing,
+            Ok(listing) => match kind(&directory)? {
+                Some(Kind::Directory) => listing,
+                current => {
+                    replace(
+                        directory,
+                        current,
+                        &root,
+                        targets,
+                        &mut pending,
+                        &mut replaced,
+                    )?;
+                    continue;
+                }
+            },
             Err(error) if moved_before_open(&error) && directory != root => {
                 let current = kind(&directory)?;
                 if current == Some(Kind::Directory) {
                     return Err(error);
                 }
-                replaced.push((directory, current));
+                replace(
+                    directory,
+                    current,
+                    &root,
+                    targets,
+                    &mut pending,
+                    &mut replaced,
+                )?;
                 continue;
             }
             Err(error) => return Err(error),
@@ -115,11 +138,37 @@ pub(super) fn scan_with(
     Ok(entries)
 }
 
+/// Records a queued directory that is no longer one. A link to a directory is walked, as
+/// a stable scan would, so the inventory still covers the tree its reads now reach.
+fn replace(
+    directory: PathBuf,
+    current: Option<Kind>,
+    root: &Path,
+    targets: &BTreeSet<PathBuf>,
+    pending: &mut Vec<PathBuf>,
+    replaced: &mut Vec<(PathBuf, Option<Kind>)>,
+) -> io::Result<()> {
+    if let Some(
+        link @ Kind::Link {
+            resolved: Some(resolved),
+            ..
+        },
+    ) = &current
+        && !excluded_entry(&directory, link, root, targets)
+        && is_directory(resolved)?
+    {
+        pending.push(resolved.clone());
+    }
+    replaced.push((directory, current));
+    Ok(())
+}
+
 fn moved_before_open(error: &io::Error) -> bool {
-    matches!(
-        error.kind(),
-        io::ErrorKind::NotFound | io::ErrorKind::NotADirectory
-    )
+    error.raw_os_error() == Some(libc::ELOOP)
+        || matches!(
+            error.kind(),
+            io::ErrorKind::NotFound | io::ErrorKind::NotADirectory
+        )
 }
 
 fn kind(path: &Path) -> io::Result<Option<Kind>> {
