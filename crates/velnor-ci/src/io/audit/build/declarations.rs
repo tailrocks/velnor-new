@@ -88,7 +88,7 @@ pub(super) fn declarations(
             let targets = inventory::load(&output)
                 .ok()
                 .filter(|saved| targets.is_subset(&saved.targets))
-                .map_or_else(|| targets.clone(), |saved| saved.targets);
+                .map_or_else(|| targets.clone(), |saved| saved.targets.clone());
             found.push(Declared {
                 output,
                 package,

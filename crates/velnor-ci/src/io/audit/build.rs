@@ -19,6 +19,7 @@ use velnor_rust::{detect, sha256_hex};
 use super::super::units::{UnitFile, Workspace, apart, unit_files};
 use super::groups::{group_dirs, inheriting, scan_dirs, shared_groups, standalone, workspaces};
 use super::inventory::{self, Evidence};
+use super::timing;
 use crate::cli::InputsBuildArgs;
 use crate::error::CiError;
 use invocation::Invocation;
@@ -78,6 +79,7 @@ pub(crate) fn build(directory: &Path, args: &InputsBuildArgs) -> Result<String, 
         invocation.compiler,
         invocation.cargo && invocation.preflight.is_none(),
     )?;
+    timing::report();
     Ok(String::new())
 }
 
@@ -97,10 +99,12 @@ impl Builder<'_> {
         replayable: bool,
         invalidate: bool,
     ) -> Result<(), CiError> {
-        self.targets.extend(generated::proven(&self.workspaces)?);
+        self.targets.extend(timing::phase("proven", || {
+            generated::proven(&self.workspaces)
+        })?);
         for _ in 0..if replayable { 2 } else { 1 } {
-            let declared = self.declared()?;
-            let before = self.identities()?;
+            let declared = timing::phase("declared", || self.declared())?;
+            let before = timing::phase("identities", || self.identities())?;
             self.targets.extend(
                 declared
                     .iter()
@@ -125,9 +129,13 @@ impl Builder<'_> {
                 }
                 declarations::invalidate(&declared)?;
             }
-            let (entries, complete) = self.capture();
-            self.run(command, &entries, complete, &before)?;
-            if !replayable || self.declared()?.iter().all(|unit| unit.trusted) {
+            let (entries, complete) = timing::phase("capture", || self.capture());
+            timing::phase("run", || self.run(command, &entries, complete, &before))?;
+            if !replayable
+                || timing::phase("declared-after", || self.declared())?
+                    .iter()
+                    .all(|unit| unit.trusted)
+            {
                 return Ok(());
             }
         }
