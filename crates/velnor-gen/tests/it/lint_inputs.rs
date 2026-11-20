@@ -254,3 +254,23 @@ fn lint_inputs_that_name_nothing_or_collide_are_rejected() -> TestResult {
     }
     Ok(())
 }
+
+#[test]
+fn a_lint_input_with_a_question_mark_or_a_bracket_is_refused_with_the_glob_message() -> TestResult {
+    let text = format!(
+        "{}",
+        detect(&repo(
+            &["Cargo.toml"],
+            "[[lint]]\nkind = 'jactionlint'\ninputs = ['cfg/h?.pkl']\n",
+        )?)
+        .err()
+        .ok_or("cfg/h?.pkl")?
+    );
+    assert!(
+        text.contains(
+            "lint.inputs entry \"cfg/h?.pkl\" uses ?, [ or ]; only * and ** are supported in a glob"
+        ),
+        "{text}"
+    );
+    Ok(())
+}

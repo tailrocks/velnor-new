@@ -146,3 +146,23 @@ fn default_ignores_is_on_unless_the_config_turns_it_off() -> TestResult {
     );
     Ok(())
 }
+
+#[test]
+fn a_glob_with_a_question_mark_or_a_bracket_is_refused_for_every_rule_key() -> TestResult {
+    for glob in ["cfg/h?.pkl", "cfg/h[k].pkl", "cfg/h]k.pkl", "?/x/**"] {
+        for config in [
+            format!("non_inputs = [\"{glob}\"]\n"),
+            format!("[[inputs]]\nglob = \"{glob}\"\npackages = [\"a\"]\n"),
+        ] {
+            let error = detect_with(&config).err().ok_or(config.clone())?;
+            let text = error.to_string();
+            assert!(
+                text.contains(&format!(
+                    "{glob:?} uses ?, [ or ]; only * and ** are supported in a glob"
+                )),
+                "{config}: {text}"
+            );
+        }
+    }
+    Ok(())
+}
