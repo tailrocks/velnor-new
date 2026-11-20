@@ -2,25 +2,38 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use velnor_ci::mise_pin::{append_output, pinned_version};
 
-use crate::io::Repo;
-
 const TOOL: &str = "mr-boxington";
 
-fn workspace(name: &str, files: &[(&str, &str)]) -> Repo {
-    let repo = Repo::empty(name);
-    for (file, text) in files {
-        fs::write(repo.root().join(file), text).unwrap_or_else(|e| unreachable!("{e}"));
+struct Dir(PathBuf);
+
+impl Drop for Dir {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.0);
     }
-    repo
+}
+
+fn workspace(name: &str, files: &[(&str, &str)]) -> Dir {
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    let dir = Dir(std::env::temp_dir().join(format!(
+        "velnor-mise-pin-{}-{}-{name}",
+        std::process::id(),
+        NEXT.fetch_add(1, Ordering::Relaxed)
+    )));
+    fs::create_dir_all(&dir.0).unwrap_or_else(|e| unreachable!("{e}"));
+    for (file, text) in files {
+        fs::write(dir.0.join(file), text).unwrap_or_else(|e| unreachable!("{e}"));
+    }
+    dir
 }
 
 fn pin(name: &str, mise: &str) -> Result<String, String> {
-    let repo = workspace(name, &[("mise.toml", mise)]);
-    pinned_version(repo.root(), TOOL).map_err(|e| e.to_string())
+    let dir = workspace(name, &[("mise.toml", mise)]);
+    pinned_version(&dir.0, TOOL).map_err(|e| e.to_string())
 }
 
 #[test]
@@ -54,7 +67,7 @@ fn a_missing_pin_fails_closed() {
 #[test]
 fn a_missing_config_fails_closed() {
     let repo = workspace("mise-pin-no-config", &[]);
-    assert!(pinned_version(repo.root(), TOOL).is_err());
+    assert!(pinned_version(&repo.0, TOOL).is_err());
 }
 
 #[test]
@@ -94,7 +107,7 @@ fn a_second_config_that_disagrees_fails_closed() {
             (".mise.toml", "[tools]\nmr-boxington = \"v1.31.0\"\n"),
         ],
     );
-    assert!(pinned_version(repo.root(), TOOL).is_err());
+    assert!(pinned_version(&repo.0, TOOL).is_err());
 }
 
 #[test]
@@ -107,7 +120,7 @@ fn a_lock_row_for_the_same_release_agrees() {
             ("mise.lock", lock),
         ],
     );
-    assert_eq!(pinned_version(repo.root(), TOOL).as_deref(), Ok("1.31.0"));
+    assert_eq!(pinned_version(&repo.0, TOOL).as_deref(), Ok("1.31.0"));
 }
 
 #[test]
@@ -120,7 +133,7 @@ fn a_lock_for_another_release_fails_closed() {
             ("mise.lock", lock),
         ],
     );
-    assert!(pinned_version(repo.root(), TOOL).is_err());
+    assert!(pinned_version(&repo.0, TOOL).is_err());
 }
 
 #[test]
@@ -132,13 +145,13 @@ fn a_lock_without_a_row_for_the_tool_fails_closed() {
             ("mise.lock", "[[tools.rust]]\nversion = \"1.99.1\"\n"),
         ],
     );
-    assert!(pinned_version(repo.root(), TOOL).is_err());
+    assert!(pinned_version(&repo.0, TOOL).is_err());
 }
 
 #[test]
 fn the_output_file_receives_one_version_line() {
     let repo = workspace("mise-pin-output", &[]);
-    let file = repo.root().join("github-output");
+    let file = repo.0.join("github-output");
     append_output(&file, "1.31.0").unwrap_or_else(|e| unreachable!("{e}"));
     let text = fs::read_to_string(Path::new(&file)).unwrap_or_default();
     assert_eq!(text, "version=1.31.0\n");

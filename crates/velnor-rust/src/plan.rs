@@ -332,7 +332,9 @@ fn add_mbx_remote(facts: &RepoFacts, jobs: &mut [Job]) {
                 pr,
                 ..step(StepKind::MbxRemote { from_pin })
             });
-            job.steps.splice(at + 1..at + 1, inserted);
+            let tail = job.steps.split_off(at + 1);
+            job.steps.extend(inserted);
+            job.steps.extend(tail);
         }
     }
 }
