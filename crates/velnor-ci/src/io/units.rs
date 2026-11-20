@@ -95,14 +95,14 @@ fn limit_from(value: Option<&str>) -> Result<usize, CiError> {
 }
 
 fn unit_files_within(target: &Path, limit: usize) -> Result<Vec<(UnitFile, PathBuf)>, CiError> {
-    let (found, built) = scan(target, limit)?;
+    let (found, built) = scan(target, limit, None)?;
     built::refuse_without_units(target, built, &found)?;
     Ok(found)
 }
 
 type Scanned = (Vec<(UnitFile, PathBuf)>, bool);
 
-fn scan(target: &Path, limit: usize) -> Result<Scanned, CiError> {
+fn scan(target: &Path, limit: usize, skip: Option<&Path>) -> Result<Scanned, CiError> {
     let mut found = Vec::new();
     let mut pending = vec![(target.to_path_buf(), 0)];
     let mut directories = 1;
@@ -125,6 +125,9 @@ fn scan(target: &Path, limit: usize) -> Result<Scanned, CiError> {
             let kind = entry
                 .file_type()
                 .map_err(|e| CiError::new(format!("cannot read {}: {e}", path.display())))?;
+            if kind.is_dir() && skip == Some(path.as_path()) {
+                continue;
+            }
             if kind.is_dir() && entry.file_name() != "incremental" {
                 if depth == 0 && entry.file_name() == NESTED_ROOTS_FOLDER {
                     // The build folders of the Cargo roots below this one, each audited as its own root.

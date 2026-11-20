@@ -18,7 +18,11 @@ pub(super) struct Printed {
 pub(in crate::io) fn unchecked_unit_files(
     target: &Path,
 ) -> Result<Vec<(UnitFile, PathBuf)>, CiError> {
-    Ok(scan(target, directory_limit()?)?.0)
+    Ok(scan(target, directory_limit()?, None)?.0)
+}
+
+fn inside<'a>(outer: &Path, inner: &'a Path) -> Option<&'a Path> {
+    inner.starts_with(outer).then_some(inner)
 }
 
 pub(in crate::io) fn unit_files_apart(
@@ -29,8 +33,8 @@ pub(in crate::io) fn unit_files_apart(
         return unit_files(target);
     }
     let limit = directory_limit()?;
-    let (mut found, target_built) = scan(target, limit)?;
-    let (more, build_built) = scan(build, limit)?;
+    let (mut found, target_built) = scan(target, limit, inside(target, build))?;
+    let (more, build_built) = scan(build, limit, inside(build, target))?;
     found.extend(more);
     built::refuse_without_units(build, target_built || build_built, &found)?;
     Ok(found)
