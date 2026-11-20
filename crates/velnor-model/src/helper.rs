@@ -11,6 +11,7 @@ pub struct HelperRelease {
     action: CommitSha,
     digests: BTreeMap<Platform, Sha256>,
     binary_digests: Option<BTreeMap<Platform, Sha256>>,
+    generator_digests: Option<BTreeMap<Platform, Sha256>>,
 }
 
 impl HelperRelease {
@@ -30,6 +31,7 @@ impl HelperRelease {
             action,
             digests,
             binary_digests: None,
+            generator_digests: None,
         })
     }
 
@@ -37,6 +39,17 @@ impl HelperRelease {
     pub fn with_binary_digests(mut self, binary_digests: BTreeMap<Platform, Sha256>) -> Self {
         self.binary_digests = Some(binary_digests);
         self
+    }
+
+    #[must_use]
+    pub fn with_generator_digests(mut self, generator_digests: BTreeMap<Platform, Sha256>) -> Self {
+        self.generator_digests = Some(generator_digests);
+        self
+    }
+
+    #[must_use]
+    pub fn generator_digests(&self) -> Option<&BTreeMap<Platform, Sha256>> {
+        self.generator_digests.as_ref()
     }
 
     #[must_use]
