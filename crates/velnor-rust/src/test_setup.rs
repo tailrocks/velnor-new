@@ -1,7 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{CargoCommand, RepoFacts, RepoPath, RustRoot, Step, StepKind, TestSetup, WorkspaceGroup};
+use velnor_model::{
+    CargoCommand, RepoFacts, RepoPath, RustRoot, Step, StepKind, TestSetup, WorkspaceGroup,
+};
 
 use crate::lane::Lane;
 use crate::members::Member;
@@ -72,8 +74,6 @@ pub(crate) fn before_tests(
     steps
 }
 
-/// Puts the `[[check_configurations]]` steps of each member in the job, before the member's first
-/// test step, or before its first compiling step when the member has no test command.
 pub(crate) fn checked_members(
     facts: &RepoFacts,
     members: &[Member],

@@ -308,3 +308,14 @@ fn a_repeated_check_entry_is_refused_so_the_check_runs_once() -> TestResult {
     assert!(text.contains("check_configurations"), "{text}");
     Ok(())
 }
+
+#[test]
+fn in_a_private_sources_job_the_check_runs_offline_after_the_token_is_revoked() -> TestResult {
+    let config = format!(
+        "{KEY}[private_sources]\napp_id = 'vars.A'\nprivate_key = 'secrets.K'\nrepositories = ['acme/lib']\n"
+    );
+    let steps = found(&jobs_of(&config, HELPER)?);
+    assert_eq!(steps.len(), 1, "{steps:?}");
+    assert_eq!(steps[0].3["env"]["CARGO_NET_OFFLINE"], "true", "{steps:?}");
+    Ok(())
+}

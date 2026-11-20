@@ -141,7 +141,7 @@ pub enum Command {
     )]
     CheckMetadata,
     #[command(
-        about = "Resolve every requested feature configuration afresh, then cargo check each distinct full package feature map once, offline and locked"
+        about = "Resolve every requested feature configuration afresh, then cargo check each distinct full package feature map once, locked; cargo runs offline when CARGO_NET_OFFLINE is set, as in a job with private sources"
     )]
     CheckConfigurations(CheckConfigurationsArgs),
     #[command(

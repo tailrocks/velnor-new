@@ -216,6 +216,9 @@ fn rendered_steps(
         {
             body.env.push(crate::cargo::target_dir_env(target));
         }
+        if lane.offline && matches!(step.kind, StepKind::TestSetup { .. }) {
+            body.env.push(crate::cargo::offline_env());
+        }
         if matches!(step.kind, StepKind::ReportCaches { .. })
             && let Some(name) = job_name
         {
