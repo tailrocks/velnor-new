@@ -253,7 +253,7 @@ fn root_of(top: &Path, file: &Path) -> String {
         .map_or_else(|| ".".to_owned(), |parent| parent.display().to_string())
 }
 
-const CONFIG_ENTRIES: [(&str, bool); 3] = [
+const CONFIG_ENTRIES: &[(&str, bool)] = &[
     (".cargo", false),
     (".cargo/config", true),
     (".cargo/config.toml", true),
@@ -274,7 +274,7 @@ fn discovery(top: &Path, file: &Path) -> Result<Vec<CargoPathEntry>, CiError> {
         if !directory.as_os_str().is_empty() {
             entries.extend(entry(directory, &here, false)?);
         }
-        for (name, with_text) in CONFIG_ENTRIES {
+        for &(name, with_text) in CONFIG_ENTRIES {
             entries.extend(entry(&directory.join(name), &here.join(name), with_text)?);
         }
     }

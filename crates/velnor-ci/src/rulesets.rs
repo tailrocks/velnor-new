@@ -10,7 +10,7 @@ use crate::github::{GitHub, Repo, parse};
 
 const PAGE: usize = 100;
 const ALL_TAGS: &str = "~ALL";
-const REQUIRED: [&str; 3] = ["creation", "update", "deletion"];
+const REQUIRED: &[&str] = &["creation", "update", "deletion"];
 
 #[derive(Debug, Deserialize)]
 struct Listed {

@@ -11,11 +11,11 @@ use super::env::{Engine, Environment};
 use super::index_file::{lock_index, read_index, write_index};
 
 const CACHE_DIRECTORY: &str = "cache";
-const RUN_STATE: [&str; 6] = [CACHE_DIRECTORY, "api", "events", "logs", "metrics", "runs"];
+const RUN_STATE: &[&str] = &[CACHE_DIRECTORY, "api", "events", "logs", "metrics", "runs"];
 
 impl<E: Engine> Environment<E> {
     pub async fn reset(&self, keep_cache: bool) -> io::Result<()> {
-        for directory in RUN_STATE {
+        for directory in RUN_STATE.iter().copied() {
             let path = self.dir.join(directory);
             if keep_cache && directory == CACHE_DIRECTORY {
                 remove_file(&path.join(RESTORES)).await?;
