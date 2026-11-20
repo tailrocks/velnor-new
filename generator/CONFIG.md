@@ -267,6 +267,10 @@ The shapes, and the jobs each one starts:
 
 - `non_inputs` is a list of globs whose files select nothing. A glob may not overlap an `inputs` glob; the generator refuses that.
 - `exclude` is a list of globs. A `Cargo.toml` that a glob matches is not a Cargo root. Each glob must match a tracked `Cargo.toml`, or the config is refused. A trailing `/` is removed.
+  An excluded nested workspace keeps its `Cargo.lock` out of the sources cache key and the prefetch, so no job can fetch its packages. Generation then checks every job for cargo runs against it:
+  - A declared `run` step in `.velnor/workflows.toml` that runs cargo against an excluded root's directory (`--manifest-path <dir>/Cargo.toml`, `cd <dir>` before cargo, or `working_directory = "<dir>"`) is refused. The message names the `Cargo.lock` and the fix: remove the root from `exclude`, or stop running cargo against it in CI.
+  - A mise task in `mise.toml` or a hand-written workflow under `.github/workflows/` may run cargo against an excluded root. The text is read without a shell or YAML parser, and the job that runs it is not known, so generation prints a note with the same fix instead of refusing.
+  - An excluded root that no step names produces no note.
 - `default_ignores` is `true` by default: documentation, licence files and root-level `*.md` files select nothing. `false` lets them select.
 
 ## Cache and debug settings

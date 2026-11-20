@@ -18,6 +18,7 @@ pub use crate::doc_steps::{member_sources, optional_steps, root_sources};
 pub use crate::docs_post_merge::defer_post_merge_docs;
 pub use crate::embedded::{is_plain_source, is_rust_source};
 pub use crate::error::{DetectError, Reason};
+pub use crate::excluded_lock::{ExcludedLockFinding, excluded_lock_findings};
 pub use crate::external_config::external_config_profile;
 pub use crate::group_runs::{GroupPlan, GroupRun, group_runs, plan_groups};
 pub use crate::lint_error::LintFault;

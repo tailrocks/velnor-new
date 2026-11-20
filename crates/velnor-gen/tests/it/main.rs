@@ -65,6 +65,7 @@ mod draft_skip_matrix;
 mod drift;
 mod events;
 mod events_policy;
+mod excluded_lock;
 mod facts;
 mod feature_lane_dedup;
 mod feature_lane_scope;
