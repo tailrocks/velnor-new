@@ -21,6 +21,7 @@ fn succeeded(metrics: Metrics) -> Outcome {
         metrics,
         caches: Vec::new(),
         trusted: true,
+        client_log: None,
     }
 }
 

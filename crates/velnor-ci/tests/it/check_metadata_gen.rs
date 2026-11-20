@@ -24,8 +24,7 @@ impl Checkout {
     }
 
     fn pinned(name: &str, helper: Option<&str>) -> Result<Self, Box<dyn Error>> {
-        let base =
-            std::env::temp_dir().join(format!("velnor-gen-check-{}-{name}", std::process::id()));
+        let base = crate::scratch_path("velnor-gen-check", name);
         if base.exists() {
             fs::remove_dir_all(&base)?;
         }

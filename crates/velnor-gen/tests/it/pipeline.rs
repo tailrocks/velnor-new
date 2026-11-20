@@ -92,12 +92,13 @@ pub(crate) fn pin_for_keys(view: &mut RepoView) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-/// The same repository pinned to the first helper release that has the delta commands.
+/// The same repository pinned to the first helper release whose delta cleanup ships
+/// (tools-v0.1.102), so the cleanup workflow renders with the delta layer.
 pub(crate) fn with_deltas(mut view: RepoView) -> Result<RepoView, Box<dyn Error>> {
     let lock = RepoPath::new(".velnor/rust-ci.lock")?;
     let text = String::from_utf8(view.files.remove(&lock).ok_or("no helper lock")?)?;
     view.files
-        .insert(lock, text.replace("0.1.81", "0.1.95").into_bytes());
+        .insert(lock, text.replace("0.1.81", "0.1.102").into_bytes());
     Ok(view)
 }
 

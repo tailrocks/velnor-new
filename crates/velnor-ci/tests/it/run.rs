@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 pub(crate) fn scratch(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("velnor-ci-run-{}-{name}", std::process::id()));
+    let dir = crate::scratch_path("velnor-ci-run", name);
     if dir.exists() {
         fs::remove_dir_all(&dir).unwrap_or_else(|e| unreachable!("{e}"));
     }
@@ -25,11 +25,16 @@ pub(crate) fn run(temp: &Path, command: &[&str]) -> Output {
 }
 
 fn run_with_grace(temp: &Path, millis: &str, command: &[&str]) -> Output {
+    // The witnesses scan CARGO_HOME after the command exits; an empty one keeps
+    // that scan of the developer's cache out of the timing.
+    let cargo_home = temp.join("cargo-home");
+    fs::create_dir_all(&cargo_home).unwrap_or_else(|e| unreachable!("{e}"));
     Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
         .arg("run")
         .arg("--")
         .args(command)
         .env("RUNNER_TEMP", temp)
+        .env("CARGO_HOME", cargo_home)
         .env("VELNOR_CI_RUN_PUMP_GRACE_MS", millis)
         .output()
         .unwrap_or_else(|e| unreachable!("{e}"))
@@ -218,36 +223,72 @@ fn run_fails_when_the_log_cannot_take_the_output() {
 #[test]
 fn run_returns_when_the_command_exits_although_a_background_process_keeps_its_pipes_open() {
     let temp = scratch("background");
-    let started = std::time::Instant::now();
-    let output = run_with_grace(
-        &temp,
-        "200",
-        &["sh", "-c", "sleep 30 & echo started; exit 4"],
+    // The shell marks its exit with a file, so the bound measures only how long
+    // velnor-ci takes to return after the command exits, not process start-up under
+    // load. Stdout stays a pipe: the background `sleep` holding the pipe is the
+    // behaviour under test.
+    let exited = temp.join("exited");
+    let script = format!(
+        "sleep 30 & echo started; touch '{}'; exit 4",
+        exited.display()
     );
-    assert!(started.elapsed() < std::time::Duration::from_secs(20));
+    let output = run_with_grace(&temp, "200", &["sh", "-c", &script]);
+    let returned = std::time::SystemTime::now();
+    let exited_at = fs::metadata(&exited)
+        .and_then(|meta| meta.modified())
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let after_exit = returned.duration_since(exited_at).unwrap_or_default();
+    assert!(
+        after_exit < std::time::Duration::from_secs(20),
+        "{after_exit:?}"
+    );
     assert_eq!(output.status.code(), Some(4));
     assert_eq!(String::from_utf8_lossy(&output.stdout), "started\n");
 }
 
 #[test]
 fn run_waits_for_all_open_pipes_within_one_shared_grace_period() {
+    // Stdout and stderr both stay open after the command exits. One grace period
+    // covers both, so the wait is about GRACE. A grace restarted per pipe would
+    // take PIPES * GRACE. GRACE is large so that the slack above it, which absorbs
+    // process startup under machine load (seconds at peak), never hides a per-pipe
+    // wait.
+    const PIPES: u32 = 2;
+    const GRACE: std::time::Duration = std::time::Duration::from_millis(5000);
     let temp = scratch("shared-grace");
-    let started = std::time::Instant::now();
-    let output = run_with_grace(
-        &temp,
-        "1000",
-        &["sh", "-c", "sleep 30 & echo out; echo err >&2; exit 5"],
+    // The shell marks its own exit with a file, so the test measures only the time
+    // velnor-ci spends after the command exits. Start-up under load does not count.
+    // Output goes to files, not pipes: a pipe reaches EOF only when every process
+    // holding its write end exits, and a background `sleep` from a parallel test
+    // thread can hold one.
+    let exited = temp.join("exited");
+    let script = format!(
+        "sleep 30 & echo out; echo err >&2; touch '{}'; exit 5",
+        exited.display()
     );
-    let elapsed = started.elapsed();
-    assert_eq!(output.status.code(), Some(5), "{output:?}");
-    assert!(
-        elapsed >= std::time::Duration::from_millis(900),
-        "{elapsed:?}"
-    );
-    assert!(
-        elapsed < std::time::Duration::from_millis(1900),
-        "{elapsed:?}"
-    );
+    let stdout = fs::File::create(temp.join("stdout")).unwrap_or_else(|e| unreachable!("{e}"));
+    let stderr = fs::File::create(temp.join("stderr")).unwrap_or_else(|e| unreachable!("{e}"));
+    let status = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        .arg("run")
+        .arg("--")
+        .args(["sh", "-c", &script])
+        .env("RUNNER_TEMP", &temp)
+        // The witnesses scan CARGO_HOME after the command exits; an empty one keeps
+        // that scan (of the developer's cache) out of the grace being measured.
+        .env("CARGO_HOME", temp.join("cargo-home"))
+        .env("VELNOR_CI_RUN_PUMP_GRACE_MS", GRACE.as_millis().to_string())
+        .stdout(stdout)
+        .stderr(stderr)
+        .status()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let returned = std::time::SystemTime::now();
+    assert_eq!(status.code(), Some(5), "{status:?}");
+    let exited_at = fs::metadata(&exited)
+        .and_then(|meta| meta.modified())
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let after_exit = returned.duration_since(exited_at).unwrap_or_default();
+    assert!(after_exit >= GRACE, "{after_exit:?}");
+    assert!(after_exit < GRACE * PIPES, "{after_exit:?}");
 }
 
 #[test]

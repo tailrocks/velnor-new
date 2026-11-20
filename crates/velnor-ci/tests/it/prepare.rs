@@ -10,7 +10,7 @@ pub(crate) const MISE: &str =
     "[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n";
 
 pub(crate) fn scratch_root(name: &str) -> PathBuf {
-    std::env::temp_dir().join(format!("velnor-ci-prepare-{}-{name}", std::process::id()))
+    crate::scratch_path("velnor-ci-prepare", name)
 }
 
 pub(crate) fn scratch(name: &str) -> PathBuf {
@@ -225,6 +225,7 @@ fn prepare_in(dir: &Path, setup: &Setup) -> Run {
         .env_clear()
         .env("PATH", format!("{}:/usr/bin:/bin", bin.display()))
         .env("CARGO_HOME", &cargo_home)
+        .env("RUNNER_TEMP", dir)
         .env("GITHUB_ENV", &env_file)
         .env("GITHUB_OUTPUT", &outputs);
     if setup.os_release == OsRelease::Fixture {

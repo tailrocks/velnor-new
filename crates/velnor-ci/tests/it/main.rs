@@ -140,6 +140,7 @@ mod release_tag_patterns;
 mod report;
 mod report_accounting;
 mod report_split_host_units;
+mod report_waste_categories;
 mod required_lane;
 mod resolve_cases;
 mod resolve_cases_receipts;
@@ -180,3 +181,11 @@ mod trusted_roots;
 mod unowned;
 mod version;
 mod write_request;
+
+pub(crate) fn scratch_path(prefix: &str, name: &str) -> std::path::PathBuf {
+    let owner = std::thread::current()
+        .name()
+        .unwrap_or("main")
+        .replace("::", "-");
+    std::env::temp_dir().join(format!("{prefix}-{}-{owner}-{name}", std::process::id()))
+}

@@ -13,8 +13,8 @@ pub const DELTA_CLEANUP_PATH: RepoPath = CACHE_TRIM_WORKFLOW_PATH;
 
 #[must_use]
 pub fn delta_cleanup(helper: &HelperRelease, workflow: &str) -> Option<String> {
-    // helper-gate: first in tools-v0.1.95 via 7f16e1fe15
-    if !helper.version().at_least((0, 1, 95)) {
+    // helper-gate: first in tools-v0.1.102 via d56256c182
+    if !helper.version().at_least((0, 1, 102)) {
         return None;
     }
     let job = RenderedJob {

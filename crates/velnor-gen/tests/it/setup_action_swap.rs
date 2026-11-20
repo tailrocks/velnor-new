@@ -4,9 +4,7 @@
 use std::error::Error;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
-use std::os::unix::process::CommandExt;
-use std::process::Command;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use crate::setup_action::Install;
 use crate::setup_action_tool_cache::seed_entry;
@@ -33,26 +31,11 @@ fn a_cache_entry_swapped_for_a_fifo_after_the_checks_cannot_hang_the_install() -
         fs::write(&shim, SWAP_SHIM)?;
         fs::set_permissions(&shim, fs::Permissions::from_mode(0o755))?;
     }
-    let mut child = install.spawn_with(Some(&cache), Some(&shims), |command| {
-        command
-            .env("ENTRY", &entry)
-            .env("SHIMS", &shims)
-            .process_group(0);
-    })?;
-    let deadline = Instant::now() + Duration::from_secs(30);
-    let status = loop {
-        if let Some(status) = child.try_wait()? {
-            break Some(status);
-        }
-        if Instant::now() > deadline {
-            Command::new(crate::setup_action::program("kill"))
-                .args(["-KILL", "--", &format!("-{}", child.id())])
-                .status()?;
-            child.wait()?;
-            break None;
-        }
-        std::thread::sleep(Duration::from_millis(50));
-    };
+    let status = install
+        .spawn_with(Some(&cache), Some(&shims), |command| {
+            command.env("ENTRY", &entry).env("SHIMS", &shims);
+        })?
+        .wait_within(Duration::from_secs(30))?;
     let copy = install.installed();
     fs::remove_dir_all(&install.work)?;
     assert!(

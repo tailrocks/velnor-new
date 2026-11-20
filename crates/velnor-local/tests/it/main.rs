@@ -3,8 +3,10 @@
 
 mod api_stub;
 mod authority;
+mod cache_mode;
 mod cache_server;
 mod checkout;
+mod client_log;
 mod conformance;
 mod crates_mirror;
 mod dev_binary;

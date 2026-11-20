@@ -73,4 +73,5 @@ pub mod timings;
 pub mod tools_local;
 pub mod trusted_roots;
 pub mod unique_json;
+pub mod waste_evidence;
 pub mod write_request;

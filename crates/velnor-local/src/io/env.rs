@@ -23,6 +23,7 @@ use crate::doctor::{CACHE_IMAGE as LOCAL_IMAGE, RUNNER_IMAGE};
 pub use engine::{DockerCli, Engine};
 pub(super) use engine::{program, words};
 pub const READY_TIMEOUT: Duration = Duration::from_secs(60);
+const CLIENT_LOG_LINES: usize = 20;
 const RUNNER_START: &str = "run -d --platform linux/arm64 -e GITHUB_ACTIONS_RUNNER_FORCE_GHES=1 -e VELNOR_CRATES_MIRROR=off -e MISE_SKILLS_FETCH=false";
 const OPENSSL: &str = "openssl genrsa -out /keys/token.pem 2048 && openssl rsa -in /keys/token.pem -RSAPublicKey_out -outform DER -out /keys/token.pub.der";
 
@@ -53,6 +54,12 @@ impl Addresses {
 
 fn strs(values: &[String]) -> Vec<&str> {
     values.iter().map(String::as_str).collect()
+}
+
+pub async fn client_log_tail(log: &Path) -> io::Result<Vec<String>> {
+    let text = fs::read_to_string(log).await?;
+    let lines: Vec<String> = text.lines().map(str::to_owned).collect();
+    Ok(lines[lines.len().saturating_sub(CLIENT_LOG_LINES)..].to_vec())
 }
 
 impl<E: Engine> Environment<E> {

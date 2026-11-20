@@ -1,18 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fs;
-use std::path::PathBuf;
 use std::process::Command;
 
-fn scratch(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("velnor-ci-run-{}-{name}", std::process::id()));
-    if dir.exists() {
-        fs::remove_dir_all(&dir).unwrap_or_else(|e| unreachable!("{e}"));
-    }
-    fs::create_dir_all(&dir).unwrap_or_else(|e| unreachable!("{e}"));
-    dir
-}
+use crate::run::scratch;
 
 struct Flaky {
     chunks: Vec<std::io::Result<Vec<u8>>>,
@@ -135,6 +126,7 @@ mod tests_run {
     use std::os::unix::fs::PermissionsExt;
     use std::path::{Path, PathBuf};
     use std::process::{Command, Output};
+    use std::time::{Duration, SystemTime};
 
     use super::scratch;
 
@@ -161,12 +153,13 @@ mod tests_run {
         script: &str,
         command: &[&str],
         grace_ms: Option<&str>,
-    ) -> (Output, String, PathBuf, std::time::Duration) {
-        let started = std::time::Instant::now();
+    ) -> (Output, String, PathBuf, SystemTime) {
         let temp = scratch(name);
         fake_nextest(&temp, script);
         let outputs = temp.join("github-output");
         fs::write(&outputs, "existing=1\n").unwrap_or_else(|e| unreachable!("{e}"));
+        let cargo_home = temp.join("cargo-home");
+        fs::create_dir_all(&cargo_home).unwrap_or_else(|e| unreachable!("{e}"));
         let path = format!(
             "{}:{}",
             temp.display(),
@@ -179,13 +172,24 @@ mod tests_run {
             .args(command)
             .env("RUNNER_TEMP", &temp)
             .env("GITHUB_OUTPUT", &outputs)
+            .env("CARGO_HOME", &cargo_home)
             .env("PATH", path);
         if let Some(grace_ms) = grace_ms {
             child.env("VELNOR_CI_RUN_PUMP_GRACE_MS", grace_ms);
         }
         let output = child.output().unwrap_or_else(|e| unreachable!("{e}"));
+        let returned = SystemTime::now();
         let written = fs::read_to_string(&outputs).unwrap_or_default();
-        (output, written, temp, started.elapsed())
+        (output, written, temp, returned)
+    }
+
+    // Time velnor-ci spent after the fake nextest exited. The script touches
+    // `exited` as its last act, so start-up under load does not count.
+    fn after_exit(temp: &Path, returned: SystemTime) -> Duration {
+        let exited = fs::metadata(temp.join("exited"))
+            .and_then(|meta| meta.modified())
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        returned.duration_since(exited).unwrap_or_default()
     }
 
     const NEXTEST_RUN: [&str; 6] = [
@@ -275,24 +279,29 @@ mod tests_run {
 
     #[test]
     fn run_withholds_counts_when_a_descendant_keeps_the_summary_pipe_open() {
+        // Output stays on the pipe: the background `sleep` holds the summary pipe,
+        // and that is the behaviour under test.
         let script = "echo '     Summary [   0.001s] 3 tests run: 3 passed, 0 skipped' >&2\n\
 sleep 30 &\n\
+touch \"$RUNNER_TEMP/exited\"\n\
 exit 0";
-        let (output, written, _, elapsed) =
+        let (output, written, temp, returned) =
             execute_nextest("tests-run-held", script, &NEXTEST_RUN, Some("300"));
         assert_eq!(output.status.code(), Some(0), "{output:?}");
         assert_eq!(written, "existing=1\n");
-        assert!(elapsed < std::time::Duration::from_secs(15), "{elapsed:?}");
+        let elapsed = after_exit(&temp, returned);
+        assert!(elapsed < Duration::from_secs(15), "{elapsed:?}");
     }
 
     #[test]
     fn run_writes_no_counts_when_a_held_pipe_never_printed_a_summary() {
-        let script = "sleep 30 &\nexit 9";
-        let (output, written, _, elapsed) =
+        let script = "sleep 30 &\ntouch \"$RUNNER_TEMP/exited\"\nexit 9";
+        let (output, written, temp, returned) =
             execute_nextest("tests-run-held-empty", script, &NEXTEST_RUN, Some("300"));
         assert_eq!(output.status.code(), Some(9), "{output:?}");
         assert_eq!(written, "existing=1\n");
-        assert!(elapsed < std::time::Duration::from_secs(15), "{elapsed:?}");
+        let elapsed = after_exit(&temp, returned);
+        assert!(elapsed < Duration::from_secs(15), "{elapsed:?}");
     }
 
     #[test]
