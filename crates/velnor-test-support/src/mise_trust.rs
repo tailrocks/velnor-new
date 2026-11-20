@@ -51,9 +51,13 @@ mod tests {
 
     #[test]
     fn inherited_trusted_paths_survive_and_the_temp_dir_is_appended_last() {
-        let inherited = std::env::join_paths([Path::new("/work/existing"), Path::new("/work/other")])
-            .unwrap_or_else(|error| unreachable!("{error}"));
-        let value = trusted_paths_with(Some(inherited.as_os_str()), Path::new("/tmp/velnor-project"));
+        let inherited =
+            std::env::join_paths([Path::new("/work/existing"), Path::new("/work/other")])
+                .unwrap_or_else(|error| unreachable!("{error}"));
+        let value = trusted_paths_with(
+            Some(inherited.as_os_str()),
+            Path::new("/tmp/velnor-project"),
+        );
         let paths: Vec<PathBuf> = std::env::split_paths(&value).collect();
         assert_eq!(
             paths,
