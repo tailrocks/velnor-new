@@ -87,7 +87,7 @@ Mise-managed Cargo retains its configured command wrappers, including MBX, and t
 
 Writing the configuration only above the checkout misses temporary directories. Writing it only in Cargo's home misses a changed home. A configuration at `/.cargo/config.toml` would reach unrelated directories but needs filesystem-root access and changes unrelated jobs. The wrapper uses a per-job configuration instead.
 
-This repository selects its scale-set runner and names its mirror in this configuration. Its existing engine and maintenance workflows are separate from the new generator and do not consume this setting. Running a generated Rust workflow requires the compatible helper release.
+This repository selects its scale-set runner and names its mirror in this configuration. Its hand-maintained `ci.yml` is separate from the generator and does not consume this setting. Running a generated Rust workflow requires the compatible helper release.
 
 ## Optional private dependencies
 
