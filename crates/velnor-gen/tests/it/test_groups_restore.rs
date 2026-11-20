@@ -70,14 +70,20 @@ fn a_restoring_group_never_saves_and_restores_after_checkout_prepare_and_before_
         assert!(!name.starts_with("Save"), "{name}");
         assert!(!name.contains("Decide"), "{name}");
     }
-    assert!(
-        steps(group)
-            .iter()
-            .any(|step| step["uses"].as_str().unwrap_or_default().contains("cache/restore"))
-    );
+    assert!(steps(group).iter().any(|step| {
+        step["uses"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("cache/restore")
+    }));
     let checkout = steps(group)
         .iter()
-        .position(|step| step["uses"].as_str().unwrap_or_default().contains("checkout"))
+        .position(|step| {
+            step["uses"]
+                .as_str()
+                .unwrap_or_default()
+                .contains("checkout")
+        })
         .ok_or("no checkout")?;
     let prepare = steps(group)
         .iter()
@@ -85,15 +91,27 @@ fn a_restoring_group_never_saves_and_restores_after_checkout_prepare_and_before_
         .ok_or("no prepare")?;
     let download = steps(group)
         .iter()
-        .position(|step| step["name"].as_str().unwrap_or_default().starts_with("Download"))
+        .position(|step| {
+            step["name"]
+                .as_str()
+                .unwrap_or_default()
+                .starts_with("Download")
+        })
         .ok_or("no download")?;
     let test = position(group, "Test")?;
     for name in CACHES {
         let at = position(group, name)?;
-        assert!(checkout < at && prepare < at && at < download && at < test, "{name}");
+        assert!(
+            checkout < at && prepare < at && at < download && at < test,
+            "{name}"
+        );
     }
     assert_eq!(
-        group["steps"][0]["uses"].as_str().unwrap_or_default().split('@').next(),
+        group["steps"][0]["uses"]
+            .as_str()
+            .unwrap_or_default()
+            .split('@')
+            .next(),
         workflow["jobs"]["rust-test"]["steps"][0]["uses"]
             .as_str()
             .unwrap_or_default()
@@ -102,9 +120,10 @@ fn a_restoring_group_never_saves_and_restores_after_checkout_prepare_and_before_
     );
     let build = job(&workflow, "rust-test")?;
     assert!(
-        steps(build)
-            .iter()
-            .any(|step| step["uses"].as_str().unwrap_or_default().contains("cache/save")),
+        steps(build).iter().any(|step| step["uses"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("cache/save")),
         "the build job still saves"
     );
     Ok(())
@@ -135,13 +154,22 @@ fn restore_cache_needs_the_cargo_need_and_a_helper_that_reads_the_key() -> TestR
         .err()
         .ok_or("accepted without the cargo need")?
         .to_string();
-    assert!(error.contains("restore_cache") && error.contains("cargo"), "{error}");
-    for config in [RESTORING.to_owned(), format!("{SHELL}restore_cache = false\n")] {
+    assert!(
+        error.contains("restore_cache") && error.contains("cargo"),
+        "{error}"
+    );
+    for config in [
+        RESTORING.to_owned(),
+        format!("{SHELL}restore_cache = false\n"),
+    ] {
         let error = workflow(&view_with(&["Cargo.toml"], &config, "0.1.107")?)
             .err()
             .ok_or("accepted on a helper that does not read the key")?
             .to_string();
-        assert!(error.contains("restore_cache") && error.contains("0.1.108"), "{error}");
+        assert!(
+            error.contains("restore_cache") && error.contains("0.1.108"),
+            "{error}"
+        );
     }
     workflow(&view_with(&["Cargo.toml"], SHELL, "0.1.90")?)?;
     Ok(())

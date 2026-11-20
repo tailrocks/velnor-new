@@ -100,17 +100,7 @@ pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, Generate
         ));
     }
     check_lane_job(facts, release)?;
-    if facts
-        .config
-        .test_groups
-        .iter()
-        .any(|group| group.restore_cache.is_some())
-        && !release.version().at_least(RESTORE_CACHE_HELPER)
-    {
-        return Err(GenerateError::RestoreCacheHelperTooOld(
-            release.version().clone(),
-        ));
-    }
+    check_restore_cache(facts, release)?;
     if facts.config.mbx_store == MbxStore::Shared && !release.version().at_least((0, 1, 85)) {
         return Err(GenerateError::MbxStoreHelperTooOld(
             release.version().clone(),
@@ -142,6 +132,20 @@ pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, Generate
         ));
     }
     Ok(release)
+}
+
+fn check_restore_cache(facts: &RepoFacts, release: &HelperRelease) -> Result<(), GenerateError> {
+    let written = facts
+        .config
+        .test_groups
+        .iter()
+        .any(|group| group.restore_cache.is_some());
+    if written && !release.version().at_least(RESTORE_CACHE_HELPER) {
+        return Err(GenerateError::RestoreCacheHelperTooOld(
+            release.version().clone(),
+        ));
+    }
+    Ok(())
 }
 
 fn check_lane_job(facts: &RepoFacts, release: &HelperRelease) -> Result<(), GenerateError> {
