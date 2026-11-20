@@ -166,9 +166,10 @@ mod tests {
             (1, Observation::NotYetVisible),
             (2, Observation::NotYetVisible),
             (3, Observation::NotYetVisible),
+            (4, Observation::NotYetVisible),
         ];
         let (last, calls) = run(&sequence, INTERVAL * 3)?;
-        assert_eq!((last, calls), (3, 4));
+        assert_eq!((last, calls), (4, 4));
         Ok(())
     }
 
