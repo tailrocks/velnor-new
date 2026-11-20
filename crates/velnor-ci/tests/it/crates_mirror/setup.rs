@@ -176,3 +176,16 @@ fn mirror_setup_repeats_from_a_read_only_helper() -> TestResult {
     }
     Ok(())
 }
+
+#[test]
+fn mirror_setup_refuses_a_runner_temp_with_a_line_break() -> TestResult {
+    let repo = Repo::empty("crates-mirror-line-break");
+    repo.write_unstaged("ca.pem", "fixture");
+    let output = setup_command(repo.root(), REGISTRY)
+        .env("RUNNER_TEMP", repo.root().join("temp\nGITHUB_ENV=forged"))
+        .output()?;
+    assert!(!output.status.success(), "{output:?}");
+    assert!(!repo.root().join("env").exists());
+    assert!(!repo.root().join("path").exists());
+    Ok(())
+}

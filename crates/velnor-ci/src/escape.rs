@@ -31,22 +31,16 @@ pub fn stderr_line(message: &str) -> String {
     format!("velnor-ci: {}", escape(message, false))
 }
 
-/// Text for a workflow-command message or any stdout line the runner reads. Line breaks and `%`
-/// are encoded, so a value cannot end its line or start a command of its own.
 #[must_use]
-pub fn escape_data(text: &str) -> String {
-    escape(text, false)
+pub fn command_line(name: &str, message: &str) -> String {
+    format!("::{name}::{}\n", escape(message, false))
 }
 
-/// Text for a workflow-command property such as `file=`. Also encodes `:` and `,`.
 #[must_use]
 pub fn escape_property(text: &str) -> String {
     escape(text, true)
 }
 
-/// A value for `GITHUB_OUTPUT`, `GITHUB_ENV` or `GITHUB_PATH`. The runner ends the value at a line
-/// break, so a value holding `\r` or `\n` would start a line of its own: a key, or a PATH entry.
-/// Such a value is refused, and the step fails, rather than written.
 pub fn file_value(value: &str) -> Result<&str, CiError> {
     if value.contains(['\r', '\n']) {
         return Err(CiError::new(
@@ -58,14 +52,7 @@ pub fn file_value(value: &str) -> Result<&str, CiError> {
 
 #[cfg(test)]
 mod tests {
-    use super::{escape_data, escape_property, file_value};
-
-    #[test]
-    fn data_value_with_a_line_break_stays_on_one_line() {
-        let text = escape_data("cache\n::stop-commands::x\r::error::forged");
-        assert_eq!(text, "cache%0A::stop-commands::x%0D::error::forged");
-        assert!(!text.contains(['\r', '\n']));
-    }
+    use super::{escape_property, file_value};
 
     #[test]
     fn property_value_also_encodes_separators() {

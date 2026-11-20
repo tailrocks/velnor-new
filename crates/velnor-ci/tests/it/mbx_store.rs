@@ -217,3 +217,25 @@ fn an_existing_shims_directory_is_secured_or_refused() {
     let outcome = run(&host, "push", "refs/heads/main", Some(&shared));
     assert_eq!(outcome, Outcome::Rejected("shims path is not a directory"));
 }
+
+#[test]
+fn a_store_or_shims_directory_with_a_line_break_cannot_add_an_environment_variable() {
+    let clean = Outcome::Shared {
+        dir: PathBuf::from("/runner/mbx"),
+        shims: PathBuf::from("/runner/shims"),
+    };
+    assert_eq!(
+        env_lines(&clean).as_deref().ok(),
+        Some("MBX_CACHE_DIR=/runner/mbx\nMBX_SHIMS_DIR=/runner/shims\n")
+    );
+    for (dir, shims) in [
+        ("/runner/mbx\nGITHUB_PATH=/evil", "/runner/shims"),
+        ("/runner/mbx", "/runner/shims\nGITHUB_PATH=/evil"),
+    ] {
+        let outcome = Outcome::Shared {
+            dir: PathBuf::from(dir),
+            shims: PathBuf::from(shims),
+        };
+        assert!(env_lines(&outcome).is_err(), "{dir:?} {shims:?}");
+    }
+}

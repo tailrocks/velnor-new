@@ -13,7 +13,7 @@ use velnor_rust::{
 };
 
 use crate::error::CiError;
-use crate::escape::escape_data;
+use crate::escape::command_line;
 
 const OS_RELEASE: &str = "/etc/os-release";
 const OS_RELEASE_OVERRIDE: &str = "VELNOR_OS_RELEASE";
@@ -172,9 +172,9 @@ pub(super) fn image_or_cold() -> (String, String) {
                     unique("GITHUB_RUN_ATTEMPT"),
                     unique("GITHUB_JOB"),
                 ),
-                format!(
-                    "::warning::{}; this run is cold and restores no shared cache\n",
-                    escape_data(&error.to_string())
+                command_line(
+                    "warning",
+                    &format!("{error}; this run is cold and restores no shared cache"),
                 ),
             )
         }

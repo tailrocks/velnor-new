@@ -224,30 +224,3 @@ pub fn setup() -> Result<String, CiError> {
     }
     Ok(message(&outcome))
 }
-
-#[cfg(test)]
-mod tests {
-    use super::{Outcome, env_lines};
-    use std::path::PathBuf;
-
-    fn shared(dir: &str) -> Outcome {
-        Outcome::Shared {
-            dir: PathBuf::from(dir),
-            shims: PathBuf::from("/runner/shims"),
-        }
-    }
-
-    #[test]
-    fn env_lines_writes_a_clean_store_path() {
-        let lines = env_lines(&shared("/runner/mbx"));
-        assert_eq!(
-            lines.as_deref().ok(),
-            Some("MBX_CACHE_DIR=/runner/mbx\nMBX_SHIMS_DIR=/runner/shims\n")
-        );
-    }
-
-    #[test]
-    fn env_lines_refuses_a_store_path_that_would_add_a_variable() {
-        assert!(env_lines(&shared("/runner/mbx\nGITHUB_PATH=/evil")).is_err());
-    }
-}

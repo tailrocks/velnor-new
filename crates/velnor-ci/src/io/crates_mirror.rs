@@ -43,7 +43,6 @@ pub(super) fn setup(args: &CratesMirrorArgs) -> Result<String, CiError> {
     .join("velnor-cargo");
     std::fs::create_dir_all(&directory).map_err(|e| failed(&e))?;
     let directory = std::fs::canonicalize(directory).map_err(|e| failed(&e))?;
-    // The directory and the two paths under it go to GITHUB_PATH and GITHUB_ENV.
     file_value(&directory.display().to_string())?;
     let wrapper = directory.join("cargo");
     let config = directory.join("config.toml");

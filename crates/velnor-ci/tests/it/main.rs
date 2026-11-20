@@ -39,6 +39,7 @@ mod delta_availability;
 mod delta_baseline;
 mod delta_binding;
 mod delta_cap;
+mod delta_escape;
 mod delta_freshness;
 mod delta_integrity;
 mod delta_metadata;

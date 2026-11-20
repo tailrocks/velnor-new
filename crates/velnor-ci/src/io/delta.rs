@@ -9,7 +9,7 @@ use super::delta_snapshot::{self as snapshot, BASELINE, MANIFEST, Manifest, Snap
 use super::delta_tree as tree;
 use crate::delta_cli::{DeltaArgs, DeltaCommand};
 use crate::error::CiError;
-use crate::escape::escape_data;
+use crate::escape::{command_line, escape};
 
 pub(super) const LIMIT: u64 = 500_000_000;
 const MARKER: &str = ".velnor/delta-marker";
@@ -48,9 +48,12 @@ pub(super) fn run(command: DeltaCommand) -> Result<String, CiError> {
 fn apply(args: &DeltaArgs, base: &str) -> Result<String, CiError> {
     super::delta_paths::staging(&args.staging_dir)?;
     if let Err(error) = safe_path(&args.target_dir) {
-        return Ok(format!(
-            "::notice::{}; skipping delta reuse\n",
-            escape_data(&cleanup(&args.staging_dir, &error))
+        return Ok(command_line(
+            "notice",
+            &format!(
+                "{}; skipping delta reuse",
+                cleanup(&args.staging_dir, &error)
+            ),
         ));
     }
     let cutoff = snapshot::now_ns()?;
@@ -103,7 +106,8 @@ fn apply(args: &DeltaArgs, base: &str) -> Result<String, CiError> {
 fn cold(target: &Path, error: &CiError) -> Result<String, CiError> {
     tree::remove_node(target)?;
     Ok(format!(
-        "delta apply failed: {error}; removed 1 cached target directories and building cold\n"
+        "delta apply failed: {}; removed 1 cached target directories and building cold\n",
+        escape(&error.to_string(), false)
     ))
 }
 
@@ -123,12 +127,10 @@ fn compiled(args: &DeltaArgs) -> bool {
 
 fn decline(reason: &str) -> Result<String, CiError> {
     super::append_outputs("save=false\n")?;
-    Ok(notice(reason))
-}
-
-/// The notice that a run saves no delta. The reason can name a path from the restored target.
-fn notice(reason: &str) -> String {
-    format!("::notice::{}; saving no delta\n", escape_data(reason))
+    Ok(command_line(
+        "notice",
+        &format!("{reason}; saving no delta"),
+    ))
 }
 
 fn stage(args: &DeltaArgs, base: &str) -> Result<String, CiError> {
@@ -322,17 +324,4 @@ pub(super) fn safe_path(path: &Path) -> Result<(), CiError> {
 
 pub(super) fn failure(path: &Path, error: &std::io::Error) -> CiError {
     CiError::new(format!("{}: {error}", path.display()))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::notice;
-
-    #[test]
-    fn notice_keeps_a_reason_with_a_line_break_on_one_line() {
-        assert_eq!(
-            notice("a\n::stop-commands::b"),
-            "::notice::a%0A::stop-commands::b; saving no delta\n"
-        );
-    }
 }
