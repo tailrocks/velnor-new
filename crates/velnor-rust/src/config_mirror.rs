@@ -14,7 +14,13 @@ pub(crate) struct RawCratesMirror {
     pub(crate) trusted_runner: Option<String>,
 }
 
-pub(crate) fn mirror(raw: RawCratesMirror) -> Result<velnor_model::CratesMirror, Reason> {
+pub(crate) fn optional(
+    raw: Option<RawCratesMirror>,
+) -> Result<Option<velnor_model::CratesMirror>, Reason> {
+    raw.map(mirror).transpose()
+}
+
+fn mirror(raw: RawCratesMirror) -> Result<velnor_model::CratesMirror, Reason> {
     let invalid = |key, value| Reason::InvalidValue { key, value };
     let runner = RunnerLabel::new(raw.runner.clone())
         .map_err(|_| invalid("crates_mirror.runner", raw.runner))?;

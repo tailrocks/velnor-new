@@ -1,12 +1,17 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
+
 use crate::budget_mode::{ModeBudget, Selection};
 use crate::cron::CronExpr;
 use crate::hosted::HostedRunners;
 use crate::ids::{PackageName, PathGlob, RepoPath, RootSlug, RunnerLabel, TargetName};
 use crate::lint::LintJob;
+use crate::mbx::MbxMode;
 use crate::shape::Shape;
+
+pub use crate::setup_phase::SetupPhase;
 use crate::test_group::TestGroup;
 use crate::trusted::TrustedRunners;
 
@@ -19,10 +24,14 @@ pub struct RustCiConfig {
     pub trusted_runners: TrustedRunners,
     pub crates_mirror: Option<CratesMirror>,
     pub private_sources: Option<PrivateSources>,
+    pub release_assets: Vec<crate::ReleaseAsset>,
     pub mbx_store: MbxStore,
     pub docs_run: DocsRun,
     pub check_alone_run: DocsRun,
     pub timeout_minutes: u16,
+    /// `[root_timeouts]`: the time limit of the jobs of one root, keyed by its folder (`None` is the
+    /// repository root). A root without an entry keeps `timeout_minutes`.
+    pub root_timeouts: BTreeMap<Option<RepoPath>, u16>,
     pub exclude: Vec<PathGlob>,
     pub non_inputs: Vec<PathGlob>,
     pub inputs: Vec<InputRule>,
@@ -41,6 +50,7 @@ pub struct RustCiConfig {
     pub cache_check_blocks: bool,
     pub cache_debug: CacheDebug,
     pub mbx_remote: MbxRemote,
+    pub mbx: MbxMode,
     pub push_after_merge_group: PushAfterMergeGroup,
     pub test_setup: Vec<TestSetup>,
     pub test_lanes: Vec<TestLane>,
@@ -49,6 +59,10 @@ pub struct RustCiConfig {
     pub test_groups: Vec<TestGroup>,
     pub checkout: CheckoutScope,
     pub workspace_groups: Vec<WorkspaceGroup>,
+    /// Hand-written workflows under `.github/workflows/` that `velnor-gen check` must not
+    /// flag. `None` when the key is not written, so the helper gate can tell an absent key
+    /// from an empty list.
+    pub external_workflows: Option<Vec<RepoPath>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -197,6 +211,9 @@ pub struct TestLane {
     pub doc: bool,
     pub packages: Vec<PackageName>,
     pub job: LaneJob,
+    /// The `timeout_minutes` key: the time limit of the lane's own job, or of the root's test job
+    /// that runs an inline lane. `None` keeps the root's limit.
+    pub timeout_minutes: Option<u16>,
     pub written: LaneKeysWritten,
 }
 
@@ -219,6 +236,8 @@ pub struct TestSetup {
     pub root: Option<RepoPath>,
     pub name: String,
     pub run: String,
+    /// The `phase` key, if written. `None` and `Some(Test)` run before the tests only.
+    pub phase: Option<SetupPhase>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -320,6 +339,7 @@ impl Default for RustCiConfig {
             docs_run: DocsRun::Always,
             check_alone_run: DocsRun::Always,
             timeout_minutes: 30,
+            root_timeouts: BTreeMap::new(),
             exclude: Vec::new(),
             non_inputs: Vec::new(),
             inputs: Vec::new(),
@@ -338,6 +358,7 @@ impl Default for RustCiConfig {
             cache_check_blocks: false,
             cache_debug: CacheDebug::Off,
             mbx_remote: MbxRemote::Off,
+            mbx: MbxMode::Default,
             push_after_merge_group: PushAfterMergeGroup::Run,
             test_setup: Vec::new(),
             test_lanes: Vec::new(),
@@ -346,6 +367,8 @@ impl Default for RustCiConfig {
             test_groups: Vec::new(),
             checkout: CheckoutScope::Full,
             workspace_groups: Vec::new(),
+            external_workflows: None,
+            release_assets: Vec::new(),
         }
     }
 }

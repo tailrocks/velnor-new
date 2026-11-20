@@ -255,6 +255,12 @@ fn call(name: &str, arguments: &[Value]) -> Result<Value, String> {
                 .to_lowercase()
                 .starts_with(&prefix.text().to_lowercase()),
         )),
+        ("endsWith", [search, suffix]) => Ok(Value::Bool(
+            search
+                .text()
+                .to_lowercase()
+                .ends_with(&suffix.text().to_lowercase()),
+        )),
         ("format", [pattern, rest @ ..]) => {
             let mut out = pattern.text();
             for (index, value) in rest.iter().enumerate() {

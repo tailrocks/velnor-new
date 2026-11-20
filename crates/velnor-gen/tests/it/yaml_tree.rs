@@ -69,7 +69,29 @@ impl Node {
 
 type Line = (usize, String);
 
+fn resolve_aliases(text: &str) -> String {
+    let mut anchors: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    text.lines()
+        .map(|line| {
+            let Some((key, value)) = line.split_once(": ") else {
+                return line.to_owned();
+            };
+            if let Some(rest) = value.strip_prefix('&') {
+                let (name, scalar) = rest.split_once(' ').unwrap_or((rest, ""));
+                anchors.insert(name.to_owned(), scalar.to_owned());
+                return format!("{key}: {scalar}");
+            }
+            match value.strip_prefix('*').and_then(|name| anchors.get(name)) {
+                Some(scalar) => format!("{key}: {scalar}"),
+                None => line.to_owned(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 pub(crate) fn parse(text: &str) -> Result<Node, String> {
+    let text = resolve_aliases(text);
     let mut lines: Vec<Line> = text
         .lines()
         .filter(|line| !line.trim().is_empty() && !line.trim_start().starts_with('#'))

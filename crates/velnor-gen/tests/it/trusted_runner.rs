@@ -10,7 +10,7 @@ use crate::trusted_events::{FORK_RUNNER, NORMAL, TRUSTED, events, runs_on};
 
 const SCALE_SET: &str = "ubuntu-26.04-scale-set";
 const POOL: &str = "ubuntu-26.04-scale-set-trusted";
-const HELPER: &str = "0.1.108";
+const HELPER: &str = "0.1.109";
 
 fn repo(config: &str, helper: &str) -> Result<RepoView, Box<dyn std::error::Error>> {
     let mut repo = view(&["Cargo.toml", "tools/Cargo.toml"], Some(config.as_bytes()))?;
