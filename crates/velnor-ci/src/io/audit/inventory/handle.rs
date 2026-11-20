@@ -10,7 +10,7 @@ use std::time::{Duration, SystemTime};
 
 use nix::dir::Dir;
 use nix::fcntl::{AtFlags, OFlag, openat, readlinkat};
-use nix::sys::stat::{FileStat, Mode, SFlag, fstatat};
+use nix::sys::stat::{FileStat, Mode, SFlag, fstat, fstatat};
 
 use super::Kind;
 use super::walk::unresolved_link;
@@ -59,6 +59,13 @@ pub(super) fn names(
         }
     }
     Ok(names)
+}
+
+pub(super) type Identity = (i128, i128);
+
+pub(super) fn identity(directory: &Dir) -> io::Result<Identity> {
+    let stat = fstat(directory).map_err(failure)?;
+    Ok((i128::from(stat.st_dev), i128::from(stat.st_ino)))
 }
 
 pub(super) struct Observed {

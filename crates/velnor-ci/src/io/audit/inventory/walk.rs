@@ -117,6 +117,8 @@ pub(in crate::io::audit) fn scan_with(
             Err(error) => return Err(error),
         };
         (probe.after_open)(&directory);
+        scan.identities
+            .insert(directory.clone(), handle::identity(&listing)?);
         let names = handle::names(&mut listing, |name| {
             (probe.listed)(name);
             budget.reserve()
@@ -125,11 +127,10 @@ pub(in crate::io::audit) fn scan_with(
         let mut children = BTreeMap::new();
         for name in names {
             let path = directory.join(&name);
-            let Some(Observed { kind, modified }) = handle::kind_at(&listing, &name, &path)? else {
+            let Some(Observed { kind, .. }) = handle::kind_at(&listing, &name, &path)? else {
                 continue;
             };
             pending.extend(queue(&kind, &path, &listing, &name, (&root, targets))?);
-            scan.modified.insert(path, modified);
             children.insert(PathBuf::from(name), kind);
         }
         scan.entries.insert(directory, children);
@@ -187,7 +188,6 @@ fn settle(
     let key = Path::new(name);
     match replacement {
         None => {
-            scan.modified.remove(directory);
             if let Some(children) = children {
                 children.remove(key);
             }
@@ -196,9 +196,8 @@ fn settle(
             kind: Kind::Directory,
             ..
         }) => return Err(changed(directory)),
-        Some(Observed { kind, modified }) => {
+        Some(Observed { kind, .. }) => {
             pending.extend(queue(&kind, directory, parent, name, (root, targets))?);
-            scan.modified.insert(directory.to_path_buf(), modified);
             if let Some(children) = children {
                 children.insert(key.to_path_buf(), kind);
             }
