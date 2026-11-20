@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    BUDGET_MODES_HELPER, CacheDebug, DocsRun, HelperRelease, HelperVersion, MbxStore,
-    Platform, PrCi, PushAfterMergeGroup, RepoFacts,
+    BUDGET_MODES_HELPER, CacheDebug, DocsRun, HelperRelease, HelperVersion, MbxStore, Platform,
+    PrCi, PushAfterMergeGroup, RepoFacts,
 };
 
 use velnor_rust::INPUTS_IDENTITY_HELPER;
