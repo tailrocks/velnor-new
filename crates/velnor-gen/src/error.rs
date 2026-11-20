@@ -45,6 +45,7 @@ pub enum GenerateError {
     Workflows(WorkflowsError),
     Rules(Vec<RuleViolation>),
     DeltaStagingCollision(RepoPath),
+    ExcludedLockRun(velnor_rust::ExcludedLockFinding),
 }
 
 impl fmt::Display for GenerateError {
@@ -52,6 +53,7 @@ impl fmt::Display for GenerateError {
         match self {
             Self::DeltaStagingCollision(path) => write!(f, "tracked path {path} collides with delta cache staging"),
             Self::Detect(error) => error.fmt(f),
+            Self::ExcludedLockRun(finding) => f.write_str(&finding.message()),
             Self::IncompatibleHelper(version) => write!(f, "{}", incompatible_helper(version)),
             Self::Release(error) => error.fmt(f),
             Self::ReleaseFileNotUtf8(path) => write!(f, "{path} is not UTF-8 text"),

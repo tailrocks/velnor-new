@@ -13,7 +13,7 @@ use super::{identity, output};
 use crate::error::CiError;
 
 pub(super) fn proven(workspaces: &[Workspace]) -> Result<BTreeSet<PathBuf>, CiError> {
-    let base = inventory::exclusions(workspaces);
+    let base = inventory::exclusions(workspaces)?;
     let mut found = BTreeSet::new();
     for target in scan_dirs(workspaces) {
         for (unit, path) in unit_files(&target)? {
@@ -21,7 +21,7 @@ pub(super) fn proven(workspaces: &[Workspace]) -> Result<BTreeSet<PathBuf>, CiEr
                 && let Ok(saved) = inventory::load(&path)
                 && base.is_subset(&saved.targets)
             {
-                found.extend(saved.targets);
+                found.extend(saved.targets.iter().cloned());
             }
         }
     }
@@ -61,3 +61,6 @@ pub(super) fn targets(
     }
     Ok(found)
 }
+
+#[cfg(test)]
+mod parses;

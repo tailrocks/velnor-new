@@ -28,7 +28,7 @@ pub(super) fn declarations(
     location: &Path,
 ) -> Result<Vec<Declared>, CiError> {
     let mut found = Vec::new();
-    let targets = inventory::exclusions(workspaces);
+    let targets = inventory::exclusions(workspaces)?;
     let active = workspaces
         .iter()
         .enumerate()
@@ -88,7 +88,7 @@ pub(super) fn declarations(
             let targets = inventory::load(&output)
                 .ok()
                 .filter(|saved| targets.is_subset(&saved.targets))
-                .map_or_else(|| targets.clone(), |saved| saved.targets);
+                .map_or_else(|| targets.clone(), |saved| saved.targets.clone());
             found.push(Declared {
                 output,
                 package,

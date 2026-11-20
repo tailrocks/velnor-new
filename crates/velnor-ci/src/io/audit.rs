@@ -8,6 +8,7 @@ mod inventory;
 mod options;
 mod selection;
 mod setup;
+mod timing;
 
 pub(crate) use build::build;
 pub use options::AuditOptions;
@@ -69,7 +70,7 @@ pub fn audit_inputs(directory: &Path, options: &AuditOptions) -> Result<String, 
         .map_err(|e| failed(&e))?
         .unwrap_or_default();
     let facts = detect(&checkout.view).map_err(|e| failed(&e))?;
-    let inherit = audit_inheriting(&facts, &checkout.root, directory, options);
+    let inherit = audit_inheriting(&facts, &checkout.root, directory, options)?;
     let workspaces = workspaces(&facts, &checkout.root, &inherit)?;
     let shared = shared_groups(&facts);
     apart(&workspaces, &shared)?;
@@ -81,7 +82,7 @@ pub fn audit_inputs(directory: &Path, options: &AuditOptions) -> Result<String, 
         &workspaces,
         &groups,
         options.max_directory_entries,
-    );
+    )?;
     for (unit, file, indices) in setup::gathered_files(&workspaces, &shared, &groups, &chosen)? {
         audit.record(&indices, &file, unit)?;
     }

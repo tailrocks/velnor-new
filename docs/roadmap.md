@@ -25,7 +25,7 @@ Work through the roadmap:
 Finish one issue (replace the number):
 
 ```text
-/goal Finish issue #583 of this repository by following docs/roadmap.md, without asking anyone. It is finished when its pull request is merged, the issue is closed, and the command and output that prove each "Done when" box are printed here. A box that only the owner can prove counts as done when the link to its [OWNER] follow-up issue is printed here. It also ends when the issue is marked `blocked` and its evidence is printed here. Never merge with a failing or missing required check. Never use --admin or a force push.
+/goal Finish issue #<number> of this repository by following docs/roadmap.md, without asking anyone. It is finished when its pull request is merged, the issue is closed, and the command and output that prove each "Done when" box are printed here. A box that only the owner can prove counts as done when the link to its [OWNER] follow-up issue is printed here. It also ends when the issue is marked `blocked` and its evidence is printed here. Never merge with a failing or missing required check. Never use --admin or a force push.
 ```
 
 A session can end before the roadmap does. Start a new one and paste the same text: the state is in GitHub, so it continues where the last one stopped. The first thing a new session does is resume each open issue with the label `in-progress`, because the session that claimed it has ended: find its branch `fast/<issue number>-*` and its pull request, and continue from the step of "One issue" that comes next.

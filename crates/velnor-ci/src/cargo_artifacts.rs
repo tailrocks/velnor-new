@@ -33,9 +33,18 @@ pub struct CargoProfile {
     pub test: bool,
 }
 
+/// A build script cargo ran or replayed (`build-script-executed`): its package and output
+/// directory, whose parent directory holds the run's records.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BuildScriptRun {
+    pub package_id: String,
+    pub out_dir: String,
+}
+
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct ArtifactBatch {
     pub artifacts: Vec<CargoArtifact>,
+    pub build_scripts: Vec<BuildScriptRun>,
     pub rejected: u64,
     pub progress: Vec<CargoProgress>,
     pub tests: Vec<(String, f64)>,
@@ -147,6 +156,16 @@ impl ArtifactTap {
             Some("build-finished") => {
                 if value.get("success").and_then(serde_json::Value::as_bool) == Some(false) {
                     self.batch.build_failed = true;
+                }
+                return;
+            }
+            Some("build-script-executed") => {
+                let text = |key| value.get(key).and_then(serde_json::Value::as_str);
+                if let (Some(package_id), Some(out_dir)) = (text("package_id"), text("out_dir")) {
+                    self.batch.build_scripts.push(BuildScriptRun {
+                        package_id: package_id.to_owned(),
+                        out_dir: out_dir.to_owned(),
+                    });
                 }
                 return;
             }
