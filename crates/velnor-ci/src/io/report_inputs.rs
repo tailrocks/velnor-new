@@ -12,6 +12,8 @@ use velnor_model::{AllTrigger, ChangeSet, RepoPath, RustSelection};
 
 #[path = "report_artifacts.rs"]
 mod artifact_evidence;
+#[path = "report_links.rs"]
+mod link_inputs;
 
 fn ci(error: impl std::fmt::Display) -> CiError {
     CiError::new(error.to_string())
@@ -47,11 +49,14 @@ fn collect_root(
     let saved = read_snapshot(&target.join(snapshot_file(&prefix)))?;
     let saved_witness = read_witness(&target.join(witness_file(&prefix)))?;
     let usable = saved.is_some();
-    let unverifiable_links = !current.links.is_empty()
+    let feeds = |path: &str| link_inputs::feeds(facts, root, path);
+    let unverifiable_links = current.links.iter().any(|link| feeds(&link.path))
         || current.unverifiable_links > 0
-        || saved
-            .as_ref()
-            .is_some_and(|saved| saved.iter().any(|input| input.file.mode == SYMLINK_MODE));
+        || saved.as_ref().is_some_and(|saved| {
+            saved
+                .iter()
+                .any(|input| input.file.mode == SYMLINK_MODE && feeds(&input.file.path))
+        });
     let same_lock = !symlink_lock && same_lock(&root.manifest, &current, saved.as_deref())?;
     let unchanged = if symlink_lock || unverifiable_links {
         BTreeSet::new()
