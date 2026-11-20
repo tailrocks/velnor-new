@@ -31,7 +31,10 @@ impl Audit<'_> {
         let Some(source) = self.unit_source(workspace, &paths, package) else {
             return Ok(None);
         };
-        if self.changed_since(workspace, &paths, built, file, false)? {
+        if !self
+            .changed_inputs(workspace, &paths, built, file, false, 1)?
+            .is_empty()
+        {
             if !self.owners.of(package, &source).is_empty() {
                 self.stale.push(file.display().to_string());
             }

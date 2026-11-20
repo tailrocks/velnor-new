@@ -7,9 +7,13 @@ use crate::budget_mode::SelectionName;
 use crate::cron::CronExpr;
 use crate::hosted::HostedRunners;
 use crate::ids::{JobId, PackageName, RepoPath, RootSlug, RunnerLabel, TargetName};
-use crate::repo::{LaneFeatures, TargetKind};
+use crate::repo::{DenyCheck, LaneFeatures, TargetKind};
 use crate::steps::{StepKind, VerifiedSave};
 use crate::test_group::NoTests;
+use crate::trusted::TrustedRunners;
+
+mod filter;
+pub use filter::FilterRef;
 
 pub const LINT_STEP: &str = "Lint";
 pub const TEST_STEP: &str = "Test";
@@ -31,6 +35,7 @@ pub struct WorkflowPlan {
     pub permissions: Permissions,
     pub fork_runner: RunnerLabel,
     pub hosted_runners: HostedRunners,
+    pub trusted_runners: TrustedRunners,
     pub jobs: Vec<Job>,
 }
 
@@ -106,6 +111,7 @@ pub struct Job {
     /// The pinned helper records the build in its test step (`outputs.built`), so the saves
     /// may wait for that record instead of a build step.
     pub records_build: bool,
+    pub chained_saves: bool,
     /// Titles the job with the selection of the run, read from the plan outputs.
     pub selection_name: Option<SelectionName>,
     pub steps: Vec<Step>,
@@ -172,8 +178,7 @@ impl Gate {
                 own(self.need),
                 own(GateNeed::PackageArgs),
             ],
-            GateNeed::Deny => vec![own(GateNeed::Deny)],
-            GateNeed::Machete => vec![own(GateNeed::Machete)],
+            GateNeed::Deny | GateNeed::Machete | GateNeed::Lint => vec![own(self.need)],
             GateNeed::PackageArgs if self.unselected => {
                 vec![own(GateNeed::Selected), own(GateNeed::PackageArgs)]
             }
@@ -201,6 +206,7 @@ pub enum GateNeed {
     Policy,
     TestsExpected,
     Group,
+    Lint,
 }
 
 impl GateNeed {
@@ -223,6 +229,7 @@ impl GateNeed {
             Self::Policy => "policy",
             Self::TestsExpected => "tests",
             Self::Group => "group",
+            Self::Lint => return format!("lint_{slug}"),
         };
         if self.is_global() {
             format!("rust_{name}")
@@ -241,8 +248,7 @@ pub fn group_output_name(slug: &RootSlug, group: &JobId) -> String {
 pub enum PlanFrom {
     ThisJob,
     Job(JobId),
-    /// The plan outputs of a job that also builds and tests, so a job that
-    /// needs it must not wait for that job to succeed.
+    /// The plan outputs of a job that also builds and tests: a job that needs it must not wait for it.
     WorkJob(JobId),
 }
 
@@ -285,6 +291,7 @@ pub enum When {
     BaseExpired,
     SavingRun,
     ClearRunLabel,
+    Failure,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -332,6 +339,7 @@ pub enum CargoCommand {
         file: RepoPath,
         filter: FilterRef,
         threads: Option<u16>,
+        partition: Option<(u16, u16)>,
         ci_profile: bool,
         no_tests: NoTests,
     },
@@ -346,6 +354,7 @@ pub enum CargoCommand {
     Deny {
         manifest: RepoPath,
         config: Option<RepoPath>,
+        checks: Option<Vec<DenyCheck>>,
     },
     Machete,
 }
@@ -379,19 +388,4 @@ impl CargoCommand {
             _ => &[],
         }
     }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum FilterRef {
-    All,
-    AllExcept(Vec<String>),
-    Expr {
-        expr: String,
-        except: Vec<String>,
-    },
-    Group {
-        include: Option<String>,
-        exclude: Vec<String>,
-        except: Vec<String>,
-    },
 }

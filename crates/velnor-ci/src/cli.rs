@@ -125,7 +125,7 @@ pub enum Command {
     )]
     MbxSeed,
     #[command(
-        about = "Keep the mise and rustup tool directories on the node's own disk. restore copies ~/.local/share/mise and ~/.rustup from tools/<key> of the store (VELNOR_MBX_SHARED_DIR on a trusted event, VELNOR_MBX_SEED_DIR otherwise) and writes hit=true or hit=false to $GITHUB_OUTPUT, so the network cache action can be skipped on a hit; save, on a trusted event only, copies them into tools/<key> with an atomic rename, keeping the two newest keys. A missing store, a failed check or a failed copy is a miss, never an error"
+        about = "Keep the mise and rustup tool directories on the node's own disk. restore copies ~/.local/share/mise and ~/.rustup from tools/<key> of the store (VELNOR_MBX_SHARED_DIR on a trusted event, VELNOR_MBX_SEED_DIR otherwise) and writes hit=true or hit=false to $GITHUB_OUTPUT, so the network cache action can be skipped on a hit; save, on a trusted event only, copies them into tools/<key> with an atomic rename, keeping the two newest keys. A missing store, a failed check or a failed copy is a miss, never an error. restore first deletes ~/.local/share/mise and ~/.rustup so that the home holds exactly the stored tree, and clear (no --key) deletes the same two directories before any restore; both refuse, with a warning and nothing deleted, a symlinked tool directory or parent, or a HOME that is a symlink, not absolute or the filesystem root"
     )]
     ToolsLocal(ToolsLocalArgs),
     #[command(
@@ -133,7 +133,7 @@ pub enum Command {
     )]
     MisePin(MisePinArgs),
     #[command(
-        about = "Verify restored tools against the anchor a trusted run recorded in $RUNNER_TEMP/velnor-tools-anchor/digest, which counts only when $VELNOR_ANCHOR_HIT is true. reset deletes $RUNNER_TEMP/velnor-tools-anchor before the anchor restore; check, after the restores, keeps ~/.local/share/mise and ~/.rustup only when their digest equals the anchor and otherwise deletes both, writing verified=true or verified=false to $GITHUB_OUTPUT; record, after the install, refuses an event that is not a push, schedule or workflow_dispatch on the default branch, and otherwise writes the anchor when none was restored and writes matches= and recorded= so the saves run only for tools equal to the anchor"
+        about = "Verify restored tools against the anchor digest a trusted run recorded. read, in the one job that restores the anchor cache entry, takes $RUNNER_TEMP/velnor-tools-anchor/digest when $VELNOR_ANCHOR_MATCHED names the restored entry and writes anchor=<digest> (empty when there is none) to $GITHUB_OUTPUT; check, after the restores, keeps ~/.local/share/mise and ~/.rustup only when their digest equals $VELNOR_TOOLS_ANCHOR and otherwise deletes both, writing verified=true or verified=false; record, after the install, refuses an event that is not a push, schedule or workflow_dispatch on the default branch, writes matches= and recorded= and the digest= of the tools so the saves run only for tools equal to the anchor, and writes a new anchor file when $VELNOR_TOOLS_VERIFIED is not true and the digest differs from $VELNOR_TOOLS_ANCHOR"
     )]
     ToolsVerify(ToolsVerifyArgs),
     #[command(
@@ -153,6 +153,11 @@ pub enum Command {
         about = "Check the [[test_groups]] of .velnor/rust-ci.toml against the tests cargo-nextest lists"
     )]
     TestGroups(TestGroupsCommand),
+    #[command(
+        subcommand,
+        about = "Guard the files a workflow artifact upload would publish"
+    )]
+    Artifacts(ArtifactsCommand),
     #[command(
         about = "Run after every cache and after velnor-ci inputs restore: every action that must follow the restores. Gives each tracked file that shares its modification time with another tracked file a distinct time, one microsecond below the time it had and ordered by path, so that cargo, which picks the newest file of a package by time alone, names the same file after every restore. When VELNOR_BASE_MAX_AGE_DAYS is a positive number, first removes every restored target directory whose target/.velnor/born date is more than that many days old, so the run builds cold. Writes the step output expired=true when it removed one (an unreadable born date counts as expired) and expired=false otherwise, so a later step can plan a full run"
     )]
@@ -255,6 +260,35 @@ pub struct LaneGuardArgs {
 }
 
 #[derive(Debug, Subcommand)]
+pub enum ArtifactsCommand {
+    #[command(
+        about = "Run in the workspace (GITHUB_WORKSPACE, else the current directory) right before an actions/upload-artifact step, which follows symbolic links and so can publish files from outside the workspace, and which reads the workspace later than this step runs. Walks each --path without following links, copies only the regular files that the path selects into a fresh --into directory (any earlier content is removed) with their paths relative to the workspace, and the upload then publishes only that directory. Symbolic links, devices, sockets and pipes are skipped, as is every file whose path has a part that looks like a secret (a .env file, a key, a token, a password, credentials) and, without a warning, every hidden file, printing one ::warning:: per skipped entry, so nothing that changes in the workspace after this step can change what is uploaded; a path that does not exist selects nothing, and an --into directory that cannot be created or a copy that cannot be written fails the step with exit 1"
+    )]
+    Stage(ArtifactsStageArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct ArtifactsStageArgs {
+    #[arg(
+        long,
+        required = true,
+        allow_hyphen_values = true,
+        value_name = "DIR",
+        help = "The staging directory, under RUNNER_TEMP; it is emptied first and the upload step names exactly this directory"
+    )]
+    pub into: std::path::PathBuf,
+    #[arg(
+        long = "path",
+        required = true,
+        allow_hyphen_values = true,
+        value_name = "PATH",
+        value_parser = clap::builder::NonEmptyStringValueParser::new(),
+        help = "A repository path or glob that the upload names, relative to the workspace; repeat for each path"
+    )]
+    pub paths: Vec<String>,
+}
+
+#[derive(Debug, Subcommand)]
 pub enum TestGroupsCommand {
     #[command(
         about = "Run in the directory of a Cargo root after the tests are built: exit 1 and name every test that two or more groups select. Lists the workspace once per group with cargo-nextest, under the group's filter unchanged, so the filter means what the group job runs; ignored tests are exempt, and a listing error fails the check"
@@ -329,5 +363,5 @@ pub struct CheckTagArgs {
 
 pub use crate::cli_release::{
     AlignArgs, CheckConfigArgs, FamilyTagArgs, PreflightArgs, PublishArgs, RecordArgs,
-    ReleaseCommand, ReleaseGateArgs,
+    ReleaseCommand, ReleaseGateArgs, VerifyListedArgs,
 };

@@ -1,7 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{CacheKey, GateNeed, RenderedStep, StepKind, sources_step, trimmed_lane};
+use super::{
+    CacheKey, CargoCommand, CargoLane, GateNeed, RenderedStep, Step, StepKind, cargo_step,
+    sources_step, trimmed_lane,
+};
 
 pub(super) fn saved_unless_hit(kind: &StepKind) -> Vec<String> {
     match kind {
@@ -54,5 +57,21 @@ pub(super) fn rustup_add(kind: &str, items: &[String]) -> RenderedStep {
         name: format!("Add Rust {kind}s"),
         run: Some(format!("rustup {kind} add {}", items.join(" "))),
         ..RenderedStep::default()
+    }
+}
+
+pub(super) fn leading_steps(step: &Step, audit: bool, lane: CargoLane) -> Vec<RenderedStep> {
+    match &step.kind {
+        StepKind::Cargo(CargoCommand::Doctest) if audit => vec![cargo_step(
+            &CargoCommand::BuildAll,
+            step.manifest.as_ref(),
+            true,
+            lane,
+            None,
+        )],
+        StepKind::UploadGroupArtifact(upload) => {
+            vec![crate::artifact_steps::group_stage(upload)]
+        }
+        _ => Vec::new(),
     }
 }

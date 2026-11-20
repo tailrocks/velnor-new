@@ -1,11 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod artifact_paths;
 mod budget_mode;
 mod cache;
 mod cache_layout;
 mod cache_outputs;
 mod cargo_build;
+mod check_configurations;
 mod cron;
 mod helper;
 mod hosted;
@@ -15,6 +17,7 @@ mod mbx;
 mod mbx_config;
 mod mise;
 mod plan;
+mod policy_table;
 mod release_asset;
 mod repo;
 mod repo_config;
@@ -25,19 +28,25 @@ mod shape;
 mod steps;
 mod test_group;
 mod token_permission;
+mod trusted;
 mod verdict;
 
+pub use artifact_paths::{
+    Case, FILESYSTEM_CASE, aliased_secret, path_matches, secret_like, secret_path, segment_matches,
+    selects,
+};
 pub use budget_mode::{BUDGET_JOB_NAME, BUDGET_MODES_HELPER, ModeBudget, Selection, SelectionName};
-pub use cache::{CacheKey, CachePath, CacheRoot, Host, LockIdentity};
+pub use cache::{AnchorSource, CacheKey, CachePath, CacheRoot, Host, LockIdentity, ToolsAnchor};
 pub use cache_layout::{
     CACHE_COMPAT_LENGTH, CacheKeyLayout, CacheKeySegment, LOCK_OUTPUT_PREFIX,
-    RUNNER_ARCH_MAX_LENGTH, RUNNER_OS_MAX_LENGTH, SHARED_SOURCES_OWNER, json_char_bytes,
-    json_string_bytes,
+    RUNNER_ARCH_MAX_LENGTH, RUNNER_OS_MAX_LENGTH, SHARED_SOURCES_OWNER, TOOLS_ANCHOR_LENGTH,
+    json_char_bytes, json_string_bytes,
 };
 pub use cache_outputs::{
     BASE_PREFIX_OUTPUT, BASE_SAVE_OUTPUT, CacheLaneOutput, SOURCES_PREFIX_OUTPUT,
     SOURCES_SAVED_OUTPUT, cache_lane_outputs,
 };
+pub use check_configurations::CheckConfigurations;
 pub use cron::CronExpr;
 pub use helper::{HelperRelease, Platform};
 pub use hosted::HostedRunners;
@@ -47,7 +56,9 @@ pub use ids::{
 };
 pub use lint::{LintCommand, LintJob, LintKind};
 pub use mbx::MbxMode;
-pub use mbx_config::{MBX_TOOL, MbxConflict, MbxDeclaration, MbxRule, mbx_declaration};
+pub use mbx_config::{
+    MBX_ACTION_RELEASE, MBX_TOOL, MbxConflict, MbxDeclaration, MbxRule, mbx_declaration,
+};
 pub use mise::MisePlatform;
 pub use plan::{
     Access, BUILD_TESTS_STEP, BUILT_OUTPUT, CI_AUTO_LABEL, CI_RUN_LABEL, CargoCommand, Concurrency,
@@ -58,13 +69,13 @@ pub use plan::{
 };
 pub use release_asset::{ReleaseAsset, ReleaseAssetError, ReleaseAssetPart};
 pub use repo::{
-    CacheDebug, CheckoutScope, CiDebugInfo, CompileInputs, CratesMirror, CustomHarness,
-    DependencyKind, DocsRun, FullRun, InputOwner, InputRule, LaneFeatures, LaneJob,
-    LaneKeysWritten, MbxRemote, MbxStore, MemberDependency, OnMain, PackageDependency, PolicyTools,
-    PrCi, PrivateSources, PushAfterMergeGroup, RepoFacts, RepoView, RepositoryIdentity,
-    RustCiConfig, RustMember, RustMetadata, RustPackage, RustRoot, SetupPhase, SpeedBudget, Target,
-    TargetKind, TestLane, TestSetup, Timings, ToolLock, ToolPin, ToolPins, ToolRequest, Toolchain,
-    UnownedPackage, Unread, Weakening, WorkspaceGroup,
+    CacheDebug, CheckoutScope, CiDebugInfo, CompileInputs, CratesMirror, CustomHarness, DenyCheck,
+    DenyChecks, DenyLane, DependencyKind, DocsRun, FullRun, InputOwner, InputRule, LaneFeatures,
+    LaneJob, LaneKeysWritten, MbxRemote, MbxStore, MemberDependency, OnMain, PackageDependency,
+    PolicyTable, PolicyTools, PrCi, PrivateSources, PushAfterMergeGroup, RepoFacts, RepoView,
+    RepositoryIdentity, RustCiConfig, RustMember, RustMetadata, RustPackage, RustRoot, SetupPhase,
+    SpeedBudget, Target, TargetKind, TestLane, TestSetup, Timings, ToolLock, ToolPin, ToolPins,
+    ToolRequest, Toolchain, UnownedPackage, Unread, Weakening, WorkspaceGroup,
 };
 pub use sealed::{Owner, VELNOR_GEN_MARKER, lf_normalized, owner_of, seal};
 pub use selection::{
@@ -73,11 +84,15 @@ pub use selection::{
     StepNeed, WORKFLOW_PATH, WORKFLOWS_CONFIG_PATH,
 };
 pub use shape::{Shape, ShapeDecision};
-pub use test_group::{GroupEvent, GroupRoot, NoTests, TestGroup, TestNeed};
+pub use test_group::{
+    ARTIFACT_RETENTION_DEFAULT, ArtifactWhen, GroupArtifact, GroupEvent, GroupRoot, NoTests,
+    TestGroup, TestNeed,
+};
 pub use token_permission::{token_permission_accesses, token_permission_accesses_prose};
+pub use trusted::{TRUSTED_EVENT, TrustedRunners};
 pub use verdict::{JobCondition, VerdictJob, VerdictSpec};
 
 pub use steps::{
-    BUDGET_JOB, BaseExpiry, GroupFilter, HelperCommand, InputsCli, PrepareLocks, StepKind,
-    ToolsLocalVerb, ToolsTelemetry, TrimFamily, VerifiedSave,
+    BUDGET_JOB, BaseExpiry, GroupFilter, GroupUpload, HelperCommand, InputsCli, PrepareLocks,
+    StepKind, ToolsLocalVerb, ToolsTelemetry, TrimFamily, VerifiedSave,
 };

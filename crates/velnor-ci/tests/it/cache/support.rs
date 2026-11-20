@@ -66,12 +66,20 @@ pub(super) fn aged(name: &str, born: &str) -> Checkout {
 }
 
 pub(super) fn decide_within(repo: &Checkout, budget: &str) -> (Output, String) {
+    decide_target_within(repo, "target", budget)
+}
+
+pub(super) fn decide_target_within(
+    repo: &Checkout,
+    target: &str,
+    budget: &str,
+) -> (Output, String) {
     let temp = repo.root().join("runner-temp");
     fs::create_dir_all(&temp).unwrap_or_else(|e| unreachable!("{e}"));
     fs::write(temp.join("velnor-run.log"), COMPILED).unwrap_or_else(|e| unreachable!("{e}"));
     let outputs = repo.root().join("github-output");
     let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
-        .args(["cache", "decide", "--target-dir", "target"])
+        .args(["cache", "decide", "--target-dir", target])
         .env("RUNNER_TEMP", &temp)
         .env("GITHUB_OUTPUT", &outputs)
         .env("VELNOR_CACHE_BUDGET_BYTES", budget)

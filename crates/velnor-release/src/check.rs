@@ -125,6 +125,12 @@ fn artifacts_of(
     for name in &check.artifacts {
         let artifact = artifact_of(name, binaries)
             .ok_or_else(|| invalid(CheckProblem::UnknownArtifact(name.clone())))?;
+        if binaries.iter().any(|binary| {
+            binary.package == artifact.package
+                && binary.optional_platforms.contains(&artifact.platform)
+        }) {
+            return Err(invalid(CheckProblem::OptionalArtifact(name.clone())));
+        }
         if !artifacts.contains(&artifact) {
             artifacts.push(artifact);
         }
@@ -217,6 +223,7 @@ pub enum CheckProblem {
     UnknownNeed(String),
     PublishWithoutArtifacts,
     UnknownArtifact(String),
+    OptionalArtifact(String),
     ArtifactsBeforeTag,
     WritesContents,
     WritesIdToken,
@@ -242,6 +249,10 @@ impl fmt::Display for CheckProblem {
             Self::UnknownArtifact(name) => write!(
                 f,
                 "artifact {name:?} is not <package>-<platform> of a [[binaries]] entry"
+            ),
+            Self::OptionalArtifact(name) => write!(
+                f,
+                "artifact {name:?} is optional, so a check that runs before publish cannot require it"
             ),
             Self::ArtifactsBeforeTag => {
                 f.write_str("names artifacts, which exist only when it runs before publish")

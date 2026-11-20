@@ -11,7 +11,7 @@ use crate::lint_error::LintFault;
 use crate::lint_tools::{Lookup, lookup};
 use crate::toml_file::table;
 
-const TASK_FOLDERS: &[&str] = &[
+pub(crate) const TASK_FOLDERS: &[&str] = &[
     "mise-tasks/",
     ".mise-tasks/",
     "mise/tasks/",

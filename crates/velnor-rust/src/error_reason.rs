@@ -56,6 +56,9 @@ impl Reason {
 
     fn fmt_setup(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::PolicyDenyWithoutConfig => f.write_str(
+                "[policy] deny = true needs a cargo-deny config (deny.toml, .deny.toml, .cargo/deny.toml or .config/deny.toml) that the lane can read; add one, or remove deny = true",
+            ),
             Self::UnpinnedTool(tool) => write!(
                 f,
                 "is present but {tool} is not pinned in mise.toml, so the policy lane could not run it; pin it there"
@@ -166,6 +169,9 @@ impl fmt::Display for Reason {
             Self::UnknownTestGroupRoot(_)
             | Self::TestGroupWithoutNextest(_)
             | Self::TestGroupFilter(_)
+            | Self::PartitionsWithoutNextest(_)
+            | Self::TestGroupArtifact { .. }
+            | Self::ArtifactNameTaken(_)
             | Self::TestGroupRestoreWithoutCargo(_)
             | Self::TestGroupsWithPrivateSources => self.fmt_test_groups(f),
             Self::UnknownTestLaneRoot(_)
@@ -175,6 +181,10 @@ impl fmt::Display for Reason {
             Self::UnknownRootTimeoutRoot(root) => write!(
                 f,
                 "root_timeouts names the root {root}, which is not a Cargo root of this repository; name the folder of a root's Cargo.toml, or . for the repository root"
+            ),
+            Self::UnknownCheckConfigurationsRoot(root) => write!(
+                f,
+                "check_configurations names the root {root}, which is not a Cargo root of this repository; name the folder of a root's Cargo.toml, or . for the repository root"
             ),
             Self::UnknownTestSetupRoot(root) => write!(
                 f,
@@ -192,6 +202,7 @@ impl fmt::Display for Reason {
                 "[env] sets {name}: cargo passes it to the compilers and clippy the checks run, and with force = true it replaces what the step sets, so a check could pass without checking; remove it, or set it without force and with a name that does not start with CLIPPY, RUST or CARGO"
             ),
             Self::UnpinnedTool(_)
+            | Self::PolicyDenyWithoutConfig
             | Self::HelperBox(_)
             | Self::MbxRemotePrivate(_)
             | Self::MbxOffConflict(_)

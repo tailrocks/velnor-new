@@ -50,7 +50,12 @@ pub(crate) fn expose_selection(facts: &RepoFacts, jobs: &mut [Job], single: bool
     }
 }
 
-fn selection_name(facts: &RepoFacts, jobs: &[Job], plan: &JobId) -> Option<SelectionName> {
+fn selection_name(
+    facts: &RepoFacts,
+    jobs: &[Job],
+    plan: &JobId,
+    after: &JobId,
+) -> Option<SelectionName> {
     if !names_selection(facts) {
         return None;
     }
@@ -65,6 +70,7 @@ fn selection_name(facts: &RepoFacts, jobs: &[Job], plan: &JobId) -> Option<Selec
     (!roots.is_empty()).then(|| SelectionName {
         plan: plan.clone(),
         roots,
+        after: after.clone(),
     })
 }
 
@@ -77,7 +83,7 @@ pub(crate) fn budget_job(
     if !facts.config.budget.is_some_and(|budget| budget.enabled()) {
         return None;
     }
-    let selection = selection_name(facts, jobs, &plan_job_id(single));
+    let selection = selection_name(facts, jobs, &plan_job_id(single), after);
     let mut steps = vec![step(StepKind::Checkout {
         depth: CHECKOUT_DEPTH,
         sparse: None,

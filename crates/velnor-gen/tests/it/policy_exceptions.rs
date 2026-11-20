@@ -3,7 +3,7 @@
 
 use std::collections::BTreeSet;
 
-use velnor_model::{PolicyTools, RepoPath};
+use velnor_model::{DenyChecks, PolicyTools, RepoPath};
 use velnor_rust::policy_runs;
 
 use crate::facts::TestResult;
@@ -13,6 +13,8 @@ fn a_cargo_deny_exceptions_file_in_a_selected_root_runs_deny_only() -> TestResul
     let both = PolicyTools {
         deny: true,
         machete: true,
+        deny_off: false,
+        checks: DenyChecks::ALL,
     };
     for name in [
         "crates/a/deny.exceptions.toml",
