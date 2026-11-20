@@ -258,6 +258,17 @@ pub(crate) fn setup_units(
     if lane.plan.is_none() {
         steps.push(step(StepKind::Helper(HelperCommand::Plan)));
     }
+    // The privacy lookup and the merge queue check hold the job token, so they run before any
+    // step that executes checkout code (mbx, tools, cargo): code run earlier could leave a
+    // same-user process that reads the token from their environment.
+    steps.extend(
+        crate::base_cache::privacy_check(facts)
+            .into_iter()
+            .map(|step| Step {
+                gate: lane.steps(),
+                ..step
+            }),
+    );
     steps.extend(mbx(facts, lane.steps()));
     let mut toolchain: Vec<Step> = mirror_step(facts)
         .into_iter()
@@ -286,7 +297,6 @@ pub(crate) fn setup_units(
         }
         let cache_root = unit.cache_root(facts);
         if index == 0 {
-            toolchain.extend(crate::base_cache::privacy_check(facts));
             toolchain.push(sources_locks(facts));
             toolchain.push(crate::base_cache::private_only(
                 facts,

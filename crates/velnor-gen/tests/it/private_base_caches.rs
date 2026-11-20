@@ -308,3 +308,31 @@ fn a_cargo_config_the_runtime_would_refuse_keeps_the_generated_refusal() -> Test
     }
     Ok(())
 }
+
+#[test]
+fn the_token_bearing_steps_run_before_any_step_that_executes_checkout_code() -> TestResult {
+    let lane = lane(&workflow(&consumer("0.1.110", GIT_LOCK, "")?)?)?;
+    let names = names(&lane);
+    let at = |name: &str| {
+        names
+            .iter()
+            .position(|each| each == name)
+            .ok_or_else(|| format!("{name} missing: {names:?}"))
+    };
+    for token_step in [
+        "Check that the repository is private",
+        "Check that the merge queue entry is not from a fork",
+    ] {
+        for code in [
+            "Install tools",
+            "velnor-ci prepare",
+            "velnor-ci check-metadata",
+        ] {
+            assert!(
+                at(token_step)? < at(code)?,
+                "{token_step} must run before {code}: {names:?}"
+            );
+        }
+    }
+    Ok(())
+}
