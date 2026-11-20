@@ -134,7 +134,7 @@ fn job_steps(
                     job_name: job.name.as_deref(),
                     after_setup: step
                         .after_setup
-                        .then(|| setups.get(&step.directory))
+                        .then(|| setups.get(&root_key(step)))
                         .flatten()
                         .map(String::as_str),
                 };
@@ -148,7 +148,7 @@ fn job_steps(
                     body.shared |= verified && tools_key;
                 }
                 if let Some(id) = own {
-                    setups.insert(step.directory.clone(), id);
+                    setups.insert(root_key(step), id);
                 }
                 Some(crate::base_steps::audited_save(
                     job,
@@ -170,6 +170,12 @@ struct Around<'a> {
     saved_after: &'a [String],
     job_name: Option<&'a str>,
     after_setup: Option<&'a str>,
+}
+
+fn root_key(step: &Step) -> Option<RepoPath> {
+    step.directory
+        .clone()
+        .or_else(|| step.manifest.as_ref().and_then(RepoPath::parent))
 }
 
 fn setup_succeeded(id: &str) -> String {

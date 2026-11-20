@@ -232,3 +232,46 @@ fn a_root_setup_in_a_workspace_group_does_not_wait_for_another_roots_setup() -> 
     );
     Ok(())
 }
+
+#[test]
+fn a_nested_root_test_in_a_workspace_group_waits_for_its_own_setup() -> TestResult {
+    let config = "[[workspace_groups]]\nname = 'tools'\nroots = ['tools/a', 'tools/b']\n\
+        [[test_setup]]\nroot = 'tools/a'\nname = 'Prepare a'\nrun = 'bash scripts/a.sh'\n";
+    let mut repo = view(
+        &["Cargo.toml", "tools/a/Cargo.toml", "tools/b/Cargo.toml"],
+        Some(config.as_bytes()),
+    )?;
+    crate::pipeline::pin_helper(&mut repo, "0.1.96")?;
+    let jobs = crate::yaml_tree::document(&workflow(&repo)?)?["jobs"].clone();
+    let (job, setup_id) = jobs
+        .as_object()
+        .into_iter()
+        .flatten()
+        .find_map(|(_, job)| {
+            job["steps"]
+                .as_array()?
+                .iter()
+                .find(|step| step["name"] == "Prepare a")
+                .and_then(|step| step["id"].as_str().map(str::to_owned))
+                .map(|id| (job.clone(), id))
+        })
+        .ok_or_else(|| format!("the setup of a is missing: {jobs}"))?;
+    let steps = job["steps"].as_array().ok_or("the job has no steps")?;
+    let waits_for_setup = format!("steps.{setup_id}.outcome == 'success'");
+    let root_tests: Vec<&serde_json::Value> = steps
+        .iter()
+        .filter(|step| {
+            let run = step["run"].as_str().unwrap_or_default();
+            run.contains("tools/a") && run.contains("nextest") && !run.contains("--no-run")
+        })
+        .collect();
+    assert!(!root_tests.is_empty(), "no test step of tools/a: {job}");
+    for test in root_tests {
+        let condition = test["if"].as_str().unwrap_or_default();
+        assert!(
+            condition.contains(&waits_for_setup),
+            "a test of tools/a runs after its setup fails: {test}"
+        );
+    }
+    Ok(())
+}
