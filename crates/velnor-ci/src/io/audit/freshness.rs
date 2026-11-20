@@ -68,14 +68,17 @@ impl Freshness {
 }
 
 impl Audit<'_> {
-    pub(super) fn changed_since(
+    /// The first `limit` declared inputs that changed since `built` (or whose receipt no longer
+    /// matches), in declaration order. A `limit` of 1 stops at the first change.
+    pub(super) fn changed_inputs(
         &mut self,
         base: &Path,
         paths: &[String],
         built: SystemTime,
         output: &Path,
         declared: bool,
-    ) -> Result<bool, CiError> {
+        limit: usize,
+    ) -> Result<Vec<String>, CiError> {
         // A cross-target cache without a prior receipt cannot prove its inputs and remains stale.
         let saved = inventory::load(output)
             .ok()
@@ -84,7 +87,11 @@ impl Audit<'_> {
             || self.freshness.targets.clone(),
             |saved| saved.targets.clone(),
         );
+        let mut changed = Vec::new();
         for raw in paths {
+            if changed.len() == limit {
+                break;
+            }
             let path = base.join(raw);
             if declared
                 && !saved
@@ -93,9 +100,10 @@ impl Audit<'_> {
                     .zip(inventory::state(&path).ok())
                     .is_some_and(|(before, current)| before == current)
             {
-                return Ok(true);
+                changed.push(raw.clone());
+                continue;
             }
-            let changed = match fs::metadata(&path) {
+            let stale = match fs::metadata(&path) {
                 Ok(metadata)
                     if metadata.is_dir() && self.excluded_tracked_inputs(&path, &targets)? =>
                 {
@@ -118,11 +126,11 @@ impl Audit<'_> {
                 }
                 Err(error) => return Err(failed(&path, &error)),
             };
-            if changed {
-                return Ok(true);
+            if stale {
+                changed.push(raw.clone());
             }
         }
-        Ok(false)
+        Ok(changed)
     }
 
     fn excluded_tracked_inputs(

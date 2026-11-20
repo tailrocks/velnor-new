@@ -7,7 +7,7 @@ use crate::error::{DetectError, Reason};
 use crate::roots::patch_files;
 use crate::toml_file::table;
 
-const BUILTIN_PROVIDERS: [&str; 4] = [
+const BUILTIN_PROVIDERS: &[&str] = &[
     "cargo:token",
     "cargo:wincred",
     "cargo:macos-keychain",
