@@ -262,3 +262,33 @@ fn a_cargo_that_prints_no_build_directory_is_audited_in_the_target_directory() {
     assert!(written.status.success(), "{written:?}");
     assert!(unit_count(&written) > 0, "{written:?}");
 }
+
+fn two_standalone_roots() -> Repo {
+    let repo = Repo::new("audit-shared-build");
+    unit(&repo, ".gitignore", "target/\nbuild/\n");
+    unit(&repo, "mise.toml", "[tools]\nrust = \"1.99.1\"\n");
+    for (directory, name) in [("web", "w"), ("tools/b", "b")] {
+        unit(
+            &repo,
+            &format!("{directory}/Cargo.toml"),
+            &format!("[package]\nname = \"{name}\"\nversion = \"0.1.0\"\nedition = \"2024\"\n"),
+        );
+        unit(&repo, &format!("{directory}/Cargo.lock"), "version = 4\n");
+        unit(&repo, &format!("{directory}/src/lib.rs"), "");
+    }
+    unit(&repo, "build/keep", "");
+    repo.git(&["add", "--all"]);
+    repo
+}
+
+#[test]
+fn two_ungrouped_roots_sharing_a_build_directory_are_refused() {
+    let repo = two_standalone_roots();
+    let refused = with_build_directory(&repo, "build", &["inputs", "audit", "--write"]);
+    assert_eq!(refused.status.code(), Some(1), "{refused:?}");
+    assert!(
+        String::from_utf8_lossy(&refused.stderr).contains("cannot be told apart"),
+        "{refused:?}"
+    );
+    assert!(!repo.root().join(".velnor/rust-inputs.lock").exists());
+}
