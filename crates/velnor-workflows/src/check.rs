@@ -297,6 +297,7 @@ fn fill_steps(
     }
     require_permissions(&job.id, &steps, &job.permissions)?;
     job_limits::write_token(&job.id, &steps, &job.permissions)?;
+    job_limits::saves_need_write(&job.id, &steps, job.cache_mode)?;
     if scope.events != ["workflow_dispatch"] {
         job_limits::secret_without_write(&job.id, &steps, &job.permissions)?;
     }
