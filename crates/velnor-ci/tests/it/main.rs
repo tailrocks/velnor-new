@@ -119,6 +119,7 @@ mod private_check;
 mod private_queue;
 mod qualification_compare;
 mod release_align;
+mod release_assets;
 mod release_branch_prefix;
 mod release_cargo_discovery;
 mod release_check_config;

@@ -98,6 +98,10 @@ pub enum StepKind {
         manifests: Vec<RepoPath>,
         cached: Vec<crate::ids::RootSlug>,
     },
+    ReleaseAssets {
+        assets: Vec<crate::release_asset::ReleaseAsset>,
+        part: crate::release_asset::ReleaseAssetPart,
+    },
     MbxRemote,
     MbxStore,
     MbxSeed,

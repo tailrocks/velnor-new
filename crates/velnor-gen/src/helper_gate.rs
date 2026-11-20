@@ -22,6 +22,11 @@ pub(crate) const CACHE_DEBUG_HELPER: (u64, u64, u64) = (0, 1, 82);
 // helper-gate: first in tools-v0.1.97 via af11477df1
 pub(crate) const REQUIRED_CHECK_HELPER: (u64, u64, u64) = (0, 1, 97);
 
+/// The first `velnor-ci` that has `fetch-assets` and whose `.velnor/rust-ci.toml` parser accepts
+/// the `release_assets` table. Once the table-driven key gates of #2025 are on main this
+/// becomes a row there.
+pub(crate) const RELEASE_ASSETS_HELPER: (u64, u64, u64) = (0, 1, 107);
+
 pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, GenerateError> {
     let release = facts
         .helper
@@ -79,6 +84,12 @@ pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, Generate
     // helper-gate: first in tools-v0.1.88 via eb3f4deda4
     if facts.config.private_sources.is_some() && !release.version().at_least((0, 1, 88)) {
         return Err(GenerateError::PrivateSourcesHelperTooOld(
+            release.version().clone(),
+        ));
+    }
+    if !facts.config.release_assets.is_empty() && !release.version().at_least(RELEASE_ASSETS_HELPER)
+    {
+        return Err(GenerateError::ReleaseAssetsHelperTooOld(
             release.version().clone(),
         ));
     }

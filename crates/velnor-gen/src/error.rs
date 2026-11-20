@@ -28,6 +28,7 @@ pub enum GenerateError {
     RequiredCheckHelperTooOld(HelperVersion),
     InputsLockHelperTooOld(HelperVersion),
     PrivateSourcesHelperTooOld(HelperVersion),
+    ReleaseAssetsHelperTooOld(HelperVersion),
     MbxStoreHelperTooOld(HelperVersion),
     PrOnlyChecksHelperTooOld(HelperVersion),
     BudgetHelperTooOld(HelperVersion),
@@ -93,6 +94,7 @@ impl fmt::Display for GenerateError {
             ),
             Self::InputsLockHelperTooOld(version) => write!(f, "velnor-ci {version} cannot read the manifest column of .velnor/rust-inputs.lock; pin velnor-ci 0.1.101 or later with `velnor-gen pin-helper 0.1.101`, or write the lock under the older pin"),
             Self::PrivateSourcesHelperTooOld(version) => write!(f, "velnor-ci {version} cannot fetch private sources; pin velnor-ci 0.1.88 or later with `velnor-gen pin-helper 0.1.88`"),
+            Self::ReleaseAssetsHelperTooOld(version) => write!(f, "velnor-ci {version} cannot fetch release assets; pin velnor-ci 0.1.107 or later with `velnor-gen pin-helper 0.1.107`"),
             Self::PrCiHelperTooOld(version) => write!(
                 f,
                 "velnor-ci {version} does not know the pr_ci key of .velnor/rust-ci.toml; pin velnor-ci 0.1.88 or later with `velnor-gen pin-helper 0.1.88`"

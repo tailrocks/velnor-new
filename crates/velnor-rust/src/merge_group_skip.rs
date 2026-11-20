@@ -10,7 +10,7 @@ use crate::plan::{RUST_JOB, step};
 
 fn is_check(kind: &StepKind) -> bool {
     match kind {
-        StepKind::TestSetup { .. } => true,
+        StepKind::TestSetup { .. } | StepKind::ReleaseAssets { .. } => true,
         StepKind::Cargo(command) => !command.is_target_build(),
         _ => false,
     }

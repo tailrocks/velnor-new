@@ -56,6 +56,8 @@ struct RawConfig {
     #[serde(default)]
     test_setup: Vec<crate::config_test_setup::RawTestSetup>,
     #[serde(default)]
+    release_assets: Vec<crate::config_release_assets::RawReleaseAsset>,
+    #[serde(default)]
     lint: Vec<crate::config_lint::RawLint>,
     #[serde(default)]
     test_groups: Vec<crate::config_test_groups::RawTestGroup>,
@@ -105,6 +107,10 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
     let ci_debuginfo =
         debuginfo(raw.ci_debuginfo.as_deref(), defaults.ci_debuginfo).map_err(invalid)?;
     let test_setup = crate::config_test_setup::parse(raw.test_setup).map_err(invalid)?;
+    let private_sources = crate::config_private::optional(raw.private_sources).map_err(invalid)?;
+    let release_assets =
+        crate::config_release_assets::parse(raw.release_assets, private_sources.as_ref())
+            .map_err(invalid)?;
     let lint = crate::config_lint::parse(raw.lint).map_err(invalid)?;
     let test_groups = crate::config_test_groups::parse(raw.test_groups).map_err(invalid)?;
     let workspace_groups = crate::groups::parse(raw.workspace_groups).map_err(invalid)?;
@@ -143,7 +149,8 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         hosted_runners: hosted_runners.with_key_written(hosted_key),
         docs_run: docs_run("docs", raw.docs.as_deref()).map_err(invalid)?,
         check_alone_run: docs_run("check_alone", raw.check_alone.as_deref()).map_err(invalid)?,
-        private_sources: crate::config_private::optional(raw.private_sources).map_err(invalid)?,
+        private_sources,
+        release_assets,
         mbx_store: raw.mbx_shared_store.unwrap_or(false).into(),
         nextest_harnesses: harnesses(raw.nextest_harnesses).map_err(invalid)?,
         default_branch,

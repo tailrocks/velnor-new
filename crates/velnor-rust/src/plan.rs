@@ -102,6 +102,7 @@ fn apply_extensions(facts: &RepoFacts, jobs: &mut [Job], single: bool) {
         crate::cargo_log::upload(jobs);
     }
     crate::private_fetch::insert(facts.config.private_sources.as_ref(), jobs);
+    crate::release_assets::insert(&facts.config, jobs);
     crate::lock_scope::apply(facts, jobs);
     if facts.config.mbx_remote == MbxRemote::GithubActions && facts.private_sources.is_none() {
         add_mbx_remote(jobs);

@@ -13,6 +13,7 @@ mod ids;
 mod lint;
 mod mise;
 mod plan;
+mod release_asset;
 mod repo;
 mod repo_config;
 mod sealed;
@@ -57,6 +58,7 @@ pub use repo::{
     SpeedBudget, Target, TargetKind, TestLane, TestSetup, Timings, ToolLock, ToolPin, ToolPins,
     ToolRequest, Toolchain, UnownedPackage, Unread, Weakening, WorkspaceGroup,
 };
+pub use release_asset::{ReleaseAsset, ReleaseAssetError, ReleaseAssetPart};
 pub use sealed::{Owner, VELNOR_GEN_MARKER, lf_normalized, owner_of, seal};
 pub use selection::{
     AllTrigger, CACHE_TRIM_WORKFLOW_PATH, ChangeSet, EventKind, OptionalSteps, RELEASE_CONFIG_PATH,

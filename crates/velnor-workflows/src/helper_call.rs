@@ -4,7 +4,7 @@
 use crate::command_scan::segments;
 use crate::wrappers::{Invoked, invoked};
 
-pub const HELPER_COMMANDS: [&str; 33] = [
+pub const HELPER_COMMANDS: [&str; 34] = [
     "report",
     "bench",
     "inputs",
@@ -21,6 +21,7 @@ pub const HELPER_COMMANDS: [&str; 33] = [
     "prepare",
     "crates-mirror",
     "fetch",
+    "fetch-assets",
     "private-token-allowed",
     "mbx-store",
     "mbx-seed",
