@@ -114,6 +114,24 @@ pub fn clean_cargo_env(command: &mut Command) -> &mut Command {
     command
 }
 
+/// Keeps mise on the machine's real cargo home for a child that gets a scratch `CARGO_HOME`.
+///
+/// Mise's rust backend treats an install whose rustup proxies are not under the selected cargo
+/// home (`$CARGO_HOME`, else `$MISE_CARGO_HOME`) as missing and reinstalls it, which fails
+/// offline. Naming the parent's cargo home in `MISE_CARGO_HOME` keeps the installed toolchain
+/// usable; it changes nothing when the child's directory selects no rust tool.
+pub fn keep_mise_cargo_home(command: &mut Command) -> &mut Command {
+    if std::env::var_os("MISE_CARGO_HOME").is_none() {
+        let home = std::env::var_os("CARGO_HOME").map(PathBuf::from).or_else(|| {
+            std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".cargo"))
+        });
+        if let Some(home) = home {
+            command.env("MISE_CARGO_HOME", home);
+        }
+    }
+    command
+}
+
 /// `real_cargo()` as text, for argv and generated sources.
 #[must_use]
 pub fn real_cargo_str() -> String {
