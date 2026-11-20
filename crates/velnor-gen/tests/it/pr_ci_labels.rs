@@ -7,11 +7,11 @@ use velnor_model::RepoPath;
 use crate::base_save::pinned;
 use crate::events::DENY_MISE;
 use crate::facts::TestResult;
-use crate::gh_expr::evaluate;
 use crate::pr_ci::{LABEL_CONFIG, label_workflow, render};
 use crate::pr_ci_sim::{
     Event, context, converted_to_draft, edited, labeled, outcome, pull, state, strings,
 };
+use velnor_test_support::gh_expr::evaluate;
 
 #[test]
 fn an_unrelated_label_runs_nothing_whatever_the_pull_request_already_carries() -> TestResult {
