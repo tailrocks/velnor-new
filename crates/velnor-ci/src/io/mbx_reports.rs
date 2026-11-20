@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::mbx_report::{DIRECTORY, SWITCH, VARIABLE, parse};
+use crate::mbx_report::{DIRECTORY, SWITCH, VARIABLE, parse, reports_session};
 use crate::waste_evidence::MbxSession;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -15,14 +15,17 @@ fn enabled() -> bool {
     std::env::var(SWITCH).is_ok_and(|value| value == "true")
 }
 
-/// Points the command's MBX report at a path no other session of the job uses.
-pub(super) fn assign(command: &mut Command) {
-    let Some(temp) = std::env::var_os("RUNNER_TEMP").filter(|temp| !temp.is_empty()) else {
-        return;
-    };
+pub(super) fn assign(command: &mut Command, argv: &[String]) {
     if !enabled() {
         return;
     }
+    command.env_remove(VARIABLE);
+    if !reports_session(argv) {
+        return;
+    }
+    let Some(temp) = std::env::var_os("RUNNER_TEMP").filter(|temp| !temp.is_empty()) else {
+        return;
+    };
     let directory = PathBuf::from(temp).join(DIRECTORY);
     if let Err(error) = fs::create_dir_all(&directory) {
         eprintln!(
@@ -49,8 +52,6 @@ pub(super) struct Reports {
     pub(super) unreadable: Vec<String>,
 }
 
-/// The sessions of every report the job's cargo sessions wrote, in start order; `None` when the
-/// job did not ask for reports or no session wrote one.
 pub(super) fn read(runner_temp: &Path) -> Option<Reports> {
     if !enabled() {
         return None;

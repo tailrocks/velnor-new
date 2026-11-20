@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::mbx_report::reports_session;
 use crate::report::{Cache, Hit, LaneMetrics};
 use crate::waste_evidence::{
     MbxEvidence, MbxSession, TOOLCHAIN_INSTALLS, mbx_sessions, mbx_unparsed_lines, seed_truncated,
@@ -43,17 +44,46 @@ pub(super) fn collect_local(metrics: &mut LaneMetrics, log: &[u8], runner_temp: 
 }
 
 fn sessions(metrics: &mut LaneMetrics, log: &[u8], runner_temp: &Path) -> (Vec<MbxSession>, u64) {
-    if let Some(reports) = super::mbx_reports::read(runner_temp) {
-        if let Some(first) = reports.unreadable.first() {
-            metrics.verification_errors.push(format!(
-                "MBX stats report not understood ({} report(s)); first: {}. Update the MBX report reader (crates/velnor-ci/src/mbx_report.rs) for this report.",
-                reports.unreadable.len(),
-                crate::escape::escape(first, false)
-            ));
+    let Some(reports) = super::mbx_reports::read(runner_temp) else {
+        return summaries(metrics, log);
+    };
+    let (mut assigned, mut unassigned) = (Vec::new(), Vec::new());
+    for invocation in &metrics.invocations {
+        let slice = log
+            .get(invocation.log_start..invocation.log_end.min(log.len()))
+            .unwrap_or_default();
+        if reports_session(&invocation.argv) {
+            assigned.extend_from_slice(slice);
+        } else {
+            unassigned.extend_from_slice(slice);
         }
-        let unreadable = u64::try_from(reports.unreadable.len()).unwrap_or(u64::MAX);
-        return (reports.sessions, unreadable);
+        assigned.push(b'\n');
+        unassigned.push(b'\n');
     }
+    let missing = mbx_sessions(&assigned)
+        .len()
+        .saturating_sub(reports.sessions.len());
+    if missing > 0 {
+        metrics.verification_errors.push(format!(
+            "MBX stats report missing for {missing} session(s) that printed a lookup summary; the MBX session counts are incomplete."
+        ));
+    }
+    if let Some(first) = reports.unreadable.first() {
+        metrics.verification_errors.push(format!(
+            "MBX stats report not understood ({} report(s)); first: {}. Update the MBX report reader (crates/velnor-ci/src/mbx_report.rs) for this report.",
+            reports.unreadable.len(),
+            crate::escape::escape(first, false)
+        ));
+    }
+    let (text, unparsed) = summaries(metrics, &unassigned);
+    let unknown = u64::try_from(reports.unreadable.len() + missing).unwrap_or(u64::MAX);
+    (
+        reports.sessions.into_iter().chain(text).collect(),
+        unparsed.saturating_add(unknown),
+    )
+}
+
+fn summaries(metrics: &mut LaneMetrics, log: &[u8]) -> (Vec<MbxSession>, u64) {
     let unparsed = mbx_unparsed_lines(log);
     if let Some(first) = unparsed.first() {
         metrics.verification_errors.push(format!(

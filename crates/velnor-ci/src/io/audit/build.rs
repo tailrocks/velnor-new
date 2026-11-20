@@ -220,7 +220,7 @@ impl Builder<'_> {
             })?;
         let mut build = Command::new(&command[0]);
         build.args(&command[1..]).current_dir(self.directory);
-        super::super::mbx_reports::assign(&mut build);
+        super::super::mbx_reports::assign(&mut build, command);
         if Invocation::new(command).cargo
             && std::env::var_os(TARGET_VARIABLE).is_none()
             && let Some(target) = self.target_directory()
