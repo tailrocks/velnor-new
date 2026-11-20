@@ -124,7 +124,7 @@ pub(super) fn own_units(repo: &Repo, target: &str, left_out: &[&str]) {
     own_units_in(repo, target, target, left_out);
 }
 
-const OWN_UNITS: [(&str, bool, &str, &str, &str); 12] = [
+const OWN_UNITS: &[(&str, bool, &str, &str, &str)] = &[
     (
         "app",
         false,
@@ -213,7 +213,7 @@ const OWN_UNITS: [(&str, bool, &str, &str, &str); 12] = [
 
 pub(super) fn own_units_in(repo: &Repo, host: &str, target: &str, left_out: &[&str]) {
     placed(repo, target);
-    for (key, on_host, file, text, fingerprint) in OWN_UNITS {
+    for &(key, on_host, file, text, fingerprint) in OWN_UNITS {
         if left_out.contains(&key) {
             continue;
         }

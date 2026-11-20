@@ -10,7 +10,7 @@ use crate::roots::effective_configs;
 use crate::target_dir::target_dir_source;
 use crate::toml_file::table;
 
-const CONFIG_FILES: [&str; 2] = [".cargo/config", ".cargo/config.toml"];
+const CONFIG_FILES: &[&str] = &[".cargo/config", ".cargo/config.toml"];
 
 #[must_use]
 pub fn cargo_config_paths(roots: &[RepoPath]) -> Vec<RepoPath> {
