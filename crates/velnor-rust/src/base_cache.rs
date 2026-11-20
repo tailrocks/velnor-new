@@ -5,8 +5,8 @@ use std::collections::BTreeMap;
 
 use velnor_model::{
     Access, BaseExpiry, CacheKey, CacheRoot, HelperCommand, Host, InputsCli, Job, JobId,
-    LockIdentity, PermissionScope, Permissions, RepoFacts, RepoPath, RootSlug, RustRoot, Step,
-    StepKind, TrimFamily, When,
+    LockIdentity, PermissionScope, Permissions, PlanFrom, RepoFacts, RepoPath, RootSlug, RustRoot,
+    Step, StepKind, TrimFamily, When,
 };
 
 use crate::lane::Lane;
@@ -40,7 +40,6 @@ pub(crate) fn inputs_cli(facts: &RepoFacts) -> InputsCli {
     }
 }
 
-// First released in tools-v0.1.111 (not tagged yet when this gate was written).
 const PRIVATE_BASE_HELPER: (u64, u64, u64) = (0, 1, 111);
 const SOURCES_FETCH_HELPER: (u64, u64, u64) = (0, 1, 88);
 // helper-gate: first in tools-v0.1.88 via 1a97547af5
@@ -88,6 +87,23 @@ pub(crate) fn privacy_check(facts: &RepoFacts) -> Vec<Step> {
     } else {
         Vec::new()
     }
+}
+
+pub(crate) fn public_sources_step(facts: &RepoFacts) -> Option<Step> {
+    (facts.config.public_sources.is_some() && writes_base(facts)).then(|| Step {
+        when: When::SavingRun,
+        ..step(StepKind::PublicSources {
+            manifests: facts
+                .rust_roots
+                .iter()
+                .map(|root| root.manifest.clone())
+                .collect(),
+            selected: crate::units::units(facts)
+                .iter()
+                .map(|unit| unit.gate.clone())
+                .collect(),
+        })
+    })
 }
 
 pub const MAX_SOURCE_ROOTS: usize = 16;
@@ -233,6 +249,11 @@ pub(crate) fn save_steps(
                 archive,
                 cli: inputs_cli(facts),
                 budget_bytes: facts.config.cache_budget_bytes,
+                verdicts: facts
+                    .config
+                    .public_sources
+                    .as_ref()
+                    .map(|_| lane.plan.clone().map_or(PlanFrom::ThisJob, PlanFrom::Job)),
             })
         },
         Step {

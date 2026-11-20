@@ -185,6 +185,8 @@ mod private_sources;
 mod private_sources_advisory;
 mod private_sources_phase;
 mod private_sources_status;
+mod public_sources;
+mod public_verdicts;
 mod qualification;
 mod release_assets;
 mod release_assets_setup_action;

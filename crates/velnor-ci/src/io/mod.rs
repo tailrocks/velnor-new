@@ -55,6 +55,8 @@ mod plan;
 mod plan_request;
 mod private_check;
 mod private_repo;
+mod public_repo;
+mod public_sources;
 pub mod pump;
 mod qualification;
 mod recording;
@@ -254,6 +256,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::CheckConfigurations(args) => configurations::check(&args),
         Command::Cache(CacheCommand::Decide(args)) => cache::run_decide(&args),
         Command::Cache(CacheCommand::PrivateRepo) => private_repo::run(),
+        Command::Cache(CacheCommand::PublicSources(args)) => public_sources::run(&args),
         Command::Cache(CacheCommand::Verify(args)) => cache_upload::verify(&args.key),
         Command::Cache(CacheCommand::Check(args)) => cache_upload::check(&args.success),
         Command::Cache(CacheCommand::Trim(args)) => cache::run_trim(&args.prefix, args.keep),

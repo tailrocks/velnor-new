@@ -4,11 +4,19 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use velnor_model::GitRepository;
+use velnor_rust::{CONFIG_PATH, LockAdmission, PinnedGit, merge_pinned};
+
 use crate::error::CiError;
 use crate::escape::escape;
+use crate::public_probe::{Deadline, VERDICTS_VARIABLE, Verdicts};
 
-pub(super) struct Sources {
+use super::public_repo::{Credentials, env_token};
+
+pub(super) struct Admission {
     pub(super) refusal: Option<String>,
+    pub(super) log: String,
+    pub(super) mismatch: Option<String>,
     pub(super) private_sources: bool,
 }
 
@@ -18,11 +26,11 @@ pub(super) fn cargo_home() -> Option<PathBuf> {
         .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".cargo")))
 }
 
-fn refused(path: &Path, not_private: Option<&CiError>) -> Sources {
+fn refused(path: &Path, not_private: Option<&CiError>) -> Admission {
     let why = not_private.map_or_else(String::new, |error| {
         format!(" and the repository is not proven private ({error})")
     });
-    Sources {
+    Admission {
         refusal: Some(format!(
             "{}\n",
             escape(
@@ -33,11 +41,18 @@ fn refused(path: &Path, not_private: Option<&CiError>) -> Sources {
                 false,
             )
         )),
+        log: String::new(),
+        mismatch: None,
         private_sources: false,
     }
 }
 
-pub(super) fn refusal(root: &Path, manifests: &[PathBuf]) -> Result<Sources, CiError> {
+pub(super) fn refusal(
+    root: &Path,
+    manifests: &[PathBuf],
+    api: &str,
+    deadline: Deadline,
+) -> Result<Admission, CiError> {
     if std::env::vars_os().any(|(key, _)| {
         let key = key.to_string_lossy();
         key.starts_with("CARGO_SOURCE_")
@@ -50,6 +65,7 @@ pub(super) fn refusal(root: &Path, manifests: &[PathBuf]) -> Result<Sources, CiE
     let Some(cargo_home) = cargo_home() else {
         return Ok(refused(Path::new("CARGO_HOME"), None));
     };
+    let mut git: Vec<PinnedGit> = Vec::new();
     let mut private_sources = false;
     let mut verdict: Option<Result<(), CiError>> = None;
     for manifest in manifests {
@@ -59,14 +75,16 @@ pub(super) fn refusal(root: &Path, manifests: &[PathBuf]) -> Result<Sources, CiE
             .map(Path::to_path_buf)
             .ok_or_else(|| CiError::new("manifest has no parent"))?;
         let lock = directory.join("Cargo.lock");
-        if !read_public(&lock, velnor_rust::cacheable_lock) {
-            if !read_public(&lock, velnor_rust::cacheable_private_lock) {
-                return Ok(refused(&lock, None));
+        let admission = read_lock(&lock);
+        if !matches!(admission, Some(LockAdmission::Public)) {
+            let private = read_public(&lock, velnor_rust::cacheable_private_lock)
+                .then(|| verdict.get_or_insert_with(super::private_repo::confirmed));
+            match (private, admission) {
+                (Some(Ok(())), _) => private_sources = true,
+                (_, Some(LockAdmission::ProbeGithub(found))) => merge_pinned(&mut git, found),
+                (Some(Err(error)), _) => return Ok(refused(&lock, Some(error))),
+                (None, _) => return Ok(refused(&lock, None)),
             }
-            if let Err(error) = verdict.get_or_insert_with(super::private_repo::confirmed) {
-                return Ok(refused(&lock, Some(error)));
-            }
-            private_sources = true;
         }
         for dir in directory
             .ancestors()
@@ -86,10 +104,128 @@ pub(super) fn refusal(root: &Path, manifests: &[PathBuf]) -> Result<Sources, CiE
             }
         }
     }
-    Ok(Sources {
-        refusal: None,
-        private_sources,
-    })
+    let Ok((declared, undeclared)) = declared_only(root, git) else {
+        return Ok(refused(&root.join(CONFIG_PATH.as_str()), None));
+    };
+    if !undeclared.is_empty() {
+        return Ok(Admission {
+            refusal: Some(
+                undeclared
+                    .iter()
+                    .map(|pinned| {
+                        format!(
+                            "::notice::base caches are not saved because git dependency github.com/{}/{} is not declared in [public_sources], so it is not proven public\n",
+                            pinned.repository.owner, pinned.repository.name
+                        )
+                    })
+                    .fold(String::new(), |all, line| all + &line),
+            ),
+            log: String::new(),
+            mismatch: None,
+            private_sources: false,
+        });
+    }
+    let git = declared;
+    let verdicts = std::env::var(VERDICTS_VARIABLE)
+        .ok()
+        .and_then(|text| Verdicts::parse(&text));
+    let mut admission = probe(
+        api,
+        &git,
+        env_token().as_deref(),
+        verdicts.as_ref(),
+        deadline,
+    );
+    admission.private_sources = private_sources;
+    Ok(admission)
+}
+
+pub(super) struct UnreadableDeclaration;
+
+pub(super) fn declared_only(
+    root: &Path,
+    found: Vec<PinnedGit>,
+) -> Result<(Vec<PinnedGit>, Vec<PinnedGit>), UnreadableDeclaration> {
+    if found.is_empty() {
+        return Ok((found, Vec::new()));
+    }
+    let declared = declared_repositories(root)?;
+    Ok(found.into_iter().partition(|pinned| {
+        declared
+            .iter()
+            .any(|known| known.matches(&pinned.repository.owner, &pinned.repository.name))
+    }))
+}
+
+fn declared_repositories(root: &Path) -> Result<Vec<GitRepository>, UnreadableDeclaration> {
+    let path = root.join(CONFIG_PATH.as_str());
+    match fs::symlink_metadata(&path) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
+        Ok(meta) if meta.is_file() => fs::read(&path)
+            .ok()
+            .and_then(|bytes| velnor_rust::declared_public_sources(&bytes).ok())
+            .ok_or(UnreadableDeclaration),
+        _ => Err(UnreadableDeclaration),
+    }
+}
+
+pub(super) fn describe(credentials: Credentials) -> &'static str {
+    match credentials {
+        Credentials::Token => "authenticated lookup",
+        Credentials::None => "unauthenticated lookup",
+    }
+}
+
+fn probe(
+    api: &str,
+    git: &[PinnedGit],
+    token: Option<&str>,
+    verdicts: Option<&Verdicts>,
+    deadline: Deadline,
+) -> Admission {
+    let mut log = Vec::new();
+    let mut refusal = Vec::new();
+    let mut mismatch = Vec::new();
+    for pinned in git {
+        let repository = &pinned.repository;
+        let name = format!("github.com/{}/{}", repository.owner, repository.name);
+        if verdicts.is_some_and(|known| known.proves_public(repository)) {
+            log.push(format!(
+                "git dependency {name} is public (verdict of this run)\n"
+            ));
+            continue;
+        }
+        match super::public_repo::verify(api, pinned, token, deadline) {
+            Ok(credentials) => log.push(format!(
+                "git dependency {name} is public ({})\n",
+                describe(credentials)
+            )),
+            Err(rejection) => {
+                refusal.push(format!(
+                    "::notice::base caches are not saved because git dependency {name} is not proven public ({rejection})\n"
+                ));
+                if rejection.is_private() {
+                    mismatch.push(format!(
+                        "git dependency {name} is not public ({rejection}), but Cargo.lock locks it as a public git source; make the repository public again or declare it in [private_sources]\n"
+                    ));
+                }
+            }
+        }
+    }
+    Admission {
+        refusal: (!refusal.is_empty()).then(|| refusal.concat()),
+        log: log.concat(),
+        mismatch: (!mismatch.is_empty()).then(|| mismatch.concat()),
+        private_sources: false,
+    }
+}
+
+pub(super) fn read_lock(path: &Path) -> Option<LockAdmission> {
+    fs::symlink_metadata(path)
+        .is_ok_and(|meta| meta.is_file())
+        .then(|| fs::read_to_string(path).ok())
+        .flatten()
+        .and_then(|text| velnor_rust::lock_admission(&text).ok())
 }
 
 fn read_public(path: &Path, check: fn(&str) -> Result<bool, velnor_rust::LockError>) -> bool {

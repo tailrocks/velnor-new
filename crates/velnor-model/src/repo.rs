@@ -330,8 +330,8 @@ pub struct ToolLock {
 
 pub use crate::policy_table::{DenyCheck, DenyLane, PolicyTable};
 pub use crate::repo_config::{
-    CacheDebug, CheckoutScope, CiDebugInfo, CratesMirror, DocsRun, FullRun, InputRule,
-    LaneFeatures, LaneJob, LaneKeysWritten, MbxRemote, MbxStore, OnMain, PrCi, PrivateSources,
-    PushAfterMergeGroup, RustCiConfig, SetupPhase, SpeedBudget, TestLane, TestSetup,
-    WorkspaceGroup,
+    CacheDebug, CheckoutScope, CiDebugInfo, CratesMirror, DocsRun, FullRun, GitRepository,
+    InputRule, LaneFeatures, LaneJob, LaneKeysWritten, MbxRemote, MbxStore, OnMain, PrCi,
+    PrivateSources, PublicSources, PushAfterMergeGroup, RustCiConfig, SetupPhase, SpeedBudget,
+    TestLane, TestSetup, WorkspaceGroup,
 };
