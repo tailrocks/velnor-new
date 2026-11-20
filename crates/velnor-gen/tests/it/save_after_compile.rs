@@ -54,7 +54,10 @@ pub(crate) fn pushed_to_main() -> Context {
     ])
 }
 
-pub(crate) fn saves(lane: &str, mut context: Context) -> Result<Vec<bool>, Box<dyn std::error::Error>> {
+pub(crate) fn saves(
+    lane: &str,
+    mut context: Context,
+) -> Result<Vec<bool>, Box<dyn std::error::Error>> {
     let record = step(lane, RECORD).ok_or("no record step")?;
     let recorded = runs(&condition_of(record)?, &context)?;
     context.set(
