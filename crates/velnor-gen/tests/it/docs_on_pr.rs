@@ -6,14 +6,12 @@ use std::error::Error;
 use velnor_gen::expected_files;
 use velnor_model::RepoPath;
 
-use crate::gh_expr::{Value, evaluate};
+use velnor_test_support::gh_expr::{Value, evaluate};
+
 use crate::golden::{load, samples};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
-// The sample is the repository itself. Its Documentation steps must run on a
-// pull request, so a rustdoc break is caught before the merge (not only after
-// it, as happened with the unresolved `[tools]` link of #2223).
 fn rust_ci_workflow() -> Result<String, Box<dyn Error>> {
     let files = expected_files(&load(&samples().join("velnor-new"))?)?;
     let workflow = files
@@ -22,8 +20,6 @@ fn rust_ci_workflow() -> Result<String, Box<dyn Error>> {
     Ok(workflow.clone())
 }
 
-// The step condition as a pull request sees it: every plan output says the
-// docs run and every outcome succeeded.
 fn resolve(event: &'static str) -> impl Fn(&str) -> Result<Value, String> {
     move |path: &str| {
         Ok(Value::Str(match path {
