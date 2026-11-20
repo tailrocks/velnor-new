@@ -25,6 +25,7 @@ pub enum CacheFamily {
     Target,
     Sources,
     Tools,
+    Anchor,
     Delta,
     Unknown,
 }
@@ -50,6 +51,19 @@ fn host(text: &str) -> bool {
 }
 
 fn classify(key: &str) -> Option<(CacheFamily, &str)> {
+    if let Some(rest) = key.strip_prefix("velnor-tools-anchor-") {
+        let (platform, after) = rest.split_once("-mise")?;
+        let (version, after) = after.split_once('-')?;
+        let (lock, tail) = after.split_once('-')?;
+        let (run, job) = tail.split_once('-')?;
+        let group = &rest[..rest.len() - tail.len() - 1];
+        return (hex(lock, 64)
+            && host(platform)
+            && !version.is_empty()
+            && numeric(run)
+            && !job.is_empty())
+        .then_some((CacheFamily::Anchor, group));
+    }
     if let Some(rest) = key.strip_prefix("velnor-tools-") {
         let (group, lock) = rest.rsplit_once('-')?;
         let (platform, version) = group.split_once("-mise")?;
@@ -176,6 +190,7 @@ fn tier(
     let idle = |days: i64| entry.last_accessed_at <= now.saturating_sub(days * DAY);
     match classify(&entry.key)? {
         (CacheFamily::Sources, _) if retired_sources(&entry.key) => Some(0),
+        (CacheFamily::Anchor, _) if rank > 0 => Some(0),
         (CacheFamily::Target, group)
             if target_owner(group)
                 .and_then(|owner| newest.get(&(owner, entry.reference.as_str())))

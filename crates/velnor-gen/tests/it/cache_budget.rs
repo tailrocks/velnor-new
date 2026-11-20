@@ -153,6 +153,26 @@ fn tools_entries_named_by_their_anchor_are_pruned_as_one_group() {
     );
 }
 
+fn anchor_entry(id: u64, digest: char, age: i64) -> CacheEntry {
+    let key = format!(
+        "velnor-tools-anchor-Linux-X64-mise2026.11.10-{}-{id}-1-rust-plan",
+        digest.to_string().repeat(64)
+    );
+    CacheEntry {
+        key,
+        ..entry(id, "other", age)
+    }
+}
+
+#[test]
+fn retired_anchor_entries_are_pruned_and_the_newest_of_each_tools_key_is_kept() {
+    let (a1, a2) = (anchor_entry(1, 'a', 8 * DAY), anchor_entry(2, 'a', DAY));
+    assert_eq!(
+        plan(&[a1, a2, anchor_entry(3, 'b', 8 * DAY)], 1_000),
+        vec![1]
+    );
+}
+
 #[test]
 fn groups_unknown_keys_ties_order_and_byte_overflow_keep_their_contract() {
     let mut entries = Vec::new();
