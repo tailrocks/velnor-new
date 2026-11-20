@@ -14,48 +14,11 @@ use crate::yaml_tree::Node;
 
 type TestResult = Result<(), Box<dyn Error>>;
 
-const PLATFORMS: [&str; 3] = ["linux-x64", "linux-arm64", "macos-arm64"];
+mod sums;
+mod support;
 
-pub(crate) fn job<'a>(tree: &'a Node, id: &str) -> Result<&'a Node, Box<dyn Error>> {
-    Ok(tree
-        .at(&["jobs", id])
-        .ok_or_else(|| format!("no job {id}"))?)
-}
-
-pub(crate) fn permissions(job: &Node) -> Vec<(String, String)> {
-    job.get("permissions").map_or_else(Vec::new, |node| {
-        node.keys()
-            .into_iter()
-            .filter_map(|key| {
-                node.get(key)
-                    .and_then(Node::text)
-                    .map(|access| (key.to_owned(), access.to_owned()))
-            })
-            .collect()
-    })
-}
-
-pub(crate) fn runs(job: &Node) -> Vec<&str> {
-    steps(job)
-        .iter()
-        .filter_map(|step| step.get("run").and_then(Node::text))
-        .collect()
-}
-
-fn triple(platform: &str) -> &'static str {
-    match platform {
-        "linux-x64" => "x86_64-unknown-linux-musl",
-        "linux-arm64" => "aarch64-unknown-linux-musl",
-        _ => "aarch64-apple-darwin",
-    }
-}
-
-fn build_ids(package: &str, platforms: &[&str]) -> Vec<String> {
-    platforms
-        .iter()
-        .map(|platform| format!("build-{package}-{platform}"))
-        .collect()
-}
+use support::{PLATFORMS, build_ids};
+pub(crate) use support::{job, permissions, runs};
 
 #[test]
 fn release_yml_has_one_build_job_per_binary_and_platform_then_sums_and_publish() -> TestResult {
@@ -231,67 +194,6 @@ fn release_yml_builds_a_root_package_from_its_own_manifest_and_target_directory(
             "tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner -czf tools-x86_64-unknown-linux-musl.tar.gz -C tools/target/x86_64-unknown-linux-musl/release tools",
         ]
     );
-    Ok(())
-}
-
-#[test]
-fn release_yml_sums_has_no_permissions_and_hashes_exactly_the_builds_of_its_package() -> TestResult
-{
-    let (_, tree) = two_binaries()?;
-    for (package, platforms) in [
-        ("app", PLATFORMS.to_vec()),
-        ("tools", vec!["linux-x64", "macos-arm64"]),
-    ] {
-        let sums = job(&tree, &format!("sums-{package}"))?;
-        assert_eq!(
-            sums.get("permissions"),
-            Some(&Node::Map(Vec::new())),
-            "{package}"
-        );
-        assert!(sums.get("environment").is_none());
-        let needs: BTreeSet<&str> = sums
-            .get("needs")
-            .ok_or("no needs")?
-            .texts()
-            .into_iter()
-            .collect();
-        let mut want: BTreeSet<String> = BTreeSet::from(["gate".to_owned(), "tag".to_owned()]);
-        want.extend(build_ids(package, &platforms));
-        assert_eq!(
-            needs,
-            want.iter().map(String::as_str).collect(),
-            "{package}"
-        );
-        let files: Vec<String> = platforms
-            .iter()
-            .map(|p| format!("{package}-{}.tar.gz", triple(p)))
-            .collect();
-        assert_eq!(
-            runs(sums),
-            [
-                format!("sha256sum {} > SHA256SUMS", files.join(" ")),
-                format!("shasum -a 256 {} > SHA256SUMS", files.join(" ")),
-            ],
-            "{package}"
-        );
-        let downloaded: Vec<&str> = steps(sums)
-            .iter()
-            .filter(|step| uses(step).is_some_and(|u| u.starts_with("actions/download-artifact@")))
-            .filter_map(|step| step.at(&["with", "name"]).and_then(Node::text))
-            .collect();
-        assert_eq!(
-            downloaded,
-            platforms
-                .iter()
-                .map(|p| format!("{package}-{p}"))
-                .collect::<Vec<_>>()
-        );
-        assert!(
-            steps(sums)
-                .iter()
-                .all(|step| uses(step).is_none_or(|u| !u.starts_with("actions/checkout@")))
-        );
-    }
     Ok(())
 }
 
