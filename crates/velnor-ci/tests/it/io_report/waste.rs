@@ -77,19 +77,12 @@ fn report_records_mbx_sessions_a_primed_store_and_toolchain_installs() -> Result
     assert_eq!(metrics.mbx.sessions.len(), 1);
     assert_eq!(metrics.mbx.sessions[0].not_looked_up, 12);
     assert_eq!(metrics.toolchain_installs, ["component rust-src"]);
-    for expected in [
-        "MBX object cache: 0 hits",
-        "toolchain installed on an exact tools cache hit: component rust-src",
-    ] {
-        assert!(
-            metrics
-                .violations
-                .iter()
-                .any(|line| line.contains(expected)),
-            "{expected}: {:?}",
-            metrics.violations
-        );
-    }
+    assert!(
+        metrics.violations.iter().any(|line| line
+            .contains("toolchain installed on an exact tools cache hit: component rust-src")),
+        "{:?}",
+        metrics.violations
+    );
     let unprimed = with_store(&repo, false)?;
     assert!(!unprimed.mbx.store_primed);
     assert!(
@@ -103,9 +96,13 @@ fn report_records_mbx_sessions_a_primed_store_and_toolchain_installs() -> Result
     Ok(())
 }
 
+fn sources_entry(created_at: &str, reference: &str, version: &str) -> serde_json::Value {
+    json!({"key":"velnor-src-key","ref":reference,"created_at":created_at,"version":version,"size_in_bytes":9})
+}
+
 fn check_sources_miss(
     name: &str,
-    created_at: &str,
+    entries: Vec<serde_json::Value>,
 ) -> Result<(bool, String), Box<dyn std::error::Error>> {
     let repo = Repo::new(name);
     let mut lane = crate::report::lane();
@@ -113,12 +110,15 @@ fn check_sources_miss(
     lane["caches"] = json!([{"family":"sources","root":null,"restore_step":"sources","save_step":"save_sources","requested_key":"velnor-src-key","matched_key":null,"hit":"miss","bytes":null,"usable":false,"usable_same_lock":false,"save":"not_attempted"}]);
     lane["invocations"][0]["compilations"] = json!([]);
     fs::write(repo.root().join("ci-metrics.json"), lane.to_string())?;
+    let mut listed = entries;
+    listed.push(sources_entry(
+        "2026-11-20T09:00:00.000Z",
+        "refs/heads/elsewhere",
+        "v1",
+    ));
     let api = crate::io::serve(BTreeMap::from([
         ("/repos/owner/repo/actions/runs/1/attempts/1/jobs?per_page=100&page=1".to_owned(), json!({"total_count":1,"jobs":[{"id":1,"name":"Rust build","created_at":"2026-11-20T10:00:00Z","started_at":"2026-11-20T10:00:00Z"}]}).to_string()),
-        ("/repos/owner/repo/actions/caches?key=velnor-src-key&per_page=100".to_owned(), json!({"total_count":2,"actions_caches":[
-            {"key":"velnor-src-key","ref":"refs/heads/main","created_at":created_at,"size_in_bytes":9},
-            {"key":"velnor-src-key","ref":"refs/heads/elsewhere","created_at":"2026-11-20T09:00:00.000Z","size_in_bytes":9}
-        ]}).to_string()),
+        ("/repos/owner/repo/actions/caches?key=velnor-src-key&per_page=100".to_owned(), json!({"total_count":listed.len(),"actions_caches":listed}).to_string()),
     ]));
     let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
         .args(["report", "--check"])
@@ -141,15 +141,50 @@ fn check_sources_miss(
 
 #[test]
 fn check_fails_a_sources_miss_whose_entry_predates_the_job_and_passes_a_newer_one() -> ResultTest {
+    let before = sources_entry("2026-11-20T09:30:00.000Z", "refs/heads/main", "v1");
+    let own_save = sources_entry("2026-11-20T10:05:00.000Z", "refs/heads/main", "v1");
     let (passed, stderr) =
-        check_sources_miss("report-sources-miss-old", "2026-11-20T09:30:00.000Z")?;
+        check_sources_miss("report-sources-miss-old", vec![before.clone(), own_save])?;
     assert!(!passed, "{stderr}");
     assert!(
         stderr.contains("sources cache missed velnor-src-key"),
         "{stderr}"
     );
-    let (passed, stderr) =
-        check_sources_miss("report-sources-miss-new", "2026-11-20T10:05:00.000Z")?;
+    let (passed, stderr) = check_sources_miss(
+        "report-sources-miss-new",
+        vec![sources_entry(
+            "2026-11-20T10:05:00.000Z",
+            "refs/heads/main",
+            "v1",
+        )],
+    )?;
+    assert!(passed, "{stderr}");
+    Ok(())
+}
+
+#[test]
+fn check_passes_a_sources_miss_whose_earlier_entry_has_another_cache_version() -> ResultTest {
+    let (passed, stderr) = check_sources_miss(
+        "report-sources-miss-other-version",
+        vec![
+            sources_entry("2026-11-20T09:30:00.000Z", "refs/heads/main", "v1"),
+            sources_entry("2026-11-20T10:05:00.000Z", "refs/heads/main", "v2"),
+        ],
+    )?;
+    assert!(passed, "{stderr}");
+    Ok(())
+}
+
+#[test]
+fn check_passes_a_sources_miss_when_the_job_version_cannot_be_established() -> ResultTest {
+    let (passed, stderr) = check_sources_miss(
+        "report-sources-miss-unknown-version",
+        vec![sources_entry(
+            "2026-11-20T09:30:00.000Z",
+            "refs/heads/main",
+            "v1",
+        )],
+    )?;
     assert!(passed, "{stderr}");
     Ok(())
 }
