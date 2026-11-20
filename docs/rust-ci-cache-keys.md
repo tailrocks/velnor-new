@@ -118,14 +118,28 @@ cache_check_blocks = true
 ```
 
 Besides compiled-despite-restored-inputs and download waste, the report names
-four more avoidable costs, each only when the evidence shows it was avoidable:
+five more avoidable costs, each only when the evidence shows it was avoidable:
 
 - A sources cache miss although the Actions cache inventory already listed
   that exact key, on a ref the job may read, when the job started. The `Cache`
   job records this as `entry_before_job`; a cold lock stays clean.
 - An MBX session with no hits although `MBX_CACHE_DIR` named a store that held
   entries older than the first Cargo invocation. A per-job or empty store, or a
-  lane without MBX lines, stays clean.
+  lane without MBX lines, stays clean here (the next item covers a
+  declared MBX with no sessions).
+- A lane that compiled without MBX: at least one compilation unit that Cargo
+  did not report fresh, but no `mbx[cache]` session line in the lane's Cargo
+  log, while the checkout declares MBX. The lane's `report` step records the
+  declaration as `mbx.declared` in `ci-metrics.json` when a mise config at the
+  checkout root (`mise.toml`, `.mise.toml`, `mise/config.toml`,
+  `.mise/config.toml`, `.config/mise.toml` or `.config/mise/config.toml`) sets
+  `mr_boxington = true` on a tool in `[tools]` or sets the command of
+  `[wrappers.cargo]` to `mbx`. A pin of the `mr-boxington` tool alone declares nothing.
+  A lane that compiled nothing, and a repository that does not declare MBX,
+  stay clean. This is the proof that the declared routing really ran: without
+  it a lane that bypassed MBX looked identical to one with no MBX at all. A
+  consumer gets it by bumping its helper pin; the generator passes no new
+  input.
 - A toolchain component or target that `velnor-ci prepare` had to install
   (recorded in `$RUNNER_TEMP/velnor-toolchain-installs.txt`) although the tools
   cache had an exact hit. This includes a declared channel that rustup would

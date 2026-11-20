@@ -285,3 +285,24 @@ fn a_mismatched_snapshot_removes_only_its_target() {
         b"sibling artifact\n"
     );
 }
+
+#[test]
+fn a_nested_root_without_recorded_metadata_cold_cleans_its_folder_below_the_repository_target() {
+    let repo = Repo::new("cold-nested-fallback");
+    repo.write("src/lib.rs", "pub fn one() {}\n");
+    repo.write(
+        "tool/Cargo.toml",
+        "[package]\nname = 'tool'\nversion = '0.1.0'\nedition = '2024'\n",
+    );
+    stale_target(&repo, "target/velnor-roots/tool");
+    stale_target(&repo, "tool/target");
+    let report = cold_on_failure(
+        &every_root_target(repo.root()).unwrap_or_else(|e| unreachable!("{e}")),
+        "restored",
+        || Err(velnor_ci::error::CiError::new("forced for the test")),
+    )
+    .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(report.contains("building cold"), "{report}");
+    assert!(!repo.root().join("target/velnor-roots/tool").exists());
+    assert!(repo.root().join("tool/target/debug").exists());
+}
