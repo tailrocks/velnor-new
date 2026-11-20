@@ -221,6 +221,6 @@ fn a_rust_toolchain_file_in_the_workspace_never_changes_which_toolchain_the_fetc
     for cwd in fixture.log("rustup.cwd").lines() {
         assert_eq!(Path::new(cwd), neutral);
     }
-    assert!(!fixture.log("rustup.cwd").is_empty());
+    assert_ne!(fixture.log("rustup.cwd"), "");
     Ok(())
 }

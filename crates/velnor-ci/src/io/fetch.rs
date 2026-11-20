@@ -76,7 +76,7 @@ fn fetch_with(args: &FetchArgs, token: Option<&str>) -> Result<(), CiError> {
     let home = super::fetch_fixed::account_home(args.home.as_deref())?;
     let fixed = super::fetch_fixed::Fixed::system().find();
     let mut roots = args.trusted_dir.clone();
-    roots.extend(fixed.iter().flat_map(|fixed| fixed.roots()));
+    roots.extend(fixed.iter().flat_map(super::fetch_fixed::Located::roots));
     let trusted = Trusted::new(&home, &roots);
     let search = search_path();
     let cargo = super::fetch_fixed::cargo(fixed.as_ref(), &trusted, &home, &search)?;
