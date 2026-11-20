@@ -35,9 +35,33 @@ fn scan_with_open_failing(kind: io::ErrorKind) -> io::Result<Entries> {
     result
 }
 
+fn scan_with_sub_removed_before_open() -> io::Result<Entries> {
+    let root = std::env::temp_dir().join(format!("velnor-scan-removed-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&root);
+    fs::create_dir_all(root.join("sub")).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::write(root.join("kept.txt"), b"").unwrap_or_else(|e| unreachable!("{e}"));
+    let mut budget = Budget::new(usize::MAX);
+    let result = scan_with(
+        &root,
+        &BTreeSet::new(),
+        &mut budget,
+        &Probe {
+            before_open: &|directory| {
+                if directory.ends_with("sub") {
+                    fs::remove_dir(directory).unwrap_or_else(|e| unreachable!("{e}"));
+                }
+                Ok(())
+            },
+            ..Probe::default()
+        },
+    );
+    fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+    result
+}
+
 #[test]
 fn a_directory_removed_before_it_is_opened_is_skipped_not_an_error() {
-    let entries = scan_with_open_failing(io::ErrorKind::NotFound);
+    let entries = scan_with_sub_removed_before_open();
     let Ok(entries) = entries else {
         panic!("scan failed on a directory removed before it was opened: {entries:?}");
     };
@@ -54,6 +78,15 @@ fn a_directory_removed_before_it_is_opened_is_skipped_not_an_error() {
         "vanished directory still recorded: {root_children:?}"
     );
     assert_eq!(entries.len(), 1, "{:?}", entries.keys());
+}
+
+#[test]
+fn a_directory_that_still_exists_is_never_dropped_because_its_open_reported_not_found() {
+    let entries = scan_with_open_failing(io::ErrorKind::NotFound);
+    assert!(
+        matches!(&entries, Err(error) if error.to_string().contains("changed while the audit scanned it; retry")),
+        "a directory that still exists was silently dropped: {entries:?}"
+    );
 }
 
 #[test]

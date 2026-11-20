@@ -101,8 +101,6 @@ pub(super) fn scan_with(
             Err(error) if handle::replaced(&error) && directory != root => {
                 if let Origin::Child { parent, name } = &origin {
                     let replacement = handle::kind_at(parent, name, &directory)?;
-                    let replacement =
-                        replacement.filter(|_| error.kind() != io::ErrorKind::NotFound);
                     settle(
                         &mut entries,
                         &mut pending,
