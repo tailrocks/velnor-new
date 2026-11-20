@@ -77,7 +77,9 @@ for EXPECTED in generator/samples/*/expected; do
   fi
   cp -R "$EXPECTED/." "$SAMPLE"
   git -C "$SAMPLE" init -q
-  (cd "$SAMPLE" && echo "$FILES" | xargs jactionlint --format gcc --strict-exit --no-online --shellcheck= --pyflakes=)
+  # The repository's config supplies the self-hosted runner labels (velnor,
+  # ubuntu-26.04-scale-set) that the generated workflows use; the sample has none.
+  (cd "$SAMPLE" && echo "$FILES" | xargs jactionlint --config-file "$ROOT/.github/jactionlint.yaml" --profile correctness --format gcc --strict-exit --no-online --shellcheck= --pyflakes=)
   CHECKED=$((CHECKED + 1))
 done
 test "$CHECKED" -gt 0
@@ -91,6 +93,10 @@ ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
 python3 -m unittest scripts/test_parity_verify_candidate.py
 '''
+
+[tasks.validate-hk]
+description = "Validate hk.pkl: fail when hk cannot load the config"
+run = "hk validate --deny-warnings"
 
 [tasks.test-maintenance-helpers]
 description = "Run repository-only maintenance helper test suites"
