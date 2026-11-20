@@ -237,6 +237,21 @@ phase = "build"
 - Placement never puts repository code ahead of a token or verdict step that was not already behind repository code: the step sits directly before the first cargo step, which is repository code already, and the `[private_sources]` token phase goes in front of it. The step does not see the token (see Optional private dependencies).
 - The key needs `velnor-ci` 0.1.109 or later, because `velnor-ci` reads the same file. Generation refuses an older pin when any step writes the key, `"test"` too. A step without the key renders as before.
 
+## Checking feature configurations
+
+`[[check_configurations]]` runs `velnor-ci check-configurations` for one root: a `cargo check` of each named feature configuration, where configurations that resolve to the same features share one check.
+
+```toml
+[[check_configurations]]
+root = "."
+configurations = "ci/configurations.json"
+```
+
+- `root` is the folder of the Cargo root's `Cargo.toml`, or `.` for the repository root, and it must name a root of this repository. The step runs in that folder, so cargo reads that root's `Cargo.toml` and `.cargo/config.toml`. The key is required.
+- `configurations` is optional: a JSON file, relative to `root`, with an array of `{ "name": ..., "features": [...], "no_default_features": false }` objects. Without it the step checks the default configuration. The file must be tracked in the repository, must not be a symbolic link or inside one, and no `non_inputs` rule may match it. A change to it selects every root, even when an `inputs` rule or a default ignore would say otherwise, so a new feature configuration always runs. The path may use ASCII letters, digits, `.`, `_`, `-` and `/` only, and may not leave the repository. The step passes it as `--configurations=<path>`.
+- The step is a `[[test_setup]]` step in most respects: it runs before the first test step of every job of that root, after any `[[test_setup]]` steps, as repository code (cargo runs build scripts), with the gate of the test steps, so a run that selects no tests skips it. A job that runs no tests has none, so a root with no test command gets no step. A root with `job = "parallel"` lanes runs the step in each of its test jobs. Write one entry per configurations file; entries of one root run in the order written. When a root's tests run from a nextest archive (test groups), the step runs once in the job that builds the archive, before the archive is built, not in the jobs that only run the archived tests, which have no Rust toolchain by default. The helper runs cargo with `--offline`, so the sources must already be in the cache.
+- The key needs `velnor-ci` 0.1.110 or later, because the pinned velnor-ci refuses a key it does not know. `velnor-gen generate` refuses an older pin when the key is written, and `velnor-gen pin-helper 0.1.110` fixes it.
+
 ## Per-root time limits
 
 `[root_timeouts]` gives one root's jobs their own time limit, so a heavy root can run longer without raising the limit of every job. Each key is the folder of a root's `Cargo.toml`, or `.` for the repository root, and each value is a time limit in minutes, 1 to 360, the same range as `timeout_minutes`. A key that names no root of the repository, a value out of range, or a second key for the same root (`crates/x` and `crates/x/`) is refused with its name.

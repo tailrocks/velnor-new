@@ -26,6 +26,7 @@ mod cache_mode_scan;
 mod call_fork_fence;
 mod cargo_flags;
 mod cargo_lock;
+mod check_configurations;
 mod classify;
 mod classify_test_runner;
 mod cleanup_job;
