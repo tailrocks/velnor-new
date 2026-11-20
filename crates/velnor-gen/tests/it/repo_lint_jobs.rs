@@ -44,6 +44,7 @@ fn the_required_check_of_the_repository_waits_for_every_lint_and_the_policy_lane
         "lint-alint",
         "lint-jactionlint",
         "lint-generator-samples",
+        "lint-parity-verify-candidate",
         "policy",
     ] {
         assert!(

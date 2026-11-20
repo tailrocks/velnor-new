@@ -30,6 +30,8 @@ shellcheck = "0.11.0"
 "github:asamarts/alint" = "0.22.1"
 # jactionlint checks the script of every actions/github-script step with node on PATH.
 node = "26.13.1"
+# Python for the unittest lint (lint-parity-verify-candidate): CI installs this pin.
+python = "3.14.10"
 # Owner hk standard (hk.pkl): secret scanners for the pre-commit, pre-push and
 # security-audit hooks, and the tools behind the stack builtins.
 kingfisher = "v2.19.1"
@@ -79,6 +81,15 @@ for EXPECTED in generator/samples/*/expected; do
   CHECKED=$((CHECKED + 1))
 done
 test "$CHECKED" -gt 0
+'''
+
+[tasks.lint-parity-verify-candidate]
+description = "Run the unit tests of the parity verifier (scripts/parity-verify-candidate.py)"
+run = '''
+set -eu
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT"
+python3 -m unittest scripts/test_parity_verify_candidate.py
 '''
 
 [tasks.test-maintenance-helpers]
