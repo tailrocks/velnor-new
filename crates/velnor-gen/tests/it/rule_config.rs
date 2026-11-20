@@ -166,3 +166,12 @@ fn a_glob_with_a_question_mark_or_a_bracket_is_refused_for_every_rule_key() -> T
     }
     Ok(())
 }
+
+#[test]
+fn a_test_group_path_with_a_question_mark_or_a_bracket_is_refused() -> TestResult {
+    for glob in ["cfg/h?.pkl", "cfg/h[k].pkl", "cfg/h]k.pkl"] {
+        let config = format!("[[test_groups]]\nname = 'g'\nfilter = 'all()'\npaths = ['{glob}']\n");
+        assert!(detect_with(&config).is_err(), "{config}");
+    }
+    Ok(())
+}
