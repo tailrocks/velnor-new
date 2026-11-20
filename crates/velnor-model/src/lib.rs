@@ -7,6 +7,7 @@ mod cache;
 mod cache_layout;
 mod cache_outputs;
 mod cargo_build;
+mod check_configurations;
 mod cron;
 mod helper;
 mod hosted;
@@ -43,6 +44,7 @@ pub use cache_outputs::{
     BASE_PREFIX_OUTPUT, BASE_SAVE_OUTPUT, CacheLaneOutput, PUBLIC_SOURCES_STEP,
     PUBLIC_VERDICTS_OUTPUT, SOURCES_PREFIX_OUTPUT, SOURCES_SAVED_OUTPUT, cache_lane_outputs,
 };
+pub use check_configurations::CheckConfigurations;
 pub use cron::CronExpr;
 pub use helper::{HelperRelease, Platform};
 pub use hosted::HostedRunners;

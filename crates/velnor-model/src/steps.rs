@@ -136,6 +136,7 @@ pub enum StepKind {
         run: String,
     },
     GeneratorCheck,
+    InstallGenerator(HelperRelease),
     InstallHelper(HelperRelease),
     FailWhenANeedFailed,
     FailOnDraftRun,
@@ -218,6 +219,7 @@ impl StepKind {
             | Self::MbxSeed { .. }
             | Self::ToolsLocal(_)
             | Self::GeneratorCheck { .. }
+            | Self::InstallGenerator(_)
             | Self::InstallHelper(_)
             | Self::FailWhenANeedFailed { .. }
             | Self::FailOnDraftRun { .. }

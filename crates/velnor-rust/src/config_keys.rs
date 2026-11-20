@@ -34,6 +34,7 @@ pub const KEYS: &[&str] = &[
     "ci_debuginfo",
     "cache_budget_bytes",
     "test_setup",
+    "check_configurations",
     "lint",
     "test_groups",
     "test_lane",

@@ -187,6 +187,10 @@ impl fmt::Display for Reason {
                 f,
                 "root_timeouts names the root {root}, which is not a Cargo root of this repository; name the folder of a root's Cargo.toml, or . for the repository root"
             ),
+            Self::UnknownCheckConfigurationsRoot(root) => write!(
+                f,
+                "check_configurations names the root {root}, which is not a Cargo root of this repository; name the folder of a root's Cargo.toml, or . for the repository root"
+            ),
             Self::UnknownTestSetupRoot(root) => write!(
                 f,
                 "test_setup names the root {root}, which is not a Cargo root of this repository; name the folder of a root's Cargo.toml, or . for the repository root"

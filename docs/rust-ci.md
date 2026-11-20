@@ -191,6 +191,7 @@ Every key of `.velnor/rust-ci.toml`, with its default. `generator/CONFIG.md` has
 | `default_ignores` | `true` | documentation and licence files select nothing |
 | `nextest_harnesses` | none | `package:target` entries for `harness = false` test targets that nextest can run; the others run in a direct step |
 | `test_setup` | none | `[[test_setup]]` fixture steps that run before tests; `phase = "build"` runs one before the first compiling cargo step of each job, so clippy and `build.rs` see it |
+| `check_configurations` | none | `[[check_configurations]]` entries (`root`, optional `configurations` JSON file) that run `velnor-ci check-configurations` before the tests of a root; needs `velnor-ci` 0.1.110 or later, see [generator/CONFIG.md](../generator/CONFIG.md) |
 | `workspace_groups` | none | `[[workspace_groups]]` entries: Cargo workspaces that share one job set and one build folder, see `generator/CONFIG.md` |
 | `external_workflows` | none | paths under `.github/workflows/` of hand-written workflows that `velnor-gen check` must not flag; needs velnor-ci 0.1.109 or later, see `generator/CONFIG.md` |
 | `lint` | none | `[[lint]]` jobs for checks that are not cargo |

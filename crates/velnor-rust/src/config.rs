@@ -61,6 +61,8 @@ struct RawConfig {
     #[serde(default)]
     test_setup: Vec<crate::config_test_setup::RawTestSetup>,
     #[serde(default)]
+    check_configurations: Vec<crate::config_check_configurations::RawCheckConfigurations>,
+    #[serde(default)]
     release_assets: Vec<crate::config_release_assets::RawReleaseAsset>,
     #[serde(default)]
     lint: Vec<crate::config_lint::RawLint>,
@@ -144,6 +146,8 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         cache_budget_bytes: crate::cache_budget::configured_budget(raw.cache_budget_bytes)
             .map_err(invalid)?,
         test_setup,
+        check_configurations: crate::config_check_configurations::parse(raw.check_configurations)
+            .map_err(invalid)?,
         checkout: checkout_scope(raw.sparse_checkout),
         lint,
         test_groups,
