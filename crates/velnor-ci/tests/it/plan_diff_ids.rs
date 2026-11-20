@@ -5,7 +5,6 @@ use std::fs;
 
 use crate::plan_diff::{aside, bind, data, plan, read, repository_with};
 
-/// Check ids with a line break that would forge a plan output key or a workflow command.
 const HOSTILE: [&str; 3] = [
     "x\nother_key=evil",
     "x\n::set-output name=other_key::evil",
