@@ -21,7 +21,7 @@ fn sizes(entries: &[(&str, u64)]) -> Result<BTreeMap<RepoPath, u64>, Box<dyn std
 }
 
 fn with(config: &str) -> Result<RepoView, Box<dyn std::error::Error>> {
-    view(&ROOTS, Some(config.as_bytes()))
+    view(ROOTS, Some(config.as_bytes()))
 }
 
 #[test]

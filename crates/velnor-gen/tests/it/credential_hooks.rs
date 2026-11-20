@@ -19,7 +19,7 @@ const HOOKS: &[&str] = &[
 #[test]
 fn a_release_root_refuses_a_cargo_credential_hook() -> TestResult {
     let config = RepoPath::new(".cargo/config.toml")?;
-    for text in HOOKS.iter().copied() {
+    for text in HOOKS {
         let mut view = release_view(&[APP], Some("[[binaries]]\npackage = \"app\"\n"))?;
         view.tracked_paths.insert(config.clone());
         view.files.insert(config.clone(), text.as_bytes().to_vec());
@@ -39,7 +39,7 @@ fn a_release_root_refuses_a_cargo_credential_hook() -> TestResult {
 #[test]
 fn a_repository_without_a_release_root_may_use_any_credential_provider() -> TestResult {
     let config = RepoPath::new(".cargo/config.toml")?;
-    for text in HOOKS.iter().copied() {
+    for text in HOOKS {
         let mut view = release_view(&[APP], None)?;
         view.tracked_paths.insert(config.clone());
         view.files.insert(config.clone(), text.as_bytes().to_vec());

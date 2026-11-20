@@ -12,7 +12,7 @@ const GROUP: &str = "[[workspace_groups]]\nname = \"tools\"\nroots = [\"tools/a\
 const ROOTS: &[&str] = &["Cargo.toml", "tools/a/Cargo.toml", "tools/b/Cargo.toml"];
 
 fn grouped(config: &str) -> Result<String, Box<dyn Error>> {
-    let mut view = view(&ROOTS, Some(config.as_bytes()))?;
+    let mut view = view(ROOTS, Some(config.as_bytes()))?;
     crate::pipeline::pin_helper(&mut view, "0.1.96")?;
     workflow(&view)
 }
@@ -37,7 +37,7 @@ fn job<'t>(text: &'t str, id: &str) -> &'t str {
 }
 
 fn refused(config: &str) -> Result<String, Box<dyn Error>> {
-    match view(&ROOTS, Some(config.as_bytes())) {
+    match view(ROOTS, Some(config.as_bytes())) {
         Ok(mut view) => match pin_helper(&mut view, "0.1.95").and_then(|()| workflow(&view)) {
             Ok(text) => Err(format!("the workflow was generated:\n{text}").into()),
             Err(error) => Ok(error.to_string()),
@@ -182,7 +182,7 @@ fn only_the_building_steps_of_a_group_set_the_shared_target_directory() -> TestR
 
 #[test]
 fn each_root_of_a_group_picks_the_ci_profile_of_its_own_nextest_config() -> TestResult {
-    let mut files = view(&ROOTS, Some(GROUP.as_bytes()))?;
+    let mut files = view(ROOTS, Some(GROUP.as_bytes()))?;
     crate::pipeline::pin_helper(&mut files, "0.1.96")?;
     let config = RepoPath::new("tools/a/.config/nextest.toml")?;
     files.tracked_paths.insert(config.clone());

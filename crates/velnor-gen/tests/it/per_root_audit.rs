@@ -10,7 +10,7 @@ const CONFIG: &str = "full_run = \"nightly\"\n[[workspace_groups]]\nname = \"too
 const ROOTS: &[&str] = &["Cargo.toml", "tools/a/Cargo.toml", "tools/b/Cargo.toml"];
 
 fn pinned(version: &str) -> Result<String, Box<dyn Error>> {
-    let mut view = view(&ROOTS, Some(CONFIG.as_bytes()))?;
+    let mut view = view(ROOTS, Some(CONFIG.as_bytes()))?;
     crate::pipeline::pin_helper(&mut view, version)?;
     workflow(&view)
 }

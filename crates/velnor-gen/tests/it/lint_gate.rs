@@ -79,8 +79,8 @@ fn the_one_required_job_needs_every_lint_job_next_to_the_rust_lanes() -> TestRes
     let text = rendered(LINT)?;
     let needs = needs_of(&text)?;
     assert!(needs.contains(&"rust".to_owned()), "{needs:?}");
-    for id in IDS.iter().copied() {
-        assert!(needs.contains(&id.to_owned()), "{id}: {needs:?}");
+    for id in IDS {
+        assert!(needs.contains(&id.to_string()), "{id}: {needs:?}");
     }
     let spec = spec(&text)?;
     for id in IDS.iter().copied() {

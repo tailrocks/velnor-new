@@ -37,7 +37,7 @@ fn env_options_cannot_hide_a_helper_call() -> TestResult {
             .map_err(|error| format!("{command:?}: {error}"))?;
         assert!(message.contains("helper = true"), "{command:?}: {message}");
     }
-    for command in WRAPPED_HELPER.iter().copied() {
+    for command in WRAPPED_HELPER {
         let command = command.replace("check", "plan");
         let message = refusal(&job_running("helper = true", &command, ""))
             .map_err(|error| format!("{command:?}: {error}"))?;

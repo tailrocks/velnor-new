@@ -230,7 +230,7 @@ fn vendored(files: &[(&str, &str)]) -> Result<String, Box<dyn std::error::Error>
 
 #[test]
 fn a_lane_keeps_the_path_dependencies_that_sit_outside_every_root() -> TestResult {
-    let text = vendored(&VENDORED)?;
+    let text = vendored(VENDORED)?;
     let lanes = lanes_of(&text);
     let with_app: Vec<_> = lanes
         .iter()

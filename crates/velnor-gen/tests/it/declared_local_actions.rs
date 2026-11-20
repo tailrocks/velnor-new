@@ -29,7 +29,7 @@ fn local(extra: &str) -> String {
 
 #[test]
 fn an_allowed_local_action_renders_with_the_self_repository_note() -> TestResult {
-    for path in ALLOWED.iter().copied() {
+    for path in ALLOWED {
         let text = rendered_text(&local(&format!("uses = \"{path}\"")), "ci")?;
         assert!(
             text.contains(&format!(

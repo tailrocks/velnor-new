@@ -76,7 +76,7 @@ const WRAPPERS: &[&str] = &[
 
 #[test]
 fn a_wrapper_cannot_hide_mise_without_isolation() {
-    for wrapper in WRAPPERS.iter().copied() {
+    for wrapper in WRAPPERS {
         for program in ["mise", "\"$RUNNER_TEMP/mise\"", "/usr/local/bin/mise"] {
             let command = wrapper.replace("{}", &format!("{program} exec rust -- cargo test"));
             assert_eq!(
@@ -90,7 +90,7 @@ fn a_wrapper_cannot_hide_mise_without_isolation() {
 
 #[test]
 fn a_wrapper_around_isolated_mise_or_another_program_is_allowed() {
-    for wrapper in WRAPPERS.iter().copied() {
+    for wrapper in WRAPPERS {
         for payload in [
             format!("mise {ISOLATION} exec gh@2.104.0 -- gh attestation verify dist/SHA256SUMS"),
             format!("\"$RUNNER_TEMP/mise\" {ISOLATION} install aqua:release-plz/release-plz@0.4.3"),
