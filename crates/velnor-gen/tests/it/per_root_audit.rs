@@ -7,10 +7,10 @@ use crate::facts::TestResult;
 use crate::pipeline::{view, workflow};
 
 const CONFIG: &str = "full_run = \"nightly\"\n[[workspace_groups]]\nname = \"tools\"\nroots = [\"tools/a\", \"tools/b\"]\n";
-const ROOTS: [&str; 3] = ["Cargo.toml", "tools/a/Cargo.toml", "tools/b/Cargo.toml"];
+const ROOTS: &[&str] = &["Cargo.toml", "tools/a/Cargo.toml", "tools/b/Cargo.toml"];
 
 fn pinned(version: &str) -> Result<String, Box<dyn Error>> {
-    let mut view = view(&ROOTS, Some(CONFIG.as_bytes()))?;
+    let mut view = view(ROOTS, Some(CONFIG.as_bytes()))?;
     crate::pipeline::pin_helper(&mut view, version)?;
     workflow(&view)
 }

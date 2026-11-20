@@ -162,7 +162,7 @@ pub(crate) fn enabled_features(manifest: &toml::Table, requested: &[String]) -> 
 }
 
 fn implicit_features(manifest: &toml::Table) -> BTreeSet<String> {
-    const TABLES: [&str; 2] = ["dependencies", "build-dependencies"];
+    const TABLES: &[&str] = &["dependencies", "build-dependencies"];
     let targets = manifest
         .get("target")
         .and_then(toml::Value::as_table)

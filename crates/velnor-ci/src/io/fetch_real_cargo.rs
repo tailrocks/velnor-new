@@ -4,7 +4,7 @@
 use std::path::Path;
 
 /// Directories mise fills with programs that read the repository's `mise.toml` when run.
-const FRONT_DIRECTORIES: [&str; 2] = ["shims", "command-wrappers"];
+const FRONT_DIRECTORIES: &[&str] = &["shims", "command-wrappers"];
 
 /// Whether `candidate` (as found on `PATH`) or `resolved` (after symlinks) is a mise shim or
 /// command wrapper rather than the tool itself.

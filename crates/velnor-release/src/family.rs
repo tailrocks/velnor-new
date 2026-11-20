@@ -68,6 +68,7 @@ pub(crate) fn plan_family(
             bin: binary.bin.clone(),
             root,
             platforms: binary.platforms.clone(),
+            optional_platforms: binary.optional_platforms.clone(),
             extra_bins: binary.bins.clone(),
             include: binary.include.clone(),
             asset_name: checked(binary, &tag_pattern)?,
@@ -110,6 +111,16 @@ pub(crate) fn plan_family(
 }
 
 fn unsupported(binary: &Binary) -> Option<FamilyError> {
+    if !binary.optional_platforms.is_empty()
+        && binary
+            .asset_name
+            .as_deref()
+            .is_some_and(crate::asset_name::asset_name_uses_version)
+    {
+        return Some(FamilyError::OptionalPlatformVersionedName {
+            package: binary.package.clone(),
+        });
+    }
     let on_the_family = |key, instead| FamilyError::BinaryKeyBelongsToFamily { key, instead };
     if binary.attest {
         Some(on_the_family("attest", "attest"))

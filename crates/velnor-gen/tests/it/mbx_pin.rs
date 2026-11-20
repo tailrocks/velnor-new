@@ -65,12 +65,32 @@ fn the_action_version_is_the_mise_pin_read_at_run_time_not_a_copied_release() ->
 }
 
 #[test]
-fn an_older_helper_keeps_the_constant_and_renders_no_pin_step() -> TestResult {
+fn an_older_helper_renders_the_constant_only_when_the_pin_is_that_release() -> TestResult {
     for helper in ["0.1.105", "0.1.108"] {
-        for mbx in ["mr-boxington = \"v1.31.0\"", "mr-boxington = \"v1.30.0\""] {
+        for mbx in ["mr-boxington = \"v1.30.0\"", "mr-boxington = \"1.30.0\""] {
             let text = text(&repo(helper, mbx)?)?;
             assert!(text.contains("version: '1.30.0'"), "{helper} {mbx}");
             assert!(!text.contains("mise-pin"), "{helper} {mbx}");
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn an_older_helper_refuses_a_pin_the_constant_would_not_match() -> TestResult {
+    for helper in ["0.1.105", "0.1.108"] {
+        for pin in ["v1.31.0", "^1.30.0", "latest", "1.30"] {
+            let mbx = format!("mr-boxington = \"{pin}\"");
+            let error = text(&repo(helper, &mbx)?)
+                .err()
+                .ok_or_else(|| format!("{helper} generated with pin {pin}"))?
+                .to_string();
+            assert!(
+                error.contains("tools.mr-boxington"),
+                "{helper} {pin}: {error}"
+            );
+            assert!(error.contains("1.30.0"), "{helper} {pin}: {error}");
+            assert!(error.contains("0.1.109"), "{helper} {pin}: {error}");
         }
     }
     Ok(())
@@ -91,6 +111,37 @@ fn a_range_or_latest_mbx_pin_is_a_generation_error() -> TestResult {
         let mbx = format!("mr-boxington = \"{pin}\"");
         assert!(text(&repo("0.1.109", &mbx)?).is_err(), "{pin} was accepted");
     }
+    Ok(())
+}
+
+fn with_second_config(pin: &str) -> Result<RepoView, Box<dyn Error>> {
+    let mut repo = repo("0.1.109", "mr-boxington = \"v1.31.0\"")?;
+    repo.files.insert(
+        RepoPath::new(".mise.toml")?,
+        format!("[tools]\nmr-boxington = \"{pin}\"\n").into_bytes(),
+    );
+    Ok(repo)
+}
+
+#[test]
+fn two_configs_pinning_different_mbx_releases_are_refused_naming_both() -> TestResult {
+    let error = text(&with_second_config("v1.32.0")?)
+        .err()
+        .ok_or("generated from two different pins")?
+        .to_string();
+    assert!(error.contains("mise.toml"), "{error}");
+    assert!(error.contains(".mise.toml"), "{error}");
+    assert!(error.contains("tools.mr-boxington"), "{error}");
+    Ok(())
+}
+
+#[test]
+fn two_configs_pinning_the_same_mbx_release_are_refused_naming_both() -> TestResult {
+    let error = text(&with_second_config("v1.31.0")?)
+        .err()
+        .ok_or("generated from two configs")?
+        .to_string();
+    assert!(error.contains(".mise.toml"), "{error}");
     Ok(())
 }
 

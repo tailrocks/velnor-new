@@ -39,7 +39,7 @@ INSERT INTO physical_attempt_lineages (lineage_id, connection_id, scale_set_id, 
 INSERT INTO physical_attempts (lineage_id, generation, reservation_id, intent_id, physical_nonce, connection_id, scale_set_id, witness_request_id, binding_digest, source_digest, engine_id, docker_root_digest, created_at) VALUES ({r}, 1, {r}, {i}, '{nonce}', 'conn-test-1', 7, {r}, '{binding}', '{hex64}', 'engine-test', '{root}', 0);
 INSERT INTO physical_attempt_current (lineage_id, generation, reservation_id, intent_id) VALUES ({r}, 1, {r}, {i})";
 
-const GUARDS: [&str; 2] = [
+const GUARDS: &[&str] = &[
     "physical_attempt_insert_guard",
     "physical_attempt_current_insert_guard",
 ];
@@ -134,7 +134,7 @@ pub(crate) async fn started_pairs(
             .replace("{hex64}", &hex64),
     )
     .await?;
-    let saved = trigger_sql(journal, &GUARDS).await?;
+    let saved = trigger_sql(journal, GUARDS).await?;
     for name in GUARDS {
         execute(journal, &format!("DROP TRIGGER {name}")).await?;
     }
@@ -264,7 +264,7 @@ const ROOT_BACKING: &str = "INSERT INTO capacity_reservation_root_backing_mappin
 
 const WITNESS: &str = "INSERT INTO capacity_reservation_cleanup_observer_witnesses (reservation_id, connection_id, operation_id, engine_id, docker_root_digest, runner_container_id, dind_container_id, instance_binding_digest, guest_boot_id, binding_json, binding_sha256) VALUES ({r}, 'conn-test-1', {i}, 'engine-test', '{root}', '{runner}', '{dind}', '{digest}', '{boot}', '{}', '{hex64}')";
 
-const BOUND_SEED_GUARDS: [&str; 2] = [
+const BOUND_SEED_GUARDS: &[&str] = &[
     "root_backing_insert_guard",
     "cleanup_observer_witness_insert_guard",
 ];
@@ -274,7 +274,7 @@ pub(crate) async fn bind_resources(
     pair: Pair,
     docker_root_digest: &str,
 ) -> TestResult<()> {
-    let saved = trigger_sql(journal, &BOUND_SEED_GUARDS).await?;
+    let saved = trigger_sql(journal, BOUND_SEED_GUARDS).await?;
     for name in BOUND_SEED_GUARDS {
         execute(journal, &format!("DROP TRIGGER {name}")).await?;
     }

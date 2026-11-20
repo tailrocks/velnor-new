@@ -27,10 +27,17 @@ pub struct Workflow {
     /// True only when `hosted = true` was declared for `runner`.
     pub hosted: bool,
     pub fork_runner: String,
+    pub trusted: Option<TrustedPool>,
     pub condition: Option<String>,
     pub concurrency: Option<Concurrency>,
     pub triggers: Triggers,
     pub jobs: Vec<Job>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TrustedPool {
+    pub label: String,
+    pub replaces: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -259,7 +266,7 @@ pub enum LocalAction {
 }
 
 impl LocalAction {
-    pub const PATHS: [&'static str; 3] = [
+    pub const PATHS: &[&'static str] = &[
         "./qualification/actions/post-fail",
         "./qualification/actions/docker",
         "./qualification/actions/composite",
@@ -310,6 +317,7 @@ impl WorkflowsPlan {
             }
             workflows.push(checked);
         }
+        crate::trusted::reserved_across(&workflows)?;
         crate::workflow_run::check_chains(&workflows)?;
         Ok(Self { workflows })
     }

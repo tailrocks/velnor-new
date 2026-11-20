@@ -14,7 +14,7 @@ type TestResult = Result<(), Box<dyn Error>>;
 
 const PLAIN: &str = "[[binaries]]\npackage = \"app\"\nattest = true\n";
 const DIGESTS: &str = "[[binaries]]\npackage = \"app\"\nattest = true\nmember_digests = \"sha256\"\nbins = [{ bin = \"rg\" }]\n";
-const TRIPLES: [&str; 3] = [
+const TRIPLES: &[&str] = &[
     "x86_64-unknown-linux-musl",
     "aarch64-unknown-linux-musl",
     "aarch64-apple-darwin",

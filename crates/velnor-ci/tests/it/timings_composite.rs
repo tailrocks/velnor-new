@@ -16,7 +16,7 @@ use crate::timings::{LIST, lab, recorded, roots, runner};
 /// pipefail` group sits between `##[start-action` and `##[end-action`.
 const REAL_MARKERS: &str = include_str!("data/timings/composite-job-markers.log");
 const REAL_JOBS: &str = include_str!("data/timings/composite-job.json");
-const RUNS: [u64; 3] = [43_636_016_430, 43_628_937_052, 43_618_131_619];
+const RUNS: &[u64] = &[43_636_016_430, 43_628_937_052, 43_618_131_619];
 
 const COMPOSITE_LOG: &str = "\
 2026-11-14T20:10:04.0000001Z ##[group]Run owner/repo/actions/setup-velnor@0123abc
@@ -33,7 +33,7 @@ const COMPOSITE_LOG: &str = "\
 fn composite_runs() -> FakeGitHub {
     let mut fake = recorded(LIST);
     for id in RUNS {
-        let path = jobs_path(&lab(), id, 1, 1);
+        let path = jobs_path(&lab(), *id, 1, 1);
         let mut jobs: Value =
             serde_json::from_str(&fake.get_text(&path)).unwrap_or_else(|e| unreachable!("{e}"));
         for job in jobs["jobs"].as_array_mut().into_iter().flatten() {
@@ -127,7 +127,7 @@ fn the_real_generated_job_log_pairs_every_step_with_its_own_log() {
 fn a_log_that_does_not_match_the_steps_is_reported_not_silently_dropped() {
     let mut fake = composite_runs();
     for id in RUNS {
-        let path = jobs_path(&lab(), id, 1, 1);
+        let path = jobs_path(&lab(), *id, 1, 1);
         let jobs: Value =
             serde_json::from_str(&fake.get_text(&path)).unwrap_or_else(|e| unreachable!("{e}"));
         for job in jobs["jobs"].as_array().into_iter().flatten() {

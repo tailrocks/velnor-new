@@ -5,8 +5,16 @@ use crate::cache::{CacheKey, CacheRoot};
 use crate::helper::HelperRelease;
 use crate::ids::{JobId, PackageName, RepoPath, RootSlug};
 use crate::lint::LintCommand;
-use crate::plan::CargoCommand;
+use crate::plan::{CargoCommand, PlanFrom};
 use crate::verdict::VerdictSpec;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GroupUpload {
+    pub position: usize,
+    pub name: String,
+    pub paths: Vec<String>,
+    pub retention_days: u8,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InputsCli {
@@ -51,6 +59,11 @@ pub enum StepKind {
         archive: Option<RepoPath>,
         cli: InputsCli,
         budget_bytes: u64,
+        verdicts: Option<PlanFrom>,
+    },
+    PublicSources {
+        manifests: Vec<RepoPath>,
+        selected: Vec<RootSlug>,
     },
     CacheResult(Vec<(JobId, TrimFamily)>),
     CacheVerify {
@@ -71,6 +84,7 @@ pub enum StepKind {
         name: String,
         file: RepoPath,
     },
+    UploadGroupArtifact(GroupUpload),
     DownloadArchive {
         name: String,
         into: Option<RepoPath>,
@@ -116,12 +130,14 @@ pub enum StepKind {
     MbxPrivate,
     MbxStore,
     MbxSeed,
-    ToolsLocal(ToolsLocalVerb),
+    ToolsLocal(ToolsLocalVerb, crate::ToolsAnchor),
     TestSetup {
         name: String,
         run: String,
+        before_build: bool,
     },
     GeneratorCheck,
+    InstallGenerator(HelperRelease),
     InstallHelper(HelperRelease),
     FailWhenANeedFailed,
     FailOnDraftRun,
@@ -136,6 +152,7 @@ pub enum StepKind {
         caches: Vec<CacheKey>,
         nextest_artifacts: bool,
         node_tools: ToolsTelemetry,
+        not_generated: Option<String>,
     },
     UploadMetrics,
     DownloadMetrics,
@@ -154,10 +171,19 @@ pub enum StepKind {
 
 impl StepKind {
     #[must_use]
+    pub const fn feeds_build(&self) -> bool {
+        matches!(
+            self,
+            Self::TestSetup {
+                before_build: true,
+                ..
+            } | Self::ReleaseAssets { .. }
+        )
+    }
+
+    #[must_use]
     pub const fn is_check(&self) -> bool {
         match self {
-            // The advisory DB fetch serves the cargo-deny check, which is a check, so it
-            // is skipped after a merge group exactly when that check is.
             Self::TestSetup { .. } | Self::AdvisoryFetch { .. } | Self::ReleaseAssets { .. } => {
                 true
             }
@@ -174,6 +200,7 @@ impl StepKind {
             | Self::SourcesFetchAll { .. }
             | Self::CacheLookup(_)
             | Self::CacheDecide { .. }
+            | Self::PublicSources { .. }
             | Self::CacheResult(_)
             | Self::CacheVerify { .. }
             | Self::CacheTrim { .. }
@@ -184,6 +211,7 @@ impl StepKind {
             | Self::RustComponents(_)
             | Self::RustTargets(_)
             | Self::UploadArchive { .. }
+            | Self::UploadGroupArtifact { .. }
             | Self::DownloadArchive { .. }
             | Self::Helper(_)
             | Self::Prepare(_)
@@ -200,8 +228,9 @@ impl StepKind {
             | Self::MbxPrivate
             | Self::MbxStore { .. }
             | Self::MbxSeed { .. }
-            | Self::ToolsLocal(_)
+            | Self::ToolsLocal(..)
             | Self::GeneratorCheck { .. }
+            | Self::InstallGenerator(_)
             | Self::InstallHelper(_)
             | Self::FailWhenANeedFailed { .. }
             | Self::FailOnDraftRun { .. }
@@ -228,7 +257,7 @@ impl StepKind {
             self,
             Self::CacheSave(_)
                 | Self::MbxRemote { .. }
-                | Self::ToolsLocal(ToolsLocalVerb::AnchorSave)
+                | Self::ToolsLocal(ToolsLocalVerb::AnchorSave, _)
         )
     }
 }
@@ -241,6 +270,7 @@ pub struct GroupFilter {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ToolsLocalVerb {
+    Clear,
     Restore,
     Save,
     SaveChecked,
@@ -249,15 +279,31 @@ pub enum ToolsLocalVerb {
     RecordSave,
     AnchorReset,
     AnchorRestore,
+    AnchorFind,
+    AnchorRead,
     Verify,
+    VerifyNamed,
+    VerifyNamedAnchor,
     Record,
     AnchorSave,
+}
+
+impl ToolsLocalVerb {
+    #[must_use]
+    pub fn checks_tools(self) -> bool {
+        matches!(
+            self,
+            Self::Verify | Self::VerifyNamed | Self::VerifyNamedAnchor
+        )
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VerifiedSave {
     OnDefaultBranch,
     UnlessLocal,
+    AnchoredOnDefaultBranch,
+    AnchoredUnlessLocal,
     NodeStore,
     Prime,
     Anchor,

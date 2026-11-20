@@ -18,7 +18,7 @@ const ATTACHMENT_PATHS: &str = "CREATE TABLE IF NOT EXISTS capacity_reservation_
 const V29_ATTACHMENT_PATHS: &str = "CREATE TABLE IF NOT EXISTS capacity_reservation_bound_storage_paths (reservation_id INTEGER NOT NULL, role TEXT NOT NULL, observer TEXT NOT NULL, mount_target TEXT NOT NULL, mount_root TEXT NOT NULL CHECK (length(mount_root) BETWEEN 1 AND 512), volume_subpath TEXT, PRIMARY KEY (reservation_id, role, observer, mount_target), FOREIGN KEY (reservation_id, role, observer, mount_target) REFERENCES capacity_reservation_bound_storage_attachments(reservation_id, role, observer, mount_target), CHECK ((role = 'engine-metadata' AND observer = 'runner' AND ((mount_target = '/.velnor-runtime-identity' AND volume_subpath IS 'runtime-identity') OR (mount_target = '/opt/velnor/job-facts' AND volume_subpath IS 'job-facts') OR (mount_target = '/opt/velnor/source-proof/control' AND volume_subpath IS 'source-proof/control') OR (mount_target = '/opt/velnor/source-proof/inbox' AND volume_subpath IS 'source-proof/inbox'))) OR (role = 'runner-home' AND ((observer IN ('runner', 'dind') AND mount_target = '/home/runner' AND volume_subpath IS NULL) OR (observer = 'runner' AND mount_target = '/opt/velnor/source-proof/inbox' AND volume_subpath IS NOT NULL AND volume_subpath IS 'source-proof/inbox'))) OR (role = 'engine-metadata' AND observer = 'probe' AND volume_subpath IS NULL) OR (role != 'engine-metadata' AND role != 'runner-home' AND volume_subpath IS NULL)))";
 const LEGACY_ATTACHMENT_PATHS: &str = "CREATE TABLE IF NOT EXISTS capacity_reservation_bound_storage_paths (reservation_id INTEGER NOT NULL, role TEXT NOT NULL, observer TEXT NOT NULL, mount_target TEXT NOT NULL, mount_root TEXT NOT NULL CHECK (length(mount_root) BETWEEN 1 AND 512), volume_subpath TEXT, PRIMARY KEY (reservation_id, role, observer, mount_target), FOREIGN KEY (reservation_id, role, observer, mount_target) REFERENCES capacity_reservation_bound_storage_attachments(reservation_id, role, observer, mount_target), CHECK ((role = 'engine-metadata' AND observer = 'runner' AND ((mount_target = '/.velnor-runtime-identity' AND volume_subpath = 'runtime-identity') OR (mount_target = '/opt/velnor/job-facts' AND volume_subpath = 'job-facts') OR (mount_target = '/opt/velnor/source-proof/control' AND volume_subpath = 'source-proof/control') OR (mount_target = '/opt/velnor/source-proof/inbox' AND volume_subpath = 'source-proof/inbox'))) OR (role = 'engine-metadata' AND observer = 'probe' AND volume_subpath IS NULL) OR (role != 'engine-metadata' AND volume_subpath IS NULL)))";
 
-const TRIGGERS: [(&str, &str); 7] = [
+const TRIGGERS: &[(&str, &str)] = &[
     (
         "root_backing_insert_guard",
         "CREATE TRIGGER IF NOT EXISTS root_backing_insert_guard BEFORE INSERT ON capacity_reservation_root_backing_mappings WHEN NOT EXISTS (SELECT 1 FROM capacity_reservations AS r JOIN capacity_reservation_provisioning AS p ON p.reservation_id = r.id JOIN capacity_reservation_provisioning_state AS s ON s.reservation_id = r.id JOIN connection_intents AS i ON i.id = p.operation_id WHERE r.id = NEW.reservation_id AND r.connection_id = NEW.connection_id AND r.intent_id = NEW.operation_id AND p.operation_id = NEW.operation_id AND p.engine_id = NEW.engine_id AND p.docker_root_digest = NEW.docker_root_digest AND p.sample_generation_id = NEW.sample_generation_id AND s.bootstrap_start_state = 'started' AND s.resources_bound = 0 AND i.state = 'pending' AND i.cleanup_proven = 0) OR NOT EXISTS (SELECT 1 FROM capacity_reservation_bootstrap_containers AS c WHERE c.reservation_id = NEW.reservation_id AND c.role = CASE NEW.role WHEN 'runner-root' THEN 'runner' ELSE 'dind' END AND c.create_state = 'created' AND c.start_state = 'started' AND c.container_id = NEW.container_id) OR length(NEW.logical_filesystem_digest) != 64 OR NEW.logical_filesystem_digest GLOB '*[^0-9a-f]*' OR length(NEW.backing_filesystem_digest) != 64 OR NEW.backing_filesystem_digest GLOB '*[^0-9a-f]*' OR length(NEW.mapping_digest) != 64 OR NEW.mapping_digest GLOB '*[^0-9a-f]*' BEGIN SELECT RAISE(ABORT, 'The root backing record is incorrect.'); END",
@@ -71,7 +71,7 @@ pub(super) async fn bootstrap(connection: &turso::Connection) -> Result<(), Host
         .execute(TABLE, ())
         .await
         .map_err(|_| HostError::Journal)?;
-    for (_, sql) in TRIGGERS {
+    for &(_, sql) in TRIGGERS {
         connection
             .execute(sql, ())
             .await
@@ -93,7 +93,7 @@ pub(super) async fn bootstrap_v30(connection: &turso::Connection) -> Result<(), 
         .execute(TABLE, ())
         .await
         .map_err(|_| HostError::Journal)?;
-    for (_, sql) in TRIGGERS {
+    for &(_, sql) in TRIGGERS {
         connection
             .execute(sql, ())
             .await
@@ -117,7 +117,7 @@ async fn validate_schema(
         ("capacity_reservation_bound_storage_paths", attachment_paths),
     ]
     .into_iter()
-    .chain(TRIGGERS)
+    .chain(TRIGGERS.iter().copied())
     .chain(with_inode.then_some(PATH_INODE_TRIGGER))
     {
         let kind = if expected.starts_with("CREATE TRIGGER") {
@@ -143,7 +143,7 @@ async fn validate_schema(
             return Err(HostError::Journal);
         }
     }
-    for query in VALIDATION {
+    for query in VALIDATION.iter().copied() {
         let mut rows = connection
             .query(query, ())
             .await

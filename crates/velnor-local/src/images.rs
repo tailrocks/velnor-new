@@ -8,7 +8,7 @@ use std::path::Path;
 pub const RUNNER_TAG: &str = "velnor-local/pair-runner";
 pub const DIND_TAG: &str = "velnor-local/pair-dind";
 pub const PROBE_TAG: &str = "velnor-local/pair-probe";
-pub const TARGETS: [&str; 3] = [RUNNER_TAG, DIND_TAG, PROBE_TAG];
+pub const TARGETS: &[&str] = &[RUNNER_TAG, DIND_TAG, PROBE_TAG];
 const RUST_IMAGE: &str =
     "rust:1.99.1-trixie@sha256:8a4e90c7946b74626488b1446f712c0fe0ed1a596cbd3d871684bc9c5433ae07";
 const TARGET_VOLUME: &str = "velnor-arm64-target";
@@ -25,7 +25,7 @@ const HELPERS: &str = r##"rustup target add aarch64-unknown-linux-musl \
     && chmod 0555 /out/*/* \
     && chown -R "$(stat -c %u:%g /out)" /out"##;
 
-pub const HOST_BUILD: [&str; 8] = [
+pub const HOST_BUILD: &[&str] = &[
     "build",
     "--release",
     "--locked",
@@ -36,7 +36,7 @@ pub const HOST_BUILD: [&str; 8] = [
     "--features=local-mode",
 ];
 pub const HOST_BINARY: &str = "target/release/velnor-host";
-pub const RELEASE_IDENTITY: [&str; 2] = [
+pub const RELEASE_IDENTITY: &[&str] = &[
     "VELNOR_RUNNER_BUILD_SOURCE_SHA",
     "VELNOR_RUNNER_BUILD_HELPER_SHA256",
 ];

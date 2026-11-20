@@ -231,9 +231,9 @@ pub(crate) fn check_condition(value: &str, scope: &Scope<'_>) -> Result<String, 
     }
 }
 
-pub(crate) const WITH_INTERPOLATIONS: [&str; 3] =
-    ["github.run_id", "github.run_attempt", "github.job"];
-pub(crate) const ENV_INTERPOLATIONS: [&str; 1] = ["github.workspace"];
+pub(crate) const WITH_INTERPOLATIONS: &[&str] =
+    &["github.run_id", "github.run_attempt", "github.job"];
+pub(crate) const ENV_INTERPOLATIONS: &[&str] = &["github.workspace"];
 
 pub(crate) fn check_interpolated(
     what: &str,

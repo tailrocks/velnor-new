@@ -24,7 +24,7 @@ fn yaml_files(dir: &Path, found: &mut Vec<PathBuf>) -> TestResult {
     Ok(())
 }
 
-const JOB_CACHE_MODES: [&str; 4] = [
+const JOB_CACHE_MODES: &[&str] = &[
     "    cache-mode: read",
     "    cache-mode: write",
     "    cache-mode: write-only",

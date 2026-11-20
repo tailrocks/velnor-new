@@ -16,7 +16,8 @@ use crate::config::CONFIG_PATH;
 use crate::detect::HELPER_PACKAGE;
 use crate::error::{DetectError, Reason};
 use crate::lane::{
-    Lane, PLAN_JOB, expose_read_outputs, plan_job, policy_job, used_group_outputs, used_outputs,
+    EARLY_POLICY_HELPER, Lane, PLAN_JOB, expose_read_outputs, plan_job, policy_job,
+    used_group_outputs, used_outputs,
 };
 use crate::plan_budget::{draft_guard, expose_selection, triggers};
 use crate::plan_tools::{mirror_step, tools_install, tools_restore, tools_save};
@@ -30,6 +31,8 @@ pub(crate) const LINT_JOB: JobId = JobId::from_static("rust-lint");
 pub(crate) const TEST_JOB: JobId = JobId::from_static("rust-test");
 pub(crate) const MBX_SEED_HELPER: (u64, u64, u64) = (0, 1, 86);
 pub(crate) const TOOLS_LOCAL_HELPER: (u64, u64, u64) = (0, 1, 89);
+// helper-gate: first in tools-v0.1.110 via c14fa4818f
+pub(crate) const CHAINED_SAVES_HELPER: (u64, u64, u64) = (0, 1, 110);
 pub(crate) const DEFAULT_GROUP_JOB: JobId = JobId::from_static("rust-test-default");
 pub(crate) const HELPER_JOB: JobId = JobId::from_static("rust-helper");
 pub(crate) const BUDGET_JOB: JobId = JobId::from_static(velnor_model::BUDGET_JOB);
@@ -67,7 +70,11 @@ fn plan_with(facts: &RepoFacts, deltas: bool) -> WorkflowPlan {
         jobs.extend(lane_jobs(facts, unit, decision.shape, suffixed, &lane));
     }
     if facts.policy.any() {
-        jobs.push(policy_job(facts, &Lane::policy(single, deltas)));
+        let early = facts
+            .helper
+            .as_ref()
+            .is_some_and(|release| release.version().at_least(EARLY_POLICY_HELPER));
+        jobs.push(policy_job(facts, &Lane::policy(single, early, deltas)));
     }
     jobs.extend(crate::lint_jobs::lint_jobs(facts));
     let draft_guard = draft_guard(facts);
@@ -97,6 +104,7 @@ fn plan_with(facts: &RepoFacts, deltas: bool) -> WorkflowPlan {
         permissions: Permissions(BTreeMap::from([(PermissionScope::Contents, Access::Read)])),
         fork_runner: facts.config.fork_runner.clone(),
         hosted_runners: facts.config.hosted_runners.clone(),
+        trusted_runners: facts.config.trusted_runners.clone(),
         jobs,
     }
 }
@@ -110,7 +118,9 @@ fn apply_extensions(facts: &RepoFacts, jobs: &mut [Job], single: bool) {
     crate::lock_scope::apply(facts, jobs);
     crate::mbx_steps::apply(facts, jobs);
     if facts.config.push_after_merge_group == PushAfterMergeGroup::SkipWhenQueueRunPassed {
-        crate::merge_group_skip::apply(jobs, single);
+        crate::merge_group_skip::apply(jobs, single, &|kind| {
+            crate::docs_post_merge::runs_after_merge(facts, kind)
+        });
     }
     crate::docs_post_merge::apply(facts, jobs);
 }
@@ -137,6 +147,7 @@ fn helper_job(facts: &RepoFacts, root: &RustRoot, deltas: bool) -> Job {
             binary: TargetName::from_static(HELPER_PACKAGE),
         }))
     });
+    let steps = crate::test_setup::before_builds(facts, root, steps);
     Job {
         needs: vec![PLAN_JOB],
         gate: lane.job(),
@@ -246,11 +257,12 @@ pub(crate) fn setup_units(
     );
     if lane.plan.is_none() {
         steps.push(step(StepKind::Helper(HelperCommand::Plan)));
+        steps.extend(crate::base_cache::public_sources_step(facts));
     }
     steps.extend(mbx(facts, lane.steps()));
     let mut toolchain: Vec<Step> = mirror_step(facts)
         .into_iter()
-        .chain(tools_restore(facts))
+        .chain(tools_restore(facts, lane.plan.as_ref()))
         .chain(tools_install(facts))
         .collect();
     if !facts.tools.tools.is_empty() {
@@ -261,9 +273,9 @@ pub(crate) fn setup_units(
     let prepare = step(StepKind::Prepare(PrepareLocks::All));
     if declared.is_some_and(|toolchain| toolchain.profile.as_deref() == Some("complete")) {
         toolchain.push(prepare);
-        toolchain.extend(tools_save(facts));
+        toolchain.extend(tools_save(facts, lane.plan.as_ref()));
     } else {
-        toolchain.extend(tools_save(facts));
+        toolchain.extend(tools_save(facts, lane.plan.as_ref()));
         toolchain.push(prepare);
     }
     for (index, (unit, family)) in units.iter().zip(families).enumerate() {
@@ -336,6 +348,10 @@ pub(crate) fn job(facts: &RepoFacts, id: JobId) -> Job {
                 .version()
                 .at_least(crate::root_jobs::BUILT_RECORD_HELPER)
         }),
+        chained_saves: facts
+            .helper
+            .as_ref()
+            .is_some_and(|helper| helper.version().at_least(CHAINED_SAVES_HELPER)),
         selection_name: None,
         steps: Vec::new(),
     }

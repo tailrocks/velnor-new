@@ -5,8 +5,8 @@ use std::collections::BTreeMap;
 
 use velnor_model::{
     Access, BaseExpiry, CacheKey, CacheRoot, HelperCommand, Host, InputsCli, Job, JobId,
-    LockIdentity, PermissionScope, Permissions, RepoFacts, RepoPath, RootSlug, RustRoot, Step,
-    StepKind, TrimFamily, When,
+    LockIdentity, PermissionScope, Permissions, PlanFrom, RepoFacts, RepoPath, RootSlug, RustRoot,
+    Step, StepKind, TrimFamily, When,
 };
 
 use crate::lane::Lane;
@@ -59,6 +59,23 @@ pub(crate) fn cache_root(facts: &RepoFacts, root: &RustRoot) -> CacheRoot {
 
 pub(crate) fn writes_base(facts: &RepoFacts) -> bool {
     facts.private_sources.is_none() && has_saving_helper(facts)
+}
+
+pub(crate) fn public_sources_step(facts: &RepoFacts) -> Option<Step> {
+    (facts.config.public_sources.is_some() && writes_base(facts)).then(|| Step {
+        when: When::SavingRun,
+        ..step(StepKind::PublicSources {
+            manifests: facts
+                .rust_roots
+                .iter()
+                .map(|root| root.manifest.clone())
+                .collect(),
+            selected: crate::units::units(facts)
+                .iter()
+                .map(|unit| unit.gate.clone())
+                .collect(),
+        })
+    })
 }
 
 pub const MAX_SOURCE_ROOTS: usize = 16;
@@ -204,6 +221,11 @@ pub(crate) fn save_steps(
                 archive,
                 cli: inputs_cli(facts),
                 budget_bytes: facts.config.cache_budget_bytes,
+                verdicts: facts
+                    .config
+                    .public_sources
+                    .as_ref()
+                    .map(|_| lane.plan.clone().map_or(PlanFrom::ThisJob, PlanFrom::Job)),
             })
         },
         Step {

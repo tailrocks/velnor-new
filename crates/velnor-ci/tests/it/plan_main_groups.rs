@@ -30,7 +30,7 @@ root = '.'
 ";
 
 const SPEC: &str = "--plan rust-plan --job rust-plan=always --job rust-test-evt=lane:root+group:root:evt --job rust-test-touched=lane:root+group:root:touched --job rust-test-untouched=lane:root+group:root:untouched";
-const GROUPS: [&str; 3] = ["evt", "touched", "untouched"];
+const GROUPS: &[&str] = &["evt", "touched", "untouched"];
 
 struct Planned {
     outputs: String,

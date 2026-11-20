@@ -6,9 +6,11 @@ use std::error::Error;
 use velnor_gen::GenerateError;
 use velnor_model::RepoView;
 use velnor_rust::LOCK_PATH;
+use velnor_test_support::gh_expr::{Value, evaluate};
 
 use crate::facts::TestResult;
 use crate::pipeline::{HELPER_LOCK, view, workflow};
+use crate::pr_ci_sim::{context, other, pull, simulate, strings};
 
 fn pinned(version: &str) -> String {
     String::from_utf8_lossy(HELPER_LOCK).replace("0.1.81", version)
@@ -273,6 +275,54 @@ fn a_pin_that_reads_the_selection_titles_the_budget_job_with_what_the_plan_selec
             "${{ steps.plan.outputs.rust_root_mode }}"
         ))
     );
+    Ok(())
+}
+
+#[test]
+fn the_selection_title_names_the_run_exactly_when_the_budget_job_runs() -> TestResult {
+    let files = budgeted("0.1.104", "[budget]\nmain_wall_seconds = 600\n")?;
+    let tree = crate::yaml_tree::document(&workflow(&files)?)?;
+    let budget = tree
+        .pointer("/jobs/rust-budget")
+        .ok_or("the budget job is missing")?;
+    let name = budget
+        .get("name")
+        .and_then(serde_json::Value::as_str)
+        .ok_or("the budget job has no title")?;
+    let needs = strings(budget.get("needs"));
+    for (case, event, failing, runs, title) in [
+        (
+            "a push to the default branch",
+            other("push", "refs/heads/main"),
+            vec![],
+            true,
+            "Speed budget (full)",
+        ),
+        (
+            "a pull request",
+            pull(false, &[]),
+            vec![],
+            false,
+            "Speed budget",
+        ),
+        (
+            "a failed build",
+            other("push", "refs/heads/main"),
+            vec!["rust"],
+            false,
+            "Speed budget",
+        ),
+    ] {
+        let results = simulate(&tree, &event, &failing)?;
+        let ran = results.get("rust-budget").map(String::as_str) != Some("skipped");
+        assert_eq!(ran, runs, "whether the budget job runs in {case}");
+        let shown = evaluate(name, &context(&event, &results, &needs))?;
+        assert_eq!(
+            shown,
+            Value::Str(title.to_owned()),
+            "the title in {case}\n{name}"
+        );
+    }
     Ok(())
 }
 

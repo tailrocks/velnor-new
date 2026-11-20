@@ -5,15 +5,20 @@ use serde::Deserialize;
 use std::collections::BTreeMap;
 
 use velnor_model::{
-    CheckoutScope, CiDebugInfo, InputRule, PackageName, PathGlob, RepoPath, RunnerLabel,
+    CiDebugInfo, GitRepository, InputRule, PackageName, PathGlob, RepoPath, RunnerLabel,
     RustCiConfig, SpeedBudget, TargetName,
 };
 
 use crate::config_events::{docs_run, on_main};
+use crate::config_external;
 use crate::config_keys::KEYS;
+use crate::config_pr_ci::parse as parse_pr_ci;
 use crate::error::{DetectError, Reason};
 use crate::shape::parse_shape;
 use crate::toml_file::table;
+use values::{checkout_scope, required_check};
+
+mod values;
 
 pub const CONFIG_PATH: RepoPath = RepoPath::from_static(".velnor/rust-ci.toml");
 
@@ -30,8 +35,10 @@ struct RawConfig {
     runner: Option<String>,
     hosted: Option<bool>,
     fork_runner: Option<String>,
+    trusted_runner: Option<String>,
     crates_mirror: Option<crate::config_mirror::RawCratesMirror>,
     private_sources: Option<crate::config_private::RawPrivateSources>,
+    public_sources: Option<crate::config_public::RawPublicSources>,
     mbx_shared_store: Option<bool>,
     docs: Option<String>,
     check_alone: Option<String>,
@@ -60,6 +67,8 @@ struct RawConfig {
     #[serde(default)]
     test_setup: Vec<crate::config_test_setup::RawTestSetup>,
     #[serde(default)]
+    check_configurations: Vec<crate::config_check_configurations::RawCheckConfigurations>,
+    #[serde(default)]
     release_assets: Vec<crate::config_release_assets::RawReleaseAsset>,
     #[serde(default)]
     lint: Vec<crate::config_lint::RawLint>,
@@ -69,6 +78,7 @@ struct RawConfig {
     workspace_groups: Vec<crate::groups::RawGroup>,
     #[serde(default)]
     test_lane: Vec<crate::config_test_lane::RawTestLane>,
+    policy: Option<crate::config_policy::RawPolicy>,
     external_workflows: Option<Vec<String>>,
 }
 
@@ -98,16 +108,13 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
     let skip_draft_pull_requests = raw
         .skip_draft_pull_requests
         .unwrap_or(defaults.skip_draft_pull_requests);
-    let pr_ci = crate::config_pr_ci::parse(raw.pr_ci.as_deref(), skip_draft_pull_requests)
-        .map_err(invalid)?;
+    let pr_ci = parse_pr_ci(raw.pr_ci.as_deref(), skip_draft_pull_requests).map_err(invalid)?;
     let default_branch =
         crate::config_branch::default_branch(raw.default_branch, defaults.default_branch)
             .map_err(invalid)?;
     let on_main = on_main(raw.on_main.as_deref(), defaults.on_main).map_err(invalid)?;
-    let full_run = match raw.full_run {
-        None => defaults.full_run,
-        Some(value) => crate::config_events::full_run(value).map_err(invalid)?,
-    };
+    let full_run =
+        crate::config_events::full_run_or(raw.full_run, defaults.full_run).map_err(invalid)?;
     let helper = crate::config_helper::path(raw.helper).map_err(invalid)?;
     let ci_debuginfo =
         debuginfo(raw.ci_debuginfo.as_deref(), defaults.ci_debuginfo).map_err(invalid)?;
@@ -120,29 +127,32 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
     let test_groups = crate::config_test_groups::parse(raw.test_groups).map_err(invalid)?;
     let workspace_groups = crate::groups::parse(raw.workspace_groups).map_err(invalid)?;
     let test_lanes = crate::config_test_lane::parse(raw.test_lane).map_err(invalid)?;
-    let external_workflows =
-        crate::config_external::parse(raw.external_workflows).map_err(invalid)?;
-    let declared_runner = raw.runner.is_some();
-    let hosted_key = raw.hosted.is_some() || test_groups.iter().any(|group| group.hosted.is_some());
-    let runner = runner(raw.runner, defaults.runner).map_err(invalid)?;
-    let crates_mirror = crate::config_mirror::optional(raw.crates_mirror).map_err(invalid)?;
-    let hosted_runners = crate::config_hosting::resolve(
-        (&runner, raw.hosted.or((!declared_runner).then_some(true))),
-        crates_mirror.as_ref(),
-        &test_groups,
-    )
+    let external_workflows = config_external::parse(raw.external_workflows).map_err(invalid)?;
+    let runner = runner(raw.runner.clone(), defaults.runner).map_err(invalid)?;
+    let runners = crate::config_trusted::Declared {
+        runner: &runner,
+        explicit_runner: raw.runner.is_some(),
+        hosted: raw.hosted,
+        fork_runner: raw.fork_runner,
+        trusted_runner: raw.trusted_runner,
+        crates_mirror: raw.crates_mirror,
+        test_groups: &test_groups,
+    }
+    .resolve()
     .map_err(invalid)?;
-    let fork_runner = crate::config_fork::fork_runner(raw.fork_runner, &runner).map_err(invalid)?;
     let (mbx_remote, mbx_store, mbx) =
         crate::config_cache::mbx_settings(raw.cache.as_ref(), raw.mbx_shared_store)
             .map_err(invalid)?;
     Ok(RustCiConfig {
         workspace_groups,
+        policy: crate::config_policy::parse(raw.policy).map_err(invalid)?,
         external_workflows,
         budget: crate::config_budget::parse(bytes).map_err(invalid)?,
         cache_budget_bytes: crate::cache_budget::configured_budget(raw.cache_budget_bytes)
             .map_err(invalid)?,
         test_setup,
+        check_configurations: crate::config_check_configurations::parse(raw.check_configurations)
+            .map_err(invalid)?,
         checkout: checkout_scope(raw.sparse_checkout),
         lint,
         test_groups,
@@ -152,10 +162,12 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         mbx_remote,
         mbx,
         push_after_merge_group: crate::config_ci::push_after_merge_group(raw.ci),
-        crates_mirror,
-        hosted_runners: hosted_runners.with_key_written(hosted_key),
+        crates_mirror: runners.crates_mirror,
+        hosted_runners: runners.hosted,
+        trusted_runners: runners.trusted,
         docs_run: docs_run("docs", raw.docs.as_deref()).map_err(invalid)?,
         check_alone_run: docs_run("check_alone", raw.check_alone.as_deref()).map_err(invalid)?,
+        public_sources: crate::config_public::optional(raw.public_sources).map_err(invalid)?,
         private_sources,
         release_assets,
         mbx_store,
@@ -173,19 +185,11 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         inputs,
         default_ignores: raw.default_ignores.unwrap_or(defaults.default_ignores),
         runner,
-        fork_runner,
+        fork_runner: runners.fork,
         timeout_minutes,
         root_timeouts: crate::config_root_timeouts::parse(raw.root_timeouts).map_err(invalid)?,
         exclude: crate::config_exclude::excludes(raw.exclude).map_err(invalid)?,
     })
-}
-
-fn checkout_scope(sparse: Option<bool>) -> CheckoutScope {
-    if sparse.unwrap_or(false) {
-        CheckoutScope::Sparse
-    } else {
-        CheckoutScope::Full
-    }
 }
 
 fn timeout(configured: Option<u16>, default: u16) -> Result<u16, Reason> {
@@ -199,17 +203,6 @@ fn timeout(configured: Option<u16>, default: u16) -> Result<u16, Reason> {
             min: *TIMEOUT_RANGE.start(),
             max: *TIMEOUT_RANGE.end(),
         })
-    }
-}
-
-fn required_check(configured: Option<String>, default: String) -> Result<String, Reason> {
-    match configured {
-        None => Ok(default),
-        Some(name) if !name.trim().is_empty() && !name.chars().any(char::is_control) => Ok(name),
-        Some(name) => Err(Reason::InvalidValue {
-            key: "required_check",
-            value: name,
-        }),
     }
 }
 
@@ -309,7 +302,7 @@ fn rules(
 const ANY_SEGMENT: &str = "*";
 const REST: &str = "**";
 
-fn rule_glob(key: &'static str, entry: String) -> Result<PathGlob, Reason> {
+pub(crate) fn rule_glob(key: &'static str, entry: String) -> Result<PathGlob, Reason> {
     let invalid = |value: String| Reason::InvalidValue { key, value };
     let (segments, _) = shape(&entry);
     let grammatical = segments
@@ -381,6 +374,10 @@ pub fn ci_debuginfo(
         || Ok(RustCiConfig::default().ci_debuginfo),
         |bytes| parse(bytes).map(|config| config.ci_debuginfo),
     )
+}
+
+pub fn declared_public_sources(bytes: &[u8]) -> Result<Vec<GitRepository>, DetectError> {
+    parse(bytes).map(|config| config.public_sources.map_or_else(Vec::new, |s| s.git))
 }
 
 pub fn budget(bytes: &[u8]) -> Result<Option<SpeedBudget>, DetectError> {

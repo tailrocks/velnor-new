@@ -21,10 +21,10 @@ pub(crate) enum Class<'c> {
     Unknown,
 }
 
-const TOOLCHAIN_FILES: [&str; 2] = ["rust-toolchain", "rust-toolchain.toml"];
-const TOOL_PIN_FILES: [&str; 3] = ["mise.toml", ".mise.toml", "mise.lock"];
-const IGNORED_FOLDERS: [&str; 3] = ["docs/", "LICENSES/", ".github/ISSUE_TEMPLATE/"];
-const IGNORED_ROOT_NAMES: [&str; 2] = ["NOTICE", "CODEOWNERS"];
+const TOOLCHAIN_FILES: &[&str] = &["rust-toolchain", "rust-toolchain.toml"];
+const TOOL_PIN_FILES: &[&str] = &["mise.toml", ".mise.toml", "mise.lock"];
+const IGNORED_FOLDERS: &[&str] = &["docs/", "LICENSES/", ".github/ISSUE_TEMPLATE/"];
+const IGNORED_ROOT_NAMES: &[&str] = &["NOTICE", "CODEOWNERS"];
 const IGNORED_ROOT_PREFIX: &str = "LICENSE";
 const PULL_REQUEST_TEMPLATE: &str = ".github/PULL_REQUEST_TEMPLATE";
 
@@ -41,6 +41,13 @@ pub(crate) fn classify<'c>(
         .any(|glob| rule_matches(glob, path))
     {
         return Class::Nothing;
+    }
+    if config
+        .check_configurations
+        .iter()
+        .any(|check| check.file().as_ref() == Some(path))
+    {
+        return Class::Unknown;
     }
     let packages: Vec<&PackageName> = config
         .inputs

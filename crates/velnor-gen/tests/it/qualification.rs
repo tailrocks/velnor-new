@@ -13,7 +13,7 @@ use crate::yaml_tree::document;
 
 /// Jobs whose commands are a call of a checked-in script under `qualification/`: velnor-gen
 /// refuses a multi-line `run`, a loop, a pipe, a `shell` key and a job `env`.
-pub(super) const SCRIPTED: [&str; 10] = [
+pub(super) const SCRIPTED: &[&str] = &[
     "mbx-cache-write-hosted",
     "mbx-cache-read-hosted",
     "ports-a-hosted",
@@ -163,7 +163,7 @@ fn scripted_jobs_call_scripts_that_exist_with_a_phase_they_have() -> TestResult 
     let workflow = generated()?;
     let jobs = jobs_of(&workflow)?;
     let mut called = BTreeSet::new();
-    for id in SCRIPTED {
+    for id in SCRIPTED.iter().copied() {
         let job = jobs.get(id).ok_or(format!("{id}: no such job"))?;
         let mut calls = 0;
         for step in job

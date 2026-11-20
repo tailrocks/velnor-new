@@ -10,7 +10,7 @@ use std::process::{Command, Output, Stdio};
 use std::time::{Duration, Instant};
 
 const RATIO: &str = "echo '     Summary [   0.077s] 63/109 tests run: 62 passed, 1 failed, 0 skipped' >&2\nexit 100";
-const NEXTEST: [&str; 3] = ["cargo-nextest", "nextest", "run"];
+const NEXTEST: &[&str] = &["cargo-nextest", "nextest", "run"];
 
 fn scratch(name: &str) -> PathBuf {
     let dir = crate::scratch_path("velnor-ci-sum", name);
@@ -51,7 +51,7 @@ fn nextest(name: &str, body: &str) -> (Output, String) {
     let temp = scratch(name);
     script(&temp, "cargo-nextest", body);
     fs::write(temp.join("github-output"), "").unwrap_or_else(|e| unreachable!("{e}"));
-    let output = velnor(&temp, &[], &NEXTEST)
+    let output = velnor(&temp, &[], NEXTEST)
         .env("VELNOR_CI_RUN_PUMP_GRACE_MS", "300")
         .output()
         .unwrap_or_else(|e| unreachable!("{e}"));
