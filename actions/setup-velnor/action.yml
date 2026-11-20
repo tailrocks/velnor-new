@@ -67,7 +67,9 @@ runs:
         evict_store_entry() {
           quarantine=
           if quarantine="$(mktemp "$dir/.velnor-ci.evict.XXXXXX" 2> /dev/null)" && mv -f "$dir/$archive" "$quarantine" 2> /dev/null; then
-            if [ "$(digest "$quarantine")" = "$expected" ]; then
+            if [ "${1:-}" = unreadable ]; then
+              echo "::warning title=setup-velnor::removed the tool-cache copy of $archive for velnor-ci $VERSION without reading it, because it is larger than $MAX_BYTES bytes or could not be read in time"
+            elif [ "$(digest "$quarantine")" = "$expected" ]; then
               mv -n "$quarantine" "$dir/$archive" 2> /dev/null || true
             else
               echo "::warning title=setup-velnor::removed the tool-cache copy of $archive for velnor-ci $VERSION, which is not the archive with SHA-256 $expected"
@@ -98,7 +100,7 @@ runs:
             if [ -n "$dir" ] && [ -f "$dir/$archive" ] && [ ! -L "$dir/$archive" ]; then
               if ! bounded_copy "$dir/$archive" "$file"; then
                 rm -f "$file"
-                evict_store_entry
+                evict_store_entry unreadable
                 continue
               fi
             else

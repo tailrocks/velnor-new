@@ -82,6 +82,12 @@ printf '%s\\t%s\\n' "$pipe" "$*" >> "$STUB_TAR_LOG"
 exec "$REAL_TAR" "$@"
 """
 
+STUB_DIGEST = """#!/bin/sh
+printf '%s\\n' "$*" >> "$STUB_DIGEST_LOG"
+if [ -n "$REAL_SHA256SUM" ]; then exec "$REAL_SHA256SUM" "$@"; fi
+exec "$REAL_SHASUM" -a 256 "$@"
+"""
+
 STUB_SLOW_HEAD = """#!/bin/sh
 /bin/sleep 1
 exec "$REAL_HEAD" "$@"
@@ -573,6 +579,34 @@ class SetupVelnorInstallTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1, result.output)
         self.assertFalse(cached.exists(), "an oversized store entry survived the job and will be read by the next one")
 
+    def test_an_oversized_store_entry_is_removed_without_being_read(self):
+        cached = self.cached_archive()
+        cached.parent.mkdir(parents=True)
+        cached.write_bytes(self.archive)
+        with cached.open("r+b") as handle:
+            handle.truncate(268435457)
+        stub = self.stub_bin / "sha256sum"
+        stub.write_text(STUB_DIGEST)
+        stub.chmod(0o755)
+        digest_log = self.root / "digest-calls.log"
+        result = self.install(
+            sha256(self.archive),
+            extra_env={
+                "STUB_MISSING": "tools-v0.1.79 rust-ci-v0.1.79",
+                "STUB_DIGEST_LOG": str(digest_log),
+                "REAL_SHA256SUM": shutil.which("sha256sum") or "",
+                "REAL_SHASUM": shutil.which("shasum") or "",
+            },
+        )
+        self.assertEqual(result.returncode, 1, result.output)
+        self.assertFalse(cached.exists(), "an oversized store entry survived the job")
+        digested = digest_log.read_text().splitlines() if digest_log.exists() else []
+        self.assertEqual(
+            [call for call in digested if ".velnor-ci.evict." in call],
+            [],
+            "an oversized store entry was read in full to hash it",
+        )
+
     def test_a_verified_copy_published_during_an_eviction_is_kept_for_the_next_job(self):
         cached = self.cached_archive()
         cached.parent.mkdir(parents=True)
@@ -597,16 +631,19 @@ class SetupVelnorInstallTests(unittest.TestCase):
         self.assertEqual(self.curl_calls(), [])
         self.assertEqual(self.installed_binary().read_bytes(), PAYLOAD)
 
-    def test_every_download_is_bounded_by_a_transfer_timeout_and_a_total_retry_budget(self):
+    def test_every_download_attempt_is_capped_at_ten_minutes_and_a_fifteen_minute_retry_window(self):
         result = self.install(sha256(self.archive), extra_env={"STUB_MISSING": "tools-v0.1.79"})
         self.assertEqual(result.returncode, 0, result.output)
         calls = self.curl_calls()
         self.assertEqual(len(calls), 2, calls)
+        limits = {"--max-time": 600, "--retry-max-time": 900}
         for call in calls:
             words = call.split()
-            for flag in ("--max-time", "--retry-max-time"):
+            for flag, limit in limits.items():
                 self.assertIn(flag, words, call)
-                self.assertRegex(words[words.index(flag) + 1], r"^[1-9][0-9]*$", call)
+                value = words[words.index(flag) + 1]
+                self.assertRegex(value, r"^[1-9][0-9]*$", call)
+                self.assertLessEqual(int(value), limit, call)
 
     def test_a_stored_archive_that_mismatches_is_removed_even_when_the_download_is_also_bad(self):
         cached = self.cached_archive()
