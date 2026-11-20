@@ -18,10 +18,21 @@ const ALLOWED: &[(&str, &[&str])] = &[
     ("remote", &["url", "fetch", "tagopt"]),
 ];
 const REMOTE_SCHEMES: &[&str] = &["https://", "http://", "ssh://"];
-const TOKEN_PREFIXES: &[&str] = &["ghp_", "gho_", "ghs_", "ghu_", "ghr_", "github_pat_"];
+const TOKEN_PREFIXES: &[&str] = &[
+    "ghp_",
+    "gho_",
+    "ghs_",
+    "ghu_",
+    "ghr_",
+    "github_pat_",
+    "glpat-",
+];
 const TOKEN_HEX_LEN: usize = 40;
 
 pub(super) fn is_plain(text: &str) -> bool {
+    if has_token_prefix(&text.to_ascii_lowercase()) {
+        return false;
+    }
     let mut section = String::new();
     for line in text.lines() {
         let line = line.trim();
@@ -82,11 +93,36 @@ pub(super) fn names_credential(text: &str) -> bool {
     has_token_prefix(&text)
         || text
             .split(|each: char| each.is_whitespace() || matches!(each, '\'' | '"' | '<' | '>'))
-            .any(|word| word.contains("://") && !plain_remote(word))
+            .flat_map(embedded_urls)
+            .any(|url| !plain_remote(url))
+}
+
+fn embedded_urls(word: &str) -> impl Iterator<Item = &str> {
+    let mut from = 0;
+    std::iter::from_fn(move || {
+        let at = from + word.get(from..)?.find("://")?;
+        from = at + "://".len();
+        let start = word[..at]
+            .char_indices()
+            .rev()
+            .find(|(_, each)| !(each.is_ascii_alphanumeric() || matches!(each, '+' | '.' | '-')))
+            .map_or(0, |(index, each)| index + each.len_utf8());
+        let url = word[start..]
+            .trim_start_matches(|each: char| !each.is_ascii_alphabetic())
+            .trim_end_matches([')', ']', '}', ',', ';', '.', ':']);
+        Some(url)
+    })
 }
 
 fn has_token_prefix(text: &str) -> bool {
-    TOKEN_PREFIXES.iter().any(|prefix| text.contains(prefix))
+    TOKEN_PREFIXES.iter().any(|prefix| {
+        text.match_indices(prefix).any(|(at, _)| {
+            !text[..at]
+                .chars()
+                .next_back()
+                .is_some_and(|before| before.is_ascii_alphanumeric())
+        })
+    })
 }
 
 fn looks_like_token(text: &str) -> bool {

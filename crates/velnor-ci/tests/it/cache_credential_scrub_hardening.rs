@@ -149,6 +149,104 @@ fn plain_git_files_the_scan_reads_are_saved() {
     ]);
 }
 
+const FSMONITOR_WATCHMAN_HEAD: &str = "#!/usr/bin/perl
+
+use strict;
+use warnings;
+use IPC::Open2;
+
+# An example hook script to integrate Watchman
+# (https://facebook.github.io/watchman/) with git to speed up detecting
+# new and modified files.
+#
+# The hook is passed a version (currently 2) and last update token
+# formatted as a string and outputs to stdout a new update token and
+# all files that have been modified since the update token. Paths must
+# be relative to the root of the working tree and separated by a single NUL.
+#
+# To enable this hook, rename this file to \"query-watchman\" and set
+# 'git config core.fsmonitor .git/hooks/query-watchman'
+#
+my ($version, $last_update_token) = @ARGV;
+";
+
+#[test]
+fn git_stock_hook_samples_with_a_parenthesised_url_are_saved() {
+    sources_save_goes_on(&[
+        (
+            "stock-fsmonitor-watchman-sample",
+            ".cargo/git/db/shared-1/hooks/fsmonitor-watchman.sample",
+            FSMONITOR_WATCHMAN_HEAD,
+        ),
+        (
+            "url-in-brackets-and-trailing-punctuation",
+            ".cargo/git/db/shared-1/hooks/post-fetch",
+            "# see [https://example.org/docs], <https://example.org/a>, https://example.org/b.\n",
+        ),
+    ]);
+}
+
+#[test]
+fn a_credential_url_embedded_in_a_word_stops_the_sources_save() {
+    sources_save_stops(&[
+        (
+            "embedded-userinfo-url",
+            ".cargo/git/db/shared-1/hooks/post-fetch",
+            "# (https://x-access-token:secret@github.com/acme/shared-lib)\n",
+        ),
+        (
+            "embedded-query-token-url",
+            ".cargo/git/db/shared-1/hooks/post-fetch",
+            "# (https://github.example/acme/shared?access_token=secret)\n",
+        ),
+        (
+            "embedded-url-after-a-plain-one",
+            ".cargo/git/db/shared-1/hooks/post-fetch",
+            "# (https://example.org/docs)(https://user@github.example/acme/shared-lib)\n",
+        ),
+        (
+            "embedded-foreign-scheme-url",
+            ".cargo/git/db/shared-1/hooks/post-fetch",
+            "# (ftp://user:secret@example.org/file)\n",
+        ),
+    ]);
+}
+
+#[test]
+fn a_token_in_a_config_comment_or_header_or_a_gitlab_token_stops_the_sources_save() {
+    sources_save_stops(&[
+        (
+            "config-comment-token",
+            ".cargo/git/db/shared-1/config",
+            "[core]\n\tbare = true\n# ghp_0123456789abcdefghijklmnopqrstuvwxyzAB\n",
+        ),
+        (
+            "config-header-only-section-token",
+            ".cargo/git/db/shared-1/config",
+            "[credential \"https://ghp_secret@github.com\"]\n",
+        ),
+        (
+            "config-remote-name-token",
+            ".cargo/git/db/shared-1/config",
+            "[remote \"ghp_secret\"]\n\turl = https://github.com/acme/shared-lib\n",
+        ),
+        (
+            "gitlab-token-in-hook",
+            ".cargo/git/db/shared-1/hooks/post-fetch",
+            "#!/bin/sh\necho glpat-abcdefghijklmnopqrst\n",
+        ),
+    ]);
+}
+
+#[test]
+fn a_ref_name_that_only_contains_a_token_prefix_is_saved() {
+    sources_save_goes_on(&[(
+        "packed-refs-prefix-inside-a-word",
+        ".cargo/git/db/shared-1/packed-refs",
+        "0123456789abcdef0123456789abcdef01234567 refs/heads/weighs_x\n",
+    )]);
+}
+
 #[cfg(unix)]
 fn sources_save_stops_for_symlink(name: &str, link: &str, target: &str) {
     let repo = private_checkout(name, GIT_LOCK);
