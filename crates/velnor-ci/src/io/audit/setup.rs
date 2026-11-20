@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use velnor_gen::io::Checkout;
 use velnor_model::{CompileInputs, RepoFacts};
@@ -11,7 +11,7 @@ use velnor_rust::{Located, Owners, locate};
 use super::Audit;
 use crate::coverage::{Built, gaps};
 use crate::error::CiError;
-use crate::io::units::{UnitFile, Workspace, unit_files_apart};
+use crate::io::units::{UnitFile, Workspace, unit_files, unit_files_apart};
 use crate::platform::Platforms;
 
 pub(super) fn begin<'a>(
@@ -95,7 +95,7 @@ pub(super) fn gathered_files(
             continue;
         }
         files.extend(
-            unit_files_apart(directory, &workspaces[indices[0]].build_directory)?
+            group_units(directory, &workspaces[indices[0]])?
                 .into_iter()
                 .map(|(unit, file)| (unit, file, indices.clone())),
         );
@@ -107,6 +107,14 @@ pub(super) fn gathered_files(
             .then_with(|| left.2.cmp(&right.2))
     });
     Ok(files)
+}
+
+fn group_units(directory: &Path, first: &Workspace) -> Result<Vec<(UnitFile, PathBuf)>, CiError> {
+    if first.build_directory == first.target_directory {
+        unit_files(directory)
+    } else {
+        unit_files_apart(directory, &first.build_directory)
+    }
 }
 
 pub(super) fn complete(

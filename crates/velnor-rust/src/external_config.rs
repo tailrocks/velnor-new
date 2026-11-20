@@ -7,9 +7,8 @@ use crate::toml_file::table;
 /// Digest lines for Cargo configuration read from outside the checkout.
 ///
 /// Every file is hashed by content under its absolute path. A file that is
-/// not UTF-8 TOML, that uses `include`, or that sets `build.build-dir` is
-/// refused: the key cannot cover what it pulls in, and the target cache cannot
-/// cover a separate build directory.
+/// not UTF-8 TOML, or that uses `include`, is refused: the key cannot cover
+/// what it pulls in.
 pub fn external_config_profile(files: &[(String, Vec<u8>)]) -> Result<String, String> {
     let mut out = String::new();
     for (path, bytes) in files {

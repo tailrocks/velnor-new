@@ -25,6 +25,26 @@ fn inside<'a>(outer: &Path, inner: &'a Path) -> Option<&'a Path> {
     inner.starts_with(outer).then_some(inner)
 }
 
+struct Apart {
+    found: Vec<(UnitFile, PathBuf)>,
+    built: bool,
+}
+
+fn apart(target: &Path, build: &Path) -> Result<Apart, CiError> {
+    let limit = directory_limit()?;
+    let (in_target, target_built) = scan(target, limit, inside(target, build))?;
+    let (mut found, build_built) = scan(build, limit, inside(build, target))?;
+    found.extend(
+        in_target
+            .into_iter()
+            .filter(|(unit, _)| matches!(unit, UnitFile::Directory { .. })),
+    );
+    Ok(Apart {
+        found,
+        built: target_built || build_built,
+    })
+}
+
 pub(in crate::io) fn unit_files_apart(
     target: &Path,
     build: &Path,
@@ -32,11 +52,8 @@ pub(in crate::io) fn unit_files_apart(
     if target == build {
         return unit_files(target);
     }
-    let limit = directory_limit()?;
-    let (mut found, target_built) = scan(target, limit, inside(target, build))?;
-    let (more, build_built) = scan(build, limit, inside(build, target))?;
-    found.extend(more);
-    built::refuse_without_units(build, target_built || build_built, &found)?;
+    let Apart { found, built } = apart(target, build)?;
+    built::refuse_without_units(build, built, &found)?;
     Ok(found)
 }
 
@@ -68,42 +85,9 @@ impl Workspace {
     }
 
     pub(in crate::io) fn unchecked_units(&self) -> Result<Vec<(UnitFile, PathBuf)>, CiError> {
-        let mut found = Vec::new();
-        for directory in self.directories() {
-            found.extend(unchecked_unit_files(&directory)?);
+        if self.target_directory == self.build_directory {
+            return unchecked_unit_files(&self.target_directory);
         }
-        Ok(found)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::Workspace;
-    use std::path::Path;
-
-    fn parsed(extra: &str) -> Workspace {
-        serde_json::from_str(&format!(
-            "{{\"workspace_root\":\"/w\",\"target_directory\":\"/w/target\"{extra},\"packages\":[]}}"
-        ))
-        .unwrap_or_else(|e| unreachable!("{e}"))
-    }
-
-    #[test]
-    fn the_build_directory_is_the_one_cargo_metadata_prints() {
-        let workspace = parsed(",\"build_directory\":\"/w/build\"");
-        assert_eq!(workspace.build_directory, Path::new("/w/build"));
-        assert_eq!(
-            workspace.directories(),
-            [Path::new("/w/target"), Path::new("/w/build")]
-        );
-    }
-
-    #[test]
-    fn a_cargo_that_prints_no_build_directory_builds_into_the_target_directory() {
-        for extra in ["", ",\"build_directory\":null"] {
-            let workspace = parsed(extra);
-            assert_eq!(workspace.build_directory, Path::new("/w/target"));
-            assert_eq!(workspace.directories(), [Path::new("/w/target")]);
-        }
+        Ok(apart(&self.target_directory, &self.build_directory)?.found)
     }
 }

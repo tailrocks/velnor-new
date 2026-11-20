@@ -109,8 +109,14 @@ pub fn audit_inputs(directory: &Path, options: &AuditOptions) -> Result<String, 
                 .zip(&groups)
                 .find(|(indices, _)| indices.contains(&index))
                 .map_or_else(
-                    || workspaces[index].target_directory.clone(),
-                    |(_, directory)| directory.clone(),
+                    || workspaces[index].build_directory.clone(),
+                    |(_, directory)| {
+                        if workspaces[index].build_directory == workspaces[index].target_directory {
+                            directory.clone()
+                        } else {
+                            workspaces[index].build_directory.clone()
+                        }
+                    },
                 )
         })
         .collect();

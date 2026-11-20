@@ -68,10 +68,15 @@ fn prepare_refuses_a_build_directory_from_the_environment_that_the_target_cache_
 
 #[test]
 fn prepare_accepts_a_build_directory_from_the_environment_that_is_the_target_directory() {
-    let mut setup = Setup::new(reported("1.99.1", Some("0.9.151")));
-    setup.env = vec![("CARGO_BUILD_BUILD_DIR", "target")];
-    let run = prepare("environment-build-dir-is-target", &setup);
-    assert!(run.output.status.success(), "{:?}", run.output);
+    for (name, value) in [
+        ("environment-build-dir-is-target", "target"),
+        ("environment-build-dir-template", "{workspace-root}/target"),
+    ] {
+        let mut setup = Setup::new(reported("1.99.1", Some("0.9.151")));
+        setup.env = vec![("CARGO_BUILD_BUILD_DIR", value)];
+        let run = prepare(name, &setup);
+        assert!(run.output.status.success(), "{value}: {:?}", run.output);
+    }
 }
 
 const LOCK: &str =

@@ -54,7 +54,10 @@ fn refuse_build_directory(root: &Path, targets: &BTreeSet<RepoPath>) -> Result<(
         velnor_rust::resolve(path)
             .map_err(|e| CiError::new(format!("cannot resolve {}: {e}", path.display())))
     };
-    let build = resolved(&root.join(&value))?;
+    let expanded = value
+        .to_string_lossy()
+        .replace("{workspace-root}", &root.to_string_lossy());
+    let build = resolved(&root.join(expanded))?;
     if let Some(target) = targets.iter().next().filter(|_| targets.len() == 1)
         && resolved(&root.join(target.as_str()))? == build
     {
