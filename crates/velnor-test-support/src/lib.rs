@@ -23,38 +23,49 @@ fn search_path() -> impl Iterator<Item = PathBuf> {
     std::env::split_paths(&path).collect::<Vec<_>>().into_iter()
 }
 
-fn candidates() -> impl Iterator<Item = PathBuf> {
-    std::iter::once(PathBuf::from(env!("CARGO")))
-        .chain(std::env::var_os("CARGO").map(PathBuf::from))
-        .chain(search_path().map(|dir| dir.join("cargo")))
-}
-
 /// The cargo a test runs: mise's command-wrapper cargo when the job has one (it runs cargo
 /// through mbx, which every build must use), otherwise the first cargo on the PATH. Never the
 /// crates-mirror wrapper, which the tests compare against.
 ///
 /// # Panics
 ///
-/// When the PATH holds no cargo other than the crates-mirror wrapper.
+/// When no cargo other than the crates-mirror wrapper can be found (see `pick_real_cargo`).
 #[must_use]
 pub fn real_cargo() -> PathBuf {
-    pick_real_cargo(candidates()).unwrap_or_else(|| {
+    pick_real_cargo(
+        search_path().map(|dir| dir.join("cargo")),
+        std::env::var_os("CARGO").map(PathBuf::from),
+        std::env::var_os("VELNOR_CARGO_REAL").map(PathBuf::from),
+    )
+    .unwrap_or_else(|| {
         unreachable!(
-            "no cargo on the PATH other than the crates-mirror wrapper; run the test under mise"
+            "no real cargo: the PATH holds only the crates-mirror wrapper, and neither mise, $CARGO nor VELNOR_CARGO_REAL names one"
         )
     })
 }
 
-fn pick_real_cargo(candidates: impl IntoIterator<Item = PathBuf>) -> Option<PathBuf> {
-    let usable: Vec<PathBuf> = candidates
-        .into_iter()
-        .filter(|cargo| cargo.is_file() && !is_mirror_wrapper(cargo))
-        .collect();
-    usable
-        .iter()
+fn candidates() -> impl Iterator<Item = PathBuf> {
+    std::iter::once(PathBuf::from(env!("CARGO")))
+        .chain(std::env::var_os("CARGO").map(PathBuf::from))
+        .chain(search_path().map(|dir| dir.join("cargo")))
+}
+
+/// Picks the real cargo, in order: mise's command-wrapper cargo (mbx), then `$CARGO` when it is
+/// not the mirror wrapper, then the cargo the mirror wrapper forwards to (`VELNOR_CARGO_REAL`),
+/// then the first non-mirror cargo on the PATH. Never the crates-mirror wrapper.
+fn pick_real_cargo(
+    path: impl IntoIterator<Item = PathBuf>,
+    cargo_env: Option<PathBuf>,
+    forward: Option<PathBuf>,
+) -> Option<PathBuf> {
+    let usable = |cargo: &PathBuf| cargo.is_file() && !is_mirror_wrapper(cargo);
+    let path: Vec<PathBuf> = path.into_iter().filter(usable).collect();
+    path.iter()
         .find(|cargo| is_mise_command_wrapper(cargo))
-        .or_else(|| usable.first())
         .cloned()
+        .or_else(|| cargo_env.filter(usable))
+        .or_else(|| forward.filter(usable))
+        .or_else(|| path.first().cloned())
 }
 
 /// mise's `command-wrappers/bin/cargo`, the one that runs cargo through mbx.
@@ -142,10 +153,10 @@ mod tests {
         let mise = scratch.bin_dir("mise/command-wrappers/bin")?;
         let rustup = scratch.bin_dir(".cargo/bin")?;
 
-        let picked = pick_real_cargo(on_path(&[&mirror, &mise, &rustup]));
+        let picked = pick_real_cargo(on_path(&[&mirror, &mise, &rustup]), None, None);
         assert_eq!(picked, Some(mise.join("cargo")));
 
-        let picked = pick_real_cargo(on_path(&[&mirror, &rustup, &mise]));
+        let picked = pick_real_cargo(on_path(&[&mirror, &rustup, &mise]), None, None);
         assert_eq!(picked, Some(mise.join("cargo")));
         Ok(())
     }
@@ -157,9 +168,24 @@ mod tests {
         let rustup = scratch.bin_dir(".cargo/bin")?;
 
         assert_eq!(
-            pick_real_cargo(on_path(&[&mirror, &rustup])),
+            pick_real_cargo(on_path(&[&mirror, &rustup]), None, None),
             Some(rustup.join("cargo"))
         );
+        Ok(())
+    }
+
+    #[test]
+    fn on_ci_the_mirror_alone_on_the_path_forwards_to_the_recorded_cargo() -> TestResult {
+        let scratch = Scratch::new("ci-shape")?;
+        let mirror = scratch.mirror("mirror")?;
+        let mise = scratch.bin_dir("mise/command-wrappers/bin")?;
+
+        let picked = pick_real_cargo(
+            on_path(&[&mirror]),
+            Some(mirror.join("cargo")),
+            Some(mise.join("cargo")),
+        );
+        assert_eq!(picked, Some(mise.join("cargo")));
         Ok(())
     }
 
@@ -168,7 +194,7 @@ mod tests {
         let scratch = Scratch::new("only-mirror")?;
         let mirror = scratch.mirror("mirror")?;
 
-        assert_eq!(pick_real_cargo(on_path(&[&mirror])), None);
+        assert_eq!(pick_real_cargo(on_path(&[&mirror]), None, None), None);
         Ok(())
     }
 }
