@@ -394,3 +394,74 @@ fn real_mbx_1_30_detail_lines_are_not_unparsed_and_both_gates_stay_active() -> R
     );
     Ok(())
 }
+
+#[test]
+fn a_truncated_labelled_summary_is_unparsed_and_fails_closed() -> ResultTest {
+    let metrics = lane_with_mbx_log(
+        "report-mbx-truncated-label",
+        "mbx[cache]: object cache:\n",
+        true,
+        false,
+    )?;
+    assert!(metrics.mbx.sessions.is_empty(), "{metrics:?}");
+    assert_eq!(metrics.mbx.unparsed, 1, "{metrics:?}");
+    assert!(
+        unparsed_warning(&metrics, "mbx[cache]: object cache:"),
+        "{:?}",
+        metrics.verification_errors
+    );
+    assert!(fails_closed(&metrics), "{metrics:?}");
+    Ok(())
+}
+
+#[test]
+fn an_unknown_counter_makes_a_summary_unparsed_labelled_or_not() -> ResultTest {
+    for (index, line) in [
+        "mbx[cache]: 3 frobs, 1 hits, 0 misses; 0 B downloaded, 0 B uploaded, 0 B stored locally",
+        "mbx[cache]: object cache: 3 frobs, 1 hits, 0 misses; 0 B downloaded, 0 B uploaded, 0 B stored locally",
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let metrics = lane_with_mbx_log(
+            &format!("report-mbx-unknown-counter-{index}"),
+            &format!("{line}\n"),
+            true,
+            false,
+        )?;
+        assert!(metrics.mbx.sessions.is_empty(), "{line}: {metrics:?}");
+        assert_eq!(metrics.mbx.unparsed, 1, "{line}: {metrics:?}");
+        assert!(fails_closed(&metrics), "{line}: {metrics:?}");
+    }
+    Ok(())
+}
+
+#[test]
+fn bypassed_and_incremental_counters_are_accepted() -> ResultTest {
+    let line = "mbx[cache]: object cache: 0 hits, 2 misses, 1 bypassed, 3 incremental; 0 B downloaded, 0 B uploaded, 0 B stored locally";
+    let metrics = lane_with_mbx_log(
+        "report-mbx-bypassed-incremental",
+        &format!("{line}\n"),
+        true,
+        false,
+    )?;
+    assert_eq!(metrics.mbx.sessions.len(), 1, "{metrics:?}");
+    assert_eq!(metrics.mbx.sessions[0].misses, 2, "{metrics:?}");
+    assert_eq!(metrics.mbx.unparsed, 0, "{metrics:?}");
+    Ok(())
+}
+
+#[test]
+fn a_non_numeric_hit_count_is_unparsed_not_dropped() -> ResultTest {
+    let line = "mbx[cache]: object cache: unknown hits, 2 misses; 0 B downloaded, 0 B uploaded, 0 B stored locally";
+    let metrics = lane_with_mbx_log(
+        "report-mbx-non-numeric-hits",
+        &format!("{line}\n"),
+        true,
+        false,
+    )?;
+    assert!(metrics.mbx.sessions.is_empty(), "{metrics:?}");
+    assert_eq!(metrics.mbx.unparsed, 1, "{metrics:?}");
+    assert!(fails_closed(&metrics), "{metrics:?}");
+    Ok(())
+}
