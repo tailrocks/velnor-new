@@ -5,8 +5,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 const SAVED_ROOT: &str = ".cargo";
-const SAVED: [&str; 3] = ["registry/index", "registry/cache", "git/db"];
-const CREDENTIAL_FILES: [&str; 6] = [
+const SAVED: &[&str] = &["registry/index", "registry/cache", "git/db"];
+const CREDENTIAL_FILES: &[&str] = &[
     ".git-credentials",
     ".netrc",
     "_netrc",
