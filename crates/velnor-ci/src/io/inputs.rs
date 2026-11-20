@@ -1,9 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs::{self, OpenOptions};
 use std::io::{ErrorKind, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use super::input_scopes::{git_prefix, scoped_files};
@@ -189,13 +190,14 @@ pub(super) fn input_witness(tracked: &Tracked) -> String {
 }
 
 pub fn restore_inputs(root: &Path, target: &Path) -> Result<String, CiError> {
-    restore_inputs_scoped(root, target, None)
+    restore_inputs_scoped(root, target, None, &mut BTreeMap::new())
 }
 
 pub(super) fn restore_inputs_scoped(
     root: &Path,
     target: &Path,
     scope: Option<&Scope>,
+    scans: &mut BTreeMap<PathBuf, Option<BTreeSet<String>>>,
 ) -> Result<String, CiError> {
     let prefix = git_prefix(root)?;
     remove_restored(&root.join(target).join(snapshot_file(&prefix)))?;
@@ -231,7 +233,11 @@ pub(super) fn restore_inputs_scoped(
     }
     fs::write(root.join(target).join(snapshot_file(&prefix)), &text)
         .map_err(|e| CiError::new(format!("cannot preserve restored inputs: {e}")))?;
-    super::restored_units::record(&root.join(target), &prefix)?;
+    let units_target = root.join(target);
+    let hashes = scans
+        .entry(units_target.clone())
+        .or_insert_with(|| super::restored_units::scan(&units_target));
+    super::restored_units::record(&units_target, &prefix, hashes.as_ref())?;
     for input in &plan.restore {
         set_modified_ns(&top.join(&input.file.path), input.mtime_ns)?;
     }

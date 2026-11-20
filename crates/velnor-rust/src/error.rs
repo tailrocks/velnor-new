@@ -115,6 +115,7 @@ pub enum Reason {
     HostTupleVersion(String),
     BuildExecutable,
     UnpinnedTool(&'static str),
+    PolicyDenyWithoutConfig,
     HelperBox(RepoPath),
     MbxRemotePrivate(String),
     MbxOffConflict(&'static str),
