@@ -20,6 +20,7 @@ mod event_gate;
 mod events;
 mod gate;
 mod gate_needs;
+mod generator_steps;
 mod helper_integrity;
 mod helper_steps;
 mod install_steps;

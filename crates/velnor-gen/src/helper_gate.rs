@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    BUDGET_MODES_HELPER, CacheDebug, DocsRun, HelperRelease, HelperVersion, MbxStore, Platform,
-    PrCi, PushAfterMergeGroup, RepoFacts,
+    BUDGET_MODES_HELPER, CacheDebug, DocsRun, HelperRelease, HelperVersion, LintKind, MbxStore,
+    Platform, PrCi, PushAfterMergeGroup, RepoFacts,
 };
 
 use velnor_rust::INPUTS_IDENTITY_HELPER;
@@ -123,6 +123,15 @@ pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, Generate
         return Err(GenerateError::BudgetModesHelperTooOld(
             release.version().clone(),
         ));
+    }
+    if facts
+        .config
+        .lint
+        .iter()
+        .any(|lint| lint.kind == LintKind::GeneratedCheck)
+        && release.generator_digests().is_none()
+    {
+        return Err(GenerateError::GeneratorNotLocked(release.version().clone()));
     }
     Ok(release)
 }

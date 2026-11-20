@@ -107,6 +107,7 @@ pub enum StepKind {
         run: String,
     },
     GeneratorCheck,
+    InstallGenerator(HelperRelease),
     InstallHelper(HelperRelease),
     FailWhenANeedFailed,
     FailOnDraftRun,

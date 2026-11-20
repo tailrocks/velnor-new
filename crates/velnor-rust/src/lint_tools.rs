@@ -15,6 +15,7 @@ pub(crate) const JACTIONLINT: &str = "jactionlint";
 pub(crate) const SHELLCHECK: &str = "shellcheck";
 pub(crate) const ALINT: &str = "alint";
 pub(crate) const NODE: &str = "node";
+pub(crate) const RUST: &str = "rust";
 
 pub(crate) enum Lookup<'a> {
     Missing,
@@ -191,6 +192,7 @@ fn check_job(
             }
             lint_tasks::check(catalog, tools, task, named)
         }
+        LintKind::GeneratedCheck => check(RUST, Need::Optional),
     }
 }
 

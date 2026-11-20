@@ -82,3 +82,6 @@ name = "Parity verifier unit tests"
 task = "lint-parity-verify-candidate"
 tools = ["python"]
 timeout_minutes = 5
+
+[[lint]]
+kind = "generated-check"

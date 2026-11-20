@@ -21,6 +21,7 @@ pub enum GenerateError {
     NoReleaseConfig,
     ReleaseToolchainPath,
     HelperNotPinned,
+    GeneratorNotLocked(HelperVersion),
     HelperTooOld(HelperVersion),
     MirrorHelperTooOld(HelperVersion),
     HostedHelperTooOld(HelperVersion),
@@ -71,6 +72,10 @@ impl fmt::Display for GenerateError {
             ),
             Self::HelperNotPinned => f.write_str(
                 "velnor-ci is not pinned: every generated job runs it, so pin a release with `velnor-gen pin-helper <version>`",
+            ),
+            Self::GeneratorNotLocked(version) => write!(
+                f,
+                "the generated-check lint installs the pinned velnor-gen archive, but .velnor/rust-ci.lock pins velnor-ci {version} without archive digests; repin with `velnor-gen pin-helper <version>` to a release that ships archives"
             ),
             Self::HelperTooOld(version) => write!(
                 f,

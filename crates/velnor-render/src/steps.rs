@@ -352,6 +352,9 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
             ..RenderedStep::default()
         },
         StepKind::GeneratorCheck => crate::helper_steps::generator_check_step(),
+        StepKind::InstallGenerator(release) => {
+            crate::generator_steps::install_generator_step(release)
+        }
         StepKind::InstallHelper(release) => install_helper(release),
         StepKind::FailOnDraftRun => crate::draft_steps::fail_on_draft(),
         StepKind::DraftNotice => crate::draft_steps::draft_notice(),
