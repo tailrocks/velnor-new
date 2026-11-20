@@ -10,7 +10,7 @@ use crate::error::CiError;
 pub(super) const CONFIG_ENV: &str = "VELNOR_CARGO_CONFIG";
 pub(super) const WRAPPER_ENV: &str = "VELNOR_CARGO_WRAPPER";
 pub(super) const REAL_ENV: &str = "VELNOR_CARGO_REAL";
-const DISABLE_ENV: &str = "VELNOR_CRATES_MIRROR";
+pub(super) const DISABLE_ENV: &str = "VELNOR_CRATES_MIRROR";
 const MARKER: &str = "# velnor-ci crates-mirror owns this file\n";
 
 pub(super) fn setup(args: &CratesMirrorArgs) -> Result<String, CiError> {
@@ -42,7 +42,7 @@ pub(super) fn setup(args: &CratesMirrorArgs) -> Result<String, CiError> {
             super::append_to(
                 "GITHUB_ENV",
                 &format!(
-                    "{}={}\n{WRAPPER_ENV}={}\nCARGO={}\n",
+                    "{}={}\n{DISABLE_ENV}=off\n{WRAPPER_ENV}={}\nCARGO={}\n",
                     super::crates_mirror_mbx::ENV,
                     super::crates_mirror_mbx::VALUE,
                     wrapper.display(),

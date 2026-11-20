@@ -67,6 +67,7 @@ fn run_wrapper_with(
         .lines()
         .find_map(|line| line.strip_prefix("VELNOR_CARGO_CONFIG="))
         .map(str::to_owned);
+    let mirror_off = env.lines().any(|line| line == "VELNOR_CRATES_MIRROR=off");
     let wrapper = fs::canonicalize(root.join("velnor-cargo/cargo"))?;
     let mut command = Command::new(&wrapper);
     command
@@ -78,11 +79,16 @@ fn run_wrapper_with(
         .env("PATH", path_with(first)?)
         .env_remove("VELNOR_CARGO_REAL")
         .env_remove("VELNOR_CARGO_RUSTUP")
+        .env_remove("VELNOR_CARGO_CONFIG")
+        .env_remove("VELNOR_CRATES_MIRROR")
         .env_remove("VELNOR_CARGO_DEPTH")
         .env_remove("VELNOR_CARGO_MISE_PHASE")
         .env_remove("__MISE_ACTIVE_WRAPPERS");
     if let Some(config) = config {
         command.env("VELNOR_CARGO_CONFIG", config);
+    }
+    if mirror_off {
+        command.env("VELNOR_CRATES_MIRROR", "off");
     }
     if mbx_required {
         command.env("VELNOR_CARGO_MBX", "required");
@@ -219,7 +225,28 @@ fn mirror_off_with_declared_mbx_and_no_cargo_on_path_succeeds() -> TestResult {
         "{env}"
     );
     assert!(!env.contains("VELNOR_CARGO_CONFIG"), "{env}");
+    assert!(env.lines().any(|line| line == "VELNOR_CRATES_MIRROR=off"), "{env}");
     assert!(!repo.root().join("velnor-cargo/config.toml").exists());
+    Ok(())
+}
+
+#[test]
+fn mirror_job_whose_config_variable_is_cleared_refuses_to_run_cargo() -> TestResult {
+    let repo = configured_repo("crates-mirror-config-cleared")?;
+    let env_path = repo.root().join("env");
+    let env = fs::read_to_string(&env_path)?;
+    let kept: String = env
+        .lines()
+        .filter(|line| !line.starts_with("VELNOR_CARGO_CONFIG="))
+        .map(|line| format!("{line}\n"))
+        .collect();
+    fs::write(&env_path, kept)?;
+    let plain = plain_cargo(&repo)?;
+    let output = run_wrapper_with(repo.root(), &plain, false, false)?;
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!output.status.success(), "{output:?}");
+    assert!(stderr.contains("missing VELNOR_CARGO_CONFIG"), "{stderr}");
+    assert!(!String::from_utf8_lossy(&output.stdout).contains("plain-cargo-ran"));
     Ok(())
 }
 
