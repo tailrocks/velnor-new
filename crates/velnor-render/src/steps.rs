@@ -370,7 +370,7 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
             run: Some(run.clone()),
             ..RenderedStep::default()
         },
-        StepKind::GeneratorCheck { from_source } => generator_check_step(*from_source),
+        StepKind::GeneratorCheck { source } => generator_check_step(source.as_ref()),
         StepKind::InstallGenerator(release) => install_generator_step(release),
         StepKind::InstallHelper(release) => install_helper(release),
         StepKind::FailOnDraftRun => crate::draft_steps::fail_on_draft(),

@@ -41,7 +41,7 @@ enum After {
 fn compiles(job: &Job) -> bool {
     job.steps.iter().any(|step| match &step.kind {
         StepKind::Cargo(command) => command.builds(),
-        StepKind::GeneratorCheck { from_source } => *from_source,
+        StepKind::GeneratorCheck { source } => source.is_some(),
         _ => false,
     })
 }

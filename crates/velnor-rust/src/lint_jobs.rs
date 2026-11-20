@@ -2,9 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    Gate, GateNeed, Job, LintCommand, LintJob, LintKind, PlanFrom, PrRun, RepoFacts, Step, StepKind,
+    Gate, GateNeed, Job, LintCommand, LintJob, LintKind, PlanFrom, PrRun, RepoFacts, RepoPath,
+    Step, StepKind,
 };
 
+use crate::config_generator::generator_root;
 use crate::lane::PLAN_JOB;
 use crate::lint_tools::{ALINT, JACTIONLINT, NODE, RUST, SHELLCHECK, usable};
 use crate::mbx_pin::MBX_TOOL;
@@ -89,7 +91,8 @@ fn generated_check_tools(facts: &RepoFacts) -> Vec<String> {
         .collect()
 }
 
-fn generated_check_job(facts: &RepoFacts, lint: &LintJob, from_source: bool) -> Job {
+fn generated_check_job(facts: &RepoFacts, lint: &LintJob, source: Option<RepoPath>) -> Job {
+    let from_source = source.is_some();
     let tools = generated_check_tools(facts);
     let mut steps = vec![step(StepKind::Checkout {
         depth: CHECKOUT_DEPTH,
@@ -121,7 +124,7 @@ fn generated_check_job(facts: &RepoFacts, lint: &LintJob, from_source: bool) -> 
                 .map(|release| step(StepKind::InstallGenerator(release.clone()))),
         );
     }
-    steps.push(step(StepKind::GeneratorCheck { from_source }));
+    steps.push(step(StepKind::GeneratorCheck { source }));
     Job {
         name: Some(lint.name.clone()),
         timeout_minutes: lint.timeout_minutes,
@@ -133,7 +136,10 @@ fn generated_check_job(facts: &RepoFacts, lint: &LintJob, from_source: bool) -> 
 
 fn lint_job(facts: &RepoFacts, lint: &LintJob) -> Job {
     if let LintKind::GeneratedCheck { from_source } = lint.kind {
-        return generated_check_job(facts, lint, from_source);
+        let source = from_source
+            .then(|| generator_root(&facts.rust_roots).ok())
+            .flatten();
+        return generated_check_job(facts, lint, source);
     }
     let planned = !lint.inputs.is_empty();
     let mut steps = vec![step(StepKind::Checkout {
