@@ -9,8 +9,6 @@ use std::path::{Path, PathBuf};
 use super::super::options::{MAX_ENTRIES_CEILING, MAX_ENTRIES_VARIABLE};
 use super::{Entries, Kind, excluded_entry};
 
-/// The entries a scan may still walk. One audit shares a budget across its scans, so
-/// the limit bounds their total.
 pub(in crate::io::audit) struct Budget {
     remaining: usize,
     limit: usize,
