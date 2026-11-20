@@ -13,7 +13,8 @@ deliberately when changing this contract.
 ## Lane fields
 
 - `lane` identifies the job; `caches` describes each cache family and root.
-- Cache keys include `requested_key` and `matched_key`; `hit` is `exact`,
+- Cache keys include `requested_key`, `matched_key` and, for a save whose key a
+  step records, `saved_key` (absent otherwise); `hit` is `exact`,
   `fallback`, or `miss`. `bytes` is the archive byte count, or `null` when the
   API cannot establish it. `usable` and `usable_same_lock` describe restored
   target data. `save` is `not_attempted`, `saved`, `failed`, or `unknown`.
@@ -56,7 +57,9 @@ for the compiler-artifact and build-script records used as input evidence.
 ## Producer and enforcement
 
 `VELNOR_REPORT_CACHES` supplies an array of cache plans. Each plan contains
-only `family`, `root` (a Cargo root or `null`), `restore_step`, and `save_step`.
+only `family`, `root` (a Cargo root or `null`), `restore_step`, and `save_step`,
+plus an optional `save_key_step` naming the step whose `key` output is the key
+the save ran under.
 Observed report fields such as `requested_key`, `hit`, and `usable` are
 rejected as plan input. `VELNOR_REPORT_STEPS` supplies the actual step outputs
 and outcomes. The report resolves keys, restore hits, and save outcomes before

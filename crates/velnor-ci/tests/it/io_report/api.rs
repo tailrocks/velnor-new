@@ -178,8 +178,6 @@ fn tools_save_under_a_new_key_after_a_miss_is_looked_up_under_the_saved_key() ->
         if let Some(key) = recorded {
             steps["saved_key"]["outputs"]["key"] = json!(key);
         }
-        // The restored old entry stays in the cache: a save whose key was never recorded must not
-        // be verified by finding it under the restore key.
         let listing = |key: &str| {
             let entries = if key == "tools-new" || key == "tools-old" {
                 json!([{"key":key,"ref":"refs/heads/main","size_in_bytes":12}])

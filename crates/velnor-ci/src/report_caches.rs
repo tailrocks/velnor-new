@@ -44,8 +44,6 @@ pub(crate) fn observe_caches(
             } else {
                 SaveOutcome::NotAttempted
             };
-            // `Some("")` means a saved key was expected but no step recorded one. That is not the
-            // same as `None` (no save-key step), and must never fall back to the restore key.
             let saved_key = plan
                 .save_key_step
                 .as_ref()

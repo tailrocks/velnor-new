@@ -195,8 +195,6 @@ fn cache_metrics(
         }
         let saving = cache.save != SaveOutcome::NotAttempted;
         if saving && cache.saved_key.as_deref() == Some("") {
-            // The save ran under a key nobody recorded. The restore key may still hold an old
-            // entry, so look up nothing and fail the save as unverifiable.
             cache.bytes = None;
             cache.save = SaveOutcome::Failed;
             metrics
