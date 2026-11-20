@@ -21,7 +21,7 @@ for lines in 401 400; do
   seq 1 "$lines" | sed 's/.*/const L_&: u32 = &;/' > "$PROBE" || exit 1
   rc=0
   alint --format github --config .alint.yml --fail-on-warning check . > "$LOG" 2>&1 || rc=$?
-  cat "$LOG"
+  sed 's/^::/probe output: /' "$LOG"
   if [ "$lines" -eq 401 ]; then
     if [ "$rc" -eq 0 ] || ! grep -q 'alint_line_cap_probe.rs' "$LOG"; then
       echo "::error::alint accepted a 401-line Rust file" >&2
