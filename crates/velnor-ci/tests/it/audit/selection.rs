@@ -338,3 +338,47 @@ fn a_failed_build_records_only_package_names_that_are_workspace_members() {
     let recorded = fs::read_to_string(&marker).unwrap_or_else(|e| unreachable!("{e}"));
     assert!(recorded.contains(r#""packages":["lib"]"#), "{recorded}");
 }
+
+#[test]
+fn a_failed_cargo_command_labels_only_a_known_subcommand() {
+    let failures = [
+        (
+            [
+                "cargo",
+                "https://user:hunter2-credential@host/x",
+                "-p",
+                "lib",
+            ],
+            "hunter2-credential",
+        ),
+        (
+            ["cargo", "hunter3-credential", "-p", "lib"],
+            "hunter3-credential",
+        ),
+    ];
+    for (failing, secret) in failures {
+        let repo = prepared_project();
+        let failed = wrapped_in(&repo, &failing, None);
+        assert!(!failed.status.success(), "{failed:?}");
+        let lib = package_output(&repo, "lib");
+        fs::remove_file(lib.with_extension("velnor-inputs.json"))
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        let refused = wrapped_in(&repo, &APP_SELECTION, None);
+        assert_eq!(refused.status.code(), Some(1), "{refused:?}");
+        assert!(
+            String::from_utf8_lossy(&refused.stderr)
+                .contains("An earlier inputs build failed: `cargo` (failed commands"),
+            "{refused:?}"
+        );
+        for file in files_below(repo.root()) {
+            let bytes = fs::read(&file).unwrap_or_default();
+            assert!(
+                !bytes
+                    .windows(secret.len())
+                    .any(|window| window == secret.as_bytes()),
+                "{secret} reached {}",
+                file.display()
+            );
+        }
+    }
+}
