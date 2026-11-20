@@ -113,11 +113,10 @@ fn no_root_of_any_sample_builds_inside_a_package_directory_from_the_new_helper()
     for sample in sample_dirs(&samples())? {
         let name = sample.file_name().unwrap_or_default().to_string_lossy();
         let mut repo = load(&sample)?;
-        if repo.files.contains_key(&LOCK_PATH) {
-            pin_version(&mut repo, NESTED_HELPER)?;
-        } else {
+        if !repo.files.contains_key(&LOCK_PATH) {
             continue;
         }
+        pin_version(&mut repo, NESTED_HELPER)?;
         let facts = detect(&repo)?;
         nested += facts
             .rust_roots
