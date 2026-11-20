@@ -17,6 +17,10 @@ pub(crate) fn on_main(configured: Option<&str>, default: OnMain) -> Result<OnMai
     }
 }
 
+pub(crate) fn full_run_or(value: Option<String>, default: FullRun) -> Result<FullRun, Reason> {
+    value.map_or(Ok(default), full_run)
+}
+
 pub(crate) fn full_run(value: String) -> Result<FullRun, Reason> {
     Ok(match value.as_str() {
         "off" => FullRun::Off,

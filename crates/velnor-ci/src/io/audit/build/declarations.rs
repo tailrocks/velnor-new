@@ -26,6 +26,7 @@ pub(super) fn declarations(
     facts: &RepoFacts,
     workspaces: &[Workspace],
     location: &Path,
+    max_entries: usize,
 ) -> Result<Vec<Declared>, CiError> {
     let mut found = Vec::new();
     let targets = inventory::exclusions(workspaces)?;
@@ -84,7 +85,7 @@ pub(super) fn declarations(
                 .filter(|path| fs::metadata(path).is_ok_and(|metadata| metadata.is_dir()))
                 .cloned()
                 .collect();
-            let trusted = trusted(&output, &paths, &directories, &targets);
+            let trusted = trusted(&output, &paths, &directories, &targets, max_entries)?;
             let targets = inventory::load(&output)
                 .ok()
                 .filter(|saved| targets.is_subset(&saved.targets))
@@ -107,26 +108,35 @@ fn trusted(
     paths: &[PathBuf],
     directories: &[PathBuf],
     targets: &BTreeSet<PathBuf>,
-) -> bool {
-    // The build scans its roots under the same default the audit uses.
-    let mut budget = inventory::Budget::new(super::super::options::DEFAULT_MAX_ENTRIES);
+    max_entries: usize,
+) -> Result<bool, CiError> {
+    let mut budget = inventory::Budget::new(max_entries);
     let saved = inventory::load(output).ok();
     let targets = saved
         .as_ref()
         .filter(|saved| targets.is_subset(&saved.targets))
         .map_or(targets, |saved| &saved.targets);
-    paths.iter().all(|path| {
+    let unchanged = paths.iter().all(|path| {
         saved
             .as_ref()
             .and_then(|saved| saved.state(path))
             .zip(inventory::state(path).ok())
             .is_some_and(|(before, current)| before == current)
-    }) && directories.iter().all(|path| {
-        inventory::scan(path, targets, &mut budget)
+    });
+    if !unchanged {
+        return Ok(false);
+    }
+    for path in directories {
+        let matched = inventory::scan(path, targets, &mut budget)
             .and_then(|entries| inventory::view(&entries, &fs::canonicalize(path)?, targets))
-            .and_then(|entries| inventory::matches(output, path, &entries, targets))
-            .unwrap_or(false)
-    })
+            .and_then(|entries| inventory::matches(output, path, &entries, targets));
+        match matched {
+            Ok(true) => {}
+            Err(error) if budget.overflowed() => return Err(CiError::new(error.to_string())),
+            Ok(false) | Err(_) => return Ok(false),
+        }
+    }
+    Ok(true)
 }
 
 pub(super) fn invalidate(declared: &[Declared]) -> Result<(), CiError> {
