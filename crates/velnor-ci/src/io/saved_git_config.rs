@@ -26,8 +26,17 @@ const TOKEN_PREFIXES: &[&str] = &[
     "ghr_",
     "github_pat_",
     "glpat-",
+    "gldt-",
+    "glrt-",
+    "glptt-",
+    "glcbt-",
+    "glft-",
+    "gloas-",
+    "glagent-",
+    "glsoat-",
 ];
 const TOKEN_HEX_LEN: usize = 40;
+const TOKEN_BODY_LEN: usize = 20;
 
 pub(super) fn is_plain(text: &str) -> bool {
     if has_token_prefix(&text.to_ascii_lowercase()) {
@@ -117,10 +126,11 @@ fn embedded_urls(word: &str) -> impl Iterator<Item = &str> {
 fn has_token_prefix(text: &str) -> bool {
     TOKEN_PREFIXES.iter().any(|prefix| {
         text.match_indices(prefix).any(|(at, _)| {
-            !text[..at]
-                .chars()
-                .next_back()
-                .is_some_and(|before| before.is_ascii_alphanumeric())
+            text[at + prefix.len()..]
+                .bytes()
+                .take_while(|each| each.is_ascii_alphanumeric() || matches!(each, b'_' | b'-'))
+                .count()
+                >= TOKEN_BODY_LEN
         })
     })
 }
