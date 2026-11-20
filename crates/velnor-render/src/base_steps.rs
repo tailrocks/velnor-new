@@ -303,7 +303,10 @@ fn fetch_all_steps(manifests: &[RepoPath], cache_debug: bool) -> Vec<RenderedSte
                 )
             }),
             continue_on_error: true,
-            run: Some(format!("{FETCH_ROOTS} {}", roots_argument(manifests, &roots))),
+            run: Some(format!(
+                "{FETCH_ROOTS} {}",
+                roots_argument(manifests, &roots)
+            )),
             ..RenderedStep::default()
         })
         .collect()
