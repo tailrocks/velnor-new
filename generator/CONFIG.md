@@ -1,6 +1,6 @@
 # Generator configuration
 
-The new Rust generator reads `.velnor/rust-ci.toml`.
+The new Rust generator reads `.velnor/rust-ci.toml`. To move a project from the velnor-actions engine, follow [`docs/migrating-to-velnor-gen.md`](../docs/migrating-to-velnor-gen.md).
 
 The generator reads `.velnor/rust-ci.toml`, `.velnor/release.toml` and `.velnor/workflows.toml` only through Git's tracked view. A file that exists on disk but that Git does not track (or ignores) is refused with an error, not replaced by defaults: run `git add <path>` (`git add -f` for an ignored file), or delete the file.
 
