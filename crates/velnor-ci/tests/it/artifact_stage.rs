@@ -8,7 +8,7 @@ use std::process::Command;
 
 use velnor_ci::artifact_stage::{Skip, Staged, stage};
 
-struct Dir(PathBuf);
+pub(crate) struct Dir(PathBuf);
 
 impl Dir {
     fn new(name: &str) -> Self {
@@ -21,11 +21,11 @@ impl Dir {
         Self(path)
     }
 
-    fn root(&self) -> &Path {
+    pub(crate) fn root(&self) -> &Path {
         &self.0
     }
 
-    fn write_unstaged(&self, path: &str, text: &str) {
+    pub(crate) fn write_unstaged(&self, path: &str, text: &str) {
         let path = self.0.join(path);
         fs::create_dir_all(path.parent().unwrap_or_else(|| unreachable!()))
             .unwrap_or_else(|e| unreachable!("{e}"));
@@ -39,13 +39,13 @@ impl Drop for Dir {
     }
 }
 
-struct Site {
-    repo: Dir,
-    outside: Dir,
-    staging: Dir,
+pub(crate) struct Site {
+    pub(crate) repo: Dir,
+    pub(crate) outside: Dir,
+    pub(crate) staging: Dir,
 }
 
-fn site(name: &str) -> Site {
+pub(crate) fn site(name: &str) -> Site {
     let repo = Dir::new(name);
     let outside = Dir::new(&format!("{name}-outside"));
     let staging = Dir::new(&format!("{name}-staging"));
@@ -58,18 +58,18 @@ fn site(name: &str) -> Site {
     }
 }
 
-fn link(target: &Path, at: &Path) {
+pub(crate) fn link(target: &Path, at: &Path) {
     fs::create_dir_all(at.parent().unwrap_or_else(|| unreachable!()))
         .unwrap_or_else(|e| unreachable!("{e}"));
     symlink(target, at).unwrap_or_else(|e| unreachable!("{e}"));
 }
 
-fn staged(site: &Site, patterns: &[&str]) -> Staged {
+pub(crate) fn staged(site: &Site, patterns: &[&str]) -> Staged {
     let patterns: Vec<String> = patterns.iter().map(|path| (*path).to_owned()).collect();
     stage(site.repo.root(), &patterns, site.staging.root()).unwrap_or_else(|e| unreachable!("{e}"))
 }
 
-fn copied(staged: &Staged) -> Vec<String> {
+pub(crate) fn copied(staged: &Staged) -> Vec<String> {
     staged
         .copied
         .iter()
@@ -77,7 +77,7 @@ fn copied(staged: &Staged) -> Vec<String> {
         .collect()
 }
 
-fn skipped(staged: &Staged) -> Vec<(String, Skip)> {
+pub(crate) fn skipped(staged: &Staged) -> Vec<(String, Skip)> {
     staged
         .skipped
         .iter()
@@ -85,7 +85,7 @@ fn skipped(staged: &Staged) -> Vec<(String, Skip)> {
         .collect()
 }
 
-fn entries(root: &Path) -> Vec<(String, bool)> {
+pub(crate) fn entries(root: &Path) -> Vec<(String, bool)> {
     let mut found = Vec::new();
     let mut pending = vec![root.to_path_buf()];
     while let Some(directory) = pending.pop() {

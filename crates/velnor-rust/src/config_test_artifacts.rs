@@ -120,6 +120,11 @@ fn check_name(name: &str) -> Result<(), Reason> {
 }
 
 fn path_fault(path: &str) -> Option<&'static str> {
+    if path.starts_with('-') {
+        return Some(
+            "starts with a hyphen, which a command line reads as an option; write the path from a directory name",
+        );
+    }
     if path.starts_with('/') {
         return Some("is outside the workspace; name a path under the repository");
     }
@@ -173,11 +178,16 @@ fn path_fault(path: &str) -> Option<&'static str> {
             "uploads a whole build directory, which is far too large; name the report files, such as target/nextest/ci/junit.xml",
         );
     }
+    if segments.iter().any(|segment| secret_like(segment)) {
+        return Some(
+            "may hold a secret (a .env file, a key, a token, a password or credentials), and anyone who can read the repository can download an artifact; name another path",
+        );
+    }
     segments
         .iter()
-        .any(|segment| secret_like(segment))
+        .any(|segment| segment.starts_with('.'))
         .then_some(
-            "may hold a secret (a .env file, a key, a token, a password or credentials), and anyone who can read the repository can download an artifact; name another path",
+            "has a hidden part (one that starts with a dot), which actions/upload-artifact does not upload by default, so the artifact would come out empty; name a path without hidden parts",
         )
 }
 

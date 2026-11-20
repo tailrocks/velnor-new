@@ -138,6 +138,10 @@ fn a_path_outside_the_workspace_or_into_secrets_is_refused() -> TestResult {
         "a\nb",
         "a b",
         "!junit.xml",
+        "--help",
+        "-x/junit.xml",
+        ".reports/junit.xml",
+        "reports/.junit.xml",
     ] {
         let config = artifacts(&format!(
             "{{ name = 'a', paths = [\"\"\"{path}\"\"\"], when = 'failure' }}"
@@ -354,13 +358,10 @@ fn a_wildcard_that_can_match_a_secret_name_is_refused_naming_the_secret() -> Tes
         ("secr*/**", "secret"),
         ("app/s*/x.xml", "secret"),
         ("app/*ecrets/x.xml", "secret"),
-        ("app/.e*/x.xml", ".env"),
-        ("app/.s*h/x.xml", ".ssh"),
         ("app/tok*/x.xml", "token"),
         ("app/pass*/x.xml", "password"),
         ("cred*/x.xml", "credential"),
         ("app/id_*/x.xml", "id_rsa"),
-        ("app/.g*/x.xml", ".git"),
         ("app/*.p*", ".pypirc"),
     ] {
         let config = artifacts(&format!(

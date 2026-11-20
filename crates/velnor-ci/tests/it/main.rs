@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod artifact_stage;
+mod artifact_stage_paths;
 mod audit;
 mod base_expiry;
 mod bench_compare;

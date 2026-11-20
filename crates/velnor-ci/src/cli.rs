@@ -272,6 +272,7 @@ pub struct ArtifactsStageArgs {
     #[arg(
         long,
         required = true,
+        allow_hyphen_values = true,
         value_name = "DIR",
         help = "The staging directory, under RUNNER_TEMP; it is emptied first and the upload step names exactly this directory"
     )]
@@ -279,6 +280,7 @@ pub struct ArtifactsStageArgs {
     #[arg(
         long = "path",
         required = true,
+        allow_hyphen_values = true,
         value_name = "PATH",
         value_parser = clap::builder::NonEmptyStringValueParser::new(),
         help = "A repository path or glob that the upload names, relative to the workspace; repeat for each path"
