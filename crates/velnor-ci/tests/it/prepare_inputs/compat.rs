@@ -5,7 +5,7 @@ use std::fs;
 
 #[cfg(not(target_os = "linux"))]
 use crate::prepare::OsRelease;
-use crate::prepare::{Setup, digest, prepare, reported, scratch_root};
+use crate::prepare::{Setup, digest, prepare, prepare_in, reported, scratch, scratch_root};
 
 fn compat_with(name: &str, change: impl FnOnce(&mut Setup)) -> String {
     let mut setup = Setup::new(reported("1.99.1", Some("0.9.151")));
@@ -116,4 +116,35 @@ fn a_platform_without_os_release_still_prepares_with_its_own_identity() {
     let run = prepare("compat-no-os-release-platform", &setup);
     assert!(run.output.status.success(), "{:?}", run.output);
     assert_ne!(digest(&run), "");
+}
+
+#[test]
+fn compat_follows_the_mise_cargo_wrapper_that_mbx_runs_through() {
+    let dir = scratch("compat-cargo-wrapper");
+    let plain = digest(&prepare_in(
+        &dir,
+        &Setup::new(reported("1.99.1", Some("0.9.151"))),
+    ))
+    .to_owned();
+    let wrapped_bin = dir.join("command-wrappers/bin");
+    fs::create_dir_all(&wrapped_bin).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::write(wrapped_bin.join("cargo"), "").unwrap_or_else(|e| unreachable!("{e}"));
+    let path: &'static str = Box::leak(
+        format!(
+            "{}:{}/bin:/usr/bin:/bin",
+            wrapped_bin.display(),
+            dir.display()
+        )
+        .into_boxed_str(),
+    );
+    let mut setup = Setup::new(reported("1.99.1", Some("0.9.151")));
+    setup.env.push(("PATH", path));
+    fs::remove_file(dir.join("output")).unwrap_or_else(|e| unreachable!("{e}"));
+    let run = prepare_in(&dir, &setup);
+    assert!(run.output.status.success(), "{:?}", run.output);
+    assert_ne!(
+        plain,
+        digest(&run),
+        "a target built through mbx must not restore an unwrapped one"
+    );
 }

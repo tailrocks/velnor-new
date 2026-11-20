@@ -65,6 +65,10 @@ filter = 'package(=velnor-gen) and binary(=it) and (test(=freshness::generate_re
 slow-timeout = { period = "10s", terminate-after = 1 }
 
 [[profile.ci.overrides]]
+filter = 'package(=velnor-gen) and binary(=it) and test(=mise_trust::generate_and_check_run_cargo_metadata_in_an_untrusted_mbx_checkout_without_a_manual_trust)'
+slow-timeout = { period = "10s", terminate-after = 1 }
+
+[[profile.ci.overrides]]
 filter = 'package(=velnor-gen) and binary(=it) and (test(=freshness::generate_rejects_a_build_script_that_is_a_filesystem_symlink) or test(=io_identity::a_checkout_without_an_origin_keeps_its_schedule_when_renamed) or test(=io_identity::generate_refuses_a_hand_written_workflow_with_a_forged_marker) or test(=io_identity::generate_still_removes_a_genuinely_generated_stale_workflow) or test(=io_identity::local_origin_generates_when_the_schedule_does_not_need_the_identity) or test(=io_identity::local_origin_is_rejected_when_a_hashed_schedule_needs_the_identity) or test(=io_identity::repository_case_does_not_change_schedule_identity) or test(=io_identity::schedules_use_the_remote_repository_and_transport_independent_identity))'
 slow-timeout = { period = "10s", terminate-after = 1 }
 
@@ -178,6 +182,10 @@ slow-timeout = { period = "10s", terminate-after = 1 }
 filter = 'package(=velnor-ci) and (test(run_returns_when_the_command_exits_although_a_background_process_keeps_its_pipes_open) | test(run_waits_for_all_open_pipes_within_one_shared_grace_period) | test(run_withholds_counts_when_a_descendant_keeps_the_summary_pipe_open) | test(run_writes_no_counts_when_a_held_pipe_never_printed_a_summary))'
 slow-timeout = { period = "30s", terminate-after = 1 }
 
+# These velnor-gen tests walk the repository or render workflows on a loaded host, and ran past the 2 s default.
+[[profile.default.overrides]]
+filter = 'package(=velnor-gen) and binary(=it) and (test(/^concurrency::/) | test(=crates_mirror::mirror_is_explicit_scoped_and_precedes_every_job_tools) | test(=declared_command_wrappers::wrappers_cannot_hide_a_repository_script_from_the_write_token_rule) | test(=job_trust_boundary::no_token_or_verdict_step_follows_repository_code_in_the_same_job))'
+slow-timeout = { period = "10s", terminate-after = 1 }
 # Each of these starts bash, perl or a rendered helper, or reads the repository, and ran past the 2 s default on a loaded host.
 [[profile.default.overrides]]
 filter = 'package(=velnor-gen) and binary(=it) and (test(=needs_size::cache_context_is_bounded_from_its_producers_without_unrelated_plan_outputs) | test(=helper_perl_environment::trusted_launcher_preserves_helper_arguments_and_failure_status) | test(=helper_perl_environment::trusted_shasum_ignores_perl_startup_and_inherited_launcher_poison) | test(=helper_integrity::rendered_commands_ignore_path_shadows_and_refuse_a_replaced_helper) | test(=helper_startup::trusted_invocations_ignore_bash_env_startup) | test(=helper_startup::trusted_invocations_ignore_imported_exec_functions) | test(=helper_startup::trusted_invocations_ignore_imported_shell_options) | test(=release_yml_raw::provenance_is_written_only_for_a_strict_sidecar) | test(=ruleset::the_help_one_liner_stops_at_the_first_failed_post) | test(=declared_command_wrappers::wrappers_cannot_hide_a_helper_call))'
@@ -208,6 +216,10 @@ slow-timeout = { period = "10s", terminate-after = 1 }
 filter = 'package(=velnor-ci) and (test(run_returns_when_the_command_exits_although_a_background_process_keeps_its_pipes_open) | test(run_waits_for_all_open_pipes_within_one_shared_grace_period) | test(run_withholds_counts_when_a_descendant_keeps_the_summary_pipe_open) | test(run_writes_no_counts_when_a_held_pipe_never_printed_a_summary))'
 slow-timeout = { period = "30s", terminate-after = 1 }
 
+# Same 10 s tier for the velnor-gen file-scan tests added above.
+[[profile.ci.overrides]]
+filter = 'package(=velnor-gen) and binary(=it) and (test(/^concurrency::/) | test(=crates_mirror::mirror_is_explicit_scoped_and_precedes_every_job_tools) | test(=declared_command_wrappers::wrappers_cannot_hide_a_repository_script_from_the_write_token_rule) | test(=job_trust_boundary::no_token_or_verdict_step_follows_repository_code_in_the_same_job))'
+slow-timeout = { period = "10s", terminate-after = 1 }
 # Same 10 s tier for the tests added to profile.default above. profile.ci has no 2 s line of its own.
 [[profile.ci.overrides]]
 filter = 'package(=velnor-gen) and binary(=it) and (test(=needs_size::cache_context_is_bounded_from_its_producers_without_unrelated_plan_outputs) | test(=helper_perl_environment::trusted_launcher_preserves_helper_arguments_and_failure_status) | test(=helper_perl_environment::trusted_shasum_ignores_perl_startup_and_inherited_launcher_poison) | test(=helper_integrity::rendered_commands_ignore_path_shadows_and_refuse_a_replaced_helper) | test(=helper_startup::trusted_invocations_ignore_bash_env_startup) | test(=helper_startup::trusted_invocations_ignore_imported_exec_functions) | test(=helper_startup::trusted_invocations_ignore_imported_shell_options) | test(=release_yml_raw::provenance_is_written_only_for_a_strict_sidecar) | test(=ruleset::the_help_one_liner_stops_at_the_first_failed_post) | test(=declared_command_wrappers::wrappers_cannot_hide_a_helper_call))'

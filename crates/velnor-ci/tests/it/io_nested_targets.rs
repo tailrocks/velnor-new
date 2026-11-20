@@ -41,7 +41,7 @@ fn checkout(pin: &str) -> Repo {
         (".velnor/rust-ci.lock", &LOCK.replace("0.1.81", pin)),
     ]);
     for directory in [".", "tool"] {
-        let output = Command::new("cargo")
+        let output = Command::new(velnor_test_support::real_cargo())
             .args(["generate-lockfile", "--offline"])
             .current_dir(repo.root().join(directory))
             .env_remove("CARGO_TARGET_DIR")

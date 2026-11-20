@@ -76,6 +76,7 @@ fn conditions(job: &Job) -> Vec<JobCondition> {
         | When::ClearRunLabel
         | When::RestoreToolsUnlessLocal
         | When::SaveToolsUnlessLocal
+        | When::LookupToolsOnNodeHit
         | When::PrimeToolsFromNetwork
         | When::SaveToolsOnDefaultBranch => None,
     };
