@@ -281,7 +281,6 @@ fn a_job_without_a_plan_job_reads_the_anchor_itself() -> TestResult {
 }
 
 #[test]
-#[test]
 fn a_job_that_names_the_anchor_entry_reads_its_key_from_the_plan_job() -> TestResult {
     for config in STORES.iter().copied() {
         let yaml = render(&["Cargo.toml", "tools/Cargo.toml"], config, "0.1.111")?;
@@ -309,6 +308,7 @@ fn a_job_that_names_the_anchor_entry_reads_its_key_from_the_plan_job() -> TestRe
     Ok(())
 }
 
+#[test]
 fn a_helper_without_the_newest_anchor_keeps_one_anchor_restore_per_job() -> TestResult {
     for config in STORES.iter().copied() {
         let yaml = render(&["Cargo.toml", "tools/Cargo.toml"], config, "0.1.109")?;
