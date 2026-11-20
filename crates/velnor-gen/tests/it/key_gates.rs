@@ -94,9 +94,7 @@ fn walk(probe: &Probe, path: &[(String, bool)], names: &[String], found: &mut BT
             .join(".");
         found.insert(dotted);
         for candidate in [&here, &as_array] {
-            // The probe goes one level below `candidate`, so wrap the probe in the candidate.
-            let (last, rest) = candidate.split_last().expect("a path has a last part");
-            if let Some(children) = fields(probe, &[rest, &[last.clone()]].concat()) {
+            if let Some(children) = fields(probe, candidate) {
                 walk(probe, candidate, &children, found);
                 break;
             }
@@ -126,11 +124,11 @@ fn rust_ci_keys() -> BTreeSet<String> {
     found
 }
 
-fn release_keys() -> BTreeSet<String> {
+fn release_keys() -> Result<BTreeSet<String>, Box<dyn Error>> {
     let mut found = BTreeSet::new();
-    let names = fields(&release_probe, &[]).expect("release.toml denies unknown keys");
+    let names = fields(&release_probe, &[]).ok_or("release.toml does not deny unknown keys")?;
     walk(&release_probe, &[], &names, &mut found);
-    found
+    Ok(found)
 }
 
 fn rows(file: ConfigFile) -> BTreeSet<String> {
@@ -153,8 +151,8 @@ fn every_key_the_rust_ci_parser_accepts_has_a_helper_gate_row() {
 }
 
 #[test]
-fn every_key_the_release_parser_accepts_has_a_helper_gate_row() {
-    let missing: Vec<_> = release_keys()
+fn every_key_the_release_parser_accepts_has_a_helper_gate_row() -> Result<(), Box<dyn Error>> {
+    let missing: Vec<_> = release_keys()?
         .difference(&rows(ConfigFile::Release))
         .cloned()
         .collect();
@@ -162,16 +160,19 @@ fn every_key_the_release_parser_accepts_has_a_helper_gate_row() {
         missing.is_empty(),
         "add a row to crates/velnor-gen/src/key_gates/release.rs for {missing:?}"
     );
+    Ok(())
 }
 
 #[test]
-fn no_row_names_a_key_the_parsers_dropped() {
+fn no_row_names_a_key_the_parsers_dropped() -> Result<(), Box<dyn Error>> {
+    let release = release_keys()?;
     let stale: Vec<_> = rows(ConfigFile::RustCi)
         .difference(&rust_ci_keys())
-        .chain(rows(ConfigFile::Release).difference(&release_keys()))
+        .chain(rows(ConfigFile::Release).difference(&release))
         .cloned()
         .collect();
     assert!(stale.is_empty(), "remove the rows for {stale:?}");
+    Ok(())
 }
 
 /// The error for `config` under a pin of `version`.
