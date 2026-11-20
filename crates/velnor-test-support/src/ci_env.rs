@@ -40,8 +40,9 @@ pub fn ci_safe_cargo_env(command: &mut Command) -> &mut Command {
 
 fn without_mirror(path: &OsStr, wrapper: Option<&Path>) -> OsString {
     let folder = wrapper.and_then(Path::parent);
-    let kept = std::env::split_paths(path)
-        .filter(|entry| Some(entry.as_path()) != folder && !is_mirror_wrapper(&entry.join("cargo")));
+    let kept = std::env::split_paths(path).filter(|entry| {
+        Some(entry.as_path()) != folder && !is_mirror_wrapper(&entry.join("cargo"))
+    });
     std::env::join_paths(kept).unwrap_or_else(|_| path.to_owned())
 }
 
