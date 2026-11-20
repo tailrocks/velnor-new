@@ -13,6 +13,8 @@ use crate::plan_tools::{mirror_step, tools_install, tools_restore, tools_save};
 
 pub(crate) const PLAN_JOB: JobId = JobId::from_static("rust-plan");
 const POLICY_JOB: JobId = JobId::from_static("policy");
+// First released in tools-v0.1.110 (not tagged yet when this gate was written).
+pub(crate) const EARLY_POLICY_HELPER: (u64, u64, u64) = (0, 1, 110);
 
 pub(crate) struct Lane {
     pub(crate) slug: RootSlug,
@@ -31,10 +33,15 @@ impl Lane {
         }
     }
 
-    pub(crate) fn policy(single: bool, deltas: bool) -> Self {
+    pub(crate) fn policy(single: bool, early: bool, deltas: bool) -> Self {
+        let plan = match (single, early) {
+            (true, true) => None,
+            (true, false) => Some(RUST_JOB),
+            (false, _) => Some(PLAN_JOB),
+        };
         Self {
             slug: RootSlug::from_static("policy"),
-            plan: Some(if single { RUST_JOB } else { PLAN_JOB }),
+            plan,
             per_root: false,
             deltas,
         }

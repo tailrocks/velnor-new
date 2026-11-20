@@ -16,7 +16,8 @@ use crate::config::CONFIG_PATH;
 use crate::detect::HELPER_PACKAGE;
 use crate::error::{DetectError, Reason};
 use crate::lane::{
-    Lane, PLAN_JOB, expose_read_outputs, plan_job, policy_job, used_group_outputs, used_outputs,
+    EARLY_POLICY_HELPER, Lane, PLAN_JOB, expose_read_outputs, plan_job, policy_job,
+    used_group_outputs, used_outputs,
 };
 use crate::plan_budget::{draft_guard, expose_selection, triggers};
 use crate::plan_tools::{mirror_step, tools_install, tools_restore, tools_save};
@@ -30,6 +31,8 @@ pub(crate) const LINT_JOB: JobId = JobId::from_static("rust-lint");
 pub(crate) const TEST_JOB: JobId = JobId::from_static("rust-test");
 pub(crate) const MBX_SEED_HELPER: (u64, u64, u64) = (0, 1, 86);
 pub(crate) const TOOLS_LOCAL_HELPER: (u64, u64, u64) = (0, 1, 89);
+// First released in tools-v0.1.110 (not tagged yet when this gate was written).
+pub(crate) const CHAINED_SAVES_HELPER: (u64, u64, u64) = (0, 1, 110);
 pub(crate) const DEFAULT_GROUP_JOB: JobId = JobId::from_static("rust-test-default");
 pub(crate) const HELPER_JOB: JobId = JobId::from_static("rust-helper");
 pub(crate) const BUDGET_JOB: JobId = JobId::from_static(velnor_model::BUDGET_JOB);
@@ -67,7 +70,11 @@ fn plan_with(facts: &RepoFacts, deltas: bool) -> WorkflowPlan {
         jobs.extend(lane_jobs(facts, unit, decision.shape, suffixed, &lane));
     }
     if facts.policy.any() {
-        jobs.push(policy_job(facts, &Lane::policy(single, deltas)));
+        let early = facts
+            .helper
+            .as_ref()
+            .is_some_and(|release| release.version().at_least(EARLY_POLICY_HELPER));
+        jobs.push(policy_job(facts, &Lane::policy(single, early, deltas)));
     }
     jobs.extend(crate::lint_jobs::lint_jobs(facts));
     let draft_guard = draft_guard(facts);
@@ -336,6 +343,10 @@ pub(crate) fn job(facts: &RepoFacts, id: JobId) -> Job {
                 .version()
                 .at_least(crate::root_jobs::BUILT_RECORD_HELPER)
         }),
+        chained_saves: facts
+            .helper
+            .as_ref()
+            .is_some_and(|helper| helper.version().at_least(CHAINED_SAVES_HELPER)),
         selection_name: None,
         steps: Vec::new(),
     }
