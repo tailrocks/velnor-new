@@ -17,6 +17,7 @@ use serde::{Deserialize, Serialize};
 use velnor_rust::{normalize, sha256_hex};
 
 use super::super::units::Workspace;
+use crate::error::CiError;
 
 pub(super) const LIMIT: usize = 100_000;
 pub(super) const STORE: &str = ".velnor-input-inventories";
@@ -41,7 +42,7 @@ pub(super) struct Receipt {
     pub(super) digest: String,
 }
 
-pub(super) fn exclusions(workspaces: &[Workspace]) -> BTreeSet<PathBuf> {
+pub(super) fn exclusions(workspaces: &[Workspace]) -> Result<BTreeSet<PathBuf>, CiError> {
     workspaces
         .iter()
         .flat_map(|workspace| {
@@ -50,8 +51,13 @@ pub(super) fn exclusions(workspaces: &[Workspace]) -> BTreeSet<PathBuf> {
                 workspace.target_directory.clone(),
             ]
         })
-        .map(|target| velnor_rust::resolve(&target))
+        .map(|target| velnor_rust::resolve(&target).map_err(|error| unresolved(&target, &error)))
         .collect()
+}
+
+/// A path the audit cannot resolve (a symbolic link loop, or an unreadable directory).
+pub(super) fn unresolved(path: &Path, error: &io::Error) -> CiError {
+    CiError::new(format!("cannot resolve {}: {error}", path.display()))
 }
 
 pub(super) fn excluded(path: &Path, root: &Path, targets: &BTreeSet<PathBuf>) -> bool {
