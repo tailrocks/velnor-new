@@ -9,7 +9,6 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
-/// The lookup index (identities, manifests, results) comes before the blobs they name.
 pub const SUBSETS: &[&str] = &[
     "executable-identities",
     "task-manifests",
@@ -64,6 +63,10 @@ fn list(from: &Path, to: &Path, walk: &mut Walk, deadline: Instant) {
         return;
     };
     for entry in entries {
+        if Instant::now() >= deadline {
+            walk.expired = true;
+            return;
+        }
         let Ok(entry) = entry else {
             walk.failed += 1;
             continue;
@@ -89,24 +92,22 @@ fn list(from: &Path, to: &Path, walk: &mut Walk, deadline: Instant) {
     }
 }
 
-/// Every subset's files, walked once, in the order they are copied.
 fn plan(seed: &Path, store: &Path, deadline: Instant) -> Walk {
     let mut all = Walk::default();
     for subset in SUBSETS {
+        if all.expired {
+            break;
+        }
         let mut walk = Walk::default();
         list(&seed.join(subset), &store.join(subset), &mut walk, deadline);
+        walk.jobs.sort_by_key(|job| std::cmp::Reverse(job.modified));
         all.jobs.append(&mut walk.jobs);
         all.failed += walk.failed;
         all.expired |= walk.expired;
     }
-    // The newest entries come from the latest trusted runs, and an action result and the blobs it
-    // names are written together, so a seed cut at the budget still holds a coherent slice. The sort
-    // is stable: equal times keep the index-before-blob order of SUBSETS.
-    all.jobs.sort_by_key(|job| std::cmp::Reverse(job.modified));
     all
 }
 
-/// The source files `copy_subset` copies, first to last.
 #[must_use]
 pub fn planned(seed: &Path) -> Vec<PathBuf> {
     let far = Instant::now() + std::time::Duration::from_secs(3600);
@@ -205,7 +206,6 @@ fn transfer(job: &Job) -> Option<Copy> {
     let done = std::io::copy(&mut source, &mut target)
         .and_then(|_| target.flush())
         .and_then(|()| {
-            // Keep only the rwx bits: a source's setuid, setgid and sticky bits never carry over.
             let mode = metadata.permissions().mode() & 0o777;
             target.set_permissions(fs::Permissions::from_mode(mode))
         })
