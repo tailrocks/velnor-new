@@ -15,6 +15,7 @@ mod build_target;
 mod built_helper_gate;
 mod built_output;
 mod cache_budget;
+mod cache_saved_key;
 mod cache_budget_workflow;
 mod cache_compat;
 mod cache_key_defects;
