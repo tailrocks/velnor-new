@@ -4,7 +4,7 @@
 use crate::command_scan::segments;
 use crate::wrappers::{Invoked, invoked};
 
-pub const HELPER_COMMANDS: [&str; 36] = [
+pub const HELPER_COMMANDS: &[&str] = &[
     "report",
     "bench",
     "inputs",
@@ -31,6 +31,7 @@ pub const HELPER_COMMANDS: [&str; 36] = [
     "check-configurations",
     "lane-guard",
     "test-groups",
+    "artifacts",
     "restored",
     "delta",
     "image",

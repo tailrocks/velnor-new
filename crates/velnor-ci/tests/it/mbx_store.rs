@@ -69,7 +69,7 @@ fn a_trusted_event_uses_the_shared_directory_with_pod_private_shims() {
     for (event, git_ref) in [("push", "refs/heads/main"), ("schedule", "refs/heads/main")] {
         let outcome = run(&host, event, git_ref, Some(&shared));
         assert_eq!(
-            env_lines(&outcome),
+            env_lines(&outcome).expect("env lines"),
             format!(
                 "MBX_CACHE_DIR={}\nMBX_SHIMS_DIR={}\n",
                 shared.display(),
@@ -103,7 +103,7 @@ fn a_pull_request_never_gets_the_shared_directory() {
         Some(&host.root.join("shared")),
     );
     assert_eq!(outcome, Outcome::Untrusted);
-    assert_eq!(env_lines(&outcome), "");
+    assert_eq!(env_lines(&outcome).expect("env lines"), "");
     assert!(!host.root.join("temp/velnor-mbx-shims").exists());
 }
 
@@ -117,7 +117,7 @@ fn a_merge_group_never_gets_the_shared_directory() {
         Some(&host.root.join("shared")),
     );
     assert_eq!(outcome, Outcome::Untrusted);
-    assert_eq!(env_lines(&outcome), "");
+    assert_eq!(env_lines(&outcome).expect("env lines"), "");
 }
 
 #[test]
@@ -136,7 +136,7 @@ fn no_offered_directory_changes_nothing() {
     let host = host("mbx-store-none");
     let outcome = run(&host, "push", "refs/heads/main", None);
     assert_eq!(outcome, Outcome::NotOffered);
-    assert_eq!(env_lines(&outcome), "");
+    assert_eq!(env_lines(&outcome).expect("env lines"), "");
 }
 
 #[test]
@@ -173,7 +173,7 @@ fn an_unusable_directory_warns_and_keeps_the_private_store() {
             "{}",
             dir.display()
         );
-        assert_eq!(env_lines(&outcome), "");
+        assert_eq!(env_lines(&outcome).expect("env lines"), "");
         assert!(message(&outcome).starts_with("::warning::VELNOR_MBX_SHARED_DIR ignored"));
     }
     assert!(!root.join("temp/velnor-mbx-shims").exists());
@@ -216,4 +216,26 @@ fn an_existing_shims_directory_is_secured_or_refused() {
     symlink(&target, &shims).unwrap_or_else(|e| unreachable!("{e}"));
     let outcome = run(&host, "push", "refs/heads/main", Some(&shared));
     assert_eq!(outcome, Outcome::Rejected("shims path is not a directory"));
+}
+
+#[test]
+fn a_store_or_shims_directory_with_a_line_break_cannot_add_an_environment_variable() {
+    let clean = Outcome::Shared {
+        dir: PathBuf::from("/runner/mbx"),
+        shims: PathBuf::from("/runner/shims"),
+    };
+    assert_eq!(
+        env_lines(&clean).as_deref().ok(),
+        Some("MBX_CACHE_DIR=/runner/mbx\nMBX_SHIMS_DIR=/runner/shims\n")
+    );
+    for (dir, shims) in [
+        ("/runner/mbx\nGITHUB_PATH=/evil", "/runner/shims"),
+        ("/runner/mbx", "/runner/shims\nGITHUB_PATH=/evil"),
+    ] {
+        let outcome = Outcome::Shared {
+            dir: PathBuf::from(dir),
+            shims: PathBuf::from(shims),
+        };
+        assert!(env_lines(&outcome).is_err(), "{dir:?} {shims:?}");
+    }
 }

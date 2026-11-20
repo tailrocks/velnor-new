@@ -66,7 +66,7 @@ fn output(files: &[(&str, &str)]) -> String {
         })
 }
 
-const ALL: [(&str, &str); 3] = [
+const ALL: &[(&str, &str)] = &[
     (".runner", r#"{"agentName":"x"}"#),
     (".credentials", r#"{"scheme":"OAuth"}"#),
     (".credentials_rsaparams", r#"{"d":"AQAB"}"#),
@@ -150,7 +150,7 @@ fn the_image_plan_names_the_lock_entry_that_is_missing() {
 #[tokio::test]
 async fn a_minted_jit_packs_the_three_files_registration_wrote() {
     let dir = temp_dir("pair-mint");
-    let docker = Registration::new(&output(&ALL));
+    let docker = Registration::new(&output(ALL));
     let env = Environment::at(&dir, &docker)
         .await
         .unwrap_or_else(|e| unreachable!("{e}"));
@@ -163,7 +163,7 @@ async fn a_minted_jit_packs_the_three_files_registration_wrote() {
             .unwrap_or_else(|e| unreachable!("{e}")),
     )
     .unwrap_or_else(|e| unreachable!("{e}"));
-    for (name, content) in ALL {
+    for &(name, content) in ALL {
         let packed = files[name].as_str().unwrap_or_default();
         assert_eq!(
             STANDARD.decode(packed).unwrap_or_default(),
@@ -340,7 +340,7 @@ async fn a_registration_that_cannot_be_packed_reports_the_runner_name_it_registe
 async fn a_minted_runner_registers_the_extra_labels_after_the_built_in_ones() {
     let built_in = velnor_local::jit::labels(&[]);
     let dir = temp_dir("pair-mint-labels");
-    let docker = Registration::new(&output(&ALL));
+    let docker = Registration::new(&output(ALL));
     let env = Environment::at(&dir, &docker)
         .await
         .unwrap_or_else(|e| unreachable!("{e}"))
@@ -359,7 +359,7 @@ async fn a_minted_runner_registers_the_extra_labels_after_the_built_in_ones() {
 async fn a_minted_runner_without_extra_labels_registers_the_built_in_ones_only() {
     let built_in = velnor_local::jit::labels(&[]);
     let dir = temp_dir("pair-mint-no-labels");
-    let docker = Registration::new(&output(&ALL));
+    let docker = Registration::new(&output(ALL));
     let env = Environment::at(&dir, &docker)
         .await
         .unwrap_or_else(|e| unreachable!("{e}"));

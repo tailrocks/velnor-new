@@ -9,7 +9,7 @@ use crate::write_request::internal;
 
 pub(super) const PATH: &str = ".velnor/config.toml";
 
-const UNSUPPORTED_STACKS: [&str; 5] = ["tofu", "bun", "gradle", "dbt", "ansible"];
+const UNSUPPORTED_STACKS: &[&str] = &["tofu", "bun", "gradle", "dbt", "ansible"];
 
 #[derive(Debug)]
 pub(super) struct InputRule {
@@ -61,7 +61,7 @@ pub(super) fn parse(text: &str) -> Result<Config, CiError> {
         }
     }
     let stacks = document.get("stacks").and_then(Value::as_table);
-    for stack in UNSUPPORTED_STACKS {
+    for stack in UNSUPPORTED_STACKS.iter().copied() {
         if stacks.is_some_and(|stacks| stacks.contains_key(stack)) {
             return Err(unsupported(stack));
         }
@@ -106,6 +106,9 @@ fn check_of(check: &Table) -> Result<Check, CiError> {
         .get("id")
         .and_then(Value::as_str)
         .ok_or_else(|| unsupported("check_without_id"))?;
+    if !is_identifier(id) {
+        return Err(unsupported(&format!("check_id:{id}")));
+    }
     let rust_changes = match check.get("selection").and_then(Value::as_str) {
         None | Some("rust_changes") => true,
         Some("declared_inputs") => false,
@@ -121,6 +124,13 @@ fn check_of(check: &Table) -> Result<Check, CiError> {
         inputs: strings(check.get("inputs")),
         rust_changes,
     })
+}
+
+fn is_identifier(id: &str) -> bool {
+    !id.is_empty()
+        && id
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'.' | b'-'))
 }
 
 fn strings(value: Option<&Value>) -> Vec<String> {

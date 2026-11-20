@@ -17,7 +17,7 @@ const WRITE: &str = "permissions = { contents = \"write\" }";
 const TOKEN: &str = "env = { GH_TOKEN = \"${{ github.token }}\" }";
 
 /// Each wrapper that runs the rest of its command line, with `{}` where the payload goes.
-const WRAPPERS: [&str; 62] = [
+const WRAPPERS: &[&str] = &[
     "nohup {}",
     "exec {}",
     "command {}",

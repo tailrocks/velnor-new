@@ -7,7 +7,10 @@
 
 use std::error::Error;
 
+use velnor_rust::LOCK_PATH;
+
 use crate::facts::path;
+use crate::lock_archive::archive_lock_at;
 use crate::pipeline::{pin_helper, view, workflow};
 
 const DOCS: &str = "docs = \"post_merge\"\n";
@@ -97,6 +100,38 @@ fn a_required_check_name_is_refused_before_the_helper_reads_it() -> Result<(), B
 #[test]
 fn a_required_check_name_renders_on_the_first_helper_that_reads_it() -> Result<(), Box<dyn Error>> {
     let refused = refusal(REQUIRED_CHECK, "0.1.97")?;
+    assert!(!refused.contains("HelperTooOld"), "{refused}");
+    Ok(())
+}
+
+const GENERATED_CHECK: &str = "[[lint]]\nkind = 'generated-check'\n";
+
+fn archived_refusal(config: &str, version: &str) -> Result<String, Box<dyn Error>> {
+    let mut repo = view(&["Cargo.toml"], None)?;
+    repo.tracked_paths.insert(LOCK_PATH);
+    repo.files
+        .insert(LOCK_PATH, archive_lock_at(version)?.into_bytes());
+    repo.files
+        .insert(path(".velnor/rust-ci.toml")?, config.as_bytes().to_vec());
+    Ok(match workflow(&repo) {
+        Ok(_) => String::new(),
+        Err(error) => format!("{error:?}"),
+    })
+}
+
+#[test]
+fn generated_check_lint_is_refused_before_the_helper_reads_its_kind() -> Result<(), Box<dyn Error>>
+{
+    let refused = archived_refusal(GENERATED_CHECK, "0.1.108")?;
+    assert!(refused.contains("ConfigKeyHelperTooOld"), "{refused}");
+    assert!(refused.contains("generated-check"), "{refused}");
+    Ok(())
+}
+
+#[test]
+fn generated_check_lint_renders_on_the_first_helper_that_reads_its_kind()
+-> Result<(), Box<dyn Error>> {
+    let refused = archived_refusal(GENERATED_CHECK, "0.1.110")?;
     assert!(!refused.contains("HelperTooOld"), "{refused}");
     Ok(())
 }

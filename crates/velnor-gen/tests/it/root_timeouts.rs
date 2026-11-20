@@ -9,7 +9,7 @@ use crate::pipeline::workflow;
 use crate::test_groups::view_with;
 use crate::yaml_tree::document;
 
-const ROOTS: [&str; 2] = ["Cargo.toml", "lab/Cargo.toml"];
+const ROOTS: &[&str] = &["Cargo.toml", "lab/Cargo.toml"];
 const HELPER: &str = "0.1.109";
 
 /// A repository limit of 30 minutes, 90 for the `lab` root, and a parallel lane of `lab` that
@@ -27,12 +27,12 @@ timeout_minutes = 120
 ";
 
 fn jobs_of(config: &str, helper: &str) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
-    let text = workflow(&view_with(&ROOTS, config, helper)?)?;
+    let text = workflow(&view_with(ROOTS, config, helper)?)?;
     Ok(document(&text)?["jobs"].clone())
 }
 
 fn refusal(config: &str, helper: &str) -> Result<String, Box<dyn std::error::Error>> {
-    let error = workflow(&view_with(&ROOTS, config, helper)?)
+    let error = workflow(&view_with(ROOTS, config, helper)?)
         .err()
         .ok_or("the configuration was accepted")?;
     Ok(error.to_string())
@@ -54,7 +54,7 @@ fn timeouts_with_prefix(jobs: &serde_json::Value, prefix: &str) -> Vec<(String, 
 
 #[test]
 fn the_root_and_lane_keys_parse_into_the_configuration() -> TestResult {
-    let facts = detect(&view_with(&ROOTS, LANE, HELPER)?)?;
+    let facts = detect(&view_with(ROOTS, LANE, HELPER)?)?;
     let config = &facts.config;
     assert_eq!(config.timeout_minutes, 30);
     assert_eq!(
@@ -69,7 +69,7 @@ fn the_root_and_lane_keys_parse_into_the_configuration() -> TestResult {
 #[test]
 fn a_root_key_names_the_repository_root_with_dot_and_takes_a_trailing_slash() -> TestResult {
     let config = "[root_timeouts]\n'.' = 45\n'lab/' = 90\n";
-    let facts = detect(&view_with(&ROOTS, config, HELPER)?)?;
+    let facts = detect(&view_with(ROOTS, config, HELPER)?)?;
     assert_eq!(facts.config.root_timeouts.get(&None), Some(&45));
     assert_eq!(
         facts.config.root_timeouts.get(&Some(RepoPath::new("lab")?)),

@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, SystemTime};
 
+use super::clear::clear_home;
 use super::{HOME_PATHS, Inputs, KEEP_KEYS, Outcome, TOOLS_DIR};
 use crate::mbx_store::{random_u64, writable_by_job};
 
@@ -78,6 +79,9 @@ pub(super) fn restore(inputs: &Inputs<'_>, dir: Option<&str>, read_only: bool) -
     let entry = base.join(TOOLS_DIR).join(inputs.key);
     if !complete(&entry, inputs.owner) {
         return Outcome::Miss;
+    }
+    if let Err(reason) = clear_home(inputs.home) {
+        return Outcome::Rejected(reason);
     }
     for path in HOME_PATHS {
         if !copy_tree(&entry.join(slot(path)), &inputs.home.join(path)) {
