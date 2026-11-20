@@ -226,7 +226,7 @@ mod tests_run {
         let script = "echo '     Summary [   0.001s] 0 tests run: 0 passed, 0 skipped' >&2";
         let (output, written, _) = run_with_output("tests-run-zero", script, &NEXTEST_RUN);
         assert!(output.status.success(), "{output:?}");
-        assert_eq!(written, "existing=1\ntests_run=0\ntests_listed=0\n");
+        assert_eq!(written, "existing=1\nbuilt=true\ntests_run=0\ntests_listed=0\n");
     }
 
     #[test]
@@ -236,7 +236,7 @@ mod tests_run {
         );
         let (output, written, _) = run_with_output("tests-run-filtered", &script, &NEXTEST_RUN);
         assert!(output.status.success(), "{output:?}");
-        assert_eq!(written, "existing=1\ntests_run=0\ntests_listed=4\n");
+        assert_eq!(written, "existing=1\nbuilt=true\ntests_run=0\ntests_listed=4\n");
     }
 
     #[test]

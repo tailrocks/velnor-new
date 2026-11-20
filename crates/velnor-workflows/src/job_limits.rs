@@ -147,21 +147,47 @@ pub(crate) fn bounded_cache_keys(
     Ok(())
 }
 
-/// A job whose `cache-mode` is not a writing one has its cache saves denied at the cache
-/// service, with only a warning in the log. Refuse that at generation: the job either declares
-/// `cache_mode = "write"` (and so its `if` keeps it off the default branch) or does not save.
+/// Whether a step saves to the GitHub Actions cache service. A `cache` or `cache-save` step always
+/// does. An `mr-boxington` step does when its backend is `github`, the action's default, and it
+/// runs in a saving job (one that runs on a push or a schedule). An expression backend may be
+/// `github`, so it counts as a save.
+pub(crate) fn saves_to_cache_service(step: &Step, saving_job: bool) -> bool {
+    match &step.body {
+        Body::Uses(Action::Cache | Action::CacheSave) => true,
+        Body::Uses(Action::MrBoxington) => {
+            saving_job
+                && !matches!(
+                    step.with.iter().find(|(name, _)| name == "backend"),
+                    Some((_, Env::Text(backend))) if backend != "github"
+                )
+        }
+        _ => false,
+    }
+}
+
+/// The `cache-mode` of a job that saves to the cache service. A job that declares no mode and
+/// whose only saver is an `mr-boxington` step writes, because that save is the one the mode must
+/// allow. A job that saves with `cache` or `cache-save` must declare a writing mode, and so must a
+/// job that declares a non-writing mode and saves at all. A job that saves nothing keeps its mode.
 pub(crate) fn saves_need_write(
     job: &str,
     steps: &[Step],
     mode: Option<CacheMode>,
-) -> Result<(), WorkflowsError> {
+    saving_job: bool,
+) -> Result<Option<CacheMode>, WorkflowsError> {
     let saves = steps
         .iter()
+        .any(|step| saves_to_cache_service(step, saving_job));
+    let cache_saves = steps
+        .iter()
         .any(|step| matches!(step.body, Body::Uses(Action::Cache | Action::CacheSave)));
+    if mode.is_none() && saves && !cache_saves {
+        return Ok(Some(CacheMode::Write));
+    }
     if saves && !mode.is_some_and(CacheMode::writes) {
         return refuse(format!(
-            "job {job} saves to the cache (cache or cache-save) without cache_mode \"write\"; a job without a writing cache-mode reads only, and its save is denied with a warning"
+            "job {job} saves to the cache service (cache, cache-save, or mr-boxington on the github backend in a push or schedule job) without cache_mode \"write\"; a job without a writing cache-mode reads only, and its save is denied with a warning"
         ));
     }
-    Ok(())
+    Ok(mode)
 }

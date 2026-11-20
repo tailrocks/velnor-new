@@ -47,7 +47,7 @@ pub(crate) fn build(directory: &Path, args: &InputsBuildArgs) -> Result<String, 
     let invocation = Invocation::new(&args.command);
     let location = fs::canonicalize(invocation.location(directory))
         .map_err(|e| CiError::new(e.to_string()))?;
-    let inherit = inheriting(&facts, &checkout.root, Some(&location));
+    let inherit = inheriting(&facts, &checkout.root, Some(&location))?;
     let workspaces = workspaces(&facts, &checkout.root, &inherit)?;
     apart(&workspaces, &shared_groups(&facts))?;
     let directories = scan_dirs(&workspaces);
@@ -64,7 +64,7 @@ pub(crate) fn build(directory: &Path, args: &InputsBuildArgs) -> Result<String, 
         directory,
         repository: checkout.root,
         facts,
-        targets: inventory::exclusions(&workspaces),
+        targets: inventory::exclusions(&workspaces)?,
         workspaces,
         directories,
         roots,

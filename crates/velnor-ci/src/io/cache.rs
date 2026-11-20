@@ -5,8 +5,10 @@ use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
+use super::cache_prune::prune;
 use super::input_target::check_removal_target;
 use crate::cache::{KEEP_NEWEST, born_expired, should_save, trim};
+use crate::cache_prune::UsedUnits;
 use crate::error::CiError;
 use crate::github::Repo;
 use crate::logscan::scan;
@@ -31,7 +33,7 @@ pub fn decide(
     now_seconds: i64,
 ) -> Result<Decision, CiError> {
     let counts = scan(log.ok_or_else(|| CiError::new("velnor-run.log is missing"))?);
-    decide_counts(&counts, target, archive, now_seconds, None)
+    decide_counts(&counts, target, archive, now_seconds, None, None)
 }
 
 pub(super) fn decide_counts(
@@ -40,6 +42,7 @@ pub(super) fn decide_counts(
     archive: Option<&Path>,
     now_seconds: i64,
     budget_bytes: Option<u64>,
+    used: Option<&UsedUnits>,
 ) -> Result<Decision, CiError> {
     if !should_save(counts) {
         return Ok(Decision {
@@ -48,16 +51,27 @@ pub(super) fn decide_counts(
                 .to_owned(),
         });
     }
+    let before = directory_size(target)?;
     let removed = remove_incremental(target)?;
     if let Some(archive) = archive {
         remove_file(archive)?;
     }
+    let pruned = prune(target, used)?;
     let size = directory_size(target)?;
+    let basis = if used.is_some() {
+        "this run's dependency units"
+    } else {
+        "no complete record of this run's units"
+    };
+    let pruning = format!(
+        "pruned from {before} bytes to {size} bytes, keeping {basis}; removed {}",
+        pruned.describe()
+    );
     if let Some(budget) = budget_bytes.filter(|budget| size > *budget) {
         return Ok(Decision {
             save: false,
             report: format!(
-                "::notice::{} is {size} bytes, more than the repository cache budget of {budget} bytes; saving nothing\n",
+                "::notice::{} is {size} bytes, more than the repository cache budget of {budget} bytes; saving nothing ({pruning})\n",
                 target.display()
             ),
         });
@@ -74,7 +88,7 @@ pub(super) fn decide_counts(
     Ok(Decision {
         save: true,
         report: format!(
-            "{} crates compiled, checked or documented; saving {}: {size} bytes, removed {removed} incremental directories\n",
+            "{} crates compiled, checked or documented; saving {}: {size} bytes, removed {removed} incremental directories; {pruning}\n",
             counts.crates_compiled(),
             target.display(),
         ),
@@ -92,7 +106,7 @@ fn remove_file(path: &Path) -> Result<(), CiError> {
     }
 }
 
-fn entries(dir: &Path) -> Result<Vec<fs::DirEntry>, CiError> {
+pub(super) fn entries(dir: &Path) -> Result<Vec<fs::DirEntry>, CiError> {
     fs::read_dir(dir)
         .and_then(Iterator::collect)
         .map_err(|e| CiError::new(format!("cannot traverse {}: {e}", dir.display())))
@@ -141,7 +155,7 @@ fn remove_incremental_child(dir: &Path) -> Result<u64, CiError> {
     Ok(1)
 }
 
-fn directory_size(dir: &Path) -> Result<u64, CiError> {
+pub(super) fn directory_size(dir: &Path) -> Result<u64, CiError> {
     let mut size = 0;
     for entry in entries(dir)? {
         let kind = entry.file_type().map_err(|e| CiError::new(e.to_string()))?;
@@ -259,14 +273,17 @@ pub(super) fn run_decide(args: &crate::cli_cache::DecideArgs) -> Result<String, 
             report: reason,
         }
     } else {
-        let counts = super::activity::activity()?
+        let recorded = super::activity::invocations()?;
+        let counts = super::activity::activity(recorded.as_deref())?
             .unwrap_or_else(|| crate::logscan::scan(&String::from_utf8_lossy(&log)));
+        let used = recorded.as_deref().and_then(UsedUnits::from_invocations);
         decide_counts(
             &counts,
             &target,
             archive.as_deref(),
             super::now_seconds(),
             budget_limit()?,
+            used.as_ref(),
         )?
     };
     super::append_outputs(&format!("save={}\nsources={sources}\n", decision.save))?;

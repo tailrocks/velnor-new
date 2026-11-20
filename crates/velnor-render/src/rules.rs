@@ -155,6 +155,7 @@ pub enum Rule {
     },
     MiseActionInTokenJob,
     MiseReadsRepositoryConfig,
+    UnreadableCommandInTokenJob,
     CombinedCacheNotLastStep,
     TokenJobRunnerNotX64(String),
     WorkflowTooLarge(usize),
@@ -210,6 +211,9 @@ impl fmt::Display for RuleViolation {
             ),
             Rule::MiseReadsRepositoryConfig => f.write_str(
                 "a job that holds the release App token runs mise without --no-config --no-env --no-hooks",
+            ),
+            Rule::UnreadableCommandInTokenJob => f.write_str(
+                "a job that holds the release App token runs a command that cannot be read, which may run mise with the repository config",
             ),
             Rule::CombinedCacheNotLastStep => f.write_str(crate::combined_cache::MESSAGE),
             Rule::WorkflowTooLarge(_)
@@ -289,18 +293,8 @@ fn token_step_rules(step: &RenderedStep, rules: &mut Vec<Rule>) {
     {
         rules.push(Rule::MiseActionInTokenJob);
     }
-    let program = step
-        .run
-        .as_deref()
-        .and_then(|run| run.split_whitespace().next())
-        .map(|word| word.trim_matches('"'));
-    if program.is_some_and(|word| word == "mise" || word.ends_with("/mise"))
-        && !step
-            .run
-            .as_deref()
-            .is_some_and(|run| run.contains(" --no-config --no-env --no-hooks "))
-    {
-        rules.push(Rule::MiseReadsRepositoryConfig);
+    if let Some(run) = step.run.as_deref() {
+        rules.extend(crate::token_commands::rules(run));
     }
 }
 

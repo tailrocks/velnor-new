@@ -16,6 +16,20 @@ pub(super) fn paths(root: &Path) -> Result<BTreeSet<PathBuf>, CiError> {
 }
 
 fn inventory(root: &Path, filtered: bool) -> Result<BTreeSet<PathBuf>, CiError> {
+    inventory_with(root, filtered, &mut |_| {})
+}
+
+/// Lists the tree under `root`. Concurrent cargo lanes sharing a target directory create and
+/// remove directories while this walk runs. A directory that vanishes after its parent listed it
+/// is left out, together with its entries: nothing is listed from a directory that is gone when it
+/// is read. A vanished directory cannot be a checkout that a removal would delete, and a delta
+/// that misses an entry is already possible for a file created after its directory was listed.
+/// Every other error still fails the walk. `before_read` runs just before each directory is read.
+fn inventory_with(
+    root: &Path,
+    filtered: bool,
+    before_read: &mut dyn FnMut(&Path),
+) -> Result<BTreeSet<PathBuf>, CiError> {
     safe_path(root)?;
     let mut result = BTreeSet::new();
     if !root.exists() {
@@ -24,10 +38,23 @@ fn inventory(root: &Path, filtered: bool) -> Result<BTreeSet<PathBuf>, CiError> 
     let mut pending = vec![PathBuf::new()];
     while let Some(relative) = pending.pop() {
         let dir = root.join(&relative);
-        for entry in fs::read_dir(&dir).map_err(|e| failure(&dir, &e))? {
+        before_read(&dir);
+        let entries = match fs::read_dir(&dir) {
+            Ok(entries) => entries,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                result.remove(&relative);
+                continue;
+            }
+            Err(e) => return Err(failure(&dir, &e)),
+        };
+        for entry in entries {
             let entry = entry.map_err(|e| failure(&dir, &e))?;
             let path = relative.join(entry.file_name());
-            let kind = entry.file_type().map_err(|e| failure(&entry.path(), &e))?;
+            let kind = match entry.file_type() {
+                Ok(kind) => kind,
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
+                Err(e) => return Err(failure(&entry.path(), &e)),
+            };
             if filtered
                 && ((kind.is_dir()
                     && entry.file_name() == "incremental"
@@ -205,4 +232,53 @@ pub(super) fn apply(
         .values()
         .filter(|node| !node.directory())
         .count())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn fixture(name: &str) -> PathBuf {
+        let exe = std::env::current_exe().expect("fixture step");
+        let root = exe
+            .parent()
+            .expect("fixture step")
+            .join(format!("velnor-delta-tree-{name}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(root.join("gone")).expect("fixture step");
+        fs::write(root.join("gone").join("inner"), b"x").expect("fixture step");
+        fs::write(root.join("keep"), b"x").expect("fixture step");
+        root
+    }
+
+    #[test]
+    fn directory_removed_after_listing_is_left_out() {
+        let root = fixture("vanished");
+        let result = inventory_with(&root, false, &mut |dir| {
+            if dir.ends_with("gone") {
+                fs::remove_dir_all(dir).expect("fixture step");
+            }
+        });
+        fs::remove_dir_all(&root).expect("fixture step");
+        assert_eq!(
+            result.expect("fixture step"),
+            BTreeSet::from([PathBuf::from("keep")])
+        );
+    }
+
+    #[test]
+    fn unreadable_directory_still_fails_the_walk() {
+        let root = fixture("unreadable");
+        let gone = root.join("gone");
+        fs::set_permissions(&gone, fs::Permissions::from_mode(0o000)).expect("fixture step");
+        let readable = fs::read_dir(&gone).is_ok();
+        let result = inventory_with(&root, false, &mut |_| {});
+        fs::set_permissions(&gone, fs::Permissions::from_mode(0o700)).expect("fixture step");
+        fs::remove_dir_all(&root).expect("fixture step");
+        if readable {
+            // Running as root: permissions do not stop the read, so there is no error to see.
+            return;
+        }
+        assert!(result.is_err());
+    }
 }
