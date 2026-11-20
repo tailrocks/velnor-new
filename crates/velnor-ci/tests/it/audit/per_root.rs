@@ -53,7 +53,7 @@ fn repo(group: bool, web: bool) -> Repo {
     unit(
         &repo,
         ".velnor/rust-ci.lock",
-        &GROUP_LOCK.replace("version = \"0.1.81\"", "version = \"0.1.86\""),
+        &GROUP_LOCK.replace("version = \"0.1.81\"", "version = \"0.1.96\""),
     );
     for (directory, name) in [("tools/a", "a"), ("tools/b", "b"), ("web", "w")] {
         package(&repo, directory, name);

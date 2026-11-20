@@ -18,8 +18,8 @@ fn fnv1a(bytes: &[u8]) -> u64 {
     })
 }
 
-fn pinned(config: &str, expected: u64) -> TestResult {
-    let text = render("0.1.86", config)?;
+fn pinned(helper: &str, config: &str, expected: u64) -> TestResult {
+    let text = render(helper, config)?;
     let actual = fnv1a(text.as_bytes());
     assert_eq!(
         actual, expected,
@@ -30,12 +30,13 @@ fn pinned(config: &str, expected: u64) -> TestResult {
 
 #[test]
 fn draft_skip_off_with_pr_ci_always_renders_the_pinned_workflow() -> TestResult {
-    pinned("shape = \"lint-test\"\n", PIN_OFF_ALWAYS)
+    pinned("0.1.86", "shape = \"lint-test\"\n", PIN_OFF_ALWAYS)
 }
 
 #[test]
 fn draft_skip_on_with_pr_ci_always_renders_the_pinned_workflow() -> TestResult {
     pinned(
+        "0.1.86",
         "shape = \"lint-test\"\nskip_draft_pull_requests = true\n",
         PIN_ON_ALWAYS,
     )
@@ -43,21 +44,29 @@ fn draft_skip_on_with_pr_ci_always_renders_the_pinned_workflow() -> TestResult {
 
 #[test]
 fn draft_skip_off_with_pr_ci_label_renders_the_pinned_workflow() -> TestResult {
-    pinned("pr_ci = \"label\"\nshape = \"lint-test\"\n", PIN_OFF_LABEL)
+    pinned(
+        "0.1.88",
+        "pr_ci = \"label\"\nshape = \"lint-test\"\n",
+        PIN_OFF_LABEL,
+    )
 }
 
 #[test]
 fn draft_skip_on_with_pr_ci_label_is_refused() {
     let refused = render(
-        "0.1.86",
+        "0.1.88",
         "pr_ci = \"label\"\nshape = \"lint-test\"\nskip_draft_pull_requests = true\n",
     );
+    let error = match refused {
+        Ok(text) => panic!("pr_ci = label with skip_draft must be refused:\n{text}"),
+        Err(error) => error.to_string(),
+    };
     assert!(
-        refused.is_err(),
-        "pr_ci = label with skip_draft must be refused"
+        error.contains("both decide what a draft pull request runs"),
+        "{error}"
     );
 }
 
 const PIN_OFF_ALWAYS: u64 = 0x9be8_0ee1_8d1d_4475;
 const PIN_ON_ALWAYS: u64 = 0xdad0_71ff_2d3b_692d;
-const PIN_OFF_LABEL: u64 = 0xc9e8_6da7_8ed0_7f2a;
+const PIN_OFF_LABEL: u64 = 0x5ded_8f9f_bc8a_bac6;
