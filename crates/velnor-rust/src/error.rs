@@ -71,6 +71,10 @@ pub enum Reason {
     UnknownTestLaneRoot(String),
     TestLaneWithoutNextest(String),
     UnknownTestLanePackage(String),
+    TestLaneFeatureConflict {
+        first: &'static str,
+        second: &'static str,
+    },
     Lint(crate::lint_error::LintFault),
     LintDuplicate(String),
     LintKeyForeign {
