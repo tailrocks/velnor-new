@@ -15,6 +15,8 @@ pub struct MbxSession {
     pub hits: u64,
     pub misses: u64,
     pub not_looked_up: u64,
+    #[serde(default)]
+    pub bypassed: u64,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -50,6 +52,7 @@ fn cache_text(line: &str) -> Option<(bool, &str)> {
     let text = line.split_once("mbx[cache]: ")?.1;
     Some(match text.strip_prefix("object cache:") {
         Some(rest) => (true, rest.trim_start()),
+        None if matches!(text.trim_end(), "object" | "object cache") => (true, ""),
         None => (false, text),
     })
 }
@@ -69,20 +72,33 @@ fn parse_lookup_summary(summary: &str) -> Option<MbxSession> {
         hits: 0,
         misses: 0,
         not_looked_up: 0,
+        bypassed: 0,
     };
-    let mut seen = [false; 2];
+    let mut seen: Vec<&str> = Vec::new();
     for clause in counts.split(',') {
         let (count, name) = clause.trim().split_once(' ')?;
-        let count = count.parse().ok()?;
-        match name.trim() {
-            "hits" => (session.hits, seen[0]) = (count, true),
-            "misses" => (session.misses, seen[1]) = (count, true),
-            "not looked up" => session.not_looked_up = count,
-            "bypassed" | "incremental" => {}
+        let count: u64 = count.parse().ok()?;
+        let name = match name.trim() {
+            "hit" | "hits" => "hits",
+            "miss" | "misses" => "misses",
+            "not looked up" => "not looked up",
+            "bypassed" => "bypassed",
+            "incremental" => "incremental",
             _ => return None,
+        };
+        if seen.contains(&name) {
+            return None;
+        }
+        seen.push(name);
+        match name {
+            "hits" => session.hits = count,
+            "misses" => session.misses = count,
+            "not looked up" => session.not_looked_up = count,
+            "bypassed" => session.bypassed = count,
+            _ => {}
         }
     }
-    (seen[0] && seen[1]).then_some(session)
+    (!seen.is_empty()).then_some(session)
 }
 
 #[must_use]
@@ -137,7 +153,7 @@ pub fn waste(metrics: &LaneMetrics) -> Vec<String> {
     let sessions = &metrics.mbx.sessions;
     let lookups: u64 = sessions
         .iter()
-        .map(|session| session.misses + session.not_looked_up)
+        .map(|session| session.misses + session.not_looked_up + session.bypassed)
         .sum();
     if metrics.mbx.store_primed
         && !metrics.mbx.seed_truncated

@@ -20,7 +20,10 @@ const REAL_MBX_1_30_DETAIL_ONLY: &str = "\
 mbx[cache]: 12 compilations had no usable prior inputs or matching prediction for a lookup
 mbx[cache]: Cargo artifact reuse and CI cache archive transfers are not included above
 ";
-const SINGULAR_SUMMARY: &str = "mbx[cache]: object cache: 3 hit, 0 miss; 0 B downloaded";
+const SINGULAR_SUMMARY: &str = "mbx[cache]: object cache: 3 hit, 1 miss; 0 B downloaded";
+const DUPLICATE_HITS_SUMMARY: &str = "mbx[cache]: object cache: 3 hits, 5 misses, 0 hits; 0 B downloaded, 0 B uploaded, 0 B stored locally";
+const OMITTED_ZERO_SUMMARY: &str = "mbx[cache]: object cache: 0 misses, 15 incremental; 0 B downloaded, 0 B uploaded, 0 B stored locally";
+const BYPASSED_ONLY_SUMMARY: &str = "mbx[cache]: object cache: 0 hits, 0 misses, 4 bypassed; 0 B downloaded, 0 B uploaded, 0 B stored locally";
 const ZERO_HIT_SUMMARY: &str = "mbx[cache]: object cache: 0 hits, 5 misses; 0 B downloaded";
 const PARTIAL_SUMMARY: &str = "mbx[cache]: object cache: 4 hits, many misses; 0 B downloaded";
 
@@ -75,7 +78,6 @@ fn unparsed_warning(metrics: &velnor_ci::report::LaneMetrics, first: &str) -> bo
     })
 }
 
-/// An unparsed summary leaves the lane unverifiable, so the final check fails closed.
 fn fails_closed(metrics: &velnor_ci::report::LaneMetrics) -> bool {
     velnor_ci::report::check(std::slice::from_ref(metrics)).is_err_and(|error| {
         error
@@ -93,22 +95,17 @@ fn waste_gates(metrics: &velnor_ci::report::LaneMetrics) -> Vec<&String> {
 }
 
 #[test]
-fn a_singular_mbx_summary_is_unparsed_with_a_warning_and_never_a_silent_zero() -> ResultTest {
+fn a_singular_mbx_summary_is_accepted_and_an_absent_one_is_not_silent() -> ResultTest {
     let metrics = lane_with_mbx_log(
         "report-mbx-singular",
         &format!("{SINGULAR_SUMMARY}\n"),
         true,
         false,
     )?;
-    assert!(metrics.mbx.sessions.is_empty(), "{metrics:?}");
-    assert_eq!(metrics.mbx.unparsed, 1, "{metrics:?}");
-    assert!(
-        unparsed_warning(&metrics, SINGULAR_SUMMARY),
-        "{:?}",
-        metrics.verification_errors
-    );
-    assert!(fails_closed(&metrics), "{metrics:?}");
-    assert!(waste_gates(&metrics).is_empty(), "{:?}", metrics.violations);
+    assert_eq!(metrics.mbx.sessions.len(), 1, "{metrics:?}");
+    assert_eq!(metrics.mbx.sessions[0].hits, 3, "{metrics:?}");
+    assert_eq!(metrics.mbx.sessions[0].misses, 1, "{metrics:?}");
+    assert_eq!(metrics.mbx.unparsed, 0, "{metrics:?}");
     let silent = lane_with_mbx_log("report-mbx-no-summary", "", true, false)?;
     assert_eq!(silent.mbx.unparsed, 0);
     assert!(
@@ -241,6 +238,71 @@ fn bypassed_and_incremental_counters_are_accepted() -> ResultTest {
     assert_eq!(metrics.mbx.sessions.len(), 1, "{metrics:?}");
     assert_eq!(metrics.mbx.sessions[0].misses, 2, "{metrics:?}");
     assert_eq!(metrics.mbx.unparsed, 0, "{metrics:?}");
+    Ok(())
+}
+
+#[test]
+fn a_repeated_mbx_counter_makes_the_summary_unparsed() -> ResultTest {
+    let metrics = lane_with_mbx_log(
+        "report-mbx-duplicate-counter",
+        &format!("{DUPLICATE_HITS_SUMMARY}\n"),
+        true,
+        false,
+    )?;
+    assert!(metrics.mbx.sessions.is_empty(), "{metrics:?}");
+    assert_eq!(metrics.mbx.unparsed, 1, "{metrics:?}");
+    assert!(fails_closed(&metrics), "{metrics:?}");
+    Ok(())
+}
+
+#[test]
+fn an_omitted_zero_counter_is_zero_not_unparsed() -> ResultTest {
+    let metrics = lane_with_mbx_log(
+        "report-mbx-omitted-zero",
+        &format!("{OMITTED_ZERO_SUMMARY}\n"),
+        true,
+        false,
+    )?;
+    assert_eq!(metrics.mbx.sessions.len(), 1, "{metrics:?}");
+    assert_eq!(metrics.mbx.sessions[0].hits, 0, "{metrics:?}");
+    assert_eq!(metrics.mbx.sessions[0].misses, 0, "{metrics:?}");
+    assert_eq!(metrics.mbx.unparsed, 0, "{metrics:?}");
+    Ok(())
+}
+
+#[test]
+fn bypassed_lookups_count_as_skipped_in_the_zero_hit_gate() -> ResultTest {
+    let metrics = lane_with_mbx_log(
+        "report-mbx-bypassed-only",
+        &format!("{BYPASSED_ONLY_SUMMARY}\n"),
+        true,
+        true,
+    )?;
+    let gates = waste_gates(&metrics);
+    assert!(
+        gates.iter().any(|line| line.contains("4 lookups")),
+        "{:?}",
+        metrics.violations
+    );
+    Ok(())
+}
+
+#[test]
+fn a_label_cut_before_its_colon_is_unparsed_and_fails_closed() -> ResultTest {
+    for (index, line) in ["mbx[cache]: object cache", "mbx[cache]: object"]
+        .into_iter()
+        .enumerate()
+    {
+        let metrics = lane_with_mbx_log(
+            &format!("report-mbx-cut-label-{index}"),
+            &format!("{line}\n"),
+            true,
+            false,
+        )?;
+        assert!(metrics.mbx.sessions.is_empty(), "{line}: {metrics:?}");
+        assert_eq!(metrics.mbx.unparsed, 1, "{line}: {metrics:?}");
+        assert!(fails_closed(&metrics), "{line}: {metrics:?}");
+    }
     Ok(())
 }
 
