@@ -135,6 +135,10 @@ pub(super) const RUST_CI: &[KeyGate] = &[
     gate(RustCi, "pr_ci", (0, 1, 88)),
     // helper-gate: first in tools-v0.1.88 via eb3f4deda4
     gate(RustCi, "private_sources", (0, 1, 88)),
+    // helper-gate: first in tools-v0.1.111 via d4ec926378
+    gate(RustCi, "public_sources", (0, 1, 111)),
+    // helper-gate: first in tools-v0.1.111 via d4ec926378
+    gate(RustCi, "public_sources.git", (0, 1, 111)),
     // helper-gate: first in tools-v0.1.88 via eb3f4deda4
     gate(RustCi, "private_sources.app_id", (0, 1, 88)),
     // helper-gate: first in tools-v0.1.88 via eb3f4deda4
