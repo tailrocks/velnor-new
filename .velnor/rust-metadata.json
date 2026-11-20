@@ -1955,7 +1955,7 @@
     "crates/velnor-release/Cargo.toml": "dca29d0f14443af5811f5454770fce6193056a6e8e3c0c72ae1729399b176459",
     "crates/velnor-render/Cargo.toml": "5aa78b4405e2c890023aa557fb31685e62c9fb1f8786e1506d04cee8a0afda4b",
     "crates/velnor-resource-probe/Cargo.toml": "43762b2c9ad022824a51e68c9327ae656032950d30c029baeaa18032f11c452e",
-    "crates/velnor-runner-attestation/Cargo.toml": "4b135488529218a76c032d622be2f13bdcca67eadece898f563563c559615d6e",
+    "crates/velnor-runner-attestation/Cargo.toml": "2905dce45bf9a2db91fcdd253b93cda69f4212f99c1228c33c887ebc5d18f3d5",
     "crates/velnor-runner-cli/Cargo.toml": "e1bf314fbce1ff6d092d00f22ec5ac91fe766a162f3340c44d09c4ab59f2d034",
     "crates/velnor-runner-core/Cargo.toml": "840a5d400de507934a9977b52967e0e593e2e48ca5eadc248fae44cbca6f005e",
     "crates/velnor-runner-github/Cargo.toml": "2554a74db1c7c02032fb7ec7fad8c8ec56534affaf7a873516ebf4f413ea8251",
