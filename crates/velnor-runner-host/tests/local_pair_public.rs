@@ -21,7 +21,7 @@ mod failure;
 mod support;
 use support::{Fixture, TestResult, labelled, request};
 
-const TMPFS: [(&str, &str); 2] = [
+const TMPFS: &[(&str, &str)] = &[
     (
         "/tmp",
         "rw,exec,nosuid,nodev,size=2147483648,nr_inodes=131072",

@@ -20,7 +20,7 @@ const MAX_METADATA_BLOB: u64 = 64 << 20;
 const MANIFEST_TYPE: &str = "application/vnd.oci.image.manifest.v1+json";
 const INDEX_TYPE: &str = "application/vnd.oci.image.index.v1+json";
 const CONFIG_TYPE: &str = "application/vnd.oci.image.config.v1+json";
-const LAYER_TYPES: [&str; 4] = [
+const LAYER_TYPES: &[&str] = &[
     "application/vnd.oci.image.layer.v1.tar",
     "application/vnd.oci.image.layer.v1.tar+gzip",
     "application/vnd.oci.image.layer.nondistributable.v1.tar",

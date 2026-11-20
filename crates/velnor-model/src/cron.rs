@@ -5,7 +5,7 @@ use std::fmt;
 
 use crate::ids::InvalidId;
 
-const FIELD_RANGES: [(u32, u32); 5] = [(0, 59), (0, 23), (1, 31), (1, 12), (0, 6)];
+const FIELD_RANGES: &[(u32, u32)] = &[(0, 59), (0, 23), (1, 31), (1, 12), (0, 6)];
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct CronExpr(String);
@@ -17,7 +17,7 @@ impl CronExpr {
         let valid = fields.len() == FIELD_RANGES.len()
             && fields
                 .iter()
-                .zip(FIELD_RANGES)
+                .zip(FIELD_RANGES.iter().copied())
                 .all(|(field, range)| field_valid(field, range));
         if valid {
             Ok(Self(value))

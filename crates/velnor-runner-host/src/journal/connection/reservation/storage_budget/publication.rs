@@ -17,20 +17,20 @@ const DECISION_PATH: &str = "/opt/velnor/source-proof/control/decision.json";
 const REQUEST_PATH: &str = "/opt/velnor/source-proof/inbox/request.json";
 const HOME_INBOX_INIT_PATH: &str = "/velnor/init/home/source-proof/inbox";
 const HOME_INBOX_VOLUME_SUBPATH: &str = "source-proof/inbox";
-const TEMPORARY_PATHS: [&str; 5] = [
+const TEMPORARY_PATHS: &[&str] = &[
     "/opt/velnor/runtime-identity/.guest-image.json.<operation_id>.tmp",
     "/opt/velnor/job-facts/.storage-cache-admission.json.<operation_id>.tmp",
     "/opt/velnor/source-proof/control/.challenge.<operation_id>.tmp",
     "/opt/velnor/source-proof/control/.decision.<operation_id>.tmp",
     "/opt/velnor/source-proof/inbox/request.<challenge>.tmp",
 ];
-const METADATA_DIRECTORIES: [&str; 4] = [
+const METADATA_DIRECTORIES: &[&str] = &[
     "/.velnor-runtime-identity",
     "/opt/velnor/job-facts",
     "/opt/velnor/source-proof",
     "/opt/velnor/source-proof/control",
 ];
-const HOME_INBOX_DIRECTORIES: [&str; 2] = ["/velnor/init/home/source-proof", HOME_INBOX_INIT_PATH];
+const HOME_INBOX_DIRECTORIES: &[&str] = &["/velnor/init/home/source-proof", HOME_INBOX_INIT_PATH];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct ControllerPublicationBound {

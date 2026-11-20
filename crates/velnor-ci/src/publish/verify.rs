@@ -15,16 +15,16 @@ pub(super) struct File<'a> {
     pub(super) bytes: &'a [u8],
 }
 
-pub(super) fn verify(request: &Request) -> Result<Vec<File<'_>>, CiError> {
+pub(super) fn verify(request: &Request) -> Result<(Vec<File<'_>>, Vec<String>), CiError> {
     if request.assetless {
-        return if request.names.is_empty() {
-            Ok(Vec::new())
+        return if request.names.is_empty() && request.optional.is_empty() {
+            Ok((Vec::new(), Vec::new()))
         } else {
             Err(CiError::new("an assetless release names no files"))
         };
     }
     let mut names = BTreeSet::new();
-    for name in &request.names {
+    for name in request.names.iter().chain(&request.optional) {
         if name.as_str() == SUMS {
             return Err(CiError::new(format!(
                 "{SUMS} is published with every release; do not name it as a file"
@@ -34,7 +34,14 @@ pub(super) fn verify(request: &Request) -> Result<Vec<File<'_>>, CiError> {
             return Err(CiError::new(format!("file {name} is named twice")));
         }
     }
-    if names.is_empty() {
+    let mut skipped = Vec::new();
+    for name in &request.optional {
+        if !request.files.contains_key(name.as_str()) {
+            names.remove(name.as_str());
+            skipped.push(format!("skipped optional {name}: not found"));
+        }
+    }
+    if request.names.is_empty() {
         return Err(CiError::new("name at least one file to publish"));
     }
     let sums_bytes = request
@@ -75,10 +82,10 @@ pub(super) fn verify(request: &Request) -> Result<Vec<File<'_>>, CiError> {
         sha256: sha256_hex(sums_bytes),
         bytes: sums_bytes,
     });
-    Ok(files)
+    Ok((files, skipped))
 }
 
-fn read_sums(bytes: &[u8]) -> Result<BTreeMap<String, String>, CiError> {
+pub(crate) fn read_sums(bytes: &[u8]) -> Result<BTreeMap<String, String>, CiError> {
     let text =
         std::str::from_utf8(bytes).map_err(|_| CiError::new(format!("{SUMS} is not UTF-8")))?;
     let body = text

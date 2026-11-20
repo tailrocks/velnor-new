@@ -8,7 +8,7 @@ use toml::{Table, Value};
 
 use super::changes::git;
 
-const SECTIONS: [&str; 3] = ["dependencies", "build-dependencies", "dev-dependencies"];
+const SECTIONS: &[&str] = &["dependencies", "build-dependencies", "dev-dependencies"];
 
 #[derive(Debug, Clone)]
 pub(super) struct Unit {
@@ -221,7 +221,7 @@ fn dependency_specs(table: &Table, dir: &str) -> Vec<(Option<String>, Option<Str
             .filter_map(Value::as_table),
     );
     for table in tables {
-        for section in SECTIONS {
+        for section in SECTIONS.iter().copied() {
             for (name, spec) in table
                 .get(section)
                 .and_then(Value::as_table)

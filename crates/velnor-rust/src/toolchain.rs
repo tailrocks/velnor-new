@@ -9,9 +9,9 @@ use velnor_model::{RepoPath, Toolchain};
 use crate::error::{DetectError, Reason};
 use crate::toml_file::table;
 
-const KEYS: [&str; 5] = ["channel", "path", "components", "targets", "profile"];
+const KEYS: &[&str] = &["channel", "path", "components", "targets", "profile"];
 
-const PROFILES: [&str; 3] = ["minimal", "default", "complete"];
+const PROFILES: &[&str] = &["minimal", "default", "complete"];
 
 pub const TOOLCHAIN_TOML: RepoPath = RepoPath::from_static("rust-toolchain.toml");
 pub const TOOLCHAIN_PLAIN: RepoPath = RepoPath::from_static("rust-toolchain");

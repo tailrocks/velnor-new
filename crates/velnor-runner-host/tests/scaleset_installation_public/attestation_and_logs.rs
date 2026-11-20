@@ -144,7 +144,7 @@ fn assert_oci_attestation_rejected(
 #[test]
 fn public_verify_worker_attestation_accepts_legacy_and_oci_artifact_manifests_and_rejects_mismatches()
 -> TestResult<()> {
-    let statement = slsa_statement(WorkerImage::Runner, &RUNNER_NAMED_LOCALS, SOURCE_SHA);
+    let statement = slsa_statement(WorkerImage::Runner, RUNNER_NAMED_LOCALS, SOURCE_SHA);
     let statement_bytes = serde_json::to_vec(&statement)?;
     let (legacy_desc, legacy_manifest, legacy_config) = legacy_attestation_blobs(&statement_bytes)?;
     verify_worker_attestation_manifest(

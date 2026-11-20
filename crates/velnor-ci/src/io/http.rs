@@ -15,7 +15,7 @@ pub(super) const DEFAULT_TIMEOUT: Duration = Duration::from_secs(300);
 const BODY_LIMIT: u64 = 512 * 1024 * 1024;
 const ERROR_BODY_LIMIT: u64 = 64 * 1024;
 const DETAIL_LIMIT: usize = 500;
-const RESPONSE_HEADERS: [&str; 3] = ["retry-after", "x-ratelimit-remaining", "x-ratelimit-reset"];
+const RESPONSE_HEADERS: &[&str] = &["retry-after", "x-ratelimit-remaining", "x-ratelimit-reset"];
 
 #[derive(Debug)]
 pub(super) struct HttpGitHub {
@@ -75,7 +75,7 @@ fn status_error(what: &str, response: &mut Response<ureq::Body>) -> CiError {
         .read_to_end(&mut raw)
         .ok();
     let mut details = describe_body(&raw);
-    for name in RESPONSE_HEADERS {
+    for name in RESPONSE_HEADERS.iter().copied() {
         if let Some(value) = response
             .headers()
             .get(name)

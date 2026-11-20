@@ -67,7 +67,7 @@ pub(crate) fn family_options(
     })
 }
 
-const RESERVED_FAMILY_FILES: [&str; 2] = ["SHA256SUMS", "COMMIT"];
+const RESERVED_FAMILY_FILES: &[&str] = &["SHA256SUMS", "COMMIT"];
 
 fn valid_file_name(name: &str) -> bool {
     !name.is_empty()

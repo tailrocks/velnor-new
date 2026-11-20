@@ -10,8 +10,16 @@ use crate::plan::{TOOLS_LOCAL_HELPER, step};
 
 /// The first `velnor-ci` with `tools-verify`, which checks every tools restore against the anchor
 /// a trusted run recorded and discards a restore that differs.
-// First released in tools-v0.1.109 (not tagged yet when this gate was written).
+// helper-gate: first in tools-v0.1.109 via 984afb1ed5
 pub const TOOLS_VERIFY_HELPER: (u64, u64, u64) = (0, 1, 109);
+
+/// The first `velnor-ci` whose tools-verify mismatch notice names the restored Actions cache entry
+/// and the command that deletes it. The verify step gets the entry's key only from this helper, so
+/// an older helper never sees an env it ignores.
+// helper-gate: first in tools-v0.1.110 via ca67828281
+pub(crate) const TOOLS_CACHE_KEY_HELPER: (u64, u64, u64) = (0, 1, 110);
+// helper-gate: first in tools-v0.1.110 via 8db5d70509
+const TOOLS_CLEAR_HELPER: (u64, u64, u64) = (0, 1, 110);
 
 pub(crate) fn tools_cache_key() -> CacheKey {
     CacheKey::Tools { host: Host }
@@ -34,6 +42,13 @@ pub fn unverified_tools_note(facts: &RepoFacts) -> Option<String> {
             TOOLS_VERIFY_HELPER.0, TOOLS_VERIFY_HELPER.1, TOOLS_VERIFY_HELPER.2
         )
     })
+}
+
+fn tools_clears(facts: &RepoFacts) -> bool {
+    facts
+        .helper
+        .as_ref()
+        .is_some_and(|release| release.version().at_least(TOOLS_CLEAR_HELPER))
 }
 
 fn tools_step(verb: ToolsLocalVerb, when: When) -> Step {
@@ -60,6 +75,13 @@ fn node_first(facts: &RepoFacts) -> bool {
     tools_verified(facts) && !facts.config.hosted_runners.contains(&facts.config.runner)
 }
 
+fn names_cache_entry(facts: &RepoFacts) -> bool {
+    facts
+        .helper
+        .as_ref()
+        .is_some_and(|release| release.version().at_least(TOOLS_CACHE_KEY_HELPER))
+}
+
 fn tools_local(facts: &RepoFacts) -> bool {
     (facts.config.mbx_store == MbxStore::Shared || node_first(facts))
         && facts
@@ -83,16 +105,22 @@ pub(crate) fn tools_restore(facts: &RepoFacts) -> Vec<Step> {
         ..step(StepKind::CacheRestore(tools_cache_key()))
     };
     let record = || step(StepKind::ToolsLocal(ToolsLocalVerb::RecordRestore));
-    let mut steps: Vec<Step> = local
-        .then(|| step(StepKind::ToolsLocal(ToolsLocalVerb::Restore)))
+    let mut steps: Vec<Step> = tools_clears(facts)
+        .then(|| step(StepKind::ToolsLocal(ToolsLocalVerb::Clear)))
         .into_iter()
+        .chain(local.then(|| step(StepKind::ToolsLocal(ToolsLocalVerb::Restore))))
         .chain([network])
         .collect();
     if tools_verified(facts) {
+        let verify = if names_cache_entry(facts) {
+            ToolsLocalVerb::VerifyNamed
+        } else {
+            ToolsLocalVerb::Verify
+        };
         steps.extend([
             tools_step(ToolsLocalVerb::AnchorReset, When::Success),
             tools_step(ToolsLocalVerb::AnchorRestore, When::Success),
-            tools_step(ToolsLocalVerb::Verify, When::Success),
+            tools_step(verify, When::Success),
         ]);
     }
     steps.extend(local.then(record));

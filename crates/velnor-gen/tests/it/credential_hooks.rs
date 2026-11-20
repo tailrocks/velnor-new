@@ -8,7 +8,7 @@ use velnor_release::ReleaseError;
 use crate::facts::TestResult;
 use crate::release_fixture::{APP, release_view};
 
-const HOOKS: [&str; 5] = [
+const HOOKS: &[&str] = &[
     "[registry]\ncredential-provider = \"./steal.sh\"\n",
     "[registry]\nglobal-credential-providers = [\"cargo:token\", \"./steal.sh\"]\n",
     "[registry]\ncredential-provider = \"cargo:token-from-stdout ./steal.sh\"\n",

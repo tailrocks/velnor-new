@@ -159,7 +159,7 @@ fn slsa_statement(image: WorkerImage, locals: &[&str], source_sha: &str) -> Valu
     })
 }
 
-const RUNNER_NAMED_LOCALS: [&str; 6] = [
+const RUNNER_NAMED_LOCALS: &[&str] = &[
     "context",
     "dockerfile",
     "resource_probe",
@@ -173,7 +173,7 @@ fn public_verify_worker_build_source_accepts_base_and_named_contexts_and_rejects
 -> TestResult<()> {
     for (image, locals) in [
         (WorkerImage::Runner, ["context", "dockerfile"].as_slice()),
-        (WorkerImage::Runner, &RUNNER_NAMED_LOCALS),
+        (WorkerImage::Runner, RUNNER_NAMED_LOCALS),
         (
             WorkerImage::Dind,
             ["context", "dockerfile", "resource_probe"].as_slice(),
@@ -182,10 +182,10 @@ fn public_verify_worker_build_source_accepts_base_and_named_contexts_and_rejects
         let statement = slsa_statement(image, locals, SOURCE_SHA);
         verify_worker_build_source(&statement, image, SOURCE_SHA, MANIFEST_DIGEST, 1024)?;
     }
-    let runner_named = slsa_statement(WorkerImage::Runner, &RUNNER_NAMED_LOCALS, SOURCE_SHA);
+    let runner_named = slsa_statement(WorkerImage::Runner, RUNNER_NAMED_LOCALS, SOURCE_SHA);
 
     let dind_with_runner_contexts =
-        slsa_statement(WorkerImage::Dind, &RUNNER_NAMED_LOCALS, SOURCE_SHA);
+        slsa_statement(WorkerImage::Dind, RUNNER_NAMED_LOCALS, SOURCE_SHA);
     let mut missing_localdir = runner_named.clone();
     missing_localdir
         .pointer_mut("/predicate/runDetails/metadata/buildkit_metadata/vcs")

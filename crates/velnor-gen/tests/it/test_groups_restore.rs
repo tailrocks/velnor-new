@@ -15,7 +15,7 @@ needs = ['cargo']
 restore_cache = true
 ";
 
-const CACHES: [&str; 2] = ["Restore the sources cache", "Restore the target cache"];
+const CACHES: &[&str] = &["Restore the sources cache", "Restore the target cache"];
 
 fn rendered_on(config: &str, helper: &str) -> Result<Value, Box<dyn std::error::Error>> {
     Ok(document(&workflow(&view_with(
@@ -37,7 +37,7 @@ fn a_restoring_group_restores_the_build_jobs_caches_under_the_same_keys() -> Tes
     let workflow = rendered_on(RESTORING, "0.1.108")?;
     let group = job(&workflow, "rust-test-shell")?;
     let build = job(&workflow, "rust-test")?;
-    for name in CACHES {
+    for name in CACHES.iter().copied() {
         let restored = step(group, name)?;
         let original = step(build, name)?;
         assert_eq!(restored["uses"], original["uses"], "{name}");
@@ -99,7 +99,7 @@ fn a_restoring_group_never_saves_and_restores_after_checkout_prepare_and_before_
         })
         .ok_or("no download")?;
     let test = position(group, "Test")?;
-    for name in CACHES {
+    for name in CACHES.iter().copied() {
         let at = position(group, name)?;
         assert!(
             checkout < at && prepare < at && at < download && at < test,
@@ -134,7 +134,7 @@ fn a_group_without_the_key_or_with_it_false_renders_no_cache_restore() -> TestRe
     let absent = rendered_on(SHELL, "0.1.108")?;
     let off = rendered_on(&format!("{SHELL}restore_cache = false\n"), "0.1.108")?;
     let group = job(&absent, "rust-test-shell")?;
-    for name in CACHES {
+    for name in CACHES.iter().copied() {
         assert!(step(group, name).is_err(), "{name}");
     }
     assert_eq!(absent, off);

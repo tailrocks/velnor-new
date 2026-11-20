@@ -6,7 +6,7 @@ use crate::facts::TestResult;
 
 const REF_IS_MAIN: &str =
     "github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch)";
-const CONFIGS: [&str; 4] = [
+const CONFIGS: &[&str] = &[
     "",
     "on_main = \"everything\"\n",
     "on_main = \"affected\"\nfull_run = \"off\"\n",
@@ -25,7 +25,7 @@ fn lane(config: &str) -> Result<String, Box<dyn std::error::Error>> {
 fn every_default_branch_run_of_every_configuration_carries_the_age_limit() -> TestResult {
     let expected =
         format!("VELNOR_BASE_MAX_AGE_DAYS: '${{{{ {REF_IS_MAIN} && ''7'' || ''0'' }}}}'");
-    for config in CONFIGS {
+    for config in CONFIGS.iter().copied() {
         let lane = lane(config)?;
         let restored = step(&lane, "velnor-ci restored").ok_or("no restored")?;
         let limit = restored
@@ -39,7 +39,7 @@ fn every_default_branch_run_of_every_configuration_carries_the_age_limit() -> Te
 
 #[test]
 fn a_run_that_found_the_base_expired_plans_everything_and_a_fresh_one_does_not() -> TestResult {
-    for config in CONFIGS {
+    for config in CONFIGS.iter().copied() {
         let lane = lane(config)?;
         let order = names(&lane);
         let restored = order
@@ -89,7 +89,7 @@ fn the_steps_after_the_restore_read_the_full_plan_when_there_is_one_and_the_firs
 
 #[test]
 fn a_lane_whose_replan_failed_saves_no_base() -> TestResult {
-    for config in CONFIGS {
+    for config in CONFIGS.iter().copied() {
         let lane = lane(config)?;
         let mut saves = 0;
         for block in steps(&lane) {

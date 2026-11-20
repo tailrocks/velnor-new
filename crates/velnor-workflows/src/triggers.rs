@@ -13,7 +13,7 @@ mod patterns;
 use inputs::{call_output, inputs};
 use patterns::{branch_patterns, filter_patterns, names, path_filters, workflow_names};
 
-const PULL_REQUEST_TYPES: [&str; 21] = [
+const PULL_REQUEST_TYPES: &[&str] = &[
     "assigned",
     "unassigned",
     "labeled",
@@ -37,7 +37,7 @@ const PULL_REQUEST_TYPES: [&str; 21] = [
     "auto_merge_disabled",
 ];
 const MIN_SCHEDULE_GAP_MINUTES: u32 = 5;
-const WORKFLOW_RUN_TYPES: [&str; 3] = ["completed", "requested", "in_progress"];
+const WORKFLOW_RUN_TYPES: &[&str] = &["completed", "requested", "in_progress"];
 
 /// Reads `[workflow.on]` and the call inputs and outputs. Without an `on`
 /// table the workflow is a reusable workflow, which is what the table `file`
@@ -140,7 +140,7 @@ fn filtered(
                 file,
                 "pull_request types",
                 request.types,
-                &PULL_REQUEST_TYPES,
+                PULL_REQUEST_TYPES,
             )?,
             branches: branch_patterns(file, "pull_request branches", request.branches)?,
             paths,
@@ -160,7 +160,7 @@ fn filtered(
         let types = if run.types.is_empty() {
             vec!["completed".to_owned()]
         } else {
-            names(file, "workflow_run types", run.types, &WORKFLOW_RUN_TYPES)?
+            names(file, "workflow_run types", run.types, WORKFLOW_RUN_TYPES)?
         };
         if run.workflows.is_empty() {
             return refuse(format!(

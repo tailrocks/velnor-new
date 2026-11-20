@@ -56,7 +56,7 @@ pub(crate) fn containers_on_linux(
     Ok(())
 }
 
-const SCRIPT_RUNNERS: [&str; 13] = [
+const SCRIPT_RUNNERS: &[&str] = &[
     "ash", "bash", "dash", "ksh", "make", "node", "perl", "python", "python3", "ruby", "sh", "zsh",
     "fish",
 ];

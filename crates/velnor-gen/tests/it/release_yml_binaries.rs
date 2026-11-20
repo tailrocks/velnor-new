@@ -35,7 +35,7 @@ fn release_yml_has_one_build_job_per_binary_and_platform_then_sums_and_publish()
     ]
     .map(str::to_owned)
     .into();
-    want.extend(build_ids("app", &PLATFORMS));
+    want.extend(build_ids("app", PLATFORMS));
     want.extend(build_ids("tools", &["linux-x64", "macos-arm64"]));
     assert_eq!(ids, want.iter().map(String::as_str).collect());
     for forbidden in ["strategy", "matrix", "fromJSON"] {

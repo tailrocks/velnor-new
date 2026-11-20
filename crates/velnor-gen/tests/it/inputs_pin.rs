@@ -7,7 +7,7 @@ use crate::facts::TestResult;
 use crate::lock::locked;
 use crate::pipeline::workflow;
 
-const BATCHED: [&str; 6] = [
+const BATCHED: &[&str] = &[
     "restore-all",
     "--scope-cache",
     "--roots-env",
@@ -31,7 +31,7 @@ fn two_roots(version: &str, config: &str) -> Result<String, Box<dyn std::error::
 fn the_released_helper_gets_only_the_commands_it_has() -> TestResult {
     for shape in ["one-job", "lint-test", "groups"] {
         let text = two_roots("0.1.81", &format!("shape = '{shape}'\n"))?;
-        for batched in BATCHED {
+        for batched in BATCHED.iter().copied() {
             assert!(
                 !text.contains(batched),
                 "{shape}: {batched} in 0.1.81 output"
@@ -66,7 +66,7 @@ fn a_helper_with_the_batched_commands_gets_them() -> TestResult {
 fn a_helper_released_before_the_batched_commands_does_not_get_them() -> TestResult {
     for version in ["0.1.95", "0.1.96"] {
         let text = two_roots(version, "")?;
-        for batched in BATCHED {
+        for batched in BATCHED.iter().copied() {
             assert!(!text.contains(batched), "{version}: {batched}");
         }
         assert!(text.contains("VELNOR_CACHE_TARGETS: |"), "{version}");

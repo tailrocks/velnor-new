@@ -70,7 +70,7 @@ fn check(github: &Fake, pattern: &str) -> Result<(), CiError> {
     )
 }
 
-const ALL: [&str; 3] = ["creation", "update", "deletion"];
+const ALL: &[&str] = &["creation", "update", "deletion"];
 
 #[test]
 fn a_pattern_the_live_rulesets_cover_for_creation_and_immutability_passes() {
@@ -90,14 +90,7 @@ fn a_pattern_the_live_rulesets_cover_for_creation_and_immutability_passes() {
 
 #[test]
 fn a_changed_pattern_the_live_rulesets_never_saw_is_refused() {
-    let github = live(&[ruleset(
-        1,
-        "tag",
-        "active",
-        &ALL,
-        &["refs/tags/app-v*"],
-        &[],
-    )]);
+    let github = live(&[ruleset(1, "tag", "active", ALL, &["refs/tags/app-v*"], &[])]);
     let error = check(&github, "evil-{{ version }}").map_err(|e| e.to_string());
     assert!(error.is_err_and(|m| m.contains("refs/tags/evil-*")));
 }
@@ -133,7 +126,7 @@ fn an_inactive_branch_or_excluding_ruleset_does_not_cover() {
             1,
             target,
             enforcement,
-            &ALL,
+            ALL,
             &["refs/tags/app-v*"],
             exclude,
         )]);
@@ -152,9 +145,9 @@ fn an_unreadable_listing_fails_closed() {
 #[test]
 fn a_covering_ruleset_on_the_second_page_is_found() {
     let filler: Vec<(u64, String, String)> = (1..=100)
-        .map(|id| ruleset(id, "branch", "active", &ALL, &["refs/heads/*"], &[]))
+        .map(|id| ruleset(id, "branch", "active", ALL, &["refs/heads/*"], &[]))
         .collect();
-    let cover = ruleset(101, "tag", "active", &ALL, &["refs/tags/app-v*"], &[]);
+    let cover = ruleset(101, "tag", "active", ALL, &["refs/tags/app-v*"], &[]);
     let mut github = live(&filler);
     let page = |sets: &[&(u64, String, String)]| {
         let listed: Vec<&str> = sets.iter().map(|(_, l, _)| l.as_str()).collect();

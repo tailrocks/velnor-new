@@ -15,9 +15,10 @@ use crate::harness::uses_nextest;
 
 pub(crate) const DEFAULT_NAME: &str = "default";
 pub(crate) const NAME_MAX_LENGTH: usize = 40;
-const FORBIDDEN_CHARACTERS: [char; 8] = ['"', '$', '`', '\\', '|', '&', ';', '<'];
-const FORBIDDEN_WORDS: [&str; 5] = ["if", "for", "while", "case", "coproc"];
+const FORBIDDEN_CHARACTERS: &[char] = &['"', '$', '`', '\\', '|', '&', ';', '<'];
+const FORBIDDEN_WORDS: &[&str] = &["if", "for", "while", "case", "coproc"];
 const THREADS_RANGE: std::ops::RangeInclusive<u16> = 1..=256;
+const PARTITIONS_RANGE: std::ops::RangeInclusive<u16> = 1..=16;
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -37,6 +38,8 @@ pub(crate) struct RawTestGroup {
     #[serde(default)]
     events: Vec<String>,
     root: Option<String>,
+    partitions: Option<u16>,
+    artifacts: Option<Vec<crate::config_test_artifacts::RawTestArtifact>>,
 }
 
 pub(crate) fn parse(raw: Vec<RawTestGroup>) -> Result<Vec<TestGroup>, Reason> {
@@ -149,6 +152,8 @@ fn group(raw: RawTestGroup) -> Result<TestGroup, Reason> {
         paths,
         events,
         root,
+        partitions: ranged("test_groups.partitions", raw.partitions, &PARTITIONS_RANGE)?,
+        artifacts: crate::config_test_artifacts::parse(raw.artifacts)?,
     })
 }
 
@@ -180,6 +185,7 @@ fn check(config: &RustCiConfig, rust_roots: &[RustRoot]) -> Result<(), DetectErr
     let invalid = |reason| DetectError::invalid(&CONFIG_PATH, reason);
     let mut seen = BTreeSet::new();
     let mut outputs = BTreeSet::new();
+    let mut jobs = BTreeSet::new();
     for group in &config.test_groups {
         let root = match &group.root {
             GroupRoot::OnlyRoot if rust_roots.len() == 1 => &rust_roots[0],
@@ -200,9 +206,12 @@ fn check(config: &RustCiConfig, rust_roots: &[RustRoot]) -> Result<(), DetectErr
             .iter()
             .any(|member| uses_nextest(config, member))
         {
-            return Err(invalid(Reason::TestGroupWithoutNextest(
-                group.name.to_string(),
-            )));
+            let name = group.name.to_string();
+            return Err(invalid(if group.partitions.is_some() {
+                Reason::PartitionsWithoutNextest(name)
+            } else {
+                Reason::TestGroupWithoutNextest(name)
+            }));
         }
         let duplicate_name = !seen.insert((
             group.name.as_str().to_ascii_lowercase(),
@@ -218,8 +227,27 @@ fn check(config: &RustCiConfig, rust_roots: &[RustRoot]) -> Result<(), DetectErr
                 value: group.name.to_string(),
             }));
         }
+        for id in job_names(group) {
+            if !jobs.insert((root.manifest.clone(), id.to_ascii_lowercase())) {
+                return Err(invalid(Reason::InvalidValue {
+                    key: "test_groups.name",
+                    value: id,
+                }));
+            }
+        }
     }
+    crate::config_test_artifacts::check_unique(config).map_err(invalid)?;
     Ok(())
+}
+
+fn job_names(group: &TestGroup) -> Vec<String> {
+    if group.partition_count() > 1 {
+        (1..=group.partition_count())
+            .map(|index| format!("{}-{index}", group.name))
+            .collect()
+    } else {
+        vec![group.name.to_string()]
+    }
 }
 
 pub(crate) fn of_root<'a>(

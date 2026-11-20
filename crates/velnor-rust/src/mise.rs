@@ -18,8 +18,8 @@ pub static MISE_CONFIGS: [RepoPath; 2] = [
     RepoPath::from_static(".mise.toml"),
 ];
 pub const MISE_LOCK: RepoPath = RepoPath::from_static("mise.lock");
-const RUST_TOOLS: [&str; 2] = ["rust", "core:rust"];
-const NEXTEST_SELECTORS: [&str; 2] = ["cargo-nextest", "nextest-rs/nextest"];
+const RUST_TOOLS: &[&str] = &["rust", "core:rust"];
+const NEXTEST_SELECTORS: &[&str] = &["cargo-nextest", "nextest-rs/nextest"];
 
 type Versions = BTreeMap<String, Vec<ToolRequest>>;
 
@@ -28,6 +28,10 @@ fn plain(version: String) -> ToolRequest {
         version,
         ..ToolRequest::default()
     }
+}
+
+pub fn tool_requests(bytes: &[u8], tool: &str) -> Result<Option<Vec<ToolRequest>>, Reason> {
+    Ok(versions(bytes)?.remove(tool))
 }
 
 #[must_use]
@@ -242,7 +246,8 @@ fn toolchain_conflict(facts: &RepoFacts) -> Option<(String, String)> {
 
 pub(crate) fn rust_tool(pins: &ToolPins) -> Option<&str> {
     RUST_TOOLS
-        .into_iter()
+        .iter()
+        .copied()
         .find(|name| pins.tools.contains_key(*name))
 }
 

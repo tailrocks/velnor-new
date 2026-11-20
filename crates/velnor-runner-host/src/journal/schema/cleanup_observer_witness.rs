@@ -32,7 +32,7 @@ const REQUEST_NO_DELETE: &str = "CREATE TRIGGER IF NOT EXISTS cleanup_observer_r
 
 const CLEANUP_GUARD: &str = "CREATE TRIGGER IF NOT EXISTS cleanup_observer_cleanup_proof_guard BEFORE UPDATE OF storage_cleanup_proven ON capacity_reservation_provisioning_state WHEN OLD.storage_cleanup_proven = 0 AND NEW.storage_cleanup_proven = 1 AND NOT EXISTS (SELECT 1 FROM capacity_reservation_cleanup_observer_witnesses AS witness JOIN capacity_reservation_cleanup_observer_probes AS cleanup_probe ON cleanup_probe.reservation_id = witness.reservation_id JOIN resource_probe_operations AS probe ON probe.operation_id = cleanup_probe.probe_operation_id WHERE witness.reservation_id = NEW.reservation_id AND probe.probe_purpose = 'cleanup-observer' AND probe.phase = 'removed') BEGIN SELECT RAISE(ABORT, 'cleanup observer proof is required'); END";
 
-const TRIGGERS: [(&str, &str); 11] = [
+const TRIGGERS: &[(&str, &str)] = &[
     ("cleanup_observer_witness_insert_guard", INSERT_GUARD),
     ("cleanup_observer_witness_no_update", IMMUTABLE_UPDATE),
     ("cleanup_observer_witness_no_delete", IMMUTABLE_DELETE),
@@ -55,7 +55,7 @@ pub(super) async fn bootstrap(connection: &turso::Connection) -> Result<(), Host
         .execute(PROBE_TABLE, ())
         .await
         .map_err(|_| HostError::Journal)?;
-    for (_, trigger) in TRIGGERS {
+    for &(_, trigger) in TRIGGERS {
         connection
             .execute(trigger, ())
             .await
@@ -99,7 +99,7 @@ pub(super) async fn validate(connection: &turso::Connection) -> Result<(), HostE
     if normalize(&actual) != normalize(PROBE_TABLE) {
         return Err(HostError::Journal);
     }
-    for (name, expected) in TRIGGERS.into_iter().filter(|(name, _)| !name.is_empty()) {
+    for &(name, expected) in TRIGGERS.iter().filter(|(name, _)| !name.is_empty()) {
         let mut rows = connection
             .query(
                 "SELECT sql FROM sqlite_schema WHERE type = 'trigger' AND name = ?1",

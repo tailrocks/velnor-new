@@ -20,7 +20,6 @@ needs = ["source"]
 helper = true
 environment = "generator-source-preview"
 permissions = { actions = "read", contents = "write", checks = "none" }
-outputs = { sign = "steps.draft.outputs.sign" }
 
 [[workflow.job.step]]
 uses = "download-artifact"

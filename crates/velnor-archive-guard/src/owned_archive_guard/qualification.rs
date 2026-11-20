@@ -14,7 +14,7 @@ const MAX_WORKFLOW_TREE_BYTES: u64 = 64 * 1024 * 1024;
 const MAX_WORKFLOW_FILES: usize = 10_000;
 const MAX_WORKFLOW_ENTRIES: usize = 20_000;
 const MAX_WORKFLOW_DEPTH: usize = 128;
-const EXPECTED_TARGETS: [&str; 3] = [
+const EXPECTED_TARGETS: &[&str] = &[
     "x86_64-unknown-linux-gnu",
     "aarch64-apple-darwin",
     "x86_64-apple-darwin",

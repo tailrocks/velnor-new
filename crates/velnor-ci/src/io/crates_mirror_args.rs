@@ -13,7 +13,7 @@
 
 use std::ffi::{OsStr, OsString};
 
-const SUBCOMMANDS: [&str; 45] = [
+const SUBCOMMANDS: &[&str] = &[
     "add",
     "bench",
     "build",
@@ -60,7 +60,7 @@ const SUBCOMMANDS: [&str; 45] = [
     "read-manifest",
     "git-checkout",
 ];
-const VALUE_FLAGS: [&str; 3] = ["--config", "-Z", "-C"];
+const VALUE_FLAGS: &[&str] = &["--config", "-Z", "-C"];
 
 /// The arguments for the real Cargo: the mirror configuration first, so a later
 /// configuration of the caller can still override it.

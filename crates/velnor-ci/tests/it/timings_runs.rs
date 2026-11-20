@@ -10,7 +10,7 @@ use velnor_model::RepoPath;
 use crate::support::FakeGitHub;
 use crate::timings::{LIST, lab, median, recorded, roots, runner};
 
-const NEWEST: [u64; 3] = [43_636_016_430, 43_628_937_052, 43_618_131_619];
+const NEWEST: &[u64] = &[43_636_016_430, 43_628_937_052, 43_618_131_619];
 
 fn list(entries: &[Value]) -> String {
     json!({ "total_count": entries.len(), "workflow_runs": entries }).to_string()
@@ -63,7 +63,7 @@ fn an_even_number_of_runs_takes_the_mean_of_the_middle_two() {
 }
 
 fn split_lab_jobs(lint_conclusion: &str) -> FakeGitHub {
-    let mut fake = recorded(&list(&ordinary(&NEWEST)));
+    let mut fake = recorded(&list(&ordinary(NEWEST)));
     for (index, id) in NEWEST.iter().enumerate() {
         let path = jobs_path(&lab(), *id, 1, 1);
         let mut jobs: Value =
@@ -189,7 +189,7 @@ fn pages_are_read_until_enough_ordinary_runs_are_found() {
     }
     fake.respond(
         workflow_runs_path(&lab(), "rust-ci.yml", 7),
-        &list(&ordinary(&NEWEST)),
+        &list(&ordinary(NEWEST)),
     );
     let report = gather(&fake, &lab(), &roots(), &runner()).unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(report.timings.len(), 2);
@@ -197,7 +197,7 @@ fn pages_are_read_until_enough_ordinary_runs_are_found() {
 
 #[test]
 fn a_binary_seen_in_fewer_than_three_runs_has_no_entry() {
-    let mut fake = recorded(&list(&ordinary(&NEWEST)));
+    let mut fake = recorded(&list(&ordinary(NEWEST)));
     let log = velnor_ci::github::job_log_path(&lab(), 132_517_592_524);
     let kept: Vec<String> = fake
         .get_text(&log)
@@ -244,7 +244,7 @@ fn a_failure_that_is_not_a_missing_log_still_stops_the_command() {
     assert!(gather(&fake, &lab(), &roots(), &runner()).is_err());
 }
 
-const SLOW_RUNS: [u64; 3] = [7_001, 7_002, 7_003];
+const SLOW_RUNS: &[u64] = &[7_001, 7_002, 7_003];
 
 fn on_slow_runner(fake: &mut FakeGitHub) {
     let repo = lab();
@@ -259,16 +259,14 @@ fn on_slow_runner(fake: &mut FakeGitHub) {
         }
     }
     let run = fake.get_text(&run_path(&repo, NEWEST[0]));
-    for id in SLOW_RUNS {
+    for id in SLOW_RUNS.iter().copied() {
         fake.respond(run_path(&repo, id), &run);
         fake.respond(jobs_path(&repo, id, 1, 1), &value.to_string());
     }
 }
 
 fn two_runners() -> FakeGitHub {
-    let mut fake = recorded(&list(&ordinary(
-        &[NEWEST.as_slice(), SLOW_RUNS.as_slice()].concat(),
-    )));
+    let mut fake = recorded(&list(&ordinary(&[NEWEST, SLOW_RUNS].concat())));
     on_slow_runner(&mut fake);
     fake
 }
@@ -304,7 +302,7 @@ fn a_runner_seen_in_no_run_gets_no_entry() {
 }
 
 fn relabel(fake: &mut FakeGitHub, labels: Option<&Value>) {
-    for id in NEWEST {
+    for id in NEWEST.iter().copied() {
         let path = jobs_path(&lab(), id, 1, 1);
         let mut value: Value =
             serde_json::from_str(&fake.get_text(&path)).unwrap_or_else(|e| unreachable!("{e}"));

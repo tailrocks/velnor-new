@@ -11,10 +11,10 @@ use crate::mise::MISE_CONFIGS;
 use crate::os_pins::pinned_for_runner;
 use crate::roots::is_cargo_config;
 
-const DEPENDENCY_FILES: [&str; 2] = ["Cargo.toml", "Cargo.lock"];
+const DEPENDENCY_FILES: &[&str] = &["Cargo.toml", "Cargo.lock"];
 const DENY_TOOL: &str = "cargo-deny";
 
-const DENY_CONFIG_NAMES: [&str; 4] = [
+const DENY_CONFIG_NAMES: &[&str] = &[
     "deny.toml",
     ".deny.toml",
     ".cargo/deny.toml",
@@ -27,7 +27,7 @@ pub(crate) fn deny_configs(view: &RepoView, roots: &[RustRoot]) -> BTreeMap<Repo
         .filter_map(|root| {
             let mut folder = root.manifest.parent();
             loop {
-                for name in DENY_CONFIG_NAMES {
+                for name in DENY_CONFIG_NAMES.iter().copied() {
                     let path = folder
                         .as_ref()
                         .map_or_else(
@@ -77,8 +77,8 @@ fn is_tool(name: &str, tool: &str) -> bool {
     name.rsplit(['/', ':']).next() == Some(tool)
 }
 
-const DENY_EXCEPTION_FILES: [&str; 2] = ["deny.exceptions.toml", ".deny.exceptions.toml"];
-const IGNORE_FILES: [&str; 2] = [".gitignore", ".ignore"];
+const DENY_EXCEPTION_FILES: &[&str] = &["deny.exceptions.toml", ".deny.exceptions.toml"];
+const IGNORE_FILES: &[&str] = &[".gitignore", ".ignore"];
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct PolicyRuns {

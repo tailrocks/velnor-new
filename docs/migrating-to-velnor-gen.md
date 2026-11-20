@@ -8,7 +8,7 @@ Most failed migrations failed before the generator ran: on the mise layout, on a
 
 ### The mise and mbx layout
 
-This is the recommended layout. Its `mise.toml` declares the Rust toolchain with `mr_boxington = true`, pins mbx and nextest, and routes every `cargo` through mbx with no `[wrappers.cargo]`. Generation accepts this native layout. The explicit layout, `[wrappers.cargo]` with `command = "mbx"` and `env = { MBX_CARGO_SHIM_MODE = "1" }` next to the same option and pin, is also accepted. Without the shim env the wrapper breaks `cargo -V` and `cargo --list`, so generation refuses it. velnor-ci 0.1.109 is not released yet; once #2108 ships, generation requires one of these two layouts.
+This is the recommended layout. Its `mise.toml` declares the Rust toolchain with `mr_boxington = true`, pins mbx and nextest, and routes every `cargo` through mbx with no `[wrappers.cargo]`. Generation accepts this native layout. The explicit layout, `[wrappers.cargo]` with `command = "mbx"` and `env = { MBX_CARGO_SHIM_MODE = "1" }` next to the same option and pin, is also accepted. Without the shim env the wrapper breaks `cargo -V` and `cargo --list`, so generation refuses it. velnor-ci [0.1.109](https://github.com/tailrocks/velnor-new/releases/tag/tools-v0.1.109) is released, and generation requires one of these two layouts (#2108).
 
 ```toml
 min_version = "<mise version>"
@@ -117,21 +117,21 @@ Checked against `origin/main`. Four gaps are still open:
 | Public git dependencies and caching | none yet | A cold build of a git dependency can be slower than a crates.io build. |
 | Caching with private dependencies | #2140 | Confirm the cache hits on the first run; see the verification section below. |
 
-Three gaps closed in 0.1.109, which is not released yet: private release-asset fixtures (#2039, fixed by #2059), hand-written image workflows (#2099, fixed by #2111) and per-lane timeouts (#2122, fixed by #2143). From 0.1.109, use `[[release_assets]]`, `external_workflows` and `[root_timeouts]`, as lesson 6 below describes. Before 0.1.109, use the workarounds below.
+Three gaps closed in [0.1.109](https://github.com/tailrocks/velnor-new/releases/tag/tools-v0.1.109): private release-asset fixtures (#2039, fixed by #2059), hand-written image workflows (#2099, fixed by #2111) and per-lane timeouts (#2122, fixed by #2143). From 0.1.109, use `[[release_assets]]`, `external_workflows` and `[root_timeouts]`, as lesson 6 below describes. Before 0.1.109, use the workarounds below.
 
-**Blocker: image workflows (before 0.1.109).** A repository whose image build is a hand-written workflow cannot both delete `.velnor/config.toml` (step 7) and pass `velnor-gen check` (step 6) until 0.1.109 ships. Hold that migration until then.
+**Image workflows (before 0.1.109).** Before 0.1.109, a repository whose image build is a hand-written workflow cannot both delete `.velnor/config.toml` (step 7) and pass `velnor-gen check` (step 6). From 0.1.109, list that workflow under `external_workflows` instead.
 
 ## Workarounds
 
 Before 0.1.109:
 
-- **Private release-asset fixtures.** Commit a copy of a fixture only when everyone who can read the repository and its history may read it, because a committed copy stays in Git history. Check its sha256 in a `[[test_setup]]` step, with the expected digest in the same file, so a changed copy fails the run. A confidential fixture has no workaround: wait for 0.1.109.
+- **Private release-asset fixtures.** Commit a copy of a fixture only when everyone who can read the repository and its history may read it, because a committed copy stays in Git history. Check its sha256 in a `[[test_setup]]` step, with the expected digest in the same file, so a changed copy fails the run. A confidential fixture has no workaround before 0.1.109; from 0.1.109, use `[[release_assets]]`.
 - **Attestation for a private repository.** `attest = true` is a `[[binaries]]` key in `.velnor/release.toml`, and it uses GitHub artifact attestations, which a private repository may not have on its plan. For an image, build with BuildKit's own provenance (`provenance: mode=max` in `docker/build-push-action`) in a hand-written workflow instead.
 - **Unsigned commits refused by a ruleset.** A commit that GitHub does not mark verified is refused by a signed-commit ruleset. Sign commits locally (`git commit -S`) or commit through GitHub's web interface, which signs them. A commit created through the REST API with a user token is unsigned unless the request supplies a signature. GitHub signs API commits only for some bot identities; see [GitHub's bot signature conditions](https://docs.github.com/en/authentication/managing-commit-signature-verification/about-commit-signature-verification#signature-verification-for-bots). Do not turn off the ruleset to land the change.
 
 ## Lessons from the 0.1.107 and 0.1.108 migrations
 
-Each item names the release that ships the fix or the option. An item marked 0.1.109 is not released yet; pin the helper to that version only when you need it.
+Each item names the release that ships the fix or the option. An item marked 0.1.109 ships in [0.1.109](https://github.com/tailrocks/velnor-new/releases/tag/tools-v0.1.109); pin the helper to that version only when you need its keys.
 
 1. **Run `cargo fmt --all --check` before you push.** Before 0.1.108, a failed Format step skipped the private-source token and fetch steps, because their implicit `success()` condition was false. The compile steps still ran, offline, and failed with "you are in the offline mode" errors that hide the formatting diff. #2180 runs the phase under `!cancelled()` when a compile step does, so the fetch runs. It is in 0.1.108. Still run the check locally first.
 

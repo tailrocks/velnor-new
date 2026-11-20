@@ -98,7 +98,7 @@ UNION ALL
 SELECT lineage_id, generation, reservation_id, 'jit_conflict_retired' AS outcome, proof_digest, settlement_digest, created_at
 FROM physical_attempt_jit_conflict_settlements";
 
-pub(super) const JIT_INDEXES: [(&str, &str); 5] = [
+pub(super) const JIT_INDEXES: &[(&str, &str)] = &[
     (
         "connection_runner_jit_id",
         "CREATE UNIQUE INDEX connection_runner_jit_id ON connection_runner_jits(connection_id, scale_set_id, runner_id) WHERE runner_id IS NOT NULL",
@@ -121,7 +121,7 @@ pub(super) const JIT_INDEXES: [(&str, &str); 5] = [
     ),
 ];
 
-pub(super) const TABLE_NAMES: [&str; 3] = [
+pub(super) const TABLE_NAMES: &[&str] = &[
     "physical_attempt_jit_conflict_recovery_claims",
     "physical_attempt_jit_conflict_recovery_progress",
     "physical_attempt_jit_conflict_settlements",

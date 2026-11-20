@@ -25,6 +25,7 @@ pub use crate::excluded_lock::{ExcludedLockFinding, excluded_lock_findings};
 pub use crate::external_config::external_config_profile;
 pub use crate::group_runs::{GroupPlan, GroupRun, group_runs, plan_groups};
 pub use crate::lint_error::LintFault;
+pub use crate::lint_inputs::lint_runs;
 pub use crate::lock::{
     LOCK_PATH, LockError, binary_sums_url, commit_url, lists_binary_sums, pin_lock,
     release_version, sums_url,
@@ -41,7 +42,7 @@ pub use crate::metadata_file::{
     METADATA_PATH, MetadataFileError, metadata_file, recorded_members, recorded_metadata,
     recorded_roots, recorded_target_dirs,
 };
-pub use crate::mise::{MISE_CONFIGS, MISE_LOCK, check_tools, mise_files, tool_pins};
+pub use crate::mise::{MISE_CONFIGS, MISE_LOCK, check_tools, mise_files, tool_pins, tool_requests};
 pub use crate::owners::{Owner, Owners, add_reads};
 pub use crate::plan::{check_required_check, plan, plan_without_deltas};
 pub use crate::policy::{PolicyRuns, policy_runs};

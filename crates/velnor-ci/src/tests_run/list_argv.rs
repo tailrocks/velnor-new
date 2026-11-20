@@ -179,3 +179,38 @@ fn every_wrapped_spelling_of_the_generated_test_step_lists_without_the_cargo_mes
         }
     }
 }
+
+#[test]
+fn a_partitioned_run_lists_the_same_partition() {
+    let run = argv(&[
+        "cargo-nextest",
+        "nextest",
+        "run",
+        "--archive-file",
+        "nextest-archive.tar.zst",
+        "--test-threads",
+        "2",
+        "--partition",
+        "hash:2/4",
+        "--no-fail-fast",
+        "-E",
+        "all()",
+    ]);
+
+    assert_eq!(
+        list_argv(&run),
+        Some(argv(&[
+            "cargo-nextest",
+            "nextest",
+            "list",
+            "--archive-file",
+            "nextest-archive.tar.zst",
+            "--partition",
+            "hash:2/4",
+            "-E",
+            "all()",
+            "--message-format",
+            "json",
+        ]))
+    );
+}

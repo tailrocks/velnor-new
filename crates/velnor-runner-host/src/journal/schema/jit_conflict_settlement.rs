@@ -28,36 +28,40 @@ pub(super) fn jit_table_sql() -> &'static str {
     ddl::JIT_TABLE
 }
 
-pub(super) fn jit_index_contracts() -> &'static [(&'static str, &'static str); 5] {
-    &ddl::JIT_INDEXES
+pub(super) fn jit_index_contracts() -> &'static [(&'static str, &'static str)] {
+    ddl::JIT_INDEXES
 }
 
 pub(super) fn terminal_view_sql() -> &'static str {
     ddl::TERMINAL_PROOFS_VIEW
 }
 
-pub(super) fn table_names() -> &'static [&'static str; 3] {
-    &ddl::TABLE_NAMES
+pub(super) fn table_names() -> &'static [&'static str] {
+    ddl::TABLE_NAMES
 }
 
 pub(super) fn schema_objects() -> impl Iterator<Item = (&'static str, &'static str, &'static str)> {
     ddl::TABLE_NAMES
-        .into_iter()
+        .iter()
+        .copied()
         .zip([ddl::CLAIMS, ddl::PROGRESS, ddl::SETTLEMENTS])
         .map(|(name, sql)| ("table", name, sql))
         .chain(
             guards::INSERT_GUARDS
-                .into_iter()
+                .iter()
+                .copied()
                 .map(|sql| ("trigger", trigger_name(sql), sql)),
         )
         .chain(
             guards::IMMUTABLE_GUARDS
-                .into_iter()
+                .iter()
+                .copied()
                 .map(|sql| ("trigger", trigger_name(sql), sql)),
         )
         .chain(
             guards::EFFECT_FENCES
-                .into_iter()
+                .iter()
+                .copied()
                 .map(|sql| ("trigger", trigger_name(sql), sql)),
         )
 }

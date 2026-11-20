@@ -35,12 +35,13 @@ pub(crate) struct Document {
     pub(crate) package: Vec<PackageEntry>,
 }
 
-const EXECUTABLE_KEYS: [&str; 2] = ["replace_command", "changelog_config"];
+const EXECUTABLE_KEYS: &[&str] = &["replace_command", "changelog_config"];
 
 pub(crate) fn executable_key(value: &toml::Value) -> Option<&'static str> {
     match value {
         toml::Value::Table(table) => EXECUTABLE_KEYS
-            .into_iter()
+            .iter()
+            .copied()
             .find(|key| table.contains_key(*key))
             .or_else(|| table.values().find_map(executable_key)),
         toml::Value::Array(items) => items.iter().find_map(executable_key),

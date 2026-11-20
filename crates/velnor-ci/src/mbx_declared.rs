@@ -5,7 +5,7 @@ use std::path::Path;
 use toml::Table;
 use velnor_model::{MbxRule, mbx_declaration};
 
-const CONFIGS: [&str; 6] = [
+const CONFIGS: &[&str] = &[
     "mise.toml",
     ".mise.toml",
     "mise/config.toml",
