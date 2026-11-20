@@ -183,7 +183,7 @@ pub(crate) fn condition(
                 parts.push(format!("steps.{REPLAN_STEP}.outcome != 'failure'"));
             }
             parts.push(ON_DEFAULT_BRANCH.to_owned());
-            parts.push(POST_MERGE_EVENTS.to_owned());
+            parts.push(SAVING_EVENTS.to_owned());
             if when == When::SaveSources {
                 parts.push(format!("steps.{BASE_STEP}.outputs.sources == 'true'"));
             }
@@ -209,7 +209,7 @@ pub(crate) fn condition(
         When::BaseExpired => parts.push(BASE_EXPIRED.to_owned()),
         When::SavingRun => {
             parts.push(ON_DEFAULT_BRANCH.to_owned());
-            parts.push(POST_MERGE_EVENTS.to_owned());
+            parts.push(SAVING_EVENTS.to_owned());
         }
         When::ClearRunLabel => {
             parts.push(IS_PULL_REQUEST.to_owned());
