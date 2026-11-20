@@ -180,7 +180,7 @@ Use acquired URLs and scoped tokens for cache service v2, artifact v4, Results a
 `evidence/proto-raw/scaleset/{client.go:765–796,session_client.go:45–303}`.
 `refs/actions-runner/src/Runner.Listener/{Runner.cs:234–257,699–800,RunnerJobRequestRef.cs:1–35,BrokerMessageListener.cs:270–314,433–452}`,
 `Runner.Common/BrokerServer.cs:67–84`, `Sdk/RSWebApi/RunServiceHttpClient.cs:70–200`, `Runner.Worker/Handlers/NodeScriptActionHandler.cs:55–83`.
-[Runner protocol evidence](../evidence.md#2-protocol-how-it-talks-to-github) · [GitHub self-hosted runner reference](https://docs.github.com/en/actions/reference/runners/self-hosted-runners)
+[Runner protocol evidence](../evidence.md#f-github-runner-protocol-surface-and-arc) · [GitHub self-hosted runner reference](https://docs.github.com/en/actions/reference/runners/self-hosted-runners)
 
 ### Job model and templates
 
