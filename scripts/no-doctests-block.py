@@ -1,11 +1,4 @@
 #!/usr/bin/env python3
-"""Fail when a Rust file puts a doc fence inside a block doc comment.
-
-Scans Rust tokens, not raw text: line comments, string and char literals are
-skipped as units, and a block comment nests like rustc's, so a `/**` inside a
-string literal is not a doc comment and a nested `/* */` does not end the
-outer one.
-"""
 import re
 import sys
 from pathlib import Path
@@ -13,6 +6,7 @@ from pathlib import Path
 IDENT = re.compile(r"[^\W\d]\w*")
 FENCE = re.compile(r"```|~~~")
 INDENTED = re.compile(r"^[ \t]*\*? {5,}\S", re.M)
+SHEBANG_ATTR = re.compile(r"#!\s*\[")
 DOC_OPEN = re.compile(r"/\*(?:!|\*(?![*/]))")
 RAW_PREFIX = {"r", "br", "cr"}
 BYTE_PREFIX = {"b", "c"}
@@ -102,11 +96,22 @@ def rust_sources():
     return sorted(p for p in Path("crates").rglob("*.rs") if "src" in p.parts)
 
 
+def strip_shebang(src):
+    src = src.removeprefix("\ufeff")
+    if src.startswith("#!") and not SHEBANG_ATTR.match(src):
+        first, newline, rest = src.partition("\n")
+        return newline + rest
+    return src
+
+
 def main(args):
     paths = [Path(a) for a in args] or rust_sources()
     bad = 0
     for path in paths:
         src = path.read_text(encoding="utf-8")
+        if "/**" not in src and "/*!" not in src:
+            continue
+        src = strip_shebang(src)
         for line, body in doc_blocks(src):
             if FENCE.search(body) or INDENTED.search(body):
                 print(f"{path}:{line}: doctest form inside a block doc comment")
