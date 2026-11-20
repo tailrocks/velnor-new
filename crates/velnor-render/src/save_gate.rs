@@ -108,7 +108,7 @@ impl SaveGate {
                     gate: step.gate.clone(),
                     setup,
                 });
-            } else if !legacy && is_compile_check(step) {
+            } else if is_compile_check(step) && (!legacy || !compiled.is_empty()) {
                 let id = format!("{COMPILE_ID}_{}", checks.len() + 1);
                 gate.ids[index] = Some(id.clone());
                 checks.push(id);
@@ -128,8 +128,6 @@ impl SaveGate {
         }
         let mut terms = Vec::new();
         if compiled.is_empty() {
-            // No build to wait for: the job's own success still gates the saves, and so
-            // does every compile step, so a failed lint, doc or alone check never saves.
             let ids = std::mem::take(&mut gate.ids);
             gate.ids = ids
                 .into_iter()

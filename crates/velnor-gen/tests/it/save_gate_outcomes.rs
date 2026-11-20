@@ -43,8 +43,8 @@ fn audit_step(lane: &str) -> Result<&str, Box<dyn std::error::Error>> {
         .ok_or_else(|| "no audit".into())
 }
 
-fn lane(variant: Variant) -> Result<String, Box<dyn std::error::Error>> {
-    jobs(variant.helper(), "")?
+fn lane(helper: &str, config: &str) -> Result<String, Box<dyn std::error::Error>> {
+    jobs(helper, config)?
         .into_iter()
         .find(|(id, _)| id == "rust")
         .map(|(_, lane)| lane)
@@ -58,6 +58,8 @@ struct Ending {
     test_failed: bool,
     /// What the audit does when it runs; `skipped` keeps it from running at all.
     audit: &'static str,
+    /// A compile check step, by name, that failed after the build.
+    failed_check: Option<&'static str>,
 }
 
 const SCHEDULED: Ending = Ending {
@@ -66,6 +68,7 @@ const SCHEDULED: Ending = Ending {
     built: true,
     test_failed: true,
     audit: "success",
+    failed_check: None,
 };
 
 /// The outcome of the audit step and whether each save runs.
@@ -73,7 +76,16 @@ fn play(
     variant: Variant,
     ending: &Ending,
 ) -> Result<(String, Vec<bool>), Box<dyn std::error::Error>> {
-    let lane = lane(variant)?;
+    play_in(variant, variant.helper(), "", ending)
+}
+
+fn play_in(
+    variant: Variant,
+    helper: &str,
+    config: &str,
+    ending: &Ending,
+) -> Result<(String, Vec<bool>), Box<dyn std::error::Error>> {
+    let lane = lane(helper, config)?;
     let mut context = Context::new(&[
         ("github.ref", "refs/heads/main"),
         ("github.event.repository.default_branch", "main"),
@@ -100,6 +112,15 @@ fn play(
         if ending.built { "true" } else { "" },
     );
     context.job_ok = ending.built && !ending.test_failed;
+    if let Some(name) = ending.failed_check {
+        let block = step(&lane, name).ok_or_else(|| format!("no {name} ({variant:?})"))?;
+        let id = block
+            .lines()
+            .find_map(|line| line.trim().strip_prefix("id: "))
+            .ok_or_else(|| format!("{name} has no id ({variant:?})"))?;
+        context.set(&format!("steps.{id}.outcome"), "failure");
+        context.job_ok = false;
+    }
     let audit = audit_step(&lane)?;
     let outcome = if ending.audit != "skipped" && runs(&condition_of(audit)?, &context)? {
         ending.audit
@@ -173,7 +194,7 @@ fn a_failed_test_after_a_green_build_and_audit_still_saves() -> TestResult {
 #[test]
 fn the_audit_runs_after_a_failed_test_when_the_build_was_green() -> TestResult {
     for variant in BOTH {
-        let lane = lane(variant)?;
+        let lane = lane(variant.helper(), "")?;
         let audit = condition_of(audit_step(&lane)?)?;
         let mut context = Context::new(&[
             ("github.event_name", "schedule"),
@@ -187,6 +208,45 @@ fn the_audit_runs_after_a_failed_test_when_the_build_was_green() -> TestResult {
         context.set("steps.build_1.outcome", "skipped");
         context.set("steps.test.outputs.built", "");
         assert!(!runs(&audit, &context)?, "{variant:?}: {audit}");
+    }
+    Ok(())
+}
+
+fn variant_helper(variant: Variant) -> &'static str {
+    match variant {
+        Variant::BuildStep => "0.1.93",
+        Variant::Recorded => "0.1.107",
+    }
+}
+
+const FULL_LANE: &str =
+    "[[test_lane]]\nroot = '.'\nfeatures = ['local-mode']\nlint = true\ndoc = true\n";
+
+#[test]
+fn a_failed_check_after_the_build_saves_nothing() -> TestResult {
+    for variant in BOTH {
+        for check in ["'Lint (features: local-mode)'", "'Documentation (features: local-mode)'"] {
+            for (event, test_failed) in [("schedule", true), ("push", false)] {
+                let ending = Ending {
+                    event,
+                    test_failed,
+                    failed_check: Some(check),
+                    ..SCHEDULED
+                };
+                let (_, saves) = play_in(variant, variant_helper(variant), FULL_LANE, &ending)?;
+                assert!(none(&saves), "{variant:?} {check} {event}: {saves:?}");
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn green_checks_after_the_build_still_save() -> TestResult {
+    for variant in BOTH {
+        let ending = SCHEDULED;
+        let (_, saves) = play_in(variant, variant_helper(variant), FULL_LANE, &ending)?;
+        assert!(all(&saves), "{variant:?}: {saves:?}");
     }
     Ok(())
 }
