@@ -17,6 +17,7 @@ pub struct RustCiConfig {
     pub hosted_runners: HostedRunners,
     pub crates_mirror: Option<CratesMirror>,
     pub private_sources: Option<PrivateSources>,
+    pub release_assets: Vec<crate::ReleaseAsset>,
     pub mbx_store: MbxStore,
     pub docs_run: DocsRun,
     pub check_alone_run: DocsRun,
@@ -149,18 +150,60 @@ impl SpeedBudget {
     }
 }
 
+/// The cargo feature selection of a test lane: named features, every feature
+/// (`all`), or the named features without the default ones (`no_default`).
+/// `all` never comes with names, so a parsed lane is one of these three shapes.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Default)]
+pub struct LaneFeatures {
+    pub names: Vec<String>,
+    pub all: bool,
+    pub no_default: bool,
+}
+
+impl LaneFeatures {
+    #[must_use]
+    pub fn label(&self) -> String {
+        let mut parts = Vec::new();
+        if self.all {
+            parts.push("all features".to_owned());
+        }
+        if self.no_default {
+            parts.push("no default features".to_owned());
+        }
+        if !self.names.is_empty() {
+            parts.push(format!("features: {}", self.names.join(",")));
+        }
+        parts.join(", ")
+    }
+
+    #[must_use]
+    pub fn normalized(&self) -> Self {
+        let mut names = self.names.clone();
+        names.sort();
+        Self {
+            names,
+            ..self.clone()
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TestLane {
     pub root: Option<RepoPath>,
-    pub features: Vec<String>,
+    pub features: LaneFeatures,
     pub filter: Option<String>,
     pub lint: bool,
     pub doc: bool,
     pub packages: Vec<PackageName>,
     pub job: LaneJob,
-    /// Whether the `job` key was written at all, whatever its value. A helper
-    /// older than the one that reads the key rejects it either way.
-    pub job_written: bool,
+    pub written: LaneKeysWritten,
+}
+
+/// Which optional keys of a `[[test_lane]]` table were written, whatever their values.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct LaneKeysWritten {
+    pub job: bool,
+    pub feature_flags: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -301,6 +344,7 @@ impl Default for RustCiConfig {
             test_groups: Vec::new(),
             checkout: CheckoutScope::Full,
             workspace_groups: Vec::new(),
+            release_assets: Vec::new(),
         }
     }
 }

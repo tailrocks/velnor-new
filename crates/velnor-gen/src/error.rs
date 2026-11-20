@@ -9,10 +9,8 @@ use velnor_render::RuleViolation;
 use velnor_rust::{DetectError, MAX_SOURCE_ROOTS, MetadataFileError};
 use velnor_workflows::WorkflowsError;
 
-use crate::helper_gate::{CACHE_DEBUG_HELPER, REQUIRED_CHECK_HELPER, RESTORE_CACHE_HELPER};
-use crate::{
-    COMPATIBLE_HELPER_SERIES, HELPER_MINIMUM, TEST_GROUP_KEYS_HELPER, TEST_LANE_JOB_HELPER,
-};
+use crate::helper_gate::REQUIRED_CHECK_HELPER;
+use crate::{COMPATIBLE_HELPER_SERIES, HELPER_MINIMUM};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GenerateError {
@@ -24,28 +22,20 @@ pub enum GenerateError {
     ReleaseToolchainPath,
     HelperNotPinned,
     HelperTooOld(HelperVersion),
-    MirrorHelperTooOld(HelperVersion),
-    HostedHelperTooOld(HelperVersion),
-    CacheDebugHelperTooOld(HelperVersion),
+    ConfigKeyHelperTooOld {
+        file: String,
+        key: &'static str,
+        first: (u64, u64, u64),
+        pinned: HelperVersion,
+    },
     RequiredCheckHelperTooOld(HelperVersion),
     InputsLockHelperTooOld(HelperVersion),
-    PrivateSourcesHelperTooOld(HelperVersion),
-    MbxStoreHelperTooOld(HelperVersion),
     PrOnlyChecksHelperTooOld(HelperVersion),
-    BudgetHelperTooOld(HelperVersion),
     BudgetModesHelperTooOld(HelperVersion),
-    TestGroupsHelperTooOld(HelperVersion),
     MergeGroupHelperTooOld(HelperVersion),
-    PrCiHelperTooOld(HelperVersion),
     DocsHelperTooOld(HelperVersion),
     CheckAloneHelperTooOld(HelperVersion),
     TooManySourceRoots(usize),
-    FamilyTagHelperTooOld(HelperVersion),
-    TagPushHelperTooOld(HelperVersion),
-    TestLaneHelperTooOld(HelperVersion),
-    TestLaneJobHelperTooOld(HelperVersion),
-    TestGroupKeyHelperTooOld(HelperVersion, &'static str),
-    RestoreCacheHelperTooOld(HelperVersion),
     HelperLockLacksMacos {
         version: HelperVersion,
         runner: String,
@@ -80,39 +70,20 @@ impl fmt::Display for GenerateError {
                 HELPER_MINIMUM.0, HELPER_MINIMUM.1, HELPER_MINIMUM.2,
                 HELPER_MINIMUM.0, HELPER_MINIMUM.1, HELPER_MINIMUM.2
             ),
-            Self::CacheDebugHelperTooOld(v) => write!(f, "{}", cache_debug_too_old(v)),
+            Self::ConfigKeyHelperTooOld { file, key, first: (major, minor, patch), pinned } => write!(
+                f,
+                "velnor-ci {pinned} does not accept the `{key}` key of {file}; pin velnor-ci {major}.{minor}.{patch} or later with `velnor-gen pin-helper {major}.{minor}.{patch}`, or remove the key"
+            ),
             Self::RequiredCheckHelperTooOld(v) => write!(f, "{}", required_check_too_old(v)),
-            Self::MbxStoreHelperTooOld(version) => write!(f, "velnor-ci {version} cannot select the shared MBX store; pin velnor-ci 0.1.85 or later"),
             Self::TooManySourceRoots(roots) => write!(
                 f,
                 "the repository has {roots} Cargo roots, and the shared Sources cache makes every saving lane fetch every root, which keeps the generated workflow within its size limit only up to {MAX_SOURCE_ROOTS} roots; reduce the Cargo roots to {MAX_SOURCE_ROOTS} or fewer, or pin velnor-ci 0.1.88 or later with `velnor-gen pin-helper 0.1.88`, whose `velnor-ci sources fetch --roots` replaces the per-root steps (tailrocks/velnor-new#1362)"
             ),
-            Self::MirrorHelperTooOld(version) => write!(
-                f,
-                "velnor-ci {version} cannot configure crates_mirror or disable it with VELNOR_CRATES_MIRROR=off; pin velnor-ci 0.1.93 or later with `velnor-gen pin-helper 0.1.93`"
-            ),
-            Self::HostedHelperTooOld(version) => write!(
-                f,
-                "velnor-ci {version} does not know the hosted key of .velnor/rust-ci.toml, and reads the file at run time; pin velnor-ci 0.1.99 or later with `velnor-gen pin-helper 0.1.99`"
-            ),
             Self::InputsLockHelperTooOld(version) => write!(f, "velnor-ci {version} cannot read the manifest column of .velnor/rust-inputs.lock; pin velnor-ci 0.1.101 or later with `velnor-gen pin-helper 0.1.101`, or write the lock under the older pin"),
-            Self::PrivateSourcesHelperTooOld(version) => write!(f, "velnor-ci {version} cannot fetch private sources; pin velnor-ci 0.1.88 or later with `velnor-gen pin-helper 0.1.88`"),
-            Self::PrCiHelperTooOld(version) => write!(
-                f,
-                "velnor-ci {version} does not know the pr_ci key of .velnor/rust-ci.toml; pin velnor-ci 0.1.88 or later with `velnor-gen pin-helper 0.1.88`"
-            ),
-            Self::BudgetHelperTooOld(version) => write!(
-                f,
-                "velnor-ci {version} cannot check the speed budget; pin velnor-ci 0.1.92 or later with `velnor-gen pin-helper 0.1.92`"
-            ),
             Self::BudgetModesHelperTooOld(v) => write!(f, "{}", modes_too_old(v)),
             Self::PrOnlyChecksHelperTooOld(version) => write!(
                 f,
                 "velnor-ci {version} cannot enforce pr_only_checks; pin velnor-ci 0.1.82 or later with `velnor-gen pin-helper 0.1.82`"
-            ),
-            Self::TestGroupsHelperTooOld(version) => write!(
-                f,
-                "velnor-ci {version} cannot read [[test_groups]] in the configuration; pin velnor-ci 0.1.90 or later with `velnor-gen pin-helper 0.1.90`"
             ),
             Self::MergeGroupHelperTooOld(version) => write!(
                 f,
@@ -126,24 +97,9 @@ impl fmt::Display for GenerateError {
                 f,
                 "velnor-ci {version} does not know the check_alone key of .velnor/rust-ci.toml; pin velnor-ci 0.1.97 or later with `velnor-gen pin-helper 0.1.97`"
             ),
-            Self::TestLaneHelperTooOld(version) => write!(
-                f,
-                "velnor-ci {version} does not know the test_lane key of .velnor/rust-ci.toml; pin velnor-ci 0.1.93 or later with `velnor-gen pin-helper 0.1.93`"
-            ),
-            Self::TestLaneJobHelperTooOld(..)
-            | Self::TestGroupKeyHelperTooOld(..)
-            | Self::RestoreCacheHelperTooOld(..) => self.gate(f),
             Self::HelperLockLacksMacos { version, runner } => write!(
                 f,
                 "the runner `{runner}` is a macOS runner, but the velnor-ci {version} in .velnor/rust-ci.lock has no macos-arm64 digest, so `actions/setup-velnor` would fail before velnor-ci runs; pin a release that lists a macos-arm64 digest with `velnor-gen pin-helper <version>`, or use a Linux runner"
-            ),
-            Self::FamilyTagHelperTooOld(version) => write!(
-                f,
-                "velnor-ci {version} cannot bind a family tag; pin velnor-ci 0.1.85 or later with `velnor-gen pin-helper 0.1.85`"
-            ),
-            Self::TagPushHelperTooOld(version) => write!(
-                f,
-                "velnor-ci {version} cannot check a pushed family tag, which family_trigger = \"tag_push\" needs; pin velnor-ci 0.1.98 or later with `velnor-gen pin-helper 0.1.98`"
             ),
             Self::VersionGroupsHelperTooOld(version) => write!(
                 f,
@@ -177,51 +133,10 @@ fn incompatible_helper(version: &HelperVersion) -> String {
     )
 }
 
-fn cache_debug_too_old(version: &HelperVersion) -> String {
-    let (major, minor, patch) = CACHE_DEBUG_HELPER;
-    format!(
-        "velnor-ci {version} does not know the cache_debug key of .velnor/rust-ci.toml; pin velnor-ci {major}.{minor}.{patch} or later with `velnor-gen pin-helper {major}.{minor}.{patch}`"
-    )
-}
-
 fn required_check_too_old(version: &HelperVersion) -> String {
     let (major, minor, patch) = REQUIRED_CHECK_HELPER;
     format!(
         "velnor-ci {version} does not name a required_check other than Required for a merge queue run; pin velnor-ci {major}.{minor}.{patch} or later with `velnor-gen pin-helper {major}.{minor}.{patch}`"
-    )
-}
-
-impl GenerateError {
-    fn gate(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::TestLaneJobHelperTooOld(version) => f.write_str(&lane_job_too_old(version)),
-            Self::TestGroupKeyHelperTooOld(version, key) => {
-                f.write_str(&group_key_too_old(version, key))
-            }
-            Self::RestoreCacheHelperTooOld(version) => f.write_str(&restore_cache_too_old(version)),
-            _ => Ok(()),
-        }
-    }
-}
-
-fn lane_job_too_old(version: &HelperVersion) -> String {
-    let (major, minor, patch) = TEST_LANE_JOB_HELPER;
-    format!(
-        "velnor-ci {version} does not know the job key of a [[test_lane]] in .velnor/rust-ci.toml; pin velnor-ci {major}.{minor}.{patch} or later with `velnor-gen pin-helper {major}.{minor}.{patch}`"
-    )
-}
-
-fn group_key_too_old(version: &HelperVersion, key: &str) -> String {
-    let (major, minor, patch) = TEST_GROUP_KEYS_HELPER;
-    format!(
-        "velnor-ci {version} does not know the {key} key of [[test_groups]] in .velnor/rust-ci.toml, and reads the file at run time; pin velnor-ci {major}.{minor}.{patch} or later with `velnor-gen pin-helper {major}.{minor}.{patch}`"
-    )
-}
-
-fn restore_cache_too_old(version: &HelperVersion) -> String {
-    let (major, minor, patch) = RESTORE_CACHE_HELPER;
-    format!(
-        "velnor-ci {version} does not know the restore_cache key of a [[test_groups]] table in .velnor/rust-ci.toml; pin velnor-ci {major}.{minor}.{patch} or later with `velnor-gen pin-helper {major}.{minor}.{patch}`"
     )
 }
 

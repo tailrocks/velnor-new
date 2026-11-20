@@ -92,6 +92,9 @@ pub struct ReleasePlan {
     pub release_plz_version: String,
     pub release_plz_url: String,
     pub release_plz_sha256: String,
+    /// The repository declares MBX as its cargo wrapper, so every release
+    /// job that runs cargo sets up the mise tools first.
+    pub mbx: bool,
 }
 
 pub(crate) fn read_all(files: &[(String, String)]) -> Result<Vec<RootConfig>, String> {
@@ -242,6 +245,7 @@ impl ReleasePlan {
             release_plz_version: release_plz.version,
             release_plz_url: release_plz.url,
             release_plz_sha256: release_plz.sha256,
+            mbx: mise::declares_mbx(&files.mise_tomls),
         })
     }
 }

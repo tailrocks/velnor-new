@@ -13,6 +13,7 @@ mod ids;
 mod lint;
 mod mise;
 mod plan;
+mod release_asset;
 mod repo;
 mod repo_config;
 mod sealed;
@@ -50,14 +51,15 @@ pub use plan::{
     TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, Triggers,
     When, WorkflowPlan, group_output_name,
 };
+pub use release_asset::{ReleaseAsset, ReleaseAssetError, ReleaseAssetPart};
 pub use repo::{
     CacheDebug, CheckoutScope, CiDebugInfo, CompileInputs, CratesMirror, CustomHarness,
-    DependencyKind, DocsRun, FullRun, InputOwner, InputRule, LaneJob, MbxRemote, MbxStore,
-    MemberDependency, OnMain, PackageDependency, PolicyTools, PrCi, PrivateSources,
-    PushAfterMergeGroup, RepoFacts, RepoView, RepositoryIdentity, RustCiConfig, RustMember,
-    RustMetadata, RustPackage, RustRoot, SpeedBudget, Target, TargetKind, TestLane, TestSetup,
-    Timings, ToolLock, ToolPin, ToolPins, ToolRequest, Toolchain, UnownedPackage, Unread,
-    Weakening, WorkspaceGroup,
+    DependencyKind, DocsRun, FullRun, InputOwner, InputRule, LaneFeatures, LaneJob,
+    LaneKeysWritten, MbxRemote, MbxStore, MemberDependency, OnMain, PackageDependency, PolicyTools,
+    PrCi, PrivateSources, PushAfterMergeGroup, RepoFacts, RepoView, RepositoryIdentity,
+    RustCiConfig, RustMember, RustMetadata, RustPackage, RustRoot, SpeedBudget, Target, TargetKind,
+    TestLane, TestSetup, Timings, ToolLock, ToolPin, ToolPins, ToolRequest, Toolchain,
+    UnownedPackage, Unread, Weakening, WorkspaceGroup,
 };
 pub use sealed::{Owner, VELNOR_GEN_MARKER, lf_normalized, owner_of, seal};
 pub use selection::{
@@ -67,8 +69,8 @@ pub use selection::{
 };
 pub use shape::{Shape, ShapeDecision};
 pub use test_group::{
-    ARTIFACT_RETENTION_DEFAULT, ArtifactWhen, GroupArtifact, GroupEvent, GroupRoot, TestGroup,
-    TestNeed,
+    ARTIFACT_RETENTION_DEFAULT, ArtifactWhen, GroupArtifact, GroupEvent, GroupRoot, NoTests,
+    TestGroup, TestNeed,
 };
 pub use token_permission::{token_permission_accesses, token_permission_accesses_prose};
 pub use verdict::{JobCondition, VerdictJob, VerdictSpec};

@@ -169,7 +169,8 @@ impl fmt::Display for Reason {
             | Self::TestGroupsWithPrivateSources => self.fmt_test_groups(f),
             Self::UnknownTestLaneRoot(_)
             | Self::TestLaneWithoutNextest(_)
-            | Self::UnknownTestLanePackage(_) => self.fmt_test_lane(f),
+            | Self::UnknownTestLanePackage(_)
+            | Self::TestLaneFeatureConflict { .. } => self.fmt_test_lane(f),
             Self::UnknownTestSetupRoot(root) => write!(
                 f,
                 "test_setup names the root {root}, which is not a Cargo root of this repository; name the folder of a root's Cargo.toml, or . for the repository root"

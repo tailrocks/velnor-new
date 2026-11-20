@@ -17,6 +17,8 @@ pub struct TestGroup {
     pub hosted: Option<bool>,
     /// The `restore_cache` key, if written. Only `Some(true)` restores.
     pub restore_cache: Option<bool>,
+    /// The `no_tests` key, if written. Unwritten, a group renders [`NoTests::Fail`].
+    pub no_tests: Option<NoTests>,
     pub paths: Vec<PathGlob>,
     pub events: Vec<GroupEvent>,
     pub root: GroupRoot,
@@ -48,6 +50,26 @@ pub const ARTIFACT_RETENTION_DEFAULT: u8 = 3;
 pub enum TestNeed {
     Docker,
     Cargo,
+}
+
+/// What nextest does when a group's filter selects no test (`--no-tests`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NoTests {
+    Fail,
+    Warn,
+    Pass,
+}
+
+impl NoTests {
+    /// The value nextest takes after `--no-tests=`.
+    #[must_use]
+    pub fn flag(self) -> &'static str {
+        match self {
+            Self::Fail => "fail",
+            Self::Warn => "warn",
+            Self::Pass => "pass",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -88,6 +110,13 @@ impl TestGroup {
     #[must_use]
     pub fn restores_cache(&self) -> bool {
         self.restore_cache == Some(true)
+    }
+
+    /// The `--no-tests` mode of this group's nextest run. Unwritten, it is `fail`,
+    /// so a group whose filter or binary matches nothing fails instead of passing.
+    #[must_use]
+    pub fn no_tests_mode(&self) -> NoTests {
+        self.no_tests.unwrap_or(NoTests::Fail)
     }
 
     #[must_use]

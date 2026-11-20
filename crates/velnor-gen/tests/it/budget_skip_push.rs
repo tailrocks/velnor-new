@@ -5,7 +5,7 @@ use std::error::Error;
 
 use velnor_model::RepoView;
 
-use crate::facts::{TestResult, path};
+use crate::facts::TestResult;
 use crate::pipeline::{view, workflow};
 
 const BUDGET: &str = "[budget]\nmain_wall_seconds = 600\n";
@@ -13,10 +13,7 @@ const SKIP_PUSH: &str = "[ci]\nskip_push_after_merge_group = true\n\n";
 
 fn repo(roots: &[&str], config: &str, helper: &str) -> Result<RepoView, Box<dyn Error>> {
     let mut repo = view(roots, Some(config.as_bytes()))?;
-    let lock = path(".velnor/rust-ci.lock")?;
-    let old = String::from_utf8(repo.files[&lock].clone())?;
-    repo.files
-        .insert(lock, old.replace("0.1.81", helper).into_bytes());
+    crate::pipeline::pin_helper(&mut repo, helper)?;
     Ok(repo)
 }
 

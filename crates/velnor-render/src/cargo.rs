@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    BUILD_TESTS_STEP, CargoCommand, FilterRef, Job, LINT_STEP, RepoPath, StepKind, TEST_STEP,
-    TargetKind, TargetName,
+    BUILD_TESTS_STEP, CargoCommand, FilterRef, Job, LINT_STEP, LaneFeatures, RepoPath, StepKind,
+    TEST_STEP, TargetKind, TargetName,
 };
 
 use crate::cargo_features::NO_TESTS_PASS;
@@ -154,6 +154,7 @@ fn cargo_command(
             threads,
             partition,
             ci_profile,
+            no_tests,
         } => nextest_run(
             &format!(
                 "--archive-file '{}' --extract-to . --extract-overwrite --workspace-remap .{}{}",
@@ -165,7 +166,7 @@ fn cargo_command(
             ),
             filter,
             *ci_profile,
-            NO_TESTS_PASS,
+            no_tests.flag(),
             &path,
         ),
         CargoCommand::NextestArchive { file } => nextest_archive(nextest, file, &path),
@@ -330,6 +331,16 @@ pub(crate) fn without_binaries(base: String, binaries: &[String]) -> String {
     binaries
         .iter()
         .fold(base, |text, id| format!("{text} - binary_id(={id})"))
+}
+
+pub(crate) fn lane_flags(features: &LaneFeatures) -> String {
+    let all = if features.all { " --all-features" } else { "" };
+    let no_default = if features.no_default {
+        " --no-default-features"
+    } else {
+        ""
+    };
+    format!("{all}{no_default}{}", feature_flag(&features.names))
 }
 
 pub(crate) fn feature_flag(features: &[String]) -> String {
