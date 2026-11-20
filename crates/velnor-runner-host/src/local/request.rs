@@ -10,7 +10,7 @@ use crate::worker::{ResourceBudget, ResourceBudgetConfig, WorkerIdentityNames};
 use super::storage::Sizes;
 
 const OPERATIONAL_RESERVE_BYTES: u64 = 1024 * 1024 * 1024;
-const RESERVED_NETWORKS: [&str; 4] = ["bridge", "host", "none", "default"];
+const RESERVED_NETWORKS: &[&str] = &["bridge", "host", "none", "default"];
 const LOCAL_NETWORK_PREFIX: &str = "velnor-local-";
 const PRODUCTION_NETWORK_PREFIX: &str = "velnor-";
 

@@ -9,7 +9,7 @@ use crate::write_request::internal;
 
 pub(super) const PATH: &str = ".velnor/config.toml";
 
-const UNSUPPORTED_STACKS: [&str; 5] = ["tofu", "bun", "gradle", "dbt", "ansible"];
+const UNSUPPORTED_STACKS: &[&str] = &["tofu", "bun", "gradle", "dbt", "ansible"];
 
 #[derive(Debug)]
 pub(super) struct InputRule {
@@ -61,7 +61,7 @@ pub(super) fn parse(text: &str) -> Result<Config, CiError> {
         }
     }
     let stacks = document.get("stacks").and_then(Value::as_table);
-    for stack in UNSUPPORTED_STACKS {
+    for stack in UNSUPPORTED_STACKS.iter().copied() {
         if stacks.is_some_and(|stacks| stacks.contains_key(stack)) {
             return Err(unsupported(stack));
         }

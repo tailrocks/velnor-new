@@ -16,7 +16,7 @@ use bollard::query_parameters::CreateContainerOptions;
 const RUNNER_DOCKER_HOST_ENV: &str = "DOCKER_HOST=unix:///var/run/docker.sock";
 const RUNNER_JOB_START_HOOK_ENV: &str =
     "ACTIONS_RUNNER_HOOK_JOB_STARTED=/usr/local/bin/velnor-job-start-hook.sh";
-const RUNNER_CAPABILITIES: [&str; 14] = [
+const RUNNER_CAPABILITIES: &[&str] = &[
     "CHOWN",
     "DAC_OVERRIDE",
     "FOWNER",
@@ -338,8 +338,13 @@ fn host_config(
         privileged: Some(privileged),
         publish_all_ports: Some(false),
         cap_drop: (role == BootstrapContainerRole::Runner).then(|| vec!["ALL".to_owned()]),
-        cap_add: (role == BootstrapContainerRole::Runner)
-            .then(|| RUNNER_CAPABILITIES.map(str::to_owned).to_vec()),
+        cap_add: (role == BootstrapContainerRole::Runner).then(|| {
+            RUNNER_CAPABILITIES
+                .iter()
+                .copied()
+                .map(str::to_owned)
+                .collect()
+        }),
         security_opt: (role == BootstrapContainerRole::Runner)
             .then(|| vec![crate::worker::seccomp::runner_security_opt()]),
         nano_cpus: Some(limits.nano_cpus),

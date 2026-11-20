@@ -31,7 +31,7 @@ pub struct RunSource<'a> {
     pub run_attempt: Option<&'a str>,
 }
 
-const FIELDS: [&str; 11] = [
+const FIELDS: &[&str] = &[
     "schema",
     "op",
     "run_key",

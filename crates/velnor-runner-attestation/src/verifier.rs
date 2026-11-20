@@ -30,7 +30,7 @@ pub(crate) const VERIFY_DEADLINE: Duration = Duration::from_secs(90);
 const SIGSTORE_TUF_ROOT: &[u8] = include_bytes!("sigstore-production-tuf-root.json");
 const GITHUB_ACTIONS_ISSUER: &str = "https://token.actions.githubusercontent.com";
 const CI_OID_PREFIX: &str = "1.3.6.1.4.1.57264.1.";
-const CI_OIDS: [&str; 23] = [
+const CI_OIDS: &[&str] = &[
     "1.3.6.1.4.1.57264.1.1",
     "1.3.6.1.4.1.57264.1.2",
     "1.3.6.1.4.1.57264.1.3",
