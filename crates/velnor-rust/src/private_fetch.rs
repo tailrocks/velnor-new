@@ -77,7 +77,7 @@ fn advisory_fetch(steps: &[Step]) -> Vec<StepKind> {
     }
 }
 
-fn shared_gate<'a>(steps: impl Iterator<Item = &'a Step>) -> Option<Gate> {
+pub(crate) fn shared_gate<'a>(steps: impl Iterator<Item = &'a Step>) -> Option<Gate> {
     let mut gates = steps.map(|step| step.gate.as_ref());
     let first = gates.next()??;
     let mut shared = first.clone();

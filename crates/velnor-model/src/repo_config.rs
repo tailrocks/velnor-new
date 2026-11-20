@@ -217,6 +217,25 @@ pub struct TestSetup {
     pub root: Option<RepoPath>,
     pub name: String,
     pub run: String,
+    /// The `phase` key, if written. `None` and `Some(Test)` run before the tests only.
+    pub phase: Option<SetupPhase>,
+}
+
+impl TestSetup {
+    /// Whether the step runs before the first cargo step that compiles, not only before the tests.
+    #[must_use]
+    pub fn before_build(&self) -> bool {
+        self.phase == Some(SetupPhase::Build)
+    }
+}
+
+/// How early a `[[test_setup]]` step runs in the jobs of its root.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SetupPhase {
+    /// Before the first test step.
+    Test,
+    /// Before the first cargo step that compiles or runs tests, so a build script can read it.
+    Build,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

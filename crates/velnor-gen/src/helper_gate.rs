@@ -28,6 +28,10 @@ pub(crate) const REQUIRED_CHECK_HELPER: (u64, u64, u64) = (0, 1, 97);
 // First released in tools-v0.1.108 (not tagged yet when this gate was written).
 pub(crate) const RESTORE_CACHE_HELPER: (u64, u64, u64) = (0, 1, 108);
 
+/// The first `velnor-ci` whose `.velnor/rust-ci.toml` parser accepts `phase` in a `[[test_setup]]` table.
+// First released in tools-v0.1.108 (not tagged yet when this gate was written).
+pub(crate) const SETUP_PHASE_HELPER: (u64, u64, u64) = (0, 1, 108);
+
 pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, GenerateError> {
     let release = facts
         .helper
@@ -103,6 +107,7 @@ pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, Generate
     check_lane_job(facts, release)?;
     check_lane_flags(facts, release)?;
     check_restore_cache(facts, release)?;
+    check_setup_phase(facts, release)?;
     if facts.config.mbx_store == MbxStore::Shared && !release.version().at_least((0, 1, 85)) {
         return Err(GenerateError::MbxStoreHelperTooOld(
             release.version().clone(),
@@ -144,6 +149,20 @@ fn check_restore_cache(facts: &RepoFacts, release: &HelperRelease) -> Result<(),
         .any(|group| group.restore_cache.is_some());
     if written && !release.version().at_least(RESTORE_CACHE_HELPER) {
         return Err(GenerateError::RestoreCacheHelperTooOld(
+            release.version().clone(),
+        ));
+    }
+    Ok(())
+}
+
+fn check_setup_phase(facts: &RepoFacts, release: &HelperRelease) -> Result<(), GenerateError> {
+    let written = facts
+        .config
+        .test_setup
+        .iter()
+        .any(|setup| setup.phase.is_some());
+    if written && !release.version().at_least(SETUP_PHASE_HELPER) {
+        return Err(GenerateError::SetupPhaseHelperTooOld(
             release.version().clone(),
         ));
     }
