@@ -31,7 +31,7 @@ shellcheck = "0.11.0"
 # jactionlint checks the script of every actions/github-script step with node on PATH.
 node = "26.13.1"
 # Python for the unittest lint (lint-parity-verify-candidate): CI installs this pin.
-python = "3.14.10"
+python = "3.15.2"
 # Owner hk standard (hk.pkl): secret scanners for the pre-commit, pre-push and
 # security-audit hooks, and the tools behind the stack builtins.
 kingfisher = "v2.19.1"
