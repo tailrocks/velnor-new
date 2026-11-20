@@ -75,6 +75,7 @@ pub enum Rule {
     CombinedCacheNotLastStep,
     TokenJobRunnerNotX64(String),
     WorkflowTooLarge(usize),
+    SourceRootsEnvCollision(String),
     CacheKeyTooLong(usize),
     OutputNameCollision(String),
     DistFileCollision(String),
@@ -133,6 +134,7 @@ impl fmt::Display for RuleViolation {
             ),
             Rule::CombinedCacheNotLastStep => f.write_str(crate::combined_cache::MESSAGE),
             Rule::WorkflowTooLarge(_)
+            | Rule::SourceRootsEnvCollision(_)
             | Rule::OutputNameCollision(_)
             | Rule::DistFileCollision(_) => Ok(()),
             Rule::CacheKeyTooLong(length) => write!(

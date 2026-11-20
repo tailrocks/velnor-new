@@ -66,7 +66,7 @@ pub use repo::{
     TargetKind, TestLane, TestSetup, Timings, ToolLock, ToolPin, ToolPins, ToolRequest, Toolchain,
     UnownedPackage, Unread, Weakening, WorkspaceGroup,
 };
-pub use sealed::{Owner, VELNOR_GEN_MARKER, lf_normalized, owner_of, seal};
+pub use sealed::{Owner, VELNOR_GEN_MARKER, lf_normalized, owner_of, seal, sha256_hex};
 pub use selection::{
     AllTrigger, CACHE_TRIM_WORKFLOW_PATH, ChangeSet, EventKind, OptionalSteps, RELEASE_CONFIG_PATH,
     RELEASE_PLZ_FILE, RELEASE_WORKFLOW_PATH, RustSelection, SAMPLES, SelectionReason, SkipReason,

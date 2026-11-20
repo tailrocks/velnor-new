@@ -17,7 +17,10 @@ use crate::pipeline::{view, workflow};
 const FETCH_STEP: &str = "Fetch the sources of every root";
 const SAVE_STEP: &str = "Save the sources cache";
 
-fn repo(manifests: &[&str], helper: &str) -> Result<RepoView, Box<dyn std::error::Error>> {
+pub(crate) fn repo(
+    manifests: &[&str],
+    helper: &str,
+) -> Result<RepoView, Box<dyn std::error::Error>> {
     let mut repo = view(manifests, None)?;
     let lock = RepoPath::new(".velnor/rust-ci.lock")?;
     let text = String::from_utf8(repo.files.remove(&lock).ok_or("no helper lock")?)?;

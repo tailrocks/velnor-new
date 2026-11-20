@@ -52,6 +52,7 @@ mod rules;
 mod save_condition;
 mod save_gate;
 mod selection_name;
+mod source_roots;
 mod steps;
 mod tests;
 mod token_commands;
@@ -108,9 +109,10 @@ pub fn render_workflow(
     rendered: &RenderedWorkflow,
 ) -> Result<BTreeMap<RepoPath, String>, Vec<RuleViolation>> {
     check_rules(rendered)?;
-    let mut file = document(plan, rendered, ShellcheckMarks::Steps);
+    let roots = source_roots::workflow_roots(plan)?;
+    let mut file = document(plan, rendered, &roots, ShellcheckMarks::Steps);
     if file.len() > rules::MAX_WORKFLOW_BYTES {
-        file = document(plan, rendered, ShellcheckMarks::Jobs);
+        file = document(plan, rendered, &roots, ShellcheckMarks::Jobs);
     }
     if file.len() > rules::MAX_WORKFLOW_BYTES {
         return Err(vec![rule_messages::size_report::too_large(
@@ -122,13 +124,18 @@ pub fn render_workflow(
     Ok(BTreeMap::from([(WORKFLOW_PATH, file)]))
 }
 
-fn document(plan: &WorkflowPlan, rendered: &RenderedWorkflow, marks: ShellcheckMarks) -> String {
+fn document(
+    plan: &WorkflowPlan,
+    rendered: &RenderedWorkflow,
+    roots: &BTreeMap<String, String>,
+    marks: ShellcheckMarks,
+) -> String {
     let workflow: Vec<_> = [
         Some(entry("name", text(&plan.name))),
         Some(entry("on", triggers(&plan.triggers))),
         Some(entry("permissions", permissions(&plan.permissions))),
         Some(entry("concurrency", concurrency(plan.concurrency))),
-        Some(entry("env", env::workflow_env(plan))),
+        Some(entry("env", env::workflow_env(roots))),
         helper_integrity::defaults(&rendered.jobs).map(|defaults| entry("defaults", defaults)),
         Some(entry(
             "jobs",

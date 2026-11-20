@@ -267,6 +267,7 @@ mod shared_sources;
 mod single_fetch;
 mod skip_push;
 mod skip_push_policy;
+mod source_roots_env;
 mod source_roots_limit;
 mod sparse_checkout;
 mod sparse_suggestion;
