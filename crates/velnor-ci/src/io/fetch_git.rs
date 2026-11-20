@@ -47,8 +47,16 @@ pub(super) fn check_databases(cache: &Path) -> Result<(), CiError> {
 }
 
 pub(super) fn merge(fetched: &Path, cache: &Path) -> Result<(), CiError> {
+    for directory in [
+        cache.to_path_buf(),
+        cache.join("db"),
+        cache.join("checkouts"),
+    ] {
+        unlinked(&directory)?;
+    }
     for database in children(&fetched.join("db"))? {
         let target = cache.join("db").join(name(&database)?);
+        unlinked(&target)?;
         if target.exists() {
             objects(&database.join("objects"), &target.join("objects"))?;
         } else {
@@ -56,15 +64,25 @@ pub(super) fn merge(fetched: &Path, cache: &Path) -> Result<(), CiError> {
         }
     }
     for group in children(&fetched.join("checkouts"))? {
+        let checkouts = cache.join("checkouts").join(name(&group)?);
+        unlinked(&checkouts)?;
         for revision in children(&group)? {
-            let target = cache
-                .join("checkouts")
-                .join(name(&group)?)
-                .join(name(&revision)?);
+            let target = checkouts.join(name(&revision)?);
+            unlinked(&target)?;
             if !target.exists() {
                 install(&target, |staged| working_tree(&revision, staged))?;
             }
         }
+    }
+    Ok(())
+}
+
+fn unlinked(path: &Path) -> Result<(), CiError> {
+    if fs::symlink_metadata(path).is_ok_and(|meta| meta.file_type().is_symlink()) {
+        return Err(CiError::new(format!(
+            "{} is a symbolic link; refusing to copy the fetched git sources through it",
+            path.display()
+        )));
     }
     Ok(())
 }

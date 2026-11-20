@@ -24,7 +24,7 @@ fn the_token_reaches_only_the_real_cargo_and_git_and_is_revoked_after_the_fetch(
         assert!(
             environment
                 .lines()
-                .any(|line| line == "GIT_ALLOW_PROTOCOL=https:http:file"),
+                .any(|line| line == "GIT_ALLOW_PROTOCOL=https"),
             "{environment}"
         );
     }

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs;
+use std::os::unix::fs::symlink;
 use std::path::Path;
 
 use super::fetch::{Fixture, TOKEN, TestResult, script, serve};
@@ -123,5 +124,34 @@ fn the_token_fetch_runs_outside_the_checkout_and_the_runner_home_with_an_absolut
             root.join("tools/Cargo.toml").display()
         )
     );
+    Ok(())
+}
+
+#[test]
+fn a_linked_git_database_or_checkout_in_the_cache_is_never_written_through_and_still_revokes()
+-> TestResult {
+    for linked in ["db/dep-1", "checkouts/dep-1"] {
+        let fixture = Fixture::new(&format!("fetch-git-link-{}", linked.replace('/', "-")), 0)?;
+        let root = fixture.repo.root().to_path_buf();
+        cargo_writing_git(&fixture)?;
+        let outside = root.join("outside");
+        fs::create_dir_all(&outside)?;
+        let link = root.join("home/.cargo/git").join(linked);
+        fs::create_dir_all(link.parent().ok_or("parent")?)?;
+        symlink(&outside, &link)?;
+        let api = serve(204)?;
+        let output = fixture.run_with(&api, Some(TOKEN), None, &["Cargo.toml"], &[]);
+        assert_eq!(
+            fs::read_dir(&outside)?.count(),
+            0,
+            "{linked}: written through"
+        );
+        assert!(!output.status.success(), "{linked}: {output:?}");
+        assert!(
+            String::from_utf8_lossy(&output.stderr).contains("symbolic link"),
+            "{linked}: {output:?}"
+        );
+        assert_eq!(api.requests.lock().map_err(|e| e.to_string())?.len(), 1);
+    }
     Ok(())
 }

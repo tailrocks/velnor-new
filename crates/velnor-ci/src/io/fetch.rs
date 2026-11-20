@@ -39,7 +39,7 @@ const COMPILER_SELECTORS: &[(&str, &str)] = &[
     ("CARGO_BUILD_RUSTC_WRAPPER", ""),
     ("CARGO_BUILD_RUSTC_WORKSPACE_WRAPPER", ""),
 ];
-const TOKEN_GIT_PROTOCOLS: &str = "https:http:file";
+const TOKEN_GIT_PROTOCOLS: &str = "https";
 const SERVER_VARIABLE: &str = "VELNOR_SERVER_URL";
 const DEFAULT_SERVER: &str = "https://github.com";
 pub(super) const REVOKE_PATH: &str = "/installation/token";
@@ -129,7 +129,7 @@ fn fetch_with(args: &FetchArgs, token: Option<&str>) -> Result<(), CiError> {
         let resolved =
             super::fetch_toolchain::resolve(&cargo, &home, &rustup_home, neutral, &trusted)?;
         cargo = resolved.cargo;
-        toolchain = resolved.toolchain;
+        toolchain = Some(resolved.toolchain);
     }
     let mut environment = trusted.environment(&home, &cargo, &git, &inherited, token, &server)?;
     environment.extend(toolchain.map(|name| ("RUSTUP_TOOLCHAIN".into(), name)));

@@ -15,7 +15,7 @@ const TOOLCHAIN_VARIABLE: &str = "RUSTUP_TOOLCHAIN";
 
 pub(super) struct Resolved {
     pub(super) cargo: PathBuf,
-    pub(super) toolchain: Option<OsString>,
+    pub(super) toolchain: OsString,
 }
 
 pub(super) fn resolve(
@@ -30,7 +30,9 @@ pub(super) fn resolve(
     let Some(rustup) = beside(cargo, &resolved, trusted) else {
         return Ok(Resolved {
             cargo: cargo.to_path_buf(),
-            toolchain: chosen().or_else(|| default_toolchain(rustup_home)),
+            toolchain: chosen()
+                .or_else(|| default_toolchain(rustup_home))
+                .unwrap_or_else(unpinned),
         });
     };
     let rustup_home = std::fs::canonicalize(rustup_home).map_err(|e| {
@@ -88,7 +90,7 @@ pub(super) fn resolve(
         })?;
     Ok(Resolved {
         cargo: real,
-        toolchain: Some(name.into()),
+        toolchain: name.into(),
     })
 }
 
@@ -127,6 +129,13 @@ fn same_program(first: &Path, second: &Path) -> bool {
             (Ok(one), Ok(other)) => one == other,
             _ => true,
         }
+}
+
+fn unpinned() -> OsString {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |elapsed| elapsed.as_nanos());
+    format!("velnor-no-toolchain-{}-{nanos}", std::process::id()).into()
 }
 
 fn chosen() -> Option<OsString> {
