@@ -15,6 +15,9 @@ from hosted_phase_measurement import mbx_summary as M
 LABELLED = "mbx[cache]: object cache: 594 hits, 11 misses; 0 B downloaded, 0 B uploaded, 5.8 MiB stored locally"
 UNLABELLED = "mbx[cache]: 1 hits, 0 misses; 0 B downloaded, 0 B uploaded, 0 B stored locally"
 PINNED_INCREMENTAL = "mbx[cache]: 0 hits, 4 misses, 13 not looked up, 15 incremental; 0 B downloaded, 0 B uploaded, 16.5 KiB stored locally"
+UNKNOWN_COUNTER = "mbx[cache]: 3 frobs, 1 misses; 0 B downloaded, 0 B uploaded, 0 B stored locally"
+LABELLESS_INCREMENTAL_NO_HITS = "mbx[cache]: 0 misses, 15 incremental; 0 B downloaded, 0 B uploaded, 0 B stored locally"
+SINGULAR_HIT = "mbx[cache]: 1 hit, 0 misses; 0 B downloaded, 0 B uploaded, 0 B stored locally"
 
 
 class ParseMbxSummaryTests(unittest.TestCase):
@@ -41,6 +44,21 @@ class ParseMbxSummaryTests(unittest.TestCase):
         self.assertEqual(row["remote_downloaded_bytes"], 0)
         self.assertEqual(row["remote_uploaded_bytes"], 0)
         self.assertAlmostEqual(row["local_store_mib"], 16.5 / 1024)
+
+    def test_label_less_summary_with_unknown_counter_word_raises_naming_the_line(self):
+        with self.assertRaises(ValueError) as raised:
+            M.parse_mbx_summary(UNKNOWN_COUNTER)
+        self.assertIn("frobs", str(raised.exception))
+        self.assertIn(UNKNOWN_COUNTER, str(raised.exception))
+
+    def test_label_less_summary_without_hits_keeps_only_printed_counters(self):
+        row = M.parse_mbx_summary(LABELLESS_INCREMENTAL_NO_HITS)
+        self.assertEqual(row["counts"], {"misses": 0, "incremental": 15})
+        self.assertNotIn("hits", row["counts"])
+
+    def test_label_less_summary_with_singular_hit_parses(self):
+        row = M.parse_mbx_summary(SINGULAR_HIT)
+        self.assertEqual(row["counts"], {"hits": 1, "misses": 0})
 
     def test_non_summary_mbx_lines_are_ignored(self):
         self.assertIsNone(M.parse_mbx_summary("mbx[cache]: 28.53s session"))
