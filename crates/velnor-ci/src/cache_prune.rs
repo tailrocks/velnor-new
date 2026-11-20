@@ -13,6 +13,13 @@ use crate::telemetry::Invocation;
 
 const HASH_LENGTH: usize = 16;
 
+/// Whether `text` is a unit hash on its own: the name of a unit directory in the layout of
+/// Cargo 1.100, `build/<package>/<hash>`.
+#[must_use]
+pub fn is_hash(text: &str) -> bool {
+    text.len() == HASH_LENGTH && text.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
+}
+
 /// The hash cargo puts after a `-` in the name of a unit's file or directory, such as
 /// `libserde-0123456789abcdef.rlib`, `build/serde-0123456789abcdef` or
 /// `serde-0123456789abcdef.serde.0123456789abcdef-cgu.0.rcgu.o`: the first 16 lower-case
@@ -20,6 +27,9 @@ const HASH_LENGTH: usize = 16;
 #[must_use]
 pub fn unit_hash(name: &str) -> Option<&str> {
     let file = Path::new(name).file_name()?.to_str()?;
+    if is_hash(file) {
+        return Some(file);
+    }
     file.match_indices('-').find_map(|(dash, _)| {
         let rest = &file[dash + 1..];
         let hash = rest.get(..HASH_LENGTH)?;
@@ -31,9 +41,13 @@ pub fn unit_hash(name: &str) -> Option<&str> {
 }
 
 /// The unit an artifact file belongs to: the hash in its own name, or else in the name of the
-/// directory holding it, which is where cargo puts a build script's `build-script-build`.
+/// directory holding it, which is where cargo puts a build script's `build-script-build`, or in
+/// the name of the unit directory above `out` (Cargo 1.100).
 fn artifact_hash(file: &str) -> Option<&str> {
-    unit_hash(file).or_else(|| unit_hash(Path::new(file).parent()?.to_str()?))
+    let parent = Path::new(file).parent()?;
+    unit_hash(file)
+        .or_else(|| unit_hash(parent.to_str()?))
+        .or_else(|| unit_hash(parent.parent()?.to_str()?).filter(|_| parent.ends_with("out")))
 }
 
 /// Whether `entry` of `deps` is an executable (a test, bench or binary) rather than a library.

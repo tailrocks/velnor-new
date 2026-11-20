@@ -250,6 +250,7 @@ fn a_save_step_renders_the_same_key_without_fallbacks() -> TestResult {
                 when: When::Success,
                 skip_after_merge_group: None,
                 skip_when_cold: false,
+                hosted_only: false,
                 pr: PrRun::Always,
                 gate: None,
                 reads: None,

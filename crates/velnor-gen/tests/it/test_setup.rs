@@ -132,3 +132,40 @@ fn a_failure_report_still_runs_when_test_setup_fails() -> TestResult {
     );
     Ok(())
 }
+
+#[test]
+fn a_failed_build_phase_setup_stops_every_cargo_step_after_it() -> TestResult {
+    let config = FIXTURE.replace("run = 'bash", "phase = 'build'\nrun = 'bash");
+    let jobs = jobs_of(&config)?;
+    let found = setups(&jobs);
+    let (id, index, _, setup) = &found[0];
+    let setup_id = setup["id"]
+        .as_str()
+        .ok_or_else(|| format!("the setup step has no id: {setup}"))?;
+    let steps = jobs[id.as_str()]["steps"]
+        .as_array()
+        .ok_or("the job has no steps")?;
+    let waits = format!("steps.{setup_id}.outcome == 'success'");
+    let after: Vec<_> = steps
+        .iter()
+        .skip(index + 1)
+        .filter(|step| {
+            step["run"]
+                .as_str()
+                .is_some_and(|run| run.contains("cargo"))
+        })
+        .collect();
+    assert!(
+        !after.is_empty(),
+        "no cargo step follows the build-phase setup"
+    );
+    for step in after {
+        assert!(
+            step["if"]
+                .as_str()
+                .is_some_and(|text| text.contains(&waits)),
+            "a cargo step runs after a failed build-phase setup: {step}"
+        );
+    }
+    Ok(())
+}

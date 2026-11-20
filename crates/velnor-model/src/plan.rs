@@ -8,7 +8,7 @@ use crate::cron::CronExpr;
 use crate::hosted::HostedRunners;
 use crate::ids::{JobId, PackageName, RepoPath, RootSlug, RunnerLabel, TargetName};
 use crate::repo::{LaneFeatures, TargetKind};
-use crate::steps::StepKind;
+use crate::steps::{StepKind, VerifiedSave};
 use crate::test_group::NoTests;
 
 pub const LINT_STEP: &str = "Lint";
@@ -123,6 +123,8 @@ pub struct Step {
     pub pr: PrRun,
     pub gate: Option<Gate>,
     pub reads: Option<PlanRef>,
+    /// Skipped on a self-hosted runner, so that the step runs only on a GitHub-hosted one.
+    pub hosted_only: bool,
     /// Set on the `[[test_setup]]` steps and on the steps after them: they run only when
     /// the setup step before them succeeded.
     pub after_setup: bool,
@@ -271,6 +273,9 @@ pub enum When {
     /// On a trusted saving run, when the node store already served the tools: looks the network entry up.
     LookupToolsOnNodeHit,
     PrimeToolsFromNetwork,
+    /// A tools save of a job whose restore is verified: it also waits for the tools to equal
+    /// the anchor that the trusted run recorded.
+    SaveVerifiedTools(VerifiedSave),
     SaveBase,
     SaveBaseDecided,
     SaveSources,

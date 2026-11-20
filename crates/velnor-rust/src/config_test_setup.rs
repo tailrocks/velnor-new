@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use serde::Deserialize;
-use velnor_model::{RepoPath, RustCiConfig, RustRoot, TestSetup};
+use velnor_model::{RepoPath, RustCiConfig, RustRoot, SetupPhase, TestSetup};
 
 use crate::config::CONFIG_PATH;
 use crate::error::{DetectError, Reason};
@@ -13,6 +13,7 @@ pub(crate) struct RawTestSetup {
     root: String,
     name: String,
     run: String,
+    phase: Option<String>,
 }
 
 pub(crate) fn parse(raw: Vec<RawTestSetup>) -> Result<Vec<TestSetup>, Reason> {
@@ -44,10 +45,23 @@ fn setup(raw: RawTestSetup) -> Result<TestSetup, Reason> {
             }
         })?),
     };
+    let phase = raw
+        .phase
+        .as_deref()
+        .map(|phase| match phase {
+            "test" => Ok(SetupPhase::Test),
+            "build" => Ok(SetupPhase::Build),
+            other => Err(Reason::InvalidValue {
+                key: "test_setup.phase",
+                value: other.to_owned(),
+            }),
+        })
+        .transpose()?;
     Ok(TestSetup {
         root,
         name: raw.name,
         run: raw.run,
+        phase,
     })
 }
 

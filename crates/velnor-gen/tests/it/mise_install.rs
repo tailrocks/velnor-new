@@ -11,7 +11,10 @@ fn locked_mise_view(mise: &str) -> Result<RepoView, Box<dyn std::error::Error>> 
         vec![("Cargo.toml", vec![lib("app", "Cargo.toml")?])],
         &[
             ("mise.toml", mise),
-            ("mise.lock", "[[tools.rust]]\nversion = \"1.99.1\"\n"),
+            (
+                "mise.lock",
+                "[[tools.rust]]\nversion = \"1.99.1\"\n[[tools.mr-boxington]]\nversion = \"1.30.0\"\nspecifiers = [\"v1.30.0\"]\n[tools.mr-boxington.\"platforms.linux-x64\"]\nurl = \"https://fixtures.invalid/mbx\"\n[tools.mr-boxington.\"platforms.linux-arm64\"]\nurl = \"https://fixtures.invalid/mbx\"\n[tools.mr-boxington.\"platforms.macos-arm64\"]\nurl = \"https://fixtures.invalid/mbx\"\n[tools.mr-boxington.\"platforms.macos-x64\"]\nurl = \"https://fixtures.invalid/mbx\"\n",
+            ),
         ],
     )
 }
@@ -26,7 +29,7 @@ fn plan_rejects_a_tool_template_even_when_it_renders_the_locked_version() -> Tes
 #[test]
 fn plan_rejects_a_plugin_that_can_replace_the_locked_tool() -> TestResult {
     let view = locked_mise_view(
-        "[tools]\nrust = \"1.99.1\"\n[plugins]\nrust = \"https://github.com/attacker/mise-rust\"\n",
+        "[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n\n[tools]\nrust = { version = \"1.99.1\", mr_boxington = true }\nmr-boxington = \"v1.30.0\"\n[plugins]\nrust = \"https://github.com/attacker/mise-rust\"\n",
     )?;
     assert!(detect(&view).is_err());
     Ok(())
@@ -35,7 +38,7 @@ fn plan_rejects_a_plugin_that_can_replace_the_locked_tool() -> TestResult {
 #[test]
 fn plan_rejects_a_variable_template_that_executes_before_installation() -> TestResult {
     let view = locked_mise_view(
-        "[tools]\nrust = \"1.99.1\"\n[vars]\npayload = \"{{ exec(command='true') }}\"\n",
+        "[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n\n[tools]\nrust = { version = \"1.99.1\", mr_boxington = true }\nmr-boxington = \"v1.30.0\"\n[vars]\npayload = \"{{ exec(command='true') }}\"\n",
     )?;
     assert!(detect(&view).is_err());
     Ok(())
@@ -43,8 +46,9 @@ fn plan_rejects_a_variable_template_that_executes_before_installation() -> TestR
 
 #[test]
 fn plan_rejects_a_variable_source_directive_that_executes_during_install() -> TestResult {
-    let view =
-        locked_mise_view("[tools]\nrust = \"1.99.1\"\n[vars]\n_.source = \"scripts/ci-env.sh\"\n")?;
+    let view = locked_mise_view(
+        "[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n\n[tools]\nrust = { version = \"1.99.1\", mr_boxington = true }\nmr-boxington = \"v1.30.0\"\n[vars]\n_.source = \"scripts/ci-env.sh\"\n",
+    )?;
     assert!(detect(&view).is_err());
     Ok(())
 }
@@ -52,7 +56,7 @@ fn plan_rejects_a_variable_source_directive_that_executes_during_install() -> Te
 #[test]
 fn plan_accepts_a_task_template_because_mise_renders_it_when_the_task_runs() -> TestResult {
     let facts = detect(&locked_mise_view(
-        "[tools]\nrust = \"1.99.1\"\n[vars]\nmode = \"release\"\n[tasks.test]\nrun = \"echo {{ vars.mode }}\"\n",
+        "[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n\n[tools]\nrust = { version = \"1.99.1\", mr_boxington = true }\nmr-boxington = \"v1.30.0\"\n[vars]\nmode = \"release\"\n[tasks.test]\nrun = \"echo {{ vars.mode }}\"\n",
     )?)?;
     assert_eq!(
         facts.tools.tools["rust"]
@@ -69,7 +73,7 @@ fn plan_accepts_a_task_template_because_mise_renders_it_when_the_task_runs() -> 
 fn plan_accepts_a_task_template_definition_because_mise_renders_it_when_a_task_extends_it()
 -> TestResult {
     let facts = detect(&locked_mise_view(
-        "[tools]\nrust = \"1.99.1\"\n[task_templates.\"python:build\"]\nrun = \"uv build --out-dir {{ config_root }}/dist\"\n",
+        "[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n\n[tools]\nrust = { version = \"1.99.1\", mr_boxington = true }\nmr-boxington = \"v1.30.0\"\n[task_templates.\"python:build\"]\nrun = \"uv build --out-dir {{ config_root }}/dist\"\n",
     )?)?;
     assert_eq!(
         facts.tools.tools["rust"]
@@ -84,7 +88,9 @@ fn plan_accepts_a_task_template_definition_because_mise_renders_it_when_a_task_e
 
 #[test]
 fn plan_accepts_a_plain_tool_version_with_its_matching_lock() -> TestResult {
-    let facts = detect(&locked_mise_view("[tools]\nrust = \"1.99.1\"\n")?)?;
+    let facts = detect(&locked_mise_view(
+        "[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n\n[tools]\nrust = { version = \"1.99.1\", mr_boxington = true }\nmr-boxington = \"v1.30.0\"\n",
+    )?)?;
     assert_eq!(
         facts.tools.tools["rust"]
             .requested
