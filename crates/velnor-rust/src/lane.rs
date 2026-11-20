@@ -72,6 +72,7 @@ impl Lane {
             packages: Vec::new(),
             unselected: false,
             group: None,
+            also: Vec::new(),
         }
     }
 

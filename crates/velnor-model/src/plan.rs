@@ -160,6 +160,9 @@ pub struct Gate {
     /// of `packages`, so a notice can say why the guarded step was skipped.
     pub unselected: bool,
     pub group: Option<JobId>,
+    /// Further roots of a `Selected` gate: it passes when the plan selects
+    /// this root or any of them.
+    pub also: Vec<RootSlug>,
 }
 
 impl Gate {
@@ -167,6 +170,10 @@ impl Gate {
     pub fn outputs(&self) -> Vec<(RootSlug, GateNeed)> {
         let own = |need| (self.slug.clone(), need);
         match self.need {
+            GateNeed::Selected if !self.also.is_empty() => self
+                .roots()
+                .map(|slug| (slug.clone(), GateNeed::Selected))
+                .collect(),
             GateNeed::Selected | GateNeed::Group => vec![own(GateNeed::Selected)],
             GateNeed::Doctests | GateNeed::Docs => vec![
                 own(GateNeed::Selected),
@@ -186,6 +193,12 @@ impl Gate {
                 vec![own(self.need)]
             }
         }
+    }
+}
+
+impl Gate {
+    pub fn roots(&self) -> impl Iterator<Item = &RootSlug> {
+        std::iter::once(&self.slug).chain(&self.also)
     }
 }
 

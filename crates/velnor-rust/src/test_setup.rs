@@ -5,7 +5,7 @@ use velnor_model::{CargoCommand, RepoFacts, RepoPath, RustRoot, Step, StepKind, 
 
 use crate::lane::Lane;
 use crate::plan::step;
-use crate::private_fetch::shared_gate;
+use crate::private_fetch::{any_gate, shared_gate};
 
 pub(crate) fn inserted(
     facts: &RepoFacts,
@@ -39,8 +39,7 @@ pub(crate) fn before_builds(facts: &RepoFacts, root: &RustRoot, mut steps: Vec<S
     }) {
         match steps.iter().position(|step| same_setup(step, &candidate)) {
             Some(index) => {
-                let merged = shared_gate([&steps[index], &candidate].into_iter());
-                steps[index].gate = merged;
+                steps[index].gate = any_gate(steps[index].gate.as_ref(), candidate.gate.as_ref());
             }
             None => setup.push(candidate),
         }

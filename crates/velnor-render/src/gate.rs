@@ -327,6 +327,14 @@ pub(crate) fn gate_parts(gate: &Gate, replanned: bool) -> Vec<String> {
     let read = |need| read_key(output(&gate.slug, need));
     let runs = |need| format!("{} == 'run'", read(need));
     match gate.need {
+        GateNeed::Selected if !gate.also.is_empty() => {
+            let any = gate
+                .roots()
+                .map(|slug| format!("{} != 'none'", read_key(output(slug, GateNeed::Selected))))
+                .collect::<Vec<_>>()
+                .join(" || ");
+            parts.push(format!("({any})"));
+        }
         GateNeed::Selected | GateNeed::Doctests | GateNeed::Docs => {
             parts.push(format!("{} != 'none'", read(GateNeed::Selected)));
             match gate.need {
