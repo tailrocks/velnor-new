@@ -56,16 +56,15 @@ pub(super) fn forward() -> Result<ExitStatus, CiError> {
     } else {
         None
     };
-    // Native-ready means mise's cargo wrapper is active in this environment but the launch
-    // phase is missing, so this first `cargo` skipped mise's MBX wrapper. Refuse it when MBX is
-    // declared, as the Outer phase does; `find_cargo` never returns mise's wrapper here.
     if matches!(phase, LaunchPhase::ReadyNative) && mbx::required() {
         return Err(mbx::refused(&find_cargo(&paths, &wrapper, &phase)?));
     }
-    if matches!(phase, LaunchPhase::Activated)
-        && let Some(status) = mise::after_activation(&wrapper, &args)?
-    {
-        return Ok(status);
+    if matches!(phase, LaunchPhase::Activated) {
+        match mise::after_activation(&wrapper, &args)? {
+            Some(status) => return Ok(status),
+            None if mbx::required() => return Err(mbx::wrapper_missing()),
+            None => {}
+        }
     }
     let mut args = args.into_iter().peekable();
     let selected = if args

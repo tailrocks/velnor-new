@@ -20,7 +20,7 @@ fn run_with_step_env(
     step_env: &[(&str, &str)],
 ) -> Result<std::process::Output, Box<dyn std::error::Error>> {
     let plain = plain_cargo(repo)?;
-    let mut command = wrapper_command(repo.root(), &plain, mbx_required, false)?;
+    let mut command = wrapper_command(repo.root(), &plain, mbx_required, &[])?;
     command.envs(step_env.iter().copied());
     Ok(command.output()?)
 }

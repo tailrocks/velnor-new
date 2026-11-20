@@ -10,6 +10,7 @@ use std::time::{Duration, Instant};
 use crate::error::CiError;
 use crate::mbx_seed_copy::{Copied, SUBSETS, copy_subset};
 use crate::mbx_store::{trusted_event, writable_by_job};
+use crate::waste_evidence::SEED_TRUNCATED;
 
 pub const SEED_DIR_ENV: &str = "VELNOR_MBX_SEED_DIR";
 pub const PRIVATE_STORE: &str = "velnor/mbx";
@@ -181,6 +182,18 @@ fn seeded_message(store: &Path, copied: &Copied, elapsed: Duration) -> String {
     )
 }
 
+pub fn record_truncation(runner_temp: &Path, outcome: &Outcome) -> Result<(), CiError> {
+    let Outcome::Seeded { copied, .. } = outcome else {
+        return Ok(());
+    };
+    if !copied.expired {
+        return Ok(());
+    }
+    let marker = runner_temp.join(SEED_TRUNCATED);
+    fs::write(&marker, b"")
+        .map_err(|error| CiError::new(format!("cannot write {}: {error}", marker.display())))
+}
+
 pub fn setup() -> Result<String, CiError> {
     let var = |name: &str| std::env::var(name).ok();
     let runner_temp =
@@ -200,6 +213,7 @@ pub fn setup() -> Result<String, CiError> {
         threads: std::thread::available_parallelism().map_or(4, |n| n.get().min(16)),
         budget: SEED_BUDGET,
     });
+    record_truncation(&runner_temp, &outcome)?;
     let lines = env_lines(&outcome);
     if !lines.is_empty() {
         let file = var("GITHUB_ENV").ok_or_else(|| CiError::new("set GITHUB_ENV"))?;

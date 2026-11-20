@@ -68,7 +68,7 @@ fn mirror_setup_refuses_unowned_job_configuration() -> TestResult {
 }
 
 #[test]
-fn mirror_off_skips_the_ca_and_writes_nothing() -> TestResult {
+fn mirror_off_skips_the_ca_and_writes_no_config() -> TestResult {
     let repo = Repo::empty("crates-mirror-off");
     let output = setup_command(repo.root(), REGISTRY)
         .env("VELNOR_CRATES_MIRROR", "off")
@@ -77,7 +77,8 @@ fn mirror_off_skips_the_ca_and_writes_nothing() -> TestResult {
     assert!(
         String::from_utf8_lossy(&output.stdout).contains("disabled by VELNOR_CRATES_MIRROR=off")
     );
-    assert_nothing_configured(repo.root());
+    assert!(!repo.root().join("velnor-cargo").exists());
+    assert_only_cleared(repo.root())?;
     Ok(())
 }
 
@@ -94,8 +95,7 @@ fn mirror_off_leaves_an_existing_job_configuration_alone() -> TestResult {
         EXISTING
     );
     assert!(!repo.root().join("velnor-cargo/cargo").exists());
-    assert!(!repo.root().join("env").exists());
-    assert!(!repo.root().join("path").exists());
+    assert_only_cleared(repo.root())?;
     Ok(())
 }
 
@@ -130,6 +130,15 @@ fn mirror_rejects_any_value_but_off() -> TestResult {
         );
         assert_nothing_configured(repo.root());
     }
+    Ok(())
+}
+
+fn assert_only_cleared(root: &Path) -> TestResult {
+    assert_eq!(
+        fs::read_to_string(root.join("env"))?,
+        "VELNOR_CARGO_CONFIG=\nVELNOR_CARGO_MBX=\n"
+    );
+    assert!(!root.join("path").exists());
     Ok(())
 }
 
