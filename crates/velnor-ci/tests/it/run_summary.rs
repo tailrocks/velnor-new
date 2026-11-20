@@ -13,7 +13,7 @@ const RATIO: &str = "echo '     Summary [   0.077s] 63/109 tests run: 62 passed,
 const NEXTEST: [&str; 3] = ["cargo-nextest", "nextest", "run"];
 
 fn scratch(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("velnor-ci-sum-{}-{name}", std::process::id()));
+    let dir = crate::scratch_path("velnor-ci-sum", name);
     fs::remove_dir_all(&dir).ok();
     fs::create_dir_all(&dir).unwrap_or_else(|e| unreachable!("{e}"));
     dir

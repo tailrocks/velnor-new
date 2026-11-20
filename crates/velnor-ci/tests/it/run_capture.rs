@@ -15,8 +15,7 @@ fn completed_observations_survive_a_descendant_holding_the_stream_open() {
         ("empty", false, true),
         ("eof", true, false),
     ] {
-        let temp =
-            std::env::temp_dir().join(format!("velnor-capture-{}-{name}", std::process::id()));
+        let temp = crate::scratch_path("velnor-capture", name);
         let program = fixture(&temp, active, held).expect("fixture");
         let started = Instant::now();
         let mut child = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
@@ -170,8 +169,7 @@ fn recorded_target_directory_uses_only_explicit_cargo_settings() {
             None,
         ),
     ] {
-        let temp =
-            std::env::temp_dir().join(format!("velnor-directory-{}-{name}", std::process::id()));
+        let temp = crate::scratch_path("velnor-directory", name);
         let program = fixture(&temp, true, false).expect("fixture");
         let temp = temp.canonicalize().expect("canonical root");
         fs::write(&program, "#!/bin/sh\ncat events\n").expect("program");

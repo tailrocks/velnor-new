@@ -27,10 +27,7 @@ impl Drop for GroupGuard {
 }
 
 fn grandchild_is_stopped_by(signal: &str) {
-    let temp = std::env::temp_dir().join(format!(
-        "velnor-ci-run-group-{}-{signal}",
-        std::process::id()
-    ));
+    let temp = crate::scratch_path("velnor-ci-run-group", signal);
     std::fs::create_dir_all(&temp).unwrap_or_else(|e| unreachable!("{e}"));
     let mut child = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
         .args(["run", "--", "sh", "-c", SPAWN_GRANDCHILD])

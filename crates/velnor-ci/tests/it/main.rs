@@ -180,3 +180,11 @@ mod trusted_roots;
 mod unowned;
 mod version;
 mod write_request;
+
+pub(crate) fn scratch_path(prefix: &str, name: &str) -> std::path::PathBuf {
+    let owner = std::thread::current()
+        .name()
+        .unwrap_or("main")
+        .replace("::", "-");
+    std::env::temp_dir().join(format!("{prefix}-{}-{owner}-{name}", std::process::id()))
+}

@@ -145,7 +145,7 @@ fn recording(
     code: u8,
     args: &[&str],
 ) -> Result<(ExitStatus, Value), Box<dyn std::error::Error>> {
-    let temp = std::env::temp_dir().join(format!("velnor-archives-{}-{name}", std::process::id()));
+    let temp = crate::scratch_path("velnor-archives", name);
     let fixture = crate::run_capture::fixture(&temp, true, false)?;
     let program = if args.is_empty() {
         fixture.clone()

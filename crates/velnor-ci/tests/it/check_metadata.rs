@@ -6,8 +6,7 @@ use std::path::PathBuf;
 use std::process::{Command, Output};
 
 fn checkout(name: &str) -> PathBuf {
-    let dir =
-        std::env::temp_dir().join(format!("velnor-ci-metadata-{}-{name}", std::process::id()));
+    let dir = crate::scratch_path("velnor-ci-metadata", name);
     if dir.exists() {
         fs::remove_dir_all(&dir).unwrap_or_else(|e| unreachable!("{e}"));
     }

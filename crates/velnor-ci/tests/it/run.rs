@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 pub(crate) fn scratch(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("velnor-ci-run-{}-{name}", std::process::id()));
+    let dir = crate::scratch_path("velnor-ci-run", name);
     if dir.exists() {
         fs::remove_dir_all(&dir).unwrap_or_else(|e| unreachable!("{e}"));
     }

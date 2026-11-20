@@ -1,18 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fs;
-use std::path::PathBuf;
 use std::process::Command;
 
-fn scratch(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("velnor-ci-run-{}-{name}", std::process::id()));
-    if dir.exists() {
-        fs::remove_dir_all(&dir).unwrap_or_else(|e| unreachable!("{e}"));
-    }
-    fs::create_dir_all(&dir).unwrap_or_else(|e| unreachable!("{e}"));
-    dir
-}
+use crate::run::scratch;
 
 struct Flaky {
     chunks: Vec<std::io::Result<Vec<u8>>>,
