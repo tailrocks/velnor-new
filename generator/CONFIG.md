@@ -237,6 +237,21 @@ phase = "build"
 - Placement never puts repository code ahead of a token or verdict step that was not already behind repository code: the step sits directly before the first cargo step, which is repository code already, and the `[private_sources]` token phase goes in front of it. The step does not see the token (see Optional private dependencies).
 - The key needs `velnor-ci` 0.1.109 or later, because `velnor-ci` reads the same file. Generation refuses an older pin when any step writes the key, `"test"` too. A step without the key renders as before.
 
+## Checking feature configurations
+
+`[[check_configurations]]` runs `velnor-ci check-configurations` for one root: a `cargo check` of each named feature configuration, where configurations that resolve to the same features share one check.
+
+```toml
+[[check_configurations]]
+root = "."
+configurations = "ci/configurations.json"
+```
+
+- `root` is the folder of the Cargo root's `Cargo.toml`, or `.` for the repository root, and it must name a root of this repository. The step runs in that folder, so cargo reads that root's `Cargo.toml` and `.cargo/config.toml`. The key is required.
+- `configurations` is optional: a JSON file, relative to `root`, with an array of `{ "name": ..., "features": [...], "no_default_features": false }` objects. Without it the step checks the default configuration. The file must be tracked in the repository, must not be a symbolic link or inside one, and no `non_inputs` rule may match it. A change to it selects every root, even when an `inputs` rule or a default ignore would say otherwise, so a new feature configuration always runs. The path may use ASCII letters, digits, `.`, `_`, `-` and `/` only, and may not leave the repository. The step passes it as `--configurations=<path>`.
+- The step is a `[[test_setup]]` step in most respects: it runs before the first test step of every job of that root, after any `[[test_setup]]` steps, as repository code (cargo runs build scripts), with the gate of the test steps, so a run that selects no tests skips it. A job that runs no tests has none, so a root with no test command gets no step. A root with `job = "parallel"` lanes runs the step in each of its test jobs. Write one entry per configurations file; entries of one root run in the order written. When a root's tests run from a nextest archive (test groups), the step runs once in the job that builds the archive, before the archive is built, not in the jobs that only run the archived tests, which have no Rust toolchain by default. The helper runs cargo with `--offline`, so the sources must already be in the cache.
+- The key needs `velnor-ci` 0.1.110 or later, because the pinned velnor-ci refuses a key it does not know. `velnor-gen generate` refuses an older pin when the key is written, and `velnor-gen pin-helper 0.1.110` fixes it.
+
 ## Per-root time limits
 
 `[root_timeouts]` gives one root's jobs their own time limit, so a heavy root can run longer without raising the limit of every job. Each key is the folder of a root's `Cargo.toml`, or `.` for the repository root, and each value is a time limit in minutes, 1 to 360, the same range as `timeout_minutes`. A key that names no root of the repository, a value out of range, or a second key for the same root (`crates/x` and `crates/x/`) is refused with its name.
@@ -516,9 +531,9 @@ timeout_minutes = 5
 
 | Key | Kinds | Meaning |
 |---|---|---|
-| `kind` | all | `jactionlint`, `alint` or `mise-task`. |
+| `kind` | all | `jactionlint`, `alint`, `mise-task` or `generated-check`. |
 | `id` | all | Job id suffix. Defaults to the kind, or to the task name for `mise-task`. Two entries cannot share it. |
-| `name` | all | Job name. Defaults to `Jactionlint`, `Alint` or `Mise task <task>`. |
+| `name` | all | Job name. Defaults to `Jactionlint`, `Alint`, `Mise task <task>` or `Generated workflows`. |
 | `timeout_minutes` | all | 1 to 360, default 10. |
 | `config` | `jactionlint`, `alint` | Configuration file. Required for `alint`. |
 | `probe` | `alint` | A script run with `bash` after alint, for rules alint cannot express. |
@@ -530,6 +545,16 @@ timeout_minutes = 5
 `alint` is the version pinned in `mise.toml` (for example `"github:asamarts/alint" = "0.22.1"`) with the archive digest of every platform in `mise.lock`, so the digest is the repository's own and no upstream installer runs. It runs `alint --format github --config <config> --fail-on-warning check .`, so a warning fails the job. The file named by `config` or `probe` is not checked at generation time; a missing file fails the job, and so the `Required` check.
 
 Every tool a lint entry needs is checked at generation. The tool must be pinned in `mise.toml` by its basename (`jactionlint`) or in full (`aqua:owner/tool/jactionlint`); a basename that matches two configured tools is refused until the entry names one in full. At least one of its requests must apply to the runner's operating system (the `os` key of the pin), and `mise.lock` must hold an entry that covers every version requested for that system. A `shellcheck` pin that is filtered out for the runner is treated as absent.
+
+### Generated workflows cannot be edited by hand
+
+The seal in a generated workflow is an unkeyed SHA-256, so anyone can recompute it after a hand edit. `[[lint]]` with `kind = "generated-check"` (no other key) adds the job `lint-generated-check`, which runs `velnor-gen check --verify-release` on the pull request's checkout (the release's checksums and commit are read from github.com without a token) and fails when any generated file differs from what `.velnor/*.toml` renders. It is off unless the entry exists, and it needs `.velnor/rust-ci.lock` to pin a release that ships `velnor-gen` archives.
+
+The job has `contents: read` and no secrets, and no selection applies to it: it runs on every pull request, merge group and push, in a draft too, and it never waits for the plan or skips after a queue run. `Required` lists it in `needs` and in its gate spec like any lint job.
+
+The `velnor-gen` that runs is never built from the pull request. The job downloads `velnor-gen-<target>.tar.gz` from the release the lock pins, compares its SHA-256 with the digest in the lock, and only then extracts it. A pull request can change the pin only to another release that was published by the project. The lock and the workflow are themselves compared by the check, so a pin that the workflow does not match is drift. Because the binary is a release, it knows only the keys and the rendering of that release: a change to the generator or to the config that a released `velnor-gen` cannot read or render the same way fails the job until a release that has it is pinned.
+
+The job does not protect the workflow that holds it: a pull request that deletes the job from the workflow and from `required.needs` removes the check, because a `pull_request` run uses the workflow of the pull request. Require the workflow from the base branch in a ruleset (`workflows` rule) to close that.
 
 ### One required check
 

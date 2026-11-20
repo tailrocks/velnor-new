@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    BUDGET_MODES_HELPER, DocsRun, HelperRelease, HelperVersion, Platform, PushAfterMergeGroup,
-    RepoFacts,
+    BUDGET_MODES_HELPER, DocsRun, HelperRelease, HelperVersion, LintKind, Platform,
+    PushAfterMergeGroup, RepoFacts,
 };
 
 use velnor_rust::INPUTS_IDENTITY_HELPER;
@@ -74,7 +74,23 @@ pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, Generate
             release.version().clone(),
         ));
     }
+    require_generator_digests(facts, release)?;
     Ok(release)
+}
+
+fn require_generator_digests(
+    facts: &RepoFacts,
+    release: &HelperRelease,
+) -> Result<(), GenerateError> {
+    let wanted = facts
+        .config
+        .lint
+        .iter()
+        .any(|lint| lint.kind == LintKind::GeneratedCheck);
+    if wanted && release.generator_digests().is_none() {
+        return Err(GenerateError::GeneratorNotLocked(release.version().clone()));
+    }
+    Ok(())
 }
 
 pub fn require_compatible(version: &HelperVersion) -> Result<(), GenerateError> {
