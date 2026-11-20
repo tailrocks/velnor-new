@@ -1,2 +1,0 @@
-runner = "ubuntu-26.04-scale-set"
-trusted_runner = "ubuntu-26.04-scale-set-trusted"

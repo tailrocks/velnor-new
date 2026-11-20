@@ -11,6 +11,7 @@ pub(crate) struct Event {
     pub(crate) name: &'static str,
     pub(crate) git_ref: &'static str,
     pub(crate) head_repository: Option<&'static str>,
+    pub(crate) default_branch: Option<&'static str>,
 }
 
 const fn event(name: &'static str, git_ref: &'static str) -> Event {
@@ -18,6 +19,16 @@ const fn event(name: &'static str, git_ref: &'static str) -> Event {
         name,
         git_ref,
         head_repository: None,
+        default_branch: Some(DEFAULT_BRANCH),
+    }
+}
+
+const fn bare(name: &'static str, git_ref: &'static str) -> Event {
+    Event {
+        name,
+        git_ref,
+        head_repository: None,
+        default_branch: None,
     }
 }
 
@@ -26,6 +37,7 @@ const fn pull(name: &'static str, git_ref: &'static str, head: &'static str) -> 
         name,
         git_ref,
         head_repository: Some(head),
+        default_branch: Some(DEFAULT_BRANCH),
     }
 }
 
@@ -39,6 +51,10 @@ pub(crate) fn events() -> Vec<(Event, &'static str)> {
         (event("push", "refs/heads/feature"), NORMAL),
         (event("push", "refs/tags/v1.0.0"), NORMAL),
         (event("schedule", "refs/heads/main"), TRUSTED),
+        (bare("schedule", "refs/heads/main"), NORMAL),
+        (bare("push", "refs/heads/main"), NORMAL),
+        (bare("workflow_dispatch", "refs/heads/main"), NORMAL),
+        (event("schedule", "refs/heads/feature"), NORMAL),
         (event("workflow_dispatch", "refs/heads/main"), TRUSTED),
         (event("workflow_dispatch", "refs/heads/feature"), NORMAL),
         (
@@ -80,10 +96,9 @@ pub(crate) fn runs_on(
             "github.event_name" => text(event.name),
             "github.ref" => text(event.git_ref),
             "github.repository" => text(REPOSITORY),
-            "github.event.repository.default_branch" if event.name != "schedule" => {
-                text(DEFAULT_BRANCH)
-            }
-            "github.event.repository.default_branch" => Ok(Value::Null),
+            "github.event.repository.default_branch" => Ok(event
+                .default_branch
+                .map_or(Value::Null, |branch| Value::Str(branch.to_owned()))),
             "github.event.pull_request.head.repo.full_name" => Ok(event
                 .head_repository
                 .map_or(Value::Null, |head| Value::Str(head.to_owned()))),

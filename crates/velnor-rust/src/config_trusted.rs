@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    CratesMirror, HostedRunners, MisePlatform, RunnerLabel, TrustedRunners, looks_github_hosted,
+    CratesMirror, HostedRunners, MisePlatform, RunnerLabel, TestGroup, TrustedRunners,
+    looks_github_hosted,
 };
 
 use crate::config_fork::expression_safe;
@@ -14,6 +15,7 @@ pub(crate) struct Fixed<'a> {
     fork_runner: &'a RunnerLabel,
     hosted_runners: &'a HostedRunners,
     mirror_runner: Option<&'a RunnerLabel>,
+    groups: &'a [TestGroup],
 }
 
 pub(crate) fn mirror_key(mirror: Option<&RawCratesMirror>) -> Option<String> {
@@ -46,6 +48,12 @@ fn label(
     ]
     .into_iter()
     .flatten()
+    .chain(
+        fixed
+            .groups
+            .iter()
+            .filter_map(|group| group.runner.as_ref()),
+    )
     .all(|other| !same(&trusted, other));
     let acceptable = expression_safe(&trusted)
         && !looks_github_hosted(trusted.as_str())
@@ -63,6 +71,7 @@ pub(crate) fn resolve(
     keys: (Option<String>, Option<String>),
     runners: (&RunnerLabel, &RunnerLabel, &HostedRunners),
     mirror: Option<&CratesMirror>,
+    groups: &[TestGroup],
 ) -> Result<TrustedRunners, Reason> {
     let (trusted_runner, mirror_trusted_runner) = keys;
     let (runner, fork_runner, hosted_runners) = runners;
@@ -71,6 +80,7 @@ pub(crate) fn resolve(
         fork_runner,
         hosted_runners,
         mirror_runner: mirror.map(|mirror| &mirror.runner),
+        groups,
     };
     let top = trusted_runner
         .as_deref()

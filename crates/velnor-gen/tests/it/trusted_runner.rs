@@ -107,12 +107,13 @@ fn the_expression_lets_no_pull_request_input_choose_the_trusted_label() -> TestR
 #[test]
 fn the_key_needs_a_helper_that_reads_it() -> TestResult {
     let config = format!("runner = '{SCALE_SET}'\ntrusted_runner = '{POOL}'\n");
-    for old in ["0.1.106", "0.1.107"] {
+    for old in ["0.1.107", "0.1.108"] {
         match workflow(&repo(&config, old)?) {
             Err(error) => assert!(
                 matches!(
                     error.downcast_ref::<GenerateError>(),
-                    Some(GenerateError::TrustedRunnerHelperTooOld(_))
+                    Some(GenerateError::ConfigKeyHelperTooOld { key, first: (0, 1, 109), .. })
+                        if *key == "trusted_runner"
                 ),
                 "{old}: {error}"
             ),

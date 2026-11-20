@@ -3,7 +3,7 @@
 
 use crate::ids::RunnerLabel;
 
-pub const TRUSTED_EVENT: &str = "(github.event_name == 'schedule' || ((github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)))";
+pub const TRUSTED_EVENT: &str = "((github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && github.ref == format('refs/heads/{0}', github.event.repository.default_branch))";
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct TrustedRunners {

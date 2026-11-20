@@ -10,6 +10,7 @@ use crate::raw::RawWorkflow;
 
 const REF_INPUTS: [&str; 3] = ["ref", "sha", "repository"];
 const CHECKOUT_KEYS: [&str; 2] = ["ref", "repository"];
+const SERVER_KEY: &str = "github-server-url";
 
 fn reads_input(value: &str) -> bool {
     value.contains("inputs.") || value.contains("github.event.inputs")
@@ -17,6 +18,31 @@ fn reads_input(value: &str) -> bool {
 
 fn reads_step_or_job(value: &str) -> bool {
     value.contains("steps.") || value.contains("needs.")
+}
+
+fn reads_matrix(value: &str) -> bool {
+    value.contains("matrix.")
+}
+
+fn names(label: &str, value: &str) -> bool {
+    value.eq_ignore_ascii_case(label)
+}
+
+fn names_label(raw: &RawWorkflow, label: &str) -> bool {
+    raw.job.iter().any(|job| {
+        job.runner
+            .as_deref()
+            .is_some_and(|runner| names(label, runner))
+            || job.runner_labels.keys().any(|key| names(label, key))
+            || job.matrix.as_ref().is_some_and(|matrix| {
+                matrix
+                    .axes
+                    .iter()
+                    .flat_map(|axes| axes.values().flatten())
+                    .chain(matrix.include.iter().flat_map(|entry| entry.values()))
+                    .any(|value| names(label, value))
+            })
+    })
 }
 
 fn lock_platform(label: &str) -> Option<String> {
@@ -74,16 +100,41 @@ pub(crate) fn pool(
             input.name
         ));
     }
-    let steps = raw
+    if names_label(raw, &label) {
+        return refuse(format!(
+            "the workflow {file} sets trusted_runner {label}, but a job or matrix entry names that label itself"
+        ));
+    }
+    let steps: Vec<&crate::raw::RawStep> = raw
         .job
         .iter()
         .flat_map(|job| &job.step)
-        .chain(raw.case.iter().flat_map(|case| &case.step));
+        .chain(raw.case.iter().flat_map(|case| &case.step))
+        .collect();
+    if steps
+        .iter()
+        .flat_map(|step| step.with.keys())
+        .any(|key| key.eq_ignore_ascii_case(SERVER_KEY))
+    {
+        return refuse(format!(
+            "the workflow {file} sets trusted_runner, but a step sets {SERVER_KEY}, which chooses the server the job checks out from"
+        ));
+    }
     let checkout: Vec<&String> = steps
+        .iter()
         .flat_map(|step| &step.with)
-        .filter(|(key, _)| CHECKOUT_KEYS.contains(&key.as_str()))
+        .filter(|(key, _)| {
+            CHECKOUT_KEYS
+                .iter()
+                .any(|name| key.eq_ignore_ascii_case(name))
+        })
         .map(|(_, value)| value)
         .collect();
+    if checkout.iter().any(|value| reads_matrix(value)) {
+        return refuse(format!(
+            "the workflow {file} sets trusted_runner, but a step reads the ref or repository to check out from the matrix"
+        ));
+    }
     if checkout.iter().any(|value| reads_input(value)) {
         return refuse(format!(
             "the workflow {file} sets trusted_runner, but a step reads the ref or repository to check out from an input"

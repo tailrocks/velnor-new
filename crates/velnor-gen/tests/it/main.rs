@@ -290,6 +290,7 @@ mod tools_verify;
 mod trim_job;
 mod trusted_events;
 mod trusted_runner;
+mod trusted_runner_fence;
 mod trusted_runner_mirror;
 mod trusted_runner_workflows;
 mod trusted_runs_on;

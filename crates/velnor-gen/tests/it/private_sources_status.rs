@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::facts::TestResult;
-use crate::gh_expr::{Value, evaluate, has_status_function};
 use crate::pipeline::workflow;
 use crate::private_sources::{SECTION, jobs, private_repo};
+use velnor_test_support::gh_expr::{Value, evaluate, has_status_function};
 
 fn is_fetch(step: &serde_json::Value) -> bool {
     step["run"]

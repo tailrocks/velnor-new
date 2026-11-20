@@ -32,13 +32,18 @@ const TABLE: [(&str, &str); 22] = [
     ("delete", "refs/heads/main"),
 ];
 
-fn expression_trusts(event: &str, git_ref: &str) -> Result<bool, String> {
+fn expression_trusts(
+    event: &str,
+    git_ref: &str,
+    default_branch: Option<&str>,
+) -> Result<bool, String> {
     let resolve = |name: &str| -> Result<Value, String> {
         match name {
             "github.event_name" => Ok(Value::Str(event.to_owned())),
             "github.ref" => Ok(Value::Str(git_ref.to_owned())),
-            "github.event.repository.default_branch" if event == "schedule" => Ok(Value::Null),
-            "github.event.repository.default_branch" => Ok(Value::Str(DEFAULT_BRANCH.to_owned())),
+            "github.event.repository.default_branch" => {
+                Ok(default_branch.map_or(Value::Null, |branch| Value::Str(branch.to_owned())))
+            }
             other => Err(format!("unknown context {other}")),
         }
     };
@@ -47,12 +52,14 @@ fn expression_trusts(event: &str, git_ref: &str) -> Result<bool, String> {
 
 #[test]
 fn the_routing_expression_and_the_helper_trust_the_same_events() -> Result<(), String> {
-    for (event, git_ref) in TABLE {
-        assert_eq!(
-            expression_trusts(event, git_ref)?,
-            trusted_event(event, git_ref, Some(DEFAULT_BRANCH)),
-            "{event} {git_ref}"
-        );
+    for default_branch in [Some(DEFAULT_BRANCH), None, Some("")] {
+        for (event, git_ref) in TABLE {
+            assert_eq!(
+                expression_trusts(event, git_ref, default_branch)?,
+                trusted_event(event, git_ref, default_branch),
+                "{event} {git_ref} {default_branch:?}"
+            );
+        }
     }
     Ok(())
 }

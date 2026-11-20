@@ -139,6 +139,7 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         (raw.trusted_runner, mirror_key),
         (&runner, &fork_runner, &hosted_runners),
         crates_mirror.as_ref(),
+        &test_groups,
     )
     .map_err(invalid)?;
     let (mbx_remote, mbx_store, mbx) =
