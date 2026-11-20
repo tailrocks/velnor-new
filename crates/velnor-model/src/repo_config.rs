@@ -17,6 +17,7 @@ pub struct RustCiConfig {
     pub hosted_runners: HostedRunners,
     pub crates_mirror: Option<CratesMirror>,
     pub private_sources: Option<PrivateSources>,
+    pub public_sources: Option<PublicSources>,
     pub mbx_store: MbxStore,
     pub docs_run: DocsRun,
     pub check_alone_run: DocsRun,
@@ -271,6 +272,7 @@ impl Default for RustCiConfig {
             hosted_runners: HostedRunners::new(vec![RunnerLabel::from_static("ubuntu-latest")]),
             crates_mirror: None,
             private_sources: None,
+            public_sources: None,
             mbx_store: MbxStore::Private,
             docs_run: DocsRun::Always,
             check_alone_run: DocsRun::Always,
@@ -318,6 +320,24 @@ pub struct PrivateSources {
     pub private_key: String,
     pub owner: String,
     pub repositories: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PublicSources {
+    pub git: Vec<GitRepository>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct GitRepository {
+    pub owner: String,
+    pub name: String,
+}
+
+impl GitRepository {
+    #[must_use]
+    pub fn matches(&self, owner: &str, name: &str) -> bool {
+        self.owner.eq_ignore_ascii_case(owner) && self.name.eq_ignore_ascii_case(name)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

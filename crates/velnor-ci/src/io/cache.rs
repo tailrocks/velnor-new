@@ -265,9 +265,9 @@ pub(super) fn run_decide(args: &crate::cli_cache::DecideArgs) -> Result<String, 
         .map_err(|e| CiError::new(format!("cannot read {}: {e}", log_path.display())))?;
     let manifests = super::cache_paths::list("VELNOR_CACHE_MANIFESTS")?
         .unwrap_or_else(|| args.manifest_path.clone());
-    let refusal = super::cache_sources::refusal(&root, &manifests)?;
-    let sources = refusal.is_none();
-    let decision = if let Some(reason) = refusal {
+    let admission = super::cache_sources::refusal(&root, &manifests, &args.public_probe_api)?;
+    let sources = admission.refusal.is_none();
+    let decision = if let Some(reason) = admission.refusal {
         Decision {
             save: false,
             report: reason,
@@ -287,7 +287,7 @@ pub(super) fn run_decide(args: &crate::cli_cache::DecideArgs) -> Result<String, 
         )?
     };
     super::append_outputs(&format!("save={}\nsources={sources}\n", decision.save))?;
-    let mut report = decision.report;
+    let mut report = admission.log + &decision.report;
     if decision.save
         && let Err(error) = super::delta_snapshot::record_inventory(&target)
     {

@@ -4,14 +4,23 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use velnor_model::GitRepository;
+use velnor_rust::LockAdmission;
+
 use crate::error::CiError;
 
-pub(super) fn refusal(root: &Path, manifests: &[PathBuf]) -> Result<Option<String>, CiError> {
-    let refused = |path: &Path| {
-        Some(format!(
+pub(super) struct Admission {
+    pub(super) refusal: Option<String>,
+    pub(super) log: String,
+}
+
+pub(super) fn refusal(root: &Path, manifests: &[PathBuf], api: &str) -> Result<Admission, CiError> {
+    let refused = |path: &Path| Admission {
+        refusal: Some(format!(
             "base caches are not saved because dependency sources in {} are not proven public\n",
             path.display()
-        ))
+        )),
+        log: String::new(),
     };
     if std::env::vars_os().any(|(key, _)| {
         let key = key.to_string_lossy();
@@ -28,6 +37,7 @@ pub(super) fn refusal(root: &Path, manifests: &[PathBuf]) -> Result<Option<Strin
     let Some(cargo_home) = cargo_home else {
         return Ok(refused(Path::new("CARGO_HOME")));
     };
+    let mut git: Vec<GitRepository> = Vec::new();
     for manifest in manifests {
         let directory = root
             .join(manifest)
@@ -35,8 +45,16 @@ pub(super) fn refusal(root: &Path, manifests: &[PathBuf]) -> Result<Option<Strin
             .map(Path::to_path_buf)
             .ok_or_else(|| CiError::new("manifest has no parent"))?;
         let lock = directory.join("Cargo.lock");
-        if !read_public(&lock, velnor_rust::cacheable_lock) {
-            return Ok(refused(&lock));
+        match read_lock(&lock) {
+            Some(LockAdmission::Public) => {}
+            Some(LockAdmission::ProbeGithub(found)) => {
+                for repository in found {
+                    if !git.contains(&repository) {
+                        git.push(repository);
+                    }
+                }
+            }
+            Some(LockAdmission::Refused { .. }) | None => return Ok(refused(&lock)),
         }
         for dir in directory
             .ancestors()
@@ -56,7 +74,39 @@ pub(super) fn refusal(root: &Path, manifests: &[PathBuf]) -> Result<Option<Strin
             }
         }
     }
-    Ok(None)
+    Ok(probe(api, &git))
+}
+
+fn probe(api: &str, git: &[GitRepository]) -> Admission {
+    let mut log = String::new();
+    let mut refusal = String::new();
+    for repository in git {
+        let name = format!("github.com/{}/{}", repository.owner, repository.name);
+        match super::public_repo::check(api, repository) {
+            Ok(()) => log.push_str(&format!(
+                "git dependency {name} is public (unauthenticated lookup)\n"
+            )),
+            Err(reason) => {
+                let line = format!(
+                    "::notice::base caches are not saved because git dependency {name} is not proven public ({reason})\n"
+                );
+                log.push_str(&line);
+                refusal.push_str(&line);
+            }
+        }
+    }
+    Admission {
+        refusal: (!refusal.is_empty()).then_some(refusal),
+        log,
+    }
+}
+
+fn read_lock(path: &Path) -> Option<LockAdmission> {
+    fs::symlink_metadata(path)
+        .is_ok_and(|meta| meta.is_file())
+        .then(|| fs::read_to_string(path).ok())
+        .flatten()
+        .and_then(|text| velnor_rust::lock_admission(&text).ok())
 }
 
 fn read_public(path: &Path, check: fn(&str) -> Result<bool, velnor_rust::LockError>) -> bool {

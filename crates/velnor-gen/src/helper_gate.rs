@@ -16,6 +16,9 @@ use crate::{
 /// The first `velnor-ci` whose `.velnor/rust-ci.toml` parser accepts the `hosted` key.
 const HOSTED_HELPER: (u64, u64, u64) = (0, 1, 99);
 const MERGE_GROUP_HELPER: (u64, u64, u64) = (0, 1, 103);
+/// The first `velnor-ci` that accepts `[public_sources]` and checks a commit-pinned github.com git
+/// dependency against the GitHub API, without a token, before it saves a cache.
+const PUBLIC_SOURCES_HELPER: (u64, u64, u64) = (0, 1, 108);
 /// The first `velnor-ci` whose `.velnor/rust-ci.toml` parser accepts the `cache_debug` key.
 // helper-gate: first in rust-ci-v0.1.82 via bfc3528bd7
 pub(crate) const CACHE_DEBUG_HELPER: (u64, u64, u64) = (0, 1, 82);
@@ -80,6 +83,11 @@ pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, Generate
     // helper-gate: first in tools-v0.1.88 via eb3f4deda4
     if facts.config.private_sources.is_some() && !release.version().at_least((0, 1, 88)) {
         return Err(GenerateError::PrivateSourcesHelperTooOld(
+            release.version().clone(),
+        ));
+    }
+    if facts.config.public_sources.is_some() && !release.version().at_least(PUBLIC_SOURCES_HELPER) {
+        return Err(GenerateError::PublicSourcesHelperTooOld(
             release.version().clone(),
         ));
     }

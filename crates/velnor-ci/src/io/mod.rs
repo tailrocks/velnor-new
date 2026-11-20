@@ -50,6 +50,7 @@ mod merge_queue;
 mod plan;
 mod plan_request;
 mod private_check;
+mod public_repo;
 pub mod pump;
 mod qualification;
 mod recording;

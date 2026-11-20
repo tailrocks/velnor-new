@@ -97,6 +97,22 @@ repositories = ["owner/shared-lib"]
 - The `groups` shape builds and tests in one job and uploads no nextest archive, because workflow artifacts are readable by anyone who can read the repository. `[[test_groups]]` is refused together with `[private_sources]` for the same reason, because a group runs from that archive.
 - `velnor-gen generate` prints a note that suggests this table when `Cargo.lock` locks a github.com git dependency over ssh or from the repository's own owner. A registry or a non-github.com git source, which the token cannot authenticate, gets a note that says so instead. With the table present, a note names a locked repository of the token's owner that `repositories` does not list, and a listed repository that no lock uses. The token is created once per job that compiles; sharing one fetch between jobs through a cache or an artifact is not done, because both are readable by anyone who can read the repository.
 
+## Public git dependencies
+
+```toml
+[public_sources]
+git = ["https://github.com/owner/shared-lib"]
+```
+
+By default a `Cargo.lock` source other than crates.io turns off the Target and Sources saves, the pull-request delta layer and `cache.mbx_remote`. A git source of a public repository can be cached, because a lock entry that names a full commit is content addressed like a crates.io release.
+
+- A source qualifies only when the lock entry is `git+https://github.com/<owner>/<repo>` (an optional `.git` and an optional `?rev=`, `?branch=` or `?tag=` query) followed by `#` and the full 40 lowercase hexadecimal characters of the commit. Another host (including `gitlab.com` and any `github.com` look-alike), `ssh`, plain `http`, a URL with credentials or a port, a nested path, a short or missing commit and a `[patch]` section never qualify.
+- `[public_sources].git` lists such repositories as `https://github.com/<owner>/<repo>` URLs (no `.git`, no duplicates). The declaration lets the generator render the saves, the deltas and `cache.mbx_remote` for them and records that you meant the repository to be public. It does not prove it. Without a declaration the generator keeps the saves off and prints a note that suggests the key.
+- On every run, `velnor-ci cache decide` asks `GET https://api.github.com/repos/<owner>/<repo>` once per repository, with no `Authorization` header and never the job's token. It saves the base only when each answer is `200`, names the same repository and says `"private": false`. A private or missing repository, a redirect (a moved repository is not followed), a rate limit (an unauthenticated address may send 60 requests an hour), a timeout (15 seconds), an unreadable answer and any other host fail closed: nothing is saved and the log says which repository and why. Each repository's result is logged.
+- The Target key hashes every git package with its source and commit through the lock hash, and the Sources key hashes `Cargo.lock`, so a new commit of the dependency moves both keys.
+- The run-time check gates the Target and Sources saves. The pull-request delta and `cache.mbx_remote` follow the declaration, so declare only repositories that stay public.
+- Needs `velnor-ci` 0.1.108 or later.
+
 ## Speed budget
 
 The numbers in [`goals.md`](goals.md) section "Targets" are the budget: a run that selects nothing finishes Velnor's own jobs within 1 minute, a warm run of unchanged code compiles and downloads 0 crates, the first cargo command starts within 30 seconds, cache storage stays under 8 GB, and the job count does not grow with crates. These are targets, and the generator does not measure all of them. What holds them today:
@@ -160,6 +176,7 @@ Every key of `.velnor/rust-ci.toml`, with its default. `generator/CONFIG.md` has
 | `cache_debug` | `false` | cargo fingerprint log, see above |
 | `ci_debuginfo` | `"line-tables-only"` | `full`, `line-tables-only` or `none` |
 | `private_sources` | none | private dependencies, see above |
+| `public_sources` | none | public git dependencies that may be cached, see above (needs `velnor-ci` 0.1.108) |
 | `crates_mirror` | none | a crates mirror for a self-hosted runner (needs `velnor-ci` 0.1.93); it stays in effect for a step that passes its own `--config` |
 | `runner` | `"ubuntu-latest"` | the runner label of every job |
 | `hosted` | `true` when `runner` is not set | `true` opens `runner` to fork pull requests, `false` fences it; required when `runner` is spelled like a GitHub-hosted label; needs `velnor-ci` 0.1.99 |

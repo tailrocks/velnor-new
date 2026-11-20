@@ -166,6 +166,7 @@ mod pr_ci_sim;
 mod private_sources;
 mod private_sources_advisory;
 mod private_sources_phase;
+mod public_sources;
 mod qualification;
 mod release_assets_setup_action;
 mod release_branch_prefix;

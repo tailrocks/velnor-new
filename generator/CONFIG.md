@@ -110,6 +110,23 @@ The token phase runs the real `cargo` and `git`. It never runs a mise shim or a 
 
 A job that runs `cargo-deny` gets one extra step before the token phase, `cargo-deny fetch db`, which has no token and no `GIT_CONFIG_*` or `CARGO_NET_OFFLINE` environment. It loads the RustSec advisory database that the `--offline` deny check then reads, so the `advisories` check works on a fresh runner. Without `[private_sources]` the step is absent.
 
+## Optional public git dependencies
+
+A project that locks a git dependency of a public github.com repository can cache it. Declare the repository in `.velnor/rust-ci.toml`. The table is off when absent, and then the generated workflow is unchanged.
+
+```toml
+[public_sources]
+git = ["https://github.com/owner/shared-lib"]
+```
+
+`git` is a non-empty list of `https://github.com/<owner>/<repo>` URLs without `.git`, and a repository appears once (case is ignored). Anything else is refused. The key needs a helper release of `0.1.108` or later.
+
+Only a source that `Cargo.lock` pins to a full commit qualifies: `git+https://github.com/<owner>/<repo>` with an optional `.git` and query, then `#` and 40 lowercase hexadecimal characters. A declared repository whose lock entry is an ssh or http URL, has credentials or a port, lives on another host, or has a short commit stays off, and so does every other non-crates.io source. With the declaration, the generator treats the declared sources as public: the Target and Sources saves, the pull-request delta layer and `cache.mbx_remote` render as for a crates.io-only lock. `velnor-gen generate` prints a note when a declared repository is locked by no `Cargo.lock` as a commit-pinned github.com dependency.
+
+Without the declaration, a commit-pinned github.com dependency keeps the saves off, and `velnor-gen generate` prints a note that suggests `[public_sources]` with the repository's URL (and `[private_sources]` for a repository that is private).
+
+The declaration is not the proof. On every run `velnor-ci cache decide` asks `GET https://api.github.com/repos/<owner>/<repo>` once per repository, with no `Authorization` header and never the job's token, and saves the Target and Sources caches only when each reply is `200`, names the same repository and says `"private": false`. A private or missing repository, a redirect, a rate limit, a timeout or an unreadable reply saves nothing and the step log names the repository and the reason; each result is logged. The pull-request delta and `cache.mbx_remote` follow the declaration without a run-time check, so declare only repositories that stay public.
+
 ## Workspace groups
 
 A repository with many small Cargo workspaces can check several of them in one job set, when the project asks for it. A group names the workspaces that share one job set; a workspace that no group names keeps its own jobs.

@@ -7,6 +7,7 @@ use std::process::Command;
 use crate::io::Repo as Checkout;
 
 mod born;
+mod public_git;
 mod support;
 
 use support::{COMPILED, WARM, decide, decide_within, seed};

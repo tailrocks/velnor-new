@@ -38,6 +38,8 @@ pub struct BudgetArgs {
 
 #[derive(Debug, Args)]
 pub struct DecideArgs {
+    #[arg(long, hide = true, default_value = "https://api.github.com")]
+    pub public_probe_api: String,
     #[arg(
         long,
         default_value = "Cargo.toml",

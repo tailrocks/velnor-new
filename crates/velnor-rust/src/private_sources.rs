@@ -1,9 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{RepoPath, RepoView, RepositoryIdentity, RustCiConfig, RustRoot};
+use velnor_model::{GitRepository, RepoPath, RepoView, RepositoryIdentity, RustCiConfig, RustRoot};
 
 use crate::error::{DetectError, Reason};
+use crate::public_git::pinned_github;
 
 use crate::roots::{CARGO_LOCK, is_cargo_config};
 use crate::toml_file::table;
@@ -20,14 +21,19 @@ pub(crate) fn note(cause: &str) -> String {
 }
 
 /// The first reason the repository's dependencies are not proven public.
-pub(crate) fn private_cause(view: &RepoView, roots: &[RustRoot]) -> Option<String> {
+pub(crate) fn private_cause(
+    view: &RepoView,
+    config: &RustCiConfig,
+    roots: &[RustRoot],
+) -> Option<String> {
+    let declared = declared_public(config);
     let locks = roots
         .iter()
         .map(|root| root.manifest.sibling(&CARGO_LOCK))
         .filter_map(|lock| {
             view.files
                 .get(&lock)
-                .map(|bytes| locked_source(&lock, bytes))
+                .map(|bytes| locked_source(&lock, bytes, declared))
         })
         .flatten();
     let configs = view
@@ -75,7 +81,22 @@ fn locked_credentials(view: &RepoView, roots: &[RustRoot]) -> Option<(RepoPath, 
     })
 }
 
-fn locked_source(lock: &RepoPath, bytes: &[u8]) -> Option<String> {
+pub(crate) fn declared_public(config: &RustCiConfig) -> &[GitRepository] {
+    config
+        .public_sources
+        .as_ref()
+        .map_or(&[], |sources| sources.git.as_slice())
+}
+
+fn is_declared(source: &str, declared: &[GitRepository]) -> bool {
+    pinned_github(source).is_some_and(|git| {
+        declared
+            .iter()
+            .any(|known| known.matches(git.owner, git.name))
+    })
+}
+
+fn locked_source(lock: &RepoPath, bytes: &[u8], declared: &[GitRepository]) -> Option<String> {
     let Ok(document) = table(bytes) else {
         return Some(format!("{lock} is unreadable"));
     };
@@ -93,7 +114,7 @@ fn locked_source(lock: &RepoPath, bytes: &[u8]) -> Option<String> {
         .find_map(|package| {
             let source = package.get("source").and_then(toml::Value::as_str)?;
             let name = package.get("name").and_then(toml::Value::as_str)?;
-            (!PUBLIC_SOURCES.contains(&source))
+            (!PUBLIC_SOURCES.contains(&source) && !is_declared(source, declared))
                 .then(|| format!("{lock} locks {name} from {source}"))
         })
 }
@@ -111,17 +132,6 @@ fn configured_source(path: &RepoPath, bytes: &[u8]) -> Option<String> {
                 .is_some_and(|entries| !entries.is_empty())
         })
         .map(|section| format!("{path} declares [{section}]"))
-}
-
-pub fn cacheable_lock(text: &str) -> Result<bool, crate::lock::LockError> {
-    let lock = crate::cargo_lock::CargoLock::parse(text)?;
-    Ok(lock.patch.is_none()
-        && lock.packages.iter().all(|package| {
-            package
-                .source
-                .as_deref()
-                .is_none_or(|source| PUBLIC_SOURCES.contains(&source))
-        }))
 }
 
 pub fn cacheable_config(text: &str) -> Result<bool, crate::lock::LockError> {
@@ -146,9 +156,15 @@ pub(crate) fn private_suggestion(
     config: &RustCiConfig,
     roots: &[RustRoot],
 ) -> Option<String> {
-    if let Some(sources) = &config.private_sources {
-        return crate::private_lock::mismatch(view, sources, roots);
-    }
+    let mut notes = crate::public_advice::notes(view, config, roots);
+    notes.extend(match &config.private_sources {
+        Some(sources) => crate::private_lock::mismatch(view, sources, roots),
+        None => looks_private(view, roots),
+    });
+    (!notes.is_empty()).then(|| notes.join("; "))
+}
+
+fn looks_private(view: &RepoView, roots: &[RustRoot]) -> Option<String> {
     let owner = match &view.repository {
         RepositoryIdentity::Named(name) => name.split('/').next().filter(|_| name.contains('/')),
         RepositoryIdentity::Unhosted => None,
@@ -156,7 +172,9 @@ pub(crate) fn private_suggestion(
     let looking: Vec<(RepoPath, String, String)> =
         crate::private_lock::locked_packages(view, roots)
             .into_iter()
-            .filter(|(_, _, source)| private_looking(source, owner))
+            .filter(|(_, _, source)| {
+                pinned_github(source).is_none() && private_looking(source, owner)
+            })
             .collect();
     if let Some((lock, name, _)) = looking
         .iter()

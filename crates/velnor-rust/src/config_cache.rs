@@ -29,7 +29,7 @@ pub(crate) fn private_sources(
     roots: &[RustRoot],
     config: &RustCiConfig,
 ) -> Result<Option<String>, DetectError> {
-    let cause = crate::private_sources::private_cause(view, roots);
+    let cause = crate::private_sources::private_cause(view, config, roots);
     match (config.mbx_remote, &cause) {
         (MbxRemote::GithubActions, Some(cause)) => Err(DetectError::invalid(
             &CONFIG_PATH,

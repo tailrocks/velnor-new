@@ -37,7 +37,8 @@ pub use crate::mise::{MISE_CONFIGS, MISE_LOCK, check_tools, mise_files, tool_pin
 pub use crate::owners::{Owner, Owners, add_reads};
 pub use crate::plan::{check_required_check, plan, plan_without_deltas};
 pub use crate::policy::{PolicyRuns, policy_runs};
-pub use crate::private_sources::{cacheable_config, cacheable_lock};
+pub use crate::private_sources::cacheable_config;
+pub use crate::public_git::{LockAdmission, lock_admission};
 pub use crate::reads::{
     INPUTS_IDENTITY_HELPER, INPUTS_LOCK, Located, dep_info_paths, format_inputs_lock,
     inputs_lock_text, locate, lock_is_identified, normalize, parse_inputs_lock, rerun_if_changed,
