@@ -21,8 +21,7 @@ pub fn job(job: &Job, records: &[Record]) -> Value {
     let root = records.iter().find(|record| record.parent_id.is_none());
     let started = root.and_then(|root| second(root.start_time.as_ref()));
     let steps: Vec<Value> = root
-        .map(|root| steps(root, records))
-        .unwrap_or_default()
+        .map_or_default(|root| steps(root, records))
         .into_iter()
         .zip(1..)
         .map(|(step, number): (&Record, u32)| {

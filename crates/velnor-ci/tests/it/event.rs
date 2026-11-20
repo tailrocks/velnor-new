@@ -22,8 +22,7 @@ fn a_configured_default_branch_that_differs_from_the_repositorys_is_refused_nami
     assert_eq!(check_default_branch("main", &event(Some("main"))), Ok(()));
     let message = check_default_branch("main", &event(Some("trunk")))
         .err()
-        .map(|e| e.to_string())
-        .unwrap_or_default();
+        .map_or_default(|e| e.to_string());
     assert!(
         message.contains("\"main\"") && message.contains("\"trunk\""),
         "{message}"

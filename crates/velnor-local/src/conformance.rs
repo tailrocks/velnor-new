@@ -197,9 +197,7 @@ pub fn report(
     let probes: BTreeSet<&String> = seen.keys().map(|(probe, _)| probe).collect();
     let mut lines = Vec::new();
     for probe in probes {
-        let recorded = stored(probe)
-            .map(|file| file["legs"].clone())
-            .unwrap_or_default();
+        let recorded = stored(probe).map_or_default(|file| file["legs"].clone());
         let names: BTreeSet<String> = recorded
             .as_object()
             .into_iter()

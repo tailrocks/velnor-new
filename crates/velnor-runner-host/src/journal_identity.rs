@@ -87,9 +87,7 @@ impl Journal {
     }
 
     pub(crate) async fn write_guard(&self) -> tokio::sync::OwnedMutexGuard<()> {
-        let lock = process_state(self.path())
-            .map(|state| Arc::clone(&state.write_lock))
-            .unwrap_or_default();
+        let lock = process_state(self.path()).map_or_default(|state| Arc::clone(&state.write_lock));
         lock.lock_owned().await
     }
 

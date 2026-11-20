@@ -62,8 +62,7 @@ impl Drop for Guard {
         let networks = self
             .networks
             .lock()
-            .map(|networks| networks.clone())
-            .unwrap_or_default();
+            .map_or_default(|networks| networks.clone());
         let sweep = std::thread::spawn(move || sweep(&docker, &environment, &image, &networks));
         let _joined = sweep.join();
     }

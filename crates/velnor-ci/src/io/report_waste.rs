@@ -28,13 +28,12 @@ pub(super) fn collect_local(metrics: &mut LaneMetrics, log: &[u8], runner_temp: 
         sessions: mbx_sessions(log),
     };
     metrics.toolchain_installs = fs::read_to_string(runner_temp.join(TOOLCHAIN_INSTALLS))
-        .map(|text| {
+        .map_or_default(|text| {
             text.lines()
                 .filter(|line| !line.is_empty())
                 .map(str::to_owned)
                 .collect()
-        })
-        .unwrap_or_default();
+        });
 }
 
 fn has_entry_before(store: &Path, start: u64) -> bool {

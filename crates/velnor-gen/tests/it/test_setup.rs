@@ -14,10 +14,7 @@ fn jobs_of(config: &str) -> Result<serde_json::Value, Box<dyn std::error::Error>
 fn setups(jobs: &serde_json::Value) -> Vec<(String, usize, Option<usize>, serde_json::Value)> {
     let mut found = Vec::new();
     for (id, job) in jobs.as_object().into_iter().flatten() {
-        let steps = job["steps"]
-            .as_array()
-            .map(Vec::as_slice)
-            .unwrap_or_default();
+        let steps = job["steps"].as_array().map_or_default(Vec::as_slice);
         let tests = steps.iter().position(|step| step["id"] == "test");
         for (index, step) in steps.iter().enumerate() {
             if step["name"] == "Prepare the fixture" {

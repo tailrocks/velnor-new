@@ -86,8 +86,7 @@ fn release_yml_runs_every_job_after_the_gate_only_when_it_is_ready_on_a_green_pu
         assert!(all.len() >= 3, "{} jobs", all.len());
         let packages = tree
             .at(&["jobs", "tag", "outputs"])
-            .map(Node::keys)
-            .unwrap_or_default();
+            .map_or_default(Node::keys);
         let (gate_id, gate) = all[0];
         assert_eq!(gate_id, "gate");
         assert_eq!(

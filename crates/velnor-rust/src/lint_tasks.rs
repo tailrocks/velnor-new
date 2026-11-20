@@ -53,8 +53,7 @@ fn declared(value: &Value) -> Declared {
         tools: entry
             .get("tools")
             .and_then(Value::as_table)
-            .map(|tools| tools.keys().cloned().collect())
-            .unwrap_or_default(),
+            .map_or_default(|tools| tools.keys().cloned().collect()),
         depends: ["depends", "depends_post"]
             .iter()
             .flat_map(|key| words(entry.get(*key)))

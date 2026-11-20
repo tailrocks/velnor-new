@@ -56,8 +56,7 @@ pub(crate) fn dist_collisions(plan: &ReleasePlan) -> Vec<RuleViolation> {
         plan.binaries
             .iter()
             .find(|binary| binary.package == package)
-            .map(|binary| published_files(binary, platform))
-            .unwrap_or_default()
+            .map_or_default(|binary| published_files(binary, platform))
     };
     let family = plan.family.as_ref().map(|family| {
         let every = plan.binaries.iter().flat_map(|binary| {

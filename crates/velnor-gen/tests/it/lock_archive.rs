@@ -78,8 +78,7 @@ fn a_new_lock_records_the_archive_digests_and_the_binary_digests() -> TestResult
     let table = |name: &str| -> Vec<String> {
         lock.split("\n\n")
             .find(|part| part.starts_with(&format!("[{name}]")))
-            .map(|part| part.lines().skip(1).map(str::to_owned).collect())
-            .unwrap_or_default()
+            .map_or_default(|part| part.lines().skip(1).map(str::to_owned).collect())
     };
     assert_eq!(
         table("velnor-ci"),

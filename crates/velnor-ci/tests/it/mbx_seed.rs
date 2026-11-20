@@ -85,9 +85,7 @@ fn run_within(
 
 fn tree(root: &Path) -> Vec<String> {
     fn walk(base: &Path, dir: &Path, out: &mut Vec<String>) {
-        let mut entries: Vec<_> = fs::read_dir(dir)
-            .map(|rd| rd.flatten().collect())
-            .unwrap_or_default();
+        let mut entries: Vec<_> = fs::read_dir(dir).map_or_default(|rd| rd.flatten().collect());
         entries.sort_by_key(fs::DirEntry::path);
         for entry in entries {
             let path = entry.path();

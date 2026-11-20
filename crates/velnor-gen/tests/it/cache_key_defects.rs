@@ -57,8 +57,7 @@ fn a_rendered_key_over_512_characters_fails_generation() -> TestResult {
     workflow(&view(&[&long(300)], None)?)?;
     let error = workflow(&view(&[&long(360)], None)?)
         .err()
-        .map(|error| error.to_string())
-        .unwrap_or_default();
+        .map_or_default(|error| error.to_string());
     assert!(error.contains("512"), "{error}");
     assert!(error.contains("rust"), "{error}");
     Ok(())
@@ -168,8 +167,7 @@ fn a_target_dir_outside_the_repository_fails_generation() -> TestResult {
         )?;
         let error = workflow(&one)
             .err()
-            .map(|error| error.to_string())
-            .unwrap_or_default();
+            .map_or_default(|error| error.to_string());
         assert!(
             error.contains("lab/.cargo/config.toml") && error.contains("target-dir"),
             "{value}: {error}"

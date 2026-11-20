@@ -73,8 +73,7 @@ async fn a_cancelled_start_stops_the_authority_process_it_spawned() {
         let state = Command::new("ps")
             .args(["-p", &pid, "-o", "stat="])
             .output()
-            .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_owned())
-            .unwrap_or_default();
+            .map_or_default(|out| String::from_utf8_lossy(&out.stdout).trim().to_owned());
         if state.is_empty() || state.starts_with('Z') {
             gone = true;
             break;

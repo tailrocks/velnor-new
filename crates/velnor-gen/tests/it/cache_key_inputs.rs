@@ -48,8 +48,7 @@ fn build_dir_and_placeholder_target_dirs_fail_generation() -> TestResult {
         with_config(&mut one, ".cargo/config.toml", body)?;
         let error = workflow(&one)
             .err()
-            .map(|error| error.to_string())
-            .unwrap_or_default();
+            .map_or_default(|error| error.to_string());
         assert!(
             error.contains(".cargo/config.toml") && error.contains("build"),
             "{body}: {error}"
@@ -85,8 +84,7 @@ fn target_cache_directories_cannot_overlap_tracked_inputs() -> TestResult {
         repo.tracked_paths.insert(RepoPath::new(tracked)?);
         let error = workflow(&repo)
             .err()
-            .map(|error| error.to_string())
-            .unwrap_or_default();
+            .map_or_default(|error| error.to_string());
         let folder = target.unwrap_or("target");
         let refusal =
             format!("build.target-dir {folder:?} overlaps tracked checkout content or repository");

@@ -228,7 +228,7 @@ fn blank_or_repeated_pr_only_checks_are_refused_by_index() {
         ("pr_only_checks = [\"DCO\", \"DCO\"]\n", 1, "repeats"),
     ] {
         files.release_toml = Some(text.to_owned());
-        let message = refusal(&files).map(|e| e.to_string()).unwrap_or_default();
+        let message = refusal(&files).map_or_default(|e| e.to_string());
         assert!(message.contains(".velnor/release.toml"), "{message}");
         assert!(
             message.contains(&format!("pr_only_checks[{index}] {why}")),

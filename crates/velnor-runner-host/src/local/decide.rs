@@ -167,7 +167,7 @@ fn template(challenge: &Challenge, bytes: &[u8], facts: Option<&Facts>) -> Decis
         actual_request_id: challenge.witness_request_id,
         run_id: facts.map_or(0, |facts| facts.run_id),
         run_attempt: facts.map_or(0, |facts| facts.attempt),
-        job_key: facts.map(|facts| facts.job.clone()).unwrap_or_default(),
+        job_key: facts.map_or_default(|facts| facts.job.clone()),
         runner_id: challenge.runner_id,
         policy_generation: challenge.policy_generation,
         policy_digest: challenge.policy_digest.clone(),

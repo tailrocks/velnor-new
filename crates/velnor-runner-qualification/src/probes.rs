@@ -117,8 +117,7 @@ pub(super) async fn run_command(
 fn command_config(resources: &OwnedResources, command: &CommandSpec<'_>) -> ContainerCreateBody {
     let mounts = command
         .socket_volume
-        .map(|volume| vec![mount(volume, "/run")])
-        .unwrap_or_default();
+        .map_or_default(|volume| vec![mount(volume, "/run")]);
     ContainerCreateBody {
         image: Some(command.image_id.to_owned()),
         entrypoint: Some(vec![command.entrypoint.to_owned()]),

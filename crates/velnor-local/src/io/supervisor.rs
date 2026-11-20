@@ -173,7 +173,7 @@ async fn launch(
         Command::new(binary)
             .args(["supervise", "--dir"])
             .arg(dir)
-            .args(pairs.map(|pairs| pairs.arguments(repo)).unwrap_or_default())
+            .args(pairs.map_or_default(|pairs| pairs.arguments(repo)))
             .stdin(Stdio::null())
             .stdout(log.try_clone()?)
             .stderr(log)

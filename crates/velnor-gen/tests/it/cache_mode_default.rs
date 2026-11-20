@@ -79,8 +79,7 @@ fn violations(text: &str, writers: &BTreeSet<String>) -> Result<Vec<String>, Box
         let mode = job.get("cache-mode").and_then(crate::yaml_tree::Node::text);
         let savers: Vec<_> = job
             .get("steps")
-            .map(|steps| steps.items().iter().filter(|step| saves(step)).collect())
-            .unwrap_or_default();
+            .map_or_default(|steps| steps.items().iter().filter(|step| saves(step)).collect());
         let can_write = matches!(mode, Some("write" | "write-only"));
         match mode {
             None if job.get("uses").is_none() => found.push(format!("{id}: no cache-mode")),

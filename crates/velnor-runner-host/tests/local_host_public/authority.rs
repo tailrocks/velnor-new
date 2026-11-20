@@ -54,10 +54,7 @@ impl Fake {
     }
 
     pub(crate) fn events(&self) -> Vec<String> {
-        self.events
-            .lock()
-            .map(|events| events.clone())
-            .unwrap_or_default()
+        self.events.lock().map_or_default(|events| events.clone())
     }
 
     pub(crate) fn dispatch(&self, side: &str, id: u64, run: Run) {

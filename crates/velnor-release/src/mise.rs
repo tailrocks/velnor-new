@@ -31,13 +31,12 @@ fn release_plz_tools(table: &Table) -> Vec<(&String, &toml::Value)> {
     table
         .get("tools")
         .and_then(toml::Value::as_table)
-        .map(|tools| {
+        .map_or_default(|tools| {
             tools
                 .iter()
                 .filter(|(key, _)| names_release_plz(key))
                 .collect()
         })
-        .unwrap_or_default()
 }
 
 fn configured_version(value: &toml::Value) -> Option<&str> {

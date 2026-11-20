@@ -123,7 +123,7 @@ fn verify(
         return match need {
             Need::Required => Err(LintFault::ToolFiltered {
                 tool: name.to_owned(),
-                platform: platform.map(MisePlatform::lock_key).unwrap_or_default(),
+                platform: platform.map_or_default(MisePlatform::lock_key),
             }),
             Need::Optional => Ok(()),
         };

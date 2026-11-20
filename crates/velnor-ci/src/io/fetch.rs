@@ -128,8 +128,7 @@ fn run_fetches(
             let cargo_home = environment
                 .iter()
                 .find(|(name, _)| name == "CARGO_HOME")
-                .map(|(_, home)| PathBuf::from(home))
-                .unwrap_or_default();
+                .map_or_default(|(_, home)| PathBuf::from(home));
             let here = manifest
                 .parent()
                 .filter(|parent| !parent.as_os_str().is_empty())
@@ -372,9 +371,7 @@ fn non_empty_variable(name: &str) -> Option<OsString> {
 }
 
 pub(super) fn search_path() -> Vec<PathBuf> {
-    std::env::var_os("PATH")
-        .map(|path| std::env::split_paths(&path).collect())
-        .unwrap_or_default()
+    std::env::var_os("PATH").map_or_default(|path| std::env::split_paths(&path).collect())
 }
 
 fn account_home() -> Result<PathBuf, CiError> {

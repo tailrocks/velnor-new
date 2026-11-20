@@ -156,8 +156,7 @@ fn the_release_ruleset_command_parses() -> TestResult {
 fn help_one_liner() -> Result<String, Box<dyn Error>> {
     let help = parse_cli(["velnor-gen", "release", "ruleset", "--help"])
         .err()
-        .map(|error| error.to_string())
-        .unwrap_or_default();
+        .map_or_default(|error| error.to_string());
     let line = help
         .split("create each with one request: ")
         .nth(1)

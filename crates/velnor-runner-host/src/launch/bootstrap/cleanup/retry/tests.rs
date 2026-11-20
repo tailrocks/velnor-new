@@ -92,7 +92,7 @@ async fn every_attempt_shares_the_one_deadline_so_retries_cannot_extend_it() {
     )
     .await;
     assert_eq!(outcome, Err(HostError::Identity));
-    let seen = seen.lock().map(|seen| seen.clone()).unwrap_or_default();
+    let seen = seen.lock().map_or_default(|seen| seen.clone());
     assert_eq!(seen.len(), 3);
     assert!(seen.iter().all(|deadline| *deadline == seen[0]));
 }

@@ -79,8 +79,7 @@ fn a_trusted_event_uses_the_shared_directory_with_pod_private_shims() {
         );
     }
     let mode = fs::metadata(host.root.join("temp/velnor-mbx-shims"))
-        .map(|m| m.permissions().mode() & 0o777)
-        .unwrap_or_default();
+        .map_or_default(|m| m.permissions().mode() & 0o777);
     assert_eq!(mode, 0o700);
     let leftovers: Vec<_> = fs::read_dir(&shared)
         .map(Iterator::count)

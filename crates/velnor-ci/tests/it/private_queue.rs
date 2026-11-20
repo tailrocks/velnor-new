@@ -80,7 +80,7 @@ fn queue(entries: &[(u32, &str, &str)], extra: Vec<(String, String)>) -> Fake {
 }
 
 fn error(result: Result<(), CiError>) -> String {
-    result.err().map(|e| e.to_string()).unwrap_or_default()
+    result.err().map_or_default(|e| e.to_string())
 }
 
 #[test]

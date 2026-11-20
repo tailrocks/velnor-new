@@ -191,8 +191,7 @@ async fn networks_of(scenario: &Scenario, side: &str) -> TestResult<Vec<String>>
     Ok(inspected
         .network_settings
         .and_then(|settings| settings.networks)
-        .map(|networks| networks.into_keys().collect())
-        .unwrap_or_default())
+        .map_or_default(|networks| networks.into_keys().collect()))
 }
 
 #[tokio::test]

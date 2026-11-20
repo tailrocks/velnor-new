@@ -28,7 +28,6 @@ use connect::{ConnectRequest, connect};
 use disconnect::disconnect;
 use drain::{drain, remove_flag};
 
-#[must_use]
 pub fn run() -> ExitCode {
     if let Some(code) = crate::readiness_probe::run_internal() {
         return code;

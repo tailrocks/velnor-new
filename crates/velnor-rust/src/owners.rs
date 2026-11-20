@@ -147,8 +147,7 @@ impl<'f> Owners<'f> {
                 .iter()
                 .filter(|unit| relative(unit.directory.as_ref(), source).is_some())
                 .max_by_key(|unit| unit.directory.as_ref().map_or(0, |d| d.as_str().len()))
-                .map(|unit| unit.owners.clone())
-                .unwrap_or_default();
+                .map_or_default(|unit| unit.owners.clone());
         };
         match self.units.iter().find(|unit| unit.directory == package) {
             Some(unit) => unit.owners.clone(),

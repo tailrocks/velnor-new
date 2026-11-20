@@ -29,14 +29,12 @@ pub(crate) fn reaches_a_check(file: &RepoPath, roots: &[RustRoot]) -> bool {
 fn root_folder(root: &RustRoot) -> String {
     root.manifest
         .parent()
-        .map(|parent| parent.to_string())
-        .unwrap_or_default()
+        .map_or_default(|parent| parent.to_string())
 }
 
 fn config_folder(file: &RepoPath, marker: &str) -> String {
     let text = file.as_str();
     text.rfind(marker)
-        .map(|at| text[..at].trim_end_matches('/'))
-        .unwrap_or_default()
+        .map_or_default(|at| text[..at].trim_end_matches('/'))
         .to_owned()
 }

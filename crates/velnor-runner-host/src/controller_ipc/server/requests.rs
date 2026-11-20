@@ -294,8 +294,7 @@ async fn current_readiness(
     docker_root_digest: &str,
 ) -> Result<crate::readiness::Readiness, HostError> {
     let config_sha256 = crate::readiness_scan::controller_config(state_path)
-        .map(|(_, config_sha256)| config_sha256)
-        .unwrap_or_default();
+        .map_or_default(|(_, config_sha256)| config_sha256);
     let response = controller_readiness(
         journal,
         state,

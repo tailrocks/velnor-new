@@ -16,8 +16,7 @@ use velnor_rust::LOCK_PATH;
 fn text(view: &RepoView, path: &RepoPath) -> String {
     view.files
         .get(path)
-        .map(|bytes| String::from_utf8_lossy(bytes).into_owned())
-        .unwrap_or_default()
+        .map_or_default(|bytes| String::from_utf8_lossy(bytes).into_owned())
 }
 
 fn helper(view: &RepoView) -> Result<HelperRelease, Box<dyn Error>> {

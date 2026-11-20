@@ -269,7 +269,7 @@ fn only_helpers_of_the_same_major_and_minor_are_accepted() -> TestResult {
             )?)),
             "{version}"
         );
-        let said = result.err().map(|e| e.to_string()).unwrap_or_default();
+        let said = result.err().map_or_default(|e| e.to_string());
         assert!(
             said.contains(&format!(
                 "velnor-ci {version} does not fit this velnor-gen, which works with velnor-ci {major}.{minor}.x"
@@ -284,7 +284,7 @@ fn only_helpers_of_the_same_major_and_minor_are_accepted() -> TestResult {
 fn a_helper_below_0_1_81_is_refused_with_the_version_to_pin() -> TestResult {
     for version in ["0.1.80", "0.1.79", "0.1.0"] {
         let result = expected_with_notes(&locked(version)?).map(|(files, _)| files);
-        let said = result.err().map(|e| e.to_string()).unwrap_or_default();
+        let said = result.err().map_or_default(|e| e.to_string());
         assert_eq!(
             said,
             format!(

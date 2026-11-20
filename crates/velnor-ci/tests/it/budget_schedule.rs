@@ -134,8 +134,7 @@ fn ids(
     histories
         .iter()
         .find(|history| history.population == population && history.mode == Some(mode))
-        .map(|history| history.samples.iter().map(|sample| sample.run_id).collect())
-        .unwrap_or_default()
+        .map_or_default(|history| history.samples.iter().map(|sample| sample.run_id).collect())
 }
 
 #[test]

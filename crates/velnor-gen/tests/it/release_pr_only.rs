@@ -106,8 +106,7 @@ fn pr_only_checks_refuse_old_helpers_and_workflow_expressions() {
     ] {
         let error = render(helper, config)
             .err()
-            .map(|e| e.to_string())
-            .unwrap_or_default();
+            .map_or_default(|e| e.to_string());
         assert!(
             error.contains("pr_only_checks") && error.contains(reason),
             "{error}"

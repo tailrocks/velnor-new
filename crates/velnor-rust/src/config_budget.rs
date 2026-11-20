@@ -56,8 +56,7 @@ impl RawLimits {
 
 impl RawBudget {
     fn budget(&self) -> SpeedBudget {
-        let mode =
-            |table: &Option<RawLimits>| table.as_ref().map(RawLimits::mode).unwrap_or_default();
+        let mode = |table: &Option<RawLimits>| table.as_ref().map_or_default(RawLimits::mode);
         SpeedBudget {
             pr_wall_seconds: self.pr_wall.unwrap_or(0),
             main_wall_seconds: self.main_wall.unwrap_or(0),
