@@ -72,6 +72,7 @@ fn conditions(job: &Job) -> Vec<JobCondition> {
         | When::BaseExpired
         | When::SavingRun
         | When::Always
+        | When::Failure
         | When::CacheDebug
         | When::ClearRunLabel
         | When::RestoreToolsUnlessLocal

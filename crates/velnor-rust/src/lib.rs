@@ -27,6 +27,7 @@ mod config_lint;
 mod config_mirror;
 mod config_pr_ci;
 mod config_private;
+mod config_test_artifacts;
 mod config_test_groups;
 mod config_test_lane;
 mod config_test_setup;

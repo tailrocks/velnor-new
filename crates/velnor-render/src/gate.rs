@@ -14,6 +14,7 @@ pub(crate) const PLAN_STEP: &str = "plan";
 pub(crate) const CACHE_DEBUG_ON: &str = "vars.VELNOR_CACHE_DEBUG == '1'";
 const NOT_CANCELLED: &str = "!cancelled()";
 const ALWAYS: &str = "always()";
+const FAILURE: &str = "failure()";
 const NOT_DRAFT: &str = "github.event.pull_request.draft != true";
 const IS_PULL_REQUEST_NOT: &str = "github.event_name != 'pull_request'";
 const IS_PULL_REQUEST: &str = "github.event_name == 'pull_request'";
@@ -150,6 +151,7 @@ pub(crate) fn condition(
         When::Success => {}
         When::Finalizer => parts.push(NOT_CANCELLED.to_owned()),
         When::Always => parts.push(ALWAYS.to_owned()),
+        When::Failure => parts.push(FAILURE.to_owned()),
         When::NotCancelled | When::NotCancelledPostMerge => {
             parts.push(NOT_CANCELLED.to_owned());
             if setup != Setup::Before {

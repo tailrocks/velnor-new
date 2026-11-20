@@ -24,6 +24,8 @@ fn group(paths: &[&str], events: &[GroupEvent]) -> TestGroup {
             .collect(),
         events: events.to_vec(),
         root: GroupRoot::OnlyRoot,
+        partitions: None,
+        artifacts: Vec::new(),
     }
 }
 

@@ -66,7 +66,10 @@ pub use selection::{
     StepNeed, WORKFLOW_PATH, WORKFLOWS_CONFIG_PATH,
 };
 pub use shape::{Shape, ShapeDecision};
-pub use test_group::{GroupEvent, GroupRoot, TestGroup, TestNeed};
+pub use test_group::{
+    ARTIFACT_RETENTION_DEFAULT, ArtifactWhen, GroupArtifact, GroupEvent, GroupRoot, TestGroup,
+    TestNeed,
+};
 pub use token_permission::{token_permission_accesses, token_permission_accesses_prose};
 pub use verdict::{JobCondition, VerdictJob, VerdictSpec};
 

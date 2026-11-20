@@ -71,3 +71,26 @@ pub(crate) fn download_step(name: &str, into: Option<&RepoPath>) -> RenderedStep
         ..RenderedStep::default()
     }
 }
+
+/// The evidence upload of a test group. It sets no token and no `env`: the action uses the
+/// runtime credentials every job already has.
+pub(crate) fn group_artifact(name: &str, paths: &[String], retention_days: u8) -> RenderedStep {
+    RenderedStep {
+        name: format!("Upload {name}"),
+        uses: Some(UPLOAD_ARTIFACT.to_owned()),
+        with: vec![
+            ("name".to_owned(), Value::Text(name.to_owned())),
+            ("path".to_owned(), Value::Text(paths.join("\n"))),
+            (
+                "retention-days".to_owned(),
+                Value::Int(u64::from(retention_days)),
+            ),
+            (
+                "if-no-files-found".to_owned(),
+                Value::Text("warn".to_owned()),
+            ),
+            ("overwrite".to_owned(), Value::Bool(true)),
+        ],
+        ..RenderedStep::default()
+    }
+}

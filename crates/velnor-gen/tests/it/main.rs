@@ -257,6 +257,8 @@ mod sparse_checkout;
 mod sparse_suggestion;
 mod step_target_dir;
 mod suggest_groups;
+mod test_group_artifacts;
+mod test_group_partitions;
 mod test_groups;
 mod test_groups_harness;
 mod test_groups_jobs;

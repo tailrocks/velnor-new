@@ -277,6 +277,8 @@ pub enum When {
     BaseExpired,
     SavingRun,
     ClearRunLabel,
+    /// Runs only when an earlier step of the job failed (`failure()`).
+    Failure,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -324,6 +326,8 @@ pub enum CargoCommand {
         file: RepoPath,
         filter: FilterRef,
         threads: Option<u16>,
+        /// `(index, count)`: run only the hash partition `index` of `count` (1-based).
+        partition: Option<(u16, u16)>,
         ci_profile: bool,
     },
     TestTarget {

@@ -81,6 +81,13 @@ pub enum Reason {
     TestGroupWithoutNextest(String),
     TestGroupFilter(String),
     TestGroupsWithPrivateSources,
+    PartitionsWithoutNextest(String),
+    TestGroupArtifact {
+        key: &'static str,
+        value: String,
+        fix: &'static str,
+    },
+    ArtifactNameTaken(String),
     PrCiWithSkipDraft,
     RustdocflagsString,
     CargoConfigInclude,

@@ -70,6 +70,7 @@ fn every_cargo_command_has_its_check_classification() {
                 file: RepoPath::from_static("target/nextest.tar.zst"),
                 filter: FilterRef::All,
                 threads: None,
+                partition: None,
                 ci_profile: true,
             },
             true,

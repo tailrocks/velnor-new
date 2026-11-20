@@ -16,6 +16,15 @@ impl Reason {
                 f,
                 "test group {name} belongs to a root with no nextest tests; a group runs a nextest filter from the root's archive"
             ),
+            Self::PartitionsWithoutNextest(name) => write!(
+                f,
+                "test_groups.partitions is set on group {name}, whose root has no nextest tests; partitions are a nextest feature (--partition), so remove partitions or give the root tests that nextest runs"
+            ),
+            Self::TestGroupArtifact { key, value, fix } => write!(f, "{key} {value:?} is refused: {fix}"),
+            Self::ArtifactNameTaken(name) => write!(
+                f,
+                "test_groups.artifacts.name {name:?} is used twice; an artifact name is unique in a workflow run, and a partitioned group appends -<partition> to each name, so give each artifact its own name"
+            ),
             Self::TestGroupFilter(filter) => write!(
                 f,
                 "test_groups.filter {filter:?} is empty or has a character a generated one-command step cannot carry (a control character, a quote, $, a backtick, a backslash, |, &, ; or <); write nextest's and, or and not instead of &, | and !"

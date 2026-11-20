@@ -294,6 +294,11 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
         StepKind::InstallMise => install_mise(),
         StepKind::Lint(command) => crate::lint_steps::lint_step(command),
         StepKind::UploadArchive { name, file } => upload_step(name, file),
+        StepKind::UploadGroupArtifact {
+            name,
+            paths,
+            retention_days,
+        } => crate::artifact_steps::group_artifact(name, paths, *retention_days),
         StepKind::DownloadArchive { name, into } => download_step(name, into.as_ref()),
         StepKind::CacheRestore(key) => cache_step(CACHE_RESTORE, "Restore", key, true),
         StepKind::CacheSave(key) => cache_step(CACHE_SAVE, "Save", key, false),

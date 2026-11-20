@@ -1,0 +1,233 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
+//! The `artifacts` key of a `[[test_groups]]` entry: evidence files that the group job
+//! uploads after its tests. Anyone who can read the repository can download a workflow
+//! artifact, so a path that could hold a secret, a path outside the workspace and a path
+//! that would upload the whole build directory are refused here, before any workflow exists.
+
+use std::collections::BTreeSet;
+
+use serde::Deserialize;
+use velnor_model::{ARTIFACT_RETENTION_DEFAULT, ArtifactWhen, GroupArtifact, RustCiConfig};
+
+use crate::config_test_groups::ranged;
+use crate::error::Reason;
+
+const NAME_MAX_LENGTH: usize = 60;
+const PATHS_MAX: usize = 16;
+const ARTIFACTS_MAX: usize = 8;
+const RETENTION_RANGE: std::ops::RangeInclusive<u16> = 1..=90;
+/// Names that other generated steps upload under.
+const RESERVED_PREFIXES: [&str; 2] = ["nextest-archive", "velnor-"];
+const SECRET_WORDS: [&str; 6] = ["key", "secret", "token", "password", "passwd", "credential"];
+const SECRET_SUFFIXES: [&str; 8] = [
+    ".pem",
+    ".key",
+    ".p12",
+    ".pfx",
+    ".jks",
+    ".keystore",
+    ".gpg",
+    ".asc",
+];
+const SECRET_PREFIXES: [&str; 5] = [".env", "id_rsa", "id_ed25519", "id_ecdsa", "id_dsa"];
+const SECRET_NAMES: [&str; 8] = [
+    ".netrc",
+    ".npmrc",
+    ".pypirc",
+    ".git-credentials",
+    ".ssh",
+    ".aws",
+    ".gnupg",
+    ".kube",
+];
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct RawTestArtifact {
+    name: String,
+    paths: Vec<String>,
+    when: String,
+    retention_days: Option<u16>,
+}
+
+fn refused(key: &'static str, value: &str, fix: &'static str) -> Reason {
+    Reason::TestGroupArtifact {
+        key,
+        value: value.to_owned(),
+        fix,
+    }
+}
+
+pub(crate) fn parse(raw: Option<Vec<RawTestArtifact>>) -> Result<Vec<GroupArtifact>, Reason> {
+    let Some(raw) = raw else {
+        return Ok(Vec::new());
+    };
+    if raw.is_empty() || raw.len() > ARTIFACTS_MAX {
+        return Err(refused(
+            "test_groups.artifacts",
+            &format!("{} entries", raw.len()),
+            "write 1 to 8 entries, or remove the key",
+        ));
+    }
+    raw.into_iter().map(artifact).collect()
+}
+
+fn artifact(raw: RawTestArtifact) -> Result<GroupArtifact, Reason> {
+    check_name(&raw.name)?;
+    let when = match raw.when.as_str() {
+        "failure" => ArtifactWhen::Failure,
+        "always" => ArtifactWhen::Always,
+        other => {
+            return Err(refused(
+                "test_groups.artifacts.when",
+                other,
+                "must be \"failure\" or \"always\"",
+            ));
+        }
+    };
+    if raw.paths.is_empty() || raw.paths.len() > PATHS_MAX {
+        return Err(refused(
+            "test_groups.artifacts.paths",
+            &format!("{} paths", raw.paths.len()),
+            "name 1 to 16 paths under the repository",
+        ));
+    }
+    for path in &raw.paths {
+        if let Some(fix) = path_fault(path) {
+            return Err(refused("test_groups.artifacts.paths", path, fix));
+        }
+    }
+    let retention = ranged(
+        "test_groups.artifacts.retention_days",
+        raw.retention_days,
+        &RETENTION_RANGE,
+    )?;
+    Ok(GroupArtifact {
+        name: raw.name,
+        paths: raw.paths,
+        when,
+        retention_days: retention.map_or(ARTIFACT_RETENTION_DEFAULT, |days| {
+            u8::try_from(days).unwrap_or(u8::MAX)
+        }),
+    })
+}
+
+fn check_name(name: &str) -> Result<(), Reason> {
+    let lower = name.to_ascii_lowercase();
+    if name.is_empty()
+        || name.len() > NAME_MAX_LENGTH
+        || !name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
+    {
+        return Err(refused(
+            "test_groups.artifacts.name",
+            name,
+            "use 1 to 60 letters, digits, '.', '_' or '-'",
+        ));
+    }
+    if RESERVED_PREFIXES
+        .iter()
+        .any(|prefix| lower.starts_with(prefix))
+    {
+        return Err(refused(
+            "test_groups.artifacts.name",
+            name,
+            "does not start with nextest-archive or velnor-, which the generated jobs use",
+        ));
+    }
+    Ok(())
+}
+
+/// Why a path may not be uploaded, as the fix to write, or `None` when it may.
+fn path_fault(path: &str) -> Option<&'static str> {
+    if path.starts_with('/') {
+        return Some("is outside the workspace; name a path under the repository");
+    }
+    if path.contains('~') || path.contains("${{") {
+        return Some("is not a repository path; write the path itself, without ~ or an expression");
+    }
+    if path.is_empty()
+        || !path.chars().all(|c| {
+            c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-' | '/' | '*' | '+' | '@')
+        })
+    {
+        return Some(
+            "has a character other than letters, digits, . _ - / * + and @; write one plain repository path or glob per entry",
+        );
+    }
+    let mut segments: Vec<&str> = path.split('/').collect();
+    if segments.last() == Some(&"") {
+        segments.pop();
+    }
+    if segments
+        .iter()
+        .any(|segment| segment.is_empty() || *segment == "." || *segment == "..")
+    {
+        return Some(
+            "is outside the workspace or not normal; write a path with no '..', '.' or empty part",
+        );
+    }
+    if segments
+        .iter()
+        .any(|segment| segment.eq_ignore_ascii_case(".git"))
+    {
+        return Some("is under .git, which holds repository credentials; name another path");
+    }
+    while segments
+        .last()
+        .is_some_and(|segment| segment.chars().all(|c| c == '*'))
+    {
+        segments.pop();
+    }
+    let Some(last) = segments.last() else {
+        return Some("selects the whole workspace; name the report files themselves");
+    };
+    let in_target = segments.len() >= 2 && segments[segments.len() - 2] == "target";
+    if *last == "target" || (in_target && matches!(*last, "debug" | "release")) {
+        return Some(
+            "uploads a whole build directory, which is far too large; name the report files, such as target/nextest/ci/junit.xml",
+        );
+    }
+    segments
+        .iter()
+        .any(|segment| secret_like(segment))
+        .then_some(
+            "may hold a secret (a .env file, a key, a token, a password or credentials), and anyone who can read the repository can download an artifact; name another path",
+        )
+}
+
+fn secret_like(segment: &str) -> bool {
+    let lower = segment.to_ascii_lowercase();
+    SECRET_WORDS.iter().any(|word| lower.contains(word))
+        || SECRET_SUFFIXES.iter().any(|suffix| lower.ends_with(suffix))
+        || SECRET_PREFIXES
+            .iter()
+            .any(|prefix| lower.starts_with(prefix))
+        || SECRET_NAMES.contains(&lower.as_str())
+}
+
+/// Artifact names are unique in one workflow run, so two groups, and a partitioned group's
+/// per-partition names, must never share one.
+pub(crate) fn check_unique(config: &RustCiConfig) -> Result<(), Reason> {
+    let mut seen = BTreeSet::new();
+    for group in &config.test_groups {
+        for artifact in &group.artifacts {
+            let names: Vec<String> = if group.partition_count() > 1 {
+                (1..=group.partition_count())
+                    .map(|index| format!("{}-{index}", artifact.name))
+                    .collect()
+            } else {
+                vec![artifact.name.clone()]
+            };
+            for name in names {
+                if !seen.insert(name.to_ascii_lowercase()) {
+                    return Err(Reason::ArtifactNameTaken(name));
+                }
+            }
+        }
+    }
+    Ok(())
+}

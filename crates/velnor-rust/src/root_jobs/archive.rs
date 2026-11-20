@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    CargoCommand, FilterRef, GroupFilter, Job, JobId, PrepareLocks, Step, StepKind, TestGroup,
-    TestNeed, When,
+    ArtifactWhen, CargoCommand, FilterRef, GroupFilter, Job, JobId, PrepareLocks, Step, StepKind,
+    TestGroup, TestNeed, When,
 };
 
 use super::{ARCHIVE_FILE, ARCHIVE_ID, RootJobs};
@@ -68,21 +68,39 @@ impl RootJobs<'_> {
                 &artifact,
                 None,
                 self.default_filter(&groups),
+                None,
             ),
         ];
-        jobs.extend(groups.iter().map(|group| {
-            self.archive_runner(
-                self.id(TEST_JOB.suffixed(group.name.as_str())),
-                &build_id,
-                &artifact,
-                Some(group),
-                FilterRef::Group {
-                    include: Some(group.filter.clone()),
-                    exclude: Vec::new(),
-                    except: member.direct_binaries(self.facts),
-                },
-            )
-        }));
+        for group in groups {
+            let base = TEST_JOB.suffixed(group.name.as_str());
+            let filter = FilterRef::Group {
+                include: Some(group.filter.clone()),
+                exclude: Vec::new(),
+                except: member.direct_binaries(self.facts),
+            };
+            let count = group.partition_count();
+            if count < 2 {
+                jobs.push(self.archive_runner(
+                    self.id(base),
+                    &build_id,
+                    &artifact,
+                    Some(group),
+                    filter,
+                    None,
+                ));
+                continue;
+            }
+            jobs.extend((1..=count).map(|index| {
+                self.archive_runner(
+                    self.id(base.suffixed(&index.to_string())),
+                    &build_id,
+                    &artifact,
+                    Some(group),
+                    filter.clone(),
+                    Some((index, count)),
+                )
+            }));
+        }
         jobs
     }
 
@@ -101,6 +119,27 @@ impl RootJobs<'_> {
         })
     }
 
+    fn artifact_steps(&self, group: &TestGroup, partition: Option<(u16, u16)>) -> Vec<Step> {
+        group
+            .artifacts
+            .iter()
+            .map(|artifact| Step {
+                when: match artifact.when {
+                    ArtifactWhen::Failure => When::Failure,
+                    ArtifactWhen::Always => When::Always,
+                },
+                ..self.gated(StepKind::UploadGroupArtifact {
+                    name: partition.map_or_else(
+                        || artifact.name.clone(),
+                        |(index, _)| format!("{}-{index}", artifact.name),
+                    ),
+                    paths: artifact.paths.clone(),
+                    retention_days: artifact.retention_days,
+                })
+            })
+            .collect()
+    }
+
     fn archive_runner(
         &self,
         id: JobId,
@@ -108,6 +147,7 @@ impl RootJobs<'_> {
         artifact: &str,
         group: Option<&TestGroup>,
         filter: FilterRef,
+        partition: Option<(u16, u16)>,
     ) -> Job {
         let runner = group
             .and_then(|group| group.runner.clone())
@@ -166,6 +206,7 @@ impl RootJobs<'_> {
                     file: ARCHIVE_FILE,
                     filter,
                     threads: group.and_then(|group| group.test_threads),
+                    partition,
                     ci_profile: self.member().root.nextest_ci_profile,
                 }],
             )
@@ -174,6 +215,11 @@ impl RootJobs<'_> {
                 when: When::Success,
                 ..step
             }),
+        );
+        steps.extend(
+            group
+                .into_iter()
+                .flat_map(|group| self.artifact_steps(group, partition)),
         );
         let mut job = self.lane_job(id, steps);
         if let Some(group) = group.filter(|group| group.selects()) {

@@ -18,7 +18,29 @@ pub struct TestGroup {
     pub paths: Vec<PathGlob>,
     pub events: Vec<GroupEvent>,
     pub root: GroupRoot,
+    /// The `partitions` key: split the group over this many jobs (`None` when not written).
+    pub partitions: Option<u16>,
+    /// The `artifacts` entries: files uploaded from the group job after its tests.
+    pub artifacts: Vec<GroupArtifact>,
 }
+
+/// One `artifacts` entry of a test group.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GroupArtifact {
+    pub name: String,
+    pub paths: Vec<String>,
+    pub when: ArtifactWhen,
+    pub retention_days: u8,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ArtifactWhen {
+    Failure,
+    Always,
+}
+
+/// The default `retention_days` of an artifact.
+pub const ARTIFACT_RETENTION_DEFAULT: u8 = 3;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum TestNeed {
@@ -55,6 +77,12 @@ pub enum GroupRoot {
 }
 
 impl TestGroup {
+    /// How many jobs the group renders as: the `partitions` value, or 1.
+    #[must_use]
+    pub fn partition_count(&self) -> u16 {
+        self.partitions.unwrap_or(1).max(1)
+    }
+
     #[must_use]
     pub fn selects(&self) -> bool {
         !self.paths.is_empty() || !self.events.is_empty()

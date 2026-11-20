@@ -69,6 +69,12 @@ pub enum StepKind {
         name: String,
         file: RepoPath,
     },
+    /// Uploads a test group's evidence files (`artifacts` in `[[test_groups]]`).
+    UploadGroupArtifact {
+        name: String,
+        paths: Vec<String>,
+        retention_days: u8,
+    },
     DownloadArchive {
         name: String,
         into: Option<RepoPath>,
@@ -171,6 +177,7 @@ impl StepKind {
             | Self::RustComponents(_)
             | Self::RustTargets(_)
             | Self::UploadArchive { .. }
+            | Self::UploadGroupArtifact { .. }
             | Self::DownloadArchive { .. }
             | Self::Helper(_)
             | Self::Prepare(_)
