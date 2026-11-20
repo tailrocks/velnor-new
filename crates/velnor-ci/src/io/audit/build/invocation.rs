@@ -3,9 +3,23 @@
 
 use std::path::{Path, PathBuf};
 
+use serde::{Deserialize, Serialize};
+
 use super::super::super::units::{MetadataInvocation, Workspace, refuse_arguments};
 use super::super::groups::root_workspace;
 use crate::error::CiError;
+
+#[derive(Default, Serialize, Deserialize)]
+pub(super) struct Selection {
+    all: bool,
+    packages: Vec<String>,
+}
+
+impl Selection {
+    pub(super) fn selects(&self, package: &str) -> bool {
+        self.all || self.packages.iter().any(|selected| selected == package)
+    }
+}
 
 pub(super) struct Invocation {
     pub(super) command: Vec<String>,
@@ -34,7 +48,10 @@ impl Invocation {
         }
     }
 
-    pub(super) fn selects(&self, package: &str) -> bool {
+    pub(super) fn selection(&self) -> Option<Selection> {
+        if !self.cargo_program() {
+            return None;
+        }
         let words: Vec<&str> = self
             .command
             .iter()
@@ -45,18 +62,29 @@ impl Invocation {
         let excluded = words
             .iter()
             .any(|word| *word == "--exclude" || word.starts_with("--exclude="));
-        if !excluded
+        let all = !excluded
             && words
                 .iter()
-                .any(|word| matches!(*word, "--workspace" | "--all"))
-        {
-            return true;
+                .any(|word| matches!(*word, "--workspace" | "--all"));
+        let mut packages = Vec::new();
+        for (index, word) in words.iter().enumerate() {
+            if matches!(*word, "-p" | "--package") {
+                packages.extend(words.get(index + 1).map(|name| (*name).to_owned()));
+            } else if let Some(name) = word
+                .strip_prefix("--package=")
+                .or_else(|| word.strip_prefix("-p"))
+            {
+                packages.push(name.to_owned());
+            }
         }
-        words.iter().enumerate().any(|(index, word)| {
-            (matches!(*word, "-p" | "--package") && words.get(index + 1) == Some(&package))
-                || word.strip_prefix("--package=") == Some(package)
-                || word.strip_prefix("-p") == Some(package)
-        })
+        Some(Selection { all, packages })
+    }
+
+    fn cargo_program(&self) -> bool {
+        Path::new(&self.command[0])
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| matches!(name, "cargo" | "cargo-nextest" | "cargo-clippy"))
     }
 
     pub(super) fn new(command: &[String]) -> Self {
