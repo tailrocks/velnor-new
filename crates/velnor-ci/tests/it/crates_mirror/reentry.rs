@@ -57,6 +57,8 @@ fn a_cargo_that_forwards_back_into_the_wrapper_is_refused_instead_of_looping() -
     Ok(())
 }
 
+// Walks the process tree, which only Linux exposes; elsewhere the env counter applies.
+#[cfg(target_os = "linux")]
 #[test]
 fn a_shim_that_unsets_the_depth_counter_is_still_refused() -> TestResult {
     let repo = Repo::empty("crates-mirror-reentry-unset");
@@ -98,6 +100,45 @@ fn a_shim_that_unsets_the_depth_counter_is_still_refused() -> TestResult {
     assert!(!output.status.success(), "{stderr}");
     assert!(
         stderr.contains("forwards back into the wrapper"),
+        "{stderr}"
+    );
+    Ok(())
+}
+
+#[test]
+fn a_forward_just_below_the_depth_limit_is_not_refused() -> TestResult {
+    let repo = Repo::empty("crates-mirror-reentry-below");
+    let root = repo.root();
+    repo.write_unstaged("ca.pem", "not used by this fixture");
+    let output = setup(root, "sparse+https://mirror.example/index/");
+    assert!(output.status.success(), "{output:?}");
+    let wrapper = fs::canonicalize(root.join("velnor-cargo/cargo"))?;
+    let env = fs::read_to_string(root.join("env"))?;
+    let config = env
+        .lines()
+        .find_map(|line| line.strip_prefix("VELNOR_CARGO_CONFIG="))
+        .ok_or("exported Cargo config")?;
+    let cargo_bin = PathBuf::from(std::env::var_os("CARGO").ok_or("CARGO from cargo test")?)
+        .parent()
+        .ok_or("Cargo directory")?
+        .to_path_buf();
+    let output = Command::new(&wrapper)
+        .args(["metadata", "--offline"])
+        .current_dir(root)
+        .env("VELNOR_CARGO_CONFIG", config)
+        .env("VELNOR_CARGO_WRAPPER", &wrapper)
+        .env("CARGO_HOME", root.join("home"))
+        .env(
+            "PATH",
+            std::env::join_paths([cargo_bin, PathBuf::from("/usr/bin"), PathBuf::from("/bin")])?,
+        )
+        .env_remove("VELNOR_CARGO_REAL")
+        .env_remove("VELNOR_CARGO_RUSTUP")
+        .env("VELNOR_CARGO_DEPTH", "63")
+        .output()?;
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        !stderr.contains("forwards back into the wrapper"),
         "{stderr}"
     );
     Ok(())
