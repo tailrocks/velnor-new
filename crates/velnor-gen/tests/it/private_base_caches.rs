@@ -48,7 +48,7 @@ fn text_and_notes(repo: &RepoView) -> Result<(String, Vec<String>), Box<dyn std:
 
 #[test]
 fn a_private_consumer_with_a_new_helper_restores_and_saves_both_base_caches() -> TestResult {
-    let repo = consumer("0.1.110", GIT_LOCK, "")?;
+    let repo = consumer("0.1.111", GIT_LOCK, "")?;
     let (text, notes) = text_and_notes(&repo)?;
     let lane = lane(&text)?;
     for present in [
@@ -74,7 +74,7 @@ fn a_private_consumer_with_a_new_helper_restores_and_saves_both_base_caches() ->
 
 #[test]
 fn the_helpers_verdict_gates_every_restore_and_every_save_of_the_base_caches() -> TestResult {
-    let text = workflow(&consumer("0.1.110", GIT_LOCK, "")?)?;
+    let text = workflow(&consumer("0.1.111", GIT_LOCK, "")?)?;
     let lane = lane(&text)?;
     let verdict = step(&lane, "Check that the repository is private").ok_or("no verdict step")?;
     assert!(verdict.contains("id: private_repo"), "{verdict}");
@@ -162,7 +162,7 @@ fn the_helpers_verdict_gates_every_restore_and_every_save_of_the_base_caches() -
 
 #[test]
 fn the_sources_cache_saves_the_cargo_downloads_and_nothing_that_holds_a_credential() -> TestResult {
-    let text = workflow(&consumer("0.1.110", GIT_LOCK, "")?)?;
+    let text = workflow(&consumer("0.1.111", GIT_LOCK, "")?)?;
     let lane = lane(&text)?;
     for name in ["Restore the sources cache", "Save the sources cache"] {
         let block = step(&lane, name).ok_or(name)?;
@@ -188,7 +188,7 @@ fn the_sources_cache_saves_the_cargo_downloads_and_nothing_that_holds_a_credenti
 
 #[test]
 fn an_older_helper_or_a_config_that_names_registries_keeps_the_refusal() -> TestResult {
-    for (helper, config, lock) in [("0.1.107", "", GIT_LOCK), ("0.1.88", "", GIT_LOCK)] {
+    for (helper, config, lock) in [("0.1.110", "", GIT_LOCK), ("0.1.107", "", GIT_LOCK), ("0.1.88", "", GIT_LOCK)] {
         let repo = consumer(helper, lock, config)?;
         let (text, notes) = text_and_notes(&repo)?;
         for absent in [
@@ -216,14 +216,14 @@ fn a_lock_that_is_not_only_git_or_a_cargo_config_with_registries_keeps_the_refus
     );
     let patched = format!("{GIT_LOCK}\n[[patch.unused]]\nname = \"secret\"\nversion = \"1.0.0\"\n");
     for lock in [registry, patched] {
-        let (text, notes) = text_and_notes(&consumer("0.1.110", &lock, "")?)?;
+        let (text, notes) = text_and_notes(&consumer("0.1.111", &lock, "")?)?;
         assert!(!text.contains("Save the target cache"), "{lock}");
         assert!(
             notes.iter().any(|note| note.contains(REFUSED_NOTE)),
             "{notes:?}"
         );
     }
-    let mut repo = consumer("0.1.110", GIT_LOCK, "")?;
+    let mut repo = consumer("0.1.111", GIT_LOCK, "")?;
     repo.files.insert(
         path(".cargo/config.toml")?,
         b"[registries.private]\nindex = \"sparse+https://registry.example.invalid/\"\n".to_vec(),
@@ -239,7 +239,7 @@ fn a_lock_that_is_not_only_git_or_a_cargo_config_with_registries_keeps_the_refus
 
 #[test]
 fn without_the_private_sources_table_private_git_dependencies_still_save_nothing() -> TestResult {
-    let mut repo = consumer("0.1.110", GIT_LOCK, "")?;
+    let mut repo = consumer("0.1.111", GIT_LOCK, "")?;
     repo.files.insert(
         path(".velnor/rust-ci.toml")?,
         b"full_run = 'off'\n".to_vec(),
@@ -256,7 +256,7 @@ fn without_the_private_sources_table_private_git_dependencies_still_save_nothing
 
 #[test]
 fn a_repository_without_private_dependencies_has_no_verdict_step() -> TestResult {
-    let repo = private_repo(&["Cargo.toml"], SECTION, "0.1.110")?;
+    let repo = private_repo(&["Cargo.toml"], SECTION, "0.1.111")?;
     let text = workflow(&repo)?;
     assert!(text.contains("Save the target cache"));
     assert!(!text.contains("cache private-repo"));
@@ -266,7 +266,7 @@ fn a_repository_without_private_dependencies_has_no_verdict_step() -> TestResult
 
 #[test]
 fn the_merge_queue_check_runs_before_either_base_cache_restore() -> TestResult {
-    let lane = lane(&workflow(&consumer("0.1.110", GIT_LOCK, "")?)?)?;
+    let lane = lane(&workflow(&consumer("0.1.111", GIT_LOCK, "")?)?)?;
     let names = names(&lane);
     let at = |name: &str| names.iter().position(|each| each == name);
     let check = at("Check that the merge queue entry is not from a fork");
@@ -295,7 +295,7 @@ fn a_cargo_config_the_runtime_would_refuse_keeps_the_generated_refusal() -> Test
         "paths = [\"../shared\"]\n",
         "[patch.crates-io]\nfoo = { path = \"../foo\" }\n",
     ] {
-        let mut repo = consumer("0.1.110", GIT_LOCK, "")?;
+        let mut repo = consumer("0.1.111", GIT_LOCK, "")?;
         repo.files
             .insert(path(".cargo/config.toml")?, config.as_bytes().to_vec());
         let (text, notes) = text_and_notes(&repo)?;
@@ -311,7 +311,7 @@ fn a_cargo_config_the_runtime_would_refuse_keeps_the_generated_refusal() -> Test
 
 #[test]
 fn the_token_bearing_steps_run_before_any_step_that_executes_checkout_code() -> TestResult {
-    let lane = lane(&workflow(&consumer("0.1.110", GIT_LOCK, "")?)?)?;
+    let lane = lane(&workflow(&consumer("0.1.111", GIT_LOCK, "")?)?)?;
     let names = names(&lane);
     let at = |name: &str| {
         names
