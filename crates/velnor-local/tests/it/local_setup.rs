@@ -12,7 +12,7 @@ use crate::support::{Stub, temp_dir};
 const PINNED: &str = "/repos/tailrocks/velnor-new/tarball/1793cf84b5924e2542a03b0fb2580e7395b2f4cb";
 const UPSTREAM: &str = "https://api.github.com/repos/tailrocks/velnor-new/tarball/1793cf84b5924e2542a03b0fb2580e7395b2f4cb";
 const MOUNTED: &str = "/opt/velnor/local/velnor-ci";
-const LOCAL_MARKERS: [&str; 4] = [
+const LOCAL_MARKERS: &[&str] = &[
     "/opt/velnor/local",
     "VELNOR_LOCAL",
     "local-mode",
@@ -83,7 +83,7 @@ fn input_names(action: &str) -> Vec<String> {
 #[test]
 fn the_production_action_has_no_local_binary_path() {
     let action = production_action();
-    for marker in LOCAL_MARKERS {
+    for marker in LOCAL_MARKERS.iter().copied() {
         assert!(
             !action.contains(marker),
             "production action.yml mentions {marker}"

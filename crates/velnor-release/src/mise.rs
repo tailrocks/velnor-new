@@ -15,7 +15,7 @@ fn parse(file: &str, text: &str) -> Result<Table, ReleaseError> {
         })
 }
 
-const RELEASE_PLZ_KEYS: [&str; 5] = [
+const RELEASE_PLZ_KEYS: &[&str] = &[
     "release-plz",
     "cargo:release-plz",
     "aqua:release-plz/release-plz",

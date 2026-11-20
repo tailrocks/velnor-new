@@ -5,7 +5,7 @@ use crate::base_save::{jobs, steps};
 use crate::facts::TestResult;
 use crate::pipeline::workflow;
 
-const TOKENS: [&str; 3] = ["GITHUB_TOKEN", "github.token", "secrets."];
+const TOKENS: &[&str] = &["GITHUB_TOKEN", "github.token", "secrets."];
 
 fn runs_repository_code(step: &str) -> bool {
     step.lines()

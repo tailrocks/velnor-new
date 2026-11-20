@@ -9,7 +9,7 @@ use crate::base_save::{jobs, step};
 use crate::facts::TestResult;
 use crate::gate_eval::{Context, condition_of, runs};
 
-const SAVES: [&str; 4] = [
+const SAVES: &[&str] = &[
     "velnor-ci inputs save",
     "Decide whether to save the build directory",
     "Save the target cache",
@@ -116,7 +116,7 @@ fn play(
         );
     }
     let mut saves = Vec::new();
-    for name in SAVES {
+    for name in SAVES.iter().copied() {
         let block = step(&lane, name).ok_or_else(|| format!("no {name} ({variant:?})"))?;
         let ran = runs(&condition_of(block)?, &context)?;
         if name == SAVES[0] {

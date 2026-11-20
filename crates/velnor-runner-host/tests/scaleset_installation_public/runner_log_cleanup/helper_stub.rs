@@ -12,7 +12,7 @@ use super::{DIND_ID, PRIVATE_VOLUME, write_json};
 pub(super) const ENGINE_DIGEST: &str =
     "b52bdf3b3388b9a5564e3c9873ed2a2c4ed4a5af1078ab1b1445e94c3dd0114f";
 const NETWORK_ID: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-const ROLES: [(&str, &str); 5] = [
+const ROLES: &[(&str, &str)] = &[
     ("", "shared-run"),
     ("-home", "runner-home"),
     ("-work", "runner-work"),
