@@ -188,3 +188,27 @@ fn check_passes_a_sources_miss_when_the_job_version_cannot_be_established() -> R
     assert!(passed, "{stderr}");
     Ok(())
 }
+
+#[test]
+fn report_records_that_the_checkout_declares_mbx() -> ResultTest {
+    let repo = fixture("report-declares-mbx")?;
+    repo.git(&["add", "."]);
+    run_cargo(&repo)?;
+    assert!(!with_store(&repo, false)?.mbx.declared);
+    fs::write(
+        repo.root().join("mise.toml"),
+        "[wrappers.cargo]\ncommand = \"mbx\"\n",
+    )?;
+    let metrics = with_store(&repo, false)?;
+    assert!(metrics.mbx.declared, "{metrics:?}");
+    assert_eq!(metrics.mbx.sessions.len(), 1);
+    assert!(
+        !metrics
+            .violations
+            .iter()
+            .any(|line| line.contains("compiled without mbx")),
+        "{:?}",
+        metrics.violations
+    );
+    Ok(())
+}

@@ -26,7 +26,7 @@ archive_guard_source_fingerprint() {
 archive_guard_target_identity() {
   local rustc_verbose rustc_details rustc_release rustc_commit rustc_host llvm_version
   local cargo_identity platform_name platform_machine
-  rustc_verbose="$(run_mise exec rust@1.99.1 -- rustc -vV)" \
+  rustc_verbose="$(run_mise exec -- rustc -vV)" \
     || fail 'cannot inspect the pinned Rust compiler'
   rustc_details="$(awk -F ': ' '
     $1 == "release" { release = $2; release_count++ }

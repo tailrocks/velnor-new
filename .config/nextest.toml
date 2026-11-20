@@ -70,11 +70,11 @@ slow-timeout = { period = "10s", terminate-after = 1 }
 
 # Each of these renders or reads every recorded sample, so it runs past the 2 s default on a loaded host.
 [[profile.default.overrides]]
-filter = 'package(=velnor-gen) and binary(=it) and (test(=golden::every_sample_repository_renders_exactly_its_expected_files) or test(=fork_fence_invariant::every_job_of_every_sample_that_a_pull_request_reaches_is_fenced) or test(=trim_job::no_job_of_any_sample_that_can_run_on_a_pull_request_or_merge_group_holds_actions_write) or test(=unused_anchors::no_rendered_sample_workflow_has_an_anchor_nobody_aliases) or test(=repo_sample::the_recorded_repository_sample_has_a_root_per_workspace_with_the_members_cargo_reports) or test(=nested_target_dir::no_root_of_any_sample_builds_inside_a_package_directory_from_the_new_helper))'
+filter = 'package(=velnor-gen) and binary(=it) and (test(=golden::every_sample_repository_renders_exactly_its_expected_files) or test(=fork_fence_invariant::every_job_of_every_sample_that_a_pull_request_reaches_is_fenced) or test(=trim_job::publication::no_job_of_any_sample_that_can_run_on_a_pull_request_or_merge_group_holds_actions_write) or test(=unused_anchors::no_rendered_sample_workflow_has_an_anchor_nobody_aliases) or test(=repo_sample::the_recorded_repository_sample_has_a_root_per_workspace_with_the_members_cargo_reports) or test(=nested_target_dir::no_root_of_any_sample_builds_inside_a_package_directory_from_the_new_helper))'
 slow-timeout = { period = "10s", terminate-after = 1 }
 
 [[profile.ci.overrides]]
-filter = 'package(=velnor-gen) and binary(=it) and (test(=golden::every_sample_repository_renders_exactly_its_expected_files) or test(=fork_fence_invariant::every_job_of_every_sample_that_a_pull_request_reaches_is_fenced) or test(=trim_job::no_job_of_any_sample_that_can_run_on_a_pull_request_or_merge_group_holds_actions_write) or test(=unused_anchors::no_rendered_sample_workflow_has_an_anchor_nobody_aliases) or test(=repo_sample::the_recorded_repository_sample_has_a_root_per_workspace_with_the_members_cargo_reports) or test(=nested_target_dir::no_root_of_any_sample_builds_inside_a_package_directory_from_the_new_helper))'
+filter = 'package(=velnor-gen) and binary(=it) and (test(=golden::every_sample_repository_renders_exactly_its_expected_files) or test(=fork_fence_invariant::every_job_of_every_sample_that_a_pull_request_reaches_is_fenced) or test(=trim_job::publication::no_job_of_any_sample_that_can_run_on_a_pull_request_or_merge_group_holds_actions_write) or test(=unused_anchors::no_rendered_sample_workflow_has_an_anchor_nobody_aliases) or test(=repo_sample::the_recorded_repository_sample_has_a_root_per_workspace_with_the_members_cargo_reports) or test(=nested_target_dir::no_root_of_any_sample_builds_inside_a_package_directory_from_the_new_helper))'
 slow-timeout = { period = "10s", terminate-after = 1 }
 
 [[profile.default.overrides]]
@@ -178,6 +178,11 @@ slow-timeout = { period = "10s", terminate-after = 1 }
 filter = 'package(=velnor-ci) and (test(run_returns_when_the_command_exits_although_a_background_process_keeps_its_pipes_open) | test(run_waits_for_all_open_pipes_within_one_shared_grace_period) | test(run_withholds_counts_when_a_descendant_keeps_the_summary_pipe_open) | test(run_writes_no_counts_when_a_held_pipe_never_printed_a_summary))'
 slow-timeout = { period = "30s", terminate-after = 1 }
 
+# Each of these starts bash, perl or a rendered helper, or reads the repository, and ran past the 2 s default on a loaded host.
+[[profile.default.overrides]]
+filter = 'package(=velnor-gen) and binary(=it) and (test(=needs_size::cache_context_is_bounded_from_its_producers_without_unrelated_plan_outputs) | test(=helper_perl_environment::trusted_launcher_preserves_helper_arguments_and_failure_status) | test(=helper_perl_environment::trusted_shasum_ignores_perl_startup_and_inherited_launcher_poison) | test(=helper_integrity::rendered_commands_ignore_path_shadows_and_refuse_a_replaced_helper) | test(=helper_startup::trusted_invocations_ignore_bash_env_startup) | test(=helper_startup::trusted_invocations_ignore_imported_exec_functions) | test(=helper_startup::trusted_invocations_ignore_imported_shell_options) | test(=release_yml_raw::provenance_is_written_only_for_a_strict_sidecar) | test(=ruleset::the_help_one_liner_stops_at_the_first_failed_post) | test(=declared_command_wrappers::wrappers_cannot_hide_a_helper_call))'
+slow-timeout = { period = "10s", terminate-after = 1 }
+
 [[profile.default.overrides]]
 filter = "package(=velnor-ci) or package(=velnor-gen) or package(=velnor-model) or package(=velnor-release) or package(=velnor-render) or package(=velnor-rust)"
 slow-timeout = { period = "2s", terminate-after = 1 }
@@ -202,3 +207,8 @@ slow-timeout = { period = "10s", terminate-after = 1 }
 [[profile.ci.overrides]]
 filter = 'package(=velnor-ci) and (test(run_returns_when_the_command_exits_although_a_background_process_keeps_its_pipes_open) | test(run_waits_for_all_open_pipes_within_one_shared_grace_period) | test(run_withholds_counts_when_a_descendant_keeps_the_summary_pipe_open) | test(run_writes_no_counts_when_a_held_pipe_never_printed_a_summary))'
 slow-timeout = { period = "30s", terminate-after = 1 }
+
+# Same 10 s tier for the tests added to profile.default above. profile.ci has no 2 s line of its own.
+[[profile.ci.overrides]]
+filter = 'package(=velnor-gen) and binary(=it) and (test(=needs_size::cache_context_is_bounded_from_its_producers_without_unrelated_plan_outputs) | test(=helper_perl_environment::trusted_launcher_preserves_helper_arguments_and_failure_status) | test(=helper_perl_environment::trusted_shasum_ignores_perl_startup_and_inherited_launcher_poison) | test(=helper_integrity::rendered_commands_ignore_path_shadows_and_refuse_a_replaced_helper) | test(=helper_startup::trusted_invocations_ignore_bash_env_startup) | test(=helper_startup::trusted_invocations_ignore_imported_exec_functions) | test(=helper_startup::trusted_invocations_ignore_imported_shell_options) | test(=release_yml_raw::provenance_is_written_only_for_a_strict_sidecar) | test(=ruleset::the_help_one_liner_stops_at_the_first_failed_post) | test(=declared_command_wrappers::wrappers_cannot_hide_a_helper_call))'
+slow-timeout = { period = "10s", terminate-after = 1 }

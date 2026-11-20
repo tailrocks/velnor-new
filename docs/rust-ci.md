@@ -107,6 +107,28 @@ The numbers in [`goals.md`](goals.md) section "Targets" are the budget: a run th
 
 Set the `budget` table (see Settings) to turn four of these into a check. The `rust-budget` job compares the run that executes it, and the median of that run and the last successful runs before it, with the wall-time, runner-time and setup-time limits you set, and fails on a breach or on a measurement it does not have. It runs on every push to the default branch and on the scheduled run (when `full_run` schedules one), never on a pull request, also when a job before it was skipped and only when the required check succeeded, and never fails the required check. A push that `skip_push_after_merge_group` skipped because the merge queue had already passed its commit is not a sample. A run that failed is not a sample, so a breach ends with the next run that is fast again. A push that selects nothing and a push that selects a core crate differ by a factor of ten, so the median of both is meaningless: `[budget.full]`, `[budget.affected]` and `[budget.none]` set limits per selection, and a run is compared only with earlier runs that made the same selection (see `generator/CONFIG.md`). The job's title records that selection (`Speed budget (full)`, `(affected)`, `(none)` or `(unknown)`), which is how a later run is matched.
 
+## Everything goes through mbx
+
+Every Rust build and test runs through mise and mbx. `mise.toml` sets `[wrappers.cargo] command = "mbx"`, so `cargo` on `PATH` is the mise wrapper that runs mbx, and mbx keeps the compiler results in its store. Do not run `~/.cargo/bin/cargo` or the rustup toolchain directly.
+
+Three exceptions are allowed. Nothing else may skip mbx.
+
+1. **Token fetch.** The `velnor-ci fetch` step runs the real `cargo fetch --locked` for each Cargo root, with the private token in the environment of that one command. It never runs a mise shim or a command wrapper, so the token never reaches a wrapper from the repository or `PATH`. The fetch downloads and does not compile, so mbx has nothing to cache.
+2. **Bootstrap of mbx and mise.** Building mise and mbx from source (`scripts/build-owned-tool.py`) uses the pinned official mbx release, checked by digest, as its cargo driver. A tool cannot be its own compiler wrapper while it is being built.
+3. **Rustdoc and doctests.** `cargo doc` and doctests run without mbx, because mbx cannot cache them yet. This is accepted for now and is revisited when mbx caches them.
+
+No script may add a fourth exception. `scripts/build-owned-archive-guard.sh` builds its guard through the repository's mise and mbx, with a fresh private mbx store per run. `scripts/local-cargo.sh` was removed: it called rustup's cargo directly and only its own test used it. Exceptions 1 and 3 do not build mbx or mise, so the bootstrap rule does not cover them; the owner must decide whether they stay.
+
+To verify a local checkout:
+
+```sh
+export MISE_TRUSTED_CONFIG_PATHS=$PWD
+mise install
+type -a cargo | head -1   # must show a path under mise/command-wrappers/bin/
+```
+
+Without `MISE_TRUSTED_CONFIG_PATHS`, mise falls back to plain cargo without a warning, so the `type -a` check is the test. A build through mbx prints `mbx[cache]: object cache: H hits, M misses, ...` lines in its output. If they are missing, the build did not go through mbx.
+
 ## Settings
 
 Every key of `.velnor/rust-ci.toml`, with its default. `generator/CONFIG.md` has the details.

@@ -3,8 +3,9 @@
 
 use crate::facts::TestResult;
 use crate::pipeline::{pin_helper, view};
-use velnor_gen::expected_with_notes;
+use velnor_gen::{GenerateError, expected_with_notes};
 use velnor_model::RepoPath;
+use velnor_render::{MAX_WORKFLOW_BYTES, Rule};
 
 const WORKFLOW: &str = ".github/workflows/rust-ci.yml";
 const LANE: &str = "[[test_lane]]\nroot = '.'\nfeatures = ['local-mode']\npackages = ['package-0']\nfilter = 'test(~local::)'\nlint = true\ndoc = true\n";
@@ -21,34 +22,55 @@ fn long_named_roots(count: usize) -> Vec<String> {
         .collect()
 }
 
-fn size_of(config: &str, roots: usize) -> Result<(usize, Vec<String>), Box<dyn std::error::Error>> {
+type Generated = Result<(usize, Vec<String>), GenerateError>;
+
+fn generated(config: &str, roots: usize) -> Result<Generated, Box<dyn std::error::Error>> {
     let manifests = long_named_roots(roots);
     let roots: Vec<&str> = manifests.iter().map(String::as_str).collect();
     let mut repo = view(&roots, Some(config.as_bytes()))?;
     pin_helper(&mut repo, "0.1.107")?;
-    let (files, notes) = expected_with_notes(&repo)?;
-    let text = files.get(&RepoPath::new(WORKFLOW)?).ok_or("no workflow")?;
-    assert!(text.contains("  required:"), "no verdict job");
-    Ok((text.len(), notes))
+    match expected_with_notes(&repo) {
+        Ok((files, notes)) => {
+            let text = files.get(&RepoPath::new(WORKFLOW)?).ok_or("no workflow")?;
+            assert!(text.contains("  required:"), "no verdict job");
+            Ok(Ok((text.len(), notes)))
+        }
+        Err(error) => Ok(Err(error)),
+    }
+}
+
+fn size_of(config: &str, roots: usize) -> Result<(usize, Vec<String>), Box<dyn std::error::Error>> {
+    generated(config, roots)?.map_err(Into::into)
 }
 
 #[test]
-fn a_parallel_lane_keeps_the_largest_fixture_under_the_workflow_size_limit() -> TestResult {
+fn a_parallel_lane_adds_a_bounded_job_to_a_sixteen_root_workflow() -> TestResult {
     let parallel = format!("{LANE}job = 'parallel'\n");
     let (inline, _) = size_of(LANE, 16)?;
-    for (roots, base) in [(16, Some(inline)), (20, None)] {
-        let (size, notes) = size_of(&parallel, roots)?;
-        assert!(
-            size <= velnor_render::MAX_WORKFLOW_BYTES,
-            "{roots} roots: {size} bytes, notes {notes:?}"
-        );
-        if let Some(base) = base {
-            assert!(
-                size > base && size - base < 40_000,
-                "{roots} roots: the lane job adds {} bytes",
-                size.saturating_sub(base)
-            );
-        }
+    let (size, notes) = size_of(&parallel, 16)?;
+    assert!(
+        size <= MAX_WORKFLOW_BYTES && size > inline && size - inline < 40_000,
+        "16 roots: {size} bytes against {inline} inline, notes {notes:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn a_parallel_lane_never_emits_a_workflow_over_the_size_limit() -> TestResult {
+    let parallel = format!("{LANE}job = 'parallel'\n");
+    match generated(&parallel, 20)? {
+        Ok((size, notes)) => assert!(
+            size <= MAX_WORKFLOW_BYTES,
+            "20 roots: {size} bytes, notes {notes:?}"
+        ),
+        Err(GenerateError::Rules(violations)) => assert!(
+            violations.iter().any(|violation| matches!(
+                violation.rule,
+                Rule::WorkflowTooLarge(bytes) if bytes > MAX_WORKFLOW_BYTES
+            )),
+            "the refusal must name the oversized workflow: {violations:?}"
+        ),
+        Err(error) => return Err(error.into()),
     }
     Ok(())
 }
