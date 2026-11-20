@@ -171,7 +171,7 @@ fn stage(args: &DeltaArgs, base: &str) -> Result<String, CiError> {
         .fold(0_u64, |size, node| size.saturating_add(node.size()))
         .saturating_add(bytes.len() as u64);
     if size > LIMIT {
-        return decline("delta exceeds its byte limit");
+        return decline(&over_limit(size).to_string());
     }
     if let Err(error) = materialize(args, &manifest, &bytes, cutoff) {
         return decline(&cleanup(&args.staging_dir, &error));
@@ -184,6 +184,12 @@ fn stage(args: &DeltaArgs, base: &str) -> Result<String, CiError> {
             .values()
             .filter(|node| !node.directory())
             .count()
+    ))
+}
+
+fn over_limit(size: u64) -> CiError {
+    CiError::new(format!(
+        "delta of {size} bytes exceeds the {LIMIT} byte limit"
     ))
 }
 
@@ -231,8 +237,9 @@ fn select(
         if !stat.directory() && known_changed {
             let minimum = (&path, &stat);
             let overhead = snapshot::encode(&minimum)?.len() as u64;
-            if size.saturating_add(stat.size()).saturating_add(overhead) > LIMIT {
-                return Err(CiError::new("delta exceeds its byte limit"));
+            let attempted = size.saturating_add(stat.size()).saturating_add(overhead);
+            if attempted > LIMIT {
+                return Err(over_limit(attempted));
             }
         }
         let changed = snapshot::change_time(&full)?;
