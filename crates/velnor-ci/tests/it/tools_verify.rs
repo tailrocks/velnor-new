@@ -370,7 +370,11 @@ fn step_output(job: &Job, verb: &str, hit: Option<&str>) -> String {
         command.env("VELNOR_ANCHOR_HIT", hit);
     }
     let run = command.output().unwrap_or_else(|e| unreachable!("{e}"));
-    assert!(run.status.success(), "{}", String::from_utf8_lossy(&run.stderr));
+    assert!(
+        run.status.success(),
+        "{}",
+        String::from_utf8_lossy(&run.stderr)
+    );
     fs::read_to_string(output).unwrap_or_default()
 }
 
@@ -384,7 +388,10 @@ fn only_the_exact_hit_true_lets_the_restored_anchor_vouch_for_the_tools() {
     ];
     for (name, hit) in cases {
         let job = job(name);
-        assert!(step_output(&job, "record", None).contains("recorded=true"), "{name}");
+        assert!(
+            step_output(&job, "record", None).contains("recorded=true"),
+            "{name}"
+        );
         let verified = step_output(&job, "check", hit);
         if hit == Some("true") {
             assert!(verified.contains("verified=true"), "{name}: {verified}");

@@ -199,7 +199,10 @@ fn every_tools_save_at_0_1_109_is_gated_to_the_default_branch() -> TestResult {
             for step in steps.iter().filter(|step| saves_tools(step)) {
                 saves += 1;
                 let condition = text(step, "if");
-                assert!(condition.contains(ON_DEFAULT), "{config:?} {id}: {condition}");
+                assert!(
+                    condition.contains(ON_DEFAULT),
+                    "{config:?} {id}: {condition}"
+                );
             }
         }
         assert_ne!(saves, 0, "{config:?}");
