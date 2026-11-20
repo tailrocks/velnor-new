@@ -186,7 +186,7 @@ pub(super) fn save(inputs: &Inputs<'_>) -> Outcome {
             fs::rename(&retired, &entry).ok();
         }
         fs::remove_dir_all(&staging).ok();
-        return if complete(&entry, inputs.owner) {
+        return if !inputs.replace && complete(&entry, inputs.owner) {
             Outcome::AlreadySaved
         } else {
             Outcome::Failed("the entry could not be published")

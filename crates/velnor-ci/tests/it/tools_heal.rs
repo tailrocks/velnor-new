@@ -6,7 +6,7 @@ use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 
 use velnor_ci::tools_discard;
-use velnor_ci::tools_local::{Inputs, Outcome, Verb, run};
+use velnor_ci::tools_local::{Inputs, Outcome, Verb, replace_requested, run};
 use velnor_ci::tools_verify::Verb as VerifyVerb;
 use velnor_ci::tools_verify_step::run as verify_step;
 
@@ -103,4 +103,73 @@ fn a_mismatching_restore_marks_the_job_and_a_clean_one_does_not() {
     assert!(tools_discard::pending(&job.root));
     tools_discard::clear(&job.root);
     assert!(!tools_discard::pending(&job.root));
+}
+
+#[test]
+fn an_unwritable_discard_marker_is_reported_and_the_discard_still_happens() {
+    let job = job("tools-heal-marker-blocked");
+    let anchor = recorded(&job);
+    fs::write(rustc(&job), "evil binary!").unwrap_or_else(|e| unreachable!("{e}"));
+    fs::create_dir(job.root.join("velnor-tools-discarded")).unwrap_or_else(|e| unreachable!("{e}"));
+    let out = verify_step(VerifyVerb::Check, &context(&job, &anchor, "push"))
+        .unwrap_or_else(|e| unreachable!("the verify step aborted: {e}"));
+    assert!(
+        out.contains("::notice::the restored tools were discarded"),
+        "{out}"
+    );
+    assert!(
+        out.contains("::warning::cannot record the discard"),
+        "{out}"
+    );
+    assert!(!job.home.join(".rustup").exists());
+}
+
+#[cfg(target_os = "macos")]
+struct Immutable(PathBuf);
+
+#[cfg(target_os = "macos")]
+impl Immutable {
+    fn set(path: &Path) -> Self {
+        let status = std::process::Command::new("chflags")
+            .arg("uchg")
+            .arg(path)
+            .status()
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        assert!(status.success());
+        Self(path.to_path_buf())
+    }
+}
+
+#[cfg(target_os = "macos")]
+impl Drop for Immutable {
+    fn drop(&mut self) {
+        std::process::Command::new("chflags")
+            .arg("nouchg")
+            .arg(&self.0)
+            .status()
+            .ok();
+    }
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn a_replacement_that_cannot_retire_the_poisoned_entry_fails_and_keeps_it() {
+    let (_repo, job, store) = poisoned_store("tools-heal-unretired");
+    let _locked = Immutable::set(&store.join("tools").join(KEY));
+    let outcome = save(&store, &job.home, true);
+    assert!(matches!(outcome, Outcome::Failed(_)), "{outcome:?}");
+    assert_eq!(stored_rustc(&store), "evil binary!");
+}
+
+#[test]
+fn an_unset_runner_temp_never_reads_a_marker_from_the_working_directory() {
+    let repo = Repo::empty("tools-heal-cwd-marker");
+    let dir = fs::canonicalize(repo.root()).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::write(dir.join("velnor-tools-discarded"), "").unwrap_or_else(|e| unreachable!("{e}"));
+    let before = std::env::current_dir().unwrap_or_else(|e| unreachable!("{e}"));
+    std::env::set_current_dir(&dir).unwrap_or_else(|e| unreachable!("{e}"));
+    let unset = replace_requested(Verb::Save, "");
+    std::env::set_current_dir(&before).unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(!unset);
+    assert!(replace_requested(Verb::Save, &dir.display().to_string()));
 }

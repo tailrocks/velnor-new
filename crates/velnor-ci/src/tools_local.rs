@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use crate::error::CiError;
 use crate::mbx_seed::SEED_DIR_ENV;
 use crate::mbx_store::{SHARED_DIR_ENV, trusted_event};
+use crate::tools_discard;
 
 mod clear;
 mod store;
@@ -197,7 +198,7 @@ pub fn setup(verb: Verb, key: Option<&str>) -> Result<String, CiError> {
         shared_dir: shared.as_deref(),
         seed_dir: seed.as_deref(),
         home: &home,
-        replace: verb == Verb::Save && crate::tools_discard::pending(Path::new(&runner_temp)),
+        replace: replace_requested(verb, &runner_temp),
         owner: fs::metadata(&home)
             .map(|metadata| metadata.uid())
             .map_err(|error| CiError::new(format!("cannot stat {}: {error}", home.display())))?,
@@ -212,8 +213,11 @@ pub fn setup(verb: Verb, key: Option<&str>) -> Result<String, CiError> {
             .and_then(|mut handle| writeln!(handle, "hit={}", outcome.hit()))
             .map_err(|error| CiError::new(format!("cannot write {file}: {error}")))?;
     }
-    if verb == Verb::Save && matches!(outcome, Outcome::Saved { .. } | Outcome::Healed { .. }) {
-        crate::tools_discard::clear(Path::new(&runner_temp));
+    if verb == Verb::Save
+        && matches!(outcome, Outcome::Saved { .. } | Outcome::Healed { .. })
+        && let Some(dir) = marker_dir(&runner_temp)
+    {
+        tools_discard::clear(dir);
     }
     finish(verb, &outcome, &node)
 }
@@ -227,4 +231,13 @@ pub fn finish(verb: Verb, outcome: &Outcome, node: &str) -> Result<String, CiErr
         ))),
         _ => Ok(message(outcome, node)),
     }
+}
+
+fn marker_dir(runner_temp: &str) -> Option<&Path> {
+    (!runner_temp.is_empty()).then(|| Path::new(runner_temp))
+}
+
+#[must_use]
+pub fn replace_requested(verb: Verb, runner_temp: &str) -> bool {
+    verb == Verb::Save && marker_dir(runner_temp).is_some_and(tools_discard::pending)
 }
