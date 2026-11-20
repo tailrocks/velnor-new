@@ -56,6 +56,7 @@ fn blocked_on_a_fifo(install: &Install) -> Result<Command, Box<dyn std::error::E
             "install.sh",
         ])
         .arg(&fifo)
+        .env("PATH", "/usr/bin:/bin")
         .stdout(Stdio::null());
     Ok(command)
 }
