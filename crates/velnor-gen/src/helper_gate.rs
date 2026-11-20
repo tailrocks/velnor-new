@@ -24,7 +24,7 @@ pub(crate) const CACHE_DEBUG_HELPER: (u64, u64, u64) = (0, 1, 82);
 pub(crate) const REQUIRED_CHECK_HELPER: (u64, u64, u64) = (0, 1, 97);
 
 /// The first `velnor-ci` whose `.velnor/rust-ci.toml` parser accepts `restore_cache` in a `[[test_groups]]` table.
-// helper-gate: first in tools-v0.1.108 via PENDING
+// helper-gate: first in tools-v0.1.108 via be63bc50f6
 pub(crate) const RESTORE_CACHE_HELPER: (u64, u64, u64) = (0, 1, 108);
 
 pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, GenerateError> {
