@@ -4111,6 +4111,7 @@ dependencies = [
  "tar",
  "tempfile",
  "velnor-runner-image-manifest",
+ "velnor-test-support",
 ]
 
 [[package]]
