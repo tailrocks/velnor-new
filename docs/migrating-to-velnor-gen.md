@@ -8,7 +8,7 @@ Most failed migrations failed before the generator ran: on the mise layout, on a
 
 ### The mise and mbx layout
 
-This is the recommended layout. Its `mise.toml` declares the Rust toolchain with `mr_boxington = true`, pins mbx and nextest, and routes every `cargo` through mbx. velnor-ci 0.1.108 and later require mbx (the requirement is added by #2108); earlier releases strongly recommend it.
+This is the recommended layout. Its `mise.toml` declares the Rust toolchain with `mr_boxington = true`, pins mbx and nextest, and routes every `cargo` through mbx. velnor-ci 0.1.108 is not released yet; once #2108 ships, generation requires the mbx layout.
 
 ```toml
 min_version = "<mise version>"
