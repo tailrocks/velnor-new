@@ -5,6 +5,7 @@ use std::fs;
 use std::process::{Command, Output};
 
 use crate::io::Repo;
+use crate::support::fresh_dir;
 
 use super::{placed, unit};
 
@@ -12,7 +13,10 @@ const GROUP_LOCK: &str =
     include_str!("../../../../../generator/samples/helper-lock/view/.velnor/rust-ci.lock");
 
 fn grouped_tools() -> Repo {
-    let repo = Repo::new("audit-groups");
+    grouped_tools_in(Repo::new("audit-groups"))
+}
+
+fn grouped_tools_in(repo: Repo) -> Repo {
     unit(&repo, ".gitignore", "target/\ntarget-velnor/\n");
     unit(&repo, "mise.toml", "[tools]\nrust = \"1.99.1\"\n");
     unit(
@@ -186,9 +190,32 @@ fn build_grouped(root: &std::path::Path, manifest: &str) -> Output {
 
 #[test]
 fn a_real_grouped_build_passes_the_audit() {
-    let repo = grouped_tools();
+    assert_real_grouped_build_passes(&grouped_tools());
+}
+
+/// A repository reached through a symlink, as on macOS where `$TMPDIR` is
+/// `/var/folders/...` and `/var` links to `/private/var`. Cargo and git report
+/// the resolved path, so a build that takes the link path must still audit.
+#[test]
+fn a_real_grouped_build_passes_the_audit_through_a_symlinked_root() {
+    let real = fs::canonicalize(fresh_dir("velnor-ci-audit-real", "parent"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let link = real.with_file_name(format!(
+        "{}-link",
+        real.file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or_else(|| unreachable!())
+    ));
+    std::os::unix::fs::symlink(&real, &link).unwrap_or_else(|e| unreachable!("{e}"));
+    let repo = Repo::new_under(&link, "audit-groups");
+    assert_real_grouped_build_passes(&grouped_tools_in(repo));
+    let _ignored = fs::remove_file(&link);
+    let _ignored = fs::remove_dir_all(&real);
+}
+
+fn assert_real_grouped_build_passes(repo: &Repo) {
     unit(
-        &repo,
+        repo,
         "tools/a/build.rs",
         "fn main() {\n    println!(\"cargo:rerun-if-changed=data.txt\");\n}\n",
     );
@@ -201,14 +228,14 @@ fn a_real_grouped_build_passes_the_audit() {
             String::from_utf8_lossy(&built.stderr)
         );
     }
-    let written = audit(&repo, &["--write"]);
+    let written = audit(repo, &["--write"]);
     assert!(
         written.status.success(),
         "stderr: {}",
         String::from_utf8_lossy(&written.stderr)
     );
     repo.git(&["add", "--all"]);
-    let output = audit(&repo, &[]);
+    let output = audit(repo, &[]);
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(output.status.success(), "{stderr}");
     let stdout = String::from_utf8_lossy(&output.stdout);

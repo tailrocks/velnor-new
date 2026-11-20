@@ -7,7 +7,7 @@ use std::process::Command;
 
 use serde::Deserialize;
 use velnor_model::PackageName;
-use velnor_rust::normalize;
+use velnor_rust::resolve;
 
 use super::audit::Audit;
 use crate::coverage::{Fingerprint, HOST, UnitKind};
@@ -176,9 +176,7 @@ fn split(stem: &str) -> Option<(&str, &str)> {
 pub(super) fn apart(workspaces: &[Workspace], shared: &[Vec<usize>]) -> Result<(), CiError> {
     let directories: Vec<PathBuf> = workspaces
         .iter()
-        .map(|w| {
-            fs::canonicalize(&w.target_directory).unwrap_or_else(|_| normalize(&w.target_directory))
-        })
+        .map(|w| resolve(&w.target_directory))
         .collect();
     for (outer, holder) in directories.iter().enumerate() {
         for (inner, held) in directories.iter().enumerate() {

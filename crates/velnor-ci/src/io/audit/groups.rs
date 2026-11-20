@@ -1,11 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fs;
 use std::path::{Path, PathBuf};
 
 use velnor_model::RepoFacts;
-use velnor_rust::normalize;
+use velnor_rust::resolve;
 
 use super::super::units::{MetadataInvocation, Workspace, own_workspace, workspace};
 use super::options::AuditOptions;
@@ -61,27 +60,6 @@ pub(super) fn scan_dirs(workspaces: &[Workspace]) -> Vec<PathBuf> {
     directories
 }
 
-fn resolved(path: &Path) -> PathBuf {
-    let path = normalize(path);
-    let mut missing = Vec::new();
-    let mut existing = path.as_path();
-    loop {
-        if let Ok(real) = fs::canonicalize(existing) {
-            return missing
-                .iter()
-                .rev()
-                .fold(real, |real, part| real.join(part));
-        }
-        match (existing.parent(), existing.file_name()) {
-            (Some(parent), Some(name)) => {
-                missing.push(name.to_owned());
-                existing = parent;
-            }
-            _ => return path,
-        }
-    }
-}
-
 pub(super) fn root_workspace(
     manifest: &Path,
     invocation: Option<&MetadataInvocation<'_>>,
@@ -93,8 +71,8 @@ pub(super) fn root_workspace(
         return own_workspace(manifest, invocation);
     }
     let found = workspace(manifest, invocation)?;
-    let target = resolved(&found.target_directory);
-    if alone && groups.iter().any(|group| resolved(group) == target) {
+    let target = resolve(&found.target_directory);
+    if alone && groups.iter().any(|group| resolve(group) == target) {
         return own_workspace(manifest, invocation);
     }
     Ok(found)
@@ -112,7 +90,7 @@ pub(super) fn inheriting(
     location: Option<&Path>,
 ) -> Vec<bool> {
     let standalone = standalone(facts);
-    let Some(location) = location.map(resolved) else {
+    let Some(location) = location.map(resolve) else {
         return vec![false; standalone.len()];
     };
     let holder = facts
@@ -120,7 +98,7 @@ pub(super) fn inheriting(
         .iter()
         .enumerate()
         .filter_map(|(index, root)| {
-            let directory = resolved(&repository.join(root.manifest.as_str()))
+            let directory = resolve(&repository.join(root.manifest.as_str()))
                 .parent()?
                 .to_path_buf();
             location
