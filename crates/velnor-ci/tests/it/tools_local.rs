@@ -104,6 +104,30 @@ fn a_trusted_save_is_restored_whole_on_a_pull_request() {
 }
 
 #[test]
+fn a_push_to_a_non_default_branch_never_saves() {
+    let node = node("tools-local-feature-push");
+    put(&node.root.join("home"));
+    let store = node.root.join("store").display().to_string();
+    let home = node.root.join("home");
+    let owner = fs::metadata(&home).map_or(0, |metadata| metadata.uid());
+    for event in ["push", "schedule", "workflow_dispatch"] {
+        let outcome = run(&Inputs {
+            verb: Verb::Save,
+            key: KEY,
+            event_name: event,
+            git_ref: "refs/heads/feature",
+            default_branch: Some("main"),
+            shared_dir: Some(&store),
+            seed_dir: Some(&store),
+            home: &home,
+            owner,
+        });
+        assert_eq!(outcome, Outcome::Untrusted, "{event}");
+    }
+    assert!(!node.root.join("store/tools").exists());
+}
+
+#[test]
 fn an_untrusted_event_never_saves_and_a_second_trusted_save_changes_nothing() {
     let node = node("tools-local-untrusted");
     put(&node.root.join("home"));

@@ -182,12 +182,23 @@ fn update_optional(
             digest.update(bytes);
         }
         Err(error) if filesystem::is_not_found(error.as_ref()) => {
+            watched.push(nearest_existing_directory(root_path, relative));
             digest.update(relative.as_bytes());
             digest.update([0, 0]);
         }
         Err(error) => return Err(error),
     }
     Ok(())
+}
+
+fn nearest_existing_directory(root_path: &Path, relative: &str) -> PathBuf {
+    let mut candidate = root_path.join(relative);
+    while candidate != root_path && !candidate.is_dir() {
+        if !candidate.pop() {
+            break;
+        }
+    }
+    candidate
 }
 
 fn add_total(total: &mut u64, length: usize) -> Result<(), Box<dyn Error>> {

@@ -71,6 +71,7 @@ pub enum Rule {
     },
     MiseActionInTokenJob,
     MiseReadsRepositoryConfig,
+    UnreadableCommandInTokenJob,
     CombinedCacheNotLastStep,
     TokenJobRunnerNotX64(String),
     WorkflowTooLarge(usize),
@@ -126,6 +127,9 @@ impl fmt::Display for RuleViolation {
             ),
             Rule::MiseReadsRepositoryConfig => f.write_str(
                 "a job that holds the release App token runs mise without --no-config --no-env --no-hooks",
+            ),
+            Rule::UnreadableCommandInTokenJob => f.write_str(
+                "a job that holds the release App token runs a command that cannot be read, which may run mise with the repository config",
             ),
             Rule::CombinedCacheNotLastStep => f.write_str(crate::combined_cache::MESSAGE),
             Rule::WorkflowTooLarge(_)

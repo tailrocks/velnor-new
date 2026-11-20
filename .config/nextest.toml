@@ -155,6 +155,14 @@ filter = 'package(=velnor-ci) and (test(=audit::freshness::distinct_declared_tre
 slow-timeout = { period = "30s", terminate-after = 1 }
 
 [[profile.default.overrides]]
+filter = 'package(=velnor-ci) and test(=cache_prune_fresh::a_pruned_build_directory_leaves_every_dependency_fresh_for_the_next_build)'
+slow-timeout = { period = "30s", terminate-after = 1 }
+
+[[profile.ci.overrides]]
+filter = 'package(=velnor-ci) and test(=cache_prune_fresh::a_pruned_build_directory_leaves_every_dependency_fresh_for_the_next_build)'
+slow-timeout = { period = "30s", terminate-after = 1 }
+
+[[profile.default.overrides]]
 filter = "package(=velnor-ci) or package(=velnor-gen) or package(=velnor-model) or package(=velnor-release) or package(=velnor-render) or package(=velnor-rust)"
 slow-timeout = { period = "2s", terminate-after = 1 }
 

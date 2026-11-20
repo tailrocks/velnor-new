@@ -11,6 +11,7 @@ mod build_inputs;
 mod cache;
 pub mod cache_api;
 mod cache_paths;
+mod cache_prune;
 mod cache_sources;
 mod cache_upload;
 mod cold;

@@ -14,6 +14,7 @@ use nix::sys::signal::{Signal, kill, killpg};
 use nix::unistd::Pid;
 use signal_hook::consts::{SIGINT, SIGTERM};
 use signal_hook::iterator::Signals;
+use velnor_model::BUILT_OUTPUT;
 
 use super::append_outputs;
 use super::early_list::EarlyList;
@@ -21,7 +22,7 @@ use super::pump::{Capture, pump_counted};
 use crate::cli::RunArgs;
 use crate::setup::DoctestCount;
 use crate::stream::separate_group;
-use crate::tests_run::{TestCounts, apply_runnable, output_lines, runs_nextest};
+use crate::tests_run::{TestCounts, apply_runnable, built, output_lines, runs_nextest};
 
 const TEMP_VARIABLE: &str = "RUNNER_TEMP";
 const LOG_FILE: &str = "velnor-run.log";
@@ -124,6 +125,10 @@ pub(super) fn execute(args: &RunArgs) -> Result<u8, (u8, String)> {
     handle.close();
     let status = status.map_err(|e| (2, format!("cannot wait for {}: {e}", args.command[0])))?;
     let mut code = exit_code(status);
+    if runs_nextest(&args.command) {
+        append_outputs(&format!("{BUILT_OUTPUT}={}\n", built(code)))
+            .map_err(|e| (2, format!("cannot write the step output: {e}")))?;
+    }
     let (mut lost, console, counts) = collect(&receiver, &slots, &mut invocation);
     if !invocation.capture_complete {
         eprintln!(
@@ -283,6 +288,9 @@ fn collect(
         failure = failure.or(captured.failure);
         console = console.or(captured.console);
         invocation.artifacts.extend(captured.observations.artifacts);
+        invocation
+            .build_scripts
+            .extend(captured.observations.build_scripts);
         invocation
             .progress
             .get_or_insert_with(Vec::new)
