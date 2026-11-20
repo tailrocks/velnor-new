@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    CargoCommand, FilterRef, PackageName, RepoPath, StepKind, TargetKind, TargetName,
+    CargoCommand, FilterRef, LaneFeatures, PackageName, RepoPath, StepKind, TargetKind, TargetName,
 };
 
 #[test]
@@ -30,7 +30,7 @@ fn every_cargo_command_has_its_check_classification() {
         ),
         (
             CargoCommand::NextestFeatures {
-                features: Vec::new(),
+                features: LaneFeatures::default(),
                 packages: vec![package()],
                 filter: FilterRef::All,
                 ci_profile: true,
@@ -40,19 +40,19 @@ fn every_cargo_command_has_its_check_classification() {
         ),
         (
             CargoCommand::ClippyFeatures {
-                features: Vec::new(),
+                features: LaneFeatures::default(),
             },
             true,
         ),
         (
             CargoCommand::DocFeatures {
-                features: Vec::new(),
+                features: LaneFeatures::default(),
             },
             true,
         ),
         (
             CargoCommand::LaneGuard {
-                features: Vec::new(),
+                features: LaneFeatures::default(),
                 packages: vec![package()],
                 filter: String::new(),
                 except: Vec::new(),
