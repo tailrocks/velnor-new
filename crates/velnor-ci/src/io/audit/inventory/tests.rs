@@ -91,6 +91,22 @@ fn a_directory_replaced_by_a_symbolic_link_before_it_is_opened_is_recorded_as_th
 }
 
 #[test]
+fn a_directory_that_is_a_directory_again_before_it_is_opened_still_fails_the_scan() {
+    let entries = scan_racing(
+        "directory-again",
+        |directory: &Path| -> io::Result<fs::ReadDir> {
+            fs::remove_dir(directory)?;
+            fs::create_dir(directory)?;
+            Err(io::Error::from(io::ErrorKind::NotFound))
+        },
+    );
+    assert!(
+        matches!(&entries, Err(error) if error.kind() == io::ErrorKind::NotFound),
+        "{entries:?}"
+    );
+}
+
+#[test]
 fn a_directory_that_cannot_be_opened_still_fails_the_scan() {
     let entries = scan_racing("denied", |_: &Path| {
         Err(io::Error::from(io::ErrorKind::PermissionDenied))
