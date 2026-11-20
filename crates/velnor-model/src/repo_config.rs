@@ -9,6 +9,7 @@ use crate::hosted::HostedRunners;
 use crate::ids::{PackageName, PathGlob, RepoPath, RootSlug, RunnerLabel, TargetName};
 use crate::lint::LintJob;
 use crate::mbx::MbxMode;
+use crate::policy_table::PolicyTable;
 use crate::shape::Shape;
 
 pub use crate::setup_phase::SetupPhase;
@@ -60,6 +61,7 @@ pub struct RustCiConfig {
     pub test_groups: Vec<TestGroup>,
     pub checkout: CheckoutScope,
     pub workspace_groups: Vec<WorkspaceGroup>,
+    pub policy: Option<PolicyTable>,
     /// Hand-written workflows under `.github/workflows/` that `velnor-gen check` must not
     /// flag. `None` when the key is not written, so the helper gate can tell an absent key
     /// from an empty list.
@@ -368,6 +370,7 @@ impl Default for RustCiConfig {
             test_groups: Vec::new(),
             checkout: CheckoutScope::Full,
             workspace_groups: Vec::new(),
+            policy: None,
             external_workflows: None,
             release_assets: Vec::new(),
         }
