@@ -268,8 +268,23 @@ fn delta_staging_rejects_tracked_files_only_when_the_lane_uses_it() -> TestResul
 }
 
 #[test]
+fn a_helper_before_the_post_merge_cleanup_fix_gets_no_cleanup_workflow() -> TestResult {
+    // tools-v0.1.101 fails `cache trim-deltas` once its PR has merged (d56256c182).
+    let files = expected_files(&pinned("0.1.101", "")?)?;
+    assert!(
+        !files.contains_key(&velnor_render::DELTA_CLEANUP_PATH),
+        "a 0.1.101 pin rendered the cleanup workflow"
+    );
+    Ok(())
+}
+
+#[test]
 fn cleanup_uses_only_a_trusted_locked_helper_and_old_helpers_get_no_delta_flags() -> TestResult {
-    for (version, source) in [(OLDEST_HELPER, false), ("0.1.95", false), ("0.1.95", true)] {
+    for (version, source) in [
+        (OLDEST_HELPER, false),
+        ("0.1.102", false),
+        ("0.1.102", true),
+    ] {
         let repo = if source {
             source_repo(version)?
         } else {
@@ -313,7 +328,7 @@ fn cleanup_uses_only_a_trusted_locked_helper_and_old_helpers_get_no_delta_flags(
             ),
             "{cleanup}"
         );
-        assert!(cleanup.contains("Install velnor-ci 0.1.95"), "{cleanup}");
+        assert!(cleanup.contains("Install velnor-ci 0.1.102"), "{cleanup}");
         assert!(
             cleanup.contains("velnor-ci cache trim-deltas --run-id \"$RUN_ID\""),
             "{cleanup}"
