@@ -24,7 +24,7 @@ pub use velnor_workflows::HELPER_COMMANDS;
 use std::collections::BTreeMap;
 use std::io::Write;
 
-use velnor_model::{CacheKey, RepoPath, RepoView, StepKind};
+use velnor_model::{CacheKey, RepoPath, RepoView, RunnerLabel, StepKind, WorkflowPlan};
 use velnor_rust::{METADATA_PATH, check_tools, detect, metadata_file, source_roots_over_limit};
 
 use crate::plan_render::plan_and_render;
@@ -55,6 +55,18 @@ pub fn generated_with_notes(
     Ok((files, notes))
 }
 
+/// The cleanup workflow runs where the repository's own jobs run: the runner of the
+/// plan's `rust-trim` job, which is the configured `runner`.
+fn cleanup_runner(plan: &WorkflowPlan) -> RunnerLabel {
+    plan.jobs
+        .iter()
+        .find(|job| job.id.as_str() == "rust-trim")
+        .map_or_else(
+            || RunnerLabel::from_static("ubuntu-latest"),
+            |job| job.runs_on.clone(),
+        )
+}
+
 pub fn expected_files(view: &RepoView) -> Result<BTreeMap<RepoPath, String>, GenerateError> {
     expected_with_notes(view).map(|(files, _)| files)
 }
@@ -80,7 +92,8 @@ pub fn expected_with_notes(
         .iter()
         .flat_map(|job| &job.steps)
         .any(|step| matches!(step.kind, StepKind::CacheSave(CacheKey::Delta { .. })))
-        && let Some(cleanup) = velnor_render::delta_cleanup(helper, &plan.name)
+        && let Some(cleanup) =
+            velnor_render::delta_cleanup(helper, &plan.name, &cleanup_runner(&plan))
     {
         files.insert(velnor_render::DELTA_CLEANUP_PATH, cleanup);
     }

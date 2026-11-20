@@ -27,6 +27,7 @@ mod call_fork_fence;
 mod cargo_flags;
 mod cargo_lock;
 mod classify;
+mod cleanup_job;
 mod combined_cache;
 mod compile_inputs;
 mod compile_inputs_identity;
