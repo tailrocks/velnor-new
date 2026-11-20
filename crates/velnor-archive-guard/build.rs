@@ -12,6 +12,8 @@ mod archive_guard_watch;
 use std::error::Error;
 use std::path::{Path, PathBuf};
 
+const SUPPLIED: &str = "VELNOR_ARCHIVE_GUARD_SOURCE_FINGERPRINT";
+
 fn main() -> Result<(), Box<dyn Error>> {
     let manifest = std::env::var_os("CARGO_MANIFEST_DIR")
         .filter(|path| !path.is_empty())
@@ -25,6 +27,16 @@ fn main() -> Result<(), Box<dyn Error>> {
         .and_then(Path::parent)
         .ok_or("workspace root is missing")?;
     let (fingerprint, watched, absent) = archive_guard_inputs::fingerprint(root)?;
+    println!("cargo:rerun-if-env-changed={SUPPLIED}");
+    if let Some(supplied) = std::env::var_os(SUPPLIED) {
+        if supplied.to_str() != Some(fingerprint.as_str()) {
+            return Err(format!(
+                "{SUPPLIED} differs from the fingerprint of {}",
+                root.display()
+            )
+            .into());
+        }
+    }
     let out_dir = std::env::var_os("OUT_DIR").map(PathBuf::from);
     let plan = archive_guard_watch::plan(watched, absent, out_dir.as_deref());
     for source in &plan.rerun {
