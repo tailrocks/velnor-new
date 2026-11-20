@@ -188,3 +188,39 @@ fn a_zero_count_retry_table_is_not_named_and_a_script_platform_change_is_new() -
     );
     Ok(())
 }
+
+#[test]
+fn turning_the_cargo_deny_policy_off_or_narrowing_its_checks_is_new() -> TestResult {
+    const CONFIG: &str = ".velnor/rust-ci.toml";
+    let off = facts(&[(CONFIG, "[policy]\ndeny = false\n")])?;
+    assert_eq!(introduced_files(&off, &[CONFIG], &[])?, [CONFIG]);
+    assert_eq!(
+        introduced_files(&off, &[CONFIG], &[(CONFIG, "[policy]\ndeny = false\n")])?,
+        Vec::<String>::new()
+    );
+    let narrowed = facts(&[(CONFIG, "[policy]\ndeny_checks = [\"advisories\"]\n")])?;
+    assert_eq!(introduced_files(&narrowed, &[CONFIG], &[])?, [CONFIG]);
+    Ok(())
+}
+
+#[test]
+fn naming_every_cargo_deny_check_is_not_a_weakening() -> TestResult {
+    const CONFIG: &str = ".velnor/rust-ci.toml";
+    for checks in [
+        "[\"advisories\", \"bans\", \"licenses\", \"sources\"]",
+        "[\"sources\", \"licenses\", \"bans\", \"advisories\"]",
+    ] {
+        let all = facts(&[(CONFIG, &format!("[policy]\ndeny_checks = {checks}\n"))])?;
+        assert_eq!(
+            introduced_files(&all, &[CONFIG], &[])?,
+            Vec::<String>::new(),
+            "{checks}"
+        );
+    }
+    let three = facts(&[(
+        CONFIG,
+        "[policy]\ndeny_checks = [\"advisories\", \"bans\", \"licenses\"]\n",
+    )])?;
+    assert_eq!(introduced_files(&three, &[CONFIG], &[])?, [CONFIG]);
+    Ok(())
+}
