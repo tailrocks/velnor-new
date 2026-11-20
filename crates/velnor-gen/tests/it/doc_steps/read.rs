@@ -213,21 +213,21 @@ pub(super) const READ: &[(&str, Files, bool, bool)] = &[
         true,
     ),
     (
-        "block doc whose summary starts on the opening line",
+        "indented text after a summary on the opening line is a paragraph",
         &[(
             "a/src/lib.rs",
             "/** Adds one.\n *     assert!(true);\n */\npub fn f() {}\n",
         )],
-        true,
-        true,
+        false,
+        false,
     ),
     (
-        "doc literal with an indented code block",
+        "a doc literal indented as one line is not a known doctest",
         &[(
             "a/src/lib.rs",
             "#[doc = r\"    assert!(true);\"]\npub fn f() {}\n",
         )],
-        true,
+        false,
         true,
     ),
     (
