@@ -128,6 +128,46 @@ Five gaps have a tracking issue in `velnor-new`: #2039, #2099, #2107, #2121 and 
 - **Attestation for a private repository.** `attest = true` is a `[[binaries]]` key in `.velnor/release.toml`, and it uses GitHub artifact attestations, which a private repository may not have on its plan. For an image, build with BuildKit's own provenance (`provenance: mode=max` in `docker/build-push-action`) in a hand-written workflow instead.
 - **Unsigned commits refused by a ruleset.** A commit that GitHub does not mark verified is refused by a signed-commit ruleset. Sign commits locally (`git commit -S`) or commit through GitHub's web interface, which signs them. A commit created through the REST API with a user token is unsigned unless the request supplies a signature. GitHub signs API commits only for some bot identities; see [GitHub's bot signature conditions](https://docs.github.com/en/authentication/managing-commit-signature-verification/about-commit-signature-verification#signature-verification-for-bots). Do not turn off the ruleset to land the change.
 
+## Lessons from the 0.1.107 and 0.1.108 migrations
+
+Each item names the release that ships the fix or the option. An item marked 0.1.109 is not released yet; pin the helper to that version only when you need it.
+
+1. **Run `cargo fmt --all --check` before you push.** Before 0.1.108, a failed Format step skipped the private-source token and fetch steps, because their implicit `success()` condition was false. The compile steps still ran, offline, and failed with "you are in the offline mode" errors that hide the formatting diff. #2180 runs the phase under `!cancelled()` when a compile step does, so the fetch runs. It is in 0.1.108. Still run the check locally first.
+
+2. **Pin `gh` in `mise.toml` for a hand-written workflow that calls it through mise.** Mise has no version of `gh` to run unless `mise.toml` pins one. The generated attestation job does not need this: it installs `gh@<version>` by name, so the rule covers only hand-written steps.
+
+3. **Rust 1.100 changes the target directory layout.** Helper 0.1.108 reads that layout in the audit, prune and delta steps (#2186). An older helper finds a built target with no units it recognises. Set the helper to 0.1.108 or later before you move the toolchain to 1.100. In 0.1.109, a built target with no unit file in a known layout is refused (#2191) instead of read as empty.
+
+4. **The `inputs build` directory cap is 1,000,000 by default (0.1.108, #2181).** The old cap was 4096 directories, which a full build and test of a multi-package workspace passes easily. `VELNOR_TARGET_MAX_DIRECTORIES` raises it up to 10,000,000. A value outside that range is refused.
+
+5. **mbx is required from 0.1.109 (#2108).** Generation refuses a `mise.toml` without one of two layouts:
+   - native: `mr_boxington = true` on the `rust` tool and no `[wrappers.cargo]`;
+   - explicit: the same option, plus `[wrappers.cargo]` with `command = "mbx"` and `env = { MBX_CARGO_SHIM_MODE = "1" }`.
+
+   It also refuses:
+   - an mbx pin not spelled exactly `mr-boxington`, with an `os` filter, or with more than one version request;
+   - a `[wrappers.cargo]` with `command = "mbx"` and no shim env, because it breaks `cargo -V`;
+   - mbx settings split between `mise.toml` and `.mise.toml`;
+   - a second tool whose key ends in `mr-boxington`.
+
+   To run cargo without mbx, set `[cache] mbx = false` (helper 0.1.109). That setting is refused with `mbx_shared_store = true` or `[cache] mbx_remote`.
+
+6. **Declare hand-written workflows in `external_workflows` (0.1.109, #2111).** Without it, `velnor-gen check` reports every workflow it does not generate as unowned. List each one in `.velnor/rust-ci.toml`:
+
+   ```toml
+   external_workflows = [".github/workflows/image.yml"]
+   ```
+
+   The listed file is then skipped by `check` and `generate`, so review it on its own. This is the mechanism the blocker in Known gaps waits for. The retired `.velnor/config.toml` bypass is deprecated.
+
+7. **Run a nextest setup script with `bash`.** In a `[[test_setup]]` command, write `bash <script>`. A script committed without the executable bit then still runs. Before 0.1.107, nextest's `SETUP` lines could drop the per-package test counts. 0.1.107 ignores them (#2169).
+
+8. **Use `[[test_setup]] phase = "build"` for a fixture that a build script or clippy reads (0.1.109, #2155).** The default phase runs the step before the tests only, so clippy and `build.rs` do not see the fixture. With `phase = "build"` the step runs before the first compiling cargo step of each job.
+
+9. **Private-repository base caches are planned, not on main (#2140).** Until they ship, confirm the cache hit on the first run, as in the verification section below.
+
+10. **Do not set `mbx_shared_store` or `[cache] mbx_remote` until you have a trusted runner pool.** Both share compiler results between runs. `mbx_shared_store` reads a per-node store on default-branch events. `mbx_remote` saves after a pull request from the same repository. Keep the default private store per job until the runners only accept writes from trusted events.
+
 ## Verification
 
 A migration is done when all of the following hold:
