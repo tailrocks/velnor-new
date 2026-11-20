@@ -100,6 +100,7 @@ mod mbx_seed;
 mod mbx_store;
 mod merge_group_skip;
 mod merge_queue;
+mod mise_pin;
 mod plan;
 mod plan_api;
 mod plan_diff;

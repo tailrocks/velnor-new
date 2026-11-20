@@ -230,6 +230,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::PrivateTokenAllowed => private_check::run(),
         Command::MbxStore => crate::mbx_store::setup(),
         Command::MbxSeed => crate::mbx_seed::setup(),
+        Command::MisePin(args) => crate::mise_pin::run(&args.tool),
         Command::ToolsLocal(args) => crate::tools_local::setup(args.verb, &args.key),
         Command::Prepare(args) => setup::prepare(&args),
         Command::CheckMetadata => setup::check_metadata(),

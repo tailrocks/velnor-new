@@ -17,8 +17,8 @@ pub use fetch_reports::FetchReportsArgs;
 mod write_request;
 pub use crate::cli_args::{
     BaseFile, BenchCommand, BudgetArgs, CheckConfigurationsArgs, CollectArgs, CompareArgs,
-    CratesMirrorArgs, ImageCommand, PlanArgs, PlanMode, PrepareArgs, QualificationCommand,
-    QualificationCompareArgs, ToolsLocalArgs, VerifyCandidateArgs,
+    CratesMirrorArgs, ImageCommand, MisePinArgs, PlanArgs, PlanMode, PrepareArgs,
+    QualificationCommand, QualificationCompareArgs, ToolsLocalArgs, VerifyCandidateArgs,
 };
 pub use crate::cli_cache::{CacheCommand, DecideArgs, TrimArgs};
 pub use gate::GateArgs;
@@ -123,6 +123,10 @@ pub enum Command {
         about = "Keep the mise and rustup tool directories on the node's own disk. restore copies ~/.local/share/mise and ~/.rustup from tools/<key> of the store (VELNOR_MBX_SHARED_DIR on a trusted event, VELNOR_MBX_SEED_DIR otherwise) and writes hit=true or hit=false to $GITHUB_OUTPUT, so the network cache action can be skipped on a hit; save, on a trusted event only, copies them into tools/<key> with an atomic rename, keeping the two newest keys. A missing store, a failed check or a failed copy is a miss, never an error"
     )]
     ToolsLocal(ToolsLocalArgs),
+    #[command(
+        about = "Print the exact release that the workspace's mise.toml (and .mise.toml) pins for <tool>, with a leading v removed, and fail unless it is one X.Y.Z release that mise.lock, when present, resolves to the same version. A range, latest, a loose or leading-zero version, a missing pin or two different pins fail. Appends version=<release> to $GITHUB_OUTPUT when that variable is set"
+    )]
+    MisePin(MisePinArgs),
     #[command(
         about = "Run after the tools are installed, in the directory of a Cargo root: exit 1 unless .velnor/rust-metadata.json is exactly what velnor-gen generate writes for that root, which reads cargo metadata --no-deps --offline"
     )]

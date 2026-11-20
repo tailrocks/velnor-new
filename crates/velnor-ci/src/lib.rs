@@ -37,6 +37,7 @@ pub mod mbx_store;
 pub mod merge_group;
 pub mod merge_queue;
 pub mod metrics;
+pub mod mise_pin;
 mod needs;
 pub mod nextest_list;
 pub mod observed_units;
