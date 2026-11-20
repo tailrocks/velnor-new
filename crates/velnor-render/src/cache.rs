@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{CacheKey, CacheKeySegment, CachePath, LOCK_OUTPUT_PREFIX, RepoPath};
+use velnor_model::{CacheKey, CacheKeySegment, CachePath, Job, LOCK_OUTPUT_PREFIX, RepoPath};
 
 use crate::gate::SOURCES_LOCKS_STEP;
 use crate::rules::Value;
@@ -10,6 +10,19 @@ use crate::steps::{MISE_VERSION, PREPARE_STEP};
 const HOST: &str = "${{ runner.os }}-${{ runner.arch }}";
 const COMMIT: &str = "${{ github.sha }}";
 const RUN_ID: &str = "${{ github.run_id }}";
+
+/// The `cache-mode` of a generated job that saves to the Actions cache service: `write`, which
+/// `read` would deny at the service. GitHub accepts only the four literals, not an expression, so
+/// the mode holds for every event of the job; each save step carries its own event gate (the
+/// default branch, or a pull request from the same repository). A job that only restores or
+/// deletes over the REST API gets none here, so the renderer writes `read`.
+pub(crate) fn saving_mode(job: &Job) -> Option<String> {
+    job.steps
+        .iter()
+        .any(|step| step.kind.saves_to_cache_service())
+        .then(|| "write".to_owned())
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RenderedKey {
     pub key: String,

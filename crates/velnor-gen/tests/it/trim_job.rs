@@ -32,7 +32,7 @@ fn lane(config: &str, id: &str) -> Result<String, Box<dyn std::error::Error>> {
 fn a_lane_keeps_read_only_contents_and_publishes_its_trim_prefix_and_save_decision() -> TestResult {
     let block = lane("", "rust")?;
     assert!(
-        block.contains("    permissions:\n      actions: read\n      contents: read\n    outputs:"),
+        block.contains("    permissions:\n      actions: read\n      contents: read\n    cache-mode: write\n    outputs:"),
         "{block}"
     );
     assert!(!block.contains("actions: write"), "{block}");
@@ -62,7 +62,7 @@ fn one_trim_job_alone_holds_actions_write_and_runs_only_after_a_default_branch_s
     assert!(trim.contains(&condition), "{trim}");
     assert!(
         trim.contains(
-            "    permissions:\n      pull-requests: read\n      actions: write\n    runs-on:"
+            "    permissions:\n      pull-requests: read\n      actions: write\n    cache-mode: read\n    runs-on:"
         ),
         "{trim}"
     );

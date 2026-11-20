@@ -57,7 +57,7 @@ pub(crate) fn yaml_job(job: &RenderedJob, marks: ShellcheckMarks) -> Yaml {
     if let Some(concurrency) = &job.concurrency {
         items.push(entry("concurrency", yaml_concurrency(concurrency)));
     }
-    if let Some(mode) = &job.cache_mode {
+    if let Some(mode) = cache_mode(job) {
         items.push(entry("cache-mode", text(mode)));
     }
     if !job.outputs.is_empty() {
@@ -109,6 +109,17 @@ pub(crate) fn yaml_job(job: &RenderedJob, marks: ShellcheckMarks) -> Yaml {
     match job_notes(job, marks) {
         Some(notes) => Yaml::Noted(notes, Box::new(Yaml::Map(items))),
         None => Yaml::Map(items),
+    }
+}
+
+/// The `cache-mode` of a job: the declared one, else `read`. A job with no key gets GitHub's
+/// default, which is `write` on a trusted trigger, so the absence is never rendered. A job that
+/// calls a reusable workflow (`uses`) has no key of its own: its callee jobs carry theirs.
+fn cache_mode(job: &RenderedJob) -> Option<&str> {
+    match (&job.cache_mode, &job.uses) {
+        (Some(mode), _) => Some(mode),
+        (None, None) => Some("read"),
+        (None, Some(_)) => None,
     }
 }
 

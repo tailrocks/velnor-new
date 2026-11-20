@@ -28,7 +28,6 @@ use crate::tests::Tests;
 pub(crate) const PREPARE_STEP: &str = "prepare";
 pub(crate) const RUN: &str = "velnor-ci run --";
 pub(crate) const RUN_DOCTESTS: &str = "velnor-ci run --require-doctests=$DOCTESTS_KNOWN --";
-
 pub(crate) const CHECKOUT: &str = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
 pub(crate) const MISE: &str = "jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d";
 pub(crate) const UPLOAD_ARTIFACT: &str =
@@ -96,6 +95,7 @@ pub(crate) fn rendered_job(job: &Job, plan: &WorkflowPlan) -> RenderedJob {
             .chain(merge_group_output(job))
             .chain(lane_outputs(&job.steps))
             .collect(),
+        cache_mode: crate::cache::saving_mode(job),
         steps,
         ..RenderedJob::default()
     }

@@ -105,7 +105,8 @@ fn a_cache_key_cannot_be_an_unbounded_expression() -> TestResult {
                 "[[workflow.job.step]]\nname = \"Step\"\nuses = \"{uses}\"\nwith = {{ path = \"a\", key = \"{key}\" }}\n"
             )
         };
-        let config = |key: &str| one_job(&input("cache_key"), "", &step(key));
+        let writer = "cache_mode = \"write\"\nif = \"github.ref != format('refs/heads/{0}', github.event.repository.default_branch)\"\n";
+        let config = |key: &str| one_job(&input("cache_key"), writer, &step(key));
         let message = refusal(&config("${{ inputs.cache_key }}"))?;
         assert!(message.contains("cache key"), "{uses}: {message}");
         rendered(&config("fixed-${{ github.run_attempt }}"))?;
