@@ -90,6 +90,3 @@ name = "hk config"
 task = "validate-hk"
 tools = ["hk"]
 timeout_minutes = 5
-
-[[lint]]
-kind = "generated-check"

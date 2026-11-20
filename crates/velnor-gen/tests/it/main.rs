@@ -244,6 +244,7 @@ mod repo_lint_jobs;
 mod repo_profile_include;
 mod repo_sample;
 mod report;
+mod report_not_generated;
 mod required_gate;
 mod required_gate_ignored;
 mod required_gate_lanes;

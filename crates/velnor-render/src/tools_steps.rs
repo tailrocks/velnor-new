@@ -178,9 +178,9 @@ fn read_step() -> RenderedStep {
 fn verify_step(verb: ToolsLocalVerb, anchor: &ToolsAnchor) -> RenderedStep {
     let (id, name, word) = match verb {
         ToolsLocalVerb::AnchorReset => (None, "Clear anchor", "reset"),
-        ToolsLocalVerb::Verify | ToolsLocalVerb::VerifyNamed => {
-            (Some(VERIFY_STEP), "Verify tools", "check")
-        }
+        ToolsLocalVerb::Verify
+        | ToolsLocalVerb::VerifyNamed
+        | ToolsLocalVerb::VerifyNamedAnchor => (Some(VERIFY_STEP), "Verify tools", "check"),
         _ => (Some(RECORD_STEP), "Record anchor", "record"),
     };
     let mut env = if *anchor == ToolsAnchor::Unanchored {
@@ -202,7 +202,18 @@ fn verify_step(verb: ToolsLocalVerb, anchor: &ToolsAnchor) -> RenderedStep {
         }
         env
     };
-    if verb == ToolsLocalVerb::VerifyNamed {
+    if verb == ToolsLocalVerb::VerifyNamedAnchor {
+        env.push((
+            "VELNOR_ANCHOR_CACHE_KEY".to_owned(),
+            Value::Expr(format!(
+                "${{{{ steps.{ANCHOR_STEP}.outputs.cache-matched-key }}}}"
+            )),
+        ));
+    }
+    if matches!(
+        verb,
+        ToolsLocalVerb::VerifyNamed | ToolsLocalVerb::VerifyNamedAnchor
+    ) {
         env.push((
             "VELNOR_TOOLS_CACHE_KEY".to_owned(),
             Value::Expr(format!(
@@ -268,7 +279,11 @@ pub(crate) fn tools_local_step(verb: ToolsLocalVerb, anchor: &ToolsAnchor) -> Re
         Verb::AnchorSave => return anchor_cache_step(crate::steps::CACHE_SAVE, "Save"),
         Verb::AnchorFind => return newest_anchor_step(crate::steps::CACHE_RESTORE, true),
         Verb::AnchorRead => return read_step(),
-        Verb::AnchorReset | Verb::Verify | Verb::VerifyNamed | Verb::Record => {
+        Verb::AnchorReset
+        | Verb::Verify
+        | Verb::VerifyNamed
+        | Verb::VerifyNamedAnchor
+        | Verb::Record => {
             return verify_step(verb, anchor);
         }
     };
