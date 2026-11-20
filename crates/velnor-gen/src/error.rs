@@ -40,6 +40,7 @@ pub enum GenerateError {
     TooManySourceRoots(usize),
     FamilyTagHelperTooOld(HelperVersion),
     TagPushHelperTooOld(HelperVersion),
+    OptionalAssetsHelperTooOld(HelperVersion),
     TestLaneHelperTooOld(HelperVersion),
     TestLaneJobHelperTooOld(HelperVersion),
     HelperLockLacksMacos {
@@ -141,6 +142,10 @@ impl fmt::Display for GenerateError {
             Self::TagPushHelperTooOld(version) => write!(
                 f,
                 "velnor-ci {version} cannot check a pushed family tag, which family_trigger = \"tag_push\" needs; pin velnor-ci 0.1.98 or later with `velnor-gen pin-helper 0.1.98`"
+            ),
+            Self::OptionalAssetsHelperTooOld(version) => write!(
+                f,
+                "velnor-ci {version} cannot publish an optional release file, which optional_platforms in .velnor/release.toml needs; pin velnor-ci 0.1.108 or later with `velnor-gen pin-helper 0.1.108`, or remove optional_platforms"
             ),
             Self::VersionGroupsHelperTooOld(version) => write!(
                 f,

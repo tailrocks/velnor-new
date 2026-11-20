@@ -170,7 +170,12 @@ fn release_publish_takes_an_optional_asset_that_is_present_and_skips_one_that_is
     let sums: String = all_files()
         .iter()
         .find(|(name, _)| *name == "SHA256SUMS")
-        .map(|(_, text)| text.lines().take(2).map(|line| format!("{line}\n")).collect())
+        .map(|(_, text)| {
+            text.lines()
+                .take(2)
+                .map(|line| format!("{line}\n"))
+                .collect()
+        })
         .unwrap_or_default();
     for (name, text) in all_files() {
         match name {

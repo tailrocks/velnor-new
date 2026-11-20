@@ -53,6 +53,17 @@ pub(crate) fn release_workflow(
     {
         return Err(GenerateError::TagPushHelperTooOld(helper.version().clone()));
     }
+    // helper-gate: first in tools-v0.1.108 via e876eb2db5
+    if plan
+        .binaries
+        .iter()
+        .any(|binary| !binary.optional_platforms.is_empty())
+        && !helper.version().at_least(crate::OPTIONAL_ASSET_HELPER)
+    {
+        return Err(GenerateError::OptionalAssetsHelperTooOld(
+            helper.version().clone(),
+        ));
+    }
     let grouped = plan
         .roots
         .iter()

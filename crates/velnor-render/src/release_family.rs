@@ -11,6 +11,7 @@ use crate::release_binaries::{
 use crate::release_checks::tag_needs;
 use crate::release_context::{BuildContext, Private};
 use crate::release_family_publish::{publish, sums, verify};
+use crate::release_optional::is_optional;
 use crate::release_source::{Source, source_of};
 use crate::release_steps::{
     TOOLCHAIN, app_token, checkout, expression, join, permissions, shell_word, variables,
@@ -228,6 +229,7 @@ fn build(
         permissions: permissions(&[("contents", "read")]),
         runs_on: runner.to_owned(),
         timeout_minutes: BUILD_TIMEOUT_MINUTES,
+        continue_on_error: is_optional(binary, platform),
         steps: build_steps(
             binary,
             platform,

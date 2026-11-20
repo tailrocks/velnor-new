@@ -93,6 +93,9 @@ pub(crate) fn yaml_job(job: &RenderedJob, marks: ShellcheckMarks) -> Yaml {
             "timeout-minutes",
             Yaml::Int(u64::from(job.timeout_minutes)),
         ));
+        if job.continue_on_error {
+            items.push(entry("continue-on-error", Yaml::Bool(true)));
+        }
         if !job.env.is_empty() {
             items.push(entry("env", values(&job.env)));
         }

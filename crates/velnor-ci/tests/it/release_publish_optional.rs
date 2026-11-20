@@ -5,9 +5,7 @@ use std::collections::BTreeMap;
 
 use velnor_ci::publish::{Request, publish};
 
-use crate::release_fake::{
-    FILES, FakeReleases, TAG, all_files, name, published_digests, request,
-};
+use crate::release_fake::{FILES, FakeReleases, TAG, all_files, name, published_digests, request};
 use crate::support::repo;
 
 const OPTIONAL: &str = "velnor-ci-macos-arm64";
@@ -58,8 +56,8 @@ fn an_optional_file_that_is_missing_is_skipped_with_a_notice() {
     let fake = FakeReleases::new();
     let id = fake.app_draft();
     let files = without_the_optional_file();
-    let said = publish(&fake, &repo(), &optional_request(&borrowed(&files)))
-        .map_err(|e| e.to_string());
+    let said =
+        publish(&fake, &repo(), &optional_request(&borrowed(&files))).map_err(|e| e.to_string());
     assert_eq!(
         said,
         Ok(format!(
@@ -125,7 +123,10 @@ fn an_optional_file_that_is_present_but_unlisted_stays_a_failure() {
     let mut present = borrowed(&files);
     present.push((OPTIONAL, "velnor-ci for macos-arm64\n"));
     let said = refusal(&fake, &optional_request(&present));
-    assert!(said.contains(&format!("{OPTIONAL}: not listed in SHA256SUMS")), "{said}");
+    assert!(
+        said.contains(&format!("{OPTIONAL}: not listed in SHA256SUMS")),
+        "{said}"
+    );
     assert!(fake.is_draft(id));
 }
 

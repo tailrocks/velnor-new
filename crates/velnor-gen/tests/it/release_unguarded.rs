@@ -88,6 +88,17 @@ pub(crate) fn expected_release_nested(
     {
         return Err(GenerateError::TagPushHelperTooOld(helper.version().clone()));
     }
+    // helper-gate: first in tools-v0.1.108 via e876eb2db5
+    if plan
+        .binaries
+        .iter()
+        .any(|binary| !binary.optional_platforms.is_empty())
+        && !helper.version().at_least(velnor_gen::OPTIONAL_ASSET_HELPER)
+    {
+        return Err(GenerateError::OptionalAssetsHelperTooOld(
+            helper.version().clone(),
+        ));
+    }
     let mut files = render_release(&plan, &helper, "main", None).map_err(GenerateError::Rules)?;
     files.retain(|path, _| *path == RELEASE_WORKFLOW_PATH);
     Ok(files)

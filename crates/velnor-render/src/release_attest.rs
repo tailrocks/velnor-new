@@ -71,13 +71,22 @@ pub(crate) fn verifications(binary: &BinaryPlan) -> Vec<RenderedStep> {
 
 pub(crate) fn verification_steps(paths: Vec<(String, String)>) -> Vec<RenderedStep> {
     let mut steps = vec![install_tool(&format!("gh@{GH_VERSION}"))];
-    steps.extend(paths.into_iter().map(|(name, path)| RenderedStep {
+    steps.extend(
+        paths
+            .into_iter()
+            .map(|(name, path)| verification_step(&name, &path, None)),
+    );
+    steps
+}
+
+pub(crate) fn verification_step(name: &str, path: &str, condition: Option<String>) -> RenderedStep {
+    RenderedStep {
         name: format!("Verify the build provenance of {name}"),
+        condition,
         env: variables(&[("GH_TOKEN", "${{ github.token }}")]),
         run: Some(format!(
             "mise --no-config --no-env --no-hooks exec gh@{GH_VERSION} -- gh attestation verify {path} --repo \"$GITHUB_REPOSITORY\" --source-digest \"$GITHUB_SHA\" --source-ref \"$GITHUB_REF\" --signer-workflow \"$GITHUB_REPOSITORY/.github/workflows/release.yml\" --signer-digest \"$GITHUB_SHA\" --deny-self-hosted-runners"
         )),
         ..RenderedStep::default()
-    }));
-    steps
+    }
 }

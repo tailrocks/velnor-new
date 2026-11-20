@@ -67,6 +67,9 @@ pub struct BinaryPlan {
     pub bin: String,
     pub root: String,
     pub platforms: Vec<Platform>,
+    /// The platforms in `platforms` whose build and files are optional: a failed build never fails
+    /// the release, and the release holds a file of one only when its build produced it.
+    pub optional_platforms: Vec<Platform>,
     pub extra_bins: Vec<ExtraBin>,
     pub include: Vec<String>,
     pub format: BinaryFormat,
