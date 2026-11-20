@@ -67,22 +67,31 @@ fn assert_restore(recorded: &Value, found: &str, key: &str, name: &str) {
     assert_eq!(hit(found, key), text(&recorded["hit"]), "{name}");
 }
 
+fn normalized(scope: &str) -> String {
+    scope.replace("/7/", "/<n>/")
+}
+
 #[test]
 fn token_scopes_match_the_access_of_each_recorded_event() {
     let document = observation("token");
+    let default_ref = "refs/heads/main";
     let cases = [
-        ("push", push("probe-<tag>-events")),
-        ("pull_request", pull(7, "main")),
-        ("schedule", push("main")),
+        (
+            "push",
+            push("probe-<tag>-events"),
+            "refs/heads/probe-<tag>-events",
+        ),
+        ("pull_request", pull(7, "main"), "refs/pull/7/merge"),
+        ("schedule", push("main"), "refs/heads/main"),
     ];
-    for (name, event) in cases {
+    for (name, event, git_ref) in cases {
         let access = access_for(&event, "main");
         let expected: Vec<(u64, String)> = access
             .read
             .iter()
             .map(|scope| {
                 let permission = if *scope == access.write { 3 } else { 1 };
-                (permission, scope.0.replace("/7/", "/<n>/"))
+                (permission, normalized(&scope.0))
             })
             .collect();
         let recorded: Vec<(u64, String)> = document["legs"][name]["cache_scopes"]
@@ -91,10 +100,10 @@ fn token_scopes_match_the_access_of_each_recorded_event() {
                 items
                     .iter()
                     .map(|item| {
-                        (
-                            item["permission"].as_u64().unwrap_or(0),
-                            text(&item["scope"]).to_owned(),
-                        )
+                        let scope = text(&item["scope"])
+                            .replace("${ref}", git_ref)
+                            .replace("${defaultRef}", default_ref);
+                        (item["permission"].as_u64().unwrap_or(0), normalized(&scope))
                     })
                     .collect()
             })
