@@ -35,8 +35,18 @@ fn fingerprint(unit: &str, package: &str, hash: &str, name: &str) {
 fn fingerprints_of_every_unit_kind_are_read_from_the_unit_directory() {
     fingerprint(LIB, "dep", "5c64b2dee9af80ce", "lib-dep");
     fingerprint(LIB, "dep", "5c64b2dee9af80ce", "dep-lib-dep");
-    fingerprint(SCRIPT, "dep", "3f722b21ff7c4711", "build-script-build-script-build");
-    fingerprint(RUN, "dep", "33cec232bab789d1", "run-build-script-build-script-build");
+    fingerprint(
+        SCRIPT,
+        "dep",
+        "3f722b21ff7c4711",
+        "build-script-build-script-build",
+    );
+    fingerprint(
+        RUN,
+        "dep",
+        "33cec232bab789d1",
+        "run-build-script-build-script-build",
+    );
     fingerprint(BIN, "fx", "3374f0e803714d87", "bin-fx");
 }
 
