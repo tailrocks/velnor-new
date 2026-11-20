@@ -138,6 +138,7 @@ mod lock_consistency;
 mod lock_scope;
 mod macos_helper_lock;
 mod main_and_scheduled;
+mod mbx_pin;
 mod mbx_remote;
 mod merge_group_check;
 mod metadata_file;

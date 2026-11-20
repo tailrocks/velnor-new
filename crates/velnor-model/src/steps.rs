@@ -105,7 +105,10 @@ pub enum StepKind {
     AdvisoryFetch {
         configs: Vec<Option<RepoPath>>,
     },
-    MbxRemote,
+    MbxRemote {
+        from_pin: bool,
+    },
+    MbxPin,
     MbxStore,
     MbxSeed,
     ToolsLocal(ToolsLocalVerb),
@@ -186,6 +189,7 @@ impl StepKind {
             | Self::PrivateToken { .. }
             | Self::PrivateFetch { .. }
             | Self::MbxRemote { .. }
+            | Self::MbxPin
             | Self::MbxStore { .. }
             | Self::MbxSeed { .. }
             | Self::ToolsLocal(_)
@@ -212,7 +216,7 @@ impl StepKind {
     /// the node-local stores and the scope-cache directory are not the service.
     #[must_use]
     pub fn saves_to_cache_service(&self) -> bool {
-        matches!(self, Self::CacheSave(_) | Self::MbxRemote)
+        matches!(self, Self::CacheSave(_) | Self::MbxRemote { .. })
     }
 }
 

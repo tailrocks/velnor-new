@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 
 use toml::Value;
-use velnor_model::{MisePlatform, RepoFacts, RepoPath, ToolPin, ToolPins, ToolRequest};
+use velnor_model::{MbxRemote, MisePlatform, RepoFacts, RepoPath, ToolPin, ToolPins, ToolRequest};
 
 use crate::error::{DetectError, Reason};
 use crate::harness::uses_nextest;
@@ -142,6 +142,24 @@ pub(crate) fn nextest_tool(pins: &ToolPins) -> Option<&str> {
 }
 
 pub(crate) const MISE_CONFIG: RepoPath = RepoPath::from_static("mise.toml");
+const MBX_TOOL: &str = "mr-boxington";
+// helper-gate: first in tools-v0.1.108 via d518291133
+pub(crate) const MBX_PIN_HELPER: (u64, u64, u64) = (0, 1, 108);
+
+#[must_use]
+pub fn exact_release(text: &str) -> Option<&str> {
+    let bare = text.strip_prefix('v').unwrap_or(text);
+    let parts: Vec<&str> = bare.split('.').collect();
+    let [major, minor, patch] = parts.as_slice() else {
+        return None;
+    };
+    let number = |part: &str| {
+        !part.is_empty()
+            && part.bytes().all(|byte| byte.is_ascii_digit())
+            && (part == "0" || !part.starts_with('0'))
+    };
+    (number(major) && number(minor) && number(patch)).then_some(bare)
+}
 
 pub fn check_tools(facts: &RepoFacts) -> Result<(), DetectError> {
     if !facts.tools.locked_file {
@@ -180,6 +198,7 @@ pub fn check_tools(facts: &RepoFacts) -> Result<(), DetectError> {
         ));
     }
     check_prebuilt(facts)?;
+    check_mbx_pin(facts)?;
     let tested = facts
         .rust_roots
         .iter()
@@ -191,6 +210,37 @@ pub fn check_tools(facts: &RepoFacts) -> Result<(), DetectError> {
         });
     }
     Ok(())
+}
+
+fn check_mbx_pin(facts: &RepoFacts) -> Result<(), DetectError> {
+    let reads_pin = facts.config.mbx_remote == MbxRemote::GithubActions
+        && facts
+            .helper
+            .as_ref()
+            .is_some_and(|helper| helper.version().at_least(MBX_PIN_HELPER));
+    if !reads_pin {
+        return Ok(());
+    }
+    let exact = match facts
+        .tools
+        .tools
+        .get(MBX_TOOL)
+        .map(|pin| &pin.requested[..])
+    {
+        Some([request]) => request.os.is_none() && exact_release(&request.version).is_some(),
+        _ => false,
+    };
+    if exact {
+        return Ok(());
+    }
+    Err(DetectError::invalid(
+        facts.tools.configs.first().unwrap_or(&MISE_CONFIG),
+        Reason::InvalidValue {
+            key: "tools.mr-boxington",
+            value: "one exact X.Y.Z release, because the mbx action reads it from mise.toml"
+                .to_owned(),
+        },
+    ))
 }
 
 fn check_prebuilt(facts: &RepoFacts) -> Result<(), DetectError> {
