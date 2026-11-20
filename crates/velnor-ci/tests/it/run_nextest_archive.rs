@@ -13,6 +13,7 @@ use crate::run_nextest::listed;
 
 const FAKE_NEXTEST: &str = r#"#!/bin/sh
 if [ "$2" = list ]; then
+    : > "$RUNNER_TEMP/list-started"
     dest=
     overwrite=
     while [ $# -gt 0 ]; do
@@ -28,12 +29,20 @@ if [ "$2" = list ]; then
         chmod 755 "$dest/test-bin"
     fi
     printf '%s\n' "$LIST_JSON"
+    : > "$RUNNER_TEMP/list-finished"
     exit 0
 fi
 echo 'Starting 1 test across 1 binary' >&2
-for _ in $(seq 1 40); do
+i=0
+while [ ! -e "$RUNNER_TEMP/list-started" ] && [ "$i" -lt 1000 ]; do
+    sleep 0.01
+    i=$((i + 1))
+done
+i=0
+while [ ! -e "$RUNNER_TEMP/list-finished" ] && [ "$i" -lt 1000 ]; do
     "$TREE/test-bin" || echo failed >> "$RUNNER_TEMP/exec-failures"
     sleep 0.02
+    i=$((i + 1))
 done
 echo 'Summary [   0.800s] 1 test run: 1 passed, 0 skipped' >&2
 [ ! -e "$RUNNER_TEMP/exec-failures" ]
