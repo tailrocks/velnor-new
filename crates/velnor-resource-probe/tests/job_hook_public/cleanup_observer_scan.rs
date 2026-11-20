@@ -9,10 +9,10 @@ use std::{
     os::unix::fs::MetadataExt,
     path::PathBuf,
     process::{Child, Command, Stdio},
-    thread,
-    time::{Duration, Instant},
+    time::Duration,
 };
 
+use super::scan_poll::{Observation, poll_observation};
 use sha2::{Digest, Sha256};
 use velnor_resource_probe::cleanup_observer::{
     CleanupDockerRootIdentity, CleanupObserverBinding, CleanupObserverRecord,
@@ -277,6 +277,15 @@ fn a_task_in_the_runner_mount_namespace_is_an_owned_reference() -> TestResult<()
 
 const SCAN_POLL_LIMIT: Duration = Duration::from_secs(10);
 const SCAN_POLL_INTERVAL: Duration = Duration::from_millis(50);
+const INVENTORY_FAULTS: [&str; 7] = [
+    "proc_",
+    "task_",
+    "inventory_",
+    "descriptor_",
+    "process_",
+    "namespace_limit",
+    "observer_",
+];
 
 struct Holder(Child);
 
@@ -287,19 +296,32 @@ impl Drop for Holder {
     }
 }
 
-/// Scans until the namespace is counted or the bound passes, and returns the last record.
-fn scan_until_owned(runner_namespace: ([u32; 2], u64)) -> TestResult<CleanupObserverRecord> {
-    let deadline = Instant::now() + SCAN_POLL_LIMIT;
-    loop {
-        let record = scan(Scenario {
-            runner_namespace,
-            volume_override: None,
-        })?;
-        if record.owned_reference_count >= 1 || Instant::now() >= deadline {
-            return Ok(record);
-        }
-        thread::sleep(SCAN_POLL_INTERVAL);
+fn observation(record: &CleanupObserverRecord) -> Observation {
+    if record.owned_reference_count >= 1 {
+        Observation::Counted
+    } else if record.issues.iter().any(|issue| {
+        INVENTORY_FAULTS
+            .iter()
+            .any(|fault| issue.starts_with(fault))
+    }) {
+        Observation::Faulted
+    } else {
+        Observation::NotYetVisible
     }
+}
+
+fn scan_until_owned(runner_namespace: ([u32; 2], u64)) -> TestResult<CleanupObserverRecord> {
+    poll_observation(
+        SCAN_POLL_LIMIT,
+        SCAN_POLL_INTERVAL,
+        || {
+            scan(Scenario {
+                runner_namespace,
+                volume_override: None,
+            })
+        },
+        observation,
+    )
 }
 
 #[test]
@@ -312,14 +334,12 @@ fn a_descriptor_held_outside_the_pair_namespace_is_an_owned_reference() -> TestR
             .stdout(Stdio::piped())
             .spawn()?,
     );
-    // The holder prints "held" only after fd 3 is open, so this line is its readiness signal.
     let mut stdout = BufReader::new(holder.0.stdout.take().ok_or("no holder stdout")?);
     let mut ready = String::new();
     stdout.read_line(&mut ready)?;
     assert_eq!(ready.trim(), "held");
     pair.child.kill()?;
     pair.child.wait()?;
-    // The holder keeps the namespace alive until the scan ends, so the scan must count it.
     let record = scan_until_owned(pair.namespace)?;
     assert!(record.owned_reference_count >= 1, "{record:?}");
     Ok(())

@@ -209,10 +209,9 @@ test-group = "probe-cleanup-observer-serial"
 filter = "package(=velnor-resource-probe) and binary(=job_hook_public)"
 test-group = "probe-cleanup-observer-serial"
 
-# Runs eight stalled-API fault cases in sequence: about 67 s on every run, past nextest's default 60 s period.
 [[profile.ci.overrides]]
 filter = 'package(=velnor-runner-host) and binary(=runner_image_qualification_public) and test(=public_qualifier_bounds_docker_operations_and_streams)'
-slow-timeout = { period = "90s", terminate-after = 3 }
+slow-timeout = { period = "60s", terminate-after = 2 }
 
 # Same tiers as profile.default for the tests added above. profile.ci has no 2 s line of its own.
 [[profile.ci.overrides]]
