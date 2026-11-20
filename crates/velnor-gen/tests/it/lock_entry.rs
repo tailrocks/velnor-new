@@ -142,7 +142,6 @@ fn online_a_tampered_commit_is_refused_and_named() -> TestResult {
     Ok(())
 }
 
-/// `lock()` with an archive-format `[velnor-ci-binary]` section spliced in.
 fn raw_lock_with_injected_binary_section() -> Result<String, Box<dyn Error>> {
     let archive = archive_lock_at("0.1.108")?;
     let section = archive
