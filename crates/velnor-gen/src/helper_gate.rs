@@ -2,14 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    BUDGET_MODES_HELPER, CacheDebug, DocsRun, HelperRelease, HelperVersion, MbxStore, Platform,
-    PrCi, PushAfterMergeGroup, RepoFacts,
+    BUDGET_MODES_HELPER, CacheDebug, DocsRun, HelperRelease, HelperVersion, LaneJob, MbxStore,
+    Platform, PrCi, PushAfterMergeGroup, RepoFacts,
 };
 
 use velnor_rust::INPUTS_IDENTITY_HELPER;
 
 use crate::{
     BUDGET_HELPER, COMPATIBLE_HELPER_SERIES, GenerateError, HELPER_MINIMUM, TEST_LANE_HELPER,
+    TEST_LANE_JOB_HELPER,
 };
 
 /// The first `velnor-ci` whose `.velnor/rust-ci.toml` parser accepts the `hosted` key.
@@ -91,6 +92,17 @@ pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, Generate
     }
     if !facts.config.test_lanes.is_empty() && !release.version().at_least(TEST_LANE_HELPER) {
         return Err(GenerateError::TestLaneHelperTooOld(
+            release.version().clone(),
+        ));
+    }
+    if facts
+        .config
+        .test_lanes
+        .iter()
+        .any(|lane| lane.job == LaneJob::Parallel)
+        && !release.version().at_least(TEST_LANE_JOB_HELPER)
+    {
+        return Err(GenerateError::TestLaneJobHelperTooOld(
             release.version().clone(),
         ));
     }

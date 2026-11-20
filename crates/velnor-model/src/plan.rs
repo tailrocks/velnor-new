@@ -300,6 +300,7 @@ pub enum CargoCommand {
         packages: Vec<PackageName>,
         filter: FilterRef,
         ci_profile: bool,
+        reports: bool,
     },
     ClippyFeatures {
         features: Vec<String>,
@@ -343,6 +344,16 @@ impl CargoCommand {
         !matches!(
             self,
             Self::FmtCheck | Self::Deny { .. } | Self::Machete | Self::NextestRunArchive { .. }
+        )
+    }
+
+    #[must_use]
+    pub const fn reports_tests(&self) -> bool {
+        matches!(
+            self,
+            Self::NextestRun { .. }
+                | Self::NextestRunArchive { .. }
+                | Self::NextestFeatures { reports: true, .. }
         )
     }
 

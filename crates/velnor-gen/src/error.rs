@@ -41,6 +41,7 @@ pub enum GenerateError {
     FamilyTagHelperTooOld(HelperVersion),
     TagPushHelperTooOld(HelperVersion),
     TestLaneHelperTooOld(HelperVersion),
+    TestLaneJobHelperTooOld(HelperVersion),
     HelperLockLacksMacos {
         version: HelperVersion,
         runner: String,
@@ -127,6 +128,10 @@ impl fmt::Display for GenerateError {
             Self::TestLaneHelperTooOld(version) => write!(
                 f,
                 "velnor-ci {version} does not know the test_lane key of .velnor/rust-ci.toml; pin velnor-ci 0.1.93 or later with `velnor-gen pin-helper 0.1.93`"
+            ),
+            Self::TestLaneJobHelperTooOld(version) => write!(
+                f,
+                "velnor-ci {version} does not know the job key of a [[test_lane]] in .velnor/rust-ci.toml; pin velnor-ci 0.1.107 or later with `velnor-gen pin-helper 0.1.107`"
             ),
             Self::HelperLockLacksMacos { version, runner } => write!(
                 f,

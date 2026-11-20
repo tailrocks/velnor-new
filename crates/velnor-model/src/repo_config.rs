@@ -157,6 +157,14 @@ pub struct TestLane {
     pub lint: bool,
     pub doc: bool,
     pub packages: Vec<PackageName>,
+    pub job: LaneJob,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum LaneJob {
+    #[default]
+    Inline,
+    Parallel,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
