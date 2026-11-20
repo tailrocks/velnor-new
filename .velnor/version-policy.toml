@@ -4,9 +4,9 @@
 # Velnor-repository-only version-policy file (version-policy §0–§2).
 # Header declares the policy schema, stable channel, release registry,
 # freshness cadence, and maximum exception age. The [tools] and [[actions]]
-# mirrors record the pins that scripts/local-cargo.sh and the archive guard
-# builder read; `cosign` is the fixed Velnor-owned signer helper. The engine
-# that compared them with its compiled catalog was deleted in #1459.
+# mirrors record the pins that the archive guard builder reads; `cosign` is the
+# fixed Velnor-owned signer helper. The engine that compared them with its compiled
+# catalog was deleted in #1459.
 # [validation-tools] pins repo-local verification tools activated for
 # manual risk-triggered runs (cargo-mutants; NOT wired into CI).
 # Consumer repositories do not need this file; the generator never
