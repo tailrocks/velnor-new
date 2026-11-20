@@ -25,7 +25,7 @@ pub(super) fn collect_local(metrics: &mut LaneMetrics, log: &[u8], runner_temp: 
     let unparsed = mbx_unparsed_lines(log);
     if let Some(first) = unparsed.first() {
         metrics.verification_errors.push(format!(
-            "MBX lookup summary not understood, {} line(s) not counted; first: {}",
+            "MBX lookup summary not understood ({} line(s)); first: {}. Update the mbx summary parser (crates/velnor-ci/src/waste_evidence.rs) for this wording.",
             unparsed.len(),
             crate::escape::escape(first, false)
         ));

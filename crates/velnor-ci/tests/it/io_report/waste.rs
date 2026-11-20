@@ -274,7 +274,11 @@ fn lane_with_mbx_log(
 
 fn unparsed_warning(metrics: &velnor_ci::report::LaneMetrics, first: &str) -> bool {
     metrics.verification_errors.iter().any(|line| {
-        line == &format!("MBX lookup summary not understood, 1 line(s) not counted; first: {first}")
+        line.contains(first)
+            && line.contains("MBX lookup summary not understood (1 line(s))")
+            && line
+                .to_lowercase()
+                .contains("update the mbx summary parser")
     })
 }
 
