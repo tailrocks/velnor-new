@@ -7,7 +7,7 @@ IDENT = re.compile(r"[^\W\d]\w*")
 FENCE = re.compile(r"```|~~~")
 LINE_DOC = re.compile(r"//(?:!|/(?!/))")
 QUOTE = r"(?:[ \t]*>)*"
-CONTAINER = r"(?:>[ \t]*|(?:[-*+]|\d{1,9}[.)])[ \t]+)*"
+CONTAINER = r"(?:>[ \t]*|(?:[-*+]|\d{1,9}[.)])[ \t]+|\[\^[^\]\s]+\]:[ \t]*)*"
 LINE_FENCE = re.compile(r"[ \t]*" + CONTAINER + r"(?:```|~~~)")
 LINE_INDENT = re.compile(QUOTE + r" {5,}\S")
 ATTR_INDENT = re.compile(r" {4,}\S|(?:[ \t]*>)+ {5,}\S")
@@ -18,6 +18,8 @@ ATTR_START = re.compile(r"#\s*!?\s*\[")
 DOC_EQ = re.compile(r"\s*=(?!=)")
 DOC_INCLUDE = re.compile(r"\s*=\s*include_str!")
 SHEBANG_ATTR = re.compile(r"#!\s*\[")
+STRING_ESCAPE = re.compile(r"\\(?:x([0-9a-fA-F]{2})|u\{([0-9a-fA-F_]{1,8})\}|(\r?\n[ \t\r\n]*)|(.))", re.S)
+SIMPLE_ESCAPE = {"n": "\n", "r": "\r", "t": "\t", "0": "\0", "\\": "\\", "'": "'", '"': '"'}
 RAW_PREFIX = {"r", "br", "cr"}
 BYTE_PREFIX = {"b", "c"}
 DOC_HINT = ("///", "//!", "/**", "/*!", "doc")
@@ -37,6 +39,20 @@ def block_end(src, i):
         else:
             i += 1
     return len(src)
+
+
+def skip_trivia(src, i):
+    while i < len(src):
+        if src[i].isspace():
+            i += 1
+        elif src.startswith("/*", i):
+            i = block_end(src, i)
+        elif src.startswith("//", i):
+            k = src.find("\n", i)
+            i = len(src) if k < 0 else k
+        else:
+            break
+    return i
 
 
 def skip_string(src, i):
@@ -75,8 +91,19 @@ def value_has_fence(value):
     return any(LINE_FENCE.match(line) or ATTR_INDENT.match(line) for line in value.split("\n"))
 
 
+def decode_escape(match):
+    hex_digits, unicode_digits, continuation, simple = match.group(1, 2, 3, 4)
+    if hex_digits:
+        return chr(int(hex_digits, 16))
+    if unicode_digits:
+        return chr(int(unicode_digits.replace("_", ""), 16))
+    if continuation is not None:
+        return ""
+    return SIMPLE_ESCAPE.get(simple, match.group(0))
+
+
 def plain_value(literal):
-    return literal[1:-1].replace("\\n", "\n")
+    return STRING_ESCAPE.sub(decode_escape, literal[1:-1])
 
 
 def raw_value(literal, prefix):
@@ -143,9 +170,10 @@ def doc_findings(src):
                 i = j
             else:
                 if word == "doc":
-                    if DOC_INCLUDE.match(src, j):
+                    k = skip_trivia(src, j)
+                    if DOC_INCLUDE.match(src, k):
                         yield i
-                    elif attr_depth and DOC_EQ.match(src, j):
+                    elif attr_depth and DOC_EQ.match(src, k):
                         doc_value = True
                 i = j
         else:
