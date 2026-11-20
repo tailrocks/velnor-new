@@ -253,3 +253,52 @@ fn a_stale_run_with_several_changed_inputs_names_the_first_and_counts_the_rest()
     );
     assert!(!repo.root().join(".velnor/rust-inputs.lock").exists());
 }
+
+#[test]
+fn a_run_with_unreadable_and_changed_inputs_counts_each_cause_separately() {
+    let repo = Repo::new("stale-run-mixed");
+    repo.write_all(&[
+        ("mise.toml", "[tools]\n"),
+        (
+            "rust/Cargo.toml",
+            "[workspace]\nmembers = [\"lib\"]\nresolver = \"3\"\n",
+        ),
+        ("rust/Cargo.lock", "version = 4\n"),
+        (
+            "rust/lib/Cargo.toml",
+            "[package]\nname = \"lib\"\nedition = \"2024\"\nbuild = \"build.rs\"\n",
+        ),
+        ("rust/lib/src/lib.rs", "pub fn value() -> u32 { 1 }\n"),
+        (
+            "rust/lib/build.rs",
+            "fn main() {\n    println!(\"cargo:rerun-if-changed=a.txt\");\n    println!(\"cargo:rerun-if-changed=b.txt\");\n    println!(\"cargo:rerun-if-changed=c.txt\");\n}\n",
+        ),
+        ("rust/lib/a.txt", "first\n"),
+        ("rust/lib/b.txt", "first\n"),
+        ("rust/lib/c.txt", "first\n"),
+    ]);
+    let clippy = build_step(&repo, &["clippy", "--workspace", "--all-targets"]);
+    assert!(clippy.status.success(), "{clippy:?}");
+    let before = lib_runs(&repo);
+    assert_eq!(before.len(), 1, "{before:?}");
+    let ran = run_finished(
+        &repo,
+        before.iter().next().unwrap_or_else(|| unreachable!()),
+    );
+
+    for input in ["a.txt", "b.txt"] {
+        let path = repo.root().join("rust/lib").join(input);
+        fs::remove_file(&path).unwrap_or_else(|e| unreachable!("{e}"));
+        std::os::unix::fs::symlink(input, &path).unwrap_or_else(|e| unreachable!("{e}"));
+    }
+    repo.write_unstaged("rust/lib/c.txt", "second\n");
+    repo.set_mtime("rust/lib/c.txt", ran + Duration::from_secs(100));
+
+    refused_with(
+        &audit(&repo, &["--write"]),
+        &[
+            "output not proven current: freshness could not be proven for input a.txt, and 1 more unproven, 1 more changed (unit ",
+        ],
+    );
+    assert!(!repo.root().join(".velnor/rust-inputs.lock").exists());
+}
