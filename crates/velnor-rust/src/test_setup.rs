@@ -19,11 +19,9 @@ pub(crate) fn inserted(
     lane: &Lane,
     mut steps: Vec<Step>,
 ) -> Vec<Step> {
+    let all = all_setups(facts);
     let setups = |build: bool| {
-        facts
-            .config
-            .test_setup
-            .iter()
+        all.iter()
             .filter(move |setup| setup.before_build() == build)
             .filter(|setup| setup.root == root.manifest.parent())
     };
@@ -50,6 +48,28 @@ pub(crate) fn inserted(
         .collect();
     steps.splice(first..first, setup);
     steps
+}
+
+/// The `[[test_setup]]` entries, then one entry for each `[[check_configurations]]`, which runs
+/// the same way: before the tests of its root, as repository code.
+fn all_setups(facts: &RepoFacts) -> Vec<TestSetup> {
+    let checks = facts
+        .config
+        .check_configurations
+        .iter()
+        .map(|check| TestSetup {
+            root: check.root.clone(),
+            name: "velnor-ci check-configurations".to_owned(),
+            run: check.command(),
+            phase: None,
+        });
+    facts
+        .config
+        .test_setup
+        .iter()
+        .cloned()
+        .chain(checks)
+        .collect()
 }
 
 fn setup_step(
