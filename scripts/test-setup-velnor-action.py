@@ -277,6 +277,19 @@ class SetupVelnorInstallTests(unittest.TestCase):
         self.assertEqual(cached.read_bytes(), self.archive)
         self.assertEqual(self.installed_binary().read_bytes(), PAYLOAD)
 
+    def test_a_mismatched_cached_archive_in_a_read_only_tool_cache_still_downloads(self):
+        cached = self.cached_archive()
+        cached.parent.mkdir(parents=True)
+        cached.write_bytes(b"tampered archive\n")
+        cached.parent.chmod(0o500)
+        self.addCleanup(cached.parent.chmod, 0o700)
+        if os.access(cached.parent, os.W_OK):
+            self.skipTest("the tool cache is writable despite mode 0500")
+        result = self.install(sha256(self.archive))
+        self.assertEqual(result.returncode, 0, result.output)
+        self.assertEqual(len(self.curl_calls()), 1)
+        self.assertEqual(self.installed_binary().read_bytes(), PAYLOAD)
+
     def test_a_cached_archive_with_the_pinned_sha256_is_unpacked_without_a_download(self):
         cached = self.cached_archive()
         cached.parent.mkdir(parents=True)

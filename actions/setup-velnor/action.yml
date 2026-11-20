@@ -107,8 +107,11 @@ runs:
           fi
           rm -f "$file"
           if [ "$source" = cache ]; then
-            rm -f "$dir/$archive"
-            echo "::warning title=setup-velnor::removed the tool-cache copy of $archive for velnor-ci $VERSION, which does not match the SHA-256 $expected"
+            if rm -f "$dir/$archive"; then
+              echo "::warning title=setup-velnor::removed the tool-cache copy of $archive for velnor-ci $VERSION, which does not match the SHA-256 $expected"
+            else
+              echo "::warning title=setup-velnor::could not remove the tool-cache copy of $archive for velnor-ci $VERSION, which does not match the SHA-256 $expected"
+            fi
           else
             echo "::warning title=setup-velnor::download attempt $n of $archive for velnor-ci $VERSION does not match the SHA-256 $expected"
           fi
