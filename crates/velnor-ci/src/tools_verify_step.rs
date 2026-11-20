@@ -53,6 +53,13 @@ fn delete_sentence(what: &str, key: &str, repository: &str) -> String {
     )
 }
 
+fn anchor_sentence(remedy: Remedy<'_>) -> String {
+    if remedy.anchor_key.is_empty() {
+        return String::new();
+    }
+    delete_sentence("anchor entry", remedy.anchor_key, remedy.repository)
+}
+
 fn delete_hint(remedy: Remedy<'_>) -> String {
     let mut hint = String::new();
     if !remedy.key.is_empty() {
@@ -62,14 +69,12 @@ fn delete_hint(remedy: Remedy<'_>) -> String {
             remedy.repository,
         ));
     }
-    if !remedy.anchor_key.is_empty() {
-        hint.push_str(&delete_sentence(
-            "anchor entry",
-            remedy.anchor_key,
-            remedy.repository,
-        ));
-    }
+    hint.push_str(&anchor_sentence(remedy));
     escape(&hint, false)
+}
+
+fn anchor_hint(remedy: Remedy<'_>) -> String {
+    escape(&anchor_sentence(remedy), false)
 }
 
 fn repository_target(server: Option<&str>, repository: Option<&str>) -> String {
@@ -99,10 +104,10 @@ pub fn message(verdict: &Verdict, remedy: Remedy<'_>) -> String {
         }
         Verdict::Verified => "velnor: the restored tools equal the anchor".to_owned(),
         Verdict::Discarded(why) => {
-            let hint = if *why == Discard::Mismatch {
-                delete_hint(remedy)
-            } else {
-                String::new()
+            let hint = match why {
+                Discard::Mismatch => delete_hint(remedy),
+                Discard::BadAnchor => anchor_hint(remedy),
+                _ => String::new(),
             };
             format!(
                 "::notice::the restored tools were discarded ({}); they install from scratch{hint}",
