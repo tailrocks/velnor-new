@@ -44,8 +44,20 @@ pub fn secret_path(segments: &[&str]) -> bool {
         .any(|segment| segment.eq_ignore_ascii_case(REPOSITORY_METADATA) || secret_like(segment))
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Case {
+    Exact,
+    Folded,
+}
+
+pub const FILESYSTEM_CASE: Case = if cfg!(target_os = "linux") {
+    Case::Exact
+} else {
+    Case::Folded
+};
+
 #[must_use]
-pub fn segment_matches(pattern: &str, text: &str) -> bool {
+pub fn segment_matches(pattern: &str, text: &str, _case: Case) -> bool {
     let pattern = pattern.to_ascii_lowercase();
     let text = text.to_ascii_lowercase();
     let mut parts = pattern.split('*');
@@ -67,19 +79,19 @@ pub fn segment_matches(pattern: &str, text: &str) -> bool {
 }
 
 #[must_use]
-pub fn path_matches(pattern: &[&str], path: &[&str]) -> bool {
+pub fn path_matches(pattern: &[&str], path: &[&str], case: Case) -> bool {
     match pattern.split_first() {
         None => path.is_empty(),
-        Some((&"**", tail)) => (0..=path.len()).any(|skip| path_matches(tail, &path[skip..])),
-        Some((head, tail)) => path
-            .split_first()
-            .is_some_and(|(first, rest)| segment_matches(head, first) && path_matches(tail, rest)),
+        Some((&"**", tail)) => (0..=path.len()).any(|skip| path_matches(tail, &path[skip..], case)),
+        Some((head, tail)) => path.split_first().is_some_and(|(first, rest)| {
+            segment_matches(head, first, case) && path_matches(tail, rest, case)
+        }),
     }
 }
 
 #[must_use]
-pub fn selects(pattern: &[&str], path: &[&str]) -> bool {
-    (1..=path.len()).any(|length| path_matches(pattern, &path[..length]))
+pub fn selects(pattern: &[&str], path: &[&str], case: Case) -> bool {
+    (1..=path.len()).any(|length| path_matches(pattern, &path[..length], case))
 }
 
 fn refused_literals() -> impl Iterator<Item = String> {
@@ -102,5 +114,5 @@ pub fn aliased_secret(segment_pattern: &str) -> Option<String> {
     if !segment_pattern.contains('*') || segment_pattern.chars().all(|c| c == '*') {
         return None;
     }
-    refused_literals().find(|literal| segment_matches(segment_pattern, literal))
+    refused_literals().find(|literal| segment_matches(segment_pattern, literal, Case::Folded))
 }

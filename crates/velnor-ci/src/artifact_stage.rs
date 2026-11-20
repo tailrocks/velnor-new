@@ -8,7 +8,7 @@ use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-use velnor_model::{path_matches, secret_path, segment_matches};
+use velnor_model::{FILESYSTEM_CASE, path_matches, secret_path, segment_matches, selects};
 
 use crate::cli::ArtifactsStageArgs;
 use crate::error::CiError;
@@ -19,7 +19,9 @@ const WORKSPACE_VARIABLE: &str = "GITHUB_WORKSPACE";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Skip {
+    HardLink,
     Link,
+    Name,
     Secret,
     Special,
     Unreadable,
@@ -28,6 +30,12 @@ pub enum Skip {
 impl Skip {
     fn reason(self) -> &'static str {
         match self {
+            Self::HardLink => {
+                "a file with more than one hard link, which may be a second name for a file outside the workspace"
+            }
+            Self::Name => {
+                "a name with a character that actions/upload-artifact rejects (one of : \" < > | * ? or a line break)"
+            }
             Self::Link => {
                 "a symbolic link, which the upload could follow out of the workspace; only regular files are staged"
             }
@@ -122,7 +130,7 @@ fn leads(pattern: &[&str], path: &[&str]) -> bool {
         (_, None) | (Some((&"**", _)), _) => true,
         (None, Some(_)) => false,
         (Some((head, tail)), Some((first, rest))) => {
-            segment_matches(head, first) && leads(tail, rest)
+            segment_matches(head, first, FILESYSTEM_CASE) && leads(tail, rest)
         }
     }
 }
@@ -145,7 +153,7 @@ impl Walk<'_> {
             let mut relative = within.to_vec();
             relative.push(name);
             let segments: Vec<&str> = relative.iter().map(String::as_str).collect();
-            let hit = inside || path_matches(&self.parts, &segments);
+            let hit = inside || path_matches(&self.parts, &segments, FILESYSTEM_CASE);
             let Ok(kind) = entry.file_type() else {
                 continue;
             };
@@ -171,7 +179,7 @@ impl Walk<'_> {
     }
 
     fn selected(&self, segments: &[&str]) -> bool {
-        velnor_model::selects(&self.parts, segments)
+        selects(&self.parts, segments, FILESYSTEM_CASE)
     }
 
     fn skip(&mut self, relative: &[String], skip: Skip) {
