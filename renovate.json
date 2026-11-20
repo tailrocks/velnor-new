@@ -70,6 +70,12 @@
       "labels": ["dependencies", "needs-lock-refresh"]
     },
     {
+      "description": "Exact `=x.y.z` cargo pins are intentional and must never be bumped by Renovate. Pins are release-coupled (velnor-gen in crates/velnor-ci, moved only by the tools release), or held for an advisory or a compile break (rustix 1.1.6 for RUSTSEC-2026-0486, der 0.7 in velnor-runner-attestation). Bumps are made by hand in a reviewed change.",
+      "matchManagers": ["cargo"],
+      "matchCurrentValue": "/^=/",
+      "enabled": false
+    },
+    {
       "description": "der must stay at 0.7.x in velnor-runner-attestation: x509-cert 0.2.x and cms use der 0.7, so a der 0.8 bump breaks Certificate::from_der (main did not compile after #1956). der moves together with x509-cert and cms; re-pin only when both ship a der 0.8 release.",
       "matchManagers": ["cargo"],
       "matchPackageNames": ["der"],
