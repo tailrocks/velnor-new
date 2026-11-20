@@ -1,9 +1,3 @@
-"""MBX object-cache summaries parse with and without the `object cache:` label.
-
-mbx 1.30.0 prints the label-less form; older runs print the labelled form. A
-summary-shaped line that does not parse raises instead of being counted as zero.
-"""
-
 import sys
 import unittest
 from pathlib import Path
@@ -31,6 +25,10 @@ class ParseMbxSummaryTests(unittest.TestCase):
         self.assertEqual(row["remote_downloaded_bytes"], 0)
         self.assertEqual(row["remote_uploaded_bytes"], 0)
         self.assertEqual(row["local_store_mib"], 0.0)
+
+    def test_label_less_singular_hit_summary_parses(self):
+        row = M.parse_mbx_summary("mbx[cache]: 1 hit, 0 misses; 0 B downloaded, 0 B uploaded, 0 B stored locally")
+        self.assertEqual(row["counts"], {"hits": 1, "misses": 0})
 
     def test_pinned_1_30_summary_with_incremental_counter_parses(self):
         row = M.parse_mbx_summary(PINNED_INCREMENTAL)
