@@ -53,6 +53,9 @@ fn every_documentation_step_runs_on_a_pull_request() -> TestResult {
             assert!(runs, "{name} on pull_request: {condition}");
         }
     }
-    assert_ne!(checked, 0, "no Documentation step in the generated workflow");
+    assert_ne!(
+        checked, 0,
+        "no Documentation step in the generated workflow"
+    );
     Ok(())
 }
