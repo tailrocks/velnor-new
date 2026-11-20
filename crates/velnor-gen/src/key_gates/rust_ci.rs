@@ -3,7 +3,7 @@
 
 //! Every key `.velnor/rust-ci.toml` accepts, with the first `velnor-ci` that parses it.
 
-use super::{ConfigFile::RustCi, KeyGate, gate, gate_value};
+use super::{ConfigFile::RustCi, KeyGate, gate, gate_untagged, gate_value};
 use crate::HELPER_MINIMUM;
 
 pub(super) const RUST_CI: &[KeyGate] = &[
@@ -125,12 +125,9 @@ pub(super) const RUST_CI: &[KeyGate] = &[
     gate(RustCi, "nextest_harnesses", HELPER_MINIMUM),
     gate(RustCi, "non_inputs", HELPER_MINIMUM),
     gate(RustCi, "on_main", HELPER_MINIMUM),
-    // helper-gate: untagged tools-v0.1.111
-    gate(RustCi, "policy", (0, 1, 111)),
-    // helper-gate: untagged tools-v0.1.111
-    gate(RustCi, "policy.deny", (0, 1, 111)),
-    // helper-gate: untagged tools-v0.1.111
-    gate(RustCi, "policy.deny_checks", (0, 1, 111)),
+    gate_untagged(RustCi, "policy", (0, 1, 111)),
+    gate_untagged(RustCi, "policy.deny", (0, 1, 111)),
+    gate_untagged(RustCi, "policy.deny_checks", (0, 1, 111)),
     // helper-gate: first in tools-v0.1.88 via e061b56eac
     gate(RustCi, "pr_ci", (0, 1, 88)),
     // helper-gate: first in tools-v0.1.88 via eb3f4deda4

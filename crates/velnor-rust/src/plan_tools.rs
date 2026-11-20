@@ -18,6 +18,7 @@ pub const TOOLS_VERIFY_HELPER: (u64, u64, u64) = (0, 1, 109);
 /// an older helper never sees an env it ignores.
 // helper-gate: first in tools-v0.1.110 via ca67828281
 pub(crate) const TOOLS_CACHE_KEY_HELPER: (u64, u64, u64) = (0, 1, 110);
+pub(crate) const TOOLS_ANCHOR_KEY_HELPER: (u64, u64, u64) = (0, 1, 111);
 // helper-gate: first in tools-v0.1.110 via 8db5d70509
 const TOOLS_CLEAR_HELPER: (u64, u64, u64) = (0, 1, 110);
 
@@ -112,6 +113,13 @@ fn names_cache_entry(facts: &RepoFacts) -> bool {
         .is_some_and(|release| release.version().at_least(TOOLS_CACHE_KEY_HELPER))
 }
 
+fn names_anchor_entry(facts: &RepoFacts) -> bool {
+    facts
+        .helper
+        .as_ref()
+        .is_some_and(|release| release.version().at_least(TOOLS_ANCHOR_KEY_HELPER))
+}
+
 fn tools_local(facts: &RepoFacts) -> bool {
     (facts.config.mbx_store == MbxStore::Shared || node_first(facts))
         && facts
@@ -151,7 +159,9 @@ pub(crate) fn tools_restore(facts: &RepoFacts, plan: Option<&JobId>) -> Vec<Step
         .chain([network])
         .collect();
     if tools_verified(facts) {
-        let verify = if names_cache_entry(facts) {
+        let verify = if names_anchor_entry(facts) {
+            ToolsLocalVerb::VerifyNamedAnchor
+        } else if names_cache_entry(facts) {
             ToolsLocalVerb::VerifyNamed
         } else {
             ToolsLocalVerb::Verify
