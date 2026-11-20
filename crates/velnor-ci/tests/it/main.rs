@@ -86,6 +86,7 @@ mod io_restore_cargo;
 mod io_restore_cold_cargo;
 mod io_restore_links;
 mod io_restore_symlinks;
+mod io_restored_symlink;
 mod io_restored_targets;
 mod io_scope_cache;
 mod io_scope_cache_paths;
