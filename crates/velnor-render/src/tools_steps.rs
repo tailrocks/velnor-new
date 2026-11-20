@@ -14,6 +14,7 @@ const ANCHOR_STEP: &str = "toolsanchor";
 const READ_STEP: &str = "toolsread";
 const ANCHOR_DIR: &str = "${{ runner.temp }}/velnor-tools-anchor";
 const ANCHOR_OUTPUT: &str = "tools_anchor";
+const ANCHOR_KEY_OUTPUT: &str = "tools_anchor_key";
 const ANCHOR_RUN: &str = "${{ github.run_id }}-${{ github.job }}";
 
 pub(crate) fn anchor_expression(anchor: &ToolsAnchor) -> String {
@@ -39,21 +40,41 @@ pub(crate) fn is_anchor_expression(expression: &str) -> bool {
         || expression.ends_with(&format!(".outputs.{ANCHOR_OUTPUT}"))
 }
 
-pub(crate) fn anchor_output(steps: &[velnor_model::Step]) -> Option<(String, String)> {
-    steps
+/// A job whose verify step names the plan's anchor entry reads its key from `tools_anchor_key`.
+pub(crate) fn anchor_outputs(
+    job: &velnor_model::Job,
+    jobs: &[velnor_model::Job],
+) -> Vec<(String, String)> {
+    let reads = job.steps.iter().any(|step| {
+        matches!(
+            step.kind,
+            velnor_model::StepKind::ToolsLocal(ToolsLocalVerb::AnchorRead, _)
+        )
+    });
+    if !reads {
+        return Vec::new();
+    }
+    let names_key = jobs
         .iter()
-        .any(|step| {
-            matches!(
-                step.kind,
-                velnor_model::StepKind::ToolsLocal(ToolsLocalVerb::AnchorRead, _)
-            )
-        })
-        .then(|| {
-            (
-                ANCHOR_OUTPUT.to_owned(),
-                anchor_expression(&ToolsAnchor::Restored(AnchorSource::ThisJob)),
-            )
-        })
+        .flat_map(|reader| &reader.steps)
+        .any(|step| match &step.kind {
+            velnor_model::StepKind::ToolsLocal(
+                ToolsLocalVerb::VerifyNamedAnchor,
+                ToolsAnchor::Restored(AnchorSource::Job(source)),
+            ) => *source == job.id,
+            _ => false,
+        });
+    let mut outputs = vec![(
+        ANCHOR_OUTPUT.to_owned(),
+        anchor_expression(&ToolsAnchor::Restored(AnchorSource::ThisJob)),
+    )];
+    if names_key {
+        outputs.push((
+            ANCHOR_KEY_OUTPUT.to_owned(),
+            format!("${{{{ steps.{ANCHOR_STEP}.outputs.cache-matched-key }}}}"),
+        ));
+    }
+    outputs
 }
 
 /// On a node miss the lookup is skipped, so its empty output leaves the network restore in charge.
@@ -203,12 +224,13 @@ fn verify_step(verb: ToolsLocalVerb, anchor: &ToolsAnchor) -> RenderedStep {
         env
     };
     if verb == ToolsLocalVerb::VerifyNamedAnchor {
-        env.push((
-            "VELNOR_ANCHOR_CACHE_KEY".to_owned(),
-            Value::Expr(format!(
-                "${{{{ steps.{ANCHOR_STEP}.outputs.cache-matched-key }}}}"
-            )),
-        ));
+        let key = match anchor {
+            ToolsAnchor::Restored(AnchorSource::Job(job)) => {
+                format!("${{{{ needs.{job}.outputs.{ANCHOR_KEY_OUTPUT} }}}}")
+            }
+            _ => format!("${{{{ steps.{ANCHOR_STEP}.outputs.cache-matched-key }}}}"),
+        };
+        env.push(("VELNOR_ANCHOR_CACHE_KEY".to_owned(), Value::Expr(key)));
     }
     if matches!(
         verb,

@@ -151,7 +151,7 @@ fn the_verify_step_names_the_restored_cache_entry_only_from_helper_0_1_110() -> 
 
 #[test]
 fn the_verify_step_names_the_anchor_entry_only_from_helper_0_1_111() -> TestResult {
-    const ANCHOR_KEY: &str = "${{ steps.toolsanchor.outputs.cache-matched-key }}";
+    const PLAN_ANCHOR_KEY: &str = "${{ needs.rust-plan.outputs.tools_anchor_key }}";
     for config in STORES {
         let before = verify_key_env(config, "0.1.110", "VELNOR_ANCHOR_CACHE_KEY")?;
         assert_ne!(before.len(), 0, "{config:?}: no verify step at 0.1.110");
@@ -160,9 +160,29 @@ fn the_verify_step_names_the_anchor_entry_only_from_helper_0_1_111() -> TestResu
         let named = verify_key_env(config, "0.1.111", "VELNOR_ANCHOR_CACHE_KEY")?;
         assert_eq!(named.len(), before.len(), "{config:?}");
         assert!(
-            named.iter().all(|key| key == &Some(ANCHOR_KEY.to_owned())),
+            named
+                .iter()
+                .all(|key| key == &Some(PLAN_ANCHOR_KEY.to_owned())),
             "{config:?}: {named:?}"
         );
+    }
+    Ok(())
+}
+
+#[test]
+fn the_plan_job_outputs_the_anchor_key_its_verify_steps_name() -> TestResult {
+    const FOUND_KEY: &str = "${{ steps.toolsanchor.outputs.cache-matched-key }}";
+    for config in STORES.iter().copied() {
+        let yaml: serde_json::Value =
+            crate::yaml_tree::document(&workflow(&repo_for(config, "0.1.111")?)?)?;
+        let plan = &yaml["jobs"]["rust-plan"];
+        assert_eq!(plan["outputs"]["tools_anchor_key"], FOUND_KEY, "{config:?}");
+        let found = plan["steps"]
+            .as_array()
+            .ok_or("plan steps missing")?
+            .iter()
+            .any(|step| step["id"] == "toolsanchor");
+        assert!(found, "{config:?}: the plan job has no toolsanchor step");
     }
     Ok(())
 }
