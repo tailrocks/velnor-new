@@ -1,10 +1,5 @@
 # Files under crates/*/tests that may still find cargo by name or CARGO.
 
-# Another session migrates these to velnor_test_support::real_cargo().
-crates/velnor-ci/tests/it/release_manifests.rs
-crates/velnor-ci/tests/it/audit/migration.rs
-crates/velnor-ci/tests/it/audit/migration/targets.rs
-
 # Fixture programs compiled and run inside the mirror fixture: they observe the CARGO
 # the mirror hands to a build script or mise entry, which is the behavior under test.
 crates/velnor-ci/tests/it/crates_mirror.rs
