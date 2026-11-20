@@ -25,11 +25,16 @@ pub(crate) fn run(temp: &Path, command: &[&str]) -> Output {
 }
 
 fn run_with_grace(temp: &Path, millis: &str, command: &[&str]) -> Output {
+    // The witnesses scan CARGO_HOME after the command exits; an empty one keeps
+    // that scan of the developer's cache out of the timing.
+    let cargo_home = temp.join("cargo-home");
+    fs::create_dir_all(&cargo_home).unwrap_or_else(|e| unreachable!("{e}"));
     Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
         .arg("run")
         .arg("--")
         .args(command)
         .env("RUNNER_TEMP", temp)
+        .env("CARGO_HOME", cargo_home)
         .env("VELNOR_CI_RUN_PUMP_GRACE_MS", millis)
         .output()
         .unwrap_or_else(|e| unreachable!("{e}"))
@@ -218,13 +223,25 @@ fn run_fails_when_the_log_cannot_take_the_output() {
 #[test]
 fn run_returns_when_the_command_exits_although_a_background_process_keeps_its_pipes_open() {
     let temp = scratch("background");
-    let started = std::time::Instant::now();
-    let output = run_with_grace(
-        &temp,
-        "200",
-        &["sh", "-c", "sleep 30 & echo started; exit 4"],
+    // The shell marks its exit with a file, so the bound measures only how long
+    // velnor-ci takes to return after the command exits, not process start-up under
+    // load. Stdout stays a pipe: the background `sleep` holding the pipe is the
+    // behaviour under test.
+    let exited = temp.join("exited");
+    let script = format!(
+        "sleep 30 & echo started; touch '{}'; exit 4",
+        exited.display()
     );
-    assert!(started.elapsed() < std::time::Duration::from_secs(20));
+    let output = run_with_grace(&temp, "200", &["sh", "-c", &script]);
+    let returned = std::time::SystemTime::now();
+    let exited_at = fs::metadata(&exited)
+        .and_then(|meta| meta.modified())
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let after_exit = returned.duration_since(exited_at).unwrap_or_default();
+    assert!(
+        after_exit < std::time::Duration::from_secs(20),
+        "{after_exit:?}"
+    );
     assert_eq!(output.status.code(), Some(4));
     assert_eq!(String::from_utf8_lossy(&output.stdout), "started\n");
 }
