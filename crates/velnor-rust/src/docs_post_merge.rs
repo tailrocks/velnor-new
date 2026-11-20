@@ -6,16 +6,23 @@ use velnor_model::{
     StepKind, StepNeed, When,
 };
 
+/// Whether the step compiles only on the push after the merge, so the build inputs it needs
+/// must survive a merge group that skipped the rest of its job.
+pub(crate) fn runs_after_merge(facts: &RepoFacts, kind: &StepKind) -> bool {
+    match kind {
+        StepKind::Cargo(CargoCommand::Doc | CargoCommand::DocFeatures { .. }) => {
+            facts.config.docs_run == DocsRun::PostMerge
+        }
+        StepKind::Cargo(CargoCommand::CheckAlone { .. }) => {
+            facts.config.check_alone_run == DocsRun::PostMerge
+        }
+        _ => false,
+    }
+}
+
 pub(crate) fn apply(facts: &RepoFacts, jobs: &mut [Job]) {
-    let docs = facts.config.docs_run == DocsRun::PostMerge;
-    let alone = facts.config.check_alone_run == DocsRun::PostMerge;
     for step in jobs.iter_mut().flat_map(|job| job.steps.iter_mut()) {
-        let deferred = match step.kind {
-            StepKind::Cargo(CargoCommand::Doc | CargoCommand::DocFeatures { .. }) => docs,
-            StepKind::Cargo(CargoCommand::CheckAlone { .. }) => alone,
-            _ => false,
-        };
-        if deferred {
+        if runs_after_merge(facts, &step.kind) {
             step.when = When::NotCancelledPostMerge;
             step.skip_after_merge_group = None;
         }

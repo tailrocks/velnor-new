@@ -5,8 +5,8 @@ use std::collections::BTreeSet;
 
 use serde::Deserialize;
 use velnor_model::{
-    ARTIFACT_RETENTION_DEFAULT, ArtifactWhen, GroupArtifact, RustCiConfig, aliased_secret,
-    secret_like,
+    ARTIFACT_RETENTION_DEFAULT, ArtifactWhen, Case, GroupArtifact, RustCiConfig, aliased_secret,
+    secret_like, segment_matches,
 };
 
 use crate::config_test_groups::ranged;
@@ -16,7 +16,10 @@ const NAME_MAX_LENGTH: usize = 60;
 const PATHS_MAX: usize = 16;
 const ARTIFACTS_MAX: usize = 8;
 const RETENTION_RANGE: std::ops::RangeInclusive<u16> = 1..=90;
-const RESERVED_PREFIXES: [&str; 2] = ["nextest-archive", "velnor-"];
+const RESERVED_PREFIXES: &[&str] = &["nextest-archive", "velnor-", "ci-metrics-"];
+const RESERVED_FIX: &str = "does not start with nextest-archive, velnor- or ci-metrics-, which the generated jobs use; a partitioned group also appends -<i>";
+const BUILD_ROOT: &str = "target";
+const BUILD_PROFILES: &[&str] = &["debug", "release"];
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -106,17 +109,20 @@ fn check_name(name: &str) -> Result<(), Reason> {
             "use 1 to 60 letters, digits, '.', '_' or '-'",
         ));
     }
-    if RESERVED_PREFIXES
-        .iter()
-        .any(|prefix| lower.starts_with(prefix))
-    {
-        return Err(refused(
-            "test_groups.artifacts.name",
-            name,
-            "does not start with nextest-archive or velnor-, which the generated jobs use",
-        ));
+    if reserved(&lower) {
+        return Err(refused("test_groups.artifacts.name", name, RESERVED_FIX));
     }
     Ok(())
+}
+
+fn reserved(lower: &str) -> bool {
+    RESERVED_PREFIXES
+        .iter()
+        .any(|prefix| lower.starts_with(prefix))
+}
+
+fn can_match(segment: &str, name: &str) -> bool {
+    segment_matches(segment, name, Case::Folded)
 }
 
 fn path_fault(path: &str) -> Option<&'static str> {
@@ -152,9 +158,14 @@ fn path_fault(path: &str) -> Option<&'static str> {
             "is outside the workspace or not normal; write a path with no '..', '.' or empty part",
         );
     }
-    if segments.first().is_some_and(|first| first.contains("**")) {
+    if segments
+        .iter()
+        .take_while(|segment| segment.chars().all(|c| c == '*'))
+        .chain(segments.first())
+        .any(|segment| segment.contains("**"))
+    {
         return Some(
-            "starts with a ** glob, which walks the whole workspace; start the path with a directory name",
+            "starts with a ** glob, or with * parts followed by one, which walks the whole workspace; start the path with a directory name",
         );
     }
     if segments
@@ -172,10 +183,15 @@ fn path_fault(path: &str) -> Option<&'static str> {
     let Some(last) = segments.last() else {
         return Some("selects the whole workspace; name the report files themselves");
     };
-    let in_target = segments.len() >= 2 && segments[segments.len() - 2] == "target";
-    if *last == "target" || (in_target && matches!(*last, "debug" | "release")) {
+    let in_target = segments.len() >= 2 && can_match(segments[segments.len() - 2], BUILD_ROOT);
+    if can_match(last, BUILD_ROOT)
+        || (in_target
+            && BUILD_PROFILES
+                .iter()
+                .any(|profile| can_match(last, profile)))
+    {
         return Some(
-            "uploads a whole build directory, which is far too large; name the report files, such as target/nextest/ci/junit.xml",
+            "uploads, or with a wildcard can reach, a whole build directory, which is far too large; name the report files, such as target/nextest/ci/junit.xml",
         );
     }
     if segments.iter().any(|segment| secret_like(segment)) {
@@ -203,6 +219,9 @@ pub(crate) fn check_unique(config: &RustCiConfig) -> Result<(), Reason> {
                 vec![artifact.name.clone()]
             };
             for name in names {
+                if reserved(&name.to_ascii_lowercase()) {
+                    return Err(refused("test_groups.artifacts.name", &name, RESERVED_FIX));
+                }
                 if !seen.insert(name.to_ascii_lowercase()) {
                     return Err(Reason::ArtifactNameTaken(name));
                 }
