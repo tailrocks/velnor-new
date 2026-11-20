@@ -7,17 +7,30 @@
 # The digests come from the official `SHASUMS256.txt` of the mise release
 # (the raw `mise-v<version>-<os>-<arch>` executables), never from a build.
 #
-# Usage: scripts/mise-binary-digests.sh [VERSION] [--check|--write] [--sums FILE]
+# The manifest is trusted only after its minisign signature (`SHASUMS256.txt.minisig`,
+# published next to it in every release) verifies against the pinned mise release key
+# `scripts/mise-minisign.pub`; a bad, missing or foreign signature stops the script
+# before any digest is read (fail closed, issue #2331). The key is a verbatim copy of
+# https://github.com/jdx/mise/blob/main/minisign.pub, the key id 64113EDF160FDEC2
+# that mise's install docs (https://mise.jdx.dev/installing-mise.html, "GitHub
+# releases") pass to `minisign -P`. To rotate it, copy the new minisign.pub from the
+# jdx/mise repository over scripts/mise-minisign.pub after checking it against
+# that documentation page, then run `--check`. The check itself is
+# scripts/minisign_verify.py (standard library only: no minisign binary needed).
+#
+# Usage: scripts/mise-binary-digests.sh [VERSION] [--check|--write] [--sums FILE [--sig FILE]]
 #   VERSION  the mise release; defaults to MISE_VERSION in crates/velnor-render/src/steps.rs
 #   (none)   print the table row for VERSION
 #   --check  exit 1 unless the checked-in table has exactly that row
 #   --write  replace the checked-in table with that row (a bump of MISE_VERSION
 #            still edits steps.rs by hand, and the pinned test literals follow)
 #   --sums   read SHASUMS256.txt from FILE instead of the release download
+#   --sig    the minisign signature of --sums (default: FILE.minisig); always required
 set -eu
 
 root=$(cd "$(dirname "$0")/.." && pwd)
 exec python3 -I - "$root" "$@" <<'PY'
+import importlib.util
 import re
 import sys
 import urllib.request
@@ -32,13 +45,15 @@ platforms = {
     "macos-x64": "macOS-X64",
 }
 
-mode, version, sums = "print", None, None
+mode, version, sums, sig = "print", None, None, None
 it = iter(args)
 for arg in it:
     if arg in ("--check", "--write"):
         mode = arg[2:]
     elif arg == "--sums":
         sums = next(it, None) or sys.exit("--sums needs a file")
+    elif arg == "--sig":
+        sig = next(it, None) or sys.exit("--sig needs a file")
     elif arg.startswith("-"):
         sys.exit(f"unknown option {arg}")
     else:
@@ -49,12 +64,34 @@ if version is None:
 if not re.fullmatch(r"\d{4}\.\d{1,2}\.\d{1,3}", version):
     sys.exit(f"{version} is not a mise release version")
 
-if sums:
-    text = open(sums).read()
-else:
-    url = f"https://github.com/jdx/mise/releases/download/v{version}/SHASUMS256.txt"
+spec = importlib.util.spec_from_file_location("minisign_verify", f"{root}/scripts/minisign_verify.py")
+minisign = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(minisign)
+
+
+def read(path):
+    with open(path, "rb") as handle:
+        return handle.read()
+
+
+def download(name):
+    url = f"https://github.com/jdx/mise/releases/download/v{version}/{name}"
     with urllib.request.urlopen(url, timeout=60) as response:
-        text = response.read().decode()
+        return response.read()
+
+
+# Fail closed: the digests below are read only from bytes whose signature verified.
+try:
+    if sums:
+        raw, signature = read(sums), read(sig or sums + ".minisig")
+    else:
+        raw, signature = download("SHASUMS256.txt"), download("SHASUMS256.txt.minisig")
+    minisign.verify(
+        read(f"{root}/scripts/mise-minisign.pub").decode(), signature.decode(), raw
+    )
+except (OSError, UnicodeDecodeError, minisign.SignatureError) as error:
+    sys.exit(f"SHASUMS256.txt of mise {version}: signature check failed, nothing trusted: {error}")
+text = raw.decode()
 
 digests = {}
 for line in text.splitlines():

@@ -111,6 +111,8 @@ ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
 printf "maintenance-phase: setup-velnor-install\n"
 python3 scripts/test-setup-velnor-action.py
+printf "maintenance-phase: mise-binary-digests\n"
+python3 scripts/test_mise_binary_digests.py
 printf "maintenance-phase: tag-ruleset-drift\n"
 bun test ./scripts/tag-ruleset-drift.test.ts
 printf "maintenance-phase: source-fetch\n"
