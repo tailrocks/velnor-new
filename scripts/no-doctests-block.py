@@ -12,6 +12,7 @@ from pathlib import Path
 
 IDENT = re.compile(r"[^\W\d]\w*")
 FENCE = re.compile(r"```|~~~")
+INDENTED = re.compile(r"^[ \t]*\*? {5,}\S", re.M)
 DOC_OPEN = re.compile(r"/\*(?:!|\*(?![*/]))")
 RAW_PREFIX = {"r", "br", "cr"}
 BYTE_PREFIX = {"b", "c"}
@@ -107,8 +108,8 @@ def main(args):
     for path in paths:
         src = path.read_text(encoding="utf-8")
         for line, body in doc_blocks(src):
-            if FENCE.search(body):
-                print(f"{path}:{line}: doc fence inside a block doc comment")
+            if FENCE.search(body) or INDENTED.search(body):
+                print(f"{path}:{line}: doctest form inside a block doc comment")
                 bad += 1
     return 1 if bad else 0
 

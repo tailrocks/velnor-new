@@ -241,6 +241,13 @@ rules:
     level: error
     message: "Doctests are off by decision (Cargo `doctest = false`). A doctest would bring back the MBX `rustdoc` bypass in every CI run. Do not add a doc fence, an indented doc code block or a `#[doc]` include; a decision is needed first."
 
+  - id: no-doctests-block-scanner
+    kind: file_exists
+    paths:
+      - scripts/no-doctests-block.py
+    level: error
+    message: "The block doc scanner is required: the no-doctests-block rule runs scripts/no-doctests-block.py, so a missing scanner must fail the lint instead of passing."
+
   - id: no-doctests-block
     kind: command
     paths:

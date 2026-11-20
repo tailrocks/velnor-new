@@ -56,6 +56,19 @@ check nested_block_fence fail '/** outer /* nested */\n * ```\n * let x = 1;\n *
 check str_block_literal pass 'fn f() { let s = "/** ```"; }\n'
 check str_inner_literal pass 'fn f() { let s = "/*! ~~~"; }\n'
 check unicode_ident   pass 'fn café() {}\n/** plain prose */\nfn f() {}\n'
+check block_indent_code fail '/**\n * prose\n *\n *     let x = 1;\n */\nfn f() {}\n'
+
+# A deleted scanner must fail the rule, not pass with nothing to run.
+missing="$work/scanner_missing"
+mkdir -p "$missing/crates/fx/src"
+printf '%b' '/** ```\n * f();\n * ```\n */\nfn f() {}\n' > "$missing/crates/fx/src/lib.rs"
+if "$alint_bin" check -c "$rule" "$missing" >/dev/null 2>&1; then got=pass; else got=fail; fi
+if [ "$got" != fail ]; then
+  echo "FAIL scanner_missing: expected fail, got $got"
+  fails=$((fails + 1))
+else
+  echo "ok   scanner_missing (fail)"
+fi
 
 if [ "$fails" -ne 0 ]; then
   echo "no-doctests fixtures: $fails failing"
