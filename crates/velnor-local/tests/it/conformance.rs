@@ -233,7 +233,9 @@ fn a_log_under_logs_jobs_takes_the_values_of_its_run() {
 }
 
 fn observation_log(hit: &str) -> String {
-    format!("{{\"legs\": {{\"default-branch\": {{\"hit\": \"{hit}\"}}}}, \"probe\": \"cache-keys\"}}")
+    format!(
+        "{{\"legs\": {{\"default-branch\": {{\"hit\": \"{hit}\"}}}}, \"probe\": \"cache-keys\"}}"
+    )
 }
 
 #[test]
@@ -248,7 +250,7 @@ fn a_wrong_observation_of_a_leg_is_not_hidden_by_a_later_log() {
     assert!(!reproduced, "{lines:?}");
     assert_eq!(
         lines,
-        ["cache-keys / default-branch: conflicting observations (9-push.log, 10-push.log)"]
+        ["cache-keys / default-branch (9-push.log, 10-push.log): conflicting observations"]
     );
 }
 
@@ -269,15 +271,11 @@ fn two_logs_that_agree_on_a_leg_reproduce_it() {
 
 #[test]
 fn logs_are_ordered_by_run_number_then_name() {
-    let mut logs: Vec<(String, String)> = [
-        "10-push.log",
-        "jobs/10-7.log",
-        "9-push.log",
-        "jobs/9-7.log",
-    ]
-    .into_iter()
-    .map(|name| (name.to_owned(), String::new()))
-    .collect();
+    let mut logs: Vec<(String, String)> =
+        ["10-push.log", "jobs/10-7.log", "9-push.log", "jobs/9-7.log"]
+            .into_iter()
+            .map(|name| (name.to_owned(), String::new()))
+            .collect();
     velnor_local::io::run::order_logs(&mut logs);
     let names: Vec<&str> = logs.iter().map(|(name, _)| name.as_str()).collect();
     assert_eq!(

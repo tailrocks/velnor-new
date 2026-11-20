@@ -92,7 +92,7 @@ async fn the_run_copy_has_no_job_level_cache_mode_and_the_notice_counts_the_keys
 #[test]
 fn cache_mode_is_stripped_when_the_jobs_key_has_a_trailing_comment() {
     let text = "jobs: # all jobs\n  rust:\n    runs-on: x\n    cache-mode: write\n    steps:\n      - run: x\n";
-    let (out, count) = strip(text);
+    let (out, count) = strip(text).unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(count, 1, "{out}");
     assert!(!out.contains("cache-mode"), "{out}");
 }
@@ -109,7 +109,10 @@ fn a_flow_job_without_cache_mode_is_left_as_written() {
     let text = "jobs:\n  rust: {runs-on: x}\n  lint:\n    runs-on: y\n    cache-mode: read\n";
     let (out, count) = strip(text).expect("no flow job has cache-mode");
     assert_eq!(count, 1);
-    assert_eq!(out, "jobs:\n  rust: {runs-on: x}\n  lint:\n    runs-on: y\n");
+    assert_eq!(
+        out,
+        "jobs:\n  rust: {runs-on: x}\n  lint:\n    runs-on: y\n"
+    );
 }
 
 #[test]

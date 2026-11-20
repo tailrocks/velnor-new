@@ -184,13 +184,14 @@ async fn rewrite_workflows(
         let text = read_workflow(&path).await?;
         let (pinning, count) = pin.map_or_else(|| (text.clone(), 0), |pin| rewrite(&text, pin));
         let (scaled, _) = scale(&pinning, timeout);
-        let (unmodelled, dropped) = cache_mode::strip(&scaled);
+        let shown = path
+            .strip_prefix(repo)
+            .unwrap_or(&path)
+            .display()
+            .to_string();
+        let (unmodelled, dropped) = cache_mode::strip(&scaled)
+            .map_err(|error| io::Error::other(format!("{shown}: {error}")))?;
         if dropped > 0 {
-            let shown = path
-                .strip_prefix(repo)
-                .unwrap_or(&path)
-                .display()
-                .to_string();
             println!("{}", cache_mode::notice(tag, &shown, dropped));
         }
         let (rewritten, _) = prune(&unmodelled, &tracked);

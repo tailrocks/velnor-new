@@ -94,7 +94,15 @@ async fn conformance(args: ConformanceArgs) -> std::io::Result<()> {
 
 /// Orders the logs by their run number, so run 9 comes before run 10, then by name.
 pub fn order_logs(logs: &mut [(String, String)]) {
-    logs.sort();
+    logs.sort_by(|(a, _), (b, _)| run_number(a).cmp(&run_number(b)).then_with(|| a.cmp(b)));
+}
+
+fn run_number(name: &str) -> u64 {
+    let base = name.strip_prefix("jobs/").unwrap_or(name);
+    base.split('-')
+        .next()
+        .and_then(|digits| digits.parse().ok())
+        .unwrap_or(u64::MAX)
 }
 
 /// The placeholder values of the run that wrote a log: a job log under `logs/jobs/` takes the
