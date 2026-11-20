@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod activity;
+mod app_token;
 mod archive_witness;
 mod artifact_api;
 mod artifact_unzip;
@@ -115,10 +116,8 @@ use crate::compare::{compare, compare_across_populations};
 use crate::error::CiError;
 use crate::escape::stderr_line;
 use crate::gate::{check_tag, release_gate};
-use crate::github::Repo;
-use crate::lane_guard;
 use crate::metrics::{METRICS_SCHEMA_VERSION, RunMetrics};
-use crate::test_groups;
+use crate::{github::Repo, lane_guard, test_groups};
 use clap::{CommandFactory, FromArgMatches};
 
 const TOKEN_VARIABLE: &str = "GITHUB_TOKEN";
@@ -250,6 +249,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Fetch(args) => fetch::fetch(&args),
         Command::FetchAssets(args) => release_assets::fetch_assets(&args),
         Command::PrivateTokenAllowed => private_check::run(),
+        Command::AppToken(args) => app_token::run(&args),
         Command::MbxStore => crate::mbx_store::setup(),
         Command::MbxSeed => crate::mbx_seed::setup(),
         Command::MisePin(args) => crate::mise_pin::run(&args.tool),

@@ -7,7 +7,9 @@ use velnor_model::{
 };
 
 use crate::plan::step;
-use crate::private_fetch::{after_trusted_setup, compiles, shared_gate, status, tokens_first};
+use crate::private_fetch::{
+    after_trusted_setup, compiles, shared_gate, status, token_mint, tokens_first,
+};
 
 /// Put the release asset phase in front of the first step that runs checkout code (the first
 /// cargo step before helper 0.1.111) of every job that compiles or runs tests, because a build
@@ -43,7 +45,7 @@ pub(crate) fn insert(facts: &RepoFacts, jobs: &mut [Job]) {
         let parts = restores(assets)
             .chain([
                 ReleaseAssetPart::Check,
-                ReleaseAssetPart::Token(sources.clone()),
+                ReleaseAssetPart::Token(sources.clone(), token_mint(facts)),
                 ReleaseAssetPart::Fetch,
             ])
             .chain(saves(assets));

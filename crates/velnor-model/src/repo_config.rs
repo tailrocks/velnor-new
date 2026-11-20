@@ -339,6 +339,14 @@ pub struct CratesMirror {
     pub cainfo: String,
 }
 
+/// Who signs the App JWT: `actions/create-github-app-token`, whose post step gets the private
+/// key at the end of the job, or one `velnor-ci app-token` step with no post step.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TokenMint {
+    Action,
+    Helper,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PrivateSources {
     pub app_id: String,
