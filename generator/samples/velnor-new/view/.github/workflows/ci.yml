@@ -118,13 +118,13 @@ jobs:
             echo "the check accepted an unmarked gate in the release bump" >&2
             exit 1
           fi
-          rel="--base-version 0.1.110 --tag-version 0.1.110 --current 0.1.111"
-          if bash scripts/check-helper-gates.sh --diff /dev/null --tree "$fixtures/gate-tree-unmarked.diff" $rel; then
+          rel=(--base-version 0.1.110 --tag-version 0.1.110 --current 0.1.111)
+          if bash scripts/check-helper-gates.sh --diff /dev/null --tree "$fixtures/gate-tree-unmarked.diff" "${rel[@]}"; then
             echo "the check accepted an unmarked gate already in the tree at the release bump" >&2
             exit 1
           fi
-          bash scripts/check-helper-gates.sh --diff /dev/null --tree "$fixtures/gate-tree-marked.diff" $rel
-          bash scripts/check-helper-gates.sh --diff /dev/null --tree "$fixtures/gate-tree-future.diff" $rel
+          bash scripts/check-helper-gates.sh --diff /dev/null --tree "$fixtures/gate-tree-marked.diff" "${rel[@]}"
+          bash scripts/check-helper-gates.sh --diff /dev/null --tree "$fixtures/gate-tree-future.diff" "${rel[@]}"
           bash scripts/check-helper-gates.sh --diff "$fixtures/gate-marker-in-code.diff" --current 0.1.110
           if bash scripts/check-helper-gates.sh --diff "$fixtures/gate-marker-malformed.diff" --current 0.1.110; then
             echo "the check accepted a malformed marker comment" >&2
