@@ -317,6 +317,7 @@ impl WorkflowsPlan {
             }
             workflows.push(checked);
         }
+        crate::trusted::reserved_across(&workflows)?;
         crate::workflow_run::check_chains(&workflows)?;
         Ok(Self { workflows })
     }

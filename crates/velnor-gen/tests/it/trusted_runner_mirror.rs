@@ -58,6 +58,29 @@ fn a_mirror_on_the_runner_inherits_the_top_level_trusted_runner() -> TestResult 
 }
 
 #[test]
+fn a_mirror_that_spells_the_shared_pool_in_another_case_names_the_same_pool() -> TestResult {
+    let upper = POOL.to_uppercase();
+    let plain = runs_on(&format!(
+        "runner = '{SCALE_SET}'\ntrusted_runner = '{POOL}'\n{}",
+        mirror(SCALE_SET, None)
+    ))?;
+    for (top, own) in [(upper.as_str(), POOL), (POOL, upper.as_str())] {
+        let labels = runs_on(&format!(
+            "runner = '{SCALE_SET}'\ntrusted_runner = '{top}'\n{}",
+            mirror(SCALE_SET, Some(own))
+        ))?;
+        assert_eq!(labels.len(), plain.len(), "{top} {own}: {labels:?}");
+        assert!(
+            labels
+                .iter()
+                .all(|label| label.to_lowercase().contains(POOL)),
+            "{top} {own}: {labels:?}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn a_mirror_on_its_own_runner_routes_by_its_own_trusted_runner() -> TestResult {
     let base = format!("runner = '{SCALE_SET}'\ntrusted_runner = '{POOL}'\n{GROUP}");
     let with = runs_on(&format!(

@@ -152,7 +152,12 @@ pub(crate) fn resolve(
         .transpose()?;
     let shares_runner = same(mirror_runner, runner);
     let effective = own.or_else(|| shares_runner.then(|| top.clone()).flatten());
-    if shares_runner && effective != top {
+    let agrees = match (&effective, &top) {
+        (Some(left), Some(right)) => same(left, right),
+        (None, None) => true,
+        _ => false,
+    };
+    if shares_runner && !agrees {
         return Err(Reason::InvalidValue {
             key: "crates_mirror.trusted_runner",
             value: mirror_trusted_runner.unwrap_or_default(),

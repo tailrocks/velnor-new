@@ -95,7 +95,7 @@ pub fn expected_with_notes(
         return Err(GenerateError::TooManySourceRoots(roots));
     }
     let (plan, mut files, budget_notes) = plan_and_render(view, &facts)?;
-    let (reusable, reusable_notes) = reusable::reusable_workflows(view, helper)?;
+    let (reusable, reusable_notes) = reusable::reusable_workflows(view, helper, &plan)?;
     files.extend(reusable);
     if plan
         .jobs

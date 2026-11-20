@@ -292,6 +292,7 @@ mod trusted_events;
 mod trusted_runner;
 mod trusted_runner_fence;
 mod trusted_runner_mirror;
+mod trusted_runner_reserved;
 mod trusted_runner_workflows;
 mod trusted_runs_on;
 mod unowned;

@@ -12,6 +12,7 @@ pub(crate) struct Event {
     pub(crate) git_ref: &'static str,
     pub(crate) head_repository: Option<&'static str>,
     pub(crate) default_branch: Option<&'static str>,
+    pub(crate) ref_protected: bool,
 }
 
 const fn event(name: &'static str, git_ref: &'static str) -> Event {
@@ -20,6 +21,14 @@ const fn event(name: &'static str, git_ref: &'static str) -> Event {
         git_ref,
         head_repository: None,
         default_branch: Some(DEFAULT_BRANCH),
+        ref_protected: true,
+    }
+}
+
+const fn unprotected(name: &'static str, git_ref: &'static str) -> Event {
+    Event {
+        ref_protected: false,
+        ..event(name, git_ref)
     }
 }
 
@@ -29,6 +38,7 @@ const fn bare(name: &'static str, git_ref: &'static str) -> Event {
         git_ref,
         head_repository: None,
         default_branch: None,
+        ref_protected: true,
     }
 }
 
@@ -38,6 +48,7 @@ const fn pull(name: &'static str, git_ref: &'static str, head: &'static str) -> 
         git_ref,
         head_repository: Some(head),
         default_branch: Some(DEFAULT_BRANCH),
+        ref_protected: true,
     }
 }
 
@@ -49,6 +60,10 @@ pub(crate) fn events() -> Vec<(Event, &'static str)> {
     vec![
         (event("push", "refs/heads/main"), TRUSTED),
         (event("push", "refs/heads/feature"), NORMAL),
+        (unprotected("push", "refs/heads/MAIN"), NORMAL),
+        (unprotected("push", "refs/heads/main"), NORMAL),
+        (unprotected("schedule", "refs/heads/main"), NORMAL),
+        (unprotected("workflow_dispatch", "refs/heads/main"), NORMAL),
         (event("push", "refs/tags/v1.0.0"), NORMAL),
         (event("schedule", "refs/heads/main"), TRUSTED),
         (bare("schedule", "refs/heads/main"), NORMAL),
@@ -95,6 +110,7 @@ pub(crate) fn runs_on(
         match name {
             "github.event_name" => text(event.name),
             "github.ref" => text(event.git_ref),
+            "github.ref_protected" => Ok(Value::Bool(event.ref_protected)),
             "github.repository" => text(REPOSITORY),
             "github.event.repository.default_branch" => Ok(event
                 .default_branch

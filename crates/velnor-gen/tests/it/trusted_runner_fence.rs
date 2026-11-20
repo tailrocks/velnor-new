@@ -134,3 +134,76 @@ fn a_test_group_on_its_own_label_leaves_the_trusted_runner_valid() -> TestResult
     rust_workflow(&repo)?;
     Ok(())
 }
+
+fn docker_job(with: &str) -> String {
+    format!(
+        "\n[[workflow.job]]\nid = \"image\"\npermissions = {{ contents = \"read\" }}\n\n[[workflow.job.step]]\nname = \"Build\"\nuses = \"docker-build-push\"\n\n[workflow.job.step.with]\n{with}\n"
+    )
+}
+
+#[test]
+fn a_docker_build_that_takes_its_inputs_from_a_dispatcher_or_matrix_is_refused() -> TestResult {
+    let on = "[workflow.on.workflow_dispatch]\n\n[[workflow.on.workflow_dispatch.input]]\nname = \"target\"\ntype = \"string\"\n";
+    for with in [
+        "context = \"${{ inputs.target }}\"",
+        "Context = \"${{ github.event.inputs.target }}\"",
+        "file = \"${{ inputs.target }}\"",
+        "FILE = \"${{ matrix.dockerfile }}\"",
+        "context = \"${{ steps.pick.outputs.context }}\"",
+        "build-contexts = \"app=${{ needs.plan.outputs.context }}\"",
+        "build-args = \"VERSION=${{ inputs.target }}\"",
+        "Build-Args = \"REF=${{ matrix.ref }}\"",
+    ] {
+        let message = refusal(&workflow(HEADER, on, &docker_job(with)))?;
+        assert!(message.contains("trusted_runner"), "{with}: {message}");
+        assert!(message.contains("Docker"), "{with}: {message}");
+    }
+    Ok(())
+}
+
+#[test]
+fn a_docker_build_outside_the_checked_out_tree_is_refused() -> TestResult {
+    for with in [
+        "context = \"https://github.com/stranger/repo.git#main\"",
+        "context = \"git@github.com:stranger/repo.git\"",
+        "context = \"github.com/stranger/repo\"",
+        "context = \"../outside\"",
+        "context = \"/srv/other\"",
+        "file = \"../other/Dockerfile\"",
+        "file = \"/etc/Dockerfile\"",
+        "build-contexts = \"base=https://example.com/base.tar.gz\"",
+        "build-contexts = \"base=../base\"",
+    ] {
+        let message = refusal(&workflow(HEADER, ON, &docker_job(with)))?;
+        assert!(message.contains("trusted_runner"), "{with}: {message}");
+        assert!(message.contains("Docker"), "{with}: {message}");
+    }
+    Ok(())
+}
+
+#[test]
+fn a_static_docker_build_stays_accepted() -> TestResult {
+    for with in [
+        "context = \".\"",
+        "context = \"services/api\"\nfile = \"services/api/Dockerfile\"",
+        "file = \"Dockerfile\"\nbuild-args = \"VERSION=1\"",
+        "context = \".\"\nbuild-contexts = \"base=docker-image://alpine:3.20\"",
+    ] {
+        rendered_file(&workflow(HEADER, ON, &docker_job(with)), "ci")?;
+    }
+    Ok(())
+}
+
+#[test]
+fn a_docker_build_in_an_untrusted_workflow_keeps_its_inputs() -> TestResult {
+    let on = "[workflow.on.workflow_dispatch]\n\n[[workflow.on.workflow_dispatch.input]]\nname = \"target\"\ntype = \"string\"\n";
+    rendered_file(
+        &workflow(
+            "runner = \"velnor-box\"",
+            on,
+            &docker_job("context = \"${{ inputs.target }}\""),
+        ),
+        "ci",
+    )?;
+    Ok(())
+}
