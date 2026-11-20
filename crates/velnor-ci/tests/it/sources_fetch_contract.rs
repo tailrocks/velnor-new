@@ -14,12 +14,17 @@ use velnor_model::{
 };
 use velnor_render::render;
 
-fn rendered_run(manifests: &[&str]) -> String {
+pub(crate) fn plan(
+    manifests: &[&str],
+    runs_on: &str,
+    hosted: &[&str],
+    trusted_runners: velnor_model::TrustedRunners,
+) -> WorkflowPlan {
     let manifests = manifests
         .iter()
         .map(|manifest| RepoPath::new(*manifest).unwrap_or_else(|e| unreachable!("{e}")))
         .collect();
-    let plan = WorkflowPlan {
+    WorkflowPlan {
         name: "Rust CI".to_owned(),
         triggers: Triggers {
             pull_request: vec![PullRequestType::Opened],
@@ -31,9 +36,13 @@ fn rendered_run(manifests: &[&str]) -> String {
         concurrency: Concurrency::CancelOlderPullRequestRuns,
         permissions: Permissions::default(),
         fork_runner: RunnerLabel::new("ubuntu-latest").unwrap_or_else(|e| unreachable!("{e}")),
-        hosted_runners: velnor_model::HostedRunners::new(vec![
-            RunnerLabel::new("ubuntu-latest").unwrap_or_else(|e| unreachable!("{e}")),
-        ]),
+        hosted_runners: velnor_model::HostedRunners::new(
+            hosted
+                .iter()
+                .map(|label| RunnerLabel::new(*label).unwrap_or_else(|e| unreachable!("{e}")))
+                .collect(),
+        ),
+        trusted_runners,
         jobs: vec![Job {
             id: JobId::new("rust").unwrap_or_else(|e| unreachable!("{e}")),
             name: None,
@@ -41,7 +50,7 @@ fn rendered_run(manifests: &[&str]) -> String {
             needs: Vec::new(),
             when: When::Success,
             pr: PrRun::Always,
-            runs_on: RunnerLabel::new("ubuntu-latest").unwrap_or_else(|e| unreachable!("{e}")),
+            runs_on: RunnerLabel::new(runs_on).unwrap_or_else(|e| unreachable!("{e}")),
             permissions: Permissions::default(),
             timeout_minutes: 10,
             reports_ignored: false,
@@ -70,7 +79,16 @@ fn rendered_run(manifests: &[&str]) -> String {
                 after_setup: false,
             }],
         }],
-    };
+    }
+}
+
+fn rendered_run(manifests: &[&str]) -> String {
+    let plan = plan(
+        manifests,
+        "ubuntu-latest",
+        &["ubuntu-latest"],
+        velnor_model::TrustedRunners::default(),
+    );
     let files = render(&plan).unwrap_or_else(|e| unreachable!("{e:?}"));
     let text = files
         .get(&WORKFLOW_PATH)

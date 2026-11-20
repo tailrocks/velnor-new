@@ -6,8 +6,14 @@ use std::collections::BTreeMap;
 use crate::budget_mode::SelectionName;
 use crate::cron::CronExpr;
 use crate::hosted::HostedRunners;
-use crate::ids::{JobId, PackageName, RepoPath, RootSlug, RunnerLabel};
+use crate::ids::{JobId, PackageName, RepoPath, RootSlug, RunnerLabel, TargetName};
+use crate::repo::{LaneFeatures, TargetKind};
 use crate::steps::{StepKind, VerifiedSave};
+use crate::test_group::NoTests;
+use crate::trusted::TrustedRunners;
+
+mod filter;
+pub use filter::FilterRef;
 
 pub const LINT_STEP: &str = "Lint";
 pub const TEST_STEP: &str = "Test";
@@ -29,6 +35,7 @@ pub struct WorkflowPlan {
     pub permissions: Permissions,
     pub fork_runner: RunnerLabel,
     pub hosted_runners: HostedRunners,
+    pub trusted_runners: TrustedRunners,
     pub jobs: Vec<Job>,
 }
 
@@ -290,4 +297,97 @@ pub enum When {
     Failure,
 }
 
-pub use crate::cargo_command::{CargoCommand, FilterRef};
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CargoCommand {
+    FmtCheck,
+    Clippy {
+        extra: Vec<String>,
+    },
+    CheckAlone {
+        package: PackageName,
+    },
+    BuildBinary {
+        package: PackageName,
+        binary: TargetName,
+    },
+    BuildAll,
+    NextestBuild,
+    NextestRun {
+        filter: FilterRef,
+        ci_profile: bool,
+    },
+    NextestFeatures {
+        features: LaneFeatures,
+        packages: Vec<PackageName>,
+        filter: FilterRef,
+        ci_profile: bool,
+        reports: bool,
+    },
+    ClippyFeatures {
+        features: LaneFeatures,
+    },
+    DocFeatures {
+        features: LaneFeatures,
+    },
+    LaneGuard {
+        features: LaneFeatures,
+        packages: Vec<PackageName>,
+        filter: String,
+        except: Vec<String>,
+    },
+    NextestArchive {
+        file: RepoPath,
+    },
+    NextestRunArchive {
+        file: RepoPath,
+        filter: FilterRef,
+        threads: Option<u16>,
+        partition: Option<(u16, u16)>,
+        ci_profile: bool,
+        no_tests: NoTests,
+    },
+    TestTarget {
+        package: PackageName,
+        target: TargetName,
+        kind: TargetKind,
+        features: Vec<String>,
+    },
+    Doctest,
+    Doc,
+    Deny {
+        manifest: RepoPath,
+        config: Option<RepoPath>,
+    },
+    Machete,
+}
+
+impl CargoCommand {
+    #[must_use]
+    pub fn builds(&self) -> bool {
+        !matches!(
+            self,
+            Self::FmtCheck | Self::Deny { .. } | Self::Machete | Self::NextestRunArchive { .. }
+        )
+    }
+
+    #[must_use]
+    pub const fn reports_tests(&self) -> bool {
+        matches!(
+            self,
+            Self::NextestRun { .. }
+                | Self::NextestRunArchive { .. }
+                | Self::NextestFeatures { reports: true, .. }
+        )
+    }
+
+    #[must_use]
+    pub fn plan_values(&self) -> &'static [GateNeed] {
+        match self {
+            Self::NextestRun { .. }
+            | Self::NextestFeatures { .. }
+            | Self::NextestRunArchive { .. } => &[GateNeed::TestFilter],
+            Self::Doctest => &[GateNeed::DoctestsKnown],
+            _ => &[],
+        }
+    }
+}
