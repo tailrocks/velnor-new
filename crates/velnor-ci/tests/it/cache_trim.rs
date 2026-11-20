@@ -357,6 +357,12 @@ fn a_ref_with_a_line_break_cannot_start_a_runner_command_in_the_trim_summary() {
         0,
     )
     .unwrap_or_else(|e| unreachable!("{e}"));
-    assert!(report.lines().all(|line| !line.starts_with("::")), "{report}");
-    assert!(report.contains("refs/heads/main%0A%3A%3Astop-commands%3A%3Atoken"), "{report}");
+    assert!(
+        report.lines().all(|line| !line.starts_with("::")),
+        "{report}"
+    );
+    assert!(
+        report.contains("refs/heads/main%0A%3A%3Astop-commands%3A%3Atoken"),
+        "{report}"
+    );
 }

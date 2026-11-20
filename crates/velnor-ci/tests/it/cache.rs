@@ -294,5 +294,8 @@ fn a_saved_target_path_with_a_line_break_stays_on_one_line() {
             .all(|line| !line.starts_with("::stop-commands::")),
         "{stdout}"
     );
-    assert!(stdout.contains("target%0A::stop-commands::token"), "{stdout}");
+    assert!(
+        stdout.contains("target%0A::stop-commands::token"),
+        "{stdout}"
+    );
 }
