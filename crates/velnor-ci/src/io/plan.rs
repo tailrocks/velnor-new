@@ -113,6 +113,8 @@ pub(super) fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
             + &lint_explanation(&skipped)
             + &input_warnings(&unmatched_inputs(
                 &facts,
+                kind,
+                listed.then_some(&changes.paths),
                 &checkout.view.tracked_paths,
                 &checkout.view.symlinks,
             ))

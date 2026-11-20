@@ -283,7 +283,10 @@ fn plan_explain_does_not_warn_about_an_input_of_a_lint_that_runs_on_a_changed_in
         .unwrap_or_else(|e| unreachable!("{e}"));
     assert!(output.status.success(), "{output:?}");
     let explained = String::from_utf8_lossy(&output.stdout);
-    assert!(!explained.contains("matches no tracked file"), "{explained}");
+    assert!(
+        !explained.contains("matches no tracked file"),
+        "{explained}"
+    );
     assert_eq!(
         lint_lines(&repo, Some("pull_request"), &["cfg/hk.pkl"]),
         "lint_hk=run "
@@ -305,7 +308,10 @@ fn unmatched_inputs_take_one_pass_over_the_tracked_paths() {
             } else {
                 format!("typo{k}")
             };
-            (k, PathGlob::new(folder).unwrap_or_else(|e| unreachable!("{e}")))
+            (
+                k,
+                PathGlob::new(folder).unwrap_or_else(|e| unreachable!("{e}")),
+            )
         })
         .collect();
     let calls = Cell::new(0_usize);
