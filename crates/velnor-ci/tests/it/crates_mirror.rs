@@ -11,6 +11,7 @@ mod cargo_directory;
 mod fetch_config;
 mod fixture;
 mod mise;
+mod real_export;
 mod reentry;
 mod setup;
 mod toolchain_view;
