@@ -135,7 +135,10 @@ fn assert_private_before_cargo(tree: &Node, expect: &[&str]) -> TestResult {
             .iter()
             .position(|step| step.get("name").and_then(Node::text) == Some("Private mbx store"))
             .ok_or_else(|| format!("{id}: no private mbx store step"))?;
-        assert!(private < first, "{id}: the private store comes after cargo or mise");
+        assert!(
+            private < first,
+            "{id}: the private store comes after cargo or mise"
+        );
         let text = run(&all[private]);
         assert_eq!(
             text,
@@ -154,7 +157,11 @@ fn every_cargo_job_makes_a_fresh_private_store_first() -> TestResult {
     assert_private_before_cargo(&release_yml(Some(MBX_MISE))?, &["build-app-linux-x64"])?;
     assert_private_before_cargo(
         &family_yml()?,
-        &["family-versions", "build-app-linux-x64", "build-tools-linux-x64"],
+        &[
+            "family-versions",
+            "build-app-linux-x64",
+            "build-tools-linux-x64",
+        ],
     )
 }
 
