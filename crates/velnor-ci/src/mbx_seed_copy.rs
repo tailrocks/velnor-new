@@ -7,13 +7,14 @@ use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::time::Instant;
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
+/// The lookup index (identities, manifests, results) comes before the blobs they name.
 pub const SUBSETS: &[&str] = &[
-    "cas",
     "executable-identities",
     "task-manifests",
     "action-results",
+    "cas",
 ];
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -29,6 +30,7 @@ struct Job {
     from: PathBuf,
     to: PathBuf,
     size: u64,
+    modified: SystemTime,
 }
 
 #[derive(Default)]
@@ -74,30 +76,56 @@ fn list(from: &Path, to: &Path, walk: &mut Walk, deadline: Instant) {
         if kind.is_dir() {
             list(&source, &target, walk, deadline);
         } else if kind.is_file() {
-            let size = entry.metadata().map_or(0, |metadata| metadata.len());
+            let (size, modified) = entry.metadata().map_or((0, UNIX_EPOCH), |metadata| {
+                (metadata.len(), metadata.modified().unwrap_or(UNIX_EPOCH))
+            });
             walk.jobs.push(Job {
                 from: source,
                 to: target,
                 size,
+                modified,
             });
         }
     }
 }
 
-#[must_use]
-pub fn copy_subset(seed: &Path, store: &Path, threads: usize, deadline: Instant) -> Copied {
-    let mut total = Copied::default();
-    for subset in SUBSETS.iter().copied() {
+/// Every subset's files, walked once, in the order they are copied.
+fn plan(seed: &Path, store: &Path, deadline: Instant) -> Walk {
+    let mut all = Walk::default();
+    for subset in SUBSETS {
         let mut walk = Walk::default();
         list(&seed.join(subset), &store.join(subset), &mut walk, deadline);
-        let part = run(walk.jobs, threads, deadline);
-        total.files += part.files;
-        total.bytes += part.bytes;
-        total.present += part.present;
-        total.failed += part.failed + walk.failed;
-        total.expired |= part.expired || walk.expired;
+        all.jobs.append(&mut walk.jobs);
+        all.failed += walk.failed;
+        all.expired |= walk.expired;
     }
-    total
+    // The newest entries come from the latest trusted runs, and an action result and the blobs it
+    // names are written together, so a seed cut at the budget still holds a coherent slice. The sort
+    // is stable: equal times keep the index-before-blob order of SUBSETS.
+    all.jobs.sort_by_key(|job| std::cmp::Reverse(job.modified));
+    all
+}
+
+/// The source files `copy_subset` copies, first to last.
+#[must_use]
+pub fn planned(seed: &Path) -> Vec<PathBuf> {
+    let far = Instant::now() + std::time::Duration::from_secs(3600);
+    plan(seed, Path::new("/"), far)
+        .jobs
+        .into_iter()
+        .map(|job| job.from)
+        .collect()
+}
+
+#[must_use]
+pub fn copy_subset(seed: &Path, store: &Path, threads: usize, deadline: Instant) -> Copied {
+    let walk = plan(seed, store, deadline);
+    let part = run(walk.jobs, threads, deadline);
+    Copied {
+        failed: part.failed + walk.failed,
+        expired: part.expired || walk.expired,
+        ..part
+    }
 }
 
 fn run(jobs: Vec<Job>, threads: usize, deadline: Instant) -> Copied {
