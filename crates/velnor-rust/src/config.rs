@@ -10,6 +10,7 @@ use velnor_model::{
 };
 
 use crate::config_events::{docs_run, on_main};
+use crate::config_external;
 use crate::config_keys::KEYS;
 use crate::error::{DetectError, Reason};
 use crate::shape::parse_shape;
@@ -72,6 +73,7 @@ struct RawConfig {
     workspace_groups: Vec<crate::groups::RawGroup>,
     #[serde(default)]
     test_lane: Vec<crate::config_test_lane::RawTestLane>,
+    policy: Option<crate::config_policy::RawPolicy>,
     external_workflows: Option<Vec<String>>,
 }
 
@@ -121,8 +123,7 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
     let test_groups = crate::config_test_groups::parse(raw.test_groups).map_err(invalid)?;
     let workspace_groups = crate::groups::parse(raw.workspace_groups).map_err(invalid)?;
     let test_lanes = crate::config_test_lane::parse(raw.test_lane).map_err(invalid)?;
-    let external_workflows =
-        crate::config_external::parse(raw.external_workflows).map_err(invalid)?;
+    let external_workflows = config_external::parse(raw.external_workflows).map_err(invalid)?;
     let runner = runner(raw.runner.clone(), defaults.runner).map_err(invalid)?;
     let runners = crate::config_trusted::Declared {
         runner: &runner,
@@ -140,6 +141,7 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
             .map_err(invalid)?;
     Ok(RustCiConfig {
         workspace_groups,
+        policy: crate::config_policy::parse(raw.policy).map_err(invalid)?,
         external_workflows,
         budget: crate::config_budget::parse(bytes).map_err(invalid)?,
         cache_budget_bytes: crate::cache_budget::configured_budget(raw.cache_budget_bytes)

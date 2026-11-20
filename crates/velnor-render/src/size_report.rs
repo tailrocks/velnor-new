@@ -30,13 +30,19 @@ fn job_sizes(file: &str) -> Vec<(usize, &str)> {
         return Vec::new();
     };
     let mut sizes: Vec<(usize, &str)> = Vec::new();
+    let mut pending = 0;
     for line in file[at + JOBS_KEY.len()..].split_inclusive('\n') {
         let header = line
             .strip_prefix("  ")
             .filter(|rest| !rest.starts_with(' ') && !rest.starts_with('#'))
             .and_then(|rest| rest.strip_suffix(":\n"));
+        let job_comment = line.starts_with("  #");
         match (header, sizes.last_mut()) {
-            (Some(id), _) => sizes.push((line.len(), id)),
+            (Some(id), _) => {
+                sizes.push((pending + line.len(), id));
+                pending = 0;
+            }
+            (None, _) if job_comment => pending += line.len(),
             (None, Some((size, _))) => *size += line.len(),
             (None, None) => {}
         }
