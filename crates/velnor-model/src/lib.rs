@@ -56,7 +56,9 @@ pub use ids::{
 };
 pub use lint::{LintCommand, LintJob, LintKind};
 pub use mbx::{MbxMode, MbxStats};
-pub use mbx_config::{MBX_TOOL, MbxConflict, MbxDeclaration, MbxRule, mbx_declaration};
+pub use mbx_config::{
+    MBX_ACTION_RELEASE, MBX_TOOL, MbxConflict, MbxDeclaration, MbxRule, mbx_declaration,
+};
 pub use mise::MisePlatform;
 pub use plan::{
     Access, BUILD_TESTS_STEP, BUILT_OUTPUT, CI_AUTO_LABEL, CI_RUN_LABEL, CargoCommand, Concurrency,
