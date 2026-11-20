@@ -7,6 +7,8 @@ use std::process::{Command, Output};
 use std::time::{Duration, UNIX_EPOCH};
 
 use velnor_ci::io::{break_time_ties_with, cold_on_failure, every_root_target};
+use velnor_model::RepoPath;
+use velnor_rust::default_folder;
 
 use crate::io::Repo;
 
@@ -16,6 +18,12 @@ pub(crate) fn helper(repo: &Repo, args: &[&str]) -> Output {
         .current_dir(repo.root())
         .output()
         .unwrap_or_else(|e| unreachable!("{e}"))
+}
+
+/// The default target folder of a nested root (`target/velnor-roots/<slug>`, #2004/#2081).
+pub(crate) fn nested_target(manifest: &str) -> String {
+    let manifest = RepoPath::new(manifest).unwrap_or_else(|e| unreachable!("{e}"));
+    default_folder(&manifest).as_str().to_owned()
 }
 
 pub(crate) fn stale_target(repo: &Repo, relative: &str) {
@@ -58,8 +66,9 @@ fn rounding_detected_after_tie_breaking_makes_a_cold_build_in_every_root() {
     for path in [".gitignore", "build.rs", "src/lib.rs"] {
         repo.set_mtime(path, tied);
     }
+    let app_target = nested_target("app/Cargo.toml");
     stale_target(&repo, "target");
-    stale_target(&repo, "app/target");
+    stale_target(&repo, &app_target);
     let report = cold_on_failure(
         &every_root_target(repo.root()).unwrap_or_else(|e| unreachable!("{e}")),
         "restored",
@@ -72,7 +81,7 @@ fn rounding_detected_after_tie_breaking_makes_a_cold_build_in_every_root() {
     );
     assert!(report.contains("building cold"), "{report}");
     assert!(!repo.root().join("target").exists());
-    assert!(!repo.root().join("app/target").exists());
+    assert!(!repo.root().join(&app_target).exists());
 }
 
 #[test]

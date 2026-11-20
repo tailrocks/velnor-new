@@ -8,6 +8,7 @@ use std::time::{Duration, UNIX_EPOCH};
 use velnor_test_support::real_cargo;
 
 use crate::io::Repo;
+use crate::io_cold::nested_target;
 
 fn helper(root: &Path, args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
@@ -128,11 +129,12 @@ fn successful_restored_does_not_reuse_consumed_targets() {
     let repo = checkout(false);
     restore(&repo, "a");
     success(repo.root(), &["restored"]);
-    repo.write_unstaged("a/target/stale", "default\n");
+    let default = nested_target("a/Cargo.toml");
+    repo.write_unstaged(&format!("{default}/stale"), "default\n");
     let output = fail_restored(&repo);
     assert!(output.status.success(), "{output:?}");
     assert!(repo.root().join("cache-a/stale").is_file());
-    assert!(!repo.root().join("a/target").exists());
+    assert!(!repo.root().join(&default).exists());
 }
 
 #[test]
