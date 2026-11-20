@@ -210,7 +210,7 @@ fn cargo_command(
             manifest,
             config,
             checks,
-        } => crate::cargo_deny::deny(manifest, config.as_ref(), checks.as_deref()),
+        } => crate::lint_steps::deny(manifest, config.as_ref(), checks.as_deref()),
         CargoCommand::Machete => ("Unused dependencies".into(), "cargo machete".into(), vec![]),
     }
 }

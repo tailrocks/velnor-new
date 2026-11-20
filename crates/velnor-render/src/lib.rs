@@ -7,7 +7,6 @@ mod budget_steps;
 mod cache;
 mod cache_upload;
 mod cargo;
-mod cargo_deny;
 mod cargo_features;
 mod cargo_path;
 mod cargo_target;
