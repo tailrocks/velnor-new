@@ -2,6 +2,8 @@
 
 The new Rust generator reads `.velnor/rust-ci.toml`.
 
+The generator reads `.velnor/rust-ci.toml`, `.velnor/release.toml` and `.velnor/workflows.toml` only through Git's tracked view. A file that exists on disk but that Git does not track (or ignores) is refused with an error, not replaced by defaults: run `git add <path>` (`git add -f` for an ignored file), or delete the file.
+
 ## Fork pull requests
 
 By default, a pull request from a fork does not select a self-hosted runner. When `runner` is not declared `hosted = true`, the generator renders `runs-on` of every job, including the `Required` gate, as an expression. It selects `runner` when the event is not a pull request or the pull request head repository is this repository, and `fork_runner` otherwise. No job is skipped for a fork, so the gate sees the real result of every job and fails when one fails. The one exception is a job that calls a reusable workflow with `uses`: it has no `runs-on`, and the callee may run on a self-hosted runner, so the generator adds the same condition to its `if` (joined with the job's own `if` in one expression) and a pull request from a fork skips the call. A deleted fork has no head repository, so it counts as a fork.
@@ -240,7 +242,7 @@ A budget is a number the project measures, not a number it guesses: set every ke
 
 These keys choose which jobs a run starts. The defaults are in the table in [`docs/rust-ci.md`](../docs/rust-ci.md).
 
-- `shape` is `"auto"` (default), `"one-job"`, `"lint-test"` or `"groups"`. `auto` picks the shape from `.velnor/rust-ci-timings.json`; any other value is fixed. A root with a `[[test_groups]]` entry always uses the `groups` layout.
+- `shape` is `"auto"` (default), `"one-job"`, `"lint-test"` or `"groups"`. `auto` picks the shape from `.velnor/rust-ci-timings.json`; any other value is fixed. When `auto` has no build times for a root, `velnor-gen generate` and `check` print a note that names the one-job shape it picked, the missing timings and how to choose a shape or record times. A root with a `[[test_groups]]` entry always uses the `groups` layout.
 - `on_main` is `"affected"` (default) or `"everything"`. It sets what a push to the default branch and a merge queue run select.
 - `full_run` is `"nightly"` (default), `"hourly"`, `"weekly"`, `"off"` or a five-field cron expression. It sets the schedule of the run that selects everything.
 - `skip_draft_pull_requests` is `false` (default). With `true`, a draft pull request runs nothing. It cannot be combined with `pr_ci = "label"`.

@@ -298,6 +298,15 @@ const LAB: &str = r#"{"lab/Cargo.toml": {"lint_build_seconds": 10, "test_build_s
 const GONE: &str =
     r#"{"gone/Cargo.toml": {"lint_build_seconds": 1, "test_build_seconds": 1, "test_seconds": 1}}"#;
 
+/// The notes that are not the `shape = "auto"` note of an untimed root.
+fn without_auto_note(notes: &[String]) -> Vec<&str> {
+    notes
+        .iter()
+        .map(String::as_str)
+        .filter(|note| !note.starts_with("shape = \"auto\""))
+        .collect()
+}
+
 fn untimed() -> Result<BTreeMap<RepoPath, String>, Box<dyn std::error::Error>> {
     Ok(
         expected_with_notes(&view(&["Cargo.toml", "lab/Cargo.toml"], Some(b""))?)
@@ -314,10 +323,11 @@ fn a_malformed_timings_file_is_named_and_the_default_shape_is_written() -> TestR
     ] {
         let (files, notes) = expected_with_notes(&timed_view(timings, "")?)?;
         assert_eq!(files, untimed()?, "{timings}");
-        assert_eq!(notes.len(), 1, "{timings}: {notes:?}");
+        let ignored = without_auto_note(&notes);
+        assert_eq!(ignored.len(), 1, "{timings}: {notes:?}");
         assert!(
-            notes[0].starts_with(".velnor/rust-ci-timings.json: ")
-                && notes[0].ends_with("; ignored"),
+            ignored[0].starts_with(".velnor/rust-ci-timings.json: ")
+                && ignored[0].ends_with("; ignored"),
             "{notes:?}"
         );
     }
@@ -354,7 +364,7 @@ fn a_timings_entry_for_a_root_that_is_gone_is_ignored_and_the_others_still_count
     let both = format!("{{{},{}", &GONE[1..GONE.len() - 1], &LAB[1..]);
     let (files, notes) = expected_with_notes(&timed_view(&both, "")?)?;
     assert_eq!(
-        notes,
+        without_auto_note(&notes),
         [
             ".velnor/rust-ci-timings.json: has times for gone/Cargo.toml, which is not a Cargo root of this repository; run `velnor-ci timings` again; entry ignored"
         ]
