@@ -73,6 +73,7 @@ pub mod ties;
 pub mod time;
 pub mod timings;
 pub mod tools_local;
+pub mod tools_verify;
 pub mod trusted_roots;
 pub mod unique_json;
 pub mod waste_evidence;

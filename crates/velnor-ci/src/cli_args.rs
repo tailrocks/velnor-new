@@ -180,6 +180,14 @@ pub struct ToolsLocalArgs {
     pub key: String,
 }
 
+#[derive(Debug, Args)]
+pub struct ToolsVerifyArgs {
+    #[arg(value_enum)]
+    pub verb: crate::tools_verify::Verb,
+    #[arg(long)]
+    pub anchor: PathBuf,
+}
+
 #[derive(Debug, Subcommand)]
 pub enum ImageCommand {
     #[command(

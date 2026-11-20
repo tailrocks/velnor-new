@@ -18,7 +18,7 @@ mod write_request;
 pub use crate::cli_args::{
     BaseFile, BenchCommand, BudgetArgs, CheckConfigurationsArgs, CollectArgs, CompareArgs,
     CratesMirrorArgs, ImageCommand, PlanArgs, PlanMode, PrepareArgs, QualificationCommand,
-    QualificationCompareArgs, ToolsLocalArgs, VerifyCandidateArgs,
+    QualificationCompareArgs, ToolsLocalArgs, ToolsVerifyArgs, VerifyCandidateArgs,
 };
 pub use crate::cli_cache::{CacheCommand, DecideArgs, TrimArgs};
 pub use gate::GateArgs;
@@ -123,6 +123,10 @@ pub enum Command {
         about = "Keep the mise and rustup tool directories on the node's own disk. restore copies ~/.local/share/mise and ~/.rustup from tools/<key> of the store (VELNOR_MBX_SHARED_DIR on a trusted event, VELNOR_MBX_SEED_DIR otherwise) and writes hit=true or hit=false to $GITHUB_OUTPUT, so the network cache action can be skipped on a hit; save, on a trusted event only, copies them into tools/<key> with an atomic rename, keeping the two newest keys. A missing store, a failed check or a failed copy is a miss, never an error"
     )]
     ToolsLocal(ToolsLocalArgs),
+    #[command(
+        about = "Verify restored tools against the anchor a trusted run recorded. check, after a restore (VELNOR_TOOLS_RESTORED=true), keeps ~/.local/share/mise and ~/.rustup only when their digest equals the anchor file and otherwise deletes both, writing verified=true or verified=false to $GITHUB_OUTPUT; record, after the install on a trusted run, writes the anchor when there is none and writes matches= and recorded= so the saves run only for tools equal to the anchor"
+    )]
+    ToolsVerify(ToolsVerifyArgs),
     #[command(
         about = "Run after the tools are installed, in the directory of a Cargo root: exit 1 unless .velnor/rust-metadata.json is exactly what velnor-gen generate writes for that root, which reads cargo metadata --no-deps --offline"
     )]
