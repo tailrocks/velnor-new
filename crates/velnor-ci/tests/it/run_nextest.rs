@@ -334,3 +334,22 @@ END";
         "existing=1\nbuilt=true\ntests_run=1\ntests_listed=1\ntests_ignored=0\ntests_by_package=kept=1/1\n"
     );
 }
+
+#[test]
+fn run_counts_a_run_whose_setup_script_printed_status_lines() {
+    let script = r"cat >&2 <<'END'
+    Starting 2 tests across 1 binary
+     SETUP [      1/1] prepull-images: bash .config/nextest-prepull-images.sh
+nextest-prepull-images: pulling postgres:18-alpine
+ SETUP PASS [   9.804s] prepull-images: bash .config/nextest-prepull-images.sh
+        PASS [   0.012s] (1/2) kept alpha
+        PASS [   0.012s] (2/2) kept beta
+     Summary [   0.022s] 2 tests run: 2 passed, 0 skipped
+END";
+    let two = listed(&[("kept", &["alpha", "beta"])]);
+    let (_, written, _) = run_with_output("tests-run-setup-script", script, &two, &NEXTEST_RUN);
+    assert_eq!(
+        written,
+        "existing=1\nbuilt=true\ntests_run=2\ntests_listed=2\ntests_ignored=0\ntests_by_package=kept=2/2\n"
+    );
+}

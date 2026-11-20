@@ -33,7 +33,7 @@ features=0
 selected=0
 previous=
 for argument in "$@"; do
-    if [ "$argument" = --features ]; then features=1; fi
+    if [ "$argument" = --features ] || [ "$argument" = --all-features ]; then features=1; fi
     if [ "$previous" = -E ]; then
         case "$argument" in "("*) selected=1 ;; esac
     fi
@@ -78,8 +78,15 @@ fn lists(repo: &Repo, default: &str, features: &str, selected: &str) {
 }
 
 fn guard(repo: &Repo, features: &str, filter: &str, except: &[&str]) -> Output {
+    guard_with(repo, &["--features", features], filter, except)
+}
+
+fn guard_with(repo: &Repo, flags: &[&str], filter: &str, except: &[&str]) -> Output {
     let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
-    command.args(["lane-guard", "--features", features, "--filter", filter]);
+    command
+        .args(["lane-guard"])
+        .args(flags)
+        .args(["--filter", filter]);
     for binary in except {
         command.args(["--except-binary", binary]);
     }
@@ -281,4 +288,25 @@ fn it_runs_three_lists_with_the_expected_arguments() {
 "
     );
     assert_eq!(calls(&plain), expected);
+}
+
+#[test]
+fn all_features_reaches_the_feature_and_selected_lists() {
+    let repo = fixture("lane-guard-calls-all");
+    let empty: &[Case] = &[];
+    let valid = listing(&[(HOST, "listed", empty)]);
+    lists(&repo, &valid, &valid, &valid);
+    assert_eq!(
+        guard_with(&repo, &["--all-features"], "all()", &[])
+            .status
+            .code(),
+        Some(0)
+    );
+    let expected = format!(
+        "{LIST_ARGS}
+{LIST_ARGS} --all-features
+{LIST_ARGS} --all-features -E (all())
+"
+    );
+    assert_eq!(calls(&repo), expected);
 }

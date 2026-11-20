@@ -4,6 +4,7 @@
 use velnor_model::{HelperRelease, PrivateSources};
 use velnor_release::{BinaryPlan, FamilyPlan, ReleasePlan, TAG_JOB_BASE_MINUTES};
 
+use crate::install_steps::install_tools;
 use crate::release::{GATE_IS_READY, after_the_gate_with, newest_check, only_while_newest};
 use crate::release_binaries::{
     BUILD_TIMEOUT_MINUTES, build_steps, command, download_to, target, upload,
@@ -42,7 +43,7 @@ pub(crate) fn family_jobs(
         binary
             .platforms
             .iter()
-            .map(|platform| build(binary, *platform, helper, private, &source))
+            .map(|platform| build(binary, *platform, helper, private, &source, plan.mbx))
     }));
     jobs.push(sums(plan, family, &source));
     if family.attest {
@@ -99,6 +100,10 @@ fn versions_job(plan: &ReleasePlan, helper: &HelperRelease, source: &Source) -> 
             format!("mkdir {VERSIONS_DIR}"),
         ),
     ]);
+    // cargo metadata runs under the mise wrapper when MBX is declared.
+    if plan.mbx {
+        steps.push(install_tools(None));
+    }
     steps.extend(family_roots(plan).into_iter().zip(version_files(plan)).map(
         |(root, file)| RenderedStep {
             env: vec![(
@@ -209,6 +214,7 @@ fn build(
     helper: &HelperRelease,
     private: Option<&PrivateSources>,
     source: &Source,
+    mbx: bool,
 ) -> RenderedJob {
     let (runner, _) = target(platform, binary);
     let reference = format!("refs/tags/${{{{ {TAG_OUTPUT} }}}}");
@@ -238,6 +244,7 @@ fn build(
                 same_commit: check,
                 tag: &tag,
                 private: private.map(|sources| Private { helper, sources }),
+                mbx,
             },
         ),
         ..after_the_family(
