@@ -9,8 +9,6 @@ use velnor_model::RepoPath;
 
 use super::Error;
 
-pub(crate) const ENGINE_CONFIG: RepoPath = RepoPath::from_static(".velnor/config.toml");
-
 pub(crate) fn workflow_paths(root: &Path) -> Result<Vec<RepoPath>, Error> {
     let directory = root.join(".github/workflows");
     let entries = match fs::read_dir(&directory) {

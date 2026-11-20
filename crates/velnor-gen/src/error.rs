@@ -51,12 +51,14 @@ pub enum GenerateError {
     Workflows(WorkflowsError),
     Rules(Vec<RuleViolation>),
     DeltaStagingCollision(RepoPath),
+    ExternalWorkflow(ExternalWorkflowError),
     ExcludedLockRun(velnor_rust::ExcludedLockFinding),
 }
 
 impl fmt::Display for GenerateError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::ExternalWorkflow(error) => error.fmt(f),
             Self::DeltaStagingCollision(path) => write!(f, "tracked path {path} collides with delta cache staging"),
             Self::Detect(error) => error.fmt(f),
             Self::ExcludedLockRun(finding) => f.write_str(&finding.message()),
@@ -199,4 +201,36 @@ fn modes_too_old(version: &HelperVersion) -> String {
     format!(
         "velnor-ci {version} cannot read the selection of a run, so it cannot apply [budget.full], [budget.affected] or [budget.none]; pin velnor-ci 0.1.104 or later with `velnor-gen pin-helper 0.1.104`"
     )
+}
+
+/// A rule of `external_workflows` in `.velnor/rust-ci.toml` that the generator refuses.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ExternalWorkflowError {
+    HelperTooOld(HelperVersion),
+    Missing(RepoPath),
+    Generated(RepoPath),
+    Collision(RepoPath),
+}
+
+impl fmt::Display for ExternalWorkflowError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::HelperTooOld(version) => write!(
+                f,
+                "velnor-ci {version} does not know the external_workflows key of .velnor/rust-ci.toml; pin velnor-ci 0.1.108 or later with `velnor-gen pin-helper 0.1.108`"
+            ),
+            Self::Missing(path) => write!(
+                f,
+                "external_workflows names {path}, which does not exist; remove the entry or add the file"
+            ),
+            Self::Generated(path) => write!(
+                f,
+                "external_workflows names {path}, which velnor-gen generated and no longer writes; delete the file or remove the entry"
+            ),
+            Self::Collision(path) => write!(
+                f,
+                "external_workflows names {path}, which velnor-gen writes; a generated file cannot be external"
+            ),
+        }
+    }
 }

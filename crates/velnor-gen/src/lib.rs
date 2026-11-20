@@ -6,6 +6,7 @@ pub mod cli;
 mod delta_cache;
 mod drifts;
 mod error;
+mod external;
 mod helper_gate;
 pub mod io;
 mod plan_render;
@@ -16,7 +17,8 @@ mod workflow_triggers;
 pub use crate::release::{release_ruleset, release_ruleset_drift};
 pub use advice::{NO_FULL_RUN_NOTE, SPARSE_SUGGESTION_BYTES, notes, sparse_note, suggest_groups};
 pub use drifts::{Drift, drift};
-pub use error::GenerateError;
+pub use error::{ExternalWorkflowError, GenerateError};
+pub use external::external_skips;
 use helper_gate::check_helper;
 pub use helper_gate::require_compatible;
 pub use velnor_workflows::HELPER_COMMANDS;
@@ -38,6 +40,9 @@ pub const TEST_LANE_HELPER: (u64, u64, u64) = (0, 1, 93);
 /// The first release whose `velnor-ci` accepts `job` in a `[[test_lane]]` table.
 // First released in tools-v0.1.107 (not tagged yet when this gate was written).
 pub const TEST_LANE_JOB_HELPER: (u64, u64, u64) = (0, 1, 107);
+/// The first release whose `velnor-ci` accepts the `external_workflows` key.
+// First released in tools-v0.1.108 (not tagged yet when this gate was written).
+pub const EXTERNAL_WORKFLOWS_HELPER: (u64, u64, u64) = (0, 1, 108);
 pub const SPARSE_HINT_HELPER: (u64, u64, u64) = (0, 1, 103);
 
 pub fn generated_files(view: &RepoView) -> Result<BTreeMap<RepoPath, String>, GenerateError> {
@@ -106,14 +111,14 @@ pub fn expected_with_notes(
 pub fn plan_generate(
     view: &RepoView,
     on_disk: &BTreeMap<RepoPath, Vec<u8>>,
-    engine_configured: bool,
     out: &mut dyn Write,
 ) -> Result<(BTreeMap<RepoPath, String>, Vec<Drift>), GenerateError> {
     let (expected, notes) = generated_with_notes(view)?;
     for note in notes {
         writeln!(out, "velnor-gen: {note}").ok();
     }
-    let drifts = drift(&expected, on_disk, engine_configured);
+    let external = external::skipped(view, &expected, on_disk)?;
+    let drifts = drift(&expected, on_disk, &external);
     Ok((expected, drifts))
 }
 

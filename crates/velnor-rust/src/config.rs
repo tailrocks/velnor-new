@@ -63,6 +63,7 @@ struct RawConfig {
     workspace_groups: Vec<crate::groups::RawGroup>,
     #[serde(default)]
     test_lane: Vec<crate::config_test_lane::RawTestLane>,
+    external_workflows: Option<Vec<String>>,
 }
 
 #[derive(Deserialize)]
@@ -109,6 +110,8 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
     let test_groups = crate::config_test_groups::parse(raw.test_groups).map_err(invalid)?;
     let workspace_groups = crate::groups::parse(raw.workspace_groups).map_err(invalid)?;
     let test_lanes = crate::config_test_lane::parse(raw.test_lane).map_err(invalid)?;
+    let external_workflows =
+        crate::config_external::parse(raw.external_workflows).map_err(invalid)?;
     let declared_runner = raw.runner.is_some();
     let hosted_key = raw.hosted.is_some() || test_groups.iter().any(|group| group.hosted.is_some());
     let runner = runner(raw.runner, defaults.runner).map_err(invalid)?;
@@ -126,6 +129,7 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
     let fork_runner = crate::config_fork::fork_runner(raw.fork_runner, &runner).map_err(invalid)?;
     Ok(RustCiConfig {
         workspace_groups,
+        external_workflows,
         budget: crate::config_budget::parse(bytes).map_err(invalid)?,
         cache_budget_bytes: crate::cache_budget::configured_budget(raw.cache_budget_bytes)
             .map_err(invalid)?,

@@ -40,7 +40,7 @@ pub use sample::{
     relocate_metadata, write_sample,
 };
 use tracked::tracked_sizes;
-use workflows::{ENGINE_CONFIG, workflow_paths};
+use workflows::workflow_paths;
 
 #[must_use]
 pub fn version_text() -> String {
@@ -176,11 +176,9 @@ fn execute(cli: &Cli) -> Result<Vec<Drift>, Error> {
     let mut wanted = workflow_paths(&root)?;
     wanted.push(METADATA_PATH);
     let workflows = read_files(&root, &wanted)?;
-    let engine_configured = regular_file(&root, &ENGINE_CONFIG)?.is_some();
     let view = read_view(&root, false)?.0;
     let (expected, drifts) =
-        plan_generate(&view, &workflows, engine_configured, &mut std::io::stderr())
-            .map_err(Error::Generate)?;
+        plan_generate(&view, &workflows, &mut std::io::stderr()).map_err(Error::Generate)?;
     if cli.command == Command::Generate {
         for note in notes(&view).map_err(Error::Generate)? {
             eprintln!("velnor-gen: note: {note}");
