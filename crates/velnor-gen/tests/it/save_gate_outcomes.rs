@@ -56,9 +56,7 @@ struct Ending {
     expired: bool,
     built: bool,
     test_failed: bool,
-    /// What the audit does when it runs; `skipped` keeps it from running at all.
     audit: &'static str,
-    /// A compile check step, by name, that failed after the build.
     failed_check: Option<&'static str>,
 }
 
