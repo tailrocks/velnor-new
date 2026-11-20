@@ -193,14 +193,44 @@ fn a_directory_replaced_by_a_symbolic_link_before_it_is_opened_is_not_followed()
     .unwrap_or_else(|e| unreachable!("{e}"));
     fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
     assert!(
-        !entries.contains_key(&scanned.join("d")) && !entries.contains_key(&elsewhere),
-        "followed the replacement link: {:?}",
+        !entries.contains_key(&scanned.join("d")),
+        "opened the replacement link as a directory: {:?}",
         entries.keys()
     );
     let children = entries
         .get(&scanned)
         .unwrap_or_else(|| unreachable!("{:?}", entries.keys()));
-    assert!(!children.contains_key(Path::new("d")), "{children:?}");
+    assert!(
+        matches!(children.get(Path::new("d")), Some(Kind::Link { .. })),
+        "the replacement link is missing from the inventory: {children:?}"
+    );
+}
+
+#[test]
+fn a_symbolic_link_through_a_regular_file_is_an_unresolved_link_not_an_error() {
+    let root = fs::canonicalize(std::env::temp_dir())
+        .unwrap_or_else(|e| unreachable!("{e}"))
+        .join(format!("velnor-scan-notdir-link-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&root);
+    fs::create_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::write(root.join("file"), b"").unwrap_or_else(|e| unreachable!("{e}"));
+    std::os::unix::fs::symlink("file/child", root.join("link"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let mut budget = Budget::new(usize::MAX);
+    let entries = scan_with(&root, &BTreeSet::new(), &mut budget, &Probe::default());
+    fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+    let entries = entries.unwrap_or_else(|e| panic!("scan failed on a link through a file: {e}"));
+    let children = entries
+        .values()
+        .next()
+        .unwrap_or_else(|| unreachable!("root is always recorded"));
+    assert!(
+        matches!(
+            children.get(Path::new("link")),
+            Some(Kind::Link { resolved: None, .. })
+        ),
+        "{children:?}"
+    );
 }
 
 #[test]

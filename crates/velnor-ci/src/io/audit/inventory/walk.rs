@@ -85,7 +85,6 @@ pub(super) fn scan_with(
         origin: Origin::Path,
     }];
     let mut visited = BTreeSet::new();
-    let mut vanished = Vec::new();
     while let Some(Pending {
         path: directory,
         origin,
@@ -100,7 +99,20 @@ pub(super) fn scan_with(
         let mut listing = match opened {
             Ok(listing) => listing,
             Err(error) if handle::replaced(&error) && directory != root => {
-                vanished.push(directory);
+                if let Origin::Child { parent, name } = &origin {
+                    let replacement = handle::kind_at(parent, name, &directory)?;
+                    let replacement =
+                        replacement.filter(|_| error.kind() != io::ErrorKind::NotFound);
+                    settle(
+                        &mut entries,
+                        &mut pending,
+                        &directory,
+                        parent,
+                        name,
+                        replacement,
+                        (&root, targets),
+                    )?;
+                }
                 continue;
             }
             Err(error) => return Err(error),
@@ -117,40 +129,82 @@ pub(super) fn scan_with(
             let Some(kind) = handle::kind_at(&listing, &name, &path)? else {
                 continue;
             };
-            if !excluded_entry(&path, &kind, &root, targets) {
-                match &kind {
-                    Kind::Directory => pending.push(Pending {
-                        path,
-                        origin: Origin::Child {
-                            parent: Opened::clone(&listing),
-                            name: name.clone(),
-                        },
-                    }),
-                    Kind::Link {
-                        resolved: Some(resolved),
-                        ..
-                    } if is_directory(resolved)? => pending.push(Pending {
-                        path: resolved.clone(),
-                        origin: Origin::Path,
-                    }),
-                    Kind::File | Kind::Link { .. } | Kind::Other => {}
-                }
-            }
+            pending.extend(queue(&kind, &path, &listing, &name, (&root, targets))?);
             children.insert(PathBuf::from(name), kind);
         }
         entries.insert(directory, children);
     }
-    for directory in vanished {
-        let (Some(parent), Some(name)) = (directory.parent(), directory.file_name()) else {
-            continue;
-        };
-        if let Some(children) = entries.get_mut(parent)
-            && children.get(Path::new(name)) == Some(&Kind::Directory)
-        {
-            children.remove(Path::new(name));
+    Ok(entries)
+}
+
+/// What to walk next for a classified child: a directory through its parent's
+/// handle, or the directory a link resolves to.
+fn queue(
+    kind: &Kind,
+    path: &Path,
+    parent: &Opened,
+    name: &OsStr,
+    (root, targets): (&Path, &BTreeSet<PathBuf>),
+) -> io::Result<Option<Pending>> {
+    if excluded_entry(path, kind, root, targets) {
+        return Ok(None);
+    }
+    Ok(match kind {
+        Kind::Directory => Some(Pending {
+            path: path.to_path_buf(),
+            origin: Origin::Child {
+                parent: Opened::clone(parent),
+                name: name.to_os_string(),
+            },
+        }),
+        Kind::Link {
+            resolved: Some(resolved),
+            ..
+        } if is_directory(resolved)? => Some(Pending {
+            path: resolved.clone(),
+            origin: Origin::Path,
+        }),
+        Kind::File | Kind::Link { .. } | Kind::Other => None,
+    })
+}
+
+/// A queued directory could not be opened because its entry changed after it was
+/// classified. A vanished entry is dropped from its parent. Anything else that now
+/// sits there (a link, a file) is inventoried in its place, and a directory that
+/// reappeared fails the scan, because it was not walked.
+fn settle(
+    entries: &mut Entries,
+    pending: &mut Vec<Pending>,
+    directory: &Path,
+    parent: &Opened,
+    name: &OsStr,
+    replacement: Option<Kind>,
+    (root, targets): (&Path, &BTreeSet<PathBuf>),
+) -> io::Result<()> {
+    let children = directory
+        .parent()
+        .and_then(|container| entries.get_mut(container));
+    let key = Path::new(name);
+    match replacement {
+        None => {
+            if let Some(children) = children {
+                children.remove(key);
+            }
+        }
+        Some(Kind::Directory) => {
+            return Err(io::Error::other(format!(
+                "{} changed while the audit scanned it; retry",
+                directory.display()
+            )));
+        }
+        Some(kind) => {
+            pending.extend(queue(&kind, directory, parent, name, (root, targets))?);
+            if let Some(children) = children {
+                children.insert(key.to_path_buf(), kind);
+            }
         }
     }
-    Ok(entries)
+    Ok(())
 }
 
 fn is_directory(path: &Path) -> io::Result<bool> {
@@ -162,5 +216,6 @@ fn is_directory(path: &Path) -> io::Result<bool> {
 }
 
 pub(in crate::io::audit) fn unresolved_link(error: &io::Error) -> bool {
-    error.kind() == io::ErrorKind::NotFound || error.raw_os_error() == Some(libc::ELOOP)
+    error.kind() == io::ErrorKind::NotFound
+        || matches!(error.raw_os_error(), Some(libc::ELOOP | libc::ENOTDIR))
 }
