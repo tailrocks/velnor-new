@@ -1,31 +1,31 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::ffi::{OsStr, OsString};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-/// Makes mise trust the temporary project `dir` for this child only, so a test that writes a
-/// `mise.toml` into a temp folder and runs mise (directly, or through a `velnor-ci` or cargo
-/// command wrapper) behaves the same on a developer machine as on CI. `dir` is appended to the
-/// inherited `MISE_TRUSTED_CONFIG_PATHS` with the platform path separator; the parent's value is
-/// not changed.
-///
-/// # Panics
-///
-/// When an inherited trusted path cannot be split or joined (it contains the separator).
 pub fn trust_mise_dir<'a>(command: &'a mut Command, dir: &Path) -> &'a mut Command {
-    let mut trusted: Vec<PathBuf> = std::env::var_os("MISE_TRUSTED_CONFIG_PATHS")
-        .map(|value| std::env::split_paths(&value).collect())
+    let inherited = std::env::var_os("MISE_TRUSTED_CONFIG_PATHS");
+    command.env(
+        "MISE_TRUSTED_CONFIG_PATHS",
+        trusted_paths_with(inherited.as_deref(), dir),
+    )
+}
+
+fn trusted_paths_with(inherited: Option<&OsStr>, dir: &Path) -> OsString {
+    let mut trusted: Vec<PathBuf> = inherited
+        .map(|value| std::env::split_paths(value).collect())
         .unwrap_or_default();
     trusted.push(dir.to_path_buf());
-    let joined = std::env::join_paths(trusted)
-        .unwrap_or_else(|error| unreachable!("MISE_TRUSTED_CONFIG_PATHS: {error}"));
-    command.env("MISE_TRUSTED_CONFIG_PATHS", joined)
+    std::env::join_paths(trusted)
+        .unwrap_or_else(|error| unreachable!("MISE_TRUSTED_CONFIG_PATHS: {error}"))
 }
 
 #[cfg(test)]
 mod tests {
-    use super::trust_mise_dir;
+    use super::{trust_mise_dir, trusted_paths_with};
+    use std::ffi::{OsStr, OsString};
     use std::path::{Path, PathBuf};
     use std::process::Command;
 
@@ -47,5 +47,27 @@ mod tests {
             paths.last().map(PathBuf::as_path),
             Some(Path::new("/tmp/velnor-project"))
         );
+    }
+
+    #[test]
+    fn inherited_trusted_paths_survive_and_the_temp_dir_is_appended_last() {
+        let inherited = std::env::join_paths([Path::new("/work/existing"), Path::new("/work/other")])
+            .unwrap_or_else(|error| unreachable!("{error}"));
+        let value = trusted_paths_with(Some(inherited.as_os_str()), Path::new("/tmp/velnor-project"));
+        let paths: Vec<PathBuf> = std::env::split_paths(&value).collect();
+        assert_eq!(
+            paths,
+            [
+                PathBuf::from("/work/existing"),
+                PathBuf::from("/work/other"),
+                PathBuf::from("/tmp/velnor-project"),
+            ]
+        );
+    }
+
+    #[test]
+    fn without_an_inherited_value_only_the_temp_dir_is_trusted() {
+        let value = trusted_paths_with(None::<&OsStr>, Path::new("/tmp/velnor-project"));
+        assert_eq!(value, OsString::from("/tmp/velnor-project"));
     }
 }
