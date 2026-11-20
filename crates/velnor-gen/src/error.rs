@@ -64,10 +64,7 @@ impl fmt::Display for GenerateError {
             Self::IncompatibleHelper(version) => write!(f, "{}", incompatible_helper(version)),
             Self::Release(error) => error.fmt(f),
             Self::ReleaseFileNotUtf8(path) => write!(f, "{path} is not UTF-8 text"),
-            Self::NoReleaseConfig => write!(
-                f,
-                "{RELEASE_CONFIG_PATH} does not exist; there is no release to describe"
-            ),
+            Self::NoReleaseConfig => write!(f, "{RELEASE_CONFIG_PATH} does not exist; there is no release to describe"),
             Self::ReleaseToolchainPath => f.write_str(
                 "rust-toolchain.toml names a toolchain path, so rustup would run a cargo from the repository with the release App token in scope; name a channel instead",
             ),
@@ -110,7 +107,10 @@ impl fmt::Display for GenerateError {
                 f,
                 "velnor-ci {version} cannot enforce pr_only_checks; pin velnor-ci 0.1.82 or later with `velnor-gen pin-helper 0.1.82`"
             ),
-            Self::TestGroupsHelperTooOld(version) => f.write_str(&groups_too_old(version)),
+            Self::TestGroupsHelperTooOld(version) => write!(
+                f,
+                "velnor-ci {version} cannot read [[test_groups]] in the configuration; pin velnor-ci 0.1.90 or later with `velnor-gen pin-helper 0.1.90`"
+            ),
             Self::MergeGroupHelperTooOld(version) => write!(
                 f,
                 "velnor-ci {version} cannot tell whether a merge_group run passed, which skip_push_after_merge_group needs; pin velnor-ci 0.1.103 or later with `velnor-gen pin-helper 0.1.103`"
@@ -191,12 +191,6 @@ fn lane_job_too_old(version: &HelperVersion) -> String {
     let (major, minor, patch) = TEST_LANE_JOB_HELPER;
     format!(
         "velnor-ci {version} does not know the job key of a [[test_lane]] in .velnor/rust-ci.toml; pin velnor-ci {major}.{minor}.{patch} or later with `velnor-gen pin-helper {major}.{minor}.{patch}`"
-    )
-}
-
-fn groups_too_old(version: &HelperVersion) -> String {
-    format!(
-        "velnor-ci {version} cannot read [[test_groups]] in the configuration; pin velnor-ci 0.1.90 or later with `velnor-gen pin-helper 0.1.90`"
     )
 }
 
