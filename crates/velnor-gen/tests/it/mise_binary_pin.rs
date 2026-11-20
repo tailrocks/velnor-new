@@ -200,12 +200,7 @@ fn the_digest_table_has_the_four_pinned_platforms_with_distinct_sha256_digests()
             .collect();
         assert_eq!(
             platforms,
-            [
-                "Linux-ARM64",
-                "Linux-X64",
-                "macOS-ARM64",
-                "macOS-X64"
-            ],
+            ["Linux-ARM64", "Linux-X64", "macOS-ARM64", "macOS-X64"],
             "{}",
             binary.version
         );
@@ -234,7 +229,10 @@ fn the_run_time_selection_leaves_windows_unpinned() -> TestResult {
         Value::Expr(expr) => expr,
         other => return Err(format!("not a selection: {other:?}").into()),
     };
-    assert!(input.starts_with("${{ runner.os != 'Windows' && ("), "{input}");
+    assert!(
+        input.starts_with("${{ runner.os != 'Windows' && ("),
+        "{input}"
+    );
     assert!(input.ends_with(") || '' }}"), "{input}");
     for digest in [
         "a448e986baedc177173b5f63c81343269eef6fef8e3e916b6151580a80e115aa",
