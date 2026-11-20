@@ -11,6 +11,7 @@ pub const KEYS: &[&str] = &[
     "runner",
     "hosted",
     "fork_runner",
+    "trusted_runner",
     "crates_mirror",
     "mbx_shared_store",
     "docs",

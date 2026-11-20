@@ -13,7 +13,7 @@ use crate::plan_tools::{mirror_step, tools_install, tools_restore, tools_save};
 
 pub(crate) const PLAN_JOB: JobId = JobId::from_static("rust-plan");
 const POLICY_JOB: JobId = JobId::from_static("policy");
-// First released in tools-v0.1.110 (not tagged yet when this gate was written).
+// helper-gate: first in tools-v0.1.110 via 9c258dd24a
 pub(crate) const EARLY_POLICY_HELPER: (u64, u64, u64) = (0, 1, 110);
 
 pub(crate) struct Lane {
@@ -106,6 +106,7 @@ impl Lane {
             ..step(StepKind::TestSetup {
                 name: format!("Skip test lane ({})", features.label()),
                 run: "echo 'skipped: no selected packages'".to_owned(),
+                before_build: false,
             })
         }
     }
