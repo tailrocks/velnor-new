@@ -93,12 +93,7 @@ fn a_clippy_first_lane_audits_a_member_build_script_beside_a_clippy_config() {
 }
 
 #[test]
-fn a_build_first_lane_still_audits_a_member_build_script_beside_a_clippy_config() {
-    assert!(audited_lock("build.rs", false).contains("shared/data.txt\tmember\n"));
-}
-
-#[test]
-fn the_lock_lists_the_clippy_reads_whatever_the_step_order() {
+fn a_build_first_lane_audits_a_member_build_script_and_lists_the_same_reads() {
     assert_eq!(audited_lock("build.rs", false), READS);
 }
 

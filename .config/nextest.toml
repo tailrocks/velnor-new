@@ -91,6 +91,10 @@ filter = 'package(=velnor-ci) and (test(=audit::migration::targets::a_cross_targ
 slow-timeout = { period = "30s", terminate-after = 1 }
 
 [[profile.default.overrides]]
+filter = 'package(=velnor-ci) and test(audit::build_script_source::)'
+slow-timeout = { period = "30s", terminate-after = 4 }
+
+[[profile.default.overrides]]
 filter = 'package(=velnor-ci) and test(crates_mirror)'
 success-output = "immediate"
 threads-required = "num-test-threads"
@@ -99,6 +103,10 @@ slow-timeout = { period = "30s", terminate-after = 4 }
 [[profile.ci.overrides]]
 filter = 'package(=velnor-ci) and (test(=audit::migration::targets::a_cross_target_created_by_cargo_at_the_source_root_does_not_hide_source_changes) | test(=audit::migration::nextest_discovery_compiles_first_and_executes_the_tests_once))'
 slow-timeout = { period = "30s", terminate-after = 1 }
+
+[[profile.ci.overrides]]
+filter = 'package(=velnor-ci) and test(audit::build_script_source::)'
+slow-timeout = { period = "30s", terminate-after = 4 }
 
 [[profile.ci.overrides]]
 filter = 'package(=velnor-ci) and test(crates_mirror)'
