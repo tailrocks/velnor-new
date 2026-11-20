@@ -98,8 +98,8 @@ pub(super) const RUST_CI: &[KeyGate] = &[
     gate(RustCi, "lint.id", (0, 1, 89)),
     // helper-gate: first in tools-v0.1.89 via 330573ef6d
     gate(RustCi, "lint.kind", (0, 1, 89)),
-    // First released in tools-v0.1.109 (not tagged yet when this gate was written).
-    gate_value(RustCi, "lint.kind", "generated-check", (0, 1, 109)),
+    // First released in tools-v0.1.110 (not tagged yet when this gate was written).
+    gate_value(RustCi, "lint.kind", "generated-check", (0, 1, 110)),
     // helper-gate: first in tools-v0.1.89 via 330573ef6d
     gate(RustCi, "lint.name", (0, 1, 89)),
     // helper-gate: first in tools-v0.1.89 via 330573ef6d

@@ -131,7 +131,7 @@ fn generated_check_lint_is_refused_before_the_helper_reads_its_kind() -> Result<
 #[test]
 fn generated_check_lint_renders_on_the_first_helper_that_reads_its_kind()
 -> Result<(), Box<dyn Error>> {
-    let refused = archived_refusal(GENERATED_CHECK, "0.1.109")?;
+    let refused = archived_refusal(GENERATED_CHECK, "0.1.110")?;
     assert!(!refused.contains("HelperTooOld"), "{refused}");
     Ok(())
 }
