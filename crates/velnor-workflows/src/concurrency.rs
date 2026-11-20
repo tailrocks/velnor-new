@@ -5,13 +5,13 @@ use crate::error::{WorkflowsError, refuse};
 use crate::plan::{CallTarget, Concurrency, Workflow};
 use crate::raw::RawConcurrency;
 
-const CONTEXTS: [&str; 4] = [
+const CONTEXTS: &[&str] = &[
     "github.workflow",
     "github.ref",
     "github.event.pull_request.number",
     "github.head_ref || github.run_id",
 ];
-const TELLS_REFS_APART: [&str; 2] = ["github.ref", "github.head_ref || github.run_id"];
+const TELLS_REFS_APART: &[&str] = &["github.ref", "github.head_ref || github.run_id"];
 const MAX_GROUP_BYTES: usize = 200;
 
 pub(crate) fn concurrency(place: &str, raw: RawConcurrency) -> Result<Concurrency, WorkflowsError> {

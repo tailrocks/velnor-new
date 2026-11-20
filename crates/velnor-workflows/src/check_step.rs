@@ -91,7 +91,7 @@ pub(crate) fn step(
         .map(|text| check_condition(&text, scope))
         .transpose()?;
     let working_directory = working_directory(job, &body, raw.working_directory)?;
-    let with = values(job, raw_with, scope, Some(&WITH_INTERPOLATIONS), check)?;
+    let with = values(job, raw_with, scope, Some(WITH_INTERPOLATIONS), check)?;
     bounded_cache_keys(job, &body, &with)?;
     Ok(Step {
         id: raw.id,

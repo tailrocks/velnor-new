@@ -82,7 +82,7 @@ fn scan_archive(path: &Path) -> Result<archive::Scanned, CiError> {
 
 fn source_inputs(root: &Path) -> Result<Value, CiError> {
     let mut inputs = Map::new();
-    for name in INPUT_PATHS {
+    for name in INPUT_PATHS.iter().copied() {
         let data = fs::read(root.join(name))
             .map_err(|error| CiError::new(format!("{}: {error}", root.join(name).display())))?;
         inputs.insert(name.to_owned(), Value::String(sha256_hex(&data)));

@@ -10,7 +10,7 @@ use crate::pipeline::workflow;
 
 type TestResult = Result<(), Box<dyn Error>>;
 
-const CI_ARCHIVES: [(&str, &str, &str); 3] = [
+const CI_ARCHIVES: &[(&str, &str, &str)] = &[
     (
         "Linux",
         "X64",
@@ -28,7 +28,7 @@ const CI_ARCHIVES: [(&str, &str, &str); 3] = [
     ),
 ];
 
-const CI_BINARIES: [(&str, &str, &str); 3] = [
+const CI_BINARIES: &[(&str, &str, &str)] = &[
     (
         "Linux",
         "X64",
@@ -180,6 +180,33 @@ fn a_linux_only_archive_release_is_pinned() -> TestResult {
 }
 
 #[test]
+fn an_optional_macos_release_lists_its_files_last_and_pins_the_same_lock() -> TestResult {
+    let macos_last = |text: &str| -> String {
+        let (macos, rest): (Vec<&str>, Vec<&str>) = text
+            .lines()
+            .filter(|line| !line.ends_with("SUMS") && !line.ends_with("COMMIT"))
+            .partition(|line| line.contains("apple-darwin"));
+        let kept = text
+            .lines()
+            .filter(|line| line.ends_with("SUMS") || line.ends_with("COMMIT"));
+        rest.into_iter()
+            .chain(kept)
+            .chain(macos)
+            .flat_map(|line| [line, "\n"])
+            .collect()
+    };
+    let lock = pin_lock(
+        "0.1.81",
+        COMMIT_FILE,
+        &macos_last(ARCHIVE_SUMS),
+        Some(&macos_last(BINARY_SUMS)),
+    )?;
+    assert_eq!(lock, archive_lock()?);
+    assert!(lock.contains("macos-arm64"), "{lock}");
+    Ok(())
+}
+
+#[test]
 fn only_a_release_that_lists_the_binary_digest_file_needs_it_downloaded() -> TestResult {
     assert!(lists_binary_sums(ARCHIVE_SUMS));
     assert!(!lists_binary_sums(SUMS));
@@ -224,12 +251,12 @@ fn the_action_checks_the_archive_and_the_launcher_checks_the_binary() -> TestRes
         "sha256-macos-arm64",
     ]
     .into_iter()
-    .zip(CI_ARCHIVES)
+    .zip(CI_ARCHIVES.iter().copied())
     {
         assert_eq!(install["with"][input], digest);
     }
     let launcher = launcher_digest(&text)?;
-    for (os, arch, digest) in CI_BINARIES {
+    for &(os, arch, digest) in CI_BINARIES {
         assert!(
             launcher.contains(&format!(
                 "runner.os == '{os}' && runner.arch == '{arch}' && '{digest}'"
@@ -237,7 +264,7 @@ fn the_action_checks_the_archive_and_the_launcher_checks_the_binary() -> TestRes
             "{launcher}"
         );
     }
-    for (_, _, archive) in CI_ARCHIVES {
+    for &(_, _, archive) in CI_ARCHIVES {
         assert!(!launcher.contains(archive), "{launcher}");
     }
     Ok(())

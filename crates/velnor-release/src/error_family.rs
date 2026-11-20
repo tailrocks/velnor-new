@@ -41,6 +41,16 @@ pub enum FamilyError {
     },
     RequiredChecksNeedTagPush,
     RequiredChecksOffWithPrOnlyChecks,
+    OptionalPlatformNotBuilt {
+        package: String,
+        platform: &'static str,
+    },
+    EveryPlatformOptional {
+        package: String,
+    },
+    OptionalPlatformVersionedName {
+        package: String,
+    },
 }
 
 impl fmt::Display for FamilyError {
@@ -97,6 +107,18 @@ impl fmt::Display for FamilyError {
             Self::RequiredChecksOffWithPrOnlyChecks => write!(
                 f,
                 ".velnor/release.toml: family_required_checks = false skips the required-checks gate, so pr_only_checks has nothing to apply to; remove one of them"
+            ),
+            Self::OptionalPlatformNotBuilt { package, platform } => write!(
+                f,
+                ".velnor/release.toml: binary {package} lists {platform} in optional_platforms, but not in platforms; list it in both"
+            ),
+            Self::EveryPlatformOptional { package } => write!(
+                f,
+                ".velnor/release.toml: every platform of binary {package} is optional, so a release could hold none of its files; keep at least one platform out of optional_platforms"
+            ),
+            Self::OptionalPlatformVersionedName { package } => write!(
+                f,
+                ".velnor/release.toml: binary {package} has optional_platforms and an asset_name that uses {{{{ version }}}}; the workflow cannot look for an optional file by a versioned name, so use an asset_name without {{{{ version }}}}"
             ),
             Self::TagPushWithReleasedPackage { package } => write!(
                 f,

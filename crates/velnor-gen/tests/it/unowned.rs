@@ -15,7 +15,7 @@ use crate::select::{assert_selects, changed, depends_on, name, path, some, unkno
 const LOOP: &str = "a/excluded/loop/Cargo.toml";
 const LEAF: &str = "vendor/leaf/Cargo.toml";
 
-const MANIFESTS: [(&str, &str); 6] = [
+const MANIFESTS: &[(&str, &str)] = &[
     (
         "a/Cargo.toml",
         "[workspace]\n\n[patch.crates-io]\npatched = { path = \"../vendor/patched\" }\n",
@@ -84,14 +84,14 @@ fn unread_after(facts: &RepoFacts, files: &[&str]) -> BTreeMap<RepoPath, Unread>
     unread_packages(facts, &changes)
 }
 
-static THROUGH_MID: [(&str, &str); 4] = [
+static THROUGH_MID: &[(&str, &str)] = &[
     ("y", "b/y/src/lib.rs"),
     ("w", "b/w/src/lib.rs"),
     ("v", "b/v/src/lib.rs"),
     ("q", "b/q/src/lib.rs"),
 ];
-static THROUGH_LOOP: [(&str, &str); 2] = [("z", "b/z/src/lib.rs"), ("u", "b/u/src/lib.rs")];
-static INSIDE: [&str; 4] = [
+static THROUGH_LOOP: &[(&str, &str)] = &[("z", "b/z/src/lib.rs"), ("u", "b/u/src/lib.rs")];
+static INSIDE: &[&str] = &[
     "vendor/leaf/src/lib.rs",
     "a/excluded/loop/src/lib.rs",
     "vendor/mid/Cargo.toml",
