@@ -126,7 +126,8 @@ fn artifacts_of(
         let artifact = artifact_of(name, binaries)
             .ok_or_else(|| invalid(CheckProblem::UnknownArtifact(name.clone())))?;
         if binaries.iter().any(|binary| {
-            binary.package == artifact.package && binary.optional_platforms.contains(&artifact.platform)
+            binary.package == artifact.package
+                && binary.optional_platforms.contains(&artifact.platform)
         }) {
             return Err(invalid(CheckProblem::OptionalArtifact(name.clone())));
         }
