@@ -286,9 +286,13 @@ fn an_oversized_reusable_workflow_is_refused_with_its_file_and_largest_jobs() ->
     let arguments = "x".repeat(1900);
     let mut config = CONFIG.to_owned();
     for index in 0..300 {
-        config.push_str(&format!(
-            "\n[[workflow.job.step]]\nname = \"Check {index}\"\nrun = \"velnor-ci check-metadata {arguments}\"\n"
-        ));
+        config.extend([
+            "\n[[workflow.job.step]]\nname = \"Check ",
+            &index.to_string(),
+            "\"\nrun = \"velnor-ci check-metadata ",
+            &arguments,
+            "\"\n",
+        ]);
     }
     let message = refusal(&config)?;
     assert!(message.contains("above 500000 bytes"), "{message}");
