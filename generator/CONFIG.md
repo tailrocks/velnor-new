@@ -1,8 +1,12 @@
 # Generator configuration
 
-The new Rust generator reads `.velnor/rust-ci.toml`.
+The new Rust generator reads `.velnor/rust-ci.toml`. To move a project from the velnor-actions engine, follow [`docs/migrating-to-velnor-gen.md`](../docs/migrating-to-velnor-gen.md).
 
 The generator reads `.velnor/rust-ci.toml`, `.velnor/release.toml` and `.velnor/workflows.toml` only through Git's tracked view. A file that exists on disk but that Git does not track (or ignores) is refused with an error, not replaced by defaults: run `git add <path>` (`git add -f` for an ignored file), or delete the file.
+
+## Local runs in a mise checkout
+
+`velnor-gen generate` and `check` run `cargo metadata` in the repository. When the repository's `mise.toml` declares `[wrappers.cargo]`, mise refuses to run that wrapper in a checkout it does not trust, so the run would stop with "Config files in mise.toml are not trusted" until someone runs `mise trust`. velnor-gen avoids that step: it adds the repository root it was pointed at to `MISE_TRUSTED_CONFIG_PATHS` for that one `cargo metadata` child. The value is appended to any existing one, and velnor-gen's own environment does not change. The wrapper still runs (mbx stays in the path). Trusting this root is safe here because you ran `velnor-gen` on this checkout yourself, and `cargo metadata` already reads the checkout's Cargo and mise config. A root path that contains `:` is refused, because mise splits this variable on `:` and the entry would trust a parent directory.
 
 ## Fork pull requests
 
@@ -33,9 +37,33 @@ fork_runner = "ubuntu-24.04"
 
 `cache_debug = true` in `.velnor/rust-ci.toml` makes every generated cargo step set `CARGO_LOG` from the repository variable `VELNOR_CACHE_DEBUG` and adds a step that uploads the log when that variable is `1`. It is `false` by default, and then the generated workflow reads no repository variable. A repository that sets it also declares `VELNOR_CACHE_DEBUG` to its workflow linter. The key needs a helper release that knows it (`0.1.82` or later), because older helpers reject unknown keys.
 
+## mbx by default
+
+Every generated job that builds with Cargo runs cargo through mbx, with its own private store. The generator does not put `mbx` in the cargo commands; it requires that the repository's `mise.toml` has one of two accepted layouts, because `mise-action` then makes `cargo` on `PATH` the mbx wrapper in every step, including the direct `cargo-clippy` and `cargo-nextest` binaries that call `cargo` back. The native layout is the one the mbx docs recommend and the one the refusal shows first:
+
+```toml
+[tools]
+rust = { version = "1.99.1", mr_boxington = true }
+mr-boxington = { version = "v1.30.0", workflow = "release.yml@refs/heads/main" }
+```
+
+The explicit layout adds the exact wrapper below to the same two entries. It is also accepted:
+
+```toml
+[wrappers.cargo]
+command = "mbx"
+env = { MBX_CARGO_SHIM_MODE = "1" }
+```
+
+Generation fails, and names what is missing with this snippet, when the pin of `mr-boxington` (one request, no `os` filter) or `mr_boxington = true` on the pinned rust tool is absent. It also fails when a `[wrappers.cargo]` is present that is neither the exact wrapper nor absent. A `command = "mbx"` wrapper without `MBX_CARGO_SHIM_MODE = "1"` is refused with its own message: without the env, `cargo -V` and `cargo --list` print mbx's own output, so the fix is to add the env or to delete the wrapper and use the native layout. Run `mise lock` after adding them, because the tools cache and the prebuilt check read `mise.lock`. The exact wrapper is not reported as a setting that makes a check do less.
+
+Each job with a building Cargo step gets the step `Private mbx store` (`echo "MBX_CACHE_DIR=$RUNNER_TEMP/mbx" >> "$GITHUB_ENV"`) before the tools restore, so mbx keeps its results in an empty per-job directory and never reads a store another job or event wrote. A job that builds nothing (fmt, cargo-deny, cargo-machete, a run of a prebuilt test archive) gets none. No store is set when `mbx_shared_store = true` or `[cache] mbx_remote` is configured: their wiring below is unchanged.
+
+`[cache] mbx = false` turns all of this off. It needs no layout, sets no store and is listed among the settings that make a check do less. It is refused with `mbx_shared_store = true` or `[cache] mbx_remote`. `mbx = true` is the default written down. Either value needs `velnor-ci` 0.1.109 or later in the lock, because an older helper rejects the key; `velnor-gen pin-helper 0.1.109` fixes an older pin. Without the key, the output needs no new helper. A release build uses mbx only for the exact layout and never with `mbx = false`. A tool whose key ends in `mr-boxington` next to the `mr-boxington` pin is refused. Declared workflows are not covered.
+
 ## Optional mbx remote cache
 
-`[cache] mbx_remote = "github-actions"` in `.velnor/rust-ci.toml` adds `jdx/mr-boxington-action` (pinned by full SHA) to every generated job that builds with Cargo (a fmt, cargo-deny or cargo-machete lane, or a run of a prebuilt test archive, gets none), right after the tools install and before any repository code runs. It uses the action's `github` backend in `objects` mode, pinned to mbx `1.30.0` (the `mr-boxington` pin of `mise.toml`) with `version`. Each job's restores are scoped to its own generation (`cache-generation: v1-<job>`), so a job never warm-starts from another job's entry. The action saves after a successful push to the default branch and after a successful pull request from the same repository (`save-on-pull-request` compares the head repository with `github.repository`, and that save is scoped to the pull request's own ref, so main and other pull requests cannot restore it); a fork pull request, a protected branch or a manual run only restores. The step runs with `continue-on-error: true`, so a failed export or save never fails the Cargo lane. The objects cache holds only what mbx compiled, so the saving needs the build commands to run under `mbx`; the generated Cargo steps do not, so a repository that opts in must route its build through `mbx` (its own `[wrappers.cargo]`) for the cache to fill. The jobs get no write permission, no `id-token` and no secret, and the workflow sets no `MBX_REMOTE_*` variable. The action's post step still runs after the job's Cargo steps. It uses the runner's cache credential, not a repository token, and writes only this repository's own caches, from a push to the default branch or a same-repository pull request. The table is off by default, and then the output is unchanged. Allowed values: `"github-actions"`. The key needs velnor-ci 0.1.88 or later, because older helpers reject unknown keys, and `velnor-gen pin-helper 0.1.88` fixes an older pin. The `mbx-remote-cache` sample is pinned to the current release.
+`[cache] mbx_remote = "github-actions"` in `.velnor/rust-ci.toml` adds `jdx/mr-boxington-action` (pinned by full SHA) to every generated job that builds with Cargo (a fmt, cargo-deny or cargo-machete lane, or a run of a prebuilt test archive, gets none), right after the tools install and before any repository code runs. It uses the action's `github` backend in `objects` mode, pinned to mbx `1.30.0` (the `mr-boxington` pin of `mise.toml`) with `version`. Each job's restores are scoped to its own generation (`cache-generation: v1-<job>`), so a job never warm-starts from another job's entry. The action saves after a successful push to the default branch (a built-in rule of the action; no input controls it) and after a successful pull request from the same repository (`save-on-pull-request` is set by comparing the head repository with `github.repository`, and that save is scoped to the pull request's own merge ref, so main and other pull requests cannot restore it). `save-on-protected-branch` and `save-on-workflow-dispatch` are rendered `false`, so a push to another protected branch, a schedule, a merge queue run, a manual run and a fork pull request only restore. Restores match the job's generation prefix, so a pull request with no entry of its own restores the default branch's latest entry. The step runs with `continue-on-error: true`, so a failed export or save never fails the Cargo lane. The objects cache holds only what mbx compiled, so the saving needs the build commands to run under `mbx`; the generated Cargo steps do not, so a repository that opts in must route its build through `mbx` (its own `[wrappers.cargo]`) for the cache to fill. The jobs get no write permission, no `id-token` and no secret, and the workflow sets no `MBX_REMOTE_*` variable. The action's post step still runs after the job's Cargo steps. It uses the runner's cache credential, not a repository token, and writes only this repository's own caches, from a push to the default branch or a same-repository pull request. The table is off by default, and then the output is unchanged. Allowed values: `"github-actions"`. The key needs velnor-ci 0.1.88 or later, because older helpers reject unknown keys, and `velnor-gen pin-helper 0.1.88` fixes an older pin. The `mbx-remote-cache` sample is pinned to the current release.
 
 ## Skip the push run after a merge queue run
 
@@ -57,6 +85,8 @@ In the one-job shape the `rust` job itself is granted `actions: read` at job lev
 ## Pull request delta cache
 
 A pull request from this repository restores a per-pull-request delta layer after the Target cache and saves it after the last compiling step, and a `rust-cache-trim.yml` workflow trims the deltas of finished pull requests. There is no key for it. It needs a locked `velnor-ci` 0.1.95 or later, because the helper has the `delta` commands. With an older helper (0.1.81 to 0.1.94) the generator silently renders no delta steps and no cleanup workflow; a helper from 0.1.95 to 0.1.101 renders the delta steps but no cleanup workflow, which needs 0.1.102 (the first release whose `cache trim-deltas` works after the pull request merges). It is not an error, so a repository pinned to an earlier release keeps generating. The layer is also left out when a custom `target-dir` is set, when `Cargo.lock` holds a source that is not proven public, or when it would not fit the budget (the generator reports what it left out).
+
+A Cargo root at the repository root builds into `target`. A root in a subdirectory builds into `target/velnor-roots/<root>` of the repository, where `<root>` is its directory lower-cased, with every character other than an ASCII letter or digit replaced by `_` (the same slug as in the Target key), so no build writes into a package directory that Cargo walks for its fingerprint. A `build.target-dir` in a Cargo configuration still decides the folder. The rule needs a locked `velnor-ci` 0.1.107 or later, because the helper works out the same folder for its cache cleanup. With an earlier helper a subdirectory root keeps `<dir>/target`. Pinning 0.1.107 changes the Target and Delta cache paths of each subdirectory root once, so that root's next run builds cold.
 
 ## Optional crates mirror
 
@@ -104,6 +134,39 @@ With `[private_sources]` the `groups` shape builds and runs the tests in one job
 
 Every later cargo command of the job runs with `--offline` and `CARGO_NET_OFFLINE=true`. The token is written to no file, to `$GITHUB_ENV` or to any git configuration.
 
+The token phase runs the real `cargo` and `git`. It never runs a mise shim or a command wrapper found on `PATH` or in the repository (it skips those and falls through to the next candidate); when no real `cargo` is left, the fetch fails closed, and the token is still revoked. Mise's trust variables are not forwarded to the fetch.
+
+A job that runs `cargo-deny` gets one extra step before the token phase, `cargo-deny fetch db`, which has no token and no `GIT_CONFIG_*` or `CARGO_NET_OFFLINE` environment. It loads the RustSec advisory database that the `--offline` deny check then reads, so the `advisories` check works on a fresh runner. Without `[private_sources]` the step is absent.
+
+## Private release assets
+
+A project whose build scripts or tests need a file from a private release (for example `.proto` files that a `build.rs` reads, or a dataset bundle) names it in `.velnor/rust-ci.toml`. The table is off when absent, and then the generated workflow is unchanged.
+
+```toml
+[[release_assets]]
+repo = "owner/fixtures"          # private repository that publishes the asset
+tag = "fixtures-2026.11.1"       # release tag
+asset = "dataset.tar.zst"        # asset name on that release
+sha256 = "<64 lowercase hex digits>"
+dest = "tests/fixtures/dataset"  # folder, relative to the repository root
+```
+
+The asset is stored at `<dest>/<asset>`. The generator does not unpack it: archive extraction has its own hazards (path traversal, links), so a committed script that a `[[test_setup]]` step runs, or the build script itself, unpacks it.
+
+The App credentials come from `[private_sources]` (`app_id` and `private_key`), which must be present. The entries need not appear in `[private_sources].repositories`: the release token has its own repository list, so the Cargo fetch token stays as narrow as it is. All entries use one owner, because one App installation issues the token.
+
+Refused at generation time: a missing `sha256` or one that is not 64 lowercase hex digits; a `repo` that is not `owner/name`; a `tag` or `asset` outside letters, digits and `._+-`; a `dest` that is absolute, empty, holds `..`, `.` or an empty part, a backslash, or a `.git` part (only letters, digits and `._-` are allowed in each part); entries of different owners; two entries with one `sha256` or one file path; more than 16 entries; an unknown key; a table without `[private_sources]`; a pinned `velnor-ci` older than `0.1.109`. Values never reach a `run:` as an expression, and a value with `${{` is refused by the character rules.
+
+**Where it runs.** The phase is a prelude of every job that compiles or runs tests, placed before the job's first cargo step (clippy, doc, the check-alone steps, the nextest build, test and archive jobs, feature lanes) and before any `[[test_setup]]` command, because a build script may read the asset. Formatting, `cargo machete` and `cargo deny` run no build script and get no prelude. It carries the same gate as the steps it precedes, so a run that selects no packages skips it.
+
+**Steps.** Per asset, `actions/cache/restore` with the key `release-asset-<sha256>` and the path `<dest>/<asset>`; on a merge queue run `velnor-ci private-token-allowed` (its own step, `release-assets-check`); `actions/create-github-app-token` (`release-assets-token`) with `permission-contents: read` and only the listed repositories; one `velnor-ci fetch-assets --asset <repo>,<tag>,<asset>,<sha256>,<dest>` step with the token in its environment only; and `actions/cache/save` for each asset whose restore missed. The save comes right after the verification, before any repository code runs, so the cached bytes are the verified ones.
+
+**Warm run.** The key is the digest, so a changed `sha256` is a new key and cannot serve stale bytes. On an exact hit the check and token steps are skipped, so no token is minted. `fetch-assets` still runs without a token: it hashes the restored file again, makes no request, and fails when the file is missing, is a link, or differs from the digest. A tampered cache entry therefore fails the job.
+
+**Fork pull requests** and bot-authored pull requests get no token, with the same condition as `[private_sources]`, and a merge queue entry gets one only when `private-token-allowed` wrote `allowed=true`. A cache hit still works. A miss fails closed, and the message names the fork case. There is no optional mode, because a skipped fixture would show up as a confusing build or test failure.
+
+**The download.** `velnor-ci fetch-assets` reads `GET /repos/<repo>/releases/tags/<tag>` on the API in `VELNOR_API_URL`, takes the one asset with that exact name, and downloads it by id. The token is not sent to the storage URL that the API redirects to. The bytes go to a new file next to the destination, are hashed while they are written (at most 4 GiB), and are renamed into place only when the SHA-256 equals the configured one; on a mismatch nothing is left. The destination is re-checked in the helper: relative, plain names, and no symbolic link or file on any folder of the path. The token is revoked with `DELETE /installation/token` afterwards, also when a download fails, and a failed revocation fails the step. The action's post-job revocation stays on as the backstop for a cancelled job.
+
 ## Workspace groups
 
 A repository with many small Cargo workspaces can check several of them in one job set, when the project asks for it. A group names the workspaces that share one job set; a workspace that no group names keeps its own jobs.
@@ -134,6 +197,18 @@ With `velnor-ci` 0.1.86 or later in the lock, `mbx_shared_store = true` also ren
 
 `check_alone = "post_merge"` does the same for the per-crate `Check <crate> alone` steps. They compile each crate with only its own feature set, so their dependency artifacts differ from the workspace lint and build steps and a pull request rarely finds them in the mbx cache. They keep their value as the check that a crate declares every feature it needs, and the run after the merge keeps that check. The default is `"always"`. The key needs `velnor-ci` 0.1.97 or later in the lock, and the same weakening and reuse rules apply.
 
+## Cargo wrapper
+
+`mise.toml` routes every `cargo` through MBX with the owner standard layout: `mr_boxington = true` on the `rust` tool, and either no cargo wrapper (the native layout) or this wrapper (the explicit layout):
+
+```toml
+[wrappers.cargo]
+command = "mbx"
+env = { MBX_CARGO_SHIM_MODE = "1" }
+```
+
+The generator accepts this exact layout as the standard. `velnor-ci plan --explain` and the review of a change do not name it as a weakening. The match is exact: `command` must be `"mbx"`, `env` must hold only `MBX_CARGO_SHIM_MODE = "1"`, and the wrapper may not add `args` or other keys. Any other cargo wrapper is still named as a weakening, because it runs cargo through a program or with settings the generator cannot vouch for. That covers another command, another env value, an extra env key, an `args` list, a missing `env`, and a wrapper for `cargo-nextest` or another `cargo-*` tool. The `rustc` and `rustdoc` wrappers are always named.
+
 ## Test setup steps
 
 A test that needs a fixture, such as a built example executable or a provisioned service, declares one step per fixture. The generator runs each step before the first test step of every job of that root, in the order written. Each step is one command, because a generated `run:` value is one command with no shell logic; the logic lives in a script the repository commits. The script exports variables to later steps through `$GITHUB_ENV`.
@@ -147,6 +222,21 @@ run = "bash scripts/prepare-fixtures.sh"
 
 `root` is the folder of the Cargo root's `Cargo.toml`, or `.` for the repository root, and it must name a root of this repository. The step runs in that folder. It follows the same gate as the test steps, so a run that selects no tests skips it. A job that runs no tests has none. With `shape = "groups"` the test group job installs only cargo-nextest, so a step there must not need Rust. A `run` value with an expression, a line break or any shell syntax is refused.
 
+## Per-root time limits
+
+`[root_timeouts]` gives one root's jobs their own time limit, so a heavy root can run longer without raising the limit of every job. Each key is the folder of a root's `Cargo.toml`, or `.` for the repository root, and each value is a time limit in minutes, 1 to 360, the same range as `timeout_minutes`. A key that names no root of the repository, a value out of range, or a second key for the same root (`crates/x` and `crates/x/`) is refused with its name.
+
+```toml
+timeout_minutes = 30
+
+[root_timeouts]
+"crates/heavy-engine" = 90
+```
+
+The limit applies to every job of that root: its lint job, its test job, its one job, its archive build job and each test group's job. A group's own `timeout_minutes` still wins for the group's job, and a `[[test_lane]]` with `job = "parallel"` still wins for its own job (see the lane sections below). A root with no entry keeps `timeout_minutes`. A grouped workspace root runs its roots in one job, so that job takes the largest of their entries.
+
+The fallback order, most specific first, is: the lane or group value, the root value, then `timeout_minutes`. The `[root_timeouts]` table and a lane's `timeout_minutes` need velnor-ci `0.1.109` or later, because the pinned velnor-ci refuses a key it does not know; `velnor-gen generate` refuses an older pin when either is set, and `velnor-gen pin-helper 0.1.109` fixes it.
+
 ## Feature test lanes
 
 A package may have tests that exist only under a Cargo feature. A `[[test_lane]]` entry adds one nextest step to the root's test job. The step runs the selected tests again with the features on.
@@ -159,7 +249,15 @@ packages = ["velnor-runner-host"]
 filter = "package(velnor-runner-host) and (test(~local::) or binary(local_host_public) or binary(local_pair_public))"
 ```
 
-`root` is the folder of the Cargo root's `Cargo.toml`, or `.` for the repository root. It must name a root of this repository that runs nextest tests. `features` is a non-empty list of distinct feature names, and each name uses letters, digits and `_-+./`. The step is named `Test (features: local-mode)` and runs `cargo-nextest nextest run --workspace --locked --features 'local-mode'` with the same selection as the root's default test step, narrowed by `filter`. It runs after the default test step and reports no test counts, so the default step stays the single source of the job's test counts. With `shape = "groups"` the step runs in the build job, which has Rust, because the archive holds only the default-feature build.
+`root` is the folder of the Cargo root's `Cargo.toml`, or `.` for the repository root. It must name a root of this repository that runs nextest tests. `features` is a list of distinct feature names, and each name uses letters, digits and `_-+./`. It is required unless `all_features` or `no_default_features` is set. The step is named `Test (features: local-mode)` and runs `cargo-nextest nextest run --workspace --locked --features 'local-mode'` with the same selection as the root's default test step, narrowed by `filter`.
+
+The two feature flags change which features the lane's steps pass to cargo, in its test, lint, doc and guard steps alike:
+
+- `all_features = true` passes `--all-features`, so the lane runs with every feature of the root on. It takes no `features` list.
+- `no_default_features = true` passes `--no-default-features`. It combines with `features`, so `features = ["a", "b"]` with it gives `--no-default-features --features 'a,b'`. It may also stand alone, to run with no features at all.
+- The two cannot be combined with each other or with a `features` list. Generation fails with a message that names the conflicting keys.
+
+A lane with a flag takes its own name: `Test (all features)`, `Test (no default features)`, or `Test (no default features, features: a,b)`, and the lint, doc and guard steps take the same words. Two lanes that differ only by a flag keep separate steps, separate lint and doc steps, and, as parallel jobs, separate jobs and cache keys (`rust-lane-all-features`, `rust-lane-no-default-a-b`). A lane without the flags renders exactly as before. The keys need velnor-ci 0.1.109 or later, and generation refuses an older pin when a lane writes either key, even as `false`. It runs after the default test step and reports no test counts, so the default step stays the single source of the job's test counts. A lane with `job = "parallel"` reports its own counts, see the next section but one. With `shape = "groups"` the step runs in the build job, which has Rust, because the archive holds only the default-feature build.
 
 `packages` names the packages of the root whose tests the lane selects. It is required with `filter` and optional without it. The plan narrows a pull request to the changed packages, so a lane whose filter matches nothing there is not broken. When the plan selects none of `packages`, and not the whole workspace, the lane step is skipped and a step named `Skip test lane (features: ...)` prints `skipped: no selected packages`. Otherwise the lane runs with `--no-tests=fail`, so a filter that matches nothing fails the job instead of passing with zero tests. A lane without `filter` runs whenever the plan selects the root.
 
@@ -177,7 +275,33 @@ lint = true
 doc = true
 ```
 
-A lane with a `filter` gets a second step, `Test lane guard (features: ...)`, right after the lane step. It runs `velnor-ci lane-guard --features '...' --filter '...'`, with one `--except-binary` for each `harness = false` binary that the root runs with `cargo test`, and it runs under the same condition as the lane step. The guard asks cargo-nextest to list the workspace with and without the features and under the filter. It fails the job when a test exists only with the features, is not ignored, and falls outside `filter`, and it names each such test with its binary id. A listing error also fails the guard. A lane without a `filter` runs every selected test and has no guard.
+A lane with a `filter` gets a second step, `Test lane guard (features: ...)`, right after the lane step. It runs `velnor-ci lane-guard --features '...' --filter '...'` (with `--all-features` or `--no-default-features` in place of or before `--features` when the lane sets the flags), with one `--except-binary` for each `harness = false` binary that the root runs with `cargo test`, and it runs under the same condition as the lane step. The guard asks cargo-nextest to list the workspace with and without the features and under the filter. It fails the job when a test exists only with the features, is not ignored, and falls outside `filter`, and it names each such test with its binary id. A listing error also fails the guard. A lane without a `filter` runs every selected test and has no guard.
+
+### A lane as its own job
+
+`job` is optional: `"inline"` (the default) keeps the lane's steps in the root's test job, as above, and renders exactly as before. `job = "parallel"` moves every step of the lane (the test step, its guard, `lint` and `doc`) out of that job into one job of its own, `rust-lane-<features>` (`rust-lane-local-mode`, or `rust-lane-all-features` or `rust-lane-no-default-...` with the flags, with the root's slug appended when the repository has several roots; a second lane with the same features gets `-2`). The job runs beside the root's jobs, so the wall time of a run is the longest job, not the sum of the default tests and the lane.
+
+```toml
+[[test_lane]]
+root = "."
+features = ["local-mode"]
+packages = ["velnor-runner-host"]
+filter = "package(velnor-runner-host) and (test(~local::) or binary(local_host_public))"
+lint = true
+doc = true
+job = "parallel"
+```
+
+- The lane job needs the plan job, so a repository that had the single `rust` job and no plan job gets a `rust-plan` job (a few seconds of setup) once it has a parallel lane. The job runs when the plan selects the root, the same condition as the root's other jobs, and its steps keep the conditions they have inline (the package selection of `packages`, the `docs` plan output and `docs = "post_merge"`).
+- The `Required` job waits for the lane job through `needs`, like every generated job. The lane adds no check name to the branch protection or the ruleset.
+- The lane's test step reports `tests_run`, `tests_listed` and `tests_by_package` as outputs of the job, and the `velnor-ci gate` verdict reads them under the root's name, next to the root's default test job. A package that the lane lists tests for and that ran none in any job fails the gate. When the plan selects none of the lane's `packages`, the test step is skipped, and the job reports zero tests, which the gate accepts.
+- The job restores the tools, the sources and its own target cache, and on a push to the default branch, a schedule and a manual run it saves its own target cache (`velnor-tgt-<job>...`). It never writes the root's target cache or the sources cache, so the lane's feature-on build stays out of the default job's cache and the other way round. The first run after the key appears has a cold target cache.
+- The job costs its own setup (checkout, tools restore, target restore). The saving is the lane's own steps, which leave the critical path when the default test job is the longer one.
+- Lanes of one root that name the same features share one lint step and one rustdoc step inline. As jobs they are independent, so each parallel lane runs its own.
+- A root of a workspace group cannot have a lane, as before.
+- The key needs velnor-ci 0.1.107 or later, because the pinned velnor-ci reads `.velnor/rust-ci.toml` and refuses a key it does not know; `velnor-gen generate` refuses an older pin when a lane sets `job = "parallel"`. A lane without the key keeps the 0.1.93 requirement below. The job id of a lane with a flag carries the flag's words, for example `rust-lane-all-features`.
+
+`timeout_minutes` is optional, 1 to 360, and sets the time limit of the lane's job when `job = "parallel"`. The lane's job takes it instead of its root's `[root_timeouts]` value or `timeout_minutes`. An inline lane (the default) has no job of its own: it runs inside its root's test job, which then takes the larger of its own limit and the lane's, so a lane can raise that job but never lower it. The key needs velnor-ci `0.1.109` or later, see Per-root time limits.
 
 The pinned velnor-ci reads `.velnor/rust-ci.toml` at run time and rejects a key it does not know, so any `[[test_lane]]` needs velnor-ci 0.1.93 or later, the first release that accepts the key and runs `lane-guard`. `velnor-gen generate` refuses an older pin when the file has a lane, filtered or not.
 
@@ -246,7 +370,7 @@ These keys choose which jobs a run starts. The defaults are in the table in [`do
 - `on_main` is `"affected"` (default) or `"everything"`. It sets what a push to the default branch and a merge queue run select.
 - `full_run` is `"nightly"` (default), `"hourly"`, `"weekly"`, `"off"` or a five-field cron expression. It sets the schedule of the run that selects everything.
 - `skip_draft_pull_requests` is `false` (default). With `true`, a draft pull request runs nothing. It cannot be combined with `pr_ci = "label"`.
-- `timeout_minutes` is the time limit of each job, 1 to 360, `30` by default.
+- `timeout_minutes` is the time limit of each job, 1 to 360, `30` by default. A root can have its own limit in `[root_timeouts]`, and a lane or group its own in `timeout_minutes`, as the sections on per-root and lane time limits describe.
 - `runner` is the runner label of every job, `"ubuntu-latest"` by default. See Fork pull requests for `hosted` and `fork_runner`.
 - `required_check` is the name of the one required check, `"Required"` by default. The name must not be blank or contain a control character. Any other name needs velnor-ci `0.1.97` or later, because the helper finds the check by that name.
 - `default_branch` is `"main"` by default. It must equal the repository's default branch, or the run fails.
@@ -258,6 +382,18 @@ The shapes, and the jobs each one starts:
 | `one-job` | `rust` | `auto` and `.velnor/rust-ci-timings.json` has no entry for the root, or the shorter of its lint build and test build takes 5 s or less |
 | `lint-test` | `rust-lint`, `rust-test` | `auto` and the shorter build takes more than 5 s |
 | `groups` | `rust-lint`, `rust-test` (builds the tests once), `rust-test-default`, `rust-test-<name>` | `shape = "groups"`, or the root has a `[[test_groups]]` entry |
+
+## External workflows
+
+`external_workflows` lists hand-written workflows that `velnor-gen check` must not flag:
+
+```toml
+external_workflows = [".github/workflows/image.yml"]
+```
+
+Each entry is a file directly under `.github/workflows/` with a `.yml` or `.yaml` extension. Without the key, `velnor-gen check` reports every workflow it does not generate as unowned (`has no generated header and no generator owns it`), and the ways out are to delete the file, to list it here, or (deprecated) to keep the retired `.velnor/config.toml`. A listed file is skipped by `check` and `generate`; every other unowned file still fails. `velnor-gen` refuses an entry that does not exist, an entry that names a file velnor-gen writes or one that carries its header. The key needs `velnor-ci` 0.1.109 or later (`velnor-gen pin-helper 0.1.109`), because the helper reads the same file and rejects an unknown key. A hand-written workflow listed here is not checked or generated by velnor-gen, so it must be reviewed on its own.
+
+The retired `.velnor/config.toml` still makes `velnor-gen check` skip every unowned workflow. That bypass is deprecated: while it is in effect `check` prints one notice per workflow it hides (`use external_workflows (velnor-ci ≥ 0.1.109)`). It will be removed once the repositories that rely on it list their workflows under `external_workflows`.
 
 ## Files and packages
 
@@ -288,6 +424,19 @@ The shapes, and the jobs each one starts:
 
 `helper = { path = "tools/velnor-ci" }` names a folder of this repository that holds the source of `velnor-ci`. The generated workflow then builds the helper from that folder instead of using a release. A trailing `/` is removed. The path must be a valid repository path.
 
+## Checking the helper lock
+
+`velnor-gen check` reads `.velnor/rust-ci.lock` before it compares the generated files. Offline it refuses a lock whose `[velnor-gen]` entry disagrees with itself or with the running binary. Each message starts with the field it names: `version:`, `commit:` or `[velnor-gen] <platform>`. A `[velnor-gen]` digest that is not 64 lowercase hex digits, or that lacks a required platform, is refused the same way. The checks are these:
+
+- The `version` and `commit` must be well-formed (a numeric `MAJOR.MINOR.PATCH` and 40 lowercase hex digits).
+- A running `velnor-gen` that is a release build of the lock's commit (it stamps that commit with `VELNOR_COMMIT`) must have the lock's version. Its own SHA-256 must equal the lock's digest for its platform, when that platform is listed.
+- A running release build of the lock's version but another commit is refused: the lock names the wrong commit.
+- A local build stamps no commit (`unknown`). Its bytes are not the published binary, so nothing about it is compared, and a newer or older release that the lock does not pin is not compared either.
+
+Offline, `check` cannot tell that a lock names a wrong version or commit when the running binary is a different release. That needs the network.
+
+`velnor-gen check --verify-release` also downloads `SHA256SUMS`, `COMMIT` and, when it is listed, `BINARY-SHA256SUMS` of the lock's release and pins the release again from them. It refuses a lock that differs from what the release publishes, and names the first field that differs (`commit:` or `[velnor-ci]`, `[velnor-ci-binary]`, `[velnor-gen]` with the platform). It needs the network and fails without it, so it is not run by default.
+
 ## Test groups
 
 Heavy or special tests get their own job; every other test stays in the default job. A group names a nextest filterset, what its tests need and the limits of its job.
@@ -305,8 +454,10 @@ root = "."
 
 - `name` is the job name `rust-test-<name>` (then the root suffix when the repository has several roots). It uses letters, digits, `_` and `-`, at most 40 characters, and is not `default`.
 - `filter` is a nextest filterset. The group job runs the tests the plan selects that this filter matches. Write nextest's `and`, `or` and `not` instead of `&`, `|` and `!`: a generated `run:` value is one command with no `&`, `|`, `;`, quote, `$`, backtick, backslash, `<` or line break. An empty filter is refused.
-- `needs` lists what the job needs before the tests start. `"docker"` adds a step that runs `docker info`, so a runner without Docker fails there. `"cargo"` installs the full toolchain, as the build job does, but restores no target or sources cache. Nothing else is installed: a group with no need installs only cargo-nextest. A test that calls `cargo` may print `Compiling` for its own build, and it must not rebuild the suite.
-- `test_threads` (1 to 256) becomes `--test-threads` for that job only. `timeout_minutes` (1 to 360) and `runner` replace the repository values for that job only.
+- `needs` lists what the job needs before the tests start. `"docker"` adds a step that runs `docker info`, so a runner without Docker fails there. `"cargo"` installs the full toolchain, as the build job does, but restores no target or sources cache unless `restore_cache = true` is set. Nothing else is installed: a group with no need installs only cargo-nextest. A test that calls `cargo` may print `Compiling` for its own build, and it must not rebuild the suite.
+- `restore_cache = true` adds restore steps for the sources cache and the target cache, followed by `velnor-ci inputs restore-all`, so a setup script or a test that builds an app starts from the cache the build job saved. The group job restores the same entries as the build job of its root (`rust-test`, or `rust-test-<root>` with several roots), under the same key and restore keys, and the restore comes after the checkout, the helper install and `velnor-ci prepare`, and before the archive download, the setup steps and the tests. The job never saves: it has no save step, `cache-mode` stays `read`, and so a pull request restores the default branch's cache and writes nothing to it. The key needs `needs = ["cargo"]`, and generation refuses it without. The key needs `velnor-ci` 0.1.108 or later, because `velnor-ci` reads the same file, and generation refuses an older pin when any group writes the key, `false` too. A group without the key renders as before. The restore uses the cache of the build job, so the first run after the key appears restores nothing until a push to the default branch has saved one. The key adds no `mbx_remote` step (see Optional mbx remote cache) and no per-pull-request delta layer; a repository with `mbx_shared_store = true` already gets the store steps in every group job.
+- `no_tests = "fail" | "warn" | "pass"` becomes `--no-tests=<value>` for that group's test run. It says what nextest does when the group's filter or binary selects no test. **The default is `"fail"`**: a group that matches nothing now fails instead of passing silently, so `[[test_groups]]` consumers see a changed `--no-tests` value in the regenerated workflow (`--no-tests=pass` before this change). Set `no_tests = "pass"` to keep the old behaviour, or `"warn"` to pass with a warning. Other values are refused. The key needs `velnor-ci` 0.1.108 or later, and generation refuses an older pin when any group writes it. The default job (`rust-test-default`) still renders `--no-tests=pass`, because the plan narrows it to the changed packages.
+- `test_threads` (1 to 256) becomes `--test-threads` for that job only. `timeout_minutes` (1 to 360) and `runner` replace the repository values for that job only. A group without `timeout_minutes` takes its root's `[root_timeouts]` value, then the repository value; see Per-root time limits.
 - `root` is the folder of the Cargo root's `Cargo.toml`, or `.`. It is required when the repository has several Cargo roots, and it must name a root with nextest tests.
 - `paths` (globs, as in `inputs`) and `events` (`pull_request`, `push`, `merge_group`, `schedule`, `workflow_dispatch`) are optional. A group with neither key runs whenever its root is selected. A group with either key is decided at run time by `velnor-ci plan`, which writes one output `rust_<root>_group_<name>` (`run` or `skip`) that is the job's `if`. The group runs when its root has a selected package and one of these holds, in this order: the event is a push to the default branch (every group runs, but only where the default lanes select the root); the event is listed in `events`; the event is a merge group and the group sets no `paths` (`events` never skip a group on a merge group); a changed path matches `paths`; every package is selected. Otherwise the job is skipped, and the `Required` check expects it to be skipped. On a merge group, `paths` are matched against the merge group's own base to head diff, the same diff the default lanes select by; when that diff cannot be computed, every package is selected and every group runs. `velnor-ci plan --explain` and the plan summary say why each group ran or was skipped. On a push to the default branch the groups follow exactly the same selection as the default lanes, neither stricter nor looser: with `on_main = "affected"` a docs-only push selects no package, so the lanes and every group skip; with `on_main = "everything"` the lanes and every group run. The default job still leaves out the group's tests, so tests of a skipped group do not run in that workflow run.
 - `hosted = true` or `hosted = false` declares the group's `runner` (see Fork pull requests). It needs a `runner` in the same group, and, like the top-level key, `velnor-ci` 0.1.99.
@@ -357,7 +508,7 @@ Every tool a lint entry needs is checked at generation. The tool must be pinned 
 
 ### Generated workflows cannot be edited by hand
 
-The seal in a generated workflow is an unkeyed SHA-256, so anyone can recompute it after a hand edit. `[[lint]]` with `kind = "generated-check"` (no other key) adds the job `lint-generated-check`, which runs `velnor-gen check` on the pull request's checkout and fails when any generated file differs from what `.velnor/*.toml` renders. It is off unless the entry exists, and it needs `.velnor/rust-ci.lock` to pin a release that ships `velnor-gen` archives.
+The seal in a generated workflow is an unkeyed SHA-256, so anyone can recompute it after a hand edit. `[[lint]]` with `kind = "generated-check"` (no other key) adds the job `lint-generated-check`, which runs `velnor-gen check --verify-release` on the pull request's checkout (the release's checksums and commit are read from github.com without a token) and fails when any generated file differs from what `.velnor/*.toml` renders. It is off unless the entry exists, and it needs `.velnor/rust-ci.lock` to pin a release that ships `velnor-gen` archives.
 
 The job has `contents: read` and no secrets, and no selection applies to it: it runs on every pull request, merge group and push, in a draft too, and it never waits for the plan or skips after a queue run. `Required` lists it in `needs` and in its gate spec like any lint job.
 
@@ -623,7 +774,7 @@ A `[[workflow.case]]` is one qualification case that runs on a hosted runner and
 - `run` is one simple command: no line break, no `;`, `|`, `&`, `$(`, backtick, `if`, `for`, `while` or `case`, and no `${{ }}`. Pass values through `env`. A command that runs `velnor-ci` needs `helper = true` on its job, and its first argument must be a subcommand of `velnor-ci`; a test keeps the list in step with the helper. The command word is found after leading `NAME=VALUE` assignments and after every `env` prefix with its options (`-C <dir>`, `-u <name>`, `-i`, `-S <string>`, `--chdir=<dir>`, `--`), so `env -C stage velnor-ci check` is a helper call like `velnor-ci check`, and `env -C scripts ./publish.sh` is a repository script for the write token rule like `./publish.sh`. A `velnor-ci` reached through a path inside the workspace (`./velnor-ci`, `stage/velnor-ci`) is a binary of the repository, not the helper; an absolute path, `~`, `$` or a `..` part still names the helper. The same search looks through the other command wrappers, chains of them included: `nohup`, `exec`, `builtin`, `command` (`command -v` and `-V` only look a name up, so they run nothing), `nice [-n N]`, `ionice`, `timeout [options] DURATION`, `stdbuf`, `time` and `xargs` (the command after its options), so `nohup velnor-ci check`, `timeout 5 velnor-ci check` and `xargs ./publish.sh` are read like `velnor-ci check` and `./publish.sh`. `sh`, `bash`, `dash`, `zsh`, `ksh` and `ash` with `-c` run their script string, which is read the same way when it holds no `$` and no backtick; a script with an expansion, an unclosed quote or a shell keyword (`if`, `for`, `{`) cannot be read, and neither can `eval`, `source`, `.`, `sudo`, `doas`, `su`, `setsid`, `flock`, `find -exec`, `xargs` with a replaced command word, an option the scan does not know, or a command word that is an expansion. Such a command counts as a repository script for the write token rule, and a `velnor-ci` word anywhere in it counts as a helper call. Every command of a sequence (`;`, `&&`, `||`, `|`, `&`, a subshell, a line break) is read as well, although the render rules above already refuse the operators.
 - `helper = "<command>"` renders `run: velnor-ci <command>` and needs `helper = true` on its job; `<command>` is a subcommand of `velnor-ci`, such as `validate-artifact-id`.
 - A job whose permissions include a `write` scope refuses a step that reads `${{ github.token }}` in its `env` and runs a repository script (a command word, after the wrappers above, that is a path or `ash`, `bash`, `dash`, `fish`, `ksh`, `make`, `node`, `perl`, `python`, `python3`, `ruby`, `sh` or `zsh`, or a command that cannot be read) or a local action, so a script of the repository does not hold a write-capable token. Other commands, such as `gh release create`, are not refused.
-- `uses` names a SHA-pinned action from this fixed list: `checkout`, `mise`, `upload-artifact`, `download-artifact`, `cache` (`actions/cache`), `cache-restore`, `cache-save`, `attest` (`actions/attest-build-provenance`), `github-script` and `mr-boxington` (`jdx/mr-boxington-action`). `with` sets its inputs. An input the pinned action does not have, or one with no default that is missing (`path` for `upload-artifact`, `path` and `key` for the cache actions, `script` for `github-script`), is refused; input names are compared without regard to case. A `github-script` `script` must be exactly one `console.log('<plain text>')` statement, with no quote, backslash, backtick or `$` inside the text, because decisions and loops live in the helper; its `github-token` must be `${{ github.token }}`, `${{ secrets.NAME }}` or `${{ env.NAME }}`. Adding an action is a change to this list, not to the model.
+- `uses` names a SHA-pinned action from this fixed list: `checkout`, `mise`, `upload-artifact`, `download-artifact`, `cache` (`actions/cache`), `cache-restore`, `cache-save`, `attest` (`actions/attest-build-provenance`), `github-script`, `mr-boxington` (`jdx/mr-boxington-action`), `docker-login` (`docker/login-action`), `docker-build-push` (`docker/build-push-action`) and `create-github-app-token` (`actions/create-github-app-token`). Each is pinned to the full commit SHA the renderer emits, never a tag, and a declared step cannot name another commit or a tag. `with` sets its inputs; `create-github-app-token` requires `private-key`, which is a secret, and a declared `with` never reads a secret (see the expression rules below), so that action cannot authenticate from a declared workflow today. An input the pinned action does not have, or one with no default that is missing (`path` for `upload-artifact`, `path` and `key` for the cache actions, `script` for `github-script`), is refused; input names are compared without regard to case. A `github-script` `script` must be exactly one `console.log('<plain text>')` statement, with no quote, backslash, backtick or `$` inside the text, because decisions and loops live in the helper; its `github-token` must be `${{ github.token }}`, `${{ secrets.NAME }}` or `${{ env.NAME }}`. Adding an action is a change to this list, not to the model. `create-github-app-token` is allowed but cannot receive a private key in a declared workflow; image or release workflows that need an App token stay hand-written.
 - `uses` also names a local action, and only these three paths are allowed: `./qualification/actions/post-fail`, `./qualification/actions/docker` and `./qualification/actions/composite`. They take no `with`. Any other local path, such as `./.github/actions/x`, fails generation, so a repository action cannot reach a job by accident. The job must run an unconditional `checkout` step without `path` before it, because a local action is read from the checked out repository. The generator writes the `# zizmor: ignore[self-repository]` note after each one.
 - Locked inputs: `checkout` always has `persist-credentials: false`; `mise` always has `cache: false` and `cache_save: false`; `attest` always has `push-to-registry: false`. Setting one to anything but `false` is refused, and setting it to `false` is accepted and written once. `attest` is refused unless its job has `id-token = "write"` and `attestations = "write"`.
 - A job that grants `id-token` or `attestations` write and runs repository code (a `cargo` command, a command word that is a path or a script runner, or a local action) before its `attest` step is not refused: `velnor-gen generate` and `check` print a `warning:` note that names the workflow, the job and the step. The fix is to split the job, as `release.yml` does for its `sums-family`: a build job with `contents: read` uploads the artifact, and an attest job with `id-token` and `attestations` write downloads it and runs no repository code. A job with no `attest` step gets no warning.

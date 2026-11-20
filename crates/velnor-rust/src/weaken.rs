@@ -4,7 +4,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use toml::Value;
-use velnor_model::{ChangeSet, DocsRun, PathGlob, RepoFacts, RepoPath, RustRoot, Weakening};
+use velnor_model::{
+    ChangeSet, DocsRun, MbxMode, PathGlob, RepoFacts, RepoPath, RustRoot, Weakening,
+};
 
 use crate::cargo_flags::flag_tokens;
 use crate::config::{CONFIG_PATH, parse};
@@ -130,6 +132,12 @@ fn in_file(file: &RepoPath, bytes: &[u8]) -> Vec<Weakening> {
                     found.push(make(
                         "check_alone = \"post_merge\"".to_owned(),
                         "skips the per-crate alone checks on pull requests and in the merge queue, so a missing feature declaration is found only after the merge".to_owned(),
+                    ));
+                }
+                if config.mbx == MbxMode::Off {
+                    found.push(make(
+                        "cache.mbx = false".to_owned(),
+                        "runs cargo outside mbx, so no compiler results are shared and the mise cargo wrapper is not checked".to_owned(),
                     ));
                 }
                 found
@@ -316,6 +324,7 @@ fn mise(parsed: &toml::Table, make: &Make<'_>) -> Vec<Weakening> {
         .into_iter()
         .flatten()
         .filter(|(name, _)| matches!(name.as_str(), "rustc" | "rustdoc") || cargo_tool(name))
+        .filter(|(name, wrapper)| !standard_mbx(name, wrapper))
         .map(|(name, wrapper)| {
             let command = wrapper
                 .get("command")
@@ -334,4 +343,11 @@ fn mise(parsed: &toml::Table, make: &Make<'_>) -> Vec<Weakening> {
 
 fn cargo_tool(name: &str) -> bool {
     name == "cargo" || name.starts_with("cargo-")
+}
+
+/// The owner standard MBX layout (`mise.toml`: `[wrappers.cargo]` with exactly
+/// `command = "mbx"` and `env = { MBX_CARGO_SHIM_MODE = "1" }`). Any other key,
+/// value or command is a different wrapper and stays named.
+fn standard_mbx(name: &str, wrapper: &Value) -> bool {
+    name == "cargo" && crate::mbx_layout::standard_wrapper(wrapper)
 }

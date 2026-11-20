@@ -6,16 +6,29 @@ use velnor_model::{PrivateSources, RepoPath, RootSlug, StepKind};
 use crate::gate::sources_step;
 use crate::release_steps::{APP_TOKEN_COMMIT, APP_TOKEN_VERSION, shell_word};
 use crate::rules::{APP_TOKEN_ACTION, RenderedStep, Value};
+use crate::steps::RUN;
 
 pub(crate) const TOKEN_STEP: &str = "private-token";
 pub(crate) const CHECK_STEP: &str = "private-check";
-const TOKEN_ALLOWED: &str = "${{ (github.event_name == 'merge_group' && steps.private-check.outputs.allowed == 'true') || (github.event_name != 'merge_group' && (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && !endsWith(github.actor, '[bot]') && !endsWith(github.event.pull_request.user.login, '[bot]')))) }}";
+
+pub(crate) mod release_asset_steps;
+
+/// The condition for creating an App token: a merge queue entry that `check` allowed, or a run
+/// that is not a fork pull request and not a bot's.
+pub(crate) fn token_allowed(check: &str) -> String {
+    format!(
+        "(github.event_name == 'merge_group' && steps.{check}.outputs.allowed == 'true') || (github.event_name != 'merge_group' && (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && !endsWith(github.actor, '[bot]') && !endsWith(github.event.pull_request.user.login, '[bot]'))))"
+    )
+}
 
 pub(crate) fn render(kind: &StepKind) -> RenderedStep {
     match kind {
         StepKind::PrivateCheck { .. } => check(),
         StepKind::PrivateToken { sources, .. } => token(sources),
         StepKind::PrivateFetch { manifests, .. } => fetch(manifests),
+        StepKind::ReleaseAssets { assets, part } => {
+            crate::private_steps::release_asset_steps::render(assets, part)
+        }
         _ => RenderedStep::default(),
     }
 }
@@ -41,7 +54,7 @@ pub(crate) fn release_phase(sources: &PrivateSources, manifest: &str) -> [Render
     ]
 }
 
-fn check() -> RenderedStep {
+pub(crate) fn check() -> RenderedStep {
     RenderedStep {
         id: Some(CHECK_STEP.to_owned()),
         name: "Check that the merge queue entry is not from a fork".to_owned(),
@@ -69,7 +82,7 @@ fn token(sources: &PrivateSources) -> RenderedStep {
     RenderedStep {
         id: Some(TOKEN_STEP.to_owned()),
         name: "Create a read-only token for the private repositories".to_owned(),
-        condition: Some(TOKEN_ALLOWED.to_owned()),
+        condition: Some(format!("${{{{ {} }}}}", token_allowed(CHECK_STEP))),
         uses: Some(format!("{APP_TOKEN_ACTION}@{APP_TOKEN_COMMIT}")),
         uses_comment: Some(APP_TOKEN_VERSION.to_owned()),
         with: vec![
@@ -91,6 +104,27 @@ fn token(sources: &PrivateSources) -> RenderedStep {
                 Value::Text("read".to_owned()),
             ),
         ],
+        ..RenderedStep::default()
+    }
+}
+
+/// The advisory DB is public, so this step runs with no token and no private config
+/// (the job environment carries neither); cargo-deny then reads it with `--offline`.
+pub(crate) fn advisory_fetch(configs: &[Option<RepoPath>]) -> RenderedStep {
+    let run = configs
+        .iter()
+        .map(|config| match config {
+            Some(path) => format!(
+                "{RUN} cargo-deny --config {} fetch db",
+                shell_word(path.as_str())
+            ),
+            None => format!("{RUN} cargo-deny fetch db"),
+        })
+        .collect::<Vec<_>>()
+        .join(" && ");
+    RenderedStep {
+        name: "Fetch the RustSec advisory database".to_owned(),
+        run: Some(run),
         ..RenderedStep::default()
     }
 }

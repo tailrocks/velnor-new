@@ -10,8 +10,8 @@ use velnor_model::{CommitSha, HelperRelease, HelperVersion, Platform, RepoPath, 
 
 pub const LOCK_PATH: RepoPath = RepoPath::from_static(".velnor/rust-ci.lock");
 const RELEASES: &str = "https://github.com/tailrocks/velnor-new/releases/download";
-const CI: &str = "velnor-ci";
-const GENERATOR: &str = "velnor-gen";
+pub(crate) const CI: &str = "velnor-ci";
+pub(crate) const GENERATOR: &str = "velnor-gen";
 const BINARY_SUMS: &str = "BINARY-SHA256SUMS";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -33,19 +33,19 @@ impl LockError {
 
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct Lock {
-    version: String,
-    commit: String,
+pub(crate) struct Lock {
+    pub(crate) version: String,
+    pub(crate) commit: String,
     #[serde(rename = "velnor-ci")]
-    ci: BTreeMap<String, String>,
+    pub(crate) ci: BTreeMap<String, String>,
     #[serde(
         rename = "velnor-ci-binary",
         default,
         skip_serializing_if = "Option::is_none"
     )]
-    ci_binary: Option<BTreeMap<String, String>>,
+    pub(crate) ci_binary: Option<BTreeMap<String, String>>,
     #[serde(rename = "velnor-gen")]
-    generator: BTreeMap<String, String>,
+    pub(crate) generator: BTreeMap<String, String>,
 }
 
 pub fn release_version(text: &str) -> Result<HelperVersion, LockError> {
@@ -201,7 +201,7 @@ fn check_commit_digest(commit: &str, listed: &BTreeMap<&str, &str>) -> Result<()
     }
 }
 
-fn release_commit(text: &str) -> Result<CommitSha, LockError> {
+pub(crate) fn release_commit(text: &str) -> Result<CommitSha, LockError> {
     CommitSha::new(text)
         .map_err(|_| LockError(format!("commit {text:?} must be 40 lowercase hex digits")))
 }
@@ -269,7 +269,7 @@ fn digests(
     Ok(found)
 }
 
-fn check_digests(found: &BTreeMap<String, String>) -> Result<(), LockError> {
+pub(crate) fn check_digests(found: &BTreeMap<String, String>) -> Result<(), LockError> {
     let known = |name: &String| Platform::ALL.iter().any(|p| p.file_suffix() == name);
     let complete = Platform::REQUIRED
         .iter()

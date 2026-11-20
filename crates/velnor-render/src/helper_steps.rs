@@ -234,7 +234,7 @@ pub(crate) use crate::generator_steps::install_generator_step;
 pub(crate) fn generator_check_step() -> RenderedStep {
     RenderedStep {
         name: "Check the generated workflow".to_owned(),
-        run: Some("velnor-gen check".to_owned()),
+        run: Some("velnor-gen check --verify-release".to_owned()),
         ..RenderedStep::default()
     }
 }
@@ -280,6 +280,21 @@ pub(crate) const MBX_ACTION_SHA: &str = "88acf2bb50552c7c508cbac13e5f8c576b95b1d
 /// pin in the repository's `mise.toml`, so every job runs the same compiler cache.
 const MBX_VERSION: &str = "1.30.0";
 
+pub(crate) fn mbx_private_step() -> RenderedStep {
+    RenderedStep {
+        name: "Private mbx store".to_owned(),
+        run: Some("echo \"MBX_CACHE_DIR=$RUNNER_TEMP/mbx\" >> \"$GITHUB_ENV\"".to_owned()),
+        ..RenderedStep::default()
+    }
+}
+
+pub(crate) fn mbx_local_step(kind: &velnor_model::StepKind) -> RenderedStep {
+    match kind {
+        velnor_model::StepKind::MbxPrivate => mbx_private_step(),
+        _ => mbx_store_step(),
+    }
+}
+
 pub(crate) fn mbx_remote_step() -> RenderedStep {
     use crate::rules::Value;
     let text = |key: &str, value: &str| (key.to_owned(), Value::Text(value.to_owned()));
@@ -302,6 +317,8 @@ pub(crate) fn mbx_remote_step() -> RenderedStep {
                 "save-on-pull-request",
                 "${{ github.event.pull_request.head.repo.full_name == github.repository }}",
             ),
+            // Off: only non-default protected branches. Default-branch pushes
+            // save by the action's built-in rule, which needs no input.
             text("save-on-protected-branch", "false"),
             text("save-on-workflow-dispatch", "false"),
         ],

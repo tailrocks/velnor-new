@@ -14,8 +14,7 @@ use crate::lock_archive::archive_lock_at;
 use crate::pipeline::workflow;
 
 pub(crate) const CHECK: &str = "[[lint]]\nkind = 'generated-check'\n";
-/// The first helper that reads `kind = "generated-check"`; every check fixture pins it.
-pub(crate) const CHECK_HELPER: &str = "0.1.108";
+pub(crate) const CHECK_HELPER: &str = "0.1.109";
 const ID: &str = "lint-generated-check";
 const X64: &str = "2a3ff18c1c5fc61a10aa66976ccf1fe669daa4af4eafec260b4c87d81afdf8f9";
 const ARM64: &str = "300f6b8a0d89cfe0643433710d7df3453c3524e7ff84c7dfc84854a78c7e120c";
@@ -72,8 +71,23 @@ fn the_check_job_runs_on_every_event_with_nothing_but_read_access_to_the_pull_re
     );
     assert_eq!(
         runs(&job).last().map(String::as_str),
-        Some("velnor-gen check")
+        Some("velnor-gen check --verify-release")
     );
+    Ok(())
+}
+
+#[test]
+fn the_check_step_verifies_the_release_without_any_token_or_secret() -> TestResult {
+    let text = rendered(CHECK)?;
+    let job = job(&text)?;
+    let steps = job["steps"].as_array().ok_or("no steps")?;
+    let check = steps
+        .iter()
+        .find(|step| step["run"].as_str() == Some("velnor-gen check --verify-release"))
+        .ok_or("no check step runs velnor-gen check --verify-release")?;
+    assert_eq!(check["env"], serde_json::Value::Null, "{check}");
+    assert!(!check.to_string().contains("GITHUB_TOKEN"), "{check}");
+    assert!(!check.to_string().contains("secrets"), "{check}");
     Ok(())
 }
 
@@ -95,7 +109,7 @@ fn the_check_runs_the_pinned_release_after_its_digest_is_verified_and_never_a_bu
     let env = &install["env"];
     assert_eq!(
         env["VELNOR_GEN_RELEASE"],
-        "https://github.com/tailrocks/velnor-new/releases/download/tools-v0.1.108"
+        "https://github.com/tailrocks/velnor-new/releases/download/tools-v0.1.109"
     );
     let archive = env["VELNOR_GEN_ARCHIVE"].as_str().ok_or("no archive")?;
     let digest = env["VELNOR_GEN_SHA256"].as_str().ok_or("no digest")?;

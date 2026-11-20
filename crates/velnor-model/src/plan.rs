@@ -7,8 +7,9 @@ use crate::budget_mode::SelectionName;
 use crate::cron::CronExpr;
 use crate::hosted::HostedRunners;
 use crate::ids::{JobId, PackageName, RepoPath, RootSlug, RunnerLabel, TargetName};
-use crate::repo::TargetKind;
-use crate::steps::StepKind;
+use crate::repo::{LaneFeatures, TargetKind};
+use crate::steps::{StepKind, VerifiedSave};
+use crate::test_group::NoTests;
 
 pub const LINT_STEP: &str = "Lint";
 pub const TEST_STEP: &str = "Test";
@@ -102,6 +103,9 @@ pub struct Job {
     pub plan_outputs: Vec<(RootSlug, GateNeed)>,
     pub group_outputs: Vec<(RootSlug, JobId)>,
     pub reports_ignored: bool,
+    /// The pinned helper records the build in its test step (`outputs.built`), so the saves
+    /// may wait for that record instead of a build step.
+    pub records_build: bool,
     /// Titles the job with the selection of the run, read from the plan outputs.
     pub selection_name: Option<SelectionName>,
     pub steps: Vec<Step>,
@@ -261,7 +265,12 @@ pub enum When {
     SaveToolsOnDefaultBranch,
     RestoreToolsUnlessLocal,
     SaveToolsUnlessLocal,
+    /// On a trusted saving run, when the node store already served the tools: looks the network entry up.
+    LookupToolsOnNodeHit,
     PrimeToolsFromNetwork,
+    /// A tools save of a job whose restore is verified: it also waits for the tools to equal
+    /// the anchor that the trusted run recorded.
+    SaveVerifiedTools(VerifiedSave),
     SaveBase,
     SaveBaseDecided,
     SaveSources,
@@ -296,19 +305,20 @@ pub enum CargoCommand {
         ci_profile: bool,
     },
     NextestFeatures {
-        features: Vec<String>,
+        features: LaneFeatures,
         packages: Vec<PackageName>,
         filter: FilterRef,
         ci_profile: bool,
+        reports: bool,
     },
     ClippyFeatures {
-        features: Vec<String>,
+        features: LaneFeatures,
     },
     DocFeatures {
-        features: Vec<String>,
+        features: LaneFeatures,
     },
     LaneGuard {
-        features: Vec<String>,
+        features: LaneFeatures,
         packages: Vec<PackageName>,
         filter: String,
         except: Vec<String>,
@@ -321,6 +331,7 @@ pub enum CargoCommand {
         filter: FilterRef,
         threads: Option<u16>,
         ci_profile: bool,
+        no_tests: NoTests,
     },
     TestTarget {
         package: PackageName,
@@ -343,6 +354,16 @@ impl CargoCommand {
         !matches!(
             self,
             Self::FmtCheck | Self::Deny { .. } | Self::Machete | Self::NextestRunArchive { .. }
+        )
+    }
+
+    #[must_use]
+    pub const fn reports_tests(&self) -> bool {
+        matches!(
+            self,
+            Self::NextestRun { .. }
+                | Self::NextestRunArchive { .. }
+                | Self::NextestFeatures { reports: true, .. }
         )
     }
 
@@ -371,17 +392,4 @@ pub enum FilterRef {
         exclude: Vec<String>,
         except: Vec<String>,
     },
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Shape {
-    OneJob,
-    LintAndTest,
-    BuildThenGroups,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ShapeDecision {
-    pub shape: Shape,
-    pub reason: String,
 }

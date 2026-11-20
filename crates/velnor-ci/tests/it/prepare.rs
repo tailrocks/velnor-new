@@ -5,6 +5,7 @@ use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
+use velnor_test_support::real_cargo;
 
 pub(crate) const MISE: &str =
     "[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n";
@@ -86,6 +87,7 @@ pub(crate) struct Setup {
     pub env: Vec<(&'static str, &'static str)>,
     pub os_release: OsRelease,
     pub cargo_home: Option<std::ffi::OsString>,
+    pub rustup_home: Option<PathBuf>,
     pub args: Vec<&'static str>,
 }
 
@@ -107,6 +109,7 @@ impl Setup {
             env: Vec::new(),
             os_release: OsRelease::Fixture,
             cargo_home: None,
+            rustup_home: None,
             args: Vec::new(),
         }
     }
@@ -162,7 +165,7 @@ fn write_os_release(dir: &Path) -> PathBuf {
     path
 }
 
-fn prepare_in(dir: &Path, setup: &Setup) -> Run {
+pub(crate) fn prepare_in(dir: &Path, setup: &Setup) -> Run {
     let checkout = dir.join("checkout");
     let bin = dir.join("bin");
     let cargo_home = dir.join(setup.cargo_home.as_deref().unwrap_or("cargo-home".as_ref()));
@@ -231,6 +234,9 @@ fn prepare_in(dir: &Path, setup: &Setup) -> Run {
     if setup.os_release == OsRelease::Fixture {
         command.env("VELNOR_OS_RELEASE", write_os_release(dir));
     }
+    if let Some(home) = &setup.rustup_home {
+        command.env("RUSTUP_HOME", home);
+    }
     for (name, value) in &setup.env {
         command.env(name, value);
     }
@@ -273,7 +279,7 @@ pub(crate) fn output<'a>(run: &'a Run, name: &str) -> &'a str {
 }
 
 fn effective(dir: &Path) -> Output {
-    let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
+    let cargo = real_cargo();
     Command::new(cargo)
         .args(["-Zunstable-options", "config", "get", "profile.dev"])
         .current_dir(dir.join("checkout"))

@@ -4111,6 +4111,7 @@ dependencies = [
  "tar",
  "tempfile",
  "velnor-runner-image-manifest",
+ "velnor-test-support",
 ]
 
 [[package]]
@@ -4122,7 +4123,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-ci"
-version = "0.1.106"
+version = "0.1.108"
 dependencies = [
  "blake3",
  "clap",
@@ -4141,12 +4142,13 @@ dependencies = [
  "velnor-release",
  "velnor-render",
  "velnor-rust",
+ "velnor-test-support",
  "zip",
 ]
 
 [[package]]
 name = "velnor-gen"
-version = "0.1.106"
+version = "0.1.108"
 dependencies = [
  "clap",
  "serde-saphyr",
@@ -4157,6 +4159,7 @@ dependencies = [
  "velnor-release",
  "velnor-render",
  "velnor-rust",
+ "velnor-test-support",
  "velnor-workflows",
 ]
 
@@ -4188,6 +4191,7 @@ name = "velnor-model"
 version = "0.0.0"
 dependencies = [
  "sha2",
+ "toml",
 ]
 
 [[package]]
@@ -4352,6 +4356,10 @@ dependencies = [
  "url",
  "velnor-model",
 ]
+
+[[package]]
+name = "velnor-test-support"
+version = "0.0.0"
 
 [[package]]
 name = "velnor-workflows"

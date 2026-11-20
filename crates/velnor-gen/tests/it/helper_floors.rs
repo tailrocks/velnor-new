@@ -7,7 +7,10 @@
 
 use std::error::Error;
 
+use velnor_rust::LOCK_PATH;
+
 use crate::facts::path;
+use crate::lock_archive::archive_lock_at;
 use crate::pipeline::{pin_helper, view, workflow};
 
 const DOCS: &str = "docs = \"post_merge\"\n";
@@ -58,7 +61,7 @@ fn post_merge_check_alone_renders_on_the_first_helper_that_defers_it() -> Result
 #[test]
 fn pr_ci_label_is_refused_before_the_helper_knows_the_key() -> Result<(), Box<dyn Error>> {
     let refused = refusal(LABEL, "0.1.87")?;
-    assert!(refused.contains("PrCiHelperTooOld"), "{refused}");
+    assert!(refused.contains("ConfigKeyHelperTooOld"), "{refused}");
     Ok(())
 }
 
@@ -75,7 +78,8 @@ const REQUIRED_CHECK: &str = "required_check = \"Gate\"\n";
 #[test]
 fn cache_debug_is_refused_before_the_helper_knows_the_key() -> Result<(), Box<dyn Error>> {
     let refused = refusal(CACHE_DEBUG, "0.1.81")?;
-    assert!(refused.contains("CacheDebugHelperTooOld"), "{refused}");
+    assert!(refused.contains("ConfigKeyHelperTooOld"), "{refused}");
+    assert!(refused.contains("cache_debug"), "{refused}");
     Ok(())
 }
 
@@ -102,18 +106,32 @@ fn a_required_check_name_renders_on_the_first_helper_that_reads_it() -> Result<(
 
 const GENERATED_CHECK: &str = "[[lint]]\nkind = 'generated-check'\n";
 
+fn archived_refusal(config: &str, version: &str) -> Result<String, Box<dyn Error>> {
+    let mut repo = view(&["Cargo.toml"], None)?;
+    repo.tracked_paths.insert(LOCK_PATH);
+    repo.files
+        .insert(LOCK_PATH, archive_lock_at(version)?.into_bytes());
+    repo.files
+        .insert(path(".velnor/rust-ci.toml")?, config.as_bytes().to_vec());
+    Ok(match workflow(&repo) {
+        Ok(_) => String::new(),
+        Err(error) => format!("{error:?}"),
+    })
+}
+
 #[test]
 fn generated_check_lint_is_refused_before_the_helper_reads_its_kind() -> Result<(), Box<dyn Error>>
 {
-    let refused = refusal(GENERATED_CHECK, "0.1.107")?;
-    assert!(refused.contains("GeneratedCheckHelperTooOld"), "{refused}");
+    let refused = archived_refusal(GENERATED_CHECK, "0.1.108")?;
+    assert!(refused.contains("ConfigKeyHelperTooOld"), "{refused}");
+    assert!(refused.contains("generated-check"), "{refused}");
     Ok(())
 }
 
 #[test]
 fn generated_check_lint_renders_on_the_first_helper_that_reads_its_kind()
 -> Result<(), Box<dyn Error>> {
-    let refused = refusal(GENERATED_CHECK, "0.1.108")?;
+    let refused = archived_refusal(GENERATED_CHECK, "0.1.109")?;
     assert!(!refused.contains("HelperTooOld"), "{refused}");
     Ok(())
 }

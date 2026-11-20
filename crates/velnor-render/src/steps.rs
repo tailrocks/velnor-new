@@ -13,7 +13,7 @@ use crate::base_steps::{
     sources_fetch_all_rest, sources_locks, trimmed_lane,
 };
 use crate::budget_steps::budget_step;
-use crate::cache::{path_text, render_key};
+use crate::cache::cache_step;
 use crate::cargo::{CargoLane, cargo_step, reports_tests};
 use crate::checkout_step::checkout_step;
 use crate::gate::{
@@ -142,6 +142,10 @@ fn job_steps(
     lane: CargoLane,
 ) -> Vec<RenderedStep> {
     let gate = SaveGate::of(job);
+    let verified = job
+        .steps
+        .iter()
+        .any(|step| step.kind == StepKind::ToolsLocal(velnor_model::ToolsLocalVerb::Verify));
     job.steps
         .iter()
         .enumerate()
@@ -153,10 +157,20 @@ fn job_steps(
                 saved_after: gate.required(),
                 job_name: job.name.as_deref(),
             };
+            let mut rendered = rendered_steps(step, setup, audit, tests, lane, around);
+            let tools_key = matches!(
+                &step.kind,
+                StepKind::CacheRestore(velnor_model::CacheKey::Tools { .. })
+                    | StepKind::CacheSave(velnor_model::CacheKey::Tools { .. })
+            );
+            for body in &mut rendered {
+                body.shared |= verified && tools_key;
+            }
             Some(crate::base_steps::audited_save(
                 job,
                 step,
-                rendered_steps(step, setup, audit, tests, lane, around),
+                rendered,
+                gate.audit_runs(index),
             ))
         })
         .flatten()
@@ -233,6 +247,7 @@ fn rendered_steps(
             ),
         );
         body.working_directory = step.directory.as_ref().map(ToString::to_string);
+        body.shared |= matches!(step.when, velnor_model::When::SaveVerifiedTools(_));
         if matches!(step.kind, StepKind::InputsSave { .. })
             && step.when != velnor_model::When::SaveBase
         {
@@ -295,6 +310,7 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
         StepKind::UploadArchive { name, file } => upload_step(name, file),
         StepKind::DownloadArchive { name, into } => download_step(name, into.as_ref()),
         StepKind::CacheRestore(key) => cache_step(CACHE_RESTORE, "Restore", key, true),
+        StepKind::CacheLookup(key) => crate::tools_steps::tools_lookup(key),
         StepKind::CacheSave(key) => cache_step(CACHE_SAVE, "Save", key, false),
         StepKind::CacheDecide {
             target,
@@ -341,10 +357,12 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
         } => restored_targets_step(targets, *expiry, *cli),
         StepKind::MbxRemote => crate::helper_steps::mbx_remote_step(),
         StepKind::CratesMirror(mirror) => crate::helper_steps::mirror_step(mirror),
-        StepKind::MbxStore => crate::helper_steps::mbx_store_step(),
+        StepKind::MbxStore | StepKind::MbxPrivate => crate::helper_steps::mbx_local_step(kind),
         StepKind::PrivateCheck { .. }
         | StepKind::PrivateToken { .. }
-        | StepKind::PrivateFetch { .. } => crate::private_steps::render(kind),
+        | StepKind::PrivateFetch { .. }
+        | StepKind::ReleaseAssets { .. } => crate::private_steps::render(kind),
+        StepKind::AdvisoryFetch { configs } => crate::private_steps::advisory_fetch(configs),
         StepKind::MbxSeed | StepKind::ToolsLocal(_) => crate::helper_steps::node_step(kind),
         StepKind::TestSetup { name, run } => RenderedStep {
             name: name.clone(),
@@ -369,31 +387,5 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
             ..RenderedStep::default()
         },
         StepKind::Budget { last } => budget_step(*last),
-    }
-}
-
-fn cache_step(action: &str, verb: &str, key: &CacheKey, fallbacks: bool) -> RenderedStep {
-    let rendered = render_key(key);
-    let paths: Vec<String> = key.paths().iter().map(path_text).collect();
-    let mut with = vec![
-        (
-            "path".to_owned(),
-            crate::cache::action_path(&paths.join("\n")),
-        ),
-        ("key".to_owned(), Value::Expr(rendered.key)),
-    ];
-    if fallbacks && !rendered.restore_keys.is_empty() {
-        with.push((
-            "restore-keys".to_owned(),
-            Value::Expr(rendered.restore_keys.join("\n")),
-        ));
-    }
-    RenderedStep {
-        id: Some(crate::report::cache_id(key, fallbacks)),
-        name: format!("{verb} the {} cache", key.family()),
-        uses: Some(action.to_owned()),
-        continue_on_error: !fallbacks && crate::cache_upload::key_id(key).is_some(),
-        with,
-        ..RenderedStep::default()
     }
 }

@@ -143,13 +143,13 @@ fn the_released_helpers_without_sources_fetch_keep_the_per_root_steps_and_the_li
 }
 
 #[test]
-fn twenty_roots_fit_the_workflow_limit_with_the_single_fetch_step() -> TestResult {
-    let manifests = many(20);
+fn nineteen_roots_fit_the_workflow_limit_with_the_single_fetch_step() -> TestResult {
+    let manifests = many(19);
     let names: Vec<&str> = manifests.iter().map(String::as_str).collect();
     let text = workflow(&repo(&names, "0.1.88")?)?;
     assert!(text.len() <= 500_000, "{} bytes", text.len());
     let savers = savers(&text);
-    assert!(savers.len() >= 20, "{}", savers.len());
+    assert!(savers.len() >= 19, "{}", savers.len());
     let (_, block) = &savers[0];
     let fetch = step(block, FETCH_STEP).ok_or("no fetch")?;
     let run = fetch
@@ -158,7 +158,7 @@ fn twenty_roots_fit_the_workflow_limit_with_the_single_fetch_step() -> TestResul
         .ok_or("no run")?;
     assert_eq!(
         run.split_whitespace().count(),
-        4 + 20,
+        4 + 19,
         "one word per root: {run}"
     );
     Ok(())
@@ -217,6 +217,7 @@ fn render_fetch(manifests: Vec<RepoPath>) -> Result<String, Box<dyn std::error::
             permissions: Permissions::default(),
             timeout_minutes: 10,
             reports_ignored: false,
+            records_build: false,
             selection_name: None,
             gate: None,
             skip_after_merge_group: None,

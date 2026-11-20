@@ -4,8 +4,8 @@
 use std::collections::BTreeSet;
 
 use velnor_model::{
-    CargoCommand, Gate, GateNeed, HelperCommand, Job, JobId, PackageName, PlanFrom, PlanRef, PrCi,
-    PrRun, RepoFacts, RootSlug, RustRoot, Step, StepKind, When,
+    CargoCommand, Gate, GateNeed, HelperCommand, Job, JobId, LaneFeatures, PackageName, PlanFrom,
+    PlanRef, PrCi, PrRun, RepoFacts, RootSlug, RustRoot, Step, StepKind, When,
 };
 
 use crate::plan::{CHECKOUT_DEPTH, PLAN_DEPTH, RUST_JOB, head, job, mbx, step};
@@ -85,7 +85,7 @@ impl Lane {
     /// The notice that stands in for a feature lane the plan did not select.
     pub(crate) fn skipped_lane(
         &self,
-        features: &[String],
+        features: &LaneFeatures,
         packages: &[PackageName],
         root: &RustRoot,
     ) -> Step {
@@ -97,7 +97,7 @@ impl Lane {
             directory: root.manifest.parent(),
             when: When::NotCancelled,
             ..step(StepKind::TestSetup {
-                name: format!("Skip test lane (features: {})", features.join(",")),
+                name: format!("Skip test lane ({})", features.label()),
                 run: "echo 'skipped: no selected packages'".to_owned(),
             })
         }
@@ -242,7 +242,12 @@ pub(crate) fn policy_job(facts: &RepoFacts, lane: &Lane) -> Job {
                 .into_iter()
                 .chain(tools_install(facts))
                 .chain(mirror_step(facts))
-                .chain(tools_save(facts))
+                .chain(
+                    (!crate::plan_tools::tools_verified(facts))
+                        .then(|| tools_save(facts))
+                        .into_iter()
+                        .flatten(),
+                )
                 .map(|step| Step {
                     gate: policy_gate.clone(),
                     ..step

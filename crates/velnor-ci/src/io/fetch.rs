@@ -13,7 +13,7 @@ use crate::trusted_roots::BUNDLE_VARIABLE;
 
 use super::crates_mirror_args::with_mirror_config;
 
-const TOKEN_VARIABLE: &str = "VELNOR_PRIVATE_TOKEN";
+pub(super) const TOKEN_VARIABLE: &str = "VELNOR_PRIVATE_TOKEN";
 const API_VARIABLE: &str = "VELNOR_API_URL";
 const SYSTEM_DIRECTORIES: [&str; 4] = ["/usr/bin", "/bin", "/usr/local/bin", "/opt/homebrew/bin"];
 const FORWARDED_VARIABLES: [&str; 9] = [
@@ -45,7 +45,7 @@ const COMPILER_SELECTORS: [(&str, &str); 6] = [
 const TOKEN_GIT_PROTOCOLS: &str = "https:http:file";
 const SERVER_VARIABLE: &str = "VELNOR_SERVER_URL";
 const DEFAULT_SERVER: &str = "https://github.com";
-const REVOKE_PATH: &str = "/installation/token";
+pub(super) const REVOKE_PATH: &str = "/installation/token";
 const FORK_HINT: &str = "no token was created: a pull request from a fork gets none, and the sources cache did not hold every dependency";
 
 pub(super) fn fetch(args: &FetchArgs) -> Result<String, CiError> {
@@ -85,10 +85,15 @@ fn fetch_with(args: &FetchArgs, token: Option<&str>) -> Result<(), CiError> {
     let mirror = super::crates_mirror::runner_config()?;
     let server = Server::from_environment()?;
     let mut environment = trusted.environment(&home, &cargo, &git, &inherited, token, &server)?;
+    let mut cargo = cargo;
     if token.is_some()
-        && let Some(toolchain) = super::fetch_toolchain::pin(&cargo, &environment)?
+        && let Some(pinned) = super::fetch_toolchain::pin(&cargo, &environment, &trusted)?
     {
-        environment.push(("RUSTUP_TOOLCHAIN".into(), toolchain));
+        if let Some(real) = pinned.cargo {
+            cargo = real;
+            environment = trusted.environment(&home, &cargo, &git, &inherited, token, &server)?;
+        }
+        environment.push(("RUSTUP_TOOLCHAIN".into(), pinned.name));
     }
     run_fetches(
         &cargo,
@@ -99,7 +104,10 @@ fn fetch_with(args: &FetchArgs, token: Option<&str>) -> Result<(), CiError> {
     )
 }
 
-pub(super) fn api_client(token: String, timeout: Duration) -> Result<impl GitHubWrite, CiError> {
+pub(super) fn api_client(
+    token: String,
+    timeout: Duration,
+) -> Result<super::http::HttpGitHub, CiError> {
     let api = std::env::var(API_VARIABLE)
         .ok()
         .filter(|api| api.starts_with("https://") || api.starts_with("http://127.0.0.1"))
@@ -241,7 +249,7 @@ impl Trusted {
         }
     }
 
-    fn within(&self, path: &Path) -> bool {
+    pub(super) fn within(&self, path: &Path) -> bool {
         self.roots.iter().any(|root| path.starts_with(root))
     }
 
@@ -266,12 +274,15 @@ impl Trusted {
             };
             let trusted_directory = self.within(&directory)
                 || (system && SYSTEM_DIRECTORIES.iter().any(|d| directory == Path::new(d)));
-            if trusted_directory && resolved.is_file() {
+            if trusted_directory
+                && resolved.is_file()
+                && !super::fetch_real_cargo::is_mise_front(&candidate, &resolved)
+            {
                 return Ok(candidate);
             }
         }
         Err(CiError::new(format!(
-            "no {name} in a tool directory the runner installed; the checkout cannot supply it"
+            "no real {name} in a tool directory the runner installed; the checkout cannot supply it, and a mise shim or wrapper is never run with the token"
         )))
     }
 

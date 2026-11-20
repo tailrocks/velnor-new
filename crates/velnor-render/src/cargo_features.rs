@@ -1,9 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{FilterRef, TEST_STEP};
+use velnor_model::{FilterRef, LaneFeatures, TEST_STEP};
 
-use crate::cargo::{DOC_RUN, clippy, feature_flag, nextest_run, without_binaries};
+use crate::cargo::{DOC_RUN, clippy, lane_flags, nextest_run, without_binaries};
 use crate::rules::Value;
 
 /// The default step may select nothing, because the plan narrows it to the
@@ -14,22 +14,18 @@ pub(crate) const NO_TESTS_FAIL: &str = "fail";
 
 pub(crate) fn nextest_features(
     nextest: &str,
-    features: &[String],
+    features: &LaneFeatures,
     filter: &FilterRef,
     ci_profile: bool,
 ) -> (String, String, Vec<(String, Value)>) {
     let (_, run, env) = nextest_run(
-        &format!("--workspace --locked{nextest}{}", feature_flag(features)),
+        &format!("--workspace --locked{nextest}{}", lane_flags(features)),
         filter,
         ci_profile,
         NO_TESTS_FAIL,
         "",
     );
-    (
-        format!("{TEST_STEP} (features: {})", features.join(",")),
-        run,
-        env,
-    )
+    (format!("{TEST_STEP} ({})", features.label()), run, env)
 }
 
 fn quoted(text: &str) -> String {
@@ -37,20 +33,20 @@ fn quoted(text: &str) -> String {
 }
 
 pub(crate) fn lane_guard(
-    features: &[String],
+    features: &LaneFeatures,
     filter: &str,
     except: &[String],
 ) -> (String, String, Vec<(String, Value)>) {
     let run = except.iter().fold(
         format!(
-            "velnor-ci lane-guard --features {} --filter {}",
-            quoted(&features.join(",")),
+            "velnor-ci lane-guard{} --filter {}",
+            lane_flags(features),
             quoted(filter)
         ),
         |text, id| format!("{text} --except-binary {}", quoted(id)),
     );
     (
-        format!("Test lane guard (features: {})", features.join(",")),
+        format!("Test lane guard ({})", features.label()),
         run,
         vec![],
     )
@@ -67,23 +63,19 @@ pub(crate) fn expr(expr: &str, except: &[String]) -> String {
 
 pub(crate) fn clippy_features(
     cargo: &str,
-    features: &[String],
+    features: &LaneFeatures,
 ) -> (String, String, Vec<(String, Value)>) {
-    let (name, run, env) = clippy(&format!("{cargo}{}", feature_flag(features)), &[], "");
-    (
-        format!("{name} (features: {})", features.join(",")),
-        run,
-        env,
-    )
+    let (name, run, env) = clippy(&format!("{cargo}{}", lane_flags(features)), &[], "");
+    (format!("{name} ({})", features.label()), run, env)
 }
 
 pub(crate) fn doc_features(
     cargo: &str,
-    features: &[String],
+    features: &LaneFeatures,
 ) -> (String, String, Vec<(String, Value)>) {
     (
-        format!("Documentation (features: {})", features.join(",")),
-        format!("{DOC_RUN}{cargo}{}", feature_flag(features)),
+        format!("Documentation ({})", features.label()),
+        format!("{DOC_RUN}{cargo}{}", lane_flags(features)),
         vec![],
     )
 }

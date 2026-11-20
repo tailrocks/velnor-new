@@ -10,8 +10,7 @@ use velnor_rust::{DetectError, detect, introduced};
 use crate::facts::{TestResult, lib, path, repo};
 use crate::pipeline::HELPER_LOCK;
 
-const MISE: &str =
-    "[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n";
+const MISE: &str = "[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n\n[tools]\nrust = { version = \"1.99.1\", mr_boxington = true }\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n";
 
 fn facts_with(files: &[(&str, &str)]) -> Result<RepoFacts, Box<dyn std::error::Error>> {
     let view = repo(
@@ -82,9 +81,9 @@ fn a_setting_that_makes_a_check_do_less_is_accepted_and_named() -> TestResult {
         ),
         (
             "mise.toml",
-            "[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n\n[wrappers.cargo]\ncommand = \"mbx\"\n",
-            "[wrappers.cargo] command = \"mbx\"",
-            "runs cargo through \"mbx\"",
+            "[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n\n[tools]\nrust = { version = \"1.99.1\", mr_boxington = true }\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n\n[wrappers.cargo-clippy]\ncommand = \"sccache\"\n",
+            "[wrappers.cargo-clippy] command = \"sccache\"",
+            "runs cargo-clippy through \"sccache\"",
         ),
         (
             ".cargo/config.toml",
@@ -100,7 +99,7 @@ fn a_setting_that_makes_a_check_do_less_is_accepted_and_named() -> TestResult {
         ),
         (
             "mise.toml",
-            "[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n\n[wrappers.cargo-nextest]\ncommand = \"true\"\n",
+            "[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n\n[tools]\nrust = { version = \"1.99.1\", mr_boxington = true }\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n\n[wrappers.cargo-nextest]\ncommand = \"true\"\n",
             "[wrappers.cargo-nextest] command = \"true\"",
             "runs cargo-nextest through \"true\"",
         ),

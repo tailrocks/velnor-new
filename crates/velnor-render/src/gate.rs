@@ -24,12 +24,13 @@ const POST_MERGE_EVENTS: &str = "(github.event_name == 'push' || github.event_na
 pub(crate) const TOOLS_STEP: &str = "tools";
 pub(crate) const TOOLS_LOCAL_STEP: &str = "toolslocal";
 pub(crate) const TOOLS_LOCAL_SAVE_STEP: &str = "toolslocalsave";
+pub(crate) const TOOLS_LOOKUP_STEP: &str = "toolslookup";
 pub(crate) const TOOLS_RESTORED_STEP: &str = "tools_restored";
 pub(crate) const TOOLS_SAVED_STEP: &str = "save_tools_node";
 pub(crate) const PREPARE_COLD: &str = "steps.prepare.outputs.cold != 'true'";
 pub(crate) const BASE_STEP: &str = "base";
 pub(crate) const SOURCES_LOCKS_STEP: &str = "sources_locks";
-const SAVING_EVENTS: &str = "(github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')";
+pub(crate) const SAVING_EVENTS: &str = "(github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')";
 const NEEDS_JSON: &str = "NEEDS_JSON";
 const GATE_SPEC: &str = "GATE_SPEC";
 pub(crate) const ON_DEFAULT_BRANCH: &str =
@@ -218,8 +219,10 @@ pub(crate) fn condition(
         }
         When::SaveToolsOnDefaultBranch
         | When::SaveToolsUnlessLocal
+        | When::LookupToolsOnNodeHit
         | When::RestoreToolsUnlessLocal
-        | When::PrimeToolsFromNetwork => tools_parts(when, &mut parts),
+        | When::PrimeToolsFromNetwork
+        | When::SaveVerifiedTools(_) => crate::tools_steps::tools_parts(when, &mut parts),
     }
     parts.extend(pr_parts(pr));
     parts.extend(extra.iter().cloned());
@@ -230,23 +233,6 @@ pub(crate) fn condition(
         None
     } else {
         Some(format!("${{{{ {} }}}}", parts.join(" && ")))
-    }
-}
-
-fn tools_parts(when: When, parts: &mut Vec<String>) {
-    if when == When::PrimeToolsFromNetwork {
-        parts.push(ON_DEFAULT_BRANCH.to_owned());
-        parts.push(SAVING_EVENTS.to_owned());
-        parts.push(format!("steps.{TOOLS_LOCAL_STEP}.outputs.hit != 'true'"));
-        parts.push(format!("steps.{TOOLS_STEP}.outputs.cache-hit == 'true'"));
-        return;
-    }
-    if when != When::RestoreToolsUnlessLocal {
-        parts.push(ON_DEFAULT_BRANCH.to_owned());
-        parts.push(format!("steps.{TOOLS_STEP}.outputs.cache-hit != 'true'"));
-    }
-    if when != When::SaveToolsOnDefaultBranch {
-        parts.push(format!("steps.{TOOLS_LOCAL_STEP}.outputs.hit != 'true'"));
     }
 }
 
@@ -323,7 +309,7 @@ pub(crate) fn all_conditions(first: Option<String>, second: Option<String>) -> O
     }
 }
 
-fn gate_parts(gate: &Gate, replanned: bool) -> Vec<String> {
+pub(crate) fn gate_parts(gate: &Gate, replanned: bool) -> Vec<String> {
     let source = plan_source(&gate.from);
     let mut parts = match &gate.from {
         PlanFrom::ThisJob => vec![format!("steps.{PLAN_STEP}.outcome == 'success'")],

@@ -5,11 +5,11 @@ use std::collections::BTreeSet;
 
 use serde::Deserialize;
 use velnor_model::{
-    GroupEvent, GroupRoot, JobId, PathGlob, RepoFacts, RepoPath, RootSlug, RustCiConfig, RustRoot,
-    Shape, ShapeDecision, TestGroup, TestNeed, group_output_name,
+    GroupEvent, GroupRoot, JobId, NoTests, PathGlob, RepoFacts, RepoPath, RootSlug, RustCiConfig,
+    RustRoot, Shape, ShapeDecision, TestGroup, TestNeed, group_output_name,
 };
 
-use crate::config::{CONFIG_PATH, runner};
+use crate::config::{CONFIG_PATH, TIMEOUT_RANGE, runner};
 use crate::error::{DetectError, Reason};
 use crate::harness::uses_nextest;
 
@@ -18,7 +18,6 @@ pub(crate) const NAME_MAX_LENGTH: usize = 40;
 const FORBIDDEN_CHARACTERS: [char; 8] = ['"', '$', '`', '\\', '|', '&', ';', '<'];
 const FORBIDDEN_WORDS: [&str; 5] = ["if", "for", "while", "case", "coproc"];
 const THREADS_RANGE: std::ops::RangeInclusive<u16> = 1..=256;
-const TIMEOUT_RANGE: std::ops::RangeInclusive<u16> = 1..=360;
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -31,6 +30,8 @@ pub(crate) struct RawTestGroup {
     timeout_minutes: Option<u16>,
     runner: Option<String>,
     hosted: Option<bool>,
+    restore_cache: Option<bool>,
+    no_tests: Option<String>,
     #[serde(default)]
     paths: Vec<String>,
     #[serde(default)]
@@ -49,7 +50,7 @@ fn invalid(key: &'static str, value: &str) -> Reason {
     }
 }
 
-fn ranged(
+pub(crate) fn ranged(
     key: &'static str,
     value: Option<u16>,
     range: &std::ops::RangeInclusive<u16>,
@@ -86,11 +87,24 @@ fn group(raw: RawTestGroup) -> Result<TestGroup, Reason> {
     if let Some(repeated) = needs.iter().find(|need| !seen.insert(**need)) {
         return Err(invalid("test_groups.needs", &format!("{repeated:?}")));
     }
+    if raw.restore_cache == Some(true) && !needs.contains(&TestNeed::Cargo) {
+        return Err(Reason::TestGroupRestoreWithoutCargo(raw.name));
+    }
     let runner = raw
         .runner
         .map(|label| {
             runner(Some(label.clone()), RustCiConfig::default().runner)
                 .map_err(|_| invalid("test_groups.runner", &label))
+        })
+        .transpose()?;
+    let no_tests = raw
+        .no_tests
+        .as_deref()
+        .map(|mode| match mode {
+            "fail" => Ok(NoTests::Fail),
+            "warn" => Ok(NoTests::Warn),
+            "pass" => Ok(NoTests::Pass),
+            other => Err(invalid("test_groups.no_tests", other)),
         })
         .transpose()?;
     let paths = raw
@@ -130,6 +144,8 @@ fn group(raw: RawTestGroup) -> Result<TestGroup, Reason> {
         )?,
         runner,
         hosted: raw.hosted,
+        restore_cache: raw.restore_cache,
+        no_tests,
         paths,
         events,
         root,

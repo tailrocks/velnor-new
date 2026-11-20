@@ -45,6 +45,7 @@ copy_checkout() {
   cp -- "$repository/crates/velnor-archive-guard/build_support/archive_guard_inputs.rs" \
     "$repository/crates/velnor-archive-guard/build_support/archive_guard_inputs_filesystem.rs" \
     "$repository/crates/velnor-archive-guard/build_support/archive_guard_inputs_filesystem_tests.rs" \
+    "$repository/crates/velnor-archive-guard/build_support/archive_guard_watch.rs" \
     "$destination/crates/velnor-archive-guard/build_support/"
   cp -R -- "$repository/crates/velnor-archive-guard/src/." \
     "$destination/crates/velnor-archive-guard/src/"
@@ -74,7 +75,7 @@ set -euo pipefail
 
 tool_state="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 private_root="$(cd -- "${HOME:?}" && pwd -P)/.cache/velnor/archive-guard"
-for variable in MISE_DATA_DIR MISE_CACHE_DIR MISE_STATE_DIR MISE_CARGO_HOME CARGO_HOME RUSTUP_HOME; do
+for variable in MISE_DATA_DIR MISE_CACHE_DIR MISE_STATE_DIR MISE_CONFIG_DIR MISE_CARGO_HOME CARGO_HOME RUSTUP_HOME MBX_CACHE_DIR; do
   value="${!variable:-}"
   [[ "$value" == "$private_root/"* ]] \
     || { printf '%s escaped the private build namespace\n' "$variable" >&2; exit 98; }
@@ -98,16 +99,18 @@ case "$command_name" in
     cat "$tool_state/pinned-mise-version"
     ;;
   install)
-    [[ "${1:-}" == rust@1.99.1 ]]
+    [[ "${1:-}" == rust && "${2:-}" == mr-boxington ]]
     ;;
   exec)
-    [[ "${1:-}" == rust@1.99.1 ]] || exit 2
-    shift
     [[ "${1:-}" == -- ]] || exit 2
     shift
     tool="${1:-}"
     shift || true
     case "$tool" in
+      sh)
+        [[ "${1:-}" == -c && "${2:-}" == 'command -v cargo' ]] || exit 2
+        printf '%s/command-wrappers/bin/cargo\n' "$tool_state"
+        ;;
       rustc)
         if [[ "${1:-}" == --version ]]; then
           printf 'rustc 1.99.1 (0123456789abcdef 2026-01-01)\n'
@@ -160,6 +163,8 @@ case "$command_name" in
             artifact="$target/release/velnor-archive-guard"
             mkdir -p -- "$(dirname -- "$artifact")"
             printf '%s\n' "$target" >>"$tool_state/build-targets"
+            printf '%s\n' "${VELNOR_ARCHIVE_GUARD_SOURCE_FINGERPRINT-unset}" \
+              >>"$tool_state/build-fingerprints"
             repository="$checkout"
             fingerprint="$("$tool_state/native-guard" source-fingerprint "$checkout")"
             cat >"$artifact" <<EOF
@@ -259,4 +264,9 @@ data_count="$(grep -c '^MISE_DATA_DIR=' "$tool_bin/mise-environments")"
 [[ "$private_state" != "$case_root/ambient-mise-state" \
   && "$state_count" -gt 0 && "$state_count" == "$data_count" ]] \
   || { printf 'Mise state was not isolated from the caller environment\n' >&2; exit 1; }
+supplied_file="$tool_bin/build-fingerprints"
+[[ "$(sed -n '1p;3p;5p' "$supplied_file" | sort -u)" == unset \
+  && "$(sed -n '2p;4p' "$supplied_file" | sort -u)" == "$fingerprint_a" \
+  && "$(sed -n '6p' "$supplied_file")" == "$fingerprint_b" ]] \
+  || { printf 'final guard build was not given the verified source fingerprint\n' >&2; exit 1; }
 printf 'archive guard target and native bootstrap regression passed\n'

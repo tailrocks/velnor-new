@@ -21,6 +21,7 @@ pub(super) fn collect_local(metrics: &mut LaneMetrics, log: &[u8], runner_temp: 
         .min();
     let store = std::env::var_os("MBX_CACHE_DIR").filter(|dir| !dir.is_empty());
     metrics.mbx = MbxEvidence {
+        declared: crate::mbx_declared::declared_in(Path::new(".")),
         store_primed: store
             .zip(first_cargo)
             .is_some_and(|(dir, start)| has_entry_before(Path::new(&dir), start)),
