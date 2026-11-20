@@ -111,8 +111,6 @@ fn every_tools_restore_is_verified_before_anything_runs_the_tools() -> TestResul
     Ok(())
 }
 
-/// Counts the verify steps of a workflow pinned to `helper` and returns the value of their
-/// `name` env (`None` when the env is absent).
 fn verify_key_env(
     config: &str,
     helper: &str,
