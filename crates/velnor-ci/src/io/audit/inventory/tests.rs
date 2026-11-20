@@ -347,3 +347,48 @@ fn a_link_target_directory_removed_before_it_is_opened_fails_the_scan_closed() {
         "a link target replaced during the scan was silently dropped: {result:?}"
     );
 }
+
+#[test]
+fn a_root_that_is_a_regular_file_fails_the_scan_with_not_a_directory() {
+    let root = std::env::temp_dir().join(format!("velnor-scan-root-file-{}", std::process::id()));
+    fs::write(&root, b"").unwrap_or_else(|e| unreachable!("{e}"));
+    let mut budget = Budget::new(usize::MAX);
+    let result = scan_with(&root, &BTreeSet::new(), &mut budget, &Probe::default());
+    fs::remove_file(&root).unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(
+        matches!(&result, Err(error) if error.raw_os_error() == Some(libc::ENOTDIR)),
+        "{result:?}"
+    );
+}
+
+#[test]
+fn a_root_replaced_by_a_symbolic_link_before_it_is_opened_fails_the_scan_instead_of_following_it() {
+    let base = fs::canonicalize(std::env::temp_dir())
+        .unwrap_or_else(|e| unreachable!("{e}"))
+        .join(format!("velnor-scan-root-link-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&base);
+    let root = base.join("root");
+    let elsewhere = base.join("elsewhere");
+    fs::create_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::create_dir_all(&elsewhere).unwrap_or_else(|e| unreachable!("{e}"));
+    let mut budget = Budget::new(usize::MAX);
+    let result = scan_with(
+        &root,
+        &BTreeSet::new(),
+        &mut budget,
+        &Probe {
+            before_open: &|directory| {
+                fs::remove_dir(directory).unwrap_or_else(|e| unreachable!("{e}"));
+                std::os::unix::fs::symlink(&elsewhere, directory)
+                    .unwrap_or_else(|e| unreachable!("{e}"));
+                Ok(())
+            },
+            ..Probe::default()
+        },
+    );
+    fs::remove_dir_all(&base).unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(
+        matches!(&result, Err(error) if matches!(error.raw_os_error(), Some(libc::ELOOP | libc::ENOTDIR))),
+        "{result:?}"
+    );
+}
