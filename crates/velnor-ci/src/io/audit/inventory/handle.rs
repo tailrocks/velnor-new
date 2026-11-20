@@ -67,7 +67,7 @@ pub(super) struct Observed {
 }
 
 fn modified(stat: &FileStat) -> SystemTime {
-    let seconds = i64::from(stat.st_mtime);
+    let seconds = stat.st_mtime;
     let nanos = Duration::from_nanos(u64::try_from(stat.st_mtime_nsec).unwrap_or(0));
     match u64::try_from(seconds) {
         Ok(seconds) => SystemTime::UNIX_EPOCH + Duration::from_secs(seconds) + nanos,
