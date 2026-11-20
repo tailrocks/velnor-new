@@ -10,6 +10,8 @@ use velnor_ci::mbx_seed::{Inputs, Outcome, env_lines, message, select};
 
 use crate::io::Repo;
 
+mod truncation;
+
 struct Host {
     _repo: Repo,
     root: PathBuf,

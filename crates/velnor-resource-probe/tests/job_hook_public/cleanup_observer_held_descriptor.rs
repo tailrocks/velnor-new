@@ -10,19 +10,10 @@ use std::{
 use velnor_resource_probe::cleanup_observer::CleanupObserverRecord;
 
 use super::{PairNamespace, Scenario, TestResult, scan};
-use crate::scan_poll::{Observation, poll_observation};
+use crate::scan_poll::{owned_reference_observation, poll_observation};
 
 const SCAN_POLL_LIMIT: Duration = Duration::from_secs(10);
 const SCAN_POLL_INTERVAL: Duration = Duration::from_millis(50);
-const INVENTORY_FAULTS: [&str; 7] = [
-    "proc_",
-    "task_",
-    "inventory_",
-    "descriptor_",
-    "process_",
-    "namespace_limit",
-    "observer_",
-];
 
 struct Holder(Child);
 
@@ -30,20 +21,6 @@ impl Drop for Holder {
     fn drop(&mut self) {
         let _killed = self.0.kill();
         let _waited = self.0.wait();
-    }
-}
-
-fn observation(record: &CleanupObserverRecord) -> Observation {
-    if record.owned_reference_count >= 1 {
-        Observation::Counted
-    } else if record.issues.iter().any(|issue| {
-        INVENTORY_FAULTS
-            .iter()
-            .any(|fault| issue.starts_with(fault))
-    }) {
-        Observation::Faulted
-    } else {
-        Observation::NotYetVisible
     }
 }
 
@@ -57,7 +34,7 @@ fn scan_until_owned(runner_namespace: ([u32; 2], u64)) -> TestResult<CleanupObse
                 volume_override: None,
             })
         },
-        observation,
+        owned_reference_observation,
     )
 }
 
