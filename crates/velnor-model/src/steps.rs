@@ -129,6 +129,7 @@ pub enum StepKind {
     TestSetup {
         name: String,
         run: String,
+        before_build: bool,
     },
     GeneratorCheck,
     InstallGenerator(HelperRelease),
@@ -164,10 +165,19 @@ pub enum StepKind {
 
 impl StepKind {
     #[must_use]
+    pub const fn feeds_build(&self) -> bool {
+        matches!(
+            self,
+            Self::TestSetup {
+                before_build: true,
+                ..
+            } | Self::ReleaseAssets { .. }
+        )
+    }
+
+    #[must_use]
     pub const fn is_check(&self) -> bool {
         match self {
-            // The advisory DB fetch serves the cargo-deny check, which is a check, so it
-            // is skipped after a merge group exactly when that check is.
             Self::TestSetup { .. } | Self::AdvisoryFetch { .. } | Self::ReleaseAssets { .. } => {
                 true
             }
