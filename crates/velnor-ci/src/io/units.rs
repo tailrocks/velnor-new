@@ -17,6 +17,8 @@ mod built;
 mod fill;
 #[cfg(test)]
 mod layout_tests;
+#[cfg(test)]
+mod limit_tests;
 
 pub(super) use build_dir::refuse_arguments;
 
@@ -123,10 +125,7 @@ fn unit_files_within(target: &Path, limit: usize) -> Result<Vec<(UnitFile, PathB
                     )));
                 }
                 if directories == limit {
-                    return Err(CiError::new(format!(
-                        "target directory traversal exceeds {limit} directories at {}; raise the bound with {MAX_TARGET_DIRECTORIES_VARIABLE} (at most {TARGET_DIRECTORIES_CEILING}) or delete the stale target directory",
-                        path.display()
-                    )));
+                    return Err(directory_limit_exceeded(&path, limit));
                 }
                 directories += 1;
                 pending.push((path, depth + 1));
@@ -144,6 +143,19 @@ fn unit_files_within(target: &Path, limit: usize) -> Result<Vec<(UnitFile, PathB
     }
     built::refuse_without_units(target, built, &found)?;
     Ok(found)
+}
+
+fn directory_limit_exceeded(path: &Path, limit: usize) -> CiError {
+    if limit >= TARGET_DIRECTORIES_CEILING {
+        return CiError::new(format!(
+            "target directory traversal exceeds {limit} directories at {}; reduce or split the target tree",
+            path.display()
+        ));
+    }
+    CiError::new(format!(
+        "target directory traversal exceeds {limit} directories at {}; raise the bound with {MAX_TARGET_DIRECTORIES_VARIABLE} (at most {TARGET_DIRECTORIES_CEILING}) or delete the stale target directory",
+        path.display()
+    ))
 }
 
 /// A file in the `out` folder of a unit that ran a build script. That folder is the script's
