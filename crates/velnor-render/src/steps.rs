@@ -97,7 +97,7 @@ pub(crate) fn rendered_job(job: &Job, plan: &WorkflowPlan) -> RenderedJob {
             .chain(test_outputs(job, &tests))
             .chain(merge_group_output(job))
             .chain(lane_outputs(&job.steps))
-            .chain(crate::public_steps::job_output(&job.steps))
+            .chain(crate::base_steps::public::job_output(&job.steps))
             .collect(),
         cache_mode: crate::cache::saving_mode(job),
         steps,
@@ -300,7 +300,7 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
         StepKind::CacheLookup(key) => crate::tools_steps::tools_lookup(key),
         StepKind::CacheSave(key) => cache_step(CACHE_SAVE, "Save", key, false),
         StepKind::CacheDecide { .. } | StepKind::PublicSources { .. } => {
-            crate::public_steps::render(kind)
+            crate::base_steps::public::render(kind)
         }
         StepKind::SourcesLocks(locks) => sources_locks(locks),
         StepKind::CacheResult(lanes) => crate::cache_upload::result(lanes),

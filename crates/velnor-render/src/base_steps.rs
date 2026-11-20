@@ -7,6 +7,8 @@ use velnor_model::{
     StepKind, TrimFamily, cache_lane_outputs,
 };
 
+pub(crate) mod public;
+
 use crate::cache::render_key;
 use crate::cache_upload::{SOURCES_KEY_OUTPUT, key_id};
 use crate::gate::sources_save_step;
@@ -59,7 +61,7 @@ pub(crate) fn cache_decide(
     rendered.env.extend(
         verdicts
             .into_iter()
-            .flat_map(crate::public_steps::decide_env),
+            .flat_map(crate::base_steps::public::decide_env),
     );
     if cli == InputsCli::PerRoot {
         return rendered;
