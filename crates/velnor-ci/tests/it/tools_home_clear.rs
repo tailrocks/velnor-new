@@ -216,3 +216,36 @@ fn clear_refuses_a_symlink_and_a_root_home_and_deletes_nothing() {
         );
     }
 }
+
+#[test]
+fn a_symlinked_home_is_refused_and_its_target_is_never_cleared() {
+    let node = node("tools-home-clear-linked-home");
+    saved(&node);
+    let real = node.root.join("real-home");
+    baked_extras(&real);
+    let linked = node.root.join("linked-home");
+    symlink(&real, &linked).unwrap_or_else(|e| unreachable!("{e}"));
+    let clear = go(&node, Verb::Clear, &linked);
+    assert!(matches!(clear, Outcome::Rejected(_)), "{clear:?}");
+    let restore = go(&node, Verb::Restore, &linked);
+    assert!(matches!(restore, Outcome::Rejected(_)), "{restore:?}");
+    assert!(
+        real.join(".local/share/mise/installs/cosign/2.9.0/bin/cosign")
+            .is_file()
+    );
+    assert!(real.join(".rustup/toolchains/nightly/bin/rustc").is_file());
+}
+
+#[test]
+fn a_home_below_a_symlinked_ancestor_is_still_cleared() {
+    let node = node("tools-home-clear-linked-ancestor");
+    let real = node.root.join("real-parent");
+    let home = real.join("home");
+    baked_extras(&home);
+    let alias = node.root.join("alias-parent");
+    symlink(&real, &alias).unwrap_or_else(|e| unreachable!("{e}"));
+    let outcome = go(&node, Verb::Clear, &alias.join("home"));
+    assert_eq!(outcome, Outcome::Cleared);
+    assert!(!home.join(".local/share/mise").exists());
+    assert!(!home.join(".rustup").exists());
+}
