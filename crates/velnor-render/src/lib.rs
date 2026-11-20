@@ -48,7 +48,6 @@ mod reusable;
 mod reusable_on;
 mod rule_messages;
 mod rules;
-mod runner_routing;
 mod save_condition;
 mod save_gate;
 mod selection_name;
@@ -82,7 +81,6 @@ pub use crate::rules::{
     RuleViolation, SETUP_VELNOR_ACTION, Value, check_rules,
 };
 use crate::steps::rendered_job;
-pub use crate::workflow::TRUSTED_EVENT;
 use crate::workflow::{ShellcheckMarks, yaml_job};
 use crate::yaml::{Yaml, emit, entry, text};
 

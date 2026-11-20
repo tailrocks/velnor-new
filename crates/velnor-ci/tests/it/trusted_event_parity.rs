@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_ci::mbx_store::trusted_event;
-use velnor_render::TRUSTED_EVENT;
+use velnor_model::TRUSTED_EVENT;
 use velnor_test_support::gh_expr::{Value, evaluate};
 
 const DEFAULT_BRANCH: &str = "main";

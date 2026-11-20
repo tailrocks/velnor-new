@@ -3,18 +3,16 @@
 
 use crate::rules::{
     RenderedConcurrency, RenderedContainer, RenderedJob, RenderedMatrix, RenderedMatrixSource,
-    RenderedStep, Value,
+    RenderedStep, RenderedTrusted, Value,
 };
 use crate::yaml::{Yaml, entry, text};
 use velnor_model::{
-    MERGE_GROUP_SKIP_OUTPUT, TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT,
-    TESTS_RUN_OUTPUT,
+    Job, MERGE_GROUP_SKIP_OUTPUT, TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT,
+    TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, TRUSTED_EVENT, WorkflowPlan,
 };
 
 /// True for every event except a pull request from a fork.
 pub(crate) const SAME_REPOSITORY: &str = "(!startsWith(github.event_name, 'pull_request') || github.event.pull_request.head.repo.full_name == github.repository)";
-
-pub const TRUSTED_EVENT: &str = "(github.event_name == 'schedule' || ((github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)))";
 
 /// Where the generated workflow tells jactionlint that `ShellCheck` cannot follow
 /// the launcher: on each launcher step, or, when that would push the file past
@@ -226,6 +224,19 @@ fn launches_helper(step: &RenderedStep) -> bool {
     step.run
         .as_deref()
         .is_some_and(|run| run.starts_with(crate::helper_integrity::INVOCATION_PREFIX))
+}
+
+pub(crate) fn fork_runner(job: &Job, plan: &WorkflowPlan) -> Option<String> {
+    (!plan.hosted_runners.contains(&job.runs_on)).then(|| plan.fork_runner.to_string())
+}
+
+pub(crate) fn trusted_runner(job: &Job, plan: &WorkflowPlan) -> Option<RenderedTrusted> {
+    plan.trusted_runners
+        .for_runner(&job.runs_on)
+        .map(|trusted| RenderedTrusted {
+            label: trusted.to_string(),
+            replaces: job.runs_on.to_string(),
+        })
 }
 
 fn runs_on(job: &RenderedJob) -> Yaml {

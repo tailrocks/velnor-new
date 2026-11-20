@@ -77,8 +77,8 @@ pub(crate) fn rendered_job(job: &Job, plan: &WorkflowPlan) -> RenderedJob {
             job,
         )),
         runs_on: job.runs_on.as_str().to_owned(),
-        fork_runner: crate::runner_routing::fork_runner(job, plan),
-        trusted_runner: crate::runner_routing::trusted_runner(job, plan),
+        fork_runner: crate::workflow::fork_runner(job, plan),
+        trusted_runner: crate::workflow::trusted_runner(job, plan),
         permissions: permission_pairs(&job.permissions),
         timeout_minutes: job.timeout_minutes,
         outputs: job

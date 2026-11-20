@@ -69,7 +69,7 @@ pub use selection::{
 pub use shape::{Shape, ShapeDecision};
 pub use test_group::{GroupEvent, GroupRoot, TestGroup, TestNeed};
 pub use token_permission::{token_permission_accesses, token_permission_accesses_prose};
-pub use trusted::TrustedRunners;
+pub use trusted::{TRUSTED_EVENT, TrustedRunners};
 pub use verdict::{JobCondition, VerdictJob, VerdictSpec};
 
 pub use steps::{
