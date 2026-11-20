@@ -142,6 +142,10 @@ fn job_steps(
     lane: CargoLane,
 ) -> Vec<RenderedStep> {
     let gate = SaveGate::of(job);
+    let verified = job
+        .steps
+        .iter()
+        .any(|step| step.kind == StepKind::ToolsLocal(velnor_model::ToolsLocalVerb::Verify));
     job.steps
         .iter()
         .enumerate()
@@ -153,10 +157,19 @@ fn job_steps(
                 saved_after: gate.required(),
                 job_name: job.name.as_deref(),
             };
+            let mut rendered = rendered_steps(step, setup, audit, tests, lane, around);
+            let tools_key = matches!(
+                &step.kind,
+                StepKind::CacheRestore(velnor_model::CacheKey::Tools { .. })
+                    | StepKind::CacheSave(velnor_model::CacheKey::Tools { .. })
+            );
+            for body in &mut rendered {
+                body.shared |= verified && tools_key;
+            }
             Some(crate::base_steps::audited_save(
                 job,
                 step,
-                rendered_steps(step, setup, audit, tests, lane, around),
+                rendered,
                 gate.audit_runs(index),
             ))
         })
