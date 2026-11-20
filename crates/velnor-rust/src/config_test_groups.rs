@@ -15,8 +15,8 @@ use crate::harness::uses_nextest;
 
 pub(crate) const DEFAULT_NAME: &str = "default";
 pub(crate) const NAME_MAX_LENGTH: usize = 40;
-const FORBIDDEN_CHARACTERS: [char; 8] = ['"', '$', '`', '\\', '|', '&', ';', '<'];
-const FORBIDDEN_WORDS: [&str; 5] = ["if", "for", "while", "case", "coproc"];
+const FORBIDDEN_CHARACTERS: &[char] = &['"', '$', '`', '\\', '|', '&', ';', '<'];
+const FORBIDDEN_WORDS: &[&str] = &["if", "for", "while", "case", "coproc"];
 const THREADS_RANGE: std::ops::RangeInclusive<u16> = 1..=256;
 
 #[derive(Deserialize)]

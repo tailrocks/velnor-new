@@ -9,7 +9,7 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
-pub const SUBSETS: [&str; 4] = [
+pub const SUBSETS: &[&str] = &[
     "executable-identities",
     "task-manifests",
     "action-results",

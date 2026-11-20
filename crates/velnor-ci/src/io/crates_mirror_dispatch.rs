@@ -19,7 +19,7 @@ const DEPTH_ENV: &str = "VELNOR_CARGO_DEPTH";
 /// before the wrapper decides a `cargo` on PATH is calling back into it.
 const MAX_DEPTH: u32 = 64;
 const SAVED: &str = "velnor-cargo-real";
-const RESERVED: [&str; 3] = ["cargo", "config.toml", "config.toml.velnor-crates-mirror"];
+const RESERVED: &[&str] = &["cargo", "config.toml", "config.toml.velnor-crates-mirror"];
 
 pub(super) fn forward() -> Result<ExitStatus, CiError> {
     // The environment counter can be dropped by a shim, so the process tree is also counted.

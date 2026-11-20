@@ -15,7 +15,7 @@ sleep 30 &\n\
 exit 0";
     let three = listed(&[("kept", &["a", "b", "c"])]);
     let (output, written, _, elapsed) =
-        execute_nextest("tests-run-held", script, &three, &NEXTEST_RUN, Some("300"));
+        execute_nextest("tests-run-held", script, &three, NEXTEST_RUN, Some("300"));
     assert_eq!(output.status.code(), Some(0), "{output:?}");
     assert_eq!(without_built(&written), "existing=1\n");
     assert!(elapsed < std::time::Duration::from_secs(15), "{elapsed:?}");
@@ -24,13 +24,8 @@ exit 0";
 #[test]
 fn run_writes_no_counts_when_a_held_pipe_never_printed_a_summary() {
     let script = "sleep 30 &\nexit 9";
-    let (output, written, _, elapsed) = execute_nextest(
-        "tests-run-held-empty",
-        script,
-        "",
-        &NEXTEST_RUN,
-        Some("300"),
-    );
+    let (output, written, _, elapsed) =
+        execute_nextest("tests-run-held-empty", script, "", NEXTEST_RUN, Some("300"));
     assert_eq!(output.status.code(), Some(9), "{output:?}");
     assert_eq!(without_built(&written), "existing=1\n");
     assert!(elapsed < std::time::Duration::from_secs(15), "{elapsed:?}");

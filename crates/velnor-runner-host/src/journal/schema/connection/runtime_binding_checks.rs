@@ -11,7 +11,7 @@ type TestResult<T> = Result<T, Box<dyn std::error::Error>>;
 
 const COLUMNS: &str = "connection_id, scale_set_id, scale_set_name, set_ownership, engine_id, docker_endpoint, platform";
 
-const PARTIAL_TRIPLES: [&str; 6] = [
+const PARTIAL_TRIPLES: &[&str] = &[
     "7, NULL, 'created', NULL, NULL, NULL",
     "NULL, NULL, 'created', NULL, NULL, NULL",
     "7, 'set', NULL, NULL, NULL, NULL",
@@ -20,7 +20,7 @@ const PARTIAL_TRIPLES: [&str; 6] = [
     "NULL, NULL, NULL, NULL, 'unix:///docker.sock', 'linux/amd64'",
 ];
 
-const COMPLETE_TRIPLES: [&str; 3] = [
+const COMPLETE_TRIPLES: &[&str] = &[
     "NULL, NULL, NULL, NULL, NULL, NULL",
     "7, 'set', 'created', NULL, NULL, NULL",
     "7, 'set', 'adopted', 'eng', 'unix:///docker.sock', 'linux/amd64'",
