@@ -25,14 +25,18 @@ impl Freshness {
         workspaces: &[Workspace],
         groups: &[PathBuf],
         max_directory_entries: usize,
-    ) -> Self {
-        let mut targets = inventory::exclusions(workspaces);
-        targets.extend(groups.iter().map(|dir| velnor_rust::resolve(dir)));
-        Self {
+    ) -> Result<Self, CiError> {
+        let mut targets = inventory::exclusions(workspaces)?;
+        for dir in groups {
+            let resolved =
+                velnor_rust::resolve(dir).map_err(|error| inventory::unresolved(dir, &error))?;
+            targets.insert(resolved);
+        }
+        Ok(Self {
             targets,
             directories: BTreeMap::new(),
             remaining: max_directory_entries,
-        }
+        })
     }
 
     fn changed(
@@ -51,25 +55,9 @@ impl Freshness {
         if !self.directories.contains_key(&key) {
             let scanned = inventory::scan(&root, targets, &mut self.remaining)?;
             let entries = inventory::view(&scanned, &root, targets)?;
-            let mut newest = SystemTime::UNIX_EPOCH;
-            for (directory, children) in &entries {
-                for (name, kind) in children {
-                    let path = directory.join(name);
-                    let metadata = match fs::metadata(&path) {
-                        Ok(metadata) => metadata,
-                        Err(error)
-                            if inventory::unresolved_link(&error)
-                                && matches!(kind, Kind::Link { resolved: None, .. }) =>
-                        {
-                            fs::symlink_metadata(&path)?
-                        }
-                        Err(error) => return Err(error),
-                    };
-                    if !metadata.is_dir() {
-                        newest = newest.max(metadata.modified()?);
-                    }
-                }
-            }
+            let Some(newest) = newest_file(&entries)? else {
+                return Ok(true);
+            };
             self.directories.insert(key.clone(), (newest, entries));
         }
         let Some((newest, entries)) = self.directories.get(&key) else {
@@ -153,9 +141,91 @@ impl Audit<'_> {
     }
 }
 
+/// The newest modification time of the files in a scanned snapshot. `None` means
+/// a listed entry has vanished since the scan, so the snapshot no longer matches
+/// the tree and the inputs are stale.
+fn newest_file(entries: &Entries) -> io::Result<Option<SystemTime>> {
+    let mut newest = SystemTime::UNIX_EPOCH;
+    for (directory, children) in entries {
+        for (name, kind) in children {
+            let path = directory.join(name);
+            let Some(metadata) = stat(&path, kind)? else {
+                return Ok(None);
+            };
+            if !metadata.is_dir() {
+                newest = newest.max(metadata.modified()?);
+            }
+        }
+    }
+    Ok(Some(newest))
+}
+
+/// Stats a scanned entry. `None` means it vanished after the scan. Any other
+/// error is still an error.
+fn stat(path: &Path, kind: &Kind) -> io::Result<Option<fs::Metadata>> {
+    let metadata = match fs::metadata(path) {
+        Ok(metadata) => Ok(metadata),
+        Err(error)
+            if inventory::unresolved_link(&error)
+                && matches!(kind, Kind::Link { resolved: None, .. }) =>
+        {
+            fs::symlink_metadata(path)
+        }
+        Err(error) => Err(error),
+    };
+    match metadata {
+        Ok(metadata) => Ok(Some(metadata)),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(error),
+    }
+}
+
 fn failed(path: &Path, error: &io::Error) -> CiError {
     CiError::new(format!(
         "cannot establish input freshness for {}: {error}",
         path.display()
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+    use std::time::UNIX_EPOCH;
+
+    use super::*;
+
+    fn snapshot(name: &str) -> (PathBuf, Entries) {
+        let root =
+            std::env::temp_dir().join(format!("velnor-freshness-{name}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+        for file in ["kept.txt", "gone.txt"] {
+            let path = root.join(file);
+            fs::write(&path, b"").unwrap_or_else(|e| unreachable!("{e}"));
+            fs::File::open(&path)
+                .and_then(|file| file.set_times(fs::FileTimes::new().set_modified(UNIX_EPOCH)))
+                .unwrap_or_else(|e| unreachable!("{e}"));
+        }
+        let mut remaining = usize::MAX;
+        let entries = inventory::scan(&root, &BTreeSet::new(), &mut remaining)
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        (root, entries)
+    }
+
+    #[test]
+    fn a_snapshot_whose_entries_all_remain_has_a_newest_file() {
+        let (root, entries) = snapshot("control");
+        let newest = newest_file(&entries);
+        fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+        assert!(matches!(newest, Ok(Some(_))), "{newest:?}");
+    }
+
+    #[test]
+    fn an_entry_removed_after_the_scan_is_reported_as_vanished_not_as_an_error() {
+        let (root, entries) = snapshot("vanished");
+        fs::remove_file(root.join("gone.txt")).unwrap_or_else(|e| unreachable!("{e}"));
+        let newest = newest_file(&entries);
+        fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+        assert!(matches!(newest, Ok(None)), "{newest:?}");
+    }
 }

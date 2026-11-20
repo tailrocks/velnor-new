@@ -23,7 +23,14 @@ fn main() -> Result<(), Box<dyn Error>> {
         .and_then(Path::parent)
         .ok_or("workspace root is missing")?;
     let (fingerprint, watched) = archive_guard_inputs::fingerprint(root)?;
+    let out_dir = std::env::var_os("OUT_DIR").map(PathBuf::from);
     for source in watched {
+        if out_dir
+            .as_deref()
+            .is_some_and(|out| out.starts_with(&source))
+        {
+            continue;
+        }
         println!("cargo:rerun-if-changed={}", source.display());
     }
     println!("cargo:rustc-env=VELNOR_ARCHIVE_GUARD_FINGERPRINT={fingerprint}");

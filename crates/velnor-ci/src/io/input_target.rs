@@ -11,6 +11,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use super::inputs::tracked_paths;
 use crate::error::CiError;
 
+mod protect;
+use protect::protect_tree;
+
 static NEXT_PROBE: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -296,35 +299,6 @@ fn same_filesystem(left: &Path, right: &Path) -> Result<bool, CiError> {
 #[cfg(not(unix))]
 fn same_filesystem(left: &Path, right: &Path) -> Result<bool, CiError> {
     Ok(resolve(left)? == resolve(right)?)
-}
-
-fn protect_tree(target: &Path) -> Result<(), CiError> {
-    let mut pending = vec![target.to_path_buf()];
-    while let Some(path) = pending.pop() {
-        if !metadata(&path)?.is_some_and(|metadata| metadata.is_dir()) {
-            continue;
-        }
-        if git_marker(&path)? {
-            return Err(CiError::new(format!(
-                "target directory {} contains Git checkout {}",
-                target.display(),
-                path.display()
-            )));
-        }
-        for entry in fs::read_dir(&path)
-            .map_err(|e| CiError::new(format!("cannot inspect {}: {e}", path.display())))?
-        {
-            let entry = entry
-                .map_err(|e| CiError::new(format!("cannot inspect {}: {e}", path.display())))?;
-            let kind = entry.file_type().map_err(|e| {
-                CiError::new(format!("cannot inspect {}: {e}", entry.path().display()))
-            })?;
-            if kind.is_dir() {
-                pending.push(entry.path());
-            }
-        }
-    }
-    Ok(())
 }
 
 fn git_marker(path: &Path) -> Result<bool, CiError> {

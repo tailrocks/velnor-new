@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::ffi::OsString;
 use std::path::{Component, Path, PathBuf};
 
 use velnor_model::{CompileInputs, InputOwner, PackageName, RepoPath};
@@ -102,31 +103,85 @@ pub fn normalize(path: &Path) -> PathBuf {
     full
 }
 
-/// `fs::canonicalize` for a path that may not exist yet. It canonicalizes the
-/// longest existing prefix and appends the rest, so a directory that a build
-/// creates later compares equal to its resolved form. A plain `normalize`
-/// keeps a symlinked prefix as typed (`/var/...` rather than `/private/var/...`)
-/// until the directory exists, and then the two forms no longer match.
-#[must_use]
-pub fn resolve(path: &Path) -> PathBuf {
-    let path = normalize(path);
-    let mut missing = Vec::new();
-    let mut existing = path.as_path();
-    loop {
-        if let Ok(real) = std::fs::canonicalize(existing) {
-            return missing
-                .iter()
-                .rev()
-                .fold(real, |real, part| real.join(part));
-        }
-        match (existing.parent(), existing.file_name()) {
-            (Some(parent), Some(name)) => {
-                missing.push(name.to_owned());
-                existing = parent;
+/// Most symbolic links one resolution follows before it reports a loop.
+const MAX_LINKS: usize = 40;
+
+/// One step of a path, in the order a resolution walks it.
+enum Step {
+    Root(OsString),
+    Name(OsString),
+    Parent,
+}
+
+/// The steps of `path`, last step first, so that `Vec::pop` yields them in order.
+fn steps(path: &Path) -> Vec<Step> {
+    let mut steps: Vec<Step> = path
+        .components()
+        .filter_map(|component| match component {
+            Component::Prefix(_) | Component::RootDir => {
+                Some(Step::Root(component.as_os_str().to_owned()))
             }
-            _ => return path,
+            Component::Normal(name) => Some(Step::Name(name.to_owned())),
+            Component::ParentDir => Some(Step::Parent),
+            Component::CurDir => None,
+        })
+        .collect();
+    steps.reverse();
+    steps
+}
+
+/// `fs::canonicalize` for a path that may not exist yet.
+///
+/// Relative input is made absolute against the current directory first. The
+/// components are then walked in order, so each `..` is applied to the real
+/// directory reached so far, as the OS applies it. A component with no entry
+/// at all keeps its lexical form, because nothing below a missing entry can be
+/// a symbolic link. A dangling symbolic link resolves to its target. A loop, and
+/// any other error such as a permission failure, is returned rather than guessed.
+pub fn resolve(path: &Path) -> std::io::Result<PathBuf> {
+    let absolute = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        std::env::current_dir()?.join(path)
+    };
+    let mut pending = steps(&absolute);
+    let mut resolved = PathBuf::new();
+    let mut links = 0;
+    while let Some(step) = pending.pop() {
+        let name = match step {
+            Step::Root(root) => {
+                resolved.push(root);
+                continue;
+            }
+            Step::Parent => {
+                resolved.pop();
+                continue;
+            }
+            Step::Name(name) => name,
+        };
+        let candidate = resolved.join(&name);
+        match std::fs::canonicalize(&candidate) {
+            Ok(real) => resolved = real,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                match std::fs::symlink_metadata(&candidate) {
+                    Ok(meta) if meta.file_type().is_symlink() => {
+                        links += 1;
+                        if links > MAX_LINKS {
+                            return Err(std::io::Error::other("too many levels of symbolic links"));
+                        }
+                        pending.extend(steps(&std::fs::read_link(&candidate)?));
+                    }
+                    Ok(_) => return Err(error),
+                    Err(missing) if missing.kind() == std::io::ErrorKind::NotFound => {
+                        resolved = candidate;
+                    }
+                    Err(other) => return Err(other),
+                }
+            }
+            Err(error) => return Err(error),
         }
     }
+    Ok(resolved)
 }
 
 #[must_use]

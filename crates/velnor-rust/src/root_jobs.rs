@@ -17,6 +17,10 @@ use crate::units::Unit;
 
 const ARCHIVE_ID: JobId = JobId::from_static("nextest-archive");
 const ARCHIVE_FILE: RepoPath = RepoPath::from_static("nextest-archive.tar.zst");
+/// The first `velnor-ci` whose test step records the build in `steps.<test>.outputs.built`,
+/// so a save waits for that record and the lane needs no separate build step.
+// First released in tools-v0.1.107 (not tagged yet when this gate was written).
+const BUILT_RECORD_HELPER: (u64, u64, u64) = (0, 1, 107);
 
 struct RootJobs<'a> {
     facts: &'a RepoFacts,
@@ -118,6 +122,14 @@ impl RootJobs<'_> {
 
     fn nextest(&self) -> bool {
         self.members.iter().any(|member| member.nextest)
+    }
+
+    /// Whether the pinned helper records the build in its test step, so no build step is needed.
+    fn records_build(&self) -> bool {
+        self.facts
+            .helper
+            .as_ref()
+            .is_some_and(|helper| helper.version().at_least(BUILT_RECORD_HELPER))
     }
 
     fn lane_job(&self, id: JobId, steps: Vec<Step>) -> Job {
@@ -234,16 +246,18 @@ impl RootJobs<'_> {
             for member in &self.members {
                 steps.extend(self.checks(member));
             }
-            for member in &self.members {
-                if !member.nextest {
-                    continue;
+            if !self.records_build() {
+                for member in &self.members {
+                    if !member.nextest {
+                        continue;
+                    }
+                    steps.extend(
+                        self.cargo(member, vec![CargoCommand::NextestBuild])
+                            .into_iter()
+                            .map(|step| self.heavy(step))
+                            .map(saving_run),
+                    );
                 }
-                steps.extend(
-                    self.cargo(member, vec![CargoCommand::NextestBuild])
-                        .into_iter()
-                        .map(|step| self.heavy(step))
-                        .map(saving_run),
-                );
             }
             for member in &self.members {
                 steps.extend(self.tests_of(member));
@@ -316,12 +330,14 @@ impl RootJobs<'_> {
             let saves = self.saves(&test_id, None, true);
             let saving = self.nextest() && !saves.is_empty();
             if saving {
-                for member in self.members.iter().filter(|member| member.nextest) {
-                    steps.extend(
-                        self.cargo(member, vec![CargoCommand::NextestBuild])
-                            .into_iter()
-                            .map(saving_run),
-                    );
+                if !self.records_build() {
+                    for member in self.members.iter().filter(|member| member.nextest) {
+                        steps.extend(
+                            self.cargo(member, vec![CargoCommand::NextestBuild])
+                                .into_iter()
+                                .map(saving_run),
+                        );
+                    }
                 }
                 for member in &self.members {
                     let tests = self.cargo(
