@@ -17,7 +17,7 @@ const WRITE: &str = "permissions = { contents = \"write\" }";
 const TOKEN: &str = "env = { GH_TOKEN = \"${{ github.token }}\" }";
 
 /// Each wrapper that runs the rest of its command line, with `{}` where the payload goes.
-const WRAPPERS: [&str; 40] = [
+const WRAPPERS: [&str; 62] = [
     "nohup {}",
     "exec {}",
     "command {}",
@@ -58,6 +58,28 @@ const WRAPPERS: [&str; 40] = [
     "sh -c \"nohup {}\"",
     "/usr/bin/nohup {}",
     "eval \"{}\"",
+    "nice -n 5 timeout 10m bash -c \"{}\"",
+    "nice -n 5 timeout 10m sh -c '{}'",
+    "timeout --preserve-status -v 5 {}",
+    "timeout --foreground -k 1 -s INT 1h {}",
+    "timeout -- 5 {}",
+    "nice -n -5 {}",
+    "stdbuf -i0 -o0 -e0 {}",
+    "stdbuf --input=0 --error L {}",
+    "env -i FOO=1 {}",
+    "env -u HOME -u PATH {}",
+    "env --unset=HOME --chdir=stage {}",
+    "env -S \"nice -n 5\" {}",
+    "env -- {}",
+    "command -- {}",
+    "exec -a name {}",
+    "exec -cl {}",
+    "bash -lc \"{}\"",
+    "bash -o pipefail -e -c \"{}\"",
+    "bash -O extglob -c \"{}\"",
+    "bash --noprofile --norc -c \"{}\"",
+    "sh -c -- \"{}\"",
+    "nohup env -i nice -n 5 timeout 10m stdbuf -oL time -p sh -c \"exec {}\"",
 ];
 
 #[test]
@@ -217,6 +239,89 @@ fn a_repository_binary_named_velnor_ci_is_not_the_helper_behind_a_wrapper() -> T
     ] {
         rendered(&job_running("", command, "")).map_err(|error| format!("{command:?}: {error}"))?;
         let message = refusal(&job_running(WRITE, command, TOKEN))
+            .map_err(|error| format!("{command:?}: {error}"))?;
+        assert!(message.contains("github.token"), "{command:?}: {message}");
+    }
+    Ok(())
+}
+
+/// `payload` wrapped in `levels` nested `sh -c "..."` scripts, each level quoted so that it reads
+/// as one word of the level above.
+fn nested_shells(levels: usize, payload: &str) -> String {
+    let mut command = payload.to_owned();
+    for _ in 0..levels {
+        command = format!(
+            "sh -c \"{}\"",
+            command.replace('\\', "\\\\").replace('"', "\\\"")
+        );
+    }
+    command
+}
+
+#[test]
+fn shells_nested_within_the_depth_limit_are_read() -> TestResult {
+    for levels in 1..=4 {
+        let command = nested_shells(levels, "gh release create v1");
+        rendered(&job_running(WRITE, &command, TOKEN))
+            .map_err(|error| format!("{command:?}: {error}"))?;
+        let command = nested_shells(levels, "./publish.sh");
+        let message = refusal(&job_running(WRITE, &command, TOKEN))
+            .map_err(|error| format!("{command:?}: {error}"))?;
+        assert!(message.contains("github.token"), "{command:?}: {message}");
+        let command = nested_shells(levels, "velnor-ci check");
+        refusal(&job_running("", &command, "")).map_err(|error| format!("{command:?}: {error}"))?;
+    }
+    Ok(())
+}
+
+#[test]
+fn shells_nested_past_the_depth_limit_are_a_repository_script() -> TestResult {
+    for levels in [10, 12] {
+        let command = nested_shells(levels, "gh release create v1");
+        let message = refusal(&job_running(WRITE, &command, TOKEN))
+            .map_err(|error| format!("levels {levels}: {error}"))?;
+        assert!(
+            message.contains("github.token"),
+            "levels {levels}: {message}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn a_chain_of_wrappers_past_the_depth_limit_is_a_repository_script() -> TestResult {
+    let chain = |links: usize| format!("{}gh release create v1", "nohup ".repeat(links));
+    rendered(&job_running(WRITE, &chain(8), TOKEN))?;
+    for links in [100, 5000] {
+        let command = chain(links);
+        let message = refusal(&job_running(WRITE, &command, TOKEN))
+            .map_err(|error| format!("{links} wrappers: {error}"))?;
+        assert!(
+            message.contains("github.token"),
+            "{links} wrappers: {message}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn other_programs_that_run_their_arguments_are_a_repository_script() -> TestResult {
+    for program in [
+        "unbuffer",
+        "fakeroot",
+        "numactl --cpunodebind=0",
+        "strace -f",
+        "valgrind",
+        "runuser -u build --",
+        "systemd-run --wait",
+        "faketime now",
+        "chronic",
+        "cpulimit -l 50 --",
+        "bwrap --bind / /",
+        "firejail",
+    ] {
+        let command = format!("{program} gh release create v1");
+        let message = refusal(&job_running(WRITE, &command, TOKEN))
             .map_err(|error| format!("{command:?}: {error}"))?;
         assert!(message.contains("github.token"), "{command:?}: {message}");
     }
