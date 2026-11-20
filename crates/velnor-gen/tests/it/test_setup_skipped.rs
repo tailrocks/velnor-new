@@ -20,9 +20,10 @@ fn grouped(config: &str) -> Result<serde_json::Value, Box<dyn std::error::Error>
 
 fn runs_after(condition: &str, setup_id: &str, outcome: &str) -> bool {
     let waits = format!("steps.{setup_id}.outcome");
-    let blocked = |value: &str| condition.contains(&format!("{waits} != '{value}'"));
-    !(outcome == "failure" && blocked("failure") || outcome == "cancelled" && blocked("cancelled"))
-        && !condition.contains(&format!("{waits} == 'success'"))
+    if condition.contains(&format!("{waits} == 'success'")) {
+        return outcome == "success";
+    }
+    !condition.contains(&format!("{waits} != '{outcome}'"))
 }
 
 fn steps_of(job: &serde_json::Value) -> Vec<serde_json::Value> {
