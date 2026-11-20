@@ -280,3 +280,26 @@ fn a_command_that_only_mentions_velnor_ci_needs_no_helper() -> TestResult {
     }
     Ok(())
 }
+
+#[test]
+fn an_oversized_reusable_workflow_is_refused_with_its_file_and_largest_jobs() -> TestResult {
+    let arguments = "x".repeat(1900);
+    let mut config = CONFIG.to_owned();
+    for index in 0..300 {
+        config.extend([
+            "\n[[workflow.job.step]]\nname = \"Check ",
+            &index.to_string(),
+            "\"\nrun = \"velnor-ci check-metadata ",
+            &arguments,
+            "\"\n",
+        ]);
+    }
+    let message = refusal(&config)?;
+    assert!(message.contains("above 500000 bytes"), "{message}");
+    assert!(
+        message.contains(&format!("{FILE} has 2 jobs; the largest are check ")),
+        "{message}"
+    );
+    assert!(message.contains(", plan "), "{message}");
+    Ok(())
+}

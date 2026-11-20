@@ -14,8 +14,8 @@ use crate::config_test_groups::ranged;
 use crate::error::{DetectError, Reason};
 use crate::harness::uses_nextest;
 
-const FORBIDDEN_CHARACTERS: [char; 8] = ['"', '$', '`', '\\', '|', '&', ';', '<'];
-const FORBIDDEN_WORDS: [&str; 5] = ["if", "for", "while", "case", "coproc"];
+const FORBIDDEN_CHARACTERS: &[char] = &['"', '$', '`', '\\', '|', '&', ';', '<'];
+const FORBIDDEN_WORDS: &[&str] = &["if", "for", "while", "case", "coproc"];
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]

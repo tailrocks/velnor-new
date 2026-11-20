@@ -68,13 +68,13 @@ const RETIREMENT_INSERT_GUARD: &str = "CREATE TRIGGER physical_attempt_unbound_r
 
 const BIND_FENCE: &str = "CREATE TRIGGER unbound_retirement_bind_fence BEFORE UPDATE OF resources_bound ON capacity_reservation_provisioning_state WHEN NEW.resources_bound = 1 AND EXISTS (SELECT 1 FROM capacity_reservation_unbound_retirement_claims AS claim WHERE claim.reservation_id = NEW.reservation_id) BEGIN SELECT RAISE(ABORT, 'A retirement claim prevents this operation.'); END";
 
-const GUARDS_WITH_SHAPE: [&str; 3] = [
+const GUARDS_WITH_SHAPE: &[&str] = &[
     "unbound_retirement_claim_insert_guard",
     "unbound_retirement_progress_insert_guard",
     "physical_attempt_unbound_retirement_insert_guard",
 ];
 
-const IMMUTABLE: [&str; 5] = [
+const IMMUTABLE: &[&str] = &[
     "CREATE TRIGGER unbound_retirement_claim_no_delete BEFORE DELETE ON capacity_reservation_unbound_retirement_claims BEGIN SELECT RAISE(ABORT, 'unbound retirement history is immutable'); END",
     "CREATE TRIGGER unbound_retirement_progress_no_update BEFORE UPDATE ON capacity_reservation_unbound_retirement_progress BEGIN SELECT RAISE(ABORT, 'unbound retirement history is immutable'); END",
     "CREATE TRIGGER unbound_retirement_progress_no_delete BEFORE DELETE ON capacity_reservation_unbound_retirement_progress BEGIN SELECT RAISE(ABORT, 'unbound retirement history is immutable'); END",
@@ -82,7 +82,7 @@ const IMMUTABLE: [&str; 5] = [
     "CREATE TRIGGER physical_attempt_unbound_retirements_no_delete BEFORE DELETE ON physical_attempt_unbound_retirements BEGIN SELECT RAISE(ABORT, 'unbound retirement history is immutable'); END",
 ];
 
-const TABLES: [(&str, &str); 3] = [
+const TABLES: &[(&str, &str)] = &[
     ("capacity_reservation_unbound_retirement_claims", CLAIMS),
     ("capacity_reservation_unbound_retirement_progress", PROGRESS),
     ("physical_attempt_unbound_retirements", RETIREMENTS),
@@ -105,8 +105,8 @@ fn objects(shape: &str) -> Vec<(&'static str, String, String)> {
     let shape = shape.replace("{s}", "state");
     let shaped = |sql: &str| sql.replace("{shape}", &shape);
     let mut objects = TABLES
-        .into_iter()
-        .map(|(name, sql)| ("table", name.to_owned(), sql.to_owned()))
+        .iter()
+        .map(|&(name, sql)| ("table", name.to_owned(), sql.to_owned()))
         .collect::<Vec<_>>();
     for sql in [
         shaped(CLAIM_INSERT_GUARD),
@@ -116,11 +116,11 @@ fn objects(shape: &str) -> Vec<(&'static str, String, String)> {
         BIND_FENCE.to_owned(),
     ]
     .into_iter()
-    .chain(IMMUTABLE.into_iter().map(str::to_owned))
+    .chain(IMMUTABLE.iter().copied().map(str::to_owned))
     {
         objects.push(("trigger", trigger_name(&sql).to_owned(), sql));
     }
-    for (table, _) in TABLES {
+    for &(table, _) in TABLES {
         for (suffix, action) in [
             ("insert", "AFTER INSERT"),
             ("update", "AFTER UPDATE"),
@@ -174,7 +174,7 @@ pub(super) async fn migrate_v44_to_v45(conn: &turso::Connection) -> Result<(), H
 
 async fn replace_shape_guards(conn: &turso::Connection, shape: &str) -> Result<(), HostError> {
     let current = objects(shape);
-    for name in GUARDS_WITH_SHAPE {
+    for name in GUARDS_WITH_SHAPE.iter().copied() {
         conn.execute(&format!("DROP TRIGGER {name}"), ())
             .await
             .map_err(|_| HostError::Journal)?;

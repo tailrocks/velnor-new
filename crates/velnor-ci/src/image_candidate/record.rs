@@ -8,7 +8,7 @@ use super::json::{is_digest, is_hex, is_int_at_least};
 use crate::error::CiError;
 
 pub const SCHEMA: &str = "velnor.job-image-candidate.v1";
-pub const INPUT_PATHS: [&str; 5] = [
+pub const INPUT_PATHS: &[&str] = &[
     ".velnor/runner.lock",
     "images/job/ubuntu-26.04/Dockerfile",
     "images/job/ubuntu-26.04/README.md",
