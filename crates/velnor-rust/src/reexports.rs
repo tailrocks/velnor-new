@@ -51,6 +51,7 @@ pub use crate::select_event::{select_event, selects_by_diff};
 pub use crate::sha256::sha256_hex;
 pub use crate::shape::{
     SECOND_JOB_COST_SECONDS, SHARD_THRESHOLD_SECONDS, decide_shape, sparse_checkout_planned,
+    untimed_auto_note,
 };
 pub use crate::sparse::bytes_outside_lanes;
 pub use crate::suggest_groups::suggest_groups;
