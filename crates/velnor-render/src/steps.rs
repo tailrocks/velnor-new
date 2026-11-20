@@ -186,25 +186,6 @@ struct Around<'a> {
     job_name: Option<&'a str>,
 }
 
-fn extra_conditions(step: &Step, setup: Setup) -> Vec<String> {
-    let mut extra = saved_unless_hit(&step.kind);
-    extra.extend(crate::private_steps::repository_conditions(step));
-    extra.extend(
-        step.hosted_only
-            .then(|| crate::gate::NOT_SELF_HOSTED.to_owned()),
-    );
-    extra.extend(
-        step.skip_when_cold
-            .then(|| crate::gate::PREPARE_COLD.to_owned()),
-    );
-    extra.extend(
-        step.skip_after_merge_group
-            .as_ref()
-            .map(|from| merge_group_skipped(from, setup)),
-    );
-    extra
-}
-
 fn rendered_steps(
     step: &Step,
     setup: Setup,

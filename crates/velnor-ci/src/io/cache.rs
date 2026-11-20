@@ -269,8 +269,10 @@ pub(super) fn run_decide(args: &crate::cli_cache::DecideArgs) -> Result<String, 
     let leak = found
         .private_sources
         .then(|| {
-            super::cache_credentials::saved_root()
-                .map_or_else(|| Some("HOME is not set".to_owned()), |home| super::cache_credentials::find(&home))
+            super::cache_credentials::saved_root().map_or_else(
+                || Some("HOME is not set".to_owned()),
+                |home| super::cache_credentials::find(&home),
+            )
         })
         .flatten();
     let sources = found.refusal.is_none() && leak.is_none();

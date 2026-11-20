@@ -1,7 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{CacheKey, GateNeed, RenderedStep, StepKind, sources_step, trimmed_lane};
+use super::{
+    CacheKey, GateNeed, RenderedStep, Setup, Step, StepKind, merge_group_skipped, sources_step,
+    trimmed_lane,
+};
 
 pub(super) fn saved_unless_hit(kind: &StepKind) -> Vec<String> {
     match kind {
@@ -55,4 +58,23 @@ pub(super) fn rustup_add(kind: &str, items: &[String]) -> RenderedStep {
         run: Some(format!("rustup {kind} add {}", items.join(" "))),
         ..RenderedStep::default()
     }
+}
+
+pub(super) fn extra_conditions(step: &Step, setup: Setup) -> Vec<String> {
+    let mut extra = saved_unless_hit(&step.kind);
+    extra.extend(crate::private_steps::repository_conditions(step));
+    extra.extend(
+        step.hosted_only
+            .then(|| crate::gate::NOT_SELF_HOSTED.to_owned()),
+    );
+    extra.extend(
+        step.skip_when_cold
+            .then(|| crate::gate::PREPARE_COLD.to_owned()),
+    );
+    extra.extend(
+        step.skip_after_merge_group
+            .as_ref()
+            .map(|from| merge_group_skipped(from, setup)),
+    );
+    extra
 }

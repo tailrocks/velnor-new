@@ -110,20 +110,9 @@ pub(super) fn api_client(
 ) -> Result<super::http::HttpGitHub, CiError> {
     let api = std::env::var(API_VARIABLE)
         .ok()
-        .filter(|api| trusted_api(api))
+        .filter(|api| super::http::trusted_api(api))
         .ok_or_else(|| CiError::new(format!("set {API_VARIABLE} to github.api_url")))?;
     Ok(super::http::HttpGitHub::new(api, token, timeout))
-}
-
-fn trusted_api(api: &str) -> bool {
-    let Ok(uri) = api.parse::<ureq::http::Uri>() else {
-        return false;
-    };
-    match uri.scheme_str() {
-        Some("https") => uri.host().is_some(),
-        Some("http") => matches!(uri.host(), Some("127.0.0.1" | "localhost")),
-        _ => false,
-    }
 }
 
 fn run_fetches(
