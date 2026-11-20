@@ -267,7 +267,8 @@ fn stable_sources_outside_a_non_default_branch_fails_the_run() -> TestResult {
 }
 
 #[test]
-fn a_cancel_service_run_cancels_its_own_run_mid_step_and_a_check_job_asserts_the_cancel() -> TestResult {
+fn a_cancel_service_run_cancels_its_own_run_mid_step_and_a_check_job_asserts_the_cancel()
+-> TestResult {
     let workflow = generated()?;
     let jobs = jobs_of(&workflow)?;
     let cancel_jobs = ["cancel-service-hosted", "cancel-service-scale-set"];
@@ -304,7 +305,10 @@ fn a_cancel_service_run_cancels_its_own_run_mid_step_and_a_check_job_asserts_the
         .ok_or("cancel-service-check: no such job")?;
     let needs = text(check.get("needs").unwrap_or(&Value::Null));
     for id in cancel_jobs {
-        assert!(needs.contains(id), "cancel-service-check does not wait for {id}");
+        assert!(
+            needs.contains(id),
+            "cancel-service-check does not wait for {id}"
+        );
     }
     assert!(
         text(check.get("if").unwrap_or(&Value::Null)).contains("always()"),
