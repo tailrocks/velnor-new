@@ -69,6 +69,17 @@ check str_slashes_fence fail 'fn f() { let u = "http://x"; }\n/// ```\n/// f();\
 check raw_then_fence    fail 'const S: &str = r#"x"#;\n/// ```\nfn g() {}\n'
 check attr_in_string    pass 'fn f() { let s = "#[doc = include_str!(x)]"; }\n'
 check attr_after_string fail 'fn f() { let s = "a"; }\n#[doc = include_str!(README.md)]\nfn g() {}\n'
+check raw_attr_body    fail '#[doc = r"```\nassert_eq!(1, 2);\n```"]\npub fn f() {}\n'
+check raw_hash_attr    fail '#[doc = r#"```\nx\n```"#]\npub fn f() {}\n'
+check raw_inner_attr   fail '#![doc = r"```\nx\n```"]\nfn f() {}\n'
+check cfg_attr_plain   fail '#[cfg_attr(docsrs, doc = "```\nx\n```")]\npub fn f() {}\n'
+check cfg_attr_raw     fail '#[cfg_attr(docsrs, doc = r"```\nx\n```")]\npub fn f() {}\n'
+check ws_hash_bracket  fail '# [doc = "```\nx\n```"]\npub fn f() {}\n'
+check ws_in_bracket    fail '#[ doc = "```\nx\n```" ]\npub fn f() {}\n'
+check ws_inner_bang    fail '#! [doc = "```\nx\n```"]\npub fn f() {}\n'
+check attr_inline_span pass '#[doc = "Use ```foo``` inline"]\npub fn f() {}\n'
+check attr_fence_start fail '#[doc = "```foo``` inline"]\npub fn f() {}\n'
+check let_doc_string   pass 'fn f() { let doc = "```"; }\n'
 
 missing="$work/scanner_missing"
 mkdir -p "$missing/crates/fx/src"
@@ -79,6 +90,18 @@ if [ "$got" != fail ]; then
   fails=$((fails + 1))
 else
   echo "ok   scanner_missing (fail)"
+fi
+
+bad_utf8="$work/not_utf8"
+mkdir -p "$bad_utf8/scripts"
+cp "$repo/scripts/no-doctests.py" "$bad_utf8/scripts/"
+printf 'fn f() { let s = "caf\xe9"; }\n' > "$bad_utf8/bad.rs"
+out="$(python3 -I "$bad_utf8/scripts/no-doctests.py" "$bad_utf8/bad.rs" 2>&1)" && utf_rc=0 || utf_rc=$?
+if [ "$utf_rc" -eq 1 ] && printf '%s' "$out" | grep -q 'not valid UTF-8' && ! printf '%s' "$out" | grep -q Traceback; then
+  echo "ok   non_utf8_error (fail, one line)"
+else
+  echo "FAIL non_utf8_error: rc=$utf_rc output=$out"
+  fails=$((fails + 1))
 fi
 
 if [ "$fails" -ne 0 ]; then
