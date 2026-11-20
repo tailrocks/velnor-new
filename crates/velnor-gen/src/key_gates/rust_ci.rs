@@ -49,6 +49,7 @@ pub(super) const RUST_CI: &[KeyGate] = &[
     gate(RustCi, "budget.setup_seconds", (0, 1, 92)),
     // helper-gate: first in tools-v0.1.88 via 08d1b3495d
     gate(RustCi, "cache", (0, 1, 88)),
+    // First released in tools-v0.1.109 (not tagged yet when this gate was written).
     gate(RustCi, "cache.mbx", (0, 1, 109)),
     // helper-gate: first in tools-v0.1.88 via 08d1b3495d
     gate(RustCi, "cache.mbx_remote", (0, 1, 88)),
@@ -77,6 +78,7 @@ pub(super) const RUST_CI: &[KeyGate] = &[
     // helper-gate: first in tools-v0.1.88 via 76a0485485
     gate(RustCi, "docs", (0, 1, 88)),
     gate(RustCi, "exclude", HELPER_MINIMUM),
+    // First released in tools-v0.1.109 (not tagged yet when this gate was written).
     gate(RustCi, "external_workflows", (0, 1, 109)),
     // helper-gate: first in rust-ci-v0.1.82 via b2413d7709
     gate(RustCi, "fork_runner", (0, 1, 82)),
@@ -121,13 +123,20 @@ pub(super) const RUST_CI: &[KeyGate] = &[
     gate(RustCi, "private_sources.private_key", (0, 1, 88)),
     // helper-gate: first in tools-v0.1.88 via eb3f4deda4
     gate(RustCi, "private_sources.repositories", (0, 1, 88)),
+    // First released in tools-v0.1.109 (not tagged yet when this gate was written).
     gate(RustCi, "release_assets", (0, 1, 109)),
+    // First released in tools-v0.1.109 (not tagged yet when this gate was written).
     gate(RustCi, "release_assets.asset", (0, 1, 109)),
+    // First released in tools-v0.1.109 (not tagged yet when this gate was written).
     gate(RustCi, "release_assets.dest", (0, 1, 109)),
+    // First released in tools-v0.1.109 (not tagged yet when this gate was written).
     gate(RustCi, "release_assets.repo", (0, 1, 109)),
+    // First released in tools-v0.1.109 (not tagged yet when this gate was written).
     gate(RustCi, "release_assets.sha256", (0, 1, 109)),
+    // First released in tools-v0.1.109 (not tagged yet when this gate was written).
     gate(RustCi, "release_assets.tag", (0, 1, 109)),
     gate(RustCi, "required_check", HELPER_MINIMUM),
+    // First released in tools-v0.1.109 (not tagged yet when this gate was written).
     gate(RustCi, "root_timeouts", (0, 1, 109)),
     gate(RustCi, "runner", HELPER_MINIMUM),
     gate(RustCi, "shape", HELPER_MINIMUM),
@@ -180,6 +189,7 @@ pub(super) const RUST_CI: &[KeyGate] = &[
     gate(RustCi, "test_lane.packages", (0, 1, 93)),
     // helper-gate: first in tools-v0.1.93 via 3099634289
     gate(RustCi, "test_lane.root", (0, 1, 93)),
+    // First released in tools-v0.1.109 (not tagged yet when this gate was written).
     gate(RustCi, "test_lane.timeout_minutes", (0, 1, 109)),
     // helper-gate: first in rust-ci-v0.1.82 via f304690c07
     gate(RustCi, "test_setup", (0, 1, 82)),
@@ -189,6 +199,7 @@ pub(super) const RUST_CI: &[KeyGate] = &[
     gate(RustCi, "test_setup.root", (0, 1, 82)),
     // helper-gate: first in rust-ci-v0.1.82 via f304690c07
     gate(RustCi, "test_setup.run", (0, 1, 82)),
+    // First released in tools-v0.1.109 (not tagged yet when this gate was written).
     gate(RustCi, "test_setup.phase", (0, 1, 109)),
     gate(RustCi, "timeout_minutes", HELPER_MINIMUM),
     // helper-gate: first in tools-v0.1.96 via 61067c17fc

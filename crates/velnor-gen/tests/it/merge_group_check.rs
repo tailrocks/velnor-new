@@ -125,13 +125,13 @@ fn test_setup_and_the_advisory_fetch_are_checks_and_other_steps_are_not() {
 }
 
 #[test]
-fn a_build_phase_setup_is_not_a_check_because_the_archive_build_it_guards_is_not_one() {
-    assert!(
-        !StepKind::TestSetup {
-            name: String::from("setup"),
-            run: String::from("true"),
-            before_build: true,
-        }
-        .is_check()
-    );
+fn only_a_build_phase_setup_and_the_release_assets_feed_a_target_build() {
+    let setup = |before_build| StepKind::TestSetup {
+        name: String::from("setup"),
+        run: String::from("true"),
+        before_build,
+    };
+    assert!(setup(true).feeds_build());
+    assert!(!setup(false).feeds_build());
+    assert!(!StepKind::MergeQueueCheck.feeds_build());
 }

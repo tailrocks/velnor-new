@@ -4,6 +4,7 @@
 use serde_json::Value;
 
 use crate::facts::TestResult;
+use crate::golden::{load, samples};
 use crate::job_trust_boundary::violations;
 use crate::pipeline::{pin_helper, view, workflow};
 use crate::private_sources::{SECTION, private_repo};
@@ -252,5 +253,28 @@ fn the_phase_key_needs_a_helper_that_reads_it_and_a_known_value() -> TestResult 
         error.contains("test_setup.phase") && error.contains("lint"),
         "{error}"
     );
+    Ok(())
+}
+
+#[test]
+fn a_build_phase_setup_of_the_helper_root_runs_before_the_source_built_helper_compiles()
+-> TestResult {
+    let mut repo = load(&samples().join("helper-source"))?;
+    let config = "exclude = [\"fixtures/**\"]\nhelper = { path = \"ci-helper\" }\n[[test_setup]]\nroot = 'ci-helper'\nname = 'Prepare the fixture'\nrun = 'bash scripts/prepare-fixture.sh'\nphase = 'build'\n";
+    repo.files
+        .insert(velnor_rust::CONFIG_PATH, config.as_bytes().to_vec());
+    let lock = String::from_utf8(repo.files[&velnor_rust::LOCK_PATH].clone())?;
+    repo.files.insert(
+        velnor_rust::LOCK_PATH,
+        lock.replace("version = \"0.1.81\"", "version = \"0.1.109\"")
+            .into_bytes(),
+    );
+    let parsed = document(&workflow(&repo)?)?;
+    let helper = &parsed["jobs"]["rust-helper"];
+    let build = steps(helper)
+        .iter()
+        .position(compiles)
+        .ok_or("the helper job builds nothing")?;
+    assert_eq!(setups(helper), vec![build - 1]);
     Ok(())
 }
