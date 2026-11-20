@@ -68,6 +68,11 @@ pub(super) fn identity(directory: &Dir) -> io::Result<Identity> {
     Ok((i128::from(stat.st_dev), i128::from(stat.st_ino)))
 }
 
+pub(super) fn identity_at(path: &Path) -> io::Result<Identity> {
+    let stat = nix::sys::stat::stat(path).map_err(failure)?;
+    Ok((i128::from(stat.st_dev), i128::from(stat.st_ino)))
+}
+
 pub(super) struct Observed {
     pub(super) kind: Kind,
     pub(super) modified: Option<SystemTime>,

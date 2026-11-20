@@ -91,6 +91,11 @@ pub(in crate::io::audit) fn scan_with(
     }) = pending.pop()
     {
         if !visited.insert(directory.clone()) {
+            if let Some(recorded) = scan.identities.get(&directory)
+                && handle::identity_at(&directory).ok().as_ref() != Some(recorded)
+            {
+                return Err(changed(&directory));
+            }
             continue;
         }
         budget.reserve()?;
