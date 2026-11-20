@@ -49,14 +49,17 @@ fn shown(path: &Path) -> String {
 
 fn walk(directory: &Path, depth: usize, budget: &mut usize) -> Option<String> {
     if depth > MAX_DEPTH {
-        return Some(format!(
-            "{} is nested too deeply to scan",
-            shown(directory)
-        ));
+        return Some(format!("{} is nested too deeply to scan", shown(directory)));
     }
     let entries = match fs::read_dir(directory) {
         Ok(entries) => entries,
-        Err(error) => return Some(format!("cannot read {}: {}", shown(directory), inert(&error.to_string()))),
+        Err(error) => {
+            return Some(format!(
+                "cannot read {}: {}",
+                shown(directory),
+                inert(&error.to_string())
+            ));
+        }
     };
     let mut subdirectories: Vec<PathBuf> = Vec::new();
     for entry in entries {

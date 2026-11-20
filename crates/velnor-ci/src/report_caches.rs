@@ -116,6 +116,7 @@ mod tests {
             root: None,
             restore_step: "restore".to_owned(),
             save_step: "save".to_owned(),
+            not_generated: None,
         }];
         let steps = json!({
             "restore": {"outcome": "skipped", "outputs": {}},
