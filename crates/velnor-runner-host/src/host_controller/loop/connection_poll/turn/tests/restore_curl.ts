@@ -7,6 +7,8 @@ import { existsSync, writeFileSync } from "node:fs";
 
 const root = process.env["VELNOR_RESTORE_TIMEOUT_FIXTURE"];
 if (!root) throw new Error("missing fixture directory");
+const stall = Number(process.env["VELNOR_RESTORE_TIMEOUT_STALL_MS"]);
+if (!Number.isFinite(stall) || stall <= 0) throw new Error("missing stall");
 const config = await Bun.stdin.text();
 const url = config.match(/^url = "([^"]+)"/m)?.[1];
 if (!url) throw new Error("missing URL");
@@ -25,7 +27,7 @@ if (url.includes("/repos/owner/repo")) {
       if (Date.now() - began >= 30_000) throw new Error("journal guard was not acquired");
       await Bun.sleep(2);
     }
-    await Bun.sleep(11_000);
+    await Bun.sleep(stall);
   }
   body = { sessionId: "session-test", messageQueueUrl: "https://actions.test/queue", messageQueueAccessToken: "queue-test" };
 } else if (url.includes("/queue")) {
