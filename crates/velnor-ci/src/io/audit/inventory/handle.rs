@@ -9,16 +9,26 @@ use std::rc::Rc;
 
 use nix::dir::Dir;
 use nix::fcntl::{AtFlags, OFlag, openat, readlinkat};
-use nix::sys::stat::{Mode, SFlag, fstatat};
+use nix::sys::stat::{Mode, SFlag, fstat, fstatat};
 
 use super::Kind;
 use super::walk::unresolved_link;
 
 pub(super) type Opened = Rc<Dir>;
 
+/// The device and inode of a directory.
+pub(super) type Identity = (libc::dev_t, libc::ino_t);
+
 pub(super) enum Origin {
     Path,
     Child { parent: Opened, name: OsString },
+}
+
+/// What a name holds now, read without following links.
+pub(super) enum Current {
+    Gone,
+    Directory(Identity),
+    Other(Kind),
 }
 
 fn failure(errno: nix::errno::Errno) -> io::Error {
@@ -42,6 +52,47 @@ pub(super) fn open(origin: &Origin, path: &Path) -> io::Result<Dir> {
     }
     .map_err(failure)?;
     Dir::from_fd(fd).map_err(failure)
+}
+
+/// The identity of the directory an open handle refers to.
+pub(super) fn identity(directory: &Dir) -> io::Result<Identity> {
+    let stat = fstat(directory).map_err(failure)?;
+    Ok((stat.st_dev, stat.st_ino))
+}
+
+/// The directory that holds `path`, and the name `path` has in it.
+pub(super) fn locate(origin: &Origin, path: &Path) -> io::Result<(Opened, OsString)> {
+    match origin {
+        Origin::Child { parent, name } => Ok((Rc::clone(parent), name.clone())),
+        Origin::Path => {
+            let (Some(container), Some(name)) = (path.parent(), path.file_name()) else {
+                return Err(io::Error::other(format!(
+                    "{} has no containing directory",
+                    path.display()
+                )));
+            };
+            let flags = OFlag::O_RDONLY | OFlag::O_DIRECTORY | OFlag::O_CLOEXEC;
+            let dir = Dir::open(container, flags, Mode::empty()).map_err(failure)?;
+            Ok((Rc::new(dir), name.to_os_string()))
+        }
+    }
+}
+
+/// What `name` in `parent` holds now.
+pub(super) fn current(parent: &Opened, name: &OsStr, path: &Path) -> io::Result<Current> {
+    let stat = match fstatat(parent.as_ref(), name, AtFlags::AT_SYMLINK_NOFOLLOW) {
+        Ok(stat) => stat,
+        Err(nix::errno::Errno::ENOENT) => return Ok(Current::Gone),
+        Err(errno) => return Err(failure(errno)),
+    };
+    let format = SFlag::from_bits_truncate(stat.st_mode) & SFlag::S_IFMT;
+    if format == SFlag::S_IFDIR {
+        return Ok(Current::Directory((stat.st_dev, stat.st_ino)));
+    }
+    Ok(match kind_at(parent, name, path)? {
+        Some(kind) => Current::Other(kind),
+        None => Current::Gone,
+    })
 }
 
 pub(super) fn names(

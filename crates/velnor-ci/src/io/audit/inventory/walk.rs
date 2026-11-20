@@ -8,7 +8,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use super::super::options::{MAX_ENTRIES_CEILING, MAX_ENTRIES_VARIABLE};
-use super::handle::{self, Opened, Origin};
+use super::handle::{self, Current, Opened, Origin};
 use super::{Entries, Kind, excluded_entry};
 
 pub(in crate::io::audit) struct Budget {
@@ -99,28 +99,31 @@ pub(super) fn scan_with(
         let mut listing = match opened {
             Ok(listing) => listing,
             Err(error) if handle::replaced(&error) && directory != root => {
-                if let Origin::Child { parent, name } = &origin {
-                    let replacement = handle::kind_at(parent, name, &directory)?;
-                    settle(
+                let (parent, name) = handle::locate(&origin, &directory)?;
+                match handle::current(&parent, &name, &directory)? {
+                    Current::Directory(_) => return Err(changed(error.kind(), &directory)),
+                    current => settle(
                         &mut entries,
                         &mut pending,
                         &directory,
-                        parent,
-                        name,
-                        replacement,
+                        &parent,
+                        &name,
+                        current,
                         (&root, targets),
-                    )?;
+                    )?,
                 }
                 continue;
             }
             Err(error) => return Err(error),
         };
+        let identity = handle::identity(&listing)?;
         (probe.after_open)(&directory);
         let names = handle::names(&mut listing, |name| {
             (probe.listed)(name);
             budget.reserve()
         })?;
         let listing = Opened::new(listing);
+        let queued_before = pending.len();
         let mut children = BTreeMap::new();
         for name in names {
             let path = directory.join(&name);
@@ -130,9 +133,48 @@ pub(super) fn scan_with(
             pending.extend(queue(&kind, &path, &listing, &name, (&root, targets))?);
             children.insert(PathBuf::from(name), kind);
         }
-        entries.insert(directory, children);
+        let (parent, name) = handle::locate(&origin, &directory)?;
+        match handle::current(&parent, &name, &directory)? {
+            Current::Directory(now) if now == identity => {
+                entries.insert(directory, children);
+            }
+            Current::Directory(_) => {
+                return Err(io::Error::other(format!(
+                    "{} was replaced by another directory while it was listed",
+                    directory.display()
+                )));
+            }
+            _ if directory == root => {
+                return Err(io::Error::other(format!(
+                    "{} was replaced while it was listed",
+                    directory.display()
+                )));
+            }
+            current => {
+                pending.truncate(queued_before);
+                settle(
+                    &mut entries,
+                    &mut pending,
+                    &directory,
+                    &parent,
+                    &name,
+                    current,
+                    (&root, targets),
+                )?;
+            }
+        }
     }
     Ok(entries)
+}
+
+fn changed(kind: io::ErrorKind, directory: &Path) -> io::Error {
+    io::Error::new(
+        kind,
+        format!(
+            "{} changed while the audit scanned it; retry",
+            directory.display()
+        ),
+    )
 }
 
 fn queue(
@@ -164,32 +206,29 @@ fn queue(
     })
 }
 
+/// Records what a directory's name holds now, in place of the listing that was
+/// queued or dropped for it: nothing, or the non-directory that replaced it.
 fn settle(
     entries: &mut Entries,
     pending: &mut Vec<Pending>,
     directory: &Path,
     parent: &Opened,
     name: &OsStr,
-    replacement: Option<Kind>,
+    current: Current,
     (root, targets): (&Path, &BTreeSet<PathBuf>),
 ) -> io::Result<()> {
     let children = directory
         .parent()
         .and_then(|container| entries.get_mut(container));
     let key = Path::new(name);
-    match replacement {
-        None => {
+    match current {
+        Current::Gone => {
             if let Some(children) = children {
                 children.remove(key);
             }
         }
-        Some(Kind::Directory) => {
-            return Err(io::Error::other(format!(
-                "{} changed while the audit scanned it; retry",
-                directory.display()
-            )));
-        }
-        Some(kind) => {
+        Current::Directory(_) => return Err(changed(io::ErrorKind::Other, directory)),
+        Current::Other(kind) => {
             pending.extend(queue(&kind, directory, parent, name, (root, targets))?);
             if let Some(children) = children {
                 children.insert(key.to_path_buf(), kind);

@@ -257,7 +257,16 @@ pub(crate) fn setup_units(
     );
     if lane.plan.is_none() {
         steps.push(step(StepKind::Helper(HelperCommand::Plan)));
+        steps.extend(crate::base_cache::public_sources_step(facts));
     }
+    steps.extend(
+        crate::base_cache::privacy_check(facts)
+            .into_iter()
+            .map(|step| Step {
+                gate: lane.steps(),
+                ..step
+            }),
+    );
     steps.extend(mbx(facts, lane.steps()));
     let mut toolchain: Vec<Step> = mirror_step(facts)
         .into_iter()
@@ -287,16 +296,22 @@ pub(crate) fn setup_units(
         let cache_root = unit.cache_root(facts);
         if index == 0 {
             toolchain.push(sources_locks(facts));
-            toolchain.push(step(StepKind::CacheRestore(CacheKey::Sources {
-                host: Host,
-                lane: cache_root.clone(),
-            })));
+            toolchain.push(crate::base_cache::private_only(
+                facts,
+                step(StepKind::CacheRestore(CacheKey::Sources {
+                    host: Host,
+                    lane: cache_root.clone(),
+                })),
+            ));
         }
-        toolchain.push(step(StepKind::CacheRestore(CacheKey::Target {
-            job: family.clone(),
-            root: cache_root,
-            host: Host,
-        })));
+        toolchain.push(crate::base_cache::private_only(
+            facts,
+            step(StepKind::CacheRestore(CacheKey::Target {
+                job: family.clone(),
+                root: cache_root,
+                host: Host,
+            })),
+        ));
         toolchain.extend(crate::delta_cache::restore(facts, unit, family, lane));
     }
     toolchain.extend(crate::units::restore_file_times(facts, units));
@@ -365,6 +380,7 @@ pub(crate) fn step(kind: StepKind) -> Step {
         when: When::Success,
         skip_after_merge_group: None,
         skip_when_cold: false,
+        private_repo: false,
         pr: PrRun::Always,
         gate: None,
         reads: None,

@@ -37,10 +37,16 @@ pub(crate) fn insert(sources: Option<&PrivateSources>, jobs: &mut [Job]) {
         let when = status(job.steps.iter().filter(|step| compiles(step)));
         let gate = shared_gate(job.steps.iter().filter(|step| runs_repository_code(step)));
         let mut kinds = advisory_fetch(&job.steps);
-        kinds.extend([
-            StepKind::PrivateCheck {
+        if !job
+            .steps
+            .iter()
+            .any(|step| matches!(step.kind, StepKind::PrivateCheck { .. }))
+        {
+            kinds.push(StepKind::PrivateCheck {
                 cached: cached.clone(),
-            },
+            });
+        }
+        kinds.extend([
             StepKind::PrivateToken {
                 sources: sources.clone(),
                 cached: cached.clone(),

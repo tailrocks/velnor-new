@@ -86,7 +86,8 @@ pub(crate) fn build(directory: &Path, args: &InputsBuildArgs) -> Result<String, 
         }
         Err(Stop::Refused(error)) => Err(error),
         Err(Stop::Failed(error)) => {
-            let failed = failure::Failure::new(invocation.label(), invocation.selection());
+            let failed =
+                failure::Failure::new(invocation.label(), invocation.selection(&builder.members()));
             match failure::record_failure(&marker, &failed) {
                 Ok(()) => Err(error),
                 Err(record) => Err(CiError::new(format!("{error}; {record}"))),
@@ -116,6 +117,14 @@ impl Builder<'_> {
             invocation.compiler,
             invocation.cargo && invocation.preflight.is_none(),
         )
+    }
+
+    fn members(&self) -> BTreeSet<&str> {
+        self.facts
+            .rust_roots
+            .iter()
+            .flat_map(|root| root.members.iter().map(|member| member.name.as_str()))
+            .collect()
     }
 
     fn marker_directories(&self) -> Vec<PathBuf> {
@@ -160,7 +169,9 @@ impl Builder<'_> {
             self.declared
                 .extend(declared.iter().flat_map(|unit| unit.paths.iter().cloned()));
             if invalidate {
-                let selection = Invocation::new(command).selection().unwrap_or_default();
+                let selection = Invocation::new(command)
+                    .selection(&self.members())
+                    .unwrap_or_default();
                 let outside: BTreeSet<&str> = declared
                     .iter()
                     .filter(|unit| !unit.trusted && !selection.selects(&unit.package))
