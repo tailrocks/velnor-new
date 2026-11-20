@@ -551,6 +551,11 @@
               "name": "sha2",
               "kind": "normal",
               "manifest": null
+            },
+            {
+              "name": "toml",
+              "kind": "normal",
+              "manifest": null
             }
           ],
           "targets": [
@@ -1999,7 +2004,7 @@
     "crates/velnor-ci/Cargo.toml": "4119300892a24b9664931a75096479be753b9c462f6950e8ca66e05d7f3f232b",
     "crates/velnor-gen/Cargo.toml": "a86338c070229715231d5eb439ffa6e83624568892481dd770802e9c2f7b774a",
     "crates/velnor-local/Cargo.toml": "e6d3b5198ae94ac9ed44e8c9dad53e7b8231c92f64abd8e33eea72f8812f2ffb",
-    "crates/velnor-model/Cargo.toml": "13010c31c12dbcc581502e41861e20289ae068458c4e4c666955b159f203ec9a",
+    "crates/velnor-model/Cargo.toml": "5d46149202c45bdc710f09e72a65f37b10a70101f8346d33cb8433adadbc7364",
     "crates/velnor-release/Cargo.toml": "dca29d0f14443af5811f5454770fce6193056a6e8e3c0c72ae1729399b176459",
     "crates/velnor-render/Cargo.toml": "71bb93bc3b049d7f387be28e8442b37c36c902ce9295e39d56aa38abeb66d46d",
     "crates/velnor-resource-probe/Cargo.toml": "43762b2c9ad022824a51e68c9327ae656032950d30c029baeaa18032f11c452e",

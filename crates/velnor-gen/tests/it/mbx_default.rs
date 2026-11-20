@@ -135,11 +135,11 @@ fn the_opt_out_is_named_as_a_check_that_does_less() -> TestResult {
     Ok(())
 }
 
-#[test]
-fn a_mise_configuration_that_does_not_route_cargo_through_mbx_is_refused_with_the_snippet()
--> TestResult {
+type Refusal = (String, Option<String>, &'static str);
+
+fn refusal_cases() -> Vec<Refusal> {
     let sccache = "[wrappers.cargo]\ncommand = \"sccache\"\n";
-    let cases = [
+    vec![
         (NO_LAYOUT.to_owned(), None, "pin"),
         (
             format!("[tools]\nrust = \"1.99.1\"\n{PIN}{NEXTEST}{WRAPPER}"),
@@ -201,64 +201,74 @@ fn a_mise_configuration_that_does_not_route_cargo_through_mbx_is_refused_with_th
             Some(WRAPPER.to_owned()),
             "split",
         ),
-    ];
-    for (mise, hidden, missing) in cases {
-        let repo = with_mises(pinned(None, "0.1.88")?, &mise, hidden.as_deref())?;
-        let error = expected_files(&repo)
-            .err()
-            .ok_or(format!("accepted: {mise} {hidden:?}"))?;
-        let GenerateError::Detect(detect) = &error else {
-            return Err(format!("{error}").into());
-        };
-        let text = error.to_string();
-        match (missing, detect) {
-            ("pin", DetectError::MbxPinRequired { .. }) => {
-                assert!(text.contains("mr-boxington = {"), "{text}");
-                assert!(text.contains("`aqua:` or `github:`"), "{text}");
-            }
-            ("split", DetectError::MbxConfigSplit(split)) => {
-                assert_eq!(split.first.as_str(), "mise.toml", "{text}");
-                assert_eq!(split.second.as_str(), ".mise.toml", "{text}");
-                assert!(text.contains("mbx = false"), "{text}");
-                continue;
-            }
-            ("wrapper", DetectError::MbxLayout(layout)) => {
-                assert!(layout.wrapper_refused() && !layout.shim_missing(), "{mise}");
-                assert!(!layout.rust_option, "{mise}");
-                assert!(text.contains("mr_boxington = true"), "{text}");
-            }
-            ("extras", DetectError::MbxLayout(layout)) => {
-                assert!(
-                    layout.wrapper_has_extras() && !layout.shim_missing(),
-                    "{mise}"
-                );
-                assert!(text.contains("extra keys"), "{text}");
-                assert!(!text.contains("cargo -V"), "{text}");
-            }
-            ("norust", DetectError::MbxLayout(layout)) => {
-                assert!(
-                    layout.wrapper_refused() && !layout.rust && !layout.rust_option,
-                    "{mise}"
-                );
-                assert!(
-                    !layout.shim_missing() && !layout.wrapper_has_extras(),
-                    "{mise}"
-                );
-                assert!(text.contains("pins no rust tool"), "{text}");
-            }
-            ("option" | "shim", DetectError::MbxLayout(layout)) => {
-                assert_eq!(layout.rust_option, missing == "option", "{mise}");
-                assert_eq!(layout.shim_missing(), missing == "shim", "{mise}");
-                assert!(text.contains("mr_boxington = true"), "{text}");
-                if missing == "shim" {
-                    assert!(text.contains("MBX_CARGO_SHIM_MODE = \"1\""), "{text}");
-                    assert!(text.contains("cargo -V"), "{text}");
-                    assert!(text.contains("native layout"), "{text}");
-                }
-            }
-            _ => return Err(format!("{missing}: {error}").into()),
+    ]
+}
+
+fn assert_refused((mise, hidden, missing): Refusal) -> TestResult {
+    let repo = with_mises(pinned(None, "0.1.88")?, &mise, hidden.as_deref())?;
+    let error = expected_files(&repo)
+        .err()
+        .ok_or(format!("accepted: {mise} {hidden:?}"))?;
+    let GenerateError::Detect(detect) = &error else {
+        return Err(format!("{error}").into());
+    };
+    let text = error.to_string();
+    match (missing, detect) {
+        ("pin", DetectError::MbxPinRequired { .. }) => {
+            assert!(text.contains("mr-boxington = {"), "{text}");
+            assert!(text.contains("`aqua:` or `github:`"), "{text}");
         }
-        assert!(text.contains("mbx = false"), "{text}");
+        ("split", DetectError::MbxConfigSplit(split)) => {
+            assert_eq!(split.first.as_str(), "mise.toml", "{text}");
+            assert_eq!(split.second.as_str(), ".mise.toml", "{text}");
+            assert!(text.contains("mbx = false"), "{text}");
+            return Ok(());
+        }
+        ("wrapper", DetectError::MbxLayout(layout)) => {
+            assert!(layout.wrapper_refused() && !layout.shim_missing(), "{mise}");
+            assert!(!layout.rust_option, "{mise}");
+            assert!(text.contains("mr_boxington = true"), "{text}");
+        }
+        ("extras", DetectError::MbxLayout(layout)) => {
+            assert!(
+                layout.wrapper_has_extras() && !layout.shim_missing(),
+                "{mise}"
+            );
+            assert!(text.contains("extra keys"), "{text}");
+            assert!(!text.contains("cargo -V"), "{text}");
+        }
+        ("norust", DetectError::MbxLayout(layout)) => {
+            assert!(
+                layout.wrapper_refused() && !layout.rust && !layout.rust_option,
+                "{mise}"
+            );
+            assert!(
+                !layout.shim_missing() && !layout.wrapper_has_extras(),
+                "{mise}"
+            );
+            assert!(text.contains("pins no rust tool"), "{text}");
+        }
+        ("option" | "shim", DetectError::MbxLayout(layout)) => {
+            assert_eq!(layout.rust_option, missing == "option", "{mise}");
+            assert_eq!(layout.shim_missing(), missing == "shim", "{mise}");
+            assert!(text.contains("mr_boxington = true"), "{text}");
+            if missing == "shim" {
+                assert!(text.contains("MBX_CARGO_SHIM_MODE = \"1\""), "{text}");
+                assert!(text.contains("cargo -V"), "{text}");
+                assert!(text.contains("native layout"), "{text}");
+            }
+        }
+        _ => return Err(format!("{missing}: {error}").into()),
+    }
+    assert!(text.contains("mbx = false"), "{text}");
+    Ok(())
+}
+
+#[test]
+fn a_mise_configuration_that_does_not_route_cargo_through_mbx_is_refused_with_the_snippet()
+-> TestResult {
+    for case in refusal_cases() {
+        assert_refused(case)?;
     }
     Ok(())
 }
