@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{Job, JobId, LaneFeatures};
+use velnor_model::{BuildRecord, Job, JobId, LaneFeatures};
 
 use super::RootJobs;
 
@@ -32,7 +32,7 @@ impl RootJobs<'_> {
                 let mut job = self.lane_job(id, steps);
                 if crate::lane::lane_job_fixes(self.facts) {
                     job.pr = crate::plan::quick(self.facts);
-                    job.saves_after_lane_test = true;
+                    job.build_record = BuildRecord::TestsAndLanes;
                 }
                 if let Some(minutes) = timeout {
                     job.timeout_minutes = minutes;

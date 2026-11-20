@@ -65,7 +65,7 @@ fn is_test_run(job: &Job, step: &Step) -> bool {
     match &step.kind {
         StepKind::Cargo(CargoCommand::NextestRun { .. }) => true,
         StepKind::Cargo(CargoCommand::NextestFeatures { reports: true, .. }) => {
-            job.saves_after_lane_test
+            job.build_record.lanes()
         }
         _ => false,
     }
@@ -83,10 +83,10 @@ impl SaveGate {
             return gate;
         };
         let saved_here = job.steps[first].gate.as_ref();
-        // Only a job whose pinned helper records the build (`Job::records_build`) and that has
+        // Only a job whose pinned helper records the build (`Job::build_record`) and that has
         // no build step of its own saves after its test steps (`built` output). Any other job
         // keeps the build steps, whatever steps it happens to have.
-        let legacy = !job.records_build
+        let legacy = !job.build_record.tests()
             || job
                 .steps
                 .iter()

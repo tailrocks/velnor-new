@@ -4,10 +4,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
-    Access, CacheDebug, CacheKey, CargoCommand, Concurrency, Gate, HelperCommand, Host, Job, JobId,
-    MbxStore, PackageName, PermissionScope, Permissions, PrCi, PrRun, PrepareLocks,
-    PushAfterMergeGroup, RepoFacts, RootSlug, RustRoot, Step, StepKind, TargetName, Toolchain,
-    When, WorkflowPlan,
+    Access, BuildRecord, CacheDebug, CacheKey, CargoCommand, Concurrency, Gate, HelperCommand,
+    Host, Job, JobId, MbxStore, PackageName, PermissionScope, Permissions, PrCi, PrRun,
+    PrepareLocks, PushAfterMergeGroup, RepoFacts, RootSlug, RustRoot, Step, StepKind, TargetName,
+    Toolchain, When, WorkflowPlan,
 };
 
 use crate::audit_job::audit_job;
@@ -338,12 +338,15 @@ pub(crate) fn job(facts: &RepoFacts, id: JobId) -> Job {
             .helper
             .as_ref()
             .is_some_and(|helper| helper.version().at_least(IGNORED_COUNT_HELPER)),
-        records_build: facts.helper.as_ref().is_some_and(|helper| {
+        build_record: if facts.helper.as_ref().is_some_and(|helper| {
             helper
                 .version()
                 .at_least(crate::root_jobs::BUILT_RECORD_HELPER)
-        }),
-        saves_after_lane_test: false,
+        }) {
+            BuildRecord::Tests
+        } else {
+            BuildRecord::Unrecorded
+        },
         chained_saves: facts
             .helper
             .as_ref()

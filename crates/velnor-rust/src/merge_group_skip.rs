@@ -153,8 +153,8 @@ mod tests {
     use std::collections::BTreeMap;
 
     use velnor_model::{
-        CargoCommand, FilterRef, Job, JobId, PackageName, Permissions, PrRun, RunnerLabel,
-        StepKind, TargetName, When,
+        BuildRecord, CargoCommand, FilterRef, Job, JobId, PackageName, Permissions, PrRun,
+        RunnerLabel, StepKind, TargetName, When,
     };
 
     use super::*;
@@ -175,8 +175,7 @@ mod tests {
             plan_outputs: Vec::new(),
             group_outputs: Vec::new(),
             reports_ignored: false,
-            records_build: false,
-            saves_after_lane_test: false,
+            build_record: BuildRecord::Unrecorded,
             chained_saves: false,
             selection_name: None,
             steps: kinds.into_iter().map(step).collect(),
