@@ -62,6 +62,19 @@ pub fn mbx_sessions(log: &[u8]) -> Vec<MbxSession> {
         .collect()
 }
 
+fn compiled_registry_unit(metrics: &LaneMetrics) -> bool {
+    metrics
+        .invocations
+        .iter()
+        .flat_map(|invocation| &invocation.artifacts)
+        .any(|artifact| {
+            !artifact.fresh
+                && crate::cargo_package::PackageIdentity::parse(&artifact.package_id)
+                    .and_then(|package| package.source)
+                    .is_some_and(|source| source.starts_with("registry+"))
+        })
+}
+
 #[must_use]
 pub fn waste(metrics: &LaneMetrics) -> Vec<String> {
     let mut violations = Vec::new();
@@ -81,7 +94,11 @@ pub fn waste(metrics: &LaneMetrics) -> Vec<String> {
         .iter()
         .map(|session| session.misses + session.not_looked_up)
         .sum();
-    if metrics.mbx.store_primed && sessions.iter().all(|session| session.hits == 0) && lookups > 0 {
+    if metrics.mbx.store_primed
+        && sessions.iter().all(|session| session.hits == 0)
+        && lookups > 0
+        && compiled_registry_unit(metrics)
+    {
         violations.push(format!(
             "MBX object cache: 0 hits in {} sessions ({lookups} lookups missed or skipped) although the configured store held entries before the job",
             sessions.len()

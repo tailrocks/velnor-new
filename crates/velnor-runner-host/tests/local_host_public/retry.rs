@@ -127,7 +127,7 @@ async fn local_slot_removes_a_failed_pair_before_it_mints_the_replacement() -> T
 #[tokio::test]
 async fn local_slot_counts_a_failed_removal_toward_the_retry_bound_and_mints_nothing_more()
 -> TestResult<()> {
-    let Some(scenario) = Scenario::new().await? else {
+    let Some(scenario) = Scenario::new_with_runtime().await? else {
         return Ok(());
     };
     let faults = Faults::new(every_wait_fails, 3);
@@ -141,7 +141,7 @@ async fn local_slot_counts_a_failed_removal_toward_the_retry_bound_and_mints_not
 
 #[tokio::test]
 async fn local_slot_counts_only_consecutive_failures_toward_the_retry_bound() -> TestResult<()> {
-    let Some(scenario) = Scenario::new().await? else {
+    let Some(scenario) = Scenario::new_with_runtime().await? else {
         return Ok(());
     };
     let faults = Faults::new(failures_alternate_with_successes, 0);
@@ -156,7 +156,7 @@ async fn local_slot_counts_only_consecutive_failures_toward_the_retry_bound() ->
 #[tokio::test]
 async fn local_transient_mint_failure_is_retried_and_leaves_the_other_slot_running()
 -> TestResult<()> {
-    let Some(mut scenario) = Scenario::new_with_guest_hook().await? else {
+    let Some(mut scenario) = Scenario::new_with_runtime().await? else {
         return Ok(());
     };
     let plan = scenario.plan(2, 0)?;
@@ -279,7 +279,7 @@ async fn wait_for_event(scenario: &Scenario, event: &str) {
 
 #[tokio::test]
 async fn local_slot_retries_the_agent_retirement_after_its_pair_was_removed() -> TestResult<()> {
-    let Some(mut scenario) = Scenario::new_with_guest_hook().await? else {
+    let Some(mut scenario) = Scenario::new_with_runtime().await? else {
         return Ok(());
     };
     scenario.fake().delete_failures.store(1, Ordering::SeqCst);
