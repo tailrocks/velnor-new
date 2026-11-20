@@ -13,8 +13,8 @@ use crate::lint_lane::{IDS, LINT, MISE};
 use crate::pipeline::{pin_helper, view, workflow};
 use crate::save_after_compile::{RECORD, saves, with_outcomes};
 
-const FIXED: &str = "0.1.110";
-const BEFORE: &str = "0.1.109";
+const FIXED: &str = "0.1.111";
+const BEFORE: &str = "0.1.110";
 const LANE_ID: &str = "rust-lane-local-mode-root";
 const LANE: &str = "[[test_lane]]\nroot = '.'\nfeatures = ['local-mode']\npackages = ['package-0']\nfilter = 'test(~local::) or binary(local_host_public)'\nlint = true\ndoc = true\njob = 'parallel'\n";
 const LABEL: &str = "pr_ci = \"label\"\n";
@@ -123,7 +123,7 @@ fn the_lane_saves_read_the_built_output_of_the_lane_test_and_not_the_job_result(
 }
 
 #[test]
-fn a_pin_before_0_1_110_keeps_the_job_result_gate_on_the_lane_saves() -> TestResult {
+fn a_pin_before_0_1_111_keeps_the_job_result_gate_on_the_lane_saves() -> TestResult {
     let block = lane_block(BEFORE, LANE)?;
     let record = step(&block, RECORD).ok_or("no record step")?;
     assert!(record.contains("success()"), "{record}");
@@ -155,7 +155,18 @@ fn under_label_mode_the_lane_job_runs_unlabeled_with_its_test_and_guard_gated() 
 }
 
 #[test]
-fn a_pin_before_0_1_110_keeps_the_label_gate_on_the_whole_lane_job() -> TestResult {
+fn a_test_only_lane_keeps_the_label_gate_on_the_whole_job() -> TestResult {
+    let test_only = LANE.replace("lint = true\ndoc = true\n", "");
+    let job = job_condition(FIXED, &format!("{LABEL}{test_only}"))?;
+    assert!(job.contains(FULL_RUN), "{job}");
+    let doc_only = LANE.replace("lint = true\n", "");
+    let job = job_condition(FIXED, &format!("{LABEL}{doc_only}"))?;
+    assert!(!job.contains(FULL_RUN), "{job}");
+    Ok(())
+}
+
+#[test]
+fn a_pin_before_0_1_111_keeps_the_label_gate_on_the_whole_lane_job() -> TestResult {
     let job = job_condition(BEFORE, &format!("{LABEL}{LANE}"))?;
     assert!(job.contains(FULL_RUN), "{job}");
     Ok(())
@@ -240,7 +251,7 @@ fn the_gate_treats_the_policy_and_lint_jobs_as_scheduled_unless_the_queue_run_pa
 }
 
 #[test]
-fn a_pin_before_0_1_110_keeps_the_support_jobs_allocated_and_their_steps_skipped() -> TestResult {
+fn a_pin_before_0_1_111_keeps_the_support_jobs_allocated_and_their_steps_skipped() -> TestResult {
     let config = format!("{KNOB}{LINT}");
     let all = jobs(&config, "0.1.103")?;
     for id in support_ids() {

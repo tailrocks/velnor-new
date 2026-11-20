@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{CacheKey, CacheRoot, Host, JobId, RepoPath, RepoView};
+use velnor_model::{CacheKey, CacheRoot, Host, JobId, RepoPath, RepoView, ToolsAnchor};
 use velnor_render::render_key;
 
 use crate::facts::TestResult;
@@ -68,7 +68,10 @@ fn a_rendered_key_over_512_characters_fails_generation() -> TestResult {
 fn no_key_family_carries_the_run_attempt() -> TestResult {
     let root = CacheRoot::new(&RepoPath::new("Cargo.toml")?, RepoPath::new("target")?);
     for key in [
-        CacheKey::Tools { host: Host },
+        CacheKey::Tools {
+            host: Host,
+            anchor: ToolsAnchor::Unanchored,
+        },
         CacheKey::Sources {
             host: Host,
             lane: root.clone(),

@@ -27,6 +27,7 @@ mod shape;
 mod steps;
 mod test_group;
 mod token_permission;
+mod trusted;
 mod verdict;
 
 pub use artifact_paths::{
@@ -34,11 +35,11 @@ pub use artifact_paths::{
     selects,
 };
 pub use budget_mode::{BUDGET_JOB_NAME, BUDGET_MODES_HELPER, ModeBudget, Selection, SelectionName};
-pub use cache::{CacheKey, CachePath, CacheRoot, Host, LockIdentity};
+pub use cache::{AnchorSource, CacheKey, CachePath, CacheRoot, Host, LockIdentity, ToolsAnchor};
 pub use cache_layout::{
     CACHE_COMPAT_LENGTH, CacheKeyLayout, CacheKeySegment, LOCK_OUTPUT_PREFIX,
-    RUNNER_ARCH_MAX_LENGTH, RUNNER_OS_MAX_LENGTH, SHARED_SOURCES_OWNER, json_char_bytes,
-    json_string_bytes,
+    RUNNER_ARCH_MAX_LENGTH, RUNNER_OS_MAX_LENGTH, SHARED_SOURCES_OWNER, TOOLS_ANCHOR_LENGTH,
+    json_char_bytes, json_string_bytes,
 };
 pub use cache_outputs::{
     BASE_PREFIX_OUTPUT, BASE_SAVE_OUTPUT, CacheLaneOutput, SOURCES_PREFIX_OUTPUT,
@@ -86,6 +87,7 @@ pub use test_group::{
     TestGroup, TestNeed,
 };
 pub use token_permission::{token_permission_accesses, token_permission_accesses_prose};
+pub use trusted::{TRUSTED_EVENT, TrustedRunners};
 pub use verdict::{JobCondition, VerdictJob, VerdictSpec};
 
 pub use steps::{

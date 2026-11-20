@@ -20,6 +20,7 @@ pub(crate) struct RawWorkflow {
     pub(crate) runner: Option<String>,
     pub(crate) hosted: Option<bool>,
     pub(crate) fork_runner: Option<String>,
+    pub(crate) trusted_runner: Option<String>,
     pub(crate) hosted_runner: Option<String>,
     pub(crate) scale_set_runner: Option<String>,
     #[serde(rename = "if")]
