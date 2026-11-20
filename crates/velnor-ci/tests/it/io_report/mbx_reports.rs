@@ -294,6 +294,61 @@ fn a_report_of_an_unknown_version_is_one_unknown_session_not_two() -> ResultTest
     Ok(())
 }
 
+fn plant(repo: &Repo, name: &str) -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
+    let directory = repo.root().join("velnor-mbx-reports");
+    fs::create_dir_all(&directory)?;
+    Ok(directory.join(name))
+}
+
+#[test]
+fn a_planted_symlink_or_oversized_report_is_unreadable_evidence_not_read() -> ResultTest {
+    let repo = fixture("mbx-reports-planted")?;
+    cargo(&repo, "build", &report_json(5, 1, 0, 0), "compiled")?;
+    let real = repo.root().join("real.json");
+    fs::write(&real, report_json(5, 7, 0, 0))?;
+    std::os::unix::fs::symlink(&real, plant(&repo, "1-linked.json")?)?;
+    fs::write(plant(&repo, "2-huge.json")?, vec![b' '; 2 << 20])?;
+    let metrics = report(&repo)?;
+    assert_eq!(metrics.mbx.sessions, [session(1, 0, 0)], "{metrics:?}");
+    assert_eq!(metrics.mbx.unparsed, 2);
+    let errors = metrics.verification_errors.join("\n");
+    assert!(
+        errors.contains("(2 report(s)); first: 1-linked.json: not a regular file"),
+        "{errors}"
+    );
+    fs::remove_file(plant(&repo, "1-linked.json")?)?;
+    let errors = report(&repo)?.verification_errors.join("\n");
+    assert!(errors.contains("2-huge.json: larger than"), "{errors}");
+    Ok(())
+}
+
+#[test]
+fn a_directory_with_more_reports_than_any_job_writes_is_not_read_in_full() -> ResultTest {
+    let repo = fixture("mbx-reports-flood")?;
+    for index in 0..600 {
+        fs::write(
+            plant(&repo, &format!("{index:05}.json"))?,
+            report_json(5, 1, 0, 0),
+        )?;
+    }
+    let metrics = report(&repo)?;
+    assert!(
+        metrics.mbx.sessions.len() < 600,
+        "{}",
+        metrics.mbx.sessions.len()
+    );
+    assert!(metrics.mbx.unparsed >= 1);
+    assert!(
+        metrics
+            .verification_errors
+            .iter()
+            .any(|line| line.contains("more than 512 entries")),
+        "{:?}",
+        metrics.verification_errors
+    );
+    Ok(())
+}
+
 #[test]
 fn with_the_switch_off_an_inherited_report_path_never_reaches_the_child() -> ResultTest {
     let repo = fixture("mbx-reports-off")?;

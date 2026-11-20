@@ -3,13 +3,16 @@
 
 use crate::mbx_report::{DIRECTORY, SWITCH, VARIABLE, parse, reports_session};
 use crate::waste_evidence::MbxSession;
-use std::fs;
+use std::fs::{self, File};
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const EXPECTED: &str = "expected";
+const MAX_ENTRIES: usize = 512;
+const MAX_REPORT_BYTES: u64 = 1 << 20;
 
 static SESSIONS: AtomicU64 = AtomicU64::new(0);
 
@@ -57,11 +60,14 @@ pub(super) fn read(runner_temp: &Path) -> Option<Reports> {
     if !enabled() {
         return None;
     }
-    let paths: Vec<PathBuf> = fs::read_dir(runner_temp.join(DIRECTORY))
+    let mut paths: Vec<PathBuf> = fs::read_dir(runner_temp.join(DIRECTORY))
         .ok()?
         .flatten()
+        .take(MAX_ENTRIES + 1)
         .map(|entry| entry.path())
         .collect();
+    let flooded = paths.len() > MAX_ENTRIES;
+    paths.truncate(MAX_ENTRIES);
     let with = |wanted: &str| {
         let mut found: Vec<PathBuf> = paths
             .iter()
@@ -75,7 +81,7 @@ pub(super) fn read(runner_temp: &Path) -> Option<Reports> {
         found
     };
     let (files, expected) = (with("json"), with(EXPECTED));
-    if files.is_empty() && expected.is_empty() {
+    if files.is_empty() && expected.is_empty() && !flooded {
         return None;
     }
     let mut reports = Reports {
@@ -93,11 +99,13 @@ pub(super) fn read(runner_temp: &Path) -> Option<Reports> {
             })
             .collect(),
     };
+    if flooded {
+        reports.unreadable.push(format!(
+            "{DIRECTORY}: more than {MAX_ENTRIES} entries; the rest were not read"
+        ));
+    }
     for file in files {
-        match fs::read(&file)
-            .map_err(|error| error.to_string())
-            .and_then(|bytes| parse(&bytes))
-        {
+        match read_regular(&file).and_then(|bytes| parse(&bytes)) {
             Ok(session) => reports.sessions.extend(session),
             Err(reason) => reports.unreadable.push(format!(
                 "{}: {reason}",
@@ -106,4 +114,19 @@ pub(super) fn read(runner_temp: &Path) -> Option<Reports> {
         }
     }
     Some(reports)
+}
+
+fn read_regular(file: &Path) -> Result<Vec<u8>, String> {
+    let metadata = fs::symlink_metadata(file).map_err(|error| error.to_string())?;
+    if !metadata.file_type().is_file() {
+        return Err("not a regular file".to_owned());
+    }
+    let mut bytes = Vec::new();
+    File::open(file)
+        .and_then(|report| report.take(MAX_REPORT_BYTES + 1).read_to_end(&mut bytes))
+        .map_err(|error| error.to_string())?;
+    if bytes.len() as u64 > MAX_REPORT_BYTES {
+        return Err(format!("larger than {MAX_REPORT_BYTES} bytes"));
+    }
+    Ok(bytes)
 }
