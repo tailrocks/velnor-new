@@ -46,8 +46,8 @@ fn condition(block: &str, name: &str) -> Result<String, Box<dyn std::error::Erro
 }
 
 #[test]
-fn twenty_roots_at_helper_0_1_109_stay_under_the_size_budget() -> TestResult {
-    let text = twenty_roots("0.1.109")?;
+fn twenty_roots_at_helper_0_1_110_stay_under_the_size_budget() -> TestResult {
+    let text = twenty_roots("0.1.110")?;
     assert!(
         text.len() <= BUDGET_BYTES,
         "{} bytes, budget {BUDGET_BYTES}",
@@ -59,7 +59,7 @@ fn twenty_roots_at_helper_0_1_109_stay_under_the_size_budget() -> TestResult {
 #[test]
 fn the_saves_after_the_decision_read_its_outputs_instead_of_repeating_its_conditions() -> TestResult
 {
-    let block = root_job(&twenty_roots("0.1.109")?)?;
+    let block = root_job(&twenty_roots("0.1.110")?)?;
     assert_eq!(
         condition(&block, "Decide whether to save the build directory")?,
         "'${{ !cancelled() && steps.inputs_save.outcome == ''success'' }}'"
@@ -83,7 +83,7 @@ fn the_saves_after_the_decision_read_its_outputs_instead_of_repeating_its_condit
 
 #[test]
 fn the_decision_itself_keeps_every_condition_of_a_save() -> TestResult {
-    let block = root_job(&twenty_roots("0.1.109")?)?;
+    let block = root_job(&twenty_roots("0.1.110")?)?;
     let saved = condition(&block, "velnor-ci inputs save")?;
     for needed in [
         "!cancelled()",

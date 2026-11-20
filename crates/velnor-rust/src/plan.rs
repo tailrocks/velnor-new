@@ -30,8 +30,8 @@ pub(crate) const LINT_JOB: JobId = JobId::from_static("rust-lint");
 pub(crate) const TEST_JOB: JobId = JobId::from_static("rust-test");
 pub(crate) const MBX_SEED_HELPER: (u64, u64, u64) = (0, 1, 86);
 pub(crate) const TOOLS_LOCAL_HELPER: (u64, u64, u64) = (0, 1, 89);
-// First released in tools-v0.1.109 (not tagged yet when this gate was written).
-pub(crate) const CHAINED_SAVES_HELPER: (u64, u64, u64) = (0, 1, 109);
+// First released in tools-v0.1.110 (not tagged yet when this gate was written).
+pub(crate) const CHAINED_SAVES_HELPER: (u64, u64, u64) = (0, 1, 110);
 pub(crate) const DEFAULT_GROUP_JOB: JobId = JobId::from_static("rust-test-default");
 pub(crate) const HELPER_JOB: JobId = JobId::from_static("rust-helper");
 pub(crate) const BUDGET_JOB: JobId = JobId::from_static(velnor_model::BUDGET_JOB);
