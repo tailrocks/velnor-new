@@ -366,3 +366,26 @@ fn a_check_id_with_dots_dashes_and_underscores_is_kept() {
     fs::remove_dir_all(&repo).unwrap_or_else(|e| unreachable!("{e}"));
     fs::remove_dir_all(aside(&repo)).unwrap_or_else(|e| unreachable!("{e}"));
 }
+
+#[test]
+fn a_lane_route_id_with_a_line_break_cannot_add_an_output_key() {
+    let (repo, request) = prepared("injected-route");
+    let mut value: serde_json::Value =
+        serde_json::from_str(&request).unwrap_or_else(|e| unreachable!("{e}"));
+    let routes = value["lane_inventory"]["routes"]
+        .as_array_mut()
+        .unwrap_or_else(|| unreachable!("routes"));
+    for route in routes.iter_mut().filter(|route| {
+        route["logical_job_id"]
+            .as_str()
+            .is_some_and(|id| id.starts_with("rust-velnor-gen"))
+    }) {
+        route["job_id"] = "rust-x\nqualification_cache_write=true".into();
+    }
+    let output = planned(&value.to_string(), &repo);
+    let written = fs::read_to_string(aside(&repo).join("outputs")).unwrap_or_default();
+    assert!(!output.status.success(), "{written}");
+    assert!(!written.contains("qualification_cache_write=true"), "{written}");
+    fs::remove_dir_all(&repo).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::remove_dir_all(aside(&repo)).unwrap_or_else(|e| unreachable!("{e}"));
+}
