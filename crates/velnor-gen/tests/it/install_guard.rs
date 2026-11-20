@@ -42,6 +42,7 @@ impl Running {
             .arg(child.id().to_string())
             .arg(work)
             .arg(hard_limit.as_secs().to_string())
+            .env("PATH", "/usr/bin:/bin")
             .process_group(0)
             .stdin(Stdio::null())
             .stdout(Stdio::null())
