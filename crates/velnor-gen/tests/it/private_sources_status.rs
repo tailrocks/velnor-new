@@ -18,9 +18,9 @@ fn is_phase(step: &serde_json::Value) -> bool {
 
 /// A PR run on a same-repository branch by a person, after the setup steps passed and the
 /// sources cache missed (the action leaves `cache-hit` empty on a miss).
-fn pull_request(path: &str) -> Result<Value, String> {
+fn pull_request(path: &str) -> Value {
     let text = |value: &str| Value::Str(value.to_owned());
-    Ok(match path {
+    match path {
         "github.event_name" => text("pull_request"),
         "github.repository" | "github.event.pull_request.head.repo.full_name" => text("o/r"),
         "github.actor" | "github.event.pull_request.user.login" => text("alice"),
@@ -28,7 +28,7 @@ fn pull_request(path: &str) -> Result<Value, String> {
         "needs.rust.outputs.rust_deny" => text("run"),
         _ if path.ends_with(".outcome") => text("success"),
         _ => Value::Null,
-    })
+    }
 }
 
 #[test]
@@ -40,20 +40,28 @@ fn a_failed_format_step_does_not_skip_the_private_token_and_the_fetch() -> TestR
         let compile = steps
             .iter()
             .find(|step| {
-                step["name"] == "Lint" || step["run"].as_str().is_some_and(|r| r.contains("cargo-clippy"))
+                step["name"] == "Lint"
+                    || step["run"]
+                        .as_str()
+                        .is_some_and(|r| r.contains("cargo-clippy"))
             })
             .and_then(|step| step["if"].as_str());
         let Some(compile) = compile else { continue };
         assert!(has_status_function(compile), "{compile}");
         for step in steps.iter().filter(|step| is_phase(step)) {
             checked += 1;
-            let guard = step["if"].as_str().ok_or_else(|| format!("no if: {step}"))?;
+            let guard = step["if"]
+                .as_str()
+                .ok_or_else(|| format!("no if: {step}"))?;
             assert!(
                 has_status_function(guard),
                 "a failed earlier step (Format) would skip this one while the compile steps still run offline: {guard}"
             );
             if step["id"] != "private-check" {
-                assert!(evaluate(guard, &pull_request)?.truthy(), "{guard}");
+                assert!(
+                    evaluate(guard, &|path| Ok(pull_request(path)))?.truthy(),
+                    "{guard}"
+                );
             }
         }
     }
