@@ -160,6 +160,7 @@ impl StepKind {
             | Self::SourcesLocks(_)
             | Self::SourcesFetch { .. }
             | Self::SourcesFetchAll { .. }
+            | Self::AdvisoryFetch { .. }
             | Self::CacheDecide { .. }
             | Self::CacheResult(_)
             | Self::CacheVerify { .. }
