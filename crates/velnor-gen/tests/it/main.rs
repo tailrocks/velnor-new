@@ -166,6 +166,7 @@ mod needs_size;
 mod needs_size_plan;
 mod nested_target_dir;
 mod nextest_profile;
+mod nextest_repo_config;
 mod no_programs;
 mod node_store_cache;
 mod patch;
