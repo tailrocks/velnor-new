@@ -17,18 +17,19 @@ This page proposes a `velnor-gen` feature that renders the `homebrew-adoption.ym
 - Secrets: none. Only `github.token`, exposed as `GH_TOKEN`. The gate job blanks every token variable and runs `env -u ... false`.
 - Target tap: none in this file. The tap lives in `.velnor/qualification/homebrew/jackin/transition.json` and reaches the workflow through `transition_id`. The only hard-coded repository is `tailrocks/velnor-new`, the SDK release source, which becomes the `repository` config key.
 - Jobs: `plan` (stage the SDK, checkout, `write-request-v1`, `plan-v1`, upload the plan artifact), `native-checks` (matrix, `fail-fast: false`, `max-parallel: 2`, download the plan, `execute-native-homebrew-check-v1`, upload the report), `required` (`fetch-reports-v1`, `write-request-v1`, `merge-v1`, upload the final report) and `required-gate` (fail unless the verdict passed).
-- The file is gone. #1529 (owner decision, 2026-11-19) deleted `.github/workflows/homebrew-adoption.yml` and removed the Homebrew formula from the pipelines. Its non-bootstrap steps ran the staged old-engine binary `velnor-actions-$VERSION`, selected by `VELNOR_INTERNAL_OP`. #1747 deleted that engine, so a revival would be rendered by `velnor-gen` and would call `velnor-ci`.
+- The workflow file and the Homebrew formula are not in the pipelines. The non-bootstrap steps of the former workflow ran the staged old-engine binary `velnor-actions-$VERSION`, selected by `VELNOR_INTERNAL_OP`. That engine is not in the tree, so a revival would be rendered by `velnor-gen` and would call `velnor-ci`.
 
 ## Why the change is large and risky
 
-1. Byte-identical output is impossible by design. The baseline it was compared against, `fixtures/opentofu-goldens/cases/dogfood/preview/.github/workflows/homebrew-adoption.yml`, was deleted by #1747 with the old engine. Moving the bootstrap into a helper changes the file anyway, so a revival needs a new baseline and a reviewed semantic diff, not an empty diff.
+1. Byte-identical output is impossible by design. The baseline this design once compared against, `fixtures/opentofu-goldens/cases/dogfood/preview/.github/workflows/homebrew-adoption.yml`, is not in the tree. Moving the bootstrap into a helper changes the file anyway, so a revival needs a new baseline and a reviewed semantic diff, not an empty diff.
 2. The generator already models job `outputs` (`RenderedJob.outputs`), per-step `continue-on-error` (`RenderedStep.continue_on_error`), the `workflow_call` trigger (`velnor-render/src/reusable_on.rs`), a matrix taken from a job output (`RenderedMatrixSource::Output`, with `max-parallel` and `fail-fast`) and the job `cache-mode` key. A revival needs no new model types for these.
 3. The helper command needs its own tests and a published helper release, which the generator then pins. That is two releases in sequence.
-4. The old-engine coupling no longer exists, so it does not block the design. The open choice on the `gh` pin source above still does.
+4. The old-engine coupling is not in the tree, so it does not block the design. The open choice on the `gh` pin source above still does.
 
 ## Suggested split
 
 1. `velnor-ci`: the `stage-sdk` command, with tests against recorded release data, then a helper release.
-2. `velnor-render::homebrew_adoption`: a renderer that uses the existing `workflow_call`, matrix-from-output and `cache-mode` support, behind the new config only.
-3. `homebrew-adoption.toml` config, a sample `homebrew-adoption`, a `generator/CONFIG.md` entry, and a golden test that fails before the renderer exists.
-4. Proof: generate the workflow and diff it against a new baseline, because the old one was deleted with #1747. No copy exists under `.github/workflows/`, so the baseline must be added with the change. The expected diff is the header, the bootstrap step and `cache-mode`, plus any permission change proposed explicitly.
+2. Replacement helper contracts for the `native-checks` and `required` jobs. `velnor-ci` has no native-check or Homebrew command, and the old `merge-v1` contract is deleted (see `docs/proposed/cli-contract.md`). The split above adds only `stage-sdk`, so these contracts are a blocker and come before the renderer.
+3. `velnor-render::homebrew_adoption`: a renderer that uses the existing `workflow_call`, matrix-from-output and `cache-mode` support, behind the new config only.
+4. `homebrew-adoption.toml` config, a sample `homebrew-adoption`, a `generator/CONFIG.md` entry, and a golden test that fails before the renderer exists.
+5. Proof: generate the workflow and diff it against a new baseline, because the old one is not in the tree. No copy exists under `.github/workflows/`, so the baseline must be added with the change. The expected diff is the header, the bootstrap step and `cache-mode`, plus any permission change proposed explicitly.
