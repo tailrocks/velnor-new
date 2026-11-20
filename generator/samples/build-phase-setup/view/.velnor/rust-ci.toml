@@ -1,0 +1,12 @@
+runner = "ubuntu-26.04-scale-set"
+hosted = false
+required_check = "Required"
+default_branch = "main"
+shape = "one-job"
+docs = "post_merge"
+
+[[test_setup]]
+root = "."
+name = "Unpack the committed asset bundle"
+run = "bash scripts/unpack-assets.sh"
+phase = "build"
