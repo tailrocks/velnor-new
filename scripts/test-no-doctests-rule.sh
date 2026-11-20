@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# Fixture test for the alint `no-doctests` rule. Every doctest form must fail,
-# plain prose must pass. Usage: scripts/test-no-doctests-rule.sh [config]
 set -euo pipefail
 
 repo="$(cd "$(dirname "$0")/.." && pwd)"
@@ -38,6 +36,8 @@ check heading_indent    fail '/// # Title\n///     code\nfn f() {}\n'
 check attr_between      fail '/// prose\n///\n#[allow(dead_code)]\n///     code\nfn f() {}\n'
 check crlf_blank_indent fail '/// a\r\n///\r\n///     code\r\nfn f() {}\r\n'
 check include_str       fail '#[doc = include_str!("README.md")]\nfn f() {}\n'
+check attr_doc_fence    fail '#[doc = "```\\nlet x = 1;\\n```"]\nfn f() {}\n'
+check attr_nested_include fail '#![cfg_attr(all(), doc = include_str!("README.md"))]\nfn f() {}\n'
 check indent_no_blank   fail '/// - item\n///     onto the next line\nfn f() {}\n'
 check plain_prose       pass '/// plain prose\n//! more prose\nfn f() {}\n'
 
