@@ -227,6 +227,10 @@ fn rendered_steps(
         }
         let mut extra = saved_unless_hit(&step.kind);
         extra.extend(
+            step.hosted_only
+                .then(|| crate::gate::NOT_SELF_HOSTED.to_owned()),
+        );
+        extra.extend(
             step.skip_when_cold
                 .then(|| crate::gate::PREPARE_COLD.to_owned()),
         );
@@ -355,7 +359,8 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
             expiry,
             cli,
         } => restored_targets_step(targets, *expiry, *cli),
-        StepKind::MbxRemote => crate::helper_steps::mbx_remote_step(),
+        StepKind::MbxRemote { from_pin } => crate::helper_steps::mbx_remote_step(*from_pin),
+        StepKind::MbxPin => crate::helper_steps::mbx_pin_step(),
         StepKind::CratesMirror(mirror) => crate::helper_steps::mirror_step(mirror),
         StepKind::MbxStore | StepKind::MbxPrivate => crate::helper_steps::mbx_local_step(kind),
         StepKind::PrivateCheck { .. }

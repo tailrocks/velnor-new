@@ -353,5 +353,6 @@ pub(crate) fn step(kind: StepKind) -> Step {
         pr: PrRun::Always,
         gate: None,
         reads: None,
+        hosted_only: false,
     }
 }

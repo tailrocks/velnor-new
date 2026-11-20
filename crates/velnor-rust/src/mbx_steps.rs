@@ -3,10 +3,15 @@
 
 use velnor_model::{HelperCommand, Job, MbxRemote, MbxStore, RepoFacts, Step, StepKind};
 
+use crate::mbx_pin::MBX_PIN_HELPER;
 use crate::plan::step;
 
 pub(crate) fn apply(facts: &RepoFacts, jobs: &mut [Job]) {
     let remote = facts.config.mbx_remote == MbxRemote::GithubActions;
+    let from_pin = facts
+        .helper
+        .as_ref()
+        .is_some_and(|helper| helper.version().at_least(MBX_PIN_HELPER));
     let private =
         facts.config.mbx.routed() && !remote && facts.config.mbx_store == MbxStore::Private;
     for job in jobs {
@@ -14,7 +19,12 @@ pub(crate) fn apply(facts: &RepoFacts, jobs: &mut [Job]) {
             continue;
         }
         if remote && facts.private_sources.is_none() {
-            insert(job, &[StepKind::MbxRemote], After::Tools);
+            let remote_steps = if from_pin {
+                vec![StepKind::MbxPin, StepKind::MbxRemote { from_pin }]
+            } else {
+                vec![StepKind::MbxRemote { from_pin }]
+            };
+            insert(job, &remote_steps, After::Tools);
         }
         if private {
             insert(job, &[StepKind::MbxPrivate], After::Helper);

@@ -222,6 +222,21 @@ run = "bash scripts/prepare-fixtures.sh"
 
 `root` is the folder of the Cargo root's `Cargo.toml`, or `.` for the repository root, and it must name a root of this repository. The step runs in that folder. It follows the same gate as the test steps, so a run that selects no tests skips it. A job that runs no tests has none. With `shape = "groups"` the test group job installs only cargo-nextest, so a step there must not need Rust. A `run` value with an expression, a line break or any shell syntax is refused.
 
+By default a step runs only before the tests, so a lint, doc or check step does not see its output. A package whose `build.rs` reads the fixture then fails `cargo clippy` before the setup has run. Add `phase = "build"` to the step:
+
+```toml
+[[test_setup]]
+root = "."
+name = "Unpack the fixtures"
+run = "bash scripts/unpack-fixtures.sh"
+phase = "build"
+```
+
+- `phase` is `"test"` (default) or `"build"`. A step with `phase = "build"` runs in every job of its root that compiles or runs tests, directly before the first cargo step that compiles the package or runs its tests: `cargo clippy`, `cargo doc`, the build of the tests or of the nextest archive, a feature lane, the test steps. It does not run before `cargo fmt`, cargo-machete or cargo-deny, and a job with only those has no such step. In the `groups` shape it runs in the lint job, the build job and each group job. Steps of both phases keep the order written inside their phase, and the `build` steps come first. A step with `phase = "build"` is not repeated before the tests of the same job.
+- The step has the gate of the cargo steps it precedes, so a run that selects nothing for the root skips it.
+- Placement never puts repository code ahead of a token or verdict step that was not already behind repository code: the step sits directly before the first cargo step, which is repository code already, and the `[private_sources]` token phase goes in front of it. The step does not see the token (see Optional private dependencies).
+- The key needs `velnor-ci` 0.1.109 or later, because `velnor-ci` reads the same file. Generation refuses an older pin when any step writes the key, `"test"` too. A step without the key renders as before.
+
 ## Per-root time limits
 
 `[root_timeouts]` gives one root's jobs their own time limit, so a heavy root can run longer without raising the limit of every job. Each key is the folder of a root's `Cargo.toml`, or `.` for the repository root, and each value is a time limit in minutes, 1 to 360, the same range as `timeout_minutes`. A key that names no root of the repository, a value out of range, or a second key for the same root (`crates/x` and `crates/x/`) is refused with its name.

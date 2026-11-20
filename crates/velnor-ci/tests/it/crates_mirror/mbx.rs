@@ -225,7 +225,10 @@ fn mirror_off_with_declared_mbx_and_no_cargo_on_path_succeeds() -> TestResult {
         "{env}"
     );
     assert!(!env.contains("VELNOR_CARGO_CONFIG"), "{env}");
-    assert!(env.lines().any(|line| line == "VELNOR_CRATES_MIRROR=off"), "{env}");
+    assert!(
+        env.lines().any(|line| line == "VELNOR_CRATES_MIRROR=off"),
+        "{env}"
+    );
     assert!(!repo.root().join("velnor-cargo/config.toml").exists());
     Ok(())
 }
@@ -235,11 +238,14 @@ fn mirror_job_whose_config_variable_is_cleared_refuses_to_run_cargo() -> TestRes
     let repo = configured_repo("crates-mirror-config-cleared")?;
     let env_path = repo.root().join("env");
     let env = fs::read_to_string(&env_path)?;
-    let kept: String = env
+    let mut kept = String::new();
+    for line in env
         .lines()
         .filter(|line| !line.starts_with("VELNOR_CARGO_CONFIG="))
-        .map(|line| format!("{line}\n"))
-        .collect();
+    {
+        kept.push_str(line);
+        kept.push('\n');
+    }
     fs::write(&env_path, kept)?;
     let plain = plain_cargo(&repo)?;
     let output = run_wrapper_with(repo.root(), &plain, false, false)?;
