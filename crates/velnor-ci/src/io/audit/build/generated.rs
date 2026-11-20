@@ -21,7 +21,7 @@ pub(super) fn proven(workspaces: &[Workspace]) -> Result<BTreeSet<PathBuf>, CiEr
                 && let Ok(saved) = inventory::load(&path)
                 && base.is_subset(&saved.targets)
             {
-                found.extend(saved.targets);
+                found.extend(saved.targets.iter().cloned());
             }
         }
     }

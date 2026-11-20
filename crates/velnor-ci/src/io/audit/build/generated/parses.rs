@@ -95,9 +95,10 @@ fn units_sharing_one_inventory_parse_it_once() {
 #[test]
 fn a_changed_inventory_is_never_served_from_the_cache() {
     let fixture = Fixture::new("changed");
-    let output = fixture.target.join("debug/build/lib-f000000000000000/output");
+    let output = fixture
+        .target
+        .join("debug/build/lib-f000000000000000/output");
     inventory::load(&output).unwrap_or_else(|e| unreachable!("{e}"));
-    fs::write(&fixture.saved, "{}")
-        .unwrap_or_else(|e| unreachable!("{e}"));
+    fs::write(&fixture.saved, "{}").unwrap_or_else(|e| unreachable!("{e}"));
     assert!(inventory::load(&output).is_err());
 }

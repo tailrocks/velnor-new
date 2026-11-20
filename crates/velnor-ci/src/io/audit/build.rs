@@ -16,10 +16,10 @@ use velnor_gen::io::read_checkout;
 use velnor_model::RepoFacts;
 use velnor_rust::{detect, sha256_hex};
 
-use super::timing;
 use super::super::units::{UnitFile, Workspace, apart, unit_files};
 use super::groups::{group_dirs, inheriting, scan_dirs, shared_groups, standalone, workspaces};
 use super::inventory::{self, Evidence};
+use super::timing;
 use crate::cli::InputsBuildArgs;
 use crate::error::CiError;
 use invocation::Invocation;
@@ -99,7 +99,9 @@ impl Builder<'_> {
         replayable: bool,
         invalidate: bool,
     ) -> Result<(), CiError> {
-        self.targets.extend(timing::phase("proven", || generated::proven(&self.workspaces))?);
+        self.targets.extend(timing::phase("proven", || {
+            generated::proven(&self.workspaces)
+        })?);
         for _ in 0..if replayable { 2 } else { 1 } {
             let declared = timing::phase("declared", || self.declared())?;
             let before = timing::phase("identities", || self.identities())?;
