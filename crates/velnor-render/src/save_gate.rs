@@ -1,13 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-//! What the saves of the target and sources caches wait for.
-//!
-//! A save does not wait for the whole job to succeed: a failing test must not cost
-//! the next run its warm target. It waits for the steps that compile the build it
-//! captures, and for the compile-input audit when one is required. The conditions
-//! themselves come from `save_condition`, for every shape of job.
-
 use velnor_model::{CargoCommand, Gate, HelperCommand, Job, PrRun, Step, StepKind, When};
 
 use crate::gate::Setup;
@@ -20,12 +13,10 @@ const AUDIT_ID: &str = "audit";
 const COMPILE_ID: &str = "compile";
 const SAVEABLE_ID: &str = "saveable";
 
-/// The step ids a job's saves wait for, and the ids those steps are given.
 #[derive(Clone, Debug, Default)]
 pub(crate) struct SaveGate {
     ids: Vec<Option<String>>,
     required: Vec<String>,
-    /// What an audit waits for before it runs, by step index.
     audit_runs: Vec<Option<String>>,
     saveable: Option<Saveable>,
 }
@@ -60,13 +51,11 @@ fn is_compile_check(step: &Step) -> bool {
     matches!(&step.kind, StepKind::Cargo(command) if command.is_compile_check())
 }
 
-/// A test step that records its build in its outputs, which the saves read.
 fn is_test_run(step: &Step) -> bool {
     matches!(&step.kind, StepKind::Cargo(CargoCommand::NextestRun { .. }))
 }
 
 impl SaveGate {
-    /// A job without a compile step before its saves keeps the implicit `success()`.
     pub(crate) fn of(job: &Job) -> Self {
         let mut gate = Self {
             ids: vec![None; job.steps.len()],
@@ -77,9 +66,6 @@ impl SaveGate {
             return gate;
         };
         let saved_here = job.steps[first].gate.as_ref();
-        // Only a job whose pinned helper records the build (`Job::records_build`) and that has
-        // no build step of its own saves after its test steps (`built` output). Any other job
-        // keeps the build steps, whatever steps it happens to have.
         let legacy = !job.records_build
             || job
                 .steps
@@ -189,15 +175,11 @@ impl SaveGate {
         &self.required
     }
 
-    /// The condition an audit adds to its own: it runs after a failed test, once the
-    /// builds before it finished, so a save never follows an audit that did not run.
     pub(crate) fn audit_runs(&self, index: usize) -> Option<&str> {
         self.audit_runs.get(index)?.as_deref()
     }
 }
 
-/// The steps a save waits for: the compile steps of its job, or the whole job when
-/// it has none.
 pub(crate) fn settled(saved_after: &[String]) -> Vec<String> {
     if saved_after.is_empty() {
         vec!["success()".to_owned()]
