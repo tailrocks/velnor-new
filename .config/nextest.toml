@@ -234,3 +234,11 @@ slow-timeout = { period = "10s", terminate-after = 1 }
 [[profile.ci.overrides]]
 filter = 'package(=velnor-gen) and binary(=it) and (test(=needs_size::cache_context_is_bounded_from_its_producers_without_unrelated_plan_outputs) | test(=helper_perl_environment::trusted_launcher_preserves_helper_arguments_and_failure_status) | test(=helper_perl_environment::trusted_shasum_ignores_perl_startup_and_inherited_launcher_poison) | test(=helper_integrity::rendered_commands_ignore_path_shadows_and_refuse_a_replaced_helper) | test(=helper_startup::trusted_invocations_ignore_bash_env_startup) | test(=helper_startup::trusted_invocations_ignore_imported_exec_functions) | test(=helper_startup::trusted_invocations_ignore_imported_shell_options) | test(=release_yml_raw::provenance_is_written_only_for_a_strict_sidecar) | test(=ruleset::the_help_one_liner_stops_at_the_first_failed_post) | test(=declared_command_wrappers::wrappers_cannot_hide_a_helper_call))'
 slow-timeout = { period = "10s", terminate-after = 1 }
+
+[[profile.default.overrides]]
+filter = 'package(=velnor-runner-host)'
+slow-timeout = { period = "60s", terminate-after = 3 }
+
+[[profile.ci.overrides]]
+filter = 'package(=velnor-runner-host)'
+slow-timeout = { period = "60s", terminate-after = 3 }
