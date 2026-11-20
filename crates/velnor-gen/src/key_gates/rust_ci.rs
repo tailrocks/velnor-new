@@ -60,6 +60,12 @@ pub(super) const RUST_CI: &[KeyGate] = &[
     gate(RustCi, "cache_debug", (0, 1, 82)),
     // helper-gate: first in tools-v0.1.91 via 240848918a
     gate(RustCi, "check_alone", (0, 1, 91)),
+    // First released in tools-v0.1.110 (not tagged yet when this gate was written).
+    gate(RustCi, "check_configurations", (0, 1, 110)),
+    // First released in tools-v0.1.110 (not tagged yet when this gate was written).
+    gate(RustCi, "check_configurations.configurations", (0, 1, 110)),
+    // First released in tools-v0.1.110 (not tagged yet when this gate was written).
+    gate(RustCi, "check_configurations.root", (0, 1, 110)),
     // helper-gate: first in tools-v0.1.88 via 5e731ce593
     gate(RustCi, "ci", (0, 1, 88)),
     // helper-gate: first in tools-v0.1.88 via 5e731ce593
