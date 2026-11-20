@@ -16,6 +16,7 @@ pub(crate) struct BuildContext<'a> {
     pub(crate) same_commit: RenderedStep,
     pub(crate) tag: &'a str,
     pub(crate) private: Option<Private<'a>>,
+    pub(crate) mbx: bool,
 }
 
 pub(crate) fn package_tag(binary: &BinaryPlan) -> String {
