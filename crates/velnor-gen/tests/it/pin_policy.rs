@@ -46,6 +46,32 @@ fn policy_actions() -> Result<Vec<PolicyAction>, Box<dyn Error>> {
     Ok(actions)
 }
 
+const MISE_VERSION: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../.mise-version");
+const MISE_TOML: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../../mise.toml");
+
+fn toml_string(path: &str, key: &str) -> Result<String, Box<dyn Error>> {
+    let doc: toml::Table = toml::from_str(&std::fs::read_to_string(path)?)?;
+    let value = doc.get(key).and_then(toml::Value::as_str);
+    Ok(value.ok_or("the file has no such string key")?.to_owned())
+}
+
+#[test]
+fn mise_version_file_matches_the_version_policy_and_the_minimum_mise_toml_requires()
+-> Result<(), Box<dyn Error>> {
+    let file = std::fs::read_to_string(MISE_VERSION)?.trim().to_owned();
+    let minimum = toml_string(MISE_TOML, "min_version")?;
+    let policy: toml::Table = toml::from_str(&std::fs::read_to_string(POLICY)?)?;
+    let pinned = policy
+        .get("tools")
+        .and_then(toml::Value::as_table)
+        .and_then(|tools| tools.get("mise"))
+        .and_then(toml::Value::as_str)
+        .ok_or("version-policy.toml has no [tools] mise pin")?;
+    assert_eq!(file, minimum, ".mise-version differs from mise.toml min_version");
+    assert_eq!(file, pinned, ".mise-version differs from version-policy.toml");
+    Ok(())
+}
+
 /// Every 40-character hex word in the source. A commit pin is always a full SHA.
 fn commit_literals(text: &str) -> impl Iterator<Item = &str> {
     text.split(|c: char| !c.is_ascii_hexdigit())
