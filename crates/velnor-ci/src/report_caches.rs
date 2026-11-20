@@ -12,6 +12,8 @@ pub(crate) struct CachePlan {
     root: Option<String>,
     restore_step: String,
     save_step: String,
+    #[serde(default)]
+    not_generated: Option<String>,
 }
 
 pub(crate) fn observe_caches(
@@ -52,6 +54,7 @@ pub(crate) fn observe_caches(
                 usable: false,
                 usable_same_lock: false,
                 save,
+                not_generated: plan.not_generated,
                 entry_before_job: None,
             }
         })
