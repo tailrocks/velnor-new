@@ -5,7 +5,6 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::fs;
 use std::path::Path;
-use std::process::Command;
 
 use velnor_gen::io::{add_manifests, read_files};
 use velnor_gen::{Drift, drift};
@@ -217,28 +216,40 @@ fn every_workflow_velnor_gen_renders_carries_a_seal_that_verifies() -> TestResul
     Ok(())
 }
 
-fn committed_view(root: &Path) -> Result<RepoView, Box<dyn Error>> {
-    let git = crate::setup_action::program("git");
-    let listing = Command::new(git)
-        .args(["ls-files", "-s", "-z"])
-        .current_dir(root)
-        .output()?;
-    assert!(listing.status.success(), "git ls-files failed");
-    let mut tracked = BTreeSet::new();
-    let mut symlinks = BTreeSet::new();
-    for entry in listing
-        .stdout
-        .split(|byte| *byte == 0)
-        .filter(|e| !e.is_empty())
-    {
-        let text = String::from_utf8(entry.to_vec())?;
-        let (meta, name) = text.split_once('\t').ok_or("unreadable git index entry")?;
-        let path = RepoPath::new(name)?;
-        if meta.starts_with("120000") {
+const UNTRACKED_DIRECTORIES: [&str; 3] = [".git", "target", "node_modules"];
+
+fn walk(
+    root: &Path,
+    directory: &Path,
+    tracked: &mut BTreeSet<RepoPath>,
+    symlinks: &mut BTreeSet<RepoPath>,
+) -> Result<(), Box<dyn Error>> {
+    for entry in fs::read_dir(directory)? {
+        let entry = entry?;
+        let kind = entry.file_type()?;
+        let name = entry.file_name();
+        let name = name.to_str().ok_or("a repository file name is not UTF-8")?;
+        if UNTRACKED_DIRECTORIES.contains(&name) {
+            continue;
+        }
+        if kind.is_dir() {
+            walk(root, &entry.path(), tracked, symlinks)?;
+            continue;
+        }
+        let relative = entry.path().strip_prefix(root)?.to_path_buf();
+        let path = RepoPath::new(relative.to_str().ok_or("a repository path is not UTF-8")?)?;
+        if kind.is_symlink() {
             symlinks.insert(path.clone());
         }
         tracked.insert(path);
     }
+    Ok(())
+}
+
+fn committed_view(root: &Path) -> Result<RepoView, Box<dyn Error>> {
+    let mut tracked = BTreeSet::new();
+    let mut symlinks = BTreeSet::new();
+    walk(root, root, &mut tracked, &mut symlinks)?;
     let mut view = RepoView {
         repository: RepositoryIdentity::Named("tailrocks/velnor-new".to_owned()),
         files: read_files(root, &wanted_files(&tracked))?,

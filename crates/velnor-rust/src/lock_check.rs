@@ -14,8 +14,6 @@ use crate::lock::{
 /// The commit a `velnor-gen` build without `VELNOR_COMMIT` reports.
 const UNSTAMPED: &str = "unknown";
 
-/// The first tools release that publishes archives and `BINARY-SHA256SUMS`; the releases
-/// before it publish raw binaries only.
 const FIRST_ARCHIVE_RELEASE: (u64, u64, u64) = (0, 1, 94);
 
 /// The velnor-gen binary that runs `check`, as its own build describes it.
@@ -56,9 +54,8 @@ fn named(section: &str, error: &LockError) -> LockError {
 
 /// Offline: the `[velnor-gen]` entry agrees with the lock's own version and commit and, when
 /// the running binary is a release build of the lock's commit, with that binary's bytes.
-/// An archive lock lists archive digests, which the binary's bytes never match, so only a raw
-/// lock is compared. A local build (`unknown` commit) is not compared, since its digest is not
-/// the published one. A newer binary that is not the locked release is not compared either.
+/// A local build (`unknown` commit) is not compared, since its digest is not the published one.
+/// A newer binary that is not the locked release is not compared either.
 pub fn check_generator_entry(bytes: &[u8], running: RunningGenerator<'_>) -> Result<(), LockError> {
     let lock = parse(bytes)?;
     release_version(&lock.version)?;
@@ -96,9 +93,6 @@ pub fn check_generator_entry(bytes: &[u8], running: RunningGenerator<'_>) -> Res
     Ok(())
 }
 
-/// The lock's format as its release version fixes it, never as its own content claims it: a
-/// release from the archive era lists `[velnor-ci-binary]` and an older one must not. Returns
-/// whether the lock is an archive lock; only a raw lock lists the bytes of the binary.
 fn check_format(lock: &Lock) -> Result<bool, LockError> {
     let archive = release_version(&lock.version)?.at_least(FIRST_ARCHIVE_RELEASE);
     match (archive, lock.ci_binary.as_ref()) {

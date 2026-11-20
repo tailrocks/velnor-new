@@ -67,7 +67,6 @@ pub(crate) fn archive_lock() -> Result<String, Box<dyn Error>> {
     archive_lock_at("0.1.81")
 }
 
-/// The archive lock pinned at `version`, for a test whose config needs that helper.
 pub(crate) fn archive_lock_at(version: &str) -> Result<String, Box<dyn Error>> {
     Ok(pin_lock(
         version,
