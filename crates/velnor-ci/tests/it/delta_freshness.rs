@@ -168,13 +168,33 @@ impl Fixture {
         ])
     }
 
+    fn fingerprint_folders(&self) -> Vec<PathBuf> {
+        let debug = self.directory.join("target/debug");
+        let list = |dir: &std::path::Path| -> Vec<PathBuf> {
+            fs::read_dir(dir)
+                .into_iter()
+                .flatten()
+                .map(|entry| entry.unwrap_or_else(|e| unreachable!("{e}")).path())
+                .collect()
+        };
+        // The layout before Cargo 1.100 is `.fingerprint/<package>-<hash>`, since then
+        // `build/<package>/<hash>/fingerprint`.
+        let mut folders = list(&debug.join(".fingerprint"));
+        for package in list(&debug.join("build")) {
+            folders.extend(
+                list(&package)
+                    .into_iter()
+                    .map(|unit| unit.join("fingerprint"))
+                    .filter(|folder| folder.is_dir()),
+            );
+        }
+        folders
+    }
+
     fn incomplete_watchsets(&self, empty: bool) {
-        let entries = fs::read_dir(self.directory.join("target/debug/.fingerprint"))
-            .unwrap_or_else(|e| unreachable!("{e}"));
         let mut count = 0;
-        for entry in entries {
-            let entry = entry.unwrap_or_else(|e| unreachable!("{e}"));
-            for file in fs::read_dir(entry.path()).unwrap_or_else(|e| unreachable!("{e}")) {
+        for folder in self.fingerprint_folders() {
+            for file in fs::read_dir(folder).unwrap_or_else(|e| unreachable!("{e}")) {
                 let file = file.unwrap_or_else(|e| unreachable!("{e}"));
                 if !file.file_name().to_string_lossy().starts_with("dep-") {
                     continue;

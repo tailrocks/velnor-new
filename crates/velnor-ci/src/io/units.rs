@@ -8,6 +8,7 @@ use std::process::Command;
 use serde::Deserialize;
 use velnor_rust::{NESTED_ROOTS_FOLDER, resolve};
 
+use crate::cache_prune::is_hash;
 use crate::error::CiError;
 
 mod fill;
@@ -248,11 +249,6 @@ fn unit_in_new_layout(folders: &[&str], name: &str) -> Option<UnitFile> {
         }
         _ => None,
     }
-}
-
-/// The 16 lower-case hexadecimal digits Cargo 1.100 names a unit directory with.
-pub(crate) fn is_hash(text: &str) -> bool {
-    text.len() == 16 && text.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
 }
 
 pub(super) fn profile(configuration: &str) -> &str {
