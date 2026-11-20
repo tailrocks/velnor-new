@@ -47,6 +47,7 @@ pub struct ReleaseFiles {
     pub workflow_names: Option<BTreeSet<String>>,
     pub push_workflows: Option<BTreeSet<String>>,
     pub mise_lock: String,
+    pub mbx_opt_out: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -245,7 +246,7 @@ impl ReleasePlan {
             release_plz_version: release_plz.version,
             release_plz_url: release_plz.url,
             release_plz_sha256: release_plz.sha256,
-            mbx: mise::declares_mbx(&files.mise_tomls),
+            mbx: !files.mbx_opt_out && mise::declares_mbx(&files.mise_tomls),
         })
     }
 }

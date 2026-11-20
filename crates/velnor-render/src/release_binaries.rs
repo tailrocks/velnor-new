@@ -12,7 +12,7 @@ use crate::release_assets::{
     versioned,
 };
 use crate::release_attest::verify;
-use crate::release_context::{BuildContext, Private, package_tag};
+use crate::release_context::{BuildContext, Private, package_tag, private_mbx_store};
 use crate::release_outputs::commit_output;
 use crate::release_raw::{raw_packaging, smoke_steps};
 use crate::release_source::PUSHED_COMMIT;
@@ -159,13 +159,14 @@ pub(crate) fn build_steps(
             steps
         }
     };
-    let mut steps = vec![
-        RenderedStep {
-            id: Some("source".to_owned()),
-            ..checkout(source, 1)
-        },
-        same_commit,
-    ];
+    let mut steps = vec![RenderedStep {
+        id: Some("source".to_owned()),
+        ..checkout(source, 1)
+    }];
+    if mbx {
+        steps.push(private_mbx_store(&build_id(&binary.package, platform)));
+    }
+    steps.push(same_commit);
     if linux {
         steps.push(command(
             "Install the musl C compiler".to_owned(),

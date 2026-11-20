@@ -72,12 +72,7 @@ fn checkout(name: &str, metadata: &Path) -> Result<Scratch, Box<dyn Error>> {
     )?;
     fs::write(repo.0.join("mise.lock"), MISE_LOCK)?;
     fs::write(repo.0.join(".velnor/rust-ci.toml"), RUST_CI)?;
-    fs::write(
-        repo.0.join("mise.toml"),
-        format!(
-            "{MISE_TOML}\n[wrappers.cargo]\ncommand = \"mbx\"\nenv = {{ MBX_CARGO_SHIM_MODE = \"1\" }}\n"
-        ),
-    )?;
+    fs::write(repo.0.join("mise.toml"), MISE_TOML)?;
     let root = repo.0.canonicalize()?;
     fs::write(
         metadata,

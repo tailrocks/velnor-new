@@ -21,7 +21,7 @@ fn with_mise(config: &str, extra: &str) -> Result<RepoView, Box<dyn std::error::
 
 fn tools(text: &str) -> String {
     format!(
-        "[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n{text}"
+        "[wrappers.cargo]\ncommand = \"mbx\"\nenv = {{ MBX_CARGO_SHIM_MODE = \"1\" }}\n\n[tools]\nrust = {{ version = \"1.99.1\", mr_boxington = true }}\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n{text}\n"
     )
 }
 
@@ -47,7 +47,7 @@ fn install_args(view: &RepoView, job: &str) -> Result<String, Box<dyn std::error
 }
 
 fn lock(entries: &[(&str, &str)]) -> Result<String, std::fmt::Error> {
-    let mut text = String::new();
+    let mut text = "[[tools.mr-boxington]]\nversion = \"1.30.0\"\nspecifiers = [\"v1.30.0\"]\n\n[tools.mr-boxington.\"platforms.linux-x64\"]\nurl = \"https://tools.test/mbx\"\n\n".to_owned();
     for (name, version) in entries {
         write!(
             text,
@@ -191,7 +191,7 @@ fn a_lint_pin_that_mise_lock_holds_at_another_version_is_refused() -> TestResult
 
 #[test]
 fn a_lint_job_runs_on_every_ready_pull_request_even_when_ci_is_label_gated() -> TestResult {
-    let mut view = crate::base_save::pinned("0.1.88", &format!("pr_ci = 'label'\n{JACTIONLINT}"))?;
+    let mut view = crate::base_save::pinned("0.1.89", &format!("pr_ci = 'label'\n{JACTIONLINT}"))?;
     view.files
         .insert(path("mise.toml")?, MISE.as_bytes().to_vec());
     let jobs = crate::yaml_tree::document(&workflow(&view)?)?["jobs"].clone();
