@@ -109,16 +109,19 @@ pub fn expected_with_notes(
     }
     let (release, release_notes) = release::release_workflow(view, &facts, helper, &files)?;
     files.extend(release);
-    let base_note = velnor_rust::base_cache_note(&facts);
     let mut notes: Vec<String> = velnor_rust::untimed_auto_note(&facts)
         .into_iter()
         .chain(velnor_rust::unverified_tools_note(&facts))
+        .chain(velnor_rust::base_cache_note(&facts))
         .chain(facts.timings_notes)
         .collect();
-    notes.extend(base_note);
     notes.extend(facts.private_suggestion);
     notes.extend(release_notes);
     notes.extend(budget_notes);
+    notes.extend(velnor_rust::deny_off_note(
+        facts.policy,
+        &facts.deny_configs,
+    ));
     notes.extend(reusable_notes);
     notes.extend(
         excluded

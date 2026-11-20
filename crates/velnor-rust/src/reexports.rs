@@ -45,7 +45,7 @@ pub use crate::metadata_file::{
 pub use crate::mise::{MISE_CONFIGS, MISE_LOCK, check_tools, mise_files, tool_pins, tool_requests};
 pub use crate::owners::{Owner, Owners, add_reads};
 pub use crate::plan::{check_required_check, plan, plan_without_deltas};
-pub use crate::policy::{PolicyRuns, policy_runs};
+pub use crate::policy::{DENY_OFF_NOTE, PolicyRuns, deny_off_note, policy_runs};
 pub use crate::private_sources::{
     base_cache_note, cacheable_config, cacheable_lock, cacheable_private_lock,
 };
