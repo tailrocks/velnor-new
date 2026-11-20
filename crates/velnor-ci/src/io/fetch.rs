@@ -110,7 +110,7 @@ pub(super) fn api_client(
 ) -> Result<super::http::HttpGitHub, CiError> {
     let api = std::env::var(API_VARIABLE)
         .ok()
-        .filter(|api| api.starts_with("https://") || api.starts_with("http://127.0.0.1"))
+        .filter(|api| super::http::trusted_api(api))
         .ok_or_else(|| CiError::new(format!("set {API_VARIABLE} to github.api_url")))?;
     Ok(super::http::HttpGitHub::new(api, token, timeout))
 }

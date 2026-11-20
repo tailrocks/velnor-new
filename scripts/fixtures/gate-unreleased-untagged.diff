@@ -1,0 +1,6 @@
+diff --git a/crates/velnor-rust/src/plan_tools.rs b/crates/velnor-rust/src/plan_tools.rs
+--- a/crates/velnor-rust/src/plan_tools.rs
++++ b/crates/velnor-rust/src/plan_tools.rs
+@@ -1,0 +1,2 @@
++// helper-gate: untagged tools-v0.1.111
++const TOOLS_NEXT_HELPER: (u64, u64, u64) = (0, 1, 111);

@@ -96,5 +96,5 @@ pub use verdict::{JobCondition, VerdictJob, VerdictSpec};
 
 pub use steps::{
     BUDGET_JOB, BaseExpiry, GroupFilter, GroupUpload, HelperCommand, InputsCli, PrepareLocks,
-    StepKind, ToolsLocalVerb, ToolsTelemetry, TrimFamily, VerifiedSave,
+    PrivateVerdict, StepKind, ToolsLocalVerb, ToolsTelemetry, TrimFamily, VerifiedSave,
 };
