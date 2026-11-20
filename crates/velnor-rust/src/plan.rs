@@ -32,7 +32,7 @@ pub(crate) const MBX_SEED_HELPER: (u64, u64, u64) = (0, 1, 86);
 pub(crate) const TOOLS_LOCAL_HELPER: (u64, u64, u64) = (0, 1, 89);
 /// The workflow shortened by chaining the saves needs no helper feature; the gate keeps the output
 /// of every earlier pin as it was.
-// First released in tools-v0.1.108 (not tagged yet when this gate was written).
+// First released in tools-v0.1.109 (not tagged yet when this gate was written).
 pub(crate) const CHAINED_SAVES_HELPER: (u64, u64, u64) = (0, 1, 109);
 pub(crate) const DEFAULT_GROUP_JOB: JobId = JobId::from_static("rust-test-default");
 pub(crate) const HELPER_JOB: JobId = JobId::from_static("rust-helper");

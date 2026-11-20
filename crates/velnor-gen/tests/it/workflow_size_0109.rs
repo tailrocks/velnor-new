@@ -1,8 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-//! The size budget of a 20-root workspace at helper 0.1.108, and the shortened save conditions
-//! that keep it there (#2170).
 
 use velnor_model::RepoPath;
 
@@ -11,7 +9,6 @@ use crate::base_save::step;
 use crate::facts::TestResult;
 use crate::pipeline::{view, workflow};
 
-/// Leaves room under GitHub's 500,000 bytes for the steps the open 0.1.108 changes add to every job.
 const BUDGET_BYTES: usize = 470_000;
 
 fn twenty_roots(helper: &str) -> Result<String, Box<dyn std::error::Error>> {
@@ -51,7 +48,7 @@ fn condition(block: &str, name: &str) -> Result<String, Box<dyn std::error::Erro
 
 #[test]
 fn twenty_roots_at_helper_0_1_108_stay_under_the_size_budget() -> TestResult {
-    let text = twenty_roots("0.1.108")?;
+    let text = twenty_roots("0.1.109")?;
     assert!(
         text.len() <= BUDGET_BYTES,
         "{} bytes, budget {BUDGET_BYTES}",
@@ -63,7 +60,7 @@ fn twenty_roots_at_helper_0_1_108_stay_under_the_size_budget() -> TestResult {
 #[test]
 fn the_saves_after_the_decision_read_its_outputs_instead_of_repeating_its_conditions() -> TestResult
 {
-    let block = root_job(&twenty_roots("0.1.108")?)?;
+    let block = root_job(&twenty_roots("0.1.109")?)?;
     assert_eq!(
         condition(&block, "Decide whether to save the build directory")?,
         "'${{ !cancelled() && steps.inputs_save.outcome == ''success'' }}'"
@@ -87,7 +84,7 @@ fn the_saves_after_the_decision_read_its_outputs_instead_of_repeating_its_condit
 
 #[test]
 fn the_decision_itself_keeps_every_condition_of_a_save() -> TestResult {
-    let block = root_job(&twenty_roots("0.1.108")?)?;
+    let block = root_job(&twenty_roots("0.1.109")?)?;
     let saved = condition(&block, "velnor-ci inputs save")?;
     for needed in [
         "!cancelled()",
