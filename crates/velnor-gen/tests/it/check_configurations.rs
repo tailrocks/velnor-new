@@ -1,11 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{CheckConfigurations, RepoPath};
+use velnor_model::{CheckConfigurations, InputRule, RepoPath};
 
 use crate::facts::TestResult;
 use crate::pipeline::workflow;
-use crate::select::{assert_selects, path, two_roots, unknown};
+use crate::select::{assert_selects, glob, name, path, two_roots, unknown};
 use crate::test_groups::{DATABASE, view_with};
 use crate::yaml_tree::document;
 
@@ -211,5 +211,39 @@ fn sparse_checkout_never_drops_the_configurations_file_of_the_root_that_runs_the
             .all(|step| step["with"]["sparse-checkout"].is_null()),
         "the top-level root keeps a full checkout"
     );
+    Ok(())
+}
+
+#[test]
+fn an_inputs_rule_for_another_root_does_not_hide_a_change_to_the_configurations_file() {
+    let mut facts = two_roots();
+    facts.config.check_configurations = vec![CheckConfigurations {
+        root: None,
+        configurations: Some(path("docs/configurations.json")),
+    }];
+    facts.config.inputs = vec![InputRule {
+        glob: glob("docs/*"),
+        packages: vec![name("cli")],
+    }];
+    let file = "docs/configurations.json";
+    assert_selects(
+        &facts,
+        vec![(&[file][..], vec![unknown(file), unknown(file)])],
+    );
+}
+
+#[test]
+fn a_symlinked_configurations_file_or_folder_is_refused() -> TestResult {
+    let config =
+        "[[check_configurations]]\nroot = '.'\nconfigurations = 'ci/configurations.json'\n";
+    for link in ["ci/configurations.json", "ci"] {
+        let mut view = tracked(config, HELPER)?;
+        view.symlinks.insert(RepoPath::new(link)?);
+        let error = workflow(&view).err().ok_or("the symlink was accepted")?;
+        assert!(
+            error.to_string().contains("symbolic link"),
+            "{link}: {error}"
+        );
+    }
     Ok(())
 }

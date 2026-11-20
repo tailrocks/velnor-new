@@ -72,8 +72,12 @@ pub(crate) fn check(
         .iter()
         .filter_map(CheckConfigurations::file)
     {
+        let linked = std::iter::successors(Some(file.clone()), RepoPath::parent)
+            .any(|part| view.symlinks.contains(&part));
         let reason = if !view.tracked_paths.contains(&file) {
             Some("a file that is not tracked in the repository")
+        } else if linked {
+            Some("a symbolic link, or inside one; name the regular file")
         } else if config
             .non_inputs
             .iter()
