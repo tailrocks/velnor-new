@@ -309,6 +309,21 @@ fn a_job_that_names_the_anchor_entry_reads_its_key_from_the_plan_job() -> TestRe
 }
 
 #[test]
+fn the_plan_job_of_helper_0_1_110_emits_only_the_anchor_digest_output() -> TestResult {
+    for config in STORES.iter().copied() {
+        let yaml = render(&["Cargo.toml", "tools/Cargo.toml"], config, HELPER)?;
+        let outputs = yaml["jobs"][PLAN]["outputs"]
+            .as_object()
+            .ok_or("plan outputs missing")?;
+        assert_eq!(outputs["tools_anchor"], READ_ANCHOR, "{config:?}");
+        assert!(!outputs.contains_key("tools_anchor_key"), "{config:?}");
+        let rendered = serde_json::to_string(&yaml)?;
+        assert!(!rendered.contains("tools_anchor_key"), "{config:?}");
+    }
+    Ok(())
+}
+
+#[test]
 fn a_helper_without_the_newest_anchor_keeps_one_anchor_restore_per_job() -> TestResult {
     for config in STORES.iter().copied() {
         let yaml = render(&["Cargo.toml", "tools/Cargo.toml"], config, "0.1.109")?;

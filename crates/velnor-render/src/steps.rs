@@ -98,7 +98,7 @@ pub(crate) fn rendered_job(job: &Job, plan: &WorkflowPlan) -> RenderedJob {
             }))
             .chain(test_outputs(job, &tests))
             .chain(merge_group_output(job))
-            .chain(crate::tools_steps::anchor_outputs(&job.steps))
+            .chain(crate::tools_steps::anchor_outputs(job, &plan.jobs))
             .chain(lane_outputs(&job.steps))
             .collect(),
         cache_mode: crate::cache::saving_mode(job),
