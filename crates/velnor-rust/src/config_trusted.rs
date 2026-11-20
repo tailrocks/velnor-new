@@ -1,21 +1,23 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{HostedRunners, MisePlatform, RunnerLabel, TrustedRunners, looks_github_hosted};
+use velnor_model::{
+    CratesMirror, HostedRunners, MisePlatform, RunnerLabel, TrustedRunners, looks_github_hosted,
+};
 
 use crate::config_fork::expression_safe;
+use crate::config_mirror::RawCratesMirror;
 use crate::error::Reason;
 
-pub(crate) struct Raw {
-    pub(crate) trusted_runner: Option<String>,
-    pub(crate) mirror_trusted_runner: Option<String>,
+pub(crate) struct Fixed<'a> {
+    runner: &'a RunnerLabel,
+    fork_runner: &'a RunnerLabel,
+    hosted_runners: &'a HostedRunners,
+    mirror_runner: Option<&'a RunnerLabel>,
 }
 
-pub(crate) struct Fixed<'a> {
-    pub(crate) runner: &'a RunnerLabel,
-    pub(crate) fork_runner: &'a RunnerLabel,
-    pub(crate) hosted_runners: &'a HostedRunners,
-    pub(crate) mirror_runner: Option<&'a RunnerLabel>,
+pub(crate) fn mirror_key(mirror: Option<&RawCratesMirror>) -> Option<String> {
+    mirror.and_then(|mirror| mirror.trusted_runner.clone())
 }
 
 fn lock_platform(label: &RunnerLabel) -> Option<String> {
@@ -57,37 +59,47 @@ fn label(
     }
 }
 
-pub(crate) fn resolve(raw: Raw, fixed: &Fixed<'_>) -> Result<TrustedRunners, Reason> {
-    let top = raw
-        .trusted_runner
+pub(crate) fn resolve(
+    keys: (Option<String>, Option<String>),
+    runners: (&RunnerLabel, &RunnerLabel, &HostedRunners),
+    mirror: Option<&CratesMirror>,
+) -> Result<TrustedRunners, Reason> {
+    let (trusted_runner, mirror_trusted_runner) = keys;
+    let (runner, fork_runner, hosted_runners) = runners;
+    let fixed = Fixed {
+        runner,
+        fork_runner,
+        hosted_runners,
+        mirror_runner: mirror.map(|mirror| &mirror.runner),
+    };
+    let top = trusted_runner
         .as_deref()
-        .map(|configured| label("trusted_runner", configured, fixed.runner, fixed))
+        .map(|configured| label("trusted_runner", configured, runner, &fixed))
         .transpose()?;
     let mut pairs: Vec<(RunnerLabel, RunnerLabel)> = top
         .iter()
-        .map(|trusted| (fixed.runner.clone(), trusted.clone()))
+        .map(|trusted| (runner.clone(), trusted.clone()))
         .collect();
     let Some(mirror_runner) = fixed.mirror_runner else {
         return Ok(TrustedRunners::new(pairs));
     };
-    let own = raw
-        .mirror_trusted_runner
+    let own = mirror_trusted_runner
         .as_deref()
         .map(|configured| {
             label(
                 "crates_mirror.trusted_runner",
                 configured,
                 mirror_runner,
-                fixed,
+                &fixed,
             )
         })
         .transpose()?;
-    let shares_runner = same(mirror_runner, fixed.runner);
+    let shares_runner = same(mirror_runner, runner);
     let effective = own.or_else(|| shares_runner.then(|| top.clone()).flatten());
     if shares_runner && effective != top {
         return Err(Reason::InvalidValue {
             key: "crates_mirror.trusted_runner",
-            value: raw.mirror_trusted_runner.unwrap_or_default(),
+            value: mirror_trusted_runner.unwrap_or_default(),
         });
     }
     if let (false, Some(trusted)) = (shares_runner, effective) {

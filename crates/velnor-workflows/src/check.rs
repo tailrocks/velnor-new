@@ -37,7 +37,7 @@ pub(crate) struct Context<'a> {
 }
 
 pub(crate) fn workflow(raw: RawWorkflow, earlier: &[Workflow]) -> Result<Workflow, WorkflowsError> {
-    let file = raw.file;
+    let file = raw.file.clone();
     let valid_file = !file.is_empty()
         && file
             .bytes()
@@ -68,6 +68,7 @@ pub(crate) fn workflow(raw: RawWorkflow, earlier: &[Workflow]) -> Result<Workflo
         &runner,
         raw.hosted.or(raw.runner.is_none().then_some(true)),
     )?;
+    let trusted = crate::trusted::pool(&file, &runner, &fork_runner, hosted, &raw)?;
     let triggers = triggers(&file, raw.on, raw.input, raw.output)?;
     let input_names: Vec<&str> = triggers
         .workflow_call
@@ -90,24 +91,6 @@ pub(crate) fn workflow(raw: RawWorkflow, earlier: &[Workflow]) -> Result<Workflo
         runner: &runner,
         hosted,
     };
-    let trusted = crate::trusted::pool(
-        &crate::trusted::Declared {
-            file: &file,
-            label: raw.trusted_runner.as_deref(),
-            runner: &runner,
-            hosted,
-            fork_runner: &fork_runner,
-            cases: (!raw.case.is_empty()).then_some(crate::trusted::CasePair {
-                hosted_runner: raw.hosted_runner.as_deref(),
-                scale_set_runner: raw.scale_set_runner.as_deref(),
-            }),
-        },
-        triggers.workflow_dispatch.as_deref().unwrap_or_default(),
-        raw.job
-            .iter()
-            .flat_map(|job| &job.step)
-            .chain(raw.case.iter().flat_map(|case| &case.step)),
-    )?;
     let mut jobs: Vec<Job> = Vec::new();
     let mut raw_jobs = cases(
         &file,

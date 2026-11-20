@@ -33,11 +33,11 @@ fn rendered(job: RenderedJob) -> Result<String, Box<dyn std::error::Error>> {
         .to_owned())
 }
 
-fn trusted(label: &str, replaces: &str) -> Option<RenderedTrusted> {
-    Some(RenderedTrusted {
+fn trusted(label: &str, replaces: &str) -> RenderedTrusted {
+    RenderedTrusted {
         label: label.to_owned(),
         replaces: replaces.to_owned(),
-    })
+    }
 }
 
 fn route(expression: &str, matrix: &[(&str, &str)], normal: &str, fork: &str) -> TestResult {
@@ -64,7 +64,7 @@ fn a_fenced_label_routes_to_the_trusted_label_on_default_branch_events() -> Test
     let expression = rendered(RenderedJob {
         runs_on: "R".to_owned(),
         fork_runner: Some("F".to_owned()),
-        trusted_runner: trusted("T", "R"),
+        trusted_runner: Some(trusted("T", "R")),
         ..RenderedJob::default()
     })?;
     assert!(
@@ -78,7 +78,7 @@ fn a_fenced_label_routes_to_the_trusted_label_on_default_branch_events() -> Test
 fn a_plain_label_routes_to_the_trusted_label_on_default_branch_events() -> TestResult {
     let expression = rendered(RenderedJob {
         runs_on: "R".to_owned(),
-        trusted_runner: trusted("T", "R"),
+        trusted_runner: Some(trusted("T", "R")),
         ..RenderedJob::default()
     })?;
     assert!(
@@ -98,7 +98,7 @@ fn an_axis_swaps_only_the_value_that_names_the_replaced_label() -> TestResult {
         runs_on: "R".to_owned(),
         runs_on_axis: Some("os".to_owned()),
         fork_runner: Some("F".to_owned()),
-        trusted_runner: trusted("T", "R"),
+        trusted_runner: Some(trusted("T", "R")),
         ..RenderedJob::default()
     })?;
     route(&fenced, &[("os", "R")], "R", "F")?;
@@ -110,7 +110,7 @@ fn an_axis_swaps_only_the_value_that_names_the_replaced_label() -> TestResult {
     let bare = rendered(RenderedJob {
         runs_on: "R".to_owned(),
         runs_on_axis: Some("os".to_owned()),
-        trusted_runner: trusted("T", "R"),
+        trusted_runner: Some(trusted("T", "R")),
         ..RenderedJob::default()
     })?;
     for (event, outcome) in events() {

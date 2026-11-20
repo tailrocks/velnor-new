@@ -5,57 +5,45 @@ use velnor_model::{MisePlatform, looks_github_hosted};
 
 use crate::check::runner_label_of;
 use crate::error::{WorkflowsError, refuse};
-use crate::plan::{Input, TrustedPool};
-use crate::raw::RawStep;
+use crate::plan::TrustedPool;
+use crate::raw::RawWorkflow;
 
 const REF_INPUTS: [&str; 3] = ["ref", "sha", "repository"];
 const CHECKOUT_KEYS: [&str; 2] = ["ref", "repository"];
-
-pub(crate) struct Declared<'a> {
-    pub(crate) file: &'a str,
-    pub(crate) label: Option<&'a str>,
-    pub(crate) runner: &'a str,
-    pub(crate) hosted: bool,
-    pub(crate) fork_runner: &'a str,
-    pub(crate) cases: Option<CasePair<'a>>,
-}
-
-pub(crate) struct CasePair<'a> {
-    pub(crate) hosted_runner: Option<&'a str>,
-    pub(crate) scale_set_runner: Option<&'a str>,
-}
 
 fn lock_platform(label: &str) -> Option<String> {
     MisePlatform::runner(label).map(MisePlatform::lock_key)
 }
 
-pub(crate) fn pool<'a>(
-    declared: &Declared<'_>,
-    dispatch: &[Input],
-    steps: impl Iterator<Item = &'a RawStep>,
+pub(crate) fn pool(
+    file: &str,
+    runner: &str,
+    fork_runner: &str,
+    hosted: bool,
+    raw: &RawWorkflow,
 ) -> Result<Option<TrustedPool>, WorkflowsError> {
-    let Some(label) = declared.label else {
+    let Some(label) = raw.trusted_runner.as_deref() else {
         return Ok(None);
     };
-    let file = declared.file;
     let label = runner_label_of(file, label).or_else(|_| {
         refuse(format!(
             "the trusted_runner {label:?} of {file} must be a label of letters, digits, dashes, underscores and dots"
         ))
     })?;
-    let replaces = match &declared.cases {
-        Some(pair) => pair.scale_set_runner.unwrap_or(declared.runner),
-        None => declared.runner,
+    let has_cases = !raw.case.is_empty();
+    let replaces = match raw.scale_set_runner.as_deref() {
+        Some(scale_set) if has_cases => scale_set,
+        _ => runner,
     };
     let differs = |other: &str| !label.eq_ignore_ascii_case(other);
     let others = [
         Some(replaces),
-        Some(declared.fork_runner),
-        declared.cases.as_ref().and_then(|pair| pair.hosted_runner),
+        Some(fork_runner),
+        raw.hosted_runner.as_deref().filter(|_| has_cases),
     ];
     if looks_github_hosted(&label)
         || looks_github_hosted(replaces)
-        || (declared.cases.is_none() && declared.hosted)
+        || (!has_cases && hosted)
         || !others.into_iter().flatten().all(differs)
         || lock_platform(&label) != lock_platform(replaces)
     {
@@ -63,7 +51,12 @@ pub(crate) fn pool<'a>(
             "the trusted_runner {label} of {file} must be a self-hosted label that differs from the runner, fork_runner and hosted_runner, shares the platform of the self-hosted runner {replaces}, and needs a runner that is not GitHub-hosted"
         ));
     }
-    if let Some(input) = dispatch.iter().find(|input| {
+    let mut dispatch = raw
+        .on
+        .iter()
+        .filter_map(|on| on.workflow_dispatch.as_ref())
+        .flat_map(|dispatch| &dispatch.input);
+    if let Some(input) = dispatch.find(|input| {
         REF_INPUTS
             .iter()
             .any(|name| input.name.eq_ignore_ascii_case(name))
@@ -73,6 +66,11 @@ pub(crate) fn pool<'a>(
             input.name
         ));
     }
+    let steps = raw
+        .job
+        .iter()
+        .flat_map(|job| &job.step)
+        .chain(raw.case.iter().flat_map(|case| &case.step));
     let chosen = steps.flat_map(|step| &step.with).any(|(key, value)| {
         CHECKOUT_KEYS.contains(&key.as_str())
             && (value.contains("inputs.") || value.contains("github.event.inputs"))

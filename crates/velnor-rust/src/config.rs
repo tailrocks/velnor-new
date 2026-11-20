@@ -113,10 +113,7 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
     let declared_runner = raw.runner.is_some();
     let hosted_key = raw.hosted.is_some() || test_groups.iter().any(|group| group.hosted.is_some());
     let runner = runner(raw.runner, defaults.runner).map_err(invalid)?;
-    let mirror_trusted_runner = raw
-        .crates_mirror
-        .as_ref()
-        .and_then(|mirror| mirror.trusted_runner.clone());
+    let mirror_key = crate::config_trusted::mirror_key(raw.crates_mirror.as_ref());
     let crates_mirror = raw
         .crates_mirror
         .map(crate::config_mirror::mirror)
@@ -130,16 +127,9 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
     .map_err(invalid)?;
     let fork_runner = crate::config_fork::fork_runner(raw.fork_runner, &runner).map_err(invalid)?;
     let trusted_runners = crate::config_trusted::resolve(
-        crate::config_trusted::Raw {
-            trusted_runner: raw.trusted_runner,
-            mirror_trusted_runner,
-        },
-        &crate::config_trusted::Fixed {
-            runner: &runner,
-            fork_runner: &fork_runner,
-            hosted_runners: &hosted_runners,
-            mirror_runner: crates_mirror.as_ref().map(|mirror| &mirror.runner),
-        },
+        (raw.trusted_runner, mirror_key),
+        (&runner, &fork_runner, &hosted_runners),
+        crates_mirror.as_ref(),
     )
     .map_err(invalid)?;
     Ok(RustCiConfig {

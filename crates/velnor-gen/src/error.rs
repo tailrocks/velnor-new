@@ -70,9 +70,7 @@ impl fmt::Display for GenerateError {
                 f,
                 "{RELEASE_CONFIG_PATH} does not exist; there is no release to describe"
             ),
-            Self::ReleaseToolchainPath => f.write_str(
-                "rust-toolchain.toml names a toolchain path, so rustup would run a cargo from the repository with the release App token in scope; name a channel instead",
-            ),
+            Self::ReleaseToolchainPath => f.write_str(TOOLCHAIN_PATH),
             Self::HelperNotPinned => f.write_str(
                 "velnor-ci is not pinned: every generated job runs it, so pin a release with `velnor-gen pin-helper <version>`",
             ),
@@ -133,7 +131,7 @@ impl fmt::Display for GenerateError {
                 "velnor-ci {version} does not know the test_lane key of .velnor/rust-ci.toml; pin velnor-ci 0.1.93 or later with `velnor-gen pin-helper 0.1.93`"
             ),
             Self::TestLaneJobHelperTooOld(version) => f.write_str(&lane_job_too_old(version)),
-            Self::TrustedRunnerHelperTooOld(version) => f.write_str(&trusted_runner_too_old(version)),
+            Self::TrustedRunnerHelperTooOld(version) => f.write_str(&trusted_too_old(version)),
             Self::HelperLockLacksMacos { version, runner } => write!(
                 f,
                 "the runner `{runner}` is a macOS runner, but the velnor-ci {version} in .velnor/rust-ci.lock has no macos-arm64 digest, so `actions/setup-velnor` would fail before velnor-ci runs; pin a release that lists a macos-arm64 digest with `velnor-gen pin-helper <version>`, or use a Linux runner"
@@ -171,6 +169,8 @@ impl From<DetectError> for GenerateError {
     }
 }
 
+const TOOLCHAIN_PATH: &str = "rust-toolchain.toml names a toolchain path, so rustup would run a cargo from the repository with the release App token in scope; name a channel instead";
+
 fn incompatible_helper(version: &HelperVersion) -> String {
     format!(
         "velnor-ci {version} does not fit this velnor-gen, which works with velnor-ci {}.{}.x; pin a compatible release with `velnor-gen pin-helper <version>`",
@@ -199,7 +199,7 @@ fn lane_job_too_old(version: &HelperVersion) -> String {
     )
 }
 
-fn trusted_runner_too_old(version: &HelperVersion) -> String {
+fn trusted_too_old(version: &HelperVersion) -> String {
     let (major, minor, patch) = TRUSTED_RUNNER_HELPER;
     format!(
         "velnor-ci {version} does not know the trusted_runner key of .velnor/rust-ci.toml; pin velnor-ci {major}.{minor}.{patch} or later with `velnor-gen pin-helper {major}.{minor}.{patch}`"
