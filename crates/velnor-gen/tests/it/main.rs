@@ -220,6 +220,7 @@ mod reusable_workflows;
 mod rule_config;
 mod rules;
 mod rules_token;
+mod rules_token_wrappers;
 mod ruleset;
 mod rust_ci_doc_keys;
 mod sample_manifests;

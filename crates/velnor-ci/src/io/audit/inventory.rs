@@ -5,10 +5,12 @@ mod evidence;
 
 pub(super) use evidence::{Evidence, State, state};
 
+use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io;
 use std::path::{Component, Path, PathBuf};
+use std::sync::Arc;
 use std::time::SystemTime;
 
 use serde::{Deserialize, Serialize};
@@ -267,7 +269,17 @@ pub(super) fn matches(
     Ok(view(&saved.entries, &root, targets)? == *current)
 }
 
-pub(super) fn load(output: &Path) -> io::Result<Evidence> {
+thread_local! {
+    static PARSED: RefCell<BTreeMap<String, Arc<Evidence>>> = const { RefCell::new(BTreeMap::new()) };
+}
+
+const PARSED_LIMIT: usize = 8;
+
+/// Loads the inventory a build output's receipt names. The receipt, the output
+/// and the inventory bytes are verified on every call exactly as before; only
+/// the JSON parse is shared, keyed by the verified content digest, so one
+/// inventory serving hundreds of outputs is parsed once per process.
+pub(super) fn load(output: &Path) -> io::Result<Arc<Evidence>> {
     let receipt: Receipt = serde_json::from_slice(&fs::read(receipt_path(output))?)?;
     if receipt.output != sha256_hex(&fs::read(output)?)
         || receipt.modified != fs::metadata(output)?.modified()?
@@ -280,5 +292,17 @@ pub(super) fn load(output: &Path) -> io::Result<Evidence> {
     if sha256_hex(&bytes) != receipt.digest {
         return Err(io::Error::other("directory inventory digest differs"));
     }
-    Ok(serde_json::from_slice(&bytes)?)
+    if let Some(parsed) = PARSED.with(|parsed| parsed.borrow().get(&receipt.digest).cloned()) {
+        return Ok(parsed);
+    }
+    super::timing::parsed();
+    let parsed = Arc::new(serde_json::from_slice::<Evidence>(&bytes)?);
+    PARSED.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        if cache.len() >= PARSED_LIMIT {
+            cache.clear();
+        }
+        cache.insert(receipt.digest, Arc::clone(&parsed));
+    });
+    Ok(parsed)
 }
