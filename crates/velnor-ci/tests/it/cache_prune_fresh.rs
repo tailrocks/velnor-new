@@ -17,7 +17,10 @@ fn helper(repo: &Repo, args: &[&str]) -> Output {
         .env("CARGO_HOME", repo.root().join("cargo-home"))
         .env_remove("CARGO_TARGET_DIR")
         .env_remove("RUSTC_WRAPPER")
-        .env("RUSTC", velnor_test_support::real_cargo().with_file_name("rustc"))
+        .env(
+            "RUSTC",
+            velnor_test_support::real_cargo().with_file_name("rustc"),
+        )
         .current_dir(repo.root())
         .output()
         .unwrap_or_else(|e| unreachable!("{e}"))

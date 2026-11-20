@@ -34,6 +34,7 @@ fn every_cargo_command_has_its_check_classification() {
                 packages: vec![package()],
                 filter: FilterRef::All,
                 ci_profile: true,
+                reports: false,
             },
             true,
         ),
