@@ -12,10 +12,7 @@ const KNOB: &str = "[ci]\nskip_push_after_merge_group = true\n";
 
 fn repo(roots: &[&str], config: &str) -> Result<RepoView, Box<dyn std::error::Error>> {
     let mut repo = view(roots, Some(config.as_bytes()))?;
-    let lock = path(".velnor/rust-ci.lock")?;
-    let old = String::from_utf8(repo.files[&lock].clone())?;
-    repo.files
-        .insert(lock, old.replace("0.1.81", "0.1.103").into_bytes());
+    crate::pipeline::pin_helper(&mut repo, "0.1.103")?;
     for (name, text) in [("deny.toml", ""), ("mise.toml", DENY_MISE)] {
         let name = RepoPath::new(name)?;
         repo.tracked_paths.insert(name.clone());

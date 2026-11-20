@@ -18,10 +18,7 @@ fn repo(
     helper: &str,
 ) -> Result<RepoView, Box<dyn std::error::Error>> {
     let mut repo = view(roots, config)?;
-    let lock = path(".velnor/rust-ci.lock")?;
-    let old = String::from_utf8(repo.files[&lock].clone())?;
-    repo.files
-        .insert(lock, old.replace("0.1.81", helper).into_bytes());
+    crate::pipeline::pin_helper(&mut repo, helper)?;
     Ok(repo)
 }
 
@@ -45,7 +42,9 @@ fn condition(job: &Value, name: &str) -> String {
 
 #[test]
 fn knob_off_or_false_leaves_the_workflow_byte_identical() -> TestResult {
-    let base = workflow(&view(&["Cargo.toml"], None)?)?;
+    let mut plain = view(&["Cargo.toml"], None)?;
+    crate::pipeline::pin_helper(&mut plain, "0.1.88")?;
+    let base = workflow(&plain)?;
     let off = workflow(&view(
         &["Cargo.toml"],
         Some(b"[ci]\nskip_push_after_merge_group = false\n"),

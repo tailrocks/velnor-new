@@ -11,6 +11,7 @@ pub use crate::cache_budget::{
 pub use crate::classify::is_workflow_file;
 pub use crate::compat::{BUILD_DRIVER, COMPAT_SCHEMA, CompatInputs, compat};
 pub use crate::config::{CONFIG_PATH, budget, ci_debuginfo};
+pub use crate::config_budget::BUDGET_KEYS;
 pub use crate::config_keys::KEYS;
 pub use crate::credentials::reject_release_credential_hooks;
 pub use crate::detect::{cargo_files, detect, manifests, metadata_roots, wanted_files};

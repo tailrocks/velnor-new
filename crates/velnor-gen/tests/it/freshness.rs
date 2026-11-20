@@ -91,7 +91,9 @@ fn a_pinned_helper_restores_inputs_once_per_root() -> TestResult {
 
 #[test]
 fn the_workflow_reads_no_repository_variable_unless_cache_debug_is_opted_in() -> TestResult {
-    let text = workflow(&view(&["Cargo.toml"], None)?)?;
+    let mut plain = view(&["Cargo.toml"], None)?;
+    crate::pipeline::pin_helper(&mut plain, "0.1.82")?;
+    let text = workflow(&plain)?;
     assert!(!text.contains("vars."), "{text}");
     assert!(!text.contains("CARGO_LOG"), "{text}");
     assert_eq!(named(&text, "Upload the cargo fingerprint log").len(), 0);

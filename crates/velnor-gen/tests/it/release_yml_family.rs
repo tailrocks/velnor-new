@@ -195,7 +195,7 @@ fn family_tag_needs_a_helper_that_knows_the_command() -> TestResult {
     }
     assert!(matches!(
         expected_release(&view),
-        Err(GenerateError::FamilyTagHelperTooOld(_))
+        Err(GenerateError::ConfigKeyHelperTooOld { .. })
     ));
     Ok(())
 }

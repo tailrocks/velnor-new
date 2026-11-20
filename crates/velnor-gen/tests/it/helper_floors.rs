@@ -75,7 +75,8 @@ const REQUIRED_CHECK: &str = "required_check = \"Gate\"\n";
 #[test]
 fn cache_debug_is_refused_before_the_helper_knows_the_key() -> Result<(), Box<dyn Error>> {
     let refused = refusal(CACHE_DEBUG, "0.1.81")?;
-    assert!(refused.contains("CacheDebugHelperTooOld"), "{refused}");
+    assert!(refused.contains("ConfigKeyHelperTooOld"), "{refused}");
+    assert!(refused.contains("cache_debug"), "{refused}");
     Ok(())
 }
 

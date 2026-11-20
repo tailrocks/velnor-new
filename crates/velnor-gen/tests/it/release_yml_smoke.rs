@@ -6,7 +6,7 @@ use std::error::Error;
 use velnor_gen::GenerateError;
 use velnor_release::ReleaseError;
 
-use crate::release_fixture::{APP, jobs, render, steps};
+use crate::release_fixture::{APP, jobs, render, render_pinned, steps};
 use crate::release_tagged_commit::render_with;
 use crate::release_yml_binaries::{job, runs};
 use crate::yaml_tree::Node;
@@ -246,20 +246,22 @@ fn commit_file_records_the_commit_the_tag_job_recorded() -> TestResult {
 
 #[test]
 fn without_the_keys_the_workflow_is_byte_identical() -> TestResult {
-    let (plain, _) = render(&[APP], Some(RAW))?;
-    let (explicit, _) = render(
+    let (plain, _) = render_pinned(&[APP], Some(RAW), "0.1.92")?;
+    let (explicit, _) = render_pinned(
         &[APP],
         Some(&RAW.replace(
             "format = \"raw\"\n",
             "format = \"raw\"\ntarget = \"gnu\"\nsmoke = false\ncommit_file = false\n",
         )),
+        "0.1.92",
     )?;
     assert_eq!(plain, explicit);
     let archive = "[[binaries]]\npackage = \"app\"\n";
-    let (plain, _) = render(&[APP], Some(archive))?;
-    let (explicit, _) = render(
+    let (plain, _) = render_pinned(&[APP], Some(archive), "0.1.92")?;
+    let (explicit, _) = render_pinned(
         &[APP],
         Some(&format!("{archive}smoke = false\ncommit_file = false\n")),
+        "0.1.92",
     )?;
     assert_eq!(plain, explicit);
     Ok(())

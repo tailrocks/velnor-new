@@ -10,10 +10,7 @@ fn repo(config: &str, helper: &str) -> Result<velnor_model::RepoView, Box<dyn st
     let mut repo = view(&["Cargo.toml", "tools/Cargo.toml"], None)?;
     repo.files
         .insert(path(".velnor/rust-ci.toml")?, config.as_bytes().to_vec());
-    let lock = path(".velnor/rust-ci.lock")?;
-    let old = String::from_utf8(repo.files[&lock].clone())?;
-    repo.files
-        .insert(lock, old.replace("0.1.81", helper).into_bytes());
+    crate::pipeline::pin_helper(&mut repo, helper)?;
     Ok(repo)
 }
 

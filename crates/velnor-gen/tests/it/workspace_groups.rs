@@ -14,14 +14,7 @@ const ROOTS: [&str; 3] = ["Cargo.toml", "tools/a/Cargo.toml", "tools/b/Cargo.tom
 
 fn grouped(config: &str) -> Result<String, Box<dyn Error>> {
     let mut view = view(&ROOTS, Some(config.as_bytes()))?;
-    let lock = RepoPath::new(LOCK)?;
-    let bytes = view
-        .files
-        .get_mut(&lock)
-        .ok_or("the lock file is missing")?;
-    *bytes = String::from_utf8(bytes.clone())?
-        .replace("0.1.81", "0.1.96")
-        .into_bytes();
+    crate::pipeline::pin_helper(&mut view, "0.1.96")?;
     workflow(&view)
 }
 
@@ -191,14 +184,7 @@ fn only_the_building_steps_of_a_group_set_the_shared_target_directory() -> TestR
 #[test]
 fn each_root_of_a_group_picks_the_ci_profile_of_its_own_nextest_config() -> TestResult {
     let mut files = view(&ROOTS, Some(GROUP.as_bytes()))?;
-    let lock = RepoPath::new(LOCK)?;
-    let bytes = files
-        .files
-        .get_mut(&lock)
-        .ok_or("the lock file is missing")?;
-    *bytes = String::from_utf8(bytes.clone())?
-        .replace("0.1.81", "0.1.96")
-        .into_bytes();
+    crate::pipeline::pin_helper(&mut files, "0.1.96")?;
     let config = RepoPath::new("tools/a/.config/nextest.toml")?;
     files.tracked_paths.insert(config.clone());
     files
