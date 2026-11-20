@@ -99,7 +99,12 @@ fn the_strict_rule_reads_the_exact_wrapper_and_the_option_on_the_rust_tool_only(
             false,
             false,
         ),
-        ("pin alone", "[tools]\nmr-boxington = \"v1.30.0\"\n", false, false),
+        (
+            "pin alone",
+            "[tools]\nmr-boxington = \"v1.30.0\"\n",
+            false,
+            false,
+        ),
     ] {
         assert_eq!(declared(text, MbxRule::Strict)?, strict, "strict: {name}");
         assert_eq!(declared(text, MbxRule::Wide)?, wide, "wide: {name}");
