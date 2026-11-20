@@ -233,6 +233,7 @@ pub enum ToolsLocalVerb {
     Prime,
     RecordRestore,
     RecordSave,
+    AnchorReset,
     AnchorRestore,
     Verify,
     Record,

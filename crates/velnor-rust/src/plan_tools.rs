@@ -80,6 +80,7 @@ pub(crate) fn tools_restore(facts: &RepoFacts) -> Vec<Step> {
         .collect();
     if tools_verified(facts) {
         steps.extend([
+            tools_step(ToolsLocalVerb::AnchorReset, When::Success),
             tools_step(ToolsLocalVerb::AnchorRestore, When::Success),
             tools_step(ToolsLocalVerb::Verify, When::Success),
         ]);
@@ -116,7 +117,7 @@ pub(crate) fn tools_save(facts: &RepoFacts) -> Vec<Step> {
     };
     let anchor: Vec<Step> = if tools_verified(facts) {
         vec![
-            tools_step(ToolsLocalVerb::Record, When::SavingRun),
+            tools_step(ToolsLocalVerb::Record, When::Success),
             tools_step(
                 ToolsLocalVerb::AnchorSave,
                 When::SaveVerifiedTools(VerifiedSave::Anchor),

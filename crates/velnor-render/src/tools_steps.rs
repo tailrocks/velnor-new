@@ -10,6 +10,7 @@ use crate::rules::{RenderedStep, Value};
 
 const VERIFY_STEP: &str = "toolsverify";
 const RECORD_STEP: &str = "toolsrecord";
+const ANCHOR_STEP: &str = "toolsanchor";
 const ANCHOR_DIR: &str = "${{ runner.temp }}/velnor-tools-anchor";
 
 /// On a node miss the lookup is skipped, so its empty output leaves the network restore in charge.
@@ -35,32 +36,17 @@ pub(crate) fn tools_parts(when: When, parts: &mut Vec<String>) {
         When::SaveToolsUnlessLocal => parts.extend([on_default, network_miss, lookup_miss]),
         When::RestoreToolsUnlessLocal => parts.push(node_miss),
         When::SaveVerifiedTools(save) => {
-            if matches!(
-                save,
-                VerifiedSave::OnDefaultBranch | VerifiedSave::UnlessLocal
-            ) {
-                parts.push(SAVING_EVENTS.to_owned());
-            }
-            let inner = match save {
-                VerifiedSave::OnDefaultBranch => When::SaveToolsOnDefaultBranch,
-                VerifiedSave::UnlessLocal => When::SaveToolsUnlessLocal,
-                VerifiedSave::Prime => When::PrimeToolsFromNetwork,
-                VerifiedSave::NodeStore | VerifiedSave::Anchor => {
-                    parts.extend([on_default, saving]);
-                    parts.push(if save == VerifiedSave::Anchor {
-                        format!("steps.{RECORD_STEP}.outputs.recorded == 'true'")
-                    } else {
-                        matches
-                    });
-                    return;
+            let recorded = format!("steps.{RECORD_STEP}.outputs.recorded == 'true'");
+            match save {
+                VerifiedSave::OnDefaultBranch => parts.extend([network_miss, matches]),
+                VerifiedSave::UnlessLocal => parts.extend([network_miss, lookup_miss, matches]),
+                VerifiedSave::NodeStore => parts.push(matches),
+                VerifiedSave::Anchor => parts.push(recorded),
+                VerifiedSave::Prime => {
+                    tools_parts(When::PrimeToolsFromNetwork, parts);
+                    parts.push(format!("steps.{VERIFY_STEP}.outputs.verified == 'true'"));
                 }
-            };
-            tools_parts(inner, parts);
-            parts.push(if save == VerifiedSave::Prime {
-                format!("steps.{VERIFY_STEP}.outputs.verified == 'true'")
-            } else {
-                matches
-            });
+            }
         }
         _ => {}
     }
@@ -73,7 +59,7 @@ fn anchor_cache_step(action: &str, verb: &str) -> RenderedStep {
     .key;
     let key = key.replacen("velnor-tools-", "velnor-tools-anchor-", 1);
     RenderedStep {
-        id: (verb == "Restore").then(|| "toolsanchor".to_owned()),
+        id: (verb == "Restore").then(|| ANCHOR_STEP.to_owned()),
         name: format!("{verb} the tools anchor"),
         uses: Some(action.to_owned()),
         with: vec![
@@ -86,14 +72,19 @@ fn anchor_cache_step(action: &str, verb: &str) -> RenderedStep {
 
 fn verify_step(verb: velnor_model::ToolsLocalVerb) -> RenderedStep {
     use velnor_model::ToolsLocalVerb as Verb;
-    let (id, name, word) = if verb == Verb::Verify {
-        (VERIFY_STEP, "Verify the restored tools", "check")
-    } else {
-        (RECORD_STEP, "Record the tools anchor", "record")
+    let (id, name, word) = match verb {
+        Verb::AnchorReset => (None, "Clear the tools anchor", "reset"),
+        Verb::Verify => (Some(VERIFY_STEP), "Verify the restored tools", "check"),
+        _ => (Some(RECORD_STEP), "Record the tools anchor", "record"),
     };
+    let hit = Value::Expr(format!("${{{{ steps.{ANCHOR_STEP}.outputs.cache-hit }}}}"));
     RenderedStep {
-        id: Some(id.to_owned()),
+        id: id.map(str::to_owned),
         name: name.to_owned(),
+        env: (verb != Verb::AnchorReset)
+            .then(|| ("VELNOR_ANCHOR_HIT".to_owned(), hit))
+            .into_iter()
+            .collect(),
         run: Some(format!("velnor-ci tools-verify {word}")),
         ..RenderedStep::default()
     }
@@ -132,7 +123,7 @@ pub(crate) fn tools_local_step(verb: velnor_model::ToolsLocalVerb) -> RenderedSt
         Verb::RecordSave => return tools_saved_step(),
         Verb::AnchorRestore => return anchor_cache_step(crate::steps::CACHE_RESTORE, "Restore"),
         Verb::AnchorSave => return anchor_cache_step(crate::steps::CACHE_SAVE, "Save"),
-        Verb::Verify | Verb::Record => return verify_step(verb),
+        Verb::AnchorReset | Verb::Verify | Verb::Record => return verify_step(verb),
     };
     RenderedStep {
         id: id.map(str::to_owned),
