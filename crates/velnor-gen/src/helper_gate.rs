@@ -122,19 +122,23 @@ pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, Generate
             release.version().clone(),
         ));
     }
+    check_budget(facts, release)?;
+    Ok(release)
+}
+
+fn check_budget(facts: &RepoFacts, release: &HelperRelease) -> Result<(), GenerateError> {
+    let version = release.version();
     if facts.config.budget.is_some_and(|budget| budget.enabled())
-        && !release.version().at_least(BUDGET_HELPER)
+        && !version.at_least(BUDGET_HELPER)
     {
-        return Err(GenerateError::BudgetHelperTooOld(release.version().clone()));
+        return Err(GenerateError::BudgetHelperTooOld(version.clone()));
     }
     if facts.config.budget.is_some_and(|budget| budget.has_modes())
-        && !release.version().at_least(BUDGET_MODES_HELPER)
+        && !version.at_least(BUDGET_MODES_HELPER)
     {
-        return Err(GenerateError::BudgetModesHelperTooOld(
-            release.version().clone(),
-        ));
+        return Err(GenerateError::BudgetModesHelperTooOld(version.clone()));
     }
-    Ok(release)
+    Ok(())
 }
 
 fn check_restore_cache(facts: &RepoFacts, release: &HelperRelease) -> Result<(), GenerateError> {

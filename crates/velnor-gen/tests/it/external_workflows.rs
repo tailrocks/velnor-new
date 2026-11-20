@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 
 use velnor_gen::{
     Drift, ExternalWorkflowError, GenerateError, drift, expected_files, external_skips,
+    plan_generate,
 };
 use velnor_model::{RepoPath, RepoView};
 use velnor_render::seal;
@@ -31,7 +32,7 @@ fn one(path: &str, text: &str) -> Result<Disk, Box<dyn std::error::Error>> {
 }
 
 fn view_of(version: &str, text: &str) -> Result<RepoView, Box<dyn std::error::Error>> {
-    Ok(pinned(version, text)?)
+    pinned(version, text)
 }
 
 #[test]
@@ -130,5 +131,71 @@ fn external_workflows_accepts_only_yaml_files_directly_under_the_workflow_direct
     }
     let view = view_of("0.1.108", &config(&format!("\"{LISTED}\"")))?;
     assert!(expected_files(&view).is_ok());
+    Ok(())
+}
+
+fn plan(
+    view: &RepoView,
+    files: &Disk,
+    engine_configured: bool,
+) -> Result<(Vec<Drift>, String), Box<dyn std::error::Error>> {
+    let mut out = Vec::new();
+    let (_, drifts) = plan_generate(view, files, engine_configured, &mut out)?;
+    Ok((drifts, String::from_utf8(out)?))
+}
+
+#[test]
+fn a_declared_workflow_is_skipped_with_no_notice_and_the_legacy_config_is_not_needed() -> TestResult
+{
+    let view = view_of("0.1.108", &config(&format!("\"{LISTED}\"")))?;
+    let files = one(LISTED, HAND_WRITTEN)?;
+    for engine_configured in [false, true] {
+        let (drifts, out) = plan(&view, &files, engine_configured)?;
+        assert!(drifts.is_empty(), "{drifts:?}");
+        assert!(!out.contains("notice:"), "{out}");
+    }
+    Ok(())
+}
+
+#[test]
+fn an_undeclared_header_less_workflow_fails_with_a_hint_when_no_legacy_config_exists() -> TestResult
+{
+    let view = view_of("0.1.108", "")?;
+    let (drifts, out) = plan(&view, &one(LISTED, HAND_WRITTEN)?, false)?;
+    let [Drift::Unmarked(path)] = drifts.as_slice() else {
+        return Err(format!("expected one Unmarked drift, got {drifts:?}").into());
+    };
+    assert_eq!(path.as_str(), LISTED);
+    assert!(drifts[0].to_string().contains("external_workflows"));
+    assert!(!out.contains("notice:"), "{out}");
+    Ok(())
+}
+
+#[test]
+fn the_legacy_config_still_suppresses_an_unmarked_workflow_and_says_it_is_deprecated() -> TestResult
+{
+    let view = view_of("0.1.108", "")?;
+    let (drifts, out) = plan(&view, &one(LISTED, HAND_WRITTEN)?, true)?;
+    assert!(drifts.is_empty(), "{drifts:?}");
+    let notice = out
+        .lines()
+        .find(|line| line.contains("notice:"))
+        .ok_or_else(|| format!("no deprecation notice in {out:?}"))?;
+    assert!(notice.contains(LISTED), "{notice}");
+    assert!(
+        notice.contains("use external_workflows (velnor-ci \u{2265} 0.1.108)"),
+        "{notice}"
+    );
+    Ok(())
+}
+
+#[test]
+fn the_legacy_config_does_not_hide_a_foreign_or_stale_file() -> TestResult {
+    let view = view_of("0.1.108", "")?;
+    let stale = seal(GENERATED_HEADER, "name: Old\n");
+    let (drifts, out) = plan(&view, &one(".github/workflows/old.yml", &stale)?, true)?;
+    assert_eq!(drifts.len(), 1, "{drifts:?}");
+    assert!(matches!(drifts[0], Drift::Stale(_)), "{drifts:?}");
+    assert!(!out.contains("notice:"), "{out}");
     Ok(())
 }

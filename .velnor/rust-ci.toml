@@ -3,7 +3,6 @@
 
 runner = "ubuntu-26.04-scale-set"
 required_check = "Required"
-external_workflows = [".github/workflows/ci.yml"]
 mbx_shared_store = true
 docs = "post_merge"
 check_alone = "post_merge"

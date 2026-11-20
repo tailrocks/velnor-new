@@ -115,6 +115,7 @@ pub fn expected_with_notes(
 pub fn plan_generate(
     view: &RepoView,
     on_disk: &BTreeMap<RepoPath, Vec<u8>>,
+    engine_configured: bool,
     out: &mut dyn Write,
 ) -> Result<(BTreeMap<RepoPath, String>, Vec<Drift>), GenerateError> {
     let (expected, notes) = generated_with_notes(view)?;
@@ -123,7 +124,32 @@ pub fn plan_generate(
     }
     let external = external::skipped(view, &expected, on_disk)?;
     let drifts = drift(&expected, on_disk, &external);
-    Ok((expected, drifts))
+    Ok((expected, legacy_bypass(drifts, engine_configured, out)))
+}
+
+/// The retired `.velnor/config.toml` still hides every unowned workflow from `check`. Drop
+/// those `Unmarked` drifts, and say for each that `external_workflows` replaces the bypass.
+fn legacy_bypass(drifts: Vec<Drift>, engine_configured: bool, out: &mut dyn Write) -> Vec<Drift> {
+    if !engine_configured {
+        return drifts;
+    }
+    drifts
+        .into_iter()
+        .filter(|drift| {
+            let Drift::Unmarked(path) = drift else {
+                return true;
+            };
+            writeln!(out, "velnor-gen: {}", legacy_bypass_notice(path)).ok();
+            false
+        })
+        .collect()
+}
+
+/// The deprecation notice for one workflow that only the legacy bypass keeps out of drift.
+fn legacy_bypass_notice(path: &RepoPath) -> String {
+    format!(
+        "notice: {path} is skipped only because .velnor/config.toml exists; that bypass is deprecated, use external_workflows (velnor-ci ≥ 0.1.108)"
+    )
 }
 
 pub fn check_tag(version: &str, tag: &str) -> Result<String, String> {

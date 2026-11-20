@@ -345,7 +345,7 @@ fn generate_names_a_malformed_timings_file_in_a_note_and_writes_the_default_shap
             view.files.entry(manifest).or_default();
         }
     }
-    let (mut files, _) = plan_generate(&view, &BTreeMap::new(), &mut out)?;
+    let (mut files, _) = plan_generate(&view, &BTreeMap::new(), false, &mut out)?;
     files.remove(&METADATA_PATH);
     let text = String::from_utf8(out)?;
     assert!(
