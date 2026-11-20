@@ -8,8 +8,8 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use super::super::options::{MAX_ENTRIES_CEILING, MAX_ENTRIES_VARIABLE};
-use super::handle::{self, Current, Opened, Origin};
 use super::descriptors::open_file_limit;
+use super::handle::{self, Current, Opened, Origin};
 use super::{Entries, Kind, excluded_entry};
 
 pub(in crate::io::audit) struct Budget {
