@@ -274,6 +274,7 @@ mod toolchain;
 mod toolchain_components;
 mod tools_cache;
 mod tools_local;
+mod tools_verify;
 mod trim_job;
 mod unowned;
 mod untracked_config;

@@ -184,8 +184,6 @@ pub struct ToolsLocalArgs {
 pub struct ToolsVerifyArgs {
     #[arg(value_enum)]
     pub verb: crate::tools_verify::Verb,
-    #[arg(long)]
-    pub anchor: PathBuf,
 }
 
 #[derive(Debug, Subcommand)]

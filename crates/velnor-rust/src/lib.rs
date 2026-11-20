@@ -106,4 +106,5 @@ mod weaken;
 mod weaken_nextest;
 mod weaken_scope;
 mod weaken_targets;
+pub use plan_tools::{TOOLS_VERIFY_HELPER, tools_verified, unverified_tools_note};
 pub use reexports::*;

@@ -18,7 +18,7 @@ use crate::tools_local::HOME_PATHS;
 
 const FORMAT: &str = "velnor-tools-anchor-v1";
 const ANCHOR_MAX_BYTES: u64 = 1024;
-pub const RESTORED_ENV: &str = "VELNOR_TOOLS_RESTORED";
+pub const ANCHOR_FILE: &str = "velnor-tools-anchor/digest";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
 pub enum Verb {
@@ -157,9 +157,14 @@ fn discard(home: &Path) -> Result<(), CiError> {
     Ok(())
 }
 
-/// After a restore: keeps it when it equals the anchor, otherwise deletes both directories.
-pub fn check(home: &Path, anchor: &Path, restored: bool) -> Result<Verdict, CiError> {
-    if !restored {
+/// After the restores: keeps the tool directories when they equal the anchor, otherwise deletes
+/// both. Whatever is there counts, so a partial restore or a leftover of an earlier job is checked
+/// too.
+pub fn check(home: &Path, anchor: &Path) -> Result<Verdict, CiError> {
+    if HOME_PATHS
+        .iter()
+        .all(|path| fs::symlink_metadata(home.join(path)).is_err())
+    {
         return Ok(Verdict::NothingRestored);
     }
     match compare(home, anchor) {
@@ -215,7 +220,7 @@ fn reason(discard: &Discard) -> String {
 pub fn message(verdict: &Verdict) -> String {
     match verdict {
         Verdict::NothingRestored => {
-            "velnor: no tools were restored, so none are verified".to_owned()
+            "velnor: no tool directories are present, so none are verified".to_owned()
         }
         Verdict::Verified => "velnor: the restored tools equal the anchor".to_owned(),
         Verdict::Discarded(why) => format!(
@@ -238,12 +243,14 @@ fn outputs(verdict: &Verdict) -> String {
     }
 }
 
-pub fn setup(verb: Verb, anchor: &Path) -> Result<String, CiError> {
+pub fn setup(verb: Verb) -> Result<String, CiError> {
     let var = |name: &str| std::env::var(name).ok();
     let home = PathBuf::from(var("HOME").ok_or_else(|| CiError::new("set HOME"))?);
+    let temp = PathBuf::from(var("RUNNER_TEMP").ok_or_else(|| CiError::new("set RUNNER_TEMP"))?);
+    let anchor = temp.join(ANCHOR_FILE);
     let verdict = match verb {
-        Verb::Check => check(&home, anchor, var(RESTORED_ENV).as_deref() == Some("true"))?,
-        Verb::Record => record(&home, anchor)?,
+        Verb::Check => check(&home, &anchor)?,
+        Verb::Record => record(&home, &anchor)?,
     };
     let file = var("GITHUB_OUTPUT").ok_or_else(|| CiError::new("set GITHUB_OUTPUT"))?;
     fs::OpenOptions::new()

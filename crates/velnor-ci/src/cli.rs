@@ -124,7 +124,7 @@ pub enum Command {
     )]
     ToolsLocal(ToolsLocalArgs),
     #[command(
-        about = "Verify restored tools against the anchor a trusted run recorded. check, after a restore (VELNOR_TOOLS_RESTORED=true), keeps ~/.local/share/mise and ~/.rustup only when their digest equals the anchor file and otherwise deletes both, writing verified=true or verified=false to $GITHUB_OUTPUT; record, after the install on a trusted run, writes the anchor when there is none and writes matches= and recorded= so the saves run only for tools equal to the anchor"
+        about = "Verify restored tools against the anchor a trusted run recorded in $RUNNER_TEMP/velnor-tools-anchor/digest. check, after the restores, keeps ~/.local/share/mise and ~/.rustup only when their digest equals the anchor and otherwise deletes both, writing verified=true or verified=false to $GITHUB_OUTPUT; record, after the install on a trusted run, writes the anchor when there is none and writes matches= and recorded= so the saves run only for tools equal to the anchor"
     )]
     ToolsVerify(ToolsVerifyArgs),
     #[command(

@@ -55,7 +55,7 @@ fn recorded(job: &Job) {
 }
 
 fn checked(job: &Job) -> Verdict {
-    check(&job.home, &job.anchor, true).unwrap_or_else(|e| unreachable!("{e}"))
+    check(&job.home, &job.anchor).unwrap_or_else(|e| unreachable!("{e}"))
 }
 
 fn discarded(job: &Job) -> bool {
@@ -88,9 +88,11 @@ fn a_tampered_tool_binary_discards_the_whole_restore() {
     assert!(discarded(&job), "both restored trees must be deleted");
 }
 
+type Change = (&'static str, fn(&Job));
+
 #[test]
 fn a_planted_file_a_new_mode_or_a_moved_link_is_a_mismatch() {
-    let changes: [(&str, fn(&Job)); 3] = [
+    let changes: [Change; 3] = [
         ("planted", |job| {
             fs::write(
                 job.home
@@ -154,11 +156,14 @@ fn a_special_file_in_the_restore_is_discarded_unread() {
 }
 
 #[test]
-fn nothing_restored_leaves_the_home_alone() {
+fn a_home_without_tool_directories_has_nothing_to_verify() {
     let job = job("tools-verify-nothing");
-    let verdict = check(&job.home, &job.anchor, false).unwrap_or_else(|e| unreachable!("{e}"));
+    for path in [".local/share/mise", ".rustup"] {
+        fs::remove_dir_all(job.home.join(path)).unwrap_or_else(|e| unreachable!("{e}"));
+    }
+    let verdict = check(&job.home, &job.anchor).unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(verdict, Verdict::NothingRestored);
-    assert!(fs::metadata(cosign(&job)).is_ok());
+    assert!(fs::metadata(&job.home).is_ok());
 }
 
 #[test]
