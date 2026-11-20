@@ -12,6 +12,7 @@ mod fetch_config;
 mod fixture;
 mod mbx;
 mod mise;
+mod mode_marker;
 mod real_export;
 mod reentry;
 mod setup;

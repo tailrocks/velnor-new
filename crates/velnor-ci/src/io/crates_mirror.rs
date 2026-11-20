@@ -7,6 +7,8 @@ use std::process::ExitCode;
 use crate::cli::CratesMirrorArgs;
 use crate::error::CiError;
 
+use super::crates_mirror_mode::{self as mode, Mode};
+
 pub(super) const CONFIG_ENV: &str = "VELNOR_CARGO_CONFIG";
 pub(super) const WRAPPER_ENV: &str = "VELNOR_CARGO_WRAPPER";
 pub(super) const REAL_ENV: &str = "VELNOR_CARGO_REAL";
@@ -35,21 +37,11 @@ pub(super) fn setup(args: &CratesMirrorArgs) -> Result<String, CiError> {
             super::crates_mirror_mbx::export_line(mbx)
         );
         if !mbx {
+            retire_earlier_wrapper()?;
             super::append_to("GITHUB_ENV", &clear)?;
             return Ok(format!("crates mirror disabled by {DISABLE_ENV}=off\n"));
         }
-        let directory = runner_directory()?;
-        let wrapper = directory.join("cargo");
-        install_wrapper(&directory, &wrapper)?;
-        super::append_to("GITHUB_PATH", &format!("{}\n", directory.display()))?;
-        super::append_to(
-            "GITHUB_ENV",
-            &format!(
-                "{clear}{DISABLE_ENV}=off\n{WRAPPER_ENV}={}\nCARGO={}\n",
-                wrapper.display(),
-                wrapper.display()
-            ),
-        )?;
+        install_mbx_forwarder(&clear)?;
         return Ok(format!(
             "crates mirror disabled by {DISABLE_ENV}=off\nMBX is declared: cargo is checked at use time, no mirror config written\n"
         ));
@@ -85,6 +77,7 @@ pub(super) fn setup(args: &CratesMirrorArgs) -> Result<String, CiError> {
         .and_then(|()| std::fs::rename(staged, &config))
         .map_err(|e| failed(&e))?;
     install_wrapper(&directory, &wrapper)?;
+    mode::write(&directory, Mode { mirror: true, mbx })?;
     super::append_to("GITHUB_PATH", &format!("{}\n", directory.display()))?;
     super::append_to(
         "GITHUB_ENV",
@@ -101,6 +94,45 @@ pub(super) fn setup(args: &CratesMirrorArgs) -> Result<String, CiError> {
         args.registry,
         config.display()
     ))
+}
+
+fn retire_earlier_wrapper() -> Result<(), CiError> {
+    let directory = PathBuf::from(
+        std::env::var_os("RUNNER_TEMP").ok_or_else(|| CiError::new("set RUNNER_TEMP"))?,
+    )
+    .join("velnor-cargo");
+    if !directory.join("cargo").exists() {
+        return Ok(());
+    }
+    mode::write(
+        &directory,
+        Mode {
+            mirror: false,
+            mbx: false,
+        },
+    )
+}
+
+fn install_mbx_forwarder(clear: &str) -> Result<(), CiError> {
+    let directory = runner_directory()?;
+    let wrapper = directory.join("cargo");
+    install_wrapper(&directory, &wrapper)?;
+    mode::write(
+        &directory,
+        Mode {
+            mirror: false,
+            mbx: true,
+        },
+    )?;
+    super::append_to("GITHUB_PATH", &format!("{}\n", directory.display()))?;
+    super::append_to(
+        "GITHUB_ENV",
+        &format!(
+            "{clear}{DISABLE_ENV}=off\n{WRAPPER_ENV}={}\nCARGO={}\n",
+            wrapper.display(),
+            wrapper.display()
+        ),
+    )
 }
 
 fn runner_directory() -> Result<PathBuf, CiError> {
