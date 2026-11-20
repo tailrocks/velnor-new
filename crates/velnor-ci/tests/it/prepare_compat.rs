@@ -42,7 +42,21 @@ fn compat_is_stable_and_follows_rustflags_and_the_debuginfo_setting() {
 }
 
 #[test]
-fn the_compat_digest_of_the_plain_fixture_is_pinned() {
-    let run = prepare("pinned", &Setup::new(reported("1.99.1", Some("0.9.151"))));
-    assert_eq!(digest(&run), "b29bb827d63005a2");
+fn the_compat_digest_ignores_the_locks_and_the_roots_of_the_repository() {
+    let json = reported("1.99.1", Some("0.9.151"));
+    let plain = prepare("compat-roots", &Setup::new(json.clone()));
+    let mut rooted = Setup::new(json);
+    rooted.populate = Some(Box::new(|checkout: &std::path::Path| {
+        let write = |path: &str, text: &str| {
+            std::fs::write(checkout.join(path), text).unwrap_or_else(|e| unreachable!("{e}"));
+        };
+        write("Cargo.lock", "version = 4\n");
+        write(
+            ".velnor/rust-metadata.json",
+            "{\"roots\":{\"Cargo.toml\":{\"members\":[]},\"other/Cargo.toml\":{\"members\":[]}},\"manifests\":{},\"layout\":\"\"}",
+        );
+    }));
+    let rooted = prepare("compat-roots", &rooted);
+    assert!(rooted.output.status.success(), "{:?}", rooted.output);
+    assert_eq!(digest(&plain), digest(&rooted));
 }
