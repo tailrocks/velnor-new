@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::report::{Cache, Hit, LaneMetrics};
-use crate::waste_evidence::{MbxEvidence, TOOLCHAIN_INSTALLS, mbx_sessions, seed_truncated};
+use crate::waste_evidence::{
+    MbxEvidence, TOOLCHAIN_INSTALLS, mbx_sessions, mbx_unparsed_lines, seed_truncated,
+};
 use serde_json::Value;
 use std::collections::BTreeSet;
 use std::fs;
@@ -20,6 +22,14 @@ pub(super) fn collect_local(metrics: &mut LaneMetrics, log: &[u8], runner_temp: 
         .map(|invocation| invocation.started_at)
         .min();
     let store = std::env::var_os("MBX_CACHE_DIR").filter(|dir| !dir.is_empty());
+    let unparsed = mbx_unparsed_lines(log);
+    if let Some(first) = unparsed.first() {
+        metrics.verification_errors.push(format!(
+            "MBX lookup summary not understood ({} line(s)); first: {}. Update the mbx summary parser (crates/velnor-ci/src/waste_evidence.rs) for this wording.",
+            unparsed.len(),
+            crate::escape::escape(first, false)
+        ));
+    }
     metrics.mbx = MbxEvidence {
         declared: crate::mbx_declared::declared_in(Path::new(".")),
         store_primed: store
@@ -27,6 +37,7 @@ pub(super) fn collect_local(metrics: &mut LaneMetrics, log: &[u8], runner_temp: 
             .is_some_and(|(dir, start)| has_entry_before(Path::new(&dir), start)),
         seed_truncated: seed_truncated(runner_temp),
         sessions: mbx_sessions(log),
+        unparsed: u64::try_from(unparsed.len()).unwrap_or(u64::MAX),
     };
     metrics.toolchain_installs = fs::read_to_string(runner_temp.join(TOOLCHAIN_INSTALLS))
         .map(|text| {
