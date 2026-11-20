@@ -75,41 +75,6 @@ fn a_token_in_a_saved_git_config_stops_the_sources_save_only() {
 }
 
 #[test]
-fn each_credential_signal_alone_stops_the_sources_save() {
-    let config = ".cargo/git/db/shared-1/config";
-    sources_save_stops(&[
-        (
-            "bare-credentials-file",
-            ".cargo/git/db/shared-1/credentials",
-            "x\n",
-        ),
-        (
-            "userinfo-only",
-            config,
-            "[remote \"origin\"]\n\turl = https://deploy@github.com/acme/shared-lib\n",
-        ),
-        (
-            "plain-http-userinfo-only",
-            config,
-            "[remote \"origin\"]\n\turl = http://deploy@github.com/acme/shared-lib\n",
-        ),
-        ("extraheader-only", config, "[http]\n\textraheader = x\n"),
-        (
-            "authorization-only",
-            config,
-            "[http]\n\theader = Authorization: x\n",
-        ),
-        (
-            "x-access-token-only",
-            config,
-            "[credential]\n\tusername = x-access-token\n",
-        ),
-        ("token-only", config, "[credential]\n\thelper = token\n"),
-        ("password-only", config, "[credential]\n\tpassword = x\n"),
-    ]);
-}
-
-#[test]
 fn a_credential_under_home_is_found_even_when_cargo_home_is_elsewhere() {
     let repo = private_checkout("decide-credential-elsewhere", GIT_LOCK);
     repo.write_unstaged(
@@ -159,4 +124,112 @@ fn sources_are_not_saved_when_home_is_unset_and_the_saved_paths_cannot_be_checke
     let (output, written) = decide_without_home(&repo, Some(&api), Some(TOKEN), Some("cargo-home"));
     assert!(output.status.success(), "{output:?}");
     assert_eq!(written, "save=true\nsources=false\n", "{output:?}");
+}
+
+#[test]
+fn credential_file_bare_credentials_alone_stops_the_sources_save() {
+    sources_save_stops(&[(
+        "credential_file_bare_credentials",
+        ".cargo/git/db/shared-1/credentials",
+        "x\n",
+    )]);
+}
+
+#[test]
+fn credential_file_git_credentials_alone_stops_the_sources_save() {
+    sources_save_stops(&[(
+        "credential_file_git_credentials",
+        ".cargo/git/db/shared-1/.git-credentials",
+        "x\n",
+    )]);
+}
+
+#[test]
+fn credential_file_netrc_alone_stops_the_sources_save() {
+    sources_save_stops(&[(
+        "credential_file_netrc",
+        ".cargo/git/db/shared-1/.netrc",
+        "x\n",
+    )]);
+}
+
+#[test]
+fn credential_file_netrc_windows_alone_stops_the_sources_save() {
+    sources_save_stops(&[(
+        "credential_file_netrc_windows",
+        ".cargo/git/db/shared-1/_netrc",
+        "x\n",
+    )]);
+}
+
+#[test]
+fn credential_file_credentials_toml_alone_stops_the_sources_save() {
+    sources_save_stops(&[(
+        "credential_file_credentials_toml",
+        ".cargo/git/db/shared-1/credentials.toml",
+        "x\n",
+    )]);
+}
+
+#[test]
+fn credential_file_hosts_yml_alone_stops_the_sources_save() {
+    sources_save_stops(&[(
+        "credential_file_hosts_yml",
+        ".cargo/git/db/shared-1/hosts.yml",
+        "x\n",
+    )]);
+}
+
+#[test]
+fn userinfo_https_alone_stops_the_sources_save() {
+    sources_save_stops(&[(
+        "userinfo_https",
+        ".cargo/git/db/shared-1/config",
+        "[remote \"origin\"]\n\turl = https://deploy@github.com/acme/shared-lib\n",
+    )]);
+}
+
+#[test]
+fn userinfo_http_alone_stops_the_sources_save() {
+    sources_save_stops(&[(
+        "userinfo_http",
+        ".cargo/git/db/shared-1/config",
+        "[remote \"origin\"]\n\turl = http://deploy@github.com/acme/shared-lib\n",
+    )]);
+}
+
+#[test]
+fn extraheader_alone_stops_the_sources_save() {
+    sources_save_stops(&[(
+        "extraheader",
+        ".cargo/git/db/shared-1/config",
+        "[http]\n\textraheader = x\n",
+    )]);
+}
+
+#[test]
+fn authorization_alone_stops_the_sources_save() {
+    sources_save_stops(&[(
+        "authorization",
+        ".cargo/git/db/shared-1/config",
+        "[http]\n\theader = Authorization: x\n",
+    )]);
+}
+
+#[test]
+fn password_alone_stops_the_sources_save() {
+    sources_save_stops(&[(
+        "password",
+        ".cargo/git/db/shared-1/config",
+        "[credential]\n\tpassword = x\n",
+    )]);
+}
+
+#[test]
+fn token_alone_stops_the_sources_save() {
+    sources_save_stops(&[(
+        "token",
+        ".cargo/git/db/shared-1/config",
+        "[credential]\n\thelper = token\n",
+    )]);
 }

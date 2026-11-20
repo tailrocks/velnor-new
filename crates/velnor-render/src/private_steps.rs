@@ -12,18 +12,6 @@ pub(crate) const TOKEN_STEP: &str = "private-token";
 pub(crate) const CHECK_STEP: &str = "private-check";
 pub(crate) const PRIVACY_STEP: &str = "private_repo";
 const PRIVATE_REPOSITORY: &str = "steps.private_repo.outputs.private == 'true'";
-macro_rules! trusted_pull_request {
-    () => {
-        "github.event.pull_request.head.repo.full_name == github.repository && !endsWith(github.actor, '[bot]') && !endsWith(github.event.pull_request.user.login, '[bot]')"
-    };
-}
-
-const RESTORE_ALLOWED: &str = concat!(
-    "(github.event_name != 'pull_request' || (",
-    trusted_pull_request!(),
-    "))"
-);
-
 pub(crate) mod release_asset_steps;
 
 /// The condition for creating an App token: a merge queue entry that `check` allowed, or a run
@@ -53,7 +41,7 @@ pub(crate) fn repository_conditions(step: &Step) -> Vec<String> {
     }
     let mut conditions = vec![PRIVATE_REPOSITORY.to_owned()];
     if matches!(step.kind, StepKind::CacheRestore(_)) {
-        conditions.push(RESTORE_ALLOWED.to_owned());
+        conditions.push(format!("({})", token_allowed(CHECK_STEP)));
     }
     conditions
 }

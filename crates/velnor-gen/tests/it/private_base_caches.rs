@@ -104,6 +104,10 @@ fn the_helpers_verdict_gates_every_restore_and_every_save_of_the_base_caches() -
             .ok_or("restore has no condition")?;
         assert!(condition.contains(VERDICT), "{condition}");
         assert!(
+            condition.contains("steps.private-check.outputs.allowed == ''true''"),
+            "{condition}"
+        );
+        assert!(
             condition.contains(&format!(
                 "(github.event_name != ''pull_request'' || ({TRUSTED_PULL_REQUEST}))"
             )),
