@@ -73,7 +73,7 @@ pub(crate) fn output(slug: &RootSlug, need: GateNeed) -> String {
     need.output_name(slug)
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Setup {
     Before,
     Restored,
@@ -345,6 +345,7 @@ pub(crate) fn gate_parts(gate: &Gate, replanned: bool) -> Vec<String> {
                 }),
             );
         }
+        GateNeed::Lint => parts.push(runs(GateNeed::Lint)),
         GateNeed::Deny => parts.push(runs(GateNeed::Deny)),
         GateNeed::Machete => parts.push(runs(GateNeed::Machete)),
         GateNeed::Policy => parts.push(format!(

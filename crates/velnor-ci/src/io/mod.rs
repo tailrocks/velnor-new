@@ -21,7 +21,9 @@ mod crates_mirror;
 mod crates_mirror_args;
 mod crates_mirror_depth;
 mod crates_mirror_dispatch;
+mod crates_mirror_mbx;
 mod crates_mirror_mise;
+mod crates_mirror_mode;
 mod delta;
 mod delta_freshness;
 mod delta_paths;
@@ -68,6 +70,7 @@ mod required;
 mod resolve_qualification;
 mod restored;
 mod restored_targets;
+mod restored_units;
 mod run;
 mod scope_cache;
 mod setup;
@@ -206,6 +209,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
             &AuditOptions {
                 write,
                 root,
+                max_directory_entries: audit::max_entries_from_env()?,
                 ..AuditOptions::default()
             },
         ),

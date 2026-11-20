@@ -4,6 +4,7 @@
 use toml::{Table, Value};
 
 pub const MBX_TOOL: &str = "mr-boxington";
+pub const MBX_ACTION_RELEASE: &str = "1.30.0";
 const MBX_TOOL_COMMAND: &str = "mbx";
 const RUST_TOOLS: &[&str] = &["rust", "core:rust"];
 const MBX_KEYS: &[&str] = &["tools.rust", "wrappers.cargo", "tools.mr-boxington"];

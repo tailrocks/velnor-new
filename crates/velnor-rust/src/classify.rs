@@ -42,6 +42,13 @@ pub(crate) fn classify<'c>(
     {
         return Class::Nothing;
     }
+    if config
+        .check_configurations
+        .iter()
+        .any(|check| check.file().as_ref() == Some(path))
+    {
+        return Class::Unknown;
+    }
     let packages: Vec<&PackageName> = config
         .inputs
         .iter()
