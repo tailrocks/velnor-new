@@ -5,8 +5,8 @@ use std::collections::BTreeMap;
 
 use velnor_model::{
     Access, BUDGET_JOB_NAME, BUDGET_MODES_HELPER, FullRun, GateNeed, Job, JobId, PermissionScope,
-    Permissions, PlanFrom, PrCi, PullRequestType, PushAfterMergeGroup, RepoFacts, RootSlug, SelectionName, Step, StepKind,
-    Triggers, When,
+    Permissions, PlanFrom, PrCi, PullRequestType, PushAfterMergeGroup, RepoFacts, RootSlug,
+    SelectionName, Step, StepKind, Triggers, When,
 };
 
 use crate::lane::PLAN_JOB;
@@ -102,7 +102,7 @@ pub(crate) fn budget_job(
     Some(Job {
         name: Some(BUDGET_JOB_NAME.to_owned()),
         needs,
-        skip_after_merge_group: skipped_after_queue.then(|| PlanFrom::Job(plan)),
+        skip_after_merge_group: skipped_after_queue.then_some(PlanFrom::Job(plan)),
         selection_name: selection,
         when: if facts.config.full_run == FullRun::Off {
             When::DefaultBranchPushAfterNeeds
