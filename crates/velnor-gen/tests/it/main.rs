@@ -166,6 +166,7 @@ mod pin_policy;
 mod pipeline;
 mod plan_job;
 mod plan_job_wait;
+mod policy_early;
 mod policy_exceptions;
 mod policy_plan;
 mod pr_ci;
