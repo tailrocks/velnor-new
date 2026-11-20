@@ -7,7 +7,7 @@ use crate::hosted::HostedRunners;
 use crate::ids::{PackageName, PathGlob, RepoPath, RootSlug, RunnerLabel, TargetName};
 use crate::lint::LintJob;
 use crate::mbx::MbxMode;
-use crate::plan::Shape;
+use crate::shape::Shape;
 use crate::test_group::TestGroup;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
