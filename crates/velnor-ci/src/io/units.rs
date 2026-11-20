@@ -32,6 +32,13 @@ pub(super) struct Workspace {
     pub(super) target_directory: PathBuf,
 }
 
+/// Where Cargo writes the intermediate artifacts. Absent before Cargo 1.100, where it is the target
+/// directory.
+#[derive(Deserialize)]
+struct BuildDirectory {
+    build_directory: Option<PathBuf>,
+}
+
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(super) enum UnitFile {
     Fingerprint {
@@ -364,6 +371,24 @@ fn metadata(
             String::from_utf8_lossy(&output.stderr).trim()
         )));
     }
-    serde_json::from_slice(&output.stdout)
-        .map_err(|e| CiError::new(format!("cargo metadata printed no workspace: {e}")))
+    let printed =
+        |e: serde_json::Error| CiError::new(format!("cargo metadata printed no workspace: {e}"));
+    let workspace: Workspace = serde_json::from_slice(&output.stdout).map_err(printed)?;
+    let build: BuildDirectory = serde_json::from_slice(&output.stdout).map_err(printed)?;
+    refuse_build_directory(&workspace, build.build_directory)?;
+    Ok(workspace)
+}
+
+/// velnor-ci caches, prunes and audits the units in the target directory only. A build directory
+/// elsewhere (`build.build-dir` or `CARGO_BUILD_BUILD_DIR`) moves those units out of it, so every
+/// read would see none of them and report a wrong lock: refuse it before any of those reads.
+fn refuse_build_directory(workspace: &Workspace, build: Option<PathBuf>) -> Result<(), CiError> {
+    match build {
+        Some(build) if build != workspace.target_directory => Err(CiError::new(format!(
+            "cargo writes intermediate artifacts to {} outside the target directory {}: a build directory set by `build.build-dir` or `CARGO_BUILD_BUILD_DIR` is not supported, so unset it",
+            build.display(),
+            workspace.target_directory.display()
+        ))),
+        _ => Ok(()),
+    }
 }
