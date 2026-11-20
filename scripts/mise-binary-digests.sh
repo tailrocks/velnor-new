@@ -17,9 +17,10 @@
 # jdx/mise repository over scripts/mise-minisign.pub after checking it against
 # that documentation page, then run `--check`. The check is the real `minisign`
 # tool, `minisign -V -m SHASUMS256.txt -x SHASUMS256.txt.minisig -p
-# scripts/mise-minisign.pub`, the way mise's own docs verify; mise.toml pins it
-# (`mise install`, or run this script through `mise exec --`). A missing minisign
-# stops the script like a failed check does. There is no bypass flag.
+# scripts/mise-minisign.pub`, the way mise's own docs verify. The tool is the one
+# mise.toml pins, resolved with `mise which minisign`; PATH is only the fallback when
+# mise cannot resolve it. A missing minisign stops the script like a failed check
+# does. There is no bypass flag.
 #
 # Usage: scripts/mise-binary-digests.sh [VERSION] [--check|--write] [--sums FILE [--sig FILE]]
 #   VERSION  the mise release; defaults to MISE_VERSION in crates/velnor-render/src/steps.rs
@@ -34,6 +35,7 @@ set -eu
 root=$(cd "$(dirname "$0")/.." && pwd)
 exec python3 -I - "$root" "$@" <<'PY'
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -83,23 +85,39 @@ def download(name):
         return response.read()
 
 
+def minisign():
+    try:
+        pinned = subprocess.run(
+            ["mise", "which", "minisign"],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            cwd=root,
+        )
+    except (OSError, subprocess.SubprocessError):
+        pinned = None
+    if pinned is not None and pinned.returncode == 0 and pinned.stdout.strip():
+        return pinned.stdout.strip()
+    return shutil.which("minisign")
+
+
 def verify(raw, signature):
     # The bytes are read once; minisign checks a private copy of exactly those
     # bytes, so what is verified is what is parsed below.
+    tool = minisign()
+    if tool is None:
+        raise SignatureError("minisign is not installed (mise install minisign)")
     with tempfile.TemporaryDirectory(prefix="mise-binary-digests.") as work:
         manifest, signed = f"{work}/SHASUMS256.txt", f"{work}/SHASUMS256.txt.minisig"
         for path, data in ((manifest, raw), (signed, signature)):
             with open(path, "wb") as handle:
                 handle.write(data)
-        try:
-            result = subprocess.run(
-                ["minisign", "-V", "-m", manifest, "-x", signed, "-p", f"{root}/scripts/mise-minisign.pub"],
-                capture_output=True,
-                text=True,
-                timeout=60,
-            )
-        except FileNotFoundError:
-            raise SignatureError("minisign is not installed (mise install minisign)")
+        result = subprocess.run(
+            [tool, "-V", "-m", manifest, "-x", signed, "-p", f"{root}/scripts/mise-minisign.pub"],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
         if result.returncode != 0:
             raise SignatureError(f"minisign exited {result.returncode}: {result.stderr.strip()}")
 
