@@ -137,6 +137,7 @@ mod release_preflight_args;
 mod release_publish;
 mod release_publish_assetless;
 mod release_publish_guards;
+mod release_publish_optional;
 mod release_published;
 mod release_record;
 mod release_record_rerun;

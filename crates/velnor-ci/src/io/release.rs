@@ -311,6 +311,7 @@ pub(super) fn run_publish(args: &PublishArgs) -> Result<String, CiError> {
     for name in args
         .files
         .iter()
+        .chain(&args.optional_assets)
         .map(PlainName::as_str)
         .chain(read.iter().copied())
     {
@@ -332,6 +333,7 @@ pub(super) fn run_publish(args: &PublishArgs) -> Result<String, CiError> {
         tag: args.tag.clone(),
         app: args.app.clone(),
         names: args.files.clone(),
+        optional: args.optional_assets.clone(),
         files,
         assetless: args.no_files,
     };

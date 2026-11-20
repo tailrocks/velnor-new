@@ -29,7 +29,7 @@ pub enum ReleaseCommand {
     )]
     Record(RecordArgs),
     #[command(
-        about = "Publish the draft release of a tag. Check each named file and SHA256SUMS in the directory as sha256sum --check --strict does, find the one draft release with the tag, which the GitHub App's bot must have created, upload the files and SHA256SUMS, and un-draft it only when it holds exactly those files with those digests; with --no-files, name and read no file and un-draft it only when it holds no asset. Exit 1 before any change on a missing, unlisted or changed file, on a published release or a second draft with the tag, on a draft that the App did not create, and on an asset that is not one of the files. Reads GITHUB_TOKEN, which needs contents: write"
+        about = "Publish the draft release of a tag. Check each named file and SHA256SUMS in the directory as sha256sum --check --strict does, find the one draft release with the tag, which the GitHub App's bot must have created, upload the files and SHA256SUMS, and un-draft it only when it holds exactly those files with those digests; with --no-files, name and read no file and un-draft it only when it holds no asset; a file named with --optional-asset is published, and listed in SHA256SUMS, only when it is in the directory, and is skipped with a notice otherwise. Exit 1 before any change on a missing, unlisted or changed file, on a published release or a second draft with the tag, on a draft that the App did not create, and on an asset that is not one of the files. Reads GITHUB_TOKEN, which needs contents: write"
     )]
     Publish(PublishArgs),
     #[command(
@@ -269,9 +269,17 @@ pub struct PublishArgs {
     )]
     pub no_files: bool,
     #[arg(
+        long = "optional-asset",
+        value_name = "FILE",
+        value_parser = file_name,
+        conflicts_with = "no_files",
+        help = "Exact name of a file to publish besides SHA256SUMS when it is in the directory and to skip, with a notice, when it is not; repeat for each file. A present one is checked and published like a named file, and SHA256SUMS must list it"
+    )]
+    pub optional_assets: Vec<PlainName>,
+    #[arg(
         required_unless_present = "no_files",
         value_parser = file_name,
-        help = "Exact names of the files to publish besides SHA256SUMS"
+        help = "Exact names of the files to publish besides SHA256SUMS; each must be in the directory"
     )]
     pub files: Vec<PlainName>,
 }

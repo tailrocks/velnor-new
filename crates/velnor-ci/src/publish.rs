@@ -21,6 +21,8 @@ pub struct Request {
     pub tag: PlainName,
     pub app: PlainName,
     pub names: Vec<PlainName>,
+    /// Files published when present in `files` and skipped, with a notice, when not.
+    pub optional: Vec<PlainName>,
     pub files: BTreeMap<String, Vec<u8>>,
     pub assetless: bool,
 }
@@ -61,7 +63,7 @@ pub fn publish(
     repo: &Repo,
     request: &Request,
 ) -> Result<String, CiError> {
-    let files = verify(request)?;
+    let (files, skipped) = verify(request)?;
     let release = match draft(github, repo, request)? {
         Found::Draft(release) => release,
         Found::PublishedByApp(release) => return confirm_published(github, repo, &release),
@@ -80,7 +82,7 @@ pub fn publish(
             foreign.join(", ")
         )));
     }
-    let mut report = Vec::new();
+    let mut report = skipped;
     for file in &files {
         match present.iter().find(|asset| asset.name == file.name) {
             Some(asset) if holds(asset, file) => {
@@ -122,16 +124,16 @@ pub fn publish(
     Ok(report.join("\n") + "\n")
 }
 
-fn verify(request: &Request) -> Result<Vec<File<'_>>, CiError> {
+fn verify(request: &Request) -> Result<(Vec<File<'_>>, Vec<String>), CiError> {
     if request.assetless {
-        return if request.names.is_empty() {
-            Ok(Vec::new())
+        return if request.names.is_empty() && request.optional.is_empty() {
+            Ok((Vec::new(), Vec::new()))
         } else {
             Err(CiError::new("an assetless release names no files"))
         };
     }
     let mut names = BTreeSet::new();
-    for name in &request.names {
+    for name in request.names.iter().chain(&request.optional) {
         if name.as_str() == SUMS {
             return Err(CiError::new(format!(
                 "{SUMS} is published with every release; do not name it as a file"
@@ -141,7 +143,14 @@ fn verify(request: &Request) -> Result<Vec<File<'_>>, CiError> {
             return Err(CiError::new(format!("file {name} is named twice")));
         }
     }
-    if names.is_empty() {
+    let mut skipped = Vec::new();
+    for name in &request.optional {
+        if !request.files.contains_key(name.as_str()) {
+            names.remove(name.as_str());
+            skipped.push(format!("skipped optional {name}: not found"));
+        }
+    }
+    if request.names.is_empty() {
         return Err(CiError::new("name at least one file to publish"));
     }
     let sums_bytes = request
@@ -182,7 +191,7 @@ fn verify(request: &Request) -> Result<Vec<File<'_>>, CiError> {
         sha256: sha256_hex(sums_bytes),
         bytes: sums_bytes,
     });
-    Ok(files)
+    Ok((files, skipped))
 }
 
 fn read_sums(bytes: &[u8]) -> Result<BTreeMap<String, String>, CiError> {

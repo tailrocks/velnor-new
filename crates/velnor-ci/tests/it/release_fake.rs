@@ -352,6 +352,7 @@ pub(crate) fn request(files: &[(&str, &str)]) -> Request {
         tag: name(TAG),
         app: name(APP),
         names: FILES.iter().map(|(file, _)| name(file)).collect(),
+        optional: Vec::new(),
         assetless: false,
         files: files
             .iter()
