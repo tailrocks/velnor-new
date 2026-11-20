@@ -17,6 +17,7 @@ mod mbx;
 mod mbx_config;
 mod mise;
 mod plan;
+mod policy_table;
 mod public_sources;
 mod release_asset;
 mod repo;
@@ -67,13 +68,14 @@ pub use plan::{
 };
 pub use release_asset::{ReleaseAsset, ReleaseAssetError, ReleaseAssetPart};
 pub use repo::{
-    CacheDebug, CheckoutScope, CiDebugInfo, CompileInputs, CratesMirror, CustomHarness,
-    DependencyKind, DocsRun, FullRun, GitRepository, InputOwner, InputRule, LaneFeatures, LaneJob,
-    LaneKeysWritten, MbxRemote, MbxStore, MemberDependency, OnMain, PackageDependency, PolicyTools,
-    PrCi, PrivateSources, PublicSources, PushAfterMergeGroup, RepoFacts, RepoView,
-    RepositoryIdentity, RustCiConfig, RustMember, RustMetadata, RustPackage, RustRoot, SetupPhase,
-    SpeedBudget, Target, TargetKind, TestLane, TestSetup, Timings, ToolLock, ToolPin, ToolPins,
-    ToolRequest, Toolchain, UnownedPackage, Unread, Weakening, WorkspaceGroup,
+    CacheDebug, CheckoutScope, CiDebugInfo, CompileInputs, CratesMirror, CustomHarness, DenyCheck,
+    DenyChecks, DenyLane, DependencyKind, DocsRun, FullRun, GitRepository, InputOwner, InputRule,
+    LaneFeatures, LaneJob, LaneKeysWritten, MbxRemote, MbxStore, MemberDependency, OnMain,
+    PackageDependency, PolicyTable, PolicyTools, PrCi, PrivateSources, PublicSources,
+    PushAfterMergeGroup, RepoFacts, RepoView, RepositoryIdentity, RustCiConfig, RustMember,
+    RustMetadata, RustPackage, RustRoot, SetupPhase, SpeedBudget, Target, TargetKind, TestLane,
+    TestSetup, Timings, ToolLock, ToolPin, ToolPins, ToolRequest, Toolchain, UnownedPackage,
+    Unread, Weakening, WorkspaceGroup,
 };
 pub use sealed::{Owner, VELNOR_GEN_MARKER, lf_normalized, owner_of, seal};
 pub use selection::{

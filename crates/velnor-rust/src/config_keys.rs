@@ -41,6 +41,7 @@ pub const KEYS: &[&str] = &[
     "test_lane",
     "budget",
     "workspace_groups",
+    "policy",
     "external_workflows",
     "release_assets",
 ];

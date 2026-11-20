@@ -5,16 +5,20 @@ use serde::Deserialize;
 use std::collections::BTreeMap;
 
 use velnor_model::{
-    CheckoutScope, CiDebugInfo, GitRepository, InputRule, PackageName, PathGlob, RepoPath,
-    RunnerLabel, RustCiConfig, SpeedBudget, TargetName,
+    CiDebugInfo, GitRepository, InputRule, PackageName, PathGlob, RepoPath, RunnerLabel,
+    RustCiConfig, SpeedBudget, TargetName,
 };
 
 use crate::config_events::{docs_run, on_main};
+use crate::config_external;
 use crate::config_keys::KEYS;
 use crate::config_pr_ci::parse as parse_pr_ci;
 use crate::error::{DetectError, Reason};
 use crate::shape::parse_shape;
 use crate::toml_file::table;
+use values::{checkout_scope, required_check};
+
+mod values;
 
 pub const CONFIG_PATH: RepoPath = RepoPath::from_static(".velnor/rust-ci.toml");
 
@@ -74,6 +78,7 @@ struct RawConfig {
     workspace_groups: Vec<crate::groups::RawGroup>,
     #[serde(default)]
     test_lane: Vec<crate::config_test_lane::RawTestLane>,
+    policy: Option<crate::config_policy::RawPolicy>,
     external_workflows: Option<Vec<String>>,
 }
 
@@ -122,8 +127,7 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
     let test_groups = crate::config_test_groups::parse(raw.test_groups).map_err(invalid)?;
     let workspace_groups = crate::groups::parse(raw.workspace_groups).map_err(invalid)?;
     let test_lanes = crate::config_test_lane::parse(raw.test_lane).map_err(invalid)?;
-    let external_workflows =
-        crate::config_external::parse(raw.external_workflows).map_err(invalid)?;
+    let external_workflows = config_external::parse(raw.external_workflows).map_err(invalid)?;
     let runner = runner(raw.runner.clone(), defaults.runner).map_err(invalid)?;
     let runners = crate::config_trusted::Declared {
         runner: &runner,
@@ -141,6 +145,7 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
             .map_err(invalid)?;
     Ok(RustCiConfig {
         workspace_groups,
+        policy: crate::config_policy::parse(raw.policy).map_err(invalid)?,
         external_workflows,
         budget: crate::config_budget::parse(bytes).map_err(invalid)?,
         cache_budget_bytes: crate::cache_budget::configured_budget(raw.cache_budget_bytes)
@@ -187,14 +192,6 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
     })
 }
 
-fn checkout_scope(sparse: Option<bool>) -> CheckoutScope {
-    if sparse.unwrap_or(false) {
-        CheckoutScope::Sparse
-    } else {
-        CheckoutScope::Full
-    }
-}
-
 fn timeout(configured: Option<u16>, default: u16) -> Result<u16, Reason> {
     let minutes = configured.unwrap_or(default);
     if TIMEOUT_RANGE.contains(&minutes) {
@@ -206,17 +203,6 @@ fn timeout(configured: Option<u16>, default: u16) -> Result<u16, Reason> {
             min: *TIMEOUT_RANGE.start(),
             max: *TIMEOUT_RANGE.end(),
         })
-    }
-}
-
-fn required_check(configured: Option<String>, default: String) -> Result<String, Reason> {
-    match configured {
-        None => Ok(default),
-        Some(name) if !name.trim().is_empty() && !name.chars().any(char::is_control) => Ok(name),
-        Some(name) => Err(Reason::InvalidValue {
-            key: "required_check",
-            value: name,
-        }),
     }
 }
 
