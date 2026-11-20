@@ -238,7 +238,7 @@ fn a_changed_path_that_is_an_ancestor_of_an_input_runs_the_lint() -> TestResult 
 
 #[test]
 fn a_plain_path_input_covers_everything_below_it_and_a_dead_list_runs_the_lint() -> TestResult {
-    let config = "[[lint]]\nkind = 'mise-task'\nid = 'hk'\ntask = 'hk'\ninputs = ['cfg']\n";
+    let config = "[[lint]]\nkind = 'mise-task'\nid = 'hk'\ntask = 'lint-generator-samples'\ninputs = ['cfg']\n";
     let facts = detect(&repo(&["Cargo.toml"], config)?)?;
     let tracked = changed(&["cfg/a/b.pkl", "src/lib.rs"])?;
     let decide =
