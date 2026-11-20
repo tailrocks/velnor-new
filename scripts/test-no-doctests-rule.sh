@@ -13,14 +13,14 @@ rule="$work/rule.yml"
   awk '/^  - id: no-doctests/ {on = 1; print; next} /^  - id: / {on = 0} on && /^[^ #]/ {exit} on {print}' "$config"
 } > "$rule"
 grep -q 'id: no-doctests$' "$rule" || { echo "no-doctests rule not found in $config" >&2; exit 2; }
-grep -q 'id: no-doctests-block' "$rule" || { echo "no-doctests-block rule not found in $config" >&2; exit 2; }
+grep -q 'id: no-doctests-scanner' "$rule" || { echo "no-doctests-scanner rule not found in $config" >&2; exit 2; }
 
 fails=0
 # check <name> <fail|pass> <file content with printf %b escapes>
 check() {
   local name="$1" expect="$2" dir="$work/$1"
   mkdir -p "$dir/crates/fx/src" "$dir/scripts"
-  cp "$repo/scripts/no-doctests-block.py" "$dir/scripts/"
+  cp "$repo/scripts/no-doctests.py" "$dir/scripts/"
   printf '%b' "$3" > "$dir/crates/fx/src/lib.rs"
   if "$alint_bin" check -c "$rule" "$dir" >/dev/null 2>&1; then got=pass; else got=fail; fi
   if [ "$got" != "$expect" ]; then

@@ -5,11 +5,18 @@ from pathlib import Path
 
 IDENT = re.compile(r"[^\W\d]\w*")
 FENCE = re.compile(r"```|~~~")
-INDENTED = re.compile(r"^[ \t]*\*? {5,}\S", re.M)
-SHEBANG_ATTR = re.compile(r"#!\s*\[")
+LINE_DOC = re.compile(r"//(?:!|/(?!/))")
+LINE_FENCE = re.compile(r"[ \t]*(?:```|~~~)")
+LINE_INDENT = re.compile(r" {5,}\S")
+BLOCK_FENCE = re.compile(r"^[ \t]*\*?[ \t]*(?:```|~~~)", re.M)
+BLOCK_INDENT = re.compile(r"^[ \t]*\*? {5,}\S", re.M)
 DOC_OPEN = re.compile(r"/\*(?:!|\*(?![*/]))")
+ATTR_DOC = re.compile(r"#!?\[doc\s*=")
+DOC_INCLUDE = re.compile(r"\s*=\s*include_str!")
 RAW_PREFIX = {"r", "br", "cr"}
 BYTE_PREFIX = {"b", "c"}
+SHEBANG_ATTR = re.compile(r"#!\s*\[")
+DOC_HINT = ("///", "//!", "/**", "/*!", "doc")
 
 
 def block_end(src, i):
@@ -60,25 +67,41 @@ def skip_char(src, i):
     return None
 
 
-def doc_blocks(src):
+def doc_findings(src):
     i = 0
+    in_attr = False
     while i < len(src):
         c = src[i]
         if src.startswith("//", i):
             k = src.find("\n", i)
-            i = len(src) if k < 0 else k
+            end = len(src) if k < 0 else k
+            if LINE_DOC.match(src, i):
+                body = src[i + 3 : end]
+                if LINE_FENCE.match(body) or LINE_INDENT.match(body):
+                    yield i
+            i = end
         elif src.startswith("/*", i):
             end = block_end(src, i)
-            text = src[i:end]
-            if DOC_OPEN.match(text):
-                yield src.count("\n", 0, i) + 1, text[3:]
+            if DOC_OPEN.match(src, i):
+                body = src[i + 3 : end]
+                if BLOCK_FENCE.search(body) or BLOCK_INDENT.search(body):
+                    yield i
             i = end
         elif c == '"':
-            i = skip_string(src, i)
+            end = skip_string(src, i)
+            if in_attr and FENCE.search(src, i, end):
+                yield i
+            i = end
         elif c == "'":
             j = skip_char(src, i)
             i = i + 1 if j is None else j
-        elif (m := IDENT.match(src, i)):
+        elif c == "#" and ATTR_DOC.match(src, i):
+            in_attr = True
+            i += 1
+        elif c == "]":
+            in_attr = False
+            i += 1
+        elif m := IDENT.match(src, i):
             word = m.group()
             j = i + len(word)
             if word in RAW_PREFIX and j < len(src) and src[j] in '#"':
@@ -87,6 +110,8 @@ def doc_blocks(src):
             elif word in BYTE_PREFIX and j < len(src) and src[j] == '"':
                 i = skip_string(src, j)
             else:
+                if word == "doc" and DOC_INCLUDE.match(src, j):
+                    yield i
                 i = j
         else:
             i += 1
@@ -97,7 +122,7 @@ def rust_sources():
 
 
 def strip_shebang(src):
-    src = src.removeprefix("\ufeff")
+    src = src.removeprefix("﻿")
     if src.startswith("#!") and not SHEBANG_ATTR.match(src):
         first, newline, rest = src.partition("\n")
         return newline + rest
@@ -109,13 +134,13 @@ def main(args):
     bad = 0
     for path in paths:
         src = path.read_text(encoding="utf-8")
-        if "/**" not in src and "/*!" not in src:
+        if not any(hint in src for hint in DOC_HINT):
             continue
         src = strip_shebang(src)
-        for line, body in doc_blocks(src):
-            if FENCE.search(body) or INDENTED.search(body):
-                print(f"{path}:{line}: doctest form inside a block doc comment")
-                bad += 1
+        for pos in doc_findings(src):
+            line = src.count("\n", 0, pos) + 1
+            print(f"{path}:{line}: doctest form in a doc comment or doc attribute")
+            bad += 1
     return 1 if bad else 0
 
 
