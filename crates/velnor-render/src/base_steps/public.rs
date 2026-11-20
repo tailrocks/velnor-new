@@ -90,6 +90,7 @@ pub(crate) fn render(kind: &StepKind) -> RenderedStep {
             cli,
             budget_bytes,
             verdicts,
+            private: _,
         } => crate::base_steps::cache_decide(
             target,
             archive.as_ref(),
