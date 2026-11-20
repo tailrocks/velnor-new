@@ -56,7 +56,7 @@ fn install(facts: &RepoFacts, lint: &LintJob) -> Vec<Step> {
         LintKind::MiseTask { tools, .. } => {
             only(tools.iter().map(|tool| resolved(facts, tool)).collect())
         }
-        LintKind::GeneratedCheck => Vec::new(),
+        LintKind::GeneratedCheck { .. } => Vec::new(),
     }
 }
 
@@ -76,7 +76,7 @@ fn commands(facts: &RepoFacts, lint: &LintJob) -> Vec<LintCommand> {
         .chain(probe.iter().cloned().map(LintCommand::Probe))
         .collect(),
         LintKind::MiseTask { task, .. } => vec![LintCommand::MiseTask(task.clone())],
-        LintKind::GeneratedCheck => Vec::new(),
+        LintKind::GeneratedCheck { .. } => Vec::new(),
     }
 }
 
@@ -88,7 +88,7 @@ fn generated_check_tools(facts: &RepoFacts) -> Vec<String> {
         .collect()
 }
 
-fn generated_check_job(facts: &RepoFacts, lint: &LintJob) -> Job {
+fn generated_check_job(facts: &RepoFacts, lint: &LintJob, from_source: bool) -> Job {
     let tools = generated_check_tools(facts);
     let steps = std::iter::once(step(StepKind::Checkout {
         depth: CHECKOUT_DEPTH,
@@ -103,9 +103,10 @@ fn generated_check_job(facts: &RepoFacts, lint: &LintJob) -> Job {
         facts
             .helper
             .iter()
+            .filter(|_| !from_source)
             .map(|release| step(StepKind::InstallGenerator(release.clone()))),
     )
-    .chain([step(StepKind::GeneratorCheck)])
+    .chain([step(StepKind::GeneratorCheck { from_source })])
     .collect();
     Job {
         name: Some(lint.name.clone()),
@@ -117,8 +118,8 @@ fn generated_check_job(facts: &RepoFacts, lint: &LintJob) -> Job {
 }
 
 fn lint_job(facts: &RepoFacts, lint: &LintJob) -> Job {
-    if lint.kind == LintKind::GeneratedCheck {
-        return generated_check_job(facts, lint);
+    if let LintKind::GeneratedCheck { from_source } = lint.kind {
+        return generated_check_job(facts, lint, from_source);
     }
     let planned = !lint.inputs.is_empty();
     let mut steps = vec![step(StepKind::Checkout {

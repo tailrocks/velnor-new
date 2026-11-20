@@ -131,7 +131,9 @@ pub enum StepKind {
         run: String,
         before_build: bool,
     },
-    GeneratorCheck,
+    GeneratorCheck {
+        from_source: bool,
+    },
     InstallGenerator(HelperRelease),
     InstallHelper(HelperRelease),
     FailWhenANeedFailed,

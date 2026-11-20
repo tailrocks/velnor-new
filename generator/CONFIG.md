@@ -561,6 +561,7 @@ timeout_minutes = 5
 | `name` | all | Job name. Defaults to `Jactionlint`, `Alint`, `Mise task <task>` or `Generated workflows`. |
 | `timeout_minutes` | all | 1 to 360, default 10. |
 | `inputs` | `jactionlint`, `alint`, `mise-task` | Globs of the files the lint reads, in the grammar of `[[inputs]] glob` (a `*` is one whole path segment, a trailing `/**` is everything below a folder). A non-empty list. Without the key the lint runs on every pull request. The key needs `velnor-ci` 0.1.110 or later. |
+| `from_source` | `generated-check` | `true` builds `velnor-gen` from the checkout with `cargo run --locked --package velnor-gen` instead of installing the pinned release. For a repository that contains the generator. The key needs `velnor-ci` 0.1.111 or later. |
 | `config` | `jactionlint`, `alint` | Configuration file. Required for `alint`. |
 | `probe` | `alint` | A script run with `bash` after alint, for rules alint cannot express. |
 | `task` | `mise-task` | The mise task, run as `mise run --force --skip-tools <task>`, so a task with fresh `sources` and `outputs` still runs. It must be a key of `[tasks]` in `mise.toml` or a file in a mise task folder (`mise-tasks`, `.mise-tasks`, `mise/tasks`, `.mise/tasks`, `.config/mise/tasks`); generation fails otherwise. |
@@ -595,9 +596,13 @@ The seal in a generated workflow is an unkeyed SHA-256, so anyone can recompute 
 
 The job has `contents: read` and no secrets, and no selection applies to it: it runs on every pull request, merge group and push, in a draft too, and it never waits for the plan or skips after a queue run. `Required` lists it in `needs` and in its gate spec like any lint job.
 
-The `velnor-gen` that runs is never built from the pull request. The job downloads `velnor-gen-<target>.tar.gz` from the release the lock pins, compares its SHA-256 with the digest in the lock, and only then extracts it. A pull request can change the pin only to another release that was published by the project. The lock and the workflow are themselves compared by the check, so a pin that the workflow does not match is drift. Because the binary is a release, it knows only the keys and the rendering of that release: a change to the generator or to the config that a released `velnor-gen` cannot read or render the same way fails the job until a release that has it is pinned.
+Unless `from_source` is set (below), the `velnor-gen` that runs is never built from the pull request. The job downloads `velnor-gen-<target>.tar.gz` from the release the lock pins, compares its SHA-256 with the digest in the lock, and only then extracts it. A pull request can change the pin only to another release that was published by the project. The lock and the workflow are themselves compared by the check, so a pin that the workflow does not match is drift. Because the binary is a release, it knows only the keys and the rendering of that release: a change to the generator or to the config that a released `velnor-gen` cannot read or render the same way fails the job until a release that has it is pinned.
 
 The job does not protect the workflow that holds it: a pull request that deletes the job from the workflow and from `required.needs` removes the check, because a `pull_request` run uses the workflow of the pull request. Require the workflow from the base branch in a ruleset (`workflows` rule) to close that.
+
+#### Checking with a generator built from the checkout
+
+A repository that contains `velnor-gen` regenerates its own workflows with the generator at its head, so the pinned release disagrees whenever a change alters the output. `from_source = true` replaces the release install with `cargo run --locked --package velnor-gen -- check --verify-release`; the job still installs the Rust toolchain and mbx, and still verifies the lock against the published release. The binary is then built from the pull request, so the check no longer proves that the project published the generator that ran: a pull request that changes the generator can change what it accepts. The job keeps `contents: read`, no secrets and no token, and the same runner fence as every lint (a pull request from a fork runs on a GitHub-hosted runner). Use it only in the repository that contains the generator and reviews every change to it. Cargo fetches the dependencies from the registry it is configured with; the job does not configure the crates mirror.
 
 ### One required check
 
