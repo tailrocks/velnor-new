@@ -33,13 +33,13 @@ Successful and failed jobs are both covered: see decision 1 and the cases table.
 
 Not part of the adopted record above. Each entry changes nothing until the owner adopts it.
 
-### P1. Mbx release in the mbx remote cache key (from #2146, tracked by #2249)
+### P1. Mbx release in the mbx remote cache key
 
 Today `[cache] mbx_remote` renders `cache-generation: v1-${{ github.job }}`. The mbx release is not part of that key. A project that bumps `mr-boxington` in `mise.toml` changes the release the action installs, and its restores keep the same key.
 
 Options:
 
-- **A. Keep the key.** The `jdx/mr-boxington-action` README (at 88acf2b) says a change of object-store format already gets a separate cache key. The likely effect of a bump is one cold restore, not a wrong build. Not reproduced. Every generated sample stays byte-identical.
+- **A. Keep the key.** The `jdx/mr-boxington-action` README says a change of object-store format already gets a separate cache key. The likely effect of a bump is one cold restore, not a wrong build. Not reproduced. Every generated sample stays byte-identical.
 - **B. Add the release to the key**, for example `v1-${{ github.job }}-<mbx release>`. This removes the reliance on the action's own format key. It changes the generated output of every `mbx_remote` sample, and the superseded entries need the pruning rule of decision 4 extended to them.
 
 Recommendation: A, unless the owner has evidence that the action does not version its object-store format. Adopting A records that a cold restore after an mbx bump is accepted.
