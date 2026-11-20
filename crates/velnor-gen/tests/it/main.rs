@@ -280,6 +280,7 @@ mod test_groups_restore;
 mod test_groups_selection;
 mod test_lane_flags;
 mod test_setup;
+mod test_setup_phase;
 mod tool_pins;
 mod toolchain;
 mod toolchain_components;
