@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::report::{Cache, Hit, LaneMetrics};
-use crate::waste_evidence::{MbxEvidence, TOOLCHAIN_INSTALLS, mbx_seed_truncated, mbx_sessions, mbx_unparsed_lines};
+use crate::waste_evidence::{
+    MbxEvidence, TOOLCHAIN_INSTALLS, mbx_seed_truncated, mbx_sessions, mbx_unparsed_lines,
+};
 use serde_json::Value;
 use std::collections::BTreeSet;
 use std::fs;

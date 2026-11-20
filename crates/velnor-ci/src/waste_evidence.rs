@@ -47,7 +47,6 @@ pub fn mbx_seed_truncated(log: &[u8]) -> bool {
     String::from_utf8_lossy(log).contains("MBX seeding stopped at the startup budget")
 }
 
-
 /// The summary text of an `mbx[cache]:` lookup line. Both forms are accepted: 1.30.0 prints
 /// `mbx[cache]: object cache: H hits, M misses; ...` in some runs and `mbx[cache]: H hits, M misses; ...`
 /// in others. Lines that are not lookup summaries (`mbx[cache]: 28.53s session`) return `None`.
