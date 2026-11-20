@@ -169,15 +169,12 @@ fn unescape_once(text: &str) -> String {
             .filter(|_| bytes[at] == b'%')
             .and_then(|pair| std::str::from_utf8(pair).ok())
             .and_then(|pair| u8::from_str_radix(pair, 16).ok());
-        match escaped {
-            Some(byte) => {
-                out.push(byte);
-                at += 3;
-            }
-            None => {
-                out.push(bytes[at]);
-                at += 1;
-            }
+        if let Some(byte) = escaped {
+            out.push(byte);
+            at += 3;
+        } else {
+            out.push(bytes[at]);
+            at += 1;
         }
     }
     String::from_utf8_lossy(&out).into_owned()
