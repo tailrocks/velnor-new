@@ -5,6 +5,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::{Command, Output};
 use std::time::{Duration, SystemTime};
+use velnor_test_support::real_cargo;
 
 use crate::delta::success;
 use crate::delta_source::helper_at;
@@ -145,7 +146,7 @@ impl Fixture {
     }
 
     fn cargo_at(args: &[&str], directory: &std::path::Path) -> Output {
-        Command::new(env!("CARGO"))
+        Command::new(real_cargo())
             .args(args)
             .current_dir(directory)
             .env("CARGO_TARGET_DIR", directory.join("target"))

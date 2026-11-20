@@ -118,7 +118,7 @@ fn a_forward_just_below_the_depth_limit_is_not_refused() -> TestResult {
         .lines()
         .find_map(|line| line.strip_prefix("VELNOR_CARGO_CONFIG="))
         .ok_or("exported Cargo config")?;
-    let cargo_bin = PathBuf::from(std::env::var_os("CARGO").ok_or("CARGO from cargo test")?)
+    let cargo_bin = velnor_test_support::real_cargo()
         .parent()
         .ok_or("Cargo directory")?
         .to_path_buf();
