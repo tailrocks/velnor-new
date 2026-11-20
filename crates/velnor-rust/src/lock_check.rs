@@ -8,7 +8,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use velnor_model::{HelperVersion, Platform};
 
 use crate::lock::{
-    CI, GENERATOR, Lock, LockError, check_digests, pin_lock, release_commit, release_version,
+    CI, GENERATOR, GENERATOR_BINARY_RELEASE, Lock, LockError, check_digests, pin_lock,
+    release_commit, release_version,
 };
 
 /// The commit a `velnor-gen` build without `VELNOR_COMMIT` reports.
@@ -103,18 +104,23 @@ type BinaryEntry<'a> = (String, &'a BTreeMap<String, String>);
 /// that section existed has none, because its `[velnor-gen]` digests are the archives'.
 fn binary_entry(lock: &Lock) -> Result<Option<BinaryEntry<'_>>, LockError> {
     let archive = check_format(lock)?;
-    match (archive, lock.generator_binary.as_ref()) {
-        (true, Some(binary)) => {
-            let section = format!("{GENERATOR}-binary");
+    let reads = release_version(&lock.version)?.at_least(GENERATOR_BINARY_RELEASE);
+    let section = format!("{GENERATOR}-binary");
+    match (archive, reads, lock.generator_binary.as_ref()) {
+        (false, _, None) => Ok(Some((GENERATOR.to_owned(), &lock.generator))),
+        (false, _, Some(_)) => Err(LockError::new(format!(
+            "[{section}] is not allowed: release {} publishes raw binaries only",
+            lock.version
+        ))),
+        (true, false, Some(_)) => Err(LockError::new(format!(
+            "[{section}] is not allowed: release {} does not read it",
+            lock.version
+        ))),
+        (true, _, None) => Ok(None),
+        (true, true, Some(binary)) => {
             check_digests(binary).map_err(|error| named(&section, &error))?;
             Ok(Some((section, binary)))
         }
-        (true, None) => Ok(None),
-        (false, Some(_)) => Err(LockError::new(format!(
-            "[{GENERATOR}-binary] is not allowed: release {} publishes raw binaries only",
-            lock.version
-        ))),
-        (false, None) => Ok(Some((GENERATOR.to_owned(), &lock.generator))),
     }
 }
 

@@ -14,6 +14,10 @@ pub(crate) const CI: &str = "velnor-ci";
 pub(crate) const GENERATOR: &str = "velnor-gen";
 const BINARY_SUMS: &str = "BINARY-SHA256SUMS";
 
+// First released in tools-v0.1.111 (not tagged yet when this gate was written). An older
+// velnor-gen rejects a lock with an unknown section, so older locks never get this one.
+pub(crate) const GENERATOR_BINARY_RELEASE: (u64, u64, u64) = (0, 1, 111);
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LockError(String);
 
@@ -108,7 +112,13 @@ pub fn pin_lock(
         Form::Raw
     };
     let (ci_binary, generator_binary) = match (form, binary_sums) {
-        (Form::Archive, Some(binary_sums)) => binary_digests(binary_sums, &listed)?,
+        (Form::Archive, Some(binary_sums)) => {
+            let (ci, generator) = binary_digests(binary_sums, &listed)?;
+            (
+                ci,
+                generator.filter(|_| version.at_least(GENERATOR_BINARY_RELEASE)),
+            )
+        }
         (Form::Archive, None) => {
             return Err(LockError(format!(
                 "SHA256SUMS lists archives, so {BINARY_SUMS} is needed for the binary digests"

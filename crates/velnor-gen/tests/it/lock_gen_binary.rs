@@ -11,7 +11,7 @@ use crate::lock_archive::ARCHIVE_SUMS;
 
 type TestResult = Result<(), Box<dyn Error>>;
 
-const VERSION: &str = "0.1.108";
+const VERSION: &str = "0.1.111";
 const COMMIT: &str = "1390e6f6a4b64e1f33dbddfbeedcd097db32ec36";
 const GEN_ARCHIVE_X64: &str = "2a3ff18c1c5fc61a10aa66976ccf1fe669daa4af4eafec260b4c87d81afdf8f9";
 const GEN_BINARY_X64: &str = "24da48018435c7e9b2e0153a05c7d65b68017db69b073cc8398c78dc6e4274df";
@@ -104,5 +104,22 @@ fn a_lock_pinned_before_the_binary_section_still_passes() -> TestResult {
         .map(str::to_owned)
         .collect();
     assert_eq!(check(&old.join("\n\n"), running(GEN_BINARY_X64)), Ok(()));
+    Ok(())
+}
+
+#[test]
+fn a_release_older_than_the_binary_section_is_pinned_without_it() -> TestResult {
+    let lock = pin_lock("0.1.110", COMMIT_FILE, &sums(), Some(BINARY_SUMS))?;
+    assert!(!lock.contains("velnor-gen-binary"), "{lock}");
+    let injected = format!(
+        "{}\n[velnor-gen-binary]\nlinux-arm64 = \"{GEN_BINARY_ARM64}\"\nlinux-x64 = \"{GEN_BINARY_X64}\"\n",
+        lock.trim_end()
+    );
+    let older = RunningGenerator {
+        version: "0.1.110",
+        ..running(GEN_BINARY_X64)
+    };
+    let error = check(&injected, older).err().ok_or("accepted")?;
+    assert!(error.contains("[velnor-gen-binary]"), "{error}");
     Ok(())
 }
