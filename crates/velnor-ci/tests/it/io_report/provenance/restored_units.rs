@@ -321,3 +321,52 @@ fn a_restored_dependent_forced_to_rebuild_by_a_missing_input_gap_is_a_gap_not_wa
     );
     Ok(())
 }
+
+const BUILD_SCRIPT_SIBLING: &str = "00000000bad0000a";
+
+#[test]
+fn a_build_script_sibling_of_the_same_package_does_not_hide_a_missing_input_gap()
+-> Result<(), Box<dyn std::error::Error>> {
+    let repo = fixture("report-restored-units-build-script-sibling")?;
+    let missing = format!("{}/store/out-dirs/v1/abc/private.rs", repo.root().display());
+    dep_info_unit(&repo, SERDE_GAP, &missing);
+    repo.write(
+        &format!("target/debug/.fingerprint/serde-{BUILD_SCRIPT_SIBLING}/run-build-script-build-script-build.json"),
+        "{}\n",
+    );
+    repo.write(
+        &format!("target/debug/.fingerprint/wrapper-{WRAPPER}/lib-wrapper"),
+        r#"{"deps":[[0,"serde",false,7621611783511691194]]}"#,
+    );
+    restore(&repo);
+    let record = restored_record(&repo)?;
+    let lines: Vec<&str> = record.lines().collect();
+    assert!(
+        lines.contains(&format!("missing-input {WRAPPER}").as_str()),
+        "{record}"
+    );
+
+    let metrics = observation(
+        &repo,
+        &[],
+        &[
+            registry_unit(&repo, "serde", SERDE_GAP)?,
+            registry_unit(&repo, "wrapper", WRAPPER)?,
+        ],
+    )?;
+    let wrapper = metrics.invocations[0]
+        .compilations
+        .iter()
+        .find(|event| event.package == "wrapper")
+        .unwrap_or_else(|| unreachable!("wrapper: {metrics:?}"));
+    assert_eq!(wrapper.restored, Some(false), "{metrics:?}");
+    assert!(wrapper.missing_input, "{metrics:?}");
+    assert!(
+        metrics
+            .violations
+            .iter()
+            .all(|line| !line.contains("wrapper")),
+        "{metrics:?}"
+    );
+    Ok(())
+}

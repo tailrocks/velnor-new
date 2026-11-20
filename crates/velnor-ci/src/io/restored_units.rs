@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use super::units::{UnitFile, unit_files};
 use crate::error::CiError;
 use crate::inputs::restored_units_file;
-use crate::restored_units::RestoredUnits;
+use crate::restored_units::{Fingerprint, RestoredUnits};
 
 const DEP_INFO_LIMIT: u64 = 4 * 1024 * 1024;
 
@@ -19,8 +19,18 @@ pub(super) fn scan(target: &Path) -> Option<RestoredUnits> {
     let mut fingerprints = Vec::new();
     for (unit, path) in units {
         match unit {
-            UnitFile::Fingerprint { hash, package, .. } => {
-                fingerprints.push((hash.clone(), package, dependency_crates(&path)));
+            UnitFile::Fingerprint {
+                hash,
+                package,
+                name,
+                ..
+            } => {
+                fingerprints.push(Fingerprint {
+                    hash: hash.clone(),
+                    package,
+                    unit: name,
+                    dependencies: dependency_crates(&path),
+                });
                 found.present.insert(hash);
             }
             UnitFile::DepInfo {

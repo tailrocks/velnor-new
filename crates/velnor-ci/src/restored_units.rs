@@ -49,18 +49,30 @@ pub fn decode(text: &str) -> Option<RestoredUnits> {
     Some(units)
 }
 
-pub fn cascade(units: &mut RestoredUnits, fingerprints: &[(String, String, BTreeSet<String>)]) {
+/// One fingerprint directory entry: the unit `hash` of `package`, named `unit`
+/// (for example `lib-serde`, or a build script's `run-build-script-...`), and
+/// the crate names it depends on.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Fingerprint {
+    pub hash: String,
+    pub package: String,
+    pub unit: String,
+    pub dependencies: BTreeSet<String>,
+}
+
+pub fn cascade(units: &mut RestoredUnits, fingerprints: &[Fingerprint]) {
     loop {
         let gaps = gap_crates(units, fingerprints);
         let forced: Vec<String> = fingerprints
             .iter()
-            .filter(|(hash, _, dependencies)| {
-                !units.missing_input.contains(hash)
-                    && dependencies
+            .filter(|print| {
+                !units.missing_input.contains(&print.hash)
+                    && print
+                        .dependencies
                         .iter()
                         .any(|name| gaps.contains(&crate_name(name)))
             })
-            .map(|(hash, _, _)| hash.clone())
+            .map(|print| print.hash.clone())
             .collect();
         if forced.is_empty() {
             return;
@@ -72,21 +84,26 @@ pub fn cascade(units: &mut RestoredUnits, fingerprints: &[(String, String, BTree
     }
 }
 
-fn gap_crates(
-    units: &RestoredUnits,
-    fingerprints: &[(String, String, BTreeSet<String>)],
-) -> BTreeSet<String> {
+/// The crates with a gap unit that no restored unit of the same crate and
+/// kind holds. Another unit of the same package, such as a build script's run
+/// unit, is a different kind and does not hide the gap; a restored unit of the
+/// same kind (another version, say) does, because the name is then ambiguous.
+fn gap_crates(units: &RestoredUnits, fingerprints: &[Fingerprint]) -> BTreeSet<String> {
     let (gaps, held): (Vec<_>, Vec<_>) = fingerprints
         .iter()
-        .partition(|(hash, _, _)| units.missing_input.contains(hash));
-    let held: BTreeSet<String> = held
+        .partition(|print| units.missing_input.contains(&print.hash));
+    let held: BTreeSet<(String, &str)> = held
         .iter()
-        .map(|(_, package, _)| crate_name(package))
+        .map(|print| (crate_name(&print.package), unit_kind(&print.unit)))
         .collect();
     gaps.iter()
-        .map(|(_, package, _)| crate_name(package))
-        .filter(|name| !held.contains(name))
+        .filter(|print| !held.contains(&(crate_name(&print.package), unit_kind(&print.unit))))
+        .map(|print| crate_name(&print.package))
         .collect()
+}
+
+fn unit_kind(unit: &str) -> &str {
+    unit.strip_suffix(".json").unwrap_or(unit)
 }
 
 fn crate_name(package: &str) -> String {
