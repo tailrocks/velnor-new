@@ -116,8 +116,9 @@ fn the_reader_maps_a_real_mbx_report_and_names_what_it_cannot_read() {
     use velnor_ci::mbx_report::parse;
     let real = include_bytes!("../data/mbx_report/mbx-1.30.0.json");
     assert_eq!(parse(real), Ok(Some(session(0, 0, 2))));
-    let bypassed =
-        br#"{"version":5,"hits":0,"misses":0,"unconsulted":0,"bypasses":{"compiler-query":1}}"#;
+    let probes = br#"{"version":5,"hits":0,"misses":0,"unconsulted":0,"bypasses":{"compiler-query":2,"standard-input":1}}"#;
+    assert_eq!(parse(probes), Ok(None));
+    let bypassed = br#"{"version":5,"hits":0,"misses":0,"unconsulted":0,"bypasses":{"compiler-query":1,"other":1}}"#;
     assert_eq!(parse(bypassed), Ok(Some(session(0, 0, 0))));
     assert_eq!(parse(report_json(5, 0, 0, 0).as_bytes()), Ok(None));
     assert!(parse(br#"{"version":5,"hits":1}"#).is_err_and(|e| e.contains("without its counts")));

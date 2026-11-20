@@ -20,6 +20,14 @@ pub const VARIABLE: &str = "MBX_STATS_REPORT";
 /// the version when the shape changes; a report of any other version is not understood.
 pub const KNOWN_VERSIONS: &[u64] = &[5];
 
+/// The bypasses MBX's own summary leaves out of its count: cargo probing the compiler.
+const ROUTINE_PROBES: &[&str] = &[
+    "compiler-query",
+    "standard-input",
+    "cc-compiler-query",
+    "cc-standard-input",
+];
+
 #[derive(Deserialize)]
 struct Counts {
     hits: u64,
@@ -49,12 +57,14 @@ pub fn parse(report: &[u8]) -> Result<Option<MbxSession>, String> {
     }
     let counts: Counts = serde_json::from_value(value)
         .map_err(|error| format!("version {version} without its counts ({error})"))?;
+    let bypassed = counts
+        .bypasses
+        .keys()
+        .any(|reason| !ROUTINE_PROBES.contains(&reason.as_str()));
     let looked_at = counts.hits + counts.misses + counts.unconsulted > 0;
-    Ok(
-        (looked_at || !counts.bypasses.is_empty()).then_some(MbxSession {
-            hits: counts.hits,
-            misses: counts.misses,
-            not_looked_up: counts.unconsulted,
-        }),
-    )
+    Ok((looked_at || bypassed).then_some(MbxSession {
+        hits: counts.hits,
+        misses: counts.misses,
+        not_looked_up: counts.unconsulted,
+    }))
 }
