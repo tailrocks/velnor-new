@@ -46,7 +46,7 @@ pub(crate) const MISE_VERSION: &str = "2026.11.10";
 mod chained_save;
 #[path = "steps_helpers.rs"]
 mod steps_helpers;
-use steps_helpers::{rustup_add, saved_unless_hit, variable};
+use steps_helpers::{leading_steps, rustup_add, saved_unless_hit, variable};
 
 pub(crate) const CACHE_RESTORE: &str =
     "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
@@ -200,16 +200,7 @@ fn rendered_steps(
     around: Around<'_>,
 ) -> Vec<RenderedStep> {
     let job_name = around.job_name;
-    let mut rendered = Vec::new();
-    if audit && step.kind == StepKind::Cargo(CargoCommand::Doctest) {
-        rendered.push(cargo_step(
-            &CargoCommand::BuildAll,
-            step.manifest.as_ref(),
-            true,
-            lane,
-            None,
-        ));
-    }
+    let mut rendered = leading_steps(step, audit, lane);
     let mut body = step_body(step, audit, tests, lane);
     if body.id.is_none() {
         body.id = around.id.map(str::to_owned);
@@ -314,6 +305,7 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
         StepKind::InstallMise => install_mise(),
         StepKind::Lint(command) => crate::lint_steps::lint_step(command),
         StepKind::UploadArchive { name, file } => upload_step(name, file),
+        StepKind::UploadGroupArtifact(upload) => crate::artifact_steps::group_artifact(upload),
         StepKind::DownloadArchive { name, into } => download_step(name, into.as_ref()),
         StepKind::CacheRestore(key) => cache_step(CACHE_RESTORE, "Restore", key, true),
         StepKind::CacheLookup(key) => crate::tools_steps::tools_lookup(key),

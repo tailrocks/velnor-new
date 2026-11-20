@@ -8,6 +8,7 @@ use velnor_model::GitRepository;
 use velnor_rust::{CONFIG_PATH, LockAdmission, PinnedGit, merge_pinned};
 
 use crate::error::CiError;
+use crate::escape::escape;
 use crate::public_probe::{Deadline, VERDICTS_VARIABLE, Verdicts};
 
 use super::public_repo::{Credentials, env_token};
@@ -26,8 +27,14 @@ pub(super) fn refusal(
 ) -> Result<Admission, CiError> {
     let refused = |path: &Path| Admission {
         refusal: Some(format!(
-            "base caches are not saved because dependency sources in {} are not proven public\n",
-            path.display()
+            "{}\n",
+            escape(
+                &format!(
+                    "base caches are not saved because dependency sources in {} are not proven public",
+                    path.display()
+                ),
+                false,
+            )
         )),
         log: String::new(),
         mismatch: None,

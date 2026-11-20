@@ -106,6 +106,9 @@ fn check_of(check: &Table) -> Result<Check, CiError> {
         .get("id")
         .and_then(Value::as_str)
         .ok_or_else(|| unsupported("check_without_id"))?;
+    if !is_identifier(id) {
+        return Err(unsupported(&format!("check_id:{id}")));
+    }
     let rust_changes = match check.get("selection").and_then(Value::as_str) {
         None | Some("rust_changes") => true,
         Some("declared_inputs") => false,
@@ -121,6 +124,13 @@ fn check_of(check: &Table) -> Result<Check, CiError> {
         inputs: strings(check.get("inputs")),
         rust_changes,
     })
+}
+
+fn is_identifier(id: &str) -> bool {
+    !id.is_empty()
+        && id
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'.' | b'-'))
 }
 
 fn strings(value: Option<&Value>) -> Vec<String> {
