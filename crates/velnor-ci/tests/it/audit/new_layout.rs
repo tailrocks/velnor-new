@@ -81,3 +81,18 @@ fn a_unit_without_dep_info_in_the_layout_of_cargo_1100_makes_the_audit_refuse() 
     );
     assert!(!repo.root().join(".velnor/rust-inputs.lock").exists());
 }
+
+#[test]
+fn a_built_target_directory_in_a_layout_with_no_known_unit_makes_the_audit_refuse() {
+    let repo = workspace_below_the_root();
+    unit(&repo, "rust/target/debug/units/lib/x/liblib.rlib", "");
+    unit(&repo, "rust/target/debug/units/lib/x/liblib.rmeta", "");
+    let refused = audit(&repo, &["--write"]);
+    assert_eq!(refused.status.code(), Some(1), "{refused:?}");
+    let stderr = String::from_utf8_lossy(&refused.stderr);
+    assert!(
+        stderr.contains("found no units in") && stderr.contains("unknown cargo layout?"),
+        "{stderr}"
+    );
+    assert!(!repo.root().join(".velnor/rust-inputs.lock").exists());
+}

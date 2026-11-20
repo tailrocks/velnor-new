@@ -11,6 +11,7 @@ use velnor_rust::{NESTED_ROOTS_FOLDER, resolve};
 use crate::cache_prune::is_hash;
 use crate::error::CiError;
 
+mod built;
 mod fill;
 #[cfg(test)]
 mod layout_tests;
@@ -90,6 +91,7 @@ fn unit_files_within(target: &Path, limit: usize) -> Result<Vec<(UnitFile, PathB
     let mut found = Vec::new();
     let mut pending = vec![(target.to_path_buf(), 0)];
     let mut directories = 1;
+    let mut built = false;
     while let Some((directory, depth)) = pending.pop() {
         let entries = match fs::read_dir(&directory) {
             Ok(entries) => entries,
@@ -134,9 +136,12 @@ fn unit_files_within(target: &Path, limit: usize) -> Result<Vec<(UnitFile, PathB
                 .filter(|_| kind.is_file() && !generated(&path))
             {
                 found.push((unit, path));
+            } else if kind.is_file() && built::output(&entry.file_name()) {
+                built = true;
             }
         }
     }
+    built::refuse_without_units(target, built, &found)?;
     Ok(found)
 }
 
