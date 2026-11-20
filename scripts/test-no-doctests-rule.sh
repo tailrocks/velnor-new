@@ -151,6 +151,7 @@ check doc_brace_comma   fail '#[doc = concat!{"prose", "```\\nx\\n```"}]\npub fn
 check block_unstarred_indent fail '/**\n    prose\n\n        let x = 1;\n*/\nfn f() {}\n'
 check block_unstarred_plain  pass '/**\n    prose\n    more prose\n*/\nfn f() {}\n'
 check setext_underline_code  fail '/// Title\n/// =====\n///     let x = 1;\nfn f() {}\n'
+check setext_dash_single    fail '/// Title\n/// -\n///     let x = 1;\nfn f() {}\n'
 check adjacent_attr_join     pass '#[doc = "prose"]\n#[doc = "    let x = 1;"]\nfn f() {}\n'
 check adjacent_line_join     pass '#[doc = "prose"]\n///     let x = 1;\nfn f() {}\n'
 check adjacent_item_reset    fail '#[doc = "prose"]\nfn a() {}\n#[doc = "    let x = 1;"]\nfn b() {}\n'
