@@ -9,7 +9,7 @@ use velnor_model::RepoPath;
 use crate::support::FakeGitHub;
 use crate::timings::{LIST, RECORDED_LIST, lab, recorded, roots, runner};
 
-const NEWEST: [u64; 3] = [43_636_016_430, 43_628_937_052, 43_618_131_619];
+const NEWEST: &[u64] = &[43_636_016_430, 43_628_937_052, 43_618_131_619];
 
 fn list(entries: &[Value]) -> String {
     json!({ "total_count": entries.len(), "workflow_runs": entries }).to_string()
@@ -30,10 +30,10 @@ fn root(path: &str) -> RepoPath {
 }
 
 fn archived_test_jobs() -> FakeGitHub {
-    let mut fake = recorded(&list(&ordinary(&NEWEST)));
+    let mut fake = recorded(&list(&ordinary(NEWEST)));
     let repo = lab();
-    for (index, id) in NEWEST.into_iter().enumerate() {
-        let path = jobs_path(&repo, id, 1, 1);
+    for (index, id) in NEWEST.iter().enumerate() {
+        let path = jobs_path(&repo, *id, 1, 1);
         let mut jobs: Value =
             serde_json::from_str(&fake.get_text(&path)).unwrap_or_else(|e| unreachable!("{e}"));
         let job_list = jobs["jobs"]
@@ -133,8 +133,8 @@ fn grouped_test_timings_use_the_archive_build_and_default_group_execution_jobs()
 
 fn lint_measurement_fake(invalid: &str) -> FakeGitHub {
     let mut fake = recorded(LIST);
-    for (index, id) in NEWEST.into_iter().enumerate() {
-        let path = jobs_path(&lab(), id, 1, 1);
+    for (index, id) in NEWEST.iter().enumerate() {
+        let path = jobs_path(&lab(), *id, 1, 1);
         let mut jobs: Value =
             serde_json::from_str(&fake.get_text(&path)).unwrap_or_else(|e| unreachable!("{e}"));
         let root_job = jobs["jobs"]
@@ -208,7 +208,7 @@ fn recorded_pull_requests_without_base_metadata_are_not_written_as_default_branc
     assert!(!exists);
 
     let default_base = gather(
-        &recorded(&list(&ordinary(&NEWEST))),
+        &recorded(&list(&ordinary(NEWEST))),
         &lab(),
         &roots(),
         &runner(),

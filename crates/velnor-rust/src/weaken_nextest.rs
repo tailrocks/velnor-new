@@ -8,7 +8,7 @@ use toml::map::Map;
 use crate::weaken::Make;
 use velnor_model::Weakening;
 
-const CHECKED_PROFILES: [&str; 2] = ["default", "ci"];
+const CHECKED_PROFILES: &[&str] = &["default", "ci"];
 
 fn profiles(parsed: &Table) -> impl Iterator<Item = (&String, &Value)> {
     parsed
