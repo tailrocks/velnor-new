@@ -157,7 +157,7 @@ packages = ["velnor-runner-host"]
 filter = "package(velnor-runner-host) and (test(~local::) or binary(local_host_public) or binary(local_pair_public))"
 ```
 
-`root` is the folder of the Cargo root's `Cargo.toml`, or `.` for the repository root. It must name a root of this repository that runs nextest tests. `features` is a non-empty list of distinct feature names, and each name uses letters, digits and `_-+./`. The step is named `Test (features: local-mode)` and runs `cargo-nextest nextest run --workspace --locked --features 'local-mode'` with the same selection as the root's default test step, narrowed by `filter`. It runs after the default test step and reports no test counts, so the default step stays the single source of the job's test counts. With `shape = "groups"` the step runs in the build job, which has Rust, because the archive holds only the default-feature build.
+`root` is the folder of the Cargo root's `Cargo.toml`, or `.` for the repository root. It must name a root of this repository that runs nextest tests. `features` is a non-empty list of distinct feature names, and each name uses letters, digits and `_-+./`. The step is named `Test (features: local-mode)` and runs `cargo-nextest nextest run --workspace --locked --features 'local-mode'` with the same selection as the root's default test step, narrowed by `filter`. It runs after the default test step and reports no test counts, so the default step stays the single source of the job's test counts. A lane with `job = "parallel"` reports its own counts, see the next section but one. With `shape = "groups"` the step runs in the build job, which has Rust, because the archive holds only the default-feature build.
 
 `packages` names the packages of the root whose tests the lane selects. It is required with `filter` and optional without it. The plan narrows a pull request to the changed packages, so a lane whose filter matches nothing there is not broken. When the plan selects none of `packages`, and not the whole workspace, the lane step is skipped and a step named `Skip test lane (features: ...)` prints `skipped: no selected packages`. Otherwise the lane runs with `--no-tests=fail`, so a filter that matches nothing fails the job instead of passing with zero tests. A lane without `filter` runs whenever the plan selects the root.
 
@@ -176,6 +176,30 @@ doc = true
 ```
 
 A lane with a `filter` gets a second step, `Test lane guard (features: ...)`, right after the lane step. It runs `velnor-ci lane-guard --features '...' --filter '...'`, with one `--except-binary` for each `harness = false` binary that the root runs with `cargo test`, and it runs under the same condition as the lane step. The guard asks cargo-nextest to list the workspace with and without the features and under the filter. It fails the job when a test exists only with the features, is not ignored, and falls outside `filter`, and it names each such test with its binary id. A listing error also fails the guard. A lane without a `filter` runs every selected test and has no guard.
+
+### A lane as its own job
+
+`job` is optional: `"inline"` (the default) keeps the lane's steps in the root's test job, as above, and renders exactly as before. `job = "parallel"` moves every step of the lane (the test step, its guard, `lint` and `doc`) out of that job into one job of its own, `rust-lane-<features>` (`rust-lane-local-mode`, with the root's slug appended when the repository has several roots; a second lane with the same features gets `-2`). The job runs beside the root's jobs, so the wall time of a run is the longest job, not the sum of the default tests and the lane.
+
+```toml
+[[test_lane]]
+root = "."
+features = ["local-mode"]
+packages = ["velnor-runner-host"]
+filter = "package(velnor-runner-host) and (test(~local::) or binary(local_host_public))"
+lint = true
+doc = true
+job = "parallel"
+```
+
+- The lane job needs the plan job, so a repository that had the single `rust` job and no plan job gets a `rust-plan` job (a few seconds of setup) once it has a parallel lane. The job runs when the plan selects the root, the same condition as the root's other jobs, and its steps keep the conditions they have inline (the package selection of `packages`, the `docs` plan output and `docs = "post_merge"`).
+- The `Required` job waits for the lane job through `needs`, like every generated job. The lane adds no check name to the branch protection or the ruleset.
+- The lane's test step reports `tests_run`, `tests_listed` and `tests_by_package` as outputs of the job, and the `velnor-ci gate` verdict reads them under the root's name, next to the root's default test job. A package that the lane lists tests for and that ran none in any job fails the gate. When the plan selects none of the lane's `packages`, the test step is skipped, and the job reports zero tests, which the gate accepts.
+- The job restores the tools, the sources and its own target cache, and on a push to the default branch, a schedule and a manual run it saves its own target cache (`velnor-tgt-<job>...`). It never writes the root's target cache or the sources cache, so the lane's feature-on build stays out of the default job's cache and the other way round. The first run after the key appears has a cold target cache.
+- The job costs its own setup (checkout, tools restore, target restore). The saving is the lane's own steps, which leave the critical path when the default test job is the longer one.
+- Lanes of one root that name the same features share one lint step and one rustdoc step inline. As jobs they are independent, so each parallel lane runs its own.
+- A root of a workspace group cannot have a lane, as before.
+- The key needs velnor-ci 0.1.107 or later, because the pinned velnor-ci reads `.velnor/rust-ci.toml` and refuses a key it does not know; `velnor-gen generate` refuses an older pin when a lane sets `job = "parallel"`. A lane without the key keeps the 0.1.93 requirement below.
 
 The pinned velnor-ci reads `.velnor/rust-ci.toml` at run time and rejects a key it does not know, so any `[[test_lane]]` needs velnor-ci 0.1.93 or later, the first release that accepts the key and runs `lane-guard`. `velnor-gen generate` refuses an older pin when the file has a lane, filtered or not.
 
