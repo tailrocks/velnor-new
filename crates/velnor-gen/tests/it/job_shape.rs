@@ -368,7 +368,7 @@ fn a_timings_entry_for_a_root_that_is_gone_is_ignored_and_the_others_still_count
     assert_eq!(
         without_auto_note(&notes),
         [
-            ".velnor/rust-ci-timings.json: has times for gone/Cargo.toml, which is not a Cargo root of this repository; run `velnor-ci timings` again; entry ignored"
+            ".velnor/rust-ci-timings.json: has times for gone/Cargo.toml, which is not a Cargo root of this repository; run `velnor-ci timings --repo owner/name` again; entry ignored"
         ]
     );
     assert_eq!(
