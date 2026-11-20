@@ -43,25 +43,33 @@ pub(super) fn refuse(workspace: &Workspace, metadata: &[u8]) -> Result<(), CiErr
 }
 
 fn refuse_configuration(directory: &Path) -> Result<(), CiError> {
-    for name in ["config.toml", "config"] {
-        let file = directory.join(".cargo").join(name);
-        if !file.is_file() {
-            continue;
-        }
-        let text = fs::read_to_string(&file)
-            .map_err(|e| CiError::new(format!("cannot read {}: {e}", file.display())))?;
-        let table: Table = toml::from_str(&text)
-            .map_err(|e| CiError::new(format!("cannot parse {}: {e}", file.display())))?;
-        if table
-            .get("build")
-            .and_then(Value::as_table)
-            .is_some_and(|build| build.contains_key("build-dir"))
-        {
-            return Err(CiError::new(format!(
-                "{} sets `build.build-dir` for a workspace member, so a build run there writes intermediate artifacts outside the target directory: a build directory is not supported, so unset it",
-                file.display()
-            )));
-        }
+    let cargo = directory.join(".cargo");
+    let Some(file) = ["config", "config.toml"]
+        .iter()
+        .map(|name| cargo.join(name))
+        .find(|file| file.is_file())
+    else {
+        return Ok(());
+    };
+    let text = fs::read_to_string(&file)
+        .map_err(|e| CiError::new(format!("cannot read {}: {e}", file.display())))?;
+    let table: Table = toml::from_str(&text)
+        .map_err(|e| CiError::new(format!("cannot parse {}: {e}", file.display())))?;
+    if table.contains_key("include") {
+        return Err(CiError::new(format!(
+            "{} includes another Cargo configuration file for a workspace member: velnor-ci cannot tell whether the included file sets `build.build-dir`, so remove the include",
+            file.display()
+        )));
+    }
+    if table
+        .get("build")
+        .and_then(Value::as_table)
+        .is_some_and(|build| build.contains_key("build-dir"))
+    {
+        return Err(CiError::new(format!(
+            "{} sets `build.build-dir` for a workspace member, so a build run there writes intermediate artifacts outside the target directory: a build directory is not supported, so unset it",
+            file.display()
+        )));
     }
     Ok(())
 }

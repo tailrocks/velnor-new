@@ -3,7 +3,7 @@
 
 use std::process::Output;
 
-use super::{audit, unit, velnor_ci, workspace_below_the_root};
+use super::{audit, own_units, unit, velnor_ci, workspace_below_the_root};
 use crate::io::Repo;
 
 fn refused(output: &Output) -> String {
@@ -41,6 +41,13 @@ fn a_build_directory_set_in_a_member_directory_makes_the_audit_refuse_and_names_
     }
 }
 
+fn audited(repo: &Repo) {
+    own_units(repo, "rust/target/debug", &[]);
+    let written = audit(repo, &["--write"]);
+    assert!(written.status.success(), "{written:?}");
+    assert!(repo.root().join(".velnor/rust-inputs.lock").is_file());
+}
+
 #[test]
 fn a_member_cargo_configuration_without_a_build_directory_does_not_stop_the_audit() {
     let repo = workspace_below_the_root();
@@ -49,8 +56,39 @@ fn a_member_cargo_configuration_without_a_build_directory_does_not_stop_the_audi
         "rust/app/.cargo/config.toml",
         "[build]\njobs = 2\n\n[term]\nquiet = false\n",
     );
-    let stderr = String::from_utf8_lossy(&audit(&repo, &["--write"]).stderr).into_owned();
-    assert!(!stderr.contains("build-dir"), "{stderr}");
+    audited(&repo);
+}
+
+#[test]
+fn a_member_configuration_that_includes_a_file_makes_the_audit_refuse_and_names_the_file() {
+    let repo = workspace_below_the_root();
+    unit(
+        &repo,
+        "rust/app/.cargo/config.toml",
+        "include = \"extra.toml\"\n",
+    );
+    unit(
+        &repo,
+        "rust/app/.cargo/extra.toml",
+        "[build]\nbuild-dir = \"bld\"\n",
+    );
+    let stderr = refused(&audit(&repo, &["--write"]));
+    assert!(stderr.contains("rust/app/.cargo/config.toml"), "{stderr}");
+    assert!(!repo.root().join(".velnor/rust-inputs.lock").exists());
+}
+
+#[test]
+fn a_member_config_file_without_an_extension_shadows_the_toml_one() {
+    let repo = workspace_below_the_root();
+    unit(&repo, "rust/app/.cargo/config", "[build]\njobs = 2\n");
+    unit(
+        &repo,
+        "rust/app/.cargo/config.toml",
+        "[build]\nbuild-dir = \"bld\"\n",
+    );
+    unit(&repo, "rust/lib/.cargo/config", "[build]\njobs = 2\n");
+    unit(&repo, "rust/lib/.cargo/config.toml", "not = [valid\n");
+    audited(&repo);
 }
 
 #[test]
