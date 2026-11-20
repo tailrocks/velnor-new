@@ -54,7 +54,7 @@ pub use crate::shape::{
 };
 pub use crate::sparse::bytes_outside_lanes;
 pub use crate::suggest_groups::suggest_groups;
-pub use crate::target_dir::NESTED_ROOTS_FOLDER;
+pub use crate::target_dir::{NESTED_ROOTS_FOLDER, default_folder};
 pub use crate::timings::{TIMINGS_PATH, render_timings, root_job_ids};
 pub use crate::toolchain::{TOOLCHAIN_PLAIN, TOOLCHAIN_TOML, toolchain};
 pub use crate::verdict::{
