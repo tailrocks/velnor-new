@@ -149,12 +149,9 @@ fn check_group_keys(facts: &RepoFacts, release: &HelperRelease) -> Result<(), Ge
         }
     });
     match key {
-        Some(key) if !release.version().at_least(TEST_GROUP_KEYS_HELPER) => {
-            Err(GenerateError::TestGroupKeyHelperTooOld {
-                version: release.version().clone(),
-                key,
-            })
-        }
+        Some(key) if !release.version().at_least(TEST_GROUP_KEYS_HELPER) => Err(
+            GenerateError::TestGroupKeyHelperTooOld(release.version().clone(), key),
+        ),
         _ => Ok(()),
     }
 }

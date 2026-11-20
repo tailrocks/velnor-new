@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    ArtifactWhen, CargoCommand, FilterRef, GroupFilter, Job, JobId, PrepareLocks, Step, StepKind,
-    TestGroup, TestNeed, When,
+    ArtifactWhen, CargoCommand, FilterRef, GroupFilter, GroupUpload, Job, JobId, PrepareLocks,
+    Step, StepKind, TestGroup, TestNeed, When,
 };
 
 use super::{ARCHIVE_FILE, ARCHIVE_ID, RootJobs};
@@ -128,14 +128,14 @@ impl RootJobs<'_> {
                     ArtifactWhen::Failure => When::Failure,
                     ArtifactWhen::Always => When::Always,
                 },
-                ..self.gated(StepKind::UploadGroupArtifact {
+                ..self.gated(StepKind::UploadGroupArtifact(GroupUpload {
                     name: partition.map_or_else(
                         || artifact.name.clone(),
                         |(index, _)| format!("{}-{index}", artifact.name),
                     ),
                     paths: artifact.paths.clone(),
                     retention_days: artifact.retention_days,
-                })
+                }))
             })
             .collect()
     }

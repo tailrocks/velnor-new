@@ -13,7 +13,7 @@ use crate::base_steps::{
     sources_fetch_all_rest, sources_locks, trimmed_lane,
 };
 use crate::budget_steps::budget_step;
-use crate::cache::{path_text, render_key};
+use crate::cache::{action_path, path_text, render_key};
 use crate::cargo::{CargoLane, cargo_step, reports_tests};
 use crate::checkout_step::checkout_step;
 use crate::gate::{
@@ -294,11 +294,7 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
         StepKind::InstallMise => install_mise(),
         StepKind::Lint(command) => crate::lint_steps::lint_step(command),
         StepKind::UploadArchive { name, file } => upload_step(name, file),
-        StepKind::UploadGroupArtifact {
-            name,
-            paths,
-            retention_days,
-        } => crate::artifact_steps::group_artifact(name, paths, *retention_days),
+        StepKind::UploadGroupArtifact(upload) => crate::artifact_steps::group_artifact(upload),
         StepKind::DownloadArchive { name, into } => download_step(name, into.as_ref()),
         StepKind::CacheRestore(key) => cache_step(CACHE_RESTORE, "Restore", key, true),
         StepKind::CacheSave(key) => cache_step(CACHE_SAVE, "Save", key, false),
@@ -382,10 +378,7 @@ fn cache_step(action: &str, verb: &str, key: &CacheKey, fallbacks: bool) -> Rend
     let rendered = render_key(key);
     let paths: Vec<String> = key.paths().iter().map(path_text).collect();
     let mut with = vec![
-        (
-            "path".to_owned(),
-            crate::cache::action_path(&paths.join("\n")),
-        ),
+        ("path".to_owned(), action_path(&paths.join("\n"))),
         ("key".to_owned(), Value::Expr(rendered.key)),
     ];
     if fallbacks && !rendered.restore_keys.is_empty() {

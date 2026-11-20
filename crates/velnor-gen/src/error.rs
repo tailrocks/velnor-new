@@ -44,10 +44,7 @@ pub enum GenerateError {
     TagPushHelperTooOld(HelperVersion),
     TestLaneHelperTooOld(HelperVersion),
     TestLaneJobHelperTooOld(HelperVersion),
-    TestGroupKeyHelperTooOld {
-        version: HelperVersion,
-        key: &'static str,
-    },
+    TestGroupKeyHelperTooOld(HelperVersion, &'static str),
     HelperLockLacksMacos {
         version: HelperVersion,
         runner: String,
@@ -135,8 +132,7 @@ impl fmt::Display for GenerateError {
                 f,
                 "velnor-ci {version} does not know the test_lane key of .velnor/rust-ci.toml; pin velnor-ci 0.1.93 or later with `velnor-gen pin-helper 0.1.93`"
             ),
-            Self::TestLaneJobHelperTooOld(version) => f.write_str(&lane_job_too_old(version)),
-            Self::TestGroupKeyHelperTooOld { version, key } => f.write_str(&group_key_too_old(version, key)),
+            Self::TestLaneJobHelperTooOld(..) | Self::TestGroupKeyHelperTooOld(..) => self.gate(f),
             Self::HelperLockLacksMacos { version, runner } => write!(
                 f,
                 "the runner `{runner}` is a macOS runner, but the velnor-ci {version} in .velnor/rust-ci.lock has no macos-arm64 digest, so `actions/setup-velnor` would fail before velnor-ci runs; pin a release that lists a macos-arm64 digest with `velnor-gen pin-helper <version>`, or use a Linux runner"
@@ -193,6 +189,18 @@ fn required_check_too_old(version: &HelperVersion) -> String {
     format!(
         "velnor-ci {version} does not name a required_check other than Required for a merge queue run; pin velnor-ci {major}.{minor}.{patch} or later with `velnor-gen pin-helper {major}.{minor}.{patch}`"
     )
+}
+
+impl GenerateError {
+    fn gate(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::TestLaneJobHelperTooOld(version) => f.write_str(&lane_job_too_old(version)),
+            Self::TestGroupKeyHelperTooOld(version, key) => {
+                f.write_str(&group_key_too_old(version, key))
+            }
+            _ => Ok(()),
+        }
+    }
 }
 
 fn lane_job_too_old(version: &HelperVersion) -> String {

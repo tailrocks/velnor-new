@@ -46,13 +46,8 @@ fn artifacts_parse_with_their_defaults() -> TestResult {
         HELPER,
     )?)?;
     assert_eq!(facts.config.test_groups[0].artifacts[0].retention_days, 90);
-    assert!(
-        detect(&view_with(&["Cargo.toml"], &group(""), HELPER)?)?
-            .config
-            .test_groups[0]
-            .artifacts
-            .is_empty()
-    );
+    let plain = detect(&view_with(&["Cargo.toml"], &group(""), HELPER)?)?;
+    assert_eq!(plain.config.test_groups[0].artifacts, []);
     Ok(())
 }
 
@@ -272,7 +267,7 @@ fn a_group_without_artifacts_uploads_nothing() -> TestResult {
     let workflow = rendered_with(&group("partitions = 2\n"), HELPER)?;
     for index in 1..=2 {
         let job = job(&workflow, &format!("rust-test-database-{index}"))?;
-        assert!(uploads(job).is_empty());
+        assert_eq!(uploads(job).len(), 0);
     }
     Ok(())
 }

@@ -74,6 +74,6 @@ pub use token_permission::{token_permission_accesses, token_permission_accesses_
 pub use verdict::{JobCondition, VerdictJob, VerdictSpec};
 
 pub use steps::{
-    BUDGET_JOB, BaseExpiry, GroupFilter, HelperCommand, InputsCli, PrepareLocks, StepKind,
-    ToolsLocalVerb, ToolsTelemetry, TrimFamily,
+    BUDGET_JOB, BaseExpiry, GroupFilter, GroupUpload, HelperCommand, InputsCli, PrepareLocks,
+    StepKind, ToolsLocalVerb, ToolsTelemetry, TrimFamily,
 };
