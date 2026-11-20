@@ -81,7 +81,7 @@ fn repository_target(server: Option<&str>, repository: Option<&str>) -> String {
         .filter(|host| !host.is_empty());
     match host {
         Some(host) => format!("{host}/{repository}"),
-        None => repository,
+        None => repository.to_owned(),
     }
 }
 
