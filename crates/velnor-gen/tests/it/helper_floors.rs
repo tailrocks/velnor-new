@@ -105,7 +105,7 @@ const GENERATED_CHECK: &str = "[[lint]]\nkind = 'generated-check'\n";
 #[test]
 fn generated_check_lint_is_refused_before_the_helper_reads_its_kind() -> Result<(), Box<dyn Error>>
 {
-    let refused = refusal(GENERATED_CHECK, "0.1.106")?;
+    let refused = refusal(GENERATED_CHECK, "0.1.107")?;
     assert!(refused.contains("GeneratedCheckHelperTooOld"), "{refused}");
     Ok(())
 }
@@ -113,7 +113,7 @@ fn generated_check_lint_is_refused_before_the_helper_reads_its_kind() -> Result<
 #[test]
 fn generated_check_lint_renders_on_the_first_helper_that_reads_its_kind()
 -> Result<(), Box<dyn Error>> {
-    let refused = refusal(GENERATED_CHECK, "0.1.107")?;
+    let refused = refusal(GENERATED_CHECK, "0.1.108")?;
     assert!(!refused.contains("HelperTooOld"), "{refused}");
     Ok(())
 }

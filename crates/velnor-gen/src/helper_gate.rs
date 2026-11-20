@@ -19,7 +19,8 @@ const MERGE_GROUP_HELPER: (u64, u64, u64) = (0, 1, 103);
 // helper-gate: first in rust-ci-v0.1.82 via bfc3528bd7
 pub(crate) const CACHE_DEBUG_HELPER: (u64, u64, u64) = (0, 1, 82);
 /// The first `velnor-ci` whose `.velnor/rust-ci.toml` parser accepts `kind = "generated-check"`.
-pub(crate) const GENERATED_CHECK_HELPER: (u64, u64, u64) = (0, 1, 107);
+// First released in tools-v0.1.108 (not tagged yet when this gate was written).
+pub(crate) const GENERATED_CHECK_HELPER: (u64, u64, u64) = (0, 1, 108);
 /// The first `velnor-ci` that names the `required_check` check when it reads a queued run.
 // helper-gate: first in tools-v0.1.97 via af11477df1
 pub(crate) const REQUIRED_CHECK_HELPER: (u64, u64, u64) = (0, 1, 97);

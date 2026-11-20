@@ -15,7 +15,7 @@ use crate::pipeline::workflow;
 
 pub(crate) const CHECK: &str = "[[lint]]\nkind = 'generated-check'\n";
 /// The first helper that reads `kind = "generated-check"`; every check fixture pins it.
-pub(crate) const CHECK_HELPER: &str = "0.1.107";
+pub(crate) const CHECK_HELPER: &str = "0.1.108";
 const ID: &str = "lint-generated-check";
 const X64: &str = "2a3ff18c1c5fc61a10aa66976ccf1fe669daa4af4eafec260b4c87d81afdf8f9";
 const ARM64: &str = "300f6b8a0d89cfe0643433710d7df3453c3524e7ff84c7dfc84854a78c7e120c";
@@ -95,7 +95,7 @@ fn the_check_runs_the_pinned_release_after_its_digest_is_verified_and_never_a_bu
     let env = &install["env"];
     assert_eq!(
         env["VELNOR_GEN_RELEASE"],
-        "https://github.com/tailrocks/velnor-new/releases/download/tools-v0.1.107"
+        "https://github.com/tailrocks/velnor-new/releases/download/tools-v0.1.108"
     );
     let archive = env["VELNOR_GEN_ARCHIVE"].as_str().ok_or("no archive")?;
     let digest = env["VELNOR_GEN_SHA256"].as_str().ok_or("no digest")?;
