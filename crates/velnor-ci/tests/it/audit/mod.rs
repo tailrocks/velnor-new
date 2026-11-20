@@ -21,6 +21,7 @@ mod optional;
 mod partial;
 mod per_root;
 mod reads;
+mod selection;
 mod stale_run;
 mod stand_ins;
 

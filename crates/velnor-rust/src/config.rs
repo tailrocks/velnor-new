@@ -10,6 +10,7 @@ use velnor_model::{
 };
 
 use crate::config_events::{docs_run, on_main};
+use crate::config_external;
 use crate::config_keys::KEYS;
 use crate::error::{DetectError, Reason};
 use crate::shape::parse_shape;
@@ -30,6 +31,7 @@ struct RawConfig {
     runner: Option<String>,
     hosted: Option<bool>,
     fork_runner: Option<String>,
+    trusted_runner: Option<String>,
     crates_mirror: Option<crate::config_mirror::RawCratesMirror>,
     private_sources: Option<crate::config_private::RawPrivateSources>,
     mbx_shared_store: Option<bool>,
@@ -71,6 +73,7 @@ struct RawConfig {
     workspace_groups: Vec<crate::groups::RawGroup>,
     #[serde(default)]
     test_lane: Vec<crate::config_test_lane::RawTestLane>,
+    policy: Option<crate::config_policy::RawPolicy>,
     external_workflows: Option<Vec<String>>,
 }
 
@@ -106,10 +109,8 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         crate::config_branch::default_branch(raw.default_branch, defaults.default_branch)
             .map_err(invalid)?;
     let on_main = on_main(raw.on_main.as_deref(), defaults.on_main).map_err(invalid)?;
-    let full_run = match raw.full_run {
-        None => defaults.full_run,
-        Some(value) => crate::config_events::full_run(value).map_err(invalid)?,
-    };
+    let full_run =
+        crate::config_events::full_run_or(raw.full_run, defaults.full_run).map_err(invalid)?;
     let helper = crate::config_helper::path(raw.helper).map_err(invalid)?;
     let ci_debuginfo =
         debuginfo(raw.ci_debuginfo.as_deref(), defaults.ci_debuginfo).map_err(invalid)?;
@@ -122,24 +123,25 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
     let test_groups = crate::config_test_groups::parse(raw.test_groups).map_err(invalid)?;
     let workspace_groups = crate::groups::parse(raw.workspace_groups).map_err(invalid)?;
     let test_lanes = crate::config_test_lane::parse(raw.test_lane).map_err(invalid)?;
-    let external_workflows =
-        crate::config_external::parse(raw.external_workflows).map_err(invalid)?;
-    let declared_runner = raw.runner.is_some();
-    let hosted_key = raw.hosted.is_some() || test_groups.iter().any(|group| group.hosted.is_some());
-    let runner = runner(raw.runner, defaults.runner).map_err(invalid)?;
-    let crates_mirror = crate::config_mirror::optional(raw.crates_mirror).map_err(invalid)?;
-    let hosted_runners = crate::config_hosting::resolve(
-        (&runner, raw.hosted.or((!declared_runner).then_some(true))),
-        crates_mirror.as_ref(),
-        &test_groups,
-    )
+    let external_workflows = config_external::parse(raw.external_workflows).map_err(invalid)?;
+    let runner = runner(raw.runner.clone(), defaults.runner).map_err(invalid)?;
+    let runners = crate::config_trusted::Declared {
+        runner: &runner,
+        explicit_runner: raw.runner.is_some(),
+        hosted: raw.hosted,
+        fork_runner: raw.fork_runner,
+        trusted_runner: raw.trusted_runner,
+        crates_mirror: raw.crates_mirror,
+        test_groups: &test_groups,
+    }
+    .resolve()
     .map_err(invalid)?;
-    let fork_runner = crate::config_fork::fork_runner(raw.fork_runner, &runner).map_err(invalid)?;
     let (mbx_remote, mbx_store, mbx) =
         crate::config_cache::mbx_settings(raw.cache.as_ref(), raw.mbx_shared_store)
             .map_err(invalid)?;
     Ok(RustCiConfig {
         workspace_groups,
+        policy: crate::config_policy::parse(raw.policy).map_err(invalid)?,
         external_workflows,
         budget: crate::config_budget::parse(bytes).map_err(invalid)?,
         cache_budget_bytes: crate::cache_budget::configured_budget(raw.cache_budget_bytes)
@@ -156,8 +158,9 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         mbx_remote,
         mbx,
         push_after_merge_group: crate::config_ci::push_after_merge_group(raw.ci),
-        crates_mirror,
-        hosted_runners: hosted_runners.with_key_written(hosted_key),
+        crates_mirror: runners.crates_mirror,
+        hosted_runners: runners.hosted,
+        trusted_runners: runners.trusted,
         docs_run: docs_run("docs", raw.docs.as_deref()).map_err(invalid)?,
         check_alone_run: docs_run("check_alone", raw.check_alone.as_deref()).map_err(invalid)?,
         private_sources,
@@ -177,7 +180,7 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         inputs,
         default_ignores: raw.default_ignores.unwrap_or(defaults.default_ignores),
         runner,
-        fork_runner,
+        fork_runner: runners.fork,
         timeout_minutes,
         root_timeouts: crate::config_root_timeouts::parse(raw.root_timeouts).map_err(invalid)?,
         exclude: crate::config_exclude::excludes(raw.exclude).map_err(invalid)?,
@@ -313,7 +316,7 @@ fn rules(
 const ANY_SEGMENT: &str = "*";
 const REST: &str = "**";
 
-fn rule_glob(key: &'static str, entry: String) -> Result<PathGlob, Reason> {
+pub(crate) fn rule_glob(key: &'static str, entry: String) -> Result<PathGlob, Reason> {
     let invalid = |value: String| Reason::InvalidValue { key, value };
     let (segments, _) = shape(&entry);
     let grammatical = segments
