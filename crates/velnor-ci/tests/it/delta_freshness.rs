@@ -87,7 +87,7 @@ impl Fixture {
         let lock = ["generate-lockfile", "--offline"];
         success(&self.cargo(&lock));
         if nested {
-            success(&self.cargo_at(&lock, self.repo.root()));
+            success(&Self::cargo_at(&lock, self.repo.root()));
         }
         velnor_gen::io::write_metadata(self.repo.root()).unwrap_or_else(|e| unreachable!("{e}"));
         self.repo.git(&["add", "--all"]);
@@ -142,10 +142,10 @@ impl Fixture {
     }
 
     fn cargo(&self, args: &[&str]) -> Output {
-        self.cargo_at(args, &self.directory)
+        Self::cargo_at(args, &self.directory)
     }
 
-    fn cargo_at(&self, args: &[&str], directory: &std::path::Path) -> Output {
+    fn cargo_at(args: &[&str], directory: &std::path::Path) -> Output {
         let mut command = Command::new(real_cargo());
         command
             .args(args)
@@ -154,9 +154,7 @@ impl Fixture {
             .env_remove("RUSTC_WRAPPER")
             .env_remove("RUSTC_WORKSPACE_WRAPPER");
         strip_mirror_overrides(&mut command);
-        command
-            .output()
-            .unwrap_or_else(|e| unreachable!("{e}"))
+        command.output().unwrap_or_else(|e| unreachable!("{e}"))
     }
 
     pub(super) fn build(&self) -> Output {

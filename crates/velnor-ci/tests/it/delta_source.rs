@@ -111,7 +111,7 @@ fn stripped_cargo_env_drops_the_job_mirror_overrides() {
     strip_mirror_overrides(&mut command);
     let envs: Vec<_> = command
         .get_envs()
-        .map(|(key, value)| (key.to_owned(), value.map(|v| v.to_owned())))
+        .map(|(key, value)| (key.to_owned(), value.map(ToOwned::to_owned)))
         .collect();
     let value = |name: &str| {
         envs.iter()
