@@ -4,7 +4,7 @@
 runner = "ubuntu-26.04-scale-set"
 required_check = "Required"
 mbx_shared_store = true
-docs = "post_merge"
+docs = "always"
 check_alone = "post_merge"
 pr_ci = "label"
 
@@ -66,7 +66,6 @@ config = ".github/jactionlint.yaml"
 kind = "alint"
 config = ".alint.yml"
 probe = "scripts/alint-line-cap-probe.sh"
-tools = ["python"]
 
 [[lint]]
 kind = "mise-task"
