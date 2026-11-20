@@ -8,7 +8,7 @@ use velnor_model::{
 use crate::lane::PLAN_JOB;
 use crate::plan::{RUST_JOB, step};
 
-pub(crate) fn apply(jobs: &mut [Job], single: bool) {
+pub(crate) fn apply(jobs: &mut [Job], single: bool, after_merge: &dyn Fn(&StepKind) -> bool) {
     for job in jobs.iter_mut() {
         let from = if !single {
             PlanFrom::Job(PLAN_JOB)
@@ -19,7 +19,10 @@ pub(crate) fn apply(jobs: &mut [Job], single: bool) {
         } else {
             continue;
         };
-        let builds = job.steps.iter().any(|step| keeps_target_build(&step.kind));
+        let builds = job
+            .steps
+            .iter()
+            .any(|step| keeps_target_build(&step.kind) || after_merge(&step.kind));
         for step in job
             .steps
             .iter_mut()
@@ -227,7 +230,7 @@ mod tests {
     fn the_build_inputs_are_skipped_only_when_no_target_build_of_the_job_survives() {
         for (build, skipped) in [(true, false), (false, true)] {
             let mut jobs = [build_inputs(build)];
-            apply(&mut jobs, true);
+            apply(&mut jobs, true, &|_| false);
             let marks: Vec<bool> = jobs[0].steps[..2]
                 .iter()
                 .map(|step| step.skip_after_merge_group.is_some())

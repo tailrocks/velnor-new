@@ -12,10 +12,10 @@ const NAME: &str = "Prepare the fixture";
 
 const GROUP: &str = "[[workspace_groups]]\nname = \"tools\"\nroots = [\"tools/a\", \"tools/b\"]\n";
 
-fn config(shape: &str, root: &str) -> String {
+fn config(shape: &str, root: &str, ci: &str) -> String {
     let group = if shape == "groups" { "" } else { GROUP };
     format!(
-        "shape = '{shape}'\n{group}{SECTION}[[release_assets]]\nrepo = 'acme/fixtures'\ntag = 'fixtures-2026.11.1'\nasset = 'dataset.tar.zst'\nsha256 = '{SHA}'\ndest = 'tests/fixtures/dataset'\n[[test_setup]]\nroot = '{root}'\nname = '{NAME}'\nrun = 'bash scripts/prepare-fixture.sh'\nphase = 'build'\n[ci]\nskip_push_after_merge_group = true\n"
+        "shape = '{shape}'\n{ci}{group}{SECTION}[[release_assets]]\nrepo = 'acme/fixtures'\ntag = 'fixtures-2026.11.1'\nasset = 'dataset.tar.zst'\nsha256 = '{SHA}'\ndest = 'tests/fixtures/dataset'\n[[test_setup]]\nroot = '{root}'\nname = '{NAME}'\nrun = 'bash scripts/prepare-fixture.sh'\nphase = 'build'\n[ci]\nskip_push_after_merge_group = true\n"
     )
 }
 
@@ -45,9 +45,7 @@ fn feeds_build(step: &Value) -> bool {
             .is_some_and(|id| id.starts_with("release-asset"))
 }
 
-#[test]
-fn the_build_inputs_run_after_a_merge_group_exactly_when_a_compiling_step_of_the_job_does()
--> TestResult {
+fn check(ci: &str) -> TestResult {
     let mut dropped = 0;
     let roots = ["Cargo.toml", "tools/a/Cargo.toml", "tools/b/Cargo.toml"];
     for (shape, root) in [
@@ -56,7 +54,7 @@ fn the_build_inputs_run_after_a_merge_group_exactly_when_a_compiling_step_of_the
         ("groups", "tools/a"),
         ("one-job", "."),
     ] {
-        let repo = private_repo(&roots, &config(shape, root), "0.1.109")?;
+        let repo = private_repo(&roots, &config(shape, root, ci), "0.1.109")?;
         for job in jobs(&workflow(&repo)?)? {
             let inputs: Vec<&Value> = steps(&job).iter().filter(|s| feeds_build(s)).collect();
             if inputs.is_empty() {
@@ -76,4 +74,15 @@ fn the_build_inputs_run_after_a_merge_group_exactly_when_a_compiling_step_of_the
     }
     assert!(dropped > 0);
     Ok(())
+}
+
+#[test]
+fn the_build_inputs_run_after_a_merge_group_exactly_when_a_compiling_step_of_the_job_does()
+-> TestResult {
+    check("")
+}
+
+#[test]
+fn the_build_inputs_stay_for_a_compiling_step_that_runs_only_after_the_merge() -> TestResult {
+    check("docs = \"post_merge\"\ncheck_alone = \"post_merge\"\n")
 }

@@ -110,7 +110,9 @@ fn apply_extensions(facts: &RepoFacts, jobs: &mut [Job], single: bool) {
     crate::lock_scope::apply(facts, jobs);
     crate::mbx_steps::apply(facts, jobs);
     if facts.config.push_after_merge_group == PushAfterMergeGroup::SkipWhenQueueRunPassed {
-        crate::merge_group_skip::apply(jobs, single);
+        crate::merge_group_skip::apply(jobs, single, &|kind| {
+            crate::docs_post_merge::runs_after_merge(facts, kind)
+        });
     }
     crate::docs_post_merge::apply(facts, jobs);
 }
