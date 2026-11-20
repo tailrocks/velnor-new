@@ -202,6 +202,7 @@ impl StepKind {
             | Self::CheckMetrics { .. }
             | Self::Budget { .. }
             | Self::MergeGroupPassed { .. }
+            | Self::AdvisoryFetch { .. }
             | Self::MergeQueueCheck { .. } => false,
         }
     }
