@@ -57,6 +57,7 @@ mod lint_tasks;
 mod lint_tools;
 mod lock;
 mod lock_affected;
+mod lock_check;
 mod lock_key;
 mod lock_scope;
 mod manifest_diff;
