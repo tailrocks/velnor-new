@@ -228,7 +228,10 @@ fn an_empty_partition_fails_on_every_partition_instead_of_passing_silently() -> 
     let config = "[[test_groups]]\nname = 'database'\nfilter = 'package(package-0) and test(=no_such_test_anywhere)'\npartitions = 2\n";
     let workflow = rendered_with(config, HELPER)?;
     for index in 1..=2 {
-        let run = run_of(job(&workflow, &format!("rust-test-database-{index}"))?, "Test")?;
+        let run = run_of(
+            job(&workflow, &format!("rust-test-database-{index}"))?,
+            "Test",
+        )?;
         assert!(run.contains("--no-tests=fail"), "partition {index}: {run}");
         assert!(!run.contains("--no-tests=pass"), "partition {index}: {run}");
     }
