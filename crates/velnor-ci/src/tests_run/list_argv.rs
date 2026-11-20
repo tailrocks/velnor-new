@@ -216,16 +216,13 @@ fn a_partitioned_run_lists_the_same_partition() {
 }
 
 #[test]
-fn an_archive_run_lists_without_writing_to_the_tree_it_runs_from() {
+fn an_archive_run_with_a_persisted_extract_tempdir_lists_without_it() {
     let run = argv(&[
         "cargo-nextest",
         "nextest",
         "run",
         "--archive-file",
         "nextest-archive.tar.zst",
-        "--extract-to",
-        ".",
-        "--extract-overwrite",
         "--persist-extract-tempdir",
         "--workspace-remap",
         ".",
