@@ -92,6 +92,13 @@ pub enum Reason {
     TestGroupFilter(String),
     TestGroupRestoreWithoutCargo(String),
     TestGroupsWithPrivateSources,
+    PartitionsWithoutNextest(String),
+    TestGroupArtifact {
+        key: &'static str,
+        value: String,
+        fix: String,
+    },
+    ArtifactNameTaken(String),
     PrCiWithSkipDraft,
     RustdocflagsString,
     CargoConfigInclude,

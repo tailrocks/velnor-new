@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod artifact_stage;
+mod artifact_stage_paths;
 mod audit;
 mod base_expiry;
 mod bench_compare;
@@ -39,6 +41,7 @@ mod delta_availability;
 mod delta_baseline;
 mod delta_binding;
 mod delta_cap;
+mod delta_escape;
 mod delta_freshness;
 mod delta_integrity;
 mod delta_metadata;
@@ -86,6 +89,7 @@ mod io_restore_cargo;
 mod io_restore_cold_cargo;
 mod io_restore_links;
 mod io_restore_symlinks;
+mod io_restored_symlink;
 mod io_restored_targets;
 mod io_scope_cache;
 mod io_scope_cache_paths;
@@ -98,6 +102,7 @@ mod lane_guard;
 mod lane_guard_generated;
 mod logscan;
 mod mbx_seed;
+mod mbx_seed_env;
 mod mbx_seed_order;
 mod mbx_store;
 mod merge_group_skip;
@@ -190,6 +195,7 @@ mod timings_composite;
 mod timings_groups;
 mod timings_runs;
 mod timings_setup;
+mod tools_home_clear;
 mod tools_local;
 mod tools_verify;
 mod tools_verify_bounds;

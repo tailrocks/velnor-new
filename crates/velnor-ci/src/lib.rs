@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+pub mod artifact_stage;
 pub mod bounded;
 pub mod budget;
 pub mod budget_history;
@@ -62,6 +63,7 @@ mod report_caches;
 pub mod reports;
 pub mod required;
 pub mod resolve_qualification;
+pub mod restored_units;
 pub mod rulesets;
 pub mod scope;
 pub mod setup;

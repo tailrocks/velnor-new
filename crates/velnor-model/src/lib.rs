@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod artifact_paths;
 mod budget_mode;
 mod cache;
 mod cache_layout;
@@ -28,6 +29,9 @@ mod test_group;
 mod token_permission;
 mod verdict;
 
+pub use artifact_paths::{
+    aliased_secret, path_matches, secret_like, secret_path, segment_matches, selects,
+};
 pub use budget_mode::{BUDGET_JOB_NAME, BUDGET_MODES_HELPER, ModeBudget, Selection, SelectionName};
 pub use cache::{CacheKey, CachePath, CacheRoot, Host, LockIdentity};
 pub use cache_layout::{
@@ -75,11 +79,14 @@ pub use selection::{
     StepNeed, WORKFLOW_PATH, WORKFLOWS_CONFIG_PATH,
 };
 pub use shape::{Shape, ShapeDecision};
-pub use test_group::{GroupEvent, GroupRoot, NoTests, TestGroup, TestNeed};
+pub use test_group::{
+    ARTIFACT_RETENTION_DEFAULT, ArtifactWhen, GroupArtifact, GroupEvent, GroupRoot, NoTests,
+    TestGroup, TestNeed,
+};
 pub use token_permission::{token_permission_accesses, token_permission_accesses_prose};
 pub use verdict::{JobCondition, VerdictJob, VerdictSpec};
 
 pub use steps::{
-    BUDGET_JOB, BaseExpiry, GroupFilter, HelperCommand, InputsCli, PrepareLocks, StepKind,
-    ToolsLocalVerb, ToolsTelemetry, TrimFamily, VerifiedSave,
+    BUDGET_JOB, BaseExpiry, GroupFilter, GroupUpload, HelperCommand, InputsCli, PrepareLocks,
+    StepKind, ToolsLocalVerb, ToolsTelemetry, TrimFamily, VerifiedSave,
 };
