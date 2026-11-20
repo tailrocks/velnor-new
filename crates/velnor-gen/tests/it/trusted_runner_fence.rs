@@ -102,7 +102,7 @@ const GROUP: &str =
 
 fn refused(config: &str) -> Result<String, Box<dyn std::error::Error>> {
     let mut repo = view(&["Cargo.toml"], Some(config.as_bytes()))?;
-    pin_helper(&mut repo, "0.1.109")?;
+    pin_helper(&mut repo, "0.1.110")?;
     Ok(rust_workflow(&repo)
         .err()
         .ok_or_else(|| format!("accepted: {config}"))?
@@ -130,7 +130,7 @@ fn a_test_group_on_its_own_label_leaves_the_trusted_runner_valid() -> TestResult
         "runner = 'velnor-box'\ntrusted_runner = '{POOL}'\n{GROUP}runner = 'database-box'\n"
     );
     let mut repo = view(&["Cargo.toml"], Some(config.as_bytes()))?;
-    pin_helper(&mut repo, "0.1.109")?;
+    pin_helper(&mut repo, "0.1.110")?;
     rust_workflow(&repo)?;
     Ok(())
 }

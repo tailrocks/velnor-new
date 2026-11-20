@@ -10,7 +10,7 @@ use crate::trusted_events::{FORK_RUNNER, NORMAL, TRUSTED, events, runs_on};
 
 const SCALE_SET: &str = "ubuntu-26.04-scale-set";
 const POOL: &str = "ubuntu-26.04-scale-set-trusted";
-const HELPER: &str = "0.1.109";
+const HELPER: &str = "0.1.110";
 
 fn repo(config: &str, helper: &str) -> Result<RepoView, Box<dyn std::error::Error>> {
     let mut repo = view(&["Cargo.toml", "tools/Cargo.toml"], Some(config.as_bytes()))?;
@@ -112,7 +112,7 @@ fn the_key_needs_a_helper_that_reads_it() -> TestResult {
             Err(error) => assert!(
                 matches!(
                     error.downcast_ref::<GenerateError>(),
-                    Some(GenerateError::ConfigKeyHelperTooOld { key, first: (0, 1, 109), .. })
+                    Some(GenerateError::ConfigKeyHelperTooOld { key, first: (0, 1, 110), .. })
                         if *key == "trusted_runner"
                 ),
                 "{old}: {error}"

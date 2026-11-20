@@ -19,7 +19,7 @@ fn mirror(runner: &str, trusted: Option<&str>) -> String {
 
 fn runs_on(config: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
     let mut repo = view(&["Cargo.toml"], Some(config.as_bytes()))?;
-    pin_helper(&mut repo, "0.1.109")?;
+    pin_helper(&mut repo, "0.1.110")?;
     let yaml: serde_json::Value = crate::yaml_tree::document(&workflow(&repo)?)?;
     Ok(yaml["jobs"]
         .as_object()
@@ -31,7 +31,7 @@ fn runs_on(config: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
 
 fn refusal(config: &str) -> Result<String, Box<dyn std::error::Error>> {
     let mut repo = view(&["Cargo.toml"], Some(config.as_bytes()))?;
-    pin_helper(&mut repo, "0.1.109")?;
+    pin_helper(&mut repo, "0.1.110")?;
     Ok(workflow(&repo)
         .err()
         .ok_or_else(|| format!("accepted: {config}"))?

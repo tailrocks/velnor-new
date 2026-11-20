@@ -73,8 +73,8 @@ pub(super) const RUST_CI: &[KeyGate] = &[
     gate(RustCi, "crates_mirror.registry", (0, 1, 93)),
     // helper-gate: first in tools-v0.1.93 via 3147d5485a
     gate(RustCi, "crates_mirror.runner", (0, 1, 93)),
-    // First released in tools-v0.1.109 (not tagged yet when this gate was written).
-    gate(RustCi, "crates_mirror.trusted_runner", (0, 1, 109)),
+    // First released in tools-v0.1.110 (not tagged yet when this gate was written).
+    gate(RustCi, "crates_mirror.trusted_runner", (0, 1, 110)),
     gate(RustCi, "default_branch", HELPER_MINIMUM),
     gate(RustCi, "default_ignores", HELPER_MINIMUM),
     // helper-gate: first in tools-v0.1.88 via 76a0485485
@@ -141,8 +141,8 @@ pub(super) const RUST_CI: &[KeyGate] = &[
     // First released in tools-v0.1.109 (not tagged yet when this gate was written).
     gate(RustCi, "root_timeouts", (0, 1, 109)),
     gate(RustCi, "runner", HELPER_MINIMUM),
-    // First released in tools-v0.1.109 (not tagged yet when this gate was written).
-    gate(RustCi, "trusted_runner", (0, 1, 109)),
+    // First released in tools-v0.1.110 (not tagged yet when this gate was written).
+    gate(RustCi, "trusted_runner", (0, 1, 110)),
     gate(RustCi, "shape", HELPER_MINIMUM),
     gate(RustCi, "skip_draft_pull_requests", HELPER_MINIMUM),
     // helper-gate: first in tools-v0.1.92 via b3dda9d553
