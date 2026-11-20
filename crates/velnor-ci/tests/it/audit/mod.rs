@@ -20,6 +20,7 @@ mod optional;
 mod partial;
 mod per_root;
 mod reads;
+mod selection;
 mod stand_ins;
 
 use std::ffi::OsStr;
