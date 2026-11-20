@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use toml::Value;
 use velnor_model::{
-    ChangeSet, DocsRun, MbxMode, PathGlob, RepoFacts, RepoPath, RustRoot, Weakening,
+    ChangeSet, DenyLane, DocsRun, MbxMode, PathGlob, RepoFacts, RepoPath, RustRoot, Weakening,
 };
 
 use crate::cargo_flags::flag_tokens;
@@ -139,6 +139,20 @@ fn in_file(file: &RepoPath, bytes: &[u8]) -> Vec<Weakening> {
                         "cache.mbx = false".to_owned(),
                         "runs cargo outside mbx, so no compiler results are shared and the mise cargo wrapper is not checked".to_owned(),
                     ));
+                }
+                if let Some(policy) = config.policy.as_ref() {
+                    if policy.deny == DenyLane::Off {
+                        found.push(make(
+                            "[policy] deny = false".to_owned(),
+                            "turns off the cargo-deny policy, so advisories, bans, licenses and sources are not checked".to_owned(),
+                        ));
+                    }
+                    if let Some(checks) = &policy.deny_checks {
+                        found.push(make(
+                            format!("[policy] deny_checks = {checks:?}"),
+                            "runs only the named cargo-deny checks, so the others are not checked".to_owned(),
+                        ));
+                    }
                 }
                 found
             },

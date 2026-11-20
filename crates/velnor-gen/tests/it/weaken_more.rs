@@ -188,3 +188,14 @@ fn a_zero_count_retry_table_is_not_named_and_a_script_platform_change_is_new() -
     );
     Ok(())
 }
+
+#[test]
+fn turning_the_cargo_deny_policy_off_or_narrowing_its_checks_is_new() -> TestResult {
+    const CONFIG: &str = ".velnor/rust-ci.toml";
+    let off = facts(&[(CONFIG, "[policy]\ndeny = false\n")])?;
+    assert_eq!(introduced_files(&off, &[CONFIG], &[])?, [CONFIG]);
+    assert!(introduced_files(&off, &[CONFIG], &[(CONFIG, "[policy]\ndeny = false\n")])?.is_empty());
+    let narrowed = facts(&[(CONFIG, "[policy]\ndeny_checks = [\"advisories\"]\n")])?;
+    assert_eq!(introduced_files(&narrowed, &[CONFIG], &[])?, [CONFIG]);
+    Ok(())
+}
