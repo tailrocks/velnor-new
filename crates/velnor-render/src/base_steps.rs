@@ -231,6 +231,19 @@ fn fetched(job: &velnor_model::Job) -> Option<String> {
 }
 
 const FETCH_ROOTS: &str = "velnor-ci sources fetch --roots";
+const ROOTS_ENV_PREFIX: &str = "VELNOR_SOURCE_ROOTS_";
+const ROOTS_ENV_MIN_CHARACTERS: usize = 100;
+
+pub(crate) fn roots_env(manifests: &[RepoPath]) -> Option<(String, String)> {
+    let [roots] = fetch_chunks(manifests).try_into().ok()?;
+    let value = roots.join(" ");
+    (value.chars().count() > ROOTS_ENV_MIN_CHARACTERS).then(|| {
+        let hash = value.bytes().fold(0x811c_9dc5_u32, |hash, byte| {
+            (hash ^ u32::from(byte)).wrapping_mul(0x0100_0193)
+        });
+        (format!("{ROOTS_ENV_PREFIX}{hash:08x}"), value)
+    })
+}
 
 fn fetch_chunks(manifests: &[RepoPath]) -> Vec<Vec<String>> {
     let budget = MAX_RUN_CHARACTERS
@@ -290,10 +303,14 @@ fn fetch_all_steps(manifests: &[RepoPath], cache_debug: bool) -> Vec<RenderedSte
                 )
             }),
             continue_on_error: true,
-            run: Some(format!("{FETCH_ROOTS} {}", roots.join(" "))),
+            run: Some(format!("{FETCH_ROOTS} {}", roots_argument(manifests, &roots))),
             ..RenderedStep::default()
         })
         .collect()
+}
+
+fn roots_argument(manifests: &[RepoPath], roots: &[String]) -> String {
+    roots_env(manifests).map_or_else(|| roots.join(" "), |(name, _)| format!("${name}"))
 }
 
 pub(crate) fn sources_fetch_all(manifests: &[RepoPath], cache_debug: bool) -> RenderedStep {

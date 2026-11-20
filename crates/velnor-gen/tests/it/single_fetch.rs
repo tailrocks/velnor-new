@@ -143,24 +143,37 @@ fn the_released_helpers_without_sources_fetch_keep_the_per_root_steps_and_the_li
 }
 
 #[test]
-fn nineteen_roots_fit_the_workflow_limit_with_the_single_fetch_step() -> TestResult {
-    let manifests = many(19);
+fn twenty_roots_fit_the_workflow_limit_with_the_single_fetch_step() -> TestResult {
+    let manifests = many(20);
     let names: Vec<&str> = manifests.iter().map(String::as_str).collect();
     let text = workflow(&repo(&names, "0.1.88")?)?;
-    assert!(text.len() <= 500_000, "{} bytes", text.len());
+    assert!(text.len() <= 494_000, "{} bytes", text.len());
     let savers = savers(&text);
-    assert!(savers.len() >= 19, "{}", savers.len());
-    let (_, block) = &savers[0];
-    let fetch = step(block, FETCH_STEP).ok_or("no fetch")?;
-    let run = fetch
+    assert!(savers.len() >= 20, "{}", savers.len());
+    let lists: Vec<&str> = text
         .lines()
-        .find_map(|line| line.trim().strip_prefix("run: "))
-        .ok_or("no run")?;
+        .filter_map(|line| line.trim().strip_prefix("VELNOR_SOURCE_ROOTS_"))
+        .collect();
+    let [list] = lists[..] else {
+        return Err(format!("one workflow env entry per root list: {lists:?}").into());
+    };
+    let (name, value) = list.split_once(": ").ok_or("no value")?;
     assert_eq!(
-        run.split_whitespace().count(),
-        4 + 19,
-        "one word per root: {run}"
+        value.trim_matches('\'').split_whitespace().count(),
+        20,
+        "one word per root: {value}"
     );
+    for (id, block) in &savers {
+        let fetch = step(block, FETCH_STEP).ok_or("no fetch")?;
+        let run = fetch
+            .lines()
+            .find_map(|line| line.trim().strip_prefix("run: "))
+            .ok_or("no run")?;
+        assert!(
+            run.ends_with(&format!("--roots $VELNOR_SOURCE_ROOTS_{name}'")),
+            "{id}: {run}"
+        );
+    }
     Ok(())
 }
 
