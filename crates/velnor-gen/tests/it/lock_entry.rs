@@ -141,3 +141,49 @@ fn online_a_tampered_commit_is_refused_and_named() -> TestResult {
     assert!(error.to_string().starts_with("commit:"), "{error}");
     Ok(())
 }
+
+/// `lock()` with an archive-format `[velnor-ci-binary]` section spliced in.
+fn raw_lock_with_injected_binary_section() -> Result<String, Box<dyn Error>> {
+    let archive = archive_lock_at("0.1.108")?;
+    let section = archive
+        .split("\n\n")
+        .find(|block| block.starts_with("[velnor-ci-binary]"))
+        .ok_or("the archive lock has no binary section")?;
+    Ok(format!("{}\n\n{section}\n", lock()?.trim_end()))
+}
+
+#[test]
+fn a_raw_lock_with_an_injected_binary_section_is_refused_and_the_digest_still_checked() -> TestResult
+{
+    let tampered =
+        raw_lock_with_injected_binary_section()?.replacen(GEN_LINUX_X64, &"0".repeat(64), 1);
+    let error = check(&tampered, release_binary()).err().ok_or("accepted")?;
+    assert!(error.contains("[velnor-ci-binary]"), "{error}");
+    assert!(error.contains("0.1.81"), "{error}");
+    Ok(())
+}
+
+#[test]
+fn an_archive_release_lock_without_a_binary_section_is_refused() -> TestResult {
+    let archive = archive_lock_at("0.1.108")?;
+    let stripped: Vec<&str> = archive
+        .split("\n\n")
+        .filter(|block| !block.starts_with("[velnor-ci-binary]"))
+        .collect();
+    let commit = archive
+        .lines()
+        .find_map(|line| line.strip_prefix("commit = \""))
+        .and_then(|rest| rest.strip_suffix('"'))
+        .ok_or("the lock names no commit")?;
+    let running = RunningGenerator {
+        version: "0.1.108",
+        commit,
+        platform: Some(Platform::LinuxX64),
+        sha256: Some(GEN_LINUX_X64),
+    };
+    let error = check(&stripped.join("\n\n"), running)
+        .err()
+        .ok_or("accepted")?;
+    assert!(error.contains("[velnor-ci-binary]"), "{error}");
+    Ok(())
+}

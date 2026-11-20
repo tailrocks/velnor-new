@@ -14,6 +14,10 @@ use crate::lock::{
 /// The commit a `velnor-gen` build without `VELNOR_COMMIT` reports.
 const UNSTAMPED: &str = "unknown";
 
+/// The first tools release that publishes archives and `BINARY-SHA256SUMS`; the releases
+/// before it publish raw binaries only.
+const FIRST_ARCHIVE_RELEASE: (u64, u64, u64) = (0, 1, 94);
+
 /// The velnor-gen binary that runs `check`, as its own build describes it.
 #[derive(Debug, Clone, Copy)]
 pub struct RunningGenerator<'a> {
@@ -60,6 +64,7 @@ pub fn check_generator_entry(bytes: &[u8], running: RunningGenerator<'_>) -> Res
     release_version(&lock.version)?;
     let commit = release_commit(&lock.commit)?;
     check_digests(&lock.generator).map_err(|error| named(GENERATOR, &error))?;
+    let archive = check_format(&lock)?;
     if running.commit == UNSTAMPED {
         return Ok(());
     }
@@ -79,7 +84,7 @@ pub fn check_generator_entry(bytes: &[u8], running: RunningGenerator<'_>) -> Res
         )));
     }
     if let (Some(platform), Some(sha)) = (running.platform, running.sha256)
-        && lock.ci_binary.is_none()
+        && !archive
         && let Some(listed) = lock.generator.get(platform.file_suffix())
         && listed != sha
     {
@@ -89,6 +94,28 @@ pub fn check_generator_entry(bytes: &[u8], running: RunningGenerator<'_>) -> Res
         )));
     }
     Ok(())
+}
+
+/// The lock's format as its release version fixes it, never as its own content claims it: a
+/// release from the archive era lists `[velnor-ci-binary]` and an older one must not. Returns
+/// whether the lock is an archive lock; only a raw lock lists the bytes of the binary.
+fn check_format(lock: &Lock) -> Result<bool, LockError> {
+    let archive = release_version(&lock.version)?.at_least(FIRST_ARCHIVE_RELEASE);
+    match (archive, lock.ci_binary.as_ref()) {
+        (true, Some(binary)) => {
+            check_digests(binary).map_err(|error| named(&format!("{CI}-binary"), &error))?;
+            Ok(true)
+        }
+        (true, None) => Err(LockError::new(format!(
+            "[{CI}-binary] is missing: release {} publishes archives, so the lock must list the binary digests",
+            lock.version
+        ))),
+        (false, Some(_)) => Err(LockError::new(format!(
+            "[{CI}-binary] is not allowed: release {} publishes raw binaries only",
+            lock.version
+        ))),
+        (false, None) => Ok(false),
+    }
 }
 
 /// Online: the lock is what the release publishes. Pins the release again from its own
