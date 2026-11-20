@@ -6,11 +6,13 @@ from pathlib import Path
 IDENT = re.compile(r"[^\W\d]\w*")
 FENCE = re.compile(r"```|~~~")
 LINE_DOC = re.compile(r"//(?:!|/(?!/))")
-LINE_FENCE = re.compile(r"[ \t]*(?:```|~~~)")
-LINE_INDENT = re.compile(r" {5,}\S")
-ATTR_INDENT = re.compile(r" {4,}\S")
-BLOCK_FENCE = re.compile(r"^[ \t]*\*?[ \t]*(?:```|~~~)", re.M)
-BLOCK_INDENT = re.compile(r"^[ \t]*\*? {5,}\S", re.M)
+QUOTE = r"(?:[ \t]*>)*"
+CONTAINER = r"(?:>[ \t]*|(?:[-*+]|\d{1,9}[.)])[ \t]+)*"
+LINE_FENCE = re.compile(r"[ \t]*" + CONTAINER + r"(?:```|~~~)")
+LINE_INDENT = re.compile(QUOTE + r" {5,}\S")
+ATTR_INDENT = re.compile(r" {4,}\S|(?:[ \t]*>)+ {5,}\S")
+BLOCK_FENCE = re.compile(r"^[ \t]*\*?[ \t]*" + CONTAINER + r"(?:```|~~~)", re.M)
+BLOCK_INDENT = re.compile(r"^[ \t]*\*?" + QUOTE + r" {5,}\S", re.M)
 DOC_OPEN = re.compile(r"/\*(?:!|\*(?![*/]))")
 ATTR_START = re.compile(r"#\s*!?\s*\[")
 DOC_EQ = re.compile(r"\s*=(?!=)")
