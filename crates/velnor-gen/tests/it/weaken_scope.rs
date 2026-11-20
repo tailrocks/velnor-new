@@ -49,6 +49,8 @@ pub(crate) fn introduced_files(
     Ok(introduced(facts, &change_set)
         .iter()
         .map(|w| w.file.to_string())
+        .collect::<BTreeSet<_>>()
+        .into_iter()
         .collect())
 }
 

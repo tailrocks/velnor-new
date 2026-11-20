@@ -8,6 +8,11 @@ use std::process::Command;
 use crate::io::Repo as Checkout;
 
 mod born;
+mod git_admissions;
+mod public_declared;
+mod public_git;
+mod public_guards;
+mod public_verdicts;
 mod support;
 
 use support::{COMPILED, WARM, decide, decide_target_within, decide_within, seed};
