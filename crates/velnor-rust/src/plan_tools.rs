@@ -16,8 +16,9 @@ pub const TOOLS_VERIFY_HELPER: (u64, u64, u64) = (0, 1, 109);
 /// The first `velnor-ci` whose tools-verify mismatch notice names the restored Actions cache entry
 /// and the command that deletes it. The verify step gets the entry's key only from this helper, so
 /// an older helper never sees an env it ignores.
-// First released in tools-v0.1.110 (not tagged yet when this gate was written).
 pub(crate) const TOOLS_CACHE_KEY_HELPER: (u64, u64, u64) = (0, 1, 110);
+// First released in tools-v0.1.110 (not tagged yet when this gate was written).
+const TOOLS_CLEAR_HELPER: (u64, u64, u64) = (0, 1, 110);
 
 pub(crate) fn tools_cache_key() -> CacheKey {
     CacheKey::Tools { host: Host }
@@ -40,6 +41,13 @@ pub fn unverified_tools_note(facts: &RepoFacts) -> Option<String> {
             TOOLS_VERIFY_HELPER.0, TOOLS_VERIFY_HELPER.1, TOOLS_VERIFY_HELPER.2
         )
     })
+}
+
+fn tools_clears(facts: &RepoFacts) -> bool {
+    facts
+        .helper
+        .as_ref()
+        .is_some_and(|release| release.version().at_least(TOOLS_CLEAR_HELPER))
 }
 
 fn tools_step(verb: ToolsLocalVerb, when: When) -> Step {
@@ -96,9 +104,10 @@ pub(crate) fn tools_restore(facts: &RepoFacts) -> Vec<Step> {
         ..step(StepKind::CacheRestore(tools_cache_key()))
     };
     let record = || step(StepKind::ToolsLocal(ToolsLocalVerb::RecordRestore));
-    let mut steps: Vec<Step> = local
-        .then(|| step(StepKind::ToolsLocal(ToolsLocalVerb::Restore)))
+    let mut steps: Vec<Step> = tools_clears(facts)
+        .then(|| step(StepKind::ToolsLocal(ToolsLocalVerb::Clear)))
         .into_iter()
+        .chain(local.then(|| step(StepKind::ToolsLocal(ToolsLocalVerb::Restore))))
         .chain([network])
         .collect();
     if tools_verified(facts) {

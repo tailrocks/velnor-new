@@ -3,7 +3,7 @@
 
 use std::path::{Path, PathBuf};
 
-use super::super::super::units::{MetadataInvocation, Workspace};
+use super::super::super::units::{MetadataInvocation, Workspace, refuse_arguments};
 use super::super::groups::root_workspace;
 use crate::error::CiError;
 
@@ -165,6 +165,12 @@ impl Invocation {
                 "inputs build does not accept a command-local --target-dir; use persistent Cargo configuration or CARGO_TARGET_DIR for both build and inputs audit",
             ));
         }
+        refuse_arguments(
+            self.command
+                .iter()
+                .map(String::as_str)
+                .take_while(|word| *word != "--"),
+        )?;
         let executable = if Path::new(&self.command[0])
             .file_name()
             .is_some_and(|name| name == "cargo")

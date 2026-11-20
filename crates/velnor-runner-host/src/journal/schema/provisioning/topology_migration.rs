@@ -62,8 +62,8 @@ async fn upgrade_v18_attachments(connection: &turso::Connection) -> Result<(), H
         RebuildSpec {
             table: "capacity_reservation_bound_storage_attachments",
             legacy: "capacity_reservation_bound_storage_attachments_v18",
-            expected_v18_columns: &ATTACHMENT_COLUMNS,
-            expected_v19_columns: &ATTACHMENT_COLUMNS,
+            expected_v18_columns: ATTACHMENT_COLUMNS,
+            expected_v19_columns: ATTACHMENT_COLUMNS,
             v18_signature: SchemaSignature::SqlFragment(
                 "observer = 'probe' and container_id is null and role = 'engine-metadata'",
             ),
@@ -84,8 +84,8 @@ async fn upgrade_publications(connection: &turso::Connection) -> Result<(), Host
         RebuildSpec {
             table: "capacity_reservation_provisioning_publications",
             legacy: "capacity_reservation_provisioning_publications_v18",
-            expected_v18_columns: &PUBLICATION_V18_COLUMNS,
-            expected_v19_columns: &PUBLICATION_V19_COLUMNS,
+            expected_v18_columns: PUBLICATION_V18_COLUMNS,
+            expected_v19_columns: PUBLICATION_V19_COLUMNS,
             v18_signature: SchemaSignature::ExactTable {
                 ddl: VERSION_EIGHTEEN_PUBLICATION_DDL,
                 primary_key: &["reservation_id"],
@@ -105,8 +105,8 @@ async fn upgrade_cleanups(connection: &turso::Connection) -> Result<(), HostErro
         RebuildSpec {
             table: "capacity_reservation_provisioning_cleanups",
             legacy: "capacity_reservation_provisioning_cleanups_v18",
-            expected_v18_columns: &CLEANUP_V18_COLUMNS,
-            expected_v19_columns: &CLEANUP_V19_COLUMNS,
+            expected_v18_columns: CLEANUP_V18_COLUMNS,
+            expected_v19_columns: CLEANUP_V19_COLUMNS,
             v18_signature: SchemaSignature::SqlFragment("dind_data_volume"),
             v19_signature: SchemaSignature::SqlFragment("metadata_volume"),
             triggers: &["provisioning_cleanup_no_update", "provisioning_cleanup_no_delete"],
@@ -287,7 +287,7 @@ async fn table_sql(connection: &turso::Connection, table: &str) -> Result<String
         .map_err(|_| HostError::Journal)
 }
 
-const ATTACHMENT_COLUMNS: [&str; 17] = [
+const ATTACHMENT_COLUMNS: &[&str] = &[
     "reservation_id",
     "role",
     "observer",
@@ -307,7 +307,7 @@ const ATTACHMENT_COLUMNS: [&str; 17] = [
     "filesystem_instance_digest",
 ];
 
-const PUBLICATION_V18_COLUMNS: [&str; 15] = [
+const PUBLICATION_V18_COLUMNS: &[&str] = &[
     "reservation_id",
     "runner_id",
     "runner_name",
@@ -325,9 +325,9 @@ const PUBLICATION_V18_COLUMNS: [&str; 15] = [
     "read_only",
 ];
 
-const PUBLICATION_V19_COLUMNS: [&str; 15] = PUBLICATION_V18_COLUMNS;
+const PUBLICATION_V19_COLUMNS: &[&str] = PUBLICATION_V18_COLUMNS;
 
-const CLEANUP_V18_COLUMNS: [&str; 13] = [
+const CLEANUP_V18_COLUMNS: &[&str] = &[
     "reservation_id",
     "runner_container_id",
     "dind_container_id",
@@ -343,7 +343,7 @@ const CLEANUP_V18_COLUMNS: [&str; 13] = [
     "cgroups_absent",
 ];
 
-const CLEANUP_V19_COLUMNS: [&str; 14] = [
+const CLEANUP_V19_COLUMNS: &[&str] = &[
     "reservation_id",
     "runner_container_id",
     "dind_container_id",

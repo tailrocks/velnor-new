@@ -3,7 +3,7 @@
 
 //! Every key `.velnor/rust-ci.toml` accepts, with the first `velnor-ci` that parses it.
 
-use super::{ConfigFile::RustCi, KeyGate, gate};
+use super::{ConfigFile::RustCi, KeyGate, gate, gate_value};
 use crate::HELPER_MINIMUM;
 
 pub(super) const RUST_CI: &[KeyGate] = &[
@@ -98,6 +98,8 @@ pub(super) const RUST_CI: &[KeyGate] = &[
     gate(RustCi, "lint.id", (0, 1, 89)),
     // helper-gate: first in tools-v0.1.89 via 330573ef6d
     gate(RustCi, "lint.kind", (0, 1, 89)),
+    // First released in tools-v0.1.110 (not tagged yet when this gate was written).
+    gate_value(RustCi, "lint.kind", "generated-check", (0, 1, 110)),
     // helper-gate: first in tools-v0.1.89 via 330573ef6d
     gate(RustCi, "lint.name", (0, 1, 89)),
     // helper-gate: first in tools-v0.1.89 via 330573ef6d
@@ -145,6 +147,16 @@ pub(super) const RUST_CI: &[KeyGate] = &[
     gate(RustCi, "sparse_checkout", (0, 1, 92)),
     // helper-gate: first in tools-v0.1.90 via 85f4392434
     gate(RustCi, "test_groups", (0, 1, 90)),
+    // First released in tools-v0.1.110 (not tagged yet when this gate was written).
+    gate(RustCi, "test_groups.artifacts", (0, 1, 110)),
+    // First released in tools-v0.1.110 (not tagged yet when this gate was written).
+    gate(RustCi, "test_groups.artifacts.name", (0, 1, 110)),
+    // First released in tools-v0.1.110 (not tagged yet when this gate was written).
+    gate(RustCi, "test_groups.artifacts.paths", (0, 1, 110)),
+    // First released in tools-v0.1.110 (not tagged yet when this gate was written).
+    gate(RustCi, "test_groups.artifacts.retention_days", (0, 1, 110)),
+    // First released in tools-v0.1.110 (not tagged yet when this gate was written).
+    gate(RustCi, "test_groups.artifacts.when", (0, 1, 110)),
     // helper-gate: first in tools-v0.1.90 via 85f4392434
     gate(RustCi, "test_groups.events", (0, 1, 90)),
     // helper-gate: first in tools-v0.1.90 via 85f4392434
@@ -159,6 +171,8 @@ pub(super) const RUST_CI: &[KeyGate] = &[
     gate(RustCi, "test_groups.no_tests", (0, 1, 107)),
     // helper-gate: first in tools-v0.1.90 via 85f4392434
     gate(RustCi, "test_groups.paths", (0, 1, 90)),
+    // First released in tools-v0.1.110 (not tagged yet when this gate was written).
+    gate(RustCi, "test_groups.partitions", (0, 1, 110)),
     // helper-gate: first in tools-v0.1.107 via ffac3edc63
     gate(RustCi, "test_groups.restore_cache", (0, 1, 107)),
     // helper-gate: first in tools-v0.1.90 via 85f4392434

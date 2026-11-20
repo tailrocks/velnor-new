@@ -8,6 +8,14 @@ use crate::lint::LintCommand;
 use crate::plan::CargoCommand;
 use crate::verdict::VerdictSpec;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GroupUpload {
+    pub position: usize,
+    pub name: String,
+    pub paths: Vec<String>,
+    pub retention_days: u8,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InputsCli {
     PerRoot,
@@ -71,6 +79,7 @@ pub enum StepKind {
         name: String,
         file: RepoPath,
     },
+    UploadGroupArtifact(GroupUpload),
     DownloadArchive {
         name: String,
         into: Option<RepoPath>,
@@ -122,6 +131,7 @@ pub enum StepKind {
         run: String,
     },
     GeneratorCheck,
+    InstallGenerator(HelperRelease),
     InstallHelper(HelperRelease),
     FailWhenANeedFailed,
     FailOnDraftRun,
@@ -184,6 +194,7 @@ impl StepKind {
             | Self::RustComponents(_)
             | Self::RustTargets(_)
             | Self::UploadArchive { .. }
+            | Self::UploadGroupArtifact { .. }
             | Self::DownloadArchive { .. }
             | Self::Helper(_)
             | Self::Prepare(_)
@@ -202,6 +213,7 @@ impl StepKind {
             | Self::MbxSeed { .. }
             | Self::ToolsLocal(_)
             | Self::GeneratorCheck { .. }
+            | Self::InstallGenerator(_)
             | Self::InstallHelper(_)
             | Self::FailWhenANeedFailed { .. }
             | Self::FailOnDraftRun { .. }
@@ -241,6 +253,7 @@ pub struct GroupFilter {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ToolsLocalVerb {
+    Clear,
     Restore,
     Save,
     SaveChecked,

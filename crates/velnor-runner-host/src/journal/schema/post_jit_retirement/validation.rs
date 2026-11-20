@@ -8,12 +8,12 @@ use super::{ddl, guards};
 mod acquire_proof;
 mod pending_claims;
 
-const INSERT_GUARDS: [&str; 3] = [
+const INSERT_GUARDS: &[&str] = &[
     guards::PROGRESS_INSERT_GUARD,
     guards::REMOTE_ABSENCE_INSERT_GUARD,
     guards::RETIREMENT_INSERT_GUARD,
 ];
-const IMMUTABLE_GUARDS: [&str; 8] = [
+const IMMUTABLE_GUARDS: &[&str] = &[
     guards::CLAIMS_NO_UPDATE,
     guards::CLAIMS_NO_DELETE,
     guards::PROGRESS_NO_UPDATE,
@@ -39,7 +39,8 @@ pub(super) async fn validate_objects_with_view(
     let mut expected = Vec::new();
     expected.extend(
         ddl::TABLE_NAMES
-            .into_iter()
+            .iter()
+            .copied()
             .zip([
                 ddl::CLAIMS_DDL,
                 ddl::PROGRESS_DDL,
@@ -52,12 +53,14 @@ pub(super) async fn validate_objects_with_view(
     expected.push(("trigger", trigger_name(claim_guard), claim_guard));
     expected.extend(
         INSERT_GUARDS
-            .into_iter()
+            .iter()
+            .copied()
             .map(|sql| ("trigger", trigger_name(sql), sql)),
     );
     expected.extend(
         IMMUTABLE_GUARDS
-            .into_iter()
+            .iter()
+            .copied()
             .map(|sql| ("trigger", trigger_name(sql), sql)),
     );
     expected.push((

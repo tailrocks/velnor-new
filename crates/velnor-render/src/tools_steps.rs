@@ -113,6 +113,14 @@ pub(crate) fn tools_lookup(key: &CacheKey) -> RenderedStep {
     step
 }
 
+fn clear_step() -> RenderedStep {
+    RenderedStep {
+        name: "Clear the tools directories".to_owned(),
+        run: Some("velnor-ci tools-local clear".to_owned()),
+        ..RenderedStep::default()
+    }
+}
+
 pub(crate) fn tools_local_step(verb: velnor_model::ToolsLocalVerb) -> RenderedStep {
     use velnor_model::ToolsLocalVerb as Verb;
     let key = crate::cache::render_key(&velnor_model::CacheKey::Tools {
@@ -120,6 +128,7 @@ pub(crate) fn tools_local_step(verb: velnor_model::ToolsLocalVerb) -> RenderedSt
     })
     .key;
     let (name, id, word) = match verb {
+        Verb::Clear => return clear_step(),
         Verb::Restore => (
             "Restore the tools from the node store",
             Some(crate::gate::TOOLS_LOCAL_STEP),

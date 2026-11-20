@@ -9,6 +9,7 @@ use std::path::Path;
 use serde::Deserialize;
 
 use crate::error::CiError;
+use crate::escape::file_value;
 use crate::resolve_qualification::strict;
 use crate::write_request::{internal, lanes};
 use qualification::Dispatch;
@@ -30,7 +31,7 @@ pub struct RunSource<'a> {
     pub run_attempt: Option<&'a str>,
 }
 
-const FIELDS: [&str; 11] = [
+const FIELDS: &[&str] = &[
     "schema",
     "op",
     "run_key",
@@ -108,24 +109,26 @@ pub fn outputs(
         Event::Push | Event::MergeGroup | Event::Qualification => String::new(),
     };
     let context = request.qualification.as_ref();
-    let line = |name: &str, value: &str| format!("{name}={value}\n");
+    let line = |name: &str, value: &str| -> Result<String, CiError> {
+        Ok(format!("{name}={}\n", file_value(value)?))
+    };
     Ok([
-        line("plan_id", &format!("plan-{run_key}")),
-        line("run_key", &run_key),
-        line("not_affected_jobs", &not_affected),
+        line("plan_id", &format!("plan-{run_key}"))?,
+        line("run_key", &run_key)?,
+        line("not_affected_jobs", &not_affected)?,
         line(
             "qualification_campaign",
             context.map_or("", |value| value.campaign.as_str()),
-        ),
+        )?,
         line(
             "qualification_phase",
             context.map_or("", |value| value.phase.as_str()),
-        ),
+        )?,
         line(
             "qualification_cache_enabled",
             flag(context.is_some_and(|value| value.phase.cache_enabled())),
-        ),
-        line("qualification_cache_write", "false"),
+        )?,
+        line("qualification_cache_write", "false")?,
     ]
     .concat())
 }
