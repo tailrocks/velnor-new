@@ -19,7 +19,7 @@ pub enum Action {
 }
 
 impl Action {
-    pub const NAMES: [&'static str; 13] = [
+    pub const NAMES: &[&'static str] = &[
         "checkout",
         "mise",
         "upload-artifact",
