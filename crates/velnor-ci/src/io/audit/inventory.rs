@@ -5,7 +5,7 @@ mod evidence;
 mod walk;
 
 pub(super) use evidence::{Evidence, State, state};
-pub(super) use walk::{scan, unresolved_link};
+pub(super) use walk::{Budget, scan, unresolved_link};
 
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
@@ -21,7 +21,6 @@ use velnor_rust::{normalize, sha256_hex};
 use super::super::units::Workspace;
 use crate::error::CiError;
 
-pub(super) const LIMIT: usize = 100_000;
 pub(super) const STORE: &str = ".velnor-input-inventories";
 pub(super) type Entries = BTreeMap<PathBuf, BTreeMap<PathBuf, Kind>>;
 
@@ -277,9 +276,8 @@ mod tests {
                     }
                 }
             });
-            let mut remaining = usize::MAX;
-            let failure =
-                (0..2_000).find_map(|_| scan(&root, &BTreeSet::new(), &mut remaining).err());
+            let mut budget = Budget::new(usize::MAX);
+            let failure = (0..2_000).find_map(|_| scan(&root, &BTreeSet::new(), &mut budget).err());
             stop.store(true, Ordering::Relaxed);
             failure
         });

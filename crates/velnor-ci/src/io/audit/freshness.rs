@@ -11,13 +11,13 @@ use velnor_rust::{Located, locate};
 
 use super::super::units::Workspace;
 use super::Audit;
-use super::inventory::{self, Entries, Kind};
+use super::inventory::{self, Budget, Entries, Kind};
 use crate::error::CiError;
 
 pub(super) struct Freshness {
     targets: BTreeSet<PathBuf>,
     directories: BTreeMap<(PathBuf, BTreeSet<PathBuf>), (SystemTime, Entries)>,
-    remaining: usize,
+    budget: Budget,
 }
 
 impl Freshness {
@@ -35,7 +35,7 @@ impl Freshness {
         Ok(Self {
             targets,
             directories: BTreeMap::new(),
-            remaining: max_directory_entries,
+            budget: Budget::new(max_directory_entries),
         })
     }
 
@@ -53,7 +53,7 @@ impl Freshness {
         let root = fs::canonicalize(path)?;
         let key = (root.clone(), targets.clone());
         if !self.directories.contains_key(&key) {
-            let scanned = inventory::scan(&root, targets, &mut self.remaining)?;
+            let scanned = inventory::scan(&root, targets, &mut self.budget)?;
             let entries = inventory::view(&scanned, &root, targets)?;
             let Some(newest) = newest_file(&entries)? else {
                 return Ok(true);
@@ -206,8 +206,8 @@ mod tests {
                 .and_then(|file| file.set_times(fs::FileTimes::new().set_modified(UNIX_EPOCH)))
                 .unwrap_or_else(|e| unreachable!("{e}"));
         }
-        let mut remaining = usize::MAX;
-        let entries = inventory::scan(&root, &BTreeSet::new(), &mut remaining)
+        let mut budget = Budget::new(usize::MAX);
+        let entries = inventory::scan(&root, &BTreeSet::new(), &mut budget)
             .unwrap_or_else(|e| unreachable!("{e}"));
         (root, entries)
     }
