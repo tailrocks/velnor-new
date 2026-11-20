@@ -80,3 +80,24 @@ fn an_entry_limit_outside_its_range_is_refused() {
     }
     assert!(!repo.root().join(".velnor/rust-inputs.lock").exists());
 }
+
+fn build_within(repo: &Repo, limit: &str) -> Output {
+    velnor_ci()
+        .env(VARIABLE, limit)
+        .current_dir(repo.root())
+        .args(["inputs", "build", "--", "true"])
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"))
+}
+
+#[test]
+fn a_build_root_scan_over_the_configured_entry_limit_fails_and_names_the_variable() {
+    let repo = workspace_below_the_root();
+    let refused = build_within(&repo, "3");
+    assert_eq!(refused.status.code(), Some(1), "{refused:?}");
+    let error = String::from_utf8_lossy(&refused.stderr);
+    assert!(
+        error.contains(VARIABLE) && error.contains("more than 3 entries"),
+        "{refused:?}"
+    );
+}
