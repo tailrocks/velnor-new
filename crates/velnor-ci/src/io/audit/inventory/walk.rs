@@ -99,18 +99,19 @@ pub(super) fn scan_with(
         let mut listing = match opened {
             Ok(listing) => listing,
             Err(error) if handle::replaced(&error) && directory != root => {
-                if let Origin::Child { parent, name } = &origin {
-                    let replacement = handle::kind_at(parent, name, &directory)?;
-                    settle(
-                        &mut entries,
-                        &mut pending,
-                        &directory,
-                        parent,
-                        name,
-                        replacement,
-                        (&root, targets),
-                    )?;
-                }
+                let Origin::Child { parent, name } = &origin else {
+                    return Err(changed(&directory));
+                };
+                let replacement = handle::kind_at(parent, name, &directory)?;
+                settle(
+                    &mut entries,
+                    &mut pending,
+                    &directory,
+                    parent,
+                    name,
+                    replacement,
+                    (&root, targets),
+                )?;
                 continue;
             }
             Err(error) => return Err(error),
@@ -190,10 +191,7 @@ fn settle(
             }
         }
         Some(Kind::Directory) => {
-            return Err(io::Error::other(format!(
-                "{} changed while the audit scanned it; retry",
-                directory.display()
-            )));
+            return Err(changed(directory));
         }
         Some(kind) => {
             pending.extend(queue(&kind, directory, parent, name, (root, targets))?);
@@ -203,6 +201,13 @@ fn settle(
         }
     }
     Ok(())
+}
+
+fn changed(directory: &Path) -> io::Error {
+    io::Error::other(format!(
+        "{} changed while the audit scanned it; retry",
+        directory.display()
+    ))
 }
 
 fn is_directory(path: &Path) -> io::Result<bool> {

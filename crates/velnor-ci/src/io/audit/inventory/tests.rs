@@ -305,3 +305,36 @@ fn a_huge_directory_stops_being_read_once_the_entry_budget_is_spent() {
         "read {read} names for a limit of {limit}"
     );
 }
+
+#[test]
+fn a_link_target_directory_removed_before_it_is_opened_fails_the_scan_closed() {
+    let base = fs::canonicalize(std::env::temp_dir())
+        .unwrap_or_else(|e| unreachable!("{e}"))
+        .join(format!("velnor-scan-target-gone-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&base);
+    let root = base.join("root");
+    let target = base.join("target-dir");
+    fs::create_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::create_dir_all(&target).unwrap_or_else(|e| unreachable!("{e}"));
+    std::os::unix::fs::symlink(&target, root.join("link")).unwrap_or_else(|e| unreachable!("{e}"));
+    let mut budget = Budget::new(usize::MAX);
+    let result = scan_with(
+        &root,
+        &BTreeSet::new(),
+        &mut budget,
+        &Probe {
+            before_open: &|directory| {
+                if directory.ends_with("target-dir") {
+                    fs::remove_dir(directory).unwrap_or_else(|e| unreachable!("{e}"));
+                }
+                Ok(())
+            },
+            ..Probe::default()
+        },
+    );
+    fs::remove_dir_all(&base).unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(
+        matches!(&result, Err(error) if error.to_string().contains("changed while the audit scanned it; retry")),
+        "a link target replaced during the scan was silently dropped: {result:?}"
+    );
+}
