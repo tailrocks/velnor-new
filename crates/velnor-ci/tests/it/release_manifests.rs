@@ -168,7 +168,7 @@ fn an_excluded_example_and_a_nested_workspace_are_not_packages_of_the_root() {
         .write("release-plz.toml", PLZ)
         .write(
             "bin/cargo",
-            "#!/bin/sh\nif [ \"${RUSTC_WRAPPER+x}\" = x ]; then touch \"$VELNOR_TEST_WRAPPER_MARKER\"; fi\nexec \"$VELNOR_TEST_REAL_CARGO\" \"$@\"\n",
+            "#!/bin/sh\nif [ \"${RUSTC_WRAPPER+x}\" = x ]; then touch \"$VELNOR_TEST_WRAPPER_MARKER\"; fi\nPATH=\"$VELNOR_TEST_OUTER_PATH\"\nexport PATH\nexec \"$VELNOR_TEST_REAL_CARGO\" \"$@\"\n",
         );
     fs::set_permissions(&stub, fs::Permissions::from_mode(0o755))
         .unwrap_or_else(|e| unreachable!("{e}"));
@@ -184,6 +184,10 @@ fn an_excluded_example_and_a_nested_workspace_are_not_packages_of_the_root() {
         .env("RUSTC_WRAPPER", "must-be-removed")
         .env("VELNOR_TEST_WRAPPER_MARKER", &marker)
         .env("VELNOR_TEST_REAL_CARGO", cargo)
+        .env(
+            "VELNOR_TEST_OUTER_PATH",
+            std::env::var_os("PATH").unwrap_or_default(),
+        )
         .env("PATH", path)
         .env_remove("CARGO")
         .env_remove("VELNOR_CARGO_CONFIG")
