@@ -222,7 +222,8 @@ fn no_release_job_shares_restores_or_saves_an_mbx_store() -> TestResult {
 
 #[test]
 fn undeclared_release_sets_no_mbx_store() -> TestResult {
-    for (id, job) in jobs(&release_yml(None, None)?)? {
+    let tree = release_yml(Some(UNDECLARED_MISE), Some(b"[cache]\nmbx = false\n"))?;
+    for (id, job) in jobs(&tree)? {
         for step in steps(job) {
             assert!(!run(step).contains("MBX_CACHE_DIR"), "{id}");
         }
