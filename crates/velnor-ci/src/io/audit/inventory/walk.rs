@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::ffi::OsStr;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -53,6 +54,7 @@ pub(in crate::io::audit) fn scan(
 pub(super) struct Probe<'a> {
     pub(super) before_open: &'a dyn Fn(&Path) -> io::Result<()>,
     pub(super) after_open: &'a dyn Fn(&Path),
+    pub(super) listed: &'a dyn Fn(&OsStr),
 }
 
 impl Default for Probe<'_> {
@@ -60,6 +62,7 @@ impl Default for Probe<'_> {
         Self {
             before_open: &|_| Ok(()),
             after_open: &|_| {},
+            listed: &|_| {},
         }
     }
 }
@@ -103,11 +106,13 @@ pub(super) fn scan_with(
             Err(error) => return Err(error),
         };
         (probe.after_open)(&directory);
-        let names = handle::names(&mut listing)?;
+        let names = handle::names(&mut listing, |name| {
+            (probe.listed)(name);
+            budget.reserve()
+        })?;
         let listing = Opened::new(listing);
         let mut children = BTreeMap::new();
         for name in names {
-            budget.reserve()?;
             let path = directory.join(&name);
             let Some(kind) = handle::kind_at(&listing, &name, &path)? else {
                 continue;

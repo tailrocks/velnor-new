@@ -1,9 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::{fs, thread};
 
+use super::super::options::MAX_ENTRIES_VARIABLE;
 use super::walk::{Probe, scan_with};
 use super::*;
 
@@ -27,6 +28,7 @@ fn scan_with_open_failing(kind: io::ErrorKind) -> io::Result<Entries> {
                 }
             },
             after_open: &|_| {},
+            ..Probe::default()
         },
     );
     fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
@@ -119,6 +121,7 @@ fn swapped_directory_scan(label: &str) -> (PathBuf, Entries) {
                     fs::write(directory.join("b"), b"").unwrap_or_else(|e| unreachable!("{e}"));
                 }
             },
+            ..Probe::default()
         },
     )
     .unwrap_or_else(|e| unreachable!("{e}"));
@@ -184,6 +187,7 @@ fn a_directory_replaced_by_a_symbolic_link_before_it_is_opened_is_not_followed()
                 Ok(())
             },
             after_open: &|_| {},
+            ..Probe::default()
         },
     )
     .unwrap_or_else(|e| unreachable!("{e}"));
@@ -197,4 +201,41 @@ fn a_directory_replaced_by_a_symbolic_link_before_it_is_opened_is_not_followed()
         .get(&scanned)
         .unwrap_or_else(|| unreachable!("{:?}", entries.keys()));
     assert!(!children.contains_key(Path::new("d")), "{children:?}");
+}
+
+#[test]
+fn a_huge_directory_stops_being_read_once_the_entry_budget_is_spent() {
+    let root = fs::canonicalize(std::env::temp_dir())
+        .unwrap_or_else(|e| unreachable!("{e}"))
+        .join(format!("velnor-scan-huge-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&root);
+    fs::create_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+    for index in 0..2_000 {
+        fs::write(root.join(format!("entry-{index}")), b"").unwrap_or_else(|e| unreachable!("{e}"));
+    }
+    let limit = 10;
+    let read = AtomicUsize::new(0);
+    let mut budget = Budget::new(limit);
+    let result = scan_with(
+        &root,
+        &BTreeSet::new(),
+        &mut budget,
+        &Probe {
+            listed: &|_| {
+                read.fetch_add(1, Ordering::Relaxed);
+            },
+            ..Probe::default()
+        },
+    );
+    fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+    let Err(error) = result else {
+        panic!("a directory larger than the budget was scanned");
+    };
+    assert!(
+        error.to_string().contains(MAX_ENTRIES_VARIABLE),
+        "limit error does not name {MAX_ENTRIES_VARIABLE}: {error}"
+    );
+    assert!(budget.overflowed());
+    let read = read.load(Ordering::Relaxed);
+    assert!(read <= limit + 1, "read {read} names for a limit of {limit}");
 }

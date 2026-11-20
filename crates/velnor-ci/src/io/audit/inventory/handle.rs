@@ -44,12 +44,17 @@ pub(super) fn open(origin: &Origin, path: &Path) -> io::Result<Dir> {
     Dir::from_fd(fd).map_err(failure)
 }
 
-pub(super) fn names(directory: &mut Dir) -> io::Result<Vec<OsString>> {
+pub(super) fn names(
+    directory: &mut Dir,
+    mut accept: impl FnMut(&OsStr) -> io::Result<()>,
+) -> io::Result<Vec<OsString>> {
     let mut names = Vec::new();
     for entry in directory.iter() {
         let name = entry.map_err(failure)?.file_name().to_bytes().to_vec();
         if name != b"." && name != b".." {
-            names.push(OsString::from_vec(name));
+            let name = OsString::from_vec(name);
+            accept(&name)?;
+            names.push(name);
         }
     }
     Ok(names)
