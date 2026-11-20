@@ -5,12 +5,14 @@ use std::fs;
 use std::os::unix::fs::{PermissionsExt, symlink};
 use std::path::{Path, PathBuf};
 
-use velnor_ci::tools_verify::{Discard, Verdict, check, record};
+use velnor_ci::tools_verify::{Anchor, Discard, Verb, Verdict, check, record};
+use velnor_ci::tools_verify_step::{Context, run};
 
 use crate::io::Repo;
 
 struct Job {
     _repo: Repo,
+    root: PathBuf,
     home: PathBuf,
     anchor: PathBuf,
 }
@@ -34,8 +36,9 @@ fn job(name: &str) -> Job {
     fs::write(toolchain.join("rustc"), "rustc binary").unwrap_or_else(|e| unreachable!("{e}"));
     Job {
         _repo: repo,
-        anchor: root.join("anchor/digest"),
+        anchor: root.join("velnor-tools-anchor/digest"),
         home,
+        root,
     }
 }
 
@@ -49,13 +52,20 @@ fn cosign(job: &Job) -> PathBuf {
         .join(".local/share/mise/installs/cosign/3.0.0/bin/cosign")
 }
 
+fn restored(job: &Job) -> Anchor<'_> {
+    Anchor {
+        file: &job.anchor,
+        restored: true,
+    }
+}
+
 fn recorded(job: &Job) {
-    let verdict = record(&job.home, &job.anchor).unwrap_or_else(|e| unreachable!("{e}"));
+    let verdict = record(&job.home, &restored(job), true).unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(verdict, Verdict::Recorded);
 }
 
 fn checked(job: &Job) -> Verdict {
-    check(&job.home, &job.anchor).unwrap_or_else(|e| unreachable!("{e}"))
+    check(&job.home, &restored(job)).unwrap_or_else(|e| unreachable!("{e}"))
 }
 
 fn discarded(job: &Job) -> bool {
@@ -74,7 +84,7 @@ fn a_restore_equal_to_the_recorded_anchor_is_kept() {
         Some("rustc binary")
     );
     assert_eq!(
-        record(&job.home, &job.anchor).unwrap_or_else(|e| unreachable!("{e}")),
+        record(&job.home, &restored(&job), true).unwrap_or_else(|e| unreachable!("{e}")),
         Verdict::Matches
     );
 }
@@ -161,7 +171,7 @@ fn a_home_without_tool_directories_has_nothing_to_verify() {
     for path in [".local/share/mise", ".rustup"] {
         fs::remove_dir_all(job.home.join(path)).unwrap_or_else(|e| unreachable!("{e}"));
     }
-    let verdict = check(&job.home, &job.anchor).unwrap_or_else(|e| unreachable!("{e}"));
+    let verdict = check(&job.home, &restored(&job)).unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(verdict, Verdict::NothingRestored);
     assert!(fs::metadata(&job.home).is_ok());
 }
@@ -172,7 +182,165 @@ fn record_never_blesses_tools_that_differ_from_the_anchor() {
     recorded(&job);
     let anchor = fs::read(&job.anchor).unwrap_or_else(|e| unreachable!("{e}"));
     fs::write(cosign(&job), "evil cosign!!").unwrap_or_else(|e| unreachable!("{e}"));
-    let verdict = record(&job.home, &job.anchor).unwrap_or_else(|e| unreachable!("{e}"));
+    let verdict = record(&job.home, &restored(&job), true).unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(verdict, Verdict::Differs(Discard::Mismatch));
     assert_eq!(fs::read(&job.anchor).ok(), Some(anchor));
+}
+
+fn missed(job: &Job) -> Anchor<'_> {
+    Anchor {
+        file: &job.anchor,
+        restored: false,
+    }
+}
+
+#[test]
+fn a_leftover_anchor_is_not_trusted_when_the_anchor_restore_missed() {
+    let job = job("tools-verify-stale-anchor");
+    recorded(&job);
+    let verdict = check(&job.home, &missed(&job)).unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(verdict, Verdict::Discarded(Discard::NoAnchor));
+    assert!(discarded(&job));
+}
+
+#[test]
+fn a_leftover_anchor_never_lets_record_call_the_tools_matching() {
+    let job = job("tools-verify-stale-record");
+    recorded(&job);
+    fs::write(rustc(&job), "evil binary!").unwrap_or_else(|e| unreachable!("{e}"));
+    let stale = fs::read(&job.anchor).unwrap_or_else(|e| unreachable!("{e}"));
+    let verdict = record(&job.home, &missed(&job), true).unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(verdict, Verdict::Recorded);
+    assert_ne!(fs::read(&job.anchor).ok(), Some(stale));
+}
+
+#[test]
+fn reset_deletes_the_anchor_directory_with_whatever_it_holds() {
+    let job = job("tools-verify-reset");
+    recorded(&job);
+    let dir = job.root.join("velnor-tools-anchor");
+    fs::create_dir_all(dir.join("sub/locked")).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::write(dir.join("sub/locked/file"), "x").unwrap_or_else(|e| unreachable!("{e}"));
+    fs::set_permissions(dir.join("sub/locked"), fs::Permissions::from_mode(0o555))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let context = context(&job, false, "push");
+    run(Verb::Reset, &context).unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(fs::symlink_metadata(&dir).is_err());
+    run(Verb::Reset, &context).unwrap_or_else(|e| unreachable!("{e}"));
+}
+
+#[test]
+fn a_read_only_directory_in_the_restore_is_still_discarded() {
+    for mode in [0o555, 0o000] {
+        let job = job(&format!("tools-verify-readonly-{mode:o}"));
+        recorded(&job);
+        let locked = job.home.join(".rustup/toolchains/locked/deep");
+        fs::create_dir_all(&locked).unwrap_or_else(|e| unreachable!("{e}"));
+        fs::write(locked.join("file"), "x").unwrap_or_else(|e| unreachable!("{e}"));
+        for dir in [&locked, locked.parent().unwrap_or(&locked)] {
+            fs::set_permissions(dir, fs::Permissions::from_mode(mode))
+                .unwrap_or_else(|e| unreachable!("{e}"));
+        }
+        let verdict = checked(&job);
+        assert!(matches!(verdict, Verdict::Discarded(_)), "{mode:o}");
+        assert!(discarded(&job), "{mode:o}");
+    }
+}
+
+#[test]
+fn a_discard_that_cannot_delete_fails_the_step() {
+    let job = job("tools-verify-undeletable");
+    recorded(&job);
+    fs::write(rustc(&job), "evil binary!").unwrap_or_else(|e| unreachable!("{e}"));
+    let share = job.home.join(".local/share");
+    fs::set_permissions(&share, fs::Permissions::from_mode(0o555))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let result = check(&job.home, &restored(&job));
+    fs::set_permissions(&share, fs::Permissions::from_mode(0o755))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(result.is_err());
+}
+
+#[test]
+fn only_a_directory_mode_changing_is_a_mismatch() {
+    let job = job("tools-verify-dir-mode");
+    recorded(&job);
+    let dir = job.home.join(".rustup/toolchains/1.99.1-x86_64-unknown-linux-gnu/bin");
+    let mode = fs::metadata(&dir)
+        .unwrap_or_else(|e| unreachable!("{e}"))
+        .permissions()
+        .mode();
+    fs::set_permissions(&dir, fs::Permissions::from_mode((mode & 0o7777) ^ 0o010))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(checked(&job), Verdict::Discarded(Discard::Mismatch));
+}
+
+fn context(job: &Job, anchor_restored: bool, event: &str) -> Context {
+    Context {
+        home: job.home.clone(),
+        runner_temp: job.root.clone(),
+        github_output: Some(job.root.join("github_output")),
+        anchor_restored,
+        event_name: event.to_owned(),
+        git_ref: "refs/heads/main".to_owned(),
+        default_branch: Some("main".to_owned()),
+    }
+}
+
+fn outputs_after(job: &Job, verb: Verb, context: &Context) -> String {
+    let _ = fs::remove_file(job.root.join("github_output"));
+    run(verb, context).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::read_to_string(job.root.join("github_output")).unwrap_or_default()
+}
+
+#[test]
+fn the_step_writes_the_outputs_that_gate_every_save() {
+    let job = job("tools-verify-outputs");
+    assert_eq!(
+        outputs_after(&job, Verb::Record, &context(&job, false, "push")),
+        "matches=true\nrecorded=true\n"
+    );
+    assert_eq!(
+        outputs_after(&job, Verb::Record, &context(&job, true, "push")),
+        "matches=true\nrecorded=false\n"
+    );
+    assert_eq!(
+        outputs_after(&job, Verb::Check, &context(&job, true, "pull_request")),
+        "verified=true\n"
+    );
+    fs::write(rustc(&job), "evil binary!").unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(
+        outputs_after(&job, Verb::Record, &context(&job, true, "push")),
+        "matches=false\nrecorded=false\n"
+    );
+    assert_eq!(
+        outputs_after(&job, Verb::Check, &context(&job, true, "push")),
+        "verified=false\n"
+    );
+    assert!(discarded(&job));
+    assert_eq!(
+        outputs_after(&job, Verb::Check, &context(&job, true, "push")),
+        "verified=false\n"
+    );
+}
+
+#[test]
+fn record_refuses_an_untrusted_event_and_writes_no_anchor() {
+    for (event, git_ref) in [
+        ("pull_request", "refs/heads/main"),
+        ("merge_group", "refs/heads/main"),
+        ("workflow_run", "refs/heads/main"),
+        ("push", "refs/heads/feature"),
+        ("push", "refs/pull/7/merge"),
+    ] {
+        let job = job("tools-verify-untrusted-record");
+        let mut context = context(&job, false, event);
+        context.git_ref = git_ref.to_owned();
+        assert_eq!(
+            outputs_after(&job, Verb::Record, &context),
+            "matches=false\nrecorded=false\n",
+            "{event} {git_ref}"
+        );
+        assert!(fs::symlink_metadata(&job.anchor).is_err(), "{event}");
+    }
 }

@@ -1,27 +1,21 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-//! Checks the restored tool directories against the anchor a trusted run recorded right after
-//! it installed them, before any project code ran. The anchor is one BLAKE3 digest over every
-//! entry of `~/.local/share/mise` and `~/.rustup`: path, kind, mode, and the bytes of each file
-//! or the target of each link. A restore that differs, or that has no anchor to compare with,
-//! is deleted whole so the normal install runs.
-
 use std::fs;
-use std::io::Write;
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 
 use crate::error::CiError;
 use crate::tools_local::HOME_PATHS;
+use crate::tree_removal::remove_tree;
 
 const FORMAT: &str = "velnor-tools-anchor-v1";
 const ANCHOR_MAX_BYTES: u64 = 1024;
-pub const ANCHOR_FILE: &str = "velnor-tools-anchor/digest";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
 pub enum Verb {
+    Reset,
     Check,
     Record,
 }
@@ -32,10 +26,12 @@ pub enum Discard {
     BadAnchor,
     Mismatch,
     Unreadable(String),
+    Untrusted,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Verdict {
+    Reset,
     NothingRestored,
     Verified,
     Discarded(Discard),
@@ -95,7 +91,6 @@ fn entry(hasher: &mut blake3::Hasher, root: &Path, path: &Path) -> Result<(), St
     Ok(())
 }
 
-/// The digest of the two tool directories under `home`; an absent directory counts as absent.
 pub fn digest(home: &Path) -> Result<String, String> {
     let mut hasher = blake3::Hasher::new();
     for path in HOME_PATHS {
@@ -110,12 +105,21 @@ pub fn digest(home: &Path) -> Result<String, String> {
     Ok(hasher.finalize().to_hex().to_string())
 }
 
-fn read_anchor(anchor: &Path) -> Result<String, Discard> {
-    let metadata = fs::symlink_metadata(anchor).map_err(|_| Discard::NoAnchor)?;
+#[derive(Debug, Clone, Copy)]
+pub struct Anchor<'a> {
+    pub file: &'a Path,
+    pub restored: bool,
+}
+
+fn read_anchor(anchor: &Anchor<'_>) -> Result<String, Discard> {
+    if !anchor.restored {
+        return Err(Discard::NoAnchor);
+    }
+    let metadata = fs::symlink_metadata(anchor.file).map_err(|_| Discard::NoAnchor)?;
     if !metadata.is_file() || metadata.len() > ANCHOR_MAX_BYTES {
         return Err(Discard::BadAnchor);
     }
-    let text = fs::read_to_string(anchor).map_err(|_| Discard::BadAnchor)?;
+    let text = fs::read_to_string(anchor.file).map_err(|_| Discard::BadAnchor)?;
     text.strip_suffix('\n')
         .and_then(|line| line.strip_prefix(FORMAT))
         .and_then(|rest| rest.strip_prefix(' '))
@@ -126,7 +130,7 @@ fn read_anchor(anchor: &Path) -> Result<String, Discard> {
         .ok_or(Discard::BadAnchor)
 }
 
-fn compare(home: &Path, anchor: &Path) -> Result<(), Discard> {
+fn compare(home: &Path, anchor: &Anchor<'_>) -> Result<(), Discard> {
     let expected = read_anchor(anchor)?;
     let actual = digest(home).map_err(Discard::Unreadable)?;
     if actual == expected {
@@ -139,15 +143,7 @@ fn compare(home: &Path, anchor: &Path) -> Result<(), Discard> {
 fn discard(home: &Path) -> Result<(), CiError> {
     for path in HOME_PATHS {
         let root = home.join(path);
-        let Ok(metadata) = fs::symlink_metadata(&root) else {
-            continue;
-        };
-        let removed = if metadata.is_dir() {
-            fs::remove_dir_all(&root)
-        } else {
-            fs::remove_file(&root)
-        };
-        removed.map_err(|error| {
+        remove_tree(&root).map_err(|error| {
             CiError::new(format!(
                 "cannot discard the restored {}: {error}",
                 root.display()
@@ -157,10 +153,17 @@ fn discard(home: &Path) -> Result<(), CiError> {
     Ok(())
 }
 
-/// After the restores: keeps the tool directories when they equal the anchor, otherwise deletes
-/// both. Whatever is there counts, so a partial restore or a leftover of an earlier job is checked
-/// too.
-pub fn check(home: &Path, anchor: &Path) -> Result<Verdict, CiError> {
+pub fn reset(anchor: &Path) -> Result<Verdict, CiError> {
+    remove_tree(anchor).map_err(|error| {
+        CiError::new(format!(
+            "cannot clear the anchor {}: {error}",
+            anchor.display()
+        ))
+    })?;
+    Ok(Verdict::Reset)
+}
+
+pub fn check(home: &Path, anchor: &Anchor<'_>) -> Result<Verdict, CiError> {
     if HOME_PATHS
         .iter()
         .all(|path| fs::symlink_metadata(home.join(path)).is_err())
@@ -176,9 +179,10 @@ pub fn check(home: &Path, anchor: &Path) -> Result<Verdict, CiError> {
     }
 }
 
-/// After the install, on a trusted run: writes the anchor when there is none, and says whether
-/// the tools may be saved, which they may only when they equal the anchor.
-pub fn record(home: &Path, anchor: &Path) -> Result<Verdict, CiError> {
+pub fn record(home: &Path, anchor: &Anchor<'_>, trusted: bool) -> Result<Verdict, CiError> {
+    if !trusted {
+        return Ok(Verdict::Differs(Discard::Untrusted));
+    }
     match compare(home, anchor) {
         Ok(()) => Ok(Verdict::Matches),
         Err(Discard::NoAnchor) => {
@@ -186,7 +190,7 @@ pub fn record(home: &Path, anchor: &Path) -> Result<Verdict, CiError> {
                 Ok(actual) => actual,
                 Err(reason) => return Ok(Verdict::Differs(Discard::Unreadable(reason))),
             };
-            write_anchor(anchor, &actual)?;
+            write_anchor(anchor.file, &actual)?;
             Ok(Verdict::Recorded)
         }
         Err(reason) => Ok(Verdict::Differs(reason)),
@@ -205,59 +209,4 @@ fn write_anchor(anchor: &Path, digest: &str) -> Result<(), CiError> {
     let staged = parent.join(format!(".anchor-{}", std::process::id()));
     fs::write(&staged, format!("{FORMAT} {digest}\n")).map_err(fail)?;
     fs::rename(&staged, anchor).map_err(fail)
-}
-
-fn reason(discard: &Discard) -> String {
-    match discard {
-        Discard::NoAnchor => "no anchor was recorded for this key".to_owned(),
-        Discard::BadAnchor => "the anchor is malformed".to_owned(),
-        Discard::Mismatch => "they differ from the anchor".to_owned(),
-        Discard::Unreadable(why) => why.clone(),
-    }
-}
-
-#[must_use]
-pub fn message(verdict: &Verdict) -> String {
-    match verdict {
-        Verdict::NothingRestored => {
-            "velnor: no tool directories are present, so none are verified".to_owned()
-        }
-        Verdict::Verified => "velnor: the restored tools equal the anchor".to_owned(),
-        Verdict::Discarded(why) => format!(
-            "::notice::the restored tools were discarded ({}); they install from scratch",
-            reason(why)
-        ),
-        Verdict::Recorded => "velnor: recorded the tools anchor".to_owned(),
-        Verdict::Matches => "velnor: the tools equal the anchor, so they may be saved".to_owned(),
-        Verdict::Differs(why) => format!("::notice::the tools are not saved ({})", reason(why)),
-    }
-}
-
-fn outputs(verdict: &Verdict) -> String {
-    match verdict {
-        Verdict::Verified => "verified=true\n".to_owned(),
-        Verdict::NothingRestored | Verdict::Discarded(_) => "verified=false\n".to_owned(),
-        Verdict::Recorded => "matches=true\nrecorded=true\n".to_owned(),
-        Verdict::Matches => "matches=true\nrecorded=false\n".to_owned(),
-        Verdict::Differs(_) => "matches=false\nrecorded=false\n".to_owned(),
-    }
-}
-
-pub fn setup(verb: Verb) -> Result<String, CiError> {
-    let var = |name: &str| std::env::var(name).ok();
-    let home = PathBuf::from(var("HOME").ok_or_else(|| CiError::new("set HOME"))?);
-    let temp = PathBuf::from(var("RUNNER_TEMP").ok_or_else(|| CiError::new("set RUNNER_TEMP"))?);
-    let anchor = temp.join(ANCHOR_FILE);
-    let verdict = match verb {
-        Verb::Check => check(&home, &anchor)?,
-        Verb::Record => record(&home, &anchor)?,
-    };
-    let file = var("GITHUB_OUTPUT").ok_or_else(|| CiError::new("set GITHUB_OUTPUT"))?;
-    fs::OpenOptions::new()
-        .append(true)
-        .create(true)
-        .open(&file)
-        .and_then(|mut handle| handle.write_all(outputs(&verdict).as_bytes()))
-        .map_err(|error| CiError::new(format!("cannot write {file}: {error}")))?;
-    Ok(format!("{}\n", message(&verdict)))
 }
