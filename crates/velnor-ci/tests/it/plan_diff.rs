@@ -385,7 +385,10 @@ fn a_lane_route_id_with_a_line_break_cannot_add_an_output_key() {
     let output = planned(&value.to_string(), &repo);
     let written = fs::read_to_string(aside(&repo).join("outputs")).unwrap_or_default();
     assert!(!output.status.success(), "{written}");
-    assert!(!written.contains("qualification_cache_write=true"), "{written}");
+    assert!(
+        !written.contains("qualification_cache_write=true"),
+        "{written}"
+    );
     fs::remove_dir_all(&repo).unwrap_or_else(|e| unreachable!("{e}"));
     fs::remove_dir_all(aside(&repo)).unwrap_or_else(|e| unreachable!("{e}"));
 }
