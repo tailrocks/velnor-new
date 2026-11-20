@@ -79,7 +79,7 @@ fn the_advisory_db_is_fetched_only_when_the_checks_include_advisories() -> TestR
         let repo = with_deny_config(private_repo(
             &["Cargo.toml", "tools/Cargo.toml"],
             &section,
-            "0.1.109",
+            "0.1.110",
         )?)?;
         let text = workflow(&repo)?;
         assert!(text.contains("cargo-deny"), "{checks}: {text}");

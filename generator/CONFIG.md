@@ -322,7 +322,7 @@ The pinned velnor-ci reads `.velnor/rust-ci.toml` at run time and rejects a key 
 
 ## cargo-deny policy lane
 
-A `deny.toml` (or `.deny.toml`, `.cargo/deny.toml`, `.config/deny.toml`) that the lane can read enables the policy lane's `cargo-deny` on its Cargo root. The `[policy]` table of `.velnor/rust-ci.toml` says it explicitly, and it needs velnor-ci 0.1.109 or later (`velnor-gen pin-helper 0.1.109` fixes an older pin; an older helper rejects the table):
+A `deny.toml` (or `.deny.toml`, `.cargo/deny.toml`, `.config/deny.toml`) that the lane can read enables the policy lane's `cargo-deny` on its Cargo root. The `[policy]` table of `.velnor/rust-ci.toml` says it explicitly, and it needs velnor-ci 0.1.110 or later (`velnor-gen pin-helper 0.1.110` fixes an older pin; an older helper rejects the table):
 
 - `deny = true` runs the lane. It is a generation error when no such config exists.
 - `deny = false` turns the lane off, even with a `deny.toml` present. The lane runs no `cargo-deny` and no `cargo-deny fetch db`, a change to `deny.toml` selects no policy run, and the generation report prints `cargo-deny policy is off ([policy] deny = false); deny.toml is ignored`.
