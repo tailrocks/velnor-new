@@ -154,6 +154,11 @@ pub enum Command {
     )]
     TestGroups(TestGroupsCommand),
     #[command(
+        subcommand,
+        about = "Guard the files a workflow artifact upload would publish"
+    )]
+    Artifacts(ArtifactsCommand),
+    #[command(
         about = "Run after every cache and after velnor-ci inputs restore: every action that must follow the restores. Gives each tracked file that shares its modification time with another tracked file a distinct time, one microsecond below the time it had and ordered by path, so that cargo, which picks the newest file of a package by time alone, names the same file after every restore. When VELNOR_BASE_MAX_AGE_DAYS is a positive number, first removes every restored target directory whose target/.velnor/born date is more than that many days old, so the run builds cold. Writes the step output expired=true when it removed one (an unreadable born date counts as expired) and expired=false otherwise, so a later step can plan a full run"
     )]
     Restored(RestoredArgs),
@@ -255,6 +260,35 @@ pub struct LaneGuardArgs {
 }
 
 #[derive(Debug, Subcommand)]
+pub enum ArtifactsCommand {
+    #[command(
+        about = "Run in the workspace (GITHUB_WORKSPACE, else the current directory) right before an actions/upload-artifact step, which follows symbolic links and so can publish files from outside the workspace, and which reads the workspace later than this step runs. Walks each --path without following links, copies only the regular files that the path selects into a fresh --into directory (any earlier content is removed) with their paths relative to the workspace, and the upload then publishes only that directory. Symbolic links, devices, sockets and pipes are skipped, as is every file whose path has a part that looks like a secret (a .env file, a key, a token, a password, credentials) and, without a warning, every hidden file, printing one ::warning:: per skipped entry, so nothing that changes in the workspace after this step can change what is uploaded; a path that does not exist selects nothing, and an --into directory that cannot be created or a copy that cannot be written fails the step with exit 1"
+    )]
+    Stage(ArtifactsStageArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct ArtifactsStageArgs {
+    #[arg(
+        long,
+        required = true,
+        allow_hyphen_values = true,
+        value_name = "DIR",
+        help = "The staging directory, under RUNNER_TEMP; it is emptied first and the upload step names exactly this directory"
+    )]
+    pub into: std::path::PathBuf,
+    #[arg(
+        long = "path",
+        required = true,
+        allow_hyphen_values = true,
+        value_name = "PATH",
+        value_parser = clap::builder::NonEmptyStringValueParser::new(),
+        help = "A repository path or glob that the upload names, relative to the workspace; repeat for each path"
+    )]
+    pub paths: Vec<String>,
+}
+
+#[derive(Debug, Subcommand)]
 pub enum TestGroupsCommand {
     #[command(
         about = "Run in the directory of a Cargo root after the tests are built: exit 1 and name every test that two or more groups select. Lists the workspace once per group with cargo-nextest, under the group's filter unchanged, so the filter means what the group job runs; ignored tests are exempt, and a listing error fails the check"
@@ -329,5 +363,5 @@ pub struct CheckTagArgs {
 
 pub use crate::cli_release::{
     AlignArgs, CheckConfigArgs, FamilyTagArgs, PreflightArgs, PublishArgs, RecordArgs,
-    ReleaseCommand, ReleaseGateArgs,
+    ReleaseCommand, ReleaseGateArgs, VerifyListedArgs,
 };
