@@ -1,4 +1,0 @@
-    let cwd = env::current_dir().map_err(|err| OrchestratorError::RootDiscovery {
-        problem: err.to_string(),
-    })?;
-    crate::root::resolve_root(&cwd)

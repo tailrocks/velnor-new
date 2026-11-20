@@ -1,4 +1,0 @@
-            .any(|component| component == "." || component == "..")
-    {
-        return false;
-    }

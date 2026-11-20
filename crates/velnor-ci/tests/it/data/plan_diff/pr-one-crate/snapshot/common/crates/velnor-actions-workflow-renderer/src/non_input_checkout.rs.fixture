@@ -1,4 +1,0 @@
-        concat!(
-            "set -eu; ",
-            "mktemp \"${{RUNNER_TEMP:-${{TMPDIR:-/tmp}}}}/non-input-paths.XXXXXX\" | {{ ",
-            "read -r list; trap 'rm -f \"$list\"' EXIT; ",

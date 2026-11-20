@@ -1,8 +1,0 @@
-        &format!("repos/tailrocks/velnor-new/compare/{sha}...{main}"),
-        token,
-        request.deadline,
-    )?;
-                || part == ".."
-                || !part
-                    .bytes()
-                    .all(|b| b.is_ascii_alphanumeric() || b"._-+@".contains(&b))

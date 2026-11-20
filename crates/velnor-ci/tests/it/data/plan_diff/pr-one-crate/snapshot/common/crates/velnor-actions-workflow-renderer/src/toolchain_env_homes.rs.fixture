@@ -1,4 +1,0 @@
-    if value.split('/').any(|segment| segment == "..") {
-        return Err(RenderError::BadCommand(format!(
-            "shared_home_escape:{field}"
-        )));

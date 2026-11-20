@@ -1,4 +1,0 @@
-    for value in [".", ".."] {
-        assert!(matches!(ConnectionId::parse(value), Err(HostError::Config)));
-    }
-}

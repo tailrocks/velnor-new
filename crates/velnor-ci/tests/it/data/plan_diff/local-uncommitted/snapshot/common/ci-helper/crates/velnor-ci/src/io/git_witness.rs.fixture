@@ -1,4 +1,0 @@
-            .and_then(|home| std::env::current_dir().ok().map(|cwd| cwd.join(home)))
-            .map(|home| home.join("git/db"));
-        let before = directory.as_deref().and_then(|path| scan(path).ok());
-        Self { directory, before }

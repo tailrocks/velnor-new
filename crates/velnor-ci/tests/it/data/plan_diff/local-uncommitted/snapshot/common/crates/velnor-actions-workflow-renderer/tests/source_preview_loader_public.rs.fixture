@@ -1,4 +1,0 @@
-    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let output = Command::new("/usr/bin/python3")
-        .arg(root.join("tests/source_preview_loader_scenarios.py"))
-        .arg(root)

@@ -1,8 +1,0 @@
-        .current_dir(temp.path())
-        .output()?;
-    assert!(output.status.success());
-    let metadata = String::from_utf8(output.stdout)?;
-        .current_dir(temp.path())
-        .output()?;
-    assert!(
-        output.status.success(),

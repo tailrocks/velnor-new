@@ -1,4 +1,0 @@
-            ".." => {
-                parts.pop()?;
-            }
-            other => parts.push(other),

@@ -1,4 +1,0 @@
-        "../escape".to_owned(),
-        "/absolute".to_owned(),
-        String::new(),
-    ] {

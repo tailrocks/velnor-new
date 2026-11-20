@@ -1,4 +1,0 @@
-            .current_dir(self.workspace.path())
-            .output()?;
-        Ok(Captured {
-            code: output.status.code(),

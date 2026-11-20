@@ -1,4 +1,0 @@
-    format!("/repos/{repo}/compare/{}...{head}?per_page=1", encode(base))
-}
-
-#[must_use]

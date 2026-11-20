@@ -1,9 +1,0 @@
-        .current_dir(root)
-        .env("GIT_AUTHOR_DATE", "2000-01-01T00:00:00Z")
-        .env("GIT_COMMITTER_DATE", "2000-01-01T00:00:00Z")
-        .args(args)
-    for parent in parents {
-        args.extend(["-p", parent]);
-    }
-    args.extend(["-m", message]);
-    git(root, &args)

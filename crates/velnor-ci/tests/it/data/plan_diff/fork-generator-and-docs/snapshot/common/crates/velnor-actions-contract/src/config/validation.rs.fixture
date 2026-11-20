@@ -1,4 +1,0 @@
-                    .all(|part| !part.is_empty() && part != "." && part != "..")
-        };
-        if self.runner_id != MAC_COMPANION_RUNNER_ID
-            || self.companion_workflow_path != ".github/workflows/qualify-runner-family.yml"

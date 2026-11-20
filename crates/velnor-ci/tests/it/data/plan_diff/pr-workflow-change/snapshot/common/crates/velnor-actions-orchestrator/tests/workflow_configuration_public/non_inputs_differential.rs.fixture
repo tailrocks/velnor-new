@@ -1,8 +1,0 @@
-    "docs", "Docs", "sub", "a-b", "*", "?", "[a]", "\u{e9}", "", ".", "..", "do*", "{a,b}", "a b",
-    ".cargo",
-];
-
-    fs::create_dir_all(info.parent().ok_or("no parent")?)?;
-    fs::write(
-        &info,
-        format!("\n{}\n", non_inputs.sparse_checkout_patterns().join("\n")),

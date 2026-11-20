@@ -1,8 +1,0 @@
-        && !value.contains("..")
-        && !value.contains("//")
-        && !value.contains("@{")
-        && value != "@"
-                && part != ".."
-                && part
-                    .bytes()
-                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-' | b'.'))

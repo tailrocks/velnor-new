@@ -1,4 +1,0 @@
-            .current_dir(root)
-            .env_clear()
-            .envs(std::env::vars_os().filter(|(key, _)| key == "PATH"))
-            .env("GIT_CONFIG_NOSYSTEM", "1")

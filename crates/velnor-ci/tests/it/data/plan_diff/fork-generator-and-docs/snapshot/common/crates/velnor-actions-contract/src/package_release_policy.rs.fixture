@@ -1,4 +1,0 @@
-            .any(|part| part.is_empty() || part == "." || part == "..")
-        && path
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'/' | b'.' | b'_' | b'-'))

@@ -1,5 +1,0 @@
-    match manifest.parent() {
-        None => (
-            "Dependency policy".into(),
-            "cargo-deny check".into(),
-// head

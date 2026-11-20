@@ -1,8 +1,0 @@
-                        && !tag.contains("..")
-                        && tag.bytes().all(|byte| {
-                            byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.')
-                        })
-                            || part == ".."
-                            || part.eq_ignore_ascii_case(".git")
-                    })
-                    || path.chars().any(char::is_control)

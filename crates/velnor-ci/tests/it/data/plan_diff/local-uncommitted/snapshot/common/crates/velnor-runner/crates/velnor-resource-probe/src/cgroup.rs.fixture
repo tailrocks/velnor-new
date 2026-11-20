@@ -1,4 +1,0 @@
-            || path.contains("..")
-        {
-            return Err(ProbeError::Invalid("probe_cgroup_path"));
-        }

@@ -1,4 +1,0 @@
-        .current_dir(&root)
-        .arg("--git-dir")
-        .arg(git_dir)
-        .arg("--work-tree")

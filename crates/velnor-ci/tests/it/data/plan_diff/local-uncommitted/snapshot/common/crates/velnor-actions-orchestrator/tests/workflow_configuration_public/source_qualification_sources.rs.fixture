@@ -1,9 +1,0 @@
-    let script = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../scripts/generator-release/source-qualification.sh");
-    let output = Command::new("bash")
-        .arg(script)
-        .arg(PREPARE_PHASE)
-        .current_dir(&workspace)
-        .env("RUNNER_TEMP", &runner_temp)
-        .env("GITHUB_WORKSPACE", &workspace)
-        .env("GITHUB_ENV", &github_env)

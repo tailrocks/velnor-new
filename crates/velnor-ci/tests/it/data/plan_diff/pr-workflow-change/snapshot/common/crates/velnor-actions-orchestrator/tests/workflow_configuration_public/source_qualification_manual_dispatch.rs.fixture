@@ -1,5 +1,0 @@
-    let script = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../scripts/generator-release/source-qualification.sh");
-    let output = Command::new("/bin/bash")
-        .arg(script)
-        .arg("qualify-linux-x64-native-validator-tools")

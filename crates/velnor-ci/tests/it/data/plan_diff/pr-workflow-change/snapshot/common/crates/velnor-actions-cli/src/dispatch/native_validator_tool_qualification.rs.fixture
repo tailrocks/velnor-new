@@ -1,4 +1,0 @@
-        velnor_actions_orchestrator::run_native_validator_tool_qualification_from_env(concat!(
-            "velnor-actions ",
-            env!("CARGO_PKG_VERSION")
-        )),

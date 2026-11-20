@@ -1,8 +1,0 @@
-#[path = "binary_release_inventory.rs"]
-pub(super) mod inventory;
-use inventory::paths_overlap;
-pub(crate) use inventory::validate_static_release_inventory;
-                    && part != ".."
-                    && part.bytes().all(|byte| {
-                        byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-')
-                    })

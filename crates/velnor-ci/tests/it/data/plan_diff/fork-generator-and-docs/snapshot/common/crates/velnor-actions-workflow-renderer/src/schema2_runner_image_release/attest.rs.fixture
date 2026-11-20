@@ -1,4 +1,0 @@
-    let mut verify = run("Verify production Mac qualification", concat!(
-        "set -euo pipefail\n",
-        "\"$RUNNER_TEMP/velnor/bin/velnor-actions-$VELNOR_SDK_VERSION\" image-maintenance verify-mac-attestation ",
-        "--producer-run-id \"$PRODUCER_RUN_ID\" --producer-run-attempt \"$PRODUCER_RUN_ATTEMPT\" ",

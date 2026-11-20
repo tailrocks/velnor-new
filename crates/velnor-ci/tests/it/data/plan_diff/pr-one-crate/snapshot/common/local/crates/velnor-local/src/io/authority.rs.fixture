@@ -1,4 +1,0 @@
-            .all(|part| !part.is_empty() && part != "." && part != "..")
-}
-
-pub async fn mint_or_retire<B: Backend>(

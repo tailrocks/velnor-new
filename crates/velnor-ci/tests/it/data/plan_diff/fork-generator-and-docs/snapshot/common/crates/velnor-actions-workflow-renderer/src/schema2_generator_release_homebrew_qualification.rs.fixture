@@ -1,9 +1,0 @@
-        include_str!("../../../.velnor/qualification/homebrew/preview-a.json"),
-        include_str!("../../../.velnor/qualification/homebrew/preview-d.json")
-    );
-    let literal = serde_json::to_string(&catalog)
-        .map_err(|error| RenderError::BadCommand(error.to_string()))?;
-    let source = include_str!("homebrew_qualification_acquire.ts")
-        .replace("\"__VELNOR_HOMEBREW_CATALOG__\"", &literal);
-    Ok(format!(
-        "set -eu\numask 077\nunset GH_HOST GH_CONFIG_DIR BUN_OPTIONS NODE_OPTIONS\nprivate=\"$(mktemp -d \"$RUNNER_TEMP/velnor-homebrew-acquire.XXXXXX\")\"\ntrap 'rm -rf \"$private\"' EXIT\ncat > \"$private/acquire.ts\" <<'VELNOR_HOMEBREW_ACQUIRE_TS'\n{source}\nVELNOR_HOMEBREW_ACQUIRE_TS\ncd \"$private\"\nexport MISE_DATA_DIR=\"${{MISE_DATA_DIR:-$HOME/.local/share/mise}}\"\nexport HOME=\"$private\"\n{command}\n{gh}\n(ulimit -f 4096; gh attestation trusted-root > \"$VELNOR_HOMEBREW_EVIDENCE_DIR/trusted_root.jsonl\")\ntest -s \"$VELNOR_HOMEBREW_EVIDENCE_DIR/trusted_root.jsonl\"\ntest \"$(wc -c < \"$VELNOR_HOMEBREW_EVIDENCE_DIR/trusted_root.jsonl\")\" -le 4194304"

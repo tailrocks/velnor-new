@@ -1,4 +1,0 @@
-    for candidate in dest.ancestors() {
-        match std::fs::symlink_metadata(candidate) {
-            Ok(meta) if meta.is_symlink() => {
-                return Err(preview_refused(label, "symlink_refused"));

@@ -1,4 +1,0 @@
-    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.github/workflows");
-    let mut found = Vec::new();
-    for entry in std::fs::read_dir(&dir)? {
-        let path = entry?.path();

@@ -1,4 +1,0 @@
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.github/workflows/ci.yml");
-    Ok(serde_saphyr::from_str_with_options(
-        &fs::read_to_string(path)?,
-        serde_saphyr::options! { budget: serde_saphyr::budget! { enforce_alias_anchor_ratio: false } },

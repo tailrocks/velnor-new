@@ -1,8 +1,0 @@
-    for sha in ["", "main", "21ec8b9f", upper.as_str(), "../x"] {
-        let said = release_gate(&FakeGitHub::default(), &repo(), sha, &[], None)
-            .map_err(|e| e.to_string());
-        assert_refused(&said, "not a full lowercase commit SHA");
-        format!("/repos/tailrocks/velnor-new/compare/release%2Fstable%20%231...{GREEN}?per_page=1")
-    );
-}
-

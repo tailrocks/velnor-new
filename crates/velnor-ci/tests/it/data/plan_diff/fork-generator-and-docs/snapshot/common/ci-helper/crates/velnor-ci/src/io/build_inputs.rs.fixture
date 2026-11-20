@@ -1,4 +1,0 @@
-        .current_dir(root)
-        .output()
-        .ok()?;
-    output.status.success().then_some(output.stdout)

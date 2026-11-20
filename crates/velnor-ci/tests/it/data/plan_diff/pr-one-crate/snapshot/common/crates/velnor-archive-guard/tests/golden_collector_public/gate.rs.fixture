@@ -1,4 +1,0 @@
-            .current_dir(root)
-            .env("RUNNER_TEMP", &runner_temp)
-            .env("CARGO_TARGET_DIR", &target)
-            .env("VELNOR_QUALIFICATION_ARCHIVE_GUARD", &harness.archive_guard)

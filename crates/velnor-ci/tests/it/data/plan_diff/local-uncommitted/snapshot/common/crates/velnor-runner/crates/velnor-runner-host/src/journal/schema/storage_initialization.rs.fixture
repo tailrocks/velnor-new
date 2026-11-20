@@ -1,6 +1,0 @@
-include!("storage_initialization/validation.rs");
-
-async fn scalar_count(connection: &turso::Connection, sql: &str) -> Result<i64, HostError> {
-    let mut rows = connection
-include!("storage_initialization/v22.rs");
-

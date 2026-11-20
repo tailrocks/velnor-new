@@ -1,4 +1,0 @@
-        OsString::from(format!("{base}...{head}")),
-        OsString::from("--"),
-    ];
-    validate_select_diff_args(&args).map_err(|err| err.to_string())?;

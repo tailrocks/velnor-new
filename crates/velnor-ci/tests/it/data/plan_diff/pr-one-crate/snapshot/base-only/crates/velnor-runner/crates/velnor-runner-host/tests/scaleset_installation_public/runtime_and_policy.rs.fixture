@@ -1,5 +1,0 @@
-#[path = "offer_and_assigned.rs"]
-mod offer_and_assigned;
-
-use serde::Serialize;
-// base

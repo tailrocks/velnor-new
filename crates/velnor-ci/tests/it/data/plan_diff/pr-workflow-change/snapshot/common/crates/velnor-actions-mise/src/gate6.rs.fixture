@@ -1,4 +1,0 @@
-            && !name.contains("..")
-            && !name.bytes().any(|byte| byte.is_ascii_whitespace());
-        if valid {
-            Ok(Self { id: id.to_owned() })

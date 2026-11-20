@@ -1,4 +1,0 @@
-        .current_dir(cwd)
-        .env_remove("http_proxy")
-        .env_remove("https_proxy")
-        .env_remove("ALL_PROXY")

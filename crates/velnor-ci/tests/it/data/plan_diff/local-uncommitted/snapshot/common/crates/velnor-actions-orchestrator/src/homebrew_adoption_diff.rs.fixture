@@ -1,4 +1,0 @@
-            .all(|part| !part.is_empty() && part != "." && part != "..")
-}
-
-pub(super) fn full_sha(value: &str) -> bool {

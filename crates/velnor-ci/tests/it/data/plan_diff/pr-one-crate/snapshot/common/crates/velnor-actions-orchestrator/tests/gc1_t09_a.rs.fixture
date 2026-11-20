@@ -1,4 +1,0 @@
-    for lane in ["", ".", "..", "a/b", "a\\b"] {
-        if qualified.lane_target_dir(&state, lane).is_ok() {
-            return Err(io::Error::other(format!("invalid lane accepted: {lane}")).into());
-        }

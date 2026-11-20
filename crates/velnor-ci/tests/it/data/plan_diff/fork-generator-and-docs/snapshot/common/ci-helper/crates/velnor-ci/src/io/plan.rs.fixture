@@ -1,8 +1,0 @@
-    append_to, current_dir, git,
-};
-use crate::cli::{BaseFile, PlanArgs};
-use crate::error::CiError;
-    let checkout = read_recorded_checkout(&current_dir()?).map_err(ci)?;
-    let facts = detect(&checkout.view).map_err(ci)?;
-    let event = read_event()?;
-    if let Some(event) = &event {

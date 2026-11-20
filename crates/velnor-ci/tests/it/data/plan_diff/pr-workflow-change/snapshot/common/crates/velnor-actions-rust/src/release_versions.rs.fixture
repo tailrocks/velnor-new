@@ -1,4 +1,0 @@
-            ".." => {
-                parts
-                    .pop()
-                    .ok_or_else(|| invalid("workspace_path_escape"))?;

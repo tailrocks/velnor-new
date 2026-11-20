@@ -1,8 +1,0 @@
-        .current_dir(root)
-        .output()?;
-    assert!(
-        output.status.success(),
-        .current_dir(root)
-        .env("VELNOR_INTERNAL_OP", "emit-group-ledger-v1")
-        .env("RUNNER_TEMP", runner)
-        .env("GITHUB_JOB", job)

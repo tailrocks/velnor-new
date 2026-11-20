@@ -1,8 +1,0 @@
-        || entry.split('/').any(|segment| segment == "..");
-    if bad {
-        return Err(IndexError::SymlinkEscape(entry.to_owned()));
-    }
-    link.ancestors().skip(1).any(|dir| dir == target)
-}
-
-fn relative_posix(root: &Path, path: &Path) -> Result<Option<String>, IndexError> {

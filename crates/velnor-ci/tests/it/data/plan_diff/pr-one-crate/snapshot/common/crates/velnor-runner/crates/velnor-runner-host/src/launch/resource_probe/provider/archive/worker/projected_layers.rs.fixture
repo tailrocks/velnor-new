@@ -1,4 +1,0 @@
-            ".." => return Err(ProviderFailure::Archive),
-            part => parts.push(part),
-        }
-    }

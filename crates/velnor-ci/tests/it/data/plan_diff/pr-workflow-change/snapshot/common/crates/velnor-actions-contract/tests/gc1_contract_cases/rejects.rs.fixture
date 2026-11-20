@@ -1,4 +1,0 @@
-    bad.release_assets[0].extract_to = Some("../escape".to_owned());
-    assert!(bad.validate(".velnor/deps.lock").is_err());
-    let mut drifted_config = fixture_lock_config();
-    "v9.9.9".clone_into(&mut drifted_config.release_assets[0].tag);

@@ -1,9 +1,0 @@
-    Ok(Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .canonicalize()?)
-}
-
-        "[package]\nname = \"velnor-actions-cli\"\nversion = \"0.1.0\"\nedition = \"2021\"\n[target.'cfg(unix)'.dependencies]\ncore = { path = \"../../libs/core\" }\n",
-    )?;
-    generate_lockfile(repo.root())?;
-    put(repo.root(), SCRIPT, "initial\n")?;

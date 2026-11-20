@@ -1,4 +1,0 @@
-        if seg == ".." {
-            parts.pop();
-        } else {
-            parts.push(seg);

@@ -1,6 +1,0 @@
-include!("process_death/fixture.rs");
-
-#[test]
-fn child_entry() {
-include!("process_death/recovery.rs");
-

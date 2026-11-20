@@ -1,4 +1,0 @@
-        && tail != ".."
-        && !tail.starts_with('-')
-        && !tail.ends_with('-')
-        && !tail.contains("--")

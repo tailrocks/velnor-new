@@ -1,8 +1,0 @@
-        "const T: &str = include_str!(\"t.txt\");\n",
-        false,
-        RUN,
-        RUN,
-        "\u{feff}include!(\"x.txt\");\n",
-        false,
-        RUN,
-        RUN,

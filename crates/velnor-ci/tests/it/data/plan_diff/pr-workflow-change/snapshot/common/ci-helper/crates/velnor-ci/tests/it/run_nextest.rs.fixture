@@ -1,8 +1,0 @@
-pub(crate) const FILTERED_LIST: &str = concat!(
-    r#"{"test-count":4,"rust-suites":{"#,
-    r#""only-ign":{"package-name":"only-ign","status":"listed","testcases":{"hidden":{"ignored":true,"filter-match":{"status":"mismatch","reason":"ignored"}}}},"#,
-    r#""kept":{"package-name":"kept","status":"listed","testcases":{"alpha":{"ignored":false,"filter-match":{"status":"matches"}},"beta":{"ignored":false,"filter-match":{"status":"mismatch","reason":"expression"}}}},"#,
-pub(crate) const EXCLUDED_LIST: &str = concat!(
-    r#"{"test-count":1,"rust-suites":{"gone":{"package-name":"gone","status":"listed","testcases":{"#,
-    r#""only":{"ignored":false,"filter-match":{"status":"mismatch","reason":"expression"}}}}}}"#
-);

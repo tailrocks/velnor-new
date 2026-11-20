@@ -1,4 +1,0 @@
-        .current_dir(repo.root())
-        .output()
-        .unwrap_or_else(|e| unreachable!("{e}"))
-}

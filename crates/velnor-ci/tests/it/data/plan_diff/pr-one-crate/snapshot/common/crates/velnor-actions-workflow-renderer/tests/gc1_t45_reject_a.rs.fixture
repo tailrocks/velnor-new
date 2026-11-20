@@ -1,4 +1,0 @@
-        &splice_before_end(archive.to_vec(), &tar_entry("../evil", b"x", b'0')),
-        Some("OCI archive contains a path that is not safe."),
-    )?;
-    expect_archive_rejection(

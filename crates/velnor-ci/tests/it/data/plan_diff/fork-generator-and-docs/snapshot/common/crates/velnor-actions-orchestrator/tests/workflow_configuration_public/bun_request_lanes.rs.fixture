@@ -1,4 +1,0 @@
-        .current_dir(root)
-        .env(WRITE_REQUEST_CHILD_ENV, "1")
-        .env(PLAN_RESPONSE_FILE_ENV, &response_path)
-        .env(REQUEST_FILE_ENV, &request_path)

@@ -1,5 +1,0 @@
-    candidate.split('/').any(|segment| segment == "..")
-        || (candidate.starts_with("./") && candidate.contains("../"))
-}
-
-fn string_literals(text: &str) -> Vec<String> {

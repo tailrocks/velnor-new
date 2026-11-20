@@ -1,4 +1,0 @@
-        .current_dir(root)
-        .args([
-            "-c",
-            "core.hooksPath=/dev/null",

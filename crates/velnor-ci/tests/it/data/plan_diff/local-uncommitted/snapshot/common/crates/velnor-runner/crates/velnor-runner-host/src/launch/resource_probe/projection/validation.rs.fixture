@@ -1,4 +1,0 @@
-            .all(|part| !part.is_empty() && part != "." && part != "..")
-}
-
-pub(super) fn digest_reference(value: &str) -> bool {

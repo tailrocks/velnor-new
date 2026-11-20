@@ -1,8 +1,0 @@
-        command.arg("report").current_dir(repo.root())
-            .env("RUNNER_TEMP", repo.root()).env("GITHUB_JOB", "rust")
-            .env("GITHUB_REF", if outcome == "pr-success" { "refs/pull/1/merge" } else { "refs/heads/main" }).env("VELNOR_REPORT_DEFAULT_BRANCH", "main")
-            .env("GITHUB_REPOSITORY", "owner/repo").env("GITHUB_RUN_ID", "1")
-        .current_dir(repo.root())
-        .env("RUNNER_TEMP", repo.root())
-        .env("GITHUB_JOB", "rust")
-        .env("GITHUB_REF", "refs/heads/main")

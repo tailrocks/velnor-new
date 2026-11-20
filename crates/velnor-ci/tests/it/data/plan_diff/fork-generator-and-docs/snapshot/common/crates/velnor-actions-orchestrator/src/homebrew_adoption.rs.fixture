@@ -1,9 +1,0 @@
-#[path = "homebrew_adoption_diff.rs"]
-mod diff;
-
-use diff::{full_sha, read_transition_diff, safe_path};
-    let admitted = ProtectedHomebrewAdoptionTransition::from_protected_source(include_bytes!(
-        "../../../.velnor/qualification/homebrew/jackin/transition.json"
-    ))?;
-    let transition = admitted.transition();
-    if transition.tap_repository != tap_repository

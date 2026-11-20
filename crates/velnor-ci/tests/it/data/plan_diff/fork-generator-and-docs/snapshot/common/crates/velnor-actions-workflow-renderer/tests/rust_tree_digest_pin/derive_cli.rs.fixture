@@ -1,8 +1,0 @@
-            .current_dir(fx.toolchains())
-            .env("HOME", home.root())
-            .args(["--tree", name])
-            .output()
-        let home = rustup.parent().expect("fixture home");
-        for dir in [home, rustup.as_path(), toolchains.as_path()] {
-            std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o755))
-                .expect("open ancestor");

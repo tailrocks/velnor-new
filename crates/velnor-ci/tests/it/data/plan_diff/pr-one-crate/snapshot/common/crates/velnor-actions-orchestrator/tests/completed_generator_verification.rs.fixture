@@ -1,8 +1,0 @@
-            include_str!("completed_generator_verification/gh_transport.sh"),
-        )?;
-        let run = reconcile_script(root.path())?;
-        fs::write(root.path().join("reconcile.sh"), run)?;
-            .current_dir(root.join("checkout"))
-            .env_clear()
-            .env("PATH", std::env::var_os("PATH").ok_or("PATH missing")?)
-            .env("HOME", root)

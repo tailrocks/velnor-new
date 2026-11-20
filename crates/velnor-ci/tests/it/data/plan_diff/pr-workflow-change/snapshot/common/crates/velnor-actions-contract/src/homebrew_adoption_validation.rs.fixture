@@ -1,4 +1,0 @@
-            .all(|part| !part.is_empty() && part != "." && part != "..")
-}
-
-pub(super) fn strict_sorted_unique<T: Ord>(items: &[T]) -> bool {

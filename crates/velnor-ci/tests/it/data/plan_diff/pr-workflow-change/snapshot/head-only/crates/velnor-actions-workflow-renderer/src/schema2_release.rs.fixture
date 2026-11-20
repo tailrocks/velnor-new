@@ -1,5 +1,0 @@
-#[path = "schema2_release_artifact_helpers.rs"]
-mod artifact_helpers;
-use artifact_helpers::{
-    attest_permissions, attest_step, build_permissions, checkout_step, document,
-// head

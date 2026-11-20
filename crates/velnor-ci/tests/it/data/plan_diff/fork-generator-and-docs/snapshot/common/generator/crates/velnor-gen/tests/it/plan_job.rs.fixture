@@ -1,4 +1,0 @@
-    for roots in [&["Cargo.toml"][..], &["Cargo.toml", "lab/Cargo.toml"][..]] {
-        let text = workflow(&view(roots, None)?)?;
-        let cargo: Vec<&str> = text
-            .split("      - name: ")

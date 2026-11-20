@@ -1,4 +1,0 @@
-                    .current_dir(std::env::temp_dir())
-                    .env("CARGO_HOME", format!("{root}/child-home-{name}"))
-                    .status()
-                    .unwrap();

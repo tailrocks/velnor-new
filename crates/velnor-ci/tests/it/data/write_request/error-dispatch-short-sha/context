@@ -1,8 +1,0 @@
-repository=tailrocks/velnor-new
-sha=abc123
-ref=refs/heads/main
-ref_protected=true
-workflow_ref=tailrocks/velnor-new/.github/workflows/ci.yml@refs/heads/main
-workflow_sha=abc123
-run_id=44491127982
-run_attempt=1

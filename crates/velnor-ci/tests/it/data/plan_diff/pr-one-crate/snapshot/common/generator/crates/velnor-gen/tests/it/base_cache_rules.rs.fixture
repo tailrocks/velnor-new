@@ -1,5 +1,0 @@
-            "../out/app",
-            "../out/app",
-        ),
-    ] {
-        let mut view = rooted(manifest, &[])?;

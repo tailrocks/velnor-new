@@ -1,4 +1,0 @@
-        std::env::current_dir()?.join(path)
-    };
-    if absolute
-        .components()

@@ -1,4 +1,0 @@
-                .any(|segment| segment == "." || segment == "..")
-            || !root.bytes().all(|byte| {
-                byte.is_ascii_alphanumeric() || matches!(byte, b'/' | b'.' | b'-' | b'_')
-            });

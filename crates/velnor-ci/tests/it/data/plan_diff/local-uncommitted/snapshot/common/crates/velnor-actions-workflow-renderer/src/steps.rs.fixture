@@ -1,8 +1,0 @@
-pub const CACHE_BOOTSTRAP_SCRIPT: &str = include_str!("cache_bootstrap.py");
-
-pub const BOOTSTRAP_STEP_NAME: &str = "Restore pinned controller";
-pub const BOOTSTRAP_MISS_CODE: i32 = 10;
-    if part.is_empty() || part == "." || part == ".." {
-        return false;
-    }
-    part.bytes()

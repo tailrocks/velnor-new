@@ -1,8 +1,0 @@
-        .current_dir(directory)
-        .status()?;
-    assert!(status.success(), "git {args:?}");
-    Ok(())
-        .current_dir(&repo.0)
-        .env("PATH", "/usr/bin:/bin")
-        .output()?;
-    assert!(

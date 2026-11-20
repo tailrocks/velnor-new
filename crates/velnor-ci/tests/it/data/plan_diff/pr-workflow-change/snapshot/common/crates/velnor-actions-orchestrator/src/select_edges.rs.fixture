@@ -1,4 +1,0 @@
-    let range = format!("{base}...{head}");
-    let mut args = vec![
-        OsString::from("--name-only"),
-        OsString::from("--no-renames"),

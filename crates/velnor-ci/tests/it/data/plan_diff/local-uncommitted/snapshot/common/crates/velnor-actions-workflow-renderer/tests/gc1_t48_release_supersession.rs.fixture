@@ -1,4 +1,0 @@
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let script = r#"sleep() { n=$(cat "$FIXTURE/elapsed"); n=$((n + 1)); echo "$n" > "$FIXTURE/elapsed"; if (( n == 1 )); then SECONDS=$((SECONDS + 5)); else SECONDS=$((SECONDS + 21000)); fi; }
-gh() { case "$*" in
-  *git/ref/heads/main*) echo main >> "$FIXTURE/calls"; n=$(cat "$FIXTURE/count"); n=$((n + 1)); echo "$n" > "$FIXTURE/count"; case "$MODE" in error) return 1;; malformed) echo '{}'; return;; already) value="$OTHER_SHA";; advance) if (( n >= 2 )); then value="$OTHER_SHA"; else value="$GITHUB_SHA"; fi;; after) if (( n >= 3 )); then value="$OTHER_SHA"; else value="$GITHUB_SHA"; fi;; after_artifact) if (( n >= 4 )); then value="$OTHER_SHA"; else value="$GITHUB_SHA"; fi;; *) value="$GITHUB_SHA";; esac; printf '{"ref":"refs/heads/main","object":{"type":"commit","sha":"%s"}}\n' "$value";;

@@ -1,9 +1,0 @@
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/it/tokens.json");
-    let text = std::fs::read_to_string(path).unwrap_or_else(|e| unreachable!("{e}"));
-    serde_json::from_str(&text).unwrap_or_else(|e| unreachable!("{e}"))
-}
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../testdata/cache-client")
-        .join(format!("{name}.json"));
-    let text = std::fs::read_to_string(path).unwrap_or_else(|e| unreachable!("{e}"));
-    serde_json::from_str(&text).unwrap_or_else(|e| unreachable!("{e}"))

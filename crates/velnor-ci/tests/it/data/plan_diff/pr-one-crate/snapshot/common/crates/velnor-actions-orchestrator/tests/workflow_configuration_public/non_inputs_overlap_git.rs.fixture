@@ -1,4 +1,0 @@
-    std::os::unix::fs::symlink("../README.md", root.join("links/readme"))?;
-    commit(root, "claims")?;
-    let base = base_config()?;
-    let write = |glob: &str| -> TestResult {

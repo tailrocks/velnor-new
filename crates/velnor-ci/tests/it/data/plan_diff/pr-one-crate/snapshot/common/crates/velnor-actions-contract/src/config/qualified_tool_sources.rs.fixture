@@ -1,8 +1,0 @@
-            .all(|part| safe_name(part) && *part != "." && *part != "..")
-}
-
-fn url_parts(url: &str) -> Option<(&str, &str)> {
-                && segment != ".."
-                && segment.bytes().all(|byte| {
-                    byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'-' | b'_' | b'+')
-                })

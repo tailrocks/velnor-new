@@ -1,4 +1,0 @@
-        && !value.contains("..")
-        && !value.bytes().any(|byte| byte.is_ascii_control())
-        && !value.contains(' ')
-}

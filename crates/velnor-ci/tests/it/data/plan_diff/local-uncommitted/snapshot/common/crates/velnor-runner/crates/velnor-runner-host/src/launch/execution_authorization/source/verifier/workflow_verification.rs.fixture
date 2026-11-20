@@ -1,4 +1,0 @@
-            .any(|part| part.is_empty() || matches!(part, "." | ".."))
-    {
-        Ok(path.to_owned())
-    } else {

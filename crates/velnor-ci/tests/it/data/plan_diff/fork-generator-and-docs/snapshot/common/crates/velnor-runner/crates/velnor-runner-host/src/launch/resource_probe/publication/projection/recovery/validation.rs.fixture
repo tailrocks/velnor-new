@@ -1,8 +1,0 @@
-                    .all(|part| !part.is_empty() && part != "." && part != "..")))
-}
-
-pub(super) fn valid_mountpoint(value: &str) -> bool {
-            .all(|part| !part.is_empty() && part != "." && part != "..")
-}
-
-pub(super) fn valid_boot_id(value: &str) -> bool {

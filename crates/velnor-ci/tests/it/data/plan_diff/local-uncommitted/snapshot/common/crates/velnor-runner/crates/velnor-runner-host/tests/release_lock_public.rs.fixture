@@ -1,8 +1,0 @@
-        .arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("build.rs"))
-        .arg("-o")
-        .arg(&output)
-        .status()?;
-        .env("CARGO_MANIFEST_DIR", env!("CARGO_MANIFEST_DIR"));
-    if local_mode {
-        command.env("CARGO_FEATURE_LOCAL_MODE", "1");
-    }

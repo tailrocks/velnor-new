@@ -1,4 +1,0 @@
-        .current_dir(repo.root())
-        .env("GITHUB_OUTPUT", &outputs);
-    if let Some(days) = days {
-        command.env("VELNOR_BASE_MAX_AGE_DAYS", days);

@@ -1,8 +1,0 @@
-        if component.is_empty() || component == "." || component == ".." {
-            return false;
-        }
-        let bytes = component.as_bytes();
-                || *part == ".."
-                || part.contains('\\')
-                || part.contains(':')
-                || part.chars().any(char::is_control)

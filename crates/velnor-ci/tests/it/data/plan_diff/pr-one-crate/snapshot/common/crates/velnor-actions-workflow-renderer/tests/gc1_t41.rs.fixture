@@ -1,8 +1,0 @@
-#[path = "controller_locator_public.rs"]
-mod controller_locator_public;
-
-fn fail(message: &str) -> Box<dyn Error> {
-    toml::from_str(include_str!("../../../.velnor/config.toml"))
-        .map_err(|error| fail(&format!("repository config rejected:{error}")))
-}
-

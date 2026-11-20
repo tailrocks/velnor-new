@@ -1,8 +1,0 @@
-        concat!(
-            "{{\"status\":200,\"headers\":{{\"docker-content-digest\":\"{digest}\",",
-            "\"content-length\":\"19\"}},\"digest\":\"{digest}\",\"size\":19}}"
-        ),
-        concat!("{{\"status\":404,\"headers\":{{}},\"digest\":\"{digest}\",\"size\":19}}"),
-        digest = digest,
-    );
-    let output = expect_ok(fixture, "head", &envelope, "head-404", "HEAD-OK")?;

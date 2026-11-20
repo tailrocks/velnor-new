@@ -1,4 +1,0 @@
-        && name != ".."
-        && !name
-            .bytes()
-            .any(|byte| byte == b'/' || byte == b'\\' || byte.is_ascii_control())

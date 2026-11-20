@@ -1,8 +1,0 @@
-        include_str!("../../../../mise.toml"),
-    )?;
-    fs::write(
-        root.join("mise.lock"),
-        include_str!("../../../../mise.lock"),
-    )?;
-    let prepared = prepare(root)?;
-    Ok((finalized_jobs(&prepared)?, prepared.emission_catalog()))

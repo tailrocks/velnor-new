@@ -1,8 +1,0 @@
-        .parent()
-        .ok_or_else(|| OrchestratorError::io(path.display().to_string(), "no_parent"))?;
-    let io =
-        |err: std::io::Error| OrchestratorError::io(path.display().to_string(), err.to_string());
-        if route.is_empty() || route.starts_with('/') || route.contains("..") {
-            return Err(internal("deps_lock_route_invalid"));
-        }
-        let args = vec![

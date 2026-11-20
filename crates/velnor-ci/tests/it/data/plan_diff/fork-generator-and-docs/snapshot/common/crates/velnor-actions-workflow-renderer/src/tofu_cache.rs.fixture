@@ -1,4 +1,0 @@
-    if path.contains("..") || crate::cache_steps::is_never_archive_path(path) {
-        return false;
-    }
-    let Some(slug) = path.strip_prefix(&format!("{TOFU_PROVIDER_CACHE_BASE_EXPR}/")) else {

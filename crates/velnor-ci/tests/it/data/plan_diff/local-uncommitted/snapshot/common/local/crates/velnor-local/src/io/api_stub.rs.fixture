@@ -1,9 +1,0 @@
-        let requested = format!("{base}...{head}");
-        let (Some(base), Some(head)) = (self.git.resolve(base).await, self.git.resolve(head).await)
-        else {
-            return Reply::missing();
-        let range = format!("{base}..{head}");
-        let behind = format!("{head}..{base}");
-        let (Some(ahead), Some(behind)) =
-            (self.git.count(&range).await, self.git.count(&behind).await)
-        else {

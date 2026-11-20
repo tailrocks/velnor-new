@@ -1,9 +1,0 @@
-        "../evil/Cargo.toml",
-        "crates/demo/README.md",
-    ] {
-        let package = fixture_package(manifest);
-        group.clone().with_declared_inputs(&["a/../b".to_owned()]),
-        "parent input",
-    );
-    Ok(())
-}

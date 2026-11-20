@@ -1,4 +1,0 @@
-    command.current_dir(repo).args(args);
-    if let Some(path) = final_arg {
-        command.arg(path);
-    }

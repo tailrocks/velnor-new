@@ -1,4 +1,0 @@
-        (root.join("shared/../shared"), "not a normal path"),
-    ];
-    if !root_user {
-        cases.push((root.join("ro"), "not writable"));

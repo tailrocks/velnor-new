@@ -1,7 +1,0 @@
-const TRUSTED_ROOT: &[u8] = include_bytes!("sigstore-trusted-root.json");
-const TRUSTED_ROOT_SHA256: &str =
-    "6494e21ea73fa7ee769f85f57d5a3e6a08725eae1e38c755fc3517c9e6bc0b66";
-
-#[path = "mac_proof_tests.rs"]
-mod tests;
-

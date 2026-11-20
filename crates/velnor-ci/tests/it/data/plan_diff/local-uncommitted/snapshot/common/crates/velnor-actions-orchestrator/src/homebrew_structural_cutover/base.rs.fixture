@@ -1,4 +1,0 @@
-        include_bytes!("../../../../.velnor/qualification/homebrew/jackin/transition.json"),
-    )
-}
-

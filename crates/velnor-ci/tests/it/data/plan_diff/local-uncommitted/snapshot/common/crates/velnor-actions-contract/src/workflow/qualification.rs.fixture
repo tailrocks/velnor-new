@@ -1,8 +1,0 @@
-    if runner_temp.contains("..") {
-        return Err(ContractError::identity("runner_temp", "parent_traversal"));
-    }
-    if relpath.is_empty() || relpath.starts_with('/') || relpath.contains('\\') {
-    if relpath.split('/').any(|seg| seg.is_empty() || seg == "..") {
-        return Err(ContractError::identity("relpath", "parent_traversal"));
-    }
-    Ok(format!("{}/{}", runner_temp.trim_end_matches('/'), relpath))

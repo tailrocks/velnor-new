@@ -1,4 +1,0 @@
-const SOURCE: &str = include_str!("../src/dispatch/cache.rs");
-
-#[test]
-fn cache_rs_has_no_explanatory_comments() {

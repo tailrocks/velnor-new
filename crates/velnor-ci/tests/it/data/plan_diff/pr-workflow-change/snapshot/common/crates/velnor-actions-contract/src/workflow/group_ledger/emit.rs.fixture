@@ -1,8 +1,0 @@
-    let checkout = env::current_dir().map_err(|err| HelperError::io(".", err.to_string()))?;
-    let manifest_path = checkout.join(crate::TASK_EXECUTION_MANIFEST_PATH);
-    emit_group_ledger_to(&runner_temp, &manifest_path, &run_dir, &run_key, &emit)
-}
-#[path = "emit_selection.rs"]
-mod selection;
-
-fn parse_manifest_document(text: &str) -> Result<TaskExecutionManifestV1, HelperError> {

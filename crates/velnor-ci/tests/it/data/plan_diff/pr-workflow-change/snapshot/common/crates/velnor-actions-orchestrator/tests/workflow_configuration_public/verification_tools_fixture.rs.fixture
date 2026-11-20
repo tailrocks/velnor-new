@@ -1,4 +1,0 @@
-pub(super) const LOCK: &str = include_str!("verification_tools.lock");
-pub(super) const KINGFISHER: &str = "github:mongodb/kingfisher";
-pub(super) const REGEX: &str =
-    r"^kingfisher-(darwin|linux)-(arm64|x64)\.tgz$|^kingfisher-windows-x64\.zip$";

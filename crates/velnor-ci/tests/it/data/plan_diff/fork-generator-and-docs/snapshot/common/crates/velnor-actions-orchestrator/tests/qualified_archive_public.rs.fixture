@@ -1,8 +1,0 @@
-            include_bytes!("fixtures/duplicate_zip/tool-single.zip").as_slice(),
-            "9c8c806d9bcc0d95c7763d5f02c24126c08353178b6c8de0f8e5d62537718815",
-            146,
-        ),
-            include_bytes!("fixtures/duplicate_zip/tool-duplicate.zip").as_slice(),
-            "e84533ea32bcd7d4f1bd7513e062f49f7c1c60d3e0c30c32c3dcfea359dcf5ec",
-            270,
-        ),

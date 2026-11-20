@@ -1,4 +1,0 @@
-            .all(|part| safe_name(part) && part != "." && part != "..")
-}
-
-pub(super) fn exact_version(value: &str) -> bool {

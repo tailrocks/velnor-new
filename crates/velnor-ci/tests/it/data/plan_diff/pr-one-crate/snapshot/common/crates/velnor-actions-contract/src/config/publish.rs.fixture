@@ -1,4 +1,0 @@
-        .all(|seg| !seg.is_empty() && seg != "." && seg != ".." && seg != ".git");
-    if path.is_empty() || path.len() > 240 || !path.bytes().all(plain) || !segments_ok {
-        return Err(ContractError::config(
-            file,

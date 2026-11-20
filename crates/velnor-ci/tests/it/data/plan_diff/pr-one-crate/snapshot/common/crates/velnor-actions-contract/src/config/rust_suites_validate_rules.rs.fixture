@@ -1,4 +1,0 @@
-            .all(|seg| !seg.is_empty() && seg != "." && seg != ".." && seg != "~")
-}
-
-pub(super) fn is_valid_workflow_slug(slug: &str) -> bool {

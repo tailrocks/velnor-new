@@ -1,4 +1,0 @@
-        .current_dir(&root)
-        .kill_on_drop(true)
-        .stdin(Stdio::null())
-        .stdout(Stdio::from(std::io::stderr()))

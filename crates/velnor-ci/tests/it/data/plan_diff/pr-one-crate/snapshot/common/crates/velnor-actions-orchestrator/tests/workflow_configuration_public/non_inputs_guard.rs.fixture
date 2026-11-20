@@ -1,7 +1,0 @@
-    let parent = outside.path().parent().ok_or("tempdir has no parent")?;
-    let not_a_repository = guard_command(glob, runner_temp.path())?
-        .current_dir(outside.path())
-        .env("GIT_CEILING_DIRECTORIES", parent)
-        .output()?;
-    assert_loud_failure("not a repository", &not_a_repository);
-

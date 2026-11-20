@@ -1,8 +1,0 @@
-    if bytes.windows(2).any(|pair| pair == b".." || pair == b"@{") {
-        return false;
-    }
-    if bytes.iter().any(|byte| {
-            && !matches!(part, "." | "..")
-            && part
-                .bytes()
-                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))

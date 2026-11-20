@@ -1,4 +1,0 @@
-        include_str!("../../../../../generator/samples/helper-lock/view/.velnor/rust-ci.lock"),
-    );
-    let output = plan_command(&repo)
-        .args(["plan", "--explain", "--changed", ".velnor/rust-ci.lock"])

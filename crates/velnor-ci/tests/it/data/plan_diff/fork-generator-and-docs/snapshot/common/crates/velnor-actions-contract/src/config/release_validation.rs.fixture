@@ -1,8 +1,0 @@
-    if path.starts_with('/') || path.split('/').any(|seg| seg.is_empty() || seg == "..") {
-        return Err(ContractError::config(file, key, "non_relative_manifest"));
-    }
-    if path != "Cargo.toml" && !path.ends_with("/Cargo.toml") {
-        || name.split('/').any(|seg| seg.is_empty() || seg == "..")
-    {
-        return Err(ContractError::config(
-            file,

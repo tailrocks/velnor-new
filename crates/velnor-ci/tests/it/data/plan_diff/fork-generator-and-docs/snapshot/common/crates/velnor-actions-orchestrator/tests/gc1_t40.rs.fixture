@@ -1,8 +1,0 @@
-#[path = "../src/compiler_observation.rs"]
-mod compiler_observation;
-
-use std::collections::BTreeMap;
-        &producer("build-preview", "../evil.toml", "."),
-        &[],
-        deadline,
-    )

@@ -1,4 +1,0 @@
-        || !root.is_empty() && root.split('/').any(|part| matches!(part, "" | "." | ".."))
-    {
-        return Err(invalid("native_workspace_root"));
-    }

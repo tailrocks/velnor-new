@@ -1,4 +1,0 @@
-        safe.push_str("...");
-    }
-    safe
-}

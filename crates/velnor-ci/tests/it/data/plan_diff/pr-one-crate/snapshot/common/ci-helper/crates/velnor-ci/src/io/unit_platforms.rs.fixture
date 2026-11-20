@@ -1,8 +1,0 @@
-                .current_dir(root)
-                .output()
-                .ok()
-                .filter(|output| output.status.success())
-            .current_dir(root)
-            .output()
-            .map_err(|e| CiError::new(format!("cannot run rustc: {e}")))?;
-        if !output.status.success() {

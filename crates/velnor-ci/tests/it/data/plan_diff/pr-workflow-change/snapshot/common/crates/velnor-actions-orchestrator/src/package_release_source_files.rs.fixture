@@ -1,8 +1,0 @@
-                    .any(|part| part.is_empty() || matches!(part, "." | ".."))
-                || !valid_sha(&entry.sha)
-            {
-                return Err(internal("release_source_tree_entry"));
-                    || matches!(*part, "." | "..")
-                    || part.len() > 255
-                    || part.contains('\\')
-            })

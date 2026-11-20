@@ -1,4 +1,0 @@
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/homebrew_qualification_acquire.test.ts");
-    let execution = PinnedToolExec::new(
-        vec![PinnedTool::Bun],
-        OsStr::new("bun"),

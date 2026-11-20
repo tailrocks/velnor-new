@@ -1,9 +1,0 @@
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../fixtures/bun-workspace-suites/input");
-    let config = fs::read_to_string(fixture.join(".velnor/config.toml"))?;
-    let repo = workflow_configuration_fixture::make_repo(&config)?;
-    fs::remove_file(repo.path().join("Cargo.toml"))?;
-    let parent = destination.parent().ok_or("fixture file has no parent")?;
-    fs::create_dir_all(parent)?;
-    fs::copy(source, destination)?;
-    Ok(())
-}

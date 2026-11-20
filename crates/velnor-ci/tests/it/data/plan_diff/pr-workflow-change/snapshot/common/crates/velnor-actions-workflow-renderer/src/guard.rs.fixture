@@ -1,8 +1,0 @@
-        if segment.is_empty() || segment == "." || segment == ".." {
-            return Err(RenderError::UnsafePath(format!("bad_segment:{path}")));
-        }
-    }
-                && !rest.split('/').any(|seg| seg.is_empty() || seg == "..")
-                && !rest.chars().any(|ch| ch.is_whitespace() || ch.is_control()) =>
-        {
-            Ok(())

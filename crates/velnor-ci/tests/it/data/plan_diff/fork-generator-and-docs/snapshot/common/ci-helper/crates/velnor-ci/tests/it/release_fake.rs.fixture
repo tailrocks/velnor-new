@@ -1,4 +1,0 @@
-pub(crate) const RELEASE: &str = include_str!("data/release.json");
-pub(crate) const REPO: &str = "tailrocks/velnor-new";
-pub(crate) const TAG: &str = "velnor-ci-v0.1.80";
-pub(crate) const APP: &str = "velnor-release";

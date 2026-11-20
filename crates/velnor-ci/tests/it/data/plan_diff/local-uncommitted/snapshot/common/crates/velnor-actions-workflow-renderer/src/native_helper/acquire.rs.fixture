@@ -1,4 +1,0 @@
-        && !value.contains("..")
-        && !value.contains("//")
-        && value
-            .bytes()

@@ -1,4 +1,0 @@
-        || path.contains("..")
-        || path.bytes().any(|byte| byte.is_ascii_control())
-    {
-        return Err(ProbeError::Invalid("job_hook_workflow_path"));

@@ -1,4 +1,0 @@
-        || lane == ".."
-        || lane.contains('/')
-        || lane.contains('\\')
-        || lane.contains('\0')

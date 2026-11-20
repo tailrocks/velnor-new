@@ -1,4 +1,0 @@
-const TABLE: &str = concat!(
-    "CREATE TABLE image_import_registry (",
-    "id INTEGER PRIMARY KEY AUTOINCREMENT, ",
-    "engine_id TEXT NOT NULL CHECK (length(engine_id) BETWEEN 1 AND 128), ",

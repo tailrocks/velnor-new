@@ -1,4 +1,0 @@
-                    .any(|part| part.is_empty() || part == "." || part == "..")
-                || rest.contains('\\')
-            {
-                return Err(bad("allow_path_not_normalized"));

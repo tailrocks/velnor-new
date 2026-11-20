@@ -1,8 +1,0 @@
-        cpu_ancestor_limits: cpu_hierarchy.ancestors,
-        probe_host_pid: pid_pair.host_pid,
-        probe_namespace_pid: pid_pair.namespace_pid,
-        probe_cgroup_pids_max: cgroup.pids_max,
-        || path.split('/').any(|part| part == "..")
-        || path.contains("//")
-    {
-        return Err(ProbeError::Invalid("proc_cgroup_path"));

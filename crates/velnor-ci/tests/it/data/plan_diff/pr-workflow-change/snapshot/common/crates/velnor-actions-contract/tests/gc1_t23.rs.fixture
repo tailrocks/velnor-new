@@ -1,4 +1,0 @@
-    if validate_stack_family_plan(CacheFamily::DbtPackages, Some("../escape")).is_ok() {
-        return Err(fail("escaping locator validated"));
-    }
-    Ok(())

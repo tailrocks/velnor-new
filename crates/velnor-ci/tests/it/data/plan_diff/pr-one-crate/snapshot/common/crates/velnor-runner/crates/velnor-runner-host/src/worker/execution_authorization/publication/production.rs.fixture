@@ -1,8 +1,0 @@
-        || volume.mountpoint.split('/').any(|part| part == "..")
-    {
-        return Err(HostError::Ownership);
-    }
-#[path = "production/helpers.rs"]
-mod helpers;
-use helpers::{append_mount_root, lower_hex, valid_mount_root, valid_operation_id, within};
-

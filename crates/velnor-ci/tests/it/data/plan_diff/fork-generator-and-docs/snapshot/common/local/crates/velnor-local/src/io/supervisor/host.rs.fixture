@@ -1,4 +1,0 @@
-    for root in exe.ancestors().skip(1) {
-        let candidate = root.join(HOST_BINARY);
-        let meta = match fs::symlink_metadata(&candidate).await {
-            Ok(meta) => meta,

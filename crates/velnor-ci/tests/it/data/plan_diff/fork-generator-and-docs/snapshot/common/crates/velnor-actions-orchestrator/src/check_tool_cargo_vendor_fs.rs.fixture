@@ -1,4 +1,0 @@
-    for ancestor in path.ancestors() {
-        let cargo = ancestor.join(".cargo");
-        match fs::symlink_metadata(&cargo) {
-            Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_dir() => {

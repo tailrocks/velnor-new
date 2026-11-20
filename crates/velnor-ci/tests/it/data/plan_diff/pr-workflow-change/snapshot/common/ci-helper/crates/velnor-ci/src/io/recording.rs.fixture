@@ -1,8 +1,0 @@
-        root: super::current_dir()?.to_string_lossy().into_owned(),
-        configuration: format!(
-            "{} {:?}",
-            configuration(argv),
-        .map(|path| super::current_dir().map(|cwd| cwd.join(path).to_string_lossy().into_owned()))
-        .transpose()
-}
-

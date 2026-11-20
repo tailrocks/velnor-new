@@ -1,4 +1,0 @@
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    WORKFLOWS
-        .iter()
-        .map(|path| {

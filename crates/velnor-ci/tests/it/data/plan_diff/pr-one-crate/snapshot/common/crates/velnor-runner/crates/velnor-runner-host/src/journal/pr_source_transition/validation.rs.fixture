@@ -1,8 +1,0 @@
-        && value != ".."
-}
-
-pub(super) fn valid_ref(value: &str) -> bool {
-        && !value.contains("..")
-        && !value.contains("//")
-        && !value.contains("@{")
-        && value != "@"

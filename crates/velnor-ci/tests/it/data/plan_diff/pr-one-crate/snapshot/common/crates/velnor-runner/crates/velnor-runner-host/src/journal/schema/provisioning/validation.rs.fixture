@@ -1,4 +1,0 @@
-include!("validation/queries.rs");
-
-async fn validate_rows(connection: &turso::Connection) -> Result<(), HostError> {
-    for queries in [

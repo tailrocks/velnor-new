@@ -1,4 +1,0 @@
-        && !branch.contains("..")
-        && !branch.contains("@{")
-        && branch
-            .bytes()

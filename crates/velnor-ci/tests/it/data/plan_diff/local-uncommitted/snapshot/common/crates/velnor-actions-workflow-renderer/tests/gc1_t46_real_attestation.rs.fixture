@@ -1,8 +1,0 @@
-            include_bytes!("fixtures/image-attestation/verified-push.json").as_slice(),
-            "a3417b150ac2f477498cadc329cdf4e23aa5b54b",
-            "push",
-            42_149_229_551_u64,
-            include_bytes!("fixtures/image-attestation/verified-dispatch.json").as_slice(),
-            "a3df794ac7906b0ebbe9fd5013fa48b5525cf6fb",
-            "workflow_dispatch",
-            39_245_035_087_u64,

@@ -1,4 +1,0 @@
-        && path.split('/').all(|part| !part.is_empty() && part != "..")
-        && path
-            .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'/' | b'.' | b'_' | b'-'))

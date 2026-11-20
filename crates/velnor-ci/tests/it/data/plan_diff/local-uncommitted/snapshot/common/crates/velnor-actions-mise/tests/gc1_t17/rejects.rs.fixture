@@ -1,4 +1,0 @@
-    "../escape".clone_into(&mut invocation.lane_id);
-    if invocation.validate().is_ok() {
-        return Err(fail("escaping lane admitted"));
-    }

@@ -1,4 +1,0 @@
-            .all(|part| !part.is_empty() && part != "." && part != "..")
-        && std::path::Path::new(value).extension() == Some(OsStr::new("rb"))
-}
-

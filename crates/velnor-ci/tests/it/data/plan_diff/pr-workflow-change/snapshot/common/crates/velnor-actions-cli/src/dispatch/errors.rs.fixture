@@ -1,4 +1,0 @@
-    match env::current_dir() {
-        Ok(dir) => Some(dir),
-        Err(error) => {
-            eprintln!("velnor-actions: working directory: {error}");

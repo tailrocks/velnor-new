@@ -1,8 +1,0 @@
-        .ancestors()
-        .flat_map(|dir| {
-            let cargo = CARGO_CONFIG_FILES
-                .map(|name| dir.join(".cargo").join(name))
-    if path.starts_with('/') || path.split('/').any(|segment| segment == "..") {
-        return Some("outside_project_path:selecting_all");
-    }
-    if path == ".velnor" || path.starts_with(".velnor/") || path.starts_with(".github/") {

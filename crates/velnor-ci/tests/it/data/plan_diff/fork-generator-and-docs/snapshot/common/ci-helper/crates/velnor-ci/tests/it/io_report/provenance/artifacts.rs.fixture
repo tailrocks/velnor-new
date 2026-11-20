@@ -1,8 +1,0 @@
-            archive.parent().ok_or("archive parent")?.display(),
-            archive.display()
-        )
-    } else {
-        .current_dir(repo.root())
-        .env("RUNNER_TEMP", repo.root())
-        .env("CARGO_HOME", cargo_home)
-        .output()?;

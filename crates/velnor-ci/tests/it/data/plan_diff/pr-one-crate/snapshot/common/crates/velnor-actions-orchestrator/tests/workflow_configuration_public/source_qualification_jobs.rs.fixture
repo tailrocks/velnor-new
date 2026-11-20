@@ -1,5 +1,0 @@
-        Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../scripts/generator-release/source-qualification.sh"),
-    )?;
-    let mut phases = Vec::new();
-    for line in script.lines() {

@@ -1,4 +1,0 @@
-        if segment == ".." {
-            return Err(RootProblem::DotDot);
-        }
-    }

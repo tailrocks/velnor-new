@@ -1,4 +1,0 @@
-            .any(|part| part.is_empty() || *part == "." || *part == "..")
-    {
-        return Err(ProbeError::Invalid("docker_root_path"));
-    }

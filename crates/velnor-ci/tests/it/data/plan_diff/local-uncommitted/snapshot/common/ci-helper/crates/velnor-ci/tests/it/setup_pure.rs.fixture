@@ -1,4 +1,0 @@
-    let both = [("1.22", &["macos"][..]), ("1.23", &["linux"][..])];
-    let linux =
-        parse_reported(&reported(&[("1.23.4", true)])).unwrap_or_else(|e| unreachable!("{e}"));
-    let mac =

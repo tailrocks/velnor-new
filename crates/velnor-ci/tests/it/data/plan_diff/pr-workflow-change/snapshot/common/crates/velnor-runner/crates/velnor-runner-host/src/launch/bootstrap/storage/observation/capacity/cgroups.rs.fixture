@@ -1,8 +1,0 @@
-    validate_shared_ancestors(
-        &owned_runner.hierarchy,
-        &owned_dind.hierarchy,
-        &runner_cgroup,
-fn validate_shared_ancestors(
-    runner_nodes: &[CgroupNodeObservation],
-    dind_nodes: &[CgroupNodeObservation],
-    runner_cgroup: &ObservedContainerCgroup,

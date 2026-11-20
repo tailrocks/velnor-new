@@ -1,4 +1,0 @@
-        transport_root: format!("{SHARED_OWNED_ROOT}/../escape"),
-        ..SharedRunnerHomes::github()
-    };
-    if bad.validate().is_ok() {

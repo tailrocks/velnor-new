@@ -1,4 +1,0 @@
-                    && !matches!(segment, "." | "..")
-                    && !segment.eq_ignore_ascii_case("latest")
-                    && segment.bytes().all(|byte| {
-                        byte.is_ascii_alphanumeric()

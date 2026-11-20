@@ -1,4 +1,0 @@
-        .current_dir(cwd)
-        .output()?;
-    if !output.status.success() {
-        return Err(format!(

@@ -1,8 +1,0 @@
-    assert_discarded(".mise-bins/x", "{dir}/../../../evil")
-}
-
-#[test]
-    assert_discarded(".mise-bins/x", "../../evil")
-}
-
-#[test]

@@ -1,8 +1,0 @@
-        fs::create_dir_all(archive.parent().ok_or("missing archive parent")?)?;
-        fs::write(&archive, "old")?;
-    } else if initial == "file" {
-        fs::create_dir_all(cargo_home.join("registry"))?;
-        .current_dir(&temp)
-        .env("RUNNER_TEMP", &temp)
-        .env("ARCHIVE", &archive)
-        .env("CACHE", &cache)

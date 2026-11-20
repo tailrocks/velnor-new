@@ -1,4 +1,0 @@
-    !matches!(value, "." | "..")
-        && !value.is_empty()
-        && value
-            .bytes()

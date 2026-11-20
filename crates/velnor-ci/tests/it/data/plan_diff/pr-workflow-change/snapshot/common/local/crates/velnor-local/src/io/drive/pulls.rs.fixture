@@ -1,4 +1,0 @@
-        let range = format!("{}...{}", pull.base_sha, pull.head_sha);
-        let changed = self.git(&["diff", "--name-only", &range]).await?;
-        let refs = format!("refs/pull/{}", pull.number);
-        let (git_ref, sha) = if pull.merged {

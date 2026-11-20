@@ -1,8 +1,0 @@
-        if path.contains("..") || is_never_archive_path(path) {
-            return Err(reject(path));
-        }
-        if !path.starts_with(&format!("{cargo_home}/")) {
-            || self.object_id.contains("..")
-        {
-            return Err(reject_object("object_id", &self.object_id));
-        }

@@ -1,4 +1,0 @@
-            if segment.contains(['/', '\\']) || segment == ".." || segment == "." {
-                return dynamic("invalid_project_segment");
-            }
-            prefix.push(':');

@@ -1,8 +1,0 @@
-#[path = "cache_recipes.rs"]
-pub(crate) mod cache_recipes;
-use crate::mbx_preflight::steps_for_catalog;
-use crate::pins::resolve_mise_setup_for_release_target;
-        crate::config::load_config_from_text(include_str!("../../../.velnor/config.toml"))?;
-    resolve(&config, &ToolCatalog::pinned())
-}
-

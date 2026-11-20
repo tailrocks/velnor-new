@@ -1,7 +1,0 @@
-        include_str!("schema2_generator_source_preview_artifact.py"),
-        include_str!("schema2_generator_source_preview_tag.py"),
-        include_str!("schema2_generator_source_preview_authority.py"),
-        include_str!("schema2_generator_source_preview_source.py")
-    );
-    let run = format!(
-        "set -eu\nenv -i PATH=/usr/bin:/bin GH_TOKEN=\"$GH_TOKEN\" GITHUB_SHA=\"$GITHUB_SHA\" GITHUB_REPOSITORY=\"$GITHUB_REPOSITORY\" GITHUB_EVENT_NAME=\"$GITHUB_EVENT_NAME\" GITHUB_REF=\"$GITHUB_REF\" GITHUB_WORKFLOW_REF=\"$GITHUB_WORKFLOW_REF\" GITHUB_WORKFLOW_SHA=\"$GITHUB_WORKFLOW_SHA\" GITHUB_ACTOR_ID=\"$GITHUB_ACTOR_ID\" GITHUB_TRIGGERING_ACTOR=\"$GITHUB_TRIGGERING_ACTOR\" GITHUB_RUN_ID=\"$GITHUB_RUN_ID\" GITHUB_RUN_ATTEMPT=\"$GITHUB_RUN_ATTEMPT\" RUNNER_TEMP=\"$RUNNER_TEMP\" GITHUB_OUTPUT=\"$GITHUB_OUTPUT\" AUTHORITY_REPOSITORY=\"$AUTHORITY_REPOSITORY\" AUTHORITY_PATH=\"$AUTHORITY_PATH\" AUTHORITY_REF=\"$AUTHORITY_REF\" AUTHORITY_SHA=\"$AUTHORITY_SHA\" /usr/bin/python3 -I -S - <<'PY'\n{script}\nPY",

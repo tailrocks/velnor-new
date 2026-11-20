@@ -1,4 +1,0 @@
-            .any(|part| part.is_empty() || part == ".." || part == ".")
-        || name.contains('\\')
-        || name.as_bytes().contains(&0)
-    {

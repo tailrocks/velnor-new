@@ -1,4 +1,0 @@
-            .any(|part| part.is_empty() || part == "." || part == "..")
-}
-
-fn is_fixed_file(path: &str) -> bool {

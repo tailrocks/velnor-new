@@ -1,4 +1,0 @@
-        format!("{home}/../escape"),
-        "foreign-home/registry/index".to_owned(),
-    ] {
-        if validate_sources_subset(std::slice::from_ref(&bad), home).is_ok() {

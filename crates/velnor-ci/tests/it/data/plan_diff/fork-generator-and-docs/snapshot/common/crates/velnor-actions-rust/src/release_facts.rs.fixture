@@ -1,4 +1,0 @@
-        if segment.is_empty() || segment == ".." {
-            return false;
-        }
-        last = segment;

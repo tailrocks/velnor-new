@@ -1,4 +1,0 @@
-const ARCHIVE: &[u8] = include_bytes!("fixtures/buildkit-attested-probe.oci.tar");
-
-type TestResult<T> = Result<T, Box<dyn std::error::Error>>;
-
