@@ -55,6 +55,7 @@ packages = ["velnor-runner-host"]
 filter = "package(velnor-runner-host) and (test(~local::) or binary(local_host_public) or binary(local_pair_public))"
 lint = true
 doc = true
+job = "parallel"
 
 # Workflow and repository-policy lint. Each entry is a generated job that the
 # Required check waits for. Tool versions come from mise.toml and mise.lock.
