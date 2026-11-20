@@ -25,14 +25,18 @@ impl Freshness {
         workspaces: &[Workspace],
         groups: &[PathBuf],
         max_directory_entries: usize,
-    ) -> Self {
-        let mut targets = inventory::exclusions(workspaces);
-        targets.extend(groups.iter().map(|dir| velnor_rust::resolve(dir)));
-        Self {
+    ) -> Result<Self, CiError> {
+        let mut targets = inventory::exclusions(workspaces)?;
+        for dir in groups {
+            let resolved =
+                velnor_rust::resolve(dir).map_err(|error| inventory::unresolved(dir, &error))?;
+            targets.insert(resolved);
+        }
+        Ok(Self {
             targets,
             directories: BTreeMap::new(),
             remaining: max_directory_entries,
-        }
+        })
     }
 
     fn changed(

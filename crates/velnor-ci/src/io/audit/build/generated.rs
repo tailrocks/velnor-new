@@ -13,7 +13,7 @@ use super::{identity, output};
 use crate::error::CiError;
 
 pub(super) fn proven(workspaces: &[Workspace]) -> Result<BTreeSet<PathBuf>, CiError> {
-    let base = inventory::exclusions(workspaces);
+    let base = inventory::exclusions(workspaces)?;
     let mut found = BTreeSet::new();
     for target in scan_dirs(workspaces) {
         for (unit, path) in unit_files(&target)? {
