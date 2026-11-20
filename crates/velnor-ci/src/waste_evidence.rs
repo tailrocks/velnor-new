@@ -26,14 +26,25 @@ pub struct MbxEvidence {
     pub declared: bool,
     /// `MBX_CACHE_DIR` named a store that held an entry older than the first cargo invocation.
     pub store_primed: bool,
+    /// The job's private store was seeded only up to the startup budget, so most lookups cannot
+    /// hit and the seed step already warned. That is a cold start, not a session that wasted a
+    /// complete store.
+    #[serde(default)]
+    pub seed_truncated: bool,
     pub sessions: Vec<MbxSession>,
 }
 
 impl MbxEvidence {
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        !self.declared && !self.store_primed && self.sessions.is_empty()
+        !self.declared && !self.store_primed && !self.seed_truncated && self.sessions.is_empty()
     }
+}
+
+/// The seed step stopped copying at its startup budget (`mbx-seed` warns with this text).
+#[must_use]
+pub fn mbx_seed_truncated(log: &[u8]) -> bool {
+    String::from_utf8_lossy(log).contains("MBX seeding stopped at the startup budget")
 }
 
 /// The `mbx[cache]: object cache: H hits, M misses[, N not looked up][, B bypassed]; ...` lines.
@@ -98,6 +109,7 @@ pub fn waste(metrics: &LaneMetrics) -> Vec<String> {
         .map(|session| session.misses + session.not_looked_up)
         .sum();
     if metrics.mbx.store_primed
+        && !metrics.mbx.seed_truncated
         && sessions.iter().all(|session| session.hits == 0)
         && lookups > 0
         && compiled_registry_unit(metrics)
