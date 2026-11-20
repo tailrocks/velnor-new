@@ -145,7 +145,10 @@ fn a_later_mirror_on_setup_supersedes_an_earlier_mirror_off_marker() -> TestResu
     assert!(on.status.success(), "{on:?}");
     assert!(read_marker(repo.root())?.contains("mirror=on"));
     let env = fs::read_to_string(repo.root().join("env"))?;
-    assert!(env.lines().any(|line| line == "VELNOR_CRATES_MIRROR="), "{env}");
+    assert!(
+        env.lines().any(|line| line == "VELNOR_CRATES_MIRROR="),
+        "{env}"
+    );
     Ok(())
 }
 
