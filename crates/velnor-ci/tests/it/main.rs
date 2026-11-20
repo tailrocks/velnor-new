@@ -60,6 +60,7 @@ mod io_foreign_targets;
 mod io_inputs_batch;
 mod io_inputs_scope;
 mod io_inputs_spec;
+mod io_nested_targets;
 mod io_plan;
 mod io_plan_docs;
 mod io_plan_forged;

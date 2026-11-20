@@ -50,6 +50,7 @@ pub use crate::sha256::sha256_hex;
 pub use crate::shape::{SECOND_JOB_COST_SECONDS, SHARD_THRESHOLD_SECONDS, decide_shape};
 pub use crate::sparse::bytes_outside_lanes;
 pub use crate::suggest_groups::suggest_groups;
+pub use crate::target_dir::NESTED_ROOTS_FOLDER;
 pub use crate::timings::{TIMINGS_PATH, render_timings, root_job_ids};
 pub use crate::toolchain::{TOOLCHAIN_PLAIN, TOOLCHAIN_TOML, toolchain};
 pub use crate::verdict::{
