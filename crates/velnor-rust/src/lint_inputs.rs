@@ -52,20 +52,30 @@ pub fn unmatched_inputs(
     tracked: &BTreeSet<RepoPath>,
     symlinks: &BTreeSet<RepoPath>,
 ) -> Vec<(JobId, PathGlob)> {
-    facts
+    let entries = facts
         .config
         .lint
         .iter()
         .flat_map(|lint| {
             lint.inputs
                 .iter()
-                .filter(|glob| {
-                    !tracked
-                        .iter()
-                        .any(|path| input_matches(glob, path, symlinks))
-                })
                 .map(|glob| (lint.id.clone(), glob.clone()))
         })
+        .collect();
+    unmatched_entries(entries, tracked, |glob, path| {
+        input_matches(glob, path, symlinks)
+    })
+}
+
+#[must_use]
+pub fn unmatched_entries<T>(
+    entries: Vec<(T, PathGlob)>,
+    tracked: &BTreeSet<RepoPath>,
+    matches: impl Fn(&PathGlob, &RepoPath) -> bool,
+) -> Vec<(T, PathGlob)> {
+    entries
+        .into_iter()
+        .filter(|(_, glob)| !tracked.iter().any(|path| matches(glob, path)))
         .collect()
 }
 
