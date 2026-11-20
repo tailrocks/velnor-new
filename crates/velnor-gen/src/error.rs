@@ -9,7 +9,9 @@ use velnor_render::RuleViolation;
 use velnor_rust::{DetectError, MAX_SOURCE_ROOTS, MetadataFileError};
 use velnor_workflows::WorkflowsError;
 
-use crate::helper_gate::{CACHE_DEBUG_HELPER, REQUIRED_CHECK_HELPER, RESTORE_CACHE_HELPER};
+use crate::helper_gate::{
+    CACHE_DEBUG_HELPER, NO_TESTS_HELPER, REQUIRED_CHECK_HELPER, RESTORE_CACHE_HELPER,
+};
 use crate::{
     COMPATIBLE_HELPER_SERIES, HELPER_MINIMUM, TEST_LANE_FLAGS_HELPER, TEST_LANE_JOB_HELPER,
 };
@@ -45,6 +47,7 @@ pub enum GenerateError {
     TestLaneHelperTooOld(HelperVersion),
     TestLaneKeyHelperTooOld(LaneKey, HelperVersion),
     RestoreCacheHelperTooOld(HelperVersion),
+    NoTestsHelperTooOld(HelperVersion),
     HelperLockLacksMacos {
         version: HelperVersion,
         runner: String,
@@ -139,6 +142,7 @@ impl fmt::Display for GenerateError {
             ),
             Self::TestLaneKeyHelperTooOld(key, version) => f.write_str(&lane_key_too_old(*key, version)),
             Self::RestoreCacheHelperTooOld(version) => f.write_str(&restore_cache_too_old(version)),
+            Self::NoTestsHelperTooOld(version) => f.write_str(&no_tests_too_old(version)),
             Self::HelperLockLacksMacos { version, runner } => write!(
                 f,
                 "the runner `{runner}` is a macOS runner, but the velnor-ci {version} in .velnor/rust-ci.lock has no macos-arm64 digest, so `actions/setup-velnor` would fail before velnor-ci runs; pin a release that lists a macos-arm64 digest with `velnor-gen pin-helper <version>`, or use a Linux runner"
@@ -214,6 +218,13 @@ fn restore_cache_too_old(version: &HelperVersion) -> String {
     let (major, minor, patch) = RESTORE_CACHE_HELPER;
     format!(
         "velnor-ci {version} does not know the restore_cache key of a [[test_groups]] table in .velnor/rust-ci.toml; pin velnor-ci {major}.{minor}.{patch} or later with `velnor-gen pin-helper {major}.{minor}.{patch}`"
+    )
+}
+
+fn no_tests_too_old(version: &HelperVersion) -> String {
+    let (major, minor, patch) = NO_TESTS_HELPER;
+    format!(
+        "velnor-ci {version} does not know the no_tests key of a [[test_groups]] table in .velnor/rust-ci.toml; pin velnor-ci {major}.{minor}.{patch} or later with `velnor-gen pin-helper {major}.{minor}.{patch}`"
     )
 }
 

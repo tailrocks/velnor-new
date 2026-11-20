@@ -5,8 +5,8 @@ use std::collections::BTreeSet;
 
 use serde::Deserialize;
 use velnor_model::{
-    GroupEvent, GroupRoot, JobId, PathGlob, RepoFacts, RepoPath, RootSlug, RustCiConfig, RustRoot,
-    Shape, ShapeDecision, TestGroup, TestNeed, group_output_name,
+    GroupEvent, GroupRoot, JobId, NoTests, PathGlob, RepoFacts, RepoPath, RootSlug, RustCiConfig,
+    RustRoot, Shape, ShapeDecision, TestGroup, TestNeed, group_output_name,
 };
 
 use crate::config::{CONFIG_PATH, runner};
@@ -32,6 +32,7 @@ pub(crate) struct RawTestGroup {
     runner: Option<String>,
     hosted: Option<bool>,
     restore_cache: Option<bool>,
+    no_tests: Option<String>,
     #[serde(default)]
     paths: Vec<String>,
     #[serde(default)]
@@ -97,6 +98,16 @@ fn group(raw: RawTestGroup) -> Result<TestGroup, Reason> {
                 .map_err(|_| invalid("test_groups.runner", &label))
         })
         .transpose()?;
+    let no_tests = raw
+        .no_tests
+        .as_deref()
+        .map(|mode| match mode {
+            "fail" => Ok(NoTests::Fail),
+            "warn" => Ok(NoTests::Warn),
+            "pass" => Ok(NoTests::Pass),
+            other => Err(invalid("test_groups.no_tests", other)),
+        })
+        .transpose()?;
     let paths = raw
         .paths
         .iter()
@@ -135,6 +146,7 @@ fn group(raw: RawTestGroup) -> Result<TestGroup, Reason> {
         runner,
         hosted: raw.hosted,
         restore_cache: raw.restore_cache,
+        no_tests,
         paths,
         events,
         root,

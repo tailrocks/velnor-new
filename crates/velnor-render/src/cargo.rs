@@ -153,6 +153,7 @@ fn cargo_command(
             filter,
             threads,
             ci_profile,
+            no_tests,
         } => nextest_run(
             &format!(
                 "--archive-file '{}' --extract-to . --extract-overwrite --workspace-remap .{}",
@@ -161,7 +162,7 @@ fn cargo_command(
             ),
             filter,
             *ci_profile,
-            NO_TESTS_PASS,
+            no_tests.flag(),
             &path,
         ),
         CargoCommand::NextestArchive { file } => nextest_archive(nextest, file, &path),
