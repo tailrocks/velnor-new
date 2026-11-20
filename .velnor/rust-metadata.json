@@ -279,7 +279,7 @@
         },
         {
           "name": "velnor-ci",
-          "version": "0.1.108",
+          "version": "0.1.109",
           "manifest": "crates/velnor-ci/Cargo.toml",
           "dependencies": [
             {
@@ -446,7 +446,7 @@
         },
         {
           "name": "velnor-gen",
-          "version": "0.1.108",
+          "version": "0.1.109",
           "manifest": "crates/velnor-gen/Cargo.toml",
           "dependencies": [
             {
@@ -2011,8 +2011,8 @@
     "Cargo.toml": "0a8af2473ac087ecafb0414a31f77b0d031f92a936d68ed5b9fee04dfe524f91",
     "crates/velnor-archive-guard/Cargo.toml": "d2b908ecde6678ad8d49c6c59aef788bc2f0f735e9c9e7a6e1a996104ca9b9f9",
     "crates/velnor-cache-rules/Cargo.toml": "b1f91a7da1743297b500893e7ce85fb1cfb03f2f854c757beabba023089930e2",
-    "crates/velnor-ci/Cargo.toml": "1ae308c51e43abcc7f6db18be5c332a566c5a1c7120c0c8cae151a6581e84b5f",
-    "crates/velnor-gen/Cargo.toml": "1cd3c30b9fc4abc0dba5c25d791702217d71e5a932a1e69dfa69078b0cd69464",
+    "crates/velnor-ci/Cargo.toml": "98dcce982ebc441fa56b9b434a62ac73a17cf315049b1e56c0243100e2af7916",
+    "crates/velnor-gen/Cargo.toml": "ffc16a4e3fcbdbc10255619b65c4f8ff3243fdfaf8fad5952e7ee5cfcfa5f65f",
     "crates/velnor-local/Cargo.toml": "e6d3b5198ae94ac9ed44e8c9dad53e7b8231c92f64abd8e33eea72f8812f2ffb",
     "crates/velnor-model/Cargo.toml": "8f25044711f94d1edf7a9cf8a37842019c7dc82d0f9f14f3659fb9af5fecf7a8",
     "crates/velnor-release/Cargo.toml": "dca29d0f14443af5811f5454770fce6193056a6e8e3c0c72ae1729399b176459",
