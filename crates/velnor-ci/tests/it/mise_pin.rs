@@ -111,6 +111,21 @@ fn two_different_pins_fail_closed() {
 }
 
 #[test]
+fn an_empty_declaration_beside_an_exact_pin_fails_closed() {
+    let repo = workspace(
+        "mise-pin-empty-declaration",
+        &[
+            ("mise.toml", "[tools]\nmr-boxington = []\n"),
+            (".mise.toml", "[tools]\nmr-boxington = \"v1.31.0\"\n"),
+        ],
+    );
+    let error = pinned_version(&repo.0, TOOL)
+        .err()
+        .unwrap_or_else(|| unreachable!("an empty declaration passed"));
+    assert!(error.to_string().contains("mise.toml"), "{error}");
+}
+
+#[test]
 fn a_second_config_that_disagrees_fails_closed() {
     let repo = workspace(
         "mise-pin-two-configs",
