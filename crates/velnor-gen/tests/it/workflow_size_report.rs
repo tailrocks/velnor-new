@@ -104,7 +104,10 @@ fn a_comment_above_the_first_job_is_charged_to_that_job() -> TestResult {
         .iter()
         .find(|(id, _)| id == "first")
         .ok_or("first job is not in the largest list")?;
-    assert!(*first_bytes >= note.len(), "first is {first_bytes} bytes: {text}");
+    assert!(
+        *first_bytes >= note.len(),
+        "first is {first_bytes} bytes: {text}"
+    );
     Ok(())
 }
 
@@ -121,6 +124,9 @@ fn a_comment_above_a_later_job_is_not_charged_to_the_job_before_it() -> TestResu
         .iter()
         .find(|(id, _)| id == "last")
         .ok_or("last job is not in the largest list")?;
-    assert!(*last_bytes >= note.len(), "last is {last_bytes} bytes: {text}");
+    assert!(
+        *last_bytes >= note.len(),
+        "last is {last_bytes} bytes: {text}"
+    );
     Ok(())
 }
