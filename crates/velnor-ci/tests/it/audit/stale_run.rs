@@ -12,6 +12,7 @@ use crate::io::Repo;
 use velnor_test_support::{ci_safe_cargo_env, real_cargo_str};
 
 const DEBUG: &str = "rust/target/debug";
+const VARIABLE: &str = "VELNOR_AUDIT_MAX_ENTRIES";
 
 fn refused_with(output: &Output, texts: &[&str]) {
     assert_eq!(output.status.code(), Some(1), "{output:?}");
@@ -128,4 +129,72 @@ fn a_run_whose_output_is_older_than_its_build_script_says_so() {
             "/rust/target/debug for lib target  (output older than its build script (unit f0000000000000e3));",
         ],
     );
+}
+
+const FAN_OUT: usize = 3;
+const ENTRIES: usize = 5;
+const ENTRY_LIMIT: &str = "8";
+
+fn fan_out_repo() -> Repo {
+    let repo = Repo::new("stale-gaps");
+    repo.write_all(&[
+        ("mise.toml", "[tools]\n"),
+        ("rust/Cargo.lock", "version = 4\n"),
+    ]);
+    let members: Vec<String> = (1..=FAN_OUT).map(|i| format!("\"lib{i}\"")).collect();
+    repo.write_unstaged(
+        "rust/Cargo.toml",
+        &format!(
+            "[workspace]\nmembers = [{}]\nresolver = \"3\"\n",
+            members.join(", ")
+        ),
+    );
+    for i in 1..=FAN_OUT {
+        repo.write_unstaged(
+            &format!("rust/lib{i}/Cargo.toml"),
+            &format!("[package]\nname = \"lib{i}\"\nedition = \"2024\"\nbuild = \"build.rs\"\n"),
+        );
+        repo.write_unstaged(
+            &format!("rust/lib{i}/src/lib.rs"),
+            "pub fn value() -> u32 { 1 }\n",
+        );
+        repo.write_unstaged(
+            &format!("rust/lib{i}/build.rs"),
+            &format!(
+                "fn main() {{ println!(\"cargo:rerun-if-changed=asset.txt\"); println!(\"cargo:rerun-if-changed=../../shared/d{i}\"); }}\n"
+            ),
+        );
+        repo.write_unstaged(&format!("rust/lib{i}/asset.txt"), "first\n");
+        for entry in 0..ENTRIES {
+            repo.write_unstaged(&format!("shared/d{i}/f{entry}"), "");
+        }
+    }
+    repo.git(&["add", "--all"]);
+    repo
+}
+
+#[test]
+fn stale_gaps_share_one_entry_budget_when_they_count_their_changed_inputs() {
+    let repo = fan_out_repo();
+    let build = build_step(&repo, &["build", "--workspace", "--all-targets"]);
+    assert!(build.status.success(), "{build:?}");
+    thread::sleep(Duration::from_secs(1));
+    for i in 1..=FAN_OUT {
+        repo.write_unstaged(&format!("rust/lib{i}/asset.txt"), "second\n");
+        repo.write_unstaged(&format!("shared/d{i}/new"), "");
+    }
+    let output = velnor_ci()
+        .env(VARIABLE, ENTRY_LIMIT)
+        .current_dir(repo.root())
+        .args(["inputs", "audit", "--write"])
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(output.status.code(), Some(1), "{output:?}");
+    assert_eq!(
+        stderr.matches("output stale: input asset.txt").count(),
+        FAN_OUT,
+        "{stderr}"
+    );
+    assert_eq!(stderr.matches(", and 1 more").count(), 1, "{stderr}");
 }

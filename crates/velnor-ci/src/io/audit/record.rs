@@ -233,10 +233,9 @@ impl Audit<'_> {
         first: String,
         cause: Cause,
     ) -> RunGap {
-        let scratch = self.freshness.scratch();
-        let shared = std::mem::replace(&mut self.freshness, scratch);
+        std::mem::swap(&mut self.freshness, &mut self.diagnostic);
         let all = self.changed_inputs(base, paths, built, output, true, usize::MAX);
-        self.freshness = shared;
+        std::mem::swap(&mut self.freshness, &mut self.diagnostic);
         let more = all.map_or(0, |all| all.len().saturating_sub(1));
         match cause {
             Cause::Changed => RunGap::Stale { input: first, more },
