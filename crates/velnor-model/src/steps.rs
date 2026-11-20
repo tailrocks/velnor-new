@@ -123,6 +123,7 @@ pub enum StepKind {
     },
     MbxPin,
     MbxPrivate,
+    MbxOutDirs,
     MbxStore,
     MbxSeed,
     ToolsLocal(ToolsLocalVerb, crate::ToolsAnchor),
@@ -220,6 +221,7 @@ impl StepKind {
             | Self::MbxRemote { .. }
             | Self::MbxPin
             | Self::MbxPrivate
+            | Self::MbxOutDirs
             | Self::MbxStore { .. }
             | Self::MbxSeed { .. }
             | Self::ToolsLocal(..)

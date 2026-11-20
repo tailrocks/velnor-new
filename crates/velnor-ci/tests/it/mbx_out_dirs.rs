@@ -1,0 +1,148 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::process::Command;
+
+use velnor_test_support::{ci_safe_cargo_env, real_cargo};
+
+type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+const SETTING: (&str, &str) = ("MBX_SHARE_OUT_DIR", "0");
+
+struct Scratch(PathBuf);
+
+impl Scratch {
+    fn new(name: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        let root =
+            std::env::temp_dir().join(format!("velnor-mbx-out-dirs-{}-{name}", std::process::id()));
+        removable(&root);
+        fs::remove_dir_all(&root).ok();
+        fs::create_dir_all(&root)?;
+        Ok(Self(fs::canonicalize(root)?))
+    }
+}
+
+impl Drop for Scratch {
+    fn drop(&mut self) {
+        removable(&self.0);
+        fs::remove_dir_all(&self.0).ok();
+    }
+}
+
+fn removable(path: &Path) {
+    use std::os::unix::fs::PermissionsExt;
+    let Ok(metadata) = fs::symlink_metadata(path) else {
+        return;
+    };
+    if metadata.is_dir() {
+        fs::set_permissions(path, fs::Permissions::from_mode(0o755)).ok();
+        for entry in fs::read_dir(path).into_iter().flatten().flatten() {
+            removable(&entry.path());
+        }
+    }
+}
+
+fn the_crate(root: &Path) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let krate = root.join("probe");
+    fs::create_dir_all(krate.join("src"))?;
+    fs::write(
+        krate.join("Cargo.toml"),
+        "[package]\nname = \"probe\"\nversion = \"0.0.0\"\nedition = \"2021\"\nbuild = \"build.rs\"\n",
+    )?;
+    fs::write(
+        krate.join("build.rs"),
+        "fn main() {\n    let out = std::env::var(\"OUT_DIR\").unwrap();\n    std::fs::write(format!(\"{out}/x.rs\"), \"pub fn value() -> u32 { 7 }\").unwrap();\n}\n",
+    )?;
+    fs::write(
+        krate.join("src/lib.rs"),
+        "include!(concat!(env!(\"OUT_DIR\"), \"/x.rs\"));\n",
+    )?;
+    Ok(krate)
+}
+
+fn build(
+    krate: &Path,
+    store: &Path,
+    setting: Option<(&str, &str)>,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let mut cargo = Command::new(real_cargo());
+    cargo.args(["build", "-v", "--offline"]).current_dir(krate);
+    cargo.env_clear();
+    for (name, value) in std::env::vars_os() {
+        let text = name.to_string_lossy();
+        if matches!(
+            text.as_ref(),
+            "PATH" | "HOME" | "USER" | "LANG" | "TMPDIR" | "CARGO_HOME"
+        ) || text.starts_with("MISE_")
+            || text.starts_with("RUSTUP_")
+        {
+            cargo.env(name, value);
+        }
+    }
+    ci_safe_cargo_env(&mut cargo);
+    cargo.env("MBX_CACHE_DIR", store);
+    if let Some((name, value)) = setting {
+        cargo.env(name, value);
+    }
+    let output = cargo.output()?;
+    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+    assert!(output.status.success(), "{stderr}");
+    assert!(
+        stderr.contains("mbx[cache]"),
+        "the build did not run under mbx: {stderr}"
+    );
+    Ok(stderr)
+}
+
+fn tar(args: &[&str]) -> TestResult {
+    let status = Command::new("tar").args(args).status()?;
+    assert!(status.success(), "tar {args:?}");
+    Ok(())
+}
+
+fn warm_build_in_an_empty_store(
+    name: &str,
+    setting: Option<(&str, &str)>,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let scratch = Scratch::new(name)?;
+    let store = scratch.0.join("runner-temp/mbx");
+    let krate = the_crate(&scratch.0)?;
+    let cold = build(&krate, &store, setting)?;
+    assert!(cold.contains("Compiling probe"), "{cold}");
+    let base = scratch.0.join("base.tar").display().to_string();
+    let target = fs::canonicalize(krate.join("target"))?;
+    tar(&["-C", &target.display().to_string(), "-cf", &base, "."])?;
+    fs::remove_file(krate.join("target"))?;
+    removable(&scratch.0.join("runner-temp"));
+    fs::remove_dir_all(scratch.0.join("runner-temp"))?;
+    fs::create_dir(krate.join("target"))?;
+    tar(&[
+        "-C",
+        &krate.join("target").display().to_string(),
+        "-xf",
+        &base,
+    ])?;
+    build(&krate, &store, setting)
+}
+
+#[test]
+fn a_base_restored_into_an_empty_mbx_store_compiles_nothing_when_outputs_stay_in_target()
+-> TestResult {
+    let warm = warm_build_in_an_empty_store("kept", Some(SETTING))?;
+    assert!(!warm.contains("Compiling"), "{warm}");
+    assert!(warm.contains("Fresh probe"), "{warm}");
+    Ok(())
+}
+
+#[test]
+fn without_the_setting_mbx_points_dep_info_into_a_store_the_next_job_does_not_have() -> TestResult {
+    let warm = warm_build_in_an_empty_store("default", None)?;
+    assert!(
+        warm.contains("Compiling probe"),
+        "mbx no longer keeps build-script outputs in the cache directory; drop {}=0 (#2373): {warm}",
+        SETTING.0
+    );
+    Ok(())
+}

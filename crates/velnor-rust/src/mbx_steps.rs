@@ -6,6 +6,9 @@ use velnor_model::{HelperCommand, Job, MbxRemote, MbxStore, RepoFacts, Step, Ste
 use crate::mbx_pin::MBX_PIN_HELPER;
 use crate::plan::step;
 
+// helper-gate: untagged tools-v0.1.111
+pub(crate) const MBX_OUT_DIR_HELPER: (u64, u64, u64) = (0, 1, 111);
+
 pub(crate) fn apply(facts: &RepoFacts, jobs: &mut [Job]) {
     let remote = facts.config.mbx_remote == MbxRemote::GithubActions;
     let from_pin = facts
@@ -14,6 +17,10 @@ pub(crate) fn apply(facts: &RepoFacts, jobs: &mut [Job]) {
         .is_some_and(|helper| helper.version().at_least(MBX_PIN_HELPER));
     let private =
         facts.config.mbx.routed() && !remote && facts.config.mbx_store == MbxStore::Private;
+    let out_dirs_in_target = facts
+        .helper
+        .as_ref()
+        .is_some_and(|helper| helper.version().at_least(MBX_OUT_DIR_HELPER));
     for job in jobs {
         if !compiles(job) {
             continue;
@@ -27,7 +34,11 @@ pub(crate) fn apply(facts: &RepoFacts, jobs: &mut [Job]) {
             insert(job, &remote_steps, After::Tools);
         }
         if private {
-            insert(job, &[StepKind::MbxPrivate], After::Helper);
+            let mut kinds = vec![StepKind::MbxPrivate];
+            if out_dirs_in_target {
+                kinds.push(StepKind::MbxOutDirs);
+            }
+            insert(job, &kinds, After::Helper);
         }
     }
 }

@@ -149,6 +149,7 @@ mod lock_scope;
 mod macos_helper_lock;
 mod main_and_scheduled;
 mod mbx_default;
+mod mbx_out_dirs;
 mod mbx_pin;
 mod mbx_provider;
 mod mbx_remote;

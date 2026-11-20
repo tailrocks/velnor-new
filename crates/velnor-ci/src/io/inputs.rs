@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::fs::{self, OpenOptions};
 use std::io::{ErrorKind, Write};
 use std::path::{Path, PathBuf};
@@ -15,6 +15,7 @@ use crate::inputs::{
     SavedInput, Tracked, format_inputs, inputs_file, plan_restore, restored_units_file,
     snapshot_file, witness_file,
 };
+use crate::restored_units::RestoredUnits;
 use crate::scope::Scope;
 pub(super) use sources::{
     TrackedPaths, capture_inputs, source_files, top_level_files, tracked_paths,
@@ -197,7 +198,7 @@ pub(super) fn restore_inputs_scoped(
     root: &Path,
     target: &Path,
     scope: Option<&Scope>,
-    scans: &mut BTreeMap<PathBuf, Option<BTreeSet<String>>>,
+    scans: &mut BTreeMap<PathBuf, Option<RestoredUnits>>,
 ) -> Result<String, CiError> {
     let prefix = git_prefix(root)?;
     remove_restored(&root.join(target).join(snapshot_file(&prefix)))?;
@@ -234,10 +235,10 @@ pub(super) fn restore_inputs_scoped(
     fs::write(root.join(target).join(snapshot_file(&prefix)), &text)
         .map_err(|e| CiError::new(format!("cannot preserve restored inputs: {e}")))?;
     let units_target = root.join(target);
-    let hashes = scans
+    let units = scans
         .entry(units_target.clone())
         .or_insert_with(|| super::restored_units::scan(&units_target));
-    super::restored_units::record(&units_target, &prefix, hashes.as_ref())?;
+    super::restored_units::record(&units_target, &prefix, units.as_ref())?;
     for input in &plan.restore {
         set_modified_ns(&top.join(&input.file.path), input.mtime_ns)?;
     }
