@@ -7,6 +7,7 @@ use velnor_model::Platform;
 use velnor_rust::{RunningGenerator, check_generator_entry, pin_lock, verify_release};
 
 use crate::lock::{COMMIT_FILE, SUMS};
+use crate::lock_archive::archive_lock_at;
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -50,6 +51,25 @@ fn a_clean_lock_passes_for_a_local_build_that_stamps_no_commit() -> TestResult {
 #[test]
 fn a_clean_lock_passes_for_the_release_binary_it_pins() -> TestResult {
     assert_eq!(check(&lock()?, release_binary()), Ok(()));
+    Ok(())
+}
+
+#[test]
+fn an_archive_lock_is_not_compared_with_the_bytes_of_the_running_binary() -> TestResult {
+    let archive = archive_lock_at("0.1.108")?;
+    let commit = archive
+        .lines()
+        .find_map(|line| line.strip_prefix("commit = \""))
+        .and_then(|rest| rest.strip_suffix('"'))
+        .ok_or("the lock names no commit")?;
+    let zeros = "0".repeat(64);
+    let release = RunningGenerator {
+        version: "0.1.108",
+        commit,
+        platform: Some(Platform::LinuxX64),
+        sha256: Some(&zeros),
+    };
+    assert_eq!(check(&archive, release), Ok(()));
     Ok(())
 }
 

@@ -6,7 +6,7 @@ use velnor_model::{MbxRemote, RepoFacts};
 use crate::error::{DetectError, Reason};
 use crate::mise::MISE_CONFIG;
 
-const MBX_TOOL: &str = "mr-boxington";
+pub(crate) const MBX_TOOL: &str = "mr-boxington";
 // First released in tools-v0.1.109 (not tagged yet when this gate was written).
 pub(crate) const MBX_PIN_HELPER: (u64, u64, u64) = (0, 1, 109);
 

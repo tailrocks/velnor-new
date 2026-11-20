@@ -4,6 +4,7 @@
 use velnor_model::{Job, LintCommand, LintJob, LintKind, PrRun, RepoFacts, Step, StepKind};
 
 use crate::lint_tools::{ALINT, JACTIONLINT, NODE, RUST, SHELLCHECK, usable};
+use crate::mbx_pin::MBX_TOOL;
 use crate::plan::{CHECKOUT_DEPTH, job, quick, step};
 
 pub(crate) fn lint_jobs(facts: &RepoFacts) -> Vec<Job> {
@@ -65,14 +66,23 @@ fn commands(facts: &RepoFacts, lint: &LintJob) -> Vec<LintCommand> {
     }
 }
 
+fn generated_check_tools(facts: &RepoFacts) -> Vec<String> {
+    available(facts, RUST)
+        .then(|| resolved(facts, RUST))
+        .into_iter()
+        .chain(available(facts, MBX_TOOL).then(|| resolved(facts, MBX_TOOL)))
+        .collect()
+}
+
 fn generated_check_job(facts: &RepoFacts, lint: &LintJob) -> Job {
+    let tools = generated_check_tools(facts);
     let steps = std::iter::once(step(StepKind::Checkout {
         depth: CHECKOUT_DEPTH,
         sparse: None,
     }))
-    .chain(available(facts, RUST).then(|| {
+    .chain((!tools.is_empty()).then(|| {
         step(StepKind::InstallTools {
-            only: Some(resolved(facts, RUST)),
+            only: Some(tools.join(" ")),
         })
     }))
     .chain(

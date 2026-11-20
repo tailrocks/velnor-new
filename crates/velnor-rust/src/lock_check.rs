@@ -52,8 +52,9 @@ fn named(section: &str, error: &LockError) -> LockError {
 
 /// Offline: the `[velnor-gen]` entry agrees with the lock's own version and commit and, when
 /// the running binary is a release build of the lock's commit, with that binary's bytes.
-/// A local build (`unknown` commit) is not compared, since its digest is not the published one.
-/// A newer binary that is not the locked release is not compared either.
+/// An archive lock lists archive digests, which the binary's bytes never match, so only a raw
+/// lock is compared. A local build (`unknown` commit) is not compared, since its digest is not
+/// the published one. A newer binary that is not the locked release is not compared either.
 pub fn check_generator_entry(bytes: &[u8], running: RunningGenerator<'_>) -> Result<(), LockError> {
     let lock = parse(bytes)?;
     release_version(&lock.version)?;
@@ -78,6 +79,7 @@ pub fn check_generator_entry(bytes: &[u8], running: RunningGenerator<'_>) -> Res
         )));
     }
     if let (Some(platform), Some(sha)) = (running.platform, running.sha256)
+        && lock.ci_binary.is_none()
         && let Some(listed) = lock.generator.get(platform.file_suffix())
         && listed != sha
     {

@@ -196,3 +196,11 @@ fn a_lock_without_archive_digests_cannot_install_velnor_gen_so_generation_stops(
     );
     Ok(())
 }
+
+#[test]
+fn the_check_job_installs_mbx_because_cargo_metadata_runs_through_it() -> TestResult {
+    let text = rendered(&format!("{LINT}\n{CHECK}"))?;
+    let job = job(&text)?;
+    assert!(job.to_string().contains("mr-boxington"), "{job}");
+    Ok(())
+}
