@@ -4,6 +4,10 @@ The new Rust generator reads `.velnor/rust-ci.toml`.
 
 The generator reads `.velnor/rust-ci.toml`, `.velnor/release.toml` and `.velnor/workflows.toml` only through Git's tracked view. A file that exists on disk but that Git does not track (or ignores) is refused with an error, not replaced by defaults: run `git add <path>` (`git add -f` for an ignored file), or delete the file.
 
+## Local runs in a mise checkout
+
+`velnor-gen generate` and `check` run `cargo metadata` in the repository. When the repository's `mise.toml` declares `[wrappers.cargo]`, mise refuses to run that wrapper in a checkout it does not trust, so the run would stop with "Config files in mise.toml are not trusted" until someone runs `mise trust`. velnor-gen avoids that step: it adds the repository root it was pointed at to `MISE_TRUSTED_CONFIG_PATHS` for that one `cargo metadata` child. The value is appended to any existing one, and velnor-gen's own environment does not change. The wrapper still runs (mbx stays in the path). Trusting this root is safe here because you ran `velnor-gen` on this checkout yourself, and `cargo metadata` already reads the checkout's Cargo and mise config. A root path that contains `:` is refused, because mise splits this variable on `:` and the entry would trust a parent directory.
+
 ## Fork pull requests
 
 By default, a pull request from a fork does not select a self-hosted runner. When `runner` is not declared `hosted = true`, the generator renders `runs-on` of every job, including the `Required` gate, as an expression. It selects `runner` when the event is not a pull request or the pull request head repository is this repository, and `fork_runner` otherwise. No job is skipped for a fork, so the gate sees the real result of every job and fails when one fails. The one exception is a job that calls a reusable workflow with `uses`: it has no `runs-on`, and the callee may run on a self-hosted runner, so the generator adds the same condition to its `if` (joined with the job's own `if` in one expression) and a pull request from a fork skips the call. A deleted fork has no head repository, so it counts as a fork.
@@ -139,6 +143,18 @@ With `velnor-ci` 0.1.86 or later in the lock, `mbx_shared_store = true` also ren
 `docs = "post_merge"` in `.velnor/rust-ci.toml` runs the `Documentation` step (`cargo doc`) only on `push`, `schedule` and `workflow_dispatch`, so a pull request and a `merge_group` run skip it. The default, `"always"`, keeps the step on every event. The key needs `velnor-ci` 0.1.97 or later in the lock, because an older helper refuses the unknown key when it reads the configuration, and generation names that release. Before the merge the plan lists documentation as left out (`docs = "post_merge" runs it only after the merge`), and the setting is reported as a check that does less, so a change that turns it on is named in review. A deferred step is never reused from a successful `merge_group` run (`skip_push_after_merge_group`), so the run after the merge always does it. mbx caches rustdoc, but it keys each crate's action on the whole workspace source tree, so any source change misses every crate and a pull request recompiles all the docs; the doc check then moves to the run after the merge.
 
 `check_alone = "post_merge"` does the same for the per-crate `Check <crate> alone` steps. They compile each crate with only its own feature set, so their dependency artifacts differ from the workspace lint and build steps and a pull request rarely finds them in the mbx cache. They keep their value as the check that a crate declares every feature it needs, and the run after the merge keeps that check. The default is `"always"`. The key needs `velnor-ci` 0.1.97 or later in the lock, and the same weakening and reuse rules apply.
+
+## Cargo wrapper
+
+`mise.toml` routes every `cargo` through MBX with the owner standard layout: `mr_boxington = true` on the `rust` tool and this wrapper:
+
+```toml
+[wrappers.cargo]
+command = "mbx"
+env = { MBX_CARGO_SHIM_MODE = "1" }
+```
+
+The generator accepts this exact layout as the standard. `velnor-ci plan --explain` and the review of a change do not name it as a weakening. The match is exact: `command` must be `"mbx"`, `env` must hold only `MBX_CARGO_SHIM_MODE = "1"`, and the wrapper may not add `args` or other keys. Any other cargo wrapper is still named as a weakening, because it runs cargo through a program or with settings the generator cannot vouch for. That covers another command, another env value, an extra env key, an `args` list, a missing `env`, and a wrapper for `cargo-nextest` or another `cargo-*` tool. The `rustc` and `rustdoc` wrappers are always named.
 
 ## Test setup steps
 

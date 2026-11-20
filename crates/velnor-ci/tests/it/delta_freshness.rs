@@ -11,20 +11,20 @@ use crate::delta::success;
 use crate::delta_source::helper_at;
 use crate::io::Repo;
 
-struct Fixture {
-    repo: Repo,
-    directory: PathBuf,
+pub(super) struct Fixture {
+    pub(super) repo: Repo,
+    pub(super) directory: PathBuf,
     identity: String,
 }
 
 impl Fixture {
-    fn new(name: &str, nested: bool) -> Self {
+    pub(super) fn new(name: &str, nested: bool) -> Self {
         let mut fixture = Self::unbuilt(name, nested);
         fixture.build_baseline(nested);
         fixture
     }
 
-    fn unbuilt(name: &str, nested: bool) -> Self {
+    pub(super) fn unbuilt(name: &str, nested: bool) -> Self {
         let repo = Repo::new(name);
         let directory = if nested {
             repo.root().join("nested")
@@ -83,7 +83,7 @@ impl Fixture {
         }
     }
 
-    fn build_baseline(&mut self, nested: bool) {
+    pub(super) fn build_baseline(&mut self, nested: bool) {
         let lock = ["generate-lockfile", "--offline"];
         success(&self.cargo(&lock));
         if nested {
@@ -109,11 +109,11 @@ impl Fixture {
             .write_unstaged("velnor-run.log", &String::from_utf8_lossy(&output.stderr));
     }
 
-    fn helper(&self, args: &[&str]) -> (Output, String) {
+    pub(super) fn helper(&self, args: &[&str]) -> (Output, String) {
         helper_at(&self.repo, args, Some(&self.identity), &self.directory)
     }
 
-    fn delta(&self, verb: &str) {
+    pub(super) fn delta(&self, verb: &str) {
         let (output, values) = self.delta_result(verb);
         success(&output);
         if verb == "stage" {
@@ -156,7 +156,7 @@ impl Fixture {
             .unwrap_or_else(|e| unreachable!("{e}"))
     }
 
-    fn build(&self) -> Output {
+    pub(super) fn build(&self) -> Output {
         self.cargo(&[
             "build",
             "--workspace",
@@ -195,7 +195,7 @@ impl Fixture {
         self.delta("stage");
     }
 
-    fn change(&self, path: &str, contents: &str) {
+    pub(super) fn change(&self, path: &str, contents: &str) {
         let path = self.directory.join(path);
         fs::write(&path, contents).unwrap_or_else(|e| unreachable!("{e}"));
         fs::File::options()
@@ -210,14 +210,14 @@ impl Fixture {
             .unwrap_or_else(|e| unreachable!("{e}"));
     }
 
-    fn restore(&self) {
+    pub(super) fn restore(&self) {
         fs::remove_dir_all(self.directory.join("target")).unwrap_or_else(|e| unreachable!("{e}"));
         self.delta("apply");
         success(&self.helper(&["inputs", "restore"]).0);
     }
 }
 
-fn assert_units(output: &Output, compiled: &[&str], fresh: &[&str]) {
+pub(super) fn assert_units(output: &Output, compiled: &[&str], fresh: &[&str]) {
     success(output);
     let log = String::from_utf8_lossy(&output.stderr);
     for name in compiled {
