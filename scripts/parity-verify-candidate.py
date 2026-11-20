@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 # SPDX-License-Identifier: Apache-2.0
-import bz2, copy, gzip, hashlib, importlib.util, io, json, lzma, os, subprocess, sys
+import bz2, copy, gzip, hashlib, importlib.util, io, json, lzma, os, re, subprocess, sys
 import tarfile, tempfile, zlib
 from pathlib import Path
 
@@ -364,19 +364,47 @@ def bind_oci(archive):
         return copy.deepcopy(UNBOUND_OCI)
 
 
+def missing_input(path):
+    return r".+/" + re.escape(path) + r": No such file or directory \(os error 2\)"
+
+
+# case name -> (regex the Rust message must fullmatch, why the texts differ)
 MESSAGE_DIFFS = {
-    "layer member size base256 big": "both refuse the base-256 member size; Rust names the bad size field, legacy reports a generic layer error",
-    "outer truncated": "both refuse the truncated archive; the text is Python tarfile's end-of-data message versus Rust's generic read error",
-    "root input missing Dockerfile": "both refuse the missing build input Dockerfile; the text is each runtime's file-not-found message",
-    "root input missing README.md": "both refuse the missing build input README.md; the text is each runtime's file-not-found message",
-    "root input missing build-test.sh": "both refuse the missing build input build-test.sh; the text is each runtime's file-not-found message",
-    "root input missing candidate/candidate.py": "both refuse the missing build input candidate/candidate.py; the text is each runtime's file-not-found message",
-    "root input missing runner.lock": "both refuse the missing build input runner.lock; the text is each runtime's file-not-found message",
+    "layer member size base256 big": (
+        re.escape("Tar archive has an incorrect member size."),
+        "both refuse the base-256 member size; Rust names the bad size field, legacy reports a generic layer error",
+    ),
+    "outer truncated": (
+        re.escape("Cannot read OCI archive."),
+        "both refuse the truncated archive; the text is Python tarfile's end-of-data message versus Rust's generic read error",
+    ),
+    "root input missing Dockerfile": (
+        missing_input("images/job/ubuntu-26.04/Dockerfile"),
+        "both refuse the missing build input Dockerfile; the text is each runtime's file-not-found message",
+    ),
+    "root input missing README.md": (
+        missing_input("images/job/ubuntu-26.04/README.md"),
+        "both refuse the missing build input README.md; the text is each runtime's file-not-found message",
+    ),
+    "root input missing build-test.sh": (
+        missing_input("images/job/ubuntu-26.04/build-test.sh"),
+        "both refuse the missing build input build-test.sh; the text is each runtime's file-not-found message",
+    ),
+    "root input missing candidate/candidate.py": (
+        missing_input("images/job/ubuntu-26.04/candidate/candidate.py"),
+        "both refuse the missing build input candidate/candidate.py; the text is each runtime's file-not-found message",
+    ),
+    "root input missing runner.lock": (
+        missing_input(".velnor/runner.lock"),
+        "both refuse the missing build input runner.lock; the text is each runtime's file-not-found message",
+    ),
 }
 
 
-def is_allowed_message_diff(name):
-    return name in MESSAGE_DIFFS
+def is_allowed_message_diff(name, new_msg):
+    if name not in MESSAGE_DIFFS or not new_msg:
+        return False
+    return re.fullmatch(MESSAGE_DIFFS[name][0], new_msg) is not None
 
 
 def message(stderr, prefix):
@@ -463,9 +491,9 @@ def main():
             elif old_ok != new_ok or (old_ok and old[1] != new[1]):
                 mismatches.append((case["name"], old_ok, new_ok, old_msg, new_msg))
                 print(f"VERDICT-DIFF  {case['name']}: legacy={'accept' if old_ok else 'reject'} new={'accept' if new_ok else 'reject'} | {old_msg or old[2][-120:]!r} | {new_msg!r}")
-            elif not old_ok and old_msg != new_msg and is_allowed_message_diff(case["name"]):
+            elif not old_ok and old_msg != new_msg and is_allowed_message_diff(case["name"], new_msg):
                 message_diffs.append((case["name"], old_msg, new_msg))
-                print(f"message-diff  {case['name']}: legacy={old_msg!r} new={new_msg!r} | allowed: {MESSAGE_DIFFS[case['name']]}")
+                print(f"message-diff  {case['name']}: legacy={old_msg!r} new={new_msg!r} | allowed: {MESSAGE_DIFFS[case['name']][1]}")
             elif not old_ok and old_msg != new_msg:
                 mismatches.append((case["name"], old_ok, new_ok, old_msg, new_msg))
                 print(f"UNEXPECTED-MSG {case['name']}: legacy={old_msg!r} new={new_msg!r}")

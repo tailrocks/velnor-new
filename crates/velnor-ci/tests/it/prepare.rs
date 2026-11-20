@@ -87,6 +87,7 @@ pub(crate) struct Setup {
     pub env: Vec<(&'static str, &'static str)>,
     pub os_release: OsRelease,
     pub cargo_home: Option<std::ffi::OsString>,
+    pub rustup_home: Option<PathBuf>,
     pub args: Vec<&'static str>,
 }
 
@@ -108,6 +109,7 @@ impl Setup {
             env: Vec::new(),
             os_release: OsRelease::Fixture,
             cargo_home: None,
+            rustup_home: None,
             args: Vec::new(),
         }
     }
@@ -163,7 +165,7 @@ fn write_os_release(dir: &Path) -> PathBuf {
     path
 }
 
-fn prepare_in(dir: &Path, setup: &Setup) -> Run {
+pub(crate) fn prepare_in(dir: &Path, setup: &Setup) -> Run {
     let checkout = dir.join("checkout");
     let bin = dir.join("bin");
     let cargo_home = dir.join(setup.cargo_home.as_deref().unwrap_or("cargo-home".as_ref()));
@@ -231,6 +233,9 @@ fn prepare_in(dir: &Path, setup: &Setup) -> Run {
         .env("GITHUB_OUTPUT", &outputs);
     if setup.os_release == OsRelease::Fixture {
         command.env("VELNOR_OS_RELEASE", write_os_release(dir));
+    }
+    if let Some(home) = &setup.rustup_home {
+        command.env("RUSTUP_HOME", home);
     }
     for (name, value) in &setup.env {
         command.env(name, value);

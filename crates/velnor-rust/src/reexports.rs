@@ -18,6 +18,7 @@ pub use crate::doc_steps::{member_sources, optional_steps, root_sources};
 pub use crate::docs_post_merge::defer_post_merge_docs;
 pub use crate::embedded::{is_plain_source, is_rust_source};
 pub use crate::error::{DetectError, Reason};
+pub use crate::excluded_lock::{ExcludedLockFinding, excluded_lock_findings};
 pub use crate::external_config::external_config_profile;
 pub use crate::group_runs::{GroupPlan, GroupRun, group_runs, plan_groups};
 pub use crate::lint_error::LintFault;
@@ -47,9 +48,13 @@ pub use crate::required_job::tests_expected;
 pub use crate::select::{select, unknown_paths, unread_packages};
 pub use crate::select_event::{select_event, selects_by_diff};
 pub use crate::sha256::sha256_hex;
-pub use crate::shape::{SECOND_JOB_COST_SECONDS, SHARD_THRESHOLD_SECONDS, decide_shape};
+pub use crate::shape::{
+    SECOND_JOB_COST_SECONDS, SHARD_THRESHOLD_SECONDS, decide_shape, sparse_checkout_planned,
+    untimed_auto_note,
+};
 pub use crate::sparse::bytes_outside_lanes;
 pub use crate::suggest_groups::suggest_groups;
+pub use crate::target_dir::NESTED_ROOTS_FOLDER;
 pub use crate::timings::{TIMINGS_PATH, render_timings, root_job_ids};
 pub use crate::toolchain::{TOOLCHAIN_PLAIN, TOOLCHAIN_TOML, toolchain};
 pub use crate::verdict::{

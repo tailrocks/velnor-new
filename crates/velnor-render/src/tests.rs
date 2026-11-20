@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{Job, RootSlug, StepKind};
+use velnor_model::{CargoCommand, Job, RootSlug, StepKind, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT};
 
 use crate::cargo::reports_tests;
 
@@ -10,6 +10,7 @@ pub(crate) const TEST_STEP_ID: &str = "test";
 #[derive(Clone, Debug, Default)]
 pub(crate) struct Tests {
     lanes: Vec<RootSlug>,
+    skippable: bool,
 }
 
 impl Tests {
@@ -28,7 +29,23 @@ impl Tests {
                 lanes.push(plan.slug.clone());
             }
         }
-        Self { lanes }
+        let skippable = job.steps.iter().any(|step| {
+            matches!(
+                &step.kind,
+                StepKind::Cargo(CargoCommand::NextestFeatures { packages, reports: true, .. })
+                    if !packages.is_empty()
+            )
+        });
+        Self { lanes, skippable }
+    }
+
+    fn read(&self, id: &str, name: &str) -> String {
+        let output = format!("steps.{id}.outputs.{name}");
+        if self.skippable && [TESTS_RUN_OUTPUT, TESTS_LISTED_OUTPUT].contains(&name) {
+            format!("${{{{ {output} || '0' }}}}")
+        } else {
+            format!("${{{{ {output} }}}}")
+        }
     }
 
     pub(crate) fn id(&self, slug: Option<&RootSlug>) -> String {
@@ -64,14 +81,11 @@ impl Tests {
                 .map(|slug| {
                     (
                         format!("{name}_{slug}"),
-                        format!("${{{{ steps.{TEST_STEP_ID}_{slug}.outputs.{name} }}}}"),
+                        self.read(&format!("{TEST_STEP_ID}_{slug}"), name),
                     )
                 })
                 .collect();
         }
-        vec![(
-            name.to_owned(),
-            format!("${{{{ steps.{TEST_STEP_ID}.outputs.{name} }}}}"),
-        )]
+        vec![(name.to_owned(), self.read(TEST_STEP_ID, name))]
     }
 }

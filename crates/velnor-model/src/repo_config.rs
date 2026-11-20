@@ -157,6 +157,17 @@ pub struct TestLane {
     pub lint: bool,
     pub doc: bool,
     pub packages: Vec<PackageName>,
+    pub job: LaneJob,
+    /// Whether the `job` key was written at all, whatever its value. A helper
+    /// older than the one that reads the key rejects it either way.
+    pub job_written: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum LaneJob {
+    #[default]
+    Inline,
+    Parallel,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -70,6 +70,16 @@ fn mbx(primed: bool, sessions: &[(u64, u64, u64)]) -> Value {
     json!({"store_primed":primed,"sessions":sessions.iter().map(|(hits, misses, not_looked_up)| json!({"hits":hits,"misses":misses,"not_looked_up":not_looked_up})).collect::<Vec<_>>()})
 }
 
+fn path_artifact() -> Value {
+    json!({
+        "package_id":"path+file:///checkout/crates/mine#mine@0.1.0",
+        "manifest_path":"crates/mine/Cargo.toml",
+        "target":{"name":"mine","kind":["lib"],"crate_types":["lib"],"src_path":"crates/mine/src/lib.rs"},
+        "profile":{"opt_level":"0","debuginfo":2,"debug_assertions":true,"overflow_checks":true,"test":false},
+        "features":[],"filenames":["target/debug/deps/libmine-abc.rlib"],"fresh":false
+    })
+}
+
 #[test]
 fn an_empty_mbx_session_on_a_primed_store_is_waste() {
     for (evidence, expected) in [
@@ -81,6 +91,8 @@ fn an_empty_mbx_session_on_a_primed_store_is_waste() {
         (mbx(true, &[]), false),
     ] {
         let mut value = quiet();
+        value["invocations"][0]["artifacts"] =
+            json!([artifact("target/debug/deps/libserde-abc.rlib")]);
         value["mbx"] = evidence.clone();
         let found = waste(&metrics(value));
         assert_eq!(
@@ -93,10 +105,35 @@ fn an_empty_mbx_session_on_a_primed_store_is_waste() {
 }
 
 #[test]
+fn an_empty_mbx_session_that_compiled_only_path_units_is_not_waste() {
+    for (artifacts, expected) in [
+        (json!([path_artifact()]), false),
+        (
+            json!([
+                path_artifact(),
+                artifact("target/debug/deps/libserde-abc.rlib")
+            ]),
+            true,
+        ),
+    ] {
+        let mut value = quiet();
+        value["invocations"][0]["artifacts"] = artifacts.clone();
+        value["mbx"] = mbx(true, &[(0, 0, 567)]);
+        let found = waste(&metrics(value));
+        assert_eq!(
+            found.iter().any(|line| line.contains("MBX object cache")),
+            expected,
+            "{artifacts}: {found:?}"
+        );
+    }
+}
+
+#[test]
 fn a_toolchain_install_on_an_exact_tools_hit_is_waste() {
     for (hit, installs, expected) in [
         ("exact", json!(["component rust-src"]), true),
         ("exact", json!(["target wasm32-unknown-unknown"]), true),
+        ("exact", json!(["toolchain 1.99.1"]), true),
         ("exact", json!([]), false),
         ("miss", json!(["component rust-src"]), false),
         ("fallback", json!(["component rust-src"]), false),
