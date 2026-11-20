@@ -18,6 +18,7 @@ use crate::release_source::PUSHED_COMMIT;
 use crate::release_steps::{
     checkout, expression, install_tool, join, permissions, shell_word, variables,
 };
+use crate::install_steps::install_tools;
 use crate::rules::{RenderedJob, RenderedStep, Value};
 use crate::steps::install_helper;
 
@@ -45,7 +46,7 @@ pub(crate) fn binary_jobs(
             let mut jobs: Vec<RenderedJob> = binary
                 .platforms
                 .iter()
-                .map(|platform| build(binary, *platform, helper, private))
+                .map(|platform| build(binary, *platform, helper, private, plan.mbx))
                 .collect();
             jobs.push(sums(binary));
             if binary.attest {
@@ -98,6 +99,7 @@ fn build(
     platform: Platform,
     helper: &HelperRelease,
     private: Option<&PrivateSources>,
+    mbx: bool,
 ) -> RenderedJob {
     let (runner, _) = target(platform, binary);
     RenderedJob {
@@ -112,6 +114,7 @@ fn build(
                 same_commit: same_commit(binary),
                 tag: &package_tag(binary),
                 private: private.map(|sources| Private { helper, sources }),
+                mbx,
             },
         ),
         ..behind_the_gate(build_id(&binary.package, platform), binary, Vec::new())
@@ -128,6 +131,7 @@ pub(crate) fn build_steps(
         same_commit,
         tag,
         private,
+        mbx,
     } = context;
     let (_, triple) = target(platform, binary);
     let suffix = platform.file_suffix();
@@ -169,7 +173,11 @@ pub(crate) fn build_steps(
         ));
     }
     steps.extend([
-        install_tool("rust"),
+        if mbx {
+            install_tools(None)
+        } else {
+            install_tool("rust")
+        },
         command(
             format!("Add the {triple} target"),
             format!("rustup target add {triple}"),

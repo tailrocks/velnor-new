@@ -174,6 +174,7 @@ mod release_declared_after;
 mod release_family_fixture;
 mod release_fixture;
 mod release_hyphen_prefix;
+mod release_mbx;
 mod release_inputs;
 mod release_nested_root;
 mod release_nested_toolchain;
