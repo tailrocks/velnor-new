@@ -23,6 +23,10 @@ pub(crate) const CACHE_DEBUG_HELPER: (u64, u64, u64) = (0, 1, 82);
 // helper-gate: first in tools-v0.1.97 via af11477df1
 pub(crate) const REQUIRED_CHECK_HELPER: (u64, u64, u64) = (0, 1, 97);
 
+/// The first `velnor-ci` whose `.velnor/rust-ci.toml` parser accepts `restore_cache` in a `[[test_groups]]` table.
+// helper-gate: first in tools-v0.1.108 via PENDING
+pub(crate) const RESTORE_CACHE_HELPER: (u64, u64, u64) = (0, 1, 108);
+
 pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, GenerateError> {
     let release = facts
         .helper
@@ -96,6 +100,17 @@ pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, Generate
         ));
     }
     check_lane_job(facts, release)?;
+    if facts
+        .config
+        .test_groups
+        .iter()
+        .any(|group| group.restore_cache.is_some())
+        && !release.version().at_least(RESTORE_CACHE_HELPER)
+    {
+        return Err(GenerateError::RestoreCacheHelperTooOld(
+            release.version().clone(),
+        ));
+    }
     if facts.config.mbx_store == MbxStore::Shared && !release.version().at_least((0, 1, 85)) {
         return Err(GenerateError::MbxStoreHelperTooOld(
             release.version().clone(),
