@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 const CARGO_TOML: &str = "[package]\nname = \"probe\"\nversion = \"0.0.0\"\nedition = \"2021\"\nbuild = \"build.rs\"\n\n[dependencies]\n\n[build-dependencies]\nrustix = { version = \"=1.1.6\", default-features = false, features = [\"fs\", \"process\", \"std\"] }\nsha2 = { version = \"=0.11.1\", default-features = false }\n";
-const MAIN: &str = "fn main() { println!(\"{}\", env!(\"VELNOR_ARCHIVE_GUARD_FINGERPRINT\")); }\n";
+const MAIN: &str = "mod stale_inputs;\nfn main() {\n    if let Err(error) = stale_inputs::verify_unwatched_inputs(env!(\"VELNOR_ARCHIVE_GUARD_ROOT\"), env!(\"VELNOR_ARCHIVE_GUARD_UNWATCHED\")) {\n        eprintln!(\"{error}\");\n        std::process::exit(1);\n    }\n    println!(\"{}\", env!(\"VELNOR_ARCHIVE_GUARD_FINGERPRINT\"));\n}\n";
 const MANIFEST: &str = "file Cargo.toml\ntree crates/probe/src\noptional .cargo/config.toml\noptional rust-toolchain\n";
 
 #[derive(Clone, Copy)]
@@ -18,6 +18,11 @@ enum Layout {
     NestedInRoot,
     SymlinkedIntoRoot,
     SymlinkResolved,
+}
+
+enum Consumed {
+    Fingerprint(String),
+    Refused(String),
 }
 
 struct Probe {
@@ -38,6 +43,8 @@ impl Probe {
             "build_support/archive_guard_inputs.rs",
             "build_support/archive_guard_inputs_filesystem.rs",
             "build_support/archive_guard_inputs_filesystem_tests.rs",
+            "build_support/archive_guard_watch.rs",
+            "src/stale_inputs.rs",
         ] {
             fs::copy(own.join(file), krate.join(file))?;
         }
@@ -78,9 +85,42 @@ impl Probe {
         Ok(stderr)
     }
 
-    fn embedded(&self) -> Result<String, Box<dyn Error>> {
+    fn consume(&self) -> Result<Consumed, Box<dyn Error>> {
         let output = Command::new(self.target.join("debug/probe")).output()?;
-        Ok(String::from_utf8(output.stdout)?.trim().to_owned())
+        if output.status.success() {
+            Ok(Consumed::Fingerprint(
+                String::from_utf8(output.stdout)?.trim().to_owned(),
+            ))
+        } else {
+            Ok(Consumed::Refused(String::from_utf8(output.stderr)?))
+        }
+    }
+
+    fn embedded(&self) -> Result<String, Box<dyn Error>> {
+        match self.consume()? {
+            Consumed::Fingerprint(value) => Ok(value),
+            Consumed::Refused(message) => Err(message.into()),
+        }
+    }
+
+    fn assert_not_stale(
+        &self,
+        created: &str,
+        appeared: &[&str],
+        may_refuse: bool,
+    ) -> Result<(), Box<dyn Error>> {
+        match self.consume()? {
+            Consumed::Fingerprint(value) => assert_eq!(
+                value,
+                self.expected()?,
+                "creating {created} left a stale embedded fingerprint"
+            ),
+            Consumed::Refused(message) => assert!(
+                may_refuse && appeared.iter().any(|path| message.contains(path)),
+                "creating {created}: unexpected refusal: {message}"
+            ),
+        }
+        Ok(())
     }
 
     fn expected(&self) -> Result<String, Box<dyn Error>> {
@@ -91,25 +131,22 @@ impl Probe {
 fn assert_created_inputs_are_noticed(layout: Layout) -> Result<(), Box<dyn Error>> {
     let temp = tempfile::tempdir()?;
     let probe = Probe::new(&temp.path().canonicalize()?, layout)?;
+    let may_refuse = !matches!(layout, Layout::OutsideRoot);
     probe.build()?;
     assert_eq!(probe.embedded()?, probe.expected()?);
 
     fs::create_dir(probe.root.join(".cargo"))?;
     fs::write(probe.root.join(".cargo/config.toml"), "")?;
     probe.build()?;
-    assert_eq!(
-        probe.embedded()?,
-        probe.expected()?,
-        "creating .cargo/config.toml left a stale embedded fingerprint"
-    );
+    probe.assert_not_stale(".cargo/config.toml", &[".cargo/config.toml"], may_refuse)?;
 
     fs::write(probe.root.join("rust-toolchain"), "1.99.1\n")?;
     probe.build()?;
-    assert_eq!(
-        probe.embedded()?,
-        probe.expected()?,
-        "creating rust-toolchain left a stale embedded fingerprint"
-    );
+    probe.assert_not_stale(
+        "rust-toolchain",
+        &[".cargo/config.toml", "rust-toolchain"],
+        may_refuse,
+    )?;
     Ok(())
 }
 
