@@ -146,8 +146,47 @@ fn declared_out_dir_inputs_survive_compiler_discovery_invalidation() {
     assert_fresh(&repo, "");
 }
 
+/// The cargo-nextest that the repository's mise.toml pins must be installed in the
+/// mise data directory. Without it the `cargo-nextest` shim fails with an opaque
+/// "not a valid shim" error, so the test names the pin and the fix instead.
+fn pinned_nextest_problem(data_dir: Option<&std::path::Path>) -> Option<String> {
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let mut probe = std::process::Command::new("mise");
+    probe
+        .args(["which", "cargo-nextest"])
+        .current_dir(&root)
+        .env("MISE_GLOBAL_CONFIG_FILE", root.join("mise.toml"))
+        .env("MISE_TRUSTED_CONFIG_PATHS", &root);
+    if let Some(data_dir) = data_dir {
+        probe.env("MISE_DATA_DIR", data_dir);
+    }
+    let output = probe
+        .output()
+        .unwrap_or_else(|e| unreachable!("cannot run mise: {e}"));
+    (!output.status.success()).then(|| {
+        "cargo-nextest pinned in mise.toml is not installed in the mise data directory: \
+         run `mise install` in the repository root, then rerun the test"
+            .to_owned()
+    })
+}
+
+#[test]
+fn nextest_discovery_names_the_missing_pin_before_running() {
+    let data_dir = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR"))
+        .join("nextest-discovery-empty-mise-data");
+    fs::create_dir_all(&data_dir).unwrap_or_else(|e| unreachable!("{e}"));
+    let problem = pinned_nextest_problem(Some(&data_dir));
+    fs::remove_dir_all(&data_dir).unwrap_or_else(|e| unreachable!("{e}"));
+    let problem = problem.expect("an empty mise data directory has no pinned cargo-nextest");
+    assert!(problem.contains("mise.toml"), "{problem}");
+    assert!(problem.contains("`mise install`"), "{problem}");
+}
+
 #[test]
 fn nextest_discovery_compiles_first_and_executes_the_tests_once() {
+    if let Some(problem) = pinned_nextest_problem(None) {
+        panic!("{problem}");
+    }
     let repo = cargo_project(InputDirectory::Generated);
     repo.write("rust/src/lib.rs", r#"#[test]
 fn records_execution() {
