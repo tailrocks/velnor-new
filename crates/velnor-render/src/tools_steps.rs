@@ -62,7 +62,7 @@ fn anchor_cache_step(action: &str, verb: &str) -> RenderedStep {
     let key = key.replacen("velnor-tools-", "velnor-tools-anchor-", 1);
     RenderedStep {
         id: (verb == "Restore").then(|| ANCHOR_STEP.to_owned()),
-        name: format!("{verb} the tools anchor"),
+        name: format!("{verb} anchor"),
         shared: true,
         uses: Some(action.to_owned()),
         with: vec![
@@ -76,9 +76,9 @@ fn anchor_cache_step(action: &str, verb: &str) -> RenderedStep {
 fn verify_step(verb: velnor_model::ToolsLocalVerb) -> RenderedStep {
     use velnor_model::ToolsLocalVerb as Verb;
     let (id, name, word) = match verb {
-        Verb::AnchorReset => (None, "Clear the tools anchor", "reset"),
-        Verb::Verify => (Some(VERIFY_STEP), "Verify the restored tools", "check"),
-        _ => (Some(RECORD_STEP), "Record the tools anchor", "record"),
+        Verb::AnchorReset => (None, "Clear anchor", "reset"),
+        Verb::Verify => (Some(VERIFY_STEP), "Verify tools", "check"),
+        _ => (Some(RECORD_STEP), "Record anchor", "record"),
     };
     let hit = Value::Expr(format!("${{{{ steps.{ANCHOR_STEP}.outputs.cache-hit }}}}"));
     RenderedStep {

@@ -330,7 +330,7 @@ fn values(items: &[(String, Value)], share: bool) -> Yaml {
                 };
                 let named = key.starts_with("VELNOR_HELPER") || key == "SOURCES_LOCKS";
                 let yaml = if (named || share)
-                    && matches!(value, Value::Text(text) | Value::Expr(text) if text.len() > if named { 100 } else { 40 } && !text.contains('\n'))
+                    && matches!(value, Value::Text(text) | Value::Expr(text) if text.len() > if named { 100 } else { 30 } && !text.contains('\n'))
                 {
                     Yaml::Shared(Box::new(yaml))
                 } else {

@@ -70,10 +70,7 @@ fn every_tools_restore_is_verified_before_anything_runs_the_tools() -> TestResul
                 .ok_or_else(|| format!("{config:?} {id}: no verify step"))?;
             assert!(verify > last_restore, "{config:?} {id}");
             let anchor = verify - 1;
-            assert_eq!(
-                steps[anchor]["name"], "Restore the tools anchor",
-                "{config:?} {id}"
-            );
+            assert_eq!(steps[anchor]["name"], "Restore anchor", "{config:?} {id}");
             assert!(anchor > last_restore, "{config:?} {id}");
             let reset = anchor - 1;
             assert!(
