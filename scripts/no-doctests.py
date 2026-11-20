@@ -6,18 +6,16 @@ from pathlib import Path
 IDENT = re.compile(r"[^\W\d]\w*")
 FENCE = re.compile(r"```|~~~")
 LINE_DOC = re.compile(r"//(?:!|/(?!/))")
-QUOTE = r"(?:[ \t]*>)*"
 CONTAINER = r"(?:>[ \t]*|(?:[-*+]|\d{1,9}[.)])[ \t]+|\[\^[^\]\s]+\]:[ \t]*)*"
+MARKER = r"[ \t]*(?:>|[-*+]|\d{1,9}[.)]|\[\^[^\]\s]+\]:)"
 LINE_FENCE = re.compile(r"[ \t]*" + CONTAINER + r"(?:```|~~~)")
-LINE_INDENT = re.compile(QUOTE + r" {5,}\S")
-ATTR_INDENT = re.compile(r" {4,}\S|(?:[ \t]*>)+ {5,}\S")
+LINE_INDENT = re.compile(r"(?:" + MARKER + r")* {5,}\S")
+ATTR_INDENT = re.compile(r" {4,}\S|(?:" + MARKER + r")+ {5,}\S")
 BLOCK_FENCE = re.compile(r"^[ \t]*\*?[ \t]*" + CONTAINER + r"(?:```|~~~)", re.M)
-BLOCK_INDENT = re.compile(r"^[ \t]*\*?" + QUOTE + r" {5,}\S", re.M)
+BLOCK_INDENT = re.compile(r"^[ \t]*\*?(?:" + MARKER + r")* {5,}\S", re.M)
 DOC_OPEN = re.compile(r"/\*(?:!|\*(?![*/]))")
-ATTR_START = re.compile(r"#\s*!?\s*\[")
 DOC_EQ = re.compile(r"\s*=(?!=)")
 DOC_INCLUDE = re.compile(r"\s*=\s*include_str!")
-SHEBANG_ATTR = re.compile(r"#!\s*\[")
 STRING_ESCAPE = re.compile(r"\\(?:x([0-9a-fA-F]{2})|u\{([0-9a-fA-F_]{1,8})\}|(\r?\n[ \t\r\n]*)|(.))", re.S)
 SIMPLE_ESCAPE = {"n": "\n", "r": "\r", "t": "\t", "0": "\0", "\\": "\\", "'": "'", '"': '"'}
 RAW_PREFIX = {"r", "br", "cr"}
@@ -87,8 +85,18 @@ def skip_char(src, i):
     return None
 
 
+def attr_open(src, i):
+    k = skip_trivia(src, i + 1)
+    if src.startswith("!", k):
+        k = skip_trivia(src, k + 1)
+    return k + 1 if src.startswith("[", k) else None
+
+
 def value_has_fence(value):
-    return any(LINE_FENCE.match(line) or ATTR_INDENT.match(line) for line in value.split("\n"))
+    return any(
+        LINE_FENCE.match(line) or ATTR_INDENT.match(line.replace("\t", "    "))
+        for line in re.split(r"\r\n|\r|\n", value)
+    )
 
 
 def decode_escape(match):
@@ -122,14 +130,14 @@ def doc_findings(src):
             end = len(src) if k < 0 else k
             if LINE_DOC.match(src, i):
                 body = src[i + 3 : end]
-                if LINE_FENCE.match(body) or LINE_INDENT.match(body):
+                if LINE_FENCE.match(body) or LINE_INDENT.match(body.replace("\t", "    ")):
                     yield i
             i = end
         elif src.startswith("/*", i):
             end = block_end(src, i)
             if DOC_OPEN.match(src, i):
                 body = src[i + 3 : end]
-                if BLOCK_FENCE.search(body) or BLOCK_INDENT.search(body):
+                if BLOCK_FENCE.search(body) or BLOCK_INDENT.search(body.replace("\t", "    ")):
                     yield i
             i = end
         elif c == '"':
@@ -140,9 +148,9 @@ def doc_findings(src):
         elif c == "'":
             j = skip_char(src, i)
             i = i + 1 if j is None else j
-        elif c == "#" and (m := ATTR_START.match(src, i)):
+        elif c == "#" and (j := attr_open(src, i)) is not None:
             attr_depth = 1
-            i = m.end()
+            i = j
         elif c == "[":
             if attr_depth:
                 attr_depth += 1
@@ -186,7 +194,7 @@ def rust_sources():
 
 def strip_shebang(src):
     src = src.removeprefix("\ufeff")
-    if src.startswith("#!") and not SHEBANG_ATTR.match(src):
+    if src.startswith("#!") and attr_open(src, 0) is None:
         first, newline, rest = src.partition("\n")
         return newline + rest
     return src

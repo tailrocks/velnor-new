@@ -25,9 +25,6 @@
 # the command below checks the regular-file type and exact pointer body on
 # the CI Linux runner. Generated trees must not emit symlinks: plugin
 # installers reject packages that contain symlink entries.
-# The `no-doctests` command rule runs scripts/no-doctests.py once (it is
-# triggered by that script file, which the scanner does not read as input)
-# and scans every crates/**/src Rust file in that one process.
 # Validate with the pinned alint binary: `alint validate-config`.
 # The 80-line function/method limit (§5, "using Clippy accounting") is NOT
 # expressed here — alint ships no function-level rule kind. It is enforced
