@@ -13,7 +13,7 @@ use crate::yaml_tree::document;
 const WORKFLOW: &str = "release";
 const DRIFT: &str = "tag-ruleset-drift";
 const WRITER: &str = "publish-family";
-const BUILDS: [&str; 4] = [
+const BUILDS: &[&str] = &[
     "build-velnor-ci-linux-x64",
     "build-velnor-ci-linux-arm64",
     "build-velnor-gen-linux-x64",
@@ -119,7 +119,7 @@ fn the_release_dag_gates_the_tag_on_default_branch_ancestry_before_anything_else
     for (id, job) in jobs.iter().filter(|(id, _)| *id != "gate") {
         assert!(needs(job).contains(&"gate"), "{id}");
     }
-    for build in BUILDS {
+    for build in BUILDS.iter().copied() {
         assert!(needs(&jobs[build]).contains(&"family"), "{build}");
     }
     assert_eq!(needs(&jobs["sums-family"]).len(), 2 + BUILDS.len());
@@ -160,7 +160,7 @@ fn only_the_publish_job_can_write_contents_and_verification_precedes_it() -> Tes
             "{id}"
         );
     }
-    for build in BUILDS {
+    for build in BUILDS.iter().copied() {
         let build_runs = runs(&jobs[build]);
         let built = position(&build_runs, "cargo build --profile release-tools ")?;
         let smoke = build_runs

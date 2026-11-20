@@ -13,7 +13,7 @@ use velnor_runner_image_manifest::RunnerImageNamedContext;
 use super::snapshot::{SnapshotDirectory, create_bounded_snapshot};
 use crate::error::HostError;
 
-const NAMES: [&str; 4] = [
+const NAMES: &[&str] = &[
     "resource_probe",
     "storage_init",
     "job_start_hook",
@@ -39,7 +39,7 @@ impl Contexts {
         end: Instant,
     ) -> Result<Self, HostError> {
         let mut files = BTreeMap::new();
-        for name in NAMES {
+        for name in NAMES.iter().copied() {
             let snapshot_name = format!("context-{name}");
             let file =
                 create_bounded_snapshot(&root.join(name), directory, &snapshot_name, end, LIMIT)?;
