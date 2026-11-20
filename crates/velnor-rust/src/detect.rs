@@ -4,8 +4,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
-    DenyLane, InputOwner, PackageName, RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE, RepoFacts, RepoPath,
-    RepoView, RepositoryIdentity, RootSlug, RustCiConfig, RustRoot, WORKFLOWS_CONFIG_PATH,
+    DenyChecks, DenyLane, InputOwner, PackageName, RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE,
+    RepoFacts, RepoPath, RepoView, RepositoryIdentity, RootSlug, RustCiConfig, RustRoot,
+    WORKFLOWS_CONFIG_PATH,
 };
 
 use crate::config::{CONFIG_PATH, excluded, parse};
@@ -166,7 +167,12 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
         .policy
         .as_ref()
         .map_or(DenyLane::Auto, |policy| policy.deny);
-    let policy = policy_tools(view, &deny_configs, config.runner.as_str(), lane)?;
+    let checks = config
+        .policy
+        .as_ref()
+        .and_then(|policy| policy.deny_checks.as_deref())
+        .map_or(DenyChecks::ALL, DenyChecks::of);
+    let policy = policy_tools(view, &deny_configs, config.runner.as_str(), lane, checks)?;
     let weakenings = weakenings(&view.files, &rust_roots);
     let private_sources = crate::config_cache::private_sources(view, &rust_roots, &config)?;
     let repository = repository_identity(view, &config)?;
