@@ -61,6 +61,7 @@ pub(crate) fn rendered_job(job: &Job, plan: &WorkflowPlan) -> RenderedJob {
     let mut steps =
         crate::helper_integrity::secure_steps(job, job_steps(job, restores, audit, &tests, lane));
     let env = crate::cargo::hoist_target_dir(job, &mut steps);
+    crate::shared_runs::mark(job, &mut steps);
     RenderedJob {
         id: job.id.to_string(),
         name: job.name.clone(),
