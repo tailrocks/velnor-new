@@ -7,6 +7,7 @@ mod cache;
 mod cache_layout;
 mod cache_outputs;
 mod cargo_build;
+mod cargo_command;
 mod check_configurations;
 mod cron;
 mod helper;
