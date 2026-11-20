@@ -149,10 +149,9 @@ fn in_file(file: &RepoPath, bytes: &[u8]) -> Vec<Weakening> {
                         ));
                     }
                     if let Some(checks) = &policy.deny_checks {
-                        let named: BTreeSet<DenyCheck> = checks.iter().copied().collect();
-                        if DenyCheck::ALL.iter().any(|check| !named.contains(check)) {
+                        for check in DenyCheck::ALL.iter().copied().filter(|check| !checks.contains(check)) {
                             found.push(make(
-                                format!("[policy] deny_checks = {checks:?}"),
+                                format!("[policy] deny_checks omits {}", check.name()),
                                 "runs only the named cargo-deny checks, so the others are not checked".to_owned(),
                             ));
                         }
