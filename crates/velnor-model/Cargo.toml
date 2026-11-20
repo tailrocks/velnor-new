@@ -20,3 +20,7 @@ toml.workspace = true
 [lib]
 path = "src/lib.rs"
 doctest = false
+
+[[test]]
+name = "it"
+path = "tests/it/main.rs"
