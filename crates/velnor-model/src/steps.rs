@@ -160,7 +160,6 @@ impl StepKind {
             | Self::SourcesLocks(_)
             | Self::SourcesFetch { .. }
             | Self::SourcesFetchAll { .. }
-            | Self::AdvisoryFetch { .. }
             | Self::CacheDecide { .. }
             | Self::CacheResult(_)
             | Self::CacheVerify { .. }
@@ -183,7 +182,6 @@ impl StepKind {
             | Self::PrivateCheck { .. }
             | Self::PrivateToken { .. }
             | Self::PrivateFetch { .. }
-            | Self::AdvisoryFetch { .. }
             | Self::MbxRemote { .. }
             | Self::MbxStore { .. }
             | Self::MbxSeed { .. }
@@ -202,7 +200,6 @@ impl StepKind {
             | Self::CheckMetrics { .. }
             | Self::Budget { .. }
             | Self::MergeGroupPassed { .. }
-            | Self::AdvisoryFetch { .. }
             | Self::MergeQueueCheck { .. } => false,
         }
     }
