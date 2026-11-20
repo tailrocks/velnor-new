@@ -56,6 +56,7 @@ mod delta_trim;
 mod event;
 mod fetch;
 mod fetch_git_home;
+mod fetch_git_links;
 mod fetch_real_cargo;
 mod fetch_reports;
 mod fetch_server;
