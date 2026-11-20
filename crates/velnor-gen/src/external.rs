@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::io::Write;
 
 use velnor_model::{RepoPath, RepoView};
 use velnor_render::{Owner, owner_of};
 use velnor_rust::detect;
 
-use crate::{ExternalWorkflowError, GenerateError};
+use crate::{Drift, ExternalWorkflowError, GenerateError};
 
 /// The `external_workflows` paths of `.velnor/rust-ci.toml` that `velnor-gen check` skips.
 /// Each must exist on disk, must not be a file velnor-gen writes, and must not carry the
@@ -50,4 +51,33 @@ pub fn external_skips(
 ) -> Result<BTreeSet<RepoPath>, GenerateError> {
     let expected = crate::expected_files(view)?;
     skipped(view, &expected, on_disk)
+}
+
+/// The retired `.velnor/config.toml` still hides every unowned workflow from `check`. Drop
+/// those `Unmarked` drifts, and say for each that `external_workflows` replaces the bypass.
+pub(crate) fn legacy_bypass(
+    drifts: Vec<Drift>,
+    engine_configured: bool,
+    out: &mut dyn Write,
+) -> Vec<Drift> {
+    if !engine_configured {
+        return drifts;
+    }
+    drifts
+        .into_iter()
+        .filter(|drift| {
+            let Drift::Unmarked(path) = drift else {
+                return true;
+            };
+            writeln!(out, "velnor-gen: {}", legacy_bypass_notice(path)).ok();
+            false
+        })
+        .collect()
+}
+
+/// The deprecation notice for one workflow that only the legacy bypass keeps out of drift.
+fn legacy_bypass_notice(path: &RepoPath) -> String {
+    format!(
+        "notice: {path} is skipped only because .velnor/config.toml exists; that bypass is deprecated, use external_workflows (velnor-ci ≥ 0.1.108)"
+    )
 }
