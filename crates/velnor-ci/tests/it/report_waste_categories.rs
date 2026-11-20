@@ -216,9 +216,15 @@ mbx[savings]: rustc believes it compiled everything. it is down 42d 20h across 1
 
 #[test]
 fn mbx_lookup_lines_that_do_not_parse_are_reported_and_never_counted_as_zero() {
-    let log = b"2026-11-20T01:37:32Z mbx[cache]: object cache: 3 hits, many misses; 0 B downloaded\n\
+    let log =
+        b"2026-11-20T01:37:32Z mbx[cache]: object cache: 3 hits, many misses; 0 B downloaded\n\
 mbx[cache]: 1 hits; 0 B downloaded, 0 B uploaded, 0 B stored locally\n\
 mbx[cache]: 28.53s session; 2m 37s estimated compiler time avoided\n";
-    assert!(mbx_sessions(log).is_empty());
-    assert_eq!(mbx_unparsed_lines(log).len(), 2, "{:?}", mbx_unparsed_lines(log));
+    assert_eq!(mbx_sessions(log).len(), 0);
+    assert_eq!(
+        mbx_unparsed_lines(log).len(),
+        2,
+        "{:?}",
+        mbx_unparsed_lines(log)
+    );
 }
