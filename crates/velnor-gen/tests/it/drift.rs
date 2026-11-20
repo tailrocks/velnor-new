@@ -219,9 +219,7 @@ fn every_workflow_velnor_gen_renders_carries_a_seal_that_verifies() -> TestResul
     Ok(())
 }
 
-fn tracked_paths(
-    root: &Path,
-) -> Result<(BTreeSet<RepoPath>, BTreeSet<RepoPath>), Box<dyn Error>> {
+fn tracked_paths(root: &Path) -> Result<(BTreeSet<RepoPath>, BTreeSet<RepoPath>), Box<dyn Error>> {
     let listing = Command::new(program("git"))
         .args(["ls-files", "-s", "-z"])
         .current_dir(root)

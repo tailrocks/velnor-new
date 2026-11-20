@@ -24,8 +24,7 @@ pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, Generate
     if !release.version().at_least(HELPER_MINIMUM) {
         return Err(GenerateError::HelperTooOld(release.version().clone()));
     }
-    if is_macos(facts) && !release.digests().contains_key(&Platform::MacosArm64)
-    {
+    if is_macos(facts) && !release.digests().contains_key(&Platform::MacosArm64) {
         return Err(GenerateError::HelperLockLacksMacos {
             version: release.version().clone(),
             runner: facts.config.runner.to_string(),
