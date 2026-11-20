@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    CargoCommand, GateNeed, Job, MERGE_GROUP_SKIP_OUTPUT, RepoFacts, RootSlug, StepKind,
-    TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT,
-    cache_lane_outputs, group_output_name, json_char_bytes, json_string_bytes,
+    GateNeed, Job, MERGE_GROUP_SKIP_OUTPUT, RepoFacts, RootSlug, StepKind, TESTS_BY_PACKAGE_OUTPUT,
+    TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, cache_lane_outputs,
+    group_output_name, json_char_bytes, json_string_bytes,
 };
 
 const PACKAGE_ENTRY_BYTES: usize = 43;
@@ -30,9 +30,9 @@ pub(crate) fn needs_max_bytes<'a>(
                 total.saturating_add(property_bytes(&group_output_name(slug, name), 4))
             });
         let tests = job.steps.iter().find_map(|step| match &step.kind {
-            StepKind::Cargo(
-                CargoCommand::NextestRun { .. } | CargoCommand::NextestRunArchive { .. },
-            ) => Some(step.reads.as_ref().map(|plan| plan.slug.clone())),
+            StepKind::Cargo(command) if command.reports_tests() => {
+                Some(step.reads.as_ref().map(|plan| plan.slug.clone()))
+            }
             _ => None,
         });
         let counters = match tests {

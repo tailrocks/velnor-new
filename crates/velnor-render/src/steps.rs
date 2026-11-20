@@ -157,6 +157,7 @@ fn job_steps(
                 job,
                 step,
                 rendered_steps(step, setup, audit, tests, lane, around),
+                gate.audit_runs(index),
             ))
         })
         .flatten()
@@ -346,6 +347,7 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
         StepKind::PrivateCheck { .. }
         | StepKind::PrivateToken { .. }
         | StepKind::PrivateFetch { .. } => crate::private_steps::render(kind),
+        StepKind::AdvisoryFetch { configs } => crate::private_steps::advisory_fetch(configs),
         StepKind::MbxSeed | StepKind::ToolsLocal(_) => crate::helper_steps::node_step(kind),
         StepKind::TestSetup { name, run } => RenderedStep {
             name: name.clone(),

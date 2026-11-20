@@ -80,6 +80,7 @@ pub enum Reason {
     UnknownTestGroupRoot(String),
     TestGroupWithoutNextest(String),
     TestGroupFilter(String),
+    TestGroupsWithPrivateSources,
     PrCiWithSkipDraft,
     RustdocflagsString,
     CargoConfigInclude,
@@ -158,28 +159,6 @@ impl Reason {
             Self::UnknownRoot(root) => write!(
                 f,
                 "has times for {root}, which is not a Cargo root of this repository; run `velnor-ci timings` again"
-            ),
-            _ => Ok(()),
-        }
-    }
-
-    fn fmt_test_groups(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::UnknownTestGroupRoot(root) => write!(
-                f,
-                "test_groups names the root {root}, which is not a Cargo root of this repository; name the folder of a root's Cargo.toml, or . for the repository root"
-            ),
-            Self::TestGroupWithoutNextest(name) => write!(
-                f,
-                "test group {name} belongs to a root with no nextest tests; a group runs a nextest filter from the root's archive"
-            ),
-            Self::TestGroupFilter(filter) => write!(
-                f,
-                "test_groups.filter {filter:?} is empty or has a character a generated one-command step cannot carry (a control character, a quote, $, a backtick, a backslash, |, &, ; or <); write nextest's and, or and not instead of &, | and !"
-            ),
-            Self::UnknownTestSetupRoot(root) => write!(
-                f,
-                "test_setup names the root {root}, which is not a Cargo root of this repository; name the folder of a root's Cargo.toml, or . for the repository root"
             ),
             _ => Ok(()),
         }
@@ -292,7 +271,8 @@ impl fmt::Display for Reason {
             | Self::UnknownRoot(_) => self.fmt_inputs(f),
             Self::UnknownTestGroupRoot(_)
             | Self::TestGroupWithoutNextest(_)
-            | Self::TestGroupFilter(_) => self.fmt_test_groups(f),
+            | Self::TestGroupFilter(_)
+            | Self::TestGroupsWithPrivateSources => self.fmt_test_groups(f),
             Self::UnknownTestLaneRoot(_)
             | Self::TestLaneWithoutNextest(_)
             | Self::UnknownTestLanePackage(_) => self.fmt_test_lane(f),

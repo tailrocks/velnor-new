@@ -21,7 +21,7 @@ use crate::lane::{
 use crate::plan_budget::{draft_guard, expose_selection, triggers};
 use crate::plan_tools::{mirror_step, tools_install, tools_restore, tools_save};
 use crate::required_job::{expose_in_single, gate_outputs};
-use crate::root_jobs::root_jobs;
+use crate::root_jobs::{lane_jobs, root_jobs};
 use crate::shape::{decisions, helper_root, single_job};
 use crate::units::{Unit, units};
 
@@ -55,13 +55,17 @@ fn plan_with(facts: &RepoFacts, deltas: bool) -> WorkflowPlan {
     let single = single_job(facts, &units, &decisions);
     let mut jobs: Vec<Job> = units
         .iter()
-        .zip(decisions)
+        .zip(decisions.iter().cloned())
         .flat_map(|(unit, decision)| {
             let lane = Lane::root(unit.gate.clone(), single, deltas);
             root_jobs(facts, unit, decision, suffixed, &lane)
         })
         .collect();
     jobs.extend(audit_job(facts, &units, &jobs));
+    for (unit, decision) in units.iter().zip(&decisions) {
+        let lane = Lane::root(unit.gate.clone(), single, deltas);
+        jobs.extend(lane_jobs(facts, unit, decision.shape, suffixed, &lane));
+    }
     if facts.policy.any() {
         jobs.push(policy_job(facts, &Lane::policy(single, deltas)));
     }
@@ -353,6 +357,11 @@ pub(crate) fn job(facts: &RepoFacts, id: JobId) -> Job {
             .helper
             .as_ref()
             .is_some_and(|helper| helper.version().at_least(IGNORED_COUNT_HELPER)),
+        records_build: facts.helper.as_ref().is_some_and(|helper| {
+            helper
+                .version()
+                .at_least(crate::root_jobs::BUILT_RECORD_HELPER)
+        }),
         selection_name: None,
         steps: Vec::new(),
     }

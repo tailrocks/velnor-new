@@ -7,7 +7,7 @@ use std::process::Command;
 
 use serde::Deserialize;
 use velnor_model::PackageName;
-use velnor_rust::resolve;
+use velnor_rust::{NESTED_ROOTS_FOLDER, resolve};
 
 use super::audit::Audit;
 use crate::coverage::{Fingerprint, HOST, UnitKind};
@@ -73,6 +73,10 @@ pub(super) fn unit_files(target: &Path) -> Result<Vec<(UnitFile, PathBuf)>, CiEr
                 .file_type()
                 .map_err(|e| CiError::new(format!("cannot read {}: {e}", path.display())))?;
             if kind.is_dir() && entry.file_name() != "incremental" {
+                if depth == 0 && entry.file_name() == NESTED_ROOTS_FOLDER {
+                    // The build folders of the Cargo roots below this one, each audited as its own root.
+                    continue;
+                }
                 if depth >= MAX_TARGET_DEPTH {
                     return Err(CiError::new(format!(
                         "target directory depth exceeds {MAX_TARGET_DEPTH} at {}",
@@ -187,7 +191,10 @@ pub(super) fn apart(workspaces: &[Workspace], shared: &[Vec<usize>]) -> Result<(
         .collect::<Result<_, _>>()?;
     for (outer, holder) in directories.iter().enumerate() {
         for (inner, held) in directories.iter().enumerate() {
-            if outer == inner || !held.starts_with(holder) {
+            if outer == inner
+                || !held.starts_with(holder)
+                || held.starts_with(holder.join(NESTED_ROOTS_FOLDER))
+            {
                 continue;
             }
             let grouped = held == holder

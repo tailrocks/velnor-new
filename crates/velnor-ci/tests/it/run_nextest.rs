@@ -83,6 +83,16 @@ pub(crate) fn run_with_output(
     let (output, written, temp, _) = execute_nextest(name, run, list_json, command, None);
     (output, written, temp)
 }
+/// The step output without the `built=` line, which a nextest run writes once its
+/// build is known. Counts are what the held-pipe tests assert are withheld.
+pub(crate) fn without_built(written: &str) -> String {
+    let mut kept = String::new();
+    for line in written.lines().filter(|line| !line.starts_with("built=")) {
+        kept.push_str(line);
+        kept.push('\n');
+    }
+    kept
+}
 pub(crate) fn execute_nextest(
     name: &str,
     run: &str,
@@ -154,7 +164,7 @@ fn run_appends_the_number_of_tests_nextest_ran_to_the_step_output() {
     assert!(output.status.success(), "{output:?}");
     assert_eq!(
         written,
-        "existing=1\ntests_run=7\ntests_listed=7\ntests_ignored=0\n"
+        "existing=1\nbuilt=true\ntests_run=7\ntests_listed=7\ntests_ignored=0\n"
     );
 }
 
@@ -168,7 +178,7 @@ fn run_counts_failed_tests_and_keeps_the_exit_code_of_nextest() {
     assert_eq!(output.status.code(), Some(100));
     assert_eq!(
         written,
-        "existing=1\ntests_run=5\ntests_listed=5\ntests_ignored=0\n"
+        "existing=1\nbuilt=true\ntests_run=5\ntests_listed=5\ntests_ignored=0\n"
     );
 }
 
@@ -180,7 +190,7 @@ fn run_reports_a_run_without_tests_as_zero() {
     assert!(output.status.success(), "{output:?}");
     assert_eq!(
         written,
-        "existing=1\ntests_run=0\ntests_listed=0\ntests_ignored=0\ntests_by_package=\n"
+        "existing=1\nbuilt=true\ntests_run=0\ntests_listed=0\ntests_ignored=0\ntests_by_package=\n"
     );
 }
 
@@ -195,7 +205,7 @@ END";
     assert!(output.status.success(), "{output:?}");
     assert_eq!(
         written,
-        "existing=1\ntests_run=0\ntests_listed=1\ntests_ignored=0\ntests_by_package=gone=0/1\n"
+        "existing=1\nbuilt=true\ntests_run=0\ntests_listed=1\ntests_ignored=0\ntests_by_package=gone=0/1\n"
     );
 }
 
@@ -210,7 +220,7 @@ END";
     let (_, written, _) = run_with_output("tests-run-no-counter", script, &two, &NEXTEST_RUN);
     assert_eq!(
         written,
-        "existing=1\ntests_run=2\ntests_listed=2\ntests_ignored=0\ntests_by_package=kept=2/2\n"
+        "existing=1\nbuilt=true\ntests_run=2\ntests_listed=2\ntests_ignored=0\ntests_by_package=kept=2/2\n"
     );
 }
 
@@ -227,7 +237,7 @@ END";
     let (_, written, _) = run_with_output("tests-run-retry", script, &two, &NEXTEST_RUN);
     assert_eq!(
         written,
-        "existing=1\ntests_run=2\ntests_listed=2\ntests_ignored=0\ntests_by_package=kept=2/2\n"
+        "existing=1\nbuilt=true\ntests_run=2\ntests_listed=2\ntests_ignored=0\ntests_by_package=kept=2/2\n"
     );
 }
 
@@ -241,7 +251,7 @@ END";
     let (_, written, _) = run_with_output("tests-run-unicode", script, &one, &NEXTEST_RUN);
     assert_eq!(
         written,
-        "existing=1\ntests_run=1\ntests_listed=1\ntests_ignored=0\ntests_by_package=café=1/1\n"
+        "existing=1\nbuilt=true\ntests_run=1\ntests_listed=1\ntests_ignored=0\ntests_by_package=café=1/1\n"
     );
 }
 
@@ -255,7 +265,7 @@ fn run_counts_a_status_line_longer_than_the_line_limit() {
     let (_, written, _) = run_with_output("tests-run-long", &script, &one, &NEXTEST_RUN);
     assert_eq!(
         written,
-        "existing=1\ntests_run=1\ntests_listed=1\ntests_ignored=0\ntests_by_package=kept=1/1\n"
+        "existing=1\nbuilt=true\ntests_run=1\ntests_listed=1\ntests_ignored=0\ntests_by_package=kept=1/1\n"
     );
 }
 
@@ -266,13 +276,13 @@ fn run_counts_runnable_tests_when_the_log_has_no_status_lines() {
     let (_, written, _) = run_with_output("tests-run-mixed", mixed, &three, &NEXTEST_RUN);
     assert_eq!(
         written,
-        "existing=1\ntests_run=3\ntests_listed=3\ntests_ignored=0\n"
+        "existing=1\nbuilt=true\ntests_run=3\ntests_listed=3\ntests_ignored=0\n"
     );
     let bare = "echo '     Summary [   0.5s] 3 tests run: 3 passed' >&2";
     let (_, written, _) = run_with_output("tests-run-bare", bare, &three, &NEXTEST_RUN);
     assert_eq!(
         written,
-        "existing=1\ntests_run=3\ntests_listed=3\ntests_ignored=0\n"
+        "existing=1\nbuilt=true\ntests_run=3\ntests_listed=3\ntests_ignored=0\n"
     );
 }
 
@@ -300,7 +310,7 @@ fn run_writes_no_count_for_other_commands_or_a_run_that_printed_no_summary() {
     for (name, script, command) in cases {
         let (_, written, _) =
             run_with_output(&format!("tests-run-no-{name}"), script, "", &command);
-        assert_eq!(written, "existing=1\n", "{name}");
+        assert_eq!(without_built(&written), "existing=1\n", "{name}");
     }
 }
 
@@ -321,6 +331,6 @@ END";
     assert!(output.status.success(), "{output:?}");
     assert_eq!(
         written,
-        "existing=1\ntests_run=1\ntests_listed=1\ntests_ignored=0\ntests_by_package=kept=1/1\n"
+        "existing=1\nbuilt=true\ntests_run=1\ntests_listed=1\ntests_ignored=0\ntests_by_package=kept=1/1\n"
     );
 }
