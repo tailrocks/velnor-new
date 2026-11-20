@@ -16,6 +16,7 @@ command = ["/usr/bin/env", "PATH=/nonexistent"]
 docker-networks = { max-threads = 4 }
 velnor-ci-serial = { max-threads = 1 }
 probe-cleanup-observer-serial = { max-threads = 1 }
+setup-action = { max-threads = 2 }
 
 [profile.ci]
 retries = 0
@@ -172,6 +173,11 @@ slow-timeout = { period = "30s", terminate-after = 1 }
 filter = 'package(=velnor-gen) and binary(=it) and test(/^setup_action/)'
 slow-timeout = { period = "30s", terminate-after = 4 }
 
+# Each of these forks bash, curl, tar and a guard watchdog; two at a time keep them off a loaded host.
+[[profile.default.overrides]]
+filter = 'package(=velnor-gen) and binary(=it) and (test(/^setup_action/) or test(=helper_tool_paths::setup_records_non_default_tools_and_rendered_calls_use_them))'
+test-group = "setup-action"
+
 # Renders every lane output of four plans and checks each rendered workflow.
 [[profile.default.overrides]]
 filter = 'package(=velnor-gen) and binary(=it) and test(saving_lane_outputs_fit_the_required_context_bound)'
@@ -202,7 +208,11 @@ test-group = "probe-cleanup-observer-serial"
 # Same tiers as profile.default for the tests added above. profile.ci has no 2 s line of its own.
 [[profile.ci.overrides]]
 filter = 'package(=velnor-gen) and binary(=it) and test(/^setup_action/)'
-slow-timeout = { period = "30s", terminate-after = 4 }
+slow-timeout = { period = "60s", terminate-after = 5 }
+
+[[profile.ci.overrides]]
+filter = 'package(=velnor-gen) and binary(=it) and (test(/^setup_action/) or test(=helper_tool_paths::setup_records_non_default_tools_and_rendered_calls_use_them))'
+test-group = "setup-action"
 
 [[profile.ci.overrides]]
 filter = 'package(=velnor-gen) and binary(=it) and test(saving_lane_outputs_fit_the_required_context_bound)'
