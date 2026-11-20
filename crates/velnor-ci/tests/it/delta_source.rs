@@ -3,7 +3,7 @@
 
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::time::{Duration, SystemTime};
 use velnor_test_support::real_cargo;
@@ -309,4 +309,24 @@ fn source_identity_declines_preexisting_tracked_node_kind_mismatches() {
 
 fn kind_path(kind: &str) -> &str {
     if kind == "file" { "src.rs" } else { "link" }
+}
+
+/// The folders of a profile directory that hold one unit's fingerprint files: the layout before
+/// Cargo 1.100 is `.fingerprint/<package>-<hash>`, since then `build/<package>/<hash>/fingerprint`.
+pub(crate) fn fingerprint_folders(debug: &Path) -> Vec<PathBuf> {
+    let list = |dir: &Path| -> Vec<PathBuf> {
+        fs::read_dir(dir)
+            .into_iter()
+            .flatten()
+            .map(|entry| entry.unwrap_or_else(|e| unreachable!("{e}")).path())
+            .collect()
+    };
+    let mut folders = list(&debug.join(".fingerprint"));
+    for package in list(&debug.join("build")) {
+        for unit in list(&package) {
+            folders.push(unit.join("fingerprint"));
+        }
+    }
+    folders.retain(|folder| folder.is_dir());
+    folders
 }

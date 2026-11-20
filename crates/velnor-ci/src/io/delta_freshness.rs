@@ -146,7 +146,7 @@ mod tests {
                 .and_then(|()| fs::write(path, "x"))
                 .unwrap_or_else(|e| unreachable!("{e}"));
         }
-        root
+        fs::canonicalize(root).unwrap_or_else(|e| unreachable!("{e}"))
     }
 
     fn found(root: &Path, external: &[&str]) -> Vec<String> {

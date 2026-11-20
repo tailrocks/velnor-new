@@ -8,7 +8,7 @@ use std::time::{Duration, SystemTime};
 use velnor_test_support::real_cargo;
 
 use crate::delta::success;
-use crate::delta_source::{helper_at, strip_mirror_overrides};
+use crate::delta_source::{fingerprint_folders, helper_at, strip_mirror_overrides};
 use crate::io::Repo;
 
 pub(super) struct Fixture {
@@ -168,32 +168,9 @@ impl Fixture {
         ])
     }
 
-    fn fingerprint_folders(&self) -> Vec<PathBuf> {
-        let debug = self.directory.join("target/debug");
-        let list = |dir: &std::path::Path| -> Vec<PathBuf> {
-            fs::read_dir(dir)
-                .into_iter()
-                .flatten()
-                .map(|entry| entry.unwrap_or_else(|e| unreachable!("{e}")).path())
-                .collect()
-        };
-        // The layout before Cargo 1.100 is `.fingerprint/<package>-<hash>`, since then
-        // `build/<package>/<hash>/fingerprint`.
-        let mut folders = list(&debug.join(".fingerprint"));
-        for package in list(&debug.join("build")) {
-            folders.extend(
-                list(&package)
-                    .into_iter()
-                    .map(|unit| unit.join("fingerprint"))
-                    .filter(|folder| folder.is_dir()),
-            );
-        }
-        folders
-    }
-
     fn incomplete_watchsets(&self, empty: bool) {
         let mut count = 0;
-        for folder in self.fingerprint_folders() {
+        for folder in fingerprint_folders(&self.directory.join("target/debug")) {
             for file in fs::read_dir(folder).unwrap_or_else(|e| unreachable!("{e}")) {
                 let file = file.unwrap_or_else(|e| unreachable!("{e}"));
                 if !file.file_name().to_string_lossy().starts_with("dep-") {
