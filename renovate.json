@@ -70,6 +70,13 @@
       "labels": ["dependencies", "needs-lock-refresh"]
     },
     {
+      "description": "release-coupled: bumped by the tools release only. velnor-gen is pinned exactly in crates/velnor-ci so the release moves both together.",
+      "matchManagers": ["cargo"],
+      "matchPackageNames": ["velnor-gen"],
+      "matchFileNames": ["crates/velnor-ci/Cargo.toml"],
+      "enabled": false
+    },
+    {
       "description": "der must stay at 0.7.x in velnor-runner-attestation: x509-cert 0.2.x and cms use der 0.7, so a der 0.8 bump breaks Certificate::from_der (main did not compile after #1956). der moves together with x509-cert and cms; re-pin only when both ship a der 0.8 release.",
       "matchManagers": ["cargo"],
       "matchPackageNames": ["der"],

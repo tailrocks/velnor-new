@@ -4,17 +4,23 @@ The local GitHub environment, a development tool that is not shipped. It runs Gi
 
 | Part | Pin |
 |---|---|
-| Stand-in | `ChristopherHX/runner.server` commit `992ccbbbf9afcde477c38c316e053b1af457ad40`, built by `docker/runner-server/Dockerfile`. The job's runtime token carries neither `github_token` (the job's GitHub token as a readable claim) nor `ac` (a write grant on every scope that nothing reads: the cache server derives access from the signed `repository`, `ref` and `defaultRef`). A further change: `DownloadArtifact` answers `Content-Type: application/zip`, without which `actions/download-artifact` saves the zip as a raw file. A second change makes `timeout-minutes` (360 when unset) cancel a job as on GitHub: runner.server arms a timer that fires the job's cancel request at its timeout, but the wait that turns the request into a cancel message for the runner never throws, so the runner was never told and the job ran on until its token (`timeout-minutes + 10`) expired, its completion was lost and the jobs that need it never started. The stand-in waits with `Task.Delay`, so the runner cancels the job, reports it cancelled, and `needs`, `if: always()` and `!cancelled()` see the result GitHub gives; a runner that does not answer is completed as cancelled by runner.server after `cancel-timeout-minutes` + 2. The build fails when the anchor line moves. Job tokens keep runner.server's expiry, `timeout-minutes + 10`, which also bounds the signed cache-admin grant |
+| Stand-in | `ChristopherHX/runner.server` commit `992ccbbbf9afcde477c38c316e053b1af457ad40`, built by `docker/runner-server/Dockerfile`. Its patches are listed below the table |
 | Runner | `actions/runner` 2.338.0, `actions-runner-linux-arm64-2.338.0.tar.gz`, sha256 `628b4a7258487b80c1d3c221095a7ded349f5ae0175fd3dfab708d07428f041b`, built by `docker/runner/Dockerfile` on the multi-arch index of `ubuntu:26.04` that holds the production amd64 manifest, so Apple Silicon pulls its own platform, with the toolchain packages of the production image (`images/runner/ubuntu-26.04/Dockerfile` is the source; `tests/it/plain_image.rs` fails when the base or the package line drifts) |
 | Cache server | `velnor-local cache-server` from this workspace, built by `docker/velnor-local/Dockerfile`. It owns the name `github.localhost`, answers the cache calls and forwards every other request to the stand-in unchanged |
 | Recorder | `mitmproxy/mitmproxy:12.1.2@sha256:0d7b2a14b4a71a908cd6f31b8f50e29bbc5c8720fe6caa706acf782da558e5c7`, used only to record runner calls: give it the alias `github.localhost` and `mitmdump --mode reverse:http://velnor-cache-server:80 --listen-port 80 --set keep_host_header=true`, and start the cache server without that alias |
 
+The stand-in image patches runner.server in three places. The build fails when an anchor line moves.
+
+- The runtime token carries neither `github_token` (the job's GitHub token as a readable claim) nor `ac` (a write grant on every scope that nothing reads: the cache server derives access from the signed `repository`, `ref` and `defaultRef`). A job whose permissions allow it gets a separate signed grant as its `github.token`, which the API stub checks; see [API stub](#api-stub).
+- `DownloadArtifact` answers `Content-Type: application/zip`, without which `actions/download-artifact` saves the zip as a raw file.
+- `timeout-minutes` (360 when unset) cancels a job as on GitHub. runner.server arms a timer that fires the job's cancel request at its timeout, but the wait that turns the request into a cancel message for the runner never throws, so the runner was never told and the job ran on until its token (`timeout-minutes + 10`) expired, its completion was lost and the jobs that need it never started. The stand-in waits with `Task.Delay`, so the runner cancels the job, reports it cancelled, and `needs`, `if: always()` and `!cancelled()` see the result GitHub gives; a runner that does not answer is completed as cancelled by runner.server after `cancel-timeout-minutes` + 2. Job tokens keep runner.server's expiry, `timeout-minutes + 10`, which also bounds the signed cache-admin grant.
+
 ## From zero to a run
 
-You need an Apple Silicon Mac with OrbStack (or Docker Desktop), a Rust toolchain, and `git`. Everything below runs on the machine and spends no money. `$VELNOR` is a checkout of this repository, `$LAB` a checkout of the repository whose workflows you want to run, and `$STATE` a directory outside both, without spaces.
+You need an Apple Silicon Mac with OrbStack (or Docker Desktop), a Rust toolchain and `git`. Everything below runs on the machine and spends no money. `$VELNOR` is a checkout of this repository, `$LAB` a checkout of the repository whose workflows you want to run, and `$STATE` a directory outside both, without spaces. `$REPO` is the checkout that a run copies; for the first run it is `$LAB`.
 
 ```sh
-export VELNOR="$HOME/src/velnor-new" LAB="$HOME/src/velnor-lab"
+export VELNOR="$HOME/src/velnor-new" LAB="$HOME/src/velnor-lab" REPO="$LAB"
 git clone https://github.com/tailrocks/velnor-new "$VELNOR" && cd "$VELNOR"
 git clone https://github.com/tailrocks/velnor-lab "$LAB"
 export STATE="$HOME/.velnor/warm"
@@ -22,17 +28,19 @@ export STATE="$HOME/.velnor/warm"
 docker build -t velnor-local/runner-server local/docker/runner-server
 docker build -t velnor-local/runner local/docker/runner
 docker build -t velnor-local/cache-server -f local/docker/velnor-local/Dockerfile .
-cargo build --release --manifest-path Cargo.toml
+cargo build --release --manifest-path Cargo.toml -p velnor-local
 cargo build --release --manifest-path Cargo.toml -p velnor-ci
-export PATH="$VELNOR/target/release:$VELNOR/target/release:$PATH"
+export PATH="$VELNOR/target/release:$PATH"
 
 velnor-local doctor
 velnor-local build
 velnor-local doctor
-velnor-local run warm --repo "$LAB" --dir "$STATE" --workflow .github/workflows/mbx-default.yml --repository tailrocks/velnor-lab --keep
+velnor-local run warm --repo "$REPO" --dir "$STATE" --workflow .github/workflows/mbx-default.yml --repository tailrocks/velnor-lab --keep
 ```
 
-`doctor` checks five parts and prints `ok` or `miss` for each (images read `n/a` when Docker is unreachable, because it cannot tell), with one `fix:` line for every part that is missing. It exits 1 when any part is `miss`, and 0 when none is:
+Run `build` and `run` from `$VELNOR`, the repository root: `build` reads `--root` (`.` by default), and `run` finds its scenarios in `local/scenarios` relative to the working directory.
+
+`doctor` checks five parts and prints `ok`, `miss` or `n/a` for each (`n/a` for an image when Docker is unreachable, because it cannot tell), with one `fix:` line for every part that is missing. It exits 1 when any part is `miss`, and 0 when none is:
 
 | Part | `ok` when | `fix:` |
 |---|---|---|
@@ -42,9 +50,9 @@ velnor-local run warm --repo "$LAB" --dir "$STATE" --workflow .github/workflows/
 | pair images | `velnor-local/pair-runner`, `velnor-local/pair-dind` and `velnor-local/pair-probe` exist | `velnor-local build` |
 | velnor-host with local mode | the `velnor-host` that `build` left in the checkout answers `local --help`, so it was built with `local-mode` | `velnor-local build` |
 
-`doctor --velnor-host <path>` checks another binary; `doctor --runner-memory <size>` checks the VM against the runner memory you will pass to `up` or `run`. The first `doctor` above prints `miss` for the pair images and for `velnor-host`; after `velnor-local build` the second prints `ok` five times. `velnor-ci` writes the metrics file of each run; `run` finds it on `PATH`, or `--velnor-ci <path>` names it. `--keep` leaves the environment up after the verdict, so `status` has something to show. `run` prints `success` for each run and, in pair mode, `pair trusted-N, admitted` under each job; the verdict ends with the executed, stood in and not exercised lines.
+`doctor --velnor-host <path>` checks another binary, and `doctor --runner-memory <size>` checks the VM against the runner memory you will pass to `up` or `run`. Before `velnor-local build`, `doctor` prints `miss` for the pair images and for `velnor-host`; after it, both print `ok`. `velnor-ci` writes the metrics file of each run; `run` finds it on `PATH`, or `--velnor-ci <path>` names it.
 
-To look at a running environment, ask for its status from another terminal while `run --keep` or `up` has it up:
+To look at a running environment, ask for its status from another terminal while `run --keep` or `up` has it up. `run --keep` leaves the environment, the authority included, up after the verdict:
 
 ```sh
 velnor-local status --dir "$STATE"
@@ -52,60 +60,6 @@ velnor-local down --dir "$STATE"
 ```
 
 `status` prints the environment's name and age, the runner mode, the authority's address, the number of events in the ledger, each pair as `busy (run <id>, job <name>)` or `idle`, and the last refusal of the job-start check, or `none`. It reads the state directory only and changes nothing; when the authority is not running it exits 1 and says so. `down` removes the environment.
-
-## Run an unreleased velnor-ci
-
-`setup-velnor` downloads the pinned release of `velnor-ci` and installs it only when its SHA-256 matches the workflow's pin, so a helper built from a working tree can never match. `--velnor-ci-binary <path>` on `up` and `run` (not `--velnor-ci`, the host program that writes the metrics file, which on a Mac is not a Linux executable) hands the runners a linux-arm64 ELF build of `velnor-ci` instead, and the workflow stays as generated, pins and all:
-
-```sh
-velnor-local run warm --repo "$REPO" --dir "$STATE" --runner plain --velnor-ci-binary "$VELNOR_CI_LINUX_ARM64"
-```
-
-`up` refuses a path that is not an executable regular file of at most 256 MiB, is not a linux-arm64 ELF, or has a `:`, `,` or newline in it, and gets the same file into the trusted runners with either `--runner` mode, and only there (the untrusted side gets nothing): with `--runner plain` it mounts the file read-only at `/opt/velnor/local/velnor-ci`; with `--runner pair` it passes the absolute path to velnor-host (`--velnor-ci-binary` on `supervise`, `local_ci` in the plan), which reads the file once per pair start, checks it again (no symlink, executable, at most 256 MiB, an ELF for the pair's platform), unpacks it into that pair's metadata volume and mounts the `local-ci` subpath of that volume read-only at `/opt/velnor/local` in the pair's runner. Nothing is mounted from the host into a pair, the dind gets nothing, and a `container:` job cannot see the file. A binary rebuilt between pair starts is picked up by the next pair. It starts the API stub with `--local-setup-velnor`, and gives the trusted runner.server `Runner.Server__ActionDownloadUrls__0__TarballUrl=http://api-stub/repos/{0}/tarball/{1}`, so the runner downloads every action through the stub.
-
-The production `actions/setup-velnor/action.yml` has no local path at all and is the action the workflow pins on GitHub and on a scale set. In local mode the stub answers the download of `tailrocks/velnor-new` (any ref) with a tarball of a local variant of that one action, which declares the same inputs, checks the version and the linux-arm64 SHA-256 pin as the release action does, and copies the mounted binary instead of downloading. It never falls back to a download, never writes the tool cache, and prints a warning and a step-summary line that name the local SHA-256 next to the pinned release. Every other action, and `tailrocks/velnor-new` without the flag, is a 302 to `https://api.github.com/repos/<owner>/<repo>/tarball/<ref>`, which is the URL runner.server hands out by default. No job on a real runner can make GitHub serve the variant, because the only thing that selects it is the address that `up` gave runner.server. The tarball holds only `actions/setup-velnor/action.yml`, so another action of that repository is missing in local mode.
-
-`run` also makes the launcher's integrity check pass for that binary, without weakening it. The generated workflow pins the SHA-256 of the released `velnor-ci` for every platform (`VELNOR_HELPER_SHA256`) and refuses any other binary with `velnor-ci integrity check failed`. After `run` copies the checkout into the state directory, it computes the SHA-256 of the file given to `--velnor-ci-binary`, replaces only the linux-arm64 digest in the `.github/workflows/*.yml` of that copy, commits the change there as `velnor-local: pin the local velnor-ci`, and prints a `WARNING` that names the binary, its SHA-256 and the number of pins it rewrote. The check itself is not touched: a job still compares the binary it runs with the pin, and a different binary is still refused. The driver pins again, with the same digest and one more commit when anything changes, on every branch it switches to, so a scenario branch that already exists in your checkout runs the local binary too. Your checkout is never modified. The digest comes from the command line only, never from the repository under test, the workflow or the job's environment, and nothing outside `local/` mentions the flag. `up` has no copy of the checkout to rewrite, so with `up` a workflow with the pinned launcher still refuses the local binary.
-
-The binary is unverified by design: this is for a developer's own machine, and the SHA-256 in the output is the way to tell a local result from a release result.
-
-## Against a throwaway dind
-
-`velnor-local` mounts host paths into the containers and reaches the control ports that `up` publishes on `127.0.0.1`, so it must run on the machine that runs the Docker daemon. To keep a dind daemon from touching your own Docker, start `velnor-local` in a container that shares the dind container's network namespace and sees the same paths:
-
-```sh
-export WORK="$HOME/velnor-dind"
-mkdir -p "$WORK" && git clone https://github.com/tailrocks/velnor-new "$WORK/repo"
-docker run -d --privileged --name dind -e DOCKER_TLS_CERTDIR= -v "$WORK:$WORK" docker:dind
-docker run -d --name driver --network container:dind -v "$WORK:$WORK" debian:trixie-slim sleep infinity
-docker exec driver sh -c 'apt-get update && apt-get install -y --no-install-recommends docker-cli git procps socat'
-```
-
-`velnor-local` refuses a `tcp://` endpoint (`doctor`, `run` and `up` say `not a local socket`), so the driver does not get `DOCKER_HOST=tcp://...`. Instead it gets a unix socket that forwards to the dind's TCP port. The driver shares the dind's network namespace, so `127.0.0.1:2375` is the dind's daemon. Start the bridge inside `driver` and point the client at its socket:
-
-```sh
-docker exec -d driver socat UNIX-LISTEN:/var/run/docker.sock,fork TCP:127.0.0.1:2375
-docker exec -e DOCKER_HOST=unix:///var/run/docker.sock driver docker info
-```
-
-The second command must print the dind's server version. Keep the bridge running for the whole session; `velnor-local` then sees `unix:///var/run/docker.sock`, which is a local socket.
-
-Inside `driver`, build the three images from the repository root, which is the build context of the single root workspace (#1594). The cache-server image needs the root `Cargo.toml`, `Cargo.lock` and `crates`, so the build context is `.`, not `local`. Then put the linux/arm64 `velnor-local` (the one in the `velnor-local/cache-server` image) into `driver`, and keep `--repo` and `--dir` under `$WORK`. A program that is not installed is named in the error (`cannot start `docker``). Pointing `DOCKER_HOST` of the Mac at the dind instead fails with `docker port ... no public port`, because the published ports exist only inside the dind.
-
-```sh
-cd "$WORK/repo"
-docker build -t velnor-local/runner-server local/docker/runner-server
-docker build -t velnor-local/runner local/docker/runner
-docker build -t velnor-local/cache-server -f local/docker/velnor-local/Dockerfile .
-```
-
-## Remote daemons and what still needs GitHub
-
-The Docker daemon must run on the machine that runs `velnor-local`. The authority and the API stub listen on `127.0.0.1`, `velnor-host` is a native process, and the checkout copy is bind-mounted by path, so a daemon with another network namespace or file system (a `tcp://` or `ssh://` endpoint, a remote OrbStack or a dind container reached from the host) cannot reach them. Without this rule `build` fails with a bind-mount stat error and `run` with `runner.server did not connect within 60 s`, after more than a minute. So `doctor` reports `miss` for any endpoint that does not start with `unix://`, and `build`, `up` and `run` stop at once with the same message. The endpoint is the one `docker context inspect` reports, which follows `DOCKER_HOST` and `DOCKER_CONTEXT`. To use a remote daemon or a dind, run `velnor-local` and `velnor-host` inside that machine or container (Linux), so that the daemon is local to them; that is how the #651 proof ran.
-
-"No GitHub" means no scale set and no JIT config. Actions (`actions/checkout` is replaced, the rest are downloaded), `mise` tools and the pinned `velnor-ci` release still come from github.com, so the machine needs internet access.
-
-Pairs are single-use: each job takes a pair and a replacement starts after it, so a run of two jobs on two pairs can show three pairs in `runner/velnor-host.log`. That is expected. If the driver was killed (Ctrl-C twice, `kill -9`), a container such as `<name>-standin` or a pair can stay; `velnor-local down --dir "$STATE"` removes every container, volume and network labelled `velnor-local=<name>`, and so does the next `up` on that directory.
 
 ## The three modes
 
@@ -120,15 +74,90 @@ Pairs are single-use: each job takes a pair and a replacement starts after it, s
 
 In pair mode each runner container gets 4 CPUs and 6 GiB, and each dind 2 CPUs and 2 GiB. `up` and `run` take `--runner-cpus <N>` (decimals allowed, `1.5`) and `--runner-memory <SIZE>` (`512m`, `6g`, `6GiB`; at least 512m) to change the runner's share; the dind's is fixed. `plain` mode sets no limits, so the flags do nothing there. Give `doctor` the same `--runner-memory` to check that the Docker VM can hold one pair. `up` and `run` also take `--home-size` (the runner's `/home/runner` volume, 2g by default), `--work-size` (its `/home/runner/_work` volume, 16g) and `--tmp-size` (its `/tmp` tmpfs, 2g), each `1g` to `64g`; the dind's `/tmp` and data keep their sizes. The caps are tmpfs ceilings, not reservations: the pages count against the memory of the container that writes them, so a write past `--runner-memory` is OOM-killed before it reaches `--work-size`, and `doctor` needs no change. `plain` mode has no caps and refuses these flags.
 
-## Safety rules
+## Run a scenario
 
-- The authority listens on `127.0.0.1` only, and every call needs its token, which each `up` replaces. The cache and API stub control ports answer only with their own token.
-- `velnor-host` with local mode exists only in builds made by `velnor-local build`. A release build refuses the `local-mode` feature, so production never carries the local check.
-- Local mode keeps no reservation. Its cleanup audit is separate from the minted-agent recovery state in `runner/minted-agents.log`. `down` removes everything labelled `velnor-local=<name>`; after it, `docker ps -aq`, `docker volume ls -q` and `docker network ls -q` with that label print nothing.
-- `down` appends its exact label filter and each removal's intent and confirmed outcome to `$STATE/cleanup.jsonl`. An intent without an outcome means completion was not confirmed. The host sweep writes the same records to `$STATE/runner/cleanup.jsonl`. Successful removals remain recorded when a later removal fails. Cleanup repairs an incomplete final record before appending, preserves complete records, and refuses deletion if a complete record is corrupt. Volumes are removed only through the label filter, without implicit anonymous-volume deletion.
-- Untrusted runs (fork pull requests) use a second network and runner.server, a cache that only restores, and no secrets or token. That network is an ordinary Docker bridge; replay fork pull requests only where that is acceptable.
-- `STATE` is outside the checkout. `run` copies the checkout and never modifies it.
-- `build` refuses uncommitted changes to tracked files, because the images are named for `HEAD`. It also refuses anything `git status` reports under `crates/velnor-runner-*`, `images` or `.velnor`, including an untracked file there. An untracked file outside those paths does not fail `build`.
+```sh
+cd "$VELNOR"
+velnor-local run warm --repo "$REPO" --dir "$STATE" --workflow .github/workflows/ci.yml --repository owner/name
+```
+
+A workflow whose `runs-on` names a label the runners do not register, such as the `ubuntu-26.04-scale-set` of velnor-new, runs unchanged when `up` or `run` takes it as `--label`: `velnor-local run warm --repo "$REPO" --dir "$STATE" --label ubuntu-26.04-scale-set ...`. The flag repeats or takes commas, adds to the built-in labels in both modes, and allows letters, digits, `.`, `_` and `-` only.
+
+`run` takes several scenarios: `velnor-local run docs leaf --parallel 2 --dir "$STATE" ...` runs each in its own environment under `$STATE/<scenario>`, at most `--parallel` at a time (one unless set), and prefixes every line, the verdict's included, with the scenario. Ctrl-C (SIGINT) and SIGTERM, which `timeout` and `kill` send, stop the running scenarios, remove their environments as `down` does, keep the queued ones from starting and make `run` exit non-zero. Each environment has its own network, containers, ports, keys, cache and copy of the checkout.
+
+A scenario is a JSON file in `scenarios/` (`--scenarios` names another directory; a path ending in `.json` is read as is): a description and an ordered list of steps. `warm`, `cold`, `docs`, `leaf`, `hub` and `lock` replay the scenarios of the lab, `fork` opens a pull request from the repository and one from a fork (with `testdata/workflows/fork-reach.yml` copied into the checkout, the first job reaches the API stub and the second cannot), `scheduled-run` (with `testdata/workflows/schedule-run.yml`) has a job post a second run to runner.server, whose job is refused as `not_dispatched`, `hello` pushes once (with `testdata/workflows/hello.yml`, for `--policy`), and `story` merges a pull request, opens a pull request, pushes to it again, opens a second one and closes the first. `velnor-new` pushes to the default branch, opens a pull request, and pushes a second commit to it. `probe-*` replays one probe of the lab; see [Conformance](#conformance).
+
+| Step | What the driver does |
+|---|---|
+| `{"push": "<branch>"}` | Sends a `push` event with `ref`, `before` and `after`. `before` is the branch's previous push in this run; for a branch that existed before the scenario it is the parent of its tip, and for a branch the scenario created it is forty zeros. Every open pull request with this branch as its head also gets `pull_request` `synchronize` with its new merge commit, unless the merge conflicts, which the driver reports and GitHub also answers with no run |
+| `{"commit": {"branch": "<b>", "append": "<path>", "line": "<text>"}}` | Appends the line to the file, which may be new, on the branch, created from the default branch when missing, and commits it |
+| `{"update_lock": {"branch": "<b>", "package": "<crate>", "workspace": "<dir>"}}` | Bumps the crate to the next patch version after the one in the `Cargo.lock` of the workspace (the root of the copy unless `workspace` names a directory in it) with `cargo update -p <crate>@<locked version> --precise <version>`, run in that workspace so its `.cargo/config` applies, and commits the lock file on the branch. Cargo reads the crates.io index for this: it is the one request of the driver itself that leaves the machine; the others are the jobs' downloads of actions and tools |
+| `{"open_pull_request": {"head": "<b>", "base": "<b>", "fork": false}}` | Merges head into base as `refs/pull/<n>/merge` would, writes the pull request to `pulls.json`, registers its base with the cache server and sends `pull_request` `opened` with `--ref refs/pull/<n>/merge`. With `"fork": true` the head repository is `velnor-local-fork/<name>` with `fork: true`, and this and every later event of that pull request go to the untrusted side. A `push` of that branch sends no `push` event, as GitHub sends none to the repository for a fork's branch, only `synchronize` to the pull request. `run` refuses a scenario that dispatches that branch, makes it a base, opens a pull request from the repository with it, or names the default branch as a fork's head. The `push` of the base that `merge_pull_request` sends and the `merge_group` event of a fork's pull request run on the trusted side, as on GitHub, where a maintainer approves the merge; the `pull_request` `closed` event itself stays on the untrusted side, as GitHub runs it for a fork |
+| `{"merge_pull_request": "<head>"}` | Squash-merges the open pull request with that head into its base, sends `pull_request` `closed` with `merged: true`, then pushes the base |
+| `{"close_pull_request": "<head>"}` | Sends `pull_request` `closed` for the open pull request with that head |
+| `{"merge_group": "<head>"}` | Merges the pull request into its base on `gh-readonly-queue/<base>/pr-<n>-<base sha>` and sends `merge_group` `checks_requested` for that branch, as GitHub's merge queue does for a queue with one pull request; a group never includes pull requests queued before it |
+| `{"schedule": "<cron>"}` | Sends `schedule` on the default branch |
+| `{"workflow_dispatch": {"branch": "<b>", "inputs": {"<name>": <JSON value>}}}` | Sends `workflow_dispatch` on the branch with the inputs, to the one workflow `--workflow` names, which this step needs |
+
+With several scenarios, `$STATE` in this paragraph stands for `$STATE/<scenario>`. `run` copies `REPO` to `$STATE/repo`, commits its uncommitted changes there (changes to tracked files and the untracked files that `.gitignore` does not exclude; an untracked link is copied as a link only when it points inside the checkout, otherwise `run` stops and names it; a nested git repository is left out with a message, as `git add` leaves it out), and makes that commit the default branch of the copy (`--default-branch`, `main` unless set), so the scenario starts from exactly what is on disk, whichever branch `REPO` has checked out, and `REPO` is never modified. The copy's `origin` remote is set to `https://github.com/<--repository>` (the clone's own `origin` would be the checkout's path), so a job that reads `remote.origin.url`, as `velnor-ci plan` does, sees a hosted repository. A step names the default branch as `{default}`. It keeps the cache that an earlier `run` on the same `--dir` left, so a rerun restores what that run saved (`--fresh-cache` starts from an empty cache, and a scenario with `"fresh_cache": true` always does: `cold` and the `probe-cache-*` scenarios; the API stub, events, logs, metrics and the restore journal always start empty, and so do the registered pull request bases, which depend on that run's `--default-branch`, the reservations that run never committed, and the entries a pull request saved, because the next run's pull request with the same number is another pull request).
+
+In the copy, `run` also rewrites every workflow: it pins the local `velnor-ci` (see [Run an unreleased velnor-ci](#run-an-unreleased-velnor-ci)), scales the timeouts (see [Slower local machines](#slower-local-machines)), and after each `actions/checkout` step that sets `sparse-checkout` it adds a step, named `velnor-local prune sparse checkout`, that deletes the tracked paths the sparse checkout leaves out, so the local workspace matches the sparse tree CI gets.
+
+Each run replays the steps, stops the environment on every exit (a failed `up`, Ctrl-C and SIGTERM included), and prints a verdict: each run with its workflow, event, conclusion and metrics file, and under it, per job, each cache key it looked up with the entry it restored and that entry's scope (the ref it was saved on), or that it found none, the seconds from the start of `up` to the first job, what was executed and what was stood in, and, in pair mode, `pair trusted-N, admitted (event <ledger id>)` under each job, or `REFUSED at job start: <reason>`. Event payloads have the fields that `conformance/event-payload.json` lists. Each event's payload is in `$STATE/events/` and the log of its runs in `$STATE/logs/`. After each run, `run` calls `velnor-ci bench collect <run id> --repo <repository> -o $STATE/metrics/<run id>.json` (`--velnor-ci` names the program) with `GITHUB_API_URL` set to the API stub, so the metrics file of a local run is written by the same code as for a real run, and `velnor-ci bench compare` reads both. `--workflow` limits the runs to one workflow file; without it, runner.server runs every workflow the event triggers. An event that triggers no workflow is reported as such and is not a failure. `Runner.Client` gets `--no-default-payload`, so an event carries exactly the payload the driver wrote and no `sender` of its own, and a `push` lists the files each new commit adds, removes and modifies, which a `paths` filter reads.
+
+`run` exits non-zero unless every run concluded `success` and, for each trusted run, wrote its metrics file. A velnor-ci that runs and fails, or exits 0 without writing the file, fails the run. A missing velnor-ci does not: `run` prints `warning: velnor-ci not found; skipping the report` for each run and still exits 0, so a successful run then has no metrics file, and the verdict's `metrics` lines are the place to check. An untrusted (fork) run never has one. `run` also fails when `Runner.Client` exits with an error before it creates a run, and when the old `cache/`, `api/`, `events/` or `logs/` cannot be removed. It refuses a branch, path, workflow, repository or default branch that is empty or starts with `-`, and an appended path that is absolute, contains `..` or leads out of the copy through a link.
+
+### Slower local machines
+
+The generated workflows size `timeout-minutes` for the CI cluster. On a loaded laptop a job can run past its limit and be cancelled before its cache save, so the save never happens and the next run starts cold. `run --timeout-scale <factor>` multiplies every numeric `timeout-minutes` in the run's copy of the workflows, at job and step level, and rounds each result up to whole minutes: `--timeout-scale 3` turns 30 into 90. Use 3 on a laptop. The default, 1, changes nothing. The factor is at least 1, with at most three decimals (`1.5`). Expressions such as `${{ inputs.minutes }}`, quoted values and values followed by anything but a comment are left alone. The checkout is never modified; the change is a commit in the run's copy, as the pin is. `up` has no such flag, because it does not copy the workflows.
+
+### Workflows with a crates mirror
+
+A workflow generated with a `[crates_mirror]` table in `.velnor/rust-ci.toml` (see `generator/CONFIG.md`) runs `velnor-ci crates-mirror`, which fails when the mirror's CA bundle is missing. Neither exists on a developer machine, so every runner that `velnor-local` starts, in `pair` and in `plain` mode, has `VELNOR_CRATES_MIRROR=off` in its environment. The step then prints `crates mirror disabled by VELNOR_CRATES_MIRROR=off` and Cargo uses crates.io. The generator refuses a pinned velnor-ci older than 0.1.93 for such a workflow. Run the generated workflow unchanged, with no override file:
+
+```sh
+velnor-local run warm --repo "$REPO" --dir "$STATE" --workflow .github/workflows/rust-ci.yml --repository owner/name
+```
+
+Production runners never set `VELNOR_CRATES_MIRROR`, so they still fail closed without the mirror.
+
+## Run velnor-new's workflows
+
+This runs velnor-new's own `rust-ci.yml` on the Mac, with the `velnor-new` scenario (push, pull request, second push). No run of it is recorded in this README, so treat it as untested.
+
+Start from the same setup as [From zero to a run](#from-zero-to-a-run), with velnor-new as both `$VELNOR` and the repository to run. `build` refuses a dirty tree, so `git status --short` must print nothing; `run` itself copies the checkout with its uncommitted changes, so `REPO` is never modified.
+
+```sh
+export VELNOR="$HOME/src/velnor-new" STATE="$HOME/.velnor/velnor-new"
+cd "$VELNOR" && git status --short
+
+velnor-local doctor
+velnor-local build
+velnor-local run velnor-new --repo "$VELNOR" --dir "$STATE" --workflow .github/workflows/rust-ci.yml --repository tailrocks/velnor-new --label ubuntu-26.04-scale-set --keep
+```
+
+The generated `rust-ci.yml` asks for `ubuntu-26.04-scale-set`, the `runner` of `.velnor/rust-ci.toml`, which the local runners do not register by default; `--label` adds it. Do not edit the generated workflow to get around it. Its `[crates_mirror]` table is handled as described in [Workflows with a crates mirror](#workflows-with-a-crates-mirror).
+
+The scenario sends a push to the default branch first, which saves the caches, then opens a pull request that appends a line to `crates/velnor-archive-guard/src/lib.rs`, then pushes a second commit to that pull request's branch. The verdict should list a run for the push, one for the pull request's `opened` event and one for its `synchronize` event, with the restores of each. The second and third runs are the ones that show whether the caches the first run saved are restored.
+
+Known limit: the scenario sends several events to one environment, and the next event can be sent while the single-use runner pair is being replaced (#1221). A later event may then fail with "No runner is registered" or "no job-start decision".
+
+## Run an unreleased velnor-ci
+
+`setup-velnor` downloads the pinned release of `velnor-ci` and installs it only when its SHA-256 matches the workflow's pin, so a helper built from a working tree can never match. `--velnor-ci-binary <path>` on `up` and `run` gives the runners a linux-arm64 ELF build of `velnor-ci` instead, and the workflow stays as generated, pins and all. It is not `--velnor-ci`, which names the host program that writes the metrics file, and on a Mac that is not a Linux executable. Build a linux-arm64 `velnor-ci` yourself and point the variable at it:
+
+```sh
+export VELNOR_CI_LINUX_ARM64="$HOME/src/velnor-ci-linux-arm64"
+velnor-local run warm --repo "$REPO" --dir "$STATE" --runner plain --velnor-ci-binary "$VELNOR_CI_LINUX_ARM64"
+```
+
+`up` refuses a path that is not an executable regular file of at most 256 MiB, is not a linux-arm64 ELF, or has a `:`, `,` or newline in it. The file reaches only the trusted runners, and the untrusted side gets nothing. With `--runner plain` it is mounted read-only at `/opt/velnor/local/velnor-ci`. With `--runner pair`, `velnor-host` receives the absolute path (`--velnor-ci-binary` on `supervise`), reads the file once per pair start, checks it again (no symlink, executable, at most 256 MiB, an ELF for the pair's platform), unpacks it into that pair's metadata volume, and mounts the `local-ci` subpath of that volume read-only at `/opt/velnor/local` in the pair's runner. Nothing is mounted from the host into a pair, the dind gets nothing, and a `container:` job cannot see the file. A binary rebuilt between pair starts is picked up by the next pair. `up` also starts the API stub with `--local-setup-velnor` and gives the trusted runner.server `Runner.Server__ActionDownloadUrls__0__TarballUrl=http://api-stub/repos/{0}/tarball/{1}`, so the runner downloads every action through the stub.
+
+The production `actions/setup-velnor/action.yml` has no local path at all and is the action the workflow pins on GitHub and on a scale set. In local mode the stub answers the download of `tailrocks/velnor-new` (any ref) with a tarball of a local variant of that one action, which declares the same inputs, checks the version and the linux-arm64 SHA-256 pin as the release action does, and copies the mounted binary instead of downloading. It never falls back to a download, never writes the tool cache, and prints a warning and a step-summary line that name the local SHA-256 next to the pinned release. Every other action, and `tailrocks/velnor-new` without the flag, is a 302 to `https://api.github.com/repos/<owner>/<repo>/tarball/<ref>`, which is the URL runner.server hands out by default. No job on a real runner can make GitHub serve the variant, because the only thing that selects it is the address that `up` gave runner.server. The tarball holds only `actions/setup-velnor/action.yml`, so another action of that repository is missing in local mode.
+
+`run` also makes the launcher's integrity check pass for that binary, without weakening it. The generated workflow pins the SHA-256 of the released `velnor-ci` for every platform (`VELNOR_HELPER_SHA256`) and refuses any other binary with `velnor-ci integrity check failed`. After `run` copies the checkout into the state directory, it computes the SHA-256 of the file given to `--velnor-ci-binary`, replaces only the linux-arm64 digest in the `.github/workflows/*.yml` of that copy, commits the change there as `velnor-local: pin the local velnor-ci`, and prints a `WARNING` that names the binary, its SHA-256 and the number of pins it rewrote. The check itself is not touched: a job still compares the binary it runs with the pin, and a different binary is still refused. The driver pins again, with the same digest and one more commit when anything changes, on every branch it switches to, so a scenario branch that already exists in your checkout runs the local binary too. Your checkout is never modified. The digest comes from the command line only, never from the repository under test, the workflow or the job's environment, and nothing outside `local/` mentions the flag. `up` has no copy of the checkout to rewrite, so with `up` a workflow with the pinned launcher still refuses the local binary.
+
+The binary is unverified by design: this is for a developer's own machine, and the SHA-256 in the output is the way to tell a local result from a release result.
 
 ## The approved-workflows check and `--policy`
 
@@ -143,11 +172,21 @@ The file is the approved job-authority policy JSON that `velnor-host connect --j
 
 A pull request from a fork is never approved, because its head repository is not the base repository; a `merge_group` job is never approved. The `run` command takes `--repository-id <n>`, the GitHub id the policy names, and events then carry it instead of an id derived from `--repository`; a policy that names another id approves nothing. The local check does not verify the policy's binding to a repository connection, and does not compare an entry's permissions, secrets, environments, needs or concurrency with the workflow; it only ever refuses more than the ledger check alone.
 
+## Safety rules
+
+- The authority listens on `127.0.0.1` only, and every call needs its token, which each `up` replaces. The cache and API stub control ports answer only with their own token.
+- `velnor-host` with local mode exists only in builds made by `velnor-local build`. A release build refuses the `local-mode` feature, so production never carries the local check.
+- Local mode keeps no reservation. Its cleanup audit is separate from the minted-agent recovery state in `runner/minted-agents.log`. `down` removes everything labelled `velnor-local=<name>`; after it, `docker ps -aq`, `docker volume ls -q` and `docker network ls -q` with that label print nothing.
+- `down` appends its exact label filter and each removal's intent and confirmed outcome to `$STATE/cleanup.jsonl`. An intent without an outcome means completion was not confirmed. The host sweep writes the same records to `$STATE/runner/cleanup.jsonl`. Successful removals remain recorded when a later removal fails. Cleanup repairs an incomplete final record before appending, preserves complete records, and refuses deletion if a complete record is corrupt. Volumes are removed only through the label filter, without implicit anonymous-volume deletion.
+- Untrusted runs (fork pull requests) use a second network and runner.server, a cache that only restores, and no secrets or token. That network is an ordinary Docker bridge; replay fork pull requests only where that is acceptable.
+- `STATE` is outside the checkout. `run` copies the checkout and never modifies it.
+- `build` refuses uncommitted changes to tracked files, because the images are named for `HEAD`. It also refuses anything `git status` reports under `crates/velnor-runner-*`, `images` or `.velnor`, including an untracked file there. An untracked file outside those paths does not fail `build`.
+
 ## Environments, pairs and the authority
 
 `velnor-local build` builds the linux/arm64 images that pair mode runs, from the recipe in `images/runner/ubuntu-26.04/README.md`: the production runner image as `velnor-local/pair-runner`, the DinD image as `velnor-local/pair-dind` and the resource probe as `velnor-local/pair-probe`. Run it from the repository root, or pass `--root`; it prints each tag with its image id. The helper programs are compiled in a `rust` container into the volume `velnor-arm64-target`, which a later build reuses. It then builds `target/release/velnor-host` with `--features=local-mode` and without the release identity variables, because a release build refuses local mode.
 
-`up` and `run` take `--runner pair|plain`. `pair`, the default, runs every job in a velnor-host dind and runner pair: the authority process (`supervise`) starts `velnor-host --state "$STATE/runner" local` (`--velnor-host` names another binary; the default is the `velnor-host` that `velnor-local build` left in the checkout that holds the `velnor-local` executable, checked to be a regular executable file with the executable's owner and no group or other write bit, and never one found through the working directory) and writes its plan to its stdin and to `runner/plan.json` (0600): the authority's address and token, the Docker socket, the ids of `velnor-local/pair-runner` and `velnor-local/pair-dind`, and `--runners` trusted and `--fork-runners` untrusted pairs on the environment's networks. `up` waits until every pair prints `pair <side>-<n> listening` in `runner/velnor-host.log`, then until runner.server reports every pair's agent online (up to 60 s); it fails, and stops the authority and velnor-host it started, if an agent is still offline after that. velnor-host checks each job at start against the authority and appends the decision to `runner/decisions.jsonl`; the verdict prints it under the job's run as `pair trusted-N, admitted (event <ledger id>)` or `REFUSED at job start: <reason>`, and a refused job makes `run` exit non-zero: the driver sees the refusal in `decisions.jsonl`, cancels the runs of that event at runner.server (a killed job never reports back) and goes on to the verdict. `plain` runs the official runner image in containers with no job-start check, and its verdict says `job-start check: none (plain containers)`. `down` stops the authority, which stops velnor-host (it removes its pairs and deletes their agents), kills a velnor-host that outlived it, and then removes every container, volume and network labelled `velnor-local=<name>`.
+`up` and `run` take `--runner pair|plain`. `pair`, the default, runs every job in a velnor-host dind and runner pair: the authority process (`supervise`) starts `velnor-host --state "$STATE/runner" local` (`--velnor-host` names another binary; the default is the `velnor-host` that `velnor-local build` left in the checkout that holds the `velnor-local` executable, checked to be a regular executable file with the executable's owner and no group or other write bit, and never one found through the working directory) and writes its plan to its stdin and to `runner/plan.json` (0600): the authority's address and token, the Docker socket, the ids of `velnor-local/pair-runner` and `velnor-local/pair-dind`, and `--runners` trusted and `--fork-runners` untrusted pairs on the environment's networks. `up` waits until every pair prints `pair <side>-<n> listening` in `runner/velnor-host.log`, then until runner.server reports every pair's agent online (up to 60 s); it fails, and stops the authority and velnor-host it started, if an agent is still offline after that. velnor-host checks each job at start against the authority and appends the decision to `runner/decisions.jsonl`; the verdict prints it under the job's run, and a refused job makes `run` exit non-zero: the driver sees the refusal in `decisions.jsonl`, cancels the runs of that event at runner.server (a killed job never reports back) and goes on to the verdict. `plain` runs the official runner image in containers with no job-start check, and its verdict says `job-start check: none (plain containers)`. `down` stops the authority, which stops velnor-host (it removes its pairs and deletes their agents), kills a velnor-host that outlived it, and then removes every container, volume and network labelled `velnor-local=<name>`.
 
 `velnor-local up --dir "$STATE" --repo "$REPO" [--runners 2]` starts one environment and `velnor-local down --dir "$STATE"` removes its containers and network. `STATE` is a directory outside the checkout, without spaces. It holds `keys/` (the runtime token key pair, made once with `openssl` in the stand-in image), `cache/` (the cache server's archives and `index.json`) and `api/` (the API stub's `pulls.json`). The environment is named `velnor-local-<hash of STATE>`: a network of that name, the containers `<name>-standin`, `<name>-cache`, `<name>-api` and, with `--runner plain`, `<name>-runner-<n>`, all labelled `velnor-local=<name>`. Two state directories are two independent environments. Only the cache server and the API stub publish a port, each a control port on a free port of `127.0.0.1` that answers only requests carrying `Authorization: Bearer <the token in keys/control>` (made once per state directory) and refuses the rest with 401, because a container can reach the host's loopback ports; `up` prints the stub's address. With `--runner plain`, `up` returns when every runner has a session with runner.server.
 
@@ -161,79 +200,72 @@ What the untrusted side does not close: its network is an ordinary Docker bridge
 
 Only `pull_request` is modelled for forks. `pull_request_target`, `workflow_run` and `issue_comment` are never sent, so a workflow that runs on them shows no run, which says nothing about whether it would be safe on GitHub.
 
-Every runner container is linux/arm64 and registers with `ubuntu-latest`, `ubuntu-22.04`, `ubuntu-24.04`, `ubuntu-26.04`, `ubuntu-22.04-arm`, `ubuntu-24.04-arm` and `ubuntu-26.04-arm`, so a workflow written for hosted runners runs unchanged and `runner.arch` is `ARM64`. There is no `ubuntu-latest-arm` label. Every one of these labels runs on the same image, Ubuntu 24.04 in plain mode and the self-hosted Ubuntu 26.04 pair image in pair mode, so a difference between Ubuntu releases does not show locally and a job can pass in one mode and fail in the other; the verdict says so. The runner image has `build-essential`, as hosted Ubuntu runners do.
+Every runner container is linux/arm64 and registers with `ubuntu-latest`, `ubuntu-22.04`, `ubuntu-24.04`, `ubuntu-26.04`, `ubuntu-22.04-arm`, `ubuntu-24.04-arm` and `ubuntu-26.04-arm`, so a workflow written for hosted runners runs unchanged and `runner.arch` is `ARM64`. There is no `ubuntu-latest-arm` label. Every one of these labels runs on one Ubuntu 26.04 image: the production runner image in pair mode, and in plain mode the image that `local/docker/runner` builds on the same base and package line (`tests/it/plain_image.rs` checks it). Hosted `ubuntu-22.04` and `ubuntu-24.04` jobs therefore do not run on their own Ubuntu release here, so a job can behave differently on GitHub than here; the verdict says so. The runner image has `build-essential`, as hosted Ubuntu runners do.
 
-## Run a scenario
+## Remote daemons and what still needs GitHub
 
-```sh
-velnor-local run warm --repo "$REPO" --dir "$STATE" --workflow .github/workflows/ci.yml --repository owner/name
-```
+The Docker daemon must run on the machine that runs `velnor-local`. The authority and the API stub listen on `127.0.0.1`, `velnor-host` is a native process, and the checkout copy is bind-mounted by path, so a daemon with another network namespace or file system (a `tcp://` or `ssh://` endpoint, a remote OrbStack or a dind container reached from the host) cannot reach them. Without this rule `build` fails with a bind-mount stat error and `run` with `runner.server did not connect within 60 s`, after more than a minute. So `doctor` reports `miss` for any endpoint that does not start with `unix://`, and `build`, `up` and `run` stop at once with the same message. The endpoint is the one `docker context inspect` reports, which follows `DOCKER_HOST` and `DOCKER_CONTEXT`. To use a remote daemon or a dind, run `velnor-local` and `velnor-host` inside that machine or container (Linux), so that the daemon is local to them. The next section does that with a dind.
 
-A workflow whose `runs-on` names a label the runners do not register, such as the `ubuntu-26.04-scale-set` of velnor-new, runs unchanged when `up` or `run` takes it as `--label`: `velnor-local run warm --repo "$REPO" --dir "$STATE" --label ubuntu-26.04-scale-set ...`. The flag repeats or takes commas, adds to the built-in labels in both modes, and allows letters, digits, `.`, `_` and `-` only.
+"No GitHub" means no scale set and no JIT config. Actions (`actions/checkout` is replaced, the rest are downloaded), `mise` tools and the pinned `velnor-ci` release still come from github.com, so the machine needs internet access.
 
-`run` takes several scenarios: `velnor-local run docs leaf --parallel 2 --dir "$STATE" ...` runs each in its own environment under `$STATE/<scenario>`, at most `--parallel` at a time (one unless set), and prefixes every line, the verdict's included, with the scenario. Ctrl-C (SIGINT) and SIGTERM, which `timeout` and `kill` send, stop the running scenarios, remove their environments as `down` does, keep the queued ones from starting and make `run` exit non-zero. Each environment has its own network, containers, ports, keys, cache and copy of the checkout.
+Pairs are single-use: each job takes a pair and a replacement starts after it, so a run of two jobs on two pairs can show three pairs in `runner/velnor-host.log`. That is expected. If the driver was killed (Ctrl-C twice, `kill -9`), a container such as `<name>-standin` or a pair can stay; `velnor-local down --dir "$STATE"` removes every container, volume and network labelled `velnor-local=<name>`, and so does the next `up` on that directory.
 
-A scenario is a JSON file in `scenarios/` (`--scenarios` names another directory; a path ending in `.json` is read as is): a description and an ordered list of steps. `warm`, `cold`, `docs`, `leaf`, `hub` and `lock` replay the scenarios of the lab, `fork` opens a pull request from the repository and one from a fork (with `testdata/workflows/fork-reach.yml` copied into the checkout, the first job reaches the API stub and the second cannot), `scheduled-run` (with `testdata/workflows/schedule-run.yml`) has a job post a second run to runner.server, whose job is refused as `not_dispatched`, `hello` pushes once (with `testdata/workflows/hello.yml`, for `--policy`), and `story` merges a pull request, opens a pull request, pushes to it again, opens a second one and closes the first. `velnor-new` pushes to the default branch, opens a pull request, and pushes a second commit to it; the recipe for velnor-new's own workflows, and what does not work yet, is in [Run velnor-new's workflows](#run-velnor-news-workflows).
+## Running against a throwaway dind
 
-| Step | What the driver does |
-|---|---|
-| `{"push": "<branch>"}` | Sends a `push` event with `ref`, `before` and `after`. `before` is the branch's previous push in this run; for a branch that existed before the scenario it is the parent of its tip, and for a branch the scenario created it is forty zeros. Every open pull request with this branch as its head also gets `pull_request` `synchronize` with its new merge commit, unless the merge conflicts, which the driver reports and GitHub also answers with no run |
-| `{"commit": {"branch": "<b>", "append": "<path>", "line": "<text>"}}` | Appends the line to the file, which may be new, on the branch, created from the default branch when missing, and commits it |
-| `{"update_lock": {"branch": "<b>", "package": "<crate>", "workspace": "<dir>"}}` | Bumps the crate to the next patch version after the one in the `Cargo.lock` of the workspace (the root of the copy unless `workspace` names a directory in it) with `cargo update -p <crate>@<locked version> --precise <version>`, run in that workspace so its `.cargo/config` applies, and commits the lock file on the branch. Cargo reads the crates.io index for this: it is the one request of the driver itself that leaves the machine; the others are the jobs' downloads of actions and tools |
-| `{"open_pull_request": {"head": "<b>", "base": "<b>", "fork": false}}` | Merges head into base as `refs/pull/<n>/merge` would, writes the pull request to `pulls.json`, registers its base with the cache server and sends `pull_request` `opened` with `--ref refs/pull/<n>/merge`. With `"fork": true` the head repository is `velnor-local-fork/<name>` with `fork: true`, and this and every later event of that pull request go to the untrusted side. A `push` of that branch sends no `push` event, as GitHub sends none to the repository for a fork's branch, only `synchronize` to the pull request. `run` refuses a scenario that dispatches that branch, makes it a base, opens a pull request from the repository with it, or names the default branch as a fork's head. The `push` of the base that `merge_pull_request` sends and the `merge_group` event of a fork's pull request run on the trusted side, as on GitHub, where a maintainer approves the merge; the `pull_request` `closed` event itself stays on the untrusted side, as GitHub runs it for a fork |
-| `{"merge_pull_request": "<head>"}` | Squash-merges the open pull request with that head into its base, sends `pull_request` `closed` with `merged: true`, then pushes the base |
-| `{"close_pull_request": "<head>"}` | Sends `pull_request` `closed` for the open pull request with that head |
-| `{"merge_group": "<head>"}` | Merges the pull request into its base on `gh-readonly-queue/<base>/pr-<n>-<base sha>` and sends `merge_group` `checks_requested` for that branch, as GitHub's merge queue does for a queue with one pull request; a group never includes pull requests queued before it |
-| `{"schedule": "<cron>"}` | Sends `schedule` on the default branch |
-| `{"workflow_dispatch": {"branch": "<b>", "inputs": {"<name>": <JSON value>}}}` | Sends `workflow_dispatch` on the branch with the inputs, to the one workflow `--workflow` names, which this step needs |
-
-With several scenarios, `$STATE` in this paragraph stands for `$STATE/<scenario>`. `run` copies `REPO` to `$STATE/repo`, commits its uncommitted changes there (changes to tracked files and the untracked files that `.gitignore` does not exclude; an untracked link is copied as a link only when it points inside the checkout, otherwise `run` stops and names it; a nested git repository is left out with a message, as `git add` leaves it out), and makes that commit the default branch of the copy (`--default-branch`, `main` unless set), so the scenario starts from exactly what is on disk, whichever branch `REPO` has checked out, and `REPO` is never modified. The copy's `origin` remote is set to `https://github.com/<--repository>` (the clone's own `origin` would be the checkout's path), so a job that reads `remote.origin.url`, as `velnor-ci plan` does, sees a hosted repository. A step names the default branch as `{default}`. It keeps the cache that an earlier `run` on the same `--dir` left, so a rerun restores what that run saved (`--fresh-cache` starts from an empty cache, and a scenario with `"fresh_cache": true` always does: `cold` and the `probe-cache-*` scenarios; the API stub, events, logs, metrics and the restore journal always start empty, and so do the registered pull request bases, which depend on that run's `--default-branch`, the reservations that run never committed, and the entries a pull request saved, because the next run's pull request with the same number is another pull request), replays the steps, stops the environment on every exit (a failed `up`, Ctrl-C and SIGTERM included), and prints a verdict: each run with its workflow, event, conclusion and metrics file, and under it, per job, each cache key it looked up with the entry it restored and that entry's scope (the ref it was saved on), or that it found none, the seconds from the start of `up` to the first job, and what was executed and what was stood in. Event payloads have the fields that `conformance/event-payload.json` lists. Each event's payload is in `$STATE/events/` and the log of its runs in `$STATE/logs/`. After each run, `run` calls `velnor-ci bench collect <run id> --repo <repository> -o $STATE/metrics/<run id>.json` (`--velnor-ci` names the program) with `GITHUB_API_URL` set to the API stub, so the metrics file of a local run is written by the same code as for a real run, and `velnor-ci bench compare` reads both. `--workflow` limits the runs to one workflow file; without it, runner.server runs every workflow the event triggers. An event that triggers no workflow is reported as such and is not a failure. `Runner.Client` gets `--no-default-payload`, so an event carries exactly the payload the driver wrote and no `sender` of its own, and a `push` lists the files each new commit adds, removes and modifies, which a `paths` filter reads. `run` exits with an error unless every run succeeded and wrote its metrics file. It refuses a branch, path, workflow, repository or default branch that is empty or starts with `-`, and an appended path that is absolute, contains `..` or leads out of the copy through a link. It fails when `Runner.Client` exits with an error before it creates a run, and when the old `cache/`, `api/`, `events/` or `logs/` cannot be removed.
-
-## Slower local machines
-
-The generated workflows size `timeout-minutes` for the CI cluster. On a loaded laptop a job can run past its limit and be cancelled before its cache save, so the save never happens and the next run starts cold. `run --timeout-scale <factor>` multiplies every numeric `timeout-minutes` in the run's copy of the workflows, at job and step level, and rounds each result up to whole minutes: `--timeout-scale 3` turns 30 into 90. Use 3 on a laptop. The default, 1, changes nothing. The factor is at least 1, with at most three decimals (`1.5`). Expressions such as `${{ inputs.minutes }}`, quoted values and values followed by anything but a comment are left alone. The checkout is never modified; the change is a commit in the run's copy, as the pin is.
-
-## Run velnor-new's workflows
-
-This runs velnor-new's own `rust-ci.yml` on the Mac, with the `velnor-new` scenario (push, pull request, second push). It is not a working recipe yet: three things stop it, listed under "What does not work yet". No run of it is recorded.
-
-Start from the same setup as [From zero to a run](#from-zero-to-a-run), with velnor-new as both `$VELNOR` and the repository to run. Keep that checkout clean for `build`, which refuses a dirty tree. `run` itself copies the checkout with its uncommitted changes, so `REPO` is never modified.
+To keep a dind daemon from touching your own Docker, run everything inside a `driver` container that shares the dind container's network namespace and sees the same paths. Keep the dind and the driver in `$WORK`, outside your own home folders.
 
 ```sh
-export VELNOR="$HOME/src/velnor-new" STATE="$HOME/.velnor/velnor-new"
-cd "$VELNOR" && git status --short
-
-velnor-local doctor
-velnor-local build
-velnor-local run velnor-new --repo "$VELNOR" --dir "$STATE" --workflow .github/workflows/rust-ci.yml --repository tailrocks/velnor-new --keep
+export WORK="$HOME/velnor-dind"
+mkdir -p "$WORK" && git clone https://github.com/tailrocks/velnor-new "$WORK/repo"
+docker run -d --privileged --name dind -e DOCKER_TLS_CERTDIR= -v "$WORK:$WORK" docker:dind
+docker run -d --name driver --network container:dind -v "$WORK:$WORK" debian:trixie-slim sleep infinity
+docker exec driver sh -c 'apt-get update && apt-get install -y --no-install-recommends docker-cli git procps socat'
 ```
 
-The scenario sends a push to the default branch first, which saves the caches, then opens a pull request that appends a line to `crates/velnor-archive-guard/src/lib.rs`, then pushes a second commit to that pull request's branch. The verdict should list a run for the push, one for the pull request's `opened` event and one for its `synchronize` event, with the restores of each. The second and third runs are the ones that show whether the caches the first run saved are restored.
-
-### What does not work yet
-
-- **The `ubuntu-26.04-scale-set` label.** `.velnor/rust-ci.toml` sets `runner = "ubuntu-26.04-scale-set"`, so the generated `runs-on` asks for a label the local runner never registers. The run fails with "No runner is registered for the requested runs-on labels". The local runner registers the hosted labels (`ubuntu-26.04` and `-arm`), and there is no flag to add the scale-set label yet. Do not edit the generated workflow to get around it.
-- **The crates mirror.** `[crates_mirror]` in the same config points cargo at `sparse+https://crates-mirror.velnor-system.svc.cluster.local/...` with a CA bundle at `/opt/velnor/crates-mirror/ca-bundle.pem`. Neither exists on the Mac, so `cargo fetch` fails in the jobs. There is no local override yet.
-- **`rust-ci.yml` is not in the tree yet.** The real file comes from `velnor-gen generate` on `.velnor/rust-ci.toml`, and it is added by #1223, which waits on rust-ci-v0.1.82 and #1228 to #1230. Until then, `--workflow .github/workflows/rust-ci.yml` names a file that is not there. The copies under `generator/samples/*/expected/.github/workflows/` are samples, not the file this run needs, and they carry the two problems above.
-
-The scenario also sends several events to one environment, and the next event can be sent while the single-use runner pair is being replaced (#1221). A later event may then fail with "No runner is registered" or "no job-start decision".
-
-## Workflows with a crates mirror
-
-A workflow generated with a `[crates_mirror]` table in `.velnor/rust-ci.toml` (see `generator/CONFIG.md`) runs `velnor-ci crates-mirror`, which fails when the mirror's CA bundle is missing. Neither exists on a developer machine, so every runner that `velnor-local` starts, in `pair` and in `plain` mode, has `VELNOR_CRATES_MIRROR=off` in its environment. The step then prints `crates mirror disabled by VELNOR_CRATES_MIRROR=off` and Cargo uses crates.io. Run the generated workflow unchanged, with no override file:
+`velnor-local` refuses a `tcp://` endpoint (`doctor`, `run` and `up` say `not a local socket`), so the driver does not get `DOCKER_HOST=tcp://...`. Instead it gets a unix socket that forwards to the dind's TCP port. The driver shares the dind's network namespace, so `127.0.0.1:2375` is the dind's daemon. Start the bridge inside `driver`, then check that the client reaches the dind through it. The check must print the dind's server version:
 
 ```sh
-velnor-local run warm --repo "$REPO" --dir "$STATE" --workflow .github/workflows/rust-ci.yml --repository owner/name
+docker exec -d driver socat UNIX-LISTEN:/var/run/docker.sock,fork TCP:127.0.0.1:2375
+docker exec -e DOCKER_HOST=unix:///var/run/docker.sock driver docker info
 ```
 
-The workflow needs a pinned `velnor-ci` release of at least `0.1.82`, which `velnor-gen` enforces whenever the table is present. A run through the pair or plain runner is the only place this variable is set; production runners never set it and still fail closed without the mirror.
+Keep the bridge running for the whole session. From here on, `drive` runs a command inside `driver`, in the checkout, with the socket set:
+
+```sh
+drive() { docker exec -w "$WORK/repo" -e DOCKER_HOST=unix:///var/run/docker.sock driver "$@"; }
+```
+
+Build the three images from the repository root, which is the build context of the single root workspace (#1594). The cache-server image needs the root `Cargo.toml`, `Cargo.lock` and `crates`, so its build context is `.`, not `local`:
+
+```sh
+drive docker build -t velnor-local/runner-server local/docker/runner-server
+drive docker build -t velnor-local/runner local/docker/runner
+drive docker build -t velnor-local/cache-server -f local/docker/velnor-local/Dockerfile .
+```
+
+The `velnor-local` executable is the binary of the cache-server image. Copy it into `target/release` of the checkout, because `build` and `run` find `velnor-host` by walking up from the executable's folder, and `build` puts `velnor-host` there. Then use it through `drive`:
+
+```sh
+drive sh -c 'mkdir -p target/release && id=$(docker create velnor-local/cache-server) && docker cp "$id:/usr/local/bin/velnor-local" target/release/velnor-local && docker rm "$id" >/dev/null'
+drive "$WORK/repo/target/release/velnor-local" doctor
+drive "$WORK/repo/target/release/velnor-local" build
+```
+
+`run` needs its state under `$WORK` too, and it takes the same `--repo` and `--dir` paths as on the Mac. The image has no `velnor-ci`, so `run` prints `warning: velnor-ci not found; skipping the report` unless you copy one in as well; the scenario still runs.
+
+```sh
+drive "$WORK/repo/target/release/velnor-local" run warm --repo "$WORK/repo" --dir "$WORK/state" --workflow .github/workflows/ci.yml --repository owner/name
+```
+
+A program that is not installed is named in the error, which starts with "cannot start" and then the program's name. Pointing `DOCKER_HOST` of the Mac at the dind instead fails with `docker port ... no public port`, because the published ports exist only inside the dind.
 
 ## Why each setting
 
-- `Runner.Server__GitApiServerUrl=http://api-stub` becomes `GITHUB_API_URL` in every job, so the helper's API calls reach the stub. Action downloads keep their own URLs (`Runner.Server:ActionDownloadUrls`), except with `--velnor-ci-binary`, which points the tarball URL at the API stub (see "Run an unreleased velnor-ci").
+- `Runner.Server__GitApiServerUrl=http://api-stub` becomes `GITHUB_API_URL` in every job, so the helper's API calls reach the stub. Action downloads keep their own URLs (`Runner.Server:ActionDownloadUrls`), except with `--velnor-ci-binary`, which points the tarball URL at the API stub (see [Run an unreleased velnor-ci](#run-an-unreleased-velnor-ci)).
 - `Runner.Server__GitServerUrl=http://github.localhost` becomes `GITHUB_SERVER_URL` in every job. `@actions/cache` uses the v2 cache protocol only when that host is `github.com`, ends in `.ghe.com` or ends in `.localhost`. For any other host, such as plain `localhost`, it assumes GitHub Enterprise Server and uses v1. `runner.server` sets the job variable `actions_uses_cache_service_v2=true` itself.
 - The stand-in image patches runner.server: `refs/pull/<n>/merge` gets `ref_name` `<n>/merge` and `ref_type` `branch`, as on GitHub, and a `workflow` string in a payload (as `schedule` and `workflow_dispatch` carry) is ignored, where runner.server would answer 500, while a `workflow` object (the upstream workflow of `workflow_run`) is still read for `on.workflow_run.workflows`.
 - `GITHUB_ACTIONS_RUNNER_FORCE_GHES=1` makes `config.sh` register through `/api/v3/actions/runner-registration`, which `runner.server` serves. Without it, the runner treats `github.localhost` as github.com and calls `api.github.localhost`, which does not exist.
+- `VELNOR_CRATES_MIRROR=off` and `MISE_SKILLS_FETCH=false` are set on every runner that `velnor-local` starts: pair mode puts them in the environment that `velnor-host` gives each pair, and plain mode in the `docker run` line. The first disables the crates mirror step (see [Workflows with a crates mirror](#workflows-with-a-crates-mirror)); the second turns off mise's skill fetch (#1950).
 - `runner.server` builds the job's cache address from the host the runner called, so the cache server receives the cache calls when it owns `github.localhost`. No change to the stand-in is needed.
 - The cache server reads the run's ref, default branch and repository from the runtime token, which `runner.server` signs with `token.pem`. The cache server verifies it with `token.pub.der`. Keep `$STATE/keys/` outside the checkout.
 - The cache server serves one repository on a trusted local network. Pull request registration is keyed by number only, and the first registration of a number holds. With a control port, as `up` starts it, registration is served only there, with the control token, and the open port answers 403, so no job can register a base. It listens on `127.0.0.1:80` unless `--listen` says otherwise; inside the container `--listen 0.0.0.0:80` exposes it on the environment's network, and `up` publishes it only on `127.0.0.1`. Every job of the trusted side can reach the cache server and the API stub. A pull request from a fork runs on the untrusted side, which cannot reach the stub (see the `fork` flag of `open_pull_request`).
@@ -248,18 +280,20 @@ The workflow needs a pinned `velnor-ci` release of at least `0.1.82`, which `vel
 
 `testdata/runner-server/` holds `runner.server`'s answers for one local run of the lab's `mbx default` workflow: the run list (`/_apis/v1/Message/workflow/runs`), the run's jobs (`/_apis/v1/Message?runid=`) and the job's timeline (`/_apis/v1/Timeline/{id}`).
 
+`testdata/workflows/` holds the three workflows that the `hello`, `fork` and `scheduled-run` scenarios copy into the checkout.
+
 ## Conformance
 
 `conformance/<probe>.json` holds how real GitHub behaved, measured by the probes of [tailrocks/velnor-lab](https://github.com/tailrocks/velnor-lab) (`lab probes`) and checked there every week. One file per probe, one entry per leg, with tags, run ids and pull request numbers replaced by placeholders. A value that names the run, `${repository}`, `${ref}` or `${defaultRef}`, is filled in from the run's event payload (`crates/velnor-local/src/conformance.rs` `run_values`); the claims `repository`, `ref` and `defaultRef`, and the scope lists, are compared by value, and every other claim by its type. `token`, `cache-save-existing`, `cache-restore-keys`, `cache-pr-reads`, `cache-other-pr` and `cache-own-pr` are replayed through `velnor-cache-rules` by `tests/it/conformance.rs`. The pushes and pull requests of `velnor-local run` carry every field of the `push` and `pull_request` legs of `event-payload`, with the observed types, checked by `crates/velnor-local/tests/it/driver.rs`. Copy new files from the lab's `conformance/` when `lab probes` changes them.
 
-Every probe also runs in the local environment. `scenarios/probe-<probe>.json` replays what `lab probes` does on GitHub for that probe (the same pushes, pull requests and dispatches, with a numeric tag that is not a pull request number), and `velnor-local conformance --dir "$STATE"` reads the observation each probe job prints into the run's logs and compares every leg with `conformance/<probe>.json`:
+Every probe also runs in the local environment. `scenarios/probe-<probe>.json` replays what `lab probes` does on GitHub for that probe (the same pushes, pull requests and dispatches, with a numeric tag that is not a pull request number). `velnor-local conformance --dir "$STATE"` reads the observation each probe job prints into the run's logs, from the job logs that the API stub serves, and compares every leg with `conformance/<probe>.json`:
 
 ```sh
 velnor-local run probe-cache-pr-reads --repo "$LAB" --dir "$STATE" --workflow .github/workflows/probe-cache-pr-reads.yml --repository tailrocks/velnor-lab
 velnor-local conformance --dir "$STATE"
 ```
 
-It prints each leg as `reproduced`, with its differences, or as `not observed`, and exits with an error unless every leg is reproduced. The legs of `event-payload`, `cache-restore-keys`, `cache-pr-reads`, `cache-other-pr` and `cache-own-pr` are reproduced. The rest differ, each for a reason listed in #632 (the lab-side fixes are tailrocks/velnor-lab#289):
+It prints each leg as `reproduced`, with its differences, or as `not observed`, and exits with an error unless every leg is reproduced. Run it from the repository root, or pass `--conformance` (`local/conformance` by default). The legs of `event-payload`, `cache-restore-keys`, `cache-pr-reads`, `cache-other-pr` and `cache-own-pr` are reproduced. The rest differ, each for a reason listed in #632 (the lab-side fixes are tailrocks/velnor-lab#289):
 
 - `cache-save-existing` reads the job log from `https://api.github.com`, not from `GITHUB_API_URL`; with the probe reading `GITHUB_API_URL` it is reproduced.
 - `needs-result` is refused locally, not run. Its canceller cancels the run with `gh run cancel`, which the runner image does not have and which would call github.com, so the sleeper never ends and `run` would wait for it. `scenarios/probe-needs-result.json` carries `not_modelled`, and `run` refuses it with `not modelled locally` before it starts an environment, so its legs print as `not observed`. Cancellation is not modelled: `if: cancelled()` and `needs.<job>.result == 'cancelled'` are not checked here.
@@ -271,10 +305,10 @@ It prints each leg as `reproduced`, with its differences, or as `not observed`, 
 
 `crates/velnor-local/` holds `velnor-local cache-server`. It serves `GetCacheEntryDownloadURL`, `CreateCacheEntry` and `FinalizeCacheEntryUpload`, the Azure-style uploads and the downloads, and asks `velnor-cache-rules` for every hit, miss, refusal and eviction. Each archive is one file in `archives/`, and `index.json` lists the entries and the registered pull requests. `restores.jsonl` gets one line per `GetCacheEntryDownloadURL`: the runtime token's `scp` (`Actions.Results:<run id>:<job id>`), the key, and the matched key and its scope, or `null` for a miss. `run` reads it for the verdict. The journal records lookups, so an `actions/cache/restore` with `lookup-only: true` also reads as restored, although it downloads nothing. Its tests replay `testdata/cache-client/` in process.
 
-Run the tests from `local/`:
+Run the tests from the repository root, with the crates that hold this code:
 
 ```sh
-cargo nextest run --locked
+cargo nextest run --locked -p velnor-local -p velnor-cache-rules
 ```
 
 ## API stub
@@ -297,7 +331,7 @@ velnor-local api-stub --listen 127.0.0.1:8080 --repo "$REPO" --dir "$STATE/api" 
 
 `--default-branch` is the branch a contents request without `ref` reads. A missing or malformed `pulls.json` is a 500. A diff larger than `--diff-limit-bytes` (256 MiB by default) is a 422. The stub serves one repository to a trusted local network and listens on `127.0.0.1` unless `--listen` says otherwise.
 
-Cache listing and deletion require `--control-listen` and `--control-token`. The control port requires `Authorization: Bearer <the token in the control-token file>` and returns 401 for a missing or wrong token. The job port serves cache listing and deletion as GitHub does: to a job that has `actions: read` (listing) or `actions: write` (listing and deleting) on an event that is not a pull request, and to no other. runner.server (the stand-in) takes each job's calculated permissions (the job's `permissions:`, else the workflow's, else its default for the event, which is write for a workflow that sets none) and, for a job whose `actions` permission is read or write, signs a grant into its `github.token` with the key that signs the runtime tokens. The API stub, started by `up` and `run` with `--token-key keys/token.pub.der`, verifies the signature, the expiry, the repository in the request path, `actions: read` for a listing, `actions: write` for a deletion, and an event that does not start with `pull_request` (so `pull_request_target` and a fork's pull request are refused, since every local pull request is untrusted). The grant also has to name a run the driver dispatched: `up` mounts the authority folder read only at `/authority` and passes `--ledger /authority`, and the stub admits the grant's `runid` against `ledger.jsonl` and runner.server's run list as the job-start check does, and refuses it unless the ledger entry that admits the run records an event that is not a pull request. A run that a job created itself (a `schedule2` call labelled `push`), a run older than the driver's dispatch, and a run of an earlier `up` are refused, as is every grant when the ledger or runner.server cannot be read. Any other job keeps the token it had (empty), and an empty, unknown, expired, tampered or other-repository token gets 403, as does a request with the control token on the job port. The job port also answers 403 when the stub has no `--token-key`. `up` and `run` take `--job-cache-admin` as an explicit override that grants every job, whatever its token, event or permissions; leave it off for the cache isolation scenarios. Other API endpoints remain available on the job port without authentication.
+Cache listing and deletion come in two ways. The control port, which `--control-listen` and `--control-token` (a file that holds the token) turn on, always serves them to a request that carries the control token as a bearer token, and answers 401 for a missing or wrong token. The job port serves them as GitHub does: to a job that has `actions: read` (listing) or `actions: write` (listing and deleting) on an event that is not a pull request, and to no other. runner.server (the stand-in) takes each job's calculated permissions (the job's `permissions:`, else the workflow's, else its default for the event, which is write for a workflow that sets none) and, for a job whose `actions` permission is read or write, signs a grant into its `github.token` with the key that signs the runtime tokens. The API stub, started by `up` and `run` with `--token-key keys/token.pub.der`, verifies the signature, the expiry, the repository in the request path, `actions: read` for a listing, `actions: write` for a deletion, and an event that does not start with `pull_request` (so `pull_request_target` and a fork's pull request are refused, since every local pull request is untrusted). The grant also has to name a run the driver dispatched: `up` mounts the authority folder read only at `/authority` and passes `--ledger /authority`, and the stub admits the grant's `runid` against `ledger.jsonl` and runner.server's run list as the job-start check does, and refuses it unless the ledger entry that admits the run records an event that is not a pull request. A run that a job created itself (a `schedule2` call labelled `push`), a run older than the driver's dispatch, and a run of an earlier `up` are refused, as is every grant when the ledger or runner.server cannot be read. Any other job keeps the token it had (empty), and an empty, unknown, expired, tampered or other-repository token gets 403, as does a request with the control token on the job port. The job port also answers 403 when the stub has no `--token-key`. `up` and `run` take `--job-cache-admin` as an explicit override that grants every job, whatever its token, event or permissions; leave it off for the cache isolation scenarios. Other API endpoints remain available on the job port without authentication.
 
 The stub serves one repository: `{owner}/{repo}` selects the cache entries and appears in URLs, and the git repository is always `--repo`. Both processes take an exclusive lock on `index.lock` in the cache directory around every read-modify-write of `index.json`, and the cache server reads `index.json` again under that lock on every request, so a delete through the stub takes effect at once and is never overwritten. A request fails with a JSON error when the index cannot be read.
 
