@@ -79,7 +79,7 @@ pub fn untimed_auto_note(facts: &RepoFacts) -> Option<String> {
         .collect();
     (!roots.is_empty()).then(|| {
         format!(
-            "shape = \"auto\" picked the one-job shape for {}: {TIMINGS_PATH} has no build times for them (the file is missing or has no entry for them), so clippy and the tests run in one job. To choose a shape, set shape = \"lint-test\" (or \"groups\") in {CONFIG_PATH}; to let auto measure, run `velnor-ci timings` and commit {TIMINGS_PATH}.",
+            "shape = \"auto\" picked the one-job shape for {}: {TIMINGS_PATH} has no build times for them (the file is missing or has no entry for them), so clippy and the tests run in one job. To choose a shape, set shape = \"lint-test\" (or \"groups\") in {CONFIG_PATH}; to let auto measure, once the generated workflow has three successful runs on the default branch, run `velnor-ci timings --repo owner/name` in the checkout (it reads GITHUB_TOKEN) and commit {TIMINGS_PATH}.",
             roots.join(", ")
         )
     })
