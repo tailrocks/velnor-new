@@ -113,6 +113,7 @@ fn output_bytes(facts: &RepoFacts, slug: &RootSlug, need: GateNeed) -> usize {
         | GateNeed::Deny
         | GateNeed::Machete
         | GateNeed::Policy
+        | GateNeed::Lint
         | GateNeed::TestsExpected
         | GateNeed::Group => 4,
         GateNeed::PackageArgs | GateNeed::TestFilter => {
