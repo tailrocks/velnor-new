@@ -10,13 +10,17 @@ use crate::io::Repo;
 
 pub(super) const VARIABLE: &str = "VELNOR_AUDIT_MAX_ENTRIES";
 
+const LINKS_PER_INODE: usize = 10_000;
+
 pub(super) fn declared_tree(entries: usize) -> Repo {
     let repo = workspace_below_the_root();
     let directory = repo.root().join("shared/first");
     fs::create_dir_all(&directory).unwrap_or_else(|e| unreachable!("{e}"));
-    let seed = directory.join("seed");
-    fs::write(&seed, "").unwrap_or_else(|e| unreachable!("{e}"));
     for index in 0..entries {
+        let seed = directory.join(format!("seed-{}", index / LINKS_PER_INODE));
+        if index % LINKS_PER_INODE == 0 {
+            fs::write(&seed, "").unwrap_or_else(|e| unreachable!("{e}"));
+        }
         fs::hard_link(&seed, directory.join(index.to_string()))
             .unwrap_or_else(|e| unreachable!("{e}"));
     }
