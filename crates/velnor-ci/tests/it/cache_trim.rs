@@ -320,3 +320,49 @@ fn trim_keeps_a_sources_entry_restored_within_a_day_beyond_the_newest_two() {
         assert_eq!(deleted_ids(&caches), expected, "{restored}");
     }
 }
+
+#[test]
+fn a_prefix_with_a_line_break_cannot_start_a_runner_command_in_the_trim_report() {
+    let fake = paged(100_000);
+    let repo = Repo::parse("tailrocks/velnor-lab").unwrap_or_else(|e| unreachable!("{e}"));
+    let report = trim(
+        &fake,
+        &repo,
+        "refs/heads/main",
+        "velnor-tgt-rust-lab-Linux-X64-abcd-\n::stop-commands::token",
+        2,
+        0,
+    )
+    .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(report.contains("::warning::"), "{report}");
+    assert!(report.contains("%0A"), "{report}");
+    assert!(
+        report
+            .lines()
+            .all(|line| line.starts_with("::warning::") || !line.starts_with("::")),
+        "{report}"
+    );
+}
+
+#[test]
+fn a_ref_with_a_line_break_cannot_start_a_runner_command_in_the_trim_summary() {
+    let fake = paged(1);
+    let repo = Repo::parse("tailrocks/velnor-lab").unwrap_or_else(|e| unreachable!("{e}"));
+    let report = trim(
+        &fake,
+        &repo,
+        "refs/heads/main\n::stop-commands::token",
+        "velnor-tgt-rust-lab-Linux-X64-abcd",
+        2,
+        0,
+    )
+    .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(
+        report.lines().all(|line| !line.starts_with("::")),
+        "{report}"
+    );
+    assert!(
+        report.contains("refs/heads/main%0A%3A%3Astop-commands%3A%3Atoken"),
+        "{report}"
+    );
+}

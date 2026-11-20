@@ -106,6 +106,7 @@ pub struct Job {
     /// The pinned helper records the build in its test step (`outputs.built`), so the saves
     /// may wait for that record instead of a build step.
     pub records_build: bool,
+    pub chained_saves: bool,
     /// Titles the job with the selection of the run, read from the plan outputs.
     pub selection_name: Option<SelectionName>,
     pub steps: Vec<Step>,
@@ -285,6 +286,7 @@ pub enum When {
     BaseExpired,
     SavingRun,
     ClearRunLabel,
+    Failure,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -332,6 +334,7 @@ pub enum CargoCommand {
         file: RepoPath,
         filter: FilterRef,
         threads: Option<u16>,
+        partition: Option<(u16, u16)>,
         ci_profile: bool,
         no_tests: NoTests,
     },
