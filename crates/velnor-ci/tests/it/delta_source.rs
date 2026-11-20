@@ -88,37 +88,47 @@ pub(super) fn delta(repo: &Repo, verb: &str, expected: Option<&str>) -> String {
     values
 }
 
-/// Drops the job's crates-mirror overrides from a child env. On CI the job's `VELNOR_CARGO_CONFIG`
-/// (passed as `--config` by the mirror cargo wrapper) and `CARGO_REGISTRIES_*` / `CARGO_SOURCE_*`
-/// replace crates-io with `velnor-crates-mirror` ahead of the repo's own `.cargo/config.toml`, so
-/// the directory source that vendors `regdep` is never found (main job 136117859373, delta.rs:88).
+/// Takes a child env off the job's crates-mirror. On CI the job's `VELNOR_CARGO_CONFIG` (passed as
+/// `--config` by the mirror cargo wrapper) and `CARGO_REGISTRIES_*` / `CARGO_SOURCE_*` replace
+/// crates-io with `velnor-crates-mirror` ahead of the repo's own `.cargo/config.toml`, so the
+/// directory source that vendors `regdep` is never found (main job 136117859373, delta.rs:88).
+///
+/// The wrapper also sits first on `PATH` as `cargo` and fails with `missing VELNOR_CARGO_WRAPPER`
+/// once its variables are gone (main run 44699691623), so the wrapper's directory leaves `PATH` too
+/// and the helper's own `cargo` resolves to the real one.
 pub(super) fn strip_mirror_overrides(command: &mut Command) {
+    let wrapper = std::env::var_os("VELNOR_CARGO_WRAPPER").map(std::path::PathBuf::from);
     for name in ["VELNOR_CARGO_CONFIG", "VELNOR_CARGO_WRAPPER"] {
         command.env_remove(name);
     }
-    for (key, _) in std::env::vars_os() {
+    for (key, value) in std::env::vars_os() {
         let name = key.to_string_lossy();
-        if name.starts_with("CARGO_REGISTRIES_") || name.starts_with("CARGO_SOURCE_") {
+        let mirror = name.starts_with("VELNOR_CARGO_")
+            || name.starts_with("CARGO_REGISTRIES_")
+            || name.starts_with("CARGO_SOURCE_")
+            || (name == "CARGO" && wrapper.as_deref() == Some(Path::new(&value)));
+        if mirror {
             command.env_remove(&key);
         }
     }
+    if let Some(directory) = wrapper.as_deref().and_then(Path::parent) {
+        let path = std::env::var_os("PATH").unwrap_or_default();
+        command.env("PATH", without_directory(&path, directory));
+    }
+}
+
+fn without_directory(path: &std::ffi::OsStr, directory: &Path) -> std::ffi::OsString {
+    let kept = std::env::split_paths(path).filter(|entry| entry != directory);
+    std::env::join_paths(kept).unwrap_or_else(|_| path.to_owned())
 }
 
 #[test]
-fn stripped_cargo_env_drops_the_job_mirror_overrides() {
-    let mut command = Command::new("cargo");
-    command.env("VELNOR_CARGO_CONFIG", "/runner/velnor-cargo/config.toml");
-    strip_mirror_overrides(&mut command);
-    let envs: Vec<_> = command
-        .get_envs()
-        .map(|(key, value)| (key.to_owned(), value.map(ToOwned::to_owned)))
-        .collect();
-    let value = |name: &str| {
-        envs.iter()
-            .find(|(key, _)| key == name)
-            .and_then(|(_, value)| value.clone())
-    };
-    assert_eq!(value("VELNOR_CARGO_CONFIG"), None, "{envs:?}");
+fn the_job_mirror_wrapper_directory_leaves_the_child_path() {
+    let path = std::env::join_paths(["/runner/velnor-cargo", "/usr/bin", "/opt/rust/bin"])
+        .unwrap_or_else(|error| unreachable!("{error}"));
+    let kept = without_directory(&path, Path::new("/runner/velnor-cargo"));
+    let kept: Vec<_> = std::env::split_paths(&kept).collect();
+    assert_eq!(kept, [Path::new("/usr/bin"), Path::new("/opt/rust/bin")]);
 }
 
 pub(super) fn cargo(repo: &Repo) -> Output {
