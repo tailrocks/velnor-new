@@ -23,11 +23,13 @@ pub(super) struct Removed(BTreeMap<Category, u64>);
 
 impl Removed {
     fn take(&mut self, category: Category, path: &Path) -> Result<(), CiError> {
-        let size = directory_size(path)?;
-        let removal = if path.is_dir() {
-            fs::remove_dir_all(path)
+        let (size, removal) = if path.is_dir() {
+            (directory_size(path)?, fs::remove_dir_all(path))
         } else {
-            fs::remove_file(path)
+            let size = fs::metadata(path)
+                .map_err(|e| CiError::new(format!("cannot read {}: {e}", path.display())))?
+                .len();
+            (size, fs::remove_file(path))
         };
         removal.map_err(|e| CiError::new(format!("cannot remove {}: {e}", path.display())))?;
         *self.0.entry(category).or_default() += size;
