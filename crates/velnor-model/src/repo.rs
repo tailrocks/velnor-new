@@ -114,6 +114,27 @@ pub struct RepoFacts {
 pub struct PolicyTools {
     pub deny: bool,
     pub machete: bool,
+    pub deny_off: bool,
+    pub checks: DenyChecks,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct DenyChecks(u8);
+
+impl DenyChecks {
+    pub const ALL: Self = Self(0b1111);
+
+    #[must_use]
+    pub fn of(checks: &[DenyCheck]) -> Self {
+        checks
+            .iter()
+            .fold(Self(0), |set, check| Self(set.0 | (1 << *check as u8)))
+    }
+
+    #[must_use]
+    pub fn contains(self, check: DenyCheck) -> bool {
+        self.0 & (1 << check as u8) != 0
+    }
 }
 
 impl PolicyTools {
@@ -306,6 +327,7 @@ pub struct ToolLock {
     pub prebuilt: BTreeSet<String>,
 }
 
+pub use crate::policy_table::{DenyCheck, DenyLane, PolicyTable};
 pub use crate::repo_config::{
     CacheDebug, CheckoutScope, CiDebugInfo, CratesMirror, DocsRun, FullRun, InputRule,
     LaneFeatures, LaneJob, LaneKeysWritten, MbxRemote, MbxStore, OnMain, PrCi, PrivateSources,

@@ -125,10 +125,11 @@ pub enum StepKind {
     MbxPrivate,
     MbxStore,
     MbxSeed,
-    ToolsLocal(ToolsLocalVerb),
+    ToolsLocal(ToolsLocalVerb, crate::ToolsAnchor),
     TestSetup {
         name: String,
         run: String,
+        before_build: bool,
     },
     GeneratorCheck,
     InstallGenerator(HelperRelease),
@@ -146,6 +147,7 @@ pub enum StepKind {
         caches: Vec<CacheKey>,
         nextest_artifacts: bool,
         node_tools: ToolsTelemetry,
+        not_generated: Option<String>,
     },
     UploadMetrics,
     DownloadMetrics,
@@ -164,10 +166,19 @@ pub enum StepKind {
 
 impl StepKind {
     #[must_use]
+    pub const fn feeds_build(&self) -> bool {
+        matches!(
+            self,
+            Self::TestSetup {
+                before_build: true,
+                ..
+            } | Self::ReleaseAssets { .. }
+        )
+    }
+
+    #[must_use]
     pub const fn is_check(&self) -> bool {
         match self {
-            // The advisory DB fetch serves the cargo-deny check, which is a check, so it
-            // is skipped after a merge group exactly when that check is.
             Self::TestSetup { .. } | Self::AdvisoryFetch { .. } | Self::ReleaseAssets { .. } => {
                 true
             }
@@ -211,7 +222,7 @@ impl StepKind {
             | Self::MbxPrivate
             | Self::MbxStore { .. }
             | Self::MbxSeed { .. }
-            | Self::ToolsLocal(_)
+            | Self::ToolsLocal(..)
             | Self::GeneratorCheck { .. }
             | Self::InstallGenerator(_)
             | Self::InstallHelper(_)
@@ -240,7 +251,7 @@ impl StepKind {
             self,
             Self::CacheSave(_)
                 | Self::MbxRemote { .. }
-                | Self::ToolsLocal(ToolsLocalVerb::AnchorSave)
+                | Self::ToolsLocal(ToolsLocalVerb::AnchorSave, _)
         )
     }
 }
@@ -262,15 +273,31 @@ pub enum ToolsLocalVerb {
     RecordSave,
     AnchorReset,
     AnchorRestore,
+    AnchorFind,
+    AnchorRead,
     Verify,
+    VerifyNamed,
+    VerifyNamedAnchor,
     Record,
     AnchorSave,
+}
+
+impl ToolsLocalVerb {
+    #[must_use]
+    pub fn checks_tools(self) -> bool {
+        matches!(
+            self,
+            Self::Verify | Self::VerifyNamed | Self::VerifyNamedAnchor
+        )
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VerifiedSave {
     OnDefaultBranch,
     UnlessLocal,
+    AnchoredOnDefaultBranch,
+    AnchoredUnlessLocal,
     NodeStore,
     Prime,
     Anchor,

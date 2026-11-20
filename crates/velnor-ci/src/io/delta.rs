@@ -32,7 +32,8 @@ pub(super) fn run(command: DeltaCommand) -> Result<String, CiError> {
                 identity.as_deref().unwrap_or_default()
             ))?;
             Ok(format!(
-                "delta base: {base}\n{}",
+                "delta base: {}\n{}",
+                escape(&base, false),
                 if identity.is_err() {
                     "::notice::source identity unavailable; saving no delta\n"
                 } else {

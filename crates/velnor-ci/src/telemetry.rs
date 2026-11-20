@@ -50,6 +50,8 @@ pub struct Compilation {
     pub workspace: bool,
     pub unchanged: bool,
     pub dependencies: BTreeSet<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub restored: Option<bool>,
 }
 
 #[must_use]

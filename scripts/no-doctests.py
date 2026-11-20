@@ -17,10 +17,8 @@ QUOTE_START = re.compile(r"[ \t]*>")
 HRULE = re.compile(r"(?:-[ \t]*){3,}|(?:\*[ \t]*){3,}|(?:_[ \t]*){3,}")
 SETEXT_UNDERLINE = re.compile(r"(?:=+|-+)[ \t]*")
 DOC_OPEN = re.compile(r"/\*(?:!|\*(?![*/]))")
-ATTR_START = re.compile(r"#\s*!?\s*\[")
 DOC_EQ = re.compile(r"\s*=(?!=)")
 DOC_INCLUDE = re.compile(r"\s*=\s*include_str!")
-SHEBANG_ATTR = re.compile(r"#!\s*\[")
 STRING_ESCAPE = re.compile(r"\\(?:x([0-9a-fA-F]{2})|u\{([0-9a-fA-F_]{1,8})\}|(\r?\n[ \t\r\n]*)|(.))", re.S)
 SIMPLE_ESCAPE = {"n": "\n", "r": "\r", "t": "\t", "0": "\0", "\\": "\\", "'": "'", '"': '"'}
 RAW_PREFIX = {"r", "br", "cr"}
@@ -56,6 +54,13 @@ def skip_trivia(src, i):
         else:
             break
     return i
+
+
+def attr_open(src, i):
+    k = skip_trivia(src, i + 1)
+    if src.startswith("!", k):
+        k = skip_trivia(src, k + 1)
+    return k + 1 if src.startswith("[", k) else None
 
 
 def skip_string(src, i):
@@ -105,16 +110,17 @@ def prose(line):
 def markdown_hit(lines, indent):
     prev = None
     for k, line in enumerate(lines):
-        if LINE_FENCE.match(line) or LIST_INDENT.match(line):
+        text = line.replace("\t", "    ")
+        if LINE_FENCE.match(text) or LIST_INDENT.match(text):
             return k
-        if indent.match(line) and not (prose(prev) and not QUOTE_START.match(line)):
+        if indent.match(text) and not (prose(prev) and not QUOTE_START.match(text)):
             return k
         prev = line
     return None
 
 
 def value_has_fence(value):
-    return markdown_hit(value.split("\n"), ATTR_INDENT) is not None
+    return markdown_hit(re.split(r"\r\n|\r|\n", value), ATTR_INDENT) is not None
 
 
 def decode_escape(match):
@@ -187,9 +193,9 @@ def doc_findings(src):
         elif c == "'":
             j = skip_char(src, i)
             i = i + 1 if j is None else j
-        elif c == "#" and (m := ATTR_START.match(src, i)):
+        elif c == "#" and (j := attr_open(src, i)) is not None:
             attr_depth = 1
-            i = m.end()
+            i = j
         elif c == "[":
             if attr_depth:
                 attr_depth += 1
@@ -233,7 +239,7 @@ def rust_sources():
 
 def strip_shebang(src):
     src = src.removeprefix("\ufeff")
-    if src.startswith("#!") and not SHEBANG_ATTR.match(src):
+    if src.startswith("#!") and attr_open(src, 0) is None:
         first, newline, rest = src.partition("\n")
         return newline + rest
     return src

@@ -4,8 +4,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use velnor_model::{PolicyTools, RepoPath, RepoView, RustRoot};
+use velnor_model::{DenyCheck, DenyChecks, DenyLane, PolicyTools, RepoPath, RepoView, RustRoot};
 
+use crate::config::CONFIG_PATH;
 use crate::error::{DetectError, Reason};
 use crate::mise::MISE_CONFIGS;
 use crate::os_pins::pinned_for_runner;
@@ -60,17 +61,44 @@ pub(crate) fn policy_tools(
     view: &RepoView,
     deny_configs: &BTreeMap<RepoPath, RepoPath>,
     runner: &str,
+    lane: DenyLane,
+    checks: DenyChecks,
 ) -> Result<PolicyTools, DetectError> {
     let pinned = |tool: &str| pinned_for_runner(&view.files, |name| is_tool(name, tool), runner);
-    if let Some(path) = deny_configs.values().next()
+    let deny = match lane {
+        DenyLane::Auto => !deny_configs.is_empty(),
+        DenyLane::On if deny_configs.is_empty() => {
+            return Err(DetectError::invalid(
+                &CONFIG_PATH,
+                Reason::PolicyDenyWithoutConfig,
+            ));
+        }
+        DenyLane::On => true,
+        DenyLane::Off => false,
+    };
+    if deny
+        && let Some(path) = deny_configs.values().next()
         && !pinned(DENY_TOOL)
     {
         return Err(DetectError::invalid(path, Reason::UnpinnedTool(DENY_TOOL)));
     }
     Ok(PolicyTools {
-        deny: !deny_configs.is_empty(),
+        deny,
         machete: pinned("cargo-machete"),
+        deny_off: lane == DenyLane::Off,
+        checks,
     })
+}
+
+pub const DENY_OFF_NOTE: &str =
+    "cargo-deny policy is off ([policy] deny = false); deny.toml is ignored";
+
+#[must_use]
+pub fn deny_off_note(
+    tools: PolicyTools,
+    deny_configs: &BTreeMap<RepoPath, RepoPath>,
+) -> Option<String> {
+    (tools.deny_off && !deny_configs.is_empty()).then(|| DENY_OFF_NOTE.to_owned())
 }
 
 fn is_tool(name: &str, tool: &str) -> bool {
@@ -93,14 +121,16 @@ pub fn policy_runs(
     everything: bool,
     selected: bool,
 ) -> PolicyRuns {
-    let dependency = everything
+    let manifest = everything
         || changed.iter().any(|path| {
             let name = path.as_str().rsplit('/').next().unwrap_or_default();
-            DEPENDENCY_FILES.contains(&name) || is_deny_config(path) || is_cargo_config(path)
+            DEPENDENCY_FILES.contains(&name) || is_cargo_config(path)
         });
+    let dependency = manifest || changed.iter().any(is_deny_config);
     let deny_only = changed.iter().any(|path| {
         let name = path.as_str().rsplit('/').next().unwrap_or_default();
-        license_text(name) || DENY_EXCEPTION_FILES.contains(&name)
+        (tools.checks.contains(DenyCheck::Licenses) && license_text(name))
+            || DENY_EXCEPTION_FILES.contains(&name)
     });
     let unused_possible = changed.iter().any(|path| {
         let name = path.as_str().rsplit('/').next().unwrap_or_default();
@@ -109,8 +139,9 @@ pub fn policy_runs(
             || IGNORE_FILES.contains(&name)
     });
     PolicyRuns {
-        deny: (tools.deny || changed.iter().any(is_deny_config)) && (dependency || deny_only),
-        machete: tools.machete && (dependency || unused_possible),
+        deny: (tools.deny || (!tools.deny_off && changed.iter().any(is_deny_config)))
+            && (dependency || deny_only),
+        machete: tools.machete && (manifest || unused_possible),
     }
 }
 

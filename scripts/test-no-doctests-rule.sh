@@ -149,6 +149,19 @@ check attr_gap_line_comment_fence fail '#[doc // gap\n = "```\\nassert_eq!(1, 1)
 check footnote_block_unclosed fail '/**\n * prose\n *\n * [^x]: ```\n * assert_eq!(1, 2);\n */\nfn f() {}\n'
 check footnote_line_unclosed fail '/// [^x]: ```\n/// assert_eq!(1, 2);\nfn f() {}\n'
 check footnote_prose_pass pass '/// [^x]: plain footnote text\n/// assert_eq!(1, 2);\nfn f() {}\n'
+check attr_gap_hash_fence fail '# /* gap */ [doc = "```\\nassert_eq!(1, 1);\\n```"]\npub fn f() {}\n'
+check shebang_gap_attr  fail '#!/* g */[doc = "```\\nassert_eq!(1, 1);\\n```"]\npub fn f() {}\n'
+check line_tab_indent   fail '/// text\n///\n/// \tassert_eq!(1, 1);\npub fn f() {}\n'
+check attr_tab_indent   fail '#[doc = "prose\\n\\n\\tassert_eq!(1, 1);"]\npub fn f() {}\n'
+check block_tab_indent  fail '/**\n * prose\n *\n * \tassert_eq!(1, 1);\n */\npub fn f() {}\n'
+check attr_cr_fence     fail '#![doc = "prose\\r```\\rassert_eq!(1, 1);\\r```"]\npub fn f() {}\n'
+check attr_cr_indent    fail '#![doc = "prose\\r\\r    assert_eq!(1, 1);\\r"]\npub fn f() {}\n'
+check line_list_indent  fail '/// -     assert_eq!(1, 1);\npub fn f() {}\n'
+check block_list_indent fail '/**\n * -     assert_eq!(1, 1);\n */\npub fn f() {}\n'
+check attr_list_indent  fail '#[doc = "-     assert_eq!(1, 1);"]\npub fn f() {}\n'
+check line_tab_no_space pass '/// text\n///\n///\tassert_eq!(1, 1);\npub fn f() {}\n'
+check block_tab_no_indent pass '/**\n * prose\n *\n *\tassert_eq!(1, 1);\n */\npub fn f() {}\n'
+check line_list_prose   pass '/// -    not code\npub fn f() {}\n'
 
 missing="$work/scanner_missing"
 mkdir -p "$missing/crates/fx/src"
