@@ -5,10 +5,10 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::{Command, Output};
 use std::time::{Duration, SystemTime};
-use velnor_test_support::real_cargo;
+use velnor_test_support::{ci_safe_cargo_env, real_cargo};
 
 use crate::delta::success;
-use crate::delta_source::{fingerprint_folders, helper_at, strip_mirror_overrides};
+use crate::delta_source::{fingerprint_folders, helper_at};
 use crate::io::Repo;
 
 pub(super) struct Fixture {
@@ -153,7 +153,7 @@ impl Fixture {
             .env("CARGO_TARGET_DIR", directory.join("target"))
             .env_remove("RUSTC_WRAPPER")
             .env_remove("RUSTC_WORKSPACE_WRAPPER");
-        strip_mirror_overrides(&mut command);
+        ci_safe_cargo_env(&mut command);
         command.output().unwrap_or_else(|e| unreachable!("{e}"))
     }
 
