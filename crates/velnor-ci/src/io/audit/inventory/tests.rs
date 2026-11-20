@@ -4,11 +4,9 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::{fs, thread};
 
+use super::walk::scan_with;
 use super::*;
 
-// Racing test: a churn thread creates and removes entries while `scan` lists
-// the same directory, so some entries are listed and then gone before their
-// stat. Every scan must still succeed.
 // A directory the parent listed as a directory, then removed before the walk
 // opened it. Injected through `scan_with` so the NotFound is deterministic.
 fn scan_with_open_failing(kind: io::ErrorKind) -> io::Result<Entries> {
@@ -59,6 +57,9 @@ fn a_directory_that_cannot_be_opened_still_fails_the_scan() {
     );
 }
 
+// Racing test: a churn thread creates and removes entries while `scan` lists
+// the same directory, so some entries are listed and then gone before their
+// stat. Every scan must still succeed.
 #[test]
 fn an_entry_removed_during_the_walk_is_not_an_error() {
     let root = std::env::temp_dir().join(format!("velnor-scan-vanish-{}", std::process::id()));
