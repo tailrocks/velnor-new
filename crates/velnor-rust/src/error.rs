@@ -80,6 +80,7 @@ pub enum Reason {
     UnknownTestGroupRoot(String),
     TestGroupWithoutNextest(String),
     TestGroupFilter(String),
+    TestGroupsWithPrivateSources,
     PrCiWithSkipDraft,
     RustdocflagsString,
     CargoConfigInclude,
@@ -176,6 +177,9 @@ impl Reason {
             Self::TestGroupFilter(filter) => write!(
                 f,
                 "test_groups.filter {filter:?} is empty or has a character a generated one-command step cannot carry (a control character, a quote, $, a backtick, a backslash, |, &, ; or <); write nextest's and, or and not instead of &, | and !"
+            ),
+            Self::TestGroupsWithPrivateSources => f.write_str(
+                "[[test_groups]] and [private_sources] cannot both be set: a test group runs from the nextest archive, and that archive holds the compiled private dependencies, which anyone who can read the repository's workflow artifacts could download; remove the test groups, or remove [private_sources] when every dependency is public",
             ),
             Self::UnknownTestSetupRoot(root) => write!(
                 f,
@@ -292,7 +296,8 @@ impl fmt::Display for Reason {
             | Self::UnknownRoot(_) => self.fmt_inputs(f),
             Self::UnknownTestGroupRoot(_)
             | Self::TestGroupWithoutNextest(_)
-            | Self::TestGroupFilter(_) => self.fmt_test_groups(f),
+            | Self::TestGroupFilter(_)
+            | Self::TestGroupsWithPrivateSources => self.fmt_test_groups(f),
             Self::UnknownTestLaneRoot(_)
             | Self::TestLaneWithoutNextest(_)
             | Self::UnknownTestLanePackage(_) => self.fmt_test_lane(f),

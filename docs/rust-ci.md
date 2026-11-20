@@ -93,7 +93,7 @@ repositories = ["owner/shared-lib"]
 
 - A GitHub App token that can read only the listed repositories is created, and `velnor-ci fetch` runs `cargo fetch --locked` with it. The token is revoked when the fetch ends, before any code of the project or its dependencies builds or runs. Every later cargo command runs with `--offline`. The token is written to no file.
 - The checkout stores no credentials and the jobs hold `contents: read`. No token is created for a fork pull request or for a pull request opened or pushed by a bot. In the merge queue a token is created only when the queued pull request comes from this repository (`velnor-ci private-token-allowed`).
-- The `groups` shape builds and tests in one job and uploads no nextest archive, because workflow artifacts are readable by anyone who can read the repository.
+- The `groups` shape builds and tests in one job and uploads no nextest archive, because workflow artifacts are readable by anyone who can read the repository. `[[test_groups]]` is refused together with `[private_sources]` for the same reason, because a group runs from that archive.
 - `velnor-gen generate` prints a note that suggests this table when `Cargo.lock` locks a github.com git dependency over ssh or from the repository's own owner. A registry or a non-github.com git source, which the token cannot authenticate, gets a note that says so instead. With the table present, a note names a locked repository of the token's owner that `repositories` does not list, and a listed repository that no lock uses. The token is created once per job that compiles; sharing one fetch between jobs through a cache or an artifact is not done, because both are readable by anyone who can read the repository.
 
 ## Speed budget
