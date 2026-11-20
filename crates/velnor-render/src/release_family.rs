@@ -12,6 +12,7 @@ use crate::release_binaries::{
 use crate::release_checks::tag_needs;
 use crate::release_context::{BuildContext, Private, private_mbx_store};
 use crate::release_family_publish::{publish, sums, verify};
+use crate::release_optional::is_optional;
 use crate::release_source::{Source, source_of};
 use crate::release_steps::{
     TOOLCHAIN, app_token, checkout, expression, join, permissions, shell_word, variables,
@@ -46,7 +47,7 @@ pub(crate) fn family_jobs(
     }));
     jobs.push(sums(plan, family, &source));
     if family.attest {
-        jobs.push(verify(plan, family, &source));
+        jobs.push(verify(plan, family, helper, &source));
     }
     jobs.push(publish(plan, family, helper, &source));
     jobs
@@ -238,6 +239,7 @@ fn build(
         permissions: permissions(&[("contents", "read")]),
         runs_on: runner.to_owned(),
         timeout_minutes: BUILD_TIMEOUT_MINUTES,
+        continue_on_error: is_optional(binary, platform),
         steps: build_steps(
             binary,
             platform,
