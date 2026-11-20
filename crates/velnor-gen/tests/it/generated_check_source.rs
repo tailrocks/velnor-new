@@ -224,6 +224,25 @@ fn from_source_builds_the_generator_from_the_root_that_holds_its_package() -> Te
 }
 
 #[test]
+fn from_source_quotes_a_nested_manifest_path_with_spaces_and_a_quote() -> TestResult {
+    let nested = "tools/gen dir/it's/Cargo.toml";
+    let view = generators(
+        &format!("{LINT}\n{FROM_SOURCE}"),
+        FIRST,
+        &["Cargo.toml", nested],
+        &[nested],
+    )?;
+    let job = job(&workflow(&view)?)?;
+    assert_eq!(
+        runs(&job).last().map(String::as_str),
+        Some(
+            "cargo run --locked --manifest-path 'tools/gen dir/it'\\''s/Cargo.toml' --target \"$VELNOR_GEN_TARGET\" --package velnor-gen -- check --verify-release"
+        )
+    );
+    Ok(())
+}
+
+#[test]
 fn from_source_refuses_a_repository_without_a_velnor_gen_package() -> TestResult {
     let view = generators(
         &format!("{LINT}\n{FROM_SOURCE}"),
