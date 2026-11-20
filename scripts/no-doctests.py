@@ -12,10 +12,15 @@ LINE_FENCE = re.compile(r"[ \t]*" + CONTAINER + r"(?:```|~~~)")
 LINE_INDENT = re.compile(QUOTE + r" {5,}\S")
 ATTR_INDENT = re.compile(r" {4,}\S|(?:[ \t]*>)+ {5,}\S")
 LIST_INDENT = re.compile(r"[ \t]*" + CONTAINER + r"(?:[-*+]|\d{1,9}[.)]) {5,}\S")
-BLOCK_MARGIN = re.compile(r"[ \t]*\*?")
+BLOCK_MARGIN = re.compile(r"[ \t]*\*")
 QUOTE_START = re.compile(r"[ \t]*>")
 HRULE = re.compile(r"(?:-[ \t]*){3,}|(?:\*[ \t]*){3,}|(?:_[ \t]*){3,}")
 SETEXT_UNDERLINE = re.compile(r"(?:=+|-+)[ \t]*")
+HTML_CLOSED = re.compile(
+    r"<!--.*-->|<\?.*\?>|<!\[CDATA\[.*\]\]>|<![A-Za-z].*>"
+    r"|<(script|pre|style|textarea)(?:\s|>|$).*</\1\s*>",
+    re.I,
+)
 DOC_OPEN = re.compile(r"/\*(?:!|\*(?![*/]))")
 DOC_EQ = re.compile(r"\s*=(?!=)")
 DOC_INCLUDE = re.compile(r"\s*=\s*include_str!")
@@ -104,6 +109,7 @@ def prose(line):
         and not text.startswith("#")
         and not HRULE.fullmatch(text)
         and not SETEXT_UNDERLINE.fullmatch(text)
+        and not HTML_CLOSED.match(text)
     )
 
 
