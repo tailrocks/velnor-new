@@ -7,6 +7,7 @@ mod cache;
 mod cache_layout;
 mod cache_outputs;
 mod cargo_build;
+mod check_configurations;
 mod cron;
 mod helper;
 mod hosted;
@@ -26,22 +27,25 @@ mod shape;
 mod steps;
 mod test_group;
 mod token_permission;
+mod trusted;
 mod verdict;
 
 pub use artifact_paths::{
-    aliased_secret, path_matches, secret_like, secret_path, segment_matches, selects,
+    Case, FILESYSTEM_CASE, aliased_secret, path_matches, secret_like, secret_path, segment_matches,
+    selects,
 };
 pub use budget_mode::{BUDGET_JOB_NAME, BUDGET_MODES_HELPER, ModeBudget, Selection, SelectionName};
-pub use cache::{CacheKey, CachePath, CacheRoot, Host, LockIdentity};
+pub use cache::{AnchorSource, CacheKey, CachePath, CacheRoot, Host, LockIdentity, ToolsAnchor};
 pub use cache_layout::{
     CACHE_COMPAT_LENGTH, CacheKeyLayout, CacheKeySegment, LOCK_OUTPUT_PREFIX,
-    RUNNER_ARCH_MAX_LENGTH, RUNNER_OS_MAX_LENGTH, SHARED_SOURCES_OWNER, json_char_bytes,
-    json_string_bytes,
+    RUNNER_ARCH_MAX_LENGTH, RUNNER_OS_MAX_LENGTH, SHARED_SOURCES_OWNER, TOOLS_ANCHOR_LENGTH,
+    json_char_bytes, json_string_bytes,
 };
 pub use cache_outputs::{
     BASE_PREFIX_OUTPUT, BASE_SAVE_OUTPUT, CacheLaneOutput, SOURCES_PREFIX_OUTPUT,
     SOURCES_SAVED_OUTPUT, cache_lane_outputs,
 };
+pub use check_configurations::CheckConfigurations;
 pub use cron::CronExpr;
 pub use helper::{HelperRelease, Platform};
 pub use hosted::HostedRunners;
@@ -82,6 +86,7 @@ pub use test_group::{
     TestGroup, TestNeed,
 };
 pub use token_permission::{token_permission_accesses, token_permission_accesses_prose};
+pub use trusted::{TRUSTED_EVENT, TrustedRunners};
 pub use verdict::{JobCondition, VerdictJob, VerdictSpec};
 
 pub use steps::{

@@ -45,6 +45,17 @@ fn condition(block: &str, name: &str) -> Result<String, Box<dyn std::error::Erro
         .ok_or_else(|| format!("{name} has no if").into())
 }
 
+/// A save's full condition: its own `if`, plus the `saveable` step's `if` when the save
+/// reads the recorded gate (`steps.saveable.outcome`) instead of repeating its terms.
+fn full_condition(block: &str, name: &str) -> Result<String, Box<dyn std::error::Error>> {
+    let own = condition(block, name)?;
+    if own.contains("steps.saveable.outcome") {
+        let saveable = condition(block, "Record that the build can be saved")?;
+        return Ok(format!("{own} {saveable}"));
+    }
+    Ok(own)
+}
+
 #[test]
 fn twenty_roots_at_helper_0_1_110_stay_under_the_size_budget() -> TestResult {
     let text = twenty_roots("0.1.110")?;
@@ -84,7 +95,7 @@ fn the_saves_after_the_decision_read_its_outputs_instead_of_repeating_its_condit
 #[test]
 fn the_decision_itself_keeps_every_condition_of_a_save() -> TestResult {
     let block = root_job(&twenty_roots("0.1.110")?)?;
-    let saved = condition(&block, "velnor-ci inputs save")?;
+    let saved = full_condition(&block, "velnor-ci inputs save")?;
     for needed in [
         "!cancelled()",
         "steps.test.outputs.built == ''true''",
@@ -107,7 +118,7 @@ fn an_older_helper_keeps_the_full_condition_on_every_save() -> TestResult {
         "Record the target cache key",
         "Save the sources cache",
     ] {
-        let found = condition(&block, name)?;
+        let found = full_condition(&block, name)?;
         assert!(
             found.contains("steps.restored.outcome == ''success''"),
             "{name}: {found}"

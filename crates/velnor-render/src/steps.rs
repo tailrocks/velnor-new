@@ -79,8 +79,8 @@ pub(crate) fn rendered_job(job: &Job, plan: &WorkflowPlan) -> RenderedJob {
             job,
         )),
         runs_on: job.runs_on.as_str().to_owned(),
-        fork_runner: (!plan.hosted_runners.contains(&job.runs_on))
-            .then(|| plan.fork_runner.to_string()),
+        fork_runner: crate::workflow::fork_runner(job, plan),
+        trusted_runner: crate::workflow::trusted_runner(job, plan),
         permissions: permission_pairs(&job.permissions),
         timeout_minutes: job.timeout_minutes,
         outputs: job
@@ -98,6 +98,7 @@ pub(crate) fn rendered_job(job: &Job, plan: &WorkflowPlan) -> RenderedJob {
             }))
             .chain(test_outputs(job, &tests))
             .chain(merge_group_output(job))
+            .chain(crate::tools_steps::anchor_output(&job.steps))
             .chain(lane_outputs(&job.steps))
             .collect(),
         cache_mode: crate::cache::saving_mode(job),
@@ -147,7 +148,7 @@ fn job_steps(
     let verified = job
         .steps
         .iter()
-        .any(|step| step.kind == StepKind::ToolsLocal(velnor_model::ToolsLocalVerb::Verify));
+        .any(|step| matches!(step.kind, StepKind::ToolsLocal(verb, _) if verb.checks_tools()));
     job.steps
         .iter()
         .enumerate()
@@ -169,12 +170,14 @@ fn job_steps(
             for body in &mut rendered {
                 body.shared |= verified && tools_key;
             }
-            Some(crate::base_steps::audited_save(
+            let mut steps = Vec::from_iter(gate.saveable(index));
+            steps.extend(crate::base_steps::audited_save(
                 job,
                 step,
                 rendered,
                 gate.audit_runs(index),
-            ))
+            ));
+            Some(steps)
         })
         .flatten()
         .collect()
@@ -361,8 +364,8 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
         | StepKind::PrivateFetch { .. }
         | StepKind::ReleaseAssets { .. } => crate::private_steps::render(kind),
         StepKind::AdvisoryFetch { configs } => crate::private_steps::advisory_fetch(configs),
-        StepKind::MbxSeed | StepKind::ToolsLocal(_) => crate::helper_steps::node_step(kind),
-        StepKind::TestSetup { name, run } => RenderedStep {
+        StepKind::MbxSeed | StepKind::ToolsLocal(..) => crate::helper_steps::node_step(kind),
+        StepKind::TestSetup { name, run, .. } => RenderedStep {
             name: name.clone(),
             run: Some(run.clone()),
             ..RenderedStep::default()
