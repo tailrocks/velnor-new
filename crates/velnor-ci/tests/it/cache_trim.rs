@@ -343,3 +343,20 @@ fn a_prefix_with_a_line_break_cannot_start_a_runner_command_in_the_trim_report()
         "{report}"
     );
 }
+
+#[test]
+fn a_ref_with_a_line_break_cannot_start_a_runner_command_in_the_trim_summary() {
+    let fake = paged(1);
+    let repo = Repo::parse("tailrocks/velnor-lab").unwrap_or_else(|e| unreachable!("{e}"));
+    let report = trim(
+        &fake,
+        &repo,
+        "refs/heads/main\n::stop-commands::token",
+        "velnor-tgt-rust-lab-Linux-X64-abcd",
+        2,
+        0,
+    )
+    .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(report.lines().all(|line| !line.starts_with("::")), "{report}");
+    assert!(report.contains("refs/heads/main%0A%3A%3Astop-commands%3A%3Atoken"), "{report}");
+}

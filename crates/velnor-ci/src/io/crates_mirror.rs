@@ -6,7 +6,7 @@ use std::process::ExitCode;
 
 use crate::cli::CratesMirrorArgs;
 use crate::error::CiError;
-use crate::escape::file_value;
+use crate::escape::{escape, file_value};
 
 pub(super) const CONFIG_ENV: &str = "VELNOR_CARGO_CONFIG";
 pub(super) const WRAPPER_ENV: &str = "VELNOR_CARGO_WRAPPER";
@@ -84,7 +84,7 @@ pub(super) fn setup(args: &CratesMirrorArgs) -> Result<String, CiError> {
     )?;
     Ok(format!(
         "Configured crates.io through {} in {}\n",
-        args.registry,
+        escape(&args.registry, false),
         config.display()
     ))
 }

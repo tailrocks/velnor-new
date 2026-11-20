@@ -277,3 +277,22 @@ fn an_inventory_notice_keeps_an_entry_name_with_a_line_break_on_one_line() {
     );
     assert!(stdout.contains("odd%0A::stop-commands::token"), "{stdout}");
 }
+
+#[test]
+fn a_saved_target_path_with_a_line_break_stays_on_one_line() {
+    let repo = Checkout::new("decide-saved-path");
+    let target = "target\n::stop-commands::token";
+    repo.write_unstaged("Cargo.lock", "version = 4\n");
+    repo.write_unstaged(&format!("{target}/debug/deps/small.rlib"), "x");
+    let (output, written) = decide_target_within(&repo, target, "100000");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(output.status.success(), "{stdout}");
+    assert_eq!(written, "save=true\nsources=true\n");
+    assert!(
+        stdout
+            .lines()
+            .all(|line| !line.starts_with("::stop-commands::")),
+        "{stdout}"
+    );
+    assert!(stdout.contains("target%0A::stop-commands::token"), "{stdout}");
+}

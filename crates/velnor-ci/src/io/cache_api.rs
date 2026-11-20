@@ -123,12 +123,13 @@ pub fn trim(
         String::new()
     };
     Ok(format!(
-        "{}: {} entries on {reference}, kept the newest {keep}, deleted {} ({} of another compatibility family)\n{warning}",
+        "{}: {} entries on {}, kept the newest {keep}, deleted {} ({} of another compatibility family)\n{warning}",
         inert(prefix),
         entries
             .iter()
             .filter(|entry| entry.key.starts_with(prefix))
             .count(),
+        inert(reference),
         stale.len(),
         foreign.len()
     ))

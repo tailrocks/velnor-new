@@ -10,7 +10,7 @@ use super::input_target::check_removal_target;
 use crate::cache::{KEEP_NEWEST, born_expired, should_save, trim};
 use crate::cache_prune::UsedUnits;
 use crate::error::CiError;
-use crate::escape::command_line;
+use crate::escape::{command_line, escape};
 use crate::github::Repo;
 use crate::logscan::scan;
 use crate::time::date_text;
@@ -86,9 +86,15 @@ pub(super) fn decide_counts(
     Ok(Decision {
         save: true,
         report: format!(
-            "{} crates compiled, checked or documented; saving {}: {size} bytes, removed {removed} incremental directories; {pruning}\n",
-            counts.crates_compiled(),
-            target.display(),
+            "{}\n",
+            escape(
+                &format!(
+                    "{} crates compiled, checked or documented; saving {}: {size} bytes, removed {removed} incremental directories; {pruning}",
+                    counts.crates_compiled(),
+                    target.display(),
+                ),
+                false,
+            )
         ),
     })
 }
