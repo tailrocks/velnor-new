@@ -25,7 +25,9 @@ use std::collections::BTreeMap;
 use std::io::Write;
 
 use velnor_model::{CacheKey, RepoPath, RepoView, StepKind};
-use velnor_rust::{METADATA_PATH, check_tools, detect, metadata_file, source_roots_over_limit};
+use velnor_rust::{
+    METADATA_PATH, check_mbx, check_tools, detect, metadata_file, source_roots_over_limit,
+};
 
 use crate::plan_render::plan_and_render;
 
@@ -69,6 +71,7 @@ pub fn expected_with_notes(
     }
     let helper = check_helper(&facts)?;
     check_tools(&facts)?;
+    check_mbx(&facts, &view.files)?;
     if let Some(roots) = source_roots_over_limit(&facts) {
         return Err(GenerateError::TooManySourceRoots(roots));
     }

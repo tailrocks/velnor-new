@@ -29,6 +29,7 @@ pub enum GenerateError {
     InputsLockHelperTooOld(HelperVersion),
     PrivateSourcesHelperTooOld(HelperVersion),
     MbxStoreHelperTooOld(HelperVersion),
+    MbxKeyHelperTooOld(HelperVersion),
     PrOnlyChecksHelperTooOld(HelperVersion),
     BudgetHelperTooOld(HelperVersion),
     BudgetModesHelperTooOld(HelperVersion),
@@ -81,6 +82,7 @@ impl fmt::Display for GenerateError {
             ),
             Self::CacheDebugHelperTooOld(v) => write!(f, "{}", cache_debug_too_old(v)),
             Self::RequiredCheckHelperTooOld(v) => write!(f, "{}", required_check_too_old(v)),
+            Self::MbxKeyHelperTooOld(version) => write!(f, "velnor-ci {version} rejects the cache.mbx key; pin velnor-ci 0.1.108 or later with `velnor-gen pin-helper 0.1.108`"),
             Self::MbxStoreHelperTooOld(version) => write!(f, "velnor-ci {version} cannot select the shared MBX store; pin velnor-ci 0.1.85 or later"),
             Self::TooManySourceRoots(roots) => write!(
                 f,

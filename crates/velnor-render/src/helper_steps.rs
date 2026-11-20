@@ -274,11 +274,40 @@ pub(crate) fn node_step(kind: &velnor_model::StepKind) -> RenderedStep {
 }
 
 pub(crate) const MBX_ACTION_SHA: &str = "88acf2bb50552c7c508cbac13e5f8c576b95b1de";
-/// The mbx release the action installs. Keep it equal to the `mr-boxington`
-/// pin in the repository's `mise.toml`, so every job runs the same compiler cache.
-const MBX_VERSION: &str = "1.30.0";
+pub(crate) const MBX_VERSION_ENV: &str = "VELNOR_TOOL_MR_BOXINGTON";
 
-pub(crate) fn mbx_remote_step() -> RenderedStep {
+fn mbx_pin_step() -> RenderedStep {
+    RenderedStep {
+        name: "Read the mbx pin".to_owned(),
+        run: Some(format!(
+            "version=\"$(mise current mr-boxington)\" && printf '%s=%s\\n' {MBX_VERSION_ENV} \"${{version#v}}\" >> \"$GITHUB_ENV\""
+        )),
+        ..RenderedStep::default()
+    }
+}
+
+pub(crate) fn mbx_private_step() -> RenderedStep {
+    RenderedStep {
+        name: "Use a private mbx store".to_owned(),
+        run: Some(
+            "printf '%s=%s\\n' MBX_CACHE_DIR \"$(mktemp -d \"$RUNNER_TEMP/mbx.XXXXXXXXXX\")\" >> \"$GITHUB_ENV\""
+                .to_owned(),
+        ),
+        ..RenderedStep::default()
+    }
+}
+
+pub(crate) fn mbx_local_step(kind: &velnor_model::StepKind) -> RenderedStep {
+    match kind {
+        velnor_model::StepKind::MbxPrivate => mbx_private_step(),
+        _ => mbx_store_step(),
+    }
+}
+
+pub(crate) fn mbx_remote_step(kind: &velnor_model::StepKind) -> RenderedStep {
+    if *kind == velnor_model::StepKind::MbxPin {
+        return mbx_pin_step();
+    }
     use crate::rules::Value;
     let text = |key: &str, value: &str| (key.to_owned(), Value::Text(value.to_owned()));
     let expr = |key: &str, value: &str| (key.to_owned(), Value::Expr(value.to_owned()));
@@ -292,7 +321,7 @@ pub(crate) fn mbx_remote_step() -> RenderedStep {
         with: vec![
             text("backend", "github"),
             text("github-cache-mode", "objects"),
-            text("version", MBX_VERSION),
+            expr("version", &format!("${{{{ env.{MBX_VERSION_ENV} }}}}")),
             // Each job restores only its own generated prefixes.
             expr("cache-generation", "v1-${{ github.job }}"),
             // Same-repository pull requests save; fork pull requests never do.
