@@ -15,8 +15,6 @@ pub struct Gate {
     /// of `packages`, so a notice can say why the guarded step was skipped.
     pub unselected: bool,
     pub group: Option<JobId>,
-    /// Further roots of a `Selected` gate: it passes when the plan selects
-    /// this root or any of them.
     pub also: Vec<RootSlug>,
 }
 
