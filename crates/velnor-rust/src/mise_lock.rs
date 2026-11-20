@@ -10,7 +10,7 @@ use crate::error::Reason;
 use crate::toml_file::table;
 
 const PLATFORM_PREFIX: &str = "platforms.";
-const RUSTUP_TOOLS: [&str; 2] = ["rust", "core:rust"];
+const RUSTUP_TOOLS: &[&str] = &["rust", "core:rust"];
 
 pub(crate) fn locked_tools(bytes: &[u8]) -> Result<BTreeMap<String, Vec<ToolLock>>, Reason> {
     let parsed = table(bytes)?;

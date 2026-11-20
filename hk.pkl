@@ -1,9 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-amends "package://github.com/jdx/hk/releases/download/v2.8.0/hk@2.8.0#/Config.pkl"
-import "package://github.com/jdx/hk/releases/download/v2.8.0/hk@2.8.0#/Builtins.pkl"
-import "package://github.com/jdx/hk/releases/download/v2.8.0/hk@2.8.0#/Config.pkl"
+amends "package://github.com/jdx/hk/releases/download/v2.13.0/hk@2.13.0#/Config.pkl"
+import "package://github.com/jdx/hk/releases/download/v2.13.0/hk@2.13.0#/Builtins.pkl"
+import "package://github.com/jdx/hk/releases/download/v2.13.0/hk@2.13.0#/Config.pkl"
 
 jobs = 2
 fail_fast = false
@@ -18,13 +18,13 @@ steps {
     workspace_indicator = "Cargo.toml"
     dir = "{{workspace}}"
     prefix = "bash \"$(git rev-parse --show-toplevel)/scripts/hk-workspace-admission\" \"$(pwd -P)/Cargo.toml\" -- mise exec --"
-    check = (Builtins.cargo_fmt.check as Config.CommandSpec) {
+    check = (Builtins.cargo_fmt.check) {
       command = "cargo fmt --all --check"
     }
-    check_list_files = (Builtins.cargo_fmt.check_list_files as Config.CommandSpec) {
+    check_list_files = (Builtins.cargo_fmt.check_list_files) {
       command = "cargo fmt --all --check -- --files-with-diff"
     }
-    fix = (Builtins.cargo_fmt.fix as Config.CommandSpec) {
+    fix = (Builtins.cargo_fmt.fix) {
       command = "cargo fmt --all"
     }
   }
@@ -33,10 +33,10 @@ steps {
     workspace_indicator = "Cargo.toml"
     dir = "{{workspace}}"
     prefix = "bash \"$(git rev-parse --show-toplevel)/scripts/hk-workspace-admission\" \"$(pwd -P)/Cargo.toml\" -- mise exec --"
-    check = (Builtins.cargo_check.check as Config.CommandSpec) {
+    check = (Builtins.cargo_check.check) {
       command = "cargo check --locked --quiet"
     }
-    fix = (Builtins.cargo_check.fix as Config.CommandSpec) {
+    fix = (Builtins.cargo_check.fix) {
       command = "cargo fix --locked --allow-dirty --allow-staged --quiet"
     }
   }
@@ -45,10 +45,10 @@ steps {
     workspace_indicator = "Cargo.toml"
     dir = "{{workspace}}"
     prefix = "bash \"$(git rev-parse --show-toplevel)/scripts/hk-workspace-admission\" \"$(pwd -P)/Cargo.toml\" -- mise exec --"
-    check = (Builtins.cargo_clippy.check as Config.CommandSpec) {
+    check = (Builtins.cargo_clippy.check) {
       command = "cargo clippy --locked --quiet"
     }
-    fix = (Builtins.cargo_clippy.fix as Config.CommandSpec) {
+    fix = (Builtins.cargo_clippy.fix) {
       command = "cargo clippy --fix --allow-dirty --allow-staged --locked --quiet"
     }
   }
@@ -56,7 +56,7 @@ steps {
     exclude = fixtureTrees
     workspace_indicator = "Cargo.lock"
     prefix = "bash \"$(git rev-parse --show-toplevel)/scripts/hk-workspace-admission\" \"$(pwd -P)/Cargo.toml\" -- mise exec --"
-    check = (Builtins.cargo_deny.check as Config.CommandSpec) {
+    check = (Builtins.cargo_deny.check) {
       command = "cargo deny --locked --workspace check"
     }
   }

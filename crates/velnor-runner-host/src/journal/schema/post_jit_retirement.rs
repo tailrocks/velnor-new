@@ -7,21 +7,21 @@ mod ddl;
 mod guards;
 mod validation;
 
-const TABLES: [&str; 4] = [
+const TABLES: &[&str] = &[
     ddl::CLAIMS_DDL,
     ddl::PROGRESS_DDL,
     ddl::REMOTE_ABSENCE_DDL,
     ddl::RETIREMENTS_DDL,
 ];
 
-const INSERT_GUARDS: [&str; 4] = [
+const INSERT_GUARDS: &[&str] = &[
     guards::CLAIM_INSERT_GUARD,
     guards::PROGRESS_INSERT_GUARD,
     guards::REMOTE_ABSENCE_INSERT_GUARD,
     guards::RETIREMENT_INSERT_GUARD,
 ];
 
-const IMMUTABLE_GUARDS: [&str; 8] = [
+const IMMUTABLE_GUARDS: &[&str] = &[
     guards::CLAIMS_NO_UPDATE,
     guards::CLAIMS_NO_DELETE,
     guards::PROGRESS_NO_UPDATE,
@@ -34,10 +34,11 @@ const IMMUTABLE_GUARDS: [&str; 8] = [
 
 pub(super) async fn bootstrap(conn: &turso::Connection) -> Result<(), HostError> {
     for sql in TABLES
-        .into_iter()
+        .iter()
+        .copied()
         .chain([ddl::TERMINAL_PROOFS_VIEW])
-        .chain(INSERT_GUARDS)
-        .chain(IMMUTABLE_GUARDS)
+        .chain(INSERT_GUARDS.iter().copied())
+        .chain(IMMUTABLE_GUARDS.iter().copied())
         .chain([guards::OUTCOME_RETIREMENT_FENCE])
     {
         conn.execute(sql, ())

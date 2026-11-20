@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use super::config::InputRule;
 use super::units::Unit;
 
-const UPWARD_CONFIGS: [&str; 4] = [
+const UPWARD_CONFIGS: &[&str] = &[
     "clippy.toml",
     ".clippy.toml",
     "rustfmt.toml",

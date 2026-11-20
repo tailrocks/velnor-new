@@ -12,7 +12,7 @@ use crate::yaml_tree::document;
 
 const NAME: &str = "Prepare the fixture";
 const SETUP: &str = "[[test_setup]]\nroot = '.'\nname = 'Prepare the fixture'\nrun = 'bash scripts/prepare-fixture.sh'\n";
-const SHAPES: [&str; 3] = ["one-job", "lint-test", "groups"];
+const SHAPES: &[&str] = &["one-job", "lint-test", "groups"];
 
 fn build_phase() -> String {
     format!("{SETUP}phase = 'build'\n")
@@ -75,7 +75,7 @@ fn a_build_phase_setup_runs_before_the_first_compiling_step_of_every_job_that_co
             );
             checked.push(id.as_str());
         }
-        let wanted: &[&str] = match shape {
+        let wanted: &[&str] = match *shape {
             "one-job" => &["rust"],
             "lint-test" => &["rust-lint", "rust-test"],
             _ => &["rust-lint", "rust-test", "rust-test-default"],
@@ -191,7 +191,7 @@ fn a_setup_of_another_root_stays_out_of_this_roots_jobs() -> TestResult {
 
 #[test]
 fn private_sources_put_the_token_and_the_fetch_before_a_build_phase_setup() -> TestResult {
-    for shape in SHAPES.into_iter().filter(|shape| *shape != "groups") {
+    for shape in SHAPES.iter().copied().filter(|shape| *shape != "groups") {
         let config = format!("shape = '{shape}'\n{SECTION}{}", build_phase());
         let text = workflow(&private_repo(&["Cargo.toml"], &config, "0.1.109")?)?;
         let parsed = document(&text)?;
