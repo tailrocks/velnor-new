@@ -244,8 +244,16 @@ fn package_output(repo: &Repo, package: &str) -> std::path::PathBuf {
         .join("output")
 }
 
-#[test]
-fn a_partial_build_never_invalidates_an_unselected_packages_output() {
+fn wrapped_build(repo: &Repo, cargo: &[&str]) -> Output {
+    command(env!("CARGO_BIN_EXE_velnor-ci"))
+        .current_dir(repo.root().join("rust"))
+        .args(["inputs", "build", "--"])
+        .args(cargo)
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"))
+}
+
+fn app_and_lib_project() -> Repo {
     let repo = cargo_project(InputDirectory::Shared);
     repo.write("rust/Cargo.toml", "[package]\nname = \"app\"\nversion = \"0.1.0\"\nedition = \"2024\"\n\n[workspace]\nmembers = [\"lib\"]\nresolver = \"3\"\n");
     repo.write(
@@ -265,6 +273,53 @@ fn a_partial_build_never_invalidates_an_unselected_packages_output() {
 "#,
     );
     repo.write("rust/Cargo.lock", "version = 4\n\n[[package]]\nname = \"app\"\nversion = \"0.1.0\"\n\n[[package]]\nname = \"lib\"\nversion = \"0.1.0\"\n");
+    repo
+}
+
+const APP_SELECTION: [&str; 6] = ["cargo", "build", "-p", "app", "--all-targets", "--offline"];
+
+#[test]
+fn the_selection_refusal_names_the_untrusted_packages_and_their_kind() {
+    let repo = app_and_lib_project();
+    let plain = build(&repo, false);
+    assert!(plain.status.success(), "{plain:?}");
+    let refused = wrapped_build(&repo, &APP_SELECTION);
+    assert_eq!(refused.status.code(), Some(1), "{refused:?}");
+    assert!(
+        String::from_utf8_lossy(&refused.stderr).contains(
+            "explicit selection: lib (build-script output). This usually means an earlier `velnor-ci inputs build` step in this job failed (failed commands record no receipts); fix that step first."
+        ),
+        "{refused:?}"
+    );
+}
+
+#[test]
+fn an_earlier_failed_inputs_build_is_named_in_the_selection_refusal() {
+    let repo = app_and_lib_project();
+    let plain = build(&repo, false);
+    assert!(plain.status.success(), "{plain:?}");
+    let prepared = build(&repo, true);
+    assert!(prepared.status.success(), "{prepared:?}");
+    let mut failing = APP_SELECTION.to_vec();
+    failing.push("--no-such-flag");
+    let failed = wrapped_build(&repo, &failing);
+    assert!(!failed.status.success(), "{failed:?}");
+    let lib = package_output(&repo, "lib");
+    fs::remove_file(lib.with_extension("velnor-inputs.json"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let refused = wrapped_build(&repo, &APP_SELECTION);
+    assert_eq!(refused.status.code(), Some(1), "{refused:?}");
+    assert!(
+        String::from_utf8_lossy(&refused.stderr).contains(
+            "An earlier inputs build failed: `cargo build -p app --all-targets --offline --no-such-flag` (failed commands record no receipts); fix that step first"
+        ),
+        "{refused:?}"
+    );
+}
+
+#[test]
+fn a_partial_build_never_invalidates_an_unselected_packages_output() {
+    let repo = app_and_lib_project();
     let plain = build(&repo, false);
     assert!(plain.status.success(), "{plain:?}");
     let app = package_output(&repo, "app");
@@ -279,23 +334,7 @@ fn a_partial_build_never_invalidates_an_unselected_packages_output() {
     };
     let before_app = identity(&app);
     let before_lib = identity(&lib);
-    let partial = || {
-        command(env!("CARGO_BIN_EXE_velnor-ci"))
-            .current_dir(repo.root().join("rust"))
-            .args([
-                "inputs",
-                "build",
-                "--",
-                "cargo",
-                "build",
-                "-p",
-                "app",
-                "--all-targets",
-                "--offline",
-            ])
-            .output()
-            .unwrap_or_else(|e| unreachable!("{e}"))
-    };
+    let partial = || wrapped_build(&repo, &APP_SELECTION);
     let refused = partial();
     assert_eq!(refused.status.code(), Some(1), "{refused:?}");
     assert!(
