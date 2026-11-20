@@ -63,6 +63,7 @@ fn anchor_cache_step(action: &str, verb: &str) -> RenderedStep {
     RenderedStep {
         id: (verb == "Restore").then(|| ANCHOR_STEP.to_owned()),
         name: format!("{verb} the tools anchor"),
+        shared: true,
         uses: Some(action.to_owned()),
         with: vec![
             ("path".to_owned(), Value::Expr(ANCHOR_DIR.to_owned())),
@@ -83,6 +84,7 @@ fn verify_step(verb: velnor_model::ToolsLocalVerb) -> RenderedStep {
     RenderedStep {
         id: id.map(str::to_owned),
         name: name.to_owned(),
+        shared: true,
         env: (verb != Verb::AnchorReset)
             .then(|| ("VELNOR_ANCHOR_HIT".to_owned(), hit))
             .into_iter()

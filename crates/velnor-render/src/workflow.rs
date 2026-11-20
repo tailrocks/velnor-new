@@ -86,7 +86,7 @@ pub(crate) fn yaml_job(job: &RenderedJob, marks: ShellcheckMarks) -> Yaml {
     if let Some(uses) = &job.uses {
         items.push(entry("uses", text(uses)));
         if !job.with.is_empty() {
-            items.push(entry("with", values(&job.with)));
+            items.push(entry("with", values(&job.with, false)));
         }
     } else {
         items.push(entry(
@@ -94,7 +94,7 @@ pub(crate) fn yaml_job(job: &RenderedJob, marks: ShellcheckMarks) -> Yaml {
             Yaml::Int(u64::from(job.timeout_minutes)),
         ));
         if !job.env.is_empty() {
-            items.push(entry("env", values(&job.env)));
+            items.push(entry("env", values(&job.env, false)));
         }
         items.extend([entry(
             "steps",
@@ -252,7 +252,15 @@ fn yaml_step(step: &RenderedStep, marks: ShellcheckMarks) -> Yaml {
     }
     items.push(entry("name", text(&step.name)));
     if let Some(condition) = &step.condition {
-        items.push(entry("if", Yaml::Expr(condition.clone())));
+        let condition = Yaml::Expr(condition.clone());
+        items.push(entry(
+            "if",
+            if step.shared {
+                Yaml::Shared(Box::new(condition))
+            } else {
+                condition
+            },
+        ));
     }
     if step.continue_on_error {
         items.push(entry("continue-on-error", Yaml::Bool(true)));
@@ -265,7 +273,7 @@ fn yaml_step(step: &RenderedStep, marks: ShellcheckMarks) -> Yaml {
         items.push(entry("uses", value));
     }
     if !step.with.is_empty() {
-        items.push(entry("with", values(&step.with)));
+        items.push(entry("with", values(&step.with, step.shared)));
     }
     if let Some(directory) = &step.working_directory {
         let value = if directory.contains("${{") {
@@ -276,7 +284,7 @@ fn yaml_step(step: &RenderedStep, marks: ShellcheckMarks) -> Yaml {
         items.push(entry("working-directory", value));
     }
     if !step.env.is_empty() {
-        items.push(entry("env", values(&step.env)));
+        items.push(entry("env", values(&step.env, step.shared)));
     }
     if let Some(shell) = &step.shell {
         items.push(entry("shell", text(shell)));
@@ -309,7 +317,7 @@ fn pairs(items: &[(String, String)]) -> Yaml {
     )
 }
 
-fn values(items: &[(String, Value)]) -> Yaml {
+fn values(items: &[(String, Value)], share: bool) -> Yaml {
     Yaml::Map(
         items
             .iter()
@@ -320,7 +328,10 @@ fn values(items: &[(String, Value)]) -> Yaml {
                     Value::Int(number) => Yaml::Int(*number),
                     Value::Bool(flag) => Yaml::Bool(*flag),
                 };
-                let yaml = if (key.starts_with("VELNOR_HELPER") || key == "SOURCES_LOCKS") && matches!(value, Value::Text(text) | Value::Expr(text) if text.len() > 100 && !text.contains('\n')) {
+                let named = key.starts_with("VELNOR_HELPER") || key == "SOURCES_LOCKS";
+                let yaml = if (named || share)
+                    && matches!(value, Value::Text(text) | Value::Expr(text) if text.len() > if named { 100 } else { 40 } && !text.contains('\n'))
+                {
                     Yaml::Shared(Box::new(yaml))
                 } else {
                     yaml

@@ -234,6 +234,7 @@ fn rendered_steps(
             ),
         );
         body.working_directory = step.directory.as_ref().map(ToString::to_string);
+        body.shared |= matches!(step.when, velnor_model::When::SaveVerifiedTools(_));
         if matches!(step.kind, StepKind::InputsSave { .. })
             && step.when != velnor_model::When::SaveBase
         {
