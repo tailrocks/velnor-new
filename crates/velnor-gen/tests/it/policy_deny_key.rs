@@ -36,14 +36,14 @@ fn notes(repo: &RepoView) -> Result<Vec<String>, Box<dyn Error>> {
 
 #[test]
 fn an_unset_policy_table_runs_the_lane_when_a_deny_toml_exists() -> TestResult {
-    let text = workflow(&repo(b"", true, "0.1.108")?)?;
+    let text = workflow(&repo(b"", true, "0.1.109")?)?;
     assert!(text.contains(DENY_RUN), "{text}");
     Ok(())
 }
 
 #[test]
 fn deny_false_turns_the_lane_off_even_with_a_deny_toml_and_says_so_in_the_report() -> TestResult {
-    let repo = repo(b"[policy]\ndeny = false\n", true, "0.1.108")?;
+    let repo = repo(b"[policy]\ndeny = false\n", true, "0.1.109")?;
     let text = workflow(&repo)?;
     assert!(!text.contains("cargo-deny --"), "{text}");
     assert!(!text.contains("fetch db"), "{text}");
@@ -53,7 +53,7 @@ fn deny_false_turns_the_lane_off_even_with_a_deny_toml_and_says_so_in_the_report
 
 #[test]
 fn deny_false_without_a_deny_toml_says_nothing_because_nothing_is_ignored() -> TestResult {
-    let repo = repo(b"[policy]\ndeny = false\n", false, "0.1.108")?;
+    let repo = repo(b"[policy]\ndeny = false\n", false, "0.1.109")?;
     assert!(!workflow(&repo)?.contains("cargo-deny --"));
     assert!(!notes(&repo)?.iter().any(|note| note == DENY_OFF_NOTE));
     Ok(())
@@ -61,9 +61,9 @@ fn deny_false_without_a_deny_toml_says_nothing_because_nothing_is_ignored() -> T
 
 #[test]
 fn deny_true_runs_the_lane_with_a_deny_toml_and_is_an_error_without_one() -> TestResult {
-    let text = workflow(&repo(b"[policy]\ndeny = true\n", true, "0.1.108")?)?;
+    let text = workflow(&repo(b"[policy]\ndeny = true\n", true, "0.1.109")?)?;
     assert!(text.contains(DENY_RUN), "{text}");
-    let error = workflow(&repo(b"[policy]\ndeny = true\n", false, "0.1.108")?)
+    let error = workflow(&repo(b"[policy]\ndeny = true\n", false, "0.1.109")?)
         .err()
         .ok_or("deny = true without a deny.toml was accepted")?;
     assert!(error.to_string().contains("deny = true"), "{error}");
@@ -72,12 +72,12 @@ fn deny_true_runs_the_lane_with_a_deny_toml_and_is_an_error_without_one() -> Tes
 }
 
 #[test]
-fn the_policy_table_is_refused_by_a_helper_older_than_0_1_108() -> TestResult {
+fn the_policy_table_is_refused_by_a_helper_older_than_0_1_109() -> TestResult {
     for config in [&b"[policy]\ndeny = false\n"[..], b"[policy]\n"] {
         let error = workflow(&repo(config, true, "0.1.107")?)
             .err()
             .ok_or("an older helper accepted [policy]")?;
-        assert!(error.to_string().contains("0.1.108"), "{error}");
+        assert!(error.to_string().contains("0.1.109"), "{error}");
     }
     Ok(())
 }
@@ -87,7 +87,7 @@ fn deny_checks_run_only_the_listed_checks_in_their_fixed_order() -> TestResult {
     let text = workflow(&repo(
         b"[policy]\ndeny_checks = [\"sources\", \"bans\", \"licenses\"]\n",
         true,
-        "0.1.108",
+        "0.1.109",
     )?)?;
     assert!(
         text.contains("cargo-deny --config ''deny.toml'' --locked check bans licenses sources"),
@@ -101,7 +101,7 @@ fn deny_checks_name_known_checks_once_and_at_least_one() -> TestResult {
     for checks in ["[]", "[\"fmt\"]", "[\"bans\", \"bans\"]", "\"bans\""] {
         let config = format!("[policy]\ndeny_checks = {checks}\n");
         assert!(
-            workflow(&repo(config.as_bytes(), true, "0.1.108")?).is_err(),
+            workflow(&repo(config.as_bytes(), true, "0.1.109")?).is_err(),
             "{checks} accepted"
         );
     }
@@ -113,7 +113,7 @@ fn the_parser_keeps_the_written_policy_table() -> TestResult {
     let config = detect(&repo(
         b"[policy]\ndeny = false\ndeny_checks = [\"bans\"]\n",
         true,
-        "0.1.108",
+        "0.1.109",
     )?)?
     .config;
     assert_eq!(
@@ -123,7 +123,7 @@ fn the_parser_keeps_the_written_policy_table() -> TestResult {
             deny_checks: Some(vec![DenyCheck::Bans]),
         })
     );
-    assert_eq!(detect(&repo(b"", true, "0.1.108")?)?.config.policy, None);
+    assert_eq!(detect(&repo(b"", true, "0.1.109")?)?.config.policy, None);
     Ok(())
 }
 
