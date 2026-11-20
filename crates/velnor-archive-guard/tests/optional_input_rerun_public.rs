@@ -97,7 +97,7 @@ impl Probe {
             .output()?;
         let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
         assert!(output.status.success(), "cargo build failed: {stderr}");
-        *self.last_build.borrow_mut() = stderr.clone();
+        self.last_build.borrow_mut().clone_from(&stderr);
         Ok(stderr)
     }
 

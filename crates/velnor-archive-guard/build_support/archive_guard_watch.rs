@@ -69,7 +69,7 @@ mod tests {
         for out in [base.join("out"), base.join("no-such-out")] {
             let planned = plan(vec![root.clone()], absent.clone(), Some(&out));
             assert_eq!(planned.rerun, vec![root.clone()]);
-            assert!(planned.unwatched.is_empty());
+            assert_eq!(planned.unwatched, Vec::<String>::new());
         }
         Ok(())
     }
@@ -85,7 +85,7 @@ mod tests {
             absent,
             Some(&root.join("target/debug/out")),
         );
-        assert!(planned.rerun.is_empty());
+        assert_eq!(planned.rerun, Vec::<std::path::PathBuf>::new());
         assert_eq!(planned.unwatched, vec!["rust-toolchain".to_owned()]);
         Ok(())
     }
