@@ -144,6 +144,14 @@ filter = 'package(=velnor-local) and binary(=it) and test(removal_audit::)'
 success-output = "immediate"
 
 [[profile.default.overrides]]
+filter = 'package(=velnor-ci) and (test(io_scope_cache::) | test(io_scope_cache_paths::) | test(io_scope_cache_races::) | test(io_inputs_batch::) | test(io_report::target_identity::) | test(io_report::wrapped::) | test(io_restore_cargo::) | test(io_restore_cold_cargo::) | test(prepare::) | test(=plan_main_groups::on_a_push_to_main_the_groups_follow_the_selection_of_the_default_lanes))'
+test-group = "velnor-ci-serial"
+
+[[profile.ci.overrides]]
+filter = 'package(=velnor-ci) and (test(io_scope_cache::) | test(io_scope_cache_paths::) | test(io_scope_cache_races::) | test(io_inputs_batch::) | test(io_report::target_identity::) | test(io_report::wrapped::) | test(io_restore_cargo::) | test(io_restore_cold_cargo::) | test(prepare::) | test(=plan_main_groups::on_a_push_to_main_the_groups_follow_the_selection_of_the_default_lanes))'
+test-group = "velnor-ci-serial"
+
+[[profile.default.overrides]]
 filter = 'package(=velnor-ci) and (test(=audit::freshness::distinct_declared_trees_cannot_exceed_the_audit_scan_budget) | test(=audit::freshness::repeated_directory_declarations_share_the_audit_scan_budget) | test(=audit::inventory::directly_named_files_do_not_consume_the_directory_walk_budget) | test(=io_plan_docs::plan_treats_sources_over_the_total_size_bound_as_possibly_holding_docs) | test(=release_manifests::an_excluded_example_and_a_nested_workspace_are_not_packages_of_the_root) | test(=resolve_qualification::every_recorded_case_matches_the_legacy_op))'
 slow-timeout = { period = "30s", terminate-after = 1 }
 
