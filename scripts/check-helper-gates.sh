@@ -63,17 +63,23 @@ is_released() {
 }
 
 release_tag() {
+  echo "tools-v0.1.$1"
+}
+
+release_ref() {
   if git rev-parse -q --verify "refs/tags/tools-v0.1.$1^{commit}" >/dev/null; then
-    echo "tools-v0.1.$1"
+    echo "refs/tags/tools-v0.1.$1"
   else
-    echo "rust-ci-v0.1.$1"
+    echo "refs/tags/rust-ci-v0.1.$1"
   fi
 }
 
 verify_correction() {
-  local file=$1 gate=$2 n=$3 commit=$4 tag prev
+  local file=$1 gate=$2 n=$3 commit=$4 tag prev ref prev_ref
   tag=$(release_tag "$n")
   prev=$(release_tag "$((n - 1))")
+  ref=$(release_ref "$n")
+  prev_ref=$(release_ref "$((n - 1))")
   if [ "$gate" != "0.1.$n" ]; then
     echo "$file: marker names $tag but the gate is $gate; the marker must name the gate's release" >&2
     return 1
@@ -82,8 +88,8 @@ verify_correction() {
     echo "$file: marker commit '$commit' is not a commit in this checkout" >&2
     return 1
   fi
-  if git rev-parse -q --verify "refs/tags/$tag^{commit}" >/dev/null; then
-    if ! git merge-base --is-ancestor "$commit" "refs/tags/$tag"; then
+  if git rev-parse -q --verify "$ref^{commit}" >/dev/null; then
+    if ! git merge-base --is-ancestor "$commit" "$ref"; then
       echo "$file: $commit is not in $tag, so gate $gate is not shipped there" >&2
       return 1
     fi
@@ -96,11 +102,11 @@ verify_correction() {
     echo "$file: tag $tag is not in this checkout (fetch tags: git fetch --tags)" >&2
     return 1
   fi
-  if ! git rev-parse -q --verify "refs/tags/$prev^{commit}" >/dev/null; then
+  if ! git rev-parse -q --verify "$prev_ref^{commit}" >/dev/null; then
     echo "$file: tag $prev is not in this checkout, cannot confirm $commit is new (fetch tags)" >&2
     return 1
   fi
-  if git merge-base --is-ancestor "$commit" "refs/tags/$prev"; then
+  if git merge-base --is-ancestor "$commit" "$prev_ref"; then
     echo "$file: $commit is already in $prev, so gate $gate is not its first release" >&2
     return 1
   fi
