@@ -76,6 +76,37 @@ fn step_env_cannot_drop_a_declared_mbx_requirement() -> TestResult {
 }
 
 #[test]
+fn a_deleted_mode_record_cannot_swap_the_mirror_config() -> TestResult {
+    let repo = configured_repo("crates-mirror-marker-deleted")?;
+    fs::remove_file(repo.root().join(MARKER_FILE))?;
+    let evil = repo.root().join("evil.toml");
+    fs::write(&evil, "[source.crates-io]\n")?;
+    let output = run_with_step_env(
+        &repo,
+        false,
+        &[("VELNOR_CARGO_CONFIG", &evil.display().to_string())],
+    )?;
+    assert_refused(&output, "mode record");
+    Ok(())
+}
+
+#[test]
+fn a_deleted_mode_record_cannot_drop_a_declared_mbx_requirement() -> TestResult {
+    let repo = Repo::empty("crates-mirror-marker-deleted-mbx");
+    repo.write_unstaged("ca.pem", "not used by this fixture");
+    repo.write_unstaged("mise.toml", MBX_DECLARED);
+    let output = setup_command(repo.root(), REGISTRY)
+        .current_dir(repo.root())
+        .env("PATH", path_with(repo.root())?)
+        .output()?;
+    assert!(output.status.success(), "{output:?}");
+    fs::remove_file(repo.root().join(MARKER_FILE))?;
+    let output = run_with_step_env(&repo, false, &[("VELNOR_CARGO_MBX", "")])?;
+    assert_refused(&output, "mode record");
+    Ok(())
+}
+
+#[test]
 fn setup_records_the_mirror_mode_beside_the_wrapper() -> TestResult {
     let on = configured_repo("crates-mirror-marker-record-on")?;
     assert!(read_marker(on.root())?.contains("mirror=on"));

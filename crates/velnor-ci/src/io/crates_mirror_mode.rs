@@ -109,6 +109,11 @@ fn recorded_for(
             Err(error) => return Err(failed(&error)),
         }
     }
+    if env_requires_the_mirror {
+        return Err(CiError::new(format!(
+            "no {FILE} mode record beside the cargo wrapper, and the job env requires the crates mirror or mbx"
+        )));
+    }
     Ok(None)
 }
 
@@ -196,6 +201,13 @@ mod tests {
     #[test]
     fn an_unlocatable_wrapper_fails_closed_when_the_job_env_requires_the_mirror() {
         assert!(recorded_for(None, true).is_err());
+    }
+
+    #[test]
+    fn a_missing_record_fails_closed_when_the_job_env_requires_the_mirror() {
+        let wrapper = std::path::Path::new("/nonexistent-velnor-wrapper/bin/cargo");
+        assert!(recorded_for(Some(wrapper), true).is_err());
+        assert!(matches!(recorded_for(Some(wrapper), false), Ok(None)));
     }
 
     #[test]
