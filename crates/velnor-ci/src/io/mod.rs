@@ -57,6 +57,7 @@ mod report;
 mod report_checkout;
 mod report_inputs;
 mod report_sparse;
+mod report_waste;
 mod required;
 mod resolve_qualification;
 mod restored;

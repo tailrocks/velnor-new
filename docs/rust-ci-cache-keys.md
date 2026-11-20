@@ -113,6 +113,21 @@ include it in Required's dependencies and verdict specification, set this in
 cache_check_blocks = true
 ```
 
+Besides compiled-despite-restored-inputs and download waste, the report names
+four more avoidable costs, each only when the evidence shows it was avoidable:
+
+- A sources cache miss although the Actions cache inventory already listed
+  that exact key, on a ref the job may read, when the job started. The `Cache`
+  job records this as `entry_before_job`; a cold lock stays clean.
+- An MBX session with no hits although `MBX_CACHE_DIR` named a store that held
+  entries older than the first Cargo invocation. A per-job or empty store, or a
+  lane without MBX lines, stays clean.
+- A toolchain component or target that `velnor-ci prepare` had to install
+  (recorded in `$RUNNER_TEMP/velnor-toolchain-installs.txt`) although the tools
+  cache had an exact hit.
+- A compilation unit (same root, package, target, profile, features, output
+  files and execution environment) built by two Cargo invocations of one lane.
+
 `rust-trim` continues to verify cache uploads and prune old entries without a
 checkout or repository code. The `Cache` job needs no additional permission to
 download artifacts from its own run. The schema-1 JSON separates cache

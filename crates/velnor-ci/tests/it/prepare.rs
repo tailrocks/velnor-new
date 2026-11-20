@@ -225,6 +225,7 @@ fn prepare_in(dir: &Path, setup: &Setup) -> Run {
         .env_clear()
         .env("PATH", format!("{}:/usr/bin:/bin", bin.display()))
         .env("CARGO_HOME", &cargo_home)
+        .env("RUNNER_TEMP", dir)
         .env("GITHUB_ENV", &env_file)
         .env("GITHUB_OUTPUT", &outputs);
     if setup.os_release == OsRelease::Fixture {

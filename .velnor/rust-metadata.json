@@ -1945,12 +1945,12 @@
     }
   },
   "manifests": {
-    "Cargo.toml": "a5ac4db6031ede31c5bef0717860dc7f7d8fc9700030f61c679e9fb30a0bf9c3",
+    "Cargo.toml": "67eddaf72befc426af5ded7ccbe289e4975e17a62adde6954cff7b0ca8495dfb",
     "crates/velnor-archive-guard/Cargo.toml": "356ce922bab3fde3d252c3ce4c1df930585520a280fb8c51ba0641b8bab5d67a",
     "crates/velnor-cache-rules/Cargo.toml": "b1f91a7da1743297b500893e7ce85fb1cfb03f2f854c757beabba023089930e2",
-    "crates/velnor-ci/Cargo.toml": "e50825a74b3aa76de42380f79d94cf6e302036f5102a12222719f8543189cc01",
+    "crates/velnor-ci/Cargo.toml": "a2d818f13372b9407897229a0f3eb478b17254a7cf06bcbdc39084aaa639bb04",
     "crates/velnor-gen/Cargo.toml": "4f7a9f8c3b080bcb739efc39baab5abf20177d3d6e8c76e74a427944f4ab8568",
-    "crates/velnor-local/Cargo.toml": "135ee0d6c76460e5f6abde1b52a4020cec8070d6f484fde78f3efe1026a6dda1",
+    "crates/velnor-local/Cargo.toml": "2dadf893ca71510a780e0f5fbcfe43cc682ed2e3f16a14357ffd51b1a1dc210c",
     "crates/velnor-model/Cargo.toml": "78a4412b692ac4a2b8654f9acae8c016fffbf1bad7356cd1fe4c1c85d4b67cd0",
     "crates/velnor-release/Cargo.toml": "dca29d0f14443af5811f5454770fce6193056a6e8e3c0c72ae1729399b176459",
     "crates/velnor-render/Cargo.toml": "5aa78b4405e2c890023aa557fb31685e62c9fb1f8786e1506d04cee8a0afda4b",

@@ -50,6 +50,8 @@ When the flag is true, Format, Lint, Documentation, the single-crate checks, tes
 
 The step fails safe. A non-push event, a missing variable, an API error, an unreadable response, a missing run, a run that failed, or a run that is still going without a succeeded `Required` job all write `skip=false`, and everything runs. The step is `continue-on-error`, so a crash also runs everything.
 
+In the one-job shape the `rust` job itself is granted `actions: read` at job level, so the merge-group lookup can query the Actions API. On a public repository this exposes only workflow-run metadata that is already public; private-repository consumers should be aware of it.
+
 ## Pull request delta cache
 
 A pull request from this repository restores a per-pull-request delta layer after the Target cache and saves it after the last compiling step, and a `rust-cache-trim.yml` workflow trims the deltas of finished pull requests. There is no key for it. It needs a locked `velnor-ci` 0.1.95 or later, because the helper has the `delta` commands. With an older helper (0.1.81 to 0.1.94) the generator silently renders no delta steps and no cleanup workflow; a helper from 0.1.95 to 0.1.101 renders the delta steps but no cleanup workflow, which needs 0.1.102 (the first release whose `cache trim-deltas` works after the pull request merges). It is not an error, so a repository pinned to an earlier release keeps generating. The layer is also left out when a custom `target-dir` is set, when `Cargo.lock` holds a source that is not proven public, or when it would not fit the budget (the generator reports what it left out).

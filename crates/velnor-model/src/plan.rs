@@ -14,6 +14,8 @@ pub const LINT_STEP: &str = "Lint";
 pub const TEST_STEP: &str = "Test";
 pub const BUILD_TESTS_STEP: &str = "Build the tests";
 pub const TESTS_RUN_OUTPUT: &str = "tests_run";
+/// Whether the test step built the test binaries: `true` once nextest got past the build.
+pub const BUILT_OUTPUT: &str = "built";
 pub const TESTS_LISTED_OUTPUT: &str = "tests_listed";
 pub const TESTS_IGNORED_OUTPUT: &str = "tests_ignored";
 pub const TESTS_BY_PACKAGE_OUTPUT: &str = "tests_by_package";

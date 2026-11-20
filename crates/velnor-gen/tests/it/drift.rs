@@ -197,7 +197,7 @@ fn a_crlf_checkout_of_a_sealed_file_is_still_owned_and_not_drift() -> TestResult
 
 #[test]
 fn every_workflow_velnor_gen_writes_is_sealed_so_check_finds_no_drift() -> TestResult {
-    let repo = crate::base_save::pinned("0.1.95", "")?;
+    let repo = crate::base_save::pinned("0.1.102", "")?;
     let expected = velnor_gen::expected_files(&repo)?;
     assert!(expected.contains_key(&velnor_render::DELTA_CLEANUP_PATH));
     let on_disk: BTreeMap<RepoPath, Vec<u8>> = expected
