@@ -404,7 +404,7 @@ A budget is a number the project measures, not a number it guesses: set every ke
 
 These keys choose which jobs a run starts. The defaults are in the table in [`docs/rust-ci.md`](../docs/rust-ci.md).
 
-- `shape` is `"auto"` (default), `"one-job"`, `"lint-test"` or `"groups"`. `auto` picks the shape from `.velnor/rust-ci-timings.json`; any other value is fixed. When `auto` has no build times for a root, `velnor-gen generate` and `check` print a note that names the one-job shape it picked, the missing timings and how to choose a shape or record times. A root with a `[[test_groups]]` entry always uses the `groups` layout.
+- `shape` is `"auto"` (default), `"one-job"`, `"lint-test"` or `"groups"`. `auto` picks the shape from `.velnor/rust-ci-timings.json`; any other value is fixed. When `auto` has no build times for a root, `velnor-gen generate` and `check` print a note that names the one-job shape it picked, the missing timings, how to choose a shape, and how to record times (`velnor-ci timings --repo owner/name` once the generated workflow has three successful runs on the default branch). A root with a `[[test_groups]]` entry always uses the `groups` layout.
 - `on_main` is `"affected"` (default) or `"everything"`. It sets what a push to the default branch and a merge queue run select.
 - `full_run` is `"nightly"` (default), `"hourly"`, `"weekly"`, `"off"` or a five-field cron expression. It sets the schedule of the run that selects everything.
 - `skip_draft_pull_requests` is `false` (default). With `true`, a draft pull request runs nothing. It cannot be combined with `pr_ci = "label"`.
