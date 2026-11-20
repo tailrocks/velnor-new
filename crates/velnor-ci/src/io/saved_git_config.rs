@@ -37,6 +37,7 @@ const TOKEN_PREFIXES: &[&str] = &[
 ];
 const TOKEN_HEX_LEN: usize = 40;
 const TOKEN_BODY_LEN: usize = 20;
+const MAX_UNESCAPE_PASSES: usize = 4;
 
 pub(super) fn is_plain(text: &str) -> bool {
     if has_token_prefix(&text.to_ascii_lowercase()) {
@@ -106,6 +107,10 @@ pub(super) fn names_credential(text: &str) -> bool {
             .any(|url| !plain_remote(url))
 }
 
+pub(super) fn names_hook_credential(text: &str) -> bool {
+    names_credential(text) || looks_like_token(&text.to_ascii_lowercase())
+}
+
 fn embedded_urls(word: &str) -> impl Iterator<Item = &str> {
     let mut from = 0;
     std::iter::from_fn(move || {
@@ -142,6 +147,42 @@ fn looks_like_token(text: &str) -> bool {
             .any(|run| run.len() >= TOKEN_HEX_LEN)
 }
 
+fn unescaped(segment: &str) -> String {
+    let mut current = segment.to_owned();
+    for _ in 0..MAX_UNESCAPE_PASSES {
+        let decoded = unescape_once(&current);
+        if decoded == current {
+            break;
+        }
+        current = decoded;
+    }
+    current
+}
+
+fn unescape_once(text: &str) -> String {
+    let bytes = text.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut at = 0;
+    while at < bytes.len() {
+        let escaped = bytes
+            .get(at + 1..at + 3)
+            .filter(|_| bytes[at] == b'%')
+            .and_then(|pair| std::str::from_utf8(pair).ok())
+            .and_then(|pair| u8::from_str_radix(pair, 16).ok());
+        match escaped {
+            Some(byte) => {
+                out.push(byte);
+                at += 3;
+            }
+            None => {
+                out.push(bytes[at]);
+                at += 1;
+            }
+        }
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
 fn plain_remote(url: &str) -> bool {
     let url = url.to_ascii_lowercase();
     REMOTE_SCHEMES.iter().any(|scheme| {
@@ -150,7 +191,7 @@ fn plain_remote(url: &str) -> bool {
             let authority = segments.next().unwrap_or("");
             !authority.is_empty()
                 && !url.contains('?')
-                && !segments.any(looks_like_token)
+                && !segments.any(|segment| looks_like_token(&unescaped(segment)))
                 && match authority.rsplit_once('@') {
                     None => true,
                     Some((userinfo, _)) => {

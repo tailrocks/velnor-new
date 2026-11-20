@@ -15,6 +15,7 @@ mod budget_window;
 mod cache;
 mod cache_budget;
 mod cache_credential_scrub;
+mod cache_credential_scrub_ancestry;
 mod cache_credential_scrub_hardening;
 mod cache_credential_scrub_tokens;
 mod cache_flow;

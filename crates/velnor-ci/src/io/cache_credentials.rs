@@ -32,24 +32,46 @@ pub(super) fn saved_root() -> Option<PathBuf> {
 pub(super) fn find(root: &Path) -> Option<String> {
     let mut budget = MAX_ENTRIES;
     for saved in SAVED {
-        let directory = root.join(saved);
-        match fs::symlink_metadata(&directory) {
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
-            Ok(meta) if meta.is_dir() => {}
-            _ => return Some(format!("{} is not a plain directory", shown(&directory))),
-        }
-        if let Some(found) = walk(&directory, 0, &mut budget) {
+        let directory = match plain_path(root, saved) {
+            Ok(Some(directory)) => directory,
+            Ok(None) => continue,
+            Err(reason) => return Some(reason),
+        };
+        if let Some(found) = walk(&directory, 0, &mut budget, false) {
             return Some(found);
         }
     }
     None
 }
 
+fn plain_path(root: &Path, saved: &str) -> Result<Option<PathBuf>, String> {
+    let mut path = root.to_path_buf();
+    let mut parts = saved.split('/');
+    loop {
+        match fs::symlink_metadata(&path) {
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Ok(meta) if meta.is_symlink() => {
+                return Err(format!(
+                    "{} is a symbolic link that could point a credential outside the saved sources",
+                    shown(&path)
+                ));
+            }
+            Ok(meta) if meta.is_dir() => {}
+            _ => return Err(format!("{} is not a plain directory", shown(&path))),
+        }
+        let Some(part) = parts.next() else {
+            return Ok(Some(path));
+        };
+        path.push(part);
+    }
+}
+
 fn shown(path: &Path) -> String {
     inert(&path.display().to_string())
 }
 
-fn walk(directory: &Path, depth: usize, budget: &mut usize) -> Option<String> {
+fn walk(directory: &Path, depth: usize, budget: &mut usize, below_hooks: bool) -> Option<String> {
+    let in_hooks = below_hooks || is_hooks(directory);
     if depth > MAX_DEPTH {
         return Some(format!("{} is nested too deeply to scan", shown(directory)));
     }
@@ -101,8 +123,8 @@ fn walk(directory: &Path, depth: usize, budget: &mut usize) -> Option<String> {
                 "{} holds a credential or a transport setting",
                 shown(&path)
             ));
-        } else if (GIT_TEXT.contains(&name.as_str()) || is_hooks(directory))
-            && names_credential_file(&path)
+        } else if (GIT_TEXT.contains(&name.as_str()) || in_hooks)
+            && names_credential_file(&path, in_hooks)
         {
             return Some(format!(
                 "{} names a credential or a transport setting",
@@ -112,7 +134,7 @@ fn walk(directory: &Path, depth: usize, budget: &mut usize) -> Option<String> {
     }
     subdirectories
         .iter()
-        .find_map(|path| walk(path, depth + 1, budget))
+        .find_map(|path| walk(path, depth + 1, budget, in_hooks))
 }
 
 fn is_hooks(directory: &Path) -> bool {
@@ -123,8 +145,14 @@ fn holds_credential(path: &Path) -> bool {
     read_small(path).is_none_or(|text| !crate::io::saved_git_config::is_plain(&text))
 }
 
-fn names_credential_file(path: &Path) -> bool {
-    read_small(path).is_none_or(|text| crate::io::saved_git_config::names_credential(&text))
+fn names_credential_file(path: &Path, hook: bool) -> bool {
+    read_small(path).is_none_or(|text| {
+        if hook {
+            crate::io::saved_git_config::names_hook_credential(&text)
+        } else {
+            crate::io::saved_git_config::names_credential(&text)
+        }
+    })
 }
 
 fn read_small(path: &Path) -> Option<String> {
