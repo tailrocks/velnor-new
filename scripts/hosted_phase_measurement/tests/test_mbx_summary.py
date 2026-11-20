@@ -1,0 +1,48 @@
+"""MBX object-cache summaries parse with and without the `object cache:` label.
+
+mbx 1.30.0 prints the label-less form; older runs print the labelled form. A
+summary-shaped line that does not parse raises instead of being counted as zero.
+"""
+
+import sys
+import unittest
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from hosted_phase_measurement import mbx_summary as M
+
+LABELLED = "mbx[cache]: object cache: 594 hits, 11 misses; 0 B downloaded, 0 B uploaded, 5.8 MiB stored locally"
+UNLABELLED = "mbx[cache]: 1 hits, 0 misses; 0 B downloaded, 0 B uploaded, 0 B stored locally"
+
+
+class ParseMbxSummaryTests(unittest.TestCase):
+    def test_labelled_summary_line_parses(self):
+        row = M.parse_mbx_summary(LABELLED)
+        self.assertEqual(row["counts"], {"hits": 594, "misses": 11})
+        self.assertEqual(row["remote_downloaded_bytes"], 0)
+        self.assertEqual(row["remote_uploaded_bytes"], 0)
+        self.assertAlmostEqual(row["local_store_mib"], 5.8)
+
+    def test_label_less_summary_line_parses(self):
+        row = M.parse_mbx_summary(UNLABELLED)
+        self.assertEqual(row["counts"], {"hits": 1, "misses": 0})
+        self.assertEqual(row["remote_downloaded_bytes"], 0)
+        self.assertEqual(row["remote_uploaded_bytes"], 0)
+        self.assertEqual(row["local_store_mib"], 0.0)
+
+    def test_non_summary_mbx_lines_are_ignored(self):
+        self.assertIsNone(M.parse_mbx_summary("mbx[cache]: 28.53s session"))
+        self.assertIsNone(M.parse_mbx_summary("Compiling serde v1.0.0"))
+
+    def test_malformed_label_less_summary_fails_instead_of_counting_zero(self):
+        with self.assertRaises(ValueError):
+            M.parse_mbx_summary("mbx[cache]: 1 hits, 0 misses; 0 B downloaded, 0 B uploaded")
+
+    def test_malformed_labelled_summary_still_fails(self):
+        with self.assertRaises(ValueError):
+            M.parse_mbx_summary("mbx[cache]: object cache: 1 hits, 0 misses; 0 B downloaded")
+
+
+if __name__ == "__main__":
+    unittest.main()

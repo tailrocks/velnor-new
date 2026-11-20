@@ -7,9 +7,11 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 
 
-MBX_MARKER = re.compile(r"mbx\[cache\]:\s*object cache:", re.IGNORECASE)
+# mbx prints the lookup summary with (`object cache:`) or without that label; a
+# label-less line is a summary only when its counters start with a count and say "hits".
+MBX_MARKER = re.compile(r"mbx\[cache\]:\s*(?:object cache:|(?=\d[^;\n]*\bhits\b))", re.IGNORECASE)
 SUMMARY = re.compile(
-    r"mbx\[cache\]:\s*object cache:\s*(?P<lookups>[^;]*);\s*"
+    r"mbx\[cache\]:\s*(?:object cache:\s*)?(?P<lookups>[^;]*);\s*"
     r"(?P<downloaded>\d+(?:\.\d+)?)\s*(?P<download_unit>[A-Za-z]+)\s+downloaded,\s*"
     r"(?P<uploaded>\d+(?:\.\d+)?)\s*(?P<upload_unit>[A-Za-z]+)\s+uploaded,\s*"
     r"(?P<local>\d+(?:\.\d+)?)\s*(?P<local_unit>[A-Za-z]+)\s+stored locally\s*[.!]?\s*",
