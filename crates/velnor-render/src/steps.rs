@@ -44,7 +44,7 @@ pub(crate) const ATTEST_BUILD_PROVENANCE: &str =
 pub(crate) const MISE_VERSION: &str = "2026.11.10";
 #[path = "steps_helpers.rs"]
 mod steps_helpers;
-use steps_helpers::{rustup_add, saved_unless_hit, variable};
+use steps_helpers::{merge_group_output, rustup_add, saved_unless_hit, test_outputs, variable};
 
 pub(crate) const CACHE_RESTORE: &str =
     "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
@@ -104,36 +104,6 @@ pub(crate) fn rendered_job(job: &Job, plan: &WorkflowPlan) -> RenderedJob {
     }
 }
 
-fn test_outputs<'a>(job: &'a Job, tests: &'a Tests) -> impl Iterator<Item = (String, String)> + 'a {
-    job.steps
-        .iter()
-        .any(|step| matches!(&step.kind, StepKind::Cargo(command) if reports_tests(command)))
-        .then(|| {
-            [
-                Some(TESTS_RUN_OUTPUT),
-                Some(TESTS_LISTED_OUTPUT),
-                job.reports_ignored.then_some(TESTS_IGNORED_OUTPUT),
-                Some(TESTS_BY_PACKAGE_OUTPUT),
-            ]
-        })
-        .into_iter()
-        .flatten()
-        .flatten()
-        .flat_map(|name| tests.outputs(name))
-}
-
-fn merge_group_output(job: &Job) -> Option<(String, String)> {
-    job.steps
-        .iter()
-        .any(|step| matches!(step.kind, StepKind::MergeGroupPassed { .. }))
-        .then(|| {
-            (
-                MERGE_GROUP_SKIP_OUTPUT.to_owned(),
-                format!("${{{{ steps.{MERGE_GROUP_STEP}.outputs.skip }}}}"),
-            )
-        })
-}
-
 fn job_steps(
     job: &Job,
     restores: bool,
@@ -146,41 +116,44 @@ fn job_steps(
         .steps
         .iter()
         .any(|step| step.kind == StepKind::ToolsLocal(velnor_model::ToolsLocalVerb::Verify));
-    let mut rendered = Vec::new();
-    let mut replanned = false;
-    // The id of the last `[[test_setup]]` step, which the steps after it wait for.
-    let mut last_setup: Option<String> = None;
-    for (index, step) in job.steps.iter().enumerate() {
-        let setup = Setup::of(restores, replanned);
-        replanned |= step.kind == StepKind::Helper(HelperCommand::PlanFull);
-        let own = (step.after_setup && matches!(step.kind, StepKind::TestSetup { .. }))
-            .then(|| format!("test_setup_{index}"));
-        let around = Around {
-            id: gate.id(index).or(own.as_deref()),
-            saved_after: gate.required(),
-            job_name: job.name.as_deref(),
-            after_setup: last_setup.as_deref().filter(|_| step.after_setup),
-        };
-        let mut step_rendered = rendered_steps(step, setup, audit, tests, lane, around);
-        let tools_key = matches!(
-            &step.kind,
-            StepKind::CacheRestore(velnor_model::CacheKey::Tools { .. })
-                | StepKind::CacheSave(velnor_model::CacheKey::Tools { .. })
-        );
-        for body in &mut step_rendered {
-            body.shared |= verified && tools_key;
-        }
-        rendered.extend(crate::base_steps::audited_save(
-            job,
-            step,
-            step_rendered,
-            gate.audit_runs(index),
-        ));
-        if own.is_some() {
-            last_setup = own;
-        }
-    }
-    rendered
+    job.steps
+        .iter()
+        .enumerate()
+        .scan(
+            (false, None::<String>),
+            |(replanned, last_setup), (index, step)| {
+                let setup = Setup::of(restores, *replanned);
+                *replanned |= step.kind == StepKind::Helper(HelperCommand::PlanFull);
+                let own = (step.after_setup && matches!(step.kind, StepKind::TestSetup { .. }))
+                    .then(|| format!("test_setup_{index}"));
+                let around = Around {
+                    id: gate.id(index).or(own.as_deref()),
+                    saved_after: gate.required(),
+                    job_name: job.name.as_deref(),
+                    after_setup: last_setup.as_deref().filter(|_| step.after_setup),
+                };
+                let mut rendered = rendered_steps(step, setup, audit, tests, lane, around);
+                let tools_key = matches!(
+                    &step.kind,
+                    StepKind::CacheRestore(velnor_model::CacheKey::Tools { .. })
+                        | StepKind::CacheSave(velnor_model::CacheKey::Tools { .. })
+                );
+                for body in &mut rendered {
+                    body.shared |= verified && tools_key;
+                }
+                if own.is_some() {
+                    *last_setup = own;
+                }
+                Some(crate::base_steps::audited_save(
+                    job,
+                    step,
+                    rendered,
+                    gate.audit_runs(index),
+                ))
+            },
+        )
+        .flatten()
+        .collect()
 }
 
 /// What the job around a step adds to it.
@@ -190,7 +163,6 @@ struct Around<'a> {
     id: Option<&'a str>,
     saved_after: &'a [String],
     job_name: Option<&'a str>,
-    /// The id of the test setup step that must succeed before this step runs.
     after_setup: Option<&'a str>,
 }
 
