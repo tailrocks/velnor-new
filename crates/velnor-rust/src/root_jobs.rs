@@ -155,7 +155,9 @@ impl RootJobs<'_> {
 
     fn lane_job(&self, id: JobId, steps: Vec<Step>) -> Job {
         let mut steps = if self.unit.grouped {
-            steps
+            self.members.iter().fold(steps, |steps, member| {
+                crate::test_setup::before_builds(self.facts, &member.root, steps)
+            })
         } else {
             crate::test_setup::inserted(self.facts, &self.unit.roots[0], self.lane, steps)
         };
@@ -211,7 +213,7 @@ impl RootJobs<'_> {
 
     fn member_steps(&self, member: &Member, steps: Vec<Step>) -> Vec<Step> {
         if self.unit.grouped {
-            crate::test_setup::inserted(self.facts, &member.root, &member.lane, steps)
+            crate::test_setup::before_tests(self.facts, &member.root, &member.lane, steps)
         } else {
             steps
         }

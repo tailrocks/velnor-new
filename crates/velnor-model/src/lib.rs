@@ -27,10 +27,12 @@ mod shape;
 mod steps;
 mod test_group;
 mod token_permission;
+mod trusted;
 mod verdict;
 
 pub use artifact_paths::{
-    aliased_secret, path_matches, secret_like, secret_path, segment_matches, selects,
+    Case, FILESYSTEM_CASE, aliased_secret, path_matches, secret_like, secret_path, segment_matches,
+    selects,
 };
 pub use budget_mode::{BUDGET_JOB_NAME, BUDGET_MODES_HELPER, ModeBudget, Selection, SelectionName};
 pub use cache::{CacheKey, CachePath, CacheRoot, Host, LockIdentity};
@@ -84,6 +86,7 @@ pub use test_group::{
     TestGroup, TestNeed,
 };
 pub use token_permission::{token_permission_accesses, token_permission_accesses_prose};
+pub use trusted::{TRUSTED_EVENT, TrustedRunners};
 pub use verdict::{JobCondition, VerdictJob, VerdictSpec};
 
 pub use steps::{
