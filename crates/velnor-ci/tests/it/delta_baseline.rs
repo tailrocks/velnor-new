@@ -173,7 +173,9 @@ fn prepare_names_the_delta_without_reading_a_restored_base() {
     let repo = Repo::new("delta-prepare-no-read");
     restored_base(&repo);
     for index in 0..FILES {
-        let path = repo.root().join(format!("target/debug/deps/lib{index}.rlib"));
+        let path = repo
+            .root()
+            .join(format!("target/debug/deps/lib{index}.rlib"));
         fs::set_permissions(&path, fs::Permissions::from_mode(0o000))
             .unwrap_or_else(|e| unreachable!("{e}"));
     }
