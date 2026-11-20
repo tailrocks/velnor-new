@@ -11,7 +11,8 @@ use crate::wrapper_options::{
 };
 
 /// A command a `run` value starts, after every wrapper is looked through.
-pub(crate) enum Invoked {
+#[derive(Debug)]
+pub enum Invoked {
     /// The command and its arguments; the first word is the command word.
     Command(Vec<String>),
     /// A command the scan cannot read (`eval`, `sudo`, a shell script with an expansion, a
@@ -59,7 +60,7 @@ const RESERVED: [&str; 15] = [
 /// `dash`, `zsh`, `ksh` and `ash` with `-c` run their script, which is read the same way when
 /// it holds no `$` or backtick. Everything the scan cannot follow is `Opaque`, so a wrapper
 /// that is not known, an option that is not known and an unreadable script fail closed.
-pub(crate) fn invoked(run: &str) -> Vec<Invoked> {
+pub fn invoked(run: &str) -> Vec<Invoked> {
     let mut found = Vec::new();
     scan(run, 0, &mut found);
     found

@@ -51,6 +51,7 @@ mod save_gate;
 mod selection_name;
 mod steps;
 mod tests;
+mod token_commands;
 mod tools_steps;
 mod workflow;
 mod yaml;
