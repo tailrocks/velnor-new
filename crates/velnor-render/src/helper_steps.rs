@@ -229,8 +229,6 @@ pub(crate) fn test_groups_step(groups: &[GroupFilter]) -> RenderedStep {
     }
 }
 
-pub(crate) use crate::generator_steps::install_generator_step;
-
 pub(crate) fn generator_check_step() -> RenderedStep {
     RenderedStep {
         name: "Check the generated workflow".to_owned(),
