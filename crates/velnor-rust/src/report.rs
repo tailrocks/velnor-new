@@ -9,8 +9,8 @@ use velnor_model::{
     PushAfterMergeGroup, RepoFacts, Step, StepKind, ToolsLocalVerb, ToolsTelemetry, When,
 };
 
-// First released in tools-v0.1.110 (not tagged yet when this gate was written).
-const NOT_GENERATED_HELPER: (u64, u64, u64) = (0, 1, 110);
+// First released in tools-v0.1.111 (not tagged yet when this gate was written).
+const NOT_GENERATED_HELPER: (u64, u64, u64) = (0, 1, 111);
 
 fn not_generated(facts: &RepoFacts) -> Option<String> {
     let refused = facts.private_sources.is_some()

@@ -9,9 +9,9 @@ use velnor_model::RepoPath;
 fn refused_base_caches_say_why_when_the_helper_reads_the_reason() -> TestResult {
     let lock = "version = 4\n\n[[package]]\nname = \"shared\"\nversion = \"1.0.0\"\nsource = \"git+https://github.com/acme/shared-lib?branch=main#abc\"\n";
     for (helper, reason) in [
-        ("0.1.109", None),
+        ("0.1.110", None),
         (
-            "0.1.110",
+            "0.1.111",
             Some("private dependencies; declare [private_sources]"),
         ),
     ] {
