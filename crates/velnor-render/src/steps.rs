@@ -44,7 +44,7 @@ pub(crate) const ATTEST_BUILD_PROVENANCE: &str =
 pub(crate) const MISE_VERSION: &str = "2026.11.10";
 #[path = "steps_helpers.rs"]
 mod steps_helpers;
-use steps_helpers::{rustup_add, saved_unless_hit, variable};
+use steps_helpers::{leading_steps, rustup_add, saved_unless_hit, variable};
 
 pub(crate) const CACHE_RESTORE: &str =
     "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
@@ -184,22 +184,6 @@ struct Around<'a> {
     id: Option<&'a str>,
     saved_after: &'a [String],
     job_name: Option<&'a str>,
-}
-
-fn leading_steps(step: &Step, audit: bool, lane: CargoLane) -> Vec<RenderedStep> {
-    match &step.kind {
-        StepKind::Cargo(CargoCommand::Doctest) if audit => vec![cargo_step(
-            &CargoCommand::BuildAll,
-            step.manifest.as_ref(),
-            true,
-            lane,
-            None,
-        )],
-        StepKind::UploadGroupArtifact(upload) => {
-            vec![crate::artifact_steps::group_guard(upload)]
-        }
-        _ => Vec::new(),
-    }
 }
 
 fn rendered_steps(
