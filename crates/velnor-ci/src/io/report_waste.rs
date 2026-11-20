@@ -47,25 +47,21 @@ fn sessions(metrics: &mut LaneMetrics, log: &[u8], runner_temp: &Path) -> (Vec<M
     let Some(reports) = super::mbx_reports::read(runner_temp) else {
         return summaries(metrics, log);
     };
-    let (mut assigned, mut unassigned) = (Vec::new(), Vec::new());
+    let mut unassigned = Vec::new();
     for invocation in &metrics.invocations {
-        let slice = log
-            .get(invocation.log_start..invocation.log_end.min(log.len()))
-            .unwrap_or_default();
-        if reports_session(&invocation.argv) {
-            assigned.extend_from_slice(slice);
-        } else {
+        if !reports_session(&invocation.argv) {
+            let slice = log
+                .get(invocation.log_start..invocation.log_end.min(log.len()))
+                .unwrap_or_default();
             unassigned.extend_from_slice(slice);
         }
-        assigned.push(b'\n');
         unassigned.push(b'\n');
     }
-    let missing = mbx_sessions(&assigned)
-        .len()
-        .saturating_sub(reports.sessions.len());
+    let missing = reports.missing.len();
     if missing > 0 {
         metrics.verification_errors.push(format!(
-            "MBX stats report missing for {missing} session(s) that printed a lookup summary; the MBX session counts are incomplete."
+            "MBX stats report missing for {missing} session(s) that were given a report path; the MBX session counts are incomplete. First: {}.",
+            crate::escape::escape(&reports.missing[0], false)
         ));
     }
     if let Some(first) = reports.unreadable.first() {

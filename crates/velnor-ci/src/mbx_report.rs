@@ -28,6 +28,41 @@ struct Counts {
     bypasses: Map<String, Value>,
 }
 
+const VALUE_OPTIONS: &[&str] = &["-C", "-Z", "--config", "--color"];
+const VALUE_FREE_OPTIONS: &[&str] = &[
+    "-q",
+    "--quiet",
+    "--verbose",
+    "--frozen",
+    "--locked",
+    "--offline",
+];
+
+fn is_complete_option(word: &str) -> bool {
+    VALUE_FREE_OPTIONS.contains(&word)
+        || word
+            .strip_prefix('-')
+            .is_some_and(|rest| !rest.is_empty() && rest.bytes().all(|byte| byte == b'v'))
+        || (word.len() > 2 && (word.starts_with("-C") || word.starts_with("-Z")))
+        || word.starts_with("--config=")
+        || word.starts_with("--color=")
+}
+
+fn cargo_subcommand(words: &[String]) -> Option<&str> {
+    let mut words = words.iter().map(String::as_str).peekable();
+    if words.peek().is_some_and(|word| word.starts_with('+')) {
+        words.next();
+    }
+    while let Some(word) = words.next() {
+        if VALUE_OPTIONS.contains(&word) {
+            words.next()?;
+        } else if !is_complete_option(word) {
+            return (!word.starts_with('-')).then_some(word);
+        }
+    }
+    None
+}
+
 #[must_use]
 pub fn reports_session(argv: &[String]) -> bool {
     let Some(program) = argv
@@ -38,10 +73,7 @@ pub fn reports_session(argv: &[String]) -> bool {
         return false;
     };
     let subcommand = if program == "cargo" {
-        argv[1..]
-            .iter()
-            .find(|word| !word.starts_with('-') && !word.starts_with('+'))
-            .map(String::as_str)
+        cargo_subcommand(&argv[1..])
     } else {
         program.strip_prefix("cargo-")
     };

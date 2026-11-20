@@ -20,7 +20,7 @@ fn report_json(version: u64, hits: u64, misses: u64, unconsulted: u64) -> String
 }
 
 fn cargo(repo: &Repo, subcommand: &str, report: &str, stderr: &str) -> ResultTest {
-    cargo_with(repo, subcommand, report, stderr, None)
+    cargo_with(repo, subcommand, report, stderr, None, true)
 }
 
 fn cargo_with(
@@ -29,6 +29,7 @@ fn cargo_with(
     report: &str,
     stderr: &str,
     inherited: Option<&std::path::Path>,
+    enabled: bool,
 ) -> ResultTest {
     let bin = repo.root().join("fake-bin");
     let cargo = bin.join("cargo");
@@ -42,7 +43,7 @@ fn cargo_with(
         .args(["run", "--", cargo.to_str().ok_or("path")?, subcommand])
         .current_dir(repo.root())
         .env("RUNNER_TEMP", repo.root())
-        .env(SWITCH, "true")
+        .env(SWITCH, if enabled { "true" } else { "false" })
         .env("FAKE_MBX_REPORT", report)
         .env("FAKE_MBX_STDERR", stderr)
         .env_remove("MBX_STATS_REPORT");
@@ -131,6 +132,7 @@ fn a_command_that_runs_tests_gets_no_report_path_and_counts_from_its_summary() -
         &report_json(5, 9, 9, 9),
         line,
         Some(&inherited),
+        true,
     )?;
     assert!(!inherited.exists());
     let metrics = report(&repo)?;
@@ -188,20 +190,124 @@ fn only_commands_that_run_no_built_code_get_a_report() {
         &["/usr/bin/cargo", "+nightly", "check"],
         &["cargo-clippy", "clippy", "--all-targets"],
         &["cargo", "doc"],
+        &["cargo", "rustc", "--", "-Zfoo"],
+        &["cargo", "b"],
+        &["cargo", "c"],
+        &["cargo", "d"],
+        &["cargo", "+1.100.0", "build"],
+        &["cargo", "--config", "k=v", "build"],
+        &["cargo", "--config=k=v", "--config", "a=b", "check"],
+        &["cargo", "-C", "dir", "build"],
+        &["cargo", "-Z", "unstable-options", "build"],
+        &["cargo", "-Zunstable-options", "-Cdir", "build"],
+        &["cargo", "--color", "always", "build"],
+        &["cargo", "--color=never", "build"],
+        &["cargo", "-v", "-vv", "-q", "--quiet", "--verbose", "build"],
+        &["cargo", "--frozen", "--locked", "--offline", "check"],
+        &[
+            "cargo", "+nightly", "-Z", "x", "-C", "d", "--locked", "clippy",
+        ],
     ] {
         assert!(reports_session(&argv(build)), "{build:?}");
     }
     for runs in [
         &["cargo", "test"][..],
+        &["cargo", "t"],
+        &["cargo", "r"],
         &["cargo", "nextest", "run"],
         &["cargo-nextest", "nextest", "run"],
         &["cargo", "run"],
-        &["cargo", "--config", "x", "build"],
+        &["cargo", "bench"],
+        &["cargo", "-C", "build", "test"],
+        &["cargo", "--config", "build", "test"],
+        &["cargo", "--config", "k=v", "test"],
+        &["cargo", "-Z", "build", "run"],
+        &["cargo", "--color", "build", "test"],
+        &["cargo", "+build", "test"],
+        &["cargo", "--unknown", "build"],
+        &["cargo", "--manifest-path", "build", "test"],
+        &["cargo", "-C"],
+        &["cargo", "--config"],
+        &["cargo", "--"],
+        &["cargo", "--version"],
+        &["cargo", "+nightly"],
+        &["cargo"],
+        &["mise", "exec", "--", "cargo", "build"],
+        &["env", "X=1", "cargo", "build"],
         &["velnor-ci", "inputs", "build"],
         &[],
     ] {
         assert!(!reports_session(&argv(runs)), "{runs:?}");
     }
+}
+
+#[test]
+fn a_build_given_a_report_path_that_left_none_is_an_error_even_alone() -> ResultTest {
+    let repo = fixture("mbx-reports-alone")?;
+    cargo(&repo, "build", "", "reworded summary")?;
+    let metrics = report(&repo)?;
+    assert!(metrics.mbx.sessions.is_empty(), "{metrics:?}");
+    assert_eq!(metrics.mbx.unparsed, 1);
+    assert!(
+        metrics
+            .verification_errors
+            .iter()
+            .any(|line| line.contains("MBX stats report missing for 1 session(s)")),
+        "{:?}",
+        metrics.verification_errors
+    );
+    Ok(())
+}
+
+#[test]
+fn a_build_with_a_reworded_summary_and_no_report_is_an_error_beside_another_report() -> ResultTest {
+    let repo = fixture("mbx-reports-reworded")?;
+    cargo(&repo, "build", &report_json(5, 1, 0, 0), "compiled")?;
+    cargo(&repo, "check", "", "something new about the cache")?;
+    let metrics = report(&repo)?;
+    assert_eq!(metrics.mbx.sessions, [session(1, 0, 0)], "{metrics:?}");
+    assert_eq!(metrics.mbx.unparsed, 1);
+    assert!(
+        metrics
+            .verification_errors
+            .iter()
+            .any(|line| line.contains("MBX stats report missing for 1 session(s)")),
+        "{:?}",
+        metrics.verification_errors
+    );
+    Ok(())
+}
+
+#[test]
+fn a_report_of_an_unknown_version_is_one_unknown_session_not_two() -> ResultTest {
+    let repo = fixture("mbx-reports-unknown-once")?;
+    cargo(
+        &repo,
+        "build",
+        &report_json(6, 4, 0, 0),
+        "mbx[cache]: object cache: 4 hits, 0 misses; 0 B downloaded",
+    )?;
+    let metrics = report(&repo)?;
+    assert!(metrics.mbx.sessions.is_empty(), "{metrics:?}");
+    assert_eq!(metrics.mbx.unparsed, 1);
+    assert_eq!(metrics.verification_errors.len(), 1, "{metrics:?}");
+    Ok(())
+}
+
+#[test]
+fn with_the_switch_off_an_inherited_report_path_never_reaches_the_child() -> ResultTest {
+    let repo = fixture("mbx-reports-off")?;
+    let inherited = repo.root().join("outer-report.json");
+    cargo_with(
+        &repo,
+        "build",
+        &report_json(5, 1, 0, 0),
+        "compiled",
+        Some(&inherited),
+        false,
+    )?;
+    assert!(!inherited.exists());
+    Ok(())
 }
 
 #[test]

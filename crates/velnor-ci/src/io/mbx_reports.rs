@@ -9,6 +9,8 @@ use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+const EXPECTED: &str = "expected";
+
 static SESSIONS: AtomicU64 = AtomicU64::new(0);
 
 fn enabled() -> bool {
@@ -16,11 +18,8 @@ fn enabled() -> bool {
 }
 
 pub(super) fn assign(command: &mut Command, argv: &[String]) {
-    if !enabled() {
-        return;
-    }
     command.env_remove(VARIABLE);
-    if !reports_session(argv) {
+    if !enabled() || !reports_session(argv) {
         return;
     }
     let Some(temp) = std::env::var_os("RUNNER_TEMP").filter(|temp| !temp.is_empty()) else {
@@ -38,40 +37,61 @@ pub(super) fn assign(command: &mut Command, argv: &[String]) {
         .duration_since(UNIX_EPOCH)
         .map_or(0, |since| since.as_nanos());
     let session = SESSIONS.fetch_add(1, Ordering::Relaxed);
-    command.env(
-        VARIABLE,
-        directory.join(format!(
-            "{started:020}-{}-{session}.json",
-            std::process::id()
-        )),
-    );
+    let name = format!("{started:020}-{}-{session}", std::process::id());
+    if let Err(error) = fs::write(directory.join(format!("{name}.{EXPECTED}")), b"") {
+        eprintln!(
+            "velnor-ci: cannot record the expected MBX report {name}: {error}; the session is counted from its stderr summary"
+        );
+        return;
+    }
+    command.env(VARIABLE, directory.join(format!("{name}.json")));
 }
 
 pub(super) struct Reports {
     pub(super) sessions: Vec<MbxSession>,
     pub(super) unreadable: Vec<String>,
+    pub(super) missing: Vec<String>,
 }
 
 pub(super) fn read(runner_temp: &Path) -> Option<Reports> {
     if !enabled() {
         return None;
     }
-    let mut files: Vec<PathBuf> = fs::read_dir(runner_temp.join(DIRECTORY))
+    let paths: Vec<PathBuf> = fs::read_dir(runner_temp.join(DIRECTORY))
         .ok()?
         .flatten()
         .map(|entry| entry.path())
-        .filter(|path| {
-            path.extension()
-                .is_some_and(|extension| extension == "json")
-        })
         .collect();
-    if files.is_empty() {
+    let with = |wanted: &str| {
+        let mut found: Vec<PathBuf> = paths
+            .iter()
+            .filter(|path| {
+                path.extension()
+                    .is_some_and(|extension| extension == wanted)
+            })
+            .cloned()
+            .collect();
+        found.sort();
+        found
+    };
+    let (files, expected) = (with("json"), with(EXPECTED));
+    if files.is_empty() && expected.is_empty() {
         return None;
     }
-    files.sort();
     let mut reports = Reports {
         sessions: Vec::new(),
         unreadable: Vec::new(),
+        missing: expected
+            .iter()
+            .filter(|marker| !marker.with_extension("json").exists())
+            .map(|marker| {
+                marker
+                    .file_stem()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .into_owned()
+            })
+            .collect(),
     };
     for file in files {
         match fs::read(&file)
