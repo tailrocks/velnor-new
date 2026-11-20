@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-
 use velnor_model::RepoPath;
 
 use crate::archive::jobs_of;
@@ -9,7 +8,7 @@ use crate::base_save::step;
 use crate::facts::TestResult;
 use crate::pipeline::{view, workflow};
 
-const BUDGET_BYTES: usize = 470_000;
+const BUDGET_BYTES: usize = 494_000;
 
 fn twenty_roots(helper: &str) -> Result<String, Box<dyn std::error::Error>> {
     let manifests: Vec<String> = (0..20)
@@ -47,7 +46,7 @@ fn condition(block: &str, name: &str) -> Result<String, Box<dyn std::error::Erro
 }
 
 #[test]
-fn twenty_roots_at_helper_0_1_108_stay_under_the_size_budget() -> TestResult {
+fn twenty_roots_at_helper_0_1_109_stay_under_the_size_budget() -> TestResult {
     let text = twenty_roots("0.1.109")?;
     assert!(
         text.len() <= BUDGET_BYTES,

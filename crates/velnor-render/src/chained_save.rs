@@ -1,15 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-//! A save after the base decision does not repeat what the decision already waited for.
-//!
-//! The decision step (`base`) runs only when the build finished, setup succeeded, the run is on
-//! the default branch and the event saves, and its outputs exist only when it ran. So a step
-//! that reads `steps.base.outputs.save` (or `.sources`) being `'true'` already knows all of that:
-//! repeating it only grows the workflow file, which GitHub limits to 500,000 bytes. The decision
-//! step itself likewise follows `inputs_save`, which waited for the same things. The default
-//! branch gate stays on every save, so that no save step can be read as reachable from a fork.
-
 use velnor_model::{Step, StepKind, When};
 
 use crate::gate::{
@@ -19,7 +10,6 @@ use crate::gate::{
 const NOT_CANCELLED: &str = "!cancelled()";
 const INPUTS_SAVED: &str = "steps.inputs_save.outcome == 'success'";
 
-/// The condition of a step, shortened when the job chains its saves.
 pub(crate) fn combined(
     chained: bool,
     step: &Step,
@@ -49,7 +39,6 @@ pub(crate) fn combined(
     )
 }
 
-/// The decision step follows the save of the inputs, which has its conditions.
 fn decision(step: &Step, extra: &[String], first: Option<&str>) -> Option<String> {
     let follows = first == Some("${{ steps.inputs_save.outcome == 'success' }}");
     (matches!(step.kind, StepKind::CacheDecide { .. })
@@ -74,10 +63,8 @@ fn after_decision(
     let mut parts = vec![
         NOT_CANCELLED.to_owned(),
         format!("steps.{BASE_STEP}.outputs.{output} == 'true'"),
-        // Implied by the decision, kept so that a save step visibly never runs off the default branch.
         ON_DEFAULT_BRANCH.to_owned(),
     ];
-    // A job with no compile step saves only while it still succeeds.
     parts.extend(saved_after.is_empty().then(|| "success()".to_owned()));
     parts.extend(pr_parts(step.pr));
     parts.extend(extra.iter().cloned());

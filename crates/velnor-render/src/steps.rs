@@ -186,7 +186,6 @@ struct Around<'a> {
     /// The id a compile or audit step gets so a save can wait for it.
     id: Option<&'a str>,
     saved_after: &'a [String],
-    /// The saves after the base decision do not repeat what it waited for.
     chained: bool,
     job_name: Option<&'a str>,
 }

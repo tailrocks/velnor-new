@@ -7,8 +7,6 @@ use crate::yaml::emit;
 
 const LARGEST_JOBS: usize = 5;
 
-/// The refusal for a workflow file above the size GitHub accepts. It names the file, how many
-/// jobs it has and the jobs that take the most bytes, so the reader sees what to shrink.
 pub(crate) fn too_large(path: &str, bytes: usize, jobs: &[RenderedJob]) -> RuleViolation {
     let mut sizes: Vec<(usize, &str)> = jobs
         .iter()

@@ -41,7 +41,6 @@ pub(crate) fn plan_and_render(
     Ok((reduced, files, vec![note]))
 }
 
-/// Adds the Cargo root count to a size refusal: the number of roots is what drives the size.
 fn with_roots(mut violations: Vec<RuleViolation>, roots: usize) -> Vec<RuleViolation> {
     for violation in &mut violations {
         if matches!(violation.rule, Rule::WorkflowTooLarge(_)) {

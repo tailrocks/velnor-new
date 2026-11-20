@@ -106,8 +106,6 @@ pub struct Job {
     /// The pinned helper records the build in its test step (`outputs.built`), so the saves
     /// may wait for that record instead of a build step.
     pub records_build: bool,
-    /// The saves after the base decision read its outputs instead of repeating its conditions,
-    /// which keeps a large workflow under GitHub's file size limit.
     pub chained_saves: bool,
     /// Titles the job with the selection of the run, read from the plan outputs.
     pub selection_name: Option<SelectionName>,
