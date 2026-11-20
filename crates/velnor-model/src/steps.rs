@@ -185,7 +185,6 @@ impl StepKind {
             | Self::PrivateCheck { .. }
             | Self::PrivateToken { .. }
             | Self::PrivateFetch { .. }
-            | Self::AdvisoryFetch { .. }
             | Self::MbxRemote { .. }
             | Self::MbxStore { .. }
             | Self::MbxSeed { .. }
