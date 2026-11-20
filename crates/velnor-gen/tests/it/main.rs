@@ -11,6 +11,7 @@ mod base_token;
 mod budget;
 mod budget_skip_push;
 mod build_target;
+mod built_output;
 mod cache_budget;
 mod cache_budget_workflow;
 mod cache_compat;

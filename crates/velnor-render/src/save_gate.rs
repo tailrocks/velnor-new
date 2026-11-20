@@ -7,7 +7,9 @@
 //! the next run its warm target. It waits for the steps that compile the build it
 //! captures, and for the compile-input audit when one ran before it.
 
-use velnor_model::{HelperCommand, Job, Step, StepKind, When};
+use velnor_model::{CargoCommand, HelperCommand, Job, Step, StepKind, When};
+
+use crate::tests::Tests;
 
 const BUILD_ID: &str = "build";
 const AUDIT_ID: &str = "audit";
@@ -37,6 +39,11 @@ fn is_build(step: &Step) -> bool {
     matches!(&step.kind, StepKind::Cargo(command) if command.is_target_build())
 }
 
+/// A test step that records its build in its outputs, which the saves read.
+fn is_test_run(step: &Step) -> bool {
+    matches!(&step.kind, StepKind::Cargo(CargoCommand::NextestRun { .. }))
+}
+
 impl SaveGate {
     /// A job without a compile step before its saves keeps the implicit `success()`.
     pub(crate) fn of(job: &Job) -> Self {
@@ -50,7 +57,24 @@ impl SaveGate {
         let saved_here = &job.steps[first].gate;
         let (mut builds, mut audits) = (0, 0);
         let mut required = Vec::new();
+        // A job with its own build step keeps the step ids; otherwise its test steps
+        // record the build (`built` output) and are the steps the saves wait for.
+        let legacy = job
+            .steps
+            .iter()
+            .any(|step| matches!(&step.kind, StepKind::Cargo(CargoCommand::NextestBuild)));
+        let tests = Tests::of(job);
         for (index, step) in job.steps.iter().enumerate().take(first) {
+            if !legacy && is_test_run(step) {
+                builds += 1;
+                let test = tests.id(step.reads.as_ref().map(|plan| &plan.slug));
+                required.push(if &step.gate == saved_here {
+                    format!("steps.{test}.outputs.built == 'true'")
+                } else {
+                    format!("(steps.{test}.outcome != 'failure' || steps.{test}.outputs.built == 'true')")
+                });
+                continue;
+            }
             let (prefix, count) = if is_build(step) {
                 (BUILD_ID, &mut builds)
             } else if is_audit(step) {
