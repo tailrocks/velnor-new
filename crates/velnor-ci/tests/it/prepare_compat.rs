@@ -40,3 +40,9 @@ fn compat_is_stable_and_follows_rustflags_and_the_debuginfo_setting() {
         ("", "")
     );
 }
+
+#[test]
+fn the_compat_digest_of_the_plain_fixture_is_pinned() {
+    let run = prepare("pinned", &Setup::new(reported("1.99.1", Some("0.9.151"))));
+    assert_eq!(digest(&run), "b29bb827d63005a2");
+}

@@ -69,20 +69,19 @@ fn lock_output_lines(root: &Path, args: &PrepareArgs) -> Result<String, CiError>
     let recorded = read_files(root, &[METADATA_PATH]).map_err(|e| CiError::new(e.to_string()))?;
     let members = recorded_members(recorded.get(&METADATA_PATH).map(Vec::as_slice))
         .map_err(|e| CiError::new(e.to_string()))?;
-    let owned: BTreeSet<String> = members.values().flatten().cloned().collect();
     let wanted = wanted_roots(&members, args)?;
     members
-        .keys()
-        .filter(|manifest| {
+        .iter()
+        .filter(|(manifest, _)| {
             wanted
                 .as_ref()
                 .is_none_or(|slugs| slugs.contains(&RootSlug::of(manifest)))
         })
-        .map(|manifest| {
+        .map(|(manifest, owned)| {
             let lock = manifest.sibling(&RepoPath::from_static("Cargo.lock"));
             let mut read = read_files(root, std::slice::from_ref(&lock))
                 .map_err(|e| CiError::new(e.to_string()))?;
-            let digest = lock_key(read.remove(&lock).as_deref(), &owned);
+            let digest = lock_key(read.remove(&lock).as_deref(), owned);
             Ok(format!(
                 "{LOCK_OUTPUT_PREFIX}{}={digest}\n",
                 RootSlug::of(manifest)

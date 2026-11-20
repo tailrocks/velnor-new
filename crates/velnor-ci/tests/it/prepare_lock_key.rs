@@ -186,20 +186,20 @@ fn the_version_of_a_path_package_outside_the_workspace_stays_in_the_lock_key() {
 }
 
 #[test]
-fn a_member_of_another_root_of_the_repository_counts_as_a_member() {
+fn a_path_dependency_named_like_a_member_of_another_root_keeps_its_version() {
     let shared = |version: &'static str| {
         lock(&[
             member("app", "0.1.83", &["shared"]),
             member("shared", version, &[]),
         ])
     };
-    assert_eq!(
+    assert_ne!(
         key_in(&shared("1.0.0"), &["app"], &["shared"]),
         key_in(&shared("1.0.1"), &["app"], &["shared"])
     );
-    assert_ne!(
-        key_in(&shared("1.0.0"), &["app"], &[]),
-        key_in(&shared("1.0.1"), &["app"], &[])
+    assert_eq!(
+        key_in(&shared("1.0.0"), &["app"], &["shared"]),
+        key_in(&shared("1.0.0"), &["app"], &[])
     );
 }
 
