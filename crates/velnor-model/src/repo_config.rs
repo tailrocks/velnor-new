@@ -235,7 +235,6 @@ pub struct TestSetup {
     pub root: Option<RepoPath>,
     pub name: String,
     pub run: String,
-    /// The `phase` key, if written. `None` and `Some(Test)` run before the tests only.
     pub phase: Option<SetupPhase>,
 }
 

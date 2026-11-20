@@ -42,7 +42,7 @@ pub(crate) fn job(name: &str) -> Job {
     }
 }
 
-fn rustc(job: &Job) -> PathBuf {
+pub(crate) fn rustc(job: &Job) -> PathBuf {
     job.home
         .join(".rustup/toolchains/1.99.1-x86_64-unknown-linux-gnu/bin/rustc")
 }
@@ -286,6 +286,8 @@ pub(crate) fn context(job: &Job, anchor_restored: bool, event: &str) -> Context 
         event_name: event.to_owned(),
         git_ref: "refs/heads/main".to_owned(),
         default_branch: Some("main".to_owned()),
+        cache_key: String::new(),
+        repository: "tailrocks/velnor-new".to_owned(),
     }
 }
 

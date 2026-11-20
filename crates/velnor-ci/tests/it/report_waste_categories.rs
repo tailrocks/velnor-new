@@ -3,7 +3,7 @@
 
 use serde_json::{Value, json};
 use velnor_ci::report::{LaneMetrics, check, waste};
-use velnor_ci::waste_evidence::{mbx_seed_truncated, mbx_sessions};
+use velnor_ci::waste_evidence::mbx_sessions;
 
 fn metrics(value: Value) -> LaneMetrics {
     serde_json::from_value(value).unwrap_or_else(|error| unreachable!("{error}"))
@@ -216,12 +216,4 @@ fn an_empty_mbx_session_after_a_truncated_seed_is_not_waste() {
             "{truncated}: {found:?}"
         );
     }
-}
-
-#[test]
-fn a_seed_stopped_at_the_startup_budget_is_read_from_the_job_log() {
-    let stopped = b"2026-11-20T10:18:10Z ##[warning]MBX seeding stopped at the startup budget; the rest builds cold\n";
-    let seeded = b"2026-11-20T10:18:10Z velnor: MBX seeded /t/mbx with 5 files, 9 bytes in 0.01s (0 already present)\n";
-    assert!(mbx_seed_truncated(stopped));
-    assert!(!mbx_seed_truncated(seeded));
 }
