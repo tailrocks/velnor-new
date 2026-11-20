@@ -65,10 +65,9 @@ fn a_failed_build_leaves_no_command_arguments_on_disk() {
         "{refused:?}"
     );
     assert!(
-        !files_below(repo.root()).any(|file| fs::read(file)
-            .is_ok_and(|bytes| bytes
-                .windows(b"hunter2-credential".len())
-                .any(|window| window == b"hunter2-credential"))),
+        !files_below(repo.root()).any(|file| fs::read(file).is_ok_and(|bytes| bytes
+            .windows(b"hunter2-credential".len())
+            .any(|window| window == b"hunter2-credential"))),
         "a command argument reached the target directory"
     );
 }
