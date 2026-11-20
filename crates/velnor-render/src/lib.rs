@@ -29,7 +29,6 @@ mod permission_yaml;
 mod pinned_actions;
 mod private_steps;
 mod release;
-mod release_asset_steps;
 mod release_assets;
 mod release_attest;
 mod release_binaries;

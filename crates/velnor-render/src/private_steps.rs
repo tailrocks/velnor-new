@@ -10,6 +10,9 @@ use crate::steps::RUN;
 
 pub(crate) const TOKEN_STEP: &str = "private-token";
 pub(crate) const CHECK_STEP: &str = "private-check";
+
+pub(crate) mod release_asset_steps;
+
 /// The condition for creating an App token: a merge queue entry that `check` allowed, or a run
 /// that is not a fork pull request and not a bot's.
 pub(crate) fn token_allowed(check: &str) -> String {
@@ -24,7 +27,7 @@ pub(crate) fn render(kind: &StepKind) -> RenderedStep {
         StepKind::PrivateToken { sources, .. } => token(sources),
         StepKind::PrivateFetch { manifests, .. } => fetch(manifests),
         StepKind::ReleaseAssets { assets, part } => {
-            crate::release_asset_steps::render(assets, part)
+            crate::private_steps::release_asset_steps::render(assets, part)
         }
         _ => RenderedStep::default(),
     }

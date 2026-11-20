@@ -49,7 +49,7 @@ fn holds_app_token(job: &RenderedJob) -> bool {
     job.steps.iter().any(|step| {
         ![
             crate::private_steps::TOKEN_STEP,
-            crate::release_asset_steps::TOKEN_STEP,
+            crate::private_steps::release_asset_steps::TOKEN_STEP,
         ]
         .contains(&step.id.as_deref().unwrap_or_default())
             && step
