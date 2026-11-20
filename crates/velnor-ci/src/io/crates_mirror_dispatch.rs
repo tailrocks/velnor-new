@@ -37,8 +37,8 @@ pub(super) fn forward() -> Result<ExitStatus, CiError> {
         std::env::var_os(WRAPPER_ENV)
             .ok_or_else(|| CiError::new("missing VELNOR_CARGO_WRAPPER"))?,
     );
-    let config =
-        std::env::var_os(CONFIG_ENV).ok_or_else(|| CiError::new("missing VELNOR_CARGO_CONFIG"))?;
+    // Absent when the mirror is off: the forward then adds no mirror config, but still checks MBX.
+    let config = std::env::var_os(CONFIG_ENV).filter(|config| !config.is_empty());
     let paths: Vec<_> =
         std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default()).collect();
     let args: Vec<_> = std::env::args_os().skip(1).collect();
@@ -109,7 +109,10 @@ pub(super) fn forward() -> Result<ExitStatus, CiError> {
     }
     mise::native_environment(&mut command);
     command
-        .args(with_mirror_config(&config, args.collect()))
+        .args(match &config {
+            Some(config) => with_mirror_config(config, args.collect()),
+            None => args.collect(),
+        })
         .env("PATH", path)
         .env(REAL_ENV, cargo.executable)
         .env(DEPTH_ENV, (depth + 1).to_string())

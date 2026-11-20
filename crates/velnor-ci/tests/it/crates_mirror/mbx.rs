@@ -66,14 +66,12 @@ fn run_wrapper_with(
     let config = env
         .lines()
         .find_map(|line| line.strip_prefix("VELNOR_CARGO_CONFIG="))
-        .ok_or("exported Cargo config")?
-        .to_owned();
+        .map(str::to_owned);
     let wrapper = fs::canonicalize(root.join("velnor-cargo/cargo"))?;
     let mut command = Command::new(&wrapper);
     command
         .args(["--version"])
         .current_dir(root)
-        .env("VELNOR_CARGO_CONFIG", config)
         .env("VELNOR_CARGO_WRAPPER", &wrapper)
         .env("CARGO_HOME", root.join("home"))
         .env("MISE_DATA_DIR", root.join("mise-data"))
@@ -83,6 +81,9 @@ fn run_wrapper_with(
         .env_remove("VELNOR_CARGO_DEPTH")
         .env_remove("VELNOR_CARGO_MISE_PHASE")
         .env_remove("__MISE_ACTIVE_WRAPPERS");
+    if let Some(config) = config {
+        command.env("VELNOR_CARGO_CONFIG", config);
+    }
     if mbx_required {
         command.env("VELNOR_CARGO_MBX", "required");
     } else {
@@ -195,24 +196,55 @@ fn setup_does_not_record_mbx_when_nothing_declares_it() -> TestResult {
 }
 
 #[test]
-fn mirror_off_with_declared_mbx_refuses_a_plain_cargo() -> TestResult {
-    let repo = Repo::empty("crates-mirror-mbx-off-plain");
+fn mirror_off_with_declared_mbx_and_no_cargo_on_path_succeeds() -> TestResult {
+    // The crates-mirror step runs before the tools install, so mise's cargo wrapper does not
+    // exist yet. The check runs at use time instead, in the forwarded cargo.
+    let repo = Repo::empty("crates-mirror-mbx-off-none");
     repo.write_unstaged("mise.toml", MBX_DECLARED);
-    let plain = plain_cargo(&repo)?;
     let output = setup_command(repo.root(), REGISTRY)
         .current_dir(repo.root())
         .env("VELNOR_CRATES_MIRROR", "off")
-        .env("PATH", path_with(&plain)?)
+        .env("PATH", path_with(repo.root())?)
         .output()?;
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(!output.status.success(), "{output:?}");
-    assert!(stderr.contains(REFUSED), "{stderr}");
-    assert!(!repo.root().join("env").exists());
+    assert!(output.status.success(), "{output:?}");
+    let env = fs::read_to_string(repo.root().join("env"))?;
+    let wrapper = fs::canonicalize(repo.root().join("velnor-cargo/cargo"))?;
+    assert!(
+        env.lines()
+            .any(|line| line == format!("CARGO={}", wrapper.display())),
+        "{env}"
+    );
+    assert!(
+        env.lines().any(|line| line == "VELNOR_CARGO_MBX=required"),
+        "{env}"
+    );
+    assert!(!env.contains("VELNOR_CARGO_CONFIG"), "{env}");
+    assert!(!repo.root().join("velnor-cargo/config.toml").exists());
     Ok(())
 }
 
 #[test]
-fn mirror_off_with_declared_mbx_pins_cargo_to_the_mise_wrapper() -> TestResult {
+fn mirror_off_with_declared_mbx_refuses_a_plain_cargo_at_use_time() -> TestResult {
+    let repo = Repo::empty("crates-mirror-mbx-off-plain");
+    repo.write_unstaged("mise.toml", MBX_DECLARED);
+    let output = setup_command(repo.root(), REGISTRY)
+        .current_dir(repo.root())
+        .env("VELNOR_CRATES_MIRROR", "off")
+        .env("PATH", path_with(repo.root())?)
+        .output()?;
+    assert!(output.status.success(), "{output:?}");
+    let plain = plain_cargo(&repo)?;
+    let output = run_wrapper_with(repo.root(), &plain, true, false)?;
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!output.status.success(), "{output:?}");
+    assert!(stderr.contains(REFUSED), "{stderr}");
+    assert!(stderr.contains(&plain.display().to_string()), "{stderr}");
+    assert!(!String::from_utf8_lossy(&output.stdout).contains("plain-cargo-ran"));
+    Ok(())
+}
+
+#[test]
+fn mirror_off_with_declared_mbx_routes_cargo_through_the_forward_shim() -> TestResult {
     let repo = Repo::empty("crates-mirror-mbx-off-mise");
     repo.write_unstaged("mise.toml", MBX_DECLARED);
     let mise = mise_wrapper(&repo)?;
@@ -223,16 +255,17 @@ fn mirror_off_with_declared_mbx_pins_cargo_to_the_mise_wrapper() -> TestResult {
         .output()?;
     assert!(output.status.success(), "{output:?}");
     let env = fs::read_to_string(repo.root().join("env"))?;
-    let cargo = mise.join("cargo");
+    let wrapper = fs::canonicalize(repo.root().join("velnor-cargo/cargo"))?;
     assert!(
         env.lines()
-            .any(|line| line == format!("CARGO={}", cargo.display())),
+            .any(|line| line == format!("CARGO={}", wrapper.display())),
         "{env}"
     );
     assert!(
-        env.lines().any(|line| line == "VELNOR_CARGO_MBX=required"),
+        env.lines()
+            .any(|line| line == format!("VELNOR_CARGO_WRAPPER={}", wrapper.display())),
         "{env}"
     );
-    assert!(!repo.root().join("velnor-cargo").exists());
+    assert!(!repo.root().join("velnor-cargo/config.toml").exists());
     Ok(())
 }

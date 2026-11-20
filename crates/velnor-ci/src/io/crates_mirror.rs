@@ -28,23 +28,30 @@ pub(super) fn setup(args: &CratesMirrorArgs) -> Result<String, CiError> {
         }
         Ok(_) | Err(std::env::VarError::NotPresent) => false,
     };
-    // MBX is never skipped: a declaring repository keeps cargo on mise's MBX wrapper
-    // even when the mirror is off, and the wrapper refuses any other cargo.
+    // MBX is never skipped: a declaring repository routes every cargo through the forwarding
+    // wrapper even when the mirror is off, and the wrapper refuses any other cargo at use time.
+    // Setup runs before the tools install, so mise's wrapper may not exist yet here.
     let mbx = super::crates_mirror_mbx::declared_here()?;
     if disabled {
         let mut text = format!("crates mirror disabled by {DISABLE_ENV}=off\n");
         if mbx {
-            let cargo = super::crates_mirror_mbx::mise_cargo()?;
+            let directory = runner_directory()?;
+            let wrapper = directory.join("cargo");
+            install_wrapper(&directory, &wrapper)?;
+            super::append_to("GITHUB_PATH", &format!("{}\n", directory.display()))?;
             super::append_to(
                 "GITHUB_ENV",
                 &format!(
-                    "{}={}\nCARGO={}\n",
+                    "{}={}\n{WRAPPER_ENV}={}\nCARGO={}\n",
                     super::crates_mirror_mbx::ENV,
                     super::crates_mirror_mbx::VALUE,
-                    cargo.display()
+                    wrapper.display(),
+                    wrapper.display()
                 ),
             )?;
-            text.push_str("MBX is declared: cargo stays on the mise MBX wrapper\n");
+            text.push_str(
+                "MBX is declared: cargo is checked at use time, no mirror config written\n",
+            );
         }
         return Ok(text);
     }
@@ -54,12 +61,7 @@ pub(super) fn setup(args: &CratesMirrorArgs) -> Result<String, CiError> {
             args.cainfo.display()
         ))
     })?;
-    let directory = PathBuf::from(
-        std::env::var_os("RUNNER_TEMP").ok_or_else(|| CiError::new("set RUNNER_TEMP"))?,
-    )
-    .join("velnor-cargo");
-    std::fs::create_dir_all(&directory).map_err(|e| failed(&e))?;
-    let directory = std::fs::canonicalize(directory).map_err(|e| failed(&e))?;
+    let directory = runner_directory()?;
     let wrapper = directory.join("cargo");
     let config = directory.join("config.toml");
     let quoted = |text: &str| serde_json::to_string(text).map_err(|e| CiError::new(e.to_string()));
@@ -83,11 +85,7 @@ pub(super) fn setup(args: &CratesMirrorArgs) -> Result<String, CiError> {
     std::fs::write(&staged, &text)
         .and_then(|()| std::fs::rename(staged, &config))
         .map_err(|e| failed(&e))?;
-    let executable = std::env::current_exe().map_err(|e| failed(&e))?;
-    let staged_wrapper = directory.join("cargo.velnor-crates-mirror");
-    std::fs::copy(executable, &staged_wrapper)
-        .and_then(|_| std::fs::rename(&staged_wrapper, &wrapper))
-        .map_err(|e| failed(&e))?;
+    install_wrapper(&directory, &wrapper)?;
     super::append_to("GITHUB_PATH", &format!("{}\n", directory.display()))?;
     let mbx_line = if mbx {
         format!(
@@ -112,6 +110,24 @@ pub(super) fn setup(args: &CratesMirrorArgs) -> Result<String, CiError> {
         args.registry,
         config.display()
     ))
+}
+
+fn runner_directory() -> Result<PathBuf, CiError> {
+    let directory = PathBuf::from(
+        std::env::var_os("RUNNER_TEMP").ok_or_else(|| CiError::new("set RUNNER_TEMP"))?,
+    )
+    .join("velnor-cargo");
+    std::fs::create_dir_all(&directory).map_err(|e| failed(&e))?;
+    std::fs::canonicalize(directory).map_err(|e| failed(&e))
+}
+
+/// Copies velnor-ci in as the `cargo` the job reaches first; it forwards to the real cargo.
+fn install_wrapper(directory: &Path, wrapper: &Path) -> Result<(), CiError> {
+    let executable = std::env::current_exe().map_err(|e| failed(&e))?;
+    let staged_wrapper = directory.join("cargo.velnor-crates-mirror");
+    std::fs::copy(executable, &staged_wrapper)
+        .and_then(|_| std::fs::rename(&staged_wrapper, wrapper))
+        .map_err(|e| failed(&e))
 }
 
 pub(super) fn runner_config() -> Result<Option<PathBuf>, CiError> {

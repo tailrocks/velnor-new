@@ -8,12 +8,11 @@
 //! in the workspace, and records it for later steps as `VELNOR_CARGO_MBX`. The wrapper then
 //! refuses any plain `cargo` it finds on PATH instead of running it.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use crate::error::CiError;
 
 use super::crates_mirror::failed;
-use super::crates_mirror_dispatch::{is_executable, proxy};
 
 /// Environment variable that marks the job as one whose repository declares MBX.
 pub(super) const ENV: &str = "VELNOR_CARGO_MBX";
@@ -75,20 +74,4 @@ pub(super) fn declares(text: &str) -> Result<bool, CiError> {
         .and_then(toml::Value::as_bool)
         == Some(true);
     Ok(wrapper || rust)
-}
-
-/// The `cargo` on PATH that mise's command wrapper provides, which is the MBX entry point.
-/// The first `cargo` on PATH must be that wrapper; anything else is refused.
-pub(super) fn mise_cargo() -> Result<PathBuf, CiError> {
-    let paths = std::env::var_os("PATH").unwrap_or_default();
-    let first = std::env::split_paths(&paths)
-        .map(|directory| directory.join("cargo"))
-        .find(|cargo| cargo.is_file() && is_executable(cargo));
-    match first {
-        Some(cargo) if proxy(&cargo, "mise")?.is_some() => Ok(cargo),
-        Some(cargo) => Err(refused(&cargo)),
-        None => Err(CiError::new(
-            "mbx is declared but no cargo on PATH is the mise mbx wrapper",
-        )),
-    }
 }
