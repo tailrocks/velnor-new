@@ -7,6 +7,8 @@ use crate::facts::{TestResult, path};
 use crate::pipeline::{view, workflow};
 
 const CHECK: &str = "\"$VELNOR_EXEC\" tools-verify check";
+const RESET: &str = "\"$VELNOR_EXEC\" tools-verify reset";
+const ANCHOR_HIT: &str = "${{ steps.toolsanchor.outputs.cache-hit }}";
 const ON_DEFAULT: &str =
     "github.ref == format('refs/heads/{0}', github.event.repository.default_branch)";
 const TRUSTED_EVENTS: &str = "(github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')";
@@ -73,11 +75,21 @@ fn every_tools_restore_is_verified_before_anything_runs_the_tools() -> TestResul
                 "{config:?} {id}"
             );
             assert!(anchor > last_restore, "{config:?} {id}");
+            let reset = anchor - 1;
+            assert!(text(&steps[reset], "run").ends_with(RESET), "{config:?} {id}");
+            assert!(reset > last_restore, "{config:?} {id}");
+            assert!(steps[reset].get("if").is_none(), "{config:?} {id}");
             for (between, step) in steps.iter().enumerate().take(verify).skip(last_restore + 1) {
                 assert!(
-                    step.get("run").is_none(),
+                    between == reset || step.get("run").is_none(),
                     "{config:?} {id}: step {between} runs before the verify step: {step}"
                 );
+            }
+            assert_eq!(steps[verify]["env"]["VELNOR_ANCHOR_HIT"], ANCHOR_HIT, "{config:?} {id}");
+            let records = steps.iter().filter(|step| text(step, "run").ends_with("tools-verify record"));
+            for record in records {
+                assert_eq!(record["env"]["VELNOR_ANCHOR_HIT"], ANCHOR_HIT, "{config:?} {id}");
+                assert!(record.get("if").is_none(), "{config:?} {id}");
             }
             let install = steps
                 .iter()
@@ -116,19 +128,20 @@ fn a_pull_request_never_saves_the_tools_and_a_save_needs_the_anchor() -> TestRes
                 for step in steps.iter().filter(|step| saves_tools(step)) {
                     saves += 1;
                     let condition = text(step, "if");
-                    assert!(condition.contains(ON_DEFAULT), "{helper} {id}: {condition}");
                     if helper == "0.1.108" {
-                        assert!(
-                            condition.contains(TRUSTED_EVENTS),
-                            "{helper} {id}: {condition}"
-                        );
                         let anchor = text(&step["with"], "key").starts_with("velnor-tools-anchor-");
-                        let wanted = if anchor { "recorded" } else { "matches" };
+                        let record = |output: &str| {
+                            condition.contains(&format!("steps.toolsrecord.outputs.{output} == 'true'"))
+                        };
+                        let primed = condition.contains("steps.toolsverify.outputs.verified == 'true'")
+                            && condition.contains(ON_DEFAULT)
+                            && condition.contains(TRUSTED_EVENTS);
                         assert!(
-                            condition
-                                .contains(&format!("steps.toolsrecord.outputs.{wanted} == 'true'")),
+                            if anchor { record("recorded") } else { record("matches") || primed },
                             "{helper} {id}: {condition}"
                         );
+                    } else {
+                        assert!(condition.contains(ON_DEFAULT), "{helper} {id}: {condition}");
                     }
                 }
             }

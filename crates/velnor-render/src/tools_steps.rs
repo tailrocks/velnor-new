@@ -38,10 +38,12 @@ pub(crate) fn tools_parts(when: When, parts: &mut Vec<String>) {
         When::SaveVerifiedTools(save) => {
             let recorded = format!("steps.{RECORD_STEP}.outputs.recorded == 'true'");
             match save {
-                VerifiedSave::OnDefaultBranch => parts.extend([network_miss, matches]),
-                VerifiedSave::UnlessLocal => parts.extend([network_miss, lookup_miss, matches]),
+                VerifiedSave::OnDefaultBranch => parts.extend([on_default, network_miss, matches]),
+                VerifiedSave::UnlessLocal => {
+                    parts.extend([on_default, network_miss, lookup_miss, matches]);
+                }
                 VerifiedSave::NodeStore => parts.push(matches),
-                VerifiedSave::Anchor => parts.push(recorded),
+                VerifiedSave::Anchor => parts.extend([on_default, recorded]),
                 VerifiedSave::Prime => {
                     tools_parts(When::PrimeToolsFromNetwork, parts);
                     parts.push(format!("steps.{VERIFY_STEP}.outputs.verified == 'true'"));
