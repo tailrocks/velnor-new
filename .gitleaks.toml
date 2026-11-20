@@ -5,3 +5,10 @@
 # Uses upstream defaults.
 [extend]
 useDefault = true
+
+[[allowlists]]
+description = "Throwaway RSA keys for the velnor-ci app-token tests; generated for the test and used nowhere else"
+paths = [
+  '''crates/velnor-ci/tests/it/data/app_token/TEST-ONLY-not-a-secret-rsa-pkcs1\.pem''',
+  '''crates/velnor-ci/tests/it/data/app_token/TEST-ONLY-not-a-secret-rsa-pkcs8\.pem''',
+]

@@ -13,6 +13,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use ring::signature::{RSA_PKCS1_2048_8192_SHA256, RsaKeyPair, UnparsedPublicKey};
+use rustls_pki_types::PrivateKeyDer;
+use rustls_pki_types::pem::PemObject;
 use serde_json::{Value, json};
 
 use crate::io::Repo;
@@ -64,7 +67,11 @@ fn serve(installation: (u16, &str), minted: (u16, &str)) -> Result<Api, Box<dyn 
             }
             let mut body = vec![0; length];
             reader.read_exact(&mut body).ok();
-            let (status, answer) = &answers[usize::from(line.starts_with("POST"))];
+            let (status, answer) = if line.starts_with("DELETE") {
+                &(204, String::new())
+            } else {
+                &answers[usize::from(line.starts_with("POST"))]
+            };
             if let Ok(mut seen) = seen.lock() {
                 seen.push(Request {
                     line: line.trim_end().to_owned(),
@@ -84,57 +91,43 @@ fn serve(installation: (u16, &str), minted: (u16, &str)) -> Result<Api, Box<dyn 
     Ok(Api { url, requests })
 }
 
-fn openssl(args: &[&str]) -> Result<Output, Box<dyn Error>> {
-    let output = Command::new("openssl").args(args).output()?;
-    if !output.status.success() {
-        return Err(format!("openssl {args:?}: {output:?}").into());
-    }
-    Ok(output)
-}
+const PKCS1: &str = include_str!("data/app_token/TEST-ONLY-not-a-secret-rsa-pkcs1.pem");
+const PKCS8: &str = include_str!("data/app_token/TEST-ONLY-not-a-secret-rsa-pkcs8.pem");
 
 struct Key {
     dir: Repo,
     pem: String,
+    public: Vec<u8>,
 }
 
 impl Key {
-    fn generate(name: &str) -> Result<Self, Box<dyn Error>> {
-        let dir = Repo::empty(name);
-        let path = dir.root().join("key.pem");
-        let path = path.to_str().ok_or("path")?;
-        openssl(&["genrsa", "-traditional", "-out", path, "2048"])?;
-        let pem = fs::read_to_string(path)?;
-        assert!(
-            pem.starts_with("-----BEGIN RSA PRIVATE KEY-----"),
-            "{}",
-            &pem[..40]
-        );
-        Ok(Self { dir, pem })
+    fn load(name: &str, pem: &str) -> Result<Self, Box<dyn Error>> {
+        let der = PrivateKeyDer::from_pem_slice(pem.as_bytes())?;
+        let pair = match &der {
+            PrivateKeyDer::Pkcs1(key) => RsaKeyPair::from_der(key.secret_pkcs1_der()),
+            PrivateKeyDer::Pkcs8(key) => RsaKeyPair::from_pkcs8(key.secret_pkcs8_der()),
+            _ => return Err("not an RSA key".into()),
+        }
+        .map_err(|e| e.to_string())?;
+        Ok(Self {
+            dir: Repo::empty(name),
+            pem: pem.to_owned(),
+            public: pair.public().as_ref().to_vec(),
+        })
+    }
+
+    fn pkcs1(name: &str) -> Result<Self, Box<dyn Error>> {
+        Self::load(name, PKCS1)
     }
 
     fn path(&self, name: &str) -> PathBuf {
         self.dir.root().join(name)
     }
 
-    fn verifies(&self, signed: &str, signature: &[u8]) -> Result<bool, Box<dyn Error>> {
-        let text = |path: &Path| path.to_str().map(str::to_owned).ok_or("path");
-        let public = text(&self.path("public.pem"))?;
-        openssl(&[
-            "rsa",
-            "-in",
-            &text(&self.path("key.pem"))?,
-            "-pubout",
-            "-out",
-            &public,
-        ])?;
-        fs::write(self.path("signed"), signed)?;
-        fs::write(self.path("signature"), signature)?;
-        let output = Command::new("openssl")
-            .args(["dgst", "-sha256", "-verify", &public, "-signature"])
-            .arg(self.path("signature"))
-            .arg(self.path("signed"))
-            .output()?;
-        Ok(output.status.success())
+    fn verifies(&self, signed: &str, signature: &[u8]) -> bool {
+        UnparsedPublicKey::new(&RSA_PKCS1_2048_8192_SHA256, &self.public)
+            .verify(signed.as_bytes(), signature)
+            .is_ok()
     }
 }
 
@@ -166,8 +159,16 @@ fn minted_answer() -> String {
 }
 
 #[test]
-fn the_jwt_is_rs256_signed_by_the_app_key_with_claims_that_github_accepts() -> TestResult {
-    let key = Key::generate("app-token-jwt")?;
+fn the_jwt_is_rs256_signed_by_a_pkcs1_app_key_with_claims_that_github_accepts() -> TestResult {
+    assert_signed_jwt(&Key::load("app-token-jwt-pkcs1", PKCS1)?)
+}
+
+#[test]
+fn the_jwt_is_rs256_signed_by_a_pkcs8_app_key_with_claims_that_github_accepts() -> TestResult {
+    assert_signed_jwt(&Key::load("app-token-jwt-pkcs8", PKCS8)?)
+}
+
+fn assert_signed_jwt(key: &Key) -> TestResult {
     let api = serve((200, r#"{"id":4242}"#), (201, &minted_answer()))?;
     let output = key.path("github-output");
     let before = now();
@@ -201,14 +202,14 @@ fn the_jwt_is_rs256_signed_by_the_app_key_with_claims_that_github_accepts() -> T
     assert!(exp - iat <= 600, "a JWT of more than ten minutes: {claims}");
     assert_eq!(claims.as_object().map(serde_json::Map::len), Some(3));
     let signature = URL_SAFE_NO_PAD.decode(parts[2])?;
-    assert!(key.verifies(&format!("{}.{}", parts[0], parts[1]), &signature)?);
-    assert!(!key.verifies(&format!("{}.{}", parts[0], parts[0]), &signature)?);
+    assert!(key.verifies(&format!("{}.{}", parts[0], parts[1]), &signature));
+    assert!(!key.verifies(&format!("{}.{}", parts[0], parts[0]), &signature));
     Ok(())
 }
 
 #[test]
 fn the_token_request_names_only_the_listed_repositories_and_contents_read() -> TestResult {
-    let key = Key::generate("app-token-request")?;
+    let key = Key::pkcs1("app-token-request")?;
     let api = serve((200, r#"{"id":4242}"#), (201, &minted_answer()))?;
     let output = key.path("github-output");
     let run = mint(&key.pem, &api, &output, &["shared-lib", "other-lib"]);
@@ -226,7 +227,7 @@ fn the_token_request_names_only_the_listed_repositories_and_contents_read() -> T
 
 #[test]
 fn the_minted_token_reaches_the_log_only_inside_the_add_mask_command() -> TestResult {
-    let key = Key::generate("app-token-mask")?;
+    let key = Key::pkcs1("app-token-mask")?;
     let api = serve((200, r#"{"id":4242}"#), (201, &minted_answer()))?;
     let output = key.path("github-output");
     let run = mint(&key.pem, &api, &output, &["shared-lib"]);
@@ -248,7 +249,7 @@ fn the_minted_token_reaches_the_log_only_inside_the_add_mask_command() -> TestRe
 
 #[test]
 fn a_refused_mint_writes_no_output_and_never_echoes_the_key_or_the_jwt() -> TestResult {
-    let key = Key::generate("app-token-refused")?;
+    let key = Key::pkcs1("app-token-refused")?;
     let answers = [
         (
             (
@@ -288,7 +289,7 @@ fn a_refused_mint_writes_no_output_and_never_echoes_the_key_or_the_jwt() -> Test
 
 #[test]
 fn an_unreadable_key_or_a_path_like_name_makes_no_request_and_is_not_echoed() -> TestResult {
-    let key = Key::generate("app-token-bad-input")?;
+    let key = Key::pkcs1("app-token-bad-input")?;
     let garbled = key.pem.replace("MII", "MIX");
     let cases: [(&str, &[&str]); 3] = [
         (&garbled, &["shared-lib"]),
@@ -309,5 +310,23 @@ fn an_unreadable_key_or_a_path_like_name_makes_no_request_and_is_not_echoed() ->
         assert!(requests.is_empty(), "{}", requests.len());
         assert!(!output.exists());
     }
+    Ok(())
+}
+
+#[test]
+fn a_token_that_cannot_be_written_is_revoked_at_once() -> TestResult {
+    let key = Key::pkcs1("app-token-unwritable")?;
+    let api = serve((200, r#"{"id":4242}"#), (201, &minted_answer()))?;
+    let output = key.path("missing-directory").join("github-output");
+    let run = mint(&key.pem, &api, &output, &["shared-lib"]);
+    assert!(!run.status.success(), "{run:?}");
+    let stderr = String::from_utf8_lossy(&run.stderr);
+    assert!(stderr.contains("the token was revoked"), "{stderr}");
+    assert!(!stderr.contains(MINTED), "{stderr}");
+    let requests = api.requests.lock().map_err(|e| e.to_string())?;
+    let last = requests.last().ok_or("no request")?;
+    assert_eq!(last.line, "DELETE /installation/token HTTP/1.1");
+    assert_eq!(last.authorization, format!("Bearer {MINTED}"));
+    assert_eq!(requests.len(), 3);
     Ok(())
 }
