@@ -160,6 +160,7 @@ mod tests {
             group_outputs: Vec::new(),
             reports_ignored: false,
             records_build: false,
+            chained_saves: false,
             selection_name: None,
             steps: kinds.into_iter().map(step).collect(),
         }
