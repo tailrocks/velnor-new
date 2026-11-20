@@ -3,7 +3,7 @@
 
 use velnor_model::RepoPath;
 
-use crate::facts::{TestResult, path};
+use crate::facts::TestResult;
 use crate::freshness::named;
 use crate::lock::locked;
 use crate::pipeline::{view, workflow};
@@ -59,13 +59,7 @@ fn released_helper_restores_inputs_after_checkout_and_cache_before_repository_co
                 }
             );
             let mut repo = view(&["Cargo.toml", "tools/Cargo.toml"], Some(config.as_bytes()))?;
-            let lock = repo
-                .files
-                .get_mut(&path(".velnor/rust-ci.lock")?)
-                .ok_or("missing helper lock")?;
-            *lock = String::from_utf8(lock.clone())?
-                .replace("0.1.81", "0.1.97")
-                .into_bytes();
+            crate::pipeline::pin_helper(&mut repo, "0.1.97")?;
             let yaml: serde_json::Value = serde_saphyr::from_str(&workflow(&repo)?)?;
             let jobs = yaml["jobs"].as_object().ok_or("missing jobs")?;
             let mut restores = 0;

@@ -3,7 +3,7 @@
 
 use serde_json::Value;
 
-use crate::facts::{TestResult, path};
+use crate::facts::TestResult;
 use crate::pipeline::{view, workflow};
 
 const SHARED: &str = "mbx_shared_store = true\n";
@@ -16,10 +16,7 @@ fn workflow_for(
     helper: &str,
 ) -> Result<Vec<(String, Value)>, Box<dyn std::error::Error>> {
     let mut repo = view(&["Cargo.toml"], Some(config.as_bytes()))?;
-    let lock = path(".velnor/rust-ci.lock")?;
-    let old = String::from_utf8(repo.files[&lock].clone())?;
-    repo.files
-        .insert(lock, old.replace("0.1.81", helper).into_bytes());
+    crate::pipeline::pin_helper(&mut repo, helper)?;
     let yaml: Value = crate::yaml_tree::document(&workflow(&repo)?)?;
     Ok(yaml["jobs"]
         .as_object()
