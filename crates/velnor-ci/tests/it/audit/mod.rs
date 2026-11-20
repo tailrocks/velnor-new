@@ -7,6 +7,7 @@ mod build_clock;
 mod build_directory;
 mod freshness;
 mod gated;
+mod global_options;
 mod groups;
 mod guards;
 mod identity;
