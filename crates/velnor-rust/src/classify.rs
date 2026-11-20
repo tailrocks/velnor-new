@@ -91,8 +91,13 @@ fn is_test_runner_config(path: &RepoPath) -> bool {
     let Some((folder, name)) = path.as_str().rsplit_once('/') else {
         return false;
     };
+    let extension = |wanted: &str| {
+        Path::new(name)
+            .extension()
+            .is_some_and(|extension| extension.eq_ignore_ascii_case(wanted))
+    };
     (folder == ".config" || folder.ends_with("/.config"))
-        && ((name.starts_with("nextest") && name.ends_with(".toml")) || name.ends_with(".sh"))
+        && ((name.starts_with("nextest") && extension("toml")) || extension("sh"))
 }
 
 fn global(path: &RepoPath, is_root_manifest: bool) -> Option<AllTrigger> {

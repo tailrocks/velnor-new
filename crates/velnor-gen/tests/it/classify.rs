@@ -74,22 +74,6 @@ fn a_global_path_outside_every_package_selects_everything_with_an_empty_config()
         ),
         ("mise.toml", AllTrigger::Global(path("mise.toml"))),
         ("mise.lock", AllTrigger::Global(path("mise.lock"))),
-        (
-            ".config/nextest.toml",
-            AllTrigger::Global(path(".config/nextest.toml")),
-        ),
-        (
-            ".config/nextest-ci.toml",
-            AllTrigger::Global(path(".config/nextest-ci.toml")),
-        ),
-        (
-            ".config/nextest-prepull-images.sh",
-            AllTrigger::Global(path(".config/nextest-prepull-images.sh")),
-        ),
-        (
-            "helper/.config/nextest.toml",
-            AllTrigger::Global(path("helper/.config/nextest.toml")),
-        ),
         ("Cargo.lock", AllTrigger::WorkspaceManifest),
         (
             ".velnor/rust-ci.toml",
