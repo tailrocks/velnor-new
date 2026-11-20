@@ -198,6 +198,10 @@ pub fn read(file: &Path, matched: bool) -> Verdict {
         .map_or(Verdict::Unanchored(Discard::BadAnchor), Verdict::Anchored)
 }
 
+fn malformed_anchor(file: &Path) -> bool {
+    matches!(read(file, true), Verdict::Unanchored(Discard::BadAnchor))
+}
+
 fn compare(home: &Path, anchor: &Anchor<'_>) -> Result<(), Discard> {
     let expected = expected(anchor)?;
     let actual = digest(home).map_err(Discard::Unreadable)?;
@@ -221,14 +225,20 @@ fn discard(home: &Path) -> Result<(), CiError> {
     Ok(())
 }
 
-pub fn check(home: &Path, anchor: &Anchor<'_>) -> Result<Verdict, CiError> {
+/// The `read` step turns a malformed anchor file into an empty anchor, so an empty anchor here is
+/// `NoAnchor` unless the restored file is itself malformed; then the check reports that reason.
+pub fn check(home: &Path, anchor: &Anchor<'_>, file: &Path) -> Result<Verdict, CiError> {
     if HOME_PATHS
         .iter()
         .all(|path| fs::symlink_metadata(home.join(path)).is_err())
     {
         return Ok(Verdict::NothingRestored);
     }
-    match compare(home, anchor) {
+    let outcome = match compare(home, anchor) {
+        Err(Discard::NoAnchor) if malformed_anchor(file) => Err(Discard::BadAnchor),
+        outcome => outcome,
+    };
+    match outcome {
         Ok(()) => Ok(Verdict::Verified),
         Err(reason) => {
             discard(home)?;

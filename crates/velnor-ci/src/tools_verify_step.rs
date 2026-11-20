@@ -139,7 +139,7 @@ pub fn run(verb: Verb, context: &Context) -> Result<String, CiError> {
     let anchor = Anchor(&context.anchor);
     let verdict = match verb {
         Verb::Read => read(&file, context.anchor_matched),
-        Verb::Check => check(&context.home, &anchor)?,
+        Verb::Check => check(&context.home, &anchor, &file)?,
         Verb::Record => record(
             &context.home,
             &Recording {

@@ -83,6 +83,26 @@ fn a_malformed_anchor_names_the_anchor_entry_that_feeds_the_check() {
 }
 
 #[test]
+fn a_restored_malformed_anchor_names_the_anchor_entry_when_the_read_step_left_it_empty() {
+    let job = job("tools-verify-restored-bad-anchor");
+    let _ = recorded(&job);
+    fs::write(&job.anchor, "velnor-tools-anchor-v1 not-a-digest\n")
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    // The read step writes an empty anchor for this file, so the check step gets an empty anchor.
+    let stdout = check_stdout(
+        &job,
+        "",
+        &[("VELNOR_ANCHOR_CACHE_KEY", "velnor-tools-anchor-abc123")],
+    );
+    assert!(stdout.contains("the anchor is malformed"), "{stdout}");
+    assert!(
+        stdout.contains("gh cache delete 'velnor-tools-anchor-abc123' -R tailrocks/velnor-new"),
+        "{stdout}"
+    );
+    assert!(discarded(&job));
+}
+
+#[test]
 fn the_delete_command_states_that_it_removes_every_entry_with_the_key() {
     let job = job("tools-verify-named-scope");
     let anchor = recorded(&job);
