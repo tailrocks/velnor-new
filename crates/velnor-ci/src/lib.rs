@@ -44,6 +44,7 @@ pub mod plan;
 pub mod plan_request;
 pub mod platform;
 pub mod preview_helpers;
+pub mod private_repo;
 pub mod private_token;
 pub mod progress_evidence;
 pub mod publish;

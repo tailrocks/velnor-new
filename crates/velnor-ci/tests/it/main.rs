@@ -13,6 +13,7 @@ mod budget_window;
 mod cache;
 mod cache_budget;
 mod cache_flow;
+mod cache_private_repo;
 mod cache_prune;
 mod cache_prune_fresh;
 mod cache_retention_flow;

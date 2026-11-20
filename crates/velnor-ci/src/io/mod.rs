@@ -10,6 +10,7 @@ mod budget;
 mod build_inputs;
 mod cache;
 pub mod cache_api;
+mod cache_credentials;
 mod cache_paths;
 mod cache_prune;
 mod cache_sources;
@@ -50,6 +51,7 @@ mod merge_queue;
 mod plan;
 mod plan_request;
 mod private_check;
+mod private_repo;
 pub mod pump;
 mod qualification;
 mod recording;
@@ -235,6 +237,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::CheckMetadata => setup::check_metadata(),
         Command::CheckConfigurations(args) => configurations::check(&args),
         Command::Cache(CacheCommand::Decide(args)) => cache::run_decide(&args),
+        Command::Cache(CacheCommand::PrivateRepo) => private_repo::run(),
         Command::Cache(CacheCommand::Verify(args)) => cache_upload::verify(&args.key),
         Command::Cache(CacheCommand::Check(args)) => cache_upload::check(&args.success),
         Command::Cache(CacheCommand::Trim(args)) => cache::run_trim(&args.prefix, args.keep),

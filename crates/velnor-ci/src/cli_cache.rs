@@ -11,9 +11,13 @@ pub enum CacheCommand {
     )]
     TrimDeltas(crate::delta_cli::TrimDeltasArgs),
     #[command(
-        about = "Read velnor-run.log in $RUNNER_TEMP and write the step output save=true when the run compiled, checked or documented at least one crate, save=false otherwise or when any checkout Cargo.lock has dependency sources not proven public; a missing or unreadable run log is an error; with true, remove <target>/<profile>/incremental and <target>/<triple>/<profile>/incremental, remove the --archive file, write target/.velnor/born with today's date when it is missing, and print the size of --target-dir"
+        about = "Read velnor-run.log in $RUNNER_TEMP and write the step output save=true when the run compiled, checked or documented at least one crate, save=false otherwise or when any checkout Cargo.lock has dependency sources not proven public (a lock whose only non-public sources are git dependencies with no credentials in their URL counts as public when GET /repos/$GITHUB_REPOSITORY, with the job token in GITHUB_TOKEN on the API in VELNOR_API_URL, proves the repository private, and then the sources output is false when the saved cargo directories hold a credential); a missing or unreadable run log is an error; with true, remove <target>/<profile>/incremental and <target>/<triple>/<profile>/incremental, remove the --archive file, write target/.velnor/born with today's date when it is missing, and print the size of --target-dir"
     )]
     Decide(DecideArgs),
+    #[command(
+        about = "Write private=true to $GITHUB_OUTPUT only when GET /repos/$GITHUB_REPOSITORY on the API in VELNOR_API_URL, with the job token in GITHUB_TOKEN, answers for this repository with private=true and a visibility of private (an internal repository is not private); writes private=false and exits 0 for a public or internal repository, a failed lookup, a missing token or any other answer, so that no cache of private dependencies is restored or saved"
+    )]
+    PrivateRepo,
     #[command(
         about = "Delete all but the newest entries whose key starts with --prefix on $GITHUB_REF, through the GitHub API; reads GITHUB_TOKEN, which needs actions: write, and GITHUB_REPOSITORY. A missing token or a failed API call exits with an error"
     )]

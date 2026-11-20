@@ -265,9 +265,14 @@ pub(super) fn run_decide(args: &crate::cli_cache::DecideArgs) -> Result<String, 
         .map_err(|e| CiError::new(format!("cannot read {}: {e}", log_path.display())))?;
     let manifests = super::cache_paths::list("VELNOR_CACHE_MANIFESTS")?
         .unwrap_or_else(|| args.manifest_path.clone());
-    let refusal = super::cache_sources::refusal(&root, &manifests)?;
-    let sources = refusal.is_none();
-    let decision = if let Some(reason) = refusal {
+    let found = super::cache_sources::refusal(&root, &manifests)?;
+    let leak = found
+        .private_sources
+        .then(super::cache_sources::cargo_home)
+        .flatten()
+        .and_then(|home| super::cache_credentials::find(&home));
+    let sources = found.refusal.is_none() && leak.is_none();
+    let decision = if let Some(reason) = found.refusal {
         Decision {
             save: false,
             report: reason,
@@ -277,14 +282,24 @@ pub(super) fn run_decide(args: &crate::cli_cache::DecideArgs) -> Result<String, 
         let counts = super::activity::activity(recorded.as_deref())?
             .unwrap_or_else(|| crate::logscan::scan(&String::from_utf8_lossy(&log)));
         let used = recorded.as_deref().and_then(UsedUnits::from_invocations);
-        decide_counts(
+        let decision = decide_counts(
             &counts,
             &target,
             archive.as_deref(),
             super::now_seconds(),
             budget_limit()?,
             used.as_ref(),
-        )?
+        )?;
+        match &leak {
+            Some(why) => Decision {
+                report: format!(
+                    "{}the sources cache is not saved because a credential could be inside it: {why}\n",
+                    decision.report
+                ),
+                ..decision
+            },
+            None => decision,
+        }
     };
     super::append_outputs(&format!("save={}\nsources={sources}\n", decision.save))?;
     let mut report = decision.report;
