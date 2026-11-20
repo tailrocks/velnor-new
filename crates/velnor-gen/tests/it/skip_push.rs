@@ -5,7 +5,7 @@ use serde_json::Value;
 use velnor_gen::expected_with_notes;
 use velnor_model::RepoView;
 
-use crate::facts::{TestResult, path};
+use crate::facts::TestResult;
 use crate::pipeline::{view, workflow};
 
 const KNOB: &[u8] = b"[ci]\nskip_push_after_merge_group = true\n";

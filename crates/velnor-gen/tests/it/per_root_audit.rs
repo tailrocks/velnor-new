@@ -3,8 +3,6 @@
 
 use std::error::Error;
 
-use velnor_model::RepoPath;
-
 use crate::facts::TestResult;
 use crate::pipeline::{view, workflow};
 

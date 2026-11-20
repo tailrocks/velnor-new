@@ -61,7 +61,7 @@ fn the_shared_store_is_selected_once_per_job_before_any_cargo_or_tool_step() -> 
 #[test]
 fn the_shared_store_is_off_unless_configured() -> TestResult {
     assert!(!workflow(&repo("", "0.1.84")?)?.contains("mbx-store"));
-    assert!(!workflow(&repo("mbx_shared_store = false\n", "0.1.84")?)?.contains("mbx-store"));
+    assert!(!workflow(&repo("mbx_shared_store = false\n", "0.1.85")?)?.contains("mbx-store"));
     Ok(())
 }
 

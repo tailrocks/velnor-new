@@ -166,6 +166,27 @@ pub(crate) fn render(
     Ok((text, tree))
 }
 
+/// Raises the pin to `minimum` when the view pins an older release, and keeps a newer one.
+pub(crate) fn pin_at_least(view: &mut RepoView, minimum: &str) -> Result<(), Box<dyn Error>> {
+    let patch = |version: &str| {
+        version
+            .rsplit('.')
+            .next()
+            .and_then(|n| n.parse::<u64>().ok())
+    };
+    let lock = String::from_utf8(view.files.get(&LOCK_PATH).ok_or("no helper lock")?.clone())?;
+    let current = lock
+        .lines()
+        .find_map(|line| line.strip_prefix("version = \"")?.strip_suffix('"'))
+        .ok_or("no version in the helper lock")?
+        .to_owned();
+    if patch(&current) < patch(minimum) {
+        view.files
+            .insert(LOCK_PATH, lock.replace(&current, minimum).into_bytes());
+    }
+    Ok(())
+}
+
 /// Like `render`, with the helper pinned to `version` so two configs compare byte for byte.
 pub(crate) fn render_pinned(
     roots: &[Root],

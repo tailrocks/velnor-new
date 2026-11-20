@@ -5,7 +5,7 @@ use std::error::Error;
 
 use velnor_model::RepoView;
 
-use crate::facts::{TestResult, path};
+use crate::facts::TestResult;
 use crate::pipeline::{view, workflow};
 
 const BUDGET: &str = "[budget]\nmain_wall_seconds = 600\n";

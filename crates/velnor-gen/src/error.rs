@@ -33,11 +33,9 @@ pub enum GenerateError {
     PrOnlyChecksHelperTooOld(HelperVersion),
     BudgetModesHelperTooOld(HelperVersion),
     MergeGroupHelperTooOld(HelperVersion),
-    PrCiHelperTooOld(HelperVersion),
     DocsHelperTooOld(HelperVersion),
     CheckAloneHelperTooOld(HelperVersion),
     TooManySourceRoots(usize),
-    TagPushHelperTooOld(HelperVersion),
     HelperLockLacksMacos {
         version: HelperVersion,
         runner: String,
@@ -83,10 +81,6 @@ impl fmt::Display for GenerateError {
                 "the repository has {roots} Cargo roots, and the shared Sources cache makes every saving lane fetch every root, which keeps the generated workflow within its size limit only up to {MAX_SOURCE_ROOTS} roots; reduce the Cargo roots to {MAX_SOURCE_ROOTS} or fewer, or pin velnor-ci 0.1.88 or later with `velnor-gen pin-helper 0.1.88`, whose `velnor-ci sources fetch --roots` replaces the per-root steps (tailrocks/velnor-new#1362)"
             ),
             Self::InputsLockHelperTooOld(version) => write!(f, "velnor-ci {version} cannot read the manifest column of .velnor/rust-inputs.lock; pin velnor-ci 0.1.101 or later with `velnor-gen pin-helper 0.1.101`, or write the lock under the older pin"),
-            Self::PrCiHelperTooOld(version) => write!(
-                f,
-                "velnor-ci {version} does not know the pr_ci key of .velnor/rust-ci.toml; pin velnor-ci 0.1.88 or later with `velnor-gen pin-helper 0.1.88`"
-            ),
             Self::BudgetModesHelperTooOld(v) => write!(f, "{}", modes_too_old(v)),
             Self::PrOnlyChecksHelperTooOld(version) => write!(
                 f,
@@ -107,10 +101,6 @@ impl fmt::Display for GenerateError {
             Self::HelperLockLacksMacos { version, runner } => write!(
                 f,
                 "the runner `{runner}` is a macOS runner, but the velnor-ci {version} in .velnor/rust-ci.lock has no macos-arm64 digest, so `actions/setup-velnor` would fail before velnor-ci runs; pin a release that lists a macos-arm64 digest with `velnor-gen pin-helper <version>`, or use a Linux runner"
-            ),
-            Self::TagPushHelperTooOld(version) => write!(
-                f,
-                "velnor-ci {version} cannot check a pushed family tag, which family_trigger = \"tag_push\" needs; pin velnor-ci 0.1.98 or later with `velnor-gen pin-helper 0.1.98`"
             ),
             Self::VersionGroupsHelperTooOld(version) => write!(
                 f,

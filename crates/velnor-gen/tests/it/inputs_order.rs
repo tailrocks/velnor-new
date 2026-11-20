@@ -3,7 +3,7 @@
 
 use velnor_model::RepoPath;
 
-use crate::facts::{TestResult, path};
+use crate::facts::TestResult;
 use crate::freshness::named;
 use crate::lock::locked;
 use crate::pipeline::{view, workflow};

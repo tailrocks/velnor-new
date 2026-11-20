@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    BUDGET_MODES_HELPER, DocsRun, HelperRelease, HelperVersion, Platform, PrCi,
-    PushAfterMergeGroup, RepoFacts,
+    BUDGET_MODES_HELPER, DocsRun, HelperRelease, HelperVersion, Platform, PushAfterMergeGroup,
+    RepoFacts,
 };
 
 use velnor_rust::INPUTS_IDENTITY_HELPER;
@@ -36,10 +36,6 @@ pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, Generate
             version: release.version().clone(),
             runner: facts.config.runner.to_string(),
         });
-    }
-    // helper-gate: first in tools-v0.1.88 via e061b56eac
-    if facts.config.pr_ci == PrCi::Label && !release.version().at_least((0, 1, 88)) {
-        return Err(GenerateError::PrCiHelperTooOld(release.version().clone()));
     }
     // helper-gate: first in tools-v0.1.97 via e25d599090
     if facts.config.docs_run == DocsRun::PostMerge && !release.version().at_least((0, 1, 97)) {

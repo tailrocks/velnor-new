@@ -33,7 +33,6 @@ use crate::plan_render::plan_and_render;
 
 pub const COMPATIBLE_HELPER_SERIES: (u64, u64) = (0, 1);
 pub const HELPER_MINIMUM: (u64, u64, u64) = (0, 1, 81);
-pub const TAG_PUSH_HELPER: (u64, u64, u64) = (0, 1, 98);
 pub const SPARSE_HINT_HELPER: (u64, u64, u64) = (0, 1, 103);
 
 pub fn generated_files(view: &RepoView) -> Result<BTreeMap<RepoPath, String>, GenerateError> {

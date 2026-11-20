@@ -5,7 +5,7 @@ use serde_json::Value;
 use velnor_model::{RepoPath, RepoView};
 
 use crate::events::DENY_MISE;
-use crate::facts::{TestResult, path};
+use crate::facts::TestResult;
 use crate::pipeline::{view, workflow};
 
 const KNOB: &str = "[ci]\nskip_push_after_merge_group = true\n";

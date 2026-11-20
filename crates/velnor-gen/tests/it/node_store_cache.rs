@@ -3,7 +3,7 @@
 
 use serde_json::Value;
 
-use crate::facts::{TestResult, path};
+use crate::facts::TestResult;
 use crate::pipeline::{view, workflow};
 
 const SHARED: &str = "mbx_shared_store = true\n";

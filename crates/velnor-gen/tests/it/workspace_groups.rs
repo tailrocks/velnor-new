@@ -6,10 +6,9 @@ use std::error::Error;
 use velnor_model::RepoPath;
 
 use crate::facts::TestResult;
-use crate::pipeline::{view, workflow};
+use crate::pipeline::{pin_helper, view, workflow};
 
 const GROUP: &str = "[[workspace_groups]]\nname = \"tools\"\nroots = [\"tools/a\", \"tools/b\"]\n";
-const LOCK: &str = ".velnor/rust-ci.lock";
 const ROOTS: [&str; 3] = ["Cargo.toml", "tools/a/Cargo.toml", "tools/b/Cargo.toml"];
 
 fn grouped(config: &str) -> Result<String, Box<dyn Error>> {
@@ -39,7 +38,7 @@ fn job<'t>(text: &'t str, id: &str) -> &'t str {
 
 fn refused(config: &str) -> Result<String, Box<dyn Error>> {
     match view(&ROOTS, Some(config.as_bytes())) {
-        Ok(view) => match workflow(&view) {
+        Ok(mut view) => match pin_helper(&mut view, "0.1.95").and_then(|()| workflow(&view)) {
             Ok(text) => Err(format!("the workflow was generated:\n{text}").into()),
             Err(error) => Ok(error.to_string()),
         },

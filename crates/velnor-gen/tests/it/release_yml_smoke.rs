@@ -196,7 +196,7 @@ fn musl_needs_a_linux_platform() {
 
 #[test]
 fn commit_file_publishes_the_tag_commit_as_an_asset_listed_in_the_checksums() -> TestResult {
-    let tree = render_with("0.1.81", &[APP], COMMIT)?;
+    let tree = render_with("0.1.92", &[APP], COMMIT)?;
     let sums = job(&tree, "sums-app")?;
     let record = steps(sums)
         .iter()
