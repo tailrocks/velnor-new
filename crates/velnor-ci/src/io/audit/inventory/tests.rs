@@ -174,6 +174,26 @@ fn a_directory_replaced_by_a_link_to_a_directory_just_after_it_is_opened_is_reco
 }
 
 #[test]
+fn a_directory_swapped_for_a_new_directory_after_it_is_opened_fails_the_scan() {
+    let entries = scan_racing(
+        "swapped-directory",
+        |directory: &Path| -> io::Result<fs::ReadDir> {
+            fs::write(directory.join("old.txt"), b"")?;
+            let listing = fs::read_dir(directory)?;
+            fs::rename(directory, directory.with_file_name("sub-old"))?;
+            fs::create_dir(directory)?;
+            fs::write(directory.join("old.txt"), b"")?;
+            fs::write(directory.join("new.txt"), b"")?;
+            Ok(listing)
+        },
+    );
+    assert!(
+        entries.is_err(),
+        "a directory swapped after it was opened must fail the scan, not record the old listing: {entries:?}"
+    );
+}
+
+#[test]
 fn a_directory_that_is_a_directory_again_before_it_is_opened_still_fails_the_scan() {
     let entries = scan_racing(
         "directory-again",
