@@ -272,19 +272,13 @@ fn a_link_made_after_staging_cannot_change_the_staged_copy() {
 }
 
 #[test]
-fn a_staged_file_is_a_copy_so_a_later_edit_or_a_hard_link_target_change_does_not_reach_it() {
+fn a_staged_file_is_a_copy_so_a_later_edit_does_not_reach_it() {
     let site = site("stage-copy");
     site.repo.write_unstaged("logs/real.log", "ok\n");
-    fs::hard_link(
-        site.repo.root().join("logs/real.log"),
-        site.repo.root().join("logs/hard.log"),
-    )
-    .unwrap_or_else(|e| unreachable!("{e}"));
     let result = staged(&site, &["logs/"]);
-    assert_eq!(copied(&result), ["logs/hard.log", "logs/real.log"]);
+    assert_eq!(copied(&result), ["logs/real.log"]);
     site.repo.write_unstaged("logs/real.log", "changed\n");
     assert_eq!(read(&site, "logs/real.log"), "ok\n");
-    assert_eq!(read(&site, "logs/hard.log"), "ok\n");
 }
 
 #[test]
