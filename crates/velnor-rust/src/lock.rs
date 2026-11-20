@@ -48,8 +48,6 @@ pub(crate) struct Lock {
     pub(crate) ci_binary: Option<BTreeMap<String, String>>,
     #[serde(rename = "velnor-gen")]
     pub(crate) generator: BTreeMap<String, String>,
-    /// The digests of the velnor-gen executables inside the archives, which `check` compares
-    /// with the running binary. `[velnor-gen]` keeps the archive digests the install step checks.
     #[serde(
         rename = "velnor-gen-binary",
         default,
@@ -171,7 +169,6 @@ type Binaries = (
     Option<BTreeMap<String, String>>,
 );
 
-/// The velnor-ci binary digests and, when the release lists any, the velnor-gen ones.
 fn binary_digests(binary_sums: &str, listed: &BTreeMap<&str, &str>) -> Result<Binaries, LockError> {
     let expected = listed
         .get(BINARY_SUMS)
@@ -253,6 +250,9 @@ pub(crate) fn parse_lock(bytes: &[u8]) -> Result<HelperRelease, LockError> {
     let commit = release_commit(&lock.commit)?;
     check_digests(&lock.generator)?;
     check_digests(&lock.ci)?;
+    if let Some(binary) = &lock.generator_binary {
+        check_digests(binary)?;
+    }
     let release = HelperRelease::new(version, commit, platform_digests(&lock.ci)?)
         .map_err(|error| LockError(error.to_string()))?;
     match &lock.ci_binary {
@@ -338,3 +338,7 @@ fn digest(found: &BTreeMap<String, String>, platform: Platform) -> Result<Sha256
         ))
     })
 }
+
+#[cfg(test)]
+#[path = "lock_tests.rs"]
+mod tests;

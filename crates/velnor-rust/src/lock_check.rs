@@ -1,8 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-//! The offline and online checks of the lock's `[velnor-gen]` entry, used by `velnor-gen check`.
-
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{HelperVersion, Platform};
@@ -12,20 +10,15 @@ use crate::lock::{
     release_commit, release_version,
 };
 
-/// The commit a `velnor-gen` build without `VELNOR_COMMIT` reports.
 const UNSTAMPED: &str = "unknown";
 
 const FIRST_ARCHIVE_RELEASE: (u64, u64, u64) = (0, 1, 94);
 
-/// The velnor-gen binary that runs `check`, as its own build describes it.
 #[derive(Debug, Clone, Copy)]
 pub struct RunningGenerator<'a> {
     pub version: &'a str,
-    /// The `VELNOR_COMMIT` the binary was built with; `unknown` for a local build.
     pub commit: &'a str,
-    /// This binary's platform, when the lock lists one.
     pub platform: Option<Platform>,
-    /// The SHA-256 of the executable file, lowercase hex.
     pub sha256: Option<&'a str>,
 }
 
@@ -39,7 +32,6 @@ pub fn running_platform() -> Option<Platform> {
     }
 }
 
-/// The version of the lock's helper release.
 pub fn lock_version(bytes: &[u8]) -> Result<HelperVersion, LockError> {
     release_version(&parse(bytes)?.version)
 }
@@ -53,12 +45,6 @@ fn named(section: &str, error: &LockError) -> LockError {
     LockError::new(format!("[{section}] {error}"))
 }
 
-/// Offline: the `[velnor-gen]` entry agrees with the lock's own version and commit and, when
-/// the running binary is a release build of the lock's commit, with that binary's bytes.
-/// A local build (`unknown` commit) is not compared, since its digest is not the published one.
-/// An archive release is compared with `[velnor-gen-binary]`; a lock pinned before that section
-/// existed lists only the archive digests, which are not the binary's, so it is not compared.
-/// A newer binary that is not the locked release is not compared either.
 pub fn check_generator_entry(bytes: &[u8], running: RunningGenerator<'_>) -> Result<(), LockError> {
     let lock = parse(bytes)?;
     release_version(&lock.version)?;
@@ -96,12 +82,8 @@ pub fn check_generator_entry(bytes: &[u8], running: RunningGenerator<'_>) -> Res
     Ok(())
 }
 
-/// A section name and the digests it lists.
 type BinaryEntry<'a> = (String, &'a BTreeMap<String, String>);
 
-/// The section that lists the digests of the velnor-gen executable, if the lock has one: a raw
-/// release's `[velnor-gen]`, an archive release's `[velnor-gen-binary]`. A lock pinned before
-/// that section existed has none, because its `[velnor-gen]` digests are the archives'.
 fn binary_entry(lock: &Lock) -> Result<Option<BinaryEntry<'_>>, LockError> {
     let archive = check_format(lock)?;
     let reads = release_version(&lock.version)?.at_least(GENERATOR_BINARY_RELEASE);
@@ -143,8 +125,6 @@ fn check_format(lock: &Lock) -> Result<bool, LockError> {
     }
 }
 
-/// Online: the lock is what the release publishes. Pins the release again from its own
-/// `SHA256SUMS`, `COMMIT` and `BINARY-SHA256SUMS` and names the first field that differs.
 pub fn verify_release(
     bytes: &[u8],
     sums: &str,
