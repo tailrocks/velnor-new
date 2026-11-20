@@ -186,3 +186,25 @@ fn saving_skips_a_target_link_with_a_notice_and_leaves_the_linked_directory_alon
     assert!(dir.join("debug/incremental/app").is_dir());
     assert!(dir.join(ARTIFACT).is_file());
 }
+
+#[cfg(target_os = "macos")]
+#[test]
+fn on_macos_xdg_cache_home_does_not_move_the_default_mbx_cache() {
+    let repo = lone("macos-xdg-default");
+    let stub = mbx_stub();
+    let home = Repo::empty("macos-xdg-default-home");
+    let xdg = Repo::empty("macos-xdg-default-xdg");
+    let dir = managed(
+        &home.root().join("Library/Caches/mbx/targets"),
+        "v1/0123456789abcdef",
+    );
+    symlink(&dir, repo.root().join("target")).unwrap_or_else(|e| unreachable!("{e}"));
+    let output = restored(&repo, &stub, home.root(), |command| {
+        command.env("XDG_CACHE_HOME", xdg.root());
+    });
+    assert!(
+        output.status.success(),
+        "{output:?}{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}

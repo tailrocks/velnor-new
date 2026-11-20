@@ -75,15 +75,11 @@ fn setting(env: &str, key: &str) -> Option<PathBuf> {
 }
 
 fn default_cache_dir() -> Option<PathBuf> {
-    if let Some(xdg) = env_path("XDG_CACHE_HOME") {
-        return Some(xdg.join("mbx"));
-    }
     let home = env_path("HOME")?;
-    Some(if cfg!(target_os = "macos") {
-        home.join("Library/Caches/mbx")
-    } else {
-        home.join(".cache/mbx")
-    })
+    if cfg!(target_os = "macos") {
+        return Some(home.join("Library/Caches/mbx"));
+    }
+    Some(env_path("XDG_CACHE_HOME").map_or_else(|| home.join(".cache/mbx"), |xdg| xdg.join("mbx")))
 }
 
 fn allowed_roots(checkout: &Path) -> Vec<PathBuf> {
