@@ -6,28 +6,34 @@ pub mod cli;
 mod delta_cache;
 mod drifts;
 mod error;
+mod external;
 mod helper_gate;
 pub mod io;
 mod key_gates;
 mod plan_render;
 mod release;
 mod reusable;
+mod tag;
 mod workflow_triggers;
 
 pub use crate::release::{release_ruleset, release_ruleset_drift};
 pub use advice::{NO_FULL_RUN_NOTE, SPARSE_SUGGESTION_BYTES, notes, sparse_note, suggest_groups};
 pub use drifts::{Drift, drift};
-pub use error::GenerateError;
+pub use error::{ExternalWorkflowError, GenerateError};
+pub use external::external_skips;
 use helper_gate::check_helper;
 pub use helper_gate::require_compatible;
 pub use key_gates::{ConfigFile, KeyGate, check_config_keys, key_gates, required_helper};
+pub use tag::check_tag;
 pub use velnor_workflows::HELPER_COMMANDS;
 
 use std::collections::BTreeMap;
 use std::io::Write;
 
-use velnor_model::{CacheKey, RepoPath, RepoView, StepKind};
-use velnor_rust::{METADATA_PATH, check_tools, detect, metadata_file, source_roots_over_limit};
+use velnor_model::{CacheKey, RepoPath, RepoView, RunnerLabel, StepKind, WorkflowPlan};
+use velnor_rust::{
+    METADATA_PATH, check_mbx, check_tools, detect, metadata_file, source_roots_over_limit,
+};
 
 use crate::plan_render::plan_and_render;
 
@@ -40,10 +46,6 @@ pub const TEST_LANE_HELPER: (u64, u64, u64) = (0, 1, 93);
 /// The first release whose `velnor-ci` accepts `job` in a `[[test_lane]]` table.
 // helper-gate: first in tools-v0.1.107 via 9d5c60385d
 pub const TEST_LANE_JOB_HELPER: (u64, u64, u64) = (0, 1, 107);
-/// The first release whose `velnor-ci` accepts `all_features` and `no_default_features`
-/// in a `[[test_lane]]` table.
-// First released in tools-v0.1.108 (not tagged yet when this gate was written).
-pub const TEST_LANE_FLAGS_HELPER: (u64, u64, u64) = (0, 1, 108);
 pub const SPARSE_HINT_HELPER: (u64, u64, u64) = (0, 1, 103);
 
 pub fn generated_files(view: &RepoView) -> Result<BTreeMap<RepoPath, String>, GenerateError> {
@@ -61,6 +63,18 @@ pub fn generated_with_notes(
     Ok((files, notes))
 }
 
+/// The cleanup workflow runs where the repository's own jobs run: the runner of the
+/// plan's `rust-trim` job, which is the configured `runner`.
+fn cleanup_runner(plan: &WorkflowPlan) -> RunnerLabel {
+    plan.jobs
+        .iter()
+        .find(|job| job.id.as_str() == "rust-trim")
+        .map_or_else(
+            || RunnerLabel::from_static("ubuntu-latest"),
+            |job| job.runs_on.clone(),
+        )
+}
+
 pub fn expected_files(view: &RepoView) -> Result<BTreeMap<RepoPath, String>, GenerateError> {
     expected_with_notes(view).map(|(files, _)| files)
 }
@@ -76,6 +90,7 @@ pub fn expected_with_notes(
     let helper = check_helper(&facts)?;
     key_gates::check_config_keys(view, helper.version())?;
     check_tools(&facts)?;
+    check_mbx(&facts, &view.files)?;
     if let Some(roots) = source_roots_over_limit(&facts) {
         return Err(GenerateError::TooManySourceRoots(roots));
     }
@@ -87,7 +102,8 @@ pub fn expected_with_notes(
         .iter()
         .flat_map(|job| &job.steps)
         .any(|step| matches!(step.kind, StepKind::CacheSave(CacheKey::Delta { .. })))
-        && let Some(cleanup) = velnor_render::delta_cleanup(helper, &plan.name)
+        && let Some(cleanup) =
+            velnor_render::delta_cleanup(helper, &plan.name, &cleanup_runner(&plan))
     {
         files.insert(velnor_render::DELTA_CLEANUP_PATH, cleanup);
     }
@@ -96,6 +112,7 @@ pub fn expected_with_notes(
     let base_note = velnor_rust::base_cache_note(&facts);
     let mut notes: Vec<String> = velnor_rust::untimed_auto_note(&facts)
         .into_iter()
+        .chain(velnor_rust::unverified_tools_note(&facts))
         .chain(facts.timings_notes)
         .collect();
     notes.extend(base_note);
@@ -121,18 +138,10 @@ pub fn plan_generate(
     for note in notes {
         writeln!(out, "velnor-gen: {note}").ok();
     }
-    let drifts = drift(&expected, on_disk, engine_configured);
-    Ok((expected, drifts))
-}
-
-pub fn check_tag(version: &str, tag: &str) -> Result<String, String> {
-    let legacy = format!("rust-ci-v{version}");
-    let current = format!("tools-v{version}");
-    if tag == legacy || tag == current {
-        Ok(format!("tag {tag} names version {version}"))
-    } else {
-        Err(format!(
-            "tag {tag} must be {legacy} or {current}, because this program is version {version}"
-        ))
-    }
+    let external = external::skipped(view, &expected, on_disk)?;
+    let drifts = drift(&expected, on_disk, &external);
+    Ok((
+        expected,
+        external::legacy_bypass(drifts, engine_configured, out),
+    ))
 }

@@ -54,6 +54,7 @@ fn raw_format_publishes_the_bare_binary_with_a_checksum_and_provenance_per_platf
     assert_eq!(
         runs(linux),
         [
+            "echo \"MBX_CACHE_DIR=$RUNNER_TEMP/mbx-release-build-app-linux-x64\" >> \"$GITHUB_ENV\"".to_owned(),
             "test -n \"$COMMIT\" -a \"$CHECKED_OUT\" = \"$COMMIT\"".to_owned(),
             "rustup target add x86_64-unknown-linux-gnu".to_owned(),
             "cargo build --release --locked --manifest-path Cargo.toml --package app --bin rg --target x86_64-unknown-linux-gnu --target-dir target".to_owned(),

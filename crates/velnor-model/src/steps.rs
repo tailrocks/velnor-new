@@ -110,7 +110,11 @@ pub enum StepKind {
     AdvisoryFetch {
         configs: Vec<Option<RepoPath>>,
     },
-    MbxRemote,
+    MbxRemote {
+        from_pin: bool,
+    },
+    MbxPin,
+    MbxPrivate,
     MbxStore,
     MbxSeed,
     ToolsLocal(ToolsLocalVerb),
@@ -194,6 +198,8 @@ impl StepKind {
             | Self::PrivateToken { .. }
             | Self::PrivateFetch { .. }
             | Self::MbxRemote { .. }
+            | Self::MbxPin
+            | Self::MbxPrivate
             | Self::MbxStore { .. }
             | Self::MbxSeed { .. }
             | Self::ToolsLocal(_)
@@ -220,7 +226,12 @@ impl StepKind {
     /// the node-local stores and the scope-cache directory are not the service.
     #[must_use]
     pub fn saves_to_cache_service(&self) -> bool {
-        matches!(self, Self::CacheSave(_) | Self::MbxRemote)
+        matches!(
+            self,
+            Self::CacheSave(_)
+                | Self::MbxRemote { .. }
+                | Self::ToolsLocal(ToolsLocalVerb::AnchorSave)
+        )
     }
 }
 
@@ -238,6 +249,20 @@ pub enum ToolsLocalVerb {
     Prime,
     RecordRestore,
     RecordSave,
+    AnchorReset,
+    AnchorRestore,
+    Verify,
+    Record,
+    AnchorSave,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VerifiedSave {
+    OnDefaultBranch,
+    UnlessLocal,
+    NodeStore,
+    Prime,
+    Anchor,
 }
 
 /// Which tools steps the cache telemetry reads in place of the cache action's own.

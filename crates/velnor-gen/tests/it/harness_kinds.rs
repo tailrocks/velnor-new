@@ -7,8 +7,7 @@ use velnor_rust::{CONFIG_PATH, DetectError, Reason, detect};
 use crate::facts::{TestResult, package, repo};
 use crate::pipeline::workflow;
 
-const NEXTEST_MISE: &str =
-    "[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n";
+const NEXTEST_MISE: &str = "[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n\n[tools]\nrust = { version = \"1.99.1\", mr_boxington = true }\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n";
 
 const GATED: &str = "[package]\nname = \"a\"\n[features]\nx = []\n[[test]]\nname = \"gated\"\nharness = false\nrequired-features = [\"x\"]\n";
 
