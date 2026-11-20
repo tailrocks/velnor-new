@@ -26,7 +26,7 @@ Keep debug verification and build the optimized Linux release payload once for e
 For a labeled final push and a merge-ready PR, **committed targets [E]** are **90 s / 250 s** to verdict and **3 min / 8 min** to merge, P50 / P90.
 The **stretch targets [E]** are **35 s / 110 s** to verdict and **75 s / 4 min** to merge, P50 / P90.
 Report actual push-to-merge for every merged PR, including label, review, and hold time. Those waits and GitHub's scheduling tails have no fixed bound.
-The measured comparators are **26.7 / 92.3 min** for scale-set PR runs and **85.1 / 456.6 min** for final-head CI start to merge. The old clocks start later than the proposed push clock. [Evidence, A T2](../evidence.md#t2-run-level-sample-via-jobs-api-successfailure-runs-split-by-era) · [Earlier push-to-merge sample](../draft/proposals/opus-5.5.md#11-push-to-merge)
+The measured comparators are **26.7 / 92.3 min** for scale-set PR runs and **85.1 / 456.6 min** for final-head CI start to merge. The old clocks start later than the proposed push clock. [Evidence, A T2](../evidence.md#t2-run-level-sample-via-jobs-api-successfailure-runs-split-by-era) · [Earlier push-to-merge sample](../proposals/opus-5.5.md#11-push-to-merge-measured-end-to-end)
 
 ## 2. The latency budget
 
@@ -37,7 +37,7 @@ PR verdict ends when the exact-head `Required` concludes. Track first actionable
 [M] means a supplied or cited measurement, [E] an estimate with assumptions, and [S] source behavior.
 `repo/` points to `~/Projects/tailrocks/velnor-new` at `d6be276a6ce9`. Live evidence used earlier revisions including `95de9b704b`.
 `refs/` and `evidence/` resolve under `~/.cache/ci-ambition`. Runner source is v2.338.0 at `7afce9e`. §5 identifies the newer oracle.
-[Evidence](../evidence.md) · [Design v2](../v2/velnor-runner-architecture.md) · [Decisions](../v2/decisions.md)
+[Evidence](../evidence.md) · [Design v2](../../../proposed/velnor-runner-architecture.md) · [Decisions](../decisions.md)
 
 ### One final labeled push
 
@@ -61,7 +61,7 @@ The design columns are central and pressured whole-path scenarios in seconds. Ad
 
 Sources are evidence A T2, T4–T5, T9a–b and T10 and the 98-PR timeline join.
 Instrument broker, sandbox, Results and push-to-webhook separately before measuring gains from Rust.
-[Evidence](../evidence.md) · [Timeline join](../draft/proposals/opus-5.5.md#11-push-to-merge)
+[Evidence](../evidence.md) · [Timeline join](../proposals/opus-5.5.md#11-push-to-merge-measured-end-to-end)
 
 Committed sums **82.3 / 243.5 s** to verdict and **154.3 / 473.5 s** to merge [E].
 Stretch sums **32.6 / 106 s** and **68.6 / 236 s** [E]. Round to §1.
@@ -180,7 +180,7 @@ Use acquired URLs and scoped tokens for cache service v2, artifact v4, Results a
 `evidence/proto-raw/scaleset/{client.go:765–796,session_client.go:45–303}`.
 `refs/actions-runner/src/Runner.Listener/{Runner.cs:234–257,699–800,RunnerJobRequestRef.cs:1–35,BrokerMessageListener.cs:270–314,433–452}`,
 `Runner.Common/BrokerServer.cs:67–84`, `Sdk/RSWebApi/RunServiceHttpClient.cs:70–200`, `Runner.Worker/Handlers/NodeScriptActionHandler.cs:55–83`.
-[Runner protocol evidence](../../evidence/protocol.md) · [GitHub self-hosted runner reference](https://docs.github.com/en/actions/reference/runners/self-hosted-runners)
+[Runner protocol evidence](../evidence.md#2-protocol-how-it-talks-to-github) · [GitHub self-hosted runner reference](https://docs.github.com/en/actions/reference/runners/self-hosted-runners)
 
 ### Job model and templates
 
@@ -338,7 +338,7 @@ Evaluate mbx-cache if >10% of requests still miss locality [E]. Qualify TLS, sco
 Retain it only after a two-week paired P90 win against CAS and warm placement with the same proof.
 At 215 MB/s, 8.7 GiB is about 43 s of payload time [E on M]. A 0.25 GB sealed shard delta is about 1.2 s plus verification.
 Choose local copy, transfer or build by measured completion cost. Allow duplicate work only with a demonstrated time win. Avoid default racing.
-[Cluster P1–P3, M1–M4, L1, E1](../v2/experiments/mbx-cache-cluster.md) · [Mac](../v2/experiments/mbx-cache-mac.md) · [Blaze B1–B6](../v2/experiments/blaze.md)
+[Cluster P1–P3, M1–M4, L1, E1](../experiments/mbx-cache-cluster.md) · [Mac](../experiments/mbx-cache-mac.md) · [Blaze B1–B6](../experiments/blaze.md)
 
 ### Complete keys and trusted promotion
 
@@ -376,7 +376,7 @@ No caller may authorize its own output. Preserve proof lineage to revoke every d
 
 After removing the named loops, observed runner-host maximum cases still took **124.8 / 137.6 s**. One sampled CLI case took 924.8 s.
 Measure elapsed and CPU time alone and under contention. Separate migration, fixture build, waits and actual test execution.
-[Design feedback F-H33](../v2/design-feedback-comparison.md#correctness-and-confidence-holes) · [Decision log](../v2/decisions.md#f-the-critical-path-floor)
+[Design feedback F-H33](../design-feedback-comparison.md#correctness-and-confidence-holes) · [Decision log](../decisions.md#f-the-critical-path-floor)
 
 1. Create one closed, checked journal template per schema and reflink private copies. Gate current-schema open at ≤1 s [E]. Keep real historical migration tests.
 2. Split 40 image-publication cases and six-state retirement loop. Do the same for blob faults, family publication, receipt integrity and archive-guard goldens.
@@ -407,7 +407,7 @@ A retry may diagnose a failure. It cannot erase one. Audit with 100% cold shadow
 Track both disagreement directions under representative load. The old 8.1% was one direction on 124 pairs.
 Target <1% infra false reds and <0.5% false ejections [E]. About 300 independent incident-free observations bound a 1% rate at one-sided 95% confidence.
 Any confirmed false green revokes the affected lineage. Sampling checks the proof and cannot substitute for it.
-[Feedback F-H34–35](../v2/design-feedback-comparison.md#correctness-and-confidence-holes)
+[Feedback F-H34–35](../design-feedback-comparison.md#correctness-and-confidence-holes)
 
 ## 7. Scheduling and the cluster
 
@@ -499,7 +499,7 @@ Start with `max_entries_to_build: 2`, `max_entries_to_merge: 1` and `check_respo
 GitHub must require the latest PR head before entry and then the actual group SHA. Fail the lab gate if a skipped, wrong-source or stale status can pass.
 GitHub can prefer checks on a PR's synthetic test merge commit. Only publish `Required` for exact role SHAs. Remove workflows that publish an ambiguous synthetic-merge status and test the effect of any remaining integration.
 The observed HEADGREEN case landed PR #1276 beneath #1037 even though #1276's group failed. ALLGREEN requires every candidate prefix.
-[Ruleset API](https://docs.github.com/en/rest/repos/rules) · [Merge queue](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/configuring-pull-request-merges/managing-a-merge-queue) · [Latest SHA/precedence](https://docs.github.com/en/pull-requests/how-tos/merge-and-close-pull-requests/troubleshooting-required-status-checks) · [Decision S3 and feedback](../v2/design-feedback-comparison.md#correctness-and-confidence-holes)
+[Ruleset API](https://docs.github.com/en/rest/repos/rules) · [Merge queue](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/configuring-pull-request-merges/managing-a-merge-queue) · [Latest SHA/precedence](https://docs.github.com/en/pull-requests/how-tos/merge-and-close-pull-requests/troubleshooting-required-status-checks) · [Decision S3 and feedback](../design-feedback-comparison.md#correctness-and-confidence-holes)
 
 ### Close same-SHA and removal races
 
@@ -566,12 +566,12 @@ Those medians are a reference for the service, without an SLA or a physical lowe
 A queue candidate with genuinely changed inputs pays the missing compile/test path. A novel small warm edit's stretch proof adds about `8 + 16 = 24 s` [E] before capacity savings or overlap.
 The 75 s stretch median therefore needs substantial receipt coverage, preflight, or a measured improvement over the old platform spans. State those conditions when reporting the target.
 On a cold or unknown root, run what the policy requires, even if that takes minutes. Under today's slow-test implementation a new 125–138 s case can dominate alone.
-The irreducible terms are proof of changed inputs, exact-SHA and queue validation, platform propagation and GitHub's protected main update. Label and review time stay in the reported end-to-end push clock. [Measured queue components](../draft/proposals/opus-5.5.md#11-push-to-merge)
+The irreducible terms are proof of changed inputs, exact-SHA and queue validation, platform propagation and GitHub's protected main update. Label and review time stay in the reported end-to-end push clock. [Measured queue components](../proposals/opus-5.5.md#11-push-to-merge-measured-end-to-end)
 
 ## 10. Critique of v2
 
 Keep N57–N64 where they express the owner's Rust, protocol, oracle and archive choices. Keep the coordinator, required group plan and XFS.
-The changes below follow v2's section order. [Architecture](../v2/velnor-runner-architecture.md) · [Decision log](../v2/decisions.md) · [Review](../v2/design-feedback-comparison.md)
+The changes below follow v2's section order. [Architecture](../../../proposed/velnor-runner-architecture.md) · [Decision log](../decisions.md) · [Review](../design-feedback-comparison.md)
 
 | V2 section | Gap and decision |
 |---|---|
