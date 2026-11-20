@@ -25,11 +25,12 @@ fn steps_of<'t>(text: &'t str, job: &str) -> Vec<&'t str> {
         .collect()
 }
 
-const LANE_SETUP: [&str; 16] = [
+const LANE_SETUP: [&str; 17] = [
     "Check out",
     "Resolve released helper tools",
     "Install velnor-ci 0.1.81",
     "Install the released helper launcher",
+    "Private mbx store",
     "Restore the tools cache",
     "Install tools",
     "Add Rust components",

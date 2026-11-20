@@ -4,7 +4,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use toml::Value;
-use velnor_model::{ChangeSet, DocsRun, PathGlob, RepoFacts, RepoPath, RustRoot, Weakening};
+use velnor_model::{
+    ChangeSet, DocsRun, MbxMode, PathGlob, RepoFacts, RepoPath, RustRoot, Weakening,
+};
 
 use crate::cargo_flags::flag_tokens;
 use crate::config::{CONFIG_PATH, parse};
@@ -130,6 +132,12 @@ fn in_file(file: &RepoPath, bytes: &[u8]) -> Vec<Weakening> {
                     found.push(make(
                         "check_alone = \"post_merge\"".to_owned(),
                         "skips the per-crate alone checks on pull requests and in the merge queue, so a missing feature declaration is found only after the merge".to_owned(),
+                    ));
+                }
+                if config.mbx == MbxMode::Off {
+                    found.push(make(
+                        "cache.mbx = false".to_owned(),
+                        "runs cargo outside mbx, so no compiler results are shared and the mise cargo wrapper is not checked".to_owned(),
                     ));
                 }
                 found
@@ -341,17 +349,5 @@ fn cargo_tool(name: &str) -> bool {
 /// `command = "mbx"` and `env = { MBX_CARGO_SHIM_MODE = "1" }`). Any other key,
 /// value or command is a different wrapper and stays named.
 fn standard_mbx(name: &str, wrapper: &Value) -> bool {
-    let Some(table) = wrapper.as_table() else {
-        return false;
-    };
-    let env_is_shim_mode = table
-        .get("env")
-        .and_then(Value::as_table)
-        .is_some_and(|env| {
-            env.len() == 1 && env.get("MBX_CARGO_SHIM_MODE").and_then(Value::as_str) == Some("1")
-        });
-    name == "cargo"
-        && table.len() == 2
-        && table.get("command").and_then(Value::as_str) == Some("mbx")
-        && env_is_shim_mode
+    name == "cargo" && crate::mbx_layout::standard_wrapper(wrapper)
 }

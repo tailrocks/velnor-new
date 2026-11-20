@@ -9,6 +9,7 @@ crates/velnor-archive-guard/build.rs
 crates/velnor-archive-guard/build_support/archive_guard_inputs.rs
 crates/velnor-archive-guard/build_support/archive_guard_inputs_filesystem.rs
 crates/velnor-archive-guard/build_support/archive_guard_inputs_filesystem_tests.rs
+crates/velnor-archive-guard/build_support/archive_guard_watch.rs
 crates/velnor-archive-guard/src/bin/velnor_archive_guard.rs
 crates/velnor-archive-guard/src/lib.rs
 crates/velnor-archive-guard/src/owned_archive_guard/candidate_extract.rs

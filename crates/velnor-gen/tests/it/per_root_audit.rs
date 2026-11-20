@@ -3,8 +3,6 @@
 
 use std::error::Error;
 
-use velnor_model::RepoPath;
-
 use crate::facts::TestResult;
 use crate::pipeline::{view, workflow};
 
@@ -13,11 +11,7 @@ const ROOTS: [&str; 3] = ["Cargo.toml", "tools/a/Cargo.toml", "tools/b/Cargo.tom
 
 fn pinned(version: &str) -> Result<String, Box<dyn Error>> {
     let mut view = view(&ROOTS, Some(CONFIG.as_bytes()))?;
-    let lock = RepoPath::new(".velnor/rust-ci.lock")?;
-    let bytes = view.files.get_mut(&lock).ok_or("the lock is missing")?;
-    *bytes = String::from_utf8(bytes.clone())?
-        .replace("0.1.81", version)
-        .into_bytes();
+    crate::pipeline::pin_helper(&mut view, version)?;
     workflow(&view)
 }
 
