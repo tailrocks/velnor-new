@@ -287,6 +287,5 @@ velnor-new uses the same layout: `mise.toml` with `min_version`,
 targets). Its `.velnor/config.toml`
 keeps `[stacks.rust] compile_driver = "mbx"` as a sticky declaration that the
 Mise evidence agrees with. `scripts/toml-tool-pin.awk` reads both the plain
-and the inline-table form of a `[tools]` entry, so `verify-local.sh` and
-`local-cargo.sh` still report the local pin. The hk configuration (`hk.pkl`
+and the inline-table form of a `[tools]` entry. The hk configuration (`hk.pkl`
 and its secret scanners) comes with the hk rollout, not this page.
