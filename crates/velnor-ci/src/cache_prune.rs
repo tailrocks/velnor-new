@@ -13,14 +13,27 @@ use crate::telemetry::Invocation;
 
 const HASH_LENGTH: usize = 16;
 
-/// The hash cargo puts after the last `-` of a unit's file or directory name, such as
-/// `libserde-0123456789abcdef.rlib` or `build/serde-0123456789abcdef`.
+/// The hash cargo puts after a `-` in the name of a unit's file or directory, such as
+/// `libserde-0123456789abcdef.rlib`, `build/serde-0123456789abcdef` or
+/// `serde-0123456789abcdef.serde.0123456789abcdef-cgu.0.rcgu.o`: the first 16 lower-case
+/// hexadecimal digits that follow a `-` and end the name or are followed by a `.`.
 #[must_use]
 pub fn unit_hash(name: &str) -> Option<&str> {
-    let stem = Path::new(name).file_stem()?.to_str()?;
-    let (_, hash) = stem.rsplit_once('-')?;
-    (hash.len() == HASH_LENGTH && hash.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')))
+    let file = Path::new(name).file_name()?.to_str()?;
+    file.match_indices('-').find_map(|(dash, _)| {
+        let rest = &file[dash + 1..];
+        let hash = rest.get(..HASH_LENGTH)?;
+        let tail = &rest[HASH_LENGTH..];
+        (hash.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
+            && (tail.is_empty() || tail.starts_with('.')))
         .then_some(hash)
+    })
+}
+
+/// The unit an artifact file belongs to: the hash in its own name, or else in the name of the
+/// directory holding it, which is where cargo puts a build script's `build-script-build`.
+fn artifact_hash(file: &str) -> Option<&str> {
+    unit_hash(file).or_else(|| unit_hash(Path::new(file).parent()?.to_str()?))
 }
 
 /// Whether `entry` of `deps` is an executable (a test, bench or binary) rather than a library.
@@ -84,7 +97,7 @@ impl UsedUnits {
 
     fn insert_all<'a>(&mut self, names: impl IntoIterator<Item = &'a str>) {
         for name in names {
-            if let Some(hash) = unit_hash(name) {
+            if let Some(hash) = artifact_hash(name) {
                 self.hashes.insert(hash.to_owned());
             }
         }

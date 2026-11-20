@@ -113,9 +113,8 @@ fn prune_profile(
             ("build", true) => prune_units(&path, used, Category::BuildScripts, removed)?,
             ("examples", true) => removed.take(Category::Executables, &path)?,
             (_, true) if name.ends_with(".dSYM") => removed.take(Category::Executables, &path)?,
-            (".cargo-lock", false) => {}
+            (".cargo-lock", false) | (_, true) => {}
             (_, false) => removed.take(Category::Executables, &path)?,
-            (_, true) => {}
         }
     }
     Ok(())

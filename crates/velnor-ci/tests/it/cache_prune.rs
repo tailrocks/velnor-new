@@ -9,7 +9,6 @@ use serde_json::{Value, json};
 use crate::io::Repo as Checkout;
 
 const SERDE: &str = "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.0";
-const OLD: &str = "registry+https://github.com/rust-lang/crates.io-index#old@1.0.0";
 const APP: &str = "path+file:///work/app#app@0.1.0";
 const SERDE_HASH: &str = "aaaaaaaaaaaaaaaa";
 const SERDE_SCRIPT_HASH: &str = "bbbbbbbbbbbbbbbb";
@@ -35,7 +34,7 @@ fn invocation(complete: bool) -> Value {
         "artifacts": [
             artifact(SERDE, "lib", &format!("/work/{DEBUG}/deps/libserde-{SERDE_HASH}.rlib")),
             artifact(SERDE, "lib", &format!("/work/{DEBUG}/deps/libserde-{SERDE_HASH}.rmeta")),
-            artifact(SERDE, "custom-build", &format!("/work/{DEBUG}/build/serde-{SERDE_SCRIPT_HASH}/build_script_build-{SERDE_SCRIPT_HASH}")),
+            artifact(SERDE, "custom-build", &format!("/work/{DEBUG}/build/serde-{SERDE_SCRIPT_HASH}/build-script-build")),
             artifact(APP, "lib", &format!("/work/{DEBUG}/deps/libapp-{APP_HASH}.rlib")),
         ],
         "build_scripts": [
@@ -55,7 +54,7 @@ fn seed(repo: &Checkout) {
         format!(".fingerprint/serde-{SERDE_HASH}/lib-serde.json"),
         format!(".fingerprint/serde-{SERDE_SCRIPT_HASH}/build-script-build-script-build.json"),
         format!(".fingerprint/serde-{SERDE_RUN_HASH}/run-build-script.json"),
-        format!("build/serde-{SERDE_SCRIPT_HASH}/build_script_build-{SERDE_SCRIPT_HASH}"),
+        format!("build/serde-{SERDE_SCRIPT_HASH}/build-script-build"),
         format!("build/serde-{SERDE_RUN_HASH}/output"),
         format!("build/serde-{SERDE_RUN_HASH}/out/generated.rs"),
         "deps/libunhashed.rlib".to_owned(),
@@ -94,7 +93,7 @@ fn kept_dependency_units() -> Vec<String> {
         format!(".fingerprint/serde-{SERDE_HASH}/lib-serde.json"),
         format!(".fingerprint/serde-{SERDE_SCRIPT_HASH}/build-script-build-script-build.json"),
         format!(".fingerprint/serde-{SERDE_RUN_HASH}/run-build-script.json"),
-        format!("build/serde-{SERDE_SCRIPT_HASH}/build_script_build-{SERDE_SCRIPT_HASH}"),
+        format!("build/serde-{SERDE_SCRIPT_HASH}/build-script-build"),
         format!("build/serde-{SERDE_RUN_HASH}/output"),
         format!("build/serde-{SERDE_RUN_HASH}/out/generated.rs"),
         "deps/libunhashed.rlib".to_owned(),
@@ -193,6 +192,7 @@ fn the_size_budget_is_judged_after_the_prune() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(output.status.success(), "{stdout}");
     assert_eq!(written, "save=true\nsources=true\n", "{stdout}");
+    fs::remove_file(repo.root().join("github-output")).unwrap_or_else(|e| unreachable!("{e}"));
     let (output, written) = decide(&repo, &[invocation(true)], Some("10"));
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert_eq!(written, "save=false\nsources=true\n", "{stdout}");
@@ -246,4 +246,29 @@ fn a_run_with_no_record_of_its_units_prunes_without_the_unit_list() {
     assert!(!exists(&repo, "target/doc"));
     assert!(!exists(&repo, &format!("{DEBUG}/deps/app-{APP_HASH}")));
     assert!(String::from_utf8_lossy(&output.stdout).contains("no complete record"));
+}
+
+#[test]
+fn a_unit_is_named_by_the_hash_after_a_dash_in_its_file_or_directory_name() {
+    use velnor_ci::cache_prune::unit_hash;
+    let hash = Some("0123456789abcdef");
+    for name in [
+        "libserde-0123456789abcdef.rlib",
+        "/t/debug/deps/serde_json-0123456789abcdef.d",
+        "/t/debug/build/proc-macro2-0123456789abcdef",
+        "dep-0123456789abcdef.dep.fedcba9876543210-cgu.0.rcgu.o",
+        "app-0123456789abcdef",
+    ] {
+        assert_eq!(unit_hash(name), hash, "{name}");
+    }
+    for name in [
+        "libapp.rlib",
+        "build-script-build",
+        "libserde-0123456789abcde.rlib",
+        "libserde-0123456789ABCDEF.rlib",
+        "libserde-0123456789abcdefg.rlib",
+        "",
+    ] {
+        assert_eq!(unit_hash(name), None, "{name}");
+    }
 }
