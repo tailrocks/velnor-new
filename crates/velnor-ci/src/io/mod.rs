@@ -68,6 +68,7 @@ mod required;
 mod resolve_qualification;
 mod restored;
 mod restored_targets;
+mod restored_units;
 mod run;
 mod scope_cache;
 mod setup;
