@@ -32,6 +32,8 @@ pub(super) const RELEASE: &[KeyGate] = &[
     gate(Release, "binaries.include", (0, 1, 90)),
     // helper-gate: first in tools-v0.1.93 via b7eb11f0d9
     gate(Release, "binaries.member_digests", (0, 1, 93)),
+    // First released in tools-v0.1.110 (not tagged yet when this gate was written).
+    gate(Release, "binaries.optional_platforms", (0, 1, 110)),
     gate(Release, "binaries.package", HELPER_MINIMUM),
     gate(Release, "binaries.platforms", HELPER_MINIMUM),
     // helper-gate: first in tools-v0.1.86 via 6700a81907

@@ -63,9 +63,13 @@ const BINARY_SUMS: &str = "\
 a7e9a4897a81bb86338896573e43b79b4f05e34a489549f1687117dd456648ba  velnor-ci-aarch64-apple-darwin.tar.gz/velnor-ci
 ";
 
-fn archive_lock() -> Result<String, Box<dyn Error>> {
+pub(crate) fn archive_lock() -> Result<String, Box<dyn Error>> {
+    archive_lock_at("0.1.81")
+}
+
+pub(crate) fn archive_lock_at(version: &str) -> Result<String, Box<dyn Error>> {
     Ok(pin_lock(
-        "0.1.81",
+        version,
         COMMIT_FILE,
         ARCHIVE_SUMS,
         Some(BINARY_SUMS),
@@ -176,6 +180,33 @@ fn a_linux_only_archive_release_is_pinned() -> TestResult {
         lock.contains("linux-x64") && !lock.contains("d8a670bd"),
         "{lock}"
     );
+    Ok(())
+}
+
+#[test]
+fn an_optional_macos_release_lists_its_files_last_and_pins_the_same_lock() -> TestResult {
+    let macos_last = |text: &str| -> String {
+        let (macos, rest): (Vec<&str>, Vec<&str>) = text
+            .lines()
+            .filter(|line| !line.ends_with("SUMS") && !line.ends_with("COMMIT"))
+            .partition(|line| line.contains("apple-darwin"));
+        let kept = text
+            .lines()
+            .filter(|line| line.ends_with("SUMS") || line.ends_with("COMMIT"));
+        rest.into_iter()
+            .chain(kept)
+            .chain(macos)
+            .flat_map(|line| [line, "\n"])
+            .collect()
+    };
+    let lock = pin_lock(
+        "0.1.81",
+        COMMIT_FILE,
+        &macos_last(ARCHIVE_SUMS),
+        Some(&macos_last(BINARY_SUMS)),
+    )?;
+    assert_eq!(lock, archive_lock()?);
+    assert!(lock.contains("macos-arm64"), "{lock}");
     Ok(())
 }
 

@@ -1,9 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{Job, LintCommand, LintJob, LintKind, RepoFacts, Step, StepKind};
+use velnor_model::{Job, LintCommand, LintJob, LintKind, PrRun, RepoFacts, Step, StepKind};
 
-use crate::lint_tools::{ALINT, JACTIONLINT, NODE, SHELLCHECK, usable};
+use crate::lint_tools::{ALINT, JACTIONLINT, NODE, RUST, SHELLCHECK, usable};
+use crate::mbx_pin::MBX_TOOL;
 use crate::plan::{CHECKOUT_DEPTH, job, quick, step};
 
 pub(crate) fn lint_jobs(facts: &RepoFacts) -> Vec<Job> {
@@ -41,6 +42,7 @@ fn install(facts: &RepoFacts, lint: &LintJob) -> Vec<Step> {
         LintKind::MiseTask { tools, .. } => {
             only(tools.iter().map(|tool| resolved(facts, tool)).collect())
         }
+        LintKind::GeneratedCheck => Vec::new(),
     }
 }
 
@@ -60,10 +62,50 @@ fn commands(facts: &RepoFacts, lint: &LintJob) -> Vec<LintCommand> {
         .chain(probe.iter().cloned().map(LintCommand::Probe))
         .collect(),
         LintKind::MiseTask { task, .. } => vec![LintCommand::MiseTask(task.clone())],
+        LintKind::GeneratedCheck => Vec::new(),
+    }
+}
+
+fn generated_check_tools(facts: &RepoFacts) -> Vec<String> {
+    available(facts, RUST)
+        .then(|| resolved(facts, RUST))
+        .into_iter()
+        .chain(available(facts, MBX_TOOL).then(|| resolved(facts, MBX_TOOL)))
+        .collect()
+}
+
+fn generated_check_job(facts: &RepoFacts, lint: &LintJob) -> Job {
+    let tools = generated_check_tools(facts);
+    let steps = std::iter::once(step(StepKind::Checkout {
+        depth: CHECKOUT_DEPTH,
+        sparse: None,
+    }))
+    .chain((!tools.is_empty()).then(|| {
+        step(StepKind::InstallTools {
+            only: Some(tools.join(" ")),
+        })
+    }))
+    .chain(
+        facts
+            .helper
+            .iter()
+            .map(|release| step(StepKind::InstallGenerator(release.clone()))),
+    )
+    .chain([step(StepKind::GeneratorCheck)])
+    .collect();
+    Job {
+        name: Some(lint.name.clone()),
+        timeout_minutes: lint.timeout_minutes,
+        pr: PrRun::Always,
+        steps,
+        ..job(facts, lint.id.clone())
     }
 }
 
 fn lint_job(facts: &RepoFacts, lint: &LintJob) -> Job {
+    if lint.kind == LintKind::GeneratedCheck {
+        return generated_check_job(facts, lint);
+    }
     let mut steps = vec![step(StepKind::Checkout {
         depth: CHECKOUT_DEPTH,
         sparse: None,

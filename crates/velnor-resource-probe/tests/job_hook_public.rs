@@ -19,6 +19,9 @@ mod cleanup_observer_tmpfs;
 #[path = "job_hook_public/cleanup_observer_projection.rs"]
 mod cleanup_observer_projection;
 
+#[path = "job_hook_public/scan_poll.rs"]
+mod scan_poll;
+
 #[cfg(target_os = "linux")]
 #[path = "job_hook_public/cleanup_observer_scan.rs"]
 mod cleanup_observer_scan;

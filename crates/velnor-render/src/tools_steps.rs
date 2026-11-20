@@ -77,18 +77,27 @@ fn verify_step(verb: velnor_model::ToolsLocalVerb) -> RenderedStep {
     use velnor_model::ToolsLocalVerb as Verb;
     let (id, name, word) = match verb {
         Verb::AnchorReset => (None, "Clear anchor", "reset"),
-        Verb::Verify => (Some(VERIFY_STEP), "Verify tools", "check"),
+        Verb::Verify | Verb::VerifyNamed => (Some(VERIFY_STEP), "Verify tools", "check"),
         _ => (Some(RECORD_STEP), "Record anchor", "record"),
     };
     let hit = Value::Expr(format!("${{{{ steps.{ANCHOR_STEP}.outputs.cache-hit }}}}"));
+    let mut env: Vec<(String, Value)> = (verb != Verb::AnchorReset)
+        .then(|| ("VELNOR_ANCHOR_HIT".to_owned(), hit))
+        .into_iter()
+        .collect();
+    if verb == Verb::VerifyNamed {
+        env.push((
+            "VELNOR_TOOLS_CACHE_KEY".to_owned(),
+            Value::Expr(format!(
+                "${{{{ steps.{TOOLS_STEP}.outputs.cache-matched-key }}}}"
+            )),
+        ));
+    }
     RenderedStep {
         id: id.map(str::to_owned),
         name: name.to_owned(),
         shared: true,
-        env: (verb != Verb::AnchorReset)
-            .then(|| ("VELNOR_ANCHOR_HIT".to_owned(), hit))
-            .into_iter()
-            .collect(),
+        env,
         run: Some(format!("velnor-ci tools-verify {word}")),
         ..RenderedStep::default()
     }
@@ -104,6 +113,14 @@ pub(crate) fn tools_lookup(key: &CacheKey) -> RenderedStep {
     step
 }
 
+fn clear_step() -> RenderedStep {
+    RenderedStep {
+        name: "Clear the tools directories".to_owned(),
+        run: Some("velnor-ci tools-local clear".to_owned()),
+        ..RenderedStep::default()
+    }
+}
+
 pub(crate) fn tools_local_step(verb: velnor_model::ToolsLocalVerb) -> RenderedStep {
     use velnor_model::ToolsLocalVerb as Verb;
     let key = crate::cache::render_key(&velnor_model::CacheKey::Tools {
@@ -111,6 +128,7 @@ pub(crate) fn tools_local_step(verb: velnor_model::ToolsLocalVerb) -> RenderedSt
     })
     .key;
     let (name, id, word) = match verb {
+        Verb::Clear => return clear_step(),
         Verb::Restore => (
             "Restore the tools from the node store",
             Some(crate::gate::TOOLS_LOCAL_STEP),
@@ -127,7 +145,9 @@ pub(crate) fn tools_local_step(verb: velnor_model::ToolsLocalVerb) -> RenderedSt
         Verb::RecordSave => return tools_saved_step(),
         Verb::AnchorRestore => return anchor_cache_step(crate::steps::CACHE_RESTORE, "Restore"),
         Verb::AnchorSave => return anchor_cache_step(crate::steps::CACHE_SAVE, "Save"),
-        Verb::AnchorReset | Verb::Verify | Verb::Record => return verify_step(verb),
+        Verb::AnchorReset | Verb::Verify | Verb::VerifyNamed | Verb::Record => {
+            return verify_step(verb);
+        }
     };
     RenderedStep {
         id: id.map(str::to_owned),

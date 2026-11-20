@@ -70,6 +70,7 @@ fn every_cargo_command_has_its_check_classification() {
                 file: RepoPath::from_static("target/nextest.tar.zst"),
                 filter: FilterRef::All,
                 threads: None,
+                partition: None,
                 ci_profile: true,
                 no_tests: velnor_model::NoTests::Pass,
             },
@@ -110,6 +111,7 @@ fn test_setup_and_the_advisory_fetch_are_checks_and_other_steps_are_not() {
         StepKind::TestSetup {
             name: String::from("setup"),
             run: String::from("true"),
+            before_build: false,
         }
         .is_check()
     );
@@ -121,4 +123,16 @@ fn test_setup_and_the_advisory_fetch_are_checks_and_other_steps_are_not() {
         .is_check()
     );
     assert!(!StepKind::MergeQueueCheck.is_check());
+}
+
+#[test]
+fn only_a_build_phase_setup_and_the_release_assets_feed_a_target_build() {
+    let setup = |before_build| StepKind::TestSetup {
+        name: String::from("setup"),
+        run: String::from("true"),
+        before_build,
+    };
+    assert!(setup(true).feeds_build());
+    assert!(!setup(false).feeds_build());
+    assert!(!StepKind::MergeQueueCheck.feeds_build());
 }

@@ -53,6 +53,7 @@ pub struct RustCiConfig {
     pub mbx: MbxMode,
     pub push_after_merge_group: PushAfterMergeGroup,
     pub test_setup: Vec<TestSetup>,
+    pub check_configurations: Vec<crate::CheckConfigurations>,
     pub test_lanes: Vec<TestLane>,
     pub budget: Option<SpeedBudget>,
     pub lint: Vec<LintJob>,
@@ -236,7 +237,6 @@ pub struct TestSetup {
     pub root: Option<RepoPath>,
     pub name: String,
     pub run: String,
-    /// The `phase` key, if written. `None` and `Some(Test)` run before the tests only.
     pub phase: Option<SetupPhase>,
 }
 
@@ -361,6 +361,7 @@ impl Default for RustCiConfig {
             mbx: MbxMode::Default,
             push_after_merge_group: PushAfterMergeGroup::Run,
             test_setup: Vec::new(),
+            check_configurations: Vec::new(),
             test_lanes: Vec::new(),
             budget: None,
             lint: Vec::new(),

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs;
+use std::os::unix::fs::PermissionsExt;
 use std::process::Command;
 
 use crate::io::Repo as Checkout;
@@ -9,7 +10,7 @@ use crate::io::Repo as Checkout;
 mod born;
 mod support;
 
-use support::{COMPILED, WARM, decide, decide_within, seed};
+use support::{COMPILED, WARM, decide, decide_target_within, decide_within, seed};
 
 #[test]
 fn a_run_that_compiled_a_crate_saves_after_dropping_what_must_not_be_cached() {
@@ -221,4 +222,119 @@ fn an_unreadable_cache_budget_fails_the_decision_instead_of_saving() {
     let (output, written) = decide_within(&repo, "eight");
     assert!(!output.status.success());
     assert_eq!(written, "");
+}
+
+#[test]
+fn an_over_budget_notice_keeps_a_target_path_with_a_line_break_on_one_line() {
+    let repo = Checkout::new("decide-over-budget-path");
+    let target = "target\n::stop-commands::token";
+    repo.write_unstaged("Cargo.lock", "version = 4\n");
+    repo.write_unstaged(
+        &format!("{target}/debug/deps/libbig.rlib"),
+        &"x".repeat(4096),
+    );
+    let (output, written) = decide_target_within(&repo, target, "1000");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(output.status.success(), "{stdout}");
+    assert_eq!(written, "save=false\nsources=true\n");
+    assert!(
+        stdout.contains("more than the repository cache budget"),
+        "{stdout}"
+    );
+    assert!(
+        stdout
+            .lines()
+            .all(|line| !line.starts_with("::stop-commands::")),
+        "{stdout}"
+    );
+    assert!(
+        stdout.contains("target%0A::stop-commands::token"),
+        "{stdout}"
+    );
+}
+
+#[test]
+fn an_inventory_notice_keeps_an_entry_name_with_a_line_break_on_one_line() {
+    let repo = Checkout::new("decide-inventory-name");
+    seed(&repo);
+    let odd = "target/debug/deps/odd\n::stop-commands::token";
+    repo.write_unstaged(odd, "sealed");
+    fs::set_permissions(repo.root().join(odd), fs::Permissions::from_mode(0o000))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let (output, written) = decide(&repo, Some(COMPILED));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(written, "save=true\nsources=true\n");
+    assert!(
+        stdout.contains("pull requests will read the whole restored base"),
+        "{stdout}"
+    );
+    assert!(
+        stdout
+            .lines()
+            .all(|line| !line.starts_with("::stop-commands::")),
+        "{stdout}"
+    );
+    assert!(stdout.contains("odd%0A::stop-commands::token"), "{stdout}");
+}
+
+#[test]
+fn a_saved_target_path_with_a_line_break_stays_on_one_line() {
+    let repo = Checkout::new("decide-saved-path");
+    let target = "target\n::stop-commands::token";
+    repo.write_unstaged("Cargo.lock", "version = 4\n");
+    repo.write_unstaged(&format!("{target}/debug/deps/small.rlib"), "x");
+    let (output, written) = decide_target_within(&repo, target, "100000");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(output.status.success(), "{stdout}");
+    assert_eq!(written, "save=true\nsources=true\n");
+    assert!(
+        stdout
+            .lines()
+            .all(|line| !line.starts_with("::stop-commands::")),
+        "{stdout}"
+    );
+    assert!(
+        stdout.contains("target%0A::stop-commands::token"),
+        "{stdout}"
+    );
+}
+
+#[test]
+fn a_refused_manifest_path_with_a_line_break_stays_on_one_line() {
+    let repo = Checkout::new("decide-refused-path");
+    seed(&repo);
+    let manifest = "dir\n::stop-commands::token/Cargo.toml";
+    let temp = repo.root().join("runner-temp");
+    fs::create_dir_all(&temp).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::write(temp.join("velnor-run.log"), COMPILED).unwrap_or_else(|e| unreachable!("{e}"));
+    let outputs = repo.root().join("github-output");
+    let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        .args([
+            "cache",
+            "decide",
+            "--target-dir",
+            "target",
+            "--manifest-path",
+        ])
+        .arg(manifest)
+        .env("RUNNER_TEMP", &temp)
+        .env("GITHUB_OUTPUT", &outputs)
+        .current_dir(repo.root())
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(
+        fs::read_to_string(&outputs).unwrap_or_default(),
+        "save=false\nsources=false\n"
+    );
+    assert!(stdout.contains("not proven public"), "{stdout}");
+    assert!(
+        stdout
+            .lines()
+            .all(|line| !line.starts_with("::stop-commands::")),
+        "{stdout}"
+    );
+    assert!(stdout.contains("dir%0A::stop-commands::token"), "{stdout}");
 }

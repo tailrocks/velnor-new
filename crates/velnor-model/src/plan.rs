@@ -12,6 +12,9 @@ use crate::steps::{StepKind, VerifiedSave};
 use crate::test_group::NoTests;
 use crate::trusted::TrustedRunners;
 
+mod filter;
+pub use filter::FilterRef;
+
 pub const LINT_STEP: &str = "Lint";
 pub const TEST_STEP: &str = "Test";
 pub const BUILD_TESTS_STEP: &str = "Build the tests";
@@ -288,6 +291,7 @@ pub enum When {
     BaseExpired,
     SavingRun,
     ClearRunLabel,
+    Failure,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -335,6 +339,7 @@ pub enum CargoCommand {
         file: RepoPath,
         filter: FilterRef,
         threads: Option<u16>,
+        partition: Option<(u16, u16)>,
         ci_profile: bool,
         no_tests: NoTests,
     },
@@ -382,19 +387,4 @@ impl CargoCommand {
             _ => &[],
         }
     }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum FilterRef {
-    All,
-    AllExcept(Vec<String>),
-    Expr {
-        expr: String,
-        except: Vec<String>,
-    },
-    Group {
-        include: Option<String>,
-        exclude: Vec<String>,
-        except: Vec<String>,
-    },
 }
