@@ -23,9 +23,9 @@ pub(in crate::io::audit) fn newest(
             match handle::observe(&listing, name.as_os_str(), &path)? {
                 Some(Observed {
                     kind: current,
-                    modified,
+                    changed,
                 }) if current == *kind => {
-                    if let Some(time) = modified {
+                    if let Some(time) = changed {
                         newest = newest.max(time);
                     }
                 }

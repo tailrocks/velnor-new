@@ -4,8 +4,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io;
+use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 
 use velnor_rust::{Located, locate};
 
@@ -48,7 +49,7 @@ impl Freshness {
     ) -> io::Result<bool> {
         let metadata = fs::metadata(path)?;
         if !metadata.is_dir() {
-            return Ok(metadata.modified()? > built);
+            return changed_since(&metadata, built);
         }
         let root = fs::canonicalize(path)?;
         let key = (root.clone(), targets.clone());
@@ -147,6 +148,14 @@ impl Audit<'_> {
                         .is_ok_and(|canonical| inventory::excluded(&canonical, &root, targets)))
         }))
     }
+}
+
+fn changed_since(metadata: &fs::Metadata, built: SystemTime) -> io::Result<bool> {
+    let inode = u64::try_from(metadata.ctime()).ok().map(|seconds| {
+        let nanos = u32::try_from(metadata.ctime_nsec()).unwrap_or(0);
+        SystemTime::UNIX_EPOCH + Duration::new(seconds, nanos)
+    });
+    Ok(metadata.modified()? > built || inode.is_some_and(|inode| inode > built))
 }
 
 fn failed(path: &Path, error: &io::Error) -> CiError {
@@ -258,6 +267,64 @@ mod tests {
         assert!(
             matches!(newest, Ok(None)),
             "a directory rewritten after the walk was accepted as the walked one: {newest:?}"
+        );
+    }
+
+    #[test]
+    fn a_same_size_rewrite_with_its_modified_time_restored_makes_the_snapshot_stale() {
+        let root = fs::canonicalize(std::env::temp_dir())
+            .unwrap_or_else(|e| unreachable!("{e}"))
+            .join(format!("velnor-freshness-restored-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let directory = root.join("d");
+        fs::create_dir_all(&directory).unwrap_or_else(|e| unreachable!("{e}"));
+        let file = directory.join("f");
+        fs::write(&file, b"a").unwrap_or_else(|e| unreachable!("{e}"));
+        for path in [&file, &directory, &root] {
+            fs::File::open(path)
+                .and_then(|handle| handle.set_times(fs::FileTimes::new().set_modified(UNIX_EPOCH)))
+                .unwrap_or_else(|e| unreachable!("{e}"));
+        }
+        let mut budget = Budget::new(usize::MAX);
+        let scan = inventory::scan(&root, &BTreeSet::new(), &mut budget)
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        fs::write(&file, b"b").unwrap_or_else(|e| unreachable!("{e}"));
+        fs::File::open(&file)
+            .and_then(|handle| handle.set_times(fs::FileTimes::new().set_modified(UNIX_EPOCH)))
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        let newest = inventory::newest(&scan, &scan.entries);
+        fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+        let built = UNIX_EPOCH + std::time::Duration::from_secs(1_000_000_000);
+        assert!(
+            matches!(newest, Ok(Some(time)) if time > built),
+            "a same-size rewrite with its mtime restored was not seen as newer than the build: {newest:?}"
+        );
+    }
+
+    #[test]
+    fn a_single_file_rewritten_at_the_same_size_with_its_modified_time_restored_is_stale() {
+        let root = fs::canonicalize(std::env::temp_dir())
+            .unwrap_or_else(|e| unreachable!("{e}"))
+            .join(format!("velnor-freshness-file-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+        let file = root.join("f");
+        fs::write(&file, b"a").unwrap_or_else(|e| unreachable!("{e}"));
+        fs::File::open(&file)
+            .and_then(|handle| handle.set_times(fs::FileTimes::new().set_modified(UNIX_EPOCH)))
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        let built = UNIX_EPOCH + std::time::Duration::from_secs(1_000_000_000);
+        fs::write(&file, b"b").unwrap_or_else(|e| unreachable!("{e}"));
+        fs::File::open(&file)
+            .and_then(|handle| handle.set_times(fs::FileTimes::new().set_modified(UNIX_EPOCH)))
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        let mut freshness =
+            Freshness::new(&[], &[], usize::MAX).unwrap_or_else(|e| unreachable!("{e}"));
+        let changed = freshness.changed(&file, built, &file, &BTreeSet::new());
+        fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+        assert!(
+            matches!(changed, Ok(true)),
+            "a same-size rewrite with its mtime restored was not stale: {changed:?}"
         );
     }
 }

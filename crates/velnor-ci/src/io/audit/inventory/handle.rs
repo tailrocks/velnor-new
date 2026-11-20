@@ -81,16 +81,21 @@ pub(super) fn identity(directory: &Dir) -> io::Result<Identity> {
 
 pub(super) struct Observed {
     pub(super) kind: Kind,
-    pub(super) modified: Option<SystemTime>,
+    pub(super) changed: Option<SystemTime>,
 }
 
-fn modified(stat: &FileStat) -> SystemTime {
-    let seconds = stat.st_mtime;
-    let nanos = Duration::from_nanos(u64::try_from(stat.st_mtime_nsec).unwrap_or(0));
+fn instant(seconds: i64, nanos: i64) -> SystemTime {
+    let nanos = Duration::from_nanos(u64::try_from(nanos).unwrap_or(0));
     match u64::try_from(seconds) {
         Ok(seconds) => SystemTime::UNIX_EPOCH + Duration::from_secs(seconds) + nanos,
         Err(_) => SystemTime::UNIX_EPOCH - Duration::from_secs(seconds.unsigned_abs()) + nanos,
     }
+}
+
+fn changed(stat: &FileStat) -> SystemTime {
+    let modified = instant(stat.st_mtime, stat.st_mtime_nsec);
+    let inode = instant(stat.st_ctime, stat.st_ctime_nsec);
+    modified.max(inode)
 }
 
 fn format_of(stat: &FileStat) -> SFlag {
@@ -125,15 +130,15 @@ fn classify(
         } else {
             Kind::Other
         };
-        let modified = (format != SFlag::S_IFDIR).then(|| modified(&stat));
-        return Ok(Some(Observed { kind, modified }));
+        let changed = (format != SFlag::S_IFDIR).then(|| changed(&stat));
+        return Ok(Some(Observed { kind, changed }));
     }
     let resolved = match std::fs::canonicalize(path) {
         Ok(resolved) => Some(resolved),
         Err(error) if unresolved_link(&error) => None,
         Err(error) => return Err(error),
     };
-    let modified = if with_modified {
+    let changed = if with_modified {
         let followed = match fstatat(directory, name, AtFlags::empty()) {
             Ok(followed) => followed,
             Err(
@@ -141,7 +146,7 @@ fn classify(
             ) => stat,
             Err(errno) => return Err(failure(errno)),
         };
-        (format_of(&followed) != SFlag::S_IFDIR).then(|| modified(&followed))
+        (format_of(&followed) != SFlag::S_IFDIR).then(|| changed(&followed))
     } else {
         None
     };
@@ -151,7 +156,7 @@ fn classify(
                 target: target.into(),
                 resolved,
             },
-            modified,
+            changed,
         })),
         Err(nix::errno::Errno::ENOENT) => Ok(None),
         Err(errno) => Err(failure(errno)),
