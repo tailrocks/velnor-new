@@ -24,7 +24,7 @@ pub(super) fn collect_local(metrics: &mut LaneMetrics, log: &[u8], runner_temp: 
     let store = std::env::var_os("MBX_CACHE_DIR").filter(|dir| !dir.is_empty());
     let unparsed = mbx_unparsed_lines(log);
     if let Some(first) = unparsed.first() {
-        metrics.diagnostics.push(format!(
+        metrics.verification_errors.push(format!(
             "MBX lookup summary not understood, {} line(s) not counted; first: {}",
             unparsed.len(),
             crate::escape::escape(first, false)

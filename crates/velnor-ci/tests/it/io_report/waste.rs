@@ -273,8 +273,17 @@ fn lane_with_mbx_log(
 }
 
 fn unparsed_warning(metrics: &velnor_ci::report::LaneMetrics, first: &str) -> bool {
-    metrics.diagnostics.iter().any(|line| {
+    metrics.verification_errors.iter().any(|line| {
         line == &format!("MBX lookup summary not understood, 1 line(s) not counted; first: {first}")
+    })
+}
+
+/// An unparsed summary leaves the lane unverifiable, so the final check fails closed.
+fn fails_closed(metrics: &velnor_ci::report::LaneMetrics) -> bool {
+    velnor_ci::report::check(std::slice::from_ref(metrics)).is_err_and(|error| {
+        error
+            .to_string()
+            .contains("MBX lookup summary not understood")
     })
 }
 
@@ -299,8 +308,9 @@ fn a_singular_mbx_summary_is_unparsed_with_a_warning_and_never_a_silent_zero() -
     assert!(
         unparsed_warning(&metrics, SINGULAR_SUMMARY),
         "{:?}",
-        metrics.diagnostics
+        metrics.verification_errors
     );
+    assert!(fails_closed(&metrics), "{metrics:?}");
     assert!(waste_gates(&metrics).is_empty(), "{:?}", metrics.violations);
     let silent = lane_with_mbx_log("report-mbx-no-summary", "", true, false)?;
     assert_eq!(silent.mbx.unparsed, 0);
@@ -342,8 +352,9 @@ fn partial_mbx_evidence_does_not_fire_the_zero_hit_gate() -> ResultTest {
     assert!(
         unparsed_warning(&partial, PARTIAL_SUMMARY),
         "{:?}",
-        partial.diagnostics
+        partial.verification_errors
     );
+    assert!(fails_closed(&partial), "{partial:?}");
     assert!(waste_gates(&partial).is_empty(), "{:?}", partial.violations);
     Ok(())
 }
