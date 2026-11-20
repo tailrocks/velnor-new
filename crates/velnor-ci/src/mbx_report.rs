@@ -50,9 +50,11 @@ pub fn parse(report: &[u8]) -> Result<Option<MbxSession>, String> {
     let counts: Counts = serde_json::from_value(value)
         .map_err(|error| format!("version {version} without its counts ({error})"))?;
     let looked_at = counts.hits + counts.misses + counts.unconsulted > 0;
-    Ok((looked_at || !counts.bypasses.is_empty()).then_some(MbxSession {
-        hits: counts.hits,
-        misses: counts.misses,
-        not_looked_up: counts.unconsulted,
-    }))
+    Ok(
+        (looked_at || !counts.bypasses.is_empty()).then_some(MbxSession {
+            hits: counts.hits,
+            misses: counts.misses,
+            not_looked_up: counts.unconsulted,
+        }),
+    )
 }

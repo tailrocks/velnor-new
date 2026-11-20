@@ -351,6 +351,7 @@ pub(crate) fn job(facts: &RepoFacts, id: JobId) -> Job {
             .helper
             .as_ref()
             .is_some_and(|helper| helper.version().at_least(CHAINED_SAVES_HELPER)),
+        mbx_stats: velnor_model::MbxStats::Summary,
         selection_name: None,
         steps: Vec::new(),
     }

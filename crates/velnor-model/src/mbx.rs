@@ -19,3 +19,13 @@ impl MbxMode {
         !matches!(self, Self::Default)
     }
 }
+
+/// Where `velnor-ci report` counts a job's MBX sessions from.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum MbxStats {
+    /// The `mbx[cache]` stderr summary in the run log.
+    #[default]
+    Summary,
+    /// One `MBX_STATS_REPORT` JSON file per cargo session, which the pinned helper assigns.
+    Reports,
+}

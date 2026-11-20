@@ -110,3 +110,17 @@ fn reports_replace_the_text_summary_and_without_reports_the_text_counts() -> Res
     assert_eq!(report(&repo)?.mbx.sessions, [session(0, 7, 0)]);
     Ok(())
 }
+
+#[test]
+fn the_reader_maps_a_real_mbx_report_and_names_what_it_cannot_read() {
+    use velnor_ci::mbx_report::parse;
+    let real = include_bytes!("../data/mbx_report/mbx-1.30.0.json");
+    assert_eq!(parse(real), Ok(Some(session(0, 0, 2))));
+    let bypassed =
+        br#"{"version":5,"hits":0,"misses":0,"unconsulted":0,"bypasses":{"compiler-query":1}}"#;
+    assert_eq!(parse(bypassed), Ok(Some(session(0, 0, 0))));
+    assert_eq!(parse(report_json(5, 0, 0, 0).as_bytes()), Ok(None));
+    assert!(parse(br#"{"version":5,"hits":1}"#).is_err_and(|e| e.contains("without its counts")));
+    assert!(parse(br#"{"hits":1}"#).is_err_and(|e| e.contains("no numeric version")));
+    assert!(parse(b"{").is_err_and(|e| e.contains("not JSON")));
+}

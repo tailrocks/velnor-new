@@ -59,7 +59,10 @@ pub(super) fn read(runner_temp: &Path) -> Option<Reports> {
         .ok()?
         .flatten()
         .map(|entry| entry.path())
-        .filter(|path| path.extension().is_some_and(|extension| extension == "json"))
+        .filter(|path| {
+            path.extension()
+                .is_some_and(|extension| extension == "json")
+        })
         .collect();
     if files.is_empty() {
         return None;

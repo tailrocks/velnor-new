@@ -112,6 +112,7 @@ pub struct Job {
     /// may wait for that record instead of a build step.
     pub records_build: bool,
     pub chained_saves: bool,
+    pub mbx_stats: crate::MbxStats,
     /// Titles the job with the selection of the run, read from the plan outputs.
     pub selection_name: Option<SelectionName>,
     pub steps: Vec<Step>,

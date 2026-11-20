@@ -54,7 +54,7 @@ pub use ids::{
     RunnerLabel, Sha256, TargetName, looks_github_hosted,
 };
 pub use lint::{LintCommand, LintJob, LintKind};
-pub use mbx::MbxMode;
+pub use mbx::{MbxMode, MbxStats};
 pub use mbx_config::{MBX_TOOL, MbxConflict, MbxDeclaration, MbxRule, mbx_declaration};
 pub use mise::MisePlatform;
 pub use plan::{

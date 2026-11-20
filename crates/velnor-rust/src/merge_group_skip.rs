@@ -173,6 +173,7 @@ mod tests {
             reports_ignored: false,
             records_build: false,
             chained_saves: false,
+            mbx_stats: velnor_model::MbxStats::Summary,
             selection_name: None,
             steps: kinds.into_iter().map(step).collect(),
         }

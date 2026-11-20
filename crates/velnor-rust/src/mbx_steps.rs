@@ -1,10 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{HelperCommand, Job, MbxRemote, MbxStore, RepoFacts, Step, StepKind};
+use velnor_model::{HelperCommand, Job, MbxRemote, MbxStats, MbxStore, RepoFacts, Step, StepKind};
 
 use crate::mbx_pin::MBX_PIN_HELPER;
 use crate::plan::step;
+
+// First released in tools-v0.1.111 (not tagged yet when this gate was written).
+const MBX_REPORTS_HELPER: (u64, u64, u64) = (0, 1, 111);
 
 pub(crate) fn apply(facts: &RepoFacts, jobs: &mut [Job]) {
     let remote = facts.config.mbx_remote == MbxRemote::GithubActions;
@@ -14,10 +17,21 @@ pub(crate) fn apply(facts: &RepoFacts, jobs: &mut [Job]) {
         .is_some_and(|helper| helper.version().at_least(MBX_PIN_HELPER));
     let private =
         facts.config.mbx.routed() && !remote && facts.config.mbx_store == MbxStore::Private;
+    let stats = if facts.config.mbx.routed()
+        && facts
+            .helper
+            .as_ref()
+            .is_some_and(|helper| helper.version().at_least(MBX_REPORTS_HELPER))
+    {
+        MbxStats::Reports
+    } else {
+        MbxStats::Summary
+    };
     for job in jobs {
         if !compiles(job) {
             continue;
         }
+        job.mbx_stats = stats;
         if remote && facts.private_sources.is_none() {
             let remote_steps = if from_pin {
                 vec![StepKind::MbxPin, StepKind::MbxRemote { from_pin }]
