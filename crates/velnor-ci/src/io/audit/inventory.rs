@@ -48,7 +48,7 @@ pub(super) fn exclusions(workspaces: &[Workspace]) -> BTreeSet<PathBuf> {
                 workspace.target_directory.clone(),
             ]
         })
-        .map(|target| fs::canonicalize(&target).unwrap_or_else(|_| normalize(&target)))
+        .map(|target| velnor_rust::resolve(&target))
         .collect()
 }
 

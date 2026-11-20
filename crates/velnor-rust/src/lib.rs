@@ -136,7 +136,7 @@ pub use policy::{PolicyRuns, policy_runs};
 pub use reads::{
     INPUTS_IDENTITY_HELPER, INPUTS_LOCK, Located, dep_info_paths, format_inputs_lock,
     inputs_lock_text, locate, lock_is_identified, normalize, parse_inputs_lock, rerun_if_changed,
-    unlisted, without_identity,
+    resolve, unlisted, without_identity,
 };
 pub use reexports::*;
 pub use repo_profile::{cargo_config_paths, check_runtime_configs, repo_profile};

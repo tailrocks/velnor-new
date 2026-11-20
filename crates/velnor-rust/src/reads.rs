@@ -102,6 +102,33 @@ pub fn normalize(path: &Path) -> PathBuf {
     full
 }
 
+/// `fs::canonicalize` for a path that may not exist yet. It canonicalizes the
+/// longest existing prefix and appends the rest, so a directory that a build
+/// creates later compares equal to its resolved form. A plain `normalize`
+/// keeps a symlinked prefix as typed (`/var/...` rather than `/private/var/...`)
+/// until the directory exists, and then the two forms no longer match.
+#[must_use]
+pub fn resolve(path: &Path) -> PathBuf {
+    let path = normalize(path);
+    let mut missing = Vec::new();
+    let mut existing = path.as_path();
+    loop {
+        if let Ok(real) = std::fs::canonicalize(existing) {
+            return missing
+                .iter()
+                .rev()
+                .fold(real, |real, part| real.join(part));
+        }
+        match (existing.parent(), existing.file_name()) {
+            (Some(parent), Some(name)) => {
+                missing.push(name.to_owned());
+                existing = parent;
+            }
+            _ => return path,
+        }
+    }
+}
+
 #[must_use]
 pub fn unlisted(found: &CompileInputs, listed: &CompileInputs) -> CompileInputs {
     found

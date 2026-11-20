@@ -27,11 +27,7 @@ impl Freshness {
         max_directory_entries: usize,
     ) -> Self {
         let mut targets = inventory::exclusions(workspaces);
-        targets.extend(
-            groups
-                .iter()
-                .map(|dir| fs::canonicalize(dir).unwrap_or_else(|_| velnor_rust::normalize(dir))),
-        );
+        targets.extend(groups.iter().map(|dir| velnor_rust::resolve(dir)));
         Self {
             targets,
             directories: BTreeMap::new(),
