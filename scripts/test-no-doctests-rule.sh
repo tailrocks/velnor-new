@@ -55,6 +55,7 @@ check block_star_close  pass '/** prose **/\nfn f() { let s = "```"; }\n'
 check nested_block_fence fail '/** outer /* nested */\n * ```\n * let x = 1;\n * ```\n */\nfn f() {}\n'
 check str_block_literal pass 'fn f() { let s = "/** ```"; }\n'
 check str_inner_literal pass 'fn f() { let s = "/*! ~~~"; }\n'
+check unicode_ident   pass 'fn café() {}\n/** plain prose */\nfn f() {}\n'
 
 if [ "$fails" -ne 0 ]; then
   echo "no-doctests fixtures: $fails failing"

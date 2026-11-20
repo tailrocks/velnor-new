@@ -8,8 +8,9 @@ outer one.
 """
 import re
 import sys
+from pathlib import Path
 
-IDENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+IDENT = re.compile(r"[^\W\d]\w*")
 FENCE = re.compile(r"```|~~~")
 DOC_OPEN = re.compile(r"/\*(?:!|\*(?![*/]))")
 RAW_PREFIX = {"r", "br", "cr"}
@@ -82,8 +83,8 @@ def doc_blocks(src):
         elif c == "'":
             j = skip_char(src, i)
             i = i + 1 if j is None else j
-        elif c.isalpha() or c == "_":
-            word = IDENT.match(src, i).group()
+        elif (m := IDENT.match(src, i)):
+            word = m.group()
             j = i + len(word)
             if word in RAW_PREFIX and j < len(src) and src[j] in '#"':
                 end = skip_raw(src, j - 1)
@@ -96,11 +97,15 @@ def doc_blocks(src):
             i += 1
 
 
-def main(paths):
+def rust_sources():
+    return sorted(p for p in Path("crates").rglob("*.rs") if "src" in p.parts)
+
+
+def main(args):
+    paths = [Path(a) for a in args] or rust_sources()
     bad = 0
     for path in paths:
-        with open(path, encoding="utf-8") as f:
-            src = f.read()
+        src = path.read_text(encoding="utf-8")
         for line, body in doc_blocks(src):
             if FENCE.search(body):
                 print(f"{path}:{line}: doc fence inside a block doc comment")

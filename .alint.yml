@@ -25,6 +25,9 @@
 # the command below checks the regular-file type and exact pointer body on
 # the CI Linux runner. Generated trees must not emit symlinks: plugin
 # installers reject packages that contain symlink entries.
+# The `no-doctests-block` command rule runs scripts/no-doctests-block.py once
+# (it is triggered by that script file, which the scanner does not read as
+# input) and scans every crates/**/src Rust file in that one process.
 # Validate with the pinned alint binary: `alint validate-config`.
 # The 80-line function/method limit (§5, "using Clippy accounting") is NOT
 # expressed here — alint ships no function-level rule kind. It is enforced
@@ -242,10 +245,9 @@ rules:
     kind: command
     paths:
       include:
-        - "crates/**/src/**/*.rs"
+        - "scripts/no-doctests-block.py"
     command:
       - python3
       - scripts/no-doctests-block.py
-      - "{path}"
     level: error
     message: "Doctests are off by decision (Cargo `doctest = false`). A block doc comment (`/** */` or `/*! */`) must not hold a doc fence (``` or ~~~), including one after a nested `/* */`. The check reads Rust tokens, so string literals are not doc comments. Do not add one; a decision is needed first."
