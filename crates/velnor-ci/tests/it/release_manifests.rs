@@ -87,6 +87,28 @@ impl Drop for Checkout {
     }
 }
 
+/// Whether `cargo` is the crates-mirror wrapper (or a per-toolchain copy of it): the
+/// mirror's `config.toml` sits beside it or one directory up.
+fn is_mirror_wrapper(cargo: &Path) -> bool {
+    let marker = "# velnor-ci crates-mirror owns this file";
+    let beside = cargo
+        .parent()
+        .into_iter()
+        .flat_map(|dir| [Some(dir), dir.parent()]);
+    beside.flatten().any(|dir| {
+        fs::read_to_string(dir.join("config.toml")).is_ok_and(|text| text.starts_with(marker))
+    })
+}
+
+/// A cargo that is not the crates-mirror wrapper, however the job's environment names it.
+fn real_cargo() -> PathBuf {
+    let path = std::env::var_os("PATH").unwrap_or_default();
+    std::iter::once(PathBuf::from(env!("CARGO")))
+        .chain(std::env::split_paths(&path).map(|dir| dir.join("cargo")))
+        .find(|cargo| cargo.is_file() && !is_mirror_wrapper(cargo))
+        .unwrap_or_else(|| unreachable!("no cargo outside the crates mirror wrapper"))
+}
+
 fn refused(checkout: &Checkout, files: &[&str], needle: &str) {
     let (code, stderr) = checkout.run(files);
     assert_eq!(code, Some(1), "{stderr}");
@@ -129,11 +151,11 @@ fn an_excluded_example_and_a_nested_workspace_are_not_packages_of_the_root() {
         std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default()),
     ))
     .unwrap_or_else(|e| unreachable!("{e}"));
-    // Not `CARGO` from the environment: a CI job that configured the crates mirror has
-    // `CARGO` set to the mirror wrapper, which would forward back into this stub forever.
-    // Not `CARGO` from the environment: a CI job that configured the crates mirror has
-    // `CARGO` set to the mirror wrapper, which would forward back into this stub forever.
-    let cargo = env!("CARGO");
+    // Neither `CARGO` from the environment nor `env!("CARGO")` as is: a CI job that
+    // configured the crates mirror has `CARGO` set to the mirror wrapper while this test
+    // is compiled and run, so both name the wrapper, which would forward back into this
+    // stub forever (each round prepends to PATH until exec fails with E2BIG).
+    let cargo = real_cargo();
     let stub = checkout.0.join("bin/cargo");
     checkout
         .write(
@@ -163,6 +185,11 @@ fn an_excluded_example_and_a_nested_workspace_are_not_packages_of_the_root() {
         .env("VELNOR_TEST_WRAPPER_MARKER", &marker)
         .env("VELNOR_TEST_REAL_CARGO", cargo)
         .env("PATH", path)
+        .env_remove("CARGO")
+        .env_remove("VELNOR_CARGO_CONFIG")
+        .env_remove("VELNOR_CARGO_WRAPPER")
+        .env_remove("VELNOR_CARGO_REAL")
+        .env_remove("VELNOR_CARGO_RUSTUP")
         .output()
         .unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(

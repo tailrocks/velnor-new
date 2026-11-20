@@ -11,10 +11,24 @@ use super::crates_mirror_args::with_mirror_config;
 use super::crates_mirror_mise::{self as mise, LaunchPhase};
 
 const RUSTUP_ENV: &str = "VELNOR_CARGO_RUSTUP";
+const DEPTH_ENV: &str = "VELNOR_CARGO_DEPTH";
+/// Nested Cargo runs (build scripts, `cargo` shims) one forwarded run may stack up
+/// before the wrapper decides a `cargo` on PATH is calling back into it.
+const MAX_DEPTH: u32 = 64;
 const SAVED: &str = "velnor-cargo-real";
 const RESERVED: [&str; 3] = ["cargo", "config.toml", "config.toml.velnor-crates-mirror"];
 
 pub(super) fn forward() -> Result<ExitStatus, CiError> {
+    let depth = std::env::var(DEPTH_ENV)
+        .ok()
+        .and_then(|depth| depth.parse::<u32>().ok())
+        .unwrap_or(0);
+    if depth >= MAX_DEPTH {
+        return Err(CiError::new(format!(
+            "the Cargo mirror wrapper was entered {depth} times in one chain: a `cargo` found on PATH forwards back into the wrapper ({}); put the real cargo ahead of it or remove the shim",
+            std::env::var(WRAPPER_ENV).unwrap_or_default()
+        )));
+    }
     let wrapper = PathBuf::from(
         std::env::var_os(WRAPPER_ENV)
             .ok_or_else(|| CiError::new("missing VELNOR_CARGO_WRAPPER"))?,
@@ -85,6 +99,7 @@ pub(super) fn forward() -> Result<ExitStatus, CiError> {
         .args(with_mirror_config(&config, args.collect()))
         .env("PATH", path)
         .env(REAL_ENV, cargo.executable)
+        .env(DEPTH_ENV, (depth + 1).to_string())
         .env("CARGO", directory.join("cargo"))
         .status()
         .map_err(|error| failed(&error))
