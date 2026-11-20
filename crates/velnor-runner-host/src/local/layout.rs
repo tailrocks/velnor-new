@@ -28,11 +28,11 @@ const HOME: &[(&str, u64, u32)] = &[
 ];
 
 pub(super) fn metadata_archive() -> Result<Vec<u8>, HostError> {
-    directories(&METADATA)
+    directories(METADATA)
 }
 
 pub(super) fn home_archive() -> Result<Vec<u8>, HostError> {
-    directories(&HOME)
+    directories(HOME)
 }
 
 fn directories(entries: &[(&str, u64, u32)]) -> Result<Vec<u8>, HostError> {
