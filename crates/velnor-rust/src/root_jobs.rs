@@ -334,13 +334,13 @@ impl RootJobs<'_> {
         for member in &self.members {
             steps.extend(self.cargo(member, lint().into_iter().chain([CargoCommand::Doc])));
         }
+        for member in &self.members {
+            steps.extend(self.cargo(member, check_alone(&member.root)));
+        }
         if tests.is_empty() {
             steps.extend(self.audit());
         }
         steps.extend(self.saves(&lint_id, None, tests.is_empty()));
-        for member in &self.members {
-            steps.extend(self.cargo(member, check_alone(&member.root)));
-        }
         let mut jobs = vec![Job {
             comment,
             pr: crate::plan::quick(self.facts),

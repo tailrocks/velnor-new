@@ -7,6 +7,12 @@ use crate::lane::Lane;
 use crate::plan::step;
 use crate::private_fetch::shared_gate;
 
+/// Puts each `[[test_setup]]` step of `root` into `steps`. A step with `phase = "build"` goes
+/// before the first cargo step that compiles or runs tests, so a build script of any job can
+/// read what it makes. Every other step goes before the first test step. The build-phase steps
+/// sit directly in front of repository code, after every step that precedes the first cargo
+/// step (the private-sources token phase goes in front of them, see `private_fetch`), so no
+/// token or verdict step follows repository code that it did not already follow.
 pub(crate) fn inserted(
     facts: &RepoFacts,
     root: &RustRoot,
@@ -14,7 +20,8 @@ pub(crate) fn inserted(
     steps: Vec<Step>,
 ) -> Vec<Step> {
     let steps = before_builds(facts, root, steps);
-    before_tests(facts, root, lane, steps)
+    let steps = before_tests(facts, root, lane, steps);
+    checked(facts, root, lane, steps)
 }
 
 pub(crate) fn before_builds(facts: &RepoFacts, root: &RustRoot, mut steps: Vec<Step>) -> Vec<Step> {
@@ -65,10 +72,55 @@ pub(crate) fn before_tests(
     steps
 }
 
+fn checked(facts: &RepoFacts, root: &RustRoot, lane: &Lane, mut steps: Vec<Step>) -> Vec<Step> {
+    let Some(first) = steps.iter().position(|step| tests(step) || archives(step)) else {
+        return steps;
+    };
+    if matches!(
+        steps[first].kind,
+        StepKind::Cargo(CargoCommand::NextestRunArchive { .. })
+    ) {
+        return steps;
+    }
+    let (when, pr) = (steps[first].when, steps[first].pr);
+    let checks: Vec<Step> = facts
+        .config
+        .check_configurations
+        .iter()
+        .filter(|check| check.root == root.manifest.parent())
+        .map(|check| {
+            setup_step(
+                root,
+                &TestSetup {
+                    root: check.root.clone(),
+                    name: "velnor-ci check-configurations".to_owned(),
+                    run: check.command(),
+                    phase: None,
+                },
+                when,
+                pr,
+            )
+        })
+        .map(|check| Step {
+            gate: lane.steps(),
+            ..check
+        })
+        .collect();
+    steps.splice(first..first, checks);
+    steps
+}
+
 fn owns(step: &Step, root: &RustRoot) -> bool {
     step.manifest
         .as_ref()
         .is_none_or(|manifest| *manifest == root.manifest)
+}
+
+fn archives(step: &Step) -> bool {
+    matches!(
+        step.kind,
+        StepKind::Cargo(CargoCommand::NextestArchive { .. })
+    )
 }
 
 fn setup_step(
@@ -102,6 +154,8 @@ fn tests(step: &Step) -> bool {
     )
 }
 
+/// A cargo step that compiles the package or runs its tests. Formatting, cargo-machete and
+/// cargo-deny read no build script, so a job with only those has no build-phase step.
 fn builds_or_tests(step: &Step) -> bool {
     matches!(&step.kind, StepKind::Cargo(command) if command.builds()
         || matches!(command, CargoCommand::NextestRunArchive { .. }))
