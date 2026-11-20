@@ -13,6 +13,7 @@ mod timing;
 
 pub(crate) use build::build;
 pub use options::AuditOptions;
+pub(crate) use options::max_entries_from_env;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
