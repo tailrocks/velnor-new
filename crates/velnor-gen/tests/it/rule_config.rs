@@ -147,31 +147,43 @@ fn default_ignores_is_on_unless_the_config_turns_it_off() -> TestResult {
     Ok(())
 }
 
-#[test]
-fn a_glob_with_a_question_mark_or_a_bracket_is_refused_for_every_rule_key() -> TestResult {
-    for glob in ["cfg/h?.pkl", "cfg/h[k].pkl", "cfg/h]k.pkl", "?/x/**"] {
-        for config in [
-            format!("non_inputs = [\"{glob}\"]\n"),
-            format!("[[inputs]]\nglob = \"{glob}\"\npackages = [\"a\"]\n"),
-        ] {
-            let error = detect_with(&config).err().ok_or(config.clone())?;
-            let text = error.to_string();
-            assert!(
-                text.contains(&format!(
-                    "{glob:?} uses ?, [ or ]; only * and ** are supported in a glob"
-                )),
-                "{config}: {text}"
-            );
-        }
+fn unsupported_glob(key: &'static str, value: &str) -> DetectError {
+    DetectError::Invalid {
+        path: CONFIG_PATH,
+        reason: Reason::UnsupportedGlob {
+            key,
+            value: value.to_owned(),
+        },
     }
-    Ok(())
 }
 
 #[test]
-fn a_test_group_path_with_a_question_mark_or_a_bracket_is_refused() -> TestResult {
+fn a_glob_with_a_question_mark_or_a_bracket_is_refused_for_every_rule_key() {
+    for glob in ["cfg/h?.pkl", "cfg/h[k].pkl", "cfg/h]k.pkl", "?/x/**"] {
+        for (config, key) in [
+            (format!("non_inputs = [\"{glob}\"]\n"), "non_inputs"),
+            (
+                format!("[[inputs]]\nglob = \"{glob}\"\npackages = [\"a\"]\n"),
+                "inputs",
+            ),
+        ] {
+            assert_eq!(
+                detect_with(&config).map(|_| ()),
+                Err(unsupported_glob(key, glob)),
+                "{config}"
+            );
+        }
+    }
+}
+
+#[test]
+fn a_test_group_path_with_a_question_mark_or_a_bracket_is_refused() {
     for glob in ["cfg/h?.pkl", "cfg/h[k].pkl", "cfg/h]k.pkl"] {
         let config = format!("[[test_groups]]\nname = 'g'\nfilter = 'all()'\npaths = ['{glob}']\n");
-        assert!(detect_with(&config).is_err(), "{config}");
+        assert_eq!(
+            detect_with(&config).map(|_| ()),
+            Err(unsupported_glob("test_groups.paths", glob)),
+            "{config}"
+        );
     }
-    Ok(())
 }

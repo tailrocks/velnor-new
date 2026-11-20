@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde_json::Value;
 use velnor_gen::{GenerateError, expected_files};
 use velnor_model::{JobId, RepoPath, RepoView, VerdictSpec};
-use velnor_rust::{Need, decide, detect};
+use velnor_rust::{CONFIG_PATH, DetectError, Need, Reason, decide, detect};
 
 use crate::facts::TestResult;
 use crate::lint_lane::{LINT, MISE};
@@ -256,21 +256,20 @@ fn lint_inputs_that_name_nothing_or_collide_are_rejected() -> TestResult {
 }
 
 #[test]
-fn a_lint_input_with_a_question_mark_or_a_bracket_is_refused_with_the_glob_message() -> TestResult {
-    let text = format!(
-        "{}",
+fn a_lint_input_with_a_question_mark_or_a_bracket_is_refused() -> TestResult {
+    assert_eq!(
         detect(&repo(
             &["Cargo.toml"],
             "[[lint]]\nkind = 'jactionlint'\ninputs = ['cfg/h?.pkl']\n",
         )?)
-        .err()
-        .ok_or("cfg/h?.pkl")?
-    );
-    assert!(
-        text.contains(
-            "lint.inputs entry \"cfg/h?.pkl\" uses ?, [ or ]; only * and ** are supported in a glob"
-        ),
-        "{text}"
+        .map(|_| ()),
+        Err(DetectError::Invalid {
+            path: CONFIG_PATH,
+            reason: Reason::UnsupportedGlob {
+                key: "lint.inputs",
+                value: "cfg/h?.pkl".to_owned(),
+            },
+        })
     );
     Ok(())
 }

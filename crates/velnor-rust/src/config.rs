@@ -11,6 +11,7 @@ use velnor_model::{
 
 use crate::config_events::{docs_run, on_main};
 use crate::config_external;
+use crate::config_glob::unsupported_glob;
 use crate::config_keys::KEYS;
 use crate::error::{DetectError, Reason};
 use crate::shape::parse_shape;
@@ -318,9 +319,7 @@ const REST: &str = "**";
 
 pub(crate) fn rule_glob(key: &'static str, entry: String) -> Result<PathGlob, Reason> {
     let invalid = |value: String| Reason::InvalidValue { key, value };
-    if entry.contains(['?', '[', ']']) {
-        return Err(Reason::UnsupportedGlob { key, value: entry });
-    }
+    unsupported_glob(key, &entry)?;
     let (segments, _) = shape(&entry);
     let grammatical = segments
         .iter()

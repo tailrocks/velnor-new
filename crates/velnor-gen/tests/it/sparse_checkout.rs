@@ -271,3 +271,28 @@ fn an_outside_dependency_that_cannot_be_read_forces_a_full_checkout() -> TestRes
     );
     Ok(())
 }
+
+#[test]
+fn a_toolchain_path_with_question_mark_or_brackets_is_escaped_for_gitignore() -> TestResult {
+    let mut view = view(&["a/Cargo.toml", "b/Cargo.toml"], Some(ON.as_bytes()))?;
+    let file = velnor_model::RepoPath::new("rust-toolchain.toml")?;
+    view.tracked_paths.insert(file.clone());
+    view.files.insert(
+        file,
+        b"[toolchain]\npath = \"toolchains/[custom]?\"\n".to_vec(),
+    );
+    view.files.insert(
+        velnor_model::RepoPath::new("mise.toml")?,
+        NEXTEST_ONLY.as_bytes().to_vec(),
+    );
+    let text = workflow(&view)?;
+    let lanes = lanes_of(&text);
+    assert!(!lanes.is_empty(), "{text}");
+    for (id, block) in lanes {
+        assert!(
+            lane_listing(&block).contains(&"/toolchains/\\[custom\\]\\?/"),
+            "{id}"
+        );
+    }
+    Ok(())
+}
