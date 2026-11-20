@@ -308,7 +308,13 @@ fn a_parallel_lane_needs_a_helper_that_reads_the_job_key() -> TestResult {
         assert!(
             error
                 .downcast_ref::<GenerateError>()
-                .is_some_and(|e| matches!(e, GenerateError::ConfigKeyHelperTooOld { key: "test_lane.job", .. })),
+                .is_some_and(|e| matches!(
+                    e,
+                    GenerateError::ConfigKeyHelperTooOld {
+                        key: "test_lane.job",
+                        ..
+                    }
+                )),
             "{error}"
         );
         assert!(
@@ -329,7 +335,13 @@ fn an_explicit_inline_job_key_needs_the_helper_that_reads_it() -> TestResult {
     assert!(
         error
             .downcast_ref::<GenerateError>()
-            .is_some_and(|e| matches!(e, GenerateError::ConfigKeyHelperTooOld { key: "test_lane.job", .. })),
+            .is_some_and(|e| matches!(
+                e,
+                GenerateError::ConfigKeyHelperTooOld {
+                    key: "test_lane.job",
+                    ..
+                }
+            )),
         "{error}"
     );
     assert!(
