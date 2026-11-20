@@ -497,6 +497,10 @@ needs = ["cancel-service-hosted", "cancel-service-scale-set"]
 permissions = { contents = "read", actions = "read" }
 
 [[workflow.job.step]]
+name = "Check out"
+uses = "checkout"
+
+[[workflow.job.step]]
 name = "Check the cancelled runs"
 run = "bash qualification/cancel-service-check.sh"
 env = { GITHUB_TOKEN = "${{ github.token }}" }
