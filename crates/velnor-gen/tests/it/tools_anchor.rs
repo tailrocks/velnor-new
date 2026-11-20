@@ -9,6 +9,8 @@ use crate::pipeline::{pin_helper, view, workflow};
 const HELPER: &str = "0.1.110";
 const PLAN: &str = "rust-plan";
 const PLAN_ANCHOR: &str = "${{ needs.rust-plan.outputs.tools_anchor }}";
+const PLAN_ANCHOR_KEY: &str = "${{ needs.rust-plan.outputs.tools_anchor_key }}";
+const PLAN_ANCHOR_KEY_OUTPUT: &str = "${{ steps.toolsanchor.outputs.cache-matched-key }}";
 const READ_ANCHOR: &str = "${{ steps.toolsread.outputs.anchor }}";
 const RECORDED: &str = "${{ steps.toolsrecord.outputs.digest }}";
 const STORES: &[&str] = &["mbx_shared_store = true\n", "mbx_shared_store = false\n"];
@@ -279,6 +281,34 @@ fn a_job_without_a_plan_job_reads_the_anchor_itself() -> TestResult {
 }
 
 #[test]
+#[test]
+fn a_job_that_names_the_anchor_entry_reads_its_key_from_the_plan_job() -> TestResult {
+    for config in STORES.iter().copied() {
+        let yaml = render(&["Cargo.toml", "tools/Cargo.toml"], config, "0.1.111")?;
+        let mut verified = 0;
+        for (id, job) in jobs(&yaml)? {
+            if id == PLAN {
+                assert_eq!(
+                    job["outputs"]["tools_anchor_key"], PLAN_ANCHOR_KEY_OUTPUT,
+                    "{config:?}"
+                );
+                continue;
+            }
+            let steps = steps(&job);
+            let Some(verify) = position(&steps, verifies) else {
+                continue;
+            };
+            verified += 1;
+            assert_eq!(
+                steps[verify]["env"]["VELNOR_ANCHOR_CACHE_KEY"], PLAN_ANCHOR_KEY,
+                "{config:?} {id}"
+            );
+        }
+        assert!(verified >= 1, "{config:?}");
+    }
+    Ok(())
+}
+
 fn a_helper_without_the_newest_anchor_keeps_one_anchor_restore_per_job() -> TestResult {
     for config in STORES.iter().copied() {
         let yaml = render(&["Cargo.toml", "tools/Cargo.toml"], config, "0.1.109")?;
