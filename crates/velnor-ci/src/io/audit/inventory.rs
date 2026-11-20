@@ -9,8 +9,6 @@ mod walk;
 pub(super) use evidence::{Evidence, State, state};
 pub(super) use latest::newest;
 pub(super) use walk::{Budget, scan};
-#[cfg(test)]
-pub(super) use walk::{Probe, scan_with};
 
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};

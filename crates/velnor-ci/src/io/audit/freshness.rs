@@ -213,48 +213,51 @@ mod tests {
         );
     }
 
-    #[test]
-    fn a_directory_swapped_in_after_the_walk_makes_the_snapshot_stale() {
+    fn directory_snapshot(name: &str) -> (PathBuf, inventory::Scan) {
         let root = fs::canonicalize(std::env::temp_dir())
             .unwrap_or_else(|e| unreachable!("{e}"))
-            .join(format!("velnor-freshness-swap-{}", std::process::id()));
+            .join(format!("velnor-freshness-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
-        let original = root.join("d");
-        fs::create_dir_all(&original).unwrap_or_else(|e| unreachable!("{e}"));
-        let set = |path: &Path, time: SystemTime| {
-            fs::write(path, b"").unwrap_or_else(|e| unreachable!("{e}"));
-            fs::File::open(path)
-                .and_then(|file| file.set_times(fs::FileTimes::new().set_modified(time)))
+        let directory = root.join("d");
+        fs::create_dir_all(&directory).unwrap_or_else(|e| unreachable!("{e}"));
+        fs::write(directory.join("f"), b"").unwrap_or_else(|e| unreachable!("{e}"));
+        for path in [directory.join("f"), directory.clone(), root.clone()] {
+            fs::File::open(&path)
+                .and_then(|file| file.set_times(fs::FileTimes::new().set_modified(UNIX_EPOCH)))
                 .unwrap_or_else(|e| unreachable!("{e}"));
-        };
-        let future = UNIX_EPOCH + std::time::Duration::from_secs(4_000_000_000);
-        set(&original.join("f"), future);
-        let swapped = std::sync::atomic::AtomicBool::new(false);
+        }
         let mut budget = Budget::new(usize::MAX);
-        let scan = inventory::scan_with(
-            &root,
-            &BTreeSet::new(),
-            &mut budget,
-            &inventory::Probe {
-                after_open: &|directory| {
-                    if directory.ends_with("d")
-                        && !swapped.swap(true, std::sync::atomic::Ordering::Relaxed)
-                    {
-                        fs::rename(directory, directory.with_file_name("d.aside"))
-                            .unwrap_or_else(|e| unreachable!("{e}"));
-                        fs::create_dir_all(directory).unwrap_or_else(|e| unreachable!("{e}"));
-                        set(&directory.join("f"), UNIX_EPOCH);
-                    }
-                },
-                ..inventory::Probe::default()
-            },
-        )
-        .unwrap_or_else(|e| unreachable!("{e}"));
+        let scan = inventory::scan(&root, &BTreeSet::new(), &mut budget)
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        (root, scan)
+    }
+
+    #[test]
+    fn a_file_created_after_the_walk_makes_the_snapshot_stale() {
+        let (root, scan) = directory_snapshot("created");
+        fs::write(root.join("d").join("new"), b"").unwrap_or_else(|e| unreachable!("{e}"));
         let newest = inventory::newest(&scan, &scan.entries);
         fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
         assert!(
             matches!(newest, Ok(None)),
-            "a swapped-in directory was read as the walked one: {newest:?}"
+            "a file created after the walk was missed: {newest:?}"
+        );
+    }
+
+    #[test]
+    fn a_directory_rewritten_with_the_same_names_after_the_walk_makes_the_snapshot_stale() {
+        let (root, scan) = directory_snapshot("rewritten");
+        let directory = root.join("d");
+        fs::remove_file(directory.join("f")).unwrap_or_else(|e| unreachable!("{e}"));
+        fs::write(directory.join("f"), b"").unwrap_or_else(|e| unreachable!("{e}"));
+        fs::File::open(directory.join("f"))
+            .and_then(|file| file.set_times(fs::FileTimes::new().set_modified(UNIX_EPOCH)))
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        let newest = inventory::newest(&scan, &scan.entries);
+        fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+        assert!(
+            matches!(newest, Ok(None)),
+            "a directory rewritten after the walk was accepted as the walked one: {newest:?}"
         );
     }
 }

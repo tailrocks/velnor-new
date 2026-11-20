@@ -61,11 +61,22 @@ pub(super) fn names(
     Ok(names)
 }
 
-pub(super) type Identity = (i128, i128);
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::io::audit) struct Identity {
+    device: i128,
+    inode: i128,
+    modified: (i128, i128),
+    changed: (i128, i128),
+}
 
 pub(super) fn identity(directory: &Dir) -> io::Result<Identity> {
     let stat = fstat(directory).map_err(failure)?;
-    Ok((i128::from(stat.st_dev), i128::from(stat.st_ino)))
+    Ok(Identity {
+        device: i128::from(stat.st_dev),
+        inode: i128::from(stat.st_ino),
+        modified: (i128::from(stat.st_mtime), i128::from(stat.st_mtime_nsec)),
+        changed: (i128::from(stat.st_ctime), i128::from(stat.st_ctime_nsec)),
+    })
 }
 
 pub(super) struct Observed {
@@ -86,7 +97,20 @@ fn format_of(stat: &FileStat) -> SFlag {
     SFlag::from_bits_truncate(stat.st_mode) & SFlag::S_IFMT
 }
 
-pub(super) fn kind_at(directory: &Dir, name: &OsStr, path: &Path) -> io::Result<Option<Observed>> {
+pub(super) fn kind_at(directory: &Dir, name: &OsStr, path: &Path) -> io::Result<Option<Kind>> {
+    Ok(classify(directory, name, path, false)?.map(|observed| observed.kind))
+}
+
+pub(super) fn observe(directory: &Dir, name: &OsStr, path: &Path) -> io::Result<Option<Observed>> {
+    classify(directory, name, path, true)
+}
+
+fn classify(
+    directory: &Dir,
+    name: &OsStr,
+    path: &Path,
+    with_modified: bool,
+) -> io::Result<Option<Observed>> {
     let stat = match fstatat(directory, name, AtFlags::AT_SYMLINK_NOFOLLOW) {
         Ok(stat) => stat,
         Err(nix::errno::Errno::ENOENT) => return Ok(None),
@@ -109,14 +133,18 @@ pub(super) fn kind_at(directory: &Dir, name: &OsStr, path: &Path) -> io::Result<
         Err(error) if unresolved_link(&error) => None,
         Err(error) => return Err(error),
     };
-    let followed = match fstatat(directory, name, AtFlags::empty()) {
-        Ok(followed) => followed,
-        Err(nix::errno::Errno::ENOENT | nix::errno::Errno::ELOOP | nix::errno::Errno::ENOTDIR) => {
-            stat
-        }
-        Err(errno) => return Err(failure(errno)),
+    let modified = if with_modified {
+        let followed = match fstatat(directory, name, AtFlags::empty()) {
+            Ok(followed) => followed,
+            Err(
+                nix::errno::Errno::ENOENT | nix::errno::Errno::ELOOP | nix::errno::Errno::ENOTDIR,
+            ) => stat,
+            Err(errno) => return Err(failure(errno)),
+        };
+        (format_of(&followed) != SFlag::S_IFDIR).then(|| modified(&followed))
+    } else {
+        None
     };
-    let modified = (format_of(&followed) != SFlag::S_IFDIR).then(|| modified(&followed));
     match readlinkat(directory, name) {
         Ok(target) => Ok(Some(Observed {
             kind: Kind::Link {

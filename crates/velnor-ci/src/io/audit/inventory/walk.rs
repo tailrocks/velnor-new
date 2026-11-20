@@ -8,7 +8,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use super::super::options::{MAX_ENTRIES_CEILING, MAX_ENTRIES_VARIABLE};
-use super::handle::{self, Observed, Opened, Origin};
+use super::handle::{self, Opened, Origin};
 use super::{Kind, Scan, excluded_entry};
 
 pub(in crate::io::audit) struct Budget {
@@ -127,7 +127,7 @@ pub(in crate::io::audit) fn scan_with(
         let mut children = BTreeMap::new();
         for name in names {
             let path = directory.join(&name);
-            let Some(Observed { kind, .. }) = handle::kind_at(&listing, &name, &path)? else {
+            let Some(kind) = handle::kind_at(&listing, &name, &path)? else {
                 continue;
             };
             pending.extend(queue(&kind, &path, &listing, &name, (&root, targets))?);
@@ -138,8 +138,6 @@ pub(in crate::io::audit) fn scan_with(
     Ok(scan)
 }
 
-/// What to walk next for a classified child: a directory through its parent's
-/// handle, or the directory a link resolves to.
 fn queue(
     kind: &Kind,
     path: &Path,
@@ -169,17 +167,13 @@ fn queue(
     })
 }
 
-/// A queued directory could not be opened because its entry changed after it was
-/// classified. A vanished entry is dropped from its parent. Anything else that now
-/// sits there (a link, a file) is inventoried in its place, and a directory that
-/// reappeared fails the scan, because it was not walked.
 fn settle(
     scan: &mut Scan,
     pending: &mut Vec<Pending>,
     directory: &Path,
     parent: &Opened,
     name: &OsStr,
-    replacement: Option<Observed>,
+    replacement: Option<Kind>,
     (root, targets): (&Path, &BTreeSet<PathBuf>),
 ) -> io::Result<()> {
     let children = directory
@@ -192,11 +186,8 @@ fn settle(
                 children.remove(key);
             }
         }
-        Some(Observed {
-            kind: Kind::Directory,
-            ..
-        }) => return Err(changed(directory)),
-        Some(Observed { kind, .. }) => {
+        Some(Kind::Directory) => return Err(changed(directory)),
+        Some(kind) => {
             pending.extend(queue(&kind, directory, parent, name, (root, targets))?);
             if let Some(children) = children {
                 children.insert(key.to_path_buf(), kind);
