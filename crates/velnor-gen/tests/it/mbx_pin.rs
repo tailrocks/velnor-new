@@ -17,7 +17,7 @@ const PIN_OUTPUT: &str = "${{ steps.mbx-pin.outputs.version }}";
 fn repo(helper: &str, mbx: &str) -> Result<RepoView, Box<dyn Error>> {
     let mut repo = view(&["Cargo.toml"], Some(ON))?;
     let mise = format!(
-        "[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n{mbx}\n"
+        "[tools]\nrust = {{ version = \"1.99.1\", mr_boxington = true }}\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n{mbx}\n"
     );
     repo.files
         .insert(RepoPath::new("mise.toml")?, mise.into_bytes());

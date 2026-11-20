@@ -274,7 +274,24 @@ pub(crate) fn node_step(kind: &velnor_model::StepKind) -> RenderedStep {
 }
 
 pub(crate) const MBX_ACTION_SHA: &str = "88acf2bb50552c7c508cbac13e5f8c576b95b1de";
+/// The mbx release the action installs. Keep it equal to the `mr-boxington`
+/// pin in the repository's `mise.toml`, so every job runs the same compiler cache.
 const MBX_VERSION: &str = "1.30.0";
+
+pub(crate) fn mbx_private_step() -> RenderedStep {
+    RenderedStep {
+        name: "Private mbx store".to_owned(),
+        run: Some("echo \"MBX_CACHE_DIR=$RUNNER_TEMP/mbx\" >> \"$GITHUB_ENV\"".to_owned()),
+        ..RenderedStep::default()
+    }
+}
+
+pub(crate) fn mbx_local_step(kind: &velnor_model::StepKind) -> RenderedStep {
+    match kind {
+        velnor_model::StepKind::MbxPrivate => mbx_private_step(),
+        _ => mbx_store_step(),
+    }
+}
 
 pub(crate) const MBX_PIN_STEP: &str = "mbx-pin";
 

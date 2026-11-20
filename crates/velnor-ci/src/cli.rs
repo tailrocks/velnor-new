@@ -17,8 +17,8 @@ pub use fetch_reports::FetchReportsArgs;
 mod write_request;
 pub use crate::cli_args::{
     BaseFile, BenchCommand, BudgetArgs, CheckConfigurationsArgs, CollectArgs, CompareArgs,
-    CratesMirrorArgs, ImageCommand, MisePinArgs, PlanArgs, PlanMode, PrepareArgs,
-    QualificationCommand, QualificationCompareArgs, ToolsLocalArgs, VerifyCandidateArgs,
+    CratesMirrorArgs, ImageCommand, MisePinArgs, PlanArgs, PlanMode, PrepareArgs, QualificationCommand,
+    QualificationCompareArgs, ToolsLocalArgs, ToolsVerifyArgs, VerifyCandidateArgs,
 };
 pub use crate::cli_cache::{CacheCommand, DecideArgs, TrimArgs};
 pub use gate::GateArgs;
@@ -131,6 +131,10 @@ pub enum Command {
         about = "Print the exact release that the workspace's mise.toml (and .mise.toml) pins for <tool>, with a leading v removed, and fail unless it is one X.Y.Z release that mise.lock, when present, resolves to the same version. A range, latest, a loose or leading-zero version, a missing pin or two different pins fail. Appends version=<release> to $GITHUB_OUTPUT when that variable is set"
     )]
     MisePin(MisePinArgs),
+    #[command(
+        about = "Verify restored tools against the anchor a trusted run recorded in $RUNNER_TEMP/velnor-tools-anchor/digest, which counts only when $VELNOR_ANCHOR_HIT is true. reset deletes $RUNNER_TEMP/velnor-tools-anchor before the anchor restore; check, after the restores, keeps ~/.local/share/mise and ~/.rustup only when their digest equals the anchor and otherwise deletes both, writing verified=true or verified=false to $GITHUB_OUTPUT; record, after the install, refuses an event that is not a push, schedule or workflow_dispatch on the default branch, and otherwise writes the anchor when none was restored and writes matches= and recorded= so the saves run only for tools equal to the anchor"
+    )]
+    ToolsVerify(ToolsVerifyArgs),
     #[command(
         about = "Run after the tools are installed, in the directory of a Cargo root: exit 1 unless .velnor/rust-metadata.json is exactly what velnor-gen generate writes for that root, which reads cargo metadata --no-deps --offline"
     )]

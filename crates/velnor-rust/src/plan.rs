@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
     Access, CacheDebug, CacheKey, CargoCommand, Concurrency, Gate, HelperCommand, Host, Job, JobId,
-    MbxRemote, MbxStore, PackageName, PermissionScope, Permissions, PrCi, PrRun, PrepareLocks,
+    MbxStore, PackageName, PermissionScope, Permissions, PrCi, PrRun, PrepareLocks,
     PushAfterMergeGroup, RepoFacts, RootSlug, RustRoot, Step, StepKind, TargetName, Toolchain,
     When, WorkflowPlan,
 };
@@ -18,7 +18,6 @@ use crate::error::{DetectError, Reason};
 use crate::lane::{
     Lane, PLAN_JOB, expose_read_outputs, plan_job, policy_job, used_group_outputs, used_outputs,
 };
-use crate::mbx_pin::MBX_PIN_HELPER;
 use crate::plan_budget::{draft_guard, expose_selection, triggers};
 use crate::plan_tools::{mirror_step, tools_install, tools_restore, tools_save};
 use crate::required_job::{expose_in_single, gate_outputs};
@@ -109,9 +108,7 @@ fn apply_extensions(facts: &RepoFacts, jobs: &mut [Job], single: bool) {
     crate::private_fetch::insert(facts.config.private_sources.as_ref(), jobs);
     crate::release_assets::insert(&facts.config, jobs);
     crate::lock_scope::apply(facts, jobs);
-    if facts.config.mbx_remote == MbxRemote::GithubActions && facts.private_sources.is_none() {
-        add_mbx_remote(facts, jobs);
-    }
+    crate::mbx_steps::apply(facts, jobs);
     if facts.config.push_after_merge_group == PushAfterMergeGroup::SkipWhenQueueRunPassed {
         crate::merge_group_skip::apply(jobs, single);
     }
@@ -298,46 +295,6 @@ pub(crate) fn setup_units(
         ..step
     }));
     steps
-}
-
-fn add_mbx_remote(facts: &RepoFacts, jobs: &mut [Job]) {
-    let from_pin = facts
-        .helper
-        .as_ref()
-        .is_some_and(|helper| helper.version().at_least(MBX_PIN_HELPER));
-    for job in jobs {
-        if !job
-            .steps
-            .iter()
-            .any(|step| matches!(&step.kind, StepKind::Cargo(command) if command.builds()))
-        {
-            continue;
-        }
-        if let Some(at) = job
-            .steps
-            .iter()
-            .position(|step| matches!(step.kind, StepKind::InstallTools { .. }))
-        {
-            let installed = &job.steps[at];
-            let (gate, pr) = (installed.gate.clone(), installed.pr);
-            let mut inserted = Vec::new();
-            if from_pin {
-                inserted.push(Step {
-                    gate: gate.clone(),
-                    pr,
-                    ..step(StepKind::MbxPin)
-                });
-            }
-            inserted.push(Step {
-                gate,
-                pr,
-                ..step(StepKind::MbxRemote { from_pin })
-            });
-            let tail = job.steps.split_off(at + 1);
-            job.steps.extend(inserted);
-            job.steps.extend(tail);
-        }
-    }
 }
 
 pub(crate) fn quick(facts: &RepoFacts) -> PrRun {

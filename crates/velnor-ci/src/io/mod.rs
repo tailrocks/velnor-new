@@ -235,6 +235,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::MbxSeed => crate::mbx_seed::setup(),
         Command::MisePin(args) => crate::mise_pin::run(&args.tool),
         Command::ToolsLocal(args) => crate::tools_local::setup(args.verb, &args.key),
+        Command::ToolsVerify(args) => crate::tools_verify_step::setup(args.verb),
         Command::Prepare(args) => setup::prepare(&args),
         Command::CheckMetadata => setup::check_metadata(),
         Command::CheckConfigurations(args) => configurations::check(&args),

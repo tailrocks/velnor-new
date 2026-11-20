@@ -7,7 +7,7 @@ use super::*;
 fn a_machete_pin_filtered_to_another_os_does_not_enable_the_policy_lane() -> TestResult {
     let mise = |os: &str| {
         format!(
-            "[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\ncargo-machete = {{ version = \"0.9.1\", os = [\"{os}\"] }}\n"
+            "[wrappers.cargo]\ncommand = \"mbx\"\nenv = {{ MBX_CARGO_SHIM_MODE = \"1\" }}\n\n[tools]\nrust = {{ version = \"1.99.1\", mr_boxington = true }}\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\ncargo-machete = {{ version = \"0.9.1\", os = [\"{os}\"] }}\n"
         )
     };
     let elsewhere = with(&[("mise.toml", &mise("macos"))], None)?;
@@ -26,7 +26,7 @@ fn a_machete_pin_filtered_to_another_os_does_not_enable_the_policy_lane() -> Tes
 fn a_machete_pin_reads_mise_os_arch_filters_and_darwin_as_macos() -> TestResult {
     let mise = |os: &str| {
         format!(
-            "[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\ncargo-machete = {{ version = \"0.9.1\", os = [\"{os}\"] }}\n"
+            "[wrappers.cargo]\ncommand = \"mbx\"\nenv = {{ MBX_CARGO_SHIM_MODE = \"1\" }}\n\n[tools]\nrust = {{ version = \"1.99.1\", mr_boxington = true }}\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\ncargo-machete = {{ version = \"0.9.1\", os = [\"{os}\"] }}\n"
         )
     };
     let linux_arch = with(
@@ -87,7 +87,7 @@ fn the_policy_lane_exists_only_for_a_deny_config_or_a_pinned_machete() -> TestRe
     let machete = with(
         &[(
             "mise.toml",
-            "[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\ncargo-machete = \"0.9.1\"\n",
+            "[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n\n[tools]\nrust = { version = \"1.99.1\", mr_boxington = true }\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\ncargo-machete = \"0.9.1\"\n",
         )],
         None,
     )?;

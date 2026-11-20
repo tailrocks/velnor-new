@@ -1,0 +1,149 @@
+2026-11-20T09:11:36.1629687Z ##[group]GITHUB_TOKEN Permissions
+2026-11-20T09:11:36.1633038Z ##[endgroup]
+2026-11-20T09:11:43.9919790Z ##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+2026-11-20T09:11:43.9925744Z ##[endgroup]
+2026-11-20T09:11:44.0688503Z ##[group]Getting Git version info
+2026-11-20T09:11:44.0724654Z ##[endgroup]
+2026-11-20T09:11:44.0766528Z ##[group]Determining repository object format
+2026-11-20T09:11:44.0767809Z ##[endgroup]
+2026-11-20T09:11:44.0768200Z ##[group]Initializing the repository
+2026-11-20T09:11:44.0848120Z ##[endgroup]
+2026-11-20T09:11:44.0848898Z ##[group]Disabling automatic garbage collection
+2026-11-20T09:11:44.0877930Z ##[endgroup]
+2026-11-20T09:11:44.0878655Z ##[group]Setting up auth
+2026-11-20T09:11:44.1883715Z ##[endgroup]
+2026-11-20T09:11:44.1884058Z ##[group]Fetching the repository
+2026-11-20T09:11:46.2627473Z ##[endgroup]
+2026-11-20T09:11:46.2627797Z ##[group]Determining the checkout info
+2026-11-20T09:11:46.2630216Z ##[endgroup]
+2026-11-20T09:11:46.2714041Z ##[group]Checking out the ref
+2026-11-20T09:11:46.8297909Z ##[endgroup]
+2026-11-20T09:11:46.8340873Z ##[group]Removing auth
+2026-11-20T09:11:46.9445478Z ##[endgroup]
+2026-11-20T09:11:46.9607075Z ##[group]Run eval "$VELNOR_HELPER_INSTALL_TOOLS"
+2026-11-20T09:11:46.9619631Z ##[endgroup]
+2026-11-20T09:11:46.9784223Z ##[group]Run tailrocks/velnor-new/actions/setup-velnor@e2a16e3820e86984fba0c8a92624296a708e
+2026-11-20T09:11:46.9788249Z ##[endgroup]
+2026-11-20T09:11:46.9830456Z ##[start-action display=Install velnor-ci;id=__tailrocks_velnor-new.__run]
+2026-11-20T09:11:46.9851527Z ##[group]Run set -euo pipefail
+2026-11-20T09:11:46.9893095Z ##[endgroup]
+2026-11-20T09:11:47.6025945Z ##[end-action id=__tailrocks_velnor-new.__run;outcome=success;conclusion=success;duration_m
+2026-11-20T09:11:47.6070578Z ##[group]Run eval "$VELNOR_HELPER_INSTALL_LAUNCHER"
+2026-11-20T09:11:47.6087162Z ##[endgroup]
+2026-11-20T09:11:47.6229967Z ##[group]Run . "$VELNOR_EXEC" plan --explain
+2026-11-20T09:11:47.6240347Z ##[endgroup]
+2026-11-20T09:11:48.5047444Z ##[group]Run . "$VELNOR_EXEC" merge-group-passed
+2026-11-20T09:11:48.5060486Z ##[endgroup]
+2026-11-20T09:11:49.0147486Z ##[group]Run . "$VELNOR_EXEC" mbx-store
+2026-11-20T09:11:49.0173515Z ##[endgroup]
+2026-11-20T09:11:49.0484853Z ##[group]Run . "$VELNOR_EXEC" crates-mirror --registry 'sparse+https://crates-mirror.velnor
+2026-11-20T09:11:49.0497135Z ##[endgroup]
+2026-11-20T09:11:49.1343683Z ##[group]Run . "$VELNOR_EXEC" tools-local restore --key "$VELNOR_TOOLS_KEY"
+2026-11-20T09:11:49.1375309Z ##[endgroup]
+2026-11-20T09:11:50.4859487Z ##[group]Run printf 'cache-primary-key=%s\ncache-matched-key=%s\ncache-hit=%s\n' "$CACHE_KE
+2026-11-20T09:11:50.4873518Z ##[endgroup]
+2026-11-20T09:11:50.5060015Z ##[group]Run jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
+2026-11-20T09:11:50.5071538Z ##[endgroup]
+2026-11-20T09:11:50.8173536Z ##[group]Setting env vars
+2026-11-20T09:11:50.8177451Z ##[group]Running mise --version
+2026-11-20T09:11:50.8267185Z ##[endgroup]
+2026-11-20T09:11:50.8438448Z ##[group]Running mise install --locked
+2026-11-20T09:11:52.5147019Z ##[endgroup]
+2026-11-20T09:11:52.5147341Z ##[group]Running mise ls
+2026-11-20T09:11:52.5367664Z ##[endgroup]
+2026-11-20T09:11:52.5578337Z ##[group]Exporting mise environment variables
+2026-11-20T09:11:52.6314031Z ##[endgroup]
+2026-11-20T09:11:52.6423284Z ##[group]Run . "$VELNOR_EXEC" crates-mirror --registry 'sparse+https://crates-mirror.velnor
+2026-11-20T09:11:52.6450266Z ##[endgroup]
+2026-11-20T09:11:52.6846866Z ##[group]Run rustup component add clippy rustfmt
+2026-11-20T09:11:52.6874805Z ##[endgroup]
+2026-11-20T09:11:52.7593693Z ##[group]Run rustup target add aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu
+2026-11-20T09:11:52.7617311Z ##[endgroup]
+2026-11-20T09:11:52.8546561Z ##[group]Run actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+2026-11-20T09:11:52.8554894Z ##[endgroup]
+2026-11-20T09:11:53.4960835Z ##[group]Run . "$VELNOR_EXEC" tools-local save --key "$VELNOR_TOOLS_KEY"
+2026-11-20T09:11:53.5017061Z ##[endgroup]
+2026-11-20T09:11:53.5425638Z ##[group]Run . "$VELNOR_EXEC" prepare --lock-root root
+2026-11-20T09:11:53.5480276Z ##[endgroup]
+2026-11-20T09:11:53.8695350Z ##[group]Run . "$VELNOR_EXEC" check-metadata
+2026-11-20T09:11:53.8720040Z ##[endgroup]
+2026-11-20T09:11:54.4219087Z ##[group]Run echo "hash=$SOURCES_LOCKS" >> "$GITHUB_OUTPUT"
+2026-11-20T09:11:54.4277552Z ##[endgroup]
+2026-11-20T09:11:54.4390185Z ##[group]Run actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+2026-11-20T09:11:54.4400104Z ##[endgroup]
+2026-11-20T09:12:05.5800897Z ##[group]Run actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+2026-11-20T09:12:05.5811958Z ##[endgroup]
+2026-11-20T09:12:49.0252401Z ##[group]Run . "$VELNOR_EXEC" inputs restore-all --root-target "${GITHUB_WORKSPACE}"/. "${G
+2026-11-20T09:12:49.0312971Z ##[endgroup]
+2026-11-20T09:12:50.4267737Z ##[group]Run . "$VELNOR_EXEC" restored --target-dir "${GITHUB_WORKSPACE}"/target
+2026-11-20T09:12:50.4326427Z ##[endgroup]
+2026-11-20T09:12:50.5803505Z ##[group]Run . "$VELNOR_EXEC" run -- cargo-fmt --all --check
+2026-11-20T09:12:50.5917728Z ##[endgroup]
+2026-11-20T09:12:54.0840215Z ##[group]Run . "$VELNOR_EXEC" run -- velnor-ci inputs build -- cargo-clippy clippy --worksp
+2026-11-20T09:12:54.0866958Z ##[endgroup]
+2026-11-20T09:13:20.6021273Z ##[group]Run . "$VELNOR_EXEC" run -- velnor-ci inputs build -- cargo doc --workspace --no-d
+2026-11-20T09:13:20.6059558Z ##[endgroup]
+2026-11-20T09:13:33.4568543Z ##[group]Run . "$VELNOR_EXEC" run -- velnor-ci inputs build -- cargo check -p velnor-archiv
+2026-11-20T09:13:33.4598663Z ##[endgroup]
+2026-11-20T09:13:37.1148571Z ##[group]Run . "$VELNOR_EXEC" run -- velnor-ci inputs build -- cargo check -p velnor-cache-
+2026-11-20T09:13:37.1174485Z ##[endgroup]
+2026-11-20T09:13:39.9960218Z ##[group]Run . "$VELNOR_EXEC" run -- velnor-ci inputs build -- cargo check -p velnor-ci --l
+2026-11-20T09:13:39.9986579Z ##[endgroup]
+2026-11-20T09:13:50.1088316Z ##[group]Run . "$VELNOR_EXEC" run -- velnor-ci inputs build -- cargo check -p velnor-gen --
+2026-11-20T09:13:50.1126676Z ##[endgroup]
+2026-11-20T09:13:54.8321624Z ##[group]Run . "$VELNOR_EXEC" run -- velnor-ci inputs build -- cargo check -p velnor-local 
+2026-11-20T09:13:54.8381475Z ##[endgroup]
+2026-11-20T09:13:57.8277406Z ##[group]Run . "$VELNOR_EXEC" run -- velnor-ci inputs build -- cargo check -p velnor-model 
+2026-11-20T09:13:57.8337485Z ##[endgroup]
+2026-11-20T09:14:00.6854979Z ##[group]Run . "$VELNOR_EXEC" run -- velnor-ci inputs build -- cargo check -p velnor-releas
+2026-11-20T09:14:00.6881228Z ##[endgroup]
+2026-11-20T09:14:03.6060642Z ##[group]Run . "$VELNOR_EXEC" run -- velnor-ci inputs build -- cargo check -p velnor-render
+2026-11-20T09:14:03.6086677Z ##[endgroup]
+2026-11-20T09:14:06.5211256Z ##[group]Run . "$VELNOR_EXEC" run -- velnor-ci inputs build -- cargo check -p velnor-resour
+2026-11-20T09:14:06.5238238Z ##[endgroup]
+2026-11-20T09:14:09.4165526Z ##[group]Run . "$VELNOR_EXEC" run -- velnor-ci inputs build -- cargo check -p velnor-runner
+2026-11-20T09:14:09.4191402Z ##[endgroup]
+2026-11-20T09:14:12.3683531Z ##[group]Run . "$VELNOR_EXEC" run -- velnor-ci inputs build -- cargo check -p velnor-runner
+2026-11-20T09:14:12.3709429Z ##[endgroup]
+2026-11-20T09:14:15.4895578Z ##[group]Run . "$VELNOR_EXEC" run -- velnor-ci inputs build -- cargo check -p velnor-runner
+2026-11-20T09:14:15.4933025Z ##[endgroup]
+2026-11-20T09:14:18.4011860Z ##[group]Run . "$VELNOR_EXEC" run -- velnor-ci inputs build -- cargo check -p velnor-runner
+2026-11-20T09:14:18.4038267Z ##[endgroup]
+2026-11-20T09:14:21.2880930Z ##[group]Run . "$VELNOR_EXEC" run -- velnor-ci inputs build -- cargo check -p velnor-runner
+2026-11-20T09:14:21.2906606Z ##[endgroup]
+2026-11-20T09:14:24.2834768Z ##[group]Run . "$VELNOR_EXEC" run -- velnor-ci inputs build -- cargo check -p velnor-runner
+2026-11-20T09:14:24.2871337Z ##[endgroup]
+2026-11-20T09:14:27.1734813Z ##[group]Run . "$VELNOR_EXEC" run -- velnor-ci inputs build -- cargo check -p velnor-runner
+2026-11-20T09:14:27.1761319Z ##[endgroup]
+2026-11-20T09:14:30.1117469Z ##[group]Run . "$VELNOR_EXEC" run -- velnor-ci inputs build -- cargo check -p velnor-rust -
+2026-11-20T09:14:30.1154916Z ##[endgroup]
+2026-11-20T09:14:34.4889945Z ##[group]Run . "$VELNOR_EXEC" run -- velnor-ci inputs build -- cargo check -p velnor-test-s
+2026-11-20T09:14:34.4949851Z ##[endgroup]
+2026-11-20T09:14:37.3907311Z ##[group]Run . "$VELNOR_EXEC" run -- velnor-ci inputs build -- cargo check -p velnor-workfl
+2026-11-20T09:14:37.3967250Z ##[endgroup]
+2026-11-20T09:14:40.2611429Z ##[group]Run mise --no-config --no-env --no-hooks install aqua:sigstore/cosign@3.1.4
+2026-11-20T09:14:40.2671873Z ##[endgroup]
+2026-11-20T09:14:40.6071444Z ##[group]Run mise --no-config --no-env --no-hooks install gh@2.104.0
+2026-11-20T09:14:40.6095862Z ##[endgroup]
+2026-11-20T09:14:43.2443254Z ##[group]Run . "$VELNOR_EXEC" run -- velnor-ci inputs build -- cargo-nextest nextest run --
+2026-11-20T09:14:43.2505882Z ##[endgroup]
+2026-11-20T09:18:53.8122923Z ##[group]Run . "$VELNOR_EXEC" run -- velnor-ci inputs build -- cargo-nextest nextest run --
+2026-11-20T09:18:53.8154870Z ##[endgroup]
+2026-11-20T09:20:02.1154037Z ##[group]Run . "$VELNOR_EXEC" run -- velnor-ci lane-guard --features 'local-mode' --filter 
+2026-11-20T09:20:02.1185879Z ##[endgroup]
+2026-11-20T09:20:04.8726098Z ##[group]Run . "$VELNOR_EXEC" run -- velnor-ci inputs build -- cargo-clippy clippy --worksp
+2026-11-20T09:20:04.8770755Z ##[endgroup]
+2026-11-20T09:20:08.4189797Z ##[group]Run . "$VELNOR_EXEC" run -- velnor-ci inputs build -- cargo doc --workspace --no-d
+2026-11-20T09:20:08.4261033Z ##[endgroup]
+2026-11-20T09:20:15.5080173Z ##[group]Run . "$VELNOR_EXEC" inputs save --target-dir target --scope-cache "${RUNNER_TEMP}
+2026-11-20T09:20:15.5112352Z ##[endgroup]
+2026-11-20T09:20:16.3992273Z ##[group]Run . "$VELNOR_EXEC" cache decide --target-dir target
+2026-11-20T09:20:16.4042392Z ##[endgroup]
+2026-11-20T09:20:20.4044756Z ##[group]Run actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+2026-11-20T09:20:20.4068081Z ##[endgroup]
+2026-11-20T09:20:34.7944232Z ##[group]Run echo "key=$CACHE_KEY" >> "$GITHUB_OUTPUT"
+2026-11-20T09:20:34.7977624Z ##[endgroup]
+2026-11-20T09:20:34.8146009Z ##[group]Run . "$VELNOR_EXEC" report
+2026-11-20T09:20:34.8210807Z ##[endgroup]
+2026-11-20T09:20:36.1603967Z ##[group]Run actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+2026-11-20T09:20:36.1614800Z ##[endgroup]

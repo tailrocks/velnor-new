@@ -106,10 +106,12 @@ fn scheduled_budget_runs_after_writers_even_when_a_sibling_or_all_saves_are_skip
 #[test]
 fn a_repository_without_cache_writers_still_budgets_existing_caches() -> TestResult {
     for bytes in [0_u64, 8_000_000_000] {
-        for version in ["0.1.82"] {
+        for version in ["0.1.109"] {
             let mut repo = crate::base_save::pinned(
                 version,
-                &format!("full_run = \"off\"\ncache_budget_bytes = {bytes}\n"),
+                &format!(
+                    "full_run = \"off\"\ncache_budget_bytes = {bytes}\n[cache]\nmbx = false\n"
+                ),
             )?;
             repo.files
                 .insert(RepoPath::new("mise.toml")?, b"[tools]\n".to_vec());
@@ -143,7 +145,10 @@ fn a_repository_without_cache_writers_still_budgets_existing_caches() -> TestRes
             ] {
                 assert!(!trim.contains(absent), "{absent}: {trim}");
             }
-            assert!(trim.contains("Install velnor-ci 0.1.82"), "{trim}");
+            assert!(
+                trim.contains(&format!("Install velnor-ci {version}")),
+                "{trim}"
+            );
             assert!(trim.contains("actions: write"), "{trim}");
             assert!(trim.contains("pull-requests: read"), "{trim}");
             let condition = trim

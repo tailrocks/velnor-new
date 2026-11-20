@@ -190,7 +190,7 @@ pub fn check_tools(facts: &RepoFacts) -> Result<(), DetectError> {
             path: facts.tools.configs.first().cloned().unwrap_or(MISE_CONFIG),
         });
     }
-    Ok(())
+    crate::mbx_layout::check_pin(facts)
 }
 
 fn check_prebuilt(facts: &RepoFacts) -> Result<(), DetectError> {
