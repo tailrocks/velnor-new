@@ -104,11 +104,18 @@ fn every_cargo_command_has_its_check_classification() {
 }
 
 #[test]
-fn test_setup_is_a_check_and_other_steps_are_not() {
+fn test_setup_and_the_advisory_fetch_are_checks_and_other_steps_are_not() {
     assert!(
         StepKind::TestSetup {
             name: String::from("setup"),
             run: String::from("true"),
+        }
+        .is_check()
+    );
+    // It serves the cargo-deny check (a check above), so it must skip with it.
+    assert!(
+        StepKind::AdvisoryFetch {
+            configs: vec![None],
         }
         .is_check()
     );

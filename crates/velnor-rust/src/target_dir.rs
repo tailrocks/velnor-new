@@ -91,6 +91,15 @@ fn default_dir(view: &RepoView, manifest: &RepoPath) -> RepoPath {
     manifest.sibling(&DEFAULT)
 }
 
+#[must_use]
+pub fn default_folder(manifest: &RepoPath) -> RepoPath {
+    if manifest.parent().is_some() {
+        nested_default(manifest)
+    } else {
+        manifest.sibling(&DEFAULT)
+    }
+}
+
 fn nested_default(manifest: &RepoPath) -> RepoPath {
     RepoPath::new(format!(
         "target/{NESTED_ROOTS_FOLDER}/{}",
