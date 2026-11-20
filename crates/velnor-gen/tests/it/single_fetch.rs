@@ -3,9 +3,9 @@
 
 use velnor_gen::{GenerateError, expected_with_notes};
 use velnor_model::{
-    CacheKey, CacheRoot, Concurrency, Host, Job, JobId, Permissions, PrRun, PullRequestType,
-    RepoPath, RepoView, RootSlug, RunnerLabel, Step, StepKind, Triggers, WORKFLOW_PATH, When,
-    WorkflowPlan,
+    BaseScope, CacheKey, CacheRoot, Concurrency, Host, Job, JobId, Permissions, PrRun,
+    PullRequestType, RepoPath, RepoView, RootSlug, RunnerLabel, Step, StepKind, Triggers,
+    WORKFLOW_PATH, When, WorkflowPlan,
 };
 use velnor_render::render;
 
@@ -232,6 +232,7 @@ fn render_fetch(manifests: Vec<RepoPath>) -> Result<String, Box<dyn std::error::
                 step_of(StepKind::CacheSave(CacheKey::Sources {
                     host: Host,
                     lane: root,
+                    scope: BaseScope::Shared,
                 })),
             ],
         }],
