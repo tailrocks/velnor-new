@@ -59,6 +59,15 @@ slow-timeout = { period = "10s", terminate-after = 1 }
 filter = 'package(=velnor-gen) and test(=helper_tool_paths::setup_records_non_default_tools_and_rendered_calls_use_them)'
 slow-timeout = { period = "10s", terminate-after = 1 }
 
+# Each of these renders or reads every recorded sample, so it runs past the 2 s default on a loaded host.
+[[profile.default.overrides]]
+filter = 'package(=velnor-gen) and binary(=it) and (test(=golden::every_sample_repository_renders_exactly_its_expected_files) or test(=fork_fence_invariant::every_job_of_every_sample_that_a_pull_request_reaches_is_fenced) or test(=trim_job::no_job_of_any_sample_that_can_run_on_a_pull_request_or_merge_group_holds_actions_write) or test(=unused_anchors::no_rendered_sample_workflow_has_an_anchor_nobody_aliases))'
+slow-timeout = { period = "10s", terminate-after = 1 }
+
+[[profile.ci.overrides]]
+filter = 'package(=velnor-gen) and binary(=it) and (test(=golden::every_sample_repository_renders_exactly_its_expected_files) or test(=fork_fence_invariant::every_job_of_every_sample_that_a_pull_request_reaches_is_fenced) or test(=trim_job::no_job_of_any_sample_that_can_run_on_a_pull_request_or_merge_group_holds_actions_write) or test(=unused_anchors::no_rendered_sample_workflow_has_an_anchor_nobody_aliases))'
+slow-timeout = { period = "10s", terminate-after = 1 }
+
 [[profile.default.overrides]]
 filter = "package(=velnor-ci) and (test(io_restore_cargo::) | test(io_restore_cold_cargo::) | test(io_raw_paths::) | test(io_cold_targets::) | test(io_shared_targets::) | test(io_foreign_targets::) | test(io_restored_targets::) | test(io_snapshot_storage::) | test(io_inputs_scope::) | test(io_inputs_batch::) | test(io_scope_cache::) | test(io_scope_cache_races::) | test(io_scope_cache_paths::))"
 slow-timeout = { period = "30s", terminate-after = 1 }
