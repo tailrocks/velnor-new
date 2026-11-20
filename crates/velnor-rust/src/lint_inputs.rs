@@ -74,9 +74,6 @@ pub fn unmatched_inputs(
     })
 }
 
-/// Returns the entries that no tracked path matches, in input order, in one pass over the
-/// tracked paths. Each path is offered only to the entries whose first glob segment equals its
-/// own first segment (or is `*`), so `matches` must be false for every other entry.
 #[must_use]
 pub fn unmatched_entries<T>(
     entries: Vec<(T, PathGlob)>,
