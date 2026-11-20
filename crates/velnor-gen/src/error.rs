@@ -139,14 +139,9 @@ impl fmt::Display for GenerateError {
                 f,
                 "velnor-ci {version} cannot bind a family tag; pin velnor-ci 0.1.85 or later with `velnor-gen pin-helper 0.1.85`"
             ),
-            Self::TagPushHelperTooOld(version) => write!(
-                f,
-                "velnor-ci {version} cannot check a pushed family tag, which family_trigger = \"tag_push\" needs; pin velnor-ci 0.1.98 or later with `velnor-gen pin-helper 0.1.98`"
-            ),
-            Self::OptionalAssetsHelperTooOld(version) => write!(
-                f,
-                "velnor-ci {version} cannot publish an optional release file, which optional_platforms in .velnor/release.toml needs; pin velnor-ci 0.1.108 or later with `velnor-gen pin-helper 0.1.108`, or remove optional_platforms"
-            ),
+            Self::TagPushHelperTooOld(version) | Self::OptionalAssetsHelperTooOld(version) => {
+                f.write_str(&release_key_too_old(self, version))
+            }
             Self::VersionGroupsHelperTooOld(version) => write!(
                 f,
                 "velnor-ci {version} cannot record the members of a release-plz version_group as one release; pin velnor-ci 0.1.97 or later with `velnor-gen pin-helper 0.1.97`"
@@ -203,5 +198,24 @@ fn lane_job_too_old(version: &HelperVersion) -> String {
 fn modes_too_old(version: &HelperVersion) -> String {
     format!(
         "velnor-ci {version} cannot read the selection of a run, so it cannot apply [budget.full], [budget.affected] or [budget.none]; pin velnor-ci 0.1.104 or later with `velnor-gen pin-helper 0.1.104`"
+    )
+}
+
+fn release_key_too_old(error: &GenerateError, version: &HelperVersion) -> String {
+    let (what, needs, pin) = if matches!(error, GenerateError::TagPushHelperTooOld(_)) {
+        (
+            "cannot check a pushed family tag, which family_trigger = \"tag_push\" needs",
+            "0.1.98",
+            "",
+        )
+    } else {
+        (
+            "cannot publish an optional release file, which optional_platforms in .velnor/release.toml needs",
+            "0.1.108",
+            ", or remove optional_platforms",
+        )
+    };
+    format!(
+        "velnor-ci {version} {what}; pin velnor-ci {needs} or later with `velnor-gen pin-helper {needs}`{pin}"
     )
 }

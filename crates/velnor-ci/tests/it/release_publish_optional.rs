@@ -27,7 +27,7 @@ fn without_the_optional_file() -> Vec<(&'static str, String)> {
             let text = if file == "SHA256SUMS" {
                 text.lines()
                     .filter(|line| !line.ends_with(OPTIONAL))
-                    .map(|line| format!("{line}\n"))
+                    .flat_map(|line| [line, "\n"])
                     .collect()
             } else {
                 text.to_owned()
