@@ -11,7 +11,7 @@ use crate::facts::TestResult;
 use crate::lint_lane::{IDS, LINT, rendered, repo, runs};
 use crate::pipeline::workflow;
 
-fn spec(text: &str) -> Result<VerdictSpec, String> {
+pub(crate) fn spec(text: &str) -> Result<VerdictSpec, String> {
     let line = text
         .split("GATE_SPEC: '")
         .nth(1)
@@ -29,7 +29,7 @@ fn spec(text: &str) -> Result<VerdictSpec, String> {
     VerdictSpec::parse(&plan, &after("--job"), &after("--tests"))
 }
 
-fn needs_of(text: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+pub(crate) fn needs_of(text: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
     let document = crate::yaml_tree::document(text)?;
     Ok(document["jobs"]["required"]["needs"]
         .as_array()
@@ -39,7 +39,7 @@ fn needs_of(text: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
         .collect())
 }
 
-fn verdict(
+pub(crate) fn verdict(
     text: &str,
     result_of: impl Fn(&str) -> Option<&'static str>,
 ) -> Result<(bool, String), Box<dyn std::error::Error>> {

@@ -7,6 +7,7 @@ mod cache;
 mod cache_layout;
 mod cache_outputs;
 mod cargo_build;
+mod check_configurations;
 mod cron;
 mod helper;
 mod hosted;
@@ -29,7 +30,8 @@ mod token_permission;
 mod verdict;
 
 pub use artifact_paths::{
-    aliased_secret, path_matches, secret_like, secret_path, segment_matches, selects,
+    Case, FILESYSTEM_CASE, aliased_secret, path_matches, secret_like, secret_path, segment_matches,
+    selects,
 };
 pub use budget_mode::{BUDGET_JOB_NAME, BUDGET_MODES_HELPER, ModeBudget, Selection, SelectionName};
 pub use cache::{CacheKey, CachePath, CacheRoot, Host, LockIdentity};
@@ -42,6 +44,7 @@ pub use cache_outputs::{
     BASE_PREFIX_OUTPUT, BASE_SAVE_OUTPUT, CacheLaneOutput, SOURCES_PREFIX_OUTPUT,
     SOURCES_SAVED_OUTPUT, cache_lane_outputs,
 };
+pub use check_configurations::CheckConfigurations;
 pub use cron::CronExpr;
 pub use helper::{HelperRelease, Platform};
 pub use hosted::HostedRunners;

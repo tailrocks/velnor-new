@@ -73,7 +73,7 @@ pub(crate) fn output(slug: &RootSlug, need: GateNeed) -> String {
     need.output_name(slug)
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Setup {
     Before,
     Restored,

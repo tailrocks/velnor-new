@@ -7,11 +7,20 @@ use std::{
     time::{Duration, Instant},
 };
 
+use velnor_resource_probe::cleanup_observer_wire::CleanupObserverRecord;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Observation {
     Counted,
     NotYetVisible,
-    Faulted,
+}
+
+pub(crate) fn owned_reference_observation(record: &CleanupObserverRecord) -> Observation {
+    if record.owned_reference_count >= 1 {
+        Observation::Counted
+    } else {
+        Observation::NotYetVisible
+    }
 }
 
 pub(crate) fn poll_observation<T>(
@@ -24,7 +33,7 @@ pub(crate) fn poll_observation<T>(
     loop {
         let value = observe()?;
         match classify(&value) {
-            Observation::Counted | Observation::Faulted => return Ok(value),
+            Observation::Counted => return Ok(value),
             Observation::NotYetVisible if Instant::now() >= deadline => return Ok(value),
             Observation::NotYetVisible => thread::sleep(interval),
         }
@@ -56,11 +65,43 @@ mod tests {
         Ok((value.0, calls))
     }
 
+    fn loaded_ci_host_record() -> CleanupObserverRecord {
+        CleanupObserverRecord {
+            schema_version: 1,
+            operation_id: "0123456789abcdef0123456789abcdef".to_owned(),
+            binding_sha256: "1d4362f29562fb1668677fd4d9bdc54c982b3a402a9fe4b1fd357d7beb1c9fd5"
+                .to_owned(),
+            guest_boot_id: Some("35d64c2c-ee1f-42a2-8d26-96f68eeb1853".to_owned()),
+            docker_root: None,
+            complete: false,
+            owned_references_absent: false,
+            issues: [
+                "initial_cgroup_or_root_check_incomplete",
+                "daemon_identity_unreadable",
+                "descriptor_limit",
+                "final_cgroup_or_root_check_incomplete",
+                "docker_root_changed",
+                "daemon_identity_changed",
+            ]
+            .map(str::to_owned)
+            .to_vec(),
+            task_count: 5037,
+            descriptor_count: 68493,
+            namespace_count: 1,
+            owned_reference_count: 0,
+            absent_volume_mountpoints: Vec::new(),
+            absent_tmpfs_devices: Vec::new(),
+            absent_mount_namespaces: Vec::new(),
+            absent_cgroup_paths: None,
+        }
+    }
+
     #[test]
-    fn a_faulted_observation_fails_on_the_first_attempt() -> Result<(), Box<dyn Error>> {
-        let sequence = [(7, Observation::Faulted), (8, Observation::Counted)];
-        assert_eq!(run(&sequence, LIMIT)?, (7, 1));
-        Ok(())
+    fn a_scan_that_hit_the_descriptor_limit_on_a_loaded_host_is_retried() {
+        assert_eq!(
+            owned_reference_observation(&loaded_ci_host_record()),
+            Observation::NotYetVisible
+        );
     }
 
     #[test]
