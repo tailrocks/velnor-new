@@ -7,6 +7,9 @@
 # gate line or the line directly above it; it passes only when the gate is N, the commit is
 # in tools-v0.1.N, and the commit is not in tools-v0.1.(N-1). Releases before 0.1.85 are
 # tagged rust-ci-v0.1.N, so the marker may name rust-ci-v0.1.N for those.
+# A gate above the released version may carry `// helper-gate: untagged tools-v0.1.N` on the
+# same lines; it passes only when the gate is N and tools-v0.1.N is not tagged yet.
+# The prose "First released in ..." / "not tagged yet" comment is rejected.
 set -euo pipefail
 
 diff_file=""
@@ -44,8 +47,25 @@ release_tag() {
   fi
 }
 
+verify_untagged() {
+  local file=$1 gate=$2 n=$3
+  if [ "$gate" != "0.1.$n" ]; then
+    echo "$file: untagged marker names tools-v0.1.$n but the gate is $gate" >&2
+    return 1
+  fi
+  if git rev-parse -q --verify "refs/tags/tools-v0.1.$n^{commit}" >/dev/null; then
+    echo "$file: tools-v0.1.$n is already tagged, so gate $gate is released; use helper-gate: first in tools-v0.1.$n via <commit>" >&2
+    return 1
+  fi
+  echo "helper gate untagged: OK ($gate is not tagged yet)"
+}
+
 verify_correction() {
   local file=$1 gate=$2 n=$3 commit=$4 tag prev
+  if [ "$commit" = untagged ]; then
+    verify_untagged "$file" "$gate" "$n"
+    return
+  fi
   tag=$(release_tag "$n")
   prev=$(release_tag "$((n - 1))")
   if [ "$gate" != "0.1.$n" ]; then
@@ -89,6 +109,13 @@ report=$(awk -v series="$series" -v patch="$patch" -v next_version="$next" '
     return n
   }
   function marker(line, out,    m) {
+    if (match(line, /helper-gate: untagged tools-v0\.1\.[0-9]+/)) {
+      m = substr(line, RSTART, RLENGTH)
+      match(m, /0\.1\.[0-9]+/)
+      out["n"] = substr(m, RSTART + 4, RLENGTH - 4)
+      out["commit"] = "untagged"
+      return 1
+    }
     if (!match(line, /helper-gate: first in (tools|rust-ci)-v0\.1\.[0-9]+ via [^ ]+/)) return 0
     m = substr(line, RSTART, RLENGTH)
     match(m, /0\.1\.[0-9]+/)
@@ -105,8 +132,9 @@ report=$(awk -v series="$series" -v patch="$patch" -v next_version="$next" '
     above = prevnew
     prevnew = text
     if (!counted || $0 !~ /^\+/) next
+    if (tolower(text) ~ /first released in|not tagged yet/) { printf "PROSE\t%s\t%s\n", file, text; next }
     stripped = text
-    sub(/helper-gate: first in (tools|rust-ci)-v0\.1\.[0-9]+ via [^ ]+/, "", stripped)
+    sub(/helper-gate: (first in (tools|rust-ci)-v0\.1\.[0-9]+ via [^ ]+|untagged tools-v0\.1\.[0-9]+)/, "", stripped)
     has = marker(text, mk) || marker(above, mk)
     markN_now = has ? mk["n"] : ""
     markC_now = has ? mk["commit"] : ""
@@ -142,6 +170,9 @@ while IFS=$'\t' read -r kind f1 f2 f3 f4; do
   case "$kind" in
     VERIFY)
       verify_correction "$f1" "$f2" "$f3" "$f4" || bad=1 ;;
+    PROSE)
+      printf '%s: prose gate marker %s\n  use `// helper-gate: first in tools-v0.1.N via <commit>` (released) or `// helper-gate: untagged tools-v0.1.N` (not tagged yet)\n' "$f1" "$f2" >&2
+      bad=1 ;;
     BAD)
       printf '%s: gate %s, but tools-v%s is already released; use %s\n  %s\n' "$f1" "$f2" "$f2" "$next" "$f3" >&2
       bad=1 ;;

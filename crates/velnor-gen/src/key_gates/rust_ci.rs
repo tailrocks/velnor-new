@@ -79,7 +79,7 @@ pub(super) const RUST_CI: &[KeyGate] = &[
     gate(RustCi, "crates_mirror.registry", (0, 1, 93)),
     // helper-gate: first in tools-v0.1.93 via 3147d5485a
     gate(RustCi, "crates_mirror.runner", (0, 1, 93)),
-    // First released in tools-v0.1.110 (not tagged yet when this gate was written).
+    // helper-gate: first in tools-v0.1.110 via 7f7d94a6a4
     gate(RustCi, "crates_mirror.trusted_runner", (0, 1, 110)),
     gate(RustCi, "default_branch", HELPER_MINIMUM),
     gate(RustCi, "default_ignores", HELPER_MINIMUM),
@@ -104,7 +104,7 @@ pub(super) const RUST_CI: &[KeyGate] = &[
     gate(RustCi, "lint.config", (0, 1, 89)),
     // helper-gate: first in tools-v0.1.89 via 330573ef6d
     gate(RustCi, "lint.id", (0, 1, 89)),
-    // First released in tools-v0.1.110 (not tagged yet when this gate was written).
+    // helper-gate: first in tools-v0.1.110 via e26fec3103
     gate(RustCi, "lint.inputs", (0, 1, 110)),
     // helper-gate: first in tools-v0.1.89 via 330573ef6d
     gate(RustCi, "lint.kind", (0, 1, 89)),
@@ -125,11 +125,11 @@ pub(super) const RUST_CI: &[KeyGate] = &[
     gate(RustCi, "nextest_harnesses", HELPER_MINIMUM),
     gate(RustCi, "non_inputs", HELPER_MINIMUM),
     gate(RustCi, "on_main", HELPER_MINIMUM),
-    // First released in tools-v0.1.111 (not tagged yet when this gate was written).
+    // helper-gate: untagged tools-v0.1.111
     gate(RustCi, "policy", (0, 1, 111)),
-    // First released in tools-v0.1.111 (not tagged yet when this gate was written).
+    // helper-gate: untagged tools-v0.1.111
     gate(RustCi, "policy.deny", (0, 1, 111)),
-    // First released in tools-v0.1.111 (not tagged yet when this gate was written).
+    // helper-gate: untagged tools-v0.1.111
     gate(RustCi, "policy.deny_checks", (0, 1, 111)),
     // helper-gate: first in tools-v0.1.88 via e061b56eac
     gate(RustCi, "pr_ci", (0, 1, 88)),
@@ -157,7 +157,7 @@ pub(super) const RUST_CI: &[KeyGate] = &[
     // helper-gate: first in tools-v0.1.109 via 7f64ddb2c4
     gate(RustCi, "root_timeouts", (0, 1, 109)),
     gate(RustCi, "runner", HELPER_MINIMUM),
-    // First released in tools-v0.1.110 (not tagged yet when this gate was written).
+    // helper-gate: first in tools-v0.1.110 via 7f7d94a6a4
     gate(RustCi, "trusted_runner", (0, 1, 110)),
     gate(RustCi, "shape", HELPER_MINIMUM),
     gate(RustCi, "skip_draft_pull_requests", HELPER_MINIMUM),

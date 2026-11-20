@@ -21,7 +21,7 @@ pub(crate) const TOOLS_CACHE_KEY_HELPER: (u64, u64, u64) = (0, 1, 110);
 // helper-gate: first in tools-v0.1.110 via 8db5d70509
 const TOOLS_CLEAR_HELPER: (u64, u64, u64) = (0, 1, 110);
 
-// First released in tools-v0.1.110 (not tagged yet when this gate was written).
+// helper-gate: first in tools-v0.1.110 via 3e56d7299d
 const TOOLS_ANCHOR_HELPER: (u64, u64, u64) = (0, 1, 110);
 
 pub(crate) fn tools_cache_key(anchor: ToolsAnchor) -> CacheKey {
