@@ -54,6 +54,33 @@ fn a_workflow_runner_equal_to_the_trusted_label_is_refused_when_cases_replace_th
 }
 
 #[test]
+fn a_scale_set_runner_equal_to_the_trusted_label_is_refused_for_cases() -> TestResult {
+    for scale_set in [POOL.to_owned(), POOL.to_uppercase()] {
+        let header = format!(
+            "runner = \"{BOX}\"\ntrusted_runner = \"{POOL}\"\nhosted_runner = \"ubuntu-24.04\"\nscale_set_runner = \"{scale_set}\"\nfork_runner = \"ubuntu-24.04\""
+        );
+        let message = refusal(&workflow(&header, "", CASES))?;
+        assert!(message.contains("trusted_runner"), "{scale_set}: {message}");
+    }
+    Ok(())
+}
+
+#[test]
+fn a_scale_set_runner_equal_to_the_trusted_label_is_refused_for_every_case() -> TestResult {
+    let second_case = "\n[[workflow.case]]\nid = \"mask\"\nmodes = [\"both\"]\n\n[[workflow.case.step]]\nname = \"Mask\"\nrun = \"echo mask\"\n";
+    let jobs = CASES.replace(
+        "\n[[workflow.job]]",
+        &format!("{second_case}\n[[workflow.job]]"),
+    );
+    let header = format!(
+        "runner = \"{BOX}\"\ntrusted_runner = \"{POOL}\"\nhosted_runner = \"ubuntu-24.04\"\nscale_set_runner = \"{POOL}\"\nfork_runner = \"ubuntu-24.04\""
+    );
+    let message = refusal(&workflow(&header, "", &jobs))?;
+    assert!(message.contains("trusted_runner"), "{message}");
+    Ok(())
+}
+
+#[test]
 fn a_workflow_runner_on_the_trusted_label_of_another_workflow_is_refused_in_either_order()
 -> TestResult {
     let trusted = format!("runner = \"{BOX}\"\ntrusted_runner = \"{POOL}\"");

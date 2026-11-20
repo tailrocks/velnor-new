@@ -35,7 +35,7 @@ fork_runner = "ubuntu-24.04"
 
 ## Trusted runner pool
 
-A repository that keeps a second, trusted self-hosted pool for the default branch sets `trusted_runner` to that pool's label. Jobs of trusted events then run on the trusted label, and every other event keeps today's `runs-on`, with its fork fallback.
+A repository that keeps a second, trusted self-hosted pool for the default branch sets `trusted_runner` to that pool's label. Jobs of trusted events then run on the trusted label, and every other event keeps today's `runs-on`, with its fork fallback. Don't enable trusted_runner until #2268 is fixed: a `run` step can still build a Docker image from workflow inputs (e.g. env T=${{ inputs.target }}; docker build $T).
 
 ```toml
 runner = "ubuntu-26.04-scale-set"

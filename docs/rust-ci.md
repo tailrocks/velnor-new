@@ -185,7 +185,7 @@ Every key of `.velnor/rust-ci.toml`, with its default. `generator/CONFIG.md` has
 | `runner` | `"ubuntu-latest"` | the runner label of every job |
 | `hosted` | `true` when `runner` is not set | `true` opens `runner` to fork pull requests, `false` fences it; required when `runner` is spelled like a GitHub-hosted label; needs `velnor-ci` 0.1.99 |
 | `fork_runner` | platform-dependent: `"ubuntu-latest"`, `"ubuntu-24.04-arm"` for a Linux arm64 `runner`, `"macos-15"` for an Apple silicon macOS `runner` | the hosted runner for fork pull requests when `runner` is self-hosted |
-| `trusted_runner` | none | the label of a trusted self-hosted pool; jobs of a push, schedule or dispatch on the protected default branch run on it, every other event on `runner`; also accepted in `[crates_mirror]`; needs `velnor-ci` 0.1.110; see [generator/CONFIG.md](../generator/CONFIG.md#trusted-runner-pool) |
+| `trusted_runner` | none | the label of a trusted self-hosted pool; jobs of a push, schedule or dispatch on the protected default branch run on it, every other event on `runner`; also accepted in `[crates_mirror]`; needs `velnor-ci` 0.1.110; see [generator/CONFIG.md](../generator/CONFIG.md#trusted-runner-pool); Don't enable trusted_runner until #2268 is fixed: a `run` step can still build a Docker image from workflow inputs (e.g. env T=${{ inputs.target }}; docker build $T). |
 | `timeout_minutes` | `30` | job time limit, 1 to 360 |
 | `root_timeouts` | none | `{ "folder" = minutes }` (1 to 360) sets the job time limit of one root; `"."` is the repository root; needs `velnor-ci` 0.1.109, see [generator/CONFIG.md](../generator/CONFIG.md) |
 | `required_check` | `"Required"` | the name of the one required check |
