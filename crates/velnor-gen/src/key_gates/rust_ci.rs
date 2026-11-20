@@ -3,7 +3,7 @@
 
 //! Every key `.velnor/rust-ci.toml` accepts, with the first `velnor-ci` that parses it.
 
-use super::{ConfigFile::RustCi, KeyGate, gate};
+use super::{ConfigFile::RustCi, KeyGate, gate, gate_value};
 use crate::HELPER_MINIMUM;
 
 pub(super) const RUST_CI: &[KeyGate] = &[
@@ -98,6 +98,8 @@ pub(super) const RUST_CI: &[KeyGate] = &[
     gate(RustCi, "lint.id", (0, 1, 89)),
     // helper-gate: first in tools-v0.1.89 via 330573ef6d
     gate(RustCi, "lint.kind", (0, 1, 89)),
+    // First released in tools-v0.1.110 (not tagged yet when this gate was written).
+    gate_value(RustCi, "lint.kind", "generated-check", (0, 1, 110)),
     // helper-gate: first in tools-v0.1.89 via 330573ef6d
     gate(RustCi, "lint.name", (0, 1, 89)),
     // helper-gate: first in tools-v0.1.89 via 330573ef6d
