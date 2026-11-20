@@ -80,7 +80,13 @@ fn plain_remote(url: &str) -> bool {
     REMOTE_SCHEMES.iter().any(|scheme| {
         url.strip_prefix(scheme).is_some_and(|rest| {
             let authority = rest.split('/').next().unwrap_or("");
-            !authority.is_empty() && (*scheme == "ssh://" || !authority.contains('@'))
+            !authority.is_empty()
+                && match authority.rsplit_once('@') {
+                    None => true,
+                    Some((userinfo, _)) => {
+                        *scheme == "ssh://" && !userinfo.contains([':', '%', '@'])
+                    }
+                }
         })
     })
 }

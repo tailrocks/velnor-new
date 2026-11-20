@@ -258,9 +258,6 @@ pub(crate) fn setup_units(
     if lane.plan.is_none() {
         steps.push(step(StepKind::Helper(HelperCommand::Plan)));
     }
-    // The privacy lookup and the merge queue check hold the job token, so they run before any
-    // step that executes checkout code (mbx, tools, cargo): code run earlier could leave a
-    // same-user process that reads the token from their environment.
     steps.extend(
         crate::base_cache::privacy_check(facts)
             .into_iter()
