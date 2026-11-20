@@ -68,6 +68,7 @@ pub fn render_release(
     });
     jobs.extend(publish_stage(plan));
     jobs.extend(finalize_job(plan, helper));
+    crate::mise_digest::pin_to_runner_platform(&mut jobs);
     let rendered = RenderedWorkflow { jobs };
     check_rules(&rendered)?;
     let workflow = [

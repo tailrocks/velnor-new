@@ -120,6 +120,7 @@ mod io_record_boundaries;
 
 mod job_setup;
 mod job_setup_env;
+mod mise_binary_pin;
 mod mise_safety;
 
 mod detect_private;

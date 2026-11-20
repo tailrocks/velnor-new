@@ -1,35 +1,35 @@
 # Mise platform binary pins
 
-Named workflow checks pin the official Mise `v2026.10.8` release and use
-the target-specific raw executable SHA-256 as the `jdx/mise-action` input.
-The workflow generator selects only the digest for the job's exact target.
-The full official [`SHASUMS256.txt`](https://github.com/jdx/mise/releases/download/v2026.10.8/SHASUMS256.txt)
-was captured at `2026-10-12T23:08:53Z`; its SHA-256 is
-`9237b178f5f3d1625045c18608e4bde6f66a023593822e8ae9029967c19474b0`.
-The raw receipt is recorded in
-[`freshness-upstream-probe-2026-10-13.json`](freshness-upstream-probe-2026-10-13.json).
+Generated workflows pin the official Mise release with the raw executable
+SHA-256 as the `sha256` input of every `jdx/mise-action` step (issue #2158).
+The renderer holds the digests (`MISE_BINARIES` in
+`crates/velnor-render/src/mise_digest.rs`, next to `MISE_VERSION`). A job whose
+runner labels name one platform gets that platform's digest; any other job
+selects it at run time from `runner.os` and `runner.arch`, and a platform
+without a row selects a text that matches no binary, so the action fails
+instead of installing an unchecked executable. The design
+and the bump procedure are in [docs/rust-ci.md](../rust-ci.md#the-mise-binary-is-pinned-by-sha-256).
 
-| Target | Official raw executable | SHA-256 |
+The digests come from the official
+[`SHASUMS256.txt`](https://github.com/jdx/mise/releases/download/v2026.11.10/SHASUMS256.txt)
+of the release and agree with the `digest` field of each release asset in the
+GitHub releases API. The raw executable equals the binary inside the release
+archive that the action downloads and extracts (checked for `linux-x64`: the
+extracted `mise/bin/mise` has the digest below).
+`scripts/mise-binary-digests.sh --check` repeats the comparison.
+
+| `runner.os`-`runner.arch` | Official raw executable | SHA-256 |
 | --- | --- | --- |
-| `x86_64-unknown-linux-gnu` | [`mise-v2026.10.8-linux-x64`](https://github.com/jdx/mise/releases/download/v2026.10.8/mise-v2026.10.8-linux-x64) | `c72477ae6c3a8e7d817a322f43da70e4643e75ee5c21265f1c19c894273b7428` |
-| `aarch64-apple-darwin` | [`mise-v2026.10.8-macos-arm64`](https://github.com/jdx/mise/releases/download/v2026.10.8/mise-v2026.10.8-macos-arm64) | `dd77de9a7574e38d8409fb06fa85e1581415896639d075987791d8c4e5a57b73` |
-| `x86_64-apple-darwin` | [`mise-v2026.10.8-macos-x64`](https://github.com/jdx/mise/releases/download/v2026.10.8/mise-v2026.10.8-macos-x64) | `a122fd04db5f2da07d24528ed61109bc82142ca44e821d4faafa05650f6ba627` |
+| `Linux-X64` | `mise-v2026.11.10-linux-x64` | `b603a4f48563fc379a794d9ea2cf9f709ed276c9141068604cb0c59fa3e674a9` |
+| `Linux-ARM64` | `mise-v2026.11.10-linux-arm64` | `86ef275d541c5243cd20b1c0fcd16810e5f3601113d8db09278d0608617a3833` |
+| `macOS-ARM64` | `mise-v2026.11.10-macos-arm64` | `3f4ba9d21c6f2170048d0870fd98ab287e04730b76a6fc8e83964d59c80eb704` |
+| `macOS-X64` | `mise-v2026.11.10-macos-x64` | `7eab8054d301b75dcbd93440ff184bee6864d95799cfdc4a00ce858313b68783` |
 
-The source-build bootstrap also accepts Linux ARM64 and macOS ARM64 archives.
-Their archive and extracted executable hashes are checked against the same
-official release manifest and captured archive bytes; the targeted
-`mise_linux_arm64_archive_uses_official_release_checksum` test guards the
-Linux ARM64 archive digest used by the source-build catalog.
+## History
 
-## Hosted qualification
-
-Qualification for `2026.10.8` passed in the exact-source [`mise-pin` run
-38321521320](https://github.com/tailrocks/velnor-new/actions/runs/38321521320),
-dispatched against source SHA
-`438bd90d2ef64515373f413b501b7ae01189a8e7`. Both [Linux x64
-job 115050479288](https://github.com/tailrocks/velnor-new/actions/runs/38321521320/job/115050479288)
-and [macOS x64
-job 115050479238](https://github.com/tailrocks/velnor-new/actions/runs/38321521320/job/115050479238)
-passed the installed binary version and digest checks. This qualification
-covers those two hosted targets only. It does not qualify the generator
-release or establish qualification for Ubuntu `24.04`/`22.04` runner labels.
+The old engine (velnor-actions 0.1.78) pinned the same digests per target. The
+rewrite dropped them, so the generated steps passed only `version` until #2158.
+The previous table (`v2026.10.8`, captured `2026-10-12T23:08:53Z`, receipt in
+[`freshness-upstream-probe-2026-10-13.json`](freshness-upstream-probe-2026-10-13.json))
+qualified Linux x64 and macOS x64 in the exact-source
+[`mise-pin` run 38321521320](https://github.com/tailrocks/velnor-new/actions/runs/38321521320).
