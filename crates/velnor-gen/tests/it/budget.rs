@@ -277,6 +277,23 @@ fn a_pin_that_reads_the_selection_titles_the_budget_job_with_what_the_plan_selec
 }
 
 #[test]
+fn the_selection_title_is_only_an_expression_when_the_budget_job_runs() -> TestResult {
+    let files = budgeted("0.1.104", "[budget]\nmain_wall_seconds = 600\n")?;
+    let tree = crate::yaml_tree::document(&workflow(&files)?)?;
+    let name = tree
+        .pointer("/jobs/rust-budget/name")
+        .and_then(serde_json::Value::as_str)
+        .ok_or("the budget job has no title")?;
+    assert!(
+        name.starts_with("${{ (needs.required.result == 'success'")
+            && name.contains("needs.rust.result == 'success')")
+            && name.ends_with("|| 'Speed budget' }}"),
+        "the title falls back to the plain name when the job is skipped\n{name}"
+    );
+    Ok(())
+}
+
+#[test]
 fn a_pin_that_cannot_read_the_selection_keeps_the_plain_title_and_needs() -> TestResult {
     let files = budgeted("0.1.103", "[budget]\nmain_wall_seconds = 600\n")?;
     let tree = crate::yaml_tree::document(&workflow(&files)?)?;

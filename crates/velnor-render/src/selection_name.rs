@@ -39,8 +39,12 @@ fn expression(name: &SelectionName) -> String {
         .map(|mode| format!("{mode} == '{}'", Selection::Nothing.plan_value()))
         .collect::<Vec<_>>()
         .join(" && ");
+    let ran = format!(
+        "needs.{}.result == 'success' && needs.{}.result == 'success'",
+        name.after, name.plan
+    );
     format!(
-        "${{{{ format('{BUDGET_JOB_NAME} ({{0}})', ({}) && '{}' || (({}) && '{}' || (({every}) && '{}' || 'unknown'))) }}}}",
+        "${{{{ ({ran}) && format('{BUDGET_JOB_NAME} ({{0}})', ({}) && '{}' || (({}) && '{}' || (({every}) && '{}' || 'unknown'))) || '{BUDGET_JOB_NAME}' }}}}",
         any(Selection::Full),
         Selection::Full.name(),
         any(Selection::Affected),
