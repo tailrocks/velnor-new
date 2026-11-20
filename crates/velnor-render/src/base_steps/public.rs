@@ -1,18 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-//! The steps that look the declared public git dependencies up once per workflow run.
-//!
-//! One step of the plan job (`velnor-ci cache public-sources`) asks the GitHub API about each
-//! repository and exposes the answers as a job output. A lane's `cache decide` reads that output
-//! from its own step `env`, which a step the pull request controls cannot override (a value
-//! written to `$GITHUB_ENV` loses against the `env` of the step). The job token goes to these two
-//! steps only, and `velnor-ci` sends it to `https://api.github.com` only.
-
 use velnor_model::{
-    PUBLIC_SOURCES_STEP, PUBLIC_VERDICTS_OUTPUT, PlanFrom, RepoPath, Step, StepKind,
+    GateNeed, PUBLIC_SOURCES_STEP, PUBLIC_VERDICTS_OUTPUT, PlanFrom, RepoPath, RootSlug, Step,
+    StepKind,
 };
 
+use crate::gate::{PLAN_STEP, output};
 use crate::rules::{RenderedStep, Value};
 
 const VERDICTS_VARIABLE: &str = "VELNOR_PUBLIC_VERDICTS";
@@ -35,8 +29,27 @@ fn token_env() -> (String, Value) {
     ("GITHUB_TOKEN".to_owned(), Value::Expr(TOKEN.to_owned()))
 }
 
-pub(crate) fn public_sources(manifests: &[RepoPath]) -> RenderedStep {
+fn selected_condition(selected: &[RootSlug]) -> Option<String> {
+    (!selected.is_empty()).then(|| {
+        let reads: Vec<String> = selected
+            .iter()
+            .map(|slug| {
+                format!(
+                    "steps.{PLAN_STEP}.outputs.{} != 'none'",
+                    output(slug, GateNeed::Selected)
+                )
+            })
+            .collect();
+        format!(
+            "${{{{ steps.{PLAN_STEP}.outcome == 'success' && ({}) }}}}",
+            reads.join(" || ")
+        )
+    })
+}
+
+pub(crate) fn public_sources(manifests: &[RepoPath], selected: &[RootSlug]) -> RenderedStep {
     RenderedStep {
+        condition: selected_condition(selected),
         id: Some(PUBLIC_SOURCES_STEP.to_owned()),
         name: "Look up the public git dependencies once for this run".to_owned(),
         continue_on_error: true,
@@ -46,7 +59,6 @@ pub(crate) fn public_sources(manifests: &[RepoPath]) -> RenderedStep {
     }
 }
 
-/// The environment a `cache decide` step needs to use the verdicts of the run.
 pub(crate) fn decide_env(from: &PlanFrom) -> Vec<(String, Value)> {
     let expression = match from {
         PlanFrom::ThisJob => format!("${{{{ steps.{PUBLIC_SOURCES_STEP}.outputs.verdicts }}}}"),
@@ -54,13 +66,9 @@ pub(crate) fn decide_env(from: &PlanFrom) -> Vec<(String, Value)> {
             format!("${{{{ needs.{job}.outputs.{PUBLIC_VERDICTS_OUTPUT} }}}}")
         }
     };
-    vec![
-        token_env(),
-        (VERDICTS_VARIABLE.to_owned(), Value::Expr(expression)),
-    ]
+    vec![(VERDICTS_VARIABLE.to_owned(), Value::Expr(expression))]
 }
 
-/// The job output that hands the verdicts to the lanes, on the job that runs the lookup.
 pub(crate) fn job_output(steps: &[Step]) -> Option<(String, String)> {
     steps
         .iter()
@@ -73,7 +81,6 @@ pub(crate) fn job_output(steps: &[Step]) -> Option<(String, String)> {
         })
 }
 
-/// Renders the decide step and the lookup step, the two that read or write the verdicts.
 pub(crate) fn render(kind: &StepKind) -> RenderedStep {
     match kind {
         StepKind::CacheDecide {
@@ -91,7 +98,10 @@ pub(crate) fn render(kind: &StepKind) -> RenderedStep {
             *budget_bytes,
             verdicts.as_ref(),
         ),
-        StepKind::PublicSources { manifests } => public_sources(manifests),
+        StepKind::PublicSources {
+            manifests,
+            selected,
+        } => public_sources(manifests, selected),
         _ => RenderedStep::default(),
     }
 }

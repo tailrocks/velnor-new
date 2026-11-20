@@ -9,6 +9,7 @@ use std::thread;
 use velnor_model::GitRepository;
 
 use super::{Credentials, check, get, read, redact};
+use crate::public_probe::{Deadline, REQUEST_TIMEOUT};
 
 const TOKEN: &str = "ghs_unit_token_must_not_leave";
 
@@ -69,6 +70,10 @@ fn repository() -> GitRepository {
     }
 }
 
+fn deadline() -> Deadline {
+    Deadline::after(REQUEST_TIMEOUT)
+}
+
 const PUBLIC: &str = r#"{"full_name":"acme/shared-lib","private":false}"#;
 
 #[test]
@@ -79,6 +84,7 @@ fn the_token_is_sent_as_a_bearer_header_when_the_caller_passes_it() {
         &repository(),
         Some(TOKEN),
         Credentials::Token,
+        deadline(),
     );
     assert_eq!(result, Ok(Credentials::Token));
     let requests = server.requests();
@@ -106,8 +112,12 @@ fn a_redirect_is_never_followed_so_the_token_cannot_reach_another_host() {
         &repository(),
         Some(TOKEN),
         Credentials::Token,
+        deadline(),
     );
-    let error = result.err().unwrap_or_default();
+    let error = result
+        .err()
+        .map(|error| error.to_string())
+        .unwrap_or_default();
     assert!(error.contains("HTTP 307"), "{error}");
     assert!(!error.contains(TOKEN), "{error}");
     assert_eq!(moved.requests().len(), 1);
@@ -125,7 +135,7 @@ fn a_redirect_is_never_followed_so_the_token_cannot_reach_another_host() {
 #[test]
 fn a_host_other_than_the_github_api_gets_no_token_from_check() {
     let server = serve(200, None, PUBLIC);
-    let result = check(&server.url, &repository(), Some(TOKEN));
+    let result = check(&server.url, &repository(), Some(TOKEN), deadline());
     assert_eq!(result, Ok(Credentials::None));
     let requests = server.requests();
     assert_eq!(requests.len(), 1, "{requests:?}");
@@ -145,7 +155,7 @@ fn a_failed_connection_does_not_echo_the_token() {
         closed.local_addr().unwrap_or_else(|e| unreachable!("{e}"))
     );
     drop(closed);
-    let error = get(&url, Some(TOKEN)).err().unwrap_or_default();
+    let error = get(&url, Some(TOKEN), deadline()).err().unwrap_or_default();
     assert!(error.starts_with("lookup failed"), "{error}");
     assert!(!error.contains(TOKEN), "{error}");
 }
@@ -157,6 +167,7 @@ fn a_token_that_is_not_a_valid_header_value_is_not_echoed() {
     let error = get(
         &format!("{}/repos/acme/shared-lib", server.url),
         Some(token),
+        deadline(),
     )
     .err()
     .unwrap_or_default();

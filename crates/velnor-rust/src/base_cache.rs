@@ -61,8 +61,6 @@ pub(crate) fn writes_base(facts: &RepoFacts) -> bool {
     facts.private_sources.is_none() && has_saving_helper(facts)
 }
 
-/// The one lookup of the declared public git dependencies for the whole run, in the job that plans
-/// it. On the same events as the base save, so a pull request never makes the lookup.
 pub(crate) fn public_sources_step(facts: &RepoFacts) -> Option<Step> {
     (facts.config.public_sources.is_some() && writes_base(facts)).then(|| Step {
         when: When::SavingRun,
@@ -71,6 +69,10 @@ pub(crate) fn public_sources_step(facts: &RepoFacts) -> Option<Step> {
                 .rust_roots
                 .iter()
                 .map(|root| root.manifest.clone())
+                .collect(),
+            selected: crate::units::units(facts)
+                .iter()
+                .map(|unit| unit.gate.clone())
                 .collect(),
         })
     })

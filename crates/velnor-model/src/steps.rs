@@ -51,15 +51,11 @@ pub enum StepKind {
         archive: Option<RepoPath>,
         cli: InputsCli,
         budget_bytes: u64,
-        /// Where the public-repository verdicts of this run come from, when `[public_sources]` is
-        /// declared. The step also gets the job token for its own lookup of a repository the
-        /// verdicts do not show as public.
         verdicts: Option<PlanFrom>,
     },
-    /// Looks the declared public git dependencies up once for the whole run (`velnor-ci cache
-    /// public-sources`) and exposes the verdicts as the job output `public_verdicts`.
     PublicSources {
         manifests: Vec<RepoPath>,
+        selected: Vec<RootSlug>,
     },
     CacheResult(Vec<(JobId, TrimFamily)>),
     CacheVerify {

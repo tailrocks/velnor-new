@@ -44,6 +44,8 @@ pub struct BudgetArgs {
 pub struct DecideArgs {
     #[arg(long, hide = true, default_value = "https://api.github.com")]
     pub public_probe_api: String,
+    #[arg(long, hide = true, default_value_t = crate::public_probe::DEFAULT_TOTAL_SECONDS)]
+    pub public_probe_seconds: u64,
     #[arg(
         long,
         default_value = "Cargo.toml",
@@ -74,6 +76,8 @@ pub struct DecideArgs {
 pub struct PublicSourcesArgs {
     #[arg(long, hide = true, default_value = "https://api.github.com")]
     pub public_probe_api: String,
+    #[arg(long, hide = true, default_value_t = crate::public_probe::DEFAULT_TOTAL_SECONDS)]
+    pub public_probe_seconds: u64,
     #[arg(
         long,
         default_value = "Cargo.toml",

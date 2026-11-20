@@ -54,8 +54,12 @@ fn a_single_job_looks_the_repositories_up_once_and_its_decide_step_reads_that_st
         condition.contains("github.event_name == 'push'") && condition.contains("default_branch"),
         "{condition}"
     );
+    assert!(
+        condition.contains("steps.plan.outputs.rust_") && condition.contains("_mode != 'none'"),
+        "the lookup runs although no lane is selected: {condition}"
+    );
     let decide = step(rust, "base").ok_or("no decide step")?;
-    assert_eq!(decide["env"]["GITHUB_TOKEN"], TOKEN);
+    assert!(decide["env"]["GITHUB_TOKEN"].is_null(), "{decide}");
     assert_eq!(
         decide["env"]["VELNOR_PUBLIC_VERDICTS"],
         "${{ steps.public_sources.outputs.verdicts }}"
@@ -78,7 +82,12 @@ fn a_single_job_looks_the_repositories_up_once_and_its_decide_step_reads_that_st
 fn with_a_plan_job_one_lookup_serves_every_lane_through_a_job_output() -> TestResult {
     let (jobs, _) = jobs(&pinned_source(), &format!("{DECLARED}{PARALLEL}"))?;
     let plan = &jobs["rust-plan"];
-    assert!(step(plan, "public_sources").is_some(), "{plan}");
+    let lookup = step(plan, "public_sources").ok_or("no lookup step")?;
+    let condition = lookup["if"].as_str().ok_or("lookup is unconditional")?;
+    assert!(
+        condition.contains("steps.plan.outputs.rust_") && condition.contains("_mode != 'none'"),
+        "the lookup runs although no lane is selected: {condition}"
+    );
     assert_eq!(
         plan["outputs"]["public_verdicts"],
         "${{ steps.public_sources.outputs.verdicts }}"
@@ -96,6 +105,7 @@ fn with_a_plan_job_one_lookup_serves_every_lane_through_a_job_output() -> TestRe
                 "${{ needs.rust-plan.outputs.public_verdicts }}",
                 "{id}"
             );
+            assert!(decide["env"]["GITHUB_TOKEN"].is_null(), "{id}");
             assert!(
                 job["needs"]
                     .as_array()
@@ -109,7 +119,7 @@ fn with_a_plan_job_one_lookup_serves_every_lane_through_a_job_output() -> TestRe
 }
 
 #[test]
-fn the_token_is_on_the_lookup_and_the_decide_steps_only() -> TestResult {
+fn the_token_is_on_the_lookup_step_only() -> TestResult {
     let (jobs, _) = jobs(&pinned_source(), &format!("{DECLARED}{PARALLEL}"))?;
     let (plain, _) = jobs_without_git()?;
     let with_git = token_steps(&jobs);
@@ -121,8 +131,7 @@ fn the_token_is_on_the_lookup_and_the_decide_steps_only() -> TestResult {
     assert!(!added.is_empty(), "{with_git:?}");
     for name in &added {
         assert!(
-            name.ends_with("Look up the public git dependencies once for this run")
-                || name.ends_with("Decide whether to save the build directory"),
+            name.ends_with("Look up the public git dependencies once for this run"),
             "{name}"
         );
     }

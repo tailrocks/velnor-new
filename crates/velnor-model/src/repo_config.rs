@@ -9,6 +9,7 @@ use crate::hosted::HostedRunners;
 use crate::ids::{PackageName, PathGlob, RepoPath, RootSlug, RunnerLabel, TargetName};
 use crate::lint::LintJob;
 use crate::mbx::MbxMode;
+pub use crate::public_sources::{GitRepository, PublicSources};
 use crate::shape::Shape;
 
 pub use crate::setup_phase::SetupPhase;
@@ -385,24 +386,6 @@ pub struct PrivateSources {
     pub private_key: String,
     pub owner: String,
     pub repositories: Vec<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PublicSources {
-    pub git: Vec<GitRepository>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub struct GitRepository {
-    pub owner: String,
-    pub name: String,
-}
-
-impl GitRepository {
-    #[must_use]
-    pub fn matches(&self, owner: &str, name: &str) -> bool {
-        self.owner.eq_ignore_ascii_case(owner) && self.name.eq_ignore_ascii_case(name)
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

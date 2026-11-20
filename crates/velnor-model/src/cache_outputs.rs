@@ -8,9 +8,7 @@ pub const BASE_SAVE_OUTPUT: &str = "base_save";
 pub const SOURCES_PREFIX_OUTPUT: &str = "sources_prefix";
 pub const SOURCES_SAVED_OUTPUT: &str = "sources_saved";
 
-/// The job output that carries the public-repository verdicts of the run.
 pub const PUBLIC_VERDICTS_OUTPUT: &str = "public_verdicts";
-/// The id of the step that writes the verdicts.
 pub const PUBLIC_SOURCES_STEP: &str = "public_sources";
 
 #[derive(Debug, Clone, PartialEq, Eq)]

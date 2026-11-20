@@ -8,6 +8,7 @@ use crate::io::Repo as Checkout;
 
 mod born;
 mod public_git;
+mod public_guards;
 mod public_verdicts;
 mod support;
 

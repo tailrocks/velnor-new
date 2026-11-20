@@ -7,6 +7,7 @@ use std::net::TcpListener;
 use std::process::{Command, Output};
 use std::sync::{Arc, Mutex};
 use std::thread;
+use std::time::Duration;
 
 use super::support::{COMPILED, seed};
 use crate::io::Repo as Checkout;
@@ -16,6 +17,7 @@ pub(super) const OTHER_SHA: &str = "fedcba9876543210fedcba9876543210fedcba98";
 pub(super) const TOKEN: &str = "ghs_job_token_must_not_leave";
 
 pub(super) struct Reply {
+    pub(super) delay: Duration,
     pub(super) status: u16,
     pub(super) headers: Vec<(&'static str, String)>,
     pub(super) body: String,
@@ -27,6 +29,7 @@ pub(super) fn public(name: &str) -> Reply {
 
 pub(super) fn reply(status: u16, body: String) -> Reply {
     Reply {
+        delay: Duration::ZERO,
         status,
         headers: Vec::new(),
         body,
@@ -36,9 +39,21 @@ pub(super) fn reply(status: u16, body: String) -> Reply {
 pub(super) struct Mock {
     pub(super) url: String,
     pub(super) requests: Arc<Mutex<Vec<String>>>,
+    pub(super) trees: Arc<Mutex<Vec<String>>>,
+}
+
+pub(super) fn clean_tree() -> Reply {
+    reply(
+        200,
+        r#"{"sha":"0","tree":[{"path":"Cargo.toml","type":"blob"}],"truncated":false}"#.to_owned(),
+    )
 }
 
 pub(super) fn serve(reply: Reply) -> Mock {
+    serve_tree(reply, clean_tree())
+}
+
+pub(super) fn serve_tree(reply: Reply, tree: Reply) -> Mock {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap_or_else(|e| unreachable!("{e}"));
     let url = format!(
         "http://{}",
@@ -48,6 +63,8 @@ pub(super) fn serve(reply: Reply) -> Mock {
     );
     let requests = Arc::new(Mutex::new(Vec::new()));
     let seen = Arc::clone(&requests);
+    let trees = Arc::new(Mutex::new(Vec::new()));
+    let seen_trees = Arc::clone(&trees);
     thread::spawn(move || {
         for mut stream in listener.incoming().flatten() {
             let mut request = Vec::new();
@@ -55,9 +72,14 @@ pub(super) fn serve(reply: Reply) -> Mock {
             while !request.ends_with(b"\r\n\r\n") && stream.read(&mut byte).is_ok_and(|n| n == 1) {
                 request.push(byte[0]);
             }
-            if let Ok(mut seen) = seen.lock() {
-                seen.push(String::from_utf8_lossy(&request).to_ascii_lowercase());
+            let text = String::from_utf8_lossy(&request).to_ascii_lowercase();
+            let is_tree = text.contains("/git/trees/");
+            let target = if is_tree { &seen_trees } else { &seen };
+            if let Ok(mut seen) = target.lock() {
+                seen.push(text);
             }
+            let reply = if is_tree { &tree } else { &reply };
+            thread::sleep(reply.delay);
             let mut lines = vec![format!("HTTP/1.1 {} Reply", reply.status)];
             lines.extend(reply.headers.iter().map(|(k, v)| format!("{k}: {v}")));
             lines.push(format!("content-length: {}", reply.body.len()));
@@ -67,12 +89,23 @@ pub(super) fn serve(reply: Reply) -> Mock {
             stream.write_all(reply.body.as_bytes()).ok();
         }
     });
-    Mock { url, requests }
+    Mock {
+        url,
+        requests,
+        trees,
+    }
 }
 
 impl Mock {
     pub(super) fn requests(&self) -> Vec<String> {
         self.requests
+            .lock()
+            .unwrap_or_else(|e| unreachable!("{e}"))
+            .clone()
+    }
+
+    pub(super) fn trees(&self) -> Vec<String> {
+        self.trees
             .lock()
             .unwrap_or_else(|e| unreachable!("{e}"))
             .clone()
@@ -218,17 +251,6 @@ macro_rules! refused_reply {
     };
 }
 
-refused_reply!(
-    a_private_repository_is_not_cacheable,
-    reply(
-        200,
-        r#"{"full_name":"acme/shared-lib","private":true}"#.to_owned()
-    )
-);
-refused_reply!(
-    a_missing_or_private_to_anonymous_repository_is_not_cacheable,
-    reply(404, r#"{"message":"Not Found"}"#.to_owned())
-);
 refused_reply!(
     a_rate_limit_is_not_cacheable,
     reply(403, r#"{"message":"API rate limit exceeded"}"#.to_owned())

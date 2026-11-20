@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::fmt::Write;
+
 use velnor_gen::expected_with_notes;
 use velnor_model::{RepoPath, RepoView};
 
@@ -17,10 +19,23 @@ pub(crate) fn locked(
     config: &str,
     helper: &str,
 ) -> Result<RepoView, Box<dyn std::error::Error>> {
+    locked_all(&[source], config, helper)
+}
+
+pub(crate) fn locked_all(
+    sources: &[&str],
+    config: &str,
+    helper: &str,
+) -> Result<RepoView, Box<dyn std::error::Error>> {
     let mut view = pinned(helper, config)?;
-    let lock = format!(
-        "version = 4\n\n[[package]]\nname = \"package-0\"\nversion = \"0.1.0\"\n\n[[package]]\nname = \"dep\"\nversion = \"1.0.0\"\nsource = \"{source}\"\n"
-    );
+    let mut lock =
+        "version = 4\n\n[[package]]\nname = \"package-0\"\nversion = \"0.1.0\"\n".to_owned();
+    for (index, source) in sources.iter().enumerate() {
+        write!(
+            lock,
+            "\n[[package]]\nname = \"dep{index}\"\nversion = \"1.0.0\"\nsource = \"{source}\"\n"
+        )?;
+    }
     view.files
         .insert(RepoPath::new("Cargo.lock")?, lock.into_bytes());
     Ok(view)
@@ -82,7 +97,7 @@ fn an_undeclared_commit_pinned_github_dependency_suggests_the_public_declaration
     let note = output.note("[public_sources]").ok_or("no suggestion")?;
     assert!(note.contains(&format!("git = ['{SOURCE}']")), "{note}");
     assert!(
-        note.contains("Cargo.lock") && note.contains("dep"),
+        note.contains("Cargo.lock") && note.contains("dep0"),
         "{note}"
     );
     Ok(())
@@ -103,8 +118,9 @@ fn a_declaration_does_not_admit_other_sources() -> TestResult {
         format!("git+https://github.com/acme/other-lib#{SHA}"),
         format!("git+https://github.com/acme/shared-lib/sub#{SHA}"),
     ];
+    let sound = pinned_source();
     for source in sources {
-        let output = render(&locked(&source, DECLARED, "0.1.109")?)?;
+        let output = render(&locked_all(&[&sound, &source], DECLARED, "0.1.109")?)?;
         assert!(!output.saves_bases(), "{source}");
         assert!(
             output.note("base caches are not saved").is_some(),
@@ -127,15 +143,67 @@ fn the_declaration_matches_the_repository_without_regard_to_case_or_a_dot_git_su
     Ok(())
 }
 
+fn refused_unused(view: &RepoView) -> Result<String, Box<dyn std::error::Error>> {
+    Ok(render(view)
+        .err()
+        .ok_or("accepted an unused declaration")?
+        .to_string())
+}
+
 #[test]
-fn a_declared_repository_that_no_lock_names_is_reported() -> TestResult {
-    let output = render(&locked(
+fn a_declared_repository_that_no_lock_names_is_refused() -> TestResult {
+    let error = refused_unused(&locked(
         "sparse+https://index.crates.io/",
         DECLARED,
         "0.1.109",
     )?)?;
-    let note = output.note("[public_sources].git lists").ok_or("no note")?;
-    assert!(note.contains("acme/shared-lib"), "{note}");
+    assert!(error.contains("[public_sources].git lists"), "{error}");
+    assert!(error.contains("acme/shared-lib"), "{error}");
+    Ok(())
+}
+
+#[test]
+fn a_declared_repository_is_refused_when_no_external_package_remains() -> TestResult {
+    let error = refused_unused(&locked_all(&[], DECLARED, "0.1.109")?)?;
+    assert!(error.contains("acme/shared-lib"), "{error}");
+    Ok(())
+}
+
+#[test]
+fn only_the_unused_declarations_are_named() -> TestResult {
+    let config = "[public_sources]\ngit = ['https://github.com/acme/shared-lib', 'https://github.com/acme/gone', 'https://github.com/acme/also-gone']\n";
+    let error = refused_unused(&locked(&pinned_source(), config, "0.1.109")?)?;
+    assert!(
+        error.contains("acme/gone, acme/also-gone") && !error.contains("acme/shared-lib,"),
+        "{error}"
+    );
+    Ok(())
+}
+
+#[test]
+fn a_repository_cannot_be_both_private_and_public() -> TestResult {
+    let both = format!(
+        "{DECLARED}[private_sources]\napp_id = 'vars.APP_ID'\nprivate_key = 'secrets.APP_KEY'\nrepositories = ['ACME/Shared-Lib']\n"
+    );
+    let error = render(&locked(&pinned_source(), &both, "0.1.109")?)
+        .err()
+        .ok_or("accepted")?
+        .to_string();
+    assert!(
+        error.contains("acme/shared-lib")
+            && error.contains("both [private_sources] and [public_sources]"),
+        "{error}"
+    );
+    let apart = format!(
+        "{DECLARED}[private_sources]\napp_id = 'vars.APP_ID'\nprivate_key = 'secrets.APP_KEY'\nrepositories = ['acme/other']\n"
+    );
+    let outcome = render(&locked(&pinned_source(), &apart, "0.1.109")?);
+    assert!(
+        !outcome
+            .err()
+            .is_some_and(|error| error.to_string().contains("both [private_sources]")),
+        "disjoint tables were refused as overlapping"
+    );
     Ok(())
 }
 
@@ -160,7 +228,7 @@ fn the_declaration_needs_the_helper_that_checks_it() -> TestResult {
         match outcome {
             Err(error) => {
                 assert!(refused, "{version}: {error}");
-                assert!(error.to_string().contains("[public_sources]"), "{error}");
+                assert!(error.to_string().contains("`public_sources`"), "{error}");
             }
             Ok(_) => assert!(!refused, "{version}"),
         }

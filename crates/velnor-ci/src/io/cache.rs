@@ -265,8 +265,13 @@ pub(super) fn run_decide(args: &crate::cli_cache::DecideArgs) -> Result<String, 
         .map_err(|e| CiError::new(format!("cannot read {}: {e}", log_path.display())))?;
     let manifests = super::cache_paths::list("VELNOR_CACHE_MANIFESTS")?
         .unwrap_or_else(|| args.manifest_path.clone());
-    let admission = super::cache_sources::refusal(&root, &manifests, &args.public_probe_api)?;
+    let deadline = crate::public_probe::Deadline::after(std::time::Duration::from_secs(
+        args.public_probe_seconds,
+    ));
+    let admission =
+        super::cache_sources::refusal(&root, &manifests, &args.public_probe_api, deadline)?;
     let sources = admission.refusal.is_none();
+    let (probe_log, mismatch) = (admission.log, admission.mismatch);
     let decision = if let Some(reason) = admission.refusal {
         Decision {
             save: false,
@@ -287,7 +292,13 @@ pub(super) fn run_decide(args: &crate::cli_cache::DecideArgs) -> Result<String, 
         )?
     };
     super::append_outputs(&format!("save={}\nsources={sources}\n", decision.save))?;
-    let mut report = admission.log + &decision.report;
+    if let Some(mismatch) = mismatch {
+        return Err(CiError::new(format!(
+            "{probe_log}{}{mismatch}",
+            decision.report
+        )));
+    }
+    let mut report = probe_log + &decision.report;
     if decision.save
         && let Err(error) = super::delta_snapshot::record_inventory(&target)
     {

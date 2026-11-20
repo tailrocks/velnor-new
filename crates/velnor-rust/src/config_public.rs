@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use serde::Deserialize;
-use velnor_model::{GitRepository, PublicSources};
+use velnor_model::{GitRepository, PrivateSources, PublicSources};
 
 use crate::error::Reason;
 use crate::public_git::slug;
@@ -45,4 +45,26 @@ fn public_sources(raw: &RawPublicSources) -> Result<PublicSources, Reason> {
         });
     }
     Ok(PublicSources { git })
+}
+
+pub(crate) fn disjoint(
+    public: Option<&PublicSources>,
+    private: Option<&PrivateSources>,
+) -> Result<(), Reason> {
+    let (Some(public), Some(private)) = (public, private) else {
+        return Ok(());
+    };
+    let overlap = public.git.iter().find(|git| {
+        git.owner.eq_ignore_ascii_case(&private.owner)
+            && private
+                .repositories
+                .iter()
+                .any(|name| name.eq_ignore_ascii_case(&git.name))
+    });
+    overlap.map_or(Ok(()), |git| {
+        Err(Reason::PublicSourceOverlap(format!(
+            "{}/{}",
+            git.owner, git.name
+        )))
+    })
 }

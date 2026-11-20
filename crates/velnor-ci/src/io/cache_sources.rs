@@ -4,26 +4,32 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use velnor_model::GitRepository;
-use velnor_rust::LockAdmission;
+use velnor_rust::{LockAdmission, PinnedGit, merge_pinned};
 
 use crate::error::CiError;
-use crate::public_probe::{VERDICTS_VARIABLE, Verdicts};
+use crate::public_probe::{Deadline, VERDICTS_VARIABLE, Verdicts};
 
 use super::public_repo::{Credentials, env_token};
 
 pub(super) struct Admission {
     pub(super) refusal: Option<String>,
     pub(super) log: String,
+    pub(super) mismatch: Option<String>,
 }
 
-pub(super) fn refusal(root: &Path, manifests: &[PathBuf], api: &str) -> Result<Admission, CiError> {
+pub(super) fn refusal(
+    root: &Path,
+    manifests: &[PathBuf],
+    api: &str,
+    deadline: Deadline,
+) -> Result<Admission, CiError> {
     let refused = |path: &Path| Admission {
         refusal: Some(format!(
             "base caches are not saved because dependency sources in {} are not proven public\n",
             path.display()
         )),
         log: String::new(),
+        mismatch: None,
     };
     if std::env::vars_os().any(|(key, _)| {
         let key = key.to_string_lossy();
@@ -40,7 +46,7 @@ pub(super) fn refusal(root: &Path, manifests: &[PathBuf], api: &str) -> Result<A
     let Some(cargo_home) = cargo_home else {
         return Ok(refused(Path::new("CARGO_HOME")));
     };
-    let mut git: Vec<GitRepository> = Vec::new();
+    let mut git: Vec<PinnedGit> = Vec::new();
     for manifest in manifests {
         let directory = root
             .join(manifest)
@@ -50,13 +56,7 @@ pub(super) fn refusal(root: &Path, manifests: &[PathBuf], api: &str) -> Result<A
         let lock = directory.join("Cargo.lock");
         match read_lock(&lock) {
             Some(LockAdmission::Public) => {}
-            Some(LockAdmission::ProbeGithub(found)) => {
-                for repository in found {
-                    if !git.contains(&repository) {
-                        git.push(repository);
-                    }
-                }
-            }
+            Some(LockAdmission::ProbeGithub(found)) => merge_pinned(&mut git, found),
             Some(LockAdmission::Refused) | None => return Ok(refused(&lock)),
         }
         for dir in directory
@@ -80,7 +80,13 @@ pub(super) fn refusal(root: &Path, manifests: &[PathBuf], api: &str) -> Result<A
     let verdicts = std::env::var(VERDICTS_VARIABLE)
         .ok()
         .and_then(|text| Verdicts::parse(&text));
-    Ok(probe(api, &git, env_token().as_deref(), verdicts.as_ref()))
+    Ok(probe(
+        api,
+        &git,
+        env_token().as_deref(),
+        verdicts.as_ref(),
+        deadline,
+    ))
 }
 
 pub(super) fn describe(credentials: Credentials) -> &'static str {
@@ -92,13 +98,16 @@ pub(super) fn describe(credentials: Credentials) -> &'static str {
 
 fn probe(
     api: &str,
-    git: &[GitRepository],
+    git: &[PinnedGit],
     token: Option<&str>,
     verdicts: Option<&Verdicts>,
+    deadline: Deadline,
 ) -> Admission {
     let mut log = Vec::new();
     let mut refusal = Vec::new();
-    for repository in git {
+    let mut mismatch = Vec::new();
+    for pinned in git {
+        let repository = &pinned.repository;
         let name = format!("github.com/{}/{}", repository.owner, repository.name);
         if verdicts.is_some_and(|known| known.proves_public(repository)) {
             log.push(format!(
@@ -106,23 +115,27 @@ fn probe(
             ));
             continue;
         }
-        match super::public_repo::check(api, repository, token) {
+        match super::public_repo::verify(api, pinned, token, deadline) {
             Ok(credentials) => log.push(format!(
                 "git dependency {name} is public ({})\n",
                 describe(credentials)
             )),
-            Err(reason) => {
-                let line = format!(
-                    "::notice::base caches are not saved because git dependency {name} is not proven public ({reason})\n"
-                );
-                log.push(line.clone());
-                refusal.push(line);
+            Err(rejection) => {
+                refusal.push(format!(
+                    "::notice::base caches are not saved because git dependency {name} is not proven public ({rejection})\n"
+                ));
+                if rejection.is_private() {
+                    mismatch.push(format!(
+                        "git dependency {name} is not public ({rejection}), but Cargo.lock locks it as a public git source; make the repository public again or declare it in [private_sources]\n"
+                    ));
+                }
             }
         }
     }
     Admission {
         refusal: (!refusal.is_empty()).then(|| refusal.concat()),
         log: log.concat(),
+        mismatch: (!mismatch.is_empty()).then(|| mismatch.concat()),
     }
 }
 

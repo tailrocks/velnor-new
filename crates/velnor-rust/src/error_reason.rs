@@ -75,6 +75,14 @@ impl Reason {
                 f,
                 "cache.mbx = false turns mbx off, but {key} needs it; remove one of them"
             ),
+            Self::PublicSourceOverlap(repository) => write!(
+                f,
+                "{repository} is listed in both [private_sources] and [public_sources]; a repository is private or public, so remove it from one of them"
+            ),
+            Self::PublicSourcesUnused(repositories) => write!(
+                f,
+                "[public_sources].git lists {repositories}, which no Cargo.lock locks as a git dependency pinned to a full commit on github.com; remove it"
+            ),
             _ => Ok(()),
         }
     }
@@ -195,6 +203,8 @@ impl fmt::Display for Reason {
             | Self::HelperBox(_)
             | Self::MbxRemotePrivate(_)
             | Self::MbxOffConflict(_)
+            | Self::PublicSourceOverlap(_)
+            | Self::PublicSourcesUnused(_)
             | Self::PrCiWithSkipDraft => self.fmt_setup(f),
             Self::BuildExecutable
             | Self::CargoCredentialProvider(_)
