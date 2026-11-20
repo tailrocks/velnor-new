@@ -86,10 +86,8 @@ pub(crate) fn build(directory: &Path, args: &InputsBuildArgs) -> Result<String, 
         }
         Err(Stop::Refused(error)) => Err(error),
         Err(Stop::Failed(error)) => {
-            let failed = failure::Failure::new(
-                invocation.label(),
-                invocation.selection(&builder.members()),
-            );
+            let failed =
+                failure::Failure::new(invocation.label(), invocation.selection(&builder.members()));
             match failure::record_failure(&marker, &failed) {
                 Ok(()) => Err(error),
                 Err(record) => Err(CiError::new(format!("{error}; {record}"))),
