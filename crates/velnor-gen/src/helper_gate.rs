@@ -2,40 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    BUDGET_MODES_HELPER, CacheDebug, DocsRun, HelperRelease, HelperVersion, MbxStore, Platform,
-    PrCi, PushAfterMergeGroup, RepoFacts,
+    BUDGET_MODES_HELPER, DocsRun, HelperRelease, HelperVersion, Platform, PushAfterMergeGroup,
+    RepoFacts,
 };
 
 use velnor_rust::INPUTS_IDENTITY_HELPER;
 
-use crate::{
-    BUDGET_HELPER, COMPATIBLE_HELPER_SERIES, GenerateError, HELPER_MINIMUM, TEST_LANE_HELPER,
-};
+use crate::{COMPATIBLE_HELPER_SERIES, GenerateError, HELPER_MINIMUM};
 
-/// The first `velnor-ci` whose `.velnor/rust-ci.toml` parser accepts the `hosted` key.
-const HOSTED_HELPER: (u64, u64, u64) = (0, 1, 99);
 const MERGE_GROUP_HELPER: (u64, u64, u64) = (0, 1, 103);
-/// The first `velnor-ci` whose `.velnor/rust-ci.toml` parser accepts the `cache_debug` key.
-// helper-gate: first in rust-ci-v0.1.82 via bfc3528bd7
-pub(crate) const CACHE_DEBUG_HELPER: (u64, u64, u64) = (0, 1, 82);
 /// The first `velnor-ci` that names the `required_check` check when it reads a queued run.
 // helper-gate: first in tools-v0.1.97 via af11477df1
 pub(crate) const REQUIRED_CHECK_HELPER: (u64, u64, u64) = (0, 1, 97);
-
-/// The first `velnor-ci` that has `fetch-assets` and whose `.velnor/rust-ci.toml` parser accepts
-/// the `release_assets` table. Once the table-driven key gates of #2025 are on main this
-/// becomes a row there.
-pub(crate) const RELEASE_ASSETS_HELPER: (u64, u64, u64) = (0, 1, 107);
-
-fn release_assets_gate(facts: &RepoFacts, release: &HelperRelease) -> Result<(), GenerateError> {
-    if !facts.config.release_assets.is_empty() && !release.version().at_least(RELEASE_ASSETS_HELPER)
-    {
-        return Err(GenerateError::ReleaseAssetsHelperTooOld(
-            release.version().clone(),
-        ));
-    }
-    Ok(())
-}
 
 pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, GenerateError> {
     let release = facts
@@ -59,16 +37,6 @@ pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, Generate
             runner: facts.config.runner.to_string(),
         });
     }
-    // helper-gate: first in tools-v0.1.90 via 85f4392434
-    if !facts.config.test_groups.is_empty() && !release.version().at_least((0, 1, 90)) {
-        return Err(GenerateError::TestGroupsHelperTooOld(
-            release.version().clone(),
-        ));
-    }
-    // helper-gate: first in tools-v0.1.88 via e061b56eac
-    if facts.config.pr_ci == PrCi::Label && !release.version().at_least((0, 1, 88)) {
-        return Err(GenerateError::PrCiHelperTooOld(release.version().clone()));
-    }
     // helper-gate: first in tools-v0.1.97 via e25d599090
     if facts.config.docs_run == DocsRun::PostMerge && !release.version().at_least((0, 1, 97)) {
         return Err(GenerateError::DocsHelperTooOld(release.version().clone()));
@@ -80,44 +48,15 @@ pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, Generate
             release.version().clone(),
         ));
     }
-    if facts.config.crates_mirror.is_some() && !release.version().at_least((0, 1, 93)) {
-        return Err(GenerateError::MirrorHelperTooOld(release.version().clone()));
-    }
-    if facts.config.hosted_runners.key_written() && !release.version().at_least(HOSTED_HELPER) {
-        return Err(GenerateError::HostedHelperTooOld(release.version().clone()));
-    }
     if facts.inputs_lock_identified && !release.version().at_least(INPUTS_IDENTITY_HELPER) {
         return Err(GenerateError::InputsLockHelperTooOld(
             release.version().clone(),
         ));
     }
-    // helper-gate: first in tools-v0.1.88 via eb3f4deda4
-    if facts.config.private_sources.is_some() && !release.version().at_least((0, 1, 88)) {
-        return Err(GenerateError::PrivateSourcesHelperTooOld(
-            release.version().clone(),
-        ));
-    }
-    release_assets_gate(facts, release)?;
     if facts.config.push_after_merge_group == PushAfterMergeGroup::SkipWhenQueueRunPassed
         && !release.version().at_least(MERGE_GROUP_HELPER)
     {
         return Err(GenerateError::MergeGroupHelperTooOld(
-            release.version().clone(),
-        ));
-    }
-    if !facts.config.test_lanes.is_empty() && !release.version().at_least(TEST_LANE_HELPER) {
-        return Err(GenerateError::TestLaneHelperTooOld(
-            release.version().clone(),
-        ));
-    }
-    if facts.config.mbx_store == MbxStore::Shared && !release.version().at_least((0, 1, 85)) {
-        return Err(GenerateError::MbxStoreHelperTooOld(
-            release.version().clone(),
-        ));
-    }
-    if facts.config.cache_debug == CacheDebug::On && !release.version().at_least(CACHE_DEBUG_HELPER)
-    {
-        return Err(GenerateError::CacheDebugHelperTooOld(
             release.version().clone(),
         ));
     }
@@ -127,11 +66,6 @@ pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, Generate
         return Err(GenerateError::RequiredCheckHelperTooOld(
             release.version().clone(),
         ));
-    }
-    if facts.config.budget.is_some_and(|budget| budget.enabled())
-        && !release.version().at_least(BUDGET_HELPER)
-    {
-        return Err(GenerateError::BudgetHelperTooOld(release.version().clone()));
     }
     if facts.config.budget.is_some_and(|budget| budget.has_modes())
         && !release.version().at_least(BUDGET_MODES_HELPER)

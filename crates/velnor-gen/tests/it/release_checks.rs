@@ -7,7 +7,7 @@ use velnor_gen::{GenerateError, expected_files};
 use velnor_release::{CheckProblem, ReleaseError};
 use velnor_render::{Rule, RuleViolation};
 
-use crate::release_fixture::{APP, TOOLS, jobs, release_view, render, steps, uses};
+use crate::release_fixture::{APP, TOOLS, jobs, release_view, render, render_pinned, steps, uses};
 use crate::release_yml_binaries::{job, permissions};
 use crate::yaml_tree::Node;
 
@@ -119,8 +119,8 @@ fn checks_chain_through_needs_and_pick_their_runner() -> TestResult {
 
 #[test]
 fn a_repository_without_checks_renders_the_same_workflow() -> TestResult {
-    let (plain, tree) = render(&[APP], Some(BINARY))?;
-    let (empty, _) = render(&[APP], Some(&format!("checks = []\n{BINARY}")))?;
+    let (plain, tree) = render_pinned(&[APP], Some(BINARY), "0.1.90")?;
+    let (empty, _) = render_pinned(&[APP], Some(&format!("checks = []\n{BINARY}")), "0.1.90")?;
     assert_eq!(plain, empty);
     assert!(jobs(&tree)?.iter().all(|(id, _)| !id.starts_with("check-")));
     Ok(())

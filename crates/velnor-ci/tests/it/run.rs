@@ -4,6 +4,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
+use velnor_test_support::{real_cargo, real_cargo_str};
 
 pub(crate) fn scratch(name: &str) -> PathBuf {
     let dir = crate::scratch_path("velnor-ci-run", name);
@@ -59,8 +60,9 @@ fn run_exits_with_the_exit_code_of_the_command() {
 #[test]
 fn run_prints_cargos_version_unchanged_and_appends_it_to_the_log() {
     let temp = scratch("cargo");
-    let output = run(&temp, &["cargo", "--version"]);
-    let version = Command::new("cargo")
+    let cargo = real_cargo();
+    let output = run(&temp, &[&real_cargo_str(), "--version"]);
+    let version = Command::new(&cargo)
         .arg("--version")
         .output()
         .unwrap_or_else(|e| unreachable!("{e}"));

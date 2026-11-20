@@ -6,6 +6,7 @@ use velnor_model::{PrivateSources, RepoPath, RootSlug, StepKind};
 use crate::gate::sources_step;
 use crate::release_steps::{APP_TOKEN_COMMIT, APP_TOKEN_VERSION, shell_word};
 use crate::rules::{APP_TOKEN_ACTION, RenderedStep, Value};
+use crate::steps::RUN;
 
 pub(crate) const TOKEN_STEP: &str = "private-token";
 pub(crate) const CHECK_STEP: &str = "private-check";
@@ -100,6 +101,27 @@ fn token(sources: &PrivateSources) -> RenderedStep {
                 Value::Text("read".to_owned()),
             ),
         ],
+        ..RenderedStep::default()
+    }
+}
+
+/// The advisory DB is public, so this step runs with no token and no private config
+/// (the job environment carries neither); cargo-deny then reads it with `--offline`.
+pub(crate) fn advisory_fetch(configs: &[Option<RepoPath>]) -> RenderedStep {
+    let run = configs
+        .iter()
+        .map(|config| match config {
+            Some(path) => format!(
+                "{RUN} cargo-deny --config {} fetch db",
+                shell_word(path.as_str())
+            ),
+            None => format!("{RUN} cargo-deny fetch db"),
+        })
+        .collect::<Vec<_>>()
+        .join(" && ");
+    RenderedStep {
+        name: "Fetch the RustSec advisory database".to_owned(),
+        run: Some(run),
         ..RenderedStep::default()
     }
 }

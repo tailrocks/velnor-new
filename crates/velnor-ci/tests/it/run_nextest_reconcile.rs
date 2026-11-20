@@ -24,7 +24,7 @@ END";
     assert!(output.status.success(), "{output:?}");
     assert_eq!(
         written,
-        "existing=1\ntests_run=2\ntests_listed=3\ntests_ignored=1\ntests_by_package=both=1/1 kept=1/2\n"
+        "existing=1\nbuilt=true\ntests_run=2\ntests_listed=3\ntests_ignored=1\ntests_by_package=both=1/1 kept=1/2\n"
     );
 }
 
@@ -41,7 +41,7 @@ END";
     assert_eq!(output.status.code(), Some(0), "{output:?}");
     assert_eq!(
         written,
-        "existing=1\ntests_run=1\ntests_listed=1\ntests_ignored=0\ntests_by_package=ran=1/1\n"
+        "existing=1\nbuilt=true\ntests_run=1\ntests_listed=1\ntests_ignored=0\ntests_by_package=ran=1/1\n"
     );
 }
 
@@ -55,7 +55,7 @@ END";
     let (_, written, _) = run_with_output("tests-run-idle", script, &counts, &NEXTEST_RUN);
     assert_eq!(
         written,
-        "existing=1\ntests_run=1\ntests_listed=3\ntests_ignored=0\ntests_by_package=idle=0/2 kept=1/1\n"
+        "existing=1\nbuilt=true\ntests_run=1\ntests_listed=3\ntests_ignored=0\ntests_by_package=idle=0/2 kept=1/1\n"
     );
 }
 
@@ -70,7 +70,7 @@ END";
     let (_, written, _) = run_with_output("tests-run-exceed", script, &one, &NEXTEST_RUN);
     assert_eq!(
         written,
-        "existing=1\ntests_run=2\ntests_listed=1\ntests_ignored=0\n"
+        "existing=1\nbuilt=true\ntests_run=2\ntests_listed=1\ntests_ignored=0\n"
     );
 }
 
@@ -84,7 +84,7 @@ END";
     let (_, written, _) = run_with_output("tests-run-short", short, &two, &NEXTEST_RUN);
     assert_eq!(
         written,
-        "existing=1\ntests_run=2\ntests_listed=2\ntests_ignored=0\n"
+        "existing=1\nbuilt=true\ntests_run=2\ntests_listed=2\ntests_ignored=0\n"
     );
     let hostile = r"cat >&2 <<'END'
     PASS [nope] (1/1) ran tests::t
@@ -94,7 +94,7 @@ END";
     let (_, written, _) = run_with_output("tests-run-hostile", hostile, &one, &NEXTEST_RUN);
     assert_eq!(
         written,
-        "existing=1\ntests_run=1\ntests_listed=1\ntests_ignored=0\n"
+        "existing=1\nbuilt=true\ntests_run=1\ntests_listed=1\ntests_ignored=0\n"
     );
     let named = r"cat >&2 <<'END'
     PASS [   0.010s] (1/1) bad=name tests::t
@@ -103,7 +103,7 @@ END";
     let (_, written, _) = run_with_output("tests-run-bad-name", named, &one, &NEXTEST_RUN);
     assert_eq!(
         written,
-        "existing=1\ntests_run=1\ntests_listed=1\ntests_ignored=0\n"
+        "existing=1\nbuilt=true\ntests_run=1\ntests_listed=1\ntests_ignored=0\n"
     );
     let prose = r"cat >&2 <<'END'
 PASS the exam
@@ -114,7 +114,7 @@ END";
     let (_, written, _) = run_with_output("tests-run-prose", prose, &ran, &NEXTEST_RUN);
     assert_eq!(
         written,
-        "existing=1\ntests_run=1\ntests_listed=1\ntests_ignored=0\ntests_by_package=ran=1/1\n"
+        "existing=1\nbuilt=true\ntests_run=1\ntests_listed=1\ntests_ignored=0\ntests_by_package=ran=1/1\n"
     );
 }
 
@@ -134,7 +134,7 @@ END";
     assert!(output.status.success(), "{output:?}");
     assert_eq!(
         written,
-        "existing=1\ntests_run=1\ntests_listed=3\ntests_ignored=0\ntests_by_package=gone=0/2 kept=1/1\n"
+        "existing=1\nbuilt=true\ntests_run=1\ntests_listed=3\ntests_ignored=0\ntests_by_package=gone=0/2 kept=1/1\n"
     );
 }
 
@@ -243,7 +243,7 @@ END";
     assert!(output.status.success(), "{output:?}");
     assert_eq!(
         written,
-        "existing=1\ntests_run=0\ntests_listed=0\ntests_ignored=1\ntests_by_package=\n"
+        "existing=1\nbuilt=true\ntests_run=0\ntests_listed=0\ntests_ignored=1\ntests_by_package=\n"
     );
     let verdict = required_verdict(&written).expect("verdict");
     assert!(verdict.passed, "{}", verdict.table());
@@ -260,7 +260,7 @@ END";
     assert!(output.status.success(), "{output:?}");
     assert_eq!(
         written,
-        "existing=1\ntests_run=0\ntests_listed=0\ntests_ignored=0\ntests_by_package=\n"
+        "existing=1\nbuilt=true\ntests_run=0\ntests_listed=0\ntests_ignored=0\ntests_by_package=\n"
     );
     let verdict = required_verdict(&written).expect("verdict");
     assert!(!verdict.passed, "{}", verdict.table());

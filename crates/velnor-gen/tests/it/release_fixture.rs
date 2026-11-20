@@ -125,6 +125,7 @@ pub(crate) fn release_view(
     if let Some(text) = release_toml {
         view.files
             .insert(RELEASE_CONFIG_PATH, text.as_bytes().to_vec());
+        crate::pipeline::pin_for_keys(&mut view)?;
     }
     for root in roots {
         let manifest = RepoPath::new(if root.dir == "." {
@@ -158,6 +159,44 @@ pub(crate) fn render(
     release_toml: Option<&str>,
 ) -> Result<(String, Node), Box<dyn Error>> {
     let mut files = expected_release(&release_view(roots, release_toml)?)?;
+    let text = files
+        .remove(&RELEASE_WORKFLOW_PATH)
+        .ok_or("release.yml was not rendered")?;
+    let tree = parse(&text)?;
+    Ok((text, tree))
+}
+
+/// Raises the pin to `minimum` when the view pins an older release, and keeps a newer one.
+pub(crate) fn pin_at_least(view: &mut RepoView, minimum: &str) -> Result<(), Box<dyn Error>> {
+    let patch = |version: &str| {
+        version
+            .rsplit('.')
+            .next()
+            .and_then(|n| n.parse::<u64>().ok())
+    };
+    let lock = String::from_utf8(view.files.get(&LOCK_PATH).ok_or("no helper lock")?.clone())?;
+    let current = lock
+        .lines()
+        .find_map(|line| line.strip_prefix("version = \"")?.strip_suffix('"'))
+        .ok_or("no version in the helper lock")?
+        .to_owned();
+    if patch(&current) < patch(minimum) {
+        view.files
+            .insert(LOCK_PATH, lock.replace(&current, minimum).into_bytes());
+    }
+    Ok(())
+}
+
+/// Like `render`, with the helper pinned to `version` so two configs compare byte for byte.
+pub(crate) fn render_pinned(
+    roots: &[Root],
+    release_toml: Option<&str>,
+    version: &str,
+) -> Result<(String, Node), Box<dyn Error>> {
+    let mut view = release_view(roots, release_toml)?;
+    view.files
+        .insert(LOCK_PATH, LOCK.replace("0.1.81", version).into_bytes());
+    let mut files = expected_release(&view)?;
     let text = files
         .remove(&RELEASE_WORKFLOW_PATH)
         .ok_or("release.yml was not rendered")?;

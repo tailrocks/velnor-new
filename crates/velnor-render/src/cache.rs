@@ -4,7 +4,7 @@
 use velnor_model::{CacheKey, CacheKeySegment, CachePath, Job, LOCK_OUTPUT_PREFIX, RepoPath};
 
 use crate::gate::SOURCES_LOCKS_STEP;
-use crate::rules::Value;
+use crate::rules::{RenderedStep, Value};
 use crate::steps::{MISE_VERSION, PREPARE_STEP};
 
 const HOST: &str = "${{ runner.os }}-${{ runner.arch }}";
@@ -151,4 +151,32 @@ pub(crate) fn action_path(text: &str) -> Value {
         .replace('\'', "''")
         .replace("${{", "\\u0024{{");
     Value::Expr(format!("${{{{ fromJSON('\"{escaped}\"') }}}}"))
+}
+
+pub(crate) fn cache_step(
+    action: &str,
+    verb: &str,
+    key: &CacheKey,
+    fallbacks: bool,
+) -> RenderedStep {
+    let rendered = render_key(key);
+    let paths: Vec<String> = key.paths().iter().map(path_text).collect();
+    let mut with = vec![
+        ("path".to_owned(), action_path(&paths.join("\n"))),
+        ("key".to_owned(), Value::Expr(rendered.key)),
+    ];
+    if fallbacks && !rendered.restore_keys.is_empty() {
+        with.push((
+            "restore-keys".to_owned(),
+            Value::Expr(rendered.restore_keys.join("\n")),
+        ));
+    }
+    RenderedStep {
+        id: Some(crate::report::cache_id(key, fallbacks)),
+        name: format!("{verb} the {} cache", key.family()),
+        uses: Some(action.to_owned()),
+        continue_on_error: !fallbacks && crate::cache_upload::key_id(key).is_some(),
+        with,
+        ..RenderedStep::default()
+    }
 }

@@ -4,6 +4,7 @@
 use std::fs;
 use std::path::Path;
 use std::process::Command;
+use velnor_test_support::real_cargo;
 
 use velnor_ci::io::{CaseSensitivity, check_input_target_with, cold_on_failure, restore_inputs};
 
@@ -21,7 +22,7 @@ fn checkout_under_a_cargo_ancestor_still_saves_its_default_target() {
         "[package]\nname = 'leaf'\nversion = '0.1.0'\nedition = '2024'\n[workspace]\n",
     );
     repo.write("src/lib.rs", "pub fn leaf() -> u8 { 1 }\n");
-    let build = Command::new(env!("CARGO"))
+    let build = Command::new(real_cargo())
         .args(["build", "--offline"])
         .current_dir(repo.root())
         .output()

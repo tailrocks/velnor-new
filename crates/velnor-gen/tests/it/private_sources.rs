@@ -14,10 +14,7 @@ pub(crate) fn private_repo(
     let mut repo = view(roots, None)?;
     repo.files
         .insert(path(".velnor/rust-ci.toml")?, section.as_bytes().to_vec());
-    let lock = path(".velnor/rust-ci.lock")?;
-    let old = String::from_utf8(repo.files[&lock].clone())?;
-    repo.files
-        .insert(lock, old.replace("0.1.81", helper).into_bytes());
+    crate::pipeline::pin_helper(&mut repo, helper)?;
     Ok(repo)
 }
 
@@ -277,7 +274,7 @@ fn the_dependency_policy_job_fetches_before_cargo_deny_resolves_the_graph() -> T
             .filter(|(_, step)| {
                 step["run"]
                     .as_str()
-                    .is_some_and(|run| run.contains("cargo-deny"))
+                    .is_some_and(|run| run.contains("cargo-deny") && !run.contains(" fetch db"))
             })
             .map(|(index, _)| index)
             .collect();

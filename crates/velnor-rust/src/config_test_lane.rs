@@ -5,7 +5,8 @@ use std::collections::BTreeSet;
 
 use serde::Deserialize;
 use velnor_model::{
-    CargoCommand, FilterRef, PackageName, RepoPath, RustCiConfig, RustRoot, TestLane,
+    CargoCommand, FilterRef, LaneFeatures, LaneJob, LaneKeysWritten, PackageName, RepoPath,
+    RustCiConfig, RustRoot, TestLane,
 };
 
 use crate::config::CONFIG_PATH;
@@ -19,7 +20,10 @@ const FORBIDDEN_WORDS: [&str; 5] = ["if", "for", "while", "case", "coproc"];
 #[serde(deny_unknown_fields)]
 pub(crate) struct RawTestLane {
     root: String,
+    #[serde(default)]
     features: Vec<String>,
+    all_features: Option<bool>,
+    no_default_features: Option<bool>,
     filter: Option<String>,
     #[serde(default)]
     lint: bool,
@@ -27,6 +31,7 @@ pub(crate) struct RawTestLane {
     doc: bool,
     #[serde(default)]
     packages: Vec<String>,
+    job: Option<String>,
 }
 
 pub(crate) fn parse(raw: Vec<RawTestLane>) -> Result<Vec<TestLane>, Reason> {
@@ -34,6 +39,24 @@ pub(crate) fn parse(raw: Vec<RawTestLane>) -> Result<Vec<TestLane>, Reason> {
 }
 
 fn lane(raw: RawTestLane) -> Result<TestLane, Reason> {
+    let all = raw.all_features.unwrap_or(false);
+    let no_default = raw.no_default_features.unwrap_or(false);
+    let written = LaneKeysWritten {
+        job: raw.job.is_some(),
+        feature_flags: raw.all_features.is_some() || raw.no_default_features.is_some(),
+    };
+    if all && !raw.features.is_empty() {
+        return Err(Reason::TestLaneFeatureConflict {
+            first: "all_features = true",
+            second: "features",
+        });
+    }
+    if all && no_default {
+        return Err(Reason::TestLaneFeatureConflict {
+            first: "all_features = true",
+            second: "no_default_features = true",
+        });
+    }
     let root = match raw.root.as_str() {
         "." => None,
         directory => Some(RepoPath::new(directory.trim_end_matches('/')).map_err(|_| {
@@ -44,7 +67,8 @@ fn lane(raw: RawTestLane) -> Result<TestLane, Reason> {
         })?),
     };
     let mut seen = BTreeSet::new();
-    let bad_feature = raw.features.is_empty()
+    let no_features = raw.features.is_empty() && !all && !no_default;
+    let bad_feature = no_features
         || raw
             .features
             .iter()
@@ -62,13 +86,29 @@ fn lane(raw: RawTestLane) -> Result<TestLane, Reason> {
         });
     }
     let packages = lane_packages(&raw)?;
+    let job = match raw.job.as_deref() {
+        None | Some("inline") => LaneJob::Inline,
+        Some("parallel") => LaneJob::Parallel,
+        Some(other) => {
+            return Err(Reason::InvalidValue {
+                key: "test_lane.job",
+                value: other.to_owned(),
+            });
+        }
+    };
     Ok(TestLane {
         root,
-        features: raw.features,
+        features: LaneFeatures {
+            names: raw.features,
+            all,
+            no_default,
+        },
         filter: raw.filter,
         lint: raw.lint,
         doc: raw.doc,
         packages,
+        job,
+        written,
     })
 }
 
@@ -134,47 +174,93 @@ pub(crate) fn commands(
 ) -> Vec<CargoCommand> {
     let mut linted = BTreeSet::new();
     let mut documented = BTreeSet::new();
-    let mut commands = Vec::new();
-    for lane in config
+    lanes_of(config, root, LaneJob::Inline)
+        .flat_map(|lane| lane_commands(lane, root, direct, &mut linted, &mut documented))
+        .collect()
+}
+
+pub(crate) struct ParallelLane {
+    pub(crate) features: LaneFeatures,
+    pub(crate) commands: Vec<CargoCommand>,
+}
+
+pub(crate) fn parallel(
+    config: &RustCiConfig,
+    root: &RustRoot,
+    direct: &[String],
+) -> Vec<ParallelLane> {
+    lanes_of(config, root, LaneJob::Parallel)
+        .map(|lane| ParallelLane {
+            features: lane.features.clone(),
+            commands: lane_commands(
+                lane,
+                root,
+                direct,
+                &mut BTreeSet::new(),
+                &mut BTreeSet::new(),
+            ),
+        })
+        .collect()
+}
+
+pub(crate) fn has_parallel(config: &RustCiConfig) -> bool {
+    config
         .test_lanes
         .iter()
-        .filter(|lane| lane.root == root.manifest.parent())
-    {
-        let features = || lane.features.clone();
-        commands.push(CargoCommand::NextestFeatures {
+        .any(|lane| lane.job == LaneJob::Parallel)
+}
+
+fn lanes_of<'a>(
+    config: &'a RustCiConfig,
+    root: &'a RustRoot,
+    job: LaneJob,
+) -> impl Iterator<Item = &'a TestLane> {
+    config
+        .test_lanes
+        .iter()
+        .filter(move |lane| lane.job == job && lane.root == root.manifest.parent())
+}
+
+fn lane_commands(
+    lane: &TestLane,
+    root: &RustRoot,
+    direct: &[String],
+    linted: &mut BTreeSet<LaneFeatures>,
+    documented: &mut BTreeSet<LaneFeatures>,
+) -> Vec<CargoCommand> {
+    let features = || lane.features.clone();
+    let mut commands = vec![CargoCommand::NextestFeatures {
+        features: features(),
+        packages: lane.packages.clone(),
+        filter: match &lane.filter {
+            Some(expr) => FilterRef::Expr {
+                expr: expr.clone(),
+                except: direct.to_vec(),
+            },
+            None if direct.is_empty() => FilterRef::All,
+            None => FilterRef::AllExcept(direct.to_vec()),
+        },
+        ci_profile: root.nextest_ci_profile,
+        reports: lane.job == LaneJob::Parallel,
+    }];
+    if let Some(expr) = &lane.filter {
+        commands.push(CargoCommand::LaneGuard {
             features: features(),
             packages: lane.packages.clone(),
-            filter: match &lane.filter {
-                Some(expr) => FilterRef::Expr {
-                    expr: expr.clone(),
-                    except: direct.to_vec(),
-                },
-                None if direct.is_empty() => FilterRef::All,
-                None => FilterRef::AllExcept(direct.to_vec()),
-            },
-            ci_profile: root.nextest_ci_profile,
+            filter: expr.clone(),
+            except: direct.to_vec(),
         });
-        if let Some(expr) = &lane.filter {
-            commands.push(CargoCommand::LaneGuard {
-                features: features(),
-                packages: lane.packages.clone(),
-                filter: expr.clone(),
-                except: direct.to_vec(),
-            });
-        }
-        // Clippy and rustdoc cover the whole workspace, so lanes that differ only
-        // in their filter would run the same command again.
-        let normalized: BTreeSet<&String> = lane.features.iter().collect();
-        if lane.lint && linted.insert(normalized.clone()) {
-            commands.push(CargoCommand::ClippyFeatures {
-                features: features(),
-            });
-        }
-        if lane.doc && documented.insert(normalized) {
-            commands.push(CargoCommand::DocFeatures {
-                features: features(),
-            });
-        }
+    }
+    let normalized = lane.features.normalized();
+    if lane.lint && linted.insert(normalized.clone()) {
+        commands.push(CargoCommand::ClippyFeatures {
+            features: features(),
+        });
+    }
+    if lane.doc && documented.insert(normalized) {
+        commands.push(CargoCommand::DocFeatures {
+            features: features(),
+        });
     }
     commands
 }

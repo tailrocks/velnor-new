@@ -316,6 +316,7 @@ fn mise(parsed: &toml::Table, make: &Make<'_>) -> Vec<Weakening> {
         .into_iter()
         .flatten()
         .filter(|(name, _)| matches!(name.as_str(), "rustc" | "rustdoc") || cargo_tool(name))
+        .filter(|(name, wrapper)| !standard_mbx(name, wrapper))
         .map(|(name, wrapper)| {
             let command = wrapper
                 .get("command")
@@ -334,4 +335,23 @@ fn mise(parsed: &toml::Table, make: &Make<'_>) -> Vec<Weakening> {
 
 fn cargo_tool(name: &str) -> bool {
     name == "cargo" || name.starts_with("cargo-")
+}
+
+/// The owner standard MBX layout (`mise.toml`: `[wrappers.cargo]` with exactly
+/// `command = "mbx"` and `env = { MBX_CARGO_SHIM_MODE = "1" }`). Any other key,
+/// value or command is a different wrapper and stays named.
+fn standard_mbx(name: &str, wrapper: &Value) -> bool {
+    let Some(table) = wrapper.as_table() else {
+        return false;
+    };
+    let env_is_shim_mode = table
+        .get("env")
+        .and_then(Value::as_table)
+        .is_some_and(|env| {
+            env.len() == 1 && env.get("MBX_CARGO_SHIM_MODE").and_then(Value::as_str) == Some("1")
+        });
+    name == "cargo"
+        && table.len() == 2
+        && table.get("command").and_then(Value::as_str) == Some("mbx")
+        && env_is_shim_mode
 }

@@ -140,6 +140,119 @@ const MR_BOXINGTON: [&str; 10] = [
     "save-on-workflow-dispatch",
 ];
 
+const DOCKER_LOGIN_INPUTS: [&str; 7] = [
+    "registry",
+    "username",
+    "password",
+    "ecr",
+    "scope",
+    "logout",
+    "registry-auth",
+];
+
+const DOCKER_BUILD_PUSH_INPUTS: [&str; 33] = [
+    "add-hosts",
+    "allow",
+    "annotations",
+    "attests",
+    "build-args",
+    "build-contexts",
+    "builder",
+    "cache-from",
+    "cache-to",
+    "call",
+    "cgroup-parent",
+    "context",
+    "file",
+    "labels",
+    "load",
+    "network",
+    "no-cache",
+    "no-cache-filters",
+    "outputs",
+    "platforms",
+    "provenance",
+    "pull",
+    "push",
+    "sbom",
+    "secrets",
+    "secret-envs",
+    "secret-files",
+    "shm-size",
+    "ssh",
+    "tags",
+    "target",
+    "ulimit",
+    "github-token",
+];
+
+const CREATE_GITHUB_APP_TOKEN_INPUTS: [&str; 64] = [
+    "client-id",
+    "app-id",
+    "private-key",
+    "owner",
+    "repositories",
+    "enterprise",
+    "skip-token-revoke",
+    "github-api-url",
+    "permission-actions",
+    "permission-administration",
+    "permission-artifact-metadata",
+    "permission-attestations",
+    "permission-checks",
+    "permission-code-quality",
+    "permission-codespaces",
+    "permission-contents",
+    "permission-custom-properties-for-organizations",
+    "permission-dependabot-secrets",
+    "permission-deployments",
+    "permission-discussions",
+    "permission-email-addresses",
+    "permission-enterprise-custom-properties-for-organizations",
+    "permission-environments",
+    "permission-followers",
+    "permission-git-ssh-keys",
+    "permission-gpg-keys",
+    "permission-interaction-limits",
+    "permission-issues",
+    "permission-members",
+    "permission-merge-queues",
+    "permission-metadata",
+    "permission-organization-administration",
+    "permission-organization-announcement-banners",
+    "permission-organization-copilot-agent-settings",
+    "permission-organization-copilot-seat-management",
+    "permission-organization-custom-org-roles",
+    "permission-organization-custom-properties",
+    "permission-organization-custom-roles",
+    "permission-organization-events",
+    "permission-organization-external-properties-for-repos",
+    "permission-organization-hooks",
+    "permission-organization-packages",
+    "permission-organization-personal-access-token-requests",
+    "permission-organization-personal-access-tokens",
+    "permission-organization-plan",
+    "permission-organization-projects",
+    "permission-organization-secrets",
+    "permission-organization-self-hosted-runners",
+    "permission-organization-user-blocking",
+    "permission-packages",
+    "permission-pages",
+    "permission-profile",
+    "permission-pull-requests",
+    "permission-repository-custom-properties",
+    "permission-repository-hooks",
+    "permission-repository-projects",
+    "permission-secret-scanning-alerts",
+    "permission-secrets",
+    "permission-security-events",
+    "permission-single-file",
+    "permission-starring",
+    "permission-statuses",
+    "permission-vulnerability-alerts",
+    "permission-workflows",
+];
+
 impl Action {
     #[must_use]
     pub fn known_inputs(self) -> &'static [&'static str] {
@@ -154,6 +267,9 @@ impl Action {
             Self::AttestBuildProvenance => &ATTEST,
             Self::GithubScript => &GITHUB_SCRIPT,
             Self::MrBoxington => &MR_BOXINGTON,
+            Self::DockerLogin => &DOCKER_LOGIN_INPUTS,
+            Self::DockerBuildPush => &DOCKER_BUILD_PUSH_INPUTS,
+            Self::CreateGithubAppToken => &CREATE_GITHUB_APP_TOKEN_INPUTS,
         }
     }
 
@@ -163,11 +279,14 @@ impl Action {
             Self::UploadArtifact => &["path"],
             Self::Cache | Self::CacheRestore | Self::CacheSave => &["path", "key"],
             Self::GithubScript => &["script"],
+            Self::CreateGithubAppToken => &["private-key"],
             Self::Checkout
             | Self::Mise
             | Self::DownloadArtifact
             | Self::AttestBuildProvenance
-            | Self::MrBoxington => &[],
+            | Self::MrBoxington
+            | Self::DockerLogin
+            | Self::DockerBuildPush => &[],
         }
     }
 }

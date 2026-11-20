@@ -226,7 +226,11 @@ pub struct LaneGuardArgs {
         value_parser = clap::builder::NonEmptyStringValueParser::new(),
         help = "Comma-separated features the lane step passes to cargo"
     )]
-    pub features: String,
+    pub features: Option<String>,
+    #[arg(long, help = "The lane step passes --all-features to cargo")]
+    pub all_features: bool,
+    #[arg(long, help = "The lane step passes --no-default-features to cargo")]
+    pub no_default_features: bool,
     #[arg(
         long,
         value_parser = clap::builder::NonEmptyStringValueParser::new(),

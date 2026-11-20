@@ -1,0 +1,8 @@
+[[test_lane]]
+root = "."
+features = ["local-mode"]
+packages = ["single-crate"]
+filter = "package(single-crate) and test(~local::)"
+lint = true
+doc = true
+job = "parallel"

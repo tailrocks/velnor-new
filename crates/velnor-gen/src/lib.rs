@@ -8,6 +8,7 @@ mod drifts;
 mod error;
 mod helper_gate;
 pub mod io;
+mod key_gates;
 mod plan_render;
 mod release;
 mod reusable;
@@ -19,6 +20,7 @@ pub use drifts::{Drift, drift};
 pub use error::GenerateError;
 use helper_gate::check_helper;
 pub use helper_gate::require_compatible;
+pub use key_gates::{ConfigFile, KeyGate, check_config_keys, key_gates, required_helper};
 pub use velnor_workflows::HELPER_COMMANDS;
 
 use std::collections::BTreeMap;
@@ -35,6 +37,13 @@ pub const TAG_PUSH_HELPER: (u64, u64, u64) = (0, 1, 98);
 pub const BUDGET_HELPER: (u64, u64, u64) = (0, 1, 92);
 /// The first release whose `velnor-ci` accepts the `test_lane` key (and runs `lane-guard`).
 pub const TEST_LANE_HELPER: (u64, u64, u64) = (0, 1, 93);
+/// The first release whose `velnor-ci` accepts `job` in a `[[test_lane]]` table.
+// helper-gate: first in tools-v0.1.107 via 9d5c60385d
+pub const TEST_LANE_JOB_HELPER: (u64, u64, u64) = (0, 1, 107);
+/// The first release whose `velnor-ci` accepts `all_features` and `no_default_features`
+/// in a `[[test_lane]]` table.
+// First released in tools-v0.1.108 (not tagged yet when this gate was written).
+pub const TEST_LANE_FLAGS_HELPER: (u64, u64, u64) = (0, 1, 108);
 pub const SPARSE_HINT_HELPER: (u64, u64, u64) = (0, 1, 103);
 
 pub fn generated_files(view: &RepoView) -> Result<BTreeMap<RepoPath, String>, GenerateError> {
@@ -65,12 +74,14 @@ pub fn expected_with_notes(
         return Err(GenerateError::ExcludedLockRun(finding.clone()));
     }
     let helper = check_helper(&facts)?;
+    key_gates::check_config_keys(view, helper.version())?;
     check_tools(&facts)?;
     if let Some(roots) = source_roots_over_limit(&facts) {
         return Err(GenerateError::TooManySourceRoots(roots));
     }
     let (plan, mut files, budget_notes) = plan_and_render(view, &facts)?;
-    files.extend(reusable::reusable_workflows(view, helper)?);
+    let (reusable, reusable_notes) = reusable::reusable_workflows(view, helper)?;
+    files.extend(reusable);
     if plan
         .jobs
         .iter()
@@ -90,6 +101,7 @@ pub fn expected_with_notes(
     notes.extend(facts.private_suggestion);
     notes.extend(release_notes);
     notes.extend(budget_notes);
+    notes.extend(reusable_notes);
     notes.extend(
         excluded
             .iter()

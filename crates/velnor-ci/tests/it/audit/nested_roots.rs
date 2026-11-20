@@ -63,6 +63,22 @@ fn an_audit_of_a_nested_root_does_not_refuse_the_target_of_the_root_above() {
 }
 
 #[test]
+fn an_audit_of_a_nested_root_building_below_the_target_of_the_root_above_is_not_refused() {
+    let repo = nested_roots();
+    let output = velnor_ci()
+        .current_dir(repo.root())
+        .env(
+            "CARGO_TARGET_DIR",
+            repo.root().join("target/velnor-roots/lab"),
+        )
+        .args(["inputs", "audit", "--root", "lab"])
+        .output()
+        .unwrap_or_else(|error| unreachable!("{error}"));
+    let text = String::from_utf8_lossy(&output.stderr);
+    assert!(!text.contains("cannot be told apart"), "{text}");
+}
+
+#[test]
 fn each_nested_root_step_builds_with_its_own_target_directory() {
     let repo = nested_roots();
     for (directory, target) in [("", "target"), ("lab", "lab/target")] {

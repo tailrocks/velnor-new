@@ -8,14 +8,6 @@ use velnor_model::{
 use crate::lane::PLAN_JOB;
 use crate::plan::{RUST_JOB, step};
 
-fn is_check(kind: &StepKind) -> bool {
-    match kind {
-        StepKind::TestSetup { .. } | StepKind::ReleaseAssets { .. } => true,
-        StepKind::Cargo(command) => !command.is_target_build(),
-        _ => false,
-    }
-}
-
 pub(crate) fn apply(jobs: &mut [Job], single: bool) {
     for job in jobs.iter_mut() {
         let from = if !single {
@@ -27,7 +19,7 @@ pub(crate) fn apply(jobs: &mut [Job], single: bool) {
         } else {
             continue;
         };
-        for step in job.steps.iter_mut().filter(|step| is_check(&step.kind)) {
+        for step in job.steps.iter_mut().filter(|step| step.kind.is_check()) {
             step.skip_after_merge_group = Some(from.clone());
         }
         if is_lint_job(job) {
@@ -158,6 +150,7 @@ mod tests {
             plan_outputs: Vec::new(),
             group_outputs: Vec::new(),
             reports_ignored: false,
+            records_build: false,
             selection_name: None,
             steps: kinds.into_iter().map(step).collect(),
         }

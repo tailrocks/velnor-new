@@ -7,7 +7,7 @@ use velnor_model::{
 };
 
 use crate::plan::step;
-use crate::private_fetch::{compiles, shared_gate};
+use crate::private_fetch::{compiles, shared_gate, status};
 
 /// Put the release asset phase in front of the first cargo step of every job that compiles or
 /// runs tests, because a build script may read the assets: the restores, the merge queue check,
@@ -22,6 +22,7 @@ pub(crate) fn insert(config: &RustCiConfig, jobs: &mut [Job]) {
         let Some(first) = job.steps.iter().position(needs_assets) else {
             continue;
         };
+        let when = status(job.steps.iter().filter(|step| compiles(step)));
         let gate = shared_gate(job.steps.iter().filter(|step| needs_assets(step)));
         let assets = &config.release_assets;
         let parts = restores(assets)
@@ -34,6 +35,7 @@ pub(crate) fn insert(config: &RustCiConfig, jobs: &mut [Job]) {
         let phase: Vec<Step> = parts
             .map(|part| Step {
                 gate: gate.clone(),
+                when,
                 ..step(StepKind::ReleaseAssets {
                     assets: assets.clone(),
                     part,

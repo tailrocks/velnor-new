@@ -3,6 +3,7 @@
 
 use std::process::{Command, Output};
 use std::time::{Duration, UNIX_EPOCH};
+use velnor_test_support::real_cargo;
 
 use velnor_ci::io::{break_time_ties_with, cold_on_failure, every_root_target};
 
@@ -44,7 +45,7 @@ fn configured_roots() -> Repo {
         ("tools/src/lib.rs", "pub fn tools() {}\n"),
     ]);
     for root in ["app", "tools"] {
-        let output = Command::new("cargo")
+        let output = Command::new(real_cargo())
             .args(["generate-lockfile", "--offline"])
             .current_dir(repo.root().join(root))
             .env_remove("CARGO_TARGET_DIR")

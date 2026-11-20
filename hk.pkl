@@ -64,6 +64,10 @@ steps {
     glob = List("mise.toml", "rust-toolchain.toml")
     check = "sh scripts/check-rust-toolchain-mirror.sh"
   }
+  ["test-cargo"] {
+    glob = List("crates/*/tests/**/*.rs", "scripts/check-test-cargo.*")
+    check = "sh scripts/check-test-cargo.sh"
+  }
   ["rumdl"] = (Builtins.rumdl) { exclude = fixtureTrees }
   ["tofu"] = (Builtins.tofu) { exclude = List("fixtures/**", "docs/**") }
   ["jactionlint"] = (Builtins.jactionlint) {
