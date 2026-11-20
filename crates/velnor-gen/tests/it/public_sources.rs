@@ -70,7 +70,7 @@ fn render(view: &RepoView) -> Result<Output, Box<dyn std::error::Error>> {
 
 #[test]
 fn a_declared_commit_pinned_github_dependency_keeps_the_base_caches() -> TestResult {
-    let output = render(&locked(&pinned_source(), DECLARED, "0.1.109")?)?;
+    let output = render(&locked(&pinned_source(), DECLARED, "0.1.110")?)?;
     assert!(output.saves_bases(), "{}", output.workflow);
     assert!(
         output.note("base caches are not saved").is_none(),
@@ -87,7 +87,7 @@ fn a_declared_commit_pinned_github_dependency_keeps_the_base_caches() -> TestRes
 
 #[test]
 fn an_undeclared_commit_pinned_github_dependency_suggests_the_public_declaration() -> TestResult {
-    let output = render(&locked(&pinned_source(), "", "0.1.109")?)?;
+    let output = render(&locked(&pinned_source(), "", "0.1.110")?)?;
     assert!(!output.saves_bases());
     assert!(
         output.note("base caches are not saved").is_some(),
@@ -120,7 +120,7 @@ fn a_declaration_does_not_admit_other_sources() -> TestResult {
     ];
     let sound = pinned_source();
     for source in sources {
-        let output = render(&locked_all(&[&sound, &source], DECLARED, "0.1.109")?)?;
+        let output = render(&locked_all(&[&sound, &source], DECLARED, "0.1.110")?)?;
         assert!(!output.saves_bases(), "{source}");
         assert!(
             output.note("base caches are not saved").is_some(),
@@ -137,7 +137,7 @@ fn the_declaration_matches_the_repository_without_regard_to_case_or_a_dot_git_su
         format!("git+https://github.com/ACME/Shared-Lib.git#{SHA}"),
         format!("git+{SOURCE}.git?branch=main#{SHA}"),
     ] {
-        let output = render(&locked(&source, DECLARED, "0.1.109")?)?;
+        let output = render(&locked(&source, DECLARED, "0.1.110")?)?;
         assert!(output.saves_bases(), "{source}");
     }
     Ok(())
@@ -155,7 +155,7 @@ fn a_declared_repository_that_no_lock_names_is_refused() -> TestResult {
     let error = refused_unused(&locked(
         "sparse+https://index.crates.io/",
         DECLARED,
-        "0.1.109",
+        "0.1.110",
     )?)?;
     assert!(error.contains("[public_sources].git lists"), "{error}");
     assert!(error.contains("acme/shared-lib"), "{error}");
@@ -164,7 +164,7 @@ fn a_declared_repository_that_no_lock_names_is_refused() -> TestResult {
 
 #[test]
 fn a_declared_repository_is_refused_when_no_external_package_remains() -> TestResult {
-    let error = refused_unused(&locked_all(&[], DECLARED, "0.1.109")?)?;
+    let error = refused_unused(&locked_all(&[], DECLARED, "0.1.110")?)?;
     assert!(error.contains("acme/shared-lib"), "{error}");
     Ok(())
 }
@@ -172,7 +172,7 @@ fn a_declared_repository_is_refused_when_no_external_package_remains() -> TestRe
 #[test]
 fn only_the_unused_declarations_are_named() -> TestResult {
     let config = "[public_sources]\ngit = ['https://github.com/acme/shared-lib', 'https://github.com/acme/gone', 'https://github.com/acme/also-gone']\n";
-    let error = refused_unused(&locked(&pinned_source(), config, "0.1.109")?)?;
+    let error = refused_unused(&locked(&pinned_source(), config, "0.1.110")?)?;
     assert!(
         error.contains("acme/gone, acme/also-gone") && !error.contains("acme/shared-lib,"),
         "{error}"
@@ -185,7 +185,7 @@ fn a_repository_cannot_be_both_private_and_public() -> TestResult {
     let both = format!(
         "{DECLARED}[private_sources]\napp_id = 'vars.APP_ID'\nprivate_key = 'secrets.APP_KEY'\nrepositories = ['ACME/Shared-Lib']\n"
     );
-    let error = render(&locked(&pinned_source(), &both, "0.1.109")?)
+    let error = render(&locked(&pinned_source(), &both, "0.1.110")?)
         .err()
         .ok_or("accepted")?
         .to_string();
@@ -197,7 +197,7 @@ fn a_repository_cannot_be_both_private_and_public() -> TestResult {
     let apart = format!(
         "{DECLARED}[private_sources]\napp_id = 'vars.APP_ID'\nprivate_key = 'secrets.APP_KEY'\nrepositories = ['acme/other']\n"
     );
-    let outcome = render(&locked(&pinned_source(), &apart, "0.1.109")?);
+    let outcome = render(&locked(&pinned_source(), &apart, "0.1.110")?);
     assert!(
         !outcome
             .err()
@@ -211,9 +211,9 @@ fn a_repository_cannot_be_both_private_and_public() -> TestResult {
 fn the_remote_mbx_cache_follows_the_declaration() -> TestResult {
     let mbx = "[cache]\nmbx_remote = \"github-actions\"\n";
     let declared = format!("{DECLARED}{mbx}");
-    let output = render(&locked(&pinned_source(), &declared, "0.1.109")?)?;
+    let output = render(&locked(&pinned_source(), &declared, "0.1.110")?)?;
     assert!(output.workflow.contains("mr-boxington-action"));
-    let refused = render(&locked(&pinned_source(), mbx, "0.1.109")?)
+    let refused = render(&locked(&pinned_source(), mbx, "0.1.110")?)
         .err()
         .ok_or("accepted")?
         .to_string();
@@ -223,7 +223,7 @@ fn the_remote_mbx_cache_follows_the_declaration() -> TestResult {
 
 #[test]
 fn the_declaration_needs_the_helper_that_checks_it() -> TestResult {
-    for (version, refused) in [("0.1.107", true), ("0.1.109", false)] {
+    for (version, refused) in [("0.1.107", true), ("0.1.109", true), ("0.1.110", false)] {
         let outcome = render(&locked(&pinned_source(), DECLARED, version)?);
         match outcome {
             Err(error) => {
@@ -253,7 +253,7 @@ fn only_a_plain_github_repository_url_can_be_declared() -> TestResult {
     ];
     for body in invalid {
         let config = format!("[public_sources]\n{body}\n");
-        let error = render(&locked(&pinned_source(), &config, "0.1.109")?)
+        let error = render(&locked(&pinned_source(), &config, "0.1.110")?)
             .err()
             .ok_or_else(|| format!("accepted: {body}"))?
             .to_string();

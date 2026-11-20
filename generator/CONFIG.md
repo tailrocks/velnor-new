@@ -147,7 +147,7 @@ A project that locks a git dependency of a public github.com repository can cach
 git = ["https://github.com/owner/shared-lib"]
 ```
 
-`git` is a non-empty list of `https://github.com/<owner>/<repo>` URLs without `.git`, and a repository appears once (case is ignored). Anything else is refused. The key needs a helper release of `0.1.109` or later (first released in tools-v0.1.109, not tagged yet when this was written).
+`git` is a non-empty list of `https://github.com/<owner>/<repo>` URLs without `.git`, and a repository appears once (case is ignored). Anything else is refused. The key needs a helper release of `0.1.110` or later (first released in tools-v0.1.110, not tagged yet when this was written).
 
 Only a source that `Cargo.lock` pins to a full commit qualifies: `git+https://github.com/<owner>/<repo>` with an optional `.git` and query, then `#` and 40 lowercase hexadecimal characters. A declared repository whose lock entry is an ssh or http URL, has credentials or a port, lives on another host, or has a short commit stays off, and so does every other non-crates.io source. With the declaration, the generator treats the declared sources as public: the Target and Sources saves, the pull-request delta layer and `cache.mbx_remote` render as for a crates.io-only lock. `velnor-gen generate` fails when a declared repository is locked by no `Cargo.lock` as a commit-pinned github.com dependency (also when no external package remains), and when the repository is also listed in `[private_sources]`; a configuration that does not match the repository is an error, not a note.
 

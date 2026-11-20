@@ -7,7 +7,7 @@ use crate::facts::TestResult;
 use crate::pipeline::workflow;
 use crate::public_sources::{DECLARED, locked, pinned_source};
 
-const HELPER: &str = "0.1.109";
+const HELPER: &str = "0.1.110";
 const PARALLEL: &str = "[[test_lane]]\nroot = '.'\nfeatures = ['local-mode']\njob = 'parallel'\n";
 const REGISTRY: &str = "sparse+https://index.crates.io/";
 const TOKEN: &str = "${{ github.token }}";

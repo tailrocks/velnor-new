@@ -128,7 +128,7 @@ By default a `Cargo.lock` source other than crates.io turns off the Target and S
 - The lookup step of the plan job (the step of the job itself when it plans for itself, which runs before any build step) sends the job's own `GITHUB_TOKEN` (`contents: read` is enough for public metadata, and the job permissions do not change) as `Authorization: Bearer` so that jobs of several organizations behind one egress address share the 1000 requests an hour per repository of the token instead of the 60 an hour of the address. The token goes to that step only (`env` on that step), and `velnor-ci` sends it only to the exact host `api.github.com` over https on port 443 with no credentials in the URL. No redirect is followed, so the token cannot be replayed to another host, and the token is never written to the log, a notice or an error. The `cache decide` step runs after the build and gets no token: its own lookups, for a repository the verdicts do not show as public, are anonymous. Without a token in the environment the lookup is unauthenticated.
 - The Target key hashes every git package with its source and commit through the lock hash, and the Sources key hashes `Cargo.lock`, so a new commit of the dependency moves both keys.
 - The run-time check gates the Target and Sources saves. The pull-request delta and `cache.mbx_remote` follow the declaration, so declare only repositories that stay public.
-- Needs `velnor-ci` 0.1.109 or later (first released in tools-v0.1.109, not tagged yet when this was written).
+- Needs `velnor-ci` 0.1.110 or later (first released in tools-v0.1.110, not tagged yet when this was written).
 
 ## Speed budget
 
@@ -197,7 +197,7 @@ Every key of `.velnor/rust-ci.toml`, with its default. `generator/CONFIG.md` has
 | `cache_debug` | `false` | cargo fingerprint log, see above |
 | `ci_debuginfo` | `"line-tables-only"` | `full`, `line-tables-only` or `none` |
 | `private_sources` | none | private dependencies, see above |
-| `public_sources` | none | public git dependencies that may be cached, see above (needs `velnor-ci` 0.1.109; not tagged yet) |
+| `public_sources` | none | public git dependencies that may be cached, see above (needs `velnor-ci` 0.1.110; not tagged yet) |
 | `release_assets` | none | `[[release_assets]]` entries: private release assets that a build script or test reads, fetched with the `[private_sources]` App, checked against a required `sha256` and cached by it, see `generator/CONFIG.md` (needs `velnor-ci` 0.1.109) |
 | `crates_mirror` | none | a crates mirror for a self-hosted runner (needs `velnor-ci` 0.1.93); it stays in effect for a step that passes its own `--config` |
 | `runner` | `"ubuntu-latest"` | the runner label of every job |
