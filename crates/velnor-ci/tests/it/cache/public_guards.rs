@@ -155,6 +155,37 @@ fn a_file_tree_that_cannot_be_read_is_not_cacheable() {
 }
 
 #[test]
+fn a_case_variant_gitmodules_is_still_a_submodule_declaration() {
+    for name in [".GitModules", ".GITMODULES"] {
+        let tree = reply(
+            200,
+            format!(
+                r#"{{"sha":"0","tree":[{{"path":"{name}","type":"blob"}}],"truncated":false}}"#
+            ),
+        );
+        let mock = serve_tree(public("acme/shared-lib"), tree);
+        let sources = [("dep", git("acme/shared-lib", SHA))];
+        let (output, written) = decide(&sources, &mock.url);
+        let stdout = refused(&output, &written);
+        assert!(stdout.contains("submodules"), "{name}: {stdout}");
+    }
+}
+
+#[test]
+fn a_gitlink_entry_is_a_submodule_even_without_a_gitmodules_file() {
+    let tree = reply(
+        200,
+        r#"{"sha":"0","tree":[{"path":"vendor","type":"commit","mode":"160000"}],"truncated":false}"#
+            .to_owned(),
+    );
+    let mock = serve_tree(public("acme/shared-lib"), tree);
+    let sources = [("dep", git("acme/shared-lib", SHA))];
+    let (output, written) = decide(&sources, &mock.url);
+    let stdout = refused(&output, &written);
+    assert!(stdout.contains("submodules"), "{stdout}");
+}
+
+#[test]
 fn the_run_wide_lookup_records_a_repository_with_submodules_as_not_public() {
     let mock = serve_tree(public("acme/shared-lib"), with_gitmodules());
     let locks = one(&[("dep", git("acme/shared-lib", SHA))]);

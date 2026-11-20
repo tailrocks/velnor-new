@@ -28,6 +28,10 @@ struct Tree {
 #[derive(Deserialize)]
 struct TreeEntry {
     path: String,
+    #[serde(default)]
+    mode: String,
+    #[serde(default, rename = "type")]
+    kind: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -158,13 +162,19 @@ fn check_submodules(
     if tree.truncated {
         return Err(unproven("the file tree is too large to read".to_owned()));
     }
-    if tree.tree.iter().any(|entry| entry.path == ".gitmodules") {
+    if tree.tree.iter().any(declares_submodule) {
         return Err(unproven(
             "the repository has git submodules, whose repositories are not proven public"
                 .to_owned(),
         ));
     }
     Ok(())
+}
+
+fn declares_submodule(entry: &TreeEntry) -> bool {
+    entry.path.eq_ignore_ascii_case(".gitmodules")
+        || entry.kind == "commit"
+        || entry.mode == "160000"
 }
 
 fn get(
