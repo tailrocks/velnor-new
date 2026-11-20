@@ -11,11 +11,12 @@ LINE_INDENT = re.compile(r" {5,}\S")
 BLOCK_FENCE = re.compile(r"^[ \t]*\*?[ \t]*(?:```|~~~)", re.M)
 BLOCK_INDENT = re.compile(r"^[ \t]*\*? {5,}\S", re.M)
 DOC_OPEN = re.compile(r"/\*(?:!|\*(?![*/]))")
-ATTR_DOC = re.compile(r"#!?\[doc\s*=")
+ATTR_START = re.compile(r"#\s*!?\s*\[")
+DOC_EQ = re.compile(r"\s*=(?!=)")
 DOC_INCLUDE = re.compile(r"\s*=\s*include_str!")
+SHEBANG_ATTR = re.compile(r"#!\s*\[")
 RAW_PREFIX = {"r", "br", "cr"}
 BYTE_PREFIX = {"b", "c"}
-SHEBANG_ATTR = re.compile(r"#!\s*\[")
 DOC_HINT = ("///", "//!", "/**", "/*!", "doc")
 
 
@@ -67,9 +68,23 @@ def skip_char(src, i):
     return None
 
 
+def value_has_fence(value):
+    return any(LINE_FENCE.match(line) or LINE_INDENT.match(line) for line in value.split("\n"))
+
+
+def plain_value(literal):
+    return literal[1:-1].replace("\\n", "\n")
+
+
+def raw_value(literal, prefix):
+    hashes = literal.index('"') - prefix
+    return literal[hashes + prefix + 1 : len(literal) - hashes - 1]
+
+
 def doc_findings(src):
     i = 0
-    in_attr = False
+    attr_depth = 0
+    doc_value = False
     while i < len(src):
         c = src[i]
         if src.startswith("//", i):
@@ -89,29 +104,46 @@ def doc_findings(src):
             i = end
         elif c == '"':
             end = skip_string(src, i)
-            if in_attr and FENCE.search(src, i, end):
+            if doc_value and value_has_fence(plain_value(src[i:end])):
                 yield i
             i = end
         elif c == "'":
             j = skip_char(src, i)
             i = i + 1 if j is None else j
-        elif c == "#" and ATTR_DOC.match(src, i):
-            in_attr = True
+        elif c == "#" and (m := ATTR_START.match(src, i)):
+            attr_depth = 1
+            i = m.end()
+        elif c == "[":
+            if attr_depth:
+                attr_depth += 1
             i += 1
         elif c == "]":
-            in_attr = False
+            if attr_depth:
+                attr_depth -= 1
+            doc_value = doc_value and attr_depth > 0
+            i += 1
+        elif c in ",)":
+            doc_value = False
             i += 1
         elif m := IDENT.match(src, i):
             word = m.group()
             j = i + len(word)
             if word in RAW_PREFIX and j < len(src) and src[j] in '#"':
                 end = skip_raw(src, j - 1)
-                i = j if end is None else end
+                if end is None:
+                    i = j
+                else:
+                    if doc_value and value_has_fence(raw_value(src[i:end], len(word))):
+                        yield i
+                    i = end
             elif word in BYTE_PREFIX and j < len(src) and src[j] == '"':
                 i = skip_string(src, j)
             else:
-                if word == "doc" and DOC_INCLUDE.match(src, j):
-                    yield i
+                if word == "doc":
+                    if DOC_INCLUDE.match(src, j):
+                        yield i
+                    elif attr_depth and DOC_EQ.match(src, j):
+                        doc_value = True
                 i = j
         else:
             i += 1
@@ -122,7 +154,7 @@ def rust_sources():
 
 
 def strip_shebang(src):
-    src = src.removeprefix("﻿")
+    src = src.removeprefix("\ufeff")
     if src.startswith("#!") and not SHEBANG_ATTR.match(src):
         first, newline, rest = src.partition("\n")
         return newline + rest
@@ -133,7 +165,12 @@ def main(args):
     paths = [Path(a) for a in args] or rust_sources()
     bad = 0
     for path in paths:
-        src = path.read_text(encoding="utf-8")
+        try:
+            src = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            print(f"{path}: not valid UTF-8; cannot scan for doctests")
+            bad += 1
+            continue
         if not any(hint in src for hint in DOC_HINT):
             continue
         src = strip_shebang(src)
