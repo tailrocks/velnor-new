@@ -282,7 +282,7 @@ fn a_deny_config_with_a_quote_is_passed_as_one_checkout_relative_argument() -> T
 }
 
 #[test]
-fn an_empty_change_list_runs_every_enabled_policy_lane() -> TestResult {
+fn an_empty_change_list_runs_every_enabled_policy_lane() {
     let tools = PolicyTools {
         deny: true,
         machete: true,
@@ -297,5 +297,4 @@ fn an_empty_change_list_runs_every_enabled_policy_lane() -> TestResult {
         ..tools
     };
     assert_eq!(policy_unread(off), velnor_rust::PolicyRuns::default());
-    Ok(())
 }
