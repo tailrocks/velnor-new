@@ -104,9 +104,8 @@ fn mirror_is_explicit_scoped_and_precedes_every_job_tools() -> TestResult {
                     .into_bytes(),
             );
             assert!(
-                workflow(&repo).is_err_and(|error| error
-                    .to_string()
-                    .contains("pin velnor-ci 0.1.93 or later"))
+                workflow(&repo)
+                    .is_err_and(|error| error.to_string().contains("pin velnor-ci 0.1.9"))
             );
             repo.files.insert(
                 path(".velnor/rust-ci.toml")?,

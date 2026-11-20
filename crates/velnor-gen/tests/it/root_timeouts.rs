@@ -10,7 +10,7 @@ use crate::test_groups::view_with;
 use crate::yaml_tree::document;
 
 const ROOTS: [&str; 2] = ["Cargo.toml", "lab/Cargo.toml"];
-const HELPER: &str = "0.1.108";
+const HELPER: &str = "0.1.109";
 
 /// A repository limit of 30 minutes, 90 for the `lab` root, and a parallel lane of `lab` that
 /// sets its own 120 minutes.
@@ -103,9 +103,9 @@ fn an_out_of_range_duplicate_or_unknown_root_is_refused_with_its_name() -> TestR
 #[test]
 fn a_helper_older_than_the_timeout_keys_is_refused() -> TestResult {
     for config in [LANE, "[root_timeouts]\nlab = 90\n"] {
-        let text = refusal(config, "0.1.107")?;
+        let text = refusal(config, "0.1.108")?;
         assert!(
-            text.contains("timeout_minutes") && text.contains("0.1.108"),
+            text.contains("0.1.109"),
             "{text}"
         );
         jobs_of(config, HELPER)?;

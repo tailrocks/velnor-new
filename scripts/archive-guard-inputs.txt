@@ -7,6 +7,7 @@ file crates/velnor-archive-guard/build.rs
 file crates/velnor-archive-guard/build_support/archive_guard_inputs.rs
 file crates/velnor-archive-guard/build_support/archive_guard_inputs_filesystem.rs
 file crates/velnor-archive-guard/build_support/archive_guard_inputs_filesystem_tests.rs
+file crates/velnor-archive-guard/build_support/archive_guard_watch.rs
 file crates/velnor-runner-image-manifest/Cargo.toml
 tree crates/velnor-runner-image-manifest/src
 file scripts/build-owned-archive-guard.sh

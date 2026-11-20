@@ -3,7 +3,7 @@
 
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::time::{Duration, SystemTime};
 use velnor_test_support::real_cargo;
@@ -34,6 +34,7 @@ pub(super) fn helper_at(
         .env("RUNNER_TEMP", repo.root())
         .env("GITHUB_OUTPUT", &outputs)
         .env_remove("EXPECTED_SOURCE_IDENTITY");
+    strip_mirror_overrides(&mut command);
     if let Some(expected) = expected {
         command.env("EXPECTED_SOURCE_IDENTITY", expected);
     }
@@ -87,13 +88,59 @@ pub(super) fn delta(repo: &Repo, verb: &str, expected: Option<&str>) -> String {
     values
 }
 
+/// Takes a child env off the job's crates-mirror. On CI the job's `VELNOR_CARGO_CONFIG` (passed as
+/// `--config` by the mirror cargo wrapper) and `CARGO_REGISTRIES_*` / `CARGO_SOURCE_*` replace
+/// crates-io with `velnor-crates-mirror` ahead of the repo's own `.cargo/config.toml`, so the
+/// directory source that vendors `regdep` is never found (main job 136117859373, delta.rs:88).
+///
+/// The wrapper also sits first on `PATH` as `cargo` and fails with `missing VELNOR_CARGO_WRAPPER`
+/// once its variables are gone (main run 44699691623), so the wrapper's directory leaves `PATH` too
+/// and the helper's own `cargo` resolves to the real one.
+pub(super) fn strip_mirror_overrides(command: &mut Command) {
+    let wrapper = std::env::var_os("VELNOR_CARGO_WRAPPER").map(std::path::PathBuf::from);
+    for name in ["VELNOR_CARGO_CONFIG", "VELNOR_CARGO_WRAPPER"] {
+        command.env_remove(name);
+    }
+    for (key, value) in std::env::vars_os() {
+        let name = key.to_string_lossy();
+        let mirror = name.starts_with("VELNOR_CARGO_")
+            || name.starts_with("CARGO_REGISTRIES_")
+            || name.starts_with("CARGO_SOURCE_")
+            || (name == "CARGO" && wrapper.as_deref() == Some(Path::new(&value)));
+        if mirror {
+            command.env_remove(&key);
+        }
+    }
+    if let Some(directory) = wrapper.as_deref().and_then(Path::parent) {
+        let path = std::env::var_os("PATH").unwrap_or_default();
+        command.env("PATH", without_directory(&path, directory));
+    }
+}
+
+fn without_directory(path: &std::ffi::OsStr, directory: &Path) -> std::ffi::OsString {
+    let kept = std::env::split_paths(path).filter(|entry| entry != directory);
+    std::env::join_paths(kept).unwrap_or_else(|_| path.to_owned())
+}
+
+#[test]
+fn the_job_mirror_wrapper_directory_leaves_the_child_path() {
+    let path = std::env::join_paths(["/runner/velnor-cargo", "/usr/bin", "/opt/rust/bin"])
+        .unwrap_or_else(|error| unreachable!("{error}"));
+    let kept = without_directory(&path, Path::new("/runner/velnor-cargo"));
+    let kept: Vec<_> = std::env::split_paths(&kept).collect();
+    assert_eq!(kept, [Path::new("/usr/bin"), Path::new("/opt/rust/bin")]);
+}
+
 pub(super) fn cargo(repo: &Repo) -> Output {
-    Command::new(real_cargo())
+    let mut command = Command::new(real_cargo());
+    command
         .args(["build", "--offline", "--verbose", "--color", "never"])
         .current_dir(repo.root())
         .env("CARGO_TARGET_DIR", repo.root().join("target"))
         .env_remove("RUSTC_WRAPPER")
-        .env_remove("RUSTC_WORKSPACE_WRAPPER")
+        .env_remove("RUSTC_WORKSPACE_WRAPPER");
+    strip_mirror_overrides(&mut command);
+    command
         .output()
         .unwrap_or_else(|error| unreachable!("{error}"))
 }
@@ -272,4 +319,24 @@ fn source_identity_declines_preexisting_tracked_node_kind_mismatches() {
 
 fn kind_path(kind: &str) -> &str {
     if kind == "file" { "src.rs" } else { "link" }
+}
+
+/// The folders of a profile directory that hold one unit's fingerprint files: the layout before
+/// Cargo 1.100 is `.fingerprint/<package>-<hash>`, since then `build/<package>/<hash>/fingerprint`.
+pub(crate) fn fingerprint_folders(debug: &Path) -> Vec<PathBuf> {
+    let list = |dir: &Path| -> Vec<PathBuf> {
+        fs::read_dir(dir)
+            .into_iter()
+            .flatten()
+            .map(|entry| entry.unwrap_or_else(|e| unreachable!("{e}")).path())
+            .collect()
+    };
+    let mut folders = list(&debug.join(".fingerprint"));
+    for package in list(&debug.join("build")) {
+        for unit in list(&package) {
+            folders.push(unit.join("fingerprint"));
+        }
+    }
+    folders.retain(|folder| folder.is_dir());
+    folders
 }

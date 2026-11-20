@@ -8,6 +8,7 @@ mod drifts;
 mod error;
 mod helper_gate;
 pub mod io;
+mod key_gates;
 mod plan_render;
 mod release;
 mod reusable;
@@ -19,12 +20,13 @@ pub use drifts::{Drift, drift};
 pub use error::GenerateError;
 use helper_gate::check_helper;
 pub use helper_gate::require_compatible;
+pub use key_gates::{ConfigFile, KeyGate, check_config_keys, key_gates, required_helper};
 pub use velnor_workflows::HELPER_COMMANDS;
 
 use std::collections::BTreeMap;
 use std::io::Write;
 
-use velnor_model::{CacheKey, RepoPath, RepoView, StepKind};
+use velnor_model::{CacheKey, RepoPath, RepoView, RunnerLabel, StepKind, WorkflowPlan};
 use velnor_rust::{METADATA_PATH, check_tools, detect, metadata_file, source_roots_over_limit};
 
 use crate::plan_render::plan_and_render;
@@ -36,12 +38,8 @@ pub const BUDGET_HELPER: (u64, u64, u64) = (0, 1, 92);
 /// The first release whose `velnor-ci` accepts the `test_lane` key (and runs `lane-guard`).
 pub const TEST_LANE_HELPER: (u64, u64, u64) = (0, 1, 93);
 /// The first release whose `velnor-ci` accepts `job` in a `[[test_lane]]` table.
-// First released in tools-v0.1.107 (not tagged yet when this gate was written).
+// helper-gate: first in tools-v0.1.107 via 9d5c60385d
 pub const TEST_LANE_JOB_HELPER: (u64, u64, u64) = (0, 1, 107);
-/// The first release whose `velnor-ci` accepts `timeout_minutes` in a `[[test_lane]]` and the
-/// `[root_timeouts]` table.
-// First released in tools-v0.1.108 (not tagged yet when this gate was written).
-pub const ROOT_TIMEOUT_HELPER: (u64, u64, u64) = (0, 1, 108);
 pub const SPARSE_HINT_HELPER: (u64, u64, u64) = (0, 1, 103);
 
 pub fn generated_files(view: &RepoView) -> Result<BTreeMap<RepoPath, String>, GenerateError> {
@@ -59,6 +57,18 @@ pub fn generated_with_notes(
     Ok((files, notes))
 }
 
+/// The cleanup workflow runs where the repository's own jobs run: the runner of the
+/// plan's `rust-trim` job, which is the configured `runner`.
+fn cleanup_runner(plan: &WorkflowPlan) -> RunnerLabel {
+    plan.jobs
+        .iter()
+        .find(|job| job.id.as_str() == "rust-trim")
+        .map_or_else(
+            || RunnerLabel::from_static("ubuntu-latest"),
+            |job| job.runs_on.clone(),
+        )
+}
+
 pub fn expected_files(view: &RepoView) -> Result<BTreeMap<RepoPath, String>, GenerateError> {
     expected_with_notes(view).map(|(files, _)| files)
 }
@@ -72,6 +82,7 @@ pub fn expected_with_notes(
         return Err(GenerateError::ExcludedLockRun(finding.clone()));
     }
     let helper = check_helper(&facts)?;
+    key_gates::check_config_keys(view, helper.version())?;
     check_tools(&facts)?;
     if let Some(roots) = source_roots_over_limit(&facts) {
         return Err(GenerateError::TooManySourceRoots(roots));
@@ -84,7 +95,8 @@ pub fn expected_with_notes(
         .iter()
         .flat_map(|job| &job.steps)
         .any(|step| matches!(step.kind, StepKind::CacheSave(CacheKey::Delta { .. })))
-        && let Some(cleanup) = velnor_render::delta_cleanup(helper, &plan.name)
+        && let Some(cleanup) =
+            velnor_render::delta_cleanup(helper, &plan.name, &cleanup_runner(&plan))
     {
         files.insert(velnor_render::DELTA_CLEANUP_PATH, cleanup);
     }

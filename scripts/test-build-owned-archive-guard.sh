@@ -45,6 +45,7 @@ copy_checkout() {
   cp -- "$repository/crates/velnor-archive-guard/build_support/archive_guard_inputs.rs" \
     "$repository/crates/velnor-archive-guard/build_support/archive_guard_inputs_filesystem.rs" \
     "$repository/crates/velnor-archive-guard/build_support/archive_guard_inputs_filesystem_tests.rs" \
+    "$repository/crates/velnor-archive-guard/build_support/archive_guard_watch.rs" \
     "$destination/crates/velnor-archive-guard/build_support/"
   cp -R -- "$repository/crates/velnor-archive-guard/src/." \
     "$destination/crates/velnor-archive-guard/src/"
