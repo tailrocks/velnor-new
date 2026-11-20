@@ -7,8 +7,8 @@ use crate::error::{DetectError, Reason};
 use crate::mise::MISE_CONFIG;
 
 const MBX_TOOL: &str = "mr-boxington";
-// First released in tools-v0.1.108 (not tagged yet when this gate was written).
-pub(crate) const MBX_PIN_HELPER: (u64, u64, u64) = (0, 1, 108);
+// First released in tools-v0.1.109 (not tagged yet when this gate was written).
+pub(crate) const MBX_PIN_HELPER: (u64, u64, u64) = (0, 1, 109);
 
 #[must_use]
 pub fn exact_release(text: &str) -> Option<&str> {

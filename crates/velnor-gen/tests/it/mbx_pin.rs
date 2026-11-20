@@ -33,7 +33,7 @@ fn text(repo: &RepoView) -> Result<String, Box<dyn Error>> {
 
 #[test]
 fn the_action_version_is_the_mise_pin_read_at_run_time_not_a_copied_release() -> TestResult {
-    let text = text(&repo("0.1.108", "mr-boxington = \"v1.31.0\"")?)?;
+    let text = text(&repo("0.1.109", "mr-boxington = \"v1.31.0\"")?)?;
     assert!(
         !text.contains("1.30.0"),
         "the old constant is still rendered"
@@ -66,17 +66,19 @@ fn the_action_version_is_the_mise_pin_read_at_run_time_not_a_copied_release() ->
 
 #[test]
 fn an_older_helper_keeps_the_constant_and_renders_no_pin_step() -> TestResult {
-    for mbx in ["mr-boxington = \"v1.31.0\"", "mr-boxington = \"v1.30.0\""] {
-        let text = text(&repo("0.1.105", mbx)?)?;
-        assert!(text.contains("version: '1.30.0'"), "{mbx}");
-        assert!(!text.contains("mise-pin"), "{mbx}");
+    for helper in ["0.1.105", "0.1.108"] {
+        for mbx in ["mr-boxington = \"v1.31.0\"", "mr-boxington = \"v1.30.0\""] {
+            let text = text(&repo(helper, mbx)?)?;
+            assert!(text.contains("version: '1.30.0'"), "{helper} {mbx}");
+            assert!(!text.contains("mise-pin"), "{helper} {mbx}");
+        }
     }
     Ok(())
 }
 
 #[test]
 fn a_missing_mbx_pin_is_a_generation_error_when_the_helper_reads_it() -> TestResult {
-    let error = text(&repo("0.1.108", "")?)
+    let error = text(&repo("0.1.109", "")?)
         .err()
         .ok_or("generated without a pin")?;
     assert!(error.to_string().contains("mr-boxington"), "{error}");
@@ -87,7 +89,7 @@ fn a_missing_mbx_pin_is_a_generation_error_when_the_helper_reads_it() -> TestRes
 fn a_range_or_latest_mbx_pin_is_a_generation_error() -> TestResult {
     for pin in ["^1.30.0", "latest", "1.30"] {
         let mbx = format!("mr-boxington = \"{pin}\"");
-        assert!(text(&repo("0.1.108", &mbx)?).is_err(), "{pin} was accepted");
+        assert!(text(&repo("0.1.109", &mbx)?).is_err(), "{pin} was accepted");
     }
     Ok(())
 }
@@ -95,7 +97,7 @@ fn a_range_or_latest_mbx_pin_is_a_generation_error() -> TestResult {
 #[test]
 fn without_the_action_the_pin_is_not_read() -> TestResult {
     let mut plain = view(&["Cargo.toml"], None)?;
-    pin_helper(&mut plain, "0.1.108")?;
+    pin_helper(&mut plain, "0.1.109")?;
     let text = text(&plain)?;
     assert!(!text.contains("mise-pin"));
     assert!(!text.contains("mr-boxington"));
