@@ -148,17 +148,17 @@ fn a_nested_root_keeps_the_cargo_configuration_of_each_ancestor_folder() -> Test
 #[test]
 fn declared_inputs_are_escaped_for_gitignore_syntax() -> TestResult {
     let config =
-        format!("{ON}[[inputs]]\nglob = \"fixtures/[data]/a?b c\"\npackages = [\"package-0\"]\n");
+        format!("{ON}[[inputs]]\nglob = \"fixtures/data dir/a b\"\npackages = [\"package-0\"]\n");
     let text = render(&["a/Cargo.toml", "b/Cargo.toml"], &config)?;
     let lanes = lanes_of(&text);
     assert!(!lanes.is_empty(), "{text}");
     for (id, block) in lanes {
         let listing = lane_listing(&block);
         assert!(
-            listing.contains(&"/fixtures/\\[data\\]/a\\?b\\ c"),
+            listing.contains(&"/fixtures/data\\ dir/a\\ b"),
             "{id}: {listing:?}"
         );
-        assert!(!listing.contains(&"/fixtures/[data]/a?b c"), "{id}");
+        assert!(!listing.contains(&"/fixtures/data dir/a b"), "{id}");
     }
     Ok(())
 }

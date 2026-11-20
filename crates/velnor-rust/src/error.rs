@@ -40,6 +40,10 @@ pub enum Reason {
         key: &'static str,
         value: String,
     },
+    UnsupportedGlob {
+        key: &'static str,
+        value: String,
+    },
     OutOfRange {
         key: &'static str,
         value: u16,

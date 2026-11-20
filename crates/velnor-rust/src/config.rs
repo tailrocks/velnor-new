@@ -318,6 +318,9 @@ const REST: &str = "**";
 
 pub(crate) fn rule_glob(key: &'static str, entry: String) -> Result<PathGlob, Reason> {
     let invalid = |value: String| Reason::InvalidValue { key, value };
+    if entry.contains(['?', '[', ']']) {
+        return Err(Reason::UnsupportedGlob { key, value: entry });
+    }
     let (segments, _) = shape(&entry);
     let grammatical = segments
         .iter()
