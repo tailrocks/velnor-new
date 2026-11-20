@@ -5,12 +5,19 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::error::CiError;
+use crate::escape::escape;
 
 pub(super) fn refusal(root: &Path, manifests: &[PathBuf]) -> Result<Option<String>, CiError> {
     let refused = |path: &Path| {
         Some(format!(
-            "base caches are not saved because dependency sources in {} are not proven public\n",
-            path.display()
+            "{}\n",
+            escape(
+                &format!(
+                    "base caches are not saved because dependency sources in {} are not proven public",
+                    path.display()
+                ),
+                false,
+            )
         ))
     };
     if std::env::vars_os().any(|(key, _)| {

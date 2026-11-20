@@ -68,6 +68,7 @@ pub struct BinaryPlan {
     pub bin: String,
     pub root: String,
     pub platforms: Vec<Platform>,
+    pub optional_platforms: Vec<Platform>,
     pub extra_bins: Vec<ExtraBin>,
     pub include: Vec<String>,
     pub format: BinaryFormat,
