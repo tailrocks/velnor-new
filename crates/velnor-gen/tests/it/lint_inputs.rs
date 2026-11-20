@@ -169,6 +169,7 @@ fn the_required_gate_treats_a_lint_the_plan_skipped_as_passing() -> TestResult {
 #[test]
 fn a_single_root_workflow_with_lint_inputs_gets_a_plan_job_and_gates_the_lint_job() -> TestResult {
     let all = jobs(&single()?)?;
+    assert!(all["rust-plan"].is_object(), "no plan job");
     let job = &all["lint-hk"];
     assert_eq!(job["needs"], serde_json::json!(["rust-plan"]), "{job}");
     assert!(
