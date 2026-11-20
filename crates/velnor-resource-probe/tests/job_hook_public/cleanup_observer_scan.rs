@@ -316,7 +316,7 @@ fn a_descriptor_held_outside_the_pair_namespace_is_an_owned_reference() -> TestR
     let mut stdout = BufReader::new(holder.0.stdout.take().ok_or("no holder stdout")?);
     let mut ready = String::new();
     stdout.read_line(&mut ready)?;
-    assert_eq!(ready.trim(), "held", "the holder could not open the namespace");
+    assert_eq!(ready.trim(), "held");
     pair.child.kill()?;
     pair.child.wait()?;
     // The holder keeps the namespace alive until the scan ends, so the scan must count it.
