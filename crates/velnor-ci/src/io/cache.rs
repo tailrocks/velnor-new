@@ -10,6 +10,7 @@ use super::input_target::check_removal_target;
 use crate::cache::{KEEP_NEWEST, born_expired, should_save, trim};
 use crate::cache_prune::UsedUnits;
 use crate::error::CiError;
+use crate::escape::{command_line, escape};
 use crate::github::Repo;
 use crate::logscan::scan;
 use crate::time::date_text;
@@ -70,10 +71,7 @@ pub(super) fn decide_counts(
     if let Some(budget) = budget_bytes.filter(|budget| size > *budget) {
         return Ok(Decision {
             save: false,
-            report: format!(
-                "::notice::{} is {size} bytes, more than the repository cache budget of {budget} bytes; saving nothing ({pruning})\n",
-                target.display()
-            ),
+            report: over_budget(target, size, budget, &pruning),
         });
     }
     let born = target.join(BORN_FILE);
@@ -88,9 +86,15 @@ pub(super) fn decide_counts(
     Ok(Decision {
         save: true,
         report: format!(
-            "{} crates compiled, checked or documented; saving {}: {size} bytes, removed {removed} incremental directories; {pruning}\n",
-            counts.crates_compiled(),
-            target.display(),
+            "{}\n",
+            escape(
+                &format!(
+                    "{} crates compiled, checked or documented; saving {}: {size} bytes, removed {removed} incremental directories; {pruning}",
+                    counts.crates_compiled(),
+                    target.display(),
+                ),
+                false,
+            )
         ),
     })
 }
@@ -311,8 +315,23 @@ pub(super) fn run_decide(args: &crate::cli_cache::DecideArgs) -> Result<String, 
         && let Err(error) = super::delta_snapshot::record_inventory(&target)
     {
         super::delta_snapshot::forget_inventory(&target)?;
-        report =
-            format!("{report}::notice::{error}; pull requests will read the whole restored base\n");
+        report = format!(
+            "{report}{}",
+            command_line(
+                "notice",
+                &format!("{error}; pull requests will read the whole restored base")
+            )
+        );
     }
     Ok(report)
+}
+
+fn over_budget(target: &Path, size: u64, budget: u64, pruning: &str) -> String {
+    command_line(
+        "notice",
+        &format!(
+            "{} is {size} bytes, more than the repository cache budget of {budget} bytes; saving nothing ({pruning})",
+            target.display()
+        ),
+    )
 }

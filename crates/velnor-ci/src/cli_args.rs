@@ -183,7 +183,7 @@ pub struct ToolsLocalArgs {
     #[arg(value_enum)]
     pub verb: crate::tools_local::Verb,
     #[arg(long)]
-    pub key: String,
+    pub key: Option<String>,
 }
 
 #[derive(Debug, Args)]

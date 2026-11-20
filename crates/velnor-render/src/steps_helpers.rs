@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{
-    CacheKey, GateNeed, RenderedStep, Setup, Step, StepKind, merge_group_skipped, sources_step,
-    trimmed_lane,
+    CacheKey, CargoCommand, CargoLane, GateNeed, RenderedStep, Setup, Step, StepKind, cargo_step,
+    merge_group_skipped, sources_step, trimmed_lane,
 };
 
 pub(super) fn saved_unless_hit(kind: &StepKind) -> Vec<String> {
@@ -77,4 +77,20 @@ pub(super) fn extra_conditions(step: &Step, setup: Setup) -> Vec<String> {
             .map(|from| merge_group_skipped(from, setup)),
     );
     extra
+}
+
+pub(super) fn leading_steps(step: &Step, audit: bool, lane: CargoLane) -> Vec<RenderedStep> {
+    match &step.kind {
+        StepKind::Cargo(CargoCommand::Doctest) if audit => vec![cargo_step(
+            &CargoCommand::BuildAll,
+            step.manifest.as_ref(),
+            true,
+            lane,
+            None,
+        )],
+        StepKind::UploadGroupArtifact(upload) => {
+            vec![crate::artifact_steps::group_stage(upload)]
+        }
+        _ => Vec::new(),
+    }
 }

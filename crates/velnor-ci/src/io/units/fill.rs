@@ -99,7 +99,7 @@ impl Audit<'_> {
                     package.clone(),
                     Fingerprint {
                         kind: UnitKind::Run,
-                        target: String::new(),
+                        target: hash.clone(),
                     },
                 ));
             }

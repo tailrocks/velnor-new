@@ -158,12 +158,13 @@ impl Builder<'_> {
                 Err(_) => return (evidence, false),
             }
         }
-        let mut remaining = inventory::LIMIT * 10;
+        // The build scans its roots under the same default the audit uses.
+        let mut budget = inventory::Budget::new(super::options::DEFAULT_MAX_ENTRIES);
         for root in &self.roots {
             if !root.exists() {
                 continue;
             }
-            match inventory::scan(root, &self.targets, &mut remaining) {
+            match inventory::scan(root, &self.targets, &mut budget) {
                 Ok(found) => evidence.entries.extend(found),
                 Err(_) => return (evidence, false),
             }

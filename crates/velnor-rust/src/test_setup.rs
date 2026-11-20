@@ -38,18 +38,62 @@ pub(crate) fn inserted(
             .collect();
         steps.splice(first..first, setup);
     }
-    let Some(first) = steps.iter().position(tests) else {
+    if let Some(first) = steps.iter().position(tests) {
+        let (when, pr) = (steps[first].when, steps[first].pr);
+        let setup: Vec<Step> = setups(false)
+            .map(|setup| Step {
+                gate: lane.steps(),
+                ..setup_step(root, setup, when, pr)
+            })
+            .collect();
+        steps.splice(first..first, setup);
+    }
+    checked(facts, root, lane, steps)
+}
+
+fn checked(facts: &RepoFacts, root: &RustRoot, lane: &Lane, mut steps: Vec<Step>) -> Vec<Step> {
+    let Some(first) = steps.iter().position(|step| tests(step) || archives(step)) else {
         return steps;
     };
+    if matches!(
+        steps[first].kind,
+        StepKind::Cargo(CargoCommand::NextestRunArchive { .. })
+    ) {
+        return steps;
+    }
     let (when, pr) = (steps[first].when, steps[first].pr);
-    let setup: Vec<Step> = setups(false)
-        .map(|setup| Step {
+    let checks: Vec<Step> = facts
+        .config
+        .check_configurations
+        .iter()
+        .filter(|check| check.root == root.manifest.parent())
+        .map(|check| {
+            setup_step(
+                root,
+                &TestSetup {
+                    root: check.root.clone(),
+                    name: "velnor-ci check-configurations".to_owned(),
+                    run: check.command(),
+                    phase: None,
+                },
+                when,
+                pr,
+            )
+        })
+        .map(|check| Step {
             gate: lane.steps(),
-            ..setup_step(root, setup, when, pr)
+            ..check
         })
         .collect();
-    steps.splice(first..first, setup);
+    steps.splice(first..first, checks);
     steps
+}
+
+fn archives(step: &Step) -> bool {
+    matches!(
+        step.kind,
+        StepKind::Cargo(CargoCommand::NextestArchive { .. })
+    )
 }
 
 fn setup_step(

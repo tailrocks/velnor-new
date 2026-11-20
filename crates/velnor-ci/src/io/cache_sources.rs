@@ -5,6 +5,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::error::CiError;
+use crate::escape::escape;
 
 pub(super) struct Sources {
     pub(super) refusal: Option<String>,
@@ -23,8 +24,14 @@ fn refused(path: &Path, not_private: Option<&CiError>) -> Sources {
     });
     Sources {
         refusal: Some(format!(
-            "base caches are not saved because dependency sources in {} are not proven public{why}\n",
-            path.display()
+            "{}\n",
+            escape(
+                &format!(
+                    "base caches are not saved because dependency sources in {} are not proven public{why}",
+                    path.display()
+                ),
+                false,
+            )
         )),
         private_sources: false,
     }

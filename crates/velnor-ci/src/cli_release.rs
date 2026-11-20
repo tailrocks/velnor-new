@@ -29,7 +29,7 @@ pub enum ReleaseCommand {
     )]
     Record(RecordArgs),
     #[command(
-        about = "Publish the draft release of a tag. Check each named file and SHA256SUMS in the directory as sha256sum --check --strict does, find the one draft release with the tag, which the GitHub App's bot must have created, upload the files and SHA256SUMS, and un-draft it only when it holds exactly those files with those digests; with --no-files, name and read no file and un-draft it only when it holds no asset. Exit 1 before any change on a missing, unlisted or changed file, on a published release or a second draft with the tag, on a draft that the App did not create, and on an asset that is not one of the files. Reads GITHUB_TOKEN, which needs contents: write"
+        about = "Publish the draft release of a tag. Check each named file and SHA256SUMS in the directory as sha256sum --check --strict does, find the one draft release with the tag, which the GitHub App's bot must have created, upload the files and SHA256SUMS, and un-draft it only when it holds exactly those files with those digests; with --no-files, name and read no file and un-draft it only when it holds no asset; a file named with --optional-asset is published, and listed in SHA256SUMS, only when it is in the directory, and is skipped with a notice otherwise. Exit 1 before any change on a missing, unlisted or changed file, on a published release or a second draft with the tag, on a draft that the App did not create, and on an asset that is not one of the files. Reads GITHUB_TOKEN, which needs contents: write"
     )]
     Publish(PublishArgs),
     #[command(
@@ -48,6 +48,30 @@ pub enum ReleaseCommand {
         about = "Inside the lead's release pull request, set the version of each --member package of the follower workspace, and its entry in the follower's Cargo.lock and in the lead's Cargo.lock when present, to the version of --lead-package, and move the exact `=` pins on those packages in both workspaces with it. Reads and writes files only, with no network and no cargo. Does nothing when everything already matches. Exit 1 before writing anything on a manifest that is not valid TOML, a version that is not a plain MAJOR.MINOR.PATCH or is inherited from the workspace, a member that is not a package of the follower workspace, a member already ahead of the lead, a pin that is not exact, or a follower without a Cargo.lock"
     )]
     Align(AlignArgs),
+    #[command(
+        about = "Run the command after -- only when SHA256SUMS in the directory lists the file, as for an optional release asset: SHA256SUMS, not the success of a download, decides whether the file is released. Exit 1 when SHA256SUMS lists the file and it is not in the directory, or when the command fails; skip, with a notice and exit 0, a file SHA256SUMS does not list"
+    )]
+    VerifyListed(VerifyListedArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct VerifyListedArgs {
+    #[arg(
+        allow_hyphen_values = true,
+        long,
+        default_value = ".",
+        help = "Directory that holds the file and SHA256SUMS"
+    )]
+    pub dir: PathBuf,
+    #[arg(long, value_parser = file_name, help = "Exact name of the file")]
+    pub file: PlainName,
+    #[arg(
+        allow_hyphen_values = true,
+        last = true,
+        required = true,
+        help = "Command to run, with its arguments, when SHA256SUMS lists the file"
+    )]
+    pub command: Vec<String>,
 }
 
 #[derive(Debug, Args)]
@@ -269,9 +293,17 @@ pub struct PublishArgs {
     )]
     pub no_files: bool,
     #[arg(
+        long = "optional-asset",
+        value_name = "FILE",
+        value_parser = file_name,
+        conflicts_with = "no_files",
+        help = "Exact name of a file to publish besides SHA256SUMS when it is in the directory and to skip, with a notice, when it is not; repeat for each file. A present one is checked and published like a named file, and SHA256SUMS must list it"
+    )]
+    pub optional_assets: Vec<PlainName>,
+    #[arg(
         required_unless_present = "no_files",
         value_parser = file_name,
-        help = "Exact names of the files to publish besides SHA256SUMS"
+        help = "Exact names of the files to publish besides SHA256SUMS; each must be in the directory"
     )]
     pub files: Vec<PlainName>,
 }

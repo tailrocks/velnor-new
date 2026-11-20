@@ -22,7 +22,7 @@ use crate::gate::{
 };
 use crate::helper_steps::{inputs_step, restore_inputs_step, restored_targets_step};
 pub(crate) use crate::install_steps::install_helper;
-use crate::install_steps::{install_mise, install_tools};
+use crate::install_steps::{install_generator_step, install_mise, install_tools};
 use crate::permission_pairs;
 use crate::rules::{RenderedJob, RenderedStep, Value};
 use crate::save_gate::SaveGate;
@@ -46,7 +46,7 @@ pub(crate) const MISE_VERSION: &str = "2026.11.10";
 mod chained_save;
 #[path = "steps_helpers.rs"]
 mod steps_helpers;
-use steps_helpers::{extra_conditions, rustup_add, variable};
+use steps_helpers::{extra_conditions, leading_steps, rustup_add, variable};
 
 pub(crate) const CACHE_RESTORE: &str =
     "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
@@ -169,12 +169,14 @@ fn job_steps(
             for body in &mut rendered {
                 body.shared |= verified && tools_key;
             }
-            Some(crate::base_steps::audited_save(
+            let mut steps = Vec::from_iter(gate.saveable(index));
+            steps.extend(crate::base_steps::audited_save(
                 job,
                 step,
                 rendered,
                 gate.audit_runs(index),
-            ))
+            ));
+            Some(steps)
         })
         .flatten()
         .collect()
@@ -199,16 +201,7 @@ fn rendered_steps(
     around: Around<'_>,
 ) -> Vec<RenderedStep> {
     let job_name = around.job_name;
-    let mut rendered = Vec::new();
-    if audit && step.kind == StepKind::Cargo(CargoCommand::Doctest) {
-        rendered.push(cargo_step(
-            &CargoCommand::BuildAll,
-            step.manifest.as_ref(),
-            true,
-            lane,
-            None,
-        ));
-    }
+    let mut rendered = leading_steps(step, audit, lane);
     let mut body = step_body(step, audit, tests, lane);
     if body.id.is_none() {
         body.id = around.id.map(str::to_owned);
@@ -305,6 +298,7 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
         StepKind::InstallMise => install_mise(),
         StepKind::Lint(command) => crate::lint_steps::lint_step(command),
         StepKind::UploadArchive { name, file } => upload_step(name, file),
+        StepKind::UploadGroupArtifact(upload) => crate::artifact_steps::group_artifact(upload),
         StepKind::DownloadArchive { name, into } => download_step(name, into.as_ref()),
         StepKind::CacheRestore(key) => cache_step(CACHE_RESTORE, "Restore", key, true),
         StepKind::CacheLookup(key) => crate::tools_steps::tools_lookup(key),
@@ -369,6 +363,7 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
             ..RenderedStep::default()
         },
         StepKind::GeneratorCheck => crate::helper_steps::generator_check_step(),
+        StepKind::InstallGenerator(release) => install_generator_step(release),
         StepKind::InstallHelper(release) => install_helper(release),
         StepKind::FailOnDraftRun => crate::draft_steps::fail_on_draft(),
         StepKind::DraftNotice => crate::draft_steps::draft_notice(),
