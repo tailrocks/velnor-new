@@ -8,7 +8,7 @@ use std::os::unix::fs::symlink;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-const CARGO_TOML: &str = "[package]\nname = \"probe\"\nversion = \"0.0.0\"\nedition = \"2021\"\nbuild = \"build.rs\"\n\n[dependencies]\n\n[build-dependencies]\nrustix = { version = \"=1.1.6\", default-features = false, features = [\"fs\", \"process\", \"std\"] }\nsha2 = { version = \"=0.11.1\", default-features = false }\n";
+const CARGO_TOML: &str = "[package]\nname = \"probe\"\nversion = \"0.0.0\"\nedition = \"2024\"\nbuild = \"build.rs\"\n\n[dependencies]\n\n[build-dependencies]\nrustix = { version = \"=1.1.6\", default-features = false, features = [\"fs\", \"process\", \"std\"] }\nsha2 = { version = \"=0.11.1\", default-features = false }\n";
 const MAIN: &str = "mod stale_inputs;\nfn main() {\n    if let Err(error) = stale_inputs::verify_unwatched_inputs(env!(\"VELNOR_ARCHIVE_GUARD_ROOT\"), env!(\"VELNOR_ARCHIVE_GUARD_UNWATCHED\")) {\n        eprintln!(\"{error}\");\n        std::process::exit(1);\n    }\n    println!(\"{}\", env!(\"VELNOR_ARCHIVE_GUARD_FINGERPRINT\"));\n}\n";
 const MANIFEST: &str = "file Cargo.toml\ntree crates/probe/src\noptional .cargo/config.toml\noptional rust-toolchain\n";
 

@@ -28,14 +28,14 @@ fn main() -> Result<(), Box<dyn Error>> {
         .ok_or("workspace root is missing")?;
     let (fingerprint, watched, absent) = archive_guard_inputs::fingerprint(root)?;
     println!("cargo:rerun-if-env-changed={SUPPLIED}");
-    if let Some(supplied) = std::env::var_os(SUPPLIED) {
-        if supplied.to_str() != Some(fingerprint.as_str()) {
-            return Err(format!(
-                "{SUPPLIED} differs from the fingerprint of {}",
-                root.display()
-            )
-            .into());
-        }
+    if let Some(supplied) = std::env::var_os(SUPPLIED)
+        && supplied.to_str() != Some(fingerprint.as_str())
+    {
+        return Err(format!(
+            "{SUPPLIED} differs from the fingerprint of {}",
+            root.display()
+        )
+        .into());
     }
     let out_dir = std::env::var_os("OUT_DIR").map(PathBuf::from);
     let plan = archive_guard_watch::plan(watched, absent, out_dir.as_deref());
