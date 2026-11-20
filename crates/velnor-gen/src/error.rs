@@ -57,10 +57,7 @@ impl fmt::Display for GenerateError {
             Self::IncompatibleHelper(version) => write!(f, "{}", incompatible_helper(version)),
             Self::Release(error) => error.fmt(f),
             Self::ReleaseFileNotUtf8(path) => write!(f, "{path} is not UTF-8 text"),
-            Self::NoReleaseConfig => write!(
-                f,
-                "{RELEASE_CONFIG_PATH} does not exist; there is no release to describe"
-            ),
+            Self::NoReleaseConfig => write!(f, "{RELEASE_CONFIG_PATH} does not exist; there is no release to describe"),
             Self::ReleaseToolchainPath => f.write_str(
                 "rust-toolchain.toml names a toolchain path, so rustup would run a cargo from the repository with the release App token in scope; name a channel instead",
             ),

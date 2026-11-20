@@ -230,7 +230,7 @@ fn generate_rejects_a_build_script_that_is_a_filesystem_symlink() -> TestResult 
     git(&root, &["init", "--quiet"])?;
     git(&root, &["add", "--all"])?;
 
-    let cargo = std::path::Path::new(env!("CARGO"));
+    let cargo = velnor_test_support::real_cargo();
     let cargo_dir = cargo.parent().ok_or("cargo executable has no parent")?;
     let search_path = std::env::join_paths([
         cargo_dir,

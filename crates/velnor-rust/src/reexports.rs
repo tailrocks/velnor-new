@@ -9,7 +9,9 @@ pub use crate::cache_budget::{
     cache_family, delta_pull_request, target_family_prefix,
 };
 pub use crate::classify::is_workflow_file;
-pub use crate::compat::{BUILD_DRIVER, COMPAT_SCHEMA, CompatInputs, compat};
+pub use crate::compat::{
+    BUILD_DRIVER, COMPAT_SCHEMA, CompatInputs, WRAPPED_BUILD_DRIVER, build_driver, compat,
+};
 pub use crate::config::{CONFIG_PATH, budget, ci_debuginfo};
 pub use crate::config_budget::BUDGET_KEYS;
 pub use crate::config_keys::KEYS;
@@ -55,7 +57,7 @@ pub use crate::shape::{
 };
 pub use crate::sparse::bytes_outside_lanes;
 pub use crate::suggest_groups::suggest_groups;
-pub use crate::target_dir::NESTED_ROOTS_FOLDER;
+pub use crate::target_dir::{NESTED_ROOTS_FOLDER, default_folder};
 pub use crate::timings::{TIMINGS_PATH, render_timings, root_job_ids};
 pub use crate::toolchain::{TOOLCHAIN_PLAIN, TOOLCHAIN_TOML, toolchain};
 pub use crate::verdict::{

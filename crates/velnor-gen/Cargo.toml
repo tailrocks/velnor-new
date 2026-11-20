@@ -40,3 +40,4 @@ toml.workspace = true
 
 [dev-dependencies]
 similar.workspace = true
+velnor-test-support = { version = "=0.0.0", path = "../velnor-test-support" }

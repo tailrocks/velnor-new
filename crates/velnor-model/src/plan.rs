@@ -264,6 +264,8 @@ pub enum When {
     SaveToolsOnDefaultBranch,
     RestoreToolsUnlessLocal,
     SaveToolsUnlessLocal,
+    /// On a trusted saving run, when the node store already served the tools: looks the network entry up.
+    LookupToolsOnNodeHit,
     PrimeToolsFromNetwork,
     SaveBase,
     SaveBaseDecided,
@@ -385,17 +387,4 @@ pub enum FilterRef {
         exclude: Vec<String>,
         except: Vec<String>,
     },
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Shape {
-    OneJob,
-    LintAndTest,
-    BuildThenGroups,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ShapeDecision {
-    pub shape: Shape,
-    pub reason: String,
 }

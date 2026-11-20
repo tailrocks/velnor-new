@@ -48,7 +48,7 @@ impl Probe {
     }
 
     fn build(&self) -> Result<String, Box<dyn Error>> {
-        let output = Command::new(env!("CARGO"))
+        let output = Command::new(velnor_test_support::real_cargo())
             .args(["build", "--offline", "-v", "--manifest-path"])
             .arg(self.root.join("crates/probe/Cargo.toml"))
             .env("CARGO_TARGET_DIR", &self.target)

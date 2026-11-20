@@ -25,7 +25,7 @@ A lockfile that cannot be read as UTF-8 or as a TOML table with a `package` arra
 
 Every job that installs the tools restores the Tools entry in the step before `jdx/mise-action` (a shard job, which installs only cargo-nextest, restores it too; the plan job installs nothing and restores nothing). `~/.local/share/mise` holds the mise program itself (`bin/mise`, which the action finds and only verifies against the signed checksums, so it downloads nothing), the installed tools and the link to the Rust toolchain; `~/.rustup` holds the toolchain, because mise installs Rust through rustup. Rust components and targets are added in every job before the save, so every job saves the same content; with `profile = "complete"` the save follows `velnor-ci prepare`, which installs the components the profile implies.
 
-Only a job that installs every tool saves it, only on the default branch and only when the restore was not an exact hit. A tool-set change on a pull request installs fresh for that pull request and saves nothing. The key covers `mise.lock`, the mise program version the generator passes to `jdx/mise-action` as `version:`, the runner OS and the runner architecture: a changed tool version or a mise bump moves it (the entry is saved only on a miss, so without the mise version a bump would keep restoring a directory built by the old mise), a comment in `mise.toml` does not. It does not cover the runner image version or the targets in `rust-toolchain.toml`; a change in either only causes a re-download, never a wrong tool. Generation fails when `mise.lock` is missing, or when a pinned tool has no prebuilt binary for the runner's platform in it (a `cargo:` tool, for example); the error names the tool.
+Only a job that installs every tool saves it, only on the default branch and only when the restore was not an exact hit. When the node store served the tools (`steps.toolslocal.outputs.hit == 'true'`) the network restore is skipped, so the job runs an `actions/cache/restore` step with `lookup-only: true` for the same key on a trusted run (default-branch push, schedule or manual run). It downloads nothing; it only reports whether the entry exists, and the network save runs only when that lookup missed. Without this lookup an evicted network entry would never be refreshed by node-hit runs, and hosted lanes and fresh nodes would keep missing it. Pull request runs neither look up nor save, and a node miss restores and saves exactly as before. A tool-set change on a pull request installs fresh for that pull request and saves nothing. The key covers `mise.lock`, the mise program version the generator passes to `jdx/mise-action` as `version:`, the runner OS and the runner architecture: a changed tool version or a mise bump moves it (the entry is saved only on a miss, so without the mise version a bump would keep restoring a directory built by the old mise), a comment in `mise.toml` does not. It does not cover the runner image version or the targets in `rust-toolchain.toml`; a change in either only causes a re-download, never a wrong tool. Generation fails when `mise.lock` is missing, or when a pinned tool has no prebuilt binary for the runner's platform in it (a `cargo:` tool, for example); the error names the tool.
 
 ## Saving the build directory
 
@@ -68,7 +68,7 @@ A plan with delta saving generates `rust-cache-trim.yml`, which runs after Rust 
 
 ## Compat
 
-`compat` is the first 16 hex characters of the SHA-256 of the following fields in order: `schema` (the decimal `COMPAT_SCHEMA`, bumped by hand when the cache layout changes), `rustc` (`rustc -vV`), `target` (`CARGO_BUILD_TARGET`, or empty), `profile-env` (the CI build profile environment lines below), `profile-config` (the dependency override config below, or empty), `repo-profile` (the effective repository Cargo profile tables), `image` (`ImageOS` and the `ID` and `VERSION_ID` fields from `/etc/os-release`, joined by `|`, with missing values empty), `rustflags` (`RUSTFLAGS`, or empty), `workspace` (the absolute workspace path), and `driver` (the build driver). Each field is encoded as its name, a colon, the decimal byte length of its UTF-8 value, a colon, the value, and a newline. The digest covers the concatenated encoded fields. `velnor-ci prepare` gathers them and writes the result as a step output.
+`compat` is the first 16 hex characters of the SHA-256 of the following fields in order: `schema` (the decimal `COMPAT_SCHEMA`, bumped by hand when the cache layout changes), `rustc` (`rustc -vV`), `target` (`CARGO_BUILD_TARGET`, or empty), `profile-env` (the CI build profile environment lines below), `profile-config` (the dependency override config below, or empty), `repo-profile` (the effective repository Cargo profile tables), `image` (`ImageOS` and the `ID` and `VERSION_ID` fields from `/etc/os-release`, joined by `|`, with missing values empty), `rustflags` (`RUSTFLAGS`, or empty), `workspace` (the absolute workspace path), and `driver` (`cargo`, or `cargo-mise-wrapper` when the `cargo` that `PATH` resolves to is in a `command-wrappers/bin` directory, which is mise's command wrapper that runs mbx; `prepare` reads `PATH` as the job's cargo calls will). A repository that turns the wrapper on or off therefore changes `compat` and misses the Target cache once, instead of restoring a target built the other way. Each field is encoded as its name, a colon, the decimal byte length of its UTF-8 value, a colon, the value, and a newline. The digest covers the concatenated encoded fields. `velnor-ci prepare` gathers them and writes the result as a step output.
 
 `repo-profile` concatenates, in repository path order, each effective Cargo config containing a `[profile]` table. Each contribution is the repository-relative path followed by a newline, the re-serialized TOML containing that table, and a newline. Configs without `[profile]` contribute nothing; a `.cargo/config.toml` shadowed by `.cargo/config` contributes nothing.
 
@@ -118,17 +118,33 @@ cache_check_blocks = true
 ```
 
 Besides compiled-despite-restored-inputs and download waste, the report names
-four more avoidable costs, each only when the evidence shows it was avoidable:
+five more avoidable costs, each only when the evidence shows it was avoidable:
 
 - A sources cache miss although the Actions cache inventory already listed
   that exact key, on a ref the job may read, when the job started. The `Cache`
   job records this as `entry_before_job`; a cold lock stays clean.
 - An MBX session with no hits although `MBX_CACHE_DIR` named a store that held
   entries older than the first Cargo invocation. A per-job or empty store, or a
-  lane without MBX lines, stays clean.
+  lane without MBX lines, stays clean here (the next item covers a
+  declared MBX with no sessions).
+- A lane that compiled without MBX: at least one compilation unit that Cargo
+  did not report fresh, but no `mbx[cache]` session line in the lane's Cargo
+  log, while the checkout declares MBX. The lane's `report` step records the
+  declaration as `mbx.declared` in `ci-metrics.json` when a mise config at the
+  checkout root (`mise.toml`, `.mise.toml`, `mise/config.toml`,
+  `.mise/config.toml`, `.config/mise.toml` or `.config/mise/config.toml`) sets
+  `mr_boxington = true` on a tool in `[tools]` or sets the command of
+  `[wrappers.cargo]` to `mbx`. A pin of the `mr-boxington` tool alone declares nothing.
+  A lane that compiled nothing, and a repository that does not declare MBX,
+  stay clean. This is the proof that the declared routing really ran: without
+  it a lane that bypassed MBX looked identical to one with no MBX at all. A
+  consumer gets it by bumping its helper pin; the generator passes no new
+  input.
 - A toolchain component or target that `velnor-ci prepare` had to install
   (recorded in `$RUNNER_TEMP/velnor-toolchain-installs.txt`) although the tools
-  cache had an exact hit.
+  cache had an exact hit. This includes a declared channel that rustup would
+  install on its first `rustc` or `cargo` call: `prepare` checks for it before
+  the first rustup call and records `toolchain <channel>`.
 - A compilation unit (same root, package, target, profile, features, output
   files and execution environment) built by two Cargo invocations of one lane.
 

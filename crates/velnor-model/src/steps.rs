@@ -28,6 +28,8 @@ pub enum StepKind {
     InstallMise,
     Lint(LintCommand),
     CacheRestore(CacheKey),
+    /// A `lookup-only` read of a cache entry: it reports whether the entry exists and never downloads it.
+    CacheLookup(CacheKey),
     CacheSave(CacheKey),
     RestoredTargets {
         expiry: BaseExpiry,
@@ -146,7 +148,9 @@ impl StepKind {
     #[must_use]
     pub const fn is_check(&self) -> bool {
         match self {
-            Self::TestSetup { .. } => true,
+            // The advisory DB fetch serves the cargo-deny check, which is a check, so it
+            // is skipped after a merge group exactly when that check is.
+            Self::TestSetup { .. } | Self::AdvisoryFetch { .. } => true,
             Self::Cargo(command) => !command.is_target_build(),
             Self::Checkout { .. }
             | Self::InstallTools { .. }
@@ -158,7 +162,7 @@ impl StepKind {
             | Self::SourcesLocks(_)
             | Self::SourcesFetch { .. }
             | Self::SourcesFetchAll { .. }
-            | Self::AdvisoryFetch { .. }
+            | Self::CacheLookup(_)
             | Self::CacheDecide { .. }
             | Self::CacheResult(_)
             | Self::CacheVerify { .. }
