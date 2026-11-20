@@ -157,6 +157,7 @@ fn job_steps(
                 job,
                 step,
                 rendered_steps(step, setup, audit, tests, lane, around),
+                gate.audit_runs(index),
             ))
         })
         .flatten()

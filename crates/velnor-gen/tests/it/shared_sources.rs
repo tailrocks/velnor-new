@@ -75,6 +75,7 @@ pub(crate) fn locks_hash(manifests: &[&str]) -> Result<String, Box<dyn std::erro
             permissions: Permissions::default(),
             timeout_minutes: 10,
             reports_ignored: false,
+            records_build: false,
             selection_name: None,
             gate: None,
             skip_after_merge_group: None,

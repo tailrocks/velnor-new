@@ -353,6 +353,11 @@ pub(crate) fn job(facts: &RepoFacts, id: JobId) -> Job {
             .helper
             .as_ref()
             .is_some_and(|helper| helper.version().at_least(IGNORED_COUNT_HELPER)),
+        records_build: facts.helper.as_ref().is_some_and(|helper| {
+            helper
+                .version()
+                .at_least(crate::root_jobs::BUILT_RECORD_HELPER)
+        }),
         selection_name: None,
         steps: Vec::new(),
     }
