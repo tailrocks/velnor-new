@@ -78,7 +78,7 @@ pub(crate) fn after_the_builds(
         .join(" && ");
     RenderedJob {
         condition: Some(expression(&format!(
-            "always() && {required} && {GATE_IS_READY} && {} && {BUILD_OUTPUT}",
+            "!cancelled() && {required} && {GATE_IS_READY} && {} && {BUILD_OUTPUT}",
             source.passed
         ))),
         ..job

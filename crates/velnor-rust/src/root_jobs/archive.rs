@@ -187,7 +187,10 @@ impl RootJobs<'_> {
         let mut steps = head(
             self.facts,
             CHECKOUT_DEPTH,
-            crate::sparse::paths(self.facts, std::slice::from_ref(&self.member().root)),
+            crate::sparse::with_artifacts(
+                crate::sparse::paths(self.facts, std::slice::from_ref(&self.member().root)),
+                group.map_or(&[], |group| &group.artifacts),
+            ),
         );
         steps.extend(mbx(self.facts, self.lane.steps()));
         steps.extend(mirror());
@@ -229,6 +232,7 @@ impl RootJobs<'_> {
             steps.push(self.gated(StepKind::TestSetup {
                 name: "Check that Docker answers".to_owned(),
                 run: "docker info".to_owned(),
+                before_build: false,
             }));
         }
         steps.extend(

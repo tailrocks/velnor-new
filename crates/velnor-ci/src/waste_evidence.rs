@@ -6,9 +6,12 @@
 
 use crate::report::{Hit, LaneMetrics};
 use serde::{Deserialize, Serialize};
+use std::path::Path;
 
 /// `prepare` appends one line per `rustup component add` or `rustup target add` it had to run.
 pub const TOOLCHAIN_INSTALLS: &str = "velnor-toolchain-installs.txt";
+
+pub const SEED_TRUNCATED: &str = "velnor-mbx-seed-truncated";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -26,9 +29,6 @@ pub struct MbxEvidence {
     pub declared: bool,
     /// `MBX_CACHE_DIR` named a store that held an entry older than the first cargo invocation.
     pub store_primed: bool,
-    /// The job's private store was seeded only up to the startup budget, so most lookups cannot
-    /// hit and the seed step already warned. That is a cold start, not a session that wasted a
-    /// complete store.
     #[serde(default)]
     pub seed_truncated: bool,
     pub sessions: Vec<MbxSession>,
@@ -41,10 +41,9 @@ impl MbxEvidence {
     }
 }
 
-/// The seed step stopped copying at its startup budget (`mbx-seed` warns with this text).
 #[must_use]
-pub fn mbx_seed_truncated(log: &[u8]) -> bool {
-    String::from_utf8_lossy(log).contains("MBX seeding stopped at the startup budget")
+pub fn seed_truncated(runner_temp: &Path) -> bool {
+    runner_temp.join(SEED_TRUNCATED).is_file()
 }
 
 /// The `mbx[cache]: object cache: H hits, M misses[, N not looked up][, B bypassed]; ...` lines.
