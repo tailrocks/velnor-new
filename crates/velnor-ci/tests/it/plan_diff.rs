@@ -15,15 +15,15 @@ use std::process::{Command, Output};
 
 use crate::support::fresh_dir;
 
-fn data() -> PathBuf {
+pub(crate) fn data() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/it/data/plan_diff")
 }
 
-fn read(path: &Path) -> String {
+pub(crate) fn read(path: &Path) -> String {
     fs::read_to_string(path).unwrap_or_else(|e| unreachable!("{}: {e}", path.display()))
 }
 
-fn git(repo: &Path, args: &[&str]) -> String {
+pub(crate) fn git(repo: &Path, args: &[&str]) -> String {
     let output = Command::new("git")
         .arg("-C")
         .arg(repo)
@@ -46,7 +46,7 @@ fn git(repo: &Path, args: &[&str]) -> String {
     String::from_utf8_lossy(&output.stdout).trim().to_owned()
 }
 
-fn copy_tree(from: &Path, to: &Path) {
+pub(crate) fn copy_tree(from: &Path, to: &Path) {
     let Ok(entries) = fs::read_dir(from) else {
         return;
     };
@@ -78,11 +78,21 @@ fn collect_files(dir: &Path, root: &Path, found: &mut Vec<PathBuf>) {
 /// The case's repository: a base commit and a head commit for a `pull_request` or fork,
 /// one commit for a local run. Returns the repository and the commits' ids.
 fn repository(case: &Path, event: &str, name: &str) -> (PathBuf, String, String) {
+    repository_with(case, event, name, |_| ())
+}
+
+pub(crate) fn repository_with(
+    case: &Path,
+    event: &str,
+    name: &str,
+    tweak: impl Fn(&Path),
+) -> (PathBuf, String, String) {
     let repo = fresh_dir("velnor-ci-plan-diff", name);
     git(&repo, &["init", "-q", "-b", "main"]);
     let snapshot = case.join("snapshot");
     copy_tree(&snapshot.join("common"), &repo);
     copy_tree(&snapshot.join("base-only"), &repo);
+    tweak(&repo);
     git(&repo, &["add", "-A"]);
     git(&repo, &["commit", "-q", "-m", "base", "--allow-empty"]);
     let base = git(&repo, &["rev-parse", "HEAD"]);
@@ -106,13 +116,13 @@ fn repository(case: &Path, event: &str, name: &str) -> (PathBuf, String, String)
 }
 
 /// Where a run's request and outputs go: beside the repository, which they must not dirty.
-fn aside(repo: &Path) -> PathBuf {
+pub(crate) fn aside(repo: &Path) -> PathBuf {
     let dir = repo.with_extension("io");
     fs::create_dir_all(&dir).unwrap_or_else(|e| unreachable!("{e}"));
     dir
 }
 
-fn plan(repo: &Path, request: &Path, outputs: &Path) -> Output {
+pub(crate) fn plan(repo: &Path, request: &Path, outputs: &Path) -> Output {
     Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
         .current_dir(repo)
         .env_clear()
@@ -128,7 +138,7 @@ fn plan(repo: &Path, request: &Path, outputs: &Path) -> Output {
         .unwrap_or_else(|e| unreachable!("{e}"))
 }
 
-fn bind(request: &str, base: &str, head: &str) -> String {
+pub(crate) fn bind(request: &str, base: &str, head: &str) -> String {
     let mut value: serde_json::Value =
         serde_json::from_str(request).unwrap_or_else(|e| unreachable!("{e}"));
     if !value["base"].is_null() {
