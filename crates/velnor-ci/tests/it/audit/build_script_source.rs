@@ -76,31 +76,35 @@ fn build_in_order(repo: &Repo, clippy_first: bool) {
     }
 }
 
-fn ran_the_script(script: &str, clippy_first: bool) {
+fn audited_lock(script: &str, clippy_first: bool) -> String {
     let repo = workspace(script);
     build_in_order(&repo, clippy_first);
     let written = audit(&repo, &["--write"]);
     assert!(written.status.success(), "{written:?}");
-    assert_eq!(
-        fs::read_to_string(repo.root().join(".velnor/rust-inputs.lock"))
-            .unwrap_or_else(|error| unreachable!("{error}")),
-        "Cargo.toml\tmember\nclippy.toml\tmember\nshared/data.txt\tmember\n"
-    );
+    fs::read_to_string(repo.root().join(".velnor/rust-inputs.lock"))
+        .unwrap_or_else(|error| unreachable!("{error}"))
 }
+
+const READS: &str = "Cargo.toml\tmember\nclippy.toml\tmember\nshared/data.txt\tmember\n";
 
 #[test]
 fn a_clippy_first_lane_audits_a_member_build_script_beside_a_clippy_config() {
-    ran_the_script("build.rs", true);
+    assert_eq!(audited_lock("build.rs", true), READS);
 }
 
 #[test]
-fn a_build_first_lane_audits_a_member_build_script_beside_a_clippy_config() {
-    ran_the_script("build.rs", false);
+fn a_build_first_lane_still_audits_a_member_build_script_beside_a_clippy_config() {
+    assert!(audited_lock("build.rs", false).contains("shared/data.txt\tmember\n"));
+}
+
+#[test]
+fn the_lock_lists_the_clippy_reads_whatever_the_step_order() {
+    assert_eq!(audited_lock("build.rs", false), READS);
 }
 
 #[test]
 fn a_clippy_first_lane_audits_a_build_script_the_manifest_names() {
-    ran_the_script("src/gen.rs", true);
+    assert_eq!(audited_lock("src/gen.rs", true), READS);
 }
 
 #[test]
