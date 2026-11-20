@@ -161,6 +161,7 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
         .transpose()?;
     crate::groups::check_helper(&config, helper.as_ref())?;
     refuse_locked_credentials(view, &config, &rust_roots)?;
+    crate::public_advice::check(view, &config, &rust_roots)?;
     let (timings, timings_notes) = usable_timings(view.files.get(&TIMINGS_PATH), &rust_roots);
     let deny_configs = deny_configs(view, &rust_roots);
     let lane = config
