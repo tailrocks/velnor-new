@@ -99,3 +99,46 @@ fn restore(step: &Value) -> Result<(String, Option<String>, Option<Hit>), &'stat
     };
     Ok((requested.to_owned(), matched.map(str::to_owned), Some(hit)))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{CachePlan, observe_caches};
+    use crate::report::{LaneMetrics, SaveOutcome, check};
+    use serde_json::json;
+
+    /// A base cache gated on the privacy verdict is skipped in a public repository: GitHub
+    /// records the restore and the save as `skipped` with no outputs. That is "not attempted",
+    /// so the cache telemetry must not fail the check.
+    #[test]
+    fn a_restore_and_save_skipped_by_the_privacy_verdict_fail_no_check() {
+        let plans = vec![CachePlan {
+            family: "sources".to_owned(),
+            root: None,
+            restore_step: "restore".to_owned(),
+            save_step: "save".to_owned(),
+        }];
+        let steps = json!({
+            "restore": {"outcome": "skipped", "outputs": {}},
+            "save": {"outcome": "skipped", "outputs": {}},
+        });
+        let (caches, errors) = observe_caches(plans, &steps, true);
+        assert!(errors.is_empty(), "{errors:?}");
+        assert_eq!(caches[0].save, SaveOutcome::NotAttempted);
+        let lane = json!({
+            "schema": 1,
+            "lane": "rust",
+            "caches": caches,
+            "invocations": [],
+            "downloaded": 0,
+            "first_cargo_seconds": null,
+            "slowest_tests": [],
+            "tests_run": null,
+            "diagnostics": [],
+            "violations": [],
+        });
+        let metrics: LaneMetrics =
+            serde_json::from_value(lane).unwrap_or_else(|error| unreachable!("{error}"));
+        let verdict = check(&[metrics]);
+        assert!(verdict.is_ok(), "{}", verdict.err().map(|e| e.to_string()).unwrap_or_default());
+    }
+}
