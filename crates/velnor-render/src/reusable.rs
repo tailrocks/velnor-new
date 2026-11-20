@@ -8,8 +8,12 @@ use velnor_workflows::{
 };
 
 use crate::gate::all_conditions;
-use crate::pinned_actions::{ACTIONS_CACHE, GITHUB_SCRIPT, MR_BOXINGTON, PinnedAction};
+use crate::pinned_actions::{
+    ACTIONS_CACHE, DOCKER_BUILD_PUSH, DOCKER_LOGIN, GITHUB_SCRIPT, MR_BOXINGTON, PinnedAction,
+};
+use crate::release_steps::APP_TOKEN_COMMIT;
 use crate::reusable_on::on;
+use crate::rules::APP_TOKEN_ACTION;
 use crate::rules::{
     MAX_WORKFLOW_BYTES, RenderedConcurrency, RenderedContainer, RenderedJob, RenderedMatrix,
     RenderedMatrixSource, RenderedStep, RenderedWorkflow, Rule, RuleViolation, Value, check_rules,
@@ -253,6 +257,11 @@ fn pin(action: Action) -> String {
         Action::Cache => return pinned(ACTIONS_CACHE),
         Action::GithubScript => return pinned(GITHUB_SCRIPT),
         Action::MrBoxington => return pinned(MR_BOXINGTON),
+        Action::DockerLogin => return pinned(DOCKER_LOGIN),
+        Action::DockerBuildPush => return pinned(DOCKER_BUILD_PUSH),
+        Action::CreateGithubAppToken => {
+            return format!("{APP_TOKEN_ACTION}@{APP_TOKEN_COMMIT}");
+        }
     };
     fixed.to_owned()
 }

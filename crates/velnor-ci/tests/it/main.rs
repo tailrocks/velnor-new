@@ -41,6 +41,7 @@ mod delta_cap;
 mod delta_freshness;
 mod delta_integrity;
 mod delta_metadata;
+mod delta_registry_fingerprints;
 mod delta_source;
 mod delta_target_paths;
 mod delta_tree;

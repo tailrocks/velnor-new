@@ -13,7 +13,7 @@ use crate::base_steps::{
     sources_fetch_all_rest, sources_locks, trimmed_lane,
 };
 use crate::budget_steps::budget_step;
-use crate::cache::{path_text, render_key};
+use crate::cache::cache_step;
 use crate::cargo::{CargoLane, cargo_step, reports_tests};
 use crate::checkout_step::checkout_step;
 use crate::gate::{
@@ -296,6 +296,7 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
         StepKind::UploadArchive { name, file } => upload_step(name, file),
         StepKind::DownloadArchive { name, into } => download_step(name, into.as_ref()),
         StepKind::CacheRestore(key) => cache_step(CACHE_RESTORE, "Restore", key, true),
+        StepKind::CacheLookup(key) => crate::tools_steps::tools_lookup(key),
         StepKind::CacheSave(key) => cache_step(CACHE_SAVE, "Save", key, false),
         StepKind::CacheDecide {
             target,
@@ -370,31 +371,5 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
             ..RenderedStep::default()
         },
         StepKind::Budget { last } => budget_step(*last),
-    }
-}
-
-fn cache_step(action: &str, verb: &str, key: &CacheKey, fallbacks: bool) -> RenderedStep {
-    let rendered = render_key(key);
-    let paths: Vec<String> = key.paths().iter().map(path_text).collect();
-    let mut with = vec![
-        (
-            "path".to_owned(),
-            crate::cache::action_path(&paths.join("\n")),
-        ),
-        ("key".to_owned(), Value::Expr(rendered.key)),
-    ];
-    if fallbacks && !rendered.restore_keys.is_empty() {
-        with.push((
-            "restore-keys".to_owned(),
-            Value::Expr(rendered.restore_keys.join("\n")),
-        ));
-    }
-    RenderedStep {
-        id: Some(crate::report::cache_id(key, fallbacks)),
-        name: format!("{verb} the {} cache", key.family()),
-        uses: Some(action.to_owned()),
-        continue_on_error: !fallbacks && crate::cache_upload::key_id(key).is_some(),
-        with,
-        ..RenderedStep::default()
     }
 }

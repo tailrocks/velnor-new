@@ -4,6 +4,7 @@
 use crate::io::Repo;
 use std::fs;
 use std::process::{Command, Output};
+use velnor_test_support::{real_cargo, real_cargo_str};
 
 fn helper(repo: &Repo, args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
@@ -14,10 +15,7 @@ fn helper(repo: &Repo, args: &[&str]) -> Output {
         .env("CARGO_HOME", repo.root().join("cargo-home"))
         .env_remove("CARGO_TARGET_DIR")
         .env_remove("RUSTC_WRAPPER")
-        .env(
-            "RUSTC",
-            std::path::Path::new(env!("CARGO")).with_file_name("rustc"),
-        )
+        .env("RUSTC", real_cargo().with_file_name("rustc"))
         .current_dir(repo.root())
         .output()
         .unwrap_or_else(|e| unreachable!("{e}"))
@@ -45,7 +43,7 @@ fn a_quiet_cargo_configuration_cannot_hide_compilation_from_the_cache_decision()
     start_job(&repo);
     success(&helper(
         &repo,
-        &["run", "--", env!("CARGO"), "build", "--offline"],
+        &["run", "--", &real_cargo_str(), "build", "--offline"],
     ));
     let output = helper(&repo, &["cache", "decide", "--target-dir", "target"]);
     success(&output);
@@ -64,7 +62,8 @@ fn a_default_branch_build_can_be_reused_by_a_pr_and_an_eight_day_base_builds_col
     );
     repo.write("src/lib.rs", "pub fn leaf() -> u8 { 1 }\n");
     start_job(&repo);
-    let build = ["run", "--", env!("CARGO"), "build", "--offline"];
+    let cargo = real_cargo_str();
+    let build = ["run", "--", cargo.as_str(), "build", "--offline"];
     success(&helper(&repo, &build));
     success(&helper(&repo, &["restored", "--target-dir", "target"]));
     success(&helper(&repo, &["inputs", "save"]));
