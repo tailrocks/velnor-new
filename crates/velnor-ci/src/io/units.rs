@@ -5,7 +5,6 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use serde::Deserialize;
 use velnor_rust::{NESTED_ROOTS_FOLDER, resolve};
 
 use crate::cache_prune::is_hash;
@@ -16,8 +15,10 @@ mod built;
 mod fill;
 #[cfg(test)]
 mod layout_tests;
+mod workspace;
 
 pub(super) use build_dir::refuse_arguments;
+pub(super) use workspace::Workspace;
 
 const MAX_TARGET_DEPTH: usize = 64;
 /// A target directory after a full build and test run holds one directory per
@@ -28,12 +29,6 @@ const MAX_TARGET_DIRECTORIES: usize = 1_000_000;
 /// The largest value `VELNOR_TARGET_MAX_DIRECTORIES` may raise the bound to.
 const TARGET_DIRECTORIES_CEILING: usize = 10_000_000;
 const MAX_TARGET_DIRECTORIES_VARIABLE: &str = "VELNOR_TARGET_MAX_DIRECTORIES";
-
-#[derive(Deserialize)]
-pub(super) struct Workspace {
-    pub(super) workspace_root: PathBuf,
-    pub(super) target_directory: PathBuf,
-}
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(super) enum UnitFile {
@@ -67,6 +62,25 @@ pub(super) fn unit_files(target: &Path) -> Result<Vec<(UnitFile, PathBuf)>, CiEr
     unit_files_within(target, directory_limit()?)
 }
 
+pub(super) fn unchecked_unit_files(target: &Path) -> Result<Vec<(UnitFile, PathBuf)>, CiError> {
+    Ok(scan(target, directory_limit()?)?.0)
+}
+
+pub(super) fn unit_files_apart(
+    target: &Path,
+    build: &Path,
+) -> Result<Vec<(UnitFile, PathBuf)>, CiError> {
+    if target == build {
+        return unit_files(target);
+    }
+    let limit = directory_limit()?;
+    let (mut found, target_built) = scan(target, limit)?;
+    let (built, build_built) = scan(build, limit)?;
+    found.extend(built);
+    built::refuse_without_units(build, target_built || build_built, &found)?;
+    Ok(found)
+}
+
 fn directory_limit() -> Result<usize, CiError> {
     limit_from(
         std::env::var(MAX_TARGET_DIRECTORIES_VARIABLE)
@@ -91,6 +105,14 @@ fn limit_from(value: Option<&str>) -> Result<usize, CiError> {
 }
 
 fn unit_files_within(target: &Path, limit: usize) -> Result<Vec<(UnitFile, PathBuf)>, CiError> {
+    let (found, built) = scan(target, limit)?;
+    built::refuse_without_units(target, built, &found)?;
+    Ok(found)
+}
+
+type Scanned = (Vec<(UnitFile, PathBuf)>, bool);
+
+fn scan(target: &Path, limit: usize) -> Result<Scanned, CiError> {
     let mut found = Vec::new();
     let mut pending = vec![(target.to_path_buf(), 0)];
     let mut directories = 1;
@@ -144,8 +166,7 @@ fn unit_files_within(target: &Path, limit: usize) -> Result<Vec<(UnitFile, PathB
             }
         }
     }
-    built::refuse_without_units(target, built, &found)?;
-    Ok(found)
+    Ok((found, built))
 }
 
 /// A file in the `out` folder of a unit that ran a build script. That folder is the script's

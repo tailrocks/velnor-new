@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use velnor_model::RepoFacts;
 use velnor_rust::rerun_if_changed;
 
-use super::super::super::units::{UnitFile, Workspace, unit_files};
+use super::super::super::units::{UnitFile, Workspace};
 use super::super::inventory;
 use crate::error::CiError;
 
@@ -64,7 +64,7 @@ pub(super) fn declarations(
                     .insert(base.to_path_buf());
             }
         }
-        for (unit, output) in unit_files(&workspace.target_directory)? {
+        for (unit, output) in workspace.unchecked_units()? {
             let UnitFile::BuildOutput { package, .. } = unit else {
                 continue;
             };

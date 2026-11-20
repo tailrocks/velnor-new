@@ -236,6 +236,9 @@ is set; with any of them it leaves the directory alone and never collects it.
 The generated workflow is the one exception: it sets `CARGO_TARGET_DIR` on each
 step that builds a root, to that root's cached target directory.
 
+`prepare` refuses a `CARGO_BUILD_BUILD_DIR` that differs from the target
+directory, because the Target cache does not cover a separate build directory.
+
 ## 5. Developer machines: MBX garbage collection
 
 MBX shares compiled outputs across every checkout through its action store

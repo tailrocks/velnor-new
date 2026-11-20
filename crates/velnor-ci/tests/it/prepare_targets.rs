@@ -49,6 +49,31 @@ fn prepare_refuses_a_tracked_target_dir_that_differs_from_the_one_recorded_at_ge
     assert!(same.output.status.success(), "{:?}", same.output);
 }
 
+#[test]
+fn prepare_refuses_a_build_directory_from_the_environment_that_the_target_cache_does_not_cover() {
+    let mut setup = Setup::new(reported("1.99.1", Some("0.9.151")));
+    setup.env = vec![("CARGO_BUILD_BUILD_DIR", "build")];
+    let run = prepare("environment-build-dir", &setup);
+    assert!(!run.output.status.success(), "{:?}", run.output);
+    let stderr = String::from_utf8_lossy(&run.output.stderr);
+    assert!(
+        stderr.contains("CARGO_BUILD_BUILD_DIR") && stderr.contains("build.build-dir"),
+        "{stderr}"
+    );
+    assert_eq!(
+        (run.env_file, run.outputs, run.velnor_config),
+        (String::new(), String::new(), String::new())
+    );
+}
+
+#[test]
+fn prepare_accepts_a_build_directory_from_the_environment_that_is_the_target_directory() {
+    let mut setup = Setup::new(reported("1.99.1", Some("0.9.151")));
+    setup.env = vec![("CARGO_BUILD_BUILD_DIR", "target")];
+    let run = prepare("environment-build-dir-is-target", &setup);
+    assert!(run.output.status.success(), "{:?}", run.output);
+}
+
 const LOCK: &str =
     include_str!("../../../../generator/samples/helper-lock/view/.velnor/rust-ci.lock");
 

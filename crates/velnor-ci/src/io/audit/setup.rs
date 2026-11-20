@@ -11,7 +11,7 @@ use velnor_rust::{Located, Owners, locate};
 use super::Audit;
 use crate::coverage::{Built, gaps};
 use crate::error::CiError;
-use crate::io::units::{UnitFile, Workspace, unit_files};
+use crate::io::units::{UnitFile, Workspace, unit_files_apart};
 use crate::platform::Platforms;
 
 pub(super) fn begin<'a>(
@@ -44,7 +44,8 @@ pub(super) fn begin<'a>(
         scripts: BTreeMap::new(),
         targets: workspaces
             .iter()
-            .filter_map(|w| match locate(&checkout.root, &w.target_directory, "") {
+            .flat_map(Workspace::directories)
+            .filter_map(|directory| match locate(&checkout.root, &directory, "") {
                 Located::Inside(target) => Some(target),
                 Located::Repository | Located::Outside => None,
             })
@@ -83,7 +84,8 @@ pub(super) fn gathered_files(
         .filter(|(index, _)| chosen[*index])
     {
         files.extend(
-            unit_files(&workspace.target_directory)?
+            workspace
+                .units()?
                 .into_iter()
                 .map(|(unit, file)| (unit, file, vec![index])),
         );
@@ -93,7 +95,7 @@ pub(super) fn gathered_files(
             continue;
         }
         files.extend(
-            unit_files(directory)?
+            unit_files_apart(directory, &workspaces[indices[0]].build_directory)?
                 .into_iter()
                 .map(|(unit, file)| (unit, file, indices.clone())),
         );
