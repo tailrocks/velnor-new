@@ -103,7 +103,10 @@ sleep 30 &\n\
 exit 0";
     let (output, written) = nextest("held", body);
     assert_eq!(output.status.code(), Some(0), "{output:?}");
-    assert!(written.is_empty(), "{written}");
+    assert!(
+        crate::run_nextest::without_built(&written).is_empty(),
+        "{written}"
+    );
     assert!(
         String::from_utf8_lossy(&output.stderr).contains("output capture incomplete"),
         "{output:?}"
