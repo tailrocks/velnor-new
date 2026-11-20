@@ -39,7 +39,7 @@ fn a_profiled_binary_builds_with_the_profile_and_packs_from_its_directory() -> T
         (
             "build-tools-macos-arm64",
             "aarch64-apple-darwin",
-            "tar -czf tools-aarch64-apple-darwin.tar.gz -C tools/target/aarch64-apple-darwin/release-tools tools",
+            "cp -p tools/target/aarch64-apple-darwin/release-tools/tools \"$RUNNER_TEMP/pack/\"",
         ),
     ];
     for (id, triple, pack) in want {

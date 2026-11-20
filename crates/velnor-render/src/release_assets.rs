@@ -113,30 +113,77 @@ pub(crate) fn bind_version(steps: &mut [RenderedStep]) {
     }
 }
 
-// GNU tar on the Linux release runners: the same inputs give the same bytes,
-// whatever the checkout's mtimes, owners and directory order. bsdtar (macOS)
-// has no `--sort`, so macOS archives keep the plain command.
 const REPRODUCIBLE: &str = "--sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner ";
+const MACOS_PACK_DIR: &str = "$RUNNER_TEMP/pack";
+const MACOS_MTIME: &str = "197001010000";
 
-pub(crate) fn pack(
-    binary: &BinaryPlan,
-    platform: Platform,
-    file: &str,
-    release_dir: &str,
-) -> String {
+fn linux_pack(binary: &BinaryPlan, file: &str, release_dir: &str) -> String {
     let members = contents(binary);
-    let flags = match platform {
-        Platform::LinuxX64 | Platform::LinuxArm64 => REPRODUCIBLE,
-        Platform::MacosArm64 => "",
-    };
     if versioned(binary) {
-        format!("tar {flags}-czf \"{STAGE_SHELL}/{file}\" -C {release_dir}{members}")
+        format!("tar {REPRODUCIBLE}-czf \"{STAGE_SHELL}/{file}\" -C {release_dir}{members}")
     } else {
         format!(
-            "tar {flags}-czf {} -C {release_dir}{members}",
+            "tar {REPRODUCIBLE}-czf {} -C {release_dir}{members}",
             shell_word(file)
         )
     }
+}
+
+fn macos_pack(binary: &BinaryPlan, file: &str, release_dir: &str) -> Vec<RenderedStep> {
+    let bins = std::iter::once(binary.bin.as_str())
+        .chain(binary.extra_bins.iter().map(|extra| extra.bin.as_str()));
+    let mut sources: Vec<String> = bins
+        .clone()
+        .map(|bin| format!("{release_dir}/{bin}"))
+        .collect();
+    sources.extend(
+        binary
+            .include
+            .iter()
+            .map(|path| format!("\"$GITHUB_WORKSPACE/{path}\"")),
+    );
+    let mut names: Vec<String> = bins.map(str::to_owned).collect();
+    names.extend(binary.include.iter().map(|path| {
+        path.rsplit_once('/')
+            .map_or(path.as_str(), |(_, name)| name)
+            .to_owned()
+    }));
+    names.sort();
+    let staged = names
+        .iter()
+        .map(|name| format!("\"{MACOS_PACK_DIR}/{name}\""))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let out = if versioned(binary) {
+        format!("\"{STAGE_SHELL}/{file}\"")
+    } else {
+        shell_word(file)
+    };
+    vec![
+        command(
+            format!("Stage {file}"),
+            format!("mkdir -p \"{MACOS_PACK_DIR}\""),
+        ),
+        command(
+            format!("Copy {file} members"),
+            format!("cp -p {} \"{MACOS_PACK_DIR}/\"", sources.join(" ")),
+        ),
+        command(
+            format!("Normalise {file} mtimes"),
+            format!("TZ=UTC touch -h -t {MACOS_MTIME} {staged}"),
+        ),
+        command(
+            format!("Pack {file}"),
+            format!(
+                "COPYFILE_DISABLE=1 tar -cf \"{MACOS_PACK_DIR}.tar\" -n --uid 0 --gid 0 --uname '' --gname '' --no-xattrs --no-mac-metadata -C \"{MACOS_PACK_DIR}\" {}",
+                names.join(" ")
+            ),
+        ),
+        command(
+            format!("Compress {file}"),
+            format!("gzip -n -c \"{MACOS_PACK_DIR}.tar\" > {out}"),
+        ),
+    ]
 }
 
 pub(crate) fn archive_packaging(
@@ -145,10 +192,13 @@ pub(crate) fn archive_packaging(
     file: &str,
     release_dir: &str,
 ) -> Vec<RenderedStep> {
-    let mut steps = vec![command(
-        format!("Pack {file}"),
-        pack(binary, platform, file, release_dir),
-    )];
+    let mut steps = match platform {
+        Platform::MacosArm64 => macos_pack(binary, file, release_dir),
+        Platform::LinuxX64 | Platform::LinuxArm64 => vec![command(
+            format!("Pack {file}"),
+            linux_pack(binary, file, release_dir),
+        )],
+    };
     steps.extend(binary.checksum_files.map(|Checksum::Sha256| {
         let checksum = if platform == Platform::MacosArm64 {
             "shasum -a 256"
