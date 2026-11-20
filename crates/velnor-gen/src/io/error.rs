@@ -16,6 +16,7 @@ pub enum Error {
     Foreign(RepoPath),
     Program(String, String),
     Repository(String),
+    UntrackedConfig(RepoPath),
     Metadata(MetadataError),
     MetadataFile(MetadataFileError),
     Detect(DetectError),
@@ -34,6 +35,10 @@ impl fmt::Display for Error {
             Self::Foreign(path) => Drift::Foreign(path.clone()).fmt(f),
             Self::Program(program, stderr) => write!(f, "{program} failed: {}", stderr.trim()),
             Self::Repository(message) => f.write_str(message),
+            Self::UntrackedConfig(path) => write!(
+                f,
+                "{path} exists but git does not track it, so velnor-gen would ignore it and generate defaults; run `git add {path}` to track it (a git-ignored file needs `git add -f`), or remove the file"
+            ),
             Self::Metadata(error) => error.fmt(f),
             Self::MetadataFile(error) => error.fmt(f),
             Self::Detect(error) => error.fmt(f),
