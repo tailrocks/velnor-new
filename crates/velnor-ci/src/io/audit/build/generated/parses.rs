@@ -34,7 +34,8 @@ impl Fixture {
             workspace_root: root.clone(),
             target_directory: target.clone(),
         }];
-        let mut targets = inventory::exclusions(&workspaces).unwrap_or_else(|e| unreachable!("{e}"));
+        let mut targets =
+            inventory::exclusions(&workspaces).unwrap_or_else(|e| unreachable!("{e}"));
         targets.insert(root.join("generated"));
         let bytes = serde_json::to_vec(&Evidence {
             entries: BTreeMap::new(),
@@ -86,7 +87,8 @@ fn units_sharing_one_inventory_parse_it_once() {
     let fixture = Fixture::new("shared");
     let before = timing::parses();
     let found = proven(&fixture.workspaces).unwrap_or_else(|e| unreachable!("{e}"));
-    let mut expected = inventory::exclusions(&fixture.workspaces).unwrap_or_else(|e| unreachable!("{e}"));
+    let mut expected =
+        inventory::exclusions(&fixture.workspaces).unwrap_or_else(|e| unreachable!("{e}"));
     expected.insert(fixture.root.join("generated"));
     assert_eq!(found, expected);
     assert_eq!(timing::parses() - before, 1);
