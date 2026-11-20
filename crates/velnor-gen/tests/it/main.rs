@@ -27,6 +27,7 @@ mod call_fork_fence;
 mod cargo_flags;
 mod cargo_lock;
 mod classify;
+mod classify_test_runner;
 mod combined_cache;
 mod compile_inputs;
 mod compile_inputs_identity;
