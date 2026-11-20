@@ -76,7 +76,10 @@ fn every_tools_restore_is_verified_before_anything_runs_the_tools() -> TestResul
             );
             assert!(anchor > last_restore, "{config:?} {id}");
             let reset = anchor - 1;
-            assert!(text(&steps[reset], "run").ends_with(RESET), "{config:?} {id}");
+            assert!(
+                text(&steps[reset], "run").ends_with(RESET),
+                "{config:?} {id}"
+            );
             assert!(reset > last_restore, "{config:?} {id}");
             assert!(steps[reset].get("if").is_none(), "{config:?} {id}");
             for (between, step) in steps.iter().enumerate().take(verify).skip(last_restore + 1) {
@@ -85,10 +88,18 @@ fn every_tools_restore_is_verified_before_anything_runs_the_tools() -> TestResul
                     "{config:?} {id}: step {between} runs before the verify step: {step}"
                 );
             }
-            assert_eq!(steps[verify]["env"]["VELNOR_ANCHOR_HIT"], ANCHOR_HIT, "{config:?} {id}");
-            let records = steps.iter().filter(|step| text(step, "run").ends_with("tools-verify record"));
+            assert_eq!(
+                steps[verify]["env"]["VELNOR_ANCHOR_HIT"], ANCHOR_HIT,
+                "{config:?} {id}"
+            );
+            let records = steps
+                .iter()
+                .filter(|step| text(step, "run").ends_with("tools-verify record"));
             for record in records {
-                assert_eq!(record["env"]["VELNOR_ANCHOR_HIT"], ANCHOR_HIT, "{config:?} {id}");
+                assert_eq!(
+                    record["env"]["VELNOR_ANCHOR_HIT"], ANCHOR_HIT,
+                    "{config:?} {id}"
+                );
                 assert!(record.get("if").is_none(), "{config:?} {id}");
             }
             let install = steps
@@ -131,13 +142,19 @@ fn a_pull_request_never_saves_the_tools_and_a_save_needs_the_anchor() -> TestRes
                     if helper == "0.1.108" {
                         let anchor = text(&step["with"], "key").starts_with("velnor-tools-anchor-");
                         let record = |output: &str| {
-                            condition.contains(&format!("steps.toolsrecord.outputs.{output} == 'true'"))
+                            condition
+                                .contains(&format!("steps.toolsrecord.outputs.{output} == 'true'"))
                         };
-                        let primed = condition.contains("steps.toolsverify.outputs.verified == 'true'")
+                        let primed = condition
+                            .contains("steps.toolsverify.outputs.verified == 'true'")
                             && condition.contains(ON_DEFAULT)
                             && condition.contains(TRUSTED_EVENTS);
                         assert!(
-                            if anchor { record("recorded") } else { record("matches") || primed },
+                            if anchor {
+                                record("recorded")
+                            } else {
+                                record("matches") || primed
+                            },
                             "{helper} {id}: {condition}"
                         );
                     } else {

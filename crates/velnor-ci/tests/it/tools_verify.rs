@@ -265,7 +265,9 @@ fn a_discard_that_cannot_delete_fails_the_step() {
 fn only_a_directory_mode_changing_is_a_mismatch() {
     let job = job("tools-verify-dir-mode");
     recorded(&job);
-    let dir = job.home.join(".rustup/toolchains/1.99.1-x86_64-unknown-linux-gnu/bin");
+    let dir = job
+        .home
+        .join(".rustup/toolchains/1.99.1-x86_64-unknown-linux-gnu/bin");
     let mode = fs::metadata(&dir)
         .unwrap_or_else(|e| unreachable!("{e}"))
         .permissions()
