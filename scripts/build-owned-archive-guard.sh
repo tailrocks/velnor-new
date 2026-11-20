@@ -9,7 +9,7 @@ script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 repository="$(cd -- "$script_dir/.." && pwd -P)"
 script_path="$script_dir/$(basename -- "${BASH_SOURCE[0]}")"
 if [[ -z "${HOME:-}" || "$HOME" != /* ]]; then
-  printf 'archive guard build: an absolute HOME is required to provision Rust 1.99.1\n' >&2
+  printf 'archive guard build: an absolute HOME is required to provision Rust 1.100.0\n' >&2
   exit 1
 fi
 home_root="$(cd -- "$HOME" && pwd -P)"
@@ -60,7 +60,7 @@ cleanup() {
 [[ "$script_path" == "$repository/scripts/build-owned-archive-guard.sh" ]] \
   || fail 'builder script is not the checkout-owned entrypoint'
 if ! mise_bin="$(command -v mise)" || [[ "$mise_bin" != /* ]]; then
-  fail 'mise is required to provision Rust 1.99.1'
+  fail 'mise is required to provision Rust 1.100.0'
 fi
 PATH=/usr/bin:/bin:/usr/sbin:/sbin
 export PATH
@@ -402,8 +402,8 @@ actual_mise_version="${mise_version%% *}"
 run_mise install rust mr-boxington
 rustc_version="$(run_mise exec -- rustc --version)"
 cargo_version="$(run_mise exec -- cargo --version)"
-[[ "$rustc_version" == 'rustc 1.99.1 '* ]] || fail "unexpected compiler: $rustc_version"
-[[ "$cargo_version" == 'cargo 1.99.1 '* ]] || fail "unexpected Cargo: $cargo_version"
+[[ "$rustc_version" == 'rustc 1.100.0 '* ]] || fail "unexpected compiler: $rustc_version"
+[[ "$cargo_version" == 'cargo 1.100.0 '* ]] || fail "unexpected Cargo: $cargo_version"
 # Every guard compile must go through the mise cargo wrapper that runs mbx.
 cargo_path="$(run_mise exec -- sh -c 'command -v cargo')"
 [[ "$cargo_path" == */command-wrappers/bin/cargo ]] \

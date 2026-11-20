@@ -18,7 +18,7 @@ check_interval_hours = 24
 max_exception_days = 14
 
 [tools]
-mise = "2026.11.1"
+mise = "2026.11.10"
 rust = "1.100.0"
 mr-boxington = "1.30.0"
 gh = "2.104.0"
@@ -35,15 +35,11 @@ cosign = "3.1.4"
 default = "ubuntu-26.04"
 supported = ["ubuntu-26.04"]
 
-# eligible_on: the date a newer release may be adopted (its publication plus the
-# 14-day window). scripts/pins-eligible.sh lists the pins whose date has arrived.
-# jdx/mise-action v5.2.10 (90f833d3..., published 2026-11-18) is the newer release.
 [[actions]]
 name = "jdx/mise-action"
-version = "v5.2.9"
-sha = "236a21c3b91f5db6d4e174b348674a0f0caac06d"
-reviewed = "2026-11-19"
-eligible_on = "2026-12-02"
+version = "v5.2.10"
+sha = "90f833d396d0cc3674b631d2d225e306476c303a"
+reviewed = "2026-11-20"
 
 [[actions]]
 name = "actions/checkout"

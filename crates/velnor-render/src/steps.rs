@@ -32,7 +32,7 @@ pub(crate) const PREPARE_STEP: &str = "prepare";
 pub(crate) const RUN: &str = "velnor-ci run --";
 pub(crate) const RUN_DOCTESTS: &str = "velnor-ci run --require-doctests=$DOCTESTS_KNOWN --";
 pub(crate) const CHECKOUT: &str = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
-pub(crate) const MISE: &str = "jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d";
+pub(crate) const MISE: &str = "jdx/mise-action@90f833d396d0cc3674b631d2d225e306476c303a";
 pub(crate) const UPLOAD_ARTIFACT: &str =
     "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9";
 pub(crate) const DOWNLOAD_ARTIFACT: &str =

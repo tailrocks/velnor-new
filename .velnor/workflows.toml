@@ -716,7 +716,7 @@ uses = "checkout"
 [[workflow.job.step]]
 name = "Set up Mise"
 uses = "mise"
-with = { version = "2026.11.1", sha256 = "7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9", install = "false", env = "false" }
+with = { version = "2026.11.10", sha256 = "b603a4f48563fc379a794d9ea2cf9f709ed276c9141068604cb0c59fa3e674a9", install = "false", env = "false" }
 
 [[workflow.job.step]]
 name = "Resolve project tool versions"
@@ -777,7 +777,7 @@ uses = "checkout"
 [[workflow.job.step]]
 name = "Set up Mise"
 uses = "mise"
-with = { version = "2026.11.1", sha256 = "7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9", install = "false", env = "false" }
+with = { version = "2026.11.10", sha256 = "b603a4f48563fc379a794d9ea2cf9f709ed276c9141068604cb0c59fa3e674a9", install = "false", env = "false" }
 
 [[workflow.job.step]]
 name = "Resolve project tool versions"
@@ -840,12 +840,12 @@ with = { ref = "${{ github.sha }}" }
 [[workflow.job.step]]
 name = "Setup Mise"
 uses = "mise"
-with = { version = "2026.11.1", sha256 = "7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9", install = "false", env = "false" }
+with = { version = "2026.11.10", sha256 = "b603a4f48563fc379a794d9ea2cf9f709ed276c9141068604cb0c59fa3e674a9", install = "false", env = "false" }
 
 [[workflow.job.step]]
 name = "Verify selected ref, version, and binary digest"
 run = "bash qualification/mise-pin.sh"
-env = { MISE_VERSION = "2026.11.1", MISE_SHA256 = "7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9" }
+env = { MISE_VERSION = "2026.11.10", MISE_SHA256 = "b603a4f48563fc379a794d9ea2cf9f709ed276c9141068604cb0c59fa3e674a9" }
 
 [[workflow.job]]
 id = "stable-sources-producer-linux"
@@ -867,7 +867,7 @@ run = "bash qualification/stable-sources.sh verify-source"
 [[workflow.job.step]]
 name = "Set up Mise"
 uses = "mise"
-with = { version = "2026.11.1", sha256 = "7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9", install = "false", env = "false" }
+with = { version = "2026.11.10", sha256 = "b603a4f48563fc379a794d9ea2cf9f709ed276c9141068604cb0c59fa3e674a9", install = "false", env = "false" }
 
 [[workflow.job.step]]
 name = "Resolve project tool versions"
@@ -917,7 +917,7 @@ run = "bash qualification/stable-sources.sh verify-source"
 [[workflow.job.step]]
 name = "Set up Mise"
 uses = "mise"
-with = { version = "2026.11.1", sha256 = "7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9", install = "false", env = "false" }
+with = { version = "2026.11.10", sha256 = "b603a4f48563fc379a794d9ea2cf9f709ed276c9141068604cb0c59fa3e674a9", install = "false", env = "false" }
 
 [[workflow.job.step]]
 name = "Resolve project tool versions"
@@ -996,7 +996,7 @@ run = "bash qualification/stable-sources.sh verify-source"
 [[workflow.job.step]]
 name = "Set up Mise"
 uses = "mise"
-with = { version = "2026.11.1", sha256 = "7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9", install = "false", env = "false" }
+with = { version = "2026.11.10", sha256 = "b603a4f48563fc379a794d9ea2cf9f709ed276c9141068604cb0c59fa3e674a9", install = "false", env = "false" }
 
 [[workflow.job.step]]
 name = "Resolve project tool versions"

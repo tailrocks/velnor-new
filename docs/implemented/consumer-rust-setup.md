@@ -27,7 +27,7 @@ newest stable version of each tool when applying it.
 min_version = "2026.10.17"
 
 [tools]
-rust = { version = "1.99.1", profile = "minimal", components = ["clippy", "rustfmt"], targets = ["aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"], mr_boxington = true }
+rust = { version = "1.100.0", profile = "minimal", components = ["clippy", "rustfmt"], targets = ["aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"], mr_boxington = true }
 mr-boxington = "1.26.0"
 hk = "2.8.0"
 cargo-binstall = "1.26.0"
@@ -47,7 +47,7 @@ edited alone):
 
 ```toml
 [toolchain]
-channel = "1.99.1"
+channel = "1.100.0"
 profile = "minimal"
 components = ["clippy", "rustfmt"]
 targets = ["aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"]

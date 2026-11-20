@@ -10,7 +10,7 @@ pub const DIND_TAG: &str = "velnor-local/pair-dind";
 pub const PROBE_TAG: &str = "velnor-local/pair-probe";
 pub const TARGETS: [&str; 3] = [RUNNER_TAG, DIND_TAG, PROBE_TAG];
 const RUST_IMAGE: &str =
-    "rust:1.99.1-trixie@sha256:8a4e90c7946b74626488b1446f712c0fe0ed1a596cbd3d871684bc9c5433ae07";
+    "rust:1.100.0-trixie@sha256:223cc32ddca8f3ee90c436dbc94b6b5f052ea7f9653c5201e9612f08ad7d21b8";
 const TARGET_VOLUME: &str = "velnor-arm64-target";
 const CARGO_VOLUME: &str = "velnor-arm64-cargo";
 const CARGO_HOME: &str = "/cargo-home";

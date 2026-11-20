@@ -113,12 +113,12 @@ case "$command_name" in
         ;;
       rustc)
         if [[ "${1:-}" == --version ]]; then
-          printf 'rustc 1.99.1 (0123456789abcdef 2026-01-01)\n'
+          printf 'rustc 1.100.0 (0123456789abcdef 2026-01-01)\n'
         elif [[ "${1:-}" == -vV ]]; then
-          printf 'rustc 1.99.1 (0123456789abcdef 2026-01-01)\n'
+          printf 'rustc 1.100.0 (0123456789abcdef 2026-01-01)\n'
           printf 'binary: rustc\ncommit-hash: 0123456789abcdef\n'
           printf 'commit-date: 2026-01-01\nhost: x86_64-unknown-linux-gnu\n'
-          printf 'release: 1.99.1\nLLVM version: 21.1.8\n'
+          printf 'release: 1.100.0\nLLVM version: 21.1.8\n'
         else
           exit 2
         fi
@@ -126,7 +126,7 @@ case "$command_name" in
       cargo)
         case "${1:-}" in
           --version)
-            printf 'cargo 1.99.1 (abcdef0123456789 2026-01-01)\n'
+            printf 'cargo 1.100.0 (abcdef0123456789 2026-01-01)\n'
             ;;
           tree)
             manifest=''
