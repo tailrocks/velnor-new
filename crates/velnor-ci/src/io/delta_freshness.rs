@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 
 use super::delta::{failure, safe_path};
 use super::delta_source::SourceSnapshot;
+use crate::cache_prune::is_hash;
 use crate::error::CiError;
 
 pub(super) fn invalidate(target: &Path, saved: &SourceSnapshot) -> Result<usize, CiError> {
@@ -81,6 +82,15 @@ fn external_packages(root: &Path) -> BTreeSet<String> {
     &external - &local
 }
 
+/// The package that owns a fingerprint directory of Cargo 1.100, `build/<package>/<hash>/fingerprint`.
+fn unit_package(path: &Path) -> Option<&str> {
+    let mut parents = path.parent()?.ancestors();
+    let hash = parents.next()?.file_name()?.to_str()?;
+    let package = parents.next()?.file_name()?.to_str()?;
+    let build = parents.next()?.file_name()?;
+    (path.file_name()? == "fingerprint" && build == "build" && is_hash(hash)).then_some(package)
+}
+
 /// The package that owns a `.fingerprint` directory named `<package>-<16 hex digits>`.
 fn fingerprint_package(name: &std::ffi::OsStr) -> Option<&str> {
     let (package, hash) = name.to_str()?.rsplit_once('-')?;
@@ -90,7 +100,17 @@ fn fingerprint_package(name: &std::ffi::OsStr) -> Option<&str> {
 fn fingerprints(target: &Path, external: &BTreeSet<String>) -> Result<Vec<PathBuf>, CiError> {
     let mut result = Vec::new();
     for path in super::delta_tree::paths(target)? {
-        if path
+        if let Some(package) = unit_package(&path) {
+            if !external.contains(package) {
+                let full = target.join(&path);
+                if fs::symlink_metadata(&full)
+                    .map_err(|e| failure(&full, &e))?
+                    .is_dir()
+                {
+                    result.push(full);
+                }
+            }
+        } else if path
             .parent()
             .and_then(Path::file_name)
             .is_some_and(|name| name == ".fingerprint")
@@ -112,4 +132,79 @@ fn fingerprints(target: &Path, external: &BTreeSet<String>) -> Result<Vec<PathBu
         }
     }
     Ok(result)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn tree(name: &str, files: &[&str]) -> PathBuf {
+        let root = std::env::temp_dir().join(format!("velnor-fresh-{name}-{}", std::process::id()));
+        for file in files {
+            let path = root.join(file);
+            fs::create_dir_all(path.parent().unwrap_or_else(|| unreachable!()))
+                .and_then(|()| fs::write(path, "x"))
+                .unwrap_or_else(|e| unreachable!("{e}"));
+        }
+        fs::canonicalize(root).unwrap_or_else(|e| unreachable!("{e}"))
+    }
+
+    fn found(root: &Path, external: &[&str]) -> Vec<String> {
+        let external = external.iter().map(|name| (*name).to_owned()).collect();
+        let mut found: Vec<String> = fingerprints(root, &external)
+            .unwrap_or_else(|e| unreachable!("{e}"))
+            .iter()
+            .map(|path| {
+                path.strip_prefix(root)
+                    .unwrap_or_else(|_| unreachable!())
+                    .to_string_lossy()
+                    .into_owned()
+            })
+            .collect();
+        found.sort();
+        found
+    }
+
+    #[test]
+    fn the_fingerprint_folders_of_cargo_1100_are_invalidated_and_external_packages_kept() {
+        let root = tree(
+            "new",
+            &[
+                "debug/build/app/3374f0e803714d87/fingerprint/lib-app",
+                "debug/build/app/3374f0e803714d87/out/libapp.rlib",
+                "debug/build/dep/5c64b2dee9af80ce/fingerprint/lib-dep",
+                "debug/build/dep/33cec232bab789d1/fingerprint/run-build-script-build-script-build",
+                "debug/build/dep/33cec232bab789d1/run/stdout",
+            ],
+        );
+        let all = found(&root, &[]);
+        let kept = found(&root, &["dep"]);
+        fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+        assert_eq!(
+            all,
+            [
+                "debug/build/app/3374f0e803714d87/fingerprint",
+                "debug/build/dep/33cec232bab789d1/fingerprint",
+                "debug/build/dep/5c64b2dee9af80ce/fingerprint",
+            ]
+        );
+        assert_eq!(kept, ["debug/build/app/3374f0e803714d87/fingerprint"]);
+    }
+
+    #[test]
+    fn the_fingerprint_folders_of_older_cargo_are_still_invalidated() {
+        let root = tree(
+            "old",
+            &[
+                "debug/.fingerprint/app-3374f0e803714d87/lib-app",
+                "debug/.fingerprint/dep-5c64b2dee9af80ce/lib-dep",
+                "debug/deps/libapp-3374f0e803714d87.rlib",
+            ],
+        );
+        let all = found(&root, &[]);
+        let kept = found(&root, &["dep"]);
+        fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+        assert_eq!(all.len(), 2, "{all:?}");
+        assert_eq!(kept, ["debug/.fingerprint/app-3374f0e803714d87"]);
+    }
 }
