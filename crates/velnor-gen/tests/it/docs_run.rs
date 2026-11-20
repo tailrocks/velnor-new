@@ -237,11 +237,15 @@ fn a_build_phase_setup_of_a_post_merge_docs_step_runs_when_that_step_runs() {
         if !job.steps.iter().any(|step| is_doc(&step.kind)) {
             continue;
         }
-        for setup in job
-            .steps
-            .iter()
-            .filter(|step| matches!(step.kind, StepKind::TestSetup { before_build: true, .. }))
-        {
+        for setup in job.steps.iter().filter(|step| {
+            matches!(
+                step.kind,
+                StepKind::TestSetup {
+                    before_build: true,
+                    ..
+                }
+            )
+        }) {
             checked += 1;
             assert_eq!(setup.when, When::NotCancelledPostMerge, "{:?}", job.id);
         }

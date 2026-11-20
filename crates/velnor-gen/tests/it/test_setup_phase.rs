@@ -309,7 +309,10 @@ fn a_build_phase_setup_precedes_a_test_phase_setup_of_the_same_grouped_root() ->
 #[test]
 fn a_build_phase_setup_of_a_path_dependency_runs_before_the_root_that_compiles_it() -> TestResult {
     let config = "shape = 'one-job'\n[[test_setup]]\nroot = 'lib'\nname = 'Prepare the fixture'\nrun = 'bash scripts/prepare-fixture.sh'\nphase = 'build'\n";
-    let mut repo = view(&["app/Cargo.toml", "lib/Cargo.toml"], Some(config.as_bytes()))?;
+    let mut repo = view(
+        &["app/Cargo.toml", "lib/Cargo.toml"],
+        Some(config.as_bytes()),
+    )?;
     pin_helper(&mut repo, "0.1.109")?;
     let app = RepoPath::new("app/Cargo.toml")?;
     let dependency = PackageDependency {
