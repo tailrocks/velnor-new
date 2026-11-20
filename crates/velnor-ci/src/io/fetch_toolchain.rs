@@ -56,23 +56,22 @@ pub(super) fn resolve(
             .output()
             .map_err(|e| CiError::new(format!("cannot run {}: {e}", rustup.display())))
     };
-    let name = match chosen() {
-        Some(name) => name.to_string_lossy().into_owned(),
-        None => {
-            let output = run(["show", "active-toolchain"], None)?;
-            let text = String::from_utf8_lossy(&output.stdout);
-            let name = text
-                .split_whitespace()
-                .next()
-                .unwrap_or_default()
-                .to_owned();
-            if !output.status.success() || !named(&name) {
-                return Err(CiError::new(format!(
-                    "rustup did not name an installed toolchain ({name:?}); refusing to run cargo with the token"
-                )));
-            }
-            name
+    let name = if let Some(name) = chosen() {
+        name.to_string_lossy().into_owned()
+    } else {
+        let output = run(["show", "active-toolchain"], None)?;
+        let text = String::from_utf8_lossy(&output.stdout);
+        let name = text
+            .split_whitespace()
+            .next()
+            .unwrap_or_default()
+            .to_owned();
+        if !output.status.success() || !named(&name) {
+            return Err(CiError::new(format!(
+                "rustup did not name an installed toolchain ({name:?}); refusing to run cargo with the token"
+            )));
         }
+        name
     };
     let which = run(["which", "cargo"], Some(&name))?;
     let printed = String::from_utf8_lossy(&which.stdout);

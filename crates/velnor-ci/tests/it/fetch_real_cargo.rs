@@ -234,9 +234,11 @@ fn a_rust_toolchain_file_in_the_workspace_never_changes_which_toolchain_the_fetc
     Ok(())
 }
 
+type Place = fn(&Path, &Path) -> std::io::Result<()>;
+
 fn planted_proxy(
     fixture: &Fixture,
-    place: fn(&Path, &Path) -> std::io::Result<()>,
+    place: Place,
     which: &str,
 ) -> Result<String, Box<dyn std::error::Error>> {
     let root = fixture.repo.root().to_path_buf();
@@ -275,8 +277,7 @@ fn hard_link(from: &Path, to: &Path) -> std::io::Result<()> {
 
 #[test]
 fn a_hard_linked_or_copied_rustup_proxy_never_runs_and_the_toolchain_cargo_does() -> TestResult {
-    let places: [(&str, fn(&Path, &Path) -> std::io::Result<()>); 2] =
-        [("hard-link", hard_link), ("copy", copy)];
+    let places: [(&str, Place); 2] = [("hard-link", hard_link), ("copy", copy)];
     for (label, place) in places {
         let fixture = Fixture::new(&format!("fetch-proxy-{label}"), 0)?;
         let home = planted_proxy(&fixture, place, "toolchains/stable-test/bin/cargo")?;

@@ -118,7 +118,7 @@ fn fetch_with(args: &FetchArgs, token: Option<&str>) -> Result<(), CiError> {
     let neutral = scratch
         .as_ref()
         .filter(|_| token.is_some())
-        .map(|s| s.path());
+        .map(super::fetch_home::Scratch::path);
     let mut toolchain = None;
     if let Some(neutral) = neutral {
         let rustup_home = trusted.home_variable(
