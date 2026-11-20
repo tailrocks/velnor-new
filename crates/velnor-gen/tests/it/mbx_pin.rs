@@ -94,6 +94,37 @@ fn a_range_or_latest_mbx_pin_is_a_generation_error() -> TestResult {
     Ok(())
 }
 
+fn with_second_config(pin: &str) -> Result<RepoView, Box<dyn Error>> {
+    let mut repo = repo("0.1.109", "mr-boxington = \"v1.31.0\"")?;
+    repo.files.insert(
+        RepoPath::new(".mise.toml")?,
+        format!("[tools]\nmr-boxington = \"{pin}\"\n").into_bytes(),
+    );
+    Ok(repo)
+}
+
+#[test]
+fn two_configs_pinning_different_mbx_releases_are_refused_naming_both() -> TestResult {
+    let error = text(&with_second_config("v1.32.0")?)
+        .err()
+        .ok_or("generated from two different pins")?
+        .to_string();
+    assert!(error.contains("mise.toml"), "{error}");
+    assert!(error.contains(".mise.toml"), "{error}");
+    assert!(error.contains("tools.mr-boxington"), "{error}");
+    Ok(())
+}
+
+#[test]
+fn two_configs_pinning_the_same_mbx_release_are_refused_naming_both() -> TestResult {
+    let error = text(&with_second_config("v1.31.0")?)
+        .err()
+        .ok_or("generated from two configs")?
+        .to_string();
+    assert!(error.contains(".mise.toml"), "{error}");
+    Ok(())
+}
+
 #[test]
 fn without_the_action_the_pin_is_not_read() -> TestResult {
     let mut plain = view(&["Cargo.toml"], None)?;
