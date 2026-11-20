@@ -87,3 +87,48 @@ fn test_setup_that_names_no_cargo_root_or_is_not_one_command_is_rejected() -> Te
     }
     Ok(())
 }
+
+#[test]
+fn a_failed_test_setup_step_stops_its_tests_and_is_never_continued_past() -> TestResult {
+    let jobs = jobs_of(FIXTURE)?;
+    let found = setups(&jobs);
+    let (id, _, _, setup) = &found[0];
+    assert!(setup["continue-on-error"].is_null(), "{setup}");
+    let setup_id = setup["id"]
+        .as_str()
+        .ok_or_else(|| format!("the setup step has no id: {setup}"))?;
+    let steps = jobs[id.as_str()]["steps"]
+        .as_array()
+        .ok_or("the job has no steps")?;
+    let test = steps
+        .iter()
+        .find(|step| step["id"] == "test")
+        .ok_or("the test step is missing")?;
+    let condition = test["if"].as_str().unwrap_or_default();
+    assert!(
+        condition.contains(&format!("steps.{setup_id}.outcome == 'success'")),
+        "the test step runs after a failed setup: {test}"
+    );
+    Ok(())
+}
+
+#[test]
+fn a_failure_report_still_runs_when_test_setup_fails() -> TestResult {
+    let jobs = jobs_of(FIXTURE)?;
+    let found = setups(&jobs);
+    let (id, _, _, _) = &found[0];
+    let steps = jobs[id.as_str()]["steps"]
+        .as_array()
+        .ok_or("the job has no steps")?;
+    let report = steps
+        .iter()
+        .find(|step| step["name"] == "Report cache telemetry")
+        .ok_or("the failure report is missing")?;
+    let condition = report["if"].as_str().unwrap_or_default();
+    assert!(condition.contains("!cancelled()"), "{report}");
+    assert!(
+        !condition.contains("outcome"),
+        "the report waits for a step outcome: {report}"
+    );
+    Ok(())
+}
