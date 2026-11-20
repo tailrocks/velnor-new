@@ -70,6 +70,13 @@
       "labels": ["dependencies", "needs-lock-refresh"]
     },
     {
+      "description": "der must stay at 0.7.x in velnor-runner-attestation: x509-cert 0.2.x and cms use der 0.7, so a der 0.8 bump breaks Certificate::from_der (main did not compile after #1956). der moves together with x509-cert and cms; re-pin only when both ship a der 0.8 release.",
+      "matchManagers": ["cargo"],
+      "matchPackageNames": ["der"],
+      "matchFileNames": ["crates/velnor-runner-attestation/Cargo.toml"],
+      "allowedVersions": "<0.8"
+    },
+    {
       "description": "x509-cert 0.3 makes tbs_certificate private (E0616); upgrading is a code change, so hold 0.2.x until that lands.",
       "matchManagers": ["cargo"],
       "matchPackageNames": ["x509-cert"],
