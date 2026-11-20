@@ -130,10 +130,7 @@ fn a_link_to_a_file_outside_the_workspace_inside_an_artifact_directory_is_not_st
     );
     let result = staged(&site, &["logs/"]);
     assert_eq!(copied(&result), ["logs/real.log"]);
-    assert_eq!(
-        skipped(&result),
-        [("logs/leak.log".to_owned(), Skip::Link)]
-    );
+    assert_eq!(skipped(&result), [("logs/leak.log".to_owned(), Skip::Link)]);
     assert_eq!(read(&site, "logs/real.log"), "ok\n");
     no_links_in_staging(&site);
     assert!(site.outside.root().join("credentials").is_file());
@@ -181,7 +178,10 @@ fn a_link_to_a_file_inside_the_workspace_is_not_staged_either() {
     );
     let result = staged(&site, &["logs/*.log"]);
     assert_eq!(copied(&result), ["logs/real.log"]);
-    assert_eq!(skipped(&result), [("logs/alias.log".to_owned(), Skip::Link)]);
+    assert_eq!(
+        skipped(&result),
+        [("logs/alias.log".to_owned(), Skip::Link)]
+    );
 }
 
 #[test]
@@ -198,7 +198,12 @@ fn only_the_selected_files_are_staged_with_their_relative_paths() {
     );
     let result = staged(
         &site,
-        &["junit.xml", "logs/**/*.log", "snapshots/", "missing/**/*.log"],
+        &[
+            "junit.xml",
+            "logs/**/*.log",
+            "snapshots/",
+            "missing/**/*.log",
+        ],
     );
     assert_eq!(
         copied(&result),
@@ -245,7 +250,10 @@ fn a_link_made_after_staging_cannot_change_the_staged_copy() {
         &site.repo.root().join("logs/real.log"),
     );
     fs::remove_dir_all(site.repo.root().join("logs")).unwrap_or_else(|e| unreachable!("{e}"));
-    link(&site.outside.root().join("dir"), &site.repo.root().join("logs"));
+    link(
+        &site.outside.root().join("dir"),
+        &site.repo.root().join("logs"),
+    );
     link(
         &site.outside.root().join("credentials"),
         &site.repo.root().join("late.log"),
@@ -290,7 +298,10 @@ fn a_pipe_is_skipped_and_never_opened() {
     .unwrap_or_else(|e| unreachable!("{e}"));
     let result = staged(&site, &["logs/"]);
     assert_eq!(copied(&result), ["logs/real.log"]);
-    assert_eq!(skipped(&result), [("logs/pipe.log".to_owned(), Skip::Special)]);
+    assert_eq!(
+        skipped(&result),
+        [("logs/pipe.log".to_owned(), Skip::Special)]
+    );
 }
 
 #[test]
@@ -305,7 +316,11 @@ fn a_file_under_a_secret_name_matched_by_a_broad_glob_is_skipped() {
     let result = staged(&site, &["app/**", "app/*/*.xml", "app/*/*"]);
     assert_eq!(copied(&result), ["app/out/report.xml"]);
     let skipped = skipped(&result);
-    for secret in ["app/secrets", "app/out/api_token.xml", "app/certs/server.pem"] {
+    for secret in [
+        "app/secrets",
+        "app/out/api_token.xml",
+        "app/certs/server.pem",
+    ] {
         assert!(
             skipped.contains(&(secret.to_owned(), Skip::Secret)),
             "{secret}: {skipped:?}"
