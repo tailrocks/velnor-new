@@ -6,8 +6,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use velnor_model::{
     Access, CacheDebug, CacheKey, CargoCommand, Concurrency, Gate, HelperCommand, Host, Job, JobId,
     MbxRemote, MbxStore, PackageName, PermissionScope, Permissions, PrCi, PrRun, PrepareLocks,
-    PushAfterMergeGroup, RepoFacts, RootSlug, RustRoot, Shape, ShapeDecision, Step, StepKind,
-    TargetName, Toolchain, When, WorkflowPlan,
+    PushAfterMergeGroup, RepoFacts, RootSlug, RustRoot, Step, StepKind, TargetName, Toolchain,
+    When, WorkflowPlan,
 };
 
 use crate::audit_job::audit_job;
@@ -22,7 +22,7 @@ use crate::plan_budget::{draft_guard, expose_selection, triggers};
 use crate::plan_tools::{mirror_step, tools_install, tools_restore, tools_save};
 use crate::required_job::{expose_in_single, gate_outputs};
 use crate::root_jobs::root_jobs;
-use crate::shape::decide_shape;
+use crate::shape::{decisions, helper_root, single_job};
 use crate::units::{Unit, units};
 
 pub(crate) const RUST_JOB: JobId = JobId::from_static("rust");
@@ -50,30 +50,9 @@ pub fn plan_without_deltas(facts: &RepoFacts) -> WorkflowPlan {
 fn plan_with(facts: &RepoFacts, deltas: bool) -> WorkflowPlan {
     let units = units(facts);
     let suffixed = units.len() > 1;
-    let decisions: Vec<ShapeDecision> = units
-        .iter()
-        .map(|unit| {
-            let decision = decide_shape(
-                facts.config.shape,
-                crate::units::timings(facts, unit).as_ref(),
-            );
-            if unit.grouped {
-                decision
-            } else {
-                crate::config_test_groups::archive_shape(facts, &unit.roots[0], decision)
-            }
-        })
-        .collect();
-    let helper_root = facts.config.helper.as_ref().and_then(|path| {
-        facts
-            .rust_roots
-            .iter()
-            .find(|root| root.manifest.parent().as_ref() == Some(path))
-    });
-    let single = units.len() == 1
-        && !units[0].grouped
-        && decisions[0].shape == Shape::OneJob
-        && helper_root.is_none();
+    let decisions = decisions(facts, &units);
+    let helper_root = helper_root(facts);
+    let single = single_job(facts, &units, &decisions);
     let mut jobs: Vec<Job> = units
         .iter()
         .zip(decisions)

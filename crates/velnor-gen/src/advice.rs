@@ -5,7 +5,8 @@ use std::collections::BTreeMap;
 
 use velnor_model::{CheckoutScope, FullRun, OnMain, RepoPath, RepoView};
 use velnor_rust::{
-    bytes_outside_lanes, detect, silent_build_scripts, suggest_groups as suggested_groups,
+    bytes_outside_lanes, detect, silent_build_scripts, sparse_checkout_planned,
+    suggest_groups as suggested_groups,
 };
 
 use crate::{GenerateError, SPARSE_HINT_HELPER};
@@ -33,7 +34,7 @@ pub fn sparse_note(
     sizes: &BTreeMap<RepoPath, u64>,
 ) -> Result<Option<String>, GenerateError> {
     let facts = detect(view)?;
-    if facts.config.checkout == CheckoutScope::Sparse {
+    if facts.config.checkout == CheckoutScope::Sparse || !sparse_checkout_planned(&facts) {
         return Ok(None);
     }
     Ok(bytes_outside_lanes(&facts, sizes)

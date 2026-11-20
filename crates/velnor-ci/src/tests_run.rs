@@ -71,6 +71,16 @@ fn nextest_run(command: &[String]) -> Option<&[String]> {
     .then_some(command)
 }
 
+/// nextest exit codes that come after the build: 0 (all passed) and 100 (a test failed).
+/// 101 is a build failure (nextest-metadata `NextestExitCode::BUILD_FAILED`).
+const TEST_RUN_FAILED: i32 = 100;
+
+/// Whether a nextest run got past building the test binaries.
+#[must_use]
+pub fn built(code: i32) -> bool {
+    matches!(code, 0 | TEST_RUN_FAILED)
+}
+
 #[must_use]
 pub fn runs_nextest(command: &[String]) -> bool {
     nextest_run(command).is_some()

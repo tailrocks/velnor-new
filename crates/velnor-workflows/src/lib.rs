@@ -37,3 +37,4 @@ pub use plan::{
     LocalAction, Matrix, MatrixSource, Output, PullRequest, Push, Service, Step, Triggers,
     Workflow, WorkflowCall, WorkflowRun, WorkflowsPlan,
 };
+pub use wrappers::{Invoked, invoked};

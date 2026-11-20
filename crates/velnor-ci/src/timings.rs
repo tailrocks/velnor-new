@@ -165,7 +165,10 @@ fn sample(
     };
     let lint = step_in(&[single.as_str(), lint_job.as_str()], LINT_STEP)?;
     let (build, test) = if let Some(test) = step_in(&[group_job.as_str()], TEST_STEP) {
-        (step_in(&[test_job.as_str()], BUILD_TESTS_STEP)?, test)
+        // Without a separate build step, the test step log names the build time too.
+        let build = step_in(&[test_job.as_str()], BUILD_TESTS_STEP)
+            .or_else(|| step_in(&[test_job.as_str()], TEST_STEP))?;
+        (build, test)
     } else {
         let test = step_in(&[single.as_str(), test_job.as_str()], TEST_STEP)?;
         (test, test)

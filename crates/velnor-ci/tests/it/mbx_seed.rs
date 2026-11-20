@@ -372,3 +372,18 @@ fn seeding_stops_at_the_startup_budget_and_says_so() {
     };
     assert_eq!((copied.files, copied.expired), (5, false));
 }
+
+#[test]
+fn a_seeded_file_never_keeps_a_setuid_or_setgid_bit_from_its_source() {
+    let host = host("mbx-seed-setuid");
+    let seed = warm_seed(&host);
+    let source = seed.join("actions/cas/cd/blob2");
+    fs::set_permissions(&source, fs::Permissions::from_mode(0o6755))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    run(&host, "pull_request", "refs/pull/1/merge", Some(&seed));
+    let copied = host.root.join("temp/velnor/mbx/actions/cas/cd/blob2");
+    let mode = fs::metadata(&copied)
+        .unwrap_or_else(|e| unreachable!("{e}"))
+        .mode();
+    assert_eq!(mode & 0o6000, 0, "copied mode {mode:o} keeps setuid/setgid");
+}

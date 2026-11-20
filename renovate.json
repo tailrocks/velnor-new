@@ -46,6 +46,11 @@
       "enabled": false
     },
     {
+      "description": "Action pins in the version policy wait 14 days after a release (see eligible_on in .velnor/version-policy.toml and scripts/pins-eligible.sh), so Renovate does not propose a release sooner.",
+      "matchManagers": ["custom.regex"],
+      "minimumReleaseAge": "14 days"
+    },
+    {
       "description": "Cargo majors need explicit migration review (VER-3.2: incompatible = migration, never silent).",
       "matchManagers": ["cargo"],
       "matchUpdateTypes": ["major"],
