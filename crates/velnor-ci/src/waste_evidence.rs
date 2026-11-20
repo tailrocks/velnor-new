@@ -21,6 +21,9 @@ pub struct MbxSession {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct MbxEvidence {
+    /// The checkout declares that cargo runs through MBX (mise `mr_boxington` or the cargo wrapper).
+    #[serde(default)]
+    pub declared: bool,
     /// `MBX_CACHE_DIR` named a store that held an entry older than the first cargo invocation.
     pub store_primed: bool,
     pub sessions: Vec<MbxSession>,
@@ -29,7 +32,7 @@ pub struct MbxEvidence {
 impl MbxEvidence {
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        !self.store_primed && self.sessions.is_empty()
+        !self.declared && !self.store_primed && self.sessions.is_empty()
     }
 }
 
@@ -103,6 +106,19 @@ pub fn waste(metrics: &LaneMetrics) -> Vec<String> {
             "MBX object cache: 0 hits in {} sessions ({lookups} lookups missed or skipped) although the configured store held entries before the job",
             sessions.len()
         ));
+    }
+    if metrics.mbx.declared
+        && metrics.mbx.sessions.is_empty()
+        && metrics
+            .invocations
+            .iter()
+            .flat_map(|invocation| &invocation.artifacts)
+            .any(|artifact| !artifact.fresh)
+    {
+        violations.push(
+            "compiled without mbx: the checkout declares mbx (mise `mr_boxington` or the cargo wrapper) but the lane compiled units and recorded no `mbx[cache]` session"
+                .to_owned(),
+        );
     }
     let tools_hit = metrics
         .caches
