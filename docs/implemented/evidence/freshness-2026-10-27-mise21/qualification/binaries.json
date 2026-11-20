@@ -3,17 +3,17 @@
   "records": [
     {
       "name": "velnor-archive-guard",
-      "origin": "/Users/donbeave/Projects/velnor-sdk57-freshness-20261027/target/release/velnor-archive-guard",
+      "origin": "<local-path>",
       "sha256": "1c458aa8f869c2e4a1871e315f4be325677d4874e25c509773603cd79c2a3020"
     },
     {
       "name": "velnor-actions",
-      "origin": "/Users/donbeave/Projects/velnor-sdk57-freshness-20261027/target/release/velnor-actions",
+      "origin": "<local-path>",
       "sha256": "1bed827f2a3f12838ff5cb97cc2ddb712adfe1ec07893d75169d0a8ef08ff3f5"
     },
     {
       "name": "qualification-diagnostics",
-      "origin": "/Users/donbeave/Projects/velnor-sdk57-freshness-20261027/target/release/examples/qualification-diagnostics",
+      "origin": "<local-path>",
       "sha256": "b15badf80f4b6e450bd16e1e6ec27808d8921cf33b566b4ff28488dc514da509"
     }
   ]

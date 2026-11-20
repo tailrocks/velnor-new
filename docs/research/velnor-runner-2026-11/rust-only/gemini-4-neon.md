@@ -482,7 +482,7 @@ Four concrete shifts close the gap from today's 85 min to the **~15 s cold / ~4 
 
 ## 10. Critique of v2
 
-Section-by-section audit of `/Users/donbeave/.cache/ci-ambition/panel/v2/velnor-runner-architecture.md` and `decisions.md` against the owner's binding decisions (1–12) and the new cluster/Mac/blaze measurements:
+Section-by-section audit of `<local-path>` and `decisions.md` against the owner's binding decisions (1–12) and the new cluster/Mac/blaze measurements:
 
 | v2 Section / Decision | What v2 gets wrong or misses | Decision overturned & replacement here |
 |---|---|---|

@@ -558,7 +558,7 @@ Four design elements close the gap between Phase 3 (45 s verdict / 110 s push-to
 
 ## 10. Critique of v2
 
-We reviewed Design v2 (`/Users/donbeave/.cache/ci-ambition/panel/v2/velnor-runner-architecture.md`) and its decision log (`decisions.md`) against the owner's 12 binding decisions. While v2 added a tenth review group (`N57`-`N65`) for the Rust-only stack, it failed to propagate the new binding decisions through its architecture, tables, workflow triggers, and phases. Below is what v2 gets wrong or misses, section by section, and the decisions we overturn.
+We reviewed Design v2 (`<local-path>`) and its decision log (`decisions.md`) against the owner's 12 binding decisions. While v2 added a tenth review group (`N57`-`N65`) for the Rust-only stack, it failed to propagate the new binding decisions through its architecture, tables, workflow triggers, and phases. Below is what v2 gets wrong or misses, section by section, and the decisions we overturn.
 
 | v2 Section | What Design v2 gets wrong or misses under the owner's binding decisions | v2 decisions overturned |
 |---|---|---|

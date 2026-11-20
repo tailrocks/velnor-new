@@ -87,7 +87,7 @@ executor = "ephemeral_self_hosted"
 [checks.runner.container]
 provider = "orb_stack"
 context = "ci-orbstack"
-socket_path = "/Users/ci/.orbstack/run/docker.sock"
+socket_path = "<local-path>"
 cli = { path = "<canonical Docker executable path>", sha256 = "<measured Docker SHA-256>", version = "<observed CLI version>", build = "<observed CLI build>" }
 daemon = { version = "<observed server version>", platform = "linux_arm64", operating_system = "OrbStack", identity_policy = "execution_scoped" }
 [checks.runner.container.sdk]
@@ -107,7 +107,7 @@ cli_sha256 = "<measured CLI executable SHA-256>"
 cli_version = "<observed CLI product version>"
 cli_build = "<observed CLI numeric build>"
 cli_commit = "<observed CLI commit SHA>"
-runtime_dir = "/Users/ci/.orbstack/run"
+runtime_dir = "<local-path>"
 runtime_uid = 501
 [checks.evidence]
 path = "evidence/orbstack-container.json"

@@ -1,6 +1,6 @@
 {
   "argv": [
-    "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+    "<local-path>",
     "api",
     "repos/jdx/mr-boxington/compare/v1.24.1...v1.25.0"
   ],

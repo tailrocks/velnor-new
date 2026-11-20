@@ -18,9 +18,9 @@ inventory. Current gate status remains in [checklist.md](checklist.md) and
 | Tag `v0.1.0` | commit `c57c700459bbe1549fe7eedcb7d8689585c38986`. Not moved. Release target `95c1d6f0f1056881e42d53846dac8ffccd7aa6a5` differs from the tag. |
 | Live runner tag | `velnor-runner:ubuntu-26.04-2.337.0` manifest list `sha256:3c7e4b73e9c600760b5af420f7c3bf8e725a8284d0d5f72d07758c7e7f474c29` (local tag, not a release asset) |
 | Live DinD tag | `velnor-dind:29.8.2` `sha256:67b02176948ff029862a2a0efad252a98b1f8f3becd1ef780754b19c915ac5b7` |
-| Host pid 91213 | `/Users/donbeave/Library/Application Support/Velnor/velnor-host` sha256 `ef505caf0adaa18b10998d2a11899fddf6c923ada172662b8b0380465c952a34` size 27714256. Matches no published `velnor-host` asset. Closest published size is `binary-a6d053cc` at 27680592, digest `sha256:a6b5f498b0ae92e6f69d73f01f592a6c1da3b6ee33b03265fc5322d835b09b68`. |
+| Host pid 91213 | `<local-path> Support/Velnor/velnor-host` sha256 `ef505caf0adaa18b10998d2a11899fddf6c923ada172662b8b0380465c952a34` size 27714256. Matches no published `velnor-host` asset. Closest published size is `binary-a6d053cc` at 27680592, digest `sha256:a6b5f498b0ae92e6f69d73f01f592a6c1da3b6ee33b03265fc5322d835b09b68`. |
 | `host.toml` | `max_jobs = 2`, context `orbstack`, platform `linux/amd64`, set `ubuntu-26.04-scale-set`. Credential ref not recorded here. |
-| Docker | OrbStack, `DOCKER_HOST=unix:///Users/donbeave/.orbstack/run/docker.sock`. Host macOS arm64. Containers `linux/amd64`. |
+| Docker | OrbStack, `DOCKER_HOST=unix://<local-path>`. Host macOS arm64. Containers `linux/amd64`. |
 
 Open PR disposition:
 

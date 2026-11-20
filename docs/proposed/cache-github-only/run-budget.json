@@ -3,11 +3,11 @@
  "task": "T02",
  "observation_date": "2026-10-26T07:31:15Z",
  "evidence_sources": [
-  "/Users/donbeave/velnor-workspace/velnor-github-only-cache-plan/evidence/jobs.json (504 job records)",
-  "/Users/donbeave/velnor-workspace/velnor-github-only-cache-plan/evidence/pipelines.json (39 selected executions)",
-  "/Users/donbeave/velnor-workspace/velnor-github-only-cache-plan/evidence/jackin-current-observations.json",
-  "/Users/donbeave/velnor-workspace/velnor-github-only-cache-plan/evidence/chainargos-job-observations.json",
-  "/Users/donbeave/velnor-workspace/velnor-github-only-cache-plan/EVIDENCE.md (2026-10-25 narrative measurements)"
+  "<local-path> (504 job records)",
+  "<local-path> (39 selected executions)",
+  "<local-path>",
+  "<local-path>",
+  "<local-path> (2026-10-25 narrative measurements)"
  ],
  "evidence_text_measurements": {
   "jackin_main_40181913046": "50 jobs, 42 ordinary Rust consumers all missing MBX bundle; job-duration sum 8434 s; creation-to-completion 826 s; 22,287,765,916 cache archive transfer bytes (repeated transfers); seed rejects displayed 7.5 GiB export.",

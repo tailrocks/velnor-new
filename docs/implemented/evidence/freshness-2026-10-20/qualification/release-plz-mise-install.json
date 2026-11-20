@@ -2,14 +2,14 @@
   "all_passed": true,
   "tool": "release-plz@0.3.173",
   "backend": "aqua:release-plz/release-plz",
-  "installed_binary": "/Users/donbeave/.cache/velnor/release-plz173-qualification-3wm38l4j/mise-prebuilt-attempt-2/data/installs/release-plz/0.3.173/release-plz",
+  "installed_binary": "<local-path>",
   "sha256": "5e1e7b9e622426fd3785873a56982ff4342acee52090355fdfe64fcae6498a87",
   "size": 42903792,
   "commands": [
     {
       "label": "registry",
       "argv": [
-        "/Users/donbeave/.cache/velnor/mise15-qualification-preparation-uufzbppm/mise-v2026.10.15-macos-arm64",
+        "<local-path>",
         "--no-config",
         "--no-env",
         "--no-hooks",
@@ -22,7 +22,7 @@
     {
       "label": "install",
       "argv": [
-        "/Users/donbeave/.cache/velnor/mise15-qualification-preparation-uufzbppm/mise-v2026.10.15-macos-arm64",
+        "<local-path>",
         "--no-config",
         "--no-env",
         "--no-hooks",
@@ -35,7 +35,7 @@
     {
       "label": "where",
       "argv": [
-        "/Users/donbeave/.cache/velnor/mise15-qualification-preparation-uufzbppm/mise-v2026.10.15-macos-arm64",
+        "<local-path>",
         "--no-config",
         "--no-env",
         "--no-hooks",
@@ -48,7 +48,7 @@
     {
       "label": "version",
       "argv": [
-        "/Users/donbeave/.cache/velnor/release-plz173-qualification-3wm38l4j/mise-prebuilt-attempt-2/data/installs/release-plz/0.3.173/release-plz",
+        "<local-path>",
         "--version"
       ],
       "exit": 0,
@@ -57,7 +57,7 @@
     {
       "label": "help",
       "argv": [
-        "/Users/donbeave/.cache/velnor/release-plz173-qualification-3wm38l4j/mise-prebuilt-attempt-2/data/installs/release-plz/0.3.173/release-plz",
+        "<local-path>",
         "--help"
       ],
       "exit": 0,
@@ -66,7 +66,7 @@
     {
       "label": "release-help",
       "argv": [
-        "/Users/donbeave/.cache/velnor/release-plz173-qualification-3wm38l4j/mise-prebuilt-attempt-2/data/installs/release-plz/0.3.173/release-plz",
+        "<local-path>",
         "release",
         "--help"
       ],
@@ -76,7 +76,7 @@
     {
       "label": "release-pr-help",
       "argv": [
-        "/Users/donbeave/.cache/velnor/release-plz173-qualification-3wm38l4j/mise-prebuilt-attempt-2/data/installs/release-plz/0.3.173/release-plz",
+        "<local-path>",
         "release-pr",
         "--help"
       ],

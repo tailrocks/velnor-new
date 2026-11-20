@@ -3,7 +3,7 @@
     {
       "case": "fresh-target-build",
       "argv": [
-        "/Users/donbeave/.cache/velnor/mbx125-qualification-20261020/runtime-prefix/mbx",
+        "<local-path>",
         "build",
         "--locked",
         "--offline",
@@ -16,7 +16,7 @@
     {
       "case": "fresh-target-binary",
       "argv": [
-        "/Users/donbeave/.cache/velnor/mbx125-qualification-20261020/runtime-smoke/target-second/debug/mbx125_qualification"
+        "<local-path>"
       ],
       "exit_code": 0,
       "elapsed": 0.07011749999946915
@@ -24,7 +24,7 @@
     {
       "case": "post-restore-verify",
       "argv": [
-        "/Users/donbeave/.cache/velnor/mbx125-qualification-20261020/runtime-prefix/mbx",
+        "<local-path>",
         "cache",
         "verify"
       ],
@@ -34,7 +34,7 @@
     {
       "case": "post-restore-stats",
       "argv": [
-        "/Users/donbeave/.cache/velnor/mbx125-qualification-20261020/runtime-prefix/mbx",
+        "<local-path>",
         "stats",
         "--json"
       ],
@@ -44,7 +44,7 @@
   ],
   "stats": {
     "version": 1,
-    "store": "/Users/donbeave/.cache/velnor/mbx125-qualification-20261020/runtime-smoke/cache/actions",
+    "store": "<local-path>",
     "savings": {
       "byte_accounting": "logical",
       "since_unix_secs": 1792480522,

@@ -60,7 +60,7 @@ fn docker(without: &[&str]) -> Docker {
         info: Some("OrbStack|aarch64"),
         memory: Some("17179869184"),
         context: true,
-        endpoint: "unix:///Users/me/.orbstack/run/docker.sock",
+        endpoint: "unix:///srv/me/.orbstack/run/docker.sock",
         images: ALL
             .iter()
             .copied()
@@ -96,7 +96,7 @@ async fn everything_present_prints_ok_for_every_part_and_is_healthy() {
     assert_eq!(text.lines().count(), 5, "{text}");
     assert!(text.lines().all(|line| line.starts_with("ok ")), "{text}");
     assert!(
-        text.contains("docker: OrbStack, linux/arm64, unix:///Users/me/.orbstack/run/docker.sock"),
+        text.contains("docker: OrbStack, linux/arm64, unix:///srv/me/.orbstack/run/docker.sock"),
         "{text}"
     );
 }
@@ -327,7 +327,7 @@ async fn a_remote_docker_endpoint_is_a_miss_with_the_run_it_inside_fix() {
 #[tokio::test]
 async fn local_unix_sockets_stay_ok() {
     for endpoint in [
-        "unix:///Users/x/.orbstack/run/docker.sock",
+        "unix:///srv/x/.orbstack/run/docker.sock",
         "unix:///var/run/docker.sock",
     ] {
         let local = Docker {

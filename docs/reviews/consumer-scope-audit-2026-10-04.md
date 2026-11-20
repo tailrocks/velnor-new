@@ -73,7 +73,7 @@ CI has no relative local action callers. ChainArgos/java-monorepo invokes its pr
 - One GitHub GraphQL snapshot resolved canonical full names and collected each default branch SHA/time, .velnor config/manifest blobs, CI blob/workflow names, privacy, and every current open PR head. Repository contents were accessible for all 46.
 - Cohort reports inspected exact default trees and relevant open-PR heads/diffs. Searches used bounded git grep/rg over fetched files, not GitHub code search alone. Supplemental A-cohort clones matched all ten API heads and were searched with fixed strings.
 - Positive caller classification distinguishes docs/product/test text from staged executable workflows and from runtime invocation. Current plan artifacts are staged in all CI files; log-level runtime evidence is claimed only for the runs recorded in the cohort findings.
-- Direct lane execution was verified from session JSONL /Users/donbeave/.codex/sessions/2026/10/04/rollout-2026-10-04T07-15-47-01a10444-4d87-7111-b1a2-37e5b2fce6b8.jsonl as gpt-6-luna/max. Jackin findings came from the separate gpt-6.1-sol/medium lane.
+- Direct lane execution was verified from session JSONL <local-path> as gpt-6-luna/max. Jackin findings came from the separate gpt-6.1-sol/medium lane.
 
 ## Bounded reference search
 

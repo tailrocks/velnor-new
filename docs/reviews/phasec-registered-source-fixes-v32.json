@@ -41,7 +41,7 @@
     "mise_sha256": "484c135bd4329975d608d3f77e26c2ece5d2f5590f18ca71f44440294f8cfa6f",
     "rustc": "1.98.1 (48a229cea 2026-09-01)",
     "cargo": "1.98.1 (797e8a9bc 2026-08-05)",
-    "nextest_path": "/Users/donbeave/.local/share/mise/installs/aqua-nextest-rs-nextest-cargo-nextest/0.9.146/cargo-nextest",
+    "nextest_path": "<local-path>",
     "nextest": "0.9.146 (8af696ddc 2026-09-21)",
     "mbx": "1.22.0",
     "build_jobs": 2,

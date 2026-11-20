@@ -14,7 +14,7 @@ Downloaded live repository metadata, ten most recently updated PRs, referenced m
 
 Raw authenticated API evidence is stored outside this public checkout at `/tmp/velnor-ci-performance-scope-audit/`; private repository source/diff evidence must stay outside public artifacts. Files use `owner__repository.json`, plus `summary.json`. A collector timestamp is retained per repository. Reuse these downloads rather than repeat API requests.
 
-Prior `/Users/donbeave/Projects/CI_MIGRATION_STATUS.md` and `ci_migration_ledger.json` record a narrow private-ChainArgos admin-merge policy. Their old outcomes are stale and do not qualify current changes or performance. Live metadata confirms the four private identities; apply the goal policy only after current review/authority checks. No waiver is claimed granted by this audit.
+Prior `<local-path>` and `ci_migration_ledger.json` record a narrow private-ChainArgos admin-merge policy. Their old outcomes are stale and do not qualify current changes or performance. Live metadata confirms the four private identities; apply the goal policy only after current review/authority checks. No waiver is claimed granted by this audit.
 
 ## Current immutable inventory
 
