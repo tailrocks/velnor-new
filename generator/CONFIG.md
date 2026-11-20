@@ -4,6 +4,10 @@ The new Rust generator reads `.velnor/rust-ci.toml`.
 
 The generator reads `.velnor/rust-ci.toml`, `.velnor/release.toml` and `.velnor/workflows.toml` only through Git's tracked view. A file that exists on disk but that Git does not track (or ignores) is refused with an error, not replaced by defaults: run `git add <path>` (`git add -f` for an ignored file), or delete the file.
 
+## Local runs in a mise checkout
+
+`velnor-gen generate` and `check` run `cargo metadata` in the repository. When the repository's `mise.toml` declares `[wrappers.cargo]`, mise refuses to run that wrapper in a checkout it does not trust, so the run would stop with "Config files in mise.toml are not trusted" until someone runs `mise trust`. velnor-gen avoids that step: it adds the repository root it was pointed at to `MISE_TRUSTED_CONFIG_PATHS` for that one `cargo metadata` child. The value is appended to any existing one, and velnor-gen's own environment does not change. The wrapper still runs (mbx stays in the path). Trusting this root is safe here because you ran `velnor-gen` on this checkout yourself, and `cargo metadata` already reads the checkout's Cargo and mise config. A root path that contains `:` is refused, because mise splits this variable on `:` and the entry would trust a parent directory.
+
 ## Fork pull requests
 
 By default, a pull request from a fork does not select a self-hosted runner. When `runner` is not declared `hosted = true`, the generator renders `runs-on` of every job, including the `Required` gate, as an expression. It selects `runner` when the event is not a pull request or the pull request head repository is this repository, and `fork_runner` otherwise. No job is skipped for a fork, so the gate sees the real result of every job and fails when one fails. The one exception is a job that calls a reusable workflow with `uses`: it has no `runs-on`, and the callee may run on a self-hosted runner, so the generator adds the same condition to its `if` (joined with the job's own `if` in one expression) and a pull request from a fork skips the call. A deleted fork has no head repository, so it counts as a fork.

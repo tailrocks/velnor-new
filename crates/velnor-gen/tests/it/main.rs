@@ -145,6 +145,7 @@ mod mise_identity;
 mod mise_install;
 mod mise_names;
 mod mise_platform;
+mod mise_trust;
 mod needs_size;
 mod needs_size_plan;
 mod nested_target_dir;
