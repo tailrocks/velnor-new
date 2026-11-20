@@ -35,14 +35,20 @@ Not part of the adopted record above. Each entry changes nothing until the owner
 
 ### P1. Mbx release in the mbx remote cache key
 
-Today `[cache] mbx_remote` renders `cache-generation: v1-${{ github.job }}`. The mbx release is not part of that key. A project that bumps `mr-boxington` in `mise.toml` changes the release the action installs, and its restores keep the same key.
+Today `[cache] mbx_remote` renders `cache-generation: v1-${{ github.job }}`. The mbx release is not part of that key. On a velnor-ci helper of 0.1.109 or later, a bump of `mr-boxington` in `mise.toml` changes the release the action installs, and the key stays the same. On an older helper the release is always the constant 1.30.0, and generation refuses any other pin, so a bump changes nothing until the helper pin moves to 0.1.109 or later.
+
+What the action's README (`jdx/mr-boxington-action`, pinned by full SHA) says:
+
+- Only the change from mbx 1.12.0 on (the object bundle becomes a directory instead of a tar) gets separate cache keys. The README says the first job after an mbx version crosses 1.12.0 restores cold.
+- A bump that keeps the same format keeps the same key, so the job restores the previous release's entries warm. The README does not say whether that restore is safe.
+- It tells consumers to change `cache-generation` when a cache-format or policy change should start fresh, and when an mbx upgrade changes cache behavior.
 
 Options:
 
-- **A. Keep the key.** The `jdx/mr-boxington-action` README says a change of object-store format already gets a separate cache key. The likely effect of a bump is one cold restore, not a wrong build. Not reproduced. Every generated sample stays byte-identical.
-- **B. Add the release to the key**, for example `v1-${{ github.job }}-<mbx release>`. This removes the reliance on the action's own format key. It changes the generated output of every `mbx_remote` sample, and the superseded entries need the pruning rule of decision 4 extended to them.
+- **A. Keep the key.** A bump that crosses 1.12.0 restores cold once, as the README documents. Any other bump restores the previous release's entries warm. Adopting A records that warm restores across same-format mbx releases are accepted. No generated output changes.
+- **B. Add the release to the key**, for example `v1-${{ github.job }}-<mbx release>`. Every bump restores cold, which follows the README's `cache-generation` guidance. Generated output changes for the one sample that renders the key, `generator/samples/mbx-remote-cache`. `generator/CONFIG.md` quotes the `v1-<job>` form in the `mbx_remote` paragraph and needs the same change. `docs/rust-ci.md` describes the restores without quoting the key. Superseded entries are removed only if the pruning rule of decision 4 is extended to them.
 
-Recommendation: A, unless the owner has evidence that the action does not version its object-store format. Adopting A records that a cold restore after an mbx bump is accepted.
+The owner decides between A and B. A is the choice if warm restores across same-format releases are acceptable; B is the choice if they are not.
 
 ## Cases the design covers
 
