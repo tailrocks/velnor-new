@@ -162,6 +162,76 @@ fn save_outcomes(cases: &[(&str, Option<bool>, SaveOutcome)]) -> super::ResultTe
 }
 
 #[test]
+fn tools_save_under_a_new_key_after_a_miss_is_looked_up_under_the_saved_key() -> super::ResultTest {
+    for (recorded, expected) in [
+        (Some("tools-new"), SaveOutcome::Saved),
+        (Some(""), SaveOutcome::Failed),
+        (None, SaveOutcome::Failed),
+    ] {
+        let repo = Repo::new("report-tools-saved-key");
+        let plan = json!([{"family":"tools","root":null,"restore_step":"restore","save_step":"save","save_key_step":"saved_key"}]);
+        let mut steps = json!({
+            "restore":{"outcome":"success","outputs":{"cache-primary-key":"tools-old","cache-hit":"false"}},
+            "save":{"outcome":"success"},
+            "saved_key":{"outcome":"success","outputs":{}}
+        });
+        if let Some(key) = recorded {
+            steps["saved_key"]["outputs"]["key"] = json!(key);
+        }
+        let listing = |key: &str| {
+            let entries = if key == "tools-new" {
+                json!([{"key":key,"ref":"refs/heads/main","size_in_bytes":12}])
+            } else {
+                json!([])
+            };
+            json!({"total_count":entries.as_array().map_or(0, Vec::len),"actions_caches":entries}).to_string()
+        };
+        let api = crate::io::serve(BTreeMap::from([
+            (
+                "/repos/owner/repo/actions/runs/1/attempts/1/jobs?per_page=100&page=1".to_owned(),
+                json!({"total_count":0,"jobs":[]}).to_string(),
+            ),
+            (
+                "/repos/owner/repo/actions/caches?key=tools-old&per_page=100".to_owned(),
+                listing("tools-old"),
+            ),
+            (
+                "/repos/owner/repo/actions/caches?key=tools-new&per_page=100".to_owned(),
+                listing("tools-new"),
+            ),
+        ]));
+        let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+            .arg("report")
+            .current_dir(repo.root())
+            .env("RUNNER_TEMP", repo.root())
+            .env("GITHUB_JOB", "rust")
+            .env("GITHUB_REF", "refs/heads/main")
+            .env("VELNOR_REPORT_DEFAULT_BRANCH", "main")
+            .env("GITHUB_REPOSITORY", "owner/repo")
+            .env("GITHUB_RUN_ID", "1")
+            .env("GITHUB_RUN_ATTEMPT", "1")
+            .env("VELNOR_REPORT_CACHES", plan.to_string())
+            .env("VELNOR_REPORT_STEPS", steps.to_string())
+            .output()?;
+        assert!(output.status.success(), "{output:?}");
+        let checked = checking(&repo)
+            .env("GITHUB_TOKEN", "fixture")
+            .env("GITHUB_API_URL", api)
+            .output()?;
+        assert_eq!(checked.status.success(), expected == SaveOutcome::Saved);
+        let metrics = read(&repo);
+        assert_eq!(metrics.caches[0].requested_key, "tools-old");
+        assert_eq!(metrics.caches[0].save, expected, "{recorded:?}");
+        assert_eq!(
+            metrics.violations.is_empty(),
+            expected == SaveOutcome::Saved,
+            "{recorded:?}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn cache_inventory_requires_unique_eligible_entries_and_complete_results() -> super::ResultTest {
     let repo = Repo::new("report-cache-inventory");
     let mut responses = BTreeMap::from([(

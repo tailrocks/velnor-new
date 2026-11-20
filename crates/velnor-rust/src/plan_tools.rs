@@ -19,6 +19,7 @@ pub const TOOLS_VERIFY_HELPER: (u64, u64, u64) = (0, 1, 109);
 // helper-gate: first in tools-v0.1.110 via ca67828281
 pub(crate) const TOOLS_CACHE_KEY_HELPER: (u64, u64, u64) = (0, 1, 110);
 pub(crate) const TOOLS_ANCHOR_KEY_HELPER: (u64, u64, u64) = (0, 1, 111);
+pub(crate) const TOOLS_SAVED_KEY_HELPER: (u64, u64, u64) = (0, 1, 111);
 // helper-gate: first in tools-v0.1.110 via 8db5d70509
 const TOOLS_CLEAR_HELPER: (u64, u64, u64) = (0, 1, 110);
 
@@ -118,6 +119,14 @@ fn names_anchor_entry(facts: &RepoFacts) -> bool {
         .helper
         .as_ref()
         .is_some_and(|release| release.version().at_least(TOOLS_ANCHOR_KEY_HELPER))
+}
+
+fn records_saved_key(facts: &RepoFacts) -> bool {
+    tools_anchored(facts)
+        && facts
+            .helper
+            .as_ref()
+            .is_some_and(|release| release.version().at_least(TOOLS_SAVED_KEY_HELPER))
 }
 
 fn tools_local(facts: &RepoFacts) -> bool {
@@ -227,8 +236,14 @@ pub(crate) fn tools_save(facts: &RepoFacts, plan: Option<&JobId>) -> Vec<Step> {
     } else {
         Vec::new()
     };
+    let saved_key = (saved == ToolsAnchor::Recorded && records_saved_key(facts))
+        .then(|| tools_step(ToolsLocalVerb::RecordSavedKey, saved.clone(), When::Success));
     if !local {
-        return anchor.into_iter().chain([network]).collect();
+        return anchor
+            .into_iter()
+            .chain([network])
+            .chain(saved_key)
+            .collect();
     }
     let checked = crate::base_cache::checks_saves(facts);
     let saving = |verb| Step {
@@ -256,6 +271,7 @@ pub(crate) fn tools_save(facts: &RepoFacts, plan: Option<&JobId>) -> Vec<Step> {
         }),
         network,
     ]);
+    steps.extend(saved_key);
     steps.extend(checked.then(|| saving(ToolsLocalVerb::RecordSave)));
     steps
 }

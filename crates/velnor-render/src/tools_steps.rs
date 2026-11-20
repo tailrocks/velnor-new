@@ -272,6 +272,7 @@ pub(crate) fn tools_local_step(verb: ToolsLocalVerb, anchor: &ToolsAnchor) -> Re
         Verb::Prime => ("Prime the node store with the tools", None, "save"),
         Verb::RecordRestore => return tools_restored_step(key),
         Verb::RecordSave => return tools_saved_step(),
+        Verb::RecordSavedKey => return tools_saved_key_step(key),
         Verb::AnchorRestore => return anchor_cache_step(crate::steps::CACHE_RESTORE, "Restore"),
         Verb::AnchorSave if *anchor == ToolsAnchor::Recorded => {
             return newest_anchor_step(crate::steps::CACHE_SAVE, false);
@@ -330,6 +331,24 @@ fn tools_restored_step(key: String) -> RenderedStep {
             "printf 'cache-primary-key=%s\\ncache-matched-key=%s\\ncache-hit=%s\\n' \"$CACHE_KEY\" \"${NODE_HIT:+$CACHE_KEY}$MATCHED\" \"$EXACT\" >> \"$GITHUB_OUTPUT\""
                 .to_owned(),
         ),
+        ..RenderedStep::default()
+    }
+}
+
+fn tools_saved_key_step(key: String) -> RenderedStep {
+    let network = crate::report::cache_id(
+        &velnor_model::CacheKey::Tools {
+            host: velnor_model::Host,
+            anchor: ToolsAnchor::Unanchored,
+        },
+        false,
+    );
+    RenderedStep {
+        id: Some(crate::gate::TOOLS_SAVED_KEY_STEP.to_owned()),
+        name: "Record the tools cache key".to_owned(),
+        condition: Some(format!("${{{{ steps.{network}.outcome == 'success' }}}}")),
+        env: vec![("CACHE_KEY".to_owned(), Value::Expr(key))],
+        run: Some("echo \"key=$CACHE_KEY\" >> \"$GITHUB_OUTPUT\"".to_owned()),
         ..RenderedStep::default()
     }
 }

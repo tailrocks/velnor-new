@@ -195,7 +195,7 @@ fn cache_metrics(
         }
         let saving = cache.save != SaveOutcome::NotAttempted;
         let key = if saving {
-            &cache.requested_key
+            cache.saved_key.as_ref().unwrap_or(&cache.requested_key)
         } else if let Some(key) = &cache.matched_key {
             key
         } else {

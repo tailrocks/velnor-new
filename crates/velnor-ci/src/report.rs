@@ -18,6 +18,8 @@ pub struct Cache {
     pub save_step: String,
     #[serde(default)]
     pub requested_key: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub saved_key: Option<String>,
     pub matched_key: Option<String>,
     pub hit: Hit,
     pub bytes: Option<u64>,

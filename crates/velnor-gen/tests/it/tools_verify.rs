@@ -12,9 +12,9 @@ const ANCHOR_HIT: &str = "${{ steps.toolsanchor.outputs.cache-hit }}";
 const ON_DEFAULT: &str =
     "github.ref == format('refs/heads/{0}', github.event.repository.default_branch)";
 const TRUSTED_EVENTS: &str = "(github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')";
-const STORES: &[&str] = &["mbx_shared_store = true\n", "mbx_shared_store = false\n"];
+pub(crate) const STORES: &[&str] = &["mbx_shared_store = true\n", "mbx_shared_store = false\n"];
 
-fn repo_for(
+pub(crate) fn repo_for(
     config: &str,
     helper: &str,
 ) -> Result<velnor_model::RepoView, Box<dyn std::error::Error>> {
@@ -28,9 +28,9 @@ fn repo_for(
     Ok(repo)
 }
 
-type Steps = Vec<(String, Vec<serde_json::Value>)>;
+pub(crate) type Steps = Vec<(String, Vec<serde_json::Value>)>;
 
-fn jobs_of(text: &str) -> Result<Steps, Box<dyn std::error::Error>> {
+pub(crate) fn jobs_of(text: &str) -> Result<Steps, Box<dyn std::error::Error>> {
     let yaml: serde_json::Value = crate::yaml_tree::document(text)?;
     let jobs = yaml["jobs"].as_object().ok_or("jobs missing")?;
     Ok(jobs
@@ -42,7 +42,7 @@ fn jobs_of(text: &str) -> Result<Steps, Box<dyn std::error::Error>> {
         .collect())
 }
 
-fn text(step: &serde_json::Value, field: &str) -> String {
+pub(crate) fn text(step: &serde_json::Value, field: &str) -> String {
     step[field].as_str().unwrap_or_default().to_owned()
 }
 
