@@ -52,7 +52,10 @@ fn names_missing_file<'a>(dep_info: &Path, inside: impl Iterator<Item = &'a Path
 }
 
 fn cargo_unpacks(path: &Path) -> bool {
-    let parts: Vec<_> = path.components().map(|part| part.as_os_str()).collect();
+    let parts: Vec<_> = path
+        .components()
+        .map(std::path::Component::as_os_str)
+        .collect();
     parts.windows(2).any(|pair| {
         (pair[0] == "registry" && pair[1] == "src") || (pair[0] == "git" && pair[1] == "checkouts")
     })
