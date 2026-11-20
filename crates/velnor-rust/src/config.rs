@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use serde::Deserialize;
+use std::collections::BTreeMap;
+
 use velnor_model::{
     CheckoutScope, CiDebugInfo, InputRule, PackageName, PathGlob, RepoPath, RunnerLabel,
     RustCiConfig, SpeedBudget, TargetName,
@@ -15,7 +17,7 @@ use crate::toml_file::table;
 
 pub const CONFIG_PATH: RepoPath = RepoPath::from_static(".velnor/rust-ci.toml");
 
-const TIMEOUT_RANGE: std::ops::RangeInclusive<u16> = 1..=360;
+pub(crate) const TIMEOUT_RANGE: std::ops::RangeInclusive<u16> = 1..=360;
 
 #[derive(Deserialize)]
 struct RawConfig {
@@ -34,6 +36,8 @@ struct RawConfig {
     docs: Option<String>,
     check_alone: Option<String>,
     timeout_minutes: Option<u16>,
+    #[serde(default)]
+    root_timeouts: BTreeMap<String, u16>,
     #[serde(default)]
     exclude: Vec<String>,
     #[serde(default)]
@@ -172,6 +176,7 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         runner,
         fork_runner,
         timeout_minutes,
+        root_timeouts: crate::config_root_timeouts::parse(raw.root_timeouts).map_err(invalid)?,
         exclude: crate::config_exclude::excludes(raw.exclude).map_err(invalid)?,
     })
 }

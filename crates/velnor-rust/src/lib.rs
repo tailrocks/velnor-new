@@ -29,6 +29,7 @@ mod config_mirror;
 mod config_pr_ci;
 mod config_private;
 mod config_release_assets;
+mod config_root_timeouts;
 mod config_test_groups;
 mod config_test_lane;
 mod config_test_setup;

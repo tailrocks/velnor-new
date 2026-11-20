@@ -134,6 +134,8 @@ pub(super) const RUST_CI: &[KeyGate] = &[
     // First released in tools-v0.1.109 (not tagged yet when this gate was written).
     gate(RustCi, "release_assets.tag", (0, 1, 109)),
     gate(RustCi, "required_check", HELPER_MINIMUM),
+    // First released in tools-v0.1.109 (not tagged yet when this gate was written).
+    gate(RustCi, "root_timeouts", (0, 1, 109)),
     gate(RustCi, "runner", HELPER_MINIMUM),
     gate(RustCi, "shape", HELPER_MINIMUM),
     gate(RustCi, "skip_draft_pull_requests", HELPER_MINIMUM),
@@ -185,6 +187,8 @@ pub(super) const RUST_CI: &[KeyGate] = &[
     gate(RustCi, "test_lane.packages", (0, 1, 93)),
     // helper-gate: first in tools-v0.1.93 via 3099634289
     gate(RustCi, "test_lane.root", (0, 1, 93)),
+    // First released in tools-v0.1.109 (not tagged yet when this gate was written).
+    gate(RustCi, "test_lane.timeout_minutes", (0, 1, 109)),
     // helper-gate: first in rust-ci-v0.1.82 via f304690c07
     gate(RustCi, "test_setup", (0, 1, 82)),
     // helper-gate: first in rust-ci-v0.1.82 via f304690c07

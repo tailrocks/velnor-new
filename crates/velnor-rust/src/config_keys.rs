@@ -16,6 +16,7 @@ pub const KEYS: [&str; 37] = [
     "docs",
     "check_alone",
     "timeout_minutes",
+    "root_timeouts",
     "exclude",
     "non_inputs",
     "inputs",
