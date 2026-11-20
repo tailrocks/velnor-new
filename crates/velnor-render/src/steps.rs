@@ -4,9 +4,8 @@
 use std::collections::BTreeMap;
 
 use velnor_model::{
-    CacheKey, CargoCommand, GateNeed, HelperCommand, Job, MERGE_GROUP_SKIP_OUTPUT,
-    MERGE_GROUP_STEP, RepoPath, Step, StepKind, TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT,
-    TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, WorkflowPlan, group_output_name,
+    CacheKey, CargoCommand, GateNeed, HelperCommand, Job, RepoPath, Step, StepKind, WorkflowPlan,
+    group_output_name,
 };
 
 use crate::artifact_steps::{download_step, upload_cargo_log, upload_step};
@@ -48,7 +47,10 @@ pub(crate) const MISE_VERSION: &str = "2026.11.10";
 mod chained_save;
 #[path = "steps_helpers.rs"]
 mod steps_helpers;
+#[path = "steps_outputs.rs"]
+mod steps_outputs;
 use steps_helpers::{leading_steps, rustup_add, saved_unless_hit, variable};
+use steps_outputs::{merge_group_output, test_outputs};
 
 pub(crate) const CACHE_RESTORE: &str =
     "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
@@ -108,36 +110,6 @@ pub(crate) fn rendered_job(job: &Job, plan: &WorkflowPlan) -> RenderedJob {
     }
 }
 
-fn test_outputs<'a>(job: &'a Job, tests: &'a Tests) -> impl Iterator<Item = (String, String)> + 'a {
-    job.steps
-        .iter()
-        .any(|step| matches!(&step.kind, StepKind::Cargo(command) if reports_tests(command)))
-        .then(|| {
-            [
-                Some(TESTS_RUN_OUTPUT),
-                Some(TESTS_LISTED_OUTPUT),
-                job.reports_ignored.then_some(TESTS_IGNORED_OUTPUT),
-                Some(TESTS_BY_PACKAGE_OUTPUT),
-            ]
-        })
-        .into_iter()
-        .flatten()
-        .flatten()
-        .flat_map(|name| tests.outputs(name))
-}
-
-fn merge_group_output(job: &Job) -> Option<(String, String)> {
-    job.steps
-        .iter()
-        .any(|step| matches!(step.kind, StepKind::MergeGroupPassed { .. }))
-        .then(|| {
-            (
-                MERGE_GROUP_SKIP_OUTPUT.to_owned(),
-                format!("${{{{ steps.{MERGE_GROUP_STEP}.outputs.skip }}}}"),
-            )
-        })
-}
-
 fn job_steps(
     job: &Job,
     restores: bool,
@@ -149,7 +121,7 @@ fn job_steps(
     let verified = job
         .steps
         .iter()
-        .any(|step| step.kind == StepKind::ToolsLocal(velnor_model::ToolsLocalVerb::Verify));
+        .any(|step| matches!(step.kind, StepKind::ToolsLocal(verb) if verb.checks_tools()));
     job.steps
         .iter()
         .enumerate()
@@ -391,7 +363,7 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
         | StepKind::ReleaseAssets { .. } => crate::private_steps::render(kind),
         StepKind::AdvisoryFetch { configs } => crate::private_steps::advisory_fetch(configs),
         StepKind::MbxSeed | StepKind::ToolsLocal(_) => crate::helper_steps::node_step(kind),
-        StepKind::TestSetup { name, run } => RenderedStep {
+        StepKind::TestSetup { name, run, .. } => RenderedStep {
             name: name.clone(),
             run: Some(run.clone()),
             ..RenderedStep::default()
