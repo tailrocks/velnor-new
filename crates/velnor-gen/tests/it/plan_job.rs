@@ -30,7 +30,7 @@ const LANE_SETUP: [&str; 17] = [
     "Resolve released helper tools",
     "Install velnor-ci 0.1.81",
     "Install the released helper launcher",
-    "Use a private mbx store",
+    "Private mbx store",
     "Restore the tools cache",
     "Install tools",
     "Add Rust components",
@@ -349,7 +349,7 @@ fn the_single_job_policy_lane_reads_the_rust_jobs_plan_and_checks_out_one_commit
     files.files.insert(deny, Vec::new());
     files.files.insert(
         RepoPath::new("mise.toml")?,
-        b"[tools]\nrust = { version = \"1.99.1\", mr_boxington = true }\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\ncargo-deny = \"0.20.2\"\n\n[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n".to_vec(),
+        b"[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n\n[tools]\nrust = { version = \"1.99.1\", mr_boxington = true }\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\ncargo-deny = \"0.20.2\"\n".to_vec(),
     );
     let text = workflow(&files)?;
     assert!(!text.contains("rust-plan"), "{text}");

@@ -11,7 +11,7 @@ use velnor_model::{
 
 pub(crate) type TestResult = Result<(), Box<dyn Error>>;
 
-pub(crate) const MISE: &str = "[tools]\nrust = { version = \"1.99.1\", mr_boxington = true }\nmr-boxington = \"v1.30.0\"\n\n[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n";
+pub(crate) const MISE: &str = "[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n\n[tools]\nrust = { version = \"1.99.1\", mr_boxington = true }\nmr-boxington = \"v1.30.0\"\n";
 
 pub(crate) fn lock_pinned_tools(view: &mut RepoView) -> Result<(), Box<dyn Error>> {
     let mise_lock = path("mise.lock")?;

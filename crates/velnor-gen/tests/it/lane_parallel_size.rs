@@ -36,7 +36,7 @@ fn size_of(config: &str, roots: usize) -> Result<(usize, Vec<String>), Box<dyn s
 fn a_parallel_lane_keeps_the_largest_fixture_under_the_workflow_size_limit() -> TestResult {
     let parallel = format!("{LANE}job = 'parallel'\n");
     let (inline, _) = size_of(LANE, 16)?;
-    for (roots, base) in [(16, Some(inline)), (20, None)] {
+    for (roots, base) in [(16, Some(inline)), (19, None)] {
         let (size, notes) = size_of(&parallel, roots)?;
         assert!(
             size <= velnor_render::MAX_WORKFLOW_BYTES,

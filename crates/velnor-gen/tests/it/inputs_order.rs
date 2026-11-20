@@ -38,7 +38,7 @@ fn trusted_before_restore(step: &serde_json::Value) -> bool {
                 | "eval \"$VELNOR_HELPER_INSTALL_LAUNCHER\""
                 | "velnor-ci plan --explain"
                 | "velnor-ci prepare"
-                | "echo \"MBX_CACHE_DIR=$RUNNER_TEMP/mbx-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$GITHUB_JOB\" >> \"$GITHUB_ENV\""
+                | "echo \"MBX_CACHE_DIR=$RUNNER_TEMP/mbx\" >> \"$GITHUB_ENV\""
                 | "velnor-ci check-metadata"
                 | "rustup component add clippy rustfmt"
         ) || run == MIRROR

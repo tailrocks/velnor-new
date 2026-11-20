@@ -9,7 +9,7 @@ use crate::facts::{TestResult, lock_pinned_tools};
 use crate::pipeline::{pin_helper, view, workflow};
 use crate::yaml_tree::document;
 
-const STORE: &str = "MBX_CACHE_DIR=$RUNNER_TEMP/mbx-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$GITHUB_JOB";
+const STORE: &str = "MBX_CACHE_DIR=$RUNNER_TEMP/mbx";
 const OPT_OUT: &[u8] = b"[cache]\nmbx = false\n";
 const NO_LAYOUT: &str =
     "[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n";

@@ -101,8 +101,8 @@ pub fn check_mbx(
         .iter()
         .filter_map(|config| files.get(config).and_then(|bytes| table(bytes).ok()))
         .collect();
-    let rust_option = !rust_tool(&facts.tools).is_some_and(|name| {
-        parsed.iter().any(|config| {
+    let rust_option = rust_tool(&facts.tools).is_some_and(|name| {
+        !parsed.iter().any(|config| {
             config
                 .get("tools")
                 .and_then(|tools| tools.get(name))

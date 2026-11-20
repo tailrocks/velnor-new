@@ -280,11 +280,8 @@ const MBX_VERSION: &str = "1.30.0";
 
 pub(crate) fn mbx_private_step() -> RenderedStep {
     RenderedStep {
-        name: "Use a private mbx store".to_owned(),
-        run: Some(
-            "echo \"MBX_CACHE_DIR=$RUNNER_TEMP/mbx-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$GITHUB_JOB\" >> \"$GITHUB_ENV\""
-                .to_owned(),
-        ),
+        name: "Private mbx store".to_owned(),
+        run: Some("echo \"MBX_CACHE_DIR=$RUNNER_TEMP/mbx\" >> \"$GITHUB_ENV\"".to_owned()),
         ..RenderedStep::default()
     }
 }

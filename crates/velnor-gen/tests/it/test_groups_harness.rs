@@ -8,7 +8,7 @@ use crate::facts::{TestResult, package, repo};
 use crate::pipeline::{HELPER_LOCK, workflow};
 
 const MANIFEST: &str = "[package]\nname = \"a\"\n[[test]]\nname = \"custom\"\nharness = false\n";
-const NEXTEST_MISE: &str = "[tools]\nrust = { version = \"1.99.1\", mr_boxington = true }\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n\n[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n";
+const NEXTEST_MISE: &str = "[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n\n[tools]\nrust = { version = \"1.99.1\", mr_boxington = true }\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n";
 const GROUP: &str = "[[test_groups]]\nname = 'db'\nfilter = 'package(a) and test(~db_)'\n";
 
 #[test]

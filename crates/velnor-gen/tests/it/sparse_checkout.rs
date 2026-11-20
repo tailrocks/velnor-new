@@ -11,7 +11,7 @@ fn render(roots: &[&str], config: &str) -> Result<String, Box<dyn std::error::Er
 }
 
 const OFF: &str = "full_run = \"off\"\n";
-const NEXTEST_ONLY: &str = "[tools]\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n";
+const NEXTEST_ONLY: &str = "[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n\n[tools]\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n";
 const ON: &str = "full_run = \"off\"\nsparse_checkout = true\n";
 
 #[test]
@@ -197,8 +197,7 @@ fn a_path_toolchain_inside_the_repository_is_checked_out_and_an_escaping_one_for
     Ok(())
 }
 
-const WITH_RUST: &str =
-    "[tools]\nrust = { version = \"1.99.1\", mr_boxington = true }\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n\n[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n";
+const WITH_RUST: &str = "[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n\n[tools]\nrust = { version = \"1.99.1\", mr_boxington = true }\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n";
 
 const VENDORED: [(&str, &str); 4] = [
     ("mise.toml", WITH_RUST),
