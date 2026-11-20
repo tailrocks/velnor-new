@@ -249,6 +249,7 @@ mod suggest_groups;
 mod test_groups;
 mod test_groups_harness;
 mod test_groups_jobs;
+mod test_groups_private;
 mod test_groups_selection;
 mod test_setup;
 mod tool_pins;
