@@ -181,7 +181,15 @@ packages = ["velnor-runner-host"]
 filter = "package(velnor-runner-host) and (test(~local::) or binary(local_host_public) or binary(local_pair_public))"
 ```
 
-`root` is the folder of the Cargo root's `Cargo.toml`, or `.` for the repository root. It must name a root of this repository that runs nextest tests. `features` is a non-empty list of distinct feature names, and each name uses letters, digits and `_-+./`. The step is named `Test (features: local-mode)` and runs `cargo-nextest nextest run --workspace --locked --features 'local-mode'` with the same selection as the root's default test step, narrowed by `filter`. It runs after the default test step and reports no test counts, so the default step stays the single source of the job's test counts. A lane with `job = "parallel"` reports its own counts, see the next section but one. With `shape = "groups"` the step runs in the build job, which has Rust, because the archive holds only the default-feature build.
+`root` is the folder of the Cargo root's `Cargo.toml`, or `.` for the repository root. It must name a root of this repository that runs nextest tests. `features` is a list of distinct feature names, and each name uses letters, digits and `_-+./`. It is required unless `all_features` or `no_default_features` is set. The step is named `Test (features: local-mode)` and runs `cargo-nextest nextest run --workspace --locked --features 'local-mode'` with the same selection as the root's default test step, narrowed by `filter`.
+
+The two feature flags change which features the lane's steps pass to cargo, in its test, lint, doc and guard steps alike:
+
+- `all_features = true` passes `--all-features`, so the lane runs with every feature of the root on. It takes no `features` list.
+- `no_default_features = true` passes `--no-default-features`. It combines with `features`, so `features = ["a", "b"]` with it gives `--no-default-features --features 'a,b'`. It may also stand alone, to run with no features at all.
+- The two cannot be combined with each other or with a `features` list. Generation fails with a message that names the conflicting keys.
+
+A lane with a flag takes its own name: `Test (all features)`, `Test (no default features)`, or `Test (no default features, features: a,b)`, and the lint, doc and guard steps take the same words. Two lanes that differ only by a flag keep separate steps, separate lint and doc steps, and, as parallel jobs, separate jobs and cache keys (`rust-lane-all-features`, `rust-lane-no-default-a-b`). A lane without the flags renders exactly as before. The keys need velnor-ci 0.1.108 or later, and generation refuses an older pin when a lane writes either key, even as `false`. It runs after the default test step and reports no test counts, so the default step stays the single source of the job's test counts. A lane with `job = "parallel"` reports its own counts, see the next section but one. With `shape = "groups"` the step runs in the build job, which has Rust, because the archive holds only the default-feature build.
 
 `packages` names the packages of the root whose tests the lane selects. It is required with `filter` and optional without it. The plan narrows a pull request to the changed packages, so a lane whose filter matches nothing there is not broken. When the plan selects none of `packages`, and not the whole workspace, the lane step is skipped and a step named `Skip test lane (features: ...)` prints `skipped: no selected packages`. Otherwise the lane runs with `--no-tests=fail`, so a filter that matches nothing fails the job instead of passing with zero tests. A lane without `filter` runs whenever the plan selects the root.
 
@@ -199,11 +207,11 @@ lint = true
 doc = true
 ```
 
-A lane with a `filter` gets a second step, `Test lane guard (features: ...)`, right after the lane step. It runs `velnor-ci lane-guard --features '...' --filter '...'`, with one `--except-binary` for each `harness = false` binary that the root runs with `cargo test`, and it runs under the same condition as the lane step. The guard asks cargo-nextest to list the workspace with and without the features and under the filter. It fails the job when a test exists only with the features, is not ignored, and falls outside `filter`, and it names each such test with its binary id. A listing error also fails the guard. A lane without a `filter` runs every selected test and has no guard.
+A lane with a `filter` gets a second step, `Test lane guard (features: ...)`, right after the lane step. It runs `velnor-ci lane-guard --features '...' --filter '...'` (with `--all-features` or `--no-default-features` in place of or before `--features` when the lane sets the flags), with one `--except-binary` for each `harness = false` binary that the root runs with `cargo test`, and it runs under the same condition as the lane step. The guard asks cargo-nextest to list the workspace with and without the features and under the filter. It fails the job when a test exists only with the features, is not ignored, and falls outside `filter`, and it names each such test with its binary id. A listing error also fails the guard. A lane without a `filter` runs every selected test and has no guard.
 
 ### A lane as its own job
 
-`job` is optional: `"inline"` (the default) keeps the lane's steps in the root's test job, as above, and renders exactly as before. `job = "parallel"` moves every step of the lane (the test step, its guard, `lint` and `doc`) out of that job into one job of its own, `rust-lane-<features>` (`rust-lane-local-mode`, with the root's slug appended when the repository has several roots; a second lane with the same features gets `-2`). The job runs beside the root's jobs, so the wall time of a run is the longest job, not the sum of the default tests and the lane.
+`job` is optional: `"inline"` (the default) keeps the lane's steps in the root's test job, as above, and renders exactly as before. `job = "parallel"` moves every step of the lane (the test step, its guard, `lint` and `doc`) out of that job into one job of its own, `rust-lane-<features>` (`rust-lane-local-mode`, or `rust-lane-all-features` or `rust-lane-no-default-...` with the flags, with the root's slug appended when the repository has several roots; a second lane with the same features gets `-2`). The job runs beside the root's jobs, so the wall time of a run is the longest job, not the sum of the default tests and the lane.
 
 ```toml
 [[test_lane]]
@@ -223,7 +231,7 @@ job = "parallel"
 - The job costs its own setup (checkout, tools restore, target restore). The saving is the lane's own steps, which leave the critical path when the default test job is the longer one.
 - Lanes of one root that name the same features share one lint step and one rustdoc step inline. As jobs they are independent, so each parallel lane runs its own.
 - A root of a workspace group cannot have a lane, as before.
-- The key needs velnor-ci 0.1.107 or later, because the pinned velnor-ci reads `.velnor/rust-ci.toml` and refuses a key it does not know; `velnor-gen generate` refuses an older pin when a lane sets `job = "parallel"`. A lane without the key keeps the 0.1.93 requirement below.
+- The key needs velnor-ci 0.1.107 or later, because the pinned velnor-ci reads `.velnor/rust-ci.toml` and refuses a key it does not know; `velnor-gen generate` refuses an older pin when a lane sets `job = "parallel"`. A lane without the key keeps the 0.1.93 requirement below. The job id of a lane with a flag carries the flag's words, for example `rust-lane-all-features`.
 
 The pinned velnor-ci reads `.velnor/rust-ci.toml` at run time and rejects a key it does not know, so any `[[test_lane]]` needs velnor-ci 0.1.93 or later, the first release that accepts the key and runs `lane-guard`. `velnor-gen generate` refuses an older pin when the file has a lane, filtered or not.
 

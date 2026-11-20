@@ -10,7 +10,9 @@ use velnor_rust::{DetectError, MAX_SOURCE_ROOTS, MetadataFileError};
 use velnor_workflows::WorkflowsError;
 
 use crate::helper_gate::{CACHE_DEBUG_HELPER, REQUIRED_CHECK_HELPER, RESTORE_CACHE_HELPER};
-use crate::{COMPATIBLE_HELPER_SERIES, HELPER_MINIMUM, TEST_LANE_JOB_HELPER};
+use crate::{
+    COMPATIBLE_HELPER_SERIES, HELPER_MINIMUM, TEST_LANE_FLAGS_HELPER, TEST_LANE_JOB_HELPER,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GenerateError {
@@ -41,7 +43,7 @@ pub enum GenerateError {
     FamilyTagHelperTooOld(HelperVersion),
     TagPushHelperTooOld(HelperVersion),
     TestLaneHelperTooOld(HelperVersion),
-    TestLaneJobHelperTooOld(HelperVersion),
+    TestLaneKeyHelperTooOld(LaneKey, HelperVersion),
     RestoreCacheHelperTooOld(HelperVersion),
     HelperLockLacksMacos {
         version: HelperVersion,
@@ -53,6 +55,12 @@ pub enum GenerateError {
     Rules(Vec<RuleViolation>),
     DeltaStagingCollision(RepoPath),
     ExcludedLockRun(velnor_rust::ExcludedLockFinding),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LaneKey {
+    Job,
+    Flags,
 }
 
 impl fmt::Display for GenerateError {
@@ -127,7 +135,7 @@ impl fmt::Display for GenerateError {
                 f,
                 "velnor-ci {version} does not know the test_lane key of .velnor/rust-ci.toml; pin velnor-ci 0.1.93 or later with `velnor-gen pin-helper 0.1.93`"
             ),
-            Self::TestLaneJobHelperTooOld(version) => f.write_str(&lane_job_too_old(version)),
+            Self::TestLaneKeyHelperTooOld(key, version) => f.write_str(&lane_key_too_old(*key, version)),
             Self::RestoreCacheHelperTooOld(version) => f.write_str(&restore_cache_too_old(version)),
             Self::HelperLockLacksMacos { version, runner } => write!(
                 f,
@@ -187,10 +195,16 @@ fn required_check_too_old(version: &HelperVersion) -> String {
     )
 }
 
-fn lane_job_too_old(version: &HelperVersion) -> String {
-    let (major, minor, patch) = TEST_LANE_JOB_HELPER;
+fn lane_key_too_old(key: LaneKey, version: &HelperVersion) -> String {
+    let (name, (major, minor, patch)) = match key {
+        LaneKey::Job => ("the job key", TEST_LANE_JOB_HELPER),
+        LaneKey::Flags => (
+            "the all_features or no_default_features keys",
+            TEST_LANE_FLAGS_HELPER,
+        ),
+    };
     format!(
-        "velnor-ci {version} does not know the job key of a [[test_lane]] in .velnor/rust-ci.toml; pin velnor-ci {major}.{minor}.{patch} or later with `velnor-gen pin-helper {major}.{minor}.{patch}`"
+        "velnor-ci {version} does not know {name} of a [[test_lane]] in .velnor/rust-ci.toml; pin velnor-ci {major}.{minor}.{patch} or later with `velnor-gen pin-helper {major}.{minor}.{patch}`"
     )
 }
 
