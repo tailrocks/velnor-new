@@ -20,7 +20,7 @@ fn report_json(version: u64, hits: u64, misses: u64, unconsulted: u64) -> String
 }
 
 fn cargo(repo: &Repo, subcommand: &str, report: &str, stderr: &str) -> ResultTest {
-    cargo_with(repo, subcommand, report, stderr, None, true)
+    cargo_with(repo, subcommand, report, stderr, None, true, false)
 }
 
 fn cargo_with(
@@ -30,6 +30,7 @@ fn cargo_with(
     stderr: &str,
     inherited: Option<&std::path::Path>,
     enabled: bool,
+    inside_session: bool,
 ) -> ResultTest {
     let bin = repo.root().join("fake-bin");
     let cargo = bin.join("cargo");
@@ -46,9 +47,13 @@ fn cargo_with(
         .env(SWITCH, if enabled { "true" } else { "false" })
         .env("FAKE_MBX_REPORT", report)
         .env("FAKE_MBX_STDERR", stderr)
-        .env_remove("MBX_STATS_REPORT");
+        .env_remove("MBX_STATS_REPORT")
+        .env_remove("MBX_SOCKET");
     if let Some(path) = inherited {
         command.env("MBX_STATS_REPORT", path);
+    }
+    if inside_session {
+        command.env("MBX_SOCKET", repo.root().join("cache-agent.sock"));
     }
     let output = command.output()?;
     assert!(output.status.success(), "{output:?}");
@@ -133,6 +138,7 @@ fn a_command_that_runs_tests_gets_no_report_path_and_counts_from_its_summary() -
         line,
         Some(&inherited),
         true,
+        false,
     )?;
     assert!(!inherited.exists());
     let metrics = report(&repo)?;
@@ -204,6 +210,11 @@ fn only_commands_that_run_no_built_code_get_a_report() {
         &["cargo", "--color=never", "build"],
         &["cargo", "-v", "-vv", "-q", "--quiet", "--verbose", "build"],
         &["cargo", "--frozen", "--locked", "--offline", "check"],
+        &["cargo", "-qv", "build"],
+        &["cargo", "-vq", "build"],
+        &["cargo", "-vC", "dir", "build"],
+        &["cargo", "-vCdir", "build"],
+        &["cargo", "-qZ", "unstable-options", "check"],
         &[
             "cargo", "+nightly", "-Z", "x", "-C", "d", "--locked", "clippy",
         ],
@@ -226,6 +237,9 @@ fn only_commands_that_run_no_built_code_get_a_report() {
         &["cargo", "+build", "test"],
         &["cargo", "--unknown", "build"],
         &["cargo", "--manifest-path", "build", "test"],
+        &["cargo", "-vC", "build", "test"],
+        &["cargo", "-qZ", "build", "run"],
+        &["cargo", "-vh", "build"],
         &["cargo", "-C"],
         &["cargo", "--config"],
         &["cargo", "--"],
@@ -322,30 +336,78 @@ fn a_planted_symlink_or_oversized_report_is_unreadable_evidence_not_read() -> Re
     Ok(())
 }
 
+fn plant_session(repo: &Repo, name: &str, json: Option<&str>) -> ResultTest {
+    fs::write(plant(repo, &format!("{name}.expected"))?, b"")?;
+    if let Some(json) = json {
+        fs::write(plant(repo, &format!("{name}.json"))?, json)?;
+    }
+    Ok(())
+}
+
 #[test]
-fn a_directory_with_more_reports_than_any_job_writes_is_not_read_in_full() -> ResultTest {
-    let repo = fixture("mbx-reports-flood")?;
-    for index in 0..600 {
-        fs::write(
-            plant(&repo, &format!("{index:05}.json"))?,
-            report_json(5, 1, 0, 0),
-        )?;
+fn three_hundred_sessions_in_one_job_are_all_read() -> ResultTest {
+    let repo = fixture("mbx-reports-three-hundred")?;
+    for index in 0..300 {
+        plant_session(&repo, &format!("{index:05}"), Some(&report_json(5, 1, 0, 0)))?;
     }
     let metrics = report(&repo)?;
-    assert!(
-        metrics.mbx.sessions.len() < 600,
-        "{}",
-        metrics.mbx.sessions.len()
-    );
-    assert!(metrics.mbx.unparsed >= 1);
-    assert!(
-        metrics
-            .verification_errors
-            .iter()
-            .any(|line| line.contains("more than 512 entries")),
-        "{:?}",
-        metrics.verification_errors
-    );
+    assert_eq!(metrics.mbx.sessions.len(), 300, "{metrics:?}");
+    assert_eq!(metrics.mbx.unparsed, 0);
+    assert!(metrics.verification_errors.is_empty(), "{metrics:?}");
+    Ok(())
+}
+
+#[test]
+fn four_thousand_ninety_six_sessions_are_the_largest_read_in_full() -> ResultTest {
+    let repo = fixture("mbx-reports-cap")?;
+    for index in 0..4096 {
+        plant_session(&repo, &format!("{index:05}"), Some(&report_json(5, 1, 0, 0)))?;
+    }
+    let metrics = report(&repo)?;
+    assert_eq!(metrics.mbx.sessions.len(), 4096);
+    assert_eq!(metrics.mbx.unparsed, 0);
+    assert!(metrics.verification_errors.is_empty(), "{metrics:?}");
+    Ok(())
+}
+
+#[test]
+fn a_job_past_4096_sessions_reports_its_stats_unavailable_without_failing() -> ResultTest {
+    let repo = fixture("mbx-reports-flood")?;
+    for index in 0..4097 {
+        plant_session(&repo, &format!("{index:05}"), Some(&report_json(5, 1, 0, 0)))?;
+    }
+    let metrics = report(&repo)?;
+    assert!(metrics.mbx.sessions.is_empty(), "{}", metrics.mbx.sessions.len());
+    assert_eq!(metrics.mbx.unparsed, 1);
+    assert!(metrics.verification_errors.is_empty(), "{:?}", metrics.verification_errors);
+    assert!(velnor_ci::report::check(std::slice::from_ref(&metrics)).is_ok());
+    Ok(())
+}
+
+#[test]
+fn a_dangling_json_symlink_is_one_unreadable_report_not_also_missing() -> ResultTest {
+    let repo = fixture("mbx-reports-dangling")?;
+    cargo(&repo, "build", &report_json(5, 1, 0, 0), "compiled")?;
+    plant_session(&repo, "5-dangling", None)?;
+    std::os::unix::fs::symlink(repo.root().join("nowhere.json"), plant(&repo, "5-dangling.json")?)?;
+    let metrics = report(&repo)?;
+    assert_eq!(metrics.mbx.sessions, [session(1, 0, 0)], "{metrics:?}");
+    assert_eq!(metrics.mbx.unparsed, 1, "{metrics:?}");
+    let errors = metrics.verification_errors.join("\n");
+    assert!(errors.contains("(1 report(s)); first: 5-dangling.json: not a regular file"), "{errors}");
+    assert!(!errors.contains("missing"), "{errors}");
+    Ok(())
+}
+
+#[test]
+fn a_session_inside_an_enclosing_mbx_session_gets_no_report_path() -> ResultTest {
+    let repo = fixture("mbx-reports-nested")?;
+    cargo_with(&repo, "build", &report_json(5, 1, 0, 0), "compiled", None, true, true)?;
+    assert!(!repo.root().join("velnor-mbx-reports").exists());
+    let metrics = report(&repo)?;
+    assert!(metrics.mbx.sessions.is_empty(), "{metrics:?}");
+    assert_eq!(metrics.mbx.unparsed, 0);
+    assert!(metrics.verification_errors.is_empty(), "{metrics:?}");
     Ok(())
 }
 
@@ -359,6 +421,7 @@ fn with_the_switch_off_an_inherited_report_path_never_reaches_the_child() -> Res
         &report_json(5, 1, 0, 0),
         "compiled",
         Some(&inherited),
+        false,
         false,
     )?;
     assert!(!inherited.exists());
