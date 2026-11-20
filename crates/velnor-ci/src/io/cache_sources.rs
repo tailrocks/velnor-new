@@ -54,7 +54,7 @@ pub(super) fn refusal(root: &Path, manifests: &[PathBuf], api: &str) -> Result<A
                     }
                 }
             }
-            Some(LockAdmission::Refused { .. }) | None => return Ok(refused(&lock)),
+            Some(LockAdmission::Refused) | None => return Ok(refused(&lock)),
         }
         for dir in directory
             .ancestors()
@@ -78,26 +78,26 @@ pub(super) fn refusal(root: &Path, manifests: &[PathBuf], api: &str) -> Result<A
 }
 
 fn probe(api: &str, git: &[GitRepository]) -> Admission {
-    let mut log = String::new();
-    let mut refusal = String::new();
+    let mut log = Vec::new();
+    let mut refusal = Vec::new();
     for repository in git {
         let name = format!("github.com/{}/{}", repository.owner, repository.name);
         match super::public_repo::check(api, repository) {
-            Ok(()) => log.push_str(&format!(
+            Ok(()) => log.push(format!(
                 "git dependency {name} is public (unauthenticated lookup)\n"
             )),
             Err(reason) => {
                 let line = format!(
                     "::notice::base caches are not saved because git dependency {name} is not proven public ({reason})\n"
                 );
-                log.push_str(&line);
-                refusal.push_str(&line);
+                log.push(line.clone());
+                refusal.push(line);
             }
         }
     }
     Admission {
-        refusal: (!refusal.is_empty()).then_some(refusal),
-        log,
+        refusal: (!refusal.is_empty()).then(|| refusal.concat()),
+        log: log.concat(),
     }
 }
 

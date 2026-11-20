@@ -19,13 +19,22 @@ const MERGE_GROUP_HELPER: (u64, u64, u64) = (0, 1, 103);
 /// The first `velnor-ci` that accepts `[public_sources]` and checks a commit-pinned github.com git
 /// dependency against the GitHub API, without a token, before it saves a cache.
 // First released in tools-v0.1.108 (not tagged yet when this gate was written).
-const PUBLIC_SOURCES_HELPER: (u64, u64, u64) = (0, 1, 108);
+pub(crate) const PUBLIC_SOURCES_HELPER: (u64, u64, u64) = (0, 1, 108);
 /// The first `velnor-ci` whose `.velnor/rust-ci.toml` parser accepts the `cache_debug` key.
 // helper-gate: first in rust-ci-v0.1.82 via bfc3528bd7
 pub(crate) const CACHE_DEBUG_HELPER: (u64, u64, u64) = (0, 1, 82);
 /// The first `velnor-ci` that names the `required_check` check when it reads a queued run.
 // helper-gate: first in tools-v0.1.97 via af11477df1
 pub(crate) const REQUIRED_CHECK_HELPER: (u64, u64, u64) = (0, 1, 97);
+
+fn check_public_sources(facts: &RepoFacts, release: &HelperRelease) -> Result<(), GenerateError> {
+    if facts.config.public_sources.is_some() && !release.version().at_least(PUBLIC_SOURCES_HELPER) {
+        return Err(GenerateError::PublicSourcesHelperTooOld(
+            release.version().clone(),
+        ));
+    }
+    Ok(())
+}
 
 pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, GenerateError> {
     let release = facts
@@ -87,11 +96,7 @@ pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, Generate
             release.version().clone(),
         ));
     }
-    if facts.config.public_sources.is_some() && !release.version().at_least(PUBLIC_SOURCES_HELPER) {
-        return Err(GenerateError::PublicSourcesHelperTooOld(
-            release.version().clone(),
-        ));
-    }
+    check_public_sources(facts, release)?;
     if facts.config.push_after_merge_group == PushAfterMergeGroup::SkipWhenQueueRunPassed
         && !release.version().at_least(MERGE_GROUP_HELPER)
     {

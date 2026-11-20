@@ -9,7 +9,7 @@ use velnor_render::RuleViolation;
 use velnor_rust::{DetectError, MAX_SOURCE_ROOTS, MetadataFileError};
 use velnor_workflows::WorkflowsError;
 
-use crate::helper_gate::{CACHE_DEBUG_HELPER, REQUIRED_CHECK_HELPER};
+use crate::helper_gate::{CACHE_DEBUG_HELPER, PUBLIC_SOURCES_HELPER, REQUIRED_CHECK_HELPER};
 use crate::{COMPATIBLE_HELPER_SERIES, HELPER_MINIMUM, TEST_LANE_JOB_HELPER};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -96,7 +96,7 @@ impl fmt::Display for GenerateError {
                 "velnor-ci {version} does not know the hosted key of .velnor/rust-ci.toml, and reads the file at run time; pin velnor-ci 0.1.99 or later with `velnor-gen pin-helper 0.1.99`"
             ),
             Self::InputsLockHelperTooOld(version) => write!(f, "velnor-ci {version} cannot read the manifest column of .velnor/rust-inputs.lock; pin velnor-ci 0.1.101 or later with `velnor-gen pin-helper 0.1.101`, or write the lock under the older pin"),
-            Self::PublicSourcesHelperTooOld(version) => write!(f, "velnor-ci {version} cannot check that a git dependency is public; pin velnor-ci 0.1.108 or later with `velnor-gen pin-helper 0.1.108`, or remove [public_sources]"),
+            Self::PublicSourcesHelperTooOld(version) => f.write_str(&public_sources_too_old(version)),
             Self::PrivateSourcesHelperTooOld(version) => write!(f, "velnor-ci {version} cannot fetch private sources; pin velnor-ci 0.1.88 or later with `velnor-gen pin-helper 0.1.88`"),
             Self::PrCiHelperTooOld(version) => write!(
                 f,
@@ -150,13 +150,7 @@ impl fmt::Display for GenerateError {
             ),
             Self::Metadata(error) => error.fmt(f),
             Self::Workflows(error) => error.fmt(f),
-            Self::Rules(violations) => {
-                f.write_str("the generated workflow breaks the YAML rules:")?;
-                for violation in violations {
-                    write!(f, "\n  {violation}")?;
-                }
-                Ok(())
-            }
+            Self::Rules(violations) => rules_broken(f, violations),
         }
     }
 }
@@ -167,6 +161,14 @@ impl From<DetectError> for GenerateError {
     fn from(error: DetectError) -> Self {
         Self::Detect(error)
     }
+}
+
+fn rules_broken(f: &mut fmt::Formatter<'_>, violations: &[RuleViolation]) -> fmt::Result {
+    f.write_str("the generated workflow breaks the YAML rules:")?;
+    for violation in violations {
+        write!(f, "\n  {violation}")?;
+    }
+    Ok(())
 }
 
 fn incompatible_helper(version: &HelperVersion) -> String {
@@ -187,6 +189,13 @@ fn required_check_too_old(version: &HelperVersion) -> String {
     let (major, minor, patch) = REQUIRED_CHECK_HELPER;
     format!(
         "velnor-ci {version} does not name a required_check other than Required for a merge queue run; pin velnor-ci {major}.{minor}.{patch} or later with `velnor-gen pin-helper {major}.{minor}.{patch}`"
+    )
+}
+
+fn public_sources_too_old(version: &HelperVersion) -> String {
+    let (major, minor, patch) = PUBLIC_SOURCES_HELPER;
+    format!(
+        "velnor-ci {version} cannot check that a git dependency is public; pin velnor-ci {major}.{minor}.{patch} or later with `velnor-gen pin-helper {major}.{minor}.{patch}`, or remove [public_sources]"
     )
 }
 

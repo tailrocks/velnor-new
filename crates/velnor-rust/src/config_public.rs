@@ -32,7 +32,9 @@ fn public_sources(raw: &RawPublicSources) -> Result<PublicSources, Reason> {
         let (owner, name) = entry
             .strip_prefix(GITHUB)
             .and_then(|path| path.split_once('/'))
-            .filter(|(owner, name)| slug(owner) && slug(name) && !name.ends_with(".git"))
+            .filter(|(owner, name)| {
+                slug(owner) && slug(name) && name.strip_suffix(".git").is_none()
+            })
             .ok_or_else(|| invalid(entry))?;
         if git.iter().any(|known| known.matches(owner, name)) {
             return Err(invalid(entry));

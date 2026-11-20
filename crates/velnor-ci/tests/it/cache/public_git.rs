@@ -80,7 +80,7 @@ impl Mock {
 }
 
 fn lock(sources: &[(&str, String)]) -> String {
-    let packages: String = sources
+    let packages: Vec<String> = sources
         .iter()
         .map(|(name, source)| {
             format!(
@@ -88,7 +88,7 @@ fn lock(sources: &[(&str, String)]) -> String {
             )
         })
         .collect();
-    format!("version = 4\n{packages}")
+    format!("version = 4\n{}", packages.concat())
 }
 
 fn git(repository: &str, sha: &str) -> String {
@@ -268,15 +268,12 @@ fn an_unreachable_api_is_not_cacheable() {
     refused(&output, &written);
 }
 
-fn refused_without_a_lookup(source: String) {
+fn refused_without_a_lookup(source: impl Into<String>) {
+    let source = source.into();
     let mock = serve(public("acme/shared-lib"));
     let (output, written) = decide(&[("dep", source.clone())], &mock.url);
     refused(&output, &written);
-    assert!(
-        mock.requests().is_empty(),
-        "{source}: {:?}",
-        mock.requests()
-    );
+    assert_eq!(mock.requests().len(), 0, "{source}: {:?}", mock.requests());
 }
 
 macro_rules! no_lookup {
@@ -304,7 +301,7 @@ no_lookup!(
 );
 no_lookup!(
     a_source_without_a_commit_is_refused_without_a_lookup,
-    "git+https://github.com/acme/shared-lib?branch=main".to_owned()
+    "git+https://github.com/acme/shared-lib?branch=main"
 );
 no_lookup!(
     ssh_is_refused_without_a_lookup,
@@ -336,7 +333,7 @@ no_lookup!(
 );
 no_lookup!(
     a_private_registry_is_refused_without_a_lookup,
-    "registry+https://private.example/index".to_owned()
+    "registry+https://private.example/index"
 );
 
 #[test]
@@ -351,5 +348,5 @@ fn a_public_git_dependency_does_not_admit_a_private_source_beside_it() {
     ];
     let (output, written) = decide(&sources, &mock.url);
     refused(&output, &written);
-    assert!(mock.requests().is_empty());
+    assert_eq!(mock.requests().len(), 0);
 }

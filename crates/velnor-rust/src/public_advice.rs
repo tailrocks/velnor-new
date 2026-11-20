@@ -7,7 +7,6 @@ use crate::private_lock::locked_packages;
 use crate::private_sources::declared_public;
 use crate::public_git::pinned_github;
 
-/// Notes about commit-pinned github.com git dependencies and `[public_sources]`.
 pub(crate) fn notes(view: &RepoView, config: &RustCiConfig, roots: &[RustRoot]) -> Vec<String> {
     let declared = declared_public(config);
     let packages = locked_packages(view, roots);

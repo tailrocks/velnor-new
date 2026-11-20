@@ -15,10 +15,6 @@ struct Lookup {
     full_name: String,
 }
 
-/// Asks the GitHub REST API, with no credentials, whether `repository` is public.
-///
-/// Every failure is an answer of "not proven public": a missing repository, a private one, a
-/// redirect, a rate limit, a timeout and an unreadable reply.
 pub(super) fn check(api: &str, repository: &GitRepository) -> Result<(), String> {
     let agent: ureq::Agent = ureq::Agent::config_builder()
         .timeout_global(Some(TIMEOUT))

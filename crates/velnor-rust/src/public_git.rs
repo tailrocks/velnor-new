@@ -13,7 +13,6 @@ const PUBLIC_REGISTRIES: [&str; 2] = [
 const GITHUB_PREFIX: &str = "git+https://github.com/";
 const COMMIT_LENGTH: usize = 40;
 
-/// A locked git source that a lock entry pins to one full commit on github.com over https.
 pub(crate) struct PinnedGithub<'a> {
     pub(crate) owner: &'a str,
     pub(crate) name: &'a str,
@@ -42,26 +41,17 @@ pub(crate) fn slug(text: &str) -> bool {
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
 }
 
-/// What a `Cargo.lock` allows before any network check.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LockAdmission {
-    /// Every source is crates.io or a path: nothing more to prove.
     Public,
-    /// Some source is not a public one, or the lock has a patch.
-    Refused { source: String },
-    /// Only crates.io, paths and commit-pinned github.com sources: cacheable once each
-    /// repository answers a token-free public lookup.
+    Refused,
     ProbeGithub(Vec<GitRepository>),
 }
 
-/// # Errors
-/// Returns an error when the lock cannot be read as a Cargo lock.
 pub fn lock_admission(text: &str) -> Result<LockAdmission, LockError> {
     let lock = CargoLock::parse(text)?;
     if lock.patch.is_some() {
-        return Ok(LockAdmission::Refused {
-            source: "[patch]".to_owned(),
-        });
+        return Ok(LockAdmission::Refused);
     }
     let mut repositories: Vec<GitRepository> = Vec::new();
     for package in &lock.packages {
@@ -72,9 +62,7 @@ pub fn lock_admission(text: &str) -> Result<LockAdmission, LockError> {
             continue;
         }
         let Some(git) = pinned_github(source) else {
-            return Ok(LockAdmission::Refused {
-                source: format!("{} from {source}", package.name),
-            });
+            return Ok(LockAdmission::Refused);
         };
         if !repositories
             .iter()
