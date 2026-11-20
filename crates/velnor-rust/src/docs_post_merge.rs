@@ -24,15 +24,24 @@ pub(crate) fn apply(facts: &RepoFacts, jobs: &mut [Job]) {
             .steps
             .iter()
             .any(|step| runs_after_merge(facts, &step.kind));
+        let pre_merge_build = job
+            .steps
+            .iter()
+            .any(|step| !runs_after_merge(facts, &step.kind) && compiles(&step.kind));
+        let defer_inputs = after_merge && !pre_merge_build;
         for step in &mut job.steps {
             if runs_after_merge(facts, &step.kind) {
                 step.when = When::NotCancelledPostMerge;
                 step.skip_after_merge_group = None;
-            } else if after_merge && step.kind.feeds_build() {
+            } else if defer_inputs && step.kind.feeds_build() {
                 step.when = When::NotCancelledPostMerge;
             }
         }
     }
+}
+
+fn compiles(kind: &StepKind) -> bool {
+    matches!(kind, StepKind::Cargo(command) if command.builds())
 }
 
 #[must_use]

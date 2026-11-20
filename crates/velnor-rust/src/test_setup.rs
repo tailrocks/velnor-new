@@ -32,12 +32,19 @@ pub(crate) fn before_builds(facts: &RepoFacts, root: &RustRoot, mut steps: Vec<S
     };
     let gate = shared_gate(steps.iter().filter(|step| owned(step)));
     let (when, pr) = (steps[first].when, steps[first].pr);
-    let setup: Vec<Step> = setups
-        .map(|setup| Step {
-            gate: gate.clone(),
-            ..setup_step(setup, when, pr)
-        })
-        .collect();
+    let mut setup: Vec<Step> = Vec::new();
+    for candidate in setups.map(|setup| Step {
+        gate: gate.clone(),
+        ..setup_step(setup, when, pr)
+    }) {
+        match steps.iter().position(|step| same_setup(step, &candidate)) {
+            Some(index) => {
+                let merged = shared_gate([&steps[index], &candidate].into_iter());
+                steps[index].gate = merged;
+            }
+            None => setup.push(candidate),
+        }
+    }
     let mut at = first;
     while at > 0
         && matches!(
@@ -52,6 +59,12 @@ pub(crate) fn before_builds(facts: &RepoFacts, root: &RustRoot, mut steps: Vec<S
     }
     steps.splice(at..at, setup);
     steps
+}
+
+fn same_setup(step: &Step, candidate: &Step) -> bool {
+    matches!(step.kind, StepKind::TestSetup { .. })
+        && step.kind == candidate.kind
+        && step.directory == candidate.directory
 }
 
 fn compiled_dirs(facts: &RepoFacts, root: &RustRoot) -> Vec<Option<RepoPath>> {

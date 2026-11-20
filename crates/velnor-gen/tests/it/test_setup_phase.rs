@@ -348,3 +348,40 @@ fn a_build_phase_setup_of_a_path_dependency_runs_before_the_root_that_compiles_i
     assert!(checked > 0, "no job compiles app");
     Ok(())
 }
+
+#[test]
+fn a_build_phase_setup_of_a_grouped_dependency_runs_once_per_job() -> TestResult {
+    const GROUP: &str =
+        "[[workspace_groups]]\nname = \"tools\"\nroots = [\"tools/a\", \"tools/b\"]\n";
+    const ROOTS: [&str; 3] = ["Cargo.toml", "tools/a/Cargo.toml", "tools/b/Cargo.toml"];
+    for shape in ["one-job", "lint-test"] {
+        let config = format!(
+            "shape = '{shape}'\n{GROUP}[[test_setup]]\nroot = 'tools/b'\nname = '{NAME}'\nrun = 'bash scripts/prepare-fixture.sh'\nphase = 'build'\n"
+        );
+        let mut repo = view(&ROOTS, Some(config.as_bytes()))?;
+        pin_helper(&mut repo, "0.1.109")?;
+        let dependent = RepoPath::new("tools/a/Cargo.toml")?;
+        repo.rust_metadata
+            .get_mut(&dependent)
+            .ok_or("no a metadata")?
+            .members[0]
+            .dependencies
+            .push(PackageDependency {
+                name: PackageName::new("b")?,
+                kind: DependencyKind::Normal,
+                platform: None,
+                optional: false,
+                manifest: Some(RepoPath::new("tools/b/Cargo.toml")?),
+                features: Vec::new(),
+                rename: None,
+            });
+        let parsed = document(&workflow(&repo)?)?;
+        let mut rendered = 0;
+        for (id, job) in jobs(&parsed) {
+            assert!(setups(job).len() <= 1, "{shape} {id}: {:?}", setups(job));
+            rendered += setups(job).len();
+        }
+        assert_ne!(rendered, 0, "{shape}: no setup was rendered");
+    }
+    Ok(())
+}

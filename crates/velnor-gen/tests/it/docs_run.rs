@@ -7,8 +7,8 @@ use crate::pipeline::{pin_helper, view, workflow};
 use crate::select::facts;
 use velnor_gen::expected_with_notes;
 use velnor_model::{
-    CargoCommand, DocsRun, EventKind, OptionalSteps, PushAfterMergeGroup, RustCiConfig, SetupPhase,
-    SkipReason, StepKind, StepNeed, TargetKind, TestSetup, When,
+    CargoCommand, DocsRun, EventKind, OptionalSteps, PushAfterMergeGroup, RustCiConfig, SkipReason,
+    StepKind, StepNeed, TargetKind, When,
 };
 use velnor_rust::{defer_post_merge_docs, plan};
 
@@ -220,35 +220,33 @@ fn documentation_the_post_merge_mode_defers_is_reported_as_left_out_before_the_m
 }
 
 #[test]
-fn a_build_phase_setup_of_a_post_merge_docs_step_runs_when_that_step_runs() {
-    let members = vec![with_targets("lib", &[TargetKind::Lib])];
-    let mut facts = facts(vec![("Cargo.toml", members)]);
-    facts.config.docs_run = DocsRun::PostMerge;
-    facts.config.push_after_merge_group = PushAfterMergeGroup::SkipWhenQueueRunPassed;
-    facts.config.test_setup = vec![TestSetup {
-        root: facts.rust_roots[0].manifest.parent(),
-        name: String::from("Prepare the fixture"),
-        run: String::from("true"),
-        phase: Some(SetupPhase::Build),
-    }];
-    let plan = plan(&facts);
+fn a_build_phase_setup_still_runs_before_a_pre_merge_check_that_shares_its_job_with_post_merge_docs()
+-> TestResult {
+    let mut repo = view(&["Cargo.toml", "tools/Cargo.toml"], None)?;
+    pin_helper(&mut repo, "0.1.109")?;
+    let config = "docs = \"post_merge\"\nshape = \"lint-test\"\n[[test_setup]]\nroot = '.'\nname = 'Prepare the fixture'\nrun = 'true'\nphase = 'build'\n";
+    repo.files
+        .insert(path(".velnor/rust-ci.toml")?, config.as_bytes().to_vec());
+    let yaml: serde_json::Value = crate::yaml_tree::document(&workflow(&repo)?)?;
     let mut checked = 0;
-    for job in &plan.jobs {
-        if !job.steps.iter().any(|step| is_doc(&step.kind)) {
+    for job in yaml["jobs"].as_object().ok_or("jobs missing")?.values() {
+        let steps = job["steps"].as_array().map_or(&[][..], Vec::as_slice);
+        let named = |name: &str| steps.iter().any(|step| step["name"] == name);
+        if !named("Lint") || !named("Documentation") {
             continue;
         }
-        for setup in job.steps.iter().filter(|step| {
-            matches!(
-                step.kind,
-                StepKind::TestSetup {
-                    before_build: true,
-                    ..
-                }
-            )
-        }) {
+        for setup in steps
+            .iter()
+            .filter(|step| step["name"] == "Prepare the fixture")
+        {
             checked += 1;
-            assert_eq!(setup.when, When::NotCancelledPostMerge, "{:?}", job.id);
+            let condition = setup["if"].as_str().unwrap_or_default();
+            assert!(
+                !condition.contains("github.event_name == 'push'"),
+                "{condition}"
+            );
         }
     }
     assert_ne!(checked, 0);
+    Ok(())
 }
