@@ -14,7 +14,13 @@ const PUBLIC_SOURCES: [&str; 2] = [
     "sparse+https://index.crates.io/",
 ];
 
-pub(crate) fn private_sources(view: &RepoView, roots: &[RustRoot]) -> Option<String> {
+/// The note that explains why the base caches are not saved.
+pub(crate) fn note(cause: &str) -> String {
+    format!("base caches are not saved because this repository has private dependencies ({cause})")
+}
+
+/// The first reason the repository's dependencies are not proven public.
+pub(crate) fn private_cause(view: &RepoView, roots: &[RustRoot]) -> Option<String> {
     let locks = roots
         .iter()
         .map(|root| root.manifest.sibling(&CARGO_LOCK))
@@ -29,11 +35,7 @@ pub(crate) fn private_sources(view: &RepoView, roots: &[RustRoot]) -> Option<Str
         .iter()
         .filter(|(path, _)| is_cargo_config(path) && reaches_a_check(path, roots))
         .filter_map(|(path, bytes)| configured_source(path, bytes));
-    locks.chain(configs).next().map(|cause| {
-        format!(
-            "base caches are not saved because this repository has private dependencies ({cause})"
-        )
-    })
+    locks.chain(configs).next()
 }
 
 pub(crate) fn refuse_locked_credentials(
