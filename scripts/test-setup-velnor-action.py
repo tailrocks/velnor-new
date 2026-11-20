@@ -19,7 +19,7 @@ RELEASE_URL = f"{RELEASES}/tools-v0.1.79/velnor-ci-x86_64-unknown-linux-musl.tar
 LEGACY_RELEASE_URL = f"{RELEASES}/rust-ci-v0.1.79/velnor-ci-x86_64-unknown-linux-musl.tar.gz"
 PAYLOAD = b"the released velnor-ci binary\n"
 DIGEST_TOOLS = ("sha256sum", "shasum")
-SCRIPT_TOOLS = ("bash", "cut", "tr", "mktemp", "rm", "cp", "mkdir", "chmod", "mv", "wc", "gzip", "head", "sleep", "seq", "env", "sync", "find")
+SCRIPT_TOOLS = ("bash", "cut", "tr", "mktemp", "rm", "cp", "mkdir", "chmod", "mv", "wc", "gzip", "head", "sleep", "seq", "env", "sync", "find", "uname")
 ARCHIVE = "velnor-ci-x86_64-unknown-linux-musl.tar.gz"
 PLATFORMS = (
     ("Linux", "X64", "x86_64-unknown-linux-musl", "SHA256_LINUX_X64"),
@@ -72,6 +72,22 @@ if [ ! -e "$STUB_RACE_MARK" ]; then
         : > "$STUB_RACE_MARK"; cp "$STUB_RACE" "$arg"; break ;;
     esac
   done
+fi
+exec "$REAL_MV" "$@"
+"""
+
+STUB_PLANTING_MV = """#!/bin/sh
+if [ ! -e "$STUB_RACE_MARK" ]; then
+  for arg; do
+    case "$arg" in
+      */velnor-ci-x86_64-unknown-linux-musl.tar.gz)
+        : > "$STUB_RACE_MARK"; mkdir -p "$STUB_TARGET"; ln -s "$STUB_TARGET" "$arg"; break ;;
+    esac
+  done
+  if [ -n "$STUB_FOLLOW" ]; then
+    for arg; do src="$dst"; dst="$arg"; done
+    exec "$REAL_MV" -f "$src" "$dst"
+  fi
 fi
 exec "$REAL_MV" "$@"
 """
@@ -720,6 +736,39 @@ class SetupVelnorInstallTests(unittest.TestCase):
         self.assertTrue(synced.exists(), "the temp file was never flushed")
         self.assertEqual(synced.read_bytes(), self.archive, "the flushed bytes are not the complete archive")
         self.assertEqual(self.cached_archive().read_bytes(), self.archive)
+
+    def plant_symlink_before_publish(self, follow):
+        target = self.root / "attacker-target"
+        stub = self.stub_bin / "mv"
+        stub.write_text(STUB_PLANTING_MV)
+        stub.chmod(0o755)
+        result = self.install(
+            sha256(self.archive),
+            extra_env={
+                "STUB_TARGET": str(target),
+                "STUB_RACE_MARK": str(self.root / "race-mark"),
+                "STUB_FOLLOW": "1" if follow else "",
+                "REAL_MV": shutil.which("mv"),
+            },
+        )
+        return result, target
+
+    def test_a_symlink_planted_at_the_store_entry_path_before_the_rename_is_replaced_not_followed(self):
+        result, target = self.plant_symlink_before_publish(follow=False)
+        self.assertEqual(result.returncode, 0, result.output)
+        self.assertEqual(installed_files(target), [], "the verified copy was published into the symlink target")
+        cached = self.cached_archive()
+        self.assertTrue(cached.is_file() and not cached.is_symlink(), "the store entry is not a regular file")
+        self.assertEqual(cached.read_bytes(), self.archive)
+        self.assertEqual(self.installed_binary().read_bytes(), PAYLOAD)
+
+    def test_a_rename_that_follows_a_planted_symlink_is_not_reported_as_installed_in_the_store(self):
+        result, target = self.plant_symlink_before_publish(follow=True)
+        self.assertEqual(result.returncode, 0, result.output)
+        self.assertIn("could not publish velnor-ci 0.1.79 to the tool cache", result.output)
+        self.assertNotIn(f"installed velnor-ci 0.1.79 in {self.cached_archive().parent}", result.output)
+        self.assertIn(f"installed velnor-ci 0.1.79 in {self.runner_temp}/velnor-ci-bin", result.output)
+        self.assertEqual(self.installed_binary().read_bytes(), PAYLOAD)
 
 
 if __name__ == "__main__":

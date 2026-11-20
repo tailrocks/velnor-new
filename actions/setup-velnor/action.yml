@@ -67,6 +67,13 @@ runs:
           head -c "$((MAX_BYTES + 1))" "$1" > "$2" 2> /dev/null || return 1
           [ "$(wc -c < "$2")" -le "$MAX_BYTES" ]
         }
+        case "$(uname -s)" in
+          Darwin | *BSD) no_follow=-h ;;
+          *) no_follow=-T ;;
+        esac
+        publish_entry() {
+          mv -f "$no_follow" "$1" "$2" 2> /dev/null && [ -f "$2" ] && [ ! -L "$2" ] && [ "$(digest "$2")" = "$expected" ]
+        }
         evict_store_entry() {
           quarantine=
           if quarantine="$(mktemp "$dir/.velnor-ci.evict.XXXXXX" 2> /dev/null)" && mv -f "$dir/$archive" "$quarantine" 2> /dev/null; then
@@ -173,7 +180,7 @@ runs:
           echo "$archive for velnor-ci $VERSION is in the tool cache at $dir, so the download is skipped"
         else
           entry=
-          if [ -n "$dir" ] && entry="$(mktemp "$dir/.velnor-ci.XXXXXX" 2> /dev/null)" && cp "$archive_file" "$entry" 2> /dev/null && flush "$entry" && clear_entry "$dir/$archive" 2> /dev/null && mv -f "$entry" "$dir/$archive" 2> /dev/null; then
+          if [ -n "$dir" ] && entry="$(mktemp "$dir/.velnor-ci.XXXXXX" 2> /dev/null)" && cp "$archive_file" "$entry" 2> /dev/null && flush "$entry" && clear_entry "$dir/$archive" 2> /dev/null && publish_entry "$entry" "$dir/$archive"; then
             echo "Verified SHA-256 $expected and installed velnor-ci $VERSION in $dir"
           else
             [ -z "$entry" ] || rm -f "$entry"
