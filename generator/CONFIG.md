@@ -59,7 +59,7 @@ Generation fails, and names what is missing with this snippet, when the pin of `
 
 Each job with a building Cargo step gets the step `Private mbx store` (`echo "MBX_CACHE_DIR=$RUNNER_TEMP/mbx" >> "$GITHUB_ENV"`) before the tools restore, so mbx keeps its results in an empty per-job directory and never reads a store another job or event wrote. A job that builds nothing (fmt, cargo-deny, cargo-machete, a run of a prebuilt test archive) gets none. No store is set when `mbx_shared_store = true` or `[cache] mbx_remote` is configured: their wiring below is unchanged.
 
-`[cache] mbx = false` turns all of this off. It needs no layout, sets no store and is listed among the settings that make a check do less. It is refused with `mbx_shared_store = true` or `[cache] mbx_remote`. `mbx = true` is the default written down. Either value needs `velnor-ci` 0.1.109 or later in the lock, because an older helper rejects the key; `velnor-gen pin-helper 0.1.109` fixes an older pin. Without the key, the output needs no new helper. Release and declared workflows are not covered.
+`[cache] mbx = false` turns all of this off. It needs no layout, sets no store and is listed among the settings that make a check do less. It is refused with `mbx_shared_store = true` or `[cache] mbx_remote`. `mbx = true` is the default written down. Either value needs `velnor-ci` 0.1.109 or later in the lock, because an older helper rejects the key; `velnor-gen pin-helper 0.1.109` fixes an older pin. Without the key, the output needs no new helper. A release build uses mbx only for the exact layout and never with `mbx = false`. A tool whose key ends in `mr-boxington` next to the `mr-boxington` pin is refused. Declared workflows are not covered.
 
 ## Optional mbx remote cache
 
