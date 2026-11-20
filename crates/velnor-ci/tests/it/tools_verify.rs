@@ -287,6 +287,7 @@ pub(crate) fn context(job: &Job, anchor_restored: bool, event: &str) -> Context 
         git_ref: "refs/heads/main".to_owned(),
         default_branch: Some("main".to_owned()),
         cache_key: String::new(),
+        anchor_key: String::new(),
         repository: "tailrocks/velnor-new".to_owned(),
     }
 }

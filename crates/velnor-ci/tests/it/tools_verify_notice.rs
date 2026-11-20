@@ -5,7 +5,7 @@ use std::fs;
 
 use crate::tools_verify::{Job, discarded, job, recorded, rustc};
 
-fn check_stdout(job: &Job, key: Option<&str>) -> String {
+fn check_stdout(job: &Job, env: &[(&str, &str)]) -> String {
     let event = job.root.join("event.json");
     fs::write(&event, r#"{"repository":{"default_branch":"main"}}"#).unwrap_or_default();
     let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
@@ -20,8 +20,8 @@ fn check_stdout(job: &Job, key: Option<&str>) -> String {
         .env("GITHUB_REF", "refs/heads/main")
         .env("GITHUB_REPOSITORY", "tailrocks/velnor-new")
         .env("VELNOR_ANCHOR_HIT", "true");
-    if let Some(key) = key {
-        command.env("VELNOR_TOOLS_CACHE_KEY", key);
+    for (name, value) in env {
+        command.env(name, value);
     }
     let run = command.output().unwrap_or_else(|e| unreachable!("{e}"));
     assert!(run.status.success(), "{run:?}");
@@ -33,7 +33,7 @@ fn a_poisoned_restore_names_its_cache_entry_and_the_command_that_deletes_it() {
     let job = job("tools-verify-named-key");
     recorded(&job);
     fs::write(rustc(&job), "evil binary!").unwrap_or_else(|e| unreachable!("{e}"));
-    let stdout = check_stdout(&job, Some("velnor-tools-abc123"));
+    let stdout = check_stdout(&job, &[("VELNOR_TOOLS_CACHE_KEY", "velnor-tools-abc123")]);
     assert!(stdout.contains("::notice::"), "{stdout}");
     assert!(stdout.contains("velnor-tools-abc123"), "{stdout}");
     assert!(
@@ -44,11 +44,61 @@ fn a_poisoned_restore_names_its_cache_entry_and_the_command_that_deletes_it() {
 }
 
 #[test]
+fn a_poisoned_restore_names_the_anchor_entry_that_feeds_the_check() {
+    let job = job("tools-verify-named-anchor");
+    recorded(&job);
+    fs::write(rustc(&job), "evil binary!").unwrap_or_else(|e| unreachable!("{e}"));
+    let stdout = check_stdout(
+        &job,
+        &[
+            ("VELNOR_TOOLS_CACHE_KEY", "velnor-tools-abc123"),
+            ("VELNOR_ANCHOR_CACHE_KEY", "velnor-tools-anchor-abc123"),
+        ],
+    );
+    assert!(
+        stdout.contains("gh cache delete 'velnor-tools-anchor-abc123' -R tailrocks/velnor-new"),
+        "{stdout}"
+    );
+}
+
+#[test]
+fn the_delete_command_states_that_it_removes_every_entry_with_the_key() {
+    let job = job("tools-verify-named-scope");
+    recorded(&job);
+    fs::write(rustc(&job), "evil binary!").unwrap_or_else(|e| unreachable!("{e}"));
+    let stdout = check_stdout(&job, &[("VELNOR_TOOLS_CACHE_KEY", "velnor-tools-abc123")]);
+    assert!(
+        stdout.contains("removes every entry with that key in the repository, on any ref"),
+        "{stdout}"
+    );
+}
+
+#[test]
+fn a_restore_on_github_enterprise_names_the_host_in_the_delete_command() {
+    let job = job("tools-verify-named-host");
+    recorded(&job);
+    fs::write(rustc(&job), "evil binary!").unwrap_or_else(|e| unreachable!("{e}"));
+    let stdout = check_stdout(
+        &job,
+        &[
+            ("VELNOR_TOOLS_CACHE_KEY", "velnor-tools-abc123"),
+            ("GITHUB_SERVER_URL", "https://ghe.example.com/"),
+        ],
+    );
+    assert!(
+        stdout.contains(
+            "gh cache delete 'velnor-tools-abc123' -R ghe.example.com/tailrocks/velnor-new"
+        ),
+        "{stdout}"
+    );
+}
+
+#[test]
 fn a_restore_from_the_node_store_names_no_cache_entry() {
     let job = job("tools-verify-named-none");
     recorded(&job);
     fs::write(rustc(&job), "evil binary!").unwrap_or_else(|e| unreachable!("{e}"));
-    let stdout = check_stdout(&job, Some(""));
+    let stdout = check_stdout(&job, &[("VELNOR_TOOLS_CACHE_KEY", "")]);
     assert!(stdout.contains("discarded"), "{stdout}");
     assert!(!stdout.contains("gh cache delete"), "{stdout}");
 }
@@ -58,7 +108,13 @@ fn a_hostile_cache_key_cannot_forge_a_second_workflow_command() {
     let job = job("tools-verify-hostile-key");
     recorded(&job);
     fs::write(rustc(&job), "evil binary!").unwrap_or_else(|e| unreachable!("{e}"));
-    let stdout = check_stdout(&job, Some("velnor-tools-50%\r\n::error::forged"));
+    let stdout = check_stdout(
+        &job,
+        &[(
+            "VELNOR_TOOLS_CACHE_KEY",
+            "velnor-tools-50%\r\n::error::forged",
+        )],
+    );
     assert_eq!(stdout.lines().count(), 1, "{stdout:?}");
     assert!(
         stdout.contains("gh cache delete 'velnor-tools-50%25%0D%0A::error::forged' -R"),
