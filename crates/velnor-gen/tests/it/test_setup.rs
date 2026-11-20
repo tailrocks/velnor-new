@@ -170,14 +170,19 @@ fn a_failed_build_phase_setup_stops_every_cargo_step_after_it() -> TestResult {
     Ok(())
 }
 
-const LINT_LANE: &str = "[[test_lane]]\nroot = '.'\nfeatures = ['local-mode']\nlint = true\ndoc = true\n";
+const LINT_LANE: &str =
+    "[[test_lane]]\nroot = '.'\nfeatures = ['local-mode']\nlint = true\ndoc = true\n";
 
 #[test]
 fn a_clippy_or_doc_step_after_the_tests_does_not_wait_for_the_test_setup() -> TestResult {
     let jobs = crate::feature_lanes::jobs_of(&format!("{FIXTURE}{LINT_LANE}"))?;
     let mut checked = 0;
     for (id, job) in jobs.as_object().into_iter().flatten() {
-        for step in job["steps"].as_array().map(Vec::as_slice).unwrap_or_default() {
+        for step in job["steps"]
+            .as_array()
+            .map(Vec::as_slice)
+            .unwrap_or_default()
+        {
             let run = step["run"].as_str().unwrap_or_default();
             if !(run.contains("cargo clippy") || run.contains("cargo doc")) {
                 continue;

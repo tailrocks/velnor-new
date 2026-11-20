@@ -34,7 +34,9 @@ pub(crate) fn inserted(
     {
         let gate = shared_gate(steps.iter().filter(|step| builds_or_tests(step)));
         let (when, pr) = (steps[first].when, steps[first].pr);
-        gate_cargo_from(&mut steps, first, |step| matches!(step.kind, StepKind::Cargo(_)));
+        gate_cargo_from(&mut steps, first, |step| {
+            matches!(step.kind, StepKind::Cargo(_))
+        });
         let setup: Vec<Step> = setups(true)
             .map(|setup| Step {
                 gate: gate.clone(),
