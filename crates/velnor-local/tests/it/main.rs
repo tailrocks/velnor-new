@@ -31,6 +31,7 @@ mod pairs_host;
 mod pairs_local_ci;
 mod plain_image;
 mod policy;
+mod postmerge_review;
 mod removal_audit;
 mod report;
 mod reset;

@@ -326,7 +326,7 @@ fn unknown_owner<'p>(
         })
 }
 
-fn config(view: &RepoView) -> Result<RustCiConfig, DetectError> {
+pub(crate) fn config(view: &RepoView) -> Result<RustCiConfig, DetectError> {
     let config = view
         .files
         .get(&CONFIG_PATH)

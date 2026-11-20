@@ -289,6 +289,9 @@ fn collect(
         console = console.or(captured.console);
         invocation.artifacts.extend(captured.observations.artifacts);
         invocation
+            .build_scripts
+            .extend(captured.observations.build_scripts);
+        invocation
             .progress
             .get_or_insert_with(Vec::new)
             .extend(captured.observations.progress);

@@ -273,7 +273,7 @@ pub(crate) fn node_step(kind: &velnor_model::StepKind) -> RenderedStep {
     }
 }
 
-const MBX_ACTION_SHA: &str = "88acf2bb50552c7c508cbac13e5f8c576b95b1de";
+pub(crate) const MBX_ACTION_SHA: &str = "88acf2bb50552c7c508cbac13e5f8c576b95b1de";
 /// The mbx release the action installs. Keep it equal to the `mr-boxington`
 /// pin in the repository's `mise.toml`, so every job runs the same compiler cache.
 const MBX_VERSION: &str = "1.30.0";
