@@ -28,32 +28,31 @@ pub(super) fn setup(args: &CratesMirrorArgs) -> Result<String, CiError> {
         }
         Ok(_) | Err(std::env::VarError::NotPresent) => false,
     };
-    // MBX is never skipped: a declaring repository routes every cargo through the forwarding
-    // wrapper even when the mirror is off, and the wrapper refuses any other cargo at use time.
-    // Setup runs before the tools install, so mise's wrapper may not exist yet here.
     let mbx = super::crates_mirror_mbx::declared_here()?;
     if disabled {
-        let mut text = format!("crates mirror disabled by {DISABLE_ENV}=off\n");
-        if mbx {
-            let directory = runner_directory()?;
-            let wrapper = directory.join("cargo");
-            install_wrapper(&directory, &wrapper)?;
-            super::append_to("GITHUB_PATH", &format!("{}\n", directory.display()))?;
-            super::append_to(
-                "GITHUB_ENV",
-                &format!(
-                    "{}={}\n{DISABLE_ENV}=off\n{WRAPPER_ENV}={}\nCARGO={}\n",
-                    super::crates_mirror_mbx::ENV,
-                    super::crates_mirror_mbx::VALUE,
-                    wrapper.display(),
-                    wrapper.display()
-                ),
-            )?;
-            text.push_str(
-                "MBX is declared: cargo is checked at use time, no mirror config written\n",
-            );
+        let clear = format!(
+            "{CONFIG_ENV}=\n{}",
+            super::crates_mirror_mbx::export_line(mbx)
+        );
+        if !mbx {
+            super::append_to("GITHUB_ENV", &clear)?;
+            return Ok(format!("crates mirror disabled by {DISABLE_ENV}=off\n"));
         }
-        return Ok(text);
+        let directory = runner_directory()?;
+        let wrapper = directory.join("cargo");
+        install_wrapper(&directory, &wrapper)?;
+        super::append_to("GITHUB_PATH", &format!("{}\n", directory.display()))?;
+        super::append_to(
+            "GITHUB_ENV",
+            &format!(
+                "{clear}{DISABLE_ENV}=off\n{WRAPPER_ENV}={}\nCARGO={}\n",
+                wrapper.display(),
+                wrapper.display()
+            ),
+        )?;
+        return Ok(format!(
+            "crates mirror disabled by {DISABLE_ENV}=off\nMBX is declared: cargo is checked at use time, no mirror config written\n"
+        ));
     }
     std::fs::File::open(&args.cainfo).map_err(|e| {
         CiError::new(format!(
@@ -87,22 +86,14 @@ pub(super) fn setup(args: &CratesMirrorArgs) -> Result<String, CiError> {
         .map_err(|e| failed(&e))?;
     install_wrapper(&directory, &wrapper)?;
     super::append_to("GITHUB_PATH", &format!("{}\n", directory.display()))?;
-    let mbx_line = if mbx {
-        format!(
-            "{}={}\n",
-            super::crates_mirror_mbx::ENV,
-            super::crates_mirror_mbx::VALUE
-        )
-    } else {
-        String::new()
-    };
     super::append_to(
         "GITHUB_ENV",
         &format!(
-            "{CONFIG_ENV}={}\n{WRAPPER_ENV}={}\nCARGO={}\n{mbx_line}",
+            "{CONFIG_ENV}={}\n{WRAPPER_ENV}={}\nCARGO={}\n{}",
             config.display(),
             wrapper.display(),
-            wrapper.display()
+            wrapper.display(),
+            super::crates_mirror_mbx::export_line(mbx)
         ),
     )?;
     Ok(format!(
@@ -121,7 +112,6 @@ fn runner_directory() -> Result<PathBuf, CiError> {
     std::fs::canonicalize(directory).map_err(|e| failed(&e))
 }
 
-/// Copies velnor-ci in as the `cargo` the job reaches first; it forwards to the real cargo.
 fn install_wrapper(directory: &Path, wrapper: &Path) -> Result<(), CiError> {
     let executable = std::env::current_exe().map_err(|e| failed(&e))?;
     let staged_wrapper = directory.join("cargo.velnor-crates-mirror");
