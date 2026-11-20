@@ -17,7 +17,7 @@
 
 ### Timeout tiers
 
-Timeouts are set in `.config/nextest.toml` (at the repository root), not in this file. A test is killed after `period` times `terminate-after`. The table lists each override group once, in file order. For each profile, the first row that matches a test sets its limit, so a row whose limit is already set by an earlier row adds only its other settings.
+Timeouts are set in `.config/nextest.toml` (at the repository root), not in this file. A test is killed after `period` times `terminate-after`. The table lists each override group once, in file order.
 
 | # | Tests | Period | Terminate after | `profile.default` | `profile.ci` |
 |---|---|---|---|---|---|
@@ -25,8 +25,8 @@ Timeouts are set in `.config/nextest.toml` (at the repository root), not in this
 | 2 | velnor-gen: `helper_tool_paths::setup_records_non_default_tools_and_rendered_calls_use_them` | 10 s | 1 | yes | yes |
 | 3 | velnor-gen, `binary(=it)`: `golden::every_sample_repository_renders_exactly_its_expected_files`, `fork_fence_invariant::every_job_of_every_sample_that_a_pull_request_reaches_is_fenced`, `trim_job::no_job_of_any_sample_that_can_run_on_a_pull_request_or_merge_group_holds_actions_write`, `unused_anchors::no_rendered_sample_workflow_has_an_anchor_nobody_aliases` | 10 s | 1 | yes | yes |
 | 4 | velnor-ci: the `io_*` test modules `io_restore_cargo::`, `io_restore_cold_cargo::`, `io_raw_paths::`, `io_cold_targets::`, `io_shared_targets::`, `io_foreign_targets::`, `io_restored_targets::`, `io_snapshot_storage::`, `io_inputs_scope::`, `io_inputs_batch::`, `io_scope_cache::`, `io_scope_cache_races::`, `io_scope_cache_paths::` | 30 s | 1 | yes | no |
-| 5 | velnor-ci: `crates_mirror`, `audit::migration::targets::a_cross_target_created_by_cargo_at_the_source_root_does_not_hide_source_changes`, `audit::migration::nextest_discovery_compiles_first_and_executes_the_tests_once` | 30 s | 1 | yes | yes |
-| 6 | velnor-ci: `crates_mirror`, with `success-output = "immediate"` and `threads-required = "num-test-threads"` | 30 s | 4 | yes, limit set by row 5 | yes, limit set by row 5 |
+| 5 | velnor-ci: `audit::migration::targets::a_cross_target_created_by_cargo_at_the_source_root_does_not_hide_source_changes`, `audit::migration::nextest_discovery_compiles_first_and_executes_the_tests_once` | 30 s | 1 | yes | yes |
+| 6 | velnor-ci: `crates_mirror`, with `success-output = "immediate"` and `threads-required = "num-test-threads"` | 30 s | 4 | yes | yes |
 | 7 | velnor-ci: `plan_reads_each_roots_sources_to_decide_the_doctest_and_documentation_steps` | 30 s | 4 | yes | yes |
 | 8 | velnor-ci: `delta_baseline::` | 30 s | 1 | yes | yes |
 | 9 | velnor-ci: `audit::bounds::` | 30 s | 4 | yes | yes |
