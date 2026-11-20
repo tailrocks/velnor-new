@@ -7,6 +7,10 @@ use crate::error::{WorkflowsError, refuse};
 use crate::matrix_runner::MatrixRunner;
 use crate::raw::RawFile;
 
+mod action;
+
+pub use action::Action;
+
 pub(crate) const DEFAULT_RUNNER: &str = "ubuntu-latest";
 pub(crate) const DEFAULT_TIMEOUT_MINUTES: u16 = 30;
 
@@ -277,82 +281,6 @@ impl LocalAction {
             Self::PostFail => Self::PATHS[0],
             Self::Docker => Self::PATHS[1],
             Self::Composite => Self::PATHS[2],
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Action {
-    Checkout,
-    Mise,
-    UploadArtifact,
-    DownloadArtifact,
-    Cache,
-    CacheRestore,
-    CacheSave,
-    AttestBuildProvenance,
-    GithubScript,
-    MrBoxington,
-}
-
-impl Action {
-    pub const NAMES: [&'static str; 10] = [
-        "checkout",
-        "mise",
-        "upload-artifact",
-        "download-artifact",
-        "cache",
-        "cache-restore",
-        "cache-save",
-        "attest",
-        "github-script",
-        "mr-boxington",
-    ];
-
-    #[must_use]
-    pub fn parse(name: &str) -> Option<Self> {
-        Some(match name {
-            "checkout" => Self::Checkout,
-            "mise" => Self::Mise,
-            "upload-artifact" => Self::UploadArtifact,
-            "download-artifact" => Self::DownloadArtifact,
-            "cache" => Self::Cache,
-            "cache-restore" => Self::CacheRestore,
-            "cache-save" => Self::CacheSave,
-            "attest" => Self::AttestBuildProvenance,
-            "github-script" => Self::GithubScript,
-            "mr-boxington" => Self::MrBoxington,
-            _ => return None,
-        })
-    }
-
-    #[must_use]
-    pub fn locked_off(self) -> &'static [&'static str] {
-        match self {
-            Self::Checkout => &["persist-credentials"],
-            Self::Mise => &["cache", "cache_save"],
-            Self::AttestBuildProvenance => &["push-to-registry"],
-            Self::UploadArtifact
-            | Self::DownloadArtifact
-            | Self::Cache
-            | Self::CacheRestore
-            | Self::CacheSave
-            | Self::GithubScript
-            | Self::MrBoxington => &[],
-        }
-    }
-
-    /// The job permissions the action cannot run without.
-    #[must_use]
-    pub fn needs_permissions(self) -> &'static [(&'static str, &'static str)] {
-        match self {
-            Self::Checkout => &[("contents", "read")],
-            Self::AttestBuildProvenance => &[
-                ("contents", "read"),
-                ("id-token", "write"),
-                ("attestations", "write"),
-            ],
-            _ => &[],
         }
     }
 }
