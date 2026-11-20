@@ -20,7 +20,7 @@ fn grouped(config: &str) -> Result<String, Box<dyn Error>> {
         .get_mut(&lock)
         .ok_or("the lock file is missing")?;
     *bytes = String::from_utf8(bytes.clone())?
-        .replace("0.1.81", "0.1.86")
+        .replace("0.1.81", "0.1.96")
         .into_bytes();
     workflow(&view)
 }
@@ -155,7 +155,7 @@ fn a_group_named_after_a_root_is_refused() -> TestResult {
 fn a_group_needs_a_helper_that_writes_the_group_mode() -> TestResult {
     let error = refused(GROUP)?;
     assert!(
-        error.contains("workspace_groups needs velnor-ci 0.1.86 or later"),
+        error.contains("workspace_groups needs velnor-ci 0.1.96 or later"),
         "{error}"
     );
     Ok(())
@@ -197,7 +197,7 @@ fn each_root_of_a_group_picks_the_ci_profile_of_its_own_nextest_config() -> Test
         .get_mut(&lock)
         .ok_or("the lock file is missing")?;
     *bytes = String::from_utf8(bytes.clone())?
-        .replace("0.1.81", "0.1.86")
+        .replace("0.1.81", "0.1.96")
         .into_bytes();
     let config = RepoPath::new("tools/a/.config/nextest.toml")?;
     files.tracked_paths.insert(config.clone());
