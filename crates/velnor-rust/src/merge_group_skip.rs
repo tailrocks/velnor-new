@@ -11,32 +11,8 @@ use crate::plan::{RUST_JOB, step};
 fn is_check(kind: &StepKind) -> bool {
     match kind {
         StepKind::TestSetup { .. } => true,
-        StepKind::Cargo(command) => is_check_command(command),
+        StepKind::Cargo(command) => !command.is_target_build(),
         _ => false,
-    }
-}
-
-/// Exhaustive, so a new command must be classified here when it is added.
-fn is_check_command(command: &CargoCommand) -> bool {
-    match command {
-        CargoCommand::FmtCheck
-        | CargoCommand::Clippy { .. }
-        | CargoCommand::ClippyFeatures { .. }
-        | CargoCommand::Doc
-        | CargoCommand::DocFeatures { .. }
-        | CargoCommand::CheckAlone { .. }
-        | CargoCommand::NextestRun { .. }
-        | CargoCommand::NextestFeatures { .. }
-        | CargoCommand::LaneGuard { .. }
-        | CargoCommand::NextestRunArchive { .. }
-        | CargoCommand::TestTarget { .. }
-        | CargoCommand::Doctest
-        | CargoCommand::Deny { .. }
-        | CargoCommand::Machete => true,
-        CargoCommand::BuildBinary { .. }
-        | CargoCommand::BuildAll
-        | CargoCommand::NextestBuild
-        | CargoCommand::NextestArchive { .. } => false,
     }
 }
 
@@ -209,10 +185,10 @@ mod tests {
             },
         ];
         for command in checks {
-            assert!(is_check_command(&command), "{command:?}");
+            assert!(!command.is_target_build(), "{command:?}");
         }
         for command in builds {
-            assert!(!is_check_command(&command), "{command:?}");
+            assert!(command.is_target_build(), "{command:?}");
         }
     }
 

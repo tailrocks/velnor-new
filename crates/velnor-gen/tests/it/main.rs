@@ -222,6 +222,7 @@ mod rules_token;
 mod ruleset;
 mod rust_ci_doc_keys;
 mod sample_manifests;
+mod save_after_build;
 mod select;
 mod setup_action;
 mod setup_action_cache;

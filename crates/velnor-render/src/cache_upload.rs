@@ -16,6 +16,8 @@ pub(crate) fn key_output(family: TrimFamily) -> &'static str {
     }
 }
 
+const AFTER_TEST_FAILURE: &str = "target cache saved after test failure";
+
 pub(crate) fn record(kind: &StepKind, saved: &RenderedStep) -> Option<RenderedStep> {
     let StepKind::CacheSave(key) = kind else {
         return None;
@@ -26,6 +28,27 @@ pub(crate) fn record(kind: &StepKind, saved: &RenderedStep) -> Option<RenderedSt
         condition: saved.condition.clone(),
         env: vec![("CACHE_KEY".to_owned(), Value::Expr(render_key(key).key))],
         run: Some("echo \"key=$CACHE_KEY\" >> \"$GITHUB_OUTPUT\"".to_owned()),
+        ..RenderedStep::default()
+    })
+}
+
+/// A saved target says so when a test of the job failed, since the save no longer
+/// waits for the tests.
+pub(crate) fn after_test_failure(
+    kind: &StepKind,
+    saved: &RenderedStep,
+    tests_failed: Option<String>,
+    gated: impl FnOnce(&[String]) -> Option<String>,
+) -> Option<RenderedStep> {
+    let (StepKind::CacheSave(CacheKey::Target { .. }), Some(failed), Some(save)) =
+        (kind, tests_failed, &saved.id)
+    else {
+        return None;
+    };
+    Some(RenderedStep {
+        name: "Note the target cache saved after a test failure".to_owned(),
+        condition: gated(&[format!("steps.{save}.outcome == 'success'"), failed]),
+        run: Some(format!("echo '{AFTER_TEST_FAILURE}'")),
         ..RenderedStep::default()
     })
 }

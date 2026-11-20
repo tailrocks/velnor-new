@@ -188,7 +188,7 @@ fn the_one_job_lane_saves_after_tests_and_input_audit_and_only_on_the_default_br
         .position(|name| name == "Test")
         .ok_or("no test")?;
     assert!(build < tested && tested < audit);
-    let saved: Vec<&str> = order[audit + 1..audit + 8]
+    let saved: Vec<&str> = order[audit + 1..audit + 9]
         .iter()
         .filter_map(|name| (!name.starts_with("Fetch")).then_some(name.as_str()))
         .collect();
@@ -199,11 +199,15 @@ fn the_one_job_lane_saves_after_tests_and_input_audit_and_only_on_the_default_br
             "Decide whether to save the build directory",
             "Save the target cache",
             "Record the target cache key",
+            "Note the target cache saved after a test failure",
             "Save the sources cache",
             "Record the sources cache key",
         ]
     );
-    for name in &saved {
+    for name in saved
+        .iter()
+        .filter(|name| !name.starts_with("Note the target"))
+    {
         let text = step(lane, name).ok_or("missing step")?;
         assert!(text.contains(EVENTS), "{name}: {text}");
         assert!(text.contains("!cancelled()"), "{name}: {text}");

@@ -143,6 +143,7 @@ pub(crate) fn condition(
     setup: Setup,
     pr: PrRun,
     extra: &[String],
+    saved_after: &[String],
 ) -> Option<String> {
     let mut parts = Vec::new();
     match when {
@@ -172,7 +173,7 @@ pub(crate) fn condition(
         When::SaveBase | When::SaveBaseDecided | When::SaveSources => {
             parts.push(NOT_CANCELLED.to_owned());
             if setup != Setup::Before {
-                parts.push("success()".to_owned());
+                parts.extend(settled(saved_after));
                 parts.push(SETUP_DONE.to_owned());
             }
             if setup == Setup::Replanned {
@@ -192,7 +193,9 @@ pub(crate) fn condition(
             if setup != Setup::Before {
                 parts.push(SETUP_DONE.to_owned());
             }
-            parts.push("success()".to_owned());
+            // The base decision only exists once the compile steps passed, so a fetch
+            // that follows it needs no compile step of its own (one fetch per root).
+            parts.extend(saved_after.is_empty().then(|| "success()".to_owned()));
             parts.push(format!("steps.{BASE_STEP}.outputs.sources == 'true'"));
         }
         When::FullAudit => {
@@ -227,6 +230,16 @@ pub(crate) fn condition(
         None
     } else {
         Some(format!("${{{{ {} }}}}", parts.join(" && ")))
+    }
+}
+
+/// The steps a save waits for: the compile steps of its job, or the whole job when
+/// it has none.
+fn settled(saved_after: &[String]) -> Vec<String> {
+    if saved_after.is_empty() {
+        vec!["success()".to_owned()]
+    } else {
+        saved_after.to_vec()
     }
 }
 
@@ -300,7 +313,7 @@ pub(crate) fn admission(
     };
     plan_succeeded.extend(crate::gate_needs::succeeded(when, needs));
     plan_succeeded.extend(skip.map(|from| merge_group_skipped(from, Setup::Before)));
-    match condition(when, gate, Setup::Before, pr, &plan_succeeded) {
+    match condition(when, gate, Setup::Before, pr, &plan_succeeded, &[]) {
         Some(predicate) => format!(
             "${{{{ {ACTIVE_EVENT} && ({}) }}}}",
             predicate.trim_start_matches("${{ ").trim_end_matches(" }}")

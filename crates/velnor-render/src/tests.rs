@@ -38,6 +38,20 @@ impl Tests {
         }
     }
 
+    /// Whether a test step of the job failed, as a `${{ }}` body that stands in an `&&` chain; none without test steps.
+    pub(crate) fn failed(&self) -> Option<String> {
+        let ids = self
+            .lanes
+            .iter()
+            .map(|slug| format!("steps.{}.outcome == 'failure'", self.id(Some(slug))))
+            .collect::<Vec<_>>();
+        match ids.as_slice() {
+            [] => None,
+            [only] => Some(only.clone()),
+            _ => Some(format!("({})", ids.join(" || "))),
+        }
+    }
+
     pub(crate) fn first_id(&self) -> Option<String> {
         self.lanes.first().map(|slug| self.id(Some(slug)))
     }
