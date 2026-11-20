@@ -118,7 +118,7 @@ fn the_reference_check_reads_only_expressions_and_only_step_ids() {
         vec!["toolsanchor"]
     );
     assert_eq!(step_refs("steps.a-b_1.outputs.x"), vec!["a-b_1"]);
-    assert!(step_refs("steps.toolsanchor").is_empty());
+    assert_eq!(step_refs("steps.toolsanchor"), Vec::<&str>::new());
     assert_eq!(
         expressions("run $x steps.a.b ${{ steps.c.outputs.d }} tail"),
         vec![" steps.c.outputs.d "]
