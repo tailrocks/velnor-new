@@ -64,7 +64,7 @@ Sources: https://arpitbhayani.me/videos/blacksmith-github-actions-internals-and-
    - Docker layers on sticky disks on NVMe; Ceph mentioned in one blog (backing store unclear). [vendor, via search summary] https://info.blacksmith.sh/task/blog/faster-disk-io-github-actions-runners
    - Sticky-disk attach/commit/concurrency semantics: not retrieved (docs page 404).
 6. Source checkout. Git mirror: not mentioned in the write-up. Not public.
-7. Test acceleration: not retrieved / not public. 
+7. Test acceleration: not retrieved / not public.
 8. Merge/queue: none.
 9. Claims. About 2x faster and half the cost; example 20 min vs 8 min; 4x cache throughput; 2x single-thread (all [vendor], baseline GitHub standard runners). Independent verification of sticky-disk design: not found.
 10. Limits. Cache is per-repo with 7-day idle eviction; bare-metal capacity provisioning lead time for large customers [competitor].
