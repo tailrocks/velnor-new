@@ -3,7 +3,6 @@
 
 use std::{
     error::Error,
-    thread,
     time::{Duration, Instant},
 };
 
@@ -26,36 +25,69 @@ pub(crate) fn owned_reference_observation(record: &CleanupObserverRecord) -> Obs
 pub(crate) fn poll_observation<T>(
     limit: Duration,
     interval: Duration,
+    now: impl Fn() -> Instant,
+    sleep: impl Fn(Duration),
     mut observe: impl FnMut() -> Result<T, Box<dyn Error>>,
     classify: impl Fn(&T) -> Observation,
 ) -> Result<T, Box<dyn Error>> {
-    let deadline = Instant::now() + limit;
+    let deadline = now() + limit;
     loop {
         let value = observe()?;
         match classify(&value) {
             Observation::Counted => return Ok(value),
-            Observation::NotYetVisible if Instant::now() >= deadline => return Ok(value),
-            Observation::NotYetVisible => thread::sleep(interval),
+            Observation::NotYetVisible if now() >= deadline => return Ok(value),
+            Observation::NotYetVisible => sleep(interval),
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::cell::Cell;
+
     use super::*;
 
     const LIMIT: Duration = Duration::from_secs(5);
     const INTERVAL: Duration = Duration::from_millis(1);
+    const MAX_CALLS: usize = 100;
+
+    struct FakeClock {
+        start: Instant,
+        elapsed: Cell<Duration>,
+    }
+
+    impl FakeClock {
+        fn new() -> Self {
+            Self {
+                start: Instant::now(),
+                elapsed: Cell::new(Duration::ZERO),
+            }
+        }
+
+        fn now(&self) -> Instant {
+            self.start + self.elapsed.get()
+        }
+
+        fn sleep(&self, duration: Duration) {
+            self.elapsed.set(self.elapsed.get() + duration);
+        }
+    }
 
     fn run(
         sequence: &[(u32, Observation)],
         limit: Duration,
     ) -> Result<(u32, usize), Box<dyn Error>> {
+        let clock = FakeClock::new();
         let mut calls = 0;
         let value = poll_observation(
             limit,
             INTERVAL,
+            || clock.now(),
+            |duration| clock.sleep(duration),
             || {
+                if calls >= MAX_CALLS {
+                    return Err("poll did not reach its deadline".into());
+                }
                 let index = calls.min(sequence.len() - 1);
                 calls += 1;
                 Ok(sequence[index])
@@ -128,11 +160,27 @@ mod tests {
     }
 
     #[test]
+    fn a_never_visible_observation_returns_the_latest_one_at_a_positive_deadline()
+    -> Result<(), Box<dyn Error>> {
+        let sequence = [
+            (1, Observation::NotYetVisible),
+            (2, Observation::NotYetVisible),
+            (3, Observation::NotYetVisible),
+        ];
+        let (last, calls) = run(&sequence, INTERVAL * 3)?;
+        assert_eq!((last, calls), (3, 4));
+        Ok(())
+    }
+
+    #[test]
     fn a_failed_observation_is_returned_without_retrying() {
+        let clock = FakeClock::new();
         let mut calls = 0;
         let result: Result<u32, _> = poll_observation(
             LIMIT,
             INTERVAL,
+            || clock.now(),
+            |duration| clock.sleep(duration),
             || {
                 calls += 1;
                 Err::<u32, Box<dyn Error>>("scan failed".into())
