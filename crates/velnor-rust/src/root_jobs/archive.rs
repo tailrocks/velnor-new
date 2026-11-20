@@ -187,15 +187,27 @@ impl RootJobs<'_> {
         let mut steps = head(
             self.facts,
             CHECKOUT_DEPTH,
-            crate::sparse::paths(self.facts, std::slice::from_ref(&self.member().root)),
+            crate::sparse::with_artifacts(
+                crate::sparse::paths(self.facts, std::slice::from_ref(&self.member().root)),
+                group.map_or(&[], |group| &group.artifacts),
+            ),
         );
         steps.extend(mbx(self.facts, self.lane.steps()));
         steps.extend(mirror());
-        steps.extend(tools_restore(self.facts).into_iter().map(|restore| Step {
-            gate: self.lane.steps(),
-            ..restore
-        }));
-        steps.extend(tools_prime(self.facts).map(|prime| Step {
+        let plan = self
+            .lane
+            .plan
+            .as_ref()
+            .filter(|_| runner == self.facts.config.runner);
+        steps.extend(
+            tools_restore(self.facts, plan)
+                .into_iter()
+                .map(|restore| Step {
+                    gate: self.lane.steps(),
+                    ..restore
+                }),
+        );
+        steps.extend(tools_prime(self.facts, plan).map(|prime| Step {
             gate: self.lane.steps(),
             ..prime
         }));

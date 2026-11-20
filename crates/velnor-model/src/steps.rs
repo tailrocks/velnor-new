@@ -125,7 +125,7 @@ pub enum StepKind {
     MbxPrivate,
     MbxStore,
     MbxSeed,
-    ToolsLocal(ToolsLocalVerb),
+    ToolsLocal(ToolsLocalVerb, crate::ToolsAnchor),
     TestSetup {
         name: String,
         run: String,
@@ -221,7 +221,7 @@ impl StepKind {
             | Self::MbxPrivate
             | Self::MbxStore { .. }
             | Self::MbxSeed { .. }
-            | Self::ToolsLocal(_)
+            | Self::ToolsLocal(..)
             | Self::GeneratorCheck { .. }
             | Self::InstallGenerator(_)
             | Self::InstallHelper(_)
@@ -250,7 +250,7 @@ impl StepKind {
             self,
             Self::CacheSave(_)
                 | Self::MbxRemote { .. }
-                | Self::ToolsLocal(ToolsLocalVerb::AnchorSave)
+                | Self::ToolsLocal(ToolsLocalVerb::AnchorSave, _)
         )
     }
 }
@@ -272,6 +272,8 @@ pub enum ToolsLocalVerb {
     RecordSave,
     AnchorReset,
     AnchorRestore,
+    AnchorFind,
+    AnchorRead,
     Verify,
     VerifyNamed,
     VerifyNamedAnchor,
@@ -293,6 +295,8 @@ impl ToolsLocalVerb {
 pub enum VerifiedSave {
     OnDefaultBranch,
     UnlessLocal,
+    AnchoredOnDefaultBranch,
+    AnchoredUnlessLocal,
     NodeStore,
     Prime,
     Anchor,

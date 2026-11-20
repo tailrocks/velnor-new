@@ -5,7 +5,7 @@ use std::fs;
 
 use crate::tools_verify::{Job, discarded, job, recorded, rustc};
 
-fn check_stdout(job: &Job, env: &[(&str, &str)]) -> String {
+fn check_stdout(job: &Job, anchor: &str, env: &[(&str, &str)]) -> String {
     let event = job.root.join("event.json");
     fs::write(&event, r#"{"repository":{"default_branch":"main"}}"#).unwrap_or_default();
     let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
@@ -19,7 +19,7 @@ fn check_stdout(job: &Job, env: &[(&str, &str)]) -> String {
         .env("GITHUB_EVENT_PATH", &event)
         .env("GITHUB_REF", "refs/heads/main")
         .env("GITHUB_REPOSITORY", "tailrocks/velnor-new")
-        .env("VELNOR_ANCHOR_HIT", "true");
+        .env("VELNOR_TOOLS_ANCHOR", anchor);
     for (name, value) in env {
         command.env(name, value);
     }
@@ -31,9 +31,13 @@ fn check_stdout(job: &Job, env: &[(&str, &str)]) -> String {
 #[test]
 fn a_poisoned_restore_names_its_cache_entry_and_the_command_that_deletes_it() {
     let job = job("tools-verify-named-key");
-    recorded(&job);
+    let anchor = recorded(&job);
     fs::write(rustc(&job), "evil binary!").unwrap_or_else(|e| unreachable!("{e}"));
-    let stdout = check_stdout(&job, &[("VELNOR_TOOLS_CACHE_KEY", "velnor-tools-abc123")]);
+    let stdout = check_stdout(
+        &job,
+        &anchor,
+        &[("VELNOR_TOOLS_CACHE_KEY", "velnor-tools-abc123")],
+    );
     assert!(stdout.contains("::notice::"), "{stdout}");
     assert!(stdout.contains("velnor-tools-abc123"), "{stdout}");
     assert!(
@@ -46,10 +50,11 @@ fn a_poisoned_restore_names_its_cache_entry_and_the_command_that_deletes_it() {
 #[test]
 fn a_poisoned_restore_names_the_anchor_entry_that_feeds_the_check() {
     let job = job("tools-verify-named-anchor");
-    recorded(&job);
+    let anchor = recorded(&job);
     fs::write(rustc(&job), "evil binary!").unwrap_or_else(|e| unreachable!("{e}"));
     let stdout = check_stdout(
         &job,
+        &anchor,
         &[
             ("VELNOR_TOOLS_CACHE_KEY", "velnor-tools-abc123"),
             ("VELNOR_ANCHOR_CACHE_KEY", "velnor-tools-anchor-abc123"),
@@ -64,9 +69,13 @@ fn a_poisoned_restore_names_the_anchor_entry_that_feeds_the_check() {
 #[test]
 fn the_delete_command_states_that_it_removes_every_entry_with_the_key() {
     let job = job("tools-verify-named-scope");
-    recorded(&job);
+    let anchor = recorded(&job);
     fs::write(rustc(&job), "evil binary!").unwrap_or_else(|e| unreachable!("{e}"));
-    let stdout = check_stdout(&job, &[("VELNOR_TOOLS_CACHE_KEY", "velnor-tools-abc123")]);
+    let stdout = check_stdout(
+        &job,
+        &anchor,
+        &[("VELNOR_TOOLS_CACHE_KEY", "velnor-tools-abc123")],
+    );
     assert!(
         stdout.contains("removes every entry with that key in the repository, on any ref"),
         "{stdout}"
@@ -76,10 +85,11 @@ fn the_delete_command_states_that_it_removes_every_entry_with_the_key() {
 #[test]
 fn a_restore_on_github_enterprise_names_the_host_in_the_delete_command() {
     let job = job("tools-verify-named-host");
-    recorded(&job);
+    let anchor = recorded(&job);
     fs::write(rustc(&job), "evil binary!").unwrap_or_else(|e| unreachable!("{e}"));
     let stdout = check_stdout(
         &job,
+        &anchor,
         &[
             ("VELNOR_TOOLS_CACHE_KEY", "velnor-tools-abc123"),
             ("GITHUB_SERVER_URL", "https://ghe.example.com/"),
@@ -96,9 +106,9 @@ fn a_restore_on_github_enterprise_names_the_host_in_the_delete_command() {
 #[test]
 fn a_restore_from_the_node_store_names_no_cache_entry() {
     let job = job("tools-verify-named-none");
-    recorded(&job);
+    let anchor = recorded(&job);
     fs::write(rustc(&job), "evil binary!").unwrap_or_else(|e| unreachable!("{e}"));
-    let stdout = check_stdout(&job, &[("VELNOR_TOOLS_CACHE_KEY", "")]);
+    let stdout = check_stdout(&job, &anchor, &[("VELNOR_TOOLS_CACHE_KEY", "")]);
     assert!(stdout.contains("discarded"), "{stdout}");
     assert!(!stdout.contains("gh cache delete"), "{stdout}");
 }
@@ -106,10 +116,11 @@ fn a_restore_from_the_node_store_names_no_cache_entry() {
 #[test]
 fn a_hostile_cache_key_cannot_forge_a_second_workflow_command() {
     let job = job("tools-verify-hostile-key");
-    recorded(&job);
+    let anchor = recorded(&job);
     fs::write(rustc(&job), "evil binary!").unwrap_or_else(|e| unreachable!("{e}"));
     let stdout = check_stdout(
         &job,
+        &anchor,
         &[(
             "VELNOR_TOOLS_CACHE_KEY",
             "velnor-tools-50%\r\n::error::forged",
