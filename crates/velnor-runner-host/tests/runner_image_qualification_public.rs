@@ -372,27 +372,56 @@ fn public_qualifier_rejects_unfinished_exec() -> TestResult<()> {
     Ok(())
 }
 
-#[test]
-fn public_qualifier_bounds_docker_operations_and_streams() -> TestResult<()> {
-    for fault in [
-        ApiFault::StallImageInspect,
-        ApiFault::StallContainerCreate,
-        ApiFault::StallContainerStart,
-        ApiFault::StallContainerInspect,
-        ApiFault::StallWait,
-        ApiFault::StallLogs,
-        ApiFault::StallExecCreate,
-        ApiFault::StallExecStream,
-    ] {
-        let git = GitFixture::new()?;
-        let mut plan = ApiPlan::new(git.source_sha());
-        plan.fault = Some(fault);
-        let (output, state, elapsed) =
-            qualify_with_timeout_timed(&git, git.source_sha(), plan, Duration::from_secs(24))?;
-        assert_failed_and_cleaned(&output, &state);
-        let readiness = matches!(fault, ApiFault::StallExecCreate | ApiFault::StallExecStream);
-        assert!(elapsed < Duration::from_secs(if readiness { 22 } else { 9 }));
-        assert!(elapsed >= Duration::from_secs(if readiness { 11 } else { 4 }));
-    }
+fn assert_stall_is_bounded(fault: ApiFault) -> TestResult<()> {
+    let git = GitFixture::new()?;
+    let mut plan = ApiPlan::new(git.source_sha());
+    plan.fault = Some(fault);
+    let (output, state, elapsed) =
+        qualify_with_timeout_timed(&git, git.source_sha(), plan, Duration::from_secs(24))?;
+    assert_failed_and_cleaned(&output, &state);
+    let readiness = matches!(fault, ApiFault::StallExecCreate | ApiFault::StallExecStream);
+    assert!(elapsed < Duration::from_secs(if readiness { 22 } else { 9 }));
+    assert!(elapsed >= Duration::from_secs(if readiness { 11 } else { 4 }));
     Ok(())
+}
+
+// One test per stall so nextest runs the eight bounds concurrently.
+#[test]
+fn public_qualifier_bounds_stalled_image_inspect() -> TestResult<()> {
+    assert_stall_is_bounded(ApiFault::StallImageInspect)
+}
+
+#[test]
+fn public_qualifier_bounds_stalled_container_create() -> TestResult<()> {
+    assert_stall_is_bounded(ApiFault::StallContainerCreate)
+}
+
+#[test]
+fn public_qualifier_bounds_stalled_container_start() -> TestResult<()> {
+    assert_stall_is_bounded(ApiFault::StallContainerStart)
+}
+
+#[test]
+fn public_qualifier_bounds_stalled_container_inspect() -> TestResult<()> {
+    assert_stall_is_bounded(ApiFault::StallContainerInspect)
+}
+
+#[test]
+fn public_qualifier_bounds_stalled_wait() -> TestResult<()> {
+    assert_stall_is_bounded(ApiFault::StallWait)
+}
+
+#[test]
+fn public_qualifier_bounds_stalled_logs() -> TestResult<()> {
+    assert_stall_is_bounded(ApiFault::StallLogs)
+}
+
+#[test]
+fn public_qualifier_bounds_stalled_exec_create() -> TestResult<()> {
+    assert_stall_is_bounded(ApiFault::StallExecCreate)
+}
+
+#[test]
+fn public_qualifier_bounds_stalled_exec_stream() -> TestResult<()> {
+    assert_stall_is_bounded(ApiFault::StallExecStream)
 }
