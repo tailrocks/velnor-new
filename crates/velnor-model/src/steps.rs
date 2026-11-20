@@ -157,13 +157,7 @@ impl StepKind {
     #[must_use]
     pub const fn is_check(&self) -> bool {
         match self {
-            Self::TestSetup {
-                before_build: true, ..
-            } => false,
-            Self::TestSetup {
-                before_build: false,
-                ..
-            } => true,
+            Self::TestSetup { before_build, .. } => !*before_build,
             // The advisory DB fetch serves the cargo-deny check, which is a check, so it
             // is skipped after a merge group exactly when that check is.
             Self::AdvisoryFetch { .. } | Self::ReleaseAssets { .. } => true,
