@@ -295,7 +295,10 @@ fn a_failed_setup_of_one_grouped_root_stops_the_other_roots_later_cargo_steps() 
         let jobs = grouped_jobs(phase)?;
         let mut checked_a = 0;
         for (id, job) in jobs.as_object().into_iter().flatten() {
-            let steps = job["steps"].as_array().map(Vec::as_slice).unwrap_or_default();
+            let steps = job["steps"]
+                .as_array()
+                .map(Vec::as_slice)
+                .unwrap_or_default();
             let Some(index) = steps.iter().position(|step| step["name"] == "Prepare b") else {
                 continue;
             };
@@ -308,7 +311,9 @@ fn a_failed_setup_of_one_grouped_root_stops_the_other_roots_later_cargo_steps() 
                 }
                 checked_a += usize::from(run.contains("tools/a"));
                 assert!(
-                    step["if"].as_str().is_some_and(|text| text.contains(&waits)),
+                    step["if"]
+                        .as_str()
+                        .is_some_and(|text| text.contains(&waits)),
                     "{id} ({phase}): a cargo step runs after a failed setup of another root: {step}"
                 );
             }

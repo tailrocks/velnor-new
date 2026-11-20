@@ -49,7 +49,9 @@ mod chained_save;
 mod steps_helpers;
 #[path = "steps_outputs.rs"]
 mod steps_outputs;
-use steps_helpers::{leading_steps, rustup_add, saved_unless_hit, variable};
+use steps_helpers::{
+    after_setup, leading_steps, root_key, rustup_add, saved_unless_hit, setup_succeeded, variable,
+};
 use steps_outputs::{merge_group_output, test_outputs};
 
 pub(crate) const CACHE_RESTORE: &str =
@@ -140,7 +142,7 @@ fn job_steps(
                     job_name: job.name.as_deref(),
                     after_setup: after_setup(step, setups),
                 };
-                let mut rendered = rendered_steps(step, setup, audit, tests, lane, around);
+                let mut rendered = rendered_steps(step, setup, audit, tests, lane, &around);
                 let tools_key = matches!(
                     &step.kind,
                     StepKind::CacheRestore(velnor_model::CacheKey::Tools { .. })
@@ -167,7 +169,6 @@ fn job_steps(
 }
 
 /// What the job around a step adds to it.
-#[derive(Clone)]
 struct Around<'a> {
     /// The id a compile or audit step gets so a save can wait for it.
     id: Option<&'a str>,
@@ -177,33 +178,13 @@ struct Around<'a> {
     after_setup: Vec<String>,
 }
 
-fn root_key(step: &Step) -> Option<RepoPath> {
-    step.directory
-        .clone()
-        .or_else(|| step.manifest.as_ref().and_then(RepoPath::parent))
-}
-
-fn after_setup(step: &Step, setups: &BTreeMap<Option<RepoPath>, String>) -> Vec<String> {
-    if !step.after_setup {
-        return Vec::new();
-    }
-    if matches!(step.kind, StepKind::TestSetup { .. }) {
-        return setups.get(&root_key(step)).cloned().into_iter().collect();
-    }
-    setups.values().cloned().collect()
-}
-
-fn setup_succeeded(id: &str) -> String {
-    format!("steps.{id}.outcome == 'success'")
-}
-
 fn rendered_steps(
     step: &Step,
     setup: Setup,
     audit: bool,
     tests: &Tests,
     lane: CargoLane,
-    around: Around<'_>,
+    around: &Around<'_>,
 ) -> Vec<RenderedStep> {
     let job_name = around.job_name;
     let mut rendered = leading_steps(step, audit, lane);
@@ -228,7 +209,13 @@ fn rendered_steps(
             ));
         }
         let mut extra = saved_unless_hit(&step.kind);
-        extra.extend(around.after_setup.iter().map(String::as_str).map(setup_succeeded));
+        extra.extend(
+            around
+                .after_setup
+                .iter()
+                .map(String::as_str)
+                .map(setup_succeeded),
+        );
         extra.extend(
             step.hosted_only
                 .then(|| crate::gate::NOT_SELF_HOSTED.to_owned()),

@@ -1,10 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
+
 use super::{
     CacheKey, CargoCommand, CargoLane, GateNeed, RenderedStep, Step, StepKind, cargo_step,
     sources_step, trimmed_lane,
 };
+use velnor_model::RepoPath;
 
 pub(super) fn saved_unless_hit(kind: &StepKind) -> Vec<String> {
     match kind {
@@ -74,4 +77,24 @@ pub(super) fn leading_steps(step: &Step, audit: bool, lane: CargoLane) -> Vec<Re
         }
         _ => Vec::new(),
     }
+}
+
+pub(super) fn root_key(step: &Step) -> Option<RepoPath> {
+    step.directory
+        .clone()
+        .or_else(|| step.manifest.as_ref().and_then(RepoPath::parent))
+}
+
+pub(super) fn after_setup(step: &Step, setups: &BTreeMap<Option<RepoPath>, String>) -> Vec<String> {
+    if !step.after_setup {
+        return Vec::new();
+    }
+    if matches!(step.kind, StepKind::TestSetup { .. }) {
+        return setups.get(&root_key(step)).cloned().into_iter().collect();
+    }
+    setups.values().cloned().collect()
+}
+
+pub(super) fn setup_succeeded(id: &str) -> String {
+    format!("steps.{id}.outcome == 'success'")
 }
