@@ -1,9 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-//! mbx's managed targets leave `target` as a symlink into its cache. `restored` and
-//! `cache decide` follow such a link only when it resolves inside a directory this job owns.
-
 use std::fs;
 use std::os::unix::fs::symlink;
 use std::path::Path;
@@ -130,7 +127,8 @@ fn a_target_link_to_the_root_of_an_allowed_directory_is_refused() {
     let repo = lone("link-root");
     let (store, managed) = store("link-root-store");
     let (temp, home) = others();
-    symlink(store.root(), repo.root().join("target")).unwrap_or_else(|e| unreachable!("{e}"));
+    symlink(store.root().join("targets"), repo.root().join("target"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
     let env = Env {
         cache: store.root(),
         temp: temp.root(),
@@ -213,4 +211,53 @@ fn a_dangling_target_link_is_refused_with_a_clear_message() {
         "{}",
         stderr(&output)
     );
+}
+
+#[test]
+fn a_target_link_into_the_shared_store_outside_its_targets_is_refused_and_left_alone() {
+    let repo = lone("link-store-actions");
+    let (store, _) = store("link-store-actions-store");
+    store.write_unstaged("actions/owner/repo/action.yml", "name: shared\n");
+    let (temp, home) = others();
+    symlink(
+        store.root().join("actions/owner"),
+        repo.root().join("target"),
+    )
+    .unwrap_or_else(|e| unreachable!("{e}"));
+    let env = Env {
+        cache: store.root(),
+        temp: temp.root(),
+        home: home.root(),
+    };
+    let output = restored(&repo, &env);
+    assert!(!output.status.success(), "{output:?}");
+    assert!(
+        stderr(&output).contains("refusing to follow"),
+        "{}",
+        stderr(&output)
+    );
+    assert!(store.root().join("actions/owner/repo/action.yml").is_file());
+    assert!(!store.root().join("actions/owner/.velnor").exists());
+}
+
+#[test]
+fn a_target_link_to_a_control_directory_is_refused_whatever_its_case() {
+    let repo = lone("link-control-case");
+    repo.write_unstaged(".Cargo/registry/index", "index");
+    let (store, _) = store("link-control-case-store");
+    let (temp, home) = others();
+    symlink(".Cargo/registry", repo.root().join("target")).unwrap_or_else(|e| unreachable!("{e}"));
+    let env = Env {
+        cache: store.root(),
+        temp: temp.root(),
+        home: home.root(),
+    };
+    let output = restored(&repo, &env);
+    assert!(!output.status.success(), "{output:?}");
+    assert!(
+        stderr(&output).contains("overlaps checkout content"),
+        "{}",
+        stderr(&output)
+    );
+    assert!(repo.root().join(".Cargo/registry/index").is_file());
 }

@@ -1,18 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-//! mbx keeps a checkout's `target` in its cache and leaves a symlink at `target`
-//! (<https://mr-boxington.jdx.dev/managed-targets>). A link is followed only when it resolves to
-//! a directory this user owns, strictly below the mbx cache, `RUNNER_TEMP` or the checkout; a
-//! checkout can plant a link to anywhere else.
-
 use std::fs;
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 
 use crate::error::CiError;
 
-/// Where the link at `link` leads, after the checks above. `checkout` is the canonical checkout top.
 pub(super) fn resolve(link: &Path, checkout: &Path) -> Result<PathBuf, CiError> {
     let resolved = fs::canonicalize(link).map_err(|e| {
         CiError::new(format!(
@@ -69,14 +63,13 @@ fn allowed_roots(checkout: &Path) -> Vec<PathBuf> {
             .collect(),
     };
     let target_root = var("MBX_TARGET_ROOT").map(PathBuf::from).map(|root| {
-        // A relative root resolves under the cache directory.
         cache_dirs
             .first()
             .map_or_else(|| root.clone(), |cache| cache.join(&root))
     });
     let mut roots = vec![checkout.to_path_buf()];
     roots.extend(var("RUNNER_TEMP").map(PathBuf::from));
-    roots.extend(cache_dirs);
+    roots.extend(cache_dirs.into_iter().map(|dir| dir.join("targets")));
     roots.extend(target_root);
     let mut roots: Vec<PathBuf> = roots
         .into_iter()

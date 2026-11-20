@@ -51,8 +51,6 @@ pub(super) fn validated(root: &Path, target: &Path) -> Result<PathBuf, CiError> 
     Ok(normalized)
 }
 
-/// The target itself may be a symlink (mbx's managed target). It is followed only into an allowed
-/// root, and a link into the checkout must not reach tracked content, `.git` or `.cargo`.
 fn follow_link(listed: &TrackedPaths, link: &Path) -> Result<(), CiError> {
     let top = fs::canonicalize(&listed.top)
         .map_err(|e| CiError::new(format!("cannot resolve {}: {e}", listed.top.display())))?;
@@ -74,9 +72,10 @@ fn check_content(listed: &TrackedPaths, relative: &Path, target: &Path) -> Resul
         return Err(CiError::new("cache target contains tracked content"));
     }
     let forbidden = relative.as_os_str().is_empty()
-        || relative
-            .components()
-            .any(|part| part.as_os_str() == ".git" || part.as_os_str() == ".cargo")
+        || relative.components().any(|part| {
+            let name = part.as_os_str();
+            name.eq_ignore_ascii_case(".git") || name.eq_ignore_ascii_case(".cargo")
+        })
         || listed.paths.iter().any(|path| {
             let path = Path::new(path);
             path.starts_with(relative) || relative.starts_with(path)
