@@ -6,7 +6,7 @@ use std::os::unix::fs::{MetadataExt, symlink};
 use std::path::{Path, PathBuf};
 
 use velnor_ci::tools_local::{Inputs, Outcome, Verb, run};
-use velnor_ci::tools_verify::{Anchor, Verdict, check, digest, record};
+use velnor_ci::tools_verify::{Anchor, Recording, Verdict, check, digest, record};
 
 use crate::io::Repo;
 
@@ -85,18 +85,18 @@ fn a_restore_over_a_baked_home_leaves_exactly_the_stored_tree() {
     baked_extras(&baked);
     assert_ne!(digest(&baked), digest(&node.root.join("stored")));
     let file = node.root.join("anchor/digest");
-    let anchor = Anchor {
+    let recording = Recording {
+        anchor: Anchor(""),
         file: &file,
-        restored: false,
+        trusted: true,
+        verified: false,
     };
-    let recorded = record(&node.root.join("stored"), &anchor, true);
-    assert_eq!(recorded.ok(), Some(Verdict::Recorded));
+    let Ok(Verdict::Recorded(anchor)) = record(&node.root.join("stored"), &recording) else {
+        unreachable!("the stored tree was not recorded")
+    };
     let restored = go(&node, Verb::Restore, &baked);
     assert!(restored.hit(), "{restored:?}");
-    let anchor = Anchor {
-        file: &file,
-        restored: true,
-    };
+    let anchor = Anchor(&anchor);
     assert_eq!(check(&baked, &anchor).ok(), Some(Verdict::Verified));
     assert_eq!(digest(&baked), digest(&node.root.join("stored")));
     assert!(

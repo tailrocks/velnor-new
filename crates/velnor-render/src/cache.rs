@@ -56,6 +56,7 @@ pub fn render_key_with_mise(key: &CacheKey, mise_version: &str) -> RenderedKey {
             CacheKeySegment::Commit => COMMIT.to_owned(),
             CacheKeySegment::RunId => RUN_ID.to_owned(),
             CacheKeySegment::PullRequest => "pr${{ github.event.pull_request.number }}".to_owned(),
+            CacheKeySegment::ToolsAnchor(anchor) => crate::tools_steps::anchor_expression(anchor),
             CacheKeySegment::DeltaBase(root) => {
                 format!("${{{{ steps.delta_base_{root}.outputs.base8 }}}}")
             }

@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::rules::{RenderedStep, Value};
-use velnor_model::{CACHE_COMPAT_LENGTH, RUNNER_ARCH_MAX_LENGTH, RUNNER_OS_MAX_LENGTH};
+use velnor_model::{
+    CACHE_COMPAT_LENGTH, RUNNER_ARCH_MAX_LENGTH, RUNNER_OS_MAX_LENGTH, TOOLS_ANCHOR_LENGTH,
+};
 
 const CACHE_ACTIONS: &[&str] = &[
     "actions/cache",
@@ -49,6 +51,7 @@ fn expansion(expression: &str) -> usize {
         "github.job" => 100,
         _ if expression.starts_with("hashFiles(") || expression.contains(".outputs.lock_") => 64,
         _ if expression.ends_with(".outputs.compat") => CACHE_COMPAT_LENGTH,
+        _ if crate::tools_steps::is_anchor_expression(expression) => TOOLS_ANCHOR_LENGTH,
         _ if expression.ends_with(".outputs.base8") => 8,
         _ => expression.encode_utf16().count(),
     }

@@ -6,7 +6,7 @@
 
 | Family | Key | Restore fallbacks, in order | Path |
 |---|---|---|---|
-| Tools | `velnor-tools-<host>-mise<version>-${{ hashFiles('mise.lock') }}` | none | `~/.local/share/mise`, `~/.rustup` |
+| Tools | `velnor-tools-<host>-mise<version>-${{ hashFiles('mise.lock') }}`, followed by `-<anchor digest>` from helper 0.1.110 | none | `~/.local/share/mise`, `~/.rustup` |
 | Sources | `velnor-src-<host>-all.roots-${{ steps.sources_locks.outputs.hash }}` | `velnor-src-<host>-all.roots-` | `~/.cargo/registry/index`, `~/.cargo/registry/cache`, `~/.cargo/git/db` |
 | Target | `velnor-tgt-<job>.<root>.<host>-<compat>-<lockhash>-${{ github.sha }}-${{ github.run_id }}` | `...-<compat>-<lockhash>-`, then `...-<compat>-` | `build.target-dir`, default `target` for the repository root and `target/velnor-roots/<root>` for every other root (locked helper 0.1.107 or later; earlier helpers use `<dir>/target`) |
 | Delta | `velnor-dlt-pr<PR number>-<job>.<root>.<host>-<compat>-<base8>-${{ github.run_id }}` | `...-<compat>-<base8>-` | `<target-dir>.velnor-delta` |

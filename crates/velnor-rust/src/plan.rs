@@ -257,7 +257,7 @@ pub(crate) fn setup_units(
     steps.extend(mbx(facts, lane.steps()));
     let mut toolchain: Vec<Step> = mirror_step(facts)
         .into_iter()
-        .chain(tools_restore(facts))
+        .chain(tools_restore(facts, lane.plan.as_ref()))
         .chain(tools_install(facts))
         .collect();
     if !facts.tools.tools.is_empty() {
@@ -268,9 +268,9 @@ pub(crate) fn setup_units(
     let prepare = step(StepKind::Prepare(PrepareLocks::All));
     if declared.is_some_and(|toolchain| toolchain.profile.as_deref() == Some("complete")) {
         toolchain.push(prepare);
-        toolchain.extend(tools_save(facts));
+        toolchain.extend(tools_save(facts, lane.plan.as_ref()));
     } else {
-        toolchain.extend(tools_save(facts));
+        toolchain.extend(tools_save(facts, lane.plan.as_ref()));
         toolchain.push(prepare);
     }
     for (index, (unit, family)) in units.iter().zip(families).enumerate() {

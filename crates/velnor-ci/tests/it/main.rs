@@ -198,6 +198,7 @@ mod timings_setup;
 mod tools_home_clear;
 mod tools_local;
 mod tools_verify;
+mod tools_verify_anchor;
 mod tools_verify_bounds;
 mod trusted_roots;
 mod unit_test_targets;

@@ -33,7 +33,7 @@ impl Default for Limits {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
 pub enum Verb {
-    Reset,
+    Read,
     Check,
     Record,
 }
@@ -49,12 +49,13 @@ pub enum Discard {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Verdict {
-    Reset,
+    Anchored(String),
+    Unanchored(Discard),
     NothingRestored,
     Verified,
     Discarded(Discard),
-    Recorded,
-    Matches,
+    Recorded(String),
+    Matches(String),
     Differs(Discard),
 }
 
@@ -153,32 +154,52 @@ pub fn digest_within(home: &Path, limits: &Limits) -> Result<String, String> {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct Anchor<'a> {
+pub struct Anchor<'a>(pub &'a str);
+
+#[derive(Debug, Clone, Copy)]
+pub struct Recording<'a> {
+    pub anchor: Anchor<'a>,
     pub file: &'a Path,
-    pub restored: bool,
+    pub trusted: bool,
+    pub verified: bool,
 }
 
-fn read_anchor(anchor: &Anchor<'_>) -> Result<String, Discard> {
-    if !anchor.restored {
-        return Err(Discard::NoAnchor);
+fn is_digest(text: &str) -> bool {
+    text.len() == 64 && text.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
+}
+
+fn expected(anchor: &Anchor<'_>) -> Result<String, Discard> {
+    match anchor.0 {
+        "" => Err(Discard::NoAnchor),
+        digest if is_digest(digest) => Ok(digest.to_owned()),
+        _ => Err(Discard::BadAnchor),
     }
-    let metadata = fs::symlink_metadata(anchor.file).map_err(|_| Discard::NoAnchor)?;
+}
+
+pub fn read(file: &Path, matched: bool) -> Verdict {
+    if !matched {
+        return Verdict::Unanchored(Discard::NoAnchor);
+    }
+    let Ok(metadata) = fs::symlink_metadata(file) else {
+        return Verdict::Unanchored(Discard::NoAnchor);
+    };
     if !metadata.is_file() || metadata.len() > ANCHOR_MAX_BYTES {
-        return Err(Discard::BadAnchor);
+        return Verdict::Unanchored(Discard::BadAnchor);
     }
-    let text = fs::read_to_string(anchor.file).map_err(|_| Discard::BadAnchor)?;
-    text.strip_suffix('\n')
-        .and_then(|line| line.strip_prefix(FORMAT))
-        .and_then(|rest| rest.strip_prefix(' '))
-        .filter(|hex| {
-            hex.len() == 64 && hex.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
+    fs::read_to_string(file)
+        .ok()
+        .and_then(|text| {
+            text.strip_suffix('\n')
+                .and_then(|line| line.strip_prefix(FORMAT))
+                .and_then(|rest| rest.strip_prefix(' '))
+                .filter(|hex| is_digest(hex))
+                .map(str::to_owned)
         })
-        .map(str::to_owned)
-        .ok_or(Discard::BadAnchor)
+        .map_or(Verdict::Unanchored(Discard::BadAnchor), Verdict::Anchored)
 }
 
 fn compare(home: &Path, anchor: &Anchor<'_>) -> Result<(), Discard> {
-    let expected = read_anchor(anchor)?;
+    let expected = expected(anchor)?;
     let actual = digest(home).map_err(Discard::Unreadable)?;
     if actual == expected {
         Ok(())
@@ -200,16 +221,6 @@ fn discard(home: &Path) -> Result<(), CiError> {
     Ok(())
 }
 
-pub fn reset(anchor: &Path) -> Result<Verdict, CiError> {
-    remove_tree(anchor).map_err(|error| {
-        CiError::new(format!(
-            "cannot clear the anchor {}: {error}",
-            anchor.display()
-        ))
-    })?;
-    Ok(Verdict::Reset)
-}
-
 pub fn check(home: &Path, anchor: &Anchor<'_>) -> Result<Verdict, CiError> {
     if HOME_PATHS
         .iter()
@@ -226,22 +237,22 @@ pub fn check(home: &Path, anchor: &Anchor<'_>) -> Result<Verdict, CiError> {
     }
 }
 
-pub fn record(home: &Path, anchor: &Anchor<'_>, trusted: bool) -> Result<Verdict, CiError> {
-    if !trusted {
+pub fn record(home: &Path, recording: &Recording<'_>) -> Result<Verdict, CiError> {
+    if !recording.trusted {
         return Ok(Verdict::Differs(Discard::Untrusted));
     }
-    match compare(home, anchor) {
-        Ok(()) => Ok(Verdict::Matches),
-        Err(Discard::NoAnchor) => {
-            let actual = match digest(home) {
-                Ok(actual) => actual,
-                Err(reason) => return Ok(Verdict::Differs(Discard::Unreadable(reason))),
-            };
-            write_anchor(anchor.file, &actual)?;
-            Ok(Verdict::Recorded)
-        }
-        Err(reason) => Ok(Verdict::Differs(reason)),
+    let actual = match digest(home) {
+        Ok(actual) => actual,
+        Err(reason) => return Ok(Verdict::Differs(Discard::Unreadable(reason))),
+    };
+    if expected(&recording.anchor).is_ok_and(|anchor| anchor == actual) {
+        return Ok(Verdict::Matches(actual));
     }
+    if recording.verified {
+        return Ok(Verdict::Differs(Discard::Mismatch));
+    }
+    write_anchor(recording.file, &actual)?;
+    Ok(Verdict::Recorded(actual))
 }
 
 fn write_anchor(anchor: &Path, digest: &str) -> Result<(), CiError> {
@@ -252,6 +263,7 @@ fn write_anchor(anchor: &Path, digest: &str) -> Result<(), CiError> {
         ))
     };
     let parent = anchor.parent().unwrap_or(Path::new("."));
+    remove_tree(parent).map_err(fail)?;
     fs::create_dir_all(parent).map_err(fail)?;
     let staged = parent.join(format!(".anchor-{}", std::process::id()));
     fs::write(&staged, format!("{FORMAT} {digest}\n")).map_err(fail)?;

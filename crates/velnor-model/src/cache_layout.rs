@@ -1,9 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{CacheKey, CacheRoot, JobId, LockIdentity, RepoPath, RootSlug};
+use crate::{CacheKey, CacheRoot, JobId, LockIdentity, RepoPath, RootSlug, ToolsAnchor};
 
 pub const CACHE_COMPAT_LENGTH: usize = 16;
+pub const TOOLS_ANCHOR_LENGTH: usize = 64;
 pub const LOCK_OUTPUT_PREFIX: &str = "lock_";
 pub const RUNNER_OS_MAX_LENGTH: usize = "Windows".len();
 pub const RUNNER_ARCH_MAX_LENGTH: usize = "ARM64".len();
@@ -23,6 +24,7 @@ pub enum CacheKeySegment {
     RunId,
     PullRequest,
     DeltaBase(RootSlug),
+    ToolsAnchor(ToolsAnchor),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -43,6 +45,7 @@ impl CacheKeySegment {
                 .saturating_add(json_string_bytes(root.as_str()).saturating_sub(2))
                 .saturating_add(1 + (RUNNER_OS_MAX_LENGTH + 1 + RUNNER_ARCH_MAX_LENGTH)),
             Self::Compat => CACHE_COMPAT_LENGTH,
+            Self::ToolsAnchor(_) => TOOLS_ANCHOR_LENGTH,
             _ => usize::MAX,
         }
     }
@@ -66,16 +69,19 @@ impl CacheKey {
             TargetOwner, Text,
         };
         let (segments, fallback_lengths): (Vec<_>, &'static [usize]) = match self {
-            Self::Tools { .. } => (
-                vec![
+            Self::Tools { anchor, .. } => {
+                let mut segments = vec![
                     Text("velnor".into()),
                     Text(self.tag().into()),
                     Host,
                     Mise,
                     Locks(vec![RepoPath::from_static("mise.lock")]),
-                ],
-                &[],
-            ),
+                ];
+                if *anchor != ToolsAnchor::Unanchored {
+                    segments.push(CacheKeySegment::ToolsAnchor(anchor.clone()));
+                }
+                (segments, &[])
+            }
             Self::Sources { .. } => (
                 vec![
                     Text("velnor".into()),

@@ -216,6 +216,7 @@ pub(crate) fn plan_job(
 ) -> Job {
     let mut steps = head(facts, PLAN_DEPTH, None);
     steps.push(step(StepKind::Helper(HelperCommand::Plan)));
+    steps.extend(crate::plan_tools::tools_anchor_read(facts));
     Job {
         plan_outputs: outputs,
         group_outputs,
@@ -246,13 +247,13 @@ pub(crate) fn policy_job(facts: &RepoFacts, lane: &Lane) -> Job {
     }));
     if !facts.tools.tools.is_empty() {
         steps.extend(
-            tools_restore(facts)
+            tools_restore(facts, lane.plan.as_ref())
                 .into_iter()
                 .chain(tools_install(facts))
                 .chain(mirror_step(facts))
                 .chain(
                     (!crate::plan_tools::tools_verified(facts))
-                        .then(|| tools_save(facts))
+                        .then(|| tools_save(facts, lane.plan.as_ref()))
                         .into_iter()
                         .flatten(),
                 )

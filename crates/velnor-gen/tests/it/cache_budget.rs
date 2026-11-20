@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeSet;
-use velnor_model::{CacheKey, CacheRoot, Host, JobId, RepoPath};
+use velnor_model::{CacheKey, CacheRoot, Host, JobId, RepoPath, ToolsAnchor};
 use velnor_render::render_key_with_mise;
 use velnor_rust::{CacheEntry, budget_plan};
 
@@ -19,7 +19,13 @@ fn entry(id: u64, family: &str, age: i64) -> CacheEntry {
             },
             id,
         ),
-        "tools" => resolve_cache_key(&CacheKey::Tools { host: Host }, id),
+        "tools" => resolve_cache_key(
+            &CacheKey::Tools {
+                host: Host,
+                anchor: ToolsAnchor::Unanchored,
+            },
+            id,
+        ),
         "dlt" => resolve_cache_key(
             &CacheKey::Delta {
                 job: JobId::new("rust-test").unwrap_or_else(|e| unreachable!("{e}")),
@@ -124,6 +130,27 @@ fn ages_are_inclusive_and_only_pr_merge_scopes_are_delta_candidates() {
         );
     }
     assert_eq!(plan(&[delta(1, 0)], 10), Vec::<u64>::new());
+}
+
+fn anchored_tools(id: u64, age: i64) -> CacheEntry {
+    CacheEntry {
+        key: format!(
+            "velnor-tools-Linux-X64-mise2026.11.10-{}-{id:064x}",
+            "a".repeat(64)
+        ),
+        ..entry(id, "other", age)
+    }
+}
+
+#[test]
+fn tools_entries_named_by_their_anchor_are_pruned_as_one_group() {
+    let old = anchored_tools(1, 8 * DAY);
+    let newest = anchored_tools(2, 8 * DAY);
+    assert_eq!(plan(&[old, newest], 0), vec![1]);
+    assert_eq!(
+        plan(&[anchored_tools(1, DAY), anchored_tools(2, DAY)], 0),
+        Vec::<u64>::new()
+    );
 }
 
 #[test]

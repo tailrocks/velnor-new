@@ -78,7 +78,7 @@ fn attach_metrics(job: &mut Job, nextest_artifacts: bool) {
     let has = |verb| {
         job.steps
             .iter()
-            .any(|step| step.kind == StepKind::ToolsLocal(verb))
+            .any(|step| matches!(&step.kind, StepKind::ToolsLocal(found, _) if *found == verb))
     };
     let node_tools = ToolsTelemetry {
         restore: has(ToolsLocalVerb::RecordRestore),

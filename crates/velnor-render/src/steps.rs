@@ -98,6 +98,7 @@ pub(crate) fn rendered_job(job: &Job, plan: &WorkflowPlan) -> RenderedJob {
             }))
             .chain(test_outputs(job, &tests))
             .chain(merge_group_output(job))
+            .chain(crate::tools_steps::anchor_output(&job.steps))
             .chain(lane_outputs(&job.steps))
             .collect(),
         cache_mode: crate::cache::saving_mode(job),
@@ -144,10 +145,12 @@ fn job_steps(
     lane: CargoLane,
 ) -> Vec<RenderedStep> {
     let gate = SaveGate::of(job);
-    let verified = job
-        .steps
-        .iter()
-        .any(|step| step.kind == StepKind::ToolsLocal(velnor_model::ToolsLocalVerb::Verify));
+    let verified = job.steps.iter().any(|step| {
+        matches!(
+            step.kind,
+            StepKind::ToolsLocal(velnor_model::ToolsLocalVerb::Verify, _)
+        )
+    });
     job.steps
         .iter()
         .enumerate()
@@ -363,7 +366,7 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
         | StepKind::PrivateFetch { .. }
         | StepKind::ReleaseAssets { .. } => crate::private_steps::render(kind),
         StepKind::AdvisoryFetch { configs } => crate::private_steps::advisory_fetch(configs),
-        StepKind::MbxSeed | StepKind::ToolsLocal(_) => crate::helper_steps::node_step(kind),
+        StepKind::MbxSeed | StepKind::ToolsLocal(..) => crate::helper_steps::node_step(kind),
         StepKind::TestSetup { name, run } => RenderedStep {
             name: name.clone(),
             run: Some(run.clone()),

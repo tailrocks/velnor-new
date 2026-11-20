@@ -3,7 +3,8 @@
 
 use velnor_model::{
     CacheKey, CacheRoot, Concurrency, Host, Job, JobId, Permissions, PrRun, PullRequestType,
-    RepoPath, RootSlug, RunnerLabel, Step, StepKind, Triggers, WORKFLOW_PATH, When, WorkflowPlan,
+    RepoPath, RootSlug, RunnerLabel, Step, StepKind, ToolsAnchor, Triggers, WORKFLOW_PATH, When,
+    WorkflowPlan,
 };
 use velnor_render::{RenderedKey, render, render_key, render_key_with_mise};
 
@@ -30,7 +31,10 @@ fn target(job: &str, manifest: &str) -> Result<RenderedKey, Box<dyn std::error::
 
 #[test]
 fn a_mise_bump_changes_the_tools_key() {
-    let key = CacheKey::Tools { host: Host };
+    let key = CacheKey::Tools {
+        host: Host,
+        anchor: ToolsAnchor::Unanchored,
+    };
     let old = render_key_with_mise(&key, "2026.11.1");
     let new = render_key_with_mise(&key, "2026.12.0");
     assert_ne!(old.key, new.key);
@@ -39,7 +43,10 @@ fn a_mise_bump_changes_the_tools_key() {
 
 #[test]
 fn each_family_renders_its_key_and_ordered_fallbacks() -> TestResult {
-    let tools = render_key(&CacheKey::Tools { host: Host });
+    let tools = render_key(&CacheKey::Tools {
+        host: Host,
+        anchor: ToolsAnchor::Unanchored,
+    });
     assert_eq!(
         tools,
         RenderedKey {
@@ -112,7 +119,10 @@ fn a_delta_key_is_never_equal_to_or_a_prefix_of_a_base_key() -> TestResult {
             lane: root,
         });
     }
-    keys.push(CacheKey::Tools { host: Host });
+    keys.push(CacheKey::Tools {
+        host: Host,
+        anchor: ToolsAnchor::Unanchored,
+    });
     let mut tags = std::collections::BTreeSet::new();
     let mut deltas = Vec::new();
     let mut bases = Vec::new();

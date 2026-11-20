@@ -293,6 +293,8 @@ mod test_setup_phase;
 mod tool_pins;
 mod toolchain;
 mod toolchain_components;
+mod tools_anchor;
+mod tools_anchor_size;
 mod tools_cache;
 mod tools_clear;
 mod tools_local;

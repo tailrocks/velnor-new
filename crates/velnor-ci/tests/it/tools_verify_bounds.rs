@@ -11,7 +11,7 @@ use crate::tools_verify::{checked, context, discarded, job, recorded};
 #[test]
 fn a_huge_sparse_file_is_discarded_without_being_read() {
     let job = job("tools-verify-sparse-huge");
-    recorded(&job);
+    let anchor = recorded(&job);
     let sparse =
         fs::File::create(job.home.join(".rustup/sparse")).unwrap_or_else(|e| unreachable!("{e}"));
     sparse
@@ -19,7 +19,7 @@ fn a_huge_sparse_file_is_discarded_without_being_read() {
         .unwrap_or_else(|e| unreachable!("{e}"));
     let started = std::time::Instant::now();
     assert!(matches!(
-        checked(&job),
+        checked(&job, &anchor),
         Verdict::Discarded(Discard::Unreadable(_))
     ));
     assert!(started.elapsed() < std::time::Duration::from_secs(10));
@@ -29,12 +29,12 @@ fn a_huge_sparse_file_is_discarded_without_being_read() {
 #[test]
 fn a_small_sparse_file_is_refused_as_suspicious() {
     let job = job("tools-verify-sparse-small");
-    recorded(&job);
+    let anchor = recorded(&job);
     fs::File::create(job.home.join(".rustup/hole"))
         .and_then(|file| file.set_len(1 << 20))
         .unwrap_or_else(|e| unreachable!("{e}"));
     assert!(matches!(
-        checked(&job),
+        checked(&job, &anchor),
         Verdict::Discarded(Discard::Unreadable(_))
     ));
 }
@@ -53,13 +53,13 @@ fn a_tree_over_the_total_budget_is_refused() {
 #[test]
 fn a_hostile_path_cannot_forge_workflow_commands_in_the_notice() {
     let job = job("tools-verify-inject");
-    recorded(&job);
+    let anchor = recorded(&job);
     let hostile = job.home.join(".rustup/a\n::stop-commands::x\r%0A");
     fs::File::create(&hostile)
         .and_then(|file| file.set_len(1 << 20))
         .unwrap_or_else(|e| unreachable!("{e}"));
     let out =
-        run(Verb::Check, &context(&job, true, "push")).unwrap_or_else(|e| unreachable!("{e}"));
+        run(Verb::Check, &context(&job, &anchor, "push")).unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(out.matches('\n').count(), 1, "{out:?}");
     assert!(!out.contains('\r'));
     assert!(!out.contains("::stop-commands::"), "{out:?}");
