@@ -16,7 +16,9 @@ const CREDENTIAL_FILES: &[&str] = &[
     "credentials.toml",
     "hosts.yml",
 ];
-const GIT_CONFIGS: &[&str] = &["config", "config.worktree"];
+const GIT_CONFIGS: &[&str] = &["config", "config.worktree", ".gitconfig", "config.bak"];
+const GIT_TEXT: &[&str] = &["fetch_head", "packed-refs"];
+const HOOKS: &str = "hooks";
 const MAX_CONFIG_BYTES: u64 = 1 << 20;
 const MAX_DEPTH: usize = 12;
 const MAX_ENTRIES: usize = 2_000_000;
@@ -78,15 +80,32 @@ fn walk(directory: &Path, depth: usize, budget: &mut usize) -> Option<String> {
         let Ok(kind) = entry.file_type() else {
             return Some(format!("cannot inspect {}", shown(&path)));
         };
+        if kind.is_symlink() {
+            return Some(format!(
+                "{} is a symbolic link that could point a credential outside the saved sources",
+                shown(&path)
+            ));
+        }
         if CREDENTIAL_FILES.contains(&name.as_str()) {
             return Some(format!("{} is a credential file", shown(&path)));
         }
         if kind.is_dir() {
             subdirectories.push(path);
-        } else if kind.is_file() && GIT_CONFIGS.contains(&name.as_str()) && holds_credential(&path)
-        {
+        } else if !kind.is_file() {
+            return Some(format!(
+                "{} is not a regular file that can be checked for a credential",
+                shown(&path)
+            ));
+        } else if GIT_CONFIGS.contains(&name.as_str()) && holds_credential(&path) {
             return Some(format!(
                 "{} holds a credential or a transport setting",
+                shown(&path)
+            ));
+        } else if (GIT_TEXT.contains(&name.as_str()) || is_hooks(directory))
+            && names_credential_file(&path)
+        {
+            return Some(format!(
+                "{} names a credential or a transport setting",
                 shown(&path)
             ));
         }
@@ -96,15 +115,22 @@ fn walk(directory: &Path, depth: usize, budget: &mut usize) -> Option<String> {
         .find_map(|path| walk(path, depth + 1, budget))
 }
 
+fn is_hooks(directory: &Path) -> bool {
+    directory.file_name().is_some_and(|name| name == HOOKS)
+}
+
 fn holds_credential(path: &Path) -> bool {
-    let Ok(meta) = fs::metadata(path) else {
-        return true;
-    };
+    read_small(path).is_none_or(|text| !crate::io::saved_git_config::is_plain(&text))
+}
+
+fn names_credential_file(path: &Path) -> bool {
+    read_small(path).is_none_or(|text| crate::io::saved_git_config::names_credential(&text))
+}
+
+fn read_small(path: &Path) -> Option<String> {
+    let meta = fs::metadata(path).ok()?;
     if meta.len() > MAX_CONFIG_BYTES {
-        return true;
+        return None;
     }
-    let Ok(text) = fs::read_to_string(path) else {
-        return true;
-    };
-    !crate::io::saved_git_config::is_plain(&text)
+    fs::read_to_string(path).ok()
 }

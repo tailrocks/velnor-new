@@ -18,6 +18,8 @@ const ALLOWED: &[(&str, &[&str])] = &[
     ("remote", &["url", "fetch", "tagopt"]),
 ];
 const REMOTE_SCHEMES: &[&str] = &["https://", "http://", "ssh://"];
+const TOKEN_PREFIXES: &[&str] = &["ghp_", "gho_", "ghs_", "ghu_", "ghr_", "github_pat_"];
+const TOKEN_HEX_LEN: usize = 40;
 
 pub(super) fn is_plain(text: &str) -> bool {
     let mut section = String::new();
@@ -75,16 +77,40 @@ fn plain_entry(section: &str, entry: &str) -> bool {
     keys.contains(&key.as_str()) && (key != "url" || value.is_some_and(plain_remote))
 }
 
+pub(super) fn names_credential(text: &str) -> bool {
+    let text = text.to_ascii_lowercase();
+    has_token_prefix(&text)
+        || text
+            .split(|each: char| each.is_whitespace() || matches!(each, '\'' | '"' | '<' | '>'))
+            .any(|word| word.contains("://") && !plain_remote(word))
+}
+
+fn has_token_prefix(text: &str) -> bool {
+    TOKEN_PREFIXES.iter().any(|prefix| text.contains(prefix))
+}
+
+fn looks_like_token(text: &str) -> bool {
+    has_token_prefix(text)
+        || text
+            .split(|each: char| !each.is_ascii_hexdigit())
+            .any(|run| run.len() >= TOKEN_HEX_LEN)
+}
+
 fn plain_remote(url: &str) -> bool {
     let url = url.to_ascii_lowercase();
     REMOTE_SCHEMES.iter().any(|scheme| {
         url.strip_prefix(scheme).is_some_and(|rest| {
-            let authority = rest.split('/').next().unwrap_or("");
+            let mut segments = rest.split('/');
+            let authority = segments.next().unwrap_or("");
             !authority.is_empty()
+                && !url.contains('?')
+                && !segments.any(looks_like_token)
                 && match authority.rsplit_once('@') {
                     None => true,
                     Some((userinfo, _)) => {
-                        *scheme == "ssh://" && !userinfo.contains([':', '%', '@'])
+                        *scheme == "ssh://"
+                            && !userinfo.contains([':', '%', '@'])
+                            && !looks_like_token(userinfo)
                     }
                 }
         })
