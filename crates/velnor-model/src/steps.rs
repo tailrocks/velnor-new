@@ -28,6 +28,8 @@ pub enum StepKind {
     InstallMise,
     Lint(LintCommand),
     CacheRestore(CacheKey),
+    /// A `lookup-only` read of a cache entry: it reports whether the entry exists and never downloads it.
+    CacheLookup(CacheKey),
     CacheSave(CacheKey),
     RestoredTargets {
         expiry: BaseExpiry,
