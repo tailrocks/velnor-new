@@ -6,11 +6,12 @@ use std::process::{Command, ExitStatus};
 
 use crate::error::CiError;
 
-use super::crates_mirror::{CONFIG_ENV, DISABLE_ENV, REAL_ENV, WRAPPER_ENV, failed};
+use super::crates_mirror::{CONFIG_ENV, REAL_ENV, WRAPPER_ENV, failed};
 use super::crates_mirror_args::with_mirror_config;
 use super::crates_mirror_depth::wrapper_ancestors;
 use super::crates_mirror_mbx as mbx;
 use super::crates_mirror_mise::{self as mise, LaunchPhase};
+use super::crates_mirror_mode as mode;
 
 const RUSTUP_ENV: &str = "VELNOR_CARGO_RUSTUP";
 const DEPTH_ENV: &str = "VELNOR_CARGO_DEPTH";
@@ -37,9 +38,8 @@ pub(super) fn forward() -> Result<ExitStatus, CiError> {
         std::env::var_os(WRAPPER_ENV)
             .ok_or_else(|| CiError::new("missing VELNOR_CARGO_WRAPPER"))?,
     );
-    // Absent only when the mirror is off, which setup records as VELNOR_CRATES_MIRROR=off.
-    let config = std::env::var_os(CONFIG_ENV).filter(|config| !config.is_empty());
-    let mirror_off = std::env::var(DISABLE_ENV).is_ok_and(|value| value == "off");
+    let mirror_off = mode::mirror_off()?;
+    let config = std::env::var_os(CONFIG_ENV);
     let paths: Vec<_> =
         std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default()).collect();
     let args: Vec<_> = std::env::args_os().skip(1).collect();
@@ -99,9 +99,7 @@ pub(super) fn forward() -> Result<ExitStatus, CiError> {
         std::iter::once(directory.as_path()).chain(paths.iter().map(PathBuf::as_path)),
     )
     .map_err(|error| CiError::new(format!("cannot configure Cargo PATH: {error}")))?;
-    if config.is_none() && !mirror_off {
-        return Err(CiError::new(format!("missing {CONFIG_ENV}")));
-    }
+    let config = mode::require_config(mirror_off, config)?;
     let mut command = Command::new(directory.join(SAVED));
     if let Some(toolchain) = cargo.toolchain {
         command.env("RUSTUP_TOOLCHAIN", toolchain);

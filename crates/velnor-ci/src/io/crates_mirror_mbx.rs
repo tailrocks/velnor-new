@@ -21,6 +21,7 @@ const FILES: [&str; 2] = ["mise.toml", ".mise.toml"];
 
 pub(super) fn required() -> bool {
     std::env::var_os(ENV).is_some_and(|value| !value.is_empty())
+        || super::crates_mirror_mode::recorded().is_ok_and(|mode| mode.is_some_and(|mode| mode.mbx))
 }
 
 pub(super) fn refused(cargo: &Path) -> CiError {

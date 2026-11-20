@@ -10,12 +10,12 @@ use crate::io::Repo;
 
 use super::fixture::{TestResult, setup, setup_command};
 
-const REGISTRY: &str = "sparse+https://mirror.example/index/";
-const MBX_DECLARED: &str = "[tools]\nrust = { version = \"1.99.1\", mr_boxington = true }\n\n[wrappers.cargo]\ncommand = \"mbx\"\n";
-const REFUSED: &str = "mbx is declared but cargo on PATH isn't the mise mbx wrapper";
+pub(super) const REGISTRY: &str = "sparse+https://mirror.example/index/";
+pub(super) const MBX_DECLARED: &str = "[tools]\nrust = { version = \"1.99.1\", mr_boxington = true }\n\n[wrappers.cargo]\ncommand = \"mbx\"\n";
+pub(super) const REFUSED: &str = "mbx is declared but cargo on PATH isn't the mise mbx wrapper";
 
 /// A `cargo` that prints a marker, standing in for a cargo found on PATH outside mise.
-fn plain_cargo(repo: &Repo) -> Result<PathBuf, Box<dyn std::error::Error>> {
+pub(super) fn plain_cargo(repo: &Repo) -> Result<PathBuf, Box<dyn std::error::Error>> {
     script(repo, "plain/cargo", "#!/bin/sh\necho plain-cargo-ran\n")?;
     Ok(repo.root().join("plain"))
 }
@@ -36,7 +36,7 @@ fn script(repo: &Repo, path: &str, text: &str) -> TestResult {
     Ok(())
 }
 
-fn path_with(first: &Path) -> Result<std::ffi::OsString, Box<dyn std::error::Error>> {
+pub(super) fn path_with(first: &Path) -> Result<std::ffi::OsString, Box<dyn std::error::Error>> {
     Ok(std::env::join_paths([
         first.to_path_buf(),
         PathBuf::from("/usr/bin"),
@@ -62,6 +62,15 @@ fn run_wrapper_with(
     mbx_required: bool,
     mise_active: bool,
 ) -> Result<Output, Box<dyn std::error::Error>> {
+    Ok(wrapper_command(root, first, mbx_required, mise_active)?.output()?)
+}
+
+pub(super) fn wrapper_command(
+    root: &Path,
+    first: &Path,
+    mbx_required: bool,
+    mise_active: bool,
+) -> Result<Command, Box<dyn std::error::Error>> {
     let env = fs::read_to_string(root.join("env"))?;
     let config = env
         .lines()
@@ -98,10 +107,10 @@ fn run_wrapper_with(
     if mise_active {
         command.env("__MISE_ACTIVE_WRAPPERS", r#"["cargo"]"#);
     }
-    Ok(command.output()?)
+    Ok(command)
 }
 
-fn configured_repo(name: &str) -> Result<Repo, Box<dyn std::error::Error>> {
+pub(super) fn configured_repo(name: &str) -> Result<Repo, Box<dyn std::error::Error>> {
     let repo = Repo::empty(name);
     repo.write_unstaged("ca.pem", "not used by this fixture");
     fs::create_dir_all(repo.root().join("mise-data"))?;
