@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::error::CiError;
+
 #[must_use]
 pub fn inert(text: &str) -> String {
     escape(text, false).replace(':', "%3A")
@@ -27,4 +29,40 @@ pub fn escape(text: &str, property: bool) -> String {
 #[must_use]
 pub fn stderr_line(message: &str) -> String {
     format!("velnor-ci: {}", escape(message, false))
+}
+
+#[must_use]
+pub fn command_line(name: &str, message: &str) -> String {
+    format!("::{name}::{}\n", escape(message, false))
+}
+
+#[must_use]
+pub fn escape_property(text: &str) -> String {
+    escape(text, true)
+}
+
+pub fn file_value(value: &str) -> Result<&str, CiError> {
+    if value.contains(['\r', '\n']) {
+        return Err(CiError::new(
+            "a value for GITHUB_OUTPUT, GITHUB_ENV or GITHUB_PATH holds a line break; refused",
+        ));
+    }
+    Ok(value)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{escape_property, file_value};
+
+    #[test]
+    fn property_value_also_encodes_separators() {
+        assert_eq!(escape_property("a:b,c\n"), "a%3Ab%2Cc%0A");
+    }
+
+    #[test]
+    fn file_value_refuses_a_line_break_that_would_add_a_key() {
+        assert_eq!(file_value("/runner/temp").ok(), Some("/runner/temp"));
+        assert!(file_value("x\nowner=evil").is_err());
+        assert!(file_value("x\rowner=evil").is_err());
+    }
 }

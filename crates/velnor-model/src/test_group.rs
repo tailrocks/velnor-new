@@ -22,7 +22,25 @@ pub struct TestGroup {
     pub paths: Vec<PathGlob>,
     pub events: Vec<GroupEvent>,
     pub root: GroupRoot,
+    pub partitions: Option<u16>,
+    pub artifacts: Vec<GroupArtifact>,
 }
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GroupArtifact {
+    pub name: String,
+    pub paths: Vec<String>,
+    pub when: ArtifactWhen,
+    pub retention_days: u8,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ArtifactWhen {
+    Failure,
+    Always,
+}
+
+pub const ARTIFACT_RETENTION_DEFAULT: u8 = 3;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum TestNeed {
@@ -79,6 +97,11 @@ pub enum GroupRoot {
 }
 
 impl TestGroup {
+    #[must_use]
+    pub fn partition_count(&self) -> u16 {
+        self.partitions.unwrap_or(1).max(1)
+    }
+
     #[must_use]
     pub fn restores_cache(&self) -> bool {
         self.restore_cache == Some(true)
