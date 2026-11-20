@@ -146,6 +146,7 @@ fn working_tree(source: &Path, target: &Path) -> Result<(), CiError> {
 }
 
 fn objects(source: &Path, target: &Path) -> Result<(), CiError> {
+    directory(target)?;
     let mut entries = children(source)?;
     entries.sort_by_key(|entry| {
         entry
@@ -160,16 +161,43 @@ fn objects(source: &Path, target: &Path) -> Result<(), CiError> {
             continue;
         }
         if kind.is_dir() {
-            fs::create_dir_all(&destination).map_err(|e| failed(&destination, &e))?;
             objects(&entry, &destination)?;
-        } else if kind.is_file() && !destination.exists() {
-            let staged = target.join(format!(".{name}.velnor-{}", std::process::id()));
-            fs::copy(&entry, &staged)
-                .and_then(|_| fs::rename(&staged, &destination))
-                .map_err(|e| failed(&destination, &e))?;
+        } else if kind.is_file() {
+            unlinked(&destination)?;
+            if !destination.exists() {
+                let staged = target.join(format!(".{name}.velnor-{}", std::process::id()));
+                drop(fs::remove_file(&staged));
+                stage(&entry, &staged)
+                    .and_then(|()| fs::rename(&staged, &destination))
+                    .map_err(|e| failed(&destination, &e))?;
+            }
         }
     }
     Ok(())
+}
+
+fn directory(path: &Path) -> Result<(), CiError> {
+    unlinked(path)?;
+    match fs::symlink_metadata(path) {
+        Ok(meta) if meta.is_dir() => Ok(()),
+        Ok(_) => Err(CiError::new(format!(
+            "{} is not a directory; refusing to copy the fetched git sources into it",
+            path.display()
+        ))),
+        Err(e) if e.kind() == ErrorKind::NotFound => {
+            fs::create_dir(path).map_err(|e| failed(path, &e))
+        }
+        Err(e) => Err(failed(path, &e)),
+    }
+}
+
+fn stage(source: &Path, staged: &Path) -> std::io::Result<()> {
+    let mut input = fs::File::open(source)?;
+    let mut output = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(staged)?;
+    std::io::copy(&mut input, &mut output).map(drop)
 }
 
 fn children(directory: &Path) -> Result<Vec<PathBuf>, CiError> {
