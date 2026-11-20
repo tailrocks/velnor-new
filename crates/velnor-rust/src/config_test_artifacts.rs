@@ -163,6 +163,11 @@ fn path_fault(path: &str) -> Option<&'static str> {
             "is outside the workspace or not normal; write a path with no '..', '.' or empty part",
         );
     }
+    if segments.first().is_some_and(|first| first.contains("**")) {
+        return Some(
+            "starts with a ** glob, which walks the whole workspace; start the path with a directory name",
+        );
+    }
     if segments
         .iter()
         .any(|segment| segment.eq_ignore_ascii_case(".git"))

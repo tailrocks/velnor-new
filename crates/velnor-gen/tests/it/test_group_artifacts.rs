@@ -115,6 +115,8 @@ fn a_path_outside_the_workspace_or_into_secrets_is_refused() -> TestResult {
         "target/**",
         "target/debug",
         "target/release/**",
+        "**/*.xml",
+        "**/junit.xml",
         "**",
         "*",
         ".",
