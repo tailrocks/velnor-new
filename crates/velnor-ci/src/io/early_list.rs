@@ -8,7 +8,7 @@ use std::thread::{self, JoinHandle};
 
 use crate::tests_run::{Listing, list_argv, runnable_matches};
 
-const STEP_FILE_VARIABLES: [&str; 5] = [
+const STEP_FILE_VARIABLES: &[&str] = &[
     "GITHUB_OUTPUT",
     "GITHUB_ENV",
     "GITHUB_PATH",
@@ -69,7 +69,7 @@ fn list_matches(argv: &[String]) -> Option<Listing> {
         .args(&argv[1..])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    for name in STEP_FILE_VARIABLES {
+    for name in STEP_FILE_VARIABLES.iter().copied() {
         command.env_remove(name);
     }
     let output = command.output().ok()?;

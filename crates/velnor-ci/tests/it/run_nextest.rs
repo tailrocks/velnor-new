@@ -125,7 +125,7 @@ pub(crate) fn execute_nextest(
     let written = fs::read_to_string(&outputs).unwrap_or_default();
     (output, written, temp, started.elapsed())
 }
-pub(crate) const NEXTEST_RUN: [&str; 6] = [
+pub(crate) const NEXTEST_RUN: &[&str] = &[
     "cargo-nextest",
     "nextest",
     "run",
@@ -160,7 +160,7 @@ fn run_appends_the_number_of_tests_nextest_ran_to_the_step_output() {
         "{{ printf '     Summary [   0.020s] {BOLD}7'; sleep 0.3; printf '{RESET} tests run: 7 passed, 0 skipped\\n'; }} >&2"
     );
     let seven = listed(&[("kept", &["a", "b", "c", "d", "e", "f", "g"])]);
-    let (output, written, _) = run_with_output("tests-run-split", &split, &seven, &NEXTEST_RUN);
+    let (output, written, _) = run_with_output("tests-run-split", &split, &seven, NEXTEST_RUN);
     assert!(output.status.success(), "{output:?}");
     assert_eq!(
         written,
@@ -174,7 +174,7 @@ fn run_counts_failed_tests_and_keeps_the_exit_code_of_nextest() {
         "echo '     Summary [   1.200s] {BOLD}5{RESET} tests run: 3 passed, {BOLD}2{RESET} failed, 0 skipped' >&2; exit 100"
     );
     let five = listed(&[("kept", &["a", "b", "c", "d", "e"])]);
-    let (output, written, _) = run_with_output("tests-run-failed", &script, &five, &NEXTEST_RUN);
+    let (output, written, _) = run_with_output("tests-run-failed", &script, &five, NEXTEST_RUN);
     assert_eq!(output.status.code(), Some(100));
     assert_eq!(
         written,
@@ -186,7 +186,7 @@ fn run_counts_failed_tests_and_keeps_the_exit_code_of_nextest() {
 fn run_reports_a_run_without_tests_as_zero() {
     let script = "echo '     Summary [   0.001s] 0 tests run: 0 passed, 0 skipped' >&2";
     let none = listed(&[]);
-    let (output, written, _) = run_with_output("tests-run-zero", script, &none, &NEXTEST_RUN);
+    let (output, written, _) = run_with_output("tests-run-zero", script, &none, NEXTEST_RUN);
     assert!(output.status.success(), "{output:?}");
     assert_eq!(
         written,
@@ -201,7 +201,7 @@ SKIP [         ] (───) gone only
  Summary [   0.001s] 0 tests run: 0 passed, 1 skipped
 END";
     let (output, written, _) =
-        run_with_output("tests-run-filtered", script, EXCLUDED_LIST, &NEXTEST_RUN);
+        run_with_output("tests-run-filtered", script, EXCLUDED_LIST, NEXTEST_RUN);
     assert!(output.status.success(), "{output:?}");
     assert_eq!(
         written,
@@ -217,7 +217,7 @@ PASS [   0.012s] kept beta
  Summary [   0.022s] 2 tests run: 2 passed, 0 skipped
 END";
     let two = listed(&[("kept", &["alpha", "beta"])]);
-    let (_, written, _) = run_with_output("tests-run-no-counter", script, &two, &NEXTEST_RUN);
+    let (_, written, _) = run_with_output("tests-run-no-counter", script, &two, NEXTEST_RUN);
     assert_eq!(
         written,
         "existing=1\nbuilt=true\ntests_run=2\ntests_listed=2\ntests_ignored=0\ntests_by_package=kept=2/2\n"
@@ -234,7 +234,7 @@ PASS [   0.012s] (1/2) kept alpha
    FLAKY 2/3 [   0.016s] (2/2) kept beta
 END";
     let two = listed(&[("kept", &["alpha", "beta"])]);
-    let (_, written, _) = run_with_output("tests-run-retry", script, &two, &NEXTEST_RUN);
+    let (_, written, _) = run_with_output("tests-run-retry", script, &two, NEXTEST_RUN);
     assert_eq!(
         written,
         "existing=1\nbuilt=true\ntests_run=2\ntests_listed=2\ntests_ignored=0\ntests_by_package=kept=2/2\n"
@@ -248,7 +248,7 @@ PASS [   0.012s] (1/1) café t::ok
  Summary [   0.012s] 1 test run: 1 passed, 0 skipped
 END";
     let one = listed(&[("café", &["t::ok"])]);
-    let (_, written, _) = run_with_output("tests-run-unicode", script, &one, &NEXTEST_RUN);
+    let (_, written, _) = run_with_output("tests-run-unicode", script, &one, NEXTEST_RUN);
     assert_eq!(
         written,
         "existing=1\nbuilt=true\ntests_run=1\ntests_listed=1\ntests_ignored=0\ntests_by_package=café=1/1\n"
@@ -262,7 +262,7 @@ fn run_counts_a_status_line_longer_than_the_line_limit() {
         "{{ printf '        PASS [   0.012s] (1/1) kept {name}\\n'; echo '     Summary [   0.012s] 1 test run: 1 passed, 0 skipped'; }} >&2"
     );
     let one = listed(&[("kept", &["x"])]);
-    let (_, written, _) = run_with_output("tests-run-long", &script, &one, &NEXTEST_RUN);
+    let (_, written, _) = run_with_output("tests-run-long", &script, &one, NEXTEST_RUN);
     assert_eq!(
         written,
         "existing=1\nbuilt=true\ntests_run=1\ntests_listed=1\ntests_ignored=0\ntests_by_package=kept=1/1\n"
@@ -273,13 +273,13 @@ fn run_counts_a_status_line_longer_than_the_line_limit() {
 fn run_counts_runnable_tests_when_the_log_has_no_status_lines() {
     let mixed = "echo '     Summary [   0.5s] 3 tests run: 2 passed, 1 failed, 5 skipped' >&2";
     let three = listed(&[("kept", &["a", "b", "c"])]);
-    let (_, written, _) = run_with_output("tests-run-mixed", mixed, &three, &NEXTEST_RUN);
+    let (_, written, _) = run_with_output("tests-run-mixed", mixed, &three, NEXTEST_RUN);
     assert_eq!(
         written,
         "existing=1\nbuilt=true\ntests_run=3\ntests_listed=3\ntests_ignored=0\n"
     );
     let bare = "echo '     Summary [   0.5s] 3 tests run: 3 passed' >&2";
-    let (_, written, _) = run_with_output("tests-run-bare", bare, &three, &NEXTEST_RUN);
+    let (_, written, _) = run_with_output("tests-run-bare", bare, &three, NEXTEST_RUN);
     assert_eq!(
         written,
         "existing=1\nbuilt=true\ntests_run=3\ntests_listed=3\ntests_ignored=0\n"
@@ -327,7 +327,7 @@ test alpha ... ok\n\
  Summary [   0.012s] 1 test run: 1 passed, 0 skipped\n\
 END";
     let one = listed(&[("kept", &["alpha"])]);
-    let (output, written, _) = run_with_output("tests-run-captured", script, &one, &NEXTEST_RUN);
+    let (output, written, _) = run_with_output("tests-run-captured", script, &one, NEXTEST_RUN);
     assert!(output.status.success(), "{output:?}");
     assert_eq!(
         written,
@@ -347,7 +347,7 @@ nextest-prepull-images: pulling postgres:18-alpine
      Summary [   0.022s] 2 tests run: 2 passed, 0 skipped
 END";
     let two = listed(&[("kept", &["alpha", "beta"])]);
-    let (_, written, _) = run_with_output("tests-run-setup-script", script, &two, &NEXTEST_RUN);
+    let (_, written, _) = run_with_output("tests-run-setup-script", script, &two, NEXTEST_RUN);
     assert_eq!(
         written,
         "existing=1\nbuilt=true\ntests_run=2\ntests_listed=2\ntests_ignored=0\ntests_by_package=kept=2/2\n"
