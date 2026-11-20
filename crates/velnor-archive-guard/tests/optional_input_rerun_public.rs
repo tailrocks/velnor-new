@@ -92,7 +92,6 @@ impl Probe {
             .arg(self.root.join("crates/probe/Cargo.toml"))
             .env("CARGO_TARGET_DIR", &self.target)
             .env("MBX_BUILD_SCRIPT_EXECUTION", "0")
-            .env("MBX_SHARE_OUT_DIR", "0")
             .env_remove("CARGO_BUILD_BUILD_DIR")
             .env_remove("CARGO_BUILD_TARGET")
             .output()?;

@@ -30,15 +30,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     for source in &plan.rerun {
         println!("cargo:rerun-if-changed={}", source.display());
     }
-    if !plan.unwatched.is_empty() {
-        println!(
-            "cargo:warning=archive guard: {} cannot be watched because cargo output {} is reachable from the checkout; a binary built before they appear refuses to print its fingerprint",
-            plan.unwatched.join(" "),
-            out_dir
-                .as_deref()
-                .map_or_else(String::new, |out| out.display().to_string())
-        );
-    }
     let unwatched_root = if plan.unwatched.is_empty() {
         ""
     } else {
