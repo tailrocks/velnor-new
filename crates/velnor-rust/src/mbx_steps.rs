@@ -7,6 +7,7 @@ use crate::mbx_pin::MBX_PIN_HELPER;
 use crate::plan::step;
 
 pub(crate) const MBX_OUT_DIR_HELPER: (u64, u64, u64) = (0, 1, 111);
+pub(crate) const MBX_COMPILING_ONLY_HELPER: (u64, u64, u64) = (0, 1, 111);
 
 pub(crate) fn apply(facts: &RepoFacts, jobs: &mut [Job]) {
     let remote = facts.config.mbx_remote == MbxRemote::GithubActions;
@@ -20,8 +21,15 @@ pub(crate) fn apply(facts: &RepoFacts, jobs: &mut [Job]) {
         .helper
         .as_ref()
         .is_some_and(|helper| helper.version().at_least(MBX_OUT_DIR_HELPER));
+    let compiling_only = facts
+        .helper
+        .as_ref()
+        .is_some_and(|helper| helper.version().at_least(MBX_COMPILING_ONLY_HELPER));
     for job in jobs {
         if !compiles(job) {
+            if compiling_only {
+                job.steps.retain(|step| !is_shared_store_step(&step.kind));
+            }
             continue;
         }
         if remote && facts.private_sources.is_none() {
@@ -46,6 +54,13 @@ pub(crate) fn apply(facts: &RepoFacts, jobs: &mut [Job]) {
 enum After {
     Tools,
     Helper,
+}
+
+fn is_shared_store_step(kind: &StepKind) -> bool {
+    matches!(
+        kind,
+        StepKind::MbxStore | StepKind::MbxSeed | StepKind::MbxOutDirs
+    )
 }
 
 fn compiles(job: &Job) -> bool {

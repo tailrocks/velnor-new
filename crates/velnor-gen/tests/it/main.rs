@@ -148,6 +148,7 @@ mod lock_gen_binary;
 mod lock_scope;
 mod macos_helper_lock;
 mod main_and_scheduled;
+mod mbx_compiling_only;
 mod mbx_default;
 mod mbx_out_dirs;
 mod mbx_pin;
