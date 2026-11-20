@@ -97,13 +97,16 @@ fn get(url: &str, token: Option<&str>) -> Result<ureq::http::Response<ureq::Body
     if let Some(token) = token {
         request = request.header("Authorization", format!("Bearer {token}"));
     }
-    request.call().map_err(|error| {
-        let text = format!("lookup failed: {error}");
-        match token {
-            Some(token) => text.replace(token, "***"),
-            None => text,
-        }
-    })
+    request
+        .call()
+        .map_err(|error| redact(format!("lookup failed: {error}"), token))
+}
+
+fn redact(text: String, token: Option<&str>) -> String {
+    match token {
+        Some(token) => text.replace(token, "***"),
+        None => text,
+    }
 }
 
 fn refusal(status: u16, credentials: Credentials) -> String {

@@ -8,7 +8,7 @@ use std::thread;
 
 use velnor_model::GitRepository;
 
-use super::{Credentials, check, get, read};
+use super::{Credentials, check, get, read, redact};
 
 const TOKEN: &str = "ghs_unit_token_must_not_leave";
 
@@ -162,4 +162,14 @@ fn a_token_that_is_not_a_valid_header_value_is_not_echoed() {
     .unwrap_or_default();
     assert!(error.starts_with("lookup failed"), "{error}");
     assert!(!error.contains(token), "{error}");
+}
+
+#[test]
+fn a_token_in_an_error_text_is_replaced_and_other_text_is_kept() {
+    let text = redact(format!("lookup failed: bad header {TOKEN}"), Some(TOKEN));
+    assert_eq!(text, "lookup failed: bad header ***");
+    assert_eq!(
+        redact("lookup failed: timeout".to_owned(), None),
+        "lookup failed: timeout"
+    );
 }

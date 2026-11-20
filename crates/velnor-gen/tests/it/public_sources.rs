@@ -176,6 +176,8 @@ fn only_a_plain_github_repository_url_can_be_declared() -> TestResult {
         "git = ['http://github.com/acme/lib']",
         "git = ['https://github.com/acme/lib.git']",
         "git = ['https://github.com/acme']",
+        "git = ['https://github.com/.acme/lib']",
+        "git = ['https://github.com/acme/.lib']",
         "git = ['https://github.com/acme/lib/tree/main']",
         "git = ['acme/lib']",
         "git = ['https://github.com/acme/lib', 'https://github.com/ACME/Lib']",
