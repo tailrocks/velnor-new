@@ -26,7 +26,7 @@ fn position(steps: &[serde_json::Value], id_or_name: &str) -> Option<usize> {
 }
 
 fn phase_jobs(config: &str) -> Result<Vec<serde_json::Value>, Box<dyn std::error::Error>> {
-    let repo = private_repo(&["Cargo.toml", "tools/Cargo.toml"], config, "0.1.107")?;
+    let repo = private_repo(&["Cargo.toml", "tools/Cargo.toml"], config, "0.1.108")?;
     Ok(jobs(&workflow(&repo)?)?
         .into_iter()
         .filter(|job| {
@@ -58,7 +58,7 @@ fn every_job_that_compiles_has_the_prelude_before_its_first_cargo_invocation() -
         let repo = private_repo(
             &["Cargo.toml", "tools/Cargo.toml"],
             &format!("{shape}{}", config(&format!("{}{SETUP}", assets()))),
-            "0.1.107",
+            "0.1.108",
         )?;
         let mut compiling_jobs = 0;
         for job in jobs(&workflow(&repo)?)? {
@@ -179,7 +179,7 @@ fn the_token_is_read_only_scoped_to_the_listed_repositories_fork_fenced_and_skip
 
 #[test]
 fn a_config_without_the_table_renders_none_of_it() -> TestResult {
-    let repo = private_repo(&["Cargo.toml"], SECTION, "0.1.107")?;
+    let repo = private_repo(&["Cargo.toml"], SECTION, "0.1.108")?;
     let text = workflow(&repo)?;
     for forbidden in ["release-asset", "fetch-assets"] {
         assert!(!text.contains(forbidden), "{forbidden}");
@@ -188,10 +188,10 @@ fn a_config_without_the_table_renders_none_of_it() -> TestResult {
 }
 
 #[test]
-fn the_table_is_refused_by_a_helper_older_than_0_1_107() -> TestResult {
+fn the_table_is_refused_by_a_helper_older_than_0_1_108() -> TestResult {
     let repo = private_repo(&["Cargo.toml"], &config(&assets()), "0.1.106")?;
     assert!(
-        workflow(&repo).is_err_and(|e| e.to_string().contains("pin velnor-ci 0.1.107 or later"))
+        workflow(&repo).is_err_and(|e| e.to_string().contains("pin velnor-ci 0.1.108 or later"))
     );
     Ok(())
 }
@@ -231,10 +231,10 @@ fn every_misconfiguration_is_refused() -> TestResult {
         ),
     ];
     for table in bad {
-        let repo = private_repo(&["Cargo.toml"], &config(&table), "0.1.107")?;
+        let repo = private_repo(&["Cargo.toml"], &config(&table), "0.1.108")?;
         assert!(workflow(&repo).is_err(), "{table}");
     }
-    let without_credentials = private_repo(&["Cargo.toml"], &good, "0.1.107")?;
+    let without_credentials = private_repo(&["Cargo.toml"], &good, "0.1.108")?;
     assert!(workflow(&without_credentials).is_err());
     Ok(())
 }
@@ -249,7 +249,7 @@ fn the_prelude_precedes_clippy_doc_check_alone_the_tests_and_the_lane_steps() ->
         let mut repo = private_repo(
             &["Cargo.toml", "tools/Cargo.toml"],
             &format!("{shape}{}", config(&format!("{}{LANE}", assets()))),
-            "0.1.107",
+            "0.1.108",
         )?;
         let root = crate::facts::path("Cargo.toml")?;
         let member = repo
