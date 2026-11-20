@@ -115,6 +115,8 @@ pub enum Reason {
     PolicyGateWithoutLane,
     HelperBox(RepoPath),
     MbxRemotePrivate(String),
+    PublicSourceOverlap(String),
+    PublicSourcesUnused(String),
     MbxOffConflict(&'static str),
     CargoCredentialProvider(String),
     LockedUrlCredentials(String),
