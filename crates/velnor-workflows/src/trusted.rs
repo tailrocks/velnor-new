@@ -11,6 +11,14 @@ use crate::raw::RawWorkflow;
 const REF_INPUTS: [&str; 3] = ["ref", "sha", "repository"];
 const CHECKOUT_KEYS: [&str; 2] = ["ref", "repository"];
 
+fn reads_input(value: &str) -> bool {
+    value.contains("inputs.") || value.contains("github.event.inputs")
+}
+
+fn reads_step_or_job(value: &str) -> bool {
+    value.contains("steps.") || value.contains("needs.")
+}
+
 fn lock_platform(label: &str) -> Option<String> {
     MisePlatform::runner(label).map(MisePlatform::lock_key)
 }
@@ -71,13 +79,19 @@ pub(crate) fn pool(
         .iter()
         .flat_map(|job| &job.step)
         .chain(raw.case.iter().flat_map(|case| &case.step));
-    let chosen = steps.flat_map(|step| &step.with).any(|(key, value)| {
-        CHECKOUT_KEYS.contains(&key.as_str())
-            && (value.contains("inputs.") || value.contains("github.event.inputs"))
-    });
-    if chosen {
+    let checkout: Vec<&String> = steps
+        .flat_map(|step| &step.with)
+        .filter(|(key, _)| CHECKOUT_KEYS.contains(&key.as_str()))
+        .map(|(_, value)| value)
+        .collect();
+    if checkout.iter().any(|value| reads_input(value)) {
         return refuse(format!(
             "the workflow {file} sets trusted_runner, but a step reads the ref or repository to check out from an input"
+        ));
+    }
+    if checkout.iter().any(|value| reads_step_or_job(value)) {
+        return refuse(format!(
+            "the workflow {file} sets trusted_runner, but a step reads the ref or repository to check out from a step or job output"
         ));
     }
     Ok(Some(TrustedPool {

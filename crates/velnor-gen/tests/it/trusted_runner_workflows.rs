@@ -222,3 +222,26 @@ fn a_workflow_whose_dispatch_can_choose_what_to_build_cannot_use_the_pool() -> T
     assert!(message.contains("trusted_runner"), "{message}");
     Ok(())
 }
+
+fn checkout_job(with: &str) -> String {
+    format!(
+        "\n[[workflow.job]]\nid = \"build\"\npermissions = {{ contents = \"read\" }}\n\n[[workflow.job.step]]\nname = \"Checkout\"\nuses = \"checkout\"\n\n[workflow.job.step.with]\n{with}\n"
+    )
+}
+
+#[test]
+fn a_trusted_workflow_cannot_check_out_a_ref_that_a_step_or_job_computed() -> TestResult {
+    let header = format!("runner = \"velnor-box\"\ntrusted_runner = \"{POOL}\"");
+    for with in [
+        "ref = \"${{ steps.pick.outputs.ref }}\"",
+        "ref = \"${{ needs.plan.outputs.ref }}\"",
+        "repository = \"${{ steps.pick.outputs.repo }}\"",
+    ] {
+        let message = refusal(&workflow(&header, ON, &checkout_job(with)))?;
+        assert!(message.contains("trusted_runner"), "{with}: {message}");
+    }
+    for with in ["ref = \"main\"", "ref = \"${{ github.sha }}\""] {
+        rendered_file(&workflow(&header, ON, &checkout_job(with)), "ci")?;
+    }
+    Ok(())
+}

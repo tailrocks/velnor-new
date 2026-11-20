@@ -106,7 +106,7 @@ fn trusted_runner(workflow: &Workflow, job: &Job) -> Option<RenderedTrusted> {
             .any(|(label, hosted)| !hosted && names_pool(label)),
         None => names_pool(job.runner.as_ref().unwrap_or(&workflow.runner)) && !job.hosted,
     };
-    (on_pool && job.call.is_none()).then(|| RenderedTrusted {
+    on_pool.then(|| RenderedTrusted {
         label: pool.label.clone(),
         replaces: pool.replaces.clone(),
     })

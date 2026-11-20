@@ -226,6 +226,9 @@ fn trusted_too_old(version: &HelperVersion) -> String {
     let (major, minor, patch) = TRUSTED_RUNNER_HELPER;
     format!(
         "velnor-ci {version} does not know the trusted_runner key of .velnor/rust-ci.toml; pin velnor-ci {major}.{minor}.{patch} or later with `velnor-gen pin-helper {major}.{minor}.{patch}`"
+    )
+}
+
 fn no_tests_too_old(version: &HelperVersion) -> String {
     let (major, minor, patch) = NO_TESTS_HELPER;
     format!(
