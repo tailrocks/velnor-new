@@ -42,7 +42,7 @@ pub(crate) fn tools_parts(when: When, parts: &mut Vec<String>) {
                 VerifiedSave::UnlessLocal => {
                     parts.extend([on_default, network_miss, lookup_miss, matches]);
                 }
-                VerifiedSave::NodeStore => parts.push(matches),
+                VerifiedSave::NodeStore => parts.extend([on_default, matches]),
                 VerifiedSave::Anchor => parts.extend([on_default, recorded]),
                 VerifiedSave::Prime => {
                     tools_parts(When::PrimeToolsFromNetwork, parts);
