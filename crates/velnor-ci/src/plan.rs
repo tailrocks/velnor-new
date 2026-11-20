@@ -135,6 +135,21 @@ pub fn lint_outputs(runs: &BTreeMap<RootSlug, bool>) -> String {
 }
 
 #[must_use]
+pub fn lint_explanation(skipped: &[String]) -> String {
+    skipped
+        .iter()
+        .map(|id| {
+            format!(
+                "left out: {}: {}\n",
+                inert(id),
+                crate::summary::LINT_SKIP_REASON
+            )
+        })
+        .collect::<Vec<String>>()
+        .concat()
+}
+
+#[must_use]
 pub fn tests_outputs(expected: &BTreeMap<RepoPath, bool>) -> String {
     expected
         .iter()

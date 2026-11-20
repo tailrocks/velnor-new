@@ -7,7 +7,7 @@ use velnor_model::{
     EventKind, LintJob, LintKind, PathGlob, RepoFacts, RepoPath, RootSlug, WORKFLOW_PATH,
 };
 
-use crate::config::{CONFIG_PATH, rule_matches};
+use crate::config::CONFIG_PATH;
 use crate::lint_tasks::TASK_FOLDERS;
 use crate::mise::{MISE_CONFIGS, MISE_LOCK};
 
@@ -36,12 +36,10 @@ fn runs(
     let Some(changed) = changed.filter(|_| event == EventKind::PullRequest) else {
         return true;
     };
-    symlinks.iter().any(|link| linked(lint, link))
-        || changed.iter().any(|path| {
-            lint.inputs.iter().any(|glob| rule_matches(glob, path))
-                || implicit(lint, path)
-                || task_file(lint, path)
-        })
+    symlinks
+        .iter()
+        .chain(changed)
+        .any(|path| reached(lint, path))
 }
 
 fn implicit(lint: &LintJob, path: &RepoPath) -> bool {
@@ -61,30 +59,27 @@ fn own_files(lint: &LintJob) -> impl Iterator<Item = &RepoPath> {
     config.into_iter().chain(probe)
 }
 
-fn task_file(lint: &LintJob, path: &RepoPath) -> bool {
-    matches!(lint.kind, LintKind::MiseTask { .. })
-        && TASK_FOLDERS
-            .iter()
-            .any(|folder| path.as_str().starts_with(folder))
-}
-
-fn linked(lint: &LintJob, link: &RepoPath) -> bool {
-    lint.inputs.iter().any(|glob| reaches(glob, link))
-        || implicit(lint, link)
-        || [WORKFLOW_PATH, CONFIG_PATH, MISE_LOCK]
-            .iter()
-            .chain(&MISE_CONFIGS)
-            .chain(own_files(lint))
-            .any(|own| own.as_str().starts_with(&format!("{link}/")))
+fn reached(lint: &LintJob, path: &RepoPath) -> bool {
+    lint.inputs.iter().any(|glob| reaches(glob, path))
+        || implicit(lint, path)
+        || below_one(lint, path)
         || (matches!(lint.kind, LintKind::MiseTask { .. })
             && TASK_FOLDERS.iter().any(|folder| {
-                link.as_str().starts_with(folder) || folder.starts_with(&format!("{link}/"))
+                path.as_str().starts_with(folder) || folder.starts_with(&format!("{path}/"))
             }))
 }
 
-fn reaches(glob: &PathGlob, link: &RepoPath) -> bool {
+fn below_one(lint: &LintJob, path: &RepoPath) -> bool {
+    [WORKFLOW_PATH, CONFIG_PATH, MISE_LOCK]
+        .iter()
+        .chain(&MISE_CONFIGS)
+        .chain(own_files(lint))
+        .any(|own| own.as_str().starts_with(&format!("{path}/")))
+}
+
+fn reaches(glob: &PathGlob, path: &RepoPath) -> bool {
     let pattern: Vec<&str> = glob.as_str().split('/').collect();
-    let segments: Vec<&str> = link.as_str().split('/').collect();
+    let segments: Vec<&str> = path.as_str().split('/').collect();
     let open = pattern.len() > 1 && pattern.last() == Some(&"**");
     let fixed = if open {
         &pattern[..pattern.len() - 1]

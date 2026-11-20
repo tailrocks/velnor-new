@@ -129,3 +129,42 @@ fn plan_still_skips_a_lint_when_no_symlink_reaches_its_inputs() {
         "lint_hk=skip "
     );
 }
+
+#[test]
+fn plan_reports_a_skipped_lint_and_why_in_the_summary_and_the_explanation() {
+    let repo = lint_repo("lint-report");
+    let summary = repo.root().join("summary");
+    fs::write(&summary, "").unwrap_or_else(|e| unreachable!("{e}"));
+    let output = plan_command(&repo)
+        .args(["plan", "--explain", "--changed", "a/src/lib.rs"])
+        .env("GITHUB_EVENT_NAME", "pull_request")
+        .env("GITHUB_STEP_SUMMARY", &summary)
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(output.status.success(), "{output:?}");
+    let line = "lint-hk | skip | no changed file reaches its inputs";
+    let text = fs::read_to_string(&summary).unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(text.contains(line), "{text}");
+    let explained = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        explained.contains("left out: lint-hk: no changed file reaches its inputs"),
+        "{explained}"
+    );
+}
+
+#[test]
+fn plan_reports_no_lint_line_for_a_lint_that_runs() {
+    let repo = lint_repo("lint-report-run");
+    let summary = repo.root().join("summary");
+    fs::write(&summary, "").unwrap_or_else(|e| unreachable!("{e}"));
+    let output = plan_command(&repo)
+        .args(["plan", "--explain", "--changed", "hk.pkl"])
+        .env("GITHUB_EVENT_NAME", "pull_request")
+        .env("GITHUB_STEP_SUMMARY", &summary)
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(output.status.success(), "{output:?}");
+    let text = fs::read_to_string(&summary).unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(!text.contains("lint-hk"), "{text}");
+    assert!(!String::from_utf8_lossy(&output.stdout).contains("left out: lint-hk"));
+}

@@ -24,10 +24,10 @@ use crate::error::CiError;
 use crate::escape::stderr_line;
 use crate::event::{Event, check_default_branch, parse_event};
 use crate::plan::{
-    Steps, explain, group_explanation, group_outputs, lint_outputs, outputs, tests_outputs,
-    warnings, weakened, workspace_group_outputs,
+    Steps, explain, group_explanation, group_outputs, lint_explanation, lint_outputs, outputs,
+    tests_outputs, warnings, weakened, workspace_group_outputs,
 };
-use crate::summary::{group_summary, summary};
+use crate::summary::{group_summary, lint_summary, summary};
 
 const EVENT_PATH_VARIABLE: &str = "GITHUB_EVENT_PATH";
 const LOCK_FILE: &str = "Cargo.lock";
@@ -76,20 +76,30 @@ pub(super) fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
             (root.manifest.clone(), tests)
         })
         .collect();
+    let lints = lint_runs(
+        &facts,
+        kind,
+        listed.then_some(&changes.paths),
+        &checkout.view.symlinks,
+    );
+    let skipped: Vec<String> = facts
+        .config
+        .lint
+        .iter()
+        .filter(|lint| lints.get(&lint.slug()) == Some(&false))
+        .map(|lint| lint.id.to_string())
+        .collect();
     let outputs = outputs(&selections, &steps, policy)?
         + &tests_outputs(&expected)
-        + &lint_outputs(&lint_runs(
-            &facts,
-            kind,
-            listed.then_some(&changes.paths),
-            &checkout.view.symlinks,
-        ))
+        + &lint_outputs(&lints)
         + &group_outputs(&groups)
         + &workspace_group_outputs(&facts.config.workspace_groups, &selections);
     append_outputs(&outputs)?;
     append_to(
         SUMMARY_VARIABLE,
-        &(summary(&facts.rust_roots, &selections, &steps) + &group_summary(&groups)),
+        &(summary(&facts.rust_roots, &selections, &steps)
+            + &group_summary(&groups)
+            + &lint_summary(&skipped)),
     )?;
     let new = introduced(&facts, &changes);
     let report = if args.explain {
@@ -99,6 +109,7 @@ pub(super) fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
             &unknown_paths(&facts, &changes),
             &unread_packages(&facts, &changes),
         ) + &group_explanation(&groups)
+            + &lint_explanation(&skipped)
             + &weakened(&facts.weakenings, &new)
     } else {
         outputs

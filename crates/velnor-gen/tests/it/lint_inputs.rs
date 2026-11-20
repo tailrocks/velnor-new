@@ -429,3 +429,28 @@ fn a_tracked_symlink_that_an_input_or_implicit_file_reaches_runs_the_lint() -> T
     }
     Ok(())
 }
+
+#[test]
+fn a_changed_path_that_is_an_ancestor_of_an_input_runs_the_lint() -> TestResult {
+    let config = "[[lint]]\nkind = 'alint'\nconfig = '.alint.yml'\nprobe = 'scripts/p.sh'\ninputs = ['cfg/check.yml']\n";
+    let facts = detect(&repo(&["Cargo.toml"], config)?)?;
+    for path in ["cfg", "scripts", "cfg/check.yml"] {
+        let paths = changed(&[path])?;
+        let runs = lint_runs(
+            &facts,
+            EventKind::PullRequest,
+            Some(&paths),
+            &BTreeSet::new(),
+        );
+        assert_eq!(runs.values().copied().collect::<Vec<_>>(), [true], "{path}");
+    }
+    let paths = changed(&["cfg2", "docs/cfg"])?;
+    let runs = lint_runs(
+        &facts,
+        EventKind::PullRequest,
+        Some(&paths),
+        &BTreeSet::new(),
+    );
+    assert_eq!(runs.values().copied().collect::<Vec<_>>(), [false]);
+    Ok(())
+}
