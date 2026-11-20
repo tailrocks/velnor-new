@@ -11,6 +11,7 @@ use crate::io_inputs_batch::fixture;
 
 fn run(repo: &Repo, root: &str, job: &str, operation: &str, cache: &Path) -> Output {
     let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
+    velnor_test_support::trust_mise_dir(&mut command, repo.root());
     command
         .current_dir(repo.root().join(root))
         .env("GITHUB_JOB", job)
