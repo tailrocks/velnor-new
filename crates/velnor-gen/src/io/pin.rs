@@ -74,6 +74,9 @@ fn download(root: &Path, url: &str) -> Result<Vec<u8>, Error> {
             OsStr::new("--silent"),
             OsStr::new("--show-error"),
             OsStr::new("--location"),
+            OsStr::new("--retry"),
+            OsStr::new("3"),
+            OsStr::new("--retry-all-errors"),
             OsStr::new(url),
         ],
     )

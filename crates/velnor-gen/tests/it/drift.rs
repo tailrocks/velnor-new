@@ -5,12 +5,15 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::fs;
 use std::path::Path;
+use std::process::Command;
 
 use velnor_gen::io::{add_manifests, read_files};
 use velnor_gen::{Drift, drift};
 use velnor_model::{RepoPath, RepoView, RepositoryIdentity};
 use velnor_render::{Owner, RELEASE_HEADER, VELNOR_GEN_MARKER, owner_of, seal};
 use velnor_rust::{METADATA_PATH, build_script_sources, recorded_metadata, wanted_files};
+
+use crate::setup_action::program;
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -216,40 +219,35 @@ fn every_workflow_velnor_gen_renders_carries_a_seal_that_verifies() -> TestResul
     Ok(())
 }
 
-const UNTRACKED_DIRECTORIES: [&str; 3] = [".git", "target", "node_modules"];
-
-fn walk(
+fn tracked_paths(
     root: &Path,
-    directory: &Path,
-    tracked: &mut BTreeSet<RepoPath>,
-    symlinks: &mut BTreeSet<RepoPath>,
-) -> Result<(), Box<dyn Error>> {
-    for entry in fs::read_dir(directory)? {
-        let entry = entry?;
-        let kind = entry.file_type()?;
-        let name = entry.file_name();
-        let name = name.to_str().ok_or("a repository file name is not UTF-8")?;
-        if UNTRACKED_DIRECTORIES.contains(&name) {
+) -> Result<(BTreeSet<RepoPath>, BTreeSet<RepoPath>), Box<dyn Error>> {
+    let listing = Command::new(program("git"))
+        .args(["ls-files", "-s", "-z"])
+        .current_dir(root)
+        .output()?;
+    assert!(
+        listing.status.success(),
+        "{}",
+        String::from_utf8_lossy(&listing.stderr)
+    );
+    let mut tracked = BTreeSet::new();
+    let mut symlinks = BTreeSet::new();
+    for entry in listing.stdout.split(|byte| *byte == 0) {
+        let Some(tab) = entry.iter().position(|byte| *byte == b'\t') else {
             continue;
-        }
-        if kind.is_dir() {
-            walk(root, &entry.path(), tracked, symlinks)?;
-            continue;
-        }
-        let relative = entry.path().strip_prefix(root)?.to_path_buf();
-        let path = RepoPath::new(relative.to_str().ok_or("a repository path is not UTF-8")?)?;
-        if kind.is_symlink() {
+        };
+        let path = RepoPath::new(std::str::from_utf8(&entry[tab + 1..])?)?;
+        if entry.starts_with(b"120000") {
             symlinks.insert(path.clone());
         }
         tracked.insert(path);
     }
-    Ok(())
+    Ok((tracked, symlinks))
 }
 
 fn committed_view(root: &Path) -> Result<RepoView, Box<dyn Error>> {
-    let mut tracked = BTreeSet::new();
-    let mut symlinks = BTreeSet::new();
-    walk(root, root, &mut tracked, &mut symlinks)?;
+    let (tracked, symlinks) = tracked_paths(root)?;
     let mut view = RepoView {
         repository: RepositoryIdentity::Named("tailrocks/velnor-new".to_owned()),
         files: read_files(root, &wanted_files(&tracked))?,

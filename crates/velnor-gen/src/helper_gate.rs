@@ -24,13 +24,7 @@ pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, Generate
     if !release.version().at_least(HELPER_MINIMUM) {
         return Err(GenerateError::HelperTooOld(release.version().clone()));
     }
-    if facts
-        .config
-        .runner
-        .as_str()
-        .to_ascii_lowercase()
-        .starts_with("macos")
-        && !release.digests().contains_key(&Platform::MacosArm64)
+    if is_macos(facts) && !release.digests().contains_key(&Platform::MacosArm64)
     {
         return Err(GenerateError::HelperLockLacksMacos {
             version: release.version().clone(),
@@ -87,10 +81,28 @@ fn require_generator_digests(
         .lint
         .iter()
         .any(|lint| lint.kind == LintKind::GeneratedCheck);
-    if wanted && release.generator_digests().is_none() {
+    if !wanted {
+        return Ok(());
+    }
+    let Some(digests) = release.generator_digests() else {
         return Err(GenerateError::GeneratorNotLocked(release.version().clone()));
+    };
+    if is_macos(facts) && !digests.contains_key(&Platform::MacosArm64) {
+        return Err(GenerateError::GeneratorLockLacksMacos {
+            version: release.version().clone(),
+            runner: facts.config.runner.to_string(),
+        });
     }
     Ok(())
+}
+
+fn is_macos(facts: &RepoFacts) -> bool {
+    facts
+        .config
+        .runner
+        .as_str()
+        .to_ascii_lowercase()
+        .starts_with("macos")
 }
 
 pub fn require_compatible(version: &HelperVersion) -> Result<(), GenerateError> {
