@@ -39,7 +39,7 @@ pub fn real_cargo() -> PathBuf {
     )
     .unwrap_or_else(|| {
         unreachable!(
-            "no real cargo: the PATH holds only the crates-mirror wrapper, and neither mise, $CARGO nor VELNOR_CARGO_REAL names one"
+            "no real cargo: the PATH holds only the crates-mirror wrapper, and neither mise, $CARGO, VELNOR_CARGO_REAL nor the mirror's velnor-cargo-real names one"
         )
     })
 }
@@ -52,20 +52,42 @@ fn candidates() -> impl Iterator<Item = PathBuf> {
 
 /// Picks the real cargo, in order: mise's command-wrapper cargo (mbx), then `$CARGO` when it is
 /// not the mirror wrapper, then the cargo the mirror wrapper forwards to (`VELNOR_CARGO_REAL`),
-/// then the first non-mirror cargo on the PATH. Never the crates-mirror wrapper.
+/// then the one it recorded beside itself (the job runs `cargo-nextest` directly, so the
+/// forwarded environment never reaches the tests), then the first non-mirror cargo on the PATH.
+/// Never the crates-mirror wrapper.
 fn pick_real_cargo(
     path: impl IntoIterator<Item = PathBuf>,
     cargo_env: Option<PathBuf>,
     forward: Option<PathBuf>,
 ) -> Option<PathBuf> {
     let usable = |cargo: &PathBuf| cargo.is_file() && !is_mirror_wrapper(cargo);
+    let path: Vec<PathBuf> = path.into_iter().collect();
+    let recorded = path
+        .iter()
+        .chain(&cargo_env)
+        .find_map(|cargo| recorded_forward(cargo));
     let path: Vec<PathBuf> = path.into_iter().filter(usable).collect();
     path.iter()
         .find(|cargo| is_mise_command_wrapper(cargo))
         .cloned()
         .or_else(|| cargo_env.filter(usable))
         .or_else(|| forward.filter(usable))
+        .or(recorded)
         .or_else(|| path.first().cloned())
+}
+
+/// The real cargo the mirror wrapper `cargo` saved as `velnor-cargo-real` beside itself (or beside
+/// the toolchain directory it forwards through).
+fn recorded_forward(mirror: &Path) -> Option<PathBuf> {
+    if !is_mirror_wrapper(mirror) {
+        return None;
+    }
+    let dir = mirror.parent()?;
+    [Some(dir), dir.parent()]
+        .into_iter()
+        .flatten()
+        .map(|dir| dir.join("velnor-cargo-real"))
+        .find(|saved| saved.is_file())
 }
 
 /// mise's `command-wrappers/bin/cargo`, the one that runs cargo through mbx.
@@ -178,6 +200,40 @@ mod tests {
     fn on_ci_the_mirror_alone_on_the_path_forwards_to_the_recorded_cargo() -> TestResult {
         let scratch = Scratch::new("ci-shape")?;
         let mirror = scratch.mirror("mirror")?;
+        let mise = scratch.bin_dir("mise/command-wrappers/bin")?;
+
+        let picked = pick_real_cargo(
+            on_path(&[&mirror]),
+            Some(mirror.join("cargo")),
+            Some(mise.join("cargo")),
+        );
+        assert_eq!(picked, Some(mise.join("cargo")));
+        Ok(())
+    }
+
+    #[test]
+    fn nextest_run_directly_finds_the_cargo_the_mirror_recorded_beside_itself() -> TestResult {
+        let scratch = Scratch::new("nextest-direct")?;
+        let mirror = scratch.mirror("mirror")?;
+        fs::write(mirror.join("velnor-cargo-real"), "#!/bin/sh\n")?;
+
+        // cargo-nextest is not launched through the wrapper, so it has no VELNOR_CARGO_REAL;
+        // `$CARGO` and the PATH both name only the mirror.
+        let picked = pick_real_cargo(on_path(&[&mirror]), Some(mirror.join("cargo")), None);
+        assert_eq!(picked, Some(mirror.join("velnor-cargo-real")));
+
+        // Under the toolchain directory the wrapper forwards through, the record is one level up.
+        let view = scratch.mirror("mirror/0123abcd")?;
+        let picked = pick_real_cargo(on_path(&[&view]), Some(view.join("cargo")), None);
+        assert_eq!(picked, Some(mirror.join("velnor-cargo-real")));
+        Ok(())
+    }
+
+    #[test]
+    fn the_exported_forward_target_beats_the_recorded_one() -> TestResult {
+        let scratch = Scratch::new("export-wins")?;
+        let mirror = scratch.mirror("mirror")?;
+        fs::write(mirror.join("velnor-cargo-real"), "#!/bin/sh\n")?;
         let mise = scratch.bin_dir("mise/command-wrappers/bin")?;
 
         let picked = pick_real_cargo(
