@@ -7,7 +7,7 @@ use crate::budget_mode::SelectionName;
 use crate::cron::CronExpr;
 use crate::hosted::HostedRunners;
 use crate::ids::{JobId, PackageName, RepoPath, RootSlug, RunnerLabel, TargetName};
-use crate::repo::{LaneFeatures, TargetKind};
+use crate::repo::{DenyCheck, LaneFeatures, TargetKind};
 use crate::steps::{StepKind, VerifiedSave};
 use crate::test_group::NoTests;
 use crate::trusted::TrustedRunners;
@@ -126,6 +126,7 @@ pub struct Step {
     pub when: When,
     pub skip_after_merge_group: Option<PlanFrom>,
     pub skip_when_cold: bool,
+    pub private_repo: bool,
     pub pr: PrRun,
     pub gate: Option<Gate>,
     pub reads: Option<PlanRef>,
@@ -354,6 +355,7 @@ pub enum CargoCommand {
     Deny {
         manifest: RepoPath,
         config: Option<RepoPath>,
+        checks: Option<Vec<DenyCheck>>,
     },
     Machete,
 }

@@ -206,7 +206,11 @@ fn cargo_command(
             format!("cargo build{path} --workspace --all-targets --locked{cargo}"),
             vec![],
         ),
-        CargoCommand::Deny { manifest, config } => deny(manifest, config.as_ref()),
+        CargoCommand::Deny {
+            manifest,
+            config,
+            checks,
+        } => crate::lint_steps::deny(manifest, config.as_ref(), checks.as_deref()),
         CargoCommand::Machete => ("Unused dependencies".into(), "cargo machete".into(), vec![]),
     }
 }
@@ -260,7 +264,7 @@ pub(crate) fn cargo_fetch(lane: CargoLane) -> RenderedStep {
     }
 }
 
-fn offline_env() -> (String, Value) {
+pub(crate) fn offline_env() -> (String, Value) {
     (
         "CARGO_NET_OFFLINE".to_owned(),
         Value::Text("true".to_owned()),
@@ -362,28 +366,6 @@ pub(crate) fn test_selector(kind: TargetKind, target: &TargetName) -> String {
         TargetKind::Example => format!("--example={target}"),
         TargetKind::Test | TargetKind::BuildScript => format!("--test={target}"),
     }
-}
-
-fn deny(manifest: &RepoPath, config: Option<&RepoPath>) -> (String, String, Vec<(String, Value)>) {
-    let directory = manifest.parent();
-    let name = directory.as_ref().map_or_else(
-        || "Dependency policy".to_owned(),
-        |directory| format!("Dependency policy ({directory})"),
-    );
-    let manifest_arg = directory.map_or_else(String::new, |_| {
-        format!(
-            " --manifest-path '{}'",
-            manifest.as_str().replace('\'', "'\\''")
-        )
-    });
-    let config_arg = config.map_or_else(String::new, |path| {
-        format!(" --config '{}'", path.as_str().replace('\'', "'\\''"))
-    });
-    (
-        name,
-        format!("cargo-deny{manifest_arg}{config_arg} --locked check"),
-        vec![],
-    )
 }
 
 pub(crate) fn reports_tests(command: &CargoCommand) -> bool {

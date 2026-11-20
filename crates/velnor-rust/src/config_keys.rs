@@ -4,6 +4,7 @@
 pub const KEYS: &[&str] = &[
     "sparse_checkout",
     "private_sources",
+    "public_sources",
     "cache_check_blocks",
     "cache_debug",
     "cache",
@@ -40,6 +41,7 @@ pub const KEYS: &[&str] = &[
     "test_lane",
     "budget",
     "workspace_groups",
+    "policy",
     "external_workflows",
     "release_assets",
 ];

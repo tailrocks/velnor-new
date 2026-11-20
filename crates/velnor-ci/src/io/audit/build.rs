@@ -3,6 +3,7 @@
 
 mod clock;
 mod declarations;
+mod failure;
 mod generated;
 mod invocation;
 
@@ -74,19 +75,65 @@ pub(crate) fn build(directory: &Path, args: &InputsBuildArgs) -> Result<String, 
         declared: BTreeSet::new(),
         location,
     };
-    if let Some(preflight) = &invocation.preflight {
-        builder.stabilize(preflight, true, true)?;
+    let marker = builder.marker_directories();
+    match builder.audit(&invocation) {
+        Ok(()) => {
+            if let Err(error) = failure::clear_failure(&marker) {
+                eprintln!("velnor-ci: {error}");
+            }
+            timing::report();
+            Ok(String::new())
+        }
+        Err(Stop::Refused(error)) => Err(error),
+        Err(Stop::Failed(error)) => {
+            let failed =
+                failure::Failure::new(invocation.label(), invocation.selection(&builder.members()));
+            match failure::record_failure(&marker, &failed) {
+                Ok(()) => Err(error),
+                Err(record) => Err(CiError::new(format!("{error}; {record}"))),
+            }
+        }
     }
-    builder.stabilize(
-        &invocation.command,
-        invocation.compiler,
-        invocation.cargo && invocation.preflight.is_none(),
-    )?;
-    timing::report();
-    Ok(String::new())
+}
+
+enum Stop {
+    Refused(CiError),
+    Failed(CiError),
+}
+
+impl From<CiError> for Stop {
+    fn from(error: CiError) -> Self {
+        Self::Failed(error)
+    }
 }
 
 impl Builder<'_> {
+    fn audit(&mut self, invocation: &Invocation) -> Result<(), Stop> {
+        if let Some(preflight) = &invocation.preflight {
+            self.stabilize(preflight, true, true)?;
+        }
+        self.stabilize(
+            &invocation.command,
+            invocation.compiler,
+            invocation.cargo && invocation.preflight.is_none(),
+        )
+    }
+
+    fn members(&self) -> BTreeSet<&str> {
+        self.facts
+            .rust_roots
+            .iter()
+            .flat_map(|root| root.members.iter().map(|member| member.name.as_str()))
+            .collect()
+    }
+
+    fn marker_directories(&self) -> Vec<PathBuf> {
+        self.target_directory().map_or_else(
+            || self.directories.clone(),
+            |target| vec![target.to_path_buf()],
+        )
+    }
+
     fn declared(&self) -> Result<Vec<declarations::Declared>, CiError> {
         declarations::declarations(
             &self.repository,
@@ -102,7 +149,7 @@ impl Builder<'_> {
         command: &[String],
         replayable: bool,
         invalidate: bool,
-    ) -> Result<(), CiError> {
+    ) -> Result<(), Stop> {
         self.targets.extend(timing::phase("proven", || {
             generated::proven(&self.workspaces)
         })?);
@@ -122,14 +169,19 @@ impl Builder<'_> {
             self.declared
                 .extend(declared.iter().flat_map(|unit| unit.paths.iter().cloned()));
             if invalidate {
-                let invocation = Invocation::new(command);
-                if declared
+                let selection = Invocation::new(command)
+                    .selection(&self.members())
+                    .unwrap_or_default();
+                let outside: BTreeSet<&str> = declared
                     .iter()
-                    .any(|unit| !unit.trusted && !invocation.selects(&unit.package))
-                {
-                    return Err(CiError::new(
-                        "untrusted build outputs include packages outside this command's explicit selection; prepare inventory first with velnor-ci inputs build -- cargo build --workspace --all-targets, preserving this build's feature, target and profile options",
-                    ));
+                    .filter(|unit| !unit.trusted && !selection.selects(&unit.package))
+                    .map(|unit| unit.package.as_str())
+                    .collect();
+                if !outside.is_empty() {
+                    return Err(Stop::Refused(outside_selection(
+                        &outside,
+                        failure::earlier_failure(&self.marker_directories(), &outside),
+                    )));
                 }
                 declarations::invalidate(&declared)?;
             }
@@ -143,9 +195,9 @@ impl Builder<'_> {
                 return Ok(());
             }
         }
-        Err(CiError::new(
+        Err(Stop::Failed(CiError::new(
             "build directory declarations did not stabilize after two compiler passes; a compiler pass must leave declared directory membership unchanged before inputs can be audited",
-        ))
+        )))
     }
 
     fn capture(&self) -> Result<(Evidence, bool), CiError> {
@@ -297,6 +349,30 @@ impl Builder<'_> {
         }
         Ok(())
     }
+}
+
+const LISTED_PACKAGES: usize = 20;
+
+fn outside_selection(packages: &BTreeSet<&str>, earlier: Option<String>) -> CiError {
+    let mut names: Vec<String> = packages
+        .iter()
+        .take(LISTED_PACKAGES)
+        .map(|package| format!("{package} (build-script output)"))
+        .collect();
+    let more = packages.len().saturating_sub(LISTED_PACKAGES);
+    if more > 0 {
+        names.push(format!("and {more} more"));
+    }
+    let cause = match earlier {
+        Some(command) => format!(
+            "An earlier inputs build failed: `{command}` (failed commands record no receipts); fix that step first"
+        ),
+        None => "This usually means an earlier `velnor-ci inputs build` step in this job failed (failed commands record no receipts); fix that step first. Otherwise prepare inventory first with velnor-ci inputs build -- cargo build --workspace --all-targets, preserving this build's feature, target and profile options".to_owned(),
+    };
+    CiError::new(format!(
+        "untrusted build outputs include packages outside this command's explicit selection: {}. {cause}",
+        names.join(", ")
+    ))
 }
 
 fn output(unit: &UnitFile) -> bool {

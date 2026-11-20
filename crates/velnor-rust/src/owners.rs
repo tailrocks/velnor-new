@@ -127,6 +127,14 @@ impl<'f> Owners<'f> {
     }
 
     #[must_use]
+    pub fn is_target_source(&self, package: Option<&str>, source: &RepoPath) -> bool {
+        self.units.iter().any(|unit| {
+            package.is_none_or(|name| unit.name.is_some_and(|own| own.as_str() == name))
+                && unit.sources.contains(&source)
+        })
+    }
+
+    #[must_use]
     pub fn of(&self, package: Option<&str>, source: &RepoPath) -> Vec<Owner<'f>> {
         let named = package.map_or_else(Vec::new, |name| self.named(name, source));
         if !named.is_empty() {
