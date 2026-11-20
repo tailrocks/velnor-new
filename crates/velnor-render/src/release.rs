@@ -21,7 +21,7 @@ use crate::release_steps::{
     release_plz_step, shell_word, variables,
 };
 use crate::rules::{
-    MAX_WORKFLOW_BYTES, RenderedConcurrency, RenderedJob, RenderedStep, RenderedWorkflow, Rule,
+    MAX_WORKFLOW_BYTES, RenderedConcurrency, RenderedJob, RenderedStep, RenderedWorkflow,
     RuleViolation, Value, check_rules,
 };
 use crate::steps::install_helper;

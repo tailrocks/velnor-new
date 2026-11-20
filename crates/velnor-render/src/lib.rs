@@ -10,6 +10,7 @@ mod cargo;
 mod cargo_features;
 mod cargo_path;
 mod cargo_target;
+mod chained_save;
 mod checkout_step;
 mod combined_cache;
 mod delta_cleanup;

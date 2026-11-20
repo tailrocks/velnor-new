@@ -17,8 +17,8 @@ use crate::cache::cache_step;
 use crate::cargo::{CargoLane, cargo_step, reports_tests};
 use crate::checkout_step::checkout_step;
 use crate::gate::{
-    PLAN_STEP, Setup, admission, all_conditions, condition, merge_group_skipped, output, plan_read,
-    plan_source, sources_step, verdict_step,
+    PLAN_STEP, Setup, admission, condition, merge_group_skipped, output, plan_read, plan_source,
+    sources_step, verdict_step,
 };
 use crate::helper_steps::{inputs_step, restore_inputs_step, restored_targets_step};
 pub(crate) use crate::install_steps::install_helper;
@@ -151,6 +151,7 @@ fn job_steps(
             let around = Around {
                 id: gate.id(index),
                 saved_after: gate.required(),
+                chained: job.chained_saves,
                 job_name: job.name.as_deref(),
             };
             Some(crate::base_steps::audited_save(
@@ -170,6 +171,8 @@ struct Around<'a> {
     /// The id a compile or audit step gets so a save can wait for it.
     id: Option<&'a str>,
     saved_after: &'a [String],
+    /// The saves after the base decision do not repeat what it waited for.
+    chained: bool,
     job_name: Option<&'a str>,
 }
 
@@ -222,16 +225,13 @@ fn rendered_steps(
                 .as_ref()
                 .map(|from| merge_group_skipped(from, setup)),
         );
-        body.condition = all_conditions(
+        body.condition = crate::chained_save::combined(
+            around.chained,
+            step,
+            setup,
+            &extra,
+            around.saved_after,
             body.condition.take(),
-            condition(
-                step.when,
-                step.gate.as_ref(),
-                setup,
-                step.pr,
-                &extra,
-                around.saved_after,
-            ),
         );
         body.working_directory = step.directory.as_ref().map(ToString::to_string);
         if matches!(step.kind, StepKind::InputsSave { .. })

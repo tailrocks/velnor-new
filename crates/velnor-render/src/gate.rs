@@ -279,7 +279,7 @@ pub(crate) fn check_name(name: Option<&String>, pr: PrRun) -> Option<String> {
     ))
 }
 
-fn pr_parts(pr: PrRun) -> Vec<String> {
+pub(crate) fn pr_parts(pr: PrRun) -> Vec<String> {
     match pr {
         PrRun::Always => Vec::new(),
         PrRun::Ready => vec![NOT_DRAFT.to_owned()],

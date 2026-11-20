@@ -288,5 +288,6 @@ mod weaken_review;
 mod weaken_scope;
 mod wiring;
 mod workflow_env;
+mod workflow_size_0108;
 mod workspace_groups;
 mod yaml_tree;
