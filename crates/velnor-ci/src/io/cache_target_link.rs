@@ -60,8 +60,11 @@ fn mbx_setting(key: &str) -> Option<PathBuf> {
         .ok()
         .filter(|output| output.status.success())?;
     let text = String::from_utf8(output.stdout).ok()?;
-    let text = text.trim();
-    (!text.is_empty()).then(|| PathBuf::from(text))
+    if text.is_empty() {
+        return None;
+    }
+    let text = text.strip_suffix('\n').unwrap_or(&text);
+    Some(PathBuf::from(text.strip_suffix('\r').unwrap_or(text)))
 }
 
 fn env_path(name: &str) -> Option<PathBuf> {
@@ -71,19 +74,35 @@ fn env_path(name: &str) -> Option<PathBuf> {
 }
 
 fn setting(env: &str, key: &str) -> Option<PathBuf> {
-    env_path(env).or_else(|| mbx_setting(key))
+    std::env::var_os(env)
+        .map(PathBuf::from)
+        .or_else(|| mbx_setting(key))
+}
+
+fn default_cache_dir_for(
+    macos: bool,
+    home: Option<PathBuf>,
+    xdg: Option<PathBuf>,
+) -> Option<PathBuf> {
+    if macos {
+        return home.map(|home| home.join("Library/Caches/mbx"));
+    }
+    xdg.map(|xdg| xdg.join("mbx"))
+        .or_else(|| home.map(|home| home.join(".cache/mbx")))
 }
 
 fn default_cache_dir() -> Option<PathBuf> {
-    let home = env_path("HOME")?;
-    if cfg!(target_os = "macos") {
-        return Some(home.join("Library/Caches/mbx"));
-    }
-    Some(env_path("XDG_CACHE_HOME").map_or_else(|| home.join(".cache/mbx"), |xdg| xdg.join("mbx")))
+    default_cache_dir_for(
+        cfg!(target_os = "macos"),
+        env_path("HOME"),
+        env_path("XDG_CACHE_HOME"),
+    )
 }
 
 fn allowed_roots(checkout: &Path) -> Vec<PathBuf> {
-    let cache_dir = setting("MBX_CACHE_DIR", "cache_dir").or_else(default_cache_dir);
+    let cache_dir = setting("MBX_CACHE_DIR", "cache_dir")
+        .filter(|dir| !dir.as_os_str().is_empty())
+        .or_else(default_cache_dir);
     let target_root = setting("MBX_TARGET_ROOT", "target.root").map(|root| match &cache_dir {
         Some(cache) => cache.join(&root),
         None => root,
@@ -100,4 +119,44 @@ fn allowed_roots(checkout: &Path) -> Vec<PathBuf> {
     roots.sort();
     roots.dedup();
     roots
+}
+
+#[cfg(test)]
+mod tests {
+    use super::default_cache_dir_for;
+    use std::path::PathBuf;
+
+    fn dir(value: &str) -> PathBuf {
+        PathBuf::from(value)
+    }
+
+    #[test]
+    fn linux_default_cache_dir_uses_xdg_without_home() {
+        assert_eq!(
+            default_cache_dir_for(false, None, Some(dir("/xdg"))),
+            Some(dir("/xdg/mbx"))
+        );
+    }
+
+    #[test]
+    fn linux_default_cache_dir_prefers_xdg_over_home() {
+        assert_eq!(
+            default_cache_dir_for(false, Some(dir("/home/u")), Some(dir("/xdg"))),
+            Some(dir("/xdg/mbx"))
+        );
+        assert_eq!(
+            default_cache_dir_for(false, Some(dir("/home/u")), None),
+            Some(dir("/home/u/.cache/mbx"))
+        );
+        assert_eq!(default_cache_dir_for(false, None, None), None);
+    }
+
+    #[test]
+    fn macos_default_cache_dir_ignores_xdg() {
+        assert_eq!(
+            default_cache_dir_for(true, Some(dir("/Users/u")), Some(dir("/xdg"))),
+            Some(dir("/Users/u/Library/Caches/mbx"))
+        );
+        assert_eq!(default_cache_dir_for(true, None, Some(dir("/xdg"))), None);
+    }
 }

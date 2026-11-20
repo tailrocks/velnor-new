@@ -15,7 +15,7 @@ pub(super) fn mbx_stub() -> Repo {
     let stub = Repo::empty("link-roots-mbx");
     stub.write_unstaged(
         "bin/mbx",
-        "#!/bin/sh\ncase \"$3\" in\n  target.root) printf '%s' \"$FAKE_MBX_TARGET_ROOT\" ;;\n  cache_dir) printf '%s' \"$FAKE_MBX_CACHE_DIR\" ;;\nesac\n",
+        "#!/bin/sh\ncase \"$3\" in\n  target.root) [ \"${FAKE_MBX_TARGET_ROOT+set}\" ] && printf '%s\\n' \"$FAKE_MBX_TARGET_ROOT\" ;;\n  cache_dir) printf '%s' \"$FAKE_MBX_CACHE_DIR\" ;;\nesac\n",
     );
     let script = stub.root().join("bin/mbx");
     fs::set_permissions(&script, fs::Permissions::from_mode(0o755))
@@ -207,4 +207,38 @@ fn on_macos_xdg_cache_home_does_not_move_the_default_mbx_cache() {
         "{output:?}{}",
         String::from_utf8_lossy(&output.stderr)
     );
+}
+
+#[test]
+fn an_empty_target_root_setting_follows_a_link_below_the_cache_dir() {
+    let repo = lone("empty-target-root");
+    let stub = mbx_stub();
+    let home = Repo::empty("empty-target-root-home");
+    let cache = Repo::empty("empty-target-root-cache");
+    let dir = managed(cache.root(), "v1/0123456789abcdef");
+    symlink(&dir, repo.root().join("target")).unwrap_or_else(|e| unreachable!("{e}"));
+    let output = restored(&repo, &stub, home.root(), |command| {
+        command.env("MBX_CACHE_DIR", cache.root());
+        command.env("FAKE_MBX_TARGET_ROOT", "");
+    });
+    assert!(
+        output.status.success(),
+        "{output:?}{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn an_unset_target_root_setting_still_refuses_a_link_below_the_cache_dir_but_outside_targets() {
+    let repo = lone("unset-target-root");
+    let stub = mbx_stub();
+    let home = Repo::empty("unset-target-root-home");
+    let cache = Repo::empty("unset-target-root-cache");
+    let dir = managed(cache.root(), "v1/0123456789abcdef");
+    symlink(&dir, repo.root().join("target")).unwrap_or_else(|e| unreachable!("{e}"));
+    let output = restored(&repo, &stub, home.root(), |command| {
+        command.env("MBX_CACHE_DIR", cache.root());
+    });
+    assert!(!output.status.success(), "{output:?}");
+    assert!(dir.join(ARTIFACT).is_file());
 }
