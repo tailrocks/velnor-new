@@ -14,6 +14,7 @@ use crate::lint_tools::{ALINT, JACTIONLINT};
 use crate::mise::tool_pins;
 
 const MISE_TASK: &str = "mise-task";
+const GENERATED_CHECK: &str = "generated-check";
 const PREFIX: &str = "lint-";
 const DEFAULT_TIMEOUT_MINUTES: u16 = 10;
 const TIMEOUT_RANGE: std::ops::RangeInclusive<u16> = 1..=360;
@@ -154,6 +155,18 @@ fn lint(raw: RawLint) -> Result<LintJob, Reason> {
             let id = task.clone();
             let name = format!("Mise task {task}");
             (LintKind::MiseTask { task, tools }, id, name)
+        }
+        GENERATED_CHECK => {
+            foreign(kind, "inputs", raw.inputs.is_some())?;
+            foreign(kind, "config", config.is_some())?;
+            foreign(kind, "probe", probe.is_some())?;
+            foreign(kind, "task", raw.task.is_some())?;
+            foreign(kind, "tools", raw.tools.is_some())?;
+            (
+                LintKind::GeneratedCheck,
+                GENERATED_CHECK.to_owned(),
+                "Generated workflows".to_owned(),
+            )
         }
         other => {
             return Err(Reason::InvalidValue {

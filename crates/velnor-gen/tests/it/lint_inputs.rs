@@ -268,7 +268,7 @@ fn runs_of(
 ) -> Result<Vec<(String, bool)>, Box<dyn std::error::Error>> {
     let facts = detect(&repo(&["Cargo.toml"], DECLARED)?)?;
     let paths = paths.map(changed).transpose()?;
-    Ok(lint_runs(&facts, event, paths.as_ref())
+    Ok(lint_runs(&facts, event, paths.as_ref(), &BTreeSet::new())
         .into_iter()
         .map(|(slug, run)| (slug.to_string(), run))
         .collect())
@@ -346,7 +346,12 @@ fn the_tool_manifests_and_the_task_files_of_a_lint_count_as_its_inputs() -> Test
     let facts = detect(&repo(&["Cargo.toml"], bare)?)?;
     let hk = |path: &str| -> Result<bool, Box<dyn std::error::Error>> {
         let paths = changed(&[path])?;
-        let runs = lint_runs(&facts, EventKind::PullRequest, Some(&paths));
+        let runs = lint_runs(
+            &facts,
+            EventKind::PullRequest,
+            Some(&paths),
+            &BTreeSet::new(),
+        );
         Ok(*runs.values().next().ok_or("no decision")?)
     };
     for path in [
@@ -362,7 +367,12 @@ fn the_tool_manifests_and_the_task_files_of_a_lint_count_as_its_inputs() -> Test
     let alint = "[[lint]]\nkind = 'alint'\nconfig = '.alint.yml'\ninputs = ['rules/**']\n";
     let facts = detect(&repo(&["Cargo.toml"], alint)?)?;
     let paths = changed(&["mise-tasks/check"])?;
-    let runs = lint_runs(&facts, EventKind::PullRequest, Some(&paths));
+    let runs = lint_runs(
+        &facts,
+        EventKind::PullRequest,
+        Some(&paths),
+        &BTreeSet::new(),
+    );
     assert_eq!(runs.values().copied().collect::<Vec<_>>(), [false]);
     Ok(())
 }
@@ -373,12 +383,49 @@ fn the_declared_config_and_probe_of_a_lint_count_as_its_inputs() -> TestResult {
     let facts = detect(&repo(&["Cargo.toml"], config)?)?;
     let at = |path: &str| -> Result<bool, Box<dyn std::error::Error>> {
         let paths = changed(&[path])?;
-        let runs = lint_runs(&facts, EventKind::PullRequest, Some(&paths));
+        let runs = lint_runs(
+            &facts,
+            EventKind::PullRequest,
+            Some(&paths),
+            &BTreeSet::new(),
+        );
         Ok(*runs.values().next().ok_or("no decision")?)
     };
     assert!(at(".alint.yml")?);
     assert!(at("scripts/probe.sh")?);
     assert!(at("rules/a.yml")?);
     assert!(!at("src/lib.rs")?);
+    Ok(())
+}
+
+#[test]
+fn a_tracked_symlink_that_an_input_or_implicit_file_reaches_runs_the_lint() -> TestResult {
+    let bare = "[[lint]]\nkind = 'alint'\nconfig = '.alint.yml'\nprobe = 'scripts/p.sh'\ninputs = ['rules/**', 'a/*/x.yml', 'hk.pkl']\n";
+    let facts = detect(&repo(&["Cargo.toml"], bare)?)?;
+    let paths = changed(&["real/hk.pkl"])?;
+    let decide = |link: &str| -> Result<bool, Box<dyn std::error::Error>> {
+        let links = changed(&[link])?;
+        let runs = lint_runs(&facts, EventKind::PullRequest, Some(&paths), &links);
+        Ok(*runs.values().next().ok_or("no decision")?)
+    };
+    for link in [
+        "hk.pkl",
+        "rules",
+        "rules/one.yml",
+        "a",
+        "a/b",
+        "a/b/x.yml",
+        "mise.toml",
+        ".mise.toml",
+        "mise.lock",
+        ".alint.yml",
+        "scripts",
+        "scripts/p.sh",
+    ] {
+        assert!(decide(link)?, "{link}");
+    }
+    for link in ["docs/readme.md", "other.pkl", "a/b/c/x.yml"] {
+        assert!(!decide(link)?, "{link}");
+    }
     Ok(())
 }

@@ -9,6 +9,7 @@ use super::{audit, own_units, unit, workspace_below_the_root};
 mod aggregate;
 mod breadth;
 mod build_output;
+mod entries;
 
 #[test]
 fn an_excessively_deep_target_directory_returns_an_error_and_keeps_the_inputs_lock() {

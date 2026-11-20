@@ -78,7 +78,12 @@ pub(super) fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
         .collect();
     let outputs = outputs(&selections, &steps, policy)?
         + &tests_outputs(&expected)
-        + &lint_outputs(&lint_runs(&facts, kind, listed.then_some(&changes.paths)))
+        + &lint_outputs(&lint_runs(
+            &facts,
+            kind,
+            listed.then_some(&changes.paths),
+            &checkout.view.symlinks,
+        ))
         + &group_outputs(&groups)
         + &workspace_group_outputs(&facts.config.workspace_groups, &selections);
     append_outputs(&outputs)?;

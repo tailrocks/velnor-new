@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs;
+use std::os::unix::fs::symlink;
 
 use crate::io::Repo;
 use crate::io_plan::{plan_command, plan_repo};
@@ -86,4 +87,45 @@ fn plan_runs_a_lint_when_it_cannot_list_the_changed_files() {
 fn plan_writes_no_lint_output_for_a_repository_without_lint_inputs() {
     let repo = plan_repo("lint-none");
     assert_eq!(lint_lines(&repo, Some("pull_request"), &["README.md"]), "");
+}
+
+#[test]
+fn plan_runs_a_lint_whose_input_is_a_symlink_when_only_the_target_changed() {
+    let repo = lint_repo("lint-symlink");
+    repo.write("real/hk.pkl", "amends \"x\"\n");
+    symlink("real/hk.pkl", repo.root().join("hk.pkl")).unwrap_or_else(|e| unreachable!("{e}"));
+    repo.git(&["add", "--all"]);
+    assert_eq!(
+        lint_lines(&repo, Some("pull_request"), &["real/hk.pkl"]),
+        "lint_hk=run "
+    );
+}
+
+#[test]
+fn plan_runs_a_lint_whose_input_sits_below_a_symlinked_folder() {
+    let repo = lint_repo("lint-symlink-folder");
+    repo.write(
+        ".velnor/rust-ci.toml",
+        "[[lint]]\nkind = 'mise-task'\nid = 'hk'\ntask = 'hk'\ninputs = ['cfg/hk.pkl']\n",
+    );
+    repo.write("real/hk.pkl", "x\n");
+    symlink("real", repo.root().join("cfg")).unwrap_or_else(|e| unreachable!("{e}"));
+    repo.git(&["add", "--all"]);
+    assert_eq!(
+        lint_lines(&repo, Some("pull_request"), &["real/hk.pkl"]),
+        "lint_hk=run "
+    );
+}
+
+#[test]
+fn plan_still_skips_a_lint_when_no_symlink_reaches_its_inputs() {
+    let repo = lint_repo("lint-symlink-unrelated");
+    repo.write("real/other.txt", "x\n");
+    symlink("real/other.txt", repo.root().join("other.txt"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    repo.git(&["add", "--all"]);
+    assert_eq!(
+        lint_lines(&repo, Some("pull_request"), &["real/other.txt"]),
+        "lint_hk=skip "
+    );
 }
