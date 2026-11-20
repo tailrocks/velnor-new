@@ -111,7 +111,7 @@ pub(crate) fn install_release_plz(plan: &ReleasePlan) -> Vec<RenderedStep> {
     ]
 }
 
-const NO_PROGRAM_VARIABLES: [(&str, &str); 6] = [
+const NO_PROGRAM_VARIABLES: &[(&str, &str)] = &[
     ("RUSTC_WRAPPER", ""),
     ("RUSTC_WORKSPACE_WRAPPER", ""),
     ("CARGO_BUILD_RUSTC_WRAPPER", ""),

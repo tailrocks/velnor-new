@@ -16,7 +16,7 @@ use crate::io::Repo;
 pub(crate) type TestResult = Result<(), Box<dyn Error>>;
 
 pub(crate) const TOKEN: &str = "ghs_recorded_installation_token";
-const URLS: [&str; 5] = [
+const URLS: &[&str] = &[
     "https://github.com/acme/private.git",
     "ssh://git@github.com/acme/private.git",
     "ssh://github.com/acme/private.git",

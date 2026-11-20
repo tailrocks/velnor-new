@@ -7,7 +7,7 @@
 use crate::base_save::{jobs, names, step};
 use crate::facts::TestResult;
 
-const SAVES: [&str; 6] = [
+const SAVES: &[&str] = &[
     "velnor-ci inputs save",
     "Decide whether to save the build directory",
     "Save the target cache",
@@ -16,7 +16,7 @@ const SAVES: [&str; 6] = [
     "Record the sources cache key",
 ];
 
-const SHAPES: [&str; 3] = ["one-job", "lint-test", "groups"];
+const SHAPES: &[&str] = &["one-job", "lint-test", "groups"];
 
 /// The jobs that save a target cache and run tests, as (id, rendered block).
 fn testing_savers(
@@ -58,7 +58,7 @@ fn every_save_waits_for_the_test_step_to_record_a_build() -> TestResult {
     for shape in SHAPES {
         let config = format!("shape = {shape:?}\non_main = 'everything'\n");
         for (id, lane) in testing_savers("0.1.107", &config)? {
-            for name in SAVES {
+            for name in SAVES.iter().copied() {
                 let Some(saved) = step(&lane, name) else {
                     continue;
                 };
