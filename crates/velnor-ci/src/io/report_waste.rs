@@ -4,6 +4,7 @@
 use crate::report::{Cache, Hit, LaneMetrics};
 use crate::waste_evidence::{MbxEvidence, TOOLCHAIN_INSTALLS, mbx_sessions};
 use serde_json::Value;
+use std::collections::BTreeSet;
 use std::fs;
 use std::path::Path;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -76,14 +77,31 @@ pub(super) fn entry_before_job(
         return None;
     }
     let entries = listing["actions_caches"].as_array()?;
-    Some(entries.iter().any(|entry| {
+    let readable = |entry: &&Value| {
         entry["key"].as_str() == Some(cache.requested_key.as_str())
             && entry["ref"]
                 .as_str()
                 .is_some_and(|reference| refs.iter().any(|allowed| allowed == reference))
-            && entry["created_at"]
-                .as_str()
-                .and_then(crate::time::parse_utc)
-                .is_some_and(|created| created < start)
+    };
+    let created = |entry: &Value| {
+        entry["created_at"]
+            .as_str()
+            .and_then(crate::time::parse_utc)
+    };
+    let versions_since_start: BTreeSet<Option<&str>> = entries
+        .iter()
+        .filter(readable)
+        .filter(|entry| created(entry).is_some_and(|created| created >= start))
+        .map(|entry| entry["version"].as_str())
+        .collect();
+    let Some(job_version) = (match versions_since_start.iter().copied().collect::<Vec<_>>()[..] {
+        [Some(version)] => Some(version),
+        _ => None,
+    }) else {
+        return Some(false);
+    };
+    Some(entries.iter().filter(readable).any(|entry| {
+        entry["version"].as_str() == Some(job_version)
+            && created(entry).is_some_and(|created| created < start)
     }))
 }

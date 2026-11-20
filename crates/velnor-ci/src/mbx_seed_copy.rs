@@ -3,7 +3,7 @@
 
 use std::fs;
 use std::io::{ErrorKind, Write};
-use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
+use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -176,7 +176,11 @@ fn transfer(job: &Job) -> Option<Copy> {
         .ok()?;
     let done = std::io::copy(&mut source, &mut target)
         .and_then(|_| target.flush())
-        .and_then(|()| target.set_permissions(metadata.permissions()))
+        .and_then(|()| {
+            // Keep only the rwx bits: a source's setuid, setgid and sticky bits never carry over.
+            let mode = metadata.permissions().mode() & 0o777;
+            target.set_permissions(fs::Permissions::from_mode(mode))
+        })
         .and_then(|()| target.set_times(fs::FileTimes::new().set_modified(metadata.modified()?)))
         .and_then(|()| fs::rename(&partial, &job.to));
     match done {

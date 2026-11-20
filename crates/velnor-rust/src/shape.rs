@@ -1,11 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{Shape, ShapeDecision, Timings};
+use velnor_model::{RepoFacts, RustRoot, Shape, ShapeDecision, Timings};
 
 use crate::config::CONFIG_PATH;
 use crate::error::Reason;
 use crate::timings::TIMINGS_PATH;
+use crate::units::{Unit, units};
 
 pub const SECOND_JOB_COST_SECONDS: u64 = 5;
 pub const SHARD_THRESHOLD_SECONDS: Option<u64> = None;
@@ -56,6 +57,51 @@ pub fn decide_shape(configured: Option<Shape>, timings: Option<&Timings>) -> Sha
             ),
         )
     }
+}
+
+/// The shape decision of every unit, as the renderer applies it.
+pub(crate) fn decisions(facts: &RepoFacts, units: &[Unit]) -> Vec<ShapeDecision> {
+    units
+        .iter()
+        .map(|unit| {
+            let decision = decide_shape(
+                facts.config.shape,
+                crate::units::timings(facts, unit).as_ref(),
+            );
+            if unit.grouped {
+                decision
+            } else {
+                crate::config_test_groups::archive_shape(facts, &unit.roots[0], decision)
+            }
+        })
+        .collect()
+}
+
+pub(crate) fn helper_root(facts: &RepoFacts) -> Option<&RustRoot> {
+    facts.config.helper.as_ref().and_then(|path| {
+        facts
+            .rust_roots
+            .iter()
+            .find(|root| root.manifest.parent().as_ref() == Some(path))
+    })
+}
+
+/// One `rust` job and no plan job: the single-job shape.
+pub(crate) fn single_job(facts: &RepoFacts, units: &[Unit], decisions: &[ShapeDecision]) -> bool {
+    units.len() == 1
+        && !units[0].grouped
+        && decisions[0].shape == Shape::OneJob
+        && helper_root(facts).is_none()
+}
+
+/// Whether the planned workflow has a plan job. Only the jobs that follow a plan
+/// job get a sparse checkout list (see `setup_units`), so the one-job shape,
+/// which has none, never gets a sparse suggestion (#645).
+#[must_use]
+pub fn sparse_checkout_planned(facts: &RepoFacts) -> bool {
+    let units = units(facts);
+    let decisions = decisions(facts, &units);
+    !single_job(facts, &units, &decisions)
 }
 
 pub(crate) fn parse_shape(configured: Option<&str>) -> Result<Option<Shape>, Reason> {

@@ -151,3 +151,27 @@ fn oversized_cargo_artifacts_report_rejection_once_across_chunks_and_eof() {
         }
     }
 }
+
+#[test]
+fn a_build_script_run_is_recorded_with_its_package_and_output_directory() {
+    let run = json!({
+        "reason": "build-script-executed",
+        "package_id": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.0",
+        "linked_libs": [], "linked_paths": [], "cfgs": [], "env": [],
+        "out_dir": "/work/target/debug/build/serde-0123456789abcdef/out"
+    });
+    let unreadable = json!({"reason": "build-script-executed", "package_id": "x"});
+    let input = format!("{run}\n{unreadable}\n");
+    let mut tap = ArtifactTap::default();
+    tap.feed(input.as_bytes());
+    let batch = tap.finish();
+    assert_eq!(
+        batch.build_scripts,
+        [velnor_ci::cargo_artifacts::BuildScriptRun {
+            package_id: "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.0"
+                .to_owned(),
+            out_dir: "/work/target/debug/build/serde-0123456789abcdef/out".to_owned(),
+        }]
+    );
+    assert_eq!(batch.rejected, 0);
+}
