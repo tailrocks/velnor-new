@@ -1,9 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::waste_evidence::MbxSession;
+use crate::waste_evidence::{MbxCompilerWork, MbxSession};
 use serde::Deserialize;
-use serde_json::{Map, Value};
+use serde_json::Value;
+use std::collections::BTreeMap;
 use std::path::Path;
 
 pub const SWITCH: &str = "VELNOR_MBX_REPORTS";
@@ -25,7 +26,11 @@ struct Counts {
     misses: u64,
     unconsulted: u64,
     #[serde(default)]
-    bypasses: Map<String, Value>,
+    verifications: u64,
+    #[serde(default)]
+    bypasses: BTreeMap<String, u64>,
+    #[serde(default)]
+    compiler: BTreeMap<String, MbxCompilerWork>,
 }
 
 const VALUE_LONG_OPTIONS: &[&str] = &["--config", "--color"];
@@ -122,5 +127,8 @@ pub fn parse(report: &[u8]) -> Result<Option<MbxSession>, String> {
         hits: counts.hits,
         misses: counts.misses,
         not_looked_up: counts.unconsulted,
+        verifications: Some(counts.verifications).filter(|count| *count > 0),
+        bypasses: counts.bypasses,
+        compiler: counts.compiler,
     }))
 }

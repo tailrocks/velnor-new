@@ -5,7 +5,9 @@ use crate::mbx_report::{DIRECTORY, SWITCH, VARIABLE, parse, reports_session};
 use crate::waste_evidence::MbxSession;
 use std::collections::BTreeMap;
 use std::fs::{self, File};
-use std::io::Read;
+use std::io::{ErrorKind, Read};
+use std::os::unix::fs::FileTypeExt;
+use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -22,9 +24,22 @@ fn enabled() -> bool {
     std::env::var(SWITCH).is_ok_and(|value| value == "true")
 }
 
-/// An enclosing mbx session (its socket is set) answers for nested cargo calls and writes no report of their own.
+/// An enclosing mbx session (its socket answers) covers nested cargo calls and writes no report of their own.
+/// A leftover `MBX_SOCKET` of a dead daemon does not count.
 fn inside_session() -> bool {
-    std::env::var_os("MBX_SOCKET").is_some_and(|socket| !socket.is_empty())
+    std::env::var_os("MBX_SOCKET")
+        .filter(|socket| !socket.is_empty())
+        .is_some_and(|socket| socket_answers(Path::new(&socket)))
+}
+
+fn socket_answers(socket: &Path) -> bool {
+    if !fs::metadata(socket).is_ok_and(|metadata| metadata.file_type().is_socket()) {
+        return false;
+    }
+    UnixStream::connect(socket).map_or_else(
+        |error| error.kind() != ErrorKind::ConnectionRefused,
+        |_| true,
+    )
 }
 
 pub(super) fn assign(command: &mut Command, argv: &[String]) {
@@ -109,6 +124,10 @@ pub(super) fn read(runner_temp: &Path) -> Option<Reports> {
         match session.report {
             None if session.marker => reports.missing.push(name),
             None => {}
+            Some(file) if !session.marker => reports.unreadable.push(format!(
+                "{}: not assigned by velnor-ci",
+                file.file_name().unwrap_or_default().to_string_lossy()
+            )),
             Some(file) => match read_regular(&file).and_then(|bytes| parse(&bytes)) {
                 Ok(parsed) => reports.sessions.extend(parsed),
                 Err(reason) => reports.unreadable.push(format!(

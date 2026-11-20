@@ -17,7 +17,9 @@ fn a_planted_symlink_or_oversized_report_is_unreadable_evidence_not_read() -> Re
     cargo(&repo, "build", &report_json(5, 1, 0, 0), "compiled")?;
     let real = repo.root().join("real.json");
     fs::write(&real, report_json(5, 7, 0, 0))?;
+    plant_session(&repo, "1-linked", None)?;
     std::os::unix::fs::symlink(&real, plant(&repo, "1-linked.json")?)?;
+    plant_session(&repo, "2-huge", None)?;
     fs::write(plant(&repo, "2-huge.json")?, vec![b' '; 2 << 20])?;
     let metrics = report(&repo)?;
     assert_eq!(metrics.mbx.sessions, [session(1, 0, 0)], "{metrics:?}");

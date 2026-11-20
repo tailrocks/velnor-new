@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{Repo, ResultTest, fixture, read};
+use std::collections::BTreeMap;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::process::Command;
 use velnor_ci::mbx_report::{parse, reports_session};
 use velnor_ci::report::LaneMetrics;
-use velnor_ci::waste_evidence::MbxSession;
+use velnor_ci::waste_evidence::{MbxCompilerWork, MbxSession};
 
 const SWITCH: &str = "VELNOR_MBX_REPORTS";
 const FAKE_CARGO: &str = "#!/bin/sh\nprintf '%s\\n' \"$FAKE_MBX_STDERR\" >&2\nif [ -n \"$MBX_STATS_REPORT\" ] && [ -n \"$FAKE_MBX_REPORT\" ]; then printf '%s' \"$FAKE_MBX_REPORT\" > \"$MBX_STATS_REPORT\"; fi\n";
@@ -82,6 +83,9 @@ pub(super) const fn session(hits: u64, misses: u64, not_looked_up: u64) -> MbxSe
         hits,
         misses,
         not_looked_up,
+        verifications: None,
+        bypasses: BTreeMap::new(),
+        compiler: BTreeMap::new(),
     }
 }
 
@@ -328,11 +332,33 @@ fn with_the_switch_off_an_inherited_report_path_never_reaches_the_child() -> Res
 #[test]
 fn the_reader_maps_a_real_mbx_report_and_names_what_it_cannot_read() {
     let real = include_bytes!("../data/mbx_report/mbx-1.30.0.json");
-    assert_eq!(parse(real), Ok(Some(session(0, 0, 2))));
+    assert_eq!(
+        parse(real),
+        Ok(Some(MbxSession {
+            bypasses: BTreeMap::from([
+                ("compiler-query".to_owned(), 2),
+                ("standard-input".to_owned(), 1)
+            ]),
+            compiler: BTreeMap::from([(
+                "unconsulted".to_owned(),
+                MbxCompilerWork {
+                    invocations: 2,
+                    duration_ns: 268_720_292
+                }
+            )]),
+            ..session(0, 0, 2)
+        }))
+    );
     let probes = br#"{"version":5,"hits":0,"misses":0,"unconsulted":0,"bypasses":{"compiler-query":2,"standard-input":1}}"#;
     assert_eq!(parse(probes), Ok(None));
     let bypassed = br#"{"version":5,"hits":0,"misses":0,"unconsulted":0,"bypasses":{"compiler-query":1,"other":1}}"#;
-    assert_eq!(parse(bypassed), Ok(Some(session(0, 0, 0))));
+    assert_eq!(
+        parse(bypassed),
+        Ok(Some(MbxSession {
+            bypasses: BTreeMap::from([("compiler-query".to_owned(), 1), ("other".to_owned(), 1)]),
+            ..session(0, 0, 0)
+        }))
+    );
     let huge = format!(
         r#"{{"version":5,"hits":{max},"misses":{max},"unconsulted":{max}}}"#,
         max = u64::MAX
