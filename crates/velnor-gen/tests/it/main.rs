@@ -253,6 +253,7 @@ mod ruleset;
 mod rust_ci_doc_keys;
 mod sample_manifests;
 mod save_after_build;
+mod save_after_compile;
 mod save_gate_outcomes;
 mod select;
 mod setup_action;

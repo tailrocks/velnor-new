@@ -8,14 +8,17 @@
 //! captures, and for the compile-input audit when one is required. The conditions
 //! themselves come from `save_condition`, for every shape of job.
 
-use velnor_model::{CargoCommand, HelperCommand, Job, Step, StepKind, When};
+use velnor_model::{CargoCommand, Gate, HelperCommand, Job, PrRun, Step, StepKind, When};
 
 use crate::gate::Setup;
+use crate::rules::RenderedStep;
 use crate::save_condition::{Audited, Built, Compiled, audit_passed, audit_runs, builds_finished};
 use crate::tests::Tests;
 
 const BUILD_ID: &str = "build";
 const AUDIT_ID: &str = "audit";
+const COMPILE_ID: &str = "compile";
+const SAVEABLE_ID: &str = "saveable";
 
 /// The step ids a job's saves wait for, and the ids those steps are given.
 #[derive(Clone, Debug, Default)]
@@ -24,6 +27,15 @@ pub(crate) struct SaveGate {
     required: Vec<String>,
     /// What an audit waits for before it runs, by step index.
     audit_runs: Vec<Option<String>>,
+    saveable: Option<Saveable>,
+}
+
+#[derive(Clone, Debug)]
+struct Saveable {
+    at: usize,
+    terms: Vec<String>,
+    gate: Option<Gate>,
+    setup: Setup,
 }
 
 fn is_save(step: &Step) -> bool {
@@ -42,6 +54,10 @@ fn is_audit(step: &Step) -> bool {
 
 fn is_build(step: &Step) -> bool {
     matches!(&step.kind, StepKind::Cargo(command) if command.is_target_build())
+}
+
+fn is_compile_check(step: &Step) -> bool {
+    matches!(&step.kind, StepKind::Cargo(command) if command.is_compile_check())
 }
 
 /// A test step that records its build in its outputs, which the saves read.
@@ -72,6 +88,7 @@ impl SaveGate {
         let tests = Tests::of(job);
         let restores = crate::base_steps::job_setup(job).0;
         let (mut compiled, mut audits) = (Vec::<Compiled>::new(), Vec::new());
+        let mut checks = Vec::<String>::new();
         let mut replanned = false;
         for (index, step) in job.steps.iter().enumerate().take(first) {
             let setup = Setup::of(restores, replanned);
@@ -91,6 +108,10 @@ impl SaveGate {
                     gate: step.gate.clone(),
                     setup,
                 });
+            } else if !legacy && is_compile_check(step) {
+                let id = format!("{COMPILE_ID}_{}", checks.len() + 1);
+                gate.ids[index] = Some(id.clone());
+                checks.push(id);
             } else if is_audit(step) {
                 let id = format!("{AUDIT_ID}_{}", audits.len() + 1);
                 gate.ids[index] = Some(id.clone());
@@ -109,14 +130,49 @@ impl SaveGate {
             gate.ids.fill(None);
             gate.audit_runs.fill(None);
         } else {
-            gate.required = builds_finished(&compiled, saved_here);
-            gate.required.extend(audits.iter().map(audit_passed));
+            let mut terms = builds_finished(&compiled, saved_here);
+            terms.extend(audits.iter().map(audit_passed));
+            terms.extend(
+                checks
+                    .iter()
+                    .map(|id| format!("steps.{id}.outcome != 'failure'")),
+            );
+            let setup = Setup::of(restores, replanned);
+            if checks.is_empty() || setup == Setup::Before {
+                gate.required = terms;
+            } else {
+                gate.required = vec![format!("steps.{SAVEABLE_ID}.outcome == 'success'")];
+                gate.saveable = Some(Saveable {
+                    at: first,
+                    terms,
+                    gate: saved_here.cloned(),
+                    setup,
+                });
+            }
         }
         gate
     }
 
     pub(crate) fn id(&self, index: usize) -> Option<&str> {
         self.ids.get(index)?.as_deref()
+    }
+
+    pub(crate) fn saveable(&self, index: usize) -> Option<RenderedStep> {
+        let saveable = self.saveable.as_ref().filter(|found| found.at == index)?;
+        Some(RenderedStep {
+            id: Some(SAVEABLE_ID.to_owned()),
+            name: "Record that the build can be saved".to_owned(),
+            condition: crate::gate::condition(
+                When::SaveBase,
+                saveable.gate.as_ref(),
+                saveable.setup,
+                PrRun::Always,
+                &[],
+                &saveable.terms,
+            ),
+            run: Some("echo 'the build can be saved'".to_owned()),
+            ..RenderedStep::default()
+        })
     }
 
     pub(crate) fn required(&self) -> &[String] {

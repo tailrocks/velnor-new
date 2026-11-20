@@ -62,8 +62,13 @@ fn every_save_waits_for_the_test_step_to_record_a_build() -> TestResult {
                 let Some(saved) = step(&lane, name) else {
                     continue;
                 };
+                let waits = if saved.contains("steps.saveable.outcome == ''success''") {
+                    step(&lane, "Record that the build can be saved").ok_or("no record")?
+                } else {
+                    saved
+                };
                 assert!(
-                    saved.contains("outputs.built == ''true''"),
+                    waits.contains("outputs.built == ''true''"),
                     "{shape} {id} {name}: {saved}"
                 );
                 assert!(!saved.contains("build_1"), "{shape} {id} {name}: {saved}");
