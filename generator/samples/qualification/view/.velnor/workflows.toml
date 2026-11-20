@@ -738,7 +738,7 @@ run = "bash qualification/mbx-cache-roundtrip.sh rust-path"
 id = "mbx_cache"
 name = "Restore MBX objects"
 uses = "mr-boxington"
-with = { github-cache-mode = "objects", version = "1.29.2", toolchain = "1.99.1", isolate-objects-cache = "true", cache-generation = "velnor-mbx-1.29.2-share-out-dir-disabled-v1", save-on-workflow-dispatch = "true" }
+with = { github-cache-mode = "objects", version = "1.30.0", toolchain = "1.100.0", isolate-objects-cache = "true", cache-generation = "velnor-mbx-1.30.0-share-out-dir-disabled-v1", save-on-workflow-dispatch = "true" }
 
 [[workflow.job.step]]
 id = "mbx-ready"
@@ -799,7 +799,7 @@ run = "bash qualification/mbx-cache-roundtrip.sh rust-path"
 id = "mbx_cache"
 name = "Restore MBX objects"
 uses = "mr-boxington"
-with = { github-cache-mode = "objects", version = "1.29.2", toolchain = "1.99.1", isolate-objects-cache = "true", cache-generation = "velnor-mbx-1.29.2-share-out-dir-disabled-v1", save-on-workflow-dispatch = "false" }
+with = { github-cache-mode = "objects", version = "1.30.0", toolchain = "1.100.0", isolate-objects-cache = "true", cache-generation = "velnor-mbx-1.30.0-share-out-dir-disabled-v1", save-on-workflow-dispatch = "false" }
 
 [[workflow.job.step]]
 id = "mbx-ready"
