@@ -161,6 +161,10 @@ fn a_trusted_runner_that_cannot_be_a_pool_of_the_workflow_is_refused() -> TestRe
             "a hosted label",
         ),
         (
+            "runner = \"velnor-linux-x64\"\ntrusted_runner = \"ubuntu-26.04\"",
+            "a hosted label of the same platform that is not the fork runner",
+        ),
+        (
             "runner = \"velnor-box\"\ntrusted_runner = \"velnor-box\"",
             "the runner",
         ),

@@ -132,6 +132,10 @@ fn a_trusted_runner_that_could_break_the_fence_or_the_lock_is_refused() -> TestR
             "a hosted label",
         ),
         (
+            format!("runner = '{SCALE_SET}'\ntrusted_runner = 'ubuntu-26.04'\n"),
+            "a hosted label that is not the fork runner",
+        ),
+        (
             format!("runner = '{SCALE_SET}'\ntrusted_runner = '{SCALE_SET}'\n"),
             "the runner itself",
         ),

@@ -10,9 +10,6 @@ pub(crate) fn fork_runner(job: &Job, plan: &WorkflowPlan) -> Option<String> {
 }
 
 pub(crate) fn trusted_runner(job: &Job, plan: &WorkflowPlan) -> Option<RenderedTrusted> {
-    if plan.hosted_runners.contains(&job.runs_on) {
-        return None;
-    }
     plan.trusted_runners
         .for_runner(&job.runs_on)
         .map(|trusted| RenderedTrusted {
