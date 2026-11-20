@@ -5,7 +5,6 @@ use std::path::Path;
 use toml::Table;
 use velnor_model::{MbxRule, mbx_declaration};
 
-/// The mise config files a checkout root can carry, in mise's own lookup order.
 const CONFIGS: &[&str] = &[
     "mise.toml",
     ".mise.toml",
