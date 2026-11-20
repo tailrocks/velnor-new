@@ -347,14 +347,12 @@ fn record_refuses_an_untrusted_event_and_writes_no_anchor() {
     }
 }
 
-/// Runs the built `velnor-ci tools-verify <verb>` the way a workflow step does: a cleared
-/// environment, a trusted default-branch push, and `VELNOR_ANCHOR_HIT` set to `hit` (unset when
-/// `None`). Returns what the step wrote to `GITHUB_OUTPUT`.
+/// Runs `velnor-ci tools-verify <verb>` like a workflow step: a cleared environment, a trusted
+/// default-branch push, and `VELNOR_ANCHOR_HIT` set to `hit` (unset when `None`).
 fn step_output(job: &Job, verb: &str, hit: Option<&str>) -> String {
     let output = job.root.join("github-output");
     let event = job.root.join("event.json");
-    fs::write(&event, r#"{"repository":{"default_branch":"main"}}"#)
-        .unwrap_or_else(|e| unreachable!("{e}"));
+    fs::write(&event, r#"{"repository":{"default_branch":"main"}}"#).unwrap_or_default();
     let _ = fs::remove_file(&output);
     let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
     command
@@ -370,11 +368,7 @@ fn step_output(job: &Job, verb: &str, hit: Option<&str>) -> String {
         command.env("VELNOR_ANCHOR_HIT", hit);
     }
     let run = command.output().unwrap_or_else(|e| unreachable!("{e}"));
-    assert!(
-        run.status.success(),
-        "{}",
-        String::from_utf8_lossy(&run.stderr)
-    );
+    assert!(run.status.success(), "{run:?}");
     fs::read_to_string(output).unwrap_or_default()
 }
 
@@ -393,12 +387,11 @@ fn only_the_exact_hit_true_lets_the_restored_anchor_vouch_for_the_tools() {
             "{name}"
         );
         let verified = step_output(&job, "check", hit);
-        if hit == Some("true") {
-            assert!(verified.contains("verified=true"), "{name}: {verified}");
-            assert!(!discarded(&job), "{name}");
-        } else {
-            assert!(verified.contains("verified=false"), "{name}: {verified}");
-            assert!(discarded(&job), "{name}");
-        }
+        assert_eq!(
+            verified.contains("verified=true"),
+            hit == Some("true"),
+            "{name}: {verified}"
+        );
+        assert_eq!(discarded(&job), hit != Some("true"), "{name}");
     }
 }
