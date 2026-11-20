@@ -23,7 +23,7 @@ fn grouped_tools() -> Repo {
     unit(
         &repo,
         ".velnor/rust-ci.lock",
-        &GROUP_LOCK.replace("version = \"0.1.81\"", "version = \"0.1.86\""),
+        &GROUP_LOCK.replace("version = \"0.1.81\"", "version = \"0.1.96\""),
     );
     for package in ["a", "b"] {
         unit(
