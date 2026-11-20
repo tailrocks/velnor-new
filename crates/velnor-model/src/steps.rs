@@ -263,8 +263,19 @@ pub enum ToolsLocalVerb {
     AnchorReset,
     AnchorRestore,
     Verify,
+    /// `Verify` on a helper whose mismatch notice names the restored cache entry, so the verify
+    /// step also gets the key of that entry.
+    VerifyNamed,
     Record,
     AnchorSave,
+}
+
+impl ToolsLocalVerb {
+    /// Whether the verb checks the restored tools against the anchor before anything uses them.
+    #[must_use]
+    pub fn checks_tools(self) -> bool {
+        matches!(self, Self::Verify | Self::VerifyNamed)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
