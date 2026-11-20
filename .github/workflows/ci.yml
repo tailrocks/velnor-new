@@ -97,6 +97,10 @@ jobs:
             echo "the check accepted a correction whose commit already shipped in the previous release" >&2
             exit 1
           fi
+          if bash scripts/check-helper-gates.sh --diff "$fixtures/gate-prose.diff" --current 0.1.100; then
+            echo "the check accepted the prose gate marker" >&2
+            exit 1
+          fi
           bash scripts/check-helper-gates.sh --diff "$fixtures/gate-good.diff" --current 0.1.100
           bash scripts/check-helper-gates.sh --diff "$fixtures/gate-correction-good.diff" --current 0.1.100
       - name: Check the added gates against the base
