@@ -125,11 +125,7 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
     let declared_runner = raw.runner.is_some();
     let hosted_key = raw.hosted.is_some() || test_groups.iter().any(|group| group.hosted.is_some());
     let runner = runner(raw.runner, defaults.runner).map_err(invalid)?;
-    let crates_mirror = raw
-        .crates_mirror
-        .map(crate::config_mirror::mirror)
-        .transpose()
-        .map_err(invalid)?;
+    let crates_mirror = crate::config_mirror::optional(raw.crates_mirror).map_err(invalid)?;
     let hosted_runners = crate::config_hosting::resolve(
         (&runner, raw.hosted.or((!declared_runner).then_some(true))),
         crates_mirror.as_ref(),
@@ -137,6 +133,9 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
     )
     .map_err(invalid)?;
     let fork_runner = crate::config_fork::fork_runner(raw.fork_runner, &runner).map_err(invalid)?;
+    let (mbx_remote, mbx_store, mbx) =
+        crate::config_cache::mbx_settings(raw.cache.as_ref(), raw.mbx_shared_store)
+            .map_err(invalid)?;
     Ok(RustCiConfig {
         workspace_groups,
         external_workflows,
@@ -150,8 +149,8 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         test_lanes,
         cache_check_blocks: raw.cache_check_blocks.unwrap_or(false),
         cache_debug: raw.cache_debug.unwrap_or(false).into(),
-        mbx_remote: crate::config_cache::mbx_remote(raw.cache).map_err(invalid)?,
-
+        mbx_remote,
+        mbx,
         push_after_merge_group: crate::config_ci::push_after_merge_group(raw.ci),
         crates_mirror,
         hosted_runners: hosted_runners.with_key_written(hosted_key),
@@ -159,7 +158,7 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         check_alone_run: docs_run("check_alone", raw.check_alone.as_deref()).map_err(invalid)?,
         private_sources,
         release_assets,
-        mbx_store: raw.mbx_shared_store.unwrap_or(false).into(),
+        mbx_store,
         nextest_harnesses: harnesses(raw.nextest_harnesses).map_err(invalid)?,
         default_branch,
         skip_draft_pull_requests,

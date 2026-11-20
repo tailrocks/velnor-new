@@ -8,7 +8,7 @@ Most failed migrations failed before the generator ran: on the mise layout, on a
 
 ### The mise and mbx layout
 
-This is the recommended layout. Its `mise.toml` declares the Rust toolchain with `mr_boxington = true`, pins mbx and nextest, and routes every `cargo` through mbx. velnor-ci 0.1.108 is not released yet; once #2108 ships, generation requires the mbx layout.
+This is the recommended layout. Its `mise.toml` declares the Rust toolchain with `mr_boxington = true`, pins mbx and nextest, and routes every `cargo` through mbx with no `[wrappers.cargo]`. Generation accepts this native layout. The explicit layout, `[wrappers.cargo]` with `command = "mbx"` and `env = { MBX_CARGO_SHIM_MODE = "1" }` next to the same option and pin, is also accepted. Without the shim env the wrapper breaks `cargo -V` and `cargo --list`, so generation refuses it. velnor-ci 0.1.109 is not released yet; once #2108 ships, generation requires one of these two layouts.
 
 ```toml
 min_version = "<mise version>"
@@ -20,10 +20,6 @@ mr-boxington = { version = "<mbx version>", workflow = "release.yml@refs/heads/m
 
 [settings]
 lockfile = true
-
-[wrappers.cargo]
-command = "mbx"
-env = { MBX_CARGO_SHIM_MODE = "1" }
 ```
 
 Pin the newest release of each tool. The `mise.toml` and `rust-toolchain.toml` of the velnor-new repository hold the current pins. Generation refuses a project that runs its tests with nextest and does not pin `cargo-nextest` in `mise.toml`.

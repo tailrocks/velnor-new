@@ -252,5 +252,6 @@ fn release_files(
         workflow_names: workflows.as_deref().map(workflow_names),
         push_workflows: workflows.as_deref().map(push_workflows),
         mise_lock: text(&MISE_LOCK)?.unwrap_or_default(),
+        mbx_opt_out: reality.is_some_and(|known| !known.facts.config.mbx.routed()),
     })
 }

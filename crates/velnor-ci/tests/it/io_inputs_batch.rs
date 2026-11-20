@@ -78,7 +78,7 @@ pub(crate) fn fixture() -> Repo {
     let repo = Repo::new("batch-custom-targets");
     repo.write(
         "mise.toml",
-        "[tools]\nrust='1.99.1'\n'aqua:nextest-rs/nextest/cargo-nextest'='0.9.151'\n",
+        "[tools]\nrust={version='1.99.1',mr_boxington=true}\n'aqua:nextest-rs/nextest/cargo-nextest'='0.9.151'\nmr-boxington={version='1.30.0',workflow='release.yml@refs/heads/main'}\n",
     );
     repo.write(
         "mise.lock",

@@ -346,3 +346,52 @@ fn record_refuses_an_untrusted_event_and_writes_no_anchor() {
         assert!(fs::symlink_metadata(&job.anchor).is_err(), "{event}");
     }
 }
+
+/// Runs `velnor-ci tools-verify <verb>` like a workflow step: a cleared environment, a trusted
+/// default-branch push, and `VELNOR_ANCHOR_HIT` set to `hit` (unset when `None`).
+fn step_output(job: &Job, verb: &str, hit: Option<&str>) -> String {
+    let output = job.root.join("github-output");
+    let event = job.root.join("event.json");
+    fs::write(&event, r#"{"repository":{"default_branch":"main"}}"#).unwrap_or_default();
+    let _ = fs::remove_file(&output);
+    let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
+    command
+        .env_clear()
+        .args(["tools-verify", verb])
+        .env("HOME", &job.home)
+        .env("RUNNER_TEMP", &job.root)
+        .env("GITHUB_OUTPUT", &output)
+        .env("GITHUB_EVENT_NAME", "push")
+        .env("GITHUB_EVENT_PATH", &event)
+        .env("GITHUB_REF", "refs/heads/main");
+    if let Some(hit) = hit {
+        command.env("VELNOR_ANCHOR_HIT", hit);
+    }
+    let run = command.output().unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(run.status.success(), "{run:?}");
+    fs::read_to_string(output).unwrap_or_default()
+}
+
+#[test]
+fn only_the_exact_hit_true_lets_the_restored_anchor_vouch_for_the_tools() {
+    let cases = [
+        ("hit-unset", None),
+        ("hit-empty", Some("")),
+        ("hit-false", Some("false")),
+        ("hit-true", Some("true")),
+    ];
+    for (name, hit) in cases {
+        let job = job(name);
+        assert!(
+            step_output(&job, "record", None).contains("recorded=true"),
+            "{name}"
+        );
+        let verified = step_output(&job, "check", hit);
+        assert_eq!(
+            verified.contains("verified=true"),
+            hit == Some("true"),
+            "{name}: {verified}"
+        );
+        assert_eq!(discarded(&job), hit != Some("true"), "{name}");
+    }
+}
