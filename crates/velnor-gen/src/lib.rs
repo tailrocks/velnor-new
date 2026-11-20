@@ -13,6 +13,7 @@ mod key_gates;
 mod plan_render;
 mod release;
 mod reusable;
+mod tag;
 mod workflow_triggers;
 
 pub use crate::release::{release_ruleset, release_ruleset_drift};
@@ -23,6 +24,7 @@ pub use external::external_skips;
 use helper_gate::check_helper;
 pub use helper_gate::require_compatible;
 pub use key_gates::{ConfigFile, KeyGate, check_config_keys, key_gates, required_helper};
+pub use tag::check_tag;
 pub use velnor_workflows::HELPER_COMMANDS;
 
 use std::collections::BTreeMap;
@@ -141,16 +143,4 @@ pub fn plan_generate(
         expected,
         external::legacy_bypass(drifts, engine_configured, out),
     ))
-}
-
-pub fn check_tag(version: &str, tag: &str) -> Result<String, String> {
-    let legacy = format!("rust-ci-v{version}");
-    let current = format!("tools-v{version}");
-    if tag == legacy || tag == current {
-        Ok(format!("tag {tag} names version {version}"))
-    } else {
-        Err(format!(
-            "tag {tag} must be {legacy} or {current}, because this program is version {version}"
-        ))
-    }
 }
