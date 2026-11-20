@@ -215,6 +215,21 @@ mbx[savings]: rustc believes it compiled everything. it is down 42d 20h across 1
 }
 
 #[test]
+fn mbx_1_30_detail_lines_around_the_summary_are_not_unparsed() {
+    let log = b"mbx[cache]: object cache: 1 hits, 89 misses, 12 not looked up; 0 B downloaded, 0 B uploaded, 77.5 MiB stored locally\n\
+mbx[cache]: 27.42s session; 1.08s estimated compiler time avoided (summed across compilations)\n\
+mbx[cache]: 12 compilations had no usable prior inputs or matching prediction for a lookup\n\
+mbx[cache]: Cargo artifact reuse and CI cache archive transfers are not included above\n\
+mbx[cache]: 662.5ms session; 0s estimated compiler time avoided (summed across compilations)\n";
+    assert_eq!(mbx_sessions(log).len(), 1);
+    assert!(
+        mbx_unparsed_lines(log).is_empty(),
+        "{:?}",
+        mbx_unparsed_lines(log)
+    );
+}
+
+#[test]
 fn mbx_lookup_lines_that_do_not_parse_are_reported_and_never_counted_as_zero() {
     let log =
         b"2026-11-20T01:37:32Z mbx[cache]: object cache: 3 hits, many misses; 0 B downloaded\n\

@@ -213,6 +213,20 @@ fn report_records_that_the_checkout_declares_mbx() -> ResultTest {
     Ok(())
 }
 
+const REAL_MBX_1_30_LOG: &str = "\
+mbx[cache]: object cache: 0 hits, 89 misses, 12 not looked up; 0 B downloaded, 0 B uploaded, 77.5 MiB stored locally
+mbx[cache]: 27.42s session; 1.08s estimated compiler time avoided (summed across compilations)
+mbx[cache]: 12 compilations had no usable prior inputs or matching prediction for a lookup
+mbx[cache]: Cargo artifact reuse and CI cache archive transfers are not included above
+mbx[cache]: object cache: 0 hits, 3 misses; 0 B downloaded, 0 B uploaded, 1.1 MiB stored locally
+mbx[cache]: 662.5ms session; 0s estimated compiler time avoided (summed across compilations)
+mbx[cache]: Cargo artifact reuse and CI cache archive transfers are not included above
+mbx[warning]: prediction was not restored: cached action is missing blob af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262
+";
+const REAL_MBX_1_30_DETAIL_ONLY: &str = "\
+mbx[cache]: 12 compilations had no usable prior inputs or matching prediction for a lookup
+mbx[cache]: Cargo artifact reuse and CI cache archive transfers are not included above
+";
 const SINGULAR_SUMMARY: &str = "mbx[cache]: object cache: 3 hit, 0 miss; 0 B downloaded";
 const ZERO_HIT_SUMMARY: &str = "mbx[cache]: object cache: 0 hits, 5 misses; 0 B downloaded";
 const PARTIAL_SUMMARY: &str = "mbx[cache]: object cache: 4 hits, many misses; 0 B downloaded";
@@ -331,5 +345,37 @@ fn partial_mbx_evidence_does_not_fire_the_zero_hit_gate() -> ResultTest {
         partial.diagnostics
     );
     assert!(waste_gates(&partial).is_empty(), "{:?}", partial.violations);
+    Ok(())
+}
+
+#[test]
+fn real_mbx_1_30_detail_lines_are_not_unparsed_and_both_gates_stay_active() -> ResultTest {
+    let zero_hit = lane_with_mbx_log("report-mbx-real-zero-hit", REAL_MBX_1_30_LOG, true, true)?;
+    assert_eq!(zero_hit.mbx.sessions.len(), 2, "{zero_hit:?}");
+    assert_eq!(zero_hit.mbx.unparsed, 0, "{zero_hit:?}");
+    assert!(
+        zero_hit
+            .violations
+            .iter()
+            .any(|line| line.contains("MBX object cache: 0 hits")),
+        "{:?}",
+        zero_hit.violations
+    );
+    let detail_only = lane_with_mbx_log(
+        "report-mbx-real-detail-only",
+        REAL_MBX_1_30_DETAIL_ONLY,
+        true,
+        false,
+    )?;
+    assert!(detail_only.mbx.sessions.is_empty(), "{detail_only:?}");
+    assert_eq!(detail_only.mbx.unparsed, 0, "{detail_only:?}");
+    assert!(
+        detail_only
+            .violations
+            .iter()
+            .any(|line| line.contains("compiled without mbx")),
+        "{:?}",
+        detail_only.violations
+    );
     Ok(())
 }

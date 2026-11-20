@@ -58,11 +58,13 @@ fn cache_text(line: &str) -> Option<&str> {
     Some(text.strip_prefix("object cache: ").unwrap_or(text))
 }
 
-fn is_session_duration(text: &str) -> bool {
-    text.split_once(';')
-        .map_or(text, |(head, _)| head)
-        .trim_end()
-        .ends_with(" session")
+fn looks_like_lookup_summary(text: &str) -> bool {
+    let counter = |word: &str| matches!(word, "hit" | "hits" | "miss" | "misses");
+    text.split(|character: char| !character.is_ascii_alphabetic())
+        .any(counter)
+        || ["downloaded", "uploaded", "stored locally"]
+            .iter()
+            .any(|tail| text.contains(tail))
 }
 
 fn parse_lookup_summary(summary: &str) -> Option<MbxSession> {
@@ -100,7 +102,7 @@ pub fn mbx_unparsed_lines(log: &[u8]) -> Vec<String> {
         .lines()
         .filter(|line| {
             cache_text(line).is_some_and(|text| {
-                !is_session_duration(text) && parse_lookup_summary(text).is_none()
+                looks_like_lookup_summary(text) && parse_lookup_summary(text).is_none()
             })
         })
         .map(|line| line.trim().to_owned())
