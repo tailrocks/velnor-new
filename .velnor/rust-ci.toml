@@ -90,3 +90,11 @@ name = "hk config"
 task = "validate-hk"
 tools = ["hk"]
 timeout_minutes = 5
+
+[[lint]]
+kind = "mise-task"
+id = "test-no-doctests-rule"
+name = "no-doctests rule fixtures"
+task = "test-no-doctests-rule"
+tools = ["alint"]
+timeout_minutes = 5
