@@ -4,7 +4,7 @@
 use crate::rules::{RenderedStep, Value};
 use velnor_model::{CACHE_COMPAT_LENGTH, RUNNER_ARCH_MAX_LENGTH, RUNNER_OS_MAX_LENGTH};
 
-const CACHE_ACTIONS: [&str; 3] = [
+const CACHE_ACTIONS: &[&str] = &[
     "actions/cache",
     "actions/cache/restore",
     "actions/cache/save",

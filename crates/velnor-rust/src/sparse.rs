@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{CheckoutScope, PathGlob, RepoFacts, RepoPath, RustRoot, Unread};
 
-const TOP_FILES: [&str; 12] = [
+const TOP_FILES: &[&str] = &[
     "Cargo.toml",
     "Cargo.lock",
     "rust-toolchain",
@@ -19,7 +19,7 @@ const TOP_FILES: [&str; 12] = [
     "clippy.toml",
     ".rustfmt.toml",
 ];
-const TOP_DIRECTORIES: [&str; 3] = [".cargo", ".config", ".velnor"];
+const TOP_DIRECTORIES: &[&str] = &[".cargo", ".config", ".velnor"];
 const EVERY_MANIFEST: &str = "**/Cargo.toml";
 
 pub(crate) fn paths(facts: &RepoFacts, roots: &[RustRoot]) -> Option<Vec<String>> {

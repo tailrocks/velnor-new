@@ -15,8 +15,8 @@ use super::crates_mirror_args::with_mirror_config;
 
 pub(super) const TOKEN_VARIABLE: &str = "VELNOR_PRIVATE_TOKEN";
 const API_VARIABLE: &str = "VELNOR_API_URL";
-const SYSTEM_DIRECTORIES: [&str; 4] = ["/usr/bin", "/bin", "/usr/local/bin", "/opt/homebrew/bin"];
-const FORWARDED_VARIABLES: [&str; 9] = [
+const SYSTEM_DIRECTORIES: &[&str] = &["/usr/bin", "/bin", "/usr/local/bin", "/opt/homebrew/bin"];
+const FORWARDED_VARIABLES: &[&str] = &[
     BUNDLE_VARIABLE,
     "HTTPS_PROXY",
     "https_proxy",
@@ -27,14 +27,14 @@ const FORWARDED_VARIABLES: [&str; 9] = [
     "NO_PROXY",
     "no_proxy",
 ];
-const GUARDED_GIT_SETTINGS: [(&str, &str); 5] = [
+const GUARDED_GIT_SETTINGS: &[(&str, &str)] = &[
     ("core.hooksPath", "/dev/null"),
     ("core.fsmonitor", "false"),
     ("core.sshCommand", "ssh"),
     ("protocol.ext.allow", "never"),
     ("credential.helper", ""),
 ];
-const COMPILER_SELECTORS: [(&str, &str); 6] = [
+const COMPILER_SELECTORS: &[(&str, &str)] = &[
     ("RUSTC", "rustc"),
     ("CARGO_BUILD_RUSTC", "rustc"),
     ("RUSTC_WRAPPER", ""),
