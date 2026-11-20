@@ -6,6 +6,7 @@ pub mod cli;
 mod delta_cache;
 mod drifts;
 mod error;
+mod external;
 mod helper_gate;
 pub mod io;
 mod key_gates;
@@ -17,7 +18,8 @@ mod workflow_triggers;
 pub use crate::release::{release_ruleset, release_ruleset_drift};
 pub use advice::{NO_FULL_RUN_NOTE, SPARSE_SUGGESTION_BYTES, notes, sparse_note, suggest_groups};
 pub use drifts::{Drift, drift};
-pub use error::GenerateError;
+pub use error::{ExternalWorkflowError, GenerateError};
+pub use external::external_skips;
 use helper_gate::check_helper;
 pub use helper_gate::require_compatible;
 pub use key_gates::{ConfigFile, KeyGate, check_config_keys, key_gates, required_helper};
@@ -129,8 +131,12 @@ pub fn plan_generate(
     for note in notes {
         writeln!(out, "velnor-gen: {note}").ok();
     }
-    let drifts = drift(&expected, on_disk, engine_configured);
-    Ok((expected, drifts))
+    let external = external::skipped(view, &expected, on_disk)?;
+    let drifts = drift(&expected, on_disk, &external);
+    Ok((
+        expected,
+        external::legacy_bypass(drifts, engine_configured, out),
+    ))
 }
 
 pub fn check_tag(version: &str, tag: &str) -> Result<String, String> {

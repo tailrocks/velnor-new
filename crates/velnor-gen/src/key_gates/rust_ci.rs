@@ -76,6 +76,8 @@ pub(super) const RUST_CI: &[KeyGate] = &[
     // helper-gate: first in tools-v0.1.88 via 76a0485485
     gate(RustCi, "docs", (0, 1, 88)),
     gate(RustCi, "exclude", HELPER_MINIMUM),
+    // First released in tools-v0.1.109 (not tagged yet when this gate was written).
+    gate(RustCi, "external_workflows", (0, 1, 109)),
     // helper-gate: first in rust-ci-v0.1.82 via b2413d7709
     gate(RustCi, "fork_runner", (0, 1, 82)),
     gate(RustCi, "full_run", HELPER_MINIMUM),

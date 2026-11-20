@@ -48,6 +48,10 @@ pub struct RustCiConfig {
     pub test_groups: Vec<TestGroup>,
     pub checkout: CheckoutScope,
     pub workspace_groups: Vec<WorkspaceGroup>,
+    /// Hand-written workflows under `.github/workflows/` that `velnor-gen check` must not
+    /// flag. `None` when the key is not written, so the helper gate can tell an absent key
+    /// from an empty list.
+    pub external_workflows: Option<Vec<RepoPath>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -344,6 +348,7 @@ impl Default for RustCiConfig {
             test_groups: Vec::new(),
             checkout: CheckoutScope::Full,
             workspace_groups: Vec::new(),
+            external_workflows: None,
             release_assets: Vec::new(),
         }
     }
