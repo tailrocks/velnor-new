@@ -2,6 +2,8 @@
 
 The new Rust generator reads `.velnor/rust-ci.toml`.
 
+The generator reads `.velnor/rust-ci.toml`, `.velnor/release.toml` and `.velnor/workflows.toml` only through Git's tracked view. A file that exists on disk but that Git does not track (or ignores) is refused with an error, not replaced by defaults: run `git add <path>` (`git add -f` for an ignored file), or delete the file.
+
 ## Fork pull requests
 
 By default, a pull request from a fork does not select a self-hosted runner. When `runner` is not declared `hosted = true`, the generator renders `runs-on` of every job, including the `Required` gate, as an expression. It selects `runner` when the event is not a pull request or the pull request head repository is this repository, and `fork_runner` otherwise. No job is skipped for a fork, so the gate sees the real result of every job and fails when one fails. The one exception is a job that calls a reusable workflow with `uses`: it has no `runs-on`, and the callee may run on a self-hosted runner, so the generator adds the same condition to its `if` (joined with the job's own `if` in one expression) and a pull request from a fork skips the call. A deleted fork has no head repository, so it counts as a fork.
