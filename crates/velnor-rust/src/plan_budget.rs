@@ -5,8 +5,8 @@ use std::collections::BTreeMap;
 
 use velnor_model::{
     Access, BUDGET_JOB_NAME, BUDGET_MODES_HELPER, FullRun, GateNeed, Job, JobId, PermissionScope,
-    Permissions, PrCi, PullRequestType, RepoFacts, RootSlug, SelectionName, Step, StepKind,
-    Triggers, When,
+    Permissions, PlanFrom, PrCi, PullRequestType, PushAfterMergeGroup, RepoFacts, RootSlug,
+    SelectionName, Step, StepKind, Triggers, When,
 };
 
 use crate::lane::PLAN_JOB;
@@ -89,16 +89,25 @@ pub(crate) fn budget_job(
             .map(|release| step(StepKind::InstallHelper(release.clone()))),
     );
     steps.push(step(StepKind::Budget { last: BUDGET_RUNS }));
+    // A push the merge queue already tested skips its work and finishes in
+    // seconds, so it is no sample of what its selection costs: the job does not
+    // run for it.
+    let skipped_after_queue =
+        facts.config.push_after_merge_group == PushAfterMergeGroup::SkipWhenQueueRunPassed;
+    let plan = plan_job_id(single);
+    let mut needs = vec![after.clone()];
+    if skipped_after_queue || selection.is_some() {
+        needs.push(plan.clone());
+    }
     Some(Job {
         name: Some(BUDGET_JOB_NAME.to_owned()),
-        needs: std::iter::once(after.clone())
-            .chain(selection.as_ref().map(|name| name.plan.clone()))
-            .collect(),
+        needs,
+        skip_after_merge_group: skipped_after_queue.then_some(PlanFrom::Job(plan)),
         selection_name: selection,
         when: if facts.config.full_run == FullRun::Off {
             When::DefaultBranchPushAfterNeeds
         } else {
-            When::ScheduledAfterNeeds
+            When::ScheduledOrDefaultBranchPushAfterNeeds
         },
         permissions: Permissions(BTreeMap::from([
             (PermissionScope::Actions, Access::Read),

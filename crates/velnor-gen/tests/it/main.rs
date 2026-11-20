@@ -9,6 +9,7 @@ mod base_safety;
 mod base_save;
 mod base_token;
 mod budget;
+mod budget_skip_push;
 mod build_target;
 mod cache_budget;
 mod cache_budget_workflow;

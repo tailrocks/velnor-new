@@ -8,6 +8,7 @@ mod bounded;
 mod budget;
 mod budget_history;
 mod budget_modes;
+mod budget_schedule;
 mod budget_window;
 mod cache;
 mod cache_budget;

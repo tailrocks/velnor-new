@@ -6,6 +6,7 @@ use velnor_model::{
     PlanFrom, PrRun, RootSlug, VerdictSpec, When, group_output_name,
 };
 
+use crate::event_gate::event_gate;
 use crate::rules::{RenderedStep, Value};
 
 const SETUP_DONE: &str = "steps.restored.outcome == 'success'";
@@ -19,8 +20,6 @@ const IS_PULL_REQUEST: &str = "github.event_name == 'pull_request'";
 const PULL_REQUEST_LABELS: &str = "github.event.pull_request.labels.*.name";
 const RELATED_EVENT: &str = "(github.event.action != 'labeled' || github.event.label.name == 'ci:run' || github.event.label.name == 'ci:auto') && (github.event.action != 'edited' || github.event.changes.base != null)";
 const SAME_REPOSITORY: &str = "github.event.pull_request.head.repo.full_name == github.repository";
-const SCHEDULE: &str = "schedule";
-const PUSH: &str = "push";
 const POST_MERGE_EVENTS: &str = "(github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')";
 pub(crate) const TOOLS_STEP: &str = "tools";
 pub(crate) const TOOLS_LOCAL_STEP: &str = "toolslocal";
@@ -33,7 +32,7 @@ pub(crate) const SOURCES_LOCKS_STEP: &str = "sources_locks";
 const SAVING_EVENTS: &str = "(github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')";
 const NEEDS_JSON: &str = "NEEDS_JSON";
 const GATE_SPEC: &str = "GATE_SPEC";
-const ON_DEFAULT_BRANCH: &str =
+pub(crate) const ON_DEFAULT_BRANCH: &str =
     "github.ref == format('refs/heads/{0}', github.event.repository.default_branch)";
 const ACTIVE_EVENT: &str = "(github.event_name != 'pull_request' || (startsWith(github.ref, 'refs/pull/') && github.event.pull_request.state != 'closed'))";
 pub(crate) fn sources_step(lane: &RootSlug) -> String {
@@ -138,16 +137,6 @@ pub(crate) fn merge_group_skipped(from: &PlanFrom, setup: Setup) -> String {
     }
 }
 
-fn event_gate(when: When) -> String {
-    match when {
-        When::Scheduled | When::ScheduledAfterNeeds => format!("github.event_name == '{SCHEDULE}'"),
-        When::ScheduledOrPush => {
-            format!("(github.event_name == '{SCHEDULE}' || github.event_name == '{PUSH}')")
-        }
-        _ => format!("(github.event_name == '{PUSH}' && {ON_DEFAULT_BRANCH})"),
-    }
-}
-
 pub(crate) fn condition(
     when: When,
     gate: Option<&Gate>,
@@ -177,7 +166,7 @@ pub(crate) fn condition(
         When::Scheduled | When::ScheduledOrPush | When::DefaultBranchPush => {
             parts.push(event_gate(when));
         }
-        When::ScheduledAfterNeeds | When::DefaultBranchPushAfterNeeds => {
+        When::ScheduledOrDefaultBranchPushAfterNeeds | When::DefaultBranchPushAfterNeeds => {
             parts.extend([NOT_CANCELLED.to_owned(), event_gate(when)]);
         }
         When::SaveBase | When::SaveBaseDecided | When::SaveSources => {

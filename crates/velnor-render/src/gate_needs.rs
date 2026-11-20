@@ -8,7 +8,7 @@ use velnor_model::{JobId, When};
 /// it names the result of every job it needs instead.
 pub(crate) fn succeeded(when: When, needs: &[JobId]) -> Vec<String> {
     match when {
-        When::ScheduledAfterNeeds | When::DefaultBranchPushAfterNeeds => needs
+        When::ScheduledOrDefaultBranchPushAfterNeeds | When::DefaultBranchPushAfterNeeds => needs
             .iter()
             .map(|need| format!("needs.{need}.result == 'success'"))
             .collect(),

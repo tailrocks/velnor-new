@@ -52,29 +52,75 @@ fn the_budget_job_runs_on_the_default_branch_when_no_full_run_is_scheduled() -> 
         .nth(1)
         .ok_or("the budget job is missing")?;
     assert!(
-        job.contains(
-            "(github.event_name == ''push'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch))"
-        ),
+        job.contains(DEFAULT_BRANCH_PUSH),
         "the job runs on a push to the default branch and on nothing else\n{job}"
+    );
+    assert!(
+        !job.contains("github.event_name == ''schedule''"),
+        "without a full run there is no scheduled run to check\n{job}"
     );
     Ok(())
 }
 
-#[test]
-fn the_budget_job_runs_on_the_schedule_when_a_full_run_is_scheduled() -> TestResult {
-    let files = budgeted(
-        "0.1.92",
-        "full_run = \"nightly\"\n[budget]\nmain_wall_seconds = 600\n",
-    )?;
-    let text = workflow(&files)?;
+const DEFAULT_BRANCH_PUSH: &str = "(github.event_name == ''push'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch))";
+
+fn condition_of_budget_job(config: &str) -> Result<String, Box<dyn Error>> {
+    let text = workflow(&budgeted("0.1.92", config)?)?;
     let job = text
         .split("  rust-budget:")
         .nth(1)
         .ok_or("the budget job is missing")?;
-    assert!(
-        job.contains("github.event_name == ''schedule''"),
-        "the job runs on the schedule and on nothing else\n{job}"
-    );
+    job.lines()
+        .find(|line| line.trim_start().starts_with("if:"))
+        .map(str::to_owned)
+        .ok_or_else(|| "the budget job has no condition".into())
+}
+
+#[test]
+fn the_budget_job_runs_on_default_branch_pushes_and_on_the_schedule_when_a_full_run_is_scheduled()
+-> TestResult {
+    for config in [
+        "full_run = \"nightly\"\n[budget]\nmain_wall_seconds = 600\n",
+        "[budget]\nmain_wall_seconds = 600\n",
+    ] {
+        let condition = condition_of_budget_job(config)?;
+        assert!(
+            condition.contains(DEFAULT_BRANCH_PUSH),
+            "the pushes that #622 judges per selection run the job\n{condition}"
+        );
+        assert!(
+            condition.contains("github.event_name == ''schedule''"),
+            "the nightly full run is checked as well\n{condition}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn the_budget_job_never_runs_on_a_pull_request_or_a_merge_group() -> TestResult {
+    for config in [
+        "full_run = \"off\"\n[budget]\nmain_wall_seconds = 600\n",
+        "full_run = \"nightly\"\n[budget]\nmain_wall_seconds = 600\n",
+    ] {
+        let whole = condition_of_budget_job(config)?;
+        // Every job also carries the guard that drops a closed pull request.
+        let condition = whole
+            .split_once("(!cancelled()")
+            .ok_or("the job condition has no status function")?
+            .1;
+        for event in ["pull_request", "merge_group", "workflow_dispatch"] {
+            assert!(
+                !condition.contains(event),
+                "{event} must not run the budget job\n{condition}"
+            );
+        }
+        assert!(
+            !condition
+                .replace(DEFAULT_BRANCH_PUSH, "")
+                .contains("''push''"),
+            "a push counts only on the default branch\n{condition}"
+        );
+    }
     Ok(())
 }
 
@@ -89,6 +135,10 @@ fn the_budget_job_runs_when_an_ancestor_was_skipped_but_not_when_the_run_was_can
         (
             "full_run = \"nightly\"\n[budget]\nmain_wall_seconds = 600\n",
             "github.event_name == ''schedule''",
+        ),
+        (
+            "full_run = \"nightly\"\n[budget]\nmain_wall_seconds = 600\n",
+            "github.event_name == ''push''",
         ),
     ] {
         let files = budgeted("0.1.92", config)?;

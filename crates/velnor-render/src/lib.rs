@@ -16,6 +16,7 @@ mod delta_cleanup;
 mod delta_steps;
 mod draft_steps;
 mod env;
+mod event_gate;
 mod events;
 mod gate;
 mod gate_needs;
