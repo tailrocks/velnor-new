@@ -8,6 +8,7 @@ use crate::cron::CronExpr;
 use crate::hosted::HostedRunners;
 use crate::ids::{JobId, PackageName, RepoPath, RootSlug, RunnerLabel, TargetName};
 use crate::repo::{DenyCheck, LaneFeatures, TargetKind};
+use crate::setup_phase::SetupOrder;
 use crate::steps::{StepKind, VerifiedSave};
 use crate::test_group::NoTests;
 use crate::trusted::TrustedRunners;
@@ -135,15 +136,6 @@ pub struct Step {
     /// Set on the `[[test_setup]]` steps and on the steps after them: they are skipped
     /// when a setup step before them failed or was cancelled.
     pub setup_order: SetupOrder,
-}
-
-/// Where a step sits against the `[[test_setup]]` steps of its job.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SetupOrder {
-    /// Not gated by the setup steps.
-    Unordered,
-    /// Skipped when a setup step before it failed or was cancelled.
-    AfterSetup,
 }
 
 pub const CI_RUN_LABEL: &str = "ci:run";
