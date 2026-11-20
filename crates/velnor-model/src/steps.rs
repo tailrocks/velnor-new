@@ -132,7 +132,7 @@ pub enum StepKind {
         before_build: bool,
     },
     GeneratorCheck {
-        from_source: bool,
+        source: Option<RepoPath>,
     },
     InstallGenerator(HelperRelease),
     InstallHelper(HelperRelease),

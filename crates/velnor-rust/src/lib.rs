@@ -22,6 +22,7 @@ mod config_events;
 mod config_exclude;
 mod config_external;
 mod config_fork;
+mod config_generator;
 mod config_helper;
 mod config_hosting;
 mod config_keys;

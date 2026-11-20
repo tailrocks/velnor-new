@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{HelperRelease, Platform};
+use velnor_model::{HelperRelease, Platform, RepoPath};
 
 use crate::rules::{RenderedStep, SETUP_VELNOR_ACTION, Value};
 use crate::steps::{MISE, MISE_VERSION};
@@ -105,20 +105,19 @@ pub(crate) fn install_generator_step(release: &HelperRelease) -> RenderedStep {
     }
 }
 
-pub(crate) fn generator_check_step(from_source: bool) -> RenderedStep {
-    if !from_source {
+pub(crate) fn generator_check_step(source: Option<&RepoPath>) -> RenderedStep {
+    let Some(manifest) = source else {
         return RenderedStep {
             name: "Check the generated workflow".to_owned(),
             run: Some("velnor-gen check --verify-release".to_owned()),
             ..RenderedStep::default()
         };
-    }
+    };
     RenderedStep {
         name: "Check the generated workflow with velnor-gen built from the checkout".to_owned(),
-        run: Some(
-            "cargo run --locked --target \"$VELNOR_GEN_TARGET\" --package velnor-gen -- check --verify-release"
-                .to_owned(),
-        ),
+        run: Some(format!(
+            "cargo run --locked --manifest-path {manifest} --target \"$VELNOR_GEN_TARGET\" --package velnor-gen -- check --verify-release"
+        )),
         env: vec![(
             "VELNOR_GEN_TARGET".to_owned(),
             Value::Expr(choice(|platform| Some(platform.host_triple().to_owned()))),

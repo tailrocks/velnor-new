@@ -225,7 +225,8 @@ impl fmt::Display for Reason {
             | Self::GroupTestGroups(_)
             | Self::Lint(_)
             | Self::LintDuplicate(_)
-            | Self::LintKeyForeign { .. } => self.fmt_config(f),
+            | Self::LintKeyForeign { .. }
+            | Self::GeneratorPackage { .. } => self.fmt_config(f),
             Self::InvalidPatch(key) => {
                 write!(
                     f,

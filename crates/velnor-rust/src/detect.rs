@@ -141,6 +141,7 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
     }
     check_nextest_harnesses(&config, &rust_roots)?;
     check_helper_box(&config, &rust_roots)?;
+    crate::config_generator::check(&config, &rust_roots)?;
     crate::config_test_groups::check_tests(&config, &rust_roots)?;
     crate::groups::check(view, &config, &rust_roots)?;
     crate::groups::check_shape(&config)?;

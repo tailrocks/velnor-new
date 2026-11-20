@@ -2,27 +2,48 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use serde_json::Value;
-use velnor_model::RepoView;
+use velnor_model::{PackageName, RepoPath, RepoView};
 use velnor_rust::LOCK_PATH;
 
 use crate::facts::TestResult;
 use crate::generated_check::CHECK;
-use crate::lint_lane::{LINT, repo, runs};
+use crate::lint_lane::{LINT, MISE, runs};
 use crate::lock_archive::archive_lock_at;
-use crate::pipeline::workflow;
+use crate::pipeline::{view, workflow};
 
 const FROM_SOURCE: &str = "[[lint]]\nkind = 'generated-check'\nfrom_source = true\n";
 const ID: &str = "lint-generated-check";
-const CHECK_FROM_SOURCE: &str = "cargo run --locked --target \"$VELNOR_GEN_TARGET\" --package velnor-gen -- check --verify-release";
+const CHECK_FROM_SOURCE: &str = "cargo run --locked --manifest-path Cargo.toml --target \"$VELNOR_GEN_TARGET\" --package velnor-gen -- check --verify-release";
+const NESTED: &str = "tools/gen/Cargo.toml";
 const FIRST: &str = "0.1.111";
 const STORE: &str = "MBX_CACHE_DIR=$RUNNER_TEMP/mbx";
 const MIRROR: &str = "[crates_mirror]\nrunner = 'mirror-box'\nregistry = 'sparse+https://crates-mirror.velnor-system.svc.cluster.local/index/'\ncainfo = '/opt/velnor/crates-mirror/ca-bundle.pem'\n";
 
 fn locked(config: &str, version: &str) -> Result<RepoView, Box<dyn std::error::Error>> {
-    let mut view = repo(config)?;
+    generators(config, version, &["Cargo.toml"], &["Cargo.toml"])
+}
+
+fn generators(
+    config: &str,
+    version: &str,
+    roots: &[&str],
+    generator_roots: &[&str],
+) -> Result<RepoView, Box<dyn std::error::Error>> {
+    let mut view = view(roots, Some(config.as_bytes()))?;
+    view.files
+        .insert(RepoPath::new("mise.toml")?, MISE.as_bytes().to_vec());
     view.tracked_paths.insert(LOCK_PATH);
     view.files
         .insert(LOCK_PATH, archive_lock_at(version)?.into_bytes());
+    for root in generator_roots {
+        let metadata = view
+            .rust_metadata
+            .get_mut(&RepoPath::new(*root)?)
+            .ok_or("no metadata for the generator root")?;
+        for member in &mut metadata.members {
+            member.name = PackageName::new("velnor-gen")?;
+        }
+    }
     Ok(view)
 }
 
@@ -181,5 +202,53 @@ fn from_source_configures_the_crates_mirror_after_velnor_ci_and_before_the_tools
     .ok_or("no tools step")?;
     let cargo = position(&job, |step| run_contains(step, CHECK_FROM_SOURCE)).ok_or("no check")?;
     assert!(helper < mirror && mirror < tools && tools < cargo, "{job}");
+    Ok(())
+}
+
+#[test]
+fn from_source_builds_the_generator_from_the_root_that_holds_its_package() -> TestResult {
+    let view = generators(
+        &format!("{LINT}\n{FROM_SOURCE}"),
+        FIRST,
+        &["Cargo.toml", NESTED],
+        &[NESTED],
+    )?;
+    let job = job(&workflow(&view)?)?;
+    assert_eq!(
+        runs(&job).last().map(String::as_str),
+        Some(
+            "cargo run --locked --manifest-path tools/gen/Cargo.toml --target \"$VELNOR_GEN_TARGET\" --package velnor-gen -- check --verify-release"
+        )
+    );
+    Ok(())
+}
+
+#[test]
+fn from_source_refuses_a_repository_without_a_velnor_gen_package() -> TestResult {
+    let view = generators(
+        &format!("{LINT}\n{FROM_SOURCE}"),
+        FIRST,
+        &["Cargo.toml"],
+        &[],
+    )?;
+    let error = workflow(&view).err();
+    let text = format!("{error:?}");
+    assert!(text.contains("GeneratorPackage"), "{text}");
+    assert!(text.contains("found: 0"), "{text}");
+    Ok(())
+}
+
+#[test]
+fn from_source_refuses_two_roots_that_both_hold_a_velnor_gen_package() -> TestResult {
+    let view = generators(
+        &format!("{LINT}\n{FROM_SOURCE}"),
+        FIRST,
+        &["Cargo.toml", NESTED],
+        &["Cargo.toml", NESTED],
+    )?;
+    let error = workflow(&view).err();
+    let text = format!("{error:?}");
+    assert!(text.contains("GeneratorPackage"), "{text}");
+    assert!(text.contains("found: 2"), "{text}");
     Ok(())
 }
