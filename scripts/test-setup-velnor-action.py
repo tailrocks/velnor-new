@@ -64,6 +64,18 @@ printf 'sync %s\\n' "$*" >> "$STUB_ORDER_LOG"
 if [ $# -gt 0 ]; then cat "$1" > "$STUB_SYNCED"; fi
 """
 
+STUB_RACING_MV = """#!/bin/sh
+if [ ! -e "$STUB_RACE_MARK" ]; then
+  for arg; do
+    case "$arg" in
+      */velnor-ci-x86_64-unknown-linux-musl.tar.gz)
+        : > "$STUB_RACE_MARK"; cp "$STUB_RACE" "$arg"; break ;;
+    esac
+  done
+fi
+exec "$REAL_MV" "$@"
+"""
+
 STUB_TAR = """#!/bin/sh
 if [ -p /dev/stdin ]; then pipe=pipe; else pipe=none; fi
 printf '%s\\t%s\\n' "$pipe" "$*" >> "$STUB_TAR_LOG"
@@ -550,6 +562,51 @@ class SetupVelnorInstallTests(unittest.TestCase):
         self.assertEqual(self.installed_binary().read_bytes(), PAYLOAD)
         leftovers = [path for path in installed_files(cached.parent) if path.name.startswith(".velnor-ci.")]
         self.assertEqual(leftovers, [], result.output)
+
+    def test_an_oversized_store_entry_is_evicted_even_when_the_download_fails(self):
+        cached = self.cached_archive()
+        cached.parent.mkdir(parents=True)
+        cached.write_bytes(self.archive)
+        with cached.open("r+b") as handle:
+            handle.truncate(268435457)
+        result = self.install(sha256(self.archive), extra_env={"STUB_MISSING": "tools-v0.1.79 rust-ci-v0.1.79"})
+        self.assertEqual(result.returncode, 1, result.output)
+        self.assertFalse(cached.exists(), "an oversized store entry survived the job and will be read by the next one")
+
+    def test_a_verified_copy_published_during_an_eviction_is_kept_for_the_next_job(self):
+        cached = self.cached_archive()
+        cached.parent.mkdir(parents=True)
+        cached.write_bytes(b"tampered archive\n")
+        stub = self.stub_bin / "mv"
+        stub.write_text(STUB_RACING_MV)
+        stub.chmod(0o755)
+        extra_env = {
+            "STUB_RACE": str(self.payload),
+            "STUB_RACE_MARK": str(self.root / "race-mark"),
+            "REAL_MV": shutil.which("mv"),
+            "STUB_MISSING": "tools-v0.1.79 rust-ci-v0.1.79",
+        }
+        first = self.install(sha256(self.archive), extra_env=extra_env)
+        self.assertEqual(first.returncode, 1, first.output)
+        self.assertTrue(cached.exists(), "a verified copy another job published was deleted")
+        self.assertEqual(cached.read_bytes(), self.archive)
+        self.stub_log.unlink(missing_ok=True)
+        self.github_path.write_text("")
+        second = self.install(sha256(self.archive), extra_env=extra_env)
+        self.assertEqual(second.returncode, 0, second.output)
+        self.assertEqual(self.curl_calls(), [])
+        self.assertEqual(self.installed_binary().read_bytes(), PAYLOAD)
+
+    def test_every_download_is_bounded_by_a_transfer_timeout_and_a_total_retry_budget(self):
+        result = self.install(sha256(self.archive), extra_env={"STUB_MISSING": "tools-v0.1.79"})
+        self.assertEqual(result.returncode, 0, result.output)
+        calls = self.curl_calls()
+        self.assertEqual(len(calls), 2, calls)
+        for call in calls:
+            words = call.split()
+            for flag in ("--max-time", "--retry-max-time"):
+                self.assertIn(flag, words, call)
+                self.assertRegex(words[words.index(flag) + 1], r"^[1-9][0-9]*$", call)
 
     def test_a_stored_archive_that_mismatches_is_removed_even_when_the_download_is_also_bad(self):
         cached = self.cached_archive()
