@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod archive;
+mod auto_shape_note;
 mod base_cache_rules;
 mod base_cache_visibility;
 mod base_expiry;
@@ -257,6 +258,7 @@ mod tools_cache;
 mod tools_local;
 mod trim_job;
 mod unowned;
+mod untracked_config;
 mod unused_anchors;
 mod version;
 mod weaken;
