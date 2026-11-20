@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    CratesMirror, GroupFilter, HelperCommand, InputsCli, MERGE_GROUP_STEP, PrepareLocks, RepoPath,
+    CratesMirror, GroupFilter, HelperCommand, InputsCli, MBX_ACTION_RELEASE, MERGE_GROUP_STEP,
+    PrepareLocks, RepoPath,
 };
 
 use crate::base_steps::base_age;
@@ -275,9 +276,6 @@ pub(crate) fn node_step(kind: &velnor_model::StepKind) -> RenderedStep {
 }
 
 pub(crate) const MBX_ACTION_SHA: &str = "88acf2bb50552c7c508cbac13e5f8c576b95b1de";
-/// The mbx release the action installs. Keep it equal to the `mr-boxington`
-/// pin in the repository's `mise.toml`, so every job runs the same compiler cache.
-const MBX_VERSION: &str = "1.30.0";
 
 pub(crate) fn mbx_private_step() -> RenderedStep {
     RenderedStep {
@@ -315,7 +313,7 @@ pub(crate) fn mbx_remote_step(from_pin: bool) -> RenderedStep {
             &format!("${{{{ steps.{MBX_PIN_STEP}.outputs.version }}}}"),
         )
     } else {
-        text("version", MBX_VERSION)
+        text("version", MBX_ACTION_RELEASE)
     };
     RenderedStep {
         name: "Set up the mbx cache".to_owned(),
