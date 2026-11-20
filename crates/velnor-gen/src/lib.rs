@@ -16,7 +16,7 @@ mod workflow_triggers;
 pub use crate::release::{release_ruleset, release_ruleset_drift};
 pub use advice::{NO_FULL_RUN_NOTE, SPARSE_SUGGESTION_BYTES, notes, sparse_note, suggest_groups};
 pub use drifts::{Drift, drift};
-pub use error::GenerateError;
+pub use error::{GenerateError, LaneKey};
 use helper_gate::check_helper;
 pub use helper_gate::require_compatible;
 pub use velnor_workflows::HELPER_COMMANDS;
@@ -41,6 +41,10 @@ pub const TEST_LANE_JOB_HELPER: (u64, u64, u64) = (0, 1, 107);
 /// The first release whose `velnor-ci` accepts `trusted_runner` in `.velnor/rust-ci.toml`.
 // First released in tools-v0.1.108 (not tagged yet when this gate was written).
 pub const TRUSTED_RUNNER_HELPER: (u64, u64, u64) = (0, 1, 108);
+/// The first release whose `velnor-ci` accepts `all_features` and `no_default_features`
+/// in a `[[test_lane]]` table.
+// First released in tools-v0.1.108 (not tagged yet when this gate was written).
+pub const TEST_LANE_FLAGS_HELPER: (u64, u64, u64) = (0, 1, 108);
 pub const SPARSE_HINT_HELPER: (u64, u64, u64) = (0, 1, 103);
 
 pub fn generated_files(view: &RepoView) -> Result<BTreeMap<RepoPath, String>, GenerateError> {
