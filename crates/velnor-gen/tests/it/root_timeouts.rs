@@ -104,10 +104,7 @@ fn an_out_of_range_duplicate_or_unknown_root_is_refused_with_its_name() -> TestR
 fn a_helper_older_than_the_timeout_keys_is_refused() -> TestResult {
     for config in [LANE, "[root_timeouts]\nlab = 90\n"] {
         let text = refusal(config, "0.1.108")?;
-        assert!(
-            text.contains("0.1.109"),
-            "{text}"
-        );
+        assert!(text.contains("0.1.109"), "{text}");
         jobs_of(config, HELPER)?;
     }
     Ok(())
