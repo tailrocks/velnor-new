@@ -75,15 +75,16 @@ mod tests {
     }
 
     #[test]
-    fn a_never_visible_observation_returns_the_last_one_at_the_deadline()
+    fn a_never_visible_observation_returns_at_a_zero_deadline_without_retrying()
     -> Result<(), Box<dyn Error>> {
+        // A zero limit is past its deadline on the first look, so the result
+        // does not depend on how long the thread is descheduled.
         let sequence = [
             (1, Observation::NotYetVisible),
             (2, Observation::NotYetVisible),
         ];
-        let (last, calls) = run(&sequence, Duration::from_millis(20))?;
-        assert_eq!(last, 2);
-        assert!(calls >= 2);
+        let (last, calls) = run(&sequence, Duration::ZERO)?;
+        assert_eq!((last, calls), (1, 1));
         Ok(())
     }
 
