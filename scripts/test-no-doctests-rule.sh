@@ -39,7 +39,17 @@ check include_str       fail '#[doc = include_str!("README.md")]\nfn f() {}\n'
 check attr_doc_fence    fail '#[doc = "```\\nlet x = 1;\\n```"]\nfn f() {}\n'
 check attr_nested_include fail '#![cfg_attr(all(), doc = include_str!("README.md"))]\nfn f() {}\n'
 check indent_no_blank   fail '/// - item\n///     onto the next line\nfn f() {}\n'
+check block_outer_fence fail '/** ```\n * let x = 1;\n * ```\n */\nfn f() {}\n'
+check block_inner_tilde fail '/*! ~~~\n * let x = 1;\n * ~~~\n */\nfn f() {}\n'
+check block_one_line    fail '/** ```let x = 1;``` */\nfn f() {}\n'
+check block_fence_later fail '/**\n * prose\n *\n * ```\n * f();\n * ```\n */\nfn f() {}\n'
+check block_glued_fence fail '/**```let x = 1; */\nfn f() {}\n'
 check plain_prose       pass '/// plain prose\n//! more prose\nfn f() {}\n'
+check block_prose       pass '/** plain prose\n * more prose\n */\n/*! also prose */\nfn f() {}\n'
+check block_fence_code  pass '/** prose */\nfn f() { let s = "```"; }\n'
+check plain_block_fence pass '/* ```\n * not a doc\n */\nfn f() {}\n'
+check empty_block_code  pass '/**/\nfn f() { let s = "```"; }\n'
+check block_star_close  pass '/** prose **/\nfn f() { let s = "```"; }\n'
 
 if [ "$fails" -ne 0 ]; then
   echo "no-doctests fixtures: $fails failing"
