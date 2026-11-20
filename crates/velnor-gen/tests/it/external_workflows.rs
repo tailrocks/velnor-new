@@ -37,7 +37,7 @@ fn view_of(version: &str, text: &str) -> Result<RepoView, Box<dyn std::error::Er
 
 #[test]
 fn a_listed_unowned_workflow_is_not_drift_and_an_unlisted_one_still_is() -> TestResult {
-    let view = view_of("0.1.108", &config(&format!("\"{LISTED}\"")))?;
+    let view = view_of("0.1.109", &config(&format!("\"{LISTED}\"")))?;
     let files = one(LISTED, HAND_WRITTEN)?;
     let expected = expected_files(&view)?;
     let skipped = external_skips(&view, &files)?;
@@ -47,7 +47,7 @@ fn a_listed_unowned_workflow_is_not_drift_and_an_unlisted_one_still_is() -> Test
         "{drifts:?}"
     );
 
-    let view = view_of("0.1.108", "")?;
+    let view = view_of("0.1.109", "")?;
     let drifts = drift(&expected, &files, &external_skips(&view, &files)?);
     let unmarked = drifts
         .iter()
@@ -63,7 +63,7 @@ fn a_listed_unowned_workflow_is_not_drift_and_an_unlisted_one_still_is() -> Test
 
 #[test]
 fn a_listed_path_that_does_not_exist_is_refused() -> TestResult {
-    let view = view_of("0.1.108", &config(&format!("\"{LISTED}\"")))?;
+    let view = view_of("0.1.109", &config(&format!("\"{LISTED}\"")))?;
     assert_eq!(
         external_skips(&view, &BTreeMap::new()).err(),
         Some(GenerateError::ExternalWorkflow(
@@ -76,7 +76,7 @@ fn a_listed_path_that_does_not_exist_is_refused() -> TestResult {
 #[test]
 fn a_listed_path_velnor_gen_writes_is_refused() -> TestResult {
     let generated = ".github/workflows/rust-ci.yml";
-    let view = view_of("0.1.108", &config(&format!("\"{generated}\"")))?;
+    let view = view_of("0.1.109", &config(&format!("\"{generated}\"")))?;
     assert_eq!(
         external_skips(&view, &one(generated, HAND_WRITTEN)?).err(),
         Some(GenerateError::ExternalWorkflow(
@@ -89,7 +89,7 @@ fn a_listed_path_velnor_gen_writes_is_refused() -> TestResult {
 #[test]
 fn a_listed_file_that_carries_the_velnor_gen_header_is_refused_as_generated() -> TestResult {
     let stale = ".github/workflows/old.yml";
-    let view = view_of("0.1.108", &config(&format!("\"{stale}\"")))?;
+    let view = view_of("0.1.109", &config(&format!("\"{stale}\"")))?;
     let files = one(stale, &seal(GENERATED_HEADER, "name: Old\n"))?;
     assert_eq!(
         external_skips(&view, &files).err(),
@@ -102,14 +102,12 @@ fn a_listed_file_that_carries_the_velnor_gen_header_is_refused_as_generated() ->
 
 #[test]
 fn external_workflows_is_refused_below_the_helper_that_accepts_it() -> TestResult {
-    let view = view_of("0.1.107", &config(&format!("\"{LISTED}\"")))?;
+    let view = view_of("0.1.108", &config(&format!("\"{LISTED}\"")))?;
     let error = expected_files(&view).err();
     assert!(
         matches!(
             error,
-            Some(GenerateError::ExternalWorkflow(
-                ExternalWorkflowError::HelperTooOld(_)
-            ))
+            Some(GenerateError::ConfigKeyHelperTooOld { key: "external_workflows", .. })
         ),
         "{error:?}"
     );
@@ -126,10 +124,10 @@ fn external_workflows_accepts_only_yaml_files_directly_under_the_workflow_direct
         "Dockerfile",
         ".github/workflows/image.yml/../../x.yml",
     ] {
-        let view = view_of("0.1.108", &config(&format!("\"{bad}\"")))?;
+        let view = view_of("0.1.109", &config(&format!("\"{bad}\"")))?;
         assert!(expected_files(&view).is_err(), "{bad} was accepted");
     }
-    let view = view_of("0.1.108", &config(&format!("\"{LISTED}\"")))?;
+    let view = view_of("0.1.109", &config(&format!("\"{LISTED}\"")))?;
     assert!(expected_files(&view).is_ok());
     Ok(())
 }
@@ -161,7 +159,7 @@ fn plan(
 #[test]
 fn a_declared_workflow_is_skipped_with_no_notice_and_the_legacy_config_is_not_needed() -> TestResult
 {
-    let view = view_of("0.1.108", &config(&format!("\"{LISTED}\"")))?;
+    let view = view_of("0.1.109", &config(&format!("\"{LISTED}\"")))?;
     let files = one(LISTED, HAND_WRITTEN)?;
     for engine_configured in [false, true] {
         let (drifts, out) = plan(&view, &files, engine_configured)?;
@@ -174,7 +172,7 @@ fn a_declared_workflow_is_skipped_with_no_notice_and_the_legacy_config_is_not_ne
 #[test]
 fn an_undeclared_header_less_workflow_fails_with_a_hint_when_no_legacy_config_exists() -> TestResult
 {
-    let view = view_of("0.1.108", "")?;
+    let view = view_of("0.1.109", "")?;
     let (drifts, out) = plan(&view, &one(LISTED, HAND_WRITTEN)?, false)?;
     let [Drift::Unmarked(path)] = drifts.as_slice() else {
         return Err(format!("expected one Unmarked drift, got {drifts:?}").into());
@@ -188,7 +186,7 @@ fn an_undeclared_header_less_workflow_fails_with_a_hint_when_no_legacy_config_ex
 #[test]
 fn the_legacy_config_still_suppresses_an_unmarked_workflow_and_says_it_is_deprecated() -> TestResult
 {
-    let view = view_of("0.1.108", "")?;
+    let view = view_of("0.1.109", "")?;
     let (drifts, out) = plan(&view, &one(LISTED, HAND_WRITTEN)?, true)?;
     assert!(drifts.is_empty(), "{drifts:?}");
     let notice = out
@@ -197,7 +195,7 @@ fn the_legacy_config_still_suppresses_an_unmarked_workflow_and_says_it_is_deprec
         .ok_or_else(|| format!("no deprecation notice in {out:?}"))?;
     assert!(notice.contains(LISTED), "{notice}");
     assert!(
-        notice.contains("use external_workflows (velnor-ci \u{2265} 0.1.108)"),
+        notice.contains("use external_workflows (velnor-ci \u{2265} 0.1.109)"),
         "{notice}"
     );
     Ok(())
@@ -205,7 +203,7 @@ fn the_legacy_config_still_suppresses_an_unmarked_workflow_and_says_it_is_deprec
 
 #[test]
 fn the_legacy_config_does_not_hide_a_foreign_or_stale_file() -> TestResult {
-    let view = view_of("0.1.108", "")?;
+    let view = view_of("0.1.109", "")?;
     let stale = seal(GENERATED_HEADER, "name: Old\n");
     let (drifts, out) = plan(&view, &one(".github/workflows/old.yml", &stale)?, true)?;
     assert_eq!(drifts.len(), 1, "{drifts:?}");

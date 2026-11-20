@@ -17,6 +17,7 @@ pub struct RustCiConfig {
     pub hosted_runners: HostedRunners,
     pub crates_mirror: Option<CratesMirror>,
     pub private_sources: Option<PrivateSources>,
+    pub release_assets: Vec<crate::ReleaseAsset>,
     pub mbx_store: MbxStore,
     pub docs_run: DocsRun,
     pub check_alone_run: DocsRun,
@@ -348,6 +349,7 @@ impl Default for RustCiConfig {
             checkout: CheckoutScope::Full,
             workspace_groups: Vec::new(),
             external_workflows: None,
+            release_assets: Vec::new(),
         }
     }
 }

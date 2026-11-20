@@ -78,6 +78,6 @@ pub(crate) fn legacy_bypass(
 /// The deprecation notice for one workflow that only the legacy bypass keeps out of drift.
 fn legacy_bypass_notice(path: &RepoPath) -> String {
     format!(
-        "notice: {path} is skipped only because .velnor/config.toml exists; that bypass is deprecated, use external_workflows (velnor-ci ≥ 0.1.108)"
+        "notice: {path} is skipped only because .velnor/config.toml exists; that bypass is deprecated, use external_workflows (velnor-ci ≥ 0.1.109)"
     )
 }

@@ -58,12 +58,10 @@ pub(crate) fn view(roots: &[&str], config: Option<&[u8]>) -> Result<RepoView, Bo
     view.files
         .insert(lock, String::from_utf8(HELPER_LOCK.to_vec())?.into_bytes());
     if let Some(bytes) = config {
-        if bytes.windows(9).any(|window| window == b"hosted = ") {
-            pin_helper(&mut view, "0.1.99")?;
-        }
         let path = RepoPath::new(".velnor/rust-ci.toml")?;
         view.tracked_paths.insert(path.clone());
         view.files.insert(path, bytes.to_vec());
+        pin_for_keys(&mut view)?;
     }
     Ok(view)
 }
@@ -75,6 +73,22 @@ pub(crate) fn pin_helper(view: &mut RepoView, version: &str) -> Result<(), Box<d
             .replace("0.1.81", version)
             .into_bytes(),
     );
+    Ok(())
+}
+
+/// Raises the default pin to the first release that parses every key the config writes, so a
+/// test that writes a newer key does not trip the key gate. A test that checks a refusal pins
+/// after construction.
+pub(crate) fn pin_for_keys(view: &mut RepoView) -> Result<(), Box<dyn Error>> {
+    if let Some((major, minor, patch)) = velnor_gen::required_helper(view) {
+        let lock = view
+            .files
+            .get(&velnor_rust::LOCK_PATH)
+            .ok_or("no helper lock")?;
+        let text =
+            String::from_utf8(lock.clone())?.replace("0.1.81", &format!("{major}.{minor}.{patch}"));
+        view.files.insert(velnor_rust::LOCK_PATH, text.into_bytes());
+    }
     Ok(())
 }
 

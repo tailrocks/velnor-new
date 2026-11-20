@@ -114,6 +114,35 @@ The token phase runs the real `cargo` and `git`. It never runs a mise shim or a 
 
 A job that runs `cargo-deny` gets one extra step before the token phase, `cargo-deny fetch db`, which has no token and no `GIT_CONFIG_*` or `CARGO_NET_OFFLINE` environment. It loads the RustSec advisory database that the `--offline` deny check then reads, so the `advisories` check works on a fresh runner. Without `[private_sources]` the step is absent.
 
+## Private release assets
+
+A project whose build scripts or tests need a file from a private release (for example `.proto` files that a `build.rs` reads, or a dataset bundle) names it in `.velnor/rust-ci.toml`. The table is off when absent, and then the generated workflow is unchanged.
+
+```toml
+[[release_assets]]
+repo = "owner/fixtures"          # private repository that publishes the asset
+tag = "fixtures-2026.11.1"       # release tag
+asset = "dataset.tar.zst"        # asset name on that release
+sha256 = "<64 lowercase hex digits>"
+dest = "tests/fixtures/dataset"  # folder, relative to the repository root
+```
+
+The asset is stored at `<dest>/<asset>`. The generator does not unpack it: archive extraction has its own hazards (path traversal, links), so a committed script that a `[[test_setup]]` step runs, or the build script itself, unpacks it.
+
+The App credentials come from `[private_sources]` (`app_id` and `private_key`), which must be present. The entries need not appear in `[private_sources].repositories`: the release token has its own repository list, so the Cargo fetch token stays as narrow as it is. All entries use one owner, because one App installation issues the token.
+
+Refused at generation time: a missing `sha256` or one that is not 64 lowercase hex digits; a `repo` that is not `owner/name`; a `tag` or `asset` outside letters, digits and `._+-`; a `dest` that is absolute, empty, holds `..`, `.` or an empty part, a backslash, or a `.git` part (only letters, digits and `._-` are allowed in each part); entries of different owners; two entries with one `sha256` or one file path; more than 16 entries; an unknown key; a table without `[private_sources]`; a pinned `velnor-ci` older than `0.1.109`. Values never reach a `run:` as an expression, and a value with `${{` is refused by the character rules.
+
+**Where it runs.** The phase is a prelude of every job that compiles or runs tests, placed before the job's first cargo step (clippy, doc, the check-alone steps, the nextest build, test and archive jobs, feature lanes) and before any `[[test_setup]]` command, because a build script may read the asset. Formatting, `cargo machete` and `cargo deny` run no build script and get no prelude. It carries the same gate as the steps it precedes, so a run that selects no packages skips it.
+
+**Steps.** Per asset, `actions/cache/restore` with the key `release-asset-<sha256>` and the path `<dest>/<asset>`; on a merge queue run `velnor-ci private-token-allowed` (its own step, `release-assets-check`); `actions/create-github-app-token` (`release-assets-token`) with `permission-contents: read` and only the listed repositories; one `velnor-ci fetch-assets --asset <repo>,<tag>,<asset>,<sha256>,<dest>` step with the token in its environment only; and `actions/cache/save` for each asset whose restore missed. The save comes right after the verification, before any repository code runs, so the cached bytes are the verified ones.
+
+**Warm run.** The key is the digest, so a changed `sha256` is a new key and cannot serve stale bytes. On an exact hit the check and token steps are skipped, so no token is minted. `fetch-assets` still runs without a token: it hashes the restored file again, makes no request, and fails when the file is missing, is a link, or differs from the digest. A tampered cache entry therefore fails the job.
+
+**Fork pull requests** and bot-authored pull requests get no token, with the same condition as `[private_sources]`, and a merge queue entry gets one only when `private-token-allowed` wrote `allowed=true`. A cache hit still works. A miss fails closed, and the message names the fork case. There is no optional mode, because a skipped fixture would show up as a confusing build or test failure.
+
+**The download.** `velnor-ci fetch-assets` reads `GET /repos/<repo>/releases/tags/<tag>` on the API in `VELNOR_API_URL`, takes the one asset with that exact name, and downloads it by id. The token is not sent to the storage URL that the API redirects to. The bytes go to a new file next to the destination, are hashed while they are written (at most 4 GiB), and are renamed into place only when the SHA-256 equals the configured one; on a mismatch nothing is left. The destination is re-checked in the helper: relative, plain names, and no symbolic link or file on any folder of the path. The token is revoked with `DELETE /installation/token` afterwards, also when a download fails, and a failed revocation fails the step. The action's post-job revocation stays on as the backstop for a cancelled job.
+
 ## Workspace groups
 
 A repository with many small Cargo workspaces can check several of them in one job set, when the project asks for it. A group names the workspaces that share one job set; a workspace that no group names keeps its own jobs.
@@ -189,7 +218,7 @@ The two feature flags change which features the lane's steps pass to cargo, in i
 - `no_default_features = true` passes `--no-default-features`. It combines with `features`, so `features = ["a", "b"]` with it gives `--no-default-features --features 'a,b'`. It may also stand alone, to run with no features at all.
 - The two cannot be combined with each other or with a `features` list. Generation fails with a message that names the conflicting keys.
 
-A lane with a flag takes its own name: `Test (all features)`, `Test (no default features)`, or `Test (no default features, features: a,b)`, and the lint, doc and guard steps take the same words. Two lanes that differ only by a flag keep separate steps, separate lint and doc steps, and, as parallel jobs, separate jobs and cache keys (`rust-lane-all-features`, `rust-lane-no-default-a-b`). A lane without the flags renders exactly as before. The keys need velnor-ci 0.1.108 or later, and generation refuses an older pin when a lane writes either key, even as `false`. It runs after the default test step and reports no test counts, so the default step stays the single source of the job's test counts. A lane with `job = "parallel"` reports its own counts, see the next section but one. With `shape = "groups"` the step runs in the build job, which has Rust, because the archive holds only the default-feature build.
+A lane with a flag takes its own name: `Test (all features)`, `Test (no default features)`, or `Test (no default features, features: a,b)`, and the lint, doc and guard steps take the same words. Two lanes that differ only by a flag keep separate steps, separate lint and doc steps, and, as parallel jobs, separate jobs and cache keys (`rust-lane-all-features`, `rust-lane-no-default-a-b`). A lane without the flags renders exactly as before. The keys need velnor-ci 0.1.109 or later, and generation refuses an older pin when a lane writes either key, even as `false`. It runs after the default test step and reports no test counts, so the default step stays the single source of the job's test counts. A lane with `job = "parallel"` reports its own counts, see the next section but one. With `shape = "groups"` the step runs in the build job, which has Rust, because the archive holds only the default-feature build.
 
 `packages` names the packages of the root whose tests the lane selects. It is required with `filter` and optional without it. The plan narrows a pull request to the changed packages, so a lane whose filter matches nothing there is not broken. When the plan selects none of `packages`, and not the whole workspace, the lane step is skipped and a step named `Skip test lane (features: ...)` prints `skipped: no selected packages`. Otherwise the lane runs with `--no-tests=fail`, so a filter that matches nothing fails the job instead of passing with zero tests. A lane without `filter` runs whenever the plan selects the root.
 
@@ -321,9 +350,9 @@ The shapes, and the jobs each one starts:
 external_workflows = [".github/workflows/image.yml"]
 ```
 
-Each entry is a file directly under `.github/workflows/` with a `.yml` or `.yaml` extension. Without the key, `velnor-gen check` reports every workflow it does not generate as unowned (`has no generated header and no generator owns it`), and the ways out are to delete the file, to list it here, or (deprecated) to keep the retired `.velnor/config.toml`. A listed file is skipped by `check` and `generate`; every other unowned file still fails. `velnor-gen` refuses an entry that does not exist, an entry that names a file velnor-gen writes or one that carries its header. The key needs `velnor-ci` 0.1.108 or later (`velnor-gen pin-helper 0.1.108`), because the helper reads the same file and rejects an unknown key. A hand-written workflow listed here is not checked or generated by velnor-gen, so it must be reviewed on its own.
+Each entry is a file directly under `.github/workflows/` with a `.yml` or `.yaml` extension. Without the key, `velnor-gen check` reports every workflow it does not generate as unowned (`has no generated header and no generator owns it`), and the ways out are to delete the file, to list it here, or (deprecated) to keep the retired `.velnor/config.toml`. A listed file is skipped by `check` and `generate`; every other unowned file still fails. `velnor-gen` refuses an entry that does not exist, an entry that names a file velnor-gen writes or one that carries its header. The key needs `velnor-ci` 0.1.109 or later (`velnor-gen pin-helper 0.1.109`), because the helper reads the same file and rejects an unknown key. A hand-written workflow listed here is not checked or generated by velnor-gen, so it must be reviewed on its own.
 
-The retired `.velnor/config.toml` still makes `velnor-gen check` skip every unowned workflow. That bypass is deprecated: while it is in effect `check` prints one notice per workflow it hides (`use external_workflows (velnor-ci ≥ 0.1.108)`). It will be removed once the repositories that rely on it list their workflows under `external_workflows`.
+The retired `.velnor/config.toml` still makes `velnor-gen check` skip every unowned workflow. That bypass is deprecated: while it is in effect `check` prints one notice per workflow it hides (`use external_workflows (velnor-ci ≥ 0.1.109)`). It will be removed once the repositories that rely on it list their workflows under `external_workflows`.
 
 ## Files and packages
 
