@@ -58,6 +58,17 @@ check str_inner_literal pass 'fn f() { let s = "/*! ~~~"; }\n'
 check unicode_ident   pass 'fn café() {}\n/** plain prose */\nfn f() {}\n'
 check shebang_block    pass '#!/usr/bin/env run /** ```\nfn f() {}\n'
 check block_indent_code fail '/**\n * prose\n *\n *     let x = 1;\n */\nfn f() {}\n'
+check block_inline_span pass '/** Use ```foo``` as an inline code span. */\nfn f() {}\n'
+check block_inline_mid  pass '/**\n * Call ~~~ here and ``` there.\n */\nfn f() {}\n'
+check block_tilde_fence fail '/**\n * prose\n * ~~~\n * f();\n * ~~~\n */\nfn f() {}\n'
+check str_line_fence    pass 'fn f() { let s = "\n/// ```\n"; }\n'
+check raw_str_line_fence pass 'const S: &str = r#"\n/// ```\n"#;\nfn f() {}\n'
+check str_line_indent   pass 'fn f() { let s = "\n///     code\n"; }\n'
+check line_inline_span  pass '/// Use ```foo``` as code.\nfn f() {}\n'
+check str_slashes_fence fail 'fn f() { let u = "http://x"; }\n/// ```\n/// f();\n/// ```\nfn g() {}\n'
+check raw_then_fence    fail 'const S: &str = r#"x"#;\n/// ```\nfn g() {}\n'
+check attr_in_string    pass 'fn f() { let s = "#[doc = include_str!(x)]"; }\n'
+check attr_after_string fail 'fn f() { let s = "a"; }\n#[doc = include_str!(README.md)]\nfn g() {}\n'
 
 missing="$work/scanner_missing"
 mkdir -p "$missing/crates/fx/src"
