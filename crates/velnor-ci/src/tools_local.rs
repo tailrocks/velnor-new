@@ -283,35 +283,71 @@ fn prune(tools: &Path, current: &str) {
     }
 }
 
+/// The node a tools line came from. Kubernetes sets `NODE_NAME` when the pod asks for it (the
+/// node, for a misses-by-node count); the hostname is the pod name otherwise. Only plain name
+/// characters survive, so the label can never open a workflow command.
 #[must_use]
-pub fn message(outcome: &Outcome) -> String {
+pub fn node_label(node_name: Option<&str>, hostname: Option<&str>) -> String {
+    [node_name, hostname]
+        .into_iter()
+        .flatten()
+        .map(str::trim)
+        .find(|name| !name.is_empty())
+        .unwrap_or("unknown")
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-') {
+                c
+            } else {
+                '_'
+            }
+        })
+        .take(253)
+        .collect()
+}
+
+fn this_node() -> String {
+    let hostname = fs::read_to_string("/etc/hostname")
+        .ok()
+        .filter(|name| !name.trim().is_empty())
+        .or_else(|| std::env::var("HOSTNAME").ok());
+    node_label(
+        std::env::var("NODE_NAME").ok().as_deref(),
+        hostname.as_deref(),
+    )
+}
+
+#[must_use]
+pub fn message(outcome: &Outcome, node: &str) -> String {
+    format!("{} node={node}\n", describe(outcome))
+}
+
+fn describe(outcome: &Outcome) -> String {
     match outcome {
-        Outcome::NotOffered => "velnor: no node-local tools store offered\n".to_owned(),
+        Outcome::NotOffered => "velnor: no node-local tools store offered".to_owned(),
         Outcome::BadKey => {
-            "::warning::the tools key is not a plain name; the node store is skipped\n".to_owned()
+            "::warning::the tools key is not a plain name; the node store is skipped".to_owned()
         }
-        Outcome::Miss => {
-            "velnor: the node-local tools store has no entry for this key\n".to_owned()
-        }
+        Outcome::Miss => "velnor: the node-local tools store has no entry for this key".to_owned(),
         Outcome::Restored { from } => {
             format!(
-                "velnor: tools restored from the node store {}\n",
+                "velnor: tools restored from the node store {}",
                 from.display()
             )
         }
         Outcome::Rejected(reason) => {
-            format!("::warning::node-local tools store ignored ({reason})\n")
+            format!("::warning::node-local tools store ignored ({reason})")
         }
         Outcome::Saved { to } => {
-            format!("velnor: tools saved to the node store {}\n", to.display())
+            format!("velnor: tools saved to the node store {}", to.display())
         }
-        Outcome::AlreadySaved => "velnor: the node store already holds this key\n".to_owned(),
-        Outcome::Busy => "velnor: another job is saving this key to the node store\n".to_owned(),
+        Outcome::AlreadySaved => "velnor: the node store already holds this key".to_owned(),
+        Outcome::Busy => "velnor: another job is saving this key to the node store".to_owned(),
         Outcome::Failed(reason) => {
-            format!("::error::tools were not saved to the node store ({reason})\n")
+            format!("::error::tools were not saved to the node store ({reason})")
         }
         Outcome::Untrusted => {
-            "velnor: tools are saved to the node store on trusted events only\n".to_owned()
+            "velnor: tools are saved to the node store on trusted events only".to_owned()
         }
     }
 }
@@ -324,6 +360,7 @@ pub fn setup(verb: Verb, key: &str) -> Result<String, CiError> {
         .and_then(|text| crate::event::parse_event(&text).ok())
         .and_then(|event| event.default_branch);
     let (shared, seed) = (var(SHARED_DIR_ENV), var(SEED_DIR_ENV));
+    let node = this_node();
     let outcome = run(&Inputs {
         verb,
         key,
@@ -347,16 +384,16 @@ pub fn setup(verb: Verb, key: &str) -> Result<String, CiError> {
             .and_then(|mut handle| writeln!(handle, "hit={}", outcome.hit()))
             .map_err(|error| CiError::new(format!("cannot write {file}: {error}")))?;
     }
-    finish(verb, &outcome)
+    finish(verb, &outcome, &node)
 }
 
 /// The text the step prints, or an error when a save that should have happened did not, so that
 /// the workflow can tell a failed save from a skipped one.
-pub fn finish(verb: Verb, outcome: &Outcome) -> Result<String, CiError> {
+pub fn finish(verb: Verb, outcome: &Outcome, node: &str) -> Result<String, CiError> {
     match outcome {
         Outcome::Failed(reason) if verb == Verb::Save => Err(CiError::new(format!(
-            "tools were not saved to the node store ({reason})"
+            "tools were not saved to the node store ({reason}) node={node}"
         ))),
-        _ => Ok(message(outcome)),
+        _ => Ok(message(outcome, node)),
     }
 }
