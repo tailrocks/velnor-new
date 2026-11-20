@@ -106,14 +106,14 @@ fn a_test_lane_needs_a_helper_that_reads_the_key_0_1_93() -> TestResult {
             let text = error.to_string();
             assert!(
                 text.contains(&format!(
-                    "velnor-ci {helper} does not know the test_lane key"
+                    "velnor-ci {helper} does not accept the `test_lane"
                 )) && text.contains("pin-helper 0.1.93"),
                 "{text}"
             );
             assert!(
                 error
                     .downcast_ref::<GenerateError>()
-                    .is_some_and(|e| matches!(e, GenerateError::TestLaneHelperTooOld(_))),
+                    .is_some_and(|e| matches!(e, GenerateError::ConfigKeyHelperTooOld { .. })),
                 "{text}"
             );
         }

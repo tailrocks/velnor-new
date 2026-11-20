@@ -108,6 +108,10 @@ pub enum Command {
     )]
     Fetch(FetchArgs),
     #[command(
+        about = "Fetch private GitHub release assets for test fixtures. For each --asset owner/name,tag,asset,sha256,dest: with the token in VELNOR_PRIVATE_TOKEN, look the release up by tag on the API in VELNOR_API_URL, download the asset by id (the token is not sent to the redirect target), check its SHA-256 and only then move it to <dest>/<asset> under the current directory; a digest mismatch, a destination that is absolute, holds .. or passes a symbolic link, or a missing asset fails the command and leaves no file. The token is revoked with DELETE /installation/token afterwards, also when a download fails. Without a token it re-checks the digest of the file that a cache restored and makes no request, and fails when the file is missing or differs, naming the fork case"
+    )]
+    FetchAssets(FetchAssetsArgs),
+    #[command(
         about = "Run before the private-source token step on a merge_group event: read the queue entry from VELNOR_MERGE_GROUP_HEAD_REF (gh-readonly-queue/<base>/pr-<number>-<sha>), look the pull request up with GET /repos/$GITHUB_REPOSITORY/pulls/<number> on the API in VELNOR_API_URL with the job token in GITHUB_TOKEN, and write allowed=true to $GITHUB_OUTPUT only when its head repository is $GITHUB_REPOSITORY, its author's login does not end in [bot] and its head sha is the queue entry's sha, and when the live queue ref of that entry still points at $GITHUB_SHA, the commit this run checked out. Every other queue entry of the same base whose commit is in that checkout (one GET /repos/$GITHUB_REPOSITORY/compare/<base>...$GITHUB_SHA, at most three pages of 100 commits) must pass the same pull request checks; a queue of 100 entries or more fails. Writes allowed=false and exits 0 for a malformed reference, a failed lookup, a fork or bot entry, a sha mismatch, a queue that was rebuilt, a bound that is exceeded or anything else, so that no token is created"
     )]
     PrivateTokenAllowed,
@@ -210,13 +214,27 @@ pub struct FetchArgs {
 }
 
 #[derive(Debug, Args)]
+pub struct FetchAssetsArgs {
+    #[arg(
+        long,
+        required = true,
+        help = "owner/name,tag,asset,sha256,dest of one release asset; repeat for each asset"
+    )]
+    pub asset: Vec<String>,
+}
+
+#[derive(Debug, Args)]
 pub struct LaneGuardArgs {
     #[arg(
         long,
         value_parser = clap::builder::NonEmptyStringValueParser::new(),
         help = "Comma-separated features the lane step passes to cargo"
     )]
-    pub features: String,
+    pub features: Option<String>,
+    #[arg(long, help = "The lane step passes --all-features to cargo")]
+    pub all_features: bool,
+    #[arg(long, help = "The lane step passes --no-default-features to cargo")]
+    pub no_default_features: bool,
     #[arg(
         long,
         value_parser = clap::builder::NonEmptyStringValueParser::new(),
