@@ -14,9 +14,24 @@ const PUBLIC_SOURCES: [&str; 2] = [
     "sparse+https://index.crates.io/",
 ];
 
+const NOT_SAVED: &str =
+    "base caches are not saved because this repository has private dependencies";
+const PRIVATE_ONLY: &str = "base caches are restored and saved only while GitHub reports this repository private, because it has private dependencies";
+
 /// The note that explains why the base caches are not saved.
 pub(crate) fn note(cause: &str) -> String {
-    format!("base caches are not saved because this repository has private dependencies ({cause})")
+    format!("{NOT_SAVED} ({cause})")
+}
+
+/// The note on the base caches of a repository with private dependencies.
+#[must_use]
+pub fn base_cache_note(facts: &velnor_model::RepoFacts) -> Option<String> {
+    let note = facts.private_sources.as_ref()?;
+    Some(if crate::base_cache::private_base(facts) {
+        note.replacen(NOT_SAVED, PRIVATE_ONLY, 1)
+    } else {
+        note.clone()
+    })
 }
 
 /// The first reason the repository's dependencies are not proven public.

@@ -40,6 +40,10 @@ pub(crate) fn inputs_cli(facts: &RepoFacts) -> InputsCli {
     }
 }
 
+/// The first `velnor-ci` with `cache private-repo`, and a `cache decide` that accepts a lock with
+/// private git sources once the API proves the repository private.
+// helper-gate: first in tools-v0.1.108 via 5ebb078d5f
+const PRIVATE_BASE_HELPER: (u64, u64, u64) = (0, 1, 108);
 const SOURCES_FETCH_HELPER: (u64, u64, u64) = (0, 1, 88);
 // helper-gate: first in tools-v0.1.88 via 1a97547af5
 const MEMBER_LOCK_HELPER: (u64, u64, u64) = (0, 1, 88);
@@ -58,7 +62,27 @@ pub(crate) fn cache_root(facts: &RepoFacts, root: &RustRoot) -> CacheRoot {
 }
 
 pub(crate) fn writes_base(facts: &RepoFacts) -> bool {
-    facts.private_sources.is_none() && has_saving_helper(facts)
+    has_saving_helper(facts) && (facts.private_sources.is_none() || private_base(facts))
+}
+
+pub(crate) fn private_base(facts: &RepoFacts) -> bool {
+    facts.private_sources.is_some()
+        && facts.private_base_caches
+        && facts
+            .helper
+            .as_ref()
+            .is_some_and(|helper| helper.version().at_least(PRIVATE_BASE_HELPER))
+}
+
+pub(crate) fn private_only(facts: &RepoFacts, step: Step) -> Step {
+    Step {
+        private_repo: private_base(facts),
+        ..step
+    }
+}
+
+pub(crate) fn privacy_check(facts: &RepoFacts) -> Option<Step> {
+    private_base(facts).then(|| step(StepKind::RepositoryPrivacy))
 }
 
 pub const MAX_SOURCE_ROOTS: usize = 16;
@@ -224,6 +248,7 @@ pub(crate) fn save_steps(
     }
     steps
         .into_iter()
+        .map(|saved| private_only(facts, saved))
         .map(|saved| Step {
             gate: lane.steps(),
             ..saved

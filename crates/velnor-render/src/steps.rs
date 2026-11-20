@@ -198,7 +198,11 @@ fn rendered_steps(
     }
     rendered.push(body);
     if let StepKind::SourcesFetchAll { manifests, .. } = &step.kind {
-        rendered.extend(sources_fetch_all_rest(manifests, lane.cache_debug));
+        rendered.extend(sources_fetch_all_rest(
+            manifests,
+            lane.cache_debug,
+            lane.offline,
+        ));
     }
     for body in &mut rendered {
         if let (StepKind::Cargo(_), Some(target)) = (&step.kind, &step.target_dir) {
@@ -213,6 +217,7 @@ fn rendered_steps(
             ));
         }
         let mut extra = saved_unless_hit(&step.kind);
+        extra.extend(crate::private_steps::repository_conditions(step));
         extra.extend(
             step.skip_when_cold
                 .then(|| crate::gate::PREPARE_COLD.to_owned()),
@@ -233,6 +238,7 @@ fn rendered_steps(
                 around.saved_after,
             ),
         );
+        body.env.extend(crate::private_steps::decide_env(step));
         body.working_directory = step.directory.as_ref().map(ToString::to_string);
         if matches!(step.kind, StepKind::InputsSave { .. })
             && step.when != velnor_model::When::SaveBase
@@ -317,7 +323,7 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
         StepKind::RustTargets(targets) => rustup_add("target", targets),
         StepKind::SourcesFetch { position, .. } => sources_fetch(*position, lane),
         StepKind::SourcesFetchAll { manifests, .. } => {
-            sources_fetch_all(manifests, lane.cache_debug)
+            sources_fetch_all(manifests, lane.cache_debug, lane.offline)
         }
         StepKind::Cargo(command) => cargo_step(
             command,
@@ -344,7 +350,8 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
         StepKind::MbxRemote => crate::helper_steps::mbx_remote_step(),
         StepKind::CratesMirror(mirror) => crate::helper_steps::mirror_step(mirror),
         StepKind::MbxStore => crate::helper_steps::mbx_store_step(),
-        StepKind::PrivateCheck { .. }
+        StepKind::RepositoryPrivacy
+        | StepKind::PrivateCheck { .. }
         | StepKind::PrivateToken { .. }
         | StepKind::PrivateFetch { .. } => crate::private_steps::render(kind),
         StepKind::AdvisoryFetch { configs } => crate::private_steps::advisory_fetch(configs),

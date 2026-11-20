@@ -255,7 +255,7 @@ pub(crate) fn cargo_fetch(lane: CargoLane) -> RenderedStep {
     }
 }
 
-fn offline_env() -> (String, Value) {
+pub(crate) fn offline_env() -> (String, Value) {
     (
         "CARGO_NET_OFFLINE".to_owned(),
         Value::Text("true".to_owned()),

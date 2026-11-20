@@ -119,6 +119,9 @@ pub struct Step {
     pub when: When,
     pub skip_after_merge_group: Option<PlanFrom>,
     pub skip_when_cold: bool,
+    /// The step reads or writes a cache of private dependencies, so it runs only when
+    /// `velnor-ci` has proven the repository private.
+    pub private_repo: bool,
     pub pr: PrRun,
     pub gate: Option<Gate>,
     pub reads: Option<PlanRef>,

@@ -268,7 +268,7 @@ fn last_fetch_all_id(manifests: &[RepoPath]) -> String {
     fetch_all_id(fetch_chunks(manifests).len() - 1)
 }
 
-fn fetch_all_steps(manifests: &[RepoPath], cache_debug: bool) -> Vec<RenderedStep> {
+fn fetch_all_steps(manifests: &[RepoPath], cache_debug: bool, offline: bool) -> Vec<RenderedStep> {
     fetch_chunks(manifests)
         .into_iter()
         .enumerate()
@@ -276,6 +276,7 @@ fn fetch_all_steps(manifests: &[RepoPath], cache_debug: bool) -> Vec<RenderedSte
             env: cache_debug
                 .then(crate::cargo::cache_debug_env)
                 .into_iter()
+                .chain(offline.then(crate::cargo::offline_env))
                 .collect(),
             id: Some(fetch_all_id(chunk)),
             name: if chunk == 0 {
@@ -296,8 +297,12 @@ fn fetch_all_steps(manifests: &[RepoPath], cache_debug: bool) -> Vec<RenderedSte
         .collect()
 }
 
-pub(crate) fn sources_fetch_all(manifests: &[RepoPath], cache_debug: bool) -> RenderedStep {
-    fetch_all_steps(manifests, cache_debug)
+pub(crate) fn sources_fetch_all(
+    manifests: &[RepoPath],
+    cache_debug: bool,
+    offline: bool,
+) -> RenderedStep {
+    fetch_all_steps(manifests, cache_debug, offline)
         .into_iter()
         .next()
         .unwrap_or_default()
@@ -306,8 +311,9 @@ pub(crate) fn sources_fetch_all(manifests: &[RepoPath], cache_debug: bool) -> Re
 pub(crate) fn sources_fetch_all_rest(
     manifests: &[RepoPath],
     cache_debug: bool,
+    offline: bool,
 ) -> Vec<RenderedStep> {
-    fetch_all_steps(manifests, cache_debug)
+    fetch_all_steps(manifests, cache_debug, offline)
         .into_iter()
         .skip(1)
         .collect()

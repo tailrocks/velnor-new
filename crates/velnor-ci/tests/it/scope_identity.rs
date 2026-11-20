@@ -48,6 +48,7 @@ fn facts() -> RepoFacts {
         timings: BTreeMap::new(),
         timings_notes: Vec::new(),
         private_sources: None,
+        private_base_caches: false,
         private_suggestion: None,
         unowned: BTreeMap::new(),
         policy: PolicyTools::default(),

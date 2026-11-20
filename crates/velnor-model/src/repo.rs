@@ -103,6 +103,9 @@ pub struct RepoFacts {
     pub timings: BTreeMap<RepoPath, Timings>,
     pub timings_notes: Vec<String>,
     pub private_sources: Option<String>,
+    /// Every private dependency source is a git dependency without credentials in its URL and
+    /// `[private_sources]` names the token that fetches it, so the base caches may hold it.
+    pub private_base_caches: bool,
     pub private_suggestion: Option<String>,
     pub unowned: BTreeMap<RepoPath, UnownedPackage>,
     pub policy: PolicyTools,

@@ -145,6 +145,7 @@ impl Lane {
             when: When::NotCancelled,
             skip_after_merge_group: None,
             skip_when_cold: false,
+            private_repo: false,
             pr: PrRun::Always,
         }
     }

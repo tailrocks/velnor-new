@@ -46,7 +46,7 @@ Three families hold the work between runs. Each key is built from one typed valu
 | Family | Key holds | Restored from | Saved by |
 |---|---|---|---|
 | Tools | runner OS and arch, mise version, hash of `mise.lock` | exact key only | default branch, on a miss |
-| Sources (cargo registry and git) | OS and arch, hash of every `Cargo.lock` | exact key, else the newest earlier entry | default branch, when sources are proven public |
+| Sources (cargo registry and git) | OS and arch, hash of every `Cargo.lock` | exact key, else the newest earlier entry | default branch, when sources are proven public, or private git sources in a repository proven private (see Private dependencies) |
 | Target (build directory) | job, root, OS and arch, `compat`, lock hash, commit, run id | newest entry with the same lock hash, else the newest with the same `compat` | default branch, when the run compiled something |
 
 **What makes a hit.**
@@ -96,6 +96,7 @@ repositories = ["owner/shared-lib"]
 - The checkout stores no credentials and the jobs hold `contents: read`. No token is created for a fork pull request or for a pull request opened or pushed by a bot. In the merge queue a token is created only when the queued pull request comes from this repository (`velnor-ci private-token-allowed`).
 - The `groups` shape builds and tests in one job and uploads no nextest archive, because workflow artifacts are readable by anyone who can read the repository. `[[test_groups]]` is refused together with `[private_sources]` for the same reason, because a group runs from that archive.
 - `velnor-gen generate` prints a note that suggests this table when `Cargo.lock` locks a github.com git dependency over ssh or from the repository's own owner. A registry or a non-github.com git source, which the token cannot authenticate, gets a note that says so instead. With the table present, a note names a locked repository of the token's owner that `repositories` does not list, and a listed repository that no lock uses. The token is created once per job that compiles; sharing one fetch between jobs through a cache or an artifact is not done, because both are readable by anyone who can read the repository.
+- With `velnor-ci` 0.1.108 or later, the base caches (Sources and Target) work for a repository that has private git dependencies and `[private_sources]`, so a private consumer stops building cold. Privacy is decided at run time, never at generation: `velnor-ci cache private-repo` asks `GET /repos/{repo}` with the job's own `GITHUB_TOKEN`, and `cache decide` asks again before a save. A public or internal repository, an API error and a missing token mean no restore and no save, with the same refusal message as before. Pull requests from forks never restore these caches, and only trusted default-branch events save them. A lock with a registry, a `[patch]`, a git URL with credentials, or a Cargo config with `[registries]` or `[source]` keeps the refusal. The Sources cache holds only the three cargo directories, and its save is dropped when a credential file or a token-bearing git config sits inside them.
 
 ## Speed budget
 
