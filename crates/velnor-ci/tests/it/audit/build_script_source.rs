@@ -40,7 +40,9 @@ fn workspace(script: &str) -> Repo {
         ("clippy.toml", "msrv = \"1.80\"\n"),
         (
             "member/Cargo.toml",
-            &format!("[package]\nname = \"member\"\nversion = \"0.1.0\"\nedition = \"2024\"\n{key}"),
+            &format!(
+                "[package]\nname = \"member\"\nversion = \"0.1.0\"\nedition = \"2024\"\n{key}"
+            ),
         ),
         ("member/src/lib.rs", "pub fn member() {}\n"),
         (
@@ -82,7 +84,7 @@ fn ran_the_script(script: &str, clippy_first: bool) {
     assert_eq!(
         fs::read_to_string(repo.root().join(".velnor/rust-inputs.lock"))
             .unwrap_or_else(|error| unreachable!("{error}")),
-        "shared/data.txt\tmember\n"
+        "Cargo.toml\tmember\nclippy.toml\tmember\nshared/data.txt\tmember\n"
     );
 }
 
@@ -107,9 +109,12 @@ fn a_run_without_its_output_is_still_reported_after_a_clippy_first_lane() {
     build_in_order(&repo, true);
     let outputs: Vec<PathBuf> = files(&repo.root().join("target/debug/build"))
         .into_iter()
-        .filter(|file| file.file_name().is_some_and(|name| name == "stdout"))
+        .filter(|file| {
+            file.file_name()
+                .is_some_and(|name| name == "stdout" || name == "output")
+        })
         .collect();
-    assert!(!outputs.is_empty());
+    assert!(!outputs.is_empty(), "the build left no run output");
     for output in outputs {
         fs::remove_file(output).unwrap_or_else(|error| unreachable!("{error}"));
     }

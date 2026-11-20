@@ -28,10 +28,7 @@ impl Audit<'_> {
         )?;
         let built = modified(file)?;
         let paths = dep_info_paths(&text);
-        let Some(Located::Inside(source)) = paths
-            .first()
-            .map(|source| locate(self.repository, workspace, source))
-        else {
+        let Some(source) = self.unit_source(workspace, &paths, package) else {
             return Ok(None);
         };
         if self.changed_since(workspace, &paths, built, file, false)? {
@@ -49,6 +46,28 @@ impl Audit<'_> {
 }
 
 impl Audit<'_> {
+    fn unit_source(
+        &self,
+        workspace: &Path,
+        paths: &[String],
+        package: Option<&str>,
+    ) -> Option<RepoPath> {
+        let located: Vec<Located> = paths
+            .iter()
+            .map(|path| locate(self.repository, workspace, path))
+            .collect();
+        let named = located.iter().find_map(|path| match path {
+            Located::Inside(source) if self.owners.is_target_source(package, source) => {
+                Some(source.clone())
+            }
+            _ => None,
+        });
+        named.or_else(|| match located.into_iter().next() {
+            Some(Located::Inside(source)) => Some(source),
+            _ => None,
+        })
+    }
+
     pub(in crate::io) fn build_output_text(
         &mut self,
         index: usize,
