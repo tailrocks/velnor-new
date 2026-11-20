@@ -8,7 +8,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use velnor_model::{HelperVersion, Platform};
 
 use crate::lock::{
-    CI, GENERATOR, Lock, LockError, check_digests, pin_lock, release_commit, release_version,
+    CI, GENERATOR, GENERATOR_BINARY_RELEASE, Lock, LockError, check_digests, pin_lock,
+    release_commit, release_version,
 };
 
 /// The commit a `velnor-gen` build without `VELNOR_COMMIT` reports.
@@ -55,13 +56,15 @@ fn named(section: &str, error: &LockError) -> LockError {
 /// Offline: the `[velnor-gen]` entry agrees with the lock's own version and commit and, when
 /// the running binary is a release build of the lock's commit, with that binary's bytes.
 /// A local build (`unknown` commit) is not compared, since its digest is not the published one.
+/// An archive release is compared with `[velnor-gen-binary]`; a lock pinned before that section
+/// existed lists only the archive digests, which are not the binary's, so it is not compared.
 /// A newer binary that is not the locked release is not compared either.
 pub fn check_generator_entry(bytes: &[u8], running: RunningGenerator<'_>) -> Result<(), LockError> {
     let lock = parse(bytes)?;
     release_version(&lock.version)?;
     let commit = release_commit(&lock.commit)?;
     check_digests(&lock.generator).map_err(|error| named(GENERATOR, &error))?;
-    let archive = check_format(&lock)?;
+    let binary = binary_entry(&lock)?;
     if running.commit == UNSTAMPED {
         return Ok(());
     }
@@ -80,17 +83,45 @@ pub fn check_generator_entry(bytes: &[u8], running: RunningGenerator<'_>) -> Res
             lock.version, running.version
         )));
     }
-    if let (Some(platform), Some(sha)) = (running.platform, running.sha256)
-        && !archive
-        && let Some(listed) = lock.generator.get(platform.file_suffix())
+    if let (Some(platform), Some(sha), Some((section, digests))) =
+        (running.platform, running.sha256, binary)
+        && let Some(listed) = digests.get(platform.file_suffix())
         && listed != sha
     {
         return Err(LockError::new(format!(
-            "[{GENERATOR}] {} digest is {listed} but this binary hashes to {sha}",
+            "[{section}] {} digest is {listed} but this binary hashes to {sha}",
             platform.file_suffix()
         )));
     }
     Ok(())
+}
+
+/// A section name and the digests it lists.
+type BinaryEntry<'a> = (String, &'a BTreeMap<String, String>);
+
+/// The section that lists the digests of the velnor-gen executable, if the lock has one: a raw
+/// release's `[velnor-gen]`, an archive release's `[velnor-gen-binary]`. A lock pinned before
+/// that section existed has none, because its `[velnor-gen]` digests are the archives'.
+fn binary_entry(lock: &Lock) -> Result<Option<BinaryEntry<'_>>, LockError> {
+    let archive = check_format(lock)?;
+    let reads = release_version(&lock.version)?.at_least(GENERATOR_BINARY_RELEASE);
+    let section = format!("{GENERATOR}-binary");
+    match (archive, reads, lock.generator_binary.as_ref()) {
+        (false, _, None) => Ok(Some((GENERATOR.to_owned(), &lock.generator))),
+        (false, _, Some(_)) => Err(LockError::new(format!(
+            "[{section}] is not allowed: release {} publishes raw binaries only",
+            lock.version
+        ))),
+        (true, false, Some(_)) => Err(LockError::new(format!(
+            "[{section}] is not allowed: release {} does not read it",
+            lock.version
+        ))),
+        (true, _, None) => Ok(None),
+        (true, true, Some(binary)) => {
+            check_digests(binary).map_err(|error| named(&section, &error))?;
+            Ok(Some((section, binary)))
+        }
+    }
 }
 
 fn check_format(lock: &Lock) -> Result<bool, LockError> {
@@ -134,7 +165,12 @@ pub fn verify_release(
         lock.ci_binary.as_ref(),
         release.ci_binary.as_ref(),
     )?;
-    compare_section(GENERATOR, Some(&lock.generator), Some(&release.generator))
+    compare_section(GENERATOR, Some(&lock.generator), Some(&release.generator))?;
+    compare_section(
+        &format!("{GENERATOR}-binary"),
+        lock.generator_binary.as_ref(),
+        release.generator_binary.as_ref(),
+    )
 }
 
 fn compare_section(
