@@ -183,6 +183,7 @@ mod timings_runs;
 mod timings_setup;
 mod tools_local;
 mod trusted_roots;
+mod unit_test_targets;
 mod unowned;
 mod version;
 mod write_request;
