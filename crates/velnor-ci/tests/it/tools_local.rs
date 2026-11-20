@@ -5,7 +5,7 @@ use std::fs;
 use std::os::unix::fs::{MetadataExt, PermissionsExt, symlink};
 use std::path::{Path, PathBuf};
 
-use velnor_ci::tools_local::{Inputs, Outcome, Verb, finish, message, run, valid_key};
+use velnor_ci::tools_local::{Inputs, Outcome, Verb, finish, message, node_label, run, valid_key};
 
 use crate::io::Repo;
 
@@ -184,7 +184,7 @@ fn a_world_writable_or_missing_store_is_not_used() {
         go(&node, Verb::Restore, KEY, "pull_request", "home"),
         Outcome::Rejected(_)
     ));
-    assert!(message(&Outcome::Miss).contains("no entry"));
+    assert!(message(&Outcome::Miss, "node-a").contains("no entry"));
 }
 
 #[test]
@@ -289,7 +289,8 @@ fn abandoned_staging_trees_are_swept_and_active_ones_are_kept() {
 #[test]
 fn a_failed_save_fails_the_step_but_nothing_else_does() {
     let failed = Outcome::Failed("the copy to the store failed");
-    let error = finish(Verb::Save, &failed).expect_err("a failed save must fail the step");
+    let error =
+        finish(Verb::Save, &failed, "node-a").expect_err("a failed save must fail the step");
     assert!(error.to_string().contains("not saved"), "{error}");
     for outcome in [
         Outcome::NotOffered,
@@ -299,9 +300,12 @@ fn a_failed_save_fails_the_step_but_nothing_else_does() {
         Outcome::Untrusted,
         Outcome::Rejected("world-writable"),
     ] {
-        assert!(finish(Verb::Save, &outcome).is_ok(), "{outcome:?}");
+        assert!(
+            finish(Verb::Save, &outcome, "node-a").is_ok(),
+            "{outcome:?}"
+        );
     }
-    assert!(finish(Verb::Restore, &failed).is_ok());
+    assert!(finish(Verb::Restore, &failed, "node-a").is_ok());
 }
 
 #[test]
@@ -310,10 +314,49 @@ fn a_save_that_cannot_copy_is_an_error_and_leaves_nothing_behind() {
     fs::create_dir_all(node.root.join("bare")).unwrap_or_else(|e| unreachable!("{e}"));
     let outcome = go(&node, Verb::Save, KEY, "push", "bare");
     assert_eq!(outcome, Outcome::Failed("the copy to the store failed"));
-    assert!(message(&outcome).starts_with("::error::"));
+    assert!(message(&outcome, "node-a").starts_with("::error::"));
     let left: Vec<_> = fs::read_dir(node.root.join("store/tools"))
         .unwrap_or_else(|e| unreachable!("{e}"))
         .flatten()
         .collect();
     assert!(left.is_empty(), "{left:?}");
+}
+
+#[test]
+fn every_tools_line_names_the_node_and_the_name_cannot_break_a_workflow_command() {
+    assert_eq!(
+        node_label(Some("velnor-240"), Some("runner-pod-7")),
+        "velnor-240"
+    );
+    assert_eq!(node_label(None, Some("runner-pod-7")), "runner-pod-7");
+    assert_eq!(node_label(Some("  "), Some("runner-pod-7")), "runner-pod-7");
+    assert_eq!(node_label(Some("a::b c"), None), "a__b_c");
+    assert_eq!(node_label(None, None), "unknown");
+    let long = node_label(Some(&"n".repeat(500)), None);
+    assert!(long.len() <= 253, "{}", long.len());
+    for outcome in [
+        Outcome::NotOffered,
+        Outcome::BadKey,
+        Outcome::Miss,
+        Outcome::Restored {
+            from: PathBuf::from("/store/tools/k"),
+        },
+        Outcome::Rejected("world-writable"),
+        Outcome::Saved {
+            to: PathBuf::from("/store/tools/k"),
+        },
+        Outcome::AlreadySaved,
+        Outcome::Busy,
+        Outcome::Failed("the copy to the store failed"),
+        Outcome::Untrusted,
+    ] {
+        let line = message(&outcome, "velnor-240");
+        assert!(
+            line.ends_with(" node=velnor-240\n"),
+            "{outcome:?}: {line:?}"
+        );
+        assert_eq!(line.matches('\n').count(), 1, "{outcome:?}: {line:?}");
+    }
+    let error = finish(Verb::Save, &Outcome::Failed("x"), "velnor-240").expect_err("failed save");
+    assert!(error.to_string().contains("node=velnor-240"), "{error}");
 }
