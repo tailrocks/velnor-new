@@ -103,6 +103,14 @@ jobs:
           fi
           bash scripts/check-helper-gates.sh --diff "$fixtures/gate-good.diff" --current 0.1.100
           bash scripts/check-helper-gates.sh --diff "$fixtures/gate-correction-good.diff" --current 0.1.100
+          for f in gate-unreleased-untagged gate-unreleased-released-marker gate-prose-released gate-released-unmarked; do
+            if bash scripts/check-helper-gates.sh --diff "$fixtures/$f.diff" --current 0.1.110; then
+              echo "the check accepted $f.diff" >&2
+              exit 1
+            fi
+          done
+          bash scripts/check-helper-gates.sh --diff "$fixtures/gate-unreleased-none.diff" --current 0.1.110
+          bash scripts/check-helper-gates.sh --diff "$fixtures/gate-released-marked.diff" --current 0.1.110
       - name: Check the added gates against the base
         env:
           BASE_REF: ${{ github.base_ref }}
