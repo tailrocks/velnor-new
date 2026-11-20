@@ -247,7 +247,10 @@ fn an_over_budget_notice_keeps_a_target_path_with_a_line_break_on_one_line() {
             .all(|line| !line.starts_with("::stop-commands::")),
         "{stdout}"
     );
-    assert!(stdout.contains("odd%0A::stop-commands::token"), "{stdout}");
+    assert!(
+        stdout.contains("target%0A::stop-commands::token"),
+        "{stdout}"
+    );
 }
 
 #[test]
