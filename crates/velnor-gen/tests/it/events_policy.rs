@@ -3,7 +3,7 @@
 
 use std::collections::BTreeSet;
 
-use velnor_model::{PolicyTools, RepoPath};
+use velnor_model::{DenyChecks, PolicyTools, RepoPath};
 use velnor_rust::policy_runs;
 
 use super::events::DENY_MISE;
@@ -46,13 +46,13 @@ fn a_license_text_change_runs_the_policy_lane_only_with_cargo_deny() -> TestResu
         deny: true,
         machete: false,
         deny_off: false,
-        licenses: true,
+        checks: DenyChecks::ALL,
     };
     let machete = PolicyTools {
         deny: false,
         machete: true,
         deny_off: false,
-        licenses: true,
+        checks: DenyChecks::ALL,
     };
     for path in [
         "LICENSE",
@@ -174,7 +174,7 @@ fn changes_to_cargo_deny_configs_select_policy() -> TestResult {
         deny: false,
         machete: false,
         deny_off: false,
-        licenses: true,
+        checks: DenyChecks::ALL,
     };
     for name in [
         "deny.toml",

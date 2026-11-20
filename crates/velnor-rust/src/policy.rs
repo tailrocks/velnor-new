@@ -4,7 +4,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use velnor_model::{DenyCheck, DenyLane, PolicyTools, RepoPath, RepoView, RustRoot};
+use velnor_model::{DenyCheck, DenyChecks, DenyLane, PolicyTools, RepoPath, RepoView, RustRoot};
 
 use crate::config::CONFIG_PATH;
 use crate::error::{DetectError, Reason};
@@ -62,7 +62,7 @@ pub(crate) fn policy_tools(
     deny_configs: &BTreeMap<RepoPath, RepoPath>,
     runner: &str,
     lane: DenyLane,
-    checks: Option<&[DenyCheck]>,
+    checks: DenyChecks,
 ) -> Result<PolicyTools, DetectError> {
     let pinned = |tool: &str| pinned_for_runner(&view.files, |name| is_tool(name, tool), runner);
     let deny = match lane {
@@ -86,7 +86,7 @@ pub(crate) fn policy_tools(
         deny,
         machete: pinned("cargo-machete"),
         deny_off: lane == DenyLane::Off,
-        licenses: checks.is_none_or(|checks| checks.contains(&DenyCheck::Licenses)),
+        checks,
     })
 }
 
@@ -129,7 +129,8 @@ pub fn policy_runs(
     let dependency = manifest || changed.iter().any(is_deny_config);
     let deny_only = changed.iter().any(|path| {
         let name = path.as_str().rsplit('/').next().unwrap_or_default();
-        (tools.licenses && license_text(name)) || DENY_EXCEPTION_FILES.contains(&name)
+        (tools.checks.contains(DenyCheck::Licenses) && license_text(name))
+            || DENY_EXCEPTION_FILES.contains(&name)
     });
     let unused_possible = changed.iter().any(|path| {
         let name = path.as_str().rsplit('/').next().unwrap_or_default();
