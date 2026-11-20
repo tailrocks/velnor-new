@@ -1,9 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
+
 use velnor_model::{
     CacheKey, CargoCommand, GateNeed, HelperCommand, Job, MERGE_GROUP_SKIP_OUTPUT,
-    MERGE_GROUP_STEP, Step, StepKind, TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT,
+    MERGE_GROUP_STEP, RepoPath, Step, StepKind, TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT,
     TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, WorkflowPlan, group_output_name,
 };
 
@@ -120,8 +122,8 @@ fn job_steps(
         .iter()
         .enumerate()
         .scan(
-            (false, None::<String>),
-            |(replanned, last_setup), (index, step)| {
+            (false, BTreeMap::<Option<RepoPath>, String>::new()),
+            |(replanned, setups), (index, step)| {
                 let setup = Setup::of(restores, *replanned);
                 *replanned |= step.kind == StepKind::Helper(HelperCommand::PlanFull);
                 let own = (step.after_setup && matches!(step.kind, StepKind::TestSetup { .. }))
@@ -130,7 +132,11 @@ fn job_steps(
                     id: gate.id(index).or(own.as_deref()),
                     saved_after: gate.required(),
                     job_name: job.name.as_deref(),
-                    after_setup: last_setup.as_deref().filter(|_| step.after_setup),
+                    after_setup: step
+                        .after_setup
+                        .then(|| setups.get(&step.directory))
+                        .flatten()
+                        .map(String::as_str),
                 };
                 let mut rendered = rendered_steps(step, setup, audit, tests, lane, around);
                 let tools_key = matches!(
@@ -141,8 +147,8 @@ fn job_steps(
                 for body in &mut rendered {
                     body.shared |= verified && tools_key;
                 }
-                if own.is_some() {
-                    *last_setup = own;
+                if let Some(id) = own {
+                    setups.insert(step.directory.clone(), id);
                 }
                 Some(crate::base_steps::audited_save(
                     job,

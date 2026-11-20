@@ -27,10 +27,14 @@ pub(crate) fn inserted(
             .filter(move |setup| setup.before_build() == build)
             .filter(|setup| setup.root == root.manifest.parent())
     };
-    if let Some(first) = steps.iter().position(builds_or_tests) {
+    if let Some(first) = steps
+        .iter()
+        .position(builds_or_tests)
+        .filter(|_| setups(true).next().is_some())
+    {
         let gate = shared_gate(steps.iter().filter(|step| builds_or_tests(step)));
         let (when, pr) = (steps[first].when, steps[first].pr);
-        gate_cargo_from(&mut steps, first);
+        gate_cargo_from(&mut steps, first, |step| matches!(step.kind, StepKind::Cargo(_)));
         let setup: Vec<Step> = setups(true)
             .map(|setup| Step {
                 gate: gate.clone(),
@@ -44,7 +48,7 @@ pub(crate) fn inserted(
         return steps;
     };
     let (when, pr) = (steps[first].when, steps[first].pr);
-    gate_cargo_from(&mut steps, first);
+    gate_cargo_from(&mut steps, first, tests);
     let setup: Vec<Step> = setups(false)
         .map(|setup| Step {
             gate: lane.steps(),
@@ -58,9 +62,9 @@ pub(crate) fn inserted(
 
 /// A cargo step from the first setup on waits for the setup before it: a setup that fails stops
 /// the job's compiling and test steps.
-fn gate_cargo_from(steps: &mut [Step], first: usize) {
+fn gate_cargo_from(steps: &mut [Step], first: usize, gated: impl Fn(&Step) -> bool) {
     for later in steps.iter_mut().skip(first) {
-        if matches!(later.kind, StepKind::Cargo(_)) {
+        if gated(later) {
             later.after_setup = true;
         }
     }

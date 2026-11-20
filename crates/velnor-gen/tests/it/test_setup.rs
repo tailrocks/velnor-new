@@ -169,3 +169,61 @@ fn a_failed_build_phase_setup_stops_every_cargo_step_after_it() -> TestResult {
     }
     Ok(())
 }
+
+const LINT_LANE: &str = "[[test_lane]]\nroot = '.'\nfeatures = ['local-mode']\nlint = true\ndoc = true\n";
+
+#[test]
+fn a_clippy_or_doc_step_after_the_tests_does_not_wait_for_the_test_setup() -> TestResult {
+    let jobs = crate::feature_lanes::jobs_of(&format!("{FIXTURE}{LINT_LANE}"))?;
+    let mut checked = 0;
+    for (id, job) in jobs.as_object().into_iter().flatten() {
+        for step in job["steps"].as_array().map(Vec::as_slice).unwrap_or_default() {
+            let run = step["run"].as_str().unwrap_or_default();
+            if !(run.contains("cargo clippy") || run.contains("cargo doc")) {
+                continue;
+            }
+            checked += 1;
+            let condition = step["if"].as_str().unwrap_or_default();
+            assert!(
+                !condition.contains("test_setup_"),
+                "{id}: a quick check waits for the test setup: {step}"
+            );
+        }
+    }
+    assert!(checked > 0, "no clippy or doc step was rendered");
+    Ok(())
+}
+
+#[test]
+fn a_root_setup_in_a_workspace_group_does_not_wait_for_another_roots_setup() -> TestResult {
+    let config = "[[workspace_groups]]\nname = 'tools'\nroots = ['tools/a', 'tools/b']\n\
+        [[test_setup]]\nroot = 'tools/a'\nname = 'Prepare a'\nrun = 'bash scripts/a.sh'\n\
+        [[test_setup]]\nroot = 'tools/b'\nname = 'Prepare b'\nrun = 'bash scripts/b.sh'\n";
+    let mut repo = view(
+        &["Cargo.toml", "tools/a/Cargo.toml", "tools/b/Cargo.toml"],
+        Some(config.as_bytes()),
+    )?;
+    crate::pipeline::pin_helper(&mut repo, "0.1.96")?;
+    let jobs = crate::yaml_tree::document(&workflow(&repo)?)?["jobs"].clone();
+    let steps_of = |name: &str| -> Result<Vec<serde_json::Value>, Box<dyn std::error::Error>> {
+        Ok(jobs
+            .as_object()
+            .into_iter()
+            .flatten()
+            .flat_map(|(_, job)| job["steps"].as_array().cloned().unwrap_or_default())
+            .filter(|step| step["name"] == name)
+            .collect())
+    };
+    let a = steps_of("Prepare a")?;
+    let b = steps_of("Prepare b")?;
+    assert_eq!((a.len(), b.len()), (1, 1), "{jobs}");
+    let a_id = a[0]["id"].as_str().ok_or("the setup of a has no id")?;
+    let waits_for_a = format!("steps.{a_id}.outcome");
+    let condition = b[0]["if"].as_str().unwrap_or_default();
+    assert!(
+        !condition.contains(&waits_for_a),
+        "the setup of b waits for the setup of a: {}",
+        b[0]
+    );
+    Ok(())
+}
