@@ -102,7 +102,7 @@ fn prepare_records_nothing_when_nothing_is_installed() {
     );
 }
 
-/// Runs `prepare` with RUSTUP_HOME at a scratch directory whose `toolchains` holds `installed`.
+/// Runs `prepare` with `RUSTUP_HOME` at a scratch directory whose `toolchains` holds `installed`.
 fn run_with_toolchains(name: &str, file: &str, installed: &[&str]) -> Run {
     let dir = scratch(name);
     let home = dir.join("rustup-home");
