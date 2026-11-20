@@ -14,10 +14,8 @@ const DISABLE_ENV: &str = "VELNOR_CRATES_MIRROR";
 const MARKER: &str = "# velnor-ci crates-mirror owns this file\n";
 
 pub(super) fn setup(args: &CratesMirrorArgs) -> Result<String, CiError> {
-    match std::env::var(DISABLE_ENV) {
-        Ok(value) if value == "off" => {
-            return Ok(format!("crates mirror disabled by {DISABLE_ENV}=off\n"));
-        }
+    let disabled = match std::env::var(DISABLE_ENV) {
+        Ok(value) if value == "off" => true,
         Ok(value) if !value.is_empty() => {
             return Err(CiError::new(format!(
                 "{DISABLE_ENV} must be unset or exactly off, not {value:?}"
@@ -28,7 +26,27 @@ pub(super) fn setup(args: &CratesMirrorArgs) -> Result<String, CiError> {
                 "{DISABLE_ENV} must be unset or exactly off"
             )));
         }
-        Ok(_) | Err(std::env::VarError::NotPresent) => {}
+        Ok(_) | Err(std::env::VarError::NotPresent) => false,
+    };
+    // MBX is never skipped: a declaring repository keeps cargo on mise's MBX wrapper
+    // even when the mirror is off, and the wrapper refuses any other cargo.
+    let mbx = super::crates_mirror_mbx::declared_here()?;
+    if disabled {
+        let mut text = format!("crates mirror disabled by {DISABLE_ENV}=off\n");
+        if mbx {
+            let cargo = super::crates_mirror_mbx::mise_cargo()?;
+            super::append_to(
+                "GITHUB_ENV",
+                &format!(
+                    "{}={}\nCARGO={}\n",
+                    super::crates_mirror_mbx::ENV,
+                    super::crates_mirror_mbx::VALUE,
+                    cargo.display()
+                ),
+            )?;
+            text.push_str("MBX is declared: cargo stays on the mise MBX wrapper\n");
+        }
+        return Ok(text);
     }
     std::fs::File::open(&args.cainfo).map_err(|e| {
         CiError::new(format!(
@@ -71,10 +89,19 @@ pub(super) fn setup(args: &CratesMirrorArgs) -> Result<String, CiError> {
         .and_then(|_| std::fs::rename(&staged_wrapper, &wrapper))
         .map_err(|e| failed(&e))?;
     super::append_to("GITHUB_PATH", &format!("{}\n", directory.display()))?;
+    let mbx_line = if mbx {
+        format!(
+            "{}={}\n",
+            super::crates_mirror_mbx::ENV,
+            super::crates_mirror_mbx::VALUE
+        )
+    } else {
+        String::new()
+    };
     super::append_to(
         "GITHUB_ENV",
         &format!(
-            "{CONFIG_ENV}={}\n{WRAPPER_ENV}={}\nCARGO={}\n",
+            "{CONFIG_ENV}={}\n{WRAPPER_ENV}={}\nCARGO={}\n{mbx_line}",
             config.display(),
             wrapper.display(),
             wrapper.display()

@@ -117,6 +117,8 @@ Three exceptions are allowed. Nothing else may skip mbx.
 2. **Bootstrap of mbx and mise.** Building mise and mbx from source (`scripts/build-owned-tool.py`) uses the pinned official mbx release, checked by digest, as its cargo driver. A tool cannot be its own compiler wrapper while it is being built.
 3. **Rustdoc and doctests.** `cargo doc` and doctests run without mbx, because mbx cannot cache them yet. This is accepted for now and is revisited when mbx caches them.
 
+MBX is fail closed when the crates mirror runs. The mirror step reads `mise.toml` (or `.mise.toml`) in the workspace. If it declares MBX (`[wrappers.cargo] command = "mbx"` or `mr_boxington = true` on `rust`), the step records `VELNOR_CARGO_MBX=required` for the rest of the job. From then on the wrapper refuses to run any `cargo` that is not the mise wrapper and fails with `mbx is declared but cargo on PATH isn't the mise mbx wrapper: <path>`. It never falls back to a cargo found elsewhere on `PATH`. `VELNOR_CRATES_MIRROR=off` does not switch MBX off: with MBX declared, the step exports `CARGO` pointing at the mise wrapper, and it fails when that wrapper is not the first `cargo` on `PATH`. Repositories that do not declare MBX are unchanged. velnor-ci releases before 0.1.108 do not have this check.
+
 Two scripts still call cargo without mbx and are not covered by an exception: `scripts/local-cargo.sh` (its only caller is its own test) and `scripts/build-owned-archive-guard.sh` (it runs `mise --no-config exec` on the pinned toolchain). Neither builds mbx or mise. The owner must decide for each one whether to route it through mbx, remove it, or add it to the exceptions above.
 
 To verify a local checkout:

@@ -20,6 +20,7 @@ mod crates_mirror;
 mod crates_mirror_args;
 mod crates_mirror_depth;
 mod crates_mirror_dispatch;
+mod crates_mirror_mbx;
 mod crates_mirror_mise;
 mod delta;
 mod delta_freshness;

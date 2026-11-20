@@ -10,6 +10,7 @@ use crate::io::Repo;
 mod cargo_directory;
 mod fetch_config;
 mod fixture;
+mod mbx;
 mod mise;
 mod reentry;
 mod setup;

@@ -9,6 +9,7 @@ use crate::error::CiError;
 use super::crates_mirror::{CONFIG_ENV, REAL_ENV, WRAPPER_ENV, failed};
 use super::crates_mirror_args::with_mirror_config;
 use super::crates_mirror_depth::wrapper_ancestors;
+use super::crates_mirror_mbx as mbx;
 use super::crates_mirror_mise::{self as mise, LaunchPhase};
 
 const RUSTUP_ENV: &str = "VELNOR_CARGO_RUSTUP";
@@ -46,6 +47,9 @@ pub(super) fn forward() -> Result<ExitStatus, CiError> {
         let cargo = find_cargo(&paths, &wrapper, &phase)?;
         if let Some(executable) = proxy(&cargo, "mise")? {
             return mise::launch(&executable, &cargo, &wrapper, &args);
+        }
+        if mbx::required() {
+            return Err(mbx::refused(&cargo));
         }
         Some(cargo)
     } else {
@@ -263,7 +267,7 @@ fn actual_cargo(
     })
 }
 
-fn proxy(cargo: &Path, name: &str) -> Result<Option<PathBuf>, CiError> {
+pub(super) fn proxy(cargo: &Path, name: &str) -> Result<Option<PathBuf>, CiError> {
     let executable = std::fs::canonicalize(cargo).map_err(|e| failed(&e))?;
     if executable.file_stem().is_some_and(|stem| stem == name) {
         return Ok(Some(executable));
@@ -296,13 +300,13 @@ fn query(command: &mut Command) -> Result<String, CiError> {
 }
 
 #[cfg(unix)]
-fn is_executable(path: &Path) -> bool {
+pub(super) fn is_executable(path: &Path) -> bool {
     use std::os::unix::fs::PermissionsExt;
     path.metadata()
         .is_ok_and(|metadata| metadata.permissions().mode() & 0o111 != 0)
 }
 
 #[cfg(not(unix))]
-fn is_executable(_path: &Path) -> bool {
+pub(super) fn is_executable(_path: &Path) -> bool {
     true
 }
