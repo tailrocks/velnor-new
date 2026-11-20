@@ -144,6 +144,7 @@ mod lock_affected;
 mod lock_archive;
 mod lock_consistency;
 mod lock_entry;
+mod lock_gen_binary;
 mod lock_scope;
 mod macos_helper_lock;
 mod main_and_scheduled;
