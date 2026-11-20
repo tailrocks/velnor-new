@@ -174,7 +174,7 @@ pub struct CratesMirrorArgs {
 
 #[derive(Debug, Args)]
 pub struct MisePinArgs {
-    /// The tool's key in the [tools] table, for example mr-boxington
+    /// The tool's key in the `[tools]` table, for example mr-boxington
     pub tool: String,
 }
 

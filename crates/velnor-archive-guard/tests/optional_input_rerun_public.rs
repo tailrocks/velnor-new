@@ -116,6 +116,7 @@ impl Probe {
             cargo
                 .env("MBX_CACHE_DIR", store)
                 .env(SUPPLIED, self.expected()?);
+            velnor_test_support::ci_safe_cargo_env(&mut cargo);
         } else {
             cargo
                 .env("MBX_BUILD_SCRIPT_EXECUTION", "0")
@@ -354,6 +355,7 @@ fn build_given_supplied_fingerprint(
             cargo.env_remove(name);
         }
     }
+    velnor_test_support::ci_safe_cargo_env(&mut cargo);
     let output = cargo.env("CARGO_TARGET_DIR", &probe.target).output()?;
     Ok((
         output.status.success(),
