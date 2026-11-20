@@ -131,6 +131,16 @@ check bq_inline_span   pass '/// > Use ```foo``` as code.\nfn f() {}\n'
 check list_inline_span pass '/// - Call ``` here\nfn f() {}\n'
 check bq_str_literal   pass 'fn f() { let s = "> ```"; }\n'
 check list_str_literal pass 'fn f() { let s = "- ```\n    x"; }\n'
+check attr_hex_escape_fence fail '#![doc = "prose\\x0a```\\x0aassert_eq!(1, 2);\\x0a```"]\npub fn f() {}\n'
+check attr_unicode_escape_fence fail '#![doc = "prose\\u{a}```\\u{a}assert_eq!(1, 2);\\u{a}```"]\npub fn f() {}\n'
+check attr_line_cont_fence fail '#![doc = "prose\\n\\\n```\\nassert_eq!(1, 2);\\n```"]\npub fn f() {}\n'
+check attr_escape_inline_pass pass '#[doc = "Use \\x60\\x60\\x60foo inline"]\npub fn f() {}\n'
+check attr_gap_comment_fence fail '#[doc /* gap */ = "```\\nassert_eq!(1, 1);\\n```"]\npub fn f() {}\n'
+check attr_gap_comment_include fail '#[doc /* gap */ = include_str!("README.md")]\npub fn f() {}\n'
+check attr_gap_line_comment_fence fail '#[doc // gap\n = "```\\nassert_eq!(1, 1);\\n```"]\npub fn f() {}\n'
+check footnote_block_unclosed fail '/**\n * prose\n *\n * [^x]: ```\n * assert_eq!(1, 2);\n */\nfn f() {}\n'
+check footnote_line_unclosed fail '/// [^x]: ```\n/// assert_eq!(1, 2);\nfn f() {}\n'
+check footnote_prose_pass pass '/// [^x]: plain footnote text\n/// assert_eq!(1, 2);\nfn f() {}\n'
 
 missing="$work/scanner_missing"
 mkdir -p "$missing/crates/fx/src"
