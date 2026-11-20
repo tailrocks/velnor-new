@@ -83,3 +83,34 @@ fn a_restore_that_left_no_record_keeps_every_dependency_compile_waste()
     );
     Ok(())
 }
+
+#[test]
+fn a_restore_whose_scan_fails_clears_the_older_record_so_held_units_stay_waste()
+-> Result<(), Box<dyn std::error::Error>> {
+    let repo = base("report-restored-units-stale", "old")?;
+    let record = repo.root().join("target").join(restored_units_file(""));
+    assert!(record.is_file());
+    let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        .args(["inputs", "restore"])
+        .current_dir(repo.root())
+        .env("RUNNER_TEMP", repo.root())
+        .env("GITHUB_JOB", "rust")
+        .env("VELNOR_TESTS_RUN", "7")
+        .env("VELNOR_TARGET_MAX_DIRECTORIES", "1")
+        .env_remove("GITHUB_TOKEN")
+        .env_remove("CARGO_TARGET_DIR")
+        .output()?;
+    assert!(output.status.success(), "{output:?}");
+    assert!(!record.exists(), "an older record survived a restore whose scan failed");
+    let gap = registry_artifact(&repo, GAP)?;
+    let metrics = observation(&repo, &[], &[gap])?;
+    assert_eq!(metrics.invocations[0].compilations[0].restored, None);
+    assert!(
+        metrics
+            .violations
+            .iter()
+            .any(|line| line.contains("serde v1.0.0")),
+        "{metrics:?}"
+    );
+    Ok(())
+}
