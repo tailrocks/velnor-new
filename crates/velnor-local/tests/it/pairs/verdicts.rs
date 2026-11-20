@@ -166,3 +166,30 @@ fn every_agent_that_took_a_job_start_decision_is_consumed_even_when_refused() {
     assert!(consumed_agents("").is_ok_and(|none| none.is_empty()));
     assert!(consumed_agents("{not json").is_err());
 }
+
+#[test]
+fn the_plain_verdict_names_the_ubuntu_release_of_the_runner_dockerfile() {
+    let dockerfile = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../local/docker/runner/Dockerfile"),
+    )
+    .unwrap_or_else(|e| unreachable!("{e}"));
+    let release = dockerfile
+        .lines()
+        .find_map(|line| line.strip_prefix("FROM ubuntu:"))
+        .and_then(|base| base.split('@').next())
+        .unwrap_or_else(|| unreachable!("no ubuntu base in the runner Dockerfile"));
+    let text = verdict(
+        "warm",
+        &[outcome(1, true)],
+        (100, 9.8),
+        &Check::Plain,
+        velnor_local::authority::WARNING,
+    );
+    assert!(
+        text.contains(&format!(
+            "every Ubuntu label ran on the one Ubuntu {release} runner image"
+        )),
+        "{text}"
+    );
+}
