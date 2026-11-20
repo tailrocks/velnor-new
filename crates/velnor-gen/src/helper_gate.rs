@@ -28,7 +28,16 @@ pub(crate) const CACHE_DEBUG_HELPER: (u64, u64, u64) = (0, 1, 82);
 // helper-gate: first in tools-v0.1.97 via af11477df1
 pub(crate) const REQUIRED_CHECK_HELPER: (u64, u64, u64) = (0, 1, 97);
 
-fn check_public_sources(facts: &RepoFacts, release: &HelperRelease) -> Result<(), GenerateError> {
+fn check_dependency_sources(
+    facts: &RepoFacts,
+    release: &HelperRelease,
+) -> Result<(), GenerateError> {
+    // helper-gate: first in tools-v0.1.88 via eb3f4deda4
+    if facts.config.private_sources.is_some() && !release.version().at_least((0, 1, 88)) {
+        return Err(GenerateError::PrivateSourcesHelperTooOld(
+            release.version().clone(),
+        ));
+    }
     if facts.config.public_sources.is_some() && !release.version().at_least(PUBLIC_SOURCES_HELPER) {
         return Err(GenerateError::PublicSourcesHelperTooOld(
             release.version().clone(),
@@ -95,13 +104,7 @@ pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, Generate
             release.version().clone(),
         ));
     }
-    // helper-gate: first in tools-v0.1.88 via eb3f4deda4
-    if facts.config.private_sources.is_some() && !release.version().at_least((0, 1, 88)) {
-        return Err(GenerateError::PrivateSourcesHelperTooOld(
-            release.version().clone(),
-        ));
-    }
-    check_public_sources(facts, release)?;
+    check_dependency_sources(facts, release)?;
     if facts.config.push_after_merge_group == PushAfterMergeGroup::SkipWhenQueueRunPassed
         && !release.version().at_least(MERGE_GROUP_HELPER)
     {
