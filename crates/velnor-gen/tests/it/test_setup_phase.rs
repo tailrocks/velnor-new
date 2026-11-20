@@ -4,8 +4,9 @@
 use serde_json::Value;
 
 use crate::facts::TestResult;
+use crate::golden::{load, samples};
 use crate::job_trust_boundary::violations;
-use crate::pipeline::workflow;
+use crate::pipeline::{pin_helper, view, workflow};
 use crate::private_sources::{SECTION, private_repo};
 use crate::test_groups::view_with;
 use crate::yaml_tree::document;
@@ -30,8 +31,6 @@ fn steps(job: &Value) -> &[Value] {
     job["steps"].as_array().map_or(&[], Vec::as_slice)
 }
 
-/// A step that compiles the package or runs its tests. Format, machete and deny read no
-/// build script.
 fn compiles(step: &Value) -> bool {
     let run = step["run"].as_str().unwrap_or_default();
     run.contains("cargo")
@@ -137,6 +136,43 @@ fn without_the_key_or_with_the_test_phase_the_setup_still_runs_only_before_the_t
 }
 
 #[test]
+fn a_build_phase_setup_of_a_grouped_root_runs_before_that_roots_first_compiling_step() -> TestResult
+{
+    const GROUP: &str =
+        "[[workspace_groups]]\nname = \"tools\"\nroots = [\"tools/a\", \"tools/b\"]\n";
+    const ROOTS: [&str; 3] = ["Cargo.toml", "tools/a/Cargo.toml", "tools/b/Cargo.toml"];
+    for shape in ["one-job", "lint-test"] {
+        let config = format!(
+            "shape = '{shape}'\n{GROUP}[[test_setup]]\nroot = 'tools/a'\nname = '{NAME}'\nrun = 'bash scripts/prepare-fixture.sh'\nphase = 'build'\n"
+        );
+        let mut repo = view(&ROOTS, Some(config.as_bytes()))?;
+        pin_helper(&mut repo, "0.1.109")?;
+        let parsed = document(&workflow(&repo)?)?;
+        let mut checked = 0;
+        for (id, job) in jobs(&parsed) {
+            let compiles_a = |step: &Value| {
+                compiles(step)
+                    && step["run"]
+                        .as_str()
+                        .is_some_and(|run| run.contains("tools/a/Cargo.toml"))
+            };
+            match steps(job).iter().position(compiles_a) {
+                None => assert!(
+                    setups(job).is_empty(),
+                    "{shape} {id}: setup without a root a step"
+                ),
+                Some(first) => {
+                    checked += 1;
+                    assert_eq!(setups(job), vec![first - 1], "{shape} {id}");
+                }
+            }
+        }
+        assert!(checked > 0, "{shape}: no job compiled tools/a");
+    }
+    Ok(())
+}
+
+#[test]
 fn a_setup_of_another_root_stays_out_of_this_roots_jobs() -> TestResult {
     let config = build_phase().replace("root = '.'", "root = 'tools'");
     let workflow = document(&workflow(&view_with(
@@ -185,8 +221,6 @@ fn private_sources_put_the_token_and_the_fetch_before_a_build_phase_setup() -> T
             );
         }
         assert_eq!(checked, if shape == "one-job" { 1 } else { 2 }, "{shape}");
-        // The setup adds no token or verdict step after repository code: the findings are
-        // exactly those of the same repository without any setup step.
         let bare = format!("shape = '{shape}'\n{SECTION}");
         let without = workflow(&private_repo(&["Cargo.toml"], &bare, "0.1.109")?)?;
         assert_eq!(violations(&text)?, violations(&without)?, "{shape}");
@@ -219,5 +253,28 @@ fn the_phase_key_needs_a_helper_that_reads_it_and_a_known_value() -> TestResult 
         error.contains("test_setup.phase") && error.contains("lint"),
         "{error}"
     );
+    Ok(())
+}
+
+#[test]
+fn a_build_phase_setup_of_the_helper_root_runs_before_the_source_built_helper_compiles()
+-> TestResult {
+    let mut repo = load(&samples().join("helper-source"))?;
+    let config = "exclude = [\"fixtures/**\"]\nhelper = { path = \"ci-helper\" }\n[[test_setup]]\nroot = 'ci-helper'\nname = 'Prepare the fixture'\nrun = 'bash scripts/prepare-fixture.sh'\nphase = 'build'\n";
+    repo.files
+        .insert(velnor_rust::CONFIG_PATH, config.as_bytes().to_vec());
+    let lock = String::from_utf8(repo.files[&velnor_rust::LOCK_PATH].clone())?;
+    repo.files.insert(
+        velnor_rust::LOCK_PATH,
+        lock.replace("version = \"0.1.81\"", "version = \"0.1.109\"")
+            .into_bytes(),
+    );
+    let parsed = document(&workflow(&repo)?)?;
+    let helper = &parsed["jobs"]["rust-helper"];
+    let build = steps(helper)
+        .iter()
+        .position(compiles)
+        .ok_or("the helper job builds nothing")?;
+    assert_eq!(setups(helper), vec![build - 1]);
     Ok(())
 }

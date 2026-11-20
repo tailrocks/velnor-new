@@ -129,8 +129,10 @@ pub enum StepKind {
     TestSetup {
         name: String,
         run: String,
+        before_build: bool,
     },
     GeneratorCheck,
+    InstallGenerator(HelperRelease),
     InstallHelper(HelperRelease),
     FailWhenANeedFailed,
     FailOnDraftRun,
@@ -163,10 +165,19 @@ pub enum StepKind {
 
 impl StepKind {
     #[must_use]
+    pub const fn feeds_build(&self) -> bool {
+        matches!(
+            self,
+            Self::TestSetup {
+                before_build: true,
+                ..
+            } | Self::ReleaseAssets { .. }
+        )
+    }
+
+    #[must_use]
     pub const fn is_check(&self) -> bool {
         match self {
-            // The advisory DB fetch serves the cargo-deny check, which is a check, so it
-            // is skipped after a merge group exactly when that check is.
             Self::TestSetup { .. } | Self::AdvisoryFetch { .. } | Self::ReleaseAssets { .. } => {
                 true
             }
@@ -212,6 +223,7 @@ impl StepKind {
             | Self::MbxSeed { .. }
             | Self::ToolsLocal(_)
             | Self::GeneratorCheck { .. }
+            | Self::InstallGenerator(_)
             | Self::InstallHelper(_)
             | Self::FailWhenANeedFailed { .. }
             | Self::FailOnDraftRun { .. }
@@ -261,8 +273,19 @@ pub enum ToolsLocalVerb {
     AnchorReset,
     AnchorRestore,
     Verify,
+    /// `Verify` on a helper whose mismatch notice names the restored cache entry, so the verify
+    /// step also gets the key of that entry.
+    VerifyNamed,
     Record,
     AnchorSave,
+}
+
+impl ToolsLocalVerb {
+    /// Whether the verb checks the restored tools against the anchor before anything uses them.
+    #[must_use]
+    pub fn checks_tools(self) -> bool {
+        matches!(self, Self::Verify | Self::VerifyNamed)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

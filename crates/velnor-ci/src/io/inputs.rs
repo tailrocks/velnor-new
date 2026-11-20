@@ -11,7 +11,8 @@ pub(super) use super::inputs_git::{git, modified_ns, set_modified_ns};
 mod sources;
 use crate::error::CiError;
 use crate::inputs::{
-    SavedInput, Tracked, format_inputs, inputs_file, plan_restore, snapshot_file, witness_file,
+    SavedInput, Tracked, format_inputs, inputs_file, plan_restore, restored_units_file,
+    snapshot_file, witness_file,
 };
 use crate::scope::Scope;
 pub(super) use sources::{
@@ -199,6 +200,7 @@ pub(super) fn restore_inputs_scoped(
     let prefix = git_prefix(root)?;
     remove_restored(&root.join(target).join(snapshot_file(&prefix)))?;
     remove_restored(&root.join(target).join(witness_file(&prefix)))?;
+    remove_restored(&root.join(target).join(restored_units_file(&prefix)))?;
     let relative = target.join(inputs_file(&prefix));
     let path = root.join(&relative);
     let text = match fs::read_to_string(&path) {
@@ -229,6 +231,7 @@ pub(super) fn restore_inputs_scoped(
     }
     fs::write(root.join(target).join(snapshot_file(&prefix)), &text)
         .map_err(|e| CiError::new(format!("cannot preserve restored inputs: {e}")))?;
+    super::restored_units::record(&root.join(target), &prefix)?;
     for input in &plan.restore {
         set_modified_ns(&top.join(&input.file.path), input.mtime_ns)?;
     }

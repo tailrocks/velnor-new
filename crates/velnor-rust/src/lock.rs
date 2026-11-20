@@ -218,7 +218,9 @@ pub(crate) fn parse_lock(bytes: &[u8]) -> Result<HelperRelease, LockError> {
     match &lock.ci_binary {
         Some(binary) => {
             check_digests(binary)?;
-            Ok(release.with_binary_digests(platform_digests(binary)?))
+            Ok(release
+                .with_binary_digests(platform_digests(binary)?)
+                .with_generator_digests(platform_digests(&lock.generator)?))
         }
         None => Ok(release),
     }

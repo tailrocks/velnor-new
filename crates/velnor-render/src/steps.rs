@@ -22,7 +22,7 @@ use crate::gate::{
 };
 use crate::helper_steps::{inputs_step, restore_inputs_step, restored_targets_step};
 pub(crate) use crate::install_steps::install_helper;
-use crate::install_steps::{install_mise, install_tools};
+use crate::install_steps::{install_generator_step, install_mise, install_tools};
 use crate::permission_pairs;
 use crate::rules::{RenderedJob, RenderedStep, Value};
 use crate::save_gate::SaveGate;
@@ -147,7 +147,7 @@ fn job_steps(
     let verified = job
         .steps
         .iter()
-        .any(|step| step.kind == StepKind::ToolsLocal(velnor_model::ToolsLocalVerb::Verify));
+        .any(|step| matches!(step.kind, StepKind::ToolsLocal(verb) if verb.checks_tools()));
     job.steps
         .iter()
         .enumerate()
@@ -169,12 +169,14 @@ fn job_steps(
             for body in &mut rendered {
                 body.shared |= verified && tools_key;
             }
-            Some(crate::base_steps::audited_save(
+            let mut steps = Vec::from_iter(gate.saveable(index));
+            steps.extend(crate::base_steps::audited_save(
                 job,
                 step,
                 rendered,
                 gate.audit_runs(index),
-            ))
+            ));
+            Some(steps)
         })
         .flatten()
         .collect()
@@ -362,12 +364,13 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
         | StepKind::ReleaseAssets { .. } => crate::private_steps::render(kind),
         StepKind::AdvisoryFetch { configs } => crate::private_steps::advisory_fetch(configs),
         StepKind::MbxSeed | StepKind::ToolsLocal(_) => crate::helper_steps::node_step(kind),
-        StepKind::TestSetup { name, run } => RenderedStep {
+        StepKind::TestSetup { name, run, .. } => RenderedStep {
             name: name.clone(),
             run: Some(run.clone()),
             ..RenderedStep::default()
         },
         StepKind::GeneratorCheck => crate::helper_steps::generator_check_step(),
+        StepKind::InstallGenerator(release) => install_generator_step(release),
         StepKind::InstallHelper(release) => install_helper(release),
         StepKind::FailOnDraftRun => crate::draft_steps::fail_on_draft(),
         StepKind::DraftNotice => crate::draft_steps::draft_notice(),
