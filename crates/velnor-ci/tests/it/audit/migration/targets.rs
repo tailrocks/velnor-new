@@ -3,6 +3,8 @@
 
 use std::fs;
 
+use velnor_test_support::real_cargo;
+
 use super::super::command;
 use super::{InputDirectory, cargo_project};
 
@@ -100,7 +102,7 @@ fn an_unproven_cached_target_cannot_hide_a_source_file() {
         .lines()
         .find_map(|line| line.strip_prefix("host: "))
         .unwrap_or_else(|| unreachable!("{version}"));
-    let plain = command("cargo")
+    let plain = command(real_cargo())
         .current_dir(repo.root().join("rust"))
         .env("CARGO_TARGET_DIR", repo.root())
         .args([

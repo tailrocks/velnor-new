@@ -6,6 +6,8 @@ mod targets;
 use std::fs;
 use std::process::Output;
 
+use velnor_test_support::real_cargo;
+
 use super::{audit, command, own_units, workspace_below_the_root};
 use crate::io::Repo;
 
@@ -63,7 +65,7 @@ fn build(repo: &Repo, wrapped: bool) -> Output {
         command.args(["inputs", "build", "--", "cargo"]);
         command
     } else {
-        command("cargo")
+        command(real_cargo())
     };
     command
         .current_dir(repo.root().join("rust"))
