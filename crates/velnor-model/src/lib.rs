@@ -54,12 +54,12 @@ pub use plan::{
 };
 pub use repo::{
     CacheDebug, CheckoutScope, CiDebugInfo, CompileInputs, CratesMirror, CustomHarness,
-    DependencyKind, DocsRun, FullRun, InputOwner, InputRule, LaneJob, MbxRemote, MbxStore,
-    MemberDependency, OnMain, PackageDependency, PolicyTools, PrCi, PrivateSources,
-    PushAfterMergeGroup, RepoFacts, RepoView, RepositoryIdentity, RustCiConfig, RustMember,
-    RustMetadata, RustPackage, RustRoot, SpeedBudget, Target, TargetKind, TestLane, TestSetup,
-    Timings, ToolLock, ToolPin, ToolPins, ToolRequest, Toolchain, UnownedPackage, Unread,
-    Weakening, WorkspaceGroup,
+    DependencyKind, DocsRun, FullRun, InputOwner, InputRule, LaneFeatures, LaneJob,
+    LaneKeysWritten, MbxRemote, MbxStore, MemberDependency, OnMain, PackageDependency, PolicyTools,
+    PrCi, PrivateSources, PushAfterMergeGroup, RepoFacts, RepoView, RepositoryIdentity,
+    RustCiConfig, RustMember, RustMetadata, RustPackage, RustRoot, SpeedBudget, Target, TargetKind,
+    TestLane, TestSetup, Timings, ToolLock, ToolPin, ToolPins, ToolRequest, Toolchain,
+    UnownedPackage, Unread, Weakening, WorkspaceGroup,
 };
 pub use sealed::{Owner, VELNOR_GEN_MARKER, lf_normalized, owner_of, seal};
 pub use selection::{
@@ -68,7 +68,7 @@ pub use selection::{
     StepNeed, WORKFLOW_PATH, WORKFLOWS_CONFIG_PATH,
 };
 pub use shape::{Shape, ShapeDecision};
-pub use test_group::{GroupEvent, GroupRoot, TestGroup, TestNeed};
+pub use test_group::{GroupEvent, GroupRoot, NoTests, TestGroup, TestNeed};
 pub use token_permission::{token_permission_accesses, token_permission_accesses_prose};
 pub use verdict::{JobCondition, VerdictJob, VerdictSpec};
 

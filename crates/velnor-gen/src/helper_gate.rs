@@ -8,9 +8,10 @@ use velnor_model::{
 
 use velnor_rust::INPUTS_IDENTITY_HELPER;
 
+use crate::error::LaneKey;
 use crate::{
-    BUDGET_HELPER, COMPATIBLE_HELPER_SERIES, GenerateError, HELPER_MINIMUM, TEST_LANE_HELPER,
-    TEST_LANE_JOB_HELPER,
+    BUDGET_HELPER, COMPATIBLE_HELPER_SERIES, GenerateError, HELPER_MINIMUM, TEST_LANE_FLAGS_HELPER,
+    TEST_LANE_HELPER, TEST_LANE_JOB_HELPER,
 };
 
 /// The first `velnor-ci` whose `.velnor/rust-ci.toml` parser accepts the `hosted` key.
@@ -25,6 +26,14 @@ pub(crate) const REQUIRED_CHECK_HELPER: (u64, u64, u64) = (0, 1, 97);
 
 /// The first `velnor-ci` whose `.velnor/rust-ci.toml` parser accepts `mbx` in the `[cache]` table.
 pub(crate) const MBX_KEY_HELPER: (u64, u64, u64) = (0, 1, 108);
+
+/// The first `velnor-ci` whose `.velnor/rust-ci.toml` parser accepts `restore_cache` in a `[[test_groups]]` table.
+// First released in tools-v0.1.108 (not tagged yet when this gate was written).
+pub(crate) const RESTORE_CACHE_HELPER: (u64, u64, u64) = (0, 1, 108);
+
+/// The first `velnor-ci` whose `.velnor/rust-ci.toml` parser accepts `no_tests` in a `[[test_groups]]` table.
+// First released in tools-v0.1.108 (not tagged yet when this gate was written).
+pub(crate) const NO_TESTS_HELPER: (u64, u64, u64) = (0, 1, 108);
 
 pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, GenerateError> {
     let release = facts
@@ -98,8 +107,7 @@ pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, Generate
             release.version().clone(),
         ));
     }
-    check_mbx_key(facts, release)?;
-    check_lane_job(facts, release)?;
+    check_config_keys(facts, release)?;
     if facts.config.mbx_store == MbxStore::Shared && !release.version().at_least((0, 1, 85)) {
         return Err(GenerateError::MbxStoreHelperTooOld(
             release.version().clone(),
@@ -133,6 +141,14 @@ pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, Generate
     Ok(release)
 }
 
+/// The config keys that need a newer `velnor-ci` than the minimum.
+fn check_config_keys(facts: &RepoFacts, release: &HelperRelease) -> Result<(), GenerateError> {
+    check_mbx_key(facts, release)?;
+    check_lane_job(facts, release)?;
+    check_lane_flags(facts, release)?;
+    check_test_group_keys(facts, release)
+}
+
 fn check_mbx_key(facts: &RepoFacts, release: &HelperRelease) -> Result<(), GenerateError> {
     if facts.config.mbx.written() && !release.version().at_least(MBX_KEY_HELPER) {
         return Err(GenerateError::MbxKeyHelperTooOld(release.version().clone()));
@@ -140,10 +156,59 @@ fn check_mbx_key(facts: &RepoFacts, release: &HelperRelease) -> Result<(), Gener
     Ok(())
 }
 
+fn check_restore_cache(facts: &RepoFacts, release: &HelperRelease) -> Result<(), GenerateError> {
+    let written = facts
+        .config
+        .test_groups
+        .iter()
+        .any(|group| group.restore_cache.is_some());
+    if written && !release.version().at_least(RESTORE_CACHE_HELPER) {
+        return Err(GenerateError::RestoreCacheHelperTooOld(
+            release.version().clone(),
+        ));
+    }
+    Ok(())
+}
+
+fn check_test_group_keys(facts: &RepoFacts, release: &HelperRelease) -> Result<(), GenerateError> {
+    check_restore_cache(facts, release)?;
+    check_no_tests(facts, release)
+}
+
+fn check_no_tests(facts: &RepoFacts, release: &HelperRelease) -> Result<(), GenerateError> {
+    let written = facts
+        .config
+        .test_groups
+        .iter()
+        .any(|group| group.no_tests.is_some());
+    if written && !release.version().at_least(NO_TESTS_HELPER) {
+        return Err(GenerateError::NoTestsHelperTooOld(
+            release.version().clone(),
+        ));
+    }
+    Ok(())
+}
+
 fn check_lane_job(facts: &RepoFacts, release: &HelperRelease) -> Result<(), GenerateError> {
-    let written = facts.config.test_lanes.iter().any(|lane| lane.job_written);
+    let written = facts.config.test_lanes.iter().any(|lane| lane.written.job);
     if written && !release.version().at_least(TEST_LANE_JOB_HELPER) {
-        return Err(GenerateError::TestLaneJobHelperTooOld(
+        return Err(GenerateError::TestLaneKeyHelperTooOld(
+            LaneKey::Job,
+            release.version().clone(),
+        ));
+    }
+    Ok(())
+}
+
+fn check_lane_flags(facts: &RepoFacts, release: &HelperRelease) -> Result<(), GenerateError> {
+    let written = facts
+        .config
+        .test_lanes
+        .iter()
+        .any(|lane| lane.written.feature_flags);
+    if written && !release.version().at_least(TEST_LANE_FLAGS_HELPER) {
+        return Err(GenerateError::TestLaneKeyHelperTooOld(
+            LaneKey::Flags,
             release.version().clone(),
         ));
     }

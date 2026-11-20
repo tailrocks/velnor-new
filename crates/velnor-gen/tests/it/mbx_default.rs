@@ -128,14 +128,14 @@ fn a_mise_configuration_that_does_not_route_cargo_through_mbx_is_refused_with_th
 -> TestResult {
     let cases = [
         (NO_LAYOUT.to_owned(), "pin"),
-        (format!("[tools]\n{OPTION}{PIN}{NEXTEST}"), "wrapper"),
         (
             format!("[tools]\nrust = \"1.99.1\"\n{PIN}{NEXTEST}{WRAPPER}"),
             "option",
         ),
+        (format!("[tools]\n{OPTION}{NEXTEST}"), "pin"),
         (
             format!("[tools]\n{OPTION}{PIN}{NEXTEST}\n[wrappers.cargo]\ncommand = \"mbx\"\n"),
-            "wrapper",
+            "shim",
         ),
         (
             format!(
@@ -157,18 +157,47 @@ fn a_mise_configuration_that_does_not_route_cargo_through_mbx_is_refused_with_th
             ("pin", DetectError::MbxPinRequired { .. }) => {
                 assert!(text.contains("mr-boxington = {"), "{text}");
             }
-            ("wrapper" | "option", DetectError::MbxLayout(layout)) => {
-                assert_eq!(layout.wrapper, missing == "wrapper", "{mise}");
+            ("wrapper", DetectError::MbxLayout(layout)) => {
+                assert!(layout.wrapper_refused() && !layout.shim_missing(), "{mise}");
+                assert!(!layout.rust_option, "{mise}");
+                assert!(text.contains("mr_boxington = true"), "{text}");
+            }
+            ("option" | "shim", DetectError::MbxLayout(layout)) => {
                 assert_eq!(layout.rust_option, missing == "option", "{mise}");
-                assert!(
-                    text.contains("MBX_CARGO_SHIM_MODE") || text.contains("mr_boxington = true"),
-                    "{text}"
-                );
+                assert_eq!(layout.shim_missing(), missing == "shim", "{mise}");
+                assert!(text.contains("mr_boxington = true"), "{text}");
+                if missing == "shim" {
+                    assert!(text.contains("MBX_CARGO_SHIM_MODE = \"1\""), "{text}");
+                    assert!(text.contains("cargo -V"), "{text}");
+                    assert!(text.contains("native layout"), "{text}");
+                }
             }
             _ => return Err(format!("{missing}: {error}").into()),
         }
         assert!(text.contains("mbx = false"), "{text}");
     }
+    Ok(())
+}
+
+#[test]
+fn the_native_layout_is_accepted_without_a_cargo_wrapper() -> TestResult {
+    let repo = with_mise(
+        pinned(None, "0.1.88")?,
+        &format!("[tools]\n{OPTION}{PIN}{NEXTEST}"),
+    )?;
+    let text = workflow(&repo)?;
+    assert!(text.contains(STORE), "{text}");
+    Ok(())
+}
+
+#[test]
+fn the_explicit_layout_with_the_shim_env_is_still_accepted() -> TestResult {
+    let repo = with_mise(
+        pinned(None, "0.1.88")?,
+        &format!("[tools]\n{OPTION}{PIN}{NEXTEST}{WRAPPER}"),
+    )?;
+    let text = workflow(&repo)?;
+    assert!(text.contains(STORE), "{text}");
     Ok(())
 }
 
