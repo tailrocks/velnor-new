@@ -108,25 +108,69 @@ The generator reads `.velnor/rust-ci.toml`, `.velnor/release.toml` and `.velnor/
 
 ## Known gaps
 
-Five gaps have a tracking issue in `velnor-new`: #2039, #2099, #2107, #2121 and #2122. The last two rows of the table have no issue yet: the git dependency row and the private dependency caching row.
+Checked against `origin/main`. Four gaps are still open:
 
 | Gap | Tracking | Effect |
 |---|---|---|
-| Private release-asset fixtures (`[[release_assets]]`, scoped token, sha256 check, digest cache) | #2039 | A test cannot fetch a private release asset from a declared config. |
-| Hand-written image workflows, and the `external_workflows` escape for `velnor-gen check` | #2099 | After step 7, a hand-written workflow is reported as unowned, so `check` fails. See the blocker below. |
 | App tokens in declared workflows | #2107 | `create-github-app-token` cannot receive its private key from a declared workflow. |
 | Test group partitions and failure artifacts | #2121 | A test group runs as one job, with no partitions and no artifacts on failure. |
-| Per-lane timeouts | #2122 | `timeout_minutes` is one value per job, not per lane. |
 | Public git dependencies and caching | none yet | A cold build of a git dependency can be slower than a crates.io build. |
-| Caching with private dependencies | none yet | Confirm the cache hits on the first run; see the verification section below. |
+| Caching with private dependencies | #2140 | Confirm the cache hits on the first run; see the verification section below. |
 
-**Blocker: image workflows.** A repository whose image build is a hand-written workflow cannot both delete `.velnor/config.toml` (step 7) and pass `velnor-gen check` (step 6) until #2099 ships. Hold that migration until then.
+Three gaps closed in 0.1.109, which is not released yet: private release-asset fixtures (#2039, fixed by #2059), hand-written image workflows (#2099, fixed by #2111) and per-lane timeouts (#2122, fixed by #2143). From 0.1.109, use `[[release_assets]]`, `external_workflows` and `[root_timeouts]`, as lesson 6 below describes. Before 0.1.109, use the workarounds below.
+
+**Blocker: image workflows (before 0.1.109).** A repository whose image build is a hand-written workflow cannot both delete `.velnor/config.toml` (step 7) and pass `velnor-gen check` (step 6) until 0.1.109 ships. Hold that migration until then.
 
 ## Workarounds
 
-- **Private release-asset fixtures (#2039).** Commit a copy of a fixture only when everyone who can read the repository and its history may read it, because a committed copy stays in Git history. Check its sha256 in a `[[test_setup]]` step, with the expected digest in the same file, so a changed copy fails the run. A confidential fixture has no workaround: the migration waits for #2039.
+Before 0.1.109:
+
+- **Private release-asset fixtures.** Commit a copy of a fixture only when everyone who can read the repository and its history may read it, because a committed copy stays in Git history. Check its sha256 in a `[[test_setup]]` step, with the expected digest in the same file, so a changed copy fails the run. A confidential fixture has no workaround: wait for 0.1.109.
 - **Attestation for a private repository.** `attest = true` is a `[[binaries]]` key in `.velnor/release.toml`, and it uses GitHub artifact attestations, which a private repository may not have on its plan. For an image, build with BuildKit's own provenance (`provenance: mode=max` in `docker/build-push-action`) in a hand-written workflow instead.
 - **Unsigned commits refused by a ruleset.** A commit that GitHub does not mark verified is refused by a signed-commit ruleset. Sign commits locally (`git commit -S`) or commit through GitHub's web interface, which signs them. A commit created through the REST API with a user token is unsigned unless the request supplies a signature. GitHub signs API commits only for some bot identities; see [GitHub's bot signature conditions](https://docs.github.com/en/authentication/managing-commit-signature-verification/about-commit-signature-verification#signature-verification-for-bots). Do not turn off the ruleset to land the change.
+
+## Lessons from the 0.1.107 and 0.1.108 migrations
+
+Each item names the release that ships the fix or the option. An item marked 0.1.109 is not released yet; pin the helper to that version only when you need it.
+
+1. **Run `cargo fmt --all --check` before you push.** Before 0.1.108, a failed Format step skipped the private-source token and fetch steps, because their implicit `success()` condition was false. The compile steps still ran, offline, and failed with "you are in the offline mode" errors that hide the formatting diff. #2180 runs the phase under `!cancelled()` when a compile step does, so the fetch runs. It is in 0.1.108. Still run the check locally first.
+
+2. **Pin `gh` in `mise.toml` for a hand-written workflow that calls it through mise.** Mise has no version of `gh` to run unless `mise.toml` pins one. The generated attestation job does not need this: it installs `gh@<version>` by name, so the rule covers only hand-written steps.
+
+3. **Rust 1.100 changes the target directory layout.** Helper 0.1.108 reads that layout in the audit, prune and delta steps (#2186). An older helper finds a built target with no units it recognises. Set the helper to 0.1.108 or later before you move the toolchain to 1.100. In 0.1.109, a built target with no unit file in a known layout is refused (#2191) instead of read as empty.
+
+4. **The `inputs build` directory cap is 1,000,000 by default (0.1.108, #2181).** The old cap was 4096 directories, which a full build and test of a multi-package workspace passes easily. `VELNOR_TARGET_MAX_DIRECTORIES` raises it up to 10,000,000. A value outside that range is refused.
+
+5. **mbx is required from 0.1.109 (#2108).** Generation refuses a `mise.toml` without one of two layouts:
+   - native: `mr_boxington = true` on the `rust` tool and no `[wrappers.cargo]`;
+   - explicit: the same option, plus `[wrappers.cargo]` with `command = "mbx"` and `env = { MBX_CARGO_SHIM_MODE = "1" }`.
+
+   It also refuses:
+   - an mbx pin not spelled exactly `mr-boxington`, with an `os` filter, or with more than one version request;
+   - a `[wrappers.cargo]` with `command = "mbx"` and no shim env, because it breaks `cargo -V`;
+   - mbx settings split between `mise.toml` and `.mise.toml`;
+   - a second tool whose key ends in `mr-boxington`.
+
+   To run cargo without mbx, set `[cache] mbx = false` (helper 0.1.109). That setting is refused with `mbx_shared_store = true` or `[cache] mbx_remote`.
+
+6. **From 0.1.109, use the keys that close the known gaps.** Each one replaces a workaround in Known gaps. Before 0.1.109, use the workaround instead.
+   - Hand-written workflows (#2111): list each one in `.velnor/rust-ci.toml`. Without the key, `velnor-gen check` reports every workflow it does not generate as unowned.
+
+     ```toml
+     external_workflows = [".github/workflows/image.yml"]
+     ```
+
+     The listed file is skipped by `check` and `generate`, so review it on its own. The retired `.velnor/config.toml` bypass is deprecated.
+   - Private release assets (#2059): a `[[release_assets]]` table names the file, its tag and its sha256. The asset is fetched with a scoped token and checked against that sha256.
+   - Per-root and per-lane time limits (#2143): a `[root_timeouts]` table, keyed by root folder (`.` for the repository root), sets one limit for a heavy root without raising every job.
+
+7. **Run a nextest setup script with `bash`.** In a `[[test_setup]]` command, write `bash <script>`. A script committed without the executable bit then still runs. Before 0.1.107, nextest's `SETUP` lines could drop the per-package test counts. 0.1.107 ignores them (#2169).
+
+8. **Use `[[test_setup]] phase = "build"` for a fixture that a build script or clippy reads (0.1.109, #2155).** The default phase runs the step before the tests only, so clippy and `build.rs` do not see the fixture. With `phase = "build"` the step runs before the first compiling cargo step of each job.
+
+9. **Caching with private dependencies is open (#2140), not on main.** Until it ships, confirm the cache hit on the first run, as in the verification section below.
+
+10. **Do not set `mbx_shared_store` or `[cache] mbx_remote` until you have a trusted runner pool.** Both share compiler results between runs. `mbx_shared_store` reads a per-node store on default-branch events. `mbx_remote` saves after a pull request from the same repository. Keep the default private store per job until the runners only accept writes from trusted events.
 
 ## Verification
 

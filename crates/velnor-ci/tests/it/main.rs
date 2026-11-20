@@ -100,6 +100,7 @@ mod lane_guard_generated;
 mod logscan;
 mod mbx_seed;
 mod mbx_seed_env;
+mod mbx_seed_order;
 mod mbx_store;
 mod merge_group_skip;
 mod merge_queue;
