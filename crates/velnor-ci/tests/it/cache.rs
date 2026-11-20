@@ -310,7 +310,13 @@ fn a_refused_manifest_path_with_a_line_break_stays_on_one_line() {
     fs::write(temp.join("velnor-run.log"), COMPILED).unwrap_or_else(|e| unreachable!("{e}"));
     let outputs = repo.root().join("github-output");
     let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
-        .args(["cache", "decide", "--target-dir", "target", "--manifest-path"])
+        .args([
+            "cache",
+            "decide",
+            "--target-dir",
+            "target",
+            "--manifest-path",
+        ])
         .arg(manifest)
         .env("RUNNER_TEMP", &temp)
         .env("GITHUB_OUTPUT", &outputs)
