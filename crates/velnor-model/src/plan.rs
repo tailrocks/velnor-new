@@ -264,6 +264,8 @@ pub enum When {
     SaveToolsOnDefaultBranch,
     RestoreToolsUnlessLocal,
     SaveToolsUnlessLocal,
+    /// On a trusted saving run, when the node store already served the tools: looks the network entry up.
+    LookupToolsOnNodeHit,
     PrimeToolsFromNetwork,
     SaveBase,
     SaveBaseDecided,

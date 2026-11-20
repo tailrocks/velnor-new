@@ -9,7 +9,7 @@ use velnor_render::RuleViolation;
 use velnor_rust::{DetectError, MAX_SOURCE_ROOTS, MetadataFileError};
 use velnor_workflows::WorkflowsError;
 
-use crate::helper_gate::{CACHE_DEBUG_HELPER, REQUIRED_CHECK_HELPER};
+use crate::helper_gate::{CACHE_DEBUG_HELPER, REQUIRED_CHECK_HELPER, RESTORE_CACHE_HELPER};
 use crate::{
     COMPATIBLE_HELPER_SERIES, HELPER_MINIMUM, TEST_GROUP_KEYS_HELPER, TEST_LANE_JOB_HELPER,
 };
@@ -45,6 +45,7 @@ pub enum GenerateError {
     TestLaneHelperTooOld(HelperVersion),
     TestLaneJobHelperTooOld(HelperVersion),
     TestGroupKeyHelperTooOld(HelperVersion, &'static str),
+    RestoreCacheHelperTooOld(HelperVersion),
     HelperLockLacksMacos {
         version: HelperVersion,
         runner: String,
@@ -66,10 +67,7 @@ impl fmt::Display for GenerateError {
             Self::IncompatibleHelper(version) => write!(f, "{}", incompatible_helper(version)),
             Self::Release(error) => error.fmt(f),
             Self::ReleaseFileNotUtf8(path) => write!(f, "{path} is not UTF-8 text"),
-            Self::NoReleaseConfig => write!(
-                f,
-                "{RELEASE_CONFIG_PATH} does not exist; there is no release to describe"
-            ),
+            Self::NoReleaseConfig => write!(f, "{RELEASE_CONFIG_PATH} does not exist; there is no release to describe"),
             Self::ReleaseToolchainPath => f.write_str(
                 "rust-toolchain.toml names a toolchain path, so rustup would run a cargo from the repository with the release App token in scope; name a channel instead",
             ),
@@ -132,7 +130,9 @@ impl fmt::Display for GenerateError {
                 f,
                 "velnor-ci {version} does not know the test_lane key of .velnor/rust-ci.toml; pin velnor-ci 0.1.93 or later with `velnor-gen pin-helper 0.1.93`"
             ),
-            Self::TestLaneJobHelperTooOld(..) | Self::TestGroupKeyHelperTooOld(..) => self.gate(f),
+            Self::TestLaneJobHelperTooOld(..)
+            | Self::TestGroupKeyHelperTooOld(..)
+            | Self::RestoreCacheHelperTooOld(..) => self.gate(f),
             Self::HelperLockLacksMacos { version, runner } => write!(
                 f,
                 "the runner `{runner}` is a macOS runner, but the velnor-ci {version} in .velnor/rust-ci.lock has no macos-arm64 digest, so `actions/setup-velnor` would fail before velnor-ci runs; pin a release that lists a macos-arm64 digest with `velnor-gen pin-helper <version>`, or use a Linux runner"
@@ -198,6 +198,7 @@ impl GenerateError {
             Self::TestGroupKeyHelperTooOld(version, key) => {
                 f.write_str(&group_key_too_old(version, key))
             }
+            Self::RestoreCacheHelperTooOld(version) => f.write_str(&restore_cache_too_old(version)),
             _ => Ok(()),
         }
     }
@@ -214,6 +215,13 @@ fn group_key_too_old(version: &HelperVersion, key: &str) -> String {
     let (major, minor, patch) = TEST_GROUP_KEYS_HELPER;
     format!(
         "velnor-ci {version} does not know the {key} key of [[test_groups]] in .velnor/rust-ci.toml, and reads the file at run time; pin velnor-ci {major}.{minor}.{patch} or later with `velnor-gen pin-helper {major}.{minor}.{patch}`"
+    )
+}
+
+fn restore_cache_too_old(version: &HelperVersion) -> String {
+    let (major, minor, patch) = RESTORE_CACHE_HELPER;
+    format!(
+        "velnor-ci {version} does not know the restore_cache key of a [[test_groups]] table in .velnor/rust-ci.toml; pin velnor-ci {major}.{minor}.{patch} or later with `velnor-gen pin-helper {major}.{minor}.{patch}`"
     )
 }
 

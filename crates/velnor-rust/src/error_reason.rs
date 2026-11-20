@@ -165,6 +165,7 @@ impl fmt::Display for Reason {
             | Self::PartitionsWithoutNextest(_)
             | Self::TestGroupArtifact { .. }
             | Self::ArtifactNameTaken(_)
+            | Self::TestGroupRestoreWithoutCargo(_)
             | Self::TestGroupsWithPrivateSources => self.fmt_test_groups(f),
             Self::UnknownTestLaneRoot(_)
             | Self::TestLaneWithoutNextest(_)

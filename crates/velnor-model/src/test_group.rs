@@ -15,6 +15,8 @@ pub struct TestGroup {
     pub runner: Option<RunnerLabel>,
     /// The `hosted` key written next to `runner`, if any.
     pub hosted: Option<bool>,
+    /// The `restore_cache` key, if written. Only `Some(true)` restores.
+    pub restore_cache: Option<bool>,
     pub paths: Vec<PathGlob>,
     pub events: Vec<GroupEvent>,
     pub root: GroupRoot,
@@ -81,6 +83,11 @@ impl TestGroup {
     #[must_use]
     pub fn partition_count(&self) -> u16 {
         self.partitions.unwrap_or(1).max(1)
+    }
+
+    #[must_use]
+    pub fn restores_cache(&self) -> bool {
+        self.restore_cache == Some(true)
     }
 
     #[must_use]

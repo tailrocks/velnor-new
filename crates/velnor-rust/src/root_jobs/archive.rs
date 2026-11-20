@@ -2,14 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    ArtifactWhen, CargoCommand, FilterRef, GroupFilter, GroupUpload, Job, JobId, PrepareLocks,
-    Step, StepKind, TestGroup, TestNeed, When,
+    ArtifactWhen, CacheKey, CargoCommand, FilterRef, GroupFilter, GroupUpload, Host, Job, JobId,
+    PrepareLocks, Step, StepKind, TestGroup, TestNeed, When,
 };
 
 use super::{ARCHIVE_FILE, ARCHIVE_ID, RootJobs};
+use crate::base_cache::sources_locks;
 use crate::members::Member;
 use crate::mise::nextest_tool;
-use crate::plan::{CHECKOUT_DEPTH, DEFAULT_GROUP_JOB, TEST_JOB, head, mbx, rust_additions};
+use crate::plan::{CHECKOUT_DEPTH, DEFAULT_GROUP_JOB, TEST_JOB, head, mbx, rust_additions, step};
 use crate::plan_tools::{mirror_step_on, tools_prime, tools_restore};
 
 impl RootJobs<'_> {
@@ -140,6 +141,32 @@ impl RootJobs<'_> {
             .collect()
     }
 
+    fn cache_restores(&self, build_id: &JobId) -> Vec<Step> {
+        let cache_root = self.unit.cache_root(self.facts);
+        [
+            sources_locks(self.facts),
+            step(StepKind::CacheRestore(CacheKey::Sources {
+                host: Host,
+                lane: cache_root.clone(),
+            })),
+            step(StepKind::CacheRestore(CacheKey::Target {
+                job: build_id.clone(),
+                root: cache_root,
+                host: Host,
+            })),
+        ]
+        .into_iter()
+        .chain(crate::units::restore_file_times(
+            self.facts,
+            std::slice::from_ref(self.unit),
+        ))
+        .map(|restore| Step {
+            gate: self.lane.steps(),
+            ..restore
+        })
+        .collect()
+    }
+
     fn archive_runner(
         &self,
         id: JobId,
@@ -188,6 +215,9 @@ impl RootJobs<'_> {
                     }),
             );
             steps.push(self.gated(StepKind::Prepare(PrepareLocks::All)));
+            if group.is_some_and(TestGroup::restores_cache) {
+                steps.extend(self.cache_restores(build_id));
+            }
         }
         steps.push(self.gated(StepKind::DownloadArchive {
             name: artifact.to_owned(),

@@ -1,7 +1,19 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::rules::RenderedStep;
+use velnor_model::CacheKey;
+
+use crate::rules::{RenderedStep, Value};
+
+/// The exact-key lookup the node-hit path runs on a trusted run: `lookup-only`, so nothing is
+/// downloaded, and no fallback keys, so `cache-hit` means the exact tools entry exists.
+pub(crate) fn tools_lookup(key: &CacheKey) -> RenderedStep {
+    let mut step = crate::cache::cache_step(crate::steps::CACHE_RESTORE, "Look up", key, false);
+    step.id = Some(crate::gate::TOOLS_LOOKUP_STEP.to_owned());
+    step.with
+        .push(("lookup-only".to_owned(), Value::Text("true".to_owned())));
+    step
+}
 
 pub(crate) fn tools_local_step(verb: velnor_model::ToolsLocalVerb) -> RenderedStep {
     use velnor_model::ToolsLocalVerb as Verb;
