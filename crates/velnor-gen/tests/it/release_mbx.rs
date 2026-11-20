@@ -4,9 +4,11 @@
 use std::error::Error;
 
 use velnor_model::{RELEASE_WORKFLOW_PATH, RepoPath};
+use velnor_rust::LOCK_PATH;
 
-use crate::release_fixture::{APP, jobs, release_view, steps, uses};
+use crate::release_fixture::{APP, LOCK, TOOLS, jobs, release_view, steps, uses};
 use crate::release_unguarded::expected_release;
+use crate::release_yml_family::{FAMILY, release_plz};
 use crate::yaml_tree::{Node, parse};
 
 type TestResult = Result<(), Box<dyn Error>>;
@@ -25,7 +27,7 @@ fn release_yml(mise: Option<&str>, config: Option<&[u8]>) -> Result<Node, Box<dy
         view.files
             .insert(RepoPath::new(".velnor/rust-ci.toml")?, bytes.to_vec());
         // `[cache] mbx` needs the helper that reads it.
-        crate::pipeline::pin_helper(&mut view, "0.1.108")?;
+        crate::pipeline::pin_helper(&mut view, "0.1.109")?;
     }
     let mut files = expected_release(&view)?;
     let text = files
@@ -99,6 +101,103 @@ fn undeclared_build_keeps_the_rust_only_install() -> TestResult {
             .find(|step| is_mise(step))
             .ok_or_else(|| format!("{id}: no mise install step"))?;
         assert_eq!(install_args(install), Some("rust"), "{id}");
+    }
+    Ok(())
+}
+
+fn family_yml() -> Result<Node, Box<dyn Error>> {
+    let mut view = release_view(&[APP, TOOLS], Some(FAMILY))?;
+    view.files
+        .insert(LOCK_PATH, LOCK.replace("0.1.81", "0.1.85").into_bytes());
+    view.files.insert(
+        RepoPath::new("release-plz.toml")?,
+        release_plz(&APP, false).into_bytes(),
+    );
+    view.files.insert(
+        RepoPath::new("tools/release-plz.toml")?,
+        release_plz(&TOOLS, false).into_bytes(),
+    );
+    view.files
+        .insert(RepoPath::new("mise.toml")?, MBX_MISE.as_bytes().to_vec());
+    let mut files = expected_release(&view)?;
+    let text = files
+        .remove(&RELEASE_WORKFLOW_PATH)
+        .ok_or("release.yml was not rendered")?;
+    Ok(parse(&text)?)
+}
+
+/// Release builds always use a fresh private mbx store; never shared, never restored.
+fn assert_private_before_cargo(tree: &Node, expect: &[&str]) -> TestResult {
+    let mut seen = Vec::new();
+    for (id, job) in jobs(tree)? {
+        let all = steps(job);
+        let Some(first) = all
+            .iter()
+            .position(|step| is_mise(step) || run(step).starts_with("cargo "))
+        else {
+            continue;
+        };
+        seen.push(id);
+        let private = all
+            .iter()
+            .position(|step| step.get("name").and_then(Node::text) == Some("Private mbx store"))
+            .ok_or_else(|| format!("{id}: no private mbx store step"))?;
+        assert!(
+            private < first,
+            "{id}: the private store comes after cargo or mise"
+        );
+        let text = run(&all[private]);
+        assert_eq!(
+            text,
+            format!("echo \"MBX_CACHE_DIR=$RUNNER_TEMP/mbx-release-{id}\" >> \"$GITHUB_ENV\""),
+            "{id}: not a job-private store"
+        );
+    }
+    for id in expect {
+        assert!(seen.contains(id), "{id} was not checked, saw {seen:?}");
+    }
+    Ok(())
+}
+
+#[test]
+fn every_cargo_job_makes_a_fresh_private_store_first() -> TestResult {
+    assert_private_before_cargo(&release_yml(Some(MBX_MISE))?, &["build-app-linux-x64"])?;
+    assert_private_before_cargo(
+        &family_yml()?,
+        &[
+            "family-versions",
+            "build-app-linux-x64",
+            "build-tools-linux-x64",
+        ],
+    )
+}
+
+#[test]
+fn no_release_job_shares_restores_or_saves_an_mbx_store() -> TestResult {
+    for tree in [release_yml(Some(MBX_MISE))?, family_yml()?] {
+        for (id, job) in jobs(&tree)? {
+            for step in steps(job) {
+                let used = uses(step).unwrap_or_default();
+                assert!(
+                    !used.starts_with("actions/cache") && !used.contains("mbx"),
+                    "{id}: restores or saves a cache: {used}"
+                );
+                let text = format!("{step:?}");
+                for banned in ["MBX_REMOTE", "VELNOR_MBX", "mbx_shared_store", "mbx-store"] {
+                    assert!(!text.contains(banned), "{id}: mentions {banned}");
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn undeclared_release_sets_no_mbx_store() -> TestResult {
+    for (id, job) in jobs(&release_yml(None)?)? {
+        for step in steps(job) {
+            assert!(!run(step).contains("MBX_CACHE_DIR"), "{id}");
+        }
     }
     Ok(())
 }

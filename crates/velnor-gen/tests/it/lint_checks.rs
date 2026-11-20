@@ -191,7 +191,7 @@ fn a_lint_pin_that_mise_lock_holds_at_another_version_is_refused() -> TestResult
 
 #[test]
 fn a_lint_job_runs_on_every_ready_pull_request_even_when_ci_is_label_gated() -> TestResult {
-    let mut view = crate::base_save::pinned("0.1.88", &format!("pr_ci = 'label'\n{JACTIONLINT}"))?;
+    let mut view = crate::base_save::pinned("0.1.89", &format!("pr_ci = 'label'\n{JACTIONLINT}"))?;
     view.files
         .insert(path("mise.toml")?, MISE.as_bytes().to_vec());
     let jobs = crate::yaml_tree::document(&workflow(&view)?)?["jobs"].clone();

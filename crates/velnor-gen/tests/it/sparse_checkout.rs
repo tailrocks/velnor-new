@@ -17,7 +17,9 @@ const ON: &str = "full_run = \"off\"\nsparse_checkout = true\n";
 #[test]
 fn off_is_byte_identical_to_the_default() -> TestResult {
     let roots = ["a/Cargo.toml", "b/Cargo.toml"];
-    let default = render(&roots, OFF)?;
+    let mut plain = view(&roots, Some(OFF.as_bytes()))?;
+    crate::pipeline::pin_helper(&mut plain, "0.1.92")?;
+    let default = workflow(&plain)?;
     let explicit = render(&roots, "full_run = \"off\"\nsparse_checkout = false\n")?;
     assert_eq!(default, explicit);
     assert!(!default.contains("sparse-checkout"));

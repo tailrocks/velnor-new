@@ -109,7 +109,7 @@ fn a_job_that_compiles_nothing_gets_no_mbx_store() -> TestResult {
 
 #[test]
 fn the_opt_out_renders_no_mbx_store_and_needs_no_mbx_layout() -> TestResult {
-    let repo = with_mise(pinned(Some(OPT_OUT), "0.1.108")?, NO_LAYOUT)?;
+    let repo = with_mise(pinned(Some(OPT_OUT), "0.1.109")?, NO_LAYOUT)?;
     let text = workflow(&repo)?;
     assert!(!text.contains("MBX_CACHE_DIR"));
     assert!(!text.contains("mr-boxington"));
@@ -119,7 +119,7 @@ fn the_opt_out_renders_no_mbx_store_and_needs_no_mbx_layout() -> TestResult {
 
 #[test]
 fn the_opt_out_is_named_as_a_check_that_does_less() -> TestResult {
-    let repo = with_mise(pinned(Some(OPT_OUT), "0.1.108")?, NO_LAYOUT)?;
+    let repo = with_mise(pinned(Some(OPT_OUT), "0.1.109")?, NO_LAYOUT)?;
     let weakenings: Vec<String> = detect(&repo)?
         .weakenings
         .iter()
@@ -335,7 +335,7 @@ fn turning_mbx_off_next_to_a_shared_store_or_a_remote_cache_is_refused() -> Test
         &b"mbx_shared_store = true\n[cache]\nmbx = false\n"[..],
         b"[cache]\nmbx = false\nmbx_remote = \"github-actions\"\n",
     ] {
-        let error = expected_files(&pinned(Some(config), "0.1.108")?)
+        let error = expected_files(&pinned(Some(config), "0.1.109")?)
             .err()
             .ok_or("accepted")?;
         assert!(error.to_string().contains("cache.mbx = false"), "{error}");
@@ -349,9 +349,13 @@ fn the_mbx_key_needs_a_helper_that_reads_it_and_the_default_needs_nothing() -> T
         let old = with_mise(pinned(Some(config), "0.1.88")?, NO_LAYOUT)?;
         assert!(matches!(
             expected_files(&old).err(),
-            Some(GenerateError::MbxKeyHelperTooOld(_))
+            Some(GenerateError::ConfigKeyHelperTooOld {
+                key: "cache.mbx",
+                first: (0, 1, 109),
+                ..
+            })
         ));
-        let mut current = pinned(Some(config), "0.1.108")?;
+        let mut current = pinned(Some(config), "0.1.109")?;
         if config == OPT_OUT {
             current = with_mise(current, NO_LAYOUT)?;
         }

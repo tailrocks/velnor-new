@@ -172,6 +172,7 @@ pub(crate) fn repo(
             lock,
             String::from_utf8(crate::pipeline::HELPER_LOCK.to_vec())?.into_bytes(),
         );
+        crate::pipeline::pin_for_keys(&mut view)?;
     }
     Ok(view)
 }
