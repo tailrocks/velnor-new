@@ -277,10 +277,47 @@ pub fn read_checkout(path: &Path) -> Result<Checkout, Error> {
 }
 
 fn program(directory: &Path, name: &str, args: &[&OsStr]) -> Result<Vec<u8>, Error> {
+    run(
+        Process::new(name).args(args).current_dir(directory),
+        name,
+        args,
+    )
+}
+
+/// Runs a program that evaluates the checkout's mise config (the mise `cargo`
+/// wrapper). mise refuses a config it does not trust, so the child also gets
+/// `root` appended to `MISE_TRUSTED_CONFIG_PATHS`. Only this child sees the
+/// value; the repository it trusts is the one velnor-gen was pointed at.
+fn program_trusting(
+    directory: &Path,
+    root: &Path,
+    name: &str,
+    args: &[&OsStr],
+) -> Result<Vec<u8>, Error> {
+    if root.as_os_str().as_encoded_bytes().contains(&b':') {
+        return Err(Error::Repository(format!(
+            "{} contains ':', so it cannot be added to MISE_TRUSTED_CONFIG_PATHS",
+            root.display()
+        )));
+    }
+    let mut trusted = std::env::var_os("MISE_TRUSTED_CONFIG_PATHS").unwrap_or_default();
+    if !trusted.is_empty() {
+        trusted.push(":");
+    }
+    trusted.push(root);
+    run(
+        Process::new(name)
+            .args(args)
+            .current_dir(directory)
+            .env("MISE_TRUSTED_CONFIG_PATHS", trusted),
+        name,
+        args,
+    )
+}
+
+fn run(command: &mut Process, name: &str, args: &[&OsStr]) -> Result<Vec<u8>, Error> {
     let label = format!("{name} {}", args[0].display());
-    let output = Process::new(name)
-        .args(args)
-        .current_dir(directory)
+    let output = command
         .output()
         .map_err(|error| Error::Program(label.clone(), error.to_string()))?;
     if output.status.success() {

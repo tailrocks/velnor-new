@@ -141,13 +141,13 @@ fn a_changed_mise_wrapper_env_is_new_and_defaults_stay_unnamed() -> TestResult {
             "[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n\n[wrappers.cargo]\ncommand = \"mbx\"\n{env}"
         )
     };
-    let before = facts(&[("mise.toml", &mise(""))])?;
+    let standard = "env = { MBX_CARGO_SHIM_MODE = \"1\" }\n";
+    let after = facts(&[(
+        "mise.toml",
+        &mise("env = { MBX_CARGO_SHIM_MODE = \"1\", RUSTDOC = \"true\" }\n"),
+    )])?;
     assert_eq!(
-        introduced_files(
-            &before,
-            &["mise.toml"],
-            &[("mise.toml", &mise("env = { RUSTDOC = \"true\" }\n"))]
-        )?,
+        introduced_files(&after, &["mise.toml"], &[("mise.toml", &mise(standard))])?,
         ["mise.toml"]
     );
     let build = named(

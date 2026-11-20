@@ -6,6 +6,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::process::{Command, Output};
 use std::time::{Duration, SystemTime};
+use velnor_test_support::real_cargo;
 
 use crate::delta::success;
 use crate::io::Repo;
@@ -87,7 +88,7 @@ pub(super) fn delta(repo: &Repo, verb: &str, expected: Option<&str>) -> String {
 }
 
 pub(super) fn cargo(repo: &Repo) -> Output {
-    Command::new("cargo")
+    Command::new(real_cargo())
         .args(["build", "--offline", "--verbose", "--color", "never"])
         .current_dir(repo.root())
         .env("CARGO_TARGET_DIR", repo.root().join("target"))

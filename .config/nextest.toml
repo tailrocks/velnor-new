@@ -65,16 +65,20 @@ filter = 'package(=velnor-gen) and binary(=it) and (test(=freshness::generate_re
 slow-timeout = { period = "10s", terminate-after = 1 }
 
 [[profile.ci.overrides]]
+filter = 'package(=velnor-gen) and binary(=it) and test(=mise_trust::generate_and_check_run_cargo_metadata_in_an_untrusted_mbx_checkout_without_a_manual_trust)'
+slow-timeout = { period = "10s", terminate-after = 1 }
+
+[[profile.ci.overrides]]
 filter = 'package(=velnor-gen) and binary(=it) and (test(=freshness::generate_rejects_a_build_script_that_is_a_filesystem_symlink) or test(=io_identity::a_checkout_without_an_origin_keeps_its_schedule_when_renamed) or test(=io_identity::generate_refuses_a_hand_written_workflow_with_a_forged_marker) or test(=io_identity::generate_still_removes_a_genuinely_generated_stale_workflow) or test(=io_identity::local_origin_generates_when_the_schedule_does_not_need_the_identity) or test(=io_identity::local_origin_is_rejected_when_a_hashed_schedule_needs_the_identity) or test(=io_identity::repository_case_does_not_change_schedule_identity) or test(=io_identity::schedules_use_the_remote_repository_and_transport_independent_identity))'
 slow-timeout = { period = "10s", terminate-after = 1 }
 
 # Each of these renders or reads every recorded sample, so it runs past the 2 s default on a loaded host.
 [[profile.default.overrides]]
-filter = 'package(=velnor-gen) and binary(=it) and (test(=golden::every_sample_repository_renders_exactly_its_expected_files) or test(=fork_fence_invariant::every_job_of_every_sample_that_a_pull_request_reaches_is_fenced) or test(=trim_job::no_job_of_any_sample_that_can_run_on_a_pull_request_or_merge_group_holds_actions_write) or test(=unused_anchors::no_rendered_sample_workflow_has_an_anchor_nobody_aliases) or test(=repo_sample::the_recorded_repository_sample_has_a_root_per_workspace_with_the_members_cargo_reports) or test(=nested_target_dir::no_root_of_any_sample_builds_inside_a_package_directory_from_the_new_helper))'
+filter = 'package(=velnor-gen) and binary(=it) and (test(=golden::every_sample_repository_renders_exactly_its_expected_files) or test(=fork_fence_invariant::every_job_of_every_sample_that_a_pull_request_reaches_is_fenced) or test(=trim_job::publication::no_job_of_any_sample_that_can_run_on_a_pull_request_or_merge_group_holds_actions_write) or test(=unused_anchors::no_rendered_sample_workflow_has_an_anchor_nobody_aliases) or test(=repo_sample::the_recorded_repository_sample_has_a_root_per_workspace_with_the_members_cargo_reports) or test(=nested_target_dir::no_root_of_any_sample_builds_inside_a_package_directory_from_the_new_helper))'
 slow-timeout = { period = "10s", terminate-after = 1 }
 
 [[profile.ci.overrides]]
-filter = 'package(=velnor-gen) and binary(=it) and (test(=golden::every_sample_repository_renders_exactly_its_expected_files) or test(=fork_fence_invariant::every_job_of_every_sample_that_a_pull_request_reaches_is_fenced) or test(=trim_job::no_job_of_any_sample_that_can_run_on_a_pull_request_or_merge_group_holds_actions_write) or test(=unused_anchors::no_rendered_sample_workflow_has_an_anchor_nobody_aliases) or test(=repo_sample::the_recorded_repository_sample_has_a_root_per_workspace_with_the_members_cargo_reports) or test(=nested_target_dir::no_root_of_any_sample_builds_inside_a_package_directory_from_the_new_helper))'
+filter = 'package(=velnor-gen) and binary(=it) and (test(=golden::every_sample_repository_renders_exactly_its_expected_files) or test(=fork_fence_invariant::every_job_of_every_sample_that_a_pull_request_reaches_is_fenced) or test(=trim_job::publication::no_job_of_any_sample_that_can_run_on_a_pull_request_or_merge_group_holds_actions_write) or test(=unused_anchors::no_rendered_sample_workflow_has_an_anchor_nobody_aliases) or test(=repo_sample::the_recorded_repository_sample_has_a_root_per_workspace_with_the_members_cargo_reports) or test(=nested_target_dir::no_root_of_any_sample_builds_inside_a_package_directory_from_the_new_helper))'
 slow-timeout = { period = "10s", terminate-after = 1 }
 
 [[profile.default.overrides]]

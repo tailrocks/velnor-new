@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::rules::{RenderedStep, Rule, Value};
+use crate::release_steps::APP_TOKEN_COMMIT;
+use crate::rules::{APP_TOKEN_ACTION, RenderedStep, Rule, Value};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PinnedAction {
@@ -87,12 +88,17 @@ const CREDENTIAL_INPUTS: [(&str, &str, Shape); 5] = [
 ];
 
 pub(crate) fn pin_rules(action: &str, reference: &str, rules: &mut Vec<Rule>) {
-    if let Some(pin) = PINNED_ACTIONS.iter().find(|pin| pin.action == action)
-        && reference != pin.commit
+    let pinned = PINNED_ACTIONS
+        .iter()
+        .map(|pin| (pin.action, pin.commit))
+        .chain([(APP_TOKEN_ACTION, APP_TOKEN_COMMIT)])
+        .find(|(name, _)| *name == action);
+    if let Some((_, commit)) = pinned
+        && reference != commit
     {
         rules.push(Rule::ActionPinMismatch {
             action: action.to_owned(),
-            commit: pin.commit,
+            commit,
         });
     }
 }
