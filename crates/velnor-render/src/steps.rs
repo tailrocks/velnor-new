@@ -44,7 +44,7 @@ pub(crate) const ATTEST_BUILD_PROVENANCE: &str =
 pub(crate) const MISE_VERSION: &str = "2026.11.10";
 #[path = "steps_helpers.rs"]
 mod steps_helpers;
-use steps_helpers::{rustup_add, saved_unless_hit, variable};
+use steps_helpers::{extra_conditions, rustup_add, variable};
 
 pub(crate) const CACHE_RESTORE: &str =
     "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
