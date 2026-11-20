@@ -58,6 +58,8 @@ mod recording;
 mod registry;
 mod release;
 mod release_align;
+mod release_assets;
+mod release_assets_files;
 mod report;
 mod report_checkout;
 mod report_inputs;
@@ -229,10 +231,13 @@ fn run(cli: Cli) -> Result<String, CiError> {
             image_candidate::verify_candidate(&args)
         }
         Command::Fetch(args) => fetch::fetch(&args),
+        Command::FetchAssets(args) => release_assets::fetch_assets(&args),
         Command::PrivateTokenAllowed => private_check::run(),
         Command::MbxStore => crate::mbx_store::setup(),
         Command::MbxSeed => crate::mbx_seed::setup(),
+        Command::MisePin(args) => crate::mise_pin::run(&args.tool),
         Command::ToolsLocal(args) => crate::tools_local::setup(args.verb, &args.key),
+        Command::ToolsVerify(args) => crate::tools_verify_step::setup(args.verb),
         Command::Prepare(args) => setup::prepare(&args),
         Command::CheckMetadata => setup::check_metadata(),
         Command::CheckConfigurations(args) => configurations::check(&args),

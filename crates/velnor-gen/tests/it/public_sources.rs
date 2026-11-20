@@ -55,7 +55,7 @@ fn render(view: &RepoView) -> Result<Output, Box<dyn std::error::Error>> {
 
 #[test]
 fn a_declared_commit_pinned_github_dependency_keeps_the_base_caches() -> TestResult {
-    let output = render(&locked(&pinned_source(), DECLARED, "0.1.108")?)?;
+    let output = render(&locked(&pinned_source(), DECLARED, "0.1.109")?)?;
     assert!(output.saves_bases(), "{}", output.workflow);
     assert!(
         output.note("base caches are not saved").is_none(),
@@ -72,7 +72,7 @@ fn a_declared_commit_pinned_github_dependency_keeps_the_base_caches() -> TestRes
 
 #[test]
 fn an_undeclared_commit_pinned_github_dependency_suggests_the_public_declaration() -> TestResult {
-    let output = render(&locked(&pinned_source(), "", "0.1.108")?)?;
+    let output = render(&locked(&pinned_source(), "", "0.1.109")?)?;
     assert!(!output.saves_bases());
     assert!(
         output.note("base caches are not saved").is_some(),
@@ -104,7 +104,7 @@ fn a_declaration_does_not_admit_other_sources() -> TestResult {
         format!("git+https://github.com/acme/shared-lib/sub#{SHA}"),
     ];
     for source in sources {
-        let output = render(&locked(&source, DECLARED, "0.1.108")?)?;
+        let output = render(&locked(&source, DECLARED, "0.1.109")?)?;
         assert!(!output.saves_bases(), "{source}");
         assert!(
             output.note("base caches are not saved").is_some(),
@@ -121,7 +121,7 @@ fn the_declaration_matches_the_repository_without_regard_to_case_or_a_dot_git_su
         format!("git+https://github.com/ACME/Shared-Lib.git#{SHA}"),
         format!("git+{SOURCE}.git?branch=main#{SHA}"),
     ] {
-        let output = render(&locked(&source, DECLARED, "0.1.108")?)?;
+        let output = render(&locked(&source, DECLARED, "0.1.109")?)?;
         assert!(output.saves_bases(), "{source}");
     }
     Ok(())
@@ -132,7 +132,7 @@ fn a_declared_repository_that_no_lock_names_is_reported() -> TestResult {
     let output = render(&locked(
         "sparse+https://index.crates.io/",
         DECLARED,
-        "0.1.108",
+        "0.1.109",
     )?)?;
     let note = output.note("[public_sources].git lists").ok_or("no note")?;
     assert!(note.contains("acme/shared-lib"), "{note}");
@@ -143,9 +143,9 @@ fn a_declared_repository_that_no_lock_names_is_reported() -> TestResult {
 fn the_remote_mbx_cache_follows_the_declaration() -> TestResult {
     let mbx = "[cache]\nmbx_remote = \"github-actions\"\n";
     let declared = format!("{DECLARED}{mbx}");
-    let output = render(&locked(&pinned_source(), &declared, "0.1.108")?)?;
+    let output = render(&locked(&pinned_source(), &declared, "0.1.109")?)?;
     assert!(output.workflow.contains("mr-boxington-action"));
-    let refused = render(&locked(&pinned_source(), mbx, "0.1.108")?)
+    let refused = render(&locked(&pinned_source(), mbx, "0.1.109")?)
         .err()
         .ok_or("accepted")?
         .to_string();
@@ -155,7 +155,7 @@ fn the_remote_mbx_cache_follows_the_declaration() -> TestResult {
 
 #[test]
 fn the_declaration_needs_the_helper_that_checks_it() -> TestResult {
-    for (version, refused) in [("0.1.107", true), ("0.1.108", false)] {
+    for (version, refused) in [("0.1.107", true), ("0.1.109", false)] {
         let outcome = render(&locked(&pinned_source(), DECLARED, version)?);
         match outcome {
             Err(error) => {
@@ -185,7 +185,7 @@ fn only_a_plain_github_repository_url_can_be_declared() -> TestResult {
     ];
     for body in invalid {
         let config = format!("[public_sources]\n{body}\n");
-        let error = render(&locked(&pinned_source(), &config, "0.1.108")?)
+        let error = render(&locked(&pinned_source(), &config, "0.1.109")?)
             .err()
             .ok_or_else(|| format!("accepted: {body}"))?
             .to_string();

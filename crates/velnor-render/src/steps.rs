@@ -143,6 +143,10 @@ fn job_steps(
     lane: CargoLane,
 ) -> Vec<RenderedStep> {
     let gate = SaveGate::of(job);
+    let verified = job
+        .steps
+        .iter()
+        .any(|step| step.kind == StepKind::ToolsLocal(velnor_model::ToolsLocalVerb::Verify));
     job.steps
         .iter()
         .enumerate()
@@ -154,10 +158,19 @@ fn job_steps(
                 saved_after: gate.required(),
                 job_name: job.name.as_deref(),
             };
+            let mut rendered = rendered_steps(step, setup, audit, tests, lane, around);
+            let tools_key = matches!(
+                &step.kind,
+                StepKind::CacheRestore(velnor_model::CacheKey::Tools { .. })
+                    | StepKind::CacheSave(velnor_model::CacheKey::Tools { .. })
+            );
+            for body in &mut rendered {
+                body.shared |= verified && tools_key;
+            }
             Some(crate::base_steps::audited_save(
                 job,
                 step,
-                rendered_steps(step, setup, audit, tests, lane, around),
+                rendered,
                 gate.audit_runs(index),
             ))
         })
@@ -215,6 +228,10 @@ fn rendered_steps(
         }
         let mut extra = saved_unless_hit(&step.kind);
         extra.extend(
+            step.hosted_only
+                .then(|| crate::gate::NOT_SELF_HOSTED.to_owned()),
+        );
+        extra.extend(
             step.skip_when_cold
                 .then(|| crate::gate::PREPARE_COLD.to_owned()),
         );
@@ -235,6 +252,7 @@ fn rendered_steps(
             ),
         );
         body.working_directory = step.directory.as_ref().map(ToString::to_string);
+        body.shared |= matches!(step.when, velnor_model::When::SaveVerifiedTools(_));
         if matches!(step.kind, StepKind::InputsSave { .. })
             && step.when != velnor_model::When::SaveBase
         {
@@ -338,12 +356,14 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
             expiry,
             cli,
         } => restored_targets_step(targets, *expiry, *cli),
-        StepKind::MbxRemote => crate::helper_steps::mbx_remote_step(),
+        StepKind::MbxRemote { from_pin } => crate::helper_steps::mbx_remote_step(*from_pin),
+        StepKind::MbxPin => crate::helper_steps::mbx_pin_step(),
         StepKind::CratesMirror(mirror) => crate::helper_steps::mirror_step(mirror),
-        StepKind::MbxStore => crate::helper_steps::mbx_store_step(),
+        StepKind::MbxStore | StepKind::MbxPrivate => crate::helper_steps::mbx_local_step(kind),
         StepKind::PrivateCheck { .. }
         | StepKind::PrivateToken { .. }
-        | StepKind::PrivateFetch { .. } => crate::private_steps::render(kind),
+        | StepKind::PrivateFetch { .. }
+        | StepKind::ReleaseAssets { .. } => crate::private_steps::render(kind),
         StepKind::AdvisoryFetch { configs } => crate::private_steps::advisory_fetch(configs),
         StepKind::MbxSeed | StepKind::ToolsLocal(_) => crate::helper_steps::node_step(kind),
         StepKind::TestSetup { name, run } => RenderedStep {
