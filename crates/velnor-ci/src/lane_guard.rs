@@ -36,7 +36,7 @@ fn guard(args: &LaneGuardArgs) -> Result<String, CiError> {
     } else {
         vec!["-E".to_owned(), format!("all(){excluded}")]
     };
-    let features = ["--features".to_owned(), args.features.clone()];
+    let features = feature_args(args);
     let selection = ["-E".to_owned(), format!("({}){excluded}", args.filter)];
     let default = list(PREFIX, &default_filter)?;
     let universe = list(PREFIX, &[default_filter.as_slice(), &features].concat())?;
@@ -53,22 +53,48 @@ fn guard(args: &LaneGuardArgs) -> Result<String, CiError> {
         .filter(|key| !selected_keys.contains(key))
         .collect();
     if missing.is_empty() {
-        return Ok(success(&args.features, feature_only.len()));
+        return Ok(success(&describe(args), feature_only.len()));
     }
     Err(CiError::new(failure(args, &missing)))
 }
 
+fn feature_args(args: &LaneGuardArgs) -> Vec<String> {
+    let mut flags = Vec::new();
+    if args.all_features {
+        flags.push("--all-features".to_owned());
+    }
+    if args.no_default_features {
+        flags.push("--no-default-features".to_owned());
+    }
+    if let Some(features) = &args.features {
+        flags.push("--features".to_owned());
+        flags.push(features.clone());
+    }
+    flags
+}
+
+fn describe(args: &LaneGuardArgs) -> String {
+    let names = args
+        .features
+        .as_deref()
+        .map(|features| format!("features '{}'", escape(features, false)));
+    match (args.all_features, args.no_default_features, names) {
+        (true, _, _) => "all features".to_owned(),
+        (false, true, None) => "no default features".to_owned(),
+        (false, true, Some(names)) => format!("no default features and {names}"),
+        (false, false, Some(names)) => names,
+        (false, false, None) => "no features".to_owned(),
+    }
+}
+
 fn success(features: &str, checked: usize) -> String {
-    let features = escape(features, false);
     match checked {
-        0 => format!(
-            "{PREFIX}: no runnable tests exist only with features '{features}'; nothing to check\n"
-        ),
+        0 => format!("{PREFIX}: no runnable tests exist only with {features}; nothing to check\n"),
         1 => format!(
-            "{PREFIX}: the 1 test that exists only with features '{features}' is selected by the lane filter\n"
+            "{PREFIX}: the 1 test that exists only with {features} is selected by the lane filter\n"
         ),
         n => format!(
-            "{PREFIX}: all {n} tests that exist only with features '{features}' are selected by the lane filter\n"
+            "{PREFIX}: all {n} tests that exist only with {features} are selected by the lane filter\n"
         ),
     }
 }
@@ -80,8 +106,8 @@ fn failure(args: &LaneGuardArgs, missing: &[TestKey]) -> String {
     };
     let mut lines = vec![
         format!(
-            "{PREFIX}: {count} {verb} only with features '{}' and {falls} outside the lane filter",
-            escape(&args.features, false)
+            "{PREFIX}: {count} {verb} only with {} and {falls} outside the lane filter",
+            describe(args)
         ),
         format!("  filter: {}", escape(&args.filter, false)),
     ];

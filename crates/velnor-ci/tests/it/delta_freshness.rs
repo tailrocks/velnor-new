@@ -8,7 +8,7 @@ use std::time::{Duration, SystemTime};
 use velnor_test_support::real_cargo;
 
 use crate::delta::success;
-use crate::delta_source::helper_at;
+use crate::delta_source::{helper_at, strip_mirror_overrides};
 use crate::io::Repo;
 
 pub(super) struct Fixture {
@@ -146,14 +146,15 @@ impl Fixture {
     }
 
     fn cargo_at(args: &[&str], directory: &std::path::Path) -> Output {
-        Command::new(real_cargo())
+        let mut command = Command::new(real_cargo());
+        command
             .args(args)
             .current_dir(directory)
             .env("CARGO_TARGET_DIR", directory.join("target"))
             .env_remove("RUSTC_WRAPPER")
-            .env_remove("RUSTC_WORKSPACE_WRAPPER")
-            .output()
-            .unwrap_or_else(|e| unreachable!("{e}"))
+            .env_remove("RUSTC_WORKSPACE_WRAPPER");
+        strip_mirror_overrides(&mut command);
+        command.output().unwrap_or_else(|e| unreachable!("{e}"))
     }
 
     pub(super) fn build(&self) -> Output {

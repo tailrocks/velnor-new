@@ -7,8 +7,9 @@ use crate::budget_mode::SelectionName;
 use crate::cron::CronExpr;
 use crate::hosted::HostedRunners;
 use crate::ids::{JobId, PackageName, RepoPath, RootSlug, RunnerLabel, TargetName};
-use crate::repo::TargetKind;
+use crate::repo::{LaneFeatures, TargetKind};
 use crate::steps::StepKind;
+use crate::test_group::NoTests;
 
 pub const LINT_STEP: &str = "Lint";
 pub const TEST_STEP: &str = "Test";
@@ -301,20 +302,20 @@ pub enum CargoCommand {
         ci_profile: bool,
     },
     NextestFeatures {
-        features: Vec<String>,
+        features: LaneFeatures,
         packages: Vec<PackageName>,
         filter: FilterRef,
         ci_profile: bool,
         reports: bool,
     },
     ClippyFeatures {
-        features: Vec<String>,
+        features: LaneFeatures,
     },
     DocFeatures {
-        features: Vec<String>,
+        features: LaneFeatures,
     },
     LaneGuard {
-        features: Vec<String>,
+        features: LaneFeatures,
         packages: Vec<PackageName>,
         filter: String,
         except: Vec<String>,
@@ -327,6 +328,7 @@ pub enum CargoCommand {
         filter: FilterRef,
         threads: Option<u16>,
         ci_profile: bool,
+        no_tests: NoTests,
     },
     TestTarget {
         package: PackageName,
