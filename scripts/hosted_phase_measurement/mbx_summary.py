@@ -17,7 +17,7 @@ SUMMARY = re.compile(
     r"(?P<local>\d+(?:\.\d+)?)\s*(?P<local_unit>[A-Za-z]+)\s+stored locally\s*[.!]?\s*",
     re.IGNORECASE,
 )
-LOOKUP = re.compile(r"(?P<count>\d+)\s+(?P<label>hits?|miss(?:es)?|not\s+looked\s+up|bypassed)", re.IGNORECASE)
+LOOKUP = re.compile(r"(?P<count>\d+)\s+(?P<label>hits?|miss(?:es)?|not\s+looked\s+up|bypassed|incremental)", re.IGNORECASE)
 UNIT_BYTES = {
     "b": 1,
     "kb": 1_000,
@@ -40,7 +40,7 @@ def _lookup_counts(value: str) -> dict[str, int]:
     counts: dict[str, int] = {}
     labels = {
         "hit": "hits", "hits": "hits", "miss": "misses", "misses": "misses",
-        "not looked up": "not_looked_up", "bypassed": "bypassed",
+        "not looked up": "not_looked_up", "bypassed": "bypassed", "incremental": "incremental",
     }
     for item in value.split(","):
         match = LOOKUP.fullmatch(item.strip())

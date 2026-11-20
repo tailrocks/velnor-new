@@ -84,12 +84,13 @@ test "$CHECKED" -gt 0
 '''
 
 [tasks.lint-parity-verify-candidate]
-description = "Run the unit tests of the parity verifier (scripts/parity-verify-candidate.py)"
+description = "Run the unit tests of the parity verifier and of the hosted-phase MBX summary parser"
 run = '''
 set -eu
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
 python3 -m unittest scripts/test_parity_verify_candidate.py
+python3 scripts/hosted_phase_measurement/tests/test_mbx_summary.py
 '''
 
 [tasks.test-maintenance-helpers]
@@ -100,8 +101,6 @@ ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
 printf "maintenance-phase: setup-velnor-install\n"
 python3 scripts/test-setup-velnor-action.py
-printf "maintenance-phase: mbx-summary\n"
-python3 scripts/hosted_phase_measurement/tests/test_mbx_summary.py
 printf "maintenance-phase: tag-ruleset-drift\n"
 bun test ./scripts/tag-ruleset-drift.test.ts
 printf "maintenance-phase: source-fetch\n"
