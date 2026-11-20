@@ -128,7 +128,18 @@ fn audit_wrapped_nextest_cannot_forge_step_outputs() {
     let output = run.output().unwrap_or_else(|e| unreachable!("{e}"));
     assert!(output.status.success(), "{output:?}");
     let written = fs::read_to_string(&output_file).unwrap_or_else(|e| unreachable!("{e}"));
-    assert_eq!(written, "existing=1\ntests_run=7\ntests_listed=9\n");
+    // The wrapper writes `built=` itself after a nextest run exits 0. The child's
+    // forged `tests_run=999` line must still be absent: only the wrapper's lines remain.
+    assert_eq!(
+        crate::run_nextest::without_built(&written),
+        "existing=1\ntests_run=7\ntests_listed=9\n"
+    );
+    assert!(
+        written
+            .lines()
+            .all(|line| !line.starts_with("built=") || line == "built=true"),
+        "{written:?}"
+    );
     let environment =
         fs::read_to_string(driver.join("child-env")).unwrap_or_else(|e| unreachable!("{e}"));
     for name in [
