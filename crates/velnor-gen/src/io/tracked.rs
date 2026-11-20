@@ -3,15 +3,44 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsStr;
+use std::fs;
+use std::io::ErrorKind;
 use std::path::Path;
 
-use velnor_model::{RepoPath, RepoView};
+use velnor_model::{RELEASE_CONFIG_PATH, RepoPath, RepoView, WORKFLOWS_CONFIG_PATH};
+use velnor_rust::CONFIG_PATH;
 
 use super::{Error, program};
 
 const SYMLINK_MODE: &[u8] = b"120000";
 
+/// Configuration that is read only through the tracked view. Git hides an
+/// untracked or ignored file from that view, so a file on disk is refused
+/// instead of being silently replaced by defaults.
+const CONFIG_FILES: [RepoPath; 3] = [CONFIG_PATH, RELEASE_CONFIG_PATH, WORKFLOWS_CONFIG_PATH];
+
 pub(super) fn tracked(root: &Path) -> Result<(BTreeSet<RepoPath>, BTreeSet<RepoPath>), Error> {
+    let (paths, symlinks) = listed(root)?;
+    refuse_untracked_config(root, &paths)?;
+    Ok((paths, symlinks))
+}
+
+fn refuse_untracked_config(root: &Path, tracked: &BTreeSet<RepoPath>) -> Result<(), Error> {
+    for path in CONFIG_FILES {
+        if tracked.contains(&path) {
+            continue;
+        }
+        let file = root.join(path.as_str());
+        match fs::symlink_metadata(&file) {
+            Ok(_) => return Err(Error::UntrackedConfig(path)),
+            Err(error) if error.kind() == ErrorKind::NotFound => {}
+            Err(error) => return Err(Error::File(file, error)),
+        }
+    }
+    Ok(())
+}
+
+fn listed(root: &Path) -> Result<(BTreeSet<RepoPath>, BTreeSet<RepoPath>), Error> {
     let listing = program(
         root,
         "git",

@@ -258,6 +258,7 @@ mod tools_cache;
 mod tools_local;
 mod trim_job;
 mod unowned;
+mod untracked_config;
 mod unused_anchors;
 mod version;
 mod weaken;
