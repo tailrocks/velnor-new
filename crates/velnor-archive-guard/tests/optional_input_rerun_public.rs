@@ -336,3 +336,52 @@ fn a_replayed_build_reflects_its_own_checkout_when_the_target_moves_into_the_roo
 -> Result<(), Box<dyn Error>> {
     assert_replayed_build_reflects_its_own_checkout(Layout::OutsideRoot, Layout::InRoot)
 }
+
+const WRONG_FINGERPRINT: &str = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
+
+fn build_given_supplied_fingerprint(
+    probe: &Probe,
+    supplied: &str,
+) -> Result<(bool, String), Box<dyn Error>> {
+    let mut cargo = Command::new(velnor_test_support::real_cargo());
+    cargo
+        .args(["build", "--offline", "-v", "--manifest-path"])
+        .arg(probe.root.join("crates/probe/Cargo.toml"))
+        .env_remove("RUSTC_WRAPPER")
+        .env(SUPPLIED, supplied);
+    for (name, _) in std::env::vars_os() {
+        if name.to_string_lossy().starts_with("MBX_") {
+            cargo.env_remove(name);
+        }
+    }
+    let output = cargo.env("CARGO_TARGET_DIR", &probe.target).output()?;
+    Ok((
+        output.status.success(),
+        String::from_utf8_lossy(&output.stderr).into_owned(),
+    ))
+}
+
+#[test]
+fn supplied_source_fingerprint_must_be_the_correct_value_or_unset() -> Result<(), Box<dyn Error>> {
+    let temp = tempfile::tempdir()?;
+    let probe = Probe::new(&temp.path().canonicalize()?, Layout::OutsideRoot)?;
+    let expected = probe.expected()?;
+    assert_ne!(expected, WRONG_FINGERPRINT);
+    for supplied in ["", WRONG_FINGERPRINT] {
+        let (succeeded, stderr) = build_given_supplied_fingerprint(&probe, supplied)?;
+        assert!(
+            !succeeded,
+            "a build given {SUPPLIED}={supplied:?} succeeded instead of failing closed"
+        );
+        assert!(
+            stderr.contains("differs from the fingerprint"),
+            "a build given {SUPPLIED}={supplied:?} failed for another reason: {stderr}"
+        );
+    }
+    let (succeeded, stderr) = build_given_supplied_fingerprint(&probe, &expected)?;
+    assert!(
+        succeeded,
+        "the correct {SUPPLIED} was refused: {stderr}"
+    );
+    Ok(())
+}
