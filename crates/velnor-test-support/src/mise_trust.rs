@@ -26,7 +26,7 @@ pub fn trust_mise_dir<'a>(command: &'a mut Command, dir: &Path) -> &'a mut Comma
 #[cfg(test)]
 mod tests {
     use super::trust_mise_dir;
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
     use std::process::Command;
 
     fn trusted_value(command: &Command) -> Option<String> {
@@ -44,7 +44,7 @@ mod tests {
         let value = trusted_value(&command).unwrap_or_else(|| unreachable!("no trust value"));
         let paths: Vec<_> = std::env::split_paths(&value).collect();
         assert_eq!(
-            paths.last().map(|p| p.as_path()),
+            paths.last().map(PathBuf::as_path),
             Some(Path::new("/tmp/velnor-project"))
         );
     }
