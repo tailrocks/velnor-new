@@ -4,6 +4,7 @@
 use std::collections::BTreeMap;
 
 use crate::plan::{job, step};
+use crate::plan_tools::TOOLS_SAVED_KEY_HELPER;
 use velnor_model::{
     Access, CI_RUN_LABEL, HelperVersion, Job, JobId, PermissionScope, Permissions, PrCi, PrRun,
     PushAfterMergeGroup, RepoFacts, Step, StepKind, ToolsLocalVerb, ToolsTelemetry, When,
@@ -38,6 +39,10 @@ fn attach(facts: &RepoFacts, jobs: &mut [Job], maintenance: Option<&Job>) -> Job
                 })
         });
     let not_generated = not_generated(facts);
+    let saved_keys = facts
+        .helper
+        .as_ref()
+        .is_some_and(|release| release.version().at_least(TOOLS_SAVED_KEY_HELPER));
     let mut producers = Vec::new();
     for job in jobs {
         let saves = job
@@ -52,7 +57,7 @@ fn attach(facts: &RepoFacts, jobs: &mut [Job], maintenance: Option<&Job>) -> Job
         {
             continue;
         }
-        attach_metrics(job, nextest_artifacts, not_generated.as_deref());
+        attach_metrics(job, nextest_artifacts, saved_keys, not_generated.as_deref());
         producers.push(&*job);
     }
     producers.extend(maintenance);
@@ -85,7 +90,12 @@ fn attach(facts: &RepoFacts, jobs: &mut [Job], maintenance: Option<&Job>) -> Job
     cache
 }
 
-fn attach_metrics(job: &mut Job, nextest_artifacts: bool, not_generated: Option<&str>) {
+fn attach_metrics(
+    job: &mut Job,
+    nextest_artifacts: bool,
+    saved_keys: bool,
+    not_generated: Option<&str>,
+) {
     let caches = job
         .steps
         .iter()
@@ -115,6 +125,7 @@ fn attach_metrics(job: &mut Job, nextest_artifacts: bool, not_generated: Option<
                 caches,
                 nextest_artifacts,
                 node_tools,
+                saved_keys,
                 not_generated,
             },
             StepKind::UploadMetrics,

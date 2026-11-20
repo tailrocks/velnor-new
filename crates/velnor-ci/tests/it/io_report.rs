@@ -344,6 +344,7 @@ mod build_failure;
 mod evidence;
 mod policy;
 mod provenance;
+mod saved_key;
 mod target_identity;
 mod waste;
 mod waste_mbx;

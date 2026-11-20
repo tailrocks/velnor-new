@@ -26,7 +26,10 @@ fn trimmed_caches(config: &str, helper: &str) -> Result<Vec<Trimmed>, Box<dyn st
             serde_json::from_str(&text(&report["env"], "VELNOR_REPORT_CACHES"))?;
         let record_ids: Vec<String> = steps
             .iter()
-            .filter(|step| text(step, "name").starts_with("Record the ") && text(step, "name").ends_with(" cache key"))
+            .filter(|step| {
+                text(step, "name").starts_with("Record the ")
+                    && text(step, "name").ends_with(" cache key")
+            })
             .filter_map(|step| step["id"].as_str().map(str::to_owned))
             .collect();
         for cache in plan.as_array().into_iter().flatten() {
