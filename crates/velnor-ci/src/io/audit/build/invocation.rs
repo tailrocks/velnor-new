@@ -273,7 +273,10 @@ fn chdir(globals: &[&str]) -> Option<PathBuf> {
             }
             "--config" | "-Z" | "--color" | "-j" | "--jobs" | "--manifest-path" => index += 2,
             value if value.starts_with("-C") => {
-                directory = Some(PathBuf::from(&value[2..]));
+                let attached = &value[2..];
+                directory = Some(PathBuf::from(
+                    attached.strip_prefix('=').unwrap_or(attached),
+                ));
                 index += 1;
             }
             _ => index += 1,

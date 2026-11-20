@@ -28,3 +28,17 @@ fn a_chdir_global_option_alone_moves_the_working_directory() {
         PathBuf::from("/repo/sub"),
     );
 }
+
+#[test]
+fn an_attached_chdir_value_drops_one_optional_equals_sign() {
+    for option in ["-Csub", "-C=sub"] {
+        assert_eq!(
+            location(
+                &format!("cargo +nightly -Z unstable-options {option} build"),
+                "/repo"
+            ),
+            PathBuf::from("/repo/sub"),
+            "{option}",
+        );
+    }
+}
