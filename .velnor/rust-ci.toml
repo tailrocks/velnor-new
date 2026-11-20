@@ -3,7 +3,7 @@
 
 runner = "ubuntu-26.04-scale-set"
 required_check = "Required"
-mbx_shared_store = true
+mbx_shared_store = false
 docs = "post_merge"
 check_alone = "post_merge"
 pr_ci = "label"
