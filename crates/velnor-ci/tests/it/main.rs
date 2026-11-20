@@ -119,6 +119,7 @@ mod prepare_inputs;
 mod prepare_install;
 mod prepare_lock_key;
 mod prepare_targets;
+mod public_probe;
 mod preview_helpers;
 mod private_check;
 mod private_queue;

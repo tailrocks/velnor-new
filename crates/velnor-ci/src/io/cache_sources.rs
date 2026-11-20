@@ -8,6 +8,9 @@ use velnor_model::GitRepository;
 use velnor_rust::LockAdmission;
 
 use crate::error::CiError;
+use crate::public_probe::{VERDICTS_VARIABLE, Verdicts};
+
+use super::public_repo::{Credentials, env_token};
 
 pub(super) struct Admission {
     pub(super) refusal: Option<String>,
@@ -74,17 +77,39 @@ pub(super) fn refusal(root: &Path, manifests: &[PathBuf], api: &str) -> Result<A
             }
         }
     }
-    Ok(probe(api, &git))
+    let verdicts = std::env::var(VERDICTS_VARIABLE)
+        .ok()
+        .and_then(|text| Verdicts::parse(&text));
+    Ok(probe(api, &git, env_token().as_deref(), verdicts.as_ref()))
 }
 
-fn probe(api: &str, git: &[GitRepository]) -> Admission {
+pub(super) fn describe(credentials: Credentials) -> &'static str {
+    match credentials {
+        Credentials::Token => "authenticated lookup",
+        Credentials::None => "unauthenticated lookup",
+    }
+}
+
+fn probe(
+    api: &str,
+    git: &[GitRepository],
+    token: Option<&str>,
+    verdicts: Option<&Verdicts>,
+) -> Admission {
     let mut log = Vec::new();
     let mut refusal = Vec::new();
     for repository in git {
         let name = format!("github.com/{}/{}", repository.owner, repository.name);
-        match super::public_repo::check(api, repository) {
-            Ok(()) => log.push(format!(
-                "git dependency {name} is public (unauthenticated lookup)\n"
+        if verdicts.is_some_and(|known| known.proves_public(repository)) {
+            log.push(format!(
+                "git dependency {name} is public (verdict of this run)\n"
+            ));
+            continue;
+        }
+        match super::public_repo::check(api, repository, token) {
+            Ok(credentials) => log.push(format!(
+                "git dependency {name} is public ({})\n",
+                describe(credentials)
             )),
             Err(reason) => {
                 let line = format!(
@@ -101,7 +126,7 @@ fn probe(api: &str, git: &[GitRepository]) -> Admission {
     }
 }
 
-fn read_lock(path: &Path) -> Option<LockAdmission> {
+pub(super) fn read_lock(path: &Path) -> Option<LockAdmission> {
     fs::symlink_metadata(path)
         .is_ok_and(|meta| meta.is_file())
         .then(|| fs::read_to_string(path).ok())

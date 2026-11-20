@@ -11,21 +11,21 @@ use std::thread;
 use super::support::{COMPILED, seed};
 use crate::io::Repo as Checkout;
 
-const SHA: &str = "0123456789abcdef0123456789abcdef01234567";
-const OTHER_SHA: &str = "fedcba9876543210fedcba9876543210fedcba98";
-const TOKEN: &str = "ghs_job_token_must_not_leave";
+pub(super) const SHA: &str = "0123456789abcdef0123456789abcdef01234567";
+pub(super) const OTHER_SHA: &str = "fedcba9876543210fedcba9876543210fedcba98";
+pub(super) const TOKEN: &str = "ghs_job_token_must_not_leave";
 
-struct Reply {
-    status: u16,
-    headers: Vec<(&'static str, String)>,
-    body: String,
+pub(super) struct Reply {
+    pub(super) status: u16,
+    pub(super) headers: Vec<(&'static str, String)>,
+    pub(super) body: String,
 }
 
-fn public(name: &str) -> Reply {
+pub(super) fn public(name: &str) -> Reply {
     reply(200, format!(r#"{{"full_name":"{name}","private":false}}"#))
 }
 
-fn reply(status: u16, body: String) -> Reply {
+pub(super) fn reply(status: u16, body: String) -> Reply {
     Reply {
         status,
         headers: Vec::new(),
@@ -33,12 +33,12 @@ fn reply(status: u16, body: String) -> Reply {
     }
 }
 
-struct Mock {
-    url: String,
-    requests: Arc<Mutex<Vec<String>>>,
+pub(super) struct Mock {
+    pub(super) url: String,
+    pub(super) requests: Arc<Mutex<Vec<String>>>,
 }
 
-fn serve(reply: Reply) -> Mock {
+pub(super) fn serve(reply: Reply) -> Mock {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap_or_else(|e| unreachable!("{e}"));
     let url = format!(
         "http://{}",
@@ -71,7 +71,7 @@ fn serve(reply: Reply) -> Mock {
 }
 
 impl Mock {
-    fn requests(&self) -> Vec<String> {
+    pub(super) fn requests(&self) -> Vec<String> {
         self.requests
             .lock()
             .unwrap_or_else(|e| unreachable!("{e}"))
@@ -79,7 +79,7 @@ impl Mock {
     }
 }
 
-fn lock(sources: &[(&str, String)]) -> String {
+pub(super) fn lock(sources: &[(&str, String)]) -> String {
     let packages: Vec<String> = sources
         .iter()
         .map(|(name, source)| {
@@ -91,11 +91,19 @@ fn lock(sources: &[(&str, String)]) -> String {
     format!("version = 4\n{}", packages.concat())
 }
 
-fn git(repository: &str, sha: &str) -> String {
+pub(super) fn git(repository: &str, sha: &str) -> String {
     format!("git+https://github.com/{repository}?rev=v1#{sha}")
 }
 
-fn decide(sources: &[(&str, String)], api: &str) -> (Output, String) {
+pub(super) fn decide(sources: &[(&str, String)], api: &str) -> (Output, String) {
+    decide_with(sources, api, &[("GITHUB_TOKEN", TOKEN), ("GH_TOKEN", TOKEN)])
+}
+
+pub(super) fn decide_with(
+    sources: &[(&str, String)],
+    api: &str,
+    env: &[(&str, &str)],
+) -> (Output, String) {
     let repo = Checkout::new("decide-public-git");
     seed(&repo);
     repo.write_unstaged("Cargo.lock", &lock(sources));
@@ -114,8 +122,10 @@ fn decide(sources: &[(&str, String)], api: &str) -> (Output, String) {
         ])
         .env("RUNNER_TEMP", &temp)
         .env("GITHUB_OUTPUT", &outputs)
-        .env("GITHUB_TOKEN", TOKEN)
-        .env("GH_TOKEN", TOKEN)
+        .env_remove("GITHUB_TOKEN")
+        .env_remove("GH_TOKEN")
+        .env_remove("VELNOR_PUBLIC_VERDICTS")
+        .envs(env.iter().copied())
         .current_dir(repo.root())
         .output()
         .unwrap_or_else(|e| unreachable!("{e}"));
@@ -123,7 +133,7 @@ fn decide(sources: &[(&str, String)], api: &str) -> (Output, String) {
     (output, written)
 }
 
-fn refused(output: &Output, written: &str) -> String {
+pub(super) fn refused(output: &Output, written: &str) -> String {
     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
     assert!(output.status.success(), "{output:?}");
     assert_eq!(written, "save=false\nsources=false\n", "{stdout}");

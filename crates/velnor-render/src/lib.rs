@@ -28,6 +28,7 @@ mod lint_steps;
 mod permission_yaml;
 mod pinned_actions;
 mod private_steps;
+mod public_steps;
 mod release;
 mod release_assets;
 mod release_attest;

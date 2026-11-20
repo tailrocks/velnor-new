@@ -97,6 +97,7 @@ pub(crate) fn rendered_job(job: &Job, plan: &WorkflowPlan) -> RenderedJob {
             .chain(test_outputs(job, &tests))
             .chain(merge_group_output(job))
             .chain(lane_outputs(&job.steps))
+            .chain(crate::public_steps::job_output(&job.steps))
             .collect(),
         cache_mode: crate::cache::saving_mode(job),
         steps,
@@ -304,7 +305,16 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
             manifests,
             cli,
             budget_bytes,
-        } => cache_decide(target, archive.as_ref(), manifests, *cli, *budget_bytes),
+            verdicts,
+        } => cache_decide(
+            target,
+            archive.as_ref(),
+            manifests,
+            *cli,
+            *budget_bytes,
+            verdicts.as_ref(),
+        ),
+        StepKind::PublicSources { manifests } => crate::public_steps::public_sources(manifests),
         StepKind::SourcesLocks(locks) => sources_locks(locks),
         StepKind::CacheResult(lanes) => crate::cache_upload::result(lanes),
         StepKind::CacheVerify { lane, family } => crate::cache_upload::verify(lane, *family),

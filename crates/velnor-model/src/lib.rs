@@ -31,8 +31,8 @@ pub use cache_layout::{
     json_string_bytes,
 };
 pub use cache_outputs::{
-    BASE_PREFIX_OUTPUT, BASE_SAVE_OUTPUT, CacheLaneOutput, SOURCES_PREFIX_OUTPUT,
-    SOURCES_SAVED_OUTPUT, cache_lane_outputs,
+    BASE_PREFIX_OUTPUT, BASE_SAVE_OUTPUT, CacheLaneOutput, PUBLIC_SOURCES_STEP,
+    PUBLIC_VERDICTS_OUTPUT, SOURCES_PREFIX_OUTPUT, SOURCES_SAVED_OUTPUT, cache_lane_outputs,
 };
 pub use cron::CronExpr;
 pub use helper::{HelperRelease, Platform};

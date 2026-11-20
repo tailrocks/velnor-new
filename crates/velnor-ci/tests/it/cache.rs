@@ -8,6 +8,7 @@ use crate::io::Repo as Checkout;
 
 mod born;
 mod public_git;
+mod public_verdicts;
 mod support;
 
 use support::{COMPILED, WARM, decide, decide_within, seed};

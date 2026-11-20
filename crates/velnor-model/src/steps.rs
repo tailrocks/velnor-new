@@ -5,7 +5,7 @@ use crate::cache::{CacheKey, CacheRoot};
 use crate::helper::HelperRelease;
 use crate::ids::{JobId, PackageName, RepoPath, RootSlug};
 use crate::lint::LintCommand;
-use crate::plan::CargoCommand;
+use crate::plan::{CargoCommand, PlanFrom};
 use crate::verdict::VerdictSpec;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -51,6 +51,15 @@ pub enum StepKind {
         archive: Option<RepoPath>,
         cli: InputsCli,
         budget_bytes: u64,
+        /// Where the public-repository verdicts of this run come from, when `[public_sources]` is
+        /// declared. The step also gets the job token for its own lookup of a repository the
+        /// verdicts do not show as public.
+        verdicts: Option<PlanFrom>,
+    },
+    /// Looks the declared public git dependencies up once for the whole run (`velnor-ci cache
+    /// public-sources`) and exposes the verdicts as `` of the job.
+    PublicSources {
+        manifests: Vec<RepoPath>,
     },
     CacheResult(Vec<(JobId, TrimFamily)>),
     CacheVerify {
@@ -164,6 +173,7 @@ impl StepKind {
             | Self::SourcesFetchAll { .. }
             | Self::CacheLookup(_)
             | Self::CacheDecide { .. }
+            | Self::PublicSources { .. }
             | Self::CacheResult(_)
             | Self::CacheVerify { .. }
             | Self::CacheTrim { .. }

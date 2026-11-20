@@ -46,6 +46,7 @@ pub mod platform;
 pub mod preview_helpers;
 pub mod private_token;
 pub mod progress_evidence;
+pub mod public_probe;
 pub mod publish;
 pub mod qualification;
 pub mod release;

@@ -208,6 +208,7 @@ pub(crate) fn plan_job(
 ) -> Job {
     let mut steps = head(facts, PLAN_DEPTH, None);
     steps.push(step(StepKind::Helper(HelperCommand::Plan)));
+    steps.extend(crate::base_cache::public_sources_step(facts));
     Job {
         plan_outputs: outputs,
         group_outputs,

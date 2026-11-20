@@ -15,6 +15,10 @@ pub enum CacheCommand {
     )]
     Decide(DecideArgs),
     #[command(
+        about = "Look up each commit-pinned github.com git dependency of the checkout Cargo.lock files once, with the job GITHUB_TOKEN (sent only to https://api.github.com, never redirected), and write the step output verdicts={\"owner/name\":true} for the lanes of this run; a failed lookup is recorded as false and never fails the step"
+    )]
+    PublicSources(PublicSourcesArgs),
+    #[command(
         about = "Delete all but the newest entries whose key starts with --prefix on $GITHUB_REF, through the GitHub API; reads GITHUB_TOKEN, which needs actions: write, and GITHUB_REPOSITORY. A missing token or a failed API call exits with an error"
     )]
     Trim(TrimArgs),
@@ -64,6 +68,18 @@ pub struct DecideArgs {
         help = "Environment variable containing JSON [hex target, optional hex archive] paths"
     )]
     pub paths_env: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct PublicSourcesArgs {
+    #[arg(long, hide = true, default_value = "https://api.github.com")]
+    pub public_probe_api: String,
+    #[arg(
+        long,
+        default_value = "Cargo.toml",
+        help = "Detected Cargo root manifests of the checkout"
+    )]
+    pub manifest_path: Vec<PathBuf>,
 }
 
 #[derive(Debug, Args)]

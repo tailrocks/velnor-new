@@ -247,6 +247,7 @@ pub(crate) fn setup_units(
     );
     if lane.plan.is_none() {
         steps.push(step(StepKind::Helper(HelperCommand::Plan)));
+        steps.extend(crate::base_cache::public_sources_step(facts));
     }
     steps.extend(mbx(facts, lane.steps()));
     let mut toolchain: Vec<Step> = mirror_step(facts)

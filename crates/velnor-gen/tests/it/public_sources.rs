@@ -7,11 +7,11 @@ use velnor_model::{RepoPath, RepoView};
 use crate::base_save::pinned;
 use crate::facts::TestResult;
 
-const SHA: &str = "0123456789abcdef0123456789abcdef01234567";
-const SOURCE: &str = "https://github.com/acme/shared-lib";
-const DECLARED: &str = "[public_sources]\ngit = ['https://github.com/acme/shared-lib']\n";
+pub(crate) const SHA: &str = "0123456789abcdef0123456789abcdef01234567";
+pub(crate) const SOURCE: &str = "https://github.com/acme/shared-lib";
+pub(crate) const DECLARED: &str = "[public_sources]\ngit = ['https://github.com/acme/shared-lib']\n";
 
-fn locked(
+pub(crate) fn locked(
     source: &str,
     config: &str,
     helper: &str,
@@ -25,7 +25,7 @@ fn locked(
     Ok(view)
 }
 
-fn pinned_source() -> String {
+pub(crate) fn pinned_source() -> String {
     format!("git+{SOURCE}?rev=v1#{SHA}")
 }
 
