@@ -57,7 +57,7 @@ pub enum StepKind {
         verdicts: Option<PlanFrom>,
     },
     /// Looks the declared public git dependencies up once for the whole run (`velnor-ci cache
-    /// public-sources`) and exposes the verdicts as `` of the job.
+    /// public-sources`) and exposes the verdicts as the job output `public_verdicts`.
     PublicSources {
         manifests: Vec<RepoPath>,
     },

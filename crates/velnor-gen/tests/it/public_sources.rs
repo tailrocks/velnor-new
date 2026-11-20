@@ -9,7 +9,8 @@ use crate::facts::TestResult;
 
 pub(crate) const SHA: &str = "0123456789abcdef0123456789abcdef01234567";
 pub(crate) const SOURCE: &str = "https://github.com/acme/shared-lib";
-pub(crate) const DECLARED: &str = "[public_sources]\ngit = ['https://github.com/acme/shared-lib']\n";
+pub(crate) const DECLARED: &str =
+    "[public_sources]\ngit = ['https://github.com/acme/shared-lib']\n";
 
 pub(crate) fn locked(
     source: &str,

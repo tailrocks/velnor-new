@@ -96,7 +96,11 @@ pub(super) fn git(repository: &str, sha: &str) -> String {
 }
 
 pub(super) fn decide(sources: &[(&str, String)], api: &str) -> (Output, String) {
-    decide_with(sources, api, &[("GITHUB_TOKEN", TOKEN), ("GH_TOKEN", TOKEN)])
+    decide_with(
+        sources,
+        api,
+        &[("GITHUB_TOKEN", TOKEN), ("GH_TOKEN", TOKEN)],
+    )
 }
 
 pub(super) fn decide_with(

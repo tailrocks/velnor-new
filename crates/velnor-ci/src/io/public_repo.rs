@@ -112,9 +112,7 @@ fn refusal(status: u16, credentials: Credentials) -> String {
         Credentials::None => "without a token",
     };
     match status {
-        404 => format!(
-            "HTTP 404 {access}: the repository is private or does not exist"
-        ),
+        404 => format!("HTTP 404 {access}: the repository is private or does not exist"),
         403 | 429 => format!("HTTP {status}: rate limited or refused"),
         300..=399 => {
             format!("HTTP {status}: the repository moved, so the lock names another repository")

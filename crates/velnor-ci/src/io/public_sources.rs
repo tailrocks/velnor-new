@@ -21,7 +21,7 @@ pub(super) fn run(args: &PublicSourcesArgs) -> Result<String, CiError> {
         .unwrap_or_else(|| args.manifest_path.clone());
     let token = super::public_repo::env_token();
     let mut verdicts = Verdicts::default();
-    let mut log = String::new();
+    let mut log: Vec<String> = Vec::new();
     for repository in repositories(&root, &manifests) {
         let name = format!("github.com/{}/{}", repository.owner, repository.name);
         let public = match super::public_repo::check(
@@ -30,14 +30,14 @@ pub(super) fn run(args: &PublicSourcesArgs) -> Result<String, CiError> {
             token.as_deref(),
         ) {
             Ok(credentials) => {
-                log.push_str(&format!(
+                log.push(format!(
                     "git dependency {name} is public ({})\n",
                     super::cache_sources::describe(credentials)
                 ));
                 true
             }
             Err(reason) => {
-                log.push_str(&format!(
+                log.push(format!(
                     "::notice::git dependency {name} is not proven public ({reason})\n"
                 ));
                 false
@@ -46,7 +46,7 @@ pub(super) fn run(args: &PublicSourcesArgs) -> Result<String, CiError> {
         verdicts.record(&repository, public);
     }
     super::append_outputs(&format!("verdicts={}\n", verdicts.render()))?;
-    Ok(log)
+    Ok(log.concat())
 }
 
 fn repositories(root: &Path, manifests: &[PathBuf]) -> Vec<GitRepository> {

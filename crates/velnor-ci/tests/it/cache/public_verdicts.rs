@@ -80,17 +80,20 @@ fn the_run_wide_step_writes_an_empty_map_when_no_lock_names_a_git_repository() {
     let (output, written) = public_sources(&[], &mock.url, &[]);
     assert!(output.status.success(), "{output:?}");
     assert_eq!(written, "verdicts={}\n");
-    assert!(mock.requests().is_empty());
+    assert_eq!(mock.requests(), Vec::<String>::new());
 }
 
 #[test]
 fn the_run_wide_step_does_not_look_up_a_source_decide_would_refuse() {
     let mock = serve(public("acme/shared-lib"));
-    let sources = [("dep", format!("git+ssh://git@github.com/acme/shared-lib#{SHA}"))];
+    let sources = [(
+        "dep",
+        format!("git+ssh://git@github.com/acme/shared-lib#{SHA}"),
+    )];
     let (output, written) = public_sources(&sources, &mock.url, &[]);
     assert!(output.status.success(), "{output:?}");
     assert_eq!(written, "verdicts={}\n");
-    assert!(mock.requests().is_empty());
+    assert_eq!(mock.requests(), Vec::<String>::new());
 }
 
 fn with_verdicts<'a>(text: &'a str, token: &'a [(&'a str, &'a str)]) -> Vec<(&'a str, &'a str)> {
@@ -110,7 +113,8 @@ fn a_public_verdict_of_this_run_replaces_the_lookup() {
     assert_eq!(written, "save=true\nsources=true\n", "{stdout}");
     assert!(mock.requests().is_empty(), "{:?}", mock.requests());
     assert!(
-        stdout.contains("git dependency github.com/acme/shared-lib is public (verdict of this run)"),
+        stdout
+            .contains("git dependency github.com/acme/shared-lib is public (verdict of this run)"),
         "{stdout}"
     );
 }
@@ -121,7 +125,12 @@ fn probes_for_itself(verdicts: &str) {
     let (output, written) = decide_with(&sources, &mock.url, &with_verdicts(verdicts, &[]));
     assert!(output.status.success(), "{verdicts}: {output:?}");
     assert_eq!(written, "save=true\nsources=true\n", "{verdicts}");
-    assert_eq!(mock.requests().len(), 1, "{verdicts}: {:?}", mock.requests());
+    assert_eq!(
+        mock.requests().len(),
+        1,
+        "{verdicts}: {:?}",
+        mock.requests()
+    );
 }
 
 macro_rules! probes {
@@ -133,12 +142,21 @@ macro_rules! probes {
     };
 }
 
-probes!(a_private_verdict_is_probed_again, r#"{"acme/shared-lib":false}"#);
-probes!(a_verdict_for_another_repository_is_ignored, r#"{"acme/other":true}"#);
+probes!(
+    a_private_verdict_is_probed_again,
+    r#"{"acme/shared-lib":false}"#
+);
+probes!(
+    a_verdict_for_another_repository_is_ignored,
+    r#"{"acme/other":true}"#
+);
 probes!(an_empty_verdict_is_ignored, "{}");
 probes!(an_unreadable_verdict_is_ignored, "not json");
 probes!(a_verdict_that_is_not_a_map_is_ignored, "[true]");
-probes!(a_verdict_with_a_text_value_is_ignored, r#"{"acme/shared-lib":"true"}"#);
+probes!(
+    a_verdict_with_a_text_value_is_ignored,
+    r#"{"acme/shared-lib":"true"}"#
+);
 probes!(a_blank_verdict_is_ignored, "");
 
 #[test]
@@ -153,7 +171,10 @@ fn a_verdict_covers_only_the_repositories_it_names() {
     assert_eq!(written, "save=true\nsources=true\n");
     let requests = mock.requests();
     assert_eq!(requests.len(), 1, "{requests:?}");
-    assert!(requests[0].starts_with("get /repos/acme/other-lib "), "{requests:?}");
+    assert!(
+        requests[0].starts_with("get /repos/acme/other-lib "),
+        "{requests:?}"
+    );
 }
 
 #[test]
@@ -161,12 +182,15 @@ fn a_public_verdict_does_not_admit_a_source_the_lock_check_refuses() {
     let mock = serve(public("acme/shared-lib"));
     let sources = [
         ("dep", git("acme/shared-lib", SHA)),
-        ("secret", "git+ssh://git@github.com/acme/private#abc".to_owned()),
+        (
+            "secret",
+            "git+ssh://git@github.com/acme/private#abc".to_owned(),
+        ),
     ];
     let env = with_verdicts(r#"{"acme/shared-lib":true}"#, &[]);
     let (output, written) = decide_with(&sources, &mock.url, &env);
     refused(&output, &written);
-    assert!(mock.requests().is_empty());
+    assert_eq!(mock.requests(), Vec::<String>::new());
 }
 
 #[test]

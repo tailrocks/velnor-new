@@ -42,7 +42,9 @@ fn a_single_job_looks_the_repositories_up_once_and_its_decide_step_reads_that_st
     let rust = &jobs["rust"];
     let lookup = step(rust, "public_sources").ok_or("no lookup step")?;
     assert!(
-        lookup["run"].as_str().is_some_and(|run| run.ends_with(" cache public-sources")),
+        lookup["run"]
+            .as_str()
+            .is_some_and(|run| run.ends_with(" cache public-sources")),
         "{lookup}"
     );
     assert_eq!(lookup["continue-on-error"], true);
@@ -65,7 +67,10 @@ fn a_single_job_looks_the_repositories_up_once_and_its_decide_step_reads_that_st
         .filter_map(|step| step["id"].as_str())
         .collect();
     let at = |id: &str| order.iter().position(|found| *found == id);
-    assert!(at("plan") < at("public_sources") && at("public_sources") < at("base"), "{order:?}");
+    assert!(
+        at("plan") < at("public_sources") && at("public_sources") < at("base"),
+        "{order:?}"
+    );
     Ok(())
 }
 
@@ -92,7 +97,9 @@ fn with_a_plan_job_one_lookup_serves_every_lane_through_a_job_output() -> TestRe
                 "{id}"
             );
             assert!(
-                job["needs"].as_array().is_some_and(|needs| needs.iter().any(|need| need == "rust-plan")),
+                job["needs"]
+                    .as_array()
+                    .is_some_and(|needs| needs.iter().any(|need| need == "rust-plan")),
                 "{id} reads a job it does not need"
             );
         }
@@ -107,7 +114,10 @@ fn the_token_is_on_the_lookup_and_the_decide_steps_only() -> TestResult {
     let (plain, _) = jobs_without_git()?;
     let with_git = token_steps(&jobs);
     let before = token_steps(&plain);
-    let added: Vec<&String> = with_git.iter().filter(|name| !before.contains(name)).collect();
+    let added: Vec<&String> = with_git
+        .iter()
+        .filter(|name| !before.contains(name))
+        .collect();
     assert!(!added.is_empty(), "{with_git:?}");
     for name in &added {
         assert!(
@@ -148,7 +158,10 @@ fn a_lock_without_git_dependencies_gets_no_lookup_and_no_token_on_decide() -> Te
         assert!(step(job, "public_sources").is_none());
         if let Some(decide) = step(job, "base") {
             assert!(decide["env"]["GITHUB_TOKEN"].is_null(), "{decide}");
-            assert!(decide["env"]["VELNOR_PUBLIC_VERDICTS"].is_null(), "{decide}");
+            assert!(
+                decide["env"]["VELNOR_PUBLIC_VERDICTS"].is_null(),
+                "{decide}"
+            );
         }
     }
     Ok(())

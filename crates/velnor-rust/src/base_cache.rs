@@ -5,8 +5,8 @@ use std::collections::BTreeMap;
 
 use velnor_model::{
     Access, BaseExpiry, CacheKey, CacheRoot, HelperCommand, Host, InputsCli, Job, JobId,
-    LockIdentity, PermissionScope, Permissions, RepoFacts, RepoPath, RootSlug, RustRoot, Step,
-    PlanFrom, StepKind, TrimFamily, When,
+    LockIdentity, PermissionScope, Permissions, PlanFrom, RepoFacts, RepoPath, RootSlug, RustRoot,
+    Step, StepKind, TrimFamily, When,
 };
 
 use crate::lane::Lane;

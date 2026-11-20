@@ -9,7 +9,7 @@ use velnor_model::{
 
 use crate::artifact_steps::{download_step, upload_cargo_log, upload_step};
 use crate::base_steps::{
-    cache_budget, cache_decide, cache_trim, lane_outputs, sources_fetch, sources_fetch_all,
+    cache_budget, cache_trim, lane_outputs, sources_fetch, sources_fetch_all,
     sources_fetch_all_rest, sources_locks, trimmed_lane,
 };
 use crate::budget_steps::budget_step;
@@ -299,22 +299,9 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
         StepKind::CacheRestore(key) => cache_step(CACHE_RESTORE, "Restore", key, true),
         StepKind::CacheLookup(key) => crate::tools_steps::tools_lookup(key),
         StepKind::CacheSave(key) => cache_step(CACHE_SAVE, "Save", key, false),
-        StepKind::CacheDecide {
-            target,
-            archive,
-            manifests,
-            cli,
-            budget_bytes,
-            verdicts,
-        } => cache_decide(
-            target,
-            archive.as_ref(),
-            manifests,
-            *cli,
-            *budget_bytes,
-            verdicts.as_ref(),
-        ),
-        StepKind::PublicSources { manifests } => crate::public_steps::public_sources(manifests),
+        StepKind::CacheDecide { .. } | StepKind::PublicSources { .. } => {
+            crate::public_steps::render(kind)
+        }
         StepKind::SourcesLocks(locks) => sources_locks(locks),
         StepKind::CacheResult(lanes) => crate::cache_upload::result(lanes),
         StepKind::CacheVerify { lane, family } => crate::cache_upload::verify(lane, *family),

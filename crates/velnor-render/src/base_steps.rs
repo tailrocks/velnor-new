@@ -3,8 +3,8 @@
 
 use velnor_model::{
     BASE_PREFIX_OUTPUT, BASE_SAVE_OUTPUT, BaseExpiry, CacheKey, CacheLaneOutput, HelperCommand,
-    InputsCli, JobId, PlanFrom, RepoPath, SOURCES_PREFIX_OUTPUT, SOURCES_SAVED_OUTPUT, Step, StepKind,
-    TrimFamily, cache_lane_outputs,
+    InputsCli, JobId, PlanFrom, RepoPath, SOURCES_PREFIX_OUTPUT, SOURCES_SAVED_OUTPUT, Step,
+    StepKind, TrimFamily, cache_lane_outputs,
 };
 
 use crate::cache::render_key;
@@ -56,9 +56,11 @@ pub(crate) fn cache_decide(
         )),
         ..RenderedStep::default()
     };
-    rendered
-        .env
-        .extend(verdicts.into_iter().flat_map(crate::public_steps::decide_env));
+    rendered.env.extend(
+        verdicts
+            .into_iter()
+            .flat_map(crate::public_steps::decide_env),
+    );
     if cli == InputsCli::PerRoot {
         return rendered;
     }

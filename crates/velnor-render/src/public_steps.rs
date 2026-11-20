@@ -72,3 +72,26 @@ pub(crate) fn job_output(steps: &[Step]) -> Option<(String, String)> {
             )
         })
 }
+
+/// Renders the decide step and the lookup step, the two that read or write the verdicts.
+pub(crate) fn render(kind: &StepKind) -> RenderedStep {
+    match kind {
+        StepKind::CacheDecide {
+            target,
+            archive,
+            manifests,
+            cli,
+            budget_bytes,
+            verdicts,
+        } => crate::base_steps::cache_decide(
+            target,
+            archive.as_ref(),
+            manifests,
+            *cli,
+            *budget_bytes,
+            verdicts.as_ref(),
+        ),
+        StepKind::PublicSources { manifests } => public_sources(manifests),
+        _ => RenderedStep::default(),
+    }
+}
