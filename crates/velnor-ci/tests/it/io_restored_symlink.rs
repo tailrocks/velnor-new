@@ -199,7 +199,8 @@ fn a_dangling_target_link_is_refused_with_a_clear_message() {
     let repo = lone("link-dangling");
     let (store, managed) = store("link-dangling-store");
     let (temp, home) = others();
-    symlink(managed.join("gone"), repo.root().join("target")).unwrap_or_else(|e| unreachable!("{e}"));
+    symlink(managed.join("gone"), repo.root().join("target"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
     let env = Env {
         cache: store.root(),
         temp: temp.root(),
