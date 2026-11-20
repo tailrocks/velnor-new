@@ -10,7 +10,7 @@ This section is the newest. Where an older section disagrees, this one wins.
 
 **Main CI.** Main fails only on flaky or environment-dependent tests. Fixes are in progress. Open items from the latest comments on #1555:
 - `run_waits_for_all_open_pipes_within_one_shared_grace_period` is timing-flaky. It runs 2.4 to 2.8 s against a 1.9 s bound. A replacement that checks events, not elapsed time, is proposed.
-- `run_reports_a_run_without_tests_as_zero` and the `could not lock config file` race share scratch directory names. The fix is in #1985. It is not merged yet.
+- `run_reports_a_run_without_tests_as_zero` and the `could not lock config file` race share scratch directory names. Fixed by #1985 (merged).
 - `repo_sample` test `the_recorded_repository_sample_...` runs close to its 2 s limit under the ci profile. It is still open.
 
 Done: `audit::bounds::breadth` (#1505). The `unbound_retirement` flake was not reproduced. The golden and trim_job tests pass on `32c952849`.
