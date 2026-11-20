@@ -255,3 +255,22 @@ fn the_newest_written_key_decides_the_version_the_error_names() -> Result<(), Bo
     );
     Ok(())
 }
+
+/// Keys that the released tools-v0.1.107 velnor-ci parses (its `plan` accepts each one in a
+/// minimal `.velnor/rust-ci.toml`), so a 0.1.107 pin must not be refused for them.
+#[test]
+fn the_keys_tools_v0_1_107_parses_are_accepted_at_107() -> Result<(), Box<dyn Error>> {
+    for config in [
+        "[[test_lane]]\nroot = \".\"\nall_features = true\n",
+        "[[test_lane]]\nroot = \".\"\nno_default_features = true\n",
+        "[[test_groups]]\nname = \"unit\"\nfilter = \"all()\"\nneeds = [\"cargo\"]\nrestore_cache = true\n",
+        "[[test_groups]]\nname = \"unit\"\nfilter = \"all()\"\nno_tests = \"warn\"\n",
+    ] {
+        let refused = refusal(config, "0.1.107")?;
+        assert!(
+            !matches!(refused, Some(GenerateError::ConfigKeyHelperTooOld { .. })),
+            "{config} at 0.1.107: {refused:?}"
+        );
+    }
+    Ok(())
+}
