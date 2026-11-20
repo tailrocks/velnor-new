@@ -32,10 +32,16 @@ fn candidates() -> impl Iterator<Item = PathBuf> {
 /// The cargo a test runs: mise's command-wrapper cargo when the job has one (it runs cargo
 /// through mbx, which every build must use), otherwise the first cargo on the PATH. Never the
 /// crates-mirror wrapper, which the tests compare against.
+///
+/// # Panics
+///
+/// When the PATH holds no cargo other than the crates-mirror wrapper.
 #[must_use]
 pub fn real_cargo() -> PathBuf {
     pick_real_cargo(candidates()).unwrap_or_else(|| {
-        panic!("no cargo on the PATH other than the crates-mirror wrapper; run the test under mise")
+        unreachable!(
+            "no cargo on the PATH other than the crates-mirror wrapper; run the test under mise"
+        )
     })
 }
 
@@ -84,27 +90,37 @@ pub fn real_cargo_str() -> String {
 #[cfg(test)]
 mod tests {
     use super::{MIRROR_MARKER, pick_real_cargo};
+    use std::error::Error;
     use std::fs;
     use std::path::{Path, PathBuf};
+
+    type TestResult = Result<(), Box<dyn Error>>;
 
     /// A scratch tree that is removed on drop.
     struct Scratch(PathBuf);
 
     impl Scratch {
-        fn new(name: &str) -> Self {
+        fn new(name: &str) -> Result<Self, Box<dyn Error>> {
             let root = std::env::temp_dir()
                 .join(format!("velnor-test-support-{}-{name}", std::process::id()));
             fs::remove_dir_all(&root).ok();
-            fs::create_dir_all(&root).unwrap();
-            Self(root)
+            fs::create_dir_all(&root)?;
+            Ok(Self(root))
         }
 
-        /// Writes an executable-looking `cargo` into `dir` and returns its directory.
-        fn bin_dir(&self, dir: &str) -> PathBuf {
+        /// Writes a `cargo` file into `dir` (relative to the scratch root) and returns `dir`.
+        fn bin_dir(&self, dir: &str) -> Result<PathBuf, Box<dyn Error>> {
             let dir = self.0.join(dir);
-            fs::create_dir_all(&dir).unwrap();
-            fs::write(dir.join("cargo"), "#!/bin/sh\n").unwrap();
-            dir
+            fs::create_dir_all(&dir)?;
+            fs::write(dir.join("cargo"), "#!/bin/sh\n")?;
+            Ok(dir)
+        }
+
+        /// Marks `dir` as the crates-mirror wrapper's folder.
+        fn mirror(&self, dir: &str) -> Result<PathBuf, Box<dyn Error>> {
+            let dir = self.bin_dir(dir)?;
+            fs::write(dir.join("config.toml"), format!("{MIRROR_MARKER}\n"))?;
+            Ok(dir)
         }
     }
 
@@ -120,39 +136,39 @@ mod tests {
     }
 
     #[test]
-    fn the_mise_command_wrapper_beats_rustup_and_skips_the_mirror() {
-        let scratch = Scratch::new("mise-wins");
-        let mirror = scratch.bin_dir("mirror");
-        fs::write(mirror.join("config.toml"), format!("{MIRROR_MARKER}\n")).unwrap();
-        let mise = scratch.bin_dir("mise/command-wrappers/bin");
-        let rustup = scratch.bin_dir(".cargo/bin");
+    fn the_mise_command_wrapper_beats_rustup_and_skips_the_mirror() -> TestResult {
+        let scratch = Scratch::new("mise-wins")?;
+        let mirror = scratch.mirror("mirror")?;
+        let mise = scratch.bin_dir("mise/command-wrappers/bin")?;
+        let rustup = scratch.bin_dir(".cargo/bin")?;
 
         let picked = pick_real_cargo(on_path(&[&mirror, &mise, &rustup]));
         assert_eq!(picked, Some(mise.join("cargo")));
 
         let picked = pick_real_cargo(on_path(&[&mirror, &rustup, &mise]));
         assert_eq!(picked, Some(mise.join("cargo")));
+        Ok(())
     }
 
     #[test]
-    fn without_mise_the_rustup_cargo_is_the_real_one() {
-        let scratch = Scratch::new("no-mise");
-        let mirror = scratch.bin_dir("mirror");
-        fs::write(mirror.join("config.toml"), format!("{MIRROR_MARKER}\n")).unwrap();
-        let rustup = scratch.bin_dir(".cargo/bin");
+    fn without_mise_the_rustup_cargo_is_the_real_one() -> TestResult {
+        let scratch = Scratch::new("no-mise")?;
+        let mirror = scratch.mirror("mirror")?;
+        let rustup = scratch.bin_dir(".cargo/bin")?;
 
         assert_eq!(
             pick_real_cargo(on_path(&[&mirror, &rustup])),
             Some(rustup.join("cargo"))
         );
+        Ok(())
     }
 
     #[test]
-    fn only_the_mirror_on_the_path_is_an_error() {
-        let scratch = Scratch::new("only-mirror");
-        let mirror = scratch.bin_dir("mirror");
-        fs::write(mirror.join("config.toml"), format!("{MIRROR_MARKER}\n")).unwrap();
+    fn only_the_mirror_on_the_path_is_an_error() -> TestResult {
+        let scratch = Scratch::new("only-mirror")?;
+        let mirror = scratch.mirror("mirror")?;
 
         assert_eq!(pick_real_cargo(on_path(&[&mirror])), None);
+        Ok(())
     }
 }
