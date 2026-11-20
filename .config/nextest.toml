@@ -65,6 +65,10 @@ filter = 'package(=velnor-gen) and binary(=it) and (test(=freshness::generate_re
 slow-timeout = { period = "10s", terminate-after = 1 }
 
 [[profile.ci.overrides]]
+filter = 'package(=velnor-gen) and binary(=it) and test(=mise_trust::generate_and_check_run_cargo_metadata_in_an_untrusted_mbx_checkout_without_a_manual_trust)'
+slow-timeout = { period = "10s", terminate-after = 1 }
+
+[[profile.ci.overrides]]
 filter = 'package(=velnor-gen) and binary(=it) and (test(=freshness::generate_rejects_a_build_script_that_is_a_filesystem_symlink) or test(=io_identity::a_checkout_without_an_origin_keeps_its_schedule_when_renamed) or test(=io_identity::generate_refuses_a_hand_written_workflow_with_a_forged_marker) or test(=io_identity::generate_still_removes_a_genuinely_generated_stale_workflow) or test(=io_identity::local_origin_generates_when_the_schedule_does_not_need_the_identity) or test(=io_identity::local_origin_is_rejected_when_a_hashed_schedule_needs_the_identity) or test(=io_identity::repository_case_does_not_change_schedule_identity) or test(=io_identity::schedules_use_the_remote_repository_and_transport_independent_identity))'
 slow-timeout = { period = "10s", terminate-after = 1 }
 
