@@ -237,6 +237,26 @@ fn a_symlinked_home_is_refused_and_its_target_is_never_cleared() {
 }
 
 #[test]
+fn a_symlinked_home_with_a_trailing_separator_is_refused_too() {
+    let node = node("tools-home-clear-linked-home-slash");
+    saved(&node);
+    let real = node.root.join("real-home");
+    baked_extras(&real);
+    let linked = node.root.join("linked-home");
+    symlink(&real, &linked).unwrap_or_else(|e| unreachable!("{e}"));
+    let slashed = PathBuf::from(format!("{}/", linked.display()));
+    let clear = go(&node, Verb::Clear, &slashed);
+    assert!(matches!(clear, Outcome::Rejected(_)), "{clear:?}");
+    let restore = go(&node, Verb::Restore, &slashed);
+    assert!(matches!(restore, Outcome::Rejected(_)), "{restore:?}");
+    assert!(
+        real.join(".local/share/mise/installs/cosign/2.9.0/bin/cosign")
+            .is_file()
+    );
+    assert!(real.join(".rustup/toolchains/nightly/bin/rustc").is_file());
+}
+
+#[test]
 fn a_home_below_a_symlinked_ancestor_is_still_cleared() {
     let node = node("tools-home-clear-linked-ancestor");
     let real = node.root.join("real-parent");
