@@ -73,15 +73,21 @@ pub(super) fn fetch(args: &FetchArgs) -> Result<String, CiError> {
 }
 
 fn fetch_with(args: &FetchArgs, token: Option<&str>) -> Result<(), CiError> {
-    let home = account_home()?;
-    let trusted = Trusted::new(&home, &args.trusted_dir);
+    let home = super::fetch_fixed::account_home(args.home.as_deref())?;
+    let fixed = super::fetch_fixed::Fixed::system().find();
+    let mut roots = args.trusted_dir.clone();
+    roots.extend(fixed.iter().flat_map(|fixed| fixed.roots()));
+    let trusted = Trusted::new(&home, &roots);
     let search = search_path();
-    let cargo = trusted.program("cargo", &search, false)?;
+    let cargo = super::fetch_fixed::cargo(fixed.as_ref(), &trusted, &home, &search)?;
     let git = trusted.program("git", &search, true)?;
-    let inherited = Inherited {
+    let mut inherited = Inherited {
         cargo_home: std::env::var_os("CARGO_HOME"),
         rustup_home: std::env::var_os("RUSTUP_HOME"),
     };
+    if let Some(fixed) = &fixed {
+        inherited = fixed.adopt(inherited);
+    }
     let mirror = super::crates_mirror::runner_config()?;
     let server = Server::from_environment()?;
     let mut environment = trusted.environment(&home, &cargo, &git, &inherited, token, &server)?;
@@ -274,7 +280,9 @@ impl Trusted {
             };
             let trusted_directory = self.within(&directory)
                 || (system && SYSTEM_DIRECTORIES.iter().any(|d| directory == Path::new(d)));
+            let resolved_trusted = !self.within(&directory) || self.within(&resolved);
             if trusted_directory
+                && resolved_trusted
                 && resolved.is_file()
                 && !super::fetch_real_cargo::is_mise_front(&candidate, &resolved)
             {
@@ -378,13 +386,4 @@ pub(super) fn search_path() -> Vec<PathBuf> {
     std::env::var_os("PATH")
         .map(|path| std::env::split_paths(&path).collect())
         .unwrap_or_default()
-}
-
-fn account_home() -> Result<PathBuf, CiError> {
-    nix::unistd::User::from_uid(nix::unistd::Uid::current())
-        .ok()
-        .flatten()
-        .map(|user| user.dir)
-        .filter(|dir| dir.is_absolute())
-        .ok_or_else(|| CiError::new("cannot read the home directory of the runner account"))
 }

@@ -221,6 +221,12 @@ pub struct FetchArgs {
         help = "An extra absolute directory whose programs and CARGO_HOME count as installed by the runner"
     )]
     pub trusted_dir: Vec<PathBuf>,
+    #[arg(
+        long,
+        hide = true,
+        help = "An absolute home directory used in place of the runner account's own"
+    )]
+    pub home: Option<PathBuf>,
 }
 
 #[derive(Debug, Args)]

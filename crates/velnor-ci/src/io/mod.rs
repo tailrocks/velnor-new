@@ -35,6 +35,7 @@ mod delta_trim;
 mod early_list;
 mod fetch;
 mod fetch_credentials;
+mod fetch_fixed;
 mod fetch_real_cargo;
 mod fetch_reports;
 mod fetch_toolchain;

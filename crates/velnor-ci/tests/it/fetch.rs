@@ -85,6 +85,7 @@ impl Fixture {
         let root = repo.root().to_path_buf();
         let log = root.join("log");
         fs::create_dir_all(&log)?;
+        fs::create_dir_all(root.join("home/.cargo"))?;
         let trusted = root.join("trusted/bin");
         script(
             &trusted.join("cargo"),
@@ -133,6 +134,8 @@ impl Fixture {
             .arg("fetch")
             .arg("--trusted-dir")
             .arg(root.join("trusted"))
+            .arg("--home")
+            .arg(root.join("home"))
             .env_clear()
             .env("PATH", path)
             .env("VELNOR_API_URL", &api.url)

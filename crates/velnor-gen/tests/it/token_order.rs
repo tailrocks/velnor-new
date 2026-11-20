@@ -65,3 +65,29 @@ fn no_job_holds_a_token_after_a_step_that_runs_checkout_code() -> TestResult {
         .insert(path("Cargo.lock")?, GIT_LOCK.as_bytes().to_vec());
     assert_tokens_first("private base caches", &workflow(&consumer)?)
 }
+
+#[test]
+fn nothing_restores_the_tool_directory_before_the_fetch() -> TestResult {
+    let mut fetches = 0;
+    for shape in ["", "shape = 'groups'\n", "shape = 'lint-test'\n"] {
+        let config = format!("{shape}{SECTION}");
+        let repo = private_repo(&["Cargo.toml", "tools/Cargo.toml"], &config, "0.1.111")?;
+        for job in jobs(&workflow(&repo)?)? {
+            let steps = job["steps"].as_array().ok_or("a job without steps")?;
+            let Some(token) = steps.iter().position(|step| step["id"] == "private-token") else {
+                continue;
+            };
+            let fetch = token + 1;
+            fetches += 1;
+            for step in &steps[..fetch] {
+                let rendered = step.to_string();
+                assert!(
+                    !rendered.contains(".local/share/mise") && !rendered.contains("mise-action"),
+                    "{config}: {rendered} precedes the fetch"
+                );
+            }
+        }
+    }
+    assert!(fetches > 0, "no job fetches");
+    Ok(())
+}
