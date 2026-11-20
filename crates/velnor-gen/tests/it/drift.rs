@@ -255,6 +255,7 @@ fn committed_view(root: &Path) -> Result<RepoView, Box<dyn Error>> {
         files: read_files(root, &wanted_files(&tracked))?,
         tracked_paths: tracked,
         symlinks,
+        gitlinks: Default::default(),
         rust_metadata: BTreeMap::new(),
     };
     add_manifests(&mut view, |paths| read_files(root, paths))?;

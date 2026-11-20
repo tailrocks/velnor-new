@@ -13,6 +13,7 @@ pub struct RepoView {
     pub files: BTreeMap<RepoPath, Vec<u8>>,
     pub tracked_paths: BTreeSet<RepoPath>,
     pub symlinks: BTreeSet<RepoPath>,
+    pub gitlinks: BTreeSet<RepoPath>,
     pub rust_metadata: BTreeMap<RepoPath, RustMetadata>,
 }
 

@@ -353,3 +353,15 @@ fn check_configurations_folds_normalized_requests_and_harmless_dev_dependencies(
     assert!(output.status.success(), "{output:?}");
     assert!(String::from_utf8_lossy(&output.stdout).contains("2 configurations, 1 checks"));
 }
+
+#[test]
+fn check_configurations_resolves_online_so_a_cold_sources_cache_can_fetch() {
+    let repo = fixture("configurations-online");
+    write_json(&repo, "default.json", &graph(&[], &[]));
+    let output = run(&repo, None);
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(
+        calls(&repo),
+        "metadata --format-version 1 --locked --manifest-path Cargo.toml\ncheck --workspace --all-targets --locked --manifest-path Cargo.toml\n"
+    );
+}

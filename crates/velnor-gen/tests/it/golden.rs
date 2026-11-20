@@ -144,6 +144,7 @@ pub(crate) fn load(sample: &Path) -> Result<RepoView, Box<dyn Error>> {
         files,
         tracked_paths,
         symlinks,
+        gitlinks: Default::default(),
         rust_metadata,
     };
     for manifest in metadata_roots(&view)? {

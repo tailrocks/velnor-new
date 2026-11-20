@@ -58,6 +58,7 @@ pub(super) fn read(directory: &Path) -> Result<ReportCheckout, CiError> {
         files: velnor_gen::io::read_files(&tracked.top, &wanted).map_err(ci)?,
         tracked_paths,
         symlinks,
+        gitlinks: Default::default(),
         rust_metadata: BTreeMap::new(),
     };
     velnor_gen::io::add_manifests(&mut view, |paths| {

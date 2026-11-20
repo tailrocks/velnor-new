@@ -247,3 +247,65 @@ fn a_symlinked_configurations_file_or_folder_is_refused() -> TestResult {
     }
     Ok(())
 }
+
+#[test]
+fn a_parallel_test_lane_does_not_repeat_the_check_in_its_own_job() -> TestResult {
+    let config = format!(
+        "{KEY}[[test_lane]]\nroot = '.'\nfeatures = ['local-mode']\njob = 'parallel'\n"
+    );
+    let steps = found(&jobs_of(&config, HELPER)?);
+    let ids: Vec<&str> = steps.iter().map(|step| step.0.as_str()).collect();
+    assert_eq!(ids, ["rust-root"], "{steps:?}");
+    Ok(())
+}
+
+#[test]
+fn a_root_without_a_test_command_still_gets_the_check_in_a_compiling_job() -> TestResult {
+    let mut view = tracked(KEY, HELPER)?;
+    for metadata in view.rust_metadata.values_mut() {
+        for member in &mut metadata.members {
+            for target in &mut member.targets {
+                target.tests = false;
+            }
+        }
+    }
+    let steps = found(&document(&workflow(&view)?)?["jobs"]);
+    assert_eq!(steps.len(), 1, "{steps:?}");
+    Ok(())
+}
+
+#[test]
+fn a_grouped_root_runs_the_check_in_the_group_target_directory() -> TestResult {
+    let config = "[[workspace_groups]]\nname = 'tools'\nroots = ['tools/a', 'tools/b']\n[[check_configurations]]\nroot = 'tools/a'\n";
+    let view = view_with(
+        &["Cargo.toml", "tools/a/Cargo.toml", "tools/b/Cargo.toml"],
+        config,
+        HELPER,
+    )?;
+    let steps = found(&document(&workflow(&view)?)?["jobs"]);
+    assert_eq!(steps.len(), 1, "{steps:?}");
+    assert_eq!(
+        steps[0].3["env"]["CARGO_TARGET_DIR"],
+        "${{ github.workspace }}/target-velnor/tools",
+        "{steps:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn a_configurations_path_that_is_a_submodule_is_refused_like_a_symlink() -> TestResult {
+    let mut view = tracked(KEY, HELPER)?;
+    view.gitlinks.insert(RepoPath::new("ci/configurations.json")?);
+    let error = workflow(&view)
+        .err()
+        .ok_or("the submodule path was accepted")?;
+    assert!(error.to_string().contains("submodule"), "{error}");
+    Ok(())
+}
+
+#[test]
+fn a_repeated_check_entry_is_refused_so_the_check_runs_once() -> TestResult {
+    let text = refusal(&format!("{KEY}{KEY}"), HELPER)?;
+    assert!(text.contains("check_configurations"), "{text}");
+    Ok(())
+}

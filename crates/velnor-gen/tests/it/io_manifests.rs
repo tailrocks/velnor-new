@@ -52,6 +52,7 @@ fn a_tracked_manifest_that_cannot_be_read_fails_the_checkout() -> TestResult {
         &readable.0,
         Checkout::tracked(&manifest)?,
         BTreeSet::new(),
+        BTreeSet::new(),
         false,
     )?
     .0;
@@ -65,6 +66,7 @@ fn a_tracked_manifest_that_cannot_be_read_fails_the_checkout() -> TestResult {
     let result = view_of(
         &dangling.0,
         Checkout::tracked(&manifest)?,
+        BTreeSet::new(),
         BTreeSet::new(),
         false,
     );
@@ -90,6 +92,7 @@ fn an_unreadable_workspace_member_lock_fails_the_checkout() -> TestResult {
     let result = view_of(
         &checkout.0,
         Checkout::tracked(&manifest)?,
+        BTreeSet::new(),
         BTreeSet::new(),
         false,
     );
