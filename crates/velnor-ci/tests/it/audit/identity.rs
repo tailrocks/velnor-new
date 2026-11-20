@@ -20,7 +20,7 @@ fn refuses(output: &Output, text: &str) {
     );
 }
 
-const TOOLS: [(&str, &str, &str); 4] = [
+const TOOLS: &[(&str, &str, &str)] = &[
     ("f000000000000011", "first_tool", "bin-first-tool"),
     ("f000000000000012", "first_tool", "test-bin-first-tool"),
     ("f000000000000014", "second_tool", "test-bin-second-tool"),
