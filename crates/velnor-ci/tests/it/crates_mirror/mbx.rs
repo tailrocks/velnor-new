@@ -50,6 +50,18 @@ fn run_wrapper(
     first: &Path,
     mbx_required: bool,
 ) -> Result<Output, Box<dyn std::error::Error>> {
+    run_wrapper_with(root, first, mbx_required, false)
+}
+
+/// `mise_active` models a step whose environment already has mise's cargo wrapper active
+/// (`__MISE_ACTIVE_WRAPPERS` lists cargo) but not the velnor launch phase: the first `cargo`
+/// the step reaches is the wrapper itself, outside mise's own `exec` chain.
+fn run_wrapper_with(
+    root: &Path,
+    first: &Path,
+    mbx_required: bool,
+    mise_active: bool,
+) -> Result<Output, Box<dyn std::error::Error>> {
     let env = fs::read_to_string(root.join("env"))?;
     let config = env
         .lines()
@@ -76,6 +88,9 @@ fn run_wrapper(
     } else {
         command.env_remove("VELNOR_CARGO_MBX");
     }
+    if mise_active {
+        command.env("__MISE_ACTIVE_WRAPPERS", r#"["cargo"]"#);
+    }
     Ok(command.output()?)
 }
 
@@ -98,6 +113,30 @@ fn declared_mbx_refuses_a_plain_cargo_ahead_of_the_mise_wrapper() -> TestResult 
     assert!(stderr.contains(REFUSED), "{stderr}");
     assert!(stderr.contains(&plain.display().to_string()), "{stderr}");
     assert!(!String::from_utf8_lossy(&output.stdout).contains("plain-cargo-ran"));
+    Ok(())
+}
+
+#[test]
+fn declared_mbx_refuses_a_first_hop_cargo_in_an_active_mise_environment() -> TestResult {
+    // Reached first-hop (no launch phase, no pinned cargo): the native-ready arm must not run
+    // a plain cargo around mise's MBX wrapper.
+    let repo = configured_repo("crates-mirror-mbx-ready-native")?;
+    let plain = plain_cargo(&repo)?;
+    let output = run_wrapper_with(repo.root(), &plain, true, true)?;
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!output.status.success(), "{output:?}");
+    assert!(stderr.contains(REFUSED), "{stderr}");
+    assert!(!String::from_utf8_lossy(&output.stdout).contains("plain-cargo-ran"));
+    Ok(())
+}
+
+#[test]
+fn undeclared_mbx_keeps_running_a_plain_cargo_in_an_active_mise_environment() -> TestResult {
+    let repo = configured_repo("crates-mirror-mbx-ready-native-undeclared")?;
+    let plain = plain_cargo(&repo)?;
+    let output = run_wrapper_with(repo.root(), &plain, false, true)?;
+    assert!(output.status.success(), "{output:?}");
+    assert!(String::from_utf8_lossy(&output.stdout).contains("plain-cargo-ran"));
     Ok(())
 }
 
