@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod artifact_stage;
+mod artifact_stage_paths;
 mod audit;
 mod base_expiry;
 mod bench_compare;
@@ -194,6 +196,7 @@ mod timings_composite;
 mod timings_groups;
 mod timings_runs;
 mod timings_setup;
+mod tools_home_clear;
 mod tools_local;
 mod tools_verify;
 mod tools_verify_bounds;
