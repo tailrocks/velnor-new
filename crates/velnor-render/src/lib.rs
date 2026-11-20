@@ -147,5 +147,4 @@ fn document(plan: &WorkflowPlan, rendered: &RenderedWorkflow, marks: ShellcheckM
     .collect();
     seal(GENERATED_HEADER, &emit(&workflow))
 }
-
 mod report;
