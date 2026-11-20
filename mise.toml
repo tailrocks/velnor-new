@@ -99,6 +99,10 @@ python3 scripts/hosted_phase_measurement/tests/test_mbx_summary.py
 description = "Validate hk.pkl: fail when hk cannot load the config"
 run = "hk validate --deny-warnings"
 
+[tasks.test-no-doctests-rule]
+description = "Check the alint no-doctests rule against doctest fixtures: every bypass form must fail, plain prose must pass"
+run = "bash scripts/test-no-doctests-rule.sh"
+
 [tasks.test-maintenance-helpers]
 description = "Run repository-only maintenance helper test suites"
 run = '''
