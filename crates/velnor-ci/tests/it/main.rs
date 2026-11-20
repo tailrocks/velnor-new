@@ -199,6 +199,7 @@ mod timings_setup;
 mod tools_home_clear;
 mod tools_local;
 mod tools_verify;
+mod tools_verify_anchor;
 mod tools_verify_bounds;
 mod tools_verify_notice;
 mod trusted_event_parity;
