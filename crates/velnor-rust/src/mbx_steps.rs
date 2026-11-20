@@ -30,16 +30,27 @@ pub(crate) fn apply(facts: &RepoFacts, jobs: &mut [Job]) {
             } else {
                 vec![StepKind::MbxRemote { from_pin }]
             };
-            insert(job, &remote_steps, After::Tools);
+            insert(
+                job,
+                &with_out_dirs(remote_steps, out_dirs_in_target),
+                After::Tools,
+            );
         }
         if private {
-            let mut kinds = vec![StepKind::MbxPrivate];
-            if out_dirs_in_target {
-                kinds.push(StepKind::MbxOutDirs);
-            }
-            insert(job, &kinds, After::Helper);
+            insert(
+                job,
+                &with_out_dirs(vec![StepKind::MbxPrivate], out_dirs_in_target),
+                After::Helper,
+            );
         }
     }
+}
+
+fn with_out_dirs(mut kinds: Vec<StepKind>, in_target: bool) -> Vec<StepKind> {
+    if in_target {
+        kinds.push(StepKind::MbxOutDirs);
+    }
+    kinds
 }
 
 #[derive(Clone, Copy)]
