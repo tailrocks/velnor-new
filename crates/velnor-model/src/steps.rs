@@ -100,6 +100,10 @@ pub enum StepKind {
         manifests: Vec<RepoPath>,
         cached: Vec<crate::ids::RootSlug>,
     },
+    ReleaseAssets {
+        assets: Vec<crate::release_asset::ReleaseAsset>,
+        part: crate::release_asset::ReleaseAssetPart,
+    },
     /// Fetches the `RustSec` advisory DB for each distinct cargo-deny config, so that the
     /// `--offline` deny check finds it. It runs before any private token exists.
     AdvisoryFetch {
@@ -151,7 +155,9 @@ impl StepKind {
         match self {
             // The advisory DB fetch serves the cargo-deny check, which is a check, so it
             // is skipped after a merge group exactly when that check is.
-            Self::TestSetup { .. } | Self::AdvisoryFetch { .. } => true,
+            Self::TestSetup { .. } | Self::AdvisoryFetch { .. } | Self::ReleaseAssets { .. } => {
+                true
+            }
             Self::Cargo(command) => !command.is_target_build(),
             Self::Checkout { .. }
             | Self::InstallTools { .. }
@@ -214,7 +220,10 @@ impl StepKind {
     /// the node-local stores and the scope-cache directory are not the service.
     #[must_use]
     pub fn saves_to_cache_service(&self) -> bool {
-        matches!(self, Self::CacheSave(_) | Self::MbxRemote)
+        matches!(
+            self,
+            Self::CacheSave(_) | Self::MbxRemote | Self::ToolsLocal(ToolsLocalVerb::AnchorSave)
+        )
     }
 }
 
@@ -232,6 +241,20 @@ pub enum ToolsLocalVerb {
     Prime,
     RecordRestore,
     RecordSave,
+    AnchorReset,
+    AnchorRestore,
+    Verify,
+    Record,
+    AnchorSave,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VerifiedSave {
+    OnDefaultBranch,
+    UnlessLocal,
+    NodeStore,
+    Prime,
+    Anchor,
 }
 
 /// Which tools steps the cache telemetry reads in place of the cache action's own.

@@ -1,9 +1,98 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::CacheKey;
+use velnor_model::{CacheKey, VerifiedSave, When};
 
+use crate::gate::{
+    ON_DEFAULT_BRANCH, SAVING_EVENTS, TOOLS_LOCAL_STEP, TOOLS_LOOKUP_STEP, TOOLS_STEP,
+};
 use crate::rules::{RenderedStep, Value};
+
+const VERIFY_STEP: &str = "toolsverify";
+const RECORD_STEP: &str = "toolsrecord";
+const ANCHOR_STEP: &str = "toolsanchor";
+const ANCHOR_DIR: &str = "${{ runner.temp }}/velnor-tools-anchor";
+
+/// On a node miss the lookup is skipped, so its empty output leaves the network restore in charge.
+pub(crate) fn tools_parts(when: When, parts: &mut Vec<String>) {
+    let on_default = ON_DEFAULT_BRANCH.to_owned();
+    let saving = SAVING_EVENTS.to_owned();
+    let node_miss = format!("steps.{TOOLS_LOCAL_STEP}.outputs.hit != 'true'");
+    let network_miss = format!("steps.{TOOLS_STEP}.outputs.cache-hit != 'true'");
+    let lookup_miss = format!("steps.{TOOLS_LOOKUP_STEP}.outputs.cache-hit != 'true'");
+    let matches = format!("steps.{RECORD_STEP}.outputs.matches == 'true'");
+    match when {
+        When::PrimeToolsFromNetwork => parts.extend([
+            on_default,
+            saving,
+            node_miss,
+            format!("steps.{TOOLS_STEP}.outputs.cache-hit == 'true'"),
+        ]),
+        When::LookupToolsOnNodeHit => parts.extend([
+            on_default,
+            format!("steps.{TOOLS_LOCAL_STEP}.outputs.hit == 'true'"),
+        ]),
+        When::SaveToolsOnDefaultBranch => parts.extend([on_default, network_miss]),
+        When::SaveToolsUnlessLocal => parts.extend([on_default, network_miss, lookup_miss]),
+        When::RestoreToolsUnlessLocal => parts.push(node_miss),
+        When::SaveVerifiedTools(save) => {
+            let recorded = format!("steps.{RECORD_STEP}.outputs.recorded == 'true'");
+            match save {
+                VerifiedSave::OnDefaultBranch => parts.extend([on_default, network_miss, matches]),
+                VerifiedSave::UnlessLocal => {
+                    parts.extend([on_default, network_miss, lookup_miss, matches]);
+                }
+                VerifiedSave::NodeStore => parts.push(matches),
+                VerifiedSave::Anchor => parts.extend([on_default, recorded]),
+                VerifiedSave::Prime => {
+                    tools_parts(When::PrimeToolsFromNetwork, parts);
+                    parts.push(format!("steps.{VERIFY_STEP}.outputs.verified == 'true'"));
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+fn anchor_cache_step(action: &str, verb: &str) -> RenderedStep {
+    let key = crate::cache::render_key(&CacheKey::Tools {
+        host: velnor_model::Host,
+    })
+    .key;
+    let key = key.replacen("velnor-tools-", "velnor-tools-anchor-", 1);
+    RenderedStep {
+        id: (verb == "Restore").then(|| ANCHOR_STEP.to_owned()),
+        name: format!("{verb} anchor"),
+        shared: true,
+        uses: Some(action.to_owned()),
+        with: vec![
+            ("path".to_owned(), Value::Expr(ANCHOR_DIR.to_owned())),
+            ("key".to_owned(), Value::Expr(key)),
+        ],
+        ..RenderedStep::default()
+    }
+}
+
+fn verify_step(verb: velnor_model::ToolsLocalVerb) -> RenderedStep {
+    use velnor_model::ToolsLocalVerb as Verb;
+    let (id, name, word) = match verb {
+        Verb::AnchorReset => (None, "Clear anchor", "reset"),
+        Verb::Verify => (Some(VERIFY_STEP), "Verify tools", "check"),
+        _ => (Some(RECORD_STEP), "Record anchor", "record"),
+    };
+    let hit = Value::Expr(format!("${{{{ steps.{ANCHOR_STEP}.outputs.cache-hit }}}}"));
+    RenderedStep {
+        id: id.map(str::to_owned),
+        name: name.to_owned(),
+        shared: true,
+        env: (verb != Verb::AnchorReset)
+            .then(|| ("VELNOR_ANCHOR_HIT".to_owned(), hit))
+            .into_iter()
+            .collect(),
+        run: Some(format!("velnor-ci tools-verify {word}")),
+        ..RenderedStep::default()
+    }
+}
 
 /// The exact-key lookup the node-hit path runs on a trusted run: `lookup-only`, so nothing is
 /// downloaded, and no fallback keys, so `cache-hit` means the exact tools entry exists.
@@ -36,6 +125,9 @@ pub(crate) fn tools_local_step(verb: velnor_model::ToolsLocalVerb) -> RenderedSt
         Verb::Prime => ("Prime the node store with the tools", None, "save"),
         Verb::RecordRestore => return tools_restored_step(key),
         Verb::RecordSave => return tools_saved_step(),
+        Verb::AnchorRestore => return anchor_cache_step(crate::steps::CACHE_RESTORE, "Restore"),
+        Verb::AnchorSave => return anchor_cache_step(crate::steps::CACHE_SAVE, "Save"),
+        Verb::AnchorReset | Verb::Verify | Verb::Record => return verify_step(verb),
     };
     RenderedStep {
         id: id.map(str::to_owned),

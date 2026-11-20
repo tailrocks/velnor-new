@@ -15,6 +15,7 @@ mod mbx;
 mod mbx_config;
 mod mise;
 mod plan;
+mod release_asset;
 mod repo;
 mod repo_config;
 mod sealed;
@@ -54,6 +55,7 @@ pub use plan::{
     TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, Triggers,
     When, WorkflowPlan, group_output_name,
 };
+pub use release_asset::{ReleaseAsset, ReleaseAssetError, ReleaseAssetPart};
 pub use repo::{
     CacheDebug, CheckoutScope, CiDebugInfo, CompileInputs, CratesMirror, CustomHarness,
     DependencyKind, DocsRun, FullRun, InputOwner, InputRule, LaneFeatures, LaneJob,
@@ -76,5 +78,5 @@ pub use verdict::{JobCondition, VerdictJob, VerdictSpec};
 
 pub use steps::{
     BUDGET_JOB, BaseExpiry, GroupFilter, HelperCommand, InputsCli, PrepareLocks, StepKind,
-    ToolsLocalVerb, ToolsTelemetry, TrimFamily,
+    ToolsLocalVerb, ToolsTelemetry, TrimFamily, VerifiedSave,
 };
