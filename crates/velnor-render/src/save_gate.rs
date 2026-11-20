@@ -126,12 +126,24 @@ impl SaveGate {
                 });
             }
         }
+        let mut terms = Vec::new();
         if compiled.is_empty() {
-            gate.ids.fill(None);
+            // No build to wait for: the job's own success still gates the saves, and so
+            // does every compile step, so a failed lint, doc or alone check never saves.
+            let ids = std::mem::take(&mut gate.ids);
+            gate.ids = ids
+                .into_iter()
+                .map(|id| id.filter(|id| checks.contains(id)))
+                .collect();
             gate.audit_runs.fill(None);
+            if !checks.is_empty() {
+                terms.push("success()".to_owned());
+            }
         } else {
-            let mut terms = builds_finished(&compiled, saved_here);
+            terms = builds_finished(&compiled, saved_here);
             terms.extend(audits.iter().map(audit_passed));
+        }
+        if !terms.is_empty() {
             terms.extend(
                 checks
                     .iter()

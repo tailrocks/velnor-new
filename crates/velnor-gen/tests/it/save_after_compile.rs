@@ -6,7 +6,7 @@ use crate::facts::TestResult;
 use crate::gate_eval::{Context, condition_of, runs};
 
 const RECORDING: &str = "0.1.107";
-const RECORD: &str = "Record that the build can be saved";
+pub(crate) const RECORD: &str = "Record that the build can be saved";
 
 const SAVES: [&str; 6] = [
     "velnor-ci inputs save",
@@ -40,7 +40,7 @@ fn compile_ids(lane: &str) -> Vec<String> {
         .collect()
 }
 
-fn pushed_to_main() -> Context {
+pub(crate) fn pushed_to_main() -> Context {
     Context::new(&[
         ("github.ref", "refs/heads/main"),
         ("github.event.repository.default_branch", "main"),
@@ -54,7 +54,7 @@ fn pushed_to_main() -> Context {
     ])
 }
 
-fn saves(lane: &str, mut context: Context) -> Result<Vec<bool>, Box<dyn std::error::Error>> {
+pub(crate) fn saves(lane: &str, mut context: Context) -> Result<Vec<bool>, Box<dyn std::error::Error>> {
     let record = step(lane, RECORD).ok_or("no record step")?;
     let recorded = runs(&condition_of(record)?, &context)?;
     context.set(
@@ -76,7 +76,7 @@ fn saves(lane: &str, mut context: Context) -> Result<Vec<bool>, Box<dyn std::err
     Ok(ran)
 }
 
-fn with_outcomes(ids: &[String], failed: Option<&str>, outcome: &str) -> Context {
+pub(crate) fn with_outcomes(ids: &[String], failed: Option<&str>, outcome: &str) -> Context {
     let mut context = pushed_to_main();
     for id in ids {
         let own = if Some(id.as_str()) == failed {
