@@ -8,6 +8,7 @@ use std::path::PathBuf;
 use crate::error::CiError;
 use crate::escape::inert;
 use crate::mbx_store::trusted_event;
+use crate::tools_discard;
 use crate::tools_verify::{Anchor, Discard, Recording, Verb, Verdict, check, read, record};
 
 const ANCHOR_DIR: &str = "velnor-tools-anchor";
@@ -71,12 +72,23 @@ fn outputs(verdict: &Verdict) -> String {
     }
 }
 
+fn checked(context: &Context, anchor: &Anchor<'_>) -> Result<Verdict, CiError> {
+    let verdict = check(&context.home, anchor)?;
+    if matches!(
+        verdict,
+        Verdict::Discarded(Discard::Mismatch | Discard::Unreadable(_))
+    ) {
+        tools_discard::mark(&context.runner_temp)?;
+    }
+    Ok(verdict)
+}
+
 pub fn run(verb: Verb, context: &Context) -> Result<String, CiError> {
     let file = context.runner_temp.join(ANCHOR_DIR).join(ANCHOR_NAME);
     let anchor = Anchor(&context.anchor);
     let verdict = match verb {
         Verb::Read => read(&file, context.anchor_matched),
-        Verb::Check => check(&context.home, &anchor)?,
+        Verb::Check => checked(context, &anchor)?,
         Verb::Record => record(
             &context.home,
             &Recording {

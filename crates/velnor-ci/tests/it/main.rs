@@ -196,6 +196,7 @@ mod timings_groups;
 mod timings_runs;
 mod timings_setup;
 mod tools_home_clear;
+mod tools_heal;
 mod tools_local;
 mod tools_verify;
 mod tools_verify_anchor;

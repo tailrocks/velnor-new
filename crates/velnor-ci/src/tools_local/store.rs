@@ -150,7 +150,7 @@ pub(super) fn save(inputs: &Inputs<'_>) -> Outcome {
     };
     let tools = base.join(TOOLS_DIR);
     let entry = tools.join(inputs.key);
-    if complete(&entry, inputs.owner) {
+    if !inputs.replace && complete(&entry, inputs.owner) {
         return Outcome::AlreadySaved;
     }
     if fs::create_dir_all(&tools).is_err() {
@@ -162,7 +162,7 @@ pub(super) fn save(inputs: &Inputs<'_>) -> Outcome {
         Claim::Broken => return Outcome::Failed("cannot lock the key"),
     };
     sweep(&tools);
-    if complete(&entry, inputs.owner) {
+    if !inputs.replace && complete(&entry, inputs.owner) {
         return Outcome::AlreadySaved;
     }
     let staging = tools.join(format!(
@@ -179,10 +179,15 @@ pub(super) fn save(inputs: &Inputs<'_>) -> Outcome {
         fs::remove_dir_all(&staging).ok();
         return Outcome::Failed("the copy to the store failed");
     }
-    if fs::symlink_metadata(&entry).is_ok() {
-        fs::remove_dir_all(&entry).ok();
-    }
+    let retired = tools.join(format!(
+        "{STAGING_PREFIX}retired-{:016x}",
+        random_u64()
+    ));
+    let replaced = fs::symlink_metadata(&entry).is_ok() && fs::rename(&entry, &retired).is_ok();
     if fs::rename(&staging, &entry).is_err() {
+        if replaced {
+            fs::rename(&retired, &entry).ok();
+        }
         fs::remove_dir_all(&staging).ok();
         return if complete(&entry, inputs.owner) {
             Outcome::AlreadySaved
@@ -190,8 +195,13 @@ pub(super) fn save(inputs: &Inputs<'_>) -> Outcome {
             Outcome::Failed("the entry could not be published")
         };
     }
+    fs::remove_dir_all(&retired).ok();
     prune(&tools, inputs.key);
-    Outcome::Saved { to: entry }
+    if replaced {
+        Outcome::Healed { to: entry }
+    } else {
+        Outcome::Saved { to: entry }
+    }
 }
 
 fn prune(tools: &Path, current: &str) {
