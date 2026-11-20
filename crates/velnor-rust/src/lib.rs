@@ -16,6 +16,7 @@ mod config;
 mod config_branch;
 mod config_budget;
 mod config_cache;
+mod config_check_configurations;
 mod config_ci;
 mod config_events;
 mod config_exclude;
