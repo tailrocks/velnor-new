@@ -319,3 +319,28 @@ fn in_a_private_sources_job_the_check_runs_offline_after_the_token_is_revoked() 
     assert_eq!(steps[0].3["env"]["CARGO_NET_OFFLINE"], "true", "{steps:?}");
     Ok(())
 }
+
+#[test]
+fn a_later_grouped_root_check_runs_before_its_own_test_not_before_an_earlier_roots() -> TestResult {
+    let config = "[[workspace_groups]]\nname = 'tools'\nroots = ['tools/a', 'tools/b']\n[[check_configurations]]\nroot = 'tools/b'\n";
+    let view = view_with(
+        &["Cargo.toml", "tools/a/Cargo.toml", "tools/b/Cargo.toml"],
+        config,
+        HELPER,
+    )?;
+    let jobs = document(&workflow(&view)?)?["jobs"].clone();
+    let steps = jobs["rust-tools"]["steps"]
+        .as_array()
+        .ok_or("no steps in rust-tools")?;
+    let position = |id: &str| steps.iter().position(|step| step["id"] == id);
+    let check = steps
+        .iter()
+        .position(|step| step["name"] == STEP)
+        .ok_or("no check step")?;
+    let (first, second) = (
+        position("test_tools_a").ok_or("no test for tools/a")?,
+        position("test_tools_b").ok_or("no test for tools/b")?,
+    );
+    assert!(first < check && check < second, "{steps:?}");
+    Ok(())
+}

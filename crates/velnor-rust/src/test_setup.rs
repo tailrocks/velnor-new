@@ -106,7 +106,7 @@ pub(crate) fn checked(
         if untested {
             builds_or_tests(step) && owns(step, root)
         } else {
-            tests(step) || archives(step)
+            (tests(step) || archives(step)) && owns(step, root)
         }
     };
     let Some(first) = steps.iter().position(place) else {
