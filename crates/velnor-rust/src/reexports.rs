@@ -30,7 +30,7 @@ pub use crate::lock::{
 };
 pub use crate::lock_affected::lock_affected;
 pub use crate::lock_key::lock_key;
-pub use crate::mbx_layout::{Layout, check_mbx};
+pub use crate::mbx_layout::{Layout, Split, check_mbx};
 pub use crate::metadata::{MetadataError, reduce_metadata};
 pub use crate::metadata_file::{
     METADATA_PATH, MetadataFileError, metadata_file, recorded_members, recorded_metadata,

@@ -19,9 +19,21 @@ const WRAPPER: &str =
     "\n[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n";
 const NEXTEST: &str = "\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n";
 
-fn with_mise(mut repo: RepoView, text: &str) -> Result<RepoView, Box<dyn std::error::Error>> {
+fn with_mise(repo: RepoView, text: &str) -> Result<RepoView, Box<dyn std::error::Error>> {
+    with_mises(repo, text, None)
+}
+
+fn with_mises(
+    mut repo: RepoView,
+    text: &str,
+    hidden: Option<&str>,
+) -> Result<RepoView, Box<dyn std::error::Error>> {
     repo.files
         .insert(RepoPath::new("mise.toml")?, text.as_bytes().to_vec());
+    if let Some(hidden) = hidden {
+        repo.files
+            .insert(RepoPath::new(".mise.toml")?, hidden.as_bytes().to_vec());
+    }
     repo.files.remove(&RepoPath::new("mise.lock")?);
     lock_pinned_tools(&mut repo)?;
     Ok(repo)
@@ -126,29 +138,75 @@ fn the_opt_out_is_named_as_a_check_that_does_less() -> TestResult {
 #[test]
 fn a_mise_configuration_that_does_not_route_cargo_through_mbx_is_refused_with_the_snippet()
 -> TestResult {
+    let sccache = "[wrappers.cargo]\ncommand = \"sccache\"\n";
     let cases = [
-        (NO_LAYOUT.to_owned(), "pin"),
+        (NO_LAYOUT.to_owned(), None, "pin"),
         (
             format!("[tools]\nrust = \"1.99.1\"\n{PIN}{NEXTEST}{WRAPPER}"),
+            None,
             "option",
         ),
-        (format!("[tools]\n{OPTION}{NEXTEST}"), "pin"),
+        (format!("[tools]\n{OPTION}{NEXTEST}"), None, "pin"),
         (
             format!("[tools]\n{OPTION}{PIN}{NEXTEST}\n[wrappers.cargo]\ncommand = \"mbx\"\n"),
+            None,
             "shim",
         ),
         (
             format!(
                 "[tools]\n{OPTION}{PIN}{NEXTEST}\n[wrappers.cargo]\ncommand = \"sccache\"\nenv = {{ MBX_CARGO_SHIM_MODE = \"1\" }}\n"
             ),
+            None,
             "wrapper",
         ),
+        (
+            format!(
+                "[tools]\n{OPTION}{PIN}{NEXTEST}\n[wrappers.cargo]\ncommand = \"mbx\"\nenv = {{ MBX_CARGO_SHIM_MODE = \"1\", EXTRA = \"1\" }}\n"
+            ),
+            None,
+            "extras",
+        ),
+        (
+            format!(
+                "[tools]\n{OPTION}mr-boxington = {{ version = \"v1.30.0\", os = [\"linux\"] }}\n{NEXTEST}"
+            ),
+            None,
+            "pin",
+        ),
+        (
+            format!("[tools]\n{OPTION}mr-boxington = [\"v1.30.0\", \"v1.29.0\"]\n{NEXTEST}"),
+            None,
+            "pin",
+        ),
+        (
+            format!(
+                "[tools]\nrust = {{ version = \"1.99.1\", mr_boxington = \"true\" }}\n{PIN}{NEXTEST}"
+            ),
+            None,
+            "option",
+        ),
+        (format!("[tools]\n{PIN}{NEXTEST}"), None, "norust"),
+        (
+            format!("[tools]\n{OPTION}{PIN}{NEXTEST}{WRAPPER}"),
+            Some(sccache.to_owned()),
+            "split",
+        ),
+        (
+            format!("[tools]\nrust = \"1.99.1\"\n{PIN}{NEXTEST}"),
+            Some(format!("[tools]\n{OPTION}")),
+            "split",
+        ),
+        (
+            format!("[tools]\n{OPTION}{PIN}{NEXTEST}"),
+            Some(WRAPPER.to_owned()),
+            "split",
+        ),
     ];
-    for (mise, missing) in cases {
-        let repo = with_mise(pinned(None, "0.1.88")?, &mise)?;
+    for (mise, hidden, missing) in cases {
+        let repo = with_mises(pinned(None, "0.1.88")?, &mise, hidden.as_deref())?;
         let error = expected_files(&repo)
             .err()
-            .ok_or(format!("accepted: {mise}"))?;
+            .ok_or(format!("accepted: {mise} {hidden:?}"))?;
         let GenerateError::Detect(detect) = &error else {
             return Err(format!("{error}").into());
         };
@@ -156,11 +214,37 @@ fn a_mise_configuration_that_does_not_route_cargo_through_mbx_is_refused_with_th
         match (missing, detect) {
             ("pin", DetectError::MbxPinRequired { .. }) => {
                 assert!(text.contains("mr-boxington = {"), "{text}");
+                assert!(text.contains("`aqua:` or `github:`"), "{text}");
+            }
+            ("split", DetectError::MbxConfigSplit(split)) => {
+                assert_eq!(split.first.as_str(), "mise.toml", "{text}");
+                assert_eq!(split.second.as_str(), ".mise.toml", "{text}");
+                assert!(text.contains("mbx = false"), "{text}");
+                continue;
             }
             ("wrapper", DetectError::MbxLayout(layout)) => {
                 assert!(layout.wrapper_refused() && !layout.shim_missing(), "{mise}");
                 assert!(!layout.rust_option, "{mise}");
                 assert!(text.contains("mr_boxington = true"), "{text}");
+            }
+            ("extras", DetectError::MbxLayout(layout)) => {
+                assert!(
+                    layout.wrapper_has_extras() && !layout.shim_missing(),
+                    "{mise}"
+                );
+                assert!(text.contains("extra keys"), "{text}");
+                assert!(!text.contains("cargo -V"), "{text}");
+            }
+            ("norust", DetectError::MbxLayout(layout)) => {
+                assert!(
+                    layout.wrapper_refused() && !layout.rust && !layout.rust_option,
+                    "{mise}"
+                );
+                assert!(
+                    !layout.shim_missing() && !layout.wrapper_has_extras(),
+                    "{mise}"
+                );
+                assert!(text.contains("pins no rust tool"), "{text}");
             }
             ("option" | "shim", DetectError::MbxLayout(layout)) => {
                 assert_eq!(layout.rust_option, missing == "option", "{mise}");
@@ -176,6 +260,19 @@ fn a_mise_configuration_that_does_not_route_cargo_through_mbx_is_refused_with_th
         }
         assert!(text.contains("mbx = false"), "{text}");
     }
+    Ok(())
+}
+
+#[test]
+fn the_whole_layout_in_the_hidden_mise_file_is_accepted_next_to_an_unrelated_mise_toml()
+-> TestResult {
+    let repo = with_mises(
+        pinned(None, "0.1.88")?,
+        &format!("[tools]\n{NEXTEST}"),
+        Some(&format!("[tools]\n{OPTION}{PIN}{WRAPPER}")),
+    )?;
+    let text = workflow(&repo)?;
+    assert!(text.contains(STORE), "{text}");
     Ok(())
 }
 

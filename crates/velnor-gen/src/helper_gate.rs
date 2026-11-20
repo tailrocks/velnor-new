@@ -24,7 +24,6 @@ pub(crate) const CACHE_DEBUG_HELPER: (u64, u64, u64) = (0, 1, 82);
 // helper-gate: first in tools-v0.1.97 via af11477df1
 pub(crate) const REQUIRED_CHECK_HELPER: (u64, u64, u64) = (0, 1, 97);
 
-/// The first `velnor-ci` whose `.velnor/rust-ci.toml` parser accepts `mbx` in the `[cache]` table.
 pub(crate) const MBX_KEY_HELPER: (u64, u64, u64) = (0, 1, 108);
 
 /// The first `velnor-ci` whose `.velnor/rust-ci.toml` parser accepts `restore_cache` in a `[[test_groups]]` table.
@@ -141,7 +140,6 @@ pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, Generate
     Ok(release)
 }
 
-/// The config keys that need a newer `velnor-ci` than the minimum.
 fn check_config_keys(facts: &RepoFacts, release: &HelperRelease) -> Result<(), GenerateError> {
     check_mbx_key(facts, release)?;
     check_lane_job(facts, release)?;
