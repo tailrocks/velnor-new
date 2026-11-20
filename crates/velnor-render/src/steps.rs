@@ -17,8 +17,8 @@ use crate::cache::cache_step;
 use crate::cargo::{CargoLane, cargo_step, reports_tests};
 use crate::checkout_step::checkout_step;
 use crate::gate::{
-    PLAN_STEP, Setup, admission, all_conditions, condition, merge_group_skipped, output, plan_read,
-    plan_source, sources_step, verdict_step,
+    PLAN_STEP, Setup, admission, condition, merge_group_skipped, output, plan_read, plan_source,
+    sources_step, verdict_step,
 };
 use crate::helper_steps::{inputs_step, restore_inputs_step, restored_targets_step};
 pub(crate) use crate::install_steps::install_helper;
@@ -42,6 +42,8 @@ pub(crate) const ATTEST_BUILD_PROVENANCE: &str =
     "actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8";
 
 pub(crate) const MISE_VERSION: &str = "2026.11.10";
+#[path = "chained_save.rs"]
+mod chained_save;
 #[path = "steps_helpers.rs"]
 mod steps_helpers;
 use steps_helpers::{leading_steps, rustup_add, saved_unless_hit, variable};
@@ -155,6 +157,7 @@ fn job_steps(
             let around = Around {
                 id: gate.id(index),
                 saved_after: gate.required(),
+                chained: job.chained_saves,
                 job_name: job.name.as_deref(),
             };
             let mut rendered = rendered_steps(step, setup, audit, tests, lane, around);
@@ -183,6 +186,7 @@ struct Around<'a> {
     /// The id a compile or audit step gets so a save can wait for it.
     id: Option<&'a str>,
     saved_after: &'a [String],
+    chained: bool,
     job_name: Option<&'a str>,
 }
 
@@ -230,16 +234,13 @@ fn rendered_steps(
                 .as_ref()
                 .map(|from| merge_group_skipped(from, setup)),
         );
-        body.condition = all_conditions(
+        body.condition = chained_save::combined(
+            around.chained,
+            step,
+            setup,
+            &extra,
+            around.saved_after,
             body.condition.take(),
-            condition(
-                step.when,
-                step.gate.as_ref(),
-                setup,
-                step.pr,
-                &extra,
-                around.saved_after,
-            ),
         );
         body.working_directory = step.directory.as_ref().map(ToString::to_string);
         body.shared |= matches!(step.when, velnor_model::When::SaveVerifiedTools(_));

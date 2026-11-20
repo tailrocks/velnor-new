@@ -39,6 +39,7 @@ mod release_family;
 mod release_family_publish;
 mod release_finalize;
 mod release_gate;
+mod release_optional;
 mod release_outputs;
 mod release_raw;
 mod release_source;
@@ -113,11 +114,11 @@ pub fn render_workflow(
         file = document(plan, rendered, ShellcheckMarks::Jobs);
     }
     if file.len() > rules::MAX_WORKFLOW_BYTES {
-        return Err(vec![RuleViolation {
-            job: String::new(),
-            step: 0,
-            rule: Rule::WorkflowTooLarge(file.len()),
-        }]);
+        return Err(vec![rule_messages::size_report::too_large(
+            WORKFLOW_PATH.as_str(),
+            file.len(),
+            &rendered.jobs,
+        )]);
     }
     Ok(BTreeMap::from([(WORKFLOW_PATH, file)]))
 }
@@ -146,5 +147,4 @@ fn document(plan: &WorkflowPlan, rendered: &RenderedWorkflow, marks: ShellcheckM
     .collect();
     seal(GENERATED_HEADER, &emit(&workflow))
 }
-
 mod report;
