@@ -157,6 +157,7 @@ mod pr_ci_labels;
 mod pr_ci_queue;
 mod pr_ci_sim;
 mod private_sources;
+mod private_sources_advisory;
 mod private_sources_phase;
 mod qualification;
 mod release_assets_setup_action;

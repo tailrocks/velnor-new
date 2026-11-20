@@ -98,6 +98,11 @@ pub enum StepKind {
         manifests: Vec<RepoPath>,
         cached: Vec<crate::ids::RootSlug>,
     },
+    /// Fetches the `RustSec` advisory DB for each distinct cargo-deny config, so that the
+    /// `--offline` deny check finds it. It runs before any private token exists.
+    AdvisoryFetch {
+        configs: Vec<Option<RepoPath>>,
+    },
     MbxRemote,
     MbxStore,
     MbxSeed,
