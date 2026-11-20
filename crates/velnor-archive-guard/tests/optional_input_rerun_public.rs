@@ -18,6 +18,7 @@ enum Layout {
     NestedInRoot,
     SymlinkedIntoRoot,
     SymlinkResolved,
+    AliasedAncestor,
 }
 
 enum Consumed {
@@ -60,6 +61,11 @@ impl Probe {
             Layout::OutsideRoot => base.join("target"),
             Layout::InRoot => root.join("target"),
             Layout::NestedInRoot => root.join("target/velnor-roots/probe-slug"),
+            Layout::AliasedAncestor => {
+                let alias = base.join("alias");
+                symlink(base, &alias)?;
+                alias.join("root/target")
+            }
             Layout::SymlinkedIntoRoot | Layout::SymlinkResolved => {
                 fs::create_dir(&real)?;
                 symlink(&real, root.join("target"))?;
@@ -219,4 +225,16 @@ fn absent_optional_inputs_leave_an_unchanged_crate_fresh_with_a_symlinked_target
 fn absent_optional_inputs_leave_an_unchanged_crate_fresh_with_a_resolved_symlink_target()
 -> Result<(), Box<dyn Error>> {
     assert_unchanged_crate_is_fresh(Layout::SymlinkResolved)
+}
+
+#[test]
+fn optional_root_input_created_with_a_target_through_a_symlinked_ancestor_is_noticed()
+-> Result<(), Box<dyn Error>> {
+    assert_created_inputs_are_noticed(Layout::AliasedAncestor)
+}
+
+#[test]
+fn absent_optional_inputs_leave_an_unchanged_crate_fresh_with_a_target_through_a_symlinked_ancestor()
+-> Result<(), Box<dyn Error>> {
+    assert_unchanged_crate_is_fresh(Layout::AliasedAncestor)
 }
