@@ -17,9 +17,8 @@ const HELPER_LOCK: &str =
     include_str!("../../../../generator/samples/helper-lock/view/.velnor/rust-ci.lock");
 const WORKFLOW: &str = ".github/workflows/rust-ci.yml";
 const LAUNCHER: &str = ". \"$VELNOR_EXEC\" run -- ";
-const MISE: &str =
-    "[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n";
-const MISE_LOCK: &str = "[[tools.\"aqua:nextest-rs/nextest/cargo-nextest\"]]\nversion = \"0.9.151\"\nspecifiers = [\"0.9.151\"]\n\n[tools.\"aqua:nextest-rs/nextest/cargo-nextest\".\"platforms.linux-x64\"]\nurl = \"https://example.invalid/nextest\"\n\n[tools.\"aqua:nextest-rs/nextest/cargo-nextest\".\"platforms.macos-arm64\"]\nurl = \"https://example.invalid/nextest\"\n\n[[tools.rust]]\nversion = \"1.99.1\"\nspecifiers = [\"1.99.1\"]\n\n[tools.rust.\"platforms.linux-x64\"]\nurl = \"https://example.invalid/rust\"\n\n[tools.rust.\"platforms.macos-arm64\"]\nurl = \"https://example.invalid/rust\"\n";
+const MISE: &str = include_str!("../../../../generator/samples/helper-lock/view/mise.toml");
+const MISE_LOCK: &str = include_str!("../../../../generator/samples/helper-lock/view/mise.lock");
 const LANE: &str = "[[test_lane]]\nroot = '.'\nfeatures = ['local-mode', 'extra']\npackages = ['package']\nfilter = \"test(~local::) or binary(it's)\"\n";
 
 fn view(helper: &str, config: &str) -> Result<RepoView, Box<dyn Error>> {
