@@ -172,9 +172,9 @@ fn a_build_that_cannot_start_leaves_a_failure_marker() {
     );
 }
 
-type Run = Option<(&'static str, &'static str)>;
+pub(super) type Run = Option<(&'static str, &'static str)>;
 
-fn wrapped_in(repo: &Repo, cargo: &[&str], run: Run) -> Output {
+pub(super) fn wrapped_in(repo: &Repo, cargo: &[&str], run: Run) -> Output {
     let mut wrapped = command(env!("CARGO_BIN_EXE_velnor-ci"));
     wrapped
         .current_dir(repo.root().join("rust"))
@@ -190,7 +190,7 @@ fn wrapped_in(repo: &Repo, cargo: &[&str], run: Run) -> Output {
     wrapped.output().unwrap_or_else(|e| unreachable!("{e}"))
 }
 
-fn prepared_project() -> Repo {
+pub(super) fn prepared_project() -> Repo {
     let repo = app_and_lib_project();
     let plain = build(&repo, false);
     assert!(plain.status.success(), "{plain:?}");
@@ -199,7 +199,7 @@ fn prepared_project() -> Repo {
     repo
 }
 
-fn refusal_after_a_failed_lib_build(failed_in: Run, refused_in: Run) -> String {
+pub(super) fn refusal_after_a_failed_lib_build(failed_in: Run, refused_in: Run) -> String {
     let repo = prepared_project();
     let failing = [
         "cargo",
@@ -220,7 +220,7 @@ fn refusal_after_a_failed_lib_build(failed_in: Run, refused_in: Run) -> String {
     String::from_utf8_lossy(&refused.stderr).into_owned()
 }
 
-const NAMED: &str = "An earlier inputs build failed: `cargo build`";
+pub(super) const NAMED: &str = "An earlier inputs build failed: `cargo build`";
 
 #[test]
 fn a_failed_non_cargo_command_records_no_package_selection() {

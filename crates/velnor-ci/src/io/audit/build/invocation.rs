@@ -13,12 +13,15 @@ use crate::error::CiError;
 #[derive(Default, Serialize, Deserialize)]
 pub(super) struct Selection {
     all: bool,
+    #[serde(default)]
+    excluded: Vec<String>,
     packages: Vec<String>,
 }
 
 impl Selection {
     pub(super) fn selects(&self, package: &str) -> bool {
-        self.all || self.packages.iter().any(|selected| selected == package)
+        self.all && !self.excluded.iter().any(|excluded| excluded == package)
+            || self.packages.iter().any(|selected| selected == package)
     }
 }
 
@@ -74,10 +77,23 @@ impl Invocation {
             .map(String::as_str)
             .take_while(|word| *word != "--")
             .collect();
-        let excluded = words
-            .iter()
-            .any(|word| *word == "--exclude" || word.starts_with("--exclude="));
-        let all = !excluded
+        let mut excluded = Vec::new();
+        let mut provable = true;
+        for (index, word) in words.iter().enumerate() {
+            let name = if *word == "--exclude" {
+                words.get(index + 1).copied()
+            } else {
+                word.strip_prefix("--exclude=")
+            };
+            if let Some(name) = name {
+                if members.contains(name) {
+                    excluded.push(name.to_owned());
+                } else {
+                    provable = false;
+                }
+            }
+        }
+        let all = provable
             && words
                 .iter()
                 .any(|word| matches!(*word, "--workspace" | "--all"));
@@ -93,7 +109,11 @@ impl Invocation {
             }
         }
         packages.retain(|name| members.contains(name.as_str()));
-        Some(Selection { all, packages })
+        Some(Selection {
+            all,
+            excluded,
+            packages,
+        })
     }
 
     fn cargo_program(&self) -> bool {
@@ -294,3 +314,7 @@ fn subcommand(words: &[&str]) -> Option<usize> {
 #[cfg(test)]
 #[path = "invocation/preflight.rs"]
 mod preflight;
+
+#[cfg(test)]
+#[path = "invocation/selection.rs"]
+mod selection_tests;
