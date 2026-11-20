@@ -163,6 +163,33 @@ fn linux_x64_download(entry: &toml::Value, wanted: &str) -> Option<ReleasePlzDow
     })
 }
 
+/// True when a mise.toml declares MBX as the cargo wrapper: `rust` with
+/// `mr_boxington = true`, or a `[wrappers.cargo]` that runs `mbx`.
+pub(crate) fn declares_mbx(mise_tomls: &[String]) -> bool {
+    mise_tomls
+        .iter()
+        .filter_map(|text| text.parse::<Table>().ok())
+        .any(|table| {
+            let rust_flag = table
+                .get("tools")
+                .and_then(toml::Value::as_table)
+                .and_then(|tools| tools.get("rust"))
+                .and_then(toml::Value::as_table)
+                .and_then(|rust| rust.get("mr_boxington"))
+                .and_then(toml::Value::as_bool)
+                == Some(true);
+            let wrapper = table
+                .get("wrappers")
+                .and_then(toml::Value::as_table)
+                .and_then(|wrappers| wrappers.get("cargo"))
+                .and_then(toml::Value::as_table)
+                .and_then(|cargo| cargo.get("command"))
+                .and_then(toml::Value::as_str)
+                == Some("mbx");
+            rust_flag || wrapper
+        })
+}
+
 pub(crate) fn check(
     mise_tomls: &[String],
     mise_lock: &str,
