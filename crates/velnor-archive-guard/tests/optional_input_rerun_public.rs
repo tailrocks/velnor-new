@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::cell::RefCell;
 use std::error::Error;
 use std::fs;
 use std::os::unix::fs::symlink;
@@ -29,6 +30,7 @@ enum Consumed {
 struct Probe {
     root: PathBuf,
     target: PathBuf,
+    last_build: RefCell<String>,
 }
 
 impl Probe {
@@ -77,7 +79,11 @@ impl Probe {
             }
         };
         fs::copy(own.join("../../Cargo.lock"), root.join("Cargo.lock"))?;
-        Ok(Self { root, target })
+        Ok(Self {
+            root,
+            target,
+            last_build: RefCell::new(String::new()),
+        })
     }
 
     fn build(&self) -> Result<String, Box<dyn Error>> {
@@ -85,9 +91,14 @@ impl Probe {
             .args(["build", "--offline", "-v", "--manifest-path"])
             .arg(self.root.join("crates/probe/Cargo.toml"))
             .env("CARGO_TARGET_DIR", &self.target)
+            .env("MBX_BUILD_SCRIPT_EXECUTION", "0")
+            .env("MBX_SHARE_OUT_DIR", "0")
+            .env_remove("CARGO_BUILD_BUILD_DIR")
+            .env_remove("CARGO_BUILD_TARGET")
             .output()?;
         let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
         assert!(output.status.success(), "cargo build failed: {stderr}");
+        *self.last_build.borrow_mut() = stderr.clone();
         Ok(stderr)
     }
 
@@ -119,14 +130,27 @@ impl Probe {
             Consumed::Fingerprint(value) => assert_eq!(
                 value,
                 self.expected()?,
-                "creating {created} left a stale embedded fingerprint"
+                "creating {created} left a stale embedded fingerprint: {}",
+                self.layout_report()
             ),
             Consumed::Refused(message) => assert!(
                 may_refuse && appeared.iter().any(|path| message.contains(path)),
-                "creating {created}: unexpected refusal: {message}"
+                "creating {created}: unexpected refusal: {message}\n{}",
+                self.layout_report()
             ),
         }
         Ok(())
+    }
+
+    fn layout_report(&self) -> String {
+        format!(
+            "root {} (canonical {:?}), target {} (canonical {:?}), last build:\n{}",
+            self.root.display(),
+            self.root.canonicalize(),
+            self.target.display(),
+            self.target.canonicalize(),
+            self.last_build.borrow()
+        )
     }
 
     fn expected(&self) -> Result<String, Box<dyn Error>> {
