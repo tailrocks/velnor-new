@@ -12,8 +12,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const EXPECTED: &str = "expected";
-const MAX_SESSIONS: usize = 4096;
-const MAX_ENTRIES: usize = 2 * MAX_SESSIONS;
+pub(super) const MAX_SESSIONS: usize = 4096;
+pub(super) const MAX_ENTRIES: usize = 2 * MAX_SESSIONS;
 const MAX_REPORT_BYTES: u64 = 1 << 20;
 
 static SESSIONS: AtomicU64 = AtomicU64::new(0);
@@ -27,13 +27,13 @@ fn inside_session() -> bool {
     std::env::var_os("MBX_SOCKET").is_some_and(|socket| !socket.is_empty())
 }
 
-pub(super) fn assign(command: &mut Command, argv: &[String]) {
+pub(super) fn assign(command: &mut Command, argv: &[String]) -> Result<(), String> {
     command.env_remove(VARIABLE);
     if !enabled() || !reports_session(argv) || inside_session() {
-        return;
+        return Ok(());
     }
     let Some(temp) = std::env::var_os("RUNNER_TEMP").filter(|temp| !temp.is_empty()) else {
-        return;
+        return Ok(());
     };
     let directory = PathBuf::from(temp).join(DIRECTORY);
     if let Err(error) = fs::create_dir_all(&directory) {
@@ -41,20 +41,18 @@ pub(super) fn assign(command: &mut Command, argv: &[String]) {
             "velnor-ci: cannot create {}: {error}; MBX sessions are counted from their stderr summary",
             directory.display()
         );
-        return;
+        return Ok(());
     }
     let started = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |since| since.as_nanos());
     let session = SESSIONS.fetch_add(1, Ordering::Relaxed);
     let name = format!("{started:020}-{}-{session}", std::process::id());
-    if let Err(error) = fs::write(directory.join(format!("{name}.{EXPECTED}")), b"") {
-        eprintln!(
-            "velnor-ci: cannot record the expected MBX report {name}: {error}; the session is counted from its stderr summary"
-        );
-        return;
-    }
+    fs::write(directory.join(format!("{name}.{EXPECTED}")), b"").map_err(|error| {
+        format!("cannot record the expected MBX report {name}: {error}; the command was not run")
+    })?;
     command.env(VARIABLE, directory.join(format!("{name}.json")));
+    Ok(())
 }
 
 #[derive(Default)]

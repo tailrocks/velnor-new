@@ -9,7 +9,7 @@ use velnor_ci::mbx_report::{parse, reports_session};
 use velnor_ci::report::LaneMetrics;
 use velnor_ci::waste_evidence::MbxSession;
 
-const SWITCH: &str = "VELNOR_MBX_REPORTS";
+pub(super) const SWITCH: &str = "VELNOR_MBX_REPORTS";
 const FAKE_CARGO: &str = "#!/bin/sh\nprintf '%s\\n' \"$FAKE_MBX_STDERR\" >&2\nif [ -n \"$MBX_STATS_REPORT\" ] && [ -n \"$FAKE_MBX_REPORT\" ]; then printf '%s' \"$FAKE_MBX_REPORT\" > \"$MBX_STATS_REPORT\"; fi\n";
 
 pub(super) fn report_json(version: u64, hits: u64, misses: u64, unconsulted: u64) -> String {
@@ -345,4 +345,33 @@ fn the_reader_maps_a_real_mbx_report_and_names_what_it_cannot_read() {
     assert!(parse(br#"{"version":5,"hits":1}"#).is_err_and(|e| e.contains("without its counts")));
     assert!(parse(br#"{"hits":1}"#).is_err_and(|e| e.contains("no numeric version")));
     assert!(parse(b"{").is_err_and(|e| e.contains("not JSON")));
+}
+
+#[test]
+fn an_inputs_build_wrapper_leaves_no_orphaned_report_marker() -> ResultTest {
+    let repo = fixture("mbx-reports-wrapper")?;
+    cargo(&repo, "check", &report_json(5, 1, 0, 0), "compiled")?;
+    let cargo = repo.root().join("fake-bin/cargo");
+    Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        .args([
+            "run",
+            "--",
+            env!("CARGO_BIN_EXE_velnor-ci"),
+            "inputs",
+            "build",
+            "--",
+            cargo.to_str().ok_or("path")?,
+            "build",
+        ])
+        .current_dir(repo.root())
+        .env("RUNNER_TEMP", repo.root())
+        .env(SWITCH, "true")
+        .env("FAKE_MBX_REPORT", report_json(5, 2, 0, 0))
+        .env("FAKE_MBX_STDERR", "compiled")
+        .env_remove("MBX_STATS_REPORT")
+        .env_remove("MBX_SOCKET")
+        .output()?;
+    let metrics = report(&repo)?;
+    assert!(metrics.verification_errors.is_empty(), "{metrics:?}");
+    Ok(())
 }

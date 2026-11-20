@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use super::mbx_reports::{MAX_ENTRIES, MAX_SESSIONS};
 use crate::mbx_report::reports_session;
 use crate::report::{Cache, Hit, LaneMetrics};
 use crate::waste_evidence::{
@@ -46,6 +47,9 @@ fn sessions(metrics: &mut LaneMetrics, log: &[u8], runner_temp: &Path) -> (Vec<M
         return summaries(metrics, log);
     };
     if reports.overflowed {
+        metrics.verification_errors.push(format!(
+            "MBX stats reports exceed the reader's bounds ({MAX_SESSIONS} sessions or {MAX_ENTRIES} entries); the MBX session counts are unknown."
+        ));
         return (Vec::new(), 1);
     }
     let mut unassigned = Vec::new();
