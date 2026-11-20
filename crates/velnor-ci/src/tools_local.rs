@@ -10,7 +10,9 @@ use crate::error::CiError;
 use crate::mbx_seed::SEED_DIR_ENV;
 use crate::mbx_store::{SHARED_DIR_ENV, trusted_event};
 
+mod clear;
 mod store;
+use clear::clear_home;
 use store::{restore, save};
 
 pub const TOOLS_DIR: &str = "tools";
@@ -21,6 +23,7 @@ pub const KEEP_KEYS: usize = 2;
 pub enum Verb {
     Restore,
     Save,
+    Clear,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -48,6 +51,7 @@ pub enum Outcome {
     Busy,
     Failed(&'static str),
     Untrusted,
+    Cleared,
 }
 
 impl Outcome {
@@ -69,7 +73,7 @@ pub fn valid_key(key: &str) -> bool {
 
 #[must_use]
 pub fn run(inputs: &Inputs<'_>) -> Outcome {
-    if !valid_key(inputs.key) {
+    if inputs.verb != Verb::Clear && !valid_key(inputs.key) {
         return Outcome::BadKey;
     }
     let trusted = trusted_event(inputs.event_name, inputs.git_ref, inputs.default_branch);
@@ -84,6 +88,9 @@ pub fn run(inputs: &Inputs<'_>) -> Outcome {
         }
         Verb::Save if !trusted => Outcome::Untrusted,
         Verb::Save => save(inputs),
+        Verb::Clear => {
+            clear_home(inputs.home).map_or_else(Outcome::Rejected, |()| Outcome::Cleared)
+        }
     }
 }
 
@@ -153,10 +160,19 @@ fn describe(outcome: &Outcome) -> String {
         Outcome::Untrusted => {
             "velnor: tools are saved to the node store on trusted events only".to_owned()
         }
+        Outcome::Cleared => {
+            "velnor: cleared the tool directories under HOME so that a restore starts empty"
+                .to_owned()
+        }
     }
 }
 
-pub fn setup(verb: Verb, key: &str) -> Result<String, CiError> {
+pub fn setup(verb: Verb, key: Option<&str>) -> Result<String, CiError> {
+    let key = match (verb, key) {
+        (Verb::Clear, key) => key.unwrap_or_default(),
+        (_, Some(key)) => key,
+        (_, None) => return Err(CiError::new("pass --key")),
+    };
     let var = |name: &str| std::env::var(name).ok();
     let home = PathBuf::from(var("HOME").ok_or_else(|| CiError::new("set HOME"))?);
     let default_branch = var("GITHUB_EVENT_PATH")

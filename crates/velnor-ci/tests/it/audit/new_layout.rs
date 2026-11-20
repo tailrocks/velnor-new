@@ -8,7 +8,7 @@
 use std::fs;
 use std::time::{Duration, UNIX_EPOCH};
 
-use super::{OWN_UNITS, audit, placed, unit, workspace_below_the_root};
+use super::{OWN_UNITS, audit, placed, unit, velnor_ci, workspace_below_the_root};
 use crate::io::Repo;
 
 /// The `(package, hash)` of an old `<package>-<hash>` folder.
@@ -92,6 +92,25 @@ fn a_built_target_directory_in_a_layout_with_no_known_unit_makes_the_audit_refus
     let stderr = String::from_utf8_lossy(&refused.stderr);
     assert!(
         stderr.contains("found no units in") && stderr.contains("unknown cargo layout?"),
+        "{stderr}"
+    );
+    assert!(!repo.root().join(".velnor/rust-inputs.lock").exists());
+}
+
+#[test]
+fn a_build_directory_from_the_environment_makes_the_audit_refuse() {
+    let repo = workspace_below_the_root();
+    own_units_1100(&repo, "rust/target/debug", &[]);
+    let refused = velnor_ci()
+        .current_dir(repo.root())
+        .env("CARGO_BUILD_BUILD_DIR", repo.root().join("rust/build"))
+        .args(["inputs", "audit", "--write"])
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(refused.status.code(), Some(1), "{refused:?}");
+    let stderr = String::from_utf8_lossy(&refused.stderr);
+    assert!(
+        stderr.contains("CARGO_BUILD_BUILD_DIR") && stderr.contains("build.build-dir"),
         "{stderr}"
     );
     assert!(!repo.root().join(".velnor/rust-inputs.lock").exists());

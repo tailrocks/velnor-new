@@ -41,6 +41,7 @@ mod release_family;
 mod release_family_publish;
 mod release_finalize;
 mod release_gate;
+mod release_optional;
 mod release_outputs;
 mod release_raw;
 mod release_source;

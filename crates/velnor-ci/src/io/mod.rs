@@ -13,6 +13,7 @@ pub mod cache_api;
 mod cache_paths;
 mod cache_prune;
 mod cache_sources;
+mod cache_target_link;
 mod cache_upload;
 mod cold;
 mod configurations;
@@ -91,10 +92,11 @@ pub use self::inputs_batch::restore_inputs_batch_with;
 pub use self::restored::{break_time_ties, break_time_ties_with};
 pub use self::scope_cache::ScopeCacheIo;
 pub use self::timings::write_report;
+use crate::artifact_stage;
 use crate::cli::{
-    AuditArgs, BenchCommand, CacheCommand, CheckTagArgs, Cli, CollectArgs, Command, CompareArgs,
-    ImageCommand, InputsCommand, QualificationCommand, ReleaseCommand, ReleaseGateArgs,
-    SourcesCommand, TestGroupsCommand,
+    ArtifactsCommand, AuditArgs, BenchCommand, CacheCommand, CheckTagArgs, Cli, CollectArgs,
+    Command, CompareArgs, ImageCommand, InputsCommand, QualificationCommand, ReleaseCommand,
+    ReleaseGateArgs, SourcesCommand, TestGroupsCommand,
 };
 use crate::collect::collect;
 use crate::compare::{compare, compare_across_populations};
@@ -160,6 +162,9 @@ pub fn main() -> ExitCode {
     if let Command::LaneGuard(args) = &cli.command {
         return lane_guard::run(args);
     }
+    if let Command::Artifacts(ArtifactsCommand::Stage(args)) = &cli.command {
+        return artifact_stage::run(args);
+    }
     if let Command::TestGroups(TestGroupsCommand::Check(args)) = &cli.command {
         return test_groups::run(args);
     }
@@ -213,6 +218,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Release(ReleaseCommand::FamilyTag(args)) => release::run_family_tag(&args),
         Command::Release(ReleaseCommand::CheckConfig(args)) => release::run_check_config(&args),
         Command::Release(ReleaseCommand::Align(args)) => release_align::run_align(&args),
+        Command::Release(ReleaseCommand::VerifyListed(args)) => release::run_verify_listed(&args),
         Command::Plan(args) => plan::run_plan(&args),
         Command::MergeGroupPassed => Ok(merge_group::run()),
         Command::MergeQueueCheck => Ok(merge_queue::run()),
@@ -234,7 +240,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::MbxStore => crate::mbx_store::setup(),
         Command::MbxSeed => crate::mbx_seed::setup(),
         Command::MisePin(args) => crate::mise_pin::run(&args.tool),
-        Command::ToolsLocal(args) => crate::tools_local::setup(args.verb, &args.key),
+        Command::ToolsLocal(args) => crate::tools_local::setup(args.verb, args.key.as_deref()),
         Command::ToolsVerify(args) => crate::tools_verify_step::setup(args.verb),
         Command::Prepare(args) => setup::prepare(&args),
         Command::CheckMetadata => setup::check_metadata(),
@@ -252,6 +258,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
         }
         Command::LaneGuard(_) => Err(CiError::new("lane-guard is handled before commands")),
         Command::TestGroups(_) => Err(CiError::new("test-groups is handled before commands")),
+        Command::Artifacts(_) => Err(CiError::new("artifacts is handled before commands")),
     }
 }
 
