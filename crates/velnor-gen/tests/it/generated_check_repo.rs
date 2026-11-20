@@ -173,7 +173,9 @@ const HAND_WRITTEN_TEXT: &str = "name: Image\non: pull_request\n";
 
 fn configured(fixture: &Fixture, external: Option<&str>) -> TestResult {
     let keys = match external {
-        Some(path) => format!("runner = 'ubuntu-26.04-scale-set'\nexternal_workflows = [\"{path}\"]\n"),
+        Some(path) => {
+            format!("runner = 'ubuntu-26.04-scale-set'\nexternal_workflows = [\"{path}\"]\n")
+        }
         None => "runner = 'ubuntu-26.04-scale-set'\n".to_owned(),
     };
     fixture.write(".velnor/rust-ci.toml", &format!("{keys}\n{CHECK}"))
@@ -185,7 +187,8 @@ fn hand_written(fixture: &Fixture) -> TestResult {
 }
 
 #[test]
-fn a_hand_written_workflow_declared_in_external_workflows_passes_the_generated_check() -> TestResult {
+fn a_hand_written_workflow_declared_in_external_workflows_passes_the_generated_check() -> TestResult
+{
     let fixture = fixture()?;
     configured(&fixture, Some(HAND_WRITTEN))?;
     hand_written(&fixture)?;
