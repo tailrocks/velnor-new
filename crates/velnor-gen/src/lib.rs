@@ -106,6 +106,7 @@ pub fn expected_with_notes(
     files.extend(release);
     let mut notes: Vec<String> = velnor_rust::untimed_auto_note(&facts)
         .into_iter()
+        .chain(velnor_rust::unverified_tools_note(&facts))
         .chain(facts.timings_notes)
         .collect();
     notes.extend(facts.private_sources);
