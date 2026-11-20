@@ -1,9 +1,3 @@
-"""MBX object-cache summaries parse with and without the `object cache:` label.
-
-mbx 1.30.0 prints the label-less form; older runs print the labelled form. A
-summary-shaped line that does not parse raises instead of being counted as zero.
-"""
-
 import sys
 import unittest
 from pathlib import Path
