@@ -25,12 +25,14 @@ pub struct Context {
     pub git_ref: String,
     pub default_branch: Option<String>,
     pub cache_key: String,
+    pub anchor_key: String,
     pub repository: String,
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct Remedy<'a> {
     pub key: &'a str,
+    pub anchor_key: &'a str,
     pub repository: &'a str,
 }
 
@@ -44,16 +46,45 @@ fn reason(discard: &Discard) -> String {
     }
 }
 
-fn delete_hint(remedy: Remedy<'_>) -> String {
-    if remedy.key.is_empty() {
-        return String::new();
-    }
-    let quoted = format!("'{}'", remedy.key.replace('\'', "'\\''"));
-    let command = format!("gh cache delete {quoted} -R {}", remedy.repository);
-    escape(
-        &format!(". The restored Actions cache entry is {quoted}; delete it with `{command}`"),
-        false,
+fn delete_sentence(what: &str, key: &str, repository: &str) -> String {
+    let quoted = format!("'{}'", key.replace('\'', "'\\''"));
+    format!(
+        ". The restored {what} is {quoted}; delete it with `gh cache delete {quoted} -R {repository}`, which removes every entry with that key in the repository, on any ref"
     )
+}
+
+fn delete_hint(remedy: Remedy<'_>) -> String {
+    let mut hint = String::new();
+    if !remedy.key.is_empty() {
+        hint.push_str(&delete_sentence(
+            "Actions cache entry",
+            remedy.key,
+            remedy.repository,
+        ));
+    }
+    if !remedy.anchor_key.is_empty() {
+        hint.push_str(&delete_sentence(
+            "anchor entry",
+            remedy.anchor_key,
+            remedy.repository,
+        ));
+    }
+    escape(&hint, false)
+}
+
+fn repository_target(server: Option<&str>, repository: Option<&str>) -> String {
+    let repository = repository.unwrap_or("<owner/repo>");
+    let host = server
+        .map(|url| {
+            url.trim_end_matches('/')
+                .trim_start_matches("https://")
+                .trim_start_matches("http://")
+        })
+        .filter(|host| !host.is_empty());
+    match host {
+        Some(host) => format!("{host}/{repository}"),
+        None => repository.to_owned(),
+    }
 }
 
 #[must_use]
@@ -130,6 +161,7 @@ pub fn run(verb: Verb, context: &Context) -> Result<String, CiError> {
         .map_err(|error| CiError::new(format!("cannot write {}: {error}", path.display())))?;
     let remedy = Remedy {
         key: &context.cache_key,
+        anchor_key: &context.anchor_key,
         repository: &context.repository,
     };
     Ok(format!("{}\n", message(&verdict, remedy)))
@@ -159,7 +191,11 @@ pub fn setup(verb: Verb) -> Result<String, CiError> {
             git_ref: var("GITHUB_REF").unwrap_or_default(),
             default_branch,
             cache_key: var("VELNOR_TOOLS_CACHE_KEY").unwrap_or_default(),
-            repository: var("GITHUB_REPOSITORY").unwrap_or_else(|| "<owner/repo>".to_owned()),
+            anchor_key: var("VELNOR_ANCHOR_CACHE_KEY").unwrap_or_default(),
+            repository: repository_target(
+                var("GITHUB_SERVER_URL").as_deref(),
+                var("GITHUB_REPOSITORY").as_deref(),
+            ),
         },
     )
 }

@@ -28,7 +28,7 @@ pub(super) fn wrapper_missing() -> CiError {
 
 pub(super) fn declared_here() -> Result<bool, CiError> {
     let directory = std::env::current_dir().map_err(|error| failed(&error))?;
-    Ok(crate::mbx_declared::declared_in(&directory))
+    crate::mbx_declared::checked_in(&directory).map_err(CiError::new)
 }
 
 pub(super) fn export_line(declared: bool) -> String {
