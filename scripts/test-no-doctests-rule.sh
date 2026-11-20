@@ -80,6 +80,8 @@ check ws_inner_bang    fail '#! [doc = "```\nx\n```"]\npub fn f() {}\n'
 check attr_inline_span pass '#[doc = "Use ```foo``` inline"]\npub fn f() {}\n'
 check attr_fence_start fail '#[doc = "```foo``` inline"]\npub fn f() {}\n'
 check let_doc_string   pass 'fn f() { let doc = "```"; }\n'
+check attr_indent4    fail '#![doc = "Prose\n\n    let x = 1;\n"]\nfn f() {}\n'
+check attr_nested_incl fail '#![doc = concat!("intro", include_str!("README.md"))]\nfn f() {}\n'
 
 missing="$work/scanner_missing"
 mkdir -p "$missing/crates/fx/src"
