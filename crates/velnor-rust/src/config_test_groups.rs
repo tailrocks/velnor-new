@@ -31,6 +31,7 @@ pub(crate) struct RawTestGroup {
     timeout_minutes: Option<u16>,
     runner: Option<String>,
     hosted: Option<bool>,
+    restore_cache: Option<bool>,
     #[serde(default)]
     paths: Vec<String>,
     #[serde(default)]
@@ -86,6 +87,9 @@ fn group(raw: RawTestGroup) -> Result<TestGroup, Reason> {
     if let Some(repeated) = needs.iter().find(|need| !seen.insert(**need)) {
         return Err(invalid("test_groups.needs", &format!("{repeated:?}")));
     }
+    if raw.restore_cache == Some(true) && !needs.contains(&TestNeed::Cargo) {
+        return Err(Reason::TestGroupRestoreWithoutCargo(raw.name));
+    }
     let runner = raw
         .runner
         .map(|label| {
@@ -130,6 +134,7 @@ fn group(raw: RawTestGroup) -> Result<TestGroup, Reason> {
         )?,
         runner,
         hosted: raw.hosted,
+        restore_cache: raw.restore_cache,
         paths,
         events,
         root,
