@@ -128,7 +128,9 @@ four more avoidable costs, each only when the evidence shows it was avoidable:
   lane without MBX lines, stays clean.
 - A toolchain component or target that `velnor-ci prepare` had to install
   (recorded in `$RUNNER_TEMP/velnor-toolchain-installs.txt`) although the tools
-  cache had an exact hit.
+  cache had an exact hit. This includes a declared channel that rustup would
+  install on its first `rustc` or `cargo` call: `prepare` checks for it before
+  the first rustup call and records `toolchain <channel>`.
 - A compilation unit (same root, package, target, profile, features, output
   files and execution environment) built by two Cargo invocations of one lane.
 
