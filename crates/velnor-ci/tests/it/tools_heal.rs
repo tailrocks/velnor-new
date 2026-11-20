@@ -4,6 +4,7 @@
 use std::fs;
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 use velnor_ci::tools_discard;
 use velnor_ci::tools_local::{Inputs, Outcome, Verb, replace_requested, run};
@@ -172,4 +173,45 @@ fn an_unset_runner_temp_never_reads_a_marker_from_the_working_directory() {
     std::env::set_current_dir(&before).unwrap_or_else(|e| unreachable!("{e}"));
     assert!(!unset);
     assert!(replace_requested(Verb::Save, &dir.display().to_string()));
+}
+
+#[test]
+fn a_save_outside_a_runner_keeps_a_marker_file_in_the_working_directory() {
+    let repo = Repo::empty("tools-heal-cli-marker");
+    let root = fs::canonicalize(repo.root()).unwrap_or_else(|e| unreachable!("{e}"));
+    let store = root.join("store");
+    let home = root.join("home");
+    let event = root.join("event.json");
+    fs::create_dir_all(&store).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::create_dir_all(home.join(".local/share/mise")).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::create_dir_all(home.join(".rustup/toolchains/stable"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    fs::write(home.join(".rustup/toolchains/stable/rustc"), "rustc")
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    fs::write(&event, r#"{"repository":{"default_branch":"main"}}"#)
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    fs::write(root.join("velnor-tools-discarded"), "").unwrap_or_else(|e| unreachable!("{e}"));
+    let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        .args(["tools-local", "save", "--key", KEY])
+        .current_dir(&root)
+        .env_remove("RUNNER_TEMP")
+        .env("HOME", &home)
+        .env("GITHUB_EVENT_NAME", "push")
+        .env("GITHUB_REF", "refs/heads/main")
+        .env("GITHUB_EVENT_PATH", &event)
+        .env("VELNOR_MBX_SHARED_DIR", &store)
+        .env("VELNOR_MBX_SEED_DIR", &store)
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success(),
+        "{stdout}{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(stdout.contains("tools saved to the node store"), "{stdout}");
+    assert!(
+        root.join("velnor-tools-discarded").is_file(),
+        "a successful save deleted the working directory's marker"
+    );
 }
