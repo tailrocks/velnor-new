@@ -178,6 +178,11 @@ slow-timeout = { period = "10s", terminate-after = 1 }
 filter = 'package(=velnor-ci) and (test(run_returns_when_the_command_exits_although_a_background_process_keeps_its_pipes_open) | test(run_waits_for_all_open_pipes_within_one_shared_grace_period) | test(run_withholds_counts_when_a_descendant_keeps_the_summary_pipe_open) | test(run_writes_no_counts_when_a_held_pipe_never_printed_a_summary))'
 slow-timeout = { period = "30s", terminate-after = 1 }
 
+# These velnor-gen tests walk the repository or render workflows on a loaded host, and ran past the 2 s default.
+[[profile.default.overrides]]
+filter = 'package(=velnor-gen) and binary(=it) and (test(/^concurrency::/) | test(=crates_mirror::mirror_is_explicit_scoped_and_precedes_every_job_tools) | test(=declared_command_wrappers::wrappers_cannot_hide_a_repository_script_from_the_write_token_rule) | test(=job_trust_boundary::no_token_or_verdict_step_follows_repository_code_in_the_same_job))'
+slow-timeout = { period = "10s", terminate-after = 1 }
+
 [[profile.default.overrides]]
 filter = "package(=velnor-ci) or package(=velnor-gen) or package(=velnor-model) or package(=velnor-release) or package(=velnor-render) or package(=velnor-rust)"
 slow-timeout = { period = "2s", terminate-after = 1 }
@@ -202,3 +207,8 @@ slow-timeout = { period = "10s", terminate-after = 1 }
 [[profile.ci.overrides]]
 filter = 'package(=velnor-ci) and (test(run_returns_when_the_command_exits_although_a_background_process_keeps_its_pipes_open) | test(run_waits_for_all_open_pipes_within_one_shared_grace_period) | test(run_withholds_counts_when_a_descendant_keeps_the_summary_pipe_open) | test(run_writes_no_counts_when_a_held_pipe_never_printed_a_summary))'
 slow-timeout = { period = "30s", terminate-after = 1 }
+
+# Same 10 s tier for the velnor-gen file-scan tests added above.
+[[profile.ci.overrides]]
+filter = 'package(=velnor-gen) and binary(=it) and (test(/^concurrency::/) | test(=crates_mirror::mirror_is_explicit_scoped_and_precedes_every_job_tools) | test(=declared_command_wrappers::wrappers_cannot_hide_a_repository_script_from_the_write_token_rule) | test(=job_trust_boundary::no_token_or_verdict_step_follows_repository_code_in_the_same_job))'
+slow-timeout = { period = "10s", terminate-after = 1 }
