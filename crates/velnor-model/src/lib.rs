@@ -56,7 +56,9 @@ pub use ids::{
 };
 pub use lint::{LintCommand, LintJob, LintKind};
 pub use mbx::MbxMode;
-pub use mbx_config::{MBX_TOOL, MbxConflict, MbxDeclaration, MbxRule, mbx_declaration};
+pub use mbx_config::{
+    MBX_ACTION_RELEASE, MBX_TOOL, MbxConflict, MbxDeclaration, MbxRule, mbx_declaration,
+};
 pub use mise::MisePlatform;
 pub use plan::{
     Access, BUILD_TESTS_STEP, BUILT_OUTPUT, CI_AUTO_LABEL, CI_RUN_LABEL, CargoCommand, Concurrency,
@@ -68,9 +70,9 @@ pub use plan::{
 pub use release_asset::{ReleaseAsset, ReleaseAssetError, ReleaseAssetPart};
 pub use repo::{
     CacheDebug, CheckoutScope, CiDebugInfo, CompileInputs, CratesMirror, CustomHarness, DenyCheck,
-    DenyLane, DependencyKind, DocsRun, FullRun, InputOwner, InputRule, LaneFeatures, LaneJob,
-    LaneKeysWritten, MbxRemote, MbxStore, MemberDependency, OnMain, PackageDependency, PolicyTable,
-    PolicyTools, PrCi, PrivateSources, PushAfterMergeGroup, RepoFacts, RepoView,
+    DenyChecks, DenyLane, DependencyKind, DocsRun, FullRun, InputOwner, InputRule, LaneFeatures,
+    LaneJob, LaneKeysWritten, MbxRemote, MbxStore, MemberDependency, OnMain, PackageDependency,
+    PolicyTable, PolicyTools, PrCi, PrivateSources, PushAfterMergeGroup, RepoFacts, RepoView,
     RepositoryIdentity, RustCiConfig, RustMember, RustMetadata, RustPackage, RustRoot, SetupPhase,
     SpeedBudget, Target, TargetKind, TestLane, TestSetup, Timings, ToolLock, ToolPin, ToolPins,
     ToolRequest, Toolchain, UnownedPackage, Unread, Weakening, WorkspaceGroup,

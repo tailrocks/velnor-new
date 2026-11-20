@@ -184,7 +184,7 @@ Every key of `.velnor/rust-ci.toml`, with its default. `generator/CONFIG.md` has
 | `default_ignores` | `true` | documentation and licence files select nothing |
 | `nextest_harnesses` | none | `package:target` entries for `harness = false` test targets that nextest can run; the others run in a direct step |
 | `test_setup` | none | `[[test_setup]]` fixture steps that run before tests; `phase = "build"` runs one before the first compiling cargo step of each job, so clippy and `build.rs` see it |
-| `policy` | none | table; `deny = true`, `false` or unset (on when a `deny.toml` exists) switches the cargo-deny lane, and `deny_checks` lists the checks it runs (needs `velnor-ci` 0.1.111), see `generator/CONFIG.md` |
+| `policy` | none | table; `deny = true`, `false` or unset (on when a `deny.toml` exists) switches the cargo-deny lane, and `deny_checks` lists the checks it runs, one or more of `advisories`, `bans`, `licenses` and `sources`, each at most once (needs `velnor-ci` 0.1.111) |
 | `check_configurations` | none | `[[check_configurations]]` entries (`root`, optional `configurations` JSON file) that run `velnor-ci check-configurations` before the tests of a root; needs `velnor-ci` 0.1.110 or later, see [generator/CONFIG.md](../generator/CONFIG.md) |
 | `workspace_groups` | none | `[[workspace_groups]]` entries: Cargo workspaces that share one job set and one build folder, see `generator/CONFIG.md` |
 | `external_workflows` | none | paths under `.github/workflows/` of hand-written workflows that `velnor-gen check` must not flag; needs velnor-ci 0.1.109 or later, see `generator/CONFIG.md` |

@@ -1,11 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-//! Every generated `jdx/mise-action` step pins the mise binary by SHA-256 (issue #2158). A job
-//! whose runner labels name one platform carries that platform's digest as a literal; any other
-//! job selects the digest by `runner.os` and `runner.arch` when it runs. The digests below are
-//! copied from the official `SHASUMS256.txt` of the pinned release, not from the renderer, so a
-//! change to the renderer's table must also change this test.
+//! Every generated `jdx/mise-action` step pins the mise binary by SHA-256 (issue #2158). A
+//! GitHub-hosted job whose label names one platform carries that platform's digest as a literal;
+//! any other job (a self-hosted label, which may be registered under any name) selects the digest
+//! by `runner.os` and `runner.arch` when it runs. The digests below are copied from the official
+//! `SHASUMS256.txt` of the pinned release, not from the renderer, so a change to the renderer's
+//! table must also change this test.
 
 use std::collections::BTreeMap;
 
@@ -50,22 +51,17 @@ fn platform_of(label: &str) -> Option<&'static str> {
     }
 }
 
-/// The digest literal a job must carry: set when every label of `runs-on` names one platform.
+/// The digest literal a job must carry: set only for a GitHub-hosted job (plain `runs-on`) whose
+/// label names one platform. A fork fence means a self-hosted label, which proves no platform.
 fn literal_for(runs_on: &str) -> Option<&'static str> {
-    let labels: Vec<&str> = match runs_on.rsplit_once(" && ") {
-        // A fork fence: `<same repository> && '<runner>' || '<hosted runner>'`.
-        Some((_, tail)) if runs_on.contains("${{") => tail.split('\'').skip(1).step_by(2).collect(),
-        _ => vec![runs_on],
-    };
-    let mut platforms: Vec<Option<&str>> = labels.into_iter().map(platform_of).collect();
-    platforms.dedup();
-    match platforms.as_slice() {
-        [Some(platform)] => DIGESTS
-            .iter()
-            .find(|(name, _)| name == platform)
-            .map(|(_, digest)| *digest),
-        _ => None,
+    if runs_on.contains("${{") {
+        return None;
     }
+    let platform = platform_of(runs_on)?;
+    DIGESTS
+        .iter()
+        .find(|(name, _)| *name == platform)
+        .map(|(_, digest)| *digest)
 }
 
 /// The mise steps of a rendered workflow, with the `runs-on` of their job.
@@ -247,6 +243,24 @@ fn the_run_time_selection_leaves_windows_unpinned() -> TestResult {
         "60b9518958e796a5bf57e782135b845318c4dc47d21a6c7e4628b6a4c55cecfc",
     ] {
         assert!(!input.contains(digest), "{input}");
+    }
+    Ok(())
+}
+
+#[test]
+fn a_self_hosted_runner_under_an_ubuntu_label_gets_no_glibc_digest() -> TestResult {
+    for config in [
+        "runner = 'ubuntu-musl'\nhosted = false\n",
+        "runner = 'ubuntu-26.04'\nhosted = false\n",
+    ] {
+        let repo = view(&["Cargo.toml", "tools/Cargo.toml"], Some(config.as_bytes()))?;
+        let steps = mise_steps(&workflow(&repo)?)?;
+        assert!(!steps.is_empty(), "{config}: no mise-action step rendered");
+        for (runs_on, with) in steps {
+            assert!(runs_on.contains("${{"), "{config}: {runs_on}");
+            let input = with["sha256"].as_str().ok_or("no sha256 input")?;
+            assert_selection(config, input)?;
+        }
     }
     Ok(())
 }

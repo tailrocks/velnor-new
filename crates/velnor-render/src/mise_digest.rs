@@ -7,11 +7,13 @@
 //! input makes the action skip its signed-archive check. That check also covers `mise-shim.exe`,
 //! which the Windows archive ships beside `mise.exe` and which only the signed check verifies.
 //! Windows therefore carries no digest: its selection is empty and the signed check runs. Linux
-//! carries none either, when the job does not name a glibc runner: a musl runner downloads a
-//! different binary, so a glibc digest would fail its check, and `runner.os` cannot tell the two
-//! apart. A job whose runner labels all name one platform gets that platform's digest as a
-//! literal; a `ubuntu-*` label is glibc, while a label that only names Linux is not. Any other
-//! job (an unknown label, a matrix runner, a fork runner of another architecture) keeps a run-time
+//! carries none either, unless the job runs on a GitHub-hosted glibc label: a musl runner downloads
+//! a different binary, so a glibc digest would fail its check, and `runner.os` cannot tell the two
+//! apart. A GitHub-hosted job (no fork runner, no trusted runner) whose label names one platform
+//! gets that platform's digest as a literal; a hosted `ubuntu-*` label is glibc, while a label that
+//! only names Linux is not. A self-hosted label proves no platform, because any name can be
+//! registered: `ubuntu-musl` is a musl runner. Any other job (a self-hosted label, an unknown
+//! label, a matrix runner, a fork runner of another architecture) keeps a run-time
 //! selection by `runner.os` and `runner.arch`, which is longer (about 500 bytes a step, and a
 //! workflow of many roots has to stay under the 500 000 byte limit). A macOS platform without a
 //! row selects a text that matches no binary, so the action fails with a SHA256 mismatch instead
@@ -166,23 +168,17 @@ pub(crate) fn pin_to_runner_platform(mut job: RenderedJob) -> RenderedJob {
 }
 
 fn runner_digest(job: &RenderedJob) -> Option<&'static str> {
-    if job.runs_on_axis.is_some() {
+    if job.runs_on_axis.is_some() || job.fork_runner.is_some() || job.trusted_runner.is_some() {
         return None;
     }
-    let mut platforms = std::iter::once(job.runs_on.as_str())
-        .chain(job.fork_runner.as_deref())
-        .map(plain_label_platform);
-    let first = platforms.next()??;
-    platforms
-        .all(|platform| platform.as_deref() == Some(first.as_str()))
-        .then_some(())?;
+    let platform = plain_label_platform(&job.runs_on)?;
     let binary = MISE_BINARIES
         .iter()
         .find(|binary| binary.version == MISE_VERSION)?;
     binary
         .sha256
         .iter()
-        .find(|(platform, _)| platform.eq_ignore_ascii_case(&first))
+        .find(|(name, _)| name.eq_ignore_ascii_case(&platform))
         .map(|(_, digest)| *digest)
 }
 
