@@ -123,7 +123,7 @@ fn a_pull_request_copies_only_the_action_store_subset_into_the_private_store() {
     );
     assert!(!copied.expired);
     assert_eq!(
-        env_lines(&outcome),
+        env_lines(&outcome).expect("env lines"),
         format!("MBX_CACHE_DIR={}\n", store.display())
     );
     assert_eq!(
@@ -185,14 +185,14 @@ fn an_absent_seed_changes_nothing() {
     let host = host("mbx-seed-absent");
     let outcome = run(&host, "pull_request", "refs/pull/1/merge", None);
     assert_eq!(outcome, Outcome::NotOffered);
-    assert_eq!(env_lines(&outcome), "");
+    assert_eq!(env_lines(&outcome).expect("env lines"), "");
     assert!(!host.root.join("temp/velnor").exists());
     let empty = host.root.join("empty");
     fs::create_dir_all(&empty).unwrap_or_else(|e| unreachable!("{e}"));
     read_only(&empty);
     let outcome = run(&host, "pull_request", "refs/pull/1/merge", Some(&empty));
     assert_eq!(outcome, Outcome::Empty);
-    assert_eq!(env_lines(&outcome), "");
+    assert_eq!(env_lines(&outcome).expect("env lines"), "");
     assert!(!host.root.join("temp/velnor").exists());
 }
 
@@ -203,7 +203,7 @@ fn a_trusted_event_is_never_seeded() {
     for event in ["push", "schedule"] {
         let outcome = run(&host, event, "refs/heads/main", Some(&seed));
         assert_eq!(outcome, Outcome::Trusted);
-        assert_eq!(env_lines(&outcome), "");
+        assert_eq!(env_lines(&outcome).expect("env lines"), "");
     }
     assert!(!host.root.join("temp/velnor").exists());
 }
@@ -230,7 +230,7 @@ fn a_symlinked_or_unsafe_seed_is_refused() {
     for (dir, reason) in cases {
         let outcome = run(&host, "pull_request", "refs/pull/1/merge", Some(&dir));
         assert_eq!(outcome, Outcome::Rejected(reason), "{}", dir.display());
-        assert_eq!(env_lines(&outcome), "");
+        assert_eq!(env_lines(&outcome).expect("env lines"), "");
         assert!(message(&outcome).starts_with("::warning::VELNOR_MBX_SEED_DIR ignored"));
     }
     let wrong = select(&Inputs {
@@ -299,7 +299,7 @@ fn a_seed_the_job_can_write_is_refused() {
         .unwrap_or_else(|e| unreachable!("{e}"));
     let outcome = run(&host, "pull_request", "refs/pull/1/merge", Some(&seed));
     assert_eq!(outcome, Outcome::Rejected("writable by this job"));
-    assert_eq!(env_lines(&outcome), "");
+    assert_eq!(env_lines(&outcome).expect("env lines"), "");
     assert!(!host.root.join("temp/velnor").exists());
 }
 

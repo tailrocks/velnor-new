@@ -6,6 +6,7 @@ use std::process::ExitCode;
 
 use crate::cli::CratesMirrorArgs;
 use crate::error::CiError;
+use crate::escape::{escape, file_value};
 
 use super::crates_mirror_mode::{self as mode, Mirror, Mode};
 
@@ -53,6 +54,7 @@ pub(super) fn setup(args: &CratesMirrorArgs) -> Result<String, CiError> {
         ))
     })?;
     let directory = runner_directory()?;
+    file_value(&directory.display().to_string())?;
     let wrapper = directory.join("cargo");
     let config = directory.join("config.toml");
     let quoted = |text: &str| serde_json::to_string(text).map_err(|e| CiError::new(e.to_string()));
@@ -97,7 +99,7 @@ pub(super) fn setup(args: &CratesMirrorArgs) -> Result<String, CiError> {
     )?;
     Ok(format!(
         "Configured crates.io through {} in {}\n",
-        args.registry,
+        escape(&args.registry, false),
         config.display()
     ))
 }
