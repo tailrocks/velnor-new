@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod action_inputs;
+mod attestation;
 mod cache_mode;
 mod call;
 mod cases;

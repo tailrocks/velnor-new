@@ -66,7 +66,8 @@ pub fn expected_with_notes(
         return Err(GenerateError::TooManySourceRoots(roots));
     }
     let (plan, mut files, budget_notes) = plan_and_render(view, &facts)?;
-    files.extend(reusable::reusable_workflows(view, helper)?);
+    let (reusable, reusable_notes) = reusable::reusable_workflows(view, helper)?;
+    files.extend(reusable);
     if plan
         .jobs
         .iter()
@@ -83,6 +84,7 @@ pub fn expected_with_notes(
     notes.extend(facts.private_suggestion);
     notes.extend(release_notes);
     notes.extend(budget_notes);
+    notes.extend(reusable_notes);
     Ok((files, notes))
 }
 
