@@ -61,6 +61,7 @@ exec "$REAL_MV" "$@"
 
 STUB_SYNC = """#!/bin/sh
 printf 'sync %s\\n' "$*" >> "$STUB_ORDER_LOG"
+if [ $# -gt 0 ]; then cat "$1" > "$STUB_SYNCED"; fi
 """
 
 STUB_TAR = """#!/bin/sh
@@ -560,13 +561,18 @@ class SetupVelnorInstallTests(unittest.TestCase):
 
     def test_a_store_write_is_flushed_to_disk_before_it_is_renamed_into_the_tool_cache(self):
         order = self.root / "order.log"
+        synced = self.root / "synced"
         for name, body in (("mv", STUB_MV), ("sync", STUB_SYNC)):
             stub = self.stub_bin / name
             stub.write_text(body)
             stub.chmod(0o755)
         result = self.install(
             sha256(self.archive),
-            extra_env={"STUB_ORDER_LOG": str(order), "REAL_MV": shutil.which("mv")},
+            extra_env={
+                "STUB_ORDER_LOG": str(order),
+                "STUB_SYNCED": str(synced),
+                "REAL_MV": shutil.which("mv"),
+            },
         )
         self.assertEqual(result.returncode, 0, result.output)
         lines = order.read_text().splitlines()
@@ -577,6 +583,9 @@ class SetupVelnorInstallTests(unittest.TestCase):
         self.assertEqual(Path(temp).parent, Path(cache_dir), "the temp file is not beside the store entry")
         flushes = [i for i, line in enumerate(lines) if line == f"sync {temp}"]
         self.assertTrue(flushes and flushes[0] < renames[0], lines)
+        self.assertTrue(synced.exists(), "the temp file was never flushed")
+        self.assertEqual(synced.read_bytes(), self.archive, "the flushed bytes are not the complete archive")
+        self.assertEqual(self.cached_archive().read_bytes(), self.archive)
 
 
 if __name__ == "__main__":

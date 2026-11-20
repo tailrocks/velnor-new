@@ -80,7 +80,12 @@ runs:
           file="$(mktemp "$staging/$archive.XXXXXX")"
           if [ "$source" = cache ]; then
             n=1
-            [ -n "$dir" ] && [ -f "$dir/$archive" ] && [ ! -L "$dir/$archive" ] && bounded_copy "$dir/$archive" "$file" || { rm -f "$file"; continue; }
+            if [ -n "$dir" ] && [ -f "$dir/$archive" ] && [ ! -L "$dir/$archive" ] && bounded_copy "$dir/$archive" "$file"; then
+              :
+            else
+              rm -f "$file"
+              continue
+            fi
           else
             downloads=$((downloads + 1))
             n=$downloads
