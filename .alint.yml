@@ -229,11 +229,14 @@ rules:
     level: error
     message: "src/lib.rs and src/main.rs MUST stay under 150 physical lines (§5)"
 
+  # An indented doc code block must follow a blank doc line (CommonMark: an
+  # indented block cannot interrupt a paragraph). A 5+-space line right after
+  # a text line is a list or paragraph continuation, so it is not flagged.
   - id: no-doctests
     kind: file_content_forbidden
     paths:
       include:
         - "crates/**/src/**/*.rs"
-    pattern: '(?m)^[ \t]*//[/!][ \t]*(?:```|~~~)|(?m)^[ \t]*//[/!] {5,}\S|#!?\[doc\s*=[^\]]*(?:```|~~~|include_str)|\bdoc\s*=\s*include_str!'
+    pattern: '(?m)^[ \t]*//[/!][ \t]*(?:```|~~~)|(?m)^[ \t]*//[/!][ \t]*\n[ \t]*//[/!] {5,}\S|#!?\[doc\s*=[^\]]*(?:```|~~~|include_str)|\bdoc\s*=\s*include_str!'
     level: error
     message: "Doctests are off by decision (Cargo `doctest = false`). A doctest would bring back the MBX `rustdoc` bypass in every CI run. Do not add a doc fence, an indented doc code block or a `#[doc]` include; a decision is needed first."
