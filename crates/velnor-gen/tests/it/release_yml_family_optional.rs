@@ -71,7 +71,8 @@ fn the_checksums_wait_for_every_build_and_need_every_required_one_to_succeed() -
     let sums = job(&tree, "sums-family")?;
     assert!(needs(sums).contains(&"build-tools-macos-arm64"));
     let condition = condition(sums);
-    assert!(condition.starts_with("${{ always() && "), "{condition}");
+    assert!(condition.starts_with("${{ !cancelled() && "), "{condition}");
+    assert!(!condition.contains("always()"), "{condition}");
     for required in [
         "gate",
         "family",
