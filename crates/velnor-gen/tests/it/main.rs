@@ -142,6 +142,7 @@ mod no_programs;
 mod node_store_cache;
 mod patch;
 mod per_root_audit;
+mod pin_policy;
 mod pipeline;
 mod plan_job;
 mod plan_job_wait;
