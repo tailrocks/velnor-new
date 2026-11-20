@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-pub(super) const TABLE_NAMES: [&str; 4] = [
+pub(super) const TABLE_NAMES: &[&str] = &[
     "physical_attempt_post_jit_retirement_claims",
     "physical_attempt_post_jit_retirement_progress",
     "physical_attempt_post_jit_retirement_remote_absence",
