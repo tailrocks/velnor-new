@@ -17,7 +17,7 @@ use crate::weaken_targets::targets;
 
 const NEXTEST_CONFIG: &str = ".config/nextest.toml";
 const MANIFEST: &str = "Cargo.toml";
-const COMPILER_KEYS: [&str; 4] = [
+const COMPILER_KEYS: &[&str] = &[
     "rustc-wrapper",
     "rustc-workspace-wrapper",
     "rustc",
@@ -220,7 +220,7 @@ fn manifest(parsed: &toml::Table, make: &Make<'_>) -> Vec<Weakening> {
 fn cargo_config(parsed: &toml::Table, make: &Make<'_>) -> Vec<Weakening> {
     let mut found = Vec::new();
     let build = parsed.get("build").and_then(Value::as_table);
-    for key in COMPILER_KEYS {
+    for key in COMPILER_KEYS.iter().copied() {
         if let Some(value) = build.and_then(|build| build.get(key)) {
             if key.ends_with("wrapper") && value.as_str() == Some("") {
                 continue;

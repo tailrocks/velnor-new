@@ -10,7 +10,7 @@
 use serde_json::{Value, json};
 use velnor_ci::report::{LaneMetrics, check};
 
-const LINT: [&str; 6] = [
+const LINT: &[&str] = &[
     "cargo-clippy",
     "clippy",
     "--workspace",
@@ -18,7 +18,7 @@ const LINT: [&str; 6] = [
     "--locked",
     "--message-format=json-render-diagnostics",
 ];
-const ARCHIVE: [&str; 7] = [
+const ARCHIVE: &[&str] = &[
     "cargo-nextest",
     "nextest",
     "archive",
@@ -75,8 +75,8 @@ fn failure(lanes: &[LaneMetrics]) -> String {
 #[test]
 fn lint_and_test_archive_jobs_may_each_compile_the_host_units_on_a_cold_run() {
     let lanes = [
-        lane("rust-lint-root", &[&LINT], &host_units()),
-        lane("rust-test-root", &[&ARCHIVE], &host_units()),
+        lane("rust-lint-root", &[LINT], &host_units()),
+        lane("rust-test-root", &[ARCHIVE], &host_units()),
     ];
     let result = check(&lanes);
     assert!(result.is_ok(), "{result:?}");
@@ -84,13 +84,13 @@ fn lint_and_test_archive_jobs_may_each_compile_the_host_units_on_a_cold_run() {
 
 #[test]
 fn the_same_unit_twice_in_one_job_is_still_a_miss() {
-    let lanes = [lane("rust-test-root", &[&ARCHIVE, &ARCHIVE], &host_units())];
+    let lanes = [lane("rust-test-root", &[ARCHIVE, ARCHIVE], &host_units())];
     let message = failure(&lanes);
     assert!(
         message.contains("syn: identical observed compilation unit executed 2 times"),
         "{message}"
     );
-    let lanes = [lane("rust-root", &[&LINT, &ARCHIVE], &host_units())];
+    let lanes = [lane("rust-root", &[LINT, ARCHIVE], &host_units())];
     let message = failure(&lanes);
     assert!(
         message.contains("serde_derive: identical observed compilation unit executed 2 times"),
@@ -100,7 +100,7 @@ fn the_same_unit_twice_in_one_job_is_still_a_miss() {
 
 #[test]
 fn two_jobs_running_the_same_kind_of_command_are_still_a_miss() {
-    for argv in [&LINT[..], &ARCHIVE[..]] {
+    for argv in [LINT, ARCHIVE] {
         let lanes = [
             lane("rust-a", &[argv], &host_units()),
             lane("rust-b", &[argv], &host_units()),
@@ -116,9 +116,9 @@ fn two_jobs_running_the_same_kind_of_command_are_still_a_miss() {
 #[test]
 fn the_split_exemption_does_not_hide_a_third_job() {
     let lanes = [
-        lane("rust-lint-root", &[&LINT], &host_units()),
-        lane("rust-test-root", &[&ARCHIVE], &host_units()),
-        lane("rust-test-other", &[&ARCHIVE], &host_units()),
+        lane("rust-lint-root", &[LINT], &host_units()),
+        lane("rust-test-root", &[ARCHIVE], &host_units()),
+        lane("rust-test-other", &[ARCHIVE], &host_units()),
     ];
     let message = failure(&lanes);
     assert!(

@@ -8,14 +8,14 @@ use serde_json::Value;
 use crate::facts::TestResult;
 use crate::golden::{sample_dirs, samples};
 
-const SECRET_MARKERS: [&str; 5] = [
+const SECRET_MARKERS: &[&str] = &[
     "GITHUB_TOKEN",
     "GH_TOKEN",
     "github.token",
     "ACTIONS_RUNTIME_TOKEN",
     "secrets.",
 ];
-const VERDICT_MARKERS: [&str; 6] = [
+const VERDICT_MARKERS: &[&str] = &[
     "velnor-ci verify",
     "velnor-ci gate",
     "velnor-ci cache check",

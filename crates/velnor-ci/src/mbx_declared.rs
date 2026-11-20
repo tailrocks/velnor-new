@@ -9,7 +9,7 @@ use std::path::Path;
 use toml::{Table, Value};
 
 /// The mise config files a checkout root can carry, in mise's own lookup order.
-const CONFIGS: [&str; 6] = [
+const CONFIGS: &[&str] = &[
     "mise.toml",
     ".mise.toml",
     "mise/config.toml",

@@ -15,7 +15,7 @@ pub(super) const SOURCE_REPOSITORY_URL: &str = "https://github.com/tailrocks/vel
 pub(super) const PLATFORM: &str = "linux/amd64";
 pub(super) const PATH_ENV: &str =
     "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin";
-pub(super) const BASE_LABELS: [&str; 6] = [
+pub(super) const BASE_LABELS: &[&str] = &[
     "org.opencontainers.image.created",
     "org.opencontainers.image.description",
     "org.opencontainers.image.title",

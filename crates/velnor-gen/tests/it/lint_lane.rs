@@ -10,7 +10,7 @@ use crate::pipeline::{view, workflow};
 const SCALE_SET: &str = "ubuntu-26.04-scale-set";
 pub(crate) const MISE: &str = "[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\njactionlint = \"2.4.0\"\nshellcheck = \"0.11.0\"\n\"github:asamarts/alint\" = \"0.22.1\"\n\n[tasks.lint-generator-samples]\nrun = \"jactionlint\"\n\n[tasks.check]\nrun = \"true\"\n";
 pub(crate) const LINT: &str = "[[lint]]\nkind = 'jactionlint'\nconfig = '.github/jactionlint.yaml'\n\n[[lint]]\nkind = 'alint'\nconfig = '.alint.yml'\nprobe = 'scripts/alint-line-cap-probe.sh'\n\n[[lint]]\nkind = 'mise-task'\ntask = 'lint-generator-samples'\ntools = ['jactionlint']\ntimeout_minutes = 5\n";
-pub(crate) const IDS: [&str; 3] = [
+pub(crate) const IDS: &[&str] = &[
     "lint-jactionlint",
     "lint-alint",
     "lint-lint-generator-samples",
@@ -53,7 +53,7 @@ pub(crate) fn uses(job: &Value) -> Vec<String> {
 fn every_lint_entry_renders_one_fenced_least_privilege_job_that_waits_for_nothing() -> TestResult {
     let jobs = jobs(&format!("runner = '{SCALE_SET}'\n{LINT}"))?;
     let fence = "${{ (!startsWith(github.event_name, 'pull_request') || github.event.pull_request.head.repo.full_name == github.repository) && 'ubuntu-26.04-scale-set' || 'ubuntu-latest' }}";
-    for id in IDS {
+    for id in IDS.iter().copied() {
         let job = &jobs[id];
         assert!(job.is_object(), "{id} missing");
         assert_eq!(job["runs-on"].as_str(), Some(fence), "{id}");
@@ -87,7 +87,7 @@ fn every_lint_entry_renders_one_fenced_least_privilege_job_that_waits_for_nothin
 #[test]
 fn a_hosted_runner_needs_no_fence_for_lint_jobs() -> TestResult {
     let jobs = jobs(&format!("runner = 'ubuntu-24.04'\nhosted = true\n{LINT}"))?;
-    for id in IDS {
+    for id in IDS.iter().copied() {
         assert_eq!(jobs[id]["runs-on"].as_str(), Some("ubuntu-24.04"), "{id}");
     }
     Ok(())

@@ -91,7 +91,7 @@ pub async fn inspect<E: Engine>(
     let (plain, pair) = if info.is_ok() {
         (
             Some(missing(engine, PLAIN_IMAGES.iter().map(|(tag, _)| *tag)).await),
-            Some(missing(engine, TARGETS.into_iter()).await),
+            Some(missing(engine, TARGETS.iter().copied()).await),
         )
     } else {
         (None, None)

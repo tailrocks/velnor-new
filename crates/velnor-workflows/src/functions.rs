@@ -4,7 +4,7 @@
 use crate::error::{WorkflowsError, refuse};
 use crate::expression::{Level, Scope};
 
-const EVERYWHERE: [&str; 7] = [
+const EVERYWHERE: &[&str] = &[
     "contains",
     "endsWith",
     "format",
@@ -13,7 +13,7 @@ const EVERYWHERE: [&str; 7] = [
     "startsWith",
     "toJSON",
 ];
-const STATUS: [&str; 4] = ["always", "cancelled", "failure", "success"];
+const STATUS: &[&str] = &["always", "cancelled", "failure", "success"];
 const HASH_FILES: &str = "hashFiles";
 
 pub(crate) fn check_functions(
@@ -24,8 +24,8 @@ pub(crate) fn check_functions(
 ) -> Result<(), WorkflowsError> {
     for name in names {
         let listed = |list: &[&str]| list.iter().any(|known| known.eq_ignore_ascii_case(name));
-        let available = listed(&EVERYWHERE)
-            || (condition && listed(&STATUS))
+        let available = listed(EVERYWHERE)
+            || (condition && listed(STATUS))
             || (scope.level == Level::Step && HASH_FILES.eq_ignore_ascii_case(name));
         if !available {
             return refuse(format!(

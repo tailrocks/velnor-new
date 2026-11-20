@@ -9,7 +9,7 @@ use crate::facts::TestResult;
 use crate::pipeline::{pin_helper, view, workflow};
 
 const GROUP: &str = "[[workspace_groups]]\nname = \"tools\"\nroots = [\"tools/a\", \"tools/b\"]\n";
-const ROOTS: [&str; 3] = ["Cargo.toml", "tools/a/Cargo.toml", "tools/b/Cargo.toml"];
+const ROOTS: &[&str] = &["Cargo.toml", "tools/a/Cargo.toml", "tools/b/Cargo.toml"];
 
 fn grouped(config: &str) -> Result<String, Box<dyn Error>> {
     let mut view = view(&ROOTS, Some(config.as_bytes()))?;

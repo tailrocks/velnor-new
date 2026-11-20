@@ -25,7 +25,7 @@ fn steps_of<'t>(text: &'t str, job: &str) -> Vec<&'t str> {
         .collect()
 }
 
-const LANE_SETUP: [&str; 16] = [
+const LANE_SETUP: &[&str] = &[
     "Check out",
     "Resolve released helper tools",
     "Install velnor-ci 0.1.81",
@@ -128,7 +128,7 @@ fn more_than_one_job_start_a_plan_job_that_installs_nothing_and_every_lane_waits
     }
     assert!(!text.contains("_doctests"), "{text}");
     let lane = steps_of(&text, "rust-lab");
-    assert_eq!(lane[..LANE_SETUP.len()], LANE_SETUP);
+    assert_eq!(&lane[..LANE_SETUP.len()], LANE_SETUP);
     assert!(lane[LANE_SETUP.len()].starts_with("Format"), "{lane:?}");
     assert!(text.contains(
         "      - rust-plan\n      - rust-root\n      - rust-lab\n      - rust-inputs-audit\n    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (always()) }}'\n"

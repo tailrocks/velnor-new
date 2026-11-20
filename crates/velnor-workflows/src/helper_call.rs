@@ -4,7 +4,7 @@
 use crate::command_scan::segments;
 use crate::wrappers::{Invoked, invoked};
 
-pub const HELPER_COMMANDS: [&str; 34] = [
+pub const HELPER_COMMANDS: &[&str] = &[
     "report",
     "bench",
     "inputs",

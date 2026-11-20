@@ -202,7 +202,7 @@ fn a_path_toolchain_inside_the_repository_is_checked_out_and_an_escaping_one_for
 const WITH_RUST: &str =
     "[tools]\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\nrust = \"1.99.1\"\n";
 
-const VENDORED: [(&str, &str); 4] = [
+const VENDORED: &[(&str, &str)] = &[
     ("mise.toml", WITH_RUST),
     (".velnor/rust-ci.toml", ON),
     (

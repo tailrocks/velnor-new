@@ -9,7 +9,7 @@ use crate::pipeline::workflow;
 use crate::test_groups::view_with;
 use crate::yaml_tree::document;
 
-const ROOTS: [&str; 2] = ["Cargo.toml", "lab/Cargo.toml"];
+const ROOTS: &[&str] = &["Cargo.toml", "lab/Cargo.toml"];
 const HELPER: &str = "0.1.109";
 
 /// A repository limit of 30 minutes, 90 for the `lab` root, and a parallel lane of `lab` that

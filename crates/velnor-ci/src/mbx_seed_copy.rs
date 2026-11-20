@@ -9,7 +9,7 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Instant;
 
-pub const SUBSETS: [&str; 4] = [
+pub const SUBSETS: &[&str] = &[
     "cas",
     "executable-identities",
     "task-manifests",
@@ -87,7 +87,7 @@ fn list(from: &Path, to: &Path, walk: &mut Walk, deadline: Instant) {
 #[must_use]
 pub fn copy_subset(seed: &Path, store: &Path, threads: usize, deadline: Instant) -> Copied {
     let mut total = Copied::default();
-    for subset in SUBSETS {
+    for subset in SUBSETS.iter().copied() {
         let mut walk = Walk::default();
         list(&seed.join(subset), &store.join(subset), &mut walk, deadline);
         let part = run(walk.jobs, threads, deadline);
