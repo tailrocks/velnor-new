@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) enum Value {
+pub enum Value {
     Null,
     Bool(bool),
     Str(String),
@@ -10,7 +10,8 @@ pub(crate) enum Value {
 }
 
 impl Value {
-    pub(crate) fn truthy(&self) -> bool {
+    #[must_use]
+    pub fn truthy(&self) -> bool {
         match self {
             Self::Null => false,
             Self::Bool(flag) => *flag,
@@ -28,7 +29,8 @@ impl Value {
         }
     }
 
-    pub(crate) fn text(&self) -> String {
+    #[must_use]
+    pub fn text(&self) -> String {
         match self {
             Self::Null => String::new(),
             Self::Bool(flag) => flag.to_string(),
@@ -264,7 +266,7 @@ fn call(name: &str, arguments: &[Value]) -> Result<Value, String> {
     }
 }
 
-pub(crate) fn evaluate(
+pub fn evaluate(
     text: &str,
     resolve: &dyn Fn(&str) -> Result<Value, String>,
 ) -> Result<Value, String> {
@@ -287,7 +289,8 @@ pub(crate) fn evaluate(
     }
 }
 
-pub(crate) fn has_status_function(text: &str) -> bool {
+#[must_use]
+pub fn has_status_function(text: &str) -> bool {
     ["always()", "cancelled()", "success()", "failure()"]
         .iter()
         .any(|function| text.contains(function))

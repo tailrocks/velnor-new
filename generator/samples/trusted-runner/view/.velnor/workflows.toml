@@ -1,0 +1,29 @@
+[[workflow]]
+file = "qualification"
+name = "Qualification"
+hosted_runner = "ubuntu-26.04"
+scale_set_runner = "ubuntu-26.04-scale-set"
+fork_runner = "ubuntu-26.04"
+trusted_runner = "ubuntu-26.04-scale-set-trusted"
+
+[workflow.on.workflow_dispatch]
+
+[[workflow.on.workflow_dispatch.input]]
+name = "mode"
+type = "choice"
+default = "both"
+options = ["both", "features"]
+
+[[workflow.case]]
+id = "features"
+title = "Features"
+timeout_minutes = 5
+permissions = { contents = "read" }
+
+[[workflow.case.step]]
+name = "Check out"
+uses = "checkout"
+
+[[workflow.case.step]]
+name = "Run"
+run = "echo ok"

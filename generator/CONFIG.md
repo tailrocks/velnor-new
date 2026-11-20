@@ -33,6 +33,29 @@ hosted = false                  # optional: an undeclared custom label is self-h
 fork_runner = "ubuntu-24.04"
 ```
 
+## Trusted runner pool
+
+A repository that keeps a second, trusted self-hosted pool for the default branch sets `trusted_runner` to that pool's label (issue [#1680](https://github.com/tailrocks/velnor-new/issues/1680)). Jobs of trusted events then run on the trusted label, and every other event keeps today's `runs-on`, with its fork fallback.
+
+```toml
+runner = "ubuntu-26.04-scale-set"
+trusted_runner = "ubuntu-26.04-scale-set-trusted"
+
+[crates_mirror]
+runner = "ubuntu-26.04-scale-set"
+trusted_runner = "ubuntu-26.04-scale-set-trusted"   # optional: defaults to the top-level key when the runner is the same
+```
+
+An event is trusted when it is a `push` or a `workflow_dispatch` whose `github.ref` is `refs/heads/<default branch>`, or a `schedule`. This is the rule `velnor-ci` applies to the node store, so routing and store use agree, and a test compares the two. It is an allowlist: `pull_request`, `pull_request_target`, `merge_group`, `workflow_run`, `issue_comment`, `repository_dispatch`, `release`, tag pushes and every other event get the normal label. `pull_request_target` and `workflow_run` matter most, because they run the default branch's copy of the workflow with `github.ref` set to the default branch, so a runner group limited to `refs/heads/<default branch>` would admit them; only this rule keeps them off the trusted pool. The default branch comes from `github.event.repository.default_branch`, so a rename needs no regeneration. The label never depends on `github.head_ref`, a pull request title or any other input a pull request controls, and a test checks that.
+
+`runs-on` becomes `${{ <trusted event> && '<trusted>' || <today's value> }}`. A job on a matrix axis swaps only the axis value equal to the replaced label: `${{ <trusted event> && matrix.<axis> == '<runner>' && '<trusted>' || <today's value> }}`, so a hosted axis value such as `macos-15` is untouched. The comparison `==` in a workflow expression ignores case, so a branch that differs from the default branch only in case counts as trusted by the expression, while `velnor-ci` and a runner group limited to the exact ref do not; the runner group then holds that job.
+
+`trusted_runner` is refused unless it is a label of letters, digits, `-`, `_` and `.`, not spelled like a GitHub-hosted label, different from `runner`, `fork_runner` and the mirror's runner (without regard to case), on the same platform as the runner it stands for (`mise.lock` stays valid), and the runner it stands for is self-hosted. In `rust-ci.toml` the key, at the top level or in `[crates_mirror]`, needs `velnor-ci` 0.1.108 or later, because `velnor-ci` reads that file at run time and an earlier release rejects the unknown key; the generator refuses an older pin, and `velnor-gen pin-helper 0.1.108` fixes it. Without the key the output is byte-identical. A job on another label (a `[[test_groups]]` runner other than `runner`, or a mirror on its own runner without its own `trusted_runner`) keeps that label.
+
+In `.velnor/workflows.toml`, `trusted_runner` sits next to `runner` in a `[[workflow]]` and applies to the jobs that render the workflow's self-hosted label: `runner` itself, or `scale_set_runner` when the workflow has `[[workflow.case]]` entries. A job with another runner, a hosted job and a job that calls a reusable workflow are unchanged. The key is refused on a workflow whose `runner` is hosted, and on a workflow that a dispatcher can point at other code: a `workflow_dispatch` input named `ref`, `sha` or `repository`, or a step whose `with.ref` or `with.repository` reads `inputs.` or `github.event.inputs`. `workflows.toml` is not read by `velnor-ci`, so the key needs no particular release.
+
+A runner group that limits the trusted pool to workflow files matches the file that holds the job (`job_workflow_ref`). When a trusted job moves into a reusable workflow, add that file at the default branch to the group.
+
 ## Optional cargo fingerprint log
 
 `cache_debug = true` in `.velnor/rust-ci.toml` makes every generated cargo step set `CARGO_LOG` from the repository variable `VELNOR_CACHE_DEBUG` and adds a step that uploads the log when that variable is `1`. It is `false` by default, and then the generated workflow reads no repository variable. A repository that sets it also declares `VELNOR_CACHE_DEBUG` to its workflow linter. The key needs a helper release that knows it (`0.1.82` or later), because older helpers reject unknown keys.
@@ -293,7 +316,7 @@ These keys choose which jobs a run starts. The defaults are in the table in [`do
 - `full_run` is `"nightly"` (default), `"hourly"`, `"weekly"`, `"off"` or a five-field cron expression. It sets the schedule of the run that selects everything.
 - `skip_draft_pull_requests` is `false` (default). With `true`, a draft pull request runs nothing. It cannot be combined with `pr_ci = "label"`.
 - `timeout_minutes` is the time limit of each job, 1 to 360, `30` by default.
-- `runner` is the runner label of every job, `"ubuntu-latest"` by default. See Fork pull requests for `hosted` and `fork_runner`.
+- `runner` is the runner label of every job, `"ubuntu-latest"` by default. See Fork pull requests for `hosted` and `fork_runner`, and Trusted runner pool for `trusted_runner`.
 - `required_check` is the name of the one required check, `"Required"` by default. The name must not be blank or contain a control character. Any other name needs velnor-ci `0.1.97` or later, because the helper finds the check by that name.
 - `default_branch` is `"main"` by default. It must equal the repository's default branch, or the run fails.
 
@@ -535,6 +558,7 @@ name = "Release checks"
 runner = "velnor-linux-x64"      # default ubuntu-latest
 hosted = false                   # true opens the runner to fork pull requests; see "Fork pull requests"
 fork_runner = "ubuntu-latest"    # default ubuntu-latest, must be GitHub-hosted
+trusted_runner = "velnor-linux-x64-trusted"   # optional; see "Trusted runner pool"
 if = "github.event_name != 'merge_group'"
 
 [workflow.concurrency]           # optional; a job may set the same inline: concurrency = { group = "...", cancel_in_progress = false }

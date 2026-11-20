@@ -9,6 +9,7 @@ use crate::hosted::HostedRunners;
 use crate::ids::{JobId, PackageName, RepoPath, RootSlug, RunnerLabel, TargetName};
 use crate::repo::TargetKind;
 use crate::steps::StepKind;
+use crate::trusted::TrustedRunners;
 
 pub const LINT_STEP: &str = "Lint";
 pub const TEST_STEP: &str = "Test";
@@ -30,6 +31,7 @@ pub struct WorkflowPlan {
     pub permissions: Permissions,
     pub fork_runner: RunnerLabel,
     pub hosted_runners: HostedRunners,
+    pub trusted_runners: TrustedRunners,
     pub jobs: Vec<Job>,
 }
 

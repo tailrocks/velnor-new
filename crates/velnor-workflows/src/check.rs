@@ -90,6 +90,24 @@ pub(crate) fn workflow(raw: RawWorkflow, earlier: &[Workflow]) -> Result<Workflo
         runner: &runner,
         hosted,
     };
+    let trusted = crate::trusted::pool(
+        &crate::trusted::Declared {
+            file: &file,
+            label: raw.trusted_runner.as_deref(),
+            runner: &runner,
+            hosted,
+            fork_runner: &fork_runner,
+            cases: (!raw.case.is_empty()).then_some(crate::trusted::CasePair {
+                hosted_runner: raw.hosted_runner.as_deref(),
+                scale_set_runner: raw.scale_set_runner.as_deref(),
+            }),
+        },
+        triggers.workflow_dispatch.as_deref().unwrap_or_default(),
+        raw.job
+            .iter()
+            .flat_map(|job| &job.step)
+            .chain(raw.case.iter().flat_map(|case| &case.step)),
+    )?;
     let mut jobs: Vec<Job> = Vec::new();
     let mut raw_jobs = cases(
         &file,
@@ -120,6 +138,7 @@ pub(crate) fn workflow(raw: RawWorkflow, earlier: &[Workflow]) -> Result<Workflo
         runner,
         hosted,
         fork_runner,
+        trusted,
         concurrency: workflow_concurrency,
         triggers,
         jobs,

@@ -27,10 +27,17 @@ pub struct Workflow {
     /// True only when `hosted = true` was declared for `runner`.
     pub hosted: bool,
     pub fork_runner: String,
+    pub trusted: Option<TrustedPool>,
     pub condition: Option<String>,
     pub concurrency: Option<Concurrency>,
     pub triggers: Triggers,
     pub jobs: Vec<Job>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TrustedPool {
+    pub label: String,
+    pub replaces: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

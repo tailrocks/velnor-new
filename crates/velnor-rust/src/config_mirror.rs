@@ -11,6 +11,7 @@ pub(crate) struct RawCratesMirror {
     runner: String,
     registry: String,
     cainfo: String,
+    pub(crate) trusted_runner: Option<String>,
 }
 
 pub(crate) fn mirror(raw: RawCratesMirror) -> Result<velnor_model::CratesMirror, Reason> {

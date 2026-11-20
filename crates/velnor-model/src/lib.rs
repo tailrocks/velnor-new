@@ -21,6 +21,7 @@ mod shape;
 mod steps;
 mod test_group;
 mod token_permission;
+mod trusted;
 mod verdict;
 
 pub use budget_mode::{BUDGET_JOB_NAME, BUDGET_MODES_HELPER, ModeBudget, Selection, SelectionName};
@@ -68,6 +69,7 @@ pub use selection::{
 pub use shape::{Shape, ShapeDecision};
 pub use test_group::{GroupEvent, GroupRoot, TestGroup, TestNeed};
 pub use token_permission::{token_permission_accesses, token_permission_accesses_prose};
+pub use trusted::TrustedRunners;
 pub use verdict::{JobCondition, VerdictJob, VerdictSpec};
 
 pub use steps::{

@@ -14,6 +14,8 @@ use velnor_model::{
 /// True for every event except a pull request from a fork.
 pub(crate) const SAME_REPOSITORY: &str = "(!startsWith(github.event_name, 'pull_request') || github.event.pull_request.head.repo.full_name == github.repository)";
 
+pub const TRUSTED_EVENT: &str = "(github.event_name == 'schedule' || ((github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)))";
+
 /// Where the generated workflow tells jactionlint that `ShellCheck` cannot follow
 /// the launcher: on each launcher step, or, when that would push the file past
 /// the size GitHub accepts, once on each job that has one.
@@ -231,13 +233,30 @@ fn runs_on(job: &RenderedJob) -> Yaml {
         Some(axis) => format!("matrix.{axis}"),
         None => literal(&job.runs_on),
     };
-    match (&job.fork_runner, &job.runs_on_axis) {
-        (Some(fork), _) => Yaml::Expr(format!(
-            "${{{{ {SAME_REPOSITORY} && {primary} || {} }}}}",
-            literal(fork)
-        )),
-        (None, Some(_)) => Yaml::Expr(format!("${{{{ {primary} }}}}")),
-        (None, None) => text(&job.runs_on),
+    let fenced = match &job.fork_runner {
+        Some(fork) => format!("{SAME_REPOSITORY} && {primary} || {}", literal(fork)),
+        None => primary.clone(),
+    };
+    match (&job.trusted_runner, &job.fork_runner, &job.runs_on_axis) {
+        (Some(trusted), fork, axis) => {
+            let label = literal(&trusted.label);
+            let pick = match axis {
+                Some(_) => format!(
+                    "{TRUSTED_EVENT} && {primary} == {} && {label}",
+                    literal(&trusted.replaces)
+                ),
+                None => format!("{TRUSTED_EVENT} && {label}"),
+            };
+            let rest = if fork.is_some() {
+                format!("({fenced})")
+            } else {
+                fenced
+            };
+            Yaml::Expr(format!("${{{{ {pick} || {rest} }}}}"))
+        }
+        (None, Some(_), _) => Yaml::Expr(format!("${{{{ {fenced} }}}}")),
+        (None, None, Some(_)) => Yaml::Expr(format!("${{{{ {primary} }}}}")),
+        (None, None, None) => text(&job.runs_on),
     }
 }
 

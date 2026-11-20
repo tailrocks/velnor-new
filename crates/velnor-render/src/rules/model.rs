@@ -82,10 +82,17 @@ pub struct RenderedJob {
     /// When set, `runs-on` is `matrix.<axis>` and `runs_on` is unused.
     pub runs_on_axis: Option<String>,
     pub fork_runner: Option<String>,
+    pub trusted_runner: Option<RenderedTrusted>,
     pub timeout_minutes: u16,
     pub env: Vec<(String, Value)>,
     pub cache_mode: Option<String>,
     pub steps: Vec<RenderedStep>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RenderedTrusted {
+    pub label: String,
+    pub replaces: String,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

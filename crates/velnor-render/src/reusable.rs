@@ -16,7 +16,8 @@ use crate::reusable_on::on;
 use crate::rules::APP_TOKEN_ACTION;
 use crate::rules::{
     MAX_WORKFLOW_BYTES, RenderedConcurrency, RenderedContainer, RenderedJob, RenderedMatrix,
-    RenderedMatrixSource, RenderedStep, RenderedWorkflow, Rule, RuleViolation, Value, check_rules,
+    RenderedMatrixSource, RenderedStep, RenderedTrusted, RenderedWorkflow, Rule, RuleViolation,
+    Value, check_rules,
 };
 use crate::steps::{
     ATTEST_BUILD_PROVENANCE, CACHE_RESTORE, CACHE_SAVE, CHECKOUT, DOWNLOAD_ARTIFACT, MISE,
@@ -95,6 +96,22 @@ fn rendered_concurrency(concurrency: &Concurrency) -> RenderedConcurrency {
     }
 }
 
+fn trusted_runner(workflow: &Workflow, job: &Job) -> Option<RenderedTrusted> {
+    let pool = workflow.trusted.as_ref()?;
+    let names_pool = |label: &str| label.eq_ignore_ascii_case(&pool.replaces);
+    let on_pool = match &job.matrix_runner {
+        Some(runner) => runner
+            .labels
+            .iter()
+            .any(|(label, hosted)| !hosted && names_pool(label)),
+        None => names_pool(job.runner.as_ref().unwrap_or(&workflow.runner)) && !job.hosted,
+    };
+    (on_pool && job.call.is_none()).then(|| RenderedTrusted {
+        label: pool.label.clone(),
+        replaces: pool.replaces.clone(),
+    })
+}
+
 fn rendered_job(workflow: &Workflow, job: &Job, helper: &HelperRelease) -> RenderedJob {
     let installs = job.helper.then(|| install_helper(helper));
     let runs_on = job.runner.as_ref().unwrap_or(&workflow.runner).clone();
@@ -119,6 +136,7 @@ fn rendered_job(workflow: &Workflow, job: &Job, helper: &HelperRelease) -> Rende
             .collect(),
         runs_on_axis: job.matrix_runner.as_ref().map(|runner| runner.axis.clone()),
         fork_runner: (!job.hosted).then(|| workflow.fork_runner.clone()),
+        trusted_runner: trusted_runner(workflow, job),
         permissions: job.permissions.clone(),
         no_permissions: job.permissions.is_empty(),
         outputs: job

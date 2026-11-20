@@ -164,6 +164,7 @@ Every key of `.velnor/rust-ci.toml`, with its default. `generator/CONFIG.md` has
 | `runner` | `"ubuntu-latest"` | the runner label of every job |
 | `hosted` | `true` when `runner` is not set | `true` opens `runner` to fork pull requests, `false` fences it; required when `runner` is spelled like a GitHub-hosted label; needs `velnor-ci` 0.1.99 |
 | `fork_runner` | platform-dependent: `"ubuntu-latest"`, `"ubuntu-24.04-arm"` for a Linux arm64 `runner`, `"macos-15"` for an Apple silicon macOS `runner` | the hosted runner for fork pull requests when `runner` is self-hosted |
+| `trusted_runner` | none | the label of a trusted self-hosted pool; jobs of a push or dispatch on the default branch and of a schedule run on it, every other event on `runner`; also accepted in `[crates_mirror]`; needs `velnor-ci` 0.1.108; see [generator/CONFIG.md](../generator/CONFIG.md#trusted-runner-pool) |
 | `timeout_minutes` | `30` | job time limit, 1 to 360 |
 | `required_check` | `"Required"` | the name of the one required check |
 | `default_branch` | `"main"` | must equal the repository's default branch, or the run fails |

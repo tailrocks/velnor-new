@@ -10,7 +10,7 @@ use velnor_rust::INPUTS_IDENTITY_HELPER;
 
 use crate::{
     BUDGET_HELPER, COMPATIBLE_HELPER_SERIES, GenerateError, HELPER_MINIMUM, TEST_LANE_HELPER,
-    TEST_LANE_JOB_HELPER,
+    TEST_LANE_JOB_HELPER, TRUSTED_RUNNER_HELPER,
 };
 
 /// The first `velnor-ci` whose `.velnor/rust-ci.toml` parser accepts the `hosted` key.
@@ -96,6 +96,13 @@ pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, Generate
         ));
     }
     check_lane_job(facts, release)?;
+    if !facts.config.trusted_runners.is_empty()
+        && !release.version().at_least(TRUSTED_RUNNER_HELPER)
+    {
+        return Err(GenerateError::TrustedRunnerHelperTooOld(
+            release.version().clone(),
+        ));
+    }
     if facts.config.mbx_store == MbxStore::Shared && !release.version().at_least((0, 1, 85)) {
         return Err(GenerateError::MbxStoreHelperTooOld(
             release.version().clone(),

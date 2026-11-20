@@ -34,6 +34,7 @@ fn rendered_run(manifests: &[&str]) -> String {
         hosted_runners: velnor_model::HostedRunners::new(vec![
             RunnerLabel::new("ubuntu-latest").unwrap_or_else(|e| unreachable!("{e}")),
         ]),
+        trusted_runners: velnor_model::TrustedRunners::default(),
         jobs: vec![Job {
             id: JobId::new("rust").unwrap_or_else(|e| unreachable!("{e}")),
             name: None,
