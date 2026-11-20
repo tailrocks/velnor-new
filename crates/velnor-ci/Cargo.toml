@@ -52,3 +52,4 @@ flate2 = { version = "=1.1.11", default-features = false, features = ["rust_back
 ring = { version = "=0.17.14", default-features = false }
 nix = { version = "=0.32.0", default-features = false, features = ["signal"] }
 velnor-render = { version = "=0.0.0", path = "../velnor-render" }
+velnor-test-support = { version = "=0.0.0", path = "../velnor-test-support" }

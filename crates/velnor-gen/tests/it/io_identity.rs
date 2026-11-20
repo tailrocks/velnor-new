@@ -41,7 +41,7 @@ fn checkout_with(path: &Path, config: &str) -> TestResult {
 }
 
 fn generate(path: &Path) -> Result<Output, Box<dyn Error>> {
-    let cargo = Path::new(env!("CARGO"));
+    let cargo = velnor_test_support::real_cargo();
     let cargo_dir = cargo.parent().ok_or("cargo executable has no parent")?;
     let search_path = std::env::join_paths([cargo_dir, Path::new("/usr/bin"), Path::new("/bin")])?;
     Ok(Command::new(env!("CARGO_BIN_EXE_velnor-gen"))
