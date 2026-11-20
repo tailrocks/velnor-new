@@ -7,7 +7,7 @@ use crate::budget_mode::SelectionName;
 use crate::cron::CronExpr;
 use crate::hosted::HostedRunners;
 use crate::ids::{JobId, PackageName, RepoPath, RootSlug, RunnerLabel, TargetName};
-use crate::repo::{LaneFeatures, TargetKind};
+use crate::repo::{DenyCheck, LaneFeatures, TargetKind};
 use crate::steps::{StepKind, VerifiedSave};
 use crate::test_group::NoTests;
 use crate::trusted::TrustedRunners;
@@ -131,8 +131,8 @@ pub struct Step {
     pub reads: Option<PlanRef>,
     /// Skipped on a self-hosted runner, so that the step runs only on a GitHub-hosted one.
     pub hosted_only: bool,
-    /// Set on the `[[test_setup]]` steps and on the steps after them: they run only when
-    /// the setup step before them succeeded.
+    /// Set on the `[[test_setup]]` steps and on the steps after them: they are skipped
+    /// when a setup step before them failed or was cancelled.
     pub after_setup: bool,
 }
 
@@ -357,6 +357,7 @@ pub enum CargoCommand {
     Deny {
         manifest: RepoPath,
         config: Option<RepoPath>,
+        checks: Option<Vec<DenyCheck>>,
     },
     Machete,
 }

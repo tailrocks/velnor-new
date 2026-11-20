@@ -50,7 +50,7 @@ mod steps_helpers;
 #[path = "steps_outputs.rs"]
 mod steps_outputs;
 use steps_helpers::{
-    after_setup, leading_steps, root_key, rustup_add, saved_unless_hit, setup_succeeded, variable,
+    after_setup, leading_steps, root_key, rustup_add, saved_unless_hit, setup_not_failed, variable,
 };
 use steps_outputs::{merge_group_output, test_outputs};
 
@@ -129,7 +129,7 @@ fn job_steps(
         .iter()
         .enumerate()
         .scan(
-            (false, BTreeMap::<Option<RepoPath>, String>::new()),
+            (false, BTreeMap::<Option<RepoPath>, Vec<String>>::new()),
             |(replanned, setups), (index, step)| {
                 let setup = Setup::of(restores, *replanned);
                 *replanned |= step.kind == StepKind::Helper(HelperCommand::PlanFull);
@@ -152,7 +152,7 @@ fn job_steps(
                     body.shared |= verified && tools_key;
                 }
                 if let Some(id) = own {
-                    setups.insert(root_key(step), id);
+                    setups.entry(root_key(step)).or_default().push(id);
                 }
                 let mut steps = Vec::from_iter(gate.saveable(index));
                 steps.extend(crate::base_steps::audited_save(
@@ -214,7 +214,7 @@ fn rendered_steps(
                 .after_setup
                 .iter()
                 .map(String::as_str)
-                .map(setup_succeeded),
+                .map(setup_not_failed),
         );
         extra.extend(
             step.hosted_only

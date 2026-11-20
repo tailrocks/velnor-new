@@ -98,10 +98,9 @@ fn the_build_phase_setup_has_the_gate_of_the_lint_step_it_precedes() -> TestResu
         .iter()
         .find(|step| step["name"] == "Lint")
         .ok_or("no Lint step")?;
-    let gated = format!(
-        "steps.{}.outcome == 'success'",
-        setup["id"].as_str().unwrap_or_default()
-    );
+    let setup_id = setup["id"].as_str().unwrap_or_default();
+    let gated =
+        format!("steps.{setup_id}.outcome != 'failure' && steps.{setup_id}.outcome != 'cancelled'");
     let expected = setup["if"]
         .as_str()
         .ok_or("the setup step has no condition")?

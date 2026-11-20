@@ -45,10 +45,12 @@ fn a_license_text_change_runs_the_policy_lane_only_with_cargo_deny() -> TestResu
     let deny = PolicyTools {
         deny: true,
         machete: false,
+        deny_off: false,
     };
     let machete = PolicyTools {
         deny: false,
         machete: true,
+        deny_off: false,
     };
     for path in [
         "LICENSE",
@@ -169,6 +171,7 @@ fn changes_to_cargo_deny_configs_select_policy() -> TestResult {
     let tools = PolicyTools {
         deny: false,
         machete: false,
+        deny_off: false,
     };
     for name in [
         "deny.toml",

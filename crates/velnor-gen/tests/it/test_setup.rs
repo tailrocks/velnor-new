@@ -106,7 +106,7 @@ fn a_failed_test_setup_step_stops_its_tests_and_is_never_continued_past() -> Tes
         .ok_or("the test step is missing")?;
     let condition = test["if"].as_str().unwrap_or_default();
     assert!(
-        condition.contains(&format!("steps.{setup_id}.outcome == 'success'")),
+        condition.contains(&format!("steps.{setup_id}.outcome != 'failure'")),
         "the test step runs after a failed setup: {test}"
     );
     Ok(())
@@ -145,7 +145,7 @@ fn a_failed_build_phase_setup_stops_every_cargo_step_after_it() -> TestResult {
     let steps = jobs[id.as_str()]["steps"]
         .as_array()
         .ok_or("the job has no steps")?;
-    let waits = format!("steps.{setup_id}.outcome == 'success'");
+    let waits = format!("steps.{setup_id}.outcome != 'failure'");
     let after: Vec<_> = steps
         .iter()
         .skip(index + 1)
@@ -257,7 +257,7 @@ fn a_nested_root_test_in_a_workspace_group_waits_for_its_own_setup() -> TestResu
         })
         .ok_or_else(|| format!("the setup of a is missing: {jobs}"))?;
     let steps = job["steps"].as_array().ok_or("the job has no steps")?;
-    let waits_for_setup = format!("steps.{setup_id}.outcome == 'success'");
+    let waits_for_setup = format!("steps.{setup_id}.outcome != 'failure'");
     let root_tests: Vec<&serde_json::Value> = steps
         .iter()
         .filter(|step| {
@@ -303,7 +303,7 @@ fn a_failed_setup_of_one_grouped_root_stops_the_other_roots_later_cargo_steps() 
                 continue;
             };
             let setup_id = steps[index]["id"].as_str().ok_or("the setup has no id")?;
-            let waits = format!("steps.{setup_id}.outcome == 'success'");
+            let waits = format!("steps.{setup_id}.outcome != 'failure'");
             for step in steps.iter().skip(index + 1) {
                 let run = step["run"].as_str().unwrap_or_default();
                 if !run.contains(cargo) || run.contains("--no-run") {

@@ -85,16 +85,19 @@ pub(super) fn root_key(step: &Step) -> Option<RepoPath> {
         .or_else(|| step.manifest.as_ref().and_then(RepoPath::parent))
 }
 
-pub(super) fn after_setup(step: &Step, setups: &BTreeMap<Option<RepoPath>, String>) -> Vec<String> {
+pub(super) fn after_setup(
+    step: &Step,
+    setups: &BTreeMap<Option<RepoPath>, Vec<String>>,
+) -> Vec<String> {
     if !step.after_setup {
         return Vec::new();
     }
     if matches!(step.kind, StepKind::TestSetup { .. }) {
-        return setups.get(&root_key(step)).cloned().into_iter().collect();
+        return setups.get(&root_key(step)).cloned().unwrap_or_default();
     }
-    setups.values().cloned().collect()
+    setups.values().flatten().cloned().collect()
 }
 
-pub(super) fn setup_succeeded(id: &str) -> String {
-    format!("steps.{id}.outcome == 'success'")
+pub(super) fn setup_not_failed(id: &str) -> String {
+    format!("steps.{id}.outcome != 'failure' && steps.{id}.outcome != 'cancelled'")
 }

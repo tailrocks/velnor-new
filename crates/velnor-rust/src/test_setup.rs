@@ -116,6 +116,7 @@ fn checked(facts: &RepoFacts, root: &RustRoot, lane: &Lane, mut steps: Vec<Step>
         })
         .map(|check| Step {
             gate: lane.steps(),
+            after_setup: true,
             ..check
         })
         .collect();
