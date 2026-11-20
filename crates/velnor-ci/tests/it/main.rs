@@ -39,6 +39,7 @@ mod delta_baseline;
 mod delta_binding;
 mod delta_cap;
 mod delta_freshness;
+mod delta_registry_fingerprints;
 mod delta_integrity;
 mod delta_metadata;
 mod delta_source;
