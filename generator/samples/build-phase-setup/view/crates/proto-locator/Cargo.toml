@@ -1,0 +1,8 @@
+[package]
+name = "proto-locator"
+version = "0.1.1"
+edition = "2024"
+publish = false
+
+[lints]
+workspace = true
