@@ -143,6 +143,9 @@ check attr_gap_line_comment_fence fail '#[doc // gap\n = "```\\nassert_eq!(1, 1)
 check footnote_block_unclosed fail '/**\n * prose\n *\n * [^x]: ```\n * assert_eq!(1, 2);\n */\nfn f() {}\n'
 check footnote_line_unclosed fail '/// [^x]: ```\n/// assert_eq!(1, 2);\nfn f() {}\n'
 check footnote_prose_pass pass '/// [^x]: plain footnote text\n/// assert_eq!(1, 2);\nfn f() {}\n'
+check cfg_attr_meta_after_doc pass '#[cfg_attr(all(), doc = "prose", deprecated(note = "```not docs```"))]\npub fn f() {}\n'
+check cfg_attr_doc_concat_comma fail '#[cfg_attr(all(), doc = concat!("prose", "```\\nx\\n```"))]\npub fn f() {}\n'
+check cfg_attr_doc_then_fence fail '#[cfg_attr(all(), doc = "prose", doc = "```\\nx\\n```")]\npub fn f() {}\n'
 
 missing="$work/scanner_missing"
 mkdir -p "$missing/crates/fx/src"

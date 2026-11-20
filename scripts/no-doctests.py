@@ -150,6 +150,8 @@ def line_run(src, i):
 def doc_findings(src):
     i = 0
     attr_depth = 0
+    paren = 0
+    doc_paren = 0
     doc_value = False
     while i < len(src):
         c = src[i]
@@ -183,6 +185,7 @@ def doc_findings(src):
             i = i + 1 if j is None else j
         elif c == "#" and (m := ATTR_START.match(src, i)):
             attr_depth = 1
+            paren = 0
             i = m.end()
         elif c == "[":
             if attr_depth:
@@ -192,6 +195,15 @@ def doc_findings(src):
             if attr_depth:
                 attr_depth -= 1
             doc_value = doc_value and attr_depth > 0
+            i += 1
+        elif c in "(),":
+            if attr_depth and c == "(":
+                paren += 1
+            elif attr_depth and c == ")":
+                paren -= 1
+                doc_value = doc_value and paren >= doc_paren
+            elif attr_depth and c == ",":
+                doc_value = doc_value and paren > doc_paren
             i += 1
         elif m := IDENT.match(src, i):
             word = m.group()
@@ -216,6 +228,7 @@ def doc_findings(src):
                         yield i
                     elif attr_depth and DOC_EQ.match(src, k):
                         doc_value = True
+                        doc_paren = paren
                 i = j
         else:
             i += 1
