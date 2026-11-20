@@ -23,7 +23,7 @@ use crate::raw::{RawJob, RawStep, RawWorkflow};
 use crate::secret_events::untrusted;
 use crate::triggers::triggers;
 
-const RESERVED_FILES: [&str; 2] = ["rust-ci", "release"];
+const RESERVED_FILES: &[&str] = &["rust-ci", "release"];
 
 pub(crate) struct Context<'a> {
     pub(crate) file: &'a str,

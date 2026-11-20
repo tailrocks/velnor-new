@@ -31,6 +31,16 @@ pub fn stderr_line(message: &str) -> String {
     format!("velnor-ci: {}", escape(message, false))
 }
 
+#[must_use]
+pub fn command_line(name: &str, message: &str) -> String {
+    format!("::{name}::{}\n", escape(message, false))
+}
+
+#[must_use]
+pub fn escape_property(text: &str) -> String {
+    escape(text, true)
+}
+
 pub fn file_value(value: &str) -> Result<&str, CiError> {
     if value.contains(['\r', '\n']) {
         return Err(CiError::new(
@@ -42,7 +52,12 @@ pub fn file_value(value: &str) -> Result<&str, CiError> {
 
 #[cfg(test)]
 mod tests {
-    use super::file_value;
+    use super::{escape_property, file_value};
+
+    #[test]
+    fn property_value_also_encodes_separators() {
+        assert_eq!(escape_property("a:b,c\n"), "a%3Ab%2Cc%0A");
+    }
 
     #[test]
     fn file_value_refuses_a_line_break_that_would_add_a_key() {

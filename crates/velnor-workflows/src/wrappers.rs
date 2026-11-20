@@ -27,7 +27,7 @@ const MAX_DEPTH: usize = 8;
 const MAX_CHAIN: usize = 32;
 
 /// Words that run what follows them, or that the scan does not follow into.
-const OPAQUE: [&str; 34] = [
+const OPAQUE: &[&str] = &[
     "eval",
     "source",
     ".",
@@ -63,7 +63,7 @@ const OPAQUE: [&str; 34] = [
     "bwrap",
     "firejail",
 ];
-const RESERVED: [&str; 15] = [
+const RESERVED: &[&str] = &[
     "if", "then", "else", "elif", "fi", "for", "while", "until", "do", "done", "case", "esac",
     "select", "{", "}",
 ];
