@@ -20,6 +20,7 @@ use velnor_rust::{detect, sha256_hex};
 use super::super::units::{UnitFile, Workspace, apart, unit_files};
 use super::groups::{group_dirs, inheriting, scan_dirs, shared_groups, standalone, workspaces};
 use super::inventory::{self, Evidence};
+use super::options::max_entries_from_env;
 use super::timing;
 use crate::cli::InputsBuildArgs;
 use crate::error::CiError;
@@ -33,6 +34,7 @@ struct Builder<'a> {
     facts: RepoFacts,
     workspaces: Vec<Workspace>,
     directories: Vec<PathBuf>,
+    max_entries: usize,
     targets: BTreeSet<PathBuf>,
     roots: BTreeSet<PathBuf>,
     declared: BTreeSet<PathBuf>,
@@ -68,6 +70,7 @@ pub(crate) fn build(directory: &Path, args: &InputsBuildArgs) -> Result<String, 
         targets: inventory::exclusions(&workspaces)?,
         workspaces,
         directories,
+        max_entries: max_entries_from_env()?,
         roots,
         declared: BTreeSet::new(),
         location,
@@ -91,6 +94,7 @@ impl Builder<'_> {
             &self.facts,
             &self.workspaces,
             &self.location,
+            self.max_entries,
         )
     }
 
@@ -133,7 +137,7 @@ impl Builder<'_> {
                 }
                 declarations::invalidate(&declared)?;
             }
-            let (entries, complete) = timing::phase("capture", || self.capture());
+            let (entries, complete) = timing::phase("capture", || self.capture())?;
             timing::phase("run", || self.run(command, &entries, complete, &before))?;
             if !replayable
                 || timing::phase("declared-after", || self.declared())?
@@ -148,7 +152,7 @@ impl Builder<'_> {
         ))
     }
 
-    fn capture(&self) -> (Evidence, bool) {
+    fn capture(&self) -> Result<(Evidence, bool), CiError> {
         let mut evidence = Evidence {
             entries: BTreeMap::new(),
             declared: BTreeMap::new(),
@@ -159,21 +163,23 @@ impl Builder<'_> {
                 Ok(state) => {
                     evidence.declared.insert(path.clone(), state);
                 }
-                Err(_) => return (evidence, false),
+                Err(_) => return Ok((evidence, false)),
             }
         }
-        // The build scans its roots under the same default the audit uses.
-        let mut budget = inventory::Budget::new(super::options::DEFAULT_MAX_ENTRIES);
+        let mut budget = inventory::Budget::new(self.max_entries);
         for root in &self.roots {
             if !root.exists() {
                 continue;
             }
             match inventory::scan(root, &self.targets, &mut budget) {
                 Ok(found) => evidence.entries.extend(found),
-                Err(_) => return (evidence, false),
+                Err(error) if budget.overflowed() => {
+                    return Err(CiError::new(error.to_string()));
+                }
+                Err(_) => return Ok((evidence, false)),
             }
         }
-        (evidence, true)
+        Ok((evidence, true))
     }
 
     fn identities(&self) -> Result<Identities, CiError> {
