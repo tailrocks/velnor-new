@@ -129,6 +129,7 @@ mod tests_run {
     use std::time::{Duration, SystemTime};
 
     use super::scratch;
+    use crate::run_nextest::without_built;
 
     const BOLD: &str = "\u{1b}[1m";
     const RESET: &str = "\u{1b}[0m";
@@ -208,7 +209,10 @@ mod tests_run {
         );
         let (output, written, _) = run_with_output("tests-run-split", &split, &NEXTEST_RUN);
         assert!(output.status.success(), "{output:?}");
-        assert_eq!(written, "existing=1\ntests_run=7\ntests_listed=7\n");
+        assert_eq!(
+            without_built(&written),
+            "existing=1\ntests_run=7\ntests_listed=7\n"
+        );
     }
 
     #[test]
@@ -218,7 +222,10 @@ mod tests_run {
         );
         let (output, written, _) = run_with_output("tests-run-failed", &script, &NEXTEST_RUN);
         assert_eq!(output.status.code(), Some(100));
-        assert_eq!(written, "existing=1\ntests_run=5\ntests_listed=5\n");
+        assert_eq!(
+            without_built(&written),
+            "existing=1\ntests_run=5\ntests_listed=5\n"
+        );
     }
 
     #[test]
@@ -226,7 +233,10 @@ mod tests_run {
         let script = "echo '     Summary [   0.001s] 0 tests run: 0 passed, 0 skipped' >&2";
         let (output, written, _) = run_with_output("tests-run-zero", script, &NEXTEST_RUN);
         assert!(output.status.success(), "{output:?}");
-        assert_eq!(written, "existing=1\ntests_run=0\ntests_listed=0\n");
+        assert_eq!(
+            without_built(&written),
+            "existing=1\ntests_run=0\ntests_listed=0\n"
+        );
     }
 
     #[test]
@@ -236,17 +246,23 @@ mod tests_run {
         );
         let (output, written, _) = run_with_output("tests-run-filtered", &script, &NEXTEST_RUN);
         assert!(output.status.success(), "{output:?}");
-        assert_eq!(written, "existing=1\ntests_run=0\ntests_listed=4\n");
+        assert_eq!(
+            without_built(&written),
+            "existing=1\ntests_run=0\ntests_listed=4\n"
+        );
     }
 
     #[test]
     fn run_lists_run_plus_skipped_and_leaves_listed_out_without_a_skipped_count() {
         let mixed = "echo '     Summary [   0.5s] 3 tests run: 2 passed, 1 failed, 5 skipped' >&2";
         let (_, written, _) = run_with_output("tests-run-mixed", mixed, &NEXTEST_RUN);
-        assert_eq!(written, "existing=1\ntests_run=3\ntests_listed=8\n");
+        assert_eq!(
+            without_built(&written),
+            "existing=1\ntests_run=3\ntests_listed=8\n"
+        );
         let bare = "echo '     Summary [   0.5s] 3 tests run: 3 passed' >&2";
         let (_, written, _) = run_with_output("tests-run-bare", bare, &NEXTEST_RUN);
-        assert_eq!(written, "existing=1\ntests_run=3\n");
+        assert_eq!(without_built(&written), "existing=1\ntests_run=3\n");
     }
 
     #[test]
@@ -273,7 +289,7 @@ mod tests_run {
         for (name, script, command) in cases {
             let (_, written, _) =
                 run_with_output(&format!("tests-run-no-{name}"), script, &command);
-            assert_eq!(written, "existing=1\n", "{name}");
+            assert_eq!(without_built(&written), "existing=1\n", "{name}");
         }
     }
 
@@ -288,7 +304,7 @@ exit 0";
         let (output, written, temp, returned) =
             execute_nextest("tests-run-held", script, &NEXTEST_RUN, Some("300"));
         assert_eq!(output.status.code(), Some(0), "{output:?}");
-        assert_eq!(written, "existing=1\n");
+        assert_eq!(without_built(&written), "existing=1\n");
         let elapsed = after_exit(&temp, returned);
         assert!(elapsed < Duration::from_secs(15), "{elapsed:?}");
     }
@@ -299,7 +315,7 @@ exit 0";
         let (output, written, temp, returned) =
             execute_nextest("tests-run-held-empty", script, &NEXTEST_RUN, Some("300"));
         assert_eq!(output.status.code(), Some(9), "{output:?}");
-        assert_eq!(written, "existing=1\n");
+        assert_eq!(without_built(&written), "existing=1\n");
         let elapsed = after_exit(&temp, returned);
         assert!(elapsed < Duration::from_secs(15), "{elapsed:?}");
     }

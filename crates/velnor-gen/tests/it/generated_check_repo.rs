@@ -11,9 +11,9 @@ use velnor_render::{Owner, owner_of, seal};
 
 use crate::facts::TestResult;
 use crate::generated_check::CHECK;
+use crate::generated_check::CHECK_HELPER;
 use crate::golden::samples;
 use crate::io::unique_id;
-use crate::generated_check::CHECK_HELPER;
 use crate::lock_archive::archive_lock_at;
 use crate::release_symlink::git;
 

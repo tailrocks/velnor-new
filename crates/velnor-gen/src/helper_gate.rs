@@ -126,19 +126,28 @@ pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, Generate
             release.version().clone(),
         ));
     }
-    if facts
+    require_generated_check_helper(facts, release)?;
+    require_generator_digests(facts, release)?;
+    Ok(release)
+}
+
+/// The `generated-check` value is read by velnor-ci's shared parser only from
+/// `GENERATED_CHECK_HELPER` on, so a pin below it would break the run.
+fn require_generated_check_helper(
+    facts: &RepoFacts,
+    release: &HelperRelease,
+) -> Result<(), GenerateError> {
+    let wanted = facts
         .config
         .lint
         .iter()
-        .any(|lint| lint.kind == LintKind::GeneratedCheck)
-        && !release.version().at_least(GENERATED_CHECK_HELPER)
-    {
+        .any(|lint| lint.kind == LintKind::GeneratedCheck);
+    if wanted && !release.version().at_least(GENERATED_CHECK_HELPER) {
         return Err(GenerateError::GeneratedCheckHelperTooOld(
             release.version().clone(),
         ));
     }
-    require_generator_digests(facts, release)?;
-    Ok(release)
+    Ok(())
 }
 
 fn require_generator_digests(

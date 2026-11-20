@@ -69,7 +69,12 @@ pub(crate) fn archive_lock() -> Result<String, Box<dyn Error>> {
 
 /// The archive lock pinned at `version`, for a test whose config needs that helper.
 pub(crate) fn archive_lock_at(version: &str) -> Result<String, Box<dyn Error>> {
-    Ok(pin_lock(version, COMMIT_FILE, ARCHIVE_SUMS, Some(BINARY_SUMS))?)
+    Ok(pin_lock(
+        version,
+        COMMIT_FILE,
+        ARCHIVE_SUMS,
+        Some(BINARY_SUMS),
+    )?)
 }
 
 #[test]

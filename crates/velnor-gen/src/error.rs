@@ -127,12 +127,7 @@ impl fmt::Display for GenerateError {
                 f,
                 "velnor-ci {version} does not know the check_alone key of .velnor/rust-ci.toml; pin velnor-ci 0.1.97 or later with `velnor-gen pin-helper 0.1.97`"
             ),
-            Self::GeneratedCheckHelperTooOld(version) => write!(
-                f,
-                "velnor-ci {version} does not know kind = \"generated-check\" in a [[lint]] entry of .velnor/rust-ci.toml; pin velnor-ci {}.{}.{} or later with `velnor-gen pin-helper {}.{}.{}`",
-                GENERATED_CHECK_HELPER.0, GENERATED_CHECK_HELPER.1, GENERATED_CHECK_HELPER.2,
-                GENERATED_CHECK_HELPER.0, GENERATED_CHECK_HELPER.1, GENERATED_CHECK_HELPER.2,
-            ),
+            Self::GeneratedCheckHelperTooOld(version) => f.write_str(&generated_check_too_old(version)),
             Self::TestLaneHelperTooOld(version) => write!(
                 f,
                 "velnor-ci {version} does not know the test_lane key of .velnor/rust-ci.toml; pin velnor-ci 0.1.93 or later with `velnor-gen pin-helper 0.1.93`"
@@ -155,15 +150,17 @@ impl fmt::Display for GenerateError {
             ),
             Self::Metadata(error) => error.fmt(f),
             Self::Workflows(error) => error.fmt(f),
-            Self::Rules(violations) => {
-                f.write_str("the generated workflow breaks the YAML rules:")?;
-                for violation in violations {
-                    write!(f, "\n  {violation}")?;
-                }
-                Ok(())
-            }
+            Self::Rules(violations) => rules_message(f, violations),
         }
     }
+}
+
+fn rules_message(f: &mut fmt::Formatter<'_>, violations: &[RuleViolation]) -> fmt::Result {
+    f.write_str("the generated workflow breaks the YAML rules:")?;
+    for violation in violations {
+        write!(f, "\n  {violation}")?;
+    }
+    Ok(())
 }
 
 impl std::error::Error for GenerateError {}
@@ -178,6 +175,13 @@ fn incompatible_helper(version: &HelperVersion) -> String {
     format!(
         "velnor-ci {version} does not fit this velnor-gen, which works with velnor-ci {}.{}.x; pin a compatible release with `velnor-gen pin-helper <version>`",
         COMPATIBLE_HELPER_SERIES.0, COMPATIBLE_HELPER_SERIES.1
+    )
+}
+
+fn generated_check_too_old(version: &HelperVersion) -> String {
+    let (major, minor, patch) = GENERATED_CHECK_HELPER;
+    format!(
+        "velnor-ci {version} does not know kind = \"generated-check\" in a [[lint]] entry of .velnor/rust-ci.toml; pin velnor-ci {major}.{minor}.{patch} or later with `velnor-gen pin-helper {major}.{minor}.{patch}`"
     )
 }
 
