@@ -18,6 +18,7 @@ const HOSTED_HELPER: (u64, u64, u64) = (0, 1, 99);
 const MERGE_GROUP_HELPER: (u64, u64, u64) = (0, 1, 103);
 /// The first `velnor-ci` that accepts `[public_sources]` and checks a commit-pinned github.com git
 /// dependency against the GitHub API, without a token, before it saves a cache.
+// helper-gate: first in tools-v0.1.108 via 1907f09728
 const PUBLIC_SOURCES_HELPER: (u64, u64, u64) = (0, 1, 108);
 /// The first `velnor-ci` whose `.velnor/rust-ci.toml` parser accepts the `cache_debug` key.
 // helper-gate: first in rust-ci-v0.1.82 via bfc3528bd7
