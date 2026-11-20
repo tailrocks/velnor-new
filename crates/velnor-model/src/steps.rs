@@ -125,7 +125,7 @@ pub enum StepKind {
     MbxPrivate,
     MbxStore,
     MbxSeed,
-    ToolsLocal(ToolsLocalVerb),
+    ToolsLocal(ToolsLocalVerb, crate::ToolsAnchor),
     TestSetup {
         name: String,
         run: String,
@@ -147,6 +147,7 @@ pub enum StepKind {
         caches: Vec<CacheKey>,
         nextest_artifacts: bool,
         node_tools: ToolsTelemetry,
+        not_generated: Option<String>,
     },
     UploadMetrics,
     DownloadMetrics,
@@ -221,7 +222,7 @@ impl StepKind {
             | Self::MbxPrivate
             | Self::MbxStore { .. }
             | Self::MbxSeed { .. }
-            | Self::ToolsLocal(_)
+            | Self::ToolsLocal(..)
             | Self::GeneratorCheck { .. }
             | Self::InstallGenerator(_)
             | Self::InstallHelper(_)
@@ -250,7 +251,7 @@ impl StepKind {
             self,
             Self::CacheSave(_)
                 | Self::MbxRemote { .. }
-                | Self::ToolsLocal(ToolsLocalVerb::AnchorSave)
+                | Self::ToolsLocal(ToolsLocalVerb::AnchorSave, _)
         )
     }
 }
@@ -272,19 +273,22 @@ pub enum ToolsLocalVerb {
     RecordSave,
     AnchorReset,
     AnchorRestore,
+    AnchorFind,
+    AnchorRead,
     Verify,
-    /// `Verify` on a helper whose mismatch notice names the restored cache entry, so the verify
-    /// step also gets the key of that entry.
     VerifyNamed,
+    VerifyNamedAnchor,
     Record,
     AnchorSave,
 }
 
 impl ToolsLocalVerb {
-    /// Whether the verb checks the restored tools against the anchor before anything uses them.
     #[must_use]
     pub fn checks_tools(self) -> bool {
-        matches!(self, Self::Verify | Self::VerifyNamed)
+        matches!(
+            self,
+            Self::Verify | Self::VerifyNamed | Self::VerifyNamedAnchor
+        )
     }
 }
 
@@ -292,6 +296,8 @@ impl ToolsLocalVerb {
 pub enum VerifiedSave {
     OnDefaultBranch,
     UnlessLocal,
+    AnchoredOnDefaultBranch,
+    AnchoredUnlessLocal,
     NodeStore,
     Prime,
     Anchor,

@@ -17,6 +17,7 @@ mod mbx;
 mod mbx_config;
 mod mise;
 mod plan;
+mod policy_table;
 mod release_asset;
 mod repo;
 mod repo_config;
@@ -35,11 +36,11 @@ pub use artifact_paths::{
     selects,
 };
 pub use budget_mode::{BUDGET_JOB_NAME, BUDGET_MODES_HELPER, ModeBudget, Selection, SelectionName};
-pub use cache::{CacheKey, CachePath, CacheRoot, Host, LockIdentity};
+pub use cache::{AnchorSource, CacheKey, CachePath, CacheRoot, Host, LockIdentity, ToolsAnchor};
 pub use cache_layout::{
     CACHE_COMPAT_LENGTH, CacheKeyLayout, CacheKeySegment, LOCK_OUTPUT_PREFIX,
-    RUNNER_ARCH_MAX_LENGTH, RUNNER_OS_MAX_LENGTH, SHARED_SOURCES_OWNER, json_char_bytes,
-    json_string_bytes,
+    RUNNER_ARCH_MAX_LENGTH, RUNNER_OS_MAX_LENGTH, SHARED_SOURCES_OWNER, TOOLS_ANCHOR_LENGTH,
+    json_char_bytes, json_string_bytes,
 };
 pub use cache_outputs::{
     BASE_PREFIX_OUTPUT, BASE_SAVE_OUTPUT, CacheLaneOutput, SOURCES_PREFIX_OUTPUT,
@@ -55,7 +56,9 @@ pub use ids::{
 };
 pub use lint::{LintCommand, LintJob, LintKind};
 pub use mbx::MbxMode;
-pub use mbx_config::{MBX_TOOL, MbxConflict, MbxDeclaration, MbxRule, mbx_declaration};
+pub use mbx_config::{
+    MBX_ACTION_RELEASE, MBX_TOOL, MbxConflict, MbxDeclaration, MbxRule, mbx_declaration,
+};
 pub use mise::MisePlatform;
 pub use plan::{
     Access, BUILD_TESTS_STEP, BUILT_OUTPUT, CI_AUTO_LABEL, CI_RUN_LABEL, CargoCommand, Concurrency,
@@ -66,13 +69,13 @@ pub use plan::{
 };
 pub use release_asset::{ReleaseAsset, ReleaseAssetError, ReleaseAssetPart};
 pub use repo::{
-    CacheDebug, CheckoutScope, CiDebugInfo, CompileInputs, CratesMirror, CustomHarness,
-    DependencyKind, DocsRun, FullRun, InputOwner, InputRule, LaneFeatures, LaneJob,
-    LaneKeysWritten, MbxRemote, MbxStore, MemberDependency, OnMain, PackageDependency, PolicyTools,
-    PrCi, PrivateSources, PushAfterMergeGroup, RepoFacts, RepoView, RepositoryIdentity,
-    RustCiConfig, RustMember, RustMetadata, RustPackage, RustRoot, SetupPhase, SpeedBudget, Target,
-    TargetKind, TestLane, TestSetup, Timings, ToolLock, ToolPin, ToolPins, ToolRequest, Toolchain,
-    UnownedPackage, Unread, Weakening, WorkspaceGroup,
+    CacheDebug, CheckoutScope, CiDebugInfo, CompileInputs, CratesMirror, CustomHarness, DenyCheck,
+    DenyChecks, DenyLane, DependencyKind, DocsRun, FullRun, InputOwner, InputRule, LaneFeatures,
+    LaneJob, LaneKeysWritten, MbxRemote, MbxStore, MemberDependency, OnMain, PackageDependency,
+    PolicyTable, PolicyTools, PrCi, PrivateSources, PushAfterMergeGroup, RepoFacts, RepoView,
+    RepositoryIdentity, RustCiConfig, RustMember, RustMetadata, RustPackage, RustRoot, SetupPhase,
+    SpeedBudget, Target, TargetKind, TestLane, TestSetup, Timings, ToolLock, ToolPin, ToolPins,
+    ToolRequest, Toolchain, UnownedPackage, Unread, Weakening, WorkspaceGroup,
 };
 pub use sealed::{Owner, VELNOR_GEN_MARKER, lf_normalized, owner_of, seal, sha256_hex};
 pub use selection::{

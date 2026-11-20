@@ -6,13 +6,18 @@
 //! The action's `sha256` input compares the installed executable with one digest, and a non-empty
 //! input makes the action skip its signed-archive check. That check also covers `mise-shim.exe`,
 //! which the Windows archive ships beside `mise.exe` and which only the signed check verifies.
-//! Windows therefore carries no digest: its selection is empty and the signed check runs. A job
-//! whose runner labels all name one platform gets that platform's digest as a literal. Any other
-//! job (an unknown label, a matrix runner, a fork runner of another architecture) keeps a run-time
+//! Windows therefore carries no digest: its selection is empty and the signed check runs. Linux
+//! carries none either, unless the job runs on a GitHub-hosted glibc label: a musl runner downloads
+//! a different binary, so a glibc digest would fail its check, and `runner.os` cannot tell the two
+//! apart. A GitHub-hosted job (no fork runner, no trusted runner) whose label names one platform
+//! gets that platform's digest as a literal; a hosted `ubuntu-*` label is glibc, while a label that
+//! only names Linux is not. A self-hosted label proves no platform, because any name can be
+//! registered: `ubuntu-musl` is a musl runner. Any other job (a self-hosted label, an unknown
+//! label, a matrix runner, a fork runner of another architecture) keeps a run-time
 //! selection by `runner.os` and `runner.arch`, which is longer (about 500 bytes a step, and a
-//! workflow of many roots has to stay under the 500 000 byte limit). A non-Windows platform
-//! without a row selects a text that matches no binary, so the action fails with a SHA256
-//! mismatch instead of installing an unchecked binary.
+//! workflow of many roots has to stay under the 500 000 byte limit). A macOS platform without a
+//! row selects a text that matches no binary, so the action fails with a SHA256 mismatch instead
+//! of installing an unchecked binary.
 //!
 //! The table is checked in, next to [`MISE_VERSION`], because Velnor owns the mise pin (mise is
 //! not a project-declared catalog tool, see hard decision 4). A version without a row does not
@@ -129,6 +134,7 @@ fn selecting(binary: &MiseBinary) -> Value {
     let chain: String = binary
         .sha256
         .iter()
+        .filter(|(platform, _)| !platform.starts_with("Linux"))
         .filter_map(|(platform, digest)| {
             let (os, arch) = platform.split_once('-')?;
             Some(format!(
@@ -137,7 +143,7 @@ fn selecting(binary: &MiseBinary) -> Value {
         })
         .collect();
     Value::Expr(format!(
-        "${{{{ runner.os != 'Windows' && ({chain}'{NO_DIGEST}') || '' }}}}"
+        "${{{{ runner.os != 'Windows' && runner.os != 'Linux' && ({chain}'{NO_DIGEST}') || '' }}}}"
     ))
 }
 
@@ -162,31 +168,27 @@ pub(crate) fn pin_to_runner_platform(mut job: RenderedJob) -> RenderedJob {
 }
 
 fn runner_digest(job: &RenderedJob) -> Option<&'static str> {
-    if job.runs_on_axis.is_some() {
+    if job.runs_on_axis.is_some() || job.fork_runner.is_some() || job.trusted_runner.is_some() {
         return None;
     }
-    let mut platforms = std::iter::once(job.runs_on.as_str())
-        .chain(job.fork_runner.as_deref())
-        .map(plain_label_platform);
-    let first = platforms.next()??;
-    platforms
-        .all(|platform| platform.as_deref() == Some(first.as_str()))
-        .then_some(())?;
+    let platform = plain_label_platform(&job.runs_on)?;
     let binary = MISE_BINARIES
         .iter()
         .find(|binary| binary.version == MISE_VERSION)?;
     binary
         .sha256
         .iter()
-        .find(|(platform, _)| platform.eq_ignore_ascii_case(&first))
+        .find(|(name, _)| name.eq_ignore_ascii_case(&platform))
         .map(|(_, digest)| *digest)
 }
 
 /// `<os>-<arch>` of a plain runner label such as `ubuntu-26.04-arm`; no expression, no guess.
+/// A Linux label that is not `ubuntu-*` names no libc, so it has no platform here.
 fn plain_label_platform(label: &str) -> Option<String> {
     label
         .bytes()
         .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_'))
         .then_some(())?;
-    MisePlatform::runner(label).map(MisePlatform::lock_key)
+    let platform = MisePlatform::runner(label)?;
+    (!platform.matches("linux") || label.starts_with("ubuntu-")).then(|| platform.lock_key())
 }
