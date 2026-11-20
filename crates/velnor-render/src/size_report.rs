@@ -1,20 +1,14 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::rules::{RenderedJob, Rule, RuleViolation};
-use crate::workflow::{ShellcheckMarks, yaml_job};
-use crate::yaml::emit;
+use crate::rules::{Rule, RuleViolation};
 
 const LARGEST_JOBS: usize = 5;
+const JOBS_KEY: &str = "\njobs:\n";
 
-pub(crate) fn too_large(path: &str, bytes: usize, jobs: &[RenderedJob]) -> RuleViolation {
-    let mut sizes: Vec<(usize, &str)> = jobs
-        .iter()
-        .map(|job| {
-            let rendered = emit(&[(job.id.clone(), yaml_job(job, ShellcheckMarks::Jobs))]);
-            (rendered.len(), job.id.as_str())
-        })
-        .collect();
+pub(crate) fn too_large(path: &str, file: &str) -> RuleViolation {
+    let mut sizes = job_sizes(file);
+    let count = sizes.len();
     sizes.sort_by(|left, right| right.cmp(left));
     let largest: Vec<String> = sizes
         .iter()
@@ -23,11 +17,29 @@ pub(crate) fn too_large(path: &str, bytes: usize, jobs: &[RenderedJob]) -> RuleV
         .collect();
     RuleViolation {
         job: format!(
-            "{path} has {} jobs; the largest are {}",
-            jobs.len(),
+            "{path} has {count} jobs; the largest are {}",
             largest.join(", ")
         ),
         step: 0,
-        rule: Rule::WorkflowTooLarge(bytes),
+        rule: Rule::WorkflowTooLarge(file.len()),
     }
+}
+
+fn job_sizes(file: &str) -> Vec<(usize, &str)> {
+    let Some(at) = file.find(JOBS_KEY) else {
+        return Vec::new();
+    };
+    let mut sizes: Vec<(usize, &str)> = Vec::new();
+    for line in file[at + JOBS_KEY.len()..].split_inclusive('\n') {
+        let header = line
+            .strip_prefix("  ")
+            .filter(|rest| !rest.starts_with(' ') && !rest.starts_with('#'))
+            .and_then(|rest| rest.strip_suffix(":\n"));
+        match (header, sizes.last_mut()) {
+            (Some(id), _) => sizes.push((line.len(), id)),
+            (None, Some((size, _))) => *size += line.len(),
+            (None, None) => {}
+        }
+    }
+    sizes
 }
