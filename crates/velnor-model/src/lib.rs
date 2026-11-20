@@ -11,12 +11,16 @@ mod helper;
 mod hosted;
 mod ids;
 mod lint;
+mod mbx;
+mod mbx_config;
 mod mise;
 mod plan;
+mod release_asset;
 mod repo;
 mod repo_config;
 mod sealed;
 mod selection;
+mod setup_phase;
 mod shape;
 mod steps;
 mod test_group;
@@ -42,6 +46,8 @@ pub use ids::{
     RunnerLabel, Sha256, TargetName, looks_github_hosted,
 };
 pub use lint::{LintCommand, LintJob, LintKind};
+pub use mbx::MbxMode;
+pub use mbx_config::{MBX_TOOL, MbxConflict, MbxDeclaration, MbxRule, mbx_declaration};
 pub use mise::MisePlatform;
 pub use plan::{
     Access, BUILD_TESTS_STEP, BUILT_OUTPUT, CI_AUTO_LABEL, CI_RUN_LABEL, CargoCommand, Concurrency,
@@ -50,14 +56,15 @@ pub use plan::{
     TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, Triggers,
     When, WorkflowPlan, group_output_name,
 };
+pub use release_asset::{ReleaseAsset, ReleaseAssetError, ReleaseAssetPart};
 pub use repo::{
     CacheDebug, CheckoutScope, CiDebugInfo, CompileInputs, CratesMirror, CustomHarness,
-    DependencyKind, DocsRun, FullRun, InputOwner, InputRule, LaneJob, MbxRemote, MbxStore,
-    MemberDependency, OnMain, PackageDependency, PolicyTools, PrCi, PrivateSources,
-    PushAfterMergeGroup, RepoFacts, RepoView, RepositoryIdentity, RustCiConfig, RustMember,
-    RustMetadata, RustPackage, RustRoot, SpeedBudget, Target, TargetKind, TestLane, TestSetup,
-    Timings, ToolLock, ToolPin, ToolPins, ToolRequest, Toolchain, UnownedPackage, Unread,
-    Weakening, WorkspaceGroup,
+    DependencyKind, DocsRun, FullRun, InputOwner, InputRule, LaneFeatures, LaneJob,
+    LaneKeysWritten, MbxRemote, MbxStore, MemberDependency, OnMain, PackageDependency, PolicyTools,
+    PrCi, PrivateSources, PushAfterMergeGroup, RepoFacts, RepoView, RepositoryIdentity,
+    RustCiConfig, RustMember, RustMetadata, RustPackage, RustRoot, SetupPhase, SpeedBudget, Target,
+    TargetKind, TestLane, TestSetup, Timings, ToolLock, ToolPin, ToolPins, ToolRequest, Toolchain,
+    UnownedPackage, Unread, Weakening, WorkspaceGroup,
 };
 pub use sealed::{Owner, VELNOR_GEN_MARKER, lf_normalized, owner_of, seal};
 pub use selection::{
@@ -66,11 +73,11 @@ pub use selection::{
     StepNeed, WORKFLOW_PATH, WORKFLOWS_CONFIG_PATH,
 };
 pub use shape::{Shape, ShapeDecision};
-pub use test_group::{GroupEvent, GroupRoot, TestGroup, TestNeed};
+pub use test_group::{GroupEvent, GroupRoot, NoTests, TestGroup, TestNeed};
 pub use token_permission::{token_permission_accesses, token_permission_accesses_prose};
 pub use verdict::{JobCondition, VerdictJob, VerdictSpec};
 
 pub use steps::{
     BUDGET_JOB, BaseExpiry, GroupFilter, HelperCommand, InputsCli, PrepareLocks, StepKind,
-    ToolsLocalVerb, ToolsTelemetry, TrimFamily,
+    ToolsLocalVerb, ToolsTelemetry, TrimFamily, VerifiedSave,
 };

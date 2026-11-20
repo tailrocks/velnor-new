@@ -162,12 +162,12 @@ fn restore_cache_needs_the_cargo_need_and_a_helper_that_reads_the_key() -> TestR
         RESTORING.to_owned(),
         format!("{SHELL}restore_cache = false\n"),
     ] {
-        let error = workflow(&view_with(&["Cargo.toml"], &config, "0.1.107")?)
+        let error = workflow(&view_with(&["Cargo.toml"], &config, "0.1.106")?)
             .err()
             .ok_or("accepted on a helper that does not read the key")?
             .to_string();
         assert!(
-            error.contains("restore_cache") && error.contains("0.1.108"),
+            error.contains("restore_cache") && error.contains("0.1.107"),
             "{error}"
         );
     }

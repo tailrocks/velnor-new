@@ -173,11 +173,23 @@ pub struct CratesMirrorArgs {
 }
 
 #[derive(Debug, Args)]
+pub struct MisePinArgs {
+    /// The tool's key in the [tools] table, for example mr-boxington
+    pub tool: String,
+}
+
+#[derive(Debug, Args)]
 pub struct ToolsLocalArgs {
     #[arg(value_enum)]
     pub verb: crate::tools_local::Verb,
     #[arg(long)]
     pub key: String,
+}
+
+#[derive(Debug, Args)]
+pub struct ToolsVerifyArgs {
+    #[arg(value_enum)]
+    pub verb: crate::tools_verify::Verb,
 }
 
 #[derive(Debug, Subcommand)]

@@ -71,6 +71,10 @@ impl Reason {
                 f,
                 "cache.mbx_remote is refused: fork pull requests can restore that cache and this repository has private dependencies ({cause}); remove cache.mbx_remote"
             ),
+            Self::MbxOffConflict(key) => write!(
+                f,
+                "cache.mbx = false turns mbx off, but {key} needs it; remove one of them"
+            ),
             _ => Ok(()),
         }
     }
@@ -166,7 +170,12 @@ impl fmt::Display for Reason {
             | Self::TestGroupsWithPrivateSources => self.fmt_test_groups(f),
             Self::UnknownTestLaneRoot(_)
             | Self::TestLaneWithoutNextest(_)
-            | Self::UnknownTestLanePackage(_) => self.fmt_test_lane(f),
+            | Self::UnknownTestLanePackage(_)
+            | Self::TestLaneFeatureConflict { .. } => self.fmt_test_lane(f),
+            Self::UnknownRootTimeoutRoot(root) => write!(
+                f,
+                "root_timeouts names the root {root}, which is not a Cargo root of this repository; name the folder of a root's Cargo.toml, or . for the repository root"
+            ),
             Self::UnknownTestSetupRoot(root) => write!(
                 f,
                 "test_setup names the root {root}, which is not a Cargo root of this repository; name the folder of a root's Cargo.toml, or . for the repository root"
@@ -185,6 +194,7 @@ impl fmt::Display for Reason {
             Self::UnpinnedTool(_)
             | Self::HelperBox(_)
             | Self::MbxRemotePrivate(_)
+            | Self::MbxOffConflict(_)
             | Self::PrCiWithSkipDraft => self.fmt_setup(f),
             Self::BuildExecutable
             | Self::CargoCredentialProvider(_)

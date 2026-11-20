@@ -332,6 +332,7 @@ run_mise() {
     CARGO_TARGET_DIR="$guard_target" \
     RUSTUP_HOME="$rustup_home" \
     MBX_CACHE_DIR="$mbx_store" \
+    ${source_fingerprint:+VELNOR_ARCHIVE_GUARD_SOURCE_FINGERPRINT="$source_fingerprint"} \
     MISE_TRUSTED_CONFIG_PATHS="$repository" \
     TMPDIR="$mbx_root" \
     "$mise_bin" "$@"

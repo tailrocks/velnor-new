@@ -64,6 +64,7 @@ fn run(repo: &Repo, command: &[&str]) -> Result<LaneMetrics, Box<dyn std::error:
         .current_dir(repo.root())
         .env("RUNNER_TEMP", repo.root())
         .env("GITHUB_JOB", "rust")
+        .env("MISE_TRUSTED_CONFIG_PATHS", repo.root())
         .env_remove("GITHUB_TOKEN")
         .env_remove("CARGO_TARGET_DIR")
         .output()?;
@@ -74,6 +75,7 @@ fn run(repo: &Repo, command: &[&str]) -> Result<LaneMetrics, Box<dyn std::error:
         .current_dir(repo.root())
         .env("RUNNER_TEMP", repo.root())
         .env("GITHUB_JOB", "rust")
+        .env("MISE_TRUSTED_CONFIG_PATHS", repo.root())
         .env("GITHUB_STEP_SUMMARY", &summary)
         .env_remove("GITHUB_TOKEN")
         .env_remove("CARGO_TARGET_DIR")
