@@ -41,7 +41,7 @@ pub use crate::metadata_file::{
     METADATA_PATH, MetadataFileError, metadata_file, recorded_members, recorded_metadata,
     recorded_roots, recorded_target_dirs,
 };
-pub use crate::mise::{MISE_CONFIGS, MISE_LOCK, check_tools, mise_files, tool_pins};
+pub use crate::mise::{MISE_CONFIGS, MISE_LOCK, check_tools, mise_files, tool_pins, tool_requests};
 pub use crate::owners::{Owner, Owners, add_reads};
 pub use crate::plan::{check_required_check, plan, plan_without_deltas};
 pub use crate::policy::{PolicyRuns, policy_runs};

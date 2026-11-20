@@ -59,6 +59,18 @@ fn the_table_form_with_a_version_is_read() {
 }
 
 #[test]
+fn a_pin_templated_from_a_var_prints_the_resolved_release() {
+    let mise = "[vars]\nmbx = \"v1.31.0\"\n\n[tools]\nmr-boxington = \"{{ vars.mbx }}\"\n";
+    assert_eq!(pin("mise-pin-template", mise).as_deref(), Ok("1.31.0"));
+}
+
+#[test]
+fn a_template_resolving_to_a_loose_version_fails_closed() {
+    let mise = "[vars]\nmbx = \"latest\"\n\n[tools]\nmr-boxington = \"{{ vars.mbx }}\"\n";
+    assert!(pin("mise-pin-template-loose", mise).is_err());
+}
+
+#[test]
 fn a_missing_pin_fails_closed() {
     let mise = "[tools]\nrust = \"1.99.1\"\n";
     assert!(pin("mise-pin-missing", mise).is_err());

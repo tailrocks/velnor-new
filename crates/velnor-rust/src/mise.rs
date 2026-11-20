@@ -30,6 +30,10 @@ fn plain(version: String) -> ToolRequest {
     }
 }
 
+pub fn tool_requests(bytes: &[u8], tool: &str) -> Result<Vec<ToolRequest>, Reason> {
+    Ok(versions(bytes)?.remove(tool).unwrap_or_default())
+}
+
 #[must_use]
 pub fn mise_files() -> Vec<RepoPath> {
     MISE_CONFIGS.iter().cloned().chain([MISE_LOCK]).collect()

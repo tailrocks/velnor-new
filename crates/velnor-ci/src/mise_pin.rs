@@ -6,6 +6,7 @@ use std::io::Write;
 use std::path::Path;
 
 use toml::{Table, Value};
+use velnor_model::ToolRequest;
 
 use crate::error::CiError;
 
@@ -20,9 +21,12 @@ pub fn pinned_version(dir: &Path, tool: &str) -> Result<String, CiError> {
         if !path.exists() {
             continue;
         }
-        let table = read_table(&path)?;
-        if let Some(entry) = tools_entry(&table, tool) {
-            pins.push(requested(entry, tool, name)?);
+        let bytes = fs::read(&path)
+            .map_err(|error| CiError::new(format!("cannot read {}: {error}", path.display())))?;
+        let requests = velnor_rust::tool_requests(&bytes, tool)
+            .map_err(|reason| CiError::new(format!("{name} does not resolve: {reason}")))?;
+        if !requests.is_empty() {
+            pins.push(requested(&requests, tool, name)?);
         }
     }
     let version = match pins.as_slice() {
@@ -69,22 +73,13 @@ fn read_table(path: &Path) -> Result<Table, CiError> {
         .map_err(|error| CiError::new(format!("{} does not parse: {error}", path.display())))
 }
 
-fn tools_entry<'a>(table: &'a Table, tool: &str) -> Option<&'a Value> {
-    table.get("tools")?.as_table()?.get(tool)
-}
-
-fn requested(entry: &Value, tool: &str, file: &str) -> Result<String, CiError> {
-    let text = match entry {
-        Value::String(text) => text.as_str(),
-        Value::Table(table) => table
-            .get("version")
-            .and_then(Value::as_str)
-            .ok_or_else(|| not_exact(tool, file, "no string version"))?,
-        _ => return Err(not_exact(tool, file, "not a single version")),
-    };
-    velnor_rust::exact_release(text)
-        .map(str::to_owned)
-        .ok_or_else(|| not_exact(tool, file, text))
+fn requested(requests: &[ToolRequest], tool: &str, file: &str) -> Result<String, CiError> {
+    match requests {
+        [request] if request.os.is_none() => velnor_rust::exact_release(&request.version)
+            .map(str::to_owned)
+            .ok_or_else(|| not_exact(tool, file, &request.version)),
+        _ => Err(not_exact(tool, file, "not a single version")),
+    }
 }
 
 fn not_exact(tool: &str, file: &str, found: &str) -> CiError {
