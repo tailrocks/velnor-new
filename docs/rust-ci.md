@@ -37,7 +37,7 @@ The tests are built once and handed on as a nextest archive. `rust-test-default`
 
 ### Always present
 
-`Required` (named by `required_check`) is the one check to require in a ruleset. It passes only when every selected job ran and passed. `Cache` reports cache waste. `Cache maintenance` (`rust-trim`) runs on the default branch only, and only when the pinned helper is velnor-ci 0.1.81 or later. A `policy` job runs `cargo-deny` when the project has a `deny.toml` and `cargo-machete` when `mise.toml` pins it, and `[[lint]]` entries add non-Rust lint jobs.
+`Required` (named by `required_check`) is the one check to require in a ruleset. It passes only when every selected job ran and passed. `Cache` reports cache waste. `Cache maintenance` (`rust-trim`) runs on the default branch only, and only when the pinned helper is velnor-ci 0.1.81 or later. A `policy` job runs `cargo-deny` when the project has a `deny.toml` and `cargo-machete` when `mise.toml` pins it (a project with neither has no `policy` job and `Required` does not wait for one), and `[[lint]]` entries add non-Rust lint jobs.
 
 ## Caches
 
