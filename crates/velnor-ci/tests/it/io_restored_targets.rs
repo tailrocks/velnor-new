@@ -5,6 +5,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::time::{Duration, UNIX_EPOCH};
+use velnor_test_support::real_cargo;
 
 use crate::io::Repo;
 
@@ -46,7 +47,7 @@ fn checkout(metadata: bool) -> Repo {
                 &format!("{name}/.cargo/config.toml"),
                 &format!("[build]\ntarget-dir='../configured-{name}'\n"),
             );
-            let output = Command::new("cargo")
+            let output = Command::new(real_cargo())
                 .args(["generate-lockfile", "--offline"])
                 .current_dir(repo.root().join(name))
                 .env_remove("CARGO_TARGET_DIR")
@@ -163,7 +164,7 @@ fn restored_cold_fallback_replaces_a_custom_target_link_for_the_next_cargo_build
         "a/src/lib.rs",
         UNIX_EPOCH + Duration::from_secs(1_700_000_000),
     );
-    let output = Command::new("cargo")
+    let output = Command::new(real_cargo())
         .args([
             "build",
             "--offline",

@@ -10,7 +10,6 @@ use velnor_model::{
 
 use crate::cargo_flags::flag_tokens;
 use crate::config::{CONFIG_PATH, parse};
-use crate::mbx_layout::standard_wrapper;
 use crate::mise::MISE_CONFIGS;
 use crate::roots::is_cargo_config;
 use crate::toml_file::table;
@@ -325,7 +324,7 @@ fn mise(parsed: &toml::Table, make: &Make<'_>) -> Vec<Weakening> {
         .into_iter()
         .flatten()
         .filter(|(name, _)| matches!(name.as_str(), "rustc" | "rustdoc") || cargo_tool(name))
-        .filter(|(name, wrapper)| !(name.as_str() == "cargo" && standard_wrapper(wrapper)))
+        .filter(|(name, wrapper)| !standard_mbx(name, wrapper))
         .map(|(name, wrapper)| {
             let command = wrapper
                 .get("command")
@@ -344,4 +343,11 @@ fn mise(parsed: &toml::Table, make: &Make<'_>) -> Vec<Weakening> {
 
 fn cargo_tool(name: &str) -> bool {
     name == "cargo" || name.starts_with("cargo-")
+}
+
+/// The owner standard MBX layout (`mise.toml`: `[wrappers.cargo]` with exactly
+/// `command = "mbx"` and `env = { MBX_CARGO_SHIM_MODE = "1" }`). Any other key,
+/// value or command is a different wrapper and stays named.
+fn standard_mbx(name: &str, wrapper: &Value) -> bool {
+    name == "cargo" && crate::mbx_layout::standard_wrapper(wrapper)
 }

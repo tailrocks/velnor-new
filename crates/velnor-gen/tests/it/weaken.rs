@@ -81,9 +81,9 @@ fn a_setting_that_makes_a_check_do_less_is_accepted_and_named() -> TestResult {
         ),
         (
             "mise.toml",
-            "[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n\n[tools]\nrust = { version = \"1.99.1\", mr_boxington = true }\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n\n[wrappers.cargo-clippy]\ncommand = \"mbx\"\n",
-            "[wrappers.cargo-clippy] command = \"mbx\"",
-            "runs cargo-clippy through \"mbx\"",
+            "[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n\n[tools]\nrust = { version = \"1.99.1\", mr_boxington = true }\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n\n[wrappers.cargo-clippy]\ncommand = \"sccache\"\n",
+            "[wrappers.cargo-clippy] command = \"sccache\"",
+            "runs cargo-clippy through \"sccache\"",
         ),
         (
             ".cargo/config.toml",
