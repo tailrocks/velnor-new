@@ -21,7 +21,7 @@ fn put(root: &Path, path: &str, age_secs: u64) {
 }
 
 #[test]
-fn a_seed_cut_at_the_budget_keeps_the_newest_entries_and_their_index() {
+fn a_seed_cut_at_the_budget_copies_the_whole_index_before_any_blob_and_the_newest_first() {
     let repo = Repo::empty("mbx-seed-order");
     let seed = repo.root().join("seed");
     put(&seed, "cas/aa/old-blob", 1_000);
@@ -45,8 +45,8 @@ fn a_seed_cut_at_the_budget_keeps_the_newest_entries_and_their_index() {
             "executable-identities/new-id",
             "task-manifests/m/new-manifest",
             "action-results/dd/new-result",
-            "cas/cc/new-blob",
             "action-results/bb/old-result",
+            "cas/cc/new-blob",
             "cas/aa/old-blob",
         ]
     );

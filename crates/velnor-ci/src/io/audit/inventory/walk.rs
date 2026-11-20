@@ -14,6 +14,7 @@ use super::{Entries, Kind, excluded_entry};
 pub(in crate::io::audit) struct Budget {
     remaining: usize,
     limit: usize,
+    overflowed: bool,
 }
 
 impl Budget {
@@ -21,16 +22,23 @@ impl Budget {
         Self {
             remaining: limit,
             limit,
+            overflowed: false,
         }
     }
 
+    pub(in crate::io::audit) fn overflowed(&self) -> bool {
+        self.overflowed
+    }
+
     fn reserve(&mut self) -> io::Result<()> {
-        self.remaining = self.remaining.checked_sub(1).ok_or_else(|| {
-            io::Error::other(format!(
+        let Some(remaining) = self.remaining.checked_sub(1) else {
+            self.overflowed = true;
+            return Err(io::Error::other(format!(
                 "audit freshness scan limit exceeded: more than {} entries; raise it with {MAX_ENTRIES_VARIABLE} (at most {MAX_ENTRIES_CEILING})",
                 self.limit
-            ))
-        })?;
+            )));
+        };
+        self.remaining = remaining;
         Ok(())
     }
 }

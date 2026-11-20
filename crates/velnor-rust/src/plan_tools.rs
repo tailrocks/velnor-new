@@ -13,6 +13,10 @@ use crate::plan::{TOOLS_LOCAL_HELPER, step};
 // First released in tools-v0.1.109 (not tagged yet when this gate was written).
 pub const TOOLS_VERIFY_HELPER: (u64, u64, u64) = (0, 1, 109);
 
+/// The first `velnor-ci` whose tools-verify mismatch notice names the restored Actions cache entry
+/// and the command that deletes it. The verify step gets the entry's key only from this helper, so
+/// an older helper never sees an env it ignores.
+pub(crate) const TOOLS_CACHE_KEY_HELPER: (u64, u64, u64) = (0, 1, 110);
 // First released in tools-v0.1.110 (not tagged yet when this gate was written).
 const TOOLS_CLEAR_HELPER: (u64, u64, u64) = (0, 1, 110);
 
@@ -100,6 +104,13 @@ fn node_first(facts: &RepoFacts) -> bool {
     tools_verified(facts) && !facts.config.hosted_runners.contains(&facts.config.runner)
 }
 
+fn names_cache_entry(facts: &RepoFacts) -> bool {
+    facts
+        .helper
+        .as_ref()
+        .is_some_and(|release| release.version().at_least(TOOLS_CACHE_KEY_HELPER))
+}
+
 fn tools_local(facts: &RepoFacts) -> bool {
     (facts.config.mbx_store == MbxStore::Shared || node_first(facts))
         && facts
@@ -139,17 +150,18 @@ pub(crate) fn tools_restore(facts: &RepoFacts, plan: Option<&JobId>) -> Vec<Step
         .chain([network])
         .collect();
     if tools_verified(facts) {
+        let verify = if names_cache_entry(facts) {
+            ToolsLocalVerb::VerifyNamed
+        } else {
+            ToolsLocalVerb::Verify
+        };
         if anchor == ToolsAnchor::Unanchored {
             steps.extend([
                 tools_step(ToolsLocalVerb::AnchorReset, anchor.clone(), When::Success),
                 tools_step(ToolsLocalVerb::AnchorRestore, anchor.clone(), When::Success),
             ]);
         }
-        steps.push(tools_step(
-            ToolsLocalVerb::Verify,
-            anchor.clone(),
-            When::Success,
-        ));
+        steps.push(tools_step(verify, anchor.clone(), When::Success));
     }
     steps.extend(local.then(|| local_step(ToolsLocalVerb::RecordRestore)));
     steps
