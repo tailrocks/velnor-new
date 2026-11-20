@@ -227,6 +227,10 @@ fn rendered_steps(
         }
         let mut extra = saved_unless_hit(&step.kind);
         extra.extend(
+            step.hosted_only
+                .then(|| crate::gate::NOT_SELF_HOSTED.to_owned()),
+        );
+        extra.extend(
             step.skip_when_cold
                 .then(|| crate::gate::PREPARE_COLD.to_owned()),
         );
