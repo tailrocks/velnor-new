@@ -9,6 +9,7 @@ use super::delta_snapshot::{self as snapshot, BASELINE, MANIFEST, Manifest, Snap
 use super::delta_tree as tree;
 use crate::delta_cli::{DeltaArgs, DeltaCommand};
 use crate::error::CiError;
+use crate::escape::{command_line, escape};
 
 pub(super) const LIMIT: u64 = 500_000_000;
 const MARKER: &str = ".velnor/delta-marker";
@@ -47,9 +48,12 @@ pub(super) fn run(command: DeltaCommand) -> Result<String, CiError> {
 fn apply(args: &DeltaArgs, base: &str) -> Result<String, CiError> {
     super::delta_paths::staging(&args.staging_dir)?;
     if let Err(error) = safe_path(&args.target_dir) {
-        return Ok(format!(
-            "::notice::{}; skipping delta reuse\n",
-            cleanup(&args.staging_dir, &error)
+        return Ok(command_line(
+            "notice",
+            &format!(
+                "{}; skipping delta reuse",
+                cleanup(&args.staging_dir, &error)
+            ),
         ));
     }
     let cutoff = snapshot::now_ns()?;
@@ -102,7 +106,8 @@ fn apply(args: &DeltaArgs, base: &str) -> Result<String, CiError> {
 fn cold(target: &Path, error: &CiError) -> Result<String, CiError> {
     tree::remove_node(target)?;
     Ok(format!(
-        "delta apply failed: {error}; removed 1 cached target directories and building cold\n"
+        "delta apply failed: {}; removed 1 cached target directories and building cold\n",
+        escape(&error.to_string(), false)
     ))
 }
 
@@ -122,7 +127,10 @@ fn compiled(args: &DeltaArgs) -> bool {
 
 fn decline(reason: &str) -> Result<String, CiError> {
     super::append_outputs("save=false\n")?;
-    Ok(format!("::notice::{reason}; saving no delta\n"))
+    Ok(command_line(
+        "notice",
+        &format!("{reason}; saving no delta"),
+    ))
 }
 
 fn stage(args: &DeltaArgs, base: &str) -> Result<String, CiError> {
