@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use serde::Deserialize;
 use velnor_rust::package_token;
 
-const NOT_RUNNABLE: [&str; 2] = ["ignored", "not-benchmark"];
+const NOT_RUNNABLE: &[&str] = &["ignored", "not-benchmark"];
 
 #[derive(Deserialize)]
 pub(super) struct Listed {

@@ -5,7 +5,7 @@ use crate::job_limits::runs_script;
 use crate::plan::{Action, Body, Job, Step, WorkflowsPlan};
 use crate::wrappers::{Invoked, invoked};
 
-const PROVENANCE_SCOPES: [&str; 2] = ["id-token", "attestations"];
+const PROVENANCE_SCOPES: &[&str] = &["id-token", "attestations"];
 
 impl WorkflowsPlan {
     #[must_use]

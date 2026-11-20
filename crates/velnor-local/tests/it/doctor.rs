@@ -46,7 +46,7 @@ impl Engine for Docker {
     }
 }
 
-const ALL: [&str; 6] = [
+const ALL: &[&str] = &[
     "velnor-local/runner-server",
     "velnor-local/runner",
     "velnor-local/cache-server",
@@ -62,7 +62,8 @@ fn docker(without: &[&str]) -> Docker {
         context: true,
         endpoint: "unix:///Users/me/.orbstack/run/docker.sock",
         images: ALL
-            .into_iter()
+            .iter()
+            .copied()
             .filter(|tag| !without.contains(tag))
             .collect(),
     }
@@ -102,7 +103,7 @@ async fn everything_present_prints_ok_for_every_part_and_is_healthy() {
 
 #[tokio::test]
 async fn missing_pair_images_print_miss_with_the_build_fix_and_are_unhealthy() {
-    let (parts, text) = report(&docker(&TARGETS), &host("doctor-pairs", true)).await;
+    let (parts, text) = report(&docker(TARGETS), &host("doctor-pairs", true)).await;
     assert!(!healthy(&parts), "{text}");
     let miss: Vec<&str> = text
         .lines()

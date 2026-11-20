@@ -14,7 +14,7 @@ mod store;
 use store::{restore, save};
 
 pub const TOOLS_DIR: &str = "tools";
-pub const HOME_PATHS: [&str; 2] = [".local/share/mise", ".rustup"];
+pub const HOME_PATHS: &[&str] = &[".local/share/mise", ".rustup"];
 pub const KEEP_KEYS: usize = 2;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]

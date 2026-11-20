@@ -22,7 +22,7 @@ const MISE: &str = include_str!("../../../../generator/samples/feature-lane/view
 const MISE_LOCK: &str = include_str!("../../../../generator/samples/feature-lane/view/mise.lock");
 
 /// Present in every lane, whatever crate it builds.
-const ALWAYS: [&str; 5] = [
+const ALWAYS: &[&str] = &[
     ".cargo/config.toml",
     ".velnor/rust-ci.lock",
     ".velnor/rust-ci.toml",

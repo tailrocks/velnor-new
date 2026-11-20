@@ -272,7 +272,7 @@ The two feature flags change which features the lane's steps pass to cargo, in i
 - `no_default_features = true` passes `--no-default-features`. It combines with `features`, so `features = ["a", "b"]` with it gives `--no-default-features --features 'a,b'`. It may also stand alone, to run with no features at all.
 - The two cannot be combined with each other or with a `features` list. Generation fails with a message that names the conflicting keys.
 
-A lane with a flag takes its own name: `Test (all features)`, `Test (no default features)`, or `Test (no default features, features: a,b)`, and the lint, doc and guard steps take the same words. Two lanes that differ only by a flag keep separate steps, separate lint and doc steps, and, as parallel jobs, separate jobs and cache keys (`rust-lane-all-features`, `rust-lane-no-default-a-b`). A lane without the flags renders exactly as before. The keys need velnor-ci 0.1.109 or later, and generation refuses an older pin when a lane writes either key, even as `false`. It runs after the default test step and reports no test counts, so the default step stays the single source of the job's test counts. A lane with `job = "parallel"` reports its own counts, see the next section but one. With `shape = "groups"` the step runs in the build job, which has Rust, because the archive holds only the default-feature build.
+A lane with a flag takes its own name: `Test (all features)`, `Test (no default features)`, or `Test (no default features, features: a,b)`, and the lint, doc and guard steps take the same words. Two lanes that differ only by a flag keep separate steps, separate lint and doc steps, and, as parallel jobs, separate jobs and cache keys (`rust-lane-all-features`, `rust-lane-no-default-a-b`). A lane without the flags renders exactly as before. The keys need velnor-ci 0.1.107 or later, and generation refuses an older pin when a lane writes either key, even as `false`. It runs after the default test step and reports no test counts, so the default step stays the single source of the job's test counts. A lane with `job = "parallel"` reports its own counts, see the next section but one. With `shape = "groups"` the step runs in the build job, which has Rust, because the archive holds only the default-feature build.
 
 `packages` names the packages of the root whose tests the lane selects. It is required with `filter` and optional without it. The plan narrows a pull request to the changed packages, so a lane whose filter matches nothing there is not broken. When the plan selects none of `packages`, and not the whole workspace, the lane step is skipped and a step named `Skip test lane (features: ...)` prints `skipped: no selected packages`. Otherwise the lane runs with `--no-tests=fail`, so a filter that matches nothing fails the job instead of passing with zero tests. A lane without `filter` runs whenever the plan selects the root.
 
@@ -319,20 +319,6 @@ job = "parallel"
 `timeout_minutes` is optional, 1 to 360, and sets the time limit of the lane's job when `job = "parallel"`. The lane's job takes it instead of its root's `[root_timeouts]` value or `timeout_minutes`. An inline lane (the default) has no job of its own: it runs inside its root's test job, which then takes the larger of its own limit and the lane's, so a lane can raise that job but never lower it. The key needs velnor-ci `0.1.109` or later, see Per-root time limits.
 
 The pinned velnor-ci reads `.velnor/rust-ci.toml` at run time and rejects a key it does not know, so any `[[test_lane]]` needs velnor-ci 0.1.93 or later, the first release that accepts the key and runs `lane-guard`. `velnor-gen generate` refuses an older pin when the file has a lane, filtered or not.
-
-## cargo-deny policy lane
-
-A `deny.toml` (or `.deny.toml`, `.cargo/deny.toml`, `.config/deny.toml`) that the lane can read enables the policy lane's `cargo-deny` on its Cargo root. The `[policy]` table of `.velnor/rust-ci.toml` says it explicitly, and it needs velnor-ci 0.1.110 or later (`velnor-gen pin-helper 0.1.110` fixes an older pin; an older helper rejects the table):
-
-- `deny = true` runs the lane. It is a generation error when no such config exists.
-- `deny = false` turns the lane off, even with a `deny.toml` present. The lane runs no `cargo-deny` and no `cargo-deny fetch db`, a change to `deny.toml` selects no policy run, and the generation report prints `cargo-deny policy is off ([policy] deny = false); deny.toml is ignored`.
-- Unset (the default) runs the lane exactly when a config exists, as it did before the table.
-- `deny_checks = ["advisories", "bans", "licenses", "sources"]` (optional) lists the checks the command runs, as `cargo-deny --locked check <checks>`. Each name appears once and at least one is listed; the command gives them in the fixed order above. Without the key the command is `cargo-deny --locked check`, which runs all four. To drop only the offline advisory check, write `deny_checks = ["bans", "licenses", "sources"]`.
-
-```toml
-[policy]
-deny = false
-```
 
 ## Unused dependencies
 
@@ -395,7 +381,7 @@ A budget is a number the project measures, not a number it guesses: set every ke
 
 These keys choose which jobs a run starts. The defaults are in the table in [`docs/rust-ci.md`](../docs/rust-ci.md).
 
-- `shape` is `"auto"` (default), `"one-job"`, `"lint-test"` or `"groups"`. `auto` picks the shape from `.velnor/rust-ci-timings.json`; any other value is fixed. When `auto` has no build times for a root, `velnor-gen generate` and `check` print a note that names the one-job shape it picked, the missing timings and how to choose a shape or record times. A root with a `[[test_groups]]` entry always uses the `groups` layout.
+- `shape` is `"auto"` (default), `"one-job"`, `"lint-test"` or `"groups"`. `auto` picks the shape from `.velnor/rust-ci-timings.json`; any other value is fixed. When `auto` has no build times for a root, `velnor-gen generate` and `check` print a note that names the one-job shape it picked, the missing timings, how to choose a shape, and how to record times (`velnor-ci timings --repo owner/name` once the generated workflow has three successful runs on the default branch). A root with a `[[test_groups]]` entry always uses the `groups` layout.
 - `on_main` is `"affected"` (default) or `"everything"`. It sets what a push to the default branch and a merge queue run select.
 - `full_run` is `"nightly"` (default), `"hourly"`, `"weekly"`, `"off"` or a five-field cron expression. It sets the schedule of the run that selects everything.
 - `skip_draft_pull_requests` is `false` (default). With `true`, a draft pull request runs nothing. It cannot be combined with `pr_ci = "label"`.

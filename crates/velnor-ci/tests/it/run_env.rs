@@ -8,7 +8,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-const STEP_FILES: [&str; 5] = [
+const STEP_FILES: &[&str] = &[
     "GITHUB_OUTPUT",
     "GITHUB_ENV",
     "GITHUB_PATH",
@@ -37,7 +37,7 @@ fn run_with_step_files(temp: &Path, command: &[&str]) -> bool {
         .args(command)
         .env("RUNNER_TEMP", temp)
         .env("PATH", path);
-    for name in STEP_FILES {
+    for name in STEP_FILES.iter().copied() {
         run.env(name, &outputs);
     }
     run.output()
@@ -48,7 +48,8 @@ fn run_with_step_files(temp: &Path, command: &[&str]) -> bool {
 
 fn leaked(env_dump: &str) -> Vec<&'static str> {
     STEP_FILES
-        .into_iter()
+        .iter()
+        .copied()
         .filter(|name| {
             env_dump
                 .lines()
