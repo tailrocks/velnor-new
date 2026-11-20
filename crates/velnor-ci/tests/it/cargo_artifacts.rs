@@ -151,3 +151,35 @@ fn oversized_cargo_artifacts_report_rejection_once_across_chunks_and_eof() {
         }
     }
 }
+
+#[test]
+fn text_report_names_each_failed_package_in_every_target_form() {
+    let input = [
+        "error: could not compile `alpha` (lib) due to 1 previous error",
+        "error: could not compile `beta` (bin \"beta-cli\") due to 2 previous errors; 1 warning emitted",
+        "error: could not compile `gamma` (lib test) due to previous error",
+        "error: could not compile `delta` (test \"suite\") due to previous error",
+        "error: could not compile `epsilon`",
+        "warning: build failed, waiting for other jobs to finish...",
+        "   Compiling zeta v1.0.0",
+    ]
+    .join("\n");
+    let mut tap = ArtifactTap::default();
+    tap.feed(input.as_bytes());
+    let names: Vec<_> = tap
+        .finish()
+        .failed_units
+        .into_iter()
+        .map(|unit| (unit.package, unit.version))
+        .collect();
+    assert_eq!(
+        names,
+        [
+            ("alpha".to_owned(), None),
+            ("beta".to_owned(), None),
+            ("gamma".to_owned(), None),
+            ("delta".to_owned(), None),
+            ("epsilon".to_owned(), None),
+        ]
+    );
+}
