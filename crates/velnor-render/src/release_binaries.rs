@@ -4,6 +4,7 @@
 use velnor_model::{HelperRelease, Platform, PrivateSources};
 use velnor_release::{BinaryFormat, BinaryPlan, Libc, ReleasePlan};
 
+use crate::install_steps::install_tools;
 use crate::private_steps::release_phase as private_phase;
 use crate::release::{FROM_A_PASSED_PUSH, GATE_IS_READY};
 use crate::release_assets::{
@@ -18,7 +19,6 @@ use crate::release_source::PUSHED_COMMIT;
 use crate::release_steps::{
     checkout, expression, install_tool, join, permissions, shell_word, variables,
 };
-use crate::install_steps::install_tools;
 use crate::rules::{RenderedJob, RenderedStep, Value};
 use crate::steps::install_helper;
 

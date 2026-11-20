@@ -4,6 +4,7 @@
 use velnor_model::{HelperRelease, PrivateSources};
 use velnor_release::{BinaryPlan, FamilyPlan, ReleasePlan, TAG_JOB_BASE_MINUTES};
 
+use crate::install_steps::install_tools;
 use crate::release::{GATE_IS_READY, after_the_gate_with, newest_check, only_while_newest};
 use crate::release_binaries::{
     BUILD_TIMEOUT_MINUTES, build_steps, command, download_to, target, upload,
@@ -16,7 +17,6 @@ use crate::release_steps::{
     TOOLCHAIN, app_token, checkout, expression, join, permissions, shell_word, variables,
 };
 use crate::rules::{RenderedJob, RenderedStep, Value};
-use crate::install_steps::install_tools;
 use crate::steps::install_helper;
 
 const TAG_STEP: &str = "family";

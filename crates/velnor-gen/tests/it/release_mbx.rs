@@ -59,7 +59,10 @@ fn mbx_build_installs_the_mise_tools_before_cargo() -> TestResult {
             .iter()
             .position(|step| run(step).starts_with("cargo build"))
             .ok_or_else(|| format!("{id}: no cargo build step"))?;
-        assert!(install < build, "{id}: cargo build runs before mise is set up");
+        assert!(
+            install < build,
+            "{id}: cargo build runs before mise is set up"
+        );
         assert_eq!(
             install_args(&all[install]),
             None,
