@@ -117,6 +117,8 @@ include it in Required's dependencies and verdict specification, set this in
 cache_check_blocks = true
 ```
 
+The MBX evidence is advisory and not authenticated. A step that runs in the same job, such as checkout code, can plant a matching `.expected` and `.json` pair in `$RUNNER_TEMP/velnor-mbx-reports`, and `velnor-ci` counts it as a session. Closing that gap needs a secret the checkout cannot read, so the check stays advisory unless `cache_check_blocks` is set, and a forged session is not a reason to trust a green `Cache` check.
+
 Besides compiled-despite-restored-inputs and download waste, the report names
 five more avoidable costs, each only when the evidence shows it was avoidable:
 

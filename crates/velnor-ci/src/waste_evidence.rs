@@ -11,7 +11,6 @@ pub const TOOLCHAIN_INSTALLS: &str = "velnor-toolchain-installs.txt";
 pub const SEED_TRUNCATED: &str = "velnor-mbx-seed-truncated";
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
 pub struct MbxCompilerWork {
     pub invocations: u64,
     pub duration_ns: u64,

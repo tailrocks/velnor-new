@@ -1,11 +1,15 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::mbx_reports::{cargo, cargo_with, report, report_json};
+use super::mbx_reports::{cargo, cargo_with, report, report_json, session};
 use super::{ResultTest, fixture};
 use serde_json::json;
+use std::collections::BTreeMap;
 use std::fs;
-use std::os::unix::net::UnixListener;
+use std::os::unix::net::{UnixListener, UnixStream};
+use std::time::{Duration, Instant};
+use velnor_ci::mbx_report::{is_socket, parse};
+use velnor_ci::waste_evidence::{MbxCompilerWork, MbxSession};
 
 fn markers(repo: &super::Repo) -> usize {
     reports(repo)
@@ -64,7 +68,7 @@ fn a_socket_path_that_is_a_regular_file_is_not_a_live_session() -> ResultTest {
 }
 
 #[test]
-fn a_socket_with_no_daemon_behind_it_is_not_a_live_session() -> ResultTest {
+fn an_existing_socket_file_is_a_live_session_without_a_connection() -> ResultTest {
     let repo = fixture("mbx-reports-orphan-socket")?;
     let orphan = repo.root().join("orphan.sock");
     drop(UnixListener::bind(&orphan)?);
@@ -77,7 +81,26 @@ fn a_socket_with_no_daemon_behind_it_is_not_a_live_session() -> ResultTest {
         true,
         Some(&orphan),
     )?;
-    assert_eq!(markers(&repo), 1);
+    assert_eq!(markers(&repo), 0);
+    Ok(())
+}
+
+#[test]
+fn a_socket_whose_listener_never_accepts_does_not_block_the_check() -> ResultTest {
+    let repo = fixture("mbx-reports-stuck-listener")?;
+    let stuck = repo.root().join("stuck.sock");
+    let _listener = UnixListener::bind(&stuck)?;
+    let waiting: Vec<UnixStream> = (0..256)
+        .map_while(|_| UnixStream::connect(&stuck).ok())
+        .collect();
+    let started = Instant::now();
+    assert!(is_socket(&stuck));
+    assert!(
+        started.elapsed() < Duration::from_secs(1),
+        "{:?}",
+        started.elapsed()
+    );
+    drop(waiting);
     Ok(())
 }
 
@@ -122,13 +145,33 @@ fn every_mbx_outcome_category_of_a_report_reaches_the_metrics() -> ResultTest {
 }
 
 #[test]
-fn a_session_without_extra_categories_keeps_its_three_counts_only() -> ResultTest {
+fn a_session_without_extra_categories_keeps_its_metrics_bytes() -> ResultTest {
     let repo = fixture("mbx-reports-plain-session")?;
     cargo(&repo, "build", &report_json(5, 3, 1, 0), "compiled")?;
     let metrics = report(&repo)?;
+    let bytes = serde_json::to_vec_pretty(&metrics.mbx)?;
     assert_eq!(
-        serde_json::to_value(&metrics.mbx)?["sessions"][0],
-        json!({"hits": 3, "misses": 1, "not_looked_up": 0})
+        bytes,
+        include_bytes!("../data/mbx_report/plain-session-mbx-evidence.json")
     );
     Ok(())
+}
+
+#[test]
+fn a_newer_report_with_unknown_fields_and_the_older_bypasses_shape_is_still_read() {
+    let newer = br#"{"version":5,"hits":1,"misses":0,"unconsulted":0,"added_later":{"a":1},"bypasses":{"compiler-query":"2","unsupported-flag":{"count":5},"other":1},"compiler":{"miss":{"invocations":1,"duration_ns":9,"added_later":true},"future":"text"}}"#;
+    assert_eq!(
+        parse(newer),
+        Ok(Some(MbxSession {
+            bypasses: BTreeMap::from([("other".to_owned(), 1)]),
+            compiler: BTreeMap::from([(
+                "miss".to_owned(),
+                MbxCompilerWork {
+                    invocations: 1,
+                    duration_ns: 9
+                }
+            )]),
+            ..session(1, 0, 0)
+        }))
+    );
 }
