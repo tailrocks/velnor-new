@@ -24,6 +24,8 @@ pub enum DenyCheck {
 }
 
 impl DenyCheck {
+    pub const ALL: [Self; 4] = [Self::Advisories, Self::Bans, Self::Licenses, Self::Sources];
+
     #[must_use]
     pub const fn name(self) -> &'static str {
         match self {

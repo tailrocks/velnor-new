@@ -5,7 +5,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use toml::Value;
 use velnor_model::{
-    ChangeSet, DenyLane, DocsRun, MbxMode, PathGlob, RepoFacts, RepoPath, RustRoot, Weakening,
+    ChangeSet, DenyCheck, DenyLane, DocsRun, MbxMode, PathGlob, RepoFacts, RepoPath, RustRoot,
+    Weakening,
 };
 
 use crate::cargo_flags::flag_tokens;
@@ -148,10 +149,13 @@ fn in_file(file: &RepoPath, bytes: &[u8]) -> Vec<Weakening> {
                         ));
                     }
                     if let Some(checks) = &policy.deny_checks {
-                        found.push(make(
-                            format!("[policy] deny_checks = {checks:?}"),
-                            "runs only the named cargo-deny checks, so the others are not checked".to_owned(),
-                        ));
+                        let named: BTreeSet<DenyCheck> = checks.iter().copied().collect();
+                        if DenyCheck::ALL.iter().any(|check| !named.contains(check)) {
+                            found.push(make(
+                                format!("[policy] deny_checks = {checks:?}"),
+                                "runs only the named cargo-deny checks, so the others are not checked".to_owned(),
+                            ));
+                        }
                     }
                 }
                 found

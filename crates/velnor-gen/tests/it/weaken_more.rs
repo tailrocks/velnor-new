@@ -202,3 +202,25 @@ fn turning_the_cargo_deny_policy_off_or_narrowing_its_checks_is_new() -> TestRes
     assert_eq!(introduced_files(&narrowed, &[CONFIG], &[])?, [CONFIG]);
     Ok(())
 }
+
+#[test]
+fn naming_every_cargo_deny_check_is_not_a_weakening() -> TestResult {
+    const CONFIG: &str = ".velnor/rust-ci.toml";
+    for checks in [
+        "[\"advisories\", \"bans\", \"licenses\", \"sources\"]",
+        "[\"sources\", \"licenses\", \"bans\", \"advisories\"]",
+    ] {
+        let all = facts(&[(CONFIG, &format!("[policy]\ndeny_checks = {checks}\n"))])?;
+        assert_eq!(
+            introduced_files(&all, &[CONFIG], &[])?,
+            Vec::<String>::new(),
+            "{checks}"
+        );
+    }
+    let three = facts(&[(
+        CONFIG,
+        "[policy]\ndeny_checks = [\"advisories\", \"bans\", \"licenses\"]\n",
+    )])?;
+    assert_eq!(introduced_files(&three, &[CONFIG], &[])?, [CONFIG]);
+    Ok(())
+}
