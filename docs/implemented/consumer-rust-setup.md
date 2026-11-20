@@ -12,9 +12,9 @@
   tests), `tool_catalog_resolve::rust_mirror::tests`,
   `tool_catalog_resolve::rust_source::tests`.
 - Deviations: none
-- Follow-up: Rust 1.100 (about 2026-11-12) brings Cargo's new build-dir
-  layout, which lets MBX collect unused units one at a time and seed new
-  worktrees from existing ones; bump the catalog when it ships.
+- Follow-up: none for the pin. Rust 1.100.0 brings Cargo's new build-dir
+  layout, which MBX could use to collect unused units one at a time and seed
+  new worktrees from existing ones; that use is not implemented yet.
 
 ## 1. `mise.toml` and `rust-toolchain.toml` (owner standard layout)
 
