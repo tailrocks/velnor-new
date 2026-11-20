@@ -6,7 +6,6 @@ use velnor_model::{HelperCommand, Job, MbxRemote, MbxStore, RepoFacts, Step, Ste
 use crate::mbx_pin::MBX_PIN_HELPER;
 use crate::plan::step;
 
-// helper-gate: untagged tools-v0.1.111
 pub(crate) const MBX_OUT_DIR_HELPER: (u64, u64, u64) = (0, 1, 111);
 
 pub(crate) fn apply(facts: &RepoFacts, jobs: &mut [Job]) {

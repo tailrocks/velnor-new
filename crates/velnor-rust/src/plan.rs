@@ -19,6 +19,7 @@ use crate::lane::{
     EARLY_POLICY_HELPER, Lane, PLAN_JOB, expose_read_outputs, plan_job, policy_job,
     used_group_outputs, used_outputs,
 };
+use crate::mbx_steps::MBX_OUT_DIR_HELPER;
 use crate::plan_budget::{draft_guard, expose_selection, triggers};
 use crate::plan_tools::{mirror_step, tools_install, tools_restore, tools_save};
 use crate::required_job::{expose_in_single, gate_outputs};
@@ -192,6 +193,11 @@ pub(crate) fn mbx(facts: &RepoFacts, seed_gate: Option<Gate>) -> Vec<Step> {
     if facts.config.mbx_store != MbxStore::Shared {
         return Vec::new();
     }
+    let out_dirs = facts
+        .helper
+        .as_ref()
+        .is_some_and(|release| release.version().at_least(MBX_OUT_DIR_HELPER))
+        .then(|| step(StepKind::MbxOutDirs));
     let seed = facts
         .helper
         .as_ref()
@@ -200,7 +206,7 @@ pub(crate) fn mbx(facts: &RepoFacts, seed_gate: Option<Gate>) -> Vec<Step> {
             gate: seed_gate,
             ..step(StepKind::MbxSeed)
         });
-    [Some(step(StepKind::MbxStore)), seed]
+    [Some(step(StepKind::MbxStore)), out_dirs, seed]
         .into_iter()
         .flatten()
         .collect()
