@@ -121,6 +121,36 @@ fn declaration_reads_the_owner_layout_and_nothing_else() -> Result<(), Box<dyn s
             "[wrappers.cargo]\ncommand = \"sccache-wrap\"\n",
             false,
         ),
+        (
+            "wrapper by path",
+            "[wrappers.cargo]\ncommand = \"./bin/mbx\"\n",
+            true,
+        ),
+        (
+            "wrapper with arguments",
+            "[wrappers.cargo]\ncommand = \"mbx --x\"\n",
+            true,
+        ),
+        (
+            "wrapper that only starts like mbx",
+            "[wrappers.cargo]\ncommand = \"mbx-wrapper\"\n",
+            false,
+        ),
+        (
+            "option on another tool",
+            "[tools]\nnode = { version = \"24\", mr_boxington = true }\n",
+            true,
+        ),
+        (
+            "option in a list of requests",
+            "[tools]\nnode = [{ version = \"24\", mr_boxington = true }]\n",
+            true,
+        ),
+        (
+            "a list of versions without the option",
+            "[tools]\nrust = [\"1.100.0\"]\n",
+            false,
+        ),
         ("unreadable", "[tools\n", false),
     ] {
         let directory = std::env::temp_dir().join(format!(

@@ -3,7 +3,7 @@
 
 use std::path::Path;
 use toml::Table;
-use velnor_model::mbx_declaration;
+use velnor_model::{MbxRule, mbx_declaration};
 
 const CONFIGS: [&str; 6] = [
     "mise.toml",
@@ -24,5 +24,5 @@ pub fn declared_in(directory: &Path) -> bool {
                 .and_then(|text| text.parse::<Table>().ok())
         })
         .collect();
-    mbx_declaration(&tables).declared()
+    mbx_declaration(&tables, MbxRule::Wide).declared()
 }

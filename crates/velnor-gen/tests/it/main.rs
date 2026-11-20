@@ -141,6 +141,7 @@ mod lock_scope;
 mod macos_helper_lock;
 mod main_and_scheduled;
 mod mbx_default;
+mod mbx_provider;
 mod mbx_remote;
 mod merge_group_check;
 mod metadata_file;

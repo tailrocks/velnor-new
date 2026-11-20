@@ -5,7 +5,9 @@ use std::collections::BTreeMap;
 use std::fmt;
 
 use toml::Value;
-use velnor_model::{MBX_TOOL, MbxDeclaration, RepoFacts, RepoPath, ToolPins, mbx_declaration};
+use velnor_model::{
+    MBX_TOOL, MbxDeclaration, MbxRule, RepoFacts, RepoPath, ToolPins, mbx_declaration,
+};
 
 use crate::error::DetectError;
 use crate::mise::{MISE_CONFIGS, rust_tool};
@@ -99,6 +101,39 @@ fn mbx_with_extras(wrapper: &Value) -> bool {
     })
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Provider {
+    pub key: String,
+    pub path: RepoPath,
+}
+
+impl Provider {
+    pub(crate) fn write(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let Self { key, path } = self;
+        write!(
+            f,
+            "{path}: `{key}` names a second provider of {MBX_TOOL}, next to the `{MBX_TOOL}` pin; two tools could then provide `mbx`, and the generator checks only the exact `{MBX_TOOL}` pin. Remove `{key}`, or set `mbx = false` in the [cache] table of .velnor/rust-ci.toml to run cargo without mbx"
+        )
+    }
+}
+
+fn names_mbx(key: &str) -> bool {
+    key != MBX_TOOL && key.rsplit([':', '/']).next() == Some(MBX_TOOL)
+}
+
+fn second_provider(paths: &[&RepoPath], parsed: &[toml::Table]) -> Option<Provider> {
+    paths.iter().zip(parsed).find_map(|(path, config)| {
+        config
+            .get("tools")
+            .and_then(Value::as_table)
+            .and_then(|tools| tools.keys().find(|key| names_mbx(key)))
+            .map(|key| Provider {
+                key: key.clone(),
+                path: (*path).clone(),
+            })
+    })
+}
+
 pub(crate) fn pin_required(path: &RepoPath, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     write!(
         f,
@@ -183,12 +218,15 @@ pub fn check_mbx(
                 .map(|parsed| (config, parsed))
         })
         .unzip();
-    if let MbxDeclaration::Conflicting(conflict) = mbx_declaration(&parsed) {
+    if let MbxDeclaration::Conflicting(conflict) = mbx_declaration(&parsed, MbxRule::Strict) {
         return Err(DetectError::MbxConfigSplit(Split {
             key: conflict.key,
             first: paths[conflict.first].clone(),
             second: paths[conflict.second].clone(),
         }));
+    }
+    if let Some(provider) = second_provider(&paths, &parsed) {
+        return Err(DetectError::MbxSecondProvider(provider));
     }
     let rust = rust_tool(&facts.tools);
     let rust_option = rust.is_some_and(|name| {

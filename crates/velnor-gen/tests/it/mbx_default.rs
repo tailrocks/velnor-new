@@ -10,20 +10,23 @@ use crate::pipeline::{pin_helper, view, workflow};
 use crate::yaml_tree::document;
 
 const STORE: &str = "MBX_CACHE_DIR=$RUNNER_TEMP/mbx";
-const OPT_OUT: &[u8] = b"[cache]\nmbx = false\n";
-const NO_LAYOUT: &str =
+pub(crate) const OPT_OUT: &[u8] = b"[cache]\nmbx = false\n";
+pub(crate) const NO_LAYOUT: &str =
     "[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n";
-const PIN: &str = "mr-boxington = \"v1.30.0\"\n";
-const OPTION: &str = "rust = { version = \"1.99.1\", mr_boxington = true }\n";
-const WRAPPER: &str =
+pub(crate) const PIN: &str = "mr-boxington = \"v1.30.0\"\n";
+pub(crate) const OPTION: &str = "rust = { version = \"1.99.1\", mr_boxington = true }\n";
+pub(crate) const WRAPPER: &str =
     "\n[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n";
-const NEXTEST: &str = "\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n";
+pub(crate) const NEXTEST: &str = "\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n";
 
-fn with_mise(repo: RepoView, text: &str) -> Result<RepoView, Box<dyn std::error::Error>> {
+pub(crate) fn with_mise(
+    repo: RepoView,
+    text: &str,
+) -> Result<RepoView, Box<dyn std::error::Error>> {
     with_mises(repo, text, None)
 }
 
-fn with_mises(
+pub(crate) fn with_mises(
     mut repo: RepoView,
     text: &str,
     hidden: Option<&str>,
@@ -39,7 +42,10 @@ fn with_mises(
     Ok(repo)
 }
 
-fn pinned(config: Option<&[u8]>, version: &str) -> Result<RepoView, Box<dyn std::error::Error>> {
+pub(crate) fn pinned(
+    config: Option<&[u8]>,
+    version: &str,
+) -> Result<RepoView, Box<dyn std::error::Error>> {
     let mut repo = view(&["Cargo.toml"], config)?;
     pin_helper(&mut repo, version)?;
     Ok(repo)

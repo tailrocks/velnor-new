@@ -169,7 +169,7 @@ pub(crate) fn declares_mbx(mise_tomls: &[String]) -> bool {
         .iter()
         .filter_map(|text| text.parse::<Table>().ok())
         .collect();
-    velnor_model::mbx_declaration(&tables).declared()
+    velnor_model::mbx_declaration(&tables, velnor_model::MbxRule::Strict).declared()
 }
 
 pub(crate) fn check(

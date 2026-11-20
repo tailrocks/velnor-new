@@ -19,6 +19,7 @@ pub enum DetectError {
     MbxPinRequired { path: RepoPath },
     MbxLayout(crate::mbx_layout::Layout),
     MbxConfigSplit(crate::mbx_layout::Split),
+    MbxSecondProvider(crate::mbx_layout::Provider),
     RustPinRequired { channel: String, path: RepoPath },
     SameSlug { first: RepoPath, second: RepoPath },
     ToolchainConflict { file: String, mise: String },
@@ -151,6 +152,7 @@ impl fmt::Display for DetectError {
             Self::MbxPinRequired { path } => crate::mbx_layout::pin_required(path, f),
             Self::MbxLayout(layout) => layout.write(f),
             Self::MbxConfigSplit(split) => split.write(f),
+            Self::MbxSecondProvider(provider) => provider.write(f),
             Self::RustPinRequired { channel, path } => write!(
                 f,
                 "the Rust toolchain file names {channel}, and the generated jobs never let rustup install a toolchain on its own; pin rust = \"{channel}\" in {path}"
