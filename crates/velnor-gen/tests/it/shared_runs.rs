@@ -4,7 +4,7 @@
 use crate::facts::TestResult;
 use crate::newest_helper::newest_helper;
 use crate::pipeline::{pin_helper, view, workflow};
-use crate::yaml_tree::parse;
+use crate::yaml_tree::{Node, parse};
 
 const RESTORED: &str = "\"$VELNOR_EXEC\" restored --target-dir";
 
@@ -31,7 +31,7 @@ fn restored_runs(text: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> 
     for job in jobs.keys() {
         for step in jobs
             .at(&[job, "steps"])
-            .map(|steps| steps.items())
+            .map(Node::items)
             .unwrap_or_default()
         {
             if let Some(run) = step.get("run").and_then(|run| run.text())
