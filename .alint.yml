@@ -234,6 +234,18 @@ rules:
     paths:
       include:
         - "crates/**/src/**/*.rs"
-    pattern: '(?m)^[ \t]*//[/!][ \t]*(?:```|~~~)|(?m)^[ \t]*//[/!] {5,}\S|/\*!(?:[^*]|\*+[^*/])*?(?:```|~~~)|/\*\*(?:```|~~~|[^*/](?:[^*]|\*+[^*/])*?(?:```|~~~))|#!?\[doc\s*=[^\]]*(?:```|~~~|include_str)|\bdoc\s*=\s*include_str!'
+    pattern: '(?m)^[ \t]*//[/!][ \t]*(?:```|~~~)|(?m)^[ \t]*//[/!] {5,}\S|#!?\[doc\s*=[^\]]*(?:```|~~~|include_str)|\bdoc\s*=\s*include_str!'
     level: error
     message: "Doctests are off by decision (Cargo `doctest = false`). A doctest would bring back the MBX `rustdoc` bypass in every CI run. Do not add a doc fence, an indented doc code block or a `#[doc]` include; a decision is needed first."
+
+  - id: no-doctests-block
+    kind: command
+    paths:
+      include:
+        - "crates/**/src/**/*.rs"
+    command:
+      - python3
+      - scripts/no-doctests-block.py
+      - "{path}"
+    level: error
+    message: "Doctests are off by decision (Cargo `doctest = false`). A block doc comment (`/** */` or `/*! */`) must not hold a doc fence (``` or ~~~), including one after a nested `/* */`. The check reads Rust tokens, so string literals are not doc comments. Do not add one; a decision is needed first."
