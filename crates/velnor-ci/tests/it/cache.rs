@@ -299,3 +299,36 @@ fn a_saved_target_path_with_a_line_break_stays_on_one_line() {
         "{stdout}"
     );
 }
+
+#[test]
+fn a_refused_manifest_path_with_a_line_break_stays_on_one_line() {
+    let repo = Checkout::new("decide-refused-path");
+    seed(&repo);
+    let manifest = "dir\n::stop-commands::token/Cargo.toml";
+    let temp = repo.root().join("runner-temp");
+    fs::create_dir_all(&temp).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::write(temp.join("velnor-run.log"), COMPILED).unwrap_or_else(|e| unreachable!("{e}"));
+    let outputs = repo.root().join("github-output");
+    let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        .args(["cache", "decide", "--target-dir", "target", "--manifest-path"])
+        .arg(manifest)
+        .env("RUNNER_TEMP", &temp)
+        .env("GITHUB_OUTPUT", &outputs)
+        .current_dir(repo.root())
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(
+        fs::read_to_string(&outputs).unwrap_or_default(),
+        "save=false\nsources=false\n"
+    );
+    assert!(stdout.contains("not proven public"), "{stdout}");
+    assert!(
+        stdout
+            .lines()
+            .all(|line| !line.starts_with("::stop-commands::")),
+        "{stdout}"
+    );
+    assert!(stdout.contains("dir%0A::stop-commands::token"), "{stdout}");
+}
