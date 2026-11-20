@@ -7,7 +7,7 @@ use crate::error::HostError;
 
 use super::{ColumnInfo, read_table_columns};
 
-const TABLES: [&str; 9] = [
+const TABLES: &[&str] = &[
     "host_storage_profiles",
     "host_storage_profile_publication",
     "host_storage_profile_pools",
