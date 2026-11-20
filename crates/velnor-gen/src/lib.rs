@@ -33,6 +33,17 @@ use crate::plan_render::plan_and_render;
 
 pub const COMPATIBLE_HELPER_SERIES: (u64, u64) = (0, 1);
 pub const HELPER_MINIMUM: (u64, u64, u64) = (0, 1, 81);
+pub const TAG_PUSH_HELPER: (u64, u64, u64) = (0, 1, 98);
+pub const BUDGET_HELPER: (u64, u64, u64) = (0, 1, 92);
+/// The first release whose `velnor-ci` accepts the `test_lane` key (and runs `lane-guard`).
+pub const TEST_LANE_HELPER: (u64, u64, u64) = (0, 1, 93);
+/// The first release whose `velnor-ci` accepts `job` in a `[[test_lane]]` table.
+// helper-gate: first in tools-v0.1.107 via 9d5c60385d
+pub const TEST_LANE_JOB_HELPER: (u64, u64, u64) = (0, 1, 107);
+/// The first release whose `velnor-ci` accepts `all_features` and `no_default_features`
+/// in a `[[test_lane]]` table.
+// First released in tools-v0.1.108 (not tagged yet when this gate was written).
+pub const TEST_LANE_FLAGS_HELPER: (u64, u64, u64) = (0, 1, 108);
 pub const SPARSE_HINT_HELPER: (u64, u64, u64) = (0, 1, 103);
 
 pub fn generated_files(view: &RepoView) -> Result<BTreeMap<RepoPath, String>, GenerateError> {
