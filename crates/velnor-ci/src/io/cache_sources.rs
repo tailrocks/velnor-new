@@ -4,7 +4,8 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use velnor_rust::{LockAdmission, PinnedGit, merge_pinned};
+use velnor_model::GitRepository;
+use velnor_rust::{CONFIG_PATH, LockAdmission, PinnedGit, merge_pinned};
 
 use crate::error::CiError;
 use crate::public_probe::{Deadline, VERDICTS_VARIABLE, Verdicts};
@@ -77,6 +78,27 @@ pub(super) fn refusal(
             }
         }
     }
+    let Ok((declared, undeclared)) = declared_only(root, git) else {
+        return Ok(refused(&root.join(CONFIG_PATH.as_str())));
+    };
+    if !undeclared.is_empty() {
+        return Ok(Admission {
+            refusal: Some(
+                undeclared
+                    .iter()
+                    .map(|pinned| {
+                        format!(
+                            "::notice::base caches are not saved because git dependency github.com/{}/{} is not declared in [public_sources], so it is not proven public\n",
+                            pinned.repository.owner, pinned.repository.name
+                        )
+                    })
+                    .fold(String::new(), |all, line| all + &line),
+            ),
+            log: String::new(),
+            mismatch: None,
+        });
+    }
+    let git = declared;
     let verdicts = std::env::var(VERDICTS_VARIABLE)
         .ok()
         .and_then(|text| Verdicts::parse(&text));
@@ -87,6 +109,35 @@ pub(super) fn refusal(
         verdicts.as_ref(),
         deadline,
     ))
+}
+
+pub(super) struct UnreadableDeclaration;
+
+pub(super) fn declared_only(
+    root: &Path,
+    found: Vec<PinnedGit>,
+) -> Result<(Vec<PinnedGit>, Vec<PinnedGit>), UnreadableDeclaration> {
+    if found.is_empty() {
+        return Ok((found, Vec::new()));
+    }
+    let declared = declared_repositories(root)?;
+    Ok(found.into_iter().partition(|pinned| {
+        declared
+            .iter()
+            .any(|known| known.matches(&pinned.repository.owner, &pinned.repository.name))
+    }))
+}
+
+fn declared_repositories(root: &Path) -> Result<Vec<GitRepository>, UnreadableDeclaration> {
+    let path = root.join(CONFIG_PATH.as_str());
+    match fs::symlink_metadata(&path) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
+        Ok(meta) if meta.is_file() => fs::read(&path)
+            .ok()
+            .and_then(|bytes| velnor_rust::declared_public_sources(&bytes).ok())
+            .ok_or(UnreadableDeclaration),
+        _ => Err(UnreadableDeclaration),
+    }
 }
 
 pub(super) fn describe(credentials: Credentials) -> &'static str {

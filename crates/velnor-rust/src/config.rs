@@ -5,8 +5,8 @@ use serde::Deserialize;
 use std::collections::BTreeMap;
 
 use velnor_model::{
-    CheckoutScope, CiDebugInfo, InputRule, PackageName, PathGlob, RepoPath, RunnerLabel,
-    RustCiConfig, SpeedBudget, TargetName,
+    CheckoutScope, CiDebugInfo, GitRepository, InputRule, PackageName, PathGlob, RepoPath,
+    RunnerLabel, RustCiConfig, SpeedBudget, TargetName,
 };
 
 use crate::config_events::{docs_run, on_main};
@@ -383,6 +383,10 @@ pub fn ci_debuginfo(
         || Ok(RustCiConfig::default().ci_debuginfo),
         |bytes| parse(bytes).map(|config| config.ci_debuginfo),
     )
+}
+
+pub fn declared_public_sources(bytes: &[u8]) -> Result<Vec<GitRepository>, DetectError> {
+    parse(bytes).map(|config| config.public_sources.map_or_else(Vec::new, |s| s.git))
 }
 
 pub fn budget(bytes: &[u8]) -> Result<Option<SpeedBudget>, DetectError> {

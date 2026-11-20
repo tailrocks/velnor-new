@@ -5,6 +5,7 @@ use std::fs;
 use std::process::{Command, Output};
 use std::time::{Duration, Instant};
 
+use super::public_declared::{declare, repositories};
 use super::public_git::{
     OTHER_SHA, Reply, SHA, decide, git, lock, public, refused, reply, serve, serve_tree,
 };
@@ -28,13 +29,21 @@ fn run(locks: &[(&str, String)], api: &str, command: &[&str], extra: &[&str]) ->
     fs::create_dir_all(&temp).unwrap_or_else(|e| unreachable!("{e}"));
     fs::write(temp.join("velnor-run.log"), COMPILED).unwrap_or_else(|e| unreachable!("{e}"));
     let mut args: Vec<String> = Vec::new();
+    let mut declared: Vec<String> = Vec::new();
     for (directory, text) in locks {
         repo.write_unstaged(&format!("{directory}Cargo.lock"), text);
+        declared.extend(text.lines().filter_map(|line| {
+            let source = line.strip_prefix("source = \"")?.strip_suffix('"')?;
+            repositories(&[("", source.to_owned())]).pop()
+        }));
         args.extend([
             "--manifest-path".to_owned(),
             format!("{directory}Cargo.toml"),
         ]);
     }
+    declared.sort_by_key(|name| name.to_ascii_lowercase());
+    declared.dedup_by(|a, b| a.eq_ignore_ascii_case(b));
+    declare(&repo, &declared);
     let outputs = repo.root().join("github-output");
     let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
         .arg("cache")

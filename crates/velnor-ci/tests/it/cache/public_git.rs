@@ -9,6 +9,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
+use super::public_declared::{declare, repositories};
 use super::support::{COMPILED, seed};
 use crate::io::Repo as Checkout;
 
@@ -141,9 +142,19 @@ pub(super) fn decide_with(
     api: &str,
     env: &[(&str, &str)],
 ) -> (Output, String) {
+    decide_declaring(sources, &repositories(sources), api, env)
+}
+
+pub(super) fn decide_declaring(
+    sources: &[(&str, String)],
+    declared: &[String],
+    api: &str,
+    env: &[(&str, &str)],
+) -> (Output, String) {
     let repo = Checkout::new("decide-public-git");
     seed(&repo);
     repo.write_unstaged("Cargo.lock", &lock(sources));
+    declare(&repo, declared);
     let temp = repo.root().join("runner-temp");
     fs::create_dir_all(&temp).unwrap_or_else(|e| unreachable!("{e}"));
     fs::write(temp.join("velnor-run.log"), COMPILED).unwrap_or_else(|e| unreachable!("{e}"));

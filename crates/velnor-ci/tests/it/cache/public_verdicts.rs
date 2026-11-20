@@ -5,6 +5,7 @@ use std::fs;
 use std::net::TcpListener;
 use std::process::{Command, Output};
 
+use super::public_declared::{declare, repositories};
 use super::public_git::{
     OTHER_SHA, SHA, TOKEN, decide_with, git, lock, public, refused, reply, serve,
 };
@@ -14,9 +15,19 @@ use crate::io::Repo as Checkout;
 const VERDICTS: &str = "VELNOR_PUBLIC_VERDICTS";
 
 fn public_sources(sources: &[(&str, String)], api: &str, env: &[(&str, &str)]) -> (Output, String) {
+    declaring(sources, &repositories(sources), api, env)
+}
+
+fn declaring(
+    sources: &[(&str, String)],
+    declared: &[String],
+    api: &str,
+    env: &[(&str, &str)],
+) -> (Output, String) {
     let repo = Checkout::new("public-sources");
     seed(&repo);
     repo.write_unstaged("Cargo.lock", &lock(sources));
+    declare(&repo, declared);
     let outputs = repo.root().join("github-output");
     let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
         .args(["cache", "public-sources", "--public-probe-api", api])
@@ -94,6 +105,26 @@ fn the_run_wide_step_does_not_look_up_a_source_decide_would_refuse() {
     assert!(output.status.success(), "{output:?}");
     assert_eq!(written, "verdicts={}\n");
     assert_eq!(mock.requests(), Vec::<String>::new());
+}
+
+#[test]
+fn the_run_wide_step_never_looks_up_an_undeclared_repository() {
+    let mock = serve(public("acme/extra-lib"));
+    let sources = [
+        ("dep", git("acme/shared-lib", SHA)),
+        ("extra", git("acme/extra-lib", SHA)),
+    ];
+    let declared = ["acme/shared-lib".to_owned()];
+    let (output, written) = declaring(&sources, &declared, &mock.url, &[]);
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(written, "verdicts={\"acme/shared-lib\":false}\n");
+    let requests = mock.requests();
+    assert_eq!(requests.len(), 1, "{requests:?}");
+    assert!(
+        requests[0].contains("/repos/acme/shared-lib"),
+        "{}",
+        requests[0]
+    );
 }
 
 fn with_verdicts<'a>(text: &'a str, token: &'a [(&'a str, &'a str)]) -> Vec<(&'a str, &'a str)> {

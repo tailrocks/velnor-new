@@ -7,6 +7,7 @@ use std::process::Command;
 use crate::io::Repo as Checkout;
 
 mod born;
+mod public_declared;
 mod public_git;
 mod public_guards;
 mod public_verdicts;

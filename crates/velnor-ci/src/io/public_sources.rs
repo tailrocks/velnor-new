@@ -17,7 +17,9 @@ pub(super) fn run(args: &PublicSourcesArgs) -> Result<String, CiError> {
     let deadline = Deadline::after(std::time::Duration::from_secs(args.public_probe_seconds));
     let mut verdicts = Verdicts::default();
     let mut log: Vec<String> = Vec::new();
-    for pinned in repositories(&root, &manifests) {
+    let (declared, _) = super::cache_sources::declared_only(&root, repositories(&root, &manifests))
+        .unwrap_or_default();
+    for pinned in declared {
         let repository = pinned.repository.clone();
         let name = format!("github.com/{}/{}", repository.owner, repository.name);
         let public = match super::public_repo::verify(

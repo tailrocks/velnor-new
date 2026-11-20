@@ -12,7 +12,7 @@ pub use crate::classify::is_workflow_file;
 pub use crate::compat::{
     BUILD_DRIVER, COMPAT_SCHEMA, CompatInputs, WRAPPED_BUILD_DRIVER, build_driver, compat,
 };
-pub use crate::config::{CONFIG_PATH, budget, ci_debuginfo};
+pub use crate::config::{CONFIG_PATH, budget, ci_debuginfo, declared_public_sources};
 pub use crate::config_budget::BUDGET_KEYS;
 pub use crate::config_keys::KEYS;
 pub use crate::credentials::reject_release_credential_hooks;
