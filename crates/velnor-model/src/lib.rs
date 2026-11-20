@@ -5,6 +5,7 @@ mod budget_mode;
 mod cache;
 mod cache_layout;
 mod cache_outputs;
+mod cargo_build;
 mod cron;
 mod helper;
 mod hosted;

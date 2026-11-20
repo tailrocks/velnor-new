@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    CacheKey, CargoCommand, GateNeed, HelperCommand, HelperRelease, Job, MERGE_GROUP_SKIP_OUTPUT,
+    CacheKey, CargoCommand, GateNeed, HelperCommand, Job, MERGE_GROUP_SKIP_OUTPUT,
     MERGE_GROUP_STEP, Step, StepKind, TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT,
     TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, WorkflowPlan, group_output_name,
 };
@@ -21,8 +21,11 @@ use crate::gate::{
     plan_source, sources_step, verdict_step,
 };
 use crate::helper_steps::{inputs_step, restore_inputs_step, restored_targets_step};
+pub(crate) use crate::install_steps::install_helper;
+use crate::install_steps::{install_mise, install_tools};
 use crate::permission_pairs;
-use crate::rules::{RenderedJob, RenderedStep, SETUP_VELNOR_ACTION, Value};
+use crate::rules::{RenderedJob, RenderedStep, Value};
+use crate::save_gate::SaveGate;
 use crate::tests::Tests;
 
 pub(crate) const PREPARE_STEP: &str = "prepare";
@@ -138,19 +141,35 @@ fn job_steps(
     tests: &Tests,
     lane: CargoLane,
 ) -> Vec<RenderedStep> {
+    let gate = SaveGate::of(job);
     job.steps
         .iter()
-        .scan(false, |replanned, step| {
+        .enumerate()
+        .scan(false, |replanned, (index, step)| {
             let setup = Setup::of(restores, *replanned);
             *replanned |= step.kind == StepKind::Helper(HelperCommand::PlanFull);
+            let around = Around {
+                id: gate.id(index),
+                saved_after: gate.required(),
+                job_name: job.name.as_deref(),
+            };
             Some(crate::base_steps::audited_save(
                 job,
                 step,
-                rendered_steps(step, setup, audit, tests, lane, job.name.as_deref()),
+                rendered_steps(step, setup, audit, tests, lane, around),
             ))
         })
         .flatten()
         .collect()
+}
+
+/// What the job around a step adds to it.
+#[derive(Clone, Copy)]
+struct Around<'a> {
+    /// The id a compile or audit step gets so a save can wait for it.
+    id: Option<&'a str>,
+    saved_after: &'a [String],
+    job_name: Option<&'a str>,
 }
 
 fn rendered_steps(
@@ -159,8 +178,9 @@ fn rendered_steps(
     audit: bool,
     tests: &Tests,
     lane: CargoLane,
-    job_name: Option<&str>,
+    around: Around<'_>,
 ) -> Vec<RenderedStep> {
+    let job_name = around.job_name;
     let mut rendered = Vec::new();
     if audit && step.kind == StepKind::Cargo(CargoCommand::Doctest) {
         rendered.push(cargo_step(
@@ -171,7 +191,11 @@ fn rendered_steps(
             None,
         ));
     }
-    rendered.push(step_body(step, audit, tests, lane));
+    let mut body = step_body(step, audit, tests, lane);
+    if body.id.is_none() {
+        body.id = around.id.map(str::to_owned);
+    }
+    rendered.push(body);
     if let StepKind::SourcesFetchAll { manifests, .. } = &step.kind {
         rendered.extend(sources_fetch_all_rest(manifests, lane.cache_debug));
     }
@@ -199,7 +223,14 @@ fn rendered_steps(
         );
         body.condition = all_conditions(
             body.condition.take(),
-            condition(step.when, step.gate.as_ref(), setup, step.pr, &extra),
+            condition(
+                step.when,
+                step.gate.as_ref(),
+                setup,
+                step.pr,
+                &extra,
+                around.saved_after,
+            ),
         );
         body.working_directory = step.directory.as_ref().map(ToString::to_string);
         if matches!(step.kind, StepKind::InputsSave { .. })
@@ -226,6 +257,20 @@ fn rendered_steps(
         .and_then(|saved| crate::cache_upload::record(&step.kind, saved))
     {
         rendered.push(verify);
+    }
+    if let Some(note) = rendered.first().and_then(|saved| {
+        crate::cache_upload::after_test_failure(&step.kind, saved, tests.failed(), |extra| {
+            condition(
+                velnor_model::When::NotCancelled,
+                step.gate.as_ref(),
+                setup,
+                step.pr,
+                extra,
+                &[],
+            )
+        })
+    }) {
+        rendered.push(note);
     }
     rendered
 }
@@ -326,35 +371,6 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
     }
 }
 
-fn install_tools(only: Option<&str>) -> RenderedStep {
-    let mut with = vec![
-        ("version".to_owned(), Value::Text(MISE_VERSION.to_owned())),
-        ("cache".to_owned(), Value::Bool(false)),
-    ];
-    if let Some(tool) = only {
-        with.push(("install_args".to_owned(), Value::Text(tool.to_owned())));
-    }
-    RenderedStep {
-        name: "Install tools".to_owned(),
-        uses: Some(MISE.to_owned()),
-        with,
-        ..RenderedStep::default()
-    }
-}
-
-fn install_mise() -> RenderedStep {
-    RenderedStep {
-        name: "Install mise".to_owned(),
-        uses: Some(MISE.to_owned()),
-        with: vec![
-            ("version".to_owned(), Value::Text(MISE_VERSION.to_owned())),
-            ("install".to_owned(), Value::Bool(false)),
-            ("cache".to_owned(), Value::Bool(false)),
-        ],
-        ..RenderedStep::default()
-    }
-}
-
 fn cache_step(action: &str, verb: &str, key: &CacheKey, fallbacks: bool) -> RenderedStep {
     let rendered = render_key(key);
     let paths: Vec<String> = key.paths().iter().map(path_text).collect();
@@ -376,24 +392,6 @@ fn cache_step(action: &str, verb: &str, key: &CacheKey, fallbacks: bool) -> Rend
         name: format!("{verb} the {} cache", key.family()),
         uses: Some(action.to_owned()),
         continue_on_error: !fallbacks && crate::cache_upload::key_id(key).is_some(),
-        with,
-        ..RenderedStep::default()
-    }
-}
-
-pub(crate) fn install_helper(release: &HelperRelease) -> RenderedStep {
-    let version = release.version();
-    let mut with = vec![("version".to_owned(), Value::Text(version.to_string()))];
-    with.extend(release.digests().iter().map(|(platform, digest)| {
-        (
-            format!("sha256-{}", platform.file_suffix()),
-            Value::Text(digest.to_string()),
-        )
-    }));
-    RenderedStep {
-        name: format!("Install velnor-ci {version}"),
-        uses: Some(format!("{SETUP_VELNOR_ACTION}@{}", release.action())),
-        uses_comment: Some(version.release_tag()),
         with,
         ..RenderedStep::default()
     }
