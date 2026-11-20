@@ -11,7 +11,7 @@ use super::fetch::Trusted;
 
 const PROXY: &str = "rustup";
 const TOOLCHAIN_VARIABLE: &str = "RUSTUP_TOOLCHAIN";
-const PASSED: [&str; 3] = ["PATH", "HOME", "RUSTUP_HOME"];
+const PASSED: &[&str] = &["PATH", "HOME", "RUSTUP_HOME"];
 
 pub(super) struct Pinned {
     pub(super) name: OsString,
@@ -43,7 +43,7 @@ pub(super) fn pin(
     let rustup = |arguments: [&str; 2], toolchain: Option<&str>| {
         let mut command = Command::new(&resolved);
         command.current_dir(&neutral).env_clear().args(arguments);
-        for name in PASSED {
+        for name in PASSED.iter().copied() {
             if let Some(value) = value(name) {
                 command.env(name, value);
             }
