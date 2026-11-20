@@ -259,3 +259,19 @@ fn a_plain_path_input_covers_everything_below_it_and_a_dead_list_runs_the_lint()
     assert!(decide("src/lib.rs", &changed(&["src/lib.rs"])?)?);
     Ok(())
 }
+
+#[test]
+fn a_file_named_like_the_prefix_of_a_trailing_glob_is_not_a_tracked_input() -> TestResult {
+    let config = "[[lint]]\nkind = 'mise-task'\nid = 'hk'\ntask = 'lint-generator-samples'\ninputs = ['cfg/**']\n";
+    let facts = detect(&repo(&["Cargo.toml"], config)?)?;
+    let paths = changed(&["src/lib.rs"])?;
+    let runs = lint_runs(
+        &facts,
+        EventKind::PullRequest,
+        Some(&paths),
+        &changed(&["cfg", "src/lib.rs"])?,
+        &BTreeSet::new(),
+    );
+    assert_eq!(runs.values().copied().collect::<Vec<_>>(), [true]);
+    Ok(())
+}

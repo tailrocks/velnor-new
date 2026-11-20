@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
@@ -38,13 +39,11 @@ fn runs(
     let Some(changed) = changed.filter(|_| event == EventKind::PullRequest) else {
         return true;
     };
-    if !has_tracked_input(lint, tracked, symlinks) {
-        return true;
-    }
     symlinks
         .iter()
         .chain(changed)
         .any(|path| reached(lint, path))
+        || !has_tracked_input(lint, tracked, symlinks)
 }
 
 fn has_tracked_input(
@@ -111,24 +110,27 @@ fn covers(glob: &PathGlob, path: &RepoPath) -> bool {
 }
 
 fn matches(glob: &PathGlob, path: &RepoPath, ancestors: bool) -> bool {
-    let pattern: Vec<&str> = glob.as_str().split('/').collect();
-    let segments: Vec<&str> = path.as_str().split('/').collect();
-    let trailing = pattern.len() > 1 && pattern.last() == Some(&"**");
+    let text = glob.as_str();
+    let trailing = text.ends_with("/**");
     let fixed = if trailing {
-        &pattern[..pattern.len() - 1]
+        &text[..text.len() - "/**".len()]
     } else {
-        &pattern[..]
+        text
     };
-    let open = trailing || !glob.as_str().contains('*');
-    let shared = fixed.len().min(segments.len());
-    let agrees = fixed[..shared]
-        .iter()
-        .zip(&segments)
-        .all(|(want, got)| want == got || *want == "*");
+    let open = trailing || !text.contains('*');
+    let (want, got) = (depth(fixed), depth(path.as_str()));
+    let agrees = fixed
+        .split('/')
+        .zip(path.as_str().split('/'))
+        .all(|(want, got)| want == got || want == "*");
     agrees
-        && if segments.len() < fixed.len() {
-            ancestors
-        } else {
-            segments.len() == fixed.len() || open
+        && match got.cmp(&want) {
+            Ordering::Less => ancestors,
+            Ordering::Equal => ancestors || !trailing,
+            Ordering::Greater => open,
         }
+}
+
+fn depth(path: &str) -> usize {
+    path.matches('/').count() + 1
 }
