@@ -13,6 +13,8 @@ use std::process::ExitCode;
 use velnor_archive_guard::owned_archive_guard;
 
 const FINGERPRINT: &str = env!("VELNOR_ARCHIVE_GUARD_FINGERPRINT");
+const UNWATCHED_ROOT: &str = env!("VELNOR_ARCHIVE_GUARD_ROOT");
+const UNWATCHED_INPUTS: &str = env!("VELNOR_ARCHIVE_GUARD_UNWATCHED");
 
 fn main() -> ExitCode {
     match run() {
@@ -35,6 +37,7 @@ fn run() -> Result<(), String> {
         if arguments.next().is_some() {
             return Err("unexpected archive guard argument".to_owned());
         }
+        velnor_archive_guard::verify_unwatched_inputs(UNWATCHED_ROOT, UNWATCHED_INPUTS)?;
         println!("{FINGERPRINT}");
         return Ok(());
     }

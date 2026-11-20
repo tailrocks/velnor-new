@@ -4,10 +4,12 @@
 use crate::io::Repo;
 use std::fs;
 use std::process::{Command, Output};
-use velnor_test_support::{real_cargo, real_cargo_str};
+use velnor_test_support::real_cargo_str;
 
 fn helper(repo: &Repo, args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+    let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
+    velnor_test_support::keep_mise_cargo_home(&mut command);
+    command
         .args(args)
         .env("RUNNER_TEMP", repo.root().join("temp"))
         .env("CARGO_TERM_COLOR", "never")
@@ -15,7 +17,6 @@ fn helper(repo: &Repo, args: &[&str]) -> Output {
         .env("CARGO_HOME", repo.root().join("cargo-home"))
         .env_remove("CARGO_TARGET_DIR")
         .env_remove("RUSTC_WRAPPER")
-        .env("RUSTC", real_cargo().with_file_name("rustc"))
         .current_dir(repo.root())
         .output()
         .unwrap_or_else(|e| unreachable!("{e}"))

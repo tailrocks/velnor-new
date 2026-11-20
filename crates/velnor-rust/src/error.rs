@@ -57,6 +57,7 @@ pub enum Reason {
     UnknownLockedPackage(String),
     UnknownRoot(RepoPath),
     UnknownTestSetupRoot(String),
+    UnknownRootTimeoutRoot(String),
     Hosting(crate::config_hosting::HostingError),
     DuplicateGroup(String),
     GroupRootTwice {
@@ -71,6 +72,10 @@ pub enum Reason {
     UnknownTestLaneRoot(String),
     TestLaneWithoutNextest(String),
     UnknownTestLanePackage(String),
+    TestLaneFeatureConflict {
+        first: &'static str,
+        second: &'static str,
+    },
     Lint(crate::lint_error::LintFault),
     LintDuplicate(String),
     LintKeyForeign {
@@ -80,6 +85,7 @@ pub enum Reason {
     UnknownTestGroupRoot(String),
     TestGroupWithoutNextest(String),
     TestGroupFilter(String),
+    TestGroupRestoreWithoutCargo(String),
     TestGroupsWithPrivateSources,
     PrCiWithSkipDraft,
     RustdocflagsString,

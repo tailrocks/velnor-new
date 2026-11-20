@@ -16,9 +16,9 @@ use crate::yaml_tree::{Node, parse};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
-const FAMILY: &str = "family_tag = \"tools-v{{ version }}\"\nroots = [\".\", \"tools\"]\n[[binaries]]\npackage = \"app\"\n[[binaries]]\npackage = \"tools\"\nplatforms = [\"linux-x64\", \"macos-arm64\"]\n";
+pub(crate) const FAMILY: &str = "family_tag = \"tools-v{{ version }}\"\nroots = [\".\", \"tools\"]\n[[binaries]]\npackage = \"app\"\n[[binaries]]\npackage = \"tools\"\nplatforms = [\"linux-x64\", \"macos-arm64\"]\n";
 
-fn release_plz(root: &Root, release: bool) -> String {
+pub(crate) fn release_plz(root: &Root, release: bool) -> String {
     release_plz_tagged(root, release, "{{ package }}-v{{ version }}")
 }
 
@@ -43,8 +43,7 @@ fn render_family_tagged(
     app_tag: &str,
 ) -> Result<Result<Node, GenerateError>, Box<dyn Error>> {
     let mut view = release_view(&[APP, TOOLS], Some(config))?;
-    view.files
-        .insert(LOCK_PATH, LOCK.replace("0.1.81", "0.1.85").into_bytes());
+    crate::release_fixture::pin_at_least(&mut view, "0.1.85")?;
     view.files.insert(
         RepoPath::new("release-plz.toml")?,
         release_plz_tagged(&APP, release, app_tag).into_bytes(),
@@ -195,7 +194,7 @@ fn family_tag_needs_a_helper_that_knows_the_command() -> TestResult {
     }
     assert!(matches!(
         expected_release(&view),
-        Err(GenerateError::FamilyTagHelperTooOld(_))
+        Err(GenerateError::ConfigKeyHelperTooOld { .. })
     ));
     Ok(())
 }

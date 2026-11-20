@@ -4,7 +4,7 @@
 use std::error::Error;
 
 use clap::Parser;
-use velnor_ci::cli::{Cli, Command};
+use velnor_ci::cli::{Cli, Command, LaneGuardArgs};
 use velnor_gen::expected_files;
 use velnor_model::{
     PackageName, RepoPath, RepoView, RustMetadata, RustPackage, Target, TargetKind, TargetName,
@@ -116,8 +116,47 @@ fn the_generated_step_parses_with_this_cli() -> TestResult {
     let Command::LaneGuard(args) = cli.command else {
         return Err(run.into());
     };
-    assert_eq!(args.features, "local-mode,extra");
+    assert_eq!(args.features.as_deref(), Some("local-mode,extra"));
     assert_eq!(args.filter, "test(~local::) or binary(it's)");
     assert_eq!(args.except_binary.len(), 0);
+    Ok(())
+}
+
+/// The lane-guard arguments the generated step of `config` passes to `velnor-ci`.
+fn guard_args(helper: &str, config: &str) -> Result<LaneGuardArgs, Box<dyn Error>> {
+    let files = expected_files(&view(helper, config)?)?;
+    let text = files
+        .get(&RepoPath::new(WORKFLOW)?)
+        .ok_or("the workflow was not rendered")?;
+    let run = text
+        .lines()
+        .find(|line| line.contains("velnor-ci lane-guard"))
+        .and_then(|line| line.trim().strip_prefix("run: '"))
+        .and_then(|rest| rest.strip_suffix('\''))
+        .ok_or("no lane-guard step")?
+        .replace("''", "'");
+    let command = run.strip_prefix(LAUNCHER).ok_or(run.as_str())?;
+    let cli = Cli::try_parse_from(shell_words(command))?;
+    let Command::LaneGuard(args) = cli.command else {
+        return Err(run.into());
+    };
+    Ok(args)
+}
+
+#[test]
+fn the_generated_guard_step_passes_the_all_features_flag() -> TestResult {
+    let config = "[[test_lane]]\nroot = '.'\nall_features = true\npackages = ['package']\nfilter = 'test(~local::)'\n";
+    let args = guard_args("0.1.108", config)?;
+    assert!(args.all_features && !args.no_default_features, "{args:?}");
+    assert_eq!(args.features, None);
+    Ok(())
+}
+
+#[test]
+fn the_generated_guard_step_passes_the_no_default_flag_with_its_features() -> TestResult {
+    let config = "[[test_lane]]\nroot = '.'\nfeatures = ['local-mode']\nno_default_features = true\npackages = ['package']\nfilter = 'test(~local::)'\n";
+    let args = guard_args("0.1.108", config)?;
+    assert!(!args.all_features && args.no_default_features, "{args:?}");
+    assert_eq!(args.features.as_deref(), Some("local-mode"));
     Ok(())
 }

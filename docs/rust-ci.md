@@ -1,6 +1,6 @@
 # How Velnor keeps Rust CI fast
 
-This page is for a project that runs `velnor-gen`. It says what the generated workflow does and which setting changes it. Every setting lives in `.velnor/rust-ci.toml`. The full reference is [`generator/CONFIG.md`](../generator/CONFIG.md), the exact cache keys are in [`rust-ci-cache-keys.md`](rust-ci-cache-keys.md), and the promises and targets are in [`goals.md`](goals.md).
+This page is for a project that runs `velnor-gen`. It says what the generated workflow does and which setting changes it. Every setting lives in `.velnor/rust-ci.toml`. The full reference is [`generator/CONFIG.md`](../generator/CONFIG.md), the exact cache keys are in [`rust-ci-cache-keys.md`](rust-ci-cache-keys.md), and the promises and targets are in [`goals.md`](goals.md). A project that moves from the velnor-actions engine starts with [`migrating-to-velnor-gen.md`](migrating-to-velnor-gen.md).
 
 `velnor-gen generate` writes `.github/workflows/rust-ci.yml` and `.velnor/rust-metadata.json`. `velnor-gen check` exits 1 when either file is out of date. Generation needs a pinned helper: `velnor-gen pin-helper <version>` writes `.velnor/rust-ci.lock` in the `--root` directory (the one that holds `.velnor/`), and stages it only when that directory is itself a git repository root. Every decision at run time is made by one program, `velnor-ci`, so each generated `run:` step is one command.
 
@@ -111,13 +111,16 @@ Set the `budget` table (see Settings) to turn four of these into a check. The `r
 
 Every Rust build and test runs through mise and mbx. `mise.toml` sets `[wrappers.cargo] command = "mbx"`, so `cargo` on `PATH` is the mise wrapper that runs mbx, and mbx keeps the compiler results in its store. Do not run `~/.cargo/bin/cargo` or the rustup toolchain directly.
 
-Three exceptions are allowed. Nothing else may skip mbx.
+Four exceptions are allowed. Nothing else may skip mbx.
 
 1. **Token fetch.** The `velnor-ci fetch` step runs the real `cargo fetch --locked` for each Cargo root, with the private token in the environment of that one command. It never runs a mise shim or a command wrapper, so the token never reaches a wrapper from the repository or `PATH`. The fetch downloads and does not compile, so mbx has nothing to cache.
 2. **Bootstrap of mbx and mise.** Building mise and mbx from source (`scripts/build-owned-tool.py`) uses the pinned official mbx release, checked by digest, as its cargo driver. A tool cannot be its own compiler wrapper while it is being built.
 3. **Rustdoc and doctests.** `cargo doc` and doctests run without mbx, because mbx cannot cache them yet. This is accepted for now and is revisited when mbx caches them.
+4. **Release-plz `cargo package` and `cargo publish`.** The `release_pr` and `tag` jobs run release-plz, which runs `cargo package` and `cargo publish` itself, without mbx and without `jdx/mise-action`. Both jobs hold the release App token, and the generator rule `MiseActionInTokenJob` forbids mise in a job that holds a token, so a repository-declared cargo wrapper must not run there. Token safety wins over mbx for these two jobs. Build jobs hold no token and do run through mise and mbx.
 
-No script may add a fourth exception. `scripts/build-owned-archive-guard.sh` builds its guard through the repository's mise and mbx, with a fresh private mbx store per run. `scripts/local-cargo.sh` was removed: it called rustup's cargo directly and only its own test used it. Exceptions 1 and 3 do not build mbx or mise, so the bootstrap rule does not cover them; the owner must decide whether they stay.
+**Release builds always use a fresh private mbx store; never shared, never restored.** mbx's action records are unsigned: rewriting the records in a writable store makes a clean checkout serve the writer's output. A self-hosted runner's `~/.cache/mbx`, a shared store or a restored Actions cache would therefore be a poisoning path into release binaries. Every generated release job that runs cargo through mise (the `build-*` jobs and `family-versions`) has the step `Private mbx store` right after its checkout, before `jdx/mise-action` and any cargo: `echo "MBX_CACHE_DIR=$RUNNER_TEMP/mbx-release-<job>" >> "$GITHUB_ENV"`. The runner empties `$RUNNER_TEMP` for every job, so the store starts empty and no other job can write it. Release jobs never set `MBX_REMOTE` or mount the shared store, and never restore or save an mbx cache. The generator tests in `crates/velnor-gen/tests/it/release_mbx.rs` pin all of this.
+
+No script may add a fifth exception. `scripts/build-owned-archive-guard.sh` builds its guard through the repository's mise and mbx, with a fresh private mbx store per run. `scripts/local-cargo.sh` was removed: it called rustup's cargo directly and only its own test used it. Exceptions 1 and 3 do not build mbx or mise, so the bootstrap rule does not cover them; the owner must decide whether they stay.
 
 To verify a local checkout:
 
@@ -151,6 +154,7 @@ Every key of `.velnor/rust-ci.toml`, with its default. `generator/CONFIG.md` has
 | `nextest_harnesses` | none | `package:target` entries for `harness = false` test targets that nextest can run; the others run in a direct step |
 | `test_setup` | none | `[[test_setup]]` fixture steps that run before tests |
 | `workspace_groups` | none | `[[workspace_groups]]` entries: Cargo workspaces that share one job set and one build folder, see `generator/CONFIG.md` |
+| `external_workflows` | none | paths under `.github/workflows/` of hand-written workflows that `velnor-gen check` must not flag; needs velnor-ci 0.1.109 or later, see `generator/CONFIG.md` |
 | `lint` | none | `[[lint]]` jobs for checks that are not cargo |
 | `cache` | none | table; `mbx_remote = "github-actions"` |
 | `mbx_shared_store` | `false` | use the node's MBX store, see above |
@@ -160,11 +164,13 @@ Every key of `.velnor/rust-ci.toml`, with its default. `generator/CONFIG.md` has
 | `cache_debug` | `false` | cargo fingerprint log, see above |
 | `ci_debuginfo` | `"line-tables-only"` | `full`, `line-tables-only` or `none` |
 | `private_sources` | none | private dependencies, see above |
+| `release_assets` | none | `[[release_assets]]` entries: private release assets that a build script or test reads, fetched with the `[private_sources]` App, checked against a required `sha256` and cached by it, see `generator/CONFIG.md` (needs `velnor-ci` 0.1.109) |
 | `crates_mirror` | none | a crates mirror for a self-hosted runner (needs `velnor-ci` 0.1.93); it stays in effect for a step that passes its own `--config` |
 | `runner` | `"ubuntu-latest"` | the runner label of every job |
 | `hosted` | `true` when `runner` is not set | `true` opens `runner` to fork pull requests, `false` fences it; required when `runner` is spelled like a GitHub-hosted label; needs `velnor-ci` 0.1.99 |
 | `fork_runner` | platform-dependent: `"ubuntu-latest"`, `"ubuntu-24.04-arm"` for a Linux arm64 `runner`, `"macos-15"` for an Apple silicon macOS `runner` | the hosted runner for fork pull requests when `runner` is self-hosted |
 | `timeout_minutes` | `30` | job time limit, 1 to 360 |
+| `root_timeouts` | none | `{ "folder" = minutes }` (1 to 360) sets the job time limit of one root; `"."` is the repository root; needs `velnor-ci` 0.1.109, see [generator/CONFIG.md](../generator/CONFIG.md) |
 | `required_check` | `"Required"` | the name of the one required check |
 | `default_branch` | `"main"` | must equal the repository's default branch, or the run fails |
 | `helper` | none | `{ path = "..." }` builds the helper from this repository instead of a release |

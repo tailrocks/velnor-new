@@ -279,7 +279,7 @@
         },
         {
           "name": "velnor-ci",
-          "version": "0.1.106",
+          "version": "0.1.108",
           "manifest": "crates/velnor-ci/Cargo.toml",
           "dependencies": [
             {
@@ -446,7 +446,7 @@
         },
         {
           "name": "velnor-gen",
-          "version": "0.1.106",
+          "version": "0.1.108",
           "manifest": "crates/velnor-gen/Cargo.toml",
           "dependencies": [
             {
@@ -465,6 +465,11 @@
             },
             {
               "name": "serde_json",
+              "kind": "normal",
+              "manifest": null
+            },
+            {
+              "name": "toml",
               "kind": "normal",
               "manifest": null
             },
@@ -495,11 +500,6 @@
             },
             {
               "name": "similar",
-              "kind": "dev",
-              "manifest": null
-            },
-            {
-              "name": "toml",
               "kind": "dev",
               "manifest": null
             },
@@ -1996,8 +1996,8 @@
     "Cargo.toml": "0a8af2473ac087ecafb0414a31f77b0d031f92a936d68ed5b9fee04dfe524f91",
     "crates/velnor-archive-guard/Cargo.toml": "d2b908ecde6678ad8d49c6c59aef788bc2f0f735e9c9e7a6e1a996104ca9b9f9",
     "crates/velnor-cache-rules/Cargo.toml": "b1f91a7da1743297b500893e7ce85fb1cfb03f2f854c757beabba023089930e2",
-    "crates/velnor-ci/Cargo.toml": "4119300892a24b9664931a75096479be753b9c462f6950e8ca66e05d7f3f232b",
-    "crates/velnor-gen/Cargo.toml": "a86338c070229715231d5eb439ffa6e83624568892481dd770802e9c2f7b774a",
+    "crates/velnor-ci/Cargo.toml": "1ae308c51e43abcc7f6db18be5c332a566c5a1c7120c0c8cae151a6581e84b5f",
+    "crates/velnor-gen/Cargo.toml": "1cd3c30b9fc4abc0dba5c25d791702217d71e5a932a1e69dfa69078b0cd69464",
     "crates/velnor-local/Cargo.toml": "e6d3b5198ae94ac9ed44e8c9dad53e7b8231c92f64abd8e33eea72f8812f2ffb",
     "crates/velnor-model/Cargo.toml": "13010c31c12dbcc581502e41861e20289ae068458c4e4c666955b159f203ec9a",
     "crates/velnor-release/Cargo.toml": "dca29d0f14443af5811f5454770fce6193056a6e8e3c0c72ae1729399b176459",

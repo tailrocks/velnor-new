@@ -85,12 +85,29 @@ pub(crate) fn generated_workflow(changes: &ChangeSet, path: &RepoPath) -> bool {
             .is_some_and(|text| owner_of(text.as_bytes()) == Owner::VelnorGen)
 }
 
+/// A nextest config (`.config/nextest*.toml`) or a script next to it (`.config/*.sh`, such as
+/// one a `[scripts.setup.*]` command runs): it changes how every test runs.
+fn is_test_runner_config(path: &RepoPath) -> bool {
+    let Some((folder, name)) = path.as_str().rsplit_once('/') else {
+        return false;
+    };
+    let extension = |wanted: &str| {
+        Path::new(name)
+            .extension()
+            .is_some_and(|extension| extension.eq_ignore_ascii_case(wanted))
+    };
+    (folder == ".config" || folder.ends_with("/.config"))
+        && ((name.starts_with("nextest") && extension("toml")) || extension("sh"))
+}
+
 fn global(path: &RepoPath, is_root_manifest: bool) -> Option<AllTrigger> {
     let name = path.as_str().rsplit('/').next().unwrap_or_default();
     if TOOLCHAIN_FILES.contains(&name) {
         Some(AllTrigger::ToolchainFile(path.clone()))
     } else if is_cargo_config(path) {
         Some(AllTrigger::CargoConfig(path.clone()))
+    } else if is_test_runner_config(path) {
+        Some(AllTrigger::Global(path.clone()))
     } else if is_root_manifest {
         Some(AllTrigger::WorkspaceManifest)
     } else if *path == WORKFLOW_PATH {

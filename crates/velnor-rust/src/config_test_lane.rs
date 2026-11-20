@@ -5,10 +5,12 @@ use std::collections::BTreeSet;
 
 use serde::Deserialize;
 use velnor_model::{
-    CargoCommand, FilterRef, LaneJob, PackageName, RepoPath, RustCiConfig, RustRoot, TestLane,
+    CargoCommand, FilterRef, LaneFeatures, LaneJob, LaneKeysWritten, PackageName, RepoPath,
+    RustCiConfig, RustRoot, TestLane,
 };
 
-use crate::config::CONFIG_PATH;
+use crate::config::{CONFIG_PATH, TIMEOUT_RANGE};
+use crate::config_test_groups::ranged;
 use crate::error::{DetectError, Reason};
 use crate::harness::uses_nextest;
 
@@ -19,7 +21,10 @@ const FORBIDDEN_WORDS: [&str; 5] = ["if", "for", "while", "case", "coproc"];
 #[serde(deny_unknown_fields)]
 pub(crate) struct RawTestLane {
     root: String,
+    #[serde(default)]
     features: Vec<String>,
+    all_features: Option<bool>,
+    no_default_features: Option<bool>,
     filter: Option<String>,
     #[serde(default)]
     lint: bool,
@@ -28,6 +33,7 @@ pub(crate) struct RawTestLane {
     #[serde(default)]
     packages: Vec<String>,
     job: Option<String>,
+    timeout_minutes: Option<u16>,
 }
 
 pub(crate) fn parse(raw: Vec<RawTestLane>) -> Result<Vec<TestLane>, Reason> {
@@ -35,6 +41,24 @@ pub(crate) fn parse(raw: Vec<RawTestLane>) -> Result<Vec<TestLane>, Reason> {
 }
 
 fn lane(raw: RawTestLane) -> Result<TestLane, Reason> {
+    let all = raw.all_features.unwrap_or(false);
+    let no_default = raw.no_default_features.unwrap_or(false);
+    let written = LaneKeysWritten {
+        job: raw.job.is_some(),
+        feature_flags: raw.all_features.is_some() || raw.no_default_features.is_some(),
+    };
+    if all && !raw.features.is_empty() {
+        return Err(Reason::TestLaneFeatureConflict {
+            first: "all_features = true",
+            second: "features",
+        });
+    }
+    if all && no_default {
+        return Err(Reason::TestLaneFeatureConflict {
+            first: "all_features = true",
+            second: "no_default_features = true",
+        });
+    }
     let root = match raw.root.as_str() {
         "." => None,
         directory => Some(RepoPath::new(directory.trim_end_matches('/')).map_err(|_| {
@@ -45,7 +69,8 @@ fn lane(raw: RawTestLane) -> Result<TestLane, Reason> {
         })?),
     };
     let mut seen = BTreeSet::new();
-    let bad_feature = raw.features.is_empty()
+    let no_features = raw.features.is_empty() && !all && !no_default;
+    let bad_feature = no_features
         || raw
             .features
             .iter()
@@ -63,6 +88,11 @@ fn lane(raw: RawTestLane) -> Result<TestLane, Reason> {
         });
     }
     let packages = lane_packages(&raw)?;
+    let timeout_minutes = ranged(
+        "test_lane.timeout_minutes",
+        raw.timeout_minutes,
+        &TIMEOUT_RANGE,
+    )?;
     let job = match raw.job.as_deref() {
         None | Some("inline") => LaneJob::Inline,
         Some("parallel") => LaneJob::Parallel,
@@ -75,13 +105,18 @@ fn lane(raw: RawTestLane) -> Result<TestLane, Reason> {
     };
     Ok(TestLane {
         root,
-        features: raw.features,
+        features: LaneFeatures {
+            names: raw.features,
+            all,
+            no_default,
+        },
         filter: raw.filter,
         lint: raw.lint,
         doc: raw.doc,
         packages,
         job,
-        job_written: raw.job.is_some(),
+        written,
+        timeout_minutes,
     })
 }
 
@@ -153,7 +188,8 @@ pub(crate) fn commands(
 }
 
 pub(crate) struct ParallelLane {
-    pub(crate) features: Vec<String>,
+    pub(crate) features: LaneFeatures,
+    pub(crate) timeout_minutes: Option<u16>,
     pub(crate) commands: Vec<CargoCommand>,
 }
 
@@ -165,6 +201,7 @@ pub(crate) fn parallel(
     lanes_of(config, root, LaneJob::Parallel)
         .map(|lane| ParallelLane {
             features: lane.features.clone(),
+            timeout_minutes: lane.timeout_minutes,
             commands: lane_commands(
                 lane,
                 root,
@@ -198,8 +235,8 @@ fn lane_commands(
     lane: &TestLane,
     root: &RustRoot,
     direct: &[String],
-    linted: &mut BTreeSet<Vec<String>>,
-    documented: &mut BTreeSet<Vec<String>>,
+    linted: &mut BTreeSet<LaneFeatures>,
+    documented: &mut BTreeSet<LaneFeatures>,
 ) -> Vec<CargoCommand> {
     let features = || lane.features.clone();
     let mut commands = vec![CargoCommand::NextestFeatures {
@@ -224,8 +261,7 @@ fn lane_commands(
             except: direct.to_vec(),
         });
     }
-    let mut normalized = lane.features.clone();
-    normalized.sort();
+    let normalized = lane.features.normalized();
     if lane.lint && linted.insert(normalized.clone()) {
         commands.push(CargoCommand::ClippyFeatures {
             features: features(),

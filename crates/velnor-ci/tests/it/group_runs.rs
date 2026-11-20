@@ -11,6 +11,8 @@ use velnor_rust::group_runs;
 
 fn group(paths: &[&str], events: &[GroupEvent]) -> TestGroup {
     TestGroup {
+        restore_cache: None,
+        no_tests: None,
         name: JobId::new("database").unwrap_or_else(|e| unreachable!("{e}")),
         filter: "package(app)".to_owned(),
         needs: Vec::new(),

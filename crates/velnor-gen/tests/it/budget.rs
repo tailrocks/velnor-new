@@ -200,10 +200,16 @@ fn the_budget_job_runs_after_the_required_check_and_the_check_does_not_wait_for_
 fn a_helper_without_the_budget_command_is_refused() -> TestResult {
     let files = budgeted("0.1.81", "[budget]\nmain_wall_seconds = 600\n")?;
     let error = velnor_gen::expected_with_notes(&files).expect_err("the old helper was accepted");
-    let GenerateError::BudgetHelperTooOld(version) = error else {
+    let GenerateError::ConfigKeyHelperTooOld {
+        key,
+        pinned: version,
+        ..
+    } = error
+    else {
         return Err(format!("unexpected error: {error}").into());
     };
     assert_eq!(version.to_string(), "0.1.81");
+    assert!(key.starts_with("budget"), "{key}");
     Ok(())
 }
 
@@ -211,10 +217,16 @@ fn a_helper_without_the_budget_command_is_refused() -> TestResult {
 fn a_pin_of_0_1_91_is_refused_because_it_predates_the_budget_command() -> TestResult {
     let files = budgeted("0.1.91", "[budget]\nmain_wall_seconds = 600\n")?;
     let error = velnor_gen::expected_with_notes(&files).expect_err("the 0.1.91 pin was accepted");
-    let GenerateError::BudgetHelperTooOld(version) = &error else {
+    let GenerateError::ConfigKeyHelperTooOld {
+        key,
+        pinned: version,
+        ..
+    } = &error
+    else {
         return Err(format!("unexpected error: {error}").into());
     };
     assert_eq!(version.to_string(), "0.1.91");
+    assert!(key.starts_with("budget"), "{key}");
     assert!(
         error.to_string().contains("pin velnor-ci 0.1.92 or later"),
         "{error}"
