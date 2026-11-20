@@ -130,14 +130,14 @@ fn audit_wrapped_nextest_cannot_forge_step_outputs() {
     let written = fs::read_to_string(&output_file).unwrap_or_else(|e| unreachable!("{e}"));
     // The wrapper writes `built=` itself after a nextest run exits 0. The child's
     // forged `tests_run=999` line must still be absent: only the wrapper's lines remain.
-    let wrapper_lines: String = written
-        .lines()
-        .filter(|line| !line.starts_with("built="))
-        .map(|line| format!("{line}\n"))
-        .collect();
-    assert_eq!(wrapper_lines, "existing=1\ntests_run=7\ntests_listed=9\n");
+    assert_eq!(
+        crate::run_nextest::without_built(&written),
+        "existing=1\ntests_run=7\ntests_listed=9\n"
+    );
     assert!(
-        written.lines().all(|line| !line.starts_with("built=") || line == "built=true"),
+        written
+            .lines()
+            .all(|line| !line.starts_with("built=") || line == "built=true"),
         "{written:?}"
     );
     let environment =

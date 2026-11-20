@@ -209,7 +209,10 @@ mod tests_run {
         );
         let (output, written, _) = run_with_output("tests-run-split", &split, &NEXTEST_RUN);
         assert!(output.status.success(), "{output:?}");
-        assert_eq!(without_built(&written), "existing=1\ntests_run=7\ntests_listed=7\n");
+        assert_eq!(
+            without_built(&written),
+            "existing=1\ntests_run=7\ntests_listed=7\n"
+        );
     }
 
     #[test]
@@ -219,7 +222,10 @@ mod tests_run {
         );
         let (output, written, _) = run_with_output("tests-run-failed", &script, &NEXTEST_RUN);
         assert_eq!(output.status.code(), Some(100));
-        assert_eq!(without_built(&written), "existing=1\ntests_run=5\ntests_listed=5\n");
+        assert_eq!(
+            without_built(&written),
+            "existing=1\ntests_run=5\ntests_listed=5\n"
+        );
     }
 
     #[test]
@@ -227,7 +233,10 @@ mod tests_run {
         let script = "echo '     Summary [   0.001s] 0 tests run: 0 passed, 0 skipped' >&2";
         let (output, written, _) = run_with_output("tests-run-zero", script, &NEXTEST_RUN);
         assert!(output.status.success(), "{output:?}");
-        assert_eq!(without_built(&written), "existing=1\ntests_run=0\ntests_listed=0\n");
+        assert_eq!(
+            without_built(&written),
+            "existing=1\ntests_run=0\ntests_listed=0\n"
+        );
     }
 
     #[test]
@@ -237,14 +246,20 @@ mod tests_run {
         );
         let (output, written, _) = run_with_output("tests-run-filtered", &script, &NEXTEST_RUN);
         assert!(output.status.success(), "{output:?}");
-        assert_eq!(without_built(&written), "existing=1\ntests_run=0\ntests_listed=4\n");
+        assert_eq!(
+            without_built(&written),
+            "existing=1\ntests_run=0\ntests_listed=4\n"
+        );
     }
 
     #[test]
     fn run_lists_run_plus_skipped_and_leaves_listed_out_without_a_skipped_count() {
         let mixed = "echo '     Summary [   0.5s] 3 tests run: 2 passed, 1 failed, 5 skipped' >&2";
         let (_, written, _) = run_with_output("tests-run-mixed", mixed, &NEXTEST_RUN);
-        assert_eq!(without_built(&written), "existing=1\ntests_run=3\ntests_listed=8\n");
+        assert_eq!(
+            without_built(&written),
+            "existing=1\ntests_run=3\ntests_listed=8\n"
+        );
         let bare = "echo '     Summary [   0.5s] 3 tests run: 3 passed' >&2";
         let (_, written, _) = run_with_output("tests-run-bare", bare, &NEXTEST_RUN);
         assert_eq!(without_built(&written), "existing=1\ntests_run=3\n");

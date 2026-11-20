@@ -86,11 +86,12 @@ pub(crate) fn run_with_output(
 /// The step output without the `built=` line, which a nextest run writes once its
 /// build is known. Counts are what the held-pipe tests assert are withheld.
 pub(crate) fn without_built(written: &str) -> String {
-    written
-        .lines()
-        .filter(|line| !line.starts_with("built="))
-        .map(|line| format!("{line}\n"))
-        .collect()
+    let mut kept = String::new();
+    for line in written.lines().filter(|line| !line.starts_with("built=")) {
+        kept.push_str(line);
+        kept.push('\n');
+    }
+    kept
 }
 pub(crate) fn execute_nextest(
     name: &str,
