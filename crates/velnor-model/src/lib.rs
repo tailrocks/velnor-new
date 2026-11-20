@@ -17,6 +17,7 @@ mod repo;
 mod repo_config;
 mod sealed;
 mod selection;
+mod shape;
 mod steps;
 mod test_group;
 mod token_permission;
@@ -45,9 +46,9 @@ pub use mise::MisePlatform;
 pub use plan::{
     Access, BUILD_TESTS_STEP, BUILT_OUTPUT, CI_AUTO_LABEL, CI_RUN_LABEL, CargoCommand, Concurrency,
     FilterRef, Gate, GateNeed, Job, LINT_STEP, MERGE_GROUP_SKIP_OUTPUT, MERGE_GROUP_STEP,
-    PermissionScope, Permissions, PlanFrom, PlanRef, PrRun, PullRequestType, Shape, ShapeDecision,
-    Step, TEST_STEP, TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT,
-    TESTS_RUN_OUTPUT, Triggers, When, WorkflowPlan, group_output_name,
+    PermissionScope, Permissions, PlanFrom, PlanRef, PrRun, PullRequestType, Step, TEST_STEP,
+    TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, Triggers,
+    When, WorkflowPlan, group_output_name,
 };
 pub use repo::{
     CacheDebug, CheckoutScope, CiDebugInfo, CompileInputs, CratesMirror, CustomHarness,
@@ -64,6 +65,7 @@ pub use selection::{
     RELEASE_PLZ_FILE, RELEASE_WORKFLOW_PATH, RustSelection, SAMPLES, SelectionReason, SkipReason,
     StepNeed, WORKFLOW_PATH, WORKFLOWS_CONFIG_PATH,
 };
+pub use shape::{Shape, ShapeDecision};
 pub use test_group::{GroupEvent, GroupRoot, TestGroup, TestNeed};
 pub use token_permission::{token_permission_accesses, token_permission_accesses_prose};
 pub use verdict::{JobCondition, VerdictJob, VerdictSpec};
