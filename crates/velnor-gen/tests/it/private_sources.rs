@@ -274,7 +274,7 @@ fn the_dependency_policy_job_fetches_before_cargo_deny_resolves_the_graph() -> T
             .filter(|(_, step)| {
                 step["run"]
                     .as_str()
-                    .is_some_and(|run| run.contains("cargo-deny"))
+                    .is_some_and(|run| run.contains("cargo-deny") && !run.contains(" fetch db"))
             })
             .map(|(index, _)| index)
             .collect();

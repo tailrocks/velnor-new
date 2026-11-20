@@ -102,6 +102,9 @@ pub struct Job {
     pub plan_outputs: Vec<(RootSlug, GateNeed)>,
     pub group_outputs: Vec<(RootSlug, JobId)>,
     pub reports_ignored: bool,
+    /// The pinned helper records the build in its test step (`outputs.built`), so the saves
+    /// may wait for that record instead of a build step.
+    pub records_build: bool,
     /// Titles the job with the selection of the run, read from the plan outputs.
     pub selection_name: Option<SelectionName>,
     pub steps: Vec<Step>,
@@ -300,6 +303,7 @@ pub enum CargoCommand {
         packages: Vec<PackageName>,
         filter: FilterRef,
         ci_profile: bool,
+        reports: bool,
     },
     ClippyFeatures {
         features: Vec<String>,
@@ -343,6 +347,16 @@ impl CargoCommand {
         !matches!(
             self,
             Self::FmtCheck | Self::Deny { .. } | Self::Machete | Self::NextestRunArchive { .. }
+        )
+    }
+
+    #[must_use]
+    pub const fn reports_tests(&self) -> bool {
+        matches!(
+            self,
+            Self::NextestRun { .. }
+                | Self::NextestRunArchive { .. }
+                | Self::NextestFeatures { reports: true, .. }
         )
     }
 

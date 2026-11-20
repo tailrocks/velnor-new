@@ -63,7 +63,9 @@ fn completed_observations_survive_a_descendant_holding_the_stream_open() {
         );
         assert_eq!(invocation["capture_complete"], !held);
         assert_eq!(
-            fs::read_to_string(temp.join("outputs")).unwrap_or_default(),
+            crate::run_nextest::without_built(
+                &fs::read_to_string(temp.join("outputs")).unwrap_or_default()
+            ),
             if active && !held { TEST_OUTPUT } else { "" }
         );
         let decision = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))

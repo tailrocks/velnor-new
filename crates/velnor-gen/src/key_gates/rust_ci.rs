@@ -155,6 +155,8 @@ pub(super) const RUST_CI: &[KeyGate] = &[
     gate(RustCi, "test_lane.features", (0, 1, 93)),
     // helper-gate: first in tools-v0.1.93 via 3099634289
     gate(RustCi, "test_lane.filter", (0, 1, 93)),
+    // First released in tools-v0.1.107 (not tagged yet when this gate was written).
+    gate(RustCi, "test_lane.job", (0, 1, 107)),
     // helper-gate: first in tools-v0.1.93 via 3099634289
     gate(RustCi, "test_lane.lint", (0, 1, 93)),
     // helper-gate: first in tools-v0.1.93 via 3099634289

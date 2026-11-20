@@ -372,8 +372,5 @@ fn deny(manifest: &RepoPath, config: Option<&RepoPath>) -> (String, String, Vec<
 }
 
 pub(crate) fn reports_tests(command: &CargoCommand) -> bool {
-    matches!(
-        command,
-        CargoCommand::NextestRun { .. } | CargoCommand::NextestRunArchive { .. }
-    )
+    command.reports_tests()
 }

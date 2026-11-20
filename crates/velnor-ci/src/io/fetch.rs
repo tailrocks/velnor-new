@@ -85,10 +85,15 @@ fn fetch_with(args: &FetchArgs, token: Option<&str>) -> Result<(), CiError> {
     let mirror = super::crates_mirror::runner_config()?;
     let server = Server::from_environment()?;
     let mut environment = trusted.environment(&home, &cargo, &git, &inherited, token, &server)?;
+    let mut cargo = cargo;
     if token.is_some()
-        && let Some(toolchain) = super::fetch_toolchain::pin(&cargo, &environment)?
+        && let Some(pinned) = super::fetch_toolchain::pin(&cargo, &environment, &trusted)?
     {
-        environment.push(("RUSTUP_TOOLCHAIN".into(), toolchain));
+        if let Some(real) = pinned.cargo {
+            cargo = real;
+            environment = trusted.environment(&home, &cargo, &git, &inherited, token, &server)?;
+        }
+        environment.push(("RUSTUP_TOOLCHAIN".into(), pinned.name));
     }
     run_fetches(
         &cargo,
@@ -241,7 +246,7 @@ impl Trusted {
         }
     }
 
-    fn within(&self, path: &Path) -> bool {
+    pub(super) fn within(&self, path: &Path) -> bool {
         self.roots.iter().any(|root| path.starts_with(root))
     }
 
@@ -266,12 +271,15 @@ impl Trusted {
             };
             let trusted_directory = self.within(&directory)
                 || (system && SYSTEM_DIRECTORIES.iter().any(|d| directory == Path::new(d)));
-            if trusted_directory && resolved.is_file() {
+            if trusted_directory
+                && resolved.is_file()
+                && !super::fetch_real_cargo::is_mise_front(&candidate, &resolved)
+            {
                 return Ok(candidate);
             }
         }
         Err(CiError::new(format!(
-            "no {name} in a tool directory the runner installed; the checkout cannot supply it"
+            "no real {name} in a tool directory the runner installed; the checkout cannot supply it, and a mise shim or wrapper is never run with the token"
         )))
     }
 
