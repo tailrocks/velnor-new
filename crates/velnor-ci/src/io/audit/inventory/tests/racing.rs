@@ -200,3 +200,109 @@ fn a_directory_that_is_a_directory_again_before_it_is_opened_still_fails_the_sca
         "{entries:?}"
     );
 }
+
+#[test]
+fn a_subdirectory_is_descended_through_its_opened_parent_not_its_path() {
+    let root = fs::canonicalize(std::env::temp_dir())
+        .unwrap_or_else(|e| unreachable!("{e}"))
+        .join(format!("velnor-scan-parent-swap-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&root);
+    let parent = root.join("d");
+    fs::create_dir_all(parent.join("sub")).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::write(parent.join("sub").join("original.txt"), b"").unwrap_or_else(|e| unreachable!("{e}"));
+    let swapped = AtomicBool::new(false);
+    let mut budget = Budget::new(usize::MAX);
+    let entries = scan_with(
+        &root,
+        &BTreeSet::new(),
+        &mut budget,
+        &Probe {
+            before_open: &|directory| {
+                if directory.ends_with("d/sub") && !swapped.swap(true, Ordering::Relaxed) {
+                    let parent = directory.with_file_name("");
+                    fs::rename(&parent, root.join("d.aside"))
+                        .unwrap_or_else(|e| unreachable!("{e}"));
+                    fs::create_dir_all(parent.join("sub")).unwrap_or_else(|e| unreachable!("{e}"));
+                    fs::write(parent.join("sub").join("replacement.txt"), b"")
+                        .unwrap_or_else(|e| unreachable!("{e}"));
+                }
+                Ok(())
+            },
+            ..Probe::default()
+        },
+    );
+    let swapped = swapped.load(Ordering::Relaxed);
+    fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(swapped, "the parent was never swapped");
+    let entries =
+        entries.unwrap_or_else(|e| panic!("scan failed after the parent was swapped: {e}"));
+    let sub = entries
+        .get(&root.join("d").join("sub"))
+        .unwrap_or_else(|| unreachable!("{:?}", entries.keys()));
+    assert!(sub.contains_key(Path::new("original.txt")), "{sub:?}");
+    assert!(
+        !sub.contains_key(Path::new("replacement.txt")),
+        "walked the replacement directory: {sub:?}"
+    );
+}
+
+#[test]
+fn a_directory_removed_after_it_is_opened_is_dropped_from_the_inventory() {
+    let entries = scan_racing("removed-after-open", &|_| Ok(()), &|directory| {
+        fs::remove_dir(directory).unwrap_or_else(|e| unreachable!("{e}"));
+    });
+    let entries = entries.unwrap_or_else(|e| panic!("scan failed on a vanished directory: {e}"));
+    let children = root_children(&entries);
+    assert!(!children.contains_key(Path::new("sub")), "{children:?}");
+    assert!(children.contains_key(Path::new("kept.txt")), "{children:?}");
+    assert_eq!(entries.len(), 1, "{:?}", entries.keys());
+}
+
+fn scan_with_root_replaced_after_it_is_opened(replace: fn(&Path, &Path)) -> io::Result<Entries> {
+    let base = fs::canonicalize(std::env::temp_dir())
+        .unwrap_or_else(|e| unreachable!("{e}"))
+        .join(format!("velnor-scan-root-swap-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&base);
+    let root = base.join("root");
+    fs::create_dir_all(root.join("sub")).unwrap_or_else(|e| unreachable!("{e}"));
+    let aside = base.join("aside");
+    let mut budget = Budget::new(usize::MAX);
+    let result = scan_with(
+        &root,
+        &BTreeSet::new(),
+        &mut budget,
+        &Probe {
+            after_open: &|directory| {
+                if directory.ends_with("root") {
+                    replace(directory, &aside);
+                }
+            },
+            ..Probe::default()
+        },
+    );
+    fs::remove_dir_all(&base).unwrap_or_else(|e| unreachable!("{e}"));
+    result
+}
+
+#[test]
+fn a_root_removed_while_it_is_listed_fails_the_scan() {
+    let entries = scan_with_root_replaced_after_it_is_opened(|root, aside| {
+        fs::rename(root, aside).unwrap_or_else(|e| unreachable!("{e}"));
+    });
+    assert!(
+        matches!(&entries, Err(error) if error.to_string().contains("was replaced while it was listed")),
+        "{entries:?}"
+    );
+}
+
+#[test]
+fn a_root_replaced_by_a_file_while_it_is_listed_fails_the_scan() {
+    let entries = scan_with_root_replaced_after_it_is_opened(|root, aside| {
+        fs::rename(root, aside).unwrap_or_else(|e| unreachable!("{e}"));
+        fs::write(root, b"").unwrap_or_else(|e| unreachable!("{e}"));
+    });
+    assert!(
+        matches!(&entries, Err(error) if error.to_string().contains("was replaced while it was listed")),
+        "{entries:?}"
+    );
+}
