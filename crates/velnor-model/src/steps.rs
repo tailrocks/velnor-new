@@ -250,6 +250,9 @@ pub enum ToolsLocalVerb {
     AnchorReset,
     AnchorRestore,
     Verify,
+    /// `Verify` on a helper whose mismatch notice names the restored cache entry, so the verify
+    /// step also gets the key of that entry.
+    VerifyNamed,
     Record,
     AnchorSave,
 }

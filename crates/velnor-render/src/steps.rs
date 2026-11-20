@@ -145,7 +145,14 @@ fn job_steps(
     let verified = job
         .steps
         .iter()
-        .any(|step| step.kind == StepKind::ToolsLocal(velnor_model::ToolsLocalVerb::Verify));
+        .any(|step| {
+            matches!(
+                step.kind,
+                StepKind::ToolsLocal(
+                    velnor_model::ToolsLocalVerb::Verify | velnor_model::ToolsLocalVerb::VerifyNamed
+                )
+            )
+        });
     job.steps
         .iter()
         .enumerate()

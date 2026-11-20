@@ -111,26 +111,30 @@ fn every_tools_restore_is_verified_before_anything_runs_the_tools() -> TestResul
     Ok(())
 }
 
+/// Counts the verify steps of a workflow pinned to `helper` and returns the value of their
+/// `VELNOR_TOOLS_CACHE_KEY` env (`None` when the env is absent).
+fn verify_key_env(config: &str, helper: &str) -> Result<Vec<Option<String>>, Box<dyn std::error::Error>> {
+    let mut keys = Vec::new();
+    for (_id, steps) in jobs_of(&workflow(&repo_for(config, helper)?)?)? {
+        let Some(verify) = steps.iter().find(|step| text(step, "run").ends_with(CHECK)) else {
+            continue;
+        };
+        keys.push(verify["env"]["VELNOR_TOOLS_CACHE_KEY"].as_str().map(str::to_owned));
+    }
+    Ok(keys)
+}
+
 #[test]
-fn the_verify_step_is_told_the_key_of_the_restored_cache_entry() -> TestResult {
+fn the_verify_step_names_the_restored_cache_entry_only_from_helper_0_1_110() -> TestResult {
     const RESTORED_KEY: &str = "${{ steps.tools.outputs.cache-matched-key }}";
     for config in STORES {
-        let mut verified_jobs = 0;
-        for (id, steps) in jobs_of(&workflow(&repo_for(config, "0.1.109")?)?)? {
-            let Some(verify) = steps.iter().find(|step| text(step, "run").ends_with(CHECK)) else {
-                continue;
-            };
-            assert_eq!(
-                verify["env"]["VELNOR_TOOLS_CACHE_KEY"], RESTORED_KEY,
-                "{config:?} {id}"
-            );
-            assert!(
-                steps.iter().any(|step| step["id"] == "tools"),
-                "{config:?} {id}: no restore step with id tools"
-            );
-            verified_jobs += 1;
-        }
-        assert_ne!(verified_jobs, 0, "{config:?}");
+        let released = verify_key_env(config, "0.1.109")?;
+        assert_ne!(released.len(), 0, "{config:?}: no verify step at 0.1.109");
+        assert!(released.iter().all(Option::is_none), "{config:?}: {released:?}");
+
+        let named = verify_key_env(config, "0.1.110")?;
+        assert_eq!(named.len(), released.len(), "{config:?}");
+        assert!(named.iter().all(|key| key == &Some(RESTORED_KEY.to_owned())), "{config:?}: {named:?}");
     }
     Ok(())
 }

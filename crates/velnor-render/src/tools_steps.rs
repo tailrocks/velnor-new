@@ -77,7 +77,7 @@ fn verify_step(verb: velnor_model::ToolsLocalVerb) -> RenderedStep {
     use velnor_model::ToolsLocalVerb as Verb;
     let (id, name, word) = match verb {
         Verb::AnchorReset => (None, "Clear anchor", "reset"),
-        Verb::Verify => (Some(VERIFY_STEP), "Verify tools", "check"),
+        Verb::Verify | Verb::VerifyNamed => (Some(VERIFY_STEP), "Verify tools", "check"),
         _ => (Some(RECORD_STEP), "Record anchor", "record"),
     };
     let hit = Value::Expr(format!("${{{{ steps.{ANCHOR_STEP}.outputs.cache-hit }}}}"));
@@ -85,7 +85,7 @@ fn verify_step(verb: velnor_model::ToolsLocalVerb) -> RenderedStep {
         .then(|| ("VELNOR_ANCHOR_HIT".to_owned(), hit))
         .into_iter()
         .collect();
-    if verb == Verb::Verify {
+    if verb == Verb::VerifyNamed {
         env.push((
             "VELNOR_TOOLS_CACHE_KEY".to_owned(),
             Value::Expr(format!(
@@ -136,7 +136,9 @@ pub(crate) fn tools_local_step(verb: velnor_model::ToolsLocalVerb) -> RenderedSt
         Verb::RecordSave => return tools_saved_step(),
         Verb::AnchorRestore => return anchor_cache_step(crate::steps::CACHE_RESTORE, "Restore"),
         Verb::AnchorSave => return anchor_cache_step(crate::steps::CACHE_SAVE, "Save"),
-        Verb::AnchorReset | Verb::Verify | Verb::Record => return verify_step(verb),
+        Verb::AnchorReset | Verb::Verify | Verb::VerifyNamed | Verb::Record => {
+            return verify_step(verb);
+        }
     };
     RenderedStep {
         id: id.map(str::to_owned),
