@@ -25,7 +25,6 @@ pub enum GenerateError {
     MirrorHelperTooOld(HelperVersion),
     HostedHelperTooOld(HelperVersion),
     CacheDebugHelperTooOld(HelperVersion),
-    MbxRemoteHelperTooOld(HelperVersion),
     RequiredCheckHelperTooOld(HelperVersion),
     InputsLockHelperTooOld(HelperVersion),
     PrivateSourcesHelperTooOld(HelperVersion),
@@ -78,10 +77,6 @@ impl fmt::Display for GenerateError {
                 HELPER_MINIMUM.0, HELPER_MINIMUM.1, HELPER_MINIMUM.2
             ),
             Self::CacheDebugHelperTooOld(v) => write!(f, "{}", cache_debug_too_old(v)),
-            Self::MbxRemoteHelperTooOld(version) => write!(
-                f,
-                "velnor-ci {version} does not know the [cache] table of rust-ci.toml; pin velnor-ci 0.1.88 or later with `velnor-gen pin-helper 0.1.88`"
-            ),
             Self::RequiredCheckHelperTooOld(v) => write!(f, "{}", required_check_too_old(v)),
             Self::MbxStoreHelperTooOld(version) => write!(f, "velnor-ci {version} cannot select the shared MBX store; pin velnor-ci 0.1.85 or later"),
             Self::TooManySourceRoots(roots) => write!(

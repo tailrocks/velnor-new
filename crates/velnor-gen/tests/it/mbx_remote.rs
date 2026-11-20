@@ -158,19 +158,6 @@ fn a_same_repository_pull_request_may_save_and_a_fork_never_does() -> TestResult
 }
 
 #[test]
-fn a_helper_that_does_not_know_the_cache_table_is_refused_before_it_runs() -> TestResult {
-    let mut repo = pinned(&["Cargo.toml"], Some(ON))?;
-    crate::pipeline::pin_helper(&mut repo, "0.1.81")?;
-    let error = workflow(&repo).expect_err("the [cache] table under velnor-ci 0.1.81");
-    let text = error.to_string();
-    assert!(
-        text.contains("[cache]") && text.contains("0.1.88"),
-        "{text}"
-    );
-    Ok(())
-}
-
-#[test]
 fn a_policy_lane_that_builds_nothing_gets_no_remote_cache() -> TestResult {
     let mut repo = pinned(&["Cargo.toml"], Some(ON))?;
     repo.files.insert(
