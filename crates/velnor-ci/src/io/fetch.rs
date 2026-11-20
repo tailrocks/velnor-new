@@ -75,8 +75,19 @@ pub(super) fn fetch(args: &FetchArgs) -> Result<String, CiError> {
 fn fetch_with(args: &FetchArgs, token: Option<&str>) -> Result<(), CiError> {
     let home = super::fetch_fixed::account_home(args.home.as_deref())?;
     let fixed = super::fetch_fixed::Fixed::system().find();
+    let scratch = fixed
+        .as_ref()
+        .map(|_| {
+            super::fetch_home::Scratch::create(
+                &home,
+                std::env::var_os("CARGO_HOME").as_deref(),
+                &super::fetch_home::temp_parent(),
+            )
+        })
+        .transpose()?;
     let mut roots = args.trusted_dir.clone();
     roots.extend(fixed.iter().flat_map(super::fetch_fixed::Located::roots));
+    roots.extend(scratch.iter().map(|scratch| scratch.path().to_path_buf()));
     let trusted = Trusted::new(&home, &roots);
     let search = search_path();
     let cargo = super::fetch_fixed::cargo(fixed.as_ref(), &trusted, &home, &search)?;
@@ -85,8 +96,8 @@ fn fetch_with(args: &FetchArgs, token: Option<&str>) -> Result<(), CiError> {
         cargo_home: std::env::var_os("CARGO_HOME"),
         rustup_home: std::env::var_os("RUSTUP_HOME"),
     };
-    if let Some(fixed) = &fixed {
-        inherited = fixed.adopt(inherited);
+    if let (Some(fixed), Some(scratch)) = (&fixed, &scratch) {
+        inherited = fixed.adopt(scratch.path());
     }
     let mirror = super::crates_mirror::runner_config()?;
     let server = Server::from_environment()?;

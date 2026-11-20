@@ -69,10 +69,9 @@ impl Located {
         [self.cargo_home.clone(), self.rustup_home.clone()]
     }
 
-    pub(super) fn adopt(&self, inherited: Inherited) -> Inherited {
-        let kept = inherited.cargo_home.filter(|home| !home.is_empty());
+    pub(super) fn adopt(&self, scratch: &Path) -> Inherited {
         Inherited {
-            cargo_home: kept.or_else(|| Some(OsString::from(&self.cargo_home))),
+            cargo_home: Some(OsString::from(scratch)),
             rustup_home: Some(OsString::from(&self.rustup_home)),
         }
     }
@@ -109,6 +108,7 @@ mod tests {
     use std::fs;
     use std::os::unix::fs::{PermissionsExt, symlink};
 
+    use super::super::fetch_home::Scratch;
     use super::*;
 
     fn me() -> u32 {
@@ -145,16 +145,33 @@ mod tests {
     }
 
     #[test]
-    fn a_sealed_toolchain_is_found_with_its_homes_adopted() {
+    fn a_sealed_toolchain_is_found_with_its_rustup_home_adopted() {
         let (_, fixed) = sealed_tree("sealed");
         let found = fixed.find().unwrap_or_else(|| unreachable!("not found"));
         assert_eq!(found.cargo, fixed.base.join("cargo/bin/cargo"));
-        let adopted = found.adopt(Inherited {
-            cargo_home: None,
-            rustup_home: Some("/elsewhere".into()),
-        });
+        let adopted = found.adopt(Path::new("/scratch"));
         assert_eq!(adopted.rustup_home, Some(fixed.base.join("rustup").into()));
-        assert_eq!(adopted.cargo_home, Some(fixed.base.join("cargo").into()));
+        assert_eq!(adopted.cargo_home, Some("/scratch".into()));
+    }
+
+    #[test]
+    fn without_a_job_cargo_home_the_sealed_toolchain_fetches_into_a_writable_home() {
+        let (root, fixed) = sealed_tree("writable");
+        let found = fixed.find().unwrap_or_else(|| unreachable!("not found"));
+        let home = root.join("home");
+        let temp = root.join("tmp");
+        fs::create_dir_all(&temp).unwrap_or_else(|e| unreachable!("{e}"));
+        let scratch = Scratch::create(&home, None, &temp).unwrap_or_else(|e| unreachable!("{e}"));
+        let adopted = found.adopt(scratch.path());
+        let chosen = PathBuf::from(adopted.cargo_home.unwrap_or_default());
+        assert!(
+            !chosen.starts_with(root.join("opt")),
+            "{}",
+            chosen.display()
+        );
+        fs::write(chosen.join(".package-cache"), "").unwrap_or_else(|e| unreachable!("{e}"));
+        fs::write(chosen.join("registry/index"), "").unwrap_or_else(|e| unreachable!("{e}"));
+        assert!(home.join(".cargo/registry/index").is_file());
     }
 
     #[test]
