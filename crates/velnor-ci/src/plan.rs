@@ -4,8 +4,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
-    AllTrigger, GateNeed, OptionalSteps, PackageName, RepoPath, RootSlug, RustSelection, StepNeed,
-    Unread, Weakening, WorkspaceGroup, group_output_name,
+    AllTrigger, GateNeed, JobId, OptionalSteps, PackageName, PathGlob, RepoPath, RootSlug,
+    RustSelection, StepNeed, Unread, Weakening, WorkspaceGroup, group_output_name,
 };
 use velnor_rust::{CONFIG_PATH, GroupPlan, PolicyRuns};
 
@@ -143,6 +143,21 @@ pub fn lint_explanation(skipped: &[String]) -> String {
                 "left out: {}: {}\n",
                 inert(id),
                 crate::summary::LINT_SKIP_REASON
+            )
+        })
+        .collect::<Vec<String>>()
+        .concat()
+}
+
+#[must_use]
+pub fn input_warnings(unmatched: &[(JobId, PathGlob)]) -> String {
+    unmatched
+        .iter()
+        .map(|(id, glob)| {
+            format!(
+                "warning: {}: inputs entry {} matches no tracked file\n",
+                inert(id.as_str()),
+                toml_string(glob.as_str())
             )
         })
         .collect::<Vec<String>>()
