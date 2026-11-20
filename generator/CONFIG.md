@@ -516,9 +516,9 @@ timeout_minutes = 5
 
 | Key | Kinds | Meaning |
 |---|---|---|
-| `kind` | all | `jactionlint`, `alint` or `mise-task`. |
+| `kind` | all | `jactionlint`, `alint`, `mise-task` or `generated-check`. |
 | `id` | all | Job id suffix. Defaults to the kind, or to the task name for `mise-task`. Two entries cannot share it. |
-| `name` | all | Job name. Defaults to `Jactionlint`, `Alint` or `Mise task <task>`. |
+| `name` | all | Job name. Defaults to `Jactionlint`, `Alint`, `Mise task <task>` or `Generated workflows`. |
 | `timeout_minutes` | all | 1 to 360, default 10. |
 | `config` | `jactionlint`, `alint` | Configuration file. Required for `alint`. |
 | `probe` | `alint` | A script run with `bash` after alint, for rules alint cannot express. |
@@ -530,6 +530,16 @@ timeout_minutes = 5
 `alint` is the version pinned in `mise.toml` (for example `"github:asamarts/alint" = "0.22.1"`) with the archive digest of every platform in `mise.lock`, so the digest is the repository's own and no upstream installer runs. It runs `alint --format github --config <config> --fail-on-warning check .`, so a warning fails the job. The file named by `config` or `probe` is not checked at generation time; a missing file fails the job, and so the `Required` check.
 
 Every tool a lint entry needs is checked at generation. The tool must be pinned in `mise.toml` by its basename (`jactionlint`) or in full (`aqua:owner/tool/jactionlint`); a basename that matches two configured tools is refused until the entry names one in full. At least one of its requests must apply to the runner's operating system (the `os` key of the pin), and `mise.lock` must hold an entry that covers every version requested for that system. A `shellcheck` pin that is filtered out for the runner is treated as absent.
+
+### Generated workflows cannot be edited by hand
+
+The seal in a generated workflow is an unkeyed SHA-256, so anyone can recompute it after a hand edit. `[[lint]]` with `kind = "generated-check"` (no other key) adds the job `lint-generated-check`, which runs `velnor-gen check --verify-release` on the pull request's checkout (the release's checksums and commit are read from github.com without a token) and fails when any generated file differs from what `.velnor/*.toml` renders. It is off unless the entry exists, and it needs `.velnor/rust-ci.lock` to pin a release that ships `velnor-gen` archives.
+
+The job has `contents: read` and no secrets, and no selection applies to it: it runs on every pull request, merge group and push, in a draft too, and it never waits for the plan or skips after a queue run. `Required` lists it in `needs` and in its gate spec like any lint job.
+
+The `velnor-gen` that runs is never built from the pull request. The job downloads `velnor-gen-<target>.tar.gz` from the release the lock pins, compares its SHA-256 with the digest in the lock, and only then extracts it. A pull request can change the pin only to another release that was published by the project. The lock and the workflow are themselves compared by the check, so a pin that the workflow does not match is drift. Because the binary is a release, it knows only the keys and the rendering of that release: a change to the generator or to the config that a released `velnor-gen` cannot read or render the same way fails the job until a release that has it is pinned.
+
+The job does not protect the workflow that holds it: a pull request that deletes the job from the workflow and from `required.needs` removes the check, because a `pull_request` run uses the workflow of the pull request. Require the workflow from the base branch in a ruleset (`workflows` rule) to close that.
 
 ### One required check
 
