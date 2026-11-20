@@ -285,11 +285,24 @@ fn the_selection_title_is_only_an_expression_when_the_budget_job_runs() -> TestR
         .and_then(serde_json::Value::as_str)
         .ok_or("the budget job has no title")?;
     assert!(
-        name.starts_with("${{ (needs.required.result == 'success'")
-            && name.contains("needs.rust.result == 'success')")
-            && name.ends_with("|| 'Speed budget' }}"),
+        name.starts_with("${{ (") && name.ends_with("|| 'Speed budget' }}"),
         "the title falls back to the plain name when the job is skipped\n{name}"
     );
+    let condition = tree
+        .pointer("/jobs/rust-budget/if")
+        .and_then(serde_json::Value::as_str)
+        .ok_or("the budget job has no condition")?;
+    for clause in condition
+        .trim_start_matches("${{ ")
+        .trim_end_matches(" }}")
+        .split(" && ")
+        .filter(|clause| !clause.contains("cancelled()"))
+    {
+        assert!(
+            name.contains(clause.trim()),
+            "the title is skipped exactly when the job is skipped, so it repeats the job's condition {clause}\n{name}"
+        );
+    }
     Ok(())
 }
 
