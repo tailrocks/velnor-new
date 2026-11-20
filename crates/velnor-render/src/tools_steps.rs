@@ -81,14 +81,23 @@ fn verify_step(verb: velnor_model::ToolsLocalVerb) -> RenderedStep {
         _ => (Some(RECORD_STEP), "Record anchor", "record"),
     };
     let hit = Value::Expr(format!("${{{{ steps.{ANCHOR_STEP}.outputs.cache-hit }}}}"));
+    let mut env: Vec<(String, Value)> = (verb != Verb::AnchorReset)
+        .then(|| ("VELNOR_ANCHOR_HIT".to_owned(), hit))
+        .into_iter()
+        .collect();
+    if verb == Verb::Verify {
+        env.push((
+            "VELNOR_TOOLS_CACHE_KEY".to_owned(),
+            Value::Expr(format!(
+                "${{{{ steps.{TOOLS_STEP}.outputs.cache-matched-key }}}}"
+            )),
+        ));
+    }
     RenderedStep {
         id: id.map(str::to_owned),
         name: name.to_owned(),
         shared: true,
-        env: (verb != Verb::AnchorReset)
-            .then(|| ("VELNOR_ANCHOR_HIT".to_owned(), hit))
-            .into_iter()
-            .collect(),
+        env,
         run: Some(format!("velnor-ci tools-verify {word}")),
         ..RenderedStep::default()
     }

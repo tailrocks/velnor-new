@@ -112,6 +112,30 @@ fn every_tools_restore_is_verified_before_anything_runs_the_tools() -> TestResul
 }
 
 #[test]
+fn the_verify_step_is_told_the_key_of_the_restored_cache_entry() -> TestResult {
+    const RESTORED_KEY: &str = "${{ steps.tools.outputs.cache-matched-key }}";
+    for config in STORES {
+        let mut verified_jobs = 0;
+        for (id, steps) in jobs_of(&workflow(&repo_for(config, "0.1.109")?)?)? {
+            let Some(verify) = steps.iter().find(|step| text(step, "run").ends_with(CHECK)) else {
+                continue;
+            };
+            assert_eq!(
+                verify["env"]["VELNOR_TOOLS_CACHE_KEY"], RESTORED_KEY,
+                "{config:?} {id}"
+            );
+            assert!(
+                steps.iter().any(|step| step["id"] == "tools"),
+                "{config:?} {id}: no restore step with id tools"
+            );
+            verified_jobs += 1;
+        }
+        assert_ne!(verified_jobs, 0, "{config:?}");
+    }
+    Ok(())
+}
+
+#[test]
 fn a_pull_request_never_saves_the_tools_and_a_save_needs_the_anchor() -> TestResult {
     for config in STORES {
         for helper in ["0.1.89", "0.1.109"] {
