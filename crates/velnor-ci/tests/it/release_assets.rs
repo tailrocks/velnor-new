@@ -20,10 +20,13 @@ const WRONG: &str = "e4f1a5c1d8b49f5b79a1a4b2a3a8b6f51d8bf9a38a7c1fa5d9d6f1d1a3f
 
 fn digest(bytes: &[u8]) -> String {
     use sha2::{Digest, Sha256};
+    use std::fmt::Write;
     Sha256::digest(bytes)
         .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect()
+        .fold(String::new(), |mut text, byte| {
+            write!(text, "{byte:02x}").ok();
+            text
+        })
 }
 
 struct Api {
@@ -78,10 +81,15 @@ fn serve(revoke_status: u16) -> Result<Api, Box<dyn Error>> {
             } else {
                 ("HTTP/1.1 404 Not Found".to_owned(), Vec::new())
             };
-            drop(stream.write_all(
-                format!("{head}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n", body.len())
+            drop(
+                stream.write_all(
+                    format!(
+                        "{head}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                        body.len()
+                    )
                     .as_bytes(),
-            ));
+                ),
+            );
             drop(stream.write_all(&body));
         }
     });
@@ -128,15 +136,23 @@ fn an_asset_with_the_right_digest_is_downloaded_without_the_token_on_the_redirec
     let sha = digest(BYTES);
     let output = run(&repo, &api, Some(TOKEN), "tests/fixtures", &sha);
     assert!(output.status.success(), "{output:?}");
-    assert_eq!(fs::read(repo.root().join("tests/fixtures/data.bin"))?, BYTES);
+    assert_eq!(
+        fs::read(repo.root().join("tests/fixtures/data.bin"))?,
+        BYTES
+    );
     assert_eq!(leftovers(&repo, "tests/fixtures"), ["data.bin"]);
     let seen = api.seen();
     assert!(
-        seen.iter().any(|r| r.starts_with("get /repos/acme/fixtures/releases/tags/v1")
-            && r.contains(&format!("bearer {TOKEN}"))),
+        seen.iter().any(
+            |r| r.starts_with("get /repos/acme/fixtures/releases/tags/v1")
+                && r.contains(&format!("bearer {TOKEN}"))
+        ),
         "{seen:?}"
     );
-    let blob = seen.iter().find(|r| r.contains("/blob/8")).ok_or("no blob request")?;
+    let blob = seen
+        .iter()
+        .find(|r| r.contains("/blob/8"))
+        .ok_or("no blob request")?;
     assert!(blob.ends_with("authorization: none"), "{blob}");
     assert!(revoked(&api), "{seen:?}");
     assert!(!String::from_utf8_lossy(&output.stdout).contains(TOKEN));
@@ -151,8 +167,11 @@ fn a_digest_mismatch_fails_leaves_no_file_and_still_revokes_the_token() -> TestR
     let output = run(&repo, &api, Some(TOKEN), "tests/fixtures", WRONG);
     assert!(!output.status.success(), "{output:?}");
     let message = String::from_utf8_lossy(&output.stderr);
-    assert!(message.contains("sha256") && message.contains(WRONG), "{message}");
-    assert!(leftovers(&repo, "tests/fixtures").is_empty());
+    assert!(
+        message.contains("sha256") && message.contains(WRONG),
+        "{message}"
+    );
+    assert_eq!(leftovers(&repo, "tests/fixtures"), Vec::<String>::new());
     assert!(revoked(&api));
     Ok(())
 }
@@ -189,7 +208,10 @@ fn a_destination_that_escapes_the_workspace_is_refused_before_any_request_but_th
         assert_eq!(gets, 0, "{dest:?} reached the API");
         assert!(revoked(&api), "{dest:?}");
     }
-    assert!(leftovers(&outside, ".").is_empty(), "wrote outside the workspace");
+    assert!(
+        leftovers(&outside, ".").is_empty(),
+        "wrote outside the workspace"
+    );
     Ok(())
 }
 
@@ -207,7 +229,7 @@ fn without_a_token_a_cached_file_with_the_right_digest_passes_offline_and_a_tamp
     fs::write(repo.root().join("tests/fixtures/data.bin"), b"tampered")?;
     let output = run(&repo, &api, None, "tests/fixtures", &sha);
     assert!(!output.status.success(), "{output:?}");
-    assert!(api.seen().is_empty());
+    assert_eq!(api.seen(), Vec::<String>::new());
     Ok(())
 }
 
@@ -217,8 +239,11 @@ fn without_a_token_or_a_cached_file_the_step_fails_closed_naming_the_fork_case()
     let api = serve(204)?;
     let output = run(&repo, &api, None, "tests/fixtures", &digest(BYTES));
     assert!(!output.status.success(), "{output:?}");
-    assert!(String::from_utf8_lossy(&output.stderr).contains("fork"), "{output:?}");
-    assert!(api.seen().is_empty());
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("fork"),
+        "{output:?}"
+    );
+    assert_eq!(api.seen(), Vec::<String>::new());
     Ok(())
 }
 
@@ -228,7 +253,10 @@ fn a_cached_file_that_is_a_symlink_is_not_read() -> TestResult {
     let outside = Repo::empty("assets-cached-target");
     fs::write(outside.root().join("data.bin"), BYTES)?;
     fs::create_dir_all(repo.root().join("tests/fixtures"))?;
-    symlink(outside.root().join("data.bin"), repo.root().join("tests/fixtures/data.bin"))?;
+    symlink(
+        outside.root().join("data.bin"),
+        repo.root().join("tests/fixtures/data.bin"),
+    )?;
     let api = serve(204)?;
     let output = run(&repo, &api, None, "tests/fixtures", &digest(BYTES));
     assert!(!output.status.success(), "{output:?}");
@@ -241,6 +269,9 @@ fn a_revocation_that_fails_fails_the_step() -> TestResult {
     let api = serve(500)?;
     let output = run(&repo, &api, Some(TOKEN), "tests/fixtures", &digest(BYTES));
     assert!(!output.status.success(), "{output:?}");
-    assert!(String::from_utf8_lossy(&output.stderr).contains("revoked"), "{output:?}");
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("revoked"),
+        "{output:?}"
+    );
     Ok(())
 }

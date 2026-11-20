@@ -71,7 +71,11 @@ impl ReleaseAsset {
         if !plain(name, b"+") {
             return Err(bad("asset", name));
         }
-        if sha256.len() != 64 || !sha256.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')) {
+        if sha256.len() != 64
+            || !sha256
+                .bytes()
+                .all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
+        {
             return Err(bad("sha256", sha256));
         }
         let folder = dest

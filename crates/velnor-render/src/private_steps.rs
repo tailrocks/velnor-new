@@ -22,6 +22,9 @@ pub(crate) fn render(kind: &StepKind) -> RenderedStep {
         StepKind::PrivateCheck { .. } => check(),
         StepKind::PrivateToken { sources, .. } => token(sources),
         StepKind::PrivateFetch { manifests, .. } => fetch(manifests),
+        StepKind::ReleaseAssets { assets, part } => {
+            crate::release_asset_steps::render(assets, part)
+        }
         _ => RenderedStep::default(),
     }
 }

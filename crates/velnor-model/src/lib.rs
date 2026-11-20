@@ -50,6 +50,7 @@ pub use plan::{
     Step, TEST_STEP, TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT,
     TESTS_RUN_OUTPUT, Triggers, When, WorkflowPlan, group_output_name,
 };
+pub use release_asset::{ReleaseAsset, ReleaseAssetError, ReleaseAssetPart};
 pub use repo::{
     CacheDebug, CheckoutScope, CiDebugInfo, CompileInputs, CratesMirror, CustomHarness,
     DependencyKind, DocsRun, FullRun, InputOwner, InputRule, MbxRemote, MbxStore, MemberDependency,
@@ -58,7 +59,6 @@ pub use repo::{
     SpeedBudget, Target, TargetKind, TestLane, TestSetup, Timings, ToolLock, ToolPin, ToolPins,
     ToolRequest, Toolchain, UnownedPackage, Unread, Weakening, WorkspaceGroup,
 };
-pub use release_asset::{ReleaseAsset, ReleaseAssetError, ReleaseAssetPart};
 pub use sealed::{Owner, VELNOR_GEN_MARKER, lf_normalized, owner_of, seal};
 pub use selection::{
     AllTrigger, CACHE_TRIM_WORKFLOW_PATH, ChangeSet, EventKind, OptionalSteps, RELEASE_CONFIG_PATH,

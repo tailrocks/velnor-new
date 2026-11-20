@@ -15,7 +15,7 @@ use crate::github::{GitHub, GitHubWrite};
 use super::fetch::{REVOKE_PATH, TOKEN_VARIABLE, api_client};
 use super::release_assets_files::{Entry, Placement};
 
-const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(30 * 60);
+const DOWNLOAD_TIMEOUT: Duration = Duration::from_mins(30);
 const FORK_HINT: &str = "no token was created: a pull request from a fork gets none, and the cache did not hold the asset";
 
 pub(super) fn fetch_assets(args: &FetchAssetsArgs) -> Result<String, CiError> {
@@ -25,12 +25,17 @@ pub(super) fn fetch_assets(args: &FetchAssetsArgs) -> Result<String, CiError> {
     let client = token
         .clone()
         .map(|token| api_client(token, DOWNLOAD_TIMEOUT));
-    let outcome = run(args, client.as_ref().and_then(|client| client.as_ref().ok()));
+    let outcome = run(
+        args,
+        client.as_ref().and_then(|client| client.as_ref().ok()),
+    );
     let revocation = client.map_or(Ok(()), |client| {
         client
             .and_then(|github| github.delete(REVOKE_PATH))
             .map_err(|e| {
-                e.context("the release asset token could not be revoked; it expires within the hour")
+                e.context(
+                    "the release asset token could not be revoked; it expires within the hour",
+                )
             })
     });
     outcome?;
@@ -104,7 +109,11 @@ fn hash_file(file: &Path) -> Result<String, CiError> {
 }
 
 pub(super) fn hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+    use std::fmt::Write;
+    bytes.iter().fold(String::new(), |mut text, byte| {
+        write!(text, "{byte:02x}").ok();
+        text
+    })
 }
 
 fn download(

@@ -103,7 +103,7 @@ fn runs_repository_code(step: &Step) -> bool {
     compiles(step) || matches!(step.kind, StepKind::TestSetup { .. })
 }
 
-fn compiles(step: &Step) -> bool {
+pub(crate) fn compiles(step: &Step) -> bool {
     matches!(&step.kind, StepKind::Cargo(command) if !matches!(
         command,
         CargoCommand::FmtCheck

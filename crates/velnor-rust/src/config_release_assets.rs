@@ -19,7 +19,7 @@ pub(crate) struct RawReleaseAsset {
 }
 
 pub(crate) fn parse(
-    raw: Vec<RawReleaseAsset>,
+    raw: &[RawReleaseAsset],
     credentials: Option<&PrivateSources>,
 ) -> Result<Vec<ReleaseAsset>, Reason> {
     let invalid = |key: &'static str, value: &str| Reason::InvalidValue {
@@ -39,19 +39,28 @@ pub(crate) fn parse(
         return Err(invalid("release_assets", "more than 16 entries"));
     }
     let mut assets: Vec<ReleaseAsset> = Vec::new();
-    for entry in &raw {
-        let asset = ReleaseAsset::new(&entry.repo, &entry.tag, &entry.asset, &entry.sha256, &entry.dest)
-            .map_err(|e| match e.field {
-                "repo" => invalid("release_assets.repo", &e.value),
-                "tag" => invalid("release_assets.tag", &e.value),
-                "asset" => invalid("release_assets.asset", &e.value),
-                "sha256" => invalid("release_assets.sha256", &e.value),
-                _ => invalid("release_assets.dest", &e.value),
-            })?;
+    for entry in raw {
+        let asset = ReleaseAsset::new(
+            &entry.repo,
+            &entry.tag,
+            &entry.asset,
+            &entry.sha256,
+            &entry.dest,
+        )
+        .map_err(|e| match e.field {
+            "repo" => invalid("release_assets.repo", &e.value),
+            "tag" => invalid("release_assets.tag", &e.value),
+            "asset" => invalid("release_assets.asset", &e.value),
+            "sha256" => invalid("release_assets.sha256", &e.value),
+            _ => invalid("release_assets.dest", &e.value),
+        })?;
         let clash = |other: &ReleaseAsset| {
             other.sha256 == asset.sha256 || (other.dest == asset.dest && other.name == asset.name)
         };
-        if assets.first().is_some_and(|first| first.owner != asset.owner) {
+        if assets
+            .first()
+            .is_some_and(|first| first.owner != asset.owner)
+        {
             return Err(invalid("release_assets.repo", &entry.repo));
         }
         if assets.iter().any(clash) {

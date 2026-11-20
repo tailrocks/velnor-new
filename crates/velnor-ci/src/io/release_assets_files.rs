@@ -26,12 +26,9 @@ pub(super) struct Placement {
 
 impl Entry {
     pub(super) fn parse(text: &str) -> Result<Self, CiError> {
-        ReleaseAsset::from_argument(text).map(Self).map_err(|e| {
-            CiError::new(format!(
-                "--asset: invalid {} {:?}",
-                e.field, e.value
-            ))
-        })
+        ReleaseAsset::from_argument(text)
+            .map(Self)
+            .map_err(|e| CiError::new(format!("--asset: invalid {} {:?}", e.field, e.value)))
     }
 
     pub(super) fn name(&self) -> &str {
@@ -40,16 +37,25 @@ impl Entry {
 
     pub(super) fn describe(&self) -> String {
         let asset = &self.0;
-        format!("{}/{} {} {}", asset.owner, asset.repo, asset.tag, asset.name)
+        format!(
+            "{}/{} {} {}",
+            asset.owner, asset.repo, asset.tag, asset.name
+        )
     }
 
     pub(super) fn release_path(&self) -> String {
         let asset = &self.0;
-        format!("/repos/{}/{}/releases/tags/{}", asset.owner, asset.repo, asset.tag)
+        format!(
+            "/repos/{}/{}/releases/tags/{}",
+            asset.owner, asset.repo, asset.tag
+        )
     }
 
     pub(super) fn asset_path(&self, id: u64) -> String {
-        format!("/repos/{}/{}/releases/assets/{id}", self.0.owner, self.0.repo)
+        format!(
+            "/repos/{}/{}/releases/assets/{id}",
+            self.0.owner, self.0.repo
+        )
     }
 
     pub(super) fn expect_digest(&self, actual: &str) -> Result<(), CiError> {
@@ -79,8 +85,9 @@ impl Entry {
                     )));
                 }
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound && create => {
-                    fs::create_dir(&folder)
-                        .map_err(|e| CiError::new(format!("cannot create {}: {e}", folder.display())))?;
+                    fs::create_dir(&folder).map_err(|e| {
+                        CiError::new(format!("cannot create {}: {e}", folder.display()))
+                    })?;
                 }
                 Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
                 Err(e) => return Err(CiError::new(format!("{}: {e}", folder.display()))),
@@ -147,10 +154,15 @@ impl Placement {
             out.write_all(&buffer[..read])
                 .map_err(|e| fail("cannot write the asset", e))?;
         }
-        out.sync_all().map_err(|e| fail("cannot write the asset", e))?;
+        out.sync_all()
+            .map_err(|e| fail("cannot write the asset", e))?;
         drop(out);
         check(&hex(&hasher.finalize()))?;
-        fs::rename(partial, &self.file)
-            .map_err(|e| fail(&format!("cannot move the asset to {}", self.file.display()), e))
+        fs::rename(partial, &self.file).map_err(|e| {
+            fail(
+                &format!("cannot move the asset to {}", self.file.display()),
+                e,
+            )
+        })
     }
 }

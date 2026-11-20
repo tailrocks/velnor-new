@@ -105,10 +105,7 @@ fn token(sources: &PrivateSources, assets: &[ReleaseAsset]) -> RenderedStep {
                 "private-key".to_owned(),
                 Value::Expr(format!("${{{{ secrets.{} }}}}", sources.private_key)),
             ),
-            (
-                "owner".to_owned(),
-                Value::Text(assets[0].owner.clone()),
-            ),
+            ("owner".to_owned(), Value::Text(assets[0].owner.clone())),
             (
                 "repositories".to_owned(),
                 Value::Text(repositories.join("\n")),

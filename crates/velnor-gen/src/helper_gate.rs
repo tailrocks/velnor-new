@@ -27,6 +27,16 @@ pub(crate) const REQUIRED_CHECK_HELPER: (u64, u64, u64) = (0, 1, 97);
 /// becomes a row there.
 pub(crate) const RELEASE_ASSETS_HELPER: (u64, u64, u64) = (0, 1, 107);
 
+fn release_assets_gate(facts: &RepoFacts, release: &HelperRelease) -> Result<(), GenerateError> {
+    if !facts.config.release_assets.is_empty() && !release.version().at_least(RELEASE_ASSETS_HELPER)
+    {
+        return Err(GenerateError::ReleaseAssetsHelperTooOld(
+            release.version().clone(),
+        ));
+    }
+    Ok(())
+}
+
 pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, GenerateError> {
     let release = facts
         .helper
@@ -87,12 +97,7 @@ pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, Generate
             release.version().clone(),
         ));
     }
-    if !facts.config.release_assets.is_empty() && !release.version().at_least(RELEASE_ASSETS_HELPER)
-    {
-        return Err(GenerateError::ReleaseAssetsHelperTooOld(
-            release.version().clone(),
-        ));
-    }
+    release_assets_gate(facts, release)?;
     if facts.config.push_after_merge_group == PushAfterMergeGroup::SkipWhenQueueRunPassed
         && !release.version().at_least(MERGE_GROUP_HELPER)
     {

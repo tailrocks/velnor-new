@@ -109,7 +109,7 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
     let test_setup = crate::config_test_setup::parse(raw.test_setup).map_err(invalid)?;
     let private_sources = crate::config_private::optional(raw.private_sources).map_err(invalid)?;
     let release_assets =
-        crate::config_release_assets::parse(raw.release_assets, private_sources.as_ref())
+        crate::config_release_assets::parse(&raw.release_assets, private_sources.as_ref())
             .map_err(invalid)?;
     let lint = crate::config_lint::parse(raw.lint).map_err(invalid)?;
     let test_groups = crate::config_test_groups::parse(raw.test_groups).map_err(invalid)?;
