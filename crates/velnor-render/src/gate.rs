@@ -14,7 +14,6 @@ pub(crate) const PLAN_STEP: &str = "plan";
 pub(crate) const CACHE_DEBUG_ON: &str = "vars.VELNOR_CACHE_DEBUG == '1'";
 const NOT_CANCELLED: &str = "!cancelled()";
 const ALWAYS: &str = "always()";
-const FAILURE: &str = "failure()";
 const NOT_DRAFT: &str = "github.event.pull_request.draft != true";
 const IS_PULL_REQUEST_NOT: &str = "github.event_name != 'pull_request'";
 const IS_PULL_REQUEST: &str = "github.event_name == 'pull_request'";
@@ -31,7 +30,6 @@ pub(crate) const TOOLS_SAVED_STEP: &str = "save_tools_node";
 pub(crate) const PREPARE_COLD: &str = "steps.prepare.outputs.cold != 'true'";
 pub(crate) const BASE_STEP: &str = "base";
 pub(crate) const SOURCES_LOCKS_STEP: &str = "sources_locks";
-const SAVING_EVENTS: &str = "(github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')";
 const NEEDS_JSON: &str = "NEEDS_JSON";
 const GATE_SPEC: &str = "GATE_SPEC";
 pub(crate) const ON_DEFAULT_BRANCH: &str =
@@ -152,7 +150,7 @@ pub(crate) fn condition(
         When::Success => {}
         When::Finalizer => parts.push(NOT_CANCELLED.to_owned()),
         When::Always => parts.push(ALWAYS.to_owned()),
-        When::Failure => parts.push(FAILURE.to_owned()),
+        When::Failure => parts.push("failure()".to_owned()),
         When::NotCancelled | When::NotCancelledPostMerge => {
             parts.push(NOT_CANCELLED.to_owned());
             if setup != Setup::Before {
@@ -183,7 +181,7 @@ pub(crate) fn condition(
                 parts.push(format!("steps.{REPLAN_STEP}.outcome != 'failure'"));
             }
             parts.push(ON_DEFAULT_BRANCH.to_owned());
-            parts.push(SAVING_EVENTS.to_owned());
+            parts.push(POST_MERGE_EVENTS.to_owned());
             if when == When::SaveSources {
                 parts.push(format!("steps.{BASE_STEP}.outputs.sources == 'true'"));
             }
@@ -209,7 +207,7 @@ pub(crate) fn condition(
         When::BaseExpired => parts.push(BASE_EXPIRED.to_owned()),
         When::SavingRun => {
             parts.push(ON_DEFAULT_BRANCH.to_owned());
-            parts.push(SAVING_EVENTS.to_owned());
+            parts.push(POST_MERGE_EVENTS.to_owned());
         }
         When::ClearRunLabel => {
             parts.push(IS_PULL_REQUEST.to_owned());
@@ -246,7 +244,7 @@ fn tools_parts(when: When, parts: &mut Vec<String>) {
     match when {
         When::PrimeToolsFromNetwork => parts.extend([
             on_default,
-            SAVING_EVENTS.to_owned(),
+            POST_MERGE_EVENTS.to_owned(),
             node_miss,
             format!("steps.{TOOLS_STEP}.outputs.cache-hit == 'true'"),
         ]),
