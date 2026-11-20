@@ -95,6 +95,10 @@ python3 -m unittest scripts/test_parity_verify_candidate.py
 python3 scripts/hosted_phase_measurement/tests/test_mbx_summary.py
 '''
 
+[tasks.validate-hk]
+description = "Validate hk.pkl: fail when hk cannot load the config"
+run = "hk validate --deny-warnings"
+
 [tasks.test-maintenance-helpers]
 description = "Run repository-only maintenance helper test suites"
 run = '''
