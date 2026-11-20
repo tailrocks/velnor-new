@@ -73,6 +73,7 @@ pub(crate) fn plan(
                 pr: PrRun::Always,
                 skip_after_merge_group: None,
                 skip_when_cold: false,
+                private_repo: false,
                 hosted_only: false,
                 gate: None,
                 reads: None,

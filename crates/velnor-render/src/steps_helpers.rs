@@ -4,8 +4,8 @@
 use std::collections::BTreeMap;
 
 use super::{
-    CacheKey, CargoCommand, CargoLane, GateNeed, RenderedStep, Step, StepKind, cargo_step,
-    sources_step, trimmed_lane,
+    CacheKey, CargoCommand, CargoLane, GateNeed, RenderedStep, Setup, Step, StepKind, cargo_step,
+    merge_group_skipped, sources_step, trimmed_lane,
 };
 use velnor_model::RepoPath;
 
@@ -61,6 +61,26 @@ pub(super) fn rustup_add(kind: &str, items: &[String]) -> RenderedStep {
         run: Some(format!("rustup {kind} add {}", items.join(" "))),
         ..RenderedStep::default()
     }
+}
+
+pub(super) fn extra_conditions(step: &Step, setup: Setup, after: &[String]) -> Vec<String> {
+    let mut extra = saved_unless_hit(&step.kind);
+    extra.extend(crate::private_steps::repository_conditions(step));
+    extra.extend(after.iter().map(String::as_str).map(setup_not_failed));
+    extra.extend(
+        step.hosted_only
+            .then(|| crate::gate::NOT_SELF_HOSTED.to_owned()),
+    );
+    extra.extend(
+        step.skip_when_cold
+            .then(|| crate::gate::PREPARE_COLD.to_owned()),
+    );
+    extra.extend(
+        step.skip_after_merge_group
+            .as_ref()
+            .map(|from| merge_group_skipped(from, setup)),
+    );
+    extra
 }
 
 pub(super) fn leading_steps(step: &Step, audit: bool, lane: CargoLane) -> Vec<RenderedStep> {

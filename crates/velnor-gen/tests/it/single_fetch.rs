@@ -188,6 +188,7 @@ fn step_of(kind: StepKind) -> Step {
         after_setup: false,
         skip_after_merge_group: None,
         skip_when_cold: false,
+        private_repo: false,
         hosted_only: false,
     }
 }

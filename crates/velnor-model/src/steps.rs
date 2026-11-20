@@ -22,6 +22,15 @@ pub enum InputsCli {
     Batched,
 }
 
+/// What `cache decide` finds in `VELNOR_REPOSITORY_PRIVATE`: nothing set (helpers before the
+/// variable), an empty string, or the answer of the repository privacy step.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PrivateVerdict {
+    Unset,
+    Cleared,
+    Checked,
+}
+
 pub const BUDGET_JOB: &str = "rust-budget";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -60,6 +69,7 @@ pub enum StepKind {
         cli: InputsCli,
         budget_bytes: u64,
         verdicts: Option<PlanFrom>,
+        private: PrivateVerdict,
     },
     PublicSources {
         manifests: Vec<RepoPath>,
@@ -103,6 +113,7 @@ pub enum StepKind {
     },
     TestGroupsCheck(Vec<GroupFilter>),
     CratesMirror(crate::repo::CratesMirror),
+    RepositoryPrivacy,
     PrivateCheck {
         cached: Vec<crate::ids::RootSlug>,
     },
@@ -220,6 +231,7 @@ impl StepKind {
             | Self::InputsRestore { .. }
             | Self::TestGroupsCheck(_)
             | Self::CratesMirror(_)
+            | Self::RepositoryPrivacy
             | Self::PrivateCheck { .. }
             | Self::PrivateToken { .. }
             | Self::PrivateFetch { .. }

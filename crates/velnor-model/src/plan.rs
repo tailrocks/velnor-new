@@ -126,6 +126,7 @@ pub struct Step {
     pub when: When,
     pub skip_after_merge_group: Option<PlanFrom>,
     pub skip_when_cold: bool,
+    pub private_repo: bool,
     pub pr: PrRun,
     pub gate: Option<Gate>,
     pub reads: Option<PlanRef>,

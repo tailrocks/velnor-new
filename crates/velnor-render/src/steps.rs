@@ -50,7 +50,7 @@ mod steps_helpers;
 #[path = "steps_outputs.rs"]
 mod steps_outputs;
 use steps_helpers::{
-    after_setup, leading_steps, root_key, rustup_add, saved_unless_hit, setup_not_failed, variable,
+    after_setup, extra_conditions, leading_steps, root_key, rustup_add, variable,
 };
 use steps_outputs::{merge_group_output, test_outputs};
 
@@ -195,7 +195,11 @@ fn rendered_steps(
     }
     rendered.push(body);
     if let StepKind::SourcesFetchAll { manifests, .. } = &step.kind {
-        rendered.extend(sources_fetch_all_rest(manifests, lane.cache_debug));
+        rendered.extend(sources_fetch_all_rest(
+            manifests,
+            lane.cache_debug,
+            lane.offline,
+        ));
     }
     for body in &mut rendered {
         if let (StepKind::Cargo(_), Some(target)) = (&step.kind, &step.target_dir) {
@@ -209,27 +213,7 @@ fn rendered_steps(
                 Value::Text(name.to_owned()),
             ));
         }
-        let mut extra = saved_unless_hit(&step.kind);
-        extra.extend(
-            around
-                .after_setup
-                .iter()
-                .map(String::as_str)
-                .map(setup_not_failed),
-        );
-        extra.extend(
-            step.hosted_only
-                .then(|| crate::gate::NOT_SELF_HOSTED.to_owned()),
-        );
-        extra.extend(
-            step.skip_when_cold
-                .then(|| crate::gate::PREPARE_COLD.to_owned()),
-        );
-        extra.extend(
-            step.skip_after_merge_group
-                .as_ref()
-                .map(|from| merge_group_skipped(from, setup)),
-        );
+        let extra = extra_conditions(step, setup, &around.after_setup);
         body.condition = chained_save::combined(
             around.chained,
             step,
@@ -238,6 +222,7 @@ fn rendered_steps(
             around.saved_after,
             body.condition.take(),
         );
+        body.env.extend(crate::private_steps::decide_env(step));
         body.working_directory = step.directory.as_ref().map(ToString::to_string);
         body.shared |= matches!(step.when, velnor_model::When::SaveVerifiedTools(_));
         if matches!(step.kind, StepKind::InputsSave { .. })
@@ -318,7 +303,7 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
         StepKind::RustTargets(targets) => rustup_add("target", targets),
         StepKind::SourcesFetch { position, .. } => sources_fetch(*position, lane),
         StepKind::SourcesFetchAll { manifests, .. } => {
-            sources_fetch_all(manifests, lane.cache_debug)
+            sources_fetch_all(manifests, lane.cache_debug, lane.offline)
         }
         StepKind::Cargo(command) => cargo_step(
             command,
@@ -346,7 +331,8 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
         StepKind::MbxPin => crate::helper_steps::mbx_pin_step(),
         StepKind::CratesMirror(mirror) => crate::helper_steps::mirror_step(mirror),
         StepKind::MbxStore | StepKind::MbxPrivate => crate::helper_steps::mbx_local_step(kind),
-        StepKind::PrivateCheck { .. }
+        StepKind::RepositoryPrivacy
+        | StepKind::PrivateCheck { .. }
         | StepKind::PrivateToken { .. }
         | StepKind::PrivateFetch { .. }
         | StepKind::ReleaseAssets { .. } => crate::private_steps::render(kind),
