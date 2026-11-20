@@ -2951,3 +2951,7 @@ f714692cf7bb2631da74dd2802a9f2a542938ee4:docs/proposed/opentofu-goldens/cases/ne
 # column-verified. These exact historical fingerprints do not cover later content.
 3e34ae71ef70cc1b4bc281e01b65a4b68ac8c083:docs/implemented/evidence/freshness-2026-10-27/ci-40428573524/maintenance.zip!matrix.json:generic-api-key:1
 3e34ae71ef70cc1b4bc281e01b65a4b68ac8c083:docs/implemented/evidence/freshness-2026-10-27/ci-40428573524/maintenance.zip!plan.json:generic-api-key:1
+
+# Throwaway RSA keys for the velnor-ci app-token tests; generated for the test and used nowhere else.
+44a531bc6df856b923f052833408643a6d81dd79:crates/velnor-ci/tests/it/data/app_token/TEST-ONLY-not-a-secret-rsa-pkcs1.pem:private-key:1
+44a531bc6df856b923f052833408643a6d81dd79:crates/velnor-ci/tests/it/data/app_token/TEST-ONLY-not-a-secret-rsa-pkcs8.pem:private-key:1
