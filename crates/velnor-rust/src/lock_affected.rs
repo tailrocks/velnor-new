@@ -8,7 +8,7 @@ use velnor_model::PackageName;
 use crate::cargo_lock::CargoLock;
 use crate::lock::LockError;
 
-const TRUSTED_SOURCES: [&str; 2] = ["registry+", "sparse+"];
+const TRUSTED_SOURCES: &[&str] = &["registry+", "sparse+"];
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 enum Key {

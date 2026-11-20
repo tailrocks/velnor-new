@@ -5,13 +5,13 @@ use velnor_model::{PackageName, RepoPath, RepoView, TargetKind};
 
 use crate::doc_steps::tokens::{Token, tokens};
 
-const PREFIXES: [&str; 4] = [
+const PREFIXES: &[&str] = &[
     "cargo:rerun-if-changed",
     "cargo::rerun-if-changed",
     "cargo:rerun-if-env-changed",
     "cargo::rerun-if-env-changed",
 ];
-const PRINTING: [&str; 4] = ["println", "print", "write", "writeln"];
+const PRINTING: &[&str] = &["println", "print", "write", "writeln"];
 const LINE_TO_ADD: &str = "println!(\"cargo:rerun-if-changed=build.rs\");";
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]

@@ -5,8 +5,8 @@ use toml::{Table, Value};
 
 pub const MBX_TOOL: &str = "mr-boxington";
 const MBX_TOOL_COMMAND: &str = "mbx";
-const RUST_TOOLS: [&str; 2] = ["rust", "core:rust"];
-const MBX_KEYS: [&str; 3] = ["tools.rust", "wrappers.cargo", "tools.mr-boxington"];
+const RUST_TOOLS: &[&str] = &["rust", "core:rust"];
+const MBX_KEYS: &[&str] = &["tools.rust", "wrappers.cargo", "tools.mr-boxington"];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MbxRule {
@@ -43,7 +43,7 @@ pub fn mbx_declaration<'a>(
     let configs: Vec<&Table> = configs.into_iter().collect();
     let mut owner: Option<usize> = None;
     for (index, config) in configs.iter().enumerate() {
-        let Some(key) = MBX_KEYS.into_iter().find(|key| sets(config, key)) else {
+        let Some(key) = MBX_KEYS.iter().copied().find(|key| sets(config, key)) else {
             continue;
         };
         match owner {

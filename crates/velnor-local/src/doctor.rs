@@ -13,7 +13,7 @@ pub const BUILD_FIX: &str = "velnor-local build";
 pub const DOCKER_FIX: &str = "start OrbStack or Docker Desktop, then check `docker info`";
 pub const LOCAL_DOCKER_FIX: &str = "velnor-local needs a Docker daemon on this machine; to use a remote daemon or dind, run velnor-local and velnor-host inside it (Linux)";
 
-pub const PLAIN_IMAGES: [(&str, &str); 3] = [
+pub const PLAIN_IMAGES: &[(&str, &str)] = &[
     (STANDIN_IMAGE, "local/docker/runner-server"),
     (RUNNER_IMAGE, "local/docker/runner"),
     (CACHE_IMAGE, "-f local/docker/velnor-local/Dockerfile ."),

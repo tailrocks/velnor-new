@@ -10,7 +10,7 @@ use crate::roots::{CARGO_LOCK, is_cargo_config};
 use crate::toml_file::table;
 use crate::weaken_scope::reaches_a_check;
 
-const PUBLIC_SOURCES: [&str; 2] = [
+const PUBLIC_SOURCES: &[&str] = &[
     "registry+https://github.com/rust-lang/crates.io-index",
     "sparse+https://index.crates.io/",
 ];
@@ -149,7 +149,7 @@ pub fn cacheable_config(text: &str) -> Result<bool, crate::lock::LockError> {
     .any(|key| document.contains_key(*key)))
 }
 
-const PUBLIC_GIT_HOSTS: [&str; 4] = ["github.com", "gitlab.com", "codeberg.org", "bitbucket.org"];
+const PUBLIC_GIT_HOSTS: &[&str] = &["github.com", "gitlab.com", "codeberg.org", "bitbucket.org"];
 
 pub(crate) fn private_suggestion(
     view: &RepoView,
