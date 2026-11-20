@@ -14,10 +14,8 @@ fn marker(directory: &Path) -> PathBuf {
     directory.join(STORE).join(MARKER)
 }
 
-/// Remembers the last failed `inputs build` command for each target directory.
-/// A failed command records no receipts, so the next audit can name it.
-pub(super) fn record_failure(directories: &[PathBuf], command: &[String]) -> Result<(), CiError> {
-    let bytes = serde_json::to_vec(command).map_err(|e| CiError::new(e.to_string()))?;
+pub(super) fn record_failure(directories: &[PathBuf], label: &str) -> Result<(), CiError> {
+    let bytes = serde_json::to_vec(label).map_err(|e| CiError::new(e.to_string()))?;
     for directory in directories {
         let path = marker(directory);
         fs::create_dir_all(directory.join(STORE))
@@ -49,11 +47,9 @@ pub(super) fn clear_failure(directories: &[PathBuf]) -> Result<(), CiError> {
     Ok(())
 }
 
-/// The command of the last failed `inputs build` in these directories, if any.
 pub(super) fn earlier_failure(directories: &[PathBuf]) -> Option<String> {
     directories.iter().find_map(|directory| {
         let bytes = fs::read(marker(directory)).ok()?;
-        let command: Vec<String> = serde_json::from_slice(&bytes).ok()?;
-        Some(command.join(" "))
+        serde_json::from_slice(&bytes).ok()
     })
 }

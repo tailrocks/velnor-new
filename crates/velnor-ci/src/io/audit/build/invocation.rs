@@ -16,6 +16,24 @@ pub(super) struct Invocation {
 }
 
 impl Invocation {
+    pub(super) fn label(&self) -> String {
+        let program = Path::new(&self.command[0])
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("command");
+        let words: Vec<&str> = self
+            .command
+            .iter()
+            .skip(1)
+            .map(String::as_str)
+            .take_while(|word| *word != "--")
+            .collect();
+        match subcommand(&words).filter(|_| program == "cargo") {
+            Some(index) => format!("{program} {}", words[index]),
+            None => program.to_owned(),
+        }
+    }
+
     pub(super) fn selects(&self, package: &str) -> bool {
         let words: Vec<&str> = self
             .command

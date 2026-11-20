@@ -235,7 +235,7 @@ impl Builder<'_> {
             Invocation::new(command).compiler,
         )?;
         if !status.success() {
-            failure::record_failure(&self.directories, command)?;
+            failure::record_failure(&self.directories, &Invocation::new(command).label())?;
             return Err(CiError::new(format!("build command failed: {status}")));
         }
         failure::clear_failure(&self.directories)
