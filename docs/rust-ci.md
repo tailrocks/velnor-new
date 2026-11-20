@@ -57,7 +57,7 @@ Three families hold the work between runs. Each key is built from one typed valu
 - The CI profile sets `CARGO_INCREMENTAL=0`, `SOURCE_DATE_EPOCH=0` and debug info to `line-tables-only` (`ci_debuginfo`). Every build step uses the same `CARGO_TARGET_DIR`.
 - On the default branch, a restored Target older than seven days is dropped. The run builds cold and selects everything.
 
-**What can write.** Only `push`, `schedule` and `workflow_dispatch` runs on the default branch save a cache. A pull request, a merge queue run and a fork pull request only restore. A save needs at least one compiled, checked or documented crate, and incremental directories are removed first. When `Cargo.lock` holds a dependency that is not proven public, no Target or Sources entry is saved. The two newest entries of a group are kept. `Cache maintenance` prunes the repository towards `cache_budget_bytes` (default and maximum 8 GB of GitHub's 10 GB) on a best-effort basis. It deletes only entries it may delete (retired or superseded entries, idle pull request deltas, Target and Sources entries beyond the newest two of a group, and idle Tools entries), so it can stay over budget when the entries it must keep are larger than the budget.
+**What can write.** Only `push`, `schedule` and `workflow_dispatch` runs on the default branch save a cache. A save waits for the build steps, not for the tests: once every build step has succeeded, the Target and Sources entries are saved even if a test fails, and a failed or skipped build saves neither. A pull request, a merge queue run and a fork pull request only restore. The `cache-mode` of a job is `write` on a job that saves and `read` on every other job, and GitHub enforces that mode at the cache service. A save needs at least one compiled, checked or documented crate, and incremental directories are removed first. When `Cargo.lock` holds a dependency that is not proven public, no Target or Sources entry is saved. The two newest entries of a group are kept. `Cache maintenance` prunes the repository towards `cache_budget_bytes` (default and maximum 8 GB of GitHub's 10 GB) on a best-effort basis. It deletes only entries it may delete (retired or superseded entries, idle pull request deltas, Target and Sources entries beyond the newest two of a group, and idle Tools entries), so it can stay over budget when the entries it must keep are larger than the budget.
 
 **PR delta cache (helper 0.1.95 or later).** A pull request from this repository restores the Target entry, then a small per-pull-request delta layer (`velnor-dlt-` keys) on top of it. After the last compiling step the lane stages what the pull request changed in `target.velnor-delta` and saves it, so the next push to the same pull request starts from that work instead of the default branch's Target. A `Rust CI` cleanup workflow trims the deltas of a finished pull request. The lanes get these steps only when the lock pins `velnor-ci` 0.1.95 or later. An older helper (0.1.81 to 0.1.94) is not refused: the generator silently leaves the delta steps out and the output is what it was without the layer.
 
@@ -119,7 +119,7 @@ Every key of `.velnor/rust-ci.toml`, with its default. `generator/CONFIG.md` has
 | `full_run` | `"nightly"` | `off`, `hourly`, `nightly`, `weekly` or a cron expression |
 | `pr_ci` | `"always"` | `always` or `label` |
 | `skip_draft_pull_requests` | `false` | draft pull requests run nothing |
-| `ci` | none | table; `skip_push_after_merge_group = true` skips checks the merge queue already ran |
+| `ci` | none | table; `skip_push_after_merge_group = true` skips checks and archived test jobs the merge queue already ran (needs `velnor-ci` 0.1.103) |
 | `docs` | `"always"` | `post_merge` runs `cargo doc` only on a `push`, `schedule` or `workflow_dispatch` run, not on a pull request or a merge queue run |
 | `check_alone` | `"always"` | `post_merge` runs the per-crate `Check <crate> alone` steps only on a `push`, `schedule` or `workflow_dispatch` run, not on a pull request or a merge queue run |
 | `sparse_checkout` | `false` | each Rust lane job checks out only the paths its lane reads |
@@ -137,7 +137,7 @@ Every key of `.velnor/rust-ci.toml`, with its default. `generator/CONFIG.md` has
 | `cache_debug` | `false` | cargo fingerprint log, see above |
 | `ci_debuginfo` | `"line-tables-only"` | `full`, `line-tables-only` or `none` |
 | `private_sources` | none | private dependencies, see above |
-| `crates_mirror` | none | a crates mirror for a self-hosted runner (needs `velnor-ci` 0.1.93) |
+| `crates_mirror` | none | a crates mirror for a self-hosted runner (needs `velnor-ci` 0.1.93); it stays in effect for a step that passes its own `--config` |
 | `runner` | `"ubuntu-latest"` | the runner label of every job |
 | `hosted` | `true` when `runner` is not set | `true` opens `runner` to fork pull requests, `false` fences it; required when `runner` is spelled like a GitHub-hosted label; needs `velnor-ci` 0.1.99 |
 | `fork_runner` | platform-dependent: `"ubuntu-latest"`, `"ubuntu-24.04-arm"` for a Linux arm64 `runner`, `"macos-15"` for an Apple silicon macOS `runner` | the hosted runner for fork pull requests when `runner` is self-hosted |
