@@ -328,12 +328,19 @@ fn metadata(
         command
             .env_remove("CARGO_TARGET_DIR")
             .env_remove("CARGO_BUILD_BUILD_DIR");
-    } else if invocation.is_none()
-        && let Some(build) = std::env::var_os("CARGO_BUILD_BUILD_DIR")
-            .map(PathBuf::from)
-            .filter(|build| build.is_relative())
+    } else if let Some(build) = std::env::var_os("CARGO_BUILD_BUILD_DIR")
+        .map(PathBuf::from)
+        .filter(|build| build.is_relative())
     {
-        command.env("CARGO_BUILD_BUILD_DIR", build_dir::step_relative(&build)?);
+        let base = match invocation {
+            Some(invocation) => invocation.directory.to_path_buf(),
+            None => std::env::current_dir()
+                .map_err(|e| CiError::new(format!("cannot read the working directory: {e}")))?,
+        };
+        command.env(
+            "CARGO_BUILD_BUILD_DIR",
+            build_dir::step_relative(&build, &base),
+        );
     }
     let output = command
         .args([

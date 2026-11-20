@@ -21,11 +21,8 @@ struct Printed {
     packages: Vec<Member>,
 }
 
-pub(super) fn step_relative(relative: &Path) -> Result<PathBuf, CiError> {
-    let directory = std::env::current_dir()
-        .map_err(|e| CiError::new(format!("cannot read the working directory: {e}")))?;
-    Ok(directory
-        .join(relative)
+pub(super) fn step_relative(relative: &Path, base: &Path) -> PathBuf {
+    base.join(relative)
         .components()
         .fold(PathBuf::new(), |mut path, part| {
             match part {
@@ -36,7 +33,7 @@ pub(super) fn step_relative(relative: &Path) -> Result<PathBuf, CiError> {
                 other => path.push(other),
             }
             path
-        }))
+        })
 }
 
 pub(super) fn refuse(workspace: &Workspace, metadata: &[u8]) -> Result<(), CiError> {
