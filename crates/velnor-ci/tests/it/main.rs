@@ -140,6 +140,7 @@ mod release_tag_patterns;
 mod report;
 mod report_accounting;
 mod report_split_host_units;
+mod report_waste_categories;
 mod required_lane;
 mod resolve_cases;
 mod resolve_cases_receipts;

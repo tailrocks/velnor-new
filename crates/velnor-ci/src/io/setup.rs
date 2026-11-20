@@ -160,9 +160,27 @@ fn install_declared(root: &std::path::Path, declared: &Toolchain) -> Result<(), 
             let mut args = vec![kind, "add"];
             args.extend(names.iter().map(String::as_str));
             tool_output(root, "rustup", &args)?;
+            record_installs(names.iter().map(|name| format!("{kind} {name}")));
         }
     }
     survey()?.ensure_none()
+}
+
+/// The report step reads these to tell a toolchain install that a tools cache hit should have
+/// made unnecessary. Recording is best effort: it never fails `prepare`.
+fn record_installs(installs: impl Iterator<Item = String>) {
+    use std::io::Write;
+    let Some(temp) = std::env::var_os("RUNNER_TEMP").filter(|temp| !temp.is_empty()) else {
+        return;
+    };
+    let mut text = installs.collect::<Vec<_>>().join("\n");
+    text.push('\n');
+    std::fs::OpenOptions::new()
+        .append(true)
+        .create(true)
+        .open(Path::new(&temp).join(crate::waste_evidence::TOOLCHAIN_INSTALLS))
+        .and_then(|mut file| file.write_all(text.as_bytes()))
+        .ok();
 }
 
 fn tool_output(root: &std::path::Path, program: &str, args: &[&str]) -> Result<String, CiError> {

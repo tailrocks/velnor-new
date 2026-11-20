@@ -98,6 +98,26 @@ fn command_kind(invocation: &Invocation) -> CommandKind {
 /// test-archive job of the split are the exception, because they are parallel by design and
 /// cannot share a target cache. What they both compile is the host side (proc-macro crates and the
 /// crates only they need), which `clippy` and `nextest archive` build in the same way.
+fn repeated(units: BTreeMap<String, (String, u64)>) -> Vec<String> {
+    units
+        .into_values()
+        .filter(|(_, count)| *count > 1)
+        .map(|(package, count)| {
+            format!("{package}: identical observed compilation unit executed {count} times")
+        })
+        .collect()
+}
+
+/// Units that two cargo invocations of one lane both compiled.
+#[must_use]
+pub fn lane_repeats(lane: &LaneMetrics) -> Vec<String> {
+    let mut within = BTreeMap::new();
+    for invocation in &lane.invocations {
+        collect(invocation, &mut within);
+    }
+    repeated(within)
+}
+
 #[must_use]
 pub fn repeats(lanes: &[LaneMetrics]) -> Vec<String> {
     let mut groups: Vec<BTreeMap<String, (String, u64)>> = Vec::new();
@@ -119,14 +139,7 @@ pub fn repeats(lanes: &[LaneMetrics]) -> Vec<String> {
         }
         groups.push(across);
     }
-    groups
-        .into_iter()
-        .flatten()
-        .filter(|(_, (_, count))| *count > 1)
-        .map(|(_, (package, count))| {
-            format!("{package}: identical observed compilation unit executed {count} times")
-        })
-        .collect()
+    groups.into_iter().flat_map(repeated).collect()
 }
 
 #[must_use]

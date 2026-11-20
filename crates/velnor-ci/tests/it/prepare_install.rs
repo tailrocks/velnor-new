@@ -70,3 +70,34 @@ fn prepare_installs_nothing_when_nothing_is_missing() {
     let calls = calls(&run);
     assert!(!calls.contains(" add "), "{calls}");
 }
+
+#[test]
+fn prepare_records_each_install_it_ran_for_the_report() {
+    let file = "[toolchain]\nchannel = \"1.99.1\"\nprofile = \"complete\"\ntargets = [\"wasm32-unknown-unknown\"]\n";
+    let run = run("record", file, &rustup(AFTER, WITH_WASM));
+    assert!(run.output.status.success(), "{:?}", run.output);
+    let recorded = fs::read_to_string(
+        run.bin
+            .join("..")
+            .join(velnor_ci::waste_evidence::TOOLCHAIN_INSTALLS),
+    )
+    .unwrap_or_default();
+    assert_eq!(
+        recorded,
+        "component rust-docs\ncomponent rust-src\ntarget wasm32-unknown-unknown\n"
+    );
+}
+
+#[test]
+fn prepare_records_nothing_when_nothing_is_installed() {
+    let file =
+        "[toolchain]\nchannel = \"1.99.1\"\nprofile = \"minimal\"\ncomponents = [\"clippy\"]\n";
+    let run = run("record-none", file, &rustup(AFTER, WITH_WASM));
+    assert!(run.output.status.success(), "{:?}", run.output);
+    assert!(
+        !run.bin
+            .join("..")
+            .join(velnor_ci::waste_evidence::TOOLCHAIN_INSTALLS)
+            .exists()
+    );
+}
