@@ -4,6 +4,7 @@
 use std::fs;
 
 use super::{audit, command, own_units, workspace_below_the_root};
+use velnor_test_support::real_cargo_str;
 
 #[test]
 fn compiler_flags_after_the_separator_remain_test_payload() {
@@ -13,7 +14,7 @@ fn compiler_flags_after_the_separator_remain_test_payload() {
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.first().is_some_and(|arg| arg == "metadata") {
-        std::process::exit(std::process::Command::new("cargo").args(&args).status().unwrap().code().unwrap_or(1));
+        std::process::exit(std::process::Command::new("@CARGO@").args(&args).status().unwrap().code().unwrap_or(1));
     }
     let compiler = args.iter().take_while(|arg| arg.as_str() != "--").any(|arg| arg == "--no-run");
     if !compiler {
@@ -27,7 +28,8 @@ fn main() {
     std::fs::write(counter, pass.to_string()).unwrap();
     std::fs::write("target/debug/build/lib-f000000000000008/output", format!("cargo:rerun-if-changed=../target/generated\ncargo:rustc-env=FIXTURE_COMPILER_PASS={pass}\n")).unwrap();
 }
-"#);
+"#
+    .replace("@CARGO@", &real_cargo_str()).as_str());
     let driver = repo.root().join("driver/cargo");
     let compiled = command("rustc")
         .current_dir(repo.root())

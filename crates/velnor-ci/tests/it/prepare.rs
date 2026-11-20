@@ -5,6 +5,7 @@ use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
+use velnor_test_support::real_cargo;
 
 pub(crate) const MISE: &str =
     "[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n";
@@ -273,7 +274,7 @@ pub(crate) fn output<'a>(run: &'a Run, name: &str) -> &'a str {
 }
 
 fn effective(dir: &Path) -> Output {
-    let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
+    let cargo = real_cargo();
     Command::new(cargo)
         .args(["-Zunstable-options", "config", "get", "profile.dev"])
         .current_dir(dir.join("checkout"))

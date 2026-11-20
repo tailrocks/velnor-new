@@ -5,6 +5,7 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 use std::time::{Duration, UNIX_EPOCH};
+use velnor_test_support::real_cargo;
 
 use crate::io::Repo;
 
@@ -55,7 +56,7 @@ fn generated_steps(workflow: &str, name: &str) -> Vec<(String, String)> {
 }
 
 fn cargo_build(repo: &Repo, root: &str) -> String {
-    let output = Command::new(env!("CARGO"))
+    let output = Command::new(real_cargo())
         .args(["build", "--offline", "-v"])
         .current_dir(repo.root().join(root))
         .env_remove("CARGO_TARGET_DIR")
@@ -100,7 +101,7 @@ pub(crate) fn fixture() -> Repo {
             &format!("{root}.cargo/config.toml"),
             &format!("[build]\ntarget-dir='{target}'\n"),
         );
-        let status = Command::new(env!("CARGO"))
+        let status = Command::new(real_cargo())
             .args(["generate-lockfile", "--offline"])
             .current_dir(repo.root().join(root))
             .status()

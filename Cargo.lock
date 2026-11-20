@@ -4141,6 +4141,7 @@ dependencies = [
  "velnor-release",
  "velnor-render",
  "velnor-rust",
+ "velnor-test-support",
  "zip",
 ]
 
@@ -4157,6 +4158,7 @@ dependencies = [
  "velnor-release",
  "velnor-render",
  "velnor-rust",
+ "velnor-test-support",
  "velnor-workflows",
 ]
 
@@ -4351,6 +4353,10 @@ dependencies = [
  "url",
  "velnor-model",
 ]
+
+[[package]]
+name = "velnor-test-support"
+version = "0.0.0"
 
 [[package]]
 name = "velnor-workflows"
