@@ -90,7 +90,7 @@ pub(super) fn setup(args: &CratesMirrorArgs) -> Result<String, CiError> {
     super::append_to(
         "GITHUB_ENV",
         &format!(
-            "{CONFIG_ENV}={}\n{WRAPPER_ENV}={}\nCARGO={}\n{}",
+            "{CONFIG_ENV}={}\n{WRAPPER_ENV}={}\nCARGO={}\n{DISABLE_ENV}=\n{}",
             config.display(),
             wrapper.display(),
             wrapper.display(),
