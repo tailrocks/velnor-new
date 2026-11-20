@@ -8,6 +8,9 @@ use std::process::Output;
 
 use serde::Deserialize;
 
+mod paths;
+pub use paths::{inside, link_inside, overlapping, with_path};
+
 pub const DEFAULT_BRANCH: &str = "{default}";
 
 #[derive(Debug, Deserialize)]
@@ -201,14 +204,6 @@ pub fn next_patch(lock: &str, package: &str) -> Option<(String, String)> {
     Some((format!("{package}@{version}"), next))
 }
 
-#[must_use]
-pub fn with_path(list: Option<&str>, path: &str) -> String {
-    match list {
-        Some(list) if !list.is_empty() => format!("{list}:{path}"),
-        _ => path.to_owned(),
-    }
-}
-
 /// What the velnor-ci report of one run came to. Only `Failed` fails the run:
 /// a velnor-ci that is not installed is a warning.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -303,30 +298,6 @@ impl Outcome {
             self.id, self.workflow, self.event, self.conclusion
         )
     }
-}
-
-#[must_use]
-pub fn link_inside(link: &Path, target: &Path) -> bool {
-    let mut depth = link.components().count().saturating_sub(1);
-    for part in target.components() {
-        match part {
-            Component::Normal(_) => depth += 1,
-            Component::CurDir => {}
-            Component::ParentDir if depth > 0 => depth -= 1,
-            _ => return false,
-        }
-    }
-    true
-}
-
-#[must_use]
-pub fn overlapping(state: &Path, checkout: &Path) -> bool {
-    state.starts_with(checkout) || checkout.starts_with(state)
-}
-
-#[must_use]
-pub fn inside(root: &Path, dir: &Path) -> bool {
-    dir.starts_with(root)
 }
 
 pub fn plan(scenarios: &[String], dir: &Path) -> Result<Vec<(String, String, PathBuf)>, String> {

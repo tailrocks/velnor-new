@@ -24,19 +24,17 @@ pub(crate) fn mbx_remote(raw: Option<RawCache>) -> Result<MbxRemote, Reason> {
     }
 }
 
-/// The mbx cache restores objects on fork pull requests, so a repository whose
-/// dependencies are not proven public must not opt in.
 pub(crate) fn private_sources(
     view: &RepoView,
     roots: &[RustRoot],
     config: &RustCiConfig,
 ) -> Result<Option<String>, DetectError> {
-    let private = crate::private_sources::private_sources(view, roots);
-    match (config.mbx_remote, &private) {
+    let cause = crate::private_sources::private_cause(view, roots);
+    match (config.mbx_remote, &cause) {
         (MbxRemote::GithubActions, Some(cause)) => Err(DetectError::invalid(
             &CONFIG_PATH,
             Reason::MbxRemotePrivate(cause.clone()),
         )),
-        _ => Ok(private),
+        _ => Ok(cause.map(|cause| crate::private_sources::note(&cause))),
     }
 }

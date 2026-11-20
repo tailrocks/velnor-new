@@ -7,7 +7,6 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
 LEGACY = REPO / "images/job/ubuntu-26.04/candidate/candidate.py"
-BINARY = sys.argv[1]
 spec = importlib.util.spec_from_file_location("legacy_candidate", LEGACY)
 legacy = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = legacy
@@ -350,6 +349,36 @@ def run(cmd, env):
     return done.returncode, done.stdout, done.stderr
 
 
+UNBOUND_OCI = {
+    "archive_index_digest": "0" * 64, "archive_index_size_bytes": 1,
+    "platform_manifest_digest": "sha256:" + "0" * 64, "platform_manifest_size_bytes": 1,
+    "image_configuration_digest": "sha256:" + "0" * 64, "image_configuration_size_bytes": 1,
+    "layer_digests": ["sha256:" + "0" * 64],
+}
+
+
+def bind_oci(archive):
+    try:
+        return legacy.verify_oci_archive(archive)
+    except Exception:
+        return copy.deepcopy(UNBOUND_OCI)
+
+
+MESSAGE_DIFFS = {
+    "layer member size base256 big": "both refuse the base-256 member size; Rust names the bad size field, legacy reports a generic layer error",
+    "outer truncated": "both refuse the truncated archive; the text is Python tarfile's end-of-data message versus Rust's generic read error",
+    "root input missing Dockerfile": "both refuse the missing build input Dockerfile; the text is each runtime's file-not-found message",
+    "root input missing README.md": "both refuse the missing build input README.md; the text is each runtime's file-not-found message",
+    "root input missing build-test.sh": "both refuse the missing build input build-test.sh; the text is each runtime's file-not-found message",
+    "root input missing candidate/candidate.py": "both refuse the missing build input candidate/candidate.py; the text is each runtime's file-not-found message",
+    "root input missing runner.lock": "both refuse the missing build input runner.lock; the text is each runtime's file-not-found message",
+}
+
+
+def is_allowed_message_diff(name):
+    return name in MESSAGE_DIFFS
+
+
 def message(stderr, prefix):
     last = [line for line in stderr.strip().splitlines() if line.strip()]
     if last and last[-1].startswith(prefix):
@@ -358,8 +387,8 @@ def message(stderr, prefix):
 
 
 def main():
+    binary = sys.argv[1]
     mismatches, total, message_diffs, stricter = [], 0, [], 0
-    base_archive = None
     for case in cases():
         with tempfile.TemporaryDirectory(prefix="parity-") as tmp:
             tmp = Path(tmp)
@@ -368,14 +397,7 @@ def main():
             archive, record_path = tmp / "candidate.oci.tar", tmp / "candidate.json"
             raw = case["raw"] if case["raw"] is not None else tar_of(case["entries"] or base_entries())
             archive.write_bytes(raw)
-            ref_archive = tmp / "ref.oci.tar"
-            ref_archive.write_bytes(tar_of(base_entries()))
-            try:
-                oci_part = legacy.verify_oci_archive(archive)
-                source_archive = archive
-            except Exception:
-                oci_part = legacy.verify_oci_archive(ref_archive)
-                source_archive = ref_archive
+            oci_part = bind_oci(archive)
             archive_hash, archive_size = legacy._hash_file(archive)
             record = {
                 "schema": legacy.SCHEMA,
@@ -427,20 +449,26 @@ def main():
                 else: env[key] = value
             args = ["--root", str(root), "--archive", str(archive), "--record", str(record_path)]
             old = run([sys.executable, str(LEGACY), "validate"] + args, env)
-            new = run([BINARY, "image", "verify-candidate"] + args, env)
+            new = run([binary, "image", "verify-candidate"] + args, env)
             total += 1
             old_ok, new_ok = old[0] == 0, new[0] == 0
             old_msg, new_msg = message(old[2], "ERROR: "), message(new[2], "velnor-ci: ")
             tag = "ACCEPT" if old_ok else "REJECT"
-            if case["name"] in STRICTER and old_ok and not new_ok:
+            if oci_part == UNBOUND_OCI and (old_ok or new_ok):
+                mismatches.append((case["name"], old_ok, new_ok, old_msg, new_msg))
+                print(f"FAIL-OPEN     {case['name']}: an archive with no OCI graph was accepted")
+            elif case["name"] in STRICTER and old_ok and not new_ok:
                 print(f"stricter      reject {case['name']}: legacy accepts a tar python silently truncates; new refuses")
                 stricter += 1
             elif old_ok != new_ok or (old_ok and old[1] != new[1]):
                 mismatches.append((case["name"], old_ok, new_ok, old_msg, new_msg))
                 print(f"VERDICT-DIFF  {case['name']}: legacy={'accept' if old_ok else 'reject'} new={'accept' if new_ok else 'reject'} | {old_msg or old[2][-120:]!r} | {new_msg!r}")
-            elif not old_ok and old_msg != new_msg:
+            elif not old_ok and old_msg != new_msg and is_allowed_message_diff(case["name"]):
                 message_diffs.append((case["name"], old_msg, new_msg))
-                print(f"message-diff  {case['name']}: legacy={old_msg!r} new={new_msg!r}")
+                print(f"message-diff  {case['name']}: legacy={old_msg!r} new={new_msg!r} | allowed: {MESSAGE_DIFFS[case['name']]}")
+            elif not old_ok and old_msg != new_msg:
+                mismatches.append((case["name"], old_ok, new_ok, old_msg, new_msg))
+                print(f"UNEXPECTED-MSG {case['name']}: legacy={old_msg!r} new={new_msg!r}")
             else:
                 print(f"same          {tag.lower():6} {case['name']}" + (f": {old_msg}" if old_msg else ""))
     print(f"\ncases={total} verdict_mismatches={len(mismatches)} stricter_by_design={stricter} message_diffs={len(message_diffs)}")
