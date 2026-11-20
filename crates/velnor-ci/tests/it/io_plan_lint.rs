@@ -221,3 +221,46 @@ fn plan_still_skips_a_lint_when_only_an_optional_input_is_untracked() {
         "lint_hk=skip "
     );
 }
+
+#[test]
+fn a_lint_input_with_a_question_mark_or_a_bracket_is_refused_at_config_load() {
+    for inputs in [
+        "['cfg/h?.pkl', 'mise.toml']",
+        "['cfg/h[k].pkl', 'mise.toml']",
+    ] {
+        let repo = folder_repo("lint-glob-refused", inputs);
+        let text = velnor_gen::io::write_metadata(repo.root())
+            .err()
+            .unwrap_or_else(|| unreachable!("the config with {inputs} was accepted"))
+            .to_string();
+        assert!(
+            text.contains("only * and ** are supported"),
+            "{inputs}: {text}"
+        );
+    }
+}
+
+#[test]
+fn plan_explain_warns_about_an_input_that_matches_no_tracked_file_and_keeps_the_decision() {
+    let repo = folder_repo("lint-typo-warning", "['cfg/hk.pkl', 'cfgg/hk.pkl']");
+    let summary = repo.root().join("summary");
+    fs::write(&summary, "").unwrap_or_else(|e| unreachable!("{e}"));
+    let output = plan_command(&repo)
+        .args(["plan", "--explain", "--changed", "a/src/lib.rs"])
+        .env("GITHUB_EVENT_NAME", "pull_request")
+        .env("GITHUB_STEP_SUMMARY", &summary)
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(output.status.success(), "{output:?}");
+    let explained = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        explained
+            .contains("warning: lint-hk: inputs entry \"cfgg/hk.pkl\" matches no tracked file\n"),
+        "{explained}"
+    );
+    assert!(!explained.contains("cfg/hk.pkl\" matches"), "{explained}");
+    assert_eq!(
+        lint_lines(&repo, Some("pull_request"), &["a/src/lib.rs"]),
+        "lint_hk=skip "
+    );
+}

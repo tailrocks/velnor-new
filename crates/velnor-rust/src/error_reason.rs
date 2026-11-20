@@ -144,6 +144,10 @@ impl fmt::Display for Reason {
             Self::MissingTable(table) => write!(f, "missing table [{table}]"),
             Self::MissingKey(key) => write!(f, "missing key {key}"),
             Self::InvalidValue { key, value } => write!(f, "invalid value {value:?} for {key}"),
+            Self::UnsupportedGlob { key, value } => write!(
+                f,
+                "{key} entry {value:?} uses ?, [ or ]; only * and ** are supported in a glob"
+            ),
             Self::Hosting(error) => error.fmt(f),
             Self::OutOfRange {
                 key,

@@ -5,7 +5,7 @@ use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
-    EventKind, LintJob, LintKind, PathGlob, RepoFacts, RepoPath, RootSlug, WORKFLOW_PATH,
+    EventKind, JobId, LintJob, LintKind, PathGlob, RepoFacts, RepoPath, RootSlug, WORKFLOW_PATH,
 };
 
 use crate::config::CONFIG_PATH;
@@ -46,19 +46,46 @@ fn runs(
         || !has_tracked_input(lint, tracked, symlinks)
 }
 
+#[must_use]
+pub fn unmatched_inputs(
+    facts: &RepoFacts,
+    tracked: &BTreeSet<RepoPath>,
+    symlinks: &BTreeSet<RepoPath>,
+) -> Vec<(JobId, PathGlob)> {
+    facts
+        .config
+        .lint
+        .iter()
+        .flat_map(|lint| {
+            lint.inputs
+                .iter()
+                .filter(|glob| {
+                    !tracked
+                        .iter()
+                        .any(|path| input_matches(glob, path, symlinks))
+                })
+                .map(|glob| (lint.id.clone(), glob.clone()))
+        })
+        .collect()
+}
+
+fn input_matches(glob: &PathGlob, path: &RepoPath, symlinks: &BTreeSet<RepoPath>) -> bool {
+    if symlinks.contains(path) {
+        reaches(glob, path)
+    } else {
+        covers(glob, path)
+    }
+}
+
 fn has_tracked_input(
     lint: &LintJob,
     tracked: &BTreeSet<RepoPath>,
     symlinks: &BTreeSet<RepoPath>,
 ) -> bool {
     tracked.iter().any(|path| {
-        lint.inputs.iter().any(|glob| {
-            if symlinks.contains(path) {
-                reaches(glob, path)
-            } else {
-                covers(glob, path)
-            }
-        })
+        lint.inputs
+            .iter()
+            .any(|glob| input_matches(glob, path, symlinks))
     })
 }
 

@@ -242,6 +242,18 @@ fn lint_inputs_that_name_nothing_or_collide_are_rejected() -> TestResult {
             "[[lint]]\nkind = 'jactionlint'\nid = 'a-b'\ninputs = ['x']\n\n[[lint]]\nkind = 'jactionlint'\nid = 'a_b'\ninputs = ['y']\n",
             "a_b",
         ),
+        (
+            "[[lint]]\nkind = 'jactionlint'\ninputs = ['cfg/h?.pkl', 'mise.toml']\n",
+            "cfg/h?.pkl",
+        ),
+        (
+            "[[lint]]\nkind = 'jactionlint'\ninputs = ['cfg/h[k].pkl']\n",
+            "cfg/h[k].pkl",
+        ),
+        (
+            "[[lint]]\nkind = 'jactionlint'\ninputs = ['cfg/h]k.pkl']\n",
+            "cfg/h]k.pkl",
+        ),
     ];
     for (config, needle) in cases {
         let text = format!(
@@ -251,6 +263,9 @@ fn lint_inputs_that_name_nothing_or_collide_are_rejected() -> TestResult {
                 .ok_or(config)?
         );
         assert!(text.contains(needle), "{config}: {text}");
+        if needle.contains(['?', '[', ']']) {
+            assert!(text.contains("only * and ** are supported"), "{text}");
+        }
     }
     Ok(())
 }
