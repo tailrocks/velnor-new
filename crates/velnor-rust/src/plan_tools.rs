@@ -10,14 +10,15 @@ use crate::plan::{TOOLS_LOCAL_HELPER, step};
 
 /// The first `velnor-ci` with `tools-verify`, which checks every tools restore against the anchor
 /// a trusted run recorded and discards a restore that differs.
-// First released in tools-v0.1.109 (not tagged yet when this gate was written).
+// helper-gate: first in tools-v0.1.109 via 984afb1ed5
 pub const TOOLS_VERIFY_HELPER: (u64, u64, u64) = (0, 1, 109);
 
 /// The first `velnor-ci` whose tools-verify mismatch notice names the restored Actions cache entry
 /// and the command that deletes it. The verify step gets the entry's key only from this helper, so
 /// an older helper never sees an env it ignores.
+// helper-gate: first in tools-v0.1.110 via ca67828281
 pub(crate) const TOOLS_CACHE_KEY_HELPER: (u64, u64, u64) = (0, 1, 110);
-// First released in tools-v0.1.110 (not tagged yet when this gate was written).
+// helper-gate: first in tools-v0.1.110 via 8db5d70509
 const TOOLS_CLEAR_HELPER: (u64, u64, u64) = (0, 1, 110);
 
 pub(crate) fn tools_cache_key() -> CacheKey {
