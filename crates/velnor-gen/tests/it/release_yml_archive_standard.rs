@@ -13,7 +13,7 @@ use crate::yaml_tree::Node;
 
 type TestResult = Result<(), Box<dyn Error>>;
 
-const TRIPLES: [(&str, &str); 3] = [
+const TRIPLES: &[(&str, &str)] = &[
     ("linux-x64", "x86_64-unknown-linux-musl"),
     ("linux-arm64", "aarch64-unknown-linux-musl"),
     ("macos-arm64", "aarch64-apple-darwin"),
@@ -71,7 +71,7 @@ fn refused(config: &str) -> Option<ReleaseError> {
 #[test]
 fn archives_are_named_after_the_binary_and_the_rust_target_triple() -> TestResult {
     let (_, tree) = render(&[APP], Some(DEFAULT))?;
-    for (platform, triple) in TRIPLES {
+    for &(platform, triple) in TRIPLES {
         let build = job(&tree, &format!("build-app-{platform}"))?;
         let commands = runs(build);
         let pack = if platform.starts_with("linux") {
@@ -90,7 +90,7 @@ fn archives_are_named_after_the_binary_and_the_rust_target_triple() -> TestResul
         );
     }
     let publish = runs(job(&tree, "publish-app")?)[0].to_owned();
-    for (_, triple) in TRIPLES {
+    for &(_, triple) in TRIPLES {
         assert!(
             publish.contains(&format!(" {}", archive(triple))),
             "{publish}"
@@ -171,7 +171,7 @@ fn tree_text(tree: &Node) -> String {
 #[test]
 fn checksum_files_adds_one_sidecar_per_archive_that_sha256sum_check_reads() -> TestResult {
     let (_, tree) = render(&[APP], Some(SIDECARS))?;
-    for (platform, triple) in TRIPLES {
+    for &(platform, triple) in TRIPLES {
         let build = job(&tree, &format!("build-app-{platform}"))?;
         let name = archive(triple);
         let tool = if platform == "macos-arm64" {
