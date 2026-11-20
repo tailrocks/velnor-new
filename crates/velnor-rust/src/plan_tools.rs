@@ -10,8 +10,8 @@ use crate::plan::{TOOLS_LOCAL_HELPER, step};
 
 /// The first `velnor-ci` with `tools-verify`, which checks every tools restore against the anchor
 /// a trusted run recorded and discards a restore that differs.
-// First released in tools-v0.1.108 (not tagged yet when this gate was written).
-pub const TOOLS_VERIFY_HELPER: (u64, u64, u64) = (0, 1, 108);
+// First released in tools-v0.1.109 (not tagged yet when this gate was written).
+pub const TOOLS_VERIFY_HELPER: (u64, u64, u64) = (0, 1, 109);
 
 pub(crate) fn tools_cache_key() -> CacheKey {
     CacheKey::Tools { host: Host }

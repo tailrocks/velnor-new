@@ -60,7 +60,7 @@ fn saves_tools(step: &serde_json::Value) -> bool {
 fn every_tools_restore_is_verified_before_anything_runs_the_tools() -> TestResult {
     for config in STORES {
         let mut verified_jobs = 0;
-        for (id, steps) in jobs_of(&workflow(&repo_for(config, "0.1.108")?)?)? {
+        for (id, steps) in jobs_of(&workflow(&repo_for(config, "0.1.109")?)?)? {
             let Some(last_restore) = steps.iter().rposition(restores_tools) else {
                 continue;
             };
@@ -114,7 +114,7 @@ fn every_tools_restore_is_verified_before_anything_runs_the_tools() -> TestResul
 #[test]
 fn a_pull_request_never_saves_the_tools_and_a_save_needs_the_anchor() -> TestResult {
     for config in STORES {
-        for helper in ["0.1.89", "0.1.108"] {
+        for helper in ["0.1.89", "0.1.109"] {
             let rendered = workflow(&repo_for(config, helper)?)?;
             let yaml: serde_json::Value = crate::yaml_tree::document(&rendered)?;
             let events: Vec<&String> = yaml["on"].as_object().ok_or("on missing")?.keys().collect();
@@ -136,7 +136,7 @@ fn a_pull_request_never_saves_the_tools_and_a_save_needs_the_anchor() -> TestRes
                 for step in steps.iter().filter(|step| saves_tools(step)) {
                     saves += 1;
                     let condition = text(step, "if");
-                    if helper == "0.1.108" {
+                    if helper == "0.1.109" {
                         let anchor = text(&step["with"], "key").starts_with("velnor-tools-anchor-");
                         let record = |output: &str| {
                             condition
@@ -177,10 +177,10 @@ fn an_older_helper_keeps_the_unverified_restore_and_generation_says_so() -> Test
         assert!(
             notes
                 .iter()
-                .any(|note| note.contains("unverified") && note.contains("0.1.108")),
+                .any(|note| note.contains("unverified") && note.contains("0.1.109")),
             "{config:?}: {notes:?}"
         );
-        let mut current = repo_for(config, "0.1.108")?;
+        let mut current = repo_for(config, "0.1.109")?;
         crate::facts::lock_pinned_tools(&mut current)?;
         let (_, notes) = expected_with_notes(&current)?;
         assert!(
