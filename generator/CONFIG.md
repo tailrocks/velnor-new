@@ -33,6 +33,29 @@ hosted = false                  # optional: an undeclared custom label is self-h
 fork_runner = "ubuntu-24.04"
 ```
 
+## Trusted runner pool
+
+A repository that keeps a second, trusted self-hosted pool for the default branch sets `trusted_runner` to that pool's label. Jobs of trusted events then run on the trusted label, and every other event keeps today's `runs-on`, with its fork fallback. Don't enable trusted_runner until #2268 is fixed: a `run` step can still build a Docker image from workflow inputs (e.g. env T=${{ inputs.target }}; docker build $T).
+
+```toml
+runner = "ubuntu-26.04-scale-set"
+trusted_runner = "ubuntu-26.04-scale-set-trusted"
+
+[crates_mirror]
+runner = "ubuntu-26.04-scale-set"
+trusted_runner = "ubuntu-26.04-scale-set-trusted"   # optional: defaults to the top-level key when the runner is the same
+```
+
+An event is trusted when it is a `push`, a `schedule` or a `workflow_dispatch` whose `github.ref` is `refs/heads/<default branch>` and whose `github.ref_protected` is true, so the default branch must be protected by a branch protection rule or a ruleset. A payload without `repository.default_branch` trusts nothing. `velnor-ci` applies the same rule to the node store, except that it compares the ref case-sensitively and does not read `github.ref_protected`; a test renders a workflow and compares the rendered routing with `velnor-ci` for every event. It is an allowlist: `pull_request`, `pull_request_target`, `merge_group`, `workflow_run`, `issue_comment`, `repository_dispatch`, `release`, tag pushes and every other event get the normal label. `pull_request_target` and `workflow_run` matter most, because they run the default branch's copy of the workflow with `github.ref` set to the default branch, so a runner group limited to `refs/heads/<default branch>` would admit them; only this rule keeps them off the trusted pool. The default branch comes from `github.event.repository.default_branch`, so a rename needs no regeneration. The label never depends on `github.head_ref`, a pull request title or any other input a pull request controls, and a test checks that.
+
+`runs-on` becomes `${{ <trusted event> && '<trusted>' || <today's value> }}`. A job on a matrix axis swaps only the axis value equal to the replaced label: `${{ <trusted event> && matrix.<axis> == '<runner>' && '<trusted>' || <today's value> }}`, so a hosted axis value such as `macos-15` is untouched. The comparison `==` in a workflow expression ignores case, so a branch that differs from the default branch only in case (`MAIN` for `main`) matches the ref comparison; the `github.ref_protected` term keeps it off the trusted pool unless that branch is protected too, so protect only the default branch. `velnor-ci` and a runner group limited to the exact ref compare case-sensitively; the runner group then holds the job of a protected branch that differs only in case.
+
+`trusted_runner` is refused unless it is a label of letters, digits, `-`, `_` and `.`, not spelled like a GitHub-hosted label, different from `runner`, `fork_runner`, the mirror's runner and the runner of every `[[test_groups]]` entry (without regard to case), on the same platform as the runner it stands for (`mise.lock` stays valid), and the runner it stands for is self-hosted. In `rust-ci.toml` the key, at the top level or in `[crates_mirror]`, needs `velnor-ci` 0.1.110 or later, because `velnor-ci` reads that file at run time and an earlier release rejects the unknown key; the generator refuses an older pin, and `velnor-gen pin-helper 0.1.110` fixes it. Without the key the output is byte-identical. A job on another label (a `[[test_groups]]` runner other than `runner`, or a mirror on its own runner without its own `trusted_runner`) keeps that label.
+
+In `.velnor/workflows.toml`, `trusted_runner` sits next to `runner` in a `[[workflow]]` and applies to the jobs that render the workflow's self-hosted label: `runner` itself, or `scale_set_runner` when the workflow has `[[workflow.case]]` entries. A job with another runner, a hosted job and a job that calls a reusable workflow are unchanged. The key is refused on a workflow whose `runner` is hosted, and on a workflow that a dispatcher can point at other code: a `workflow_dispatch` input named `ref`, `sha` or `repository`, or a step whose `with.ref` or `with.repository` (in any letter case) reads `inputs.` or `github.event.inputs`, `steps.`, `needs.` or `matrix.` (a step or job output can carry an input forward, and a matrix can be built from one), or a step that sets `github-server-url`. A `docker-build-push` step is refused when its `context`, `file`, `build-contexts` or `build-args` read an input, the matrix or a step or job output, or when its `context`, `file` or a build context is a remote source (a URL, a Git address), an absolute path, or a path with a `..` segment. A job or matrix entry that names the `trusted_runner` label itself is refused too, and so is the workflow's own `runner` when `[[workflow.case]]` entries replace it with `scale_set_runner`. The refusal is textual; a trusted workflow must not fetch or check out refs derived from dispatch inputs; that requires write access to dispatch on the default branch, which the trust model already assumes. The label is reserved across the file: no other `[[workflow]]` may use it as `runner`, `scale_set_runner`, `hosted_runner`, a job runner or a matrix runner, and no job generated from `rust-ci.toml` may run on a `trusted_runner` of a workflow or the other way round, because such a job would run pull request code on the trusted pool outside the trusted event check. `workflows.toml` is not read by `velnor-ci`, so the key needs no particular release.
+
+A runner group that limits the trusted pool to workflow files matches the file that holds the job (`job_workflow_ref`). When a trusted job moves into a reusable workflow, add that file at the default branch to the group.
+
 ## Optional cargo fingerprint log
 
 `cache_debug = true` in `.velnor/rust-ci.toml` makes every generated cargo step set `CARGO_LOG` from the repository variable `VELNOR_CACHE_DEBUG` and adds a step that uploads the log when that variable is `1`. It is `false` by default, and then the generated workflow reads no repository variable. A repository that sets it also declares `VELNOR_CACHE_DEBUG` to its workflow linter. The key needs a helper release that knows it (`0.1.82` or later), because older helpers reject unknown keys.
@@ -401,7 +424,7 @@ These keys choose which jobs a run starts. The defaults are in the table in [`do
 - `full_run` is `"nightly"` (default), `"hourly"`, `"weekly"`, `"off"` or a five-field cron expression. It sets the schedule of the run that selects everything.
 - `skip_draft_pull_requests` is `false` (default). With `true`, a draft pull request runs nothing. It cannot be combined with `pr_ci = "label"`.
 - `timeout_minutes` is the time limit of each job, 1 to 360, `30` by default. A root can have its own limit in `[root_timeouts]`, and a lane or group its own in `timeout_minutes`, as the sections on per-root and lane time limits describe.
-- `runner` is the runner label of every job, `"ubuntu-latest"` by default. See Fork pull requests for `hosted` and `fork_runner`.
+- `runner` is the runner label of every job, `"ubuntu-latest"` by default. See Fork pull requests for `hosted` and `fork_runner`, and Trusted runner pool for `trusted_runner`.
 - `required_check` is the name of the one required check, `"Required"` by default. The name must not be blank or contain a control character. Any other name needs velnor-ci `0.1.97` or later, because the helper finds the check by that name.
 - `default_branch` is `"main"` by default. It must equal the repository's default branch, or the run fails.
 
@@ -510,7 +533,7 @@ A repository with any `[[test_groups]]` splits each root that has a group into t
 
 ## Non-Rust lint jobs
 
-A `[[lint]]` entry adds one job to the generated workflow for a check that is not a Cargo lane. Each entry becomes the job `lint-<id>`. The job checks out the repository at depth 1, installs only the tools it names, and runs commands. It has `contents: read` and no other permission (plus `actions: read` in a single-job workflow with `skip_push_after_merge_group`), no `needs` (it starts with the plan job, not after it), and the same fork fence as every other job: a pull request from a fork runs it on `fork_runner`. A generated `run:` value is one command with no shell logic, and a lint job adds no action to the fixed list: every tool it runs comes from `mise.toml`, checksummed in `mise.lock`. A lint job runs on every ready pull request, also when `pr_ci` is `label`.
+A `[[lint]]` entry adds one job to the generated workflow for a check that is not a Cargo lane. Each entry becomes the job `lint-<id>`. The job checks out the repository at depth 1, installs only the tools it names, and runs commands. It has `contents: read` and no other permission (plus `actions: read` in a single-job workflow with `skip_push_after_merge_group`), no `needs` (it starts with the plan job, not after it; a lint with `inputs` waits for the plan job), and the same fork fence as every other job: a pull request from a fork runs it on `fork_runner`. A generated `run:` value is one command with no shell logic, and a lint job adds no action to the fixed list: every tool it runs comes from `mise.toml`, checksummed in `mise.lock`. A lint job runs on every ready pull request, also when `pr_ci` is `label`, unless the entry declares `inputs` (below).
 
 ```toml
 [[lint]]
@@ -537,6 +560,7 @@ timeout_minutes = 5
 | `id` | all | Job id suffix. Defaults to the kind, or to the task name for `mise-task`. Two entries cannot share it. |
 | `name` | all | Job name. Defaults to `Jactionlint`, `Alint`, `Mise task <task>` or `Generated workflows`. |
 | `timeout_minutes` | all | 1 to 360, default 10. |
+| `inputs` | `jactionlint`, `alint`, `mise-task` | Globs of the files the lint reads, in the grammar of `[[inputs]] glob` (a `*` is one whole path segment, a trailing `/**` is everything below a folder). A non-empty list. Without the key the lint runs on every pull request. The key needs `velnor-ci` 0.1.110 or later. |
 | `config` | `jactionlint`, `alint` | Configuration file. Required for `alint`. |
 | `probe` | `alint` | A script run with `bash` after alint, for rules alint cannot express. |
 | `task` | `mise-task` | The mise task, run as `mise run --force --skip-tools <task>`, so a task with fresh `sources` and `outputs` still runs. It must be a key of `[tasks]` in `mise.toml` or a file in a mise task folder (`mise-tasks`, `.mise-tasks`, `mise/tasks`, `.mise/tasks`, `.config/mise/tasks`); generation fails otherwise. |
@@ -547,6 +571,23 @@ timeout_minutes = 5
 `alint` is the version pinned in `mise.toml` (for example `"github:asamarts/alint" = "0.22.1"`) with the archive digest of every platform in `mise.lock`, so the digest is the repository's own and no upstream installer runs. It runs `alint --format github --config <config> --fail-on-warning check .`, so a warning fails the job. The file named by `config` or `probe` is not checked at generation time; a missing file fails the job, and so the `Required` check.
 
 Every tool a lint entry needs is checked at generation. The tool must be pinned in `mise.toml` by its basename (`jactionlint`) or in full (`aqua:owner/tool/jactionlint`); a basename that matches two configured tools is refused until the entry names one in full. At least one of its requests must apply to the runner's operating system (the `os` key of the pin), and `mise.lock` must hold an entry that covers every version requested for that system. A `shellcheck` pin that is filtered out for the runner is treated as absent.
+
+### Skipping a lint on an unrelated pull request
+
+A lint with `inputs` runs on a pull request only when the plan finds a changed file that matches one of its globs. The plan also runs it when the change touches the generated workflow (`.github/workflows/rust-ci.yml`), `.velnor/rust-ci.toml`, `mise.toml`, `.mise.toml`, `mise.lock`, the entry's own `config` or `probe` file, or, for a `mise-task`, any file in a mise task folder (`mise-tasks`, `.mise-tasks`, `mise/tasks`, `.mise/tasks`, `.config/mise/tasks`). The plan runs it on every `push`, `merge_group`, `schedule` and `workflow_dispatch` run, and on a pull request whose changed files it cannot list: a failure to list them runs the lint, it never skips it. A tracked symlink that an input, one of these files or a folder on their path reaches also runs the lint on every pull request, because the change list names the target and not the link; a changed path that is a folder on the path to an input (a deleted symlink to a folder) runs it too. A lint the plan leaves out is listed in the step summary and in `velnor-ci plan --explain` with its reason.
+
+Narrow `inputs` on a tool that checks the whole tree (`alint`, `jactionlint`) skip the pull requests that change files the tool checks, so declare broad globs for such a tool or leave `inputs` unset. Declare every local override file the tool reads as well (for example `hk.local.pkl` next to `hk.pkl`): the plan only knows the globs and the files listed above.
+
+```toml
+[[lint]]
+kind = "mise-task"
+id = "validate-hk"
+task = "validate-hk"
+tools = ["hk"]
+inputs = ["hk.pkl", "mise.toml"]
+```
+
+The plan job writes one output `lint_<id>` (the id without the `lint-` prefix, lowercased, with every character that is not a letter or digit written as `_`) with the value `run` or `skip`, and the lint job waits for the plan job and carries that output as its condition, so a skipped lint never allocates a runner. A workflow with any lint that declares `inputs` always has a plan job, also for one Cargo root: the one-job shape without a plan job is not used. Two entries whose ids give one output name are refused. A lint without `inputs` is generated as before and writes no output.
 
 ### Generated workflows cannot be edited by hand
 
@@ -560,7 +601,7 @@ The job does not protect the workflow that holds it: a pull request that deletes
 
 ### One required check
 
-The `Required` job (named by `required_check`) lists every lint job in `needs` and in its gate spec with no condition, next to the Rust lanes. A lint job that failed, was cancelled, was skipped or is absent from `needs` fails the gate, and a job in `needs` that the spec does not name fails it too. A ruleset therefore requires one check name for the Rust lanes and the lint lane together.
+The `Required` job (named by `required_check`) lists every lint job in `needs` and in its gate spec, next to the Rust lanes, with no condition for a lint without `inputs`. A lint job without `inputs` that failed, was cancelled, was skipped or is absent from `needs` fails the gate, and a job in `needs` that the spec does not name fails it too. A lint job with `inputs` is expected exactly when its plan output is `run`: the gate takes a skipped job as passing when the output is `skip` and fails it when the output is `run`. A ruleset therefore requires one check name for the Rust lanes and the lint lane together.
 
 ## Optional extra binaries and files in a release asset
 
@@ -692,6 +733,7 @@ name = "Release checks"
 runner = "velnor-linux-x64"      # default ubuntu-latest
 hosted = false                   # true opens the runner to fork pull requests; see "Fork pull requests"
 fork_runner = "ubuntu-latest"    # default ubuntu-latest, must be GitHub-hosted
+trusted_runner = "velnor-linux-x64-trusted"   # optional; see "Trusted runner pool"
 if = "github.event_name != 'merge_group'"
 
 [workflow.concurrency]           # optional; a job may set the same inline: concurrency = { group = "...", cancel_in_progress = false }
