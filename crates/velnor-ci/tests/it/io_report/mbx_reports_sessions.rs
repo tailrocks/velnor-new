@@ -6,6 +6,7 @@ use super::{Repo, ResultTest, fixture};
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::process::Command;
+use velnor_ci::mbx_report::reports_session;
 
 fn plant(repo: &Repo, name: &str) -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
     let directory = repo.root().join("velnor-mbx-reports");
@@ -212,4 +213,48 @@ fn an_unwritable_stats_directory_with_no_other_session_is_unparsed_not_silent() 
         metrics.verification_errors
     );
     Ok(())
+}
+
+#[test]
+fn a_report_without_its_expected_marker_is_unreadable_evidence() -> ResultTest {
+    let repo = fixture("mbx-reports-unmarked")?;
+    cargo(&repo, "build", &report_json(5, 1, 0, 0), "compiled")?;
+    fs::write(plant(&repo, "0-planted.json")?, report_json(5, 5, 0, 0))?;
+    let metrics = report(&repo)?;
+    assert_eq!(metrics.mbx.sessions, [session(1, 0, 0)], "{metrics:?}");
+    assert_eq!(metrics.mbx.unparsed, 1);
+    let errors = metrics.verification_errors.join("\n");
+    assert!(
+        errors.contains("0-planted.json: no expected marker"),
+        "{errors}"
+    );
+    Ok(())
+}
+
+#[test]
+fn a_nextest_listing_builds_test_binaries_so_it_gets_a_report() {
+    let argv = |words: &[&str]| {
+        words
+            .iter()
+            .map(|word| (*word).to_owned())
+            .collect::<Vec<String>>()
+    };
+    assert!(reports_session(&argv(&[
+        "cargo",
+        "nextest",
+        "list",
+        "--workspace"
+    ])));
+    assert!(reports_session(&argv(&[
+        "cargo-nextest",
+        "nextest",
+        "list",
+        "--workspace"
+    ])));
+    assert!(!reports_session(&argv(&[
+        "cargo",
+        "nextest",
+        "run",
+        "--workspace"
+    ])));
 }

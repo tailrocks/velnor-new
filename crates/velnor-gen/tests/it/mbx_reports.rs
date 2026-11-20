@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::facts::TestResult;
-use crate::mbx_default::{NO_LAYOUT, OPT_OUT, pinned, with_mise};
+use crate::mbx_default::{NEXTEST, NO_LAYOUT, OPT_OUT, OPTION, WRAPPER, pinned, with_mise};
 use crate::pipeline::workflow;
 use crate::yaml_tree::document;
 
@@ -41,5 +41,17 @@ fn an_older_helper_or_a_job_without_mbx_gets_no_report_switch() -> TestResult {
     assert!(!workflow(&pinned(None, "0.1.110")?)?.contains(SWITCH));
     let off = with_mise(pinned(Some(OPT_OUT), "0.1.111")?, NO_LAYOUT)?;
     assert!(!workflow(&off)?.contains(SWITCH));
+    Ok(())
+}
+
+#[test]
+fn an_mbx_pin_older_than_its_report_release_keeps_summary_mode() -> TestResult {
+    let mise = |version: &str| {
+        format!("[tools]\n{OPTION}mr-boxington = \"{version}\"\n{NEXTEST}{WRAPPER}")
+    };
+    let older = workflow(&with_mise(pinned(None, "0.1.111")?, &mise("v1.29.0"))?)?;
+    assert!(!older.contains(SWITCH));
+    let current = workflow(&with_mise(pinned(None, "0.1.111")?, &mise("v1.30.0"))?)?;
+    assert!(current.contains(SWITCH));
     Ok(())
 }

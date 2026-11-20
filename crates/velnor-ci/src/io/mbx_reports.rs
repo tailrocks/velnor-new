@@ -28,7 +28,7 @@ fn inside_session() -> bool {
     std::env::var_os("MBX_SOCKET").is_some_and(|socket| !socket.is_empty())
 }
 
-pub(super) fn assign(command: &mut Command, argv: &[String]) {
+pub(crate) fn assign(command: &mut Command, argv: &[String]) {
     command.env_remove(VARIABLE);
     if !enabled() || !reports_session(argv) || inside_session() {
         return;
@@ -138,7 +138,13 @@ pub(super) fn read(runner_temp: &Path) -> Option<Reports> {
         match session.report {
             None if session.marker => reports.missing.push(name),
             None => {}
-            Some(file) => match read_regular(&file).and_then(|bytes| parse(&bytes)) {
+            Some(file) => match read_regular(&file).and_then(|bytes| {
+                if session.marker {
+                    parse(&bytes)
+                } else {
+                    Err("no expected marker".to_owned())
+                }
+            }) {
                 Ok(parsed) => reports.sessions.extend(parsed),
                 Err(reason) => reports.unreadable.push(format!(
                     "{}: {reason}",

@@ -3,10 +3,11 @@
 
 use velnor_model::{HelperCommand, Job, MbxRemote, MbxStats, MbxStore, RepoFacts, Step, StepKind};
 
-use crate::mbx_pin::MBX_PIN_HELPER;
+use crate::mbx_pin::{MBX_PIN_HELPER, MBX_TOOL, exact_release};
 use crate::plan::step;
 
 const MBX_REPORTS_HELPER: (u64, u64, u64) = (0, 1, 111);
+const MBX_REPORTS_RELEASE: (u64, u64, u64) = (1, 30, 0);
 
 pub(crate) fn apply(facts: &RepoFacts, jobs: &mut [Job]) {
     let remote = facts.config.mbx_remote == MbxRemote::GithubActions;
@@ -21,6 +22,7 @@ pub(crate) fn apply(facts: &RepoFacts, jobs: &mut [Job]) {
             .helper
             .as_ref()
             .is_some_and(|helper| helper.version().at_least(MBX_REPORTS_HELPER))
+        && !pinned_before_reports(facts)
     {
         MbxStats::Reports
     } else {
@@ -43,6 +45,22 @@ pub(crate) fn apply(facts: &RepoFacts, jobs: &mut [Job]) {
             insert(job, &[StepKind::MbxPrivate], After::Helper);
         }
     }
+}
+
+fn pinned_before_reports(facts: &RepoFacts) -> bool {
+    facts.tools.tools.get(MBX_TOOL).is_some_and(|pin| {
+        pin.requested.iter().any(|request| {
+            exact_release(&request.version).is_some_and(|text| {
+                let mut parts = text.split('.').filter_map(|part| part.parse::<u64>().ok());
+                let release = (
+                    parts.next().unwrap_or(0),
+                    parts.next().unwrap_or(0),
+                    parts.next().unwrap_or(0),
+                );
+                release < MBX_REPORTS_RELEASE
+            })
+        })
+    })
 }
 
 #[derive(Clone, Copy)]

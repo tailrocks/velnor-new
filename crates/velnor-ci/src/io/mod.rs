@@ -49,6 +49,7 @@ mod inputs_batch;
 mod inputs_git;
 mod manifests;
 mod mbx_reports;
+pub(crate) use mbx_reports::assign as assign_mbx_report;
 mod merge_group;
 mod merge_queue;
 mod plan;
