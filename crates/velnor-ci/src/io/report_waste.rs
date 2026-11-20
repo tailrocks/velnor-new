@@ -9,8 +9,6 @@ use std::fs;
 use std::path::Path;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-/// A store that is walked for more entries than this is not probed further: the answer stays
-/// "not primed", which never claims waste.
 const PROBE_LIMIT: usize = 20_000;
 
 pub(super) fn collect_local(metrics: &mut LaneMetrics, log: &[u8], runner_temp: &Path) {
@@ -75,7 +73,6 @@ fn has_entry_before(store: &Path, start: u64) -> bool {
     false
 }
 
-/// Whether the inventory listed `cache`'s key on a ref the job may read before the job started.
 pub(super) fn entry_before_job(
     cache: &Cache,
     listing: &Value,
