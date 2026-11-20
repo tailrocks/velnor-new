@@ -8,6 +8,8 @@ use std::path::Path;
 
 use velnor_render::SETUP_VELNOR_ACTION;
 
+use crate::install_guard::Running;
+
 pub(crate) type TestResult = Result<(), Box<dyn Error>>;
 
 const REPOSITORY: &str = "tailrocks/velnor-new/";
@@ -165,6 +167,7 @@ fn no_run_block_of_the_action_expands_an_expression() -> TestResult {
 
 pub(crate) const ARCHIVE: &str = "velnor-ci-x86_64-unknown-linux-musl.tar.gz";
 
+#[derive(Debug)]
 pub(crate) struct Install {
     pub(crate) work: std::path::PathBuf,
     pub(crate) binary: &'static [u8],
@@ -209,26 +212,16 @@ impl Install {
         cache: Option<&Path>,
         shim_dir: Option<&Path>,
     ) -> Result<std::process::ExitStatus, Box<dyn Error>> {
-        let mut child = self.spawn_with(cache, shim_dir, |_| {})?;
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
-        loop {
-            if let Some(status) = child.try_wait()? {
-                return Ok(status);
-            }
-            if std::time::Instant::now() >= deadline {
-                child.kill().ok();
-                child.wait().ok();
-                return Err("the install script did not finish in 30 seconds".into());
-            }
-            std::thread::sleep(std::time::Duration::from_millis(20));
-        }
+        self.spawn_with(cache, shim_dir, |_| {})?
+            .wait_within(std::time::Duration::from_secs(30))?
+            .ok_or_else(|| "the install script did not finish in 30 seconds".into())
     }
 
     pub(crate) fn spawn(
         &self,
         cache: Option<&Path>,
         configure: impl FnOnce(&mut std::process::Command),
-    ) -> Result<std::process::Child, Box<dyn Error>> {
+    ) -> Result<Running, Box<dyn Error>> {
         self.spawn_with(cache, None, configure)
     }
 
@@ -237,7 +230,7 @@ impl Install {
         cache: Option<&Path>,
         shim_dir: Option<&Path>,
         configure: impl FnOnce(&mut std::process::Command),
-    ) -> Result<std::process::Child, Box<dyn Error>> {
+    ) -> Result<Running, Box<dyn Error>> {
         use std::process::Command;
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
         let action = fs::read_to_string(root.join("actions/setup-velnor/action.yml"))?;
@@ -273,11 +266,17 @@ impl Install {
             command.env("PATH", format!("{}:{TOOLS}", shims.display()));
         }
         configure(&mut command);
-        Ok(command.spawn()?)
+        Running::start(command, &self.work, std::time::Duration::from_secs(120))
     }
 
     pub(crate) fn installed(&self) -> Result<Vec<u8>, Box<dyn Error>> {
         let on_path = fs::read_to_string(self.work.join("path"))?;
         Ok(fs::read(Path::new(on_path.trim()).join("velnor-ci"))?)
+    }
+}
+
+impl Drop for Install {
+    fn drop(&mut self) {
+        fs::remove_dir_all(&self.work).ok();
     }
 }

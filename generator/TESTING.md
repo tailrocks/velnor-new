@@ -17,7 +17,7 @@
 
 ### Timeout tiers
 
-Timeouts are set in `.config/nextest.toml` (at the repository root), not in this file. A test is killed after `period` times `terminate-after`. The table lists each override group once, in file order. For each profile, the first row that matches a test sets its limit, so a row whose limit is already set by an earlier row adds only its other settings.
+Timeouts are set in `.config/nextest.toml` (at the repository root), not in this file. A test is killed after `period` times `terminate-after`. The table lists each override group once, in file order.
 
 | # | Tests | Period | Terminate after | `profile.default` | `profile.ci` |
 |---|---|---|---|---|---|
@@ -26,15 +26,15 @@ Timeouts are set in `.config/nextest.toml` (at the repository root), not in this
 | 3 | velnor-gen, `binary(=it)`: `freshness::generate_rejects_a_build_script_that_is_a_filesystem_symlink`, `io_identity::a_checkout_without_an_origin_keeps_its_schedule_when_renamed`, `io_identity::generate_refuses_a_hand_written_workflow_with_a_forged_marker`, `io_identity::generate_still_removes_a_genuinely_generated_stale_workflow`, `io_identity::local_origin_generates_when_the_schedule_does_not_need_the_identity`, `io_identity::local_origin_is_rejected_when_a_hashed_schedule_needs_the_identity`, `io_identity::repository_case_does_not_change_schedule_identity`, `io_identity::schedules_use_the_remote_repository_and_transport_independent_identity` | 10 s | 1 | yes | yes |
 | 4 | velnor-gen, `binary(=it)`: `golden::every_sample_repository_renders_exactly_its_expected_files`, `fork_fence_invariant::every_job_of_every_sample_that_a_pull_request_reaches_is_fenced`, `trim_job::no_job_of_any_sample_that_can_run_on_a_pull_request_or_merge_group_holds_actions_write`, `unused_anchors::no_rendered_sample_workflow_has_an_anchor_nobody_aliases`, `repo_sample::the_recorded_repository_sample_has_a_root_per_workspace_with_the_members_cargo_reports` | 10 s | 1 | yes | yes |
 | 5 | velnor-ci: the `io_*` test modules `io_restore_cargo::`, `io_restore_cold_cargo::`, `io_raw_paths::`, `io_cold_targets::`, `io_shared_targets::`, `io_foreign_targets::`, `io_restored_targets::`, `io_snapshot_storage::`, `io_inputs_scope::`, `io_inputs_batch::`, `io_scope_cache::`, `io_scope_cache_races::`, `io_scope_cache_paths::` | 30 s | 1 | yes | no |
-| 6 | velnor-ci: `crates_mirror`, `audit::migration::targets::a_cross_target_created_by_cargo_at_the_source_root_does_not_hide_source_changes`, `audit::migration::nextest_discovery_compiles_first_and_executes_the_tests_once` | 30 s | 1 | yes | yes |
-| 7 | velnor-ci: `crates_mirror`, with `success-output = "immediate"` and `threads-required = "num-test-threads"` | 30 s | 4 | yes, limit set by row 5 | yes, limit set by row 5 |
+| 6 | velnor-ci: `audit::migration::targets::a_cross_target_created_by_cargo_at_the_source_root_does_not_hide_source_changes`, `audit::migration::nextest_discovery_compiles_first_and_executes_the_tests_once` | 30 s | 1 | yes | yes |
+| 7 | velnor-ci: `crates_mirror`, with `success-output = "immediate"` and `threads-required = "num-test-threads"` | 30 s | 4 | yes | yes |
 | 8 | velnor-ci: `plan_reads_each_roots_sources_to_decide_the_doctest_and_documentation_steps` | 30 s | 4 | yes | yes |
 | 9 | velnor-ci: `delta_baseline::` | 30 s | 1 | yes | yes |
 | 10 | velnor-ci: `audit::bounds::` | 30 s | 4 | yes | yes |
 | 11 | velnor-ci: `audit::freshness::distinct_declared_trees_cannot_exceed_the_audit_scan_budget`, `audit::freshness::repeated_directory_declarations_share_the_audit_scan_budget`, `audit::inventory::directly_named_files_do_not_consume_the_directory_walk_budget`, `io_plan_docs::plan_treats_sources_over_the_total_size_bound_as_possibly_holding_docs`, `release_manifests::an_excluded_example_and_a_nested_workspace_are_not_packages_of_the_root`, `resolve_qualification::every_recorded_case_matches_the_legacy_op` | 30 s | 1 | yes | yes |
 | 12 | catch-all for the velnor-ci, velnor-gen, velnor-model, velnor-release, velnor-render and velnor-rust packages | 2 s | 1 | yes | yes |
 
-Row 12 is the last line of `profile.default`. It applies to every test that no earlier row matches. `profile.ci` has no 2 s line of its own, but nextest makes a custom profile inherit the `profile.default` overrides, so row 11 also applies under `profile.ci`. A test that builds a temporary repository and runs real git, such as `ruleset::the_binary_prints_the_golden_ruleset_for_a_repository_that_holds_the_sample`, matches no row and gets the 2 s limit under both profiles.
+Row 12 is the last line of `profile.default`. It applies to every test that no earlier row matches. `profile.ci` has no 2 s line of its own, but nextest makes a custom profile inherit the `profile.default` overrides, so row 12 also applies under `profile.ci`. A test that builds a temporary repository and runs real git, such as `ruleset::the_binary_prints_the_golden_ruleset_for_a_repository_that_holds_the_sample`, matches no row and gets the 2 s limit under both profiles.
 
 ## Samples
 

@@ -107,6 +107,14 @@ pub fn verdict(
         lines.push(format!("  {}", outcome.line()));
         lines.extend(check.under(outcome).iter().map(|job| format!("    {job}")));
         lines.extend(outcome.caches.iter().map(|cache| format!("    {cache}")));
+        if let Some(tail) = &outcome.client_log {
+            lines
+                .push("    Runner.Client log, last lines (no job of this run started):".to_owned());
+            if tail.is_empty() {
+                lines.push("      (the log is empty)".to_owned());
+            }
+            lines.extend(tail.iter().map(|line| format!("      {line}")));
+        }
     }
     let stray = check.stray(outcomes);
     if !stray.is_empty() {
