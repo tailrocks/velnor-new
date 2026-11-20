@@ -81,8 +81,7 @@ fn render_one(
     if file.len() > MAX_WORKFLOW_BYTES {
         return Err(vec![crate::rule_messages::size_report::too_large(
             &format!(".github/workflows/{}.yml", workflow.file),
-            file.len(),
-            &rendered.jobs,
+            &file,
         )]);
     }
     Ok((format!(".github/workflows/{}.yml", workflow.file), file))

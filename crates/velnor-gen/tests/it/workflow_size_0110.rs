@@ -2,13 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::RepoPath;
+use velnor_render::MAX_WORKFLOW_BYTES;
 
 use crate::archive::jobs_of;
 use crate::base_save::step;
 use crate::facts::TestResult;
 use crate::pipeline::{view, workflow};
-
-const BUDGET_BYTES: usize = 494_000;
 
 fn twenty_roots(helper: &str) -> Result<String, Box<dyn std::error::Error>> {
     let manifests: Vec<String> = (0..20)
@@ -46,11 +45,11 @@ fn condition(block: &str, name: &str) -> Result<String, Box<dyn std::error::Erro
 }
 
 #[test]
-fn twenty_roots_at_helper_0_1_110_stay_under_the_size_budget() -> TestResult {
+fn twenty_roots_at_helper_0_1_110_stay_within_the_platform_workflow_limit() -> TestResult {
     let text = twenty_roots("0.1.110")?;
     assert!(
-        text.len() <= BUDGET_BYTES,
-        "{} bytes, budget {BUDGET_BYTES}",
+        text.len() <= MAX_WORKFLOW_BYTES,
+        "{} bytes, limit {MAX_WORKFLOW_BYTES}",
         text.len()
     );
     Ok(())
