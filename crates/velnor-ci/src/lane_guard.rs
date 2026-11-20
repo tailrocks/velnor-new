@@ -19,7 +19,7 @@ pub fn run(args: &LaneGuardArgs) -> ExitCode {
             ExitCode::SUCCESS
         }
         Err(error) => {
-            eprintln!("{error}");
+            eprintln!("{}", escape(&error.to_string(), false));
             ExitCode::FAILURE
         }
     }
