@@ -11,8 +11,8 @@ use velnor_model::{
 };
 use velnor_rust::{
     cargo_files, defer_post_merge_docs, detect, introduced, is_workflow_file, lint_runs,
-    member_sources, optional_steps, plan_groups, policy_runs, root_sources, select_event,
-    selects_by_diff, tests_expected, unknown_paths, unread_packages,
+    member_sources, optional_steps, plan_groups, policy_runs, policy_unread, root_sources,
+    select_event, selects_by_diff, tests_expected, unknown_paths, unread_packages,
 };
 
 use super::{
@@ -65,7 +65,11 @@ pub(super) fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
     let selected = selections
         .values()
         .any(|selection| !matches!(selection, RustSelection::None));
-    let policy = policy_runs(facts.policy, &changes.paths, everything, selected);
+    let policy = if kind == EventKind::PullRequest && changes.paths.is_empty() {
+        policy_unread(facts.policy)
+    } else {
+        policy_runs(facts.policy, &changes.paths, everything, selected)
+    };
     let expected: BTreeMap<RepoPath, bool> = facts
         .rust_roots
         .iter()

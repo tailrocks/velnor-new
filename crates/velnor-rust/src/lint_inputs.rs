@@ -34,7 +34,9 @@ fn runs(
     changed: Option<&BTreeSet<RepoPath>>,
     symlinks: &BTreeSet<RepoPath>,
 ) -> bool {
-    let Some(changed) = changed.filter(|_| event == EventKind::PullRequest) else {
+    let Some(changed) =
+        changed.filter(|changed| event == EventKind::PullRequest && !changed.is_empty())
+    else {
         return true;
     };
     symlinks

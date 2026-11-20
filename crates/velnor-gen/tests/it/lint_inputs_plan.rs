@@ -42,7 +42,6 @@ fn a_pull_request_that_changes_no_input_skips_the_lint() -> TestResult {
         EventKind::PullRequest,
         Some(&["src/lib.rs", "README.md"])
     )?);
-    assert!(!hk(EventKind::PullRequest, Some(&[]))?);
     assert!(!hk(
         EventKind::PullRequest,
         Some(&["a/hk.pkl", "toolsmith/x"])
@@ -206,5 +205,11 @@ fn a_changed_path_that_is_an_ancestor_of_an_input_runs_the_lint() -> TestResult 
         &BTreeSet::new(),
     );
     assert_eq!(runs.values().copied().collect::<Vec<_>>(), [false]);
+    Ok(())
+}
+
+#[test]
+fn an_empty_change_list_on_a_pull_request_runs_the_lint() -> TestResult {
+    assert!(hk(EventKind::PullRequest, Some(&[]))?);
     Ok(())
 }

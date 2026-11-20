@@ -205,6 +205,15 @@ fn every_other_event_runs_the_gated_generated_check_even_for_a_docs_change() -> 
 }
 
 #[test]
+fn an_empty_change_list_on_a_pull_request_runs_the_gated_generated_check() -> TestResult {
+    assert!(
+        selected(&[], EventKind::PullRequest)?,
+        "an empty change list is unknown, not docs-only"
+    );
+    Ok(())
+}
+
+#[test]
 fn an_unlisted_change_set_runs_the_gated_generated_check() -> TestResult {
     let facts = detect(&check_repo(CHECK_GATED, FIRST)?)?;
     let runs = lint_runs(&facts, EventKind::PullRequest, None, &BTreeSet::new());
