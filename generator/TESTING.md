@@ -14,6 +14,7 @@
 - A rule test is a table of inputs and outputs, not one test per case.
 - No test starts a program found through `PATH` or touches the network. `.config/nextest.toml` wraps every test binary, when nextest lists it and when it runs it, in `env PATH=/nonexistent`, and `no_programs` fails if `git`, `cargo` or `sh` can still be found through `PATH`. A program named by an absolute path is not blocked. The `io` module is tested by the real runs.
 - One behavior is tested at one layer.
+- A test that drives nextest through `cargo-nextest` (`audit::migration::nextest_discovery_compiles_first_and_executes_the_tests_once` in `velnor-ci`) needs the version `mise.toml` pins in the mise data directory. Run `mise install` in the repository root once. Without it the test fails and names the pin.
 
 ### Timeout tiers
 
