@@ -15,6 +15,7 @@ LIST_INDENT = re.compile(r"[ \t]*" + CONTAINER + r"(?:[-*+]|\d{1,9}[.)]) {5,}\S"
 BLOCK_MARGIN = re.compile(r"[ \t]*\*?")
 QUOTE_START = re.compile(r"[ \t]*>")
 HRULE = re.compile(r"(?:-[ \t]*){3,}|(?:\*[ \t]*){3,}|(?:_[ \t]*){3,}")
+SETEXT_UNDERLINE = re.compile(r"(?:=+|-+)[ \t]*")
 DOC_OPEN = re.compile(r"/\*(?:!|\*(?![*/]))")
 ATTR_START = re.compile(r"#\s*!?\s*\[")
 DOC_EQ = re.compile(r"\s*=(?!=)")
@@ -93,7 +94,12 @@ def prose(line):
     if line is None:
         return False
     text = re.sub("^" + CONTAINER, "", line.strip(), count=1)
-    return bool(text) and not text.startswith("#") and not HRULE.fullmatch(text)
+    return (
+        bool(text)
+        and not text.startswith("#")
+        and not HRULE.fullmatch(text)
+        and not SETEXT_UNDERLINE.fullmatch(text)
+    )
 
 
 def markdown_hit(lines, indent):
