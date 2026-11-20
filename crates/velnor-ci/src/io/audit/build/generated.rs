@@ -61,3 +61,6 @@ pub(super) fn targets(
     }
     Ok(found)
 }
+
+#[cfg(test)]
+mod parses;

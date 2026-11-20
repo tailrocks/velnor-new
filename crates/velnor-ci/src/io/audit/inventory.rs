@@ -268,6 +268,7 @@ pub(super) fn matches(
 }
 
 pub(super) fn load(output: &Path) -> io::Result<Evidence> {
+    super::timing::parsed();
     let receipt: Receipt = serde_json::from_slice(&fs::read(receipt_path(output))?)?;
     if receipt.output != sha256_hex(&fs::read(output)?)
         || receipt.modified != fs::metadata(output)?.modified()?

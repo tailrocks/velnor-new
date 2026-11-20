@@ -8,6 +8,7 @@ mod inventory;
 mod options;
 mod selection;
 mod setup;
+mod timing;
 
 pub(crate) use build::build;
 pub use options::AuditOptions;
