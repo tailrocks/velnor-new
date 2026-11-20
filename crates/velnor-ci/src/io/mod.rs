@@ -13,6 +13,7 @@ pub mod cache_api;
 mod cache_paths;
 mod cache_prune;
 mod cache_sources;
+mod cache_target_link;
 mod cache_upload;
 mod cold;
 mod configurations;
@@ -213,6 +214,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Release(ReleaseCommand::FamilyTag(args)) => release::run_family_tag(&args),
         Command::Release(ReleaseCommand::CheckConfig(args)) => release::run_check_config(&args),
         Command::Release(ReleaseCommand::Align(args)) => release_align::run_align(&args),
+        Command::Release(ReleaseCommand::VerifyListed(args)) => release::run_verify_listed(&args),
         Command::Plan(args) => plan::run_plan(&args),
         Command::MergeGroupPassed => Ok(merge_group::run()),
         Command::MergeQueueCheck => Ok(merge_queue::run()),
