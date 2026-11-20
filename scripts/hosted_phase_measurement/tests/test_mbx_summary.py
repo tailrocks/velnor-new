@@ -66,6 +66,15 @@ class ParseMbxSummaryTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             M.parse_mbx_summary("mbx[cache]: object cache: 1 hits, 0 misses; 0 B downloaded")
 
+    def test_labelled_summary_without_the_downloaded_clause_fails_instead_of_dropping(self):
+        for line in (
+            "mbx[cache]: object cache: 1 hits, 0 misses; 0 B uploaded",
+            "mbx[cache]: object cache: 1 hits, 0 misses",
+            "mbx[cache]: object cache:",
+        ):
+            with self.subTest(line=line), self.assertRaises(ValueError):
+                M.parse_mbx_summary(line)
+
 
 if __name__ == "__main__":
     unittest.main()

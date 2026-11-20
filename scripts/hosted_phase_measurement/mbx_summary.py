@@ -7,6 +7,7 @@ from typing import Any
 
 MBX_MARKER = re.compile(r"mbx\[cache\]:", re.IGNORECASE)
 SUMMARY_SHAPE = re.compile(r";.*\bdownloaded\b", re.IGNORECASE)
+LABEL = re.compile(r"mbx\[cache\]:\s*object cache:", re.IGNORECASE)
 SUMMARY = re.compile(
     r"mbx\[cache\]:\s*(?:object cache:\s*)?(?P<lookups>[^;]*);\s*"
     r"(?P<downloaded>\d+(?:\.\d+)?)\s*(?P<download_unit>[A-Za-z]+)\s+downloaded,\s*"
@@ -85,7 +86,7 @@ def parse_mbx_summary(line: str) -> dict[str, Any] | None:
     if len(markers) != 1:
         _fail(f"line contains multiple MBX object-cache markers: {line!r}")
     text = line[markers[0].start():].strip()
-    if SUMMARY_SHAPE.search(text) is None:
+    if LABEL.match(text) is None and SUMMARY_SHAPE.search(text) is None:
         return None
     match = SUMMARY.fullmatch(text)
     if match is None:
