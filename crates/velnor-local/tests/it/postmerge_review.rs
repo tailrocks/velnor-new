@@ -92,7 +92,7 @@ async fn scaling_a_branch_twice_scales_it_once() {
 #[test]
 fn a_block_scalar_line_that_looks_like_the_key_is_left_alone() {
     let text = "jobs:\n  t:\n    steps:\n      - name: Write\n        run: |\n          cat <<EOF > c.yml\n          timeout-minutes: 10\n          EOF\n";
-    let (out, count) = scale(text, factor("3"));
+    let (out, count) = scale(text, factor("3")).unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(out, text);
     assert_eq!(count, 0);
 }
@@ -100,7 +100,7 @@ fn a_block_scalar_line_that_looks_like_the_key_is_left_alone() {
 #[test]
 fn a_timeout_inside_a_flow_mapping_is_scaled() {
     let text = "jobs:\n  test: {runs-on: ubuntu-26.04, timeout-minutes: 30}\n";
-    let (out, count) = scale(text, factor("3"));
+    let (out, count) = scale(text, factor("3")).unwrap_or_else(|e| unreachable!("{e}"));
     assert!(out.contains("timeout-minutes: 90}"), "{out}");
     assert_eq!(count, 1);
 }
@@ -110,6 +110,41 @@ fn a_huge_factor_gives_the_exact_product() {
     let (out, _) = scale(
         "jobs:\n  t:\n    timeout-minutes: 30\n",
         factor("10000000000000000"),
+    )
+    .unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(
+        out,
+        "jobs:\n  t:\n    timeout-minutes: 300000000000000000\n"
     );
-    assert_eq!(out, "jobs:\n  t:\n    timeout-minutes: 300000000000000000\n");
+}
+
+#[test]
+fn a_product_that_overflows_is_refused() {
+    let text = "jobs:\n  t:\n    timeout-minutes: 1000000\n";
+    let error = scale(text, factor("18000000000000000"))
+        .err()
+        .unwrap_or_default();
+    assert!(error.contains("64 bits"), "{error}");
+}
+
+#[test]
+fn an_alias_or_an_anchor_for_a_timeout_is_refused_by_name() {
+    for text in [
+        "jobs:\n  t:\n    timeout-minutes: *t\n",
+        "jobs:\n  t:\n    timeout-minutes: &t 30\n",
+        "jobs:\n  t:\n    <<: *base\n",
+    ] {
+        let error = scale(text, factor("3")).err().unwrap_or_default();
+        assert!(
+            error.contains("alias") || error.contains("anchor"),
+            "{text}: {error}"
+        );
+    }
+}
+
+#[test]
+fn keys_outside_job_and_step_level_are_left_alone() {
+    let text = "env:\n  timeout-minutes: 5\njobs:\n  t:\n    with:\n      timeout-minutes: 5\n    steps:\n      - with:\n          timeout-minutes: 7\n";
+    let (out, count) = scale(text, factor("3")).unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!((out.as_str(), count), (text, 0));
 }

@@ -4176,6 +4176,7 @@ dependencies = [
  "percent-encoding",
  "ring",
  "serde",
+ "serde-saphyr",
  "serde_json",
  "tokio",
  "tokio-util",
