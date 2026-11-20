@@ -9,12 +9,13 @@ use crate::io::Repo as Checkout;
 
 const COMPILED: &str =
     "   Compiling app v0.1.0 (/work/lab/app)\n    Finished `dev` profile in 3.20s\n";
-const TOKEN: &str = "ghs_job_token";
-const PRIVATE: &str = r#"{"full_name":"acme/app","private":true,"visibility":"private"}"#;
+pub(crate) const TOKEN: &str = "ghs_job_token";
+pub(crate) const PRIVATE: &str =
+    r#"{"full_name":"acme/app","private":true,"visibility":"private"}"#;
 const PUBLIC: &str = r#"{"full_name":"acme/app","private":false,"visibility":"public"}"#;
 const INTERNAL: &str = r#"{"full_name":"acme/app","private":true,"visibility":"internal"}"#;
 const OTHER: &str = r#"{"full_name":"acme/other","private":true,"visibility":"private"}"#;
-const GIT_LOCK: &str = "version = 4\n[[package]]\nname = \"shared\"\nversion = \"1.0.0\"\nsource = \"git+https://github.com/acme/shared-lib?rev=abc#0123456789abcdef0123456789abcdef01234567\"\n";
+pub(crate) const GIT_LOCK: &str = "version = 4\n[[package]]\nname = \"shared\"\nversion = \"1.0.0\"\nsource = \"git+https://github.com/acme/shared-lib?rev=abc#0123456789abcdef0123456789abcdef01234567\"\n";
 
 struct Outcome {
     output: Output,
@@ -116,11 +117,67 @@ fn an_answer_that_does_not_prove_privacy_of_this_repository_is_reported_not_priv
             r#"{"full_name":"acme/app"}"#,
             Some(TOKEN),
         ),
+        (
+            "no-visibility",
+            200,
+            r#"{"full_name":"acme/app","private":true}"#,
+            Some(TOKEN),
+        ),
+        (
+            "no-full-name",
+            200,
+            r#"{"private":true,"visibility":"private"}"#,
+            Some(TOKEN),
+        ),
         ("no-token", 200, PRIVATE, None),
     ])
 }
 
-fn decide_with(repo: &Checkout, api: Option<&Api>, token: Option<&str>) -> (Output, String) {
+#[test]
+fn the_job_token_goes_only_to_an_https_api_or_a_loopback_host() -> TestResult {
+    for api in [
+        "http://127.0.0.1.evil.example",
+        "http://127.0.0.1@evil.example",
+        "http://localhost.evil.example",
+        "http://evil.example",
+        "ftp://127.0.0.1",
+    ] {
+        let repo = Checkout::empty("pr-untrusted-api");
+        let outputs = repo.root().join("github-output");
+        let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+            .current_dir(repo.root())
+            .args(["cache", "private-repo"])
+            .env_clear()
+            .env("PATH", "/usr/bin:/bin")
+            .env("GITHUB_OUTPUT", &outputs)
+            .env("GITHUB_REPOSITORY", "acme/app")
+            .env("GITHUB_TOKEN", TOKEN)
+            .env("VELNOR_API_URL", api)
+            .output()?;
+        assert!(output.status.success(), "{api}: {output:?}");
+        assert_eq!(fs::read_to_string(&outputs)?, "private=false\n", "{api}");
+        assert!(
+            String::from_utf8_lossy(&output.stderr).contains("set VELNOR_API_URL"),
+            "{api}: {output:?}"
+        );
+    }
+    Ok(())
+}
+
+pub(crate) fn decide_with(
+    repo: &Checkout,
+    api: Option<&Api>,
+    token: Option<&str>,
+) -> (Output, String) {
+    decide_in(repo, api, token, None)
+}
+
+pub(crate) fn decide_in(
+    repo: &Checkout,
+    api: Option<&Api>,
+    token: Option<&str>,
+    cargo_home: Option<&str>,
+) -> (Output, String) {
     let temp = repo.root().join("runner-temp");
     fs::create_dir_all(&temp).unwrap_or_else(|e| unreachable!("{e}"));
     fs::write(temp.join("velnor-run.log"), COMPILED).unwrap_or_else(|e| unreachable!("{e}"));
@@ -141,11 +198,14 @@ fn decide_with(repo: &Checkout, api: Option<&Api>, token: Option<&str>) -> (Outp
     if let Some(token) = token {
         command.env("GITHUB_TOKEN", token);
     }
+    if let Some(cargo_home) = cargo_home {
+        command.env("CARGO_HOME", repo.root().join(cargo_home));
+    }
     let output = command.output().unwrap_or_else(|e| unreachable!("{e}"));
     (output, fs::read_to_string(&outputs).unwrap_or_default())
 }
 
-fn private_checkout(name: &str, lock: &str) -> Checkout {
+pub(crate) fn private_checkout(name: &str, lock: &str) -> Checkout {
     let repo = Checkout::new(name);
     repo.write_unstaged("target/debug/incremental/app-1/work", "x");
     repo.write_unstaged("target/debug/deps/libapp.rlib", "rlib");
@@ -282,100 +342,4 @@ fn a_public_lock_asks_no_question_of_the_api() -> TestResult {
     assert_eq!(written, "save=true\nsources=true\n");
     assert!(api.requests.lock().map_err(|e| e.to_string())?.is_empty());
     Ok(())
-}
-
-fn saved_sources_with(name: &str, relative: &str, content: &str) -> (Output, String) {
-    let repo = private_checkout(name, GIT_LOCK);
-    repo.write_unstaged(&format!("home/{relative}"), content);
-    let api = serve_body(200, PRIVATE).unwrap_or_else(|e| unreachable!("{e}"));
-    decide_with(&repo, Some(&api), Some(TOKEN))
-}
-
-fn sources_save_stops(cases: &[(&str, &str, &str)]) {
-    for (label, relative, content) in cases {
-        let (output, written) =
-            saved_sources_with(&format!("decide-credential-{label}"), relative, content);
-        assert!(output.status.success(), "{label}: {output:?}");
-        assert_eq!(written, "save=true\nsources=false\n", "{label}: {output:?}");
-        assert!(
-            String::from_utf8_lossy(&output.stdout).contains("credential"),
-            "{label}: {output:?}"
-        );
-    }
-}
-
-fn sources_save_goes_on(cases: &[(&str, &str, &str)]) {
-    for (label, relative, content) in cases {
-        let (output, written) =
-            saved_sources_with(&format!("decide-outside-{label}"), relative, content);
-        assert!(output.status.success(), "{label}: {output:?}");
-        assert_eq!(written, "save=true\nsources=true\n", "{label}: {output:?}");
-    }
-}
-
-#[test]
-fn a_credential_file_inside_the_saved_sources_paths_stops_the_sources_save_only() {
-    sources_save_stops(&[
-        (
-            "git-credentials",
-            ".cargo/git/db/shared-1/.git-credentials",
-            "https://x-access-token:ghs_secret@github.com\n",
-        ),
-        (
-            "netrc",
-            ".cargo/git/db/shared-1/.netrc",
-            "machine github.com login x password ghs_secret\n",
-        ),
-        (
-            "registry-credentials",
-            ".cargo/registry/cache/index.crates.io-1/credentials.toml",
-            "[registry]\ntoken = \"secret\"\n",
-        ),
-    ]);
-}
-
-#[test]
-fn a_token_in_a_saved_git_config_stops_the_sources_save_only() {
-    sources_save_stops(&[
-        (
-            "token-in-config-url",
-            ".cargo/git/db/shared-1/config",
-            "[remote \"origin\"]\n\turl = https://x-access-token:ghs_secret@github.com/acme/shared-lib\n",
-        ),
-        (
-            "extraheader",
-            ".cargo/git/db/shared-1/config",
-            "[http]\n\textraheader = AUTHORIZATION: basic eC1hY2Nlc3M6c2VjcmV0\n",
-        ),
-    ]);
-}
-
-#[test]
-fn credential_files_outside_the_saved_sources_paths_do_not_matter() {
-    sources_save_goes_on(&[
-        (
-            "home-git-credentials",
-            ".git-credentials",
-            "https://x-access-token:ghs_secret@github.com\n",
-        ),
-        (
-            "home-netrc",
-            ".netrc",
-            "machine github.com login x password ghs_secret\n",
-        ),
-        (
-            "cargo-credentials",
-            ".cargo/credentials.toml",
-            "[registry]\ntoken = \"secret\"\n",
-        ),
-    ]);
-}
-
-#[test]
-fn plain_git_data_inside_the_saved_sources_paths_is_saved() {
-    sources_save_goes_on(&[(
-        "plain-git-config",
-        ".cargo/git/db/shared-1/config",
-        "[core]\n\tbare = true\n[remote \"origin\"]\n\turl = https://github.com/acme/shared-lib\n",
-    )]);
 }

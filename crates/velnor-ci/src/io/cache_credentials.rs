@@ -4,6 +4,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+const SAVED_ROOT: &str = ".cargo";
 const SAVED: [&str; 3] = ["registry/index", "registry/cache", "git/db"];
 const CREDENTIAL_FILES: [&str; 6] = [
     ".git-credentials",
@@ -18,10 +19,16 @@ const MAX_CONFIG_BYTES: u64 = 1 << 20;
 const MAX_DEPTH: usize = 12;
 const MAX_ENTRIES: usize = 2_000_000;
 
-pub(super) fn find(cargo_home: &Path) -> Option<String> {
+pub(super) fn saved_root() -> Option<PathBuf> {
+    std::env::var_os("HOME")
+        .filter(|home| !home.is_empty())
+        .map(|home| PathBuf::from(home).join(SAVED_ROOT))
+}
+
+pub(super) fn find(root: &Path) -> Option<String> {
     let mut budget = MAX_ENTRIES;
     for saved in SAVED {
-        let directory = cargo_home.join(saved);
+        let directory = root.join(saved);
         match fs::symlink_metadata(&directory) {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
             Ok(meta) if meta.is_dir() => {}
@@ -90,7 +97,6 @@ fn holds_credential(path: &Path) -> bool {
         let line = line.trim().to_ascii_lowercase();
         line.starts_with("extraheader")
             || line.contains("authorization")
-            || line.contains("x-access-token")
             || line.contains("password")
             || line.contains("token")
             || userinfo(&line)

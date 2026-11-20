@@ -12,8 +12,22 @@ pub(crate) const TOKEN_STEP: &str = "private-token";
 pub(crate) const CHECK_STEP: &str = "private-check";
 pub(crate) const PRIVACY_STEP: &str = "private_repo";
 const PRIVATE_REPOSITORY: &str = "steps.private_repo.outputs.private == 'true'";
-const NOT_A_FORK: &str = "(github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)";
-const TOKEN_ALLOWED: &str = "${{ (github.event_name == 'merge_group' && steps.private-check.outputs.allowed == 'true') || (github.event_name != 'merge_group' && (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && !endsWith(github.actor, '[bot]') && !endsWith(github.event.pull_request.user.login, '[bot]')))) }}";
+macro_rules! trusted_pull_request {
+    () => {
+        "github.event.pull_request.head.repo.full_name == github.repository && !endsWith(github.actor, '[bot]') && !endsWith(github.event.pull_request.user.login, '[bot]')"
+    };
+}
+
+const RESTORE_ALLOWED: &str = concat!(
+    "(github.event_name != 'pull_request' || (",
+    trusted_pull_request!(),
+    "))"
+);
+const TOKEN_ALLOWED: &str = concat!(
+    "${{ (github.event_name == 'merge_group' && steps.private-check.outputs.allowed == 'true') || (github.event_name != 'merge_group' && (github.event_name != 'pull_request' || (",
+    trusted_pull_request!(),
+    "))) }}"
+);
 
 pub(crate) fn render(kind: &StepKind) -> RenderedStep {
     match kind {
@@ -25,20 +39,17 @@ pub(crate) fn render(kind: &StepKind) -> RenderedStep {
     }
 }
 
-/// What a step that reads or writes a cache of private dependencies waits for: the helper's
-/// verdict that the repository is private, and, for a restore, that the run is not a fork's.
 pub(crate) fn repository_conditions(step: &Step) -> Vec<String> {
     if !step.private_repo {
         return Vec::new();
     }
     let mut conditions = vec![PRIVATE_REPOSITORY.to_owned()];
     if matches!(step.kind, StepKind::CacheRestore(_)) {
-        conditions.push(NOT_A_FORK.to_owned());
+        conditions.push(RESTORE_ALLOWED.to_owned());
     }
     conditions
 }
 
-/// The decision repeats the question, so the save does not rest on a step output alone.
 pub(crate) fn decide_env(step: &Step) -> Vec<(String, Value)> {
     if step.private_repo && matches!(step.kind, StepKind::CacheDecide { .. }) {
         api_env()

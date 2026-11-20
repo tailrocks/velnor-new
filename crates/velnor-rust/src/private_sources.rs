@@ -23,7 +23,6 @@ pub(crate) fn note(cause: &str) -> String {
     format!("{NOT_SAVED} ({cause})")
 }
 
-/// The note on the base caches of a repository with private dependencies.
 #[must_use]
 pub fn base_cache_note(facts: &velnor_model::RepoFacts) -> Option<String> {
     let note = facts.private_sources.as_ref()?;

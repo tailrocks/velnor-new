@@ -268,7 +268,7 @@ pub(super) fn run_decide(args: &crate::cli_cache::DecideArgs) -> Result<String, 
     let found = super::cache_sources::refusal(&root, &manifests)?;
     let leak = found
         .private_sources
-        .then(super::cache_sources::cargo_home)
+        .then(super::cache_credentials::saved_root)
         .flatten()
         .and_then(|home| super::cache_credentials::find(&home));
     let sources = found.refusal.is_none() && leak.is_none();

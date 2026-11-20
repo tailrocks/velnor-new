@@ -40,8 +40,6 @@ pub(crate) fn inputs_cli(facts: &RepoFacts) -> InputsCli {
     }
 }
 
-/// The first `velnor-ci` with `cache private-repo`, and a `cache decide` that accepts a lock with
-/// private git sources once the API proves the repository private.
 // First released in tools-v0.1.108 (not tagged yet when this gate was written).
 const PRIVATE_BASE_HELPER: (u64, u64, u64) = (0, 1, 108);
 const SOURCES_FETCH_HELPER: (u64, u64, u64) = (0, 1, 88);

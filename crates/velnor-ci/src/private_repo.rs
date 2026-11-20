@@ -19,18 +19,21 @@ pub fn require_private(repository: &str, github: &dyn GitHub) -> Result<(), CiEr
     let text = github.get(&path)?;
     let answer: Repository = serde_json::from_str(&text)
         .map_err(|e| CiError::new(format!("GET {path} is not readable: {e}")))?;
-    if answer
-        .full_name
-        .as_deref()
-        .is_some_and(|name| !name.eq_ignore_ascii_case(repository))
-    {
+    let Some(name) = answer.full_name.as_deref() else {
         return Err(CiError::new(format!(
-            "GET {path} answered for {}, not for {repository}",
-            answer.full_name.unwrap_or_default()
+            "GET {path} did not name the repository, so it cannot prove {repository} private"
+        )));
+    };
+    if !name.eq_ignore_ascii_case(repository) {
+        return Err(CiError::new(format!(
+            "GET {path} answered for {name}, not for {repository}"
         )));
     }
     match (answer.private, answer.visibility.as_deref()) {
-        (true, None | Some("private")) => Ok(()),
+        (true, Some("private")) => Ok(()),
+        (true, None) => Err(CiError::new(format!(
+            "GET {path} did not state the visibility of {repository}, and only a private repository can keep private dependencies in its caches"
+        ))),
         (true, Some(visibility)) => Err(CiError::new(format!(
             "{repository} has the visibility {visibility}, and only a private repository can keep private dependencies in its caches"
         ))),

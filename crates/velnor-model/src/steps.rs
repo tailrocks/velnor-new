@@ -89,8 +89,6 @@ pub enum StepKind {
     },
     TestGroupsCheck(Vec<GroupFilter>),
     CratesMirror(crate::repo::CratesMirror),
-    /// Asks `velnor-ci` whether the repository is private, which the restores and saves of the
-    /// caches of private dependencies wait for.
     RepositoryPrivacy,
     PrivateCheck {
         cached: Vec<crate::ids::RootSlug>,

@@ -12,7 +12,7 @@ use crate::private_sources::{SECTION, private_repo};
 
 const GIT_LOCK: &str = "version = 4\n\n[[package]]\nname = \"package-0\"\nversion = \"0.1.0\"\n\n[[package]]\nname = \"shared\"\nversion = \"1.0.0\"\nsource = \"git+https://github.com/acme/shared-lib?branch=main#0123456789abcdef\"\n";
 const VERDICT: &str = "steps.private_repo.outputs.private == ''true''";
-const SAME_REPOSITORY: &str = "(github.event_name != ''pull_request'' || github.event.pull_request.head.repo.full_name == github.repository)";
+const TRUSTED_PULL_REQUEST: &str = "github.event.pull_request.head.repo.full_name == github.repository && !endsWith(github.actor, ''[bot]'') && !endsWith(github.event.pull_request.user.login, ''[bot]'')";
 const SAVING_NOTE: &str = "only while GitHub reports this repository private";
 const REFUSED_NOTE: &str =
     "base caches are not saved because this repository has private dependencies";
@@ -103,8 +103,27 @@ fn the_helpers_verdict_gates_every_restore_and_every_save_of_the_base_caches() -
             .find(|line| line.trim_start().starts_with("if: "))
             .ok_or("restore has no condition")?;
         assert!(condition.contains(VERDICT), "{condition}");
-        assert!(condition.contains(SAME_REPOSITORY), "{condition}");
+        assert!(
+            condition.contains(&format!(
+                "(github.event_name != ''pull_request'' || ({TRUSTED_PULL_REQUEST}))"
+            )),
+            "{condition}"
+        );
+        assert!(
+            condition.contains("!endsWith(github.actor, ''[bot]'')"),
+            "{condition}"
+        );
+        assert!(
+            condition.contains("!endsWith(github.event.pull_request.user.login, ''[bot]'')"),
+            "{condition}"
+        );
     }
+    let token = step(
+        &lane,
+        "Create a read-only token for the private repositories",
+    )
+    .ok_or("no token step")?;
+    assert!(token.contains(TRUSTED_PULL_REQUEST), "{token}");
     for gated_save in [
         "velnor-ci inputs save",
         "Decide whether to save the build directory",

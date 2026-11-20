@@ -106,9 +106,6 @@ mod tests {
     use crate::report::{LaneMetrics, SaveOutcome, check};
     use serde_json::json;
 
-    /// A base cache gated on the privacy verdict is skipped in a public repository: GitHub
-    /// records the restore and the save as `skipped` with no outputs. That is "not attempted",
-    /// so the cache telemetry must not fail the check.
     #[test]
     fn a_restore_and_save_skipped_by_the_privacy_verdict_fail_no_check() {
         let plans = vec![CachePlan {
