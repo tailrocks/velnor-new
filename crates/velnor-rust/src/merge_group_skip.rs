@@ -5,10 +5,11 @@ use velnor_model::{
     Access, CargoCommand, HelperCommand, Job, PermissionScope, PlanFrom, RepoFacts, StepKind,
 };
 
-use crate::lane::PLAN_JOB;
+use crate::lane::{PLAN_JOB, POLICY_JOB};
 use crate::plan::{RUST_JOB, step};
 
-pub(crate) fn apply(jobs: &mut [Job], single: bool) {
+pub(crate) fn apply(facts: &RepoFacts, jobs: &mut [Job], single: bool) {
+    let whole_jobs = crate::lane::lane_job_fixes(facts);
     for job in jobs.iter_mut() {
         let from = if !single {
             PlanFrom::Job(PLAN_JOB)
@@ -19,6 +20,12 @@ pub(crate) fn apply(jobs: &mut [Job], single: bool) {
         } else {
             continue;
         };
+        let whole =
+            whole_jobs && from != PlanFrom::ThisJob && (is_lint_job(job) || job.id == POLICY_JOB);
+        if whole {
+            skip_whole_job(job, &from, single);
+            continue;
+        }
         for step in job.steps.iter_mut().filter(|step| step.kind.is_check()) {
             step.skip_after_merge_group = Some(from.clone());
         }
@@ -29,6 +36,13 @@ pub(crate) fn apply(jobs: &mut [Job], single: bool) {
             job.skip_after_merge_group = Some(from);
         }
     }
+}
+
+fn skip_whole_job(job: &mut Job, from: &PlanFrom, single: bool) {
+    if !single && !job.needs.contains(&PLAN_JOB) {
+        job.needs.push(PLAN_JOB);
+    }
+    job.skip_after_merge_group = Some(from.clone());
 }
 
 fn plans_itself(job: &Job) -> bool {
@@ -109,10 +123,12 @@ pub(crate) fn ask(facts: &RepoFacts, jobs: &mut [Job], single: bool) {
 /// disables the skip.
 fn assert_skips_resolve(jobs: &[Job]) {
     for job in jobs {
-        for step in &job.steps {
-            let Some(from) = &step.skip_after_merge_group else {
-                continue;
-            };
+        let marks = job.skip_after_merge_group.iter().chain(
+            job.steps
+                .iter()
+                .filter_map(|step| step.skip_after_merge_group.as_ref()),
+        );
+        for from in marks {
             let reader = match from {
                 PlanFrom::ThisJob => Some(job),
                 PlanFrom::Job(id) | PlanFrom::WorkJob(id) => jobs.iter().find(|job| &job.id == id),
@@ -160,6 +176,7 @@ mod tests {
             group_outputs: Vec::new(),
             reports_ignored: false,
             records_build: false,
+            saves_after_lane_test: false,
             chained_saves: false,
             selection_name: None,
             steps: kinds.into_iter().map(step).collect(),

@@ -76,6 +76,7 @@ pub(crate) fn locks_hash(manifests: &[&str]) -> Result<String, Box<dyn std::erro
             timeout_minutes: 10,
             reports_ignored: false,
             records_build: false,
+            saves_after_lane_test: false,
             chained_saves: false,
             selection_name: None,
             gate: None,

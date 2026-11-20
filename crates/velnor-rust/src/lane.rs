@@ -12,9 +12,18 @@ use crate::plan::{CHECKOUT_DEPTH, PLAN_DEPTH, RUST_JOB, head, job, mbx, step};
 use crate::plan_tools::{mirror_step, tools_install, tools_restore, tools_save};
 
 pub(crate) const PLAN_JOB: JobId = JobId::from_static("rust-plan");
-const POLICY_JOB: JobId = JobId::from_static("policy");
+pub(crate) const POLICY_JOB: JobId = JobId::from_static("policy");
 // First released in tools-v0.1.110 (not tagged yet when this gate was written).
 pub(crate) const EARLY_POLICY_HELPER: (u64, u64, u64) = (0, 1, 110);
+// First released in tools-v0.1.110 (not tagged yet when this gate was written).
+const LANE_JOB_FIXES_HELPER: (u64, u64, u64) = (0, 1, 110);
+
+pub(crate) fn lane_job_fixes(facts: &RepoFacts) -> bool {
+    facts
+        .helper
+        .as_ref()
+        .is_some_and(|helper| helper.version().at_least(LANE_JOB_FIXES_HELPER))
+}
 
 pub(crate) struct Lane {
     pub(crate) slug: RootSlug,

@@ -61,8 +61,14 @@ fn is_compile_check(step: &Step) -> bool {
 }
 
 /// A test step that records its build in its outputs, which the saves read.
-fn is_test_run(step: &Step) -> bool {
-    matches!(&step.kind, StepKind::Cargo(CargoCommand::NextestRun { .. }))
+fn is_test_run(job: &Job, step: &Step) -> bool {
+    match &step.kind {
+        StepKind::Cargo(CargoCommand::NextestRun { .. }) => true,
+        StepKind::Cargo(CargoCommand::NextestFeatures { reports: true, .. }) => {
+            job.saves_after_lane_test
+        }
+        _ => false,
+    }
 }
 
 impl SaveGate {
@@ -93,7 +99,7 @@ impl SaveGate {
         for (index, step) in job.steps.iter().enumerate().take(first) {
             let setup = Setup::of(restores, replanned);
             replanned |= step.kind == StepKind::Helper(HelperCommand::PlanFull);
-            if !legacy && is_test_run(step) {
+            if !legacy && is_test_run(job, step) {
                 let test = tests.id(step.reads.as_ref().map(|plan| &plan.slug));
                 compiled.push(Compiled {
                     built: Built::Recorded(test),

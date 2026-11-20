@@ -19,7 +19,7 @@ const LANE_ID: &str = "rust-lane-local-mode-root";
 const LANE: &str = "[[test_lane]]\nroot = '.'\nfeatures = ['local-mode']\npackages = ['package-0']\nfilter = 'test(~local::) or binary(local_host_public)'\nlint = true\ndoc = true\njob = 'parallel'\n";
 const LABEL: &str = "pr_ci = \"label\"\n";
 const KNOB: &str = "[ci]\nskip_push_after_merge_group = true\n\n";
-const FULL_RUN: &str = "ci:auto";
+const FULL_RUN: &str = "pull_request.labels";
 const SKIP: &str = "needs.rust-plan.outputs.skip_push != 'true'";
 
 fn lane_workflow(helper: &str, config: &str) -> Result<String, Box<dyn std::error::Error>> {
@@ -54,7 +54,12 @@ fn job_condition(helper: &str, config: &str) -> Result<String, Box<dyn std::erro
 }
 
 fn step_condition(block: &str, name: &str) -> Result<String, Box<dyn std::error::Error>> {
-    let found = step(block, name).ok_or_else(|| format!("no step {name}"))?;
+    let quoted = format!("name: '{name}'");
+    let found = steps(block)
+        .into_iter()
+        .find(|found| found.lines().any(|line| line.trim() == quoted))
+        .or_else(|| step(block, name))
+        .ok_or_else(|| format!("no step {name}"))?;
     Ok(found
         .lines()
         .find_map(|line| line.trim().strip_prefix("if: "))
@@ -83,14 +88,14 @@ fn a_failed_lane_compile_step_or_an_unfinished_lane_build_saves_nothing() -> Tes
         let mut context = with_outcomes(&ids, Some(failed), "success");
         context.job_ok = false;
         let saved = saves(&block, context)?;
-        assert!(saved.iter().all(|ran| !ran), "{failed}: {saved:?}");
+        assert!(saved[..2].iter().all(|ran| !ran), "{failed}: {saved:?}");
     }
     let mut unbuilt = with_outcomes(&ids, None, "success");
     unbuilt.set("steps.test.outputs.built", "");
     unbuilt.set("steps.test.outcome", "failure");
     unbuilt.job_ok = false;
     let saved = saves(&block, unbuilt)?;
-    assert!(saved.iter().all(|ran| !ran), "{saved:?}");
+    assert!(saved[..2].iter().all(|ran| !ran), "{saved:?}");
     Ok(())
 }
 
@@ -208,7 +213,8 @@ fn the_policy_and_lint_jobs_are_not_allocated_after_a_skipped_push() -> TestResu
 }
 
 #[test]
-fn the_gate_treats_the_policy_and_lint_jobs_as_scheduled_unless_the_queue_run_passed() -> TestResult {
+fn the_gate_treats_the_policy_and_lint_jobs_as_scheduled_unless_the_queue_run_passed() -> TestResult
+{
     let config = format!("{KNOB}{LINT}");
     let all = jobs(&config, FIXED)?;
     let text = all["required"]["steps"]

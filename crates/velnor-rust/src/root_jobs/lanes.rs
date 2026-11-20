@@ -30,6 +30,10 @@ impl RootJobs<'_> {
                 steps.extend(self.audit());
                 steps.extend(self.saves(&id, None, false));
                 let mut job = self.lane_job(id, steps);
+                if crate::lane::lane_job_fixes(self.facts) {
+                    job.pr = crate::plan::quick(self.facts);
+                    job.saves_after_lane_test = true;
+                }
                 if let Some(minutes) = timeout {
                     job.timeout_minutes = minutes;
                 }

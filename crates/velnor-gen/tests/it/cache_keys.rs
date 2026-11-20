@@ -241,6 +241,7 @@ fn a_save_step_renders_the_same_key_without_fallbacks() -> TestResult {
             group_outputs: Vec::new(),
             reports_ignored: false,
             records_build: false,
+            saves_after_lane_test: false,
             chained_saves: false,
             selection_name: None,
             steps: vec![Step {
