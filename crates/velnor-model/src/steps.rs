@@ -154,7 +154,9 @@ impl StepKind {
         match self {
             // The advisory DB fetch serves the cargo-deny check, which is a check, so it
             // is skipped after a merge group exactly when that check is.
-            Self::TestSetup { .. } | Self::AdvisoryFetch { .. } | Self::ReleaseAssets { .. } => true,
+            Self::TestSetup { .. } | Self::AdvisoryFetch { .. } | Self::ReleaseAssets { .. } => {
+                true
+            }
             Self::Cargo(command) => !command.is_target_build(),
             Self::Checkout { .. }
             | Self::InstallTools { .. }
