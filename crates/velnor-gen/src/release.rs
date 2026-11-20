@@ -8,7 +8,7 @@ use velnor_model::{
     HelperRelease, RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE, RepoFacts, RepoPath, RepoView, TargetKind,
 };
 use velnor_release::{
-    FamilyTrigger, ReleaseFiles, ReleasePlan, check_publish_budget, ruleset_drift, ruleset_json,
+    ReleaseFiles, ReleasePlan, check_publish_budget, ruleset_drift, ruleset_json,
 };
 use velnor_render::{Owner, owner_of, render_release};
 use velnor_rust::{MISE_CONFIGS, MISE_LOCK, reject_release_credential_hooks};
@@ -38,20 +38,6 @@ pub(crate) fn release_workflow(
         return Err(GenerateError::PrOnlyChecksHelperTooOld(
             helper.version().clone(),
         ));
-    }
-    // helper-gate: first in tools-v0.1.85 via bd00dd340b
-    if plan.family.is_some() && !helper.version().at_least((0, 1, 85)) {
-        return Err(GenerateError::FamilyTagHelperTooOld(
-            helper.version().clone(),
-        ));
-    }
-    if plan
-        .family
-        .as_ref()
-        .is_some_and(|family| family.trigger == FamilyTrigger::TagPush)
-        && !helper.version().at_least(crate::TAG_PUSH_HELPER)
-    {
-        return Err(GenerateError::TagPushHelperTooOld(helper.version().clone()));
     }
     let grouped = plan
         .roots
