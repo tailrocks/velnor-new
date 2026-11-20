@@ -70,10 +70,9 @@ fn delete_hint(remedy: Remedy<'_>) -> String {
     escape(&hint, false)
 }
 
-fn repository_target(server: Option<String>, repository: Option<String>) -> String {
-    let repository = repository.unwrap_or_else(|| "<owner/repo>".to_owned());
+fn repository_target(server: Option<&str>, repository: Option<&str>) -> String {
+    let repository = repository.unwrap_or("<owner/repo>");
     let host = server
-        .as_deref()
         .map(|url| {
             url.trim_end_matches('/')
                 .trim_start_matches("https://")
@@ -185,7 +184,10 @@ pub fn setup(verb: Verb) -> Result<String, CiError> {
             default_branch,
             cache_key: var("VELNOR_TOOLS_CACHE_KEY").unwrap_or_default(),
             anchor_key: var("VELNOR_ANCHOR_CACHE_KEY").unwrap_or_default(),
-            repository: repository_target(var("GITHUB_SERVER_URL"), var("GITHUB_REPOSITORY")),
+            repository: repository_target(
+                var("GITHUB_SERVER_URL").as_deref(),
+                var("GITHUB_REPOSITORY").as_deref(),
+            ),
         },
     )
 }
