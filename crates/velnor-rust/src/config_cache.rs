@@ -49,10 +49,6 @@ pub(crate) fn private_sources(
     roots: &[RustRoot],
     config: &RustCiConfig,
 ) -> Result<Option<String>, DetectError> {
-    // Credentials beside a public declaration can fetch a private submodule
-    // of that public repository, so they are a cause in their own right: they
-    // must stop the base caches and the pull-request deltas, not only the
-    // remote mbx cache.
     let cause = crate::private_sources::private_cause(view, config, roots).or_else(|| {
         (config.private_sources.is_some()
             && !crate::private_sources::declared_public(config).is_empty())
