@@ -144,7 +144,6 @@ fn the_released_helpers_without_sources_fetch_keep_the_per_root_steps_and_the_li
 
 #[test]
 fn nineteen_roots_fit_the_workflow_limit_with_the_single_fetch_step() -> TestResult {
-    // Twenty roots fit until every mise step carried a SHA-256 literal (#2158, 86 bytes a step).
     let manifests = many(19);
     let names: Vec<&str> = manifests.iter().map(String::as_str).collect();
     let text = workflow(&repo(&names, "0.1.88")?)?;
@@ -188,6 +187,7 @@ fn step_of(kind: StepKind) -> Step {
         reads: None,
         skip_after_merge_group: None,
         skip_when_cold: false,
+        hosted_only: false,
     }
 }
 

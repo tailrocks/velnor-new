@@ -134,12 +134,12 @@ fn a_lane_with_no_features_and_no_flag_is_still_refused() -> TestResult {
 #[test]
 fn the_flags_need_the_helper_that_reads_them() -> TestResult {
     for config in [ALL, NO_DEFAULT] {
-        for helper in ["0.1.93", "0.1.107"] {
+        for helper in ["0.1.93", "0.1.106"] {
             let error = workflow(&lane_view(helper, config)?)
                 .err()
                 .ok_or("an old helper was accepted")?;
             assert!(
-                error.to_string().contains("pin-helper 0.1.108"),
+                error.to_string().contains("pin-helper 0.1.107"),
                 "{helper}: {error}"
             );
         }
@@ -149,7 +149,7 @@ fn the_flags_need_the_helper_that_reads_them() -> TestResult {
         "all_features = false\nfeatures = ['a']",
     );
     assert!(
-        workflow(&lane_view("0.1.107", &written_false)?).is_err(),
+        workflow(&lane_view("0.1.106", &written_false)?).is_err(),
         "a written flag needs the new helper even when false"
     );
     Ok(())
