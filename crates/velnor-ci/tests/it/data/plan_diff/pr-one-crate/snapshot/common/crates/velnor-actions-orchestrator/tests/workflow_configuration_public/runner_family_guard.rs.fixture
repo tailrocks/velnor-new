@@ -1,0 +1,8 @@
+        .current_dir(root)
+        .output()?
+        .status;
+    assert!(
+            .current_dir(root)
+            .output()?;
+        if output.status.success() {
+            fs::write(&marker, b"task reached")?;

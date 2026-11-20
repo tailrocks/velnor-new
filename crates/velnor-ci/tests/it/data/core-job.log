@@ -1,0 +1,12 @@
+﻿2026-11-12T08:38:31.9411408Z Current runner version: '2.338.2'
+2026-11-12T08:38:31.9434040Z ##[group]Runner Image Provisioner
+2026-11-12T08:38:38.2404467Z Received 239075328 of 400627507 (59.7%), 227.8 MBs/sec
+2026-11-12T08:38:38.7492609Z Received 400627507 of 400627507 (100.0%), 252.5 MBs/sec
+2026-11-12T08:38:38.7494589Z Cache Size: ~382 MB (400627507 B)
+2026-11-12T08:38:38.7583926Z [command]/usr/bin/tar -xf /home/runner/work/_temp/79797922-d04a-4d02-8574-825ff6c141a2/cache.tzst -P -C /home/runner/work/velnor-new/velnor-new --use-compress-program unzstd
+2026-11-12T08:38:40.3448020Z Cache restored successfully
+2026-11-12T08:39:35.2588086Z     Checking velnor-runner-core v0.1.0 (/home/runner/work/velnor-new/velnor-new/crates/velnor-runner/crates/velnor-runner-core)
+2026-11-12T08:39:35.2591289Z  Documenting velnor-runner-core v0.1.0 (/home/runner/work/velnor-new/velnor-new/crates/velnor-runner/crates/velnor-runner-core)
+2026-11-12T08:39:35.4340193Z     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.99s
+2026-11-12T08:39:35.5300012Z     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.90s
+2026-11-12T08:39:35.5609468Z Finished waiting for all background step(s).

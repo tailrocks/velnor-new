@@ -1,0 +1,4 @@
+        if !raw.bytes().all(allowed) || raw.starts_with('-') || raw.contains("..") {
+            return Err("base ref has unsupported characters".to_owned());
+        }
+        Ok(Self(raw.to_owned()))

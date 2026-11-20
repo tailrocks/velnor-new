@@ -1,0 +1,93 @@
+# SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+# SPDX-License-Identifier: Apache-2.0
+
+# What velnor-ci reads to decide which crate jobs a diff affects: the Rust input
+# rules and non-inputs. Everything else about the generated workflows lives in
+# .velnor/rust-ci.toml and .velnor/workflows.toml (velnor-gen).
+
+[stacks]
+ignore = []
+
+[stacks.rust]
+non_inputs = ["docs/**"]
+
+[[stacks.rust.inputs]]
+globs = [
+  "crates/velnor-runner-host/**",
+  ".velnor/runner.lock",
+  "Cargo.toml",
+  "Cargo.lock",
+]
+packages = ["velnor-runner-host"]
+complete = true
+
+[[stacks.rust.inputs]]
+globs = [
+  "crates/velnor-runner-cli/**",
+  "Cargo.toml",
+  "Cargo.lock",
+]
+packages = ["velnor-runner-cli"]
+complete = true
+
+[[stacks.rust.inputs]]
+globs = ["crates/velnor-local/**", "crates/velnor-cache-rules/**"]
+packages = ["velnor-cache-rules", "velnor-local"]
+complete = true
+
+[[stacks.rust.inputs]]
+globs = ["crates/velnor-ci/**", "ci-helper/**"]
+packages = ["velnor-ci"]
+complete = true
+
+[[stacks.rust.inputs]]
+globs = ["crates/velnor-gen/**", "crates/velnor-model/**", "crates/velnor-release/**", "crates/velnor-render/**", "crates/velnor-rust/**", "generator/**", ".github/workflows/release.yml", ".velnor/release.toml", ".github/workflows/tag-ruleset-drift.yml", ".velnor/workflows.toml"]
+packages = ["velnor-model", "velnor-rust", "velnor-render", "velnor-gen", "velnor-release"]
+complete = true
+
+[[stacks.rust.inputs]]
+globs = ["actions/setup-velnor/action.yml"]
+packages = ["velnor-gen"]
+complete = true
+
+[[stacks.rust.inputs]]
+globs = [
+  "crates/velnor-runner-attestation/**",
+  "Cargo.toml",
+  "Cargo.lock",
+]
+packages = ["velnor-runner-attestation"]
+complete = true
+
+[[stacks.rust.inputs]]
+globs = [
+  ".config/**",
+  ".github/**",
+  ".velnor/config.toml",
+  ".velnor/mise.lock",
+  ".velnor/mise.toml",
+  ".velnor/qualification/**",
+  ".velnor/runner.lock",
+  ".velnor/rust-ci.lock",
+  ".velnor/rust-ci.toml",
+  ".velnor/rust-inputs.lock",
+  ".velnor/rust-metadata.json",
+  ".velnor/rust-toolchain.toml",
+  ".velnor/version-policy.toml",
+  "crates/**",
+  "fixtures/**",
+  "images/**",
+  "scripts/**",
+  ".cargo/config",
+  ".cargo/config.toml",
+  ".gitignore",
+  ".mise-version",
+  "Cargo.lock",
+  "Cargo.toml",
+  "mise.lock",
+  "mise.toml",
+  "rust-toolchain",
+  "rust-toolchain.toml",
+]
+packages = ["velnor-archive-guard"]
+complete = true

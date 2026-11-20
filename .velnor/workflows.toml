@@ -1,0 +1,1052 @@
+[[workflow]]
+file = "qualification"
+name = "Qualification"
+runner = "ubuntu-26.04"
+hosted = true
+fork_runner = "ubuntu-26.04"
+hosted_runner = "ubuntu-26.04"
+scale_set_runner = "ubuntu-26.04-scale-set"
+
+[workflow.on.workflow_dispatch]
+
+[[workflow.on.workflow_dispatch.input]]
+name = "mode"
+type = "choice"
+default = "both"
+options = ["both", "features", "js", "artifacts", "buildx", "negative", "composite", "docker-action", "post-fail", "oidc", "cancel", "compose", "bind", "testcontainers", "submodule", "pressure", "mask", "outputs", "js-pin", "services", "container", "cancel-service", "ports", "secret", "mise-pin", "stable-sources", "cache", "empty-cache", "mbx-cache-roundtrip"]
+
+
+[[workflow.case]]
+id = "js"
+title = "JavaScript actions"
+modes = ["features", "js"]
+timeout_minutes = 5
+permissions = { contents = "read" }
+
+[[workflow.case.step]]
+name = "Check out"
+uses = "checkout"
+
+[[workflow.case.step]]
+name = "Record checkout"
+run = "git rev-parse HEAD"
+
+[[workflow.case.step]]
+name = "Run JavaScript"
+run = "node -e 'console.log(\"js-action-ok\")'"
+
+[[workflow.case]]
+id = "buildx"
+title = "Buildx"
+modes = ["features", "buildx"]
+timeout_minutes = 5
+
+[[workflow.case.step]]
+name = "Buildx version"
+run = "docker buildx version"
+
+[[workflow.case.step]]
+name = "Write Dockerfile"
+run = "printf 'FROM scratch\\n' > Dockerfile"
+
+[[workflow.case.step]]
+name = "Buildx probe"
+run = "docker buildx build --progress=plain -t velnor-g4:probe ."
+
+[[workflow.case]]
+id = "expect-fail"
+title = "Expected negative"
+modes = ["negative"]
+timeout_minutes = 5
+
+[[workflow.case.step]]
+name = "Announce failure"
+run = "echo expected-negative"
+
+[[workflow.case.step]]
+name = "Intentional failure"
+run = "exit 1"
+
+[[workflow.case]]
+id = "js-pin"
+title = "Pinned JavaScript"
+timeout_minutes = 5
+
+[[workflow.case.step]]
+name = "Pinned script"
+uses = "github-script"
+with = { script = "console.log('js-pin-ok')" }
+
+[[workflow.case]]
+id = "empty-cache"
+title = "Empty cache"
+timeout_minutes = 5
+if = "github.ref != format('refs/heads/{0}', github.event.repository.default_branch)"
+permissions = { contents = "read", actions = "write" }
+cache_mode = "write"
+env = { MISE_NO_CONFIG = "1", MISE_NO_ENV = "1" }
+
+[[workflow.case.step]]
+id = "empty"
+name = "Restore absent cache"
+uses = "cache-restore"
+with = { path = "g4-cache.txt", key = "g4-empty-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}", fail-on-cache-miss = "false" }
+
+[[workflow.case.step]]
+name = "Require cache miss"
+run = "test \"$HIT\" != true"
+env = { HIT = "${{ steps.empty.outputs.cache-hit }}" }
+
+[[workflow.case.step]]
+name = "Create spaced directory"
+run = "mkdir -p \"g4 cache\""
+
+[[workflow.case.step]]
+name = "Write spaced path"
+run = "printf '%s\\n' cache-ok > \"g4 cache/note.txt\""
+
+[[workflow.case.step]]
+name = "Save spaced path"
+uses = "cache-save"
+with = { path = "g4 cache/note.txt", key = "g4-space-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}" }
+
+[[workflow.case.step]]
+name = "Remove spaced path"
+run = "rm -f \"g4 cache/note.txt\""
+
+[[workflow.case.step]]
+id = "space"
+name = "Restore spaced path"
+uses = "cache-restore"
+with = { path = "g4 cache/note.txt", key = "g4-space-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}", fail-on-cache-miss = "true" }
+
+[[workflow.case.step]]
+name = "Require spaced content"
+run = "grep -qx cache-ok \"g4 cache/note.txt\""
+env = { HIT = "${{ steps.space.outputs.cache-hit }}" }
+
+[[workflow.case.step]]
+name = "Require spaced hit"
+run = "test \"$HIT\" = true"
+env = { HIT = "${{ steps.space.outputs.cache-hit }}" }
+
+[[workflow.case]]
+id = "composite"
+title = "Composite"
+timeout_minutes = 5
+permissions = { contents = "read" }
+
+[[workflow.case.step]]
+name = "Check out"
+uses = "checkout"
+
+[[workflow.case.step]]
+name = "Local composite"
+uses = "./qualification/actions/composite"
+
+[[workflow.case]]
+id = "docker-action"
+title = "Docker action"
+timeout_minutes = 5
+permissions = { contents = "read" }
+
+[[workflow.case.step]]
+name = "Check out"
+uses = "checkout"
+
+[[workflow.case.step]]
+name = "Local docker"
+uses = "./qualification/actions/docker"
+
+[[workflow.case]]
+id = "post-fail"
+title = "Post failure"
+timeout_minutes = 5
+permissions = { contents = "read" }
+
+[[workflow.case.step]]
+name = "Check out"
+uses = "checkout"
+
+[[workflow.case.step]]
+name = "Main fails post runs"
+uses = "./qualification/actions/post-fail"
+
+[[workflow.case]]
+id = "oidc"
+title = "OIDC"
+timeout_minutes = 5
+permissions = { id-token = "write", contents = "read" }
+
+[[workflow.case.step]]
+name = "Require OIDC request URL"
+run = "test -n \"$ACTIONS_ID_TOKEN_REQUEST_URL\""
+
+[[workflow.case]]
+id = "cancel"
+title = "Cancel"
+timeout_minutes = 5
+
+[[workflow.case.step]]
+name = "Sleep until cancelled"
+run = "sleep 180"
+
+[[workflow.case]]
+id = "compose"
+title = "Compose"
+timeout_minutes = 5
+permissions = { contents = "read" }
+
+[[workflow.case.step]]
+name = "Check out"
+uses = "checkout"
+
+[[workflow.case.step]]
+name = "Start compose"
+run = "docker compose -f qualification/compose/stack.yml up -d --wait"
+
+[[workflow.case.step]]
+name = "List running services"
+run = "docker compose -f qualification/compose/stack.yml ps --services --status running > \"$RUNNER_TEMP/g4-compose-ps\""
+
+[[workflow.case.step]]
+name = "Require api"
+run = "grep -qx api \"$RUNNER_TEMP/g4-compose-ps\""
+
+[[workflow.case.step]]
+name = "Require db"
+run = "grep -qx db \"$RUNNER_TEMP/g4-compose-ps\""
+
+[[workflow.case.step]]
+name = "Remove compose"
+run = "docker compose -f qualification/compose/stack.yml down --volumes"
+
+[[workflow.case.step]]
+name = "Record compose"
+run = "echo compose-ok"
+
+[[workflow.case]]
+id = "bind"
+title = "Bind"
+timeout_minutes = 5
+
+[[workflow.case.step]]
+name = "Write workspace file"
+run = "printf '%s\\n' bind-ok > \"$GITHUB_WORKSPACE/g4-bind.txt\""
+
+[[workflow.case.step]]
+name = "Read it through a bind mount"
+run = "docker run --rm -v \"$GITHUB_WORKSPACE/g4-bind.txt:/g4-bind.txt:ro\" alpine:3.24.2@sha256:d56c381f961d307a21b3ca004cf1e3910f106644aefb1f43e654c8a56c4fd395 cat /g4-bind.txt > \"$RUNNER_TEMP/g4-bind-out\""
+
+[[workflow.case.step]]
+name = "Require the content"
+run = "grep -qx bind-ok \"$RUNNER_TEMP/g4-bind-out\""
+
+[[workflow.case]]
+id = "testcontainers"
+title = "Testcontainers"
+timeout_minutes = 5
+permissions = { contents = "read" }
+
+[[workflow.case.step]]
+name = "Check out"
+uses = "checkout"
+
+[[workflow.case.step]]
+name = "Install"
+run = "npm ci --prefix qualification/testcontainers"
+
+[[workflow.case.step]]
+name = "Reap"
+run = "node qualification/testcontainers/reap.mjs"
+
+[[workflow.case]]
+id = "submodule"
+title = "Submodule"
+timeout_minutes = 5
+permissions = { contents = "read" }
+
+[[workflow.case.step]]
+name = "Check out"
+uses = "checkout"
+with = { submodules = "recursive", lfs = "true" }
+
+[[workflow.case.step]]
+name = "Record HEAD"
+run = "git rev-parse HEAD > \"$RUNNER_TEMP/g4-head\""
+
+[[workflow.case.step]]
+name = "Require the workflow commit"
+run = "grep -qx \"$GITHUB_SHA\" \"$RUNNER_TEMP/g4-head\""
+
+[[workflow.case.step]]
+name = "Require the submodule"
+run = "grep -qx submodule-ok qualification/fixtures/submodule/MARKER"
+
+[[workflow.case.step]]
+name = "Require the LFS file"
+run = "grep -qx lfs-ok qualification/fixtures/lfs-marker.txt"
+
+[[workflow.case]]
+id = "pressure-a"
+title = "Pressure A"
+modes = ["pressure"]
+timeout_minutes = 5
+
+[[workflow.case.step]]
+name = "Announce pressure"
+run = "echo pressure-start"
+
+[[workflow.case.step]]
+name = "Pressure sleep"
+run = "sleep 150"
+
+[[workflow.case.step]]
+name = "Record pressure"
+run = "echo pressure-ok"
+
+[[workflow.case]]
+id = "pressure-b"
+title = "Pressure B"
+modes = ["pressure"]
+timeout_minutes = 5
+
+[[workflow.case.step]]
+name = "Announce pressure"
+run = "echo pressure-start"
+
+[[workflow.case.step]]
+name = "Pressure sleep"
+run = "sleep 150"
+
+[[workflow.case.step]]
+name = "Record pressure"
+run = "echo pressure-ok"
+
+[[workflow.case]]
+id = "pressure-c"
+title = "Pressure C"
+modes = ["pressure"]
+timeout_minutes = 5
+
+[[workflow.case.step]]
+name = "Announce pressure"
+run = "echo pressure-start"
+
+[[workflow.case.step]]
+name = "Pressure sleep"
+run = "sleep 150"
+
+[[workflow.case.step]]
+name = "Record pressure"
+run = "echo pressure-ok"
+
+[[workflow.case]]
+id = "mask"
+title = "Mask"
+timeout_minutes = 5
+
+[[workflow.case.step]]
+name = "Register mask"
+run = "echo \"::add-mask::g4-mask-canary\""
+
+[[workflow.case.step]]
+name = "Mask canary"
+run = "echo g4-mask-canary"
+
+[[workflow.case]]
+id = "services"
+title = "Services"
+modes = ["features", "services"]
+timeout_minutes = 5
+
+[[workflow.case.service]]
+name = "redis"
+image = "redis:8.10.2-alpine@sha256:16b124a2d3eacd620d917ead6fd26cbf1f1d7117fa94122398971931cfe2d403"
+ports = ["6379:6379"]
+options = "--health-cmd \"redis-cli ping\" --health-interval 5s --health-timeout 5s --health-retries 12"
+
+[[workflow.case.step]]
+name = "Localhost port"
+run = "nc -z -w 1 127.0.0.1 6379"
+
+[[workflow.case]]
+id = "container"
+title = "Container"
+timeout_minutes = 5
+
+[workflow.case.container]
+image = "alpine:3.24.4@sha256:0f49f331d9212aff11b932863be4eb01cdf962969aa86dab7d1ee21ac6f5f52b"
+
+[[workflow.case.service]]
+name = "redis"
+image = "redis:8.10.2-alpine@sha256:16b124a2d3eacd620d917ead6fd26cbf1f1d7117fa94122398971931cfe2d403"
+ports = ["6379:6379"]
+options = "--health-cmd \"redis-cli ping\" --health-interval 5s --health-timeout 5s --health-retries 12"
+
+[[workflow.case.step]]
+name = "Service DNS"
+run = "nc -z -w 1 redis 6379"
+
+[[workflow.case]]
+id = "cancel-service"
+title = "Cancel service"
+timeout_minutes = 5
+permissions = { contents = "read", actions = "write" }
+
+[[workflow.case.service]]
+name = "redis"
+image = "redis:8.10.2-alpine@sha256:16b124a2d3eacd620d917ead6fd26cbf1f1d7117fa94122398971931cfe2d403"
+ports = ["6379:6379"]
+options = "--health-cmd \"redis-cli ping\" --health-interval 5s --health-timeout 5s --health-retries 12"
+
+[[workflow.case.step]]
+name = "Probe service"
+run = "nc -z -w 1 127.0.0.1 6379"
+
+[[workflow.case.step]]
+name = "Announce service"
+run = "echo service-up"
+
+[[workflow.case.step]]
+name = "Sleep before the cancel"
+run = "sleep 10"
+
+[[workflow.case.step]]
+name = "Cancel the run mid-step"
+run = 'curl --fail --silent --show-error --request POST --header "Accept: application/vnd.github+json" --header "Authorization: Bearer $GITHUB_TOKEN" "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/cancel"'
+env = { GITHUB_TOKEN = "${{ github.token }}" }
+
+[[workflow.case.step]]
+name = "Wait for the cancel"
+run = "sleep 120"
+
+[[workflow.case.step]]
+name = "Fail when the cancel was not delivered"
+run = "exit 1"
+
+[[workflow.case]]
+id = "ports-a"
+title = "Ports A"
+modes = ["ports"]
+timeout_minutes = 5
+permissions = { contents = "read" }
+
+[[workflow.case.step]]
+name = "Check out"
+uses = "checkout"
+with = { sparse-checkout = "qualification" }
+
+[[workflow.case.step]]
+name = "Hold host port"
+run = "bash qualification/ports.sh"
+
+[[workflow.case]]
+id = "ports-b"
+title = "Ports B"
+modes = ["ports"]
+timeout_minutes = 5
+permissions = { contents = "read" }
+
+[[workflow.case.step]]
+name = "Check out"
+uses = "checkout"
+with = { sparse-checkout = "qualification" }
+
+[[workflow.case.step]]
+name = "Hold host port"
+run = "bash qualification/ports.sh"
+
+[[workflow.case]]
+id = "secret"
+title = "Secret"
+timeout_minutes = 5
+
+[[workflow.case.step]]
+name = "Require secret canary"
+run = "test -n \"$G3_CANARY\""
+env = { G3_CANARY = "${{ secrets.G3_CANARY }}" }
+
+[[workflow.case.step]]
+name = "Hold secret canary"
+run = "sleep 180"
+env = { G3_CANARY = "${{ secrets.G3_CANARY }}" }
+
+[[workflow.job]]
+id = "mode-guard"
+name = "Mode guard / unknown mode"
+if = "!(inputs.mode == 'both' || inputs.mode == 'features' || inputs.mode == 'js' || inputs.mode == 'artifacts' || inputs.mode == 'buildx' || inputs.mode == 'negative' || inputs.mode == 'composite' || inputs.mode == 'docker-action' || inputs.mode == 'post-fail' || inputs.mode == 'oidc' || inputs.mode == 'cancel' || inputs.mode == 'compose' || inputs.mode == 'bind' || inputs.mode == 'testcontainers' || inputs.mode == 'submodule' || inputs.mode == 'pressure' || inputs.mode == 'mask' || inputs.mode == 'outputs' || inputs.mode == 'js-pin' || inputs.mode == 'services' || inputs.mode == 'container' || inputs.mode == 'cancel-service' || inputs.mode == 'ports' || inputs.mode == 'secret' || inputs.mode == 'mise-pin' || inputs.mode == 'stable-sources' || inputs.mode == 'cache' || inputs.mode == 'empty-cache' || inputs.mode == 'mbx-cache-roundtrip')"
+runner = "ubuntu-26.04"
+timeout_minutes = 5
+
+[[workflow.job.step]]
+name = "Reject a mode that no job runs"
+run = "echo '::error title=unknown_qualification_mode::The mode is not one that Qualification runs. Without this job the run would succeed with every job skipped.'"
+
+[[workflow.job.step]]
+name = "Fail the guard"
+run = "exit 1"
+
+[[workflow.job]]
+id = "cancel-service-check"
+name = "Check cancel-service / cancelled, not timed out"
+if = "always() && inputs.mode == 'cancel-service'"
+runner = "ubuntu-26.04"
+timeout_minutes = 5
+needs = ["cancel-service-hosted", "cancel-service-scale-set"]
+permissions = { contents = "read", actions = "read" }
+
+[[workflow.job.step]]
+name = "Check out"
+uses = "checkout"
+
+[[workflow.job.step]]
+name = "Check the cancelled runs"
+run = "bash qualification/cancel-service-check.sh"
+env = { GITHUB_TOKEN = "${{ github.token }}" }
+
+[[workflow.job]]
+id = "stable-sources-guard"
+name = "Stable sources / branch guard"
+if = "inputs.mode == 'stable-sources' && !(github.event_name == 'workflow_dispatch' && github.repository == 'tailrocks/velnor-new' && startsWith(github.ref, 'refs/heads/') && github.ref != format('refs/heads/{0}', github.event.repository.default_branch))"
+runner = "ubuntu-26.04"
+timeout_minutes = 5
+
+[[workflow.job.step]]
+name = "Reject stable sources outside a non-default branch"
+run = "echo '::error title=stable_sources_requires_non_default_branch::Dispatch stable-sources from a non-default branch of this repository. Every stable-sources job is skipped otherwise.'"
+
+[[workflow.job.step]]
+name = "Fail the guard"
+run = "exit 1"
+
+[[workflow.job]]
+id = "verify-hosted"
+name = "Verify / GitHub hosted / Linux x64"
+if = "inputs.mode == 'both'"
+runner = "ubuntu-26.04"
+timeout_minutes = 5
+
+[[workflow.job.step]]
+name = "Qualify hosted lane"
+run = "echo qualification-hosted"
+
+[[workflow.job]]
+id = "verify-scale-set"
+name = "Verify / Velnor Scale Set / Linux x64"
+if = "inputs.mode == 'both'"
+runner = "ubuntu-26.04-scale-set"
+timeout_minutes = 5
+
+[[workflow.job.step]]
+name = "Qualify scale-set lane"
+run = "echo qualification-scale-set"
+
+[[workflow.job]]
+id = "compare"
+name = "Compare hosted and Velnor execution"
+if = "inputs.mode == 'both'"
+runner = "ubuntu-26.04"
+timeout_minutes = 5
+needs = ["verify-hosted", "verify-scale-set"]
+
+[[workflow.job.step]]
+name = "Compare lanes"
+run = "echo compare-lanes"
+
+[[workflow.job]]
+id = "artifacts-hosted"
+name = "Artifacts / GitHub hosted"
+if = "inputs.mode == 'features' || inputs.mode == 'artifacts'"
+runner = "ubuntu-26.04"
+timeout_minutes = 5
+permissions = { contents = "read", actions = "write" }
+
+[[workflow.job.step]]
+name = "Write proof"
+run = "echo g4-artifact > g4-proof.txt"
+
+[[workflow.job.step]]
+name = "Upload proof"
+uses = "upload-artifact"
+with = { name = "g4-proof-hosted", path = "g4-proof.txt", if-no-files-found = "error" }
+
+[[workflow.job]]
+id = "artifacts-scale-set"
+name = "Artifacts / Velnor Scale Set"
+if = "inputs.mode == 'features' || inputs.mode == 'artifacts'"
+runner = "ubuntu-26.04-scale-set"
+timeout_minutes = 5
+permissions = { contents = "read", actions = "write" }
+
+[[workflow.job.step]]
+name = "Write proof"
+run = "echo g4-artifact > g4-proof.txt"
+
+[[workflow.job.step]]
+name = "Upload proof"
+uses = "upload-artifact"
+with = { name = "g4-proof-scale-set", path = "g4-proof.txt", if-no-files-found = "error" }
+
+[[workflow.job]]
+id = "outputs-scale-set"
+name = "Outputs / Velnor Scale Set"
+if = "inputs.mode == 'outputs'"
+runner = "ubuntu-26.04-scale-set"
+timeout_minutes = 5
+outputs = { proof = "steps.emit.outputs.proof" }
+
+[[workflow.job.step]]
+name = "Create bin directory"
+run = "mkdir -p \"$RUNNER_TEMP/g4-bin\""
+
+[[workflow.job.step]]
+name = "Write path probe"
+run = "printf '%s\\n' '#!/bin/sh' 'echo path-ok' > \"$RUNNER_TEMP/g4-bin/g4-path-ok\""
+
+[[workflow.job.step]]
+name = "Make probe executable"
+run = "chmod +x \"$RUNNER_TEMP/g4-bin/g4-path-ok\""
+
+[[workflow.job.step]]
+id = "emit"
+name = "Write output"
+run = "echo proof=outputs-ok >> \"$GITHUB_OUTPUT\""
+
+[[workflow.job.step]]
+name = "Write env"
+run = "echo G4_ENV=outputs-ok >> \"$GITHUB_ENV\""
+
+[[workflow.job.step]]
+name = "Write path"
+run = "echo \"$RUNNER_TEMP/g4-bin\" >> \"$GITHUB_PATH\""
+
+[[workflow.job.step]]
+name = "Check env"
+run = "test \"$G4_ENV\" = outputs-ok"
+
+[[workflow.job.step]]
+name = "Run path probe"
+run = "g4-path-ok > \"$RUNNER_TEMP/g4-path-out\""
+
+[[workflow.job.step]]
+name = "Check path probe"
+run = "grep -qx path-ok \"$RUNNER_TEMP/g4-path-out\""
+
+[[workflow.job]]
+id = "outputs-hosted"
+name = "Outputs / GitHub hosted"
+if = "inputs.mode == 'outputs'"
+runner = "ubuntu-26.04"
+timeout_minutes = 5
+needs = ["outputs-scale-set"]
+
+[[workflow.job.step]]
+name = "Check job output"
+run = "test \"$PROOF\" = outputs-ok"
+env = { PROOF = "${{ needs.outputs-scale-set.outputs.proof }}" }
+
+[[workflow.job]]
+id = "cache-scale-set"
+name = "Cache / Velnor Scale Set"
+if = "inputs.mode == 'cache' && github.ref != format('refs/heads/{0}', github.event.repository.default_branch)"
+runner = "ubuntu-26.04-scale-set"
+timeout_minutes = 5
+permissions = { contents = "read", actions = "write" }
+cache_mode = "write"
+env = { MISE_NO_CONFIG = "1", MISE_NO_ENV = "1" }
+
+[[workflow.job.step]]
+name = "Write cache file"
+run = "echo cache-ok > g4-cache.txt"
+
+[[workflow.job.step]]
+name = "Save cache"
+uses = "cache"
+with = { path = "g4-cache.txt", key = "g4-cache-${{ github.run_id }}" }
+
+[[workflow.job]]
+id = "cache-hosted"
+name = "Cache / GitHub hosted"
+if = "inputs.mode == 'cache'"
+runner = "ubuntu-26.04"
+timeout_minutes = 5
+needs = ["cache-scale-set"]
+permissions = { contents = "read", actions = "write" }
+cache_mode = "read"
+
+[[workflow.job.step]]
+name = "Restore cache"
+uses = "cache-restore"
+with = { path = "g4-cache.txt", key = "g4-cache-${{ github.run_id }}", fail-on-cache-miss = "true" }
+
+[[workflow.job.step]]
+name = "Check restore"
+run = "grep -qx cache-ok g4-cache.txt"
+
+[[workflow.job]]
+id = "cache-default-branch-guard"
+name = "Cache qualification / default branch guard"
+if = "(inputs.mode == 'cache' || inputs.mode == 'empty-cache' || inputs.mode == 'mbx-cache-roundtrip') && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)"
+runner = "ubuntu-26.04"
+timeout_minutes = 5
+
+[[workflow.job.step]]
+name = "Reject cache mode on the default branch"
+run = "echo '::error title=cache_qualification_requires_non_default_branch::Dispatch cache qualification modes from a non-default branch. Every cache job is skipped on the default branch.'"
+
+[[workflow.job.step]]
+name = "Fail the guard"
+run = "exit 1"
+
+[[workflow.job]]
+id = "mbx-cache-write-hosted"
+name = "MBX objects cache / branch writer"
+if = "inputs.mode == 'mbx-cache-roundtrip' && github.ref != format('refs/heads/{0}', github.event.repository.default_branch)"
+runner = "ubuntu-26.04"
+timeout_minutes = 5
+permissions = { contents = "read", actions = "write" }
+cache_mode = "write"
+env = { MBX_GC_AUTO = "0", MBX_SHARE_OUT_DIR = "0", ACTIONS_CACHE_MODE = "write", CARGO_HOME = "${{ github.workspace }}/.velnor-mbx-cache-qualification/cargo", MISE_AUTO_INSTALL = "false", MISE_CARGO_HOME = "${{ github.workspace }}/.velnor-mbx-cache-qualification/cargo", MISE_EXEC_AUTO_INSTALL = "false", MISE_LOCKFILE = "0", MISE_NO_CONFIG = "1", MISE_NO_ENV = "1", MISE_NO_HOOKS = "1", MISE_RUSTUP_HOME = "${{ github.workspace }}/.velnor-mbx-cache-qualification/rustup", RUSTUP_HOME = "${{ github.workspace }}/.velnor-mbx-cache-qualification/rustup" }
+
+[[workflow.job.step]]
+name = "Check out"
+uses = "checkout"
+
+[[workflow.job.step]]
+name = "Set up Mise"
+uses = "mise"
+with = { version = "2026.11.1", sha256 = "7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9", install = "false", env = "false" }
+
+[[workflow.job.step]]
+name = "Resolve project tool versions"
+run = "bash qualification/mbx-cache-roundtrip.sh resolve"
+
+[[workflow.job.step]]
+name = "Install pinned Rust toolchain"
+run = "bash qualification/mbx-cache-roundtrip.sh install-rust"
+
+[[workflow.job.step]]
+name = "Verify Rust channel manifest"
+run = "bash qualification/mbx-cache-roundtrip.sh verify-rust"
+
+[[workflow.job.step]]
+name = "Put the verified Rust toolchain on PATH"
+run = "bash qualification/mbx-cache-roundtrip.sh rust-path"
+
+[[workflow.job.step]]
+id = "mbx_cache"
+name = "Restore MBX objects"
+uses = "mr-boxington"
+with = { github-cache-mode = "objects", version = "1.29.2", toolchain = "1.99.1", isolate-objects-cache = "true", cache-generation = "velnor-mbx-1.29.2-share-out-dir-disabled-v1", save-on-workflow-dispatch = "true" }
+
+[[workflow.job.step]]
+id = "mbx-ready"
+name = "Verify MBX action identity and write policy"
+run = "bash qualification/mbx-cache-roundtrip.sh identity-write"
+env = { MBX_VERSION = "${{ steps.mbx_cache.outputs.mbx-version }}", CACHE_SAVE_ELIGIBLE = "${{ steps.mbx_cache.outputs.cache-save-eligible }}", CACHE_SAVE_REASON = "${{ steps.mbx_cache.outputs.cache-save-reason }}", CACHE_HIT = "${{ steps.mbx_cache.outputs.cache-hit }}" }
+
+[[workflow.job.step]]
+name = "Compile MBX cache probe"
+run = "bash qualification/mbx-cache-roundtrip.sh probe"
+
+[[workflow.job.step]]
+name = "Clean MBX workspace outputs"
+if = "always() && steps.mbx-ready.outcome == 'success'"
+run = "bash qualification/mbx-cache-roundtrip.sh clean"
+
+[[workflow.job.step]]
+name = "Sample runner disk after cleanup"
+run = "bash qualification/mbx-cache-roundtrip.sh disk"
+
+[[workflow.job]]
+id = "mbx-cache-read-hosted"
+name = "MBX objects cache / read-only reuse"
+if = "inputs.mode == 'mbx-cache-roundtrip' && github.ref != format('refs/heads/{0}', github.event.repository.default_branch)"
+runner = "ubuntu-26.04"
+timeout_minutes = 5
+needs = ["mbx-cache-write-hosted"]
+permissions = { contents = "read", actions = "read" }
+cache_mode = "read"
+env = { MBX_GC_AUTO = "0", MBX_SHARE_OUT_DIR = "0", ACTIONS_CACHE_MODE = "read", CARGO_HOME = "${{ github.workspace }}/.velnor-mbx-cache-qualification/cargo", MISE_AUTO_INSTALL = "false", MISE_CARGO_HOME = "${{ github.workspace }}/.velnor-mbx-cache-qualification/cargo", MISE_EXEC_AUTO_INSTALL = "false", MISE_LOCKFILE = "0", MISE_NO_CONFIG = "1", MISE_NO_ENV = "1", MISE_NO_HOOKS = "1", MISE_RUSTUP_HOME = "${{ github.workspace }}/.velnor-mbx-cache-qualification/rustup", RUSTUP_HOME = "${{ github.workspace }}/.velnor-mbx-cache-qualification/rustup" }
+
+[[workflow.job.step]]
+name = "Check out"
+uses = "checkout"
+
+[[workflow.job.step]]
+name = "Set up Mise"
+uses = "mise"
+with = { version = "2026.11.1", sha256 = "7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9", install = "false", env = "false" }
+
+[[workflow.job.step]]
+name = "Resolve project tool versions"
+run = "bash qualification/mbx-cache-roundtrip.sh resolve"
+
+[[workflow.job.step]]
+name = "Install pinned Rust toolchain"
+run = "bash qualification/mbx-cache-roundtrip.sh install-rust"
+
+[[workflow.job.step]]
+name = "Verify Rust channel manifest"
+run = "bash qualification/mbx-cache-roundtrip.sh verify-rust"
+
+[[workflow.job.step]]
+name = "Put the verified Rust toolchain on PATH"
+run = "bash qualification/mbx-cache-roundtrip.sh rust-path"
+
+[[workflow.job.step]]
+id = "mbx_cache"
+name = "Restore MBX objects"
+uses = "mr-boxington"
+with = { github-cache-mode = "objects", version = "1.29.2", toolchain = "1.99.1", isolate-objects-cache = "true", cache-generation = "velnor-mbx-1.29.2-share-out-dir-disabled-v1", save-on-workflow-dispatch = "false" }
+
+[[workflow.job.step]]
+id = "mbx-ready"
+name = "Verify MBX action identity and write policy"
+run = "bash qualification/mbx-cache-roundtrip.sh identity-read"
+env = { MBX_VERSION = "${{ steps.mbx_cache.outputs.mbx-version }}", CACHE_SAVE_ELIGIBLE = "${{ steps.mbx_cache.outputs.cache-save-eligible }}", CACHE_SAVE_REASON = "${{ steps.mbx_cache.outputs.cache-save-reason }}", CACHE_HIT = "${{ steps.mbx_cache.outputs.cache-hit }}" }
+
+[[workflow.job.step]]
+name = "Require imported MBX objects"
+run = "bash qualification/mbx-cache-roundtrip.sh require-imported"
+
+[[workflow.job.step]]
+name = "Compile MBX cache probe"
+run = "bash qualification/mbx-cache-roundtrip.sh probe"
+
+[[workflow.job.step]]
+name = "Require reused compilation"
+run = "bash qualification/mbx-cache-roundtrip.sh require-reuse"
+
+[[workflow.job.step]]
+name = "Clean MBX workspace outputs"
+if = "always() && steps.mbx-ready.outcome == 'success'"
+run = "bash qualification/mbx-cache-roundtrip.sh clean"
+
+[[workflow.job]]
+id = "mise-pin-linux-x64"
+name = "Mise pin / hosted / Linux x64"
+if = "inputs.mode == 'mise-pin'"
+runner = "ubuntu-26.04"
+timeout_minutes = 5
+permissions = { contents = "read" }
+
+[[workflow.job.step]]
+name = "Check out selected ref"
+uses = "checkout"
+with = { ref = "${{ github.sha }}" }
+
+[[workflow.job.step]]
+name = "Setup Mise"
+uses = "mise"
+with = { version = "2026.11.1", sha256 = "7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9", install = "false", env = "false" }
+
+[[workflow.job.step]]
+name = "Verify selected ref, version, and binary digest"
+run = "bash qualification/mise-pin.sh"
+env = { MISE_VERSION = "2026.11.1", MISE_SHA256 = "7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9" }
+
+[[workflow.job]]
+id = "stable-sources-producer-linux"
+name = "Stable sources / linux / producer"
+if = "inputs.mode == 'stable-sources' && github.event_name == 'workflow_dispatch' && github.repository == 'tailrocks/velnor-new' && startsWith(github.ref, 'refs/heads/') && github.ref != format('refs/heads/{0}', github.event.repository.default_branch)"
+runner = "ubuntu-26.04"
+timeout_minutes = 30
+permissions = { actions = "read", contents = "read" }
+outputs = { artifact_id = "steps.upload.outputs.artifact-id", artifact_digest = "steps.upload.outputs.artifact-digest", tree = "steps.identity.outputs.tree", root_lock = "steps.identity.outputs.root_lock", runner_lock = "steps.identity.outputs.runner_lock", attempt = "steps.identity.outputs.attempt" }
+
+[[workflow.job.step]]
+name = "Check out"
+uses = "checkout"
+
+[[workflow.job.step]]
+name = "Verify branch source"
+run = "bash qualification/stable-sources.sh verify-source"
+
+[[workflow.job.step]]
+name = "Set up Mise"
+uses = "mise"
+with = { version = "2026.11.1", sha256 = "7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9", install = "false", env = "false" }
+
+[[workflow.job.step]]
+name = "Resolve project tool versions"
+run = "bash qualification/stable-sources.sh resolve-tools"
+
+[[workflow.job.step]]
+name = "Install pinned qualification tools"
+run = "bash qualification/stable-sources.sh install-tools"
+env = { GITHUB_TOKEN = "${{ github.token }}" }
+
+[[workflow.job.step]]
+name = "Verify Rust channel manifest"
+run = "bash qualification/stable-sources.sh verify-rust"
+
+[[workflow.job.step]]
+name = "Prepare cold producer sources"
+run = "bash qualification/stable-sources.sh prepare-producer"
+
+[[workflow.job.step]]
+id = "identity"
+name = "Record producer identity"
+run = "bash qualification/stable-sources.sh record-identity"
+
+[[workflow.job.step]]
+id = "upload"
+name = "Upload exact source artifact"
+uses = "upload-artifact"
+with = { name = "${{ steps.identity.outputs.upload_name }}", path = "${{ steps.identity.outputs.upload_path }}", include-hidden-files = "true", if-no-files-found = "error", retention-days = "1" }
+
+[[workflow.job]]
+id = "stable-sources-linux-warm"
+name = "Stable sources / linux / warm"
+if = "inputs.mode == 'stable-sources' && github.event_name == 'workflow_dispatch' && github.repository == 'tailrocks/velnor-new' && startsWith(github.ref, 'refs/heads/') && github.ref != format('refs/heads/{0}', github.event.repository.default_branch)"
+runner = "ubuntu-26.04"
+timeout_minutes = 30
+permissions = { actions = "read", contents = "read" }
+needs = ["stable-sources-producer-linux"]
+
+[[workflow.job.step]]
+name = "Check out"
+uses = "checkout"
+
+[[workflow.job.step]]
+name = "Verify branch source"
+run = "bash qualification/stable-sources.sh verify-source"
+
+[[workflow.job.step]]
+name = "Set up Mise"
+uses = "mise"
+with = { version = "2026.11.1", sha256 = "7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9", install = "false", env = "false" }
+
+[[workflow.job.step]]
+name = "Resolve project tool versions"
+run = "bash qualification/stable-sources.sh resolve-tools"
+
+[[workflow.job.step]]
+name = "Install pinned qualification tools"
+run = "bash qualification/stable-sources.sh install-tools"
+env = { GITHUB_TOKEN = "${{ github.token }}" }
+
+[[workflow.job.step]]
+name = "Verify Rust channel manifest"
+run = "bash qualification/stable-sources.sh verify-rust"
+
+[[workflow.job.step]]
+name = "Install pinned GitHub CLI"
+run = "mise --no-config --no-env --no-hooks install gh@2.104.0"
+
+[[workflow.job.step]]
+name = "Fetch exact source artifact metadata"
+run = "bash qualification/stable-sources.sh fetch-metadata"
+env = { GH_TOKEN = "${{ github.token }}", SOURCES_ID = "${{ needs.stable-sources-producer-linux.outputs.artifact_id }}" }
+
+[[workflow.job.step]]
+id = "admission"
+name = "Admit same-run source artifact"
+run = "bash qualification/stable-sources.sh admit"
+env = { SOURCES_ID = "${{ needs.stable-sources-producer-linux.outputs.artifact_id }}", SOURCES_DIGEST = "${{ needs.stable-sources-producer-linux.outputs.artifact_digest }}", SOURCES_TREE = "${{ needs.stable-sources-producer-linux.outputs.tree }}", SOURCES_ROOT_LOCK = "${{ needs.stable-sources-producer-linux.outputs.root_lock }}", SOURCES_RUNNER_LOCK = "${{ needs.stable-sources-producer-linux.outputs.runner_lock }}", SOURCES_ATTEMPT = "${{ needs.stable-sources-producer-linux.outputs.attempt }}", SOURCES_NAME = "proof-linux" }
+
+[[workflow.job.step]]
+name = "Require source artifact admission"
+run = "test \"$SOURCES_ADMITTED\" = true"
+env = { SOURCES_ADMITTED = "${{ steps.admission.outputs.admitted }}" }
+
+[[workflow.job.step]]
+id = "validate"
+name = "Validate exact artifact ID"
+run = "bash qualification/stable-sources.sh validate-id"
+env = { VELNOR_EVIDENCE_ARTIFACT_ID = "${{ needs.stable-sources-producer-linux.outputs.artifact_id }}" }
+
+[[workflow.job.step]]
+id = "download"
+name = "Download exact admitted sources"
+uses = "download-artifact"
+with = { artifact-ids = "${{ needs.stable-sources-producer-linux.outputs.artifact_id }}", path = "${{ steps.validate.outputs.download_path }}" }
+
+[[workflow.job.step]]
+name = "Measure source preparation"
+run = "bash qualification/stable-sources.sh measure-warm"
+env = { SOURCES_TREE = "${{ needs.stable-sources-producer-linux.outputs.tree }}" }
+
+[[workflow.job.step]]
+name = "Require source provenance and fetch mode"
+run = "bash qualification/stable-sources.sh provenance-warm"
+
+[[workflow.job.step]]
+name = "Measure offline archive guard build"
+run = "bash qualification/stable-sources.sh archive-guard"
+
+[[workflow.job]]
+id = "stable-sources-linux-cold"
+name = "Stable sources / linux / cold"
+if = "inputs.mode == 'stable-sources' && github.event_name == 'workflow_dispatch' && github.repository == 'tailrocks/velnor-new' && startsWith(github.ref, 'refs/heads/') && github.ref != format('refs/heads/{0}', github.event.repository.default_branch)"
+runner = "ubuntu-26.04"
+timeout_minutes = 30
+permissions = { actions = "read", contents = "read" }
+
+[[workflow.job.step]]
+name = "Check out"
+uses = "checkout"
+
+[[workflow.job.step]]
+name = "Verify branch source"
+run = "bash qualification/stable-sources.sh verify-source"
+
+[[workflow.job.step]]
+name = "Set up Mise"
+uses = "mise"
+with = { version = "2026.11.1", sha256 = "7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9", install = "false", env = "false" }
+
+[[workflow.job.step]]
+name = "Resolve project tool versions"
+run = "bash qualification/stable-sources.sh resolve-tools"
+
+[[workflow.job.step]]
+name = "Install pinned qualification tools"
+run = "bash qualification/stable-sources.sh install-tools"
+env = { GITHUB_TOKEN = "${{ github.token }}" }
+
+[[workflow.job.step]]
+name = "Verify Rust channel manifest"
+run = "bash qualification/stable-sources.sh verify-rust"
+
+[[workflow.job.step]]
+name = "Measure source preparation"
+run = "bash qualification/stable-sources.sh measure-cold"
+
+[[workflow.job.step]]
+name = "Require source provenance and fetch mode"
+run = "bash qualification/stable-sources.sh provenance-cold"
+
+[[workflow.job.step]]
+name = "Measure offline archive guard build"
+run = "bash qualification/stable-sources.sh archive-guard"
+
+[[workflow]]
+file = "tag-ruleset-drift"
+name = "Tag ruleset drift"
+runner = "ubuntu-24.04"
+hosted = true
+
+[workflow.on]
+schedule = ["23 4 * * *"]
+
+[workflow.on.workflow_dispatch]
+
+[[workflow.job]]
+id = "tag-ruleset-drift"
+name = "Tag ruleset drift"
+if = "github.ref == format('refs/heads/{0}', github.event.repository.default_branch)"
+timeout_minutes = 5
+permissions = { contents = "read" }
+
+[[workflow.job.step]]
+name = "Check out"
+uses = "checkout"
+with = { persist-credentials = "false" }
+
+[[workflow.job.step]]
+name = "Check tag immutability rulesets"
+run = "node scripts/tag-ruleset-drift.mjs"
+env = { TAG_RULESET_ADMIN_READ_TOKEN = "${{ secrets.TAG_RULESET_ADMIN_READ_TOKEN }}", GITHUB_REPOSITORY = "${{ github.repository }}" }

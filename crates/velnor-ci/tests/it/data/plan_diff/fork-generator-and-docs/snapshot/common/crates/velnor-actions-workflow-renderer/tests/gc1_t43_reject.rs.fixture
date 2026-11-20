@@ -1,0 +1,8 @@
+    "../escape".clone_into(&mut traversal.member);
+    cases.push((traversal, "bootstrap_member"));
+    let mut absolute_member = good.clone();
+    "/etc/passwd".clone_into(&mut absolute_member.member);
+        ("VELNOR_BOOTSTRAP_MEMBER", "../escape"),
+        ("VELNOR_BOOTSTRAP_EXPECTED_SHA256", &"0".repeat(64)),
+        ("VELNOR_BOOTSTRAP_STAGED_PATH", "/tmp/velnor-gc1-t43-staged"),
+        ("VELNOR_BOOTSTRAP_MAX_BYTES", "67108864"),

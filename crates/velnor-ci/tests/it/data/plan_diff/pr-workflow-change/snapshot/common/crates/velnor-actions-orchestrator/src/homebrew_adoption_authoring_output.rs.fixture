@@ -1,0 +1,80 @@
+        .filter(|name| *name != "." && *name != "..")
+        .ok_or_else(|| internal("homebrew_adoption_output_path_invalid"))?;
+    let parent = output_dir
+        .parent()
+        .ok_or_else(|| internal("homebrew_adoption_output_path_invalid"))?
+        .canonicalize()
+        .map_err(|_| internal("homebrew_adoption_output_parent_invalid"))?;
+    let target = parent.join(name);
+    if target.starts_with(root) || fs::symlink_metadata(&target).is_ok() {
+        return Err(internal("homebrew_adoption_output_not_fresh_external"));
+    }
+    Ok((parent, target))
+}
+
+pub(super) fn write_overlay(
+    parent: &Path,
+    target: &Path,
+    transition_id: &str,
+    base_sha: &str,
+    if target.parent() != Some(parent)
+        || target
+            .file_name()
+            .is_none_or(|name| name.to_str().is_none_or(str::is_empty))
+    let parent_fd = open_trusted_parent(parent)?;
+    let mut stage_builder = tempfile::Builder::new();
+    stage_builder.prefix(".velnor-homebrew-adoption-");
+    #[cfg(unix)]
+        .tempdir_in(parent)
+        .map_err(|_| internal("homebrew_adoption_output_stage"))?;
+    let stage_name = stage
+        .path()
+    parent: &impl rustix::fd::AsFd,
+    staged_name: &str,
+    target_name: &str,
+    staged_fd: &impl rustix::fd::AsFd,
+    verify_stage_identity(parent, staged_name, staged_fd, identity)?;
+    renameat_with(
+        parent,
+        staged_name,
+        parent,
+        target_name,
+        RenameFlags::NOREPLACE,
+    )
+    verify_named_identity(parent, target_name, identity)
+}
+
+#[cfg(not(unix))]
+    parent: &impl rustix::fd::AsFd,
+    name: &str,
+) -> Result<rustix::fd::OwnedFd, OrchestratorError> {
+    rustix::fs::openat(
+        parent,
+        name,
+        rustix::fs::OFlags::RDONLY
+            | rustix::fs::OFlags::DIRECTORY
+    parent: &impl rustix::fd::AsFd,
+    name: &str,
+    fd: &impl rustix::fd::AsFd,
+    expected: DirectoryIdentity,
+    verify_named_identity(parent, name, expected)
+}
+
+#[cfg(not(unix))]
+    parent: &impl rustix::fd::AsFd,
+    name: &str,
+    expected: DirectoryIdentity,
+) -> Result<(), OrchestratorError> {
+    let stat = rustix::fs::statat(parent, name, rustix::fs::AtFlags::SYMLINK_NOFOLLOW)
+        .map_err(|_| internal("homebrew_adoption_output_stage_identity"))?;
+    if directory_identity_from_stat(&stat) != expected
+        || rustix::fs::FileType::from_raw_mode(stat.st_mode) != rustix::fs::FileType::Directory
+    if let Some(parent) = path.parent() {
+        velnor_actions_contract::exclusive_write::create_dir_no_symlink(root, parent)?;
+    }
+    velnor_actions_contract::exclusive_write::write_exclusive(&path, bytes, "homebrew_adoption_output")?;
+    set_mode(&path, mode)
+            .any(|part| part.is_empty() || matches!(part, "." | ".."))
+        || relative
+            .bytes()
+            .any(|byte| !(byte.is_ascii_alphanumeric() || b"._-/".contains(&byte)))

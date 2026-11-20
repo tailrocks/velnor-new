@@ -1,0 +1,8 @@
+const TABLE: &str = concat!(
+    "CREATE TABLE local_worker_exits (",
+    "lineage_id INTEGER NOT NULL CHECK (lineage_id > 0), ",
+    "generation INTEGER NOT NULL CHECK (generation > 0), ",
+const INSERT_GUARD: &str = concat!(
+    "CREATE TRIGGER local_worker_exit_insert_guard BEFORE INSERT ON local_worker_exits ",
+    "WHEN NOT EXISTS (SELECT 1 FROM physical_attempt_current AS \"current\" ",
+    "JOIN physical_attempts AS attempt ON attempt.lineage_id = \"current\".lineage_id AND attempt.generation = \"current\".generation AND attempt.reservation_id = \"current\".reservation_id AND attempt.intent_id = \"current\".intent_id ",

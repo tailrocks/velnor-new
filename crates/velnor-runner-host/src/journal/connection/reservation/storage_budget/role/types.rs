@@ -1,0 +1,148 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
+use crate::error::HostError;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) enum StorageMedium {
+    Disk,
+    Tmpfs,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) enum StorageInodePolicy {
+    Finite,
+    DynamicBtrfs,
+    Unknown,
+}
+
+impl StorageInodePolicy {
+    pub(crate) const fn as_str(self) -> &'static str {
+        match self {
+            Self::Finite => "finite",
+            Self::DynamicBtrfs => "dynamic-btrfs",
+            Self::Unknown => "unknown",
+        }
+    }
+
+    pub(in crate::journal::connection::reservation::storage_budget) const fn as_byte(self) -> u8 {
+        match self {
+            Self::Finite => 1,
+            Self::DynamicBtrfs => 2,
+            Self::Unknown => 3,
+        }
+    }
+
+    pub(crate) fn parse(value: &str) -> Result<Self, HostError> {
+        match value {
+            "finite" => Ok(Self::Finite),
+            "dynamic-btrfs" => Ok(Self::DynamicBtrfs),
+            "unknown" => Ok(Self::Unknown),
+            _ => Err(HostError::Journal),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) enum StorageFilesystemKind {
+    Btrfs,
+    Tmpfs,
+    Other,
+}
+
+impl StorageFilesystemKind {
+    pub(crate) const fn as_str(self) -> &'static str {
+        match self {
+            Self::Btrfs => "btrfs",
+            Self::Tmpfs => "tmpfs",
+            Self::Other => "other",
+        }
+    }
+
+    pub(crate) fn parse(value: &str) -> Result<Self, HostError> {
+        match value {
+            "btrfs" => Ok(Self::Btrfs),
+            "tmpfs" => Ok(Self::Tmpfs),
+            "other" => Ok(Self::Other),
+            _ => Err(HostError::Journal),
+        }
+    }
+}
+
+impl StorageMedium {
+    pub(crate) const fn as_str(self) -> &'static str {
+        match self {
+            Self::Disk => "disk",
+            Self::Tmpfs => "tmpfs",
+        }
+    }
+
+    pub(in crate::journal::connection::reservation::storage_budget) const fn as_byte(self) -> u8 {
+        match self {
+            Self::Disk => 1,
+            Self::Tmpfs => 2,
+        }
+    }
+
+    pub(crate) fn parse(value: &str) -> Result<Self, HostError> {
+        match value {
+            "disk" => Ok(Self::Disk),
+            "tmpfs" => Ok(Self::Tmpfs),
+            _ => Err(HostError::Journal),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) enum StorageRole {
+    RunnerRoot,
+    RunnerHome,
+    RunnerWork,
+    RunnerTmp,
+    RunnerShm,
+    SharedRun,
+    DindRoot,
+    DindData,
+    DindTmp,
+    DindShm,
+    CacheLive,
+    CacheStage,
+    EngineMetadata,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct StorageRoleContract {
+    pub(crate) medium: StorageMedium,
+
+    pub(crate) target: &'static str,
+
+    pub(crate) read_only: bool,
+
+    pub(crate) observer: StorageObserver,
+
+    pub(crate) source_target: Option<&'static str>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) enum StorageObserver {
+    Runner,
+
+    Dind,
+
+    Probe,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct StorageAttachmentContract {
+    pub(crate) role: StorageRole,
+
+    pub(crate) observer: StorageObserver,
+
+    pub(crate) target: &'static str,
+
+    pub(crate) read_only: bool,
+
+    pub(crate) source_target: Option<&'static str>,
+
+    pub(crate) volume_subpath: Option<&'static str>,
+}

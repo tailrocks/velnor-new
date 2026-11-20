@@ -1,0 +1,24 @@
+        concat!(
+            "{{\"path\":\"/v2/tailrocks/velnor-job/manifests/{digest}\",",
+            "\"digest\":\"{digest}\",\"status\":302,",
+            "\"location\":\"https://pkg-containers.githubusercontent.com/a/blobs/{digest}\"}}"
+            "/v2/tailrocks/velnor-job/blobs/uploads/../manifests/x",
+            "Registry upload location is outside the fixed HTTPS upload path.",
+        ),
+        (
+        concat!("{{\"status\":500,\"headers\":{{}},\"digest\":\"{digest}\",\"size\":19}}"),
+        digest = digest,
+    );
+    expect_rejection(
+        concat!(
+            "{{\"status\":200,\"headers\":{{\"docker-content-digest\":\"{digest}\",",
+            "\"content-length\":\"20\"}},\"digest\":\"{digest}\",\"size\":19}}"
+        ),
+            concat!(
+                "{{\"status\":200,\"headers\":{{\"docker-content-digest\":\"{digest}\",",
+                "\"content-length\":\"{len}\"}},\"body_hex\":\"{body}\",",
+                "\"digest\":\"{digest}\",\"size\":{len},\"expected_hex\":\"{expected}\"}}"
+        concat!(
+            "{{\"status\":200,\"headers\":{{\"docker-content-digest\":\"{digest}\",",
+            "\"content-length\":\"99\"}},\"body_hex\":\"{body}\",",
+            "\"digest\":\"{digest}\",\"size\":{len},\"expected_hex\":\"{body}\"}}"

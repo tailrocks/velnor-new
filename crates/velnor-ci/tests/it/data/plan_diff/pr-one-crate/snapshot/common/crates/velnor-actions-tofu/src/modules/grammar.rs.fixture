@@ -1,0 +1,4 @@
+    if source.starts_with("./") || source.starts_with("../") {
+        SourceClass::Local
+    } else if is_absolute(source) {
+        SourceClass::External

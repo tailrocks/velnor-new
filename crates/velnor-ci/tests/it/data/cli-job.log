@@ -1,0 +1,61 @@
+﻿2026-11-12T08:37:35.9275616Z Current runner version: '2.338.2'
+2026-11-12T08:37:35.9291409Z ##[group]Runner Image Provisioner
+2026-11-12T08:37:35.9292056Z Hosted Compute Agent
+2026-11-12T08:37:44.6497392Z Cache hit for: mise-tools-v2-351e03e56a119396b95fbfa7963a97987cee3a1ba924b87a835ded25c0b4699d
+2026-11-12T08:37:45.8134053Z Received 104857600 of 400627507 (26.2%), 100.0 MBs/sec
+2026-11-12T08:37:46.8143809Z Received 293601280 of 400627507 (73.3%), 139.9 MBs/sec
+2026-11-12T08:37:47.1955771Z Received 400627507 of 400627507 (100.0%), 160.4 MBs/sec
+2026-11-12T08:37:47.1959980Z Cache Size: ~382 MB (400627507 B)
+2026-11-12T08:37:47.2022382Z [command]/usr/bin/tar -xf /home/runner/work/_temp/d2db3f7c-b73a-42a9-ac73-668e9732f262/cache.tzst -P -C /home/runner/work/velnor-new/velnor-new --use-compress-program unzstd
+2026-11-12T08:37:48.4582318Z Cache restored successfully
+2026-11-12T08:37:48.4838686Z Cache restored from key: mise-tools-v2-351e03e56a119396b95fbfa7963a97987cee3a1ba924b87a835ded25c0b4699d
+2026-11-12T08:37:59.8243352Z Cache hit for: velnor-v4-state-trusted-union-root-s256-5b6d0b80604733ba245e8e1421d5b16b059b5265e2bd6fa0bff55c3637645bf9-s256-6aa87f3a0540a991ae9391172169892b458ff05594c6b25f01cd7ee4adfa1036-s256-4b550c4c1e8d0074ecc77d7fea018c353183bdcc158996d2c422207777cff8d9
+2026-11-12T08:38:00.9735352Z Received 125829120 of 1457119465 (8.6%), 120.0 MBs/sec
+2026-11-12T08:38:01.9738948Z Received 268435456 of 1457119465 (18.4%), 128.0 MBs/sec
+2026-11-12T08:38:02.9769159Z Received 486539264 of 1457119465 (33.4%), 154.6 MBs/sec
+2026-11-12T08:38:03.9766957Z Received 658505728 of 1457119465 (45.2%), 157.0 MBs/sec
+2026-11-12T08:38:04.9747629Z Received 817889280 of 1457119465 (56.1%), 156.0 MBs/sec
+2026-11-12T08:38:05.9743489Z Received 1006632960 of 1457119465 (69.1%), 160.0 MBs/sec
+2026-11-12T08:38:06.9759121Z Received 1191182336 of 1457119465 (81.7%), 162.2 MBs/sec
+2026-11-12T08:38:07.9756060Z Received 1354760192 of 1457119465 (93.0%), 161.5 MBs/sec
+2026-11-12T08:38:08.5011882Z Received 1457119465 of 1457119465 (100.0%), 163.0 MBs/sec
+2026-11-12T08:38:08.5013321Z Cache Size: ~1390 MB (1457119465 B)
+2026-11-12T08:38:08.5110186Z [command]/usr/bin/tar -xf /home/runner/work/_temp/b3676539-6357-426d-8486-7f9da0d05309/cache.tzst -P -C /home/runner/work/velnor-new/velnor-new --use-compress-program unzstd
+2026-11-12T08:38:12.2644805Z Cache restored successfully
+2026-11-12T08:38:12.3153968Z Cache restored from key: velnor-v4-state-trusted-union-root-s256-5b6d0b80604733ba245e8e1421d5b16b059b5265e2bd6fa0bff55c3637645bf9-s256-6aa87f3a0540a991ae9391172169892b458ff05594c6b25f01cd7ee4adfa1036-s256-4b550c4c1e8d0074ecc77d7fea018c353183bdcc158996d2c422207777cff8d9
+2026-11-12T08:39:23.3475001Z    Compiling cfg-if v1.0.5
+2026-11-12T08:39:23.3475582Z    Compiling proc-macro2 v1.0.107
+2026-11-12T08:39:23.3476052Z    Compiling unicode-ident v1.0.27
+2026-11-12T08:39:23.3485745Z    Compiling quote v1.0.47
+2026-11-12T08:39:23.4398940Z    Compiling typenum v1.20.1
+2026-11-12T08:39:23.4399431Z    Compiling serde_core v1.0.229
+2026-11-12T08:39:23.4476475Z    Compiling shlex v2.0.1
+2026-11-12T08:39:23.4524312Z    Compiling find-msvc-tools v0.1.14
+2026-11-12T08:39:23.4577495Z    Compiling cc v1.8.0
+2026-11-12T08:39:23.4653687Z    Compiling hybrid-array v0.4.15
+2026-11-12T08:39:23.4714755Z    Compiling block-buffer v0.12.1
+2026-11-12T08:39:23.4769610Z    Compiling crypto-common v0.2.2
+2026-11-12T08:39:23.4833668Z    Compiling itoa v1.0.18
+2026-11-12T08:39:23.4885498Z    Compiling cpufeatures v0.3.1
+2026-11-12T08:39:23.4940257Z    Compiling serde v1.0.229
+2026-11-12T08:39:23.9371736Z    Compiling zmij v1.0.23
+2026-11-12T08:39:23.9444097Z    Compiling linux-raw-sys v0.12.1
+2026-11-12T08:39:23.9537340Z    Compiling bitflags v2.13.2
+2026-11-12T08:39:23.9579030Z    Compiling syn v3.0.9
+2026-11-12T08:39:23.9579642Z    Compiling const-oid v0.10.2
+2026-11-12T08:39:23.9651057Z    Compiling base64 v0.23.1
+2026-11-12T08:39:23.9697561Z    Compiling digest v0.11.3
+2026-11-12T08:39:23.9771021Z    Compiling rustix v1.1.6
+2026-11-12T08:40:13.0648683Z     Finished `dev` profile [unoptimized + debuginfo] target(s) in 49.84s
+2026-11-12T08:41:34.3515128Z     Finished `test` profile [unoptimized + debuginfo] target(s) in 26.87s
+2026-11-12T08:41:41.7523339Z     Finished `test` profile [unoptimized + debuginfo] target(s) in 4.92s
+2026-11-12T08:41:41.7639758Z     Checking utf8parse v0.2.2
+2026-11-12T08:41:41.7839301Z     Checking anstyle-parse v1.0.0
+2026-11-12T08:41:41.9279551Z    Compiling velnor-archive-guard v0.1.79 (/home/runner/work/velnor-new/velnor-new/crates/velnor-archive-guard)
+2026-11-12T08:41:42.1150662Z ────────────
+2026-11-12T08:41:42.1169883Z  Nextest run ID 1cfdcedf-2c54-48a4-8552-aa76662756a9 with nextest profile: ci
+2026-11-12T08:41:42.1199948Z     Starting 221 tests across 17 binaries
+2026-11-12T08:51:39.6663290Z      Summary [ 597.553s] 221 tests run: 221 passed (11 slow), 0 skipped
+2026-11-12T08:51:39.7033835Z mbx[cache]: object cache: 43 hits, 0 misses; 0 B downloaded, 0 B uploaded, 0 B stored locally
+2026-11-12T08:37:44.0672030Z [36;1mvelnor_dir="$RUNNER_TEMP/velnor-project-tool"[0m
+2026-11-12T08:37:44.0672369Z [36;1mvelnor_db="$velnor_dir/declared"[0m

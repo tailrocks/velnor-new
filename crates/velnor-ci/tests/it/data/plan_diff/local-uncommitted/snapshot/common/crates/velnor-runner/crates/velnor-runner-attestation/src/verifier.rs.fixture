@@ -1,0 +1,9 @@
+const SIGSTORE_TUF_ROOT: &[u8] = include_bytes!("sigstore-production-tuf-root.json");
+const GITHUB_ACTIONS_ISSUER: &str = "https://token.actions.githubusercontent.com";
+const CI_OID_PREFIX: &str = "1.3.6.1.4.1.57264.1.";
+const CI_OIDS: [&str; 23] = [
+include!("verifier/transport.inc.rs");
+include!("verifier/claims.inc.rs");
+include!("verifier/inline.inc.rs");
+include!("verifier/tests.inc.rs");
+

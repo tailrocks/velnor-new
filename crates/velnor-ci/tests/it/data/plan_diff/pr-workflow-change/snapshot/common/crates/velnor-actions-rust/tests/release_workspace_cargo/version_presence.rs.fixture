@@ -1,0 +1,36 @@
+            .current_dir(&root)
+            .env("CARGO_HOME", root.join("cargo-home"))
+            .output()
+            .expect("metadata");
+            .current_dir(&root)
+            .env("CARGO_HOME", root.join("cargo-home"))
+            .output()
+            .expect("cargo package");
+            .current_dir(&root)
+            .env("CARGO_HOME", root.join("cargo-home"))
+            .output()
+            .expect("metadata");
+            .current_dir(&root)
+            .env("CARGO_HOME", root.join("cargo-home"))
+            .output()
+            .expect("cargo package");
+            .current_dir(&root)
+            .env("CARGO_HOME", root.join("cargo-home"))
+            .output()
+            .expect("metadata");
+            .current_dir(&root)
+            .env("CARGO_HOME", root.join("cargo-home"))
+            .output()
+            .expect("cargo package");
+                .current_dir(&dep)
+                .status()
+                .is_ok_and(|status| status.success())
+        );
+        .current_dir(&root)
+        .output()
+        .expect("metadata");
+    assert!(
+        .current_dir(&root)
+        .output()
+        .expect("package");
+    assert!(

@@ -1,0 +1,44 @@
+#[path = "config_workflow.rs"]
+mod workflow;
+use workflow::PartialWorkflow;
+
+#[path = "bun_registry_install.rs"]
+pub(crate) mod bun_registry_install;
+#[path = "deps_layout.rs"]
+pub(crate) mod deps_layout;
+#[path = "deps_lock.rs"]
+pub(crate) mod deps_lock;
+#[path = "gradle_jobs.rs"]
+pub(crate) mod gradle_jobs;
+#[path = "gradle_run.rs"]
+pub(crate) mod gradle_run;
+#[path = "playwright_install.rs"]
+pub(crate) mod playwright_install;
+#[path = "playwright_lock.rs"]
+pub(crate) mod playwright_lock;
+#[path = "playwright_resolve.rs"]
+pub(crate) mod playwright_resolve;
+#[path = "playwright_system_deps.rs"]
+pub(crate) mod playwright_system_deps;
+#[path = "private_fetch.rs"]
+pub(crate) mod private_fetch;
+#[path = "private_fetch_http.rs"]
+pub(crate) mod private_fetch_http;
+#[path = "private_fetch_root.rs"]
+pub(crate) mod private_fetch_root;
+#[path = "private_fetch_session.rs"]
+pub(crate) mod private_fetch_session;
+#[path = "private_fetch_verified.rs"]
+pub(crate) mod private_fetch_verified;
+#[path = "private_revoke.rs"]
+pub(crate) mod private_revoke;
+#[path = "private_sources.rs"]
+pub(crate) mod private_sources;
+#[path = "private_wiring.rs"]
+pub(crate) mod private_wiring;
+
+pub(crate) const CONFIG_REL: &str = ".velnor/config.toml";
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.velnor/config.toml");
+        let config_text = std::fs::read_to_string(&source).expect("repo config must exist");
+        std::fs::create_dir_all(dir.join(".velnor")).expect("fixture must build");
+        std::fs::write(dir.join(".velnor/config.toml"), config_text)

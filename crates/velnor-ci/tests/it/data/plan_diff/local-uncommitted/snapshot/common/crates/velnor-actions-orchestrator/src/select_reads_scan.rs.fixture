@@ -1,0 +1,23 @@
+                Token::Ident(word) if word == "current_dir" => self.anchored = true,
+                Token::Ident(word) if word == "parent" || word == "ancestors" => {
+                    self.escapes = true;
+                }
+                Token::Str(body) => self.literal(body),
+        if body == "CARGO_MANIFEST_DIR" {
+            self.anchored = true;
+        } else if body.split('/').any(|component| component == "..") {
+            self.escapes = true;
+        }
+    }
+            Some("CARGO_MANIFEST_DIR") => self.package_dir,
+            Some("OUT_DIR") => return Concat::BuildOutput,
+            _ => return Concat::Unanchored,
+        };
+            && body.split('/').next() == Some("..")
+        {
+            self.targets.push((resolve(self.package_dir, body), false));
+        }
+            ".." => {
+                if parts.pop().is_none() {
+                    return ReadTarget::Outside;
+                }

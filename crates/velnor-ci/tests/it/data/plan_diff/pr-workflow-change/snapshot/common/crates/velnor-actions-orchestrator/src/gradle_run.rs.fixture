@@ -1,0 +1,8 @@
+            && (!plain(&root) || root.starts_with('/') || root.split('/').any(|s| s == ".."))
+        {
+            return Err(fail("gradle_root_invalid"));
+        }
+        workspace: std::env::current_dir().map_err(|err| io_err("cwd", &err))?,
+        runner_temp: PathBuf::from(get("RUNNER_TEMP").ok_or_else(|| fail("runner_temp_missing"))?),
+    };
+    run(&spec, &machine, &|command| {

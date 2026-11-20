@@ -1,0 +1,5 @@
+            .map(|root| lane.cargo(CargoCommand::BuildAll, root.manifest.parent())),
+    );
+    steps.push(step(StepKind::Helper(HelperCommand::InputsAudit)));
+    Some(Job {
+// base

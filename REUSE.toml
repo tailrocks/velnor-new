@@ -1,0 +1,47 @@
+version = 1
+
+SPDX-PackageName = "velnor-new"
+SPDX-PackageSupplier = "Alexey Zhokhov <alexey@zhokhov.com>"
+SPDX-PackageDownloadLocation = "https://github.com/tailrocks/velnor-new"
+SPDX-PackageOriginator = "Person: Alexey Zhokhov"
+
+[[annotations]]
+path = "**"
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Alexey Zhokhov"
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = "docs/reviews/native-mbx-active-run-gc/active-prediction-repro.patch"
+precedence = "override"
+SPDX-FileCopyrightText = "2026 Jeff Dickey"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "docs/reviews/native-mbx-active-run-gc/LICENSE"
+precedence = "override"
+SPDX-FileCopyrightText = "2026 Jeff Dickey"
+SPDX-License-Identifier = "MIT"
+
+[[annotations]]
+path = "images/dind/cgroup-v2-delegation.sh"
+precedence = "override"
+SPDX-FileCopyrightText = ["2013-2018 Docker, Inc.", "2026 Alexey Zhokhov"]
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = "images/dind/LICENSE-moby"
+precedence = "override"
+SPDX-FileCopyrightText = "2013-2018 Docker, Inc."
+SPDX-License-Identifier = "Apache-2.0"
+
+[[annotations]]
+path = [
+  "docs/implemented/evidence/freshness-2026-10-13/runner-doc.html",
+  "docs/implemented/evidence/freshness-2026-10-20/hosted-runners.html",
+  "docs/implemented/evidence/freshness-2026-10-24/hosted-runners.html",
+  "docs/implemented/evidence/freshness-2026-10-25/hosted-runners.html",
+]
+precedence = "override"
+SPDX-FileCopyrightText = "2026 GitHub Inc."
+SPDX-License-Identifier = "CC-BY-4.0"

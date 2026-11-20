@@ -1,0 +1,8 @@
+    if ObservationSession::begin("..", "brew-install", &new_session_id(), &context).is_ok() {
+        return Err(fail("observation accepted a dotdot recipe"));
+    }
+    if ObservationSession::begin("a\0b", "brew-install", &new_session_id(), &context).is_ok() {
+    if ObservationSession::begin("install", "..", &new_session_id(), &context).is_ok() {
+        return Err(fail("observation accepted a dotdot check"));
+    }
+    if ObservationSession::begin("install", "brew-install", "a/b", &context).is_ok() {

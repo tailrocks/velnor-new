@@ -1,0 +1,20 @@
+#[path = "package_release_artifacts_content.rs"]
+mod content;
+use content::{check_deadline, inspect_optional_identity_envelope, inspect_sbom};
+
+#[path = "package_release_artifacts_gzip.rs"]
+mod gzip;
+
+const MAX_ENTRIES_PER_ARCHIVE: usize = 4096;
+            || name == ".."
+            || !expected_members.contains(name)
+            || found.contains_key(name)
+        {
+#[path = "package_release_artifacts_binary.rs"]
+mod binary;
+
+fn inspect_archive(
+        || name == ".."
+        || !expected.contains(name)
+        || !found.insert(name.to_owned())
+    {

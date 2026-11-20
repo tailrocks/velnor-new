@@ -1,0 +1,28 @@
+        include_str!("../../../../.velnor/generator.lock"),
+    )?;
+    fs::write(
+        root.join(".velnor/controller-approvals.json"),
+        include_str!("../../../../.velnor/controller-approvals.json"),
+    )?;
+    Ok(repo)
+}
+    let project = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    for path in [
+        "images/runner/ubuntu-26.04/Dockerfile",
+        "images/dind/Dockerfile",
+            "malformed" => fs::write(&manifest, "tree ../escape\n")?,
+            "missing" => fs::remove_file(&manifest)?,
+            "symlink" => {
+                fs::remove_file(&manifest)?;
+    let project = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    for context in [
+        "images/runner/ubuntu-26.04",
+        "images/dind",
+    let project = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    for name in ["mise.toml", "mise.lock", "rust-toolchain.toml"] {
+        std::fs::copy(project.join(name), root.join(name))?;
+    }
+        std::fs::create_dir_all(destination.parent().ok_or("missing parent")?)?;
+        std::fs::copy(project.join(name), destination)?;
+    }
+    Ok(())

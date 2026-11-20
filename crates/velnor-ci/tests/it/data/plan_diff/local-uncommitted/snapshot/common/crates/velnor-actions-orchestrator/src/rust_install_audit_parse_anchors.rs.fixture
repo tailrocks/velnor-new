@@ -1,0 +1,8 @@
+#[path = "rust_install_audit_parse_anchor_lex.rs"]
+mod lex;
+use lex::{
+    FlowState, QuoteState, entry_flow_start, entry_quote_continuation, flow_separator_positions,
+            if let Some(rest) = document_marker_tail(content, "...")
+                && rest.trim().is_empty()
+            {
+                at += 1;

@@ -1,0 +1,5 @@
+    let (_, source) = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/src/launch/jit_conflict/tests/inbox_fake.ts"
+    ))
+    .split_once('\n')
