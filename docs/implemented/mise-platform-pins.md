@@ -4,10 +4,13 @@ Generated workflows pin the official Mise release with the raw executable
 SHA-256 as the `sha256` input of every `jdx/mise-action` step (issue #2158).
 The renderer holds the digests (`MISE_BINARIES` in
 `crates/velnor-render/src/mise_digest.rs`, next to `MISE_VERSION`). A job whose
-runner labels name one platform gets that platform's digest; any other job
-selects it at run time from `runner.os` and `runner.arch`. Windows is not
-pinned: it selects an empty `sha256`, so the action keeps its signed-archive
-check, which also covers `mise-shim.exe`. Any other platform without a row
+runner labels name one platform gets that platform's digest (a Linux label only
+when it starts with `ubuntu-`, which names a glibc runner); any other job
+selects it at run time from `runner.os` and `runner.arch`. Windows and Linux
+are not pinned by that selection: it is an empty `sha256`, so the action keeps
+its signed-archive check, which covers `mise-shim.exe` on Windows and the
+binary that suits the runner's libc on Linux (a musl runner downloads a
+different binary than the glibc digest names). Any other platform without a row
 selects a text that matches no binary, so the action fails instead of
 installing an unchecked executable. The design
 and the bump procedure are in [docs/rust-ci.md](../rust-ci.md#the-mise-binary-is-pinned-by-sha-256).
