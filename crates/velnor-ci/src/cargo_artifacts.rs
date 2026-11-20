@@ -39,6 +39,10 @@ pub struct ArtifactBatch {
     pub rejected: u64,
     pub progress: Vec<CargoProgress>,
     pub tests: Vec<(String, f64)>,
+    /// `(name, version)` of units cargo reported a compile error for.
+    pub failed_units: Vec<(String, String)>,
+    /// Cargo reported `build-finished` with `success: false`.
+    pub build_failed: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -123,8 +127,31 @@ impl ArtifactTap {
         let Ok(value) = serde_json::from_slice::<serde_json::Value>(&self.line) else {
             return;
         };
-        if value.get("reason").and_then(serde_json::Value::as_str) != Some("compiler-artifact") {
-            return;
+        match value.get("reason").and_then(serde_json::Value::as_str) {
+            Some("compiler-message") => {
+                let is_error = value
+                    .pointer("/message/level")
+                    .and_then(serde_json::Value::as_str)
+                    == Some("error");
+                let identity = value
+                    .get("package_id")
+                    .and_then(serde_json::Value::as_str)
+                    .and_then(crate::cargo_package::PackageIdentity::parse);
+                if is_error && let Some(identity) = identity {
+                    self.batch
+                        .failed_units
+                        .push((identity.name.to_owned(), identity.version.to_owned()));
+                }
+                return;
+            }
+            Some("build-finished") => {
+                if value.get("success").and_then(serde_json::Value::as_bool) == Some(false) {
+                    self.batch.build_failed = true;
+                }
+                return;
+            }
+            Some("compiler-artifact") => {}
+            _ => return,
         }
         match serde_json::from_value(value) {
             Ok(artifact) => self.batch.artifacts.push(artifact),
