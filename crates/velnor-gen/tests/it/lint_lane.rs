@@ -147,6 +147,21 @@ fn a_mise_task_installs_the_configured_backend_qualified_tool_key() -> TestResul
 }
 
 #[test]
+fn the_alint_job_installs_the_python_its_no_doctests_command_runs() -> TestResult {
+    let config = "[[lint]]\nkind = 'alint'\nconfig = '.alint.yml'\ntools = ['python']\n";
+    let mut repo = view(&["Cargo.toml"], Some(config.as_bytes()))?;
+    let mise = MISE.replace("[tools]\n", "[tools]\npython = \"3.15.2\"\n");
+    repo.files
+        .insert(RepoPath::new("mise.toml")?, mise.into_bytes());
+    let jobs = crate::yaml_tree::document(&workflow(&repo)?)?["jobs"].clone();
+    assert_eq!(
+        jobs["lint-alint"]["steps"][1]["with"]["install_args"],
+        "github:asamarts/alint python"
+    );
+    Ok(())
+}
+
+#[test]
 fn the_alint_job_checks_the_repo_then_proves_the_line_cap_rejects_a_seeded_file() -> TestResult {
     let jobs = jobs(LINT)?;
     let steps = jobs["lint-alint"]["steps"]

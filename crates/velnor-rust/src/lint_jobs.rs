@@ -35,7 +35,11 @@ fn install(facts: &RepoFacts, lint: &LintJob) -> Vec<Step> {
             tools.extend(available(facts, NODE).then(|| resolved(facts, NODE)));
             only(tools)
         }
-        LintKind::Alint { .. } => only(vec![resolved(facts, ALINT)]),
+        LintKind::Alint { tools, .. } => {
+            let mut names = vec![resolved(facts, ALINT)];
+            names.extend(tools.iter().map(|tool| resolved(facts, tool)));
+            only(names)
+        }
         LintKind::MiseTask { tools, .. } if tools.is_empty() => {
             vec![step(StepKind::InstallMise)]
         }
@@ -56,7 +60,7 @@ fn commands(facts: &RepoFacts, lint: &LintJob) -> Vec<LintCommand> {
             config: config.clone(),
             shellcheck: available(facts, SHELLCHECK),
         }],
-        LintKind::Alint { config, probe } => std::iter::once(LintCommand::Alint {
+        LintKind::Alint { config, probe, .. } => std::iter::once(LintCommand::Alint {
             config: config.clone(),
         })
         .chain(probe.iter().cloned().map(LintCommand::Probe))

@@ -49,6 +49,17 @@ fn path(key: &'static str, value: Option<String>) -> Result<Option<RepoPath>, Re
         .transpose()
 }
 
+fn tool_names(tools: Option<Vec<String>>) -> Result<Vec<String>, Reason> {
+    let tools = tools.unwrap_or_default();
+    match tools.iter().find(|tool| !word(tool)) {
+        Some(tool) => Err(Reason::InvalidValue {
+            key: "lint.tools",
+            value: tool.clone(),
+        }),
+        None => Ok(tools),
+    }
+}
+
 fn foreign(kind: &str, key: &'static str, present: bool) -> Result<(), Reason> {
     if present {
         Err(Reason::LintKeyForeign {
@@ -107,10 +118,14 @@ fn lint(raw: RawLint) -> Result<LintJob, Reason> {
         }
         ALINT => {
             foreign(kind, "task", raw.task.is_some())?;
-            foreign(kind, "tools", raw.tools.is_some())?;
             let config = config.ok_or(Reason::MissingKey("lint.config"))?;
+            let tools = tool_names(raw.tools.clone())?;
             (
-                LintKind::Alint { config, probe },
+                LintKind::Alint {
+                    config,
+                    probe,
+                    tools,
+                },
                 ALINT.to_owned(),
                 "Alint".to_owned(),
             )
@@ -125,13 +140,7 @@ fn lint(raw: RawLint) -> Result<LintJob, Reason> {
                     value: task,
                 });
             }
-            let tools = raw.tools.clone().unwrap_or_default();
-            if let Some(tool) = tools.iter().find(|tool| !word(tool)) {
-                return Err(Reason::InvalidValue {
-                    key: "lint.tools",
-                    value: tool.clone(),
-                });
-            }
+            let tools = tool_names(raw.tools.clone())?;
             let id = task.clone();
             let name = format!("Mise task {task}");
             (LintKind::MiseTask { task, tools }, id, name)

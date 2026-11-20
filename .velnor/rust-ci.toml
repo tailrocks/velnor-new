@@ -66,6 +66,7 @@ config = ".github/jactionlint.yaml"
 kind = "alint"
 config = ".alint.yml"
 probe = "scripts/alint-line-cap-probe.sh"
+tools = ["python"]
 
 [[lint]]
 kind = "mise-task"
