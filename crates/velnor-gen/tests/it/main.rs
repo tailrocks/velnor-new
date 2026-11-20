@@ -264,6 +264,7 @@ mod suggest_groups;
 mod test_groups;
 mod test_groups_harness;
 mod test_groups_jobs;
+mod test_groups_no_tests;
 mod test_groups_private;
 mod test_groups_restore;
 mod test_groups_selection;
