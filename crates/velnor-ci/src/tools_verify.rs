@@ -225,8 +225,6 @@ fn discard(home: &Path) -> Result<(), CiError> {
     Ok(())
 }
 
-/// The `read` step turns a malformed anchor file into an empty anchor, so an empty anchor here is
-/// `NoAnchor` unless the restored file is itself malformed; then the check reports that reason.
 pub fn check(home: &Path, anchor: &Anchor<'_>, file: &Path) -> Result<Verdict, CiError> {
     if HOME_PATHS
         .iter()
