@@ -4,6 +4,7 @@
 mod boundary;
 mod bounds;
 mod build_clock;
+mod build_directory;
 mod freshness;
 mod gated;
 mod groups;
@@ -39,7 +40,9 @@ pub(super) fn command(program: impl AsRef<OsStr>) -> Command {
 
 pub(super) fn velnor_ci() -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
-    command.env_remove("CARGO_TARGET_DIR");
+    command
+        .env_remove("CARGO_TARGET_DIR")
+        .env_remove("CARGO_BUILD_BUILD_DIR");
     command
 }
 
