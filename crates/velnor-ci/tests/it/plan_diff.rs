@@ -78,10 +78,23 @@ fn collect_files(dir: &Path, root: &Path, found: &mut Vec<PathBuf>) {
 /// The case's repository: a base commit and a head commit for a `pull_request` or fork,
 /// one commit for a local run. Returns the repository and the commits' ids.
 fn repository(case: &Path, event: &str, name: &str) -> (PathBuf, String, String) {
+    repository_with(case, event, name, "")
+}
+
+fn repository_with(
+    case: &Path,
+    event: &str,
+    name: &str,
+    config_tail: &str,
+) -> (PathBuf, String, String) {
     let repo = fresh_dir("velnor-ci-plan-diff", name);
     git(&repo, &["init", "-q", "-b", "main"]);
     let snapshot = case.join("snapshot");
     copy_tree(&snapshot.join("common"), &repo);
+    if !config_tail.is_empty() {
+        let config = repo.join(".velnor/config.toml");
+        fs::write(&config, read(&config) + config_tail).unwrap_or_else(|e| unreachable!("{e}"));
+    }
     copy_tree(&snapshot.join("base-only"), &repo);
     git(&repo, &["add", "-A"]);
     git(&repo, &["commit", "-q", "-m", "base", "--allow-empty"]);
@@ -285,6 +298,71 @@ fn an_untracked_file_runs_every_job() {
     assert!(output.status.success());
     assert!(read(&aside(&repo).join("outputs")).contains("\nnot_affected_jobs=\n"));
     assert!(String::from_utf8_lossy(&output.stderr).contains("untracked_files:all_changed"));
+    fs::remove_dir_all(&repo).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::remove_dir_all(aside(&repo)).unwrap_or_else(|e| unreachable!("{e}"));
+}
+
+fn planned_with_check(name: &str, id: &str) -> (PathBuf, Output) {
+    let case = data().join("pr-one-crate");
+    let quoted = serde_json::Value::from(id).to_string();
+    let tail = format!(
+        "\n[[checks]]\nid = {quoted}\ninputs = [\"zzz-never\"]\nselection = \"declared_inputs\"\n"
+    );
+    let (repo, base, head) = repository_with(&case, "pull_request", name, &tail);
+    let request = bind(&read(&case.join("request.json")), &base, &head);
+    let output = planned(&request, &repo);
+    (repo, output)
+}
+
+#[test]
+fn a_check_id_with_a_line_break_is_refused_and_adds_no_output_key() {
+    let (repo, output) = planned_with_check("injected-id", "x\nqualification_cache_write=true");
+    let written = fs::read_to_string(aside(&repo).join("outputs")).unwrap_or_default();
+    assert!(!output.status.success(), "{written}");
+    assert!(
+        !written
+            .lines()
+            .any(|line| line.starts_with("qualification_cache_write=true")),
+        "{written}"
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("x%0Aqualification_cache_write=true"),
+        "{stderr}"
+    );
+    assert!(!stderr.contains("x\nqualification"), "{stderr}");
+    fs::remove_dir_all(&repo).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::remove_dir_all(aside(&repo)).unwrap_or_else(|e| unreachable!("{e}"));
+}
+
+#[test]
+fn a_check_id_outside_the_identifier_alphabet_is_refused() {
+    for id in ["", "a b", "a,b", "a/b", "é"] {
+        let (repo, output) = planned_with_check("odd-id", id);
+        assert!(!output.status.success(), "{id:?}");
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            stderr.contains("diff_selection_not_supported:check_id"),
+            "{stderr}"
+        );
+        fs::remove_dir_all(&repo).unwrap_or_else(|e| unreachable!("{e}"));
+        fs::remove_dir_all(aside(&repo)).unwrap_or_else(|e| unreachable!("{e}"));
+    }
+}
+
+#[test]
+fn a_check_id_with_dots_dashes_and_underscores_is_kept() {
+    let (repo, output) = planned_with_check("good-id", "jactionlint-linux_x64.1");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let written = read(&aside(&repo).join("outputs"));
+    assert!(
+        written.contains(",check-jactionlint-linux_x64.1,"),
+        "{written}"
+    );
     fs::remove_dir_all(&repo).unwrap_or_else(|e| unreachable!("{e}"));
     fs::remove_dir_all(aside(&repo)).unwrap_or_else(|e| unreachable!("{e}"));
 }
