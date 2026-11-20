@@ -1,8 +1,12 @@
 # Generator configuration
 
-The new Rust generator reads `.velnor/rust-ci.toml`.
+The new Rust generator reads `.velnor/rust-ci.toml`. To move a project from the velnor-actions engine, follow [`docs/migrating-to-velnor-gen.md`](../docs/migrating-to-velnor-gen.md).
 
 The generator reads `.velnor/rust-ci.toml`, `.velnor/release.toml` and `.velnor/workflows.toml` only through Git's tracked view. A file that exists on disk but that Git does not track (or ignores) is refused with an error, not replaced by defaults: run `git add <path>` (`git add -f` for an ignored file), or delete the file.
+
+## Local runs in a mise checkout
+
+`velnor-gen generate` and `check` run `cargo metadata` in the repository. When the repository's `mise.toml` declares `[wrappers.cargo]`, mise refuses to run that wrapper in a checkout it does not trust, so the run would stop with "Config files in mise.toml are not trusted" until someone runs `mise trust`. velnor-gen avoids that step: it adds the repository root it was pointed at to `MISE_TRUSTED_CONFIG_PATHS` for that one `cargo metadata` child. The value is appended to any existing one, and velnor-gen's own environment does not change. The wrapper still runs (mbx stays in the path). Trusting this root is safe here because you ran `velnor-gen` on this checkout yourself, and `cargo metadata` already reads the checkout's Cargo and mise config. A root path that contains `:` is refused, because mise splits this variable on `:` and the entry would trust a parent directory.
 
 ## Fork pull requests
 
@@ -157,6 +161,18 @@ With `velnor-ci` 0.1.86 or later in the lock, `mbx_shared_store = true` also ren
 
 `check_alone = "post_merge"` does the same for the per-crate `Check <crate> alone` steps. They compile each crate with only its own feature set, so their dependency artifacts differ from the workspace lint and build steps and a pull request rarely finds them in the mbx cache. They keep their value as the check that a crate declares every feature it needs, and the run after the merge keeps that check. The default is `"always"`. The key needs `velnor-ci` 0.1.97 or later in the lock, and the same weakening and reuse rules apply.
 
+## Cargo wrapper
+
+`mise.toml` routes every `cargo` through MBX with the owner standard layout: `mr_boxington = true` on the `rust` tool and this wrapper:
+
+```toml
+[wrappers.cargo]
+command = "mbx"
+env = { MBX_CARGO_SHIM_MODE = "1" }
+```
+
+The generator accepts this exact layout as the standard. `velnor-ci plan --explain` and the review of a change do not name it as a weakening. The match is exact: `command` must be `"mbx"`, `env` must hold only `MBX_CARGO_SHIM_MODE = "1"`, and the wrapper may not add `args` or other keys. Any other cargo wrapper is still named as a weakening, because it runs cargo through a program or with settings the generator cannot vouch for. That covers another command, another env value, an extra env key, an `args` list, a missing `env`, and a wrapper for `cargo-nextest` or another `cargo-*` tool. The `rustc` and `rustdoc` wrappers are always named.
+
 ## Test setup steps
 
 A test that needs a fixture, such as a built example executable or a provisioned service, declares one step per fixture. The generator runs each step before the first test step of every job of that root, in the order written. Each step is one command, because a generated `run:` value is one command with no shell logic; the logic lives in a script the repository commits. The script exports variables to later steps through `$GITHUB_ENV`.
@@ -182,7 +198,15 @@ packages = ["velnor-runner-host"]
 filter = "package(velnor-runner-host) and (test(~local::) or binary(local_host_public) or binary(local_pair_public))"
 ```
 
-`root` is the folder of the Cargo root's `Cargo.toml`, or `.` for the repository root. It must name a root of this repository that runs nextest tests. `features` is a non-empty list of distinct feature names, and each name uses letters, digits and `_-+./`. The step is named `Test (features: local-mode)` and runs `cargo-nextest nextest run --workspace --locked --features 'local-mode'` with the same selection as the root's default test step, narrowed by `filter`. It runs after the default test step and reports no test counts, so the default step stays the single source of the job's test counts. A lane with `job = "parallel"` reports its own counts, see the next section but one. With `shape = "groups"` the step runs in the build job, which has Rust, because the archive holds only the default-feature build.
+`root` is the folder of the Cargo root's `Cargo.toml`, or `.` for the repository root. It must name a root of this repository that runs nextest tests. `features` is a list of distinct feature names, and each name uses letters, digits and `_-+./`. It is required unless `all_features` or `no_default_features` is set. The step is named `Test (features: local-mode)` and runs `cargo-nextest nextest run --workspace --locked --features 'local-mode'` with the same selection as the root's default test step, narrowed by `filter`.
+
+The two feature flags change which features the lane's steps pass to cargo, in its test, lint, doc and guard steps alike:
+
+- `all_features = true` passes `--all-features`, so the lane runs with every feature of the root on. It takes no `features` list.
+- `no_default_features = true` passes `--no-default-features`. It combines with `features`, so `features = ["a", "b"]` with it gives `--no-default-features --features 'a,b'`. It may also stand alone, to run with no features at all.
+- The two cannot be combined with each other or with a `features` list. Generation fails with a message that names the conflicting keys.
+
+A lane with a flag takes its own name: `Test (all features)`, `Test (no default features)`, or `Test (no default features, features: a,b)`, and the lint, doc and guard steps take the same words. Two lanes that differ only by a flag keep separate steps, separate lint and doc steps, and, as parallel jobs, separate jobs and cache keys (`rust-lane-all-features`, `rust-lane-no-default-a-b`). A lane without the flags renders exactly as before. The keys need velnor-ci 0.1.108 or later, and generation refuses an older pin when a lane writes either key, even as `false`. It runs after the default test step and reports no test counts, so the default step stays the single source of the job's test counts. A lane with `job = "parallel"` reports its own counts, see the next section but one. With `shape = "groups"` the step runs in the build job, which has Rust, because the archive holds only the default-feature build.
 
 `packages` names the packages of the root whose tests the lane selects. It is required with `filter` and optional without it. The plan narrows a pull request to the changed packages, so a lane whose filter matches nothing there is not broken. When the plan selects none of `packages`, and not the whole workspace, the lane step is skipped and a step named `Skip test lane (features: ...)` prints `skipped: no selected packages`. Otherwise the lane runs with `--no-tests=fail`, so a filter that matches nothing fails the job instead of passing with zero tests. A lane without `filter` runs whenever the plan selects the root.
 
@@ -200,11 +224,11 @@ lint = true
 doc = true
 ```
 
-A lane with a `filter` gets a second step, `Test lane guard (features: ...)`, right after the lane step. It runs `velnor-ci lane-guard --features '...' --filter '...'`, with one `--except-binary` for each `harness = false` binary that the root runs with `cargo test`, and it runs under the same condition as the lane step. The guard asks cargo-nextest to list the workspace with and without the features and under the filter. It fails the job when a test exists only with the features, is not ignored, and falls outside `filter`, and it names each such test with its binary id. A listing error also fails the guard. A lane without a `filter` runs every selected test and has no guard.
+A lane with a `filter` gets a second step, `Test lane guard (features: ...)`, right after the lane step. It runs `velnor-ci lane-guard --features '...' --filter '...'` (with `--all-features` or `--no-default-features` in place of or before `--features` when the lane sets the flags), with one `--except-binary` for each `harness = false` binary that the root runs with `cargo test`, and it runs under the same condition as the lane step. The guard asks cargo-nextest to list the workspace with and without the features and under the filter. It fails the job when a test exists only with the features, is not ignored, and falls outside `filter`, and it names each such test with its binary id. A listing error also fails the guard. A lane without a `filter` runs every selected test and has no guard.
 
 ### A lane as its own job
 
-`job` is optional: `"inline"` (the default) keeps the lane's steps in the root's test job, as above, and renders exactly as before. `job = "parallel"` moves every step of the lane (the test step, its guard, `lint` and `doc`) out of that job into one job of its own, `rust-lane-<features>` (`rust-lane-local-mode`, with the root's slug appended when the repository has several roots; a second lane with the same features gets `-2`). The job runs beside the root's jobs, so the wall time of a run is the longest job, not the sum of the default tests and the lane.
+`job` is optional: `"inline"` (the default) keeps the lane's steps in the root's test job, as above, and renders exactly as before. `job = "parallel"` moves every step of the lane (the test step, its guard, `lint` and `doc`) out of that job into one job of its own, `rust-lane-<features>` (`rust-lane-local-mode`, or `rust-lane-all-features` or `rust-lane-no-default-...` with the flags, with the root's slug appended when the repository has several roots; a second lane with the same features gets `-2`). The job runs beside the root's jobs, so the wall time of a run is the longest job, not the sum of the default tests and the lane.
 
 ```toml
 [[test_lane]]
@@ -224,7 +248,7 @@ job = "parallel"
 - The job costs its own setup (checkout, tools restore, target restore). The saving is the lane's own steps, which leave the critical path when the default test job is the longer one.
 - Lanes of one root that name the same features share one lint step and one rustdoc step inline. As jobs they are independent, so each parallel lane runs its own.
 - A root of a workspace group cannot have a lane, as before.
-- The key needs velnor-ci 0.1.107 or later, because the pinned velnor-ci reads `.velnor/rust-ci.toml` and refuses a key it does not know; `velnor-gen generate` refuses an older pin when a lane sets `job = "parallel"`. A lane without the key keeps the 0.1.93 requirement below.
+- The key needs velnor-ci 0.1.107 or later, because the pinned velnor-ci reads `.velnor/rust-ci.toml` and refuses a key it does not know; `velnor-gen generate` refuses an older pin when a lane sets `job = "parallel"`. A lane without the key keeps the 0.1.93 requirement below. The job id of a lane with a flag carries the flag's words, for example `rust-lane-all-features`.
 
 The pinned velnor-ci reads `.velnor/rust-ci.toml` at run time and rejects a key it does not know, so any `[[test_lane]]` needs velnor-ci 0.1.93 or later, the first release that accepts the key and runs `lane-guard`. `velnor-gen generate` refuses an older pin when the file has a lane, filtered or not.
 
@@ -352,7 +376,8 @@ root = "."
 
 - `name` is the job name `rust-test-<name>` (then the root suffix when the repository has several roots). It uses letters, digits, `_` and `-`, at most 40 characters, and is not `default`.
 - `filter` is a nextest filterset. The group job runs the tests the plan selects that this filter matches. Write nextest's `and`, `or` and `not` instead of `&`, `|` and `!`: a generated `run:` value is one command with no `&`, `|`, `;`, quote, `$`, backtick, backslash, `<` or line break. An empty filter is refused.
-- `needs` lists what the job needs before the tests start. `"docker"` adds a step that runs `docker info`, so a runner without Docker fails there. `"cargo"` installs the full toolchain, as the build job does, but restores no target or sources cache. Nothing else is installed: a group with no need installs only cargo-nextest. A test that calls `cargo` may print `Compiling` for its own build, and it must not rebuild the suite.
+- `needs` lists what the job needs before the tests start. `"docker"` adds a step that runs `docker info`, so a runner without Docker fails there. `"cargo"` installs the full toolchain, as the build job does, but restores no target or sources cache unless `restore_cache = true` is set. Nothing else is installed: a group with no need installs only cargo-nextest. A test that calls `cargo` may print `Compiling` for its own build, and it must not rebuild the suite.
+- `restore_cache = true` adds restore steps for the sources cache and the target cache, followed by `velnor-ci inputs restore-all`, so a setup script or a test that builds an app starts from the cache the build job saved. The group job restores the same entries as the build job of its root (`rust-test`, or `rust-test-<root>` with several roots), under the same key and restore keys, and the restore comes after the checkout, the helper install and `velnor-ci prepare`, and before the archive download, the setup steps and the tests. The job never saves: it has no save step, `cache-mode` stays `read`, and so a pull request restores the default branch's cache and writes nothing to it. The key needs `needs = ["cargo"]`, and generation refuses it without. The key needs `velnor-ci` 0.1.108 or later, because `velnor-ci` reads the same file, and generation refuses an older pin when any group writes the key, `false` too. A group without the key renders as before. The restore uses the cache of the build job, so the first run after the key appears restores nothing until a push to the default branch has saved one. The key adds no `mbx_remote` step (see Optional mbx remote cache) and no per-pull-request delta layer; a repository with `mbx_shared_store = true` already gets the store steps in every group job.
 - `test_threads` (1 to 256) becomes `--test-threads` for that job only. `timeout_minutes` (1 to 360) and `runner` replace the repository values for that job only.
 - `root` is the folder of the Cargo root's `Cargo.toml`, or `.`. It is required when the repository has several Cargo roots, and it must name a root with nextest tests.
 - `paths` (globs, as in `inputs`) and `events` (`pull_request`, `push`, `merge_group`, `schedule`, `workflow_dispatch`) are optional. A group with neither key runs whenever its root is selected. A group with either key is decided at run time by `velnor-ci plan`, which writes one output `rust_<root>_group_<name>` (`run` or `skip`) that is the job's `if`. The group runs when its root has a selected package and one of these holds, in this order: the event is a push to the default branch (every group runs, but only where the default lanes select the root); the event is listed in `events`; the event is a merge group and the group sets no `paths` (`events` never skip a group on a merge group); a changed path matches `paths`; every package is selected. Otherwise the job is skipped, and the `Required` check expects it to be skipped. On a merge group, `paths` are matched against the merge group's own base to head diff, the same diff the default lanes select by; when that diff cannot be computed, every package is selected and every group runs. `velnor-ci plan --explain` and the plan summary say why each group ran or was skipped. On a push to the default branch the groups follow exactly the same selection as the default lanes, neither stricter nor looser: with `on_main = "affected"` a docs-only push selects no package, so the lanes and every group skip; with `on_main = "everything"` the lanes and every group run. The default job still leaves out the group's tests, so tests of a skipped group do not run in that workflow run.

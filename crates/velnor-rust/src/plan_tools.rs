@@ -74,7 +74,14 @@ pub(crate) fn tools_save(facts: &RepoFacts) -> Vec<Step> {
         when: When::SavingRun,
         ..step(StepKind::ToolsLocal(verb))
     };
+    // A node hit skips the network restore, so the network entry is looked up here: an evicted
+    // entry is saved again by the first trusted run that finds the node store warm.
+    let lookup = Step {
+        when: When::LookupToolsOnNodeHit,
+        ..step(StepKind::CacheLookup(tools_cache_key()))
+    };
     let mut steps = vec![
+        lookup,
         saving(if checked {
             ToolsLocalVerb::SaveChecked
         } else {
