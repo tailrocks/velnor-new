@@ -187,7 +187,7 @@ fn a_single_root_workflow_with_lint_inputs_gets_a_plan_job_and_gates_the_lint_jo
 fn a_lint_job_keeps_unique_step_ids_with_the_merge_group_skip() -> TestResult {
     let config = format!("[ci]\nskip_push_after_merge_group = true\n\n{DECLARED}");
     let mut repo = repo(&["Cargo.toml"], &config)?;
-    pin_helper(&mut repo, "0.1.110")?;
+    pin_helper(&mut repo, "0.1.111")?;
     let all = jobs(&workflow(&repo)?)?;
     for id in ["lint-hk", "lint-jactionlint"] {
         let ids: Vec<&str> = all[id]["steps"]
@@ -205,20 +205,22 @@ fn a_lint_job_keeps_unique_step_ids_with_the_merge_group_skip() -> TestResult {
 #[test]
 fn a_helper_older_than_the_key_is_refused_with_the_gate_error() -> TestResult {
     let mut repo = repo(&["Cargo.toml"], DECLARED)?;
-    pin_helper(&mut repo, "0.1.109")?;
-    let error = expected_files(&repo).err();
-    assert!(
-        matches!(
-            error,
-            Some(GenerateError::ConfigKeyHelperTooOld {
-                key: "lint.inputs",
-                first: (0, 1, 110),
-                ..
-            })
-        ),
-        "{error:?}"
-    );
-    pin_helper(&mut repo, "0.1.110")?;
+    for helper in ["0.1.109", "0.1.110"] {
+        pin_helper(&mut repo, helper)?;
+        let error = expected_files(&repo).err();
+        assert!(
+            matches!(
+                error,
+                Some(GenerateError::ConfigKeyHelperTooOld {
+                    key: "lint.inputs",
+                    first: (0, 1, 111),
+                    ..
+                })
+            ),
+            "{helper}: {error:?}"
+        );
+    }
+    pin_helper(&mut repo, "0.1.111")?;
     assert!(expected_files(&repo).is_ok());
     Ok(())
 }
