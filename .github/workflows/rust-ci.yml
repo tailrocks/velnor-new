@@ -142,7 +142,7 @@ jobs:
         run: 'printf ''cache-primary-key=%s\ncache-matched-key=%s\ncache-hit=%s\n'' "$CACHE_KEY" "${NODE_HIT:+$CACHE_KEY}$MATCHED" "$EXACT" >> "$GITHUB_OUTPUT"'
       - name: Install tools
         if: '${{ steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' }}'
-        uses: jdx/mise-action@90f833d396d0cc3674b631d2d225e306476c303a
+        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
         with:
           version: '2026.11.10'
           cache: false
@@ -575,7 +575,7 @@ jobs:
           EXACT: '${{ steps.toolslocal.outputs.hit == ''true'' && ''true'' || steps.tools.outputs.cache-hit }}'
         run: 'printf ''cache-primary-key=%s\ncache-matched-key=%s\ncache-hit=%s\n'' "$CACHE_KEY" "${NODE_HIT:+$CACHE_KEY}$MATCHED" "$EXACT" >> "$GITHUB_OUTPUT"'
       - name: Install tools
-        uses: jdx/mise-action@90f833d396d0cc3674b631d2d225e306476c303a
+        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
         with:
           version: '2026.11.10'
           cache: false
@@ -692,7 +692,7 @@ jobs:
           persist-credentials: false
       - name: Install tools
         if: '${{ steps.merge_group.outputs.skip != ''true'' }}'
-        uses: jdx/mise-action@90f833d396d0cc3674b631d2d225e306476c303a
+        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
         with:
           version: '2026.11.10'
           cache: false
@@ -746,7 +746,7 @@ jobs:
           persist-credentials: false
       - name: Install tools
         if: '${{ steps.merge_group.outputs.skip != ''true'' }}'
-        uses: jdx/mise-action@90f833d396d0cc3674b631d2d225e306476c303a
+        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
         with:
           version: '2026.11.10'
           cache: false
@@ -803,7 +803,7 @@ jobs:
           persist-credentials: false
       - name: Install tools
         if: '${{ steps.merge_group.outputs.skip != ''true'' }}'
-        uses: jdx/mise-action@90f833d396d0cc3674b631d2d225e306476c303a
+        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
         with:
           version: '2026.11.10'
           cache: false
@@ -857,7 +857,7 @@ jobs:
           persist-credentials: false
       - name: Install tools
         if: '${{ steps.merge_group.outputs.skip != ''true'' }}'
-        uses: jdx/mise-action@90f833d396d0cc3674b631d2d225e306476c303a
+        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
         with:
           version: '2026.11.10'
           cache: false

@@ -28,7 +28,7 @@ fn trusted_before_restore(step: &serde_json::Value) -> bool {
                 | "tailrocks/velnor-new/actions/setup-velnor@1390e6f6a4b64e1f33dbddfbeedcd097db32ec36"
                 | "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9"
                 | "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9"
-                | "jdx/mise-action@90f833d396d0cc3674b631d2d225e306476c303a"
+                | "jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d"
         );
     }
     step["run"].as_str().map(plain).is_some_and(|run| {
