@@ -35,7 +35,7 @@ fn rules_of(command: &str) -> Vec<Rule> {
 }
 
 /// Each wrapper that runs the rest of its command line, with `{}` where the payload goes.
-const WRAPPERS: [&str; 36] = [
+const WRAPPERS: &[&str] = &[
     "nohup {}",
     "exec {}",
     "command {}",

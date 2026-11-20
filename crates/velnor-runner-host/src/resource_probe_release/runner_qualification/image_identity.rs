@@ -186,7 +186,7 @@ pub(crate) fn source_healthcheck(
     let mut projection = serde_json::Map::new();
     if let Some(healthcheck) = expected.get("Healthcheck") {
         if let Some(object) = healthcheck.as_object() {
-            const KEYS: [&str; 6] = [
+            const KEYS: &[&str] = &[
                 "Test",
                 "Interval",
                 "Timeout",

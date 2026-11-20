@@ -8,7 +8,7 @@ use crate::launch::bootstrap::unbound_pair_fixtures::{FAILED, seed};
 
 type TestResult<T> = Result<T, Box<dyn std::error::Error>>;
 
-const QUIESCE: [&str; 5] = [
+const QUIESCE: &[&str] = &[
     "UPDATE capacity_reservation_provisioning_state SET bootstrap_start_state = 'not_requested', runner_container_id = NULL, dind_container_id = NULL WHERE reservation_id = 2",
     "DELETE FROM capacity_reservation_provisioning_objects WHERE reservation_id = 2",
     "DELETE FROM capacity_reservation_bootstrap_containers WHERE reservation_id = 2",
@@ -40,7 +40,15 @@ async fn a_reservation_is_release_ready_once_completion_settles_its_removed_init
     )
     .await?;
     seed::attach_handoff(&journal, FAILED).await?;
-    seed::unguarded(&journal, &QUIESCE.map(str::to_owned)).await?;
+    seed::unguarded(
+        &journal,
+        &QUIESCE
+            .iter()
+            .copied()
+            .map(str::to_owned)
+            .collect::<Vec<_>>(),
+    )
+    .await?;
     let helper = scope
         .unretired_storage_initializer(
             FAILED.reservation,

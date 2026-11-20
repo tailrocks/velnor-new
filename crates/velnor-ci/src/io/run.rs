@@ -32,7 +32,7 @@ const SIGNAL_BASE: i32 = 128;
 const PUMP_GRACE: Duration = Duration::from_secs(2);
 const TERMINAL_VARIABLE: &str = "VELNOR_CI_RUN_TERMINAL";
 const CONTROLLING_TERMINAL: &str = "/dev/tty";
-const STEP_FILE_VARIABLES: [&str; 5] = [
+const STEP_FILE_VARIABLES: &[&str] = &[
     "GITHUB_OUTPUT",
     "GITHUB_ENV",
     "GITHUB_PATH",
@@ -225,7 +225,7 @@ fn spawn_child(argv: &[String]) -> Result<(std::process::Child, bool), (u8, Stri
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     if runs_nextest(argv) {
-        for name in STEP_FILE_VARIABLES {
+        for name in STEP_FILE_VARIABLES.iter().copied() {
             command.env_remove(name);
         }
     }
