@@ -122,3 +122,20 @@ fn the_multi_job_shape_keeps_policy_on_the_plan_job_at_every_pin() -> TestResult
     }
     Ok(())
 }
+
+#[test]
+fn a_project_with_no_policy_tool_gets_no_policy_job_and_required_does_not_wait_for_one()
+-> TestResult {
+    for helper in ["0.1.81", "0.1.109", "0.1.110"] {
+        let mut repo = view(&["Cargo.toml"], None)?;
+        pin_helper(&mut repo, helper)?;
+        let text = workflow(&repo)?;
+        assert!(!text.contains("\n  policy:\n"), "{helper}: {text}");
+        let required = job(&text, "required")?;
+        assert!(
+            !needs(&required).contains(&"policy"),
+            "{helper}: {required}"
+        );
+    }
+    Ok(())
+}
