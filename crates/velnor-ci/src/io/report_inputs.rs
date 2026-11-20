@@ -119,9 +119,12 @@ fn collect_invocations(metrics: &mut LaneMetrics, inputs: &RootInputs<'_>) -> Re
             continue;
         }
         let progress = progress(invocation, inputs.log)?;
+        let failures = build_failures(invocation, inputs.log);
         let progress = crate::progress_evidence::retain(
             invocation,
             progress,
+            &failures,
+            &metrics.lane,
             &mut metrics.diagnostics,
             &mut metrics.verification_errors,
         );
@@ -319,6 +322,18 @@ fn dependencies(
         }
     }
     dependencies
+}
+
+fn build_failures(
+    invocation: &crate::telemetry::Invocation,
+    log: &[u8],
+) -> crate::cargo_artifacts::ArtifactBatch {
+    let mut tap = ArtifactTap::default();
+    tap.feed(
+        log.get(invocation.log_start..invocation.log_end)
+            .unwrap_or_default(),
+    );
+    tap.finish()
 }
 
 fn progress(

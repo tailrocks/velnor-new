@@ -322,6 +322,7 @@ fn metadata_inputs(repo: &Repo) -> ResultTest {
 }
 
 mod api;
+mod build_failure;
 mod evidence;
 mod policy;
 mod provenance;
