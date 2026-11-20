@@ -5,12 +5,12 @@
 
 # Qualification mode `ports`: two jobs on one host each publish host port 8080
 # of their own container, so the runner must give every job its own port
-# space. This is the script form of the `ports-*` jobs of the old engine qualification.yml,
-# which wrote it as one `&&` chain with a `while` loop.
+# space. The four `ports-*` jobs of qualification.yml run this script, two on
+# GitHub-hosted runners and two on the Velnor scale set.
 #
-# The chain ran under the runner's default shell, `bash -e {0}`, which has no
-# pipefail. `docker port | grep -q` must keep it that way: `grep -q` exits at
-# the first match and `docker port` may then die of SIGPIPE.
+# The script sets no pipefail, so a pipeline's status is the status of its last
+# command. `docker port | grep -q` depends on that: `grep -q` exits at the first
+# match and `docker port` may then die of SIGPIPE.
 
 set -eu
 
