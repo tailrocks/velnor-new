@@ -25,7 +25,7 @@ pub fn pinned_version(dir: &Path, tool: &str) -> Result<String, CiError> {
             .map_err(|error| CiError::new(format!("cannot read {}: {error}", path.display())))?;
         let requests = velnor_rust::tool_requests(&bytes, tool)
             .map_err(|reason| CiError::new(format!("{name} does not resolve: {reason}")))?;
-        if !requests.is_empty() {
+        if let Some(requests) = requests {
             pins.push(requested(&requests, tool, name)?);
         }
     }

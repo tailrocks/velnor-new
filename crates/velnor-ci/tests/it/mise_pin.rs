@@ -134,7 +134,12 @@ fn a_second_config_that_disagrees_fails_closed() {
             (".mise.toml", "[tools]\nmr-boxington = \"v1.31.0\"\n"),
         ],
     );
-    assert!(pinned_version(&repo.0, TOOL).is_err());
+    let error = pinned_version(&repo.0, TOOL)
+        .err()
+        .unwrap_or_else(|| unreachable!("two different pins passed"))
+        .to_string();
+    assert!(error.contains("mise.toml"), "{error}");
+    assert!(error.contains(".mise.toml"), "{error}");
 }
 
 #[test]

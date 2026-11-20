@@ -30,8 +30,8 @@ fn plain(version: String) -> ToolRequest {
     }
 }
 
-pub fn tool_requests(bytes: &[u8], tool: &str) -> Result<Vec<ToolRequest>, Reason> {
-    Ok(versions(bytes)?.remove(tool).unwrap_or_default())
+pub fn tool_requests(bytes: &[u8], tool: &str) -> Result<Option<Vec<ToolRequest>>, Reason> {
+    Ok(versions(bytes)?.remove(tool))
 }
 
 #[must_use]
