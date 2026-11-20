@@ -36,6 +36,7 @@ mod config_test_artifacts;
 mod config_test_groups;
 mod config_test_lane;
 mod config_test_setup;
+mod config_trusted;
 mod credentials;
 mod delta_cache;
 mod detect;

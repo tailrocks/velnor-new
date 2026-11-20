@@ -14,6 +14,7 @@ use crate::shape::Shape;
 
 pub use crate::setup_phase::SetupPhase;
 use crate::test_group::TestGroup;
+use crate::trusted::TrustedRunners;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RustCiConfig {
@@ -21,6 +22,7 @@ pub struct RustCiConfig {
     pub fork_runner: RunnerLabel,
     /// Labels declared `hosted = true`; every other runner is self-hosted and fenced.
     pub hosted_runners: HostedRunners,
+    pub trusted_runners: TrustedRunners,
     pub crates_mirror: Option<CratesMirror>,
     pub private_sources: Option<PrivateSources>,
     pub public_sources: Option<PublicSources>,
@@ -332,6 +334,7 @@ impl Default for RustCiConfig {
             runner: RunnerLabel::from_static("ubuntu-latest"),
             fork_runner: RunnerLabel::from_static("ubuntu-latest"),
             hosted_runners: HostedRunners::new(vec![RunnerLabel::from_static("ubuntu-latest")]),
+            trusted_runners: TrustedRunners::default(),
             crates_mirror: None,
             private_sources: None,
             public_sources: None,

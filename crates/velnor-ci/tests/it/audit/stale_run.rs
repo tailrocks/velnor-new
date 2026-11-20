@@ -122,3 +122,47 @@ fn a_run_whose_output_is_older_than_its_build_script_says_so() {
         ],
     );
 }
+
+#[test]
+fn a_stale_run_with_several_changed_inputs_names_the_first_and_counts_the_rest() {
+    let repo = Repo::new("stale-run-many");
+    repo.write_all(&[
+        ("mise.toml", "[tools]\n"),
+        (
+            "rust/Cargo.toml",
+            "[workspace]\nmembers = [\"lib\"]\nresolver = \"3\"\n",
+        ),
+        ("rust/Cargo.lock", "version = 4\n"),
+        (
+            "rust/lib/Cargo.toml",
+            "[package]\nname = \"lib\"\nedition = \"2024\"\nbuild = \"build.rs\"\n",
+        ),
+        ("rust/lib/src/lib.rs", "pub fn value() -> u32 { 1 }\n"),
+        (
+            "rust/lib/build.rs",
+            "fn main() {\n    println!(\"cargo:rerun-if-changed=a.txt\");\n    println!(\"cargo:rerun-if-changed=b.txt\");\n    println!(\"cargo:rerun-if-changed=c.txt\");\n}\n",
+        ),
+        ("rust/lib/a.txt", "first\n"),
+        ("rust/lib/b.txt", "first\n"),
+        ("rust/lib/c.txt", "first\n"),
+    ]);
+    let clippy = build_step(&repo, &["clippy", "--workspace", "--all-targets"]);
+    assert!(clippy.status.success(), "{clippy:?}");
+    let before = lib_runs(&repo);
+    assert_eq!(before.len(), 1, "{before:?}");
+
+    for input in ["a.txt", "b.txt", "c.txt"] {
+        repo.write_unstaged(&format!("rust/lib/{input}"), "second\n");
+        repo.set_mtime(
+            &format!("rust/lib/{input}"),
+            SystemTime::now() + Duration::from_secs(100),
+        );
+    }
+    let build = build_step(&repo, &["build", "--workspace", "--all-targets"]);
+    assert!(build.status.success(), "{build:?}");
+    refused_with(
+        &audit(&repo, &["--write"]),
+        &["output stale: input a.txt changed after it ran, and 2 more (unit "],
+    );
+    assert!(!repo.root().join(".velnor/rust-inputs.lock").exists());
+}

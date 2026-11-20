@@ -17,14 +17,8 @@ pub(crate) fn on_main(configured: Option<&str>, default: OnMain) -> Result<OnMai
     }
 }
 
-pub(crate) fn configured_full_run(
-    configured: Option<String>,
-    default: FullRun,
-) -> Result<FullRun, Reason> {
-    match configured {
-        None => Ok(default),
-        Some(value) => full_run(value),
-    }
+pub(crate) fn full_run_or(value: Option<String>, default: FullRun) -> Result<FullRun, Reason> {
+    value.map_or(Ok(default), full_run)
 }
 
 pub(crate) fn full_run(value: String) -> Result<FullRun, Reason> {
