@@ -6,7 +6,7 @@ use velnor_release::{BinaryPlan, FamilyPlan, RELEASE_APP_SLUG, ReleasePlan};
 
 use crate::release::HOSTED_RUNNER;
 use crate::release_assets::{COMMIT_FILE, bind_version, published_files, read_version, word};
-use crate::release_attest::{provenance, verification_step, verification_steps};
+use crate::release_attest::{listed_verification_step, provenance, verification_steps};
 use crate::release_binaries::{
     DIST, PUBLISH_TIMEOUT_MINUTES, SUMS_FILE, artifact, build_id, download, upload,
 };
@@ -14,7 +14,7 @@ use crate::release_binary_sums::digests;
 use crate::release_checks::family_publish_needs;
 use crate::release_family::{COMMIT_OUTPUT, TAG_OUTPUT, after_the_family};
 use crate::release_optional::{
-    after_the_builds, artifact_download, is_optional, optional_files, when_present,
+    after_the_builds, artifact_download, has_optional, is_optional, optional_files, when_present,
 };
 use crate::release_source::Source;
 use crate::release_steps::{expression, permissions, shell_word, variables};
@@ -168,8 +168,17 @@ pub(crate) fn sums(plan: &ReleasePlan, family: &FamilyPlan, source: &Source) -> 
     }
 }
 
-pub(crate) fn verify(plan: &ReleasePlan, family: &FamilyPlan, source: &Source) -> RenderedJob {
-    let mut steps = artifact_downloads(plan);
+pub(crate) fn verify(
+    plan: &ReleasePlan,
+    family: &FamilyPlan,
+    helper: &HelperRelease,
+    source: &Source,
+) -> RenderedJob {
+    let mut steps: Vec<RenderedStep> = has_optional(plan)
+        .then(|| install_helper(helper))
+        .into_iter()
+        .collect();
+    steps.extend(artifact_downloads(plan));
     steps.push(download(SUMS_ARTIFACT.to_owned()));
     steps.extend(read_family_version(plan));
     let paths = files(plan, family, Some(DIST), false)
@@ -183,7 +192,7 @@ pub(crate) fn verify(plan: &ReleasePlan, family: &FamilyPlan, source: &Source) -
     steps.extend(
         files(plan, family, Some(DIST), true)
             .into_iter()
-            .map(|(name, path)| verification_step(&name, &path, Some(when_present(&name, None)))),
+            .map(|(name, path)| listed_verification_step(&name, DIST, &path)),
     );
     bind_version(&mut steps);
     RenderedJob {

@@ -146,6 +146,7 @@ mod release_record;
 mod release_record_rerun;
 mod release_recover;
 mod release_tag_patterns;
+mod release_verify_listed;
 mod report;
 mod report_accounting;
 mod report_split_host_units;

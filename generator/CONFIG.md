@@ -901,7 +901,7 @@ family_trigger = "tag_push"
 
 ### Optional platforms
 
-`optional_platforms` on a binary names platforms of `platforms` whose build is best effort: a failed or cancelled build of one never fails the run and never blocks the release. It needs `family_tag` and a helper release of `0.1.109` or later (`velnor-ci release publish --optional-asset`), and generation refuses it under an older pin. It does not combine with an `asset_name` that uses `{{ version }}`, and a binary must keep at least one platform that is not optional.
+`optional_platforms` on a binary names platforms of `platforms` whose build is best effort: a failed or cancelled build of one never fails the run and never blocks the release. It needs `family_tag` and a helper release of `0.1.110` or later (`velnor-ci release publish --optional-asset`), and generation refuses it under an older pin. It does not combine with an `asset_name` that uses `{{ version }}`, and a binary must keep at least one platform that is not optional.
 
 ```toml
 [[binaries]]
@@ -911,7 +911,7 @@ optional_platforms = ["macos-arm64"]
 ```
 
 - The build job of an optional platform has `continue-on-error: true`.
-- `sums-family` waits for every build and runs with `always()`, but its condition still needs `needs.<job>.result == 'success'` for `gate`, `family` and every required build, so one failed required build stops the release as before. `verify-family` and `publish-family` follow it as usual and need no optional build.
+- `sums-family` waits for every build and runs with `always()`, but its condition still needs `needs.<job>.result == 'success'` for `gate`, `family` and every required build, so one failed required build stops the release as before. `verify-family` and `publish-family` follow it as usual and need no optional build. `verify-family` checks each optional file with `velnor-ci release verify-listed --dir=dist --file=<file> -- <gh attestation verify ...>`, which runs the verification only when `SHA256SUMS` lists the file, fails when the sums list a file that is not in `dist` (a download that failed after `sums-family` saw it), and skips an unlisted one with a notice.
 - The download of an optional artifact has `continue-on-error: true`. `SHA256SUMS` lists the files of the required platforms in one step, then one `Add <file> to SHA256SUMS` step per optional file runs only when `hashFiles('dist/<file>') != ''`; the same holds for the unpack and listing of an optional archive in `checksums_file`, and for the attestation check of an optional file. The attestation covers every file in `dist`, so a present optional file is attested like the others.
 - `publish-family` passes the optional files as `--optional-asset=<file>`. `velnor-ci release publish` skips one that is not in the directory, with a `skipped optional <file>: not found` notice. It publishes a present one only when `SHA256SUMS` lists it with the matching digest, and still fails on a missing required file, on a file that is listed and missing, and on one that is present and unlisted.
 - A macOS build runs on `macos-15`. GitHub-hosted macOS minutes are free only for a public repository, so list `macos-arm64` as optional only where that holds. The generator cannot see the visibility of the repository.

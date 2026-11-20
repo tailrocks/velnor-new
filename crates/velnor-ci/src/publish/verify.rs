@@ -85,7 +85,7 @@ pub(super) fn verify(request: &Request) -> Result<(Vec<File<'_>>, Vec<String>), 
     Ok((files, skipped))
 }
 
-fn read_sums(bytes: &[u8]) -> Result<BTreeMap<String, String>, CiError> {
+pub(crate) fn read_sums(bytes: &[u8]) -> Result<BTreeMap<String, String>, CiError> {
     let text =
         std::str::from_utf8(bytes).map_err(|_| CiError::new(format!("{SUMS} is not UTF-8")))?;
     let body = text

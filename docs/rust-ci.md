@@ -150,7 +150,7 @@ Without `MISE_TRUSTED_CONFIG_PATHS`, mise falls back to plain cargo without a wa
 
 ## Optional release assets
 
-A binary in `.velnor/release.toml` can list `optional_platforms`, for example `macos-arm64` built on `macos-15`. Its build is best effort: the job has `continue-on-error`, `sums-family` runs with `always()` while it still needs every required build to have succeeded, and `velnor-ci release publish --optional-asset` (helper 0.1.108 or later) publishes, checksums and attests a file that exists and skips, with a notice, one that does not. A missing required file still fails the release. Under an older pin the generator refuses the key. See "Optional platforms" in `generator/CONFIG.md`.
+A binary in `.velnor/release.toml` can list `optional_platforms`, for example `macos-arm64` built on `macos-15`. Its build is best effort: the job has `continue-on-error`, `sums-family` runs with `always()` while it still needs every required build to have succeeded, and `velnor-ci release publish --optional-asset` (helper 0.1.110 or later) publishes, checksums and attests a file that exists and skips, with a notice, one that does not. `SHA256SUMS` decides what is verified: `velnor-ci release verify-listed` fails a release whose sums list an optional file that did not download. A missing required file still fails the release. Under an older pin the generator refuses the key. See "Optional platforms" in `generator/CONFIG.md`.
 
 ## Settings
 

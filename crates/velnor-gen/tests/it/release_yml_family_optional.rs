@@ -13,7 +13,7 @@ use crate::yaml_tree::Node;
 
 type TestResult = Result<(), Box<dyn Error>>;
 
-const OPTIONAL_HELPER: &str = "0.1.109";
+const OPTIONAL_HELPER: &str = "0.1.110";
 const HEAD: &str = "family_tag = \"tools-v{{ version }}\"\nroots = [\".\", \"tools\"]\nchecksums_file = \"BINARY-SHA256SUMS\"\ncommit_file = true\nattest = true\n";
 const BINARY: &str = "[[binaries]]\npackage = \"app\"\nsmoke = true\nplatforms = [\"linux-x64\", \"linux-arm64\", \"macos-arm64\"]\noptional_platforms = [\"macos-arm64\"]\n[[binaries]]\npackage = \"tools\"\nsmoke = true\nplatforms = [\"linux-x64\", \"linux-arm64\", \"macos-arm64\"]\noptional_platforms = [\"macos-arm64\"]\n";
 const APP_MACOS: &str = "app-aarch64-apple-darwin.tar.gz";
@@ -180,15 +180,22 @@ fn the_member_digests_unpack_and_list_an_optional_archive_only_when_it_exists() 
 }
 
 #[test]
-fn only_the_attestation_of_an_existing_optional_file_is_verified() -> TestResult {
+fn the_helper_verifies_an_optional_file_that_the_checksums_list_and_a_required_one_directly()
+-> TestResult {
     let tree = rendered()?;
     let verify = job(&tree, "verify-family")?;
     for file in [APP_MACOS, TOOLS_MACOS] {
         let step = step_named(verify, &format!("Verify the build provenance of {file}"))?;
-        let text = step.get("if").and_then(Node::text).unwrap_or("");
+        let run = step.get("run").and_then(Node::text).unwrap_or("");
         assert!(
-            text.contains(&format!("hashFiles('dist/{file}') != ''")),
-            "{text}"
+            run.starts_with(&format!(
+                "velnor-ci release verify-listed --dir=dist --file={file} -- "
+            )),
+            "{run}"
+        );
+        assert!(
+            run.contains(&format!("gh attestation verify dist/{file} ")),
+            "{run}"
         );
     }
     let required = step_named(
@@ -196,6 +203,12 @@ fn only_the_attestation_of_an_existing_optional_file_is_verified() -> TestResult
         "Verify the build provenance of app-x86_64-unknown-linux-musl.tar.gz",
     )?;
     assert!(required.get("if").is_none());
+    let run = required.get("run").and_then(Node::text).unwrap_or("");
+    assert!(!run.contains("verify-listed"), "{run}");
+    assert!(
+        step_named(verify, "Install velnor-ci 0.1.110").is_ok(),
+        "the verify job installs the helper"
+    );
     Ok(())
 }
 
@@ -273,7 +286,7 @@ fn optional_platforms_need_a_helper_that_publishes_optional_files() -> TestResul
         ),
         "{error}"
     );
-    assert!(error.to_string().contains("pin-helper 0.1.109"), "{error}");
+    assert!(error.to_string().contains("pin-helper 0.1.110"), "{error}");
     generate(OPTIONAL_HELPER, &config())?;
     Ok(())
 }

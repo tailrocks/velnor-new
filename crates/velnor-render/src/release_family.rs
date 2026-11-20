@@ -47,7 +47,7 @@ pub(crate) fn family_jobs(
     }));
     jobs.push(sums(plan, family, &source));
     if family.attest {
-        jobs.push(verify(plan, family, &source));
+        jobs.push(verify(plan, family, helper, &source));
     }
     jobs.push(publish(plan, family, helper, &source));
     jobs

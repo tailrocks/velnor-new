@@ -74,19 +74,32 @@ pub(crate) fn verification_steps(paths: Vec<(String, String)>) -> Vec<RenderedSt
     steps.extend(
         paths
             .into_iter()
-            .map(|(name, path)| verification_step(&name, &path, None)),
+            .map(|(name, path)| verification_step(&name, &path)),
     );
     steps
 }
 
-pub(crate) fn verification_step(name: &str, path: &str, condition: Option<String>) -> RenderedStep {
+fn verify_command(path: &str) -> String {
+    format!(
+        "mise --no-config --no-env --no-hooks exec gh@{GH_VERSION} -- gh attestation verify {path} --repo \"$GITHUB_REPOSITORY\" --source-digest \"$GITHUB_SHA\" --source-ref \"$GITHUB_REF\" --signer-workflow \"$GITHUB_REPOSITORY/.github/workflows/release.yml\" --signer-digest \"$GITHUB_SHA\" --deny-self-hosted-runners"
+    )
+}
+
+pub(crate) fn verification_step(name: &str, path: &str) -> RenderedStep {
     RenderedStep {
         name: format!("Verify the build provenance of {name}"),
-        condition,
         env: variables(&[("GH_TOKEN", "${{ github.token }}")]),
-        run: Some(format!(
-            "mise --no-config --no-env --no-hooks exec gh@{GH_VERSION} -- gh attestation verify {path} --repo \"$GITHUB_REPOSITORY\" --source-digest \"$GITHUB_SHA\" --source-ref \"$GITHUB_REF\" --signer-workflow \"$GITHUB_REPOSITORY/.github/workflows/release.yml\" --signer-digest \"$GITHUB_SHA\" --deny-self-hosted-runners"
-        )),
+        run: Some(verify_command(path)),
         ..RenderedStep::default()
+    }
+}
+
+pub(crate) fn listed_verification_step(name: &str, dir: &str, path: &str) -> RenderedStep {
+    RenderedStep {
+        run: Some(format!(
+            "velnor-ci release verify-listed --dir={dir} --file={name} -- {}",
+            verify_command(path)
+        )),
+        ..verification_step(name, path)
     }
 }

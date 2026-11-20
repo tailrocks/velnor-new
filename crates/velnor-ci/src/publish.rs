@@ -12,6 +12,7 @@ use crate::release::PlainName;
 
 mod verify;
 
+pub(crate) use verify::read_sums;
 use verify::{File, verify};
 
 pub const SUMS: &str = "SHA256SUMS";
@@ -70,7 +71,10 @@ pub fn publish(
     let stale: Vec<&ApiAsset> = present
         .iter()
         .filter(|asset| {
-            request.optional.iter().any(|name| name.as_str() == asset.name)
+            request
+                .optional
+                .iter()
+                .any(|name| name.as_str() == asset.name)
                 && !files.iter().any(|file| file.name == asset.name)
         })
         .collect();
