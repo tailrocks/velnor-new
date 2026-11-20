@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 
 use toml::Value;
-use velnor_model::{MbxRemote, MisePlatform, RepoFacts, RepoPath, ToolPin, ToolPins, ToolRequest};
+use velnor_model::{MisePlatform, RepoFacts, RepoPath, ToolPin, ToolPins, ToolRequest};
 
 use crate::error::{DetectError, Reason};
 use crate::harness::uses_nextest;
