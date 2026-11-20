@@ -3,13 +3,14 @@
 
 use std::fs;
 use std::io::ErrorKind;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use super::HOME_PATHS;
 use crate::tree_removal::remove_tree;
 
 const UNSAFE_PATH: &str = "a tool directory is a symlink or leaves HOME, so nothing is cleared";
-const UNSAFE_HOME: &str = "HOME is not an absolute directory below the root, so nothing is cleared";
+const UNSAFE_HOME: &str =
+    "HOME is a symlink, not absolute or the filesystem root, so nothing is cleared";
 const NOT_REMOVED: &str = "a tool directory could not be removed";
 
 fn present(home: &Path, relative: &str) -> Result<bool, &'static str> {
@@ -27,12 +28,18 @@ fn present(home: &Path, relative: &str) -> Result<bool, &'static str> {
 }
 
 pub(super) fn clear_home(home: &Path) -> Result<(), &'static str> {
-    if !home.is_absolute() || fs::canonicalize(home).map_or(true, |real| real.parent().is_none()) {
+    let home: PathBuf = home.components().collect();
+    let linked =
+        fs::symlink_metadata(&home).map_or(true, |metadata| metadata.file_type().is_symlink());
+    if !home.is_absolute()
+        || linked
+        || fs::canonicalize(&home).map_or(true, |real| real.parent().is_none())
+    {
         return Err(UNSAFE_HOME);
     }
     let mut owned = Vec::new();
     for path in HOME_PATHS {
-        if present(home, path)? {
+        if present(&home, path)? {
             owned.push(home.join(path));
         }
     }

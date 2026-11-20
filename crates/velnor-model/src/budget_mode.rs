@@ -85,4 +85,5 @@ impl ModeBudget {
 pub struct SelectionName {
     pub plan: JobId,
     pub roots: Vec<RootSlug>,
+    pub after: JobId,
 }
