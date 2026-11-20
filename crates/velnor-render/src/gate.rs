@@ -152,6 +152,7 @@ pub(crate) fn condition(
         When::Success => {}
         When::Finalizer => parts.push(NOT_CANCELLED.to_owned()),
         When::Always => parts.push(ALWAYS.to_owned()),
+        When::Failure => parts.push("failure()".to_owned()),
         When::NotCancelled | When::NotCancelledPostMerge => {
             parts.push(NOT_CANCELLED.to_owned());
             if setup != Setup::Before {
