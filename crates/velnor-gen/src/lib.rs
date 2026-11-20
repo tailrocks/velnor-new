@@ -60,6 +60,10 @@ pub fn expected_with_notes(
     view: &RepoView,
 ) -> Result<(BTreeMap<RepoPath, String>, Vec<String>), GenerateError> {
     let facts = detect(view)?;
+    let excluded = velnor_rust::excluded_lock_findings(view)?;
+    if let Some(finding) = excluded.iter().find(|finding| finding.refusal) {
+        return Err(GenerateError::ExcludedLockRun(finding.clone()));
+    }
     let helper = check_helper(&facts)?;
     check_tools(&facts)?;
     if let Some(roots) = source_roots_over_limit(&facts) {
@@ -78,11 +82,19 @@ pub fn expected_with_notes(
     }
     let (release, release_notes) = release::release_workflow(view, &facts, helper, &files)?;
     files.extend(release);
-    let mut notes = facts.timings_notes;
+    let mut notes: Vec<String> = velnor_rust::untimed_auto_note(&facts)
+        .into_iter()
+        .chain(facts.timings_notes)
+        .collect();
     notes.extend(facts.private_sources);
     notes.extend(facts.private_suggestion);
     notes.extend(release_notes);
     notes.extend(budget_notes);
+    notes.extend(
+        excluded
+            .iter()
+            .map(velnor_rust::ExcludedLockFinding::message),
+    );
     Ok((files, notes))
 }
 

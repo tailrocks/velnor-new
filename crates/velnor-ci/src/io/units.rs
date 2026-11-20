@@ -176,8 +176,15 @@ fn split(stem: &str) -> Option<(&str, &str)> {
 pub(super) fn apart(workspaces: &[Workspace], shared: &[Vec<usize>]) -> Result<(), CiError> {
     let directories: Vec<PathBuf> = workspaces
         .iter()
-        .map(|w| resolve(&w.target_directory))
-        .collect();
+        .map(|w| {
+            resolve(&w.target_directory).map_err(|error| {
+                CiError::new(format!(
+                    "cannot resolve {}: {error}",
+                    w.target_directory.display()
+                ))
+            })
+        })
+        .collect::<Result<_, _>>()?;
     for (outer, holder) in directories.iter().enumerate() {
         for (inner, held) in directories.iter().enumerate() {
             if outer == inner || !held.starts_with(holder) {

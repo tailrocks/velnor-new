@@ -6,6 +6,7 @@ pub mod budget;
 pub mod budget_history;
 mod budget_report;
 pub mod cache;
+pub mod cache_prune;
 pub mod cargo_artifacts;
 pub mod cargo_package;
 pub mod cli;

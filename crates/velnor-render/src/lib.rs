@@ -43,6 +43,7 @@ mod release_outputs;
 mod release_raw;
 mod release_source;
 mod release_steps;
+mod rendered_pins;
 mod reusable;
 mod reusable_on;
 mod rule_messages;
@@ -70,6 +71,7 @@ pub use crate::pinned_actions::{
     GITHUB_SCRIPT, MR_BOXINGTON, PINNED_ACTIONS, PinnedAction,
 };
 pub use crate::release::{RELEASE_HEADER, render_release};
+pub use crate::rendered_pins::{RenderedPin, rendered_pins};
 pub use crate::reusable::{REUSABLE_HEADER, render_reusable};
 pub use crate::rules::{
     ALLOWED_ACTIONS, APP_TOKEN_ACTION, MAX_CACHE_KEY_CHARACTERS, MAX_ENV_CHARACTERS,

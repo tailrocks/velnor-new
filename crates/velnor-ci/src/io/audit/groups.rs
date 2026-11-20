@@ -10,6 +10,8 @@ use super::super::units::{MetadataInvocation, Workspace, own_workspace, workspac
 use super::options::AuditOptions;
 use crate::error::CiError;
 
+use super::inventory::unresolved;
+
 pub(super) fn shared_groups(facts: &RepoFacts) -> Vec<Vec<usize>> {
     facts
         .config
@@ -71,9 +73,15 @@ pub(super) fn root_workspace(
         return own_workspace(manifest, invocation);
     }
     let found = workspace(manifest, invocation)?;
-    let target = resolve(&found.target_directory);
-    if alone && groups.iter().any(|group| resolve(group) == target) {
-        return own_workspace(manifest, invocation);
+    let target = resolve(&found.target_directory)
+        .map_err(|error| unresolved(&found.target_directory, &error))?;
+    if alone {
+        for group in groups {
+            let directory = resolve(group).map_err(|error| unresolved(group, &error))?;
+            if directory == target {
+                return own_workspace(manifest, invocation);
+            }
+        }
     }
     Ok(found)
 }
@@ -88,30 +96,33 @@ pub(super) fn inheriting(
     facts: &RepoFacts,
     repository: &Path,
     location: Option<&Path>,
-) -> Vec<bool> {
+) -> Result<Vec<bool>, CiError> {
     let standalone = standalone(facts);
-    let Some(location) = location.map(resolve) else {
-        return vec![false; standalone.len()];
+    let Some(location) = location else {
+        return Ok(vec![false; standalone.len()]);
     };
-    let holder = facts
-        .rust_roots
+    let location = resolve(location).map_err(|error| unresolved(location, &error))?;
+    let mut directories = Vec::new();
+    for root in &facts.rust_roots {
+        let manifest = repository.join(root.manifest.as_str());
+        directories.push(resolve(&manifest).map_err(|error| unresolved(&manifest, &error))?);
+    }
+    let holder = directories
         .iter()
         .enumerate()
-        .filter_map(|(index, root)| {
-            let directory = resolve(&repository.join(root.manifest.as_str()))
-                .parent()?
-                .to_path_buf();
+        .filter_map(|(index, directory)| {
+            let directory = directory.parent()?.to_path_buf();
             location
                 .starts_with(&directory)
                 .then(|| (directory.components().count(), index))
         })
         .max_by_key(|(depth, _)| *depth)
         .map(|(_, index)| index);
-    standalone
+    Ok(standalone
         .into_iter()
         .enumerate()
         .map(|(index, alone)| !alone || holder.is_none_or(|holder| holder == index))
-        .collect()
+        .collect())
 }
 
 /// `inputs audit` reads the target of the root `--root` names, or of the
@@ -121,7 +132,7 @@ pub(super) fn audit_inheriting(
     repository: &Path,
     directory: &Path,
     options: &AuditOptions,
-) -> Vec<bool> {
+) -> Result<Vec<bool>, CiError> {
     let owner = options
         .root
         .as_deref()
