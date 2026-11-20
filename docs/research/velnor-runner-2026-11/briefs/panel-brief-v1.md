@@ -57,7 +57,7 @@ The owner accepts these costs in exchange for speed: instability, more work, bre
    - **Network:** the cross-site WireGuard pod network (DE to FI latency); keeping cache traffic node-local or same-site; MTU; local mirrors for crates.io, toolchains and container images.
    - **Kubernetes:** kubelet reservations and eviction thresholds, CPU manager and topology manager policies (static or exclusive CPUs for build pods), pod resource requests vs limits for compile-heavy jobs, priority classes, node labels and taints for CI pools, scheduler tuning for warm-node placement, image GC thresholds, and whether k3s defaults (e.g. flannel, local-path) suit CI.
    - **Build-specific:** linker choice (mold or lld), `CARGO_BUILD_JOBS` vs cores per pod, sccache, mbx and blaze placement, rustc codegen settings for CI profiles, and test parallelism vs CPU and memory per pod.
-   
+
    For each change, give the expected gain with evidence, the risk, and how to roll it back. Rank them by gain per effort.
 8. A phased plan, where each phase ends in a measured improvement on velnor-new with a numeric target (PR wall time, runner-minutes, cache hit %). Include the top risks and how each is detected and contained.
 
