@@ -170,7 +170,7 @@ fn twenty_roots_fit_the_workflow_limit_with_the_single_fetch_step() -> TestResul
             .find_map(|line| line.trim().strip_prefix("run: "))
             .ok_or("no run")?;
         assert!(
-            run.ends_with(&format!("--roots $VELNOR_SOURCE_ROOTS_{name}'")),
+            run.ends_with(&format!("--roots $VELNOR_SOURCE_ROOTS_{name}")),
             "{id}: {run}"
         );
     }
