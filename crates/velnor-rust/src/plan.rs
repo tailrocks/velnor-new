@@ -18,7 +18,7 @@ use crate::error::{DetectError, Reason};
 use crate::lane::{
     Lane, PLAN_JOB, expose_read_outputs, plan_job, policy_job, used_group_outputs, used_outputs,
 };
-use crate::mise::MBX_PIN_HELPER;
+use crate::mbx_pin::MBX_PIN_HELPER;
 use crate::plan_budget::{draft_guard, expose_selection, triggers};
 use crate::plan_tools::{mirror_step, tools_install, tools_restore, tools_save};
 use crate::required_job::{expose_in_single, gate_outputs};
