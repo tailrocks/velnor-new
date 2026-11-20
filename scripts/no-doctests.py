@@ -8,6 +8,7 @@ FENCE = re.compile(r"```|~~~")
 LINE_DOC = re.compile(r"//(?:!|/(?!/))")
 LINE_FENCE = re.compile(r"[ \t]*(?:```|~~~)")
 LINE_INDENT = re.compile(r" {5,}\S")
+ATTR_INDENT = re.compile(r" {4,}\S")
 BLOCK_FENCE = re.compile(r"^[ \t]*\*?[ \t]*(?:```|~~~)", re.M)
 BLOCK_INDENT = re.compile(r"^[ \t]*\*? {5,}\S", re.M)
 DOC_OPEN = re.compile(r"/\*(?:!|\*(?![*/]))")
@@ -69,7 +70,7 @@ def skip_char(src, i):
 
 
 def value_has_fence(value):
-    return any(LINE_FENCE.match(line) or LINE_INDENT.match(line) for line in value.split("\n"))
+    return any(LINE_FENCE.match(line) or ATTR_INDENT.match(line) for line in value.split("\n"))
 
 
 def plain_value(literal):
@@ -122,9 +123,6 @@ def doc_findings(src):
                 attr_depth -= 1
             doc_value = doc_value and attr_depth > 0
             i += 1
-        elif c in ",)":
-            doc_value = False
-            i += 1
         elif m := IDENT.match(src, i):
             word = m.group()
             j = i + len(word)
@@ -138,6 +136,9 @@ def doc_findings(src):
                     i = end
             elif word in BYTE_PREFIX and j < len(src) and src[j] == '"':
                 i = skip_string(src, j)
+            elif word == "include_str" and doc_value:
+                yield i
+                i = j
             else:
                 if word == "doc":
                     if DOC_INCLUDE.match(src, j):
