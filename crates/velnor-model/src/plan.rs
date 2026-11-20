@@ -7,7 +7,7 @@ use crate::budget_mode::SelectionName;
 use crate::cron::CronExpr;
 use crate::hosted::HostedRunners;
 use crate::ids::{JobId, PackageName, RepoPath, RootSlug, RunnerLabel, TargetName};
-use crate::repo::TargetKind;
+use crate::repo::{LaneFeatures, TargetKind};
 use crate::steps::StepKind;
 use crate::test_group::NoTests;
 
@@ -302,20 +302,20 @@ pub enum CargoCommand {
         ci_profile: bool,
     },
     NextestFeatures {
-        features: Vec<String>,
+        features: LaneFeatures,
         packages: Vec<PackageName>,
         filter: FilterRef,
         ci_profile: bool,
         reports: bool,
     },
     ClippyFeatures {
-        features: Vec<String>,
+        features: LaneFeatures,
     },
     DocFeatures {
-        features: Vec<String>,
+        features: LaneFeatures,
     },
     LaneGuard {
-        features: Vec<String>,
+        features: LaneFeatures,
         packages: Vec<PackageName>,
         filter: String,
         except: Vec<String>,
