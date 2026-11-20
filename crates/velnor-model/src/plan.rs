@@ -123,6 +123,8 @@ pub struct Step {
     pub pr: PrRun,
     pub gate: Option<Gate>,
     pub reads: Option<PlanRef>,
+    /// Skipped on a self-hosted runner, so that the step runs only on a GitHub-hosted one.
+    pub hosted_only: bool,
 }
 
 pub const CI_RUN_LABEL: &str = "ci:run";

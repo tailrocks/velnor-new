@@ -142,7 +142,6 @@ pub(crate) fn nextest_tool(pins: &ToolPins) -> Option<&str> {
 }
 
 pub(crate) const MISE_CONFIG: RepoPath = RepoPath::from_static("mise.toml");
-
 pub fn check_tools(facts: &RepoFacts) -> Result<(), DetectError> {
     if !facts.tools.locked_file {
         return Err(DetectError::MiseLockRequired { path: MISE_LOCK });
@@ -180,6 +179,7 @@ pub fn check_tools(facts: &RepoFacts) -> Result<(), DetectError> {
         ));
     }
     check_prebuilt(facts)?;
+    crate::mbx_pin::check_mbx_pin(facts)?;
     let tested = facts
         .rust_roots
         .iter()
