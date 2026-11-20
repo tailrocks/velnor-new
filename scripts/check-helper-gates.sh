@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 # Usage: check-helper-gates.sh <base-ref>            diff <base-ref>...HEAD
 #        check-helper-gates.sh --diff FILE --current 0.1.N
-# Fails when an added or changed helper-version gate in the generator crates is not
-# strictly greater than the velnor-ci version already released on the base.
+# Fails when an added or changed helper-version gate in the generator crates disagrees with the
+# velnor-ci version this tree builds (crates/velnor-ci/Cargo.toml at HEAD, or --current).
 # A correction may carry `// helper-gate: first in tools-v0.1.N via <commit-ish>` on the
 # gate line or the line directly above it; it passes only when the gate is N, the commit is
 # in tools-v0.1.N, and the commit is not in tools-v0.1.(N-1). Releases before 0.1.85 are
 # tagged rust-ci-v0.1.N, so the marker may name rust-ci-v0.1.N for those.
-# Convention: a gate above the latest released tools-v tag is unreleased and carries no marker; the
-# release bump that tags it adds `// helper-gate: first in tools-v0.1.N via <commit>`, and a gate at or
-# below the latest tag must carry that marker. Any other helper-gate marker, and any prose
-# "First released in" / "not tagged yet" line, is rejected.
+# Convention: a gate above the tree's velnor-ci version is unreleased and carries no marker; a gate at
+# or below it must carry `// helper-gate: first in tools-v0.1.N via <commit>`. In the release bump that
+# sets the version to N, the tag does not exist yet, so the marker commit only has to be in HEAD.
+# Any other helper-gate marker, and any prose "First released in" / "not tagged yet" line, is rejected.
 set -euo pipefail
 
 diff_file=""
@@ -26,7 +26,7 @@ done
 
 if [ -z "$current" ]; then
   [ -n "$base" ] || { echo "usage: $0 <base-ref> | --diff FILE --current 0.1.N" >&2; exit 2; }
-  current=$(git show "$base:crates/velnor-ci/Cargo.toml" | sed -n 's/^version = "\(.*\)"/\1/p' | head -n1)
+  current=$(git show "HEAD:crates/velnor-ci/Cargo.toml" | sed -n 's/^version = "\(.*\)"/\1/p' | head -n1)
 fi
 if [ -z "$diff_file" ]; then
   diff_file=$(mktemp)
@@ -39,7 +39,7 @@ case "$patch" in '' | *[!0-9]*) echo "cannot read the velnor-ci version from '$c
 series=${current%.*}
 next="$series.$((patch + 1))"
 
-# A gate is released when its version is at or below the base's velnor-ci version.
+# A gate is released when its version is at or below the velnor-ci version this tree builds.
 is_released() {
   local v=$1
   [ "${v%.*}" = "$series" ] && [ "${v##*.}" -le "$patch" ]
@@ -62,16 +62,22 @@ verify_correction() {
     echo "$file: marker names $tag but the gate is $gate; the marker must name the gate's release" >&2
     return 1
   fi
-  if ! git rev-parse -q --verify "refs/tags/$tag^{commit}" >/dev/null; then
-    echo "$file: tag $tag is not in this checkout (fetch tags: git fetch --tags)" >&2
-    return 1
-  fi
   if ! git rev-parse -q --verify "$commit^{commit}" >/dev/null; then
     echo "$file: marker commit '$commit' is not a commit in this checkout" >&2
     return 1
   fi
-  if ! git merge-base --is-ancestor "$commit" "refs/tags/$tag"; then
-    echo "$file: $commit is not in $tag, so gate $gate is not shipped there" >&2
+  if git rev-parse -q --verify "refs/tags/$tag^{commit}" >/dev/null; then
+    if ! git merge-base --is-ancestor "$commit" "refs/tags/$tag"; then
+      echo "$file: $commit is not in $tag, so gate $gate is not shipped there" >&2
+      return 1
+    fi
+  elif [ "$n" = "$patch" ]; then
+    if ! git merge-base --is-ancestor "$commit" HEAD; then
+      echo "$file: $commit is not in this tree, so gate $gate cannot ship with it" >&2
+      return 1
+    fi
+  else
+    echo "$file: tag $tag is not in this checkout (fetch tags: git fetch --tags)" >&2
     return 1
   fi
   if ! git rev-parse -q --verify "refs/tags/$prev^{commit}" >/dev/null; then
@@ -173,7 +179,7 @@ while IFS=$'\t' read -r kind f1 f2 f3 f4; do
 done <<<"$report"
 
 if [ "$bad" != 0 ]; then
-  echo "helper gates must be strictly greater than velnor-ci $current on the base (tools-v$current is already tagged)" >&2
+  echo "helper gates must be above velnor-ci $current (this tree), or at or below it with the released marker" >&2
   exit 1
 fi
 echo "helper gates: OK (every added gate is above velnor-ci $current or carries a verified correction marker)"
