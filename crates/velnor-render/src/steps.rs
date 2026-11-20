@@ -211,7 +211,9 @@ fn rendered_steps(
         rendered.extend(sources_fetch_all_rest(manifests, lane.cache_debug));
     }
     for body in &mut rendered {
-        if let (StepKind::Cargo(_), Some(target)) = (&step.kind, &step.target_dir) {
+        if let (StepKind::Cargo(_) | StepKind::TestSetup { .. }, Some(target)) =
+            (&step.kind, &step.target_dir)
+        {
             body.env.push(crate::cargo::target_dir_env(target));
         }
         if matches!(step.kind, StepKind::ReportCaches { .. })

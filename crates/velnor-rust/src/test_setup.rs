@@ -1,9 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{CargoCommand, RepoFacts, RustRoot, Step, StepKind, TestSetup};
+use velnor_model::{
+    CargoCommand, RepoFacts, RepoPath, RustRoot, Step, StepKind, TestSetup, WorkspaceGroup,
+};
 
 use crate::lane::Lane;
+use crate::members::Member;
 use crate::plan::step;
 use crate::private_fetch::shared_gate;
 
@@ -48,11 +51,47 @@ pub(crate) fn inserted(
             .collect();
         steps.splice(first..first, setup);
     }
-    checked(facts, root, lane, steps)
+    steps
 }
 
-fn checked(facts: &RepoFacts, root: &RustRoot, lane: &Lane, mut steps: Vec<Step>) -> Vec<Step> {
-    let Some(first) = steps.iter().position(|step| tests(step) || archives(step)) else {
+/// Puts the `[[check_configurations]]` steps of each member in the job, before the member's first
+/// test step, or before its first compiling step when the member has no test command.
+pub(crate) fn checked_members(
+    facts: &RepoFacts,
+    members: &[Member],
+    mut steps: Vec<Step>,
+    checks: bool,
+) -> Vec<Step> {
+    if !checks {
+        return steps;
+    }
+    for member in members {
+        steps = checked(
+            facts,
+            &member.root,
+            &member.lane,
+            steps,
+            member.tests(facts).is_empty(),
+        );
+    }
+    steps
+}
+
+pub(crate) fn checked(
+    facts: &RepoFacts,
+    root: &RustRoot,
+    lane: &Lane,
+    mut steps: Vec<Step>,
+    untested: bool,
+) -> Vec<Step> {
+    let place = |step: &Step| {
+        if untested {
+            builds_or_tests(step)
+        } else {
+            tests(step) || archives(step)
+        }
+    };
+    let Some(first) = steps.iter().position(place) else {
         return steps;
     };
     if matches!(
@@ -62,6 +101,7 @@ fn checked(facts: &RepoFacts, root: &RustRoot, lane: &Lane, mut steps: Vec<Step>
         return steps;
     }
     let (when, pr) = (steps[first].when, steps[first].pr);
+    let target = group_target(facts, root);
     let checks: Vec<Step> = facts
         .config
         .check_configurations
@@ -82,11 +122,21 @@ fn checked(facts: &RepoFacts, root: &RustRoot, lane: &Lane, mut steps: Vec<Step>
         })
         .map(|check| Step {
             gate: lane.steps(),
+            target_dir: target.clone(),
             ..check
         })
         .collect();
     steps.splice(first..first, checks);
     steps
+}
+
+fn group_target(facts: &RepoFacts, root: &RustRoot) -> Option<RepoPath> {
+    facts
+        .config
+        .workspace_groups
+        .iter()
+        .find(|group: &&WorkspaceGroup| group.roots.contains(&root.manifest))
+        .map(WorkspaceGroup::target_dir)
 }
 
 fn archives(step: &Step) -> bool {

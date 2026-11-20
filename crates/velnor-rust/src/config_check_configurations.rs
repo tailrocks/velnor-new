@@ -15,7 +15,23 @@ pub(crate) struct RawCheckConfigurations {
 }
 
 pub(crate) fn parse(raw: Vec<RawCheckConfigurations>) -> Result<Vec<CheckConfigurations>, Reason> {
-    raw.into_iter().map(entry).collect()
+    let entries: Vec<CheckConfigurations> = raw.into_iter().map(entry).collect::<Result<_, _>>()?;
+    for (index, entry) in entries.iter().enumerate() {
+        if entries[..index].contains(entry) {
+            return Err(Reason::InvalidValue {
+                key: "check_configurations",
+                value: format!(
+                    "root {} with {}, listed twice",
+                    entry
+                        .root
+                        .as_ref()
+                        .map_or_else(|| ".".to_owned(), ToString::to_string),
+                    entry.command()
+                ),
+            });
+        }
+    }
+    Ok(entries)
 }
 
 fn entry(raw: RawCheckConfigurations) -> Result<CheckConfigurations, Reason> {
@@ -72,12 +88,16 @@ pub(crate) fn check(
         .iter()
         .filter_map(CheckConfigurations::file)
     {
-        let linked = std::iter::successors(Some(file.clone()), RepoPath::parent)
-            .any(|part| view.symlinks.contains(&part));
+        let parts: Vec<RepoPath> =
+            std::iter::successors(Some(file.clone()), RepoPath::parent).collect();
+        let linked = parts.iter().any(|part| view.symlinks.contains(part));
+        let submodule = parts.iter().any(|part| view.gitlinks.contains(part));
         let reason = if !view.tracked_paths.contains(&file) {
             Some("a file that is not tracked in the repository")
         } else if linked {
             Some("a symbolic link, or inside one; name the regular file")
+        } else if submodule {
+            Some("a git submodule, or inside one; name the regular file")
         } else if config
             .non_inputs
             .iter()

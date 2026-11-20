@@ -108,9 +108,7 @@ fn cargo(manifest: &Path, configuration: &Configuration, operation: &str) -> Com
     } else {
         command.args(["--workspace", "--all-targets"]);
     }
-    command
-        .args(["--locked", "--offline", "--manifest-path"])
-        .arg(manifest);
+    command.args(["--locked", "--manifest-path"]).arg(manifest);
     if configuration.no_default_features {
         command.arg("--no-default-features");
     }

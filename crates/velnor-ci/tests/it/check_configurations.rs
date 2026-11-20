@@ -123,11 +123,11 @@ fn check_configurations_folds_only_equal_full_package_feature_maps() {
     assert!(lines[5..].iter().all(|line| line.starts_with("check ")));
     assert_eq!(
         lines[0],
-        "metadata --format-version 1 --locked --offline --manifest-path nested/Cargo.toml --no-default-features --features first"
+        "metadata --format-version 1 --locked --manifest-path nested/Cargo.toml --no-default-features --features first"
     );
     assert_eq!(
         lines[5],
-        "check --workspace --all-targets --locked --offline --manifest-path nested/Cargo.toml --no-default-features --features first"
+        "check --workspace --all-targets --locked --manifest-path nested/Cargo.toml --no-default-features --features first"
     );
     assert!(!recorded.contains("--no-deps"));
     assert!(!lines[5..].iter().any(|line| line.ends_with("alias")));
@@ -234,7 +234,7 @@ fn check_configurations_without_a_request_file_checks_default_once() {
     assert!(output.status.success(), "{output:?}");
     assert_eq!(
         calls(&repo),
-        "metadata --format-version 1 --locked --offline --manifest-path Cargo.toml\ncheck --workspace --all-targets --locked --offline --manifest-path Cargo.toml\n"
+        "metadata --format-version 1 --locked --manifest-path Cargo.toml\ncheck --workspace --all-targets --locked --manifest-path Cargo.toml\n"
     );
     assert!(String::from_utf8_lossy(&output.stdout).contains("1 configurations, 1 checks"));
 }

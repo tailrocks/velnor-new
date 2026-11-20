@@ -29,7 +29,7 @@ impl RootJobs<'_> {
                 steps.extend(self.member_steps(member, tests));
                 steps.extend(self.audit());
                 steps.extend(self.saves(&id, None, false));
-                let mut job = self.lane_job(id, steps);
+                let mut job = self.lane_job(id, steps, false);
                 if let Some(minutes) = timeout {
                     job.timeout_minutes = minutes;
                 }

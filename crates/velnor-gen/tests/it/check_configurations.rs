@@ -250,9 +250,8 @@ fn a_symlinked_configurations_file_or_folder_is_refused() -> TestResult {
 
 #[test]
 fn a_parallel_test_lane_does_not_repeat_the_check_in_its_own_job() -> TestResult {
-    let config = format!(
-        "{KEY}[[test_lane]]\nroot = '.'\nfeatures = ['local-mode']\njob = 'parallel'\n"
-    );
+    let config =
+        format!("{KEY}[[test_lane]]\nroot = '.'\nfeatures = ['local-mode']\njob = 'parallel'\n");
     let steps = found(&jobs_of(&config, HELPER)?);
     let ids: Vec<&str> = steps.iter().map(|step| step.0.as_str()).collect();
     assert_eq!(ids, ["rust-root"], "{steps:?}");
@@ -285,8 +284,7 @@ fn a_grouped_root_runs_the_check_in_the_group_target_directory() -> TestResult {
     let steps = found(&document(&workflow(&view)?)?["jobs"]);
     assert_eq!(steps.len(), 1, "{steps:?}");
     assert_eq!(
-        steps[0].3["env"]["CARGO_TARGET_DIR"],
-        "${{ github.workspace }}/target-velnor/tools",
+        steps[0].3["env"]["CARGO_TARGET_DIR"], "${{ github.workspace }}/target-velnor/tools",
         "{steps:?}"
     );
     Ok(())
@@ -295,7 +293,8 @@ fn a_grouped_root_runs_the_check_in_the_group_target_directory() -> TestResult {
 #[test]
 fn a_configurations_path_that_is_a_submodule_is_refused_like_a_symlink() -> TestResult {
     let mut view = tracked(KEY, HELPER)?;
-    view.gitlinks.insert(RepoPath::new("ci/configurations.json")?);
+    view.gitlinks
+        .insert(RepoPath::new("ci/configurations.json")?);
     let error = workflow(&view)
         .err()
         .ok_or("the submodule path was accepted")?;

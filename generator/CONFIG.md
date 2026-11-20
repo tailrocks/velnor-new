@@ -241,6 +241,8 @@ phase = "build"
 
 `[[check_configurations]]` runs `velnor-ci check-configurations` for one root: a `cargo check` of each named feature configuration, where configurations that resolve to the same features share one check.
 
+The check runs once per root, in the job that holds the root's tests (the first test job, not the parallel lane jobs). A root without a test command gets it before its first compiling step. A grouped root runs it with the group's target directory. The helper resolves with `--locked` and without `--offline`, so a cold sources cache fetches exactly the locked crates. A `configurations` path that is a symbolic link, a submodule, or inside one is refused, and so is an entry repeated with the same root and file.
+
 ```toml
 [[check_configurations]]
 root = "."
