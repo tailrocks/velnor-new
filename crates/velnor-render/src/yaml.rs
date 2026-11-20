@@ -172,7 +172,7 @@ fn scalar(text: &str) -> String {
     }
 }
 
-const RESERVED: [&str; 11] = [
+const RESERVED: &[&str] = &[
     "true", "false", "yes", "no", "on", "off", "null", "y", "n", "nan", "inf",
 ];
 

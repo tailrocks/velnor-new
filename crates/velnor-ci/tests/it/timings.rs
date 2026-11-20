@@ -12,7 +12,7 @@ pub(crate) const LIST: &str = include_str!("data/timings/list-main-pr.json");
 pub(crate) const RECORDED_LIST: &str = include_str!("data/timings/list.json");
 const REPO: &str = include_str!("data/timings/repo.json");
 
-const RUNS: [(u64, &str, &str); 3] = [
+const RUNS: &[(u64, &str, &str)] = &[
     (
         43_636_016_430,
         include_str!("data/timings/run-43636016430.json"),
@@ -30,7 +30,7 @@ const RUNS: [(u64, &str, &str); 3] = [
     ),
 ];
 
-const LOGS: [(u64, &str); 9] = [
+const LOGS: &[(u64, &str)] = &[
     (
         132_572_876_594,
         include_str!("data/timings/log-132572876594.log"),
@@ -88,11 +88,11 @@ pub(crate) fn recorded(list: &str) -> FakeGitHub {
     let mut fake = FakeGitHub::default();
     fake.respond(repo_path(&repo), REPO);
     fake.respond(workflow_runs_path(&repo, "rust-ci.yml", 1), list);
-    for (id, run, jobs) in RUNS {
+    for &(id, run, jobs) in RUNS {
         fake.respond(run_path(&repo, id), run);
         fake.respond(jobs_path(&repo, id, 1, 1), jobs);
     }
-    for (id, log) in LOGS {
+    for &(id, log) in LOGS {
         fake.respond(job_log_path(&repo, id), log);
     }
     fake
@@ -226,7 +226,7 @@ fn fewer_than_three_runs_write_nothing_and_say_so() {
 fn a_root_whose_steps_cannot_be_read_gets_no_entry() {
     let mut fake = recorded(LIST);
     let repo = lab();
-    for (id, _) in LOGS {
+    for &(id, _) in LOGS {
         let log = fake.get_text(&job_log_path(&repo, id));
         fake.respond(
             job_log_path(&repo, id),
@@ -254,7 +254,7 @@ fn a_root_whose_steps_cannot_be_read_gets_no_entry() {
 fn a_later_finished_line_in_the_test_step_is_not_the_test_build() {
     let mut fake = recorded(LIST);
     let repo = lab();
-    for (id, _) in LOGS {
+    for &(id, _) in LOGS {
         let log = fake.get_text(&job_log_path(&repo, id));
         let later = log.replace(
             "Summary [",

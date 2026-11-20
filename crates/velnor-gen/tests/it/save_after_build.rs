@@ -6,7 +6,7 @@
 use crate::base_save::{jobs, names, step};
 use crate::facts::TestResult;
 
-const SAVES: [&str; 6] = [
+const SAVES: &[&str] = &[
     "velnor-ci inputs save",
     "Decide whether to save the build directory",
     "Save the target cache",

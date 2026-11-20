@@ -201,7 +201,7 @@ fn a_path_toolchain_inside_the_repository_is_checked_out_and_an_escaping_one_for
 
 const WITH_RUST: &str = "[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n\n[tools]\nrust = { version = \"1.99.1\", mr_boxington = true }\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n";
 
-const VENDORED: [(&str, &str); 4] = [
+const VENDORED: &[(&str, &str)] = &[
     ("mise.toml", WITH_RUST),
     (".velnor/rust-ci.toml", ON),
     (
@@ -229,7 +229,7 @@ fn vendored(files: &[(&str, &str)]) -> Result<String, Box<dyn std::error::Error>
 
 #[test]
 fn a_lane_keeps_the_path_dependencies_that_sit_outside_every_root() -> TestResult {
-    let text = vendored(&VENDORED)?;
+    let text = vendored(VENDORED)?;
     let lanes = lanes_of(&text);
     let with_app: Vec<_> = lanes
         .iter()
