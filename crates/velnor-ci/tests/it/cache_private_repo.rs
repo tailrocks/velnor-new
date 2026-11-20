@@ -178,6 +178,25 @@ pub(crate) fn decide_in(
     token: Option<&str>,
     cargo_home: Option<&str>,
 ) -> (Output, String) {
+    decide_env(repo, api, token, cargo_home, true)
+}
+
+pub(crate) fn decide_without_home(
+    repo: &Checkout,
+    api: Option<&Api>,
+    token: Option<&str>,
+    cargo_home: Option<&str>,
+) -> (Output, String) {
+    decide_env(repo, api, token, cargo_home, false)
+}
+
+fn decide_env(
+    repo: &Checkout,
+    api: Option<&Api>,
+    token: Option<&str>,
+    cargo_home: Option<&str>,
+    home: bool,
+) -> (Output, String) {
     let temp = repo.root().join("runner-temp");
     fs::create_dir_all(&temp).unwrap_or_else(|e| unreachable!("{e}"));
     fs::write(temp.join("velnor-run.log"), COMPILED).unwrap_or_else(|e| unreachable!("{e}"));
@@ -187,11 +206,13 @@ pub(crate) fn decide_in(
         .args(["cache", "decide", "--target-dir", "target"])
         .env_clear()
         .env("PATH", "/usr/bin:/bin")
-        .env("HOME", repo.root().join("home"))
         .env("RUNNER_TEMP", &temp)
         .env("GITHUB_OUTPUT", &outputs)
         .env("GITHUB_REPOSITORY", "acme/app")
         .current_dir(repo.root());
+    if home {
+        command.env("HOME", repo.root().join("home"));
+    }
     if let Some(api) = api {
         command.env("VELNOR_API_URL", &api.url);
     }

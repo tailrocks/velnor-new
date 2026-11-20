@@ -4,7 +4,7 @@
 use std::process::Output;
 
 use crate::cache_private_repo::{
-    GIT_LOCK, PRIVATE, TOKEN, decide_in, decide_with, private_checkout,
+    GIT_LOCK, PRIVATE, TOKEN, decide_in, decide_with, decide_without_home, private_checkout,
 };
 use crate::fetch::serve_body;
 
@@ -150,4 +150,13 @@ fn plain_git_data_inside_the_saved_sources_paths_is_saved() {
         ".cargo/git/db/shared-1/config",
         "[core]\n\tbare = true\n[remote \"origin\"]\n\turl = https://github.com/acme/shared-lib\n",
     )]);
+}
+
+#[test]
+fn sources_are_not_saved_when_home_is_unset_and_the_saved_paths_cannot_be_checked() {
+    let repo = private_checkout("decide-no-home", GIT_LOCK);
+    let api = serve_body(200, PRIVATE).unwrap_or_else(|e| unreachable!("{e}"));
+    let (output, written) = decide_without_home(&repo, Some(&api), Some(TOKEN), Some("cargo-home"));
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(written, "save=true\nsources=false\n", "{output:?}");
 }
