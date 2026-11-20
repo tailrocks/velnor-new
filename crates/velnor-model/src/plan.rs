@@ -181,8 +181,7 @@ impl Gate {
                 own(self.need),
                 own(GateNeed::PackageArgs),
             ],
-            GateNeed::Deny => vec![own(GateNeed::Deny)],
-            GateNeed::Machete => vec![own(GateNeed::Machete)],
+            GateNeed::Deny | GateNeed::Machete | GateNeed::Lint => vec![own(self.need)],
             GateNeed::PackageArgs if self.unselected => {
                 vec![own(GateNeed::Selected), own(GateNeed::PackageArgs)]
             }
@@ -210,6 +209,7 @@ pub enum GateNeed {
     Policy,
     TestsExpected,
     Group,
+    Lint,
 }
 
 impl GateNeed {
@@ -232,6 +232,7 @@ impl GateNeed {
             Self::Policy => "policy",
             Self::TestsExpected => "tests",
             Self::Group => "group",
+            Self::Lint => return format!("lint_{slug}"),
         };
         if self.is_global() {
             format!("rust_{name}")
@@ -250,8 +251,7 @@ pub fn group_output_name(slug: &RootSlug, group: &JobId) -> String {
 pub enum PlanFrom {
     ThisJob,
     Job(JobId),
-    /// The plan outputs of a job that also builds and tests, so a job that
-    /// needs it must not wait for that job to succeed.
+    /// The plan outputs of a job that also builds and tests: a job that needs it must not wait for it.
     WorkJob(JobId),
 }
 
