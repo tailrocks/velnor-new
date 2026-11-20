@@ -274,22 +274,32 @@ pub(crate) fn node_step(kind: &velnor_model::StepKind) -> RenderedStep {
 }
 
 const MBX_ACTION_SHA: &str = "88acf2bb50552c7c508cbac13e5f8c576b95b1de";
+/// The mbx release the action installs. Keep it equal to the `mr-boxington`
+/// pin in the repository's `mise.toml`, so every job runs the same compiler cache.
+const MBX_VERSION: &str = "1.30.0";
 
 pub(crate) fn mbx_remote_step() -> RenderedStep {
     use crate::rules::Value;
     let text = |key: &str, value: &str| (key.to_owned(), Value::Text(value.to_owned()));
+    let expr = |key: &str, value: &str| (key.to_owned(), Value::Expr(value.to_owned()));
     RenderedStep {
         name: "Set up the mbx cache".to_owned(),
         uses: Some(format!("{MBX_ACTION}@{MBX_ACTION_SHA}")),
         uses_comment: Some("v1.7.3".to_owned()),
+        // The action's post step inherits this, so a failed export or save
+        // does not fail the Cargo lane that ran the build.
+        continue_on_error: true,
         with: vec![
             text("backend", "github"),
             text("github-cache-mode", "objects"),
-            (
-                "cache-key-suffix".to_owned(),
-                Value::Expr("${{ github.job }}".to_owned()),
+            text("version", MBX_VERSION),
+            // Each job restores only its own generated prefixes.
+            expr("cache-generation", "v1-${{ github.job }}"),
+            // Same-repository pull requests save; fork pull requests never do.
+            expr(
+                "save-on-pull-request",
+                "${{ github.event.pull_request.head.repo.full_name == github.repository }}",
             ),
-            text("save-on-pull-request", "false"),
             text("save-on-protected-branch", "false"),
             text("save-on-workflow-dispatch", "false"),
         ],

@@ -320,7 +320,7 @@ fn add_mbx_remote(jobs: &mut [Job]) {
         if !job
             .steps
             .iter()
-            .any(|step| matches!(step.kind, StepKind::Cargo(_)))
+            .any(|step| matches!(&step.kind, StepKind::Cargo(command) if command.builds()))
         {
             continue;
         }
