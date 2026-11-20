@@ -73,6 +73,10 @@ fn template() -> &'static (PathBuf, Shas) {
     })
 }
 
+pub(crate) fn repo_template() -> &'static Path {
+    &template().0
+}
+
 pub(crate) fn copy_repo(dest: &Path) {
     let copied = Command::new("cp")
         .arg("-R")
