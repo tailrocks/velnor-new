@@ -87,7 +87,10 @@ fn entry(hasher: &mut blake3::Hasher, root: &Path, path: &Path) -> Result<(), St
             entry(hasher, root, &child)?;
         }
     } else {
-        return Err(format!("{} is not a file, a directory or a link", relative.display()));
+        return Err(format!(
+            "{} is not a file, a directory or a link",
+            relative.display()
+        ));
     }
     Ok(())
 }
@@ -116,7 +119,9 @@ fn read_anchor(anchor: &Path) -> Result<String, Discard> {
     text.strip_suffix('\n')
         .and_then(|line| line.strip_prefix(FORMAT))
         .and_then(|rest| rest.strip_prefix(' '))
-        .filter(|hex| hex.len() == 64 && hex.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')))
+        .filter(|hex| {
+            hex.len() == 64 && hex.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
+        })
         .map(str::to_owned)
         .ok_or(Discard::BadAnchor)
 }
@@ -185,7 +190,10 @@ pub fn record(home: &Path, anchor: &Path) -> Result<Verdict, CiError> {
 
 fn write_anchor(anchor: &Path, digest: &str) -> Result<(), CiError> {
     let fail = |error: std::io::Error| {
-        CiError::new(format!("cannot write the anchor {}: {error}", anchor.display()))
+        CiError::new(format!(
+            "cannot write the anchor {}: {error}",
+            anchor.display()
+        ))
     };
     let parent = anchor.parent().unwrap_or(Path::new("."));
     fs::create_dir_all(parent).map_err(fail)?;
@@ -206,7 +214,9 @@ fn reason(discard: &Discard) -> String {
 #[must_use]
 pub fn message(verdict: &Verdict) -> String {
     match verdict {
-        Verdict::NothingRestored => "velnor: no tools were restored, so none are verified".to_owned(),
+        Verdict::NothingRestored => {
+            "velnor: no tools were restored, so none are verified".to_owned()
+        }
         Verdict::Verified => "velnor: the restored tools equal the anchor".to_owned(),
         Verdict::Discarded(why) => format!(
             "::notice::the restored tools were discarded ({}); they install from scratch",
@@ -214,10 +224,7 @@ pub fn message(verdict: &Verdict) -> String {
         ),
         Verdict::Recorded => "velnor: recorded the tools anchor".to_owned(),
         Verdict::Matches => "velnor: the tools equal the anchor, so they may be saved".to_owned(),
-        Verdict::Differs(why) => format!(
-            "::notice::the tools are not saved ({})",
-            reason(why)
-        ),
+        Verdict::Differs(why) => format!("::notice::the tools are not saved ({})", reason(why)),
     }
 }
 

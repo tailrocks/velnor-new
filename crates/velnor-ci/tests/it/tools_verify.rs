@@ -24,8 +24,11 @@ fn job(name: &str) -> Job {
     fs::write(mise.join("cosign"), "cosign binary").unwrap_or_else(|e| unreachable!("{e}"));
     fs::set_permissions(mise.join("cosign"), fs::Permissions::from_mode(0o755))
         .unwrap_or_else(|e| unreachable!("{e}"));
-    symlink("3.0.0", home.join(".local/share/mise/installs/cosign/latest"))
-        .unwrap_or_else(|e| unreachable!("{e}"));
+    symlink(
+        "3.0.0",
+        home.join(".local/share/mise/installs/cosign/latest"),
+    )
+    .unwrap_or_else(|e| unreachable!("{e}"));
     let toolchain = home.join(".rustup/toolchains/1.99.1-x86_64-unknown-linux-gnu/bin");
     fs::create_dir_all(&toolchain).unwrap_or_else(|e| unreachable!("{e}"));
     fs::write(toolchain.join("rustc"), "rustc binary").unwrap_or_else(|e| unreachable!("{e}"));
@@ -89,8 +92,12 @@ fn a_tampered_tool_binary_discards_the_whole_restore() {
 fn a_planted_file_a_new_mode_or_a_moved_link_is_a_mismatch() {
     let changes: [(&str, fn(&Job)); 3] = [
         ("planted", |job| {
-            fs::write(job.home.join(".local/share/mise/installs/cosign/3.0.0/bin/cargo"), "x")
-                .unwrap_or_else(|e| unreachable!("{e}"));
+            fs::write(
+                job.home
+                    .join(".local/share/mise/installs/cosign/3.0.0/bin/cargo"),
+                "x",
+            )
+            .unwrap_or_else(|e| unreachable!("{e}"));
         }),
         ("mode", |job| {
             fs::set_permissions(rustc(job), fs::Permissions::from_mode(0o755))
@@ -106,7 +113,11 @@ fn a_planted_file_a_new_mode_or_a_moved_link_is_a_mismatch() {
         let job = job(&format!("tools-verify-{name}"));
         recorded(&job);
         change(&job);
-        assert_eq!(checked(&job), Verdict::Discarded(Discard::Mismatch), "{name}");
+        assert_eq!(
+            checked(&job),
+            Verdict::Discarded(Discard::Mismatch),
+            "{name}"
+        );
         assert!(discarded(&job), "{name}");
     }
 }
@@ -135,7 +146,10 @@ fn a_special_file_in_the_restore_is_discarded_unread() {
         .status()
         .unwrap_or_else(|e| unreachable!("{e}"));
     assert!(status.success());
-    assert!(matches!(checked(&job), Verdict::Discarded(Discard::Unreadable(_))));
+    assert!(matches!(
+        checked(&job),
+        Verdict::Discarded(Discard::Unreadable(_))
+    ));
     assert!(discarded(&job));
 }
 
