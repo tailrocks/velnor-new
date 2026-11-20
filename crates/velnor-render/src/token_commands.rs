@@ -5,7 +5,7 @@ use velnor_workflows::{Invoked, invoked};
 
 use crate::rules::Rule;
 
-const ISOLATION: [&str; 3] = ["--no-config", "--no-env", "--no-hooks"];
+const ISOLATION: &[&str] = &["--no-config", "--no-env", "--no-hooks"];
 
 /// The rules a `run` value breaks in a job that holds the release App token: `mise` runs only
 /// with `--no-config --no-env --no-hooks`, so it never reads the repository's config.

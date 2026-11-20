@@ -20,7 +20,7 @@ fn network_transition_v33() -> String {
     )
 }
 
-const TRIGGERS: [(&str, &str); 6] = [
+const TRIGGERS: &[(&str, &str)] = &[
     (
         "reservation_network_insert_guard",
         "CREATE TRIGGER IF NOT EXISTS reservation_network_insert_guard BEFORE INSERT ON capacity_reservation_networks WHEN NEW.network_name != (SELECT 'velnor-' || i.runner_name || '-private' FROM connection_intents AS i WHERE i.id = NEW.operation_id AND i.connection_id = NEW.connection_id) OR NEW.labels_json != '{\"io.velnor.connection-id\":\"' || NEW.connection_id || '\",\"io.velnor.engine-id\":\"' || NEW.engine_id || '\",\"io.velnor.managed\":\"true\",\"io.velnor.operation-id\":\"' || NEW.operation_id || '\",\"io.velnor.reservation-id\":\"' || NEW.reservation_id || '\"}' OR NOT EXISTS (SELECT 1 FROM capacity_reservations AS r JOIN connection_intents AS i ON i.id = r.intent_id AND i.connection_id = r.connection_id JOIN capacity_reservation_provisioning AS p ON p.reservation_id = r.id WHERE r.id = NEW.reservation_id AND r.connection_id = NEW.connection_id AND r.intent_id = NEW.operation_id AND p.operation_id = NEW.operation_id AND p.engine_id = NEW.engine_id AND p.docker_root_digest = NEW.docker_root_digest AND r.state = 'reserved' AND i.kind = 'launch' AND i.state = 'pending' AND i.cleanup_proven = 0) BEGIN SELECT RAISE(ABORT, 'invalid private network claim'); END",
@@ -49,7 +49,7 @@ pub(super) async fn bootstrap(connection: &turso::Connection) -> Result<(), Host
         .execute(TABLE, ())
         .await
         .map_err(|_| HostError::Journal)?;
-    for (_, statement) in TRIGGERS {
+    for &(_, statement) in TRIGGERS {
         connection
             .execute(statement, ())
             .await
@@ -102,7 +102,7 @@ async fn validate_with_transition(
     expected_transition: &str,
 ) -> Result<(), HostError> {
     for (name, expected) in
-        std::iter::once(("capacity_reservation_networks", TABLE)).chain(TRIGGERS)
+        std::iter::once(("capacity_reservation_networks", TABLE)).chain(TRIGGERS.iter().copied())
     {
         let expected = if name == "reservation_network_transition" {
             expected_transition

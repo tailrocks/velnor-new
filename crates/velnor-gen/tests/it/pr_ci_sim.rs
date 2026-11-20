@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 
 use serde_json::Value as Json;
 
-use crate::gh_expr::{Value, evaluate, has_status_function};
+use velnor_test_support::gh_expr::{Value, evaluate, has_status_function};
 
 #[derive(Clone)]
 pub(crate) struct Event {

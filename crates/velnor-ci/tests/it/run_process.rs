@@ -193,7 +193,7 @@ mod tests_run {
         returned.duration_since(exited).unwrap_or_default()
     }
 
-    const NEXTEST_RUN: [&str; 6] = [
+    const NEXTEST_RUN: &[&str] = &[
         "cargo-nextest",
         "nextest",
         "run",
@@ -207,7 +207,7 @@ mod tests_run {
         let split = format!(
             "{{ printf '     Summary [   0.020s] {BOLD}7'; sleep 0.3; printf '{RESET} tests run: 7 passed, 0 skipped\\n'; }} >&2"
         );
-        let (output, written, _) = run_with_output("tests-run-split", &split, &NEXTEST_RUN);
+        let (output, written, _) = run_with_output("tests-run-split", &split, NEXTEST_RUN);
         assert!(output.status.success(), "{output:?}");
         assert_eq!(
             without_built(&written),
@@ -220,7 +220,7 @@ mod tests_run {
         let script = format!(
             "echo '     Summary [   1.200s] {BOLD}5{RESET} tests run: 3 passed, {BOLD}2{RESET} failed, 0 skipped' >&2; exit 100"
         );
-        let (output, written, _) = run_with_output("tests-run-failed", &script, &NEXTEST_RUN);
+        let (output, written, _) = run_with_output("tests-run-failed", &script, NEXTEST_RUN);
         assert_eq!(output.status.code(), Some(100));
         assert_eq!(
             without_built(&written),
@@ -231,7 +231,7 @@ mod tests_run {
     #[test]
     fn run_reports_a_run_without_tests_as_zero() {
         let script = "echo '     Summary [   0.001s] 0 tests run: 0 passed, 0 skipped' >&2";
-        let (output, written, _) = run_with_output("tests-run-zero", script, &NEXTEST_RUN);
+        let (output, written, _) = run_with_output("tests-run-zero", script, NEXTEST_RUN);
         assert!(output.status.success(), "{output:?}");
         assert_eq!(
             written,
@@ -244,7 +244,7 @@ mod tests_run {
         let script = format!(
             "echo '     Summary [   0.001s] {BOLD}0{RESET} tests run: 0 passed, {BOLD}4{RESET} skipped' >&2"
         );
-        let (output, written, _) = run_with_output("tests-run-filtered", &script, &NEXTEST_RUN);
+        let (output, written, _) = run_with_output("tests-run-filtered", &script, NEXTEST_RUN);
         assert!(output.status.success(), "{output:?}");
         assert_eq!(
             written,
@@ -255,13 +255,13 @@ mod tests_run {
     #[test]
     fn run_lists_run_plus_skipped_and_leaves_listed_out_without_a_skipped_count() {
         let mixed = "echo '     Summary [   0.5s] 3 tests run: 2 passed, 1 failed, 5 skipped' >&2";
-        let (_, written, _) = run_with_output("tests-run-mixed", mixed, &NEXTEST_RUN);
+        let (_, written, _) = run_with_output("tests-run-mixed", mixed, NEXTEST_RUN);
         assert_eq!(
             without_built(&written),
             "existing=1\ntests_run=3\ntests_listed=8\n"
         );
         let bare = "echo '     Summary [   0.5s] 3 tests run: 3 passed' >&2";
-        let (_, written, _) = run_with_output("tests-run-bare", bare, &NEXTEST_RUN);
+        let (_, written, _) = run_with_output("tests-run-bare", bare, NEXTEST_RUN);
         assert_eq!(without_built(&written), "existing=1\ntests_run=3\n");
     }
 
@@ -302,7 +302,7 @@ sleep 30 &\n\
 touch \"$RUNNER_TEMP/exited\"\n\
 exit 0";
         let (output, written, temp, returned) =
-            execute_nextest("tests-run-held", script, &NEXTEST_RUN, Some("300"));
+            execute_nextest("tests-run-held", script, NEXTEST_RUN, Some("300"));
         assert_eq!(output.status.code(), Some(0), "{output:?}");
         assert_eq!(without_built(&written), "existing=1\n");
         let elapsed = after_exit(&temp, returned);
@@ -313,7 +313,7 @@ exit 0";
     fn run_writes_no_counts_when_a_held_pipe_never_printed_a_summary() {
         let script = "sleep 30 &\ntouch \"$RUNNER_TEMP/exited\"\nexit 9";
         let (output, written, temp, returned) =
-            execute_nextest("tests-run-held-empty", script, &NEXTEST_RUN, Some("300"));
+            execute_nextest("tests-run-held-empty", script, NEXTEST_RUN, Some("300"));
         assert_eq!(output.status.code(), Some(9), "{output:?}");
         assert_eq!(without_built(&written), "existing=1\n");
         let elapsed = after_exit(&temp, returned);

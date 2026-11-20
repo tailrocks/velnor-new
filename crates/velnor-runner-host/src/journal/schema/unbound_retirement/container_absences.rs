@@ -9,7 +9,7 @@ const INSERT_GUARD: &str = "CREATE TRIGGER unbound_container_absence_insert_guar
 
 const PROGRESS_GUARD: &str = "CREATE TRIGGER unbound_retirement_container_absence_guard BEFORE INSERT ON capacity_reservation_unbound_retirement_progress WHEN NEW.phase = 'containers_absent' AND EXISTS (SELECT 1 FROM capacity_reservation_bootstrap_containers AS container WHERE container.reservation_id = NEW.reservation_id AND (container.container_id IS NOT NULL OR container.create_state != 'unclaimed' OR container.start_state != 'not_requested') AND NOT EXISTS (SELECT 1 FROM unbound_container_absences AS absence WHERE absence.reservation_id = container.reservation_id AND absence.role = container.role AND absence.docker_name = container.container_name)) BEGIN SELECT RAISE(ABORT, 'A bootstrap container is not proven absent.'); END";
 
-const IMMUTABLE: [(&str, &str); 2] = [("update", "UPDATE"), ("delete", "DELETE")];
+const IMMUTABLE: &[(&str, &str)] = &[("update", "UPDATE"), ("delete", "DELETE")];
 
 fn objects() -> Vec<(&'static str, String, String)> {
     let mut objects = vec![
@@ -29,7 +29,7 @@ fn objects() -> Vec<(&'static str, String, String)> {
             PROGRESS_GUARD.to_owned(),
         ),
     ];
-    for (suffix, action) in IMMUTABLE {
+    for &(suffix, action) in IMMUTABLE {
         let name = format!("unbound_container_absences_no_{suffix}");
         let sql = format!(
             "CREATE TRIGGER {name} BEFORE {action} ON unbound_container_absences BEGIN SELECT RAISE(ABORT, 'Container absence evidence is immutable.'); END"

@@ -168,8 +168,16 @@ fn an_ungrouped_root_keeps_its_own_target_directory() {
 }
 
 fn build_grouped(root: &std::path::Path, manifest: &str) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
-        .env("CARGO_TARGET_DIR", root.join("target-velnor/tools"))
+    build_grouped_with(root, manifest, false)
+}
+
+fn build_grouped_with(root: &std::path::Path, manifest: &str, build_directory: bool) -> Output {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
+    command.env("CARGO_TARGET_DIR", root.join("target-velnor/tools"));
+    if build_directory {
+        command.env("CARGO_BUILD_BUILD_DIR", root.join("target-velnor/tools"));
+    }
+    command
         .current_dir(root)
         .args([
             "inputs",
@@ -244,6 +252,15 @@ fn assert_real_grouped_build_passes(repo: &Repo) {
 
 #[test]
 fn a_grouped_build_does_not_pull_an_ungrouped_root_into_the_shared_directory() {
+    ungrouped_root_beside_the_group(false);
+}
+
+#[test]
+fn a_build_directory_equal_to_the_shared_target_does_not_refuse_an_ungrouped_root() {
+    ungrouped_root_beside_the_group(true);
+}
+
+fn ungrouped_root_beside_the_group(build_directory: bool) {
     let repo = grouped_tools();
     unit(
         &repo,
@@ -257,7 +274,7 @@ fn a_grouped_build_does_not_pull_an_ungrouped_root_into_the_shared_directory() {
     );
     unit(&repo, "web/src/lib.rs", "");
     repo.git(&["add", "--all"]);
-    let built = build_grouped(repo.root(), "tools/a/Cargo.toml");
+    let built = build_grouped_with(repo.root(), "tools/a/Cargo.toml", build_directory);
     assert!(
         built.status.success(),
         "{}",

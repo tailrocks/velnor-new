@@ -6,7 +6,7 @@ use crate::pipeline::{view, workflow};
 
 const SELF_HOSTED: &str = "runner = \"scale-set\"\nhosted = false\n";
 const NOT_SELF_HOSTED: &str = "runner.environment != 'self-hosted'";
-const NETWORK_STEPS: [&str; 3] = [
+const NETWORK_STEPS: &[&str] = &[
     "Restore the tools cache",
     "Look up the tools cache",
     "Save the tools cache",
@@ -59,7 +59,7 @@ fn a_self_hosted_job_restores_the_tools_from_the_node_store_and_skips_the_action
             let install =
                 at(steps, "Install tools").ok_or_else(|| format!("{store:?} {id}: no install"))?;
             assert!(local < verify && verify < install, "{store:?} {id}");
-            for name in NETWORK_STEPS {
+            for name in NETWORK_STEPS.iter().copied() {
                 for step in steps.iter().filter(|step| step["name"] == name) {
                     let when = condition(step);
                     assert!(

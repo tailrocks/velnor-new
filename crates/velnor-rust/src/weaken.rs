@@ -5,7 +5,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use toml::Value;
 use velnor_model::{
-    ChangeSet, DocsRun, MbxMode, PathGlob, RepoFacts, RepoPath, RustRoot, Weakening,
+    ChangeSet, DenyCheck, DenyLane, DocsRun, MbxMode, PathGlob, RepoFacts, RepoPath, RustRoot,
+    Weakening,
 };
 
 use crate::cargo_flags::flag_tokens;
@@ -19,7 +20,7 @@ use crate::weaken_targets::targets;
 
 const NEXTEST_CONFIG: &str = ".config/nextest.toml";
 const MANIFEST: &str = "Cargo.toml";
-const COMPILER_KEYS: [&str; 4] = [
+const COMPILER_KEYS: &[&str] = &[
     "rustc-wrapper",
     "rustc-workspace-wrapper",
     "rustc",
@@ -140,6 +141,22 @@ fn in_file(file: &RepoPath, bytes: &[u8]) -> Vec<Weakening> {
                         "runs cargo outside mbx, so no compiler results are shared and the mise cargo wrapper is not checked".to_owned(),
                     ));
                 }
+                if let Some(policy) = config.policy.as_ref() {
+                    if policy.deny == DenyLane::Off {
+                        found.push(make(
+                            "[policy] deny = false".to_owned(),
+                            "turns off the cargo-deny policy, so advisories, bans, licenses and sources are not checked".to_owned(),
+                        ));
+                    }
+                    if let Some(checks) = &policy.deny_checks {
+                        for check in DenyCheck::ALL.iter().copied().filter(|check| !checks.contains(check)) {
+                            found.push(make(
+                                format!("[policy] deny_checks omits {}", check.name()),
+                                "runs only the named cargo-deny checks, so the others are not checked".to_owned(),
+                            ));
+                        }
+                    }
+                }
                 found
             },
         );
@@ -228,7 +245,7 @@ fn manifest(parsed: &toml::Table, make: &Make<'_>) -> Vec<Weakening> {
 fn cargo_config(parsed: &toml::Table, make: &Make<'_>) -> Vec<Weakening> {
     let mut found = Vec::new();
     let build = parsed.get("build").and_then(Value::as_table);
-    for key in COMPILER_KEYS {
+    for key in COMPILER_KEYS.iter().copied() {
         if let Some(value) = build.and_then(|build| build.get(key)) {
             if key.ends_with("wrapper") && value.as_str() == Some("") {
                 continue;

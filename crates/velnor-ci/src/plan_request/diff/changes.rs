@@ -10,9 +10,9 @@ use super::Event;
 const NON_UTF8: &str = "non_utf8_path";
 const SHORT_SHA_MIN: usize = 7;
 const FULL_SHA: usize = 64;
-const PROJECT_TOOL_FILES: [&str; 3] = [".tool-versions", "rust-toolchain.toml", "rust-toolchain"];
-const MISE_LOCKS: [&str; 2] = ["mise.lock", ".mise.lock"];
-const MISE_CONFIGS: [&str; 13] = [
+const PROJECT_TOOL_FILES: &[&str] = &[".tool-versions", "rust-toolchain.toml", "rust-toolchain"];
+const MISE_LOCKS: &[&str] = &["mise.lock", ".mise.lock"];
+const MISE_CONFIGS: &[&str] = &[
     "mise.toml",
     ".mise.toml",
     "mise.*.toml",

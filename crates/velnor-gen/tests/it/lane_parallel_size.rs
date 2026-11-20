@@ -5,7 +5,7 @@ use crate::facts::TestResult;
 use crate::pipeline::{pin_helper, view};
 use velnor_gen::{GenerateError, expected_with_notes};
 use velnor_model::RepoPath;
-use velnor_render::{MAX_WORKFLOW_BYTES, Rule};
+use velnor_render::MAX_WORKFLOW_BYTES;
 
 const WORKFLOW: &str = ".github/workflows/rust-ci.yml";
 const LANE: &str = "[[test_lane]]\nroot = '.'\nfeatures = ['local-mode']\npackages = ['package-0']\nfilter = 'test(~local::)'\nlint = true\ndoc = true\n";
@@ -55,22 +55,18 @@ fn a_parallel_lane_adds_a_bounded_job_to_a_sixteen_root_workflow() -> TestResult
     Ok(())
 }
 
+/// The 20-root parallel workflow renders (498,858 B when this was written) and stays inside this
+/// budget, 500 B under `MAX_WORKFLOW_BYTES`: any growth of a job's steps fails here instead of
+/// becoming a refusal for a user's repository.
+const TWENTY_ROOT_BUDGET: usize = 499_500;
+
 #[test]
-fn a_parallel_lane_never_emits_a_workflow_over_the_size_limit() -> TestResult {
+fn a_parallel_lane_renders_a_twenty_root_workflow_inside_its_budget() -> TestResult {
     let parallel = format!("{LANE}job = 'parallel'\n");
-    match generated(&parallel, 20)? {
-        Ok((size, notes)) => assert!(
-            size <= MAX_WORKFLOW_BYTES,
-            "20 roots: {size} bytes, notes {notes:?}"
-        ),
-        Err(GenerateError::Rules(violations)) => assert!(
-            violations.iter().any(|violation| matches!(
-                violation.rule,
-                Rule::WorkflowTooLarge(bytes) if bytes > MAX_WORKFLOW_BYTES
-            )),
-            "the refusal must name the oversized workflow: {violations:?}"
-        ),
-        Err(error) => return Err(error.into()),
-    }
+    let (size, notes) = size_of(&parallel, 20)?;
+    assert!(
+        size <= TWENTY_ROOT_BUDGET && TWENTY_ROOT_BUDGET < MAX_WORKFLOW_BYTES,
+        "20 roots: {size} bytes against a budget of {TWENTY_ROOT_BUDGET}, notes {notes:?}"
+    );
     Ok(())
 }

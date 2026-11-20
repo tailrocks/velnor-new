@@ -10,7 +10,7 @@ use std::time::UNIX_EPOCH;
 #[path = "test_template/prune.rs"]
 mod prune;
 
-const SUFFIXES: [&str; 3] = ["", "-wal", "-shm"];
+const SUFFIXES: &[&str] = &["", "-wal", "-shm"];
 
 fn root() -> io::Result<(PathBuf, String)> {
     let exe = std::env::current_exe()?;
@@ -85,7 +85,7 @@ fn install(template: &Path, parent: &Path, name: &str) -> io::Result<bool> {
     let tag = std::process::id();
     let staged = |suffix: &str| parent.join(format!(".{name}.seed-{tag}{suffix}"));
     let result = (|| {
-        for suffix in SUFFIXES {
+        for suffix in SUFFIXES.iter().copied() {
             let source = template.join(format!("db{suffix}"));
             if source.exists() {
                 fs::copy(&source, staged(suffix))?;
@@ -102,7 +102,7 @@ fn install(template: &Path, parent: &Path, name: &str) -> io::Result<bool> {
             Err(error) => Err(error),
         }
     })();
-    for suffix in SUFFIXES {
+    for suffix in SUFFIXES.iter().copied() {
         fs::remove_file(staged(suffix)).ok();
     }
     if result.is_err() {

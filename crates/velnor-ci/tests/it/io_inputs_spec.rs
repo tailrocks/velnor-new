@@ -8,9 +8,11 @@ use std::time::{Duration, UNIX_EPOCH};
 
 use crate::io::Repo;
 use crate::io_scope_cache::prepared;
+use velnor_test_support::trust_mise_dir;
 
 fn run(repo: &Repo, operation: &str, specification: Option<&str>, cache: &Path) -> Output {
     let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
+    trust_mise_dir(&mut command, repo.root());
     command
         .current_dir(repo.root())
         .env("GITHUB_JOB", "job")

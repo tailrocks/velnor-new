@@ -92,7 +92,7 @@ async fn rebuild_jit_table(conn: &turso::Connection) -> Result<(), HostError> {
     Ok(())
 }
 
-const JIT_DEPENDENT_EXTERNAL_TRIGGER_NAMES: [&str; 8] = [
+const JIT_DEPENDENT_EXTERNAL_TRIGGER_NAMES: &[&str] = &[
     "execution_proof_approval_jit_guard",
     "execution_proof_insert_jit_guard",
     "execution_publication_context_insert_guard",
@@ -134,7 +134,7 @@ async fn suspend_jit_dependent_triggers(
     if jit_dependent
         .iter()
         .map(|(name, _, _)| name.as_str())
-        .ne(JIT_DEPENDENT_EXTERNAL_TRIGGER_NAMES)
+        .ne(JIT_DEPENDENT_EXTERNAL_TRIGGER_NAMES.iter().copied())
     {
         return Err(HostError::Journal);
     }

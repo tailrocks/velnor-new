@@ -6,7 +6,7 @@ use std::error::Error;
 use crate::release_fixture::steps;
 use crate::yaml_tree::Node;
 
-pub(super) const PLATFORMS: [&str; 3] = ["linux-x64", "linux-arm64", "macos-arm64"];
+pub(super) const PLATFORMS: &[&str] = &["linux-x64", "linux-arm64", "macos-arm64"];
 
 pub(crate) fn job<'a>(tree: &'a Node, id: &str) -> Result<&'a Node, Box<dyn Error>> {
     Ok(tree

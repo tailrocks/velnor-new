@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-const V22_COLUMNS: [(&str, &str); 4] = [
+const V22_COLUMNS: &[(&str, &str)] = &[
     (
         "layout_version",
         "INTEGER NOT NULL DEFAULT 1 CHECK (layout_version IN (1, 2))",
@@ -11,7 +11,7 @@ const V22_COLUMNS: [(&str, &str); 4] = [
     ("metadata_layout_digest", "TEXT"),
 ];
 
-const V22_TRIGGERS: [(&str, &str); 3] = [
+const V22_TRIGGERS: &[(&str, &str)] = &[
     (
         "storage_initialization_v2_insert_guard",
         "CREATE TRIGGER IF NOT EXISTS storage_initialization_v2_insert_guard BEFORE INSERT ON capacity_reservation_storage_initialization WHEN (NEW.layout_version = 1 AND (NEW.metadata_volume IS NOT NULL OR NEW.metadata_volume_id IS NOT NULL OR NEW.metadata_layout_digest IS NOT NULL)) OR (NEW.layout_version = 2 AND (NEW.metadata_volume IS NULL OR NEW.metadata_volume_id IS NULL OR NEW.metadata_volume != NEW.metadata_volume_id OR length(NEW.metadata_volume) != 42 OR substr(NEW.metadata_volume, 1, 1) != 'w' OR substr(NEW.metadata_volume, 34) != '-metadata' OR substr(NEW.metadata_volume, 2, 32) GLOB '*[^0-9a-f]*' OR (SELECT COUNT(*) FROM capacity_reservation_provisioning_objects WHERE reservation_id = NEW.reservation_id AND role = 'engine-metadata' AND create_state = 'created' AND docker_id = NEW.metadata_volume_id AND docker_name = NEW.metadata_volume) != 1)) BEGIN SELECT RAISE(ABORT, 'The storage initializer record is incorrect.'); END",
@@ -30,7 +30,7 @@ pub(super) async fn upgrade_v22(connection: &turso::Connection) -> Result<(), Ho
     let columns =
         super::read_table_columns(connection, "capacity_reservation_storage_initialization")
             .await?;
-    for (name, definition) in V22_COLUMNS {
+    for &(name, definition) in V22_COLUMNS {
         if !columns.contains_key(name) {
             connection
                 .execute(
@@ -41,7 +41,7 @@ pub(super) async fn upgrade_v22(connection: &turso::Connection) -> Result<(), Ho
                 .map_err(|_| HostError::Journal)?;
         }
     }
-    for (_, statement) in V22_TRIGGERS {
+    for &(_, statement) in V22_TRIGGERS {
         connection
             .execute(statement, ())
             .await
@@ -71,7 +71,7 @@ pub(super) async fn validate_v22(connection: &turso::Connection) -> Result<(), H
     let columns =
         super::read_table_columns(connection, "capacity_reservation_storage_initialization")
             .await?;
-    for (name, expected) in V22_COLUMNS {
+    for &(name, expected) in V22_COLUMNS {
         let Some(actual) = columns.get(name) else {
             return Err(HostError::Journal);
         };
@@ -87,7 +87,7 @@ pub(super) async fn validate_v22(connection: &turso::Connection) -> Result<(), H
             return Err(HostError::Journal);
         }
     }
-    for (name, expected) in V22_TRIGGERS {
+    for &(name, expected) in V22_TRIGGERS {
         let mut rows = connection
             .query(
                 "SELECT sql FROM sqlite_schema WHERE type = 'trigger' AND name = ?1",
@@ -106,7 +106,7 @@ pub(super) async fn validate_v22(connection: &turso::Connection) -> Result<(), H
             return Err(HostError::Journal);
         }
     }
-    for query in V22_VALIDATION {
+    for query in V22_VALIDATION.iter().copied() {
         if scalar_count(connection, query).await? != 0 {
             return Err(HostError::Journal);
         }

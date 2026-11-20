@@ -8,8 +8,8 @@ use velnor_model::Weakening;
 
 use crate::weaken::Make;
 
-const KINDS: [&str; 4] = ["test", "bench", "bin", "example"];
-const DISCOVERY: [(&str, &str); 4] = [
+const KINDS: &[&str] = &["test", "bench", "bin", "example"];
+const DISCOVERY: &[(&str, &str)] = &[
     ("autolib", "src/lib.rs"),
     ("autoexamples", "examples/"),
     ("autobenches", "benches/"),
@@ -46,7 +46,7 @@ fn default_features(parsed: &toml::Table) -> BTreeSet<String> {
 pub(crate) fn targets(parsed: &toml::Table, owner: &str, make: &Make<'_>) -> Vec<Weakening> {
     let mut found = Vec::new();
     let package = parsed.get("package");
-    for (key, folder) in DISCOVERY {
+    for &(key, folder) in DISCOVERY {
         if is_false(package, key) {
             found.push(make(
                 format!("{key} = false"),
@@ -68,7 +68,7 @@ pub(crate) fn targets(parsed: &toml::Table, owner: &str, make: &Make<'_>) -> Vec
         ));
     }
     let enabled = default_features(parsed);
-    for kind in KINDS {
+    for kind in KINDS.iter().copied() {
         let entries = parsed
             .get(kind)
             .and_then(Value::as_array)

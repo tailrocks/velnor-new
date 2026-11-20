@@ -8,7 +8,7 @@ use crate::ImageContractError as ContractError;
 use crate::candidate::{ImageCandidateArchive, ImageCandidateOci, ImageCandidateWorkflow};
 
 pub const RUNNER_IMAGE_PUBLICATION_SCHEMA: &str = "velnor.runner-image-publication.v2";
-pub const RUNNER_IMAGE_FAMILY_ARTIFACT_NAMES: [&str; 13] = [
+pub const RUNNER_IMAGE_FAMILY_ARTIFACT_NAMES: &[&str] = &[
     "velnor-runner-linux-amd64.tar",
     "velnor-dind-linux-amd64.tar",
     "velnor-resource-probe-linux-amd64.tar",

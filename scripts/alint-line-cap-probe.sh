@@ -33,4 +33,6 @@ for lines in 401 400; do
   fi
 done
 
+bash scripts/test-no-doctests-rule.sh || exit 1
+
 rm -f "$PROBE"

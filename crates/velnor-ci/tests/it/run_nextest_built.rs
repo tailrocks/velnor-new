@@ -7,7 +7,7 @@ use crate::run_nextest::{NEXTEST_RUN, execute_nextest};
 
 fn built_line(name: &str, code: i32) -> String {
     let script = format!("exit {code}");
-    let (output, written, _, _) = execute_nextest(name, &script, "", &NEXTEST_RUN, None);
+    let (output, written, _, _) = execute_nextest(name, &script, "", NEXTEST_RUN, None);
     assert_eq!(output.status.code(), Some(code), "{output:?}");
     written
         .lines()

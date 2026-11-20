@@ -11,7 +11,7 @@ use super::{BOUND, FAILED, TestResult};
 
 const STATES: &str = "SELECT remove_state || '/' || abort_state FROM capacity_reservation_storage_initialization WHERE reservation_id = ?1";
 const PROVISIONING: &str = "SELECT bootstrap_start_state || '/' || resources_bound FROM capacity_reservation_provisioning_state WHERE reservation_id = ?1";
-const ROLES: [&str; 11] = [
+const ROLES: &[&str] = &[
     "runner-root",
     "runner-home",
     "runner-work",
