@@ -89,7 +89,7 @@ fn sorted_lines(file: fs::File, content: &mut blake3::Hasher) -> std::io::Result
     let mut lines: Vec<&[u8]> = bytes.split_inclusive(|byte| *byte == b'\n').collect();
     lines.sort_unstable();
     for line in lines {
-        content.update(line);
+        field(content, line);
     }
     Ok(read)
 }

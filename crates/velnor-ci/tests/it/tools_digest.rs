@@ -92,3 +92,12 @@ fn an_anchor_of_the_unordered_digest_is_not_trusted() {
         .unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(read(&job.anchor, true), Verdict::Anchored(digest));
 }
+
+#[test]
+fn sorted_lines_keep_their_boundaries_in_the_digest() {
+    let first = job("tools-digest-boundary-a");
+    let second = job("tools-digest-boundary-b");
+    write(&first, COMPONENTS, "c\nb");
+    write(&second, COMPONENTS, "bc\n");
+    assert_ne!(digest_of(&first), digest_of(&second));
+}
