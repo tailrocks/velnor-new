@@ -298,7 +298,13 @@ fn the_selection_title_names_the_run_exactly_when_the_budget_job_runs() -> TestR
             true,
             "Speed budget (full)",
         ),
-        ("a pull request", pull(false, &[]), vec![], false, "Speed budget"),
+        (
+            "a pull request",
+            pull(false, &[]),
+            vec![],
+            false,
+            "Speed budget",
+        ),
         (
             "a failed build",
             other("push", "refs/heads/main"),
