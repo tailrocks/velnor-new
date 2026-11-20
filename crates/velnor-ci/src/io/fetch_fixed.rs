@@ -161,7 +161,8 @@ mod tests {
         let home = root.join("home");
         let temp = root.join("tmp");
         fs::create_dir_all(&temp).unwrap_or_else(|e| unreachable!("{e}"));
-        let scratch = Scratch::create(&home, None, &temp).unwrap_or_else(|e| unreachable!("{e}"));
+        let scratch = Scratch::create(&home.join(".cargo"), &temp, true)
+            .unwrap_or_else(|e| unreachable!("{e}"));
         let adopted = found.adopt(scratch.path());
         let chosen = PathBuf::from(adopted.cargo_home.unwrap_or_default());
         assert!(

@@ -157,6 +157,10 @@ impl Fixture {
         command.output().unwrap_or_else(|e| unreachable!("{e}"))
     }
 
+    pub(crate) fn manifest(&self, name: &str) -> Result<std::path::PathBuf, Box<dyn Error>> {
+        Ok(fs::canonicalize(self.repo.root().join(name))?)
+    }
+
     pub(crate) fn log(&self, name: &str) -> String {
         fs::read_to_string(self.repo.root().join("log").join(name)).unwrap_or_default()
     }

@@ -8,35 +8,49 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::error::CiError;
 
-const SHARED: [&str; 2] = ["registry", "git"];
+const GIT: &str = "git";
+const SHARED: [&str; 2] = ["registry", GIT];
 const ATTEMPTS: u32 = 16;
 
 pub(super) struct Scratch {
     path: PathBuf,
+    cache: PathBuf,
 }
 
 impl Scratch {
-    pub(super) fn create(home: &Path, job: Option<&OsStr>, temp: &Path) -> Result<Self, CiError> {
-        let cache = cache_home(home, job);
+    pub(super) fn create(cache: &Path, temp: &Path, share_git: bool) -> Result<Self, CiError> {
         let scratch = Self {
             path: fresh_directory(temp)?,
+            cache: cache.to_path_buf(),
         };
         for name in SHARED {
             let target = cache.join(name);
-            std::fs::create_dir_all(&target)
-                .and_then(|()| symlink(&target, scratch.path.join(name)))
-                .map_err(|e| {
-                    CiError::new(format!(
-                        "cannot prepare {} for the fetch: {e}",
-                        target.display()
-                    ))
-                })?;
+            let prepared = if name == GIT && !share_git {
+                std::fs::create_dir(scratch.path.join(name))
+            } else {
+                std::fs::create_dir_all(&target)
+                    .and_then(|()| symlink(&target, scratch.path.join(name)))
+            };
+            prepared.map_err(|e| {
+                CiError::new(format!(
+                    "cannot prepare {} for the fetch: {e}",
+                    target.display()
+                ))
+            })?;
         }
         Ok(scratch)
     }
 
     pub(super) fn path(&self) -> &Path {
         &self.path
+    }
+
+    pub(super) fn keep_git(&self) -> Result<(), CiError> {
+        let fetched = self.path.join(GIT);
+        if std::fs::symlink_metadata(&fetched).is_ok_and(|meta| meta.is_dir()) {
+            super::fetch_git::merge(&fetched, &self.cache.join(GIT))?;
+        }
+        Ok(())
     }
 }
 
@@ -46,14 +60,16 @@ impl Drop for Scratch {
     }
 }
 
-pub(super) fn temp_parent() -> PathBuf {
+pub(super) fn temp_parent(home: &Path) -> PathBuf {
+    let home = std::fs::canonicalize(home).unwrap_or_else(|_| home.to_path_buf());
     std::env::var_os("RUNNER_TEMP")
         .map(PathBuf::from)
         .filter(|dir| dir.is_absolute() && dir.is_dir())
+        .filter(|dir| !std::fs::canonicalize(dir).is_ok_and(|dir| dir.starts_with(&home)))
         .unwrap_or_else(std::env::temp_dir)
 }
 
-fn cache_home(home: &Path, job: Option<&OsStr>) -> PathBuf {
+pub(super) fn cache_home(home: &Path, job: Option<&OsStr>) -> PathBuf {
     let default = home.join(".cargo");
     let Some(job) = job.filter(|job| !job.is_empty()).map(PathBuf::from) else {
         return default;
@@ -130,7 +146,7 @@ mod tests {
             )
             .unwrap_or_else(|e| unreachable!("{e}"));
         }
-        let scratch = Scratch::create(&root.join("home"), None, &root.join("tmp"))
+        let scratch = Scratch::create(&root.join("home/.cargo"), &root.join("tmp"), true)
             .unwrap_or_else(|e| unreachable!("{e}"));
         assert_eq!(entries(scratch.path()), ["git", "registry"]);
         assert_ne!(scratch.path(), cargo);
@@ -141,8 +157,12 @@ mod tests {
     fn the_job_cargo_home_inside_the_runner_home_receives_the_fetched_sources() {
         let root = tree("job");
         let job = root.join("home/.cargo/nested");
-        let scratch = Scratch::create(&root.join("home"), Some(job.as_os_str()), &root.join("tmp"))
-            .unwrap_or_else(|e| unreachable!("{e}"));
+        let scratch = Scratch::create(
+            &cache_home(&root.join("home"), Some(job.as_os_str())),
+            &root.join("tmp"),
+            true,
+        )
+        .unwrap_or_else(|e| unreachable!("{e}"));
         fs::write(scratch.path().join("registry/crate"), "")
             .unwrap_or_else(|e| unreachable!("{e}"));
         assert!(job.join("registry/crate").is_file());
@@ -170,7 +190,7 @@ mod tests {
     fn the_scratch_home_is_private_and_removed_without_touching_the_shared_sources() {
         use std::os::unix::fs::MetadataExt;
         let root = tree("drop");
-        let scratch = Scratch::create(&root.join("home"), None, &root.join("tmp"))
+        let scratch = Scratch::create(&root.join("home/.cargo"), &root.join("tmp"), true)
             .unwrap_or_else(|e| unreachable!("{e}"));
         let path = scratch.path().to_path_buf();
         let mode = fs::metadata(&path)
@@ -187,9 +207,9 @@ mod tests {
     #[test]
     fn two_scratch_homes_never_share_a_directory() {
         let root = tree("pair");
-        let first = Scratch::create(&root.join("home"), None, &root.join("tmp"))
+        let first = Scratch::create(&root.join("home/.cargo"), &root.join("tmp"), true)
             .unwrap_or_else(|e| unreachable!("{e}"));
-        let second = Scratch::create(&root.join("home"), None, &root.join("tmp"))
+        let second = Scratch::create(&root.join("home/.cargo"), &root.join("tmp"), true)
             .unwrap_or_else(|e| unreachable!("{e}"));
         assert_ne!(first.path(), second.path());
     }
