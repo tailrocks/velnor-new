@@ -21,6 +21,7 @@ pub const HELPER_COMMANDS: [&str; 34] = [
     "prepare",
     "crates-mirror",
     "fetch",
+    "fetch-assets",
     "private-token-allowed",
     "mbx-store",
     "mbx-seed",
