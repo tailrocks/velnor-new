@@ -7,7 +7,7 @@ use std::error::Error;
 use velnor_gen::GenerateError;
 use velnor_release::ReleaseError;
 
-use crate::release_fixture::{APP, jobs, render, steps};
+use crate::release_fixture::{APP, jobs, render, render_pinned, steps};
 use crate::release_yml_binaries::{job, runs as run_steps};
 use crate::yaml_tree::Node;
 
@@ -54,6 +54,7 @@ fn raw_format_publishes_the_bare_binary_with_a_checksum_and_provenance_per_platf
     assert_eq!(
         runs(linux),
         [
+            "echo \"MBX_CACHE_DIR=$RUNNER_TEMP/mbx-release-build-app-linux-x64\" >> \"$GITHUB_ENV\"".to_owned(),
             "test -n \"$COMMIT\" -a \"$CHECKED_OUT\" = \"$COMMIT\"".to_owned(),
             "rustup target add x86_64-unknown-linux-gnu".to_owned(),
             "cargo build --release --locked --manifest-path Cargo.toml --package app --bin rg --target x86_64-unknown-linux-gnu --target-dir target".to_owned(),
@@ -127,13 +128,15 @@ fn raw_format_names_the_arm_and_macos_assets() -> TestResult {
 
 #[test]
 fn archive_format_stays_the_default_and_can_be_named() -> TestResult {
-    let (default_text, _) = render(
+    let (default_text, _) = render_pinned(
         &[APP],
         Some("[[binaries]]\npackage = \"app\"\nbin = \"rg\"\n"),
+        "0.1.88",
     )?;
-    let (named_text, _) = render(
+    let (named_text, _) = render_pinned(
         &[APP],
         Some("[[binaries]]\npackage = \"app\"\nbin = \"rg\"\nformat = \"archive\"\n"),
+        "0.1.88",
     )?;
     assert_eq!(default_text, named_text);
     assert!(default_text.contains("rg-x86_64-unknown-linux-musl.tar.gz"));

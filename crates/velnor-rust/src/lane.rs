@@ -242,7 +242,12 @@ pub(crate) fn policy_job(facts: &RepoFacts, lane: &Lane) -> Job {
                 .into_iter()
                 .chain(tools_install(facts))
                 .chain(mirror_step(facts))
-                .chain(tools_save(facts))
+                .chain(
+                    (!crate::plan_tools::tools_verified(facts))
+                        .then(|| tools_save(facts))
+                        .into_iter()
+                        .flatten(),
+                )
                 .map(|step| Step {
                     gate: policy_gate.clone(),
                     ..step
