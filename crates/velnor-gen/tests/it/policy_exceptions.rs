@@ -13,6 +13,7 @@ fn a_cargo_deny_exceptions_file_in_a_selected_root_runs_deny_only() -> TestResul
     let both = PolicyTools {
         deny: true,
         machete: true,
+        deny_off: false,
     };
     for name in [
         "crates/a/deny.exceptions.toml",
