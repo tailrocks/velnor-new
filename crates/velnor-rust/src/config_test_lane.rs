@@ -81,6 +81,7 @@ fn lane(raw: RawTestLane) -> Result<TestLane, Reason> {
         doc: raw.doc,
         packages,
         job,
+        job_written: raw.job.is_some(),
     })
 }
 

@@ -320,6 +320,26 @@ fn a_parallel_lane_needs_a_helper_that_reads_the_job_key() -> TestResult {
 }
 
 #[test]
+fn an_explicit_inline_job_key_needs_the_helper_that_reads_it() -> TestResult {
+    // The pinned 0.1.106 rejects the `job` key whatever its value (deny_unknown_fields).
+    let inline = format!("{FILTERED}job = 'inline'\n");
+    let error = workflow(&lane_view("0.1.106", &inline)?)
+        .err()
+        .ok_or("a 0.1.106 pin accepted an explicit job = 'inline' key")?;
+    assert!(
+        error
+            .downcast_ref::<GenerateError>()
+            .is_some_and(|e| matches!(e, GenerateError::TestLaneJobHelperTooOld(_))),
+        "{error}"
+    );
+    assert!(
+        workflow(&lane_view(HELPER, &inline)?).is_ok(),
+        "the new helper must accept an explicit inline job key"
+    );
+    Ok(())
+}
+
+#[test]
 fn an_unknown_job_value_is_refused() -> TestResult {
     let error = workflow(&lane_view(
         HELPER,

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    BUDGET_MODES_HELPER, CacheDebug, DocsRun, HelperRelease, HelperVersion, LaneJob, MbxStore,
+    BUDGET_MODES_HELPER, CacheDebug, DocsRun, HelperRelease, HelperVersion, MbxStore,
     Platform, PrCi, PushAfterMergeGroup, RepoFacts,
 };
 
@@ -130,12 +130,8 @@ pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, Generate
 }
 
 fn check_lane_job(facts: &RepoFacts, release: &HelperRelease) -> Result<(), GenerateError> {
-    let parallel = facts
-        .config
-        .test_lanes
-        .iter()
-        .any(|lane| lane.job == LaneJob::Parallel);
-    if parallel && !release.version().at_least(TEST_LANE_JOB_HELPER) {
+    let written = facts.config.test_lanes.iter().any(|lane| lane.job_written);
+    if written && !release.version().at_least(TEST_LANE_JOB_HELPER) {
         return Err(GenerateError::TestLaneJobHelperTooOld(
             release.version().clone(),
         ));
