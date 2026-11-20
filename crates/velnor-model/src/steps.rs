@@ -148,7 +148,9 @@ impl StepKind {
     #[must_use]
     pub const fn is_check(&self) -> bool {
         match self {
-            Self::TestSetup { .. } => true,
+            // The advisory DB fetch serves the cargo-deny check, which is a check, so it
+            // is skipped after a merge group exactly when that check is.
+            Self::TestSetup { .. } | Self::AdvisoryFetch { .. } => true,
             Self::Cargo(command) => !command.is_target_build(),
             Self::Checkout { .. }
             | Self::InstallTools { .. }
@@ -160,6 +162,7 @@ impl StepKind {
             | Self::SourcesLocks(_)
             | Self::SourcesFetch { .. }
             | Self::SourcesFetchAll { .. }
+            | Self::AdvisoryFetch { .. }
             | Self::CacheDecide { .. }
             | Self::CacheResult(_)
             | Self::CacheVerify { .. }
@@ -182,6 +185,7 @@ impl StepKind {
             | Self::PrivateCheck { .. }
             | Self::PrivateToken { .. }
             | Self::PrivateFetch { .. }
+            | Self::AdvisoryFetch { .. }
             | Self::MbxRemote { .. }
             | Self::MbxPin
             | Self::MbxPrivate
@@ -202,6 +206,7 @@ impl StepKind {
             | Self::CheckMetrics { .. }
             | Self::Budget { .. }
             | Self::MergeGroupPassed { .. }
+            | Self::AdvisoryFetch { .. }
             | Self::MergeQueueCheck { .. } => false,
         }
     }
