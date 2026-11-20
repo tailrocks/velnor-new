@@ -16,7 +16,7 @@ pub(crate) const REPO: &str = "tailrocks/velnor-new";
 pub(crate) const TAG: &str = "velnor-ci-v0.1.80";
 pub(crate) const APP: &str = "velnor-release";
 pub(crate) const BOT: &str = "velnor-release[bot]";
-pub(crate) const FILES: [(&str, &str); 3] = [
+pub(crate) const FILES: &[(&str, &str)] = &[
     ("velnor-ci-linux-x64", "velnor-ci for linux-x64\n"),
     ("velnor-ci-linux-arm64", "velnor-ci for linux-arm64\n"),
     ("velnor-ci-macos-arm64", "velnor-ci for macos-arm64\n"),

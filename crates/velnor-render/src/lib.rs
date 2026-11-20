@@ -114,11 +114,11 @@ pub fn render_workflow(
         file = document(plan, rendered, ShellcheckMarks::Jobs);
     }
     if file.len() > rules::MAX_WORKFLOW_BYTES {
-        return Err(vec![RuleViolation {
-            job: String::new(),
-            step: 0,
-            rule: Rule::WorkflowTooLarge(file.len()),
-        }]);
+        return Err(vec![rule_messages::size_report::too_large(
+            WORKFLOW_PATH.as_str(),
+            file.len(),
+            &rendered.jobs,
+        )]);
     }
     Ok(BTreeMap::from([(WORKFLOW_PATH, file)]))
 }

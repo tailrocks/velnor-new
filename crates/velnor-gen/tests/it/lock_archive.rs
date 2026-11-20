@@ -10,7 +10,7 @@ use crate::pipeline::workflow;
 
 type TestResult = Result<(), Box<dyn Error>>;
 
-const CI_ARCHIVES: [(&str, &str, &str); 3] = [
+const CI_ARCHIVES: &[(&str, &str, &str)] = &[
     (
         "Linux",
         "X64",
@@ -28,7 +28,7 @@ const CI_ARCHIVES: [(&str, &str, &str); 3] = [
     ),
 ];
 
-const CI_BINARIES: [(&str, &str, &str); 3] = [
+const CI_BINARIES: &[(&str, &str, &str)] = &[
     (
         "Linux",
         "X64",
@@ -251,12 +251,12 @@ fn the_action_checks_the_archive_and_the_launcher_checks_the_binary() -> TestRes
         "sha256-macos-arm64",
     ]
     .into_iter()
-    .zip(CI_ARCHIVES)
+    .zip(CI_ARCHIVES.iter().copied())
     {
         assert_eq!(install["with"][input], digest);
     }
     let launcher = launcher_digest(&text)?;
-    for (os, arch, digest) in CI_BINARIES {
+    for &(os, arch, digest) in CI_BINARIES {
         assert!(
             launcher.contains(&format!(
                 "runner.os == '{os}' && runner.arch == '{arch}' && '{digest}'"
@@ -264,7 +264,7 @@ fn the_action_checks_the_archive_and_the_launcher_checks_the_binary() -> TestRes
             "{launcher}"
         );
     }
-    for (_, _, archive) in CI_ARCHIVES {
+    for &(_, _, archive) in CI_ARCHIVES {
         assert!(!launcher.contains(archive), "{launcher}");
     }
     Ok(())

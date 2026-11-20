@@ -8,13 +8,13 @@ use serde_json::{Value, json};
 /// The values a run's placeholders stand for, such as `ref` for `${ref}`.
 pub type Values = BTreeMap<String, String>;
 
-const TYPE_WORDS: [&str; 8] = [
+const TYPE_WORDS: &[&str] = &[
     "string", "number", "boolean", "object", "array", "null", "sha", "absent",
 ];
 
 /// Paths compared by value however the stored file writes them: the identity claims that name
 /// the repository and the refs the run was triggered on, and the cache and token scope lists.
-const EXACT: [&str; 5] = [
+const EXACT: &[&str] = &[
     "claims.repository",
     "claims.ref",
     "claims.defaultRef",

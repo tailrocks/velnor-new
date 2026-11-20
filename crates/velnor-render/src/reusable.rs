@@ -16,7 +16,7 @@ use crate::reusable_on::on;
 use crate::rules::APP_TOKEN_ACTION;
 use crate::rules::{
     MAX_WORKFLOW_BYTES, RenderedConcurrency, RenderedContainer, RenderedJob, RenderedMatrix,
-    RenderedMatrixSource, RenderedStep, RenderedWorkflow, Rule, RuleViolation, Value, check_rules,
+    RenderedMatrixSource, RenderedStep, RenderedWorkflow, RuleViolation, Value, check_rules,
 };
 use crate::steps::{
     ATTEST_BUILD_PROVENANCE, CACHE_RESTORE, CACHE_SAVE, CHECKOUT, DOWNLOAD_ARTIFACT, MISE,
@@ -79,11 +79,11 @@ fn render_one(
     ));
     let file = crate::seal(REUSABLE_HEADER, &emit(&document));
     if file.len() > MAX_WORKFLOW_BYTES {
-        return Err(vec![RuleViolation {
-            job: String::new(),
-            step: 0,
-            rule: Rule::WorkflowTooLarge(file.len()),
-        }]);
+        return Err(vec![crate::rule_messages::size_report::too_large(
+            &format!(".github/workflows/{}.yml", workflow.file),
+            file.len(),
+            &rendered.jobs,
+        )]);
     }
     Ok((format!(".github/workflows/{}.yml", workflow.file), file))
 }

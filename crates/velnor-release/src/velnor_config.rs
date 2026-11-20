@@ -222,7 +222,7 @@ fn text_refs(values: &[String]) -> Vec<&str> {
 /// Names Cargo reserves, or that would build into a directory another profile or
 /// Cargo itself owns. `dev`, `test` and `bench` land in `target/debug`; the rest are
 /// refused by Cargo or collide with its own `target` subdirectories.
-const RESERVED_PROFILES: [&str; 11] = [
+const RESERVED_PROFILES: &[&str] = &[
     "dev",
     "test",
     "bench",

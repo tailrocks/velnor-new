@@ -40,7 +40,8 @@ fn auto_without_timings_says_which_shape_it_picked_and_how_to_choose_or_measure(
         "one-job",
         TIMINGS_PATH.as_str(),
         "shape = \"lint-test\"",
-        "velnor-ci timings",
+        "velnor-ci timings --repo owner/name",
+        "three successful runs",
     ] {
         assert!(note.contains(expected), "{expected} missing from {note}");
     }
