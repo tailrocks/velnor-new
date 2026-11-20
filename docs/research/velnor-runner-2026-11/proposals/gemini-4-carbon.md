@@ -210,7 +210,7 @@ replaces), here is the verdict on each hypothesis.
   - Setting `min_entries_to_merge_wait_minutes = 0` removes **5.0 min** of idle merge-queue sleep.
   - Consolidating 5 workspaces (`1,160` lock entries) into 1 workspace (`527` unique external crates),
     running affected-only `merge_group` diffs relative to green `main`
-    ([docs/goals.md:86](../../../goals.md#L86)),
+    ([docs/goals.md:86](../../../goals.md)),
     filtering `local-mode` to its 2 specific test binaries (`saves 5.5 to 9.2` runner-min), and fixing
     + LPT-sharding the 4 slow test suites brings typical PR wall time from **16 to 75 min** down to
     **24 to 38 s** (arithmetic in Section 5).
@@ -430,7 +430,7 @@ immutable directories (`0555`)**, and each job receives an isolated writable wor
      DE-to-FI) so all 5 workers stay warm on `main`.
 5. **Test results (tree-verdict receipts only, `0%` cross-change caching by design).**
    - Arbitrary test-result caching across code edits that reach a crate is **rejected** to preserve
-     [docs/goals.md:36](../../../goals.md#L36)
+     [docs/goals.md:36](../../../goals.md)
      Promise 3; unaffected crates already skip tests via `velnor-ci plan`. The sole safe test-result
      reuse is an **attested Tree-Verdict Receipt** keyed by
      `(git_tree_sha, workflow_sha, toolchain_sha)`, which skips re-running identical `merge_group`
@@ -445,7 +445,7 @@ immutable directories (`0555`)**, and each job receives an isolated writable wor
   more busy CCDs than an idle worker with a warm `main` snapshot (`+60`), preventing queue hotspots
   while keeping all shards of one `run_id` in the same site (`DE` or `FI`).
 - **Trust and secret boundaries
-  ([docs/goals.md:44](../../../goals.md#L44)).**
+  ([docs/goals.md:44](../../../goals.md)).**
   - `compat_hash` binds
     `(OS, arch, distro_id, rustc_commit_hash, cargo_profile_flags, relative_workspace)` and **never**
     `$RUNNER_TEMP` or `ImageOS`.
@@ -456,7 +456,7 @@ immutable directories (`0555`)**, and each job receives an isolated writable wor
     generation retained per open PR, deleted on PR close or 48 h TTL). `merge_group` reads `main` only
     and writes nothing.
   - Private dependencies (`velnor-deps` App token,
-    [docs/hard-decisions.md:388-421](../../../hard-decisions.md#L388-L421))
+    [docs/hard-decisions.md:388-421](../../../hard-decisions.md))
     are fetched and revoked before repository code runs, and any snapshot containing private-dep
     artifacts is tagged `visibility = internal` so public fork microVMs receive only public `main`
     block seeds (`dm-snapshot` read-only, all guest writes destroyed on VM exit).
@@ -517,7 +517,7 @@ immutable directories (`0555`)**, and each job receives an isolated writable wor
      saving **5.5 to 9.2 runner-min** per run.
    - **`Check / maintenance-helpers`.** Move `velnor-archive-guard` and `velnor-actions-freshness`
      into the unified cached workspace run, deleting
-     [mise.toml:90-199](../../../../mise.toml#L90-L199)'s
+     [mise.toml:90-199](../../../../mise.toml)'s
      uncached temp `CARGO_HOME`, `--config build.jobs=2`, `--jobs 2`, and
      `threads-required = "num-test-threads"` serialization (`508 s` drops to `~20 s`).
 5. **Eliminate double and triple runs across push-to-merge.**
@@ -528,7 +528,7 @@ immutable directories (`0555`)**, and each job receives an isolated writable wor
      `merge_group` in **~8 s**.
    - **Affected-only `merge_group` when `main` advanced.** Diff `merge_group` against its green `main`
      first parent and test **only the affected crate closure**
-     ([docs/goals.md:86](../../../goals.md#L86)
+     ([docs/goals.md:86](../../../goals.md)
      default), backed by a **6-hourly or nightly full scheduled run** (`mode = all`).
    - **No test re-run on `push` to `main`.** When `GITHUB_SHA` already passed `merge_group`, `push`
      exits green in **~8 s** and runs only an async background `main` XFS snapshot seal. Restrict
@@ -600,9 +600,9 @@ experiment `#652` (comment `6874232403`, recorded in `#586`) rules `blaze` out f
    `rustup`, and `RUSTUP_TOOLCHAIN`** (`docs/toolchain.md:12-26,262-265`). Its own docs state: *"Keep
    `cargo build`/`cargo test` with the project's toolchain in CI. blaze is for the edit loop; the
    project's toolchain decides"* (`docs/toolchain.md:272-273`). Adopting it in CI would break
-   [docs/goals.md:36](../../../goals.md#L36) Promise
+   [docs/goals.md:36](../../../goals.md) Promise
    3 and
-   [docs/hard-decisions.md:232-265](../../../hard-decisions.md#L232-L265)
+   [docs/hard-decisions.md:232-265](../../../hard-decisions.md)
    (`Rust 1.99.1`).
 2. **Missing gates and partial borrow checking.** `blaze` fails with `no such command` on `clippy`,
    `fmt`, and `doc` (`docs/usage.md:320-324`), does not run `cargo nextest` (`#652` run
@@ -810,7 +810,7 @@ standalone measurable win on `velnor-new`.
    - *Detection.* `velnor-ci report --check` flags unexpected crate rebuilds on the `Cache` check;
      `main` snapshots are `chmod 0555` immutable and verified against `inputs.tsv` digests.
    - *Containment.* Any verification error deletes the suspect snapshot, marks `Cache` red, and falls
-     back to a clean cold build ([docs/goals.md:36](../../../goals.md#L36) Never-Compromise #3). Fork jobs run exclusively in
+     back to a clean cold build ([docs/goals.md:36](../../../goals.md) Never-Compromise #3). Fork jobs run exclusively in
      KVM microVMs over `dm-snapshot` read-only public block seeds whose writes vanish at VM exit.
 3. **Undeclared cross-crate file read missed by affected-only `merge_group` selection.**
    - *Detection.* `rust-inputs-audit` checks reads on every PR, and the 6-hourly/nightly scheduled
@@ -837,19 +837,19 @@ standalone measurable win on `velnor-new`.
 ## Owner questions
 
 1. **Updating `docs/goals.md` for self-hosted CoW caches and Phase 4 native execution.**
-   [docs/goals.md:16](../../../goals.md#L16) and Rule
-   11 ([docs/goals.md:74](../../../goals.md#L74))
+   [docs/goals.md:16](../../../goals.md) and Rule
+   11 ([docs/goals.md:74](../../../goals.md))
    require that *"Jobs are always executed by GitHub's official runner"*, and
-   [docs/goals.md:45](../../../goals.md#L45) binds
+   [docs/goals.md:45](../../../goals.md) binds
    the design to *"GitHub's 10 GB of cache and on standard hosted runners."* Do you approve updating
    [docs/goals.md](../../../goals.md) so hosted mode
    preserves those limits for external users while self-hosted cluster mode uses >10 GB node-local XFS
    CoW snapshots and Phase 4's `velnor-worker` native Rust runtime (with `OfficialRunner` retained as
    local-mode oracle and fallback)?
-2. **Merge-queue ruleset and selection policy ([docs/goals.md:86](../../../goals.md#L86) vs [docs/hard-decisions.md:108](../../../hard-decisions.md#L108)).**
+2. **Merge-queue ruleset and selection policy ([docs/goals.md:86](../../../goals.md) vs [docs/hard-decisions.md:108](../../../hard-decisions.md)).**
    Do you approve (a) changing ruleset `24396608` to `min_entries_to_merge_wait_minutes = 0` and
    `max_entries_to_build = 5`, (b) skipping `push`-to-`main` test execution when `merge_group` passed
-   on the identical commit SHA, and (c) enabling [docs/goals.md:86](../../../goals.md#L86)'s default affected-only selection on
+   on the identical commit SHA, and (c) enabling [docs/goals.md:86](../../../goals.md)'s default affected-only selection on
    `merge_group` (plus tree-equal fast-pass) backed by 6-hourly/nightly full workspace runs once
    `velnor-gen` owns CI?
 3. **Replacing `velnor-runner-host`'s 171k-LOC monolith instead of extending it via PR `#1324`.** PR

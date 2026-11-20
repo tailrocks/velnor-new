@@ -69,23 +69,23 @@ nine `mbx` variants in issue `#585` and dropped `mbx` in `velnor-gen`.
   `velnor-node` pipe shim, first-`renewjob` gate (actions-runner/src/Runner.Listener/JobDispatcher.cs:395-406), and UTF-16LE encoder.
 - **`mbx-cache` OIDC authorization (proposal-G.md:311).** Both [velnor-new/.github/workflows/ci.yml:35-40](../../../../.github/workflows/ci.yml#L35-L40) and
   [velnor-new/generator/samples/velnor-new/expected/.github/workflows/rust-ci.yml:18-19](../../../../generator/samples/velnor-new/expected/.github/workflows/rust-ci.yml#L18-L19) forbid `id-token: write` on build jobs (enforced by
-  [velnor-new/generator/crates/velnor-gen/tests/it/release_yml_security.rs:55](../../../../crates/velnor-gen/tests/it/release_yml_security.rs#L55)), so CI jobs cannot mint GitHub OIDC tokens.
+  velnor-new/generator/crates/velnor-gen/tests/it/release_yml_security.rs:55), so CI jobs cannot mint GitHub OIDC tokens.
 - **`velnor-gen` job count, cache driver, hit-rate formula, debuginfo, and `runs-on` (proposal-G.md:269, lines 301, 336, 363, and 368).**
   [rust-ci.yml:174-195](../../../../generator/samples/velnor-new/expected/.github/workflows/rust-ci.yml#L174-L195) emits 10 jobs (not 7) and uses plain Cargo `target/` caching with zero `mbx` steps. `velnor-gen` already defaults
-  `ci_debuginfo` to `LineTablesOnly` ([velnor-new/generator/crates/velnor-model/src/repo.rs:332](../../../../crates/velnor-model/src/repo.rs#L332)) and renders a static string `runs-on`
+  `ci_debuginfo` to `LineTablesOnly` (velnor-new/generator/crates/velnor-model/src/repo.rs:332) and renders a static string `runs-on`
   ([velnor-new/generator/crates/velnor-render/src/workflow.rs:67](../../../../crates/velnor-render/src/workflow.rs#L67)) with no fork-routing expression. Even if `mbx` ran over warm `target/` directories, Cargo
   skips `rustc` on ~445 Fresh crates, driving `hits / (hits + misses + not looked up)` toward 0% when caching works best while also omitting
   `mbx`'s fourth `bypassed` counter.
 - **PR `#1312` job count, `mise` download, T11 wait, and read-only Rust mount (proposal-G.md:248, lines 8, 67, 142, and 329).** Run
   `44308933193` (PR `#1312`) executed 20 non-skipped jobs (12 scale-set plus 8 hosted), not 12. `mise 2026.11.1` is baked into runner image
   `.4` (`Setup Mise` median 2 s in evidence.md:350, whereas 4.6 s in G line 95 was `cargo fetch`). T11's 86 queued jobs had median waits of 10.4 min and
-  9.1 min (evidence.md:390-391), not 20 to 40 min. Mounting the Rust toolchain read-only under `ci.yml` fails [velnor-new/.github/workflows/ci.yml:438](../../../../.github/workflows/ci.yml#L438)
+  9.1 min (evidence.md:390-391), not 20 to 40 min. Mounting the Rust toolchain read-only under `ci.yml` fails [velnor-new/.github/workflows/ci.yml:438](../../../../.github/workflows/ci.yml)
   (`rust_installed_manifest_unwritable`).
 
 ### 3. Missed bottlenecks or risks
 
 - **Dropping CI's `push` trigger breaks releases, cache saves, and pruning (proposal-G.md:276).** `velnor-ci release-gate`
-  ([velnor-new/ci-helper/crates/velnor-ci/src/gate.rs:137-155](../../../../crates/velnor-ci/src/gate.rs#L137-L155)), `velnor-gen`'s `release.yml` ([velnor-new/generator/crates/velnor-render/src/release.rs:95-105](../../../../crates/velnor-render/src/release.rs#L95-L105)),
+  ([velnor-new/ci-helper/crates/velnor-ci/src/gate.rs:137-155](../../../../crates/velnor-ci/src/gate.rs#L137-L155)), `velnor-gen`'s `release.yml` (velnor-new/generator/crates/velnor-render/src/release.rs:95-105),
   velnor-new/.github/workflows/product-release.yml:86, and velnor-new/.github/workflows/cache-prune.yml:20 all require `event == "push"` on `main`, and
   direct pushes bypassing the queue would land unverified.
 - **Dropped `local-mode` coverage and ruleset `24396608` deadlock in Phase 1 (proposal-G.md:368).** Switching to `rust-ci.yml` as-is drops
@@ -133,8 +133,8 @@ layers over a mutable lowerdir, repeating the registrar `flock` bottleneck docum
    patches one integer replica count, so `kube-scheduler` places pods across DE and FI (`35 ms` RTT) blind to cache warmth or sibling test
    shards. Testing one unprivileged ARC pod spec without writable host mounts across DE and FI workers settles this.
 2. **MBX is the right compiler cache for `velnor-new` (proposal-E.md:568-591).**
-   Proposal E misses `velnor-new`'s roadmap record (`#585` and `#586`, cited at [velnor-new/docs/roadmap.md:48](../../../roadmap.md#L48)) and
-   [velnor-new/docs/implemented/cache-measurements.md:81-108](../../../implemented/cache-measurements.md#L81-L108). Every tested `mbx` mode recompiled 10 to 68 crates on unchanged warm runs due
+   Proposal E misses `velnor-new`'s roadmap record (`#585` and `#586`, cited at [velnor-new/docs/roadmap.md:48](../../../roadmap.md)) and
+   [velnor-new/docs/implemented/cache-measurements.md:81-108](../../../implemented/cache-measurements.md). Every tested `mbx` mode recompiled 10 to 68 crates on unchanged warm runs due
    to external `OUT_DIR` `StaleDepFingerprint` cascades, `mbx` compile counts agreed with Cargo logs in 1 of 163 runs, and `velnor-gen`
    flags `[wrappers.cargo] command = "mbx"` as a weakening wrapper ([velnor-new/generator/crates/velnor-gen/tests/it/weaken.rs:84-88](../../../../crates/velnor-gen/tests/it/weaken.rs#L84-L88)).
    Running `#585`'s `warm` and `leaf` benchmarks on a worker node comparing plain Cargo over XFS reflinked `target/` (`velnor-ci inputs
@@ -158,9 +158,9 @@ layers over a mutable lowerdir, repeating the registrar `flock` bottleneck docum
   little about download time because *"The cluster image already seeds tools."* velnor-runners/state/RESULT.md:115 states the opposite:
   *"Not baked in: the Rust toolchain. Generated workflows install it into `RUSTUP_HOME=${{ runner.temp }}/velnor/rustup`, which is per-job."*
   Scale-set Rust jobs spend 10 s median and 18 s p90 installing Rust (`706 runner-min` in evidence.md:344).
-- **Wrong and out-of-bounds `path:line` citations (proposal-E.md:99, lines 131 and 257).** [velnor-new/crates/velnor-runner/crates/velnor-runner-core/src/ownership.rs:1-34](../../../../crates/velnor-runner-core/src/ownership.rs#L1-L34)
-  has 34 lines total, so `ownership.rs:21-42` runs past EOF. [velnor-new/.github/workflows/ci.yml:2592-2620](../../../../.github/workflows/ci.yml#L2592-L2620) contains `MBX stats`, `Upload
-  crate reports`, and the `local-mode` header rather than parallel check steps (`2570-2590`). [ci.yml:703-707](../../../../.github/workflows/ci.yml#L703-L707) is `Compute state snapshot key`
+- **Wrong and out-of-bounds `path:line` citations (proposal-E.md:99, lines 131 and 257).** velnor-new/crates/velnor-runner/crates/velnor-runner-core/src/ownership.rs:1-34
+  has 34 lines total, so `ownership.rs:21-42` runs past EOF. [velnor-new/.github/workflows/ci.yml:2592-2620](../../../../.github/workflows/ci.yml) contains `MBX stats`, `Upload
+  crate reports`, and the `local-mode` header rather than parallel check steps (`2570-2590`). [ci.yml:703-707](../../../../.github/workflows/ci.yml) is `Compute state snapshot key`
   (`&s25`), not scale-set `Restore Cargo sources` (`666-674`). Proposal E also cites 15 unsubmitted local scratch files
   (`ci-pack-analysis.txt:7`, `ci-live-analysis.txt:2-15`, `github-main-rules.jsonl:5`) as `path:line` sources.
 - **Misread `[[checks]]` selector in `.velnor/config.toml:282-956` (proposal-E.md:411-417).** `.velnor/config.toml` omits
@@ -169,7 +169,7 @@ layers over a mutable lowerdir, repeating the registrar `flock` bottleneck docum
 - **Missed `StateCompat` mismatch and stale Blaze and generator facts (proposal-E.md:352-356, lines 138, 418 to 429, and 601).** Even the 6
   `generator` and 4 `ci-helper` seals that succeeded had 0 of 3,636 scale-set restores because `ci.yml:707` hashes `ImageOS`, `$RUNNER_TEMP`,
   and `$GITHUB_WORKSPACE` into `compat` (`#1305` comment `6980735625`), so replacing the tip check alone still yields 0% restores. Blaze had
-  releases through `v0.20261105.4` (tested and rejected in `#652`), not `v0.20261027.0`, and `velnor-gen` ([rust-ci.yml:1631-1668](../../../../generator/samples/velnor-new/expected/.github/workflows/rust-ci.yml#L1631-L1668)) already
+  releases through `v0.20261105.4` (tested and rejected in `#652`), not `v0.20261027.0`, and `velnor-gen` ([rust-ci.yml:1631-1668](../../../../generator/samples/velnor-new/expected/.github/workflows/rust-ci.yml)) already
   retired `ledger-cli` and `Required verdict`.
 
 ### 3. Missed bottlenecks or risks
@@ -228,12 +228,12 @@ missing `#585`'s proof that `mbx` loses to plain Cargo `target/` snapshots.
    and that client lives in Phase 4's unbuilt `velnor-runner-proto`. Checking how `needs.rust-plan.outputs` could be populated via the Scale
    Set admin API alone settles this.
 3. **Skipping test binaries by `hash(test binary digest + env class)` keeps equal verification confidence (proposal-F.md:294, lines 218 and 434).**
-   As [velnor-new/ci-helper/crates/velnor-ci/src/cli.rs:214](../../../../crates/velnor-ci/src/cli.rs#L214) states, integration tests read unembedded repo files at runtime.
-   [velnor-new/generator/crates/velnor-gen/tests/it/golden.rs:19-24](../../../../crates/velnor-gen/tests/it/golden.rs#L19-L24) reads `generator/samples/**` and `.velnor/config.toml`,
+   As velnor-new/ci-helper/crates/velnor-ci/src/cli.rs:214 states, integration tests read unembedded repo files at runtime.
+   velnor-new/generator/crates/velnor-gen/tests/it/golden.rs:19-24 reads `generator/samples/**` and `.velnor/config.toml`,
    velnor-new/crates/velnor-archive-guard/tests/golden_collector_public/gate.rs:30-46 runs `scripts/generator-release/source-qualification.sh`
    and reads `MANIFEST.sha256`, and velnor-new/crates/velnor-actions-cli/tests/image_publication_public/context_fixture.rs:47-84 reads
    `.velnor/*.lock`. Editing any of those files leaves the test binary digest unchanged, skipping the broken test 95% of the time and
-   violating `brief-v1.md:11` and [velnor-new/docs/goals.md:36](../../../goals.md#L36). Corrupting `generator/samples/velnor-new/expected/.github/workflows/rust-ci.yml`
+   violating `brief-v1.md:11` and [velnor-new/docs/goals.md:36](../../../goals.md). Corrupting `generator/samples/velnor-new/expected/.github/workflows/rust-ci.yml`
    and confirming `velnor-gen`'s `it` binary SHA-256 stays identical settles this.
 4. **Six 12-CPU shards cut `runner-host` tests to 35 to 50 s (`<= 60 s` gate) and four shards cut `actions-cli` to 60 s without fixing slow tests (proposal-F.md:296, line 435).**
    Proposal F divides `192 to 246 s` and `238 s` by `6` and `4`, forgetting those baselines already ran across 96 uncapped threads
@@ -242,7 +242,7 @@ missing `#585`'s proof that `mbx` loses to plain Cargo `target/` snapshots.
    (velnor-new/crates/velnor-actions-cli/tests/image_publication_public.rs:85-138) plus its `89 s` fixture build keep both suites above 4 min.
    Running 6-shard nextest partitioning on 12-CPU cgroups today settles this.
 5. **In-place container scrubbing across 50 untrusted PR jobs paired with `velnor-runner-host`'s 185k-LOC journal (proposal-F.md:334, line 190).**
-   `velnor-runner-host` proves deletion via 404 ([ownership.rs:27-34](../../../../crates/velnor-runner-core/src/ownership.rs#L27-L34)), not multi-job container scrubbing, and carries ~60 open bugs
+   `velnor-runner-host` proves deletion via 404 (ownership.rs:27-34), not multi-job container scrubbing, and carries ~60 open bugs
    (evidence.md:951-953). Reusing a live container across 50 untrusted PRs risks cross-job residue in `/dev/shm`, keyrings, or writable slot
    trees when spawning a fresh rootless container over an XFS reflinked rootfs takes `<50 ms`.
 
@@ -262,7 +262,7 @@ missing `#585`'s proof that `mbx` loses to plain Cargo `target/` snapshots.
   jobs to 2 compiler processes (contradicting its own line 47 observation of 88-core bursts), velnor-new/crates/velnor-actions-contract/src/config/preview_policy.rs:57-88
   and resources.rs:135-155 only validate optional `build_jobs` and `default_shards` caps and emit no Cargo or nextest thread flags.
 - **Conflating legacy `ci.yml` ledgers with `velnor-gen`'s `rust-ci.yml`, default linker error, and inventory misattribution (proposal-F.md:200, lines 130, 270, 390, and 401).**
-  [rust-ci.yml:1631-1668](../../../../generator/samples/velnor-new/expected/.github/workflows/rust-ci.yml#L1631-L1668) has no per-job signed ledgers, no `Required verdict` job (only `Required`), and zero `mbx` steps. Rust 1.99.1 on
+  [rust-ci.yml:1631-1668](../../../../generator/samples/velnor-new/expected/.github/workflows/rust-ci.yml) has no per-job signed ledgers, no `Required verdict` job (only `Required`), and zero `mbx` steps. Rust 1.99.1 on
   `x86_64-unknown-linux-gnu` already defaults to `rust-lld` (not GNU `ld`), and the `2x3.84 TB + 3x15 TB` disk strings come from
   velnor-runners/README.md:26-31, not `inventory.md` (`3.5T`, `14T`).
 
@@ -317,7 +317,7 @@ runtime-read fixtures, samples, or scripts changed.
   Runner.cs:742-764 refutes F (`acquirejob` returns `409` on second use) and backs **G's L1** (Rust listener plus local UTF-16LE pipe to
   unmodified `Runner.Worker`) and **E's rule** (any native worker must run `node24` JS actions in-sandbox rather than rejecting or handing off
   after `acquirejob`).
-- **Test skipping, slow suites, and `main` pushes.** `landlock(7)` (`stat(2)` gap) and runtime fixture reads ([cli.rs:214](../../../../crates/velnor-ci/src/cli.rs#L214),
+- **Test skipping, slow suites, and `main` pushes.** `landlock(7)` (`stat(2)` gap) and runtime fixture reads (cli.rs:214,
   [golden.rs:19-24](../../../../crates/velnor-gen/tests/it/golden.rs#L19-L24)) decisively support **E** over G and F: never skip selected test binaries across code or fixture edits, refactor the four
   `>250 s` suites (`unbound_retirement`, `runner_image_qualification_public`, `image_publication_public`, `maintenance-helpers`) before
   sharding, and emit a fast tree-verified `push` receipt on `main` ([gate.rs:137-155](../../../../crates/velnor-ci/src/gate.rs#L137-L155)) rather than dropping the `push` trigger as G proposes.
