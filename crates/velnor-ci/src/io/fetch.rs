@@ -126,8 +126,14 @@ fn fetch_with(args: &FetchArgs, token: Option<&str>) -> Result<(), CiError> {
             home.join(".rustup"),
             "RUSTUP_HOME",
         )?;
-        let resolved =
-            super::fetch_toolchain::resolve(&cargo, &home, &rustup_home, neutral, &trusted)?;
+        let resolved = super::fetch_toolchain::resolve(
+            &cargo,
+            &home,
+            &rustup_home,
+            neutral,
+            &trusted,
+            fixed.as_ref(),
+        )?;
         cargo = resolved.cargo;
         toolchain = Some(resolved.toolchain);
     }

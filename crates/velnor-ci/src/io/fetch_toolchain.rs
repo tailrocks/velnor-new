@@ -9,6 +9,7 @@ use std::process::{Command, Output};
 use crate::error::CiError;
 
 use super::fetch::Trusted;
+use super::fetch_fixed::Located;
 
 const PROXY: &str = "rustup";
 const TOOLCHAIN_VARIABLE: &str = "RUSTUP_TOOLCHAIN";
@@ -24,10 +25,11 @@ pub(super) fn resolve(
     rustup_home: &Path,
     neutral: &Path,
     trusted: &Trusted,
+    fixed: Option<&Located>,
 ) -> Result<Resolved, CiError> {
     let resolved = std::fs::canonicalize(cargo)
         .map_err(|e| CiError::new(format!("cannot resolve {}: {e}", cargo.display())))?;
-    let Some(rustup) = beside(cargo, &resolved, trusted) else {
+    let Some(rustup) = beside(cargo, &resolved, trusted, fixed) else {
         return Ok(Resolved {
             cargo: cargo.to_path_buf(),
             toolchain: chosen()
@@ -94,14 +96,23 @@ pub(super) fn resolve(
     })
 }
 
-fn beside(cargo: &Path, resolved: &Path, trusted: &Trusted) -> Option<PathBuf> {
+pub(super) fn beside(
+    cargo: &Path,
+    resolved: &Path,
+    trusted: &Trusted,
+    fixed: Option<&Located>,
+) -> Option<PathBuf> {
     if resolved.file_name().is_some_and(|name| name == PROXY) {
         return Some(resolved.to_path_buf());
     }
     [cargo.with_file_name(PROXY), resolved.with_file_name(PROXY)]
         .into_iter()
         .filter_map(|candidate| std::fs::canonicalize(candidate).ok())
-        .find(|rustup| rustup.is_file() && trusted.within(rustup))
+        .find(|rustup| {
+            rustup.is_file()
+                && trusted.within(rustup)
+                && fixed.is_none_or(|fixed| fixed.seals(rustup))
+        })
 }
 
 fn real_cargo(printed: &str, rustup_home: &Path, proxies: &[&Path]) -> Option<PathBuf> {

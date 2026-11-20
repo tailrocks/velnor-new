@@ -12,6 +12,7 @@ use super::fetch::{Inherited, Trusted};
 const BASE: &str = "/opt/rust";
 const GROUP_AND_OTHER_WRITE: u32 = 0o022;
 
+#[derive(Clone)]
 pub(super) struct Fixed {
     base: PathBuf,
     owner: u32,
@@ -20,6 +21,7 @@ pub(super) struct Fixed {
 
 pub(super) struct Located {
     pub(super) cargo: PathBuf,
+    seal: Fixed,
     cargo_home: PathBuf,
     rustup_home: PathBuf,
 }
@@ -46,6 +48,7 @@ impl Fixed {
             && self.sealed(&resolved))
         .then(|| Located {
             cargo: candidate,
+            seal: self.clone(),
             cargo_home,
             rustup_home: self.base.join("rustup"),
         })
@@ -65,6 +68,10 @@ impl Fixed {
 }
 
 impl Located {
+    pub(super) fn seals(&self, path: &Path) -> bool {
+        self.seal.sealed(path)
+    }
+
     pub(super) fn roots(&self) -> [PathBuf; 2] {
         [self.cargo_home.clone(), self.rustup_home.clone()]
     }
@@ -173,6 +180,48 @@ mod tests {
         fs::write(chosen.join(".package-cache"), "").unwrap_or_else(|e| unreachable!("{e}"));
         fs::write(chosen.join("registry/index"), "").unwrap_or_else(|e| unreachable!("{e}"));
         assert!(home.join(".cargo/registry/index").is_file());
+    }
+
+    fn beside_cargo(fixed: &Fixed, found: &Located) -> Option<PathBuf> {
+        let trusted = Trusted::new(&fixed.base, &found.roots());
+        let cargo = fs::canonicalize(&found.cargo).unwrap_or_else(|e| unreachable!("{e}"));
+        super::super::fetch_toolchain::beside(&found.cargo, &cargo, &trusted, Some(found))
+    }
+
+    #[test]
+    fn a_rustup_next_to_the_sealed_cargo_is_used_only_when_it_is_sealed_too() {
+        let (_, fixed) = sealed_tree("rustup");
+        let rustup = fixed.base.join("cargo/bin/rustup");
+        script(&rustup);
+        let found = fixed.find().unwrap_or_else(|| unreachable!("not found"));
+        let sealed = fs::canonicalize(&rustup).ok();
+        assert_eq!(beside_cargo(&fixed, &found), sealed);
+        for mode in [0o775, 0o757] {
+            fs::set_permissions(&rustup, fs::Permissions::from_mode(mode))
+                .unwrap_or_else(|e| unreachable!("{e}"));
+            assert_eq!(beside_cargo(&fixed, &found), None, "{mode:o}");
+        }
+    }
+
+    #[test]
+    fn a_rustup_link_from_the_sealed_toolchain_to_a_writable_place_is_not_used() {
+        let (root, fixed) = sealed_tree("rustup-link");
+        let elsewhere = root.join("home/.cargo/bin/rustup");
+        script(&elsewhere);
+        fs::set_permissions(
+            root.join("home/.cargo/bin"),
+            fs::Permissions::from_mode(0o775),
+        )
+        .unwrap_or_else(|e| unreachable!("{e}"));
+        symlink(&elsewhere, fixed.base.join("cargo/bin/rustup"))
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        let found = fixed.find().unwrap_or_else(|| unreachable!("not found"));
+        let trusted = Trusted::new(&root.join("home"), &found.roots());
+        let cargo = fs::canonicalize(&found.cargo).unwrap_or_else(|e| unreachable!("{e}"));
+        assert_eq!(
+            super::super::fetch_toolchain::beside(&found.cargo, &cargo, &trusted, Some(&found)),
+            None
+        );
     }
 
     #[test]
