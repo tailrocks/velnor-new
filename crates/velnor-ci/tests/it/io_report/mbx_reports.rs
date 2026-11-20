@@ -33,6 +33,21 @@ pub(super) fn cargo_with(
     enabled: bool,
     socket: Option<&std::path::Path>,
 ) -> ResultTest {
+    let output =
+        cargo_command(repo, subcommand, report, stderr, inherited, enabled, socket)?.output()?;
+    assert!(output.status.success(), "{output:?}");
+    Ok(())
+}
+
+pub(super) fn cargo_command(
+    repo: &Repo,
+    subcommand: &str,
+    report: &str,
+    stderr: &str,
+    inherited: Option<&std::path::Path>,
+    enabled: bool,
+    socket: Option<&std::path::Path>,
+) -> Result<Command, Box<dyn std::error::Error>> {
     let bin = repo.root().join("fake-bin");
     let cargo = bin.join("cargo");
     if !cargo.exists() {
@@ -56,9 +71,7 @@ pub(super) fn cargo_with(
     if let Some(socket) = socket {
         command.env("MBX_SOCKET", socket);
     }
-    let output = command.output()?;
-    assert!(output.status.success(), "{output:?}");
-    Ok(())
+    Ok(command)
 }
 
 pub(super) fn report(repo: &Repo) -> Result<LaneMetrics, Box<dyn std::error::Error>> {

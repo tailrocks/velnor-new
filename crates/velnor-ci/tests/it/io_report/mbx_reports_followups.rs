@@ -1,14 +1,18 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::mbx_reports::{cargo, cargo_with, report, report_json, session};
+use super::mbx_reports::{cargo, cargo_command, cargo_with, report, report_json, session};
 use super::{ResultTest, fixture};
 use serde_json::json;
 use std::collections::BTreeMap;
 use std::fs;
-use std::os::unix::net::{UnixListener, UnixStream};
-use std::time::{Duration, Instant};
-use velnor_ci::mbx_report::{is_socket, parse};
+use std::io::ErrorKind;
+use std::os::unix::net::UnixListener;
+use std::process::{Command, Stdio};
+use std::sync::mpsc;
+use std::thread;
+use std::time::Duration;
+use velnor_ci::mbx_report::parse;
 use velnor_ci::waste_evidence::{MbxCompilerWork, MbxSession};
 
 fn markers(repo: &super::Repo) -> usize {
@@ -89,18 +93,39 @@ fn an_existing_socket_file_is_a_live_session_without_a_connection() -> ResultTes
 fn a_socket_whose_listener_never_accepts_does_not_block_the_check() -> ResultTest {
     let repo = fixture("mbx-reports-stuck-listener")?;
     let stuck = repo.root().join("stuck.sock");
-    let _listener = UnixListener::bind(&stuck)?;
-    let waiting: Vec<UnixStream> = (0..256)
-        .map_while(|_| UnixStream::connect(&stuck).ok())
-        .collect();
-    let started = Instant::now();
-    assert!(is_socket(&stuck));
+    let listener = UnixListener::bind(&stuck)?;
+    let mut command = cargo_command(
+        &repo,
+        "build",
+        &report_json(5, 2, 0, 0),
+        "compiled",
+        None,
+        true,
+        Some(&stuck),
+    )?;
+    let child = command
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
+    let pid = child.id();
+    let (sender, receiver) = mpsc::channel();
+    thread::spawn(move || sender.send(child.wait_with_output()));
+    let Ok(output) = receiver.recv_timeout(Duration::from_secs(5)) else {
+        Command::new("kill")
+            .args(["-KILL", &pid.to_string()])
+            .status()?;
+        return Err("velnor-ci blocked on a socket whose listener never accepts".into());
+    };
+    let output = output?;
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(markers(&repo), 0);
+    listener.set_nonblocking(true)?;
     assert!(
-        started.elapsed() < Duration::from_secs(1),
-        "{:?}",
-        started.elapsed()
+        listener
+            .accept()
+            .is_err_and(|error| error.kind() == ErrorKind::WouldBlock),
+        "the check connected to the listener"
     );
-    drop(waiting);
     Ok(())
 }
 
