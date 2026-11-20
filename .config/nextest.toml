@@ -70,15 +70,15 @@ slow-timeout = { period = "10s", terminate-after = 1 }
 
 # Each of these renders or reads every recorded sample, so it runs past the 2 s default on a loaded host.
 [[profile.default.overrides]]
-filter = 'package(=velnor-gen) and binary(=it) and (test(=golden::every_sample_repository_renders_exactly_its_expected_files) or test(=fork_fence_invariant::every_job_of_every_sample_that_a_pull_request_reaches_is_fenced) or test(=trim_job::no_job_of_any_sample_that_can_run_on_a_pull_request_or_merge_group_holds_actions_write) or test(=unused_anchors::no_rendered_sample_workflow_has_an_anchor_nobody_aliases) or test(=repo_sample::the_recorded_repository_sample_has_a_root_per_workspace_with_the_members_cargo_reports))'
+filter = 'package(=velnor-gen) and binary(=it) and (test(=golden::every_sample_repository_renders_exactly_its_expected_files) or test(=fork_fence_invariant::every_job_of_every_sample_that_a_pull_request_reaches_is_fenced) or test(=trim_job::no_job_of_any_sample_that_can_run_on_a_pull_request_or_merge_group_holds_actions_write) or test(=unused_anchors::no_rendered_sample_workflow_has_an_anchor_nobody_aliases) or test(=repo_sample::the_recorded_repository_sample_has_a_root_per_workspace_with_the_members_cargo_reports) or test(=nested_target_dir::no_root_of_any_sample_builds_inside_a_package_directory_from_the_new_helper))'
 slow-timeout = { period = "10s", terminate-after = 1 }
 
 [[profile.ci.overrides]]
-filter = 'package(=velnor-gen) and binary(=it) and (test(=golden::every_sample_repository_renders_exactly_its_expected_files) or test(=fork_fence_invariant::every_job_of_every_sample_that_a_pull_request_reaches_is_fenced) or test(=trim_job::no_job_of_any_sample_that_can_run_on_a_pull_request_or_merge_group_holds_actions_write) or test(=unused_anchors::no_rendered_sample_workflow_has_an_anchor_nobody_aliases) or test(=repo_sample::the_recorded_repository_sample_has_a_root_per_workspace_with_the_members_cargo_reports))'
+filter = 'package(=velnor-gen) and binary(=it) and (test(=golden::every_sample_repository_renders_exactly_its_expected_files) or test(=fork_fence_invariant::every_job_of_every_sample_that_a_pull_request_reaches_is_fenced) or test(=trim_job::no_job_of_any_sample_that_can_run_on_a_pull_request_or_merge_group_holds_actions_write) or test(=unused_anchors::no_rendered_sample_workflow_has_an_anchor_nobody_aliases) or test(=repo_sample::the_recorded_repository_sample_has_a_root_per_workspace_with_the_members_cargo_reports) or test(=nested_target_dir::no_root_of_any_sample_builds_inside_a_package_directory_from_the_new_helper))'
 slow-timeout = { period = "10s", terminate-after = 1 }
 
 [[profile.default.overrides]]
-filter = "package(=velnor-ci) and (test(io_restore_cargo::) | test(io_restore_cold_cargo::) | test(io_raw_paths::) | test(io_cold_targets::) | test(io_shared_targets::) | test(io_foreign_targets::) | test(io_restored_targets::) | test(io_snapshot_storage::) | test(io_inputs_scope::) | test(io_inputs_batch::) | test(io_scope_cache::) | test(io_scope_cache_races::) | test(io_scope_cache_paths::))"
+filter = "package(=velnor-ci) and (test(io_restore_cargo::) | test(io_restore_cold_cargo::) | test(io_raw_paths::) | test(io_cold_targets::) | test(io_shared_targets::) | test(io_foreign_targets::) | test(io_restored_targets::) | test(io_nested_targets::) | test(io_snapshot_storage::) | test(io_inputs_scope::) | test(io_inputs_batch::) | test(io_scope_cache::) | test(io_scope_cache_races::) | test(io_scope_cache_paths::))"
 slow-timeout = { period = "30s", terminate-after = 1 }
 
 [[profile.default.overrides]]
@@ -155,6 +155,30 @@ filter = 'package(=velnor-ci) and (test(=audit::freshness::distinct_declared_tre
 slow-timeout = { period = "30s", terminate-after = 1 }
 
 [[profile.default.overrides]]
+filter = 'package(=velnor-ci) and test(=cache_prune_fresh::a_pruned_build_directory_leaves_every_dependency_fresh_for_the_next_build)'
+slow-timeout = { period = "30s", terminate-after = 1 }
+
+[[profile.ci.overrides]]
+filter = 'package(=velnor-ci) and test(=cache_prune_fresh::a_pruned_build_directory_leaves_every_dependency_fresh_for_the_next_build)'
+slow-timeout = { period = "30s", terminate-after = 1 }
+
+# setup_action tests fork installs that block on a FIFO and wait on watchdog and deadline
+# timers of up to 30 s (orphan tests: up to 120 s in the worst case).
+[[profile.default.overrides]]
+filter = 'package(=velnor-gen) and binary(=it) and test(/^setup_action/)'
+slow-timeout = { period = "30s", terminate-after = 4 }
+
+# Renders every lane output of four plans and checks each rendered workflow.
+[[profile.default.overrides]]
+filter = 'package(=velnor-gen) and binary(=it) and test(saving_lane_outputs_fit_the_required_context_bound)'
+slow-timeout = { period = "10s", terminate-after = 1 }
+
+# These wait for a grace period or a background process that holds a pipe: 5 s grace, and up to 2 x grace of wall time.
+[[profile.default.overrides]]
+filter = 'package(=velnor-ci) and (test(run_returns_when_the_command_exits_although_a_background_process_keeps_its_pipes_open) | test(run_waits_for_all_open_pipes_within_one_shared_grace_period) | test(run_withholds_counts_when_a_descendant_keeps_the_summary_pipe_open) | test(run_writes_no_counts_when_a_held_pipe_never_printed_a_summary))'
+slow-timeout = { period = "30s", terminate-after = 1 }
+
+[[profile.default.overrides]]
 filter = "package(=velnor-ci) or package(=velnor-gen) or package(=velnor-model) or package(=velnor-release) or package(=velnor-render) or package(=velnor-rust)"
 slow-timeout = { period = "2s", terminate-after = 1 }
 
@@ -165,3 +189,16 @@ test-group = "probe-cleanup-observer-serial"
 [[profile.ci.overrides]]
 filter = "package(=velnor-resource-probe) and binary(=job_hook_public)"
 test-group = "probe-cleanup-observer-serial"
+
+# Same tiers as profile.default for the tests added above. profile.ci has no 2 s line of its own.
+[[profile.ci.overrides]]
+filter = 'package(=velnor-gen) and binary(=it) and test(/^setup_action/)'
+slow-timeout = { period = "30s", terminate-after = 4 }
+
+[[profile.ci.overrides]]
+filter = 'package(=velnor-gen) and binary(=it) and test(saving_lane_outputs_fit_the_required_context_bound)'
+slow-timeout = { period = "10s", terminate-after = 1 }
+
+[[profile.ci.overrides]]
+filter = 'package(=velnor-ci) and (test(run_returns_when_the_command_exits_although_a_background_process_keeps_its_pipes_open) | test(run_waits_for_all_open_pipes_within_one_shared_grace_period) | test(run_withholds_counts_when_a_descendant_keeps_the_summary_pipe_open) | test(run_writes_no_counts_when_a_held_pipe_never_printed_a_summary))'
+slow-timeout = { period = "30s", terminate-after = 1 }

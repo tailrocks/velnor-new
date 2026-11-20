@@ -42,6 +42,10 @@ path = "tests/provenance_envelope_public.rs"
 name = "registry_graph_public"
 path = "tests/registry_graph_public.rs"
 
+[[test]]
+name = "optional_input_rerun_public"
+path = "tests/optional_input_rerun_public.rs"
+
 [dependencies]
 flate2 = { version = "=1.1.11", default-features = false, features = ["rust_backend"] }
 serde = { workspace = true }

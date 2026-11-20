@@ -35,7 +35,8 @@ pub(crate) fn insert(sources: Option<&PrivateSources>, jobs: &mut [Job]) {
             })
             .collect();
         let gate = shared_gate(job.steps.iter().filter(|step| runs_repository_code(step)));
-        let phase = [
+        let mut kinds = advisory_fetch(&job.steps);
+        kinds.extend([
             StepKind::PrivateCheck {
                 cached: cached.clone(),
             },
@@ -44,8 +45,8 @@ pub(crate) fn insert(sources: Option<&PrivateSources>, jobs: &mut [Job]) {
                 cached: cached.clone(),
             },
             StepKind::PrivateFetch { manifests, cached },
-        ]
-        .map(|kind| Step {
+        ]);
+        let phase = kinds.into_iter().map(|kind| Step {
             gate: gate.clone(),
             ..step(kind)
         });
@@ -53,6 +54,26 @@ pub(crate) fn insert(sources: Option<&PrivateSources>, jobs: &mut [Job]) {
         job.permissions
             .0
             .insert(PermissionScope::PullRequests, Access::Read);
+    }
+}
+
+/// cargo-deny runs `--offline` once private sources are configured, so the advisory DB
+/// must be fetched first. The DB is public: this step gets no token and no private config.
+fn advisory_fetch(steps: &[Step]) -> Vec<StepKind> {
+    let mut configs: Vec<Option<RepoPath>> = Vec::new();
+    let denies = steps.iter().filter_map(|step| match &step.kind {
+        StepKind::Cargo(CargoCommand::Deny { config, .. }) => Some(config.clone()),
+        _ => None,
+    });
+    for config in denies {
+        if !configs.contains(&config) {
+            configs.push(config);
+        }
+    }
+    if configs.is_empty() {
+        Vec::new()
+    } else {
+        vec![StepKind::AdvisoryFetch { configs }]
     }
 }
 

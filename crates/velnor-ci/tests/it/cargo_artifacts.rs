@@ -151,3 +151,59 @@ fn oversized_cargo_artifacts_report_rejection_once_across_chunks_and_eof() {
         }
     }
 }
+
+#[test]
+fn text_report_names_each_failed_package_in_every_target_form() {
+    let input = [
+        "error: could not compile `alpha` (lib) due to 1 previous error",
+        "error: could not compile `beta` (bin \"beta-cli\") due to 2 previous errors; 1 warning emitted",
+        "error: could not compile `gamma` (lib test) due to previous error",
+        "error: could not compile `delta` (test \"suite\") due to previous error",
+        "error: could not compile `epsilon`",
+        "warning: build failed, waiting for other jobs to finish...",
+        "   Compiling zeta v1.0.0",
+    ]
+    .join("\n");
+    let mut tap = ArtifactTap::default();
+    tap.feed(input.as_bytes());
+    let names: Vec<_> = tap
+        .finish()
+        .failed_units
+        .into_iter()
+        .map(|unit| (unit.package, unit.version))
+        .collect();
+    assert_eq!(
+        names,
+        [
+            ("alpha".to_owned(), None),
+            ("beta".to_owned(), None),
+            ("gamma".to_owned(), None),
+            ("delta".to_owned(), None),
+            ("epsilon".to_owned(), None),
+        ]
+    );
+}
+
+#[test]
+fn a_build_script_run_is_recorded_with_its_package_and_output_directory() {
+    let run = json!({
+        "reason": "build-script-executed",
+        "package_id": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.0",
+        "linked_libs": [], "linked_paths": [], "cfgs": [], "env": [],
+        "out_dir": "/work/target/debug/build/serde-0123456789abcdef/out"
+    });
+    let unreadable = json!({"reason": "build-script-executed", "package_id": "x"});
+    let input = format!("{run}\n{unreadable}\n");
+    let mut tap = ArtifactTap::default();
+    tap.feed(input.as_bytes());
+    let batch = tap.finish();
+    assert_eq!(
+        batch.build_scripts,
+        [velnor_ci::cargo_artifacts::BuildScriptRun {
+            package_id: "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.0"
+                .to_owned(),
+            out_dir: "/work/target/debug/build/serde-0123456789abcdef/out".to_owned(),
+        }]
+    );
+    assert_eq!(batch.rejected, 0);
+}

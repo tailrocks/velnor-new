@@ -33,16 +33,34 @@ pub struct CargoProfile {
     pub test: bool,
 }
 
+/// A build script cargo ran or replayed (`build-script-executed`): its package and output
+/// directory, whose parent directory holds the run's records.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BuildScriptRun {
+    pub package_id: String,
+    pub out_dir: String,
+}
+
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct ArtifactBatch {
     pub artifacts: Vec<CargoArtifact>,
+    pub build_scripts: Vec<BuildScriptRun>,
     pub rejected: u64,
     pub progress: Vec<CargoProgress>,
     pub tests: Vec<(String, f64)>,
-    /// `(name, version)` of units cargo reported a compile error for.
-    pub failed_units: Vec<(String, String)>,
-    /// Cargo reported `build-finished` with `success: false`.
+    /// Units cargo reported a compile error for.
+    pub failed_units: Vec<FailedUnit>,
+    /// Cargo reported `build-finished` with `success: false`. A diagnostic only: it does not say
+    /// which units failed.
     pub build_failed: bool,
+}
+
+/// A unit that cargo could not compile. Cargo's text report (`error: could not compile`) names the
+/// package only, so `version` is set only when a JSON `compiler-message` gave the package id.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FailedUnit {
+    pub package: String,
+    pub version: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -123,6 +141,9 @@ impl ArtifactTap {
             if let Some(test) = individual_test(line) {
                 self.batch.tests.push(test);
             }
+            if let Some(unit) = failed_unit(line) {
+                self.batch.failed_units.push(unit);
+            }
         }
         let Ok(value) = serde_json::from_slice::<serde_json::Value>(&self.line) else {
             return;
@@ -138,15 +159,26 @@ impl ArtifactTap {
                     .and_then(serde_json::Value::as_str)
                     .and_then(crate::cargo_package::PackageIdentity::parse);
                 if is_error && let Some(identity) = identity {
-                    self.batch
-                        .failed_units
-                        .push((identity.name.to_owned(), identity.version.to_owned()));
+                    self.batch.failed_units.push(FailedUnit {
+                        package: identity.name.to_owned(),
+                        version: Some(identity.version.to_owned()),
+                    });
                 }
                 return;
             }
             Some("build-finished") => {
                 if value.get("success").and_then(serde_json::Value::as_bool) == Some(false) {
                     self.batch.build_failed = true;
+                }
+                return;
+            }
+            Some("build-script-executed") => {
+                let text = |key| value.get(key).and_then(serde_json::Value::as_str);
+                if let (Some(package_id), Some(out_dir)) = (text("package_id"), text("out_dir")) {
+                    self.batch.build_scripts.push(BuildScriptRun {
+                        package_id: package_id.to_owned(),
+                        out_dir: out_dir.to_owned(),
+                    });
                 }
                 return;
             }
@@ -158,6 +190,18 @@ impl ArtifactTap {
             Err(_) => self.batch.rejected += 1,
         }
     }
+}
+
+/// `error: could not compile `pkg` (lib) due to 1 previous error`, and the same with `(bin "x")`,
+/// `(test "y")`, `due to previous error`, `; 2 previous errors`. Cargo prints it in every message
+/// format, including `json-render-diagnostics`, which emits no `compiler-message` for rustc errors.
+fn failed_unit(line: &str) -> Option<FailedUnit> {
+    let rest = line.strip_prefix("error: could not compile `")?;
+    let (package, _) = rest.split_once('`')?;
+    (!package.is_empty()).then(|| FailedUnit {
+        package: package.to_owned(),
+        version: None,
+    })
 }
 
 fn cargo_progress(line: &str) -> Option<CargoProgress> {

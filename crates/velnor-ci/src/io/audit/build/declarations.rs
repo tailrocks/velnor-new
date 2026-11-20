@@ -28,7 +28,7 @@ pub(super) fn declarations(
     location: &Path,
 ) -> Result<Vec<Declared>, CiError> {
     let mut found = Vec::new();
-    let targets = inventory::exclusions(workspaces);
+    let targets = inventory::exclusions(workspaces)?;
     let active = workspaces
         .iter()
         .enumerate()

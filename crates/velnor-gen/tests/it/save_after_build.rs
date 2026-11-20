@@ -63,13 +63,13 @@ fn a_save_never_follows_a_cancelled_run() -> TestResult {
 }
 
 #[test]
-fn a_failed_input_audit_still_blocks_the_save() -> TestResult {
+fn a_save_requires_the_input_audit_to_pass_when_it_is_asked_for() -> TestResult {
     let lane = rust_lane()?;
     let audit = step(&lane, "velnor-ci inputs audit").ok_or("no audit")?;
     assert!(audit.contains("id: audit_1"), "{audit}");
     for saved in saving_steps(&lane)? {
         assert!(
-            saved.contains("steps.audit_1.outcome != ''failure''"),
+            saved.contains("steps.audit_1.outcome == ''success''"),
             "{saved}"
         );
     }

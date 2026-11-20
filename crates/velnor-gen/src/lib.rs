@@ -35,6 +35,9 @@ pub const TAG_PUSH_HELPER: (u64, u64, u64) = (0, 1, 98);
 pub const BUDGET_HELPER: (u64, u64, u64) = (0, 1, 92);
 /// The first release whose `velnor-ci` accepts the `test_lane` key (and runs `lane-guard`).
 pub const TEST_LANE_HELPER: (u64, u64, u64) = (0, 1, 93);
+/// The first release whose `velnor-ci` accepts `job` in a `[[test_lane]]` table.
+// First released in tools-v0.1.107 (not tagged yet when this gate was written).
+pub const TEST_LANE_JOB_HELPER: (u64, u64, u64) = (0, 1, 107);
 pub const SPARSE_HINT_HELPER: (u64, u64, u64) = (0, 1, 103);
 
 pub fn generated_files(view: &RepoView) -> Result<BTreeMap<RepoPath, String>, GenerateError> {
@@ -60,13 +63,18 @@ pub fn expected_with_notes(
     view: &RepoView,
 ) -> Result<(BTreeMap<RepoPath, String>, Vec<String>), GenerateError> {
     let facts = detect(view)?;
+    let excluded = velnor_rust::excluded_lock_findings(view)?;
+    if let Some(finding) = excluded.iter().find(|finding| finding.refusal) {
+        return Err(GenerateError::ExcludedLockRun(finding.clone()));
+    }
     let helper = check_helper(&facts)?;
     check_tools(&facts)?;
     if let Some(roots) = source_roots_over_limit(&facts) {
         return Err(GenerateError::TooManySourceRoots(roots));
     }
     let (plan, mut files, budget_notes) = plan_and_render(view, &facts)?;
-    files.extend(reusable::reusable_workflows(view, helper)?);
+    let (reusable, reusable_notes) = reusable::reusable_workflows(view, helper)?;
+    files.extend(reusable);
     if plan
         .jobs
         .iter()
@@ -78,11 +86,20 @@ pub fn expected_with_notes(
     }
     let (release, release_notes) = release::release_workflow(view, &facts, helper, &files)?;
     files.extend(release);
-    let mut notes = facts.timings_notes;
+    let mut notes: Vec<String> = velnor_rust::untimed_auto_note(&facts)
+        .into_iter()
+        .chain(facts.timings_notes)
+        .collect();
     notes.extend(facts.private_sources);
     notes.extend(facts.private_suggestion);
     notes.extend(release_notes);
     notes.extend(budget_notes);
+    notes.extend(reusable_notes);
+    notes.extend(
+        excluded
+            .iter()
+            .map(velnor_rust::ExcludedLockFinding::message),
+    );
     Ok((files, notes))
 }
 

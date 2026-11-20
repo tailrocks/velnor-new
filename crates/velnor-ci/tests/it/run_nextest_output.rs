@@ -6,7 +6,7 @@
 use std::process::Command;
 
 use crate::run::scratch;
-use crate::run_nextest::{NEXTEST_RUN, execute_nextest, fake_nextest, listed};
+use crate::run_nextest::{NEXTEST_RUN, execute_nextest, fake_nextest, listed, without_built};
 
 #[test]
 fn run_withholds_counts_and_packages_when_a_descendant_keeps_the_summary_pipe_open() {
@@ -17,7 +17,7 @@ exit 0";
     let (output, written, _, elapsed) =
         execute_nextest("tests-run-held", script, &three, &NEXTEST_RUN, Some("300"));
     assert_eq!(output.status.code(), Some(0), "{output:?}");
-    assert_eq!(written, "existing=1\n");
+    assert_eq!(without_built(&written), "existing=1\n");
     assert!(elapsed < std::time::Duration::from_secs(15), "{elapsed:?}");
 }
 
@@ -32,7 +32,7 @@ fn run_writes_no_counts_when_a_held_pipe_never_printed_a_summary() {
         Some("300"),
     );
     assert_eq!(output.status.code(), Some(9), "{output:?}");
-    assert_eq!(written, "existing=1\n");
+    assert_eq!(without_built(&written), "existing=1\n");
     assert!(elapsed < std::time::Duration::from_secs(15), "{elapsed:?}");
 }
 

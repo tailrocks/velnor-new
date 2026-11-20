@@ -138,7 +138,7 @@ fn dependency_name(kind: DependencyKind) -> &'static str {
 
 const TARGET_DIR_HELPER: (u64, u64, u64) = (0, 1, 85);
 
-fn pin_at_least(view: &RepoView, minimum: (u64, u64, u64)) -> bool {
+pub(crate) fn pin_at_least(view: &RepoView, minimum: (u64, u64, u64)) -> bool {
     view.files
         .get(&LOCK_PATH)
         .and_then(|bytes| parse_lock(bytes).ok())

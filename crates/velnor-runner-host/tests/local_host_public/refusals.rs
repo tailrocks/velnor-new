@@ -23,7 +23,7 @@ fn differing(id_event: Option<&str>, git_ref: Option<&str>, sha: Option<&str>) -
 
 #[tokio::test]
 async fn local_job_start_check_refuses_a_run_whose_event_ref_or_sha_differ() -> TestResult<()> {
-    let Some(mut scenario) = Scenario::new_with_guest_hook().await? else {
+    let Some(mut scenario) = Scenario::new_with_runtime().await? else {
         return Ok(());
     };
     let plan = scenario.plan(1, 0)?;
@@ -74,7 +74,7 @@ async fn logged(docker: &Docker, container: &str) -> TestResult<String> {
 
 #[tokio::test]
 async fn local_pair_runner_receives_the_jit_over_its_stdin() -> TestResult<()> {
-    let Some(mut scenario) = Scenario::running_with_guest_hook(Program::Echo).await? else {
+    let Some(mut scenario) = Scenario::running_with_runtime(Program::Echo).await? else {
         return Ok(());
     };
     let plan = scenario.plan(1, 0)?;

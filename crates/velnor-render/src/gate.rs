@@ -323,7 +323,7 @@ pub(crate) fn all_conditions(first: Option<String>, second: Option<String>) -> O
     }
 }
 
-fn gate_parts(gate: &Gate, replanned: bool) -> Vec<String> {
+pub(crate) fn gate_parts(gate: &Gate, replanned: bool) -> Vec<String> {
     let source = plan_source(&gate.from);
     let mut parts = match &gate.from {
         PlanFrom::ThisJob => vec![format!("steps.{PLAN_STEP}.outcome == 'success'")],

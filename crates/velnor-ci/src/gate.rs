@@ -3,20 +3,18 @@
 
 use std::collections::BTreeSet;
 
-use serde::de::DeserializeOwned;
-
 use crate::error::CiError;
 use crate::github::{
-    ApiBranch, ApiCommitStatus, ApiCompare, ApiPage, ApiRepo, ApiRequiredCheck, ApiRule, ApiRunJob,
-    ApiWorkflowRun, GitHub, Repo, branch_path, compare_path, parse, repo_path, rules_path,
-    run_jobs_path, runs_path, statuses_path,
+    ApiCommitStatus, ApiCompare, ApiRepo, ApiRunJob, ApiWorkflowRun, GitHub, Repo, compare_path,
+    parse, repo_path, run_jobs_path, runs_path, statuses_path,
 };
 
-const ACTIONS_APP_ID: i64 = 15368;
-const ANY_APP: i64 = -1;
-const RULES_PAGE: usize = 100;
-
 mod exemptions;
+mod pages;
+mod required;
+
+use pages::{EmptyPage, all_pages, pages};
+use required::required_checks;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Verdict {
@@ -34,11 +32,6 @@ struct PushEvidence {
     jobs: Vec<ApiRunJob>,
     names: BTreeSet<String>,
     running: bool,
-}
-
-struct RequiredChecks {
-    names: BTreeSet<String>,
-    exempt_sources: Vec<ApiRequiredCheck>,
 }
 
 fn refuse_blank_pr_only(pr_only_checks: &[String]) -> Result<(), CiError> {
@@ -182,172 +175,6 @@ pub fn check_tag(version: &str, tag: &str) -> Result<String, CiError> {
             "tag {tag} must be {legacy} or {current}, because this program is version {version}"
         )))
     }
-}
-
-fn required_checks(
-    github: &dyn GitHub,
-    repo: &Repo,
-    branch: &str,
-    pr_only_checks: &[String],
-) -> Result<RequiredChecks, CiError> {
-    let mut checks = BTreeSet::new();
-    let mut app_checks = Vec::new();
-    let mut applicable = Vec::new();
-    for page in 1.. {
-        let rules: Vec<ApiRule> = parse(
-            &github.get(&rules_path(repo, branch, page))?,
-            "branch rules",
-        )?;
-        for rule in rules
-            .iter()
-            .filter(|rule| rule.kind == "required_status_checks")
-        {
-            let listed = rule
-                .parameters
-                .as_ref()
-                .and_then(|parameters| parameters.required_status_checks.as_ref())
-                .ok_or_else(|| {
-                    CiError::new(format!(
-                        "a required_status_checks rule of branch {branch} lists no checks"
-                    ))
-                })?;
-            for check in listed {
-                checks.insert(check.context.clone());
-                app_checks.push(check.clone());
-            }
-        }
-        let last = rules.len() < RULES_PAGE;
-        applicable.extend(rules);
-        if last {
-            break;
-        }
-    }
-    for check in classic_checks(github, repo, branch)? {
-        checks.insert(check.context.clone());
-        app_checks.push(check);
-    }
-    if checks.is_empty() {
-        return Err(CiError::new(format!(
-            "branch {branch} requires no status check in its rules or its branch protection, so no commit of it can be released"
-        )));
-    }
-    for name in pr_only_checks {
-        if !checks.contains(name) {
-            return Err(CiError::new(format!(
-                "PR-only check {name} is not required on branch {branch}"
-            )));
-        }
-    }
-    if !pr_only_checks.is_empty() {
-        exemptions::require_enforcement(
-            github,
-            repo,
-            branch,
-            &applicable,
-            pr_only_checks,
-            &app_checks,
-        )?;
-    }
-    if checks.iter().all(|name| pr_only_checks.contains(name)) {
-        return Err(CiError::new(format!(
-            "branch {branch} has no required push check after PR-only exemptions"
-        )));
-    }
-    for check in &app_checks {
-        if !pr_only_checks.contains(&check.context) {
-            require(branch, check)?;
-        }
-    }
-    Ok(RequiredChecks {
-        names: checks,
-        exempt_sources: app_checks
-            .into_iter()
-            .filter(|check| pr_only_checks.contains(&check.context))
-            .collect(),
-    })
-}
-
-fn classic_checks(
-    github: &dyn GitHub,
-    repo: &Repo,
-    branch: &str,
-) -> Result<Vec<ApiRequiredCheck>, CiError> {
-    let ApiBranch { protection } = parse(&github.get(&branch_path(repo, branch))?, "branch")?;
-    let classic = protection.required_status_checks;
-    if classic.enforcement_level == "off" {
-        return Ok(Vec::new());
-    }
-    let mut checks = classic.checks;
-    for context in classic.contexts {
-        if !checks.iter().any(|check| check.context == context) {
-            checks.push(ApiRequiredCheck {
-                context,
-                integration_id: None,
-            });
-        }
-    }
-    Ok(checks)
-}
-
-fn require(branch: &str, check: &ApiRequiredCheck) -> Result<(), CiError> {
-    if let Some(app) = check
-        .integration_id
-        .filter(|app| ![ACTIONS_APP_ID, ANY_APP].contains(app))
-    {
-        return Err(CiError::new(format!(
-            "branch {branch} requires check {} from the GitHub App {app}, and only a check from GitHub Actions ({ACTIONS_APP_ID}) can be tied to a push run",
-            check.context
-        )));
-    }
-    Ok(())
-}
-
-fn all_pages<T: DeserializeOwned>(
-    github: &dyn GitHub,
-    what: &str,
-    path: impl Fn(u32) -> String,
-) -> Result<Vec<T>, CiError> {
-    pages(github, what, path, EmptyPage::Reject)
-}
-
-#[derive(Clone, Copy)]
-enum EmptyPage {
-    Reject,
-    Discard,
-}
-
-fn pages<T: DeserializeOwned>(
-    github: &dyn GitHub,
-    what: &str,
-    path: impl Fn(u32) -> String,
-    empty_page: EmptyPage,
-) -> Result<Vec<T>, CiError> {
-    let mut all = Vec::new();
-    let mut expected = None;
-    for page in 1.. {
-        let ApiPage { total_count, items } = parse(&github.get(&path(page))?, what)?;
-        if expected.is_some_and(|count| count != total_count) {
-            return Err(CiError::new(format!(
-                "GitHub {what} listing changed during pagination; retry the release gate"
-            )));
-        }
-        expected = Some(total_count);
-        let empty = items.is_empty();
-        all.extend(items);
-        if all.len() == total_count {
-            break;
-        }
-        if empty && matches!(empty_page, EmptyPage::Discard) {
-            return Ok(Vec::new());
-        }
-        if empty || all.len() > total_count {
-            return Err(CiError::new(format!(
-                "GitHub lists {total_count} {what} and returned {}",
-                all.len()
-            )));
-        }
-    }
-    Ok(all)
 }
 
 fn with_status(by_jobs: Check, states: &[&str]) -> Check {

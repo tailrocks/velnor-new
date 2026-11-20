@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod action_inputs;
+mod attestation;
 mod cache_mode;
 mod call;
 mod cases;
@@ -37,3 +38,4 @@ pub use plan::{
     LocalAction, Matrix, MatrixSource, Output, PullRequest, Push, Service, Step, Triggers,
     Workflow, WorkflowCall, WorkflowRun, WorkflowsPlan,
 };
+pub use wrappers::{Invoked, invoked};

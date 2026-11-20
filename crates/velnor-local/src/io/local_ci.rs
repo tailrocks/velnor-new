@@ -9,6 +9,7 @@ use tokio::fs;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use super::checkout::git;
+use super::scaled::Scaled;
 use crate::cache_mode;
 use crate::cli::{EnvironmentArgs, RunnerMode};
 use crate::pin::{Sha256, rewrite};
@@ -180,10 +181,16 @@ async fn rewrite_workflows(
     let (mut pinned, mut changed) = (0, false);
     let tracked = tracked_files(repo).await?;
     let tracked: Vec<&str> = tracked.iter().map(String::as_str).collect();
+    let mut scaled_texts = Scaled::open(repo).await?;
     for path in workflow_files(repo).await? {
         let text = read_workflow(&path).await?;
         let (pinning, count) = pin.map_or_else(|| (text.clone(), 0), |pin| rewrite(&text, pin));
-        let (scaled, _) = scale(&pinning, timeout);
+        let (scaled, scaled_count) = if scaled_texts.holds(&text) {
+            (pinning, 0)
+        } else {
+            scale(&pinning, timeout)
+                .map_err(|reason| io::Error::other(format!("{}: {reason}", path.display())))?
+        };
         let shown = path
             .strip_prefix(repo)
             .unwrap_or(&path)
@@ -197,6 +204,9 @@ async fn rewrite_workflows(
         let (rewritten, _) = prune(&unmodelled, &tracked);
         if rewritten != text {
             write_workflow(&path, &rewritten).await?;
+            if scaled_count > 0 {
+                scaled_texts.record(&rewritten).await?;
+            }
             changed = true;
         }
         pinned += count;

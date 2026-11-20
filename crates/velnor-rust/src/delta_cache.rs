@@ -98,8 +98,5 @@ fn supported(facts: &RepoFacts, root: &RustRoot, deltas: bool) -> bool {
             .helper
             .as_ref()
             .is_some_and(|helper| helper.version().at_least(DELTA_HELPER))
-        && root.target_dir
-            == root
-                .manifest
-                .sibling(&velnor_model::RepoPath::from_static("target"))
+        && crate::target_dir::is_default(root)
 }
