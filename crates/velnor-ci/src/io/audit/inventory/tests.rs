@@ -237,5 +237,8 @@ fn a_huge_directory_stops_being_read_once_the_entry_budget_is_spent() {
     );
     assert!(budget.overflowed());
     let read = read.load(Ordering::Relaxed);
-    assert!(read <= limit + 1, "read {read} names for a limit of {limit}");
+    assert!(
+        read <= limit + 1,
+        "read {read} names for a limit of {limit}"
+    );
 }
