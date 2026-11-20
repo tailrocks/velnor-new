@@ -108,7 +108,8 @@ fn trusted(
     directories: &[PathBuf],
     targets: &BTreeSet<PathBuf>,
 ) -> bool {
-    let mut remaining = inventory::LIMIT * 10;
+    // The build scans its roots under the same default the audit uses.
+    let mut budget = inventory::Budget::new(super::super::options::DEFAULT_MAX_ENTRIES);
     let saved = inventory::load(output).ok();
     let targets = saved
         .as_ref()
@@ -121,7 +122,7 @@ fn trusted(
             .zip(inventory::state(path).ok())
             .is_some_and(|(before, current)| before == current)
     }) && directories.iter().all(|path| {
-        inventory::scan(path, targets, &mut remaining)
+        inventory::scan(path, targets, &mut budget)
             .and_then(|entries| inventory::view(&entries, &fs::canonicalize(path)?, targets))
             .and_then(|entries| inventory::matches(output, path, &entries, targets))
             .unwrap_or(false)

@@ -63,6 +63,7 @@ mod report_caches;
 pub mod reports;
 pub mod required;
 pub mod resolve_qualification;
+pub mod restored_units;
 pub mod rulesets;
 pub mod scope;
 pub mod setup;

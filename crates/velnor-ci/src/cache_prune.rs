@@ -43,7 +43,8 @@ pub fn unit_hash(name: &str) -> Option<&str> {
 /// The unit an artifact file belongs to: the hash in its own name, or else in the name of the
 /// directory holding it, which is where cargo puts a build script's `build-script-build`, or in
 /// the name of the unit directory above `out` (Cargo 1.100).
-fn artifact_hash(file: &str) -> Option<&str> {
+#[must_use]
+pub fn artifact_hash(file: &str) -> Option<&str> {
     let parent = Path::new(file).parent()?;
     unit_hash(file)
         .or_else(|| unit_hash(parent.to_str()?))
