@@ -7,7 +7,7 @@ use std::process::ExitCode;
 use crate::cli::CratesMirrorArgs;
 use crate::error::CiError;
 
-use super::crates_mirror_mode::{self as mode, Mode};
+use super::crates_mirror_mode::{self as mode, Mirror, Mode};
 
 pub(super) const CONFIG_ENV: &str = "VELNOR_CARGO_CONFIG";
 pub(super) const WRAPPER_ENV: &str = "VELNOR_CARGO_WRAPPER";
@@ -77,7 +77,13 @@ pub(super) fn setup(args: &CratesMirrorArgs) -> Result<String, CiError> {
         .and_then(|()| std::fs::rename(staged, &config))
         .map_err(|e| failed(&e))?;
     install_wrapper(&directory, &wrapper)?;
-    mode::write(&directory, Mode { mirror: true, mbx })?;
+    mode::write(
+        &directory,
+        &Mode {
+            mirror: Mirror::On(config.clone()),
+            mbx,
+        },
+    )?;
     super::append_to("GITHUB_PATH", &format!("{}\n", directory.display()))?;
     super::append_to(
         "GITHUB_ENV",
@@ -106,8 +112,8 @@ fn retire_earlier_wrapper() -> Result<(), CiError> {
     }
     mode::write(
         &directory,
-        Mode {
-            mirror: false,
+        &Mode {
+            mirror: Mirror::Off,
             mbx: false,
         },
     )
@@ -119,8 +125,8 @@ fn install_mbx_forwarder(clear: &str) -> Result<(), CiError> {
     install_wrapper(&directory, &wrapper)?;
     mode::write(
         &directory,
-        Mode {
-            mirror: false,
+        &Mode {
+            mirror: Mirror::Off,
             mbx: true,
         },
     )?;

@@ -6,14 +6,14 @@ use std::path::Path;
 
 use crate::io::Repo;
 
-use super::fixture::{TestResult, setup_command};
+use super::fixture::{TestResult, setup, setup_command};
 use super::mbx::{
     MBX_DECLARED, REGISTRY, configured_repo, path_with, plain_cargo, wrapper_command,
 };
 
 const MARKER_FILE: &str = "velnor-cargo/velnor-cargo-mode";
+const MARKER_CONFIG: &str = "recorded";
 
-/// Runs the wrapper of a mirror-on job as a step whose `env:` block sets these values.
 fn run_with_step_env(
     repo: &Repo,
     mbx_required: bool,
@@ -111,6 +111,74 @@ fn a_later_mirror_on_setup_supersedes_an_earlier_mirror_off_marker() -> TestResu
         .env("PATH", path_with(repo.root())?)
         .output()?;
     assert!(on.status.success(), "{on:?}");
+    assert!(read_marker(repo.root())?.contains("mirror=on"));
+    Ok(())
+}
+
+#[test]
+fn step_env_cannot_replace_the_mirror_config_with_another_file() -> TestResult {
+    let repo = configured_repo("crates-mirror-marker-other-config")?;
+    let evil = repo.root().join("evil.toml");
+    fs::write(&evil, "[source.crates-io]\n")?;
+    let output = run_with_step_env(
+        &repo,
+        false,
+        &[("VELNOR_CARGO_CONFIG", &evil.display().to_string())],
+    )?;
+    assert_refused(&output, "VELNOR_CARGO_CONFIG");
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains(MARKER_CONFIG),
+        "{output:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn step_env_naming_the_recorded_mirror_config_still_runs_cargo() -> TestResult {
+    let repo = configured_repo("crates-mirror-marker-same-config")?;
+    let config = fs::canonicalize(repo.root().join("velnor-cargo/config.toml"))?;
+    let output = run_with_step_env(
+        &repo,
+        false,
+        &[("VELNOR_CARGO_CONFIG", &config.display().to_string())],
+    )?;
+    assert!(output.status.success(), "{output:?}");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("plain-cargo-ran"), "{stdout}");
+    Ok(())
+}
+
+#[test]
+fn setup_records_the_config_path_it_wrote() -> TestResult {
+    let repo = configured_repo("crates-mirror-marker-config-line")?;
+    let config = fs::canonicalize(repo.root().join("velnor-cargo/config.toml"))?;
+    assert!(
+        read_marker(repo.root())?.contains(&format!("config={}", config.display())),
+        "{}",
+        read_marker(repo.root())?
+    );
+    Ok(())
+}
+
+#[test]
+fn setup_does_not_write_through_a_planted_record_symlink() -> TestResult {
+    let repo = configured_repo("crates-mirror-marker-symlink")?;
+    let victim = repo.root().join("victim");
+    fs::write(&victim, "precious")?;
+    std::os::unix::fs::symlink(&victim, repo.root().join(format!("{MARKER_FILE}.tmp")))?;
+    let output = setup(repo.root(), REGISTRY);
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(fs::read_to_string(&victim)?, "precious");
+    assert!(read_marker(repo.root())?.contains("mirror=on"));
+    Ok(())
+}
+
+#[test]
+fn setup_replaces_a_stale_regular_record_temp_file() -> TestResult {
+    let repo = configured_repo("crates-mirror-marker-stale-temp")?;
+    fs::write(repo.root().join(format!("{MARKER_FILE}.tmp")), "stale")?;
+    let output = setup(repo.root(), REGISTRY);
+    assert!(output.status.success(), "{output:?}");
     assert!(read_marker(repo.root())?.contains("mirror=on"));
     Ok(())
 }
