@@ -64,7 +64,6 @@ pub(crate) fn make_repo(dir: &Path) -> Shas {
     }
 }
 
-/// The repository `repo.sh` builds, made once and copied for every case.
 fn template() -> &'static (PathBuf, Shas) {
     TEMPLATE.get_or_init(|| {
         let dir = fresh_dir("velnor-ci-resolve", "template").join("repo");
