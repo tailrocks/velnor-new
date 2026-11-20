@@ -76,9 +76,9 @@ fn written(value: &toml::Value, segments: &[&str], expected: Option<&str>) -> bo
         (toml::Value::Table(table), Some((head, rest))) => table
             .get(*head)
             .is_some_and(|inner| written(inner, rest, expected)),
-        (toml::Value::Array(items), _) => items
-            .iter()
-            .any(|item| written(item, segments, expected)),
+        (toml::Value::Array(items), _) => {
+            items.iter().any(|item| written(item, segments, expected))
+        }
         _ => false,
     }
 }
@@ -102,7 +102,9 @@ fn newest(view: &RepoView, skip: impl Fn(&KeyGate) -> bool) -> Option<&'static K
         let root = toml::Value::Table(table);
         for row in key_gates().filter(|row| row.file == file && !skip(row)) {
             let segments: Vec<&str> = row.key.split('.').collect();
-            if written(&root, &segments, row.value) && newest.is_none_or(|best| row.first > best.first) {
+            if written(&root, &segments, row.value)
+                && newest.is_none_or(|best| row.first > best.first)
+            {
                 newest = Some(row);
             }
         }
