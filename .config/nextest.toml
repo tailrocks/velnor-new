@@ -239,10 +239,6 @@ threads-required = "num-test-threads"
 filter = "package(=velnor-resource-probe) and test(=cleanup_observer_scan::cleanup_observer_held_descriptor::a_descriptor_held_outside_the_pair_namespace_is_an_owned_reference)"
 threads-required = "num-test-threads"
 
-[[profile.ci.overrides]]
-filter = 'package(=velnor-runner-host) and binary(=runner_image_qualification_public) and test(=public_qualifier_bounds_docker_operations_and_streams)'
-slow-timeout = { period = "60s", terminate-after = 2 }
-
 # Same tiers as profile.default for the tests added above. profile.ci has no 2 s line of its own.
 [[profile.ci.overrides]]
 filter = 'package(=velnor-gen) and binary(=it) and test(/^setup_action/)'
