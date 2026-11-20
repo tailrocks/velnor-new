@@ -6,7 +6,6 @@ from pathlib import Path
 IDENT = re.compile(r"[^\W\d]\w*")
 FENCE = re.compile(r"```|~~~")
 INDENTED = re.compile(r"^[ \t]*\*? {5,}\S", re.M)
-SHEBANG_ATTR = re.compile(r"#!\s*\[")
 DOC_OPEN = re.compile(r"/\*(?:!|\*(?![*/]))")
 RAW_PREFIX = {"r", "br", "cr"}
 BYTE_PREFIX = {"b", "c"}
@@ -96,9 +95,28 @@ def rust_sources():
     return sorted(p for p in Path("crates").rglob("*.rs") if "src" in p.parts)
 
 
+def is_shebang(src):
+    if not src.startswith("#!"):
+        return False
+    i = 2
+    while i < len(src):
+        if src[i].isspace():
+            i += 1
+        elif src.startswith("/*", i):
+            i = block_end(src, i)
+        elif src.startswith("//", i):
+            end = src.find("\n", i)
+            if end < 0:
+                return True
+            i = end
+        else:
+            return src[i] != "["
+    return True
+
+
 def strip_shebang(src):
     src = src.removeprefix("\ufeff")
-    if src.startswith("#!") and not SHEBANG_ATTR.match(src):
+    if is_shebang(src):
         first, newline, rest = src.partition("\n")
         return newline + rest
     return src
