@@ -39,11 +39,6 @@ fn is_build(step: &Step) -> bool {
 
 impl SaveGate {
     /// A job without a compile step before its saves keeps the implicit `success()`.
-    ///
-    /// Only the last compile step is named. A compile step has no status function, so
-    /// GitHub skips it once any earlier step failed; its success therefore stands for
-    /// the success of every compile step before it. An audit can fail without
-    /// skipping its siblings, so each audit is named.
     pub(crate) fn of(job: &Job) -> Self {
         let mut gate = Self {
             ids: vec![None; job.steps.len()],
@@ -54,30 +49,30 @@ impl SaveGate {
         };
         let saved_here = &job.steps[first].gate;
         let (mut builds, mut audits) = (0, 0);
-        let mut last_build = None;
-        let mut audited = Vec::new();
+        let mut required = Vec::new();
         for (index, step) in job.steps.iter().enumerate().take(first) {
-            if is_build(step) {
-                builds += 1;
-                let id = format!("{BUILD_ID}_{builds}");
-                // A build of another root is skipped, not failed, when the plan leaves
-                // that root out; only a build of the saved root must have run.
-                last_build = Some(if &step.gate == saved_here {
-                    format!("steps.{id}.outcome == 'success'")
-                } else {
-                    format!("steps.{id}.outcome != 'failure'")
-                });
-                gate.ids[index] = Some(id);
+            let (prefix, count) = if is_build(step) {
+                (BUILD_ID, &mut builds)
             } else if is_audit(step) {
-                audits += 1;
-                let id = format!("{AUDIT_ID}_{audits}");
-                audited.push(format!("steps.{id}.outcome != 'failure'"));
-                gate.ids[index] = Some(id);
-            }
+                (AUDIT_ID, &mut audits)
+            } else {
+                continue;
+            };
+            *count += 1;
+            let id = format!("{prefix}_{count}");
+            // A build of another root is skipped, not failed, when the plan leaves
+            // that root out; only a build of the saved root must have run.
+            required.push(if prefix == BUILD_ID && &step.gate == saved_here {
+                format!("steps.{id}.outcome == 'success'")
+            } else {
+                format!("steps.{id}.outcome != 'failure'")
+            });
+            gate.ids[index] = Some(id);
         }
-        match last_build {
-            Some(build) => gate.required = std::iter::once(build).chain(audited).collect(),
-            None => gate.ids.fill(None),
+        if builds == 0 {
+            gate.ids.fill(None);
+        } else {
+            gate.required = required;
         }
         gate
     }
@@ -88,5 +83,15 @@ impl SaveGate {
 
     pub(crate) fn required(&self) -> &[String] {
         &self.required
+    }
+}
+
+/// The steps a save waits for: the compile steps of its job, or the whole job when
+/// it has none.
+pub(crate) fn settled(saved_after: &[String]) -> Vec<String> {
+    if saved_after.is_empty() {
+        vec!["success()".to_owned()]
+    } else {
+        saved_after.to_vec()
     }
 }

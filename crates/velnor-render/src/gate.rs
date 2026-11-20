@@ -173,7 +173,7 @@ pub(crate) fn condition(
         When::SaveBase | When::SaveBaseDecided | When::SaveSources => {
             parts.push(NOT_CANCELLED.to_owned());
             if setup != Setup::Before {
-                parts.extend(settled(saved_after));
+                parts.extend(crate::save_gate::settled(saved_after));
                 parts.push(SETUP_DONE.to_owned());
             }
             if setup == Setup::Replanned {
@@ -230,16 +230,6 @@ pub(crate) fn condition(
         None
     } else {
         Some(format!("${{{{ {} }}}}", parts.join(" && ")))
-    }
-}
-
-/// The steps a save waits for: the compile steps of its job, or the whole job when
-/// it has none.
-fn settled(saved_after: &[String]) -> Vec<String> {
-    if saved_after.is_empty() {
-        vec!["success()".to_owned()]
-    } else {
-        saved_after.to_vec()
     }
 }
 

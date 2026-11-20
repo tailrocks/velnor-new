@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    CacheKey, CargoCommand, GateNeed, HelperCommand, HelperRelease, Job, MERGE_GROUP_SKIP_OUTPUT,
+    CacheKey, CargoCommand, GateNeed, HelperCommand, Job, MERGE_GROUP_SKIP_OUTPUT,
     MERGE_GROUP_STEP, Step, StepKind, TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT,
     TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, WorkflowPlan, group_output_name,
 };
@@ -21,8 +21,10 @@ use crate::gate::{
     plan_source, sources_step, verdict_step,
 };
 use crate::helper_steps::{inputs_step, restore_inputs_step, restored_targets_step};
+pub(crate) use crate::install_steps::install_helper;
+use crate::install_steps::{install_mise, install_tools};
 use crate::permission_pairs;
-use crate::rules::{RenderedJob, RenderedStep, SETUP_VELNOR_ACTION, Value};
+use crate::rules::{RenderedJob, RenderedStep, Value};
 use crate::save_gate::SaveGate;
 use crate::tests::Tests;
 
@@ -369,35 +371,6 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
     }
 }
 
-fn install_tools(only: Option<&str>) -> RenderedStep {
-    let mut with = vec![
-        ("version".to_owned(), Value::Text(MISE_VERSION.to_owned())),
-        ("cache".to_owned(), Value::Bool(false)),
-    ];
-    if let Some(tool) = only {
-        with.push(("install_args".to_owned(), Value::Text(tool.to_owned())));
-    }
-    RenderedStep {
-        name: "Install tools".to_owned(),
-        uses: Some(MISE.to_owned()),
-        with,
-        ..RenderedStep::default()
-    }
-}
-
-fn install_mise() -> RenderedStep {
-    RenderedStep {
-        name: "Install mise".to_owned(),
-        uses: Some(MISE.to_owned()),
-        with: vec![
-            ("version".to_owned(), Value::Text(MISE_VERSION.to_owned())),
-            ("install".to_owned(), Value::Bool(false)),
-            ("cache".to_owned(), Value::Bool(false)),
-        ],
-        ..RenderedStep::default()
-    }
-}
-
 fn cache_step(action: &str, verb: &str, key: &CacheKey, fallbacks: bool) -> RenderedStep {
     let rendered = render_key(key);
     let paths: Vec<String> = key.paths().iter().map(path_text).collect();
@@ -419,24 +392,6 @@ fn cache_step(action: &str, verb: &str, key: &CacheKey, fallbacks: bool) -> Rend
         name: format!("{verb} the {} cache", key.family()),
         uses: Some(action.to_owned()),
         continue_on_error: !fallbacks && crate::cache_upload::key_id(key).is_some(),
-        with,
-        ..RenderedStep::default()
-    }
-}
-
-pub(crate) fn install_helper(release: &HelperRelease) -> RenderedStep {
-    let version = release.version();
-    let mut with = vec![("version".to_owned(), Value::Text(version.to_string()))];
-    with.extend(release.digests().iter().map(|(platform, digest)| {
-        (
-            format!("sha256-{}", platform.file_suffix()),
-            Value::Text(digest.to_string()),
-        )
-    }));
-    RenderedStep {
-        name: format!("Install velnor-ci {version}"),
-        uses: Some(format!("{SETUP_VELNOR_ACTION}@{}", release.action())),
-        uses_comment: Some(version.release_tag()),
         with,
         ..RenderedStep::default()
     }
