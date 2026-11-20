@@ -107,7 +107,10 @@ fn external_workflows_is_refused_below_the_helper_that_accepts_it() -> TestResul
     assert!(
         matches!(
             error,
-            Some(GenerateError::ConfigKeyHelperTooOld { key: "external_workflows", .. })
+            Some(GenerateError::ConfigKeyHelperTooOld {
+                key: "external_workflows",
+                ..
+            })
         ),
         "{error:?}"
     );
