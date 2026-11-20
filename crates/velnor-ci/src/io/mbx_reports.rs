@@ -3,6 +3,7 @@
 
 use crate::mbx_report::{DIRECTORY, SWITCH, VARIABLE, parse, reports_session};
 use crate::waste_evidence::MbxSession;
+use std::collections::BTreeMap;
 use std::fs::{self, File};
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -11,7 +12,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const EXPECTED: &str = "expected";
-const MAX_ENTRIES: usize = 512;
+const MAX_SESSIONS: usize = 4096;
+const MAX_ENTRIES: usize = 2 * MAX_SESSIONS;
 const MAX_REPORT_BYTES: u64 = 1 << 20;
 
 static SESSIONS: AtomicU64 = AtomicU64::new(0);
@@ -20,9 +22,14 @@ fn enabled() -> bool {
     std::env::var(SWITCH).is_ok_and(|value| value == "true")
 }
 
+/// An enclosing mbx session (its socket is set) answers for nested cargo calls and writes no report of their own.
+fn inside_session() -> bool {
+    std::env::var_os("MBX_SOCKET").is_some_and(|socket| !socket.is_empty())
+}
+
 pub(super) fn assign(command: &mut Command, argv: &[String]) {
     command.env_remove(VARIABLE);
-    if !enabled() || !reports_session(argv) {
+    if !enabled() || !reports_session(argv) || inside_session() {
         return;
     }
     let Some(temp) = std::env::var_os("RUNNER_TEMP").filter(|temp| !temp.is_empty()) else {
@@ -50,67 +57,65 @@ pub(super) fn assign(command: &mut Command, argv: &[String]) {
     command.env(VARIABLE, directory.join(format!("{name}.json")));
 }
 
+#[derive(Default)]
 pub(super) struct Reports {
     pub(super) sessions: Vec<MbxSession>,
     pub(super) unreadable: Vec<String>,
     pub(super) missing: Vec<String>,
+    pub(super) overflowed: bool,
+}
+
+#[derive(Default)]
+struct Session {
+    marker: bool,
+    report: Option<PathBuf>,
 }
 
 pub(super) fn read(runner_temp: &Path) -> Option<Reports> {
     if !enabled() {
         return None;
     }
-    let mut paths: Vec<PathBuf> = fs::read_dir(runner_temp.join(DIRECTORY))
+    let listed: Vec<PathBuf> = fs::read_dir(runner_temp.join(DIRECTORY))
         .ok()?
         .flatten()
         .take(MAX_ENTRIES + 1)
         .map(|entry| entry.path())
         .collect();
-    let flooded = paths.len() > MAX_ENTRIES;
-    paths.truncate(MAX_ENTRIES);
-    let with = |wanted: &str| {
-        let mut found: Vec<PathBuf> = paths
-            .iter()
-            .filter(|path| {
-                path.extension()
-                    .is_some_and(|extension| extension == wanted)
-            })
-            .cloned()
-            .collect();
-        found.sort();
-        found
-    };
-    let (files, expected) = (with("json"), with(EXPECTED));
-    if files.is_empty() && expected.is_empty() && !flooded {
+    let mut found: BTreeMap<String, Session> = BTreeMap::new();
+    for path in listed.iter().take(MAX_ENTRIES) {
+        let Some(name) = path
+            .file_stem()
+            .map(|stem| stem.to_string_lossy().into_owned())
+        else {
+            continue;
+        };
+        match path.extension().and_then(|extension| extension.to_str()) {
+            Some(EXPECTED) => found.entry(name).or_default().marker = true,
+            Some("json") => found.entry(name).or_default().report = Some(path.clone()),
+            _ => {}
+        }
+    }
+    if listed.len() > MAX_ENTRIES || found.len() > MAX_SESSIONS {
+        return Some(Reports {
+            overflowed: true,
+            ..Reports::default()
+        });
+    }
+    if found.is_empty() {
         return None;
     }
-    let mut reports = Reports {
-        sessions: Vec::new(),
-        unreadable: Vec::new(),
-        missing: expected
-            .iter()
-            .filter(|marker| !marker.with_extension("json").exists())
-            .map(|marker| {
-                marker
-                    .file_stem()
-                    .unwrap_or_default()
-                    .to_string_lossy()
-                    .into_owned()
-            })
-            .collect(),
-    };
-    if flooded {
-        reports.unreadable.push(format!(
-            "{DIRECTORY}: more than {MAX_ENTRIES} entries; the rest were not read"
-        ));
-    }
-    for file in files {
-        match read_regular(&file).and_then(|bytes| parse(&bytes)) {
-            Ok(session) => reports.sessions.extend(session),
-            Err(reason) => reports.unreadable.push(format!(
-                "{}: {reason}",
-                file.file_name().unwrap_or_default().to_string_lossy()
-            )),
+    let mut reports = Reports::default();
+    for (name, session) in found {
+        match session.report {
+            None if session.marker => reports.missing.push(name),
+            None => {}
+            Some(file) => match read_regular(&file).and_then(|bytes| parse(&bytes)) {
+                Ok(parsed) => reports.sessions.extend(parsed),
+                Err(reason) => reports.unreadable.push(format!(
+                    "{}: {reason}",
+                    file.file_name().unwrap_or_default().to_string_lossy()
+                )),
+            },
         }
     }
     Some(reports)

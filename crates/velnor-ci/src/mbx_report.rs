@@ -28,24 +28,37 @@ struct Counts {
     bypasses: Map<String, Value>,
 }
 
-const VALUE_OPTIONS: &[&str] = &["-C", "-Z", "--config", "--color"];
-const VALUE_FREE_OPTIONS: &[&str] = &[
-    "-q",
-    "--quiet",
-    "--verbose",
-    "--frozen",
-    "--locked",
-    "--offline",
-];
+const VALUE_LONG_OPTIONS: &[&str] = &["--config", "--color"];
+const VALUE_FREE_LONG_OPTIONS: &[&str] =
+    &["--quiet", "--verbose", "--frozen", "--locked", "--offline"];
 
-fn is_complete_option(word: &str) -> bool {
-    VALUE_FREE_OPTIONS.contains(&word)
-        || word
-            .strip_prefix('-')
-            .is_some_and(|rest| !rest.is_empty() && rest.bytes().all(|byte| byte == b'v'))
-        || (word.len() > 2 && (word.starts_with("-C") || word.starts_with("-Z")))
+/// Whether a cargo global option takes the next word, or `None` when it is not one of these.
+fn global_option(word: &str) -> Option<bool> {
+    if let Some(shorts) = word
+        .strip_prefix('-')
+        .filter(|rest| !rest.is_empty() && !rest.starts_with('-'))
+    {
+        return short_cluster(shorts);
+    }
+    if VALUE_LONG_OPTIONS.contains(&word) {
+        return Some(true);
+    }
+    (VALUE_FREE_LONG_OPTIONS.contains(&word)
         || word.starts_with("--config=")
-        || word.starts_with("--color=")
+        || word.starts_with("--color="))
+    .then_some(false)
+}
+
+/// `-qv` and `-vC dir` are bundles: `C` and `Z` take the rest of the bundle, or the next word when none is left.
+fn short_cluster(shorts: &str) -> Option<bool> {
+    for (index, letter) in shorts.char_indices() {
+        match letter {
+            'v' | 'q' => {}
+            'C' | 'Z' => return Some(index + letter.len_utf8() == shorts.len()),
+            _ => return None,
+        }
+    }
+    Some(false)
 }
 
 fn cargo_subcommand(words: &[String]) -> Option<&str> {
@@ -54,10 +67,13 @@ fn cargo_subcommand(words: &[String]) -> Option<&str> {
         words.next();
     }
     while let Some(word) = words.next() {
-        if VALUE_OPTIONS.contains(&word) {
-            words.next()?;
-        } else if !is_complete_option(word) {
-            return (!word.starts_with('-')).then_some(word);
+        match global_option(word) {
+            Some(takes_next) => {
+                if takes_next {
+                    words.next()?;
+                }
+            }
+            None => return (!word.starts_with('-')).then_some(word),
         }
     }
     None

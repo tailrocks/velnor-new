@@ -45,6 +45,9 @@ fn sessions(metrics: &mut LaneMetrics, log: &[u8], runner_temp: &Path) -> (Vec<M
     let Some(reports) = super::mbx_reports::read(runner_temp) else {
         return summaries(metrics, log);
     };
+    if reports.overflowed {
+        return (Vec::new(), 1);
+    }
     let mut unassigned = Vec::new();
     for invocation in &metrics.invocations {
         if !reports_session(&invocation.argv) {
