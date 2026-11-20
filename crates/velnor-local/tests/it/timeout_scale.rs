@@ -42,7 +42,7 @@ fn workflow() -> String {
 
 #[test]
 fn a_factor_multiplies_every_numeric_value_at_job_and_step_level() {
-    let (text, count) = scale(&workflow(), factor("3"));
+    let (text, count) = scale(&workflow(), factor("3")).unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(count, 3, "{text}");
     assert!(text.contains("    timeout-minutes: 90\n"), "{text}");
     assert!(text.contains("        timeout-minutes: 30\n"), "{text}");
@@ -54,7 +54,7 @@ fn a_factor_multiplies_every_numeric_value_at_job_and_step_level() {
 
 #[test]
 fn a_fractional_factor_rounds_each_value_up_to_whole_minutes() {
-    let (text, _) = scale(&workflow(), factor("1.5"));
+    let (text, _) = scale(&workflow(), factor("1.5")).unwrap_or_else(|e| unreachable!("{e}"));
     assert!(text.contains("    timeout-minutes: 45\n"), "{text}");
     assert!(text.contains("        timeout-minutes: 15\n"), "{text}");
     assert!(
@@ -65,14 +65,16 @@ fn a_fractional_factor_rounds_each_value_up_to_whole_minutes() {
 
 #[test]
 fn a_factor_with_a_decimal_is_exact_before_rounding_up() {
-    let (text, _) = scale("    timeout-minutes: 10\n", factor("1.1"));
-    assert_eq!(text, "    timeout-minutes: 11\n");
+    let (text, _) = scale("jobs:\n  t:\n    timeout-minutes: 10\n", factor("1.1"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(text, "jobs:\n  t:\n    timeout-minutes: 11\n");
 }
 
 #[test]
 fn the_default_factor_leaves_the_workflow_byte_for_byte_unchanged() {
     let original = workflow();
-    let (text, count) = scale(&original, TimeoutScale::default());
+    let (text, count) =
+        scale(&original, TimeoutScale::default()).unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(count, 0);
     assert_eq!(text, original);
     assert_eq!(factor("1"), TimeoutScale::default());
@@ -80,7 +82,7 @@ fn the_default_factor_leaves_the_workflow_byte_for_byte_unchanged() {
 
 #[test]
 fn non_numeric_values_and_other_keys_are_left_alone() {
-    let (text, _) = scale(&workflow(), factor("3"));
+    let (text, _) = scale(&workflow(), factor("3")).unwrap_or_else(|e| unreachable!("{e}"));
     assert!(
         text.contains("        timeout-minutes: ${{ inputs.minutes }}\n"),
         "{text}"
