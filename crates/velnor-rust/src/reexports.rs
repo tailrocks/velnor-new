@@ -12,7 +12,7 @@ pub use crate::classify::is_workflow_file;
 pub use crate::compat::{
     BUILD_DRIVER, COMPAT_SCHEMA, CompatInputs, WRAPPED_BUILD_DRIVER, build_driver, compat,
 };
-pub use crate::config::{CONFIG_PATH, budget, ci_debuginfo};
+pub use crate::config::{CONFIG_PATH, budget, ci_debuginfo, declared_public_sources};
 pub use crate::config_budget::BUDGET_KEYS;
 pub use crate::config_keys::KEYS;
 pub use crate::credentials::reject_release_credential_hooks;
@@ -46,9 +46,8 @@ pub use crate::mise::{MISE_CONFIGS, MISE_LOCK, check_tools, mise_files, tool_pin
 pub use crate::owners::{Owner, Owners, add_reads};
 pub use crate::plan::{check_required_check, plan, plan_without_deltas};
 pub use crate::policy::{DENY_OFF_NOTE, PolicyRuns, deny_off_note, policy_runs};
-pub use crate::private_sources::{
-    base_cache_note, cacheable_config, cacheable_lock, cacheable_private_lock,
-};
+pub use crate::private_sources::{base_cache_note, cacheable_config, cacheable_private_lock};
+pub use crate::public_git::{LockAdmission, PinnedGit, lock_admission, merge_pinned};
 pub use crate::reads::{
     INPUTS_IDENTITY_HELPER, INPUTS_LOCK, Located, dep_info_paths, format_inputs_lock,
     inputs_lock_text, locate, lock_is_identified, normalize, parse_inputs_lock, rerun_if_changed,
