@@ -30,6 +30,8 @@ platforms = {
     "linux-x64": "Linux-X64",
     "macos-arm64": "macOS-ARM64",
     "macos-x64": "macOS-X64",
+    "windows-arm64.exe": "Windows-ARM64",
+    "windows-x64.exe": "Windows-X64",
 }
 
 mode, version, sums = "print", None, None

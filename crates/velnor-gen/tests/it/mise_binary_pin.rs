@@ -16,7 +16,7 @@ use crate::release_fixture::two_binaries;
 use velnor_render::{MISE_BINARIES, UnknownMiseVersion, Value, mise_sha256_input};
 
 const VERSION: &str = "2026.11.10";
-const DIGESTS: [(&str, &str); 4] = [
+const DIGESTS: [(&str, &str); 6] = [
     (
         "Linux-ARM64",
         "86ef275d541c5243cd20b1c0fcd16810e5f3601113d8db09278d0608617a3833",
@@ -33,6 +33,14 @@ const DIGESTS: [(&str, &str); 4] = [
         "macOS-X64",
         "7eab8054d301b75dcbd93440ff184bee6864d95799cfdc4a00ce858313b68783",
     ),
+    (
+        "Windows-ARM64",
+        "60b9518958e796a5bf57e782135b845318c4dc47d21a6c7e4628b6a4c55cecfc",
+    ),
+    (
+        "Windows-X64",
+        "a448e986baedc177173b5f63c81343269eef6fef8e3e916b6151580a80e115aa",
+    ),
 ];
 /// The platform one runner label runs on, for the labels the fixtures use.
 fn platform_of(label: &str) -> Option<&'static str> {
@@ -40,10 +48,13 @@ fn platform_of(label: &str) -> Option<&'static str> {
         return Some("macOS-ARM64");
     }
     let linux = label.starts_with("ubuntu-") || label.contains("linux");
-    match (linux, label.ends_with("-arm")) {
-        (true, true) => Some("Linux-ARM64"),
-        (true, false) => Some("Linux-X64"),
-        (false, _) => None,
+    let arm = label.ends_with("-arm");
+    match (linux, label.starts_with("windows-"), arm) {
+        (true, _, true) => Some("Linux-ARM64"),
+        (true, _, false) => Some("Linux-X64"),
+        (false, true, true) => Some("Windows-ARM64"),
+        (false, true, false) => Some("Windows-X64"),
+        (false, false, _) => None,
     }
 }
 
@@ -187,7 +198,7 @@ fn a_mise_version_without_a_known_digest_is_refused() {
 }
 
 #[test]
-fn the_digest_table_has_the_four_runner_platforms_with_distinct_sha256_digests() {
+fn the_digest_table_has_the_six_runner_platforms_with_distinct_sha256_digests() {
     let mut seen = std::collections::BTreeSet::new();
     for binary in MISE_BINARIES {
         let platforms: Vec<&str> = binary
@@ -197,7 +208,14 @@ fn the_digest_table_has_the_four_runner_platforms_with_distinct_sha256_digests()
             .collect();
         assert_eq!(
             platforms,
-            ["Linux-ARM64", "Linux-X64", "macOS-ARM64", "macOS-X64"],
+            [
+                "Linux-ARM64",
+                "Linux-X64",
+                "Windows-ARM64",
+                "Windows-X64",
+                "macOS-ARM64",
+                "macOS-X64"
+            ],
             "{}",
             binary.version
         );
@@ -218,4 +236,28 @@ fn the_digest_table_has_the_four_runner_platforms_with_distinct_sha256_digests()
         }
     }
     assert!(MISE_BINARIES.iter().any(|binary| binary.version == VERSION));
+}
+
+#[test]
+fn the_run_time_selection_names_the_windows_platforms_too() -> TestResult {
+    let input = match mise_sha256_input(VERSION)? {
+        Value::Expr(expr) => expr,
+        other => return Err(format!("not a selection: {other:?}").into()),
+    };
+    for (os, arch, digest) in [
+        (
+            "Windows",
+            "X64",
+            "a448e986baedc177173b5f63c81343269eef6fef8e3e916b6151580a80e115aa",
+        ),
+        (
+            "Windows",
+            "ARM64",
+            "60b9518958e796a5bf57e782135b845318c4dc47d21a6c7e4628b6a4c55cecfc",
+        ),
+    ] {
+        let clause = format!("runner.os == '{os}' && runner.arch == '{arch}' && '{digest}'");
+        assert!(input.contains(&clause), "{input}");
+    }
+    Ok(())
 }

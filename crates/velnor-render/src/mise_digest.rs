@@ -29,7 +29,7 @@ use crate::steps::MISE_VERSION;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MiseBinary {
     pub version: &'static str,
-    pub sha256: [(&'static str, &'static str); 4],
+    pub sha256: [(&'static str, &'static str); 6],
 }
 
 /// Every mise release the renderer can pin. Rewrite the row with
@@ -44,6 +44,14 @@ pub const MISE_BINARIES: &[MiseBinary] = &[MiseBinary {
         (
             "Linux-X64",
             "b603a4f48563fc379a794d9ea2cf9f709ed276c9141068604cb0c59fa3e674a9",
+        ),
+        (
+            "Windows-ARM64",
+            "60b9518958e796a5bf57e782135b845318c4dc47d21a6c7e4628b6a4c55cecfc",
+        ),
+        (
+            "Windows-X64",
+            "a448e986baedc177173b5f63c81343269eef6fef8e3e916b6151580a80e115aa",
         ),
         (
             "macOS-ARM64",
