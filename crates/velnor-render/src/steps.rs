@@ -169,12 +169,14 @@ fn job_steps(
             for body in &mut rendered {
                 body.shared |= verified && tools_key;
             }
-            Some(crate::base_steps::audited_save(
+            let mut steps = Vec::from_iter(gate.saveable(index));
+            steps.extend(crate::base_steps::audited_save(
                 job,
                 step,
                 rendered,
                 gate.audit_runs(index),
-            ))
+            ));
+            Some(steps)
         })
         .flatten()
         .collect()
