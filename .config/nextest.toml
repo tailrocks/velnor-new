@@ -198,6 +198,14 @@ filter = 'package(=velnor-gen) and binary(=it) and (test(=needs_size::cache_cont
 slow-timeout = { period = "10s", terminate-after = 1 }
 
 [[profile.default.overrides]]
+filter = 'package(=velnor-gen) and binary(=it) and (test(=drift::the_workflows_committed_in_this_repository_are_what_its_own_config_generates) or test(=generated_check_repo::a_hand_edited_and_resealed_workflow_makes_velnor_gen_check_exit_one_naming_the_file) or test(=generated_check_repo::an_unsealed_hand_edit_is_refused_and_a_regenerated_workflow_passes_again))'
+slow-timeout = { period = "30s", terminate-after = 1 }
+
+[[profile.ci.overrides]]
+filter = 'package(=velnor-gen) and binary(=it) and (test(=drift::the_workflows_committed_in_this_repository_are_what_its_own_config_generates) or test(=generated_check_repo::a_hand_edited_and_resealed_workflow_makes_velnor_gen_check_exit_one_naming_the_file) or test(=generated_check_repo::an_unsealed_hand_edit_is_refused_and_a_regenerated_workflow_passes_again))'
+slow-timeout = { period = "30s", terminate-after = 1 }
+
+[[profile.default.overrides]]
 filter = "package(=velnor-ci) or package(=velnor-gen) or package(=velnor-model) or package(=velnor-release) or package(=velnor-render) or package(=velnor-rust)"
 slow-timeout = { period = "2s", terminate-after = 1 }
 
@@ -208,6 +216,10 @@ test-group = "probe-cleanup-observer-serial"
 [[profile.ci.overrides]]
 filter = "package(=velnor-resource-probe) and binary(=job_hook_public)"
 test-group = "probe-cleanup-observer-serial"
+
+[[profile.ci.overrides]]
+filter = 'package(=velnor-runner-host) and binary(=runner_image_qualification_public) and test(=public_qualifier_bounds_docker_operations_and_streams)'
+slow-timeout = { period = "60s", terminate-after = 2 }
 
 # Same tiers as profile.default for the tests added above. profile.ci has no 2 s line of its own.
 [[profile.ci.overrides]]

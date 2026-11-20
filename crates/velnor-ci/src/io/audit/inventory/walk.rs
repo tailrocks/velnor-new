@@ -6,14 +6,41 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
+use super::super::options::{MAX_ENTRIES_CEILING, MAX_ENTRIES_VARIABLE};
 use super::{Entries, Kind, excluded_entry};
+
+/// The entries a scan may still walk. One audit shares a budget across its scans, so
+/// the limit bounds their total.
+pub(in crate::io::audit) struct Budget {
+    remaining: usize,
+    limit: usize,
+}
+
+impl Budget {
+    pub(in crate::io::audit) fn new(limit: usize) -> Self {
+        Self {
+            remaining: limit,
+            limit,
+        }
+    }
+
+    fn reserve(&mut self) -> io::Result<()> {
+        self.remaining = self.remaining.checked_sub(1).ok_or_else(|| {
+            io::Error::other(format!(
+                "audit freshness scan limit exceeded: more than {} entries; raise it with {MAX_ENTRIES_VARIABLE} (at most {MAX_ENTRIES_CEILING})",
+                self.limit
+            ))
+        })?;
+        Ok(())
+    }
+}
 
 pub(in crate::io::audit) fn scan(
     root: &Path,
     targets: &BTreeSet<PathBuf>,
-    remaining: &mut usize,
+    budget: &mut Budget,
 ) -> io::Result<Entries> {
-    scan_with(root, targets, remaining, |directory: &Path| {
+    scan_with(root, targets, budget, |directory: &Path| {
         fs::read_dir(directory)
     })
 }
@@ -21,7 +48,7 @@ pub(in crate::io::audit) fn scan(
 pub(super) fn scan_with(
     root: &Path,
     targets: &BTreeSet<PathBuf>,
-    remaining: &mut usize,
+    budget: &mut Budget,
     open: impl Fn(&Path) -> io::Result<fs::ReadDir>,
 ) -> io::Result<Entries> {
     let root = fs::canonicalize(root)?;
@@ -33,7 +60,7 @@ pub(super) fn scan_with(
         if !visited.insert(directory.clone()) {
             continue;
         }
-        reserve(remaining)?;
+        budget.reserve()?;
         let listing = match open(&directory) {
             Ok(listing) => listing,
             Err(error) if moved_before_open(&error) && directory != root => {
@@ -48,7 +75,7 @@ pub(super) fn scan_with(
         };
         let mut children = BTreeMap::new();
         for entry in listing {
-            reserve(remaining)?;
+            budget.reserve()?;
             let entry = entry?;
             let path = entry.path();
             let Some(kind) = kind(&path)? else {
@@ -128,13 +155,6 @@ fn is_directory(path: &Path) -> io::Result<bool> {
         Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
         Err(error) => Err(error),
     }
-}
-
-fn reserve(remaining: &mut usize) -> io::Result<()> {
-    *remaining = remaining
-        .checked_sub(1)
-        .ok_or_else(|| io::Error::other("audit freshness scan limit exceeded"))?;
-    Ok(())
 }
 
 pub(in crate::io::audit) fn unresolved_link(error: &io::Error) -> bool {

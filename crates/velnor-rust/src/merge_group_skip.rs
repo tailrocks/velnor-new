@@ -12,7 +12,7 @@ pub(crate) fn apply(jobs: &mut [Job], single: bool) {
     for job in jobs.iter_mut() {
         let from = if !single {
             PlanFrom::Job(PLAN_JOB)
-        } else if job.id == RUST_JOB || is_lint_job(job) {
+        } else if job.id == RUST_JOB || is_lint_job(job) || plans_itself(job) {
             PlanFrom::ThisJob
         } else if job.needs.contains(&RUST_JOB) {
             PlanFrom::Job(RUST_JOB)
@@ -29,6 +29,12 @@ pub(crate) fn apply(jobs: &mut [Job], single: bool) {
             job.skip_after_merge_group = Some(from);
         }
     }
+}
+
+fn plans_itself(job: &Job) -> bool {
+    job.steps
+        .iter()
+        .any(|step| step.kind == StepKind::Helper(HelperCommand::Plan))
 }
 
 fn is_archive_consumer(job: &Job) -> bool {
@@ -58,7 +64,10 @@ fn skip_lint_job(job: &mut Job, from: &PlanFrom, single: bool) {
 pub(crate) fn ask(facts: &RepoFacts, jobs: &mut [Job], single: bool) {
     let required = facts.config.required_check.as_str();
     let asker = if single { RUST_JOB } else { PLAN_JOB };
-    for job in jobs.iter_mut().filter(|job| job.id == asker) {
+    for job in jobs
+        .iter_mut()
+        .filter(|job| job.id == asker || (single && plans_itself(job)))
+    {
         if let Some(at) = job
             .steps
             .iter()
@@ -151,6 +160,7 @@ mod tests {
             group_outputs: Vec::new(),
             reports_ignored: false,
             records_build: false,
+            chained_saves: false,
             selection_name: None,
             steps: kinds.into_iter().map(step).collect(),
         }

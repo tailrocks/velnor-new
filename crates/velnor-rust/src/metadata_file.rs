@@ -264,8 +264,8 @@ pub fn recorded_metadata(
     Ok(known)
 }
 
-const DISCOVERED_FILES: [&str; 3] = ["build.rs", "src/lib.rs", "src/main.rs"];
-const DISCOVERED_FOLDERS: [&str; 4] = ["src/bin", "tests", "examples", "benches"];
+const DISCOVERED_FILES: &[&str] = &["build.rs", "src/lib.rs", "src/main.rs"];
+const DISCOVERED_FOLDERS: &[&str] = &["src/bin", "tests", "examples", "benches"];
 
 fn discovered(relative: &str) -> bool {
     DISCOVERED_FILES.contains(&relative)

@@ -92,7 +92,7 @@ fn walk<'a>(facts: &'a RepoFacts, changes: &'a ChangeSet) -> Walk<'a> {
     walk
 }
 
-const OWN_FOLDERS: [&str; 4] = ["src/", "tests/", "benches/", "examples/"];
+const OWN_FOLDERS: &[&str] = &["src/", "tests/", "benches/", "examples/"];
 const BUILD_SCRIPT: &str = "build.rs";
 
 struct Node<'a> {

@@ -12,8 +12,8 @@ fn scan_racing(name: &str, race: impl Fn(&Path) -> io::Result<fs::ReadDir>) -> i
     let _ = fs::remove_dir_all(&root);
     fs::create_dir_all(root.join("sub")).unwrap_or_else(|e| unreachable!("{e}"));
     fs::write(root.join("kept.txt"), b"").unwrap_or_else(|e| unreachable!("{e}"));
-    let mut remaining = usize::MAX;
-    let result = scan_with(&root, &BTreeSet::new(), &mut remaining, |directory| {
+    let mut budget = Budget::new(usize::MAX);
+    let result = scan_with(&root, &BTreeSet::new(), &mut budget, |directory| {
         if directory.ends_with("sub") {
             race(directory)
         } else {
@@ -60,11 +60,7 @@ fn a_directory_replaced_by_a_regular_file_before_it_is_opened_is_recorded_as_tha
         panic!("scan failed on a directory replaced by a file: {entries:?}");
     };
     let children = root_children(&entries);
-    assert_eq!(
-        children.get(Path::new("sub")),
-        Some(&Kind::File),
-        "{children:?}"
-    );
+    assert_eq!(children.get(Path::new("sub")), Some(&Kind::File), "{children:?}");
     assert_eq!(entries.len(), 1, "{:?}", entries.keys());
 }
 
@@ -134,8 +130,8 @@ fn an_entry_removed_during_the_walk_is_not_an_error() {
                 }
             }
         });
-        let mut remaining = usize::MAX;
-        let failure = (0..2_000).find_map(|_| scan(&root, &BTreeSet::new(), &mut remaining).err());
+        let mut budget = Budget::new(usize::MAX);
+        let failure = (0..2_000).find_map(|_| scan(&root, &BTreeSet::new(), &mut budget).err());
         stop.store(true, Ordering::Relaxed);
         failure
     });

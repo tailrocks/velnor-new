@@ -5,9 +5,9 @@ use crate::journal::{IntentState, Journal, Outcome};
 
 use super::TestResult;
 
-const TABLES: [&str; 1] = ["intents"];
+const TABLES: &[&str] = &["intents"];
 
-const GUARDS: [&str; 3] = [
+const GUARDS: &[&str] = &[
     "unbound_retirement_claim_insert_guard",
     "unbound_retirement_progress_insert_guard",
     "physical_attempt_unbound_retirement_insert_guard",
@@ -25,7 +25,7 @@ async fn single(journal: &Journal, sql: &str, name: &str) -> TestResult<String> 
 
 async fn downgrade_to_v43(journal: &Journal) -> TestResult<()> {
     let connection = journal.connection().await?;
-    for name in GUARDS {
+    for name in GUARDS.iter().copied() {
         let sql = single(
             journal,
             "SELECT sql FROM sqlite_schema WHERE name = ?1",
