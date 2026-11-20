@@ -65,6 +65,7 @@ fn rendered_run(manifests: &[&str]) -> String {
                 skip_when_cold: false,
                 gate: None,
                 reads: None,
+                after_setup: false,
             }],
         }],
     };

@@ -110,6 +110,7 @@ pub(crate) fn plan(kinds: Vec<StepKind>) -> Result<WorkflowPlan, Box<dyn Error>>
                     pr: PrRun::Always,
                     gate: None,
                     reads: None,
+                    after_setup: false,
                 })
                 .collect(),
         }],

@@ -123,6 +123,9 @@ pub struct Step {
     pub pr: PrRun,
     pub gate: Option<Gate>,
     pub reads: Option<PlanRef>,
+    /// Set on the `[[test_setup]]` steps and on the steps after them: they run only when
+    /// the setup step before them succeeded.
+    pub after_setup: bool,
 }
 
 pub const CI_RUN_LABEL: &str = "ci:run";

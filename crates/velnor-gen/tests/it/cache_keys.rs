@@ -253,6 +253,7 @@ fn a_save_step_renders_the_same_key_without_fallbacks() -> TestResult {
                 pr: PrRun::Always,
                 gate: None,
                 reads: None,
+                after_setup: false,
             }],
         }],
     };

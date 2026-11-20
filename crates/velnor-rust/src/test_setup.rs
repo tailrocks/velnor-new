@@ -27,6 +27,12 @@ pub(crate) fn inserted(
         return steps;
     };
     let (when, pr) = (steps[first].when, steps[first].pr);
+    // A setup that fails stops the job's tests, so every cargo step after it waits for it.
+    for later in steps.iter_mut().skip(first) {
+        if matches!(later.kind, StepKind::Cargo(_)) {
+            later.after_setup = true;
+        }
+    }
     let setup: Vec<Step> = facts
         .config
         .test_setup
@@ -37,6 +43,7 @@ pub(crate) fn inserted(
             gate: lane.steps(),
             when,
             pr,
+            after_setup: true,
             ..step(StepKind::TestSetup {
                 name: setup.name.clone(),
                 run: setup.run.clone(),

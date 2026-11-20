@@ -90,6 +90,7 @@ pub(crate) fn locks_hash(manifests: &[&str]) -> Result<String, Box<dyn std::erro
                 pr: PrRun::Always,
                 gate: None,
                 reads: None,
+                after_setup: false,
                 skip_after_merge_group: None,
                 skip_when_cold: false,
             }],

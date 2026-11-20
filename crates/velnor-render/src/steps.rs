@@ -142,26 +142,32 @@ fn job_steps(
     lane: CargoLane,
 ) -> Vec<RenderedStep> {
     let gate = SaveGate::of(job);
-    job.steps
-        .iter()
-        .enumerate()
-        .scan(false, |replanned, (index, step)| {
-            let setup = Setup::of(restores, *replanned);
-            *replanned |= step.kind == StepKind::Helper(HelperCommand::PlanFull);
-            let around = Around {
-                id: gate.id(index),
-                saved_after: gate.required(),
-                job_name: job.name.as_deref(),
-            };
-            Some(crate::base_steps::audited_save(
-                job,
-                step,
-                rendered_steps(step, setup, audit, tests, lane, around),
-                gate.audit_runs(index),
-            ))
-        })
-        .flatten()
-        .collect()
+    let mut rendered = Vec::new();
+    let mut replanned = false;
+    // The id of the last `[[test_setup]]` step, which the steps after it wait for.
+    let mut last_setup: Option<String> = None;
+    for (index, step) in job.steps.iter().enumerate() {
+        let setup = Setup::of(restores, replanned);
+        replanned |= step.kind == StepKind::Helper(HelperCommand::PlanFull);
+        let own = (step.after_setup && matches!(step.kind, StepKind::TestSetup { .. }))
+            .then(|| format!("test_setup_{index}"));
+        let around = Around {
+            id: gate.id(index).or(own.as_deref()),
+            saved_after: gate.required(),
+            job_name: job.name.as_deref(),
+            after_setup: last_setup.as_deref().filter(|_| step.after_setup),
+        };
+        rendered.extend(crate::base_steps::audited_save(
+            job,
+            step,
+            rendered_steps(step, setup, audit, tests, lane, around),
+            gate.audit_runs(index),
+        ));
+        if own.is_some() {
+            last_setup = own;
+        }
+    }
+    rendered
 }
 
 /// What the job around a step adds to it.
@@ -171,6 +177,8 @@ struct Around<'a> {
     id: Option<&'a str>,
     saved_after: &'a [String],
     job_name: Option<&'a str>,
+    /// The id of the test setup step that must succeed before this step runs.
+    after_setup: Option<&'a str>,
 }
 
 fn rendered_steps(
@@ -213,6 +221,11 @@ fn rendered_steps(
             ));
         }
         let mut extra = saved_unless_hit(&step.kind);
+        extra.extend(
+            around
+                .after_setup
+                .map(|id| format!("steps.{id}.outcome == 'success'")),
+        );
         extra.extend(
             step.skip_when_cold
                 .then(|| crate::gate::PREPARE_COLD.to_owned()),
