@@ -13,29 +13,27 @@ use crate::release_symlink::Scratch;
 type TestResult = Result<(), Box<dyn Error>>;
 
 const CURL: &str = r#"#!/bin/sh
-retry=no
-all=no
-previous=
 for argument in "$@"; do
-  [ "$previous" = "--retry" ] && [ "$argument" -ge 1 ] 2> /dev/null && retry=yes
-  [ "$argument" = "--retry-all-errors" ] && all=yes
-  previous=$argument
   url=$argument
 done
-if [ "$retry" != yes ] || [ "$all" != yes ]; then
-  echo "curl: (22) The requested URL returned error: 503" >&2
-  exit 22
-fi
 case "$url" in
-  */SHA256SUMS) cat "$(dirname "$0")/SHA256SUMS" ;;
-  */COMMIT) cat "$(dirname "$0")/COMMIT" ;;
+  */SHA256SUMS) name=SHA256SUMS ;;
+  */COMMIT) name=COMMIT ;;
   *) echo "curl: (22) The requested URL returned error: 404" >&2; exit 22 ;;
 esac
+dir="$(dirname "$0")"
+if [ ! -e "$dir/failed-$name" ]; then
+  : > "$dir/failed-$name"
+  head -c 16 "$dir/$name"
+  echo "curl: (18) transfer closed with outstanding read data remaining" >&2
+  exit 18
+fi
+cat "$dir/$name"
 "#;
 
 #[test]
-fn a_release_metadata_download_asks_curl_to_retry_so_a_transient_error_does_not_fail_the_pin()
--> TestResult {
+fn a_release_metadata_download_that_fails_midway_is_retried_without_its_partial_bytes() -> TestResult
+{
     let base = Scratch(std::env::temp_dir().join(format!("velnor-gen-retry-{}", unique_id())));
     let bin = base.0.join("bin");
     let repo = base.0.join("repo");

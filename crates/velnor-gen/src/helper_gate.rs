@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    BUDGET_MODES_HELPER, DocsRun, HelperRelease, HelperVersion, LintKind, Platform,
+    BUDGET_MODES_HELPER, DocsRun, HelperRelease, HelperVersion, LintKind, MisePlatform, Platform,
     PushAfterMergeGroup, RepoFacts,
 };
 
@@ -96,12 +96,8 @@ fn require_generator_digests(
 }
 
 fn is_macos(facts: &RepoFacts) -> bool {
-    facts
-        .config
-        .runner
-        .as_str()
-        .to_ascii_lowercase()
-        .starts_with("macos")
+    MisePlatform::runner(facts.config.runner.as_str())
+        .is_some_and(|platform| platform.matches("macos"))
 }
 
 pub fn require_compatible(version: &HelperVersion) -> Result<(), GenerateError> {

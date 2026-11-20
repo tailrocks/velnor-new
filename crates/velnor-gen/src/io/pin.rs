@@ -65,21 +65,31 @@ pub fn lock_root(root: &Path) -> Result<PathBuf, Error> {
     fs::canonicalize(root).map_err(|e| Error::File(root.into(), e))
 }
 
+const DOWNLOAD_ATTEMPTS: usize = 4;
+
 fn download(root: &Path, url: &str) -> Result<Vec<u8>, Error> {
-    program(
-        root,
-        "curl",
-        &[
-            OsStr::new("--fail"),
-            OsStr::new("--silent"),
-            OsStr::new("--show-error"),
-            OsStr::new("--location"),
-            OsStr::new("--retry"),
-            OsStr::new("3"),
-            OsStr::new("--retry-all-errors"),
-            OsStr::new(url),
-        ],
-    )
+    let mut failures = 0;
+    loop {
+        match program(
+            root,
+            "curl",
+            &[
+                OsStr::new("--fail"),
+                OsStr::new("--silent"),
+                OsStr::new("--show-error"),
+                OsStr::new("--location"),
+                OsStr::new(url),
+            ],
+        ) {
+            Ok(bytes) => return Ok(bytes),
+            Err(error) => {
+                failures += 1;
+                if failures == DOWNLOAD_ATTEMPTS {
+                    return Err(error);
+                }
+            }
+        }
+    }
 }
 
 pub fn write_lock(root: &Path, lock: &str) -> Result<(), Error> {
