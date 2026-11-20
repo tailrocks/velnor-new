@@ -267,8 +267,9 @@ pub(crate) fn mbx_seed_step() -> RenderedStep {
 }
 
 pub(crate) fn node_step(kind: &velnor_model::StepKind) -> RenderedStep {
+    use velnor_model::StepKind::ToolsLocal;
     match kind {
-        velnor_model::StepKind::ToolsLocal(verb) => crate::tools_steps::tools_local_step(*verb),
+        ToolsLocal(verb, anchor) => crate::tools_steps::tools_local_step(*verb, anchor),
         _ => mbx_seed_step(),
     }
 }
