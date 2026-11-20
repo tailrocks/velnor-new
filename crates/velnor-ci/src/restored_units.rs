@@ -1,11 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-//! The units a restored base held, recorded when it was restored. A dependency compile is waste
-//! only if the base held the unit that was compiled again. The save keeps just the units the run
-//! that saved it used, so a later run with another package or feature selection compiles units
-//! the base never held; that is a gap in the base, not a cache that failed to serve.
-
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::cache_prune::{artifact_hash, is_hash};
@@ -25,7 +20,6 @@ pub fn encode(hashes: &BTreeSet<String>) -> String {
     text
 }
 
-/// `None` for any text this helper did not write, so an unreadable record keeps the old rule.
 #[must_use]
 pub fn decode(text: &str) -> Option<BTreeSet<String>> {
     let mut lines = text.lines();
@@ -38,8 +32,6 @@ pub fn decode(text: &str) -> Option<BTreeSet<String>> {
         .flatten()
 }
 
-/// Marks each dependency compilation of `invocation` with whether any of its non-fresh units
-/// was in `restored`. A compilation whose units cannot be read stays unmarked.
 pub fn classify(invocation: &mut Invocation, restored: &BTreeSet<String>) {
     for compilation in invocation
         .compilations
@@ -64,13 +56,12 @@ pub fn classify(invocation: &mut Invocation, restored: &BTreeSet<String>) {
     }
 }
 
-/// Dependency units compiled that the restored base never held, by root. They are no waste: the
-/// run that saved the base used other packages or features, so the base had nothing to serve.
 #[must_use]
 pub fn base_gaps(metrics: &LaneMetrics) -> Vec<String> {
     let mut gaps: BTreeMap<&str, BTreeSet<String>> = BTreeMap::new();
     for invocation in &metrics.invocations {
-        if invocation.restored_target_usable == Some(false) {
+        if invocation.restored_target_usable == Some(false) || !same_lock(metrics, &invocation.root)
+        {
             continue;
         }
         for event in invocation
@@ -84,12 +75,17 @@ pub fn base_gaps(metrics: &LaneMetrics) -> Vec<String> {
         }
     }
     gaps.into_iter()
-        .map(|(root, units)| {
+        .map(|(root, packages)| {
             format!(
-                "{root}: {} dependency units were not in the restored base (a different package or feature selection than the run that saved it): {}",
-                units.len(),
-                units.into_iter().collect::<Vec<_>>().join(", ")
+                "{root}: dependency packages not in the restored base (a different package or feature selection than the run that saved it): {}",
+                packages.into_iter().collect::<Vec<_>>().join(", ")
             )
         })
         .collect()
+}
+
+fn same_lock(metrics: &LaneMetrics, root: &str) -> bool {
+    metrics.caches.iter().any(|cache| {
+        cache.family == "target" && cache.root.as_deref() == Some(root) && cache.usable_same_lock
+    })
 }

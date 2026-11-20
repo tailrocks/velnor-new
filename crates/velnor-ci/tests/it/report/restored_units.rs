@@ -27,7 +27,7 @@ fn a_dependency_unit_the_restored_base_never_held_is_a_notice_not_waste() {
     assert!(report.contains("no waste"), "{report}");
     assert!(
         report.contains(
-            ".: 1 dependency units were not in the restored base (a different package or feature selection than the run that saved it): serde v1.0.0"
+            ".: dependency packages not in the restored base (a different package or feature selection than the run that saved it): serde v1.0.0"
         ),
         "{report}"
     );
@@ -70,4 +70,13 @@ fn a_record_that_is_not_ours_or_is_damaged_reads_as_absent() {
     ] {
         assert_eq!(decode(text), None, "{text:?}");
     }
+}
+
+#[test]
+fn a_gap_on_a_changed_lock_is_no_notice() {
+    let mut value = lane();
+    value["caches"][0]["usable_same_lock"] = json!(false);
+    value["invocations"][0]["compilations"][0]["restored"] = json!(false);
+    let report = check(&[metrics(value)]).unwrap_or_else(|error| unreachable!("{error}"));
+    assert!(!report.contains("restored base"), "{report}");
 }
