@@ -114,7 +114,6 @@ pub struct RepoFacts {
 pub struct PolicyTools {
     pub deny: bool,
     pub machete: bool,
-    /// `[policy] deny = false` turns the lane off, so a changed `deny.toml` selects nothing.
     pub deny_off: bool,
 }
 

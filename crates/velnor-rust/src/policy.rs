@@ -91,7 +91,6 @@ pub(crate) fn policy_tools(
 pub const DENY_OFF_NOTE: &str =
     "cargo-deny policy is off ([policy] deny = false); deny.toml is ignored";
 
-/// The generation report's line for a `deny.toml` that `[policy] deny = false` turns off.
 #[must_use]
 pub fn deny_off_note(
     tools: PolicyTools,

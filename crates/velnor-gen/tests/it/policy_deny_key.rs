@@ -13,8 +13,6 @@ use crate::pipeline::{pin_helper, view, workflow};
 
 const DENY_RUN: &str = "cargo-deny --config ''deny.toml'' --locked check";
 
-/// A Cargo repository whose helper is pinned to `helper`, with or without a tracked
-/// `deny.toml` (and a mise pin of cargo-deny, which the lane requires).
 fn repo(config: &[u8], deny_toml: bool, helper: &str) -> Result<RepoView, Box<dyn Error>> {
     let mut repo = view(&["Cargo.toml"], Some(config))?;
     if deny_toml {

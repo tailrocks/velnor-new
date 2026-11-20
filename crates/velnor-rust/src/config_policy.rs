@@ -27,8 +27,6 @@ pub(crate) fn parse(raw: Option<RawPolicy>) -> Result<Option<PolicyTable>, Reaso
     .transpose()
 }
 
-/// The named checks, in the fixed order of `DenyCheck`, each once: an empty list or a
-/// repeated or unknown name is refused.
 fn checks(names: &[String]) -> Result<Vec<DenyCheck>, Reason> {
     let invalid = |name: &str| Reason::InvalidValue {
         key: "deny_checks",

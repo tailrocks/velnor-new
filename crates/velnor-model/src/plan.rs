@@ -346,7 +346,6 @@ pub enum CargoCommand {
     Deny {
         manifest: RepoPath,
         config: Option<RepoPath>,
-        /// The checks to run; `None` runs `cargo deny check` with all of them.
         checks: Option<Vec<DenyCheck>>,
     },
     Machete,

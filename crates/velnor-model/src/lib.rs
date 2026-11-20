@@ -63,9 +63,9 @@ pub use repo::{
     DenyLane, DependencyKind, DocsRun, FullRun, InputOwner, InputRule, LaneFeatures, LaneJob,
     LaneKeysWritten, MbxRemote, MbxStore, MemberDependency, OnMain, PackageDependency, PolicyTable,
     PolicyTools, PrCi, PrivateSources, PushAfterMergeGroup, RepoFacts, RepoView,
-    RepositoryIdentity, RustCiConfig, RustMember, RustMetadata, RustPackage, RustRoot, SetupPhase, SpeedBudget,
-    Target, TargetKind, TestLane, TestSetup, Timings, ToolLock, ToolPin, ToolPins, ToolRequest,
-    Toolchain, UnownedPackage, Unread, Weakening, WorkspaceGroup,
+    RepositoryIdentity, RustCiConfig, RustMember, RustMetadata, RustPackage, RustRoot, SetupPhase,
+    SpeedBudget, Target, TargetKind, TestLane, TestSetup, Timings, ToolLock, ToolPin, ToolPins,
+    ToolRequest, Toolchain, UnownedPackage, Unread, Weakening, WorkspaceGroup,
 };
 pub use sealed::{Owner, VELNOR_GEN_MARKER, lf_normalized, owner_of, seal};
 pub use selection::{

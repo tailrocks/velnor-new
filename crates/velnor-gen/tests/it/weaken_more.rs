@@ -194,7 +194,10 @@ fn turning_the_cargo_deny_policy_off_or_narrowing_its_checks_is_new() -> TestRes
     const CONFIG: &str = ".velnor/rust-ci.toml";
     let off = facts(&[(CONFIG, "[policy]\ndeny = false\n")])?;
     assert_eq!(introduced_files(&off, &[CONFIG], &[])?, [CONFIG]);
-    assert!(introduced_files(&off, &[CONFIG], &[(CONFIG, "[policy]\ndeny = false\n")])?.is_empty());
+    assert_eq!(
+        introduced_files(&off, &[CONFIG], &[(CONFIG, "[policy]\ndeny = false\n")])?,
+        Vec::<String>::new()
+    );
     let narrowed = facts(&[(CONFIG, "[policy]\ndeny_checks = [\"advisories\"]\n")])?;
     assert_eq!(introduced_files(&narrowed, &[CONFIG], &[])?, [CONFIG]);
     Ok(())
