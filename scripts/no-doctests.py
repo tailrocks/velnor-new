@@ -15,6 +15,7 @@ LIST_INDENT = re.compile(r"[ \t]*" + CONTAINER + r"(?:[-*+]|\d{1,9}[.)]) {5,}\S"
 ORDERED_LEAD = re.compile(r"[ \t]*(\d{1,9})[.)](?=[ \t])")
 BLOCK_MARGIN = re.compile(r"[ \t]*\*")
 QUOTE_START = re.compile(r"[ \t]*>")
+LIST_START = re.compile(r"[ \t]*" + QUOTE + r"(?:\[\^[^\]\s]+\]:[ \t]*)?(?:[-*+]|\d{1,9}[.)])(?:[ \t]|$)")
 HRULE = re.compile(r"(?:-[ \t]*){3,}|(?:\*[ \t]*){3,}|(?:_[ \t]*){3,}")
 SETEXT_UNDERLINE = re.compile(r"(?:=+|-+)[ \t]*")
 HTML_CLOSED = re.compile(
@@ -114,19 +115,27 @@ def prose(line):
     )
 
 
-def list_interrupts(prev, text):
+def quote_depth(line):
+    return re.match(QUOTE, line).group().count(">")
+
+
+def list_interrupts(prev, text, opened):
     ordered = ORDERED_LEAD.match(text)
-    return not (ordered and int(ordered.group(1)) != 1 and prose(prev))
+    if not (ordered and int(ordered.group(1)) != 1):
+        return True
+    return not (not opened and prose(prev) and quote_depth(prev) == quote_depth(text))
 
 
 def markdown_hit(lines, indent):
     prev = None
+    opened = False
     for k, line in enumerate(lines):
         text = line.replace("\t", "    ")
-        if LINE_FENCE.match(text) or (LIST_INDENT.match(text) and list_interrupts(prev, text)):
+        if LINE_FENCE.match(text) or (LIST_INDENT.match(text) and list_interrupts(prev, text, opened)):
             return k
         if indent.match(text) and not (prose(prev) and not QUOTE_START.match(text)):
             return k
+        opened = opened or LIST_START.match(line) is not None
         prev = line
     return None
 
