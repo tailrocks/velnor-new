@@ -194,10 +194,20 @@ fn cache_metrics(
                 super::report_waste::entry_before_job(cache, &listing, &readable_refs(), start);
         }
         let saving = cache.save != SaveOutcome::NotAttempted;
+        if saving && cache.saved_key.as_deref() == Some("") {
+            // The save ran under a key nobody recorded. The restore key may still hold an old
+            // entry, so look up nothing and fail the save as unverifiable.
+            cache.bytes = None;
+            cache.save = SaveOutcome::Failed;
+            metrics
+                .diagnostics
+                .push("Saved cache key unavailable".to_owned());
+            continue;
+        }
         let key = if saving {
-            cache.saved_key.as_ref().unwrap_or(&cache.requested_key)
+            cache.saved_key.as_deref().unwrap_or(cache.requested_key.as_str())
         } else if let Some(key) = &cache.matched_key {
-            key
+            key.as_str()
         } else {
             continue;
         };

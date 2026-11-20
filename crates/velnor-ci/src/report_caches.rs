@@ -44,13 +44,13 @@ pub(crate) fn observe_caches(
             } else {
                 SaveOutcome::NotAttempted
             };
+            // `Some("")` means a saved key was expected but no step recorded one. That is not the
+            // same as `None` (no save-key step), and must never fall back to the restore key.
             let saved_key = plan
                 .save_key_step
                 .as_ref()
                 .filter(|_| save != SaveOutcome::NotAttempted)
-                .and_then(|id| steps[id]["outputs"]["key"].as_str())
-                .filter(|key| !key.is_empty())
-                .map(str::to_owned);
+                .map(|id| steps[id]["outputs"]["key"].as_str().unwrap_or_default().to_owned());
             Cache {
                 family: plan.family,
                 root: plan.root,
