@@ -348,7 +348,7 @@ fn the_single_job_policy_lane_reads_the_rust_jobs_plan_and_checks_out_one_commit
     files.files.insert(deny, Vec::new());
     files.files.insert(
         RepoPath::new("mise.toml")?,
-        b"[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\ncargo-deny = \"0.20.2\"\n".to_vec(),
+        b"[tools]\nrust = { version = \"1.99.1\", mr_boxington = true }\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\ncargo-deny = \"0.20.2\"\n\n[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n".to_vec(),
     );
     let text = workflow(&files)?;
     assert!(!text.contains("rust-plan"), "{text}");

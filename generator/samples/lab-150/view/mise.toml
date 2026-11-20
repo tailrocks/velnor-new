@@ -1,5 +1,5 @@
 [tools]
-rust = { version = "1.99.1", profile = "minimal", components = [
+rust = { version = "1.99.1", mr_boxington = true, profile = "minimal", components = [
   "clippy",
   "rustfmt",
 ], targets = [
@@ -12,3 +12,7 @@ hk = "2.12.0"
 
 [settings]
 lockfile = true
+
+[wrappers.cargo]
+command = "mbx"
+env = { MBX_CARGO_SHIM_MODE = "1" }

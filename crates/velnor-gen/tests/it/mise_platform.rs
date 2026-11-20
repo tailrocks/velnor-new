@@ -23,7 +23,7 @@ pub(crate) fn generate(
     let config = format!("runner = \"{runner}\"\n{hosted}");
     let mut repo = view(&["Cargo.toml"], Some(config.as_bytes())).map_err(|e| e.to_string())?;
     let mise = format!(
-        "[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\ncargo-deny = {{ version = \"0.20.2\", os = [\"{filter}\"] }}\n"
+        "[tools]\nrust = {{ version = \"1.99.1\", mr_boxington = true }}\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\ncargo-deny = {{ version = \"0.20.2\", os = [\"{filter}\"] }}\n\n[wrappers.cargo]\ncommand = \"mbx\"\nenv = {{ MBX_CARGO_SHIM_MODE = \"1\" }}\n"
     );
     let mut lock = "[[tools.rust]]\nversion = \"1.99.1\"\n\n[[tools.\"aqua:nextest-rs/nextest/cargo-nextest\"]]\nversion = \"0.9.151\"\n".to_owned();
     for platform in ["linux-x64", "linux-arm64", "macos-arm64", "macos-x64"] {
@@ -102,7 +102,7 @@ fn an_applicable_mise_filter_cannot_skip_the_missing_prebuilt_error() {
 #[test]
 fn every_applicable_locked_version_needs_its_own_prebuilt_for_the_runner() -> TestResult {
     let mut repo = view(&["Cargo.toml"], None)?;
-    repo.files.insert(RepoPath::from_static("mise.toml"), b"[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\ntool = [\"1\", \"2\"]\n".to_vec());
+    repo.files.insert(RepoPath::from_static("mise.toml"), b"[tools]\nrust = { version = \"1.99.1\", mr_boxington = true }\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\ntool = [\"1\", \"2\"]\n\n[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n".to_vec());
     let mut lock = "[[tools.rust]]\nversion = \"1.99.1\"\n[[tools.\"aqua:nextest-rs/nextest/cargo-nextest\"]]\nversion = \"0.9.151\"\n[tools.\"aqua:nextest-rs/nextest/cargo-nextest\".\"platforms.linux-x64\"]\nurl = \"https://fixtures.invalid/nextest\"\n[[tools.tool]]\nversion = \"1.0.0\"\nspecifiers = [\"1\"]\n[tools.tool.\"platforms.linux-x64\"]\nurl = \"https://fixtures.invalid/tool-1\"\n[[tools.tool]]\nversion = \"2.0.0\"\nspecifiers = [\"2\"]\n".to_owned();
     let path = RepoPath::from_static("mise.lock");
     repo.files.insert(path.clone(), lock.as_bytes().to_vec());
@@ -126,7 +126,7 @@ fn a_prebuilt_is_checked_only_for_the_configured_lock_option_variant() -> TestRe
     let mut repo = view(&["Cargo.toml"], None)?;
     let mise = |flavor| {
         format!(
-            "[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\ntool = {{ version = \"1\", flavor = \"{flavor}\" }}\n"
+            "[tools]\nrust = {{ version = \"1.99.1\", mr_boxington = true }}\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\ntool = {{ version = \"1\", flavor = \"{flavor}\" }}\n\n[wrappers.cargo]\ncommand = \"mbx\"\nenv = {{ MBX_CARGO_SHIM_MODE = \"1\" }}\n"
         )
     };
     let lock = |linux, mac| {

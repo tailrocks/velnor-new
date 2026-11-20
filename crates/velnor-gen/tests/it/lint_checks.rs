@@ -21,7 +21,7 @@ fn with_mise(config: &str, extra: &str) -> Result<RepoView, Box<dyn std::error::
 
 fn tools(text: &str) -> String {
     format!(
-        "[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n{text}"
+        "[tools]\nrust = {{ version = \"1.99.1\", mr_boxington = true }}\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n{text}\n\n[wrappers.cargo]\ncommand = \"mbx\"\nenv = {{ MBX_CARGO_SHIM_MODE = \"1\" }}\n"
     )
 }
 

@@ -340,7 +340,7 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
             expiry,
             cli,
         } => restored_targets_step(targets, *expiry, *cli),
-        StepKind::MbxRemote | StepKind::MbxPin => crate::helper_steps::mbx_remote_step(kind),
+        StepKind::MbxRemote => crate::helper_steps::mbx_remote_step(),
         StepKind::CratesMirror(mirror) => crate::helper_steps::mirror_step(mirror),
         StepKind::MbxStore | StepKind::MbxPrivate => crate::helper_steps::mbx_local_step(kind),
         StepKind::PrivateCheck { .. }

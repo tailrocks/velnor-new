@@ -7,15 +7,14 @@ use crate::plan::step;
 
 pub(crate) fn apply(facts: &RepoFacts, jobs: &mut [Job]) {
     let remote = facts.config.mbx_remote == MbxRemote::GithubActions;
-    let private = facts.config.mbx.routed()
-        && !remote
-        && facts.config.mbx_store == MbxStore::Private;
+    let private =
+        facts.config.mbx.routed() && !remote && facts.config.mbx_store == MbxStore::Private;
     for job in jobs {
         if !compiles(job) {
             continue;
         }
         if remote && facts.private_sources.is_none() {
-            insert(job, &[StepKind::MbxPin, StepKind::MbxRemote], After::Tools);
+            insert(job, &[StepKind::MbxRemote], After::Tools);
         }
         if private {
             insert(job, &[StepKind::MbxPrivate], After::Before);

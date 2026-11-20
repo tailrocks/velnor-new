@@ -234,7 +234,7 @@ fn an_unpinned_jactionlint_is_refused_instead_of_installed_unpinned() -> TestRes
     let mut repo = repo("[[lint]]\nkind = 'jactionlint'\n")?;
     repo.files.insert(
         RepoPath::new("mise.toml")?,
-        b"[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n"
+        b"[tools]\nrust = { version = \"1.99.1\", mr_boxington = true }\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n\n[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n"
             .to_vec(),
     );
     let error = workflow(&repo).err().ok_or("accepted without a pin")?;
@@ -247,7 +247,7 @@ fn jactionlint_without_a_pinned_shellcheck_turns_shellcheck_off() -> TestResult 
     let mut repo = repo("[[lint]]\nkind = 'jactionlint'\n")?;
     repo.files.insert(
         RepoPath::new("mise.toml")?,
-        b"[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\njactionlint = \"2.4.0\"\n"
+        b"[tools]\nrust = { version = \"1.99.1\", mr_boxington = true }\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\njactionlint = \"2.4.0\"\n\n[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n"
             .to_vec(),
     );
     let text = workflow(&repo)?;

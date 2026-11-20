@@ -25,7 +25,7 @@ fn every_job_installs_every_pinned_tool_and_needs_a_real_nextest_pin() -> TestRe
     let mut unpinned = pinned;
     unpinned.files.insert(
         other.clone(),
-        b"[tools]\nrust = \"1.99.1\"\nnextest-helper = \"1\"\n".to_vec(),
+        b"[tools]\nrust = { version = \"1.99.1\", mr_boxington = true }\nmr-boxington = \"v1.30.0\"\nnextest-helper = \"1\"\n\n[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n".to_vec(),
     );
     crate::facts::lock_pinned_tools(&mut unpinned)?;
     assert_eq!(

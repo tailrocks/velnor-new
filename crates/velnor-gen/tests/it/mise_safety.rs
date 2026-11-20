@@ -11,8 +11,7 @@ use crate::pipeline::view;
 fn detect_rejects_mise_configuration_that_can_change_installation() -> TestResult {
     let path = RepoPath::new("mise.toml")?;
     let mut repo = view(&["Cargo.toml"], None)?;
-    let valid =
-        "[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n";
+    let valid = "[tools]\nrust = { version = \"1.99.1\", mr_boxington = true }\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n\n[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n";
     repo.files.insert(path.clone(), valid.as_bytes().to_vec());
     repo.files.insert(RepoPath::new("mise.lock")?, b"[[tools.rust]]\nversion = \"1.99.1\"\n[[tools.\"aqua:nextest-rs/nextest/cargo-nextest\"]]\nversion = \"0.9.151\"\n".to_vec());
     assert!(detect(&repo).is_ok());

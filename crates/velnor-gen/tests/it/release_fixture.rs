@@ -112,7 +112,7 @@ pub(crate) fn release_view(
     view.files.insert(LOCK_PATH, LOCK.as_bytes().to_vec());
     view.files.insert(
         RepoPath::new("mise.toml")?,
-        b"[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n\"aqua:release-plz/release-plz\" = \"0.4.3\"\n".to_vec(),
+        b"[tools]\nrust = { version = \"1.99.1\", mr_boxington = true }\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n\"aqua:release-plz/release-plz\" = \"0.4.3\"\n\n[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n".to_vec(),
     );
     view.files.insert(
         RepoPath::new("mise.lock")?,

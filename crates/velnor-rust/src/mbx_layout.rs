@@ -25,9 +25,12 @@ pub(crate) fn standard_wrapper(wrapper: &Value) -> bool {
     let Some(table) = wrapper.as_table() else {
         return false;
     };
-    let env_ok = table.get("env").and_then(Value::as_table).is_some_and(|env| {
-        env.len() == 1 && env.get(SHIM_MODE).and_then(Value::as_str) == Some("1")
-    });
+    let env_ok = table
+        .get("env")
+        .and_then(Value::as_table)
+        .is_some_and(|env| {
+            env.len() == 1 && env.get(SHIM_MODE).and_then(Value::as_str) == Some("1")
+        });
     table.len() == 2 && table.get("command").and_then(Value::as_str) == Some("mbx") && env_ok
 }
 
@@ -67,7 +70,12 @@ fn mbx_pin_usable(pins: &ToolPins) -> bool {
 pub(crate) fn check_pin(facts: &RepoFacts) -> Result<(), DetectError> {
     if facts.config.mbx.routed() && !mbx_pin_usable(&facts.tools) {
         return Err(DetectError::MbxPinRequired {
-            path: facts.tools.configs.first().cloned().unwrap_or(MISE_CONFIGS[0].clone()),
+            path: facts
+                .tools
+                .configs
+                .first()
+                .cloned()
+                .unwrap_or(MISE_CONFIGS[0].clone()),
         });
     }
     Ok(())
@@ -87,19 +95,27 @@ pub fn check_mbx(
         .first()
         .cloned()
         .unwrap_or(MISE_CONFIGS[0].clone());
-    let rust_option = !rust_tool(&facts.tools)
-        .and_then(|name| facts.tools.tools.get(name))
-        .is_some_and(|pin| {
-            pin.requested
-                .iter()
-                .all(|request| request.options.get("mr_boxington").map(String::as_str) == Some("true"))
-        });
-    let wrapper = !facts.tools.configs.iter().any(|config| {
-        files
-            .get(config)
-            .and_then(|bytes| table(bytes).ok())
-            .and_then(|parsed| parsed.get("wrappers")?.get("cargo").map(standard_wrapper))
-            .unwrap_or(false)
+    let parsed: Vec<toml::Table> = facts
+        .tools
+        .configs
+        .iter()
+        .filter_map(|config| files.get(config).and_then(|bytes| table(bytes).ok()))
+        .collect();
+    let rust_option = !rust_tool(&facts.tools).is_some_and(|name| {
+        parsed.iter().any(|config| {
+            config
+                .get("tools")
+                .and_then(|tools| tools.get(name))
+                .and_then(|rust| rust.get("mr_boxington"))
+                .and_then(Value::as_bool)
+                == Some(true)
+        })
+    });
+    let wrapper = !parsed.iter().any(|config| {
+        config
+            .get("wrappers")
+            .and_then(|wrappers| wrappers.get("cargo"))
+            .is_some_and(standard_wrapper)
     });
     if rust_option || wrapper {
         return Err(DetectError::MbxLayout(Layout {

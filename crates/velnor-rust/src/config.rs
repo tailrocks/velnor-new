@@ -126,7 +126,8 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
     let fork_runner = crate::config_fork::fork_runner(raw.fork_runner, &runner).map_err(invalid)?;
     let mbx_remote = crate::config_cache::mbx_remote(raw.cache.as_ref()).map_err(invalid)?;
     let mbx_store = raw.mbx_shared_store.unwrap_or(false).into();
-    let mbx = crate::config_cache::mbx(raw.cache.as_ref(), mbx_remote, mbx_store).map_err(invalid)?;
+    let mbx =
+        crate::config_cache::mbx(raw.cache.as_ref(), mbx_remote, mbx_store).map_err(invalid)?;
     Ok(RustCiConfig {
         workspace_groups,
         budget: crate::config_budget::parse(bytes).map_err(invalid)?,

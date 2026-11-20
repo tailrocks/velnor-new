@@ -146,7 +146,7 @@ fn a_tool_without_a_prebuilt_binary_for_the_runner_fails_generation_naming_the_t
         set(
             repo,
             "mise.toml",
-            "[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n\"cargo:ripgrep\" = \"14\"\n",
+            "[tools]\nrust = { version = \"1.99.1\", mr_boxington = true }\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n\"cargo:ripgrep\" = \"14\"\n\n[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n",
         )?;
         set(
             repo,

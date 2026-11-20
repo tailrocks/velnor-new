@@ -38,8 +38,7 @@ name = "shadow"
 harness = false
 "#;
 
-const NEXTEST_MISE: &str =
-    "[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n";
+const NEXTEST_MISE: &str = "[tools]\nrust = { version = \"1.99.1\", mr_boxington = true }\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n\n[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n";
 
 fn view(config: Option<&str>) -> Result<RepoView, Box<dyn std::error::Error>> {
     let mut a = package(

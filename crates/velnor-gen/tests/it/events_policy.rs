@@ -105,7 +105,7 @@ fn the_policy_lane_runs_machete_once_from_the_repository_root() -> TestResult {
     let mise = RepoPath::new("mise.toml")?;
     view.files.insert(
         mise,
-        b"[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\ncargo-machete = \"0.9.1\"\n"
+        b"[tools]\nrust = { version = \"1.99.1\", mr_boxington = true }\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\ncargo-machete = \"0.9.1\"\n\n[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n"
             .to_vec(),
     );
     let text = workflow(&view)?;
