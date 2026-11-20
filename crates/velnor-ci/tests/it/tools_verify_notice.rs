@@ -133,3 +133,44 @@ fn a_hostile_cache_key_cannot_forge_a_second_workflow_command() {
     );
     assert!(!stdout.contains('\r'), "{stdout:?}");
 }
+
+#[test]
+fn a_malformed_anchor_names_the_anchor_entry_that_feeds_the_check() {
+    let job = job("tools-verify-bad-anchor");
+    recorded(&job);
+    let stdout = check_stdout(
+        &job,
+        "not-a-digest",
+        &[
+            ("VELNOR_TOOLS_CACHE_KEY", "velnor-tools-abc123"),
+            ("VELNOR_ANCHOR_CACHE_KEY", "velnor-tools-anchor-abc123"),
+        ],
+    );
+    assert!(stdout.contains("the anchor is malformed"), "{stdout}");
+    assert!(
+        stdout.contains("gh cache delete 'velnor-tools-anchor-abc123' -R tailrocks/velnor-new"),
+        "{stdout}"
+    );
+    assert!(!stdout.contains("velnor-tools-abc123'"), "{stdout}");
+    assert!(discarded(&job));
+}
+
+#[test]
+fn a_restore_on_github_com_names_the_repository_without_a_host() {
+    let job = job("tools-verify-named-github-com");
+    let anchor = recorded(&job);
+    fs::write(rustc(&job), "evil binary!").unwrap_or_else(|e| unreachable!("{e}"));
+    let stdout = check_stdout(
+        &job,
+        &anchor,
+        &[
+            ("VELNOR_TOOLS_CACHE_KEY", "velnor-tools-abc123"),
+            ("GITHUB_SERVER_URL", "https://github.com"),
+        ],
+    );
+    assert!(
+        stdout.contains("gh cache delete 'velnor-tools-abc123' -R tailrocks/velnor-new"),
+        "{stdout}"
+    );
+    assert!(!stdout.contains("github.com/tailrocks"), "{stdout}");
+}

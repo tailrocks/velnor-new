@@ -53,9 +53,9 @@ fn delete_sentence(what: &str, key: &str, repository: &str) -> String {
     )
 }
 
-fn delete_hint(remedy: Remedy<'_>) -> String {
+fn delete_hint(remedy: Remedy<'_>, tools_entry: bool) -> String {
     let mut hint = String::new();
-    if !remedy.key.is_empty() {
+    if tools_entry && !remedy.key.is_empty() {
         hint.push_str(&delete_sentence(
             "Actions cache entry",
             remedy.key,
@@ -80,7 +80,7 @@ fn repository_target(server: Option<&str>, repository: Option<&str>) -> String {
                 .trim_start_matches("https://")
                 .trim_start_matches("http://")
         })
-        .filter(|host| !host.is_empty());
+        .filter(|host| !host.is_empty() && *host != "github.com");
     match host {
         Some(host) => format!("{host}/{repository}"),
         None => repository.to_owned(),
@@ -99,10 +99,10 @@ pub fn message(verdict: &Verdict, remedy: Remedy<'_>) -> String {
         }
         Verdict::Verified => "velnor: the restored tools equal the anchor".to_owned(),
         Verdict::Discarded(why) => {
-            let hint = if *why == Discard::Mismatch {
-                delete_hint(remedy)
-            } else {
-                String::new()
+            let hint = match why {
+                Discard::Mismatch => delete_hint(remedy, true),
+                Discard::BadAnchor => delete_hint(remedy, false),
+                _ => String::new(),
             };
             format!(
                 "::notice::the restored tools were discarded ({}); they install from scratch{hint}",
