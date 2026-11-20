@@ -14,8 +14,8 @@ pub(crate) const LABEL_CONFIG: &str = "pr_ci = \"label\"\nshape = \"lint-test\"\
 const GATE: &str = "velnor-ci gate";
 const LENIENT: &str = "Fail when a Rust job failed or was cancelled";
 const NOTICE: &str = "Note that CI is not requested on a draft pull request";
-const QUICK_JOBS: [&str; 3] = ["rust-plan", "rust-lint", "policy"];
-const FULL_JOBS: [&str; 1] = ["rust-test"];
+const QUICK_JOBS: &[&str] = &["rust-plan", "rust-lint", "policy"];
+const FULL_JOBS: &[&str] = &["rust-test"];
 const RESET: &str = "ci-run-label";
 
 pub(crate) fn render(version: &str, config: &str) -> Result<String, Box<dyn std::error::Error>> {
@@ -82,7 +82,11 @@ enum Runs {
 
 impl Runs {
     fn jobs(self) -> (Vec<&'static str>, Vec<&'static str>) {
-        let everything: Vec<&str> = QUICK_JOBS.into_iter().chain(FULL_JOBS).collect();
+        let everything: Vec<&str> = QUICK_JOBS
+            .iter()
+            .copied()
+            .chain(FULL_JOBS.iter().copied())
+            .collect();
         match self {
             Self::Nothing => (Vec::new(), everything),
             Self::Quick => (QUICK_JOBS.to_vec(), FULL_JOBS.to_vec()),
@@ -264,7 +268,7 @@ fn required_on_a_merge_group_or_a_push_to_main_needs_every_lane_and_allows_no_sk
                 event.name
             );
         }
-        for job in QUICK_JOBS.into_iter().chain(FULL_JOBS) {
+        for job in QUICK_JOBS.iter().copied().chain(FULL_JOBS.iter().copied()) {
             assert_eq!(state(&results, job), "success", "{} {job}", event.name);
         }
         assert!(verdict.steps.iter().any(|step| step == GATE));

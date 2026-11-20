@@ -27,7 +27,7 @@ pub(crate) async fn install_v18_revision_triggers(
 pub(crate) async fn install_v20_revision_triggers(
     connection: &Connection,
 ) -> Result<(), HostError> {
-    for statement in V20_REVISION_TRIGGERS {
+    for statement in V20_REVISION_TRIGGERS.iter().copied() {
         connection
             .execute(statement, ())
             .await
@@ -67,7 +67,7 @@ pub(crate) async fn validate_v20_revision_triggers(
     Ok(())
 }
 
-const V20_REVISION_TRIGGERS: [&str; 3] = [
+const V20_REVISION_TRIGGERS: &[&str] = &[
     "CREATE TRIGGER IF NOT EXISTS storage_initialization_revision_insert AFTER INSERT ON capacity_reservation_storage_initialization BEGIN UPDATE journal_meta SET revision = revision + 1 WHERE singleton = 1; END",
     "CREATE TRIGGER IF NOT EXISTS storage_initialization_revision_update AFTER UPDATE ON capacity_reservation_storage_initialization BEGIN UPDATE journal_meta SET revision = revision + 1 WHERE singleton = 1; END",
     "CREATE TRIGGER IF NOT EXISTS storage_initialization_revision_delete AFTER DELETE ON capacity_reservation_storage_initialization BEGIN UPDATE journal_meta SET revision = revision + 1 WHERE singleton = 1; END",

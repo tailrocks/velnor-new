@@ -266,7 +266,7 @@ pub enum LocalAction {
 }
 
 impl LocalAction {
-    pub const PATHS: [&'static str; 3] = [
+    pub const PATHS: &[&'static str] = &[
         "./qualification/actions/post-fail",
         "./qualification/actions/docker",
         "./qualification/actions/composite",

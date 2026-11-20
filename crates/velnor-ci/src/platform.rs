@@ -47,7 +47,7 @@ enum Expression {
     Not(Box<Expression>),
 }
 
-const FIXED_NAMES: [&str; 5] = [
+const FIXED_NAMES: &[&str] = &[
     "unix",
     "windows",
     "target_env",
@@ -55,7 +55,7 @@ const FIXED_NAMES: [&str; 5] = [
     "target_abi",
 ];
 
-const FIXED_KEYS: [&str; 9] = [
+const FIXED_KEYS: &[&str] = &[
     "target_os",
     "target_family",
     "target_arch",

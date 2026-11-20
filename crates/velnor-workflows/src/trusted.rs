@@ -8,8 +8,8 @@ use crate::error::{WorkflowsError, refuse};
 use crate::plan::TrustedPool;
 use crate::raw::RawWorkflow;
 
-const REF_INPUTS: [&str; 3] = ["ref", "sha", "repository"];
-const CHECKOUT_KEYS: [&str; 2] = ["ref", "repository"];
+const REF_INPUTS: &[&str] = &["ref", "sha", "repository"];
+const CHECKOUT_KEYS: &[&str] = &["ref", "repository"];
 const SERVER_KEY: &str = "github-server-url";
 
 fn reads_input(value: &str) -> bool {

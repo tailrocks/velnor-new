@@ -8,7 +8,7 @@ use crate::error::Reason;
 use crate::toml_file::table;
 
 /// The keys of `[budget]` and of each `[budget.<selection>]` table.
-pub const BUDGET_KEYS: [&str; 4] = [
+pub const BUDGET_KEYS: &[&str] = &[
     "pr_wall_seconds",
     "main_wall_seconds",
     "runner_seconds",
