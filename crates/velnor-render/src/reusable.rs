@@ -79,11 +79,11 @@ fn render_one(
     ));
     let file = crate::seal(REUSABLE_HEADER, &emit(&document));
     if file.len() > MAX_WORKFLOW_BYTES {
-        return Err(vec![RuleViolation {
-            job: String::new(),
-            step: 0,
-            rule: Rule::WorkflowTooLarge(file.len()),
-        }]);
+        return Err(vec![crate::size_report::too_large(
+            &format!(".github/workflows/{}.yml", workflow.file),
+            file.len(),
+            &rendered.jobs,
+        )]);
     }
     Ok((format!(".github/workflows/{}.yml", workflow.file), file))
 }
