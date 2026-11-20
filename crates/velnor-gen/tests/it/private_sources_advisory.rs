@@ -71,3 +71,19 @@ fn without_the_section_the_policy_job_does_not_fetch_the_advisory_db() -> TestRe
     assert!(!text.contains("fetch db"), "{text}");
     Ok(())
 }
+
+#[test]
+fn the_advisory_db_is_fetched_only_when_the_checks_include_advisories() -> TestResult {
+    for (checks, fetched) in [("[\"bans\"]", false), ("[\"advisories\", \"bans\"]", true)] {
+        let section = format!("{SECTION}[policy]\ndeny_checks = {checks}\n");
+        let repo = with_deny_config(private_repo(
+            &["Cargo.toml", "tools/Cargo.toml"],
+            &section,
+            "0.1.109",
+        )?)?;
+        let text = workflow(&repo)?;
+        assert!(text.contains("cargo-deny"), "{checks}: {text}");
+        assert_eq!(text.contains(" fetch db"), fetched, "{checks}: {text}");
+    }
+    Ok(())
+}
