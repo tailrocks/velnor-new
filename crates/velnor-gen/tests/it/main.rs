@@ -143,6 +143,7 @@ mod mise_names;
 mod mise_platform;
 mod needs_size;
 mod needs_size_plan;
+mod nested_target_dir;
 mod nextest_profile;
 mod no_programs;
 mod node_store_cache;
