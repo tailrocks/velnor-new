@@ -82,9 +82,11 @@ const WRAPPERS: [&str; 62] = [
     "nohup env -i nice -n 5 timeout 10m stdbuf -oL time -p sh -c \"exec {}\"",
 ];
 
-#[test]
-fn wrappers_cannot_hide_a_helper_call() -> TestResult {
-    for wrapper in WRAPPERS {
+/// The table is checked in two halves, so that each test stays within the 2 s test budget.
+const HALF: usize = WRAPPERS.len() / 2;
+
+fn helper_call_behind(wrappers: &[&str]) -> TestResult {
+    for wrapper in wrappers {
         let command = wrapper.replace("{}", "velnor-ci check");
         let message = refusal(&job_running("", &command, ""))
             .map_err(|error| format!("{command:?}: {error}"))?;
@@ -98,6 +100,16 @@ fn wrappers_cannot_hide_a_helper_call() -> TestResult {
         );
     }
     Ok(())
+}
+
+#[test]
+fn wrappers_cannot_hide_a_helper_call() -> TestResult {
+    helper_call_behind(&WRAPPERS[..HALF])
+}
+
+#[test]
+fn more_wrappers_cannot_hide_a_helper_call() -> TestResult {
+    helper_call_behind(&WRAPPERS[HALF..])
 }
 
 #[test]
@@ -115,9 +127,8 @@ fn a_command_sequence_is_refused_when_it_calls_the_helper() -> TestResult {
     Ok(())
 }
 
-#[test]
-fn wrappers_cannot_hide_a_repository_script_from_the_write_token_rule() -> TestResult {
-    for wrapper in WRAPPERS {
+fn repository_script_behind(wrappers: &[&str]) -> TestResult {
+    for wrapper in wrappers {
         for payload in ["./publish.sh", "bash publish.sh"] {
             let command = wrapper.replace("{}", payload);
             let message = refusal(&job_running(WRITE, &command, TOKEN))
@@ -126,6 +137,16 @@ fn wrappers_cannot_hide_a_repository_script_from_the_write_token_rule() -> TestR
         }
     }
     Ok(())
+}
+
+#[test]
+fn wrappers_cannot_hide_a_repository_script_from_the_write_token_rule() -> TestResult {
+    repository_script_behind(&WRAPPERS[..HALF])
+}
+
+#[test]
+fn more_wrappers_cannot_hide_a_repository_script_from_the_write_token_rule() -> TestResult {
+    repository_script_behind(&WRAPPERS[HALF..])
 }
 
 #[test]
