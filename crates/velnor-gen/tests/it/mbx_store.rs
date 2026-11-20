@@ -10,10 +10,7 @@ fn repo(config: &str, helper: &str) -> Result<velnor_model::RepoView, Box<dyn st
     let mut repo = view(&["Cargo.toml", "tools/Cargo.toml"], None)?;
     repo.files
         .insert(path(".velnor/rust-ci.toml")?, config.as_bytes().to_vec());
-    let lock = path(".velnor/rust-ci.lock")?;
-    let old = String::from_utf8(repo.files[&lock].clone())?;
-    repo.files
-        .insert(lock, old.replace("0.1.81", helper).into_bytes());
+    crate::pipeline::pin_helper(&mut repo, helper)?;
     Ok(repo)
 }
 
@@ -64,7 +61,7 @@ fn the_shared_store_is_selected_once_per_job_before_any_cargo_or_tool_step() -> 
 #[test]
 fn the_shared_store_is_off_unless_configured() -> TestResult {
     assert!(!workflow(&repo("", "0.1.84")?)?.contains("mbx-store"));
-    assert!(!workflow(&repo("mbx_shared_store = false\n", "0.1.84")?)?.contains("mbx-store"));
+    assert!(!workflow(&repo("mbx_shared_store = false\n", "0.1.85")?)?.contains("mbx-store"));
     Ok(())
 }
 

@@ -7,7 +7,8 @@ use velnor_model::{ModeBudget, Selection, SpeedBudget};
 use crate::error::Reason;
 use crate::toml_file::table;
 
-const KEYS: [&str; 4] = [
+/// The keys of `[budget]` and of each `[budget.<selection>]` table.
+pub const BUDGET_KEYS: [&str; 4] = [
     "pr_wall_seconds",
     "main_wall_seconds",
     "runner_seconds",
@@ -73,13 +74,15 @@ fn unknown_key(value: &toml::Value) -> Option<String> {
     let table = value.as_table()?;
     for (key, inner) in table {
         if let Some(mode) = Selection::from_name(key) {
-            let unknown = inner
-                .as_table()
-                .and_then(|inner| inner.keys().find(|name| !KEYS.contains(&name.as_str())));
+            let unknown = inner.as_table().and_then(|inner| {
+                inner
+                    .keys()
+                    .find(|name| !BUDGET_KEYS.contains(&name.as_str()))
+            });
             if let Some(name) = unknown {
                 return Some(format!("{}.{name}", mode.name()));
             }
-        } else if !KEYS.contains(&key.as_str()) {
+        } else if !BUDGET_KEYS.contains(&key.as_str()) {
             return Some(key.clone());
         }
     }

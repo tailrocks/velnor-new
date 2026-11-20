@@ -13,7 +13,7 @@ use crate::yaml_tree::{Node, parse};
 
 const RELEASE_PLZ: &str = "[workspace]\ngit_tag_name = \"{{ package }}-v{{ version }}\"\ngit_release_draft = true\nrelease_always = false\nsemver_check = false\npr_branch_prefix = \"{prefix}\"\ngit_only = true\n\n[[package]]\nname = \"{package}\"\n{release}";
 
-pub(crate) const HELPER: &str = "0.1.98";
+pub(crate) const HELPER: &str = "0.1.99";
 
 pub(crate) const TOOLS_LIKE: &str = "roots = [\".\", \"tools\"]\nfamily_tag = \"tools-v{{ version }}\"\n[[binaries]]\npackage = \"app\"\nsmoke = true\nplatforms = [\"linux-x64\", \"linux-arm64\"]\n[[binaries]]\npackage = \"tools\"\nsmoke = true\nplatforms = [\"linux-x64\", \"linux-arm64\"]\n";
 

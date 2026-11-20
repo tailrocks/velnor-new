@@ -13,7 +13,7 @@ use crate::trusted_roots::BUNDLE_VARIABLE;
 
 use super::crates_mirror_args::with_mirror_config;
 
-const TOKEN_VARIABLE: &str = "VELNOR_PRIVATE_TOKEN";
+pub(super) const TOKEN_VARIABLE: &str = "VELNOR_PRIVATE_TOKEN";
 const API_VARIABLE: &str = "VELNOR_API_URL";
 const SYSTEM_DIRECTORIES: [&str; 4] = ["/usr/bin", "/bin", "/usr/local/bin", "/opt/homebrew/bin"];
 const FORWARDED_VARIABLES: [&str; 9] = [
@@ -45,7 +45,7 @@ const COMPILER_SELECTORS: [(&str, &str); 6] = [
 const TOKEN_GIT_PROTOCOLS: &str = "https:http:file";
 const SERVER_VARIABLE: &str = "VELNOR_SERVER_URL";
 const DEFAULT_SERVER: &str = "https://github.com";
-const REVOKE_PATH: &str = "/installation/token";
+pub(super) const REVOKE_PATH: &str = "/installation/token";
 const FORK_HINT: &str = "no token was created: a pull request from a fork gets none, and the sources cache did not hold every dependency";
 
 pub(super) fn fetch(args: &FetchArgs) -> Result<String, CiError> {
@@ -104,7 +104,10 @@ fn fetch_with(args: &FetchArgs, token: Option<&str>) -> Result<(), CiError> {
     )
 }
 
-pub(super) fn api_client(token: String, timeout: Duration) -> Result<impl GitHubWrite, CiError> {
+pub(super) fn api_client(
+    token: String,
+    timeout: Duration,
+) -> Result<super::http::HttpGitHub, CiError> {
     let api = std::env::var(API_VARIABLE)
         .ok()
         .filter(|api| api.starts_with("https://") || api.starts_with("http://127.0.0.1"))

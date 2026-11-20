@@ -78,12 +78,12 @@ fn no_tests_needs_a_helper_that_reads_the_key_even_for_the_default_value() -> Te
         format!("{SHELL}no_tests = 'pass'\n"),
         format!("{SHELL}no_tests = 'fail'\n"),
     ] {
-        let error = workflow(&view_with(&["Cargo.toml"], &config, "0.1.107")?)
+        let error = workflow(&view_with(&["Cargo.toml"], &config, "0.1.106")?)
             .err()
             .ok_or("accepted on a helper that does not read the key")?
             .to_string();
         assert!(
-            error.contains("no_tests") && error.contains("0.1.108"),
+            error.contains("no_tests") && error.contains("0.1.107"),
             "{error}"
         );
     }

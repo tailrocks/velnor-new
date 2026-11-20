@@ -30,7 +30,7 @@ use crate::cli::{Cli, Command, ReleaseCommand};
 use crate::{Drift, check_tag, notes, plan_generate};
 pub use check::check_metadata;
 pub use error::Error;
-use pin::pin_helper;
+use pin::{check_lock, pin_helper};
 pub use pin::{lock_root, write_lock};
 pub use read::{add_manifests, read_files, view_of};
 use read::{read_tracked, read_view, regular_file};
@@ -115,10 +115,10 @@ pub fn main() -> Exit {
             return ruleset::drift(&cli.root, live);
         }
         Command::SuggestGroups => return suggest(&cli.root),
-        Command::Generate | Command::Check => {}
+        Command::Generate | Command::Check { .. } => {}
     }
     match execute(&cli) {
-        Ok(drifts) if cli.command == Command::Check && !drifts.is_empty() => {
+        Ok(drifts) if matches!(cli.command, Command::Check { .. }) && !drifts.is_empty() => {
             for drift in &drifts {
                 eprintln!("{drift}");
             }
@@ -172,6 +172,9 @@ fn suggest(path: &Path) -> Exit {
 
 fn execute(cli: &Cli) -> Result<Vec<Drift>, Error> {
     let root = toplevel(&cli.root)?;
+    if let Command::Check { verify_release } = &cli.command {
+        check_lock(&root, *verify_release)?;
+    }
     let mut wanted = workflow_paths(&root)?;
     wanted.push(METADATA_PATH);
     let workflows = read_files(&root, &wanted)?;

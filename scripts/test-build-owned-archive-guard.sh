@@ -163,6 +163,8 @@ case "$command_name" in
             artifact="$target/release/velnor-archive-guard"
             mkdir -p -- "$(dirname -- "$artifact")"
             printf '%s\n' "$target" >>"$tool_state/build-targets"
+            printf '%s\n' "${VELNOR_ARCHIVE_GUARD_SOURCE_FINGERPRINT-unset}" \
+              >>"$tool_state/build-fingerprints"
             repository="$checkout"
             fingerprint="$("$tool_state/native-guard" source-fingerprint "$checkout")"
             cat >"$artifact" <<EOF
@@ -262,4 +264,9 @@ data_count="$(grep -c '^MISE_DATA_DIR=' "$tool_bin/mise-environments")"
 [[ "$private_state" != "$case_root/ambient-mise-state" \
   && "$state_count" -gt 0 && "$state_count" == "$data_count" ]] \
   || { printf 'Mise state was not isolated from the caller environment\n' >&2; exit 1; }
+supplied_file="$tool_bin/build-fingerprints"
+[[ "$(sed -n '1p;3p;5p' "$supplied_file" | sort -u)" == unset \
+  && "$(sed -n '2p;4p' "$supplied_file" | sort -u)" == "$fingerprint_a" \
+  && "$(sed -n '6p' "$supplied_file")" == "$fingerprint_b" ]] \
+  || { printf 'final guard build was not given the verified source fingerprint\n' >&2; exit 1; }
 printf 'archive guard target and native bootstrap regression passed\n'

@@ -77,7 +77,9 @@ for EXPECTED in generator/samples/*/expected; do
   fi
   cp -R "$EXPECTED/." "$SAMPLE"
   git -C "$SAMPLE" init -q
-  (cd "$SAMPLE" && echo "$FILES" | xargs jactionlint --format gcc --strict-exit --no-online --shellcheck= --pyflakes=)
+  # The repository's config supplies the self-hosted runner labels (velnor,
+  # ubuntu-26.04-scale-set) that the generated workflows use; the sample has none.
+  (cd "$SAMPLE" && echo "$FILES" | xargs jactionlint --config-file "$ROOT/.github/jactionlint.yaml" --profile correctness --format gcc --strict-exit --no-online --shellcheck= --pyflakes=)
   CHECKED=$((CHECKED + 1))
 done
 test "$CHECKED" -gt 0

@@ -6,7 +6,7 @@ use velnor_model::{RepoPath, RepoView, TargetKind};
 use crate::facts::TestResult;
 use crate::pipeline::{view, workflow};
 
-const MISE_WITH_MACHETE: &str = "[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\ncargo-machete = \"0.9.1\"\ncargo-deny = \"0.20.2\"\n";
+const MISE_WITH_MACHETE: &str = "[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n\n[tools]\nrust = { version = \"1.99.1\", mr_boxington = true }\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\ncargo-machete = \"0.9.1\"\ncargo-deny = \"0.20.2\"\n";
 
 fn text(view: &RepoView) -> Result<String, Box<dyn std::error::Error>> {
     Ok(workflow(view)?.replace("''", "'"))
