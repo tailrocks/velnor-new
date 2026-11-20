@@ -190,3 +190,26 @@ fn a_change_to_the_configurations_file_selects_work_even_under_a_default_ignore(
         vec![(&[file][..], vec![unknown(file), unknown(file)])],
     );
 }
+
+#[test]
+fn sparse_checkout_never_drops_the_configurations_file_of_the_root_that_runs_the_check()
+-> TestResult {
+    let config = "sparse_checkout = true\n[[check_configurations]]\nroot = 'tools'\nconfigurations = 'ci.json'\n";
+    let mut view = tracked(config, HELPER)?;
+    view.tracked_paths.insert(RepoPath::new("tools/ci.json")?);
+    let jobs = document(&workflow(&view)?)?["jobs"].clone();
+    let steps = jobs["rust-tools"]["steps"].as_array().ok_or("no steps")?;
+    let listing = steps
+        .iter()
+        .find_map(|step| step["with"]["sparse-checkout"].as_str())
+        .ok_or("the tools job has no sparse checkout")?;
+    assert!(listing.contains("/tools/"), "{listing}");
+    assert_eq!(found(&jobs).len(), 1);
+    let root = jobs["rust-root"]["steps"].as_array().ok_or("no steps")?;
+    assert!(
+        root.iter()
+            .all(|step| step["with"]["sparse-checkout"].is_null()),
+        "the top-level root keeps a full checkout"
+    );
+    Ok(())
+}
