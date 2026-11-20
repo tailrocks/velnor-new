@@ -14,7 +14,7 @@ const METADATA_DIRECTORY: &str = "metadata";
 const RUNNER_ID: u64 = 1000;
 const ROOT_ID: u64 = 0;
 
-const METADATA: [(&str, u64, u32); 5] = [
+const METADATA: &[(&str, u64, u32)] = &[
     ("metadata/", ROOT_ID, 0o555),
     ("metadata/runtime-identity/", ROOT_ID, 0o555),
     ("metadata/job-facts/", ROOT_ID, 0o555),
@@ -22,17 +22,17 @@ const METADATA: [(&str, u64, u32); 5] = [
     ("metadata/source-proof/control/", ROOT_ID, 0o555),
 ];
 
-const HOME: [(&str, u64, u32); 2] = [
+const HOME: &[(&str, u64, u32)] = &[
     ("source-proof/", ROOT_ID, 0o755),
     ("source-proof/inbox/", RUNNER_ID, 0o700),
 ];
 
 pub(super) fn metadata_archive() -> Result<Vec<u8>, HostError> {
-    directories(&METADATA)
+    directories(METADATA)
 }
 
 pub(super) fn home_archive() -> Result<Vec<u8>, HostError> {
-    directories(&HOME)
+    directories(HOME)
 }
 
 fn directories(entries: &[(&str, u64, u32)]) -> Result<Vec<u8>, HostError> {

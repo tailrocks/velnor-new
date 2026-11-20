@@ -8,7 +8,7 @@ use crate::expression::is_identifier;
 use crate::plan::{Container, Service};
 use crate::raw::{RawContainer, RawService};
 
-const VALUE_FLAGS: [&str; 13] = [
+const VALUE_FLAGS: &[&str] = &[
     "--cpus",
     "--health-cmd",
     "--health-interval",
@@ -23,7 +23,7 @@ const VALUE_FLAGS: [&str; 13] = [
     "--ulimit",
     "--user",
 ];
-const SWITCH_FLAGS: [&str; 2] = ["--init", "--read-only"];
+const SWITCH_FLAGS: &[&str] = &["--init", "--read-only"];
 const HEALTH_CMD: &str = "--health-cmd";
 
 pub(crate) fn container(job: &str, raw: RawContainer) -> Result<Container, WorkflowsError> {
