@@ -4,6 +4,7 @@
 use std::collections::BTreeSet;
 
 use crate::error::CiError;
+use crate::escape::escape;
 use crate::github::{
     ApiCommitStatus, ApiCompare, ApiRepo, ApiRunJob, ApiWorkflowRun, GitHub, Repo, compare_path,
     parse, repo_path, run_jobs_path, runs_path, statuses_path,
@@ -99,7 +100,10 @@ pub fn release_gate(
                     "PR-only check {name} has a push job or commit status or check run on commit {sha}"
                 )));
             }
-            report.push(format!("check {name} is explicitly PR-only"));
+            report.push(format!(
+                "check {} is explicitly PR-only",
+                escape(name, false)
+            ));
             continue;
         }
         let named: Vec<&str> = statuses
@@ -111,10 +115,10 @@ pub fn release_gate(
             judge(name, &push.jobs, push.running, &default_branch),
             &named,
         ) {
-            Check::Passed => report.push(format!("check {name} passed")),
+            Check::Passed => report.push(format!("check {} passed", escape(name, false))),
             Check::Waiting(state) => {
                 ready = false;
-                report.push(format!("check {name} {state}"));
+                report.push(format!("check {} {state}", escape(name, false)));
             }
             Check::Failed(reason) => failures.push(format!(
                 "check {name} did not pass on commit {sha}: {reason}"

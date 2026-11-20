@@ -5,7 +5,7 @@ use crate::cache::{CacheKey, CacheRoot};
 use crate::helper::HelperRelease;
 use crate::ids::{JobId, PackageName, RepoPath, RootSlug};
 use crate::lint::LintCommand;
-use crate::plan::CargoCommand;
+use crate::plan::{CargoCommand, PlanFrom};
 use crate::verdict::VerdictSpec;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -59,6 +59,11 @@ pub enum StepKind {
         archive: Option<RepoPath>,
         cli: InputsCli,
         budget_bytes: u64,
+        verdicts: Option<PlanFrom>,
+    },
+    PublicSources {
+        manifests: Vec<RepoPath>,
+        selected: Vec<RootSlug>,
     },
     CacheResult(Vec<(JobId, TrimFamily)>),
     CacheVerify {
@@ -147,6 +152,7 @@ pub enum StepKind {
         caches: Vec<CacheKey>,
         nextest_artifacts: bool,
         node_tools: ToolsTelemetry,
+        not_generated: Option<String>,
     },
     UploadMetrics,
     DownloadMetrics,
@@ -194,6 +200,7 @@ impl StepKind {
             | Self::SourcesFetchAll { .. }
             | Self::CacheLookup(_)
             | Self::CacheDecide { .. }
+            | Self::PublicSources { .. }
             | Self::CacheResult(_)
             | Self::CacheVerify { .. }
             | Self::CacheTrim { .. }
@@ -275,18 +282,19 @@ pub enum ToolsLocalVerb {
     AnchorFind,
     AnchorRead,
     Verify,
-    /// `Verify` on a helper whose mismatch notice names the restored cache entry, so the verify
-    /// step also gets the key of that entry.
     VerifyNamed,
+    VerifyNamedAnchor,
     Record,
     AnchorSave,
 }
 
 impl ToolsLocalVerb {
-    /// Whether the verb checks the restored tools against the anchor before anything uses them.
     #[must_use]
     pub fn checks_tools(self) -> bool {
-        matches!(self, Self::Verify | Self::VerifyNamed)
+        matches!(
+            self,
+            Self::Verify | Self::VerifyNamed | Self::VerifyNamedAnchor
+        )
     }
 }
 
