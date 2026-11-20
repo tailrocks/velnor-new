@@ -46,7 +46,7 @@ fn parse(bytes: &[u8]) -> Result<Lock, LockError> {
     toml::from_str(text).map_err(|error| LockError::new(error.to_string()))
 }
 
-fn named(section: &str, error: LockError) -> LockError {
+fn named(section: &str, error: &LockError) -> LockError {
     LockError::new(format!("[{section}] {error}"))
 }
 
@@ -58,7 +58,7 @@ pub fn check_generator_entry(bytes: &[u8], running: RunningGenerator<'_>) -> Res
     let lock = parse(bytes)?;
     release_version(&lock.version)?;
     let commit = release_commit(&lock.commit)?;
-    check_digests(&lock.generator).map_err(|error| named(GENERATOR, error))?;
+    check_digests(&lock.generator).map_err(|error| named(GENERATOR, &error))?;
     if running.commit == UNSTAMPED {
         return Ok(());
     }
