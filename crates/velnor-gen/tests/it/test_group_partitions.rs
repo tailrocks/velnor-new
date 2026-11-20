@@ -1,9 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-//! `partitions = N` on a `[[test_groups]]` entry renders N jobs, each running one nextest
-//! hash partition of the group's tests.
-
 use serde_json::Value;
 use velnor_model::TargetKind;
 use velnor_rust::{CONFIG_PATH, detect};

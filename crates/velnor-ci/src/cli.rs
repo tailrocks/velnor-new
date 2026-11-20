@@ -154,6 +154,11 @@ pub enum Command {
     )]
     TestGroups(TestGroupsCommand),
     #[command(
+        subcommand,
+        about = "Guard the files a workflow artifact upload would publish"
+    )]
+    Artifacts(ArtifactsCommand),
+    #[command(
         about = "Run after every cache and after velnor-ci inputs restore: every action that must follow the restores. Gives each tracked file that shares its modification time with another tracked file a distinct time, one microsecond below the time it had and ordered by path, so that cargo, which picks the newest file of a package by time alone, names the same file after every restore. When VELNOR_BASE_MAX_AGE_DAYS is a positive number, first removes every restored target directory whose target/.velnor/born date is more than that many days old, so the run builds cold. Writes the step output expired=true when it removed one (an unreadable born date counts as expired) and expired=false otherwise, so a later step can plan a full run"
     )]
     Restored(RestoredArgs),
@@ -252,6 +257,26 @@ pub struct LaneGuardArgs {
         help = "Nextest binary id the lane never lists; repeatable"
     )]
     pub except_binary: Vec<String>,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum ArtifactsCommand {
+    #[command(
+        about = "Run in the workspace (GITHUB_WORKSPACE, else the current directory) right before an actions/upload-artifact step, which follows symbolic links and so can publish files from outside the workspace. Walks each --path without following links, from its longest part before the first wildcard down through every directory below it, and removes every symbolic link it meets (only the link, never its target), printing one ::warning:: per removal; a path that does not exist is skipped, and a link that cannot be removed or a directory that cannot be read fails the step with exit 1"
+    )]
+    Check(ArtifactsCheckArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct ArtifactsCheckArgs {
+    #[arg(
+        long = "path",
+        required = true,
+        value_name = "PATH",
+        value_parser = clap::builder::NonEmptyStringValueParser::new(),
+        help = "A repository path or glob that the upload names, relative to the workspace; repeat for each path"
+    )]
+    pub paths: Vec<String>,
 }
 
 #[derive(Debug, Subcommand)]

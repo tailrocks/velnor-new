@@ -1,8 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-//! `artifacts` on a `[[test_groups]]` entry uploads failure evidence after the tests.
-
 use serde_json::Value;
 use velnor_rust::detect;
 
@@ -194,7 +192,10 @@ fn a_failure_artifact_is_uploaded_after_the_tests_under_the_default_token_only()
     let upload = uploads(job);
     assert_eq!(upload.len(), 1, "{upload:?}");
     let upload = upload[0];
-    assert_eq!(upload["if"], "${{ failure() }}", "{upload}");
+    assert_eq!(
+        upload["if"], "${{ (steps.artifact_guard_0.outcome == 'success') && (failure()) }}",
+        "{upload}"
+    );
     assert_eq!(upload["with"]["name"], "database-failures");
     assert_eq!(
         upload["with"]["path"],
@@ -225,7 +226,6 @@ fn a_failure_artifact_is_uploaded_after_the_tests_under_the_default_token_only()
     );
     assert_eq!(job["permissions"]["contents"], "read");
     assert!(job["permissions"]["id-token"].is_null() && job["permissions"]["actions"] != "write");
-    // the allowlisted pin is the one the archive upload uses
     let build = job_uses(&workflow, "rust-test")?;
     assert!(build.contains(&UPLOAD.to_owned()), "{build:?}");
     assert!(run_of(job, "Test").is_ok());
@@ -250,14 +250,69 @@ fn an_always_artifact_renders_always_and_each_partition_gets_its_own_name() -> T
         let job = job(&workflow, &format!("rust-test-database-{index}"))?;
         let found = uploads(job);
         assert_eq!(found.len(), 2, "{found:?}");
-        assert_eq!(found[0]["if"], "${{ always() }}");
+        assert_eq!(
+            found[0]["if"],
+            "${{ (steps.artifact_guard_0.outcome == 'success') && (always()) }}"
+        );
         assert_eq!(
             found[0]["with"]["name"],
             format!("database-failures-{index}")
         );
-        assert_eq!(found[1]["if"], "${{ failure() }}");
+        assert_eq!(
+            found[1]["if"],
+            "${{ (steps.artifact_guard_1.outcome == 'success') && (failure()) }}"
+        );
         assert_eq!(found[1]["with"]["name"], format!("logs-{index}"));
         assert_eq!(found[1]["with"]["retention-days"], 1);
+    }
+    Ok(())
+}
+
+fn guard_before(job: &Value, upload: &Value) -> Result<Value, String> {
+    let all = steps(job);
+    let at = all
+        .iter()
+        .position(|step| step == upload)
+        .ok_or("the upload is not a step of the job")?;
+    all.get(at.checked_sub(1).ok_or("no step before the upload")?)
+        .cloned()
+        .ok_or_else(|| "no step before the upload".to_owned())
+}
+
+#[test]
+fn a_guard_removes_symbolic_links_right_before_every_upload_and_shares_its_condition() -> TestResult
+{
+    let config = group(&format!(
+        "partitions = 2\nartifacts = [{}, {{ name = 'logs', paths = ['logs/', 'app/out/*.log'], when = 'failure' }}]\n",
+        entry("when = 'always'")
+    ));
+    let workflow = rendered_with(&config, HELPER)?;
+    for index in 1..=2 {
+        let job = job(&workflow, &format!("rust-test-database-{index}"))?;
+        let found = uploads(job);
+        assert_eq!(found.len(), 2, "{found:?}");
+        let expected = [
+            ("always()", "artifact_guard_0", "--path junit.xml"),
+            (
+                "failure()",
+                "artifact_guard_1",
+                "--path logs/ --path 'app/out/*.log'",
+            ),
+        ];
+        for (upload, (condition, id, paths)) in found.into_iter().zip(expected) {
+            let guard = guard_before(job, upload)?;
+            assert_eq!(guard["id"], id, "{guard}");
+            assert_eq!(guard["if"], format!("${{{{ {condition} }}}}"), "{guard}");
+            assert_eq!(
+                guard["run"],
+                format!(". \"$VELNOR_EXEC\" artifacts check {paths}"),
+                "{guard}"
+            );
+            assert_eq!(
+                upload["if"],
+                format!("${{{{ (steps.{id}.outcome == 'success') && ({condition}) }}}}")
+            );
+        }
     }
     Ok(())
 }

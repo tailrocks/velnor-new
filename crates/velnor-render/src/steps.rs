@@ -186,6 +186,22 @@ struct Around<'a> {
     job_name: Option<&'a str>,
 }
 
+fn leading_steps(step: &Step, audit: bool, lane: CargoLane) -> Vec<RenderedStep> {
+    match &step.kind {
+        StepKind::Cargo(CargoCommand::Doctest) if audit => vec![cargo_step(
+            &CargoCommand::BuildAll,
+            step.manifest.as_ref(),
+            true,
+            lane,
+            None,
+        )],
+        StepKind::UploadGroupArtifact(upload) => {
+            vec![crate::artifact_steps::group_guard(upload)]
+        }
+        _ => Vec::new(),
+    }
+}
+
 fn rendered_steps(
     step: &Step,
     setup: Setup,
@@ -195,16 +211,7 @@ fn rendered_steps(
     around: Around<'_>,
 ) -> Vec<RenderedStep> {
     let job_name = around.job_name;
-    let mut rendered = Vec::new();
-    if audit && step.kind == StepKind::Cargo(CargoCommand::Doctest) {
-        rendered.push(cargo_step(
-            &CargoCommand::BuildAll,
-            step.manifest.as_ref(),
-            true,
-            lane,
-            None,
-        ));
-    }
+    let mut rendered = leading_steps(step, audit, lane);
     let mut body = step_body(step, audit, tests, lane);
     if body.id.is_none() {
         body.id = around.id.map(str::to_owned);

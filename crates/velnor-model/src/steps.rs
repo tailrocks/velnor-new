@@ -8,9 +8,9 @@ use crate::lint::LintCommand;
 use crate::plan::CargoCommand;
 use crate::verdict::VerdictSpec;
 
-/// The evidence upload of a test group: the artifact name, its paths and its retention.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GroupUpload {
+    pub position: usize,
     pub name: String,
     pub paths: Vec<String>,
     pub retention_days: u8,
@@ -79,7 +79,6 @@ pub enum StepKind {
         name: String,
         file: RepoPath,
     },
-    /// Uploads a test group's evidence files (`artifacts` in `[[test_groups]]`).
     UploadGroupArtifact(GroupUpload),
     DownloadArchive {
         name: String,

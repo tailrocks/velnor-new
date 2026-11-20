@@ -1,11 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-//! The `artifacts` key of a `[[test_groups]]` entry: evidence files that the group job
-//! uploads after its tests. Anyone who can read the repository can download a workflow
-//! artifact, so a path that could hold a secret, a path outside the workspace and a path
-//! that would upload the whole build directory are refused here, before any workflow exists.
-
 use std::collections::BTreeSet;
 
 use serde::Deserialize;
@@ -18,7 +13,6 @@ const NAME_MAX_LENGTH: usize = 60;
 const PATHS_MAX: usize = 16;
 const ARTIFACTS_MAX: usize = 8;
 const RETENTION_RANGE: std::ops::RangeInclusive<u16> = 1..=90;
-/// Names that other generated steps upload under.
 const RESERVED_PREFIXES: [&str; 2] = ["nextest-archive", "velnor-"];
 const SECRET_WORDS: [&str; 6] = ["key", "secret", "token", "password", "passwd", "credential"];
 const SECRET_SUFFIXES: [&str; 8] = [
@@ -141,7 +135,6 @@ fn check_name(name: &str) -> Result<(), Reason> {
     Ok(())
 }
 
-/// Why a path may not be uploaded, as the fix to write, or `None` when it may.
 fn path_fault(path: &str) -> Option<&'static str> {
     if path.starts_with('/') {
         return Some("is outside the workspace; name a path under the repository");
@@ -209,8 +202,6 @@ fn secret_like(segment: &str) -> bool {
         || SECRET_NAMES.contains(&lower.as_str())
 }
 
-/// Artifact names are unique in one workflow run, so two groups, and a partitioned group's
-/// per-partition names, must never share one.
 pub(crate) fn check_unique(config: &RustCiConfig) -> Result<(), Reason> {
     let mut seen = BTreeSet::new();
     for group in &config.test_groups {

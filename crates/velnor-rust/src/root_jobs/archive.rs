@@ -124,12 +124,14 @@ impl RootJobs<'_> {
         group
             .artifacts
             .iter()
-            .map(|artifact| Step {
+            .enumerate()
+            .map(|(position, artifact)| Step {
                 when: match artifact.when {
                     ArtifactWhen::Failure => When::Failure,
                     ArtifactWhen::Always => When::Always,
                 },
                 ..self.gated(StepKind::UploadGroupArtifact(GroupUpload {
+                    position,
                     name: partition.map_or_else(
                         || artifact.name.clone(),
                         |(index, _)| format!("{}-{index}", artifact.name),

@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::release_steps::shell_word;
 use crate::rules::{RenderedStep, Value};
 use crate::steps::{DOWNLOAD_ARTIFACT, UPLOAD_ARTIFACT};
 use velnor_model::{GroupUpload, RepoPath};
@@ -72,11 +73,13 @@ pub(crate) fn download_step(name: &str, into: Option<&RepoPath>) -> RenderedStep
     }
 }
 
-/// The evidence upload of a test group. It sets no token and no `env`: the action uses the
-/// runtime credentials every job already has.
 pub(crate) fn group_artifact(upload: &GroupUpload) -> RenderedStep {
     RenderedStep {
         name: format!("Upload {}", upload.name),
+        condition: Some(format!(
+            "${{{{ steps.{}.outcome == 'success' }}}}",
+            guard_id(upload)
+        )),
         uses: Some(UPLOAD_ARTIFACT.to_owned()),
         with: vec![
             ("name".to_owned(), Value::Text(upload.name.clone())),
@@ -91,6 +94,24 @@ pub(crate) fn group_artifact(upload: &GroupUpload) -> RenderedStep {
             ),
             ("overwrite".to_owned(), Value::Bool(true)),
         ],
+        ..RenderedStep::default()
+    }
+}
+
+fn guard_id(upload: &GroupUpload) -> String {
+    format!("artifact_guard_{}", upload.position)
+}
+
+pub(crate) fn group_guard(upload: &GroupUpload) -> RenderedStep {
+    let mut run = "velnor-ci artifacts check".to_owned();
+    for path in &upload.paths {
+        run.push_str(" --path ");
+        run.push_str(&shell_word(path));
+    }
+    RenderedStep {
+        id: Some(guard_id(upload)),
+        name: format!("Remove symbolic links from {}", upload.name),
+        run: Some(run),
         ..RenderedStep::default()
     }
 }

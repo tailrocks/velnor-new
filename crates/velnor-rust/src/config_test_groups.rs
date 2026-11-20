@@ -240,7 +240,6 @@ fn check(config: &RustCiConfig, rust_roots: &[RustRoot]) -> Result<(), DetectErr
     Ok(())
 }
 
-/// The job-name suffixes of a group: its name, or `<name>-<i>` for each partition.
 fn job_names(group: &TestGroup) -> Vec<String> {
     if group.partition_count() > 1 {
         (1..=group.partition_count())
