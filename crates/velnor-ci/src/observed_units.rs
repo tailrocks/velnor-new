@@ -15,16 +15,23 @@ pub(crate) fn identity(invocation: &Invocation, artifact: &CargoArtifact) -> Opt
         .filter(|filename| {
             let path = Path::new(filename);
             !path.is_absolute()
-                && (path.parent().is_some_and(|parent| parent.ends_with("deps"))
-                    && (matches!(
-                        path.extension().and_then(|value| value.to_str()),
-                        Some("rmeta" | "rlib")
-                    ) || artifact.profile.test
-                        || (artifact.target.kind.iter().any(|kind| kind == "proc-macro")
-                            && matches!(
-                                path.extension().and_then(|value| value.to_str()),
-                                Some("so" | "dylib" | "dll")
-                            )))
+                && (path.parent().is_some_and(|parent| {
+                    parent.ends_with("deps")
+                        || (parent.ends_with("out")
+                            && parent
+                                .parent()
+                                .and_then(Path::file_name)
+                                .and_then(|name| name.to_str())
+                                .is_some_and(crate::cache_prune::is_hash))
+                }) && (matches!(
+                    path.extension().and_then(|value| value.to_str()),
+                    Some("rmeta" | "rlib")
+                ) || artifact.profile.test
+                    || (artifact.target.kind.iter().any(|kind| kind == "proc-macro")
+                        && matches!(
+                            path.extension().and_then(|value| value.to_str()),
+                            Some("so" | "dylib" | "dll")
+                        )))
                     && path
                         .file_stem()
                         .and_then(|name| name.to_str())

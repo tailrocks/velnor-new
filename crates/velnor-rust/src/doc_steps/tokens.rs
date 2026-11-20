@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::markdown::{block_lines, code_block, tested};
+use super::markdown::{block_lines, shape_of, unindent};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Token<'a> {
@@ -86,9 +86,10 @@ impl<'a> Lexer<'a> {
             lines.push(&self.text[from + 3..to]);
             self.at = to;
         }
+        let shape = shape_of(unindent(lines));
         Some(Token::Doc {
-            fenced: lines.iter().any(|line| code_block(line)),
-            tested: tested(lines.iter().copied()),
+            fenced: shape.fenced,
+            tested: shape.tested,
         })
     }
 
@@ -115,10 +116,10 @@ impl<'a> Lexer<'a> {
         }
         self.at = at;
         documented.then(|| {
-            let lines = block_lines(&self.text[start + 3..at]);
+            let shape = shape_of(block_lines(&self.text[start + 3..at]));
             Token::Doc {
-                fenced: lines.iter().any(|line| code_block(line)),
-                tested: tested(lines.iter().copied()),
+                fenced: shape.fenced,
+                tested: shape.tested,
             }
         })
     }

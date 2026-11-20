@@ -48,7 +48,7 @@ fn text_and_notes(repo: &RepoView) -> Result<(String, Vec<String>), Box<dyn std:
 
 #[test]
 fn a_private_consumer_with_a_new_helper_restores_and_saves_both_base_caches() -> TestResult {
-    let repo = consumer("0.1.108", GIT_LOCK, "")?;
+    let repo = consumer("0.1.109", GIT_LOCK, "")?;
     let (text, notes) = text_and_notes(&repo)?;
     let lane = lane(&text)?;
     for present in [
@@ -74,7 +74,7 @@ fn a_private_consumer_with_a_new_helper_restores_and_saves_both_base_caches() ->
 
 #[test]
 fn the_helpers_verdict_gates_every_restore_and_every_save_of_the_base_caches() -> TestResult {
-    let text = workflow(&consumer("0.1.108", GIT_LOCK, "")?)?;
+    let text = workflow(&consumer("0.1.109", GIT_LOCK, "")?)?;
     let lane = lane(&text)?;
     let verdict = step(&lane, "Check that the repository is private").ok_or("no verdict step")?;
     assert!(verdict.contains("id: private_repo"), "{verdict}");
@@ -159,7 +159,7 @@ fn the_helpers_verdict_gates_every_restore_and_every_save_of_the_base_caches() -
 
 #[test]
 fn the_sources_cache_saves_the_cargo_downloads_and_nothing_that_holds_a_credential() -> TestResult {
-    let text = workflow(&consumer("0.1.108", GIT_LOCK, "")?)?;
+    let text = workflow(&consumer("0.1.109", GIT_LOCK, "")?)?;
     let lane = lane(&text)?;
     for name in ["Restore the sources cache", "Save the sources cache"] {
         let block = step(&lane, name).ok_or(name)?;
@@ -213,14 +213,14 @@ fn a_lock_that_is_not_only_git_or_a_cargo_config_with_registries_keeps_the_refus
     );
     let patched = format!("{GIT_LOCK}\n[[patch.unused]]\nname = \"secret\"\nversion = \"1.0.0\"\n");
     for lock in [registry, patched] {
-        let (text, notes) = text_and_notes(&consumer("0.1.108", &lock, "")?)?;
+        let (text, notes) = text_and_notes(&consumer("0.1.109", &lock, "")?)?;
         assert!(!text.contains("Save the target cache"), "{lock}");
         assert!(
             notes.iter().any(|note| note.contains(REFUSED_NOTE)),
             "{notes:?}"
         );
     }
-    let mut repo = consumer("0.1.108", GIT_LOCK, "")?;
+    let mut repo = consumer("0.1.109", GIT_LOCK, "")?;
     repo.files.insert(
         path(".cargo/config.toml")?,
         b"[registries.private]\nindex = \"sparse+https://registry.example.invalid/\"\n".to_vec(),
@@ -236,7 +236,7 @@ fn a_lock_that_is_not_only_git_or_a_cargo_config_with_registries_keeps_the_refus
 
 #[test]
 fn without_the_private_sources_table_private_git_dependencies_still_save_nothing() -> TestResult {
-    let mut repo = consumer("0.1.108", GIT_LOCK, "")?;
+    let mut repo = consumer("0.1.109", GIT_LOCK, "")?;
     repo.files.insert(
         path(".velnor/rust-ci.toml")?,
         b"full_run = 'off'\n".to_vec(),
@@ -253,7 +253,7 @@ fn without_the_private_sources_table_private_git_dependencies_still_save_nothing
 
 #[test]
 fn a_repository_without_private_dependencies_has_no_verdict_step() -> TestResult {
-    let repo = private_repo(&["Cargo.toml"], SECTION, "0.1.108")?;
+    let repo = private_repo(&["Cargo.toml"], SECTION, "0.1.109")?;
     let text = workflow(&repo)?;
     assert!(text.contains("Save the target cache"));
     assert!(!text.contains("cache private-repo"));

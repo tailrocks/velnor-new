@@ -40,8 +40,8 @@ pub(crate) fn inputs_cli(facts: &RepoFacts) -> InputsCli {
     }
 }
 
-// First released in tools-v0.1.108 (not tagged yet when this gate was written).
-const PRIVATE_BASE_HELPER: (u64, u64, u64) = (0, 1, 108);
+// First released in tools-v0.1.109 (not tagged yet when this gate was written).
+const PRIVATE_BASE_HELPER: (u64, u64, u64) = (0, 1, 109);
 const SOURCES_FETCH_HELPER: (u64, u64, u64) = (0, 1, 88);
 // helper-gate: first in tools-v0.1.88 via 1a97547af5
 const MEMBER_LOCK_HELPER: (u64, u64, u64) = (0, 1, 88);
