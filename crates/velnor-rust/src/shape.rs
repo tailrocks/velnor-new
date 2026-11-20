@@ -59,6 +59,32 @@ pub fn decide_shape(configured: Option<Shape>, timings: Option<&Timings>) -> Sha
     }
 }
 
+/// The note for `shape = "auto"` when a root has no build times. Auto then picks the
+/// one-job shape without measuring anything, which the generator says out loud.
+#[must_use]
+pub fn untimed_auto_note(facts: &RepoFacts) -> Option<String> {
+    if facts.config.shape.is_some() {
+        return None;
+    }
+    let units = units(facts);
+    let roots: Vec<String> = units
+        .iter()
+        .zip(decisions(facts, &units))
+        .filter(|(unit, decision)| {
+            decision.shape == Shape::OneJob && crate::units::timings(facts, unit).is_none()
+        })
+        .flat_map(|(unit, _)| &unit.roots)
+        .filter(|root| !facts.timings.contains_key(&root.manifest))
+        .map(|root| root.manifest.to_string())
+        .collect();
+    (!roots.is_empty()).then(|| {
+        format!(
+            "shape = \"auto\" picked the one-job shape for {}: {TIMINGS_PATH} has no build times for them (the file is missing or has no entry for them), so clippy and the tests run in one job. To choose a shape, set shape = \"lint-test\" (or \"groups\") in {CONFIG_PATH}; to let auto measure, run `velnor-ci timings` and commit {TIMINGS_PATH}.",
+            roots.join(", ")
+        )
+    })
+}
+
 /// The shape decision of every unit, as the renderer applies it.
 pub(crate) fn decisions(facts: &RepoFacts, units: &[Unit]) -> Vec<ShapeDecision> {
     units
@@ -92,6 +118,7 @@ pub(crate) fn single_job(facts: &RepoFacts, units: &[Unit], decisions: &[ShapeDe
         && !units[0].grouped
         && decisions[0].shape == Shape::OneJob
         && helper_root(facts).is_none()
+        && !crate::config_test_lane::has_parallel(&facts.config)
 }
 
 /// Whether the planned workflow has a plan job. Only the jobs that follow a plan

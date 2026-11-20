@@ -150,6 +150,12 @@ pub(crate) fn check_tests(
     config: &RustCiConfig,
     rust_roots: &[RustRoot],
 ) -> Result<(), DetectError> {
+    if !config.test_groups.is_empty() && config.private_sources.is_some() {
+        return Err(DetectError::invalid(
+            &CONFIG_PATH,
+            Reason::TestGroupsWithPrivateSources,
+        ));
+    }
     crate::config_test_setup::check(config, rust_roots)?;
     check(config, rust_roots)
 }

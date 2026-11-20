@@ -98,6 +98,11 @@ pub enum StepKind {
         manifests: Vec<RepoPath>,
         cached: Vec<crate::ids::RootSlug>,
     },
+    /// Fetches the `RustSec` advisory DB for each distinct cargo-deny config, so that the
+    /// `--offline` deny check finds it. It runs before any private token exists.
+    AdvisoryFetch {
+        configs: Vec<Option<RepoPath>>,
+    },
     MbxRemote,
     MbxStore,
     MbxSeed,
@@ -138,6 +143,66 @@ pub enum StepKind {
 }
 
 impl StepKind {
+    #[must_use]
+    pub const fn is_check(&self) -> bool {
+        match self {
+            Self::TestSetup { .. } => true,
+            Self::Cargo(command) => !command.is_target_build(),
+            Self::Checkout { .. }
+            | Self::InstallTools { .. }
+            | Self::InstallMise { .. }
+            | Self::Lint(_)
+            | Self::CacheRestore(_)
+            | Self::CacheSave(_)
+            | Self::RestoredTargets { .. }
+            | Self::SourcesLocks(_)
+            | Self::SourcesFetch { .. }
+            | Self::SourcesFetchAll { .. }
+            | Self::CacheDecide { .. }
+            | Self::CacheResult(_)
+            | Self::CacheVerify { .. }
+            | Self::CacheTrim { .. }
+            | Self::DeltaPrepare(_)
+            | Self::DeltaApply(_)
+            | Self::DeltaStage(_, _)
+            | Self::CacheBudget(_)
+            | Self::RustComponents(_)
+            | Self::RustTargets(_)
+            | Self::UploadArchive { .. }
+            | Self::DownloadArchive { .. }
+            | Self::Helper(_)
+            | Self::Prepare(_)
+            | Self::InputsAuditRoot(_)
+            | Self::InputsSave { .. }
+            | Self::InputsRestore { .. }
+            | Self::TestGroupsCheck(_)
+            | Self::CratesMirror(_)
+            | Self::PrivateCheck { .. }
+            | Self::PrivateToken { .. }
+            | Self::PrivateFetch { .. }
+            | Self::AdvisoryFetch { .. }
+            | Self::MbxRemote { .. }
+            | Self::MbxStore { .. }
+            | Self::MbxSeed { .. }
+            | Self::ToolsLocal(_)
+            | Self::GeneratorCheck { .. }
+            | Self::InstallHelper(_)
+            | Self::FailWhenANeedFailed { .. }
+            | Self::FailOnDraftRun { .. }
+            | Self::DraftNotice { .. }
+            | Self::ClearRunLabel { .. }
+            | Self::Verdict { .. }
+            | Self::UploadCargoLog { .. }
+            | Self::ReportCaches { .. }
+            | Self::UploadMetrics { .. }
+            | Self::DownloadMetrics { .. }
+            | Self::CheckMetrics { .. }
+            | Self::Budget { .. }
+            | Self::MergeGroupPassed { .. }
+            | Self::MergeQueueCheck { .. } => false,
+        }
+    }
+
     /// Whether the step saves to the Actions cache service, which `cache-mode: read` denies. The
     /// trim steps delete over the REST API with the job token, which the mode does not gate, and
     /// the node-local stores and the scope-cache directory are not the service.
