@@ -20,6 +20,12 @@ fn sample() -> String {
     std::fs::read_to_string(path).unwrap_or_else(|e| unreachable!("{e}"))
 }
 
+fn without_cache_mode(text: &str) -> String {
+    text.split_inclusive('\n')
+        .filter(|line| !line.starts_with("    cache-mode:"))
+        .collect()
+}
+
 fn git(repo: &Path, args: &[&str]) -> String {
     let output = Command::new("git")
         .args(["-C", &repo.display().to_string()])
@@ -129,7 +135,7 @@ async fn a_local_dev_binary_is_accepted_by_the_launcher_check_with_the_flag() {
 }
 
 #[tokio::test]
-async fn without_the_flag_a_local_binary_is_still_refused_and_the_workflow_is_untouched() {
+async fn without_the_flag_a_local_binary_is_still_refused_and_the_pin_is_untouched() {
     let repo = checkout("dev-binary-refused");
     let file = binary(&temp_dir("dev-binary-file-2"), &ELF_ARM64);
     let args = parsed(&repo, "plain", &[]);
@@ -138,8 +144,8 @@ async fn without_the_flag_a_local_binary_is_still_refused_and_the_workflow_is_un
         .unwrap_or_else(|e| unreachable!("{e}"));
     let workflow =
         std::fs::read_to_string(repo.join(WORKFLOW)).unwrap_or_else(|e| unreachable!("{e}"));
-    assert_eq!(workflow, sample());
-    assert_eq!(git(&repo, &["rev-list", "--count", "HEAD"]), "1");
+    assert_eq!(workflow, without_cache_mode(&sample()));
+    assert_eq!(git(&repo, &["rev-list", "--count", "HEAD"]), "2");
     let output = launch(&workflow, &pinned_digest(&workflow), &file);
     assert!(refused(&output), "{output:?}");
 }
@@ -157,7 +163,7 @@ async fn the_flag_changes_only_the_linux_arm64_digest_and_the_check_still_refuse
         .unwrap_or_else(|e| unreachable!("{e}"));
     let workflow =
         std::fs::read_to_string(repo.join(WORKFLOW)).unwrap_or_else(|e| unreachable!("{e}"));
-    let original = sample();
+    let original = without_cache_mode(&sample());
     assert_ne!(workflow, original);
     assert_eq!(
         workflow.replace(&pinned_digest(&workflow), &pinned_digest(&original)),
@@ -213,7 +219,7 @@ async fn a_branch_that_already_exists_in_the_checkout_is_pinned_when_the_driver_
         &file
     )));
 
-    pin_branch(&repo, Some(&pin), TimeoutScale::default())
+    pin_branch(&repo, "t", Some(&pin), TimeoutScale::default())
         .await
         .unwrap_or_else(|e| unreachable!("{e}"));
 
@@ -222,7 +228,7 @@ async fn a_branch_that_already_exists_in_the_checkout_is_pinned_when_the_driver_
     let output = launch(&workflow, &pinned_digest(&workflow), &file);
     assert!(!refused(&output), "{output:?}");
     let commits = git(&repo, &["rev-list", "--count", "HEAD"]);
-    pin_branch(&repo, Some(&pin), TimeoutScale::default())
+    pin_branch(&repo, "t", Some(&pin), TimeoutScale::default())
         .await
         .unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(git(&repo, &["rev-list", "--count", "HEAD"]), commits);

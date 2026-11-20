@@ -49,6 +49,7 @@ impl<E: Engine + Copy + Send> Driver<'_, E> {
                 metrics: Metrics::Failed(String::new()),
                 caches,
                 trusted: false,
+                client_log: None,
             });
         }
         let collected = Command::new(&self.args.velnor_ci)
@@ -76,6 +77,7 @@ impl<E: Engine + Copy + Send> Driver<'_, E> {
             conclusion,
             started: github["run_started_at"].as_str().and_then(standin::seconds),
             metrics: metrics_of(&self.args.velnor_ci, collected, written, metrics),
+            client_log: None,
         })
     }
 }
