@@ -168,7 +168,11 @@ mod tests {
     fn a_scan_at_the_ceiling_says_the_tree_must_shrink_not_raise_the_limit() {
         let mut budget = Budget::new(MAX_ENTRIES_CEILING);
         budget.remaining = 0;
-        let error = budget.reserve().err().map(|e| e.to_string()).unwrap_or_default();
+        let error = budget
+            .reserve()
+            .err()
+            .map(|e| e.to_string())
+            .unwrap_or_default();
         assert!(error.contains("more than 10000000 entries"), "{error}");
         assert!(error.contains("reduced or split"), "{error}");
         assert!(!error.contains("raise"), "{error}");
@@ -178,7 +182,11 @@ mod tests {
     fn a_scan_below_the_ceiling_says_how_to_raise_the_limit() {
         let mut budget = Budget::new(3);
         budget.remaining = 0;
-        let error = budget.reserve().err().map(|e| e.to_string()).unwrap_or_default();
+        let error = budget
+            .reserve()
+            .err()
+            .map(|e| e.to_string())
+            .unwrap_or_default();
         assert!(error.contains(MAX_ENTRIES_VARIABLE), "{error}");
         assert!(error.contains("raise it with"), "{error}");
     }
