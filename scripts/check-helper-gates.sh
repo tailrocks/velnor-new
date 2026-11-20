@@ -2,24 +2,54 @@
 set -euo pipefail
 
 diff_file=""
-current=""
+tree_file=""
+head_version=""
+base_version=""
+tag_version=""
 base=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --diff) diff_file=$2; shift 2 ;;
-    --current) current=$2; shift 2 ;;
+    --tree) tree_file=$2; shift 2 ;;
+    --current) head_version=$2; shift 2 ;;
+    --base-version) base_version=$2; shift 2 ;;
+    --tag-version) tag_version=$2; shift 2 ;;
     *) base=$1; shift ;;
   esac
 done
 
-if [ -z "$current" ]; then
-  [ -n "$base" ] || { echo "usage: $0 <base-ref> | --diff FILE --current 0.1.N" >&2; exit 2; }
-  current=$(git show "HEAD:crates/velnor-ci/Cargo.toml" | sed -n 's/^version = "\(.*\)"/\1/p' | head -n1)
+manifest_version() {
+  sed -n 's/^version = "\(.*\)"/\1/p' | head -n1
+}
+
+vmax() {
+  printf '%s\n' "$@" | { grep -v '^$' || true; } | sort -V | tail -n1
+}
+
+gate_dirs="crates/velnor-gen crates/velnor-render crates/velnor-rust"
+if [ -z "$head_version" ]; then
+  [ -n "$base" ] || { echo "usage: $0 <base-ref> | --diff FILE --current 0.1.N [--base-version V] [--tag-version V] [--tree FILE]" >&2; exit 2; }
+  head_version=$(git show "HEAD:crates/velnor-ci/Cargo.toml" | manifest_version)
+  base_version=$(git show "$base:crates/velnor-ci/Cargo.toml" | manifest_version)
+  tag_version=$(git tag -l 'tools-v*' | sed 's/^tools-v//' | sort -V | tail -n1)
+fi
+floor=$(vmax "$base_version" "$tag_version")
+current=$(vmax "$floor" "$head_version")
+scan_tree=0
+if [ -n "$base_version" ] && [ "$(vmax "$base_version" "$head_version")" = "$head_version" ] && [ "$base_version" != "$head_version" ]; then
+  scan_tree=1
 fi
 if [ -z "$diff_file" ]; then
   diff_file=$(mktemp)
-  trap 'rm -f "$diff_file"' EXIT
-  git diff "$base...HEAD" -- crates/velnor-gen crates/velnor-render crates/velnor-rust >"$diff_file"
+  trap 'rm -f "$diff_file" "$tree_file"' EXIT
+  git diff "$base...HEAD" -- $gate_dirs >"$diff_file"
+  tree_file=$(mktemp)
+  if [ "$scan_tree" = 1 ]; then
+    git ls-files -- $(printf '%s/src ' $gate_dirs) | while IFS= read -r f; do
+      printf 'diff --git a/%s b/%s\n@@ -0,0 +1 @@\n' "$f" "$f"
+      sed 's/^/+/' "$f"
+    done >"$tree_file"
+  fi
 fi
 
 patch=${current##*.}
@@ -77,7 +107,9 @@ verify_correction() {
   echo "helper gate correction: OK ($gate first in $tag via $commit)"
 }
 
-report=$(awk -v series="$series" -v patch="$patch" '
+scan() {
+  local tree=$1 file=$2
+  awk -v series="$series" -v patch="$patch" -v tree="$tree" -v lo="${base_version##*.}" '
   function versions(line, out,    rest, n, v) {
     n = 0
     rest = line
@@ -122,8 +154,8 @@ report=$(awk -v series="$series" -v patch="$patch" '
       delete am
       next
     }
-    if (tolower(text) ~ /^[ \t]*(\/\/|\/\*|\*).*(first released in|not tagged yet)/) { printf "PROSE\t%s\t%s\n", file, text; next }
-    if (text ~ /helper-gate:/ && !marker(text, probe_mk)) { printf "MARKER\t%s\t%s\n", file, text; next }
+    if (!tree && tolower(text) ~ /^[ \t]*(\/\/|\/\*|\*).*(first released in|not tagged yet)/) { printf "PROSE\t%s\t%s\n", file, text; next }
+    if (!tree && text ~ /^[ \t]*(\/\/|\/\*|\*).*helper-gate:|[;,{}][ \t]*\/\/.*helper-gate:/ && !marker(text, probe_mk)) { printf "MARKER\t%s\t%s\n", file, text; next }
     if (!counted) next
     stripped = strip(text)
     has = marker(text, mk) || marker(above, mk)
@@ -144,6 +176,10 @@ report=$(awk -v series="$series" -v patch="$patch" '
       for (k = 1; k <= n; k++) {
         if ((added[i] SUBSEP found[k]) in seen) continue
         seen[added[i] SUBSEP found[k]] = 1
+        if (tree) {
+          split(found[k], tv, ".")
+          if (tv[1] "." tv[2] != series || tv[3] + 0 <= lo + 0 || tv[3] + 0 > patch) continue
+        }
         if (markN[i] != "") {
           printf "VERIFY\t%s\t%s\t%s\t%s\n", parts[1], found[k], markN[i], markC[i]
           continue
@@ -154,7 +190,13 @@ report=$(awk -v series="$series" -v patch="$patch" '
       }
     }
   }
-' "$diff_file")
+' "$file"
+}
+
+report=$(scan 0 "$diff_file")
+if [ -n "$tree_file" ] && [ "$scan_tree" = 1 ]; then
+  report=$(printf '%s\n%s' "$report" "$(scan 1 "$tree_file")")
+fi
 
 bad=0
 while IFS=$'\t' read -r kind f1 f2 f3 f4; do
