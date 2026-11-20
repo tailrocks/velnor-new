@@ -21,6 +21,7 @@ const PULL_REQUEST_LABELS: &str = "github.event.pull_request.labels.*.name";
 const RELATED_EVENT: &str = "(github.event.action != 'labeled' || github.event.label.name == 'ci:run' || github.event.label.name == 'ci:auto') && (github.event.action != 'edited' || github.event.changes.base != null)";
 const SAME_REPOSITORY: &str = "github.event.pull_request.head.repo.full_name == github.repository";
 const POST_MERGE_EVENTS: &str = "(github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')";
+pub(crate) const NOT_SELF_HOSTED: &str = "runner.environment != 'self-hosted'";
 pub(crate) const TOOLS_STEP: &str = "tools";
 pub(crate) const TOOLS_LOCAL_STEP: &str = "toolslocal";
 pub(crate) const TOOLS_LOCAL_SAVE_STEP: &str = "toolslocalsave";

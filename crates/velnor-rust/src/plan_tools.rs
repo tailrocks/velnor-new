@@ -51,8 +51,17 @@ fn verified_when(facts: &RepoFacts, plain: When, verified: VerifiedSave) -> When
     }
 }
 
+/// A verified restore for a repository whose runner is self-hosted. Restoring the 590 to 620 MB
+/// tools archive from the Actions cache took 31 to 66 s on a scale-set runner, while installing
+/// the same tools from scratch took 9 to 18 s, so such a job takes the tools from the node store
+/// and installs them on a miss. The Actions cache stays in place for a GitHub-hosted runner, which
+/// a job of the same workflow can still land on (a fork pull request), through `hosted_only`.
+fn node_first(facts: &RepoFacts) -> bool {
+    tools_verified(facts) && !facts.config.hosted_runners.contains(&facts.config.runner)
+}
+
 fn tools_local(facts: &RepoFacts) -> bool {
-    facts.config.mbx_store == MbxStore::Shared
+    (facts.config.mbx_store == MbxStore::Shared || node_first(facts))
         && facts
             .helper
             .as_ref()
@@ -70,6 +79,7 @@ pub(crate) fn tools_restore(facts: &RepoFacts) -> Vec<Step> {
         } else {
             When::Success
         },
+        hosted_only: node_first(facts),
         ..step(StepKind::CacheRestore(tools_cache_key()))
     };
     let record = || step(StepKind::ToolsLocal(ToolsLocalVerb::RecordRestore));
@@ -94,6 +104,7 @@ pub(crate) fn tools_restore(facts: &RepoFacts) -> Vec<Step> {
 pub(crate) fn tools_prime(facts: &RepoFacts) -> Option<Step> {
     (!facts.tools.tools.is_empty() && tools_local(facts)).then(|| Step {
         when: verified_when(facts, When::PrimeToolsFromNetwork, VerifiedSave::Prime),
+        hosted_only: node_first(facts),
         ..step(StepKind::ToolsLocal(ToolsLocalVerb::Prime))
     })
 }
@@ -113,6 +124,7 @@ pub(crate) fn tools_save(facts: &RepoFacts) -> Vec<Step> {
                 VerifiedSave::OnDefaultBranch,
             )
         },
+        hosted_only: node_first(facts),
         ..step(StepKind::CacheSave(tools_cache_key()))
     };
     let anchor: Vec<Step> = if tools_verified(facts) {
@@ -142,6 +154,7 @@ pub(crate) fn tools_save(facts: &RepoFacts) -> Vec<Step> {
     // entry is saved again by the first trusted run that finds the node store warm.
     let lookup = Step {
         when: When::LookupToolsOnNodeHit,
+        hosted_only: node_first(facts),
         ..step(StepKind::CacheLookup(tools_cache_key()))
     };
     let mut steps = anchor;
