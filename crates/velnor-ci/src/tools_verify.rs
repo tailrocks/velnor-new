@@ -66,15 +66,20 @@ fn field(hasher: &mut blake3::Hasher, bytes: &[u8]) {
 }
 
 fn is_component_list(relative: &Path) -> bool {
-    let parts: Vec<_> = relative.components().collect();
+    let parts: Vec<_> = relative
+        .components()
+        .map(|part| part.as_os_str().as_bytes())
+        .collect();
     matches!(
         parts.as_slice(),
-        [a, b, _, c, d, e]
-            if a.as_os_str() == ".rustup"
-                && b.as_os_str() == "toolchains"
-                && c.as_os_str() == "lib"
-                && d.as_os_str() == "rustlib"
-                && e.as_os_str() == "components"
+        [
+            b".rustup",
+            b"toolchains",
+            _,
+            b"lib",
+            b"rustlib",
+            b"components"
+        ]
     )
 }
 
