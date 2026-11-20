@@ -99,6 +99,7 @@ mod helper_startup;
 mod helper_tool_paths;
 mod helper_workflow_size;
 mod hosted_key;
+mod key_gates;
 mod lane_guard_steps;
 mod lane_parallel_job;
 mod lane_parallel_size;

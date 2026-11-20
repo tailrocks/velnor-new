@@ -8,6 +8,7 @@ mod drifts;
 mod error;
 mod helper_gate;
 pub mod io;
+mod key_gates;
 mod plan_render;
 mod release;
 mod reusable;
@@ -16,9 +17,10 @@ mod workflow_triggers;
 pub use crate::release::{release_ruleset, release_ruleset_drift};
 pub use advice::{NO_FULL_RUN_NOTE, SPARSE_SUGGESTION_BYTES, notes, sparse_note, suggest_groups};
 pub use drifts::{Drift, drift};
-pub use error::{GenerateError, LaneKey};
+pub use error::GenerateError;
 use helper_gate::check_helper;
 pub use helper_gate::require_compatible;
+pub use key_gates::{ConfigFile, KeyGate, check_config_keys, key_gates, required_helper};
 pub use velnor_workflows::HELPER_COMMANDS;
 
 use std::collections::BTreeMap;
@@ -72,6 +74,7 @@ pub fn expected_with_notes(
         return Err(GenerateError::ExcludedLockRun(finding.clone()));
     }
     let helper = check_helper(&facts)?;
+    key_gates::check_config_keys(view, helper.version())?;
     check_tools(&facts)?;
     if let Some(roots) = source_roots_over_limit(&facts) {
         return Err(GenerateError::TooManySourceRoots(roots));
