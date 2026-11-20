@@ -167,3 +167,46 @@ fn an_unsealed_hand_edit_is_refused_and_a_regenerated_workflow_passes_again() ->
     assert!(output.status.success(), "{}", text(&output.stderr));
     Ok(())
 }
+
+const HAND_WRITTEN: &str = ".github/workflows/image.yml";
+const HAND_WRITTEN_TEXT: &str = "name: Image\non: pull_request\n";
+
+fn configured(fixture: &Fixture, external: Option<&str>) -> TestResult {
+    let keys = match external {
+        Some(path) => format!("runner = 'ubuntu-26.04-scale-set'\nexternal_workflows = [\"{path}\"]\n"),
+        None => "runner = 'ubuntu-26.04-scale-set'\n".to_owned(),
+    };
+    fixture.write(".velnor/rust-ci.toml", &format!("{keys}\n{CHECK}"))
+}
+
+fn hand_written(fixture: &Fixture) -> TestResult {
+    fs::create_dir_all(fixture.repo().join(".github/workflows"))?;
+    fixture.write(HAND_WRITTEN, HAND_WRITTEN_TEXT)
+}
+
+#[test]
+fn a_hand_written_workflow_declared_in_external_workflows_passes_the_generated_check() -> TestResult {
+    let fixture = fixture()?;
+    configured(&fixture, Some(HAND_WRITTEN))?;
+    hand_written(&fixture)?;
+    generated(&fixture)?;
+    let output = fixture.velnor_gen("check")?;
+    assert!(output.status.success(), "{}", text(&output.stderr));
+    assert!(text(&output.stdout).contains("generated files are up to date"));
+    Ok(())
+}
+
+#[test]
+fn the_same_hand_written_workflow_undeclared_fails_the_generated_check_and_names_external_workflows()
+-> TestResult {
+    let fixture = fixture()?;
+    configured(&fixture, None)?;
+    hand_written(&fixture)?;
+    generated(&fixture)?;
+    let output = fixture.velnor_gen("check")?;
+    let stderr = text(&output.stderr);
+    assert_eq!(output.status.code(), Some(1), "{stderr}");
+    assert!(stderr.contains(HAND_WRITTEN), "{stderr}");
+    assert!(stderr.contains("external_workflows"), "{stderr}");
+    Ok(())
+}
