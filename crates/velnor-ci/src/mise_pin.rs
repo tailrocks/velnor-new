@@ -9,13 +9,13 @@ use toml::{Table, Value};
 
 use crate::error::CiError;
 
-const CONFIGS: [&str; 2] = ["mise.toml", ".mise.toml"];
+const CONFIGS: &[&str] = &["mise.toml", ".mise.toml"];
 const LOCK: &str = "mise.lock";
 const OUTPUT_VARIABLE: &str = "GITHUB_OUTPUT";
 
 pub fn pinned_version(dir: &Path, tool: &str) -> Result<String, CiError> {
     let mut pins = Vec::new();
-    for name in CONFIGS {
+    for name in CONFIGS.iter().copied() {
         let path = dir.join(name);
         if !path.exists() {
             continue;
