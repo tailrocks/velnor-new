@@ -163,12 +163,13 @@ pub fn restore_inputs_batch_with(
         scope_cache::write(cache, &top, &context, by_root, io)?;
     }
     let mut report = String::new();
+    let mut scans = BTreeMap::new();
     for (root, target, scope) in scoped {
         restored_targets::record(&root, &target)?;
         report.push_str(&cold_on_failure(
             std::slice::from_ref(&target),
             "inputs restore",
-            || inputs::restore_inputs_scoped(&root, &target, Some(&scope)),
+            || inputs::restore_inputs_scoped(&root, &target, Some(&scope), &mut scans),
         )?);
     }
     Ok(report)

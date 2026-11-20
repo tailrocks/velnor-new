@@ -1,8 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{Job, LintCommand, LintJob, LintKind, PrRun, RepoFacts, Step, StepKind};
+use velnor_model::{
+    Gate, GateNeed, Job, LintCommand, LintJob, LintKind, PlanFrom, PrRun, RepoFacts, Step, StepKind,
+};
 
+use crate::lane::PLAN_JOB;
 use crate::lint_tools::{ALINT, JACTIONLINT, NODE, RUST, SHELLCHECK, usable};
 use crate::mbx_pin::MBX_TOOL;
 use crate::plan::{CHECKOUT_DEPTH, job, quick, step};
@@ -14,6 +17,17 @@ pub(crate) fn lint_jobs(facts: &RepoFacts) -> Vec<Job> {
         .iter()
         .map(|lint| lint_job(facts, lint))
         .collect()
+}
+
+fn gate(lint: &LintJob, from: PlanFrom) -> Gate {
+    Gate {
+        slug: lint.slug(),
+        need: GateNeed::Lint,
+        from,
+        packages: Vec::new(),
+        unselected: false,
+        group: None,
+    }
 }
 
 fn resolved(facts: &RepoFacts, name: &str) -> String {
@@ -110,6 +124,7 @@ fn lint_job(facts: &RepoFacts, lint: &LintJob) -> Job {
     if lint.kind == LintKind::GeneratedCheck {
         return generated_check_job(facts, lint);
     }
+    let planned = !lint.inputs.is_empty();
     let mut steps = vec![step(StepKind::Checkout {
         depth: CHECKOUT_DEPTH,
         sparse: None,
@@ -124,6 +139,8 @@ fn lint_job(facts: &RepoFacts, lint: &LintJob) -> Job {
         name: Some(lint.name.clone()),
         timeout_minutes: lint.timeout_minutes,
         pr: quick(facts),
+        needs: if planned { vec![PLAN_JOB] } else { Vec::new() },
+        gate: planned.then(|| gate(lint, PlanFrom::Job(PLAN_JOB))),
         steps,
         ..job(facts, lint.id.clone())
     }

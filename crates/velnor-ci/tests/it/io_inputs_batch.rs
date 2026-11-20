@@ -5,7 +5,7 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 use std::time::{Duration, UNIX_EPOCH};
-use velnor_test_support::real_cargo;
+use velnor_test_support::{real_cargo, trust_mise_dir};
 
 use crate::io::Repo;
 
@@ -15,7 +15,9 @@ fn command(repo: &Repo, directory: &Path, run: &str, trace: &Path) -> String {
         Some(rest) => format!("{binary}{rest}"),
         None => run.replacen("velnor-ci", &binary, 1),
     };
-    let output = Command::new("sh")
+    let mut command = Command::new("sh");
+    trust_mise_dir(&mut command, repo.root());
+    let output = command
         .args(["-c", &run])
         .current_dir(directory)
         .env("GITHUB_WORKSPACE", repo.root())
@@ -56,7 +58,9 @@ fn generated_steps(workflow: &str, name: &str) -> Vec<(String, String)> {
 }
 
 fn cargo_build(repo: &Repo, root: &str) -> String {
-    let output = Command::new(real_cargo())
+    let mut command = Command::new(real_cargo());
+    trust_mise_dir(&mut command, repo.root());
+    let output = command
         .args(["build", "--offline", "-v"])
         .current_dir(repo.root().join(root))
         .env_remove("CARGO_TARGET_DIR")
@@ -101,7 +105,8 @@ pub(crate) fn fixture() -> Repo {
             &format!("{root}.cargo/config.toml"),
             &format!("[build]\ntarget-dir='{target}'\n"),
         );
-        let status = Command::new(real_cargo())
+        let mut command = Command::new(real_cargo());
+        let status = trust_mise_dir(&mut command, repo.root())
             .args(["generate-lockfile", "--offline"])
             .current_dir(repo.root().join(root))
             .status()
