@@ -34,6 +34,7 @@ pub(super) fn helper_at(
         .env("RUNNER_TEMP", repo.root())
         .env("GITHUB_OUTPUT", &outputs)
         .env_remove("EXPECTED_SOURCE_IDENTITY");
+    strip_mirror_overrides(&mut command);
     if let Some(expected) = expected {
         command.env("EXPECTED_SOURCE_IDENTITY", expected);
     }
@@ -87,13 +88,49 @@ pub(super) fn delta(repo: &Repo, verb: &str, expected: Option<&str>) -> String {
     values
 }
 
+/// Drops the job's crates-mirror overrides from a child env. On CI the job's `VELNOR_CARGO_CONFIG`
+/// (passed as `--config` by the mirror cargo wrapper) and `CARGO_REGISTRIES_*` / `CARGO_SOURCE_*`
+/// replace crates-io with `velnor-crates-mirror` ahead of the repo's own `.cargo/config.toml`, so
+/// the directory source that vendors `regdep` is never found (main job 136117859373, delta.rs:88).
+pub(super) fn strip_mirror_overrides(command: &mut Command) {
+    for name in ["VELNOR_CARGO_CONFIG", "VELNOR_CARGO_WRAPPER"] {
+        command.env_remove(name);
+    }
+    for (key, _) in std::env::vars_os() {
+        let name = key.to_string_lossy();
+        if name.starts_with("CARGO_REGISTRIES_") || name.starts_with("CARGO_SOURCE_") {
+            command.env_remove(&key);
+        }
+    }
+}
+
+#[test]
+fn stripped_cargo_env_drops_the_job_mirror_overrides() {
+    let mut command = Command::new("cargo");
+    command.env("VELNOR_CARGO_CONFIG", "/runner/velnor-cargo/config.toml");
+    strip_mirror_overrides(&mut command);
+    let envs: Vec<_> = command
+        .get_envs()
+        .map(|(key, value)| (key.to_owned(), value.map(ToOwned::to_owned)))
+        .collect();
+    let value = |name: &str| {
+        envs.iter()
+            .find(|(key, _)| key == name)
+            .and_then(|(_, value)| value.clone())
+    };
+    assert_eq!(value("VELNOR_CARGO_CONFIG"), None, "{envs:?}");
+}
+
 pub(super) fn cargo(repo: &Repo) -> Output {
-    Command::new(real_cargo())
+    let mut command = Command::new(real_cargo());
+    command
         .args(["build", "--offline", "--verbose", "--color", "never"])
         .current_dir(repo.root())
         .env("CARGO_TARGET_DIR", repo.root().join("target"))
         .env_remove("RUSTC_WRAPPER")
-        .env_remove("RUSTC_WORKSPACE_WRAPPER")
+        .env_remove("RUSTC_WORKSPACE_WRAPPER");
+    strip_mirror_overrides(&mut command);
+    command
         .output()
         .unwrap_or_else(|error| unreachable!("{error}"))
 }
