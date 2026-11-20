@@ -101,7 +101,10 @@ fn a_restore_whose_scan_fails_clears_the_older_record_so_held_units_stay_waste()
         .env_remove("CARGO_TARGET_DIR")
         .output()?;
     assert!(output.status.success(), "{output:?}");
-    assert!(!record.exists(), "an older record survived a restore whose scan failed");
+    assert!(
+        !record.exists(),
+        "an older record survived a restore whose scan failed"
+    );
     let gap = registry_artifact(&repo, GAP)?;
     let metrics = observation(&repo, &[], &[gap])?;
     assert_eq!(metrics.invocations[0].compilations[0].restored, None);
