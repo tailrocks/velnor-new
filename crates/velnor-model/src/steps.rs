@@ -8,6 +8,14 @@ use crate::lint::LintCommand;
 use crate::plan::CargoCommand;
 use crate::verdict::VerdictSpec;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GroupUpload {
+    pub position: usize,
+    pub name: String,
+    pub paths: Vec<String>,
+    pub retention_days: u8,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InputsCli {
     PerRoot,
@@ -71,6 +79,7 @@ pub enum StepKind {
         name: String,
         file: RepoPath,
     },
+    UploadGroupArtifact(GroupUpload),
     DownloadArchive {
         name: String,
         into: Option<RepoPath>,
@@ -184,6 +193,7 @@ impl StepKind {
             | Self::RustComponents(_)
             | Self::RustTargets(_)
             | Self::UploadArchive { .. }
+            | Self::UploadGroupArtifact { .. }
             | Self::DownloadArchive { .. }
             | Self::Helper(_)
             | Self::Prepare(_)

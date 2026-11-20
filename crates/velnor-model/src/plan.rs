@@ -286,6 +286,7 @@ pub enum When {
     BaseExpired,
     SavingRun,
     ClearRunLabel,
+    Failure,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -333,6 +334,7 @@ pub enum CargoCommand {
         file: RepoPath,
         filter: FilterRef,
         threads: Option<u16>,
+        partition: Option<(u16, u16)>,
         ci_profile: bool,
         no_tests: NoTests,
     },

@@ -152,13 +152,17 @@ fn cargo_command(
             file,
             filter,
             threads,
+            partition,
             ci_profile,
             no_tests,
         } => nextest_run(
             &format!(
-                "--archive-file '{}' --extract-to . --extract-overwrite --workspace-remap .{}",
+                "--archive-file '{}' --extract-to . --extract-overwrite --workspace-remap .{}{}",
                 file.as_str().replace('\'', "'\\''"),
-                threads.map_or_else(String::new, |count| format!(" --test-threads {count}"))
+                threads.map_or_else(String::new, |count| format!(" --test-threads {count}")),
+                partition.map_or_else(String::new, |(index, count)| format!(
+                    " --partition hash:{index}/{count}"
+                ))
             ),
             filter,
             *ci_profile,

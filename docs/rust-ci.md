@@ -148,6 +148,10 @@ type -a cargo | head -1   # must show a path under mise/command-wrappers/bin/
 
 Without `MISE_TRUSTED_CONFIG_PATHS`, mise falls back to plain cargo without a warning, so the `type -a` check is the test. A build through mbx prints `mbx[cache]: object cache: H hits, M misses, ...` lines in its output. If they are missing, the build did not go through mbx.
 
+## Optional release assets
+
+A binary in `.velnor/release.toml` can list `optional_platforms`, for example `macos-arm64` built on `macos-15`. Its build is best effort: the job has `continue-on-error`, `sums-family` runs with `always()` while it still needs every required build to have succeeded, and `velnor-ci release publish --optional-asset` (helper 0.1.110 or later) publishes, checksums and attests a file that exists and skips, with a notice, one that does not. `SHA256SUMS` decides what is verified: `velnor-ci release verify-listed` fails a release whose sums list an optional file that did not download. A missing required file still fails the release. Under an older pin the generator refuses the key. See "Optional platforms" in `generator/CONFIG.md`.
+
 ## Settings
 
 Every key of `.velnor/rust-ci.toml`, with its default. `generator/CONFIG.md` has the details.
