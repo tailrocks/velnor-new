@@ -10,10 +10,16 @@ use crate::plan::{TOOLS_LOCAL_HELPER, step};
 
 /// The first `velnor-ci` with `tools-verify`, which checks every tools restore against the anchor
 /// a trusted run recorded and discards a restore that differs.
-// First released in tools-v0.1.109 (not tagged yet when this gate was written).
+// helper-gate: first in tools-v0.1.109 via 984afb1ed5
 pub const TOOLS_VERIFY_HELPER: (u64, u64, u64) = (0, 1, 109);
 
-// First released in tools-v0.1.110 (not tagged yet when this gate was written).
+/// The first `velnor-ci` whose tools-verify mismatch notice names the restored Actions cache entry
+/// and the command that deletes it. The verify step gets the entry's key only from this helper, so
+/// an older helper never sees an env it ignores.
+// helper-gate: first in tools-v0.1.110 via ca67828281
+pub(crate) const TOOLS_CACHE_KEY_HELPER: (u64, u64, u64) = (0, 1, 110);
+pub(crate) const TOOLS_ANCHOR_KEY_HELPER: (u64, u64, u64) = (0, 1, 111);
+// helper-gate: first in tools-v0.1.110 via 8db5d70509
 const TOOLS_CLEAR_HELPER: (u64, u64, u64) = (0, 1, 110);
 
 // First released in tools-v0.1.110 (not tagged yet when this gate was written).
@@ -100,6 +106,20 @@ fn node_first(facts: &RepoFacts) -> bool {
     tools_verified(facts) && !facts.config.hosted_runners.contains(&facts.config.runner)
 }
 
+fn names_cache_entry(facts: &RepoFacts) -> bool {
+    facts
+        .helper
+        .as_ref()
+        .is_some_and(|release| release.version().at_least(TOOLS_CACHE_KEY_HELPER))
+}
+
+fn names_anchor_entry(facts: &RepoFacts) -> bool {
+    facts
+        .helper
+        .as_ref()
+        .is_some_and(|release| release.version().at_least(TOOLS_ANCHOR_KEY_HELPER))
+}
+
 fn tools_local(facts: &RepoFacts) -> bool {
     (facts.config.mbx_store == MbxStore::Shared || node_first(facts))
         && facts
@@ -139,17 +159,20 @@ pub(crate) fn tools_restore(facts: &RepoFacts, plan: Option<&JobId>) -> Vec<Step
         .chain([network])
         .collect();
     if tools_verified(facts) {
+        let verify = if names_anchor_entry(facts) {
+            ToolsLocalVerb::VerifyNamedAnchor
+        } else if names_cache_entry(facts) {
+            ToolsLocalVerb::VerifyNamed
+        } else {
+            ToolsLocalVerb::Verify
+        };
         if anchor == ToolsAnchor::Unanchored {
             steps.extend([
                 tools_step(ToolsLocalVerb::AnchorReset, anchor.clone(), When::Success),
                 tools_step(ToolsLocalVerb::AnchorRestore, anchor.clone(), When::Success),
             ]);
         }
-        steps.push(tools_step(
-            ToolsLocalVerb::Verify,
-            anchor.clone(),
-            When::Success,
-        ));
+        steps.push(tools_step(verify, anchor.clone(), When::Success));
     }
     steps.extend(local.then(|| local_step(ToolsLocalVerb::RecordRestore)));
     steps

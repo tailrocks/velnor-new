@@ -95,7 +95,7 @@ pub fn expected_with_notes(
         return Err(GenerateError::TooManySourceRoots(roots));
     }
     let (plan, mut files, budget_notes) = plan_and_render(view, &facts)?;
-    let (reusable, reusable_notes) = reusable::reusable_workflows(view, helper)?;
+    let (reusable, reusable_notes) = reusable::reusable_workflows(view, helper, &plan)?;
     files.extend(reusable);
     if plan
         .jobs
@@ -112,12 +112,16 @@ pub fn expected_with_notes(
     let mut notes: Vec<String> = velnor_rust::untimed_auto_note(&facts)
         .into_iter()
         .chain(velnor_rust::unverified_tools_note(&facts))
+        .chain(velnor_rust::base_cache_note(&facts))
         .chain(facts.timings_notes)
         .collect();
-    notes.extend(facts.private_sources);
     notes.extend(facts.private_suggestion);
     notes.extend(release_notes);
     notes.extend(budget_notes);
+    notes.extend(velnor_rust::deny_off_note(
+        facts.policy,
+        &facts.deny_configs,
+    ));
     notes.extend(reusable_notes);
     notes.extend(
         excluded

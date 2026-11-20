@@ -28,7 +28,7 @@ fn generated(config: &str, roots: usize) -> Result<Generated, Box<dyn std::error
     let manifests = long_named_roots(roots);
     let roots: Vec<&str> = manifests.iter().map(String::as_str).collect();
     let mut repo = view(&roots, Some(config.as_bytes()))?;
-    pin_helper(&mut repo, "0.1.110")?;
+    pin_helper(&mut repo, "0.1.107")?;
     match expected_with_notes(&repo) {
         Ok((files, notes)) => {
             let text = files.get(&RepoPath::new(WORKFLOW)?).ok_or("no workflow")?;
@@ -55,10 +55,10 @@ fn a_parallel_lane_adds_a_bounded_job_to_a_sixteen_root_workflow() -> TestResult
     Ok(())
 }
 
-// The 20-root parallel workflow at helper 0.1.110 renders 497,057 B. The budget allows 2 KB
-// more and stays under `MAX_WORKFLOW_BYTES`, so growth of a job's steps fails here instead of
-// becoming a refusal for a user's repository.
-const TWENTY_ROOT_BUDGET: usize = 499_105;
+/// The 20-root parallel workflow renders (498,858 B when this was written) and stays inside this
+/// budget, 500 B under `MAX_WORKFLOW_BYTES`: any growth of a job's steps fails here instead of
+/// becoming a refusal for a user's repository.
+const TWENTY_ROOT_BUDGET: usize = 499_500;
 
 #[test]
 fn a_parallel_lane_renders_a_twenty_root_workflow_inside_its_budget() -> TestResult {

@@ -8,17 +8,19 @@ use std::time::{Duration, UNIX_EPOCH};
 use super::super::{inventory, own_units, unit, velnor_ci, workspace_below_the_root};
 use crate::io::Repo;
 
-const VARIABLE: &str = "VELNOR_AUDIT_MAX_ENTRIES";
+pub(super) const VARIABLE: &str = "VELNOR_AUDIT_MAX_ENTRIES";
 
-/// A workspace whose build output declares `shared/first`, so the audit scans
-/// that tree on every run. The tree holds `entries` empty files.
-fn declared_tree(entries: usize) -> Repo {
+const LINKS_PER_INODE: usize = 10_000;
+
+pub(super) fn declared_tree(entries: usize) -> Repo {
     let repo = workspace_below_the_root();
     let directory = repo.root().join("shared/first");
     fs::create_dir_all(&directory).unwrap_or_else(|e| unreachable!("{e}"));
-    let seed = directory.join("seed");
-    fs::write(&seed, "").unwrap_or_else(|e| unreachable!("{e}"));
     for index in 0..entries {
+        let seed = directory.join(format!("seed-{}", index / LINKS_PER_INODE));
+        if index % LINKS_PER_INODE == 0 {
+            fs::write(&seed, "").unwrap_or_else(|e| unreachable!("{e}"));
+        }
         fs::hard_link(&seed, directory.join(index.to_string()))
             .unwrap_or_else(|e| unreachable!("{e}"));
     }
@@ -35,7 +37,7 @@ fn declared_tree(entries: usize) -> Repo {
     repo
 }
 
-fn audit_within(repo: &Repo, limit: Option<&str>) -> Output {
+pub(super) fn audit_within(repo: &Repo, limit: Option<&str>) -> Output {
     let mut command = velnor_ci();
     command
         .env_remove(VARIABLE)
@@ -79,4 +81,25 @@ fn an_entry_limit_outside_its_range_is_refused() {
         );
     }
     assert!(!repo.root().join(".velnor/rust-inputs.lock").exists());
+}
+
+fn build_within(repo: &Repo, limit: &str) -> Output {
+    velnor_ci()
+        .env(VARIABLE, limit)
+        .current_dir(repo.root())
+        .args(["inputs", "build", "--", "true"])
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"))
+}
+
+#[test]
+fn a_build_root_scan_over_the_configured_entry_limit_fails_and_names_the_variable() {
+    let repo = workspace_below_the_root();
+    let refused = build_within(&repo, "3");
+    assert_eq!(refused.status.code(), Some(1), "{refused:?}");
+    let error = String::from_utf8_lossy(&refused.stderr);
+    assert!(
+        error.contains(VARIABLE) && error.contains("more than 3 entries"),
+        "{refused:?}"
+    );
 }

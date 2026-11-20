@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    Access, CacheKey, CargoCommand, Gate, GateNeed, Job, PermissionScope, PrivateSources, RepoPath,
-    RootSlug, Step, StepKind, When,
+    Access, CacheKey, CargoCommand, DenyCheck, Gate, GateNeed, Job, PermissionScope,
+    PrivateSources, RepoPath, RootSlug, Step, StepKind, When,
 };
 
 use crate::plan::step;
@@ -37,10 +37,16 @@ pub(crate) fn insert(sources: Option<&PrivateSources>, jobs: &mut [Job]) {
         let when = status(job.steps.iter().filter(|step| compiles(step)));
         let gate = shared_gate(job.steps.iter().filter(|step| runs_repository_code(step)));
         let mut kinds = advisory_fetch(&job.steps);
-        kinds.extend([
-            StepKind::PrivateCheck {
+        if !job
+            .steps
+            .iter()
+            .any(|step| matches!(step.kind, StepKind::PrivateCheck { .. }))
+        {
+            kinds.push(StepKind::PrivateCheck {
                 cached: cached.clone(),
-            },
+            });
+        }
+        kinds.extend([
             StepKind::PrivateToken {
                 sources: sources.clone(),
                 cached: cached.clone(),
@@ -77,7 +83,13 @@ pub(crate) fn status<'a>(mut compiling: impl Iterator<Item = &'a Step>) -> When 
 fn advisory_fetch(steps: &[Step]) -> Vec<StepKind> {
     let mut configs: Vec<Option<RepoPath>> = Vec::new();
     let denies = steps.iter().filter_map(|step| match &step.kind {
-        StepKind::Cargo(CargoCommand::Deny { config, .. }) => Some(config.clone()),
+        StepKind::Cargo(CargoCommand::Deny { config, checks, .. })
+            if checks
+                .as_ref()
+                .is_none_or(|checks| checks.contains(&DenyCheck::Advisories)) =>
+        {
+            Some(config.clone())
+        }
         _ => None,
     });
     for config in denies {

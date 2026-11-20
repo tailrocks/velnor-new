@@ -8,7 +8,7 @@ use velnor_model::{
 use crate::lane::PLAN_JOB;
 use crate::plan::{RUST_JOB, step};
 
-pub(crate) fn apply(jobs: &mut [Job], single: bool) {
+pub(crate) fn apply(jobs: &mut [Job], single: bool, after_merge: &dyn Fn(&StepKind) -> bool) {
     for job in jobs.iter_mut() {
         let from = if !single {
             PlanFrom::Job(PLAN_JOB)
@@ -19,7 +19,15 @@ pub(crate) fn apply(jobs: &mut [Job], single: bool) {
         } else {
             continue;
         };
-        for step in job.steps.iter_mut().filter(|step| step.kind.is_check()) {
+        let builds = job
+            .steps
+            .iter()
+            .any(|step| keeps_target_build(&step.kind) || after_merge(&step.kind));
+        for step in job
+            .steps
+            .iter_mut()
+            .filter(|step| step.kind.is_check() && !(builds && step.kind.feeds_build()))
+        {
             step.skip_after_merge_group = Some(from.clone());
         }
         if is_lint_job(job) {
@@ -29,6 +37,10 @@ pub(crate) fn apply(jobs: &mut [Job], single: bool) {
             job.skip_after_merge_group = Some(from);
         }
     }
+}
+
+fn keeps_target_build(kind: &StepKind) -> bool {
+    matches!(kind, StepKind::Cargo(command) if command.is_target_build())
 }
 
 fn plans_itself(job: &Job) -> bool {
@@ -137,8 +149,8 @@ mod tests {
     use std::collections::BTreeMap;
 
     use velnor_model::{
-        CargoCommand, FilterRef, Job, JobId, PackageName, Permissions, PrRun, RunnerLabel,
-        StepKind, TargetName, When,
+        CargoCommand, FilterRef, Job, JobId, PackageName, Permissions, PrRun, ReleaseAssetPart,
+        RunnerLabel, StepKind, TargetName, When,
     };
 
     use super::*;
@@ -203,5 +215,44 @@ mod tests {
         let mut jobs = [job(RUST_JOB, vec![StepKind::Cargo(CargoCommand::Doc)])];
         jobs[0].steps.push(marked);
         assert_skips_resolve(&jobs);
+    }
+
+    fn build_inputs(build: bool) -> Job {
+        let mut kinds = vec![
+            StepKind::ReleaseAssets {
+                assets: Vec::new(),
+                part: ReleaseAssetPart::Check,
+            },
+            StepKind::TestSetup {
+                name: String::from("setup"),
+                run: String::from("true"),
+                before_build: true,
+            },
+        ];
+        if build {
+            kinds.push(StepKind::Cargo(CargoCommand::NextestBuild));
+        }
+        kinds.push(StepKind::Cargo(CargoCommand::Clippy { extra: Vec::new() }));
+        job(RUST_JOB, kinds)
+    }
+
+    #[test]
+    fn the_build_inputs_are_skipped_only_when_no_target_build_of_the_job_survives() {
+        for (build, skipped) in [(true, false), (false, true)] {
+            let mut jobs = [build_inputs(build)];
+            apply(&mut jobs, true, &|_| false);
+            let marks: Vec<bool> = jobs[0].steps[..2]
+                .iter()
+                .map(|step| step.skip_after_merge_group.is_some())
+                .collect();
+            assert_eq!(marks, [skipped, skipped], "build: {build}");
+            assert!(
+                jobs[0]
+                    .steps
+                    .last()
+                    .is_some_and(|step| step.skip_after_merge_group.is_some()),
+                "the clippy check is skipped either way"
+            );
+        }
     }
 }

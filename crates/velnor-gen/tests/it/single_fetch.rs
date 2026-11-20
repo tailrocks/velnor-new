@@ -187,6 +187,7 @@ fn step_of(kind: StepKind) -> Step {
         reads: None,
         skip_after_merge_group: None,
         skip_when_cold: false,
+        private_repo: false,
         hosted_only: false,
     }
 }
@@ -207,6 +208,7 @@ fn render_fetch(manifests: Vec<RepoPath>) -> Result<String, Box<dyn std::error::
         permissions: Permissions::default(),
         fork_runner: RunnerLabel::new("ubuntu-latest")?,
         hosted_runners: velnor_model::HostedRunners::new(vec![RunnerLabel::new("ubuntu-latest")?]),
+        trusted_runners: velnor_model::TrustedRunners::default(),
         jobs: vec![Job {
             id: JobId::new("rust")?,
             name: None,

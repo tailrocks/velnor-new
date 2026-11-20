@@ -255,6 +255,9 @@ pub(crate) fn context(job: &Job, anchor: &str, event: &str) -> Context {
         event_name: event.to_owned(),
         git_ref: "refs/heads/main".to_owned(),
         default_branch: Some("main".to_owned()),
+        cache_key: String::new(),
+        anchor_key: String::new(),
+        repository: "tailrocks/velnor-new".to_owned(),
     }
 }
 
@@ -334,6 +337,8 @@ fn record_refuses_an_untrusted_event_and_writes_no_anchor() {
     }
 }
 
+/// Runs `velnor-ci tools-verify <verb>` like a workflow step: a cleared environment, a trusted
+/// default-branch push, and the given extra variables.
 pub(crate) fn step_output(job: &Job, verb: &str, vars: &[(&str, &str)]) -> String {
     let output = job.root.join("github-output");
     let event = job.root.join("event.json");

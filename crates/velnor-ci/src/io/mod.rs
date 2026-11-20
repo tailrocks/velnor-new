@@ -10,6 +10,7 @@ mod budget;
 mod build_inputs;
 mod cache;
 pub mod cache_api;
+mod cache_credentials;
 mod cache_paths;
 mod cache_prune;
 mod cache_sources;
@@ -21,7 +22,9 @@ mod crates_mirror;
 mod crates_mirror_args;
 mod crates_mirror_depth;
 mod crates_mirror_dispatch;
+mod crates_mirror_mbx;
 mod crates_mirror_mise;
+mod crates_mirror_mode;
 mod delta;
 mod delta_freshness;
 mod delta_paths;
@@ -51,6 +54,9 @@ mod merge_queue;
 mod plan;
 mod plan_request;
 mod private_check;
+mod private_repo;
+mod public_repo;
+mod public_sources;
 pub mod pump;
 mod qualification;
 mod recording;
@@ -70,6 +76,7 @@ mod restored;
 mod restored_targets;
 mod restored_units;
 mod run;
+mod saved_git_config;
 mod scope_cache;
 mod setup;
 mod small;
@@ -248,6 +255,8 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::CheckMetadata => setup::check_metadata(),
         Command::CheckConfigurations(args) => configurations::check(&args),
         Command::Cache(CacheCommand::Decide(args)) => cache::run_decide(&args),
+        Command::Cache(CacheCommand::PrivateRepo) => private_repo::run(),
+        Command::Cache(CacheCommand::PublicSources(args)) => public_sources::run(&args),
         Command::Cache(CacheCommand::Verify(args)) => cache_upload::verify(&args.key),
         Command::Cache(CacheCommand::Check(args)) => cache_upload::check(&args.success),
         Command::Cache(CacheCommand::Trim(args)) => cache::run_trim(&args.prefix, args.keep),

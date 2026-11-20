@@ -14,7 +14,7 @@ mod model;
 pub use check::check_rules;
 pub use model::{
     RenderedConcurrency, RenderedContainer, RenderedJob, RenderedMatrix, RenderedMatrixSource,
-    RenderedStep, RenderedWorkflow, Value,
+    RenderedStep, RenderedTrusted, RenderedWorkflow, Value,
 };
 
 pub const SETUP_VELNOR_ACTION: &str = "tailrocks/velnor-new/actions/setup-velnor";
