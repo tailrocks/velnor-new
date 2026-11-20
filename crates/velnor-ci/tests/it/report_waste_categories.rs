@@ -3,7 +3,7 @@
 
 use serde_json::{Value, json};
 use velnor_ci::report::{LaneMetrics, check, waste};
-use velnor_ci::waste_evidence::mbx_sessions;
+use velnor_ci::waste_evidence::{mbx_sessions, mbx_unparsed_lines};
 
 fn metrics(value: Value) -> LaneMetrics {
     serde_json::from_value(value).unwrap_or_else(|error| unreachable!("{error}"))
@@ -199,4 +199,26 @@ noise object cache: x hits\n";
         .map(|session| (session.hits, session.misses, session.not_looked_up))
         .collect();
     assert_eq!(found, [(0, 0, 567), (43, 2, 0)]);
+}
+
+#[test]
+fn mbx_1_30_0_summary_without_the_object_cache_label_is_parsed() {
+    // Printed by `mbx 1.30.0` on a local `cargo build -p velnor-cache-rules` (2026-11-20).
+    let log = b"   Compiling velnor-cache-rules v0.0.0 (/checkout/crates/velnor-cache-rules)\n\
+mbx[cache]: 1 hits, 0 misses; 0 B downloaded, 0 B uploaded, 0 B stored locally\n\
+mbx[savings]: rustc believes it compiled everything. it is down 42d 20h across 102194 builds. let it believe.\n";
+    let found: Vec<_> = mbx_sessions(log)
+        .into_iter()
+        .map(|session| (session.hits, session.misses, session.not_looked_up))
+        .collect();
+    assert_eq!(found, [(1, 0, 0)]);
+}
+
+#[test]
+fn mbx_lookup_lines_that_do_not_parse_are_reported_and_never_counted_as_zero() {
+    let log = b"2026-11-20T01:37:32Z mbx[cache]: object cache: 3 hits, many misses; 0 B downloaded\n\
+mbx[cache]: 1 hits; 0 B downloaded, 0 B uploaded, 0 B stored locally\n\
+mbx[cache]: 28.53s session; 2m 37s estimated compiler time avoided\n";
+    assert!(mbx_sessions(log).is_empty());
+    assert_eq!(mbx_unparsed_lines(log).len(), 2, "{:?}", mbx_unparsed_lines(log));
 }

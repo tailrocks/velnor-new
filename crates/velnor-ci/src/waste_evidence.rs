@@ -36,32 +36,55 @@ impl MbxEvidence {
     }
 }
 
-/// The `mbx[cache]: object cache: H hits, M misses[, N not looked up][, B bypassed]; ...` lines.
+/// The summary text of an `mbx[cache]:` lookup line. Both forms are accepted: 1.30.0 prints
+/// `mbx[cache]: object cache: H hits, M misses; ...` in some runs and `mbx[cache]: H hits, M misses; ...`
+/// in others. Lines that are not lookup summaries (`mbx[cache]: 28.53s session`) return `None`.
+fn lookup_summary(line: &str) -> Option<&str> {
+    let text = line.split_once("mbx[cache]: ")?.1;
+    let text = text.strip_prefix("object cache: ").unwrap_or(text);
+    (text.starts_with(|c: char| c.is_ascii_digit()) && text.contains(" hits")).then_some(text)
+}
+
+fn parse_lookup_summary(summary: &str) -> Option<MbxSession> {
+    let counts = summary.split_once(';').map_or(summary, |(head, _)| head);
+    let mut session = MbxSession {
+        hits: 0,
+        misses: 0,
+        not_looked_up: 0,
+    };
+    let mut seen = [false; 2];
+    for clause in counts.split(',') {
+        let (count, name) = clause.trim().split_once(' ')?;
+        let count = count.parse().ok()?;
+        match name.trim() {
+            "hits" => (session.hits, seen[0]) = (count, true),
+            "misses" => (session.misses, seen[1]) = (count, true),
+            "not looked up" => session.not_looked_up = count,
+            _ => {}
+        }
+    }
+    (seen[0] && seen[1]).then_some(session)
+}
+
+/// The `mbx[cache]:` lookup summaries in a job log, parsed. A summary that does not parse is
+/// absent here and listed by [`mbx_unparsed_lines`]; it is never counted as zero.
 #[must_use]
 pub fn mbx_sessions(log: &[u8]) -> Vec<MbxSession> {
     String::from_utf8_lossy(log)
         .lines()
-        .filter_map(|line| {
-            let summary = line.split_once("mbx[cache]: object cache: ")?.1;
-            let counts = summary.split_once(';').map_or(summary, |(head, _)| head);
-            let mut session = MbxSession {
-                hits: 0,
-                misses: 0,
-                not_looked_up: 0,
-            };
-            let mut seen = [false; 2];
-            for clause in counts.split(',') {
-                let (count, name) = clause.trim().split_once(' ')?;
-                let count = count.parse().ok()?;
-                match name.trim() {
-                    "hits" => (session.hits, seen[0]) = (count, true),
-                    "misses" => (session.misses, seen[1]) = (count, true),
-                    "not looked up" => session.not_looked_up = count,
-                    _ => {}
-                }
-            }
-            (seen[0] && seen[1]).then_some(session)
+        .filter_map(|line| parse_lookup_summary(lookup_summary(line)?))
+        .collect()
+}
+
+/// The lookup summary lines that `mbx_sessions` could not parse.
+#[must_use]
+pub fn mbx_unparsed_lines(log: &[u8]) -> Vec<String> {
+    String::from_utf8_lossy(log)
+        .lines()
+        .filter(|line| {
+            lookup_summary(line).is_some_and(|summary| parse_lookup_summary(summary).is_none())
         })
+        .map(|line| line.trim().to_owned())
         .collect()
 }
 
