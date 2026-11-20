@@ -16,7 +16,8 @@ use crate::config::CONFIG_PATH;
 use crate::detect::HELPER_PACKAGE;
 use crate::error::{DetectError, Reason};
 use crate::lane::{
-    Lane, PLAN_JOB, expose_read_outputs, plan_job, policy_job, used_group_outputs, used_outputs,
+    EARLY_POLICY_HELPER, Lane, PLAN_JOB, expose_read_outputs, plan_job, policy_job,
+    used_group_outputs, used_outputs,
 };
 use crate::plan_budget::{draft_guard, expose_selection, triggers};
 use crate::plan_tools::{mirror_step, tools_install, tools_restore, tools_save};
@@ -67,7 +68,11 @@ fn plan_with(facts: &RepoFacts, deltas: bool) -> WorkflowPlan {
         jobs.extend(lane_jobs(facts, unit, decision.shape, suffixed, &lane));
     }
     if facts.policy.any() {
-        jobs.push(policy_job(facts, &Lane::policy(single, deltas)));
+        let early = facts
+            .helper
+            .as_ref()
+            .is_some_and(|release| release.version().at_least(EARLY_POLICY_HELPER));
+        jobs.push(policy_job(facts, &Lane::policy(single, early, deltas)));
     }
     jobs.extend(crate::lint_jobs::lint_jobs(facts));
     let draft_guard = draft_guard(facts);
