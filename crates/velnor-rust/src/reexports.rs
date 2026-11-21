@@ -6,7 +6,7 @@ pub use crate::build_profile::{BuildProfile, build_profile, rustc_release};
 pub use crate::build_script::{SilentBuildScript, build_script_sources, silent_build_scripts};
 pub use crate::cache_budget::{
     CacheEntry, CacheFamily, CacheId, DEFAULT_CACHE_BUDGET_BYTES, Timestamp, budget_plan,
-    cache_family, delta_pull_request, target_family_prefix,
+    cache_family, delta_pull_request, is_sources_prefix, target_family_prefix,
 };
 pub use crate::classify::is_workflow_file;
 pub use crate::compat::{
@@ -25,7 +25,7 @@ pub use crate::excluded_lock::{ExcludedLockFinding, excluded_lock_findings};
 pub use crate::external_config::external_config_profile;
 pub use crate::group_runs::{GroupPlan, GroupRun, group_runs, plan_groups};
 pub use crate::lint_error::LintFault;
-pub use crate::lint_inputs::lint_runs;
+pub use crate::lint_inputs::{lint_runs, unmatched_entries, unmatched_inputs};
 pub use crate::lock::{
     LOCK_PATH, LockError, binary_sums_url, commit_url, lists_binary_sums, pin_lock,
     release_version, sums_url,
@@ -44,7 +44,8 @@ pub use crate::metadata_file::{
 };
 pub use crate::mise::{MISE_CONFIGS, MISE_LOCK, check_tools, mise_files, tool_pins, tool_requests};
 pub use crate::owners::{Owner, Owners, add_reads};
-pub use crate::plan::{check_required_check, plan, plan_without_deltas};
+pub use crate::plan::{plan, plan_without_deltas};
+pub use crate::plan_check::check_required_check;
 pub use crate::policy::{DENY_OFF_NOTE, PolicyRuns, deny_off_note, policy_runs};
 pub use crate::private_sources::{base_cache_note, cacheable_config, cacheable_private_lock};
 pub use crate::public_git::{LockAdmission, PinnedGit, lock_admission, merge_pinned};

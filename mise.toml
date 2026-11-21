@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 # SPDX-License-Identifier: Apache-2.0
 
-min_version = "2026.10.18"
+min_version = "2026.11.10"
 
 [tools]
 # Owner standard layout: `mr_boxington = true` plus `[wrappers.cargo]` run
@@ -10,7 +10,7 @@ min_version = "2026.10.18"
 # rustup-only tools read only the file, and generation fails on drift. Generated CI reads every version in this table
 # at run time (hard decision 4); clean checkouts resolve MBX from this file
 # via `mise install`, never globally.
-rust = { version = "1.99.1", profile = "minimal", components = [
+rust = { version = "1.100.0", profile = "minimal", components = [
   "clippy",
   "rustfmt",
 ], targets = [
@@ -26,6 +26,7 @@ cargo-binstall = "1.27.0"
 # and hk's check-only jactionlint step runs the same binaries locally.
 jactionlint = "2.6.0"
 shellcheck = "0.11.0"
+minisign = { version = "0.12", os = ["linux", "windows", "macos/arm64"] }
 # Repository policy (.alint.yml): the generated Alint job installs this pin.
 "github:asamarts/alint" = "0.22.1"
 # jactionlint checks the script of every actions/github-script step with node on PATH.
@@ -107,6 +108,20 @@ run = "bash scripts/test-no-doctests-rule.sh"
 description = "Check the alint no-absolute-local-paths rule against path fixtures: home, root and scratch paths must fail, GitHub runner paths and placeholders must pass"
 run = "bash scripts/test-no-absolute-local-paths-rule.sh"
 
+[tasks.test-mise-binary-digests]
+description = "Run the minisign signature tests of scripts/mise-binary-digests.sh; CI requires minisign, elsewhere a missing minisign skips"
+run = '''
+set -eu
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT"
+if [ -n "${CI:-}" ]; then
+  VELNOR_REQUIRE_MINISIGN=1
+  export VELNOR_REQUIRE_MINISIGN
+fi
+python3 scripts/test_mise_binary_digests.py
+python3 scripts/test_mise_binary_digests_entry.py
+'''
+
 [tasks.test-maintenance-helpers]
 description = "Run repository-only maintenance helper test suites"
 run = '''
@@ -115,6 +130,13 @@ ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
 printf "maintenance-phase: setup-velnor-install\n"
 python3 scripts/test-setup-velnor-action.py
+printf "maintenance-phase: mise-binary-digests\n"
+if [ -n "${CI:-}" ]; then
+  VELNOR_REQUIRE_MINISIGN=1
+  export VELNOR_REQUIRE_MINISIGN
+fi
+python3 scripts/test_mise_binary_digests.py
+python3 scripts/test_mise_binary_digests_entry.py
 printf "maintenance-phase: tag-ruleset-drift\n"
 bun test ./scripts/tag-ruleset-drift.test.ts
 printf "maintenance-phase: source-fetch\n"
