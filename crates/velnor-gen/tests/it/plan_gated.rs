@@ -17,7 +17,7 @@ use crate::pipeline::{pin_helper, view, workflow};
 const POLICY_GATED: &[u8] = b"[policy]\ngate_on_plan = true\n";
 const CHECK_GATED: &str = "[[lint]]\nkind = 'generated-check'\ngate_on_plan = true\n";
 const CHECK_PLAIN: &str = "[[lint]]\nkind = 'generated-check'\n";
-const FIRST: &str = "0.1.111";
+const FIRST: &str = "0.1.112";
 
 fn policy_repo(
     config: Option<&[u8]>,
@@ -113,18 +113,20 @@ fn a_policy_job_without_the_key_still_plans_alone_and_allocates_a_runner() -> Te
 
 #[test]
 fn a_helper_older_than_the_policy_key_is_refused() -> TestResult {
-    let repo = policy_repo(Some(POLICY_GATED), "0.1.110")?;
-    let error = expected_files(&repo).err();
-    assert!(
-        matches!(
-            error,
-            Some(GenerateError::ConfigKeyHelperTooOld {
-                first: (0, 1, 111),
-                ..
-            })
-        ),
-        "{error:?}"
-    );
+    for helper in ["0.1.110", "0.1.111"] {
+        let repo = policy_repo(Some(POLICY_GATED), helper)?;
+        let error = expected_files(&repo).err();
+        assert!(
+            matches!(
+                error,
+                Some(GenerateError::ConfigKeyHelperTooOld {
+                    first: (0, 1, 112),
+                    ..
+                })
+            ),
+            "{helper}: {error:?}"
+        );
+    }
     Ok(())
 }
 
@@ -265,7 +267,7 @@ fn the_key_is_refused_on_any_other_lint_and_by_a_helper_older_than_it() -> TestR
         matches!(
             error,
             Some(GenerateError::ConfigKeyHelperTooOld {
-                first: (0, 1, 111),
+                first: (0, 1, 112),
                 ..
             })
         ),
