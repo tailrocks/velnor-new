@@ -173,6 +173,139 @@ pub(super) fn api_client(
     Ok(super::http::HttpGitHub::new(api, token, timeout))
 }
 
+<<<<<<< HEAD
+||||||| 193adc8c56
+fn run_fetches(
+    cargo: &Path,
+    environment: &[(OsString, OsString)],
+    mirror: Option<&Path>,
+    manifests: &[PathBuf],
+    with_token: bool,
+) -> Result<(), CiError> {
+    for manifest in manifests {
+        let mut command = Command::new(cargo);
+        command
+            .env_clear()
+            .envs(environment.iter().map(|(k, v)| (k, v)));
+        let neutralised = if with_token {
+            let cargo_home = environment
+                .iter()
+                .find(|(name, _)| name == "CARGO_HOME")
+                .map(|(_, home)| PathBuf::from(home))
+                .unwrap_or_default();
+            let here = manifest
+                .parent()
+                .filter(|parent| !parent.as_os_str().is_empty())
+                .unwrap_or(Path::new("."));
+            super::fetch_credentials::neutralise(here, &cargo_home)?
+        } else {
+            super::fetch_credentials::Neutralised::default()
+        };
+        command.envs(neutralised.environment.iter().map(|(k, v)| (k, v)));
+        let directory = manifest
+            .parent()
+            .filter(|parent| !parent.as_os_str().is_empty());
+        if let Some(directory) = directory {
+            command.current_dir(directory);
+        }
+        let mut arguments: Vec<OsString> = vec!["fetch".into(), "--locked".into()];
+        arguments.extend([
+            "--manifest-path".into(),
+            manifest.file_name().unwrap_or(manifest.as_os_str()).into(),
+        ]);
+        if with_token {
+            arguments.extend(["--config".into(), "net.offline=false".into()]);
+            for config in &neutralised.config {
+                arguments.extend(["--config".into(), config.into()]);
+            }
+        } else {
+            arguments.push("--offline".into());
+        }
+        command.args(match mirror {
+            Some(mirror) => with_mirror_config(mirror.as_os_str(), arguments),
+            None => arguments,
+        });
+        let status = command
+            .status()
+            .map_err(|e| CiError::new(format!("cannot run {}: {e}", cargo.display())))?;
+        if !status.success() {
+            let why = if with_token { "" } else { FORK_HINT };
+            return Err(CiError::new(format!(
+                "cargo fetch for {} failed with {status}{}{why}",
+                manifest.display(),
+                if with_token { "" } else { "; " }
+            )));
+        }
+    }
+    Ok(())
+}
+
+=======
+fn run_fetches(
+    cargo: &Path,
+    environment: &[(OsString, OsString)],
+    mirror: Option<&Path>,
+    manifests: &[PathBuf],
+    with_token: bool,
+) -> Result<(), CiError> {
+    for manifest in manifests {
+        let mut command = Command::new(cargo);
+        command
+            .env_clear()
+            .envs(environment.iter().map(|(k, v)| (k, v)));
+        let neutralised = if with_token {
+            let cargo_home = environment
+                .iter()
+                .find(|(name, _)| name == "CARGO_HOME")
+                .map_or_default(|(_, home)| PathBuf::from(home));
+            let here = manifest
+                .parent()
+                .filter(|parent| !parent.as_os_str().is_empty())
+                .unwrap_or(Path::new("."));
+            super::fetch_credentials::neutralise(here, &cargo_home)?
+        } else {
+            super::fetch_credentials::Neutralised::default()
+        };
+        command.envs(neutralised.environment.iter().map(|(k, v)| (k, v)));
+        let directory = manifest
+            .parent()
+            .filter(|parent| !parent.as_os_str().is_empty());
+        if let Some(directory) = directory {
+            command.current_dir(directory);
+        }
+        let mut arguments: Vec<OsString> = vec!["fetch".into(), "--locked".into()];
+        arguments.extend([
+            "--manifest-path".into(),
+            manifest.file_name().unwrap_or(manifest.as_os_str()).into(),
+        ]);
+        if with_token {
+            arguments.extend(["--config".into(), "net.offline=false".into()]);
+            for config in &neutralised.config {
+                arguments.extend(["--config".into(), config.into()]);
+            }
+        } else {
+            arguments.push("--offline".into());
+        }
+        command.args(match mirror {
+            Some(mirror) => with_mirror_config(mirror.as_os_str(), arguments),
+            None => arguments,
+        });
+        let status = command
+            .status()
+            .map_err(|e| CiError::new(format!("cannot run {}: {e}", cargo.display())))?;
+        if !status.success() {
+            let why = if with_token { "" } else { FORK_HINT };
+            return Err(CiError::new(format!(
+                "cargo fetch for {} failed with {status}{}{why}",
+                manifest.display(),
+                if with_token { "" } else { "; " }
+            )));
+        }
+    }
+    Ok(())
+}
+
+>>>>>>> origin/main
 pub(super) struct Server {
     authority: String,
     forms: Vec<String>,
@@ -380,7 +513,5 @@ fn non_empty_variable(name: &str) -> Option<OsString> {
 }
 
 pub(super) fn search_path() -> Vec<PathBuf> {
-    std::env::var_os("PATH")
-        .map(|path| std::env::split_paths(&path).collect())
-        .unwrap_or_default()
+    std::env::var_os("PATH").map_or_default(|path| std::env::split_paths(&path).collect())
 }

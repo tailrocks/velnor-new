@@ -50,11 +50,10 @@ fn run_line<'a>(step: &[&'a str]) -> &'a str {
     step.iter()
         .find_map(|line| line.trim().strip_prefix("run: "))
         .map(|run| run.trim_matches('\''))
-        .map(|run| {
+        .map_or_default(|run| {
             run.split_once("\"$VELNOR_EXEC\" ")
                 .map_or(run, |(_, invocation)| invocation)
         })
-        .unwrap_or_default()
 }
 
 #[test]

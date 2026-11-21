@@ -148,7 +148,7 @@ async fn down_refuses_a_live_pid_with_no_binary_record_and_says_what_to_do() {
     let alive = live.try_wait().ok().is_none_or(|status| status.is_none());
     live.kill().ok();
     live.wait().ok();
-    let message = down.err().map(|e| e.to_string()).unwrap_or_default();
+    let message = down.err().map_or_default(|e| e.to_string());
     assert!(alive, "down stopped a process without a binary record");
     assert!(
         message.contains(&format!("stop process {pid}")),
