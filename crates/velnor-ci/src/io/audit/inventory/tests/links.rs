@@ -3,6 +3,8 @@
 
 use std::os::unix::fs::symlink;
 
+use nix::sys::resource::{Resource, getrlimit, setrlimit};
+
 use super::*;
 
 fn base(name: &str) -> PathBuf {
@@ -114,11 +116,17 @@ fn a_link_crossing_more_than_forty_links_is_unresolved_and_one_within_the_limit_
 #[test]
 fn a_link_into_a_deeply_nested_directory_resolves_like_canonicalize() {
     let base = base("deep");
+    let dir = base.join("dir");
     let nested: PathBuf = std::iter::repeat_n("d", 400).collect();
-    fs::create_dir_all(base.join(&nested)).unwrap_or_else(|e| unreachable!("{e}"));
-    symlink(&nested, base.join("entry")).unwrap_or_else(|e| unreachable!("{e}"));
-    let resolutions = link_resolutions(&base);
-    let expected = fs::canonicalize(base.join("entry")).ok();
+    fs::create_dir_all(&dir).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::create_dir_all(base.join("nested").join(&nested)).unwrap_or_else(|e| unreachable!("{e}"));
+    symlink(Path::new("../nested").join(&nested), dir.join("entry"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let (soft, hard) = getrlimit(Resource::RLIMIT_NOFILE).unwrap_or_else(|e| unreachable!("{e}"));
+    setrlimit(Resource::RLIMIT_NOFILE, 256, hard).unwrap_or_else(|e| unreachable!("{e}"));
+    let resolutions = link_resolutions(&dir);
+    setrlimit(Resource::RLIMIT_NOFILE, soft, hard).unwrap_or_else(|e| unreachable!("{e}"));
+    let expected = fs::canonicalize(dir.join("entry")).ok();
     fs::remove_dir_all(&base).unwrap_or_else(|e| unreachable!("{e}"));
     assert!(expected.is_some());
     assert_eq!(resolutions.get(Path::new("entry")), Some(&expected));
