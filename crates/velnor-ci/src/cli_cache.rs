@@ -37,7 +37,7 @@ pub enum CacheCommand {
     )]
     PurgePrivate(PurgePrivateArgs),
     #[command(
-        about = "Delete the one cache entry with the exact --key on the exact --ref (both are printed by the tools-verify notice), through the GitHub API; refuses, and deletes nothing, when no entry or more than one entry matches (two versions under one key on one ref); reads GITHUB_TOKEN, which needs actions: write"
+        about = "Delete the one cache entry with the exact --key on the FIRST --ref that holds it (the refs are printed by the tools-verify notice in restore order), through the GitHub API; later refs are never touched; refuses, and deletes nothing, when no ref holds the key, when a listing fails, or when the first ref that holds it has more than one entry (two versions under one key); reads GITHUB_TOKEN, which needs actions: write"
     )]
     DeleteEntry(DeleteEntryArgs),
 }
@@ -48,9 +48,10 @@ pub struct DeleteEntryArgs {
     pub key: String,
     #[arg(
         long = "ref",
-        help = "The ref the entry belongs to, such as refs/heads/main or refs/pull/7/merge"
+        required = true,
+        help = "A ref the entry can belong to, such as refs/pull/7/merge or refs/heads/main; repeat it in the order the cache action reads refs (the run's own ref, then the base branch, then the default branch)"
     )]
-    pub reference: String,
+    pub refs: Vec<String>,
     #[arg(long, help = "Repository as owner/name, default GITHUB_REPOSITORY")]
     pub repo: Option<String>,
 }

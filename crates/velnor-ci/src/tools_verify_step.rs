@@ -60,14 +60,18 @@ fn quoted(text: &str) -> String {
     format!("'{}'", text.replace('\'', "'\\''"))
 }
 
-fn delete_command(key: &str, reference: &str, remote: &Remote) -> String {
+fn delete_command(key: &str, refs: &[String], remote: &Remote) -> String {
+    let refs: String = refs.iter().fold(String::new(), |mut line, reference| {
+        line.push_str(" --ref ");
+        line.push_str(&quoted(reference));
+        line
+    });
     format!(
-        "GITHUB_API_URL={} GITHUB_TOKEN=\"$(gh auth token --hostname {})\" velnor-ci cache delete-entry --repo {} --key {} --ref {}",
+        "GITHUB_API_URL={} GITHUB_TOKEN=\"$(gh auth token --hostname {})\" velnor-ci cache delete-entry --repo {} --key {}{refs}",
         quoted(&remote.api_url),
         quoted(&remote.host),
         quoted(&remote.repository),
         quoted(key),
-        quoted(reference),
     )
 }
 
@@ -75,15 +79,10 @@ fn delete_sentence(what: &str, key: &str, remedy: Remedy<'_>) -> String {
     if remedy.refs.is_empty() {
         return String::new();
     }
-    let commands: Vec<String> = remedy
-        .refs
-        .iter()
-        .map(|reference| format!("`{}`", delete_command(key, reference, remedy.remote)))
-        .collect();
     format!(
-        ". The restored {what} is {}; the cache action does not report which ref it came from (it reads the ref of this run, then the base and default branches), so run the command whose ref lists it: {}. Each deletes only the one entry with that key on its ref, and refuses unless exactly one entry has it",
+        ". The restored {what} is {}; the cache action does not report which ref it came from, so the command lists the refs in the order the action reads them (the ref of this run, then the base and default branches), deletes the entry on the first ref that holds the key and never touches a later one: `{}`. It refuses unless exactly one entry has the key on that ref",
         quoted(key),
-        commands.join(" or ")
+        delete_command(key, remedy.refs, remedy.remote)
     )
 }
 

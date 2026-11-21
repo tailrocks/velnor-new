@@ -19,6 +19,7 @@ const PAGE_SIZE: usize = 100;
 struct Api {
     entries: Vec<Value>,
     filters_by_ref: bool,
+    failing_ref: Option<&'static str>,
     asked: RefCell<Vec<String>>,
     deleted: RefCell<Vec<u64>>,
 }
@@ -39,6 +40,9 @@ impl GitHub for Api {
         self.asked.borrow_mut().push(path.to_owned());
         let key = query(path, "key").unwrap_or_default();
         let reference = query(path, "ref").map(|text| text.replace("%2F", "/"));
+        if self.failing_ref.is_some() && reference.as_deref() == self.failing_ref {
+            return Err(CiError::new("GitHub answered 502"));
+        }
         let page: usize = query(path, "page")
             .and_then(|text| text.parse().ok())
             .unwrap_or(1);
@@ -81,9 +85,14 @@ fn api(entries: Vec<Value>) -> Api {
     Api {
         entries,
         filters_by_ref: true,
+        failing_ref: None,
         asked: RefCell::default(),
         deleted: RefCell::default(),
     }
+}
+
+fn refs(names: &[&str]) -> Vec<String> {
+    names.iter().map(|name| (*name).to_owned()).collect()
 }
 
 fn repo() -> Repo {
@@ -96,7 +105,8 @@ fn exactly_one_entry_on_the_ref_is_deleted_by_its_id() {
         entry(11, KEY, MAIN, VERSION_A),
         entry(12, KEY, MERGE, VERSION_B),
     ]);
-    let report = delete_entry(&api, &repo(), KEY, MERGE).unwrap_or_else(|e| unreachable!("{e}"));
+    let report =
+        delete_entry(&api, &repo(), KEY, &refs(&[MERGE])).unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(*api.deleted.borrow(), [12]);
     assert!(report.contains("12"), "{report}");
     let asked = api.asked.borrow();
@@ -114,7 +124,7 @@ fn two_versions_under_one_key_on_one_ref_are_refused_and_nothing_is_deleted() {
         entry(11, KEY, MAIN, VERSION_A),
         entry(12, KEY, MAIN, VERSION_B),
     ]);
-    let error = delete_entry(&api, &repo(), KEY, MAIN)
+    let error = delete_entry(&api, &repo(), KEY, &refs(&[MAIN]))
         .err()
         .unwrap_or_else(|| unreachable!("two versions under one key must be refused"));
     let text = error.to_string();
@@ -133,14 +143,14 @@ fn an_entry_whose_key_only_starts_with_the_key_is_never_a_candidate() {
         entry(20, &longer, MAIN, VERSION_A),
         entry(21, KEY, MAIN, VERSION_A),
     ]);
-    delete_entry(&api, &repo(), KEY, MAIN).unwrap_or_else(|e| unreachable!("{e}"));
+    delete_entry(&api, &repo(), KEY, &refs(&[MAIN])).unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(*api.deleted.borrow(), [21]);
 }
 
 #[test]
 fn a_key_without_any_entry_on_the_ref_is_refused() {
     let api = api(vec![entry(11, KEY, MAIN, VERSION_A)]);
-    let error = delete_entry(&api, &repo(), KEY, MERGE)
+    let error = delete_entry(&api, &repo(), KEY, &refs(&[MERGE]))
         .err()
         .unwrap_or_else(|| unreachable!("a key with no entry on the ref must be refused"));
     assert_eq!(
@@ -153,7 +163,7 @@ fn a_key_without_any_entry_on_the_ref_is_refused() {
 #[test]
 fn an_empty_listing_is_refused() {
     let api = api(Vec::new());
-    assert!(delete_entry(&api, &repo(), KEY, MAIN).is_err());
+    assert!(delete_entry(&api, &repo(), KEY, &refs(&[MAIN])).is_err());
     assert!(api.deleted.borrow().is_empty());
 }
 
@@ -164,7 +174,7 @@ fn an_entry_on_another_ref_is_ignored_even_when_the_listing_returns_it() {
         entry(32, KEY, MERGE, VERSION_A),
     ]);
     api.filters_by_ref = false;
-    delete_entry(&api, &repo(), KEY, MAIN).unwrap_or_else(|e| unreachable!("{e}"));
+    delete_entry(&api, &repo(), KEY, &refs(&[MAIN])).unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(*api.deleted.borrow(), [31]);
 }
 
@@ -175,7 +185,7 @@ fn a_match_on_the_second_page_is_found_and_deleted() {
         .collect();
     entries.push(entry(500, KEY, MAIN, VERSION_B));
     let api = api(entries);
-    delete_entry(&api, &repo(), KEY, MAIN).unwrap_or_else(|e| unreachable!("{e}"));
+    delete_entry(&api, &repo(), KEY, &refs(&[MAIN])).unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(*api.deleted.borrow(), [500]);
     assert!(
         api.asked
@@ -195,10 +205,100 @@ fn an_ambiguity_spanning_two_pages_deletes_nothing_and_names_both_ids() {
     );
     entries.push(entry(500, KEY, MAIN, VERSION_B));
     let api = api(entries);
-    let error = delete_entry(&api, &repo(), KEY, MAIN)
+    let error = delete_entry(&api, &repo(), KEY, &refs(&[MAIN]))
         .err()
         .unwrap_or_else(|| unreachable!("an ambiguous match must be refused"));
     let text = error.to_string();
     assert!(text.contains("ID 1 ") && text.contains("ID 500 "), "{text}");
     assert!(api.deleted.borrow().is_empty());
+}
+
+fn both_refs() -> Api {
+    api(vec![
+        entry(11, KEY, MAIN, VERSION_A),
+        entry(12, KEY, MERGE, VERSION_B),
+    ])
+}
+
+#[test]
+fn the_key_on_two_refs_deletes_only_the_entry_on_the_first_ref() {
+    let api = both_refs();
+    delete_entry(&api, &repo(), KEY, &refs(&[MERGE, MAIN])).unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(*api.deleted.borrow(), [12]);
+    assert!(
+        api.asked
+            .borrow()
+            .iter()
+            .all(|path| !path.contains("heads")),
+        "{:?}",
+        api.asked.borrow()
+    );
+}
+
+#[test]
+fn the_order_of_the_refs_decides_which_entry_is_deleted() {
+    let api = both_refs();
+    delete_entry(&api, &repo(), KEY, &refs(&[MAIN, MERGE])).unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(*api.deleted.borrow(), [11]);
+}
+
+#[test]
+fn the_key_only_on_a_later_ref_deletes_that_entry() {
+    let api = api(vec![entry(11, KEY, MAIN, VERSION_A)]);
+    delete_entry(&api, &repo(), KEY, &refs(&[MERGE, MAIN])).unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(*api.deleted.borrow(), [11]);
+}
+
+#[test]
+fn two_entries_on_the_first_ref_refuse_without_looking_at_a_later_ref() {
+    let api = api(vec![
+        entry(11, KEY, MAIN, VERSION_A),
+        entry(12, KEY, MERGE, VERSION_A),
+        entry(13, KEY, MERGE, VERSION_B),
+    ]);
+    let error = delete_entry(&api, &repo(), KEY, &refs(&[MERGE, MAIN]))
+        .err()
+        .unwrap_or_else(|| unreachable!("two entries on the first ref must be refused"));
+    let text = error.to_string();
+    assert!(text.contains("ID 12 ") && text.contains("ID 13 "), "{text}");
+    assert!(api.deleted.borrow().is_empty());
+    assert!(
+        api.asked
+            .borrow()
+            .iter()
+            .all(|path| !path.contains("heads")),
+        "{:?}",
+        api.asked.borrow()
+    );
+}
+
+#[test]
+fn a_failing_listing_of_the_first_ref_refuses_instead_of_skipping_to_the_next() {
+    let mut api = both_refs();
+    api.failing_ref = Some(MERGE);
+    let error = delete_entry(&api, &repo(), KEY, &refs(&[MERGE, MAIN]))
+        .err()
+        .unwrap_or_else(|| unreachable!("a failed listing must refuse"));
+    assert!(error.to_string().contains("502"), "{error}");
+    assert!(api.deleted.borrow().is_empty());
+}
+
+#[test]
+fn no_refs_and_an_empty_ref_among_them_are_refused() {
+    let api = both_refs();
+    assert!(delete_entry(&api, &repo(), KEY, &[]).is_err());
+    assert!(delete_entry(&api, &repo(), KEY, &refs(&[MERGE, ""])).is_err());
+    assert!(api.deleted.borrow().is_empty());
+}
+
+#[test]
+fn a_key_with_no_entry_on_any_ref_names_every_ref_searched() {
+    let api = api(vec![entry(11, "other", MAIN, VERSION_A)]);
+    let error = delete_entry(&api, &repo(), KEY, &refs(&[MERGE, MAIN]))
+        .err()
+        .unwrap_or_else(|| unreachable!("no entry anywhere must be refused"));
+    assert_eq!(
+        error.to_string(),
+        format!("no cache entry has the key {KEY} on {MERGE} or {MAIN}; nothing was deleted")
+    );
 }

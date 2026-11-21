@@ -12,6 +12,7 @@ use serde_json::{Value, json};
 const REPO: &str = "tailrocks/velnor-new";
 const KEY: &str = "velnor-tools-Linux-X64-mise2026.11.10-aa";
 const MAIN: &str = "refs/heads/main";
+const FAIL: &str = "refs/pull/9/merge";
 const MERGE: &str = "refs/pull/7/merge";
 const VERSION_A: &str = "a1a1";
 const VERSION_B: &str = "b2b2";
@@ -62,6 +63,7 @@ fn answer(served: &Served, stream: TcpStream) {
             break;
         }
     }
+    let mut status = "200 OK";
     let body = if method == "DELETE" {
         served
             .deleted
@@ -71,10 +73,13 @@ fn answer(served: &Served, stream: TcpStream) {
         String::new()
     } else {
         let query = target.split_once('?').map_or("", |(_, query)| query);
+        if param(query, "ref").as_deref() == Some(FAIL) {
+            status = "502 Bad Gateway";
+        }
         listing(served, query)
     };
     let reply = format!(
-        "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{body}",
+        "HTTP/1.1 {status}\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{body}",
         body.len()
     );
     let mut stream = stream;
@@ -180,7 +185,7 @@ fn an_empty_ref_is_refused_and_nothing_is_deleted() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(!output.status.success(), "{stderr}");
     assert!(
-        stderr.contains("pass the exact cache key and its ref"),
+        stderr.contains("pass the exact cache key and its refs"),
         "{stderr}"
     );
     assert_eq!(deleted(&served), Vec::<String>::new());
@@ -193,7 +198,7 @@ fn an_empty_key_is_refused_and_nothing_is_deleted() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(!output.status.success(), "{stderr}");
     assert!(
-        stderr.contains("pass the exact cache key and its ref"),
+        stderr.contains("pass the exact cache key and its refs"),
         "{stderr}"
     );
     assert_eq!(deleted(&served), Vec::<String>::new());
@@ -230,5 +235,42 @@ fn a_missing_token_is_refused_and_nothing_is_deleted() {
         stderr.contains("set GITHUB_TOKEN to a GitHub token"),
         "{stderr}"
     );
+    assert_eq!(deleted(&served), Vec::<String>::new());
+}
+
+#[test]
+fn the_binary_deletes_on_the_first_ref_that_holds_the_key_and_leaves_the_later_one() {
+    let (api, served) = serve(vec![
+        entry(11, KEY, MAIN, VERSION_A),
+        entry(12, KEY, MERGE, VERSION_B),
+    ]);
+    let output = delete_entry(&api, &["--key", KEY, "--ref", MERGE, "--ref", MAIN]);
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(
+        deleted(&served),
+        [format!("/repos/{REPO}/actions/caches/12")]
+    );
+}
+
+#[test]
+fn the_binary_respects_the_order_of_the_refs() {
+    let (api, served) = serve(vec![
+        entry(11, KEY, MAIN, VERSION_A),
+        entry(12, KEY, MERGE, VERSION_B),
+    ]);
+    let output = delete_entry(&api, &["--key", KEY, "--ref", MAIN, "--ref", MERGE]);
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(
+        deleted(&served),
+        [format!("/repos/{REPO}/actions/caches/11")]
+    );
+}
+
+#[test]
+fn the_binary_refuses_when_the_listing_of_the_first_ref_fails() {
+    let (api, served) = serve(vec![entry(11, KEY, MAIN, VERSION_A)]);
+    let output = delete_entry(&api, &["--key", KEY, "--ref", FAIL, "--ref", MAIN]);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!output.status.success(), "{stderr}");
     assert_eq!(deleted(&served), Vec::<String>::new());
 }
