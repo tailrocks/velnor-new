@@ -116,3 +116,18 @@ fn a_bare_build_program_whose_name_starts_with_a_dash_is_run_by_its_absolute_pat
         bin.join("-prog").display().to_string()
     );
 }
+
+#[test]
+fn an_executable_without_a_shebang_is_an_exec_format_error_and_records_nothing() {
+    let repo = built_repository();
+    let receipt = receipt_bytes(&repo);
+    unit(&repo, "plain", "exit 0\n");
+    fs::set_permissions(repo.root().join("plain"), fs::Permissions::from_mode(0o755))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let stderr = String::from_utf8_lossy(&refused(&repo, "./plain").stderr).into_owned();
+    assert!(
+        stderr.contains("cannot run build command: Exec format error"),
+        "{stderr}"
+    );
+    assert_nothing_was_recorded(&repo, &receipt);
+}

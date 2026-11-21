@@ -3,7 +3,7 @@
 
 use std::ffi::{OsStr, OsString};
 use std::fs;
-use std::io;
+use std::io::{self, Read};
 use std::os::unix::ffi::OsStrExt;
 use std::path::{self, Path, PathBuf};
 use std::process::Command;
@@ -12,6 +12,15 @@ use nix::errno::Errno;
 use nix::unistd::{AccessFlags, access};
 
 const DEFAULT_PATH: &str = "/usr/bin:/bin";
+
+const NATIVE_MAGIC: [&[u8]; 6] = [
+    b"\x7fELF",
+    b"\xfe\xed\xfa\xce",
+    b"\xfe\xed\xfa\xcf",
+    b"\xce\xfa\xed\xfe",
+    b"\xcf\xfa\xed\xfe",
+    b"\xca\xfe\xba\xbe",
+];
 
 fn search_path(build: &Command) -> OsString {
     build
@@ -32,6 +41,17 @@ fn usable(candidate: &Path, metadata: &fs::Metadata) -> io::Result<PathBuf> {
     path::absolute(candidate)
 }
 
+fn executable_format(path: PathBuf) -> io::Result<PathBuf> {
+    let mut head = Vec::new();
+    let read = fs::File::open(&path).and_then(|file| file.take(4).read_to_end(&mut head));
+    let known = head.starts_with(b"#!") || NATIVE_MAGIC.iter().any(|magic| head.starts_with(magic));
+    if read.is_err() || known {
+        Ok(path)
+    } else {
+        Err(Errno::ENOEXEC.into())
+    }
+}
+
 pub(super) fn resolve(build: &Command) -> io::Result<PathBuf> {
     let program = Path::new(build.get_program());
     if program.as_os_str().is_empty() {
@@ -43,7 +63,7 @@ pub(super) fn resolve(build: &Command) -> io::Result<PathBuf> {
     };
     if program.as_os_str().as_bytes().contains(&b'/') {
         let candidate = base.join(program);
-        return usable(&candidate, &fs::metadata(&candidate)?);
+        return usable(&candidate, &fs::metadata(&candidate)?).and_then(executable_format);
     }
     let mut denied = false;
     for directory in std::env::split_paths(&search_path(build)) {
@@ -52,7 +72,7 @@ pub(super) fn resolve(build: &Command) -> io::Result<PathBuf> {
             continue;
         };
         match usable(&candidate, &metadata) {
-            Ok(found) => return Ok(found),
+            Ok(found) => return executable_format(found),
             Err(_) => denied = true,
         }
     }
