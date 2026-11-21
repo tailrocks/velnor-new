@@ -238,6 +238,7 @@ fn render_fetch(manifests: Vec<RepoPath>) -> Result<String, Box<dyn std::error::
             permissions: Permissions::default(),
             timeout_minutes: 10,
             reports_ignored: false,
+            anchor_key_output: false,
             build_record: BuildRecord::Unrecorded,
             chained_saves: false,
             mbx_stats: velnor_model::MbxStats::Summary,

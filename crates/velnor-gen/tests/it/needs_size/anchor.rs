@@ -4,9 +4,9 @@
 use velnor_model::{StepKind, ToolsLocalVerb};
 use velnor_render::{MAX_ENV_CHARACTERS, Rule, rendered_workflow};
 
-use super::{realized_needs, required_bound};
+use super::{cache_bound, realized_needs, required_bound};
 use crate::facts::TestResult;
-use crate::needs_size_plan::{saving_facts_pinned, test_packages_of};
+use crate::needs_size_plan::{saving_facts_pinned, saving_facts_shaped, test_packages_of};
 
 fn check(roots: usize) -> Result<(usize, usize, bool), Box<dyn std::error::Error>> {
     check_at(roots, "0.1.111")
@@ -85,6 +85,45 @@ fn the_tools_anchor_outputs_are_budgeted_for_a_0_1_110_helper() -> TestResult {
     assert!(
         actual > MAX_ENV_CHARACTERS && refused,
         "roots={roots}, actual={actual}, refused={refused}"
+    );
+    Ok(())
+}
+
+fn single_job_sizes(
+    helper: &str,
+) -> Result<(usize, usize, usize, bool), Box<dyn std::error::Error>> {
+    let facts = saving_facts_shaped(1, false, Some(helper), "one-job")?;
+    let plan = velnor_rust::plan(&facts);
+    let workflow = rendered_workflow(&plan);
+    let renders_key = workflow.jobs.iter().any(|job| {
+        job.outputs
+            .iter()
+            .any(|(name, _)| name == "tools_anchor_key")
+    });
+    let actual = realized_needs(&workflow, "required", &test_packages_of(&facts)?)?;
+    Ok((
+        actual,
+        required_bound(&plan)?,
+        cache_bound(&plan)?,
+        renders_key,
+    ))
+}
+
+#[test]
+fn a_single_job_budgets_no_anchor_key_it_does_not_render() -> TestResult {
+    let (kept_actual, kept_required, kept_cache, kept_key) = single_job_sizes("0.1.111")?;
+    let (actual, required, cache, key) = single_job_sizes("0.1.112")?;
+    assert!(kept_key && !key);
+    assert!(actual <= required, "actual={actual}, bound={required}");
+    let freed = kept_actual - actual;
+    assert!(freed > 0);
+    assert!(
+        kept_required - required >= freed,
+        "required bound {kept_required} -> {required}, realized {kept_actual} -> {actual}"
+    );
+    assert!(
+        kept_cache - cache >= freed,
+        "cache bound {kept_cache} -> {cache}, realized {kept_actual} -> {actual}"
     );
     Ok(())
 }
