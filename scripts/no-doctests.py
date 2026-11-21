@@ -23,6 +23,8 @@ HTML_BLOCK6 = re.compile(r"[ ]{0,3}</?(?:" + HTML6_TAGS + r")(?=[ \t/>]|$)", re.
 TAG_OPEN = r"<[A-Za-z][A-Za-z0-9-]*(?:[ \t]+[A-Za-z_:][A-Za-z0-9_.:-]*(?:[ \t]*=[ \t]*(?:[^ \t\"'=<>`]+|'[^']*'|\"[^\"]*\"))?)*[ \t]*/?>"
 TAG_CLOSE = r"</[A-Za-z][A-Za-z0-9-]*[ \t]*>"
 HTML_BLOCK7 = re.compile(r"[ ]{0,3}(?:" + TAG_OPEN + "|" + TAG_CLOSE + r")[ \t]*$")
+RAW_OPEN = re.compile(r"[ ]{0,3}(?:<(script|pre|style|textarea)(?=[\s>]|$)|<!--|<\?|<!\[CDATA\[|<![A-Za-z])", re.I)
+RAW_END = {"<!--": "-->", "<?": "?>", "<![cdata[": "]]>"}
 QUOTE_PREFIX = re.compile(r"(?:[ \t]*>)*")
 NON_PROSE = re.compile(r"[ \t]*(?:#{1,6}(?:[ \t]|$)|(?:[-*+]|\d{1,9}[.)])(?:[ \t]|$)|[-*_=\s]*$)")
 BLOCK_INDENT = re.compile(r"^[ \t]*\*?(?:" + MARKER + r")* {5,}\S", re.M)
@@ -163,10 +165,23 @@ def is_prose(content):
     return re.match(r"[ \t]*" + FENCE_OPEN, content) is None
 
 
+def raw_end(opener):
+    if opener.group(1):
+        return f"</{opener.group(1).lower()}>"
+    return RAW_END.get(opener.group().lstrip(" ").lower(), ">")
+
+
 def doc_line(body, state):
     rel = doc_content(body)
     if state["html"]:
         state["html"] = bool(rel.strip())
+        return False
+    quote = QUOTE_PREFIX.match(rel)
+    depth = quote.group().count(">")
+    text = rel[quote.end() :]
+    if state["raw"] is not None:
+        if state["raw"] in text.lower():
+            state["raw"] = None
         return False
     if not rel.strip():
         state["prose"] = None
@@ -175,8 +190,12 @@ def doc_line(body, state):
         state["html"] = True
         state["prose"] = None
         return False
-    quote = QUOTE_PREFIX.match(rel)
-    depth = quote.group().count(">")
+    if opener := RAW_OPEN.match(text):
+        end = raw_end(opener)
+        state["prose"] = None
+        if end not in text[opener.end() :].lower():
+            state["raw"] = end
+        return False
     continued = state["prose"] == depth
     if LINE_FENCE.match(body) or (LINE_INDENT.match(line_indent_text(body)) and not continued):
         state["prose"] = None
@@ -190,7 +209,7 @@ def doc_findings(src):
     attr_depth = 0
     doc_value = False
     doc_end = -2
-    doc_state = {"html": False, "prose": None}
+    doc_state = {"html": False, "prose": None, "raw": None}
     while i < len(src):
         c = src[i]
         if src.startswith("//", i):
@@ -199,7 +218,7 @@ def doc_findings(src):
             if LINE_DOC.match(src, i):
                 start = src.rfind("\n", 0, i) + 1
                 if start != doc_end + 1:
-                    doc_state = {"html": False, "prose": None}
+                    doc_state = {"html": False, "prose": None, "raw": None}
                 doc_end = end
                 if doc_line(src[i + 3 : end], doc_state):
                     yield i

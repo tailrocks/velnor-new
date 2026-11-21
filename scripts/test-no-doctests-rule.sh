@@ -158,6 +158,13 @@ check html_after_prose pass '/// prose\n/// <div>\n/// ```\n/// assert_eq!(1, 1)
 check html_blank_ends fail '/// <div>\n///\n/// ```\n/// assert_eq!(1, 1);\n/// ```\nfn f() {}\n'
 check html_span_block_start pass '/// <span>\n/// ```\n/// assert_eq!(1, 1);\n/// ```\nfn f() {}\n'
 check html_span_after_prose fail '/// prose\n/// <span>\n/// ```\n/// assert_eq!(1, 1);\n/// ```\nfn f() {}\n'
+check html_one_line_comment fail '/// <!-- comment -->\n///     assert_eq!(1, 2);\nfn f() {}\n'
+check html_one_line_script fail '/// <script></script>\n///     assert_eq!(1, 2);\nfn f() {}\n'
+check html_one_line_prose fail '/// prose\n/// <!-- comment -->\n///     assert_eq!(1, 2);\nfn f() {}\n'
+check html_multiline_close fail '/// <!--\n/// -->\n///     assert_eq!(1, 2);\nfn f() {}\n'
+check html_multiline_indent pass '/// <!--\n///     assert_eq!(1, 2);\n/// -->\nfn f() {}\n'
+check html_one_line_quote fail '/// > <!-- c -->\n/// >     assert_eq!(1, 2);\nfn f() {}\n'
+check html_pre_raw_fence pass '/// <pre>\n/// ```\n/// assert_eq!(1, 1);\n/// ```\n/// </pre>\nfn f() {}\n'
 check quote_code_span pass '/// > ```foo``` inline\nfn f() {}\n'
 check line_code_span_start pass '/// ```foo``` inline\nfn f() {}\n'
 
