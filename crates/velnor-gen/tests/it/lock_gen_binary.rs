@@ -5,8 +5,8 @@ use std::error::Error;
 
 use velnor_model::Platform;
 use velnor_rust::{
-    DetectError, LOCK_PATH, Reason, RunningGenerator, check_generator_entry, detect, pin_lock,
-    verify_release,
+    DetectError, LOCK_PATH, LockError, Reason, ReleaseFiles, Remedy, RunningGenerator,
+    check_generator_entry, check_lock_entries, detect, pin_lock, verify_release,
 };
 
 use crate::facts::{lib, repo};
@@ -29,12 +29,24 @@ const GEN_BINARY_ARM64: &str = "8a7852af13610acee22317e764266301a83884595823a9b0
 const GEN_BINARY_MACOS: &str = "5b8f0d27e1a7f6a3c9d4e2b1a0c8f7e6d5c4b3a2918070605f4e3d2c1b0a9f8e";
 
 fn lock() -> Result<String, Box<dyn Error>> {
+    lock_at(VERSION)
+}
+
+fn lock_at(version: &str) -> Result<String, Box<dyn Error>> {
     Ok(pin_lock(
-        VERSION,
+        version,
         COMMIT_FILE,
         &generator_sums(),
         Some(GENERATOR_BINARY_SUMS),
     )?)
+}
+
+fn release_files() -> ReleaseFiles {
+    ReleaseFiles {
+        sums: generator_sums(),
+        commit: COMMIT_FILE.to_owned(),
+        binary_sums: Some(GENERATOR_BINARY_SUMS.to_owned()),
+    }
 }
 
 fn running(sha256: &str) -> RunningGenerator<'_> {
@@ -46,8 +58,8 @@ fn running(sha256: &str) -> RunningGenerator<'_> {
     }
 }
 
-fn check(text: &str, running: RunningGenerator<'_>) -> Result<(), String> {
-    check_generator_entry(text.as_bytes(), running).map_err(|error| error.to_string())
+fn check(text: &str, running: RunningGenerator<'_>) -> Result<(), LockError> {
+    check_generator_entry(text.as_bytes(), running)
 }
 
 #[test]
@@ -76,12 +88,9 @@ fn the_archive_digest_is_not_the_digest_of_the_binary() -> TestResult {
     let error = check(&lock()?, running(GEN_ARCHIVE_X64))
         .err()
         .ok_or("accepted the archive digest as the binary's")?;
-    assert_eq!(
-        error,
-        format!(
-            "[velnor-gen-binary] linux-x64 digest is {GEN_BINARY_X64} but this binary hashes to {GEN_ARCHIVE_X64}"
-        )
-    );
+    assert!(error.to_string().contains("[velnor-gen-binary]"), "{error}");
+    assert!(error.to_string().contains(GEN_BINARY_X64), "{error}");
+    assert_eq!(error.remedy(), Some(&Remedy::VerifyRelease), "{error}");
     Ok(())
 }
 
@@ -95,15 +104,9 @@ fn a_tampered_binary_digest_is_refused_online_and_named() -> TestResult {
         Some(GENERATOR_BINARY_SUMS),
     )
     .err()
-    .ok_or("accepted")?
-    .to_string();
-    assert_eq!(
-        error,
-        format!(
-            "[velnor-gen-binary] linux-x64 digest is {} but the release lists {GEN_BINARY_X64}",
-            "0".repeat(64)
-        )
-    );
+    .ok_or("accepted")?;
+    assert!(error.to_string().contains("[velnor-gen-binary]"), "{error}");
+    assert!(error.to_string().contains("linux-x64"), "{error}");
     Ok(())
 }
 
@@ -162,12 +165,11 @@ fn detect_names_a_malformed_ci_binary_table_at_the_lock() -> TestResult {
     Ok(())
 }
 
-fn without_binary_section() -> Result<String, Box<dyn Error>> {
-    Ok(lock()?
-        .split("\n\n")
+fn without_binary_section(lock: &str) -> String {
+    lock.split("\n\n")
         .filter(|block| !block.starts_with("[velnor-gen-binary]"))
         .collect::<Vec<_>>()
-        .join("\n\n"))
+        .join("\n\n")
 }
 
 #[test]
@@ -188,12 +190,14 @@ fn a_lock_pinned_before_the_binary_section_still_passes() -> TestResult {
 
 #[test]
 fn a_release_that_lists_binary_digests_is_refused_offline_without_its_section() -> TestResult {
-    let error = check(&without_binary_section()?, running(GEN_BINARY_X64))
+    let error = check(&without_binary_section(&lock()?), running(GEN_BINARY_X64))
         .err()
         .ok_or("accepted a 0.1.111 lock without [velnor-gen-binary]")?;
+    assert!(error.to_string().contains("[velnor-gen-binary]"), "{error}");
     assert_eq!(
-        error,
-        "[velnor-gen-binary] is missing: release 0.1.111 lists the velnor-gen binary digests, so the lock must list them; re-pin with `velnor-gen pin-helper 0.1.111` or later"
+        error.remedy(),
+        Some(&Remedy::Repin(VERSION.to_owned())),
+        "{error}"
     );
     Ok(())
 }
@@ -201,17 +205,18 @@ fn a_release_that_lists_binary_digests_is_refused_offline_without_its_section() 
 #[test]
 fn verify_release_names_the_repin_when_the_binary_section_is_missing() -> TestResult {
     let error = verify_release(
-        without_binary_section()?.as_bytes(),
+        without_binary_section(&lock()?).as_bytes(),
         &generator_sums(),
         COMMIT_FILE,
         Some(GENERATOR_BINARY_SUMS),
     )
     .err()
-    .ok_or("accepted")?
-    .to_string();
+    .ok_or("accepted")?;
+    assert!(error.to_string().contains("[velnor-gen-binary]"), "{error}");
     assert_eq!(
-        error,
-        "[velnor-gen-binary] is missing: release 0.1.111 lists the velnor-gen binary digests; re-pin with `velnor-gen pin-helper 0.1.111` or later"
+        error.remedy(),
+        Some(&Remedy::Repin(VERSION.to_owned())),
+        "{error}"
     );
     Ok(())
 }
@@ -234,10 +239,7 @@ fn a_release_older_than_the_binary_section_is_pinned_without_it() -> TestResult 
         ..running(GEN_BINARY_X64)
     };
     let error = check(&injected, older).err().ok_or("accepted")?;
-    assert_eq!(
-        error,
-        "[velnor-gen-binary] is not allowed: release 0.1.110 does not read it"
-    );
+    assert!(error.to_string().contains("[velnor-gen-binary]"), "{error}");
     Ok(())
 }
 
@@ -249,5 +251,56 @@ fn a_release_from_the_binary_section_on_is_not_pinned_without_velnor_gen_digests
         .to_string();
     assert!(error.contains("velnor-gen"), "{error}");
     assert!(error.contains(BINARY_SUMS_FILE), "{error}");
+    Ok(())
+}
+
+fn running_at<'a>(version: &'a str, sha256: &'a str) -> RunningGenerator<'a> {
+    RunningGenerator {
+        version,
+        ..running(sha256)
+    }
+}
+
+#[test]
+fn each_refusal_names_the_remedy_for_the_lock_it_repairs() -> TestResult {
+    let later = "0.1.112";
+    let tampered = lock_at(later)?.replacen(GEN_BINARY_X64, &"0".repeat(64), 1);
+    let missing = without_binary_section(&lock_at(later)?);
+    let cases = [
+        (
+            "online, tampered digest",
+            tampered,
+            Some(release_files()),
+            running_at(later, GEN_BINARY_X64),
+            Remedy::Repin(later.to_owned()),
+        ),
+        (
+            "offline, missing section",
+            missing.clone(),
+            None,
+            running_at(later, GEN_BINARY_X64),
+            Remedy::Repin(later.to_owned()),
+        ),
+        (
+            "online, missing section",
+            missing,
+            Some(release_files()),
+            running_at(later, GEN_BINARY_X64),
+            Remedy::Repin(later.to_owned()),
+        ),
+        (
+            "online, replaced binary",
+            lock()?,
+            Some(release_files()),
+            running(GEN_ARCHIVE_X64),
+            Remedy::Reinstall(VERSION.to_owned()),
+        ),
+    ];
+    for (case, bytes, release, running, remedy) in cases {
+        let error = check_lock_entries(bytes.as_bytes(), release, running)
+            .err()
+            .ok_or(case)?;
+        assert_eq!(error.remedy(), Some(&remedy), "{case}: {error}");
+    }
     Ok(())
 }

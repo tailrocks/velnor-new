@@ -27,12 +27,13 @@ pub use crate::group_runs::{GroupPlan, GroupRun, group_runs, plan_groups};
 pub use crate::lint_error::LintFault;
 pub use crate::lint_inputs::{lint_runs, unmatched_entries, unmatched_inputs};
 pub use crate::lock::{
-    LOCK_PATH, LockError, binary_sums_url, commit_url, lists_binary_sums, pin_lock,
+    LOCK_PATH, LockError, Remedy, binary_sums_url, commit_url, lists_binary_sums, pin_lock,
     release_version, sums_url,
 };
 pub use crate::lock_affected::lock_affected;
 pub use crate::lock_check::{
-    RunningGenerator, check_generator_entry, lock_version, running_platform, verify_release,
+    ReleaseFiles, RunningGenerator, check_generator_entry, check_lock_entries, lock_version,
+    running_platform, verify_release,
 };
 pub use crate::lock_key::lock_key;
 pub use crate::mbx_layout::{Layout, Provider, Split, check_mbx};

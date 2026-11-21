@@ -5,10 +5,11 @@ use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use velnor_model::HelperVersion;
 use velnor_rust::{
-    LOCK_PATH, RunningGenerator, binary_sums_url, check_generator_entry, commit_url,
+    LOCK_PATH, ReleaseFiles, RunningGenerator, binary_sums_url, check_lock_entries, commit_url,
     lists_binary_sums, lock_version, pin_lock, release_version, running_platform, sha256_hex,
-    sums_url, verify_release,
+    sums_url,
 };
 
 use crate::require_compatible;
@@ -19,22 +20,12 @@ pub(super) fn pin_helper(root: &Path, version: &str) -> Result<String, Error> {
     let version = release_version(version).map_err(Error::Lock)?;
     require_compatible(&version).map_err(Error::Generate)?;
     let root = lock_root(root)?;
-    let sums = download(&root, &sums_url(&version))?;
-    let commit = download(&root, &commit_url(&version))?;
-    let sums = String::from_utf8_lossy(&sums);
-    let binary_sums = if lists_binary_sums(&sums) {
-        Some(download(&root, &binary_sums_url(&version))?)
-    } else {
-        None
-    };
+    let release = fetch_release(&root, &version)?;
     let lock = pin_lock(
         version.as_str(),
-        &String::from_utf8_lossy(&commit),
-        &sums,
-        binary_sums
-            .as_deref()
-            .map(String::from_utf8_lossy)
-            .as_deref(),
+        &release.commit,
+        &release.sums,
+        release.binary_sums.as_deref(),
     )
     .map_err(Error::Lock)?;
     write_lock(&root, &lock)?;
@@ -63,6 +54,21 @@ pub(super) fn pin_helper(root: &Path, version: &str) -> Result<String, Error> {
 /// is written or staged in that repository.
 pub fn lock_root(root: &Path) -> Result<PathBuf, Error> {
     fs::canonicalize(root).map_err(|e| Error::File(root.into(), e))
+}
+
+fn fetch_release(root: &Path, version: &HelperVersion) -> Result<ReleaseFiles, Error> {
+    let sums = String::from_utf8_lossy(&download(root, &sums_url(version))?).into_owned();
+    let commit = String::from_utf8_lossy(&download(root, &commit_url(version))?).into_owned();
+    let binary_sums = if lists_binary_sums(&sums) {
+        Some(String::from_utf8_lossy(&download(root, &binary_sums_url(version))?).into_owned())
+    } else {
+        None
+    };
+    Ok(ReleaseFiles {
+        sums,
+        commit,
+        binary_sums,
+    })
 }
 
 fn download(root: &Path, url: &str) -> Result<Vec<u8>, Error> {
@@ -105,25 +111,11 @@ pub(super) fn check_lock(root: &Path, online: bool) -> Result<(), Error> {
         platform: running_platform(),
         sha256: sha256.as_deref(),
     };
-    check_generator_entry(&bytes, running).map_err(Error::Lock)?;
-    if online {
+    let release = if online {
         let version = lock_version(&bytes).map_err(Error::Lock)?;
-        let sums = download(root, &sums_url(&version))?;
-        let commit_file = download(root, &commit_url(&version))?;
-        let sums = String::from_utf8_lossy(&sums);
-        let binary_sums = if lists_binary_sums(&sums) {
-            Some(download(root, &binary_sums_url(&version))?)
-        } else {
-            None
-        };
-        let binary_sums = binary_sums.as_deref().map(String::from_utf8_lossy);
-        verify_release(
-            &bytes,
-            &sums,
-            &String::from_utf8_lossy(&commit_file),
-            binary_sums.as_deref(),
-        )
-        .map_err(Error::Lock)?;
-    }
-    Ok(())
+        Some(fetch_release(root, &version)?)
+    } else {
+        None
+    };
+    check_lock_entries(&bytes, release, running).map_err(Error::Lock)
 }
