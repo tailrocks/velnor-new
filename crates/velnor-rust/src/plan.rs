@@ -175,7 +175,7 @@ pub(crate) fn head(facts: &RepoFacts, depth: u32, sparse: Option<Vec<String>>) -
 
 /// The shared-store steps. A job that plans runs them after the plan, so a
 /// run that selects nothing never seeds: `seed_gate` is the job's selection.
-pub(crate) fn mbx(facts: &RepoFacts, seed_gate: Option<Gate>) -> Vec<Step> {
+pub(crate) fn mbx(facts: &RepoFacts, seed_gate: Option<&Gate>) -> Vec<Step> {
     if facts.config.mbx_store != MbxStore::Shared {
         return Vec::new();
     }
@@ -189,7 +189,7 @@ pub(crate) fn mbx(facts: &RepoFacts, seed_gate: Option<Gate>) -> Vec<Step> {
         .as_ref()
         .is_some_and(|release| release.version().at_least(MBX_SELECTED_STORE_HELPER));
     let store = Step {
-        gate: seed_gate.clone().filter(|_| selected_store),
+        gate: seed_gate.cloned().filter(|_| selected_store),
         ..step(StepKind::MbxStore)
     };
     let seed = facts
@@ -197,7 +197,7 @@ pub(crate) fn mbx(facts: &RepoFacts, seed_gate: Option<Gate>) -> Vec<Step> {
         .as_ref()
         .is_some_and(|release| release.version().at_least(MBX_SEED_HELPER))
         .then(|| Step {
-            gate: seed_gate,
+            gate: seed_gate.cloned(),
             ..step(StepKind::MbxSeed)
         });
     [Some(store), out_dirs, seed]
@@ -264,7 +264,7 @@ pub(crate) fn setup_units(
                 ..step
             }),
     );
-    steps.extend(mbx(facts, lane.steps()));
+    steps.extend(mbx(facts, lane.steps().as_ref()));
     let mut toolchain: Vec<Step> = mirror_step(facts)
         .into_iter()
         .chain(tools_restore(facts, lane.plan.as_ref()))

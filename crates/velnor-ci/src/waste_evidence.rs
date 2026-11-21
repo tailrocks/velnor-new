@@ -3,7 +3,7 @@
 
 use crate::report::{Hit, LaneMetrics};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 pub const TOOLCHAIN_INSTALLS: &str = "velnor-toolchain-installs.txt";
@@ -156,16 +156,25 @@ pub fn mbx_unparsed_lines(log: &[u8]) -> Vec<String> {
 }
 
 fn compiled_registry_unit(metrics: &LaneMetrics) -> bool {
-    metrics
-        .invocations
-        .iter()
-        .flat_map(|invocation| &invocation.artifacts)
-        .any(|artifact| {
+    metrics.invocations.iter().any(|invocation| {
+        let absent_from_base: BTreeSet<(&str, &str)> = invocation
+            .compilations
+            .iter()
+            .filter(|compilation| compilation.restored == Some(false))
+            .map(|compilation| (compilation.package.as_str(), compilation.version.as_str()))
+            .collect();
+        invocation.artifacts.iter().any(|artifact| {
             !artifact.fresh
-                && crate::cargo_package::PackageIdentity::parse(&artifact.package_id)
-                    .and_then(|package| package.source)
-                    .is_some_and(|source| source.starts_with("registry+"))
+                && crate::cargo_package::PackageIdentity::parse(&artifact.package_id).is_some_and(
+                    |package| {
+                        package
+                            .source
+                            .is_some_and(|source| source.starts_with("registry+"))
+                            && !absent_from_base.contains(&(package.name, package.version))
+                    },
+                )
         })
+    })
 }
 
 #[must_use]
