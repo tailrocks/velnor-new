@@ -516,13 +516,13 @@ The retired `.velnor/config.toml` still makes `velnor-gen check` skip every unow
 The lock's executable digests are the ones the running binary is compared with, and where they are written depends on the release format:
 
 - A raw release, which publishes the `velnor-gen` binary itself, lists its digests under `[velnor-gen]`.
-- An archive release lists the archive's digests under `[velnor-gen]`, which the install step checks before it unpacks anything, and the executable's digests under `[velnor-gen-binary]`. `pin-helper` writes `[velnor-gen-binary]` for a release from 0.1.111 on, which is the first release that reads it. A lock of such a release without `[velnor-gen-binary]` is refused, and `velnor-gen pin-helper 0.1.111` or later fixes it.
+- An archive release lists the archive's digests under `[velnor-gen]`, which the install step checks before it unpacks anything, and the executable's digests under `[velnor-gen-binary]`. `pin-helper` writes `[velnor-gen-binary]` for a release from 0.1.111 on, which is the first release that reads it. A lock of such a release without `[velnor-gen-binary]` is refused, and `velnor-gen pin-helper <the lock's version>` fixes it.
 - A lock of an archive release older than 0.1.111 has no `[velnor-gen-binary]`, and its `[velnor-gen]` digests are the archive's, so the running binary is not compared with it offline.
 - A raw release never has a `[velnor-gen-binary]`, and an archive release older than 0.1.111 is refused with one.
 
 Offline, `check` cannot tell that a lock names a wrong version or commit when the running binary is a different release. That needs the network.
 
-`velnor-gen check --verify-release` also downloads `SHA256SUMS`, `COMMIT` and, when it is listed, `BINARY-SHA256SUMS` of the lock's release and pins the release again from them. It refuses a lock that differs from what the release publishes, and names the first field that differs (`commit:` or `[velnor-ci]`, `[velnor-ci-binary]`, `[velnor-gen]` or `[velnor-gen-binary]`, with the platform). A mismatch in `[velnor-gen-binary]` also names `velnor-gen pin-helper 0.1.111` or later as the fix, and a lock of a release from 0.1.111 on that lacks the section is refused with the same command. It needs the network and fails without it, so it is not run by default.
+`velnor-gen check --verify-release` also downloads `SHA256SUMS`, `COMMIT` and, when it is listed, `BINARY-SHA256SUMS` of the lock's release and pins the release again from them. It refuses a lock that differs from what the release publishes, and names the first field that differs (`commit:` or `[velnor-ci]`, `[velnor-ci-binary]`, `[velnor-gen]` or `[velnor-gen-binary]`, with the platform). A mismatch in `[velnor-gen-binary]` also names `velnor-gen pin-helper <the lock's version>` as the fix, and a lock of a release from 0.1.111 on that lacks the section is refused with the same command. It needs the network and fails without it, so it is not run by default.
 
 ## Test groups
 
