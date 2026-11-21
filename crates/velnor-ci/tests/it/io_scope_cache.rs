@@ -223,6 +223,13 @@ fn changed_checkout_inputs_or_identity_refuse_scope_reuse() {
                 rejected(&other, &cache, "", "job");
                 continue;
             }
+            "root" => {
+                let path = format!(
+                    "one/custom-target/{}",
+                    velnor_ci::inputs::inputs_file("one/")
+                );
+                repo.write_unstaged(&path, "stale");
+            }
             _ => {}
         }
         let output = rejected(
