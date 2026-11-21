@@ -274,21 +274,21 @@ pub(super) fn run_decide(args: &crate::cli_cache::DecideArgs) -> Result<String, 
     ));
     let admission =
         super::cache_sources::refusal(&root, &manifests, &args.public_probe_api, deadline)?;
-    let leak = admission
-        .private_sources
-        .then(|| {
-            super::cache_credentials::saved_root().map_or_else(
-                || Some("HOME is not set".to_owned()),
-                |home| super::cache_credentials::find(&home),
-            )
-        })
-        .flatten();
+    let leak = super::cache_credentials::saved_root().map_or_else(
+        || Some("HOME is not set".to_owned()),
+        |home| super::cache_credentials::find(&home),
+    );
     let sources = admission.refusal.is_none() && leak.is_none();
     let (probe_log, mismatch) = (admission.log, admission.mismatch);
     let decision = if let Some(reason) = admission.refusal {
         Decision {
             save: false,
             report: reason,
+        }
+    } else if let Some(linked) = linked_target_notice(&target) {
+        Decision {
+            save: false,
+            report: linked,
         }
     } else {
         let recorded = super::activity::invocations()?;
@@ -335,6 +335,23 @@ pub(super) fn run_decide(args: &crate::cli_cache::DecideArgs) -> Result<String, 
         );
     }
     Ok(report)
+}
+
+fn linked_target_notice(target: &Path) -> Option<String> {
+    fs::symlink_metadata(target)
+        .ok()
+        .filter(|metadata| metadata.file_type().is_symlink())?;
+    let leads_to = fs::canonicalize(target).map_or_else(
+        |_| "an unresolved directory".to_owned(),
+        |resolved| resolved.display().to_string(),
+    );
+    Some(command_line(
+        "notice",
+        &format!(
+            "{} is a link to {leads_to}; saving it would archive the link, not the build directory, and a fresh runner would restore a dangling link; saving nothing (turn off mbx managed target views with `mbx settings set target.views false` on lanes that save this cache)",
+            target.display()
+        ),
+    ))
 }
 
 fn over_budget(target: &Path, size: u64, budget: u64, pruning: &str) -> String {

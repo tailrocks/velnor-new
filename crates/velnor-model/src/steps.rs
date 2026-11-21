@@ -5,7 +5,8 @@ use crate::cache::{CacheKey, CacheRoot};
 use crate::helper::HelperRelease;
 use crate::ids::{JobId, PackageName, RepoPath, RootSlug};
 use crate::lint::LintCommand;
-use crate::plan::{CargoCommand, PlanFrom};
+use crate::plan::CargoCommand;
+use crate::plan_gate::PlanFrom;
 use crate::verdict::VerdictSpec;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -139,6 +140,7 @@ pub enum StepKind {
     },
     MbxPin,
     MbxPrivate,
+    MbxOutDirs,
     MbxStore,
     MbxSeed,
     ToolsLocal(ToolsLocalVerb, crate::ToolsAnchor),
@@ -238,6 +240,7 @@ impl StepKind {
             | Self::MbxRemote { .. }
             | Self::MbxPin
             | Self::MbxPrivate
+            | Self::MbxOutDirs
             | Self::MbxStore { .. }
             | Self::MbxSeed { .. }
             | Self::ToolsLocal(..)

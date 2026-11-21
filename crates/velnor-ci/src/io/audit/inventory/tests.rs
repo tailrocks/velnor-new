@@ -1,11 +1,17 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::{fs, thread};
 
-use super::walk::scan_with;
+use super::super::options::MAX_ENTRIES_VARIABLE;
+use super::walk::{Probe, scan_with};
 use super::*;
+
+mod ancestors;
+mod links;
+mod placement;
+mod racing;
 
 fn scan_with_open_failing(kind: io::ErrorKind) -> io::Result<Entries> {
     let root =
@@ -14,20 +20,53 @@ fn scan_with_open_failing(kind: io::ErrorKind) -> io::Result<Entries> {
     fs::create_dir_all(root.join("sub")).unwrap_or_else(|e| unreachable!("{e}"));
     fs::write(root.join("kept.txt"), b"").unwrap_or_else(|e| unreachable!("{e}"));
     let mut budget = Budget::new(usize::MAX);
-    let result = scan_with(&root, &BTreeSet::new(), &mut budget, |directory| {
-        if directory.ends_with("sub") {
-            Err(io::Error::from(kind))
-        } else {
-            fs::read_dir(directory)
-        }
-    });
+    let result = scan_with(
+        &root,
+        &BTreeSet::new(),
+        &mut budget,
+        &Probe {
+            before_open: &|directory| {
+                if directory.ends_with("sub") {
+                    Err(io::Error::from(kind))
+                } else {
+                    Ok(())
+                }
+            },
+            after_open: &|_| {},
+            ..Probe::default()
+        },
+    );
+    fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+    result
+}
+
+fn scan_with_sub_removed_before_open() -> io::Result<Entries> {
+    let root = std::env::temp_dir().join(format!("velnor-scan-removed-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&root);
+    fs::create_dir_all(root.join("sub")).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::write(root.join("kept.txt"), b"").unwrap_or_else(|e| unreachable!("{e}"));
+    let mut budget = Budget::new(usize::MAX);
+    let result = scan_with(
+        &root,
+        &BTreeSet::new(),
+        &mut budget,
+        &Probe {
+            before_open: &|directory| {
+                if directory.ends_with("sub") {
+                    fs::remove_dir(directory).unwrap_or_else(|e| unreachable!("{e}"));
+                }
+                Ok(())
+            },
+            ..Probe::default()
+        },
+    );
     fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
     result
 }
 
 #[test]
 fn a_directory_removed_before_it_is_opened_is_skipped_not_an_error() {
-    let entries = scan_with_open_failing(io::ErrorKind::NotFound);
+    let entries = scan_with_sub_removed_before_open();
     let Ok(entries) = entries else {
         panic!("scan failed on a directory removed before it was opened: {entries:?}");
     };
@@ -44,6 +83,15 @@ fn a_directory_removed_before_it_is_opened_is_skipped_not_an_error() {
         "vanished directory still recorded: {root_children:?}"
     );
     assert_eq!(entries.len(), 1, "{:?}", entries.keys());
+}
+
+#[test]
+fn a_directory_that_still_exists_is_never_dropped_because_its_open_reported_not_found() {
+    let entries = scan_with_open_failing(io::ErrorKind::NotFound);
+    assert!(
+        matches!(&entries, Err(error) if error.to_string().contains("changed while the audit scanned it; retry")),
+        "a directory that still exists was silently dropped: {entries:?}"
+    );
 }
 
 #[test]
@@ -81,5 +129,117 @@ fn an_entry_removed_during_the_walk_is_not_an_error() {
     assert!(
         failure.is_none(),
         "scan failed on a vanished entry: {failure:?}"
+    );
+}
+
+#[test]
+fn a_directory_replaced_by_a_symbolic_link_before_it_is_opened_is_not_followed() {
+    let root = fs::canonicalize(std::env::temp_dir())
+        .unwrap_or_else(|e| unreachable!("{e}"))
+        .join(format!("velnor-scan-link-swap-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&root);
+    let scanned = root.join("scanned");
+    let elsewhere = root.join("elsewhere");
+    fs::create_dir_all(scanned.join("d")).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::create_dir_all(&elsewhere).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::write(elsewhere.join("secret"), b"").unwrap_or_else(|e| unreachable!("{e}"));
+    let mut budget = Budget::new(usize::MAX);
+    let entries = scan_with(
+        &scanned,
+        &BTreeSet::new(),
+        &mut budget,
+        &Probe {
+            before_open: &|directory| {
+                if directory.ends_with("d") {
+                    fs::remove_dir(directory).unwrap_or_else(|e| unreachable!("{e}"));
+                    std::os::unix::fs::symlink(&elsewhere, directory)
+                        .unwrap_or_else(|e| unreachable!("{e}"));
+                }
+                Ok(())
+            },
+            after_open: &|_| {},
+            ..Probe::default()
+        },
+    )
+    .unwrap_or_else(|e| unreachable!("{e}"));
+    fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(
+        !entries.contains_key(&scanned.join("d")),
+        "opened the replacement link as a directory: {:?}",
+        entries.keys()
+    );
+    let children = entries
+        .get(&scanned)
+        .unwrap_or_else(|| unreachable!("{:?}", entries.keys()));
+    assert!(
+        matches!(children.get(Path::new("d")), Some(Kind::Link { .. })),
+        "the replacement link is missing from the inventory: {children:?}"
+    );
+}
+
+#[test]
+fn a_symbolic_link_through_a_regular_file_is_an_unresolved_link_not_an_error() {
+    let root = fs::canonicalize(std::env::temp_dir())
+        .unwrap_or_else(|e| unreachable!("{e}"))
+        .join(format!("velnor-scan-notdir-link-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&root);
+    fs::create_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::write(root.join("file"), b"").unwrap_or_else(|e| unreachable!("{e}"));
+    std::os::unix::fs::symlink("file/child", root.join("link"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let mut budget = Budget::new(usize::MAX);
+    let entries = scan_with(&root, &BTreeSet::new(), &mut budget, &Probe::default());
+    fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+    let entries = entries.unwrap_or_else(|e| panic!("scan failed on a link through a file: {e}"));
+    let children = entries
+        .values()
+        .next()
+        .unwrap_or_else(|| unreachable!("root is always recorded"));
+    assert!(
+        matches!(
+            children.get(Path::new("link")),
+            Some(Kind::Link { resolved: None, .. })
+        ),
+        "{children:?}"
+    );
+}
+
+#[test]
+fn a_huge_directory_stops_being_read_once_the_entry_budget_is_spent() {
+    let root = fs::canonicalize(std::env::temp_dir())
+        .unwrap_or_else(|e| unreachable!("{e}"))
+        .join(format!("velnor-scan-huge-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&root);
+    fs::create_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+    for index in 0..2_000 {
+        fs::write(root.join(format!("entry-{index}")), b"").unwrap_or_else(|e| unreachable!("{e}"));
+    }
+    let limit = 10;
+    let read = AtomicUsize::new(0);
+    let mut budget = Budget::new(limit);
+    let result = scan_with(
+        &root,
+        &BTreeSet::new(),
+        &mut budget,
+        &Probe {
+            listed: &|_| {
+                read.fetch_add(1, Ordering::Relaxed);
+            },
+            ..Probe::default()
+        },
+    );
+    fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+    let Err(error) = result else {
+        panic!("a directory larger than the budget was scanned");
+    };
+    assert!(
+        error.to_string().contains(MAX_ENTRIES_VARIABLE),
+        "limit error does not name {MAX_ENTRIES_VARIABLE}: {error}"
+    );
+    assert!(budget.overflowed());
+    let read = read.load(Ordering::Relaxed);
+    assert!(
+        read <= limit + 1,
+        "read {read} names for a limit of {limit}"
     );
 }

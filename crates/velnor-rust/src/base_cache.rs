@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 
 use velnor_model::{
-    Access, BaseExpiry, CacheKey, CacheRoot, HelperCommand, Host, InputsCli, Job, JobId,
+    Access, BaseExpiry, BaseScope, CacheKey, CacheRoot, HelperCommand, Host, InputsCli, Job, JobId,
     LockIdentity, PermissionScope, Permissions, PlanFrom, PrivateVerdict, RepoFacts, RepoPath,
     RootSlug, RustRoot, Step, StepKind, TrimFamily, When,
 };
@@ -42,6 +42,7 @@ pub(crate) fn inputs_cli(facts: &RepoFacts) -> InputsCli {
 
 // helper-gate: first in tools-v0.1.111 via 193adc8c56
 const PRIVATE_BASE_HELPER: (u64, u64, u64) = (0, 1, 111);
+const PRIVATE_PREFIX_HELPER: (u64, u64, u64) = (0, 1, 112);
 const SOURCES_FETCH_HELPER: (u64, u64, u64) = (0, 1, 88);
 // helper-gate: first in tools-v0.1.88 via 1a97547af5
 const MEMBER_LOCK_HELPER: (u64, u64, u64) = (0, 1, 88);
@@ -72,6 +73,18 @@ fn has_private_base_helper(facts: &RepoFacts) -> bool {
 
 pub(crate) fn private_base(facts: &RepoFacts) -> bool {
     facts.private_sources.is_some() && facts.private_base_caches && has_private_base_helper(facts)
+}
+
+pub(crate) fn base_scope(facts: &RepoFacts) -> BaseScope {
+    let prefixed = facts
+        .helper
+        .as_ref()
+        .is_some_and(|helper| helper.version().at_least(PRIVATE_PREFIX_HELPER));
+    if private_base(facts) && prefixed {
+        BaseScope::PrivateRepo
+    } else {
+        BaseScope::Shared
+    }
 }
 
 fn private_verdict(facts: &RepoFacts) -> PrivateVerdict {
@@ -240,6 +253,7 @@ pub(crate) fn save_steps(
         job: job.clone(),
         root: cache_root.clone(),
         host: Host,
+        scope: base_scope(facts),
     };
     let mut steps = vec![
         Step {
@@ -283,6 +297,7 @@ pub(crate) fn save_steps(
             ..step(StepKind::CacheSave(CacheKey::Sources {
                 host: Host,
                 lane: cache_root,
+                scope: base_scope(facts),
             }))
         });
     }

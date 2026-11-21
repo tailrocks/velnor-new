@@ -64,8 +64,7 @@ fn container_label_keys(container: &ContainerInspectResponse) -> Vec<String> {
         .config
         .as_ref()
         .and_then(|config| config.labels.as_ref())
-        .map(|labels| labels.keys().cloned().collect())
-        .unwrap_or_default()
+        .map_or_default(|labels| labels.keys().cloned().collect())
 }
 
 async fn observe_pair(fixture: &Fixture) -> TestResult<Observed> {
@@ -109,8 +108,7 @@ fn networks(container: &ContainerInspectResponse) -> Vec<String> {
         .network_settings
         .as_ref()
         .and_then(|settings| settings.networks.as_ref())
-        .map(|networks| networks.keys().cloned().collect())
-        .unwrap_or_default()
+        .map_or_default(|networks| networks.keys().cloned().collect())
 }
 
 fn network_mode(container: &ContainerInspectResponse) -> Option<String> {

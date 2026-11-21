@@ -19,6 +19,7 @@ mod cache_upload;
 mod cold;
 mod configurations;
 mod crates_mirror;
+mod crates_mirror_alias;
 mod crates_mirror_args;
 mod crates_mirror_depth;
 mod crates_mirror_dispatch;
@@ -35,8 +36,12 @@ mod delta_trim;
 mod early_list;
 mod fetch;
 mod fetch_credentials;
+mod fetch_fixed;
+mod fetch_git;
+mod fetch_home;
 mod fetch_real_cargo;
 mod fetch_reports;
+mod fetch_run;
 mod fetch_toolchain;
 mod git;
 mod git_witness;
@@ -49,6 +54,8 @@ mod inputs;
 mod inputs_batch;
 mod inputs_git;
 mod manifests;
+mod mbx_reports;
+pub(crate) use mbx_reports::assign as assign_mbx_report;
 mod merge_group;
 mod merge_queue;
 mod plan;
@@ -84,6 +91,7 @@ mod sources;
 mod timings;
 mod unit_platforms;
 mod units;
+mod version;
 mod write_request;
 
 use std::fs::{self, File, OpenOptions};
@@ -100,6 +108,7 @@ pub use self::inputs_batch::restore_inputs_batch_with;
 pub use self::restored::{break_time_ties, break_time_ties_with};
 pub use self::scope_cache::ScopeCacheIo;
 pub use self::timings::write_report;
+pub use self::version::{parse_cli, version_text};
 use crate::artifact_stage;
 use crate::cli::{
     ArtifactsCommand, AuditArgs, BenchCommand, CacheCommand, CheckTagArgs, Cli, CollectArgs,
@@ -115,7 +124,6 @@ use crate::github::Repo;
 use crate::lane_guard;
 use crate::metrics::{METRICS_SCHEMA_VERSION, RunMetrics};
 use crate::test_groups;
-use clap::{CommandFactory, FromArgMatches};
 
 const TOKEN_VARIABLE: &str = "GITHUB_TOKEN";
 const API_VARIABLE: &str = "GITHUB_API_URL";
@@ -126,29 +134,7 @@ const SOURCE_LIMIT: u64 = 1 << 20;
 const SOURCE_TOTAL_LIMIT: u64 = 64 << 20;
 const SCHEDULED: &str = "schedule";
 const DEFAULT_API: &str = "https://api.github.com";
-const UNKNOWN_COMMIT: &str = "unknown";
 
-#[must_use]
-pub fn version_text() -> String {
-    format!(
-        "{} ({})",
-        env!("CARGO_PKG_VERSION"),
-        option_env!("VELNOR_COMMIT").unwrap_or(UNKNOWN_COMMIT)
-    )
-}
-
-pub fn parse_cli<I, T>(args: I) -> Result<Cli, clap::Error>
-where
-    I: IntoIterator<Item = T>,
-    T: Into<std::ffi::OsString> + Clone,
-{
-    let matches = Cli::command()
-        .version(version_text())
-        .try_get_matches_from(args)?;
-    Cli::from_arg_matches(&matches)
-}
-
-#[must_use]
 pub fn main() -> ExitCode {
     if crates_mirror::is_wrapper() {
         return crates_mirror::run();

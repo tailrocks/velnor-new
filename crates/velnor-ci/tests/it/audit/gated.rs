@@ -286,7 +286,7 @@ fn audit_with_rustc(repo: &Repo, script: &str) -> std::process::Output {
 
 #[test]
 fn a_rustc_that_prints_no_host_triple_fails_the_audit() {
-    let output = audit_with_rustc(&direct(INACTIVE), "#!/bin/sh\necho 'release: 1.99.1'\n");
+    let output = audit_with_rustc(&direct(INACTIVE), "#!/bin/sh\necho 'release: 1.100.0'\n");
     assert_eq!(output.status.code(), Some(1), "{output:?}");
     assert!(
         String::from_utf8_lossy(&output.stderr).contains("no host triple"),
