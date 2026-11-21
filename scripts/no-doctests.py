@@ -8,10 +8,23 @@ FENCE = re.compile(r"```|~~~")
 LINE_DOC = re.compile(r"//(?:!|/(?!/))")
 CONTAINER = r"(?:>[ \t]*|(?:[-*+]|\d{1,9}[.)])[ \t]+(?:\[[ xX]\][ \t]+)?|\[\^[^\]\s]+\]:[ \t]*)*"
 MARKER = r"[ \t]*(?:>|(?:[-*+]|\d{1,9}[.)])(?=[ \t])|\[\^[^\]\s]+\]:)"
-LINE_FENCE = re.compile(r"[ \t]*" + CONTAINER + r"(?:```|~~~)")
+FENCE_OPEN = r"(?:`{3,}(?=[^`\n]*$)|~{3,})"
+LINE_FENCE = re.compile(r"[ \t]*" + CONTAINER + FENCE_OPEN)
 LINE_INDENT = re.compile(r"(?:" + MARKER + r")* {5,}\S")
 ATTR_INDENT = re.compile(r" {4,}\S|(?:" + MARKER + r")+ {5,}\S")
-BLOCK_FENCE = re.compile(r"^[ \t]*\*?[ \t]*" + CONTAINER + r"(?:```|~~~)", re.M)
+BLOCK_FENCE = re.compile(r"^[ \t]*\*?[ \t]*" + CONTAINER + FENCE_OPEN, re.M)
+HTML6_TAGS = (
+    "address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt"
+    "|fieldset|figcaption|figure|footer|form|frame|frameset|h[1-6]|head|header|hr|html|iframe|legend|li|link|main|menu"
+    "|menuitem|nav|noframes|ol|optgroup|option|p|param|search|section|summary|table|tbody|td|tfoot|th|thead|title|tr"
+    "|track|ul"
+)
+HTML_BLOCK6 = re.compile(r"[ ]{0,3}</?(?:" + HTML6_TAGS + r")(?=[ \t/>]|$)", re.I)
+TAG_OPEN = r"<[A-Za-z][A-Za-z0-9-]*(?:[ \t]+[A-Za-z_:][A-Za-z0-9_.:-]*(?:[ \t]*=[ \t]*(?:[^ \t\"'=<>`]+|'[^']*'|\"[^\"]*\"))?)*[ \t]*/?>"
+TAG_CLOSE = r"</[A-Za-z][A-Za-z0-9-]*[ \t]*>"
+HTML_BLOCK7 = re.compile(r"[ ]{0,3}(?:" + TAG_OPEN + "|" + TAG_CLOSE + r")[ \t]*$")
+QUOTE_PREFIX = re.compile(r"(?:[ \t]*>)*")
+NON_PROSE = re.compile(r"[ \t]*(?:#{1,6}(?:[ \t]|$)|(?:[-*+]|\d{1,9}[.)])(?:[ \t]|$)|[-*_=\s]*$)")
 BLOCK_INDENT = re.compile(r"^[ \t]*\*?(?:" + MARKER + r")* {5,}\S", re.M)
 DOC_OPEN = re.compile(r"/\*(?:!|\*(?![*/]))")
 DOC_EQ = re.compile(r"\s*=(?!=)")
@@ -139,18 +152,56 @@ def raw_value(literal, prefix):
     return literal[hashes + prefix + 1 : len(literal) - hashes - 1]
 
 
+def doc_content(body):
+    text = line_indent_text(body)
+    return text[1:] if body[:1] in (" ", "\t") else text
+
+
+def is_prose(content):
+    if NON_PROSE.match(content):
+        return False
+    return re.match(r"[ \t]*" + FENCE_OPEN, content) is None
+
+
+def doc_line(body, state):
+    rel = doc_content(body)
+    if state["html"]:
+        state["html"] = bool(rel.strip())
+        return False
+    if not rel.strip():
+        state["prose"] = None
+        return False
+    if HTML_BLOCK6.match(rel) or (state["prose"] is None and HTML_BLOCK7.match(rel)):
+        state["html"] = True
+        state["prose"] = None
+        return False
+    quote = QUOTE_PREFIX.match(rel)
+    depth = quote.group().count(">")
+    continued = state["prose"] == depth
+    if LINE_FENCE.match(body) or (LINE_INDENT.match(line_indent_text(body)) and not continued):
+        state["prose"] = None
+        return True
+    state["prose"] = depth if is_prose(rel[quote.end() :]) else None
+    return False
+
+
 def doc_findings(src):
     i = 0
     attr_depth = 0
     doc_value = False
+    doc_end = -2
+    doc_state = {"html": False, "prose": None}
     while i < len(src):
         c = src[i]
         if src.startswith("//", i):
             k = src.find("\n", i)
             end = len(src) if k < 0 else k
             if LINE_DOC.match(src, i):
-                body = src[i + 3 : end]
-                if LINE_FENCE.match(body) or LINE_INDENT.match(line_indent_text(body)):
+                start = src.rfind("\n", 0, i) + 1
+                if start != doc_end + 1:
+                    doc_state = {"html": False, "prose": None}
+                doc_end = end
+                if doc_line(src[i + 3 : end], doc_state):
                     yield i
             i = end
         elif src.startswith("/*", i):
