@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs;
+use std::io::{ErrorKind, Write};
+use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 
 use crate::error::CiError;
@@ -13,7 +15,16 @@ const BEGAN: &str = "velnor-tools-restore-began";
 
 pub fn record(runner_temp: &Path, now: i64) -> Result<(), CiError> {
     let path = runner_temp.join(BEGAN);
-    fs::write(&path, now.to_string()).map_err(|error| {
+    let written = match fs::remove_file(&path) {
+        Err(error) if error.kind() != ErrorKind::NotFound => Err(error),
+        _ => fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .custom_flags(libc::O_NOFOLLOW)
+            .open(&path)
+            .and_then(|mut file| file.write_all(now.to_string().as_bytes())),
+    };
+    written.map_err(|error| {
         CiError::new(format!(
             "cannot record when the restore began in {}: {error}",
             path.display()

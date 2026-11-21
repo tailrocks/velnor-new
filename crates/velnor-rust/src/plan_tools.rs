@@ -21,6 +21,7 @@ pub(crate) const TOOLS_CACHE_KEY_HELPER: (u64, u64, u64) = (0, 1, 110);
 // helper-gate: first in tools-v0.1.111 via a1a1595d9f
 pub(crate) const TOOLS_ANCHOR_KEY_HELPER: (u64, u64, u64) = (0, 1, 111);
 const ANCHOR_KEY_PRUNE_HELPER: (u64, u64, u64) = (0, 1, 112);
+const ANCHOR_KEY_DROP_HELPER: (u64, u64, u64) = (0, 1, 112);
 pub(crate) const TOOLS_SAVED_KEY_HELPER: (u64, u64, u64) = (0, 1, 112);
 const TOOLS_ANCHOR_ATTEMPT_HELPER: (u64, u64, u64) = (0, 1, 112);
 // helper-gate: first in tools-v0.1.110 via 8db5d70509
@@ -176,10 +177,10 @@ fn names_cache_entry(facts: &RepoFacts) -> bool {
 }
 
 fn names_anchor_entry(facts: &RepoFacts) -> bool {
-    facts
-        .helper
-        .as_ref()
-        .is_some_and(|release| release.version().at_least(TOOLS_ANCHOR_KEY_HELPER))
+    facts.helper.as_ref().is_some_and(|release| {
+        release.version().at_least(TOOLS_ANCHOR_KEY_HELPER)
+            && !release.version().at_least(ANCHOR_KEY_DROP_HELPER)
+    })
 }
 
 fn records_saved_key(facts: &RepoFacts) -> bool {

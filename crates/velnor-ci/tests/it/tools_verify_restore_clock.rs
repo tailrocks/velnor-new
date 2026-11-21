@@ -6,7 +6,8 @@ use std::os::unix::fs::symlink;
 
 use velnor_ci::io::cache_delete_entry::resolve_entry;
 use velnor_ci::restore_clock::{SAFETY_MARGIN_SECONDS, cutoff, record};
-use velnor_ci::time::{parse_utc, utc_text};
+use velnor_ci::time::{now_unix, parse_utc, utc_text};
+use velnor_ci::tools_local::{Verb as ToolsVerb, note_clear};
 
 use crate::cache_delete_entry::{KEY, MAIN, VERSION_A, api, entry_saved, refs, repo};
 use crate::tools_verify::{job, recorded, rustc};
@@ -108,9 +109,53 @@ fn the_check_prints_the_recorded_start_minus_the_margin() {
 }
 
 #[test]
-fn the_clear_step_records_its_start_for_the_check() {
-    let job = job("restore-clock-clear");
+fn the_clear_step_records_the_clock_it_is_given_exactly() {
+    let job = job("restore-clock-clear-exact");
+    note_clear(ToolsVerb::Clear, Some(&job.root), BEGAN);
+    assert_eq!(cutoff(&job.root, FAR_FUTURE), margined(BEGAN));
+    let record = fs::read_to_string(job.root.join("velnor-tools-restore-began"));
+    assert_eq!(record.ok().as_deref(), Some(BEGAN.to_string().as_str()));
+}
+
+#[test]
+fn only_the_clear_step_records_a_start() {
+    let job = job("restore-clock-other-verbs");
+    for verb in [ToolsVerb::Restore, ToolsVerb::Save] {
+        note_clear(verb, Some(&job.root), BEGAN);
+    }
     assert_eq!(cutoff(&job.root, FAR_FUTURE), margined(FAR_FUTURE));
+}
+
+#[test]
+fn a_record_path_that_is_a_symlink_is_replaced_and_its_target_is_never_written() {
+    let job = job("restore-clock-write-symlink");
+    let target = job.root.join("elsewhere");
+    fs::write(&target, "untouched").unwrap_or_else(|e| unreachable!("{e}"));
+    let path = job.root.join("velnor-tools-restore-began");
+    symlink(&target, &path).unwrap_or_else(|e| unreachable!("{e}"));
+    record(&job.root, BEGAN).unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(
+        fs::read_to_string(&target).ok().as_deref(),
+        Some("untouched")
+    );
+    assert!(fs::symlink_metadata(&path).is_ok_and(|meta| meta.is_file()));
+    assert_eq!(cutoff(&job.root, NOW), margined(BEGAN));
+}
+
+#[test]
+fn a_dangling_symlink_at_the_record_path_creates_nothing_at_its_target() {
+    let job = job("restore-clock-write-dangling");
+    let target = job.root.join("not-yet");
+    symlink(&target, job.root.join("velnor-tools-restore-began"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    record(&job.root, BEGAN).unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(fs::symlink_metadata(&target).is_err());
+}
+
+#[test]
+fn the_clear_command_leaves_a_record_between_the_clock_before_and_after_it() {
+    let job = job("restore-clock-clear");
+    let before = now_unix();
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
         .env_clear()
         .env("HOME", &job.home)
@@ -120,6 +165,14 @@ fn the_clear_step_records_its_start_for_the_check() {
         .args(["tools-local", "clear"])
         .output()
         .unwrap_or_else(|e| unreachable!("{e}"));
+    let after = now_unix();
     assert!(output.status.success(), "{output:?}");
-    assert_ne!(cutoff(&job.root, FAR_FUTURE), margined(FAR_FUTURE));
+    let began: i64 = fs::read_to_string(job.root.join("velnor-tools-restore-began"))
+        .ok()
+        .and_then(|text| text.parse().ok())
+        .unwrap_or_else(|| unreachable!("the clear step left no record"));
+    assert!(
+        (before..=after).contains(&began),
+        "{before} {began} {after}"
+    );
 }

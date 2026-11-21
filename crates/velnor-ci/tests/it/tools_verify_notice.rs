@@ -58,7 +58,7 @@ fn a_poisoned_restore_names_its_cache_entry_and_the_command_that_deletes_it_by_i
 }
 
 #[test]
-fn a_poisoned_restore_names_the_anchor_entry_that_feeds_the_check() {
+fn a_poisoned_restore_never_names_the_anchor_entry() {
     let job = job("tools-verify-named-anchor");
     let anchor = recorded(&job);
     fs::write(rustc(&job), "evil binary!").unwrap_or_else(|e| unreachable!("{e}"));
@@ -70,14 +70,17 @@ fn a_poisoned_restore_names_the_anchor_entry_that_feeds_the_check() {
             ("VELNOR_ANCHOR_CACHE_KEY", "velnor-tools-anchor-abc123"),
         ],
     );
+    assert_eq!(stdout.matches("cache delete-entry").count(), 1, "{stdout}");
     assert!(
-        stdout.contains(&delete_entry("velnor-tools-anchor-abc123")),
+        stdout.contains(&delete_entry("velnor-tools-abc123")),
         "{stdout}"
     );
+    assert!(!stdout.contains("velnor-tools-anchor-abc123"), "{stdout}");
+    assert!(!stdout.contains("anchor entry"), "{stdout}");
 }
 
 #[test]
-fn a_malformed_anchor_names_the_anchor_entry_that_feeds_the_check() {
+fn a_malformed_anchor_names_no_entry_because_the_next_trusted_run_records_a_new_one() {
     let job = job("tools-verify-bad-anchor");
     let stdout = check_stdout(
         &job,
@@ -85,15 +88,17 @@ fn a_malformed_anchor_names_the_anchor_entry_that_feeds_the_check() {
         &[("VELNOR_ANCHOR_CACHE_KEY", "velnor-tools-anchor-abc123")],
     );
     assert!(stdout.contains("the anchor is malformed"), "{stdout}");
+    assert!(!stdout.contains("cache delete-entry"), "{stdout}");
+    assert!(!stdout.contains("velnor-tools-anchor-abc123"), "{stdout}");
     assert!(
-        stdout.contains(&delete_entry("velnor-tools-anchor-abc123")),
+        stdout.contains("The next trusted run on the default branch records a new anchor"),
         "{stdout}"
     );
     assert!(discarded(&job));
 }
 
 #[test]
-fn a_restored_malformed_anchor_names_the_anchor_entry_when_the_read_step_left_it_empty() {
+fn a_restored_malformed_anchor_names_no_entry_when_the_read_step_left_it_empty() {
     let job = job("tools-verify-restored-bad-anchor");
     let _ = recorded(&job);
     fs::write(&job.anchor, "velnor-tools-anchor-v1 not-a-digest\n")
@@ -104,10 +109,7 @@ fn a_restored_malformed_anchor_names_the_anchor_entry_when_the_read_step_left_it
         &[("VELNOR_ANCHOR_CACHE_KEY", "velnor-tools-anchor-abc123")],
     );
     assert!(stdout.contains("the anchor is malformed"), "{stdout}");
-    assert!(
-        stdout.contains(&delete_entry("velnor-tools-anchor-abc123")),
-        "{stdout}"
-    );
+    assert!(!stdout.contains("cache delete-entry"), "{stdout}");
     assert!(discarded(&job));
 }
 

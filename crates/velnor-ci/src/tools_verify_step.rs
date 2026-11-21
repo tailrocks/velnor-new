@@ -36,7 +36,6 @@ pub struct Context {
     pub base_ref: String,
     pub default_branch: Option<String>,
     pub cache_key: String,
-    pub anchor_key: String,
     pub restored_before: String,
     pub remote: Remote,
 }
@@ -44,7 +43,6 @@ pub struct Context {
 #[derive(Debug, Clone, Copy)]
 pub struct Remedy<'a> {
     pub key: &'a str,
-    pub anchor_key: &'a str,
     pub remote: &'a Remote,
     pub refs: &'a [String],
     pub restored_before: &'a str,
@@ -59,6 +57,8 @@ fn reason(discard: &Discard) -> String {
         Discard::Untrusted => "this is not a trusted default-branch run".to_owned(),
     }
 }
+
+const BAD_ANCHOR_HINT: &str = ". The next trusted run on the default branch records a new anchor, and the newest anchor wins, so nothing needs deleting";
 
 fn delete_command(key: &str, refs: &[String], remote: &Remote, restored_before: &str) -> String {
     let refs = ref_options(refs);
@@ -97,24 +97,14 @@ fn delete_sentence(what: &str, key: &str, remedy: Remedy<'_>) -> String {
     )
 }
 
-fn anchor_sentence(remedy: Remedy<'_>) -> String {
-    if remedy.anchor_key.is_empty() {
+fn delete_hint(remedy: Remedy<'_>) -> String {
+    if remedy.key.is_empty() {
         return String::new();
     }
-    delete_sentence("anchor entry", remedy.anchor_key, remedy)
-}
-
-fn delete_hint(remedy: Remedy<'_>) -> String {
-    let mut hint = String::new();
-    if !remedy.key.is_empty() {
-        hint.push_str(&delete_sentence("Actions cache entry", remedy.key, remedy));
-    }
-    hint.push_str(&anchor_sentence(remedy));
-    escape(&hint, false)
-}
-
-fn anchor_hint(remedy: Remedy<'_>) -> String {
-    escape(&anchor_sentence(remedy), false)
+    escape(
+        &delete_sentence("Actions cache entry", remedy.key, remedy),
+        false,
+    )
 }
 
 fn host_of(server: Option<&str>) -> &str {
@@ -161,7 +151,7 @@ pub fn message(verdict: &Verdict, remedy: Remedy<'_>) -> String {
         Verdict::Discarded(why) => {
             let hint = match why {
                 Discard::Mismatch => delete_hint(remedy),
-                Discard::BadAnchor => anchor_hint(remedy),
+                Discard::BadAnchor => BAD_ANCHOR_HINT.to_owned(),
                 _ => String::new(),
             };
             format!(
@@ -255,7 +245,6 @@ pub fn run(verb: Verb, context: &Context) -> Result<String, CiError> {
     let refs = restore_refs(context);
     let remedy = Remedy {
         key: &context.cache_key,
-        anchor_key: &context.anchor_key,
         remote: &context.remote,
         refs: &refs,
         restored_before: &context.restored_before,
@@ -292,7 +281,6 @@ pub fn setup(verb: Verb) -> Result<String, CiError> {
             base_ref: var("GITHUB_BASE_REF").unwrap_or_default(),
             default_branch,
             cache_key: var("VELNOR_TOOLS_CACHE_KEY").unwrap_or_default(),
-            anchor_key: var("VELNOR_ANCHOR_CACHE_KEY").unwrap_or_default(),
             restored_before,
             remote: remote(
                 var("GITHUB_SERVER_URL").as_deref(),

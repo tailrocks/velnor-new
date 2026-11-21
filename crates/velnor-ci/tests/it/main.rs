@@ -228,6 +228,7 @@ mod tools_home_clear;
 mod tools_local;
 mod tools_verify;
 mod tools_verify_anchor;
+mod tools_verify_anchor_kept;
 mod tools_verify_bounds;
 mod tools_verify_notice;
 mod tools_verify_notice_steps;

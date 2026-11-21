@@ -185,6 +185,14 @@ fn home_owner(home: &Path) -> Result<u32, std::io::Error> {
         .map(|metadata| metadata.uid())
 }
 
+pub fn note_clear(verb: Verb, runner_temp: Option<&Path>, now: i64) {
+    if verb == Verb::Clear
+        && let Some(dir) = runner_temp
+    {
+        crate::restore_clock::record(dir, now).ok();
+    }
+}
+
 pub fn setup(verb: Verb, key: Option<&str>) -> Result<String, CiError> {
     let key = match (verb, key) {
         (Verb::Clear, key) => key.unwrap_or_default(),
@@ -200,11 +208,7 @@ pub fn setup(verb: Verb, key: Option<&str>) -> Result<String, CiError> {
     let (shared, seed) = (var(SHARED_DIR_ENV), var(SEED_DIR_ENV));
     let runner_temp = crate::tools_discard::runner_temp(var("RUNNER_TEMP"));
     let node = this_node();
-    if verb == Verb::Clear
-        && let Some(dir) = runner_temp.as_deref()
-    {
-        crate::restore_clock::record(dir, crate::time::now_unix()).ok();
-    }
+    note_clear(verb, runner_temp.as_deref(), crate::time::now_unix());
     let outcome = run(&Inputs {
         verb,
         key,

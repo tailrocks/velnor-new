@@ -41,7 +41,7 @@ fn a_job_that_names_the_anchor_entry_reads_its_key_from_the_plan_job() -> TestRe
 fn every_declared_anchor_key_output_is_read_and_every_read_one_is_declared() -> TestResult {
     let cases: [(&str, &[&str], &str, bool); 3] = [
         ("0.1.111", &["Cargo.toml", "tools/Cargo.toml"], "", true),
-        ("0.1.112", &["Cargo.toml", "tools/Cargo.toml"], "", true),
+        ("0.1.112", &["Cargo.toml", "tools/Cargo.toml"], "", false),
         ("0.1.112", &["Cargo.toml"], "shape = \"one-job\"\n", false),
     ];
     for config in STORES {
