@@ -26,6 +26,7 @@ mod helper_steps;
 mod install_steps;
 mod key_length;
 mod lint_steps;
+mod mbx_out_dirs;
 mod mise_digest;
 mod permission_yaml;
 mod pinned_actions;
