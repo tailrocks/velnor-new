@@ -14,7 +14,7 @@ regexes = ['''^m-[0-9a-f]{16}$''']
 [[allowlists]]
 description = "test fixtures and tests with fake tokens, keys or public upstream material; vendored action bundles"
 paths = [
-  '''^crates/velnor-ci/tests/it/cache_credential_scrub(_hardening)?\.rs$''',
+  '''^crates/velnor-ci/tests/it/cache_credential_scrub[a-z_]*\.rs$''',
   '''^crates/velnor-ci/tests/it/cache_private_repo\.rs$''',
   '''^crates/velnor-ci/tests/it/public_probe\.rs$''',
   '''^crates/velnor-ci/tests/it/audit/selection\.rs$''',
