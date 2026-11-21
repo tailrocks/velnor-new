@@ -1,10 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-//! Runs the rendered save conditions against the outcomes a job can end with: a save
-//! never follows a build that did not finish or an audit that was required and did
-//! not pass (#2027, #2028), and still follows a failed test (#1970).
-
 use crate::base_save::{jobs, step};
 use crate::facts::TestResult;
 use crate::gate_eval::{Context, condition_of, runs};
@@ -16,12 +12,9 @@ const SAVES: &[&str] = &[
     "Record the target cache key",
 ];
 
-/// How the saves learn that the tests were built.
 #[derive(Clone, Copy, Debug)]
 enum Variant {
-    /// A `Build the tests` step with the id `build_1`.
     BuildStep,
-    /// The test step records `built` in its outputs.
     Recorded,
 }
 
@@ -69,7 +62,6 @@ const SCHEDULED: Ending = Ending {
     failed_check: None,
 };
 
-/// The outcome of the audit step and whether each save runs.
 fn play(
     variant: Variant,
     ending: &Ending,
@@ -302,8 +294,6 @@ const GROUPS: &str = concat!(
     "/../../generator/samples/workspace-groups/expected/.github/workflows/rust-ci.yml"
 );
 
-/// The saves of the `rust-tools` job when its three group builds ended as given and
-/// each group is selected (`true`) or left out by the plan.
 fn groups(
     builds: [&str; 3],
     selected: [bool; 3],
