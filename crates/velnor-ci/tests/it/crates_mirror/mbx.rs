@@ -13,7 +13,7 @@ use super::fixture::{TestResult, setup, setup_command};
 mod state;
 
 pub(super) const REGISTRY: &str = "sparse+https://mirror.example/index/";
-pub(super) const MBX_DECLARED: &str = "[tools]\nrust = { version = \"1.99.1\", mr_boxington = true }\n\n[wrappers.cargo]\ncommand = \"mbx\"\n";
+pub(super) const MBX_DECLARED: &str = "[tools]\nrust = { version = \"1.100.0\", mr_boxington = true }\n\n[wrappers.cargo]\ncommand = \"mbx\"\n";
 pub(super) const REFUSED: &str = "mbx is declared but cargo on PATH isn't the mise mbx wrapper";
 const ACTIVE_NATIVE: &[(&str, &str)] = &[("__MISE_ACTIVE_WRAPPERS", r#"["cargo"]"#)];
 
@@ -175,7 +175,7 @@ fn undeclared_mbx_keeps_running_a_plain_cargo() -> TestResult {
 fn setup_does_not_record_mbx_when_nothing_declares_it() -> TestResult {
     let repo = Repo::empty("crates-mirror-mbx-none");
     repo.write_unstaged("ca.pem", "not used by this fixture");
-    repo.write_unstaged("mise.toml", "[tools]\nrust = \"1.99.1\"\n");
+    repo.write_unstaged("mise.toml", "[tools]\nrust = \"1.100.0\"\n");
     let output = setup_command(repo.root(), REGISTRY)
         .current_dir(repo.root())
         .output()?;
@@ -189,7 +189,7 @@ fn setup_does_not_record_mbx_when_nothing_declares_it() -> TestResult {
 fn setup_refuses_two_mise_files_that_both_set_rust_and_exports_no_mbx() -> TestResult {
     let repo = Repo::empty("crates-mirror-mbx-conflict");
     repo.write_unstaged("ca.pem", "not used by this fixture");
-    repo.write_unstaged("mise.toml", "[tools]\nrust = \"1.99.1\"\n");
+    repo.write_unstaged("mise.toml", "[tools]\nrust = \"1.100.0\"\n");
     repo.write_unstaged(".mise/config.toml", "[tools]\nrust = \"1.98.0\"\n");
     let output = setup_command(repo.root(), REGISTRY)
         .current_dir(repo.root())
