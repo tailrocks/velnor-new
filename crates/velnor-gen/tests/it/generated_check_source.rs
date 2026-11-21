@@ -14,7 +14,7 @@ use crate::pipeline::workflow;
 const FROM_SOURCE: &str = "[[lint]]\nkind = 'generated-check'\nfrom_source = true\n";
 const ID: &str = "lint-generated-check";
 const CHECK_FROM_SOURCE: &str = "cargo run --locked --target \"$VELNOR_GEN_TARGET\" --package velnor-gen -- check --verify-release";
-const FIRST: &str = "0.1.111";
+const FIRST: &str = "0.1.112";
 const STORE: &str = "MBX_CACHE_DIR=$RUNNER_TEMP/mbx";
 const MIRROR: &str = "[crates_mirror]\nrunner = 'mirror-box'\nregistry = 'sparse+https://crates-mirror.velnor-system.svc.cluster.local/index/'\ncainfo = '/opt/velnor/crates-mirror/ca-bundle.pem'\n";
 
@@ -106,10 +106,12 @@ fn from_source_false_renders_the_release_install_byte_for_byte() -> TestResult {
 
 #[test]
 fn a_helper_older_than_from_source_is_refused_with_the_gate_error() -> TestResult {
-    let error = workflow(&locked(&format!("{LINT}\n{FROM_SOURCE}"), "0.1.110")?).err();
-    let text = format!("{error:?}");
-    assert!(text.contains("ConfigKeyHelperTooOld"), "{text}");
-    assert!(text.contains("lint.from_source"), "{text}");
+    for older in ["0.1.110", "0.1.111"] {
+        let error = workflow(&locked(&format!("{LINT}\n{FROM_SOURCE}"), older)?).err();
+        let text = format!("{error:?}");
+        assert!(text.contains("ConfigKeyHelperTooOld"), "{older}: {text}");
+        assert!(text.contains("lint.from_source"), "{older}: {text}");
+    }
     assert!(workflow(&locked(&format!("{LINT}\n{FROM_SOURCE}"), FIRST)?).is_ok());
     Ok(())
 }
