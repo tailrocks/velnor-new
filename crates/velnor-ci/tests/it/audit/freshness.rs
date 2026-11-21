@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod change_time;
+
 use std::fs::{self, File, FileTimes};
 use std::time::{Duration, UNIX_EPOCH};
 

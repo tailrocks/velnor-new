@@ -6,8 +6,6 @@ mod bounds;
 mod build_clock;
 mod build_directory;
 mod build_script_source;
-mod change_time;
-mod change_time_restore;
 mod freshness;
 mod gated;
 mod global_options;

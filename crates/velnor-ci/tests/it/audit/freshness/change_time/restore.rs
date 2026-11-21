@@ -4,12 +4,12 @@
 use std::ffi::OsStr;
 use std::fs;
 
-use super::change_time::{
+use super::super::super::inventory::build_stamping;
+use super::super::super::{own_units, unit, workspace_below_the_root};
+use super::{
     INPUT, INPUTS_RESTORE, OLD, OUTPUT, assert_fresh, assert_stale, at, built_repository,
     restore_inputs, saved, settled_after,
 };
-use super::inventory::build_stamping;
-use super::{own_units, unit, workspace_below_the_root};
 use crate::io::Repo;
 
 const ALIAS: &str = "ties/alias.txt";
@@ -54,7 +54,7 @@ fn a_hard_link_alias_changed_after_the_restore_is_stale() {
 }
 
 fn from_the_rust_root(repo: &Repo, operation: &str) {
-    let ran = super::velnor_ci()
+    let ran = super::super::super::velnor_ci()
         .current_dir(repo.root().join("rust"))
         .env("GITHUB_JOB", "job")
         .args(["inputs", operation, "--target-dir", "target"])
