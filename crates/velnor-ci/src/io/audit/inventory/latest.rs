@@ -72,11 +72,7 @@ fn followed_type_kept(scan: &Scan, kind: &Kind, modified: Option<SystemTime>) ->
     }
 }
 
-fn reopen(
-    scan: &Scan,
-    directory: &Path,
-    hooks: &Hooks<'_>,
-) -> io::Result<Option<nix::dir::Dir>> {
+fn reopen(scan: &Scan, directory: &Path, hooks: &Hooks<'_>) -> io::Result<Option<nix::dir::Dir>> {
     let Some(walked) = scan.entries.get(directory) else {
         return Ok(None);
     };
