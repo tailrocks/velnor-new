@@ -35,33 +35,19 @@ fn filter(entry: &toml::Table) -> &str {
         .unwrap_or("")
 }
 
-#[test]
-fn the_velnor_ci_package_wide_tier_is_in_both_profiles() -> TestResult {
-    for profile in PROFILES {
-        let bare_tier = overrides(profile)?.into_iter().any(|entry| {
-            matches!(
-                filter(&entry).replace(['"', '\''], "").trim(),
-                "package(=velnor-ci)"
-            ) && entry
-                .get("slow-timeout")
-                .and_then(|timeout| timeout.get("period"))
-                .and_then(toml::Value::as_str)
-                == Some("30s")
-        });
-        assert!(
-            bare_tier,
-            "profile {profile}: velnor-ci has no package-wide 30 s tier"
-        );
-    }
-    Ok(())
-}
-
 fn names_test(filter: &str, name: &str) -> bool {
     filter.split("test(").skip(1).any(|rest| {
         let pattern = rest.split(')').next().unwrap_or("");
-        pattern
-            .strip_prefix('=')
-            .map_or_else(|| name.contains(pattern), |exact| exact == name)
+        if let Some(exact) = pattern.strip_prefix('=') {
+            exact == name
+        } else if let Some(prefix) = pattern
+            .strip_prefix("/^")
+            .and_then(|rest| rest.strip_suffix('/'))
+        {
+            name.starts_with(prefix)
+        } else {
+            name.contains(pattern)
+        }
     })
 }
 
@@ -124,17 +110,20 @@ const TEN_SECOND_TESTS: [&str; 13] = [
 ];
 
 fn covers(filter: &str, name: &str) -> bool {
-    if filter.contains("test(") {
-        names_test(filter, name)
-    } else {
-        filter.contains("package(=velnor-ci)")
-    }
+    filter.contains("package(=velnor-ci)")
+        && (!filter.contains("test(") || names_test(filter, name))
 }
 
-fn effective_timeout_period(entries: &[toml::Table], name: &str) -> Option<String> {
-    entries
+fn effective_timeout_period(
+    profile: &str,
+    name: &str,
+) -> Result<Option<String>, Box<dyn std::error::Error>> {
+    let mut chain = overrides(profile)?;
+    if profile != "default" {
+        chain.extend(overrides("default")?);
+    }
+    Ok(chain
         .iter()
-        .rev()
         .filter(|entry| entry.contains_key("slow-timeout"))
         .find(|entry| covers(filter(entry), name))
         .and_then(|entry| {
@@ -143,19 +132,16 @@ fn effective_timeout_period(entries: &[toml::Table], name: &str) -> Option<Strin
                 .get("period")?
                 .as_str()
                 .map(str::to_owned)
-        })
+        }))
 }
 
-#[test]
-fn the_scoped_ten_second_tier_is_the_timeout_nextest_applies_to_each_named_slow_test() -> TestResult
-{
+fn assert_tier(tier: &str, names: &[&str]) -> TestResult {
     for profile in PROFILES {
-        let entries = overrides(profile)?;
-        for name in TEN_SECOND_TESTS {
+        for name in names {
             assert_eq!(
-                effective_timeout_period(&entries, name).as_deref(),
-                Some("10s"),
-                "profile {profile}: {name} does not get the scoped 10 s tier"
+                effective_timeout_period(profile, name)?.as_deref(),
+                Some(tier),
+                "profile {profile}: {name} does not get the {tier} tier"
             );
         }
     }
@@ -163,18 +149,42 @@ fn the_scoped_ten_second_tier_is_the_timeout_nextest_applies_to_each_named_slow_
 }
 
 #[test]
-fn the_legacy_op_replay_gets_the_sixty_second_tier_in_both_profiles() -> TestResult {
-    for profile in PROFILES {
-        let entries = overrides(profile)?;
-        assert_eq!(
-            effective_timeout_period(
-                &entries,
-                "plan_diff::every_recorded_case_matches_the_legacy_op"
-            )
-            .as_deref(),
-            Some("60s"),
-            "profile {profile}: the replay of every recorded case runs past 10 s on a loaded host"
-        );
-    }
-    Ok(())
+fn the_scoped_ten_second_tier_is_the_timeout_nextest_applies_to_each_named_slow_test() -> TestResult
+{
+    assert_tier("10s", &TEN_SECOND_TESTS)
+}
+
+#[test]
+fn a_velnor_ci_test_without_a_scoped_tier_keeps_the_two_second_default() -> TestResult {
+    assert_tier(
+        "2s",
+        &[
+            "gate::current_run::a_changed_listing_refuses_with_a_retry_diagnosis",
+            "tools_digest::a_changed_component_list_still_changes_the_digest",
+        ],
+    )
+}
+
+#[test]
+fn the_measured_slow_velnor_ci_families_get_the_thirty_second_tier() -> TestResult {
+    assert_tier(
+        "30s",
+        &[
+            "delta_freshness::changed_member_rechecks_every_cached_package",
+            "plan_git::a_modified_file_selects_its_package_with_no_token",
+            "io_report::provenance::links::tracked_link_cycle_cannot_prove_source_contents",
+        ],
+    )
+}
+
+#[test]
+fn the_replays_of_every_recorded_case_get_the_sixty_second_tier() -> TestResult {
+    assert_tier(
+        "60s",
+        &[
+            "plan_diff::every_recorded_case_matches_the_legacy_op",
+            "resolve_qualification::every_recorded_case_matches_the_legacy_op",
+            "io_plan_docs::plan_treats_sources_over_the_total_size_bound_as_possibly_holding_docs",
+        ],
+    )
 }
