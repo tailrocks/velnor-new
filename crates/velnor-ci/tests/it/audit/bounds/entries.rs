@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs;
+use std::path::Path;
 use std::process::Output;
+use std::thread;
 use std::time::{Duration, UNIX_EPOCH};
 
 use super::super::{inventory, own_units, unit, velnor_ci, workspace_below_the_root};
@@ -16,14 +18,11 @@ pub(super) fn declared_tree(entries: usize) -> Repo {
     let repo = workspace_below_the_root();
     let directory = repo.root().join("shared/first");
     fs::create_dir_all(&directory).unwrap_or_else(|e| unreachable!("{e}"));
-    for index in 0..entries {
-        let seed = directory.join(format!("seed-{}", index / LINKS_PER_INODE));
-        if index % LINKS_PER_INODE == 0 {
-            fs::write(&seed, "").unwrap_or_else(|e| unreachable!("{e}"));
-        }
-        fs::hard_link(&seed, directory.join(index.to_string()))
-            .unwrap_or_else(|e| unreachable!("{e}"));
+    for seed in 0..entries.div_ceil(LINKS_PER_INODE) {
+        let seed = directory.join(format!("seed-{seed}"));
+        fs::write(&seed, "").unwrap_or_else(|e| unreachable!("{e}"));
     }
+    link_entries(&directory, entries);
     let target = "rust/target/debug";
     own_units(&repo, target, &[]);
     let output = format!("{target}/build/lib-f000000000000008/output");
@@ -35,6 +34,25 @@ pub(super) fn declared_tree(entries: usize) -> Repo {
     repo.set_mtime(&output, UNIX_EPOCH + Duration::from_secs(3_000_000_001));
     inventory::build(&repo, &output, None);
     repo
+}
+
+// Each hard link is a metadata round trip, so a serial loop over 100 000
+// entries dominates the test. The seeds exist before any link is made, so
+// the links are independent and can be created from a few threads.
+fn link_entries(directory: &Path, entries: usize) {
+    const THREADS: usize = 8;
+    let chunk = entries.div_ceil(THREADS).max(1);
+    thread::scope(|scope| {
+        for start in (0..entries).step_by(chunk) {
+            scope.spawn(move || {
+                for index in start..(start + chunk).min(entries) {
+                    let seed = directory.join(format!("seed-{}", index / LINKS_PER_INODE));
+                    fs::hard_link(&seed, directory.join(index.to_string()))
+                        .unwrap_or_else(|e| unreachable!("{e}"));
+                }
+            });
+        }
+    });
 }
 
 pub(super) fn audit_within(repo: &Repo, limit: Option<&str>) -> Output {
