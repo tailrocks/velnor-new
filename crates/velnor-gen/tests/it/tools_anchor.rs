@@ -6,7 +6,7 @@ use serde_json::Value;
 use crate::facts::TestResult;
 use crate::pipeline::{pin_helper, view, workflow};
 
-const HELPER: &str = "0.1.110";
+pub(crate) const HELPER: &str = "0.1.110";
 const PLAN: &str = "rust-plan";
 const PLAN_ANCHOR: &str = "${{ needs.rust-plan.outputs.tools_anchor }}";
 const PLAN_ANCHOR_KEY: &str = "${{ needs.rust-plan.outputs.tools_anchor_key }}";
@@ -14,11 +14,11 @@ const PLAN_ANCHOR_KEY_NAME: &str = "needs.rust-plan.outputs.tools_anchor_key";
 const PLAN_ANCHOR_KEY_OUTPUT: &str = "${{ steps.toolsanchor.outputs.cache-matched-key }}";
 const READ_ANCHOR: &str = "${{ steps.toolsread.outputs.anchor }}";
 const RECORDED: &str = "${{ steps.toolsrecord.outputs.digest }}";
-const STORES: &[&str] = &["mbx_shared_store = true\n", "mbx_shared_store = false\n"];
-const PREFIX: &str = "velnor-tools-anchor-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles('mise.lock') }}-";
+pub(crate) const STORES: &[&str] = &["mbx_shared_store = true\n", "mbx_shared_store = false\n"];
+pub(crate) const PREFIX: &str = "velnor-tools-anchor-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles('mise.lock') }}-";
 const TOOLS_KEY: &str = "velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles('mise.lock') }}-";
 
-fn render(
+pub(crate) fn render(
     manifests: &[&str],
     config: &str,
     helper: &str,
@@ -28,15 +28,15 @@ fn render(
     Ok(crate::yaml_tree::document(&workflow(&repo)?)?)
 }
 
-fn steps(job: &Value) -> Vec<Value> {
+pub(crate) fn steps(job: &Value) -> Vec<Value> {
     job["steps"].as_array().cloned().unwrap_or_default()
 }
 
-fn text(value: &Value, field: &str) -> String {
+pub(crate) fn text(value: &Value, field: &str) -> String {
     value[field].as_str().unwrap_or_default().to_owned()
 }
 
-fn jobs(yaml: &Value) -> Result<Vec<(String, Value)>, Box<dyn std::error::Error>> {
+pub(crate) fn jobs(yaml: &Value) -> Result<Vec<(String, Value)>, Box<dyn std::error::Error>> {
     Ok(yaml["jobs"]
         .as_object()
         .ok_or("jobs missing")?
@@ -394,57 +394,6 @@ fn the_anchor_key_output_is_kept_before_helper_0_1_112_and_dropped_from_it() -> 
                 }
             }
             assert!(readers > 0, "{config:?} {helper}");
-        }
-    }
-    Ok(())
-}
-
-const ATTEMPT_RUN: &str = "${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}";
-const PLAIN_RUN: &str = "${{ github.run_id }}-${{ github.job }}";
-const ON_DEFAULT_BRANCH: &str =
-    "github.ref == format('refs/heads/{0}', github.event.repository.default_branch)";
-
-fn anchor_steps(helper: &str) -> Result<Vec<Value>, Box<dyn std::error::Error>> {
-    let yaml = render(&["Cargo.toml", "tools/Cargo.toml"], STORES[0], helper)?;
-    let mut found = Vec::new();
-    for (_, job) in jobs(&yaml)? {
-        found.extend(
-            steps(&job)
-                .into_iter()
-                .filter(|step| step["name"] == "Find the anchor" || step["name"] == "Save anchor"),
-        );
-    }
-    Ok(found)
-}
-
-#[test]
-fn a_rerun_of_a_job_names_its_anchor_by_run_attempt_from_helper_0_1_112() -> TestResult {
-    let before = anchor_steps(HELPER)?;
-    assert!(
-        before.iter().any(|step| step["name"] == "Save anchor"),
-        "{before:?}"
-    );
-    for step in &before {
-        assert_eq!(step["with"]["key"], format!("{PREFIX}{PLAIN_RUN}"));
-    }
-    let after = anchor_steps("0.1.112")?;
-    assert_eq!(after.len(), before.len(), "{after:?}");
-    for step in &after {
-        assert_eq!(step["with"]["key"], format!("{PREFIX}{ATTEMPT_RUN}"));
-    }
-    Ok(())
-}
-
-#[test]
-fn a_new_anchor_is_saved_only_on_the_default_branch() -> TestResult {
-    for helper in [HELPER, "0.1.112"] {
-        let saves: Vec<Value> = anchor_steps(helper)?
-            .into_iter()
-            .filter(|step| step["name"] == "Save anchor")
-            .collect();
-        assert_ne!(saves.len(), 0, "{helper}");
-        for step in saves {
-            assert!(text(&step, "if").contains(ON_DEFAULT_BRANCH), "{helper}");
         }
     }
     Ok(())
