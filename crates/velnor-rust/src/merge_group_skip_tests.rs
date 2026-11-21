@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 
 use velnor_model::{
     BuildRecord, CargoCommand, FilterRef, Job, JobId, PackageName, Permissions, PrRun,
-    ReleaseAssetPart, RunnerLabel, StepKind, TargetName, When,
+    ReleaseAssetPart, RepoPath, RunnerLabel, RustRoot, StepKind, TargetName, When,
 };
 
 use super::*;
@@ -110,4 +110,54 @@ fn the_build_inputs_are_skipped_only_when_no_target_build_of_the_job_survives() 
             "the clippy check is skipped either way"
         );
     }
+}
+
+fn root(manifest: &'static str, target: &'static str) -> RustRoot {
+    RustRoot {
+        manifest: RepoPath::from_static(manifest),
+        target_dir: RepoPath::from_static(target),
+        nextest_ci_profile: false,
+        members: Vec::new(),
+        depends_on: Vec::new(),
+        external_dependencies: Vec::new(),
+    }
+}
+
+fn setup_in(directory: &'static str) -> Step {
+    let mut setup = step(StepKind::TestSetup {
+        name: String::from("setup"),
+        run: String::from("true"),
+        before_build: true,
+    });
+    setup.directory = Some(RepoPath::from_static(directory));
+    setup
+}
+
+fn build_of(manifest: Option<&'static str>) -> Step {
+    let mut build = step(StepKind::Cargo(CargoCommand::NextestBuild));
+    build.manifest = manifest.map(RepoPath::from_static);
+    build
+}
+
+fn setup_survives(roots: &[RustRoot], setup: Step, build: Step) -> bool {
+    let mut jobs = [job(RUST_JOB, Vec::new())];
+    jobs[0].steps = vec![setup, build];
+    mark(&mut jobs, true, false, Some(roots), &|_| false);
+    jobs[0].steps[0].skip_after_merge_group.is_none()
+}
+
+#[test]
+fn a_setup_is_kept_when_a_surviving_build_has_no_manifest() {
+    let roots = [root("tools/a/Cargo.toml", "tools/a/target")];
+    assert!(setup_survives(&roots, setup_in("tools/b"), build_of(None)));
+}
+
+#[test]
+fn a_setup_is_kept_when_a_surviving_build_names_no_known_root() {
+    let roots = [root("tools/a/Cargo.toml", "tools/a/target")];
+    assert!(setup_survives(
+        &roots,
+        setup_in("tools/b"),
+        build_of(Some("tools/c/Cargo.toml")),
+    ));
 }
