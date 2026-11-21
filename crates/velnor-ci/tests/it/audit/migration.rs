@@ -229,19 +229,15 @@ fn records_execution() {
 }
 
 pub(super) fn package_output(repo: &Repo, package: &str) -> std::path::PathBuf {
-    fs::read_dir(repo.root().join("rust/target/debug/build"))
+    fs::read_dir(repo.root().join("rust/target/debug/build").join(package))
         .unwrap_or_else(|e| unreachable!("{e}"))
-        .map(|entry| entry.unwrap_or_else(|e| unreachable!("{e}")))
-        .find(|entry| {
-            entry
-                .file_name()
-                .to_string_lossy()
-                .starts_with(&format!("{package}-"))
-                && entry.path().join("output").is_file()
+        .map(|hash| {
+            hash.unwrap_or_else(|e| unreachable!("{e}"))
+                .path()
+                .join("run/stdout")
         })
+        .find(|output| output.is_file())
         .unwrap_or_else(|| unreachable!("missing {package} output"))
-        .path()
-        .join("output")
 }
 
 pub(super) fn wrapped_build(repo: &Repo, cargo: &[&str]) -> Output {
