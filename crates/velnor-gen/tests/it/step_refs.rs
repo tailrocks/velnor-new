@@ -1,20 +1,36 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashSet};
 use std::error::Error;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::thread;
 
-use serde_json::Value;
+use serde_json::{Value, json};
 
 use crate::facts::TestResult;
 use crate::pipeline::{pin_helper, view, workflow};
 
 const SHARED_STORE_ON: &str = "mbx_shared_store = true\n";
-const SHARED_STORE_OFF: &str = "mbx_shared_store = false\n";
 const CACHE_DEBUG_ON: &str = "cache_debug = true\n";
 const TEST_GROUPS_ON: &str = "[[test_groups]]\nname = 'database'\nroot = '.'\nfilter = 'package(package-0) and test(/^db_/)'\n\n[[test_groups]]\nname = 'shell'\nroot = '.'\nfilter = 'binary(it) and test(~cargo_)'\n";
+const ARTIFACTS_ON: &str = "[[test_groups]]\nname = 'shell'\nroot = '.'\nfilter = 'binary(it) and test(~cargo_)'\n[[test_groups.artifacts]]\nname = 'shell-logs'\npaths = ['target/debug/app']\nwhen = 'always'\n";
+const RESTORE_CACHE_ON: &str = "[[test_groups]]\nname = 'shell'\nroot = '.'\nfilter = 'binary(it) and test(~cargo_)'\nneeds = ['cargo']\nrestore_cache = true\n";
+const SWEEP_CONFIGS: &[(&str, &str)] = &[
+    ("mbx_shared_store", SHARED_STORE_ON),
+    ("cache_debug", CACHE_DEBUG_ON),
+    ("test_groups", TEST_GROUPS_ON),
+    ("test_groups.artifacts", ARTIFACTS_ON),
+    ("test_groups.restore_cache", RESTORE_CACHE_ON),
+];
+
+pub(crate) struct StepRef<'a> {
+    pub(crate) id: &'a str,
+    pub(crate) reference: &'a str,
+}
 
 fn rust_sources(dir: &Path, out: &mut Vec<PathBuf>) -> std::io::Result<()> {
     for entry in fs::read_dir(dir)? {
@@ -56,16 +72,11 @@ pub(crate) fn gate_patches() -> Result<BTreeSet<u64>, Box<dyn Error>> {
     Ok(patches)
 }
 
-fn gate_patch(key: &str) -> Result<u64, Box<dyn Error>> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/key_gates/rust_ci.rs");
-    let text = fs::read_to_string(path)?;
-    let (_, after) = text
-        .split_once(&format!("\"{key}\""))
-        .ok_or_else(|| format!("the {key} gate is missing"))?;
-    patches_in(after)
-        .first()
-        .copied()
-        .ok_or_else(|| format!("the {key} gate has no threshold").into())
+pub(crate) fn gate_patch(key: &str) -> Result<u64, Box<dyn Error>> {
+    velnor_gen::key_gates()
+        .find(|gate| gate.key == key && gate.value.is_none())
+        .map(|gate| gate.first.2)
+        .ok_or_else(|| format!("the {key} gate is missing").into())
 }
 
 pub(crate) fn strings<'a>(value: &'a Value, out: &mut Vec<&'a str>) {
@@ -84,7 +95,7 @@ pub(crate) fn expressions(text: &str) -> Vec<&str> {
         .collect()
 }
 
-pub(crate) fn step_refs(expr: &str) -> Vec<&str> {
+pub(crate) fn step_refs(expr: &str) -> Vec<StepRef<'_>> {
     expr.match_indices("steps.")
         .filter(|(at, _)| {
             expr[..*at]
@@ -97,15 +108,22 @@ pub(crate) fn step_refs(expr: &str) -> Vec<&str> {
             let id_len = rest
                 .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '-'))
                 .unwrap_or(rest.len());
-            (id_len > 0 && rest[id_len..].starts_with('.')).then(|| &rest[..id_len])
+            let reference_len = rest
+                .find(|c: char| !(c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.')))
+                .unwrap_or(rest.len());
+            (id_len > 0).then(|| StepRef {
+                id: &rest[..id_len],
+                reference: &expr[at..at + "steps.".len() + reference_len],
+            })
         })
         .collect()
 }
 
-pub(crate) fn dangling_refs(workflow: &Value) -> Vec<String> {
+pub(crate) fn dangling_refs(workflow: &Value) -> (usize, Vec<String>) {
+    let mut checked = 0;
     let mut dangling = Vec::new();
     let Some(jobs) = workflow["jobs"].as_object() else {
-        return dangling;
+        return (checked, dangling);
     };
     for (job_id, job) in jobs {
         let ids: BTreeSet<&str> = job["steps"]
@@ -118,9 +136,15 @@ pub(crate) fn dangling_refs(workflow: &Value) -> Vec<String> {
         strings(job, &mut texts);
         for text in texts {
             for expr in expressions(text) {
-                for id in step_refs(expr) {
-                    if !ids.contains(id) {
-                        dangling.push(format!("{job_id}: steps.{id} in `{expr}`"));
+                for found in step_refs(expr) {
+                    checked += 1;
+                    if !ids.contains(found.id) {
+                        dangling.push(format!(
+                            "{job_id}: `{}` names no step of this job (id `{}`) in `{}`",
+                            found.reference,
+                            found.id,
+                            expr.trim()
+                        ));
                     }
                 }
             }
@@ -128,70 +152,152 @@ pub(crate) fn dangling_refs(workflow: &Value) -> Vec<String> {
     }
     dangling.sort();
     dangling.dedup();
-    dangling
+    (checked, dangling)
+}
+
+fn shape(text: &str, helper: &str) -> String {
+    text.lines()
+        .filter(|line| !line.starts_with("# velnor-gen-sha256:"))
+        .map(|line| line.replace(helper, "HELPER"))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn sweep_job(
+    patch: u64,
+    config: Option<&str>,
+    seen: &Mutex<HashSet<String>>,
+) -> Result<(usize, Vec<String>), Box<dyn Error>> {
+    let helper = format!("0.1.{patch}");
+    let mut repo = view(
+        &["Cargo.toml", "tools/Cargo.toml"],
+        config.map(str::as_bytes),
+    )?;
+    pin_helper(&mut repo, &helper)?;
+    let text = workflow(&repo)?;
+    if !seen
+        .lock()
+        .map_err(|_| "the render set is poisoned")?
+        .insert(shape(&text, &helper))
+    {
+        return Ok((0, Vec::new()));
+    }
+    let (checked, dangling) = dangling_refs(&crate::yaml_tree::document(&text)?);
+    let failures = dangling
+        .into_iter()
+        .map(|found| format!("helper {helper}, config {config:?}: {found}"))
+        .collect();
+    Ok((checked, failures))
 }
 
 #[test]
 fn every_steps_reference_names_a_step_of_its_own_job() -> TestResult {
-    let mut refs = 0;
     let patches = gate_patches()?;
-    let shared_store = gate_patch("mbx_shared_store")?;
-    let cache_debug = gate_patch("cache_debug")?;
-    let test_groups = gate_patch("test_groups")?;
+    let mut thresholds = Vec::new();
+    for (key, config) in SWEEP_CONFIGS {
+        thresholds.push((gate_patch(key)?, *config));
+    }
     assert!(
         patches.contains(&velnor_gen::HELPER_MINIMUM.2)
-            && patches.contains(&shared_store)
-            && patches.contains(&cache_debug)
-            && patches.contains(&test_groups),
-        "gate scan found {patches:?}, which misses the minimum, shared-store, cache_debug or test_groups gate"
+            && thresholds.iter().all(|(gate, _)| patches.contains(gate)),
+        "gate scan found {patches:?}, which misses a sweep gate in {SWEEP_CONFIGS:?}"
     );
+    let mut work: Vec<(u64, Option<&str>)> = Vec::new();
     for patch in patches {
-        let helper = format!("0.1.{patch}");
-        let mut configs: Vec<Option<&str>> = vec![None];
-        if patch >= shared_store {
-            configs.extend([Some(SHARED_STORE_ON), Some(SHARED_STORE_OFF)]);
-        }
-        if patch >= cache_debug {
-            configs.push(Some(CACHE_DEBUG_ON));
-        }
-        if patch >= test_groups {
-            configs.push(Some(TEST_GROUPS_ON));
-        }
-        for config in configs {
-            let mut repo = view(
-                &["Cargo.toml", "tools/Cargo.toml"],
-                config.map(str::as_bytes),
-            )?;
-            pin_helper(&mut repo, &helper)?;
-            let yaml = crate::yaml_tree::document(&workflow(&repo)?)?;
-            let mut texts = Vec::new();
-            strings(&yaml, &mut texts);
-            refs += texts
-                .iter()
-                .flat_map(|text| expressions(text))
-                .map(|expr| step_refs(expr).len())
-                .sum::<usize>();
-            let dangling = dangling_refs(&yaml);
-            assert!(
-                dangling.is_empty(),
-                "helper {helper}, config {config:?}: {dangling:#?}"
-            );
+        work.push((patch, None));
+        for (gate, config) in &thresholds {
+            if patch >= *gate {
+                work.push((patch, Some(config)));
+            }
         }
     }
+    let seen = Mutex::new(HashSet::new());
+    let next = AtomicUsize::new(0);
+    let workers = thread::available_parallelism()
+        .map_or(1, usize::from)
+        .min(4);
+    let results: Vec<Result<(usize, Vec<String>), String>> = thread::scope(|scope| {
+        let handles: Vec<_> = (0..workers)
+            .map(|_| {
+                scope.spawn(|| {
+                    let mut refs = 0;
+                    let mut failures = Vec::new();
+                    while let Some(&(patch, config)) =
+                        work.get(next.fetch_add(1, Ordering::Relaxed))
+                    {
+                        let (checked, found) =
+                            sweep_job(patch, config, &seen).map_err(|error| error.to_string())?;
+                        refs += checked;
+                        failures.extend(found);
+                    }
+                    Ok((refs, failures))
+                })
+            })
+            .collect();
+        handles
+            .into_iter()
+            .map(|handle| {
+                handle
+                    .join()
+                    .unwrap_or_else(|_| Err("a sweep worker panicked".to_owned()))
+            })
+            .collect()
+    });
+    let mut refs = 0;
+    let mut failures = Vec::new();
+    for result in results {
+        let (checked, found) = result?;
+        refs += checked;
+        failures.extend(found);
+    }
+    failures.sort();
+    assert!(failures.is_empty(), "{failures:#?}");
     assert_ne!(refs, 0, "no steps reference was checked");
     Ok(())
+}
+
+fn references(expr: &str) -> Vec<(&str, &str)> {
+    step_refs(expr)
+        .into_iter()
+        .map(|found| (found.id, found.reference))
+        .collect()
 }
 
 #[test]
 fn the_reference_check_reads_only_expressions_and_only_step_ids() {
     assert_eq!(
-        step_refs("steps.toolsanchor.outputs.cache-hit == 'true' && x.steps.nope.y"),
-        vec!["toolsanchor"]
+        references("steps.toolsanchor.outputs.cache-hit == 'true' && x.steps.nope.y"),
+        vec![("toolsanchor", "steps.toolsanchor.outputs.cache-hit")]
     );
-    assert_eq!(step_refs("steps.a-b_1.outputs.x"), vec!["a-b_1"]);
-    assert_eq!(step_refs("steps.toolsanchor"), Vec::<&str>::new());
+    assert_eq!(
+        references("steps.a-b_1.outputs.x"),
+        vec![("a-b_1", "steps.a-b_1.outputs.x")]
+    );
+    assert_eq!(
+        references("toJSON(steps.toolsanchor)"),
+        vec![("toolsanchor", "steps.toolsanchor")]
+    );
     assert_eq!(
         expressions("run $x steps.a.b ${{ steps.c.outputs.d }} tail"),
         vec![" steps.c.outputs.d "]
+    );
+}
+
+#[test]
+fn a_dangling_name_sharing_a_prefix_with_a_real_step_is_reported_whole() {
+    let workflow = json!({"jobs": {"rust-root": {"steps": [
+        {"id": "toolsanchor", "run": "true"},
+        {"run": "${{ steps.toolsanchor.outputs.cache-hit }}"},
+        {"run": "${{ steps.toolsanchorx.outputs.cache-hit == 'true' }}"},
+        {"run": "${{ toJSON(steps.toolsanchor2) }}"},
+    ]}}});
+    let (checked, dangling) = dangling_refs(&workflow);
+    assert_eq!(checked, 3);
+    assert_eq!(
+        dangling,
+        vec![
+            "rust-root: `steps.toolsanchor2` names no step of this job (id `toolsanchor2`) in `toJSON(steps.toolsanchor2)`",
+            "rust-root: `steps.toolsanchorx.outputs.cache-hit` names no step of this job (id `toolsanchorx`) in `steps.toolsanchorx.outputs.cache-hit == 'true'`",
+        ]
     );
 }

@@ -258,3 +258,68 @@ fn a_non_numeric_hit_count_is_unparsed_not_dropped() -> ResultTest {
     assert!(fails_closed(&metrics), "{metrics:?}");
     Ok(())
 }
+
+fn lane_with_mbx_report(
+    name: &str,
+    report: &str,
+) -> Result<velnor_ci::report::LaneMetrics, Box<dyn std::error::Error>> {
+    let repo = fixture(name)?;
+    repo.write("mise.toml", "[wrappers.cargo]\ncommand = \"mbx\"\n");
+    let root = fs::canonicalize(repo.root())?;
+    let mut invocation = crate::report::lane()["invocations"][0].clone();
+    invocation["root"] = json!(root);
+    invocation["argv"] = json!(["cargo", "build", "--workspace"]);
+    invocation["started_at"] = json!(2_000_000);
+    invocation["compilations"] = json!([]);
+    invocation["progress"] = serde_json::Value::Null;
+    invocation["log_start"] = json!(0);
+    invocation["log_end"] = json!(0);
+    invocation["artifacts"] = json!([registry_compiled_unit()]);
+    fs::write(repo.root().join("velnor-run.log"), "")?;
+    fs::write(
+        repo.root().join("velnor-invocations.jsonl"),
+        format!("{invocation}\n"),
+    )?;
+    let reports = repo.root().join("velnor-mbx-reports");
+    fs::create_dir_all(&reports)?;
+    fs::write(reports.join("1-1-0.expected"), "")?;
+    fs::write(reports.join("1-1-0.json"), report)?;
+    with_store(&repo, false)
+}
+
+#[test]
+fn a_lane_whose_only_mbx_reports_are_probes_still_compiled_without_mbx() -> ResultTest {
+    let idle = r#"{"version":5,"hits":0,"misses":0,"unconsulted":0,"bypasses":{"compiler-query":2,"standard-input":1}}"#;
+    let probed = lane_with_mbx_report("report-mbx-probe-only", idle)?;
+    assert_eq!(probed.mbx.sessions.len(), 1, "{probed:?}");
+    assert_eq!(probed.mbx.sessions[0].bypasses.len(), 2, "{probed:?}");
+    assert!(
+        probed
+            .violations
+            .iter()
+            .any(|line| line.contains("compiled without mbx")),
+        "{:?}",
+        probed.violations
+    );
+    let compiled =
+        r#"{"version":5,"hits":0,"misses":3,"unconsulted":0,"bypasses":{"compiler-query":2}}"#;
+    let real = lane_with_mbx_report("report-mbx-probe-and-compile", compiled)?;
+    assert!(waste_gates(&real).is_empty(), "{:?}", real.violations);
+    Ok(())
+}
+
+#[test]
+fn a_lane_whose_only_mbx_report_is_verification_only_is_a_session_not_compiled_without_mbx()
+-> ResultTest {
+    let verified = r#"{"version":5,"hits":0,"misses":0,"unconsulted":0,"verifications":4,"bypasses":{},"compiler":{}}"#;
+    let metrics = lane_with_mbx_report("report-mbx-verification-only", verified)?;
+    assert_eq!(metrics.mbx.sessions.len(), 1, "{metrics:?}");
+    assert_eq!(
+        metrics.mbx.sessions[0].verifications,
+        Some(4),
+        "{metrics:?}"
+    );
+    assert!(!metrics.mbx.sessions[0].probe_only, "{metrics:?}");
+    assert!(waste_gates(&metrics).is_empty(), "{:?}", metrics.violations);
+    Ok(())
+}

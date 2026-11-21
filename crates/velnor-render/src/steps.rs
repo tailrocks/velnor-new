@@ -1,10 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
+
 use velnor_model::{
-    CacheKey, CargoCommand, GateNeed, HelperCommand, Job, MERGE_GROUP_SKIP_OUTPUT,
-    MERGE_GROUP_STEP, Step, StepKind, TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT,
-    TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, WorkflowPlan, group_output_name,
+    CacheKey, CargoCommand, GateNeed, HelperCommand, Job, RepoPath, SetupOrder, Step, StepKind,
+    WorkflowPlan, group_output_name,
 };
 
 use crate::artifact_steps::{download_step, upload_cargo_log, upload_step};
@@ -46,7 +47,10 @@ pub(crate) const MISE_VERSION: &str = "2026.11.10";
 mod chained_save;
 #[path = "steps_helpers.rs"]
 mod steps_helpers;
-use steps_helpers::{extra_conditions, leading_steps, rustup_add, variable};
+#[path = "steps_outputs.rs"]
+mod steps_outputs;
+use steps_helpers::{after_setup, extra_conditions, leading_steps, root_key, rustup_add, variable};
+use steps_outputs::{merge_group_output, test_outputs};
 
 pub(crate) const CACHE_RESTORE: &str =
     "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
@@ -56,88 +60,61 @@ const A_NEED_FAILED: &str =
 
 pub(crate) fn rendered_job(job: &Job, plan: &WorkflowPlan) -> RenderedJob {
     let (restores, audit) = crate::base_steps::job_setup(job);
-    let lane = crate::cargo::cargo_lane(job);
+    let lane = crate::cargo::cargo_lane(job, plan);
     let tests = Tests::of(job);
     let mut steps =
         crate::helper_integrity::secure_steps(job, job_steps(job, restores, audit, &tests, lane));
     let mut env = crate::cargo::hoist_target_dir(job, &mut steps);
     env.extend(crate::cargo_target::mbx_reports_env(job));
     crate::shared_runs::mark(job, &mut steps);
-    crate::mise_digest::pin_to_runner_platform(RenderedJob {
-        id: job.id.to_string(),
-        name: job.name.clone(),
-        check_name: crate::selection_name::title(job),
-        comment: job.comment.clone(),
-        env,
-        needs: job.needs.iter().map(ToString::to_string).collect(),
-        condition: Some(crate::base_steps::audited_lane(
-            admission(
-                job.when,
-                job.gate.as_ref(),
-                job.pr,
-                &job.needs,
-                job.skip_after_merge_group.as_ref(),
-            ),
-            job,
-        )),
-        runs_on: job.runs_on.as_str().to_owned(),
-        fork_runner: crate::workflow::fork_runner(job, plan),
-        trusted_runner: crate::workflow::trusted_runner(job, plan),
-        permissions: permission_pairs(&job.permissions),
-        timeout_minutes: job.timeout_minutes,
-        outputs: job
-            .plan_outputs
-            .iter()
-            .map(|(slug, need)| {
-                let key = output(slug, *need);
-                let value = format!("${{{{ steps.{PLAN_STEP}.outputs.{key} }}}}");
-                (key, value)
-            })
-            .chain(job.group_outputs.iter().map(|(slug, name)| {
-                let key = group_output_name(slug, name);
-                let value = format!("${{{{ steps.{PLAN_STEP}.outputs.{key} }}}}");
-                (key, value)
-            }))
-            .chain(test_outputs(job, &tests))
-            .chain(merge_group_output(job))
-            .chain(crate::tools_steps::anchor_outputs(&job.steps))
-            .chain(lane_outputs(&job.steps))
-            .chain(crate::base_steps::public::job_output(&job.steps))
-            .collect(),
-        cache_mode: crate::cache::saving_mode(job),
-        steps,
-        ..RenderedJob::default()
-    })
-}
-
-fn test_outputs<'a>(job: &'a Job, tests: &'a Tests) -> impl Iterator<Item = (String, String)> + 'a {
-    job.steps
-        .iter()
-        .any(|step| matches!(&step.kind, StepKind::Cargo(command) if reports_tests(command)))
-        .then(|| {
-            [
-                Some(TESTS_RUN_OUTPUT),
-                Some(TESTS_LISTED_OUTPUT),
-                job.reports_ignored.then_some(TESTS_IGNORED_OUTPUT),
-                Some(TESTS_BY_PACKAGE_OUTPUT),
-            ]
-        })
-        .into_iter()
-        .flatten()
-        .flatten()
-        .flat_map(|name| tests.outputs(name))
-}
-
-fn merge_group_output(job: &Job) -> Option<(String, String)> {
-    job.steps
-        .iter()
-        .any(|step| matches!(step.kind, StepKind::MergeGroupPassed { .. }))
-        .then(|| {
-            (
-                MERGE_GROUP_SKIP_OUTPUT.to_owned(),
-                format!("${{{{ steps.{MERGE_GROUP_STEP}.outputs.skip }}}}"),
-            )
-        })
+    crate::mise_digest::pin_to_runner_platform(
+        RenderedJob {
+            id: job.id.to_string(),
+            name: job.name.clone(),
+            check_name: crate::selection_name::title(job),
+            comment: job.comment.clone(),
+            env,
+            needs: job.needs.iter().map(ToString::to_string).collect(),
+            condition: Some(crate::base_steps::audited_lane(
+                admission(
+                    job.when,
+                    job.gate.as_ref(),
+                    job.pr,
+                    &job.needs,
+                    job.skip_after_merge_group.as_ref(),
+                ),
+                job,
+            )),
+            runs_on: job.runs_on.as_str().to_owned(),
+            fork_runner: crate::workflow::fork_runner(job, plan),
+            trusted_runner: crate::workflow::trusted_runner(job, plan),
+            permissions: permission_pairs(&job.permissions),
+            timeout_minutes: job.timeout_minutes,
+            outputs: job
+                .plan_outputs
+                .iter()
+                .map(|(slug, need)| {
+                    let key = output(slug, *need);
+                    let value = format!("${{{{ steps.{PLAN_STEP}.outputs.{key} }}}}");
+                    (key, value)
+                })
+                .chain(job.group_outputs.iter().map(|(slug, name)| {
+                    let key = group_output_name(slug, name);
+                    let value = format!("${{{{ steps.{PLAN_STEP}.outputs.{key} }}}}");
+                    (key, value)
+                }))
+                .chain(test_outputs(job, &tests))
+                .chain(merge_group_output(job))
+                .chain(crate::tools_steps::anchor_outputs(&job.steps))
+                .chain(lane_outputs(&job.steps))
+                .chain(crate::base_steps::public::job_output(&job.steps))
+                .collect(),
+            cache_mode: crate::cache::saving_mode(job),
+            steps,
+            ..RenderedJob::default()
+        },
+        crate::job_helper::release_of(job, plan),
+    )
 }
 
 fn job_steps(
@@ -155,45 +132,55 @@ fn job_steps(
     job.steps
         .iter()
         .enumerate()
-        .scan(false, |replanned, (index, step)| {
-            let setup = Setup::of(restores, *replanned);
-            *replanned |= step.kind == StepKind::Helper(HelperCommand::PlanFull);
-            let around = Around {
-                id: gate.id(index),
-                saved_after: gate.required(),
-                chained: job.chained_saves,
-                job_name: job.name.as_deref(),
-            };
-            let mut rendered = rendered_steps(step, setup, audit, tests, lane, around);
-            let tools_key = matches!(
-                &step.kind,
-                StepKind::CacheRestore(velnor_model::CacheKey::Tools { .. })
-                    | StepKind::CacheSave(velnor_model::CacheKey::Tools { .. })
-            );
-            for body in &mut rendered {
-                body.shared |= verified && tools_key;
-            }
-            let mut steps = Vec::from_iter(gate.saveable(index));
-            steps.extend(crate::base_steps::audited_save(
-                job,
-                step,
-                rendered,
-                gate.audit_runs(index),
-            ));
-            Some(steps)
-        })
+        .scan(
+            (false, BTreeMap::<Option<RepoPath>, Vec<String>>::new()),
+            |(replanned, setups), (index, step)| {
+                let setup = Setup::of(restores, *replanned);
+                *replanned |= step.kind == StepKind::Helper(HelperCommand::PlanFull);
+                let own = (step.setup_order == SetupOrder::AfterSetup
+                    && matches!(step.kind, StepKind::TestSetup { .. }))
+                .then(|| format!("test_setup_{index}"));
+                let around = Around {
+                    id: gate.id(index).or(own.as_deref()),
+                    saved_after: gate.required(),
+                    chained: job.chained_saves,
+                    job_name: job.name.as_deref(),
+                    after_setup: after_setup(step, setups),
+                };
+                let mut rendered = rendered_steps(step, setup, audit, tests, lane, &around);
+                let tools_key = matches!(
+                    &step.kind,
+                    StepKind::CacheRestore(velnor_model::CacheKey::Tools { .. })
+                        | StepKind::CacheSave(velnor_model::CacheKey::Tools { .. })
+                );
+                for body in &mut rendered {
+                    body.shared |= verified && tools_key;
+                }
+                if let Some(id) = own {
+                    setups.entry(root_key(step)).or_default().push(id);
+                }
+                let mut steps = Vec::from_iter(gate.saveable(index));
+                steps.extend(crate::base_steps::audited_save(
+                    job,
+                    step,
+                    rendered,
+                    gate.audit_runs(index),
+                ));
+                Some(steps)
+            },
+        )
         .flatten()
         .collect()
 }
 
 /// What the job around a step adds to it.
-#[derive(Clone, Copy)]
 struct Around<'a> {
     /// The id a compile or audit step gets so a save can wait for it.
     id: Option<&'a str>,
     saved_after: &'a [String],
     chained: bool,
     job_name: Option<&'a str>,
+    after_setup: Vec<String>,
 }
 
 fn rendered_steps(
@@ -202,7 +189,7 @@ fn rendered_steps(
     audit: bool,
     tests: &Tests,
     lane: CargoLane,
-    around: Around<'_>,
+    around: &Around<'_>,
 ) -> Vec<RenderedStep> {
     let job_name = around.job_name;
     let mut rendered = leading_steps(step, audit, lane);
@@ -212,11 +199,7 @@ fn rendered_steps(
     }
     rendered.push(body);
     if let StepKind::SourcesFetchAll { manifests, .. } = &step.kind {
-        rendered.extend(sources_fetch_all_rest(
-            manifests,
-            lane.cache_debug,
-            lane.offline,
-        ));
+        rendered.extend(sources_fetch_all_rest(manifests, lane));
     }
     for body in &mut rendered {
         if let (StepKind::Cargo(_), Some(target)) = (&step.kind, &step.target_dir) {
@@ -230,7 +213,7 @@ fn rendered_steps(
                 Value::Text(name.to_owned()),
             ));
         }
-        let extra = extra_conditions(step, setup);
+        let extra = extra_conditions(step, setup, &around.after_setup);
         body.condition = chained_save::combined(
             around.chained,
             step,
@@ -319,9 +302,7 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
         StepKind::RustComponents(components) => rustup_add("component", components),
         StepKind::RustTargets(targets) => rustup_add("target", targets),
         StepKind::SourcesFetch { position, .. } => sources_fetch(*position, lane),
-        StepKind::SourcesFetchAll { manifests, .. } => {
-            sources_fetch_all(manifests, lane.cache_debug, lane.offline)
-        }
+        StepKind::SourcesFetchAll { manifests, .. } => sources_fetch_all(manifests, lane),
         StepKind::Cargo(command) => cargo_step(
             command,
             step.manifest.as_ref(),
@@ -348,6 +329,7 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
         StepKind::MbxPin => crate::helper_steps::mbx_pin_step(),
         StepKind::CratesMirror(mirror) => crate::helper_steps::mirror_step(mirror),
         StepKind::MbxStore | StepKind::MbxPrivate => crate::helper_steps::mbx_local_step(kind),
+        StepKind::MbxOutDirs => crate::mbx_out_dirs::mbx_out_dirs_step(),
         StepKind::RepositoryPrivacy
         | StepKind::PrivateCheck { .. }
         | StepKind::PrivateToken { .. }
