@@ -103,7 +103,7 @@ fn the_helper_bootstrap_job_never_saves_so_its_caches_are_not_labelled() -> Test
 #[test]
 fn every_save_step_the_report_names_is_rendered_in_its_job() -> TestResult {
     let lock = "version = 4\n\n[[package]]\nname = \"shared\"\nversion = \"1.0.0\"\nsource = \"git+https://github.com/acme/shared-lib?branch=main#abc\"\n";
-    let mut repo = crate::base_save::pinned("0.1.111", "")?;
+    let mut repo = crate::base_save::pinned("0.1.112", "")?;
     repo.files
         .insert(RepoPath::new("Cargo.lock")?, lock.as_bytes().to_vec());
     assert_named_saves_are_rendered(&repo)
@@ -112,7 +112,7 @@ fn every_save_step_the_report_names_is_rendered_in_its_job() -> TestResult {
 #[test]
 fn a_public_lint_job_names_only_the_saves_it_renders() -> TestResult {
     assert_named_saves_are_rendered(&crate::base_save::pinned(
-        "0.1.111",
+        "0.1.112",
         "shape = \"lint-test\"\n",
     )?)
 }

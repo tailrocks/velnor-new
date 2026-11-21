@@ -10,18 +10,19 @@ use velnor_model::{
     PushAfterMergeGroup, RepoFacts, Step, StepKind, ToolsLocalVerb, ToolsTelemetry, When,
 };
 
-const REPORT_FIELDS_HELPER: (u64, u64, u64) = (0, 1, 111);
+const NOT_GENERATED_HELPER: (u64, u64, u64) = (0, 1, 111);
+const REPORT_FIELDS_HELPER: (u64, u64, u64) = (0, 1, 112);
 
-fn reads_report_fields(facts: &RepoFacts) -> bool {
+fn helper_at_least(facts: &RepoFacts, gate: (u64, u64, u64)) -> bool {
     facts
         .helper
         .as_ref()
-        .is_some_and(|helper| helper.version().at_least(REPORT_FIELDS_HELPER))
+        .is_some_and(|helper| helper.version().at_least(gate))
 }
 
 fn not_generated(facts: &RepoFacts) -> Option<&'static str> {
     let refused = facts.private_sources.is_some()
-        && reads_report_fields(facts)
+        && helper_at_least(facts, NOT_GENERATED_HELPER)
         && !crate::base_cache::writes_base(facts);
     refused.then_some("private dependencies")
 }
@@ -37,7 +38,7 @@ fn attach(facts: &RepoFacts, jobs: &mut [Job], maintenance: Option<&Job>) -> Job
                 })
         });
     let not_generated = not_generated(facts);
-    let optional_saves = reads_report_fields(facts);
+    let optional_saves = helper_at_least(facts, REPORT_FIELDS_HELPER);
     let mut producers = Vec::new();
     for job in jobs {
         let saves = job
