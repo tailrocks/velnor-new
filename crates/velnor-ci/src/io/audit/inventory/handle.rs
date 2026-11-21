@@ -3,16 +3,19 @@
 
 use std::ffi::{OsStr, OsString};
 use std::io;
-use std::os::fd::{AsFd, BorrowedFd};
+use std::os::fd::{AsFd, OwnedFd};
 use std::os::unix::ffi::OsStringExt;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use nix::dir::Dir;
-use nix::fcntl::{AT_FDCWD, AtFlags, OFlag, openat, readlinkat};
-use nix::sys::stat::{Mode, SFlag, fstat, fstatat};
+use nix::fcntl::{AtFlags, readlinkat};
+use nix::fcntl::{OFlag, openat};
+use nix::sys::stat::Mode;
+use nix::sys::stat::{SFlag, fstat, fstatat};
 
 use super::Kind;
+use super::resolve;
 use super::walk::unresolved_link;
 
 pub(super) type Opened = Rc<Dir>;
@@ -41,14 +44,13 @@ pub(super) fn replaced(error: &io::Error) -> bool {
 }
 
 pub(super) fn open(origin: &Origin, path: &Path) -> io::Result<Dir> {
-    let flags = OFlag::O_RDONLY | OFlag::O_DIRECTORY | OFlag::O_NOFOLLOW | OFlag::O_CLOEXEC;
     let fd = match origin {
-        Origin::Path => openat(AT_FDCWD, path, flags, Mode::empty()),
+        Origin::Path => resolve::open_path(path, true)?,
         Origin::Child { parent, name } => {
-            openat(parent.as_ref(), name.as_os_str(), flags, Mode::empty())
+            let flags = OFlag::O_RDONLY | OFlag::O_DIRECTORY | OFlag::O_NOFOLLOW | OFlag::O_CLOEXEC;
+            openat(parent.as_ref(), name.as_os_str(), flags, Mode::empty()).map_err(failure)?
         }
-    }
-    .map_err(failure)?;
+    };
     Dir::from_fd(fd).map_err(failure)
 }
 pub(super) fn identity(directory: &Dir) -> io::Result<Identity> {
@@ -56,7 +58,24 @@ pub(super) fn identity(directory: &Dir) -> io::Result<Identity> {
     Ok((stat.st_dev, stat.st_ino))
 }
 pub(super) fn current(origin: &Origin, path: &Path) -> io::Result<Current> {
-    let (anchor, name) = anchor(origin, path);
+    let held: OwnedFd;
+    let (anchor, name) = match origin {
+        Origin::Child { parent, name } => (parent.as_fd(), name.as_os_str()),
+        Origin::Path => {
+            let (container, name) = match (path.parent(), path.file_name()) {
+                (Some(container), Some(name)) => (container, name),
+                _ => (path, OsStr::new(".")),
+            };
+            held = match resolve::open_path(container, false) {
+                Ok(held) => held,
+                Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                    return Ok(Current::Gone);
+                }
+                Err(error) => return Err(error),
+            };
+            (held.as_fd(), name)
+        }
+    };
     let stat = match fstatat(anchor, name, AtFlags::AT_SYMLINK_NOFOLLOW) {
         Ok(stat) => stat,
         Err(nix::errno::Errno::ENOENT) => return Ok(Current::Gone),
@@ -70,13 +89,6 @@ pub(super) fn current(origin: &Origin, path: &Path) -> io::Result<Current> {
         Some(kind) => Current::Other(kind),
         None => Current::Gone,
     })
-}
-
-fn anchor<'a>(origin: &'a Origin, path: &'a Path) -> (BorrowedFd<'a>, &'a OsStr) {
-    match origin {
-        Origin::Path => (AT_FDCWD, path.as_os_str()),
-        Origin::Child { parent, name } => (parent.as_fd(), name.as_os_str()),
-    }
 }
 
 pub(super) fn names(
@@ -111,17 +123,16 @@ pub(super) fn kind_at(directory: impl AsFd, name: &OsStr, path: &Path) -> io::Re
             Kind::Other
         }));
     }
-    let resolved = match std::fs::canonicalize(path) {
+    let target = match readlinkat(&directory, name) {
+        Ok(target) => PathBuf::from(target),
+        Err(nix::errno::Errno::ENOENT) => return Ok(None),
+        Err(errno) => return Err(failure(errno)),
+    };
+    let base = path.parent().unwrap_or(path);
+    let resolved = match resolve::resolve(directory.as_fd(), base, &target) {
         Ok(resolved) => Some(resolved),
         Err(error) if unresolved_link(&error) => None,
         Err(error) => return Err(error),
     };
-    match readlinkat(&directory, name) {
-        Ok(target) => Ok(Some(Kind::Link {
-            target: target.into(),
-            resolved,
-        })),
-        Err(nix::errno::Errno::ENOENT) => Ok(None),
-        Err(errno) => Err(failure(errno)),
-    }
+    Ok(Some(Kind::Link { target, resolved }))
 }
