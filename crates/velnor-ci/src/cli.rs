@@ -227,6 +227,12 @@ pub struct FetchArgs {
         help = "An absolute home directory used in place of the runner account's own"
     )]
     pub home: Option<PathBuf>,
+    #[arg(
+        long,
+        hide = true,
+        help = "Never look for the sealed runner toolchain under /opt/rust; find cargo only through --trusted-dir and the runner's own tool directories, as on a runner without one"
+    )]
+    pub no_fixed_toolchain: bool,
 }
 
 #[derive(Debug, Args)]

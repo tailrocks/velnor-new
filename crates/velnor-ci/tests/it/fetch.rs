@@ -136,6 +136,7 @@ impl Fixture {
             .arg(root.join("trusted"))
             .arg("--home")
             .arg(root.join("home"))
+            .arg("--no-fixed-toolchain")
             .env_clear()
             .env("PATH", path)
             .env("VELNOR_API_URL", &api.url)

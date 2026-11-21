@@ -77,7 +77,11 @@ fn fetch_with(
     token: Option<&str>,
 ) -> Result<Option<super::fetch_home::Scratch>, CiError> {
     let home = super::fetch_fixed::account_home(args.home.as_deref())?;
-    let fixed = super::fetch_fixed::Fixed::system().find();
+    let fixed = if args.no_fixed_toolchain {
+        None
+    } else {
+        super::fetch_fixed::Fixed::system().find()
+    };
     let mut roots = args.trusted_dir.clone();
     roots.extend(fixed.iter().flat_map(super::fetch_fixed::Located::roots));
     let mut trusted = Trusted::new(&home, &roots);
