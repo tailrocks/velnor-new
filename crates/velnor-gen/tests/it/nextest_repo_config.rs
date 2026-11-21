@@ -93,7 +93,9 @@ fn the_velnor_ci_serial_group_holds_every_plan_main_groups_test() -> TestResult 
     Ok(())
 }
 
-const TEN_SECOND_TESTS: [&str; 13] = [
+const TEN_SECOND_TESTS: [&str; 15] = [
+    "run::run_keeps_each_stream_and_every_byte_and_appends_one_record_per_command",
+    "io_target_case::checkout_under_a_cargo_ancestor_still_saves_its_default_target",
     "audit::build_directory::a_build_command_naming_a_build_directory_is_refused",
     "audit::groups::a_real_grouped_build_passes_the_audit",
     "audit::groups::a_real_grouped_build_passes_the_audit_through_a_symlinked_root",
@@ -173,6 +175,7 @@ fn the_measured_slow_velnor_ci_families_get_the_thirty_second_tier() -> TestResu
             "delta_freshness::changed_member_rechecks_every_cached_package",
             "plan_git::a_modified_file_selects_its_package_with_no_token",
             "io_report::provenance::links::tracked_link_cycle_cannot_prove_source_contents",
+            "mise_version_plan::a_change_to_mise_version_runs_the_velnor_gen_tests_that_read_it",
         ],
     )
 }
