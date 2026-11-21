@@ -17,7 +17,7 @@ use crate::pipeline::{pin_helper, view};
 use crate::private_sources::SECTION;
 use crate::release_fixture::{APP, Root, TOOLS, TWO_BINARIES, release_view};
 use crate::release_unguarded::expected_release;
-use crate::step_refs::{Scan, scan_workflow};
+use crate::step_refs::{Callees, Scan, scan_workflow};
 use crate::test_groups::{DATABASE, SHELL};
 
 const ROOTS: &[&str] = &["Cargo.toml", "tools/Cargo.toml"];
@@ -77,45 +77,46 @@ fn is_workflow(path: &RepoPath) -> bool {
     path.to_string().starts_with(".github/workflows/")
 }
 
-fn shape(text: &str, helper: &str) -> String {
-    text.lines()
-        .filter(|line| !line.starts_with("# velnor-gen-sha256:"))
-        .map(|line| line.replace(helper, "HELPER"))
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
 fn sweep_job(
     patch: u64,
     config: Option<&str>,
-    seen: &Mutex<HashSet<String>>,
+    seen: &Mutex<HashSet<(Option<String>, u64)>>,
 ) -> Result<(usize, Vec<String>), Box<dyn Error>> {
-    let helper = format!("0.1.{patch}");
     let mut repo = view(ROOTS, config.map(str::as_bytes))?;
-    pin_helper(&mut repo, &helper)?;
-    let files = generated(&mut repo)?;
-    let shaped: String = files
-        .iter()
-        .filter(|(path, _)| is_workflow(path))
-        .map(|(_, text)| shape(text, &helper))
-        .collect();
+    let effective = pinned(&mut repo, patch)?;
     if !seen
         .lock()
         .map_err(|_| "the render set is poisoned")?
-        .insert(shaped)
+        .insert((config.map(str::to_owned), effective))
     {
         return Ok((0, Vec::new()));
     }
+    let files = generated(&mut repo)?;
+    let callees = callees_of(&files)?;
     let mut scan = Scan::default();
     for (_, text) in files.iter().filter(|(path, _)| is_workflow(path)) {
-        scan_workflow(&crate::yaml_tree::document(text)?, &mut scan);
+        scan_workflow(&crate::yaml_tree::document(text)?, &callees, &mut scan);
     }
     let failures = scan
         .dangling
         .into_iter()
-        .map(|found| format!("helper {helper}, config {config:?}: {found}"))
+        .map(|found| format!("helper 0.1.{effective}, config {config:?}: {found}"))
         .collect();
     Ok((scan.refs, failures))
+}
+
+fn callees_of(files: &BTreeMap<RepoPath, String>) -> Result<Callees, Box<dyn Error>> {
+    let mut callees = Callees::new();
+    for (path, text) in files.iter().filter(|(path, _)| is_workflow(path)) {
+        let document = crate::yaml_tree::document(text)?;
+        let Some(outputs) = document["on"]["workflow_call"]["outputs"].as_object() else {
+            continue;
+        };
+        let names: BTreeSet<String> = outputs.keys().cloned().collect();
+        callees.insert(format!("./{path}"), names.clone());
+        callees.insert(path.to_string(), names);
+    }
+    Ok(callees)
 }
 
 fn generated(repo: &mut RepoView) -> Result<BTreeMap<RepoPath, String>, Box<dyn Error>> {
@@ -189,9 +190,11 @@ fn every_steps_reference_names_a_step_of_its_own_job() -> TestResult {
     Ok(())
 }
 
-fn pinned(repo: &mut RepoView, patch: u64) -> TestResult {
+fn pinned(repo: &mut RepoView, patch: u64) -> Result<u64, Box<dyn Error>> {
     let required = velnor_gen::required_helper(repo).map_or(0, |(_, _, patch)| patch);
-    pin_helper(repo, &format!("0.1.{}", patch.max(required)))
+    let effective = patch.max(required);
+    pin_helper(repo, &format!("0.1.{effective}"))?;
+    Ok(effective)
 }
 
 #[derive(Default)]
@@ -202,8 +205,9 @@ struct Sweep {
 
 impl Sweep {
     fn add(&mut self, label: &str, files: &BTreeMap<RepoPath, String>) -> TestResult {
+        let callees = callees_of(files)?;
         for (_, text) in files.iter().filter(|(path, _)| is_workflow(path)) {
-            scan_workflow(&crate::yaml_tree::document(text)?, &mut self.scan);
+            scan_workflow(&crate::yaml_tree::document(text)?, &callees, &mut self.scan);
         }
         self.problems.extend(
             self.scan
@@ -222,6 +226,7 @@ impl Sweep {
 
 fn rust_ci_sweep(cases: &[(Option<&str>, Option<&str>)]) -> TestResult {
     let mut sweep = Sweep::default();
+    let mut rendered = BTreeSet::new();
     for patch in gate_patches()? {
         for (config, tools) in cases {
             let mut repo = view(ROOTS, config.map(str::as_bytes))?;
@@ -229,8 +234,13 @@ fn rust_ci_sweep(cases: &[(Option<&str>, Option<&str>)]) -> TestResult {
                 repo.files
                     .insert(RepoPath::new("mise.toml")?, tools.as_bytes().to_vec());
             }
-            pinned(&mut repo, patch)?;
-            sweep.add(&format!("0.1.{patch}, {config:?}"), &generated(&mut repo)?)?;
+            let effective = pinned(&mut repo, patch)?;
+            if rendered.insert((format!("{config:?}{tools:?}"), effective)) {
+                sweep.add(
+                    &format!("0.1.{effective}, {config:?}"),
+                    &generated(&mut repo)?,
+                )?;
+            }
         }
     }
     sweep.finish();
@@ -265,14 +275,17 @@ fn every_steps_reference_in_the_release_workflow_names_a_step_of_its_own_job() -
         ),
     ];
     let mut sweep = Sweep::default();
+    let mut rendered = BTreeSet::new();
     for patch in gate_patches()? {
         for (roots, release_toml) in cases {
             let mut repo = release_view(roots, Some(release_toml))?;
-            pinned(&mut repo, patch)?;
-            sweep.add(
-                &format!("0.1.{patch}, {release_toml:?}"),
-                &expected_release(&repo)?,
-            )?;
+            let effective = pinned(&mut repo, patch)?;
+            if rendered.insert((release_toml, effective)) {
+                sweep.add(
+                    &format!("0.1.{effective}, {release_toml:?}"),
+                    &expected_release(&repo)?,
+                )?;
+            }
         }
     }
     sweep.finish();
