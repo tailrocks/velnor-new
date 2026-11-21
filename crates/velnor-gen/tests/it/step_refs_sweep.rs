@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use std::error::Error;
 use std::ops::RangeInclusive;
 
-use velnor_model::{RepoPath, RepoView};
+use velnor_model::{RepoPath, RepoView, WORKFLOWS_CONFIG_PATH};
 
 use crate::facts::{TestResult, lock_pinned_tools};
 use crate::lint_lane::{LINT as LINT_LANE, MISE};
@@ -153,6 +153,56 @@ fn every_steps_reference_in_the_release_workflow_names_a_step_of_its_own_job() -
                 &release_files(roots, release_toml, helper)?,
             )?;
         }
+    }
+    sweep.finish();
+    Ok(())
+}
+
+const REUSABLE: &str = r#"
+[[workflow]]
+file = "build-assets"
+name = "Build assets"
+
+[[workflow.job]]
+id = "build"
+permissions = { contents = "read" }
+
+[[workflow.job.step]]
+uses = "checkout"
+
+[[workflow.job.step]]
+id = "build"
+name = "Build"
+run = "cargo build --release --locked"
+
+[[workflow.job.step]]
+id = "upload"
+uses = "upload-artifact"
+with = { name = "assets", path = "target/release/app" }
+"#;
+
+fn reusable_files(helper: u64) -> Result<BTreeMap<RepoPath, String>, Box<dyn Error>> {
+    let mut repo = view(ROOTS, None)?;
+    repo.files
+        .insert(WORKFLOWS_CONFIG_PATH, REUSABLE.as_bytes().to_vec());
+    pin(&mut repo, helper)?;
+    lock_pinned_tools(&mut repo)?;
+    Ok(velnor_gen::expected_with_notes(&repo)?.0)
+}
+
+#[test]
+fn every_steps_reference_in_a_reusable_workflow_names_a_step_of_its_own_job() -> TestResult {
+    let mut sweep = Sweep::default();
+    for helper in helpers() {
+        let files = reusable_files(helper)?;
+        assert!(
+            files
+                .keys()
+                .any(|path| path.to_string() == ".github/workflows/build-assets.yml"),
+            "{:?}",
+            files.keys().collect::<Vec<_>>()
+        );
+        sweep.add(&format!("0.1.{helper}"), &files)?;
     }
     sweep.finish();
     Ok(())
