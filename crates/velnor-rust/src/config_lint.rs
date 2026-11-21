@@ -146,14 +146,10 @@ fn lint(raw: RawLint) -> Result<LintJob, Reason> {
         }
         ALINT => {
             foreign(kind, "task", raw.task.is_some())?;
+            foreign(kind, "tools", raw.tools.is_some())?;
             let config = config.ok_or(Reason::MissingKey("lint.config"))?;
-            let tools = tool_names(raw.tools.clone())?;
             (
-                LintKind::Alint {
-                    config,
-                    probe,
-                    tools,
-                },
+                LintKind::Alint { config, probe },
                 ALINT.to_owned(),
                 "Alint".to_owned(),
             )

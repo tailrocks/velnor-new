@@ -57,7 +57,6 @@ def skip_trivia(src, i):
 
 
 def attr_open(src, i):
-    """Index just past the "[" of an attribute opened by "#" at i, or None."""
     j = skip_trivia(src, i + 1)
     if j < len(src) and src[j] == "!":
         j = skip_trivia(src, j + 1)
@@ -108,7 +107,6 @@ def split_lines(text):
 
 
 def doc_text_tabs(text):
-    # rustdoc drops one space after the comment marker; tab stops count from there.
     if text.startswith(" "):
         return " " + text[1:].expandtabs(4)
     return text.expandtabs(4)
@@ -127,8 +125,6 @@ def markdown_hit(lines, indent):
 
 
 def value_has_fence(value):
-    # rustdoc unindents a doc value by the margin common to its non-blank lines,
-    # so an attribute whose lines are all indented has no indented code block.
     lines = [line.expandtabs(4) for line in split_lines(value)]
     margin = min((len(line) - len(line.lstrip(" ")) for line in lines if line.strip()), default=0)
     lines = [line[margin:] for line in lines]
@@ -211,7 +207,9 @@ def doc_findings(src):
         elif c == "#" and (j := attr_open(src, i)) is not None:
             attr_depth = 1
             paren = 0
-            name = IDENT.match(src, skip_trivia(src, j))
+            k = skip_trivia(src, j)
+            k += 2 if src.startswith("r#", k) else 0
+            name = IDENT.match(src, k)
             attr_name = name.group() if name else ""
             i = j
         elif c == "[":
@@ -245,8 +243,7 @@ def doc_findings(src):
                     i = end
             elif word in BYTE_PREFIX and j < len(src) and src[j] == '"':
                 i = skip_string(src, j)
-            elif doc_value and src.startswith("!", j) and word != "concat":
-                # Only literals and concat!/include_str! values are readable here.
+            elif doc_value and src.startswith("!", skip_trivia(src, j)) and word != "concat":
                 yield i
                 i = j
             else:
@@ -269,8 +266,6 @@ def rust_sources():
 
 
 def strip_shebang(src):
-    # rustc: "#!" is a shebang unless the next token after whitespace and
-    # comments is "[", which makes it an inner attribute.
     src = src.removeprefix("\ufeff")
     if src.startswith("#!") and not src.startswith("[", skip_trivia(src, 2)):
         first, newline, rest = src.partition("\n")

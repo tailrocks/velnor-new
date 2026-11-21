@@ -45,7 +45,6 @@ pub enum LintKind {
     Alint {
         config: RepoPath,
         probe: Option<RepoPath>,
-        tools: Vec<String>,
     },
     MiseTask {
         task: String,

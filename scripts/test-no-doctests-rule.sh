@@ -156,6 +156,8 @@ check cfg_doc_value    pass '#![allow(unexpected_cfgs)]\n#[cfg(doc = "```not doc
 check attr_env_macro   fail '#[doc = env!("MYDOC")]\npub fn f() {}\n'
 check attr_margin_pass pass '#[doc = "    assert!(true);"]\npub fn f() {}\n'
 check attr_margin_fence fail '#[doc = "    assert!(true);\\n\\nprose\\n\\n        code();"]\npub fn f() {}\n'
+check attr_gap_macro_bang fail '#[doc = env /* gap */ !("MYDOC")]\npub fn f() {}\n'
+check attr_raw_ident_doc fail '#[r#doc = "```\\nassert_eq!(1, 1);\\n```"]\npub fn f() {}\n'
 
 missing="$work/scanner_missing"
 mkdir -p "$missing/crates/fx/src"
