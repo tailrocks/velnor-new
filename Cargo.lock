@@ -4156,6 +4156,7 @@ dependencies = [
  "clap",
  "serde-saphyr",
  "serde_json",
+ "sha2",
  "similar",
  "toml",
  "velnor-model",
