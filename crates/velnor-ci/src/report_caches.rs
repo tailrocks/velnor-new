@@ -16,8 +16,19 @@ pub(crate) struct CachePlan {
     not_generated: Option<String>,
 }
 
+/// The `private_repo` step exists only on lanes with private base caches, and
+/// those caches are used only when the repository was positively confirmed. A
+/// step that failed, was skipped or wrote no readable verdict is not a
+/// confirmation.
 pub(crate) fn privacy_unavailable(steps: &Value) -> bool {
-    steps["private_repo"]["outputs"]["unavailable"] == "true"
+    let step = &steps["private_repo"];
+    if step.is_null() {
+        return false;
+    }
+    let outputs = &step["outputs"];
+    step["outcome"] != "success"
+        || outputs["unavailable"] == "true"
+        || !matches!(outputs["private"].as_str(), Some("true" | "false"))
 }
 
 pub(crate) fn observe_caches(
@@ -177,6 +188,36 @@ mod tests {
         assert!(!privacy_unavailable(&step(json!({"private": "false"}))));
         assert!(!privacy_unavailable(&step(json!({"private": "true"}))));
         assert!(!privacy_unavailable(&json!({})));
+    }
+
+    #[test]
+    fn a_private_repo_step_that_did_not_confirm_the_visibility_is_unavailable() {
+        for (label, step) in [
+            ("failed, no outputs", json!({"outcome": "failure"})),
+            (
+                "failed, empty outputs",
+                json!({"outcome": "failure", "outputs": {}}),
+            ),
+            ("skipped", json!({"outcome": "skipped", "outputs": {}})),
+            ("cancelled", json!({"outcome": "cancelled"})),
+            (
+                "succeeded without a verdict",
+                json!({"outcome": "success", "outputs": {}}),
+            ),
+            (
+                "succeeded with an unreadable verdict",
+                json!({"outcome": "success", "outputs": {"private": ""}}),
+            ),
+            (
+                "succeeded without an outcome",
+                json!({"outputs": {"private": "false"}}),
+            ),
+        ] {
+            assert!(
+                privacy_unavailable(&json!({"private_repo": step})),
+                "{label}"
+            );
+        }
     }
 
     #[test]

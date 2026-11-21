@@ -39,6 +39,17 @@ fn an_unavailable_privacy_lookup_reaches_the_metrics_and_fails_the_cache_check()
         "the Cache check must fail"
     );
     for (label, steps) in [
+        ("failed", r#"{"private_repo":{"outcome":"failure"}}"#),
+        (
+            "failed-empty",
+            r#"{"private_repo":{"outcome":"failure","outputs":{}}}"#,
+        ),
+    ] {
+        let metrics = lane(&format!("report-privacy-{label}"), steps)?;
+        assert!(metrics.privacy_unavailable, "{label}");
+        assert!(check(&[metrics]).is_err(), "{label}");
+    }
+    for (label, steps) in [
         (
             "public",
             r#"{"private_repo":{"outcome":"success","outputs":{"private":"false"}}}"#,
