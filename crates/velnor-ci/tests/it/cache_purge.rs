@@ -22,6 +22,7 @@ struct Api {
     running: RefCell<Vec<(&'static str, u64)>>,
     run_listings: Cell<usize>,
     promoted_to: Option<&'static str>,
+    workflows: RefCell<Vec<&'static str>>,
 }
 
 fn entry(id: u64, key: &str, reference: &str) -> Value {
@@ -40,12 +41,19 @@ impl Api {
             running: RefCell::default(),
             run_listings: Cell::default(),
             promoted_to: None,
+            workflows: RefCell::default(),
         }
     }
 
     fn with_runs(entries: Vec<Value>, runs: &[(&'static str, u64)]) -> Self {
         let api = Self::new(entries);
         *api.running.borrow_mut() = runs.to_vec();
+        api
+    }
+
+    fn with_workflows(entries: Vec<Value>, states: &[&'static str]) -> Self {
+        let api = Self::new(entries);
+        *api.workflows.borrow_mut() = states.to_vec();
         api
     }
 
@@ -58,6 +66,11 @@ impl Api {
 
 impl GitHub for Api {
     fn get(&self, path: &str) -> Result<String, CiError> {
+        if path.contains("/actions/workflows?") {
+            let states = self.workflows.borrow();
+            let rows: Vec<Value> = states.iter().map(|state| json!({"state": state})).collect();
+            return Ok(json!({"total_count":rows.len(),"workflows":rows}).to_string());
+        }
         if path.contains("/actions/runs?") {
             let status = path
                 .split("status=")

@@ -34,16 +34,36 @@ struct RunCount {
     total_count: u64,
 }
 
+#[derive(serde::Deserialize)]
+struct WorkflowList {
+    total_count: u64,
+    workflows: Vec<Workflow>,
+}
+
+#[derive(serde::Deserialize)]
+struct Workflow {
+    state: String,
+}
+
+fn enabled_workflows(github: &dyn GitHubWrite, repo: &Repo) -> Result<u64, CiError> {
+    let json = github.get(&format!("/repos/{repo}/actions/workflows?per_page=100"))?;
+    let list: WorkflowList = serde_json::from_str(&json)
+        .map_err(|e| CiError::new(format!("the workflow listing is not readable: {e}")))?;
+    if list.total_count != list.workflows.len() as u64 {
+        return Err(CiError::new(
+            "the workflow listing is incomplete; run purge-private again",
+        ));
+    }
+    Ok(list
+        .workflows
+        .iter()
+        .filter(|workflow| !workflow.state.starts_with("disabled"))
+        .count() as u64)
+}
+
 fn running_workflows(github: &dyn GitHubWrite, repo: &Repo) -> Result<u64, CiError> {
     let mut total = 0;
-    for status in [
-        "in_progress",
-        "queued",
-        "waiting",
-        "requested",
-        "pending",
-        "action_required",
-    ] {
+    for status in ["in_progress", "queued", "waiting", "requested", "pending"] {
         let json = github.get(&format!(
             "/repos/{repo}/actions/runs?status={status}&per_page=1"
         ))?;
@@ -59,6 +79,14 @@ pub fn purge_private(
     repo: &Repo,
     delete: bool,
 ) -> Result<String, CiError> {
+    if delete {
+        let enabled = enabled_workflows(github, repo)?;
+        if enabled > 0 {
+            return Err(CiError::new(format!(
+                "{enabled} workflows are enabled; disable every workflow before the purge so no run can start during it"
+            )));
+        }
+    }
     let first = running_workflows(github, repo)?;
     let second = running_workflows(github, repo)?;
     let running = first.max(second);
