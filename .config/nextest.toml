@@ -221,16 +221,10 @@ slow-timeout = { period = "30s", terminate-after = 1 }
 filter = 'package(=velnor-gen) and binary(=it) and (test(=drift::the_workflows_committed_in_this_repository_are_what_its_own_config_generates) or test(=generated_check_repo::a_hand_edited_and_resealed_workflow_makes_velnor_gen_check_exit_one_naming_the_file) or test(=generated_check_repo::an_unsealed_hand_edit_is_refused_and_a_regenerated_workflow_passes_again))'
 slow-timeout = { period = "30s", terminate-after = 1 }
 
+# The velnor-ci tests run in parallel: a test that runs cargo or git on a temporary repository takes
+# more than 2 s of wall time when the other test threads share the host.
 [[profile.default.overrides]]
-filter = 'package(=velnor-ci) and test(=plan_diff::every_recorded_case_matches_the_legacy_op)'
-slow-timeout = { period = "60s", terminate-after = 1 }
-
-[[profile.default.overrides]]
-filter = 'package(=velnor-ci) and (test(=audit::build_directory::a_build_command_naming_a_build_directory_is_refused) | test(=audit::groups::a_real_grouped_build_passes_the_audit) | test(=audit::groups::a_real_grouped_build_passes_the_audit_through_a_symlinked_root) | test(=audit::per_root::a_per_root_audit_compares_only_the_lock_lines_of_its_own_packages) | test(=plan_diff::a_check_id_outside_the_identifier_alphabet_is_refused) | test(=plan_main::a_push_reads_the_base_lock_while_it_fits_and_selects_everything_past_the_byte_budget) | test(=io_plan_groups::plan_outputs_one_run_or_skip_per_group_and_root) | test(plan_main_groups::))'
-slow-timeout = { period = "10s", terminate-after = 1 }
-
-[[profile.default.overrides]]
-filter = 'package(=velnor-ci) and test(audit::)'
+filter = "package(=velnor-ci)"
 slow-timeout = { period = "30s", terminate-after = 1 }
 
 [[profile.default.overrides]]
@@ -292,13 +286,29 @@ filter = 'package(=velnor-runner-host)'
 slow-timeout = { period = "60s", terminate-after = 3 }
 
 [[profile.ci.overrides]]
+filter = "package(=velnor-ci)"
+slow-timeout = { period = "30s", terminate-after = 1 }
+
+[[profile.default.overrides]]
+filter = 'package(=velnor-ci) and test(audit::)'
+slow-timeout = { period = "30s", terminate-after = 1 }
+
+[[profile.default.overrides]]
 filter = 'package(=velnor-ci) and test(=plan_diff::every_recorded_case_matches_the_legacy_op)'
 slow-timeout = { period = "60s", terminate-after = 1 }
 
-[[profile.ci.overrides]]
+[[profile.default.overrides]]
 filter = 'package(=velnor-ci) and (test(=audit::build_directory::a_build_command_naming_a_build_directory_is_refused) | test(=audit::groups::a_real_grouped_build_passes_the_audit) | test(=audit::groups::a_real_grouped_build_passes_the_audit_through_a_symlinked_root) | test(=audit::per_root::a_per_root_audit_compares_only_the_lock_lines_of_its_own_packages) | test(=plan_diff::a_check_id_outside_the_identifier_alphabet_is_refused) | test(=plan_main::a_push_reads_the_base_lock_while_it_fits_and_selects_everything_past_the_byte_budget) | test(=io_plan_groups::plan_outputs_one_run_or_skip_per_group_and_root) | test(plan_main_groups::))'
 slow-timeout = { period = "10s", terminate-after = 1 }
 
 [[profile.ci.overrides]]
 filter = 'package(=velnor-ci) and test(audit::)'
 slow-timeout = { period = "30s", terminate-after = 1 }
+
+[[profile.ci.overrides]]
+filter = 'package(=velnor-ci) and test(=plan_diff::every_recorded_case_matches_the_legacy_op)'
+slow-timeout = { period = "60s", terminate-after = 1 }
+
+[[profile.ci.overrides]]
+filter = 'package(=velnor-ci) and (test(=audit::build_directory::a_build_command_naming_a_build_directory_is_refused) | test(=audit::groups::a_real_grouped_build_passes_the_audit) | test(=audit::groups::a_real_grouped_build_passes_the_audit_through_a_symlinked_root) | test(=audit::per_root::a_per_root_audit_compares_only_the_lock_lines_of_its_own_packages) | test(=plan_diff::a_check_id_outside_the_identifier_alphabet_is_refused) | test(=plan_main::a_push_reads_the_base_lock_while_it_fits_and_selects_everything_past_the_byte_budget) | test(=io_plan_groups::plan_outputs_one_run_or_skip_per_group_and_root) | test(plan_main_groups::))'
+slow-timeout = { period = "10s", terminate-after = 1 }

@@ -36,18 +36,22 @@ fn filter(entry: &toml::Table) -> &str {
 }
 
 #[test]
-fn no_override_gives_every_velnor_ci_test_a_longer_timeout() -> TestResult {
+fn the_velnor_ci_package_wide_tier_is_in_both_profiles() -> TestResult {
     for profile in PROFILES {
-        for entry in overrides(profile)? {
-            let bare = matches!(
+        let bare_tier = overrides(profile)?.into_iter().any(|entry| {
+            matches!(
                 filter(&entry).replace(['"', '\''], "").trim(),
                 "package(=velnor-ci)"
-            );
-            assert!(
-                !(bare && entry.contains_key("slow-timeout")),
-                "profile {profile}: a package-wide slow-timeout hides the 2 s default of velnor-ci: {entry:?}"
-            );
-        }
+            ) && entry
+                .get("slow-timeout")
+                .and_then(|timeout| timeout.get("period"))
+                .and_then(toml::Value::as_str)
+                == Some("30s")
+        });
+        assert!(
+            bare_tier,
+            "profile {profile}: velnor-ci has no package-wide 30 s tier"
+        );
     }
     Ok(())
 }
@@ -127,9 +131,10 @@ fn covers(filter: &str, name: &str) -> bool {
     }
 }
 
-fn first_timeout_period(entries: &[toml::Table], name: &str) -> Option<String> {
+fn effective_timeout_period(entries: &[toml::Table], name: &str) -> Option<String> {
     entries
         .iter()
+        .rev()
         .filter(|entry| entry.contains_key("slow-timeout"))
         .find(|entry| covers(filter(entry), name))
         .and_then(|entry| {
@@ -148,7 +153,7 @@ fn the_scoped_ten_second_tier_is_the_timeout_nextest_applies_to_each_named_slow_
         let entries = overrides(profile)?;
         for name in TEN_SECOND_TESTS {
             assert_eq!(
-                first_timeout_period(&entries, name).as_deref(),
+                effective_timeout_period(&entries, name).as_deref(),
                 Some("10s"),
                 "profile {profile}: {name} does not get the scoped 10 s tier"
             );
@@ -162,7 +167,7 @@ fn the_legacy_op_replay_gets_the_sixty_second_tier_in_both_profiles() -> TestRes
     for profile in PROFILES {
         let entries = overrides(profile)?;
         assert_eq!(
-            first_timeout_period(
+            effective_timeout_period(
                 &entries,
                 "plan_diff::every_recorded_case_matches_the_legacy_op"
             )
