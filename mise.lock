@@ -789,6 +789,65 @@ url = "https://github.com/mongodb/kingfisher/releases/download/v2.19.1/kingfishe
 url_api = "https://api.github.com/repos/mongodb/kingfisher/releases/assets/757938635"
 provenance = "github-attestations"
 
+[[tools.minisign]]
+version = "0.12"
+backend = "aqua:jedisct1/minisign"
+specifiers = ["0.12"]
+
+[tools.minisign."platforms.linux-arm64"]
+checksum = "sha256:9a599b48ba6eb7b1e80f12f36b94ceca7c00b7a5173c95c3efc88d9822957e73"
+url = "https://github.com/jedisct1/minisign/releases/download/0.12/minisign-0.12-linux.tar.gz"
+url_api = "https://api.github.com/repos/jedisct1/minisign/releases/assets/220886623"
+provenance = "minisign"
+
+[tools.minisign."platforms.linux-arm64-musl"]
+checksum = "sha256:9a599b48ba6eb7b1e80f12f36b94ceca7c00b7a5173c95c3efc88d9822957e73"
+url = "https://github.com/jedisct1/minisign/releases/download/0.12/minisign-0.12-linux.tar.gz"
+url_api = "https://api.github.com/repos/jedisct1/minisign/releases/assets/220886623"
+provenance = "minisign"
+
+[tools.minisign."platforms.linux-x64"]
+checksum = "sha256:9a599b48ba6eb7b1e80f12f36b94ceca7c00b7a5173c95c3efc88d9822957e73"
+url = "https://github.com/jedisct1/minisign/releases/download/0.12/minisign-0.12-linux.tar.gz"
+url_api = "https://api.github.com/repos/jedisct1/minisign/releases/assets/220886623"
+provenance = "minisign"
+
+[tools.minisign."platforms.linux-x64-baseline"]
+checksum = "sha256:9a599b48ba6eb7b1e80f12f36b94ceca7c00b7a5173c95c3efc88d9822957e73"
+url = "https://github.com/jedisct1/minisign/releases/download/0.12/minisign-0.12-linux.tar.gz"
+url_api = "https://api.github.com/repos/jedisct1/minisign/releases/assets/220886623"
+provenance = "minisign"
+
+[tools.minisign."platforms.linux-x64-musl"]
+checksum = "sha256:9a599b48ba6eb7b1e80f12f36b94ceca7c00b7a5173c95c3efc88d9822957e73"
+url = "https://github.com/jedisct1/minisign/releases/download/0.12/minisign-0.12-linux.tar.gz"
+url_api = "https://api.github.com/repos/jedisct1/minisign/releases/assets/220886623"
+provenance = "minisign"
+
+[tools.minisign."platforms.linux-x64-musl-baseline"]
+checksum = "sha256:9a599b48ba6eb7b1e80f12f36b94ceca7c00b7a5173c95c3efc88d9822957e73"
+url = "https://github.com/jedisct1/minisign/releases/download/0.12/minisign-0.12-linux.tar.gz"
+url_api = "https://api.github.com/repos/jedisct1/minisign/releases/assets/220886623"
+provenance = "minisign"
+
+[tools.minisign."platforms.macos-arm64"]
+checksum = "sha256:89000b19535765f9cffc65a65d64a820f433ef6db8020667f7570e06bf6aac63"
+url = "https://github.com/jedisct1/minisign/releases/download/0.12/minisign-0.12-macos.zip"
+url_api = "https://api.github.com/repos/jedisct1/minisign/releases/assets/220895743"
+provenance = "minisign"
+
+[tools.minisign."platforms.windows-x64"]
+checksum = "sha256:37b600344e20c19314b2e82813db2bfdcc408b77b876f7727889dbd46d539479"
+url = "https://github.com/jedisct1/minisign/releases/download/0.12/minisign-0.12-win64.zip"
+url_api = "https://api.github.com/repos/jedisct1/minisign/releases/assets/220886631"
+provenance = "minisign"
+
+[tools.minisign."platforms.windows-x64-baseline"]
+checksum = "sha256:37b600344e20c19314b2e82813db2bfdcc408b77b876f7727889dbd46d539479"
+url = "https://github.com/jedisct1/minisign/releases/download/0.12/minisign-0.12-win64.zip"
+url_api = "https://api.github.com/repos/jedisct1/minisign/releases/assets/220886631"
+provenance = "minisign"
+
 [[tools.mr-boxington]]
 version = "1.30.0"
 backend = "packslip:github.com/jdx/mr-boxington"
@@ -1100,9 +1159,9 @@ url_api = "https://api.github.com/repos/rvben/rumdl/releases/assets/764100352"
 provenance = "github-attestations"
 
 [[tools.rust]]
-version = "1.99.1"
+version = "1.100.0"
 backend = "core:rust"
-specifiers = ["1.99.1"]
+specifiers = ["1.100.0"]
 
 [tools.rust.options]
 components = "clippy,rustfmt"

@@ -105,8 +105,7 @@ pub(super) const RUST_CI: &[KeyGate] = &[
     gate_untagged(RustCi, "lint.from_source", (0, 1, 111)),
     // helper-gate: first in tools-v0.1.89 via 330573ef6d
     gate(RustCi, "lint.id", (0, 1, 89)),
-    // helper-gate: first in tools-v0.1.110 via e26fec3103
-    gate(RustCi, "lint.inputs", (0, 1, 110)),
+    gate_untagged(RustCi, "lint.inputs", (0, 1, 111)),
     // helper-gate: first in tools-v0.1.89 via 330573ef6d
     gate(RustCi, "lint.kind", (0, 1, 89)),
     // helper-gate: first in tools-v0.1.110 via ef61950555
@@ -133,6 +132,8 @@ pub(super) const RUST_CI: &[KeyGate] = &[
     gate(RustCi, "pr_ci", (0, 1, 88)),
     // helper-gate: first in tools-v0.1.88 via eb3f4deda4
     gate(RustCi, "private_sources", (0, 1, 88)),
+    gate_untagged(RustCi, "public_sources", (0, 1, 111)),
+    gate_untagged(RustCi, "public_sources.git", (0, 1, 111)),
     // helper-gate: first in tools-v0.1.88 via eb3f4deda4
     gate(RustCi, "private_sources.app_id", (0, 1, 88)),
     // helper-gate: first in tools-v0.1.88 via eb3f4deda4

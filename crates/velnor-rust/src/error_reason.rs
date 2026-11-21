@@ -78,6 +78,14 @@ impl Reason {
                 f,
                 "cache.mbx = false turns mbx off, but {key} needs it; remove one of them"
             ),
+            Self::PublicSourceOverlap(repository) => write!(
+                f,
+                "{repository} is listed in both [private_sources] and [public_sources]; a repository is private or public, so remove it from one of them"
+            ),
+            Self::PublicSourcesUnused(repositories) => write!(
+                f,
+                "[public_sources].git lists {repositories}, which no Cargo.lock locks as a git dependency pinned to a full commit on github.com; remove it"
+            ),
             _ => Ok(()),
         }
     }
@@ -147,6 +155,10 @@ impl fmt::Display for Reason {
             Self::MissingTable(table) => write!(f, "missing table [{table}]"),
             Self::MissingKey(key) => write!(f, "missing key {key}"),
             Self::InvalidValue { key, value } => write!(f, "invalid value {value:?} for {key}"),
+            Self::UnsupportedGlob { key, value } => write!(
+                f,
+                "{key} entry {value:?} uses ?, [ or ]; only * and ** are supported in a glob"
+            ),
             Self::Hosting(error) => error.fmt(f),
             Self::OutOfRange {
                 key,
@@ -206,6 +218,8 @@ impl fmt::Display for Reason {
             | Self::HelperBox(_)
             | Self::MbxRemotePrivate(_)
             | Self::MbxOffConflict(_)
+            | Self::PublicSourceOverlap(_)
+            | Self::PublicSourcesUnused(_)
             | Self::PrCiWithSkipDraft => self.fmt_setup(f),
             Self::BuildExecutable
             | Self::CargoCredentialProvider(_)

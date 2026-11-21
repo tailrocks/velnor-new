@@ -3,6 +3,7 @@
 
 use velnor_model::{HelperRelease, Platform, RepoPath};
 
+use crate::mise_digest::pinned_sha256;
 use crate::release_steps::shell_word;
 use crate::rules::{RenderedStep, SETUP_VELNOR_ACTION, Value};
 use crate::steps::{MISE, MISE_VERSION};
@@ -10,6 +11,7 @@ use crate::steps::{MISE, MISE_VERSION};
 pub(crate) fn install_tools(only: Option<&str>) -> RenderedStep {
     let mut with = vec![
         ("version".to_owned(), Value::Text(MISE_VERSION.to_owned())),
+        ("sha256".to_owned(), pinned_sha256()),
         ("cache".to_owned(), Value::Bool(false)),
     ];
     if let Some(tool) = only {
@@ -29,6 +31,7 @@ pub(crate) fn install_mise() -> RenderedStep {
         uses: Some(MISE.to_owned()),
         with: vec![
             ("version".to_owned(), Value::Text(MISE_VERSION.to_owned())),
+            ("sha256".to_owned(), pinned_sha256()),
             ("install".to_owned(), Value::Bool(false)),
             ("cache".to_owned(), Value::Bool(false)),
         ],

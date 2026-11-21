@@ -4,8 +4,8 @@
 use std::collections::BTreeSet;
 
 use velnor_model::{
-    Concurrency, Job, JobId, Permissions, PrRun, PullRequestType, RepoPath, RootSlug, RunnerLabel,
-    Step, StepKind, Triggers, WORKFLOW_PATH, When, WorkflowPlan,
+    BuildRecord, Concurrency, Job, JobId, Permissions, PrRun, PullRequestType, RepoPath, RootSlug,
+    RunnerLabel, Step, StepKind, Triggers, WORKFLOW_PATH, When, WorkflowPlan,
 };
 use velnor_render::render;
 
@@ -76,8 +76,9 @@ pub(crate) fn locks_hash(manifests: &[&str]) -> Result<String, Box<dyn std::erro
             permissions: Permissions::default(),
             timeout_minutes: 10,
             reports_ignored: false,
-            records_build: false,
+            build_record: BuildRecord::Unrecorded,
             chained_saves: false,
+            mbx_stats: velnor_model::MbxStats::Summary,
             selection_name: None,
             gate: None,
             skip_after_merge_group: None,
@@ -94,7 +95,9 @@ pub(crate) fn locks_hash(manifests: &[&str]) -> Result<String, Box<dyn std::erro
                 reads: None,
                 skip_after_merge_group: None,
                 skip_when_cold: false,
+                private_repo: false,
                 hosted_only: false,
+                any_gate: Vec::new(),
             }],
         }],
     };

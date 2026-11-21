@@ -40,6 +40,10 @@ pub enum Reason {
         key: &'static str,
         value: String,
     },
+    UnsupportedGlob {
+        key: &'static str,
+        value: String,
+    },
     OutOfRange {
         key: &'static str,
         value: u16,
@@ -117,6 +121,8 @@ pub enum Reason {
     PolicyDenyWithoutConfig,
     HelperBox(RepoPath),
     MbxRemotePrivate(String),
+    PublicSourceOverlap(String),
+    PublicSourcesUnused(String),
     MbxOffConflict(&'static str),
     CargoCredentialProvider(String),
     LockedUrlCredentials(String),
