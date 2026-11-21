@@ -60,6 +60,7 @@ mod source_roots;
 mod steps;
 mod tests;
 mod token_commands;
+mod tools_saved_key_step;
 mod tools_steps;
 mod workflow;
 mod yaml;

@@ -10,6 +10,7 @@ use crate::gate::{
     ON_DEFAULT_BRANCH, SAVING_EVENTS, TOOLS_LOCAL_STEP, TOOLS_LOOKUP_STEP, TOOLS_STEP,
 };
 use crate::rules::{RenderedStep, Value};
+use crate::tools_saved_key_step::tools_saved_key_step;
 
 const VERIFY_STEP: &str = "toolsverify";
 const RECORD_STEP: &str = "toolsrecord";
@@ -345,24 +346,6 @@ fn tools_restored_step(key: String) -> RenderedStep {
             "printf 'cache-primary-key=%s\\ncache-matched-key=%s\\ncache-hit=%s\\n' \"$CACHE_KEY\" \"${NODE_HIT:+$CACHE_KEY}$MATCHED\" \"$EXACT\" >> \"$GITHUB_OUTPUT\""
                 .to_owned(),
         ),
-        ..RenderedStep::default()
-    }
-}
-
-fn tools_saved_key_step(key: String) -> RenderedStep {
-    let network = crate::report::cache_id(
-        &velnor_model::CacheKey::Tools {
-            host: velnor_model::Host,
-            anchor: ToolsAnchor::Unanchored,
-        },
-        false,
-    );
-    RenderedStep {
-        id: Some(crate::gate::TOOLS_SAVED_KEY_STEP.to_owned()),
-        name: "Record the tools cache key".to_owned(),
-        condition: Some(format!("${{{{ steps.{network}.outcome == 'success' }}}}")),
-        env: vec![("CACHE_KEY".to_owned(), Value::Expr(key))],
-        run: Some("echo \"key=$CACHE_KEY\" >> \"$GITHUB_OUTPUT\"".to_owned()),
         ..RenderedStep::default()
     }
 }
