@@ -300,10 +300,21 @@ pub(crate) fn nextest_run(
     path: &str,
 ) -> (String, String, Vec<(String, Value)>) {
     let profile = if ci_profile { " --profile ci" } else { "" };
+    let explicit = if matches!(
+        filter,
+        FilterRef::Group {
+            include: Some(_),
+            ..
+        } | FilterRef::Expr { .. }
+    ) {
+        " --ignore-default-filter"
+    } else {
+        ""
+    };
     (
         TEST_STEP.into(),
         format!(
-            "cargo-nextest nextest run{path} {scope}{profile} --no-fail-fast --ignore-default-filter --status-level pass -E \"{}\" --no-tests={no_tests}",
+            "cargo-nextest nextest run{path} {scope}{profile} --no-fail-fast{explicit} --status-level pass -E \"{}\" --no-tests={no_tests}",
             nextest_filter(filter)
         ),
         vec![],

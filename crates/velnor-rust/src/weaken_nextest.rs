@@ -85,7 +85,7 @@ pub(crate) fn nextest(parsed: &Table, make: &Make<'_>) -> Vec<Weakening> {
             found.push(make(
                 format!("profile.{profile}.default-filter = {filter}"),
                 format!(
-                    "limits a plain nextest run to the tests matching {filter}; the nextest step Velnor generates ignores it"
+                    "limits the default nextest run to the tests matching {filter}; the generated test step applies it, so only a test group or lane that selects a test runs it"
                 ),
             ));
         }

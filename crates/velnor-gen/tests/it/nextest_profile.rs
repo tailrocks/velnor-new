@@ -37,6 +37,39 @@ fn ci_runs(text: &str) -> usize {
 }
 
 #[test]
+fn the_test_run_keeps_the_default_filter_of_the_profile() -> TestResult {
+    let ci = rendered(
+        &["Cargo.toml"],
+        None,
+        &[(".config/nextest.toml", CI_PROFILE)],
+    )?;
+    assert!(
+        ci.contains("--profile ci --no-fail-fast --status-level pass -E"),
+        "{ci}"
+    );
+    assert!(
+        !ci.contains("--ignore-default-filter --status-level"),
+        "{ci}"
+    );
+    Ok(())
+}
+
+#[test]
+fn an_explicit_test_lane_still_runs_the_tests_its_filter_selects() -> TestResult {
+    let config = "[[test_lane]]\nroot = '.'\nfeatures = ['local-mode']\npackages = ['package-0']\nfilter = 'test(~local::)'\n";
+    let mut repo = crate::feature_lanes::lane_view("0.1.93", config)?;
+    let path = RepoPath::new(".config/nextest.toml")?;
+    repo.tracked_paths.insert(path.clone());
+    repo.files.insert(path, CI_PROFILE.as_bytes().to_vec());
+    let text = workflow(&repo)?;
+    assert!(
+        text.contains("--profile ci --no-fail-fast --ignore-default-filter --status-level pass -E"),
+        "{text}"
+    );
+    Ok(())
+}
+
+#[test]
 fn a_root_that_defines_profile_ci_runs_nextest_with_it() -> TestResult {
     let ci = rendered(
         &["Cargo.toml"],
