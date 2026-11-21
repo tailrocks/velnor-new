@@ -6,7 +6,7 @@ Observed 2026-10-03 through authenticated GitHub REST calls. Inventory/access ev
 
 `scope.json` and `repositories.txt` were absent in the checkout. Targeted searches covered repository/project roots, migrations, prior Velnor evidence/scan/work roots, plus immediate Projects/Downloads/Desktop inventories. Reconstructed both from the 47-row CSV and independently cross-checked every ordered consumer against the goal. No repository added, dropped, or renamed. Independent verifier confirmed counts and equality: generator 1; Wave A 8; Wave B 33; Wave C 5.
 
-All 47 repositories are accessible, nonarchived, and currently use `main`. There are 43 public and four private repositories. The original Brown 404 is resolved: `ChainArgos/jackin-agent-brown` is private and accessible to the authenticated account. Its migration is PR #243, merged 2026-10-02T15:29:29Z, head `9b85ac956fc917df97198dd6df67f844d41d0c84`.
+All 47 repositories are accessible, nonarchived, and currently use `main`. There are 43 public and four private repositories. The original Brown 404 is resolved: `example-org/example-repo` is private and accessible to the authenticated account. Its migration is PR #243, merged 2026-10-02T15:29:29Z, head `9b85ac956fc917df97198dd6df67f844d41d0c84`.
 
 ## Evidence boundary
 
@@ -14,7 +14,7 @@ Downloaded live repository metadata, ten most recently updated PRs, referenced m
 
 Raw authenticated API evidence is stored outside this public checkout at `/tmp/velnor-ci-performance-scope-audit/`; private repository source/diff evidence must stay outside public artifacts. Files use `owner__repository.json`, plus `summary.json`. A collector timestamp is retained per repository. Reuse these downloads rather than repeat API requests.
 
-Prior `<local-path>` and `ci_migration_ledger.json` record a narrow private-ChainArgos admin-merge policy. Their old outcomes are stale and do not qualify current changes or performance. Live metadata confirms the four private identities; apply the goal policy only after current review/authority checks. No waiver is claimed granted by this audit.
+Prior `<local-path>` and `ci_migration_ledger.json` record a narrow private-example-org admin-merge policy. Their old outcomes are stale and do not qualify current changes or performance. Live metadata confirms the four private identities; apply the goal policy only after current review/authority checks. No waiver is claimed granted by this audit.
 
 ## Current immutable inventory
 
@@ -23,14 +23,14 @@ Every row remains `INCOMPLETE`: no cold/warm/third-run measurement or resulting 
 | # | Wave | Repository | Visibility | Default SHA | Migration PR | Relevant diff gaps | Status |
 |---:|---|---|---|---|---|---|---|
 | 0 | G | `tailrocks/velnor-new` | public | `c57c700459bbe1549fe7eedcb7d8689585c38986` | — | generator PR audit pending | INCOMPLETE |
-| 1 | A | `jackin-project/jackin` | public | `6c389d38eadab93d6d6a4005e01dbdd8c4160221` | [1110](https://github.com/jackin-project/jackin/pull/1110) | `.github/workflows/ci-main.yml`; `.github/workflows/ci-pr.yml`; `.github/workflows/ci.yml` | INCOMPLETE |
-| 2 | A | `jackin-project/jackin-agent-smith` | public | `2e7119b9c668ca7a9c55218b20049885299d198f` | [213](https://github.com/jackin-project/jackin-agent-smith/pull/213) | patches downloaded; review pending | INCOMPLETE |
-| 3 | A | `jackin-project/homebrew-tap` | public | `cd05a0ea2cf68fd6c2753ee938247b2dcd4c7551` | [505](https://github.com/jackin-project/homebrew-tap/pull/505) | patches downloaded; review pending | INCOMPLETE |
-| 4 | A | `jackin-project/jackin-role-action` | public | `59e538704b8c119f3b6668cea0154909a6158ff6` | [189](https://github.com/jackin-project/jackin-role-action/pull/189) | patches downloaded; review pending | INCOMPLETE |
-| 5 | A | `jackin-project/jackin-sentinel` | public | `587a0d1a8eef96108c9d9d530bdaa13df91edd2b` | [154](https://github.com/jackin-project/jackin-sentinel/pull/154) | patches downloaded; review pending | INCOMPLETE |
-| 6 | A | `jackin-project/jackin-dev` | public | `a01b342162bc56cdf1e8bbaab793e73d31c1d621` | [48](https://github.com/jackin-project/jackin-dev/pull/48) | patches downloaded; review pending | INCOMPLETE |
-| 7 | A | `jackin-project/jackin-github-terraform` | public | `b43a2314c6b58906d52828115d3b3973026f6a2a` | [48](https://github.com/jackin-project/jackin-github-terraform/pull/48) | patches downloaded; review pending | INCOMPLETE |
-| 8 | A | `jackin-project/jackin-the-architect` | public | `2cf461e2fed1b95d9fd1e7ba74c10d4d8b1c685d` | [478](https://github.com/jackin-project/jackin-the-architect/pull/478) | patches downloaded; review pending | INCOMPLETE |
+| 1 | A | `example-org/example-repo` | public | `6c389d38eadab93d6d6a4005e01dbdd8c4160221` | [1110](https://github.com/example-org/example-repo/pull/1110) | `.github/workflows/ci-main.yml`; `.github/workflows/ci-pr.yml`; `.github/workflows/ci.yml` | INCOMPLETE |
+| 2 | A | `example-org/example-repo` | public | `2e7119b9c668ca7a9c55218b20049885299d198f` | [213](https://github.com/example-org/example-repo/pull/213) | patches downloaded; review pending | INCOMPLETE |
+| 3 | A | `example-org/example-repo` | public | `cd05a0ea2cf68fd6c2753ee938247b2dcd4c7551` | [505](https://github.com/example-org/example-repo/pull/505) | patches downloaded; review pending | INCOMPLETE |
+| 4 | A | `example-org/example-repo` | public | `59e538704b8c119f3b6668cea0154909a6158ff6` | [189](https://github.com/example-org/example-repo/pull/189) | patches downloaded; review pending | INCOMPLETE |
+| 5 | A | `example-org/example-repo` | public | `587a0d1a8eef96108c9d9d530bdaa13df91edd2b` | [154](https://github.com/example-org/example-repo/pull/154) | patches downloaded; review pending | INCOMPLETE |
+| 6 | A | `example-org/example-repo` | public | `a01b342162bc56cdf1e8bbaab793e73d31c1d621` | [48](https://github.com/example-org/example-repo/pull/48) | patches downloaded; review pending | INCOMPLETE |
+| 7 | A | `example-org/example-repo` | public | `b43a2314c6b58906d52828115d3b3973026f6a2a` | [48](https://github.com/example-org/example-repo/pull/48) | patches downloaded; review pending | INCOMPLETE |
+| 8 | A | `example-org/example-repo` | public | `2cf461e2fed1b95d9fd1e7ba74c10d4d8b1c685d` | [478](https://github.com/example-org/example-repo/pull/478) | patches downloaded; review pending | INCOMPLETE |
 | 9 | B | `tailrocks/github-terraform` | public | `288dc40dec53500dfeb8bed148613b99cfea92c2` | [38](https://github.com/tailrocks/github-terraform/pull/38) | patches downloaded; review pending | INCOMPLETE |
 | 10 | B | `tailrocks/termpane` | public | `7cf2f9981ef9a3f7c8fc295a7501a261fba955a8` | [31](https://github.com/tailrocks/termpane/pull/31) | patches downloaded; review pending | INCOMPLETE |
 | 11 | B | `tailrocks/tui-snap` | public | `a47c9aaefb34e4c00026f99d8a8dd7ee5916b274` | [10](https://github.com/tailrocks/tui-snap/pull/10) | `.github/workflows/ci.yml` | INCOMPLETE |
@@ -64,11 +64,11 @@ Every row remains `INCOMPLETE`: no cold/warm/third-run measurement or resulting 
 | 39 | B | `tailrocks/tailrocks-open-source-skills` | public | `3e51bc5c91949f361ed926d8f760bcb16edef111` | [2](https://github.com/tailrocks/tailrocks-open-source-skills/pull/2) | patches downloaded; review pending | INCOMPLETE |
 | 40 | B | `tailrocks/tailrocks-macos-skills` | public | `eb0be5522fe0c1c9c74d41ee354446a011b10c74` | [2](https://github.com/tailrocks/tailrocks-macos-skills/pull/2) | patches downloaded; review pending | INCOMPLETE |
 | 41 | B | `tailrocks/tailrocks-code-quality-skills` | public | `e63a82f28b688a7fada418e615aa9ec0eeec4c04` | [2](https://github.com/tailrocks/tailrocks-code-quality-skills/pull/2) | patches downloaded; review pending | INCOMPLETE |
-| 42 | C | `ChainArgos/blockchain-nodes` | public | `0881638712a837bdcb90b3cd811a8a9be3aa8d83` | [729](https://github.com/ChainArgos/blockchain-nodes/pull/729) | `.github/workflows/ci-main.yml`; `.github/workflows/ci-pr.yml`; `.github/workflows/release.yml` | INCOMPLETE |
-| 43 | C | `ChainArgos/java-monorepo` | private | `5f77c0b09eda3ac4a6fb8c5de0a622a0cb926c45` | [2081](https://github.com/ChainArgos/java-monorepo/pull/2081) | `.github/ci/project.toml`; `.github/workflows/ci-main.yml`; `.github/workflows/ci-pr.yml`; `.github/workflows/ci.yml` | INCOMPLETE |
-| 44 | C | `ChainArgos/jackin-agent-brown` | private | `6b2ac2277103a22b9ae155bc92415ca5ddf05f95` | [243](https://github.com/ChainArgos/jackin-agent-brown/pull/243) | patches downloaded; review pending | INCOMPLETE |
-| 45 | C | `ChainArgos/cloudflare-tofu` | private | `cc0e2b687dc6c1a9943b0ae9f5911f1e782c1a20` | [6](https://github.com/ChainArgos/cloudflare-tofu/pull/6) | patches downloaded; review pending | INCOMPLETE |
-| 46 | C | `ChainArgos/github-terraform` | private | `c8d47ea87a611251f965555dafbd8015f29f303b` | [14](https://github.com/ChainArgos/github-terraform/pull/14) | patches downloaded; review pending | INCOMPLETE |
+| 42 | C | `example-org/example-repo` | public | `0881638712a837bdcb90b3cd811a8a9be3aa8d83` | [729](https://github.com/example-org/example-repo/pull/729) | `.github/workflows/ci-main.yml`; `.github/workflows/ci-pr.yml`; `.github/workflows/release.yml` | INCOMPLETE |
+| 43 | C | `example-org/example-repo` | private | `5f77c0b09eda3ac4a6fb8c5de0a622a0cb926c45` | [2081](https://github.com/example-org/example-repo/pull/2081) | `.github/ci/project.toml`; `.github/workflows/ci-main.yml`; `.github/workflows/ci-pr.yml`; `.github/workflows/ci.yml` | INCOMPLETE |
+| 44 | C | `example-org/example-repo` | private | `6b2ac2277103a22b9ae155bc92415ca5ddf05f95` | [243](https://github.com/example-org/example-repo/pull/243) | patches downloaded; review pending | INCOMPLETE |
+| 45 | C | `example-org/example-repo` | private | `cc0e2b687dc6c1a9943b0ae9f5911f1e782c1a20` | [6](https://github.com/example-org/example-repo/pull/6) | patches downloaded; review pending | INCOMPLETE |
+| 46 | C | `example-org/example-repo` | private | `c8d47ea87a611251f965555dafbd8015f29f303b` | [14](https://github.com/example-org/example-repo/pull/14) | patches downloaded; review pending | INCOMPLETE |
 
 ## Remaining audit work
 

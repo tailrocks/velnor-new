@@ -23,7 +23,7 @@
     {
       "number": 1,
       "wave": "A",
-      "repository": "jackin-project/jackin",
+      "repository": "example-org/example-repo",
       "observed_source_sha": "0aa821a088e1bacf3d4d85a4c9faaa67faa85132",
       "audit_status": "AUDITED_PAST_LOGS",
       "performance_status": "INCOMPLETE",
@@ -39,7 +39,7 @@
     {
       "number": 2,
       "wave": "A",
-      "repository": "jackin-project/jackin-agent-smith",
+      "repository": "example-org/example-repo",
       "observed_source_sha": "2e7119b9c668ca7a9c55218b20049885299d198f",
       "audit_status": "AUDITED_PAST_LOGS",
       "performance_status": "INCOMPLETE",
@@ -55,7 +55,7 @@
     {
       "number": 3,
       "wave": "A",
-      "repository": "jackin-project/homebrew-tap",
+      "repository": "example-org/example-repo",
       "observed_source_sha": "cd05a0ea2cf68fd6c2753ee938247b2dcd4c7551",
       "audit_status": "AUDITED_PAST_LOGS",
       "performance_status": "INCOMPLETE",
@@ -71,7 +71,7 @@
     {
       "number": 4,
       "wave": "A",
-      "repository": "jackin-project/jackin-role-action",
+      "repository": "example-org/example-repo",
       "observed_source_sha": "59e538704b8c119f3b6668cea0154909a6158ff6",
       "audit_status": "AUDITED_PAST_LOGS",
       "performance_status": "INCOMPLETE",
@@ -87,7 +87,7 @@
     {
       "number": 5,
       "wave": "A",
-      "repository": "jackin-project/jackin-sentinel",
+      "repository": "example-org/example-repo",
       "observed_source_sha": "587a0d1a8eef96108c9d9d530bdaa13df91edd2b",
       "audit_status": "AUDITED_PAST_LOGS",
       "performance_status": "INCOMPLETE",
@@ -103,7 +103,7 @@
     {
       "number": 6,
       "wave": "A",
-      "repository": "jackin-project/jackin-dev",
+      "repository": "example-org/example-repo",
       "observed_source_sha": "a01b342162bc56cdf1e8bbaab793e73d31c1d621",
       "audit_status": "AUDITED_PAST_LOGS",
       "performance_status": "INCOMPLETE",
@@ -119,7 +119,7 @@
     {
       "number": 7,
       "wave": "A",
-      "repository": "jackin-project/jackin-github-terraform",
+      "repository": "example-org/example-repo",
       "observed_source_sha": "b43a2314c6b58906d52828115d3b3973026f6a2a",
       "audit_status": "AUDITED_PAST_LOGS",
       "performance_status": "INCOMPLETE",
@@ -135,7 +135,7 @@
     {
       "number": 8,
       "wave": "A",
-      "repository": "jackin-project/jackin-the-architect",
+      "repository": "example-org/example-repo",
       "observed_source_sha": "2cf461e2fed1b95d9fd1e7ba74c10d4d8b1c685d",
       "audit_status": "AUDITED_PAST_LOGS",
       "performance_status": "INCOMPLETE",
@@ -679,7 +679,7 @@
     {
       "number": 42,
       "wave": "C",
-      "repository": "ChainArgos/blockchain-nodes",
+      "repository": "example-org/example-repo",
       "observed_source_sha": "0881638712a837bdcb90b3cd811a8a9be3aa8d83",
       "audit_status": "AUDITED_PAST_LOGS",
       "performance_status": "INCOMPLETE",
@@ -695,7 +695,7 @@
     {
       "number": 43,
       "wave": "C",
-      "repository": "ChainArgos/java-monorepo",
+      "repository": "example-org/example-repo",
       "observed_source_sha": "0a937e0c0442782bfb88c43cfdf67c1fc3f3b4f0",
       "audit_status": "AUDITED_PAST_LOGS",
       "performance_status": "INCOMPLETE",
@@ -718,7 +718,7 @@
     {
       "number": 44,
       "wave": "C",
-      "repository": "ChainArgos/jackin-agent-brown",
+      "repository": "example-org/example-repo",
       "observed_source_sha": "6b2ac2277103a22b9ae155bc92415ca5ddf05f95",
       "audit_status": "AUDITED_PAST_LOGS",
       "performance_status": "INCOMPLETE",
@@ -734,7 +734,7 @@
     {
       "number": 45,
       "wave": "C",
-      "repository": "ChainArgos/cloudflare-tofu",
+      "repository": "example-org/example-repo",
       "observed_source_sha": "cc0e2b687dc6c1a9943b0ae9f5911f1e782c1a20",
       "audit_status": "AUDITED_PAST_LOGS",
       "performance_status": "INCOMPLETE",
@@ -750,7 +750,7 @@
     {
       "number": 46,
       "wave": "C",
-      "repository": "ChainArgos/github-terraform",
+      "repository": "example-org/example-repo",
       "observed_source_sha": "c8d47ea87a611251f965555dafbd8015f29f303b",
       "audit_status": "AUDITED_PAST_LOGS",
       "performance_status": "INCOMPLETE",
