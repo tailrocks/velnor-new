@@ -148,17 +148,17 @@ fn a_nested_root_keeps_the_cargo_configuration_of_each_ancestor_folder() -> Test
 #[test]
 fn declared_inputs_are_escaped_for_gitignore_syntax() -> TestResult {
     let config =
-        format!("{ON}[[inputs]]\nglob = \"fixtures/[data]/a?b c\"\npackages = [\"package-0\"]\n");
+        format!("{ON}[[inputs]]\nglob = \"fixtures/data dir/a b\"\npackages = [\"package-0\"]\n");
     let text = render(&["a/Cargo.toml", "b/Cargo.toml"], &config)?;
     let lanes = lanes_of(&text);
     assert!(!lanes.is_empty(), "{text}");
     for (id, block) in lanes {
         let listing = lane_listing(&block);
         assert!(
-            listing.contains(&"/fixtures/\\[data\\]/a\\?b\\ c"),
+            listing.contains(&"/fixtures/data\\ dir/a\\ b"),
             "{id}: {listing:?}"
         );
-        assert!(!listing.contains(&"/fixtures/[data]/a?b c"), "{id}");
+        assert!(!listing.contains(&"/fixtures/data dir/a b"), "{id}");
     }
     Ok(())
 }
@@ -269,5 +269,30 @@ fn an_outside_dependency_that_cannot_be_read_forces_a_full_checkout() -> TestRes
             .all(|(_, block)| !lane_listing(block).contains(&"/a/")),
         "the lane that reaches the unreadable package stayed sparse\n{text}"
     );
+    Ok(())
+}
+
+#[test]
+fn a_toolchain_path_with_question_mark_or_brackets_is_escaped_for_gitignore() -> TestResult {
+    let mut view = view(&["a/Cargo.toml", "b/Cargo.toml"], Some(ON.as_bytes()))?;
+    let file = velnor_model::RepoPath::new("rust-toolchain.toml")?;
+    view.tracked_paths.insert(file.clone());
+    view.files.insert(
+        file,
+        b"[toolchain]\npath = \"toolchains/[custom]?\"\n".to_vec(),
+    );
+    view.files.insert(
+        velnor_model::RepoPath::new("mise.toml")?,
+        NEXTEST_ONLY.as_bytes().to_vec(),
+    );
+    let text = workflow(&view)?;
+    let lanes = lanes_of(&text);
+    assert!(!lanes.is_empty(), "{text}");
+    for (id, block) in lanes {
+        assert!(
+            lane_listing(&block).contains(&"/toolchains/\\[custom\\]\\?/"),
+            "{id}"
+        );
+    }
     Ok(())
 }

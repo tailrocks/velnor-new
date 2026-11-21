@@ -51,8 +51,14 @@ fn is_compile_check(step: &Step) -> bool {
     matches!(&step.kind, StepKind::Cargo(command) if command.is_compile_check())
 }
 
-fn is_test_run(step: &Step) -> bool {
-    matches!(&step.kind, StepKind::Cargo(CargoCommand::NextestRun { .. }))
+fn is_test_run(job: &Job, step: &Step) -> bool {
+    match &step.kind {
+        StepKind::Cargo(CargoCommand::NextestRun { .. }) => true,
+        StepKind::Cargo(CargoCommand::NextestFeatures { reports: true, .. }) => {
+            job.build_record.lanes()
+        }
+        _ => false,
+    }
 }
 
 impl SaveGate {
@@ -66,7 +72,7 @@ impl SaveGate {
             return gate;
         };
         let saved_here = job.steps[first].gate.as_ref();
-        let legacy = !job.records_build
+        let legacy = !job.build_record.tests()
             || job
                 .steps
                 .iter()
@@ -79,7 +85,7 @@ impl SaveGate {
         for (index, step) in job.steps.iter().enumerate().take(first) {
             let setup = Setup::of(restores, replanned);
             replanned |= step.kind == StepKind::Helper(HelperCommand::PlanFull);
-            if !legacy && is_test_run(step) {
+            if !legacy && is_test_run(job, step) {
                 let test = tests.id(step.reads.as_ref().map(|plan| &plan.slug));
                 compiled.push(Compiled {
                     built: Built::Recorded(test),
