@@ -183,8 +183,8 @@ fn recording(
         .args(["run", "--"])
         .arg(&program)
         .args(args)
-        .current_dir(&temp)
-        .env("RUNNER_TEMP", &temp)
+        .current_dir(temp.path())
+        .env("RUNNER_TEMP", temp.path())
         .env("ARCHIVE", &archive)
         .env("CACHE", &cache)
         .env("HOME", temp.join("home"))
@@ -204,6 +204,6 @@ fn recording(
     let output = command.output()?;
     let text = fs::read_to_string(temp.join("velnor-invocations.jsonl"))?;
     let invocation = serde_json::from_str(text.trim())?;
-    fs::remove_dir_all(temp)?;
+    fs::remove_dir_all(temp.path())?;
     Ok((output.status, invocation))
 }

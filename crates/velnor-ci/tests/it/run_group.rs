@@ -28,10 +28,10 @@ impl Drop for GroupGuard {
 
 fn grandchild_is_stopped_by(signal: &str) {
     let temp = crate::scratch_path("velnor-ci-run-group", signal);
-    std::fs::create_dir_all(&temp).unwrap_or_else(|e| unreachable!("{e}"));
+    std::fs::create_dir_all(temp.path()).unwrap_or_else(|e| unreachable!("{e}"));
     let mut child = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
         .args(["run", "--", "sh", "-c", SPAWN_GRANDCHILD])
-        .env("RUNNER_TEMP", &temp)
+        .env("RUNNER_TEMP", temp.path())
         .env("VELNOR_CI_RUN_PUMP_GRACE_MS", "100")
         .env("VELNOR_CI_RUN_TERMINAL", "0")
         .stdout(Stdio::piped())
@@ -63,7 +63,6 @@ fn grandchild_is_stopped_by(signal: &str) {
     if survived {
         kill(grandchild, Signal::SIGKILL).ok();
     }
-    std::fs::remove_dir_all(&temp).ok();
     assert!(!survived, "the grandchild outlived {signal}");
 }
 

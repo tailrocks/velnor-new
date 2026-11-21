@@ -159,7 +159,7 @@ async fn send_after_a_consumed_pair(decisions: &str) -> Vec<bool> {
         .lock()
         .unwrap_or_else(|e| unreachable!("{e}"))
         .clone();
-    std::fs::remove_dir_all(&dir).unwrap_or_else(|e| unreachable!("{e}"));
+    std::fs::remove_dir_all(dir.path()).unwrap_or_else(|e| unreachable!("{e}"));
     started
 }
 

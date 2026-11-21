@@ -206,8 +206,8 @@ fn a_real_grouped_build_passes_the_audit() {
 /// the resolved path, so a build that takes the link path must still audit.
 #[test]
 fn a_real_grouped_build_passes_the_audit_through_a_symlinked_root() {
-    let real = fs::canonicalize(fresh_dir("velnor-ci-audit-real", "parent"))
-        .unwrap_or_else(|e| unreachable!("{e}"));
+    let parent = fresh_dir("velnor-ci-audit-real", "parent");
+    let real = fs::canonicalize(parent.path()).unwrap_or_else(|e| unreachable!("{e}"));
     let link = real.with_file_name(format!(
         "{}-link",
         real.file_name()

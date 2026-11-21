@@ -98,7 +98,7 @@ fn every_recorded_case_matches_the_legacy_op() {
             );
             assert!(!outputs.exists(), "{name} wrote outputs");
         }
-        fs::remove_dir_all(&temp).unwrap_or_else(|e| unreachable!("{e}"));
+        fs::remove_dir_all(temp.path()).unwrap_or_else(|e| unreachable!("{e}"));
     }
 }
 
@@ -109,7 +109,7 @@ fn refusal(request: &str, mode: &str, extra: &[(&str, &str)]) -> String {
     let output = plan(&file, mode, &temp.join("outputs"), extra);
     assert!(!output.status.success(), "planned: {request}");
     assert!(!temp.join("outputs").exists());
-    fs::remove_dir_all(&temp).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::remove_dir_all(temp.path()).unwrap_or_else(|e| unreachable!("{e}"));
     String::from_utf8_lossy(&output.stderr).into_owned()
 }
 
@@ -164,7 +164,7 @@ fn the_run_key_follows_the_attempt_override_then_the_request() {
     let output = plan(&request, "ci", &outputs, &[("VELNOR_RUN_KEY_ATTEMPT", "7")]);
     assert!(output.status.success());
     assert!(read(&outputs).starts_with("plan_id=plan-r9-a2\nrun_key=r9-a2\n"));
-    fs::remove_dir_all(&temp).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::remove_dir_all(temp.path()).unwrap_or_else(|e| unreachable!("{e}"));
 }
 
 #[test]
@@ -182,7 +182,7 @@ fn a_qualification_run_needs_the_default_branch() {
         .unwrap_or_else(|e| unreachable!("{e}"));
     assert!(!output.status.success());
     assert!(String::from_utf8_lossy(&output.stderr).contains("missing_default_branch"));
-    fs::remove_dir_all(&temp).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::remove_dir_all(temp.path()).unwrap_or_else(|e| unreachable!("{e}"));
 }
 
 #[test]
@@ -244,5 +244,5 @@ fn a_request_that_is_a_fifo_is_refused_instead_of_waiting_for_a_writer() {
             .is_some_and(|text| text.contains("unreadable_request")),
         "{stderr:?}"
     );
-    fs::remove_dir_all(&temp).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::remove_dir_all(temp.path()).unwrap_or_else(|e| unreachable!("{e}"));
 }

@@ -105,7 +105,7 @@ fn run_case(case: &Path) -> (String, String) {
         String::from_utf8_lossy(&output.stderr)
     );
     let written = read(&outputs);
-    fs::remove_dir_all(&repo).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::remove_dir_all(repo.path()).unwrap_or_else(|e| unreachable!("{e}"));
     fs::remove_dir_all(aside(&repo)).unwrap_or_else(|e| unreachable!("{e}"));
     (
         written,
@@ -158,7 +158,7 @@ fn a_workflow_change_runs_every_job() {
     assert!(stderr.contains("global_config_changed"), "{stderr}");
 }
 
-fn prepared(name: &str) -> (PathBuf, String) {
+fn prepared(name: &str) -> (velnor_test_support::ScratchDir, String) {
     let case = data().join("pr-one-crate");
     let (repo, base, head) = repository(&case, "pull_request", name);
     (repo, bind(&read(&case.join("request.json")), &base, &head))
@@ -184,7 +184,7 @@ fn a_request_without_lane_routes_is_refused() {
         stderr.contains("diff_selection_needs_lane_inventory"),
         "{stderr}"
     );
-    fs::remove_dir_all(&repo).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::remove_dir_all(repo.path()).unwrap_or_else(|e| unreachable!("{e}"));
     fs::remove_dir_all(aside(&repo)).unwrap_or_else(|e| unreachable!("{e}"));
 }
 
@@ -198,7 +198,7 @@ fn a_checkout_that_is_not_the_head_is_refused() {
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("checkout_head_mismatch"), "{stderr}");
-    fs::remove_dir_all(&repo).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::remove_dir_all(repo.path()).unwrap_or_else(|e| unreachable!("{e}"));
     fs::remove_dir_all(aside(&repo)).unwrap_or_else(|e| unreachable!("{e}"));
 }
 
@@ -210,7 +210,7 @@ fn an_untracked_file_runs_every_job() {
     assert!(output.status.success());
     assert!(read(&aside(&repo).join("outputs")).contains("\nnot_affected_jobs=\n"));
     assert!(String::from_utf8_lossy(&output.stderr).contains("untracked_files:all_changed"));
-    fs::remove_dir_all(&repo).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::remove_dir_all(repo.path()).unwrap_or_else(|e| unreachable!("{e}"));
     fs::remove_dir_all(aside(&repo)).unwrap_or_else(|e| unreachable!("{e}"));
 }
 
@@ -221,7 +221,7 @@ fn check_tail(id: &str) -> String {
     )
 }
 
-fn planned_with_check(name: &str, id: &str) -> (PathBuf, Output) {
+fn planned_with_check(name: &str, id: &str) -> (velnor_test_support::ScratchDir, Output) {
     let case = data().join("pr-one-crate");
     let (repo, base, head) = repository_with(&case, "pull_request", name, &check_tail(id));
     let request = bind(&read(&case.join("request.json")), &base, &head);
@@ -246,7 +246,7 @@ fn a_check_id_with_a_line_break_is_refused_and_adds_no_output_key() {
         "{stderr}"
     );
     assert!(!stderr.contains("x\nqualification"), "{stderr}");
-    fs::remove_dir_all(&repo).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::remove_dir_all(repo.path()).unwrap_or_else(|e| unreachable!("{e}"));
     fs::remove_dir_all(aside(&repo)).unwrap_or_else(|e| unreachable!("{e}"));
 }
 
@@ -268,7 +268,7 @@ fn a_check_id_outside_the_identifier_alphabet_is_refused() {
             "{stderr}"
         );
     }
-    fs::remove_dir_all(&repo).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::remove_dir_all(repo.path()).unwrap_or_else(|e| unreachable!("{e}"));
     fs::remove_dir_all(aside(&repo)).unwrap_or_else(|e| unreachable!("{e}"));
 }
 
@@ -285,7 +285,7 @@ fn a_check_id_with_dots_dashes_and_underscores_is_kept() {
         written.contains(",check-jactionlint-linux_x64.1,"),
         "{written}"
     );
-    fs::remove_dir_all(&repo).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::remove_dir_all(repo.path()).unwrap_or_else(|e| unreachable!("{e}"));
     fs::remove_dir_all(aside(&repo)).unwrap_or_else(|e| unreachable!("{e}"));
 }
 
@@ -311,6 +311,6 @@ fn a_lane_route_id_with_a_line_break_cannot_add_an_output_key() {
         !written.contains("qualification_cache_write=true"),
         "{written}"
     );
-    fs::remove_dir_all(&repo).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::remove_dir_all(repo.path()).unwrap_or_else(|e| unreachable!("{e}"));
     fs::remove_dir_all(aside(&repo)).unwrap_or_else(|e| unreachable!("{e}"));
 }

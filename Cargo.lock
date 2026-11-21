@@ -4184,6 +4184,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "velnor-cache-rules",
+ "velnor-test-support",
 ]
 
 [[package]]

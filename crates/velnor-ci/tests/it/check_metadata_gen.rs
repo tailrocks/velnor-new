@@ -3,7 +3,7 @@
 
 use std::error::Error;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 
 use velnor_gen::io::{Error as IoError, check_metadata, write_metadata};
@@ -16,7 +16,7 @@ const LOCK: &str = ".velnor/rust-ci.lock";
 const SAMPLE_LOCK: &str =
     include_str!("../../../../generator/samples/helper-lock/view/.velnor/rust-ci.lock");
 
-struct Checkout(PathBuf);
+struct Checkout(velnor_test_support::ScratchDir);
 
 impl Checkout {
     fn new(name: &str) -> Result<Self, Box<dyn Error>> {
@@ -26,10 +26,10 @@ impl Checkout {
     fn pinned(name: &str, helper: Option<&str>) -> Result<Self, Box<dyn Error>> {
         let base = crate::scratch_path("velnor-gen-check", name);
         if base.exists() {
-            fs::remove_dir_all(&base)?;
+            fs::remove_dir_all(base.path())?;
         }
-        fs::create_dir_all(&base)?;
-        let checkout = Self(fs::canonicalize(base)?);
+        fs::create_dir_all(base.path())?;
+        let checkout = Self(base.canonicalized()?);
         checkout.git(&["init", "--quiet"])?;
         checkout.write(
             "Cargo.toml",
@@ -48,7 +48,7 @@ impl Checkout {
     fn git(&self, arguments: &[&str]) -> TestResult {
         let status = Command::new("git")
             .args(arguments)
-            .current_dir(&self.0)
+            .current_dir(self.0.path())
             .status()?;
         status.success().then_some(()).ok_or("git failed".into())
     }
@@ -67,7 +67,7 @@ impl Checkout {
 
 impl Drop for Checkout {
     fn drop(&mut self) {
-        fs::remove_dir_all(&self.0).ok();
+        fs::remove_dir_all(self.0.path()).ok();
     }
 }
 

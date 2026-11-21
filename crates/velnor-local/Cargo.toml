@@ -49,3 +49,4 @@ velnor-cache-rules = { path = "../velnor-cache-rules", version = "=0.0.0" }
 
 [dev-dependencies]
 tokio = { version = "=1.54.1", features = ["test-util"] }
+velnor-test-support = { version = "=0.0.0", path = "../velnor-test-support" }

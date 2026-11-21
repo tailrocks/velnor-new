@@ -73,7 +73,7 @@ fn sanitize(route: &str) -> String {
 /// Lay the world out under a fresh directory: the repository, `$RUNNER_TEMP` with the request,
 /// the event payload.
 struct Laid {
-    root: PathBuf,
+    root: velnor_test_support::ScratchDir,
     repo: PathBuf,
     temp: PathBuf,
     payload: PathBuf,
@@ -224,11 +224,11 @@ pub(crate) fn run_helper(world: &mut World, bin: &str) -> Outcome {
     command
         .env_clear()
         .env("PATH", "/usr/bin:/bin")
-        .env("HOME", &laid.root)
+        .env("HOME", laid.root.path())
         .current_dir(if world.quirk == Some(Quirk::NotARepository) {
-            &laid.root
+            laid.root.path()
         } else {
-            &laid.repo
+            laid.repo.as_path()
         });
     command
         .env("RUNNER_TEMP", &laid.temp)
@@ -253,7 +253,7 @@ pub(crate) fn run_helper(world: &mut World, bin: &str) -> Outcome {
             .clone(),
         admission: admission_of(&laid.temp),
     };
-    fs::remove_dir_all(&laid.root).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::remove_dir_all(laid.root.path()).unwrap_or_else(|e| unreachable!("{e}"));
     outcome
 }
 
@@ -295,11 +295,11 @@ pub(crate) fn run_legacy(world: &mut World, engine: &str) -> Outcome {
     command
         .env_clear()
         .env("PATH", format!("{}:/usr/bin:/bin", bin_dir.display()))
-        .env("HOME", &laid.root)
+        .env("HOME", laid.root.path())
         .current_dir(if world.quirk == Some(Quirk::NotARepository) {
-            &laid.root
+            laid.root.path()
         } else {
-            &laid.repo
+            laid.repo.as_path()
         })
         .env("RUNNER_TEMP", &laid.temp)
         .env("VELNOR_INTERNAL_OP", "resolve-qualification-v1")
@@ -320,7 +320,7 @@ pub(crate) fn run_legacy(world: &mut World, engine: &str) -> Outcome {
         requests,
         admission: admission_of(&laid.temp),
     };
-    fs::remove_dir_all(&laid.root).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::remove_dir_all(laid.root.path()).unwrap_or_else(|e| unreachable!("{e}"));
     outcome
 }
 

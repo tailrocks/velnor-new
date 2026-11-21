@@ -221,10 +221,14 @@ mod unowned;
 mod version;
 mod write_request;
 
-pub(crate) fn scratch_path(prefix: &str, name: &str) -> std::path::PathBuf {
+pub(crate) fn scratch_name(prefix: &str, name: &str) -> std::path::PathBuf {
     let owner = std::thread::current()
         .name()
         .unwrap_or("main")
         .replace("::", "-");
     std::env::temp_dir().join(format!("{prefix}-{}-{owner}-{name}", std::process::id()))
+}
+
+pub(crate) fn scratch_path(prefix: &str, name: &str) -> velnor_test_support::ScratchDir {
+    velnor_test_support::ScratchDir::adopt(scratch_name(prefix, name))
 }

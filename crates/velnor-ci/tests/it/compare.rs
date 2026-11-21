@@ -227,7 +227,7 @@ fn metrics_without_a_schema_version_are_rejected() {
     .unwrap_or_else(|error| unreachable!("{error}"));
 
     let result = read_metrics(&path).map(|_| ());
-    fs::remove_dir_all(&directory).unwrap_or_else(|error| unreachable!("{error}"));
+    fs::remove_dir_all(directory.path()).unwrap_or_else(|error| unreachable!("{error}"));
     assert!(
         result
             .as_ref()

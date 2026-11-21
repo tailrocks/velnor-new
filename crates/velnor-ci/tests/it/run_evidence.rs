@@ -106,17 +106,17 @@ fn quiet_nonfresh_artifacts_save_the_cache_without_counting_verbose_artifacts_tw
         let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
             .args(["run", "--"])
             .arg(&program)
-            .current_dir(&temp)
-            .env("RUNNER_TEMP", &temp)
+            .current_dir(temp.path())
+            .env("RUNNER_TEMP", temp.path())
             .output()
             .expect("capture");
         assert!(output.status.success(), "{output:?}");
         let decision = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
             .args(["cache", "decide", "--target-dir", "target"])
-            .current_dir(&temp)
-            .env("RUNNER_TEMP", &temp)
+            .current_dir(temp.path())
+            .env("RUNNER_TEMP", temp.path())
             .env("GITHUB_OUTPUT", temp.join("outputs"))
-            .env("HOME", &temp)
+            .env("HOME", temp.path())
             .output()
             .expect("decision");
         assert!(decision.status.success(), "{decision:?}");
@@ -131,7 +131,7 @@ fn quiet_nonfresh_artifacts_save_the_cache_without_counting_verbose_artifacts_tw
                 "{decision:?}"
             );
         }
-        fs::remove_dir_all(temp).expect("cleanup");
+        fs::remove_dir_all(temp.path()).expect("cleanup");
     }
 }
 
@@ -255,8 +255,8 @@ fn rejected_oversized_output_cannot_establish_zero_cache_activity() {
         let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
             .args(["run", "--"])
             .arg(program)
-            .current_dir(&temp)
-            .env("RUNNER_TEMP", &temp)
+            .current_dir(temp.path())
+            .env("RUNNER_TEMP", temp.path())
             .output()
             .expect("capture");
         assert!(output.status.success());
@@ -269,10 +269,10 @@ fn rejected_oversized_output_cannot_establish_zero_cache_activity() {
         assert_eq!(invocation.rejected, 1);
         let decision = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
             .args(["cache", "decide", "--target-dir", "target"])
-            .current_dir(&temp)
-            .env("RUNNER_TEMP", &temp)
+            .current_dir(temp.path())
+            .env("RUNNER_TEMP", temp.path())
             .env("GITHUB_OUTPUT", temp.join("outputs"))
-            .env("HOME", &temp)
+            .env("HOME", temp.path())
             .output()
             .expect("decision");
         assert_eq!(decision.status.success(), active, "{decision:?}");
@@ -285,6 +285,6 @@ fn rejected_oversized_output_cannot_establish_zero_cache_activity() {
             assert!(String::from_utf8_lossy(&decision.stderr).contains("rejected"));
             assert!(!temp.join("outputs").exists());
         }
-        fs::remove_dir_all(temp).expect("cleanup");
+        fs::remove_dir_all(temp.path()).expect("cleanup");
     }
 }

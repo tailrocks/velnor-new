@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::{Command, Output};
 
 use crate::support::fresh_dir;
@@ -26,7 +26,7 @@ const FILES: &[&str] = &[
     "follower/crates/velnor-gen/src.txt",
 ];
 
-struct Fixture(PathBuf);
+struct Fixture(velnor_test_support::ScratchDir);
 
 impl Fixture {
     fn new(name: &str) -> Self {
@@ -70,7 +70,7 @@ impl Fixture {
             command.args(["--member", member]);
         }
         command
-            .current_dir(&self.0)
+            .current_dir(self.0.path())
             .output()
             .unwrap_or_else(|e| unreachable!("{e}"))
     }
@@ -78,7 +78,7 @@ impl Fixture {
 
 impl Drop for Fixture {
     fn drop(&mut self) {
-        let _ignored = fs::remove_dir_all(&self.0);
+        let _ignored = fs::remove_dir_all(self.0.path());
     }
 }
 

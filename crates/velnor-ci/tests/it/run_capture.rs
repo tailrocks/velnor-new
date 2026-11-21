@@ -26,8 +26,8 @@ fn completed_observations_survive_a_descendant_holding_the_stream_open() {
                 "nextest",
                 "run",
             ])
-            .current_dir(&temp)
-            .env("RUNNER_TEMP", &temp)
+            .current_dir(temp.path())
+            .env("RUNNER_TEMP", temp.path())
             .env("CARGO_HOME", temp.join("cargo-home"))
             .env("GITHUB_OUTPUT", temp.join("outputs"))
             .env("VELNOR_CI_RUN_PUMP_GRACE_MS", "20")
@@ -70,10 +70,10 @@ fn completed_observations_survive_a_descendant_holding_the_stream_open() {
         );
         let decision = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
             .args(["cache", "decide", "--target-dir", "target"])
-            .current_dir(&temp)
-            .env("RUNNER_TEMP", &temp)
+            .current_dir(temp.path())
+            .env("RUNNER_TEMP", temp.path())
             .env("GITHUB_OUTPUT", temp.join("cache-outputs"))
-            .env("HOME", &temp)
+            .env("HOME", temp.path())
             .output()
             .expect("cache decision");
         if active {
@@ -89,7 +89,7 @@ fn completed_observations_survive_a_descendant_holding_the_stream_open() {
             );
             assert!(String::from_utf8_lossy(&decision.stderr).contains("incomplete"));
         }
-        fs::remove_dir_all(temp).expect("cleanup");
+        fs::remove_dir_all(temp.path()).expect("cleanup");
     }
 }
 

@@ -7,20 +7,22 @@ use std::os::unix::fs::symlink;
 use std::path::{Path, PathBuf};
 
 use velnor_rust::resolve;
+use velnor_test_support::ScratchDir;
 
 type TestResult = Result<(), Box<dyn Error>>;
 
 /// A fresh directory under the temp dir, canonical so its paths compare equal to resolved ones.
-fn scratch(tag: &str) -> Result<PathBuf, Box<dyn Error>> {
-    let root = std::env::temp_dir().join(format!("velnor-resolve-{tag}-{}", std::process::id()));
-    fs::remove_dir_all(&root).ok();
-    fs::create_dir_all(&root)?;
-    Ok(fs::canonicalize(&root)?)
+fn scratch(tag: &str) -> Result<(ScratchDir, PathBuf), Box<dyn Error>> {
+    let guard = ScratchDir::new(
+        std::env::temp_dir().join(format!("velnor-resolve-{tag}-{}", std::process::id())),
+    );
+    let canonical = fs::canonicalize(guard.path())?;
+    Ok((guard, canonical))
 }
 
 #[test]
 fn dangling_symlink_resolves_to_its_target_not_its_own_path() -> TestResult {
-    let d = scratch("dangling")?;
+    let (_guard, d) = scratch("dangling")?;
     fs::create_dir_all(d.join("repo"))?;
     symlink(d.join("elsewhere"), d.join("repo/target"))?;
     assert_eq!(resolve(&d.join("repo/target"))?, d.join("elsewhere"));
@@ -29,7 +31,7 @@ fn dangling_symlink_resolves_to_its_target_not_its_own_path() -> TestResult {
 
 #[test]
 fn symlink_loop_is_an_error_not_a_missing_path() -> TestResult {
-    let d = scratch("loop")?;
+    let (_guard, d) = scratch("loop")?;
     symlink(d.join("a"), d.join("b"))?;
     symlink(d.join("b"), d.join("a"))?;
     assert!(resolve(&d.join("a")).is_err());
@@ -38,7 +40,7 @@ fn symlink_loop_is_an_error_not_a_missing_path() -> TestResult {
 
 #[test]
 fn dotdot_after_symlink_in_existing_prefix_follows_the_os() -> TestResult {
-    let d = scratch("dotdot")?;
+    let (_guard, d) = scratch("dotdot")?;
     fs::create_dir_all(d.join("outside/deep"))?;
     fs::create_dir_all(d.join("repo"))?;
     symlink(d.join("outside/deep"), d.join("repo/link"))?;
@@ -60,11 +62,32 @@ fn relative_inputs_are_made_absolute() -> TestResult {
 
 #[test]
 fn missing_paths_keep_their_lexical_tail() -> TestResult {
-    let d = scratch("missing")?;
+    let (_guard, d) = scratch("missing")?;
     fs::create_dir_all(d.join("present"))?;
     assert_eq!(
         resolve(&d.join("present/not-yet/deeper"))?,
         d.join("present/not-yet/deeper")
     );
+    Ok(())
+}
+
+fn leftovers(tag: &str) -> usize {
+    let prefix = format!("velnor-resolve-{tag}-{}", std::process::id());
+    fs::read_dir(std::env::temp_dir()).map_or(0, |entries| {
+        entries
+            .flatten()
+            .filter(|entry| entry.file_name().to_string_lossy().starts_with(&prefix))
+            .count()
+    })
+}
+
+#[test]
+fn a_scratch_directory_leaves_nothing_in_tmpdir_once_its_test_ends() -> TestResult {
+    let before = leftovers("selftest");
+    {
+        let (_guard, d) = scratch("selftest")?;
+        fs::write(d.join("probe"), "")?;
+    }
+    assert_eq!(leftovers("selftest"), before);
     Ok(())
 }

@@ -36,7 +36,7 @@ fn checkout_under_a_cargo_ancestor_still_saves_its_default_target() {
     assert!(save.status.success(), "{save:?}");
     assert!(repo.root().join("target/.velnor/inputs.tsv").is_file());
     drop(repo);
-    fs::remove_dir_all(parent).unwrap_or_else(|error| unreachable!("{error}"));
+    fs::remove_dir_all(parent.path()).unwrap_or_else(|error| unreachable!("{error}"));
 }
 
 fn case_alias(name: &str) -> Repo {
