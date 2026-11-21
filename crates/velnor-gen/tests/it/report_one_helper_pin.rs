@@ -11,6 +11,7 @@ const CHECK_STEP: &str = "Check cache waste";
 
 #[derive(Default)]
 struct JobPins {
+    name: String,
     pins: BTreeSet<String>,
     producer: bool,
     checker: bool,
@@ -21,8 +22,11 @@ fn job_pins(shape: &str) -> Result<Vec<JobPins>, Box<dyn std::error::Error>> {
         &workflow(&crate::base_save::pinned("0.1.110", shape)?)?,
     ))?;
     let mut jobs = Vec::new();
-    for job in parsed["jobs"].as_object().ok_or("jobs")?.values() {
-        let mut found = JobPins::default();
+    for (name, job) in parsed["jobs"].as_object().ok_or("jobs")? {
+        let mut found = JobPins {
+            name: name.clone(),
+            ..JobPins::default()
+        };
         for step in job["steps"].as_array().ok_or("steps")? {
             if step["uses"]
                 .as_str()
@@ -45,7 +49,12 @@ fn job_pins(shape: &str) -> Result<Vec<JobPins>, Box<dyn std::error::Error>> {
 
 #[test]
 fn every_report_job_and_the_checker_install_one_helper_pin() -> TestResult {
-    for shape in ["", "shape = \"lint-test\"\n", "shape = \"groups\"\n"] {
+    for shape in [
+        "",
+        "shape = \"lint-test\"\n",
+        "shape = \"groups\"\n",
+        "pr_ci = \"label\"\n",
+    ] {
         let jobs = job_pins(shape)?;
         assert!(
             jobs.iter().any(|job| job.producer) && jobs.iter().any(|job| job.checker),
@@ -53,7 +62,12 @@ fn every_report_job_and_the_checker_install_one_helper_pin() -> TestResult {
         );
         for job in &jobs {
             if job.producer || job.checker || !job.pins.is_empty() {
-                assert_eq!(job.pins, BTreeSet::from(["0.1.110".to_owned()]), "{shape}");
+                assert_eq!(
+                    job.pins,
+                    BTreeSet::from(["0.1.110".to_owned()]),
+                    "{shape} job {}",
+                    job.name
+                );
             }
         }
     }
