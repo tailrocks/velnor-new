@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import tarfile
 import tempfile
+import time
 import unittest
 
 
@@ -19,7 +20,7 @@ RELEASE_URL = f"{RELEASES}/tools-v0.1.79/velnor-ci-x86_64-unknown-linux-musl.tar
 LEGACY_RELEASE_URL = f"{RELEASES}/rust-ci-v0.1.79/velnor-ci-x86_64-unknown-linux-musl.tar.gz"
 PAYLOAD = b"the released velnor-ci binary\n"
 DIGEST_TOOLS = ("sha256sum", "shasum")
-SCRIPT_TOOLS = ("bash", "cut", "tr", "mktemp", "rm", "cp", "mkdir", "chmod", "mv", "wc", "gzip", "head", "sleep", "seq", "env", "sync", "find", "uname")
+SCRIPT_TOOLS = ("bash", "cut", "tr", "mktemp", "rm", "cp", "mkdir", "chmod", "mv", "wc", "gzip", "head", "sleep", "seq", "env", "sync", "find", "uname", "sort", "stat")
 ARCHIVE = "velnor-ci-x86_64-unknown-linux-musl.tar.gz"
 PLATFORMS = (
     ("Linux", "X64", "x86_64-unknown-linux-musl", "SHA256_LINUX_X64"),
@@ -99,6 +100,18 @@ case "$last" in
     if [ ! -e "$STUB_RACE_MARK" ]; then
       : > "$STUB_RACE_MARK"
       cp "$STUB_RACE" "${last%/*}/.velnor-ci.evict.$PPID"
+    fi ;;
+esac
+exec "$REAL_MV" "$@"
+"""
+
+STUB_PLANT_QUARANTINE_MV = """#!/bin/sh
+for arg; do last="$arg"; done
+case "$last" in
+  */.velnor-ci.evict.*)
+    if [ ! -e "$STUB_RACE_MARK" ]; then
+      : > "$STUB_RACE_MARK"
+      cp "$STUB_RACE" "$last"
     fi ;;
 esac
 exec "$REAL_MV" "$@"
@@ -775,6 +788,45 @@ class SetupVelnorInstallTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1, result.output)
         retained = [path for path in installed_files(self.tool_cache) if path.read_bytes() == self.archive]
         self.assertTrue(retained, "a verified archive kept by an earlier eviction was overwritten and deleted")
+
+    def test_kept_quarantines_are_pruned_to_the_newest_three_and_a_symlink_among_them_is_not_followed(self):
+        cached = self.cached_archive()
+        cached.parent.mkdir(parents=True)
+        cached.write_bytes(b"tampered archive\n")
+        stub = self.stub_bin / "mv"
+        stub.write_text(STUB_PLANT_QUARANTINE_MV)
+        stub.chmod(0o755)
+        now = time.time()
+        stale = []
+        for index, age in enumerate((5000, 4000, 3000, 2000, 1000)):
+            entry = cached.parent / f".velnor-ci.evict.{100 + index}.{index}"
+            entry.write_bytes(b"old quarantine\n")
+            os.utime(entry, (now - age, now - age))
+            stale.append((entry.name, age))
+        outside = self.root / "outside-target"
+        outside.write_bytes(b"outside the quarantine\n")
+        link = cached.parent / ".velnor-ci.evict.1.1"
+        link.symlink_to(outside)
+        os.utime(link, (now - 10000, now - 10000), follow_symlinks=False)
+        result = self.install(
+            sha256(self.archive),
+            extra_env={
+                "STUB_RACE": str(self.payload),
+                "STUB_RACE_MARK": str(self.root / "race-mark"),
+                "REAL_MV": shutil.which("mv"),
+                "STUB_MISSING": "tools-v0.1.79 rust-ci-v0.1.79",
+            },
+        )
+        self.assertEqual(result.returncode, 1, result.output)
+        self.assertIn("is kept at", result.output)
+        remaining = sorted(path.name for path in cached.parent.glob(".velnor-ci.evict.*"))
+        self.assertEqual(len(remaining), 3, f"expected the newest three quarantines, found {remaining}")
+        self.assertIn(".velnor-ci.evict.104.4", remaining)
+        self.assertIn(".velnor-ci.evict.103.3", remaining)
+        kept = [path for path in cached.parent.glob(".velnor-ci.evict.*") if path.read_bytes() == self.archive]
+        self.assertEqual(len(kept), 1, "the verified quarantine written by this eviction was not kept")
+        self.assertFalse(link.is_symlink(), "the stale symlink in the quarantine was not removed")
+        self.assertEqual(outside.read_bytes(), b"outside the quarantine\n", "a quarantine symlink was followed")
 
     def test_a_directory_at_the_store_entry_path_is_removed_when_the_download_fails(self):
         cached = self.cached_archive()
