@@ -187,3 +187,15 @@ fn a_test_group_path_with_a_question_mark_or_a_bracket_is_refused() {
         );
     }
 }
+
+#[test]
+fn an_exclude_glob_with_a_question_mark_or_a_bracket_is_refused() {
+    for glob in ["cfg/h?.toml", "cfg/h[k].toml", "cfg/h]k.toml"] {
+        let config = format!("exclude = ['{glob}']\n");
+        assert_eq!(
+            detect_with(&config).map(|_| ()),
+            Err(unsupported_glob("exclude", glob)),
+            "{config}"
+        );
+    }
+}

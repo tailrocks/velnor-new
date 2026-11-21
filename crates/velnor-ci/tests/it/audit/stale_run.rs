@@ -43,8 +43,9 @@ fn build_step(repo: &Repo, cargo: &[&str]) -> Output {
 
 fn library_with_asset_input() -> Repo {
     let repo = Repo::new("stale-run");
+    let mise = crate::toolchain::mise_rust_pin();
     repo.write_all(&[
-        ("mise.toml", "[tools]\nrust = \"1.100.0\"\n"),
+        ("mise.toml", mise.as_str()),
         (
             "rust/Cargo.toml",
             "[workspace]\nmembers = [\"lib\"]\nresolver = \"3\"\n",
@@ -196,8 +197,9 @@ fn stale_gaps_share_one_entry_budget_when_they_count_their_changed_inputs() {
 #[test]
 fn a_stale_run_with_several_changed_inputs_names_the_first_and_counts_the_rest() {
     let repo = Repo::new("stale-run-many");
+    let mise = crate::toolchain::mise_rust_pin();
     repo.write_all(&[
-        ("mise.toml", "[tools]\nrust = \"1.100.0\"\n"),
+        ("mise.toml", mise.as_str()),
         (
             "rust/Cargo.toml",
             "[workspace]\nmembers = [\"lib\"]\nresolver = \"3\"\n",
