@@ -110,3 +110,28 @@ fn a_build_command_naming_a_build_directory_is_refused() {
         );
     }
 }
+
+#[test]
+fn a_relative_build_directory_with_a_cargo_path_template_is_refused_by_the_audit_and_the_build() {
+    let repo = workspace_below_the_root();
+    let value = "{workspace-root}/build";
+    let message = format!(
+        "CARGO_BUILD_BUILD_DIR={value} is relative and uses a cargo path template; set an absolute path instead"
+    );
+    let audited = velnor_ci()
+        .current_dir(repo.root().join("rust/app"))
+        .env("CARGO_BUILD_BUILD_DIR", value)
+        .args(["inputs", "audit", "--write"])
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let built = velnor_ci()
+        .current_dir(repo.root().join("rust/app"))
+        .env("CARGO_BUILD_BUILD_DIR", value)
+        .args(["inputs", "build", "--", "cargo", "build"])
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    for output in [audited, built] {
+        assert!(refused(&output).contains(&message), "{output:?}");
+    }
+    assert!(!repo.root().join("rust/build").exists());
+}

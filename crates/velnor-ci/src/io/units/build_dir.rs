@@ -34,6 +34,16 @@ pub(super) fn refuse_parent(relative: &Path) -> Result<(), CiError> {
     Ok(())
 }
 
+pub(super) fn refuse_template(relative: &Path) -> Result<(), CiError> {
+    if relative.to_string_lossy().contains('{') {
+        return Err(CiError::new(format!(
+            "CARGO_BUILD_BUILD_DIR={} is relative and uses a cargo path template; set an absolute path instead",
+            relative.display()
+        )));
+    }
+    Ok(())
+}
+
 pub(super) fn step_relative(relative: &Path, base: &Path) -> PathBuf {
     base.join(relative)
 }
