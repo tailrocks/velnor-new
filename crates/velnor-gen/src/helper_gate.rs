@@ -6,12 +6,11 @@ use velnor_model::{
     PushAfterMergeGroup, RepoFacts,
 };
 
-use velnor_rust::INPUTS_IDENTITY_HELPER;
+use velnor_rust::{INPUTS_IDENTITY_HELPER, TOKEN_FIRST_HELPER};
 
 use crate::{COMPATIBLE_HELPER_SERIES, GenerateError, HELPER_MINIMUM};
 
 const MERGE_GROUP_HELPER: (u64, u64, u64) = (0, 1, 103);
-/// The first `velnor-ci` that names the `required_check` check when it reads a queued run.
 // helper-gate: first in tools-v0.1.97 via af11477df1
 pub(crate) const REQUIRED_CHECK_HELPER: (u64, u64, u64) = (0, 1, 97);
 
@@ -106,4 +105,17 @@ pub fn require_compatible(version: &HelperVersion) -> Result<(), GenerateError> 
     } else {
         Err(GenerateError::IncompatibleHelper(version.clone()))
     }
+}
+
+pub(crate) fn mint_note(facts: &RepoFacts) -> Option<String> {
+    let version = facts.helper.as_ref()?.version();
+    let uses_token =
+        facts.config.private_sources.is_some() || !facts.config.release_assets.is_empty();
+    (uses_token && !version.at_least(TOKEN_FIRST_HELPER)).then(|| {
+        let (major, minor, patch) = TOKEN_FIRST_HELPER;
+        format!(
+            "[private_sources] / release assets with helper {} mint the App token after repository-controlled steps; upgrade the helper to {major}.{minor}.{patch} or later",
+            version.as_str()
+        )
+    })
 }
