@@ -4,20 +4,21 @@
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 
-use sha2::{Digest, Sha256};
-use velnor_ci::image_candidate::hashing::hex;
+use velnor_ci::cache_version::{Compression, cache_version};
+use velnor_ci::tools_verify_step::tools_paths;
 
 use crate::tools_verify::{Job, discarded, job, recorded, rustc};
 
 const GZIP_VERSION: &str = "0e860ad0f6378509df797cde101e51911acafca877e9ef5e166e86d508c549da";
 const ZSTD_VERSION: &str = "0cccfb17094855db4c75b312ac9e0441b5c3cbdbccea182d94251e8142ff4640";
+const ANCHOR_VERSION: &str = "fdc9a87fe2dcd2021bb6b6640eb35094a7299abb6781b70cfb9a8cc2e1ff5133";
 const REPO: &str = "tailrocks/velnor-new";
 
-/// The `version` the cache service stores: the SHA-256 of the paths, the compression method and
-/// the toolkit's salt, joined with `|`, as `getCacheVersion` in `@actions/cache` computes it.
-fn version(path: &str, compression: &str) -> String {
-    let text = format!("{path}|{compression}|1.0");
-    hex(&Sha256::digest(text.as_bytes()))
+fn gzip_anchor_version(job: &Job) -> String {
+    cache_version(
+        &[&format!("{}/velnor-tools-anchor", job.root.display())],
+        Compression::Gzip,
+    )
 }
 
 fn zstd_on_path(job: &Job) -> String {
@@ -103,9 +104,49 @@ fn the_version_follows_the_compression_the_cache_action_picks_on_this_runner() {
 
 #[test]
 fn the_pinned_versions_are_what_the_cache_service_stores_for_the_tools_paths() {
-    let paths = "~/.local/share/mise|~/.rustup";
-    assert_eq!(GZIP_VERSION, version(paths, "gzip"));
-    assert_eq!(ZSTD_VERSION, version(paths, "zstd-without-long"));
+    assert_eq!(
+        cache_version(&tools_paths(), Compression::Gzip),
+        GZIP_VERSION
+    );
+    assert_eq!(
+        cache_version(&tools_paths(), Compression::ZstdWithoutLong),
+        ZSTD_VERSION
+    );
+    assert_eq!(
+        cache_version(
+            &["/home/runner/_work/_temp/velnor-tools-anchor"],
+            Compression::ZstdWithoutLong
+        ),
+        ANCHOR_VERSION
+    );
+}
+
+#[test]
+fn a_poisoned_restore_never_runs_a_program_from_its_own_tree_to_pick_the_compression() {
+    let job = job("tools-verify-poisoned-zstd");
+    let anchor = recorded(&job);
+    let shims = job.home.join(".local/share/mise/shims");
+    fs::create_dir_all(&shims).unwrap_or_else(|e| unreachable!("{e}"));
+    let ran = job.root.join("poisoned-zstd-ran");
+    let zstd = shims.join("zstd");
+    fs::write(
+        &zstd,
+        format!("#!/bin/sh\necho ran > '{}'\necho zstd\n", ran.display()),
+    )
+    .unwrap_or_else(|e| unreachable!("{e}"));
+    fs::set_permissions(&zstd, fs::Permissions::from_mode(0o755))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let stdout = check_stdout(
+        &job,
+        &anchor,
+        &[
+            ("VELNOR_TOOLS_CACHE_KEY", "velnor-tools-abc123"),
+            ("PATH", &shims.display().to_string()),
+        ],
+    );
+    assert!(stdout.contains("::notice::"), "{stdout}");
+    assert!(discarded(&job));
+    assert!(!ran.exists());
 }
 
 #[test]
@@ -121,10 +162,7 @@ fn a_poisoned_restore_names_the_anchor_entry_that_feeds_the_check() {
             ("VELNOR_ANCHOR_CACHE_KEY", "velnor-tools-anchor-abc123"),
         ],
     );
-    let anchor_version = version(
-        &format!("{}/velnor-tools-anchor", job.root.display()),
-        "gzip",
-    );
+    let anchor_version = gzip_anchor_version(&job);
     assert!(
         stdout.contains(&delete_entry("velnor-tools-anchor-abc123", &anchor_version)),
         "{stdout}"
@@ -139,10 +177,7 @@ fn a_malformed_anchor_names_the_anchor_entry_that_feeds_the_check() {
         "not-a-digest",
         &[("VELNOR_ANCHOR_CACHE_KEY", "velnor-tools-anchor-abc123")],
     );
-    let anchor_version = version(
-        &format!("{}/velnor-tools-anchor", job.root.display()),
-        "gzip",
-    );
+    let anchor_version = gzip_anchor_version(&job);
     assert!(stdout.contains("the anchor is malformed"), "{stdout}");
     assert!(
         stdout.contains(&delete_entry("velnor-tools-anchor-abc123", &anchor_version)),
@@ -162,10 +197,7 @@ fn a_restored_malformed_anchor_names_the_anchor_entry_when_the_read_step_left_it
         "",
         &[("VELNOR_ANCHOR_CACHE_KEY", "velnor-tools-anchor-abc123")],
     );
-    let anchor_version = version(
-        &format!("{}/velnor-tools-anchor", job.root.display()),
-        "gzip",
-    );
+    let anchor_version = gzip_anchor_version(&job);
     assert!(stdout.contains("the anchor is malformed"), "{stdout}");
     assert!(
         stdout.contains(&delete_entry("velnor-tools-anchor-abc123", &anchor_version)),

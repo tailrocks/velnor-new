@@ -217,6 +217,7 @@ mod tools_digest;
 mod tools_heal;
 mod tools_home_clear;
 mod tools_local;
+mod tools_paths_render;
 mod tools_verify;
 mod tools_verify_anchor;
 mod tools_verify_bounds;

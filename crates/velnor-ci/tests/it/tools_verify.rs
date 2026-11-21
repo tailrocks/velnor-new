@@ -263,7 +263,7 @@ pub(crate) fn context(job: &Job, anchor: &str, event: &str) -> Context {
             api_url: "https://api.github.com".to_owned(),
             repository: "tailrocks/velnor-new".to_owned(),
         },
-        compression: Compression::Gzip,
+        compression: Some(Compression::Gzip),
     }
 }
 

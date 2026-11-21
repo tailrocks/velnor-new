@@ -1,13 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-//! The `version` the cache service stores with an entry. Two entries may share one key on one ref
-//! when their versions differ, so naming a key does not name one entry.
-//!
-//! `actions/cache` computes it as the SHA-256 of the cached paths, the compression method and a
-//! salt, joined with `|` (`getCacheVersion` in `@actions/toolkit`). The compression method is a
-//! property of the runner that saves or restores: zstd when the runner has `zstd`, else gzip.
-
 use std::process::Command;
 
 use sha2::{Digest, Sha256};
@@ -30,8 +23,6 @@ impl Compression {
         }
     }
 
-    /// What `actions/cache` picks on this runner: it runs `zstd --quiet --version` and takes any
-    /// output, standard or error, as a sign that zstd works.
     #[must_use]
     pub fn detect() -> Self {
         let Ok(output) = Command::new("zstd").args(["--quiet", "--version"]).output() else {

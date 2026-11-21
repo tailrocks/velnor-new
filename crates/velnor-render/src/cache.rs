@@ -129,13 +129,9 @@ fn string_expression(text: &str) -> String {
 
 pub(crate) fn path_text(path: &CachePath) -> String {
     match path {
-        CachePath::MiseData => "~/.local/share/mise".to_owned(),
-        CachePath::RustupHome => "~/.rustup".to_owned(),
-        CachePath::CargoRegistryIndex => "~/.cargo/registry/index".to_owned(),
-        CachePath::CargoRegistryCache => "~/.cargo/registry/cache".to_owned(),
-        CachePath::CargoGitDb => "~/.cargo/git/db".to_owned(),
         CachePath::Target(directory) => glob_literal(directory.as_str()),
         CachePath::Delta(root) => root.delta_dir(),
+        literal => literal.literal().unwrap_or_default().to_owned(),
     }
 }
 

@@ -14,9 +14,9 @@ const MAIN: &str = "refs/heads/main";
 const ZSTD: &str = "0cccfb17094855db4c75b312ac9e0441b5c3cbdbccea182d94251e8142ff4640";
 const GZIP: &str = "0e860ad0f6378509df797cde101e51911acafca877e9ef5e166e86d508c549da";
 
-/// A cache API that filters its listing by `key` (a prefix) and `ref` the way GitHub does.
 struct Api {
     entries: Vec<Value>,
+    filters_by_ref: bool,
     asked: RefCell<Vec<String>>,
     deleted: RefCell<Vec<u64>>,
 }
@@ -41,7 +41,9 @@ impl GitHub for Api {
             .entries
             .iter()
             .filter(|row| row["key"].as_str().is_some_and(|k| k.starts_with(key)))
-            .filter(|row| reference.as_deref().is_none_or(|r| row["ref"] == r))
+            .filter(|row| {
+                !self.filters_by_ref || reference.as_deref().is_none_or(|r| row["ref"] == r)
+            })
             .collect();
         Ok(json!({"total_count":rows.len(),"actions_caches":rows}).to_string())
     }
@@ -67,6 +69,7 @@ impl GitHubWrite for Api {
 fn api(entries: Vec<Value>) -> Api {
     Api {
         entries,
+        filters_by_ref: true,
         asked: RefCell::default(),
         deleted: RefCell::default(),
     }
@@ -142,6 +145,17 @@ fn a_ref_narrows_an_otherwise_ambiguous_match_to_one_entry() {
         entry(31, KEY, MAIN, ZSTD),
         entry(32, KEY, "refs/pull/7/merge", ZSTD),
     ]);
+    delete_entry(&api, &repo(), KEY, ZSTD, Some(MAIN)).unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(*api.deleted.borrow(), [31]);
+}
+
+#[test]
+fn an_entry_on_another_ref_is_ignored_even_when_the_listing_returns_it() {
+    let mut api = api(vec![
+        entry(31, KEY, MAIN, ZSTD),
+        entry(32, KEY, "refs/pull/7/merge", ZSTD),
+    ]);
+    api.filters_by_ref = false;
     delete_entry(&api, &repo(), KEY, ZSTD, Some(MAIN)).unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(*api.deleted.borrow(), [31]);
 }

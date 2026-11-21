@@ -5,6 +5,8 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
+use velnor_model::{CacheKey, CachePath, Host, ToolsAnchor};
+
 use crate::cache_version::{Compression, cache_version};
 use crate::error::CiError;
 use crate::escape::{escape, inert};
@@ -14,11 +16,18 @@ use crate::tools_verify::{Anchor, Discard, Recording, Verb, Verdict, check, read
 
 const ANCHOR_DIR: &str = "velnor-tools-anchor";
 const ANCHOR_NAME: &str = "digest";
-/// The `path:` of the tools cache step, which is `CacheKey::Tools::paths()` in `velnor-model`; the
-/// `tools_cache` tests of `velnor-gen` pin the rendered paths.
-const TOOLS_PATHS: [&str; 2] = ["~/.local/share/mise", "~/.rustup"];
+#[must_use]
+pub fn tools_paths() -> Vec<&'static str> {
+    CacheKey::Tools {
+        host: Host,
+        anchor: ToolsAnchor::Unanchored,
+    }
+    .paths()
+    .iter()
+    .filter_map(CachePath::literal)
+    .collect()
+}
 
-/// Where the notice sends the delete command: the host, its API and the repository.
 #[derive(Debug, Clone)]
 pub struct Remote {
     pub host: String,
@@ -40,7 +49,7 @@ pub struct Context {
     pub cache_key: String,
     pub anchor_key: String,
     pub remote: Remote,
-    pub compression: Compression,
+    pub compression: Option<Compression>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -131,7 +140,6 @@ fn host_of(server: Option<&str>) -> &str {
         .unwrap_or("github.com")
 }
 
-/// The host is always named, so that `GH_HOST` cannot point the command at another instance.
 fn remote(server: Option<&str>, api: Option<&str>, repository: Option<&str>) -> Remote {
     let host = host_of(server);
     let api_url = api.filter(|url| !url.is_empty()).map_or_else(
@@ -236,8 +244,9 @@ pub fn run(verb: Verb, context: &Context) -> Result<String, CiError> {
         .and_then(|mut handle| handle.write_all(outputs(&verdict).as_bytes()))
         .map_err(|error| CiError::new(format!("cannot write {}: {error}", path.display())))?;
     let anchor_dir = context.runner_temp.join(ANCHOR_DIR);
-    let key_version = cache_version(&TOOLS_PATHS, context.compression);
-    let anchor_version = cache_version(&[&anchor_dir.to_string_lossy()], context.compression);
+    let compression = context.compression.unwrap_or_else(Compression::detect);
+    let key_version = cache_version(&tools_paths(), compression);
+    let anchor_version = cache_version(&[&anchor_dir.to_string_lossy()], compression);
     let reference = context
         .default_branch
         .as_ref()
@@ -285,7 +294,7 @@ pub fn setup(verb: Verb) -> Result<String, CiError> {
                 var("GITHUB_API_URL").as_deref(),
                 var("GITHUB_REPOSITORY").as_deref(),
             ),
-            compression: Compression::detect(),
+            compression: None,
         },
     )
 }
