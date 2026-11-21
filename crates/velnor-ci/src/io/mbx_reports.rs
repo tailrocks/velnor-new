@@ -7,7 +7,7 @@ use nix::errno::Errno;
 use nix::sys::socket::{AddressFamily, SockFlag, SockType, UnixAddr, connect, socket};
 use std::collections::BTreeMap;
 use std::ffi::OsStr;
-use std::fs::{self, OpenOptions};
+use std::fs::{self, OpenOptions, TryLockError};
 use std::io::{self, Read, Write};
 use std::os::fd::AsRawFd;
 use std::os::unix::fs::OpenOptionsExt;
@@ -56,10 +56,29 @@ fn accepts_without_blocking(path: &Path) -> bool {
     if endpoint.set_nonblocking(true).is_err() {
         return false;
     }
-    matches!(
-        connect(endpoint.as_raw_fd(), &address),
-        Ok(()) | Err(Errno::EAGAIN | Errno::EINPROGRESS)
-    )
+    match connect(endpoint.as_raw_fd(), &address) {
+        Ok(()) | Err(Errno::EAGAIN | Errno::EINPROGRESS) => true,
+        Err(Errno::ECONNREFUSED) => session_lease_is_held(path),
+        Err(_) => false,
+    }
+}
+
+const SESSION_LEASE: &str = "owner.lock";
+
+fn session_lease_is_held(socket: &Path) -> bool {
+    let Some(directory) = socket.parent() else {
+        return false;
+    };
+    let Ok(lease) = OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK | libc::O_CLOEXEC)
+        .open(directory.join(SESSION_LEASE))
+    else {
+        return false;
+    };
+    let outcome = lease.try_lock_shared();
+    drop(lease);
+    matches!(outcome, Err(TryLockError::WouldBlock))
 }
 
 pub(crate) fn assign(command: &mut Command, argv: &[String]) {
