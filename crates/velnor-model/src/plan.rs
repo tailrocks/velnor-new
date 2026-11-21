@@ -10,6 +10,7 @@ use crate::hosted::HostedRunners;
 use crate::ids::{JobId, PackageName, RepoPath, RootSlug, RunnerLabel, TargetName};
 use crate::plan_gate::{Gate, GateNeed, PlanFrom};
 use crate::repo::{DenyCheck, LaneFeatures, TargetKind};
+use crate::setup_phase::SetupOrder;
 use crate::steps::{StepKind, VerifiedSave};
 use crate::test_group::NoTests;
 use crate::trusted::TrustedRunners;
@@ -139,6 +140,9 @@ pub struct Step {
     pub reads: Option<PlanRef>,
     /// Skipped on a self-hosted runner, so that the step runs only on a GitHub-hosted one.
     pub hosted_only: bool,
+    /// Set on the `[[test_setup]]` steps and on the steps after them: they are skipped
+    /// when a setup step before them failed or was cancelled.
+    pub setup_order: SetupOrder,
 }
 
 pub const CI_RUN_LABEL: &str = "ci:run";

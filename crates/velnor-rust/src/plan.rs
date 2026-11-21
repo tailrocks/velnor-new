@@ -6,8 +6,8 @@ use std::collections::BTreeMap;
 use velnor_model::{
     Access, BuildRecord, CacheDebug, CacheKey, CargoCommand, Concurrency, Gate, HelperCommand,
     Host, Job, JobId, MbxStore, PackageName, PermissionScope, Permissions, PrCi, PrRun,
-    PrepareLocks, PushAfterMergeGroup, RepoFacts, RootSlug, RustRoot, Step, StepKind, TargetName,
-    Toolchain, When, WorkflowPlan,
+    PrepareLocks, PushAfterMergeGroup, RepoFacts, RootSlug, RustRoot, SetupOrder, Step, StepKind,
+    TargetName, Toolchain, When, WorkflowPlan,
 };
 
 use crate::audit_job::audit_job;
@@ -151,7 +151,8 @@ fn helper_job(facts: &RepoFacts, root: &RustRoot, deltas: bool) -> Job {
             binary: TargetName::from_static(HELPER_PACKAGE),
         }))
     });
-    let steps = crate::test_setup::before_builds(facts, root, steps);
+    let mut steps = crate::test_setup::before_builds(facts, root, steps);
+    crate::test_setup::gate_job(&mut steps);
     Job {
         needs: vec![PLAN_JOB],
         gate: lane.job(),
@@ -381,5 +382,6 @@ pub(crate) fn step(kind: StepKind) -> Step {
         any_gate: Vec::new(),
         reads: None,
         hosted_only: false,
+        setup_order: SetupOrder::Unordered,
     }
 }
