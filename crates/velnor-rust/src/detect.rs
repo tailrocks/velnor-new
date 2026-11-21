@@ -10,9 +10,7 @@ use velnor_model::{
 };
 
 use crate::config::{CONFIG_PATH, excluded, parse};
-use crate::detect_checks::{
-    check_build_targets, check_helper_box, check_nextest_harnesses, check_setup_files,
-};
+use crate::detect_checks::{check_build_targets, check_nextest_harnesses, check_setup_files};
 use crate::embedded::is_rust_source;
 use crate::error::{DetectError, Reason};
 use crate::lock::{LOCK_PATH, parse_lock};
@@ -141,8 +139,7 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
         ));
     }
     check_nextest_harnesses(&config, &rust_roots)?;
-    check_helper_box(&config, &rust_roots)?;
-    crate::detect_checks::check_generator(&config, &rust_roots)?;
+    crate::detect_checks::check_packages(&config, &rust_roots)?;
     crate::config_test_groups::check_tests(&config, &rust_roots)?;
     crate::groups::check(view, &config, &rust_roots)?;
     crate::groups::check_shape(&config)?;
@@ -176,6 +173,17 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
         .and_then(|policy| policy.deny_checks.as_deref())
         .map_or(DenyChecks::ALL, DenyChecks::of);
     let policy = policy_tools(view, &deny_configs, config.runner.as_str(), lane, checks)?;
+    if config
+        .policy
+        .as_ref()
+        .is_some_and(|table| table.gate_on_plan)
+        && !(policy.deny || policy.machete)
+    {
+        return Err(DetectError::invalid(
+            &CONFIG_PATH,
+            Reason::PolicyGateWithoutLane,
+        ));
+    }
     let weakenings = weakenings(&view.files, &rust_roots);
     let private_sources = crate::config_cache::private_sources(view, &rust_roots, &config)?;
     let repository = repository_identity(view, &config)?;

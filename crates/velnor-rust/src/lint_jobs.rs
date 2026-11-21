@@ -130,7 +130,17 @@ fn generated_check_job(facts: &RepoFacts, lint: &LintJob, from_source: bool) -> 
     Job {
         name: Some(lint.name.clone()),
         timeout_minutes: lint.timeout_minutes,
-        pr: PrRun::Always,
+        pr: if lint.plan_gated {
+            quick(facts)
+        } else {
+            PrRun::Always
+        },
+        needs: if lint.plan_gated {
+            vec![PLAN_JOB]
+        } else {
+            Vec::new()
+        },
+        gate: lint.plan_gated.then(|| gate(lint, PlanFrom::Job(PLAN_JOB))),
         steps,
         ..job(facts, lint.id.clone())
     }
@@ -140,7 +150,7 @@ fn lint_job(facts: &RepoFacts, lint: &LintJob) -> Job {
     if let LintKind::GeneratedCheck { from_source } = lint.kind {
         return generated_check_job(facts, lint, from_source);
     }
-    let planned = !lint.inputs.is_empty();
+    let planned = lint.planned();
     let mut steps = vec![step(StepKind::Checkout {
         depth: CHECKOUT_DEPTH,
         sparse: None,

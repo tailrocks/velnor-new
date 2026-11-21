@@ -32,6 +32,7 @@ pub(crate) struct RawLint {
     tools: Option<Vec<String>>,
     inputs: Option<Vec<String>>,
     from_source: Option<bool>,
+    gate_on_plan: Option<bool>,
 }
 
 fn word(value: &str) -> bool {
@@ -132,6 +133,9 @@ fn inputs(raw: Option<Vec<String>>) -> Result<Vec<PathGlob>, Reason> {
 
 fn lint(raw: RawLint) -> Result<LintJob, Reason> {
     let kind = raw.kind.as_str();
+    if kind != GENERATED_CHECK {
+        foreign(kind, "gate_on_plan", raw.gate_on_plan.is_some())?;
+    }
     let config = path("lint.config", raw.config.clone())?;
     let probe = path("lint.probe", raw.probe.clone())?;
     if kind != GENERATED_CHECK {
@@ -208,6 +212,7 @@ fn lint(raw: RawLint) -> Result<LintJob, Reason> {
         name: title(raw.name, name)?,
         timeout_minutes,
         inputs: inputs(raw.inputs)?,
+        plan_gated: raw.gate_on_plan.unwrap_or(false),
         kind,
     })
 }

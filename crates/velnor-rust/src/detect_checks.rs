@@ -29,6 +29,14 @@ pub(crate) fn generator_manifest(rust_roots: &[RustRoot]) -> Option<RepoPath> {
         .map(|root| root.manifest.clone())
 }
 
+pub(crate) fn check_packages(
+    config: &RustCiConfig,
+    rust_roots: &[RustRoot],
+) -> Result<(), DetectError> {
+    check_helper_box(config, rust_roots)?;
+    check_generator(config, rust_roots)
+}
+
 pub(crate) fn check_generator(
     config: &RustCiConfig,
     rust_roots: &[RustRoot],

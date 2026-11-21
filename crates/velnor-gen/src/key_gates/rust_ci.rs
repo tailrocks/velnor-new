@@ -103,6 +103,7 @@ pub(super) const RUST_CI: &[KeyGate] = &[
     // helper-gate: first in tools-v0.1.89 via 330573ef6d
     gate(RustCi, "lint.config", (0, 1, 89)),
     gate_untagged(RustCi, "lint.from_source", (0, 1, 112)),
+    gate_untagged(RustCi, "lint.gate_on_plan", (0, 1, 112)),
     // helper-gate: first in tools-v0.1.89 via 330573ef6d
     gate(RustCi, "lint.id", (0, 1, 89)),
     // helper-gate: first in tools-v0.1.111 via 78cb5295bf
@@ -132,6 +133,7 @@ pub(super) const RUST_CI: &[KeyGate] = &[
     gate(RustCi, "policy.deny", (0, 1, 111)),
     // helper-gate: first in tools-v0.1.111 via 050fcb6e15
     gate(RustCi, "policy.deny_checks", (0, 1, 111)),
+    gate_untagged(RustCi, "policy.gate_on_plan", (0, 1, 112)),
     // helper-gate: first in tools-v0.1.88 via e061b56eac
     gate(RustCi, "pr_ci", (0, 1, 88)),
     // helper-gate: first in tools-v0.1.88 via eb3f4deda4
