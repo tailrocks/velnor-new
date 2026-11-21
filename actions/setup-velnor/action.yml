@@ -68,10 +68,6 @@ runs:
           [ "$(wc -c < "$2")" -le "$MAX_BYTES" ]
         }
         publish_entry() {
-          if [ -d "$2" ]; then
-            echo "::warning title=setup-velnor::refusing to publish over the directory $2"
-            return 1
-          fi
           mv -f -T "$1" "$2" 2> /dev/null && [ -f "$2" ] && [ ! -L "$2" ] && [ "$(digest "$2")" = "$expected" ]
         }
         mtime_of() {

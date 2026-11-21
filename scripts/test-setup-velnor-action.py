@@ -1148,7 +1148,6 @@ class SetupVelnorInstallTests(unittest.TestCase):
         self.assertIn(f"installed velnor-ci 0.1.79 in {self.runner_temp}/velnor-ci-bin", result.output)
         self.assertEqual(self.installed_binary().read_bytes(), PAYLOAD)
 
-
     def test_a_directory_planted_at_the_store_entry_path_makes_publish_fail_and_is_not_moved_into(self):
         stub = self.stub_bin / "rm"
         stub.write_text(STUB_REPLANTING_RM)
@@ -1158,10 +1157,8 @@ class SetupVelnorInstallTests(unittest.TestCase):
         result = self.install(sha256(self.archive), extra_env={"REAL_RM": shutil.which("rm")})
         self.assertEqual(result.returncode, 0, result.output)
         self.assertEqual(installed_files(cached), [], "the verified copy was moved inside the directory at the store entry path")
-        self.assertIn("refusing to publish over the directory", result.output)
         self.assertIn("could not publish velnor-ci 0.1.79 to the tool cache", result.output)
         self.assertEqual(self.installed_binary().read_bytes(), PAYLOAD)
-
 
     def test_a_verified_copy_evicted_while_a_directory_is_planted_at_the_store_entry_path_is_kept(self):
         cached = self.cached_archive()
