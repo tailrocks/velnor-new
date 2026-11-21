@@ -66,6 +66,7 @@ pub enum RunGap {
     Stale { input: String, more: usize },
     Unproven { input: String, more: usize },
     Older,
+    Uncompiled,
 }
 
 #[derive(Debug, Default)]
@@ -236,8 +237,11 @@ fn run_reason(gap: Option<&RunGap>, unit: &str) -> String {
             more_suffix(*more)
         ),
         Some(RunGap::Older) => format!("output older than its build script (unit {unit})"),
+        Some(RunGap::Uncompiled) => format!(
+            "build script run without the dep-info of its compile (unit {unit}); its inputs are unknown, so a replayed or restored run is not credited; delete this package's build directories under build/ and rebuild through velnor-ci inputs build"
+        ),
         None => {
-            format!("build script run with a cargo fingerprint and no output (unit {unit})")
+            format!("build script run with a cargo fingerprint and no output file (unit {unit})")
         }
     }
 }

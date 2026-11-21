@@ -171,7 +171,11 @@ impl Audit<'_> {
                 .filter(|(_, compiled)| *compiled <= built)
                 .map(|(source, _)| source.clone())
                 .collect();
-            let mut gap = (!known.is_empty() && scripts.is_empty()).then_some(RunGap::Older);
+            let mut gap = if known.is_empty() {
+                Some(RunGap::Uncompiled)
+            } else {
+                scripts.is_empty().then_some(RunGap::Older)
+            };
             let mut current = false;
             for source in scripts {
                 let mut ran = false;
