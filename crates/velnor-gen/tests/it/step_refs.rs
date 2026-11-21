@@ -11,15 +11,35 @@ use std::thread;
 
 use serde_json::{Value, json};
 
-use crate::facts::TestResult;
-use crate::pipeline::{pin_helper, view, workflow};
+use crate::facts::{TestResult, lock_pinned_tools};
+use crate::pipeline::{pin_helper, view};
+use crate::private_sources::{SECTION, private_repo};
+use crate::release_family_fixture;
+use crate::release_fixture;
+use crate::release_fixture::APP;
+use crate::test_groups::view_with;
+use crate::yaml_tree::document;
 
 const SHARED_STORE_ON: &str = "mbx_shared_store = true\n";
 const CACHE_DEBUG_ON: &str = "cache_debug = true\n";
+const PR_ONLY_CHECKS_ON: &str = "pr_only_checks = [\"DCO\"]\n";
+const RELEASE_BINARIES: &str = "[[binaries]]\npackage = \"app\"\n";
+const ARTIFACTS_ON: &str = "[[test_groups]]\nname = 'shell'\nfilter = 'binary(it) and test(~cargo_)'\nneeds = ['cargo']\nartifacts = [{ name = 'shell-failures', paths = ['junit.xml'], when = 'failure' }]\n";
+const TWO_GROUPS: &str = "[[test_groups]]\nname = 'database'\nroot = '.'\nfilter = 'package(package-0) and test(/^db_/)'\nneeds = ['docker']\ntest_threads = 2\ntimeout_minutes = 45\nrunner = 'velnor-box'\n[[test_groups]]\nname = 'shell'\nroot = '.'\nfilter = 'binary(it) and test(~cargo_)'\nneeds = ['cargo']\n";
+const PR_ONLY_CHECKS_MINIMUM: u64 = 82;
 
 struct StepRef<'a> {
     id: &'a str,
     reference: &'a str,
+}
+
+#[derive(Clone, Copy, Debug)]
+enum Shape {
+    Rust(Option<&'static str>),
+    Groups(&'static str),
+    Private,
+    Release(&'static str),
+    Family,
 }
 
 fn rust_sources(dir: &Path, out: &mut Vec<PathBuf>) -> std::io::Result<()> {
@@ -43,7 +63,15 @@ fn patches_in(text: &str) -> Vec<u64> {
 
 fn gate_patches() -> Result<BTreeSet<u64>, Box<dyn Error>> {
     let mut files = Vec::new();
-    for krate in ["velnor-gen", "velnor-rust", "velnor-render", "velnor-model"] {
+    for krate in [
+        "velnor-gen",
+        "velnor-rust",
+        "velnor-render",
+        "velnor-model",
+        "velnor-ci",
+        "velnor-release",
+        "velnor-workflows",
+    ] {
         let src = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("..")
             .join(krate)
@@ -145,60 +173,121 @@ fn dangling_refs(workflow: &Value) -> (usize, Vec<String>) {
     (checked, dangling)
 }
 
-fn shape(text: &str, helper: &str) -> String {
-    text.lines()
-        .filter(|line| !line.starts_with("# velnor-gen-sha256:"))
-        .map(|line| line.replace(helper, "HELPER"))
-        .collect::<Vec<_>>()
-        .join("\n")
+fn documents(shape: Shape, helper: &str) -> Result<Vec<Value>, Box<dyn Error>> {
+    let mut repo = match shape {
+        Shape::Family => {
+            let (text, _) =
+                release_family_fixture::generate(helper, &release_family_fixture::tools_like(""))?;
+            return Ok(vec![document(&text)?]);
+        }
+        Shape::Rust(config) => {
+            let mut repo = view(
+                &["Cargo.toml", "tools/Cargo.toml"],
+                config.map(str::as_bytes),
+            )?;
+            pin_helper(&mut repo, helper)?;
+            repo
+        }
+        Shape::Groups(config) => view_with(&["Cargo.toml"], config, helper)?,
+        Shape::Private => private_repo(&["Cargo.toml"], SECTION, helper)?,
+        Shape::Release(config) => {
+            let (text, _) = release_fixture::render_pinned(&[APP], Some(config), helper)?;
+            return Ok(vec![document(&text)?]);
+        }
+    };
+    lock_pinned_tools(&mut repo)?;
+    let mut docs = Vec::new();
+    for (path, text) in velnor_gen::expected_files(&repo)? {
+        if Path::new(path.as_str())
+            .extension()
+            .is_some_and(|ext| ext == "yml")
+        {
+            docs.push(document(&text)?);
+        }
+    }
+    Ok(docs)
 }
 
 fn sweep_job(
     patch: u64,
-    config: Option<&str>,
+    shape: Shape,
     seen: &Mutex<HashSet<String>>,
 ) -> Result<(usize, Vec<String>), Box<dyn Error>> {
     let helper = format!("0.1.{patch}");
-    let mut repo = view(
-        &["Cargo.toml", "tools/Cargo.toml"],
-        config.map(str::as_bytes),
-    )?;
-    pin_helper(&mut repo, &helper)?;
-    let text = workflow(&repo)?;
-    if !seen
-        .lock()
-        .map_err(|_| "the render set is poisoned")?
-        .insert(shape(&text, &helper))
-    {
-        return Ok((0, Vec::new()));
+    let mut checked = 0;
+    let mut failures = Vec::new();
+    for doc in documents(shape, &helper)? {
+        let key = doc.to_string().replace(&helper, "HELPER");
+        if !seen
+            .lock()
+            .map_err(|_| "the render set is poisoned")?
+            .insert(key)
+        {
+            continue;
+        }
+        let (found_refs, dangling) = dangling_refs(&doc);
+        checked += found_refs;
+        failures.extend(
+            dangling
+                .into_iter()
+                .map(|found| format!("helper {helper}, shape {shape:?}: {found}")),
+        );
     }
-    let (checked, dangling) = dangling_refs(&crate::yaml_tree::document(&text)?);
-    let failures = dangling
-        .into_iter()
-        .map(|found| format!("helper {helper}, config {config:?}: {found}"))
-        .collect();
     Ok((checked, failures))
 }
 
 #[test]
 fn every_steps_reference_names_a_step_of_its_own_job() -> TestResult {
     let patches = gate_patches()?;
+    let newest = *patches.last().ok_or("the gate scan found no helper")?;
     let shared_store = gate_patch("mbx_shared_store")?;
     let cache_debug = gate_patch("cache_debug")?;
-    assert!(
-        patches.contains(&velnor_gen::HELPER_MINIMUM.2)
-            && patches.contains(&shared_store)
-            && patches.contains(&cache_debug),
-        "gate scan found {patches:?}, which misses the minimum, shared-store or cache_debug gate"
-    );
-    let mut work: Vec<(u64, Option<&str>)> = Vec::new();
-    for patch in patches {
-        work.push((patch, None));
+    let test_groups = gate_patch("test_groups")?;
+    let artifacts = gate_patch("test_groups.artifacts")?;
+    let private_sources = gate_patch("private_sources")?;
+    let family = gate_patch("family_required_checks")?;
+    for gate in [
+        velnor_gen::HELPER_MINIMUM.2,
+        shared_store,
+        cache_debug,
+        test_groups,
+        artifacts,
+        private_sources,
+        family,
+        PR_ONLY_CHECKS_MINIMUM,
+    ] {
+        assert!(
+            patches.contains(&gate),
+            "gate scan found {patches:?}, which misses the gate at 0.1.{gate}"
+        );
+    }
+    let mut work: Vec<(u64, Shape)> = Vec::new();
+    for &patch in &patches {
+        let at_gate = |gate: u64| patch >= gate && (patch == gate || patch == newest);
+        work.push((patch, Shape::Rust(None)));
         if patch >= shared_store {
-            work.push((patch, Some(SHARED_STORE_ON)));
+            work.push((patch, Shape::Rust(Some(SHARED_STORE_ON))));
         }
         if patch >= cache_debug {
-            work.push((patch, Some(CACHE_DEBUG_ON)));
+            work.push((patch, Shape::Rust(Some(CACHE_DEBUG_ON))));
+        }
+        if at_gate(test_groups) {
+            work.push((patch, Shape::Groups(TWO_GROUPS)));
+        }
+        if at_gate(artifacts) {
+            work.push((patch, Shape::Groups(ARTIFACTS_ON)));
+        }
+        if at_gate(private_sources) {
+            work.push((patch, Shape::Private));
+        }
+        if at_gate(PR_ONLY_CHECKS_MINIMUM) {
+            work.push((patch, Shape::Release(PR_ONLY_CHECKS_ON)));
+        }
+        if at_gate(velnor_gen::HELPER_MINIMUM.2) {
+            work.push((patch, Shape::Release(RELEASE_BINARIES)));
+        }
+        if at_gate(family) {
+            work.push((patch, Shape::Family));
         }
     }
     let seen = Mutex::new(HashSet::new());
@@ -212,11 +301,10 @@ fn every_steps_reference_names_a_step_of_its_own_job() -> TestResult {
                 scope.spawn(|| {
                     let mut refs = 0;
                     let mut failures = Vec::new();
-                    while let Some(&(patch, config)) =
-                        work.get(next.fetch_add(1, Ordering::Relaxed))
+                    while let Some(&(patch, shape)) = work.get(next.fetch_add(1, Ordering::Relaxed))
                     {
                         let (checked, found) =
-                            sweep_job(patch, config, &seen).map_err(|error| error.to_string())?;
+                            sweep_job(patch, shape, &seen).map_err(|error| error.to_string())?;
                         refs += checked;
                         failures.extend(found);
                     }
