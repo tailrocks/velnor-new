@@ -91,6 +91,7 @@ fn project_directories(work: &Path, args: &[OsString]) -> Option<Vec<PathBuf>> {
     let command = subcommand(&args).map(|(_, command)| command);
     if let Some(target) = command.filter(|command| direct_target(command)) {
         let script = base.join(target);
+        let script = std::fs::canonicalize(&script).unwrap_or(script);
         let mut directories = vec![
             script
                 .parent()

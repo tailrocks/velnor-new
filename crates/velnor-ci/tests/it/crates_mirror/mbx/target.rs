@@ -260,3 +260,39 @@ fn a_bare_rs_name_without_zscript_is_an_external_subcommand_scoped_by_its_manife
     )?);
     Ok(())
 }
+
+#[test]
+fn a_script_symlink_is_scoped_by_the_script_it_resolves_to() -> TestResult {
+    let repo = declared_job()?;
+    let launch = repo.root().join("launch");
+    let scratch = repo.root().join("scratch-project");
+    fs::create_dir_all(&scratch)?;
+    fs::write(repo.root().join("tool.rs"), "")?;
+    std::os::unix::fs::symlink(repo.root().join("tool.rs"), scratch.join("linked.rs"))?;
+    let linked = scratch.join("linked.rs").display().to_string();
+    assert_refused(&run_with_args(
+        &repo,
+        &launch,
+        &["+nightly", "-Zscript", &linked],
+    )?);
+    Ok(())
+}
+
+#[test]
+fn a_manifest_path_after_a_rs_script_belongs_to_the_script() -> TestResult {
+    let repo = declared_job()?;
+    let launch = repo.root().join("launch");
+    let inside = repo.root().join("Cargo.toml").display().to_string();
+    assert_plain(&run_with_args(
+        &repo,
+        &launch,
+        &[
+            "+nightly",
+            "-Zscript",
+            "tool.rs",
+            "--manifest-path",
+            &inside,
+        ],
+    )?);
+    Ok(())
+}
