@@ -10,7 +10,7 @@ const SAVED_ROOT: &str = ".cargo";
 const SAVED: &[(&str, Zone)] = &[
     ("registry/index", Zone::Crate),
     ("registry/cache", Zone::Crate),
-    ("git/db", Zone::Plain),
+    ("git/db", Zone::Databases),
 ];
 const GIT_DIRECTORY: &str = ".git";
 const CREDENTIAL_FILES: &[&str] = &[
@@ -25,6 +25,7 @@ const GIT_CONFIGS: &[&str] = &["config", "config.worktree", ".gitconfig", "confi
 const GIT_TEXT: &[&str] = &["fetch_head", "packed-refs"];
 const HOOKS: &str = "hooks";
 const LOGS: &str = "logs";
+const MODULES: &str = "modules";
 const MAX_CONFIG_BYTES: u64 = 1 << 20;
 const MAX_DEPTH: usize = 12;
 const MAX_ENTRIES: usize = 2_000_000;
@@ -32,31 +33,37 @@ const MAX_ENTRIES: usize = 2_000_000;
 #[derive(Clone, Copy, PartialEq)]
 enum Zone {
     Crate,
+    Databases,
+    Repository,
+    Modules,
+    Module,
     Plain,
     Hooks,
     Logs,
 }
 
 impl Zone {
-    fn within(self, directory: &Path) -> Self {
+    fn entering(self, directory: &Path) -> Self {
         let name = directory.file_name();
-        if self == Self::Crate {
-            return if name.is_some_and(|name| name.eq_ignore_ascii_case(GIT_DIRECTORY)) {
-                Self::Plain
-            } else {
-                self
-            };
+        let is = |wanted: &str| name.is_some_and(|name| name.eq_ignore_ascii_case(wanted));
+        match self {
+            Self::Crate if is(GIT_DIRECTORY) => Self::Repository,
+            Self::Databases => Self::Repository,
+            Self::Repository | Self::Module if is(HOOKS) => Self::Hooks,
+            Self::Repository | Self::Module if is(LOGS) => Self::Logs,
+            Self::Repository | Self::Modules | Self::Module if is(MODULES) => Self::Modules,
+            Self::Modules | Self::Module => Self::Module,
+            Self::Repository => Self::Plain,
+            other => other,
         }
-        if self != Self::Plain {
-            return self;
-        }
-        if name.is_some_and(|name| name.eq_ignore_ascii_case(HOOKS)) {
-            Self::Hooks
-        } else if name.is_some_and(|name| name.eq_ignore_ascii_case(LOGS)) {
-            Self::Logs
-        } else {
-            Self::Plain
-        }
+    }
+
+    fn git(self) -> bool {
+        self != Self::Crate
+    }
+
+    fn scans_every_file(self) -> bool {
+        matches!(self, Self::Hooks | Self::Logs)
     }
 }
 
@@ -107,8 +114,7 @@ fn shown(path: &Path) -> String {
     inert(&path.display().to_string())
 }
 
-fn walk(directory: &Path, depth: usize, budget: &mut usize, above: Zone) -> Option<String> {
-    let zone = above.within(directory);
+fn walk(directory: &Path, depth: usize, budget: &mut usize, zone: Zone) -> Option<String> {
     if depth > MAX_DEPTH {
         return Some(format!("{} is nested too deeply to scan", shown(directory)));
     }
@@ -150,7 +156,7 @@ fn walk(directory: &Path, depth: usize, budget: &mut usize, above: Zone) -> Opti
                 shown(&path)
             ));
         }
-        let git = zone != Zone::Crate;
+        let git = zone.git();
         if CREDENTIAL_FILES.contains(&name.as_str())
             || (git && GIT_CREDENTIAL_FILES.contains(&name.as_str()))
         {
@@ -169,7 +175,7 @@ fn walk(directory: &Path, depth: usize, budget: &mut usize, above: Zone) -> Opti
                 shown(&path)
             ));
         } else if git
-            && (GIT_TEXT.contains(&name.as_str()) || zone != Zone::Plain)
+            && (GIT_TEXT.contains(&name.as_str()) || zone.scans_every_file())
             && names_credential_file(&path, zone)
         {
             return Some(format!(
@@ -180,7 +186,7 @@ fn walk(directory: &Path, depth: usize, budget: &mut usize, above: Zone) -> Opti
     }
     subdirectories
         .iter()
-        .find_map(|path| walk(path, depth + 1, budget, zone))
+        .find_map(|path| walk(path, depth + 1, budget, zone.entering(path)))
 }
 
 fn holds_credential(path: &Path) -> bool {

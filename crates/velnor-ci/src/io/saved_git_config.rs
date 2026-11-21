@@ -38,6 +38,8 @@ const TOKEN_PREFIXES: &[&str] = &[
 const TOKEN_HEX_LEN: usize = 40;
 const TOKEN_BODY_LEN: usize = 20;
 const MAX_UNESCAPE_PASSES: usize = 4;
+const AUTHORIZATION: &str = "authorization";
+const BASIC_BODY_LEN: usize = 16;
 
 pub(super) fn is_plain(text: &str) -> bool {
     if has_token_prefix(&text.to_ascii_lowercase()) {
@@ -99,16 +101,52 @@ fn plain_entry(section: &str, entry: &str) -> bool {
 }
 
 pub(super) fn names_credential(text: &str) -> bool {
-    let text = text.to_ascii_lowercase();
-    has_token_prefix(&text)
+    variants(text).is_none_or(|variants| variants.iter().any(|text| names_in(text, false)))
+}
+
+pub(super) fn names_hook_credential(text: &str) -> bool {
+    variants(text).is_none_or(|variants| variants.iter().any(|text| names_in(text, true)))
+}
+
+fn names_in(text: &str, hook: bool) -> bool {
+    has_token_prefix(text)
+        || names_basic_authorization(text)
+        || (hook && looks_like_token(text))
         || text
             .split(|each: char| each.is_whitespace() || matches!(each, '\'' | '"' | '<' | '>'))
             .flat_map(embedded_urls)
             .any(|url| !plain_remote(url))
 }
 
-pub(super) fn names_hook_credential(text: &str) -> bool {
-    names_credential(text) || looks_like_token(&text.to_ascii_lowercase())
+fn variants(text: &str) -> Option<[String; 4]> {
+    let raw = text.to_ascii_lowercase();
+    let decoded = unescaped(&raw)?;
+    Some([joined(&raw), joined(&decoded), raw, decoded])
+}
+
+fn joined(text: &str) -> String {
+    text.replace("\\\r\n", "")
+        .replace("\\\n", "")
+        .replace(['\\', '\'', '"'], "")
+}
+
+fn names_basic_authorization(text: &str) -> bool {
+    text.match_indices(AUTHORIZATION).any(|(at, _)| {
+        let rest = text[at + AUTHORIZATION.len()..].trim_start_matches(|each: char| {
+            each.is_whitespace() || matches!(each, ':' | '=' | '\'' | '"')
+        });
+        rest.strip_prefix("basic")
+            .map(|rest| rest.trim_start_matches(|each: char| each.is_whitespace() || each == '\''))
+            .is_some_and(|rest| {
+                rest.bytes()
+                    .take_while(|each| {
+                        each.is_ascii_alphanumeric()
+                            || matches!(each, b'+' | b'/' | b'=' | b'-' | b'_')
+                    })
+                    .count()
+                    >= BASIC_BODY_LEN
+            })
+    })
 }
 
 fn embedded_urls(word: &str) -> impl Iterator<Item = &str> {
