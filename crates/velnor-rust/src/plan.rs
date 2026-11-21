@@ -299,6 +299,7 @@ pub(crate) fn setup_units(
                 step(StepKind::CacheRestore(CacheKey::Sources {
                     host: Host,
                     lane: cache_root.clone(),
+                    scope: crate::base_cache::base_scope(facts),
                 })),
             ));
         }
@@ -308,6 +309,7 @@ pub(crate) fn setup_units(
                 job: family.clone(),
                 root: cache_root,
                 host: Host,
+                scope: crate::base_cache::base_scope(facts),
             })),
         ));
         toolchain.extend(crate::delta_cache::restore(facts, unit, family, lane));

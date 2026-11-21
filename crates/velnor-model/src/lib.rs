@@ -38,11 +38,13 @@ pub use artifact_paths::{
     selects,
 };
 pub use budget_mode::{BUDGET_JOB_NAME, BUDGET_MODES_HELPER, ModeBudget, Selection, SelectionName};
-pub use cache::{AnchorSource, CacheKey, CachePath, CacheRoot, Host, LockIdentity, ToolsAnchor};
+pub use cache::{
+    AnchorSource, BaseScope, CacheKey, CachePath, CacheRoot, Host, LockIdentity, ToolsAnchor,
+};
 pub use cache_layout::{
-    CACHE_COMPAT_LENGTH, CacheKeyLayout, CacheKeySegment, LOCK_OUTPUT_PREFIX,
-    RUNNER_ARCH_MAX_LENGTH, RUNNER_OS_MAX_LENGTH, SHARED_SOURCES_OWNER, TOOLS_ANCHOR_LENGTH,
-    json_char_bytes, json_string_bytes,
+    CACHE_COMPAT_LENGTH, CacheKeyLayout, CacheKeySegment, LOCK_OUTPUT_PREFIX, PRIVATE_SOURCES_TAG,
+    PRIVATE_TARGET_TAG, RUNNER_ARCH_MAX_LENGTH, RUNNER_OS_MAX_LENGTH, SHARED_SOURCES_OWNER,
+    TOOLS_ANCHOR_LENGTH, json_char_bytes, json_string_bytes,
 };
 pub use cache_outputs::{
     BASE_PREFIX_OUTPUT, BASE_SAVE_OUTPUT, CacheLaneOutput, PUBLIC_SOURCES_STEP,
@@ -64,10 +66,12 @@ pub use mbx_config::{
 };
 pub use mise::MisePlatform;
 pub use plan::{
-    Access, BUILD_TESTS_STEP, BUILT_OUTPUT, CI_AUTO_LABEL, CI_RUN_LABEL, CargoCommand, Concurrency,
-    FilterRef, Job, LINT_STEP, MERGE_GROUP_SKIP_OUTPUT, MERGE_GROUP_STEP, PermissionScope,
-    Permissions, PlanRef, PrRun, PullRequestType, Step, TEST_STEP, TESTS_BY_PACKAGE_OUTPUT,
-    TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, Triggers, When, WorkflowPlan,
+    Access, BUILD_TESTS_STEP, BUILT_OUTPUT, CACHE_KEY_MAX_BYTES, CI_AUTO_LABEL, CI_RUN_LABEL,
+    CargoCommand, Concurrency, FilterRef, Job, LINT_STEP, MERGE_GROUP_SKIP_OUTPUT,
+    MERGE_GROUP_STEP, PermissionScope, Permissions, PlanRef, PrRun, PullRequestType, Step,
+    TEST_STEP, TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT,
+    TESTS_RUN_OUTPUT, TOOLS_ANCHOR_DIGEST_BYTES, TOOLS_ANCHOR_KEY_OUTPUT, TOOLS_ANCHOR_OUTPUT,
+    Triggers, When, WorkflowPlan,
 };
 pub use plan_gate::{Gate, GateNeed, PlanFrom, group_output_name};
 pub use release_asset::{ReleaseAsset, ReleaseAssetError, ReleaseAssetPart};
