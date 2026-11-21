@@ -383,3 +383,23 @@ fn a_helper_before_0_1_112_renders_a_repeated_check_entry_as_it_did() -> TestRes
     assert_eq!(twice, 2 * once, "{once} {twice}");
     Ok(())
 }
+
+#[test]
+fn a_grouped_root_check_runs_before_its_own_tests_not_a_sibling_roots() -> TestResult {
+    let config = "[[workspace_groups]]\nname = 'tools'\nroots = ['tools/a', 'tools/b']\n[[check_configurations]]\nroot = 'tools/b'\n";
+    let view = view_with(
+        &["Cargo.toml", "tools/a/Cargo.toml", "tools/b/Cargo.toml"],
+        config,
+        NEXT,
+    )?;
+    let jobs = document(&workflow(&view)?)?["jobs"].clone();
+    let steps = found(&jobs);
+    assert_eq!(steps.len(), 1, "{steps:?}");
+    let (id, index, _, _) = &steps[0];
+    let next = jobs[id.as_str()]["steps"][index + 1]["run"]
+        .as_str()
+        .unwrap_or_default()
+        .to_owned();
+    assert!(next.contains("tools/b/Cargo.toml"), "{id}: {next}");
+    Ok(())
+}

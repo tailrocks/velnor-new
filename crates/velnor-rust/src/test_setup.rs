@@ -176,7 +176,9 @@ fn checked(
     let current = !matches!(placement, Placement::Previous);
     let place = |step: &Step| match placement {
         Placement::Untested => builds_or_tests(step) && owns(step, root),
-        Placement::Tested | Placement::Previous => tests(step) || archives(step),
+        Placement::Tested | Placement::Previous => {
+            (tests(step) || archives(step)) && owns(step, root)
+        }
     };
     let Some(first) = steps.iter().position(place) else {
         return steps;
