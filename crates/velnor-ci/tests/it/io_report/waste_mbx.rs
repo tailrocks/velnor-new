@@ -307,6 +307,28 @@ fn a_label_cut_before_its_colon_is_unparsed_and_fails_closed() -> ResultTest {
 }
 
 #[test]
+fn a_summary_cut_before_its_terminator_is_unparsed_not_a_zero_hit_session() -> ResultTest {
+    for (index, line) in [
+        "mbx[cache]: object cache: 5 misses",
+        "mbx[cache]: object cache: 0 hits, 5 misses",
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let metrics = lane_with_mbx_log(
+            &format!("report-mbx-cut-terminator-{index}"),
+            &format!("{line}\n"),
+            true,
+            false,
+        )?;
+        assert!(metrics.mbx.sessions.is_empty(), "{line}: {metrics:?}");
+        assert_eq!(metrics.mbx.unparsed, 1, "{line}: {metrics:?}");
+        assert!(fails_closed(&metrics), "{line}: {metrics:?}");
+    }
+    Ok(())
+}
+
+#[test]
 fn a_non_numeric_hit_count_is_unparsed_not_dropped() -> ResultTest {
     let line = "mbx[cache]: object cache: unknown hits, 2 misses; 0 B downloaded, 0 B uploaded, 0 B stored locally";
     let metrics = lane_with_mbx_log(

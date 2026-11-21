@@ -67,7 +67,7 @@ fn looks_like_lookup_summary(text: &str) -> bool {
 }
 
 fn parse_lookup_summary(summary: &str) -> Option<MbxSession> {
-    let counts = summary.split_once(';').map_or(summary, |(head, _)| head);
+    let (counts, _) = summary.split_once(';')?;
     let mut session = MbxSession {
         hits: 0,
         misses: 0,
