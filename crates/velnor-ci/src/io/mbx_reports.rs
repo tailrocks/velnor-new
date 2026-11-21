@@ -24,8 +24,6 @@ fn enabled() -> bool {
     std::env::var(SWITCH).is_ok_and(|value| value == "true")
 }
 
-/// An enclosing mbx session (its socket exists) covers nested cargo calls and writes no report of their own.
-/// A leftover `MBX_SOCKET` that is missing or not a socket does not count. The socket is never connected to.
 fn inside_session() -> bool {
     std::env::var_os("MBX_SOCKET")
         .filter(|socket| !socket.is_empty())
