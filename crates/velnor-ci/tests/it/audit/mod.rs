@@ -9,6 +9,7 @@ mod build_script_source;
 mod failure_identity;
 mod freshness;
 mod gated;
+mod global_options;
 mod groups;
 mod guards;
 mod identity;
