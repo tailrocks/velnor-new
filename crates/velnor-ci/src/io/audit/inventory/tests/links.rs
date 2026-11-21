@@ -72,9 +72,10 @@ fn handle_relative_resolution_agrees_with_canonicalize_on_a_stable_tree() {
     for (name, target) in &links {
         symlink(target, dir.join(name)).unwrap_or_else(|e| unreachable!("{e}"));
     }
-    for (name, resolved) in link_resolutions(&dir) {
-        let expected = fs::canonicalize(dir.join(&name)).ok();
-        assert_eq!(resolved, expected, "{}", name.display());
+    let resolutions = link_resolutions(&dir);
+    for (name, _) in &links {
+        let expected = fs::canonicalize(dir.join(name)).ok();
+        assert_eq!(resolutions.get(Path::new(name)), Some(&expected), "{name}");
     }
     fs::remove_dir_all(&base).unwrap_or_else(|e| unreachable!("{e}"));
 }
@@ -102,7 +103,7 @@ fn a_link_crossing_more_than_forty_links_is_unresolved_and_one_within_the_limit_
     let dir = base.join("dir");
     fs::create_dir_all(base.join("a/b")).unwrap_or_else(|e| unreachable!("{e}"));
     fs::create_dir_all(&dir).unwrap_or_else(|e| unreachable!("{e}"));
-    chain(&dir, "short", 21);
+    chain(&dir, "short", 40);
     chain(&dir, "long", 41);
     let resolutions = link_resolutions(&dir);
     fs::remove_dir_all(&base).unwrap_or_else(|e| unreachable!("{e}"));
@@ -123,7 +124,7 @@ fn a_link_into_a_deeply_nested_directory_resolves_like_canonicalize() {
     symlink(Path::new("../nested").join(&nested), dir.join("entry"))
         .unwrap_or_else(|e| unreachable!("{e}"));
     let (soft, hard) = getrlimit(Resource::RLIMIT_NOFILE).unwrap_or_else(|e| unreachable!("{e}"));
-    setrlimit(Resource::RLIMIT_NOFILE, 256, hard).unwrap_or_else(|e| unreachable!("{e}"));
+    setrlimit(Resource::RLIMIT_NOFILE, hard.min(256), hard).unwrap_or_else(|e| unreachable!("{e}"));
     let resolutions = link_resolutions(&dir);
     setrlimit(Resource::RLIMIT_NOFILE, soft, hard).unwrap_or_else(|e| unreachable!("{e}"));
     let expected = fs::canonicalize(dir.join("entry")).ok();
