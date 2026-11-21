@@ -301,6 +301,7 @@ mod source_roots_env;
 mod source_roots_limit;
 mod sparse_checkout;
 mod sparse_suggestion;
+mod step_refs;
 mod step_target_dir;
 mod suggest_groups;
 mod test_group_artifact_followups;
