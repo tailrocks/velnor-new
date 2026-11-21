@@ -384,7 +384,7 @@ fn the_privacy_check_is_gated_by_the_lane_selection_like_the_cache_steps() -> Te
         .ok_or("no if on the verdict step")?;
     assert_eq!(
         condition,
-        r#"'${{ steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' }}'"#,
+        "'${{ steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' }}'",
         "{verdict}"
     );
     Ok(())
