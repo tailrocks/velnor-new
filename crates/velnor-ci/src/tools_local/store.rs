@@ -14,6 +14,7 @@ use crate::tree_removal::remove_tree;
 
 const MARKER: &str = ".complete";
 const STAGING_PREFIX: &str = ".staging-";
+const RETIRED_PREFIX: &str = "retired-";
 const LOCK_PREFIX: &str = ".lock-";
 const STALE_AFTER: Duration = Duration::from_hours(1);
 const COPY: &str = "/bin/cp";
@@ -137,18 +138,82 @@ fn claim(tools: &Path, key: &str) -> Claim {
     Claim::Held
 }
 
-fn sweep(tools: &Path) {
+fn owners(name: &str) -> Vec<&str> {
+    let rest = name.strip_prefix(STAGING_PREFIX).unwrap_or(name);
+    let mut keys = Vec::new();
+    if let Some(key) = rest.strip_prefix(RETIRED_PREFIX) {
+        keys.push(key);
+    }
+    if let Some((key, suffix)) = rest.rsplit_once('-')
+        && suffix.len() == 16
+        && suffix.bytes().all(|byte| byte.is_ascii_hexdigit())
+    {
+        keys.push(key);
+    }
+    keys
+}
+
+fn hold_owners(tools: &Path, name: &str, current: &str) -> Option<Vec<Lock>> {
+    let mut held = Vec::new();
+    for key in owners(name).into_iter().filter(|key| *key != current) {
+        match claim(tools, key) {
+            Claim::Won(lock) => held.push(lock),
+            Claim::Held | Claim::Broken => return None,
+        }
+    }
+    Some(held)
+}
+
+fn legacy(name: &str) -> bool {
+    name.strip_prefix(STAGING_PREFIX)
+        .and_then(|rest| rest.strip_prefix(RETIRED_PREFIX))
+        .is_some_and(|suffix| {
+            suffix.len() == 16 && suffix.bytes().all(|byte| byte.is_ascii_hexdigit())
+        })
+}
+
+fn another_save_running(tools: &Path, current: &str) -> bool {
+    let own = format!("{LOCK_PREFIX}{current}");
+    fs::read_dir(tools)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .any(|entry| {
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            name.starts_with(LOCK_PREFIX) && name != own && !stale(&entry.path())
+        })
+}
+
+fn sweep(tools: &Path, current: &str) {
     let Ok(entries) = fs::read_dir(tools) else {
         return;
     };
-    for entry in entries.flatten() {
+    let entries: Vec<_> = entries.flatten().collect();
+    for entry in entries {
         let name = entry.file_name();
         let name = name.to_string_lossy();
-        if (name.starts_with(STAGING_PREFIX) || name.starts_with(LOCK_PREFIX))
-            && stale(&entry.path())
+        let leftover = name.starts_with(STAGING_PREFIX);
+        if !(leftover || name.starts_with(LOCK_PREFIX))
+            || entry.file_type().is_ok_and(|kind| kind.is_file())
+            || !stale(&entry.path())
         {
-            fs::remove_dir_all(entry.path()).ok();
+            continue;
         }
+        let _held = if legacy(&name) {
+            if another_save_running(tools, current) {
+                continue;
+            }
+            Vec::new()
+        } else if leftover {
+            match hold_owners(tools, &name, current) {
+                Some(held) => held,
+                None => continue,
+            }
+        } else {
+            Vec::new()
+        };
+        remove_tree(&entry.path()).ok();
     }
 }
 
@@ -170,7 +235,7 @@ pub(super) fn save(inputs: &Inputs<'_>, owner: u32) -> Outcome {
         Claim::Held => return Outcome::Busy,
         Claim::Broken => return Outcome::Failed("cannot lock the key"),
     };
-    sweep(&tools);
+    sweep(&tools, inputs.key);
     if !inputs.replace && complete(&entry, owner) {
         return Outcome::AlreadySaved;
     }
@@ -185,10 +250,10 @@ pub(super) fn save(inputs: &Inputs<'_>, owner: u32) -> Outcome {
             .all(|path| copy_tree(&inputs.home.join(path), &staging.join(slot(path))))
         && fs::File::create(staging.join(MARKER)).is_ok();
     if !copied {
-        fs::remove_dir_all(&staging).ok();
+        remove_tree(&staging).ok();
         return Outcome::Failed("the copy to the store failed");
     }
-    let retired = tools.join(format!("{STAGING_PREFIX}retired-{}", inputs.key));
+    let retired = tools.join(format!("{STAGING_PREFIX}{RETIRED_PREFIX}{}", inputs.key));
     if fs::remove_dir_all(&retired).is_err()
         && fs::symlink_metadata(&retired).is_ok_and(|metadata| metadata.is_dir())
     {
@@ -197,14 +262,14 @@ pub(super) fn save(inputs: &Inputs<'_>, owner: u32) -> Outcome {
     let present = fs::symlink_metadata(&entry).is_ok();
     let replaced = present && fs::rename(&entry, &retired).is_ok();
     if inputs.replace && present && !replaced {
-        fs::remove_dir_all(&staging).ok();
+        remove_tree(&staging).ok();
         return Outcome::Failed("the poisoned entry could not be retired");
     }
     if fs::rename(&staging, &entry).is_err() {
         if replaced {
             fs::rename(&retired, &entry).ok();
         }
-        fs::remove_dir_all(&staging).ok();
+        remove_tree(&staging).ok();
         return if !inputs.replace && complete(&entry, owner) {
             Outcome::AlreadySaved
         } else {
@@ -226,16 +291,88 @@ fn prune(tools: &Path, current: &str) {
     let Ok(entries) = fs::read_dir(tools) else {
         return;
     };
-    let mut older: Vec<(SystemTime, PathBuf)> = entries
+    let mut older: Vec<(SystemTime, u64, PathBuf)> = entries
         .flatten()
         .filter(|entry| {
             let name = entry.file_name();
             name != current && !name.to_string_lossy().starts_with('.')
         })
-        .filter_map(|entry| Some((entry.metadata().ok()?.modified().ok()?, entry.path())))
+        .filter_map(|entry| {
+            let metadata = entry.metadata().ok()?;
+            Some((metadata.modified().ok()?, metadata.ino(), entry.path()))
+        })
         .collect();
     older.sort_by_key(|entry| std::cmp::Reverse(entry.0));
-    for (_, path) in older.into_iter().skip(KEEP_KEYS - 1) {
-        fs::remove_dir_all(path).ok();
+    for (modified, ino, path) in older.into_iter().skip(KEEP_KEYS - 1) {
+        prune_candidate(tools, &path, ino, modified);
+    }
+}
+
+fn prune_candidate(tools: &Path, path: &Path, ino: u64, modified: SystemTime) {
+    let key = path.file_name().unwrap_or_default().to_string_lossy();
+    let Claim::Won(_lock) = claim(tools, &key) else {
+        return;
+    };
+    let unchanged = fs::symlink_metadata(path).is_ok_and(|metadata| {
+        metadata.ino() == ino && metadata.modified().is_ok_and(|now| now == modified)
+    });
+    if unchanged {
+        remove_tree(path).ok();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+    use std::os::unix::fs::MetadataExt;
+    use std::path::PathBuf;
+    use std::time::{Duration, SystemTime};
+
+    use super::prune_candidate;
+
+    fn scratch(name: &str) -> PathBuf {
+        let root = std::env::temp_dir().join(format!("velnor-prune-{name}-{}", std::process::id()));
+        drop(fs::remove_dir_all(&root));
+        fs::create_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+        root
+    }
+
+    fn aged_dir(path: &PathBuf, modified: SystemTime) -> u64 {
+        fs::create_dir(path).unwrap_or_else(|e| unreachable!("{e}"));
+        fs::File::open(path)
+            .and_then(|file| file.set_modified(modified))
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        fs::symlink_metadata(path)
+            .unwrap_or_else(|e| unreachable!("{e}"))
+            .ino()
+    }
+
+    #[test]
+    fn a_prune_candidate_replaced_after_its_snapshot_is_kept() {
+        let root = scratch("replaced");
+        let old = root.join("k-old");
+        let modified = SystemTime::now() - Duration::from_hours(2);
+        let ino = aged_dir(&old, modified);
+        fs::rename(&old, root.join("moved")).unwrap_or_else(|e| unreachable!("{e}"));
+        let fresh_ino = aged_dir(&old, modified);
+        assert_ne!(ino, fresh_ino);
+
+        prune_candidate(&root, &old, ino, modified);
+
+        assert!(old.is_dir());
+        fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+    }
+
+    #[test]
+    fn an_unchanged_prune_candidate_is_removed() {
+        let root = scratch("unchanged");
+        let old = root.join("k-old");
+        let modified = SystemTime::now() - Duration::from_hours(2);
+        let ino = aged_dir(&old, modified);
+
+        prune_candidate(&root, &old, ino, modified);
+
+        assert!(!old.exists());
+        fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
     }
 }
