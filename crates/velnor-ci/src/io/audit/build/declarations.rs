@@ -145,7 +145,7 @@ fn trusted(
         let key = (root.clone(), targets.clone());
         if !pass.views.contains_key(&key) {
             let scanned = inventory::scan(path, targets, &mut pass.budget)
-                .and_then(|entries| inventory::view(&entries, &root, targets));
+                .and_then(|scan| inventory::view(&scan.entries, &root, targets));
             match scanned {
                 Ok(view) => {
                     pass.views.insert(key.clone(), view);

@@ -8,6 +8,7 @@ mod build_directory;
 mod build_script_source;
 mod freshness;
 mod gated;
+mod global_options;
 mod groups;
 mod guards;
 mod identity;

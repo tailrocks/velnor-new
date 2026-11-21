@@ -11,6 +11,7 @@ use crate::error::Reason;
 pub(crate) struct RawPolicy {
     deny: Option<bool>,
     deny_checks: Option<Vec<String>>,
+    gate_on_plan: Option<bool>,
 }
 
 pub(crate) fn parse(raw: Option<RawPolicy>) -> Result<Option<PolicyTable>, Reason> {
@@ -22,6 +23,7 @@ pub(crate) fn parse(raw: Option<RawPolicy>) -> Result<Option<PolicyTable>, Reaso
                 Some(false) => DenyLane::Off,
             },
             deny_checks: raw.deny_checks.as_deref().map(checks).transpose()?,
+            gate_on_plan: raw.gate_on_plan.unwrap_or(false),
         })
     })
     .transpose()
