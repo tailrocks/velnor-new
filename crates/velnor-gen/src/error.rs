@@ -32,7 +32,6 @@ pub enum GenerateError {
     },
     RequiredCheckHelperTooOld(HelperVersion),
     InputsLockHelperTooOld(HelperVersion),
-    PrOnlyChecksHelperTooOld(HelperVersion),
     BudgetModesHelperTooOld(HelperVersion),
     MergeGroupHelperTooOld(HelperVersion),
     DocsHelperTooOld(HelperVersion),
@@ -87,10 +86,6 @@ impl fmt::Display for GenerateError {
             ),
             Self::InputsLockHelperTooOld(version) => write!(f, "velnor-ci {version} cannot read the manifest column of .velnor/rust-inputs.lock; pin velnor-ci 0.1.101 or later with `velnor-gen pin-helper 0.1.101`, or write the lock under the older pin"),
             Self::BudgetModesHelperTooOld(v) => write!(f, "{}", modes_too_old(v)),
-            Self::PrOnlyChecksHelperTooOld(version) => write!(
-                f,
-                "velnor-ci {version} cannot enforce pr_only_checks; pin velnor-ci 0.1.82 or later with `velnor-gen pin-helper 0.1.82`"
-            ),
             Self::MergeGroupHelperTooOld(version) => write!(
                 f,
                 "velnor-ci {version} cannot tell whether a merge_group run passed, which skip_push_after_merge_group needs; pin velnor-ci 0.1.103 or later with `velnor-gen pin-helper 0.1.103`"
