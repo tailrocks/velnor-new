@@ -38,7 +38,8 @@ pub(super) fn command(program: impl AsRef<OsStr>) -> Command {
     command
         .env_remove("CARGO_TARGET_DIR")
         .env("MBX_BUILD_SCRIPT_EXECUTION", "0")
-        .env("MBX_SHARE_OUT_DIR", "0");
+        .env("MBX_SHARE_OUT_DIR", "0")
+        .env_remove("VELNOR_AUDIT_MAX_ENTRIES");
     command
 }
 

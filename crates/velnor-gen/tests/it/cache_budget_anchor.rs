@@ -160,3 +160,21 @@ fn newest_by_created_at_wins_even_when_last_accessed_orders_differently() {
     ];
     assert_eq!(plan(&entries, u64::MAX), [2]);
 }
+
+#[test]
+fn run_attempt_anchor_keys_are_classified_and_age_out_with_the_per_run_keys() {
+    let attempt_key = |run: u64, attempt: u64| {
+        format!(
+            "velnor-tools-anchor-Linux-X64-mise2026.11.10-{}-{run}-{attempt}-rust-plan",
+            "a".repeat(64)
+        )
+    };
+    assert_eq!(cache_family(&attempt_key(7, 2)), CacheFamily::ToolsAnchor);
+    let entries = [
+        anchor(1, MAIN, anchor_key("Linux-X64", 'a', 1)),
+        anchor(2, MAIN, attempt_key(2, 1)),
+        anchor(3, MAIN, attempt_key(2, 2)),
+        anchor(4, MAIN, attempt_key(3, 1)),
+    ];
+    assert_eq!(plan(&entries, u64::MAX), [1, 2]);
+}

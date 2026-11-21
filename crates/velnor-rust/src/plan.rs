@@ -1,24 +1,23 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use velnor_model::{
     Access, BuildRecord, CacheDebug, CacheKey, CargoCommand, Concurrency, Gate, HelperCommand,
     Host, Job, JobId, MbxStore, PackageName, PermissionScope, Permissions, PrCi, PrRun,
-    PrepareLocks, PushAfterMergeGroup, RepoFacts, RootSlug, RustRoot, Step, StepKind, TargetName,
-    Toolchain, When, WorkflowPlan,
+    PrepareLocks, PushAfterMergeGroup, RepoFacts, RootSlug, RustRoot, SetupOrder, Step, StepKind,
+    TargetName, Toolchain, When, WorkflowPlan,
 };
 
 use crate::audit_job::audit_job;
 use crate::base_cache::{restored, sources_locks};
-use crate::config::CONFIG_PATH;
 use crate::detect::HELPER_PACKAGE;
-use crate::error::{DetectError, Reason};
 use crate::lane::{
     EARLY_POLICY_HELPER, Lane, PLAN_JOB, expose_read_outputs, plan_job, policy_job,
     used_group_outputs, used_outputs,
 };
+use crate::mbx_steps::MBX_OUT_DIR_HELPER;
 use crate::plan_budget::{draft_guard, expose_selection, triggers};
 use crate::plan_tools::{mirror_step, tools_install, tools_restore, tools_save};
 use crate::required_job::{expose_in_single, gate_outputs};
@@ -86,7 +85,11 @@ fn plan_with(facts: &RepoFacts, deltas: bool) -> WorkflowPlan {
         used.extend(gate_outputs(&jobs));
         used.sort();
         used.dedup();
-        jobs.insert(0, plan_job(facts, used, used_group_outputs(&jobs)));
+        let anchor_gates = crate::plan_tools::anchor_consumer_gates(&jobs, &PLAN_JOB);
+        jobs.insert(
+            0,
+            plan_job(facts, used, used_group_outputs(&jobs), &anchor_gates),
+        );
     }
     expose_selection(facts, &mut jobs, single, &units);
     if let Some(root) = helper_root {
@@ -113,8 +116,8 @@ fn apply_extensions(facts: &RepoFacts, jobs: &mut [Job], single: bool) {
     if facts.config.cache_debug == CacheDebug::On {
         crate::cargo_log::upload(jobs);
     }
-    crate::private_fetch::insert(facts.config.private_sources.as_ref(), jobs);
-    crate::release_assets::insert(&facts.config, jobs);
+    crate::private_fetch::insert(facts, jobs);
+    crate::release_assets::insert(facts, jobs);
     crate::lock_scope::apply(facts, jobs);
     crate::mbx_steps::apply(facts, jobs);
     if facts.config.push_after_merge_group == PushAfterMergeGroup::SkipWhenQueueRunPassed {
@@ -147,32 +150,14 @@ fn helper_job(facts: &RepoFacts, root: &RustRoot, deltas: bool) -> Job {
             binary: TargetName::from_static(HELPER_PACKAGE),
         }))
     });
-    let steps = crate::test_setup::before_builds(facts, root, steps);
+    let mut steps = crate::test_setup::before_builds(facts, root, steps);
+    crate::test_setup::gate_job(&mut steps);
     Job {
         needs: vec![PLAN_JOB],
         gate: lane.job(),
         steps,
         ..job(facts, HELPER_JOB)
     }
-}
-pub fn check_required_check(facts: &RepoFacts, plan: &WorkflowPlan) -> Result<(), DetectError> {
-    let mut ids = BTreeSet::new();
-    if let Some(job) = plan.jobs.iter().find(|job| !ids.insert(job.id.as_str())) {
-        return Err(DetectError::JobIdTaken(job.id.to_string()));
-    }
-    let name = &facts.config.required_check;
-    if plan.jobs.iter().any(|job| {
-        job.id.as_str() != "required" && job.name.as_deref().unwrap_or(job.id.as_str()) == name
-    }) {
-        return Err(DetectError::invalid(
-            &CONFIG_PATH,
-            Reason::InvalidValue {
-                key: "required_check",
-                value: name.clone(),
-            },
-        ));
-    }
-    Ok(())
 }
 
 pub(crate) fn head(facts: &RepoFacts, depth: u32, sparse: Option<Vec<String>>) -> Vec<Step> {
@@ -192,6 +177,11 @@ pub(crate) fn mbx(facts: &RepoFacts, seed_gate: Option<Gate>) -> Vec<Step> {
     if facts.config.mbx_store != MbxStore::Shared {
         return Vec::new();
     }
+    let out_dirs = facts
+        .helper
+        .as_ref()
+        .is_some_and(|release| release.version().at_least(MBX_OUT_DIR_HELPER))
+        .then(|| step(StepKind::MbxOutDirs));
     let seed = facts
         .helper
         .as_ref()
@@ -200,7 +190,7 @@ pub(crate) fn mbx(facts: &RepoFacts, seed_gate: Option<Gate>) -> Vec<Step> {
             gate: seed_gate,
             ..step(StepKind::MbxSeed)
         });
-    [Some(step(StepKind::MbxStore)), seed]
+    [Some(step(StepKind::MbxStore)), out_dirs, seed]
         .into_iter()
         .flatten()
         .collect()
@@ -298,6 +288,7 @@ pub(crate) fn setup_units(
                 step(StepKind::CacheRestore(CacheKey::Sources {
                     host: Host,
                     lane: cache_root.clone(),
+                    scope: crate::base_cache::base_scope(facts),
                 })),
             ));
         }
@@ -307,6 +298,7 @@ pub(crate) fn setup_units(
                 job: family.clone(),
                 root: cache_root,
                 host: Host,
+                scope: crate::base_cache::base_scope(facts),
             })),
         ));
         toolchain.extend(crate::delta_cache::restore(facts, unit, family, lane));
@@ -385,7 +377,9 @@ pub(crate) fn step(kind: StepKind) -> Step {
         private_repo: false,
         pr: PrRun::Always,
         gate: None,
+        any_gate: Vec::new(),
         reads: None,
         hosted_only: false,
+        setup_order: SetupOrder::Unordered,
     }
 }

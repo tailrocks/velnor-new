@@ -5,8 +5,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_ci::scope::Scope;
 use velnor_model::{
-    CompileInputs, InputOwner, PackageName, PolicyTools, RepoFacts, RepoPath, RustCiConfig,
-    RustMember, RustRoot, ToolPins,
+    CompileInputs, DenyChecks, InputOwner, PackageName, PolicyTools, RepoFacts, RepoPath,
+    RustCiConfig, RustMember, RustRoot, ToolPins,
 };
 
 fn path(text: &str) -> RepoPath {
@@ -51,7 +51,12 @@ fn facts() -> RepoFacts {
         private_base_caches: false,
         private_suggestion: None,
         unowned: BTreeMap::new(),
-        policy: PolicyTools::default(),
+        policy: PolicyTools {
+            deny: false,
+            machete: false,
+            deny_off: false,
+            checks: DenyChecks::of(&[]),
+        },
         deny_configs: BTreeMap::new(),
         weakenings: Vec::new(),
     }
