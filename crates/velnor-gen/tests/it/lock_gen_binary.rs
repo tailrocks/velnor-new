@@ -4,8 +4,12 @@
 use std::error::Error;
 
 use velnor_model::Platform;
-use velnor_rust::{RunningGenerator, check_generator_entry, pin_lock, verify_release};
+use velnor_rust::{
+    DetectError, LOCK_PATH, Reason, RunningGenerator, check_generator_entry, detect, pin_lock,
+    verify_release,
+};
 
+use crate::facts::{lib, repo};
 use crate::lock::COMMIT_FILE;
 use crate::lock_archive::{
     ARCHIVE_SUMS, BINARY_SUMS as CI_BINARY_SUMS, GENERATOR_BINARY_SUMS, generator_sums,
@@ -17,6 +21,8 @@ type TestResult = Result<(), Box<dyn Error>>;
 
 const VERSION: &str = "0.1.111";
 const COMMIT: &str = "1390e6f6a4b64e1f33dbddfbeedcd097db32ec36";
+const CI_ARCHIVE_X64: &str = "b91a87ecac8eda2809f202b4566d886273d7b34d6ef29f726751fcbc8bb3d502";
+const CI_BINARY_X64: &str = "9de941ee8e31748973283b2cd31a439119a9d22f60ec3e2884d855a8e2971c6f";
 const GEN_ARCHIVE_X64: &str = "2a3ff18c1c5fc61a10aa66976ccf1fe669daa4af4eafec260b4c87d81afdf8f9";
 const GEN_BINARY_X64: &str = "24da48018435c7e9b2e0153a05c7d65b68017db69b073cc8398c78dc6e4274df";
 const GEN_BINARY_ARM64: &str = "8a7852af13610acee22317e764266301a83884595823a9b006a525d395cfa543";
@@ -70,8 +76,12 @@ fn the_archive_digest_is_not_the_digest_of_the_binary() -> TestResult {
     let error = check(&lock()?, running(GEN_ARCHIVE_X64))
         .err()
         .ok_or("accepted the archive digest as the binary's")?;
-    assert!(error.contains("[velnor-gen-binary]"), "{error}");
-    assert!(error.contains(GEN_BINARY_X64), "{error}");
+    assert_eq!(
+        error,
+        format!(
+            "[velnor-gen-binary] linux-x64 digest is {GEN_BINARY_X64} but this binary hashes to {GEN_ARCHIVE_X64}"
+        )
+    );
     Ok(())
 }
 
@@ -87,8 +97,68 @@ fn a_tampered_binary_digest_is_refused_online_and_named() -> TestResult {
     .err()
     .ok_or("accepted")?
     .to_string();
-    assert!(error.contains("[velnor-gen-binary]"), "{error}");
-    assert!(error.contains("linux-x64"), "{error}");
+    assert_eq!(
+        error,
+        format!(
+            "[velnor-gen-binary] linux-x64 digest is {} but the release lists {GEN_BINARY_X64}",
+            "0".repeat(64)
+        )
+    );
+    Ok(())
+}
+
+fn lock_refusal(text: &str) -> Result<String, Box<dyn Error>> {
+    let view = repo(
+        vec![("Cargo.toml", vec![lib("a", "a/Cargo.toml")?])],
+        &[(LOCK_PATH.as_str(), text)],
+    )?;
+    match detect(&view) {
+        Err(DetectError::Invalid {
+            path,
+            reason: Reason::HelperLock(error),
+        }) if path == LOCK_PATH => Ok(error.to_string()),
+        Err(error) => Err(format!("refused at another file or reason: {error:?}").into()),
+        Ok(_) => Err("accepted".into()),
+    }
+}
+
+#[test]
+fn detect_names_a_malformed_binary_table_at_the_lock() -> TestResult {
+    let text = lock()?.replacen(GEN_BINARY_X64, "not-a-digest", 1);
+    assert_eq!(
+        lock_refusal(&text)?,
+        "[velnor-gen-binary] the SHA-256 for linux-x64 is not 64 lowercase hex digits"
+    );
+    Ok(())
+}
+
+#[test]
+fn detect_names_a_malformed_generator_table_at_the_lock() -> TestResult {
+    let text = lock()?.replacen(GEN_ARCHIVE_X64, "not-a-digest", 1);
+    assert_eq!(
+        lock_refusal(&text)?,
+        "[velnor-gen] the SHA-256 for linux-x64 is not 64 lowercase hex digits"
+    );
+    Ok(())
+}
+
+#[test]
+fn detect_names_a_malformed_ci_table_at_the_lock() -> TestResult {
+    let text = lock()?.replacen(CI_ARCHIVE_X64, "not-a-digest", 1);
+    assert_eq!(
+        lock_refusal(&text)?,
+        "[velnor-ci] the SHA-256 for linux-x64 is not 64 lowercase hex digits"
+    );
+    Ok(())
+}
+
+#[test]
+fn detect_names_a_malformed_ci_binary_table_at_the_lock() -> TestResult {
+    let text = lock()?.replacen(CI_BINARY_X64, "not-a-digest", 1);
+    assert_eq!(
+        lock_refusal(&text)?,
+        "[velnor-ci-binary] the SHA-256 for linux-x64 is not 64 lowercase hex digits"
+    );
     Ok(())
 }
 
@@ -121,8 +191,10 @@ fn a_release_that_lists_binary_digests_is_refused_offline_without_its_section() 
     let error = check(&without_binary_section()?, running(GEN_BINARY_X64))
         .err()
         .ok_or("accepted a 0.1.111 lock without [velnor-gen-binary]")?;
-    assert!(error.contains("[velnor-gen-binary]"), "{error}");
-    assert!(error.contains("pin-helper 0.1.111"), "{error}");
+    assert_eq!(
+        error,
+        "[velnor-gen-binary] is missing: release 0.1.111 lists the velnor-gen binary digests, so the lock must list them; re-pin with `velnor-gen pin-helper 0.1.111` or later"
+    );
     Ok(())
 }
 
@@ -137,8 +209,10 @@ fn verify_release_names_the_repin_when_the_binary_section_is_missing() -> TestRe
     .err()
     .ok_or("accepted")?
     .to_string();
-    assert!(error.contains("[velnor-gen-binary]"), "{error}");
-    assert!(error.contains("pin-helper 0.1.111"), "{error}");
+    assert_eq!(
+        error,
+        "[velnor-gen-binary] is missing: release 0.1.111 lists the velnor-gen binary digests; re-pin with `velnor-gen pin-helper 0.1.111` or later"
+    );
     Ok(())
 }
 
@@ -160,7 +234,10 @@ fn a_release_older_than_the_binary_section_is_pinned_without_it() -> TestResult 
         ..running(GEN_BINARY_X64)
     };
     let error = check(&injected, older).err().ok_or("accepted")?;
-    assert!(error.contains("[velnor-gen-binary]"), "{error}");
+    assert_eq!(
+        error,
+        "[velnor-gen-binary] is not allowed: release 0.1.110 does not read it"
+    );
     Ok(())
 }
 
