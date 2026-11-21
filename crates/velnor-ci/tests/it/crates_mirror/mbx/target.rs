@@ -329,3 +329,28 @@ fn a_bare_rs_script_under_zscript_is_scoped_by_its_own_path_not_the_manifest_pat
     )?);
     Ok(())
 }
+
+#[test]
+fn a_multi_component_name_without_zscript_is_an_external_subcommand_scoped_by_its_manifest_path()
+-> TestResult {
+    let repo = declared_job()?;
+    let launch = repo.root().join("launch");
+    let inside = repo.root().join("Cargo.toml").display().to_string();
+    let outside = repo
+        .root()
+        .join("scratch-project/Cargo.toml")
+        .display()
+        .to_string();
+    assert_refused(&run_with_args(
+        &repo,
+        &launch,
+        &["a/b", "--manifest-path", &inside],
+    )?);
+    assert_plain(&run_with_args(
+        &repo,
+        &launch,
+        &["a/b", "--manifest-path", &outside],
+    )?);
+    Ok(())
+}
+
