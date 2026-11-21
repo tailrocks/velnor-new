@@ -18,6 +18,7 @@ LIST_ITEM = re.compile(r" *(?:[-*+]|\d{1,9}[.)]) +\S")
 QUOTE_START = re.compile(r"[ \t]*>")
 HRULE = re.compile(r"(?:-[ \t]*){3,}|(?:\*[ \t]*){3,}|(?:_[ \t]*){3,}")
 SETEXT = re.compile(r"=+[ \t]*|-+[ \t]*")
+ATX = re.compile(r"#{1,6}(?:[ \t]|$)")
 HTML_DONE = re.compile(r"<!--.*-->|<\?.*\?>|<![A-Za-z].*>|<!\[CDATA\[.*\]\]>")
 DOC_OPEN = re.compile(r"/\*(?:!|\*(?![*/]))")
 NEWLINE = re.compile(r"\r\n|\r|\n")
@@ -103,7 +104,7 @@ def prose(line):
     if line is None:
         return False
     text = re.sub("^" + CONTAINER, "", line.strip(), count=1)
-    return bool(text) and not text.startswith("#") and not HRULE.fullmatch(text) and not HTML_DONE.fullmatch(text)
+    return bool(text) and not ATX.match(text) and not HRULE.fullmatch(text) and not HTML_DONE.fullmatch(text)
 
 
 def split_lines(text):
@@ -135,12 +136,11 @@ def unindent_run(bodies):
 
 def carried(tail, inner):
     if tail is None or tail[0] != inner:
-        return None, False
-    return tail[1], tail[2]
+        return None, False, None
+    return tail[1], tail[2], tail[3]
 
 
-def markdown_hit(lines, indent, prev=None):
-    item = None
+def markdown_hit(lines, indent, prev=None, item=None):
     for k, raw in enumerate(lines):
         line = raw.expandtabs(4)
         blank = not line.strip()
@@ -150,24 +150,25 @@ def markdown_hit(lines, indent, prev=None):
             item = None
         lazy = prose(prev) and not QUOTE_START.match(line)
         if LIST_INDENT.match(line) or (LINE_FENCE.match(line) and not (lazy and indent.match(line))):
-            return k
+            return k, item
         code = indent.match(line) if item is None or blank else width >= item + 4
         if code and not lazy:
-            return k
+            return k, item
         match = LIST_ITEM.match(line)
         if match and not HRULE.fullmatch(line.strip()):
             item = match.end() - 1
         heading = prose(prev) and SETEXT.fullmatch(line.strip()) and (was is None or width >= was)
         prev = "" if heading else line
-    return None
+    return None, item
 
 
-def value_has_fence(value, prev=None, normalize=True):
+def value_has_fence(value, prev=None, normalize=True, item=None):
     lines = [line.expandtabs(4) for line in split_lines(value)]
     if normalize:
         margin = min((len(line) - len(line.lstrip(" ")) for line in lines if line.strip()), default=0)
         lines = [line[margin:] for line in lines]
-    return markdown_hit(lines, ATTR_INDENT, prev) is not None
+    hit, item = markdown_hit(lines, ATTR_INDENT, prev, item)
+    return hit is not None, item
 
 
 def has_following_doc(src, j, inner):
@@ -185,7 +186,10 @@ def has_following_doc(src, j, inner):
                 return src.startswith("/*!", j) == inner
             j = block_end(src, j)
         elif c == "#" and (k := attr_open(src, j)) is not None:
-            if IDENT.match(src, skip_trivia(src, k)) and IDENT.match(src, skip_trivia(src, k)).group() == "doc":
+            n = skip_trivia(src, k)
+            n += 2 if src.startswith("r#", n) else 0
+            name = IDENT.match(src, n)
+            if name and name.group() == "doc":
                 return src.startswith("!", skip_trivia(src, j + 1)) == inner
             m, depth = k, 1
             while m < len(src) and depth:
@@ -259,13 +263,13 @@ def doc_findings(src):
                 run, end = line_run(src, i)
                 bodies = [body for _, body, _ in run]
                 inner = src.startswith("//!", i)
-                prev, seen = carried(tail, inner)
+                prev, seen, item = carried(tail, inner)
                 tabbed = any(tab for _, _, tab in run)
                 standalone = not seen and not tabbed and not has_following_doc(src, end, inner)
-                hit = markdown_hit(unindent_run(bodies) if standalone else bodies, LINE_INDENT, prev)
+                hit, item = markdown_hit(unindent_run(bodies) if standalone else bodies, LINE_INDENT, prev, item)
                 if hit is not None:
                     yield run[hit][0]
-                tail = (inner, bodies[-1], seen or any(body.strip() for body in bodies))
+                tail = (inner, bodies[-1], seen or any(body.strip() for body in bodies), item)
             else:
                 k = src.find("\n", i)
                 end = len(src) if k < 0 else k
@@ -277,23 +281,25 @@ def doc_findings(src):
                 body = src[start:end]
                 lines = split_lines(body[:-2] if body.endswith("*/") else body)
                 inner = src.startswith("/*!", i)
-                prev, seen = carried(tail, inner)
+                prev, seen, item = carried(tail, inner)
                 standalone = not seen and not has_following_doc(src, end, inner)
                 stripped = [doc_text_tabs(line) for line in block_text(lines, standalone)]
-                hit = markdown_hit(stripped, LINE_INDENT, prev)
+                hit, item = markdown_hit(stripped, LINE_INDENT, prev, item)
                 if hit is not None:
                     yield start + sum(len(line) + 1 for line in lines[:hit])
-                tail = (inner, stripped[-1], seen or any(line.strip() for line in stripped))
+                tail = (inner, stripped[-1], seen or any(line.strip() for line in stripped), item)
             i = end
         elif c == '"':
             end = skip_string(src, i)
             if doc_value:
                 value = plain_value(src[i:end])
-                prev, seen = carried(tail, attr_inner)
-                if value_has_fence(value, prev, not seen and not has_following_doc(src, end, attr_inner)):
+                prev, seen, item = carried(tail, attr_inner)
+                standalone = not seen and paren == doc_paren and not has_following_doc(src, end, attr_inner)
+                found, item = value_has_fence(value, prev, standalone, item)
+                if found:
                     yield i
                 if attr_name == "doc":
-                    tail = (attr_inner, split_lines(value)[-1], True)
+                    tail = (attr_inner, split_lines(value)[-1], seen or bool(value.strip()), item)
             i = end
         elif c == "'":
             j = skip_char(src, i)
@@ -343,11 +349,13 @@ def doc_findings(src):
                 else:
                     if doc_value:
                         value = raw_value(src[i:end], len(word))
-                        prev, seen = carried(tail, attr_inner)
-                        if value_has_fence(value, prev, not seen and not has_following_doc(src, end, attr_inner)):
+                        prev, seen, item = carried(tail, attr_inner)
+                        standalone = not seen and paren == doc_paren and not has_following_doc(src, end, attr_inner)
+                        found, item = value_has_fence(value, prev, standalone, item)
+                        if found:
                             yield i
                         if attr_name == "doc":
-                            tail = (attr_inner, split_lines(value)[-1], True)
+                            tail = (attr_inner, split_lines(value)[-1], seen or bool(value.strip()), item)
                     i = end
             elif word in BYTE_PREFIX and j < len(src) and src[j] == '"':
                 i = skip_string(src, j)
