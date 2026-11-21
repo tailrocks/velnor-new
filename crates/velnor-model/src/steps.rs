@@ -121,6 +121,7 @@ pub enum StepKind {
     PrivateToken {
         sources: crate::repo::PrivateSources,
         cached: Vec<crate::ids::RootSlug>,
+        mint: crate::repo::TokenMint,
     },
     PrivateFetch {
         manifests: Vec<RepoPath>,
@@ -166,6 +167,7 @@ pub enum StepKind {
         nextest_artifacts: bool,
         node_tools: ToolsTelemetry,
         not_generated: Option<String>,
+        unsuppressed: Vec<CacheKey>,
     },
     UploadMetrics,
     DownloadMetrics,
