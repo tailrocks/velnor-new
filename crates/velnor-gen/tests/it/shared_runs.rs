@@ -29,10 +29,7 @@ fn restored_runs(text: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> 
     let jobs = tree.get("jobs").ok_or("no jobs")?;
     let mut runs = Vec::new();
     for job in jobs.keys() {
-        for step in jobs
-            .at(&[job, "steps"])
-            .map_or_default(Node::items)
-        {
+        for step in jobs.at(&[job, "steps"]).map_or_default(Node::items) {
             if let Some(run) = step.get("run").and_then(|run| run.text())
                 && run.contains(RESTORED)
             {
