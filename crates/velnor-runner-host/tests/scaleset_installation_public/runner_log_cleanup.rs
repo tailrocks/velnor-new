@@ -310,6 +310,14 @@ fn write_exec_response(
     }
 }
 
+/// Wall-clock budget for one worker pass to reach its observable end state.
+///
+/// The budget used to be a count of 5 ms polls (2,000 of them). Under parallel
+/// load each poll stretches to 7 to 30 ms, so the count expired after 15 to 60 s
+/// of wall time while a pass that needed about 15 s was still running. A deadline
+/// measured on the clock keeps the bound a real upper limit on hung passes only.
+const COMPLETION_PASS_DEADLINE: Duration = Duration::from_secs(120);
+
 async fn run_one_worker_pass(
     ctx: (&Journal, &RepositoryConnection, &Path, &LocalDockerStub),
     docker: bollard::Docker,
@@ -332,7 +340,7 @@ async fn run_one_worker_pass(
         state_dir,
     )
     .await?;
-    let mut waited_polls = 0_usize;
+    let deadline = std::time::Instant::now() + COMPLETION_PASS_DEADLINE;
     while !stub.dind_stop_entered.load(Ordering::Acquire) {
         let bad_exit_done = {
             let g = stub
@@ -345,8 +353,7 @@ async fn run_one_worker_pass(
         if bad_exit_done && seed::retry_committed(state_dir, &mut observer).await? {
             break;
         }
-        waited_polls += 1;
-        if waited_polls > 2_000 {
+        if std::time::Instant::now() >= deadline {
             return Err("timed out waiting for completion worker pass".into());
         }
         tokio::time::sleep(Duration::from_millis(5)).await;
