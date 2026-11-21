@@ -64,7 +64,10 @@ impl Freshness {
         let Some((newest, entries)) = self.directories.get(&key) else {
             return Err(io::Error::other("directory inventory missing after scan"));
         };
-        Ok(*newest > built || !inventory::matches(output, path, entries, targets).unwrap_or(false))
+        Ok(
+            *newest >= built
+                || !inventory::matches(output, path, entries, targets).unwrap_or(false),
+        )
     }
 }
 
@@ -155,7 +158,7 @@ fn changed_since(metadata: &fs::Metadata, built: SystemTime) -> io::Result<bool>
         let nanos = u32::try_from(metadata.ctime_nsec()).unwrap_or(0);
         SystemTime::UNIX_EPOCH + Duration::new(seconds, nanos)
     });
-    Ok(metadata.modified()? > built || inode.is_some_and(|inode| inode > built))
+    Ok(metadata.modified()? >= built || inode.is_some_and(|inode| inode >= built))
 }
 
 fn failed(path: &Path, error: &io::Error) -> CiError {
@@ -325,6 +328,60 @@ mod tests {
         assert!(
             matches!(changed, Ok(true)),
             "a same-size rewrite with its mtime restored was not stale: {changed:?}"
+        );
+    }
+
+    fn change_time(path: &Path) -> SystemTime {
+        let metadata = fs::metadata(path).unwrap_or_else(|e| unreachable!("{e}"));
+        let seconds = u64::try_from(metadata.ctime()).unwrap_or_else(|e| unreachable!("{e}"));
+        let nanos = u32::try_from(metadata.ctime_nsec()).unwrap_or_else(|e| unreachable!("{e}"));
+        SystemTime::UNIX_EPOCH + Duration::new(seconds, nanos)
+    }
+
+    #[test]
+    fn a_file_whose_change_time_equals_the_snapshot_time_is_stale() {
+        let root = fs::canonicalize(std::env::temp_dir())
+            .unwrap_or_else(|e| unreachable!("{e}"))
+            .join(format!("velnor-freshness-ctime-tie-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+        let file = root.join("f");
+        fs::write(&file, b"a").unwrap_or_else(|e| unreachable!("{e}"));
+        fs::File::open(&file)
+            .and_then(|handle| handle.set_times(fs::FileTimes::new().set_modified(UNIX_EPOCH)))
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        let built = change_time(&file);
+        let mut freshness =
+            Freshness::new(&[], &[], usize::MAX).unwrap_or_else(|e| unreachable!("{e}"));
+        let changed = freshness.changed(&file, built, &file, &BTreeSet::new());
+        fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+        assert!(
+            matches!(changed, Ok(true)),
+            "a change at the snapshot time was treated as fresh: {changed:?}"
+        );
+    }
+
+    #[test]
+    fn a_directory_entry_whose_change_time_equals_the_snapshot_time_is_stale() {
+        let root = fs::canonicalize(std::env::temp_dir())
+            .unwrap_or_else(|e| unreachable!("{e}"))
+            .join(format!("velnor-freshness-dir-tie-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let directory = root.join("d");
+        fs::create_dir_all(&directory).unwrap_or_else(|e| unreachable!("{e}"));
+        let file = directory.join("f");
+        fs::write(&file, b"a").unwrap_or_else(|e| unreachable!("{e}"));
+        fs::File::open(&file)
+            .and_then(|handle| handle.set_times(fs::FileTimes::new().set_modified(UNIX_EPOCH)))
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        let built = change_time(&file);
+        let mut freshness =
+            Freshness::new(&[], &[], usize::MAX).unwrap_or_else(|e| unreachable!("{e}"));
+        let changed = freshness.changed(&directory, built, &file, &BTreeSet::new());
+        fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+        assert!(
+            matches!(changed, Ok(true)),
+            "a directory entry changed at the snapshot time was treated as fresh: {changed:?}"
         );
     }
 }
