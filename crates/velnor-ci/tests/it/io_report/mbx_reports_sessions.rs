@@ -109,6 +109,58 @@ fn a_job_past_4096_sessions_is_unknown_evidence_that_fails_the_check() -> Result
     Ok(())
 }
 
+fn padded_report(bytes: usize) -> String {
+    let mut json = report_json(5, 1, 0, 0);
+    json.push_str(&" ".repeat(bytes - json.len()));
+    json
+}
+
+#[test]
+fn reports_totalling_past_the_byte_budget_are_unknown_evidence_that_fails_the_check() -> ResultTest
+{
+    let repo = fixture("mbx-reports-byte-flood")?;
+    for index in 0..40 {
+        plant_session(
+            &repo,
+            &format!("{index:05}"),
+            Some(&padded_report(1_000_000)),
+        )?;
+    }
+    let metrics = report(&repo)?;
+    assert!(
+        metrics.mbx.sessions.is_empty(),
+        "{}",
+        metrics.mbx.sessions.len()
+    );
+    assert_eq!(metrics.mbx.unparsed, 1);
+    assert!(
+        metrics.verification_errors.iter().any(
+            |line| line.contains("MBX stats reports exceed") && line.contains("33554432 bytes")
+        ),
+        "{:?}",
+        metrics.verification_errors
+    );
+    assert!(velnor_ci::report::check(std::slice::from_ref(&metrics)).is_err());
+    Ok(())
+}
+
+#[test]
+fn reports_totalling_under_the_byte_budget_are_all_read() -> ResultTest {
+    let repo = fixture("mbx-reports-byte-budget")?;
+    for index in 0..30 {
+        plant_session(
+            &repo,
+            &format!("{index:05}"),
+            Some(&padded_report(1_000_000)),
+        )?;
+    }
+    let metrics = report(&repo)?;
+    assert_eq!(metrics.mbx.sessions.len(), 30, "{metrics:?}");
+    assert_eq!(metrics.mbx.unparsed, 0);
+    assert!(metrics.verification_errors.is_empty(), "{metrics:?}");
+    Ok(())
+}
+
 #[test]
 fn a_dangling_json_symlink_is_one_unreadable_report_not_also_missing() -> ResultTest {
     let repo = fixture("mbx-reports-dangling")?;
