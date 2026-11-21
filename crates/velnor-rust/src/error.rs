@@ -116,6 +116,7 @@ pub enum Reason {
     BuildExecutable,
     UnpinnedTool(&'static str),
     PolicyDenyWithoutConfig,
+    PolicyGateWithoutLane,
     HelperBox(RepoPath),
     MbxRemotePrivate(String),
     PublicSourceOverlap(String),
