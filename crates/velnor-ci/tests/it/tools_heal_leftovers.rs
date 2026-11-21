@@ -6,9 +6,9 @@ use std::os::unix::fs::{PermissionsExt, symlink};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::thread;
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant, SystemTime};
 
-use velnor_ci::tools_local::Outcome;
+use velnor_ci::tools_local::{Outcome, message};
 
 use crate::io::Repo;
 use crate::tools_heal::{KEY, leftovers, poisoned_store, save, save_as};
@@ -251,23 +251,19 @@ fn two_aged_entries(job: &Job, store: &Path) -> PathBuf {
 }
 
 #[test]
-fn a_prune_candidate_whose_lock_is_released_during_the_save_is_removed() {
+fn a_prune_candidate_whose_lock_is_released_is_removed_by_the_next_save() {
     let job = job("tools-heal-prune-released");
     let store = job.root.join("store");
     fs::create_dir_all(&store).unwrap_or_else(|e| unreachable!("{e}"));
     let first = two_aged_entries(&job, &store);
     let lock = store.join("tools/.lock-velnor-tools-first");
     fs::create_dir(&lock).unwrap_or_else(|e| unreachable!("{e}"));
-    let release = thread::spawn(move || {
-        thread::sleep(Duration::from_millis(300));
-        fs::remove_dir(&lock)
-    });
     let third = save_as(&store, &job.home, "velnor-tools-third", false);
     assert!(matches!(third, Outcome::Saved { .. }), "{third:?}");
-    release
-        .join()
-        .unwrap_or_else(|_| unreachable!("the releasing thread panicked"))
-        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(first.is_dir(), "a locked prune candidate was removed");
+    fs::remove_dir(&lock).unwrap_or_else(|e| unreachable!("{e}"));
+    let fourth = save_as(&store, &job.home, "velnor-tools-fourth", false);
+    assert!(matches!(fourth, Outcome::Saved { .. }), "{fourth:?}");
     assert!(!first.exists(), "a released prune candidate was kept");
 }
 
@@ -298,6 +294,54 @@ fn a_prune_candidate_replaced_while_its_lock_was_held_is_kept() {
         .unwrap_or_else(|_| unreachable!("the replacing thread panicked"))
         .unwrap_or_else(|e| unreachable!("{e}"));
     assert!(first.is_dir(), "the prune removed a replacement entry");
+}
+
+#[test]
+fn a_save_does_not_wait_for_a_prune_candidate_whose_lock_is_held() {
+    let job = job("tools-heal-prune-no-wait");
+    let store = job.root.join("store");
+    fs::create_dir_all(&store).unwrap_or_else(|e| unreachable!("{e}"));
+    let first = two_aged_entries(&job, &store);
+    let lock = store.join("tools/.lock-velnor-tools-first");
+    fs::create_dir(&lock).unwrap_or_else(|e| unreachable!("{e}"));
+    let started = Instant::now();
+    let third = save_as(&store, &job.home, "velnor-tools-third", false);
+    let elapsed = started.elapsed();
+    assert!(matches!(third, Outcome::Saved { .. }), "{third:?}");
+    assert!(
+        elapsed < Duration::from_secs(5),
+        "the save waited {elapsed:?} for a prune candidate whose lock is held"
+    );
+    assert!(first.is_dir(), "the locked prune candidate was removed");
+}
+
+#[test]
+fn a_prune_candidate_that_cannot_be_locked_is_kept_and_reported() {
+    let job = job("tools-heal-prune-unlockable");
+    let store = job.root.join("store");
+    fs::create_dir_all(&store).unwrap_or_else(|e| unreachable!("{e}"));
+    let name = "k".repeat(250);
+    let candidate = store.join("tools").join(&name);
+    fs::create_dir_all(&candidate).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::write(candidate.join("rustc"), "old binary").unwrap_or_else(|e| unreachable!("{e}"));
+    aged(&candidate, Duration::from_hours(3));
+    let second = save_as(&store, &job.home, "velnor-tools-second", false);
+    assert!(matches!(second, Outcome::Saved { .. }), "{second:?}");
+    aged(
+        &store.join("tools/velnor-tools-second"),
+        Duration::from_hours(2),
+    );
+    let third = save_as(&store, &job.home, "velnor-tools-third", false);
+    assert!(matches!(third, Outcome::Saved { .. }), "{third:?}");
+    assert!(
+        candidate.join("rustc").is_file(),
+        "the unlockable entry was removed"
+    );
+    let text = message(&third, "node");
+    assert!(
+        text.contains("::warning::") && text.contains(&name),
+        "the unlockable entry was not reported: {text}"
+    );
 }
 
 #[test]

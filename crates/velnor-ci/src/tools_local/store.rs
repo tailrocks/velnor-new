@@ -5,8 +5,7 @@ use std::fs;
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::thread;
-use std::time::{Duration, Instant, SystemTime};
+use std::time::{Duration, SystemTime};
 
 use super::clear::{check_home, clear_home};
 use super::{HOME_PATHS, Inputs, KEEP_KEYS, Outcome, TOOLS_DIR};
@@ -18,8 +17,6 @@ const STAGING_PREFIX: &str = ".staging-";
 const RETIRED_PREFIX: &str = "retired-";
 const LOCK_PREFIX: &str = ".lock-";
 const STALE_AFTER: Duration = Duration::from_hours(1);
-const PRUNE_WAIT: Duration = Duration::from_secs(10);
-const PRUNE_STEP: Duration = Duration::from_millis(100);
 const COPY: &str = "/bin/cp";
 
 fn base(dir: Option<&str>, owner: u32, read_only: bool) -> Result<PathBuf, Outcome> {
@@ -283,17 +280,17 @@ pub(super) fn save(inputs: &Inputs<'_>, owner: u32) -> Outcome {
         return Outcome::Failed("the replaced entry could not be removed");
     }
     drop(lock);
-    prune(&tools, inputs.key);
+    let kept = prune(&tools, inputs.key);
     if replaced {
-        Outcome::Healed { to: entry }
+        Outcome::Healed { to: entry, kept }
     } else {
-        Outcome::Saved { to: entry }
+        Outcome::Saved { to: entry, kept }
     }
 }
 
-fn prune(tools: &Path, current: &str) {
+fn prune(tools: &Path, current: &str) -> Vec<String> {
     let Ok(entries) = fs::read_dir(tools) else {
-        return;
+        return Vec::new();
     };
     let mut older: Vec<(SystemTime, u64, PathBuf)> = entries
         .flatten()
@@ -307,29 +304,37 @@ fn prune(tools: &Path, current: &str) {
         })
         .collect();
     older.sort_by_key(|entry| std::cmp::Reverse(entry.0));
-    let mut pending: Vec<_> = older.into_iter().skip(KEEP_KEYS - 1).collect();
-    let deadline = Instant::now() + PRUNE_WAIT;
-    loop {
-        pending.retain(|(modified, ino, path)| prune_candidate(tools, path, *ino, *modified));
-        if pending.is_empty() || Instant::now() >= deadline {
-            return;
-        }
-        thread::sleep(PRUNE_STEP);
-    }
+    older
+        .into_iter()
+        .skip(KEEP_KEYS - 1)
+        .filter_map(|(modified, ino, path)| prune_candidate(tools, &path, ino, modified))
+        .collect()
 }
 
-fn prune_candidate(tools: &Path, path: &Path, ino: u64, modified: SystemTime) -> bool {
+fn prune_candidate(tools: &Path, path: &Path, ino: u64, modified: SystemTime) -> Option<String> {
     let key = path.file_name().unwrap_or_default().to_string_lossy();
     let _lock = match claim(tools, &key) {
         Claim::Won(lock) => lock,
-        Claim::Held => return true,
-        Claim::Broken => return false,
+        Claim::Held => return None,
+        Claim::Broken => return Some(plain(&key)),
     };
     let unchanged = fs::symlink_metadata(path).is_ok_and(|metadata| {
         metadata.ino() == ino && metadata.modified().is_ok_and(|now| now == modified)
     });
-    if unchanged {
-        remove_tree(path).ok();
+    if !unchanged {
+        return None;
     }
-    false
+    remove_tree(path).err().map(|_| plain(&key))
+}
+
+fn plain(name: &str) -> String {
+    name.chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-') {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect()
 }

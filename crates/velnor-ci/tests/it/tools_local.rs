@@ -366,6 +366,7 @@ fn every_tools_line_names_the_node_and_the_name_cannot_break_a_workflow_command(
         Outcome::Rejected("world-writable"),
         Outcome::Saved {
             to: PathBuf::from("/store/tools/k"),
+            kept: Vec::new(),
         },
         Outcome::AlreadySaved,
         Outcome::Busy,
