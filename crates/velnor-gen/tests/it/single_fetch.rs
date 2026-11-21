@@ -189,6 +189,7 @@ fn step_of(kind: StepKind) -> Step {
         skip_when_cold: false,
         private_repo: false,
         hosted_only: false,
+        any_gate: Vec::new(),
     }
 }
 

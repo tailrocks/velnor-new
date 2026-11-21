@@ -265,6 +265,7 @@ fn a_save_step_renders_the_same_key_without_fallbacks() -> TestResult {
                 skip_when_cold: false,
                 private_repo: false,
                 hosted_only: false,
+                any_gate: Vec::new(),
                 pr: PrRun::Always,
                 gate: None,
                 reads: None,

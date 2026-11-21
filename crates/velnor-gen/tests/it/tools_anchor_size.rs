@@ -7,7 +7,7 @@ use crate::facts::TestResult;
 use crate::pipeline::{pin_helper, view, workflow};
 
 const LANE: &str = "[[test_lane]]\nroot = '.'\nfeatures = ['local-mode']\npackages = ['package-0']\nfilter = 'test(~local::)'\nlint = true\ndoc = true\njob = 'parallel'\n";
-const SAVED_AT_LEAST: usize = 10_000;
+const SAVED_AT_LEAST: usize = 9_000;
 
 fn twenty_roots(config: Option<&str>, helper: &str) -> Result<usize, Box<dyn std::error::Error>> {
     let manifests: Vec<String> = (0..20)

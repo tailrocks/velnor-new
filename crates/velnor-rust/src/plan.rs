@@ -86,7 +86,11 @@ fn plan_with(facts: &RepoFacts, deltas: bool) -> WorkflowPlan {
         used.extend(gate_outputs(&jobs));
         used.sort();
         used.dedup();
-        jobs.insert(0, plan_job(facts, used, used_group_outputs(&jobs)));
+        let anchor_gates = crate::plan_tools::anchor_consumer_gates(&jobs, &PLAN_JOB);
+        jobs.insert(
+            0,
+            plan_job(facts, used, used_group_outputs(&jobs), &anchor_gates),
+        );
     }
     expose_selection(facts, &mut jobs, single, &units);
     if let Some(root) = helper_root {
@@ -388,6 +392,7 @@ pub(crate) fn step(kind: StepKind) -> Step {
         private_repo: false,
         pr: PrRun::Always,
         gate: None,
+        any_gate: Vec::new(),
         reads: None,
         hosted_only: false,
     }
