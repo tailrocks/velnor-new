@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
 use std::ffi::{OsStr, OsString};
 use std::io;
 use std::os::fd::{AsFd, BorrowedFd, OwnedFd};
@@ -100,6 +101,22 @@ fn reopen(parent: &Path, expected: &Stamp) -> io::Result<OwnedFd> {
         Ok(held)
     } else {
         Err(changed(io::ErrorKind::Other, parent))
+    }
+}
+
+pub(super) fn revisited(
+    identities: &BTreeMap<PathBuf, Stamp>,
+    directory: &Path,
+    reach: Reach<'_>,
+) -> io::Result<()> {
+    let Some(recorded) = identities.get(directory) else {
+        return Ok(());
+    };
+    match current(&Origin::Path, directory, reach) {
+        Ok(Current::Directory(now)) if recorded.is(now) => Ok(()),
+        Ok(_) => Err(changed(io::ErrorKind::Other, directory)),
+        Err(error) if replaced(&error) => Err(changed(error.kind(), directory)),
+        Err(error) => Err(error),
     }
 }
 

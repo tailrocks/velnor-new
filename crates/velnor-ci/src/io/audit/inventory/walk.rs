@@ -5,6 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::io;
+use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::rc::{Rc, Weak};
 
@@ -96,13 +97,13 @@ struct Pending {
 }
 
 struct Held<'p, 'a> {
-    handles: Vec<Weak<Dir>>,
+    handles: Vec<(Weak<Dir>, Range<usize>)>,
     probe: &'p Probe<'a>,
 }
 
 impl<'a> Held<'_, 'a> {
     fn reach(&mut self) -> Reach<'a> {
-        self.handles.retain(|handle| handle.strong_count() > 0);
+        self.handles.retain(|(handle, _)| handle.strong_count() > 0);
         let in_use = self.handles.len() + UNTRACKED_LISTING + RESOLVER_FIXED;
         Reach {
             bound: DESCRIPTOR_BUDGET.saturating_sub(in_use),
@@ -110,12 +111,14 @@ impl<'a> Held<'_, 'a> {
         }
     }
 
-    fn track(&mut self, listing: &Opened, pending: &mut [Pending]) {
-        self.handles.push(Rc::downgrade(listing));
-        self.handles.retain(|handle| handle.strong_count() > 0);
+    fn track(&mut self, listing: &Opened, pending: &mut [Pending], start: usize) {
+        self.handles
+            .push((Rc::downgrade(listing), start..pending.len()));
+        self.handles.retain(|(handle, _)| handle.strong_count() > 0);
         while self.handles.len() > self.probe.held {
-            let oldest = self.handles.remove(0);
-            for entry in pending.iter_mut() {
+            let (oldest, siblings) = self.handles.remove(0);
+            let end = siblings.end.min(pending.len());
+            for entry in pending.get_mut(siblings.start..end).unwrap_or_default() {
                 if let Some(reopen) = reopening(entry, &oldest) {
                     entry.origin = reopen;
                 }
@@ -167,6 +170,7 @@ pub(super) fn scan_with(
     }) = pending.pop()
     {
         if !visited.insert(directory.clone()) {
+            handle::revisited(&identities, &directory, held.reach())?;
             continue;
         }
         budget.reserve()?;
@@ -187,6 +191,7 @@ pub(super) fn scan_with(
                         &origin,
                         current,
                         (&root, targets),
+                        held.reach(),
                     )?,
                 }
                 continue;
@@ -208,7 +213,7 @@ pub(super) fn scan_with(
             (&mut pending, &mut held),
             (&root, targets),
         )?;
-        held.track(&listing, &mut pending);
+        held.track(&listing, &mut pending, queued_before);
         match handle::current(&origin, &directory, held.reach())? {
             Current::Directory(now) if stamp.is(now) => {
                 entries.insert(directory, children);
@@ -237,6 +242,7 @@ pub(super) fn scan_with(
                     &origin,
                     current,
                     (&root, targets),
+                    held.reach(),
                 )?;
             }
         }
@@ -264,7 +270,7 @@ fn list(
             stamp,
             name: name.clone(),
         };
-        pending.extend(queue(&kind, &path, child, (root, targets))?);
+        pending.extend(queue(&kind, &path, child, (root, targets), held.reach())?);
         children.insert(PathBuf::from(name), kind);
     }
     Ok(children)
@@ -285,6 +291,7 @@ fn queue(
     path: &Path,
     origin: Origin,
     (root, targets): (&Path, &BTreeSet<PathBuf>),
+    reach: Reach<'_>,
 ) -> io::Result<Option<Pending>> {
     if excluded_entry(path, kind, root, targets) {
         return Ok(None);
@@ -297,7 +304,7 @@ fn queue(
         Kind::Link {
             resolved: Some(resolved),
             ..
-        } if is_directory(resolved)? => Some(Pending {
+        } if is_directory(resolved, reach)? => Some(Pending {
             path: resolved.clone(),
             origin: Origin::Path,
         }),
@@ -312,6 +319,7 @@ fn settle(
     origin: &Origin,
     current: Current,
     (root, targets): (&Path, &BTreeSet<PathBuf>),
+    reach: Reach<'_>,
 ) -> io::Result<()> {
     let children = directory
         .parent()
@@ -325,7 +333,13 @@ fn settle(
         }
         Current::Directory(_) => return Err(changed(io::ErrorKind::Other, directory)),
         Current::Other(kind) => {
-            pending.extend(queue(&kind, directory, origin.clone(), (root, targets))?);
+            pending.extend(queue(
+                &kind,
+                directory,
+                origin.clone(),
+                (root, targets),
+                reach,
+            )?);
             if let (Some(children), Some(key)) = (children, key) {
                 children.insert(key.to_path_buf(), kind);
             }
@@ -334,10 +348,11 @@ fn settle(
     Ok(())
 }
 
-fn is_directory(path: &Path) -> io::Result<bool> {
-    match fs::metadata(path) {
-        Ok(metadata) => Ok(metadata.is_dir()),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
+fn is_directory(path: &Path, reach: Reach<'_>) -> io::Result<bool> {
+    match handle::current(&Origin::Path, path, reach) {
+        Ok(Current::Directory(_) | Current::Other(Kind::Link { .. })) => Ok(true),
+        Ok(Current::Gone | Current::Other(_)) => Ok(false),
+        Err(error) if handle::replaced(&error) => Ok(true),
         Err(error) => Err(error),
     }
 }
