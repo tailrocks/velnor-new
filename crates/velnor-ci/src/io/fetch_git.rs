@@ -160,12 +160,22 @@ fn objects(source: &Path, target: &Path) -> Result<(), CiError> {
             objects(&entry, &destination)?;
         } else if kind.is_file() && !destination.exists() {
             let staged = target.join(format!(".{name}.velnor-{}", std::process::id()));
-            fs::copy(&entry, &staged)
-                .and_then(|_| fs::rename(&staged, &destination))
+            drop(fs::remove_file(&staged));
+            stage(&entry, &staged)
+                .and_then(|()| fs::rename(&staged, &destination))
                 .map_err(|e| failed(&destination, &e))?;
         }
     }
     Ok(())
+}
+
+fn stage(source: &Path, staged: &Path) -> std::io::Result<()> {
+    let mut input = fs::File::open(source)?;
+    let mut output = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(staged)?;
+    std::io::copy(&mut input, &mut output).map(drop)
 }
 
 fn children(directory: &Path) -> Result<Vec<PathBuf>, CiError> {
