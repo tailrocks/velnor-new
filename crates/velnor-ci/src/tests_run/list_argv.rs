@@ -226,7 +226,6 @@ fn an_archive_run_lists_without_writing_to_the_tree_it_runs_from() {
         "--extract-to",
         ".",
         "--extract-overwrite",
-        "--persist-extract-tempdir",
         "--workspace-remap",
         ".",
         "--test-threads",
