@@ -174,7 +174,6 @@ fn git_waste(metrics: &LaneMetrics, invocation: &Invocation) -> Option<String> {
 pub fn check(lanes: &[LaneMetrics]) -> Result<String, CiError> {
     let mut identities = BTreeSet::new();
     let mut violations = Vec::new();
-    let mut notices = Vec::new();
     for lane in lanes {
         validate_evidence(lane)?;
         if !identities.insert(&lane.lane) {
@@ -191,30 +190,36 @@ pub fn check(lanes: &[LaneMetrics]) -> Result<String, CiError> {
         }
         violations.extend(lane.violations.iter().cloned());
         violations.extend(waste(lane));
-        notices.extend(crate::restored_units::base_gaps(lane));
     }
     violations.extend(compilation_repeats(lanes)?);
     violations.sort();
     violations.dedup();
-    notices.sort();
-    notices.dedup();
-    let mut notice_text = String::new();
-    for notice in notices {
-        notice_text.push_str("::notice::");
-        notice_text.push_str(&notice);
-        notice_text.push('\n');
-    }
     if violations.is_empty() {
         Ok(format!(
-            "Cache: {} lanes checked, no waste\n{notice_text}",
-            lanes.len()
+            "Cache: {} lanes checked, no waste\n{}",
+            lanes.len(),
+            restore_notices(lanes)
         ))
     } else {
-        Err(CiError::new(format!(
-            "{}\n{notice_text}",
-            violations.join("\n")
-        )))
+        Err(CiError::new(violations.join("\n")))
     }
+}
+
+pub fn restore_notices(lanes: &[LaneMetrics]) -> String {
+    let mut notices: Vec<String> = lanes
+        .iter()
+        .flat_map(crate::restored_units::base_gaps)
+        .collect();
+    notices.sort();
+    notices.dedup();
+    notice_lines(&notices)
+}
+
+fn notice_lines(notices: &[String]) -> String {
+    notices
+        .iter()
+        .map(|notice| crate::escape::command_line("notice", notice))
+        .collect()
 }
 
 fn compilation_repeats(lanes: &[LaneMetrics]) -> Result<Vec<String>, CiError> {

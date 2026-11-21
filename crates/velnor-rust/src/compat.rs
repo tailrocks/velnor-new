@@ -7,7 +7,7 @@ use crate::build_profile::BuildProfile;
 use crate::sha256::sha256_hex;
 use velnor_model::CACHE_COMPAT_LENGTH;
 
-pub const COMPAT_SCHEMA: u32 = 1;
+pub const COMPAT_SCHEMA: u32 = 2;
 pub const BUILD_DRIVER: &str = "cargo";
 /// The driver when `cargo` resolves to mise's command wrapper, which runs mbx: its
 /// artifacts differ from a plain build, so a plain target must never restore into it.
