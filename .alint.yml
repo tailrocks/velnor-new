@@ -269,7 +269,7 @@ rules:
         - "docs/implemented/evidence/freshness-2026-10-20/second/observations.json"
         - "docs/implemented/evidence/freshness-2026-10-24/qualification/update-set-pin-regressions-final.stderr"
         - "docs/implemented/evidence/freshness-2026-10-24/qualification/update-set-pin-regressions-initial.stderr"
-    pattern: '(?m)(?:^|[^A-Za-z0-9._-])(?:/Users/[A-Za-z0-9._-]+(?:[/\s"\x27\x60):,\]]|$)|/home/(?:[^r/\s][A-Za-z0-9._-]*|r[^u/\s][A-Za-z0-9._-]*|ru[^n/\s][A-Za-z0-9._-]*|run[^n/\s][A-Za-z0-9._-]*|runn[^e/\s][A-Za-z0-9._-]*|runne[^r/\s][A-Za-z0-9._-]*|runner[A-Za-z0-9._-]+|r|ru|run|runn|runne)(?:[/\s"\x27\x60):,\]]|$)|/private/tmp/claude-|/root/)'
+    pattern: '(?m)(?:^|[^A-Za-z0-9._-])(?:/Users/[A-Za-z0-9._-]+(?:[/\s"\x27\x60):,\]]|$)|/home/(?:[^r/\s][A-Za-z0-9._-]*|r[^u/\s][A-Za-z0-9._-]*|ru[^n/\s][A-Za-z0-9._-]*|run[^n/\s][A-Za-z0-9._-]*|runn[^e/\s][A-Za-z0-9._-]*|runne[^r/\s][A-Za-z0-9._-]*|runner[A-Za-z0-9._-]+|r|ru|run|runn|runne)(?:[/\s"\x27\x60):,\]]|$)|/private/tmp/claude-|/root/(?:[A-Za-z0-9]+(?:_[A-Za-z0-9]+)+/)*(?:\.|[A-Za-z0-9-]+(?:[^A-Za-z0-9_-]|$)|[A-Za-z0-9]+(?:_[A-Za-z0-9]+)+\.[A-Za-z0-9]|[\s"\x27\x60):,\]]|$))'
     level: error
     message: "Absolute home-directory path in a tracked file: use a repo-relative path, a relative link or a generic placeholder"
 
