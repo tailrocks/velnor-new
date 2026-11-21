@@ -20,8 +20,7 @@ fn declared_link(target: &str) -> Repo {
     let links = repo.root().join("shared/dir");
     fs::create_dir_all(&links).unwrap_or_else(|e| unreachable!("{e}"));
     if target == "../../elsewhere/hop" {
-        symlink("inner", repo.root().join("elsewhere/hop"))
-            .unwrap_or_else(|e| unreachable!("{e}"));
+        symlink("inner", repo.root().join("elsewhere/hop")).unwrap_or_else(|e| unreachable!("{e}"));
     }
     let root = repo.root().display().to_string();
     symlink(target.replace("{root}", &root), links.join("link"))
