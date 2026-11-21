@@ -138,7 +138,9 @@ fn walk(directory: &Path, depth: usize, budget: &mut usize, below_hooks: bool) -
 }
 
 fn is_hooks(directory: &Path) -> bool {
-    directory.file_name().is_some_and(|name| name == HOOKS)
+    directory
+        .file_name()
+        .is_some_and(|name| name.eq_ignore_ascii_case(HOOKS))
 }
 
 fn holds_credential(path: &Path) -> bool {

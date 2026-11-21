@@ -77,6 +77,24 @@ fn a_percent_encoded_token_in_a_remote_path_stops_the_sources_save() {
 }
 
 #[test]
+fn a_token_in_a_capitalized_hooks_helper_stops_the_sources_save() {
+    sources_save_stops(&[(
+        "capitalized-hooks-helper-token",
+        ".cargo/git/db/shared-1/Hooks/helper",
+        "export TOKEN=ghs_0123456789abcdefghijklmnopqrstuvwxyzAB\n",
+    )]);
+}
+
+#[test]
+fn a_five_times_encoded_token_in_a_remote_path_stops_the_sources_save() {
+    sources_save_stops(&[(
+        "five-times-encoded-prefix-token",
+        ".cargo/git/db/shared-1/config",
+        "[remote \"origin\"]\n\turl = https://github.example/%2525252567hp_0123456789abcdefghijklmnopqrstuvwxyzAB/shared-lib\n",
+    )]);
+}
+
+#[test]
 fn a_percent_escape_in_a_plain_remote_path_is_saved() {
     sources_save_goes_on(&[(
         "encoded-space-in-path",

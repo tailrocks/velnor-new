@@ -147,16 +147,16 @@ fn looks_like_token(text: &str) -> bool {
             .any(|run| run.len() >= TOKEN_HEX_LEN)
 }
 
-fn unescaped(segment: &str) -> String {
+fn unescaped(segment: &str) -> Option<String> {
     let mut current = segment.to_owned();
     for _ in 0..MAX_UNESCAPE_PASSES {
         let decoded = unescape_once(&current);
         if decoded == current {
-            break;
+            return Some(current);
         }
         current = decoded;
     }
-    current
+    None
 }
 
 fn unescape_once(text: &str) -> String {
@@ -188,7 +188,8 @@ fn plain_remote(url: &str) -> bool {
             let authority = segments.next().unwrap_or("");
             !authority.is_empty()
                 && !url.contains('?')
-                && !segments.any(|segment| looks_like_token(&unescaped(segment)))
+                && !segments
+                    .any(|segment| unescaped(segment).is_none_or(|text| looks_like_token(&text)))
                 && match authority.rsplit_once('@') {
                     None => true,
                     Some((userinfo, _)) => {
