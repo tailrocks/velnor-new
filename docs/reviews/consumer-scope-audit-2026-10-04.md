@@ -20,7 +20,7 @@ excluded SHAs, `owned-source/`, and `tailrocks/velnor-new@`. The full 31-needle
 R1 set also includes two generic Velnor URL literals, which match expected
 documentation, workflow, and manifest files. The union CSV's generic-path
 counts/classifications for the moved PR rows retain their prior-snapshot
-provenance; they are not current-head counts. Jackin inventory: 2,519 text and 116 binary files. Java monorepo
+provenance; they are not current-head counts. Jackin inventory: 2,519 text and 116 binary files. example-repo-2
 inventory: 7,007 text and 5,939 binary files. Binary counts are inventory
 evidence; they do not imply semantic text coverage of binary contents. See
 [the retirement-union refresh](consumer-retirement-union-2026-10-04.md) for
