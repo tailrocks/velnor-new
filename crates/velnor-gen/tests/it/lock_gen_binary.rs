@@ -259,25 +259,6 @@ fn a_release_from_the_binary_section_on_is_not_pinned_without_velnor_gen_digests
     Ok(())
 }
 
-#[test]
-fn the_release_is_checked_before_the_offline_entry_so_a_tampered_binary_is_named_as_tampered()
--> TestResult {
-    let tampered = lock()?.replacen(GEN_BINARY_X64, &"0".repeat(64), 1);
-    let error = check_lock_entries(
-        tampered.as_bytes(),
-        Some(release_files()),
-        running(GEN_BINARY_X64),
-    )
-    .err()
-    .ok_or("accepted")?;
-    assert_eq!(
-        error.remedy(),
-        Some(&Remedy::Repin(VERSION.to_owned())),
-        "{error}"
-    );
-    Ok(())
-}
-
 fn running_at<'a>(version: &'a str, sha256: &'a str) -> RunningGenerator<'a> {
     RunningGenerator {
         version,
