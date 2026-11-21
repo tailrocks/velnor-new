@@ -266,8 +266,7 @@ mod tests {
         let error = budget
             .reserve()
             .err()
-            .map(|e| e.to_string())
-            .unwrap_or_default();
+            .map_or_default(|e| e.to_string());
         assert!(error.contains("more than 10000000 entries"), "{error}");
         assert!(error.contains("reduced or split"), "{error}");
         assert!(!error.contains("raise"), "{error}");
@@ -280,8 +279,7 @@ mod tests {
         let error = budget
             .reserve()
             .err()
-            .map(|e| e.to_string())
-            .unwrap_or_default();
+            .map_or_default(|e| e.to_string());
         assert!(error.contains(MAX_ENTRIES_VARIABLE), "{error}");
         assert!(error.contains("raise it with"), "{error}");
     }

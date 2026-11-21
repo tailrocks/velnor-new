@@ -56,19 +56,13 @@ async fn a_docker_error_while_looking_for_the_fork_side_fails_the_authority_star
         Err(io::Error::other("daemon is down")),
     )
     .await;
-    let message = failed
-        .err()
-        .map(|error| error.to_string())
-        .unwrap_or_default();
+    let message = failed.err().map_or_default(|error| error.to_string());
     assert!(message.contains("daemon is down"), "{message}");
 }
 
 #[tokio::test]
 async fn a_fork_container_that_publishes_no_port_fails_the_authority_start() {
     let failed = open("runners-fork-stopped", Ok("abc123")).await;
-    let message = failed
-        .err()
-        .map(|error| error.to_string())
-        .unwrap_or_default();
+    let message = failed.err().map_or_default(|error| error.to_string());
     assert!(message.contains("no public port"), "{message}");
 }

@@ -150,7 +150,6 @@ where
     Cli::from_arg_matches(&matches)
 }
 
-#[must_use]
 pub fn main() -> ExitCode {
     if crates_mirror::is_wrapper() {
         return crates_mirror::run();
