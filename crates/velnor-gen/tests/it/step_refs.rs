@@ -26,6 +26,7 @@ use crate::yaml_tree::document;
 const SHARED_STORE_ON: &str = "mbx_shared_store = true\n";
 const CACHE_DEBUG_ON: &str = "cache_debug = true\n";
 const PR_ONLY_CHECKS_ON: &str = "pr_only_checks = [\"DCO\"]\n";
+const RELEASE_ASSETS_ON: &str = "[[release_assets]]\nrepo = 'acme/fixtures'\ntag = 'fixtures-2026.11.1'\nasset = 'dataset.tar.zst'\nsha256 = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'\ndest = 'tests/fixtures/dataset'\n";
 const RELEASE_BINARIES: &str = "[[binaries]]\npackage = \"app\"\n";
 const ARTIFACTS_ON: &str = "[[test_groups]]\nname = 'shell'\nfilter = 'binary(it) and test(~cargo_)'\nneeds = ['cargo']\nartifacts = [{ name = 'shell-failures', paths = ['junit.xml'], when = 'failure' }]\n";
 const TWO_GROUPS: &str = "[[test_groups]]\nname = 'database'\nroot = '.'\nfilter = 'package(package-0) and test(/^db_/)'\nneeds = ['docker']\ntest_threads = 2\ntimeout_minutes = 45\nrunner = 'velnor-box'\n[[test_groups]]\nname = 'shell'\nroot = '.'\nfilter = 'binary(it) and test(~cargo_)'\nneeds = ['cargo']\n";
@@ -46,6 +47,7 @@ enum Shape {
     Groups(&'static str),
     Private,
     PrivateBase,
+    PrivateAssets,
     Declared,
     Release(&'static str),
     Family,
@@ -128,6 +130,10 @@ fn documents(shape: Shape, helper: &str) -> Result<Vec<Value>, Box<dyn Error>> {
         }
         Shape::Groups(config) => view_with(&["Cargo.toml"], config, helper)?,
         Shape::Private => private_repo(&["Cargo.toml"], SECTION, helper)?,
+        Shape::PrivateAssets => {
+            let config = format!("{SECTION}{RELEASE_ASSETS_ON}");
+            private_repo(&["Cargo.toml"], &config, helper)?
+        }
         Shape::PrivateBase => {
             let mut repo = private_repo(&["Cargo.toml"], SECTION, helper)?;
             repo.files
@@ -187,65 +193,7 @@ fn sweep_job(
     Ok((checked, failures))
 }
 
-#[test]
-fn every_steps_reference_names_a_step_of_its_own_job() -> TestResult {
-    let scanned = gate_patches()?;
-    let newest = *scanned.last().ok_or("the gate scan found no helper")?;
-    let shared_store = gate_patch("mbx_shared_store")?;
-    let cache_debug = gate_patch("cache_debug")?;
-    let test_groups = gate_patch("test_groups")?;
-    let artifacts = gate_patch("test_groups.artifacts")?;
-    let private_sources = gate_patch("private_sources")?;
-    let family = family_first()?;
-    for gate in [
-        velnor_gen::HELPER_MINIMUM.2,
-        shared_store,
-        cache_debug,
-        test_groups,
-        artifacts,
-        private_sources,
-        PRIVATE_BASE_MINIMUM,
-        PR_ONLY_CHECKS_MINIMUM,
-    ] {
-        assert!(
-            scanned.contains(&gate),
-            "gate scan found {scanned:?}, which misses the gate at 0.1.{gate}"
-        );
-    }
-    let mut work: Vec<(u64, Shape)> = Vec::new();
-    for &patch in &scanned {
-        work.push((patch, Shape::Rust(None)));
-        if patch >= shared_store {
-            work.push((patch, Shape::Rust(Some(SHARED_STORE_ON))));
-        }
-        if patch >= cache_debug {
-            work.push((patch, Shape::Rust(Some(CACHE_DEBUG_ON))));
-        }
-        if patch >= test_groups {
-            work.push((patch, Shape::Groups(TWO_GROUPS)));
-        }
-        if patch >= artifacts {
-            work.push((patch, Shape::Groups(ARTIFACTS_ON)));
-        }
-        if patch >= private_sources {
-            work.push((patch, Shape::Private));
-        }
-        if patch >= PRIVATE_BASE_MINIMUM {
-            work.push((patch, Shape::PrivateBase));
-        }
-        if patch >= velnor_gen::HELPER_MINIMUM.2 {
-            work.push((patch, Shape::Declared));
-        }
-        if patch >= PR_ONLY_CHECKS_MINIMUM {
-            work.push((patch, Shape::Release(PR_ONLY_CHECKS_ON)));
-        }
-        if patch >= velnor_gen::HELPER_MINIMUM.2 {
-            work.push((patch, Shape::Release(RELEASE_BINARIES)));
-        }
-    }
-    for patch in family..=newest {
-        work.push((patch, Shape::Family));
-    }
+fn run_sweep(work: &[(u64, Shape)]) -> Result<(usize, Vec<String>), Box<dyn Error>> {
     let seen = Mutex::new(HashSet::new());
     let next = AtomicUsize::new(0);
     let workers = thread::available_parallelism()
@@ -284,6 +232,74 @@ fn every_steps_reference_names_a_step_of_its_own_job() -> TestResult {
         refs += checked;
         failures.extend(found);
     }
+    Ok((refs, failures))
+}
+
+#[test]
+fn every_steps_reference_names_a_step_of_its_own_job() -> TestResult {
+    let scanned = gate_patches()?;
+    let newest = *scanned.last().ok_or("the gate scan found no helper")?;
+    let shared_store = gate_patch("mbx_shared_store")?;
+    let cache_debug = gate_patch("cache_debug")?;
+    let test_groups = gate_patch("test_groups")?;
+    let artifacts = gate_patch("test_groups.artifacts")?;
+    let private_sources = gate_patch("private_sources")?;
+    let release_assets = gate_patch("release_assets")?;
+    let family = family_first()?;
+    for gate in [
+        velnor_gen::HELPER_MINIMUM.2,
+        shared_store,
+        cache_debug,
+        test_groups,
+        artifacts,
+        private_sources,
+        release_assets,
+        PRIVATE_BASE_MINIMUM,
+        PR_ONLY_CHECKS_MINIMUM,
+    ] {
+        assert!(
+            scanned.contains(&gate),
+            "gate scan found {scanned:?}, which misses the gate at 0.1.{gate}"
+        );
+    }
+    let mut work: Vec<(u64, Shape)> = Vec::new();
+    for &patch in &scanned {
+        work.push((patch, Shape::Rust(None)));
+        if patch >= shared_store {
+            work.push((patch, Shape::Rust(Some(SHARED_STORE_ON))));
+        }
+        if patch >= cache_debug {
+            work.push((patch, Shape::Rust(Some(CACHE_DEBUG_ON))));
+        }
+        if patch >= test_groups {
+            work.push((patch, Shape::Groups(TWO_GROUPS)));
+        }
+        if patch >= artifacts {
+            work.push((patch, Shape::Groups(ARTIFACTS_ON)));
+        }
+        if patch >= private_sources {
+            work.push((patch, Shape::Private));
+        }
+        if patch >= release_assets {
+            work.push((patch, Shape::PrivateAssets));
+        }
+        if patch >= PRIVATE_BASE_MINIMUM {
+            work.push((patch, Shape::PrivateBase));
+        }
+        if patch >= velnor_gen::HELPER_MINIMUM.2 {
+            work.push((patch, Shape::Declared));
+        }
+        if patch >= PR_ONLY_CHECKS_MINIMUM {
+            work.push((patch, Shape::Release(PR_ONLY_CHECKS_ON)));
+        }
+        if patch >= velnor_gen::HELPER_MINIMUM.2 {
+            work.push((patch, Shape::Release(RELEASE_BINARIES)));
+        }
+    }
+    for patch in family..=newest {
+        work.push((patch, Shape::Family));
+    }
+    let (refs, mut failures) = run_sweep(&work)?;
     failures.sort();
     assert!(failures.is_empty(), "{failures:#?}");
     assert_ne!(refs, 0, "no steps reference was checked");
