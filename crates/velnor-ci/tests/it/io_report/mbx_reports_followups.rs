@@ -23,14 +23,12 @@ fn markers(repo: &super::Repo) -> usize {
 }
 
 fn reports(repo: &super::Repo) -> Vec<String> {
-    fs::read_dir(repo.root().join("velnor-mbx-reports"))
-        .map(|entries| {
-            entries
-                .flatten()
-                .map(|entry| entry.file_name().to_string_lossy().into_owned())
-                .collect()
-        })
-        .unwrap_or_default()
+    fs::read_dir(repo.root().join("velnor-mbx-reports")).map_or(Vec::new(), |entries| {
+        entries
+            .flatten()
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .collect()
+    })
 }
 
 #[test]
