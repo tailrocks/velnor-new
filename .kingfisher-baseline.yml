@@ -1836,3 +1836,15 @@ repositories:
     line: 556
     first_seen_at: 2026-10-22T00:00:00+00:00
     last_updated_at: 2026-10-22T00:00:00+00:00
+  - path: crates/velnor-ci/tests/it/data/app_token/TEST-ONLY-not-a-secret-rsa-pkcs1.pem
+    fingerprint: '11415942262482910993'
+    rule_id: betterleaks.private-key
+    line: 1
+    first_seen_at: 2026-11-20T23:04:26.627003+00:00
+    last_updated_at: 2026-11-20T23:04:26.627003+00:00
+  - path: crates/velnor-ci/tests/it/data/app_token/TEST-ONLY-not-a-secret-rsa-pkcs8.pem
+    fingerprint: '16506025047878417893'
+    rule_id: betterleaks.private-key
+    line: 1
+    first_seen_at: 2026-11-20T23:04:26.627003+00:00
+    last_updated_at: 2026-11-20T23:04:26.627003+00:00
