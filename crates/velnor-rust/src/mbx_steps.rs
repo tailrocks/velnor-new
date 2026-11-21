@@ -8,6 +8,7 @@ use crate::plan::step;
 
 // helper-gate: first in tools-v0.1.111 via 534aa8684b
 pub(crate) const MBX_OUT_DIR_HELPER: (u64, u64, u64) = (0, 1, 111);
+const MBX_COMPILING_ONLY_HELPER: (u64, u64, u64) = (0, 1, 112);
 // helper-gate: first in tools-v0.1.111 via 351e1f2a59
 const MBX_REPORTS_HELPER: (u64, u64, u64) = (0, 1, 111);
 const MBX_REPORTS_RELEASE: (u64, u64, u64) = (1, 30, 0);
@@ -24,6 +25,10 @@ pub(crate) fn apply(facts: &RepoFacts, jobs: &mut [Job]) {
         .helper
         .as_ref()
         .is_some_and(|helper| helper.version().at_least(MBX_OUT_DIR_HELPER));
+    let compiling_only = facts
+        .helper
+        .as_ref()
+        .is_some_and(|helper| helper.version().at_least(MBX_COMPILING_ONLY_HELPER));
     let stats = if facts.config.mbx.routed()
         && facts
             .helper
@@ -37,6 +42,12 @@ pub(crate) fn apply(facts: &RepoFacts, jobs: &mut [Job]) {
     };
     for job in jobs {
         if !compiles(job) {
+            if compiling_only {
+                job.steps.retain(|step| !is_shared_store_step(&step.kind));
+                if facts.config.mbx.routed() {
+                    insert(job, &[StepKind::MbxPrivate], After::Helper);
+                }
+            }
             continue;
         }
         job.mbx_stats = stats;
@@ -89,6 +100,13 @@ fn pinned_before_reports(facts: &RepoFacts) -> bool {
 enum After {
     Tools,
     Helper,
+}
+
+fn is_shared_store_step(kind: &StepKind) -> bool {
+    matches!(
+        kind,
+        StepKind::MbxStore | StepKind::MbxSeed | StepKind::MbxOutDirs
+    )
 }
 
 fn compiles(job: &Job) -> bool {
