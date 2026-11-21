@@ -278,6 +278,31 @@ fn a_root_without_a_test_command_still_gets_the_check_in_a_compiling_job() -> Te
 }
 
 #[test]
+fn a_compiling_step_after_a_testless_roots_check_waits_for_the_check() -> TestResult {
+    let mut view = tracked(KEY, NEXT)?;
+    for metadata in view.rust_metadata.values_mut() {
+        for member in &mut metadata.members {
+            for target in &mut member.targets {
+                target.tests = false;
+            }
+        }
+    }
+    let jobs = document(&workflow(&view)?)?["jobs"].clone();
+    let steps = found(&jobs);
+    assert_eq!(steps.len(), 1, "{steps:?}");
+    let (id, index, _, _) = &steps[0];
+    let after = &jobs[id.as_str()]["steps"][index + 1];
+    assert!(
+        after["if"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("outcome != 'failure'"),
+        "{id}: {after}"
+    );
+    Ok(())
+}
+
+#[test]
 fn a_configurations_path_that_is_a_submodule_is_refused_like_a_symlink() -> TestResult {
     let mut view = tracked(KEY, NEXT)?;
     view.gitlinks

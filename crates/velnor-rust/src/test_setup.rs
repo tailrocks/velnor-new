@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    CargoCommand, RepoFacts, RepoPath, RustRoot, SetupOrder, Step, StepKind, TestSetup,
+    CargoCommand, RepoFacts, RepoPath, RustRoot, SetupOrder, SetupPhase, Step, StepKind, TestSetup,
     WorkspaceGroup,
 };
 
@@ -206,7 +206,7 @@ fn checked(
                     root: check.root.clone(),
                     name: "velnor-ci check-configurations".to_owned(),
                     run: check.command(),
-                    phase: None,
+                    phase: matches!(placement, Placement::Untested).then_some(SetupPhase::Build),
                 },
                 when,
                 pr,
