@@ -26,6 +26,7 @@ const GIT_TEXT: &[&str] = &["fetch_head", "packed-refs"];
 const HOOKS: &str = "hooks";
 const LOGS: &str = "logs";
 const MODULES: &str = "modules";
+const REFS: &str = "refs";
 const MAX_CONFIG_BYTES: u64 = 1 << 20;
 const MAX_DEPTH: usize = 12;
 const MAX_ENTRIES: usize = 2_000_000;
@@ -52,6 +53,7 @@ impl Zone {
             Self::Repository | Self::Module if is(HOOKS) => Self::Hooks,
             Self::Repository | Self::Module if is(LOGS) => Self::Logs,
             Self::Repository | Self::Modules | Self::Module if is(MODULES) => Self::Modules,
+            Self::Module if is(REFS) => Self::Plain,
             Self::Modules | Self::Module => Self::Module,
             Self::Repository => Self::Plain,
             other => other,
