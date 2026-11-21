@@ -95,23 +95,6 @@ fn the_archive_digest_is_not_the_digest_of_the_binary() -> TestResult {
 }
 
 #[test]
-fn a_replaced_binary_is_reinstalled_once_the_release_verifies() -> TestResult {
-    let error = check_lock_entries(
-        lock()?.as_bytes(),
-        Some(release_files()),
-        running(GEN_ARCHIVE_X64),
-    )
-    .err()
-    .ok_or("accepted the archive digest as the binary's")?;
-    assert_eq!(
-        error.remedy(),
-        Some(&Remedy::Reinstall(VERSION.to_owned())),
-        "{error}"
-    );
-    Ok(())
-}
-
-#[test]
 fn a_tampered_binary_digest_is_refused_online_and_named() -> TestResult {
     let tampered = lock()?.replacen(GEN_BINARY_X64, &"0".repeat(64), 1);
     let error = verify_release(
@@ -295,25 +278,53 @@ fn the_release_is_checked_before_the_offline_entry_so_a_tampered_binary_is_named
     Ok(())
 }
 
+fn running_at<'a>(version: &'a str, sha256: &'a str) -> RunningGenerator<'a> {
+    RunningGenerator {
+        version,
+        ..running(sha256)
+    }
+}
+
 #[test]
-fn a_repin_names_the_version_of_the_lock_it_repairs() -> TestResult {
+fn each_refusal_names_the_remedy_for_the_lock_it_repairs() -> TestResult {
     let later = "0.1.112";
     let tampered = lock_at(later)?.replacen(GEN_BINARY_X64, &"0".repeat(64), 1);
     let missing = without_binary_section(&lock_at(later)?);
     let cases = [
-        ("online, tampered digest", tampered, Some(release_files())),
-        ("offline, missing section", missing.clone(), None),
-        ("online, missing section", missing, Some(release_files())),
+        (
+            "online, tampered digest",
+            tampered,
+            Some(release_files()),
+            running_at(later, GEN_BINARY_X64),
+            Remedy::Repin(later.to_owned()),
+        ),
+        (
+            "offline, missing section",
+            missing.clone(),
+            None,
+            running_at(later, GEN_BINARY_X64),
+            Remedy::Repin(later.to_owned()),
+        ),
+        (
+            "online, missing section",
+            missing,
+            Some(release_files()),
+            running_at(later, GEN_BINARY_X64),
+            Remedy::Repin(later.to_owned()),
+        ),
+        (
+            "online, replaced binary",
+            lock()?,
+            Some(release_files()),
+            running(GEN_ARCHIVE_X64),
+            Remedy::Reinstall(VERSION.to_owned()),
+        ),
     ];
-    for (case, bytes, release) in cases {
-        let error = check_lock_entries(bytes.as_bytes(), release, running(GEN_BINARY_X64))
+    for (case, bytes, release, running, remedy) in cases {
+        let error = check_lock_entries(bytes.as_bytes(), release, running)
             .err()
             .ok_or(case)?;
-        assert_eq!(
-            error.remedy(),
-            Some(&Remedy::Repin(later.to_owned())),
-            "{case}: {error}"
-        );
+        assert_eq!(error.remedy(), Some(&remedy), "{case}: {error}");
     }
     Ok(())
 }
