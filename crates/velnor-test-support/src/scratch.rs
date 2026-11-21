@@ -18,7 +18,7 @@ pub struct ScratchDir {
 impl ScratchDir {
     #[must_use]
     pub fn new(path: PathBuf) -> Self {
-        remove_tree(&path).unwrap_or_else(|e| panic!("cannot clear {}: {e}", path.display()));
+        remove_tree(&path).unwrap_or_else(|e| unreachable!("cannot clear {}: {e}", path.display()));
         fs::create_dir_all(&path).unwrap_or_else(|e| unreachable!("{e}"));
         Self { path }
     }
