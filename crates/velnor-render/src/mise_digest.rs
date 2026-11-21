@@ -133,7 +133,7 @@ pub(crate) fn pin_to_runner_platform(mut job: RenderedJob) -> RenderedJob {
 }
 
 fn runner_digest(job: &RenderedJob) -> Option<&'static str> {
-    if job.runs_on_axis.is_some() || job.fork_runner.is_some() || job.trusted_runner.is_some() {
+    if job.runs_on_axis.is_some() || job.fork_runner.is_some() {
         return None;
     }
     let platform = plain_label_platform(&job.runs_on)?;

@@ -19,11 +19,13 @@ to a job on a runner declared GitHub-hosted (`hosted = true`, or the default
 `ubuntu-latest`). A self-hosted pool is fenced (`hosted = false`) and gets the
 run-time selection, which has no Linux row, so a musl pool behind an `ubuntu-*`
 label keeps the action's signed-archive check and downloads its own binary. A
-self-hosted pool whose label is spelled like a GitHub-hosted one (`ubuntu-*`)
-therefore has to say `hosted = false`; that key is required only for such a
-spelling. Declaring it `hosted = true` claims a GitHub-hosted glibc runner. A
-`trusted_runner` pool is always self-hosted and never gets the literal. The design
-and the bump procedure are in [docs/rust-ci.md](../rust-ci.md#the-mise-binary-is-pinned-by-sha-256).
+label on the GitHub-hosted list (`looks_github_hosted` in
+`crates/velnor-model/src/ids.rs`, such as `ubuntu-24.04`) must be declared with
+`hosted`: a self-hosted pool on one of those labels has to say `hosted = false`,
+or the configuration is refused. Any other label, such as `ubuntu-26.04-scale-set`,
+is fenced without the key. Declaring a listed label `hosted = true` claims a
+GitHub-hosted glibc runner. A `trusted_runner` pool is always self-hosted and never
+gets the literal. The design and the bump procedure are in [docs/rust-ci.md](../rust-ci.md#the-mise-binary-is-pinned-by-sha-256).
 
 | `runner.os`-`runner.arch` | Official raw executable | SHA-256 |
 | --- | --- | --- |
