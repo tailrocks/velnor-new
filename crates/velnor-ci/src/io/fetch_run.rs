@@ -31,8 +31,7 @@ pub(super) fn run_fetches(
             let cargo_home = environment
                 .iter()
                 .find(|(name, _)| name == "CARGO_HOME")
-                .map(|(_, home)| PathBuf::from(home))
-                .unwrap_or_default();
+                .map_or_default(|(_, home)| PathBuf::from(home));
             let checkout = directory.unwrap_or(Path::new("."));
             let absolute = std::fs::canonicalize(manifest)
                 .or_else(|_| std::path::absolute(manifest))
