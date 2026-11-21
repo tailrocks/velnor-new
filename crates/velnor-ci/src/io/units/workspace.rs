@@ -25,9 +25,17 @@ pub(in crate::io) fn build_unit_files(
     workspaces: &[Workspace],
     directory: &Path,
 ) -> Result<Vec<(UnitFile, PathBuf)>, CiError> {
-    if workspaces.iter().any(|workspace| {
-        workspace.target_directory == directory && workspace.build_directory == directory
-    }) {
+    let touching: Vec<&Workspace> = workspaces
+        .iter()
+        .filter(|workspace| {
+            workspace.target_directory == directory || workspace.build_directory == directory
+        })
+        .collect();
+    let plain = !touching.is_empty()
+        && touching.iter().all(|workspace| {
+            workspace.target_directory == directory && workspace.build_directory == directory
+        });
+    if plain {
         return unit_files(directory);
     }
     unchecked_unit_files(directory)

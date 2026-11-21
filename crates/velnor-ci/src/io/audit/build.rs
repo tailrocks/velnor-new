@@ -17,7 +17,7 @@ use velnor_gen::io::read_checkout;
 use velnor_model::RepoFacts;
 use velnor_rust::{detect, sha256_hex};
 
-use super::super::units::{UnitFile, Workspace, apart, build_unit_files};
+use super::super::units::{UnitFile, Workspace, apart, build_unit_files, unchecked_unit_files};
 use super::groups::{group_dirs, inheriting, scan_dirs, shared_groups, standalone, workspaces};
 use super::inventory::{self, Evidence};
 use super::options::max_entries_from_env;
@@ -321,7 +321,14 @@ impl Builder<'_> {
                     .and_then(|()| fs::write(&saved, &bytes))
                     .map_err(|e| CiError::new(format!("cannot save input inventory: {e}")))?;
             }
-            for (unit, file) in build_unit_files(&self.workspaces, directory)? {
+            // A failed command may leave partial output that the strict scan
+            // refuses; cleanup must still run so the real exit status is reported.
+            let units = if status.success() {
+                build_unit_files(&self.workspaces, directory)?
+            } else {
+                unchecked_unit_files(directory)?
+            };
+            for (unit, file) in units {
                 if !output(&unit) {
                     continue;
                 }
