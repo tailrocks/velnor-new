@@ -18,7 +18,7 @@ fn grouped_tools() -> Repo {
 
 fn grouped_tools_in(repo: Repo) -> Repo {
     unit(&repo, ".gitignore", "target/\ntarget-velnor/\n");
-    unit(&repo, "mise.toml", "[tools]\nrust = \"1.100.0\"\n");
+    unit(&repo, "mise.toml", &crate::toolchain::mise_rust_pin());
     unit(
         &repo,
         ".velnor/rust-ci.toml",
