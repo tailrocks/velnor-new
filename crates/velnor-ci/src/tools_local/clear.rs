@@ -27,7 +27,7 @@ fn present(home: &Path, relative: &str) -> Result<bool, &'static str> {
     Ok(true)
 }
 
-pub(super) fn clear_home(home: &Path) -> Result<(), &'static str> {
+pub(super) fn check_home(home: &Path) -> Result<PathBuf, &'static str> {
     let home: PathBuf = home.components().collect();
     let linked =
         fs::symlink_metadata(&home).map_or(true, |metadata| metadata.file_type().is_symlink());
@@ -37,6 +37,11 @@ pub(super) fn clear_home(home: &Path) -> Result<(), &'static str> {
     {
         return Err(UNSAFE_HOME);
     }
+    Ok(home)
+}
+
+pub(super) fn clear_home(home: &Path) -> Result<(), &'static str> {
+    let home = check_home(home)?;
     let mut owned = Vec::new();
     for path in HOME_PATHS {
         if present(&home, path)? {

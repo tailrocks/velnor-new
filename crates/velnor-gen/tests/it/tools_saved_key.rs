@@ -92,7 +92,7 @@ fn the_tools_save_exposes_its_recorded_key_and_the_report_reads_it_from_helper_0
                 "{config:?} {id}: {record}"
             );
             assert_eq!(
-                record["if"], "${{ steps.save_tools.outcome == 'success' }}",
+                record["if"], "${{ !cancelled() && steps.save_tools.outcome != 'skipped' }}",
                 "{config:?} {id}"
             );
             assert!(
@@ -110,16 +110,18 @@ fn the_tools_save_exposes_its_recorded_key_and_the_report_reads_it_from_helper_0
 
 #[test]
 fn an_older_helper_gets_no_saved_key_step_and_no_report_field() -> TestResult {
-    for config in STORES.iter().copied() {
-        let jobs = saving_jobs(config, "0.1.110")?;
-        assert_ne!(jobs.len(), 0, "{config:?}: no job saves the tools");
-        for job in jobs {
-            assert!(job.records.is_empty(), "{config:?} {}", job.id);
-            assert!(
-                job.report_plan.get("save_key_step").is_none(),
-                "{config:?} {}",
-                job.id
-            );
+    for helper in ["0.1.110", "0.1.111"] {
+        for config in STORES.iter().copied() {
+            let jobs = saving_jobs(config, helper)?;
+            assert_ne!(jobs.len(), 0, "{config:?} {helper}: no job saves the tools");
+            for job in jobs {
+                assert!(job.records.is_empty(), "{config:?} {helper} {}", job.id);
+                assert!(
+                    job.report_plan.get("save_key_step").is_none(),
+                    "{config:?} {helper} {}",
+                    job.id
+                );
+            }
         }
     }
     Ok(())

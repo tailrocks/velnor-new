@@ -6,8 +6,8 @@ use std::collections::BTreeMap;
 use velnor_model::{
     Access, BuildRecord, CacheDebug, CacheKey, CargoCommand, Concurrency, Gate, HelperCommand,
     Host, Job, JobId, MbxStore, PackageName, PermissionScope, Permissions, PrCi, PrRun,
-    PrepareLocks, PushAfterMergeGroup, RepoFacts, RootSlug, RustRoot, Step, StepKind, TargetName,
-    Toolchain, When, WorkflowPlan,
+    PrepareLocks, PushAfterMergeGroup, RepoFacts, RootSlug, RustRoot, SetupOrder, Step, StepKind,
+    TargetName, Toolchain, When, WorkflowPlan,
 };
 
 use crate::audit_job::audit_job;
@@ -121,7 +121,7 @@ fn apply_extensions(facts: &RepoFacts, jobs: &mut [Job], single: bool) {
     crate::lock_scope::apply(facts, jobs);
     crate::mbx_steps::apply(facts, jobs);
     if facts.config.push_after_merge_group == PushAfterMergeGroup::SkipWhenQueueRunPassed {
-        crate::merge_group_skip::apply(jobs, single, crate::lane::lane_job_fixes(facts), &|kind| {
+        crate::merge_group_skip::apply(facts, jobs, single, &|kind| {
             crate::docs_post_merge::runs_after_merge(facts, kind)
         });
     }
@@ -150,7 +150,8 @@ fn helper_job(facts: &RepoFacts, root: &RustRoot, deltas: bool) -> Job {
             binary: TargetName::from_static(HELPER_PACKAGE),
         }))
     });
-    let steps = crate::test_setup::before_builds(facts, root, steps);
+    let mut steps = crate::test_setup::before_builds(facts, root, steps);
+    crate::test_setup::gate_job(&mut steps);
     Job {
         needs: vec![PLAN_JOB],
         gate: lane.job(),
@@ -379,5 +380,6 @@ pub(crate) fn step(kind: StepKind) -> Step {
         any_gate: Vec::new(),
         reads: None,
         hosted_only: false,
+        setup_order: SetupOrder::Unordered,
     }
 }
