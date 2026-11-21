@@ -12,6 +12,8 @@ use std::process::Output;
 
 const RECORD_RUN_DESTINATION: &str = "p=; for a in \"$@\"; do [ \"$p\" = --extract-to ] && printf '%s' \"$a\" > \"$RUNNER_TEMP/run-extract\"; case $a in --extract-to=*) printf '%s' \"${a#--extract-to=}\" > \"$RUNNER_TEMP/run-extract\";; esac; p=$a; done\n";
 const WAIT_FOR_LIST: &str = "i=0\nwhile [ ! -f \"$RUNNER_TEMP/list-argv\" ] && [ $i -lt 40 ]; do sleep 0.05; i=$((i+1)); done\n";
+const REQUIRE_ARCHIVE_FOR_EXTRACT: &str = "case \" $* \" in *\" --extract-to \"*|*\" --extract-to=\"*) case \" $* \" in *\" --archive-file \"*|*\" --archive-file=\"*) ;; *) echo 'error: the following required arguments were not provided: --archive-file' >&2; exit 2;; esac;; esac\n";
+const REPLACE_DESTINATION_WITH_FILE: &str = "p=; for a in \"$@\"; do [ \"$p\" = --extract-to ] && { rm -rf \"$a\"; : > \"$a\"; }; p=$a; done\n";
 const RUN_BODY: &str = "echo '    Starting 1 tests across 1 binary' >&2\n";
 const RUN_END: &str = "echo '        PASS [   0.012s] (1/1) kept alpha' >&2\necho '     Summary [   0.012s] 1 test run: 1 passed, 0 skipped' >&2\n";
 const NEXTEST_TMPDIR_USE: &str = "case \" $* \" in *\" --extract-to \"*) ;; *) mktemp -d \"$TMPDIR/nextest.XXXXXX\" > /dev/null || { echo 'Error: [double-spawn] failed: Permission denied (os error 13)' >&2; exit 104; };; esac\n";
@@ -28,7 +30,7 @@ struct Scenario {
 impl Scenario {
     fn listing(json: &str) -> Self {
         let list = format!(
-            "printf '%s\\n' \"$@\" > \"$RUNNER_TEMP/list-argv\"\n\
+            "{REQUIRE_ARCHIVE_FOR_EXTRACT}printf '%s\\n' \"$@\" > \"$RUNNER_TEMP/list-argv\"\n\
 p=; for a in \"$@\"; do d=; [ \"$p\" = --extract-to ] && d=$a; [ -n \"$d\" ] && [ -d \"$d\" ] && : > \"$RUNNER_TEMP/list-dest-existed\"; p=$a; done\n\
 printf '%s\\n' '{json}'\nexit 0"
         );
@@ -215,30 +217,35 @@ fn the_early_list_does_not_extract_into_an_unusable_tmpdir() {
 }
 
 #[test]
-fn an_archive_named_by_the_environment_is_extracted_into_its_own_directory() {
+fn nextest_archive_file_in_the_environment_does_not_change_a_source_run_list() {
     let mut scenario = Scenario::listing(&listed(&[("kept", &["alpha"])]));
     scenario.archive_env = Some("a.tar.zst");
     let command = ["cargo-nextest", "nextest", "run", "--no-tests=pass"].map(str::to_owned);
-    let (output, written, temp) = scenario.execute("tests-run-extract-env", &command, None);
+    let (output, written, temp) = scenario.execute("tests-run-extract-env-ignored", &command, None);
+    assert!(output.status.success(), "{output:?}");
+    assert!(written.contains("tests_by_package=kept=1/1"), "{written}");
+    assert!(written.contains("tests_listed=1"), "{written}");
+    assert_eq!(extract_to(&list_args(&temp)), None);
+    assert!(!String::from_utf8_lossy(&output.stderr).contains("early nextest list failed"));
+}
+
+#[test]
+fn a_list_directory_that_cannot_be_removed_is_reported_with_its_path() {
+    let mut scenario = Scenario::listing(&listed(&[("kept", &["alpha"])]));
+    scenario.list = format!("{REPLACE_DESTINATION_WITH_FILE}{}", scenario.list);
+    let (output, written, temp) =
+        scenario.execute("tests-run-extract-cleanup", &archive_run(&[]), None);
     assert!(output.status.success(), "{output:?}");
     assert!(written.contains("tests_by_package=kept=1/1"), "{written}");
     let args = list_args(&temp);
     let value = extract_to(&args).unwrap_or_else(|| unreachable!("{args:?}"));
-    assert!(Path::new(&value).starts_with(&temp), "{value}");
-    assert!(temp.join("list-dest-existed").exists());
-}
-
-#[test]
-fn an_archive_named_by_the_environment_is_admitted_by_its_size() {
-    let mut scenario = Scenario::listing(&listed(&[("kept", &["alpha"])]));
-    scenario.archive_env = Some("a.tar.zst");
-    let command = ["cargo-nextest", "nextest", "run", "--no-tests=pass"].map(str::to_owned);
-    let (output, written, temp) =
-        scenario.execute("tests-run-extract-env-big", &command, Some(1 << 42));
-    assert!(output.status.success(), "{output:?}");
-    assert_withheld(&written);
-    assert!(!temp.join("list-argv").exists(), "the list ran anyway");
-    assert!(String::from_utf8_lossy(&output.stderr).contains("bytes free"));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains(&format!(
+            "velnor-ci: cannot remove the early nextest list directory {value}:"
+        )),
+        "{stderr}"
+    );
 }
 
 #[test]

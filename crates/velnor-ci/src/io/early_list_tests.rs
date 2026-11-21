@@ -32,10 +32,7 @@ fn archive_run(program: &Path) -> Vec<String> {
 }
 
 fn environment(runner_temp: Option<OsString>) -> Environment {
-    Environment {
-        runner_temp,
-        archive_file: None,
-    }
+    Environment { runner_temp }
 }
 
 fn report(result: Result<Listing, Failure>) -> String {
@@ -150,28 +147,6 @@ fn a_destination_that_does_not_allow_execution_is_reported_before_the_list_start
     );
     assert!(
         message.contains(&directory.display().to_string()),
-        "{message}"
-    );
-    fs::remove_dir_all(&directory).unwrap_or_else(|e| unreachable!("{e}"));
-}
-
-#[test]
-fn an_archive_named_only_by_the_environment_is_admitted_by_its_size() {
-    let directory = scratch("env-archive");
-    let archive = directory.join("a.tar.zst");
-    fs::write(&archive, vec![0u8; 100]).unwrap_or_else(|e| unreachable!("{e}"));
-    let run = ["/nonexistent/cargo-nextest", "nextest", "run"].map(str::to_owned);
-    let message = report(try_list(
-        &run,
-        &Environment {
-            runner_temp: Some(OsString::from(&directory)),
-            archive_file: Some(archive.display().to_string()),
-        },
-        &|_| Ok(true),
-        &|_| Ok(799),
-    ));
-    assert!(
-        message.contains("bytes free, but the extraction may need 800"),
         "{message}"
     );
     fs::remove_dir_all(&directory).unwrap_or_else(|e| unreachable!("{e}"));

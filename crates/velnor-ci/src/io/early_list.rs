@@ -25,8 +25,6 @@ fn widen<T: Into<u64>>(value: T) -> u64 {
     value.into()
 }
 
-const ARCHIVE_VARIABLE: &str = "NEXTEST_ARCHIVE_FILE";
-
 const STEP_FILE_VARIABLES: &[&str] = &[
     "GITHUB_OUTPUT",
     "GITHUB_ENV",
@@ -91,7 +89,6 @@ fn list_matches(argv: &[String]) -> Option<Listing> {
         argv,
         &Environment {
             runner_temp: std::env::var_os("RUNNER_TEMP"),
-            archive_file: std::env::var(ARCHIVE_VARIABLE).ok(),
         },
         &can_execute_from,
         &free_bytes,
@@ -125,7 +122,6 @@ impl Failure {
 
 struct Environment {
     runner_temp: Option<OsString>,
-    archive_file: Option<String>,
 }
 
 fn try_list(
@@ -136,7 +132,7 @@ fn try_list(
 ) -> Result<Listing, Failure> {
     let mut argv =
         list_argv(argv).ok_or_else(|| Failure::new("the command is not a nextest run"))?;
-    let archive = archive_file(&argv, environment.archive_file.as_deref());
+    let archive = archive_file(&argv);
     let directory = if let Some(archive) = archive {
         Some(
             extraction_directory(
@@ -222,7 +218,7 @@ fn admit(archive: &str, directory: &Path, free: &FreeProbe) -> Result<(), String
     Ok(())
 }
 
-fn archive_file(argv: &[String], environment: Option<&str>) -> Option<String> {
+fn archive_file(argv: &[String]) -> Option<String> {
     let end = argv
         .iter()
         .position(|arg| arg == "--")
@@ -236,7 +232,6 @@ fn archive_file(argv: &[String], environment: Option<&str>) -> Option<String> {
             }
             arg.strip_prefix("--archive-file=")
         })
-        .or_else(|| environment.filter(|value| !value.is_empty()))
         .map(str::to_owned)
 }
 

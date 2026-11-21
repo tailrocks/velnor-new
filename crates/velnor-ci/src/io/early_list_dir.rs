@@ -73,7 +73,14 @@ impl ListDir {
 
 impl Drop for ListDir {
     fn drop(&mut self) {
-        drop(fs::remove_dir_all(&self.0));
+        match fs::remove_dir_all(&self.0) {
+            Ok(()) => {}
+            Err(error) if error.kind() == ErrorKind::NotFound => {}
+            Err(error) => eprintln!(
+                "velnor-ci: cannot remove the early nextest list directory {}: {error}; the extracted archive stays on disk",
+                self.0.display()
+            ),
+        }
     }
 }
 
