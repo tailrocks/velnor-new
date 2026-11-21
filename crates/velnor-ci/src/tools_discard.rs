@@ -2,11 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::error::CiError;
 
 const MARK: &str = "velnor-tools-discarded";
+
+#[must_use]
+pub fn runner_temp(raw: Option<String>) -> Option<PathBuf> {
+    raw.map(PathBuf::from).filter(|path| path.is_absolute())
+}
 
 pub fn mark(runner_temp: &Path) -> Result<(), CiError> {
     let path = runner_temp.join(MARK);

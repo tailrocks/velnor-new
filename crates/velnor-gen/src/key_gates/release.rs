@@ -3,7 +3,7 @@
 
 //! Every key `.velnor/release.toml` accepts, with the first `velnor-ci` that parses it.
 
-use super::{ConfigFile::Release, KeyGate, gate};
+use super::{ConfigFile::Release, KeyGate, gate, gate_filled};
 use crate::HELPER_MINIMUM;
 
 pub(super) const RELEASE: &[KeyGate] = &[
@@ -70,6 +70,7 @@ pub(super) const RELEASE: &[KeyGate] = &[
     gate(Release, "family_tag", (0, 1, 85)),
     // helper-gate: first in tools-v0.1.98 via 29d96c9839
     gate(Release, "family_trigger", (0, 1, 98)),
-    gate(Release, "pr_only_checks", HELPER_MINIMUM),
+    // helper-gate: first in rust-ci-v0.1.82 via 41e7beb8c3
+    gate_filled(Release, "pr_only_checks", (0, 1, 82)),
     gate(Release, "roots", HELPER_MINIMUM),
 ];

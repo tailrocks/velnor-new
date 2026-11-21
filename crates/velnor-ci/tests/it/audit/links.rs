@@ -1,9 +1,14 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fs;
+use std::fs::{self, File};
+use std::os::fd::OwnedFd;
 use std::os::unix::fs::symlink;
 use std::time::{Duration, UNIX_EPOCH};
+
+use nix::fcntl::{OFlag, openat};
+use nix::sys::stat::{Mode, mkdirat};
+use nix::unistd::symlinkat;
 
 use super::{audit, inventory::build, own_units, unit, workspace_below_the_root};
 use crate::io::Repo;
@@ -266,4 +271,28 @@ fn a_live_link_with_parent_components_cannot_disguise_source_as_target() {
     let refused = run();
     assert_eq!(refused.status.code(), Some(1), "{refused:?}");
     assert!(!lock.exists());
+}
+
+fn deeper_than_path_max_with_a_link_back(top: &std::path::Path) {
+    let name = "x".repeat(200);
+    let mut held = OwnedFd::from(File::open(top).unwrap_or_else(|e| unreachable!("{e}")));
+    for _ in 0..libc::PATH_MAX as usize / (name.len() + 1) + 2 {
+        mkdirat(&held, name.as_str(), Mode::S_IRWXU).unwrap_or_else(|e| unreachable!("{e}"));
+        held = openat(
+            &held,
+            name.as_str(),
+            OFlag::O_RDONLY | OFlag::O_DIRECTORY | OFlag::O_CLOEXEC,
+            Mode::empty(),
+        )
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    }
+    symlinkat("..", &held, "up").unwrap_or_else(|e| unreachable!("{e}"));
+}
+
+#[test]
+fn a_declared_tree_deeper_than_path_max_with_a_link_back_up_is_audited_as_fresh() {
+    let repo = declared_shared();
+    deeper_than_path_max_with_a_link_back(&repo.root().join("shared"));
+    build(&repo, OUTPUT, None);
+    assert_fresh(&repo, "shared\tlib\n");
 }
