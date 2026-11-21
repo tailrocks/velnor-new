@@ -118,8 +118,7 @@ fn answer(mut stream: TcpStream, base: &str, routes: &Routes, hits: &Mutex<Vec<H
     let location = reply
         .location
         .as_ref()
-        .map(|to| format!("location: {}\r\n", to.replace("{base}", base)))
-        .unwrap_or_default();
+        .map_or_default(|to| format!("location: {}\r\n", to.replace("{base}", base)));
     let head = format!(
         "HTTP/1.1 {} Reply\r\ncontent-type: application/octet-stream\r\n{location}content-length: {}\r\nconnection: close\r\n\r\n",
         reply.status,
