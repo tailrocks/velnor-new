@@ -22,6 +22,7 @@ regexes = [
 
 [[allowlists]]
 description = "dbt contract proposal: the placeholder service credential, in this one document only"
+targetRules = ["generic-password"]
 condition = "AND"
 paths = ['''^docs/proposed/dbt-contract\.md$''']
 regexTarget = "secret"
