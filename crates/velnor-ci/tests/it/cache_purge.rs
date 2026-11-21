@@ -17,6 +17,7 @@ struct Api {
     fail_delete: Option<u64>,
     listings: Cell<usize>,
     arrivals: RefCell<VecDeque<Vec<Value>>>,
+    running: Cell<(u64, u64)>,
 }
 
 fn entry(id: u64, key: &str, reference: &str) -> Value {
@@ -32,7 +33,14 @@ impl Api {
             fail_delete: None,
             listings: Cell::default(),
             arrivals: RefCell::default(),
+            running: Cell::default(),
         }
+    }
+
+    fn with_runs(entries: Vec<Value>, in_progress: u64, queued: u64) -> Self {
+        let api = Self::new(entries);
+        api.running.set((in_progress, queued));
+        api
     }
 
     fn arriving_after_each_relist(batches: Vec<Vec<Value>>) -> Self {
@@ -44,6 +52,17 @@ impl Api {
 
 impl GitHub for Api {
     fn get(&self, path: &str) -> Result<String, CiError> {
+        if path.contains("/actions/runs?") {
+            let (in_progress, queued) = self.running.get();
+            let total = if path.contains("status=in_progress") {
+                in_progress
+            } else if path.contains("status=queued") {
+                queued
+            } else {
+                return Err(CiError::new("unexpected run status"));
+            };
+            return Ok(json!({"total_count":total,"workflow_runs":[]}).to_string());
+        }
         self.asked.borrow_mut().push(path.to_owned());
         let page: usize = path
             .rsplit_once("page=")
@@ -263,4 +282,71 @@ fn a_write_that_keeps_arriving_fails_after_the_bounded_passes() {
         Some("1 velnor-private- entries remain after the purge; run it again")
     );
     assert_eq!(*api.deleted.borrow(), vec![1, 2, 3, 100, 101]);
+}
+
+#[test]
+fn in_progress_runs_refuse_the_purge_and_delete_nothing() {
+    let api = Api::with_runs(mixed(), 2, 1);
+    let error = purge_private(&api, &repo(), true)
+        .err()
+        .map(|e| e.to_string());
+    assert_eq!(
+        error.as_deref(),
+        Some(
+            "3 workflow runs are in progress; wait for them or disable workflows, then run purge-private again"
+        )
+    );
+    assert!(api.deleted.borrow().is_empty());
+    assert_eq!(api.entries.borrow().len(), 8);
+}
+
+#[test]
+fn queued_runs_alone_refuse_the_purge() {
+    let api = Api::with_runs(mixed(), 0, 1);
+    let error = purge_private(&api, &repo(), true)
+        .err()
+        .map(|e| e.to_string());
+    assert_eq!(
+        error.as_deref(),
+        Some(
+            "1 workflow runs are in progress; wait for them or disable workflows, then run purge-private again"
+        )
+    );
+    assert!(api.deleted.borrow().is_empty());
+}
+
+#[test]
+fn a_dry_run_warns_about_running_workflows_and_succeeds() {
+    let api = Api::with_runs(mixed(), 2, 0);
+    let report = purge_private(&api, &repo(), false).unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(report.contains("would delete 3 entries"), "{report}");
+    assert!(
+        report.contains("2 workflow runs are in progress; wait for them or disable workflows"),
+        "{report}"
+    );
+    assert!(api.deleted.borrow().is_empty());
+}
+
+#[test]
+fn the_deleted_count_is_cumulative_across_passes() {
+    let late = vec![entry(
+        9,
+        "velnor-private-tgt-late.root.Linux-X64-cc-1",
+        "refs/heads/main",
+    )];
+    let mut api = Api::arriving_after_each_relist(vec![late]);
+    *api.entries.borrow_mut() = vec![entry(
+        1,
+        "velnor-private-src-Linux-X64-all.roots-aa",
+        "refs/heads/main",
+    )];
+    api.fail_delete = Some(9);
+    let error = purge_private(&api, &repo(), true)
+        .err()
+        .map(|e| e.to_string());
+    assert_eq!(
+        error.as_deref(),
+        Some("deleted 1 of 2; failed at entry ID 9: HTTP 403")
+    );
+    assert_eq!(*api.deleted.borrow(), vec![1]);
 }

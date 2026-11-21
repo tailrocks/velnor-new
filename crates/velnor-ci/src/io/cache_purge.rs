@@ -29,11 +29,36 @@ fn private_entries(github: &dyn GitHubWrite, repo: &Repo) -> Result<Vec<Entry>, 
     Ok(private)
 }
 
+#[derive(serde::Deserialize)]
+struct RunCount {
+    total_count: u64,
+}
+
+fn running_workflows(github: &dyn GitHubWrite, repo: &Repo) -> Result<u64, CiError> {
+    let mut total = 0;
+    for status in ["in_progress", "queued"] {
+        let json = github.get(&format!(
+            "/repos/{repo}/actions/runs?status={status}&per_page=1"
+        ))?;
+        let count: RunCount = serde_json::from_str(&json)
+            .map_err(|e| CiError::new(format!("the workflow run listing is not readable: {e}")))?;
+        total += count.total_count;
+    }
+    Ok(total)
+}
+
 pub fn purge_private(
     github: &dyn GitHubWrite,
     repo: &Repo,
     delete: bool,
 ) -> Result<String, CiError> {
+    let running = running_workflows(github, repo)?;
+    let busy = format!(
+        "{running} workflow runs are in progress; wait for them or disable workflows, then run purge-private again"
+    );
+    if delete && running > 0 {
+        return Err(CiError::new(busy));
+    }
     let mut pending = private_entries(github, repo)?;
     let bytes: u128 = pending
         .iter()
@@ -46,23 +71,29 @@ pub fn purge_private(
         refs.len()
     );
     if !delete {
+        let warning = if running > 0 {
+            format!("warning: {busy}\n")
+        } else {
+            String::new()
+        };
         return Ok(format!(
-            "{report}would delete {} entries; pass --yes to delete them\n",
+            "{report}would delete {} entries; pass --yes to delete them\n{warning}",
             pending.len()
         ));
     }
     let mut deleted = 0;
+    let mut seen = 0;
     for _ in 0..PURGE_PASSES {
         let ids: Vec<u64> = pending.iter().map(|entry| entry.id).collect();
-        for (done, id) in ids.iter().enumerate() {
+        seen += ids.len();
+        for id in &ids {
             if let Err(error) = delete_entries(github, repo, &[*id]) {
                 return Err(CiError::new(format!(
-                    "deleted {done} of {}; failed at entry ID {id}: {error}",
-                    ids.len()
+                    "deleted {deleted} of {seen}; failed at entry ID {id}: {error}"
                 )));
             }
+            deleted += 1;
         }
-        deleted += ids.len();
         pending = private_entries(github, repo)?;
         if pending.is_empty() {
             return Ok(format!("{report}deleted {deleted} entries\n"));
