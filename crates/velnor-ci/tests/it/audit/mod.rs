@@ -6,6 +6,7 @@ mod bounds;
 mod build_clock;
 mod build_directory;
 mod build_script_source;
+mod failure_identity;
 mod freshness;
 mod gated;
 mod global_options;
