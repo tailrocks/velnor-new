@@ -3,8 +3,9 @@
 """scripts/mise-binary-digests.sh trusts SHASUMS256.txt only after the real `minisign` verifies it.
 
 The tests run the pinned tool (mise.toml, `minisign`), never a stand-in. Without it on PATH they
-skip, unless VELNOR_REQUIRE_MINISIGN is set, as the `test-maintenance-helpers` task sets it: then
-a missing tool is a failure, so CI cannot pass by skipping.
+skip, unless VELNOR_REQUIRE_MINISIGN is set, as the `test-mise-binary-digests` task sets it (the
+`mise-binary-digests` lint job of rust-ci runs that task): then a missing tool is a failure, so CI
+cannot pass by skipping.
 """
 
 import os
@@ -189,6 +190,39 @@ class MinisignResolution(unittest.TestCase):
         result = self.run_with_path()
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(self.used.read_text().split(), [path_tool])
+
+
+class MiseTomlMinisignPin(unittest.TestCase):
+    """The mise.toml minisign pin may name only platforms mise.lock can install it on."""
+
+    ROOT = SCRIPTS.parent
+
+    def test_os_restriction_matches_the_lock_platforms(self):
+        import tomllib
+
+        entry = tomllib.loads((self.ROOT / "mise.toml").read_text())["tools"]["minisign"]
+        self.assertIsInstance(entry, dict, "minisign has no Intel-mac build: restrict it with `os`")
+        lock = tomllib.loads((self.ROOT / "mise.lock").read_text())
+        locked = {
+            key.removeprefix("platforms.")
+            for key in lock["tools"]["minisign"][0]
+            if key.startswith("platforms.")
+        }
+        self.assertTrue(locked, "mise.lock has no minisign platforms")
+        allowed = {tuple(item.partition("/")[::2]) for item in entry["os"]}
+        self.assertNotIn(("macos", ""), allowed, "bare `macos` would include the Intel Mac")
+        for platform in locked:
+            os_name, arch = platform.split("-")[:2]
+            self.assertTrue(
+                (os_name, "") in allowed or (os_name, arch) in allowed,
+                f"mise.lock has {platform} but mise.toml `os` {entry['os']} excludes it",
+            )
+        for os_name, arch in allowed:
+            self.assertTrue(
+                any(p.startswith(f"{os_name}-{arch}") for p in locked),
+                f"mise.toml `os` allows {os_name}/{arch or '*'} but mise.lock has no entry",
+            )
+        self.assertFalse(any(p.startswith("macos-x64") for p in locked))
 
 
 if __name__ == "__main__":
