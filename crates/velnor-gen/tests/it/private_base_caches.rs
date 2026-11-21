@@ -74,7 +74,7 @@ fn a_private_consumer_with_a_new_helper_restores_and_saves_both_base_caches() ->
 
 #[test]
 fn the_helpers_verdict_gates_every_restore_and_every_save_of_the_base_caches() -> TestResult {
-    let text = workflow(&consumer("0.1.111", GIT_LOCK, "")?)?;
+    let text = workflow(&consumer("0.1.112", GIT_LOCK, "")?)?;
     let lane = lane(&text)?;
     let verdict = step(&lane, "Check that the repository is private").ok_or("no verdict step")?;
     assert!(verdict.contains("id: private_repo"), "{verdict}");
@@ -171,7 +171,7 @@ fn a_lane_that_saves_no_sources_still_tells_the_decision_that_the_sources_restor
     let mut repo = private_repo(
         &["Cargo.toml"],
         &format!("shape = \"lint-test\"\n{SECTION}"),
-        "0.1.111",
+        "0.1.112",
     )?;
     repo.files
         .insert(path("Cargo.lock")?, GIT_LOCK.as_bytes().to_vec());
