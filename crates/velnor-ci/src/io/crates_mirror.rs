@@ -6,7 +6,7 @@ use std::process::ExitCode;
 
 use crate::cli::CratesMirrorArgs;
 use crate::error::CiError;
-use crate::escape::{escape, file_value};
+use crate::escape::{escape, file_value, stderr_line};
 
 use super::crates_mirror_mode::{self as mode, Mirror, Mode};
 
@@ -90,7 +90,7 @@ pub(super) fn setup(args: &CratesMirrorArgs) -> Result<String, CiError> {
     super::append_to(
         "GITHUB_ENV",
         &format!(
-            "{CONFIG_ENV}={}\n{WRAPPER_ENV}={}\nCARGO={}\n{}",
+            "{CONFIG_ENV}={}\n{WRAPPER_ENV}={}\nCARGO={}\n{DISABLE_ENV}=\n{}",
             config.display(),
             wrapper.display(),
             wrapper.display(),
@@ -206,7 +206,7 @@ pub(super) fn run() -> ExitCode {
             .and_then(|code| u8::try_from(code).ok())
             .map_or(ExitCode::FAILURE, ExitCode::from),
         Err(error) => {
-            eprintln!("{error}");
+            eprintln!("{}", stderr_line(&error.to_string()));
             ExitCode::FAILURE
         }
     }

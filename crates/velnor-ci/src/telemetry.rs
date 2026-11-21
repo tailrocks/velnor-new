@@ -50,11 +50,10 @@ pub struct Compilation {
     pub workspace: bool,
     pub unchanged: bool,
     pub dependencies: BTreeSet<String>,
-    /// Whether the restored base held a unit of this dependency crate that this run compiled
-    /// again: `Some(false)` when none of its compiled units was in the base (a base gap, not
-    /// waste). `None` when the restore left no record or the units are unknown.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub restored: Option<bool>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub missing_input: bool,
 }
 
 #[must_use]

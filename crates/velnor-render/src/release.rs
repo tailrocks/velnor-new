@@ -68,7 +68,12 @@ pub fn render_release(
     });
     jobs.extend(publish_stage(plan));
     jobs.extend(finalize_job(plan, helper));
-    let rendered = RenderedWorkflow { jobs };
+    let jobs = jobs
+        .into_iter()
+        .map(crate::mise_digest::pin_to_runner_platform);
+    let rendered = RenderedWorkflow {
+        jobs: jobs.collect(),
+    };
     check_rules(&rendered)?;
     let workflow = [
         entry("name", text("Release")),
@@ -106,8 +111,7 @@ pub fn render_release(
     if file.len() > MAX_WORKFLOW_BYTES {
         return Err(vec![crate::rule_messages::size_report::too_large(
             RELEASE_WORKFLOW_PATH.as_str(),
-            file.len(),
-            &rendered.jobs,
+            &file,
         )]);
     }
     Ok(BTreeMap::from([(RELEASE_WORKFLOW_PATH, file)]))

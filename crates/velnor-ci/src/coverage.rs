@@ -61,13 +61,10 @@ pub struct Unit {
     pub source: RepoPath,
 }
 
-/// Why a build-script run has no current output. Keyed by (configuration, package, unit hash)
-/// in `Built::run_gaps`; a run without an entry has no output to explain.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum RunGap {
-    /// The output exists, but a `rerun-if-changed` input changed after the run.
     Stale { input: String, more: usize },
-    /// The output is older than the compiled build script that should have written it.
+    Unproven { input: String, more: usize },
     Older,
 }
 
@@ -230,20 +227,26 @@ fn orphans<'b>(
 
 fn run_reason(gap: Option<&RunGap>, unit: &str) -> String {
     match gap {
-        Some(RunGap::Stale { input, more }) => {
-            let more = if *more == 0 {
-                String::new()
-            } else {
-                format!(", and {more} more")
-            };
-            format!(
-                "output stale: input {input} changed after it ran{more} (unit {unit}); produce build-script inputs before the first compile step, e.g. [[test_setup]] phase = \"build\""
-            )
-        }
+        Some(RunGap::Stale { input, more }) => format!(
+            "output stale: input {input} changed after it ran{} (unit {unit}); produce build-script inputs before the first compile step, e.g. a [[test_setup]] table with phase = \"build\"",
+            more_suffix(*more)
+        ),
+        Some(RunGap::Unproven { input, more }) => format!(
+            "output not proven current: freshness could not be proven for input {input}{} (unit {unit}); rebuild the target through velnor-ci inputs build",
+            more_suffix(*more)
+        ),
         Some(RunGap::Older) => format!("output older than its build script (unit {unit})"),
         None => {
             format!("build script run with a cargo fingerprint and no output (unit {unit})")
         }
+    }
+}
+
+fn more_suffix(more: usize) -> String {
+    if more == 0 {
+        String::new()
+    } else {
+        format!(", and {more} more")
     }
 }
 

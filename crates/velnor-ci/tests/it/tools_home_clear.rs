@@ -6,7 +6,7 @@ use std::os::unix::fs::{MetadataExt, symlink};
 use std::path::{Path, PathBuf};
 
 use velnor_ci::tools_local::{Inputs, Outcome, Verb, run};
-use velnor_ci::tools_verify::{Anchor, Verdict, check, digest, record};
+use velnor_ci::tools_verify::{Anchor, Recording, Verdict, check, digest, record};
 
 use crate::io::Repo;
 
@@ -68,6 +68,7 @@ fn go(node: &Node, verb: Verb, home: &Path) -> Outcome {
         seed_dir: Some(&store),
         home,
         owner: fs::metadata(home).map_or(0, |metadata| metadata.uid()),
+        replace: false,
     })
 }
 
@@ -85,19 +86,20 @@ fn a_restore_over_a_baked_home_leaves_exactly_the_stored_tree() {
     baked_extras(&baked);
     assert_ne!(digest(&baked), digest(&node.root.join("stored")));
     let file = node.root.join("anchor/digest");
-    let anchor = Anchor {
+    let recording = Recording {
+        anchor: Anchor(""),
         file: &file,
-        restored: false,
+        trusted: true,
+        verified: false,
     };
-    let recorded = record(&node.root.join("stored"), &anchor, true);
-    assert_eq!(recorded.ok(), Some(Verdict::Recorded));
+    let Ok(Verdict::Recorded(anchor)) = record(&node.root.join("stored"), &recording) else {
+        unreachable!("the stored tree was not recorded")
+    };
     let restored = go(&node, Verb::Restore, &baked);
     assert!(restored.hit(), "{restored:?}");
-    let anchor = Anchor {
-        file: &file,
-        restored: true,
-    };
-    assert_eq!(check(&baked, &anchor).ok(), Some(Verdict::Verified));
+    let anchor = Anchor(&anchor);
+    let file = baked.join("velnor-tools-anchor/digest");
+    assert_eq!(check(&baked, &anchor, &file).ok(), Some(Verdict::Verified));
     assert_eq!(digest(&baked), digest(&node.root.join("stored")));
     assert!(
         !baked
@@ -215,4 +217,57 @@ fn clear_refuses_a_symlink_and_a_root_home_and_deletes_nothing() {
             "{home:?}: {outcome:?}"
         );
     }
+}
+
+#[test]
+fn a_symlinked_home_is_refused_and_its_target_is_never_cleared() {
+    let node = node("tools-home-clear-linked-home");
+    saved(&node);
+    let real = node.root.join("real-home");
+    baked_extras(&real);
+    let linked = node.root.join("linked-home");
+    symlink(&real, &linked).unwrap_or_else(|e| unreachable!("{e}"));
+    let clear = go(&node, Verb::Clear, &linked);
+    assert!(matches!(clear, Outcome::Rejected(_)), "{clear:?}");
+    let restore = go(&node, Verb::Restore, &linked);
+    assert!(matches!(restore, Outcome::Rejected(_)), "{restore:?}");
+    assert!(
+        real.join(".local/share/mise/installs/cosign/2.9.0/bin/cosign")
+            .is_file()
+    );
+    assert!(real.join(".rustup/toolchains/nightly/bin/rustc").is_file());
+}
+
+#[test]
+fn a_symlinked_home_with_a_trailing_separator_is_refused_too() {
+    let node = node("tools-home-clear-linked-home-slash");
+    saved(&node);
+    let real = node.root.join("real-home");
+    baked_extras(&real);
+    let linked = node.root.join("linked-home");
+    symlink(&real, &linked).unwrap_or_else(|e| unreachable!("{e}"));
+    let slashed = PathBuf::from(format!("{}/", linked.display()));
+    let clear = go(&node, Verb::Clear, &slashed);
+    assert!(matches!(clear, Outcome::Rejected(_)), "{clear:?}");
+    let restore = go(&node, Verb::Restore, &slashed);
+    assert!(matches!(restore, Outcome::Rejected(_)), "{restore:?}");
+    assert!(
+        real.join(".local/share/mise/installs/cosign/2.9.0/bin/cosign")
+            .is_file()
+    );
+    assert!(real.join(".rustup/toolchains/nightly/bin/rustc").is_file());
+}
+
+#[test]
+fn a_home_below_a_symlinked_ancestor_is_still_cleared() {
+    let node = node("tools-home-clear-linked-ancestor");
+    let real = node.root.join("real-parent");
+    let home = real.join("home");
+    baked_extras(&home);
+    let alias = node.root.join("alias-parent");
+    symlink(&real, &alias).unwrap_or_else(|e| unreachable!("{e}"));
+    let outcome = go(&node, Verb::Clear, &alias.join("home"));
+    assert_eq!(outcome, Outcome::Cleared);
+    assert!(!home.join(".local/share/mise").exists());
+    assert!(!home.join(".rustup").exists());
 }

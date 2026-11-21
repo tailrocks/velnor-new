@@ -1,11 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-//! The units a restored base held, recorded when it was restored. A dependency compile is waste
-//! only if the base held the unit that was compiled again. The save keeps just the units the run
-//! that saved it used, so a later run with another package or feature selection compiles units
-//! the base never held; that is a gap in the base, not a cache that failed to serve.
-
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::cache_prune::{artifact_hash, is_hash};
@@ -13,34 +8,48 @@ use crate::cargo_package::PackageIdentity;
 use crate::report::LaneMetrics;
 use crate::telemetry::Invocation;
 
-const HEADER: &str = "velnor-restored-units 1";
+const HEADER: &str = "velnor-restored-units 2";
+const MISSING_INPUT: &str = "missing-input ";
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RestoredUnits {
+    pub present: BTreeSet<String>,
+    pub missing_input: BTreeSet<String>,
+}
 
 #[must_use]
-pub fn encode(hashes: &BTreeSet<String>) -> String {
+pub fn encode(units: &RestoredUnits) -> String {
     let mut text = format!("{HEADER}\n");
-    for hash in hashes {
+    for hash in &units.present {
+        text.push_str(hash);
+        text.push('\n');
+    }
+    for hash in &units.missing_input {
+        text.push_str(MISSING_INPUT);
         text.push_str(hash);
         text.push('\n');
     }
     text
 }
 
-/// `None` for any text this helper did not write, so an unreadable record keeps the old rule.
 #[must_use]
-pub fn decode(text: &str) -> Option<BTreeSet<String>> {
+pub fn decode(text: &str) -> Option<RestoredUnits> {
     let mut lines = text.lines();
-    (lines.next()? == HEADER)
-        .then(|| {
-            lines
-                .map(|line| is_hash(line).then(|| line.to_owned()))
-                .collect()
-        })
-        .flatten()
+    if lines.next()? != HEADER {
+        return None;
+    }
+    let mut units = RestoredUnits::default();
+    for line in lines {
+        match line.strip_prefix(MISSING_INPUT) {
+            Some(hash) if is_hash(hash) => units.missing_input.insert(hash.to_owned()),
+            None if is_hash(line) => units.present.insert(line.to_owned()),
+            _ => return None,
+        };
+    }
+    Some(units)
 }
 
-/// Marks each dependency compilation of `invocation` with whether any of its non-fresh units
-/// was in `restored`. A compilation whose units cannot be read stays unmarked.
-pub fn classify(invocation: &mut Invocation, restored: &BTreeSet<String>) {
+pub fn classify(invocation: &mut Invocation, restored: &RestoredUnits) {
     for compilation in invocation
         .compilations
         .iter_mut()
@@ -59,18 +68,22 @@ pub fn classify(invocation: &mut Invocation, restored: &BTreeSet<String>) {
             .filter_map(|file| artifact_hash(file))
             .collect();
         if !units.is_empty() {
-            compilation.restored = Some(units.iter().any(|hash| restored.contains(*hash)));
+            let held = units.iter().any(|hash| restored.present.contains(*hash));
+            compilation.restored = Some(held);
+            compilation.missing_input = !held
+                && units
+                    .iter()
+                    .any(|hash| restored.missing_input.contains(*hash));
         }
     }
 }
 
-/// Dependency units compiled that the restored base never held, by root. They are no waste: the
-/// run that saved the base used other packages or features, so the base had nothing to serve.
 #[must_use]
 pub fn base_gaps(metrics: &LaneMetrics) -> Vec<String> {
-    let mut gaps: BTreeMap<&str, BTreeSet<String>> = BTreeMap::new();
+    let mut gaps: BTreeMap<(&str, bool), BTreeSet<String>> = BTreeMap::new();
     for invocation in &metrics.invocations {
-        if invocation.restored_target_usable == Some(false) {
+        if invocation.restored_target_usable == Some(false) || !same_lock(metrics, &invocation.root)
+        {
             continue;
         }
         for event in invocation
@@ -78,18 +91,29 @@ pub fn base_gaps(metrics: &LaneMetrics) -> Vec<String> {
             .iter()
             .filter(|event| !event.workspace && event.restored == Some(false))
         {
-            gaps.entry(&invocation.root)
+            gaps.entry((&invocation.root, event.missing_input))
                 .or_default()
                 .insert(format!("{} v{}", event.package, event.version));
         }
     }
     gaps.into_iter()
-        .map(|(root, units)| {
-            format!(
-                "{root}: {} dependency units were not in the restored base (a different package or feature selection than the run that saved it): {}",
-                units.len(),
-                units.into_iter().collect::<Vec<_>>().join(", ")
-            )
+        .map(|((root, missing_input), packages)| {
+            let packages = packages.into_iter().collect::<Vec<_>>().join(", ");
+            if missing_input {
+                format!(
+                    "{root}: dependency packages whose restored dep-info names a file outside target/ that is missing (for example mbx build-script outputs in a cache directory this job did not have; MBX_SHARE_OUT_DIR=0 keeps them under target/): {packages}"
+                )
+            } else {
+                format!(
+                    "{root}: dependency packages not in the restored base (a different package or feature selection than the run that saved it): {packages}"
+                )
+            }
         })
         .collect()
+}
+
+fn same_lock(metrics: &LaneMetrics, root: &str) -> bool {
+    metrics.caches.iter().any(|cache| {
+        cache.family == "target" && cache.root.as_deref() == Some(root) && cache.usable_same_lock
+    })
 }

@@ -46,7 +46,7 @@ const CI_BINARIES: &[(&str, &str, &str)] = &[
     ),
 ];
 
-const ARCHIVE_SUMS: &str = "\
+pub(crate) const ARCHIVE_SUMS: &str = "\
 0e5bd0f714140aa32270568a463b252853b828318ed29e3bad93a1bf18ce2fbd  COMMIT
 4e9a485939165d82a9ebd49078778ca47137f344524ce8d87d03116760d5bb6d  BINARY-SHA256SUMS
 b91a87ecac8eda2809f202b4566d886273d7b34d6ef29f726751fcbc8bb3d502  velnor-ci-x86_64-unknown-linux-musl.tar.gz
@@ -82,8 +82,7 @@ fn a_new_lock_records_the_archive_digests_and_the_binary_digests() -> TestResult
     let table = |name: &str| -> Vec<String> {
         lock.split("\n\n")
             .find(|part| part.starts_with(&format!("[{name}]")))
-            .map(|part| part.lines().skip(1).map(str::to_owned).collect())
-            .unwrap_or_default()
+            .map_or_default(|part| part.lines().skip(1).map(str::to_owned).collect())
     };
     assert_eq!(
         table("velnor-ci"),

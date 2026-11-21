@@ -27,7 +27,7 @@ fn a_dependency_unit_the_restored_base_never_held_is_a_notice_not_waste() {
     assert!(report.contains("no waste"), "{report}");
     assert!(
         report.contains(
-            ".: 1 dependency units were not in the restored base (a different package or feature selection than the run that saved it): serde v1.0.0"
+            ".: dependency packages not in the restored base (a different package or feature selection than the run that saved it): serde v1.0.0"
         ),
         "{report}"
     );
@@ -57,17 +57,51 @@ fn a_gap_is_no_notice_on_a_cold_base() {
 #[test]
 fn a_record_that_is_not_ours_or_is_damaged_reads_as_absent() {
     use std::collections::BTreeSet;
-    use velnor_ci::restored_units::{decode, encode};
-    let hashes: BTreeSet<String> = ["0123456789abcdef", "fedcba9876543210"]
-        .map(str::to_owned)
-        .into();
-    assert_eq!(decode(&encode(&hashes)), Some(hashes));
-    assert_eq!(decode(&encode(&BTreeSet::new())), Some(BTreeSet::new()));
+    use velnor_ci::restored_units::{RestoredUnits, decode, encode};
+    let hashes = |list: [&str; 2]| -> BTreeSet<String> { list.map(str::to_owned).into() };
+    let units = RestoredUnits {
+        present: hashes(["0123456789abcdef", "fedcba9876543210"]),
+        missing_input: hashes(["00000000deadbeef", "00000000cafebabe"]),
+    };
+    assert_eq!(decode(&encode(&units)), Some(units));
+    assert_eq!(
+        decode(&encode(&RestoredUnits::default())),
+        Some(RestoredUnits::default())
+    );
     for text in [
         "",
-        "other 1\n0123456789abcdef\n",
-        "velnor-restored-units 1\nnot-a-hash\n",
+        "other 2\n0123456789abcdef\n",
+        "velnor-restored-units 1\n0123456789abcdef\n",
+        "velnor-restored-units 2\nnot-a-hash\n",
+        "velnor-restored-units 2\nmissing-input not-a-hash\n",
     ] {
         assert_eq!(decode(text), None, "{text:?}");
     }
+}
+
+#[test]
+fn a_dependency_unit_whose_dep_info_names_a_missing_file_is_a_base_gap_with_that_reason() {
+    let mut value = lane();
+    value["invocations"][0]["compilations"][0]["restored"] = json!(false);
+    value["invocations"][0]["compilations"][0]["missing_input"] = json!(true);
+    let lane = metrics(value);
+    assert_eq!(waste(&lane), [] as [String; 0]);
+    let report = check(&[lane]).unwrap_or_else(|error| unreachable!("{error}"));
+    assert!(report.contains("no waste"), "{report}");
+    assert!(
+        report.contains("dependency packages whose restored dep-info names a file outside target/ that is missing"),
+        "{report}"
+    );
+    assert!(report.contains("MBX_SHARE_OUT_DIR=0"), "{report}");
+    assert!(report.contains("serde v1.0.0"), "{report}");
+    assert!(!report.contains("not in the restored base"), "{report}");
+}
+
+#[test]
+fn a_gap_on_a_changed_lock_is_no_notice() {
+    let mut value = lane();
+    value["caches"][0]["usable_same_lock"] = json!(false);
+    value["invocations"][0]["compilations"][0]["restored"] = json!(false);
+    let report = check(&[metrics(value)]).unwrap_or_else(|error| unreachable!("{error}"));
+    assert!(!report.contains("restored base"), "{report}");
 }

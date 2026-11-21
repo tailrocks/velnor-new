@@ -2,14 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs;
-use std::process::Command;
 
-use super::{audit, own_units, unit, workspace_below_the_root};
+use super::{audit, command, own_units, unit, workspace_below_the_root};
 
 mod aggregate;
 mod breadth;
 mod build_output;
+mod declared_budget;
 mod entries;
+mod limit_env;
 
 #[test]
 fn an_excessively_deep_target_directory_returns_an_error_and_keeps_the_inputs_lock() {
@@ -30,8 +31,7 @@ fn an_excessively_deep_target_directory_returns_an_error_and_keeps_the_inputs_lo
         directory.push("d");
         fs::create_dir(&directory).unwrap_or_else(|e| unreachable!("{e}"));
     }
-    let output = Command::new("sh")
-        .env_remove("CARGO_TARGET_DIR")
+    let output = command("sh")
         .args([
             "-c",
             "ulimit -n 1024 && exec \"$1\" inputs audit --write",
