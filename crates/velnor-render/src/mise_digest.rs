@@ -155,3 +155,22 @@ fn plain_label_platform(label: &str) -> Option<String> {
     let platform = MisePlatform::runner(label)?;
     (!platform.matches("linux") || label.starts_with("ubuntu-")).then(|| platform.lock_key())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::rules::RenderedTrusted;
+
+    #[test]
+    fn a_trusted_pool_behind_an_ubuntu_label_gets_no_glibc_digest_without_a_fork_fence() {
+        let job = RenderedJob {
+            runs_on: "ubuntu-26.04-scale-set".to_owned(),
+            trusted_runner: Some(RenderedTrusted {
+                label: "ubuntu-26.04-scale-set-musl".to_owned(),
+                replaces: "ubuntu-26.04-scale-set".to_owned(),
+            }),
+            ..RenderedJob::default()
+        };
+        assert_eq!(runner_digest(&job), None);
+    }
+}
