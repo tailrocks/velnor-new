@@ -35,7 +35,7 @@ Measure service time from the later of push or label authorization. Publish labe
 PR verdict ends when the exact-head `Required` concludes. Track first actionable failure, open PRs, superseded runs and timeouts.
 
 [M] means a supplied or cited measurement, [E] an estimate with assumptions, and [S] source behavior.
-`repo/` points to `~/Projects/tailrocks/velnor-new` at `d6be276a6ce9`. Live evidence used earlier revisions including `95de9b704b`.
+`repo/` points to `<home>/Projects/tailrocks/velnor-new` at `d6be276a6ce9`. Live evidence used earlier revisions including `95de9b704b`.
 `refs/` and `evidence/` resolve under `~/.cache/ci-ambition`. Runner source is v2.338.0 at `7afce9e`. §5 identifies the newer oracle.
 [Evidence](../evidence.md) · [Design v2](../../../proposed/velnor-runner-architecture.md) · [Decisions](../decisions.md)
 

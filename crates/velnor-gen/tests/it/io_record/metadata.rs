@@ -53,8 +53,8 @@ fn a_sample_name_cannot_leave_the_samples_folder() -> TestResult {
 
 #[test]
 fn recorded_metadata_no_longer_names_the_checkout_it_came_from() -> TestResult {
-    let checkout = Path::new("/home/someone/work/project");
-    let json = br#"{"workspace_root":"/home/someone/work/project","packages":[{"name":"a","version":"0.1.0","id":"path+file:///home/someone/work/project/crates/a#0.1.0","manifest_path":"/home/someone/work/project/crates/a/Cargo.toml","dependencies":[],"targets":[]}]}"#;
+    let checkout = Path::new("/srv/someone/work/project");
+    let json = br#"{"workspace_root":"/srv/someone/work/project","packages":[{"name":"a","version":"0.1.0","id":"path+file:///srv/someone/work/project/crates/a#0.1.0","manifest_path":"/srv/someone/work/project/crates/a/Cargo.toml","dependencies":[],"targets":[]}]}"#;
     let recorded = relocate_metadata(checkout, json)?;
     assert!(!String::from_utf8(recorded.clone())?.contains("someone"));
     let (workspace, metadata) =
@@ -69,8 +69,8 @@ fn recorded_metadata_no_longer_names_the_checkout_it_came_from() -> TestResult {
 
 #[test]
 fn recorded_metadata_names_no_checkout_whose_path_needs_url_escaping() -> TestResult {
-    let json = br#"{"workspace_root":"/home/some one/project name","packages":[{"name":"a","version":"0.1.0","id":"path+file:///home/some%20one/project%20name/crates/a#0.1.0","manifest_path":"/home/some one/project name/crates/a/Cargo.toml","dependencies":[],"targets":[]}]}"#;
-    let recorded = relocate_metadata(Path::new("/home/some one/project name"), json)?;
+    let json = br#"{"workspace_root":"/srv/some one/project name","packages":[{"name":"a","version":"0.1.0","id":"path+file:///srv/some%20one/project%20name/crates/a#0.1.0","manifest_path":"/srv/some one/project name/crates/a/Cargo.toml","dependencies":[],"targets":[]}]}"#;
+    let recorded = relocate_metadata(Path::new("/srv/some one/project name"), json)?;
     let text = String::from_utf8(recorded)?;
     assert!(!text.contains("some"), "{text}");
     assert!(!text.contains("project"), "{text}");
@@ -130,21 +130,21 @@ fn a_checkout_at_the_filesystem_root_cannot_be_recorded() {
 
 #[test]
 fn recorded_metadata_names_no_checkout_in_object_keys() -> TestResult {
-    let json = br#"{"metadata":{"/home/someone/work/project/x":1}}"#;
-    let recorded = relocate_metadata(Path::new("/home/someone/work/project"), json)?;
+    let json = br#"{"metadata":{"/srv/someone/work/project/x":1}}"#;
+    let recorded = relocate_metadata(Path::new("/srv/someone/work/project"), json)?;
     assert!(!String::from_utf8(recorded)?.contains("someone"));
     Ok(())
 }
 
 #[test]
 fn recorded_metadata_relocates_only_checkout_path_prefixes() -> TestResult {
-    let json = br#"{"nearby":"/Users/me/workspace/crate","manifest":"/rep/crates/a/Cargo.toml"}"#;
+    let json = br#"{"nearby":"/srv/me/workspace/crate","manifest":"/rep/crates/a/Cargo.toml"}"#;
     let recorded = relocate_metadata(Path::new("/rep"), json)?;
     let value: serde_json::Value = serde_json::from_slice(&recorded)?;
     assert_eq!(value["manifest"], "/repo/crates/a/Cargo.toml");
-    let recorded = relocate_metadata(Path::new("/Users/me/work"), json)?;
+    let recorded = relocate_metadata(Path::new("/srv/me/work"), json)?;
     let value: serde_json::Value = serde_json::from_slice(&recorded)?;
-    assert_eq!(value["nearby"], "/Users/me/workspace/crate");
+    assert_eq!(value["nearby"], "/srv/me/workspace/crate");
     let json = br#"["/tmp/repo#other/crate","/tmp/repo?other/crate","path+file:///tmp/repo#package","file:///tmp/repo?query"]"#;
     let recorded = relocate_metadata(Path::new("/tmp/repo"), json)?;
     let value: serde_json::Value = serde_json::from_slice(&recorded)?;

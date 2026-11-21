@@ -431,7 +431,7 @@ _Source file: cluster.md_
 
 Captured 2026-11-18 ~16:40-16:45 UTC, read-only (`kubectl get/describe/top/version`, `get --raw .../proxy/configz` and `.../proxy/stats/summary`).
 Raw JSON scratch: `~/.cache/ci-ambition/evidence/cluster-raw/` (nodes.json, ars.json).
-Docs dir: `~/Projects/tailrocks/velnor-runners/` = RN; files: `RN/README.md`, `RN/PLAN.md`, `RN/state/RESULT.md` (=RESULT), `RN/state/log.md` (=LOG). Note: the RN goal file and `RN/PLAN.md` are at the repo root, not under state/. `RN/state/inventory.md` = INV.
+Docs dir: `<home>/Projects/tailrocks/velnor-runners/` = RN; files: `RN/README.md`, `RN/PLAN.md`, `RN/state/RESULT.md` (=RESULT), `RN/state/log.md` (=LOG). Note: the RN goal file and `RN/PLAN.md` are at the repo root, not under state/. `RN/state/inventory.md` = INV.
 Source tags: [K] live cluster command, [D file:line] docs. Docs are dated 2026-11-15/17; the cluster is 3d3h old.
 
 ### 0. Summary table per node

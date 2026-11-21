@@ -2,7 +2,7 @@
 
 Private raw W0, runtime, release-identity, cache-trust and qualification evidence is retained outside the public checkout. Originals remain intact. This archive establishes evidence preservation; it grants no performance qualification.
 
-Archive: `~/.codex-chainargos2/private/ci-performance/evidence-2026-10-03/`. Private `manifest.json` records source directories, relative file paths, SHA256, bytes, collection identity files and all 47 collected source commits. Directories use mode 0700; regular files use 0600. Symlinks and special entries are never followed. Literal symlink targets are recorded privately.
+Archive: `<home>/<private-evidence-root>/private/ci-performance/evidence-2026-10-03/`. Private `manifest.json` records source directories, relative file paths, SHA256, bytes, collection identity files and all 47 collected source commits. Directories use mode 0700; regular files use 0600. Symlinks and special entries are never followed. Literal symlink targets are recorded privately.
 
 Snapshot status: W0 supplements for all waves captured after the audit writers finished. Previous manifests remain in private `manifest-history/`; differing metadata revisions are retained by digest. Renewed independent preservation verification passed. Performance qualification remains incomplete.
 
