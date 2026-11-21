@@ -8,7 +8,9 @@ use crate::cargo_build::BuildRecord;
 use crate::cron::CronExpr;
 use crate::hosted::HostedRunners;
 use crate::ids::{JobId, PackageName, RepoPath, RootSlug, RunnerLabel, TargetName};
+use crate::plan_gate::{Gate, GateNeed, PlanFrom};
 use crate::repo::{DenyCheck, LaneFeatures, TargetKind};
+use crate::setup_phase::SetupOrder;
 use crate::steps::{StepKind, VerifiedSave};
 use crate::test_group::NoTests;
 use crate::trusted::TrustedRunners;
@@ -27,6 +29,10 @@ pub const TESTS_IGNORED_OUTPUT: &str = "tests_ignored";
 pub const TESTS_BY_PACKAGE_OUTPUT: &str = "tests_by_package";
 pub const MERGE_GROUP_STEP: &str = "merge_group";
 pub const MERGE_GROUP_SKIP_OUTPUT: &str = "skip_push";
+pub const TOOLS_ANCHOR_OUTPUT: &str = "tools_anchor";
+pub const TOOLS_ANCHOR_KEY_OUTPUT: &str = "tools_anchor_key";
+pub const TOOLS_ANCHOR_DIGEST_BYTES: usize = 64;
+pub const CACHE_KEY_MAX_BYTES: usize = 512;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorkflowPlan {
@@ -129,9 +135,13 @@ pub struct Step {
     pub private_repo: bool,
     pub pr: PrRun,
     pub gate: Option<Gate>,
+    pub any_gate: Vec<Gate>,
     pub reads: Option<PlanRef>,
     /// Skipped on a self-hosted runner, so that the step runs only on a GitHub-hosted one.
     pub hosted_only: bool,
+    /// Set on the `[[test_setup]]` steps and on the steps after them: they are skipped
+    /// when a setup step before them failed or was cancelled.
+    pub setup_order: SetupOrder,
 }
 
 pub const CI_RUN_LABEL: &str = "ci:run";
@@ -152,105 +162,6 @@ pub enum PrRun {
 pub struct PlanRef {
     pub slug: RootSlug,
     pub from: PlanFrom,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Gate {
-    pub slug: RootSlug,
-    pub need: GateNeed,
-    pub from: PlanFrom,
-    /// A gate on packages passes when the plan selects any of them or the
-    /// whole workspace. Empty means no package condition.
-    pub packages: Vec<PackageName>,
-    /// Passes exactly when the plan selects a package of the root but none
-    /// of `packages`, so a notice can say why the guarded step was skipped.
-    pub unselected: bool,
-    pub group: Option<JobId>,
-}
-
-impl Gate {
-    #[must_use]
-    pub fn outputs(&self) -> Vec<(RootSlug, GateNeed)> {
-        let own = |need| (self.slug.clone(), need);
-        match self.need {
-            GateNeed::Selected | GateNeed::Group => vec![own(GateNeed::Selected)],
-            GateNeed::Doctests | GateNeed::Docs => vec![
-                own(GateNeed::Selected),
-                own(self.need),
-                own(GateNeed::PackageArgs),
-            ],
-            GateNeed::Deny | GateNeed::Machete | GateNeed::Lint => vec![own(self.need)],
-            GateNeed::PackageArgs if self.unselected => {
-                vec![own(GateNeed::Selected), own(GateNeed::PackageArgs)]
-            }
-            GateNeed::Policy => vec![own(GateNeed::Deny), own(GateNeed::Machete)],
-            GateNeed::TestFilter
-            | GateNeed::PackageArgs
-            | GateNeed::DoctestsKnown
-            | GateNeed::TestsExpected => {
-                vec![own(self.need)]
-            }
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum GateNeed {
-    Selected,
-    Doctests,
-    DoctestsKnown,
-    Docs,
-    TestFilter,
-    PackageArgs,
-    Deny,
-    Machete,
-    Policy,
-    TestsExpected,
-    Group,
-    Lint,
-}
-
-impl GateNeed {
-    #[must_use]
-    pub fn is_global(self) -> bool {
-        matches!(self, Self::Deny | Self::Machete | Self::Policy)
-    }
-
-    #[must_use]
-    pub fn output_name(self, slug: &RootSlug) -> String {
-        let name = match self {
-            Self::Selected => "mode",
-            Self::Doctests => "doctests",
-            Self::DoctestsKnown => "doctests_known",
-            Self::Docs => "docs",
-            Self::TestFilter => "test_filter",
-            Self::PackageArgs => "package_args",
-            Self::Deny => "deny",
-            Self::Machete => "machete",
-            Self::Policy => "policy",
-            Self::TestsExpected => "tests",
-            Self::Group => "group",
-            Self::Lint => return format!("lint_{slug}"),
-        };
-        if self.is_global() {
-            format!("rust_{name}")
-        } else {
-            format!("rust_{slug}_{name}")
-        }
-    }
-}
-
-#[must_use]
-pub fn group_output_name(slug: &RootSlug, group: &JobId) -> String {
-    format!("rust_{slug}_group_{group}")
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum PlanFrom {
-    ThisJob,
-    Job(JobId),
-    /// The plan outputs of a job that also builds and tests: a job that needs it must not wait for it.
-    WorkJob(JobId),
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]

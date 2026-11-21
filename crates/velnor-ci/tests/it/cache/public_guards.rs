@@ -53,6 +53,7 @@ fn run(locks: &[(&str, String)], api: &str, command: &[&str], extra: &[&str]) ->
         .args(extra)
         .env("RUNNER_TEMP", &temp)
         .env("GITHUB_OUTPUT", &outputs)
+        .env("HOME", repo.root())
         .env_remove("GITHUB_TOKEN")
         .env_remove("VELNOR_PUBLIC_VERDICTS")
         .current_dir(repo.root())

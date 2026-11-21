@@ -5,3 +5,38 @@
 # Uses upstream defaults.
 [extend]
 useDefault = true
+
+[[allowlists]]
+description = "matrix_key task-digest ids (m-<16 hex>), not credentials"
+regexes = ['''^m-[0-9a-f]{16}$''']
+
+[[allowlists]]
+description = "credential-scrub fixtures: only the known fake values in these four files, so a real credential added later is still reported"
+condition = "AND"
+paths = [
+  '''^crates/velnor-ci/tests/it/cache_credential_scrub\.rs$''',
+  '''^crates/velnor-ci/tests/it/cache_credential_scrub_crates\.rs$''',
+  '''^crates/velnor-ci/tests/it/cache_credential_scrub_hardening\.rs$''',
+  '''^crates/velnor-ci/tests/it/cache_credential_scrub_ancestry\.rs$''',
+]
+regexTarget = "secret"
+regexes = [
+  '''^0123456789abcdef0123456789abcdef01234567$''',
+  '''^ghs_secret$''',
+  '''^glpat\-abcdefghijklmnopqrst$''',
+  '''^sec\\\\\\nret$''',
+  '''^secret$''',
+]
+
+[[allowlists]]
+description = "test fixtures and tests with fake tokens, keys or public upstream material"
+paths = [
+  '''^crates/velnor-ci/tests/it/cache_private_repo\.rs$''',
+  '''^crates/velnor-ci/tests/it/public_probe\.rs$''',
+  '''^crates/velnor-ci/tests/it/audit/selection\.rs$''',
+  '''^crates/velnor-runner/crates/velnor-runner-attestation/tests/fixtures/tough/snakeoil\.pem$''',
+  '''^generator/crates/velnor-gen/tests/it/detect_private\.rs$''',
+  '''^crates/velnor-runner/crates/velnor-runner-host/src/launch/gate/removal_tests\.rs$''',
+  '''^crates/velnor-actions-contract/src/(config/dbt|workflow/qualification_cache_lineage)_tests\.rs$''',
+  '''^crates/velnor-actions-mise/tests/impl_mise_env_policy\.rs$''',
+]

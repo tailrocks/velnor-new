@@ -10,6 +10,7 @@ use velnor_render::{MAX_ENV_CHARACTERS, Rule, rendered_workflow};
 use crate::facts::TestResult;
 use crate::needs_size_plan::{saving_facts, saving_plan, test_packages};
 
+mod anchor;
 mod realized;
 
 use realized::{realized_needs, workflow_jobs};

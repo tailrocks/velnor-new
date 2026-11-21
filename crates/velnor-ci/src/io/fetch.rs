@@ -3,15 +3,12 @@
 
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use std::time::Duration;
 
 use crate::cli::FetchArgs;
 use crate::error::CiError;
 use crate::github::GitHubWrite;
 use crate::trusted_roots::BUNDLE_VARIABLE;
-
-use super::crates_mirror_args::with_mirror_config;
 
 pub(super) const TOKEN_VARIABLE: &str = "VELNOR_PRIVATE_TOKEN";
 const API_VARIABLE: &str = "VELNOR_API_URL";
@@ -42,11 +39,11 @@ const COMPILER_SELECTORS: &[(&str, &str)] = &[
     ("CARGO_BUILD_RUSTC_WRAPPER", ""),
     ("CARGO_BUILD_RUSTC_WORKSPACE_WRAPPER", ""),
 ];
-const TOKEN_GIT_PROTOCOLS: &str = "https:http:file";
+const TOKEN_GIT_PROTOCOLS: &str = "https";
 const SERVER_VARIABLE: &str = "VELNOR_SERVER_URL";
 const DEFAULT_SERVER: &str = "https://github.com";
 pub(super) const REVOKE_PATH: &str = "/installation/token";
-const FORK_HINT: &str = "no token was created: a pull request from a fork gets none, and the sources cache did not hold every dependency";
+pub(super) const FORK_HINT: &str = "no token was created: a pull request from a fork gets none, and the sources cache did not hold every dependency";
 
 pub(super) fn fetch(args: &FetchArgs) -> Result<String, CiError> {
     let token = std::env::var(TOKEN_VARIABLE)
@@ -63,8 +60,11 @@ pub(super) fn fetch(args: &FetchArgs) -> Result<String, CiError> {
                 e.context("the fetch token could not be revoked; it expires within the hour")
             })
     });
-    outcome?;
+    let scratch = outcome?;
     revocation?;
+    if let Some(scratch) = scratch {
+        scratch.keep_index()?;
+    }
     Ok(if token.is_some() {
         "Fetched the dependencies and revoked the token\n".to_owned()
     } else {
@@ -72,36 +72,98 @@ pub(super) fn fetch(args: &FetchArgs) -> Result<String, CiError> {
     })
 }
 
-fn fetch_with(args: &FetchArgs, token: Option<&str>) -> Result<(), CiError> {
-    let home = account_home()?;
-    let trusted = Trusted::new(&home, &args.trusted_dir);
-    let search = search_path();
-    let cargo = trusted.program("cargo", &search, false)?;
-    let git = trusted.program("git", &search, true)?;
-    let inherited = Inherited {
+fn fetch_with(
+    args: &FetchArgs,
+    token: Option<&str>,
+) -> Result<Option<super::fetch_home::Scratch>, CiError> {
+    let home = super::fetch_fixed::account_home(args.home.as_deref())?;
+    let fixed = if args.no_fixed_toolchain {
+        None
+    } else {
+        super::fetch_fixed::Fixed::system().find()
+    };
+    let mut roots = args.trusted_dir.clone();
+    roots.extend(fixed.iter().flat_map(super::fetch_fixed::Located::roots));
+    let mut trusted = Trusted::new(&home, &roots);
+    let mut inherited = Inherited {
         cargo_home: std::env::var_os("CARGO_HOME"),
         rustup_home: std::env::var_os("RUSTUP_HOME"),
     };
+    let scratch = if fixed.is_some() || token.is_some() {
+        let cache = match fixed {
+            Some(_) => super::fetch_home::cache_home(&home, inherited.cargo_home.as_deref()),
+            None => trusted.home_variable(
+                inherited.cargo_home.as_ref(),
+                home.join(".cargo"),
+                "CARGO_HOME",
+            )?,
+        };
+        let temp = super::fetch_home::temp_parent(&home, token.is_some())?;
+        Some(super::fetch_home::Scratch::create(
+            &cache,
+            &temp,
+            token.is_none(),
+        )?)
+    } else {
+        None
+    };
+    if let Some(scratch) = &scratch {
+        trusted.roots.push(scratch.path().to_path_buf());
+        inherited = match &fixed {
+            Some(fixed) => fixed.adopt(scratch.path()),
+            None => Inherited {
+                cargo_home: Some(scratch.path().into()),
+                rustup_home: inherited.rustup_home,
+            },
+        };
+    }
+    let search = search_path();
+    let mut cargo = super::fetch_fixed::cargo(fixed.as_ref(), &trusted, &home, &search)?;
+    let git = trusted.program("git", &search, true)?;
     let mirror = super::crates_mirror::runner_config()?;
     let server = Server::from_environment()?;
-    let mut environment = trusted.environment(&home, &cargo, &git, &inherited, token, &server)?;
-    let mut cargo = cargo;
-    if token.is_some()
-        && let Some(pinned) = super::fetch_toolchain::pin(&cargo, &environment, &trusted)?
-    {
-        if let Some(real) = pinned.cargo {
-            cargo = real;
-            environment = trusted.environment(&home, &cargo, &git, &inherited, token, &server)?;
-        }
-        environment.push(("RUSTUP_TOOLCHAIN".into(), pinned.name));
+    let neutral = scratch
+        .as_ref()
+        .filter(|_| token.is_some())
+        .map(super::fetch_home::Scratch::path);
+    let mut toolchain = None;
+    let mut rustc = None;
+    if let Some(neutral) = neutral {
+        let rustup_home = trusted.home_variable(
+            inherited.rustup_home.as_ref(),
+            home.join(".rustup"),
+            "RUSTUP_HOME",
+        )?;
+        let resolved = super::fetch_toolchain::resolve(
+            &cargo,
+            &home,
+            &rustup_home,
+            neutral,
+            &trusted,
+            fixed.as_ref(),
+        )?;
+        cargo = resolved.cargo;
+        toolchain = Some(resolved.toolchain);
+        rustc = resolved.rustc;
     }
-    run_fetches(
+    let mut environment = trusted.environment(&home, &cargo, &git, &inherited, token, &server)?;
+    environment.extend(toolchain.map(|name| ("RUSTUP_TOOLCHAIN".into(), name)));
+    for name in ["RUSTC", "CARGO_BUILD_RUSTC"] {
+        environment.extend(rustc.iter().map(|rustc| (name.into(), rustc.into())));
+    }
+    super::fetch_run::run_fetches(
         &cargo,
         &environment,
         mirror.as_deref(),
         &args.manifest_path,
-        token.is_some(),
-    )
+        neutral,
+    )?;
+    if token.is_some()
+        && let Some(scratch) = &scratch
+    {
+        scratch.keep_git()?;
+    }
+    Ok(scratch.filter(|_| token.is_some()))
 }
 
 pub(super) fn api_client(
@@ -113,71 +175,6 @@ pub(super) fn api_client(
         .filter(|api| super::http::trusted_api(api))
         .ok_or_else(|| CiError::new(format!("set {API_VARIABLE} to github.api_url")))?;
     Ok(super::http::HttpGitHub::new(api, token, timeout))
-}
-
-fn run_fetches(
-    cargo: &Path,
-    environment: &[(OsString, OsString)],
-    mirror: Option<&Path>,
-    manifests: &[PathBuf],
-    with_token: bool,
-) -> Result<(), CiError> {
-    for manifest in manifests {
-        let mut command = Command::new(cargo);
-        command
-            .env_clear()
-            .envs(environment.iter().map(|(k, v)| (k, v)));
-        let neutralised = if with_token {
-            let cargo_home = environment
-                .iter()
-                .find(|(name, _)| name == "CARGO_HOME")
-                .map(|(_, home)| PathBuf::from(home))
-                .unwrap_or_default();
-            let here = manifest
-                .parent()
-                .filter(|parent| !parent.as_os_str().is_empty())
-                .unwrap_or(Path::new("."));
-            super::fetch_credentials::neutralise(here, &cargo_home)?
-        } else {
-            super::fetch_credentials::Neutralised::default()
-        };
-        command.envs(neutralised.environment.iter().map(|(k, v)| (k, v)));
-        let directory = manifest
-            .parent()
-            .filter(|parent| !parent.as_os_str().is_empty());
-        if let Some(directory) = directory {
-            command.current_dir(directory);
-        }
-        let mut arguments: Vec<OsString> = vec!["fetch".into(), "--locked".into()];
-        arguments.extend([
-            "--manifest-path".into(),
-            manifest.file_name().unwrap_or(manifest.as_os_str()).into(),
-        ]);
-        if with_token {
-            arguments.extend(["--config".into(), "net.offline=false".into()]);
-            for config in &neutralised.config {
-                arguments.extend(["--config".into(), config.into()]);
-            }
-        } else {
-            arguments.push("--offline".into());
-        }
-        command.args(match mirror {
-            Some(mirror) => with_mirror_config(mirror.as_os_str(), arguments),
-            None => arguments,
-        });
-        let status = command
-            .status()
-            .map_err(|e| CiError::new(format!("cannot run {}: {e}", cargo.display())))?;
-        if !status.success() {
-            let why = if with_token { "" } else { FORK_HINT };
-            return Err(CiError::new(format!(
-                "cargo fetch for {} failed with {status}{}{why}",
-                manifest.display(),
-                if with_token { "" } else { "; " }
-            )));
-        }
-    }
-    Ok(())
 }
 
 pub(super) struct Server {
@@ -230,7 +227,7 @@ pub(super) struct Inherited {
 }
 
 pub(super) struct Trusted {
-    roots: Vec<PathBuf>,
+    pub(super) roots: Vec<PathBuf>,
 }
 
 impl Trusted {
@@ -274,7 +271,9 @@ impl Trusted {
             };
             let trusted_directory = self.within(&directory)
                 || (system && SYSTEM_DIRECTORIES.iter().any(|d| directory == Path::new(d)));
+            let resolved_trusted = !self.within(&directory) || self.within(&resolved);
             if trusted_directory
+                && resolved_trusted
                 && resolved.is_file()
                 && !super::fetch_real_cargo::is_mise_front(&candidate, &resolved)
             {
@@ -286,6 +285,26 @@ impl Trusted {
         )))
     }
 
+    pub(super) fn home_variable(
+        &self,
+        value: Option<&OsString>,
+        default: PathBuf,
+        name: &str,
+    ) -> Result<PathBuf, CiError> {
+        let Some(value) = value.filter(|value| !value.is_empty()) else {
+            return Ok(default);
+        };
+        let path = PathBuf::from(value);
+        if path.is_absolute() && self.within(&path) {
+            Ok(path)
+        } else {
+            Err(CiError::new(format!(
+                "{name} is {}, outside the tool directories the runner installed",
+                path.display()
+            )))
+        }
+    }
+
     pub(super) fn environment(
         &self,
         home: &Path,
@@ -295,26 +314,16 @@ impl Trusted {
         token: Option<&str>,
         server: &Server,
     ) -> Result<Vec<(OsString, OsString)>, CiError> {
-        let home_variable = |value: &Option<OsString>, default: PathBuf, name: &str| match value
-            .as_ref()
-            .filter(|value| !value.is_empty())
-        {
-            None => Ok(default),
-            Some(value) => {
-                let path = PathBuf::from(value);
-                if path.is_absolute() && self.within(&path) {
-                    Ok(path)
-                } else {
-                    Err(CiError::new(format!(
-                        "{name} is {}, outside the tool directories the runner installed",
-                        path.display()
-                    )))
-                }
-            }
-        };
-        let cargo_home = home_variable(&inherited.cargo_home, home.join(".cargo"), "CARGO_HOME")?;
-        let rustup_home =
-            home_variable(&inherited.rustup_home, home.join(".rustup"), "RUSTUP_HOME")?;
+        let cargo_home = self.home_variable(
+            inherited.cargo_home.as_ref(),
+            home.join(".cargo"),
+            "CARGO_HOME",
+        )?;
+        let rustup_home = self.home_variable(
+            inherited.rustup_home.as_ref(),
+            home.join(".rustup"),
+            "RUSTUP_HOME",
+        )?;
         let directories: Vec<PathBuf> = [cargo.parent(), git.parent()]
             .into_iter()
             .flatten()
@@ -375,16 +384,5 @@ fn non_empty_variable(name: &str) -> Option<OsString> {
 }
 
 pub(super) fn search_path() -> Vec<PathBuf> {
-    std::env::var_os("PATH")
-        .map(|path| std::env::split_paths(&path).collect())
-        .unwrap_or_default()
-}
-
-fn account_home() -> Result<PathBuf, CiError> {
-    nix::unistd::User::from_uid(nix::unistd::Uid::current())
-        .ok()
-        .flatten()
-        .map(|user| user.dir)
-        .filter(|dir| dir.is_absolute())
-        .ok_or_else(|| CiError::new("cannot read the home directory of the runner account"))
+    std::env::var_os("PATH").map_or_default(|path| std::env::split_paths(&path).collect())
 }

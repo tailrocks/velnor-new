@@ -50,6 +50,7 @@ pub(super) fn with_store(
         .current_dir(repo.root())
         .env("RUNNER_TEMP", repo.root())
         .env("GITHUB_JOB", "rust")
+        .env("VELNOR_MBX_REPORTS", "true")
         .env("VELNOR_REPORT_CACHES", cache_plan().to_string())
         .env("VELNOR_REPORT_STEPS", TOOLS_HIT)
         .env_remove("GITHUB_TOKEN")
@@ -93,6 +94,31 @@ fn report_records_mbx_sessions_a_primed_store_and_toolchain_installs() -> Result
         "{:?}",
         unprimed.violations
     );
+    Ok(())
+}
+
+#[test]
+fn only_object_cache_entries_make_the_store_primed_not_out_dirs_or_shims() -> ResultTest {
+    let repo = fixture("report-store-out-dirs")?;
+    repo.git(&["add", "."]);
+    run_cargo(&repo)?;
+    let old = UNIX_EPOCH + Duration::from_secs(1_000_000);
+    for file in [
+        "store/out-dirs/v1/0123/private.rs",
+        "store/shims/rust/mbx-rustc",
+        "store/actions/sessions/v1/session",
+    ] {
+        let path = repo.root().join(file);
+        fs::create_dir_all(path.parent().ok_or("parent")?)?;
+        fs::write(&path, "entry")?;
+        fs::File::options()
+            .write(true)
+            .open(&path)?
+            .set_modified(old)?;
+    }
+    assert!(!with_store(&repo, true)?.mbx.store_primed);
+    primed_store(&repo)?;
+    assert!(with_store(&repo, true)?.mbx.store_primed);
     Ok(())
 }
 
