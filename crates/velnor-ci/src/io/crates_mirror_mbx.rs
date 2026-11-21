@@ -10,6 +10,38 @@ use super::crates_mirror::failed;
 
 pub(super) const ENV: &str = "VELNOR_CARGO_MBX";
 pub(super) const VALUE: &str = "required";
+const MANIFEST_COMMANDS: &[&str] = &[
+    "add",
+    "b",
+    "bench",
+    "build",
+    "c",
+    "check",
+    "clean",
+    "clippy",
+    "d",
+    "doc",
+    "fetch",
+    "fix",
+    "generate-lockfile",
+    "locate-project",
+    "metadata",
+    "package",
+    "pkgid",
+    "publish",
+    "r",
+    "remove",
+    "rm",
+    "run",
+    "rustc",
+    "rustdoc",
+    "t",
+    "test",
+    "tree",
+    "update",
+    "vendor",
+    "verify-project",
+];
 
 pub(super) fn required(args: &[OsString]) -> bool {
     recorded() && !nested_in_cargo() && declared_for_project(args)
@@ -28,32 +60,59 @@ fn declared_for_project(args: &[OsString]) -> bool {
     let Ok(work) = std::env::current_dir() else {
         return true;
     };
+    let Ok(workspace) = workspace() else {
+        return true;
+    };
     let directory = project_directory(&work, args);
     let directory = std::fs::canonicalize(&directory).unwrap_or(directory);
-    scope(&directory, workspace().as_deref())
+    scope(&directory, workspace.as_deref())
         .into_iter()
         .any(crate::mbx_declared::declared_or_unreadable_in)
 }
 
 fn project_directory(work: &Path, args: &[OsString]) -> PathBuf {
-    manifest(args)
+    let command = subcommand(args);
+    if command == Some("install")
+        && let Some(path) = option_value(args, "--path", false)
+    {
+        return work.join(path);
+    }
+    let shorthand = command.is_some_and(|command| MANIFEST_COMMANDS.contains(&command));
+    option_value(args, "--manifest-path", shorthand)
         .and_then(|manifest| work.join(manifest).parent().map(Path::to_path_buf))
         .unwrap_or_else(|| work.to_path_buf())
 }
 
-fn manifest(args: &[OsString]) -> Option<OsString> {
+fn subcommand(args: &[OsString]) -> Option<&str> {
     let mut args = args.iter().take_while(|arg| *arg != "--");
     while let Some(arg) = args.next() {
-        if arg == "--manifest-path" || arg == "-m" {
+        let arg = arg.to_str()?;
+        if matches!(arg, "-C" | "-Z" | "--config" | "--color") {
+            args.next();
+        } else if !arg.starts_with(['-', '+']) {
+            return Some(arg);
+        }
+    }
+    None
+}
+
+fn option_value(args: &[OsString], long: &str, shorthand: bool) -> Option<OsString> {
+    let mut args = args.iter().take_while(|arg| *arg != "--");
+    while let Some(arg) = args.next() {
+        if arg == long || (shorthand && arg == "-m") {
             return args.next().cloned();
         }
         let Some(arg) = arg.to_str() else {
             continue;
         };
-        if let Some(value) = arg.strip_prefix("--manifest-path=") {
+        if let Some(value) = arg
+            .strip_prefix(long)
+            .and_then(|rest| rest.strip_prefix('='))
+        {
             return Some(value.into());
         }
-        if !arg.starts_with("--")
+        if shorthand
+            && !arg.starts_with("--")
             && let Some(value) = arg.strip_prefix("-m")
         {
             return Some(value.strip_prefix('=').unwrap_or(value).into());
@@ -62,9 +121,11 @@ fn manifest(args: &[OsString]) -> Option<OsString> {
     None
 }
 
-fn workspace() -> Option<PathBuf> {
-    let workspace = std::env::var_os("GITHUB_WORKSPACE").filter(|value| !value.is_empty())?;
-    std::fs::canonicalize(workspace).ok()
+fn workspace() -> std::io::Result<Option<PathBuf>> {
+    std::env::var_os("GITHUB_WORKSPACE")
+        .filter(|value| !value.is_empty())
+        .map(std::fs::canonicalize)
+        .transpose()
 }
 
 fn scope<'a>(directory: &'a Path, workspace: Option<&Path>) -> Vec<&'a Path> {

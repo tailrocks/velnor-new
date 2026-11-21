@@ -206,6 +206,71 @@ fn every_manifest_path_spelling_decides_by_the_project_it_names() -> TestResult 
 }
 
 #[test]
+fn a_custom_subcommand_keeps_its_own_dash_m_and_stays_scoped_to_the_launching_directory()
+-> TestResult {
+    let repo = declared_job()?;
+    let spec = repo.root().join("scratch-project/spec");
+    let spec = spec.display().to_string();
+    assert_refused(&run_with_args(&repo, repo.root(), &["foo", "-m", &spec])?);
+    assert_refused(&run_with_args(
+        &repo,
+        repo.root(),
+        &["foo", &format!("-m{spec}")],
+    )?);
+    let manifest = repo.root().join("scratch-project/Cargo.toml");
+    let manifest = manifest.display().to_string();
+    assert_plain(&run_with_args(
+        &repo,
+        repo.root(),
+        &["foo", "--manifest-path", &manifest],
+    )?);
+    assert_plain(&run_with_args(
+        &repo,
+        repo.root(),
+        &[
+            "+nightly",
+            "-Z",
+            "unstable-options",
+            "build",
+            "-m",
+            &manifest,
+        ],
+    )?);
+    Ok(())
+}
+
+#[test]
+fn an_install_from_a_path_is_scoped_by_the_crate_it_installs() -> TestResult {
+    let repo = declared_job()?;
+    let launch = repo.root().join("launch");
+    let inside = repo.root().display().to_string();
+    let outside = repo.root().join("scratch-project").display().to_string();
+    for spelling in [
+        vec!["install".to_owned(), "--path".to_owned(), inside.clone()],
+        vec!["install".to_owned(), format!("--path={inside}")],
+    ] {
+        let args: Vec<&str> = spelling.iter().map(String::as_str).collect();
+        assert_refused(&run_with_args(&repo, &launch, &args)?);
+    }
+    assert_plain(&run_with_args(
+        &repo,
+        repo.root(),
+        &["install", "--path", &outside],
+    )?);
+    assert_plain(&run_with_args(&repo, &launch, &["add", "--path", &inside])?);
+    Ok(())
+}
+
+#[test]
+fn a_workspace_path_that_cannot_be_resolved_fails_closed() -> TestResult {
+    let repo = declared_job()?;
+    let member = repo.root().join("crates/member");
+    let gone = repo.root().join("renamed-checkout");
+    assert_refused(&run_in(&repo, &member, Some(&gone), false)?);
+    Ok(())
+}
+
+#[test]
 fn an_unreadable_or_invalid_config_counts_as_declaring_mbx() -> TestResult {
     let broken: [(&str, &[u8]); 3] = [
         ("invalid toml", b"[tools\n"),
