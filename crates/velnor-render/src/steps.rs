@@ -60,8 +60,9 @@ pub(crate) fn rendered_job(job: &Job, plan: &WorkflowPlan) -> RenderedJob {
     let tests = Tests::of(job);
     let mut steps =
         crate::helper_integrity::secure_steps(job, job_steps(job, restores, audit, &tests, lane));
-    let env = crate::cargo::hoist_target_dir(job, &mut steps);
-    RenderedJob {
+    let mut env = crate::cargo::hoist_target_dir(job, &mut steps);
+    env.extend(crate::cargo_target::mbx_reports_env(job));
+    crate::mise_digest::pin_to_runner_platform(RenderedJob {
         id: job.id.to_string(),
         name: job.name.clone(),
         check_name: crate::selection_name::title(job),
@@ -98,14 +99,14 @@ pub(crate) fn rendered_job(job: &Job, plan: &WorkflowPlan) -> RenderedJob {
             }))
             .chain(test_outputs(job, &tests))
             .chain(merge_group_output(job))
-            .chain(crate::tools_steps::anchor_output(&job.steps))
+            .chain(crate::tools_steps::anchor_outputs(&job.steps))
             .chain(lane_outputs(&job.steps))
             .chain(crate::base_steps::public::job_output(&job.steps))
             .collect(),
         cache_mode: crate::cache::saving_mode(job),
         steps,
         ..RenderedJob::default()
-    }
+    })
 }
 
 fn test_outputs<'a>(job: &'a Job, tests: &'a Tests) -> impl Iterator<Item = (String, String)> + 'a {

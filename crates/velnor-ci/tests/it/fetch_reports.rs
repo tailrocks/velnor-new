@@ -90,14 +90,12 @@ fn fetch(served: &Served, dir: &Path) -> Output {
 }
 
 fn fetched(dir: &Path) -> BTreeSet<String> {
-    fs::read_dir(dir.join("reports"))
-        .map(|entries| {
-            entries
-                .flatten()
-                .map(|entry| entry.file_name().to_string_lossy().into_owned())
-                .collect()
-        })
-        .unwrap_or_default()
+    fs::read_dir(dir.join("reports")).map_or_default(|entries| {
+        entries
+            .flatten()
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .collect()
+    })
 }
 
 fn tree(root: &Path) -> BTreeMap<String, Vec<u8>> {

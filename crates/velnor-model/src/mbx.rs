@@ -19,3 +19,10 @@ impl MbxMode {
         !matches!(self, Self::Default)
     }
 }
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum MbxStats {
+    #[default]
+    Summary,
+    Reports,
+}

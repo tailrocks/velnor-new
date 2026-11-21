@@ -32,6 +32,7 @@ pub mod io;
 pub mod lane_guard;
 pub mod logscan;
 pub mod mbx_declared;
+pub mod mbx_report;
 pub mod mbx_seed;
 pub mod mbx_seed_copy;
 pub mod mbx_store;
