@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::mbx_reports::{SWITCH, cargo, cargo_command, cargo_with, report, report_json, session};
-use super::mbx_socket::{fill_backlog, run_bounded};
+use super::mbx_socket::{SocketDir, fill_backlog, run_bounded};
 use super::{Repo, ResultTest, fixture};
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
@@ -135,7 +135,8 @@ fn a_dangling_json_symlink_is_one_unreadable_report_not_also_missing() -> Result
 #[test]
 fn a_session_inside_an_enclosing_mbx_session_gets_no_report_path() -> ResultTest {
     let repo = fixture("mbx-reports-nested")?;
-    let socket = repo.root().join("cache-agent.sock");
+    let sockets = SocketDir::for_repo(&repo)?;
+    let socket = sockets.socket("cache-agent.sock");
     let _daemon = std::os::unix::net::UnixListener::bind(&socket)?;
     cargo_with(
         &repo,
@@ -157,7 +158,8 @@ fn a_session_inside_an_enclosing_mbx_session_gets_no_report_path() -> ResultTest
 #[test]
 fn a_stale_socket_left_by_a_dead_listener_does_not_hide_the_session() -> ResultTest {
     let repo = fixture("mbx-reports-stale-socket")?;
-    let socket = repo.root().join("cache-agent.sock");
+    let sockets = SocketDir::for_repo(&repo)?;
+    let socket = sockets.socket("cache-agent.sock");
     drop(UnixListener::bind(&socket)?);
     cargo_with(
         &repo,
@@ -186,7 +188,8 @@ fn a_stale_socket_is_not_inherited_by_a_command_that_reports_nothing() -> Result
         "#!/bin/sh\nif [ -z \"${MBX_SOCKET+x}\" ]; then printf unset > \"$FAKE_CHILD_ENV\"; else printf set > \"$FAKE_CHILD_ENV\"; fi\n",
     )?;
     fs::set_permissions(&nextest, fs::Permissions::from_mode(0o755))?;
-    let socket = repo.root().join("cache-agent.sock");
+    let sockets = SocketDir::for_repo(&repo)?;
+    let socket = sockets.socket("cache-agent.sock");
     drop(UnixListener::bind(&socket)?);
     let observed = repo.root().join("child-env");
     let output = run_bounded(
@@ -212,7 +215,8 @@ fn a_stale_socket_is_not_inherited_by_a_command_that_reports_nothing() -> Result
 #[test]
 fn a_listener_with_a_full_queue_does_not_stall_the_session() -> ResultTest {
     let repo = fixture("mbx-reports-busy-socket")?;
-    let socket = repo.root().join("cache-agent.sock");
+    let sockets = SocketDir::for_repo(&repo)?;
+    let socket = sockets.socket("cache-agent.sock");
     let _listener = UnixListener::bind(&socket)?;
     let _clients = fill_backlog(&socket)?;
     let mut command = cargo_command(

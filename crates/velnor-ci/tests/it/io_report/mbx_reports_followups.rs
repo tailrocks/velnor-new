@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::mbx_reports::{cargo, cargo_command, cargo_with, report, report_json, session};
+use super::mbx_socket::SocketDir;
 use super::{ResultTest, fixture};
 use serde_json::json;
 use std::collections::BTreeMap;
@@ -33,7 +34,8 @@ fn reports(repo: &super::Repo) -> Vec<String> {
 #[test]
 fn a_stale_socket_path_does_not_make_a_cargo_call_look_nested() -> ResultTest {
     let repo = fixture("mbx-reports-stale-socket")?;
-    let dead = repo.root().join("dead.sock");
+    let sockets = SocketDir::for_repo(&repo)?;
+    let dead = sockets.socket("dead.sock");
     cargo_with(
         &repo,
         "build",
@@ -71,7 +73,8 @@ fn a_socket_path_that_is_a_regular_file_is_not_a_live_session() -> ResultTest {
 #[test]
 fn an_existing_socket_file_is_a_live_session_without_a_connection() -> ResultTest {
     let repo = fixture("mbx-reports-orphan-socket")?;
-    let orphan = repo.root().join("orphan.sock");
+    let sockets = SocketDir::for_repo(&repo)?;
+    let orphan = sockets.socket("orphan.sock");
     let _listener = UnixListener::bind(&orphan)?;
     cargo_with(
         &repo,
@@ -89,7 +92,8 @@ fn an_existing_socket_file_is_a_live_session_without_a_connection() -> ResultTes
 #[test]
 fn a_relative_socket_path_is_not_a_live_session() -> ResultTest {
     let repo = fixture("mbx-reports-relative-socket")?;
-    let _listener = UnixListener::bind(repo.root().join("cache-agent.sock"))?;
+    let sockets = SocketDir::for_repo(&repo)?;
+    let _listener = UnixListener::bind(sockets.socket("cache-agent.sock"))?;
     cargo_with(
         &repo,
         "build",
@@ -107,7 +111,8 @@ fn a_relative_socket_path_is_not_a_live_session() -> ResultTest {
 #[test]
 fn a_socket_whose_listener_never_accepts_does_not_block_the_check() -> ResultTest {
     let repo = fixture("mbx-reports-stuck-listener")?;
-    let stuck = repo.root().join("stuck.sock");
+    let sockets = SocketDir::for_repo(&repo)?;
+    let stuck = sockets.socket("stuck.sock");
     let _listener = UnixListener::bind(&stuck)?;
     let mut command = cargo_command(
         &repo,
@@ -147,7 +152,7 @@ fn every_mbx_outcome_category_of_a_report_reaches_the_metrics() -> ResultTest {
     assert_eq!(
         session,
         json!({
-            "hits": 3, "misses": 1, "not_looked_up": 2, "verifications": 4,
+            "hits": 3, "misses": 1, "not_looked_up": 2, "verifications": 4, "bypassed": 5,
             "bypasses": {"compiler-query": 2, "unsupported-flag": 5},
             "compiler": {
                 "miss": {"invocations": 1, "duration_ns": 900},
@@ -192,11 +197,12 @@ fn a_session_without_extra_categories_keeps_its_metrics_bytes() -> ResultTest {
 
 #[test]
 fn a_newer_report_with_unknown_fields_and_the_older_bypasses_shape_is_still_read() {
-    let newer = br#"{"version":5,"hits":1,"misses":0,"unconsulted":0,"added_later":{"a":1},"bypasses":{"compiler-query":"2","unsupported-flag":{"count":5},"other":1},"compiler":{"miss":{"invocations":1,"duration_ns":9,"added_later":true},"future":"text"}}"#;
+    let newer = br#"{"version":5,"hits":1,"misses":0,"unconsulted":0,"added_later":{"a":1},"bypasses":{"compiler-query":2,"other":1},"compiler":{"miss":{"invocations":1,"duration_ns":9,"added_later":true},"future":"text"}}"#;
     assert_eq!(
         parse(newer),
         Ok(Some(MbxSession {
-            bypasses: BTreeMap::from([("other".to_owned(), 1)]),
+            bypasses: BTreeMap::from([("compiler-query".to_owned(), 2), ("other".to_owned(), 1)]),
+            bypassed: 1,
             compiler: BTreeMap::from([(
                 "miss".to_owned(),
                 MbxCompilerWork {
@@ -206,6 +212,16 @@ fn a_newer_report_with_unknown_fields_and_the_older_bypasses_shape_is_still_read
             )]),
             ..session(1, 0, 0)
         }))
+    );
+    let non_numeric = br#"{"version":5,"hits":1,"misses":0,"unconsulted":0,"bypasses":{"compiler-query":"2","other":1}}"#;
+    assert!(
+        parse(non_numeric).is_err(),
+        "a string bypass count must not be zero"
+    );
+    let object = br#"{"version":5,"hits":1,"misses":0,"unconsulted":0,"bypasses":{"unsupported-flag":{"count":5}}}"#;
+    assert!(
+        parse(object).is_err(),
+        "an object bypass count must not be zero"
     );
 }
 
@@ -246,6 +262,7 @@ fn the_reader_maps_a_real_mbx_report_and_names_what_it_cannot_read() {
         parse(bypassed),
         Ok(Some(MbxSession {
             bypasses: BTreeMap::from([("compiler-query".to_owned(), 1), ("other".to_owned(), 1)]),
+            bypassed: 1,
             ..session(0, 0, 0)
         }))
     );
@@ -261,4 +278,23 @@ fn the_reader_maps_a_real_mbx_report_and_names_what_it_cannot_read() {
     assert!(parse(br#"{"version":5,"hits":1}"#).is_err_and(|e| e.contains("without its counts")));
     assert!(parse(br#"{"hits":1}"#).is_err_and(|e| e.contains("no numeric version")));
     assert!(parse(b"{").is_err_and(|e| e.contains("not JSON")));
+}
+
+#[test]
+fn a_version_five_report_with_only_incremental_compilations_yields_a_session() {
+    let incremental =
+        br#"{"version":5,"hits":0,"misses":0,"unconsulted":0,"incremental_compilations":15}"#;
+    assert_eq!(parse(incremental), Ok(Some(session(0, 0, 15))));
+}
+
+#[test]
+fn a_verification_only_report_is_a_session() {
+    let verified = br#"{"version":5,"hits":0,"misses":0,"unconsulted":0,"verifications":4,"bypasses":{},"compiler":{}}"#;
+    assert_eq!(
+        parse(verified),
+        Ok(Some(MbxSession {
+            verifications: Some(4),
+            ..session(0, 0, 0)
+        }))
+    );
 }
