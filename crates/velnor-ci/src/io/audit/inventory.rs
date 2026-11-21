@@ -259,4 +259,6 @@ pub(super) fn load(output: &Path) -> io::Result<Arc<Evidence>> {
 }
 
 #[cfg(test)]
+mod revisit;
+#[cfg(test)]
 mod tests;
