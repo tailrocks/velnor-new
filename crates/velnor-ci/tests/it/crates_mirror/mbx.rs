@@ -13,6 +13,7 @@ use super::fixture::{TestResult, setup, setup_command};
 mod alias;
 mod scope;
 mod state;
+mod target;
 
 pub(super) const REGISTRY: &str = "sparse+https://mirror.example/index/";
 pub(super) const MBX_DECLARED: &str = "[tools]\nrust = { version = \"1.100.0\", mr_boxington = true }\n\n[wrappers.cargo]\ncommand = \"mbx\"\n";

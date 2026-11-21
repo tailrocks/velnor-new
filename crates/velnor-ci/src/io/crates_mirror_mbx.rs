@@ -74,19 +74,54 @@ fn declared_for_project(args: &[OsString]) -> bool {
 }
 
 fn project_directory(work: &Path, args: &[OsString]) -> Option<PathBuf> {
-    let args = super::crates_mirror_alias::expand(work, args, MANIFEST_COMMANDS)?;
+    let base = directory_flag(work, args);
+    let args = super::crates_mirror_alias::expand(&base, args, MANIFEST_COMMANDS)?;
     let command = subcommand(&args).map(|(_, command)| command);
+    if let Some(target) = command.filter(|command| direct_target(command)) {
+        let script = base.join(target);
+        return Some(
+            script
+                .parent()
+                .map_or_else(|| base.clone(), Path::to_path_buf),
+        );
+    }
     if command == Some("install")
         && let Some(path) = option_value(&args, "--path", false)
     {
-        return Some(work.join(path));
+        return Some(base.join(path));
     }
     let shorthand = command.is_some_and(|command| MANIFEST_COMMANDS.contains(&command));
     Some(
         option_value(&args, "--manifest-path", shorthand)
-            .and_then(|manifest| work.join(manifest).parent().map(Path::to_path_buf))
-            .unwrap_or_else(|| work.to_path_buf()),
+            .and_then(|manifest| base.join(manifest).parent().map(Path::to_path_buf))
+            .unwrap_or_else(|| base.clone()),
     )
+}
+
+fn directory_flag(work: &Path, args: &[OsString]) -> PathBuf {
+    let mut base = work.to_path_buf();
+    let mut seen = args.iter().take_while(|arg| *arg != "--");
+    while let Some(arg) = seen.next() {
+        let Some(text) = arg.to_str() else {
+            break;
+        };
+        if text == "-C" {
+            if let Some(directory) = seen.next() {
+                base = base.join(directory);
+            }
+        } else if matches!(text, "-Z" | "--config" | "--color") {
+            seen.next();
+        } else if !text.starts_with(['-', '+']) {
+            break;
+        }
+    }
+    base
+}
+
+fn direct_target(command: &str) -> bool {
+    let path = Path::new(command);
+    path.extension().is_some_and(|extension| extension == "rs")
+        || path.file_name().is_some_and(|name| name == "Cargo.toml")
 }
 
 pub(super) fn subcommand(args: &[OsString]) -> Option<(usize, &str)> {

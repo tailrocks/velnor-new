@@ -10,7 +10,7 @@ use toml::{Table, Value};
 use super::crates_mirror_mbx::{option_value, subcommand};
 
 const DEPTH: usize = 8;
-const CONFIGS: &[&str] = &["config.toml", "config"];
+const CONFIGS: &[&str] = &["config", "config.toml"];
 
 enum Alias {
     Found(Vec<OsString>),
@@ -24,7 +24,7 @@ pub(super) fn expand(work: &Path, args: &[OsString], builtin: &[&str]) -> Option
         let Some((index, name)) = subcommand(&args) else {
             return Some(args);
         };
-        if builtin.contains(&name) || name == "install" {
+        if name == "install" {
             return Some(args);
         }
         let name = name.to_owned();
@@ -33,6 +33,7 @@ pub(super) fn expand(work: &Path, args: &[OsString], builtin: &[&str]) -> Option
                 args.splice(index..=index, words);
             }
             Alias::Absent => return Some(args),
+            Alias::Unknown if builtin.contains(&name.as_str()) => return Some(args),
             Alias::Unknown => {
                 return option_value(&args, "--manifest-path", true)
                     .is_none()
@@ -47,7 +48,10 @@ fn lookup(work: &Path, args: &[OsString], name: &str) -> Alias {
     if command_line_may_define_aliases(args) {
         return Alias::Unknown;
     }
-    let variable = format!("CARGO_ALIAS_{}", name.to_uppercase().replace('-', "_"));
+    let variable = format!(
+        "CARGO_ALIAS_{}",
+        name.to_uppercase().replace(['-', '.'], "_")
+    );
     if let Some(value) = std::env::var_os(&variable) {
         return match value.to_str() {
             Some(text) => words(text),
@@ -55,19 +59,28 @@ fn lookup(work: &Path, args: &[OsString], name: &str) -> Alias {
         };
     }
     for directory in config_directories(work) {
-        for config in CONFIGS {
-            match std::fs::read_to_string(directory.join(config)) {
-                Ok(text) => match from_config(&text, name) {
-                    Alias::Absent => {}
-                    found => return found,
-                },
-                Err(error)
-                    if matches!(error.kind(), ErrorKind::NotFound | ErrorKind::NotADirectory) => {}
-                Err(_) => return Alias::Unknown,
-            }
+        match config_text(&directory) {
+            Ok(Some(text)) => match from_config(&text, name) {
+                Alias::Absent => {}
+                found => return found,
+            },
+            Ok(None) => {}
+            Err(_) => return Alias::Unknown,
         }
     }
     Alias::Absent
+}
+
+fn config_text(directory: &Path) -> std::io::Result<Option<String>> {
+    for config in CONFIGS {
+        match std::fs::read_to_string(directory.join(config)) {
+            Ok(text) => return Ok(Some(text)),
+            Err(error)
+                if matches!(error.kind(), ErrorKind::NotFound | ErrorKind::NotADirectory) => {}
+            Err(error) => return Err(error),
+        }
+    }
+    Ok(None)
 }
 
 fn command_line_may_define_aliases(args: &[OsString]) -> bool {

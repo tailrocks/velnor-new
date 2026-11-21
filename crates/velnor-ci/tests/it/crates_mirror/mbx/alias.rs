@@ -3,9 +3,11 @@
 
 use std::fs;
 use std::path::Path;
+use std::process::Output;
 
 use super::super::fixture::TestResult;
 use super::scope::{assert_plain, assert_refused, declared_job, run_with_args};
+use super::{plain_cargo, wrapper_command};
 use crate::io::Repo;
 
 fn aliases(launch: &Path, body: &str) -> Result<(), Box<dyn std::error::Error>> {
@@ -122,5 +124,51 @@ fn an_alias_given_on_the_command_line_fails_closed() -> TestResult {
         &launch,
         &["--config", "alias.xb='build'", "xb", "-m", &outside],
     )?);
+    Ok(())
+}
+
+#[test]
+fn a_user_alias_overrides_a_built_in_alias_of_the_same_name() -> TestResult {
+    let repo = declared_job()?;
+    let launch = repo.root().join("launch");
+    let (inside, outside) = manifests(&repo);
+    aliases(&launch, &format!("[alias]\nb = \"build -m {inside}\"\n"))?;
+    assert_refused(&run_with_args(&repo, &launch, &["b"])?);
+    aliases(&launch, &format!("[alias]\nb = \"build -m {outside}\"\n"))?;
+    assert_plain(&run_with_args(&repo, &launch, &["b"])?);
+    Ok(())
+}
+
+#[test]
+fn the_extensionless_cargo_config_wins_over_config_toml() -> TestResult {
+    let repo = declared_job()?;
+    let launch = repo.root().join("launch");
+    let (inside, outside) = manifests(&repo);
+    aliases(&launch, &format!("[alias]\nxx = \"build -m {outside}\"\n"))?;
+    fs::write(
+        launch.join(".cargo/config"),
+        format!("[alias]\nxx = \"build -m {inside}\"\n"),
+    )?;
+    assert_refused(&run_with_args(&repo, &launch, &["xx"])?);
+    Ok(())
+}
+
+#[test]
+fn a_dotted_alias_name_is_read_from_its_environment_variable() -> TestResult {
+    let repo = declared_job()?;
+    let launch = repo.root().join("launch");
+    let (inside, outside) = manifests(&repo);
+    let plain = plain_cargo(&repo)?;
+    fs::create_dir_all(&launch)?;
+    let run = |value: &str| -> Result<Output, Box<dyn std::error::Error>> {
+        Ok(
+            wrapper_command(repo.root(), &plain, true, &[("CARGO_ALIAS_FOO_BAR", value)])?
+                .current_dir(&launch)
+                .args(["foo.bar"])
+                .output()?,
+        )
+    };
+    assert_refused(&run(&format!("build -m {inside}"))?);
+    assert_plain(&run(&format!("build -m {outside}"))?);
     Ok(())
 }
