@@ -11,12 +11,13 @@
 use std::collections::BTreeSet;
 use std::error::Error;
 
-use velnor_gen::{ConfigFile, GenerateError, key_gates};
+use velnor_gen::{ConfigFile, GenerateError, expected_files, key_gates};
 use velnor_model::Selection;
 use velnor_release::{ReleaseFiles, ReleasePlan};
-use velnor_rust::{BUDGET_KEYS, KEYS, detect};
+use velnor_rust::{BUDGET_KEYS, KEYS, LOCK_PATH, detect};
 
 use crate::pipeline::{pin_helper, view, workflow};
+use crate::release_fixture::{APP, LOCK, release_view};
 
 type Probe = dyn Fn(&toml::Table) -> String;
 
@@ -272,5 +273,29 @@ fn the_keys_tools_v0_1_107_parses_are_accepted_at_107() -> Result<(), Box<dyn Er
             "{config} at 0.1.107: {refused:?}"
         );
     }
+    Ok(())
+}
+
+#[test]
+fn pr_only_checks_key_gate_and_generator_agree_at_0_1_81() -> Result<(), Box<dyn Error>> {
+    let mut release = release_view(&[APP], Some("pr_only_checks = [\"DCO\"]\n"))?;
+    release.files.insert(LOCK_PATH, LOCK.as_bytes().to_vec());
+    let refused = expected_files(&release).err();
+    assert!(
+        matches!(
+            refused,
+            Some(GenerateError::ConfigKeyHelperTooOld {
+                key: "pr_only_checks",
+                first: (0, 1, 82),
+                ..
+            })
+        ),
+        "{refused:?}"
+    );
+    release
+        .files
+        .insert(LOCK_PATH, LOCK.replace("0.1.81", "0.1.82").into_bytes());
+    let accepted = expected_files(&release);
+    assert!(accepted.is_ok(), "{:?}", accepted.as_ref().err());
     Ok(())
 }
