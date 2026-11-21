@@ -88,7 +88,7 @@ pub(crate) fn insert(facts: &RepoFacts, jobs: &mut [Job]) {
             .any(|step| matches!(step.kind, StepKind::PrivateCheck { .. }))
         {
             kinds.push(StepKind::PrivateCheck {
-                cached: cached.clone(),
+                cached: if early { Vec::new() } else { cached.clone() },
             });
         }
         kinds.extend([
