@@ -12,6 +12,7 @@ use velnor_ci::io::cache_delete_entry::delete_entry;
 const KEY: &str = "velnor-tools-Linux-X64-mise2026.11.10-aa";
 const MAIN: &str = "refs/heads/main";
 const ZSTD: &str = "0cccfb17094855db4c75b312ac9e0441b5c3cbdbccea182d94251e8142ff4640";
+const PAGE_SIZE: usize = 100;
 const GZIP: &str = "0e860ad0f6378509df797cde101e51911acafca877e9ef5e166e86d508c549da";
 
 struct Api {
@@ -37,6 +38,9 @@ impl GitHub for Api {
         self.asked.borrow_mut().push(path.to_owned());
         let key = query(path, "key").unwrap_or_default();
         let reference = query(path, "ref").map(|text| text.replace("%2F", "/"));
+        let page: usize = query(path, "page")
+            .and_then(|text| text.parse().ok())
+            .unwrap_or(1);
         let rows: Vec<&Value> = self
             .entries
             .iter()
@@ -45,7 +49,13 @@ impl GitHub for Api {
                 !self.filters_by_ref || reference.as_deref().is_none_or(|r| row["ref"] == r)
             })
             .collect();
-        Ok(json!({"total_count":rows.len(),"actions_caches":rows}).to_string())
+        let total = rows.len();
+        let rows: Vec<&Value> = rows
+            .into_iter()
+            .skip(page.saturating_sub(1) * PAGE_SIZE)
+            .take(PAGE_SIZE)
+            .collect();
+        Ok(json!({"total_count":total,"actions_caches":rows}).to_string())
     }
 }
 
@@ -158,4 +168,37 @@ fn an_entry_on_another_ref_is_ignored_even_when_the_listing_returns_it() {
     api.filters_by_ref = false;
     delete_entry(&api, &repo(), KEY, ZSTD, Some(MAIN)).unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(*api.deleted.borrow(), [31]);
+}
+
+#[test]
+fn a_match_on_the_second_page_is_found_and_deleted() {
+    let mut entries: Vec<Value> = (1..=PAGE_SIZE as u64)
+        .map(|id| entry(id, KEY, MAIN, GZIP))
+        .collect();
+    entries.push(entry(500, KEY, MAIN, ZSTD));
+    let api = api(entries);
+    delete_entry(&api, &repo(), KEY, ZSTD, Some(MAIN)).unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(*api.deleted.borrow(), [500]);
+    assert!(
+        api.asked
+            .borrow()
+            .iter()
+            .any(|path| path.ends_with("page=2")),
+        "{:?}",
+        api.asked.borrow()
+    );
+}
+
+#[test]
+fn an_ambiguity_spanning_two_pages_deletes_nothing_and_names_both_ids() {
+    let mut entries = vec![entry(1, KEY, MAIN, ZSTD)];
+    entries.extend((2..=PAGE_SIZE as u64).map(|id| entry(id, KEY, MAIN, GZIP)));
+    entries.push(entry(500, KEY, "refs/pull/7/merge", ZSTD));
+    let api = api(entries);
+    let error = delete_entry(&api, &repo(), KEY, ZSTD, None)
+        .err()
+        .unwrap_or_else(|| unreachable!("an ambiguous match must be refused"));
+    let text = error.to_string();
+    assert!(text.contains("ID 1 ") && text.contains("ID 500 "), "{text}");
+    assert!(api.deleted.borrow().is_empty());
 }

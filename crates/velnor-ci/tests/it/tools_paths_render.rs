@@ -39,5 +39,16 @@ fn rendered_tools_paths() -> Vec<String> {
 
 #[test]
 fn the_paths_the_notice_versions_are_the_paths_the_rendered_tools_cache_stores() {
-    assert_eq!(rendered_tools_paths(), tools_paths());
+    assert_eq!(
+        rendered_tools_paths(),
+        tools_paths().unwrap_or_else(|e| unreachable!("{e}"))
+    );
+}
+
+#[test]
+fn the_notice_versions_the_two_tools_directories_and_nothing_else() {
+    assert_eq!(
+        tools_paths().unwrap_or_else(|e| unreachable!("{e}")),
+        ["~/.local/share/mise", "~/.rustup"]
+    );
 }

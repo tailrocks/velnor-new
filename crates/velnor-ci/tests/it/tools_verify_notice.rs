@@ -15,7 +15,11 @@ const REPO: &str = "tailrocks/velnor-new";
 const ANCHOR_VERSION: &str = "fdc9a87fe2dcd2021bb6b6640eb35094a7299abb6781b70cfb9a8cc2e1ff5133";
 
 fn tools_version() -> String {
-    cache_version(&tools_paths(), Compression::detect())
+    cache_version(&literal_tools_paths(), Compression::detect())
+}
+
+fn literal_tools_paths() -> Vec<&'static str> {
+    tools_paths().unwrap_or_else(|e| unreachable!("{e}"))
 }
 
 fn anchor_entry_version(job: &Job) -> String {
@@ -112,11 +116,11 @@ fn a_zstd_on_the_path_is_never_run_while_the_notice_is_built() {
 fn the_pinned_versions_are_what_the_cache_service_stores_for_the_tools_paths() {
     assert_eq!(
         GZIP_VERSION,
-        cache_version(&tools_paths(), Compression::Gzip)
+        cache_version(&literal_tools_paths(), Compression::Gzip)
     );
     assert_eq!(
         ZSTD_VERSION,
-        cache_version(&tools_paths(), Compression::ZstdWithoutLong)
+        cache_version(&literal_tools_paths(), Compression::ZstdWithoutLong)
     );
     assert_eq!(
         ANCHOR_VERSION,
