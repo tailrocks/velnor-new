@@ -6,11 +6,14 @@ use std::error::Error;
 use velnor_gen::{GenerateError, expected_with_notes};
 use velnor_model::Platform;
 use velnor_rust::{
-    DetectError, Reason, RunningGenerator, check_generator_entry, pin_lock, verify_release,
+    DetectError, LOCK_PATH, Reason, RunningGenerator, check_generator_entry, pin_lock,
+    verify_release,
 };
 
 use crate::lock::{COMMIT_FILE, with_lock};
 use crate::lock_archive::ARCHIVE_SUMS;
+
+const BINARY_SUMS_FILE: &str = "BINARY-SHA256SUMS";
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -22,7 +25,6 @@ const GEN_BINARY_ARM64: &str = "8a7852af13610acee22317e764266301a83884595823a9b0
 const GEN_BINARY_MACOS: &str = "5b8f0d27e1a7f6a3c9d4e2b1a0c8f7e6d5c4b3a2918070605f4e3d2c1b0a9f8e";
 const BINARY_SUMS_DIGEST: &str = "69033b9cdde1860652f3d64fdb4f3757cafc0b666d50ad1ba409dda6b078ddaf";
 
-/// `BINARY-SHA256SUMS` of a release that lists the velnor-gen binaries beside velnor-ci's.
 const BINARY_SUMS: &str = "\
 9de941ee8e31748973283b2cd31a439119a9d22f60ec3e2884d855a8e2971c6f  velnor-ci-x86_64-unknown-linux-musl.tar.gz/velnor-ci
 6d887a0b48bba9c85da802b1943beb3ff38a2ffbc0effbdff615e5f53fe6a4a8  velnor-ci-aarch64-unknown-linux-musl.tar.gz/velnor-ci
@@ -170,35 +172,50 @@ fn with_binary_table(table: &str) -> Result<String, Box<dyn Error>> {
     Ok(format!("{head}[velnor-gen-binary]\n{table}\n"))
 }
 
-fn generation_refuses_the_lock(lock: &str) -> Result<bool, Box<dyn Error>> {
-    Ok(matches!(
-        expected_with_notes(&with_lock(lock)?).map(|(files, _)| files),
-        Err(GenerateError::Detect(DetectError::Invalid {
-            reason: Reason::HelperLock(_),
-            ..
-        }))
-    ))
+fn generation_refusal(lock: &str) -> Result<String, Box<dyn Error>> {
+    let error = expected_with_notes(&with_lock(lock)?)
+        .err()
+        .ok_or("generation accepted the lock")?;
+    match error {
+        GenerateError::Detect(DetectError::Invalid {
+            path,
+            reason: Reason::HelperLock(error),
+        }) => {
+            assert_eq!(path, LOCK_PATH);
+            Ok(error.to_string())
+        }
+        other => Err(other.to_string().into()),
+    }
 }
 
 #[test]
 fn generation_accepts_a_well_formed_generator_binary_table() -> TestResult {
     let sum = "b".repeat(64);
     let lock = with_binary_table(&format!("linux-x64 = \"{sum}\"\nlinux-arm64 = \"{sum}\""))?;
-    assert!(!generation_refuses_the_lock(&lock)?, "{lock}");
+    expected_with_notes(&with_lock(&lock)?).map_err(|error| error.to_string())?;
     Ok(())
 }
 
 #[test]
 fn generation_refuses_a_malformed_generator_binary_table() -> TestResult {
     let sum = "b".repeat(64);
-    let tables = [
-        "linux-x64 = \"abc\"\nlinux-arm64 = \"abc\"".to_string(),
-        format!("linux-x64 = \"{sum}\""),
-        format!("linux-x64 = \"{sum}\"\nlinux-arm64 = \"{sum}\"\nlinux-riscv64 = \"{sum}\""),
+    let cases = [
+        (
+            "linux-x64 = \"abc\"\nlinux-arm64 = \"abc\"".to_string(),
+            "[velnor-gen-binary] the SHA-256 for linux-x64 is not 64 lowercase hex digits",
+        ),
+        (
+            format!("linux-x64 = \"{sum}\""),
+            "[velnor-gen-binary] a program must list the platforms linux-x64, linux-arm64 and may list macos-arm64",
+        ),
+        (
+            format!("linux-x64 = \"{sum}\"\nlinux-arm64 = \"{sum}\"\nlinux-riscv64 = \"{sum}\""),
+            "[velnor-gen-binary] a program must list the platforms linux-x64, linux-arm64 and may list macos-arm64",
+        ),
     ];
-    for table in tables {
+    for (table, expected) in cases {
         let lock = with_binary_table(&table)?;
-        assert!(generation_refuses_the_lock(&lock)?, "{lock}");
+        assert_eq!(generation_refusal(&lock)?, expected, "{lock}");
     }
     Ok(())
 }

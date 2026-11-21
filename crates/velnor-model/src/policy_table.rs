@@ -5,6 +5,7 @@
 pub struct PolicyTable {
     pub deny: DenyLane,
     pub deny_checks: Option<Vec<DenyCheck>>,
+    pub gate_on_plan: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
