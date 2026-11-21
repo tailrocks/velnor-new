@@ -258,7 +258,8 @@ pub(crate) fn parse_lock(bytes: &[u8]) -> Result<HelperRelease, LockError> {
     check_digests(&lock.generator)?;
     check_digests(&lock.ci)?;
     if let Some(binary) = &lock.generator_binary {
-        check_digests(binary)?;
+        check_digests(binary)
+            .map_err(|error| LockError::new(format!("[velnor-gen-binary] {error}")))?;
     }
     let release = HelperRelease::new(version, commit, platform_digests(&lock.ci)?)
         .map_err(|error| LockError(error.to_string()))?;
