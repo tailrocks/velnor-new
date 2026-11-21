@@ -244,7 +244,7 @@ All of it lives on one XFS filesystem per node (reflink is on by default), so "r
 - *Trusted scope:* push to main, merge_group and schedule. Only these write the trusted store and promote a workspace.
 - *PR scope:* a same-repository PR reads the trusted store and writes its own overlay, dropped when the PR closes. This is design rule 8 of `docs/goals.md`.
 - *Fork PRs:* no cluster access at first; the workflow routes them to GitHub-hosted runners.
-- *Organisations:* tailrocks, ChainArgos and jackin never share a store or a slot view.
+- *Organisations:* tailrocks, example-org and jackin never share a store or a slot view.
 - *Releases:* no shared cache, as today.
 - *Verdict records* are written by the agent, which launches the test and reads its exit status. Job code cannot write one.
 
@@ -313,7 +313,7 @@ Median PR: about 85 s. Mean over the mix: about 2 min [est: 0.47 × 85 + 0.11 ×
 - **Both sites.** Add `topology.kubernetes.io/region` labels (none exist [E]). All jobs of one run stay in one site, because DE to FI is 35 ms over the public internet [D]. Each site has its own cache server; the two replicate in the background. The dispatcher prefers the site that is warm and spills to the other when the first has no free slot.
 - **Isolation of untrusted PRs.** Three tiers. Same-repository PRs: namespaces, seccomp, no host mounts, PR-scoped overlay, network egress allow-list. Fork PRs: routed to GitHub-hosted runners by the generated `runs-on` expression until a microVM lane exists (velnor-legacy's Firecracker backend is the reference). Gate jobs: control node only. Note that today no worker is tainted and all five run privileged dind [E], so the "dedicated tainted nodes" decision is not yet in force.
 - **Scaling.** Each EPYC has 48 cores in 8 L3 groups of 6 [M 48 physical cores; grouping from the CPU's 256 MB L3, to verify with `lscpu`]. I would reserve one group for the system and light jobs and offer the rest as elastic slots: a job owns its base cores and may borrow idle ones, which the agent takes back at the next dispatch. That gives about 15 heavy and 5 medium slots on the five workers. Expected demand after Phase 2 is about one busy slot on average at 20 runs per hour [est: 20 × 3 slot-minutes ÷ 60]. Other organisations get their own quota.
-- **ARC stays installed** for ChainArgos and jackin until they move, and as a fallback for tailrocks, scaled to its minimum.
+- **ARC stays installed** for example-org and jackin until they move, and as a fallback for tailrocks, scaled to its minimum.
 
 ## 7. The role of mbx and blaze
 
@@ -416,7 +416,7 @@ Each phase ends with one week of measurements posted on #1305 before the next be
 6. **Merge queue and triggers.** Will you raise `max_entries_to_build` to 5, and drop CI's `push` trigger on main (or let it become a cached no-op)?
 7. **Hosted pool.** `Source qualification` uses about 2,400 hosted-seconds per run on every PR event, and `Job image candidate` runs on every branch push. Move them to the cluster, or narrow their triggers?
 8. **PR #1324.** It carries the journal and ownership proofs to Kubernetes as "one runner, two runtimes". I recommend a crash-only node agent for the cluster and keeping the journal for the Mac path only. Do you accept two runtimes with different recovery models?
-9. **Other organisations.** ChainArgos (15 private repositories) and jackin share these nodes. Separate stores and quotas are in the design; do you want them on Velnor at all, or left on ARC?
+9. **Other organisations.** example-org (15 private repositories) and jackin share these nodes. Separate stores and quotas are in the design; do you want them on Velnor at all, or left on ARC?
 10. **Fork PRs.** Route them to GitHub-hosted runners until a microVM lane exists?
 11. **Test time budget.** Enforce "no test over 10 s, suite critical path under 60 s" as a required check? It is the only way the P90 targets hold.
 12. **Hardware.** May I propose a one-month rental of one high-clock node to measure the critical-path gain before any purchase?

@@ -2,9 +2,9 @@
 
 **Status:** Active specification. This document supersedes the conflicting
 clauses of [the deferred self-hosted roadmap](../deferred/self-hosted-runner.md).
-It is not a claim that live qualification or the ChainArgos rollout has passed.
+It is not a claim that live qualification or the example-org rollout has passed.
 
-**Repository:** `tailrocks/velnor-new`. **First consumer:** `ChainArgos/java-monorepo`.
+**Repository:** `tailrocks/velnor-new`. **First consumer:** `example-org/example-repo`.
 **Host:** macOS, one explicitly selected local Docker engine. **Runtime:** the
 unmodified official GitHub Actions runner, Ubuntu 26.04, `linux/amd64`, registered
 with the Runner Scale Set protocol and JIT.
@@ -312,7 +312,7 @@ emitted by `velnor-actions`, not patched after generation.
 
 `docs/implemented/macos-scaleset/` records G0–G8. Each row is `PASS`, `FAIL`,
 `BLOCKED_EXTERNAL`, or `NOT_RUN`. A skipped test is not a pass. Live GitHub,
-launchd, signing, and ChainArgos verdicts stay external oracles. Local tests do
+launchd, signing, and example-org verdicts stay external oracles. Local tests do
 not mark G4, G6 launchd, G7, or G8 `PASS`.
 
 ## 8. Out of scope
@@ -320,4 +320,4 @@ not mark G4, G6 launchd, G7, or G8 `PASS`.
 Kubernetes, ARC, Velnor-managed VMs, Firecracker, libvirt, fleet provisioning,
 a Linux-host controller, native Darwin or Xcode jobs, a dashboard or TUI, a Go
 sidecar, a second workflow interpreter, a new distributed cache, multi-repository
-capacity pools, and ChainArgos production deploys.
+capacity pools, and example-org production deploys.

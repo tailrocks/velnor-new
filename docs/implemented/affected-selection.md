@@ -190,7 +190,7 @@ it does, the read scan below forces the package on every pull request.
 ```toml
 [[stacks.rust.inputs]]
 globs = ["backend/eth-model/src/main/proto/**", "backend/tailrocks-type/src/main/proto/**"]
-packages = ["eth-processor-app"]
+packages = ["example-repo"]
 
 [[stacks.rust.inputs]]
 globs = ["scripts/lightdash-migration/evidence/**"]

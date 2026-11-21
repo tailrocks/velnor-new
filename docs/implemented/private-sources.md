@@ -39,7 +39,7 @@ with fixtures and qualification tests, not against live private repositories.
 - Cargo git sources land in the owned Cargo home. The fetch runs the
   project-declared Rust, not the Velnor pin, and refuses to start when that
   toolchain is not installed. Before this, a project whose Rust differed from
-  the Velnor pin (bitcoin-processor-rust run 39591265476: project 1.98.1, pin
+  the Velnor pin (example-repo run 39591265476: project 1.98.1, pin
   1.99.1) fetched into `~/.cargo`: `mise exec` warned about the missing pin
   and ran the ambient `cargo`. The step logged success, the next
   `Fetch Cargo sources` step missed offline and failed an unauthenticated

@@ -17,7 +17,7 @@ Rust suites and the dependency-seed job sit beside crate jobs. Repositories that
 declare no suite keep byte-identical output.
 
 Reasons: the change is additive, its default is unchanged, and it is required by
-the owner's instruction that browser suites run in CI (ChainArgos platform: a
+the owner's instruction that browser suites run in CI (example-org platform: a
 30-minute member job ran `ci`, vitest and 8 Playwright projects on one runner;
 documentation-portal: about 230 runner-minutes of Playwright). The owner may
 revisit it. Unsolicited splits stay forbidden: decision 6 lists any split of a
@@ -34,21 +34,21 @@ more of the member's scripts that runs in its own job beside the member job,
 the way Rust suites and the dependency-seed job sit beside crate jobs.
 
 ```toml
-[stacks.bun.members."@chainargos/platform"]
+[stacks.bun.members."@example-org/example-repo"]
 scripts = ["ci", "test", "test:browser"]
 timeout_minutes = 20                         # member job only
 
-[stacks.bun.members."@chainargos/platform".suites.unit]
+[stacks.bun.members."@example-org/example-repo".suites.unit]
 scripts = ["test"]
 timeout_minutes = 25
 
-[stacks.bun.members."@chainargos/platform".suites.browser]
+[stacks.bun.members."@example-org/example-repo".suites.browser]
 scripts = ["test:browser"]                   # exactly one script with [playwright]
 browsers = ["chromium", "webkit"]
 timeout_minutes = 25                         # per leg when sharded
 # required = true                            # false: runs, but outside Required
 
-[stacks.bun.members."@chainargos/platform".suites.browser.playwright]
+[stacks.bun.members."@example-org/example-repo".suites.browser.playwright]
 projects = ["chromium-desktop", "webkit-desktop"]   # optional, sorted, unique
 shards = 2                                   # 1..=64, per project when projects is set
 # max_parallel = 4                           # 1..=legs

@@ -30,27 +30,27 @@ multiply secrets per producer and consumer.
 
 ```toml
 [private_sources]
-owner = "ChainArgos"                                   # every producer repository lives here
+owner = "example-org"                                   # every producer repository lives here
 app_id_variable = "VELNOR_DEPS_APP_ID"                 # organization variable (App client id)
 app_private_key_secret = "VELNOR_DEPS_APP_PRIVATE_KEY" # organization secret (App private key)
-npm_scopes = ["@chainargos"]                           # registry fixed to npm.pkg.github.com
+npm_scopes = ["@example-org"]                           # registry fixed to npm.pkg.github.com
 
 [[private_sources.maven_bundles]]                      # fixed location, no extract_to
-id = "processor-shared-libs"
-repository = "ChainArgos/processor-shared"
-tag = "processor-shared-libs-v2.3.0"
-asset = "processor-shared-libs-2.3.0-maven.tar.gz"
+id = "shared-libs"
+repository = "example-org/example-repo-1"
+tag = "shared-libs-v2.3.0"
+asset = "shared-libs-2.3.0-maven.tar.gz"
 
 [[private_sources.release_assets]]
 id = "explorer-schema"
-repository = "ChainArgos/blockchain-explorer"
+repository = "example-org/example-repo-2"
 tag = "explorer-schema-v1.4.0"
 asset = "explorer-schema-1.4.0.tar.gz"
 extract_to = "explorer-schema"                         # under the Velnor-owned dependency root
 
 [[private_sources.git_trees]]
 id = "platform-history-2025-11"
-repository = "ChainArgos/java-monorepo"
+repository = "example-org/example-repo-3"
 tag = "platform-history/2025-11"
 ```
 
@@ -77,11 +77,11 @@ fetch.
 schema = 1
 
 [[maven_bundles]]
-id = "processor-shared-libs"
-repository = "ChainArgos/processor-shared"
-tag = "processor-shared-libs-v2.3.0"
+id = "shared-libs"
+repository = "example-org/example-repo-1"
+tag = "shared-libs-v2.3.0"
 commit = "<40 lowercase hex>"
-asset = "processor-shared-libs-2.3.0-maven.tar.gz"
+asset = "shared-libs-2.3.0-maven.tar.gz"
 sha256 = "<64 lowercase hex>"
 ```
 
@@ -249,7 +249,7 @@ the extracted trees match `.velnor/deps.lock` without fetching again:
       "kind": "release-assets",
       "id": "bitcoin-protos",
       "path": "bitcoin-protos",
-      "repository": "ChainArgos/bitcoin-processor-java",
+      "repository": "example-org/example-repo-4",
       "tag": "bitcoin-protos-v1.0.0",
       "commit": "<40 lowercase hex>",
       "asset": "bitcoin-protos-1.0.0.tar.gz",

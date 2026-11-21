@@ -2,10 +2,10 @@
 
 Status: adopted per the split brief; the owner may revisit. Hard decision:
 [decision 6](../hard-decisions.md). Origin: stack item B, PW and N of the
-ChainArgos split design (section 3 and 4.2). Every choice marked
+example-org split design (section 3 and 4.2). Every choice marked
 *(refinement)* departs from the design text and is recorded here.
 
-Bun workspaces (the ChainArgos frontend, documentation portal, event catalog
+Bun workspaces (the example-org frontend, documentation portal, event catalog
 and prototypes) get one generated job per workspace member. The adapter crate
 is `velnor-actions-bun`; it reads text and launches nothing.
 
@@ -17,14 +17,14 @@ roots = ["frontend"]                       # required, sorted, unique; "." is th
 timeout_minutes = 10                       # 1..=360; default workflow.crate_timeout_minutes
 scripts = ["typecheck", "lint", "test", "build"]   # default; intersected with each member's scripts
 
-[stacks.bun.members."@chainargos/ui"]
+[stacks.bun.members."@example-org/example-repo"]
 scripts = ["typecheck", "lint", "test"]    # replaces the list; every name must exist in package.json
 browsers = ["chromium"]                    # sorted, unique; chromium | firefox | webkit
 timeout_minutes = 30                       # 1..=360; this member's job only
 
 [[stacks.bun.inputs]]
 globs = ["frontend/packages/*/src/**"]
-members = ["chainargos-docs"]
+members = ["example-org-docs"]
 complete = true
 ```
 

@@ -1,12 +1,12 @@
 # Ansible contract (Ansible stack with uv-locked Python)
 
-Status: implemented except for the items under "Not yet implemented". Source design: the ChainArgos split stacks design
+Status: implemented except for the items under "Not yet implemented". Source design: the example-org split stacks design
 (section 6.2 and 6.3). Decision: [host deployment (HD-9)](../host-deployment-decision.md),
 adopted per the split brief; owner may revisit. This page states what exists
 today and what each remaining piece must satisfy; it does not claim the stack
 is complete.
 
-## Consumer shape (`ChainArgos/infrastructure`)
+## Consumer shape (`example-org/example-repo`)
 
 - Playbooks live directly in `ansible-configs/` (47 top-level files plus
   `tasks/`, `config/`, `debian/`); inventory `ansible-configs/hosts.ini`;

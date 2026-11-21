@@ -30,7 +30,7 @@ runner_source_tag_signature = "PASS: GitHub commit signature."
 runner_scope_download_observed_date = "2026-10-18"
 runner_scope_download_version = "2.337.0"
 runner_scope_download_sha256 = "70920811a4f8ad4328818682bca5c6469c1c942fab52448868071d0063816613"
-runner_scope_download_repositories = ["tailrocks/velnor-new", "donbeave/essential-mac", "ChainArgos/java-monorepo"]
+runner_scope_download_repositories = ["tailrocks/velnor-new", "donbeave/essential-mac", "example-org/example-repo"]
 
 docker_version = "29.9.1"
 docker_source_repository = "moby/moby"

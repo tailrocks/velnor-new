@@ -1,7 +1,7 @@
 # Package publication contract
 
 **Status:** Proposed. Implements items RF (release and tag flow, versioning)
-and RA (release-asset bundles) of the ChainArgos split design (§4.0, §4.4),
+and RA (release-asset bundles) of the example-org split design (§4.0, §4.4),
 under [hard decision 8](../hard-decisions.md). Image promotion (I.promote)
 builds on this flow and is specified when it lands; npm (N) is section 8 and
 Maven bundles (M) are section 9.
@@ -76,8 +76,8 @@ or `deps.lock` SHA recorded at release" depends on item P's `deps.lock`.
 ```toml
 [[publish.bundles]]
 id = "explorer-schema"
-paths = ["backend-rust/blockchain-explorer/schemas/schema.graphql"]
-version_file = "backend-rust/blockchain-explorer/Cargo.toml"
+paths = ["backend-rust/example-repo-1/schemas/schema.graphql"]
+version_file = "backend-rust/example-repo-1/Cargo.toml"
 ```
 
 `paths` are sorted, unique, repo-relative files or directories (no globs, no
@@ -167,7 +167,7 @@ Rust crates consumed as `git` dependencies release by tag. The same
 [[publish.npm]]
 id = "ui"                                    # tag ui-v1.4.0
 root = "frontend"                            # a [stacks.bun] root
-member = "@chainargos/ui"                    # workspace member published at the tag
+member = "@example-org/example-repo-2"                    # workspace member published at the tag
 pack_script = "pack"                         # root script writing the tarballs
 tarballs = "frontend/.portable/tarballs"     # directory it writes <scope>-<name>-<version>.tgz into
 registry = "github"                          # closed: npm.pkg.github.com
@@ -205,7 +205,7 @@ the tarball (*adopted per the split brief; owner may revisit*).
 
 ```toml
 [[publish.maven]]
-id = "processor-shared-libs"     # tag processor-shared-libs-v2.3.0, zip name stem
+id = "shared-libs"     # tag shared-libs-v2.3.0, zip name stem
 root = "backend"                 # a [stacks.gradle] root
 # attest = false                 # explicit opt-out; default true
 # attest_reason = "private repository on a plan without artifact attestations"
@@ -380,7 +380,7 @@ That historical probe established:
 - `cosign verify-blob-attestation` cannot verify these bundles: GitHub's
   Fulcio issues no SCTs. `gh` is the verifier.
 
-ChainArgos private-repository runs already showed GitHub's Fulcio and TSA
+example-org private-repository runs already showed GitHub's Fulcio and TSA
 signing on a plan without the store: the error comes after signing, at the
 persist call.
 
