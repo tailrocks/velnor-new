@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 
 use crate::audit_job::AUDIT_JOB;
 use crate::plan::{HELPER_JOB, job, step};
+use crate::plan_tools::TOOLS_SAVED_KEY_HELPER;
 use velnor_model::{
     Access, CI_RUN_LABEL, CacheKey, HelperVersion, Job, JobId, PermissionScope, Permissions, PrCi,
     PrRun, PushAfterMergeGroup, RepoFacts, Step, StepKind, ToolsLocalVerb, ToolsTelemetry, When,
@@ -40,6 +41,10 @@ fn attach(facts: &RepoFacts, jobs: &mut [Job], maintenance: Option<&Job>) -> Job
         });
     let not_generated = not_generated(facts);
     let optional_saves = helper_at_least(facts, REPORT_FIELDS_HELPER);
+    let saved_keys = facts
+        .helper
+        .as_ref()
+        .is_some_and(|release| release.version().at_least(TOOLS_SAVED_KEY_HELPER));
     let mut producers = Vec::new();
     for job in jobs {
         let saves = job
@@ -55,7 +60,7 @@ fn attach(facts: &RepoFacts, jobs: &mut [Job], maintenance: Option<&Job>) -> Job
             continue;
         }
         let reason = not_generated.filter(|_| job.id != AUDIT_JOB);
-        attach_metrics(job, nextest_artifacts, reason, optional_saves);
+        attach_metrics(job, nextest_artifacts, saved_keys, reason, optional_saves);
         producers.push(&*job);
     }
     producers.extend(maintenance);
@@ -91,6 +96,7 @@ fn attach(facts: &RepoFacts, jobs: &mut [Job], maintenance: Option<&Job>) -> Job
 fn attach_metrics(
     job: &mut Job,
     nextest_artifacts: bool,
+    saved_keys: bool,
     not_generated: Option<&'static str>,
     optional_saves: bool,
 ) {
@@ -139,6 +145,7 @@ fn attach_metrics(
                 saved,
                 nextest_artifacts,
                 node_tools,
+                saved_keys,
                 not_generated,
                 unsuppressed,
             },

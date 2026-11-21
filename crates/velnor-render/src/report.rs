@@ -39,6 +39,7 @@ pub(crate) fn lane(kind: &StepKind, test_id: Option<String>) -> RenderedStep {
         caches,
         saved,
         node_tools,
+        saved_keys,
         not_generated,
         unsuppressed,
         ..
@@ -58,8 +59,12 @@ pub(crate) fn lane(kind: &StepKind, test_id: Option<String>) -> RenderedStep {
         };
         if saves {
             plan["save_step"] = serde_json::Value::String(step(false, node_tools.save, crate::gate::TOOLS_SAVED_STEP));
-            if tools && node_tools.saved_key {
-                plan["save_key_step"] = serde_json::Value::String(crate::gate::TOOLS_SAVED_KEY_STEP.to_owned());
+            let saved_key = match key {
+                CacheKey::Tools { .. } => node_tools.saved_key.then(|| crate::gate::TOOLS_SAVED_KEY_STEP.to_owned()),
+                _ => saved_keys.then(|| crate::cache_upload::key_id(key)).flatten(),
+            };
+            if let Some(id) = saved_key {
+                plan["save_key_step"] = serde_json::Value::String(id);
             }
         }
         if let (false, false, Some(reason)) = (tools, unsuppressed.contains(key), not_generated) {
