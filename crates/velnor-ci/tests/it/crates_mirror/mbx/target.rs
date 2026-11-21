@@ -167,3 +167,90 @@ fn a_script_target_that_cannot_be_resolved_fails_closed() -> TestResult {
     )?);
     Ok(())
 }
+
+#[test]
+fn an_external_subcommand_under_zscript_is_scoped_by_its_manifest_path() -> TestResult {
+    let repo = declared_job()?;
+    let launch = repo.root().join("launch");
+    let inside = repo.root().join("Cargo.toml").display().to_string();
+    let outside = repo
+        .root()
+        .join("scratch-project/Cargo.toml")
+        .display()
+        .to_string();
+    for command in [&["nextest", "run"][..], &["foo"][..]] {
+        let mut declared = vec!["+nightly", "-Zscript"];
+        declared.extend_from_slice(command);
+        declared.extend(["--manifest-path", &inside]);
+        assert_refused(&run_with_args(&repo, &launch, &declared)?);
+        let mut scratch = vec!["+nightly", "-Zscript"];
+        scratch.extend_from_slice(command);
+        scratch.extend(["--manifest-path", &outside]);
+        assert_plain(&run_with_args(&repo, &launch, &scratch)?);
+    }
+    Ok(())
+}
+
+#[test]
+fn a_built_in_command_under_zscript_is_scoped_by_its_manifest_path() -> TestResult {
+    let repo = declared_job()?;
+    let launch = repo.root().join("launch");
+    let inside = repo.root().join("Cargo.toml").display().to_string();
+    let outside = repo
+        .root()
+        .join("scratch-project/Cargo.toml")
+        .display()
+        .to_string();
+    assert_refused(&run_with_args(
+        &repo,
+        &launch,
+        &["+nightly", "-Zscript", "build", "--manifest-path", &inside],
+    )?);
+    assert_plain(&run_with_args(
+        &repo,
+        &launch,
+        &["+nightly", "-Zscript", "build", "-m", &outside],
+    )?);
+    assert_refused(&run_with_args(
+        &repo,
+        repo.root(),
+        &["+nightly", "-Zscript", "build"],
+    )?);
+    Ok(())
+}
+
+#[test]
+fn a_bare_name_under_zscript_is_a_subcommand_and_a_dot_slash_name_is_a_script() -> TestResult {
+    let repo = declared_job()?;
+    let launch = repo.root().join("launch");
+    fs::create_dir_all(repo.root().join("scratch-project"))?;
+    let inside = repo.root().join("Cargo.toml").display().to_string();
+    assert_refused(&run_with_args(
+        &repo,
+        &launch,
+        &["+nightly", "-Zscript", "tool", "--manifest-path", &inside],
+    )?);
+    assert_refused(&run_with_args(
+        &repo,
+        &launch,
+        &[
+            "+nightly",
+            "-Zscript",
+            "../tool",
+            "--manifest-path",
+            &inside,
+        ],
+    )?);
+    assert_plain(&run_with_args(
+        &repo,
+        &launch,
+        &[
+            "+nightly",
+            "-Zscript",
+            "../scratch-project/tool",
+            "--manifest-path",
+            &inside,
+        ],
+    )?);
+    Ok(())
+}

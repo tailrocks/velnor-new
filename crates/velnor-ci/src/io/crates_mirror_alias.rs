@@ -32,7 +32,7 @@ pub(super) fn expand(work: &Path, args: &[OsString], builtin: &[&str]) -> Option
         if builtin.contains(&name.as_str()) && !ALIASABLE_BUILTINS.contains(&name.as_str()) {
             return Some(args);
         }
-        if direct_target(&name, &args) {
+        if direct_target(&name) {
             return matches!(lookup(work, &args, &name), Alias::Absent).then_some(args);
         }
         match lookup(work, &args, &name) {
