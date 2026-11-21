@@ -67,9 +67,6 @@ fn steps(target: &Path, pending: &mut Vec<Step>) {
     }
 }
 
-/// Canonical path of `target`, a link target found in `directory` (whose canonical
-/// path is `base`), resolved link by link through descriptors so no ancestor named
-/// by a path is looked up again.
 pub(super) fn resolve(
     directory: BorrowedFd<'_>,
     base: &Path,
