@@ -1,11 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{PrivateSources, ReleaseAsset, ReleaseAssetPart};
+use velnor_model::{PrivateSources, ReleaseAsset, ReleaseAssetPart, TokenMint};
 
-use crate::private_steps::token_allowed;
-use crate::release_steps::{APP_TOKEN_COMMIT, APP_TOKEN_VERSION, shell_word};
-use crate::rules::{APP_TOKEN_ACTION, RenderedStep, Value};
+use crate::private_steps::{app_token, token_allowed};
+use crate::release_steps::shell_word;
+use crate::rules::{RenderedStep, Value};
 use crate::steps::{CACHE_RESTORE, CACHE_SAVE};
 
 pub(crate) const TOKEN_STEP: &str = "release-assets-token";
@@ -15,7 +15,7 @@ pub(crate) fn render(assets: &[ReleaseAsset], part: &ReleaseAssetPart) -> Render
     match part {
         ReleaseAssetPart::Restore(index) => restore(&assets[*index], *index),
         ReleaseAssetPart::Check => check(assets),
-        ReleaseAssetPart::Token(sources) => token(sources, assets),
+        ReleaseAssetPart::Token(sources, mint) => token(sources, *mint, assets),
         ReleaseAssetPart::Fetch => fetch(assets),
         ReleaseAssetPart::Save(index) => save(&assets[*index], *index),
     }
@@ -79,7 +79,7 @@ fn check(assets: &[ReleaseAsset]) -> RenderedStep {
     step
 }
 
-fn token(sources: &PrivateSources, assets: &[ReleaseAsset]) -> RenderedStep {
+fn token(sources: &PrivateSources, mint: TokenMint, assets: &[ReleaseAsset]) -> RenderedStep {
     let mut repositories: Vec<&str> = Vec::new();
     for asset in assets {
         if !repositories.contains(&asset.repo.as_str()) {
@@ -94,28 +94,7 @@ fn token(sources: &PrivateSources, assets: &[ReleaseAsset]) -> RenderedStep {
             any_miss(assets),
             token_allowed(CHECK_STEP)
         )),
-        uses: Some(format!("{APP_TOKEN_ACTION}@{APP_TOKEN_COMMIT}")),
-        uses_comment: Some(APP_TOKEN_VERSION.to_owned()),
-        with: vec![
-            (
-                "client-id".to_owned(),
-                Value::Expr(format!("${{{{ vars.{} }}}}", sources.app_id)),
-            ),
-            (
-                "private-key".to_owned(),
-                Value::Expr(format!("${{{{ secrets.{} }}}}", sources.private_key)),
-            ),
-            ("owner".to_owned(), Value::Text(assets[0].owner.clone())),
-            (
-                "repositories".to_owned(),
-                Value::Text(repositories.join("\n")),
-            ),
-            (
-                "permission-contents".to_owned(),
-                Value::Text("read".to_owned()),
-            ),
-        ],
-        ..RenderedStep::default()
+        ..app_token(sources, &assets[0].owner, &repositories, mint)
     }
 }
 
