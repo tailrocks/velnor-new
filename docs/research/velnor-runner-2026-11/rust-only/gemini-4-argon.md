@@ -410,12 +410,12 @@ Under Owner Decision 8, **no pull requests come from forks** (all fork handling,
 2. **Docker obligations without per-pod DinD tax (`I084`, `N51`):** Only 3 test binaries in the entire repository need a Docker daemon (`local_pair_public`, `local_host_public`, and `velnor-local`'s Docker tests). They are scheduled as dedicated `docker`-class obligations that receive the already-compiled test executables from the `build` obligation in <1 s and run against an isolated rootless Docker/containerd sidecar on one designated worker per site, eliminating the 57 DinD readiness probe failures/hour (`evidence §B.6`) and 4 s startup tax from all other builds.
 3. **Structural separation of PR vs `main` caches (`I048`):** PR sandboxes have zero write access to `/opt/velnor/store/snapshots` or `mbx-cache`. Only the per-site `main` builder writes to `/opt/velnor/store/snapshots/main-<gen>` and `mbx-cache`, and only `main` commits promote receipts to the `trusted` scope.
 
-### 7.5 Sharing the cluster with `example-org` and `jackin`
+### 7.5 Sharing the cluster with `example-org` and `example-org-b`
 
-Three organizations share the 5 workers today (`tailrocks` max 60 runners, `example-org` max 60, `jackin` max 40 [M, evidence §B.3.2]).
-- We isolate `example-org` and `jackin` in their existing namespaces (`arc-runners-example-org`, `arc-runners-jackin`) with dedicated Kubernetes `ResourceQuota` and `LimitRange` objects, separate XFS project-quota storage directories (`/var/lib/rancher/k3s/storage/example-org` and `/jackin`, zero cache or artifact sharing across orgs), and equal `PriorityClass` (`velnor-pr`, priority `1000`) to `velnor-new`'s PR builds:
-  - `velnor-merge` (priority `10000`) > `velnor-gate` (`5000`) > `velnor-pr` == `org-ci` (`1000`, guaranteed 30% minimum cluster CPU share for `example-org` + `jackin` under contention) > `velnor-batch` (`100`, preemptible).
-- `example-org` and `jackin` remain on ARC until `velnor-new`'s native Rust executor has run in production for 4 weeks post-cutover, after which they can optionally migrate to `velnor-dispatch` instances in their own namespaces.
+Three organizations share the 5 workers today (`tailrocks` max 60 runners, `example-org` max 60, `example-org-b` max 40 [M, evidence §B.3.2]).
+- We isolate `example-org` and `example-org-b` in their existing namespaces (`arc-runners-example-org`, `arc-runners-example-org-b`) with dedicated Kubernetes `ResourceQuota` and `LimitRange` objects, separate XFS project-quota storage directories (`/var/lib/rancher/k3s/storage/example-org` and `/example-org-b`, zero cache or artifact sharing across orgs), and equal `PriorityClass` (`velnor-pr`, priority `1000`) to `velnor-new`'s PR builds:
+  - `velnor-merge` (priority `10000`) > `velnor-gate` (`5000`) > `velnor-pr` == `org-ci` (`1000`, guaranteed 30% minimum cluster CPU share for `example-org` + `example-org-b` under contention) > `velnor-batch` (`100`, preemptible).
+- `example-org` and `example-org-b` remain on ARC until `velnor-new`'s native Rust executor has run in production for 4 weeks post-cutover, after which they can optionally migrate to `velnor-dispatch` instances in their own namespaces.
 
 ### 7.6 Host and kernel tuning
 

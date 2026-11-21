@@ -5,7 +5,7 @@
  "evidence_sources": [
   "<local-workspace>/evidence/jobs.json (504 job records)",
   "<local-workspace>/evidence/pipelines.json (39 selected executions)",
-  "<local-workspace>/evidence/jackin-current-observations.json",
+  "<local-workspace>/evidence/example-org-b.json",
   "<local-workspace>/evidence/example-org-job-observations.json",
   "<local-workspace>/EVIDENCE.md (2026-10-25 narrative measurements)"
  ],

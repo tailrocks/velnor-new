@@ -12,7 +12,7 @@ You are reviewing the FINAL design of "Velnor", a native-Rust, GitHub-Actions-co
 - The delivery plan: `.../delivery-plan.md` (same folder).
 - The evidence and experiments: `.../evidence.md` and `.../experiments/*.md` (same folder).
 - The proposals, reviews, feedback and Rust-only redesigns in the same folder, as needed.
-- Code, read-only: `~/Projects/tailrocks/velnor-new`, `~/.cache/ci-ambition/refs/{actions-runner,arc,velnor-legacy,mr-boxington-cache,rustfs}`.
+- Code, read-only: `<home>/Projects/tailrocks/velnor-new`, `~/.cache/ci-ambition/refs/{actions-runner,arc,velnor-legacy,mr-boxington-cache,rustfs}`.
 
 ## Check, in this order
 1. **Correctness holes.** Any path to a false green: gate bypasses, reuse keys that miss an input, stale caches or mtimes, the label flow, merge-queue settings, executor switching, storage tiers, mirrors. Severity: critical, high, medium or low.

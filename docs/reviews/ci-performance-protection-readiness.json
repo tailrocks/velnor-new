@@ -87,7 +87,7 @@
     "statuscontext/app and current protected flag do not prove immutable workflow admission or historical protection",
     "live44 protected does not mean complete configured checks; 16 rows lack Required and need actual generated gate audit",
     "broad current IaC apply can restore stale Policy/ci-required contexts; reconcile source with live migrations before apply",
-    "jackin and example-org module strictstatus policy=false; preserve existing differences instead of global strictness invention",
+    "example-org-b and example-org module strictstatus policy=false; preserve existing differences instead of global strictness invention",
     "tailrocks/tailrocks-repository-skills has no matching declared policy: requires source inventory integration",
     "no settings apply, publication, benchmarkdispatch or infrastructure mutation performed"
   ],

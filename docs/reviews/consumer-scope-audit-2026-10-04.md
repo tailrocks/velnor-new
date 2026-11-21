@@ -55,7 +55,7 @@ Scope has 47 rows including generator and 46 consumers. Its ordered consumer nam
 
 GitHub metadata resolved all 46 repositories. Every default branch is main; all current configs, manifests, and CI workflow files were accessible. Four private example-org repos were readable. The only canonicalization is tailrocks/tui-snap to tailrocks/tuiscotti (repository id 1358764452). No repository was inaccessible.
 
-The companion scope-audit CSV preserves all 46 numbered rows in Appendix-C order: exact default SHA/time, config/manifest/CI blob IDs, effective policy, generator source/platform digests, workflow files, caller inventory, stock-MBX classification, all 40 open PR head refs/SHAs, and owner checkpoints. The 07:42 snapshot refreshed the open-PR head values for Jackin #1111 and example-org/example-repo #2085 in both CSVs. All other scope-audit fields preserve the original bounded audit evidence.
+The companion scope-audit CSV preserves all 46 numbered rows in Appendix-C order: exact default SHA/time, config/manifest/CI blob IDs, effective policy, generator source/platform digests, workflow files, caller inventory, stock-MBX classification, all 40 open PR head refs/SHAs, and owner checkpoints. The 07:42 snapshot refreshed the open-PR head values for example-org-b #1111 and example-org/example-repo #2085 in both CSVs. All other scope-audit fields preserve the original bounded audit evidence.
 
 ## Current consumer state
 
@@ -73,7 +73,7 @@ CI has no relative local action callers. example-org/example-repo invokes its pr
 - One GitHub GraphQL snapshot resolved canonical full names and collected each default branch SHA/time, .velnor config/manifest blobs, CI blob/workflow names, privacy, and every current open PR head. Repository contents were accessible for all 46.
 - Cohort reports inspected exact default trees and relevant open-PR heads/diffs. Searches used bounded git grep/rg over fetched files, not GitHub code search alone. Supplemental A-cohort clones matched all ten API heads and were searched with fixed strings.
 - Positive caller classification distinguishes docs/product/test text from staged executable workflows and from runtime invocation. Current plan artifacts are staged in all CI files; log-level runtime evidence is claimed only for the runs recorded in the cohort findings.
-- Direct lane execution was verified from session JSONL <local-path> as gpt-6-luna/max. Jackin findings came from the separate gpt-6.1-sol/medium lane.
+- Direct lane execution was verified from session JSONL <local-path> as gpt-6-luna/max. example-org-b findings came from the separate gpt-6.1-sol/medium lane.
 
 ## Bounded reference search
 
@@ -106,7 +106,7 @@ Limits: snapshot covers current default heads and open PR heads in the CSV plus 
 
 | # | Scope name → canonical | Current main SHA | Status and positive evidence | Owner/checkpoint |
 |---:|---|---|---|---|
-| 1 | example-org/example-repo | 0aa821a088e1bacf3d4d85a4c9faaa67faa85132 | NO-CHANGE (source); HOLD (#1108 validator); staged Velnor plan-v1; stock MBX yes; MBX qualification pending; #1108 task validator binds legacy generated workflow/state paths. | Jackin owner; migrate #1108 validator before adoption. |
+| 1 | example-org/example-repo | 0aa821a088e1bacf3d4d85a4c9faaa67faa85132 | NO-CHANGE (source); HOLD (#1108 validator); staged Velnor plan-v1; stock MBX yes; MBX qualification pending; #1108 task validator binds legacy generated workflow/state paths. | example-org-b owner; migrate #1108 validator before adoption. |
 | 2 | example-org/example-repo | 2e7119b9c668ca7a9c55218b20049885299d198f | NO-CHANGE (source); staged Velnor plan-v1; stock MBX no | Repo owner; exact-artifact regeneration and deterministic parity. |
 | 3 | example-org/example-repo | cd05a0ea2cf68fd6c2753ee938247b2dcd4c7551 | NO-CHANGE (source); staged Velnor plan-v1; stock MBX no | Repo owner; exact-artifact regeneration and deterministic parity. |
 | 4 | example-org/example-repo | 59e538704b8c119f3b6668cea0154909a6158ff6 | NO-CHANGE (source); staged Velnor plan-v1; stock MBX no | Repo owner; exact-artifact regeneration and deterministic parity. |
