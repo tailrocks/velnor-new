@@ -229,3 +229,13 @@ fn declaration_never_drops_a_file_when_two_files_set_the_mbx_keys()
     }
     Ok(())
 }
+
+#[test]
+fn counters_that_fill_the_integer_range_do_not_overflow_the_waste_sum() {
+    let mut value = lane(&json!([]), &json!({"store_primed":true,"sessions":[]}));
+    value["mbx"]["sessions"] = json!([
+        {"hits":0,"misses":u64::MAX,"not_looked_up":u64::MAX},
+        {"hits":0,"misses":u64::MAX,"not_looked_up":1}
+    ]);
+    assert!(waste(&metrics(value)).iter().all(|line| !line.is_empty()));
+}

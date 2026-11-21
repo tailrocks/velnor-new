@@ -17,7 +17,6 @@ struct Member {
 
 #[derive(Deserialize)]
 struct Printed {
-    build_directory: Option<PathBuf>,
     #[serde(default)]
     packages: Vec<Member>,
 }
@@ -27,19 +26,12 @@ pub(super) fn refuse(workspace: &Workspace, metadata: &[u8]) -> Result<(), CiErr
         .map_err(|e| CiError::new(format!("cargo metadata printed no workspace: {e}")))?;
     for member in &printed.packages {
         let mut directory = member.manifest_path.parent();
-        while let Some(current) = directory.filter(|current| *current != workspace.workspace_root) {
+        while let Some(current) = directory.filter(|current| *current != workspace.root) {
             refuse_configuration(current)?;
             directory = current.parent();
         }
     }
-    match printed.build_directory {
-        Some(build) if build != workspace.target_directory => Err(CiError::new(format!(
-            "cargo writes intermediate artifacts to {} outside the target directory {}: a build directory set by `build.build-dir` or `CARGO_BUILD_BUILD_DIR` is not supported, so unset it",
-            build.display(),
-            workspace.target_directory.display()
-        ))),
-        _ => Ok(()),
-    }
+    Ok(())
 }
 
 fn refuse_configuration(directory: &Path) -> Result<(), CiError> {
