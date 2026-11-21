@@ -10,6 +10,7 @@ use super::*;
 
 mod ancestors;
 mod budget;
+mod checkpoints;
 mod decision;
 mod descriptors;
 mod links;

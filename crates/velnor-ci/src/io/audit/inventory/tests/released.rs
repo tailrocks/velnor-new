@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::handle::{self, Origin};
+use super::handle::{self, Climb, Origin};
 use super::*;
 
 fn released_scan(name: &str, change: &dyn Fn(&Path)) -> (io::Result<Entries>, PathBuf) {
@@ -77,8 +77,11 @@ fn a_child_whose_stamp_differs_from_the_one_recorded_at_release_is_refused() {
     let parent = root.join("d");
     fs::create_dir_all(parent.join("sub")).unwrap_or_else(|e| unreachable!("{e}"));
     let stamp_of = |path: &Path| {
-        handle::stamp(handle::open(&Origin::Path, path).unwrap_or_else(|e| unreachable!("{e}")))
-            .unwrap_or_else(|e| unreachable!("{e}"))
+        handle::stamp(
+            handle::open(&Origin::Path, path, &Climb::none())
+                .unwrap_or_else(|e| unreachable!("{e}")),
+        )
+        .unwrap_or_else(|e| unreachable!("{e}"))
     };
     let origin = Origin::Reopen {
         parent: parent.clone(),
@@ -86,16 +89,16 @@ fn a_child_whose_stamp_differs_from_the_one_recorded_at_release_is_refused() {
         child: Some(stamp_of(&parent.join("sub"))),
         name: "sub".into(),
     };
-    let unchanged = handle::open(&origin, &parent.join("sub"));
+    let unchanged = handle::open(&origin, &parent.join("sub"), &Climb::none());
     fs::write(parent.join("added.txt"), b"").unwrap_or_else(|e| unreachable!("{e}"));
     fs::File::open(&parent)
         .and_then(|directory| directory.set_modified(std::time::UNIX_EPOCH))
         .unwrap_or_else(|e| unreachable!("{e}"));
-    let busier_parent = handle::open(&origin, &parent.join("sub"));
+    let busier_parent = handle::open(&origin, &parent.join("sub"), &Climb::none());
     fs::File::open(parent.join("sub"))
         .and_then(|directory| directory.set_modified(std::time::UNIX_EPOCH))
         .unwrap_or_else(|e| unreachable!("{e}"));
-    let refused = handle::open(&origin, &parent.join("sub"));
+    let refused = handle::open(&origin, &parent.join("sub"), &Climb::none());
     fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
     assert!(unchanged.is_ok(), "{:?}", unchanged.err());
     assert!(busier_parent.is_ok(), "{:?}", busier_parent.err());

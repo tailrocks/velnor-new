@@ -5,15 +5,12 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::io;
-use std::ops::Range;
 use std::path::{Path, PathBuf};
-use std::rc::{Rc, Weak};
-
-use nix::dir::Dir;
 
 use super::super::options::{MAX_ENTRIES_CEILING, MAX_ENTRIES_VARIABLE};
-use super::handle::{self, Current, Opened, Origin, Stamp};
-use super::resolve::{RESOLVER_FIXED, Reach};
+use super::handle::{self, Climb, Current, Opened, Origin, Stamp};
+use super::held::Held;
+use super::resolve::Reach;
 use super::{Entries, Kind, Scan, excluded_entry};
 
 pub(in crate::io::audit) struct Budget {
@@ -76,6 +73,7 @@ pub(super) struct Probe<'a> {
     pub(super) after_open: &'a dyn Fn(&Path),
     pub(super) listed: &'a dyn Fn(&OsStr),
     pub(super) opened: &'a dyn Fn(),
+    pub(super) reopened: &'a dyn Fn(&Path, usize),
     pub(super) held: usize,
 }
 
@@ -86,65 +84,15 @@ impl Default for Probe<'_> {
             after_open: &|_| {},
             listed: &|_| {},
             opened: &|| {},
+            reopened: &|_, _| {},
             held: HELD_HANDLES,
         }
     }
 }
 
-struct Pending {
-    path: PathBuf,
-    origin: Origin,
-}
-
-struct Held<'p, 'a> {
-    handles: Vec<(Weak<Dir>, Range<usize>)>,
-    probe: &'p Probe<'a>,
-}
-
-impl<'a> Held<'_, 'a> {
-    fn reach(&mut self) -> Reach<'a> {
-        self.handles.retain(|(handle, _)| handle.strong_count() > 0);
-        let in_use = self.handles.len() + UNTRACKED_LISTING + RESOLVER_FIXED;
-        Reach {
-            bound: DESCRIPTOR_BUDGET.saturating_sub(in_use),
-            opened: self.probe.opened,
-        }
-    }
-
-    fn track(&mut self, listing: &Opened, pending: &mut [Pending], start: usize) {
-        self.handles
-            .push((Rc::downgrade(listing), start..pending.len()));
-        self.handles.retain(|(handle, _)| handle.strong_count() > 0);
-        while self.handles.len() > self.probe.held {
-            let (oldest, siblings) = self.handles.remove(0);
-            let end = siblings.end.min(pending.len());
-            for entry in pending.get_mut(siblings.start..end).unwrap_or_default() {
-                if let Some(reopen) = reopening(entry, &oldest) {
-                    entry.origin = reopen;
-                }
-            }
-        }
-    }
-}
-
-fn reopening(entry: &Pending, released: &Weak<Dir>) -> Option<Origin> {
-    let Origin::Child {
-        parent,
-        stamp,
-        name,
-    } = &entry.origin
-    else {
-        return None;
-    };
-    if !Weak::ptr_eq(&Rc::downgrade(parent), released) {
-        return None;
-    }
-    Some(Origin::Reopen {
-        parent: entry.path.parent()?.to_path_buf(),
-        stamp: *stamp,
-        child: handle::child_stamp(parent, name),
-        name: name.clone(),
-    })
+pub(super) struct Pending {
+    pub(super) path: PathBuf,
+    pub(super) origin: Origin,
 }
 
 pub(super) fn scan_with(
@@ -161,10 +109,7 @@ pub(super) fn scan_with(
         origin: Origin::Path,
     }];
     let mut visited = BTreeSet::new();
-    let mut held = Held {
-        handles: Vec::new(),
-        probe,
-    };
+    let mut held = Held::new(probe);
     while let Some(Pending {
         path: directory,
         origin,
@@ -175,15 +120,17 @@ pub(super) fn scan_with(
             continue;
         }
         budget.reserve()?;
-        let opened =
-            (probe.before_open)(&directory).and_then(|()| handle::open(&origin, &directory));
+        let opened = (probe.before_open)(&directory)
+            .and_then(|()| handle::open(&origin, &directory, &held.climb(&origin)));
         let mut listing = match opened {
             Ok(listing) => listing,
             Err(error) if handle::replaced(&error) && directory != root => {
                 if matches!(origin, Origin::Path) {
                     return Err(changed(error.kind(), &directory));
                 }
-                match handle::current(&origin, &directory, held.reach())? {
+                let current =
+                    handle::current(&origin, &directory, held.reach(), &held.climb(&origin))?;
+                match current {
                     Current::Directory(_) => return Err(changed(error.kind(), &directory)),
                     current => settle(
                         &mut entries,
@@ -214,8 +161,9 @@ pub(super) fn scan_with(
             (&mut pending, &mut held),
             (&root, targets),
         )?;
-        held.track(&listing, &mut pending, queued_before);
-        match handle::current(&origin, &directory, held.reach())? {
+        held.track(&listing, &directory, &mut pending, queued_before);
+        let current = handle::current(&origin, &directory, held.reach(), &held.climb(&origin))?;
+        match current {
             Current::Directory(now) if stamp.is(now) => {
                 entries.insert(directory, children);
             }
@@ -350,7 +298,7 @@ fn settle(
 }
 
 fn is_directory(path: &Path, reach: Reach<'_>) -> io::Result<bool> {
-    match handle::current(&Origin::Path, path, reach) {
+    match handle::current(&Origin::Path, path, reach, &Climb::none()) {
         Ok(Current::Directory(_) | Current::Other(Kind::Link { .. })) => Ok(true),
         Ok(Current::Gone | Current::Other(_)) => Ok(false),
         Err(error) if handle::replaced(&error) => Ok(true),

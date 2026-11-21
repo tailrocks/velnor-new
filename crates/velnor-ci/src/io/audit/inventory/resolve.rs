@@ -40,14 +40,31 @@ pub(super) fn open_path(path: &Path, listing: bool) -> io::Result<OwnedFd> {
             format!("{} is not an absolute path", path.display()),
         ));
     }
-    let mut remaining = components.as_path().components().count();
-    let mut current = open_directory(AT_FDCWD, Path::new("/"), listing && remaining == 0)?;
-    for component in components {
+    let below = components.as_path();
+    let root = open_directory(
+        AT_FDCWD,
+        Path::new("/"),
+        listing && below.as_os_str().is_empty(),
+    )?;
+    descend(root, below, listing)
+}
+
+pub(super) fn open_below(
+    anchor: BorrowedFd<'_>,
+    below: &Path,
+    listing: bool,
+) -> io::Result<OwnedFd> {
+    descend(anchor.try_clone_to_owned()?, below, listing)
+}
+
+fn descend(mut current: OwnedFd, below: &Path, listing: bool) -> io::Result<OwnedFd> {
+    let mut remaining = below.components().count();
+    for component in below.components() {
         remaining -= 1;
         let Component::Normal(name) = component else {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
-                format!("{} is not a canonical path", path.display()),
+                format!("{} is not a canonical path", below.display()),
             ));
         };
         current = open_directory(current.as_fd(), Path::new(name), listing && remaining == 0)?;

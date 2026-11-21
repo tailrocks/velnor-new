@@ -59,6 +59,25 @@ pub(super) enum Origin {
         name: OsString,
     },
 }
+pub(super) struct Anchor {
+    pub(super) dir: Opened,
+    pub(super) path: PathBuf,
+}
+
+pub(super) struct Climb<'a> {
+    pub(super) anchor: Option<Anchor>,
+    pub(super) stepped: &'a dyn Fn(&Path, usize),
+}
+
+impl Climb<'_> {
+    pub(super) fn none() -> Self {
+        Self {
+            anchor: None,
+            stepped: &|_, _| {},
+        }
+    }
+}
+
 pub(super) enum Current {
     Gone,
     Directory(Identity),
@@ -81,7 +100,7 @@ pub(super) fn replaced(error: &io::Error) -> bool {
     ) || error.raw_os_error() == Some(libc::ELOOP)
 }
 
-pub(super) fn open(origin: &Origin, path: &Path) -> io::Result<Dir> {
+pub(super) fn open(origin: &Origin, path: &Path, climb: &Climb<'_>) -> io::Result<Dir> {
     let fd = match origin {
         Origin::Path => resolve::open_path(path, true)?,
         Origin::Child { parent, name, .. } => child(parent.as_fd(), name)?,
@@ -91,7 +110,7 @@ pub(super) fn open(origin: &Origin, path: &Path) -> io::Result<Dir> {
             child: recorded,
             name,
         } => {
-            let opened = child(reopen(parent, stamp)?.as_fd(), name)?;
+            let opened = child(reopen(parent, stamp, climb)?.as_fd(), name)?;
             if self::stamp(&opened).ok() != *recorded {
                 return Err(changed(io::ErrorKind::Other, parent));
             }
@@ -112,8 +131,21 @@ fn child(parent: BorrowedFd<'_>, name: &OsStr) -> io::Result<OwnedFd> {
     openat(parent, name, flags, Mode::empty()).map_err(failure)
 }
 
-fn reopen(parent: &Path, expected: &Stamp) -> io::Result<OwnedFd> {
-    let held = resolve::open_path(parent, false).map_err(|error| {
+fn reopen(parent: &Path, expected: &Stamp, climb: &Climb<'_>) -> io::Result<OwnedFd> {
+    let below = climb
+        .anchor
+        .as_ref()
+        .and_then(|anchor| Some((anchor, parent.strip_prefix(&anchor.path).ok()?)));
+    let steps = below.map_or_else(
+        || parent.components().count(),
+        |(_, below)| below.components().count(),
+    );
+    (climb.stepped)(parent, steps);
+    let opened = match below {
+        Some((anchor, below)) => resolve::open_below(anchor.dir.as_fd(), below, false),
+        None => resolve::open_path(parent, false),
+    };
+    let held = opened.map_err(|error| {
         if replaced(&error) {
             changed(io::ErrorKind::Other, parent)
         } else {
@@ -135,7 +167,7 @@ pub(super) fn revisited(
     let Some(recorded) = identities.get(directory) else {
         return Ok(());
     };
-    match current(&Origin::Path, directory, reach) {
+    match current(&Origin::Path, directory, reach, &Climb::none()) {
         Ok(Current::Directory(now)) if recorded.is(now) => Ok(()),
         Ok(_) => Err(changed(io::ErrorKind::Other, directory)),
         Err(error) if replaced(&error) => Err(changed(error.kind(), directory)),
@@ -153,7 +185,12 @@ pub(super) fn stamp(directory: impl AsFd) -> io::Result<Stamp> {
         .map(|stat| Stamp::of(&stat))
         .map_err(failure)
 }
-pub(super) fn current(origin: &Origin, path: &Path, reach: Reach<'_>) -> io::Result<Current> {
+pub(super) fn current(
+    origin: &Origin,
+    path: &Path,
+    reach: Reach<'_>,
+    climb: &Climb<'_>,
+) -> io::Result<Current> {
     let held: OwnedFd;
     let (anchor, name) = match origin {
         Origin::Child { parent, name, .. } => (parent.as_fd(), name.as_os_str()),
@@ -163,7 +200,7 @@ pub(super) fn current(origin: &Origin, path: &Path, reach: Reach<'_>) -> io::Res
             name,
             ..
         } => {
-            held = reopen(parent, stamp)?;
+            held = reopen(parent, stamp, climb)?;
             (held.as_fd(), name.as_os_str())
         }
         Origin::Path => {
