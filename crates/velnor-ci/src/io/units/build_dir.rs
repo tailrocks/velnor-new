@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 use serde::Deserialize;
 use toml::{Table, Value};
@@ -21,10 +21,31 @@ struct Printed {
     packages: Vec<Member>,
 }
 
-pub(super) fn step_relative(relative: &Path) -> Result<PathBuf, CiError> {
-    std::env::current_dir()
-        .map(|directory| directory.join(relative))
-        .map_err(|e| CiError::new(format!("cannot read the working directory: {e}")))
+pub(super) fn refuse_parent(relative: &Path) -> Result<(), CiError> {
+    if relative
+        .components()
+        .any(|part| part == Component::ParentDir)
+    {
+        return Err(CiError::new(format!(
+            "CARGO_BUILD_BUILD_DIR={} is relative and contains `..`; set an absolute path or one without `..`",
+            relative.display()
+        )));
+    }
+    Ok(())
+}
+
+pub(super) fn refuse_template(build: &Path) -> Result<(), CiError> {
+    if build.to_string_lossy().contains('{') {
+        return Err(CiError::new(format!(
+            "CARGO_BUILD_BUILD_DIR={} uses a cargo path template; set a plain absolute path instead",
+            build.display()
+        )));
+    }
+    Ok(())
+}
+
+pub(super) fn step_relative(relative: &Path, base: &Path) -> PathBuf {
+    base.join(relative)
 }
 
 pub(super) fn refuse(workspace: &Workspace, metadata: &[u8]) -> Result<(), CiError> {
