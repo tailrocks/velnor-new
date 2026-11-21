@@ -41,7 +41,7 @@ fn a_poisoned_restore_names_its_cache_entry_and_the_command_that_deletes_it() {
     assert!(stdout.contains("::notice::"), "{stdout}");
     assert!(stdout.contains("velnor-tools-abc123"), "{stdout}");
     assert!(
-        stdout.contains("gh cache delete 'velnor-tools-abc123' -R tailrocks/velnor-new"),
+        stdout.contains("gh cache delete 'velnor-tools-abc123' -R github.com/tailrocks/velnor-new"),
         "{stdout}"
     );
     assert!(discarded(&job));
@@ -61,7 +61,9 @@ fn a_poisoned_restore_names_the_anchor_entry_that_feeds_the_check() {
         ],
     );
     assert!(
-        stdout.contains("gh cache delete 'velnor-tools-anchor-abc123' -R tailrocks/velnor-new"),
+        stdout.contains(
+            "gh cache delete 'velnor-tools-anchor-abc123' -R github.com/tailrocks/velnor-new"
+        ),
         "{stdout}"
     );
 }
@@ -76,7 +78,9 @@ fn a_malformed_anchor_names_the_anchor_entry_that_feeds_the_check() {
     );
     assert!(stdout.contains("the anchor is malformed"), "{stdout}");
     assert!(
-        stdout.contains("gh cache delete 'velnor-tools-anchor-abc123' -R tailrocks/velnor-new"),
+        stdout.contains(
+            "gh cache delete 'velnor-tools-anchor-abc123' -R github.com/tailrocks/velnor-new"
+        ),
         "{stdout}"
     );
     assert!(discarded(&job));
@@ -95,7 +99,9 @@ fn a_restored_malformed_anchor_names_the_anchor_entry_when_the_read_step_left_it
     );
     assert!(stdout.contains("the anchor is malformed"), "{stdout}");
     assert!(
-        stdout.contains("gh cache delete 'velnor-tools-anchor-abc123' -R tailrocks/velnor-new"),
+        stdout.contains(
+            "gh cache delete 'velnor-tools-anchor-abc123' -R github.com/tailrocks/velnor-new"
+        ),
         "{stdout}"
     );
     assert!(discarded(&job));
@@ -139,7 +145,7 @@ fn a_restore_on_github_enterprise_names_the_host_in_the_delete_command() {
 }
 
 #[test]
-fn a_restore_on_github_com_names_the_bare_repository_that_gh_defaults_to() {
+fn a_restore_on_github_com_names_the_host_so_gh_host_cannot_redirect_the_delete() {
     let job = job("tools-verify-named-github-com");
     let anchor = recorded(&job);
     fs::write(rustc(&job), "evil binary!").unwrap_or_else(|e| unreachable!("{e}"));
@@ -152,10 +158,9 @@ fn a_restore_on_github_com_names_the_bare_repository_that_gh_defaults_to() {
         ],
     );
     assert!(
-        stdout.contains("gh cache delete 'velnor-tools-abc123' -R tailrocks/velnor-new"),
+        stdout.contains("gh cache delete 'velnor-tools-abc123' -R github.com/tailrocks/velnor-new"),
         "{stdout}"
     );
-    assert!(!stdout.contains("github.com/tailrocks"), "{stdout}");
 }
 
 #[test]
