@@ -32,6 +32,18 @@ pub enum CacheCommand {
     Check(CheckArgs),
     #[command(about = "Enforce the repository cache budget while protecting newest bases")]
     Budget(BudgetArgs),
+    #[command(
+        about = "List every GitHub Actions cache entry of the repository whose key starts with velnor-private-, on every ref, and delete them only with --yes (a dry run otherwise); prints counts and bytes, never a token. Run it once when a private repository becomes public, because a fork pull request of a public repository can restore a default-branch entry by its exact key; it does not look at the repository visibility, so it also removes the entries of a repository that is still private. Reads GITHUB_TOKEN, which needs actions: write to delete, and GITHUB_REPOSITORY"
+    )]
+    PurgePrivate(PurgePrivateArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct PurgePrivateArgs {
+    #[arg(long, help = "Delete the entries; without it only report them")]
+    pub yes: bool,
+    #[arg(long, help = "Repository as owner/name, default GITHUB_REPOSITORY")]
+    pub repo: Option<String>,
 }
 
 #[derive(Debug, Args)]
