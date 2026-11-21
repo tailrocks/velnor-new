@@ -256,7 +256,7 @@ fn a_repeated_mbx_counter_makes_the_summary_unparsed() -> ResultTest {
 }
 
 #[test]
-fn an_omitted_zero_counter_is_zero_not_unparsed() -> ResultTest {
+fn an_omitted_zero_counter_is_zero_and_incremental_work_is_not_dropped() -> ResultTest {
     let metrics = lane_with_mbx_log(
         "report-mbx-omitted-zero",
         &format!("{OMITTED_ZERO_SUMMARY}\n"),
@@ -266,24 +266,21 @@ fn an_omitted_zero_counter_is_zero_not_unparsed() -> ResultTest {
     assert_eq!(metrics.mbx.sessions.len(), 1, "{metrics:?}");
     assert_eq!(metrics.mbx.sessions[0].hits, 0, "{metrics:?}");
     assert_eq!(metrics.mbx.sessions[0].misses, 0, "{metrics:?}");
+    assert_eq!(metrics.mbx.sessions[0].not_looked_up, 15, "{metrics:?}");
     assert_eq!(metrics.mbx.unparsed, 0, "{metrics:?}");
     Ok(())
 }
 
 #[test]
-fn bypassed_lookups_count_as_skipped_in_the_zero_hit_gate() -> ResultTest {
+fn undifferentiated_stderr_bypasses_do_not_trigger_the_zero_hit_gate() -> ResultTest {
     let metrics = lane_with_mbx_log(
         "report-mbx-bypassed-only",
         &format!("{BYPASSED_ONLY_SUMMARY}\n"),
         true,
         true,
     )?;
-    let gates = waste_gates(&metrics);
-    assert!(
-        gates.iter().any(|line| line.contains("4 lookups")),
-        "{:?}",
-        metrics.violations
-    );
+    assert_eq!(metrics.mbx.unparsed, 0, "{metrics:?}");
+    assert!(waste_gates(&metrics).is_empty(), "{:?}", metrics.violations);
     Ok(())
 }
 

@@ -73,7 +73,6 @@ fn cache_text(line: &str) -> Option<(bool, &str)> {
     let text = line.split_once("mbx[cache]: ")?.1;
     Some(match text.strip_prefix(OBJECT_CACHE_LABEL) {
         Some(rest) => (true, rest.trim_start()),
-        // Any nonempty prefix of the label is a label cut short, not an unrelated detail line.
         None if !text.trim_end().is_empty() && OBJECT_CACHE_LABEL.starts_with(text.trim_end()) => {
             (true, "")
         }
@@ -81,7 +80,6 @@ fn cache_text(line: &str) -> Option<(bool, &str)> {
     })
 }
 
-/// The transfer statistics after the `;` start with `<size> <unit> downloaded`, as every complete summary does.
 fn has_transfer_suffix(tail: &str) -> bool {
     let clause = tail.split(',').next().unwrap_or_default();
     matches!(
@@ -126,8 +124,9 @@ fn parse_lookup_summary(summary: &str) -> Option<MbxSession> {
         match name {
             "hits" => session.hits = count,
             "misses" => session.misses = count,
-            "not looked up" => session.not_looked_up = count,
-            "bypassed" => session.bypassed = count,
+            "not looked up" | "incremental" => {
+                session.not_looked_up = session.not_looked_up.saturating_add(count);
+            }
             _ => {}
         }
     }
