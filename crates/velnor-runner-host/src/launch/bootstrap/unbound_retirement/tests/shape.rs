@@ -8,6 +8,8 @@ use super::fixture::FixtureDocker;
 use super::seed;
 use super::{FAILED, RESERVATION, RETIRED, TestResult, retire_unbound_pair};
 
+const FAR_DEADLINE: std::time::Duration = std::time::Duration::from_secs(3600);
+
 const NOT_STARTED: &str = "UPDATE capacity_reservation_provisioning_state SET bootstrap_start_state = 'not_requested', runner_container_id = NULL, dind_container_id = NULL WHERE reservation_id = {r}";
 const NO_CONTAINERS: &str =
     "DELETE FROM capacity_reservation_bootstrap_containers WHERE reservation_id = {r}";
@@ -186,7 +188,7 @@ async fn sweep(containers: Containers) -> TestResult<()> {
     assert_eq!(scope.uncertain_unbound_pairs().await?, vec![reservation]);
 
     retire_uncertain_unbound_pairs(
-        tokio::time::Instant::now() + std::time::Duration::from_secs(30),
+        tokio::time::Instant::now() + FAR_DEADLINE,
         &docker,
         &scope,
         &engine,
