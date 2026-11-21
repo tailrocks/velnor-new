@@ -14,13 +14,17 @@ use velnor_ci::tools_verify_step::run as verify_step;
 use crate::io::Repo;
 use crate::tools_verify::{Job, context, job, recorded, rustc};
 
-const KEY: &str = "velnor-tools-Linux-X64-mise2026.11.10-abc123";
+pub(crate) const KEY: &str = "velnor-tools-Linux-X64-mise2026.11.10-abc123";
 
 pub(crate) fn save(store: &Path, home: &Path, replace: bool) -> Outcome {
+    save_as(store, home, KEY, replace)
+}
+
+pub(crate) fn save_as(store: &Path, home: &Path, key: &str, replace: bool) -> Outcome {
     let store = store.display().to_string();
     run(&Inputs {
         verb: Verb::Save,
-        key: KEY,
+        key,
         event_name: "push",
         git_ref: "refs/heads/main",
         default_branch: Some("main"),
