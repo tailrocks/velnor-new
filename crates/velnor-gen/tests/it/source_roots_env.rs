@@ -11,6 +11,7 @@ use crate::single_fetch::repo;
 use crate::yaml_tree::document;
 
 const HELPER: &str = "0.1.110";
+const LITERAL_HELPER: &str = "0.1.112";
 
 const PLAIN_ROOTS: [&str; 6] = [
     "svc/a-plus+sign-service",
@@ -37,6 +38,13 @@ struct Rendered {
 }
 
 fn rendered(directories: &[&str]) -> Result<Rendered, Box<dyn std::error::Error>> {
+    rendered_with(directories, HELPER)
+}
+
+fn rendered_with(
+    directories: &[&str],
+    helper: &str,
+) -> Result<Rendered, Box<dyn std::error::Error>> {
     let manifests: Vec<String> = std::iter::once("Cargo.toml".to_owned())
         .chain(
             directories
@@ -45,7 +53,7 @@ fn rendered(directories: &[&str]) -> Result<Rendered, Box<dyn std::error::Error>
         )
         .collect();
     let names: Vec<&str> = manifests.iter().map(String::as_str).collect();
-    let tree = document(&workflow(&repo(&names, HELPER)?)?)?;
+    let tree = document(&workflow(&repo(&names, helper)?)?)?;
     let env = tree
         .get("env")
         .and_then(Value::as_object)
@@ -132,6 +140,49 @@ fn roots_with_command_separators_are_refused_instead_of_expanded() -> TestResult
             result.is_err_and(|error| error.to_string().contains("a run value contains")),
             "{root}"
         );
+    }
+    Ok(())
+}
+
+#[test]
+fn a_helper_with_the_literal_roots_argument_never_reads_the_roots_from_the_environment()
+-> TestResult {
+    let workflow = rendered_with(&PLAIN_ROOTS, LITERAL_HELPER)?;
+    assert!(workflow.env.is_empty(), "{:?}", workflow.env);
+    let [run] = &workflow.runs[..] else {
+        return Err(format!("one fetch step: {:?}", workflow.runs).into());
+    };
+    assert!(
+        run.ends_with(
+            "--roots . './svc/a-plus+sign-service' './svc/b-at@sign-service' './svc/c-comma,name-service' './svc/d-colon:name-service' './svc/e-equals=name-service' './svc/f-percent%name-service'"
+        ),
+        "{run}"
+    );
+    assert!(!run.contains("VELNOR_SOURCE_ROOTS"), "{run}");
+    Ok(())
+}
+
+#[test]
+fn the_helper_just_below_the_literal_roots_gate_still_hoists_the_roots() -> TestResult {
+    let workflow = rendered_with(&PLAIN_ROOTS, "0.1.111")?;
+    assert_eq!(workflow.env.len(), 1, "{:?}", workflow.env);
+    let [run] = &workflow.runs[..] else {
+        return Err(format!("one fetch step: {:?}", workflow.runs).into());
+    };
+    assert!(run.contains("--roots $VELNOR_SOURCE_ROOTS_"), "{run}");
+    Ok(())
+}
+
+#[test]
+fn a_single_root_longer_than_the_run_limit_is_refused_by_the_cache_key_limit_at_every_helper()
+-> TestResult {
+    let manifest = format!("{}/Cargo.toml", vec!["a".repeat(240); 9].join("/"));
+    for helper in [HELPER, LITERAL_HELPER] {
+        let error = workflow(&repo(&[manifest.as_str()], helper)?)
+            .err()
+            .ok_or("an oversized root rendered")?
+            .to_string();
+        assert!(error.contains("a cache key can be"), "{helper}: {error}");
     }
     Ok(())
 }

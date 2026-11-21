@@ -280,7 +280,7 @@ Platform behavior comes from GitHub's [dependency caching reference](https://doc
 
 - Search tries an exact primary key, partial primary-key matches and ordered restore-key prefixes within the current branch before repeating on the default branch. For multiple partial matches, newest means creation time, not last access.
 - Matching order is a documented service contract; the client only sends keys and version. A partial match requires payload reconciliation before use.
-- The pinned client permits at most ten total keys, at most 512 characters per key and no commas. A restore must match the cache version; gzip and zstd entries do not cross-restore.
+- The [pinned toolkit 6.1.0 client](https://github.com/actions/toolkit/blob/0786132e6a1a4451c2d392bbbf481c2b172d4312/packages/cache/src/cache.ts#L81-L93) permits at most ten total keys (`keys.length > 10`) and, in its `checkKey`, at most 512 JavaScript `key.length` units per key (UTF-16 code units, so a non-BMP character counts as two) and no commas. A restore must match the cache version; gzip and zstd entries do not cross-restore.
 - `cache-hit` proves only an exact primary-key match, never validity, completeness or current-source validation.
 
 #### 5.4 Cache scope and trust
