@@ -60,7 +60,7 @@ fn a_zstd_in_a_relative_path_entry_is_refused() {
     let job = job("zstd-relative-path");
     let ran = dir(&job, "zstd-ran");
     fake_zstd(&dir(&job, "zstd-bin"), &ran);
-    let stdout = notice_with_path(&job, ":zstd-bin");
+    let stdout = notice_with_path(&job, "zstd-bin");
     assert!(!ran.exists(), "{stdout}");
     assert!(names_version(&stdout, GZIP_VERSION), "{stdout}");
 }
