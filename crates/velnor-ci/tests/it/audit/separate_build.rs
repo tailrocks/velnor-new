@@ -229,7 +229,11 @@ fn a_build_directory_through_a_symlink_and_a_parent_component_is_refused_before_
         .unwrap_or_else(|e| unreachable!("{e}"));
     let audit = from_step_directory(&repo, "lnk/../bd", &["inputs", "audit", "--write"]);
     refused_for_parent_component(&audit, "lnk/../bd");
-    let build = from_step_directory(&repo, "lnk/../bd", &["inputs", "build", "--", "cargo", "build"]);
+    let build = from_step_directory(
+        &repo,
+        "lnk/../bd",
+        &["inputs", "build", "--", "cargo", "build"],
+    );
     refused_for_parent_component(&build, "lnk/../bd");
     assert!(!repo.root().join(".velnor/rust-inputs.lock").exists());
     assert!(!outside.parent().unwrap_or(&outside).join("bd").exists());
@@ -337,7 +341,11 @@ fn two_ungrouped_roots_sharing_a_build_directory_are_refused() {
 #[test]
 fn a_relative_build_directory_with_a_parent_component_is_refused_by_the_build() {
     let repo = workspace_below_the_root();
-    let refused = from_step_directory(&repo, "../build", &["inputs", "build", "--", "cargo", "build"]);
+    let refused = from_step_directory(
+        &repo,
+        "../build",
+        &["inputs", "build", "--", "cargo", "build"],
+    );
     refused_for_parent_component(&refused, "../build");
     assert!(!repo.root().join("rust/build").exists());
 }

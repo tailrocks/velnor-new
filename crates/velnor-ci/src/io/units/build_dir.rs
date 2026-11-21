@@ -22,7 +22,10 @@ struct Printed {
 }
 
 pub(super) fn refuse_parent(relative: &Path) -> Result<(), CiError> {
-    if relative.components().any(|part| part == Component::ParentDir) {
+    if relative
+        .components()
+        .any(|part| part == Component::ParentDir)
+    {
         return Err(CiError::new(format!(
             "CARGO_BUILD_BUILD_DIR={} is relative and contains `..`; set an absolute path or one without `..`",
             relative.display()
