@@ -22,17 +22,11 @@ fn refused_with(output: &Output, texts: &[&str]) {
 
 /// The unit hashes of the `lib` build-script runs with an output under `target/debug`.
 fn lib_runs(repo: &Repo) -> BTreeSet<String> {
-    fs::read_dir(repo.root().join(DEBUG).join("build"))
+    fs::read_dir(repo.root().join(DEBUG).join("build/lib"))
         .unwrap_or_else(|e| unreachable!("{e}"))
         .map(|entry| entry.unwrap_or_else(|e| unreachable!("{e}")))
-        .filter(|entry| entry.path().join("output").is_file())
-        .filter_map(|entry| {
-            entry
-                .file_name()
-                .to_string_lossy()
-                .strip_prefix("lib-")
-                .map(str::to_owned)
-        })
+        .filter(|entry| entry.path().join("run/stdout").is_file())
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
         .collect()
 }
 
@@ -49,7 +43,7 @@ fn build_step(repo: &Repo, cargo: &[&str]) -> Output {
 fn library_with_asset_input() -> Repo {
     let repo = Repo::new("stale-run");
     repo.write_all(&[
-        ("mise.toml", "[tools]\n"),
+        ("mise.toml", "[tools]\nrust = \"1.100.0\"\n"),
         (
             "rust/Cargo.toml",
             "[workspace]\nmembers = [\"lib\"]\nresolver = \"3\"\n",
@@ -127,7 +121,7 @@ fn a_run_whose_output_is_older_than_its_build_script_says_so() {
 fn a_stale_run_with_several_changed_inputs_names_the_first_and_counts_the_rest() {
     let repo = Repo::new("stale-run-many");
     repo.write_all(&[
-        ("mise.toml", "[tools]\n"),
+        ("mise.toml", "[tools]\nrust = \"1.100.0\"\n"),
         (
             "rust/Cargo.toml",
             "[workspace]\nmembers = [\"lib\"]\nresolver = \"3\"\n",
