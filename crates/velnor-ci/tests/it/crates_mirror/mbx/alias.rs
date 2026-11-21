@@ -192,7 +192,7 @@ fn a_user_alias_never_overrides_any_other_built_in_command() -> TestResult {
     let repo = declared_job()?;
     let launch = repo.root().join("launch");
     let (inside, _) = manifests(&repo);
-    for name in ["new", "version", "info"] {
+    for name in ["new", "version"] {
         aliases(
             &launch,
             &format!("[alias]\n{name} = \"build -m {inside}\"\n"),
@@ -329,5 +329,32 @@ fn a_relative_home_is_resolved_from_the_directory_flag() -> TestResult {
         .args(["-C", &target.display().to_string(), "x"])
         .output()?;
     assert_refused(&output);
+    Ok(())
+}
+
+#[test]
+fn a_user_alias_named_like_a_newer_built_in_is_scoped_by_its_expansion() -> TestResult {
+    let repo = declared_job()?;
+    let launch = repo.root().join("launch");
+    let (inside, _) = manifests(&repo);
+    for name in ["add", "info", "remove", "report"] {
+        aliases(
+            &launch,
+            &format!("[alias]\n{name} = \"build -m {inside}\"\n"),
+        )?;
+        assert_refused(&run_with_args(&repo, &launch, &[name])?);
+    }
+    Ok(())
+}
+
+#[test]
+fn an_alias_after_the_option_separator_is_scoped_by_its_expansion() -> TestResult {
+    let repo = declared_job()?;
+    let launch = repo.root().join("launch");
+    let (inside, outside) = manifests(&repo);
+    aliases(&launch, &format!("[alias]\nxx = \"build -m {inside}\"\n"))?;
+    assert_refused(&run_with_args(&repo, &launch, &["--", "xx"])?);
+    aliases(&launch, &format!("[alias]\nxx = \"build -m {outside}\"\n"))?;
+    assert_plain(&run_with_args(&repo, &launch, &["--", "xx"])?);
     Ok(())
 }
