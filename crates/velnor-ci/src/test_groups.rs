@@ -12,7 +12,6 @@ use crate::nextest_list::{TestKey, list};
 const PREFIX: &str = "velnor-ci test-groups";
 const LISTED_LIMIT: usize = 50;
 
-#[must_use]
 pub fn run(args: &TestGroupsCheckArgs) -> ExitCode {
     match check(&args.groups) {
         Ok(report) => {

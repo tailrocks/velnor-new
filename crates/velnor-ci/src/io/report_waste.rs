@@ -33,22 +33,23 @@ pub(super) fn collect_local(metrics: &mut LaneMetrics, log: &[u8], runner_temp: 
         unparsed,
     };
     metrics.toolchain_installs = fs::read_to_string(runner_temp.join(TOOLCHAIN_INSTALLS))
-        .map(|text| {
+        .map_or_default(|text| {
             text.lines()
                 .filter(|line| !line.is_empty())
                 .map(str::to_owned)
                 .collect()
-        })
-        .unwrap_or_default();
+        });
 }
 
 fn sessions(metrics: &mut LaneMetrics, log: &[u8], runner_temp: &Path) -> (Vec<MbxSession>, u64) {
-    let unrecorded = super::mbx_reports::unrecorded(runner_temp);
+    let (unrecorded, ledger_unknown) = unrecorded_ledger(metrics, runner_temp);
     let Some(reports) = super::mbx_reports::read(runner_temp) else {
         let (sessions, unparsed) = summaries(metrics, log);
         return (
             sessions,
-            unparsed.saturating_add(unrecorded_sessions(metrics, unrecorded)),
+            unparsed
+                .saturating_add(unrecorded_sessions(metrics, unrecorded))
+                .saturating_add(ledger_unknown),
         );
     };
     if reports.overflowed {
@@ -81,14 +82,34 @@ fn sessions(metrics: &mut LaneMetrics, log: &[u8], runner_temp: &Path) -> (Vec<M
             crate::escape::escape(first, false)
         ));
     }
+    if reports.unlisted > 0 {
+        metrics.verification_errors.push(format!(
+            "MBX stats directory or entry could not be read ({} failure(s)); the MBX session counts are incomplete.",
+            reports.unlisted
+        ));
+    }
     let (text, unparsed) = summaries(metrics, &unassigned);
-    let unknown = u64::try_from(reports.unreadable.len() + missing).unwrap_or(u64::MAX);
+    let unknown =
+        u64::try_from(reports.unreadable.len() + missing + reports.unlisted).unwrap_or(u64::MAX);
     (
         reports.sessions.into_iter().chain(text).collect(),
         unparsed
             .saturating_add(unknown)
-            .saturating_add(unrecorded_sessions(metrics, unrecorded)),
+            .saturating_add(unrecorded_sessions(metrics, unrecorded))
+            .saturating_add(ledger_unknown),
     )
+}
+
+fn unrecorded_ledger(metrics: &mut LaneMetrics, runner_temp: &Path) -> (u64, u64) {
+    match super::mbx_reports::unrecorded(runner_temp) {
+        Ok(count) => (count, 0),
+        Err(reason) => {
+            metrics.verification_errors.push(format!(
+                "MBX unrecorded-session ledger not understood ({reason}); the MBX session counts are unknown."
+            ));
+            (0, 1)
+        }
+    }
 }
 
 fn unrecorded_sessions(metrics: &mut LaneMetrics, count: u64) -> u64 {
