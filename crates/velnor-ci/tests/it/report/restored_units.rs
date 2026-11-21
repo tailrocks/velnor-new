@@ -34,13 +34,88 @@ fn a_dependency_unit_the_restored_base_never_held_is_a_notice_not_waste() {
 }
 
 #[test]
-fn a_run_without_a_restored_unit_record_keeps_the_old_rule() {
+fn a_dependency_unit_with_no_restore_status_is_unknown_not_waste() {
     let lane = with_restored(None);
-    assert_eq!(
-        waste(&lane),
-        [".: serde v1.0.0 compiled despite usable restored inputs"]
+    assert_eq!(waste(&lane), [] as [String; 0]);
+    let report = check(&[lane]).unwrap_or_else(|error| unreachable!("{error}"));
+    assert!(report.contains("no waste"), "{report}");
+    assert!(
+        report.contains(
+            "::warning::.: dependency compiles with an unknown restore status (restored-units manifest not recorded): serde v1.0.0"
+        ),
+        "{report}"
     );
-    assert!(check(&[lane]).is_err());
+}
+
+#[test]
+fn a_missing_or_unreadable_manifest_is_a_warning_and_a_present_one_a_notice() {
+    for (state, level) in [
+        ("absent", "warning"),
+        ("unreadable", "warning"),
+        ("present", "notice"),
+    ] {
+        let mut value = lane();
+        value["invocations"][0]["restored_manifest"] = json!(state);
+        let report = check(&[metrics(value)]).unwrap_or_else(|error| unreachable!("{error}"));
+        assert!(
+            report.contains(&format!(
+                "::{level}::.: dependency compiles with an unknown restore status (restored-units manifest {state}): serde v1.0.0"
+            )),
+            "{state}: {report}"
+        );
+    }
+}
+
+#[test]
+fn a_failing_check_keeps_the_restore_warning_out_of_the_error_text() {
+    let mut value = lane();
+    value["invocations"][0]["restored_manifest"] = json!("absent");
+    value["violations"] = json!([".: a failing lane"]);
+    let lanes = [metrics(value)];
+    let error = check(&lanes)
+        .expect_err("a violation fails the check")
+        .to_string();
+    assert!(error.contains(".: a failing lane"), "{error}");
+    assert!(!error.contains("::warning::"), "{error}");
+    assert!(
+        notices(&lanes).contains(
+            &"::warning::.: dependency compiles with an unknown restore status (restored-units manifest absent): serde v1.0.0".to_owned()
+        ),
+        "{:?}",
+        notices(&lanes)
+    );
+}
+
+#[test]
+fn cargos_dirty_reason_is_named_for_an_unknown_and_for_waste() {
+    let reason = "FsStatusOutdated(StaleItem(MissingFile { path: \"/store/out-dirs/v1/x.rs\" }))";
+    let mut unknown = lane();
+    unknown["invocations"][0]["compilations"][0]["dirty"] = json!(reason);
+    let report = check(&[metrics(unknown)]).unwrap_or_else(|error| unreachable!("{error}"));
+    assert!(
+        report.contains(&format!("serde v1.0.0 (cargo: {reason})")),
+        "{report}"
+    );
+    let mut held = lane();
+    held["invocations"][0]["compilations"][0]["restored"] = json!(true);
+    held["invocations"][0]["compilations"][0]["dirty"] = json!(reason);
+    assert_eq!(
+        waste(&metrics(held)),
+        [format!(
+            ".: serde v1.0.0 compiled despite usable restored inputs (cargo: {reason})"
+        )]
+    );
+}
+
+#[test]
+fn a_manifest_state_round_trips_through_the_metrics() {
+    for state in ["present", "absent", "unreadable"] {
+        let mut value = lane();
+        value["invocations"][0]["restored_manifest"] = json!(state);
+        let text =
+            serde_json::to_value(metrics(value)).unwrap_or_else(|error| unreachable!("{error}"));
+        assert_eq!(text["invocations"][0]["restored_manifest"], json!(state));
+    }
 }
 
 #[test]

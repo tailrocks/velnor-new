@@ -10,7 +10,7 @@ use std::time::{Duration, Instant};
 use crate::error::CiError;
 use crate::escape::file_value;
 use crate::mbx_seed_copy::{Copied, SUBSETS, copy_subset};
-use crate::mbx_store::{trusted_event, writable_by_job};
+use crate::mbx_store::{KEEP_OUT_DIR, trusted_event, writable_by_job};
 use crate::waste_evidence::SEED_TRUNCATED;
 
 pub const SEED_DIR_ENV: &str = "VELNOR_MBX_SEED_DIR";
@@ -138,11 +138,11 @@ pub fn env_lines(outcome: &Outcome) -> Result<String, CiError> {
     Ok(match outcome {
         Outcome::Seeded { store, .. } => {
             format!(
-                "MBX_CACHE_DIR={}\n",
+                "MBX_CACHE_DIR={}\n{KEEP_OUT_DIR}",
                 file_value(&store.display().to_string())?
             )
         }
-        _ => String::new(),
+        _ => KEEP_OUT_DIR.to_owned(),
     })
 }
 

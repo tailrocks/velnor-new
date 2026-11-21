@@ -228,6 +228,12 @@ fn spawn_child(argv: &[String]) -> Result<(std::process::Child, bool), (u8, Stri
         .env("CARGO_TERM_QUIET", "false")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    if super::recording::explains_rebuilds(argv)
+        && std::env::var("VELNOR_CACHE_DEBUG").as_deref() == Ok("1")
+        && std::env::var_os("CARGO_LOG").is_none_or(|value| value.is_empty())
+    {
+        command.env("CARGO_LOG", super::recording::FINGERPRINT_LOG);
+    }
     super::mbx_reports::assign(&mut command, argv);
     if runs_nextest(argv) {
         for name in STEP_FILE_VARIABLES.iter().copied() {
@@ -300,6 +306,7 @@ fn collect(
             .progress
             .get_or_insert_with(Vec::new)
             .extend(captured.observations.progress);
+        invocation.dirty.extend(captured.observations.dirty);
         invocation.tests.extend(captured.observations.tests);
         invocation.rejected += captured.observations.rejected;
     }

@@ -33,6 +33,27 @@ pub(super) fn cargo_command(argv: &[String]) -> &[String] {
     }
 }
 
+pub(super) const FINGERPRINT_LOG: &str =
+    "cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info";
+
+pub(super) fn explains_rebuilds(argv: &[String]) -> bool {
+    let command = cargo_command(argv);
+    let cargo = command
+        .first()
+        .and_then(|program| Path::new(program).file_name())
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name == "cargo" || name.starts_with("cargo-"));
+    cargo
+        && crate::telemetry::target_selection(command)
+            .iter()
+            .any(|word| {
+                matches!(
+                    word.as_str(),
+                    "check" | "c" | "clippy" | "build" | "b" | "doc" | "d"
+                )
+            })
+}
+
 pub(super) fn start_invocation(argv: &[String]) -> Result<Invocation, CiError> {
     let execution = execution(argv)?;
     Ok(Invocation {
@@ -70,6 +91,8 @@ pub(super) fn start_invocation(argv: &[String]) -> Result<Invocation, CiError> {
         rejected: 0,
         execution,
         target_directory: target_directory(argv)?,
+        dirty: Vec::new(),
+        restored_manifest: None,
     })
 }
 pub(super) fn save_invocation(invocation: &Invocation) -> Result<(), CiError> {

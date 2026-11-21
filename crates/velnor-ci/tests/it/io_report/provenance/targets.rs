@@ -104,11 +104,7 @@ fn restored_target_warmth_is_scoped_to_each_invocations_effective_target() -> Re
         let metrics = report_target(&repo, "", HIT, actual)?;
         assert_eq!(metrics.invocations[0].compilations.len(), 2);
         assert_eq!(metrics.invocations[0].restored_target_usable, Some(warm));
-        assert_eq!(
-            metrics.violations.len(),
-            if warm { 2 } else { 0 },
-            "{metrics:?}"
-        );
+        assert_eq!(metrics.violations.len(), usize::from(warm), "{metrics:?}");
         assert!(metrics.verification_errors.is_empty(), "{metrics:?}");
     }
     Ok(())
@@ -129,12 +125,20 @@ fn configured_target_warm_report_ignores_default_target_decoy() -> ResultTest {
     assert!(metrics.caches[0].usable, "{metrics:?}");
     assert!(metrics.caches[0].usable_same_lock, "{metrics:?}");
     assert!(metrics.verification_errors.is_empty(), "{metrics:?}");
-    for package in ["dependency v1.0.0", "demo v0.1.0"] {
-        assert!(
-            metrics.violations.iter().any(|line| line.contains(package)),
-            "{metrics:?}"
-        );
-    }
+    assert!(
+        metrics
+            .violations
+            .iter()
+            .any(|line| line.contains("demo v0.1.0")),
+        "{metrics:?}"
+    );
+    assert!(
+        !metrics
+            .violations
+            .iter()
+            .any(|line| line.contains("dependency v1.0.0")),
+        "{metrics:?}"
+    );
     assert_eq!(metrics.invocations[0].target_directory, None);
     Ok(())
 }

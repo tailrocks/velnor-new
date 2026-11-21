@@ -123,11 +123,11 @@ pub enum Command {
     )]
     AppToken(AppTokenArgs),
     #[command(
-        about = "Use the runner's shared MBX store: when VELNOR_MBX_SHARED_DIR names an absolute, existing, symlink-free, writable directory and the event is trusted (a push or schedule on the default branch), append MBX_CACHE_DIR and a pod-private MBX_SHIMS_DIR under $RUNNER_TEMP to $GITHUB_ENV. Every other event, and a directory that fails a check (with a warning), keeps MBX's per-job store"
+        about = "Use the runner's shared MBX store: when VELNOR_MBX_SHARED_DIR names an absolute, existing, symlink-free, writable directory and the event is trusted (a push or schedule on the default branch), append MBX_CACHE_DIR and a pod-private MBX_SHIMS_DIR under $RUNNER_TEMP to $GITHUB_ENV. Every other event, and a directory that fails a check (with a warning), keeps MBX's per-job store. Always appends MBX_SHARE_OUT_DIR=0, so that build script outputs stay under target/ and a restored target does not depend on the store"
     )]
     MbxStore,
     #[command(
-        about = "On a pull request or any other untrusted event, when VELNOR_MBX_SEED_DIR names an absolute, existing, symlink-free directory owned by this user or root and not world-writable, copy its actions/{cas,executable-identities,task-manifests,action-results} files that are missing into the private store $RUNNER_TEMP/velnor/mbx, in parallel and without ever writing to the seed, then append MBX_CACHE_DIR for that store to $GITHUB_ENV and log the files, bytes and seconds. Without the variable, with an empty seed, on a trusted event, or when a check fails (with a warning), it changes nothing and MBX builds cold"
+        about = "On a pull request or any other untrusted event, when VELNOR_MBX_SEED_DIR names an absolute, existing, symlink-free directory owned by this user or root and not world-writable, copy its actions/{cas,executable-identities,task-manifests,action-results} files that are missing into the private store $RUNNER_TEMP/velnor/mbx, in parallel and without ever writing to the seed, then append MBX_CACHE_DIR for that store to $GITHUB_ENV and log the files, bytes and seconds. Without the variable, with an empty seed, on a trusted event, or when a check fails (with a warning), it appends no MBX_CACHE_DIR and MBX builds cold. Always appends MBX_SHARE_OUT_DIR=0"
     )]
     MbxSeed,
     #[command(

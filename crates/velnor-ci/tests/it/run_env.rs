@@ -88,3 +88,114 @@ fn run_leaves_the_step_file_variables_to_commands_that_are_not_nextest() {
     let seen = fs::read_to_string(temp.join("child-env")).unwrap_or_default();
     assert_eq!(leaked(&seen), STEP_FILES.to_vec(), "{seen}");
 }
+
+fn fake_cargo(temp: &Path) {
+    let program = temp.join("cargo");
+    fs::write(
+        &program,
+        "#!/bin/sh\nprintf '%s' \"${CARGO_LOG-unset}\" > \"$RUNNER_TEMP/cargo-log\"\necho '   0.024s  INFO prepare_target{force=false package_id=gen v0.1.0 (/work/gen) target=\"gen\"}: cargo::compiler::fingerprint:     dirty: FsStatusOutdated(StaleItem(MissingFile { path: \"/store/x.rs\" }))' >&2\n",
+    )
+    .unwrap_or_else(|e| unreachable!("{e}"));
+    fs::set_permissions(&program, fs::Permissions::from_mode(0o755))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+}
+
+fn cargo_log_seen(
+    temp: &Path,
+    command: &[&str],
+    preset: Option<&str>,
+    cache_debug: Option<&str>,
+) -> String {
+    fs::remove_file(temp.join("velnor-invocations.jsonl")).ok();
+    let path = format!(
+        "{}:{}",
+        temp.display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    let mut run = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
+    run.arg("run")
+        .arg("--")
+        .args(command)
+        .env("RUNNER_TEMP", temp)
+        .env("PATH", path)
+        .env_remove("CARGO_LOG")
+        .env_remove("VELNOR_CACHE_DEBUG");
+    if let Some(preset) = preset {
+        run.env("CARGO_LOG", preset);
+    }
+    if let Some(cache_debug) = cache_debug {
+        run.env("VELNOR_CACHE_DEBUG", cache_debug);
+    }
+    assert!(
+        run.output()
+            .unwrap_or_else(|e| unreachable!("{e}"))
+            .status
+            .success()
+    );
+    fs::read_to_string(temp.join("cargo-log")).unwrap_or_default()
+}
+
+#[test]
+fn a_cargo_build_command_runs_with_the_fingerprint_log_and_records_cargos_dirty_reason() {
+    let temp = scratch("run-env-fingerprint-log");
+    fake_cargo(&temp);
+    for subcommand in ["check", "c", "clippy", "build", "b", "doc", "d"] {
+        assert_eq!(
+            cargo_log_seen(&temp, &["cargo", subcommand, "--locked"], None, Some("1")),
+            "cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info",
+            "{subcommand}"
+        );
+    }
+    let records = fs::read_to_string(temp.join("velnor-invocations.jsonl")).unwrap_or_default();
+    assert!(
+        records.contains(
+            r#""dirty":[{"package":"gen","version":"0.1.0","reason":"FsStatusOutdated(StaleItem(MissingFile { path: \"/store/x.rs\" }))"}]"#
+        ),
+        "{records}"
+    );
+}
+
+#[test]
+fn an_empty_cargo_log_counts_as_unset_for_a_cargo_build_command() {
+    let temp = scratch("run-env-empty-cargo-log");
+    fake_cargo(&temp);
+    assert_eq!(
+        cargo_log_seen(&temp, &["cargo", "check", "--locked"], Some(""), Some("1")),
+        "cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info"
+    );
+}
+
+#[test]
+fn the_fingerprint_log_is_kept_off_commands_that_run_tests_and_never_overrides_the_caller() {
+    let temp = scratch("run-env-fingerprint-log-off");
+    fake_cargo(&temp);
+    for command in [
+        &["cargo", "test"][..],
+        &["cargo", "run"][..],
+        &["cargo", "nextest", "run"][..],
+    ] {
+        assert_eq!(
+            cargo_log_seen(&temp, command, None, Some("1")),
+            "unset",
+            "{command:?}"
+        );
+    }
+    assert_eq!(
+        cargo_log_seen(&temp, &["cargo", "check"], Some("warn"), Some("1")),
+        "warn"
+    );
+}
+
+#[test]
+fn the_fingerprint_log_stays_off_unless_cache_debug_is_on() {
+    let temp = scratch("run-env-fingerprint-log-opt-in");
+    fake_cargo(&temp);
+    assert_eq!(
+        cargo_log_seen(&temp, &["cargo", "check", "--locked"], None, None),
+        "unset"
+    );
+    assert_eq!(
+        cargo_log_seen(&temp, &["cargo", "check", "--locked"], None, Some("0")),
+        "unset"
+    );
+}
