@@ -41,7 +41,14 @@ pub fn purge_private(
         refs.len()
     );
     if delete {
-        delete_entries(github, repo, &ids)?;
+        for (done, id) in ids.iter().enumerate() {
+            if let Err(error) = delete_entries(github, repo, &[*id]) {
+                return Err(CiError::new(format!(
+                    "deleted {done} of {}; failed at entry ID {id}: {error}",
+                    ids.len()
+                )));
+            }
+        }
         Ok(format!("{report}deleted {} entries\n", ids.len()))
     } else {
         Ok(format!(

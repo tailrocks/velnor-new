@@ -185,7 +185,11 @@ fn a_failed_delete_is_an_error() {
     let error = purge_private(&api, &repo(), true)
         .err()
         .map(|e| e.to_string());
-    assert!(error.is_some_and(|text| text.contains("403")));
+    assert_eq!(
+        error.as_deref(),
+        Some("deleted 1 of 3; failed at entry ID 2: HTTP 403")
+    );
+    assert_eq!(*api.deleted.borrow(), vec![1]);
 }
 
 #[test]
