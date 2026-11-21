@@ -60,8 +60,11 @@ pub(super) fn fetch(args: &FetchArgs) -> Result<String, CiError> {
                 e.context("the fetch token could not be revoked; it expires within the hour")
             })
     });
-    outcome?;
+    let scratch = outcome?;
     revocation?;
+    if let Some(scratch) = scratch {
+        scratch.keep_index()?;
+    }
     Ok(if token.is_some() {
         "Fetched the dependencies and revoked the token\n".to_owned()
     } else {
@@ -69,7 +72,10 @@ pub(super) fn fetch(args: &FetchArgs) -> Result<String, CiError> {
     })
 }
 
-fn fetch_with(args: &FetchArgs, token: Option<&str>) -> Result<(), CiError> {
+fn fetch_with(
+    args: &FetchArgs,
+    token: Option<&str>,
+) -> Result<Option<super::fetch_home::Scratch>, CiError> {
     let home = super::fetch_fixed::account_home(args.home.as_deref())?;
     let fixed = super::fetch_fixed::Fixed::system().find();
     let mut roots = args.trusted_dir.clone();
@@ -143,10 +149,12 @@ fn fetch_with(args: &FetchArgs, token: Option<&str>) -> Result<(), CiError> {
         &args.manifest_path,
         neutral,
     )?;
-    match (&scratch, token) {
-        (Some(scratch), Some(_)) => scratch.keep_git(),
-        _ => Ok(()),
+    if token.is_some()
+        && let Some(scratch) = &scratch
+    {
+        scratch.keep_git()?;
     }
+    Ok(scratch.filter(|_| token.is_some()))
 }
 
 pub(super) fn api_client(

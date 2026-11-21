@@ -8,6 +8,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::error::CiError;
 
+mod index;
+
 const GIT: &str = "git";
 const REGISTRY: &str = "registry";
 const DOWNLOADS: [&str; 2] = ["cache", "src"];
@@ -57,6 +59,10 @@ impl Scratch {
 
     pub(super) fn path(&self) -> &Path {
         &self.path
+    }
+
+    pub(super) fn keep_index(&self) -> Result<(), CiError> {
+        index::keep(&self.path, &self.cache)
     }
 
     pub(super) fn keep_git(&self) -> Result<(), CiError> {
