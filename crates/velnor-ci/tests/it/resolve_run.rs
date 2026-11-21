@@ -14,7 +14,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, Weak};
 use std::time::{Duration, Instant};
 
-use crate::resolve_world::{Quirk, World, copy_repo, data_dir, sha256};
+use crate::resolve_world::{Quirk, World, copy_repo, data_dir, repo_template, sha256};
 use crate::support::fresh_dir;
 
 static LAST_MICROS: AtomicU64 = AtomicU64::new(0);
@@ -217,9 +217,6 @@ pub(crate) fn run_helper(world: &mut World, bin: &str) -> Outcome {
     world.finish();
     let laid = lay(world, "plan-v1-request.json");
     let (api, log) = serve(world);
-    if world.quirk != Some(Quirk::NotARepository) {
-        copy_repo(&laid.repo);
-    }
     let mut command = Command::new(bin);
     command
         .env_clear()
@@ -228,7 +225,7 @@ pub(crate) fn run_helper(world: &mut World, bin: &str) -> Outcome {
         .current_dir(if world.quirk == Some(Quirk::NotARepository) {
             &laid.root
         } else {
-            &laid.repo
+            repo_template()
         });
     command
         .env("RUNNER_TEMP", &laid.temp)
@@ -314,8 +311,7 @@ pub(crate) fn run_legacy(world: &mut World, engine: &str) -> Outcome {
     }
     let output = timed(&mut command);
     let requests = fs::read_to_string(api_dir.join("requests.log"))
-        .map(|text| text.lines().map(str::to_owned).collect())
-        .unwrap_or_default();
+        .map_or_default(|text| text.lines().map(str::to_owned).collect());
     let outcome = Outcome {
         error: error_of(&output),
         requests,

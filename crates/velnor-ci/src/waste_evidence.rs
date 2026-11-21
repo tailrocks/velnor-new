@@ -3,18 +3,33 @@
 
 use crate::report::{Hit, LaneMetrics};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::path::Path;
 
 pub const TOOLCHAIN_INSTALLS: &str = "velnor-toolchain-installs.txt";
 
 pub const SEED_TRUNCATED: &str = "velnor-mbx-seed-truncated";
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MbxCompilerWork {
+    pub invocations: u64,
+    pub duration_ns: u64,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct MbxSession {
     pub hits: u64,
     pub misses: u64,
     pub not_looked_up: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub verifications: Option<u64>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub bypasses: BTreeMap<String, u64>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub compiler: BTreeMap<String, MbxCompilerWork>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub probe_only: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -65,11 +80,7 @@ fn looks_like_lookup_summary(text: &str) -> bool {
 
 fn parse_lookup_summary(summary: &str) -> Option<MbxSession> {
     let counts = summary.split_once(';').map_or(summary, |(head, _)| head);
-    let mut session = MbxSession {
-        hits: 0,
-        misses: 0,
-        not_looked_up: 0,
-    };
+    let mut session = MbxSession::default();
     let mut seen = [false; 2];
     for clause in counts.split(',') {
         let (count, name) = clause.trim().split_once(' ')?;
@@ -134,11 +145,15 @@ pub fn waste(metrics: &LaneMetrics) -> Vec<String> {
             ));
         }
     }
-    let sessions = &metrics.mbx.sessions;
-    let lookups: u64 = sessions
+    let sessions: Vec<&MbxSession> = metrics
+        .mbx
+        .sessions
         .iter()
-        .map(|session| session.misses + session.not_looked_up)
-        .sum();
+        .filter(|session| !session.probe_only)
+        .collect();
+    let lookups: u64 = sessions.iter().fold(0_u64, |total, session| {
+        total.saturating_add(session.misses.saturating_add(session.not_looked_up))
+    });
     if metrics.mbx.store_primed
         && !metrics.mbx.seed_truncated
         && metrics.mbx.unparsed == 0
@@ -152,7 +167,7 @@ pub fn waste(metrics: &LaneMetrics) -> Vec<String> {
         ));
     }
     if metrics.mbx.declared
-        && metrics.mbx.sessions.is_empty()
+        && sessions.is_empty()
         && metrics.mbx.unparsed == 0
         && metrics
             .invocations

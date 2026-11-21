@@ -9,12 +9,18 @@ pub struct LintJob {
     pub name: String,
     pub timeout_minutes: u16,
     pub inputs: Vec<PathGlob>,
+    pub plan_gated: bool,
     pub kind: LintKind,
 }
 
 const JOB_PREFIX: &str = "lint-";
 
 impl LintJob {
+    #[must_use]
+    pub fn planned(&self) -> bool {
+        self.plan_gated || !self.inputs.is_empty()
+    }
+
     #[must_use]
     pub fn slug(&self) -> RootSlug {
         let tail = self
@@ -45,7 +51,6 @@ pub enum LintKind {
     Alint {
         config: RepoPath,
         probe: Option<RepoPath>,
-        tools: Vec<String>,
     },
     MiseTask {
         task: String,

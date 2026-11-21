@@ -124,7 +124,7 @@ fn verify(
         return match need {
             Need::Required => Err(LintFault::ToolFiltered {
                 tool: name.to_owned(),
-                platform: platform.map(MisePlatform::lock_key).unwrap_or_default(),
+                platform: platform.map_or_default(MisePlatform::lock_key),
             }),
             Need::Optional => Ok(()),
         };
@@ -185,13 +185,7 @@ fn check_job(
                 check(NODE, Need::Optional)
             }
         }
-        LintKind::Alint { tools: named, .. } => {
-            check(ALINT, Need::Required)?;
-            for name in named {
-                check(name, Need::Required)?;
-            }
-            Ok(())
-        }
+        LintKind::Alint { .. } => check(ALINT, Need::Required),
         LintKind::MiseTask { task, tools: named } => {
             for name in named {
                 check(name, Need::Required)?;

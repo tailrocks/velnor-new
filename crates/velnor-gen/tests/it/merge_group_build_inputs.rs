@@ -23,10 +23,16 @@ fn steps(job: &Value) -> &[Value] {
     job["steps"].as_array().map_or(&[], Vec::as_slice)
 }
 
+fn condition(step: &Value) -> &str {
+    step["if"].as_str().unwrap_or_default()
+}
+
 fn skipped(step: &Value) -> bool {
-    step["if"]
-        .as_str()
-        .is_some_and(|condition| condition.contains("skip"))
+    condition(step).contains(".skip != 'true'") || condition(step).contains(".skip_push != 'true'")
+}
+
+fn post_merge_only(step: &Value) -> bool {
+    condition(step).contains("github.event_name == 'push'")
 }
 
 fn compiles(step: &Value) -> bool {
@@ -61,10 +67,18 @@ fn check(ci: &str) -> TestResult {
                 continue;
             }
             let survives = steps(&job).iter().any(|s| compiles(s) && !skipped(s));
+            let before_merge = steps(&job)
+                .iter()
+                .any(|s| compiles(s) && !post_merge_only(s));
             for input in inputs {
                 assert_eq!(
                     !skipped(input),
                     survives,
+                    "{shape} {}: {input}",
+                    job["name"]
+                );
+                assert!(
+                    !before_merge || !post_merge_only(input),
                     "{shape} {}: {input}",
                     job["name"]
                 );

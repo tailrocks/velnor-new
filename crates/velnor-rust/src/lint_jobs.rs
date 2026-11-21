@@ -27,6 +27,7 @@ fn gate(lint: &LintJob, from: PlanFrom) -> Gate {
         packages: Vec::new(),
         unselected: false,
         group: None,
+        also: Vec::new(),
     }
 }
 
@@ -49,11 +50,7 @@ fn install(facts: &RepoFacts, lint: &LintJob) -> Vec<Step> {
             tools.extend(available(facts, NODE).then(|| resolved(facts, NODE)));
             only(tools)
         }
-        LintKind::Alint { tools, .. } => {
-            let mut names = vec![resolved(facts, ALINT)];
-            names.extend(tools.iter().map(|tool| resolved(facts, tool)));
-            only(names)
-        }
+        LintKind::Alint { .. } => only(vec![resolved(facts, ALINT)]),
         LintKind::MiseTask { tools, .. } if tools.is_empty() => {
             vec![step(StepKind::InstallMise)]
         }
@@ -74,7 +71,7 @@ fn commands(facts: &RepoFacts, lint: &LintJob) -> Vec<LintCommand> {
             config: config.clone(),
             shellcheck: available(facts, SHELLCHECK),
         }],
-        LintKind::Alint { config, probe, .. } => std::iter::once(LintCommand::Alint {
+        LintKind::Alint { config, probe } => std::iter::once(LintCommand::Alint {
             config: config.clone(),
         })
         .chain(probe.iter().cloned().map(LintCommand::Probe))
@@ -114,7 +111,17 @@ fn generated_check_job(facts: &RepoFacts, lint: &LintJob) -> Job {
     Job {
         name: Some(lint.name.clone()),
         timeout_minutes: lint.timeout_minutes,
-        pr: PrRun::Always,
+        pr: if lint.plan_gated {
+            quick(facts)
+        } else {
+            PrRun::Always
+        },
+        needs: if lint.plan_gated {
+            vec![PLAN_JOB]
+        } else {
+            Vec::new()
+        },
+        gate: lint.plan_gated.then(|| gate(lint, PlanFrom::Job(PLAN_JOB))),
         steps,
         ..job(facts, lint.id.clone())
     }
@@ -124,7 +131,7 @@ fn lint_job(facts: &RepoFacts, lint: &LintJob) -> Job {
     if lint.kind == LintKind::GeneratedCheck {
         return generated_check_job(facts, lint);
     }
-    let planned = !lint.inputs.is_empty();
+    let planned = lint.planned();
     let mut steps = vec![step(StepKind::Checkout {
         depth: CHECKOUT_DEPTH,
         sparse: None,

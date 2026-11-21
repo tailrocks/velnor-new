@@ -175,7 +175,7 @@ fn a_lint_workflow_obeys_rule_nine_and_adds_no_action_to_the_fixed_list() -> Tes
 
 #[test]
 fn lint_config_that_could_smuggle_shell_or_name_nothing_is_rejected() -> TestResult {
-    let cases: [(String, &str); 15] = [
+    let cases: [(String, &str); 14] = [
         ("[[lint]]\nkind = 'unknown'\n".to_owned(), "lint.kind"),
         (
             "[[lint]]\nkind = 'mise-task'\ntask = 'a; rm -rf x'\n".to_owned(),
@@ -200,13 +200,8 @@ fn lint_config_that_could_smuggle_shell_or_name_nothing_is_rejected() -> TestRes
         ),
         ("[[lint]]\nkind = 'alint'\n".to_owned(), "lint.config"),
         (
-            "[[lint]]\nkind = 'alint'\nconfig = '.alint.yml'\ntools = ['a b']\n".to_owned(),
-            "lint.tools",
-        ),
-        (
-            "[[lint]]\nkind = 'alint'\nconfig = '.alint.yml'\ntools = ['missing-tool']\n"
-                .to_owned(),
-            "missing-tool",
+            "[[lint]]\nkind = 'alint'\nconfig = '.alint.yml'\ntools = ['python']\n".to_owned(),
+            "does not take the key tools",
         ),
         (
             "[[lint]]\nkind = 'jactionlint'\ntask = 'x'\n".to_owned(),

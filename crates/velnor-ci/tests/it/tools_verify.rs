@@ -69,7 +69,7 @@ pub(crate) fn recorded(job: &Job) -> String {
 }
 
 pub(crate) fn checked(job: &Job, anchor: &str) -> Verdict {
-    check(&job.home, &Anchor(anchor)).unwrap_or_else(|e| unreachable!("{e}"))
+    check(&job.home, &Anchor(anchor), &job.anchor).unwrap_or_else(|e| unreachable!("{e}"))
 }
 
 pub(crate) fn discarded(job: &Job) -> bool {
@@ -219,7 +219,7 @@ fn a_discard_that_cannot_delete_fails_the_step() {
     let share = job.home.join(".local/share");
     fs::set_permissions(&share, fs::Permissions::from_mode(0o555))
         .unwrap_or_else(|e| unreachable!("{e}"));
-    let result = check(&job.home, &Anchor(&anchor));
+    let result = check(&job.home, &Anchor(&anchor), &job.anchor);
     fs::set_permissions(&share, fs::Permissions::from_mode(0o755))
         .unwrap_or_else(|e| unreachable!("{e}"));
     assert!(result.is_err());
@@ -337,8 +337,6 @@ fn record_refuses_an_untrusted_event_and_writes_no_anchor() {
     }
 }
 
-/// Runs `velnor-ci tools-verify <verb>` like a workflow step: a cleared environment, a trusted
-/// default-branch push, and the given extra variables.
 pub(crate) fn step_output(job: &Job, verb: &str, vars: &[(&str, &str)]) -> String {
     let output = job.root.join("github-output");
     let event = job.root.join("event.json");
