@@ -22,7 +22,7 @@ fn assets() -> String {
 
 fn warning(helper: &str) -> String {
     format!(
-        "[private_sources] / release assets with helper {helper} mint the App token after checkout-controlled steps; upgrade the helper to 0.1.111 or later"
+        "[private_sources] / release assets with helper {helper} mint the App token after repository-controlled steps; upgrade the helper to 0.1.111 or later"
     )
 }
 
