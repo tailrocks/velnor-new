@@ -248,6 +248,11 @@ def doc_findings(src):
                     i = end
             elif word in BYTE_PREFIX and j < len(src) and src[j] == '"':
                 i = skip_string(src, j)
+            elif doc_value and word == "concat" and (joined := concat_literals(src, j)) is not None:
+                text, end = joined
+                if value_has_fence(text):
+                    yield i
+                i = end
             elif doc_value and src.startswith("!", skip_trivia(src, j)) and word != "concat":
                 yield i
                 i = j
@@ -264,6 +269,37 @@ def doc_findings(src):
                 i = j
         else:
             i += 1
+
+
+def concat_literals(src, i):
+    k = skip_trivia(src, i)
+    if not src.startswith("!", k):
+        return None
+    k = skip_trivia(src, k + 1)
+    if not src.startswith("(", k):
+        return None
+    k += 1
+    parts = []
+    while True:
+        k = skip_trivia(src, k)
+        if k >= len(src):
+            return None
+        if src[k] == ")":
+            return "".join(parts), k + 1
+        if src[k] == ",":
+            k += 1
+        elif src[k] == '"':
+            end = skip_string(src, k)
+            parts.append(plain_value(src[k:end]))
+            k = end
+        elif (word := IDENT.match(src, k)) and word.group() in RAW_PREFIX and src.startswith(('"', "#"), k + len(word.group())):
+            end = skip_raw(src, k + len(word.group()) - 1)
+            if end is None:
+                return None
+            parts.append(raw_value(src[k:end], len(word.group())))
+            k = end
+        else:
+            return None
 
 
 def rust_sources():
