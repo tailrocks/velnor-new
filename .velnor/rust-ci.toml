@@ -102,3 +102,7 @@ task = "validate-hk"
 tools = ["hk"]
 timeout_minutes = 5
 inputs = ["hk.pkl", "hk.local.pkl", ".hkrc.pkl", "mise.toml", "mise.lock"]
+
+[[inputs]]
+glob = ".mise-version"
+packages = ["velnor-gen"]

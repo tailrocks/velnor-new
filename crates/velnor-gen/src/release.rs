@@ -34,11 +34,6 @@ pub(crate) fn release_workflow(
     let reality = Reality { facts, generated };
     let plan = read_plan(&release_files(view, Some(&reality))?)?;
     check_publish_budget(&plan.roots).map_err(GenerateError::Release)?;
-    if !plan.pr_only_checks.is_empty() && !helper.version().at_least((0, 1, 82)) {
-        return Err(GenerateError::PrOnlyChecksHelperTooOld(
-            helper.version().clone(),
-        ));
-    }
     let grouped = plan
         .roots
         .iter()

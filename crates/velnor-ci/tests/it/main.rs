@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod app_token;
 mod artifact_stage;
 mod artifact_stage_paths;
 mod audit;
@@ -122,6 +123,7 @@ mod mbx_store;
 mod merge_group_skip;
 mod merge_queue;
 mod mise_pin;
+mod mise_version_plan;
 mod plan;
 mod plan_api;
 mod plan_diff;
