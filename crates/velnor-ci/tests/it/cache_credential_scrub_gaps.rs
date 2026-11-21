@@ -169,3 +169,40 @@ fn a_basic_payload_with_control_bytes_stops_the_sources_save() {
         )),
     )]);
 }
+
+#[test]
+fn a_form_encoded_basic_payload_with_an_encoded_plus_stops_the_sources_save() {
+    let line = |text: &str| commented(&format!("{SHA}\t\tbranch 'main' {text}"));
+    sources_save_stops(&[
+        (
+            "config-form-plus-in-payload",
+            CONFIG,
+            &commented("Authorization%3A+Basic+8J%2BYgDpwYXNz"),
+        ),
+        (
+            "config-form-plus-in-payload-after-a-sha",
+            CONFIG,
+            &line("Authorization%3A+Basic+8J%2BYgDpwYXNz"),
+        ),
+        (
+            "config-percent-header-plus-payload",
+            CONFIG,
+            &line("Authorization%3A%20Basic%20Aw%2BYgDpwYXNz"),
+        ),
+        (
+            "config-two-layers-plus-in-payload",
+            CONFIG,
+            &line("Authorization%253A%2BBasic%2B8J%252BYgDpwYXNz"),
+        ),
+        (
+            "config-plain-header-encoded-plus",
+            CONFIG,
+            &line("Authorization: Basic 8J%2BYgDpwYXNz"),
+        ),
+        (
+            "config-mixed-layers-plus-in-payload",
+            CONFIG,
+            &line("Authorization%3A+Basic+8J%252BYgDpwYXNz"),
+        ),
+    ]);
+}

@@ -22,6 +22,7 @@ mod cache_credential_scrub_crates;
 mod cache_credential_scrub_gaps;
 mod cache_credential_scrub_hardening;
 mod cache_credential_scrub_modules;
+mod cache_credential_scrub_submodules;
 mod cache_credential_scrub_tokens;
 mod cache_credential_scrub_trees;
 mod cache_flow;

@@ -115,12 +115,26 @@ fn names_in(text: &str) -> bool {
             .any(|url| !plain_remote(url))
 }
 
-fn variants(text: &str) -> Option<[String; 3]> {
-    Some([
-        text.to_owned(),
-        unescaped(text, false)?,
-        unescaped(text, true)?,
-    ])
+fn variants(text: &str) -> Option<Vec<String>> {
+    let mut seen = vec![text.to_owned()];
+    let mut frontier = vec![text.to_owned()];
+    for _ in 0..=MAX_UNESCAPE_PASSES {
+        let mut next = Vec::new();
+        for current in &frontier {
+            for form in [false, true] {
+                let decoded = unescape_once(current, form);
+                if !seen.contains(&decoded) {
+                    seen.push(decoded.clone());
+                    next.push(decoded);
+                }
+            }
+        }
+        if next.is_empty() {
+            return Some(seen);
+        }
+        frontier = next;
+    }
+    None
 }
 
 fn names_basic_authorization(text: &str) -> bool {
@@ -211,10 +225,10 @@ fn looks_like_token(text: &str) -> bool {
             .any(|run| run.len() >= TOKEN_HEX_LEN)
 }
 
-fn unescaped(segment: &str, form: bool) -> Option<String> {
+fn unescaped(segment: &str) -> Option<String> {
     let mut current = segment.to_owned();
     for _ in 0..=MAX_UNESCAPE_PASSES {
-        let decoded = unescape_once(&current, form);
+        let decoded = unescape_once(&current, false);
         if decoded == current {
             return Some(current);
         }
@@ -256,9 +270,8 @@ fn plain_remote(url: &str) -> bool {
             let authority = segments.next().unwrap_or("");
             !authority.is_empty()
                 && !url.contains('?')
-                && !segments.any(|segment| {
-                    unescaped(segment, false).is_none_or(|text| looks_like_token(&text))
-                })
+                && !segments
+                    .any(|segment| unescaped(segment).is_none_or(|text| looks_like_token(&text)))
                 && match authority.rsplit_once('@') {
                     None => true,
                     Some((userinfo, _)) => {
