@@ -9,6 +9,7 @@ use super::walk::{Probe, scan_with};
 use super::*;
 
 mod ancestors;
+mod descriptors;
 mod links;
 mod placement;
 mod racing;

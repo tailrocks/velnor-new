@@ -3,7 +3,7 @@
 
 use std::ffi::{OsStr, OsString};
 use std::io;
-use std::os::fd::{AsFd, OwnedFd};
+use std::os::fd::{AsFd, BorrowedFd, OwnedFd};
 use std::os::unix::ffi::OsStringExt;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
@@ -16,7 +16,7 @@ use nix::sys::stat::{SFlag, fstat, fstatat};
 
 use super::Kind;
 use super::resolve;
-use super::walk::unresolved_link;
+use super::walk::{changed, unresolved_link};
 
 pub(super) type Opened = Rc<Dir>;
 pub(super) type Identity = (libc::dev_t, libc::ino_t);
@@ -24,7 +24,16 @@ pub(super) type Identity = (libc::dev_t, libc::ino_t);
 #[derive(Clone)]
 pub(super) enum Origin {
     Path,
-    Child { parent: Opened, name: OsString },
+    Child {
+        parent: Opened,
+        identity: Identity,
+        name: OsString,
+    },
+    Reopen {
+        parent: PathBuf,
+        identity: Identity,
+        name: OsString,
+    },
 }
 pub(super) enum Current {
     Gone,
@@ -46,21 +55,52 @@ pub(super) fn replaced(error: &io::Error) -> bool {
 pub(super) fn open(origin: &Origin, path: &Path) -> io::Result<Dir> {
     let fd = match origin {
         Origin::Path => resolve::open_path(path, true)?,
-        Origin::Child { parent, name } => {
-            let flags = OFlag::O_RDONLY | OFlag::O_DIRECTORY | OFlag::O_NOFOLLOW | OFlag::O_CLOEXEC;
-            openat(parent.as_ref(), name.as_os_str(), flags, Mode::empty()).map_err(failure)?
-        }
+        Origin::Child { parent, name, .. } => child(parent.as_fd(), name)?,
+        Origin::Reopen {
+            parent,
+            identity,
+            name,
+        } => child(reopen(parent, *identity)?.as_fd(), name)?,
     };
     Dir::from_fd(fd).map_err(failure)
 }
-pub(super) fn identity(directory: &Dir) -> io::Result<Identity> {
+
+fn child(parent: BorrowedFd<'_>, name: &OsStr) -> io::Result<OwnedFd> {
+    let flags = OFlag::O_RDONLY | OFlag::O_DIRECTORY | OFlag::O_NOFOLLOW | OFlag::O_CLOEXEC;
+    openat(parent, name, flags, Mode::empty()).map_err(failure)
+}
+
+fn reopen(parent: &Path, expected: Identity) -> io::Result<OwnedFd> {
+    let held = resolve::open_path(parent, false).map_err(|error| {
+        if replaced(&error) {
+            changed(io::ErrorKind::Other, parent)
+        } else {
+            error
+        }
+    })?;
+    if identity(&held)? == expected {
+        Ok(held)
+    } else {
+        Err(changed(io::ErrorKind::Other, parent))
+    }
+}
+
+pub(super) fn identity(directory: impl AsFd) -> io::Result<Identity> {
     let stat = fstat(directory).map_err(failure)?;
     Ok((stat.st_dev, stat.st_ino))
 }
 pub(super) fn current(origin: &Origin, path: &Path) -> io::Result<Current> {
     let held: OwnedFd;
     let (anchor, name) = match origin {
-        Origin::Child { parent, name } => (parent.as_fd(), name.as_os_str()),
+        Origin::Child { parent, name, .. } => (parent.as_fd(), name.as_os_str()),
+        Origin::Reopen {
+            parent,
+            identity,
+            name,
+        } => {
+            held = reopen(parent, *identity)?;
+            (held.as_fd(), name.as_os_str())
+        }
         Origin::Path => {
             let (container, name) = match (path.parent(), path.file_name()) {
                 (Some(container), Some(name)) => (container, name),

@@ -6,8 +6,11 @@ use std::ffi::OsStr;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::rc::{Rc, Weak};
 
 use super::super::options::{MAX_ENTRIES_CEILING, MAX_ENTRIES_VARIABLE};
+use nix::dir::Dir;
+
 use super::handle::{self, Current, Opened, Origin};
 use super::{Entries, Kind, excluded_entry};
 
@@ -62,10 +65,13 @@ pub(in crate::io::audit) fn scan(
     scan_with(root, targets, budget, &Probe::default())
 }
 
+const HELD_HANDLES: usize = 64;
+
 pub(super) struct Probe<'a> {
     pub(super) before_open: &'a dyn Fn(&Path) -> io::Result<()>,
     pub(super) after_open: &'a dyn Fn(&Path),
     pub(super) listed: &'a dyn Fn(&OsStr),
+    pub(super) held: usize,
 }
 
 impl Default for Probe<'_> {
@@ -74,6 +80,7 @@ impl Default for Probe<'_> {
             before_open: &|_| Ok(()),
             after_open: &|_| {},
             listed: &|_| {},
+            held: HELD_HANDLES,
         }
     }
 }
@@ -81,6 +88,52 @@ impl Default for Probe<'_> {
 struct Pending {
     path: PathBuf,
     origin: Origin,
+}
+
+struct Held {
+    handles: Vec<Weak<Dir>>,
+    limit: usize,
+}
+
+impl Held {
+    fn new(limit: usize) -> Self {
+        Self {
+            handles: Vec::new(),
+            limit,
+        }
+    }
+
+    fn track(&mut self, listing: &Opened, pending: &mut [Pending]) {
+        self.handles.push(Rc::downgrade(listing));
+        self.handles.retain(|handle| handle.strong_count() > 0);
+        while self.handles.len() > self.limit {
+            let oldest = self.handles.remove(0);
+            for entry in pending.iter_mut() {
+                if let Some(reopen) = reopening(entry, &oldest) {
+                    entry.origin = reopen;
+                }
+            }
+        }
+    }
+}
+
+fn reopening(entry: &Pending, released: &Weak<Dir>) -> Option<Origin> {
+    let Origin::Child {
+        parent,
+        identity,
+        name,
+    } = &entry.origin
+    else {
+        return None;
+    };
+    if !Weak::ptr_eq(&Rc::downgrade(parent), released) {
+        return None;
+    }
+    Some(Origin::Reopen {
+        parent: entry.path.parent()?.to_path_buf(),
+        identity: *identity,
+        name: name.clone(),
+    })
 }
 
 pub(super) fn scan_with(
@@ -96,6 +149,7 @@ pub(super) fn scan_with(
         origin: Origin::Path,
     }];
     let mut visited = BTreeSet::new();
+    let mut held = Held::new(probe.held);
     while let Some(Pending {
         path: directory,
         origin,
@@ -141,11 +195,13 @@ pub(super) fn scan_with(
             };
             let child = Origin::Child {
                 parent: Opened::clone(&listing),
+                identity,
                 name: name.clone(),
             };
             pending.extend(queue(&kind, &path, child, (&root, targets))?);
             children.insert(PathBuf::from(name), kind);
         }
+        held.track(&listing, &mut pending);
         match handle::current(&origin, &directory)? {
             Current::Directory(now) if now == identity => {
                 entries.insert(directory, children);
@@ -178,7 +234,7 @@ pub(super) fn scan_with(
     Ok(entries)
 }
 
-fn changed(kind: io::ErrorKind, directory: &Path) -> io::Error {
+pub(super) fn changed(kind: io::ErrorKind, directory: &Path) -> io::Error {
     io::Error::new(
         kind,
         format!(
