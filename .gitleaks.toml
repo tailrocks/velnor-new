@@ -29,6 +29,17 @@ regexes = [
 ]
 
 [[allowlists]]
+description = "cache-sources fixture: only the known fake x-access-token value in this file, so a real credential added later is still reported"
+condition = "AND"
+paths = [
+  '''^crates/velnor-ci/tests/it/cache_sources_restored\.rs$''',
+]
+regexTarget = "secret"
+regexes = [
+  '''^ghs_secret$''',
+]
+
+[[allowlists]]
 description = "test fixtures and tests with fake tokens, keys or public upstream material"
 paths = [
   '''^crates/velnor-ci/tests/it/cache_private_repo\.rs$''',
