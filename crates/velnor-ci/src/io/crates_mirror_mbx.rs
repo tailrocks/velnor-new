@@ -73,8 +73,9 @@ fn declared_for_project(args: &[OsString]) -> bool {
         .any(crate::mbx_declared::declared_or_unreadable_in)
 }
 
-fn project_directory(work: &Path, args: &[OsString]) -> Option<PathBuf> {
-    let args = super::crates_mirror_alias::expand(work, args, MANIFEST_COMMANDS)?;
+fn project_directory(launch: &Path, args: &[OsString]) -> Option<PathBuf> {
+    let work = invocation_directory(launch, args);
+    let args = super::crates_mirror_alias::expand(&work, args, MANIFEST_COMMANDS)?;
     let command = subcommand(&args).map(|(_, command)| command);
     if command == Some("install")
         && let Some(path) = option_value(&args, "--path", false)
@@ -85,8 +86,22 @@ fn project_directory(work: &Path, args: &[OsString]) -> Option<PathBuf> {
     Some(
         option_value(&args, "--manifest-path", shorthand)
             .and_then(|manifest| work.join(manifest).parent().map(Path::to_path_buf))
-            .unwrap_or_else(|| work.to_path_buf()),
+            .unwrap_or_else(|| work.clone()),
     )
+}
+
+fn invocation_directory(launch: &Path, args: &[OsString]) -> PathBuf {
+    let end = subcommand(args).map_or(args.len(), |(index, _)| index);
+    let mut directory = launch.to_path_buf();
+    let mut options = args[..end].iter();
+    while let Some(arg) = options.next() {
+        if arg == "-C"
+            && let Some(value) = options.next()
+        {
+            directory.push(value);
+        }
+    }
+    directory
 }
 
 pub(super) fn subcommand(args: &[OsString]) -> Option<(usize, &str)> {

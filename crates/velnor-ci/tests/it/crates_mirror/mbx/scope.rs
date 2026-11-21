@@ -352,3 +352,16 @@ fn a_cargo_started_by_a_running_cargo_or_test_runs_plain_but_a_step_cargo_fails_
     assert!(String::from_utf8_lossy(&output.stderr).contains(REFUSED));
     Ok(())
 }
+
+#[test]
+fn a_dash_c_directory_names_the_project_for_a_build_started_outside_it() -> TestResult {
+    let repo = declared_job()?;
+    let launch = repo.root().join("launch");
+    let checkout = repo.root().display().to_string();
+    assert_refused(&run_with_args(&repo, &launch, &["-C", &checkout, "build"])?);
+    let outside = repo.root().join("scratch-project");
+    fs::create_dir_all(&outside)?;
+    let outside = outside.display().to_string();
+    assert_plain(&run_with_args(&repo, &launch, &["-C", &outside, "build"])?);
+    Ok(())
+}
