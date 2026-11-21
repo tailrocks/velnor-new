@@ -264,7 +264,7 @@
     }
   ],
   "private_mac_arm_raw": {
-    "path": "<home>/.cache/velnor/mise15-qualification-preparation-uufzbppm/mise-v2026.10.15-macos-arm64",
+    "path": "/Users/donbeave/.cache/velnor/mise15-qualification-preparation-uufzbppm/mise-v2026.10.15-macos-arm64",
     "size": 135143184,
     "sha256": "826c4833fa7437a63f6027b86bc10c8b61b1163dc793c03ecde92f68ad167890",
     "equals_archive_member": true,

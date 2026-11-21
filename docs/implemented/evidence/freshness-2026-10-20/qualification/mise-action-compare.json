@@ -1,6 +1,6 @@
 {
   "argv": [
-    "<home>/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
+    "/Users/donbeave/.local/share/mise/installs/gh/2.102.0/gh_2.102.0_macOS_arm64/bin/gh",
     "api",
     "repos/jdx/mise-action/compare/v5.2.0...v5.2.1"
   ],
