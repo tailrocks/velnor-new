@@ -333,7 +333,7 @@ fn a_relative_home_is_resolved_from_the_directory_flag() -> TestResult {
 }
 
 #[test]
-fn a_user_alias_named_like_a_newer_built_in_is_scoped_by_its_expansion() -> TestResult {
+fn a_user_alias_named_add_info_remove_or_report_is_ignored_as_cargo_ignores_it() -> TestResult {
     let repo = declared_job()?;
     let launch = repo.root().join("launch");
     let (inside, _) = manifests(&repo);
@@ -342,7 +342,7 @@ fn a_user_alias_named_like_a_newer_built_in_is_scoped_by_its_expansion() -> Test
             &launch,
             &format!("[alias]\n{name} = \"build -m {inside}\"\n"),
         )?;
-        assert_refused(&run_with_args(&repo, &launch, &[name])?);
+        assert_plain(&run_with_args(&repo, &launch, &[name])?);
     }
     Ok(())
 }

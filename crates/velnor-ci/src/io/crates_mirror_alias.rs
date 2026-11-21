@@ -57,9 +57,7 @@ const BUILTINS: &[&str] = &[
     "version",
     "yank",
 ];
-const ALIASABLE_BUILTINS: &[&str] = &[
-    "add", "b", "c", "clippy", "d", "info", "r", "remove", "report", "rm", "t",
-];
+const ALIASABLE_BUILTINS: &[&str] = &["b", "c", "clippy", "d", "r", "rm", "t"];
 
 enum Alias {
     Found(Vec<OsString>),
