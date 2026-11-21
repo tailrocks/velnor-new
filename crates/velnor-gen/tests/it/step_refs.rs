@@ -4,11 +4,41 @@
 use std::collections::BTreeSet;
 
 use serde_json::Value;
+use velnor_gen::expected_files;
+use velnor_model::{RELEASE_WORKFLOW_PATH, RepoView, WORKFLOWS_CONFIG_PATH};
+use velnor_render::DELTA_CLEANUP_PATH;
+use velnor_rust::LOCK_PATH;
 
+use crate::base_save::pinned;
 use crate::facts::TestResult;
 use crate::pipeline::{pin_helper, view, workflow};
+use crate::release_fixture::{APP, LOCK, release_view};
+use crate::yaml_tree::document;
 
 const HELPERS: &[&str] = &["0.1.109", "0.1.110", "0.1.111"];
+const REUSABLE: &str = r#"
+[[workflow]]
+file = "build-assets"
+name = "Build assets"
+
+[[workflow.job]]
+id = "build"
+permissions = { contents = "read" }
+
+[[workflow.job.step]]
+uses = "checkout"
+
+[[workflow.job.step]]
+id = "build"
+name = "Build"
+run = "cargo build --release --locked"
+
+[[workflow.job.step]]
+id = "upload"
+uses = "upload-artifact"
+with = { name = "assets", path = "target/release/app" }
+"#;
+
 const CONFIGS: &[Option<&str>] = &[
     None,
     Some("mbx_shared_store = true\n"),
@@ -88,7 +118,7 @@ fn every_steps_reference_names_a_step_of_its_own_job() -> TestResult {
                 config.map(str::as_bytes),
             )?;
             pin_helper(&mut repo, helper)?;
-            let yaml = crate::yaml_tree::document(&workflow(&repo)?)?;
+            let yaml = document(&workflow(&repo)?)?;
             let mut texts = Vec::new();
             strings(&yaml, &mut texts);
             refs += texts
@@ -103,6 +133,52 @@ fn every_steps_reference_names_a_step_of_its_own_job() -> TestResult {
             );
         }
     }
+    assert_ne!(refs, 0, "no steps reference was checked");
+    Ok(())
+}
+
+#[test]
+fn every_file_of_the_cleanup_release_and_reusable_families_names_its_steps() -> TestResult {
+    let mut reusable = release_view(&[], None)?;
+    reusable
+        .files
+        .insert(WORKFLOWS_CONFIG_PATH, REUSABLE.as_bytes().to_vec());
+    let mut release = release_view(&[APP], Some("roots = [\".\"]\n"))?;
+    release.files.insert(LOCK_PATH, LOCK.as_bytes().to_vec());
+    let families: [(&str, RepoView); 4] = [
+        ("cleanup", pinned("0.1.102", "")?),
+        (
+            "cleanup-runner",
+            pinned("0.1.102", "runner = \"ubuntu-26.04-scale-set\"\n")?,
+        ),
+        ("release", release),
+        ("reusable", reusable),
+    ];
+    let mut checked = Vec::new();
+    let mut refs = 0;
+    for (family, repo) in &families {
+        for (path, text) in expected_files(repo)? {
+            let yaml = document(&text)?;
+            let mut texts = Vec::new();
+            strings(&yaml, &mut texts);
+            refs += texts
+                .iter()
+                .flat_map(|text| expressions(text))
+                .map(|expr| step_refs(expr).len())
+                .sum::<usize>();
+            let dangling = dangling_refs(&yaml);
+            assert!(dangling.is_empty(), "{family} {path}: {dangling:#?}");
+            checked.push(path);
+        }
+    }
+    assert!(checked.contains(&DELTA_CLEANUP_PATH), "{checked:?}");
+    assert!(checked.contains(&RELEASE_WORKFLOW_PATH), "{checked:?}");
+    assert!(
+        checked
+            .iter()
+            .any(|path| path.to_string().ends_with("build-assets.yml")),
+        "{checked:?}"
+    );
     assert_ne!(refs, 0, "no steps reference was checked");
     Ok(())
 }
