@@ -2,11 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeSet;
-use std::fs;
 use std::process::Output;
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use super::migration::outputs::run_outputs;
 use super::{audit, own_units, unit, velnor_ci, workspace_below_the_root};
 use crate::io::Repo;
 use velnor_test_support::{ci_safe_cargo_env, real_cargo_str};
@@ -23,11 +23,9 @@ fn refused_with(output: &Output, texts: &[&str]) {
 }
 
 fn lib_runs(repo: &Repo) -> BTreeSet<String> {
-    fs::read_dir(repo.root().join(DEBUG).join("build/lib"))
-        .unwrap_or_else(|e| unreachable!("{e}"))
-        .map(|entry| entry.unwrap_or_else(|e| unreachable!("{e}")))
-        .filter(|entry| entry.path().join("run/stdout").is_file())
-        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+    run_outputs(&repo.root().join(DEBUG).join("build"), "lib")
+        .into_iter()
+        .map(|run| run.unit)
         .collect()
 }
 
