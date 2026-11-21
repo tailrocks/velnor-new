@@ -58,6 +58,8 @@ pub struct Compilation {
     pub restored: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dirty: Option<String>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub missing_input: bool,
 }
 
 #[must_use]

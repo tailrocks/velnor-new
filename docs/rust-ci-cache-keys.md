@@ -123,7 +123,7 @@ cache_check_blocks = true
 
 A dependency compile counts as compiled despite restored inputs only when the
 restore proved the base held the unit (`restored: true`). `inputs restore`
-records the units of the restored target in `.velnor/restored-units`, and each
+records the units of the restored target in `.velnor/restored-units-*.tsv`, and each
 invocation in `ci-metrics.json` carries `restored_manifest` (`present`,
 `absent` or `unreadable`). A dependency compile whose restore status is
 unknown, because that record is absent or unreadable, is not waste. The check
@@ -134,6 +134,18 @@ the manifest is present but no unit matched. For every rebuilt unit, a
 and the report keeps cargo's `dirty:` reason as `dirty` on the compilation. The
 reason is appended to the waste and notice lines as `(cargo: <reason>)`.
 
+A registry or git dependency that compiled although its unit was restored is
+not waste when the unit's dep-info (the `.d` file under `deps/` or `out/`) lists
+an absolute file outside `target/` that did not exist when the base was
+restored. `inputs restore` records those units as `missing-input` in
+`.velnor/restored-units-*.tsv`, and the check reports them as a base gap that
+names the reason, not as waste. Cargo marks such a unit dirty, and the usual
+cause is mbx keeping build-script output in an `out-dirs` store the job did not
+have; the generated `Keep mbx build-script outputs in target` step prevents it.
+Files under `registry/src` and `git/checkouts` do not count: Cargo unpacks them
+again, and the Sources cache does not hold them. A path that is a dangling
+symbolic link counts as missing.
+
 Besides compiled-despite-restored-inputs and download waste, the report names
 five more avoidable costs, each only when the evidence shows it was avoidable:
 
@@ -141,9 +153,11 @@ five more avoidable costs, each only when the evidence shows it was avoidable:
   that exact key, on a ref the job may read, when the job started. The `Cache`
   job records this as `entry_before_job`; a cold lock stays clean.
 - An MBX session with no hits although `MBX_CACHE_DIR` named a store that held
-  entries older than the first Cargo invocation. A per-job or empty store, or a
-  lane without MBX lines, stays clean here (the next item covers a
-  declared MBX with no sessions).
+  object-cache entries (`actions/cas` or `actions/action-results`) older than the
+  first Cargo invocation. A per-job or empty store, a store that holds only
+  build-script outputs (`out-dirs`), shims or sessions, or a lane without MBX
+  lines, stays clean here (the next item covers a declared MBX with no
+  sessions).
 - A lane that compiled without MBX: at least one compilation unit that Cargo
   did not report fresh, but no `mbx[cache]` session line in the lane's Cargo
   log, while the checkout declares MBX. The lane's `report` step records the

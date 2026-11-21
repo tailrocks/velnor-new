@@ -202,6 +202,7 @@ fn from_progress(
         dependencies: super::dependencies(root, member),
         restored: None,
         dirty: None,
+        missing_input: false,
         package: event.package.clone(),
         version: event.version.clone(),
     }

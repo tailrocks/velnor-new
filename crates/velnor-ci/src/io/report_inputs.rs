@@ -98,7 +98,7 @@ struct RootInputs<'a> {
     root_path: &'a Path,
     unchanged: &'a BTreeSet<String>,
     saved_witness: Option<&'a str>,
-    restored_units: Option<&'a BTreeSet<String>>,
+    restored_units: Option<&'a crate::restored_units::RestoredUnits>,
     manifest: crate::restored_units::Manifest,
     symlink_lock: bool,
     unverifiable_links: bool,
