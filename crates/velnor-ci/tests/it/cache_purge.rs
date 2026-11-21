@@ -17,7 +17,7 @@ struct Api {
     fail_delete: Option<u64>,
     listings: Cell<usize>,
     arrivals: RefCell<VecDeque<Vec<Value>>>,
-    running: Cell<(u64, u64)>,
+    running: RefCell<Vec<(&'static str, u64)>>,
 }
 
 fn entry(id: u64, key: &str, reference: &str) -> Value {
@@ -33,13 +33,13 @@ impl Api {
             fail_delete: None,
             listings: Cell::default(),
             arrivals: RefCell::default(),
-            running: Cell::default(),
+            running: RefCell::default(),
         }
     }
 
-    fn with_runs(entries: Vec<Value>, in_progress: u64, queued: u64) -> Self {
+    fn with_runs(entries: Vec<Value>, runs: &[(&'static str, u64)]) -> Self {
         let api = Self::new(entries);
-        api.running.set((in_progress, queued));
+        *api.running.borrow_mut() = runs.to_vec();
         api
     }
 
@@ -53,14 +53,18 @@ impl Api {
 impl GitHub for Api {
     fn get(&self, path: &str) -> Result<String, CiError> {
         if path.contains("/actions/runs?") {
-            let (in_progress, queued) = self.running.get();
-            let total = if path.contains("status=in_progress") {
-                in_progress
-            } else if path.contains("status=queued") {
-                queued
-            } else {
-                return Err(CiError::new("unexpected run status"));
-            };
+            let status = path
+                .split("status=")
+                .nth(1)
+                .and_then(|rest| rest.split('&').next())
+                .ok_or_else(|| CiError::new("unexpected run listing"))?;
+            let total: u64 = self
+                .running
+                .borrow()
+                .iter()
+                .filter(|(running, _)| *running == status)
+                .map(|(_, count)| count)
+                .sum();
             return Ok(json!({"total_count":total,"workflow_runs":[]}).to_string());
         }
         self.asked.borrow_mut().push(path.to_owned());
@@ -286,7 +290,7 @@ fn a_write_that_keeps_arriving_fails_after_the_bounded_passes() {
 
 #[test]
 fn in_progress_runs_refuse_the_purge_and_delete_nothing() {
-    let api = Api::with_runs(mixed(), 2, 1);
+    let api = Api::with_runs(mixed(), &[("in_progress", 2), ("queued", 1)]);
     let error = purge_private(&api, &repo(), true)
         .err()
         .map(|e| e.to_string());
@@ -302,7 +306,7 @@ fn in_progress_runs_refuse_the_purge_and_delete_nothing() {
 
 #[test]
 fn queued_runs_alone_refuse_the_purge() {
-    let api = Api::with_runs(mixed(), 0, 1);
+    let api = Api::with_runs(mixed(), &[("queued", 1)]);
     let error = purge_private(&api, &repo(), true)
         .err()
         .map(|e| e.to_string());
@@ -316,8 +320,40 @@ fn queued_runs_alone_refuse_the_purge() {
 }
 
 #[test]
+fn waiting_runs_alone_refuse_the_purge_and_delete_nothing() {
+    let api = Api::with_runs(mixed(), &[("waiting", 1)]);
+    let error = purge_private(&api, &repo(), true)
+        .err()
+        .map(|e| e.to_string());
+    assert_eq!(
+        error.as_deref(),
+        Some(
+            "1 workflow runs are in progress; wait for them or disable workflows, then run purge-private again"
+        )
+    );
+    assert!(api.deleted.borrow().is_empty());
+    assert_eq!(api.entries.borrow().len(), 8);
+}
+
+#[test]
+fn action_required_runs_alone_refuse_the_purge_and_delete_nothing() {
+    let api = Api::with_runs(mixed(), &[("action_required", 1)]);
+    let error = purge_private(&api, &repo(), true)
+        .err()
+        .map(|e| e.to_string());
+    assert_eq!(
+        error.as_deref(),
+        Some(
+            "1 workflow runs are in progress; wait for them or disable workflows, then run purge-private again"
+        )
+    );
+    assert!(api.deleted.borrow().is_empty());
+    assert_eq!(api.entries.borrow().len(), 8);
+}
+
+#[test]
 fn a_dry_run_warns_about_running_workflows_and_succeeds() {
-    let api = Api::with_runs(mixed(), 2, 0);
+    let api = Api::with_runs(mixed(), &[("in_progress", 2)]);
     let report = purge_private(&api, &repo(), false).unwrap_or_else(|e| unreachable!("{e}"));
     assert!(report.contains("would delete 3 entries"), "{report}");
     assert!(
