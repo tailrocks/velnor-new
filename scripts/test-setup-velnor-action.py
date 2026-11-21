@@ -155,13 +155,10 @@ esac
 exec "$REAL_MV" "$@"
 """
 
-# Every command the install script could use to look at the store entry. Each one is replaced by a shim
-# that records its arguments when one of them names the watched path, then runs the real command.
 WATCHED_TOOLS = (
     "cat", "head", "tail", "dd", "cp", "od", "xxd", "hexdump", "sha256sum", "shasum", "tar", "gzip", "zcat",
     "wc", "awk", "sed", "grep", "base64", "strings", "openssl", "find", "mv", "rm",
 )
-# Commands that may name the store entry without reading its bytes.
 NON_READING_TOOLS = ("find", "mv", "rm")
 
 
