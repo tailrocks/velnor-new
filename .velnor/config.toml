@@ -45,6 +45,14 @@ globs = ["crates/velnor-gen/**", "crates/velnor-model/**", "crates/velnor-releas
 packages = ["velnor-model", "velnor-rust", "velnor-render", "velnor-gen", "velnor-release"]
 complete = true
 
+# mise_version_pin.rs reads this file at run time, which the audit lock does not
+# see, so velnor-gen declares it here; without it a change to the pin alone
+# skips the test that checks it against mise.toml.
+[[stacks.rust.inputs]]
+globs = [".mise-version"]
+packages = ["velnor-gen"]
+complete = true
+
 [[stacks.rust.inputs]]
 globs = ["actions/setup-velnor/action.yml"]
 packages = ["velnor-gen"]
