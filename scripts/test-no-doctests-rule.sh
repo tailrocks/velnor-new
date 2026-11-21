@@ -175,6 +175,9 @@ check dash_adjacent_prose pass '/// Doc.\n/// -- text\n/// --     text\npub fn f
 check line_tab_then_space pass '/// text\n///\n///\t assert_eq!(1, 1);\npub fn f() {}\n'
 check line_tab_two_tabs fail '/// text\n///\n///\t\tassert_eq!(1, 1);\npub fn f() {}\n'
 check line_tab_then_four fail '/// text\n///\n///\t    assert_eq!(1, 1);\npub fn f() {}\n'
+check fence_indent_after_prose pass '/// prose\n///     ```\n///     let x = 1;\n///     ```\npub fn g() {}\n'
+check fence_3sp_after_prose fail '/// prose\n///    ```\n///    let x = 1;\n///    ```\npub fn k() {}\n'
+check cfg_attr_predicate_doc pass '#![allow(unexpected_cfgs)]\n#[cfg_attr(doc = "```not documentation```", allow(dead_code))]\npub fn h() {}\n'
 
 missing="$work/scanner_missing"
 mkdir -p "$missing/crates/fx/src"

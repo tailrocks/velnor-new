@@ -116,9 +116,10 @@ def markdown_hit(lines, indent):
     prev = None
     for k, raw in enumerate(lines):
         line = raw.expandtabs(4)
-        if LINE_FENCE.match(line) or LIST_INDENT.match(line):
+        lazy = prose(prev) and not QUOTE_START.match(line)
+        if LIST_INDENT.match(line) or (LINE_FENCE.match(line) and not (lazy and indent.match(line))):
             return k
-        if indent.match(line) and not (prose(prev) and not QUOTE_START.match(line)):
+        if indent.match(line) and not lazy:
             return k
         prev = line
     return None
@@ -172,6 +173,7 @@ def doc_findings(src):
     attr_depth = 0
     attr_name = ""
     paren = 0
+    cfg_comma = False
     doc_paren = 0
     doc_value = False
     while i < len(src):
@@ -207,6 +209,7 @@ def doc_findings(src):
         elif c == "#" and (j := attr_open(src, i)) is not None:
             attr_depth = 1
             paren = 0
+            cfg_comma = False
             k = skip_trivia(src, j)
             k += 2 if src.startswith("r#", k) else 0
             name = IDENT.match(src, k)
@@ -229,6 +232,8 @@ def doc_findings(src):
                 doc_value = doc_value and paren >= doc_paren
             elif attr_depth and c == ",":
                 doc_value = doc_value and paren > doc_paren
+                if attr_name == "cfg_attr" and paren == 1:
+                    cfg_comma = True
             i += 1
         elif m := IDENT.match(src, i):
             word = m.group()
@@ -252,7 +257,7 @@ def doc_findings(src):
                     if DOC_INCLUDE.match(src, k):
                         yield i
                     elif DOC_EQ.match(src, k) and (
-                        (attr_name == "doc" and paren == 0) or attr_name == "cfg_attr"
+                        (attr_name == "doc" and paren == 0) or (attr_name == "cfg_attr" and paren == 1 and cfg_comma)
                     ):
                         doc_value = True
                         doc_paren = paren
