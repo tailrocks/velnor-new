@@ -19,7 +19,6 @@ DOC_OPEN = re.compile(r"/\*(?:!|\*(?![*/]))")
 ATTR_START = re.compile(r"#\s*!?\s*\[")
 DOC_EQ = re.compile(r"\s*=(?!=)")
 DOC_INCLUDE = re.compile(r"\s*=\s*include_str!")
-SHEBANG_ATTR = re.compile(r"#!\s*\[")
 STRING_ESCAPE = re.compile(r"\\(?:x([0-9a-fA-F]{2})|u\{([0-9a-fA-F_]{1,8})\}|(\r?\n[ \t\r\n]*)|(.))", re.S)
 SIMPLE_ESCAPE = {"n": "\n", "r": "\r", "t": "\t", "0": "\0", "\\": "\\", "'": "'", '"': '"'}
 RAW_PREFIX = {"r", "br", "cr"}
@@ -239,8 +238,10 @@ def rust_sources():
 
 
 def strip_shebang(src):
+    # rustc: "#!" is a shebang unless the next token after whitespace and
+    # comments is "[", which makes it an inner attribute.
     src = src.removeprefix("\ufeff")
-    if src.startswith("#!") and not SHEBANG_ATTR.match(src):
+    if src.startswith("#!") and not src.startswith("[", skip_trivia(src, 2)):
         first, newline, rest = src.partition("\n")
         return newline + rest
     return src

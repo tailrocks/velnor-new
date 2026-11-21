@@ -14,10 +14,17 @@ use super::Audit;
 use super::inventory::{self, Budget, Entries, Kind};
 use crate::error::CiError;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Cause {
+    Changed,
+    Unproven,
+}
+
 pub(super) struct Freshness {
     targets: BTreeSet<PathBuf>,
     directories: BTreeMap<(PathBuf, BTreeSet<PathBuf>), (SystemTime, Entries)>,
     budget: Budget,
+    max_directory_entries: usize,
 }
 
 impl Freshness {
@@ -36,7 +43,17 @@ impl Freshness {
             targets,
             directories: BTreeMap::new(),
             budget: Budget::new(max_directory_entries),
+            max_directory_entries,
         })
+    }
+
+    pub(super) fn scratch(&self) -> Self {
+        Self {
+            targets: self.targets.clone(),
+            directories: BTreeMap::new(),
+            budget: Budget::new(self.max_directory_entries),
+            max_directory_entries: self.max_directory_entries,
+        }
     }
 
     fn changed(
@@ -68,8 +85,6 @@ impl Freshness {
 }
 
 impl Audit<'_> {
-    /// The first `limit` declared inputs that changed since `built` (or whose receipt no longer
-    /// matches), in declaration order. A `limit` of 1 stops at the first change.
     pub(super) fn changed_inputs(
         &mut self,
         base: &Path,
@@ -78,7 +93,7 @@ impl Audit<'_> {
         output: &Path,
         declared: bool,
         limit: usize,
-    ) -> Result<Vec<String>, CiError> {
+    ) -> Result<Vec<(String, Cause)>, CiError> {
         // A cross-target cache without a prior receipt cannot prove its inputs and remains stale.
         let saved = inventory::load(output)
             .ok()
@@ -93,15 +108,19 @@ impl Audit<'_> {
                 break;
             }
             let path = base.join(raw);
-            if declared
-                && !saved
-                    .as_ref()
-                    .and_then(|saved| saved.state(&path))
-                    .zip(inventory::state(&path).ok())
-                    .is_some_and(|(before, current)| before == current)
-            {
-                changed.push(raw.clone());
-                continue;
+            if declared {
+                let before = saved.as_ref().and_then(|saved| saved.state(&path));
+                match (before, inventory::state(&path).ok()) {
+                    (Some(before), Some(current)) if before == current => {}
+                    (Some(_), Some(_)) => {
+                        changed.push((raw.clone(), Cause::Changed));
+                        continue;
+                    }
+                    _ => {
+                        changed.push((raw.clone(), Cause::Unproven));
+                        continue;
+                    }
+                }
             }
             let stale = match fs::metadata(&path) {
                 Ok(metadata)
@@ -127,7 +146,7 @@ impl Audit<'_> {
                 Err(error) => return Err(failed(&path, &error)),
             };
             if stale {
-                changed.push(raw.clone());
+                changed.push((raw.clone(), Cause::Changed));
             }
         }
         Ok(changed)
