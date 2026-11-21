@@ -5,6 +5,7 @@ use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
+use super::cache_limits::{budget_bytes_from, max_age_days_from};
 use super::cache_prune::prune;
 use super::input_target::check_removal_target;
 use crate::cache::{KEEP_NEWEST, born_expired, should_save, trim};
@@ -186,11 +187,7 @@ pub struct Expiry {
 }
 
 pub fn expire_old_bases(targets: &[PathBuf], now_seconds: i64) -> Result<Expiry, CiError> {
-    let Some(days) = std::env::var(MAX_AGE_VARIABLE)
-        .ok()
-        .and_then(|text| text.trim().parse::<u64>().ok())
-        .filter(|days| *days > 0)
-    else {
+    let Some(days) = max_age_days_from(std::env::var_os(MAX_AGE_VARIABLE).as_deref())? else {
         return Ok(Expiry {
             expired: false,
             report: String::new(),
@@ -246,14 +243,7 @@ pub(super) fn run_trim(prefix: &str, keep: Option<usize>) -> Result<String, CiEr
 }
 
 fn budget_limit() -> Result<Option<u64>, CiError> {
-    match std::env::var("VELNOR_CACHE_BUDGET_BYTES") {
-        Ok(text) if !text.trim().is_empty() => text
-            .trim()
-            .parse()
-            .map(Some)
-            .map_err(|_| CiError::new("VELNOR_CACHE_BUDGET_BYTES is not a number of bytes")),
-        _ => Ok(None),
-    }
+    budget_bytes_from(std::env::var_os("VELNOR_CACHE_BUDGET_BYTES").as_deref())
 }
 
 pub(super) fn run_decide(args: &crate::cli_cache::DecideArgs) -> Result<String, CiError> {

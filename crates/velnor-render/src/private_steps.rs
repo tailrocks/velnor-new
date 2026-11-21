@@ -1,7 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{PrivateSources, PrivateVerdict, RepoPath, RootSlug, Step, StepKind};
+use velnor_model::{
+    HelperRelease, PrivateSources, PrivateVerdict, RepoPath, RootSlug, Step, StepKind, TokenMint,
+};
 
 use crate::gate::sources_step;
 use crate::release_steps::{APP_TOKEN_COMMIT, APP_TOKEN_VERSION, shell_word};
@@ -12,6 +14,7 @@ pub(crate) const TOKEN_STEP: &str = "private-token";
 pub(crate) const CHECK_STEP: &str = "private-check";
 pub(crate) const PRIVACY_STEP: &str = "private_repo";
 const PRIVATE_REPOSITORY: &str = "steps.private_repo.outputs.private == 'true'";
+const RELEASE_HELPER_MINT: (u64, u64, u64) = (0, 1, 112);
 pub(crate) mod release_asset_steps;
 
 /// The condition for creating an App token: a merge queue entry that `check` allowed, or a run
@@ -26,7 +29,7 @@ pub(crate) fn render(kind: &StepKind) -> RenderedStep {
     match kind {
         StepKind::RepositoryPrivacy => privacy(),
         StepKind::PrivateCheck { .. } => check(),
-        StepKind::PrivateToken { sources, .. } => token(sources),
+        StepKind::PrivateToken { sources, mint, .. } => token(sources, *mint),
         StepKind::PrivateFetch { manifests, .. } => fetch(manifests),
         StepKind::ReleaseAssets { assets, part } => {
             crate::private_steps::release_asset_steps::render(assets, part)
@@ -116,11 +119,23 @@ pub(crate) fn unless_hit(cached: &[RootSlug]) -> Vec<String> {
     vec![format!("({})", misses.join(" || "))]
 }
 
-pub(crate) fn release_phase(sources: &PrivateSources, manifest: &str) -> [RenderedStep; 2] {
+pub(crate) fn release_mint(helper: &HelperRelease) -> TokenMint {
+    if helper.version().at_least(RELEASE_HELPER_MINT) {
+        TokenMint::Helper
+    } else {
+        TokenMint::Action
+    }
+}
+
+pub(crate) fn release_phase(
+    sources: &PrivateSources,
+    manifest: &str,
+    mint: TokenMint,
+) -> [RenderedStep; 2] {
     [
         RenderedStep {
             condition: None,
-            ..token(sources)
+            ..token(sources, mint)
         },
         fetch_paths([manifest]),
     ]
@@ -150,26 +165,56 @@ pub(crate) fn check() -> RenderedStep {
     }
 }
 
-fn token(sources: &PrivateSources) -> RenderedStep {
+fn token(sources: &PrivateSources, mint: TokenMint) -> RenderedStep {
+    let repositories: Vec<&str> = sources.repositories.iter().map(String::as_str).collect();
     RenderedStep {
         id: Some(TOKEN_STEP.to_owned()),
         name: "Create a read-only token for the private repositories".to_owned(),
         condition: Some(format!("${{{{ {} }}}}", token_allowed(CHECK_STEP))),
+        ..app_token(sources, &sources.owner, &repositories, mint)
+    }
+}
+
+pub(crate) fn app_token(
+    sources: &PrivateSources,
+    owner: &str,
+    repositories: &[&str],
+    mint: TokenMint,
+) -> RenderedStep {
+    let client_id = Value::Expr(format!("${{{{ vars.{} }}}}", sources.app_id));
+    let private_key = Value::Expr(format!("${{{{ secrets.{} }}}}", sources.private_key));
+    if mint == TokenMint::Helper {
+        let names: Vec<String> = repositories
+            .iter()
+            .map(|name| format!("--repository={}", shell_word(name)))
+            .collect();
+        return RenderedStep {
+            env: vec![
+                ("VELNOR_APP_CLIENT_ID".to_owned(), client_id),
+                ("VELNOR_APP_PRIVATE_KEY".to_owned(), private_key),
+                (
+                    "VELNOR_API_URL".to_owned(),
+                    Value::Expr("${{ github.api_url }}".to_owned()),
+                ),
+            ],
+            run: Some(format!(
+                "velnor-ci app-token --owner={} {}",
+                shell_word(owner),
+                names.join(" ")
+            )),
+            ..RenderedStep::default()
+        };
+    }
+    RenderedStep {
         uses: Some(format!("{APP_TOKEN_ACTION}@{APP_TOKEN_COMMIT}")),
         uses_comment: Some(APP_TOKEN_VERSION.to_owned()),
         with: vec![
-            (
-                "client-id".to_owned(),
-                Value::Expr(format!("${{{{ vars.{} }}}}", sources.app_id)),
-            ),
-            (
-                "private-key".to_owned(),
-                Value::Expr(format!("${{{{ secrets.{} }}}}", sources.private_key)),
-            ),
-            ("owner".to_owned(), Value::Text(sources.owner.clone())),
+            ("client-id".to_owned(), client_id),
+            ("private-key".to_owned(), private_key),
+            ("owner".to_owned(), Value::Text(owner.to_owned())),
             (
                 "repositories".to_owned(),
-                Value::Text(sources.repositories.join("\n")),
+                Value::Text(repositories.join("\n")),
             ),
             (
                 "permission-contents".to_owned(),

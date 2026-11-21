@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod app_token;
 mod artifact_stage;
 mod artifact_stage_paths;
 mod audit;
@@ -32,6 +33,7 @@ mod io_cold_foreign;
 mod io_gate;
 mod io_report_privacy;
 mod run_escape;
+mod runtime_gitlink;
 
 mod cache_safety;
 mod cache_upload;
@@ -125,6 +127,7 @@ mod mbx_store;
 mod merge_group_skip;
 mod merge_queue;
 mod mise_pin;
+mod mise_version_plan;
 mod plan;
 mod plan_api;
 mod plan_diff;
@@ -215,6 +218,7 @@ mod timings_composite;
 mod timings_groups;
 mod timings_runs;
 mod timings_setup;
+mod toolchain;
 mod tools_digest;
 mod tools_heal;
 mod tools_home_clear;
