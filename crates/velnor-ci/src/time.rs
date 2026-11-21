@@ -1,22 +1,43 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+fn number(text: &str) -> Option<i64> {
+    if text.is_empty() || !text.bytes().all(|byte| byte.is_ascii_digit()) {
+        return None;
+    }
+    text.parse().ok()
+}
+
+fn days_in_month(year: i64, month: i64) -> i64 {
+    let leap = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
+    match month {
+        2 if leap => 29,
+        2 => 28,
+        4 | 6 | 9 | 11 => 30,
+        _ => 31,
+    }
+}
+
 #[must_use]
 pub fn parse_utc(text: &str) -> Option<i64> {
     let (text, offset) = split_offset(text)?;
     let (date, time) = text.split_once('T')?;
     let mut date = date.split('-');
-    let year: i64 = date.next()?.parse().ok()?;
-    let month: i64 = date.next()?.parse().ok()?;
-    let day: i64 = date.next()?.parse().ok()?;
-    if date.next().is_some() || !(1..=12).contains(&month) || !(1..=31).contains(&day) {
+    let year = number(date.next()?)?;
+    let month = number(date.next()?)?;
+    let day = number(date.next()?)?;
+    if date.next().is_some()
+        || !(1..=12).contains(&month)
+        || !(1..=days_in_month(year, month)).contains(&day)
+    {
         return None;
     }
-    let time = time.split('.').next()?;
+    let (time, fraction) = time.split_once('.').unwrap_or((time, "0"));
+    number(fraction)?;
     let mut time = time.split(':');
-    let hour: i64 = time.next()?.parse().ok()?;
-    let minute: i64 = time.next()?.parse().ok()?;
-    let second: i64 = time.next()?.parse().ok()?;
+    let hour = number(time.next()?)?;
+    let minute = number(time.next()?)?;
+    let second = number(time.next()?)?;
     if time.next().is_some() || hour > 23 || minute > 59 || second > 60 {
         return None;
     }
@@ -35,8 +56,8 @@ fn split_offset(text: &str) -> Option<(&str, i64)> {
         _ => return None,
     };
     let (hours, minutes) = tail[1..].split_once(':')?;
-    let hours: i64 = hours.parse().ok()?;
-    let minutes: i64 = minutes.parse().ok()?;
+    let hours = number(hours)?;
+    let minutes = number(minutes)?;
     if hours > 23 || minutes > 59 {
         return None;
     }
@@ -73,13 +94,12 @@ pub fn utc_text(unix_seconds: i64) -> String {
 }
 
 #[must_use]
-pub fn now_utc_text() -> String {
-    let seconds = std::time::SystemTime::now()
+pub fn now_unix() -> i64 {
+    std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .ok()
         .and_then(|elapsed| i64::try_from(elapsed.as_secs()).ok())
-        .unwrap_or(0);
-    utc_text(seconds)
+        .unwrap_or(0)
 }
 
 #[must_use]

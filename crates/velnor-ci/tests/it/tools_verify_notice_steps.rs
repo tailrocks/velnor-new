@@ -42,34 +42,17 @@ fn the_notice_explains_the_two_steps_and_prints_only_the_resolve_command() {
 }
 
 #[test]
-fn the_notice_stamps_the_command_with_the_time_the_check_began() {
+fn the_notice_describes_the_stamp_and_the_token_precedence() {
     let job = job("tools-verify-stamp");
     let anchor = recorded(&job);
     fs::write(rustc(&job), "evil binary!").unwrap_or_else(|e| unreachable!("{e}"));
-    let before = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |elapsed| elapsed.as_secs());
     let stdout = check_stdout(
         &job,
         &anchor,
         &[("VELNOR_TOOLS_CACHE_KEY", "velnor-tools-abc123")],
     );
-    let after = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |elapsed| elapsed.as_secs());
-    let (_, after_flag) = stdout
-        .split_once("--restored-before '")
-        .unwrap_or_else(|| unreachable!("no stamp in {stdout}"));
-    let stamp = after_flag.split('\'').next().unwrap_or_default().to_owned();
-    let seconds = parse_utc(&stamp)
-        .and_then(|seconds| u64::try_from(seconds).ok())
-        .unwrap_or_else(|| unreachable!("{stamp}"));
     assert!(
-        (before..=after).contains(&seconds),
-        "{stamp} {before} {after}"
-    );
-    assert!(
-        stdout.contains("--restored-before (the time this job's tools check began"),
+        stdout.contains("--restored-before (the time this job's restore began"),
         "{stdout}"
     );
     assert!(

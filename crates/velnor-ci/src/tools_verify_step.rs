@@ -7,7 +7,9 @@ use std::path::{Path, PathBuf};
 
 use crate::error::CiError;
 use crate::escape::{escape, inert, shell_quote as quoted};
+use crate::io::cache_delete_entry::ref_options;
 use crate::mbx_store::trusted_event;
+use crate::restore_clock;
 use crate::tools_discard;
 use crate::tools_verify::{Anchor, Discard, Recording, Verb, Verdict, check, read, record};
 
@@ -59,11 +61,7 @@ fn reason(discard: &Discard) -> String {
 }
 
 fn delete_command(key: &str, refs: &[String], remote: &Remote, restored_before: &str) -> String {
-    let refs: String = refs.iter().fold(String::new(), |mut line, reference| {
-        line.push_str(" --ref ");
-        line.push_str(&quoted(reference));
-        line
-    });
+    let refs = ref_options(refs);
     format!(
         "GITHUB_API_URL={} GITHUB_TOKEN=\"$(gh auth token --hostname {})\" velnor-ci cache delete-entry --repo {} --key {}{refs} --restored-before {}",
         quoted(&remote.api_url),
@@ -91,10 +89,11 @@ fn delete_sentence(what: &str, key: &str, remedy: Remedy<'_>) -> String {
         return String::new();
     }
     format!(
-        ". The restored {what} is {}; the cache action does not report which ref or version it came from, so the command below only reads: it lists every ref the action can have read, in its order (the ref of this run, then the base and default branches), and prints the one entry the restore read (ID, version and ref) together with the command that deletes that entry by its ID. It deletes nothing itself, so running it again is harmless. It resolves an entry only when the FIRST ref holds the key and the entry was saved before --restored-before (the time this job's tools check began, after its restore had finished; an entry saved at or after it, or without a usable created_at, is not the entry this run read, so a stale notice of another run can never delete an entry saved later), and refuses, printing nothing to delete, when the first ref no longer holds it (another job of this run or you may have deleted the entry already; if so, stop), when that ref has more than one entry, when a later ref holds the key under a different version or when an entry has no version; then check which version the job used and delete that ID. Step 1: run the command below and read the entry it prints. Step 2: run the --id command it prints, once; it deletes exactly that ID and refuses when the ID no longer exists or has another key. The two steps are needed once per run, not once per job, even though every tools job of the run prints this notice: after one job's entry is deleted, step 1 refuses instead of naming the next ref's healthy entry. It needs velnor-ci 0.1.112 or newer on the machine that runs it, which the pinned helper does not provide: download it from {HELPER_RELEASES} (tag tools-v0.1.112 or newer) and put it on PATH. The token is the one `gh auth token` prints, which prefers an exported GH_TOKEN or GITHUB_TOKEN (GH_ENTERPRISE_TOKEN or GITHUB_ENTERPRISE_TOKEN on a host other than github.com) to the stored login, and it needs actions: write.{} Command: `{}`",
+        ". The restored {what} is {}; the cache action does not report which ref or version it came from, so the command below only reads: it lists every ref the action can have read, in its order (the ref of this run, then the base and default branches), and prints the one entry the restore read (ID, version and ref) together with the command that deletes that entry by its ID. It deletes nothing itself, so running it again is harmless. It resolves an entry only when the FIRST ref holds the key and the entry was saved before --restored-before (the time this job's restore began, taken from the record that `tools-local clear` leaves before the restores or, when there is none, from this check, whichever is earlier, minus a safety margin of {margin} minutes for clock skew; an entry saved at or after it, or without a usable created_at, is not shown to be the entry this run read, so a stale notice of another run does not resolve an entry saved after this run's restore, unless the runner clock is ahead of GitHub's by more than the margin; a refusal says why and prints the command that reruns step 1 with an explicit --restored-before), and refuses, printing nothing to delete, when the first ref no longer holds it (another job of this run or you may have deleted the entry already; if so, stop), when that ref has more than one entry, when a later ref holds the key under a different version or when an entry has no version; then check which version the job used and delete that ID. Step 1: run the command below and read the entry it prints. Step 2: run the --id command it prints, once; it deletes exactly that ID and refuses when the ID no longer exists or has another key. The two steps are needed once per run, not once per job, even though every tools job of the run prints this notice: after one job's entry is deleted, step 1 refuses instead of naming the next ref's healthy entry. It needs velnor-ci 0.1.112 or newer on the machine that runs it, which the pinned helper does not provide: download it from {HELPER_RELEASES} (tag tools-v0.1.112 or newer) and put it on PATH. The token is the one `gh auth token` prints, which prefers an exported GH_TOKEN or GITHUB_TOKEN (GH_ENTERPRISE_TOKEN or GITHUB_ENTERPRISE_TOKEN on a host other than github.com) to the stored login, and it needs actions: write.{} Command: `{}`",
         quoted(key),
         trust_hint(remedy.remote),
-        delete_command(key, remedy.refs, remedy.remote, remedy.restored_before)
+        delete_command(key, remedy.refs, remedy.remote, remedy.restored_before),
+        margin = restore_clock::SAFETY_MARGIN_SECONDS / 60,
     )
 }
 
@@ -265,7 +264,6 @@ pub fn run(verb: Verb, context: &Context) -> Result<String, CiError> {
 }
 
 pub fn setup(verb: Verb) -> Result<String, CiError> {
-    let restored_before = crate::time::now_utc_text();
     let var = |name: &str| std::env::var(name).ok();
     let required = |name: &str| {
         var(name)
@@ -276,13 +274,15 @@ pub fn setup(verb: Verb) -> Result<String, CiError> {
         .and_then(|path| fs::read_to_string(path).ok())
         .and_then(|text| crate::event::parse_event(&text).ok())
         .and_then(|event| event.default_branch);
+    let runner_temp = tools_discard::runner_temp(var("RUNNER_TEMP")).ok_or_else(|| {
+        CiError::new("set RUNNER_TEMP to an absolute path; the tools anchor lives under it")
+    })?;
+    let restored_before = restore_clock::cutoff(&runner_temp, crate::time::now_unix());
     run(
         verb,
         &Context {
             home: required("HOME")?,
-            runner_temp: tools_discard::runner_temp(var("RUNNER_TEMP")).ok_or_else(|| {
-                CiError::new("set RUNNER_TEMP to an absolute path; the tools anchor lives under it")
-            })?,
+            runner_temp,
             github_output: var("GITHUB_OUTPUT").map(PathBuf::from),
             anchor: var("VELNOR_TOOLS_ANCHOR").unwrap_or_default(),
             anchor_matched: var("VELNOR_ANCHOR_MATCHED").is_some_and(|key| !key.is_empty()),

@@ -33,6 +33,7 @@ pub(crate) struct Api {
     pub(crate) second_page: Option<Vec<Value>>,
     pub(crate) asked: RefCell<Vec<String>>,
     pub(crate) deleted: RefCell<Vec<u64>>,
+    vanishing: RefCell<Vec<u64>>,
 }
 
 pub(crate) fn entry(id: u64, key: &str, reference: &str, version: &str) -> Value {
@@ -122,13 +123,20 @@ impl GitHubWrite for Api {
     fn delete(&self, path: &str) -> Result<(), CiError> {
         let id = path.rsplit('/').next().and_then(|id| id.parse().ok());
         let id: u64 = id.ok_or_else(|| CiError::new("invalid id"))?;
-        self.deleted.borrow_mut().push(id);
         self.entries.borrow_mut().retain(|row| row["id"] != id);
+        if self.vanishing.borrow().contains(&id) {
+            return Err(CiError::missing("GitHub answered 404"));
+        }
+        self.deleted.borrow_mut().push(id);
         Ok(())
     }
 }
 
 impl Api {
+    pub(crate) fn vanish_before_delete(&self, id: u64) {
+        self.vanishing.borrow_mut().push(id);
+    }
+
     pub(crate) fn save(&self, row: Value) {
         self.entries.borrow_mut().push(row);
     }
@@ -142,6 +150,7 @@ pub(crate) fn api(entries: Vec<Value>) -> Api {
         second_page: None,
         asked: RefCell::default(),
         deleted: RefCell::default(),
+        vanishing: RefCell::default(),
     }
 }
 

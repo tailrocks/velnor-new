@@ -12,22 +12,6 @@ use crate::cache_delete_entry::{
 const BASE: &str = "refs/heads/release";
 
 #[test]
-fn the_key_only_on_a_later_ref_is_refused_and_prints_no_id_command() {
-    let api = api(vec![entry(11, KEY, MAIN, VERSION_A)]);
-    let error = resolve_entry(&api, &repo(), KEY, &refs(&[MERGE, MAIN]))
-        .err()
-        .unwrap_or_else(|| unreachable!("a later ref must not be claimed as the restored entry"));
-    assert_eq!(
-        error.to_string(),
-        format!(
-            "the key {KEY} is no longer on {MERGE} (refs checked, in order: {MERGE}, {MAIN}; the first ref that holds it is {MAIN}); if you or another job already deleted this run's entry, stop. Otherwise the restore read {MAIN}: re-run with `--ref {MAIN}` first only if you know this run restored from it; nothing was deleted"
-        )
-    );
-    assert!(!error.to_string().contains("--id"), "{error}");
-    assert!(api.deleted.borrow().is_empty());
-}
-
-#[test]
 fn the_refusal_names_every_earlier_ref_and_the_order_checked() {
     let api = api(vec![entry(11, KEY, MAIN, VERSION_A)]);
     let error = resolve_entry(&api, &repo(), KEY, &refs(&[MERGE, BASE, MAIN]))

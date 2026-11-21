@@ -82,7 +82,11 @@ fn step_one_without_restored_before_is_refused_by_the_parser() {
     let output = delete_entry(&api, &["--key", KEY, "--ref", MERGE]);
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(!output.status.success(), "{stderr}");
-    assert!(stderr.contains("--restored-before"), "{stderr}");
+    assert!(
+        stderr.contains("the following required arguments were not provided")
+            && stderr.contains("--restored-before <RESTORED_BEFORE>"),
+        "{stderr}"
+    );
     assert_eq!(deleted(&served), Vec::<String>::new());
 }
 
@@ -121,7 +125,11 @@ fn the_binary_refuses_an_entry_saved_after_the_stamp_and_prints_no_id_command() 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(!output.status.success(), "{stdout}{stderr}");
-    assert!(stderr.contains("not the entry this run read"), "{stderr}");
+    assert!(
+        stderr.contains("saved within 5 minutes before this run's restore or after it")
+            && stderr.contains("--restored-before '2026-11-17T00:00:01Z'"),
+        "{stderr}"
+    );
     assert!(!stdout.contains("--id"), "{stdout}");
     assert_eq!(deleted(&served), Vec::<String>::new());
 }

@@ -200,6 +200,11 @@ pub fn setup(verb: Verb, key: Option<&str>) -> Result<String, CiError> {
     let (shared, seed) = (var(SHARED_DIR_ENV), var(SEED_DIR_ENV));
     let runner_temp = crate::tools_discard::runner_temp(var("RUNNER_TEMP"));
     let node = this_node();
+    if verb == Verb::Clear
+        && let Some(dir) = runner_temp.as_deref()
+    {
+        crate::restore_clock::record(dir, crate::time::now_unix()).ok();
+    }
     let outcome = run(&Inputs {
         verb,
         key,

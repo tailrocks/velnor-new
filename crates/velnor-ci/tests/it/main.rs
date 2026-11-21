@@ -231,6 +231,7 @@ mod tools_verify_anchor;
 mod tools_verify_bounds;
 mod tools_verify_notice;
 mod tools_verify_notice_steps;
+mod tools_verify_restore_clock;
 mod trusted_event_parity;
 mod trusted_roots;
 mod unit_test_targets;

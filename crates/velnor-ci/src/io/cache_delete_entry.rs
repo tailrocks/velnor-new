@@ -1,13 +1,14 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::cache_api::{Entry, client, delete_entries, exact_entries};
+use super::cache_api::{Entry, client, exact_entries};
 use crate::cache::encode;
 use crate::cli_cache::DeleteEntryArgs;
 use crate::error::CiError;
 use crate::escape::{inert, shell_quote};
 use crate::github::{GitHubWrite, Repo};
-use crate::time::parse_utc;
+use crate::restore_clock::SAFETY_MARGIN_SECONDS;
+use crate::time::{parse_utc, utc_text};
 
 const DEFAULT_API: &str = "https://api.github.com";
 
@@ -46,6 +47,50 @@ fn holders(
         );
     }
     Ok(held)
+}
+
+#[must_use]
+pub fn ref_options(refs: &[String]) -> String {
+    refs.iter().fold(String::new(), |mut line, reference| {
+        line.push_str(" --ref ");
+        line.push_str(&shell_quote(reference));
+        line
+    })
+}
+
+fn rerun_command(repo: &Repo, key: &str, refs: &[String], stamp: &str) -> String {
+    format!(
+        "velnor-ci cache delete-entry --repo {} --key {}{} --restored-before {}",
+        shell_quote(&repo.to_string()),
+        shell_quote(key),
+        ref_options(refs),
+        shell_quote(stamp)
+    )
+}
+
+fn late_refusal(
+    entry: &Entry,
+    saved: i64,
+    (repo, key, refs): (&Repo, &str, &[String]),
+    restored_before: &str,
+) -> String {
+    let command = rerun_command(repo, key, refs, &utc_text(saved + 1));
+    let rerun = if crate::escape::escape(&command, false) == command {
+        format!("`{command}` (with the GITHUB_API_URL and GITHUB_TOKEN of this run)")
+    } else {
+        format!(
+            "the same command with --restored-before {} (the key or a ref holds a character that this message cannot print as typed)",
+            shell_quote(&utc_text(saved + 1))
+        )
+    };
+    format!(
+        "the entry ID {} ({}) was saved at {}, which is not before the cutoff {restored_before}. The cutoff is the time this run's restore began minus a safety margin of {} minutes, so the entry was saved within {} minutes before this run's restore or after it, and it cannot be shown to be the entry this run read; nothing was deleted. Use this only if you know the entry was saved before this run's restore began: rerun step 1 with an explicit --restored-before later than the save time: {rerun}",
+        entry.id,
+        inert(key),
+        entry.created_at,
+        SAFETY_MARGIN_SECONDS / 60,
+        SAFETY_MARGIN_SECONDS / 60,
+    )
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -126,20 +171,19 @@ pub fn resolve_entry(
     }
     match parse_utc(&first.created_at) {
         Some(saved) if saved < restored => {}
-        Some(_) => {
-            return Err(CiError::new(format!(
-                "the entry ID {} ({named}) was saved at {}, not before this run's restore ({}), so it is not the entry this run read: a later run saved it after the entry the restore read was deleted or evicted; nothing was deleted",
-                first.id,
-                inert(&first.created_at),
-                inert(restored_before)
+        Some(saved) => {
+            return Err(CiError::new(late_refusal(
+                first,
+                saved,
+                (repo, key, refs),
+                restored_before,
             )));
         }
         None => {
             return Err(CiError::new(format!(
-                "the entry ID {} ({named}) has no usable created_at ({}), so it cannot be shown to predate this run's restore ({}); nothing was deleted",
+                "the entry ID {} ({named}) has no usable created_at ({}), so it cannot be shown to predate this run's restore (cutoff {restored_before}); nothing was deleted",
                 first.id,
                 inert(&first.created_at),
-                inert(restored_before)
             )));
         }
     }
@@ -169,7 +213,16 @@ pub fn delete_by_id(
             "no cache entry with ID {id} has the key {named}: it was deleted already or belongs to another key; nothing was deleted"
         )));
     };
-    delete_entries(github, repo, &[entry.id])?;
+    match github.delete(&format!("/repos/{repo}/actions/caches/{}", entry.id)) {
+        Ok(()) => {}
+        Err(error) if error.is_missing() => {
+            return Err(CiError::new(format!(
+                "entry {} ({named}) was already gone; nothing was deleted",
+                entry.id
+            )));
+        }
+        Err(error) => return Err(error),
+    }
     Ok(format!(
         "deleted cache entry ID {} ({named}, version {}, {})\n",
         entry.id,
