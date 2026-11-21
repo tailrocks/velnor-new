@@ -49,20 +49,20 @@ pub(super) fn forward() -> Result<ExitStatus, CiError> {
         if let Some(executable) = proxy(&cargo, "mise")? {
             return mise::launch(&executable, &cargo, &wrapper, &args);
         }
-        if mbx::required() {
+        if mbx::required(&args) {
             return Err(mbx::refused(&cargo));
         }
         Some(cargo)
     } else {
         None
     };
-    if matches!(phase, LaunchPhase::ReadyNative) && mbx::required() {
+    if matches!(phase, LaunchPhase::ReadyNative) && mbx::required(&args) {
         return Err(mbx::refused(&find_cargo(&paths, &wrapper, &phase)?));
     }
     if matches!(phase, LaunchPhase::Activated) {
         match mise::after_activation(&wrapper, &args)? {
             Some(status) => return Ok(status),
-            None if mbx::required() => return Err(mbx::wrapper_missing()),
+            None if mbx::required(&args) => return Err(mbx::wrapper_missing()),
             None => {}
         }
     }
