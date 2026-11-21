@@ -21,8 +21,6 @@ pub(crate) const TOOLS_CACHE_KEY_HELPER: (u64, u64, u64) = (0, 1, 110);
 // helper-gate: first in tools-v0.1.111 via a1a1595d9f
 pub(crate) const TOOLS_ANCHOR_KEY_HELPER: (u64, u64, u64) = (0, 1, 111);
 const TOOLS_ANCHOR_ATTEMPT_HELPER: (u64, u64, u64) = (0, 1, 112);
-// helper-gate: first in tools-v0.1.111 via 19e135fac1
-const TOOLS_ANCHOR_BUDGET_HELPER: (u64, u64, u64) = (0, 1, 111);
 // helper-gate: first in tools-v0.1.110 via 8db5d70509
 const TOOLS_CLEAR_HELPER: (u64, u64, u64) = (0, 1, 110);
 
@@ -148,13 +146,6 @@ fn names_cache_entry(facts: &RepoFacts) -> bool {
         .helper
         .as_ref()
         .is_some_and(|release| release.version().at_least(TOOLS_CACHE_KEY_HELPER))
-}
-
-pub(crate) fn budgets_anchor_outputs(facts: &RepoFacts) -> bool {
-    facts
-        .helper
-        .as_ref()
-        .is_some_and(|release| release.version().at_least(TOOLS_ANCHOR_BUDGET_HELPER))
 }
 
 fn names_anchor_entry(facts: &RepoFacts) -> bool {
