@@ -63,41 +63,58 @@ mod tests {
     use std::fs;
     use std::panic::{AssertUnwindSafe, catch_unwind, panic_any};
     use std::path::{Path, PathBuf};
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     use super::{ScratchDir, keep_requested};
 
-    fn leftovers(root: &Path, prefix: &str) -> Vec<PathBuf> {
-        let Ok(entries) = fs::read_dir(root) else {
-            return Vec::new();
-        };
-        entries
-            .flatten()
-            .map(|entry| entry.path())
-            .filter(|path| {
-                path.file_name()
-                    .and_then(|name| name.to_str())
-                    .is_some_and(|name| name.starts_with(prefix))
-            })
-            .collect()
+    fn entry_count(root: &Path) -> usize {
+        fs::read_dir(root).map_or(0, Iterator::count)
+    }
+
+    fn fresh_root() -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_or(0, |elapsed| elapsed.as_nanos());
+        let root = std::env::temp_dir().join(format!(
+            "velnor-scratch-selftest-{}-{nanos}",
+            std::process::id()
+        ));
+        fs::create_dir(&root).unwrap_or_else(|e| unreachable!("{e}"));
+        root
+    }
+
+    fn assert_cleanup_leaves_nothing_behind() {
+        let root = fresh_root();
+
+        let success = ScratchDir::new(root.join("success"));
+        fs::write(success.join("payload"), "data").unwrap_or_else(|e| unreachable!("{e}"));
+        drop(success);
+        assert_eq!(entry_count(&root), 0);
+
+        let panicked = catch_unwind(AssertUnwindSafe(|| {
+            let _guard = ScratchDir::new(root.join("panic"));
+            panic_any("expected test panic");
+        }));
+        assert!(panicked.is_err());
+        assert_eq!(entry_count(&root), 0);
+
+        fs::remove_dir(&root).unwrap_or_else(|e| unreachable!("{e}"));
     }
 
     #[test]
     fn scratch_dirs_leave_nothing_in_tmpdir_on_success_or_panic() {
-        let root = std::env::temp_dir();
-        let prefix = format!("velnor-scratch-selftest-{}", std::process::id());
-        let before = leftovers(&root, &prefix);
+        assert_cleanup_leaves_nothing_behind();
+    }
 
-        let success = ScratchDir::new(root.join(format!("{prefix}-success")));
-        fs::write(success.join("payload"), "data").unwrap_or_else(|e| unreachable!("{e}"));
-        drop(success);
-
-        let panicked = catch_unwind(AssertUnwindSafe(|| {
-            let _guard = ScratchDir::new(root.join(format!("{prefix}-panic")));
-            panic_any("expected test panic");
-        }));
-        assert!(panicked.is_err());
-
-        assert_eq!(leftovers(&root, &prefix), before);
+    #[test]
+    fn a_stale_tree_left_by_an_earlier_process_does_not_break_cleanup() {
+        let stale = ScratchDir::adopt(std::env::temp_dir().join(format!(
+            "velnor-scratch-selftest-{}-stale-success",
+            std::process::id()
+        )));
+        fs::create_dir_all(stale.path()).unwrap_or_else(|e| unreachable!("{e}"));
+        fs::write(stale.join("left"), "stale").unwrap_or_else(|e| unreachable!("{e}"));
+        assert_cleanup_leaves_nothing_behind();
     }
 
     #[test]

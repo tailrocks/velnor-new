@@ -24,12 +24,10 @@ impl Stub {
         Self::build(repo, dir, cache_dir, false)
     }
 
-    /// A stub started with `--job-cache-admin`: the override that grants every job.
     pub(crate) fn job_cache_admin(repo: &Path, dir: &Path, cache_dir: &Path) -> Self {
         Self::granting(repo, dir, cache_dir, true, None, (None, None))
     }
 
-    /// A stub started with `--token-key`, `--standin` and `--ledger`.
     pub(crate) fn job_grants(repo: &Path, dir: &Path, cache_dir: &Path, bound: Bound) -> Self {
         Self::granting(repo, dir, cache_dir, false, Some(job_token_key()), bound)
     }
@@ -118,7 +116,6 @@ impl Stub {
         self.call_with(method, path_and_query, None).await
     }
 
-    /// A call that carries `bearer` as the `Authorization` token, as a job's helper does.
     pub(crate) async fn call_as(&self, method: &str, path_and_query: &str, bearer: &str) -> Reply {
         self.call_with(method, path_and_query, Some(bearer)).await
     }

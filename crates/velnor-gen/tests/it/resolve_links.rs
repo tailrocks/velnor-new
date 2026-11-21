@@ -5,6 +5,7 @@ use std::error::Error;
 use std::fs;
 use std::os::unix::fs::symlink;
 use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use velnor_rust::resolve;
 use velnor_test_support::ScratchDir;
@@ -13,9 +14,11 @@ type TestResult = Result<(), Box<dyn Error>>;
 
 /// A fresh directory under the temp dir, canonical so its paths compare equal to resolved ones.
 fn scratch(tag: &str) -> Result<(ScratchDir, PathBuf), Box<dyn Error>> {
-    let guard = ScratchDir::new(
-        std::env::temp_dir().join(format!("velnor-resolve-{tag}-{}", std::process::id())),
-    );
+    let nanos = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+    let guard = ScratchDir::new(std::env::temp_dir().join(format!(
+        "velnor-resolve-{tag}-{}-{nanos}",
+        std::process::id()
+    )));
     let canonical = fs::canonicalize(guard.path())?;
     Ok((guard, canonical))
 }
@@ -81,13 +84,27 @@ fn leftovers(tag: &str) -> usize {
     })
 }
 
-#[test]
-fn a_scratch_directory_leaves_nothing_in_tmpdir_once_its_test_ends() -> TestResult {
-    let before = leftovers("selftest");
+fn assert_scratch_leaves_nothing_in_tmpdir(tag: &str) -> TestResult {
+    let before = leftovers(tag);
     {
-        let (_guard, d) = scratch("selftest")?;
+        let (_guard, d) = scratch(tag)?;
         fs::write(d.join("probe"), "")?;
     }
-    assert_eq!(leftovers("selftest"), before);
+    assert_eq!(leftovers(tag), before);
     Ok(())
+}
+
+#[test]
+fn a_scratch_directory_leaves_nothing_in_tmpdir_once_its_test_ends() -> TestResult {
+    assert_scratch_leaves_nothing_in_tmpdir("selftest")
+}
+
+#[test]
+fn a_stale_tree_left_by_an_earlier_process_does_not_break_that_check() -> TestResult {
+    let stale = ScratchDir::adopt(
+        std::env::temp_dir().join(format!("velnor-resolve-stale-{}", std::process::id())),
+    );
+    fs::create_dir_all(stale.path())?;
+    fs::write(stale.join("left"), "")?;
+    assert_scratch_leaves_nothing_in_tmpdir("stale")
 }
