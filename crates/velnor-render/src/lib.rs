@@ -54,6 +54,7 @@ mod rules;
 mod save_condition;
 mod save_gate;
 mod selection_name;
+mod shared_runs;
 mod source_roots;
 mod steps;
 mod tests;

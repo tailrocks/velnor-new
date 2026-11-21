@@ -112,6 +112,7 @@ pub(crate) fn plan(kinds: Vec<StepKind>) -> Result<WorkflowPlan, Box<dyn Error>>
                     skip_when_cold: false,
                     private_repo: false,
                     hosted_only: false,
+                    any_gate: Vec::new(),
                     pr: PrRun::Always,
                     gate: None,
                     reads: None,

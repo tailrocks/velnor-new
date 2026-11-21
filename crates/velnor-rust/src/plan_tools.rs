@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    AnchorSource, CacheKey, Host, JobId, MbxStore, RepoFacts, RunnerLabel, Step, StepKind,
-    ToolsAnchor, ToolsLocalVerb, VerifiedSave, When,
+    AnchorSource, CacheKey, Gate, Host, Job, JobId, MbxStore, PlanFrom, RepoFacts, RunnerLabel,
+    Step, StepKind, ToolsAnchor, ToolsLocalVerb, VerifiedSave, When,
 };
 
 use crate::plan::{TOOLS_LOCAL_HELPER, step};
@@ -46,7 +46,7 @@ fn restored_anchor(facts: &RepoFacts, plan: Option<&JobId>) -> ToolsAnchor {
     ToolsAnchor::Restored(plan.map_or(AnchorSource::ThisJob, |job| AnchorSource::Job(job.clone())))
 }
 
-pub(crate) fn tools_anchor_read(facts: &RepoFacts) -> Vec<Step> {
+pub(crate) fn tools_anchor_read(facts: &RepoFacts, any_gate: &[Gate]) -> Vec<Step> {
     if facts.tools.tools.is_empty() || !tools_anchored(facts) {
         return Vec::new();
     }
@@ -56,8 +56,36 @@ pub(crate) fn tools_anchor_read(facts: &RepoFacts) -> Vec<Step> {
         ToolsLocalVerb::AnchorFind
     };
     [find, ToolsLocalVerb::AnchorRead]
-        .map(|verb| step(StepKind::ToolsLocal(verb, ToolsAnchor::Unanchored)))
+        .map(|verb| Step {
+            any_gate: any_gate.to_vec(),
+            ..step(StepKind::ToolsLocal(verb, ToolsAnchor::Unanchored))
+        })
         .into()
+}
+
+pub(crate) fn anchor_consumer_gates(jobs: &[Job], plan: &JobId) -> Vec<Gate> {
+    let takes_anchor = |job: &Job| {
+        job.steps.iter().any(|step| {
+            matches!(
+                &step.kind,
+                StepKind::ToolsLocal(_, ToolsAnchor::Restored(AnchorSource::Job(from))) if from == plan
+            )
+        })
+    };
+    let mut gates = Vec::new();
+    for job in jobs.iter().filter(|job| takes_anchor(job)) {
+        let Some(gate) = &job.gate else {
+            return Vec::new();
+        };
+        let gate = Gate {
+            from: PlanFrom::ThisJob,
+            ..gate.clone()
+        };
+        if !gates.contains(&gate) {
+            gates.push(gate);
+        }
+    }
+    gates
 }
 
 #[must_use]
@@ -167,7 +195,7 @@ pub(crate) fn tools_restore(facts: &RepoFacts, plan: Option<&JobId>) -> Vec<Step
     let local_step = |verb| step(StepKind::ToolsLocal(verb, anchor.clone()));
     let mut steps: Vec<Step> = plan
         .is_none()
-        .then(|| tools_anchor_read(facts))
+        .then(|| tools_anchor_read(facts, &[]))
         .into_iter()
         .flatten()
         .chain(tools_clears(facts).then(|| {
