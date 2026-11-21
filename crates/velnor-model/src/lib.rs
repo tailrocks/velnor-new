@@ -38,11 +38,13 @@ pub use artifact_paths::{
     selects,
 };
 pub use budget_mode::{BUDGET_JOB_NAME, BUDGET_MODES_HELPER, ModeBudget, Selection, SelectionName};
-pub use cache::{AnchorSource, CacheKey, CachePath, CacheRoot, Host, LockIdentity, ToolsAnchor};
+pub use cache::{
+    AnchorSource, BaseScope, CacheKey, CachePath, CacheRoot, Host, LockIdentity, ToolsAnchor,
+};
 pub use cache_layout::{
-    CACHE_COMPAT_LENGTH, CacheKeyLayout, CacheKeySegment, LOCK_OUTPUT_PREFIX,
-    RUNNER_ARCH_MAX_LENGTH, RUNNER_OS_MAX_LENGTH, SHARED_SOURCES_OWNER, TOOLS_ANCHOR_LENGTH,
-    json_char_bytes, json_string_bytes,
+    CACHE_COMPAT_LENGTH, CacheKeyLayout, CacheKeySegment, LOCK_OUTPUT_PREFIX, PRIVATE_SOURCES_TAG,
+    PRIVATE_TARGET_TAG, RUNNER_ARCH_MAX_LENGTH, RUNNER_OS_MAX_LENGTH, SHARED_SOURCES_OWNER,
+    TOOLS_ANCHOR_LENGTH, json_char_bytes, json_string_bytes,
 };
 pub use cache_outputs::{
     BASE_PREFIX_OUTPUT, BASE_SAVE_OUTPUT, CacheLaneOutput, PUBLIC_SOURCES_STEP,
@@ -89,6 +91,7 @@ pub use selection::{
     RELEASE_PLZ_FILE, RELEASE_WORKFLOW_PATH, RustSelection, SAMPLES, SelectionReason, SkipReason,
     StepNeed, WORKFLOW_PATH, WORKFLOWS_CONFIG_PATH,
 };
+pub use setup_phase::SetupOrder;
 pub use shape::{Shape, ShapeDecision};
 pub use test_group::{
     ARTIFACT_RETENTION_DEFAULT, ArtifactWhen, GroupArtifact, GroupEvent, GroupRoot, NoTests,
