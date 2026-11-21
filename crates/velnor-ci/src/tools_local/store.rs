@@ -304,14 +304,75 @@ fn prune(tools: &Path, current: &str) {
         .collect();
     older.sort_by_key(|entry| std::cmp::Reverse(entry.0));
     for (modified, ino, path) in older.into_iter().skip(KEEP_KEYS - 1) {
-        let key = path.file_name().unwrap_or_default().to_string_lossy();
-        if let Claim::Won(_lock) = claim(tools, &key) {
-            let unchanged = fs::symlink_metadata(&path).is_ok_and(|metadata| {
-                metadata.ino() == ino && metadata.modified().is_ok_and(|now| now == modified)
-            });
-            if unchanged {
-                remove_tree(&path).ok();
-            }
-        }
+        prune_candidate(tools, &path, ino, modified);
+    }
+}
+
+fn prune_candidate(tools: &Path, path: &Path, ino: u64, modified: SystemTime) {
+    let key = path.file_name().unwrap_or_default().to_string_lossy();
+    let Claim::Won(_lock) = claim(tools, &key) else {
+        return;
+    };
+    let unchanged = fs::symlink_metadata(path).is_ok_and(|metadata| {
+        metadata.ino() == ino && metadata.modified().is_ok_and(|now| now == modified)
+    });
+    if unchanged {
+        remove_tree(path).ok();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+    use std::os::unix::fs::MetadataExt;
+    use std::path::PathBuf;
+    use std::time::{Duration, SystemTime};
+
+    use super::prune_candidate;
+
+    fn scratch(name: &str) -> PathBuf {
+        let root = std::env::temp_dir().join(format!("velnor-prune-{name}-{}", std::process::id()));
+        drop(fs::remove_dir_all(&root));
+        fs::create_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+        root
+    }
+
+    fn aged_dir(path: &PathBuf, modified: SystemTime) -> u64 {
+        fs::create_dir(path).unwrap_or_else(|e| unreachable!("{e}"));
+        fs::File::open(path)
+            .and_then(|file| file.set_modified(modified))
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        fs::symlink_metadata(path)
+            .unwrap_or_else(|e| unreachable!("{e}"))
+            .ino()
+    }
+
+    #[test]
+    fn a_prune_candidate_replaced_after_its_snapshot_is_kept() {
+        let root = scratch("replaced");
+        let old = root.join("k-old");
+        let modified = SystemTime::now() - Duration::from_hours(2);
+        let ino = aged_dir(&old, modified);
+        fs::rename(&old, root.join("moved")).unwrap_or_else(|e| unreachable!("{e}"));
+        let fresh_ino = aged_dir(&old, modified);
+        assert_ne!(ino, fresh_ino);
+
+        prune_candidate(&root, &old, ino, modified);
+
+        assert!(old.is_dir());
+        fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+    }
+
+    #[test]
+    fn an_unchanged_prune_candidate_is_removed() {
+        let root = scratch("unchanged");
+        let old = root.join("k-old");
+        let modified = SystemTime::now() - Duration::from_hours(2);
+        let ino = aged_dir(&old, modified);
+
+        prune_candidate(&root, &old, ino, modified);
+
+        assert!(!old.exists());
+        fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
     }
 }
