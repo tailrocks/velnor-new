@@ -108,10 +108,6 @@ run = "bash scripts/check-no-doctests.sh"
 description = "Check the rustdoc doctest listing check against planted doctest fixtures"
 run = "bash scripts/test-no-doctests-listing.sh"
 
-[tasks.test-no-doctests-rule]
-description = "Check the alint no-doctests rule against doctest fixtures: every bypass form must fail, plain prose must pass"
-run = "bash scripts/test-no-doctests-rule.sh"
-
 [tasks.test-mise-binary-digests]
 description = "Run the minisign signature tests of scripts/mise-binary-digests.sh; CI requires minisign, elsewhere a missing minisign skips"
 run = '''

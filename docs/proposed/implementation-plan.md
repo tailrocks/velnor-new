@@ -56,8 +56,7 @@ Policy fixtures are committed policy tests per [rust-quality
 §5](ci-maintenance/rust-quality-contract.md) (cargo-metadata edge test, exact member-set
 test, literal-substring ownership tests, Alint-generic plus Clippy sizes,
 human-reviewed snapshots); custom linters are forbidden and Alint stays
-generic-only, with one exception: the `no-doctests` content rule in
-`.alint.yml` fails on a doc code fence.
+generic-only.
 
 An implementation gate passes only when all listed proofs pass on the named CI runner and the result is recorded with the code. A skipped, cancelled, missing, or infrastructure-failed proof does not pass a gate.
 
