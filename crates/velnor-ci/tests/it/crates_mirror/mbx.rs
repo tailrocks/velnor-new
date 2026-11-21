@@ -5,7 +5,6 @@ use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
-
 use std::sync::LazyLock;
 
 use crate::io::Repo;
