@@ -93,6 +93,7 @@ fn a_tampered_binary_digest_is_refused_online_and_named() -> TestResult {
         .to_string();
     assert!(error.contains("[velnor-gen-binary]"), "{error}");
     assert!(error.contains("linux-x64"), "{error}");
+    assert!(error.contains("pin-helper 0.1.111"), "{error}");
     Ok(())
 }
 
