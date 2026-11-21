@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs;
-use std::os::unix::fs::PermissionsExt;
-use std::path::Path;
+use std::os::unix::fs::{PermissionsExt, symlink};
+use std::path::{Path, PathBuf};
+use std::process::Command;
+use std::thread;
 use std::time::{Duration, SystemTime};
 
 use velnor_ci::tools_local::Outcome;
@@ -229,5 +231,101 @@ fn a_failed_copy_leaves_no_staging_tree_behind_even_when_it_holds_a_read_only_di
         leftovers(&store),
         Vec::<String>::new(),
         "a staging tree stays"
+    );
+}
+
+fn two_aged_entries(job: &Job, store: &Path) -> PathBuf {
+    let first = save_as(store, &job.home, "velnor-tools-first", false);
+    assert!(matches!(first, Outcome::Saved { .. }), "{first:?}");
+    aged(
+        &store.join("tools/velnor-tools-first"),
+        Duration::from_hours(3),
+    );
+    let second = save_as(store, &job.home, "velnor-tools-second", false);
+    assert!(matches!(second, Outcome::Saved { .. }), "{second:?}");
+    aged(
+        &store.join("tools/velnor-tools-second"),
+        Duration::from_hours(2),
+    );
+    store.join("tools/velnor-tools-first")
+}
+
+#[test]
+fn a_prune_candidate_whose_lock_is_released_during_the_save_is_removed() {
+    let job = job("tools-heal-prune-released");
+    let store = job.root.join("store");
+    fs::create_dir_all(&store).unwrap_or_else(|e| unreachable!("{e}"));
+    let first = two_aged_entries(&job, &store);
+    let lock = store.join("tools/.lock-velnor-tools-first");
+    fs::create_dir(&lock).unwrap_or_else(|e| unreachable!("{e}"));
+    let release = thread::spawn(move || {
+        thread::sleep(Duration::from_millis(300));
+        fs::remove_dir(&lock)
+    });
+    let third = save_as(&store, &job.home, "velnor-tools-third", false);
+    assert!(matches!(third, Outcome::Saved { .. }), "{third:?}");
+    release
+        .join()
+        .unwrap_or_else(|_| unreachable!("the releasing thread panicked"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(!first.exists(), "a released prune candidate was kept");
+}
+
+#[test]
+fn a_prune_candidate_replaced_while_its_lock_was_held_is_kept() {
+    let job = job("tools-heal-prune-replaced");
+    let store = job.root.join("store");
+    fs::create_dir_all(&store).unwrap_or_else(|e| unreachable!("{e}"));
+    let first = two_aged_entries(&job, &store);
+    let modified = fs::metadata(&first)
+        .and_then(|metadata| metadata.modified())
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let lock = store.join("tools/.lock-velnor-tools-first");
+    fs::create_dir(&lock).unwrap_or_else(|e| unreachable!("{e}"));
+    let parked = store.join("parked");
+    let replacement = first.clone();
+    let replace = thread::spawn(move || {
+        thread::sleep(Duration::from_millis(300));
+        fs::rename(&replacement, &parked)?;
+        fs::create_dir(&replacement)?;
+        fs::File::open(&replacement)?.set_modified(modified)?;
+        fs::remove_dir(&lock)
+    });
+    let third = save_as(&store, &job.home, "velnor-tools-third", false);
+    assert!(matches!(third, Outcome::Saved { .. }), "{third:?}");
+    replace
+        .join()
+        .unwrap_or_else(|_| unreachable!("the replacing thread panicked"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(first.is_dir(), "the prune removed a replacement entry");
+}
+
+#[test]
+fn a_stale_symlink_entry_is_pruned_without_touching_its_target() {
+    let job = job("tools-heal-prune-symlink");
+    let store = job.root.join("store");
+    fs::create_dir_all(&store).unwrap_or_else(|e| unreachable!("{e}"));
+    let target = job.root.join("outside");
+    fs::create_dir_all(&target).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::write(target.join("keep"), "outside").unwrap_or_else(|e| unreachable!("{e}"));
+    let link = store.join("tools/velnor-tools-first");
+    fs::create_dir_all(store.join("tools")).unwrap_or_else(|e| unreachable!("{e}"));
+    symlink(&target, &link).unwrap_or_else(|e| unreachable!("{e}"));
+    let touched = Command::new("touch")
+        .args(["-h", "-t", "201001010000"])
+        .arg(&link)
+        .status();
+    assert!(touched.is_ok_and(|status| status.success()));
+    let second = save_as(&store, &job.home, "velnor-tools-second", false);
+    assert!(matches!(second, Outcome::Saved { .. }), "{second:?}");
+    let third = save_as(&store, &job.home, "velnor-tools-third", false);
+    assert!(matches!(third, Outcome::Saved { .. }), "{third:?}");
+    assert!(
+        fs::symlink_metadata(&link).is_err(),
+        "the stale symlink stays"
+    );
+    assert!(
+        target.join("keep").is_file(),
+        "the symlink target was removed"
     );
 }
