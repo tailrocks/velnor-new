@@ -250,6 +250,34 @@ fn a_check_id_with_a_line_break_is_refused_and_adds_no_output_key() {
     fs::remove_dir_all(aside(&repo)).unwrap_or_else(|e| unreachable!("{e}"));
 }
 
+const HOSTILE: [&str; 3] = [
+    "x\nother_key=evil",
+    "x\n::set-output name=other_key::evil",
+    "x\n::add-mask::secret",
+];
+
+fn only_known_keys(written: &str) -> bool {
+    written.lines().all(|line| {
+        ["plan_id", "run_key", "not_affected_jobs", "qualification_"]
+            .iter()
+            .any(|key| line.starts_with(key))
+    })
+}
+
+#[test]
+fn a_check_id_with_a_line_break_cannot_add_a_plan_output() {
+    for (index, id) in HOSTILE.iter().enumerate() {
+        let (repo, output) = planned_with_check(&format!("hostile-id-{index}"), id);
+        let written = fs::read_to_string(aside(&repo).join("outputs")).unwrap_or_default();
+        assert!(only_known_keys(&written), "{id:?}: {written}");
+        assert!(!written.contains("evil"), "{id:?}: {written}");
+        assert!(!written.contains("secret"), "{id:?}: {written}");
+        assert!(!output.status.success(), "{id:?}: {written}");
+        fs::remove_dir_all(&repo).unwrap_or_else(|e| unreachable!("{e}"));
+        fs::remove_dir_all(aside(&repo)).unwrap_or_else(|e| unreachable!("{e}"));
+    }
+}
+
 #[test]
 fn a_check_id_outside_the_identifier_alphabet_is_refused() {
     let case = data().join("pr-one-crate");
