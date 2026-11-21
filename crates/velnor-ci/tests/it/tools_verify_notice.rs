@@ -4,26 +4,36 @@
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 
-use sha2::{Digest, Sha256};
-use velnor_ci::image_candidate::hashing::hex;
+use velnor_ci::cache_version::{Compression, cache_version};
 
 use crate::tools_verify::{Job, discarded, job, recorded, rustc};
 
 const GZIP_VERSION: &str = "0e860ad0f6378509df797cde101e51911acafca877e9ef5e166e86d508c549da";
 const ZSTD_VERSION: &str = "0cccfb17094855db4c75b312ac9e0441b5c3cbdbccea182d94251e8142ff4640";
 const REPO: &str = "tailrocks/velnor-new";
+const TOOLS: [&str; 2] = ["~/.local/share/mise", "~/.rustup"];
 
-fn version(path: &str, compression: &str) -> String {
-    let text = format!("{path}|{compression}|1.0");
-    hex(&Sha256::digest(text.as_bytes()))
+fn tools_version() -> String {
+    cache_version(&TOOLS, Compression::detect())
 }
 
-fn zstd_on_path(job: &Job) -> String {
+fn anchor_entry_version(job: &Job) -> String {
+    let anchor = format!("{}/velnor-tools-anchor", job.root.display());
+    cache_version(&[anchor.as_str()], Compression::detect())
+}
+
+fn zstd_on_path(job: &Job, ran: &std::path::Path) -> String {
     let bin = job.root.join("zstd-bin");
     fs::create_dir_all(&bin).unwrap_or_else(|e| unreachable!("{e}"));
     let zstd = bin.join("zstd");
-    fs::write(&zstd, "#!/bin/sh\necho '*** Zstandard CLI v1.5.5'\n")
-        .unwrap_or_else(|e| unreachable!("{e}"));
+    fs::write(
+        &zstd,
+        format!(
+            "#!/bin/sh\necho ran > '{}'\necho '*** Zstandard CLI v1.5.5'\n",
+            ran.display()
+        ),
+    )
+    .unwrap_or_else(|e| unreachable!("{e}"));
     fs::set_permissions(&zstd, fs::Permissions::from_mode(0o755))
         .unwrap_or_else(|e| unreachable!("{e}"));
     bin.display().to_string()
@@ -73,7 +83,7 @@ fn a_poisoned_restore_names_its_cache_entry_and_the_command_that_deletes_it_by_i
     );
     assert!(stdout.contains("::notice::"), "{stdout}");
     assert!(
-        stdout.contains(&delete_entry("velnor-tools-abc123", GZIP_VERSION)),
+        stdout.contains(&delete_entry("velnor-tools-abc123", &tools_version())),
         "{stdout}"
     );
     assert!(!stdout.contains("gh cache delete"), "{stdout}");
@@ -81,29 +91,30 @@ fn a_poisoned_restore_names_its_cache_entry_and_the_command_that_deletes_it_by_i
 }
 
 #[test]
-fn the_version_follows_the_compression_the_cache_action_picks_on_this_runner() {
-    let job = job("tools-verify-named-zstd");
+fn a_zstd_on_the_path_is_never_run_while_the_notice_is_built() {
+    let job = job("tools-verify-zstd-on-path");
     let anchor = recorded(&job);
     fs::write(rustc(&job), "evil binary!").unwrap_or_else(|e| unreachable!("{e}"));
+    let ran = job.root.join("zstd-ran");
     let stdout = check_stdout(
         &job,
         &anchor,
         &[
             ("VELNOR_TOOLS_CACHE_KEY", "velnor-tools-abc123"),
-            ("PATH", &zstd_on_path(&job)),
+            ("PATH", &zstd_on_path(&job, &ran)),
         ],
     );
-    assert!(
-        stdout.contains(&delete_entry("velnor-tools-abc123", ZSTD_VERSION)),
-        "{stdout}"
-    );
+    assert!(!ran.exists(), "{stdout}");
 }
 
 #[test]
 fn the_pinned_versions_are_what_the_cache_service_stores_for_the_tools_paths() {
-    let paths = "~/.local/share/mise|~/.rustup";
-    assert_eq!(GZIP_VERSION, version(paths, "gzip"));
-    assert_eq!(ZSTD_VERSION, version(paths, "zstd-without-long"));
+    let paths = ["~/.local/share/mise", "~/.rustup"];
+    assert_eq!(GZIP_VERSION, cache_version(&paths, Compression::Gzip));
+    assert_eq!(
+        ZSTD_VERSION,
+        cache_version(&paths, Compression::ZstdWithoutLong)
+    );
 }
 
 #[test]
@@ -119,10 +130,7 @@ fn a_poisoned_restore_names_the_anchor_entry_that_feeds_the_check() {
             ("VELNOR_ANCHOR_CACHE_KEY", "velnor-tools-anchor-abc123"),
         ],
     );
-    let anchor_version = version(
-        &format!("{}/velnor-tools-anchor", job.root.display()),
-        "gzip",
-    );
+    let anchor_version = anchor_entry_version(&job);
     assert!(
         stdout.contains(&delete_entry("velnor-tools-anchor-abc123", &anchor_version)),
         "{stdout}"
@@ -137,10 +145,7 @@ fn a_malformed_anchor_names_the_anchor_entry_that_feeds_the_check() {
         "not-a-digest",
         &[("VELNOR_ANCHOR_CACHE_KEY", "velnor-tools-anchor-abc123")],
     );
-    let anchor_version = version(
-        &format!("{}/velnor-tools-anchor", job.root.display()),
-        "gzip",
-    );
+    let anchor_version = anchor_entry_version(&job);
     assert!(stdout.contains("the anchor is malformed"), "{stdout}");
     assert!(
         stdout.contains(&delete_entry("velnor-tools-anchor-abc123", &anchor_version)),
@@ -160,10 +165,7 @@ fn a_restored_malformed_anchor_names_the_anchor_entry_when_the_read_step_left_it
         "",
         &[("VELNOR_ANCHOR_CACHE_KEY", "velnor-tools-anchor-abc123")],
     );
-    let anchor_version = version(
-        &format!("{}/velnor-tools-anchor", job.root.display()),
-        "gzip",
-    );
+    let anchor_version = anchor_entry_version(&job);
     assert!(stdout.contains("the anchor is malformed"), "{stdout}");
     assert!(
         stdout.contains(&delete_entry("velnor-tools-anchor-abc123", &anchor_version)),
