@@ -272,7 +272,10 @@ impl StepKind {
             self,
             Self::CacheSave(_)
                 | Self::MbxRemote { .. }
-                | Self::ToolsLocal(ToolsLocalVerb::AnchorSave, _)
+                | Self::ToolsLocal(
+                    ToolsLocalVerb::AnchorSave | ToolsLocalVerb::AnchorSaveAttempt,
+                    _
+                )
         )
     }
 }
@@ -295,12 +298,14 @@ pub enum ToolsLocalVerb {
     AnchorReset,
     AnchorRestore,
     AnchorFind,
+    AnchorFindAttempt,
     AnchorRead,
     Verify,
     VerifyNamed,
     VerifyNamedAnchor,
     Record,
     AnchorSave,
+    AnchorSaveAttempt,
 }
 
 impl ToolsLocalVerb {
