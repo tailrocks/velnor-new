@@ -17,7 +17,7 @@ use velnor_gen::io::read_checkout;
 use velnor_model::RepoFacts;
 use velnor_rust::{detect, sha256_hex};
 
-use super::super::units::{UnitFile, Workspace, apart, unit_files};
+use super::super::units::{UnitFile, Workspace, apart, unchecked_unit_files};
 use super::groups::{group_dirs, inheriting, scan_dirs, shared_groups, standalone, workspaces};
 use super::inventory::{self, Evidence};
 use super::options::max_entries_from_env;
@@ -233,7 +233,7 @@ impl Builder<'_> {
     fn identities(&self) -> Result<Identities, CiError> {
         let mut before = BTreeMap::new();
         for directory in &self.directories {
-            for (unit, path) in unit_files(directory)? {
+            for (unit, path) in unchecked_unit_files(directory)? {
                 if output(&unit) {
                     before.insert(path.clone(), identity(&path)?);
                 }
@@ -246,7 +246,7 @@ impl Builder<'_> {
         self.workspaces
             .iter()
             .filter_map(|workspace| {
-                let root = fs::canonicalize(&workspace.workspace_root).ok()?;
+                let root = fs::canonicalize(&workspace.root).ok()?;
                 self.location
                     .starts_with(&root)
                     .then_some((root.components().count(), workspace))
@@ -321,7 +321,7 @@ impl Builder<'_> {
                     .and_then(|()| fs::write(&saved, &bytes))
                     .map_err(|e| CiError::new(format!("cannot save input inventory: {e}")))?;
             }
-            for (unit, file) in unit_files(directory)? {
+            for (unit, file) in unchecked_unit_files(directory)? {
                 if !output(&unit) {
                     continue;
                 }
