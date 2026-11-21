@@ -36,8 +36,7 @@ use std::process::{Command, Output};
 use crate::io::Repo;
 
 pub(super) fn command(program: impl AsRef<OsStr>) -> Command {
-    let mut command = Command::new(program);
-    crate::run::strip_nextest_environment(&mut command);
+    let mut command = crate::run::command_without_nextest_environment(program);
     command
         .env_remove("CARGO_TARGET_DIR")
         .env("MBX_BUILD_SCRIPT_EXECUTION", "0")

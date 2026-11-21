@@ -15,7 +15,7 @@ pub(crate) fn scratch(name: &str) -> PathBuf {
     dir
 }
 
-pub(crate) fn strip_nextest_environment(command: &mut Command) {
+fn strip_nextest_environment(command: &mut Command) {
     for (name, _) in std::env::vars_os() {
         if name.to_string_lossy().starts_with("NEXTEST_") {
             command.env_remove(name);
@@ -23,10 +23,14 @@ pub(crate) fn strip_nextest_environment(command: &mut Command) {
     }
 }
 
-pub(crate) fn velnor_ci_run() -> Command {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
+pub(crate) fn command_without_nextest_environment(program: impl AsRef<std::ffi::OsStr>) -> Command {
+    let mut command = Command::new(program);
     strip_nextest_environment(&mut command);
     command
+}
+
+pub(crate) fn velnor_ci_run() -> Command {
+    command_without_nextest_environment(env!("CARGO_BIN_EXE_velnor-ci"))
 }
 
 pub(crate) fn run(temp: &Path, command: &[&str]) -> Output {
