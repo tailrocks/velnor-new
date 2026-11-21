@@ -36,17 +36,6 @@ pub(super) fn refuse_parent(relative: &Path) -> Result<(), CiError> {
 
 pub(super) fn step_relative(relative: &Path, base: &Path) -> PathBuf {
     base.join(relative)
-        .components()
-        .fold(PathBuf::new(), |mut path, part| {
-            match part {
-                Component::ParentDir => {
-                    path.pop();
-                }
-                Component::CurDir => {}
-                other => path.push(other),
-            }
-            path
-        })
 }
 
 pub(super) fn refuse(workspace: &Workspace, metadata: &[u8]) -> Result<(), CiError> {

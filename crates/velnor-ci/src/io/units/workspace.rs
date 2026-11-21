@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::fs;
 use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
@@ -25,9 +26,17 @@ pub(in crate::io) fn build_unit_files(
     workspaces: &[Workspace],
     directory: &Path,
 ) -> Result<Vec<(UnitFile, PathBuf)>, CiError> {
-    if workspaces.iter().any(|workspace| {
-        workspace.target_directory == directory && workspace.build_directory == directory
-    }) {
+    let touching: Vec<&Workspace> = workspaces
+        .iter()
+        .filter(|workspace| {
+            workspace.target_directory == directory || workspace.build_directory == directory
+        })
+        .collect();
+    let plain = !touching.is_empty()
+        && touching.iter().all(|workspace| {
+            workspace.target_directory == directory && workspace.build_directory == directory
+        });
+    if plain {
         return unit_files(directory);
     }
     unchecked_unit_files(directory)
@@ -69,14 +78,19 @@ pub(in crate::io) fn unit_files_apart(
     Ok(found)
 }
 
+fn physical(path: PathBuf) -> PathBuf {
+    fs::canonicalize(&path).unwrap_or(path)
+}
+
 impl From<Printed> for Workspace {
     fn from(printed: Printed) -> Self {
+        let target_directory = physical(printed.target_directory);
         Self {
             build_directory: printed
                 .build_directory
-                .unwrap_or_else(|| printed.target_directory.clone()),
+                .map_or_else(|| target_directory.clone(), physical),
             root: printed.workspace_root,
-            target_directory: printed.target_directory,
+            target_directory,
         }
     }
 }

@@ -223,7 +223,7 @@ fn a_relative_build_directory_with_a_parent_component_is_refused_by_the_audit() 
 #[test]
 fn a_build_directory_through_a_symlink_and_a_parent_component_is_refused_before_cargo_reads_it() {
     let repo = workspace_below_the_root();
-    let outside = repo.root().join("../lnk-target/inner");
+    let outside = repo.root().join("rust/lnk-target/inner");
     fs::create_dir_all(&outside).unwrap_or_else(|e| unreachable!("{e}"));
     std::os::unix::fs::symlink(&outside, repo.root().join("rust/app/lnk"))
         .unwrap_or_else(|e| unreachable!("{e}"));
@@ -237,6 +237,32 @@ fn a_build_directory_through_a_symlink_and_a_parent_component_is_refused_before_
     refused_for_parent_component(&build, "lnk/../bd");
     assert!(!repo.root().join(".velnor/rust-inputs.lock").exists());
     assert!(!outside.parent().unwrap_or(&outside).join("bd").exists());
+}
+
+#[test]
+fn a_relative_build_directory_through_a_symlink_is_audited_where_cargo_writes_it() {
+    let repo = workspace_below_the_root();
+    let target = repo.root().join("rust/lnk-target");
+    fs::create_dir_all(&target).unwrap_or_else(|e| unreachable!("{e}"));
+    std::os::unix::fs::symlink(&target, repo.root().join("rust/app/lnk"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let built = from_step_directory(
+        &repo,
+        "lnk/bd",
+        &["inputs", "build", "--", "cargo", "build", "--workspace", "--all-targets"],
+    );
+    assert!(built.status.success(), "{built:?}");
+    assert!(target.join("bd/debug").is_dir(), "{built:?}");
+    let through_link = from_step_directory(&repo, "lnk/bd", &["inputs", "audit", "--write"]);
+    assert!(through_link.status.success(), "{through_link:?}");
+    let direct = target.join("bd").display().to_string();
+    let direct = from_step_directory(&repo, &direct, &["inputs", "audit", "--write"]);
+    assert!(direct.status.success(), "{direct:?}");
+    assert_eq!(through_link.stdout, direct.stdout);
+    assert!(
+        !String::from_utf8_lossy(&through_link.stdout).contains("from 0 unit files"),
+        "{through_link:?}"
+    );
 }
 
 #[test]

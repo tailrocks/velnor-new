@@ -24,7 +24,7 @@ mod workspace;
 
 pub(super) use build_dir::refuse_arguments;
 pub(super) use separation::apart;
-pub(super) use workspace::{build_unit_files, unit_files_apart};
+pub(super) use workspace::{build_unit_files, unchecked_unit_files, unit_files_apart};
 
 const MAX_TARGET_DEPTH: usize = 64;
 /// A target directory after a full build and test run holds one directory per

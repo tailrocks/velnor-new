@@ -32,3 +32,45 @@ fn a_plain_target_with_units_builds_without_refusal() {
         .unwrap_or_else(|e| unreachable!("{e}"));
     assert!(built.status.success(), "{built:?}");
 }
+
+#[test]
+fn a_failed_command_that_leaves_output_and_no_unit_reports_its_own_failure() {
+    let repo = workspace_below_the_root();
+    let failed = velnor_ci()
+        .current_dir(repo.root())
+        .args([
+            "inputs",
+            "build",
+            "--",
+            "sh",
+            "-c",
+            "mkdir -p rust/target/debug && : > rust/target/debug/libapp.rlib && exit 3",
+        ])
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(failed.status.code(), Some(1), "{failed:?}");
+    let stderr = String::from_utf8_lossy(&failed.stderr);
+    assert!(
+        stderr.contains("build command failed") && !stderr.contains("unknown cargo layout?"),
+        "{stderr}"
+    );
+}
+
+#[test]
+fn a_plain_target_named_through_a_parent_component_is_refused_before_the_layout_check() {
+    let repo = workspace_below_the_root();
+    std::fs::create_dir_all(repo.root().join("scratch")).unwrap_or_else(|e| unreachable!("{e}"));
+    unit(&repo, "rust/target/debug/libapp.rlib", "");
+    let refused = velnor_ci()
+        .current_dir(repo.root())
+        .env("CARGO_BUILD_BUILD_DIR", "scratch/../rust/target")
+        .args(["inputs", "build", "--", "true"])
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(refused.status.code(), Some(1), "{refused:?}");
+    let stderr = String::from_utf8_lossy(&refused.stderr);
+    assert!(
+        stderr.contains("CARGO_BUILD_BUILD_DIR=scratch/../rust/target is relative and contains `..`"),
+        "{stderr}"
+    );
+}
