@@ -85,12 +85,37 @@ if [ ! -e "$STUB_RACE_MARK" ]; then
         : > "$STUB_RACE_MARK"; mkdir -p "$STUB_TARGET"; ln -s "$STUB_TARGET" "$arg"; break ;;
     esac
   done
-  if [ -n "$STUB_FOLLOW" ]; then
-    for arg; do src="$dst"; dst="$arg"; done
-    exec "$REAL_MV" -f "$src" "$dst"
-  fi
+  for arg; do src="$dst"; dst="$arg"; done
+  exec "$REAL_MV" -f "$src" "$dst"
 fi
 exec "$REAL_MV" "$@"
+"""
+
+STUB_REPLANTING_RM = """#!/bin/sh
+for arg; do last="$arg"; done
+"$REAL_RM" "$@" || exit $?
+case "$last" in */velnor-ci-x86_64-unknown-linux-musl.tar.gz) mkdir -p "$last" ;; esac
+"""
+
+STUB_REPLANTING_EVICT_MV = """#!/bin/sh
+for arg; do last="$arg"; done
+"$REAL_MV" "$@" || exit $?
+case "$last" in
+  *.velnor-ci.evict.*)
+    if [ ! -e "$STUB_RACE_MARK" ]; then
+      : > "$STUB_RACE_MARK"
+      mkdir -p "$STUB_ENTRY"
+    fi ;;
+esac
+"""
+
+STUB_GARBAGE_FIRST_HEAD = """#!/bin/sh
+if [ ! -e "$STUB_HEAD_MARK" ]; then
+  : > "$STUB_HEAD_MARK"
+  printf 'garbage\\n'
+  exit 0
+fi
+exec "$REAL_HEAD" "$@"
 """
 
 STUB_PLANT_PID_QUARANTINE_MV = """#!/bin/sh
@@ -181,6 +206,80 @@ esac
 exec "$REAL_MV" "$@"
 """
 
+MV_PASS_THROUGH = """#!/bin/sh
+exec "{real}" "$@"
+"""
+
+MV_COMPAT = """#!/bin/sh
+case "$1 $2" in
+  "-f -T" | "-n -T")
+    mode=$1
+    shift 2
+    if [ -L "$2" ]; then
+      [ "$mode" = -n ] && exit 1
+      "{rm}" -f -- "$2" || exit 1
+    elif [ -d "$2" ]; then
+      echo "mv: cannot overwrite directory $2 with a non-directory" >&2
+      exit 1
+    elif [ "$mode" = -n ] && [ -e "$2" ]; then
+      exit 1
+    fi
+    exec "{real}" "$mode" "$1" "$2" ;;
+esac
+exec "{real}" "$@"
+"""
+
+
+def host_mv_supports_no_target_directory():
+    with tempfile.TemporaryDirectory() as probe:
+        source, target = Path(probe) / "source", Path(probe) / "target"
+        source.touch()
+        target.touch()
+        return subprocess.run(["mv", "-f", "-T", str(source), str(target)], capture_output=True).returncode == 0
+
+
+HOST_MV_HAS_T = host_mv_supports_no_target_directory()
+
+STUB_PLANTING_PUBLISH_MV = """#!/bin/sh
+for arg; do last="$arg"; done
+if [ "$last" = "$STUB_ENTRY" ] && [ ! -e "$STUB_RACE_MARK" ]; then
+  : > "$STUB_RACE_MARK"
+  mkdir -p "$STUB_ENTRY"
+fi
+exec "$REAL_MV" "$@"
+"""
+
+STUB_PLANTING_RESTORE_MV = """#!/bin/sh
+for arg; do last="$arg"; done
+if [ "$last" = "$STUB_ENTRY" ] && [ "$1" = -n ] && [ ! -e "$STUB_RACE_MARK" ]; then
+  : > "$STUB_RACE_MARK"
+  mkdir -p "$STUB_ENTRY"
+fi
+exec "$REAL_MV" "$@"
+"""
+
+STUB_PLANTING_EVICTION_MV = """#!/bin/sh
+for arg; do last="$arg"; done
+case "$last" in
+  *.velnor-ci.evict.*)
+    if [ ! -e "$STUB_RACE_MARK" ]; then
+      : > "$STUB_RACE_MARK"
+      mkdir -p -- "$last"
+    fi ;;
+esac
+exec "$REAL_MV" "$@"
+"""
+
+STUB_PLANTING_SYMLINK_PUBLISH_MV = """#!/bin/sh
+for arg; do last="$arg"; done
+if [ "$last" = "$STUB_ENTRY" ] && [ ! -e "$STUB_RACE_MARK" ]; then
+  : > "$STUB_RACE_MARK"
+  mkdir -p "$STUB_TARGET"
+  ln -s "$STUB_TARGET" "$STUB_ENTRY"
+fi
+exec "$REAL_MV" "$@"
+"""
+
 WATCHED_TOOLS = (
     "cat", "head", "tail", "dd", "cp", "od", "xxd", "hexdump", "sha256sum", "shasum", "tar", "gzip", "zcat",
     "wc", "awk", "sed", "grep", "base64", "strings", "openssl", "find", "mv", "rm",
@@ -268,6 +367,12 @@ class SetupVelnorInstallTests(unittest.TestCase):
             stub = self.stub_bin / name
             stub.write_text(body)
             stub.chmod(0o755)
+        self.mv_compat = self.root / "mv-compat"
+        shim = MV_PASS_THROUGH if HOST_MV_HAS_T else MV_COMPAT
+        self.mv_compat.write_text(shim.replace("{real}", shutil.which("mv")).replace("{rm}", shutil.which("rm")))
+        self.mv_compat.chmod(0o755)
+        (self.stub_bin / "mv").write_text(self.mv_compat.read_text())
+        (self.stub_bin / "mv").chmod(0o755)
 
     def path_with(self, digest_tool):
         if shutil.which(digest_tool) is None:
@@ -275,7 +380,7 @@ class SetupVelnorInstallTests(unittest.TestCase):
         bin_dir = self.root / f"path-{digest_tool}"
         bin_dir.mkdir()
         for name in (*SCRIPT_TOOLS, digest_tool):
-            (bin_dir / name).symlink_to(shutil.which(name))
+            (bin_dir / name).symlink_to(self.mv_compat if name == "mv" else shutil.which(name))
         (bin_dir / "curl").symlink_to(self.stub_bin / "curl")
         (bin_dir / "tar").symlink_to(self.stub_bin / "tar")
         return str(bin_dir)
@@ -725,7 +830,7 @@ class SetupVelnorInstallTests(unittest.TestCase):
             handle.truncate(268435457)
         read_log = self.root / "store-entry-calls.log"
         for name in WATCHED_TOOLS:
-            real = shutil.which(name)
+            real = str(self.mv_compat) if name == "mv" else shutil.which(name)
             if real is None:
                 continue
             stub = self.stub_bin / name
@@ -756,7 +861,7 @@ class SetupVelnorInstallTests(unittest.TestCase):
         extra_env = {
             "STUB_RACE": str(self.payload),
             "STUB_RACE_MARK": str(self.root / "race-mark"),
-            "REAL_MV": shutil.which("mv"),
+            "REAL_MV": str(self.mv_compat),
             "STUB_MISSING": "tools-v0.1.79 rust-ci-v0.1.79",
         }
         first = self.install(sha256(self.archive), extra_env=extra_env)
@@ -782,7 +887,7 @@ class SetupVelnorInstallTests(unittest.TestCase):
             extra_env={
                 "STUB_RACE": str(self.payload),
                 "STUB_RACE_MARK": str(self.root / "race-mark"),
-                "REAL_MV": shutil.which("mv"),
+                "REAL_MV": str(self.mv_compat),
                 "STUB_MISSING": "tools-v0.1.79 rust-ci-v0.1.79",
             },
         )
@@ -814,7 +919,7 @@ class SetupVelnorInstallTests(unittest.TestCase):
             extra_env={
                 "STUB_RACE": str(self.payload),
                 "STUB_RACE_MARK": str(self.root / "race-mark"),
-                "REAL_MV": shutil.which("mv"),
+                "REAL_MV": str(self.mv_compat),
                 "STUB_MISSING": "tools-v0.1.79 rust-ci-v0.1.79",
             },
         )
@@ -847,7 +952,7 @@ class SetupVelnorInstallTests(unittest.TestCase):
             extra_env={
                 "STUB_RACE": str(self.payload),
                 "STUB_RACE_MARK": str(self.root / "race-mark"),
-                "REAL_MV": shutil.which("mv"),
+                "REAL_MV": str(self.mv_compat),
                 "STUB_MISSING": "tools-v0.1.79 rust-ci-v0.1.79",
             },
         )
@@ -899,6 +1004,32 @@ class SetupVelnorInstallTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1, result.output)
         self.assertFalse(cached.exists(), "a mismatched store entry survived because eviction needed a new file")
 
+    def test_a_directory_planted_at_the_eviction_quarantine_path_does_not_receive_the_evicted_archive(self):
+        cached = self.cached_archive()
+        cached.parent.mkdir(parents=True)
+        cached.write_bytes(b"tampered archive\n")
+        stub_mv = self.stub_bin / "mv"
+        stub_mv.write_text(STUB_PLANTING_EVICTION_MV)
+        stub_mv.chmod(0o755)
+        result = self.install(
+            sha256(self.archive),
+            extra_env={
+                "REAL_MV": str(self.mv_compat),
+                "STUB_ENTRY": str(cached),
+                "STUB_RACE_MARK": str(self.root / "race-mark"),
+            },
+        )
+        self.assertTrue((self.root / "race-mark").exists(), result.output)
+        self.assertEqual(result.returncode, 0, result.output)
+        self.assertIn(
+            f"::warning title=setup-velnor::could not remove the tool-cache copy of {ARCHIVE} for velnor-ci 0.1.79",
+            result.output,
+        )
+        self.assertEqual(self.installed_binary().read_bytes(), PAYLOAD)
+        self.assertEqual(cached.read_bytes(), self.archive, "the store entry was not refreshed with the verified archive")
+        nested = [path for path in cached.parent.rglob("*") if path.is_file() and path.parent != cached.parent]
+        self.assertEqual(nested, [], "the evicted archive was moved inside the directory planted at the quarantine path")
+
     def test_a_healthy_store_entry_that_cannot_be_copied_to_the_runner_temp_directory_is_kept(self):
         cached = self.cached_archive()
         cached.parent.mkdir(parents=True)
@@ -948,7 +1079,7 @@ class SetupVelnorInstallTests(unittest.TestCase):
             extra_env={
                 "STUB_RACE": str(self.payload),
                 "STUB_RACE_MARK": str(self.root / "race-mark"),
-                "REAL_MV": shutil.which("mv"),
+                "REAL_MV": str(self.mv_compat),
                 "STUB_MISSING": "tools-v0.1.79 rust-ci-v0.1.79",
             },
         )
@@ -1016,7 +1147,7 @@ class SetupVelnorInstallTests(unittest.TestCase):
             extra_env={
                 "STUB_ORDER_LOG": str(order),
                 "STUB_SYNCED": str(synced),
-                "REAL_MV": shutil.which("mv"),
+                "REAL_MV": str(self.mv_compat),
             },
         )
         self.assertEqual(result.returncode, 0, result.output)
@@ -1032,7 +1163,7 @@ class SetupVelnorInstallTests(unittest.TestCase):
         self.assertEqual(synced.read_bytes(), self.archive, "the flushed bytes are not the complete archive")
         self.assertEqual(self.cached_archive().read_bytes(), self.archive)
 
-    def plant_symlink_before_publish(self, follow):
+    def plant_symlink_before_publish(self):
         target = self.root / "attacker-target"
         stub = self.stub_bin / "mv"
         stub.write_text(STUB_PLANTING_MV)
@@ -1042,27 +1173,117 @@ class SetupVelnorInstallTests(unittest.TestCase):
             extra_env={
                 "STUB_TARGET": str(target),
                 "STUB_RACE_MARK": str(self.root / "race-mark"),
-                "STUB_FOLLOW": "1" if follow else "",
-                "REAL_MV": shutil.which("mv"),
+                "REAL_MV": str(self.mv_compat),
             },
         )
         return result, target
 
-    def test_a_symlink_planted_at_the_store_entry_path_before_the_rename_is_replaced_not_followed(self):
-        result, target = self.plant_symlink_before_publish(follow=False)
-        self.assertEqual(result.returncode, 0, result.output)
-        self.assertEqual(installed_files(target), [], "the verified copy was published into the symlink target")
-        cached = self.cached_archive()
-        self.assertTrue(cached.is_file() and not cached.is_symlink(), "the store entry is not a regular file")
-        self.assertEqual(cached.read_bytes(), self.archive)
-        self.assertEqual(self.installed_binary().read_bytes(), PAYLOAD)
-
     def test_a_rename_that_follows_a_planted_symlink_is_not_reported_as_installed_in_the_store(self):
-        result, target = self.plant_symlink_before_publish(follow=True)
+        result, target = self.plant_symlink_before_publish()
         self.assertEqual(result.returncode, 0, result.output)
         self.assertIn("could not publish velnor-ci 0.1.79 to the tool cache", result.output)
         self.assertNotIn(f"installed velnor-ci 0.1.79 in {self.cached_archive().parent}", result.output)
         self.assertIn(f"installed velnor-ci 0.1.79 in {self.runner_temp}/velnor-ci-bin", result.output)
+        self.assertEqual(self.installed_binary().read_bytes(), PAYLOAD)
+
+    def test_a_directory_planted_at_the_store_entry_path_makes_publish_fail_and_is_not_moved_into(self):
+        stub = self.stub_bin / "rm"
+        stub.write_text(STUB_REPLANTING_RM)
+        stub.chmod(0o755)
+        cached = self.cached_archive()
+        cached.mkdir(parents=True)
+        result = self.install(sha256(self.archive), extra_env={"REAL_RM": shutil.which("rm")})
+        self.assertEqual(result.returncode, 0, result.output)
+        self.assertEqual(installed_files(cached), [], "the verified copy was moved inside the directory at the store entry path")
+        self.assertIn("could not publish velnor-ci 0.1.79 to the tool cache", result.output)
+        self.assertEqual(self.installed_binary().read_bytes(), PAYLOAD)
+
+    def test_a_verified_copy_evicted_while_a_directory_is_planted_at_the_store_entry_path_is_kept(self):
+        cached = self.cached_archive()
+        cached.parent.mkdir(parents=True)
+        cached.write_bytes(self.archive)
+        stub_head = self.stub_bin / "head"
+        stub_head.write_text(STUB_GARBAGE_FIRST_HEAD)
+        stub_head.chmod(0o755)
+        stub_mv = self.stub_bin / "mv"
+        stub_mv.write_text(STUB_REPLANTING_EVICT_MV)
+        stub_mv.chmod(0o755)
+        result = self.install(
+            sha256(self.archive),
+            extra_env={
+                "REAL_MV": str(self.mv_compat),
+                "STUB_ENTRY": str(cached),
+                "STUB_RACE_MARK": str(self.root / "race-mark"),
+                "STUB_HEAD_MARK": str(self.root / "head-mark"),
+            },
+        )
+        self.assertEqual(result.returncode, 0, result.output)
+        self.assertIn("because the store entry path is taken", result.output)
+        self.assertEqual(self.installed_binary().read_bytes(), PAYLOAD)
+
+    def test_a_directory_planted_between_the_check_and_the_publish_rename_is_not_moved_into(self):
+        stub = self.stub_bin / "mv"
+        stub.write_text(STUB_PLANTING_PUBLISH_MV)
+        stub.chmod(0o755)
+        cached = self.cached_archive()
+        result = self.install(
+            sha256(self.archive),
+            extra_env={
+                "REAL_MV": str(self.mv_compat),
+                "STUB_ENTRY": str(cached),
+                "STUB_RACE_MARK": str(self.root / "race-mark"),
+            },
+        )
+        self.assertEqual(result.returncode, 0, result.output)
+        self.assertEqual(installed_files(cached), [], "the verified copy was moved inside the directory planted at the store entry path")
+        self.assertIn("could not publish velnor-ci 0.1.79 to the tool cache", result.output)
+        self.assertEqual(self.installed_binary().read_bytes(), PAYLOAD)
+
+    def test_a_directory_planted_between_the_eviction_and_the_restore_does_not_receive_the_verified_copy(self):
+        cached = self.cached_archive()
+        cached.parent.mkdir(parents=True)
+        cached.write_bytes(self.archive)
+        stub_head = self.stub_bin / "head"
+        stub_head.write_text(STUB_GARBAGE_FIRST_HEAD)
+        stub_head.chmod(0o755)
+        stub_mv = self.stub_bin / "mv"
+        stub_mv.write_text(STUB_PLANTING_RESTORE_MV)
+        stub_mv.chmod(0o755)
+        result = self.install(
+            sha256(self.archive),
+            extra_env={
+                "REAL_MV": str(self.mv_compat),
+                "STUB_ENTRY": str(cached),
+                "STUB_RACE_MARK": str(self.root / "race-mark"),
+                "STUB_HEAD_MARK": str(self.root / "head-mark"),
+            },
+        )
+        self.assertEqual(result.returncode, 0, result.output)
+        self.assertEqual(installed_files(cached), [], "the verified copy was restored inside the directory planted at the store entry path")
+        self.assertIn("because the store entry path is taken", result.output)
+        kept = [path for path in cached.parent.glob(".velnor-ci.evict.*") if path.is_file()]
+        self.assertEqual([path.read_bytes() for path in kept], [self.archive])
+        self.assertEqual(self.installed_binary().read_bytes(), PAYLOAD)
+
+    def test_a_symlink_planted_at_the_store_entry_path_before_the_publish_rename_is_replaced_not_followed(self):
+        target = self.root / "attacker-target"
+        stub = self.stub_bin / "mv"
+        stub.write_text(STUB_PLANTING_SYMLINK_PUBLISH_MV)
+        stub.chmod(0o755)
+        cached = self.cached_archive()
+        result = self.install(
+            sha256(self.archive),
+            extra_env={
+                "REAL_MV": str(self.mv_compat),
+                "STUB_ENTRY": str(cached),
+                "STUB_TARGET": str(target),
+                "STUB_RACE_MARK": str(self.root / "race-mark"),
+            },
+        )
+        self.assertEqual(result.returncode, 0, result.output)
+        self.assertEqual(installed_files(target), [], "the verified copy was moved through the symlink planted at the store entry path")
+        self.assertTrue(cached.is_file() and not cached.is_symlink(), "the symlink at the store entry path was not replaced")
+        self.assertEqual(cached.read_bytes(), self.archive)
         self.assertEqual(self.installed_binary().read_bytes(), PAYLOAD)
 
 
