@@ -167,6 +167,7 @@ pub enum StepKind {
         caches: Vec<CacheKey>,
         nextest_artifacts: bool,
         node_tools: ToolsTelemetry,
+        saved_keys: bool,
         not_generated: Option<String>,
         unsuppressed: Vec<CacheKey>,
     },
