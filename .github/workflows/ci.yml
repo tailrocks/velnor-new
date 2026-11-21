@@ -135,6 +135,13 @@ jobs:
             echo "the check accepted a helper-gate marker inside a string literal" >&2
             exit 1
           fi
+          for f in gate-string-marker-semicolon gate-string-marker-comma gate-string-marker-brace-open gate-string-marker-brace-close; do
+            if bash scripts/check-helper-gates.sh --diff "$fixtures/$f.diff" --current 0.1.110; then
+              echo "the check accepted a helper-gate marker after a character inside a string literal: $f" >&2
+              exit 1
+            fi
+          done
+          bash scripts/check-helper-gates.sh --diff "$fixtures/gate-marker-after-string.diff" --current 0.1.110
           if bash scripts/check-helper-gates.sh --diff "$fixtures/gate-marker-malformed.diff" --current 0.1.110; then
             echo "the check accepted a malformed marker comment" >&2
             exit 1

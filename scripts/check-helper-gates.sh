@@ -122,10 +122,21 @@ scan() {
     }
     return n
   }
+  function in_string(s,    i, c, n, sq) {
+    sq = sprintf("%c", 39)
+    n = 0
+    for (i = 1; i <= length(s); i++) {
+      c = substr(s, i, 1)
+      if (c == "\\") { i++; continue }
+      if (c == sq && substr(s, i + 1, 1) == "\"" && substr(s, i + 2, 1) == sq) { i += 2; continue }
+      if (c == "\"") n++
+    }
+    return n % 2
+  }
   function marker(line, out,    m, pre) {
     if (!match(line, /helper-gate: first in (tools|rust-ci)-v0\.1\.[0-9]+ via [^ ]+/)) return 0
     pre = substr(line, 1, RSTART - 1)
-    if (pre !~ /^[ \t]*(\/\/|\/\*|\*)/ && pre !~ /[;,{}][ \t]*\/\/[^"]*$/) return 0
+    if (pre !~ /^[ \t]*(\/\/|\/\*|\*)/ && !(pre ~ /[;,{}][ \t]*\/\/[^"]*$/ && !in_string(pre))) return 0
     m = substr(line, RSTART, RLENGTH)
     match(m, /0\.1\.[0-9]+/)
     out["n"] = substr(m, RSTART + 4, RLENGTH - 4)
