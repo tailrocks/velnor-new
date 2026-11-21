@@ -15,7 +15,7 @@ const FROM_SOURCE: &str = "[[lint]]\nkind = 'generated-check'\nfrom_source = tru
 const ID: &str = "lint-generated-check";
 const CHECK_FROM_SOURCE: &str = "cargo run --locked --manifest-path Cargo.toml --target \"$VELNOR_GEN_TARGET\" --package velnor-gen -- check --verify-release";
 const NESTED: &str = "tools/gen/Cargo.toml";
-const FIRST: &str = "0.1.111";
+const FIRST: &str = "0.1.112";
 const STORE: &str = "MBX_CACHE_DIR=$RUNNER_TEMP/mbx";
 const MIRROR: &str = "[crates_mirror]\nrunner = 'mirror-box'\nregistry = 'sparse+https://crates-mirror.velnor-system.svc.cluster.local/index/'\ncainfo = '/opt/velnor/crates-mirror/ca-bundle.pem'\n";
 
