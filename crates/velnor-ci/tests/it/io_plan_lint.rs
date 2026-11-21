@@ -1,8 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::cell::Cell;
+use std::collections::BTreeSet;
 use std::fs;
 use std::os::unix::fs::symlink;
+
+use velnor_model::{PathGlob, RepoPath};
+use velnor_rust::unmatched_entries;
 
 use crate::io::Repo;
 use crate::io_plan::{plan_command, plan_repo};
@@ -167,4 +172,161 @@ fn plan_reports_no_lint_line_for_a_lint_that_runs() {
     let text = fs::read_to_string(&summary).unwrap_or_else(|e| unreachable!("{e}"));
     assert!(!text.contains("lint-hk"), "{text}");
     assert!(!String::from_utf8_lossy(&output.stdout).contains("left out: lint-hk"));
+}
+
+fn folder_repo(name: &str, inputs: &str) -> Repo {
+    let repo = lint_repo(name);
+    repo.write_all(&[
+        (
+            ".velnor/rust-ci.toml",
+            &format!("[[lint]]\nkind = 'mise-task'\nid = 'hk'\ntask = 'hk'\ninputs = {inputs}\n"),
+        ),
+        ("cfg/hk.pkl", "x\n"),
+        ("cfg/sub/deep.pkl", "x\n"),
+        ("cfgx/other.pkl", "x\n"),
+    ]);
+    repo
+}
+
+#[test]
+fn plan_runs_a_lint_whose_input_is_a_folder_when_a_file_below_it_changed() {
+    let repo = folder_repo("lint-folder-run", "['cfg']");
+    for changed in ["cfg/hk.pkl", "cfg/sub/deep.pkl"] {
+        assert_eq!(
+            lint_lines(&repo, Some("pull_request"), &[changed]),
+            "lint_hk=run ",
+            "{changed}"
+        );
+    }
+}
+
+#[test]
+fn plan_skips_a_lint_whose_input_is_a_folder_when_only_a_sibling_prefix_changed() {
+    let repo = folder_repo("lint-folder-skip", "['cfg']");
+    assert_eq!(
+        lint_lines(&repo, Some("pull_request"), &["cfgx/other.pkl"]),
+        "lint_hk=skip "
+    );
+}
+
+#[test]
+fn plan_runs_a_lint_none_of_whose_inputs_matches_a_tracked_file() {
+    let repo = folder_repo("lint-dead-inputs", "['cfgg', 'nothing/**', 'a/*/x.yml']");
+    assert_eq!(
+        lint_lines(&repo, Some("pull_request"), &["a/src/lib.rs"]),
+        "lint_hk=run "
+    );
+}
+
+#[test]
+fn plan_still_skips_a_lint_when_only_an_optional_input_is_untracked() {
+    let repo = folder_repo("lint-optional-input", "['cfg/hk.pkl', 'cfg/hk.local.pkl']");
+    assert_eq!(
+        lint_lines(&repo, Some("pull_request"), &["a/src/lib.rs"]),
+        "lint_hk=skip "
+    );
+}
+
+#[test]
+fn a_lint_input_with_a_question_mark_or_a_bracket_is_refused_at_config_load() {
+    for inputs in [
+        "['cfg/h?.pkl', 'mise.toml']",
+        "['cfg/h[k].pkl', 'mise.toml']",
+    ] {
+        let repo = folder_repo("lint-glob-refused", inputs);
+        let text = velnor_gen::io::write_metadata(repo.root())
+            .err()
+            .unwrap_or_else(|| unreachable!("the config with {inputs} was accepted"))
+            .to_string();
+        assert!(
+            text.contains("only * and ** are supported"),
+            "{inputs}: {text}"
+        );
+    }
+}
+
+#[test]
+fn plan_explain_warns_about_an_input_that_matches_no_tracked_file_and_keeps_the_decision() {
+    let repo = folder_repo("lint-typo-warning", "['cfg/hk.pkl', 'cfgg/hk.pkl']");
+    let summary = repo.root().join("summary");
+    fs::write(&summary, "").unwrap_or_else(|e| unreachable!("{e}"));
+    let output = plan_command(&repo)
+        .args(["plan", "--explain", "--changed", "a/src/lib.rs"])
+        .env("GITHUB_EVENT_NAME", "pull_request")
+        .env("GITHUB_STEP_SUMMARY", &summary)
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(output.status.success(), "{output:?}");
+    let explained = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        explained
+            .contains("warning: lint-hk: inputs entry \"cfgg/hk.pkl\" matches no tracked file\n"),
+        "{explained}"
+    );
+    assert!(!explained.contains("cfg/hk.pkl\" matches"), "{explained}");
+    assert_eq!(
+        lint_lines(&repo, Some("pull_request"), &["a/src/lib.rs"]),
+        "lint_hk=skip "
+    );
+}
+
+#[test]
+fn plan_explain_does_not_warn_about_an_input_of_a_lint_that_runs_on_a_changed_input() {
+    let repo = folder_repo("lint-typo-runs", "['cfg/hk.pkl', 'cfgg/hk.pkl']");
+    let summary = repo.root().join("summary");
+    fs::write(&summary, "").unwrap_or_else(|e| unreachable!("{e}"));
+    let output = plan_command(&repo)
+        .args(["plan", "--explain", "--changed", "cfg/hk.pkl"])
+        .env("GITHUB_EVENT_NAME", "pull_request")
+        .env("GITHUB_STEP_SUMMARY", &summary)
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(output.status.success(), "{output:?}");
+    let explained = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        !explained.contains("matches no tracked file"),
+        "{explained}"
+    );
+    assert_eq!(
+        lint_lines(&repo, Some("pull_request"), &["cfg/hk.pkl"]),
+        "lint_hk=run "
+    );
+}
+
+#[test]
+fn unmatched_inputs_take_one_pass_over_the_tracked_paths() {
+    let tracked: BTreeSet<RepoPath> = (0..20_000)
+        .map(|i| {
+            RepoPath::new(format!("lint{}/src/{i}.rs", i % 120))
+                .unwrap_or_else(|e| unreachable!("{e}"))
+        })
+        .collect();
+    let entries: Vec<(usize, PathGlob)> = (0..120)
+        .map(|k| {
+            let folder = if k % 2 == 0 {
+                format!("lint{k}")
+            } else {
+                format!("typo{k}")
+            };
+            (
+                k,
+                PathGlob::new(folder).unwrap_or_else(|e| unreachable!("{e}")),
+            )
+        })
+        .collect();
+    let calls = Cell::new(0_usize);
+    let unmatched = unmatched_entries(entries, &tracked, |glob, path| {
+        calls.set(calls.get() + 1);
+        path.as_str()
+            .strip_prefix(glob.as_str())
+            .is_some_and(|rest| rest.is_empty() || rest.starts_with('/'))
+    });
+    let names: Vec<usize> = unmatched.iter().map(|(k, _)| *k).collect();
+    assert_eq!(names, (0..120).filter(|k| k % 2 == 1).collect::<Vec<_>>());
+    assert!(
+        calls.get() <= tracked.len(),
+        "{} matcher calls for {} tracked paths",
+        calls.get(),
+        tracked.len()
+    );
 }
