@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    ArtifactWhen, CacheKey, CargoCommand, FilterRef, GroupFilter, GroupUpload, Host, Job, JobId,
-    NoTests, PrepareLocks, Step, StepKind, TestGroup, TestNeed, When,
+    ArtifactWhen, BaseScope, CacheKey, CargoCommand, FilterRef, GroupFilter, GroupUpload, Host,
+    Job, JobId, NoTests, PrepareLocks, Step, StepKind, TestGroup, TestNeed, When,
 };
 
 use super::{ARCHIVE_FILE, ARCHIVE_ID, RootJobs};
@@ -62,7 +62,7 @@ impl RootJobs<'_> {
             true,
         ));
         let mut jobs = vec![
-            self.inline_lanes_timeout(self.lane_job(build_id.clone(), build)),
+            self.inline_lanes_timeout(self.lane_job(build_id.clone(), build, true)),
             self.archive_runner(
                 self.id(DEFAULT_GROUP_JOB),
                 &build_id,
@@ -150,11 +150,13 @@ impl RootJobs<'_> {
             step(StepKind::CacheRestore(CacheKey::Sources {
                 host: Host,
                 lane: cache_root.clone(),
+                scope: BaseScope::Shared,
             })),
             step(StepKind::CacheRestore(CacheKey::Target {
                 job: build_id.clone(),
                 root: cache_root,
                 host: Host,
+                scope: BaseScope::Shared,
             })),
         ]
         .into_iter()
@@ -242,6 +244,7 @@ impl RootJobs<'_> {
                 name: "Check that Docker answers".to_owned(),
                 run: "docker info".to_owned(),
                 before_build: false,
+                offline_after_private_fetch: false,
             }));
         }
         steps.extend(
@@ -267,7 +270,7 @@ impl RootJobs<'_> {
                 .into_iter()
                 .flat_map(|group| self.artifact_steps(group, partition)),
         );
-        let mut job = self.lane_job(id, steps);
+        let mut job = self.lane_job(id, steps, false);
         if let Some(group) = group.filter(|group| group.selects()) {
             job.gate = self.lane.group_job(group.name.clone()).or(job.gate);
         }

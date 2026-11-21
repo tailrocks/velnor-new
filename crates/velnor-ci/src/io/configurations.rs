@@ -103,14 +103,13 @@ fn report_targets(configurations: &[Configuration], resolutions: &[ResolvedFeatu
 fn cargo(manifest: &Path, configuration: &Configuration, operation: &str) -> Command {
     let mut command = Command::new("cargo");
     command.arg(operation);
+    super::mbx_reports::assign(&mut command, &["cargo".to_owned(), operation.to_owned()]);
     if operation == "metadata" {
         command.args(["--format-version", "1"]);
     } else {
         command.args(["--workspace", "--all-targets"]);
     }
-    command
-        .args(["--locked", "--offline", "--manifest-path"])
-        .arg(manifest);
+    command.args(["--locked", "--manifest-path"]).arg(manifest);
     if configuration.no_default_features {
         command.arg("--no-default-features");
     }

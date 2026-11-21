@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs;
-use std::os::unix::fs::{MetadataExt, symlink};
+use std::os::unix::fs::symlink;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 use velnor_ci::tools_local::{Inputs, Outcome, Verb, run};
 use velnor_ci::tools_verify::{Anchor, Recording, Verdict, check, digest, record};
@@ -67,7 +68,7 @@ fn go(node: &Node, verb: Verb, home: &Path) -> Outcome {
         shared_dir: Some(&store),
         seed_dir: Some(&store),
         home,
-        owner: fs::metadata(home).map_or(0, |metadata| metadata.uid()),
+        replace: false,
     })
 }
 
@@ -97,7 +98,8 @@ fn a_restore_over_a_baked_home_leaves_exactly_the_stored_tree() {
     let restored = go(&node, Verb::Restore, &baked);
     assert!(restored.hit(), "{restored:?}");
     let anchor = Anchor(&anchor);
-    assert_eq!(check(&baked, &anchor).ok(), Some(Verdict::Verified));
+    let file = baked.join("velnor-tools-anchor/digest");
+    assert_eq!(check(&baked, &anchor, &file).ok(), Some(Verdict::Verified));
     assert_eq!(digest(&baked), digest(&node.root.join("stored")));
     assert!(
         !baked
@@ -268,4 +270,108 @@ fn a_home_below_a_symlinked_ancestor_is_still_cleared() {
     assert_eq!(outcome, Outcome::Cleared);
     assert!(!home.join(".local/share/mise").exists());
     assert!(!home.join(".rustup").exists());
+}
+
+#[test]
+fn a_dangling_or_looping_home_link_is_a_warning_and_deletes_nothing() {
+    let node = node("tools-home-clear-dangling-home");
+    saved(&node);
+    let dangling = node.root.join("dangling-home");
+    symlink(node.root.join("missing"), &dangling).unwrap_or_else(|e| unreachable!("{e}"));
+    let (first, second) = (node.root.join("loop-a"), node.root.join("loop-b"));
+    symlink(&second, &first).unwrap_or_else(|e| unreachable!("{e}"));
+    symlink(&first, &second).unwrap_or_else(|e| unreachable!("{e}"));
+    for home in [&dangling, &first] {
+        for verb in [Verb::Clear, Verb::Restore] {
+            let outcome = go(&node, verb, home);
+            assert!(
+                matches!(&outcome, Outcome::Rejected(reason) if reason.starts_with("HOME is")),
+                "{verb:?} {}: {outcome:?}",
+                home.display()
+            );
+        }
+        assert!(
+            fs::symlink_metadata(home).is_ok_and(|metadata| metadata.file_type().is_symlink()),
+            "{}",
+            home.display()
+        );
+    }
+    assert!(!node.root.join("missing").exists());
+}
+
+#[test]
+fn a_dangling_home_link_with_a_trailing_slash_or_no_stored_entry_is_a_warning() {
+    let node = node("tools-home-clear-dangling-slash");
+    let dangling = node.root.join("dangling-home");
+    symlink(node.root.join("missing"), &dangling).unwrap_or_else(|e| unreachable!("{e}"));
+    let slashed = PathBuf::from(format!("{}/", dangling.display()));
+    for home in [&slashed, &dangling] {
+        for verb in [Verb::Clear, Verb::Restore] {
+            let outcome = go(&node, verb, home);
+            assert!(
+                matches!(&outcome, Outcome::Rejected(reason) if reason.starts_with("HOME is")),
+                "{verb:?} {}: {outcome:?}",
+                home.display()
+            );
+        }
+    }
+    assert!(
+        fs::symlink_metadata(&dangling).is_ok_and(|metadata| metadata.file_type().is_symlink())
+    );
+}
+
+fn tools_local(home: &Path, verb: &str, output: &Path) -> std::process::Output {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
+    command
+        .env("HOME", home)
+        .env("GITHUB_OUTPUT", output)
+        .env("GITHUB_EVENT_NAME", "pull_request")
+        .env("GITHUB_REF", "refs/pull/1/merge")
+        .env_remove("GITHUB_EVENT_PATH")
+        .env_remove("RUNNER_TEMP")
+        .env_remove("VELNOR_MBX_SHARED_DIR")
+        .env_remove("VELNOR_MBX_SEED_DIR")
+        .args(["tools-local", verb]);
+    if verb != "clear" {
+        command.args(["--key", KEY]);
+    }
+    command.output().unwrap_or_else(|e| unreachable!("{e}"))
+}
+
+#[test]
+fn a_missing_or_empty_home_is_a_warning_and_restore_still_reports_a_miss() {
+    let node = node("tools-home-clear-missing-home");
+    for (name, home) in [
+        ("missing", node.root.join("missing-home")),
+        ("empty", PathBuf::new()),
+    ] {
+        let cleared = tools_local(&home, "clear", &node.root.join(format!("{name}-clear")));
+        assert!(cleared.status.success(), "{name}: {cleared:?}");
+        assert!(
+            String::from_utf8_lossy(&cleared.stdout).starts_with("::warning::"),
+            "{name}: {cleared:?}"
+        );
+        let output_file = node.root.join(format!("{name}-restore"));
+        let restored = tools_local(&home, "restore", &output_file);
+        assert!(restored.status.success(), "{name}: {restored:?}");
+        assert!(
+            String::from_utf8_lossy(&restored.stdout).starts_with("::warning::"),
+            "{name}: {restored:?}"
+        );
+        assert_eq!(
+            fs::read_to_string(&output_file).unwrap_or_default(),
+            "hit=false\n",
+            "{name}"
+        );
+    }
+}
+
+#[test]
+fn a_save_through_a_link_to_root_is_refused_for_a_store_the_job_owns() {
+    let node = node("tools-home-save-root-owned");
+    let linked = node.root.join("root-owned-home");
+    symlink("/", &linked).unwrap_or_else(|e| unreachable!("{e}"));
+    let outcome = go(&node, Verb::Save, &linked);
+    assert_eq!(outcome, Outcome::Rejected("owned by another user"));
+    assert!(!node.root.join("store/tools").exists());
 }

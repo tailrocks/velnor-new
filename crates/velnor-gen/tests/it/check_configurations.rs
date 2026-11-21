@@ -1,7 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use velnor_gen::GenerateError;
 use velnor_model::{CheckConfigurations, InputRule, RepoPath};
+use velnor_rust::{DetectError, Reason};
 
 use crate::facts::TestResult;
 use crate::pipeline::workflow;
@@ -11,6 +13,7 @@ use crate::yaml_tree::document;
 
 const ROOTS: &[&str] = &["Cargo.toml", "tools/Cargo.toml"];
 const HELPER: &str = "0.1.110";
+const NEXT: &str = "0.1.112";
 const STEP: &str = "velnor-ci check-configurations";
 const KEY: &str =
     "[[check_configurations]]\nroot = '.'\nconfigurations = 'ci/configurations.json'\n";
@@ -42,13 +45,14 @@ fn refusal(config: &str, helper: &str) -> Result<String, Box<dyn std::error::Err
     Ok(error.to_string())
 }
 
-fn found(jobs: &serde_json::Value) -> Vec<(String, usize, Option<usize>, serde_json::Value)> {
+pub(crate) fn found(
+    jobs: &serde_json::Value,
+) -> Vec<(String, usize, Option<usize>, serde_json::Value)> {
     let mut found = Vec::new();
     for (id, job) in jobs.as_object().into_iter().flatten() {
         let steps = job["steps"]
             .as_array()
-            .map(Vec::as_slice)
-            .unwrap_or_default();
+            .map_or_else(Default::default, Vec::as_slice);
         let tests = steps.iter().position(|step| step["id"] == "test");
         for (index, step) in steps.iter().enumerate() {
             if step["name"] == STEP {
@@ -245,5 +249,134 @@ fn a_symlinked_configurations_file_or_folder_is_refused() -> TestResult {
             "{link}: {error}"
         );
     }
+    Ok(())
+}
+
+#[test]
+fn a_parallel_test_lane_does_not_repeat_the_check_in_its_own_job() -> TestResult {
+    let config =
+        format!("{KEY}[[test_lane]]\nroot = '.'\nfeatures = ['local-mode']\njob = 'parallel'\n");
+    let steps = found(&jobs_of(&config, NEXT)?);
+    let ids: Vec<&str> = steps.iter().map(|step| step.0.as_str()).collect();
+    assert_eq!(ids, ["rust-root"], "{steps:?}");
+    Ok(())
+}
+
+#[test]
+fn a_root_without_a_test_command_still_gets_the_check_in_a_compiling_job() -> TestResult {
+    let mut view = tracked(KEY, NEXT)?;
+    for metadata in view.rust_metadata.values_mut() {
+        for member in &mut metadata.members {
+            for target in &mut member.targets {
+                target.tests = false;
+            }
+        }
+    }
+    let steps = found(&document(&workflow(&view)?)?["jobs"]);
+    assert_eq!(steps.len(), 1, "{steps:?}");
+    Ok(())
+}
+
+#[test]
+fn a_compiling_step_after_a_testless_roots_check_waits_for_the_check() -> TestResult {
+    let mut view = tracked(KEY, NEXT)?;
+    for metadata in view.rust_metadata.values_mut() {
+        for member in &mut metadata.members {
+            for target in &mut member.targets {
+                target.tests = false;
+            }
+        }
+    }
+    let jobs = document(&workflow(&view)?)?["jobs"].clone();
+    let steps = found(&jobs);
+    assert_eq!(steps.len(), 1, "{steps:?}");
+    let (id, index, _, _) = &steps[0];
+    let after = &jobs[id.as_str()]["steps"][index + 1];
+    assert!(
+        after["if"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("outcome != 'failure'"),
+        "{id}: {after}"
+    );
+    Ok(())
+}
+
+#[test]
+fn a_configurations_path_that_is_a_submodule_is_refused_like_a_symlink() -> TestResult {
+    let mut view = tracked(KEY, NEXT)?;
+    view.gitlinks
+        .insert(RepoPath::new("ci/configurations.json")?);
+    let error = workflow(&view)
+        .err()
+        .ok_or("the submodule path was accepted")?;
+    assert!(
+        matches!(
+            error.downcast_ref::<GenerateError>(),
+            Some(GenerateError::Detect(DetectError::Invalid {
+                path,
+                reason: Reason::InvalidValue { key: "check_configurations.configurations", .. },
+            })) if path.as_str() == ".velnor/rust-ci.toml"
+        ),
+        "{error:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn a_repeated_check_entry_is_refused_so_the_check_runs_once() -> TestResult {
+    let error = workflow(&tracked(&format!("{KEY}{KEY}"), NEXT)?)
+        .err()
+        .ok_or("a repeated entry was accepted")?;
+    assert!(
+        matches!(
+            error.downcast_ref::<GenerateError>(),
+            Some(GenerateError::Detect(DetectError::Invalid {
+                path,
+                reason: Reason::InvalidValue { key: "check_configurations", .. },
+            })) if path.as_str() == ".velnor/rust-ci.toml"
+        ),
+        "{error:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn in_a_private_sources_job_the_check_runs_offline_after_the_token_is_revoked() -> TestResult {
+    let config = format!(
+        "{KEY}[private_sources]\napp_id = 'vars.A'\nprivate_key = 'secrets.K'\nrepositories = ['acme/lib']\n"
+    );
+    let steps = found(&jobs_of(&config, NEXT)?);
+    assert_eq!(steps.len(), 1, "{steps:?}");
+    assert_eq!(steps[0].3["env"]["CARGO_NET_OFFLINE"], "true", "{steps:?}");
+    Ok(())
+}
+
+#[test]
+fn a_private_sources_job_makes_only_the_check_offline_not_the_repositorys_own_setup() -> TestResult
+{
+    let config = format!(
+        "{KEY}[[test_setup]]\nroot = '.'\nname = 'Prepare the fixture'\nrun = 'bash scripts/prepare-fixture.sh'\n[private_sources]\napp_id = 'vars.A'\nprivate_key = 'secrets.K'\nrepositories = ['acme/lib']\n"
+    );
+    let jobs = jobs_of(&config, NEXT)?;
+    let mut setups = 0;
+    for (id, job) in jobs.as_object().into_iter().flatten() {
+        for step in job["steps"].as_array().into_iter().flatten() {
+            if step["name"] == "Prepare the fixture" {
+                setups += 1;
+                assert!(step["env"]["CARGO_NET_OFFLINE"].is_null(), "{id}: {step}");
+            }
+        }
+    }
+    assert_eq!(setups, 1);
+    assert_eq!(found(&jobs).len(), 1);
+    Ok(())
+}
+
+#[test]
+fn a_helper_before_0_1_112_renders_a_repeated_check_entry_as_it_did() -> TestResult {
+    let once = found(&jobs_of(KEY, "0.1.111")?).len();
+    let twice = found(&jobs_of(&format!("{KEY}{KEY}"), "0.1.111")?).len();
+    assert_eq!(twice, 2 * once, "{once} {twice}");
     Ok(())
 }

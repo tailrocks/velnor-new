@@ -7,9 +7,10 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, SystemTime};
 
-use super::clear::clear_home;
+use super::clear::{check_home, clear_home};
 use super::{HOME_PATHS, Inputs, KEEP_KEYS, Outcome, TOOLS_DIR};
 use crate::mbx_store::{random_u64, writable_by_job};
+use crate::tree_removal::remove_tree;
 
 const MARKER: &str = ".complete";
 const STAGING_PREFIX: &str = ".staging-";
@@ -71,13 +72,21 @@ fn copy_tree(from: &Path, to: &Path) -> bool {
             .is_ok_and(|status| status.success())
 }
 
-pub(super) fn restore(inputs: &Inputs<'_>, dir: Option<&str>, read_only: bool) -> Outcome {
-    let base = match base(dir, inputs.owner, read_only) {
+pub(super) fn restore(
+    inputs: &Inputs<'_>,
+    dir: Option<&str>,
+    read_only: bool,
+    owner: u32,
+) -> Outcome {
+    if let Err(reason) = check_home(inputs.home) {
+        return Outcome::Rejected(reason);
+    }
+    let base = match base(dir, owner, read_only) {
         Ok(base) => base,
         Err(outcome) => return outcome,
     };
     let entry = base.join(TOOLS_DIR).join(inputs.key);
-    if !complete(&entry, inputs.owner) {
+    if !complete(&entry, owner) {
         return Outcome::Miss;
     }
     if let Err(reason) = clear_home(inputs.home) {
@@ -143,14 +152,14 @@ fn sweep(tools: &Path) {
     }
 }
 
-pub(super) fn save(inputs: &Inputs<'_>) -> Outcome {
-    let base = match base(inputs.shared_dir, inputs.owner, false) {
+pub(super) fn save(inputs: &Inputs<'_>, owner: u32) -> Outcome {
+    let base = match base(inputs.shared_dir, owner, false) {
         Ok(base) => base,
         Err(outcome) => return outcome,
     };
     let tools = base.join(TOOLS_DIR);
     let entry = tools.join(inputs.key);
-    if complete(&entry, inputs.owner) {
+    if !inputs.replace && complete(&entry, owner) {
         return Outcome::AlreadySaved;
     }
     if fs::create_dir_all(&tools).is_err() {
@@ -162,7 +171,7 @@ pub(super) fn save(inputs: &Inputs<'_>) -> Outcome {
         Claim::Broken => return Outcome::Failed("cannot lock the key"),
     };
     sweep(&tools);
-    if complete(&entry, inputs.owner) {
+    if !inputs.replace && complete(&entry, owner) {
         return Outcome::AlreadySaved;
     }
     let staging = tools.join(format!(
@@ -179,19 +188,38 @@ pub(super) fn save(inputs: &Inputs<'_>) -> Outcome {
         fs::remove_dir_all(&staging).ok();
         return Outcome::Failed("the copy to the store failed");
     }
-    if fs::symlink_metadata(&entry).is_ok() {
-        fs::remove_dir_all(&entry).ok();
+    let retired = tools.join(format!("{STAGING_PREFIX}retired-{}", inputs.key));
+    if fs::remove_dir_all(&retired).is_err()
+        && fs::symlink_metadata(&retired).is_ok_and(|metadata| metadata.is_dir())
+    {
+        remove_tree(&retired).ok();
+    }
+    let present = fs::symlink_metadata(&entry).is_ok();
+    let replaced = present && fs::rename(&entry, &retired).is_ok();
+    if inputs.replace && present && !replaced {
+        fs::remove_dir_all(&staging).ok();
+        return Outcome::Failed("the poisoned entry could not be retired");
     }
     if fs::rename(&staging, &entry).is_err() {
+        if replaced {
+            fs::rename(&retired, &entry).ok();
+        }
         fs::remove_dir_all(&staging).ok();
-        return if complete(&entry, inputs.owner) {
+        return if !inputs.replace && complete(&entry, owner) {
             Outcome::AlreadySaved
         } else {
             Outcome::Failed("the entry could not be published")
         };
     }
+    if replaced && remove_tree(&retired).is_err() {
+        return Outcome::Failed("the replaced entry could not be removed");
+    }
     prune(&tools, inputs.key);
-    Outcome::Saved { to: entry }
+    if replaced {
+        Outcome::Healed { to: entry }
+    } else {
+        Outcome::Saved { to: entry }
+    }
 }
 
 fn prune(tools: &Path, current: &str) {

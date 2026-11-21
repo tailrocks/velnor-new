@@ -2,13 +2,43 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    Access, CargoCommand, HelperCommand, Job, PermissionScope, PlanFrom, RepoFacts, StepKind,
+    Access, CargoCommand, HelperCommand, Job, PermissionScope, PlanFrom, RepoFacts, RepoPath,
+    RustRoot, Step, StepKind,
 };
 
-use crate::lane::PLAN_JOB;
+use crate::lane::{PLAN_JOB, POLICY_JOB};
 use crate::plan::{RUST_JOB, step};
+use crate::test_setup;
 
-pub(crate) fn apply(jobs: &mut [Job], single: bool, after_merge: &dyn Fn(&StepKind) -> bool) {
+const PER_ROOT_SETUP_HELPER: (u64, u64, u64) = (0, 1, 112);
+
+pub(crate) fn apply(
+    facts: &RepoFacts,
+    jobs: &mut [Job],
+    single: bool,
+    after_merge: &dyn Fn(&StepKind) -> bool,
+) {
+    let setup_roots = facts
+        .helper
+        .as_ref()
+        .filter(|helper| helper.version().at_least(PER_ROOT_SETUP_HELPER))
+        .map(|_| facts.rust_roots.as_slice());
+    mark(
+        jobs,
+        single,
+        crate::lane::lane_job_fixes(facts),
+        setup_roots,
+        after_merge,
+    );
+}
+
+fn mark(
+    jobs: &mut [Job],
+    single: bool,
+    whole_jobs: bool,
+    setup_roots: Option<&[RustRoot]>,
+    after_merge: &dyn Fn(&StepKind) -> bool,
+) {
     for job in jobs.iter_mut() {
         let from = if !single {
             PlanFrom::Job(PLAN_JOB)
@@ -19,16 +49,30 @@ pub(crate) fn apply(jobs: &mut [Job], single: bool, after_merge: &dyn Fn(&StepKi
         } else {
             continue;
         };
+        let whole =
+            whole_jobs && from != PlanFrom::ThisJob && (is_lint_job(job) || job.id == POLICY_JOB);
+        if whole {
+            skip_whole_job(job, &from, single);
+            continue;
+        }
         let builds = job
             .steps
             .iter()
             .any(|step| keeps_target_build(&step.kind) || after_merge(&step.kind));
-        for step in job
+        let keeps: Vec<bool> = job
             .steps
-            .iter_mut()
-            .filter(|step| step.kind.is_check() && !(builds && step.kind.feeds_build()))
-        {
-            step.skip_after_merge_group = Some(from.clone());
+            .iter()
+            .map(|step| match setup_roots {
+                Some(roots) if matches!(step.kind, StepKind::TestSetup { .. }) => {
+                    compiled_by_builds(&job.steps, roots, after_merge, step.directory.as_ref())
+                }
+                _ => builds,
+            })
+            .collect();
+        for (step, keep) in job.steps.iter_mut().zip(keeps) {
+            if step.kind.is_check() && !(keep && step.kind.feeds_build()) {
+                step.skip_after_merge_group = Some(from.clone());
+            }
         }
         if is_lint_job(job) {
             skip_lint_job(job, &from, single);
@@ -37,6 +81,35 @@ pub(crate) fn apply(jobs: &mut [Job], single: bool, after_merge: &dyn Fn(&StepKi
             job.skip_after_merge_group = Some(from);
         }
     }
+}
+
+fn skip_whole_job(job: &mut Job, from: &PlanFrom, single: bool) {
+    if !single && !job.needs.contains(&PLAN_JOB) {
+        job.needs.push(PLAN_JOB);
+    }
+    job.skip_after_merge_group = Some(from.clone());
+}
+
+fn compiled_by_builds(
+    steps: &[Step],
+    roots: &[RustRoot],
+    after_merge: &dyn Fn(&StepKind) -> bool,
+    directory: Option<&RepoPath>,
+) -> bool {
+    steps
+        .iter()
+        .filter(|step| keeps_target_build(&step.kind) || after_merge(&step.kind))
+        .any(|build| match &build.manifest {
+            None => true,
+            Some(manifest) => roots
+                .iter()
+                .find(|root| &root.manifest == manifest)
+                .is_none_or(|root| {
+                    test_setup::compiled_dirs(roots, root)
+                        .iter()
+                        .any(|dir| dir.as_ref() == directory)
+                }),
+        })
 }
 
 fn keeps_target_build(kind: &StepKind) -> bool {
@@ -121,10 +194,12 @@ pub(crate) fn ask(facts: &RepoFacts, jobs: &mut [Job], single: bool) {
 /// disables the skip.
 fn assert_skips_resolve(jobs: &[Job]) {
     for job in jobs {
-        for step in &job.steps {
-            let Some(from) = &step.skip_after_merge_group else {
-                continue;
-            };
+        let marks = job.skip_after_merge_group.iter().chain(
+            job.steps
+                .iter()
+                .filter_map(|step| step.skip_after_merge_group.as_ref()),
+        );
+        for from in marks {
             let reader = match from {
                 PlanFrom::ThisJob => Some(job),
                 PlanFrom::Job(id) | PlanFrom::WorkJob(id) => jobs.iter().find(|job| &job.id == id),
@@ -145,114 +220,5 @@ fn assert_skips_resolve(jobs: &[Job]) {
 }
 
 #[cfg(test)]
-mod tests {
-    use std::collections::BTreeMap;
-
-    use velnor_model::{
-        CargoCommand, FilterRef, Job, JobId, PackageName, Permissions, PrRun, ReleaseAssetPart,
-        RunnerLabel, StepKind, TargetName, When,
-    };
-
-    use super::*;
-
-    fn job(id: JobId, kinds: Vec<StepKind>) -> Job {
-        Job {
-            id,
-            name: None,
-            comment: None,
-            needs: Vec::new(),
-            when: When::Success,
-            pr: PrRun::Always,
-            runs_on: RunnerLabel::from_static("ubuntu-latest"),
-            permissions: Permissions(BTreeMap::new()),
-            timeout_minutes: 30,
-            gate: None,
-            skip_after_merge_group: None,
-            plan_outputs: Vec::new(),
-            group_outputs: Vec::new(),
-            reports_ignored: false,
-            records_build: false,
-            chained_saves: false,
-            selection_name: None,
-            steps: kinds.into_iter().map(step).collect(),
-        }
-    }
-
-    #[test]
-    fn the_checks_and_only_the_checks_are_classified_as_checks() {
-        let checks = [
-            CargoCommand::FmtCheck,
-            CargoCommand::Clippy { extra: Vec::new() },
-            CargoCommand::Doc,
-            CargoCommand::Doctest,
-            CargoCommand::Machete,
-            CargoCommand::NextestRun {
-                filter: FilterRef::All,
-                ci_profile: true,
-            },
-        ];
-        let builds = [
-            CargoCommand::BuildAll,
-            CargoCommand::NextestBuild,
-            CargoCommand::BuildBinary {
-                package: PackageName::from_static("app"),
-                binary: TargetName::from_static("app"),
-            },
-        ];
-        for command in checks {
-            assert!(!command.is_target_build(), "{command:?}");
-        }
-        for command in builds {
-            assert!(command.is_target_build(), "{command:?}");
-        }
-    }
-
-    #[test]
-    #[should_panic(expected = "reads no merge-group-passed step")]
-    fn a_skip_naming_a_missing_merge_group_step_stops_generation() {
-        let mut marked = step(StepKind::Cargo(CargoCommand::FmtCheck));
-        marked.skip_after_merge_group = Some(PlanFrom::ThisJob);
-        let mut jobs = [job(RUST_JOB, vec![StepKind::Cargo(CargoCommand::Doc)])];
-        jobs[0].steps.push(marked);
-        assert_skips_resolve(&jobs);
-    }
-
-    fn build_inputs(build: bool) -> Job {
-        let mut kinds = vec![
-            StepKind::ReleaseAssets {
-                assets: Vec::new(),
-                part: ReleaseAssetPart::Check,
-            },
-            StepKind::TestSetup {
-                name: String::from("setup"),
-                run: String::from("true"),
-                before_build: true,
-            },
-        ];
-        if build {
-            kinds.push(StepKind::Cargo(CargoCommand::NextestBuild));
-        }
-        kinds.push(StepKind::Cargo(CargoCommand::Clippy { extra: Vec::new() }));
-        job(RUST_JOB, kinds)
-    }
-
-    #[test]
-    fn the_build_inputs_are_skipped_only_when_no_target_build_of_the_job_survives() {
-        for (build, skipped) in [(true, false), (false, true)] {
-            let mut jobs = [build_inputs(build)];
-            apply(&mut jobs, true, &|_| false);
-            let marks: Vec<bool> = jobs[0].steps[..2]
-                .iter()
-                .map(|step| step.skip_after_merge_group.is_some())
-                .collect();
-            assert_eq!(marks, [skipped, skipped], "build: {build}");
-            assert!(
-                jobs[0]
-                    .steps
-                    .last()
-                    .is_some_and(|step| step.skip_after_merge_group.is_some()),
-                "the clippy check is skipped either way"
-            );
-        }
-    }
-}
+#[path = "merge_group_skip_tests.rs"]
+mod tests;

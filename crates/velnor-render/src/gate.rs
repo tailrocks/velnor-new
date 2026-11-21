@@ -28,6 +28,7 @@ pub(crate) const TOOLS_LOCAL_SAVE_STEP: &str = "toolslocalsave";
 pub(crate) const TOOLS_LOOKUP_STEP: &str = "toolslookup";
 pub(crate) const TOOLS_RESTORED_STEP: &str = "tools_restored";
 pub(crate) const TOOLS_SAVED_STEP: &str = "save_tools_node";
+pub(crate) const TOOLS_SAVED_KEY_STEP: &str = "tools_saved_key";
 pub(crate) const PREPARE_COLD: &str = "steps.prepare.outputs.cold != 'true'";
 pub(crate) const BASE_STEP: &str = "base";
 pub(crate) const SOURCES_LOCKS_STEP: &str = "sources_locks";
@@ -36,7 +37,7 @@ const NEEDS_JSON: &str = "NEEDS_JSON";
 const GATE_SPEC: &str = "GATE_SPEC";
 pub(crate) const ON_DEFAULT_BRANCH: &str =
     "github.ref == format('refs/heads/{0}', github.event.repository.default_branch)";
-const ACTIVE_EVENT: &str = "(github.event_name != 'pull_request' || (startsWith(github.ref, 'refs/pull/') && github.event.pull_request.state != 'closed'))";
+pub(crate) const ACTIVE_EVENT: &str = "(github.event_name != 'pull_request' || (startsWith(github.ref, 'refs/pull/') && github.event.pull_request.state != 'closed'))";
 pub(crate) fn sources_step(lane: &RootSlug) -> String {
     format!("sources_{lane}")
 }
@@ -327,6 +328,14 @@ pub(crate) fn gate_parts(gate: &Gate, replanned: bool) -> Vec<String> {
     let read = |need| read_key(output(&gate.slug, need));
     let runs = |need| format!("{} == 'run'", read(need));
     match gate.need {
+        GateNeed::Selected if !gate.also.is_empty() => {
+            let any = gate
+                .roots()
+                .map(|slug| format!("{} != 'none'", read_key(output(slug, GateNeed::Selected))))
+                .collect::<Vec<_>>()
+                .join(" || ");
+            parts.push(format!("({any})"));
+        }
         GateNeed::Selected | GateNeed::Doctests | GateNeed::Docs => {
             parts.push(format!("{} != 'none'", read(GateNeed::Selected)));
             match gate.need {

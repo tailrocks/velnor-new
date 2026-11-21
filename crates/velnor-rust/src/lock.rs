@@ -14,8 +14,7 @@ pub(crate) const CI: &str = "velnor-ci";
 pub(crate) const GENERATOR: &str = "velnor-gen";
 const BINARY_SUMS: &str = "BINARY-SHA256SUMS";
 
-// First released in tools-v0.1.111 (not tagged yet when this gate was written). An older
-// velnor-gen rejects a lock with an unknown section, so older locks never get this one.
+// helper-gate: first in tools-v0.1.111 via 1e48e76705
 pub(crate) const GENERATOR_BINARY_RELEASE: (u64, u64, u64) = (0, 1, 111);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -114,10 +113,16 @@ pub fn pin_lock(
     let (ci_binary, generator_binary) = match (form, binary_sums) {
         (Form::Archive, Some(binary_sums)) => {
             let (ci, generator) = binary_digests(binary_sums, &listed)?;
-            (
-                ci,
-                generator.filter(|_| version.at_least(GENERATOR_BINARY_RELEASE)),
-            )
+            let generator = if version.at_least(GENERATOR_BINARY_RELEASE) {
+                Some(generator.ok_or_else(|| {
+                    LockError(format!(
+                        "{BINARY_SUMS} lists no {GENERATOR} binary digests, but release {version} must list them"
+                    ))
+                })?)
+            } else {
+                None
+            };
+            (ci, generator)
         }
         (Form::Archive, None) => {
             return Err(LockError(format!(
@@ -243,6 +248,10 @@ fn check_commit_digest(commit: &str, listed: &BTreeMap<&str, &str>) -> Result<()
     }
 }
 
+pub(crate) fn named(section: &str, error: &LockError) -> LockError {
+    LockError::new(format!("[{section}] {error}"))
+}
+
 pub(crate) fn release_commit(text: &str) -> Result<CommitSha, LockError> {
     CommitSha::new(text)
         .map_err(|_| LockError(format!("commit {text:?} must be 40 lowercase hex digits")))
@@ -253,13 +262,16 @@ pub(crate) fn parse_lock(bytes: &[u8]) -> Result<HelperRelease, LockError> {
     let lock: Lock = toml::from_str(text).map_err(|error| LockError(error.to_string()))?;
     let version = release_version(&lock.version)?;
     let commit = release_commit(&lock.commit)?;
-    check_digests(&lock.generator)?;
-    check_digests(&lock.ci)?;
+    check_digests(&lock.generator).map_err(|error| named(GENERATOR, &error))?;
+    check_digests(&lock.ci).map_err(|error| named(CI, &error))?;
+    if let Some(binary) = &lock.generator_binary {
+        check_digests(binary).map_err(|error| named(&format!("{GENERATOR}-binary"), &error))?;
+    }
     let release = HelperRelease::new(version, commit, platform_digests(&lock.ci)?)
         .map_err(|error| LockError(error.to_string()))?;
     match &lock.ci_binary {
         Some(binary) => {
-            check_digests(binary)?;
+            check_digests(binary).map_err(|error| named(&format!("{CI}-binary"), &error))?;
             Ok(release
                 .with_binary_digests(platform_digests(binary)?)
                 .with_generator_digests(platform_digests(&lock.generator)?))

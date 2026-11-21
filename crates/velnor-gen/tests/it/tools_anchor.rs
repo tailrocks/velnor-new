@@ -9,6 +9,8 @@ use crate::pipeline::{pin_helper, view, workflow};
 const HELPER: &str = "0.1.110";
 const PLAN: &str = "rust-plan";
 const PLAN_ANCHOR: &str = "${{ needs.rust-plan.outputs.tools_anchor }}";
+const PLAN_ANCHOR_KEY: &str = "${{ needs.rust-plan.outputs.tools_anchor_key }}";
+const PLAN_ANCHOR_KEY_OUTPUT: &str = "${{ steps.toolsanchor.outputs.cache-matched-key }}";
 const READ_ANCHOR: &str = "${{ steps.toolsread.outputs.anchor }}";
 const RECORDED: &str = "${{ steps.toolsrecord.outputs.digest }}";
 const STORES: &[&str] = &["mbx_shared_store = true\n", "mbx_shared_store = false\n"];
@@ -279,6 +281,34 @@ fn a_job_without_a_plan_job_reads_the_anchor_itself() -> TestResult {
 }
 
 #[test]
+fn a_job_that_names_the_anchor_entry_reads_its_key_from_the_plan_job() -> TestResult {
+    for config in STORES.iter().copied() {
+        let yaml = render(&["Cargo.toml", "tools/Cargo.toml"], config, "0.1.111")?;
+        let mut verified = 0;
+        for (id, job) in jobs(&yaml)? {
+            if id == PLAN {
+                assert_eq!(
+                    job["outputs"]["tools_anchor_key"], PLAN_ANCHOR_KEY_OUTPUT,
+                    "{config:?}"
+                );
+                continue;
+            }
+            let steps = steps(&job);
+            let Some(verify) = position(&steps, verifies) else {
+                continue;
+            };
+            verified += 1;
+            assert_eq!(
+                steps[verify]["env"]["VELNOR_ANCHOR_CACHE_KEY"], PLAN_ANCHOR_KEY,
+                "{config:?} {id}"
+            );
+        }
+        assert!(verified >= 1, "{config:?}");
+    }
+    Ok(())
+}
+
+#[test]
 fn a_helper_without_the_newest_anchor_keeps_one_anchor_restore_per_job() -> TestResult {
     for config in STORES.iter().copied() {
         let yaml = render(&["Cargo.toml", "tools/Cargo.toml"], config, "0.1.109")?;
@@ -300,6 +330,57 @@ fn a_helper_without_the_newest_anchor_keeps_one_anchor_restore_per_job() -> Test
                 .count();
         }
         assert!(restores >= 2, "{config:?}");
+    }
+    Ok(())
+}
+
+const ATTEMPT_RUN: &str = "${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}";
+const PLAIN_RUN: &str = "${{ github.run_id }}-${{ github.job }}";
+const ON_DEFAULT_BRANCH: &str =
+    "github.ref == format('refs/heads/{0}', github.event.repository.default_branch)";
+
+fn anchor_steps(helper: &str) -> Result<Vec<Value>, Box<dyn std::error::Error>> {
+    let yaml = render(&["Cargo.toml", "tools/Cargo.toml"], STORES[0], helper)?;
+    let mut found = Vec::new();
+    for (_, job) in jobs(&yaml)? {
+        found.extend(
+            steps(&job)
+                .into_iter()
+                .filter(|step| step["name"] == "Find the anchor" || step["name"] == "Save anchor"),
+        );
+    }
+    Ok(found)
+}
+
+#[test]
+fn a_rerun_of_a_job_names_its_anchor_by_run_attempt_from_helper_0_1_112() -> TestResult {
+    let before = anchor_steps(HELPER)?;
+    assert!(
+        before.iter().any(|step| step["name"] == "Save anchor"),
+        "{before:?}"
+    );
+    for step in &before {
+        assert_eq!(step["with"]["key"], format!("{PREFIX}{PLAIN_RUN}"));
+    }
+    let after = anchor_steps("0.1.112")?;
+    assert_eq!(after.len(), before.len(), "{after:?}");
+    for step in &after {
+        assert_eq!(step["with"]["key"], format!("{PREFIX}{ATTEMPT_RUN}"));
+    }
+    Ok(())
+}
+
+#[test]
+fn a_new_anchor_is_saved_only_on_the_default_branch() -> TestResult {
+    for helper in [HELPER, "0.1.112"] {
+        let saves: Vec<Value> = anchor_steps(helper)?
+            .into_iter()
+            .filter(|step| step["name"] == "Save anchor")
+            .collect();
+        assert_ne!(saves.len(), 0, "{helper}");
+        for step in saves {
+            assert!(text(&step, "if").contains(ON_DEFAULT_BRANCH), "{helper}");
+        }
     }
     Ok(())
 }

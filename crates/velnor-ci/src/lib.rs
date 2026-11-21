@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+pub mod app_token;
 pub mod artifact_stage;
 pub mod bounded;
 pub mod budget;
@@ -32,6 +33,7 @@ pub mod io;
 pub mod lane_guard;
 pub mod logscan;
 pub mod mbx_declared;
+pub mod mbx_report;
 pub mod mbx_seed;
 pub mod mbx_seed_copy;
 pub mod mbx_store;
@@ -46,8 +48,10 @@ pub mod plan;
 pub mod plan_request;
 pub mod platform;
 pub mod preview_helpers;
+pub mod private_repo;
 pub mod private_token;
 pub mod progress_evidence;
+pub mod public_probe;
 pub mod publish;
 pub mod qualification;
 pub mod release;
@@ -76,6 +80,7 @@ pub mod tests_run;
 pub mod ties;
 pub mod time;
 pub mod timings;
+pub mod tools_discard;
 pub mod tools_local;
 pub mod tools_verify;
 pub mod tools_verify_step;

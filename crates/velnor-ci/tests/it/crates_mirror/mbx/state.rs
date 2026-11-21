@@ -4,6 +4,7 @@
 use std::fs;
 use std::path::Path;
 use std::process::Output;
+use std::sync::LazyLock;
 
 use crate::io::Repo;
 
@@ -18,7 +19,12 @@ const CONFIG_FILES: [&str; 6] = [
     ".config/mise.toml",
     ".config/mise/config.toml",
 ];
-const ARRAY_FORM: &str = "[tools]\nrust = [{ version = \"1.99.1\", mr_boxington = true }]\n";
+static ARRAY_FORM: LazyLock<String> = LazyLock::new(|| {
+    format!(
+        "[tools]\nrust = [{{ version = \"{}\", mr_boxington = true }}]\n",
+        crate::toolchain::pinned_channel()
+    )
+});
 const WRAPPER_PATH: &str = "[wrappers.cargo]\ncommand = \"/opt/tools/bin/mbx\"\n";
 
 fn final_env(root: &Path, name: &str) -> Result<Option<String>, Box<dyn std::error::Error>> {
@@ -34,8 +40,11 @@ fn final_env(root: &Path, name: &str) -> Result<Option<String>, Box<dyn std::err
 fn setup_records_a_declared_mbx_from_every_mise_location_and_form() -> TestResult {
     let declarations = CONFIG_FILES
         .iter()
-        .map(|file| (*file, MBX_DECLARED))
-        .chain([("mise.toml", ARRAY_FORM), ("mise.toml", WRAPPER_PATH)]);
+        .map(|file| (*file, MBX_DECLARED.as_str()))
+        .chain([
+            ("mise.toml", ARRAY_FORM.as_str()),
+            ("mise.toml", WRAPPER_PATH),
+        ]);
     for (file, text) in declarations {
         let repo = Repo::empty("crates-mirror-mbx-record");
         repo.write_unstaged("ca.pem", "not used by this fixture");
@@ -57,7 +66,7 @@ fn setup_records_a_declared_mbx_from_every_mise_location_and_form() -> TestResul
 fn setup_run_without_mbx_or_mirror_clears_the_modes_an_earlier_run_exported() -> TestResult {
     let repo = Repo::empty("crates-mirror-mbx-stale");
     repo.write_unstaged("ca.pem", "not used by this fixture");
-    repo.write_unstaged("mise.toml", MBX_DECLARED);
+    repo.write_unstaged("mise.toml", &MBX_DECLARED);
     let first = setup_command(repo.root(), REGISTRY)
         .current_dir(repo.root())
         .output()?;
@@ -67,7 +76,7 @@ fn setup_run_without_mbx_or_mirror_clears_the_modes_an_earlier_run_exported() ->
         Some("required")
     );
     assert!(final_env(repo.root(), "VELNOR_CARGO_CONFIG")?.is_some_and(|value| !value.is_empty()));
-    repo.write_unstaged("mise.toml", "[tools]\nrust = \"1.99.1\"\n");
+    repo.write_unstaged("mise.toml", &crate::toolchain::mise_rust_pin());
     let second = setup_command(repo.root(), REGISTRY)
         .current_dir(repo.root())
         .env("VELNOR_CRATES_MIRROR", "off")
@@ -88,12 +97,12 @@ fn setup_run_without_mbx_or_mirror_clears_the_modes_an_earlier_run_exported() ->
 fn setup_run_with_the_mirror_and_no_mbx_clears_a_stale_mbx_mode() -> TestResult {
     let repo = Repo::empty("crates-mirror-mbx-stale-on");
     repo.write_unstaged("ca.pem", "not used by this fixture");
-    repo.write_unstaged("mise.toml", MBX_DECLARED);
+    repo.write_unstaged("mise.toml", &MBX_DECLARED);
     let first = setup_command(repo.root(), REGISTRY)
         .current_dir(repo.root())
         .output()?;
     assert!(first.status.success(), "{first:?}");
-    repo.write_unstaged("mise.toml", "[tools]\nrust = \"1.99.1\"\n");
+    repo.write_unstaged("mise.toml", &crate::toolchain::mise_rust_pin());
     let second = setup_command(repo.root(), REGISTRY)
         .current_dir(repo.root())
         .output()?;

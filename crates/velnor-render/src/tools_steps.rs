@@ -1,20 +1,21 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{AnchorSource, CacheKey, ToolsAnchor, ToolsLocalVerb, VerifiedSave, When};
+use velnor_model::{
+    AnchorSource, CacheKey, TOOLS_ANCHOR_KEY_OUTPUT as ANCHOR_KEY_OUTPUT,
+    TOOLS_ANCHOR_OUTPUT as ANCHOR_OUTPUT, ToolsAnchor, ToolsLocalVerb, VerifiedSave, When,
+};
 
 use crate::gate::{
     ON_DEFAULT_BRANCH, SAVING_EVENTS, TOOLS_LOCAL_STEP, TOOLS_LOOKUP_STEP, TOOLS_STEP,
 };
 use crate::rules::{RenderedStep, Value};
+use crate::tools_anchor_steps::{
+    ANCHOR_STEP, READ_STEP, anchor_cache_step, newest_anchor_step, read_step,
+};
 
 const VERIFY_STEP: &str = "toolsverify";
 const RECORD_STEP: &str = "toolsrecord";
-const ANCHOR_STEP: &str = "toolsanchor";
-const READ_STEP: &str = "toolsread";
-const ANCHOR_DIR: &str = "${{ runner.temp }}/velnor-tools-anchor";
-const ANCHOR_OUTPUT: &str = "tools_anchor";
-const ANCHOR_RUN: &str = "${{ github.run_id }}-${{ github.job }}";
 
 pub(crate) fn anchor_expression(anchor: &ToolsAnchor) -> String {
     match anchor {
@@ -39,21 +40,35 @@ pub(crate) fn is_anchor_expression(expression: &str) -> bool {
         || expression.ends_with(&format!(".outputs.{ANCHOR_OUTPUT}"))
 }
 
-pub(crate) fn anchor_output(steps: &[velnor_model::Step]) -> Option<(String, String)> {
-    steps
-        .iter()
-        .any(|step| {
-            matches!(
-                step.kind,
-                velnor_model::StepKind::ToolsLocal(ToolsLocalVerb::AnchorRead, _)
-            )
-        })
-        .then(|| {
-            (
-                ANCHOR_OUTPUT.to_owned(),
-                anchor_expression(&ToolsAnchor::Restored(AnchorSource::ThisJob)),
-            )
-        })
+pub(crate) fn anchor_outputs(steps: &[velnor_model::Step]) -> Vec<(String, String)> {
+    let reads = steps.iter().any(|step| {
+        matches!(
+            step.kind,
+            velnor_model::StepKind::ToolsLocal(ToolsLocalVerb::AnchorRead, _)
+        )
+    });
+    if !reads {
+        return Vec::new();
+    }
+    vec![
+        (
+            ANCHOR_OUTPUT.to_owned(),
+            anchor_expression(&ToolsAnchor::Restored(AnchorSource::ThisJob)),
+        ),
+        (
+            ANCHOR_KEY_OUTPUT.to_owned(),
+            format!("${{{{ steps.{ANCHOR_STEP}.outputs.cache-matched-key }}}}"),
+        ),
+    ]
+}
+
+fn anchor_key_expression(anchor: &ToolsAnchor) -> String {
+    match anchor {
+        ToolsAnchor::Restored(AnchorSource::Job(job)) => {
+            format!("${{{{ needs.{job}.outputs.{ANCHOR_KEY_OUTPUT} }}}}")
+        }
+        _ => format!("${{{{ steps.{ANCHOR_STEP}.outputs.cache-matched-key }}}}"),
+    }
 }
 
 /// On a node miss the lookup is skipped, so its empty output leaves the network restore in charge.
@@ -109,72 +124,6 @@ pub(crate) fn tools_parts(when: When, parts: &mut Vec<String>) {
     }
 }
 
-fn anchor_prefix() -> String {
-    crate::cache::render_key(&CacheKey::Tools {
-        host: velnor_model::Host,
-        anchor: ToolsAnchor::Unanchored,
-    })
-    .key
-    .replacen("velnor-tools-", "velnor-tools-anchor-", 1)
-}
-
-fn anchor_cache_step(action: &str, verb: &str) -> RenderedStep {
-    RenderedStep {
-        id: (verb == "Restore").then(|| ANCHOR_STEP.to_owned()),
-        name: format!("{verb} anchor"),
-        shared: true,
-        uses: Some(action.to_owned()),
-        with: vec![
-            ("path".to_owned(), Value::Expr(ANCHOR_DIR.to_owned())),
-            ("key".to_owned(), Value::Expr(anchor_prefix())),
-        ],
-        ..RenderedStep::default()
-    }
-}
-
-fn newest_anchor_step(action: &str, find: bool) -> RenderedStep {
-    let prefix = format!("{}-", anchor_prefix());
-    let mut with = vec![
-        ("path".to_owned(), Value::Expr(ANCHOR_DIR.to_owned())),
-        (
-            "key".to_owned(),
-            Value::Expr(format!("{prefix}{ANCHOR_RUN}")),
-        ),
-    ];
-    if find {
-        with.push(("restore-keys".to_owned(), Value::Expr(prefix)));
-    }
-    RenderedStep {
-        id: find.then(|| ANCHOR_STEP.to_owned()),
-        name: if find {
-            "Find the anchor"
-        } else {
-            "Save anchor"
-        }
-        .to_owned(),
-        shared: true,
-        uses: Some(action.to_owned()),
-        with,
-        ..RenderedStep::default()
-    }
-}
-
-fn read_step() -> RenderedStep {
-    RenderedStep {
-        id: Some(READ_STEP.to_owned()),
-        name: "Read the anchor".to_owned(),
-        shared: true,
-        env: vec![(
-            "VELNOR_ANCHOR_MATCHED".to_owned(),
-            Value::Expr(format!(
-                "${{{{ steps.{ANCHOR_STEP}.outputs.cache-matched-key }}}}"
-            )),
-        )],
-        run: Some("velnor-ci tools-verify read".to_owned()),
-        ..RenderedStep::default()
-    }
-}
-
 fn verify_step(verb: ToolsLocalVerb, anchor: &ToolsAnchor) -> RenderedStep {
     let (id, name, word) = match verb {
         ToolsLocalVerb::AnchorReset => (None, "Clear anchor", "reset"),
@@ -205,9 +154,7 @@ fn verify_step(verb: ToolsLocalVerb, anchor: &ToolsAnchor) -> RenderedStep {
     if verb == ToolsLocalVerb::VerifyNamedAnchor {
         env.push((
             "VELNOR_ANCHOR_CACHE_KEY".to_owned(),
-            Value::Expr(format!(
-                "${{{{ steps.{ANCHOR_STEP}.outputs.cache-matched-key }}}}"
-            )),
+            Value::Expr(anchor_key_expression(anchor)),
         ));
     }
     if matches!(
@@ -272,12 +219,19 @@ pub(crate) fn tools_local_step(verb: ToolsLocalVerb, anchor: &ToolsAnchor) -> Re
         Verb::Prime => ("Prime the node store with the tools", None, "save"),
         Verb::RecordRestore => return tools_restored_step(key),
         Verb::RecordSave => return tools_saved_step(),
+        Verb::RecordSavedKey => return tools_saved_key_step(key),
         Verb::AnchorRestore => return anchor_cache_step(crate::steps::CACHE_RESTORE, "Restore"),
         Verb::AnchorSave if *anchor == ToolsAnchor::Recorded => {
-            return newest_anchor_step(crate::steps::CACHE_SAVE, false);
+            return newest_anchor_step(crate::steps::CACHE_SAVE, false, false);
+        }
+        Verb::AnchorSaveAttempt => {
+            return newest_anchor_step(crate::steps::CACHE_SAVE, false, true);
         }
         Verb::AnchorSave => return anchor_cache_step(crate::steps::CACHE_SAVE, "Save"),
-        Verb::AnchorFind => return newest_anchor_step(crate::steps::CACHE_RESTORE, true),
+        Verb::AnchorFind => return newest_anchor_step(crate::steps::CACHE_RESTORE, true, false),
+        Verb::AnchorFindAttempt => {
+            return newest_anchor_step(crate::steps::CACHE_RESTORE, true, true);
+        }
         Verb::AnchorRead => return read_step(),
         Verb::AnchorReset
         | Verb::Verify
@@ -330,6 +284,26 @@ fn tools_restored_step(key: String) -> RenderedStep {
             "printf 'cache-primary-key=%s\\ncache-matched-key=%s\\ncache-hit=%s\\n' \"$CACHE_KEY\" \"${NODE_HIT:+$CACHE_KEY}$MATCHED\" \"$EXACT\" >> \"$GITHUB_OUTPUT\""
                 .to_owned(),
         ),
+        ..RenderedStep::default()
+    }
+}
+
+fn tools_saved_key_step(key: String) -> RenderedStep {
+    let network = crate::report::cache_id(
+        &velnor_model::CacheKey::Tools {
+            host: velnor_model::Host,
+            anchor: ToolsAnchor::Unanchored,
+        },
+        false,
+    );
+    RenderedStep {
+        id: Some(crate::gate::TOOLS_SAVED_KEY_STEP.to_owned()),
+        name: "Record the tools cache key".to_owned(),
+        condition: Some(format!(
+            "${{{{ !cancelled() && steps.{network}.outcome != 'skipped' }}}}"
+        )),
+        env: vec![("CACHE_KEY".to_owned(), Value::Expr(key))],
+        run: Some("echo \"key=$CACHE_KEY\" >> \"$GITHUB_OUTPUT\"".to_owned()),
         ..RenderedStep::default()
     }
 }

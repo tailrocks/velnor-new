@@ -31,6 +31,7 @@ pub(crate) struct RawLint {
     task: Option<String>,
     tools: Option<Vec<String>>,
     inputs: Option<Vec<String>>,
+    gate_on_plan: Option<bool>,
 }
 
 fn word(value: &str) -> bool {
@@ -117,12 +118,23 @@ fn inputs(raw: Option<Vec<String>>) -> Result<Vec<PathGlob>, Reason> {
     }
     entries
         .into_iter()
-        .map(|entry| rule_glob("lint.inputs", entry))
+        .map(|entry| {
+            if entry.contains(['?', '[', ']']) {
+                return Err(Reason::UnsupportedGlob {
+                    key: "lint.inputs",
+                    value: entry,
+                });
+            }
+            rule_glob("lint.inputs", entry)
+        })
         .collect()
 }
 
 fn lint(raw: RawLint) -> Result<LintJob, Reason> {
     let kind = raw.kind.as_str();
+    if kind != GENERATED_CHECK {
+        foreign(kind, "gate_on_plan", raw.gate_on_plan.is_some())?;
+    }
     let config = path("lint.config", raw.config.clone())?;
     let probe = path("lint.probe", raw.probe.clone())?;
     let (kind, id, name) = match kind {
@@ -198,6 +210,7 @@ fn lint(raw: RawLint) -> Result<LintJob, Reason> {
         name: title(raw.name, name)?,
         timeout_minutes,
         inputs: inputs(raw.inputs)?,
+        plan_gated: raw.gate_on_plan.unwrap_or(false),
         kind,
     })
 }

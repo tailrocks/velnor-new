@@ -8,7 +8,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use velnor_model::{HelperVersion, Platform};
 
 use crate::lock::{
-    CI, GENERATOR, GENERATOR_BINARY_RELEASE, Lock, LockError, check_digests, pin_lock,
+    CI, GENERATOR, GENERATOR_BINARY_RELEASE, Lock, LockError, check_digests, named, pin_lock,
     release_commit, release_version,
 };
 
@@ -47,10 +47,6 @@ pub fn lock_version(bytes: &[u8]) -> Result<HelperVersion, LockError> {
 fn parse(bytes: &[u8]) -> Result<Lock, LockError> {
     let text = std::str::from_utf8(bytes).map_err(|error| LockError::new(error.to_string()))?;
     toml::from_str(text).map_err(|error| LockError::new(error.to_string()))
-}
-
-fn named(section: &str, error: &LockError) -> LockError {
-    LockError::new(format!("[{section}] {error}"))
 }
 
 /// Offline: the `[velnor-gen]` entry agrees with the lock's own version and commit and, when
@@ -116,12 +112,22 @@ fn binary_entry(lock: &Lock) -> Result<Option<BinaryEntry<'_>>, LockError> {
             "[{section}] is not allowed: release {} does not read it",
             lock.version
         ))),
-        (true, _, None) => Ok(None),
+        (true, false, None) => Ok(None),
+        (true, true, None) => Err(LockError::new(format!(
+            "[{section}] is missing: release {} lists the velnor-gen binary digests, so the lock must list them; {}",
+            lock.version,
+            repin_hint()
+        ))),
         (true, true, Some(binary)) => {
             check_digests(binary).map_err(|error| named(&section, &error))?;
             Ok(Some((section, binary)))
         }
     }
+}
+
+fn repin_hint() -> String {
+    let (major, minor, patch) = GENERATOR_BINARY_RELEASE;
+    format!("re-pin with `velnor-gen pin-helper {major}.{minor}.{patch}` or later")
 }
 
 fn check_format(lock: &Lock) -> Result<bool, LockError> {
@@ -166,8 +172,16 @@ pub fn verify_release(
         release.ci_binary.as_ref(),
     )?;
     compare_section(GENERATOR, Some(&lock.generator), Some(&release.generator))?;
+    let section = format!("{GENERATOR}-binary");
+    if lock.generator_binary.is_none() && release.generator_binary.is_some() {
+        return Err(LockError::new(format!(
+            "[{section}] is missing: release {} lists the velnor-gen binary digests; {}",
+            lock.version,
+            repin_hint()
+        )));
+    }
     compare_section(
-        &format!("{GENERATOR}-binary"),
+        &section,
         lock.generator_binary.as_ref(),
         release.generator_binary.as_ref(),
     )

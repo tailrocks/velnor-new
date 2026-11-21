@@ -14,6 +14,7 @@ mod checkout_step;
 mod combined_cache;
 mod delta_cleanup;
 mod delta_steps;
+mod document;
 mod draft_steps;
 mod env;
 mod event_gate;
@@ -23,8 +24,11 @@ mod gate_needs;
 mod helper_integrity;
 mod helper_steps;
 mod install_steps;
+mod job_helper;
 mod key_length;
 mod lint_steps;
+mod mbx_out_dirs;
+mod mise_digest;
 mod permission_yaml;
 mod pinned_actions;
 mod private_steps;
@@ -52,22 +56,21 @@ mod rules;
 mod save_condition;
 mod save_gate;
 mod selection_name;
+mod shared_runs;
+mod source_roots;
 mod steps;
 mod tests;
 mod token_commands;
+mod tools_anchor_steps;
 mod tools_steps;
 mod workflow;
 mod yaml;
 
-use std::collections::BTreeMap;
-
-use velnor_model::{RepoPath, WORKFLOW_PATH, WorkflowPlan};
-
 pub use crate::cache::{RenderedKey, render_key, render_key_with_mise};
 pub use crate::delta_cleanup::{DELTA_CLEANUP_PATH, delta_cleanup};
-use crate::events::{concurrency, triggers};
+use crate::document::document;
+pub use crate::mise_digest::{MISE_BINARIES, MiseBinary, UnknownMiseVersion, mise_sha256_input};
 pub(crate) use crate::permission_yaml::permission_pairs;
-use crate::permission_yaml::permissions;
 pub use crate::pinned_actions::{
     ACTIONS_CACHE, ATTEST_BUILD_PROVENANCE, DOCKER_BUILD_PUSH, DOCKER_LOGIN, DOCKER_SETUP_BUILDX,
     GITHUB_SCRIPT, MR_BOXINGTON, PINNED_ACTIONS, PinnedAction,
@@ -76,14 +79,15 @@ pub use crate::release::{RELEASE_HEADER, render_release};
 pub use crate::rendered_pins::{RenderedPin, rendered_pins};
 pub use crate::reusable::{REUSABLE_HEADER, render_reusable};
 pub use crate::rules::{
-    ALLOWED_ACTIONS, APP_TOKEN_ACTION, MAX_CACHE_KEY_CHARACTERS, MAX_ENV_CHARACTERS,
-    MAX_RUN_CHARACTERS, MAX_WORKFLOW_BYTES, RenderedConcurrency, RenderedContainer, RenderedJob,
-    RenderedMatrix, RenderedMatrixSource, RenderedStep, RenderedTrusted, RenderedWorkflow, Rule,
-    RuleViolation, SETUP_VELNOR_ACTION, Value, check_rules,
+    ALLOWED_ACTIONS, APP_TOKEN_ACTION, MAX_ENV_CHARACTERS, MAX_RUN_CHARACTERS, MAX_WORKFLOW_BYTES,
+    RenderedConcurrency, RenderedContainer, RenderedJob, RenderedMatrix, RenderedMatrixSource,
+    RenderedStep, RenderedTrusted, RenderedWorkflow, Rule, RuleViolation, SETUP_VELNOR_ACTION,
+    Value, check_rules,
 };
 use crate::steps::rendered_job;
-use crate::workflow::{ShellcheckMarks, yaml_job};
-use crate::yaml::{Yaml, emit, entry, text};
+use crate::workflow::ShellcheckMarks;
+use std::collections::BTreeMap;
+use velnor_model::{RepoPath, WORKFLOW_PATH, WorkflowPlan};
 
 pub use velnor_model::{Owner, VELNOR_GEN_MARKER, lf_normalized, owner_of, seal};
 pub const GENERATED_HEADER: &str =
@@ -109,9 +113,10 @@ pub fn render_workflow(
     rendered: &RenderedWorkflow,
 ) -> Result<BTreeMap<RepoPath, String>, Vec<RuleViolation>> {
     check_rules(rendered)?;
-    let mut file = document(plan, rendered, ShellcheckMarks::Steps);
+    let roots = source_roots::workflow_roots(plan)?;
+    let mut file = document(plan, rendered, &roots, ShellcheckMarks::Steps);
     if file.len() > rules::MAX_WORKFLOW_BYTES {
-        file = document(plan, rendered, ShellcheckMarks::Jobs);
+        file = document(plan, rendered, &roots, ShellcheckMarks::Jobs);
     }
     if file.len() > rules::MAX_WORKFLOW_BYTES {
         return Err(vec![rule_messages::size_report::too_large(
@@ -122,28 +127,4 @@ pub fn render_workflow(
     Ok(BTreeMap::from([(WORKFLOW_PATH, file)]))
 }
 
-fn document(plan: &WorkflowPlan, rendered: &RenderedWorkflow, marks: ShellcheckMarks) -> String {
-    let workflow: Vec<_> = [
-        Some(entry("name", text(&plan.name))),
-        Some(entry("on", triggers(&plan.triggers))),
-        Some(entry("permissions", permissions(&plan.permissions))),
-        Some(entry("concurrency", concurrency(plan.concurrency))),
-        Some(entry("env", env::workflow_env())),
-        helper_integrity::defaults(&rendered.jobs).map(|defaults| entry("defaults", defaults)),
-        Some(entry(
-            "jobs",
-            Yaml::Map(
-                rendered
-                    .jobs
-                    .iter()
-                    .map(|job| (job.id.clone(), yaml_job(job, marks)))
-                    .collect(),
-            ),
-        )),
-    ]
-    .into_iter()
-    .flatten()
-    .collect();
-    seal(GENERATED_HEADER, &emit(&workflow))
-}
 mod report;

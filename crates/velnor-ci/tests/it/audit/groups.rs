@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs;
-use std::process::{Command, Output};
+use std::process::Output;
 
 use crate::io::Repo;
 use crate::support::fresh_dir;
 
-use super::{placed, unit};
+use super::{placed, unit, velnor_ci};
 
 const GROUP_LOCK: &str =
     include_str!("../../../../../generator/samples/helper-lock/view/.velnor/rust-ci.lock");
@@ -18,7 +18,7 @@ fn grouped_tools() -> Repo {
 
 fn grouped_tools_in(repo: Repo) -> Repo {
     unit(&repo, ".gitignore", "target/\ntarget-velnor/\n");
-    unit(&repo, "mise.toml", "[tools]\nrust = \"1.99.1\"\n");
+    unit(&repo, "mise.toml", &crate::toolchain::mise_rust_pin());
     unit(
         &repo,
         ".velnor/rust-ci.toml",
@@ -68,9 +68,8 @@ fn group_units(repo: &Repo, package: &str, normal: &str, harness: &str) {
 }
 
 fn audit(repo: &Repo, args: &[&str]) -> Output {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
+    let mut command = velnor_ci();
     command
-        .env_remove("CARGO_TARGET_DIR")
         .current_dir(repo.root())
         .args(["inputs", "audit"])
         .args(args);
@@ -172,7 +171,7 @@ fn build_grouped(root: &std::path::Path, manifest: &str) -> Output {
 }
 
 fn build_grouped_with(root: &std::path::Path, manifest: &str, build_directory: bool) -> Output {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
+    let mut command = velnor_ci();
     command.env("CARGO_TARGET_DIR", root.join("target-velnor/tools"));
     if build_directory {
         command.env("CARGO_BUILD_BUILD_DIR", root.join("target-velnor/tools"));

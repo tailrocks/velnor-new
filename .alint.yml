@@ -19,8 +19,8 @@
 # inheritance predicates).
 #
 # Schema: alint config model (`version` + `rules`, each rule with
-# id/kind/level). The top-level `command` rule is trusted and checks only
-# each AGENTS.md's sibling CLAUDE.md pointer file, which Alint has no native
+# id/kind/level). The `command` rules are trusted: the top-level one checks
+# only each AGENTS.md's sibling CLAUDE.md pointer file, which Alint has no native
 # exact-content rule to express. Its `pair` rule checks existence only;
 # the command below checks the regular-file type and exact pointer body on
 # the CI Linux runner. Generated trees must not emit symlinks: plugin

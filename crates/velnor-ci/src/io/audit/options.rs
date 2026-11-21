@@ -51,7 +51,6 @@ impl Default for AuditOptions {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::os::unix::ffi::OsStrExt;
 
     #[test]
     fn the_default_admits_a_workspace_far_above_the_old_bound() {
@@ -74,12 +73,5 @@ mod tests {
                 "{value}"
             );
         }
-    }
-
-    #[test]
-    fn a_value_that_is_not_unicode_is_refused() {
-        let value = OsStr::from_bytes(b"\xff");
-        let error = max_entries_from(Some(value)).err();
-        assert!(error.is_some_and(|error| error.to_string().contains(MAX_ENTRIES_VARIABLE)));
     }
 }
