@@ -222,10 +222,16 @@ pub(crate) fn tools_local_step(verb: ToolsLocalVerb, anchor: &ToolsAnchor) -> Re
         Verb::RecordSavedKey => return tools_saved_key_step(key),
         Verb::AnchorRestore => return anchor_cache_step(crate::steps::CACHE_RESTORE, "Restore"),
         Verb::AnchorSave if *anchor == ToolsAnchor::Recorded => {
-            return newest_anchor_step(crate::steps::CACHE_SAVE, false);
+            return newest_anchor_step(crate::steps::CACHE_SAVE, false, false);
+        }
+        Verb::AnchorSaveAttempt => {
+            return newest_anchor_step(crate::steps::CACHE_SAVE, false, true);
         }
         Verb::AnchorSave => return anchor_cache_step(crate::steps::CACHE_SAVE, "Save"),
-        Verb::AnchorFind => return newest_anchor_step(crate::steps::CACHE_RESTORE, true),
+        Verb::AnchorFind => return newest_anchor_step(crate::steps::CACHE_RESTORE, true, false),
+        Verb::AnchorFindAttempt => {
+            return newest_anchor_step(crate::steps::CACHE_RESTORE, true, true);
+        }
         Verb::AnchorRead => return read_step(),
         Verb::AnchorReset
         | Verb::Verify

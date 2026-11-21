@@ -149,7 +149,12 @@ pub fn waste(metrics: &LaneMetrics) -> Vec<String> {
             .map(|cache| {
                 format!(
                     "{} cache save failed: {}",
-                    cache.family, cache.requested_key
+                    cache.family,
+                    cache
+                        .saved_key
+                        .as_deref()
+                        .filter(|key| !key.is_empty())
+                        .unwrap_or(&cache.requested_key)
                 )
             }),
     );

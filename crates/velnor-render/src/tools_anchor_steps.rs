@@ -9,6 +9,7 @@ pub(super) const ANCHOR_STEP: &str = "toolsanchor";
 pub(super) const READ_STEP: &str = "toolsread";
 const ANCHOR_DIR: &str = "${{ runner.temp }}/velnor-tools-anchor";
 const ANCHOR_RUN: &str = "${{ github.run_id }}-${{ github.job }}";
+const ANCHOR_RUN_ATTEMPT: &str = "${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}";
 
 fn anchor_prefix() -> String {
     crate::cache::render_key(&CacheKey::Tools {
@@ -33,14 +34,16 @@ pub(super) fn anchor_cache_step(action: &str, verb: &str) -> RenderedStep {
     }
 }
 
-pub(super) fn newest_anchor_step(action: &str, find: bool) -> RenderedStep {
+pub(super) fn newest_anchor_step(action: &str, find: bool, attempt: bool) -> RenderedStep {
     let prefix = format!("{}-", anchor_prefix());
+    let run = if attempt {
+        ANCHOR_RUN_ATTEMPT
+    } else {
+        ANCHOR_RUN
+    };
     let mut with = vec![
         ("path".to_owned(), Value::Expr(ANCHOR_DIR.to_owned())),
-        (
-            "key".to_owned(),
-            Value::Expr(format!("{prefix}{ANCHOR_RUN}")),
-        ),
+        ("key".to_owned(), Value::Expr(format!("{prefix}{run}"))),
     ];
     if find {
         with.push(("restore-keys".to_owned(), Value::Expr(prefix)));
