@@ -68,6 +68,7 @@ fn go(node: &Node, verb: Verb, home: &Path) -> Outcome {
         seed_dir: Some(&store),
         home,
         owner: home_owner(home).unwrap_or(0),
+        replace: false,
     })
 }
 
