@@ -2,16 +2,41 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    Access, CargoCommand, HelperCommand, Job, PermissionScope, PlanFrom, RepoFacts, StepKind,
+    Access, CargoCommand, HelperCommand, Job, PermissionScope, PlanFrom, RepoFacts, RepoPath,
+    RustRoot, Step, StepKind,
 };
 
 use crate::lane::{PLAN_JOB, POLICY_JOB};
 use crate::plan::{RUST_JOB, step};
+use crate::test_setup;
+
+const PER_ROOT_SETUP_HELPER: (u64, u64, u64) = (0, 1, 112);
 
 pub(crate) fn apply(
+    facts: &RepoFacts,
+    jobs: &mut [Job],
+    single: bool,
+    after_merge: &dyn Fn(&StepKind) -> bool,
+) {
+    let setup_roots = facts
+        .helper
+        .as_ref()
+        .filter(|helper| helper.version().at_least(PER_ROOT_SETUP_HELPER))
+        .map(|_| facts.rust_roots.as_slice());
+    mark(
+        jobs,
+        single,
+        crate::lane::lane_job_fixes(facts),
+        setup_roots,
+        after_merge,
+    );
+}
+
+fn mark(
     jobs: &mut [Job],
     single: bool,
     whole_jobs: bool,
+    setup_roots: Option<&[RustRoot]>,
     after_merge: &dyn Fn(&StepKind) -> bool,
 ) {
     for job in jobs.iter_mut() {
@@ -34,12 +59,20 @@ pub(crate) fn apply(
             .steps
             .iter()
             .any(|step| keeps_target_build(&step.kind) || after_merge(&step.kind));
-        for step in job
+        let keeps: Vec<bool> = job
             .steps
-            .iter_mut()
-            .filter(|step| step.kind.is_check() && !(builds && step.kind.feeds_build()))
-        {
-            step.skip_after_merge_group = Some(from.clone());
+            .iter()
+            .map(|step| match setup_roots {
+                Some(roots) if matches!(step.kind, StepKind::TestSetup { .. }) => {
+                    compiled_by_builds(&job.steps, roots, after_merge, step.directory.as_ref())
+                }
+                _ => builds,
+            })
+            .collect();
+        for (step, keep) in job.steps.iter_mut().zip(keeps) {
+            if step.kind.is_check() && !(keep && step.kind.feeds_build()) {
+                step.skip_after_merge_group = Some(from.clone());
+            }
         }
         if is_lint_job(job) {
             skip_lint_job(job, &from, single);
@@ -55,6 +88,28 @@ fn skip_whole_job(job: &mut Job, from: &PlanFrom, single: bool) {
         job.needs.push(PLAN_JOB);
     }
     job.skip_after_merge_group = Some(from.clone());
+}
+
+fn compiled_by_builds(
+    steps: &[Step],
+    roots: &[RustRoot],
+    after_merge: &dyn Fn(&StepKind) -> bool,
+    directory: Option<&RepoPath>,
+) -> bool {
+    steps
+        .iter()
+        .filter(|step| keeps_target_build(&step.kind) || after_merge(&step.kind))
+        .any(|build| match &build.manifest {
+            None => true,
+            Some(manifest) => roots
+                .iter()
+                .find(|root| &root.manifest == manifest)
+                .is_none_or(|root| {
+                    test_setup::compiled_dirs(roots, root)
+                        .iter()
+                        .any(|dir| dir.as_ref() == directory)
+                }),
+        })
 }
 
 fn keeps_target_build(kind: &StepKind) -> bool {
@@ -261,7 +316,7 @@ mod tests {
     fn the_build_inputs_are_skipped_only_when_no_target_build_of_the_job_survives() {
         for (build, skipped) in [(true, false), (false, true)] {
             let mut jobs = [build_inputs(build)];
-            apply(&mut jobs, true, false, &|_| false);
+            mark(&mut jobs, true, false, None, &|_| false);
             let marks: Vec<bool> = jobs[0].steps[..2]
                 .iter()
                 .map(|step| step.skip_after_merge_group.is_some())
@@ -273,6 +328,70 @@ mod tests {
                     .last()
                     .is_some_and(|step| step.skip_after_merge_group.is_some()),
                 "the clippy check is skipped either way"
+            );
+        }
+    }
+
+    fn root(manifest: &'static str, depends_on: &[&'static str]) -> RustRoot {
+        RustRoot {
+            manifest: RepoPath::from_static(manifest),
+            target_dir: RepoPath::from_static("target"),
+            nextest_ci_profile: false,
+            members: Vec::new(),
+            depends_on: depends_on
+                .iter()
+                .copied()
+                .map(RepoPath::from_static)
+                .collect(),
+            external_dependencies: Vec::new(),
+        }
+    }
+
+    fn at(kind: StepKind, directory: &'static str, manifest: Option<&'static str>) -> Step {
+        Step {
+            directory: Some(RepoPath::from_static(directory)),
+            manifest: manifest.map(RepoPath::from_static),
+            ..step(kind)
+        }
+    }
+
+    fn sibling_job(build_dir: &'static str, build_manifest: &'static str) -> Job {
+        let setup = StepKind::TestSetup {
+            name: String::from("setup"),
+            run: String::from("true"),
+            before_build: true,
+        };
+        let mut job = job(RUST_JOB, Vec::new());
+        job.steps = vec![
+            at(setup, "tools/a", None),
+            at(
+                StepKind::Cargo(CargoCommand::Clippy { extra: Vec::new() }),
+                "tools/a",
+                Some("tools/a/Cargo.toml"),
+            ),
+            at(
+                StepKind::Cargo(CargoCommand::NextestBuild),
+                build_dir,
+                Some(build_manifest),
+            ),
+        ];
+        job
+    }
+
+    #[test]
+    fn a_setup_of_one_root_stays_only_while_a_surviving_build_compiles_its_root() {
+        let cases: [(&[&str], bool); 2] = [(&[], false), (&["tools/a/Cargo.toml"], true)];
+        for (depends_on, kept) in cases {
+            let roots = [
+                root("tools/a/Cargo.toml", &[]),
+                root("tools/b/Cargo.toml", depends_on),
+            ];
+            let mut jobs = [sibling_job("tools/b", "tools/b/Cargo.toml")];
+            mark(&mut jobs, true, false, Some(&roots), &|_| false);
+            assert_eq!(
+                jobs[0].steps[0].skip_after_merge_group.is_none(),
+                kept,
+                "tools/b depends on {depends_on:?}"
             );
         }
     }
