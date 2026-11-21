@@ -146,9 +146,6 @@ pub(super) fn write_reply(
     if reply.disconnect {
         return stream.shutdown(std::net::Shutdown::Both);
     }
-    if let Some(delay) = reply.delay {
-        std::thread::sleep(delay);
-    }
     let reason = match reply.status {
         200 => "OK",
         201 => "Created",

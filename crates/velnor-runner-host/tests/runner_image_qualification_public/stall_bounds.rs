@@ -1,9 +1,30 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::io::{Read, Write};
+use std::os::unix::net::UnixStream;
 use std::time::Instant;
 
 use super::*;
+
+#[test]
+fn fixture_teardown_does_not_wait_for_a_silent_client() -> TestResult<()> {
+    let api = DockerApiFixture::new(ApiPlan::new("0000000000000000000000000000000000000000"))?;
+    let _silent = UnixStream::connect(api.socket())?;
+    let mut probe = UnixStream::connect(api.socket())?;
+    probe.write_all(b"GET /probe HTTP/1.1\r\nHost: fixture\r\n\r\n")?;
+    let mut reply = Vec::new();
+    probe.read_to_end(&mut reply)?;
+    assert!(!reply.is_empty());
+    let started = Instant::now();
+    drop(api);
+    let teardown = started.elapsed();
+    assert!(
+        teardown < Duration::from_secs(2),
+        "fixture teardown waited {teardown:?} for a silent client"
+    );
+    Ok(())
+}
 
 fn bounded(fault: ApiFault) -> TestResult<()> {
     let git = GitFixture::new()?;

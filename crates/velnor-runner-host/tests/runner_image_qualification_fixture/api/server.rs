@@ -107,9 +107,13 @@ fn run_server(
 ) -> JoinHandle<()> {
     thread::spawn(move || {
         let mut workers = Vec::new();
+        let mut connections = Vec::new();
         while !stopping.load(Ordering::Acquire) {
             match listener.accept() {
                 Ok((stream, _)) => {
+                    if let Ok(handle) = stream.try_clone() {
+                        connections.push(handle);
+                    }
                     let state = Arc::clone(&state);
                     let settled = Arc::clone(&settled);
                     let stopping = Arc::clone(&stopping);
@@ -122,6 +126,9 @@ fn run_server(
                 }
                 Err(_) => break,
             }
+        }
+        for connection in &connections {
+            drop(connection.shutdown(std::net::Shutdown::Both));
         }
         for worker in workers {
             drop(worker.join());
