@@ -126,3 +126,116 @@ fn an_output_of_a_unit_in_its_own_directory_is_owned_whatever_its_hash_or_spelli
         scanned(&files).unwrap_or_else(|e| unreachable!("{owned}: {e}"));
     }
 }
+
+const OLD_UNIT: &str = "debug/build/bs-0123456789abcdef";
+const GHOST: &str = "debug/build/ghost/e0a3e98b7b3fb465";
+
+fn refused_beside_a_build(extra: &[&str]) -> String {
+    let mut files = bin_only_build();
+    files.extend(extra.iter().map(|file| (*file).to_owned()));
+    scanned(&files).expect_err(&extra.join(" "))
+}
+
+#[test]
+fn an_out_folder_whose_unit_ran_no_build_script_owns_no_output() {
+    for orphan in [
+        &["debug/build/zzz-0123456789abcdef/out/x.rlib"][..],
+        &["debug/build/zzz-0123456789abcdef/out/x.d"],
+        &[&format!("{OLD_UNIT}/out/y.rlib")],
+        &[&format!("{GHOST}/out/libghost-e0a3e98b7b3fb465.rlib")],
+        &[
+            &format!("{GHOST}/out/libghost-e0a3e98b7b3fb465.rlib"),
+            &format!("{GHOST}/run/note"),
+        ],
+    ] {
+        let message = refused_beside_a_build(orphan);
+        assert!(
+            message.contains("unknown cargo layout?"),
+            "{orphan:?}: {message}"
+        );
+    }
+}
+
+#[test]
+fn an_out_folder_beside_the_output_of_its_build_script_owns_what_the_script_generated() {
+    for generated in [
+        &[
+            &format!("{OLD_UNIT}/output"),
+            &format!("{OLD_UNIT}/out/y.rlib"),
+            &format!("{OLD_UNIT}/out/y.d"),
+        ][..],
+        &[
+            &format!("{GHOST}/run/stdout"),
+            &format!("{GHOST}/out/y.rlib"),
+            &format!("{GHOST}/out/y.d"),
+        ],
+    ] {
+        let mut files = bin_only_build();
+        files.extend(generated.iter().map(|file| (*file).to_owned()));
+        scanned(&files).unwrap_or_else(|e| unreachable!("{generated:?}: {e}"));
+    }
+}
+
+#[test]
+fn an_invoked_timestamp_is_bookkeeping_only_where_cargo_writes_it() {
+    for misplaced in [
+        "debug/invoked.timestamp".to_owned(),
+        "debug/deps/invoked.timestamp".to_owned(),
+        "debug/examples/invoked.timestamp".to_owned(),
+        "debug/build/invoked.timestamp".to_owned(),
+        "debug/build/zzz/invoked.timestamp".to_owned(),
+        "debug/build/ghost/invoked.timestamp".to_owned(),
+        "debug/build/ghost/e0a3e98b7b3fb465/invoked.timestamp".to_owned(),
+        "debug/build/ghost/e0a3e98b7b3fb465/run/deeper/invoked.timestamp".to_owned(),
+        "debug/build/ghost/short/run/invoked.timestamp".to_owned(),
+        "debug/build/zzz-short/invoked.timestamp".to_owned(),
+        format!("{LIB}/invoked.timestamp"),
+        format!("{LIB}/out/invoked.timestamp"),
+    ] {
+        let message = refused_beside_a_build(&[&misplaced]);
+        assert!(
+            message.contains("unknown cargo layout?"),
+            "{misplaced}: {message}"
+        );
+    }
+}
+
+#[test]
+fn an_invoked_timestamp_where_cargo_writes_it_is_owned() {
+    for placed in [
+        &[
+            &format!("{GHOST}/run/stdout"),
+            &format!("{GHOST}/run/invoked.timestamp"),
+        ][..],
+        &[&format!("{LIB}/fingerprint/invoked.timestamp")],
+        &[&format!("{OLD_UNIT}/invoked.timestamp")],
+        &[&"debug/.fingerprint/foo-0123456789abcdef/invoked.timestamp".to_owned()],
+    ] {
+        let mut files = bin_only_build();
+        files.extend(placed.iter().map(|file| (*file).to_owned()));
+        scanned(&files).unwrap_or_else(|e| unreachable!("{placed:?}: {e}"));
+    }
+}
+
+#[test]
+fn an_artifact_in_the_fingerprint_folder_of_an_old_layout_unit_is_an_output_nothing_owns() {
+    for orphan in [
+        "debug/.fingerprint/foo-0123456789abcdef/libzzz.rlib",
+        "debug/.fingerprint/foo-0123456789abcdef/zzz.d",
+    ] {
+        let message = refused_beside_a_build(&[orphan]);
+        assert!(
+            message.contains("unknown cargo layout?"),
+            "{orphan}: {message}"
+        );
+    }
+}
+
+#[test]
+fn a_hyphenated_dep_info_stem_owns_the_underscored_library_beside_it() {
+    scanned(&[
+        "debug/deps/my-lib-0123456789abcdef.d".to_owned(),
+        "debug/deps/libmy_lib-0123456789abcdef.rlib".to_owned(),
+    ])
+    .unwrap_or_else(|e| unreachable!("{e}"));
+}

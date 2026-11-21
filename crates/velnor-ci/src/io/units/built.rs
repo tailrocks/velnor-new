@@ -10,11 +10,14 @@ use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 
 use super::{UnitFile, split};
+use crate::cache_prune::is_hash;
 use crate::error::CiError;
+
+const TIMESTAMP: &str = "invoked.timestamp";
 
 /// A file only a build leaves: a compiled library, its metadata, dep-info, or a unit's marker.
 pub(super) fn output(name: &OsStr) -> bool {
-    artifact(name) || bookkeeping(name)
+    artifact(name) || name == TIMESTAMP
 }
 
 pub(super) fn artifact(name: &OsStr) -> bool {
@@ -23,8 +26,28 @@ pub(super) fn artifact(name: &OsStr) -> bool {
         .is_some_and(|extension| matches!(extension.to_str(), Some("rlib" | "rmeta" | "d")))
 }
 
-pub(super) fn bookkeeping(name: &OsStr) -> bool {
-    name == "invoked.timestamp"
+pub(super) fn bookkeeping(file: &Path) -> bool {
+    file.file_name().is_some_and(|name| name == TIMESTAMP)
+        && file.parent().is_some_and(written_by_cargo)
+}
+
+fn written_by_cargo(directory: &Path) -> bool {
+    let parent = directory.parent();
+    let build = |path: Option<&Path>| named(path) == Some("build");
+    match named(Some(directory)) {
+        Some("run") => {
+            named(parent).is_some_and(is_hash)
+                && parent
+                    .and_then(Path::parent)
+                    .is_some_and(|package| build(package.parent()))
+        }
+        Some(folder) => split(folder).is_some() && build(parent),
+        None => false,
+    }
+}
+
+fn named(path: Option<&Path>) -> Option<&str> {
+    path?.file_name()?.to_str()
 }
 
 pub(super) struct Owners<'a> {

@@ -168,7 +168,7 @@ fn scan(target: &Path, limit: usize, skip: Option<&Path>) -> Result<Scanned, CiE
                 found.push((unit, path));
             } else if kind.is_file() && built::output(&entry.file_name()) {
                 built = true;
-                if !generated(&path) && !built::bookkeeping(&entry.file_name()) {
+                if !generated(&path) && !built::bookkeeping(&path) {
                     outputs.push(path);
                 }
             }
@@ -205,7 +205,9 @@ fn generated(file: &Path) -> bool {
     let Some(unit) = out.parent() else {
         return false;
     };
-    unit.join("run").is_dir() || unit.parent().is_some_and(|build| build.ends_with("build"))
+    unit.join("run/stdout").is_file()
+        || unit.parent().is_some_and(|build| build.ends_with("build"))
+            && unit.join("output").is_file()
 }
 
 fn unit_file(relative: &Path) -> Option<UnitFile> {
