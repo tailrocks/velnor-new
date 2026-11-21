@@ -21,7 +21,6 @@ HRULE = re.compile(r"(?:-[ \t]*){3,}|(?:\*[ \t]*){3,}|(?:_[ \t]*){3,}")
 SETEXT = re.compile(r"=+[ \t]*|-+[ \t]*")
 ATX = re.compile(r"#{1,6}(?:[ \t]|$)")
 FOOTNOTE_DEF = re.compile(r"[ \t]*" + FOOTNOTE)
-CFG_DOC = re.compile(r",\s*doc\s*=")
 HTML_DONE = re.compile(r"<!--.*-->|<\?.*\?>|<![A-Za-z].*>|<!\[CDATA\[.*\]\]>")
 DOC_OPEN = re.compile(r"/\*(?:!|\*(?![*/]))")
 NEWLINE = re.compile(r"\r\n|\r|\n")
@@ -175,8 +174,107 @@ def value_has_fence(value, prev=None, normalize=True, item=None):
     if normalize:
         margin = min((len(line) - len(line.lstrip(" ")) for line in lines if line.strip()), default=0)
         lines = [line[margin:] for line in lines]
-    hit, item = markdown_hit(lines, ATTR_INDENT, prev, item)
-    return hit is not None, item
+    return markdown_hit(lines, ATTR_INDENT, prev, item)
+
+
+def piece_at(pieces, line):
+    text = "".join(piece for _, piece in pieces)
+    starts = [0] + [m.end() for m in NEWLINE.finditer(text)]
+    offset, seen = starts[line], 0
+    for pos, piece in pieces:
+        seen += len(piece)
+        if offset < seen:
+            return pos
+    return pieces[-1][0]
+
+
+def flush_value(src, end, pieces, inner, tail):
+    text = "".join(piece for _, piece in pieces)
+    prev, seen, item = carried(tail, inner)
+    standalone = not seen and not has_following_doc(src, end, inner)
+    hit, item = value_has_fence(text, prev, standalone, item)
+    tail = (inner, split_lines(text)[-1], seen or bool(text.strip()), item)
+    return (None if hit is None else piece_at(pieces, hit)), tail
+
+
+class CfgLevels:
+    def __init__(self, name, tail):
+        self.stack = [[1, False, tail]] if name == "cfg_attr" else []
+
+    def comma(self, paren):
+        if self.stack and paren == self.stack[-1][0]:
+            self.stack[-1][1] = True
+
+    def close(self, paren):
+        while self.stack and paren < self.stack[-1][0]:
+            self.stack.pop()
+
+    def meta(self, paren):
+        return bool(self.stack) and self.stack[-1][1] and paren == self.stack[-1][0]
+
+    def nests(self, src, word, j, paren):
+        if word == "cfg_attr" and self.meta(paren) and src.startswith("(", skip_trivia(src, j)):
+            self.stack.append([paren + 1, False, self.stack[-1][2]])
+
+
+def literal_end(src, word, j):
+    if word in RAW_PREFIX and j < len(src) and src[j] in '#"':
+        return skip_raw(src, j - 1)
+    if word in BYTE_PREFIX and j < len(src) and src[j] == '"':
+        return skip_string(src, j)
+    return None
+
+
+def cfg_has_doc(src, i):
+    levels = CfgLevels("cfg_attr", None)
+    paren = 0
+    while i < len(src):
+        c = src[i]
+        if (j := skip_trivia(src, i)) != i:
+            i = j
+        elif c == '"':
+            i = skip_string(src, i)
+        elif c == "'":
+            j = skip_char(src, i)
+            i = i + 1 if j is None else j
+        elif c in "([{":
+            paren += 1
+            i += 1
+        elif c in ")]}":
+            paren -= 1
+            if paren < 0:
+                return False
+            levels.close(paren)
+            i += 1
+        elif c == ",":
+            levels.comma(paren)
+            i += 1
+        elif m := IDENT.match(src, i):
+            word, j = m.group(), m.end()
+            if (end := literal_end(src, word, j)) is not None:
+                i = end
+                continue
+            if word == "doc" and levels.meta(paren) and DOC_EQ.match(src, skip_trivia(src, j)):
+                return True
+            levels.nests(src, word, j, paren)
+            i = j
+        else:
+            i += 1
+    return False
+
+
+def attr_end(src, i):
+    depth = 1
+    while i < len(src) and depth:
+        if src[i] == '"':
+            i = skip_string(src, i)
+            continue
+        if src[i] == "[":
+            depth += 1
+        elif src[i] == "]":
+            depth -= 1
+        i += 1
+    return i
 
 
 def has_following_doc(src, j, inner):
@@ -199,19 +297,9 @@ def has_following_doc(src, j, inner):
             name = IDENT.match(src, n)
             if name and name.group() == "doc":
                 return src.startswith("!", skip_trivia(src, j + 1)) == inner
-            m, depth = k, 1
-            while m < len(src) and depth:
-                if src[m] == '"':
-                    m = skip_string(src, m)
-                    continue
-                if src[m] == "[":
-                    depth += 1
-                elif src[m] == "]":
-                    depth -= 1
-                m += 1
-            if name and name.group() == "cfg_attr" and CFG_DOC.search(src, k, m):
+            if name and name.group() == "cfg_attr" and cfg_has_doc(src, k):
                 return src.startswith("!", skip_trivia(src, j + 1)) == inner
-            j = m
+            j = attr_end(src, k)
         elif m := IDENT.match(src, j):
             j = m.end()
         else:
@@ -247,7 +335,7 @@ def line_run(src, i):
         k = src.find("\n", pos)
         end = len(src) if k < 0 else k
         text = src[pos + 3 : end]
-        run.append((pos, doc_text_tabs(text), "\t" in text))
+        run.append((pos, doc_text_tabs(text), "\t" in text[: len(text) - len(text.lstrip(" \t"))]))
         j = end + 1
         while j < len(src) and src[j] in " \t":
             j += 1
@@ -261,12 +349,23 @@ def doc_findings(src):
     attr_depth = 0
     attr_name = ""
     paren = 0
-    cfg_comma = False
+    levels = CfgLevels("", None)
+    doc_frame = None
     doc_paren = 0
     doc_value = False
+    pieces = []
     attr_inner = False
     tail = None
-    while i < len(src):
+    while i < len(src) or pieces:
+        if pieces and not (doc_value and i < len(src)):
+            if doc_frame is None:
+                hit, tail = flush_value(src, i, pieces, attr_inner, tail)
+            else:
+                hit, doc_frame[2] = flush_value(src, i, pieces, attr_inner, doc_frame[2])
+            pieces = []
+            if hit is not None:
+                yield hit
+            continue
         c = src[i]
         if src.startswith("//", i):
             if LINE_DOC.match(src, i):
@@ -302,14 +401,7 @@ def doc_findings(src):
         elif c == '"':
             end = skip_string(src, i)
             if doc_value:
-                value = plain_value(src[i:end])
-                prev, seen, item = carried(tail, attr_inner)
-                standalone = not seen and paren == doc_paren and not has_following_doc(src, end, attr_inner)
-                found, item = value_has_fence(value, prev, standalone, item)
-                if found:
-                    yield i
-                if attr_name == "doc":
-                    tail = (attr_inner, split_lines(value)[-1], seen or bool(value.strip()), item)
+                pieces.append((i, plain_value(src[i:end])))
             i = end
         elif c == "'":
             j = skip_char(src, i)
@@ -317,11 +409,11 @@ def doc_findings(src):
         elif c == "#" and (j := attr_open(src, i)) is not None:
             attr_depth = 1
             paren = 0
-            cfg_comma = False
             k = skip_trivia(src, j)
             k += 2 if src.startswith("r#", k) else 0
             name = IDENT.match(src, k)
             attr_name = name.group() if name else ""
+            levels = CfgLevels(attr_name, tail)
             attr_inner = src.startswith("!", skip_trivia(src, i + 1))
             i = j
         elif c in "([{":
@@ -335,6 +427,7 @@ def doc_findings(src):
         elif c in ")]}":
             if attr_depth:
                 paren -= 1
+                levels.close(paren)
                 if c == "]":
                     attr_depth -= 1
                 doc_value = doc_value and attr_depth > 0 and paren >= doc_paren
@@ -344,8 +437,8 @@ def doc_findings(src):
         elif c in ",;":
             if attr_depth:
                 doc_value = doc_value and paren > doc_paren
-                if c == "," and attr_name == "cfg_attr" and paren == 1:
-                    cfg_comma = True
+                if c == ",":
+                    levels.comma(paren)
             else:
                 tail = None
             i += 1
@@ -358,14 +451,7 @@ def doc_findings(src):
                     i = j
                 else:
                     if doc_value:
-                        value = raw_value(src[i:end], len(word))
-                        prev, seen, item = carried(tail, attr_inner)
-                        standalone = not seen and paren == doc_paren and not has_following_doc(src, end, attr_inner)
-                        found, item = value_has_fence(value, prev, standalone, item)
-                        if found:
-                            yield i
-                        if attr_name == "doc":
-                            tail = (attr_inner, split_lines(value)[-1], seen or bool(value.strip()), item)
+                        pieces.append((i, raw_value(src[i:end], len(word))))
                     i = end
             elif word in BYTE_PREFIX and j < len(src) and src[j] == '"':
                 i = skip_string(src, j)
@@ -377,11 +463,12 @@ def doc_findings(src):
                     k = skip_trivia(src, j)
                     if DOC_INCLUDE.match(src, k):
                         yield i
-                    elif DOC_EQ.match(src, k) and (
-                        (attr_name == "doc" and paren == 0) or (attr_name == "cfg_attr" and paren == 1 and cfg_comma)
-                    ):
+                    elif DOC_EQ.match(src, k) and ((attr_name == "doc" and paren == 0) or levels.meta(paren)):
                         doc_value = True
                         doc_paren = paren
+                        doc_frame = None if attr_name == "doc" and paren == 0 else levels.stack[-1]
+                else:
+                    levels.nests(src, word, j, paren)
                 i = j
         else:
             i += 1
