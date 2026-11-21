@@ -3,6 +3,7 @@
 
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet};
+use std::path::Path;
 
 use velnor_model::{
     EventKind, JobId, LintJob, LintKind, PathGlob, RepoFacts, RepoPath, RootSlug, WORKFLOW_PATH,
@@ -24,7 +25,7 @@ pub fn lint_runs(
         .config
         .lint
         .iter()
-        .filter(|lint| !lint.inputs.is_empty())
+        .filter(|lint| lint.planned())
         .map(|lint| (lint.slug(), runs(lint, event, changed, tracked, symlinks)))
         .collect()
 }
@@ -36,10 +37,13 @@ fn runs(
     tracked: &BTreeSet<RepoPath>,
     symlinks: &BTreeSet<RepoPath>,
 ) -> bool {
-    let Some(changed) = changed.filter(|_| event == EventKind::PullRequest) else {
+    let Some(changed) =
+        changed.filter(|changed| event == EventKind::PullRequest && !changed.is_empty())
+    else {
         return true;
     };
-    triggered(lint, changed, symlinks) || !has_tracked_input(lint, tracked, symlinks)
+    triggered(lint, changed, symlinks)
+        || (!lint.inputs.is_empty() && !has_tracked_input(lint, tracked, symlinks))
 }
 
 fn triggered(lint: &LintJob, changed: &BTreeSet<RepoPath>, symlinks: &BTreeSet<RepoPath>) -> bool {
@@ -150,10 +154,21 @@ fn implicit(lint: &LintJob, path: &RepoPath) -> bool {
 fn own_files(lint: &LintJob) -> impl Iterator<Item = &RepoPath> {
     let (config, probe) = match &lint.kind {
         LintKind::Jactionlint { config } => (config.as_ref(), None),
-        LintKind::Alint { config, probe } => (Some(config), probe.as_ref()),
+        LintKind::Alint { config, probe, .. } => (Some(config), probe.as_ref()),
         LintKind::MiseTask { .. } | LintKind::GeneratedCheck => (None, None),
     };
     config.into_iter().chain(probe)
+}
+
+const GENERATOR_FOLDERS: [&str; 3] = [".github/", ".velnor/", "generator/"];
+
+fn inert(path: &RepoPath) -> bool {
+    !GENERATOR_FOLDERS
+        .iter()
+        .any(|folder| path.as_str().starts_with(folder))
+        && Path::new(path.as_str())
+            .extension()
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("md"))
 }
 
 fn declared(lint: &LintJob, path: &RepoPath) -> bool {
@@ -161,6 +176,9 @@ fn declared(lint: &LintJob, path: &RepoPath) -> bool {
 }
 
 fn reached(lint: &LintJob, path: &RepoPath) -> bool {
+    if lint.kind == LintKind::GeneratedCheck {
+        return !inert(path);
+    }
     declared(lint, path)
         || implicit(lint, path)
         || below_one(lint, path)

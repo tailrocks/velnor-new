@@ -3,20 +3,36 @@
 
 use std::ffi::{OsStr, OsString};
 use std::io;
-use std::os::fd::{AsFd, BorrowedFd};
+use std::os::fd::{AsFd, OwnedFd};
 use std::os::unix::ffi::OsStringExt;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
+use std::time::{Duration, SystemTime};
 
 use nix::dir::Dir;
-use nix::fcntl::{AT_FDCWD, AtFlags, OFlag, openat, readlinkat};
-use nix::sys::stat::{Mode, SFlag, fstat, fstatat};
+use nix::fcntl::{AtFlags, OFlag, openat, readlinkat};
+use nix::sys::stat::{FileStat, Mode, SFlag, fstat, fstatat};
 
 use super::Kind;
+use super::resolve;
 use super::walk::unresolved_link;
 
 pub(super) type Opened = Rc<Dir>;
 pub(super) type Identity = (libc::dev_t, libc::ino_t);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::io::audit) struct Stamp {
+    device: i128,
+    inode: i128,
+    modified: (i128, i128),
+    changed: (i128, i128),
+}
+
+impl Stamp {
+    pub(super) fn is(&self, (device, inode): Identity) -> bool {
+        self.device == i128::from(device) && self.inode == i128::from(inode)
+    }
+}
 
 #[derive(Clone)]
 pub(super) enum Origin {
@@ -27,6 +43,11 @@ pub(super) enum Current {
     Gone,
     Directory(Identity),
     Other(Kind),
+}
+
+pub(super) struct Observed {
+    pub(super) kind: Kind,
+    pub(super) modified: Option<SystemTime>,
 }
 
 fn failure(errno: nix::errno::Errno) -> io::Error {
@@ -41,22 +62,43 @@ pub(super) fn replaced(error: &io::Error) -> bool {
 }
 
 pub(super) fn open(origin: &Origin, path: &Path) -> io::Result<Dir> {
-    let flags = OFlag::O_RDONLY | OFlag::O_DIRECTORY | OFlag::O_NOFOLLOW | OFlag::O_CLOEXEC;
     let fd = match origin {
-        Origin::Path => openat(AT_FDCWD, path, flags, Mode::empty()),
+        Origin::Path => resolve::open_path(path, true)?,
         Origin::Child { parent, name } => {
-            openat(parent.as_ref(), name.as_os_str(), flags, Mode::empty())
+            let flags = OFlag::O_RDONLY | OFlag::O_DIRECTORY | OFlag::O_NOFOLLOW | OFlag::O_CLOEXEC;
+            openat(parent.as_ref(), name.as_os_str(), flags, Mode::empty()).map_err(failure)?
         }
-    }
-    .map_err(failure)?;
+    };
     Dir::from_fd(fd).map_err(failure)
 }
-pub(super) fn identity(directory: &Dir) -> io::Result<Identity> {
+pub(super) fn stamp(directory: &Dir) -> io::Result<Stamp> {
     let stat = fstat(directory).map_err(failure)?;
-    Ok((stat.st_dev, stat.st_ino))
+    Ok(Stamp {
+        device: i128::from(stat.st_dev),
+        inode: i128::from(stat.st_ino),
+        modified: (i128::from(stat.st_mtime), i128::from(stat.st_mtime_nsec)),
+        changed: (i128::from(stat.st_ctime), i128::from(stat.st_ctime_nsec)),
+    })
 }
 pub(super) fn current(origin: &Origin, path: &Path) -> io::Result<Current> {
-    let (anchor, name) = anchor(origin, path);
+    let held: OwnedFd;
+    let (anchor, name) = match origin {
+        Origin::Child { parent, name } => (parent.as_fd(), name.as_os_str()),
+        Origin::Path => {
+            let (container, name) = match (path.parent(), path.file_name()) {
+                (Some(container), Some(name)) => (container, name),
+                _ => (path, OsStr::new(".")),
+            };
+            held = match resolve::open_path(container, false) {
+                Ok(held) => held,
+                Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                    return Ok(Current::Gone);
+                }
+                Err(error) => return Err(error),
+            };
+            (held.as_fd(), name)
+        }
+    };
     let stat = match fstatat(anchor, name, AtFlags::AT_SYMLINK_NOFOLLOW) {
         Ok(stat) => stat,
         Err(nix::errno::Errno::ENOENT) => return Ok(Current::Gone),
@@ -70,13 +112,6 @@ pub(super) fn current(origin: &Origin, path: &Path) -> io::Result<Current> {
         Some(kind) => Current::Other(kind),
         None => Current::Gone,
     })
-}
-
-fn anchor<'a>(origin: &'a Origin, path: &'a Path) -> (BorrowedFd<'a>, &'a OsStr) {
-    match origin {
-        Origin::Path => (AT_FDCWD, path.as_os_str()),
-        Origin::Child { parent, name } => (parent.as_fd(), name.as_os_str()),
-    }
 }
 
 pub(super) fn names(
@@ -96,32 +131,76 @@ pub(super) fn names(
 }
 
 pub(super) fn kind_at(directory: impl AsFd, name: &OsStr, path: &Path) -> io::Result<Option<Kind>> {
+    Ok(classify(directory, name, path, false, &|| {})?.map(|observed| observed.kind))
+}
+
+pub(super) fn observe(
+    directory: impl AsFd,
+    name: &OsStr,
+    path: &Path,
+    resolved: &dyn Fn(),
+) -> io::Result<Option<Observed>> {
+    classify(directory, name, path, true, resolved)
+}
+
+fn modified(stat: &FileStat) -> SystemTime {
+    let seconds = stat.st_mtime;
+    let nanos = Duration::from_nanos(u64::try_from(stat.st_mtime_nsec).unwrap_or(0));
+    match u64::try_from(seconds) {
+        Ok(seconds) => SystemTime::UNIX_EPOCH + Duration::from_secs(seconds) + nanos,
+        Err(_) => SystemTime::UNIX_EPOCH - Duration::from_secs(seconds.unsigned_abs()) + nanos,
+    }
+}
+
+fn format_of(stat: &FileStat) -> SFlag {
+    SFlag::from_bits_truncate(stat.st_mode) & SFlag::S_IFMT
+}
+
+fn classify(
+    directory: impl AsFd,
+    name: &OsStr,
+    path: &Path,
+    with_modified: bool,
+    after_resolve: &dyn Fn(),
+) -> io::Result<Option<Observed>> {
     let stat = match fstatat(&directory, name, AtFlags::AT_SYMLINK_NOFOLLOW) {
         Ok(stat) => stat,
         Err(nix::errno::Errno::ENOENT) => return Ok(None),
         Err(errno) => return Err(failure(errno)),
     };
-    let format = SFlag::from_bits_truncate(stat.st_mode) & SFlag::S_IFMT;
+    let format = format_of(&stat);
     if format != SFlag::S_IFLNK {
-        return Ok(Some(if format == SFlag::S_IFDIR {
+        let kind = if format == SFlag::S_IFDIR {
             Kind::Directory
         } else if format == SFlag::S_IFREG {
             Kind::File
         } else {
             Kind::Other
-        }));
+        };
+        let modified = (format != SFlag::S_IFDIR).then(|| modified(&stat));
+        return Ok(Some(Observed { kind, modified }));
     }
-    let resolved = match std::fs::canonicalize(path) {
-        Ok(resolved) => Some(resolved),
+    let target = match readlinkat(&directory, name) {
+        Ok(target) => PathBuf::from(target),
+        Err(nix::errno::Errno::ENOENT) => return Ok(None),
+        Err(errno) => return Err(failure(errno)),
+    };
+    let base = path.parent().unwrap_or(path);
+    let followed = match resolve::resolve(directory.as_fd(), base, &target) {
+        Ok(followed) => Some(followed),
         Err(error) if unresolved_link(&error) => None,
         Err(error) => return Err(error),
     };
-    match readlinkat(&directory, name) {
-        Ok(target) => Ok(Some(Kind::Link {
-            target: target.into(),
-            resolved,
-        })),
-        Err(nix::errno::Errno::ENOENT) => Ok(None),
-        Err(errno) => Err(failure(errno)),
-    }
+    after_resolve();
+    let modified = if with_modified {
+        let observed = followed.as_ref().map_or(&stat, |followed| &followed.stat);
+        (format_of(observed) != SFlag::S_IFDIR).then(|| modified(observed))
+    } else {
+        None
+    };
+    let resolved = followed.map(|followed| followed.path);
+    Ok(Some(Observed {
+        kind: Kind::Link { target, resolved },
+        modified,
+    }))
 }

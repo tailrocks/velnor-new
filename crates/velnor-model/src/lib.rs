@@ -91,6 +91,7 @@ pub use selection::{
     RELEASE_PLZ_FILE, RELEASE_WORKFLOW_PATH, RustSelection, SAMPLES, SelectionReason, SkipReason,
     StepNeed, WORKFLOW_PATH, WORKFLOWS_CONFIG_PATH,
 };
+pub use setup_phase::SetupOrder;
 pub use shape::{Shape, ShapeDecision};
 pub use test_group::{
     ARTIFACT_RETENTION_DEFAULT, ArtifactWhen, GroupArtifact, GroupEvent, GroupRoot, NoTests,
