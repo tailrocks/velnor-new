@@ -153,6 +153,39 @@ fn a_later_mirror_on_setup_supersedes_an_earlier_mirror_off_marker() -> TestResu
 }
 
 #[test]
+fn an_off_inherited_from_github_env_keeps_a_rerun_mirror_off() -> TestResult {
+    let repo = Repo::empty("crates-mirror-marker-inherited-off");
+    repo.write_unstaged("ca.pem", "not used by this fixture");
+    repo.write_unstaged("mise.toml", MBX_DECLARED);
+    let off = setup_command(repo.root(), REGISTRY)
+        .current_dir(repo.root())
+        .env("VELNOR_CRATES_MIRROR", "off")
+        .env("PATH", path_with(repo.root())?)
+        .output()?;
+    assert!(off.status.success(), "{off:?}");
+    let env = fs::read_to_string(repo.root().join("env"))?;
+    let inherited = env
+        .lines()
+        .filter_map(|line| line.strip_prefix("VELNOR_CRATES_MIRROR="))
+        .next_back()
+        .ok_or("the mirror-off setup exported no VELNOR_CRATES_MIRROR line")?;
+    assert_eq!(inherited, "off");
+    fs::remove_file(repo.root().join("env"))?;
+    let rerun = setup_command(repo.root(), REGISTRY)
+        .current_dir(repo.root())
+        .env("VELNOR_CRATES_MIRROR", inherited)
+        .env("PATH", path_with(repo.root())?)
+        .output()?;
+    assert!(rerun.status.success(), "{rerun:?}");
+    assert!(
+        String::from_utf8_lossy(&rerun.stdout).contains("crates mirror disabled by"),
+        "{rerun:?}"
+    );
+    assert!(read_marker(repo.root())?.contains("mirror=off"));
+    Ok(())
+}
+
+#[test]
 fn step_env_cannot_replace_the_mirror_config_with_another_file() -> TestResult {
     let repo = configured_repo("crates-mirror-marker-other-config")?;
     let evil = repo.root().join("evil.toml");
