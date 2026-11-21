@@ -14,6 +14,7 @@ use crate::pipeline::{pin_helper, view, workflow};
 const SHARED_STORE_ON: &str = "mbx_shared_store = true\n";
 const SHARED_STORE_OFF: &str = "mbx_shared_store = false\n";
 const CACHE_DEBUG_ON: &str = "cache_debug = true\n";
+const TEST_GROUPS_ON: &str = "[[test_groups]]\nname = 'database'\nroot = '.'\nfilter = 'package(package-0) and test(/^db_/)'\n\n[[test_groups]]\nname = 'shell'\nroot = '.'\nfilter = 'binary(it) and test(~cargo_)'\n";
 
 fn rust_sources(dir: &Path, out: &mut Vec<PathBuf>) -> std::io::Result<()> {
     for entry in fs::read_dir(dir)? {
@@ -34,7 +35,7 @@ fn patches_in(text: &str) -> Vec<u64> {
         .collect()
 }
 
-fn gate_patches() -> Result<BTreeSet<u64>, Box<dyn Error>> {
+pub(crate) fn gate_patches() -> Result<BTreeSet<u64>, Box<dyn Error>> {
     let mut files = Vec::new();
     for krate in ["velnor-gen", "velnor-rust", "velnor-render", "velnor-model"] {
         let src = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -67,7 +68,7 @@ fn gate_patch(key: &str) -> Result<u64, Box<dyn Error>> {
         .ok_or_else(|| format!("the {key} gate has no threshold").into())
 }
 
-fn strings<'a>(value: &'a Value, out: &mut Vec<&'a str>) {
+pub(crate) fn strings<'a>(value: &'a Value, out: &mut Vec<&'a str>) {
     match value {
         Value::String(text) => out.push(text),
         Value::Array(items) => items.iter().for_each(|item| strings(item, out)),
@@ -76,14 +77,14 @@ fn strings<'a>(value: &'a Value, out: &mut Vec<&'a str>) {
     }
 }
 
-fn expressions(text: &str) -> Vec<&str> {
+pub(crate) fn expressions(text: &str) -> Vec<&str> {
     text.split("${{")
         .skip(1)
         .filter_map(|rest| rest.split_once("}}").map(|(expr, _)| expr))
         .collect()
 }
 
-fn step_refs(expr: &str) -> Vec<&str> {
+pub(crate) fn step_refs(expr: &str) -> Vec<&str> {
     expr.match_indices("steps.")
         .filter(|(at, _)| {
             expr[..*at]
@@ -101,7 +102,7 @@ fn step_refs(expr: &str) -> Vec<&str> {
         .collect()
 }
 
-fn dangling_refs(workflow: &Value) -> Vec<String> {
+pub(crate) fn dangling_refs(workflow: &Value) -> Vec<String> {
     let mut dangling = Vec::new();
     let Some(jobs) = workflow["jobs"].as_object() else {
         return dangling;
@@ -136,11 +137,13 @@ fn every_steps_reference_names_a_step_of_its_own_job() -> TestResult {
     let patches = gate_patches()?;
     let shared_store = gate_patch("mbx_shared_store")?;
     let cache_debug = gate_patch("cache_debug")?;
+    let test_groups = gate_patch("test_groups")?;
     assert!(
         patches.contains(&velnor_gen::HELPER_MINIMUM.2)
             && patches.contains(&shared_store)
-            && patches.contains(&cache_debug),
-        "gate scan found {patches:?}, which misses the minimum, shared-store or cache_debug gate"
+            && patches.contains(&cache_debug)
+            && patches.contains(&test_groups),
+        "gate scan found {patches:?}, which misses the minimum, shared-store, cache_debug or test_groups gate"
     );
     for patch in patches {
         let helper = format!("0.1.{patch}");
@@ -150,6 +153,9 @@ fn every_steps_reference_names_a_step_of_its_own_job() -> TestResult {
         }
         if patch >= cache_debug {
             configs.push(Some(CACHE_DEBUG_ON));
+        }
+        if patch >= test_groups {
+            configs.push(Some(TEST_GROUPS_ON));
         }
         for config in configs {
             let mut repo = view(
