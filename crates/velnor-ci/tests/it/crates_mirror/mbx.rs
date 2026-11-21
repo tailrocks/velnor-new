@@ -10,6 +10,8 @@ use crate::io::Repo;
 
 use super::fixture::{TestResult, setup, setup_command};
 
+mod alias;
+mod scope;
 mod state;
 
 pub(super) const REGISTRY: &str = "sparse+https://mirror.example/index/";
@@ -90,6 +92,8 @@ pub(super) fn wrapper_command(
         .env_remove("VELNOR_CRATES_MIRROR")
         .env_remove("VELNOR_CARGO_DEPTH")
         .env_remove("VELNOR_CARGO_MISE_PHASE")
+        .env_remove("GITHUB_WORKSPACE")
+        .env_remove("CARGO_MANIFEST_DIR")
         .env_remove("__MISE_ACTIVE_WRAPPERS");
     if let Some(config) = config {
         command.env("VELNOR_CARGO_CONFIG", config);
@@ -98,6 +102,7 @@ pub(super) fn wrapper_command(
         command.env("VELNOR_CRATES_MIRROR", "off");
     }
     if mbx_required {
+        fs::write(root.join("mise.toml"), MBX_DECLARED)?;
         command.env("VELNOR_CARGO_MBX", "required");
     } else {
         command.env_remove("VELNOR_CARGO_MBX");
