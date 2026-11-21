@@ -6,7 +6,7 @@ use velnor_model::{HelperRelease, Platform, RepoPath};
 use crate::cargo::{CargoLane, cache_debug_env, offline_env};
 use crate::mise_digest::pinned_sha256;
 use crate::rules::{RenderedStep, SETUP_VELNOR_ACTION, Value};
-use crate::steps::{MISE, MISE_VERSION};
+use crate::steps::{MISE, MISE_VERSION, RUN};
 
 pub(crate) fn install_tools(only: Option<&str>) -> RenderedStep {
     let mut with = vec![
@@ -139,7 +139,7 @@ pub(crate) fn generator_check_step(
     RenderedStep {
         name: "Check the generated workflow with velnor-gen built from the checkout".to_owned(),
         run: Some(format!(
-            "cargo run --locked{offline} --target host-tuple --package velnor-gen --bin velnor-gen -- --root {} check --verify-release",
+            "{RUN} cargo run --locked{offline} --target host-tuple --package velnor-gen --bin velnor-gen -- --root {} check --verify-release",
             path_to_root(directory)
         )),
         env: lane

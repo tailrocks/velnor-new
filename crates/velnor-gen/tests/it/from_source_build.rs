@@ -50,6 +50,8 @@ fn the_source_build_runs_cargo_in_the_generator_directory_for_the_host_target() 
         &dir.join("bin/cargo"),
         &format!("pwd > '{0}'; printf '%s\\n' \"$@\" >> '{0}'", out.display()),
     )?;
+    let launcher = dir.join("velnor-exec");
+    fs::write(&launcher, "shift 2\nexec \"$@\"\n")?;
     let roots = [
         ("Cargo.toml", "velnor-ci-app"),
         ("tools/gen/Cargo.toml", "velnor-gen"),
@@ -68,6 +70,7 @@ fn the_source_build_runs_cargo_in_the_generator_directory_for_the_host_target() 
             "PATH",
             format!("{}:/usr/bin:/bin", dir.join("bin").display()),
         )
+        .env("VELNOR_EXEC", &launcher)
         .status()?;
     assert!(status.success(), "{job}");
     let seen = fs::read_to_string(&out)?;

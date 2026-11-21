@@ -62,8 +62,18 @@ fn the_source_build_is_one_command_with_no_shell_logic() -> TestResult {
     for logic in ["eval", "$(", "`", ";", "&&", "||", "|", "{", "if ", "fail"] {
         assert!(!run.contains(logic), "{logic}: {run}");
     }
-    assert!(run.starts_with("cargo run "), "{run}");
     assert!(step["env"].is_null(), "{step}");
+    Ok(())
+}
+
+#[test]
+fn the_source_build_runs_through_the_velnor_ci_wrapper_like_every_cargo_step() -> TestResult {
+    let job = job(&rendered(&format!("{LINT}\n{FROM_SOURCE}"), FIRST)?)?;
+    assert!(
+        run(&job).starts_with(r#". "$VELNOR_EXEC" run -- cargo run --locked "#),
+        "{}",
+        run(&job)
+    );
     Ok(())
 }
 
