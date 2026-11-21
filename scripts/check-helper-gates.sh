@@ -62,8 +62,6 @@ is_released() {
   [ "${v%.*}" = "$series" ] && [ "${v##*.}" -le "$patch" ]
 }
 
-# The ref a release is verified against. A release shipped under the legacy
-# rust-ci-v prefix keeps that prefix; an untagged current release defaults to tools-v.
 release_ref() {
   local n=$1
   if git rev-parse -q --verify "refs/tags/tools-v0.1.$n^{commit}" >/dev/null; then
