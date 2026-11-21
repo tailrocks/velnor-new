@@ -10,6 +10,7 @@ use std::time::{Duration, SystemTime};
 use super::clear::clear_home;
 use super::{HOME_PATHS, Inputs, KEEP_KEYS, Outcome, TOOLS_DIR};
 use crate::mbx_store::{random_u64, writable_by_job};
+use crate::tree_removal::remove_tree;
 
 const MARKER: &str = ".complete";
 const STAGING_PREFIX: &str = ".staging-";
@@ -180,7 +181,11 @@ pub(super) fn save(inputs: &Inputs<'_>) -> Outcome {
         return Outcome::Failed("the copy to the store failed");
     }
     let retired = tools.join(format!("{STAGING_PREFIX}retired-{}", inputs.key));
-    fs::remove_dir_all(&retired).ok();
+    if fs::remove_dir_all(&retired).is_err()
+        && fs::symlink_metadata(&retired).is_ok_and(|metadata| metadata.is_dir())
+    {
+        remove_tree(&retired).ok();
+    }
     let present = fs::symlink_metadata(&entry).is_ok();
     let replaced = present && fs::rename(&entry, &retired).is_ok();
     if inputs.replace && present && !replaced {
@@ -198,7 +203,7 @@ pub(super) fn save(inputs: &Inputs<'_>) -> Outcome {
             Outcome::Failed("the entry could not be published")
         };
     }
-    if replaced && remove_tree_or_file(&retired).is_err() {
+    if replaced && remove_tree(&retired).is_err() {
         return Outcome::Failed("the replaced entry could not be removed");
     }
     prune(&tools, inputs.key);
@@ -206,14 +211,6 @@ pub(super) fn save(inputs: &Inputs<'_>) -> Outcome {
         Outcome::Healed { to: entry }
     } else {
         Outcome::Saved { to: entry }
-    }
-}
-
-fn remove_tree_or_file(path: &Path) -> std::io::Result<()> {
-    if fs::symlink_metadata(path)?.is_dir() {
-        fs::remove_dir_all(path)
-    } else {
-        fs::remove_file(path)
     }
 }
 

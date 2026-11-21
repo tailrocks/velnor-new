@@ -98,19 +98,43 @@ fn a_replacement_heals_a_regular_file_left_at_the_entry() {
     assert_eq!(save(&store, &job.home, false), Outcome::AlreadySaved);
 }
 
+const READ_ONLY_DIR: &str = ".rustup/toolchains/1.99.1-x86_64-unknown-linux-gnu/bin";
+
+fn leftovers(store: &Path) -> Vec<String> {
+    let mut names: Vec<_> = fs::read_dir(store.join("tools"))
+        .unwrap_or_else(|e| unreachable!("{e}"))
+        .flatten()
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .collect();
+    names.sort();
+    names
+}
+
 #[test]
-fn a_replacement_that_cannot_remove_the_old_entry_fails_instead_of_healing() {
-    let (_repo, job, store) = poisoned_store("tools-heal-undeletable");
-    let bin = store
-        .join("tools")
-        .join(KEY)
-        .join(".rustup/toolchains/1.99.1-x86_64-unknown-linux-gnu/bin");
+fn a_replacement_heals_an_old_entry_holding_a_read_only_directory() {
+    let (_repo, job, store) = poisoned_store("tools-heal-read-only-old");
+    let bin = store.join("tools").join(KEY).join(READ_ONLY_DIR);
     fs::set_permissions(&bin, fs::Permissions::from_mode(0o555))
         .unwrap_or_else(|e| unreachable!("{e}"));
-    let outcome = save(&store, &job.home, true);
-    fs::set_permissions(&bin, fs::Permissions::from_mode(0o755))
+    let healed = save(&store, &job.home, true);
+    assert!(matches!(healed, Outcome::Healed { .. }), "{healed:?}");
+    assert_eq!(stored_rustc(&store), "rustc binary");
+    assert_eq!(leftovers(&store), [KEY], "no retired entry stays");
+}
+
+#[test]
+fn a_retired_leftover_holding_a_read_only_directory_does_not_block_the_next_replacement() {
+    let (_repo, job, store) = poisoned_store("tools-heal-read-only-leftover");
+    let retired = store.join("tools").join(format!(".staging-retired-{KEY}"));
+    let locked = retired.join("tree/locked");
+    fs::create_dir_all(&locked).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::write(locked.join("file"), "old").unwrap_or_else(|e| unreachable!("{e}"));
+    fs::set_permissions(&locked, fs::Permissions::from_mode(0o555))
         .unwrap_or_else(|e| unreachable!("{e}"));
-    assert!(matches!(outcome, Outcome::Failed(_)), "{outcome:?}");
+    let healed = save(&store, &job.home, true);
+    assert!(matches!(healed, Outcome::Healed { .. }), "{healed:?}");
+    assert_eq!(stored_rustc(&store), "rustc binary");
+    assert_eq!(leftovers(&store), [KEY], "no retired entry stays");
 }
 
 #[test]
@@ -187,6 +211,25 @@ impl Drop for Immutable {
             .status()
             .ok();
     }
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn a_replacement_that_cannot_remove_the_old_entry_fails_and_keeps_the_new_one() {
+    let (_repo, job, store) = poisoned_store("tools-heal-unremoved");
+    let tools = store.join("tools");
+    let planted = tools.join(KEY).join(READ_ONLY_DIR).join("rustc");
+    let _released = Immutable(
+        tools
+            .join(format!(".staging-retired-{KEY}"))
+            .join(READ_ONLY_DIR)
+            .join("rustc"),
+    );
+    let _locked = Immutable::set(&planted);
+    let outcome = save(&store, &job.home, true);
+    assert!(matches!(outcome, Outcome::Failed(_)), "{outcome:?}");
+    assert!(velnor_ci::tools_local::finish(Verb::Save, &outcome, "node").is_err());
+    assert_eq!(stored_rustc(&store), "rustc binary");
 }
 
 #[cfg(target_os = "macos")]
