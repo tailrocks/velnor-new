@@ -54,9 +54,14 @@ enum Step {
     Root,
     Parent,
     Name(OsString),
+    Directory,
 }
 
 fn steps(target: &Path, pending: &mut Vec<Step>) {
+    let bytes = target.as_os_str().as_encoded_bytes();
+    if bytes.ends_with(b"/") || bytes.ends_with(b"/.") {
+        pending.push(Step::Directory);
+    }
     for component in target.components().rev() {
         match component {
             Component::Normal(name) => pending.push(Step::Name(name.to_owned())),
@@ -78,28 +83,24 @@ pub(super) fn resolve(
     target: &Path,
 ) -> io::Result<Followed> {
     let mut current = directory.try_clone_to_owned()?;
-    let mut trail: Vec<OwnedFd> = Vec::new();
     let mut path = base.to_path_buf();
     let mut pending = Vec::new();
-    let mut links = 0;
+    let mut links = 1;
     let mut last = None;
     steps(target, &mut pending);
     while let Some(step) = pending.pop() {
         match step {
             Step::Root => {
                 current = open_path(Path::new("/"), false)?;
-                trail.clear();
                 path = PathBuf::from("/");
                 last = None;
             }
             Step::Parent => {
-                current = match trail.pop() {
-                    Some(parent) => parent,
-                    None => open_directory(current.as_fd(), Path::new(".."), false)?,
-                };
+                current = open_directory(current.as_fd(), Path::new(".."), false)?;
                 path.pop();
                 last = None;
             }
+            Step::Directory => {}
             Step::Name(name) => {
                 let stat = fstatat(&current, name.as_os_str(), AtFlags::AT_SYMLINK_NOFOLLOW)
                     .map_err(failure)?;
@@ -117,8 +118,7 @@ pub(super) fn resolve(
                     }
                     steps(&next, &mut pending);
                 } else if format == SFlag::S_IFDIR {
-                    let opened = open_directory(current.as_fd(), Path::new(&name), false)?;
-                    trail.push(std::mem::replace(&mut current, opened));
+                    current = open_directory(current.as_fd(), Path::new(&name), false)?;
                     path.push(&name);
                 } else if pending.is_empty() {
                     path.push(&name);
