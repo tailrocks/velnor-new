@@ -53,7 +53,7 @@ impl Zone {
             Self::Repository | Self::Module if is(HOOKS) => Self::Hooks,
             Self::Repository | Self::Module if is(LOGS) => Self::Logs,
             Self::Repository | Self::Modules | Self::Module if is(MODULES) => Self::Modules,
-            Self::Module if is(REFS) => Self::Plain,
+            Self::Module if is(REFS) => Self::Repository,
             Self::Modules | Self::Module => Self::Module,
             Self::Repository => Self::Plain,
             other => other,
