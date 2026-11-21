@@ -1,6 +1,7 @@
 # Hand-maintained. Rust CI, Alint, Jactionlint, Cargo Deny and Cargo Machete are generated into
 # rust-ci.yml (velnor-gen, .velnor/rust-ci.toml). What stays here: the workflow_dispatch contract
-# inputs (the qualification code addresses this workflow path) and the helper-gates check.
+# inputs (the qualification code addresses this workflow path), the helper-gates check and the
+# secret scanners.
 name: CI
 "on":
   pull_request:
@@ -138,3 +139,38 @@ jobs:
         env:
           BASE_REF: ${{ github.base_ref }}
         run: bash scripts/check-helper-gates.sh "origin/$BASE_REF"
+  secret-scan:
+    name: Secret scanners
+    runs-on: [velnor, ubuntu-26.04-scale-set]
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash -e {0}
+    if: (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || github.event_name == 'push'
+    env:
+      MISE_NO_CONFIG: "0"
+      MISE_NO_ENV: "0"
+      MISE_LOCKFILE: "1"
+    steps:
+      - name: Checkout with history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: "0"
+          persist-credentials: "false"
+      - name: Install the pinned secret scanners
+        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
+        with:
+          version: '2026.11.10'
+          cache: false
+          install_args: gitleaks betterleaks kingfisher
+      - name: Print scanner versions
+        run: |
+          gitleaks version
+          betterleaks version
+          kingfisher --version
+      - name: Scan git history with gitleaks
+        run: gitleaks git . --redact --no-banner --config .gitleaks.toml
+      - name: Scan git history with betterleaks
+        run: betterleaks git . --redact -c .gitleaks.toml
+      - name: Scan the working tree with kingfisher
+        run: bash scripts/secret-scan-worktree.sh
