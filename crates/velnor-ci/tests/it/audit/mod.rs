@@ -5,6 +5,7 @@ mod boundary;
 mod bounds;
 mod build_clock;
 mod build_directory;
+mod build_program;
 mod build_script_source;
 mod descriptors;
 mod freshness;

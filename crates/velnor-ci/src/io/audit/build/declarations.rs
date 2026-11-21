@@ -183,3 +183,6 @@ pub(super) fn invalidate(declared: &[Declared]) -> Result<(), CiError> {
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests;

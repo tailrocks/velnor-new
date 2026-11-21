@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::cell::Cell;
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::{OsStr, OsString};
 use std::fs;
@@ -19,6 +20,7 @@ pub(in crate::io::audit) struct Budget {
     limit: usize,
     overflowed: bool,
     descriptors: bool,
+    warned: Cell<usize>,
 }
 
 impl Budget {
@@ -28,6 +30,7 @@ impl Budget {
             limit,
             overflowed: false,
             descriptors: false,
+            warned: Cell::new(0),
         }
     }
 
@@ -40,6 +43,11 @@ impl Budget {
         self.descriptors
     }
 
+    #[cfg(test)]
+    pub(in crate::io::audit) fn warnings_emitted(&self) -> usize {
+        self.warned.get()
+    }
+
     pub(in crate::io::audit) fn descriptor_warning(&self, error: &io::Error) -> Option<String> {
         if self.descriptors {
             return Some(format!("velnor-ci: WARNING: {error}"));
@@ -50,6 +58,7 @@ impl Budget {
 
     pub(in crate::io::audit) fn warn_descriptors_exhausted(&self, error: &io::Error) {
         if let Some(warning) = self.descriptor_warning(error) {
+            self.warned.set(self.warned.get() + 1);
             eprintln!("{warning}");
         }
     }

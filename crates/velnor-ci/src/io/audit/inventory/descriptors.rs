@@ -7,6 +7,7 @@ use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use nix::sys::resource::{RLIM_INFINITY, Resource, getrlimit, setrlimit};
 
+use super::program;
 use crate::error::CiError;
 
 const UNLIMITED_TARGET: u64 = 10_240;
@@ -62,16 +63,17 @@ impl Drop for OpenFileLimit {
 const CONFINE: &str = "limit=$1; shift; ulimit -Sn \"$limit\" && exec \"$@\"";
 
 impl OpenFileLimit {
-    fn confine(&self, build: &Command) -> Command {
+    fn confine(&self, build: &Command) -> io::Result<Command> {
+        let program = program::resolve(build)?;
         let limit = if self.soft == RLIM_INFINITY {
             "unlimited".to_owned()
         } else {
             self.soft.to_string()
         };
-        let mut confined = Command::new("sh");
+        let mut confined = Command::new("/bin/sh");
         confined
             .args(["-c", CONFINE, "velnor-build", &limit])
-            .arg(build.get_program())
+            .arg(program)
             .args(build.get_args());
         if let Some(directory) = build.get_current_dir() {
             confined.current_dir(directory);
@@ -82,7 +84,7 @@ impl OpenFileLimit {
                 None => confined.env_remove(name),
             };
         }
-        confined
+        Ok(confined)
     }
 }
 
@@ -91,7 +93,9 @@ pub(in crate::io::audit) fn run_build(
     build: &mut Command,
 ) -> Result<ExitStatus, CiError> {
     let status = match limit {
-        Some(limit) => limit.confine(build).status(),
+        Some(limit) => limit
+            .confine(build)
+            .and_then(|mut confined| confined.status()),
         None => build.status(),
     };
     status.map_err(|e| CiError::new(format!("cannot run build command: {e}")))
@@ -142,6 +146,7 @@ pub(super) fn comparison_message(errno: i32) -> String {
 #[cfg(test)]
 mod tests {
     use std::fs;
+    use std::os::unix::fs::PermissionsExt;
 
     use nix::sys::stat::Mode;
     use nix::unistd::mkfifo;
@@ -206,6 +211,50 @@ mod tests {
         assert!(matches!(status, Ok(Ok(status)) if status.success()));
         assert_eq!(child_limit.trim(), soft.to_string());
         assert_eq!(open_file_limit(), during);
+    }
+
+    fn confined(mut build: Command) -> Result<ExitStatus, CiError> {
+        let raised = raise_open_file_limit();
+        let result = run_build(raised.as_ref(), &mut build);
+        drop(raised);
+        result
+    }
+
+    #[test]
+    fn an_absolute_build_program_runs_under_a_path_without_a_shell() {
+        let mut build = Command::new("/bin/sh");
+        build.args(["-c", "exit 0"]).env("PATH", "/nonexistent");
+        assert!(confined(build).is_ok_and(|status| status.success()));
+    }
+
+    #[test]
+    fn a_bare_build_program_is_found_through_the_path_the_build_gets() {
+        let scratch =
+            std::env::temp_dir().join(format!("velnor-child-path-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&scratch);
+        fs::create_dir_all(&scratch).unwrap_or_else(|e| unreachable!("{e}"));
+        let tool = scratch.join("velnor-only-tool");
+        fs::write(&tool, "#!/bin/sh\nexit 7\n").unwrap_or_else(|e| unreachable!("{e}"));
+        fs::set_permissions(&tool, fs::Permissions::from_mode(0o755))
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        let mut build = Command::new("velnor-only-tool");
+        build.env("PATH", &scratch);
+        let status = confined(build);
+        fs::remove_dir_all(&scratch).unwrap_or_else(|e| unreachable!("{e}"));
+        assert_eq!(status.ok().and_then(|status| status.code()), Some(7));
+    }
+
+    #[test]
+    fn a_build_program_that_cannot_be_started_is_an_error_not_an_exit_code() {
+        for program in ["velnor-no-such-program", "", "-velnor-no-such-program"] {
+            let error = confined(Command::new(program))
+                .err()
+                .unwrap_or_else(|| unreachable!("{program:?} must not run"));
+            assert!(
+                error.to_string().starts_with("cannot run build command: "),
+                "{program:?}: {error}"
+            );
+        }
     }
 
     #[test]
