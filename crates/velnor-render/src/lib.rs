@@ -58,6 +58,7 @@ mod source_roots;
 mod steps;
 mod tests;
 mod token_commands;
+mod tools_anchor_steps;
 mod tools_steps;
 mod workflow;
 mod yaml;
