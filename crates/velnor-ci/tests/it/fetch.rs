@@ -168,6 +168,7 @@ impl Fixture {
 }
 
 mod environment;
+mod fixed_toolchain;
 mod token;
 
 const MIRROR: &str = "# velnor-ci crates-mirror owns this file\n[source.crates-io]\nreplace-with = \"velnor-crates-mirror\"\n[source.velnor-crates-mirror]\nregistry = \"sparse+https://mirror.invalid/\"\n[http]\ncainfo = \"/etc/ssl/mirror.pem\"\n";
