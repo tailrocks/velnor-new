@@ -139,7 +139,8 @@ fn checked(context: &Context, anchor: &Anchor<'_>, file: &Path) -> Result<Verdic
         verdict,
         Verdict::Discarded(Discard::Mismatch | Discard::Unreadable(_))
     ) {
-        tools_discard::mark(&context.runner_temp)?;
+        tools_discard::mark(&context.runner_temp)
+            .map_err(|error| CiError::new(format!("{error}; the poisoned entry would be kept")))?;
     }
     Ok(verdict)
 }
@@ -197,7 +198,9 @@ pub fn setup(verb: Verb) -> Result<String, CiError> {
         verb,
         &Context {
             home: required("HOME")?,
-            runner_temp: required("RUNNER_TEMP")?,
+            runner_temp: tools_discard::runner_temp(var("RUNNER_TEMP")).ok_or_else(|| {
+                CiError::new("set RUNNER_TEMP to an absolute path; the tools anchor lives under it")
+            })?,
             github_output: var("GITHUB_OUTPUT").map(PathBuf::from),
             anchor: var("VELNOR_TOOLS_ANCHOR").unwrap_or_default(),
             anchor_matched: var("VELNOR_ANCHOR_MATCHED").is_some_and(|key| !key.is_empty()),
