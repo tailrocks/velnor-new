@@ -11,6 +11,9 @@ use super::crates_mirror_mbx::{option_value, subcommand};
 
 const DEPTH: usize = 8;
 const CONFIGS: &[&str] = &["config", "config.toml"];
+// Built-in names a user alias may still override: cargo's short aliases, and clippy,
+// which is an external subcommand. Every other built-in name ignores a user alias.
+const OVERRIDABLE: &[&str] = &["b", "c", "clippy", "d", "r", "rm", "t"];
 
 enum Alias {
     Found(Vec<OsString>),
@@ -28,6 +31,9 @@ pub(super) fn expand(work: &Path, args: &[OsString], builtin: &[&str]) -> Option
             return Some(args);
         }
         let name = name.to_owned();
+        if builtin.contains(&name.as_str()) && !OVERRIDABLE.contains(&name.as_str()) {
+            return Some(args);
+        }
         match lookup(work, &args, &name) {
             Alias::Found(words) => {
                 args.splice(index..=index, words);

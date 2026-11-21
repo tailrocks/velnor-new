@@ -172,3 +172,17 @@ fn a_dotted_alias_name_is_read_from_its_environment_variable() -> TestResult {
     assert_plain(&run(&format!("build -m {outside}"))?);
     Ok(())
 }
+
+#[test]
+fn a_user_alias_never_overrides_a_real_built_in_command() -> TestResult {
+    let repo = declared_job()?;
+    let launch = repo.root().join("launch");
+    let (inside, outside) = manifests(&repo);
+    aliases(
+        &launch,
+        &format!("[alias]\ntest = \"metadata --no-deps --format-version 1 -m {outside}\"\n"),
+    )?;
+    assert_refused(&run_with_args(&repo, &launch, &["test", "-m", &inside])?);
+    assert_plain(&run_with_args(&repo, &launch, &["test", "-m", &outside])?);
+    Ok(())
+}

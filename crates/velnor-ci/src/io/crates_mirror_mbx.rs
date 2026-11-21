@@ -109,6 +109,8 @@ fn directory_flag(work: &Path, args: &[OsString]) -> PathBuf {
             if let Some(directory) = seen.next() {
                 base = base.join(directory);
             }
+        } else if let Some(directory) = text.strip_prefix("-C") {
+            base = base.join(directory);
         } else if matches!(text, "-Z" | "--config" | "--color") {
             seen.next();
         } else if !text.starts_with(['-', '+']) {
