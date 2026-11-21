@@ -103,11 +103,7 @@ pub(super) fn scan_with(
     }) = pending.pop()
     {
         if !visited.insert(directory.clone()) {
-            if let Some(recorded) = identities.get(&directory)
-                && !handle::identity_at(&directory).is_ok_and(|now| recorded.is(now))
-            {
-                return Err(changed(io::ErrorKind::Other, &directory));
-            }
+            revisited(&identities, &directory)?;
             continue;
         }
         budget.reserve()?;
@@ -192,6 +188,15 @@ pub(super) fn scan_with(
         entries,
         identities,
     })
+}
+
+fn revisited(identities: &BTreeMap<PathBuf, handle::Stamp>, directory: &Path) -> io::Result<()> {
+    match identities.get(directory) {
+        Some(recorded) if !handle::identity_at(directory).is_ok_and(|now| recorded.is(now)) => {
+            Err(changed(io::ErrorKind::Other, directory))
+        }
+        _ => Ok(()),
+    }
 }
 
 fn changed(kind: io::ErrorKind, directory: &Path) -> io::Error {
