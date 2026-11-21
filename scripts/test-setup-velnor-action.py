@@ -92,6 +92,18 @@ fi
 exec "$REAL_MV" "$@"
 """
 
+STUB_PLANT_PID_QUARANTINE_MV = """#!/bin/sh
+for arg; do last="$arg"; done
+case "$last" in
+  */.velnor-ci.evict.*)
+    if [ ! -e "$STUB_RACE_MARK" ]; then
+      : > "$STUB_RACE_MARK"
+      cp "$STUB_RACE" "${last%/*}/.velnor-ci.evict.$PPID"
+    fi ;;
+esac
+exec "$REAL_MV" "$@"
+"""
+
 STUB_TAR = """#!/bin/sh
 if [ -p /dev/stdin ]; then pipe=pipe; else pipe=none; fi
 printf '%s\\t%s\\n' "$pipe" "$*" >> "$STUB_TAR_LOG"
@@ -744,6 +756,26 @@ class SetupVelnorInstallTests(unittest.TestCase):
         self.assertEqual(self.curl_calls(), [])
         self.assertEqual(self.installed_binary().read_bytes(), PAYLOAD)
 
+    def test_a_verified_archive_retained_by_an_earlier_eviction_is_not_overwritten_by_a_later_one(self):
+        cached = self.cached_archive()
+        cached.parent.mkdir(parents=True)
+        cached.write_bytes(b"tampered archive\n")
+        stub = self.stub_bin / "mv"
+        stub.write_text(STUB_PLANT_PID_QUARANTINE_MV)
+        stub.chmod(0o755)
+        result = self.install(
+            sha256(self.archive),
+            extra_env={
+                "STUB_RACE": str(self.payload),
+                "STUB_RACE_MARK": str(self.root / "race-mark"),
+                "REAL_MV": shutil.which("mv"),
+                "STUB_MISSING": "tools-v0.1.79 rust-ci-v0.1.79",
+            },
+        )
+        self.assertEqual(result.returncode, 1, result.output)
+        retained = [path for path in installed_files(self.tool_cache) if path.read_bytes() == self.archive]
+        self.assertTrue(retained, "a verified archive kept by an earlier eviction was overwritten and deleted")
+
     def test_a_directory_at_the_store_entry_path_is_removed_when_the_download_fails(self):
         cached = self.cached_archive()
         cached.mkdir(parents=True)
@@ -794,12 +826,24 @@ class SetupVelnorInstallTests(unittest.TestCase):
         head = self.stub_bin / "head"
         head.write_text(STUB_FAILING_FIRST_HEAD)
         head.chmod(0o755)
-        result = self.install(
-            sha256(self.archive), extra_env={"STUB_HEAD_MARK": str(self.root / "head-mark")}
+        head_mark = str(self.root / "head-mark")
+        first = self.install(
+            sha256(self.archive),
+            extra_env={"STUB_HEAD_MARK": head_mark, "STUB_MISSING": "tools-v0.1.79 rust-ci-v0.1.79"},
         )
-        self.assertEqual(result.returncode, 0, result.output)
-        self.assertNotIn("removed the tool-cache copy", result.output)
-        self.assertIn("is kept", result.output)
+        self.assertEqual(first.returncode, 1, first.output)
+        self.assertNotIn("removed the tool-cache copy", first.output)
+        self.assertIn("is kept", first.output)
+        self.assertTrue(
+            cached.is_file() and cached.read_bytes() == self.archive, "the healthy store entry was not kept"
+        )
+        self.stub_log.unlink(missing_ok=True)
+        self.github_path.write_text("")
+        second = self.install(sha256(self.archive), extra_env={"STUB_HEAD_MARK": head_mark})
+        self.assertEqual(second.returncode, 0, second.output)
+        self.assertIn("is in the tool cache", second.output)
+        self.assertEqual(self.curl_calls(), [])
+        self.assertEqual(self.installed_binary().read_bytes(), PAYLOAD)
 
     def test_a_failed_removal_of_the_eviction_quarantine_does_not_abort_the_install(self):
         cached = self.cached_archive()

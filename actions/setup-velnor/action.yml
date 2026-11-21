@@ -75,8 +75,8 @@ runs:
           mv -f "$no_follow" "$1" "$2" 2> /dev/null && [ -f "$2" ] && [ ! -L "$2" ] && [ "$(digest "$2")" = "$expected" ]
         }
         evict_store_entry() {
-          quarantine="$dir/.velnor-ci.evict.$$"
-          if mv -f "$no_follow" "$dir/$archive" "$quarantine" 2> /dev/null; then
+          quarantine="$dir/.velnor-ci.evict.$$.$RANDOM$RANDOM"
+          if mv -n "$no_follow" "$dir/$archive" "$quarantine" 2> /dev/null; then
             if [ -n "${1:-}" ]; then
               echo "::warning title=setup-velnor::removed the tool-cache copy of $archive for velnor-ci $VERSION $1"
               rm -f "$quarantine" 2> /dev/null || true
