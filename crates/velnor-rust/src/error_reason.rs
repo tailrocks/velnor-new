@@ -245,6 +245,7 @@ impl fmt::Display for Reason {
             | Self::LintDuplicate(_)
             | Self::LintKeyForeign { .. }
             | Self::GeneratorPackage { .. }
+            | Self::GeneratorBinary { .. }
             | Self::InvalidPatch(_) => self.fmt_config(f),
         }
     }

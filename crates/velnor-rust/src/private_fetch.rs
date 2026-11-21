@@ -246,8 +246,12 @@ pub(crate) fn any_gate(first: Option<&Gate>, second: Option<&Gate>) -> Option<Ga
 }
 
 fn manifest(step: &Step) -> RepoPath {
-    if let StepKind::Cargo(CargoCommand::Deny { manifest, .. }) = &step.kind {
-        return manifest.clone();
+    match &step.kind {
+        StepKind::Cargo(CargoCommand::Deny { manifest, .. })
+        | StepKind::GeneratorCheck {
+            source: Some(manifest),
+        } => return manifest.clone(),
+        _ => {}
     }
     step.directory.as_ref().map_or_else(
         || RepoPath::from_static("Cargo.toml"),
@@ -260,10 +264,12 @@ fn runs_repository_code(step: &Step) -> bool {
 }
 
 pub(crate) fn compiles(step: &Step) -> bool {
-    matches!(&step.kind, StepKind::Cargo(command) if !matches!(
-        command,
-        CargoCommand::FmtCheck
-            | CargoCommand::Machete
-            | CargoCommand::NextestRunArchive { .. }
-    ))
+    match &step.kind {
+        StepKind::Cargo(command) => !matches!(
+            command,
+            CargoCommand::FmtCheck | CargoCommand::Machete | CargoCommand::NextestRunArchive { .. }
+        ),
+        StepKind::GeneratorCheck { source } => source.is_some(),
+        _ => false,
+    }
 }

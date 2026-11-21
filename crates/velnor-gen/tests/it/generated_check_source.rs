@@ -3,7 +3,7 @@
 
 use serde_json::Value;
 use velnor_gen::GenerateError;
-use velnor_model::{PackageName, RepoPath, RepoView};
+use velnor_model::{PackageName, RepoPath, RepoView, Target, TargetKind, TargetName};
 use velnor_rust::{CONFIG_PATH, DetectError, LOCK_PATH, Reason};
 
 use crate::facts::TestResult;
@@ -12,11 +12,11 @@ use crate::lint_lane::{LINT, MISE, runs};
 use crate::lock_archive::archive_lock_at;
 use crate::pipeline::{view, workflow};
 
-const FROM_SOURCE: &str = "[[lint]]\nkind = 'generated-check'\nfrom_source = true\n";
-const ID: &str = "lint-generated-check";
-const CHECK_FROM_SOURCE: &str = "cargo run --locked --manifest-path Cargo.toml --target \"$VELNOR_GEN_TARGET\" --package velnor-gen -- check --verify-release";
-const NESTED: &str = "tools/gen/Cargo.toml";
-const FIRST: &str = "0.1.112";
+pub(crate) const FROM_SOURCE: &str = "[[lint]]\nkind = 'generated-check'\nfrom_source = true\n";
+pub(crate) const ID: &str = "lint-generated-check";
+pub(crate) const CHECK_FROM_SOURCE: &str = "cargo run --locked --manifest-path Cargo.toml --target \"$VELNOR_GEN_TARGET\" --package velnor-gen -- check --verify-release";
+pub(crate) const NESTED: &str = "tools/gen/Cargo.toml";
+pub(crate) const FIRST: &str = "0.1.112";
 const STORE: &str = "MBX_CACHE_DIR=$RUNNER_TEMP/mbx";
 const MIRROR: &str = "[crates_mirror]\nrunner = 'mirror-box'\nregistry = 'sparse+https://crates-mirror.velnor-system.svc.cluster.local/index/'\ncainfo = '/opt/velnor/crates-mirror/ca-bundle.pem'\n";
 
@@ -24,7 +24,7 @@ fn locked(config: &str, version: &str) -> Result<RepoView, Box<dyn std::error::E
     generators(config, version, &["Cargo.toml"], &["Cargo.toml"])
 }
 
-fn generators(
+pub(crate) fn generators(
     config: &str,
     version: &str,
     roots: &[&str],
@@ -43,12 +43,20 @@ fn generators(
             .ok_or("no metadata for the generator root")?;
         for member in &mut metadata.members {
             member.name = PackageName::new("velnor-gen")?;
+            member.targets = vec![Target {
+                name: TargetName::new("velnor-gen")?,
+                kinds: vec![TargetKind::Bin],
+                tests: false,
+                doctest: false,
+                source: None,
+                requires_features: false,
+            }];
         }
     }
     Ok(view)
 }
 
-fn refused(view: &RepoView) -> Result<GenerateError, Box<dyn std::error::Error>> {
+pub(crate) fn refused(view: &RepoView) -> Result<GenerateError, Box<dyn std::error::Error>> {
     let error = workflow(view).err().ok_or("the repository was accepted")?;
     error
         .downcast::<GenerateError>()
@@ -60,7 +68,7 @@ fn rendered(config: &str, version: &str) -> Result<String, Box<dyn std::error::E
     workflow(&locked(config, version)?)
 }
 
-fn job(text: &str) -> Result<Value, Box<dyn std::error::Error>> {
+pub(crate) fn job(text: &str) -> Result<Value, Box<dyn std::error::Error>> {
     Ok(crate::yaml_tree::document(text)?["jobs"][ID].clone())
 }
 
@@ -68,11 +76,19 @@ fn position(job: &Value, predicate: impl Fn(&Value) -> bool) -> Option<usize> {
     job["steps"].as_array()?.iter().position(predicate)
 }
 
+fn check_step(job: &Value) -> Option<&Value> {
+    job["steps"].as_array()?.iter().find(|step| {
+        step["run"]
+            .as_str()
+            .is_some_and(|run| run.contains("--package velnor-gen -- check"))
+    })
+}
+
 fn run_contains(step: &Value, text: &str) -> bool {
     step["run"].as_str().is_some_and(|run| run.contains(text))
 }
 
-fn names(job: &Value) -> Vec<String> {
+pub(crate) fn names(job: &Value) -> Vec<String> {
     job["steps"]
         .as_array()
         .into_iter()
@@ -86,7 +102,7 @@ fn from_source_builds_velnor_gen_from_the_checkout_instead_of_installing_the_rel
 {
     let job = job(&rendered(&format!("{LINT}\n{FROM_SOURCE}"), FIRST)?)?;
     assert_eq!(
-        runs(&job).last().map(String::as_str),
+        check_step(&job).and_then(|step| step["run"].as_str()),
         Some(CHECK_FROM_SOURCE)
     );
     assert!(
@@ -110,7 +126,7 @@ fn from_source_keeps_the_job_free_of_secrets_and_write_access() -> TestResult {
     assert!(!job.to_string().contains("GITHUB_TOKEN"), "{job}");
     let steps = job["steps"].as_array().ok_or("no steps")?;
     assert_eq!(steps[0]["with"]["persist-credentials"], false);
-    let check = steps.last().ok_or("no steps")?;
+    let check = check_step(&job).ok_or("no check step")?;
     assert!(
         check["env"]
             .as_object()
@@ -238,7 +254,7 @@ fn from_source_builds_the_generator_from_the_root_that_holds_its_package() -> Te
     )?;
     let job = job(&workflow(&view)?)?;
     assert_eq!(
-        runs(&job).last().map(String::as_str),
+        check_step(&job).and_then(|step| step["run"].as_str()),
         Some(
             "cargo run --locked --manifest-path Cargo.toml --target \"$VELNOR_GEN_TARGET\" --package velnor-gen -- check --verify-release"
         )
@@ -259,10 +275,7 @@ fn from_source_runs_cargo_in_the_nested_root_so_its_cargo_config_applies() -> Te
         b"[build]\nrustflags = ['--cfg', 'nested']\n".to_vec(),
     );
     let job = job(&workflow(&view)?)?;
-    let check = job["steps"]
-        .as_array()
-        .and_then(|steps| steps.last())
-        .ok_or("no steps")?;
+    let check = check_step(&job).ok_or("no check step")?;
     assert_eq!(check["working-directory"], "tools/gen", "{check}");
     assert_eq!(
         check["run"],
@@ -274,10 +287,7 @@ fn from_source_runs_cargo_in_the_nested_root_so_its_cargo_config_applies() -> Te
 #[test]
 fn from_source_in_the_repository_root_sets_no_working_directory() -> TestResult {
     let job = job(&rendered(&format!("{LINT}\n{FROM_SOURCE}"), FIRST)?)?;
-    let check = job["steps"]
-        .as_array()
-        .and_then(|steps| steps.last())
-        .ok_or("no steps")?;
+    let check = check_step(&job).ok_or("no check step")?;
     assert!(check["working-directory"].is_null(), "{check}");
     Ok(())
 }
@@ -292,10 +302,7 @@ fn from_source_runs_in_a_nested_directory_with_spaces_and_a_quote() -> TestResul
         &[nested],
     )?;
     let job = job(&workflow(&view)?)?;
-    let check = job["steps"]
-        .as_array()
-        .and_then(|steps| steps.last())
-        .ok_or("no steps")?;
+    let check = check_step(&job).ok_or("no check step")?;
     assert_eq!(check["working-directory"], "tools/gen dir/it's", "{check}");
     assert_eq!(check["run"], CHECK_FROM_SOURCE);
     Ok(())

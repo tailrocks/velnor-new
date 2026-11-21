@@ -55,6 +55,10 @@ impl Reason {
                 f,
                 "from_source builds velnor-gen from the checkout, so exactly one Cargo root must hold a velnor-gen package; found {found}"
             ),
+            Self::GeneratorBinary { found } => write!(
+                f,
+                "from_source runs velnor-gen as a binary, so its package must have exactly one bin target; found {found}"
+            ),
             _ => Ok(()),
         }
     }

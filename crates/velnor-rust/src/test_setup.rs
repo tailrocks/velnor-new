@@ -207,6 +207,11 @@ fn tests(step: &Step) -> bool {
 }
 
 fn builds_or_tests(step: &Step) -> bool {
-    matches!(&step.kind, StepKind::Cargo(command) if command.builds()
-        || matches!(command, CargoCommand::NextestRunArchive { .. }))
+    match &step.kind {
+        StepKind::Cargo(command) => {
+            command.builds() || matches!(command, CargoCommand::NextestRunArchive { .. })
+        }
+        StepKind::GeneratorCheck { source } => source.is_some(),
+        _ => false,
+    }
 }

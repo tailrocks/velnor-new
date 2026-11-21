@@ -91,6 +91,7 @@ mod gate_eval;
 mod generated_check;
 mod generated_check_repo;
 mod generated_check_source;
+mod generated_check_source_jobs;
 mod generated_selection;
 mod golden;
 mod golden_env;

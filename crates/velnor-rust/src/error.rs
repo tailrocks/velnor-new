@@ -70,6 +70,9 @@ pub enum Reason {
     GeneratorPackage {
         found: usize,
     },
+    GeneratorBinary {
+        found: usize,
+    },
     Hosting(crate::config_hosting::HostingError),
     DuplicateGroup(String),
     GroupRootTwice {

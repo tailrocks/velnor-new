@@ -125,10 +125,20 @@ fn generated_check_job(facts: &RepoFacts, lint: &LintJob, source: Option<RepoPat
                 .map(|release| step(StepKind::InstallGenerator(release.clone()))),
         );
     }
+    let root = source.as_ref().and_then(|manifest| {
+        facts
+            .rust_roots
+            .iter()
+            .find(|root| root.manifest == *manifest)
+    });
     steps.push(Step {
         directory: source.as_ref().and_then(RepoPath::parent),
         ..step(StepKind::GeneratorCheck { source })
     });
+    let steps = match root {
+        Some(root) => crate::test_setup::before_builds(facts, root, steps),
+        None => steps,
+    };
     Job {
         name: Some(lint.name.clone()),
         timeout_minutes: lint.timeout_minutes,
