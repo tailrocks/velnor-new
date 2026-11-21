@@ -15,13 +15,19 @@ fn decided(label: &str, repository: &str, file: &str, content: &str) -> String {
 }
 
 fn hook_stops(cases: &[(&str, &str)]) {
+    hook_stops_beside(cases, "HEAD", "ref: refs/heads/main\n");
+}
+
+fn hook_stops_beside(cases: &[(&str, &str)], marker: &str, content: &str) {
     for (label, repository) in cases {
-        let written = decided(
-            label,
-            &format!("{DATABASE}/{repository}"),
-            "hooks/post-fetch",
+        let repo = private_checkout(&format!("decide-modules-marker-{label}"), GIT_LOCK);
+        repo.write_unstaged(&format!("home/{DATABASE}/{repository}/{marker}"), content);
+        repo.write_unstaged(
+            &format!("home/{DATABASE}/{repository}/hooks/post-fetch"),
             &format!("TOKEN={SHA}\n"),
         );
+        let (output, written) = decide_with(&repo, Some("true"));
+        assert!(output.status.success(), "{label}: {output:?}");
         assert_eq!(written, "save=true\nsources=false\n", "{label}");
     }
 }
@@ -73,6 +79,52 @@ fn the_hook_tree_of_a_nested_submodule_is_scanned() {
             "modules/refs/modules/refs",
         ),
     ]);
+}
+
+#[test]
+fn the_hook_tree_below_any_directory_of_the_modules_tree_is_scanned() {
+    hook_stops(&[
+        ("hooks-directly-in-modules-refs", "modules/refs"),
+        ("segment-after-refs", "modules/vendor/refs/x"),
+        ("segments-after-refs", "modules/vendor/refs/x/y/z"),
+        ("segment-after-objects", "modules/objects/x"),
+        (
+            "segment-after-objects-in-a-module",
+            "modules/vendor/objects/x",
+        ),
+        ("three-level-nested-module", "modules/a/modules/b/modules/c"),
+        (
+            "three-level-nested-module-below-refs",
+            "modules/a/refs/modules/b/refs/x/modules/c",
+        ),
+    ]);
+}
+
+#[test]
+fn a_config_file_marks_a_git_directory_as_well_as_a_head_file() {
+    hook_stops_beside(
+        &[
+            ("config-marker", "modules/vendor/refs/x"),
+            ("config-marker-nested", "modules/a/modules/b/modules/c"),
+        ],
+        "config",
+        "[core]\n\tbare = true\n",
+    );
+}
+
+#[test]
+fn a_hooks_directory_without_a_git_directory_parent_is_not_a_hook_tree() {
+    for (label, directory) in [
+        ("plain-directory", "modules/vendor/plain"),
+        (
+            "plain-directory-below-refs",
+            "modules/vendor/refs/heads/plain",
+        ),
+        ("plain-directory-below-objects", "modules/vendor/objects/ab"),
+    ] {
+        let written = decided(label, &format!("{DATABASE}/{directory}"), "hooks/main", SHA);
+        assert_eq!(written, "save=true\nsources=true\n", "{label}");
+    }
 }
 
 #[test]

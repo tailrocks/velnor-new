@@ -26,7 +26,7 @@ const GIT_TEXT: &[&str] = &["fetch_head", "packed-refs"];
 const HOOKS: &str = "hooks";
 const LOGS: &str = "logs";
 const MODULES: &str = "modules";
-const REFS: &str = "refs";
+const GIT_DIRECTORY_MARKERS: &[&str] = &["head", "config"];
 const MAX_CONFIG_BYTES: u64 = 1 << 20;
 const MAX_DEPTH: usize = 12;
 const MAX_ENTRIES: usize = 2_000_000;
@@ -37,26 +37,34 @@ enum Zone {
     Databases,
     Repository,
     Modules,
-    Module,
     Plain,
     Hooks,
     Logs,
 }
 
 impl Zone {
-    fn entering(self, directory: &Path) -> Self {
+    fn entering(self, directory: &Path, parent_is_git_directory: bool) -> Self {
         let name = directory.file_name();
         let is = |wanted: &str| name.is_some_and(|name| name.eq_ignore_ascii_case(wanted));
         match self {
             Self::Crate if is(GIT_DIRECTORY) => Self::Repository,
             Self::Databases => Self::Repository,
-            Self::Repository | Self::Module if is(HOOKS) => Self::Hooks,
-            Self::Repository | Self::Module if is(LOGS) => Self::Logs,
-            Self::Repository | Self::Modules | Self::Module if is(MODULES) => Self::Modules,
-            Self::Module if is(REFS) => Self::Repository,
-            Self::Modules | Self::Module => Self::Module,
-            Self::Repository => Self::Plain,
+            Self::Repository => Self::entering_repository(is),
+            Self::Modules if parent_is_git_directory && is(HOOKS) => Self::Hooks,
+            Self::Modules if parent_is_git_directory && is(LOGS) => Self::Logs,
             other => other,
+        }
+    }
+
+    fn entering_repository(is: impl Fn(&str) -> bool) -> Self {
+        if is(HOOKS) {
+            Self::Hooks
+        } else if is(LOGS) {
+            Self::Logs
+        } else if is(MODULES) {
+            Self::Modules
+        } else {
+            Self::Plain
         }
     }
 
@@ -145,6 +153,10 @@ fn walk(directory: &Path, depth: usize, budget: &mut usize, zone: Zone) -> Optio
         listed.push(entry);
     }
     listed.sort_by_key(fs::DirEntry::file_name);
+    let is_git_directory = listed.iter().any(|entry| {
+        let name = entry.file_name().to_string_lossy().to_ascii_lowercase();
+        GIT_DIRECTORY_MARKERS.contains(&name.as_str())
+    });
     let mut subdirectories: Vec<PathBuf> = Vec::new();
     for entry in listed {
         let path = entry.path();
@@ -186,9 +198,14 @@ fn walk(directory: &Path, depth: usize, budget: &mut usize, zone: Zone) -> Optio
             ));
         }
     }
-    subdirectories
-        .iter()
-        .find_map(|path| walk(path, depth + 1, budget, zone.entering(path)))
+    subdirectories.iter().find_map(|path| {
+        walk(
+            path,
+            depth + 1,
+            budget,
+            zone.entering(path, is_git_directory),
+        )
+    })
 }
 
 fn holds_credential(path: &Path) -> bool {

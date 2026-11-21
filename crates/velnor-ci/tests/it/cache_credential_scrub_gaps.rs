@@ -67,16 +67,6 @@ fn the_hook_tree_of_every_repository_is_still_scanned() {
             ".cargo/registry/index/index.crates.io-1/.git/hooks/post-fetch",
             &format!("TOKEN={SHA}\n"),
         ),
-        (
-            "submodule-repository-hook",
-            ".cargo/git/db/shared-1/modules/vendor/hooks/post-fetch",
-            &format!("TOKEN={SHA}\n"),
-        ),
-        (
-            "nested-submodule-repository-hook",
-            ".cargo/git/db/shared-1/modules/vendor/deep/hooks/post-fetch",
-            &format!("TOKEN={SHA}\n"),
-        ),
     ]);
 }
 
