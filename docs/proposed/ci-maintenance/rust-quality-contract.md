@@ -252,7 +252,7 @@ optional heavyweight dependency, platform separation, stable API, or measured
 rebuild reduction. Pure model code MUST NOT depend on UI, database, HTTP,
 platform, or process crates. Do not create wrapper or `utils` crates only to
 meet a count. The allowed dependency directions are architectural requirements
-reviewed from Cargo metadata through this mechanism allowlist only: (1) a `cargo-metadata` edge test over the manifest graph, (2) an exact workspace member-set test, (3) literal-substring ownership tests over declared paths, (4) sizes via generic Alint line-count rules plus Clippy `too_many_lines`, (5) human-reviewed insta snapshots. Custom linters are forbidden; Alint stays generic-only, with one content exception: the `no-doctests` regex rule over `crates/**/src/**/*.rs`.
+reviewed from Cargo metadata through this mechanism allowlist only: (1) a `cargo-metadata` edge test over the manifest graph, (2) an exact workspace member-set test, (3) literal-substring ownership tests over declared paths, (4) sizes via generic Alint line-count rules plus Clippy `too_many_lines`, (5) human-reviewed insta snapshots. Custom linters are forbidden; Alint stays generic-only, with one content exception: the `no-doctests` rule (a token scanner, `scripts/no-doctests.py`) over `crates/**/src/**/*.rs`.
 
 Timeless principles (spec §3.2): separation of concerns per §1,
 `pub(crate)` by default, one authoritative implementation, KISS/YAGNI (no
