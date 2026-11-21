@@ -129,6 +129,7 @@ mod tests {
             root: None,
             restore_step: "restore".to_owned(),
             save_step: "save".to_owned(),
+            save_key_step: None,
             not_generated: None,
         }];
         let steps = json!({
