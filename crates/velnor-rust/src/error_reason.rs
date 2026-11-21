@@ -30,6 +30,10 @@ impl Reason {
                 f,
                 "inputs names {package}, which is not a package of this repository"
             ),
+            Self::GeneratorHostTuple(version) => write!(
+                f,
+                "from_source builds velnor-gen with --target host-tuple, which Cargo does not support in Rust {version}; use Rust 1.91.0 or newer"
+            ),
             Self::GeneratorPackage { found } => write!(
                 f,
                 "from_source builds velnor-gen from this repository, so exactly one Cargo workspace member must be named velnor-gen; found {found}"
@@ -184,7 +188,7 @@ impl fmt::Display for Reason {
             | Self::UntrackedManifest
             | Self::LockLine(_)
             | Self::UnknownLockedPackage(_)
-            | Self::UnknownRoot(_) | Self::GeneratorPackage { .. } => self.fmt_inputs(f),
+            | Self::UnknownRoot(_) | Self::GeneratorPackage { .. } | Self::GeneratorHostTuple(_) => self.fmt_inputs(f),
             Self::UnknownTestGroupRoot(_)
             | Self::TestGroupWithoutNextest(_)
             | Self::TestGroupFilter(_)

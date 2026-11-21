@@ -46,7 +46,7 @@ pub(crate) fn check_host_tuple_version(
     Ok(())
 }
 
-fn supports_host_tuple(version: &str) -> bool {
+pub(crate) fn supports_host_tuple(version: &str) -> bool {
     let channel = match version.split_once('-') {
         Some((channel @ ("stable" | "beta" | "nightly"), host))
             if host.contains('_') || host.starts_with("aarch64-") =>

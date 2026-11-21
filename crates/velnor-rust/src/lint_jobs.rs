@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    Gate, GateNeed, Job, LintCommand, LintJob, LintKind, PlanFrom, PrRun, RepoFacts, Step, StepKind,
+    Gate, GateNeed, Job, LintCommand, LintJob, LintKind, PlanFrom, PrRun, RepoFacts, RepoPath,
+    Step, StepKind,
 };
 
 use crate::detect_checks::generator_manifest;
@@ -92,14 +93,14 @@ fn generated_check_tools(facts: &RepoFacts) -> Vec<String> {
 }
 
 fn generated_check_job(facts: &RepoFacts, lint: &LintJob, from_source: bool) -> Job {
-    let source = from_source
+    let manifest = from_source
         .then(|| generator_manifest(&facts.rust_roots))
         .flatten();
     let mut steps = vec![step(StepKind::Checkout {
         depth: CHECKOUT_DEPTH,
         sparse: None,
     })];
-    if source.is_some() {
+    if manifest.is_some() {
         steps.extend(
             facts
                 .helper
@@ -127,7 +128,12 @@ fn generated_check_job(facts: &RepoFacts, lint: &LintJob, from_source: bool) -> 
                 .map(|release| step(StepKind::InstallGenerator(release.clone()))),
         );
     }
-    steps.push(step(StepKind::GeneratorCheck { source }));
+    steps.push(Step {
+        directory: manifest.as_ref().and_then(RepoPath::parent),
+        ..step(StepKind::GeneratorCheck {
+            from_source: manifest.is_some(),
+        })
+    });
     Job {
         name: Some(lint.name.clone()),
         timeout_minutes: lint.timeout_minutes,

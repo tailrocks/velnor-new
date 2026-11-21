@@ -1,8 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{HelperRelease, Platform};
+use velnor_model::{HelperRelease, Platform, RepoPath};
 
+use crate::cargo::{CargoLane, cache_debug_env, offline_env};
 use crate::mise_digest::pinned_sha256;
 use crate::rules::{RenderedStep, SETUP_VELNOR_ACTION, Value};
 use crate::steps::{MISE, MISE_VERSION};
@@ -108,29 +109,45 @@ pub(crate) fn install_generator_step(release: &HelperRelease) -> RenderedStep {
     }
 }
 
-const CHECK_FROM_SOURCE: &str = "set -euo pipefail; fail() { printf '%s\\n' \"::error title=velnor-gen::$1\"; exit 1; }; root=$PWD; cd \"$(dirname \"$VELNOR_GEN_MANIFEST\")\"; target=$(rustc -vV | sed -n 's/^host: //p'); [ -n \"$target\" ] || fail \"rustc reports no host triple\"; cargo run --locked --manifest-path \"$root/$VELNOR_GEN_MANIFEST\" --target \"$target\" --package velnor-gen --bin velnor-gen -- --root \"$root\" check --verify-release";
+fn path_to_root(directory: Option<&RepoPath>) -> String {
+    directory.map_or_else(
+        || ".".to_owned(),
+        |directory| {
+            directory
+                .as_str()
+                .split('/')
+                .map(|_| "..")
+                .collect::<Vec<_>>()
+                .join("/")
+        },
+    )
+}
 
-pub(crate) fn generator_check_step(source: Option<&str>) -> RenderedStep {
-    let Some(manifest) = source else {
+pub(crate) fn generator_check_step(
+    from_source: bool,
+    directory: Option<&RepoPath>,
+    lane: CargoLane,
+) -> RenderedStep {
+    if !from_source {
         return RenderedStep {
             name: "Check the generated workflow".to_owned(),
             run: Some("velnor-gen check --verify-release".to_owned()),
             ..RenderedStep::default()
         };
-    };
+    }
+    let offline = if lane.offline { " --offline" } else { "" };
     RenderedStep {
         name: "Check the generated workflow with velnor-gen built from the checkout".to_owned(),
-        run: Some("eval \"$VELNOR_GEN_CHECK\"".to_owned()),
-        env: vec![
-            (
-                "VELNOR_GEN_CHECK".to_owned(),
-                Value::Text(CHECK_FROM_SOURCE.to_owned()),
-            ),
-            (
-                "VELNOR_GEN_MANIFEST".to_owned(),
-                Value::Text(manifest.to_owned()),
-            ),
-        ],
+        run: Some(format!(
+            "cargo run --locked{offline} --target host-tuple --package velnor-gen --bin velnor-gen -- --root {} check --verify-release",
+            path_to_root(directory)
+        )),
+        env: lane
+            .cache_debug
+            .then(cache_debug_env)
+            .into_iter()
+            .chain(lane.offline.then(offline_env))
+            .collect(),
         ..RenderedStep::default()
     }
 }

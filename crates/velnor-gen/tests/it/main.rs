@@ -93,6 +93,7 @@ mod fork_fence;
 mod fork_fence_invariant;
 mod freshness;
 mod from_source_build;
+mod from_source_review;
 mod gate_eval;
 mod generated_check;
 mod generated_check_repo;

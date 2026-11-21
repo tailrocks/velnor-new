@@ -45,12 +45,7 @@ fn attach(facts: &RepoFacts, jobs: &mut [Job], maintenance: Option<&Job>) -> Job
             .steps
             .iter()
             .any(|step| matches!(step.kind, StepKind::CacheSave(_)));
-        if !job
-            .steps
-            .iter()
-            .any(|step| matches!(step.kind, StepKind::Cargo(_)))
-            && !saves
-        {
+        if !job.steps.iter().any(|step| step.kind.runs_cargo()) && !saves {
             continue;
         }
         let reason = not_generated.filter(|_| job.id != AUDIT_JOB);

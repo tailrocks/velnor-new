@@ -260,11 +260,7 @@ pub(crate) fn any_gate(first: Option<&Gate>, second: Option<&Gate>) -> Option<Ga
 }
 
 fn manifest(step: &Step) -> RepoPath {
-    if let StepKind::Cargo(CargoCommand::Deny { manifest, .. })
-    | StepKind::GeneratorCheck {
-        source: Some(manifest),
-    } = &step.kind
-    {
+    if let StepKind::Cargo(CargoCommand::Deny { manifest, .. }) = &step.kind {
         return manifest.clone();
     }
     step.directory.as_ref().map_or_else(
@@ -283,7 +279,7 @@ pub(crate) fn compiles(step: &Step) -> bool {
             command,
             CargoCommand::FmtCheck | CargoCommand::Machete | CargoCommand::NextestRunArchive { .. }
         ),
-        StepKind::GeneratorCheck { source } => source.is_some(),
+        StepKind::GeneratorCheck { from_source } => *from_source,
         _ => false,
     }
 }

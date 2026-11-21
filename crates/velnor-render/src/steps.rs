@@ -357,8 +357,8 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
             run: Some(run.clone()),
             ..RenderedStep::default()
         },
-        StepKind::GeneratorCheck { source } => {
-            generator_check_step(source.as_ref().map(RepoPath::as_str))
+        StepKind::GeneratorCheck { from_source } => {
+            generator_check_step(*from_source, directory, lane)
         }
         StepKind::InstallGenerator(release) => install_generator_step(release),
         StepKind::InstallHelper(release) => install_helper(release),

@@ -176,8 +176,8 @@ fn declared(lint: &LintJob, path: &RepoPath) -> bool {
 }
 
 fn reached(lint: &LintJob, path: &RepoPath) -> bool {
-    if matches!(lint.kind, LintKind::GeneratedCheck { .. }) {
-        return !inert(path);
+    if let LintKind::GeneratedCheck { from_source } = lint.kind {
+        return from_source || !inert(path);
     }
     declared(lint, path)
         || implicit(lint, path)

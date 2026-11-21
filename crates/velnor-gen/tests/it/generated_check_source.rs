@@ -14,12 +14,12 @@ use crate::private_sources::{SECTION, private_repo};
 
 pub(crate) const FROM_SOURCE: &str = "[[lint]]\nkind = 'generated-check'\nfrom_source = true\n";
 const ID: &str = "lint-generated-check";
-const RUN_FROM_SOURCE: &str = "eval \"$VELNOR_GEN_CHECK\"";
+pub(crate) const RUN_FROM_SOURCE: &str = "cargo run --locked";
 pub(crate) const FIRST: &str = "0.1.112";
 const STORE: &str = "MBX_CACHE_DIR=$RUNNER_TEMP/mbx";
 const MIRROR: &str = "[crates_mirror]\nrunner = 'mirror-box'\nregistry = 'sparse+https://crates-mirror.velnor-system.svc.cluster.local/index/'\ncainfo = '/opt/velnor/crates-mirror/ca-bundle.pem'\n";
 
-fn bin(name: &str) -> Result<Target, Box<dyn std::error::Error>> {
+pub(crate) fn bin(name: &str) -> Result<Target, Box<dyn std::error::Error>> {
     Ok(Target {
         name: TargetName::new(name)?,
         kinds: vec![TargetKind::Bin],
@@ -30,7 +30,7 @@ fn bin(name: &str) -> Result<Target, Box<dyn std::error::Error>> {
     })
 }
 
-fn packages(
+pub(crate) fn packages(
     config: &str,
     version: &str,
     roots: &[(&str, &str)],
@@ -53,7 +53,7 @@ fn packages(
     Ok(repo)
 }
 
-fn locked(config: &str, version: &str) -> Result<RepoView, Box<dyn std::error::Error>> {
+pub(crate) fn locked(config: &str, version: &str) -> Result<RepoView, Box<dyn std::error::Error>> {
     packages(config, version, &[("Cargo.toml", "velnor-gen")])
 }
 
@@ -65,21 +65,22 @@ pub(crate) fn job(text: &str) -> Result<Value, Box<dyn std::error::Error>> {
     Ok(crate::yaml_tree::document(text)?["jobs"][ID].clone())
 }
 
-fn position(job: &Value, predicate: impl Fn(&Value) -> bool) -> Option<usize> {
+pub(crate) fn position(job: &Value, predicate: impl Fn(&Value) -> bool) -> Option<usize> {
     job["steps"].as_array()?.iter().position(predicate)
 }
 
-fn run_contains(step: &Value, text: &str) -> bool {
+pub(crate) fn run_contains(step: &Value, text: &str) -> bool {
     step["run"].as_str().is_some_and(|run| run.contains(text))
 }
 
-pub(crate) fn check_script(job: &Value) -> String {
+pub(crate) fn check_step(job: &Value) -> Value {
     job["steps"]
         .as_array()
-        .and_then(|steps| steps.last())
-        .and_then(|step| step["env"]["VELNOR_GEN_CHECK"].as_str())
+        .into_iter()
+        .flatten()
+        .find(|step| run_contains(step, RUN_FROM_SOURCE))
+        .cloned()
         .unwrap_or_default()
-        .to_owned()
 }
 
 pub(crate) fn names(job: &Value) -> Vec<String> {
@@ -95,7 +96,7 @@ pub(crate) fn names(job: &Value) -> Vec<String> {
 fn from_source_builds_velnor_gen_from_the_checkout_instead_of_installing_the_release() -> TestResult
 {
     let job = job(&rendered(&format!("{LINT}\n{FROM_SOURCE}"), FIRST)?)?;
-    assert_eq!(runs(&job).last().map(String::as_str), Some(RUN_FROM_SOURCE));
+    assert!(!check_step(&job).is_null(), "{job}");
     assert!(
         !names(&job)
             .iter()
@@ -103,7 +104,12 @@ fn from_source_builds_velnor_gen_from_the_checkout_instead_of_installing_the_rel
         "{job}"
     );
     assert!(!job.to_string().contains("VELNOR_GEN_ARCHIVE"), "{job}");
-    assert!(check_script(&job).contains("--package velnor-gen"), "{job}");
+    assert!(
+        check_step(&job)["run"]
+            .as_str()
+            .is_some_and(|run| run.contains("--package velnor-gen")),
+        "{job}"
+    );
     Ok(())
 }
 
@@ -115,13 +121,8 @@ fn from_source_keeps_the_job_free_of_secrets_and_write_access() -> TestResult {
     assert!(!job.to_string().contains("GITHUB_TOKEN"), "{job}");
     let steps = job["steps"].as_array().ok_or("no steps")?;
     assert_eq!(steps[0]["with"]["persist-credentials"], false);
-    let check = steps.last().ok_or("no steps")?;
-    assert!(
-        check["env"].as_object().is_some_and(|env| env
-            .keys()
-            .all(|key| key == "VELNOR_GEN_CHECK" || key == "VELNOR_GEN_MANIFEST")),
-        "{check}"
-    );
+    let check = check_step(&job);
+    assert!(check["env"].is_null(), "{check}");
     assert!(
         job["needs"].is_null() && job["environment"].is_null(),
         "{job}"
@@ -253,40 +254,6 @@ fn from_source_requires_a_rust_pin() -> TestResult {
 }
 
 #[test]
-fn the_source_build_takes_its_host_triple_from_rustc_on_the_runner() -> TestResult {
-    let job = job(&rendered(&format!("{LINT}\n{FROM_SOURCE}"), FIRST)?)?;
-    assert!(check_script(&job).contains("rustc -vV"), "{job}");
-    let text = job.to_string();
-    for triple in [
-        "x86_64-unknown-linux-gnu",
-        "aarch64-unknown-linux-gnu",
-        "aarch64-apple-darwin",
-    ] {
-        assert!(!text.contains(triple), "{triple}: {job}");
-    }
-    Ok(())
-}
-
-#[test]
-fn from_source_builds_the_generator_from_the_workspace_that_holds_it() -> TestResult {
-    let roots = [
-        ("Cargo.toml", "velnor-ci-app"),
-        ("tools/gen/Cargo.toml", "velnor-gen"),
-    ];
-    let repo = packages(&format!("{LINT}\n{FROM_SOURCE}"), FIRST, &roots)?;
-    let job = job(&workflow(&repo)?)?;
-    let step = job["steps"]
-        .as_array()
-        .and_then(|steps| steps.last())
-        .ok_or("no steps")?;
-    assert_eq!(
-        step["env"]["VELNOR_GEN_MANIFEST"], "tools/gen/Cargo.toml",
-        "{job}"
-    );
-    Ok(())
-}
-
-#[test]
 fn from_source_refuses_a_repository_without_exactly_one_velnor_gen() -> TestResult {
     for roots in [
         vec![("Cargo.toml", "velnor-ci-app")],
@@ -321,38 +288,31 @@ fn from_source_refuses_a_velnor_gen_package_without_a_binary() -> TestResult {
     Ok(())
 }
 
-#[test]
-fn from_source_runs_cargo_in_the_generator_directory_for_the_named_binary() -> TestResult {
-    let job = job(&rendered(&format!("{LINT}\n{FROM_SOURCE}"), FIRST)?)?;
-    let script = check_script(&job);
-    assert!(script.contains("cd \"$(dirname"), "{script}");
-    assert!(script.contains("--bin velnor-gen"), "{script}");
-    Ok(())
-}
-
-#[test]
-fn from_source_fetches_private_dependencies_before_it_builds_the_generator() -> TestResult {
+pub(crate) fn private_generator() -> Result<RepoView, Box<dyn std::error::Error>> {
     let mut repo = private_repo(&["Cargo.toml"], &format!("{SECTION}{FROM_SOURCE}"), FIRST)?;
     repo.tracked_paths.insert(LOCK_PATH);
     repo.files
         .insert(LOCK_PATH, archive_lock_at(FIRST)?.into_bytes());
     repo.files
         .insert(RepoPath::new("mise.toml")?, MISE.as_bytes().to_vec());
-    repo.rust_metadata
+    let member = &mut repo
+        .rust_metadata
         .get_mut(&RepoPath::new("Cargo.toml")?)
         .ok_or("no root")?
-        .members[0]
-        .name = PackageName::new("velnor-gen")?;
-    repo.rust_metadata
-        .get_mut(&RepoPath::new("Cargo.toml")?)
-        .ok_or("no root")?
-        .members[0]
-        .targets = vec![bin("velnor-gen")?];
+        .members[0];
+    member.name = PackageName::new("velnor-gen")?;
+    member.targets = vec![bin("velnor-gen")?];
+    Ok(repo)
+}
+
+#[test]
+fn from_source_fetches_private_dependencies_before_it_builds_the_generator() -> TestResult {
+    let repo = private_generator()?;
     let job = job(&workflow(&repo)?)?;
     let token = position(&job, |step| step["id"] == "private-token").ok_or("no token")?;
     let fetch =
         position(&job, |step| run_contains(step, "\"$VELNOR_EXEC\" fetch ")).ok_or("no fetch")?;
-    let check = position(&job, |step| run_contains(step, "VELNOR_GEN_CHECK")).ok_or("no check")?;
+    let check = position(&job, |step| run_contains(step, RUN_FROM_SOURCE)).ok_or("no check")?;
     assert!(token < fetch && fetch < check, "{job}");
     Ok(())
 }
