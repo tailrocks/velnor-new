@@ -8,7 +8,12 @@ use serde_json::Value;
 use crate::facts::TestResult;
 use crate::pipeline::{pin_helper, view, workflow};
 
-const HELPERS: &[&str] = &["0.1.109", "0.1.110", "0.1.111"];
+const BEFORE_SHARED_STORE: &[&str] = &["0.1.81", "0.1.84"];
+const HELPERS: &[&str] = &[
+    "0.1.85", "0.1.86", "0.1.87", "0.1.88", "0.1.89", "0.1.91", "0.1.92", "0.1.93", "0.1.94",
+    "0.1.95", "0.1.96", "0.1.97", "0.1.98", "0.1.99", "0.1.100", "0.1.101", "0.1.102", "0.1.103",
+    "0.1.104", "0.1.106", "0.1.107", "0.1.109", "0.1.110", "0.1.111",
+];
 const CONFIGS: &[Option<&str>] = &[
     None,
     Some("mbx_shared_store = true\n"),
@@ -81,26 +86,29 @@ fn dangling_refs(workflow: &Value) -> Vec<String> {
 #[test]
 fn every_steps_reference_names_a_step_of_its_own_job() -> TestResult {
     let mut refs = 0;
-    for helper in HELPERS {
-        for config in CONFIGS.iter().copied() {
-            let mut repo = view(
-                &["Cargo.toml", "tools/Cargo.toml"],
-                config.map(str::as_bytes),
-            )?;
-            pin_helper(&mut repo, helper)?;
-            let yaml = crate::yaml_tree::document(&workflow(&repo)?)?;
-            let mut texts = Vec::new();
-            strings(&yaml, &mut texts);
-            refs += texts
-                .iter()
-                .flat_map(|text| expressions(text))
-                .map(|expr| step_refs(expr).len())
-                .sum::<usize>();
-            let dangling = dangling_refs(&yaml);
-            assert!(
-                dangling.is_empty(),
-                "helper {helper}, config {config:?}: {dangling:#?}"
-            );
+    let pins = [(BEFORE_SHARED_STORE, &CONFIGS[..1]), (HELPERS, CONFIGS)];
+    for (helpers, configs) in pins {
+        for helper in helpers {
+            for config in configs.iter().copied() {
+                let mut repo = view(
+                    &["Cargo.toml", "tools/Cargo.toml"],
+                    config.map(str::as_bytes),
+                )?;
+                pin_helper(&mut repo, helper)?;
+                let yaml = crate::yaml_tree::document(&workflow(&repo)?)?;
+                let mut texts = Vec::new();
+                strings(&yaml, &mut texts);
+                refs += texts
+                    .iter()
+                    .flat_map(|text| expressions(text))
+                    .map(|expr| step_refs(expr).len())
+                    .sum::<usize>();
+                let dangling = dangling_refs(&yaml);
+                assert!(
+                    dangling.is_empty(),
+                    "helper {helper}, config {config:?}: {dangling:#?}"
+                );
+            }
         }
     }
     assert_ne!(refs, 0, "no steps reference was checked");
