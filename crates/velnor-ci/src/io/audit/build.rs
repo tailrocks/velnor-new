@@ -217,15 +217,14 @@ impl Builder<'_> {
             }
         }
         let mut budget = inventory::Budget::new(self.max_entries);
-        let roots: BTreeSet<PathBuf> = self
-            .roots
-            .iter()
-            .map(|root| fs::canonicalize(root).unwrap_or_else(|_| root.clone()))
-            .collect();
-        for root in &roots {
-            if !root.exists() {
-                continue;
+        let roots = match inventory::capture_roots(&self.roots, &mut budget) {
+            Ok(roots) => roots,
+            Err(error) => {
+                budget.warn_descriptors_exhausted(&error);
+                return Ok((evidence, false));
             }
+        };
+        for root in &roots {
             match inventory::scan(root, &self.targets, &mut budget) {
                 Ok(found) => evidence.entries.extend(found.entries),
                 Err(error) if budget.overflowed() => {

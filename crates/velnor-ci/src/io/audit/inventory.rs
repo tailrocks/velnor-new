@@ -8,11 +8,13 @@ mod held;
 mod latest;
 mod program;
 mod resolve;
+mod roots;
 mod walk;
 
 pub(super) use descriptors::{OpenFileLimit, raise_open_file_limit, run_build};
 pub(super) use evidence::{Evidence, State, state};
 pub(super) use latest::newest;
+pub(super) use roots::capture_roots;
 pub(super) use walk::{Budget, scan};
 
 use std::cell::RefCell;

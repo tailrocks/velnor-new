@@ -20,7 +20,7 @@ pub(in crate::io::audit) struct Budget {
     remaining: usize,
     limit: usize,
     overflowed: bool,
-    descriptors: bool,
+    pub(super) descriptors: bool,
     #[cfg(test)]
     warned: Cell<usize>,
 }

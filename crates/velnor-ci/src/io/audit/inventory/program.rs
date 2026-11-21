@@ -13,6 +13,11 @@ use nix::unistd::{AccessFlags, access};
 
 const DEFAULT_PATH: &str = "/usr/bin:/bin";
 
+#[cfg(target_os = "macos")]
+const SHEBANG_LIMIT: usize = 512;
+#[cfg(not(target_os = "macos"))]
+const SHEBANG_LIMIT: usize = 256;
+
 const NATIVE_MAGIC: [&[u8]; 6] = [
     b"\x7fELF",
     b"\xfe\xed\xfa\xce",
@@ -41,11 +46,38 @@ fn usable(candidate: &Path, metadata: &fs::Metadata) -> io::Result<PathBuf> {
     path::absolute(candidate)
 }
 
+fn interpreter(head: &[u8]) -> io::Result<()> {
+    let line = match head.iter().position(|byte| *byte == b'\n') {
+        Some(end) => &head[..end],
+        None if head.len() < SHEBANG_LIMIT => head,
+        None => return Err(Errno::ENOEXEC.into()),
+    };
+    let interpreter = line[2..]
+        .trim_ascii_start()
+        .split(|byte| matches!(byte, b' ' | b'\t'))
+        .next()
+        .unwrap_or_default();
+    if interpreter.is_empty() {
+        return Err(Errno::ENOEXEC.into());
+    }
+    if interpreter.starts_with(b"/") {
+        let interpreter = Path::new(OsStr::from_bytes(interpreter));
+        usable(interpreter, &fs::metadata(interpreter)?)?;
+    }
+    Ok(())
+}
+
 fn executable_format(path: PathBuf) -> io::Result<PathBuf> {
     let mut head = Vec::new();
-    let read = fs::File::open(&path).and_then(|file| file.take(4).read_to_end(&mut head));
-    let known = head.starts_with(b"#!") || NATIVE_MAGIC.iter().any(|magic| head.starts_with(magic));
-    if read.is_err() || known {
+    let read = fs::File::open(&path)
+        .and_then(|file| file.take(SHEBANG_LIMIT as u64).read_to_end(&mut head));
+    if read.is_err() {
+        return Ok(path);
+    }
+    if head.starts_with(b"#!") {
+        return interpreter(&head).map(|()| path);
+    }
+    if NATIVE_MAGIC.iter().any(|magic| head.starts_with(magic)) {
         Ok(path)
     } else {
         Err(Errno::ENOEXEC.into())
@@ -235,6 +267,125 @@ mod tests {
         let mut searched = Command::new("named");
         searched.current_dir(&directory).env("PATH", &directory);
         assert_eq!(resolve(&searched).ok(), Some(named));
+        fs::remove_dir_all(&directory).unwrap_or_else(|e| unreachable!("{e}"));
+    }
+
+    fn script(directory: &Path, name: &str, body: &[u8]) -> PathBuf {
+        let path = directory.join(name);
+        fs::write(&path, body).unwrap_or_else(|e| unreachable!("{e}"));
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o755))
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        path
+    }
+
+    fn resolved(directory: &Path, name: &str) -> io::Result<PathBuf> {
+        found(&format!("./{name}"), directory, OsStr::new("/nonexistent"))
+    }
+
+    #[test]
+    fn a_missing_interpreter_is_not_found_with_or_without_a_space_after_the_marker() {
+        let directory = scratch("missing-interpreter");
+        for (name, body) in [
+            ("tight", "#!/nonexistent/interp\nexit 0\n"),
+            ("spaced", "#! /nonexistent/interp -e\nexit 0\n"),
+            ("tabbed", "#!\t/nonexistent/interp\n"),
+            ("unterminated", "#!/nonexistent/interp"),
+        ] {
+            script(&directory, name, body.as_bytes());
+            assert_eq!(
+                resolved(&directory, name).err().map(|e| e.kind()),
+                Some(io::ErrorKind::NotFound),
+                "{name}"
+            );
+        }
+        fs::remove_dir_all(&directory).unwrap_or_else(|e| unreachable!("{e}"));
+    }
+
+    #[test]
+    fn an_interpreter_that_is_not_executable_is_permission_denied() {
+        let directory = scratch("denied-interpreter");
+        file(&directory, "plain", 0o644);
+        fs::create_dir(directory.join("folder")).unwrap_or_else(|e| unreachable!("{e}"));
+        for target in ["plain", "folder"] {
+            let body = format!("#!{}\n", directory.join(target).display());
+            script(&directory, "tool", body.as_bytes());
+            assert_eq!(
+                resolved(&directory, "tool").err().map(|e| e.kind()),
+                Some(io::ErrorKind::PermissionDenied),
+                "{target}"
+            );
+        }
+        fs::remove_dir_all(&directory).unwrap_or_else(|e| unreachable!("{e}"));
+    }
+
+    #[test]
+    fn an_existing_interpreter_resolves_whatever_its_arguments_name() {
+        let directory = scratch("interpreter");
+        let sh = directory.join("sh");
+        std::os::unix::fs::symlink("/bin/sh", &sh).unwrap_or_else(|e| unreachable!("{e}"));
+        for (name, body) in [
+            ("plain", "#!/bin/sh\n".to_owned()),
+            ("spaced", "#! /bin/sh -e\n".to_owned()),
+            ("linked", format!("#!{}\n", sh.display())),
+            (
+                "env",
+                "#!/usr/bin/env no-such-program-anywhere\n".to_owned(),
+            ),
+        ] {
+            let expected = script(&directory, name, body.as_bytes());
+            assert_eq!(resolved(&directory, name).ok(), Some(expected), "{name}");
+        }
+        fs::remove_dir_all(&directory).unwrap_or_else(|e| unreachable!("{e}"));
+    }
+
+    #[test]
+    fn a_marker_without_an_interpreter_is_an_exec_format_error() {
+        let directory = scratch("bare-marker");
+        for (name, body) in [
+            ("bare", "#!\n"),
+            ("blank", "#!   \nexit 0\n"),
+            ("end", "#!"),
+        ] {
+            script(&directory, name, body.as_bytes());
+            assert_eq!(
+                resolved(&directory, name)
+                    .err()
+                    .and_then(|e| e.raw_os_error()),
+                Some(libc::ENOEXEC),
+                "{name}"
+            );
+        }
+        fs::remove_dir_all(&directory).unwrap_or_else(|e| unreachable!("{e}"));
+    }
+
+    fn padded(length: usize) -> Vec<u8> {
+        let mut line = b"#!/bin/sh".to_vec();
+        line.resize(length, b' ');
+        line.push(b'\n');
+        line
+    }
+
+    #[test]
+    fn a_marker_line_over_the_kernel_limit_is_an_exec_format_error() {
+        let directory = scratch("long-marker");
+        let fits = script(&directory, "fits", &padded(SHEBANG_LIMIT - 1));
+        assert_eq!(resolved(&directory, "fits").ok(), Some(fits));
+        script(&directory, "over", &padded(SHEBANG_LIMIT));
+        assert_eq!(
+            resolved(&directory, "over")
+                .err()
+                .and_then(|e| e.raw_os_error()),
+            Some(libc::ENOEXEC)
+        );
+        let mut endless = b"#!/bin/sh".to_vec();
+        endless.resize(SHEBANG_LIMIT * 4, b' ');
+        script(&directory, "endless", &endless);
+        assert_eq!(
+            resolved(&directory, "endless")
+                .err()
+                .and_then(|e| e.raw_os_error()),
+            Some(libc::ENOEXEC)
+        );
         fs::remove_dir_all(&directory).unwrap_or_else(|e| unreachable!("{e}"));
     }
 }

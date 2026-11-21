@@ -258,6 +258,26 @@ mod tests {
     }
 
     #[test]
+    fn a_script_naming_a_missing_interpreter_is_an_error_like_a_direct_spawn() {
+        let scratch =
+            std::env::temp_dir().join(format!("velnor-child-interpreter-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&scratch);
+        fs::create_dir_all(&scratch).unwrap_or_else(|e| unreachable!("{e}"));
+        let tool = scratch.join("tool");
+        fs::write(&tool, "#!/nonexistent/interp\n").unwrap_or_else(|e| unreachable!("{e}"));
+        fs::set_permissions(&tool, fs::Permissions::from_mode(0o755))
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        let direct = Command::new(&tool).status().err().map(|e| e.kind());
+        let confined = confined(Command::new(&tool)).err();
+        fs::remove_dir_all(&scratch).unwrap_or_else(|e| unreachable!("{e}"));
+        assert_eq!(direct, Some(io::ErrorKind::NotFound));
+        assert!(
+            confined.is_some_and(|e| e.to_string().starts_with("cannot run build command: ")),
+            "the confined run must fail to start"
+        );
+    }
+
+    #[test]
     fn overlapping_raises_restore_the_limit_the_first_caller_had_once_the_last_drops() {
         let (soft, _) = lowered();
         let first = raise_open_file_limit();
