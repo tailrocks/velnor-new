@@ -284,6 +284,8 @@ rules:
         - "docs/implemented/evidence/freshness-2026-10-24/qualification/commands.txt"
         - "docs/implemented/evidence/freshness-2026-10-20/main-ci-plan.log"
         - "docs/implemented/evidence/freshness-2026-10-24/main-ci-plan.log"
+        - "docs/implemented/evidence/freshness-2026-10-13/main-run-38316930881-plan-job-115035687366.log"
+        - "docs/implemented/evidence/freshness-2026-10-25/runner-plan.log"
     pattern: '(?m)(?:^|[^A-Za-z0-9._/-])(?:/private/(?:tmp|var)/[A-Za-z0-9_]|/var/folders/[A-Za-z0-9_]|/tmp/[A-Za-z0-9_]*[-._0-9])'
     level: error
     message: "Local temp path in a doc or evidence file: use a repo-relative path, a relative link or <tmp>/... as the placeholder. Plain /tmp/example style examples are allowed."

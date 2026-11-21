@@ -1154,9 +1154,9 @@ Plan	Setup Mise	2026-10-12T22:29:34.4373120Z There is NO WARRANTY, to the extent
 Plan	Setup Mise	2026-10-12T22:29:34.4373833Z
 Plan	Setup Mise	2026-10-12T22:29:34.4374246Z Written by John Gilmore and Jay Fenlason.
 Plan	Setup Mise	2026-10-12T22:29:34.4378668Z Using curl to download mise
-Plan	Setup Mise	2026-10-12T22:29:34.4402507Z [command]/usr/bin/curl -fsSL https://github.com/jdx/mise/releases/download/v2026.10.6/mise-v2026.10.6-linux-x64.tar.zst --output <tmp>/mise-action-JcmkHI/mise-v2026.10.6-linux-x64.tar.zst
-Plan	Setup Mise	2026-10-12T22:29:34.7380676Z [command]/usr/bin/tar --zstd -xf <tmp>/mise-action-JcmkHI/mise-v2026.10.6-linux-x64.tar.zst -C <tmp>/mise-action-JcmkHI
-Plan	Setup Mise	2026-10-12T22:29:35.0354595Z [command]/usr/bin/mv <tmp>/mise-action-JcmkHI/mise/bin/mise /home/runner/.local/share/mise/bin/mise
+Plan	Setup Mise	2026-10-12T22:29:34.4402507Z [command]/usr/bin/curl -fsSL https://github.com/jdx/mise/releases/download/v2026.10.6/mise-v2026.10.6-linux-x64.tar.zst --output /tmp/mise-action-JcmkHI/mise-v2026.10.6-linux-x64.tar.zst
+Plan	Setup Mise	2026-10-12T22:29:34.7380676Z [command]/usr/bin/tar --zstd -xf /tmp/mise-action-JcmkHI/mise-v2026.10.6-linux-x64.tar.zst -C /tmp/mise-action-JcmkHI
+Plan	Setup Mise	2026-10-12T22:29:35.0354595Z [command]/usr/bin/mv /tmp/mise-action-JcmkHI/mise/bin/mise /home/runner/.local/share/mise/bin/mise
 Plan	Setup Mise	2026-10-12T22:29:35.3476598Z ##[group]Setting env vars
 Plan	Setup Mise	2026-10-12T22:29:35.3477065Z Setting MISE_LOG_LEVEL=info
 Plan	Setup Mise	2026-10-12T22:29:35.3482640Z Setting MISE_TRUSTED_CONFIG_PATHS=/home/runner/work/velnor-new/velnor-new

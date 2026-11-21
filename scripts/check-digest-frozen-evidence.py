@@ -13,6 +13,18 @@ MANIFESTS = [
 ]
 
 
+PINNED_LOGS = {
+    "docs/implemented/evidence/freshness-2026-10-13/main-run-38316930881-plan-job-115035687366.log": (
+        "acc1236ed3ab0fd94030bedcf3e496e9790a8dcce0bcb8001b31b263f4295f91",
+        347778,
+    ),
+    "docs/implemented/evidence/freshness-2026-10-25/runner-plan.log": (
+        "13e24e5b054cb423fdfad5b60a6bc84d852d992679efa933219433d3d454ae43",
+        665901,
+    ),
+}
+
+
 def exempt_paths(config):
     out = []
     for rule_id in RULE_IDS:
@@ -75,6 +87,10 @@ def check(root, paths):
             failures.append(f"{p}: exempt path does not exist")
             continue
         digest, size = sha256_of(full)
+        if p in PINNED_LOGS:
+            if PINNED_LOGS[p] != (digest, size):
+                failures.append(f"{p}: differs from the sha256 and bytes its claim record pins")
+            continue
         recorded = False
         for m in MANIFESTS:
             base = os.path.dirname(m)

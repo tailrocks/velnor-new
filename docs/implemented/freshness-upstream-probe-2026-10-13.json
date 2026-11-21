@@ -184,8 +184,8 @@
       "image_release": "https://github.com/actions/runner-images/releases/tag/ubuntu26%2F20260927.149",
       "log": {
         "path": "docs/implemented/evidence/freshness-2026-10-13/main-run-38316930881-plan-job-115035687366.log",
-        "sha256": "806e704e9153c9e96bfe0e8a5be10ebfcd40ebbb5fc09395919779a09e6e53f2",
-        "bytes": 347782
+        "sha256": "acc1236ed3ab0fd94030bedcf3e496e9790a8dcce0bcb8001b31b263f4295f91",
+        "bytes": 347778
       }
     }
   },
