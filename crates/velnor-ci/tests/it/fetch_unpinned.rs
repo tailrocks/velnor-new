@@ -17,8 +17,6 @@ fn hard_link(from: &Path, to: &Path) -> std::io::Result<()> {
     fs::hard_link(from, to)
 }
 
-/// Plants a `rust-toolchain.toml` naming a hostile toolchain in an ancestor of the
-/// runner's temp directory, the way an earlier job on a reused runner can.
 fn planted_above_runner_temp(fixture: &Fixture) -> Result<String, Box<dyn std::error::Error>> {
     let root = fixture.repo.root();
     let runner = root.join("runner");
@@ -35,8 +33,6 @@ fn planted_above_runner_temp(fixture: &Fixture) -> Result<String, Box<dyn std::e
     Ok(runner_temp.display().to_string())
 }
 
-/// A rustup proxy as it behaves when started under the name `cargo`: `RUSTUP_TOOLCHAIN`
-/// wins, otherwise the nearest `rust-toolchain.toml` above the cwd decides.
 fn proxy(fixture: &Fixture) -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
     let root = fixture.repo.root();
     let source = root.join("proxy/rustup");

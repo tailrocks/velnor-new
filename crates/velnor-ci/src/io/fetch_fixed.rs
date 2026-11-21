@@ -279,4 +279,44 @@ mod tests {
                 .join(".cargo/bin/cargo")
         );
     }
+
+    #[test]
+    fn a_toolchain_cargo_that_rustup_names_outside_the_seal_never_receives_the_token() {
+        let (root, fixed) = sealed_tree("returned");
+        let rustup = fixed.base.join("cargo/bin/rustup");
+        fs::write(
+            &rustup,
+            "#!/bin/sh\ncase \"$1\" in\nshow) echo 't (default)';;\nwhich) echo \"$RUSTUP_HOME/toolchains/t/bin/cargo\";;\nesac\n",
+        )
+        .and_then(|()| fs::set_permissions(&rustup, fs::Permissions::from_mode(0o755)))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+        let bin = fixed.base.join("rustup/toolchains/t/bin");
+        script(&bin.join("cargo"));
+        fs::write(bin.join("cargo"), "#!/bin/sh\necho real\n")
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        let neutral = root.join("neutral");
+        fs::create_dir_all(&neutral).unwrap_or_else(|e| unreachable!("{e}"));
+        let found = fixed.find().unwrap_or_else(|| unreachable!("not found"));
+        let home = root.join("home");
+        let trusted = Trusted::new(&home, &found.roots());
+        let resolve = || {
+            super::super::fetch_toolchain::resolve(
+                &found.cargo,
+                &home,
+                &fixed.base.join("rustup"),
+                &neutral,
+                &trusted,
+                Some(&found),
+            )
+        };
+        let sealed = resolve().unwrap_or_else(|e| unreachable!("{e}"));
+        assert_eq!(sealed.cargo, bin.join("cargo"));
+        fs::set_permissions(&bin, fs::Permissions::from_mode(0o775))
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        let refused = resolve().err().map(|e| e.to_string());
+        assert!(
+            refused.is_some_and(|e| e.contains("outside the sealed toolchain")),
+            "group-writable bin"
+        );
+    }
 }

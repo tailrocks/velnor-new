@@ -30,16 +30,36 @@ pub(super) fn check_databases(cache: &Path) -> Result<(), CiError> {
                 .into_iter()
                 .map(|worktree| worktree.join("config.worktree")),
         );
-        for config in configs {
-            match fs::read_to_string(&config) {
-                Ok(text) if super::saved_git_config::is_plain(&text) => {}
-                Err(e) if e.kind() == ErrorKind::NotFound => {}
-                _ => {
-                    return Err(CiError::new(format!(
-                        "{} is not a plain git config; refusing to run the fetch with the token",
-                        config.display()
-                    )));
-                }
+        check_configs(&configs)?;
+    }
+    for index in children(&cache.join("registry/index"))? {
+        let repository = index.join(".git");
+        match fs::symlink_metadata(&repository) {
+            Ok(meta) if meta.is_dir() => {}
+            Err(e) if e.kind() == ErrorKind::NotFound => continue,
+            _ => {
+                return Err(CiError::new(format!(
+                    "{} is not a plain git directory; refusing to run the fetch with the token",
+                    repository.display()
+                )));
+            }
+        }
+        let configs: Vec<PathBuf> = CONFIGS.iter().map(|name| repository.join(name)).collect();
+        check_configs(&configs)?;
+    }
+    Ok(())
+}
+
+fn check_configs(configs: &[PathBuf]) -> Result<(), CiError> {
+    for config in configs {
+        match fs::read_to_string(config) {
+            Ok(text) if super::saved_git_config::is_plain(&text) => {}
+            Err(e) if e.kind() == ErrorKind::NotFound => {}
+            _ => {
+                return Err(CiError::new(format!(
+                    "{} is not a plain git config; refusing to run the fetch with the token",
+                    config.display()
+                )));
             }
         }
     }
@@ -304,5 +324,48 @@ mod tests {
                 "{linked}"
             );
         }
+    }
+
+    #[test]
+    fn a_registry_index_repository_with_a_planted_git_config_refuses_the_token_fetch() {
+        let plain = "[core]\n\trepositoryformatversion = 0\n\tbare = false\n[remote \"origin\"]\n\turl = https://github.com/acme/index\n\tfetch = +HEAD:refs/remotes/origin/HEAD\n";
+        let planted = "[http \"https://github.com/\"]\n\tproxy = http://attacker.invalid:8080\n\tsslVerify = false\n";
+        for (label, config) in [("config", "config"), ("worktree", "config.worktree")] {
+            let root = tree(&format!("index-{label}"));
+            let repository = root.join("registry/index/github.com-1ecc6299db9ec823/.git");
+            put(&repository.join("config"), plain);
+            assert!(check_databases(&root).is_ok(), "{label}");
+            put(&repository.join(config), planted);
+            let refused = check_databases(&root).err().map(|e| e.to_string());
+            assert!(
+                refused.is_some_and(|e| e.contains("not a plain git config")),
+                "{label}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_registry_index_whose_git_entry_is_a_link_or_a_file_refuses_the_token_fetch() {
+        let root = tree("index-linked");
+        let index = root.join("registry/index/github.com-1ecc6299db9ec823");
+        put(&index.join(".git"), "gitdir: /somewhere/else\n");
+        let refused = check_databases(&root).err().map(|e| e.to_string());
+        assert!(
+            refused.is_some_and(|e| e.contains("not a plain git directory")),
+            "file"
+        );
+        fs::remove_file(index.join(".git")).unwrap_or_else(|e| unreachable!("{e}"));
+        symlink(root.join("elsewhere"), index.join(".git")).unwrap_or_else(|e| unreachable!("{e}"));
+        assert!(check_databases(&root).is_err(), "link");
+    }
+
+    #[test]
+    fn a_sparse_registry_index_without_a_repository_passes_the_token_fetch_check() {
+        let root = tree("index-sparse");
+        put(
+            &root.join("registry/index/index.crates.io-1949cf8c6b5b557f/.cache/se/rd/serde"),
+            "x",
+        );
+        assert!(check_databases(&root).is_ok());
     }
 }

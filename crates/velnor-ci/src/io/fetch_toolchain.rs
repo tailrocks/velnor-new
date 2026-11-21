@@ -90,6 +90,12 @@ pub(super) fn resolve(
                 rustup_home.display()
             ))
         })?;
+    if fixed.is_some_and(|fixed| !fixed.seals(&real)) {
+        return Err(CiError::new(format!(
+            "{} is outside the sealed toolchain; refusing to run it with the token",
+            real.display()
+        )));
+    }
     Ok(Resolved {
         cargo: real,
         toolchain: name.into(),
