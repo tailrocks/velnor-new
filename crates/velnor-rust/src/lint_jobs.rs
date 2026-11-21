@@ -28,6 +28,7 @@ fn gate(lint: &LintJob, from: PlanFrom) -> Gate {
         packages: Vec::new(),
         unselected: false,
         group: None,
+        also: Vec::new(),
     }
 }
 
