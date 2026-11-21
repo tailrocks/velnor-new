@@ -88,7 +88,10 @@ fn a_percent_escape_in_a_plain_remote_path_is_saved() {
 #[cfg(unix)]
 fn stops_for_symlinked_ancestor(name: &str, ancestor: &str, outside: &str, planted: &str) {
     let repo = private_checkout(name, GIT_LOCK);
-    repo.write_unstaged(&format!("home/outside/{planted}"), "[core]\n\tbare = true\n");
+    repo.write_unstaged(
+        &format!("home/outside/{planted}"),
+        "[core]\n\tbare = true\n",
+    );
     let link = repo.root().join("home").join(ancestor);
     std::fs::create_dir_all(link.parent().unwrap_or_else(|| unreachable!()))
         .unwrap_or_else(|e| unreachable!("{e}"));
