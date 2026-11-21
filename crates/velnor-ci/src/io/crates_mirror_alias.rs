@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 use toml::{Table, Value};
 
-use super::crates_mirror_mbx::{direct_target, option_value, subcommand};
+use super::crates_mirror_mbx::{direct_target, subcommand};
 
 const DEPTH: usize = 8;
 const CONFIGS: &[&str] = &["config", "config.toml"];
@@ -40,12 +40,7 @@ pub(super) fn expand(work: &Path, args: &[OsString], builtin: &[&str]) -> Option
                 args.splice(index..=index, words);
             }
             Alias::Absent => return Some(args),
-            Alias::Unknown if builtin.contains(&name.as_str()) => return None,
-            Alias::Unknown => {
-                return option_value(&args, "--manifest-path", true)
-                    .is_none()
-                    .then_some(args);
-            }
+            Alias::Unknown => return None,
         }
     }
     None

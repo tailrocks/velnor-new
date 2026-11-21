@@ -64,48 +64,70 @@ fn declared_for_project(args: &[OsString]) -> bool {
     let Ok(workspace) = workspace() else {
         return true;
     };
-    let Some(directory) = project_directory(&work, args) else {
+    let Some(directories) = project_directories(&work, args) else {
         return true;
     };
-    let directory = match std::fs::canonicalize(&directory) {
-        Ok(resolved) => resolved,
-        Err(_)
-            if directory
-                .components()
-                .any(|part| part == Component::ParentDir) =>
-        {
-            return true;
-        }
-        Err(_) => directory,
-    };
-    scope(&directory, workspace.as_deref())
-        .into_iter()
-        .any(crate::mbx_declared::declared_or_unreadable_in)
+    directories.into_iter().any(|directory| {
+        let directory = match std::fs::canonicalize(&directory) {
+            Ok(resolved) => resolved,
+            Err(_)
+                if directory
+                    .components()
+                    .any(|part| part == Component::ParentDir) =>
+            {
+                return true;
+            }
+            Err(_) => directory,
+        };
+        scope(&directory, workspace.as_deref())
+            .into_iter()
+            .any(crate::mbx_declared::declared_or_unreadable_in)
+    })
 }
 
-fn project_directory(work: &Path, args: &[OsString]) -> Option<PathBuf> {
+fn project_directories(work: &Path, args: &[OsString]) -> Option<Vec<PathBuf>> {
     let base = directory_flag(work, args);
     let args = super::crates_mirror_alias::expand(&base, args, MANIFEST_COMMANDS)?;
     let command = subcommand(&args).map(|(_, command)| command);
     if let Some(target) = command.filter(|command| direct_target(command)) {
         let script = base.join(target);
-        return Some(
+        let mut directories = vec![
             script
                 .parent()
                 .map_or_else(|| base.clone(), Path::to_path_buf),
-        );
+        ];
+        if may_be_external_subcommand(target, &args) {
+            directories.push(manifest_directory(&base, &args, false));
+        }
+        return Some(directories);
     }
     if command == Some("install")
         && let Some(path) = option_value(&args, "--path", false)
     {
-        return Some(base.join(path));
+        return Some(vec![base.join(path)]);
     }
     let shorthand = command.is_some_and(|command| MANIFEST_COMMANDS.contains(&command));
-    Some(
-        option_value(&args, "--manifest-path", shorthand)
-            .and_then(|manifest| base.join(manifest).parent().map(Path::to_path_buf))
-            .unwrap_or_else(|| base.clone()),
-    )
+    Some(vec![manifest_directory(&base, &args, shorthand)])
+}
+
+fn manifest_directory(base: &Path, args: &[OsString], shorthand: bool) -> PathBuf {
+    option_value(args, "--manifest-path", shorthand)
+        .and_then(|manifest| base.join(manifest).parent().map(Path::to_path_buf))
+        .unwrap_or_else(|| base.to_path_buf())
+}
+
+fn may_be_external_subcommand(target: &str, args: &[OsString]) -> bool {
+    Path::new(target).components().count() == 1 && !script_enabled(args)
+}
+
+fn script_enabled(args: &[OsString]) -> bool {
+    let mut args = args.iter().take_while(|arg| *arg != "--");
+    while let Some(arg) = args.next() {
+        if arg == "-Zscript" || (arg == "-Z" && args.next().is_some_and(|flag| flag == "script")) {
+            return true;
+        }
+    }
+    false
 }
 
 fn directory_flag(work: &Path, args: &[OsString]) -> PathBuf {

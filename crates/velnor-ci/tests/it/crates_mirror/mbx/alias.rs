@@ -245,3 +245,19 @@ fn an_alias_named_like_a_script_path_does_not_replace_the_script_target() -> Tes
     )?);
     Ok(())
 }
+
+#[test]
+fn an_unknown_custom_alias_fails_closed() -> TestResult {
+    let repo = declared_job()?;
+    let launch = repo.root().join("launch");
+    let (inside, _) = manifests(&repo);
+    aliases(&launch, "include = [\"aliases.toml\"]\n")?;
+    fs::write(
+        launch.join(".cargo/aliases.toml"),
+        format!("[alias]\nx = \"build --manifest-path {inside}\"\n"),
+    )?;
+    assert_refused(&run_with_args(&repo, &launch, &["x"])?);
+    aliases(&launch, "[alias\n")?;
+    assert_refused(&run_with_args(&repo, &launch, &["x"])?);
+    Ok(())
+}

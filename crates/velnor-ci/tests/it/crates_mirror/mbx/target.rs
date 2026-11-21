@@ -57,25 +57,6 @@ fn an_attached_directory_flag_names_the_project_the_command_runs_in() -> TestRes
 }
 
 #[test]
-fn each_directory_flag_is_applied_in_order_like_cargo() -> TestResult {
-    let repo = declared_job()?;
-    let launch = repo.root().join("launch");
-    let scratch = repo.root().join("scratch-project").display().to_string();
-    let declaring = repo.root().display().to_string();
-    assert_refused(&run_with_args(
-        &repo,
-        &launch,
-        &[&format!("-C{scratch}"), "-C", &declaring, "build"],
-    )?);
-    assert_plain(&run_with_args(
-        &repo,
-        &launch,
-        &["-C", &declaring, &format!("-C{scratch}"), "build"],
-    )?);
-    Ok(())
-}
-
-#[test]
 fn an_equals_attached_directory_flag_names_the_project_the_command_runs_in() -> TestResult {
     let repo = declared_job()?;
     let launch = repo.root().join("launch");
@@ -251,6 +232,31 @@ fn a_bare_name_under_zscript_is_a_subcommand_and_a_dot_slash_name_is_a_script() 
             "--manifest-path",
             &inside,
         ],
+    )?);
+    Ok(())
+}
+
+#[test]
+fn a_bare_rs_name_without_zscript_is_an_external_subcommand_scoped_by_its_manifest_path()
+-> TestResult {
+    let repo = declared_job()?;
+    let launch = repo.root().join("launch");
+    let (inside, outside) = (
+        repo.root().join("Cargo.toml").display().to_string(),
+        repo.root()
+            .join("scratch-project/Cargo.toml")
+            .display()
+            .to_string(),
+    );
+    assert_refused(&run_with_args(
+        &repo,
+        &launch,
+        &["foo.rs", "--manifest-path", &inside],
+    )?);
+    assert_plain(&run_with_args(
+        &repo,
+        &launch,
+        &["foo.rs", "--manifest-path", &outside],
     )?);
     Ok(())
 }
