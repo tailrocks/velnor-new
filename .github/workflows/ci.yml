@@ -175,9 +175,11 @@ jobs:
           gitleaks version
           betterleaks version
           kingfisher --version
+      - name: Test that the secret scan configs report planted tokens in each fixture path
+        run: bash scripts/test-secret-scan-config.sh
       - name: Scan the commit history with gitleaks
         run: gitleaks git . --redact --no-banner --config .gitleaks.toml --log-opts="--full-history --diff-merges=first-parent HEAD"
       - name: Scan the commit history with betterleaks
-        run: betterleaks git . --redact -c .gitleaks.toml --log-opts="--full-history --diff-merges=first-parent HEAD"
+        run: betterleaks git . --redact -c .betterleaks.toml --log-opts="--full-history --diff-merges=first-parent HEAD"
       - name: Scan the working tree with kingfisher
         run: bash scripts/secret-scan-worktree.sh

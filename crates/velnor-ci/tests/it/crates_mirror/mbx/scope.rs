@@ -14,7 +14,7 @@ const MISSING: &str = "mise's cargo wrapper is missing after activation";
 
 pub(super) fn declared_job() -> Result<Repo, Box<dyn std::error::Error>> {
     let repo = configured_repo("crates-mirror-mbx-scope")?;
-    fs::write(repo.root().join("mise.toml"), MBX_DECLARED)?;
+    fs::write(repo.root().join("mise.toml"), MBX_DECLARED.as_str())?;
     let setup = setup_command(repo.root(), REGISTRY)
         .current_dir(repo.root())
         .output()?;
@@ -71,7 +71,7 @@ fn a_test_fixture_outside_the_workspace_runs_plain_even_beside_a_declaring_works
     let fixture = repo.root().join("fixture-outside-the-workspace");
     let workspace = repo.root().join("workspace");
     fs::create_dir_all(&workspace)?;
-    fs::write(workspace.join("mise.toml"), MBX_DECLARED)?;
+    fs::write(workspace.join("mise.toml"), MBX_DECLARED.as_str())?;
     assert_plain(&run_in(&repo, &fixture, Some(&workspace), true)?);
     Ok(())
 }
@@ -107,7 +107,7 @@ fn a_build_in_a_workspace_subdirectory_still_fails_closed_when_the_workspace_dec
     let workspace = repo.root().join("workspace");
     let member = workspace.join("crates/member");
     fs::create_dir_all(&member)?;
-    fs::write(workspace.join("mise.toml"), MBX_DECLARED)?;
+    fs::write(workspace.join("mise.toml"), MBX_DECLARED.as_str())?;
     let output = run_in(&repo, &member, Some(&workspace), true)?;
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(!output.status.success(), "{output:?}");
