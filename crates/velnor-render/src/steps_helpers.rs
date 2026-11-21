@@ -76,8 +76,6 @@ fn any_gate(step: &Step, setup: Setup) -> Option<String> {
         .map(|parts| parts.iter().filter(|part| !shared.contains(part)).collect())
         .collect();
     let mut terms: Vec<String> = shared.into_iter().cloned().collect();
-    // An alternative with no parts of its own holds as soon as the shared terms do, so the OR is
-    // redundant and the shared terms alone decide the gate.
     if owns.iter().any(Vec::is_empty) {
         return (!terms.is_empty()).then(|| terms.join(" && "));
     }
