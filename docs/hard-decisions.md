@@ -141,7 +141,7 @@ letting a Velnor pin override a project declaration.
 ## 6. One job per Bun workspace member with parallel script steps
 
 **Decision.** Each Bun workspace member owns exactly one generated CI job named
-`Bun / <package name>` (job id `bun-<slug>`, for example `Bun / @example-org/ui`). A
+`Bun / <package name>` (job id `bun-<slug>`, for example `Bun / @chainargos/ui`). A
 single-package root (no `workspaces`) is one member. The job prepares checkout, pinned tools
 and the dependency install once; the member's `package.json` scripts (`typecheck`, `lint`,
 `test`, `build` by default) then run as parallel steps (`background: true` members joined by

@@ -224,11 +224,6 @@ class PathTests(unittest.TestCase):
             self.assertNotIn("zzplanted", found[0])
             self.assertEqual(guard.scan(root, planted("zzother")), [])
 
-    def test_name_in_hard_decisions_doc_is_found(self):
-        tmp, root = repository({"docs/hard-decisions.md": "zzplanted\n"})
-        with tmp:
-            self.assertEqual(guard.scan(root, planted("zzplanted")), ["docs/hard-decisions.md:1"])
-
 
 GIT_ENV = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
 
@@ -330,6 +325,18 @@ class FullScanTriggerTests(unittest.TestCase):
         )
         with tmp:
             self.assertEqual(outcome(root, ["zzplanted"], environ)[0], 0)
+
+
+class ExemptionTests(unittest.TestCase):
+    def test_exempt_path_is_not_read_and_other_paths_still_fail(self):
+        tmp, root = repository({"docs/hard-decisions.md": "zzplanted\n", "docs/other.md": "zzplanted\n"})
+        with tmp:
+            self.assertEqual(guard.scan(root, planted("zzplanted")), ["docs/other.md:1"])
+
+    def test_exemption_covers_only_the_exact_path(self):
+        tmp, root = repository({"docs/hard-decisions.md.bak": "zzplanted\n", "other/docs/hard-decisions.md": "zzplanted\n"})
+        with tmp:
+            self.assertEqual(len(guard.scan(root, planted("zzplanted"))), 2)
 
 
 class LongTokenTests(unittest.TestCase):
