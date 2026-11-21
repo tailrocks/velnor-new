@@ -200,6 +200,8 @@ check ordered_padded_one_after_prose fail '/// prose\n/// 01.     let x = 1;\npu
 check ordered_paren_one_after_prose fail '/// prose\n/// 1)     let x = 1;\npub fn k() {}\n'
 check ordered_two_after_blank fail '/// prose\n///\n/// 2.     let x = 1;\npub fn l() {}\n'
 check ordered_two_quoted_after_prose fail '/// prose\n/// > 2.     let x = 1;\npub fn m() {}\n'
+check block_margin_star_later pass '/**\n    --- *\n        let x = 1;\n*/\npub fn n() {}\n'
+check quote_indent_after_prose pass '/// prose\n///     > let x = 1;\npub fn q() {}\n'
 
 missing="$work/scanner_missing"
 mkdir -p "$missing/crates/fx/src"

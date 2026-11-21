@@ -14,7 +14,7 @@ ATTR_INDENT = re.compile(r" {4,}\S|(?:[ \t]*>)+ {5,}\S")
 LIST_INDENT = re.compile(r"[ \t]*" + CONTAINER + r"((?:[-*+]|\d{1,9}[.)])) {5,}\S")
 ORDERED_NO_INTERRUPT = re.compile(r"(?!0*1[.)])\d{1,9}[.)]")
 BLOCK_MARGIN = re.compile(r"^[ \t]*\*")
-QUOTE_START = re.compile(r"[ \t]*>")
+QUOTE_START = re.compile(r" {0,3}>")
 SETEXT_UNDERLINE = re.compile(r"(?:=+|-+)[ \t]*")
 HTML_CLOSED = re.compile(
     r"<!--.*-->|<\?.*\?>|<!\[CDATA\[.*\]\]>|<![A-Za-z].*>"
