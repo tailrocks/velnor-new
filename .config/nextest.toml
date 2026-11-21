@@ -17,6 +17,7 @@ docker-networks = { max-threads = 4 }
 velnor-ci-serial = { max-threads = 1 }
 probe-cleanup-observer-serial = { max-threads = 1 }
 setup-action = { max-threads = 2 }
+runtime-host-readiness-stall = { max-threads = 1 }
 
 [profile.ci]
 retries = 0
@@ -276,3 +277,13 @@ slow-timeout = { period = "60s", terminate-after = 3 }
 [[profile.ci.overrides]]
 filter = "package(=velnor-ci)"
 slow-timeout = { period = "30s", terminate-after = 1 }
+
+# The two readiness stall cases each wait for a 15 s exec readiness deadline and bound their wall time at 22 s.
+# Run one at a time so their waits never overlap: parallel runs measured 21.4 to 22.1 s wall on a loaded host.
+[[profile.default.overrides]]
+filter = 'package(=velnor-runner-host) and binary(=runner_image_qualification_public) and (test(=stall_bounds::stall_exec_create) | test(=stall_bounds::stall_exec_stream))'
+test-group = "runtime-host-readiness-stall"
+
+[[profile.ci.overrides]]
+filter = 'package(=velnor-runner-host) and binary(=runner_image_qualification_public) and (test(=stall_bounds::stall_exec_create) | test(=stall_bounds::stall_exec_stream))'
+test-group = "runtime-host-readiness-stall"
