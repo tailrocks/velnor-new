@@ -7,7 +7,7 @@ use crate::tools_verify::{Job, discarded, job, recorded, rustc};
 
 const REPO: &str = "tailrocks/velnor-new";
 
-pub(crate) fn check_stdout(job: &Job, anchor: &str, env: &[(&str, &str)]) -> String {
+fn run_verb(job: &Job, verb: &str, anchor: &str, env: &[(&str, &str)]) -> String {
     let event = job.root.join("event.json");
     fs::write(&event, r#"{"repository":{"default_branch":"main"}}"#).unwrap_or_default();
     let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
@@ -17,7 +17,7 @@ pub(crate) fn check_stdout(job: &Job, anchor: &str, env: &[(&str, &str)]) -> Str
         .env_clear()
         .current_dir(&job.root)
         .env("PATH", &no_tools)
-        .args(["tools-verify", "check"])
+        .args(["tools-verify", verb])
         .env("HOME", &job.home)
         .env("RUNNER_TEMP", &job.root)
         .env("GITHUB_OUTPUT", job.root.join("github-output"))
@@ -32,6 +32,10 @@ pub(crate) fn check_stdout(job: &Job, anchor: &str, env: &[(&str, &str)]) -> Str
     let run = command.output().unwrap_or_else(|e| unreachable!("{e}"));
     assert!(run.status.success(), "{run:?}");
     String::from_utf8_lossy(&run.stdout).into_owned()
+}
+
+pub(crate) fn check_stdout(job: &Job, anchor: &str, env: &[(&str, &str)]) -> String {
+    run_verb(job, "check", anchor, env)
 }
 
 fn delete_entry(key: &str) -> String {
@@ -85,6 +89,41 @@ fn a_malformed_anchor_names_no_entry_because_the_next_trusted_run_records_a_new_
     let stdout = check_stdout(
         &job,
         "not-a-digest",
+        &[("VELNOR_ANCHOR_CACHE_KEY", "velnor-tools-anchor-abc123")],
+    );
+    assert!(stdout.contains("the anchor is malformed"), "{stdout}");
+    assert!(!stdout.contains("cache delete-entry"), "{stdout}");
+    assert!(!stdout.contains("velnor-tools-anchor-abc123"), "{stdout}");
+    assert!(
+        stdout.contains("The next trusted run on the default branch records a new anchor"),
+        "{stdout}"
+    );
+    assert!(discarded(&job));
+}
+
+#[test]
+fn a_malformed_anchor_read_in_the_plan_job_names_no_entry_in_the_check() {
+    let job = job("tools-verify-plan-bad-anchor");
+    fs::create_dir_all(job.anchor.parent().unwrap_or(&job.root))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    fs::write(&job.anchor, "velnor-tools-anchor-v1 not-a-digest\n")
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    run_verb(
+        &job,
+        "read",
+        "",
+        &[("VELNOR_ANCHOR_MATCHED", "velnor-tools-anchor-abc123")],
+    );
+    let read =
+        fs::read_to_string(job.root.join("github-output")).unwrap_or_else(|e| unreachable!("{e}"));
+    let anchor = read.trim_start_matches("anchor=").trim_end();
+    fs::remove_file(&job.anchor).unwrap_or_else(|e| unreachable!("{e}"));
+    for path in [".local/share/mise", ".rustup"] {
+        fs::remove_dir_all(job.home.join(path)).unwrap_or_else(|e| unreachable!("{e}"));
+    }
+    let stdout = check_stdout(
+        &job,
+        anchor,
         &[("VELNOR_ANCHOR_CACHE_KEY", "velnor-tools-anchor-abc123")],
     );
     assert!(stdout.contains("the anchor is malformed"), "{stdout}");
