@@ -36,13 +36,7 @@ struct RunCount {
 
 fn running_workflows(github: &dyn GitHubWrite, repo: &Repo) -> Result<u64, CiError> {
     let mut total = 0;
-    for status in [
-        "in_progress",
-        "queued",
-        "waiting",
-        "requested",
-        "pending",
-    ] {
+    for status in ["in_progress", "queued", "waiting", "requested", "pending"] {
         let json = github.get(&format!(
             "/repos/{repo}/actions/runs?status={status}&per_page=1"
         ))?;
