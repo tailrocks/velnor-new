@@ -86,7 +86,8 @@ hooks {
       ["kingfisher-staged"] { check = "kingfisher scan . --staged --no-validate --redact --no-update-check --baseline-file .kingfisher-baseline.yml" }
     }
   }
-  // The pre-push scans cover HEAD ancestry only; CI on merge_group (secret-scan) is the gate for what lands on main.
+  // The pre-push scans cover HEAD ancestry only. The CI secret-scan job is an ADVISORY check: it is not
+  // in the Required aggregate, but it also runs on merge_group.
   ["pre-push"] {
     steps {
       ["betterleaks-history"] { check = "betterleaks git . --redact -c .gitleaks.toml --log-opts=\"--full-history HEAD\"" }
