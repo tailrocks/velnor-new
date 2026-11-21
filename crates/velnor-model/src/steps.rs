@@ -161,6 +161,8 @@ pub enum StepKind {
     UploadCargoLog,
     ReportCaches {
         caches: Vec<CacheKey>,
+        /// The keys this job saves, so the report names only the save steps it renders.
+        saved: Vec<CacheKey>,
         nextest_artifacts: bool,
         node_tools: ToolsTelemetry,
         not_generated: Option<String>,

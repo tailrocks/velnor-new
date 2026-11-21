@@ -94,10 +94,15 @@ fn attach_metrics(job: &mut Job, nextest_artifacts: bool, not_generated: Option<
             _ => None,
         })
         .collect();
-    let saves_cache = job
+    let saved: Vec<_> = job
         .steps
         .iter()
-        .any(|step| matches!(&step.kind, StepKind::CacheSave(key) if key.family() != "tools"));
+        .filter_map(|step| match &step.kind {
+            StepKind::CacheSave(key) => Some(key.clone()),
+            _ => None,
+        })
+        .collect();
+    let saves_cache = saved.iter().any(|key| key.family() != "tools");
     let not_generated = not_generated.filter(|_| !saves_cache).map(str::to_owned);
     let has = |verb| {
         job.steps
@@ -112,6 +117,7 @@ fn attach_metrics(job: &mut Job, nextest_artifacts: bool, not_generated: Option<
         [
             StepKind::ReportCaches {
                 caches,
+                saved,
                 nextest_artifacts,
                 node_tools,
                 not_generated,

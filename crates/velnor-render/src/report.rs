@@ -37,6 +37,7 @@ pub(crate) fn cache_id(key: &CacheKey, restore: bool) -> String {
 pub(crate) fn lane(kind: &StepKind, test_id: Option<String>) -> RenderedStep {
     let StepKind::ReportCaches {
         caches,
+        saved,
         node_tools,
         not_generated,
         ..
@@ -53,9 +54,10 @@ pub(crate) fn lane(kind: &StepKind, test_id: Option<String>) -> RenderedStep {
             (false, Some(reason)) => {
                 plan["not_generated"] = serde_json::Value::String(reason.to_owned());
             }
-            _ => {
+            _ if tools || saved.contains(key) => {
                 plan["save_step"] = serde_json::Value::String(step(false, node_tools.save, crate::gate::TOOLS_SAVED_STEP));
             }
+            _ => {}
         }
         plan
     }).collect();

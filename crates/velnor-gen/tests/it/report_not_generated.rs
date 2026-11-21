@@ -3,7 +3,7 @@
 
 use crate::facts::TestResult;
 use crate::pipeline::workflow;
-use velnor_model::RepoPath;
+use velnor_model::{RepoPath, RepoView};
 
 #[test]
 fn refused_base_caches_say_why_when_the_helper_reads_the_reason() -> TestResult {
@@ -58,8 +58,20 @@ fn every_save_step_the_report_names_is_rendered_in_its_job() -> TestResult {
     let mut repo = crate::base_save::pinned("0.1.111", "")?;
     repo.files
         .insert(RepoPath::new("Cargo.lock")?, lock.as_bytes().to_vec());
+    assert_named_saves_are_rendered(&repo)
+}
+
+#[test]
+fn a_public_lint_job_names_only_the_saves_it_renders() -> TestResult {
+    assert_named_saves_are_rendered(&crate::base_save::pinned(
+        "0.1.111",
+        "shape = \"lint-test\"\n",
+    )?)
+}
+
+fn assert_named_saves_are_rendered(repo: &RepoView) -> TestResult {
     let parsed: serde_json::Value =
-        serde_saphyr::from_str(&crate::archive::plain_invocations(&workflow(&repo)?))?;
+        serde_saphyr::from_str(&crate::archive::plain_invocations(&workflow(repo)?))?;
     let mut named = 0;
     for job in parsed["jobs"].as_object().ok_or("jobs")?.values() {
         let steps = job["steps"].as_array().ok_or("steps")?;
