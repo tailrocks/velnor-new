@@ -17,7 +17,7 @@ use crate::pipeline::{pin_helper, view};
 use crate::private_sources::SECTION;
 use crate::release_fixture::{APP, Root, TOOLS, TWO_BINARIES, release_view};
 use crate::release_unguarded::expected_release;
-use crate::step_refs::{Callees, Scan, scan_workflow};
+use crate::step_refs::{Callees, Scan, dangling_refs, scan_workflow};
 use crate::test_groups::{DATABASE, SHELL};
 
 const ROOTS: &[&str] = &["Cargo.toml", "tools/Cargo.toml"];
@@ -109,10 +109,9 @@ fn callees_of(files: &BTreeMap<RepoPath, String>) -> Result<Callees, Box<dyn Err
     let mut callees = Callees::new();
     for (path, text) in files.iter().filter(|(path, _)| is_workflow(path)) {
         let document = crate::yaml_tree::document(text)?;
-        let Some(outputs) = document["on"]["workflow_call"]["outputs"].as_object() else {
-            continue;
-        };
-        let names: BTreeSet<String> = outputs.keys().cloned().collect();
+        let names: BTreeSet<String> = document["on"]["workflow_call"]["outputs"]
+            .as_object()
+            .map_or_else(BTreeSet::new, |outputs| outputs.keys().cloned().collect());
         callees.insert(format!("./{path}"), names.clone());
         callees.insert(path.to_string(), names);
     }
@@ -289,5 +288,23 @@ fn every_steps_reference_in_the_release_workflow_names_a_step_of_its_own_job() -
         }
     }
     sweep.finish();
+    Ok(())
+}
+
+#[test]
+fn a_needs_output_of_an_outputless_local_reusable_workflow_is_dangling() -> TestResult {
+    let mut files = BTreeMap::new();
+    files.insert(
+        RepoPath::new(".github/workflows/release.yml")?,
+        "on:\n  workflow_call: {}\njobs: {}\n".to_owned(),
+    );
+    files.insert(
+        RepoPath::new(".github/workflows/rust-ci.yml")?,
+        "on: push\njobs:\n  release:\n    uses: ./.github/workflows/release.yml\n  deploy:\n    needs: [release]\n    steps:\n      - run: echo ${{ needs.release.outputs.nope }}\n".to_owned(),
+    );
+    let callees = callees_of(&files)?;
+    let caller =
+        crate::yaml_tree::document(&files[&RepoPath::new(".github/workflows/rust-ci.yml")?])?;
+    assert_eq!(dangling_refs(&caller, &callees).1.len(), 1);
     Ok(())
 }
