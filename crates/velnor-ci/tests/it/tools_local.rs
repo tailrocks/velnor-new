@@ -69,6 +69,7 @@ fn go(node: &Node, verb: Verb, key: &str, event: &str, home: &str) -> Outcome {
         seed_dir: Some(&store),
         home: &home,
         owner,
+        replace: false,
     })
 }
 
@@ -121,6 +122,7 @@ fn a_push_to_a_non_default_branch_never_saves() {
             seed_dir: Some(&store),
             home: &home,
             owner,
+            replace: false,
         });
         assert_eq!(outcome, Outcome::Untrusted, "{event}");
     }
