@@ -173,12 +173,15 @@ def raw_end(opener):
 
 def doc_line(body, state):
     rel = doc_content(body)
-    if state["html"]:
-        state["html"] = bool(rel.strip())
-        return False
     quote = QUOTE_PREFIX.match(rel)
     depth = quote.group().count(">")
     text = rel[quote.end() :]
+    if depth < state["depth"]:
+        state["html"] = False
+        state["raw"] = None
+    if state["html"]:
+        state["html"] = bool(rel.strip())
+        return False
     if state["raw"] is not None:
         if state["raw"] in text.lower():
             state["raw"] = None
@@ -186,15 +189,17 @@ def doc_line(body, state):
     if not rel.strip():
         state["prose"] = None
         return False
-    if HTML_BLOCK6.match(rel) or (state["prose"] is None and HTML_BLOCK7.match(rel)):
-        state["html"] = True
-        state["prose"] = None
-        return False
     if opener := RAW_OPEN.match(text):
         end = raw_end(opener)
         state["prose"] = None
         if end not in text[opener.end() :].lower():
             state["raw"] = end
+            state["depth"] = depth
+        return False
+    if HTML_BLOCK6.match(rel) or (state["prose"] is None and HTML_BLOCK7.match(rel)):
+        state["html"] = True
+        state["prose"] = None
+        state["depth"] = depth
         return False
     continued = state["prose"] == depth
     if LINE_FENCE.match(body) or (LINE_INDENT.match(line_indent_text(body)) and not continued):
@@ -209,7 +214,7 @@ def doc_findings(src):
     attr_depth = 0
     doc_value = False
     doc_end = -2
-    doc_state = {"html": False, "prose": None, "raw": None}
+    doc_state = {"html": False, "prose": None, "raw": None, "depth": 0}
     while i < len(src):
         c = src[i]
         if src.startswith("//", i):
@@ -218,7 +223,7 @@ def doc_findings(src):
             if LINE_DOC.match(src, i):
                 start = src.rfind("\n", 0, i) + 1
                 if start != doc_end + 1:
-                    doc_state = {"html": False, "prose": None, "raw": None}
+                    doc_state = {"html": False, "prose": None, "raw": None, "depth": 0}
                 doc_end = end
                 if doc_line(src[i + 3 : end], doc_state):
                     yield i

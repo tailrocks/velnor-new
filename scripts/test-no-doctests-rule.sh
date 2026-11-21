@@ -167,6 +167,19 @@ check html_one_line_quote fail '/// > <!-- c -->\n/// >     assert_eq!(1, 2);\nf
 check html_pre_raw_fence pass '/// <pre>\n/// ```\n/// assert_eq!(1, 1);\n/// ```\n/// </pre>\nfn f() {}\n'
 check quote_code_span pass '/// > ```foo``` inline\nfn f() {}\n'
 check line_code_span_start pass '/// ```foo``` inline\nfn f() {}\n'
+check pre_bare_fence    fail '/// <pre>\n/// </pre>\n/// ```\n/// assert_eq!(1, 1);\n/// ```\nfn f() {}\n'
+check script_bare_fence fail '/// <script>\n/// </script>\n/// ```\n/// assert_eq!(1, 1);\n/// ```\nfn f() {}\n'
+check style_bare_fence  fail '/// <style>\n/// </style>\n/// ```\n/// assert_eq!(1, 1);\n/// ```\nfn f() {}\n'
+check textarea_bare_fence fail '/// <textarea>\n/// </textarea>\n/// ```\n/// assert_eq!(1, 1);\n/// ```\nfn f() {}\n'
+check pre_class_bare_fence fail '/// <pre class="x">\n/// </pre>\n/// ```\n/// assert_eq!(1, 1);\n/// ```\nfn f() {}\n'
+check pre_three_line_fence fail '/// <pre>\n/// assert_eq!(1, 1);\n/// </pre>\n/// ```\n/// assert_eq!(1, 1);\n/// ```\nfn f() {}\n'
+check pre_blank_fence   fail '/// <pre>\n///\n/// </pre>\n/// ```\n/// assert_eq!(1, 1);\n/// ```\nfn f() {}\n'
+check bq_pre_unquoted_fence fail '/// > <pre>\n/// ```\n/// assert_eq!(1, 1);\n/// ```\nfn f() {}\n'
+check bq_comment_unquoted_fence fail '/// > <!--\n/// ```\n/// assert_eq!(1, 1);\n/// ```\nfn f() {}\n'
+check bq_script_unquoted_fence fail '/// > <script>\n/// ```\n/// assert_eq!(1, 1);\n/// ```\nfn f() {}\n'
+check bq_html_unquoted_fence fail '/// > <div>\n/// ```\n/// assert_eq!(1, 1);\n/// ```\nfn f() {}\n'
+check quote_raw_continuation pass '/// > <!--\n/// > ```\n/// > assert_eq!(1, 1);\n/// > -->\nfn f() {}\n'
+check indent_then_fence fail '/// prose\n///     let x = 1;\n/// ```\n/// assert_eq!(1, 1);\n/// ```\nfn f() {}\n'
 
 missing="$work/scanner_missing"
 mkdir -p "$missing/crates/fx/src"
