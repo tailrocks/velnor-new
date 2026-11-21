@@ -21,6 +21,28 @@ SIMPLE_ESCAPE = {"n": "\n", "r": "\r", "t": "\t", "0": "\0", "\\": "\\", "'": "'
 RAW_PREFIX = {"r", "br", "cr"}
 BYTE_PREFIX = {"b", "c"}
 DOC_HINT = ("///", "//!", "/**", "/*!", "doc")
+WHITESPACE = " \t\r\n"
+QUOTE_PREFIX = re.compile(r"(?:[ ]{0,3}>[ ]?)+")
+LIST_ITEM = re.compile(r"([-*+]|\d{1,9}[.)])([ ]+|$)")
+ATX = re.compile(r"#{1,6}(?:[ ]|$)")
+THEMATIC = re.compile(r"(?:(?:\*[ ]*){3,}|(?:-[ ]*){3,}|(?:_[ ]*){3,})$")
+SETEXT = re.compile(r"(?:=+|-+)[ ]*$")
+FENCE_OPEN = re.compile(r"(?:```|~~~)")
+HTML_TYPE6 = (
+    "address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|"
+    "fieldset|figcaption|figure|footer|form|frame|frameset|h1|h2|h3|h4|h5|h6|head|header|hr|html|iframe|legend|li|"
+    "link|main|menu|menuitem|nav|noframes|ol|optgroup|option|p|param|search|section|summary|table|tbody|td|tfoot|th|"
+    "thead|title|tr|track|ul"
+)
+HTML_BLOCKS = (
+    (re.compile(r"<(?:script|pre|style|textarea)(?:[ ]|>|$)", re.I), re.compile(r"</(?:script|pre|style|textarea)>", re.I)),
+    (re.compile(r"<!--"), re.compile(r"-->")),
+    (re.compile(r"<\?"), re.compile(r"\?>")),
+    (re.compile(r"<![A-Za-z]"), re.compile(r">")),
+    (re.compile(r"<!\[CDATA\["), re.compile(r"\]\]>")),
+    (re.compile(r"</?(?:" + HTML_TYPE6 + r")(?:[ ]|/?>|$)", re.I), None),
+    (re.compile(r"(?:<[A-Za-z][A-Za-z0-9-]*(?:[ ]+[^<>]*)?/?>|</[A-Za-z][A-Za-z0-9-]*[ ]*>)[ ]*$"), None),
+)
 
 
 def block_end(src, i):
@@ -113,10 +135,13 @@ def line_indent_text(body):
 
 
 def value_has_fence(value):
-    return any(
-        LINE_FENCE.match(line) or ATTR_INDENT.match(line.replace("\t", "    "))
-        for line in re.split(r"\r\n|\r|\n", value)
-    )
+    doc = Doc()
+    for line in re.split(r"\r\n|\r|\n", value):
+        indent_hit = ATTR_INDENT.match(line.replace("\t", "    "))
+        suppressed = doc.feed(line.replace("\t", "    "))
+        if LINE_FENCE.match(line) or (indent_hit and not suppressed):
+            return True
+    return False
 
 
 def decode_escape(match):
@@ -139,26 +164,138 @@ def raw_value(literal, prefix):
     return literal[hashes + prefix + 1 : len(literal) - hashes - 1]
 
 
+def html_start(s):
+    for start, end in HTML_BLOCKS:
+        if start.match(s):
+            return True, end
+    return False, None
+
+
+def block_start(s):
+    return bool(
+        THEMATIC.match(s)
+        or SETEXT.match(s)
+        or ATX.match(s)
+        or FENCE_OPEN.match(s)
+        or LIST_ITEM.match(s)
+        or html_start(s)[0]
+    )
+
+
+class Doc:
+    def __init__(self):
+        self.para = False
+        self.item = None
+        self.html = None
+
+    def open_html(self, s, quoted):
+        matched, end = html_start(s)
+        if not matched:
+            return False
+        self.html = None if end is not None and end.search(s) else (end, quoted)
+        self.para = False
+        return True
+
+    def feed(self, text):
+        q = QUOTE_PREFIX.match(text)
+        quoted = q is not None
+        body = text[q.end() :] if quoted else text
+        if self.html is not None:
+            end, in_quote = self.html
+            if in_quote and not quoted:
+                self.html = None
+            else:
+                content = body if in_quote else text
+                if end is None:
+                    if content.strip():
+                        return True
+                    self.html = None
+                    self.para = False
+                    return False
+                if end.search(content):
+                    self.html = None
+                return True
+        if quoted:
+            self.item = None
+        ind = len(body) - len(body.lstrip(" "))
+        s = body[ind:].rstrip()
+        if not s:
+            self.para = False
+            return False
+        base = 0 if quoted or self.item is None else self.item
+        if not quoted and self.item is not None and ind < self.item:
+            self.item = None
+        rel = ind - base
+        plain = not quoted and ind >= 4
+        if self.para and not (rel < 4 and block_start(s)):
+            return plain
+        if rel >= 4:
+            self.para = False
+            return False
+        if THEMATIC.match(s) or ATX.match(s) or FENCE_OPEN.match(s):
+            self.para = False
+            return plain
+        if self.para and SETEXT.match(s):
+            self.para = False
+            return plain
+        m = LIST_ITEM.match(s)
+        if m:
+            rest = s[m.end() :]
+            if not quoted:
+                spaces = len(m.group(2))
+                self.item = ind + len(m.group(1)) + (spaces if 0 < spaces <= 4 else 1)
+            if self.open_html(rest, quoted):
+                return plain
+            self.para = bool(rest) and not (ATX.match(rest) or THEMATIC.match(rest) or FENCE_OPEN.match(rest))
+            return plain
+        if self.open_html(s, quoted):
+            return plain
+        self.para = True
+        return plain
+
+
+def block_text(line):
+    expanded = line.replace("\t", "    ")
+    star = re.match(r"[ ]*\*", expanded)
+    if star:
+        rest = expanded[star.end() :]
+        return rest[1:] if rest.startswith(" ") else rest
+    return expanded[1:] if expanded.startswith(" ") else expanded
+
+
+def block_hit(body):
+    doc = Doc()
+    for line in body.split("\n"):
+        indent_hit = BLOCK_INDENT.match(line.replace("\t", "    "))
+        suppressed = doc.feed(block_text(line))
+        if BLOCK_FENCE.match(line) or (indent_hit and not suppressed):
+            return True
+    return False
+
+
 def doc_findings(src):
     i = 0
     attr_depth = 0
     doc_value = False
+    line_doc = Doc()
     while i < len(src):
         c = src[i]
+        if c not in WHITESPACE and not LINE_DOC.match(src, i):
+            line_doc = Doc()
         if src.startswith("//", i):
             k = src.find("\n", i)
             end = len(src) if k < 0 else k
             if LINE_DOC.match(src, i):
                 body = src[i + 3 : end]
-                if LINE_FENCE.match(body) or LINE_INDENT.match(line_indent_text(body)):
+                text = line_indent_text(body)
+                suppressed = line_doc.feed(text[1:] if text.startswith(" ") else text)
+                if LINE_FENCE.match(body) or (LINE_INDENT.match(text) and not suppressed):
                     yield i
             i = end
         elif src.startswith("/*", i):
             end = block_end(src, i)
-            if DOC_OPEN.match(src, i):
-                body = src[i + 3 : end]
-                if BLOCK_FENCE.search(body) or BLOCK_INDENT.search(body.replace("\t", "    ")):
-                    yield i
+            if DOC_OPEN.match(src, i) and block_hit(src[i + 3 : end]):
+                yield i
             i = end
         elif c == '"':
             end = skip_string(src, i)

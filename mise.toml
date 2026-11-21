@@ -99,6 +99,10 @@ python3 scripts/hosted_phase_measurement/tests/test_mbx_summary.py
 description = "Validate hk.pkl: fail when hk cannot load the config"
 run = "hk validate --deny-warnings"
 
+[tasks.lint-no-doctests]
+description = "Scan the Rust sources for doc comments and doc attributes that hold a doctest (fence, indented code or include_str!)"
+run = "python3 scripts/no-doctests.py"
+
 [tasks.test-no-doctests-rule]
 description = "Check the alint no-doctests rule against doctest fixtures: every bypass form must fail, plain prose must pass"
 run = "bash scripts/test-no-doctests-rule.sh"

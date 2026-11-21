@@ -85,6 +85,14 @@ timeout_minutes = 5
 
 [[lint]]
 kind = "mise-task"
+id = "no-doctests"
+name = "No doctests"
+task = "lint-no-doctests"
+tools = ["python"]
+timeout_minutes = 5
+
+[[lint]]
+kind = "mise-task"
 id = "validate-hk"
 name = "hk config"
 task = "validate-hk"

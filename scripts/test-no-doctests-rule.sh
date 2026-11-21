@@ -2,18 +2,8 @@
 set -euo pipefail
 
 repo="$(cd "$(dirname "$0")/.." && pwd)"
-config="${1:-$repo/.alint.yml}"
-alint_bin="${ALINT:-alint}"
 work="$(mktemp -d "${TMPDIR:-/tmp}/no-doctests.XXXXXX")"
 trap 'rm -rf "$work"' EXIT
-
-rule="$work/rule.yml"
-{
-  printf 'version: 1\nrules:\n'
-  awk '/^  - id: no-doctests/ {on = 1; print; next} /^  - id: / {on = 0} on && /^[^ #]/ {exit} on {print}' "$config"
-} > "$rule"
-grep -q 'id: no-doctests$' "$rule" || { echo "no-doctests rule not found in $config" >&2; exit 2; }
-grep -q 'id: no-doctests-scanner' "$rule" || { echo "no-doctests-scanner rule not found in $config" >&2; exit 2; }
 
 fails=0
 # check <name> <fail|pass> <file content with printf %b escapes>
@@ -22,7 +12,7 @@ check() {
   mkdir -p "$dir/crates/fx/src" "$dir/scripts"
   cp "$repo/scripts/no-doctests.py" "$dir/scripts/"
   printf '%b' "$3" > "$dir/crates/fx/src/lib.rs"
-  if "$alint_bin" check -c "$rule" "$dir" >/dev/null 2>&1; then got=pass; else got=fail; fi
+  if (cd "$dir" && python3 -I scripts/no-doctests.py) >/dev/null 2>&1; then got=pass; else got=fail; fi
   if [ "$got" != "$expect" ]; then
     echo "FAIL $name: expected $expect, got $got"
     fails=$((fails + 1))
@@ -40,7 +30,7 @@ check crlf_blank_indent fail '/// a\r\n///\r\n///     code\r\nfn f() {}\r\n'
 check include_str       fail '#[doc = include_str!("README.md")]\nfn f() {}\n'
 check attr_doc_fence    fail '#[doc = "```\\nlet x = 1;\\n```"]\nfn f() {}\n'
 check attr_nested_include fail '#![cfg_attr(all(), doc = include_str!("README.md"))]\nfn f() {}\n'
-check indent_no_blank   fail '/// - item\n///     onto the next line\nfn f() {}\n'
+check list_item_no_blank pass '/// - item\n///     onto the next line\nfn f() {}\n'
 check block_outer_fence fail '/** ```\n * let x = 1;\n * ```\n */\nfn f() {}\n'
 check block_inner_tilde fail '/*! ~~~\n * let x = 1;\n * ~~~\n */\nfn f() {}\n'
 check block_one_line    fail '/** ```let x = 1;``` */\nfn f() {}\n'
@@ -144,11 +134,44 @@ check dash_adjacent_prose pass '/// Doc.\n/// -- text\n/// --     text\npub fn f
 check line_tab_then_space pass '/// text\n///\n///\t assert_eq!(1, 1);\npub fn f() {}\n'
 check line_tab_two_tabs fail '/// text\n///\n///\t\tassert_eq!(1, 1);\npub fn f() {}\n'
 check line_tab_then_four fail '/// text\n///\n///\t    assert_eq!(1, 1);\npub fn f() {}\n'
+check list_item_blank_four pass '/// - item\n///\n///     code\nfn f() {}\n'
+check list_item_nested_lazy pass '/// - a\n///   - b\n///       code\nfn f() {}\n'
+check list_item_blank_six fail '/// - item\n///\n///       code\nfn f() {}\n'
+check list_heading_code fail '/// - a\n///   # h\n///       code\nfn f() {}\n'
+check para_heading_code fail '/// text\n/// # h\n///     code\nfn f() {}\n'
+check list_block_blank_six fail '/**\n * - a\n *\n *       code\n */\nfn f() {}\n'
+check list_nested_blank_ten fail '/// - a\n///\n///   - b\n///\n///         code\nfn f() {}\n'
+check list_lazy_blank_six fail '/// - a\n///   lazy\n///\n///       code\nfn f() {}\n'
+check para_list_blank_six fail '/// text\n/// - a\n///\n///       code\nfn f() {}\n'
+check list_html_after_blank fail '/// - a\n///\n/// <div>\n///\n///     code\nfn f() {}\n'
+check list_item_html_blank_six fail '/// - <div>\n///\n///       code\nfn f() {}\n'
+check quote_lazy_prose pass '/// > prose\n///     code\nfn f() {}\n'
+check quote_lazy_blank_code fail '/// > prose\n///\n///     code\nfn f() {}\n'
+check fence_info_foo fail '/// ```foo\n/// code();\n/// ```\nfn f() {}\n'
+check fence_info_text fail '/// ```text\n/// code();\n/// ```\nfn f() {}\n'
+check fence_info_tilde fail '/// ~~~foo\n/// code();\n/// ~~~\nfn f() {}\n'
+check html_div_lines pass '/// <div>\n///     code\n/// </div>\nfn f() {}\n'
+check html_div_blank_code fail '/// <div>\n///\n///     code\nfn f() {}\n'
+check html_block_div_lines pass '/**\n * <div>\n *     code\n * </div>\n */\nfn f() {}\n'
+check html_block_pre_lines pass '/**\n * <pre>\n *     code\n * </pre>\n */\nfn f() {}\n'
+check html_block_div_blank_code fail '/**\n * <div>\n *\n *     code\n */\nfn f() {}\n'
+check html_quote_marker_lines pass '/// > <div>\n/// >     code\nfn f() {}\n'
+check html_quote_no_marker_code fail '/// > <div>\n///     code\nfn f() {}\n'
+check html_quote_blank_code fail '/// > <div>\n/// >\n///     code\nfn f() {}\n'
+check html_block_quote_no_marker fail '/**\n * > <div>\n *     code\n */\nfn f() {}\n'
+check html_list_item_lines pass '/// - <div>\n///     code\nfn f() {}\n'
+check html_type1_lines pass '/// <pre>\n///     code\n/// </pre>\nfn f() {}\n'
+check html_type1_same_line_code fail '/// <pre>x</pre>\n///     code\nfn f() {}\n'
+check html_type2_lines pass '/// <!--\n///     code\n/// -->\nfn f() {}\n'
+check html_type2_same_line_code fail '/// <!-- x -->\n///     code\nfn f() {}\n'
+check html_type3_lines pass '/// <?x\n///     code\n/// ?>\nfn f() {}\n'
+check html_type4_lines pass '/// <!X\n///     code\n/// >\nfn f() {}\n'
+check html_type5_lines pass '/// <![CDATA[\n///     code\n/// ]]>\nfn f() {}\n'
 
 missing="$work/scanner_missing"
 mkdir -p "$missing/crates/fx/src"
 printf '%b' '/** ```\n * f();\n * ```\n */\nfn f() {}\n' > "$missing/crates/fx/src/lib.rs"
-if "$alint_bin" check -c "$rule" "$missing" >/dev/null 2>&1; then got=pass; else got=fail; fi
+if (cd "$missing" && python3 -I scripts/no-doctests.py) >/dev/null 2>&1; then got=pass; else got=fail; fi
 if [ "$got" != fail ]; then
   echo "FAIL scanner_missing: expected fail, got $got"
   fails=$((fails + 1))
