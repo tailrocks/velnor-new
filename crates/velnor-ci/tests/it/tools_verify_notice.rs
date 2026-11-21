@@ -145,17 +145,14 @@ fn a_restore_on_github_enterprise_names_the_host_in_the_delete_command() {
 }
 
 #[test]
-fn a_restore_on_github_com_names_the_host_so_gh_host_cannot_redirect_the_delete() {
+fn a_restore_without_a_server_url_names_github_com_so_gh_host_cannot_redirect_the_delete() {
     let job = job("tools-verify-named-github-com");
     let anchor = recorded(&job);
     fs::write(rustc(&job), "evil binary!").unwrap_or_else(|e| unreachable!("{e}"));
     let stdout = check_stdout(
         &job,
         &anchor,
-        &[
-            ("VELNOR_TOOLS_CACHE_KEY", "velnor-tools-abc123"),
-            ("GITHUB_SERVER_URL", "https://github.com"),
-        ],
+        &[("VELNOR_TOOLS_CACHE_KEY", "velnor-tools-abc123")],
     );
     assert!(
         stdout.contains("gh cache delete 'velnor-tools-abc123' -R github.com/tailrocks/velnor-new"),
