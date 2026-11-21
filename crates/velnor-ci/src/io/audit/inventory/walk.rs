@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 
 use super::super::options::{MAX_ENTRIES_CEILING, MAX_ENTRIES_VARIABLE};
 use super::handle::{self, Current, Opened, Origin};
-use super::{Entries, Kind, excluded_entry};
+use super::{Entries, Kind, Scan, excluded_entry};
 
 pub(in crate::io::audit) struct Budget {
     remaining: usize,
@@ -58,7 +58,7 @@ pub(in crate::io::audit) fn scan(
     root: &Path,
     targets: &BTreeSet<PathBuf>,
     budget: &mut Budget,
-) -> io::Result<Entries> {
+) -> io::Result<Scan> {
     scan_with(root, targets, budget, &Probe::default())
 }
 
@@ -88,9 +88,10 @@ pub(super) fn scan_with(
     targets: &BTreeSet<PathBuf>,
     budget: &mut Budget,
     probe: &Probe<'_>,
-) -> io::Result<Entries> {
+) -> io::Result<Scan> {
     let root = fs::canonicalize(root)?;
     let mut entries = Entries::new();
+    let mut identities = BTreeMap::new();
     let mut pending = vec![Pending {
         path: root.clone(),
         origin: Origin::Path,
@@ -110,6 +111,9 @@ pub(super) fn scan_with(
         let mut listing = match opened {
             Ok(listing) => listing,
             Err(error) if handle::replaced(&error) && directory != root => {
+                if matches!(origin, Origin::Path) {
+                    return Err(changed(error.kind(), &directory));
+                }
                 match handle::current(&origin, &directory)? {
                     Current::Directory(_) => return Err(changed(error.kind(), &directory)),
                     current => settle(
@@ -125,7 +129,8 @@ pub(super) fn scan_with(
             }
             Err(error) => return Err(error),
         };
-        let identity = handle::identity(&listing)?;
+        let stamp = handle::stamp(&listing)?;
+        identities.insert(directory.clone(), stamp);
         (probe.after_open)(&directory);
         let names = handle::names(&mut listing, |name| {
             (probe.listed)(name);
@@ -147,7 +152,7 @@ pub(super) fn scan_with(
             children.insert(PathBuf::from(name), kind);
         }
         match handle::current(&origin, &directory)? {
-            Current::Directory(now) if now == identity => {
+            Current::Directory(now) if stamp.is(now) => {
                 entries.insert(directory, children);
             }
             Current::Directory(_) => {
@@ -162,6 +167,9 @@ pub(super) fn scan_with(
                     directory.display()
                 )));
             }
+            _ if matches!(origin, Origin::Path) => {
+                return Err(changed(io::ErrorKind::Other, &directory));
+            }
             current => {
                 pending.truncate(queued_before);
                 settle(
@@ -175,7 +183,10 @@ pub(super) fn scan_with(
             }
         }
     }
-    Ok(entries)
+    Ok(Scan {
+        entries,
+        identities,
+    })
 }
 
 fn changed(kind: io::ErrorKind, directory: &Path) -> io::Error {
