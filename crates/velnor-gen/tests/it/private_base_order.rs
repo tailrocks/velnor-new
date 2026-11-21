@@ -15,7 +15,10 @@ fn every_private_base_restore_follows_the_merge_queue_check_and_admits_a_trusted
     for (roots, shape) in [
         (&["Cargo.toml"][..], ""),
         (&["Cargo.toml", "tools/Cargo.toml"][..], ""),
-        (&["Cargo.toml", "tools/Cargo.toml"][..], "shape = 'groups'\n"),
+        (
+            &["Cargo.toml", "tools/Cargo.toml"][..],
+            "shape = 'groups'\n",
+        ),
     ] {
         let case = format!("{roots:?} {shape}");
         let mut repo = private_repo(roots, &format!("{shape}{SECTION}"), "0.1.111")?;
@@ -39,18 +42,14 @@ fn every_private_base_restore_follows_the_merge_queue_check_and_admits_a_trusted
                 }
                 restores += 1;
                 let check = position("private-check").ok_or_else(|| format!("{case}:{job}"))?;
-                let repository =
-                    position("private_repo").ok_or_else(|| format!("{case}:{job}"))?;
+                let repository = position("private_repo").ok_or_else(|| format!("{case}:{job}"))?;
                 assert!(check < index && repository < index, "{case}:{step}");
                 let condition = step["if"].as_str().ok_or("restore has no condition")?;
                 assert!(
                     condition.contains(MERGE_QUEUE_VERDICT),
                     "{case}:{condition}"
                 );
-                assert!(
-                    condition.contains(REPOSITORY_VERDICT),
-                    "{case}:{condition}"
-                );
+                assert!(condition.contains(REPOSITORY_VERDICT), "{case}:{condition}");
             }
         }
         assert!(restores > 0, "{case}:no base cache restore");
