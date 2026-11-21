@@ -87,3 +87,32 @@ fn a_build_program_whose_name_starts_with_a_dash_runs_as_a_program() {
         .unwrap_or_else(|e| unreachable!("{e}"));
     assert!(ran.status.success(), "{ran:?}");
 }
+
+#[test]
+fn a_bare_build_program_whose_name_starts_with_a_dash_is_run_by_its_absolute_path() {
+    let repo = built_repository();
+    let bin = repo.root().join("bin");
+    let ran = repo.root().join("ran.txt");
+    unit(
+        &repo,
+        "bin/-prog",
+        &format!("#!/bin/sh\nprintf '%s' \"$0\" > '{}'\n", ran.display()),
+    );
+    fs::set_permissions(bin.join("-prog"), fs::Permissions::from_mode(0o755))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let inherited = std::env::var_os("PATH").unwrap_or_default();
+    let path =
+        std::env::join_paths(std::iter::once(bin.clone()).chain(std::env::split_paths(&inherited)))
+            .unwrap_or_else(|e| unreachable!("{e}"));
+    let output = super::velnor_ci()
+        .current_dir(repo.root())
+        .env("PATH", path)
+        .args(["inputs", "build", "--", "-prog"])
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(
+        fs::read_to_string(&ran).unwrap_or_else(|e| unreachable!("{e}")),
+        bin.join("-prog").display().to_string()
+    );
+}

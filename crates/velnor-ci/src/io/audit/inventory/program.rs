@@ -119,6 +119,91 @@ mod tests {
         fs::remove_dir_all(&directory).unwrap_or_else(|e| unreachable!("{e}"));
     }
 
+    fn found(program: &str, directory: &Path, path: &OsStr) -> io::Result<PathBuf> {
+        let mut build = Command::new(program);
+        build.current_dir(directory).env("PATH", path);
+        resolve(&build)
+    }
+
+    fn joined(directories: &[PathBuf]) -> OsString {
+        std::env::join_paths(directories).unwrap_or_else(|e| unreachable!("{e}"))
+    }
+
+    fn directories(directory: &Path, names: &[&str]) -> Vec<PathBuf> {
+        names
+            .iter()
+            .map(|name| {
+                let path = directory.join(name);
+                fs::create_dir_all(&path).unwrap_or_else(|e| unreachable!("{e}"));
+                path
+            })
+            .collect()
+    }
+
+    #[test]
+    fn the_first_executable_on_path_wins() {
+        let directory = scratch("order");
+        let dirs = directories(&directory, &["first", "second"]);
+        let expected = file(&dirs[0], "tool", 0o755);
+        file(&dirs[1], "tool", 0o755);
+        assert_eq!(
+            found("tool", &directory, &joined(&dirs)).ok(),
+            Some(expected)
+        );
+        fs::remove_dir_all(&directory).unwrap_or_else(|e| unreachable!("{e}"));
+    }
+
+    #[test]
+    fn a_non_executable_candidate_is_skipped_for_a_later_executable() {
+        let directory = scratch("skipped");
+        let dirs = directories(&directory, &["first", "second"]);
+        file(&dirs[0], "tool", 0o644);
+        let expected = file(&dirs[1], "tool", 0o755);
+        assert_eq!(
+            found("tool", &directory, &joined(&dirs)).ok(),
+            Some(expected)
+        );
+        fs::remove_dir_all(&directory).unwrap_or_else(|e| unreachable!("{e}"));
+    }
+
+    #[test]
+    fn an_empty_path_component_means_the_build_directory() {
+        let directory = scratch("empty");
+        let dirs = directories(&directory, &["elsewhere"]);
+        let expected = file(&directory, "tool", 0o755);
+        let path = OsString::from(format!(":{}", dirs[0].display()));
+        assert_eq!(found("tool", &directory, &path).ok(), Some(expected));
+        fs::remove_dir_all(&directory).unwrap_or_else(|e| unreachable!("{e}"));
+    }
+
+    #[test]
+    fn a_relative_path_component_is_relative_to_the_build_directory() {
+        let directory = scratch("relative");
+        let dirs = directories(&directory, &["sub"]);
+        let expected = file(&dirs[0], "tool", 0o755);
+        assert_eq!(
+            found("tool", &directory, OsStr::new("sub")).ok(),
+            Some(expected)
+        );
+        fs::remove_dir_all(&directory).unwrap_or_else(|e| unreachable!("{e}"));
+    }
+
+    #[test]
+    fn with_path_removed_the_search_uses_the_platform_default() {
+        let mut build = Command::new("true");
+        build.env_remove("PATH");
+        assert!(resolve(&build).is_ok());
+        #[cfg(target_os = "macos")]
+        {
+            let mut sbin = Command::new("ifconfig");
+            sbin.env_remove("PATH");
+            assert_eq!(
+                resolve(&sbin).err().map(|e| e.kind()),
+                Some(io::ErrorKind::NotFound)
+            );
+        }
+    }
+
     #[test]
     fn an_executable_resolves_to_an_absolute_path_that_never_starts_with_a_dash() {
         let directory = scratch("found");
