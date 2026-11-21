@@ -4,7 +4,9 @@
 use std::error::Error;
 
 use velnor_model::Platform;
-use velnor_rust::{RunningGenerator, check_generator_entry, pin_lock, verify_release};
+use velnor_rust::{
+    LockError, Remedy, RunningGenerator, check_generator_entry, pin_lock, verify_release,
+};
 
 use crate::lock::COMMIT_FILE;
 use crate::lock_archive::{
@@ -40,8 +42,8 @@ fn running(sha256: &str) -> RunningGenerator<'_> {
     }
 }
 
-fn check(text: &str, running: RunningGenerator<'_>) -> Result<(), String> {
-    check_generator_entry(text.as_bytes(), running).map_err(|error| error.to_string())
+fn check(text: &str, running: RunningGenerator<'_>) -> Result<(), LockError> {
+    check_generator_entry(text.as_bytes(), running)
 }
 
 #[test]
@@ -70,9 +72,13 @@ fn the_archive_digest_is_not_the_digest_of_the_binary() -> TestResult {
     let error = check(&lock()?, running(GEN_ARCHIVE_X64))
         .err()
         .ok_or("accepted the archive digest as the binary's")?;
-    assert!(error.contains("[velnor-gen-binary]"), "{error}");
-    assert!(error.contains(GEN_BINARY_X64), "{error}");
-    assert!(error.contains("reinstall velnor-gen 0.1.111"), "{error}");
+    assert!(error.to_string().contains("[velnor-gen-binary]"), "{error}");
+    assert!(error.to_string().contains(GEN_BINARY_X64), "{error}");
+    assert_eq!(
+        error.remedy(),
+        Some(&Remedy::Reinstall(VERSION.to_owned())),
+        "{error}"
+    );
     Ok(())
 }
 
@@ -86,11 +92,14 @@ fn a_tampered_binary_digest_is_refused_online_and_named() -> TestResult {
         Some(GENERATOR_BINARY_SUMS),
     )
     .err()
-    .ok_or("accepted")?
-    .to_string();
-    assert!(error.contains("[velnor-gen-binary]"), "{error}");
-    assert!(error.contains("linux-x64"), "{error}");
-    assert!(error.contains("pin-helper 0.1.111"), "{error}");
+    .ok_or("accepted")?;
+    assert!(error.to_string().contains("[velnor-gen-binary]"), "{error}");
+    assert!(error.to_string().contains("linux-x64"), "{error}");
+    assert_eq!(
+        error.remedy(),
+        Some(&Remedy::Repin(VERSION.to_owned())),
+        "{error}"
+    );
     Ok(())
 }
 
@@ -123,8 +132,12 @@ fn a_release_that_lists_binary_digests_is_refused_offline_without_its_section() 
     let error = check(&without_binary_section()?, running(GEN_BINARY_X64))
         .err()
         .ok_or("accepted a 0.1.111 lock without [velnor-gen-binary]")?;
-    assert!(error.contains("[velnor-gen-binary]"), "{error}");
-    assert!(error.contains("pin-helper 0.1.111"), "{error}");
+    assert!(error.to_string().contains("[velnor-gen-binary]"), "{error}");
+    assert_eq!(
+        error.remedy(),
+        Some(&Remedy::Repin(VERSION.to_owned())),
+        "{error}"
+    );
     Ok(())
 }
 
@@ -137,10 +150,13 @@ fn verify_release_names_the_repin_when_the_binary_section_is_missing() -> TestRe
         Some(GENERATOR_BINARY_SUMS),
     )
     .err()
-    .ok_or("accepted")?
-    .to_string();
-    assert!(error.contains("[velnor-gen-binary]"), "{error}");
-    assert!(error.contains("pin-helper 0.1.111"), "{error}");
+    .ok_or("accepted")?;
+    assert!(error.to_string().contains("[velnor-gen-binary]"), "{error}");
+    assert_eq!(
+        error.remedy(),
+        Some(&Remedy::Repin(VERSION.to_owned())),
+        "{error}"
+    );
     Ok(())
 }
 
@@ -162,7 +178,7 @@ fn a_release_older_than_the_binary_section_is_pinned_without_it() -> TestResult 
         ..running(GEN_BINARY_X64)
     };
     let error = check(&injected, older).err().ok_or("accepted")?;
-    assert!(error.contains("[velnor-gen-binary]"), "{error}");
+    assert!(error.to_string().contains("[velnor-gen-binary]"), "{error}");
     Ok(())
 }
 

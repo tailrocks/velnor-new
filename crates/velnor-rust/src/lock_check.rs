@@ -8,7 +8,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use velnor_model::{HelperVersion, Platform};
 
 use crate::lock::{
-    CI, GENERATOR, GENERATOR_BINARY_RELEASE, Lock, LockError, check_digests, pin_lock,
+    CI, GENERATOR, GENERATOR_BINARY_RELEASE, Lock, LockError, Remedy, check_digests, pin_lock,
     release_commit, release_version,
 };
 
@@ -83,10 +83,10 @@ pub fn check_generator_entry(bytes: &[u8], running: RunningGenerator<'_>) -> Res
         && listed != sha
     {
         return Err(LockError::new(format!(
-            "[{section}] {} digest is {listed} but this binary hashes to {sha}; reinstall velnor-gen {}",
+            "[{section}] {} digest is {listed} but this binary hashes to {sha}",
             platform.file_suffix(),
-            running.version
-        )));
+        ))
+        .with_remedy(Remedy::Reinstall(running.version.to_owned())));
     }
     Ok(())
 }
@@ -109,20 +109,15 @@ fn binary_entry(lock: &Lock) -> Result<Option<BinaryEntry<'_>>, LockError> {
         ))),
         (true, false, None) => Ok(None),
         (true, true, None) => Err(LockError::new(format!(
-            "[{section}] is missing: release {} lists the velnor-gen binary digests, so the lock must list them; {}",
-            lock.version,
-            repin_hint()
-        ))),
+            "[{section}] is missing: release {} lists the velnor-gen binary digests, so the lock must list them",
+            lock.version
+        ))
+        .with_remedy(Remedy::Repin(lock.version.clone()))),
         (true, true, Some(binary)) => {
             check_digests(binary).map_err(|error| named(&section, &error))?;
             Ok(Some((section, binary)))
         }
     }
-}
-
-fn repin_hint() -> String {
-    let (major, minor, patch) = GENERATOR_BINARY_RELEASE;
-    format!("re-pin with `velnor-gen pin-helper {major}.{minor}.{patch}` or later")
 }
 
 fn check_format(lock: &Lock) -> Result<bool, LockError> {
@@ -170,17 +165,17 @@ pub fn verify_release(
     let section = format!("{GENERATOR}-binary");
     if lock.generator_binary.is_none() && release.generator_binary.is_some() {
         return Err(LockError::new(format!(
-            "[{section}] is missing: release {} lists the velnor-gen binary digests; {}",
-            lock.version,
-            repin_hint()
-        )));
+            "[{section}] is missing: release {} lists the velnor-gen binary digests",
+            lock.version
+        ))
+        .with_remedy(Remedy::Repin(lock.version.clone())));
     }
     compare_section(
         &section,
         lock.generator_binary.as_ref(),
         release.generator_binary.as_ref(),
     )
-    .map_err(|error| LockError::new(format!("{error}; {}", repin_hint())))
+    .map_err(|error| error.with_remedy(Remedy::Repin(lock.version.clone())))
 }
 
 fn compare_section(

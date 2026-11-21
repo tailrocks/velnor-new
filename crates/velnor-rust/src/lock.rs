@@ -18,11 +18,33 @@ const BINARY_SUMS: &str = "BINARY-SHA256SUMS";
 pub(crate) const GENERATOR_BINARY_RELEASE: (u64, u64, u64) = (0, 1, 111);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LockError(String);
+pub struct LockError {
+    message: String,
+    remedy: Option<Remedy>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Remedy {
+    Repin(String),
+    Reinstall(String),
+}
+
+impl fmt::Display for Remedy {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Repin(version) => write!(f, "re-pin with `velnor-gen pin-helper {version}`"),
+            Self::Reinstall(version) => write!(f, "reinstall velnor-gen {version}"),
+        }
+    }
+}
 
 impl fmt::Display for LockError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.0)
+        f.write_str(&self.message)?;
+        match &self.remedy {
+            Some(remedy) => write!(f, "; {remedy}"),
+            None => Ok(()),
+        }
     }
 }
 
@@ -30,7 +52,22 @@ impl std::error::Error for LockError {}
 
 impl LockError {
     pub(crate) fn new(message: impl Into<String>) -> Self {
-        Self(message.into())
+        Self {
+            message: message.into(),
+            remedy: None,
+        }
+    }
+
+    pub(crate) fn with_remedy(self, remedy: Remedy) -> Self {
+        Self {
+            remedy: Some(remedy),
+            ..self
+        }
+    }
+
+    #[must_use]
+    pub fn remedy(&self) -> Option<&Remedy> {
+        self.remedy.as_ref()
     }
 }
 
@@ -63,11 +100,11 @@ pub fn release_version(text: &str) -> Result<HelperVersion, LockError> {
             .split('.')
             .all(|part| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit()));
     if !numeric {
-        return Err(LockError(format!(
+        return Err(LockError::new(format!(
             "version {text:?} must be MAJOR.MINOR.PATCH, digits only"
         )));
     }
-    HelperVersion::new(text).map_err(|error| LockError(error.to_string()))
+    HelperVersion::new(text).map_err(|error| LockError::new(error.to_string()))
 }
 
 #[must_use]
@@ -113,7 +150,7 @@ pub fn pin_lock(
             let (ci, generator) = binary_digests(binary_sums, &listed)?;
             let generator = if version.at_least(GENERATOR_BINARY_RELEASE) {
                 Some(generator.ok_or_else(|| {
-                    LockError(format!(
+                    LockError::new(format!(
                         "{BINARY_SUMS} lists no {GENERATOR} binary digests, but release {version} must list them"
                     ))
                 })?)
@@ -123,13 +160,13 @@ pub fn pin_lock(
             (ci, generator)
         }
         (Form::Archive, None) => {
-            return Err(LockError(format!(
+            return Err(LockError::new(format!(
                 "SHA256SUMS lists archives, so {BINARY_SUMS} is needed for the binary digests"
             )));
         }
         (Form::Raw, None) => (None, None),
         (Form::Raw, Some(_)) => {
-            return Err(LockError(format!(
+            return Err(LockError::new(format!(
                 "SHA256SUMS lists no archives, so {BINARY_SUMS} has nothing to describe"
             )));
         }
@@ -142,7 +179,7 @@ pub fn pin_lock(
         generator: digests(GENERATOR, form, &listed)?,
         generator_binary,
     };
-    toml::to_string(&lock).map_err(|error| LockError(error.to_string()))
+    toml::to_string(&lock).map_err(|error| LockError::new(error.to_string()))
 }
 
 #[derive(Clone, Copy)]
@@ -179,10 +216,10 @@ type Binaries = (
 fn binary_digests(binary_sums: &str, listed: &BTreeMap<&str, &str>) -> Result<Binaries, LockError> {
     let expected = listed
         .get(BINARY_SUMS)
-        .ok_or_else(|| LockError(format!("SHA256SUMS lists no {BINARY_SUMS}")))?;
+        .ok_or_else(|| LockError::new(format!("SHA256SUMS lists no {BINARY_SUMS}")))?;
     let actual = hex(&Hasher::digest(binary_sums.as_bytes()));
     if actual != *expected {
-        return Err(LockError(format!(
+        return Err(LockError::new(format!(
             "{BINARY_SUMS} has SHA-256 {actual} but SHA256SUMS lists {expected}"
         )));
     }
@@ -212,12 +249,12 @@ fn program_binaries(
         let name = binary_member(program, platform);
         let Some(sum) = binaries.get(name.as_str()) else {
             if Platform::REQUIRED.contains(&platform) {
-                return Err(LockError(format!("{BINARY_SUMS} lists no {name}")));
+                return Err(LockError::new(format!("{BINARY_SUMS} lists no {name}")));
             }
             continue;
         };
         Sha256::new(*sum)
-            .map_err(|_| LockError(format!("{BINARY_SUMS} has no SHA-256 for {name}")))?;
+            .map_err(|_| LockError::new(format!("{BINARY_SUMS} has no SHA-256 for {name}")))?;
         found.insert(platform.file_suffix().to_owned(), (*sum).to_owned());
     }
     Ok(found)
@@ -234,12 +271,12 @@ fn hex(bytes: &[u8]) -> String {
 fn check_commit_digest(commit: &str, listed: &BTreeMap<&str, &str>) -> Result<(), LockError> {
     let expected = listed
         .get("COMMIT")
-        .ok_or_else(|| LockError("SHA256SUMS lists no COMMIT".to_owned()))?;
+        .ok_or_else(|| LockError::new("SHA256SUMS lists no COMMIT".to_owned()))?;
     let actual = hex(&Hasher::digest(commit.as_bytes()));
     if actual == *expected {
         Ok(())
     } else {
-        Err(LockError(format!(
+        Err(LockError::new(format!(
             "COMMIT has SHA-256 {actual} but SHA256SUMS lists {expected}"
         )))
     }
@@ -247,18 +284,18 @@ fn check_commit_digest(commit: &str, listed: &BTreeMap<&str, &str>) -> Result<()
 
 pub(crate) fn release_commit(text: &str) -> Result<CommitSha, LockError> {
     CommitSha::new(text)
-        .map_err(|_| LockError(format!("commit {text:?} must be 40 lowercase hex digits")))
+        .map_err(|_| LockError::new(format!("commit {text:?} must be 40 lowercase hex digits")))
 }
 
 pub(crate) fn parse_lock(bytes: &[u8]) -> Result<HelperRelease, LockError> {
-    let text = std::str::from_utf8(bytes).map_err(|error| LockError(error.to_string()))?;
-    let lock: Lock = toml::from_str(text).map_err(|error| LockError(error.to_string()))?;
+    let text = std::str::from_utf8(bytes).map_err(|error| LockError::new(error.to_string()))?;
+    let lock: Lock = toml::from_str(text).map_err(|error| LockError::new(error.to_string()))?;
     let version = release_version(&lock.version)?;
     let commit = release_commit(&lock.commit)?;
     check_digests(&lock.generator)?;
     check_digests(&lock.ci)?;
     let release = HelperRelease::new(version, commit, platform_digests(&lock.ci)?)
-        .map_err(|error| LockError(error.to_string()))?;
+        .map_err(|error| LockError::new(error.to_string()))?;
     match &lock.ci_binary {
         Some(binary) => {
             check_digests(binary)?;
@@ -286,7 +323,7 @@ fn listed_sums(sums: &str) -> Result<BTreeMap<&str, &str>, LockError> {
     let mut listed = BTreeMap::new();
     for (sum, name) in sums.lines().filter_map(|line| line.split_once("  ")) {
         if listed.insert(name, sum).is_some() {
-            return Err(LockError(format!("SHA256SUMS lists {name} twice")));
+            return Err(LockError::new(format!("SHA256SUMS lists {name} twice")));
         }
     }
     Ok(listed)
@@ -302,12 +339,12 @@ fn digests(
         let name = form.asset(program, platform);
         let Some(sum) = listed.get(name.as_str()) else {
             if Platform::REQUIRED.contains(&platform) {
-                return Err(LockError(format!("SHA256SUMS lists no {name}")));
+                return Err(LockError::new(format!("SHA256SUMS lists no {name}")));
             }
             continue;
         };
         Sha256::new(*sum)
-            .map_err(|_| LockError(format!("SHA256SUMS has no SHA-256 for {name}")))?;
+            .map_err(|_| LockError::new(format!("SHA256SUMS has no SHA-256 for {name}")))?;
         found.insert(platform.file_suffix().to_owned(), (*sum).to_owned());
     }
     Ok(found)
@@ -319,7 +356,7 @@ pub(crate) fn check_digests(found: &BTreeMap<String, String>) -> Result<(), Lock
         .iter()
         .all(|p| found.contains_key(p.file_suffix()));
     if !found.keys().all(known) || !complete {
-        return Err(LockError(format!(
+        return Err(LockError::new(format!(
             "a program must list the platforms {} and may list {}",
             Platform::REQUIRED.map(Platform::file_suffix).join(", "),
             Platform::MacosArm64.file_suffix()
@@ -334,9 +371,9 @@ pub(crate) fn check_digests(found: &BTreeMap<String, String>) -> Result<(), Lock
 fn digest(found: &BTreeMap<String, String>, platform: Platform) -> Result<Sha256, LockError> {
     let sum = found
         .get(platform.file_suffix())
-        .ok_or_else(|| LockError(format!("no SHA-256 for {}", platform.file_suffix())))?;
+        .ok_or_else(|| LockError::new(format!("no SHA-256 for {}", platform.file_suffix())))?;
     Sha256::new(sum.as_str()).map_err(|_| {
-        LockError(format!(
+        LockError::new(format!(
             "the SHA-256 for {} is not 64 lowercase hex digits",
             platform.file_suffix()
         ))

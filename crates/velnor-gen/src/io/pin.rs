@@ -105,7 +105,6 @@ pub(super) fn check_lock(root: &Path, online: bool) -> Result<(), Error> {
         platform: running_platform(),
         sha256: sha256.as_deref(),
     };
-    check_generator_entry(&bytes, running).map_err(Error::Lock)?;
     if online {
         let version = lock_version(&bytes).map_err(Error::Lock)?;
         let sums = download(root, &sums_url(&version))?;
@@ -125,5 +124,6 @@ pub(super) fn check_lock(root: &Path, online: bool) -> Result<(), Error> {
         )
         .map_err(Error::Lock)?;
     }
+    check_generator_entry(&bytes, running).map_err(Error::Lock)?;
     Ok(())
 }

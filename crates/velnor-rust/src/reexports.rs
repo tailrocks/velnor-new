@@ -27,7 +27,7 @@ pub use crate::group_runs::{GroupPlan, GroupRun, group_runs, plan_groups};
 pub use crate::lint_error::LintFault;
 pub use crate::lint_inputs::{lint_runs, unmatched_entries, unmatched_inputs};
 pub use crate::lock::{
-    LOCK_PATH, LockError, binary_sums_url, commit_url, lists_binary_sums, pin_lock,
+    LOCK_PATH, LockError, Remedy, binary_sums_url, commit_url, lists_binary_sums, pin_lock,
     release_version, sums_url,
 };
 pub use crate::lock_affected::lock_affected;
