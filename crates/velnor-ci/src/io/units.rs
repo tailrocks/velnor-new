@@ -199,15 +199,9 @@ fn directory_limit_exceeded(path: &Path, limit: usize) -> CiError {
 /// A file in the `out` folder of a unit that ran a build script. That folder is the script's
 /// `OUT_DIR`, so a `.d` file there is generated content, not dep-info.
 fn generated(file: &Path) -> bool {
-    let Some(out) = file.parent().filter(|out| out.ends_with("out")) else {
-        return false;
-    };
-    let Some(unit) = out.parent() else {
-        return false;
-    };
-    unit.join("run/stdout").is_file()
-        || unit.parent().is_some_and(|build| build.ends_with("build"))
-            && unit.join("output").is_file()
+    file.parent()
+        .filter(|out| out.ends_with("out"))
+        .is_some_and(built::run_started)
 }
 
 fn unit_file(relative: &Path) -> Option<UnitFile> {

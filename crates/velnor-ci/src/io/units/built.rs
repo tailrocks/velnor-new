@@ -32,18 +32,41 @@ pub(super) fn bookkeeping(file: &Path) -> bool {
 }
 
 fn written_by_cargo(directory: &Path) -> bool {
-    let parent = directory.parent();
-    let build = |path: Option<&Path>| named(path) == Some("build");
     match named(Some(directory)) {
-        Some("run") => {
-            named(parent).is_some_and(is_hash)
-                && parent
-                    .and_then(Path::parent)
-                    .is_some_and(|package| build(package.parent()))
-        }
-        Some(folder) => split(folder).is_some() && build(parent),
-        None => false,
+        Some("run") => directory.parent().is_some_and(new_layout_unit),
+        _ => legacy_unit(directory),
     }
+}
+
+fn build_folder(path: Option<&Path>) -> bool {
+    named(path) == Some("build")
+}
+
+fn new_layout_unit(unit: &Path) -> bool {
+    named(Some(unit)).is_some_and(is_hash)
+        && unit
+            .parent()
+            .and_then(Path::parent)
+            .is_some_and(|build| build_folder(Some(build)))
+}
+
+fn legacy_unit(unit: &Path) -> bool {
+    named(Some(unit)).is_some_and(|name| split(name).is_some()) && build_folder(unit.parent())
+}
+
+pub(super) fn run_started(out: &Path) -> bool {
+    let Some(unit) = out.parent() else {
+        return false;
+    };
+    if new_layout_unit(unit) {
+        return ["run/invoked.timestamp", "run/stdout"]
+            .iter()
+            .any(|marker| unit.join(marker).is_file());
+    }
+    legacy_unit(unit)
+        && [TIMESTAMP, "output"]
+            .iter()
+            .any(|marker| unit.join(marker).is_file())
 }
 
 fn named(path: Option<&Path>) -> Option<&str> {
@@ -88,21 +111,26 @@ impl<'a> Owners<'a> {
         if let Some(names) = self.unit_names.get(directory) {
             return unit_name(output).is_some_and(|name| names.contains(&name));
         }
-        let configuration = if directory.file_name().is_some_and(|name| name == "examples") {
-            directory.parent().unwrap_or(directory)
-        } else {
-            directory
-        };
         let Some((stem, extension)) = stem_and_extension(output) else {
             return false;
         };
+        let nested = directory
+            .file_name()
+            .is_some_and(|name| name == "examples")
+            .then(|| directory.parent())
+            .flatten();
         let bare = (extension == "d")
             .then(|| stem.strip_prefix("lib"))
             .flatten();
-        [Some(stem), bare].into_iter().flatten().any(|name| {
-            self.produced
-                .contains(&(configuration, extension, name.replace('-', "_")))
-        })
+        [Some(directory), nested]
+            .into_iter()
+            .flatten()
+            .any(|configuration| {
+                [Some(stem), bare].into_iter().flatten().any(|name| {
+                    self.produced
+                        .contains(&(configuration, extension, name.replace('-', "_")))
+                })
+            })
     }
 }
 

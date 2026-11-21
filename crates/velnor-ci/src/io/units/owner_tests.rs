@@ -239,3 +239,112 @@ fn a_hyphenated_dep_info_stem_owns_the_underscored_library_beside_it() {
     ])
     .unwrap_or_else(|e| unreachable!("{e}"));
 }
+
+const FAILED_NEW: &str = "debug/build/gen/0123456789abcdef";
+const FAILED_OLD: &str = "debug/build/gen-0123456789abcdef";
+
+fn written(unit: &str) -> Vec<String> {
+    [
+        "out/gen.rlib",
+        "out/gen.d",
+        "out/libgen-0123456789abcdef.rmeta",
+    ]
+    .iter()
+    .map(|file| format!("{unit}/{file}"))
+    .collect()
+}
+
+#[test]
+fn an_out_folder_of_a_build_script_that_started_and_failed_owns_what_it_wrote() {
+    for (unit, started) in [
+        (FAILED_NEW, "run/invoked.timestamp"),
+        (FAILED_OLD, "invoked.timestamp"),
+    ] {
+        let mut files = bin_only_build();
+        files.extend(written(unit));
+        files.push(format!("{unit}/{started}"));
+        scanned(&files).unwrap_or_else(|e| unreachable!("{unit}: {e}"));
+    }
+}
+
+#[test]
+fn an_out_folder_is_generated_only_inside_a_unit_directory_of_a_build_folder() {
+    for (unit, markers) in [
+        ("debug/build/ghost", &["output", "invoked.timestamp"][..]),
+        (
+            "debug/build/ghost",
+            &["run/stdout", "run/invoked.timestamp"],
+        ),
+        (
+            "debug/build/ghost/short",
+            &["run/stdout", "run/invoked.timestamp"],
+        ),
+        ("debug/build/ghost-short", &["output", "invoked.timestamp"]),
+        (
+            "debug/zzz/ghost/0123456789abcdef",
+            &["run/stdout", "run/invoked.timestamp"],
+        ),
+        (
+            "debug/zzz/ghost-0123456789abcdef",
+            &["output", "invoked.timestamp"],
+        ),
+        ("debug/build/ghost/0123456789abcdef/deeper", &["run/stdout"]),
+    ] {
+        for marker in markers {
+            let mut files = written(unit);
+            files.push(format!("{unit}/{marker}"));
+            let message =
+                refused_beside_a_build(&files.iter().map(String::as_str).collect::<Vec<_>>());
+            assert!(
+                message.contains("unknown cargo layout?"),
+                "{unit} {marker}: {message}"
+            );
+        }
+    }
+}
+
+#[test]
+fn an_invoked_timestamp_outside_a_build_folder_is_not_bookkeeping() {
+    for misplaced in [
+        "debug/zzz/ghost/0123456789abcdef/run/invoked.timestamp",
+        "debug/zzz/foo-0123456789abcdef/invoked.timestamp",
+    ] {
+        let message = refused_beside_a_build(&[misplaced]);
+        assert!(
+            message.contains("unknown cargo layout?"),
+            "{misplaced}: {message}"
+        );
+    }
+}
+
+fn renamed(files: Vec<String>) -> Vec<String> {
+    files
+        .into_iter()
+        .filter(|file| !file.starts_with("debug/CACHEDIR"))
+        .map(|file| file.replacen("debug/", "examples/", 1))
+        .collect()
+}
+
+#[test]
+fn a_profile_named_examples_owns_its_final_artifacts() {
+    let mut files = renamed(example_build());
+    files.extend(["examples/libmy_lib.rlib", "examples/libmy_lib.d"].map(str::to_owned));
+    scanned(&files).unwrap_or_else(|e| unreachable!("{e}"));
+}
+
+#[test]
+fn a_profile_named_examples_still_refuses_an_output_no_unit_owns() {
+    for orphan in [
+        "examples/libzzz.rlib",
+        "examples/zzz.d",
+        "examples/examples/libzzz.rlib",
+    ] {
+        let mut files = renamed(example_build());
+        files.push(orphan.to_owned());
+        let message = scanned(&files).expect_err(orphan);
+        assert!(
+            message.contains("unknown cargo layout?"),
+            "{orphan}: {message}"
+        );
+    }
+}

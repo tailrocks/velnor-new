@@ -34,6 +34,7 @@ pub(super) struct Invocation {
     pub(super) preflight: Option<Vec<String>>,
     pub(super) compiler: bool,
     pub(super) cargo: bool,
+    builds: bool,
     globals: Vec<String>,
     chdir: Option<PathBuf>,
 }
@@ -153,6 +154,10 @@ impl Invocation {
             preflight.extend(command[end..].iter().cloned());
             preflight
         });
+        let running = matches!(
+            (program, arguments),
+            ("cargo", ["run" | "r" | "bench" | "rustc", ..])
+        );
         let mut globals = if program == "cargo" {
             start.map_or_else(Vec::new, |start| command[1..=start].to_vec())
         } else {
@@ -175,6 +180,7 @@ impl Invocation {
             preflight,
             compiler,
             cargo: compilation || nextest || test,
+            builds: compilation || nextest || test || running,
             globals,
             chdir,
         }
@@ -183,12 +189,12 @@ impl Invocation {
     pub(super) fn step(&self, directory: &Path) -> PathBuf {
         self.chdir
             .as_ref()
-            .filter(|_| self.cargo)
+            .filter(|_| self.builds)
             .map_or_else(|| directory.to_path_buf(), |chdir| directory.join(chdir))
     }
 
     pub(super) fn location(&self, directory: &Path) -> PathBuf {
-        if !self.cargo {
+        if !self.builds {
             return directory.to_path_buf();
         }
         let base = self.step(directory);
@@ -219,7 +225,7 @@ impl Invocation {
         inherit: &[bool],
         groups: &[PathBuf],
     ) -> Result<(), CiError> {
-        if !self.cargo {
+        if !self.builds {
             return Ok(());
         }
         if self
@@ -340,3 +346,6 @@ mod location;
 #[cfg(test)]
 #[path = "invocation/preflight.rs"]
 mod preflight;
+#[cfg(test)]
+#[path = "invocation/targets.rs"]
+mod targets;

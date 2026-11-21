@@ -8,13 +8,27 @@ use std::process::Output;
 use super::{unit, velnor_ci};
 use crate::io::Repo;
 
+const BUILD_SCRIPT: &str = r#"use std::{env, fs, path::Path};
+
+fn main() {
+    let out = env::var("OUT_DIR").unwrap();
+    for file in ["gen.rlib", "gen.d", "libgen-0123456789abcdef.rmeta", "gen-0123456789abcdef.d"] {
+        fs::write(Path::new(&out).join(file), "").unwrap();
+    }
+    let manifest = env::var("CARGO_MANIFEST_DIR").unwrap();
+    if Path::new(&manifest).join("FAIL").exists() {
+        std::process::exit(1);
+    }
+}
+"#;
+
 fn workspace() -> Repo {
     let repo = Repo::new("audit-real");
     unit(&repo, "mise.toml", &crate::toolchain::mise_rust_pin());
     unit(
         &repo,
         "Cargo.toml",
-        "[workspace]\nmembers = [\"my-app\", \"my-lib\", \"my-macro\", \"my-tool\"]\nresolver = \"3\"\n",
+        "[workspace]\nmembers = [\"my-app\", \"my-lib\", \"my-macro\", \"my-tool\"]\nresolver = \"3\"\n\n[profile.examples]\ninherits = \"dev\"\n",
     );
     unit(&repo, "Cargo.lock", "version = 4\n");
     let package = |name: &str, extra: &str| {
@@ -37,7 +51,7 @@ fn workspace() -> Repo {
         "my-macro/src/lib.rs",
         "extern crate proc_macro;\n#[proc_macro]\npub fn one(_: proc_macro::TokenStream) -> proc_macro::TokenStream {\n    \"1\".parse().unwrap()\n}\n",
     );
-    unit(&repo, "my-app/build.rs", "fn main() {}\n");
+    unit(&repo, "my-app/build.rs", BUILD_SCRIPT);
     unit(
         &repo,
         "my-app/src/lib.rs",
@@ -77,7 +91,11 @@ const DEBUG: [&[&str]; 7] = [
     &["test", "--no-run"],
 ];
 
-const OTHER_PROFILES: [&[&str]; 2] = [&["check"], &["build", "--release"]];
+const OTHER_PROFILES: [&[&str]; 3] = [
+    &["check"],
+    &["build", "--release"],
+    &["build", "--profile", "examples", "-p", "my-lib"],
+];
 
 fn build_in_one_target(repo: &Repo, scenarios: &[&[&str]]) {
     for arguments in scenarios {
@@ -145,13 +163,51 @@ fn plant_orphans_beside_a_real_build(repo: &Repo) {
     assert!(accepted.status.success(), "{accepted:?}");
 }
 
+fn a_failed_build_script_does_not_block_the_retry(repo: &Repo) {
+    let fail = repo.root().join("my-app/FAIL");
+    fs::write(&fail, "").unwrap_or_else(|e| unreachable!("{e}"));
+    let failed = inputs_build(repo, &["cargo", "build", "-p", "my-app", "--offline"]);
+    assert!(!failed.status.success(), "{failed:?}");
+    let stderr = String::from_utf8_lossy(&failed.stderr);
+    assert!(
+        stderr.contains("failed to run custom build command"),
+        "{stderr}"
+    );
+    fs::remove_file(&fail).unwrap_or_else(|e| unreachable!("{e}"));
+    build_in_one_target(
+        repo,
+        &[&["build", "-p", "my-app"], &["build", "--all-targets"]],
+    );
+}
+
+fn an_empty_target_dir_is_left_to_cargo_to_reject(repo: &Repo) {
+    for arguments in [
+        &["inputs", "build", "--", "cargo", "build", "--offline"][..],
+        &["inputs", "audit"],
+    ] {
+        let refused = velnor_ci()
+            .current_dir(repo.root())
+            .env("CARGO_TARGET_DIR", "")
+            .args(arguments)
+            .output()
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        assert_eq!(refused.status.code(), Some(1), "{arguments:?}: {refused:?}");
+        let stderr = String::from_utf8_lossy(&refused.stderr);
+        assert!(
+            stderr.contains("the target directory is set to an empty string"),
+            "{arguments:?}: {stderr}"
+        );
+    }
+}
+
 #[test]
 fn a_real_cargo_build_is_not_refused_and_an_output_no_unit_of_it_owns_is() {
     std::thread::scope(|scope| {
         let debug = scope.spawn(|| build_in_one_target(&workspace(), &DEBUG));
         let other = scope.spawn(|| build_in_one_target(&workspace(), &OTHER_PROFILES));
         let repo = workspace();
-        build_in_one_target(&repo, &[&["build", "--all-targets"]]);
+        a_failed_build_script_does_not_block_the_retry(&repo);
+        an_empty_target_dir_is_left_to_cargo_to_reject(&repo);
         plant_orphans_beside_a_real_build(&repo);
         for handle in [debug, other] {
             handle
