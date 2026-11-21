@@ -356,3 +356,42 @@ fn from_source_fetches_private_dependencies_before_it_builds_the_generator() -> 
     assert!(token < fetch && fetch < check, "{job}");
     Ok(())
 }
+
+#[test]
+fn from_source_restores_and_verifies_the_tool_home_before_installing_tools() -> TestResult {
+    let job = job(&rendered(&format!("{LINT}\n{FROM_SOURCE}"), FIRST)?)?;
+    let names = names(&job);
+    let install = names
+        .iter()
+        .position(|name| name == "Install tools")
+        .ok_or("no install tools step")?;
+    for restore in [
+        "Clear the tools directories",
+        "Restore the tools cache",
+        "Verify tools",
+    ] {
+        let at = names
+            .iter()
+            .position(|name| name == restore)
+            .ok_or("no restore step")?;
+        assert!(at < install, "{restore}: {job}");
+    }
+    Ok(())
+}
+
+#[test]
+fn from_source_fetches_the_nested_generator_workspace_dependencies() -> TestResult {
+    let roots = [
+        ("Cargo.toml", "velnor-ci-app"),
+        ("tools/gen/Cargo.toml", "velnor-gen"),
+    ];
+    let repo = packages(&format!("{SECTION}{FROM_SOURCE}"), FIRST, &roots)?;
+    let job = job(&workflow(&repo)?)?;
+    let fetch =
+        position(&job, |step| run_contains(step, "\"$VELNOR_EXEC\" fetch ")).ok_or("no fetch")?;
+    assert!(
+        run_contains(&job["steps"][fetch], "tools/gen/Cargo.toml"),
+        "{job}"
+    );
+    Ok(())
+}
