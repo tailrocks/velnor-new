@@ -78,6 +78,7 @@ pub(crate) fn locks_hash(manifests: &[&str]) -> Result<String, Box<dyn std::erro
             reports_ignored: false,
             build_record: BuildRecord::Unrecorded,
             chained_saves: false,
+            mbx_stats: velnor_model::MbxStats::Summary,
             selection_name: None,
             gate: None,
             skip_after_merge_group: None,

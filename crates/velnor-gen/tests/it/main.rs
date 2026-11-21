@@ -155,6 +155,7 @@ mod mbx_default;
 mod mbx_pin;
 mod mbx_provider;
 mod mbx_remote;
+mod mbx_reports;
 mod merge_group_build_inputs;
 mod merge_group_check;
 mod metadata_file;
