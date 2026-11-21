@@ -5,11 +5,21 @@ use super::{CRASHED, Crash, NEIGHBOR, Prepared, TestResult, bootstrap_seed, db, 
 use crate::launch::bootstrap::retire_unbound_pair_at;
 
 #[tokio::test(flavor = "multi_thread")]
-async fn bootstrap_claim_without_a_docker_post_releases_after_its_deadline() -> TestResult<()> {
-    for crash in [Crash::DindCreate, Crash::VolumeCreate, Crash::NetworkCreate] {
-        Box::pin(never_dispatched(crash, false)).await?;
-    }
-    Ok(())
+async fn bootstrap_claim_without_a_docker_post_releases_after_its_deadline_dind_create()
+-> TestResult<()> {
+    Box::pin(never_dispatched(Crash::DindCreate, false)).await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn bootstrap_claim_without_a_docker_post_releases_after_its_deadline_volume_create()
+-> TestResult<()> {
+    Box::pin(never_dispatched(Crash::VolumeCreate, false)).await
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn bootstrap_claim_without_a_docker_post_releases_after_its_deadline_network_create()
+-> TestResult<()> {
+    Box::pin(never_dispatched(Crash::NetworkCreate, false)).await
 }
 
 #[tokio::test(flavor = "multi_thread")]

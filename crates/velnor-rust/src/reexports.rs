@@ -6,7 +6,7 @@ pub use crate::build_profile::{BuildProfile, build_profile, rustc_release};
 pub use crate::build_script::{SilentBuildScript, build_script_sources, silent_build_scripts};
 pub use crate::cache_budget::{
     CacheEntry, CacheFamily, CacheId, DEFAULT_CACHE_BUDGET_BYTES, Timestamp, budget_plan,
-    cache_family, delta_pull_request, target_family_prefix,
+    cache_family, delta_pull_request, is_sources_prefix, target_family_prefix,
 };
 pub use crate::classify::is_workflow_file;
 pub use crate::compat::{

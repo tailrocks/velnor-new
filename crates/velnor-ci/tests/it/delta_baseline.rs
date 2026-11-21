@@ -22,6 +22,7 @@ fn save_base(repo: &Repo) -> Output {
         .args(["cache", "decide", "--target-dir", "target"])
         .env("RUNNER_TEMP", repo.root())
         .env("GITHUB_OUTPUT", repo.root().join("decide-output"))
+        .env("HOME", repo.root())
         .env("VELNOR_CACHE_MANIFESTS", "Cargo.toml")
         .current_dir(repo.root())
         .output()

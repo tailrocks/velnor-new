@@ -51,8 +51,9 @@ fn admits_statement(statement: &Value, expected: &ExpectedBuildSource<'_>) -> bo
     else {
         return false;
     };
-    if !is_hex(expected.source_commit, 40)
-        || statement.get("_type").and_then(Value::as_str) != Some("https://in-toto.io/Statement/v1")
+    !(!is_hex(expected.source_commit, 40)
+        || statement.get("_type").and_then(Value::as_str)
+            != Some("https://in-toto.io/Statement/v1")
         || statement.get("predicateType").and_then(Value::as_str)
             != Some("https://slsa.dev/provenance/v1")
         || build.get("buildType").and_then(Value::as_str)
@@ -82,11 +83,7 @@ fn admits_statement(statement: &Value, expected: &ExpectedBuildSource<'_>) -> bo
             source_arg,
             expected.source_commit,
             expected.named_context_paths,
-        )
-    {
-        return false;
-    }
-    true
+        ))
 }
 
 fn role_spec(
