@@ -8,8 +8,8 @@ use crate::pipeline::workflow;
 use crate::private_sources::{SECTION, jobs, private_repo};
 
 const GIT_LOCK: &str = "version = 4\n\n[[package]]\nname = \"package-0\"\nversion = \"0.1.0\"\n\n[[package]]\nname = \"shared\"\nversion = \"1.0.0\"\nsource = \"git+https://github.com/acme/shared-lib?branch=main#0123456789abcdef\"\n";
-const ASSETS: &str = "[[release_assets]]\nrepo = 'acme/fixtures'\ntag = 'fixtures-2026.11.1'\nasset = 'dataset.tar.zst'\nsha256 = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'\ndest = 'tests/fixtures/dataset'\n";
-const SETUP: &str = "[[test_setup]]\nroot = '.'\nname = 'Prepare the fixture'\nrun = 'bash scripts/prepare-fixture.sh'\n";
+pub(crate) const ASSETS: &str = "[[release_assets]]\nrepo = 'acme/fixtures'\ntag = 'fixtures-2026.11.1'\nasset = 'dataset.tar.zst'\nsha256 = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'\ndest = 'tests/fixtures/dataset'\n";
+pub(crate) const SETUP: &str = "[[test_setup]]\nroot = '.'\nname = 'Prepare the fixture'\nrun = 'bash scripts/prepare-fixture.sh'\n";
 
 const PLAIN_ACTIONS: &[&str] = &[
     "actions/checkout@",
@@ -28,7 +28,7 @@ fn holds_a_token(step: &Value) -> bool {
         .any(|token| rendered.contains(token))
 }
 
-fn runs_checkout_code(step: &Value) -> bool {
+pub(crate) fn runs_checkout_code(step: &Value) -> bool {
     let run = step["run"].as_str().unwrap_or_default();
     step["uses"]
         .as_str()
