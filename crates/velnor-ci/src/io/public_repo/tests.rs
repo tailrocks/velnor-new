@@ -22,8 +22,7 @@ impl Server {
     fn requests(&self) -> Vec<String> {
         self.requests
             .lock()
-            .map(|seen| seen.clone())
-            .unwrap_or_default()
+            .map_or_else(|_| Vec::new(), |seen| seen.clone())
     }
 }
 
@@ -116,8 +115,7 @@ fn a_redirect_is_never_followed_so_the_token_cannot_reach_another_host() {
     );
     let error = result
         .err()
-        .map(|error| error.to_string())
-        .unwrap_or_default();
+        .map_or_else(String::new, |error| error.to_string());
     assert!(error.contains("HTTP 307"), "{error}");
     assert!(!error.contains(TOKEN), "{error}");
     assert_eq!(moved.requests().len(), 1);
