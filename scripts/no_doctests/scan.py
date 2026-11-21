@@ -37,7 +37,8 @@ def doc_findings(src):
             if doc_frame is None:
                 hit, tail = flush_value(src, i, pieces, attr_inner, tail)
             else:
-                hit, doc_frame[2] = flush_value(src, i, pieces, attr_inner, doc_frame[2])
+                cell = doc_frame[2]
+                hit, cell[0] = flush_value(src, i, pieces, attr_inner, cell[0])
             pieces = []
             if hit is not None:
                 yield hit

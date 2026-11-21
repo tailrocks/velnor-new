@@ -225,6 +225,9 @@ check cfg_attr_nested_fence fail '#[cfg_attr(all(), cfg_attr(all(), doc = "```\n
 check cfg_attr_nested_follow fail '///     compile_error!("x");\n#[cfg_attr(all(), cfg_attr(all(), doc = "prose"))]\npub fn f() {}\n'
 check cfg_attr_nested_predicate pass '#[cfg_attr(all(), cfg_attr(doc = "```", allow(dead_code)))]\npub fn f() {}\n'
 check cfg_attr_same_frame_lazy pass '#[cfg_attr(all(), doc = "a", doc = "    compile_error!(\"x\");\nsecond")]\npub fn f() {}\n'
+check cfg_attr_nested_enclosing_lazy pass '#[cfg_attr(all(), cfg_attr(all(), doc = "a"), doc = "    compile_error!(\"x\");\nsecond")]\npub fn f() {}\n'
+check cfg_attr_nested_sibling_lazy pass '#[cfg_attr(all(), cfg_attr(all(), doc = "a"), cfg_attr(all(), doc = "    compile_error!(\"x\");\nsecond"))]\npub fn f() {}\n'
+check cfg_attr_nested_then_prose fail '#[cfg_attr(all(), cfg_attr(all(), doc = "    compile_error!(\"x\");\nsecond"), doc = "tail")]\npub fn f() {}\n'
 check doc_concat_glued_fence fail '#[doc = concat!("a\\n``", "`\\ncompile_error!(\"x\");\\n```")]\npub fn f() {}\n'
 
 long="$work/footnote_long"

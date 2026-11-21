@@ -51,7 +51,7 @@ def flush_value(src, end, pieces, inner, tail):
 
 class CfgLevels:
     def __init__(self, name, tail):
-        self.stack = [[1, False, tail]] if name == "cfg_attr" else []
+        self.stack = [[1, False, [tail]]] if name == "cfg_attr" else []
 
     def comma(self, paren):
         if self.stack and paren == self.stack[-1][0]:
