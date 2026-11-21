@@ -91,6 +91,8 @@ async fn a_sweep_whose_deadline_has_passed_retires_nothing_and_leaves_the_pair_u
     let journal = Journal::open(&dir.path().join("launch.db")).await?;
     let (scope, engine) = seed::started_pairs(&journal, &docker, &[FAILED]).await?;
     scope.abandon_unbound_pair(FAILED.reservation).await?;
+    let before = fixture.objects(FAILED);
+    assert!(before.contains(&FAILED.container_id("runner")));
 
     retire_uncertain_unbound_pairs(Instant::now(), &docker, &scope, &engine).await?;
 
@@ -98,10 +100,6 @@ async fn a_sweep_whose_deadline_has_passed_retires_nothing_and_leaves_the_pair_u
         seed::text(&journal, RESERVATION, FAILED.reservation).await?,
         "uncertain/00/uncertain/0/1/none/"
     );
-    assert!(
-        fixture
-            .objects(FAILED)
-            .contains(&FAILED.container_id("runner"))
-    );
+    assert_eq!(fixture.objects(FAILED), before);
     Ok(())
 }

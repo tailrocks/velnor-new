@@ -8,9 +8,6 @@ use super::fixture::FixtureDocker;
 use super::seed;
 use super::{FAILED, RESERVATION, RETIRED, TestResult, retire_unbound_pair};
 
-/// The sweep stops at its deadline and leaves the pair uncertain (see `deadline.rs`). These tests
-/// assert the retirement itself, so the deadline must never fire on a loaded runner; a 30 second
-/// wall clock did, when the whole suite starved this test for over a minute.
 const FAR_DEADLINE: std::time::Duration = std::time::Duration::from_secs(3600);
 
 const NOT_STARTED: &str = "UPDATE capacity_reservation_provisioning_state SET bootstrap_start_state = 'not_requested', runner_container_id = NULL, dind_container_id = NULL WHERE reservation_id = {r}";
