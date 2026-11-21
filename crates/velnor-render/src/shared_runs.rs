@@ -14,6 +14,7 @@ pub(crate) fn mark(job: &Job, steps: &mut [RenderedStep]) {
     }) else {
         return;
     };
+    // helper-gate: first in tools-v0.1.111 via 6f9fabf5e1
     if !release.version().at_least((0, 1, 111)) {
         return;
     }

@@ -14,6 +14,7 @@ pub mod cache_api;
 mod cache_credentials;
 mod cache_paths;
 mod cache_prune;
+pub mod cache_purge;
 mod cache_sources;
 mod cache_target_link;
 mod cache_upload;
@@ -250,6 +251,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Cache(CacheCommand::Trim(args)) => cache::run_trim(&args.prefix, args.keep),
         Command::Cache(CacheCommand::TrimDeltas(args)) => delta_trim::run(args.run_id),
         Command::Cache(CacheCommand::Budget(args)) => cache_api::run_budget(&args),
+        Command::Cache(CacheCommand::PurgePrivate(args)) => cache_purge::run(&args),
         Command::Restored(args) => small::run_restored(&args),
         Command::ValidateArtifactId => small::run_validate_artifact_id(),
         Command::Run(_) | Command::Sources(_) => {
