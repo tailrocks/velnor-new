@@ -154,15 +154,15 @@ impl RootJobs<'_> {
     }
 
     fn lane_job(&self, id: JobId, steps: Vec<Step>, checks: bool) -> Job {
-        let mut steps = if self.unit.grouped {
+        let grouped = self.unit.grouped;
+        let mut steps = if grouped {
             self.members.iter().fold(steps, |steps, member| {
                 crate::test_setup::before_builds(self.facts, &member.root, steps)
             })
         } else {
             crate::test_setup::inserted(self.facts, &self.unit.roots[0], self.lane, steps)
         };
-        crate::test_setup::gate_job(&mut steps);
-        steps = crate::test_setup::checked_members(self.facts, &self.members, steps, checks);
+        steps = crate::test_setup::place_checks(self.facts, &self.members, grouped, checks, steps);
         crate::delta_cache::append(&mut steps, self.facts, self.unit, self.lane, &id);
         Job {
             permissions: crate::base_cache::lane_permissions(self.facts),
@@ -333,7 +333,6 @@ impl RootJobs<'_> {
             .collect();
         let lint_id = self.id(LINT_JOB);
         let mut steps = self.setup(&lint_id);
-        let lint_checks = tests.is_empty() || crate::test_setup::checks_per_member(self.facts);
         for member in &self.members {
             steps.extend(self.cargo(member, lint().into_iter().chain([CargoCommand::Doc])));
         }
@@ -347,7 +346,7 @@ impl RootJobs<'_> {
         let mut jobs = vec![Job {
             comment,
             pr: crate::plan::quick(self.facts),
-            ..self.lane_job(lint_id, steps, lint_checks)
+            ..self.lane_job(lint_id, steps, true)
         }];
         if archive && self.nextest() && self.facts.config.private_sources.is_none() {
             jobs.extend(self.archived_tests());
@@ -390,5 +389,12 @@ impl RootJobs<'_> {
             jobs.push(self.inline_lanes_timeout(self.lane_job(test_id, steps, true)));
         }
         jobs
+    }
+
+    fn gated(&self, kind: StepKind) -> Step {
+        Step {
+            gate: self.lane.steps(),
+            ..step(kind)
+        }
     }
 }

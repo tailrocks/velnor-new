@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    CargoCommand, RepoFacts, RepoPath, RustRoot, SetupOrder, Step, StepKind, TestSetup,
+    CargoCommand, RepoFacts, RepoPath, RustRoot, SetupOrder, SetupPhase, Step, StepKind, TestSetup,
     WorkspaceGroup,
 };
 
@@ -39,7 +39,7 @@ pub(crate) fn before_builds(facts: &RepoFacts, root: &RustRoot, mut steps: Vec<S
     for candidate in setups.map(|setup| Step {
         gate: gate.clone(),
         setup_order: SetupOrder::AfterSetup,
-        ..setup_step(setup, when, pr)
+        ..setup_step(setup, when, pr, false)
     }) {
         match steps.iter().position(|step| same_setup(step, &candidate)) {
             Some(index) => {
@@ -107,54 +107,76 @@ pub(crate) fn before_tests(
         .map(|setup| Step {
             gate: lane.steps(),
             setup_order: SetupOrder::AfterSetup,
-            ..setup_step(setup, when, pr)
+            ..setup_step(setup, when, pr, false)
         })
         .collect();
     steps.splice(first..first, setup);
     steps
 }
 
-const MEMBER_CHECK_HELPER: (u64, u64, u64) = (0, 1, 112);
-
-pub(crate) fn checks_per_member(facts: &RepoFacts) -> bool {
-    facts
-        .helper
-        .as_ref()
-        .is_some_and(|helper| helper.version().at_least(MEMBER_CHECK_HELPER))
-}
-
-pub(crate) fn checked_members(
+pub(crate) fn place_checks(
     facts: &RepoFacts,
     members: &[Member],
-    mut steps: Vec<Step>,
+    grouped: bool,
     checks: bool,
+    steps: Vec<Step>,
 ) -> Vec<Step> {
+    let mut steps = with_checks(facts, members, grouped, checks, steps);
+    gate_job(&mut steps);
+    steps
+}
+
+fn with_checks(
+    facts: &RepoFacts,
+    members: &[Member],
+    grouped: bool,
+    checks: bool,
+    mut steps: Vec<Step>,
+) -> Vec<Step> {
+    if !crate::config_check_configurations::current(facts.helper.as_ref()) {
+        return match members.first() {
+            Some(member) if !grouped => checked(
+                facts,
+                &member.root,
+                &member.lane,
+                steps,
+                Placement::Previous,
+            ),
+            _ => steps,
+        };
+    }
     if !checks {
         return steps;
     }
     for member in members {
-        steps = checked(
-            facts,
-            &member.root,
-            &member.lane,
-            steps,
-            member.tests(facts).is_empty(),
-        );
+        let placement = if member.tests(facts).is_empty() {
+            Placement::Untested
+        } else {
+            Placement::Tested
+        };
+        steps = checked(facts, &member.root, &member.lane, steps, placement);
     }
     steps
 }
 
-pub(crate) fn checked(
+#[derive(Clone, Copy)]
+enum Placement {
+    Previous,
+    Tested,
+    Untested,
+}
+
+fn checked(
     facts: &RepoFacts,
     root: &RustRoot,
     lane: &Lane,
     mut steps: Vec<Step>,
-    untested: bool,
+    placement: Placement,
 ) -> Vec<Step> {
-    let place = |step: &Step| {
-        if untested {
-            builds_or_tests(step) && owns(step, root)
-        } else {
+    let current = !matches!(placement, Placement::Previous);
+    let place = |step: &Step| match placement {
+        Placement::Untested => builds_or_tests(step) && owns(step, root),
+        Placement::Tested | Placement::Previous => {
             (tests(step) || archives(step)) && owns(step, root)
         }
     };
@@ -168,7 +190,11 @@ pub(crate) fn checked(
         return steps;
     }
     let (when, pr) = (steps[first].when, steps[first].pr);
-    let target = group_target(facts, root);
+    let target = if current {
+        group_target(facts, root)
+    } else {
+        None
+    };
     let checks: Vec<Step> = facts
         .config
         .check_configurations
@@ -180,10 +206,11 @@ pub(crate) fn checked(
                     root: check.root.clone(),
                     name: "velnor-ci check-configurations".to_owned(),
                     run: check.command(),
-                    phase: None,
+                    phase: matches!(placement, Placement::Untested).then_some(SetupPhase::Build),
                 },
                 when,
                 pr,
+                current,
             )
         })
         .map(|check| Step {
@@ -235,7 +262,12 @@ pub(crate) fn gate_job(steps: &mut [Step]) {
     }
 }
 
-fn setup_step(setup: &TestSetup, when: velnor_model::When, pr: velnor_model::PrRun) -> Step {
+fn setup_step(
+    setup: &TestSetup,
+    when: velnor_model::When,
+    pr: velnor_model::PrRun,
+    offline_after_private_fetch: bool,
+) -> Step {
     Step {
         directory: setup.root.clone(),
         when,
@@ -244,6 +276,7 @@ fn setup_step(setup: &TestSetup, when: velnor_model::When, pr: velnor_model::PrR
             name: setup.name.clone(),
             run: setup.run.clone(),
             before_build: setup.before_build(),
+            offline_after_private_fetch,
         })
     }
 }

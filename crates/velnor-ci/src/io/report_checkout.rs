@@ -17,22 +17,6 @@ fn ci(error: impl std::fmt::Display) -> CiError {
     CiError::new(error.to_string())
 }
 
-fn gitlinks(top: &Path) -> Result<BTreeSet<RepoPath>, CiError> {
-    let listed = super::inputs::git(top, &["ls-files", "-s", "-z"], None)?;
-    listed
-        .split(|byte| *byte == 0)
-        .filter(|entry| entry.starts_with(b"160000 "))
-        .map(|entry| {
-            let tab = entry
-                .iter()
-                .position(|byte| *byte == b'\t')
-                .ok_or_else(|| ci("git ls-files printed an entry without a path"))?;
-            let text = std::str::from_utf8(&entry[tab + 1..]).map_err(ci)?;
-            RepoPath::new(text).map_err(ci)
-        })
-        .collect()
-}
-
 pub(super) fn read(directory: &Path) -> Result<ReportCheckout, CiError> {
     let tracked = super::inputs::tracked_paths(directory)?;
     let tracked_paths = tracked
@@ -74,7 +58,7 @@ pub(super) fn read(directory: &Path) -> Result<ReportCheckout, CiError> {
         files: velnor_gen::io::read_files(&tracked.top, &wanted).map_err(ci)?,
         tracked_paths,
         symlinks,
-        gitlinks: gitlinks(&tracked.top)?,
+        gitlinks: super::inputs::gitlinks(&tracked.top)?,
         rust_metadata: BTreeMap::new(),
     };
     velnor_gen::io::add_manifests(&mut view, |paths| {
@@ -95,7 +79,7 @@ pub(super) fn read(directory: &Path) -> Result<ReportCheckout, CiError> {
 
 #[cfg(test)]
 mod tests {
-    use super::{gitlinks, read};
+    use super::read;
     use std::path::{Path, PathBuf};
     use std::process::Command;
 
@@ -107,41 +91,6 @@ mod tests {
             .status()
             .unwrap_or_else(|e| unreachable!("{e}"));
         assert!(status.success(), "git {args:?}");
-    }
-
-    #[test]
-    fn a_submodule_entry_is_a_gitlink_and_a_file_is_not() {
-        let directory: PathBuf =
-            std::env::temp_dir().join(format!("velnor-ci-gitlink-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&directory);
-        std::fs::create_dir_all(&directory).unwrap_or_else(|e| unreachable!("{e}"));
-        git(&directory, &["init", "--quiet", "--object-format=sha1"]);
-        git(
-            &directory,
-            &[
-                "update-index",
-                "--add",
-                "--cacheinfo",
-                "160000,1111111111111111111111111111111111111111,vendor/lib",
-            ],
-        );
-        git(
-            &directory,
-            &[
-                "update-index",
-                "--add",
-                "--cacheinfo",
-                "100644,e69de29bb2d1d6434b8b29ae775ad8c2e48c5391,Cargo.toml",
-            ],
-        );
-        let found = gitlinks(&directory);
-        let _ = std::fs::remove_dir_all(&directory);
-        let found: Vec<String> = found
-            .unwrap_or_else(|e| unreachable!("{e}"))
-            .iter()
-            .map(|path| path.as_str().to_owned())
-            .collect();
-        assert_eq!(found, ["vendor/lib"]);
     }
 
     #[test]

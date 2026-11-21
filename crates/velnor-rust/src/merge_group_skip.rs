@@ -248,6 +248,7 @@ mod tests {
                 name: String::from("setup"),
                 run: String::from("true"),
                 before_build: true,
+                offline_after_private_fetch: false,
             },
         ];
         if build {

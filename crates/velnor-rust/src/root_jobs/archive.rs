@@ -244,6 +244,7 @@ impl RootJobs<'_> {
                 name: "Check that Docker answers".to_owned(),
                 run: "docker info".to_owned(),
                 before_build: false,
+                offline_after_private_fetch: false,
             }));
         }
         steps.extend(
@@ -279,12 +280,5 @@ impl RootJobs<'_> {
             job.timeout_minutes = minutes;
         }
         job
-    }
-
-    fn gated(&self, kind: StepKind) -> Step {
-        Step {
-            gate: self.lane.steps(),
-            ..step(kind)
-        }
     }
 }

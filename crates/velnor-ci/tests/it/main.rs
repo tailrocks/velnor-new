@@ -29,6 +29,7 @@ mod cache_retention_flow;
 mod io_cold_foreign;
 mod io_gate;
 mod run_escape;
+mod runtime_gitlink;
 
 mod cache_safety;
 mod cache_upload;
