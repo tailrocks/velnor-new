@@ -95,13 +95,44 @@ fn malformed_or_missing_scope_caches_refuse_save_and_remove_the_old_snapshot() {
     }
 }
 
+fn copy_into(from: &Path, to: &Path) {
+    let output = Command::new("cp")
+        .arg("-pR")
+        .arg(from.join("."))
+        .arg(to.join("."))
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(output.status.success(), "{output:?}");
+}
+
+fn pristine_copy(repo: &Repo) -> Repo {
+    let copy = Repo::empty("scope-pristine");
+    copy_into(repo.root(), copy.root());
+    copy
+}
+
+fn reset_to(repo: &Repo, pristine: &Repo) {
+    for entry in fs::read_dir(repo.root()).unwrap_or_else(|e| unreachable!("{e}")) {
+        let path = entry.unwrap_or_else(|e| unreachable!("{e}")).path();
+        let is_dir = fs::symlink_metadata(&path).is_ok_and(|metadata| metadata.is_dir());
+        if is_dir {
+            fs::remove_dir_all(&path).unwrap_or_else(|e| unreachable!("{e}"));
+        } else {
+            fs::remove_file(&path).unwrap_or_else(|e| unreachable!("{e}"));
+        }
+    }
+    copy_into(pristine.root(), repo.root());
+}
+
 #[test]
 fn changed_checkout_inputs_or_identity_refuse_scope_reuse() {
+    let (repo, cache) = prepared();
+    let pristine = pristine_copy(&repo);
     for change in [
         "manifest", "lock", "metadata", "added", "mode", "link", "type", "head", "job", "checkout",
         "root", "retarget", "removed",
     ] {
-        let (repo, cache) = prepared();
+        reset_to(&repo, &pristine);
         match change {
             "manifest" => {
                 repo.write_unstaged("Cargo.toml", "[package]\nname='changed'\nversion='0.1.0'\n");
