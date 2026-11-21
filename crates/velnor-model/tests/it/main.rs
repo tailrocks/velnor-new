@@ -2,4 +2,5 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod artifact_paths;
+mod job_id;
 mod mbx_declaration;
