@@ -87,15 +87,12 @@ fn gate_patches() -> Result<BTreeSet<u64>, Box<dyn Error>> {
             .join("src");
         rust_sources(&src, &mut files)?;
     }
-    let mut patches = BTreeSet::new();
+    let mut patches: BTreeSet<u64> = velnor_gen::key_gates().map(|gate| gate.first.2).collect();
     for file in files {
         let text = fs::read_to_string(file)?;
-        patches.extend(
-            patches_in(&text)
-                .into_iter()
-                .filter(|patch| *patch >= velnor_gen::HELPER_MINIMUM.2),
-        );
+        patches.extend(patches_in(&text));
     }
+    patches.retain(|patch| *patch >= velnor_gen::HELPER_MINIMUM.2);
     Ok(patches)
 }
 
@@ -217,7 +214,6 @@ fn every_steps_reference_names_a_step_of_its_own_job() -> TestResult {
     }
     let mut work: Vec<(u64, Shape)> = Vec::new();
     for &patch in &scanned {
-        let at_gate = |gate: u64| patch >= gate && (patch == gate || patch == newest);
         work.push((patch, Shape::Rust(None)));
         if patch >= shared_store {
             work.push((patch, Shape::Rust(Some(SHARED_STORE_ON))));
@@ -225,25 +221,25 @@ fn every_steps_reference_names_a_step_of_its_own_job() -> TestResult {
         if patch >= cache_debug {
             work.push((patch, Shape::Rust(Some(CACHE_DEBUG_ON))));
         }
-        if at_gate(test_groups) {
+        if patch >= test_groups {
             work.push((patch, Shape::Groups(TWO_GROUPS)));
         }
-        if at_gate(artifacts) {
+        if patch >= artifacts {
             work.push((patch, Shape::Groups(ARTIFACTS_ON)));
         }
-        if at_gate(private_sources) {
+        if patch >= private_sources {
             work.push((patch, Shape::Private));
         }
-        if at_gate(PRIVATE_BASE_MINIMUM) {
+        if patch >= PRIVATE_BASE_MINIMUM {
             work.push((patch, Shape::PrivateBase));
         }
-        if at_gate(velnor_gen::HELPER_MINIMUM.2) {
+        if patch >= velnor_gen::HELPER_MINIMUM.2 {
             work.push((patch, Shape::Declared));
         }
-        if at_gate(PR_ONLY_CHECKS_MINIMUM) {
+        if patch >= PR_ONLY_CHECKS_MINIMUM {
             work.push((patch, Shape::Release(PR_ONLY_CHECKS_ON)));
         }
-        if at_gate(velnor_gen::HELPER_MINIMUM.2) {
+        if patch >= velnor_gen::HELPER_MINIMUM.2 {
             work.push((patch, Shape::Release(RELEASE_BINARIES)));
         }
     }
