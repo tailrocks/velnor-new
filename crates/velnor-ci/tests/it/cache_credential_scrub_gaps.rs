@@ -211,3 +211,39 @@ fn prose_about_a_basic_authorization_header_is_saved() {
         ("benign-four-times-encoded-space", FETCH_HEAD, "%25252520\n"),
     ]);
 }
+
+#[test]
+fn a_basic_authorization_header_with_non_ascii_credentials_stops_the_sources_save() {
+    sources_save_stops(&[
+        (
+            "hook-utf8-password",
+            HOOK,
+            "curl -H 'Authorization: Basic dXNlcjpww6Rzcw==' https://example.org\n",
+        ),
+        (
+            "hook-utf8-user",
+            HOOK,
+            "curl -H 'Authorization: Basic w7xzZXI6cGFzcw==' https://example.org\n",
+        ),
+        (
+            "hook-invalid-utf8-password",
+            HOOK,
+            "curl -H 'Authorization: Basic dXNlcjpw5HNz' https://example.org\n",
+        ),
+        (
+            "hook-invalid-utf8-user",
+            HOOK,
+            "curl -H 'Authorization: Basic dXPpcjpwYXNz' https://example.org\n",
+        ),
+        (
+            "hook-invalid-utf8-bytes-only",
+            HOOK,
+            "curl -H 'Authorization: Basic dXNlcjpw//5zcw==' https://example.org\n",
+        ),
+        (
+            "fetch-head-utf8-password",
+            FETCH_HEAD,
+            &format!("{SHA}\t\tbranch 'main' Authorization: Basic dXNlcjpww6Rzcw==\n"),
+        ),
+    ]);
+}

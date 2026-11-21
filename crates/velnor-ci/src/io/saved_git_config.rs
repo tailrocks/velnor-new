@@ -171,10 +171,7 @@ fn basic_payload_credential(payload: &str) -> bool {
             bits &= (1 << filled) - 1;
         }
     }
-    decoded.contains(&b':')
-        && decoded
-            .iter()
-            .all(|each| each.is_ascii_graphic() || *each == b' ')
+    decoded.contains(&b':') && !decoded.iter().any(u8::is_ascii_control)
 }
 
 fn embedded_urls(word: &str) -> impl Iterator<Item = &str> {
