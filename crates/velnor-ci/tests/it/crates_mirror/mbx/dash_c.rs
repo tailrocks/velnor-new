@@ -149,7 +149,7 @@ fn a_dash_c_into_a_member_of_a_declaring_workspace_walks_up_to_the_workspace() -
     let member = workspace.join("crates/member");
     fs::create_dir_all(&member)?;
     fs::create_dir_all(&launch)?;
-    fs::write(workspace.join("mise.toml"), MBX_DECLARED)?;
+    fs::write(workspace.join("mise.toml"), MBX_DECLARED.as_str())?;
     let plain = plain_cargo(&repo)?;
     let output = wrapper_command(repo.root(), &plain, false, &[])?
         .current_dir(&launch)
@@ -158,5 +158,26 @@ fn a_dash_c_into_a_member_of_a_declaring_workspace_walks_up_to_the_workspace() -
         .args(["-C", "../workspace/crates/member", "build"])
         .output()?;
     assert_refused(&output);
+    Ok(())
+}
+
+#[test]
+fn a_dash_c_after_a_double_dash_is_not_a_global_option() -> TestResult {
+    let repo = declared_job()?;
+    let launch = repo.root().join("launch");
+    let scratch = repo.root().join("scratch-project");
+    fs::create_dir_all(&scratch)?;
+    let checkout = repo.root().display().to_string();
+    let scratch = scratch.display().to_string();
+    assert_plain(&run_with_args(
+        &repo,
+        &launch,
+        &["--", "-C", &checkout, "build"],
+    )?);
+    assert_refused(&run_with_args(
+        &repo,
+        repo.root(),
+        &["--", "-C", &scratch, "build"],
+    )?);
     Ok(())
 }
