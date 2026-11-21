@@ -61,7 +61,7 @@ doc = true
 [[lint]]
 kind = "jactionlint"
 config = ".github/jactionlint.yaml"
-inputs = [".github/**", "actions/**", "mise.toml", "mise.lock"]
+inputs = [".github/**", "actions/**", "qualification/actions/**", "crates/velnor-local/src/io/local_setup/action.yml", "mise.toml", "mise.lock"]
 
 [[lint]]
 kind = "alint"
@@ -84,7 +84,7 @@ name = "Parity verifier unit tests"
 task = "lint-parity-verify-candidate"
 tools = ["python"]
 timeout_minutes = 5
-inputs = ["scripts/parity-verify-candidate.py", "scripts/test_parity_verify_candidate.py", "scripts/hosted_phase_measurement/**", "mise.toml", "mise.lock"]
+inputs = ["scripts/parity-verify-candidate.py", "scripts/test_parity_verify_candidate.py", "scripts/hosted_phase_measurement/**", "images/job/ubuntu-26.04/candidate/candidate.py", "mise.toml", "mise.lock"]
 
 [[lint]]
 kind = "mise-task"
@@ -101,4 +101,4 @@ name = "hk config"
 task = "validate-hk"
 tools = ["hk"]
 timeout_minutes = 5
-inputs = ["hk.pkl", "mise.toml", "mise.lock"]
+inputs = ["hk.pkl", "hk.local.pkl", ".hkrc.pkl", "mise.toml", "mise.lock"]
