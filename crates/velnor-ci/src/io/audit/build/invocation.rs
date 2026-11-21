@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -21,6 +22,13 @@ impl Selection {
     }
 }
 
+const CARGO_PROGRAMS: [&str; 3] = ["cargo", "cargo-nextest", "cargo-clippy"];
+
+const CARGO_SUBCOMMANDS: [&str; 16] = [
+    "build", "b", "check", "c", "clippy", "test", "t", "nextest", "doc", "d", "run", "r", "bench",
+    "rustc", "fetch", "metadata",
+];
+
 pub(super) struct Invocation {
     pub(super) command: Vec<String>,
     pub(super) preflight: Option<Vec<String>>,
@@ -34,7 +42,11 @@ impl Invocation {
         let program = Path::new(&self.command[0])
             .file_name()
             .and_then(|name| name.to_str())
+            .filter(|name| CARGO_PROGRAMS.contains(name))
             .unwrap_or("command");
+        if program != "cargo" {
+            return program.to_owned();
+        }
         let words: Vec<&str> = self
             .command
             .iter()
@@ -42,13 +54,16 @@ impl Invocation {
             .map(String::as_str)
             .take_while(|word| *word != "--")
             .collect();
-        match subcommand(&words).filter(|_| program == "cargo") {
-            Some(index) => format!("{program} {}", words[index]),
+        match subcommand(&words)
+            .map(|index| words[index])
+            .filter(|word| CARGO_SUBCOMMANDS.contains(word))
+        {
+            Some(word) => format!("cargo {word}"),
             None => program.to_owned(),
         }
     }
 
-    pub(super) fn selection(&self) -> Option<Selection> {
+    pub(super) fn selection(&self, members: &BTreeSet<&str>) -> Option<Selection> {
         if !self.cargo_program() {
             return None;
         }
@@ -77,6 +92,7 @@ impl Invocation {
                 packages.push(name.to_owned());
             }
         }
+        packages.retain(|name| members.contains(name.as_str()));
         Some(Selection { all, packages })
     }
 
