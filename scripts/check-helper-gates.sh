@@ -167,14 +167,25 @@ scan() {
     return 0
   }
   function open_tuple_bad(line,    t, c) {
-    if (!match(line, "(^|\\()" ws num ws "(," ws num ws ")?,?" ws "$")) return 0
+    if (!match(line, "\\(" ws num ws "(," ws num ws ")?,?" ws "$")) return 0
     t = substr(line, RSTART)
     gsub(/[()[:space:]]/, "", t)
     split(t, c, ",")
     return intval(c[1]) == 0
   }
+  function nonliteral_tuple_bad(line,    s, m, n, e) {
+    s = line
+    while (match(s, "\\([^(),]*," ws "1" ws ",[^()]*\\)")) {
+      m = substr(s, RSTART + 1, RLENGTH - 2)
+      s = substr(s, RSTART + RLENGTH)
+      n = split(m, e, ",")
+      gsub(/[[:space:]]/, "", e[1])
+      if (n == 3 && e[1] ~ /^0/ && intval(e[1]) < 0) return 1
+    }
+    return 0
+  }
   function tuple_bad(line,    s, off, m, st, t, c, pre, rest) {
-    if (open_tuple_bad(line)) return 1
+    if (open_tuple_bad(line) || nonliteral_tuple_bad(line)) return 1
     if (line ~ ("(\\(|,)" ws "\\(" ws num ws "\\)")) return 1
     off = 0; s = line
     while (match(s, "(^|[^A-Za-z0-9_.])" num ws "," ws num ws ",")) {

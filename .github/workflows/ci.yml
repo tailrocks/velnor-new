@@ -173,7 +173,7 @@ jobs:
               exit 1
             fi
           done
-          for f in gate-call-cast gate-call-parens gate-call-sum gate-call-const gate-call-split gate-call-split-open gate-call-value-cast gate-call-new-ctor gate-call-callee-newline gate-call-open-tuple gate-call-bare-elements gate-call-paren-first gate-call-paren-later; do
+          for f in gate-call-cast gate-call-parens gate-call-sum gate-call-const gate-call-split gate-call-split-open gate-call-value-cast gate-call-new-ctor gate-call-callee-newline gate-call-open-tuple gate-call-bare-elements gate-call-paren-first gate-call-paren-later gate-call-nonliteral-split; do
             if bash scripts/check-helper-gates.sh --diff "$fixtures/$f.diff" --current 0.1.110; then
               echo "the check accepted a gate row that is not a literal tuple: $f" >&2
               exit 1
@@ -188,6 +188,7 @@ jobs:
           for f in gate-call-literal gate-call-minimum gate-call-value-literal gate-call-untagged-literal gate-call-new-ctor-literal gate-minimum-marked; do
             bash scripts/check-helper-gates.sh --diff "$fixtures/$f.diff" --current 0.1.110
           done
+          bash scripts/check-helper-gates.sh --diff "$fixtures/gate-array-zero-literal.diff" --current 0.1.110
           bash scripts/check-helper-gates.sh --diff "$fixtures/gate-tuple-mixed-string.diff" --current 0.1.110
           bash scripts/check-helper-gates.sh --diff "$fixtures/gate-tuple-other-series.diff" --current 0.1.110
           bash scripts/check-helper-gates.sh --diff "$fixtures/gate-removed-minus-minus.diff" --current 0.1.110

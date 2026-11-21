@@ -1,0 +1,7 @@
+diff --git a/crates/velnor-gen/src/key_gates/zeroes.rs b/crates/velnor-gen/src/key_gates/zeroes.rs
+--- /dev/null
++++ b/crates/velnor-gen/src/key_gates/zeroes.rs
+@@ -0,0 +1,3 @@
++const ZEROES: [u64; 1] = [
++    0,
++];
