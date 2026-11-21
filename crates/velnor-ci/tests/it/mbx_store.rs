@@ -140,7 +140,7 @@ fn a_stale_probe_file_does_not_block_the_shared_directory() {
 }
 
 #[test]
-fn no_offered_directory_changes_nothing() {
+fn no_offered_directory_appends_only_the_out_dir_setting() {
     let host = host("mbx-store-none");
     let outcome = run(&host, "push", "refs/heads/main", None);
     assert_eq!(outcome, Outcome::NotOffered);

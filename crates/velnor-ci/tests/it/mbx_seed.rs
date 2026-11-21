@@ -180,7 +180,7 @@ fn a_second_run_skips_what_is_already_present() {
 }
 
 #[test]
-fn an_absent_seed_changes_nothing() {
+fn an_absent_seed_appends_only_the_out_dir_setting() {
     let host = host("mbx-seed-absent");
     let outcome = run(&host, "pull_request", "refs/pull/1/merge", None);
     assert_eq!(outcome, Outcome::NotOffered);
@@ -196,7 +196,7 @@ fn an_absent_seed_changes_nothing() {
 }
 
 #[test]
-fn a_trusted_event_is_never_seeded() {
+fn a_trusted_event_is_never_seeded_and_appends_the_out_dir_setting() {
     let host = host("mbx-seed-trusted");
     let seed = warm_seed(&host);
     for event in ["push", "schedule"] {
