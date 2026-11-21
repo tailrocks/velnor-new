@@ -11,9 +11,18 @@ CONTAINER = r"(?:>[ \t]*|(?:[-*+]|\d{1,9}[.)])(?:[ \t]+(?:\[[ xX]\][ \t]+)?|$)|\
 LINE_FENCE = re.compile(r"[ \t]*" + CONTAINER + r"(?:```|~~~)")
 LINE_INDENT = re.compile(QUOTE + r" {5,}\S")
 ATTR_INDENT = re.compile(r" {4,}\S|(?:[ \t]*>)+ {5,}\S")
-LIST_INDENT = re.compile(r"[ \t]*" + CONTAINER + r"(?:[-*+]|\d{1,9}[.)]) {5,}\S")
-BLOCK_MARGIN = re.compile(r"[ \t]*\*?")
-QUOTE_START = re.compile(r"[ \t]*>")
+LIST_INDENT = re.compile(r"[ \t]*" + CONTAINER + r"((?:[-*+]|\d{1,9}[.)])) {5,}\S")
+ROOT_ORDERED = re.compile(r"[ \t]*(?!0*1[.)])\d{1,9}[.)] {5,}\S")
+CONTAINER_START = re.compile(r"[ \t]*(?:>|(?:[-*+]|\d{1,9}[.)])(?:[ \t]|$)|\[\^)")
+BLOCK_MARGIN = re.compile(r"^[ \t]*\*")
+LINE_QUOTE_START = re.compile(r" {0,4}>")
+ATTR_QUOTE_START = re.compile(r" {0,3}>")
+SETEXT_UNDERLINE = re.compile(r"(?:=+|-+)[ \t]*")
+HTML_CLOSED = re.compile(
+    r"<!--.*-->|<\?.*\?>|<!\[CDATA\[.*\]\]>|<![A-Za-z].*>"
+    r"|<(script|pre|style|textarea)(?:\s|>|$).*</\1>",
+    re.I,
+)
 HRULE = re.compile(r"(?:-[ \t]*){3,}|(?:\*[ \t]*){3,}|(?:_[ \t]*){3,}")
 DOC_OPEN = re.compile(r"/\*(?:!|\*(?![*/]))")
 NEWLINE = re.compile(r"\r\n|\r|\n")
@@ -95,11 +104,13 @@ def skip_char(src, i):
     return None
 
 
-def prose(line):
-    if line is None:
-        return False
+def opens_paragraph(line, before):
     text = re.sub("^" + CONTAINER, "", line.strip(), count=1)
-    return bool(text) and not text.startswith("#") and not HRULE.fullmatch(text)
+    if not text or text.startswith("#") or HRULE.fullmatch(text) or HTML_CLOSED.match(text):
+        return False
+    if SETEXT_UNDERLINE.fullmatch(text):
+        return not before
+    return True
 
 
 def split_lines(text):
@@ -112,24 +123,33 @@ def doc_text_tabs(text):
     return text.expandtabs(4)
 
 
-def markdown_hit(lines, indent):
+def markdown_hit(lines, indent, quote_start):
+    before = False
     prev = None
     for k, raw in enumerate(lines):
         line = raw.expandtabs(4)
-        lazy = prose(prev) and not QUOTE_START.match(line)
-        if LIST_INDENT.match(line) or (LINE_FENCE.match(line) and not (lazy and indent.match(line))):
+        lazy = before and not quote_start.match(line)
+        item = LIST_INDENT.match(line)
+        root_item = ROOT_ORDERED.match(line) and not CONTAINER_START.match(prev or "")
+        if (item and not (lazy and root_item)) or (LINE_FENCE.match(line) and not (lazy and indent.match(line))):
             return k
-        if indent.match(line) and not lazy:
-            return k
+        if indent.match(line):
+            if not lazy:
+                return k
+        else:
+            before = opens_paragraph(line, before)
         prev = line
     return None
 
 
-def value_has_fence(value):
-    lines = [line.expandtabs(4) for line in split_lines(value)]
+def unindent(lines):
     margin = min((len(line) - len(line.lstrip(" ")) for line in lines if line.strip()), default=0)
-    lines = [line[margin:] for line in lines]
-    return markdown_hit(lines, ATTR_INDENT) is not None
+    return [line[margin:] for line in lines]
+
+
+def value_has_fence(value):
+    lines = unindent([line.expandtabs(4) for line in split_lines(value)])
+    return markdown_hit(lines, ATTR_INDENT, ATTR_QUOTE_START) is not None
 
 
 def decode_escape(match):
@@ -181,7 +201,7 @@ def doc_findings(src):
         if src.startswith("//", i):
             if LINE_DOC.match(src, i):
                 run, end = line_run(src, i)
-                hit = markdown_hit([body for _, body in run], LINE_INDENT)
+                hit = markdown_hit([body for _, body in run], LINE_INDENT, LINE_QUOTE_START)
                 if hit is not None:
                     yield run[hit][0]
             else:
@@ -192,9 +212,9 @@ def doc_findings(src):
             end = block_end(src, i)
             if DOC_OPEN.match(src, i):
                 start = i + 3
-                lines = split_lines(src[start:end])
+                lines = split_lines(src[start : end - 2])
                 stripped = [doc_text_tabs(BLOCK_MARGIN.sub("", line, count=1)) for line in lines]
-                hit = markdown_hit(stripped, LINE_INDENT)
+                hit = markdown_hit(unindent(stripped), ATTR_INDENT, ATTR_QUOTE_START)
                 if hit is not None:
                     yield start + sum(len(line) + 1 for line in lines[:hit])
             i = end
