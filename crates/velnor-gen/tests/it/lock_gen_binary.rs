@@ -189,26 +189,16 @@ fn generation_accepts_a_well_formed_generator_binary_table() -> TestResult {
 }
 
 #[test]
-fn generation_refuses_a_truncated_generator_binary_digest() -> TestResult {
-    let lock = with_binary_table("linux-x64 = \"abc\"\nlinux-arm64 = \"abc\"")?;
-    assert!(generation_refuses_the_lock(&lock)?, "{lock}");
-    Ok(())
-}
-
-#[test]
-fn generation_refuses_a_generator_binary_table_missing_a_required_platform() -> TestResult {
+fn generation_refuses_a_malformed_generator_binary_table() -> TestResult {
     let sum = "b".repeat(64);
-    let lock = with_binary_table(&format!("linux-x64 = \"{sum}\""))?;
-    assert!(generation_refuses_the_lock(&lock)?, "{lock}");
-    Ok(())
-}
-
-#[test]
-fn generation_refuses_a_generator_binary_table_with_an_unknown_platform() -> TestResult {
-    let sum = "b".repeat(64);
-    let lock = with_binary_table(&format!(
-        "linux-x64 = \"{sum}\"\nlinux-arm64 = \"{sum}\"\nlinux-riscv64 = \"{sum}\""
-    ))?;
-    assert!(generation_refuses_the_lock(&lock)?, "{lock}");
+    let tables = [
+        "linux-x64 = \"abc\"\nlinux-arm64 = \"abc\"".to_string(),
+        format!("linux-x64 = \"{sum}\""),
+        format!("linux-x64 = \"{sum}\"\nlinux-arm64 = \"{sum}\"\nlinux-riscv64 = \"{sum}\""),
+    ];
+    for table in tables {
+        let lock = with_binary_table(&table)?;
+        assert!(generation_refuses_the_lock(&lock)?, "{lock}");
+    }
     Ok(())
 }
