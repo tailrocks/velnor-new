@@ -86,8 +86,9 @@ pub fn check_generator_entry(bytes: &[u8], running: RunningGenerator<'_>) -> Res
         && listed != sha
     {
         return Err(LockError::new(format!(
-            "[{section}] {} digest is {listed} but this binary hashes to {sha}",
-            platform.file_suffix()
+            "[{section}] {} digest is {listed} but this binary hashes to {sha}; {}",
+            platform.file_suffix(),
+            repin_hint()
         )));
     }
     Ok(())
