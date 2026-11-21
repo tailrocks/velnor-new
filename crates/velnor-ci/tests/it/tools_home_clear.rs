@@ -365,3 +365,13 @@ fn a_missing_or_empty_home_is_a_warning_and_restore_still_reports_a_miss() {
         );
     }
 }
+
+#[test]
+fn a_save_through_a_link_to_root_is_refused_for_a_store_the_job_owns() {
+    let node = node("tools-home-save-root-owned");
+    let linked = node.root.join("root-owned-home");
+    symlink("/", &linked).unwrap_or_else(|e| unreachable!("{e}"));
+    let outcome = go(&node, Verb::Save, &linked);
+    assert_eq!(outcome, Outcome::Rejected("owned by another user"));
+    assert!(!node.root.join("store/tools").exists());
+}
