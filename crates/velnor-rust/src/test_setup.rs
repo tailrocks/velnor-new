@@ -31,7 +31,7 @@ pub(crate) fn inserted(
 
 pub(crate) fn before_builds(facts: &RepoFacts, root: &RustRoot, mut steps: Vec<Step>) -> Vec<Step> {
     let owned = |step: &Step| builds_or_tests(step) && owns(step, root);
-    let compiled = compiled_dirs(facts, root);
+    let compiled = compiled_dirs(&facts.rust_roots, root);
     let setups = facts
         .config
         .test_setup
@@ -78,7 +78,7 @@ fn same_setup(step: &Step, candidate: &Step) -> bool {
         && step.directory == candidate.directory
 }
 
-fn compiled_dirs(facts: &RepoFacts, root: &RustRoot) -> Vec<Option<RepoPath>> {
+pub(crate) fn compiled_dirs(roots: &[RustRoot], root: &RustRoot) -> Vec<Option<RepoPath>> {
     let mut seen: Vec<&RepoPath> = Vec::new();
     let mut pending = vec![root];
     while let Some(next) = pending.pop() {
@@ -87,8 +87,7 @@ fn compiled_dirs(facts: &RepoFacts, root: &RustRoot) -> Vec<Option<RepoPath>> {
         }
         seen.push(&next.manifest);
         pending.extend(
-            facts
-                .rust_roots
+            roots
                 .iter()
                 .filter(|other| next.depends_on.contains(&other.manifest)),
         );
