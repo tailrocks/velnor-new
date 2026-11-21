@@ -169,9 +169,9 @@ pub fn mint(
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '-'))
     {
-        return Err(CiError::new(format!(
-            "the installation token answer holds a token that is not plain letters, digits, _, . and -"
-        )));
+        return Err(CiError::new(
+            "the installation token answer holds a token that is not plain letters, digits, _, . and -",
+        ));
     }
     Ok(token)
 }
