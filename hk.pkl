@@ -90,7 +90,7 @@ hooks {
   // in the Required aggregate, but it also runs on merge_group.
   ["pre-push"] {
     steps {
-      ["betterleaks-history"] { check = "betterleaks git . --redact -c .gitleaks.toml --log-opts=\"--full-history HEAD\"" }
+      ["betterleaks-history"] { check = "betterleaks git . --redact -c .gitleaks.toml --log-opts=\"--full-history --diff-merges=first-parent HEAD\"" }
       ["kingfisher-worktree"] { check = "bash scripts/secret-scan-worktree.sh" }
     }
   }

@@ -171,8 +171,8 @@ jobs:
           betterleaks version
           kingfisher --version
       - name: Scan the commit history with gitleaks
-        run: gitleaks git . --redact --no-banner --config .gitleaks.toml --log-opts="--full-history HEAD"
+        run: gitleaks git . --redact --no-banner --config .gitleaks.toml --log-opts="--full-history --diff-merges=first-parent HEAD"
       - name: Scan the commit history with betterleaks
-        run: betterleaks git . --redact -c .gitleaks.toml --log-opts="--full-history HEAD"
+        run: betterleaks git . --redact -c .gitleaks.toml --log-opts="--full-history --diff-merges=first-parent HEAD"
       - name: Scan the working tree with kingfisher
         run: bash scripts/secret-scan-worktree.sh

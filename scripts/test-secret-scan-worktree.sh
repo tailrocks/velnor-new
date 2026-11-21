@@ -40,8 +40,8 @@ SH
 fi
 echo "secret-scan-worktree scanner: $scanner (kingfisher $pin)"
 
-# 36 hex characters from /dev/urandom: a GitHub-token-shaped value that differs on every run.
-token="ghp_$(od -An -N18 -tx1 /dev/urandom | tr -d ' \n')"
+# A GitHub-token-shaped value (ghp_ + 36 characters) from fixed pieces, so the scan result is the same on every run.
+token="ghp_$(printf '%s' 'Ab3Cd5Ef7Gh9' 'Jk2Lm4Np6Qr8' 'St0Uv1Wx3Yz5')"
 printf 'GITHUB_TOKEN=%s\n' "$token" >"$tmp/tree/app.env"
 set +e
 (cd "$tmp/tree" && bash "$scan") >"$tmp/planted.log" 2>&1
