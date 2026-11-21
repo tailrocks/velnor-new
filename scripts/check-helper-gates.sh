@@ -150,6 +150,22 @@ scan() {
     if (a != 0 || b != 1 || c < 0) return ""
     return "0.1." c
   }
+  function literal_tuple(t,    e) {
+    gsub(/[()[:space:]]/, "", t)
+    sub(/,$/, "", t)
+    if (split(t, e, ",") != 3) return 0
+    return intval(e[1]) >= 0 && intval(e[2]) >= 0 && intval(e[3]) >= 0
+  }
+  function gate_call_bad(line,    pre, call, st) {
+    if (!match(line, /(^|[^A-Za-z0-9_.])gate(_untagged|_filled|_value)?[[:space:]]*\(/)) return 0
+    st = RSTART + ((substr(line, RSTART, 1) == "g") ? 0 : 1)
+    pre = substr(line, 1, st - 1)
+    if (pre ~ /(^|[^A-Za-z0-9_])fn[[:space:]]+$/) return 0
+    call = substr(line, st)
+    if (call !~ ("^gate[A-Za-z_]*[[:space:]]*\\([^()]*," ws "(" tup "|HELPER_MINIMUM)" ws "\\)" ws "[,;]?" ws "$")) return 1
+    if (match(call, tup ws "\\)")) return !literal_tuple(substr(call, RSTART, RLENGTH - 1))
+    return 0
+  }
   function versions(line, out,    rest, n, v) {
     n = 0
     rest = line
@@ -300,6 +316,7 @@ scan() {
     if (!tree && tolower(text) ~ /^[ \t]*(\/\/|\/\*|\*).*(first released in|not tagged yet)/) { printf "PROSE\t%s\t%s\n", file, text; next }
     if (!tree && c_mention && !c_mv) { printf "MARKER\t%s\t%s\n", file, text; next }
     if (!counted) next
+    if (file ~ /^crates\/velnor-gen\/src\/key_gates\// && gate_call_bad(mask_code(text))) { printf "SHAPE\t%s\t%s\n", file, text; next }
     stripped = strip(text)
     has = c_mv || p_mv
     markN_now = c_mv ? c_mn : (p_mv ? p_mn : "")
@@ -356,6 +373,9 @@ while IFS=$'\t' read -r kind f1 f2 f3 f4; do
       bad=1 ;;
     MARKER)
       printf '%s: helper-gate marker is not the released form: %s\n  use `// helper-gate: first in tools-v0.1.N via <commit>` on a released gate; leave unreleased gates unmarked\n' "$f1" "$f2" >&2
+      bad=1 ;;
+    SHAPE)
+      printf '%s: gate row is not a literal tuple on one line: %s\n  write the gate as `gate(File, "key", (0, 1, N))` with three integer literals on that line (or HELPER_MINIMUM)\n' "$f1" "$f2" >&2
       bad=1 ;;
     BAD)
       printf '%s: gate %s, but tools-v%s is already released; use %s\n  %s\n' "$f1" "$f2" "$f2" "$next" "$f3" >&2

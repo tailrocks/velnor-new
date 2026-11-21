@@ -2,10 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeSet;
-use std::fs;
-use std::path::Path;
-
 use velnor_rust::KEYS;
+
+use crate::io::read_repo_file;
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -19,14 +18,6 @@ fn documented_keys(page: &str) -> Vec<String> {
         .flat_map(|cell| cell.split('`').skip(1).step_by(2))
         .map(str::to_owned)
         .collect()
-}
-
-fn read_repo_file(relative: &str) -> std::io::Result<String> {
-    fs::read_to_string(
-        Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../..")
-            .join(relative),
-    )
 }
 
 #[test]
