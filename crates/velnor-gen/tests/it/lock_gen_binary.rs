@@ -95,6 +95,23 @@ fn the_archive_digest_is_not_the_digest_of_the_binary() -> TestResult {
 }
 
 #[test]
+fn a_replaced_binary_is_reinstalled_once_the_release_verifies() -> TestResult {
+    let error = check_lock_entries(
+        lock()?.as_bytes(),
+        Some(release_files()),
+        running(GEN_ARCHIVE_X64),
+    )
+    .err()
+    .ok_or("accepted the archive digest as the binary's")?;
+    assert_eq!(
+        error.remedy(),
+        Some(&Remedy::Reinstall(VERSION.to_owned())),
+        "{error}"
+    );
+    Ok(())
+}
+
+#[test]
 fn a_tampered_binary_digest_is_refused_online_and_named() -> TestResult {
     let tampered = lock()?.replacen(GEN_BINARY_X64, &"0".repeat(64), 1);
     let error = verify_release(

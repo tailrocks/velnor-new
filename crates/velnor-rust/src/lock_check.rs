@@ -51,15 +51,22 @@ pub fn check_lock_entries(
     release: Option<ReleaseFiles>,
     running: RunningGenerator<'_>,
 ) -> Result<(), LockError> {
-    if let Some(files) = release {
-        verify_release(
-            bytes,
-            &files.sums,
-            &files.commit,
-            files.binary_sums.as_deref(),
-        )?;
-    }
-    check_generator_entry(bytes, running)
+    let Some(files) = release else {
+        return check_generator_entry(bytes, running);
+    };
+    verify_release(
+        bytes,
+        &files.sums,
+        &files.commit,
+        files.binary_sums.as_deref(),
+    )?;
+    check_generator_entry(bytes, running).map_err(|error| {
+        if error.remedy() == Some(&Remedy::VerifyRelease) {
+            error.with_remedy(Remedy::Reinstall(running.version.to_owned()))
+        } else {
+            error
+        }
+    })
 }
 
 /// The version of the lock's helper release.
