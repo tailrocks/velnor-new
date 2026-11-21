@@ -29,10 +29,6 @@ impl Scratch {
     }
 }
 
-/// Declares mbx for the scratch tree the way a real project does: the checkout's own `rust` and
-/// `mr-boxington` tool entries in a `mise.toml`. The scratch tree sits outside the checkout, so
-/// without this mise's cargo wrapper finds no config that names mbx and runs plain cargo (a
-/// developer's global mise config hides that locally; a CI runner has none).
 fn declare_mbx(root: &Path) -> TestResult {
     let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mise.toml");
     let repo: toml::Table = fs::read_to_string(repo)?.parse()?;
@@ -52,7 +48,6 @@ fn declare_mbx(root: &Path) -> TestResult {
     Ok(())
 }
 
-/// `MISE_TRUSTED_CONFIG_PATHS` with the scratch tree added, so mise reads its `mise.toml`.
 fn trusted_with(root: &Path) -> std::ffi::OsString {
     let mut paths: Vec<PathBuf> = std::env::var_os("MISE_TRUSTED_CONFIG_PATHS")
         .map_or_default(|value| std::env::split_paths(&value).collect());
