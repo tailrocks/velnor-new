@@ -12,9 +12,9 @@
   tests), `tool_catalog_resolve::rust_mirror::tests`,
   `tool_catalog_resolve::rust_source::tests`.
 - Deviations: none
-- Follow-up: Rust 1.100 (about 2026-11-12) brings Cargo's new build-dir
-  layout, which lets MBX collect unused units one at a time and seed new
-  worktrees from existing ones; bump the catalog when it ships.
+- Follow-up: none for the pin. Rust 1.100.0 brings Cargo's new build-dir
+  layout, which MBX could use to collect unused units one at a time and seed
+  new worktrees from existing ones; that use is not implemented yet.
 
 ## 1. `mise.toml` and `rust-toolchain.toml` (owner standard layout)
 
@@ -27,7 +27,7 @@ newest stable version of each tool when applying it.
 min_version = "2026.10.17"
 
 [tools]
-rust = { version = "1.99.1", profile = "minimal", components = ["clippy", "rustfmt"], targets = ["aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"], mr_boxington = true }
+rust = { version = "1.100.0", profile = "minimal", components = ["clippy", "rustfmt"], targets = ["aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"], mr_boxington = true }
 mr-boxington = "1.26.0"
 hk = "2.8.0"
 cargo-binstall = "1.26.0"
@@ -47,7 +47,7 @@ edited alone):
 
 ```toml
 [toolchain]
-channel = "1.99.1"
+channel = "1.100.0"
 profile = "minimal"
 components = ["clippy", "rustfmt"]
 targets = ["aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"]

@@ -31,8 +31,7 @@ fn restored_runs(text: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> 
     for job in jobs.keys() {
         for step in jobs
             .at(&[job, "steps"])
-            .map(Node::items)
-            .unwrap_or_default()
+            .map_or_default(Node::items)
         {
             if let Some(run) = step.get("run").and_then(|run| run.text())
                 && run.contains(RESTORED)
