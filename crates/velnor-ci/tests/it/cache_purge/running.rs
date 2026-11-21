@@ -77,6 +77,14 @@ fn disabled_workflows_let_the_purge_proceed() {
 }
 
 #[test]
+fn a_dry_run_with_enabled_workflows_still_reports_the_entries() {
+    let api = Api::with_workflows(mixed(), &["active"]);
+    let report = purge_private(&api, &repo(), false);
+    assert!(report.is_ok(), "{report:?}");
+    assert!(api.deleted.borrow().is_empty());
+}
+
+#[test]
 fn a_deleted_workflow_does_not_block_the_purge() {
     let api = Api::with_workflows(mixed(), &["deleted", "disabled_fork", "disabled_manually"]);
     let report = purge_private(&api, &repo(), true);

@@ -98,3 +98,17 @@ fn a_grouped_root_check_runs_before_its_own_tests_not_a_sibling_roots() -> TestR
     assert!(next.contains("tools/b/Cargo.toml"), "{id}: {next}");
     Ok(())
 }
+
+#[test]
+fn a_mixed_split_group_with_tests_everywhere_keeps_the_check_out_of_the_lint_job() -> TestResult {
+    let config = "shape = 'lint-test'\n[[workspace_groups]]\nname = 'tools'\nroots = ['tools/a', 'tools/b']\n[[check_configurations]]\nroot = 'tools/a'\n";
+    let view = view_with(
+        &["Cargo.toml", "tools/a/Cargo.toml", "tools/b/Cargo.toml"],
+        config,
+        NEXT,
+    )?;
+    let steps = found(&document(&workflow(&view)?)?["jobs"]);
+    assert_eq!(steps.len(), 1, "{steps:?}");
+    assert!(!steps[0].0.contains("lint"), "{steps:?}");
+    Ok(())
+}
