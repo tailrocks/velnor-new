@@ -155,6 +155,24 @@ esac
 exec "$REAL_MV" "$@"
 """
 
+# Every command the install script could use to look at the store entry. Each one is replaced by a shim
+# that records its arguments when one of them names the watched path, then runs the real command.
+WATCHED_TOOLS = (
+    "cat", "head", "tail", "dd", "cp", "od", "xxd", "hexdump", "sha256sum", "shasum", "tar", "gzip", "zcat",
+    "wc", "awk", "sed", "grep", "base64", "strings", "openssl", "find", "mv", "rm",
+)
+# Commands that may name the store entry without reading its bytes.
+NON_READING_TOOLS = ("find", "mv", "rm")
+
+
+def watch_shim(name, real):
+    return f"""#!/bin/sh
+for arg; do
+  case "$arg" in *"$STUB_WATCHED"*) printf '%s %s\\n' "{name}" "$*" >> "$STUB_READ_LOG" ;; esac
+done
+exec "{real}" "$@"
+"""
+
 
 def archive_bytes(members=None):
     members = [("velnor-ci", PAYLOAD, 0o755)] if members is None else members
@@ -676,6 +694,35 @@ class SetupVelnorInstallTests(unittest.TestCase):
         requested = [int(count) for count in read_log.read_text().split()] if read_log.exists() else []
         self.assertEqual(requested, [], f"head was asked for {sum(requested)} bytes of an oversized store entry")
 
+    def test_an_oversized_store_entry_is_not_read_by_any_command(self):
+        cached = self.cached_archive()
+        cached.parent.mkdir(parents=True)
+        cached.write_bytes(self.archive)
+        with cached.open("r+b") as handle:
+            handle.truncate(268435457)
+        read_log = self.root / "store-entry-calls.log"
+        for name in WATCHED_TOOLS:
+            real = shutil.which(name)
+            if real is None:
+                continue
+            stub = self.stub_bin / name
+            stub.write_text(watch_shim(name, real))
+            stub.chmod(0o755)
+        result = self.install(
+            sha256(self.archive),
+            extra_env={
+                "STUB_MISSING": "tools-v0.1.79 rust-ci-v0.1.79",
+                "STUB_WATCHED": str(cached),
+                "STUB_READ_LOG": str(read_log),
+            },
+        )
+        self.assertEqual(result.returncode, 1, result.output)
+        self.assertFalse(cached.exists(), "an oversized store entry survived the job")
+        calls = read_log.read_text().splitlines() if read_log.exists() else []
+        self.assertTrue(calls, "the eviction did not name the store entry at all, so the check saw nothing")
+        reads = [call for call in calls if call.split()[0] not in NON_READING_TOOLS]
+        self.assertEqual(reads, [], "a command read the bytes of an oversized store entry")
+
     def test_a_verified_copy_published_during_an_eviction_is_kept_for_the_next_job(self):
         cached = self.cached_archive()
         cached.parent.mkdir(parents=True)
@@ -711,6 +758,19 @@ class SetupVelnorInstallTests(unittest.TestCase):
         self.assertFalse(
             cached.exists() or cached.is_symlink(),
             "a directory at the store entry path survived a job that could not download",
+        )
+
+    def test_a_dangling_symlink_at_the_store_entry_path_is_removed_when_the_download_fails(self):
+        cached = self.cached_archive()
+        cached.parent.mkdir(parents=True)
+        cached.symlink_to(self.root / "no-such-target")
+        result = self.install(
+            sha256(self.archive), extra_env={"STUB_MISSING": "tools-v0.1.79 rust-ci-v0.1.79"}
+        )
+        self.assertEqual(result.returncode, 1, result.output)
+        self.assertFalse(
+            cached.exists() or cached.is_symlink(),
+            "a dangling symlink at the store entry path survived a job that could not download",
         )
 
     def test_a_mismatched_store_entry_is_evicted_even_when_no_new_file_can_be_created_for_it(self):
