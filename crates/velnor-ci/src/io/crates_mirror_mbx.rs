@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::ffi::OsString;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 use crate::error::CiError;
 
@@ -64,36 +64,120 @@ fn declared_for_project(args: &[OsString]) -> bool {
     let Ok(workspace) = workspace() else {
         return true;
     };
-    let Some(directory) = project_directory(&work, args) else {
+    let Some(directories) = project_directories(&work, args) else {
         return true;
     };
-    let directory = std::fs::canonicalize(&directory).unwrap_or(directory);
-    scope(&directory, workspace.as_deref())
-        .into_iter()
-        .any(crate::mbx_declared::declared_or_unreadable_in)
+    directories.into_iter().any(|directory| {
+        let directory = match std::fs::canonicalize(&directory) {
+            Ok(resolved) => resolved,
+            Err(_)
+                if directory
+                    .components()
+                    .any(|part| part == Component::ParentDir) =>
+            {
+                return true;
+            }
+            Err(_) => directory,
+        };
+        scope(&directory, workspace.as_deref())
+            .into_iter()
+            .any(crate::mbx_declared::declared_or_unreadable_in)
+    })
 }
 
-fn project_directory(work: &Path, args: &[OsString]) -> Option<PathBuf> {
-    let args = super::crates_mirror_alias::expand(work, args, MANIFEST_COMMANDS)?;
+fn project_directories(work: &Path, args: &[OsString]) -> Option<Vec<PathBuf>> {
+    let base = directory_flag(work, args)?;
+    let args = super::crates_mirror_alias::expand(&base, args)?;
     let command = subcommand(&args).map(|(_, command)| command);
+    if let Some(target) = command.filter(|command| direct_target(command)) {
+        let script = base.join(target);
+        let script = std::fs::canonicalize(&script).unwrap_or(script);
+        let mut directories = vec![
+            script
+                .parent()
+                .map_or_else(|| base.clone(), Path::to_path_buf),
+        ];
+        if may_be_external_subcommand(&args) {
+            directories.push(manifest_directory(&base, &args, false));
+        }
+        return Some(directories);
+    }
     if command == Some("install")
         && let Some(path) = option_value(&args, "--path", false)
     {
-        return Some(work.join(path));
+        return Some(vec![base.join(path)]);
     }
     let shorthand = command.is_some_and(|command| MANIFEST_COMMANDS.contains(&command));
-    Some(
-        option_value(&args, "--manifest-path", shorthand)
-            .and_then(|manifest| work.join(manifest).parent().map(Path::to_path_buf))
-            .unwrap_or_else(|| work.to_path_buf()),
-    )
+    Some(vec![manifest_directory(&base, &args, shorthand)])
+}
+
+fn manifest_directory(base: &Path, args: &[OsString], shorthand: bool) -> PathBuf {
+    option_value(args, "--manifest-path", shorthand)
+        .and_then(|manifest| base.join(manifest).parent().map(Path::to_path_buf))
+        .unwrap_or_else(|| base.to_path_buf())
+}
+
+fn may_be_external_subcommand(args: &[OsString]) -> bool {
+    !script_enabled(args)
+}
+
+fn script_enabled(args: &[OsString]) -> bool {
+    let end = subcommand(args).map_or(args.len(), |(index, _)| index);
+    let mut args = args[..end].iter();
+    while let Some(arg) = args.next() {
+        let Some((flag, attached)) = arg.to_str().and_then(value_flag) else {
+            continue;
+        };
+        let attached = attached.strip_prefix('=').unwrap_or(attached);
+        if flag == 'Z'
+            && (attached == "script"
+                || (attached.is_empty() && args.next().is_some_and(|word| word == "script")))
+        {
+            return true;
+        }
+    }
+    false
+}
+
+fn directory_flag(work: &Path, args: &[OsString]) -> Option<PathBuf> {
+    let mut base = work.to_path_buf();
+    let mut seen = args.iter();
+    while let Some(arg) = seen.next() {
+        let text = arg.to_str()?;
+        if let Some((flag, attached)) = value_flag(text) {
+            let value = if attached.is_empty() {
+                seen.next().cloned()
+            } else {
+                Some(OsString::from(
+                    attached.strip_prefix('=').unwrap_or(attached),
+                ))
+            };
+            if let Some(directory) = value.filter(|_| flag == 'C') {
+                base = base.join(directory);
+            }
+        } else if matches!(text, "--config" | "--color") {
+            seen.next();
+        } else if !text.starts_with(['-', '+']) {
+            break;
+        }
+    }
+    Some(std::fs::canonicalize(&base).unwrap_or(base))
+}
+
+pub(super) fn direct_target(command: &str) -> bool {
+    let path = Path::new(command);
+    path.components().count() > 1 || path.extension().is_some_and(|extension| extension == "rs")
 }
 
 pub(super) fn subcommand(args: &[OsString]) -> Option<(usize, &str)> {
-    let mut seen = args.iter().enumerate().take_while(|(_, arg)| *arg != "--");
+    let mut seen = args.iter().enumerate();
     while let Some((index, arg)) = seen.next() {
         let arg = arg.to_str()?;
-        if matches!(arg, "-C" | "-Z" | "--config" | "--color") {
+        if let Some((_, attached)) = value_flag(arg) {
+            if attached.is_empty() {
+                seen.next();
+            }
+        } else if matches!(arg, "--config" | "--color") {
             seen.next();
         } else if !arg.starts_with(['-', '+']) {
             return Some((index, arg));
@@ -102,10 +186,30 @@ pub(super) fn subcommand(args: &[OsString]) -> Option<(usize, &str)> {
     None
 }
 
+fn value_flag(arg: &str) -> Option<(char, &str)> {
+    short_value(arg, &['C', 'Z'])
+}
+
+fn short_value<'a>(arg: &'a str, takes_value: &[char]) -> Option<(char, &'a str)> {
+    if arg.starts_with("--") {
+        return None;
+    }
+    let flags = arg.strip_prefix('-')?;
+    flags
+        .char_indices()
+        .find(|(_, flag)| takes_value.contains(flag))
+        .map(|(index, flag)| (flag, &flags[index + flag.len_utf8()..]))
+}
+
 pub(super) fn option_value(args: &[OsString], long: &str, shorthand: bool) -> Option<OsString> {
-    let mut args = args.iter().take_while(|arg| *arg != "--");
+    let split = subcommand(args).map_or(args.len(), |(index, _)| index);
+    let mut args = args
+        .iter()
+        .enumerate()
+        .take_while(|(index, arg)| *index < split || *arg != "--")
+        .map(|(_, arg)| arg);
     while let Some(arg) = args.next() {
-        if arg == long || (shorthand && arg == "-m") {
+        if arg == long {
             return args.next().cloned();
         }
         let Some(arg) = arg.to_str() else {
@@ -117,11 +221,11 @@ pub(super) fn option_value(args: &[OsString], long: &str, shorthand: bool) -> Op
         {
             return Some(value.into());
         }
-        if shorthand
-            && !arg.starts_with("--")
-            && let Some(value) = arg.strip_prefix("-m")
-        {
-            return Some(value.strip_prefix('=').unwrap_or(value).into());
+        if shorthand && let Some(('m', attached)) = short_value(arg, &['C', 'Z', 'm']) {
+            if attached.is_empty() {
+                return args.next().cloned();
+            }
+            return Some(attached.strip_prefix('=').unwrap_or(attached).into());
         }
     }
     None

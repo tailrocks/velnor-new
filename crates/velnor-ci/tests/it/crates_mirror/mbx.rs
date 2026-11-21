@@ -12,8 +12,10 @@ use crate::io::Repo;
 use super::fixture::{TestResult, setup, setup_command};
 
 mod alias;
+mod parsing;
 mod scope;
 mod state;
+mod target;
 
 pub(super) const REGISTRY: &str = "sparse+https://mirror.example/index/";
 pub(super) static MBX_DECLARED: LazyLock<String> = LazyLock::new(|| {
