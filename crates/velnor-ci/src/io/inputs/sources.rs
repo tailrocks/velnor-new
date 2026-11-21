@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeSet;
 use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
@@ -10,6 +11,7 @@ use super::git;
 use crate::error::CiError;
 use crate::inputs::{Tracked, TrackedFile, is_representable, parse_ls_files, with_worktree_blobs};
 use crate::scope::Scope;
+use velnor_model::RepoPath;
 
 pub(in crate::io) struct TrackedPaths {
     pub top: PathBuf,
@@ -42,6 +44,24 @@ pub(in crate::io) fn tracked_paths(root: &Path) -> Result<TrackedPaths, CiError>
         }
     }
     Ok(TrackedPaths { top, paths })
+}
+
+pub(in crate::io) fn gitlinks(root: &Path) -> Result<BTreeSet<RepoPath>, CiError> {
+    let listed = git(root, &["ls-files", "-s", "-z"], None)?;
+    listed
+        .split(|byte| *byte == 0)
+        .filter(|entry| entry.starts_with(b"160000 "))
+        .map(|entry| {
+            let name = entry
+                .iter()
+                .position(|byte| *byte == b'\t')
+                .and_then(|tab| entry.get(tab + 1..))
+                .ok_or_else(|| CiError::new("git ls-files printed an unreadable entry"))?;
+            let text = std::str::from_utf8(name)
+                .map_err(|e| CiError::new(format!("git ls-files printed non-UTF-8: {e}")))?;
+            RepoPath::new(text).map_err(|e| CiError::new(e.to_string()))
+        })
+        .collect()
 }
 
 pub(in crate::io) struct CapturedInputs {
