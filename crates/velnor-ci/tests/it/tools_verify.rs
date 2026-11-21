@@ -69,7 +69,7 @@ pub(crate) fn recorded(job: &Job) -> String {
 }
 
 pub(crate) fn checked(job: &Job, anchor: &str) -> Verdict {
-    check(&job.home, &Anchor(anchor)).unwrap_or_else(|e| unreachable!("{e}"))
+    check(&job.home, &Anchor(anchor), &job.anchor).unwrap_or_else(|e| unreachable!("{e}"))
 }
 
 pub(crate) fn discarded(job: &Job) -> bool {
@@ -219,7 +219,7 @@ fn a_discard_that_cannot_delete_fails_the_step() {
     let share = job.home.join(".local/share");
     fs::set_permissions(&share, fs::Permissions::from_mode(0o555))
         .unwrap_or_else(|e| unreachable!("{e}"));
-    let result = check(&job.home, &Anchor(&anchor));
+    let result = check(&job.home, &Anchor(&anchor), &job.anchor);
     fs::set_permissions(&share, fs::Permissions::from_mode(0o755))
         .unwrap_or_else(|e| unreachable!("{e}"));
     assert!(result.is_err());

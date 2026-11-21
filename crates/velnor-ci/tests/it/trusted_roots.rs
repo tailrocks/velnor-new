@@ -28,8 +28,7 @@ fn a_bundle_without_a_certificate_is_refused() {
 ",
     )
     .err()
-    .map(|e| e.to_string())
-    .unwrap_or_default();
+    .map_or_default(|e| e.to_string());
     assert!(message.contains("no certificate"), "{message}");
 }
 

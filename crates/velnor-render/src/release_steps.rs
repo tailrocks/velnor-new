@@ -51,6 +51,7 @@ pub(crate) fn install_tool(tool: &str) -> RenderedStep {
         uses: Some(MISE.to_owned()),
         with: vec![
             ("version".to_owned(), Value::Text(MISE_VERSION.to_owned())),
+            ("sha256".to_owned(), crate::mise_digest::pinned_sha256()),
             ("install_args".to_owned(), Value::Text(tool.to_owned())),
             ("cache".to_owned(), Value::Bool(false)),
         ],

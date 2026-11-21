@@ -40,7 +40,6 @@ pub struct KeyGate {
     pub key: &'static str,
     pub value: Option<&'static str>,
     pub first: (u64, u64, u64),
-    pub tagged: bool,
 }
 
 const fn gate(file: ConfigFile, key: &'static str, first: (u64, u64, u64)) -> KeyGate {
@@ -49,18 +48,11 @@ const fn gate(file: ConfigFile, key: &'static str, first: (u64, u64, u64)) -> Ke
         key,
         value: None,
         first,
-        tagged: true,
     }
 }
 
 const fn gate_untagged(file: ConfigFile, key: &'static str, first: (u64, u64, u64)) -> KeyGate {
-    KeyGate {
-        file,
-        key,
-        value: None,
-        first,
-        tagged: false,
-    }
+    gate(file, key, first)
 }
 
 const fn gate_value(
@@ -74,7 +66,6 @@ const fn gate_value(
         key,
         value: Some(value),
         first,
-        tagged: true,
     }
 }
 

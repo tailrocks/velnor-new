@@ -19,9 +19,11 @@ fn helper(repo: &Repo, args: &[&str]) -> Output {
         .env("CARGO_HOME", repo.root().join("cargo-home"))
         .env_remove("CARGO_TARGET_DIR")
         .env_remove("RUSTC_WRAPPER")
-        .current_dir(repo.root())
-        .output()
-        .unwrap_or_else(|e| unreachable!("{e}"))
+        .current_dir(repo.root());
+    if args.contains(&"decide") {
+        command.env("HOME", repo.root());
+    }
+    command.output().unwrap_or_else(|e| unreachable!("{e}"))
 }
 
 fn success(output: &Output) {

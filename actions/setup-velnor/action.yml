@@ -55,20 +55,30 @@ runs:
           if kill -0 "$reader" 2> /dev/null; then
             kill "$reader" 2> /dev/null || true
             wait "$reader" 2> /dev/null || true
-            return 1
+            return 2
           fi
           wait "$reader" || return 1
           [ "$(wc -c < "$2")" -le "$MAX_BYTES" ]
+        }
+        clear_entry() {
+          if [ -d "$1" ] || [ -L "$1" ]; then rm -rf -- "$1"; fi
         }
         copy_extracted() {
           head -c "$((MAX_BYTES + 1))" "$1" > "$2" 2> /dev/null || return 1
           [ "$(wc -c < "$2")" -le "$MAX_BYTES" ]
         }
+        case "$(uname -s)" in
+          Darwin | *BSD) no_follow=-h ;;
+          *) no_follow=-T ;;
+        esac
+        publish_entry() {
+          mv -f "$no_follow" "$1" "$2" 2> /dev/null && [ -f "$2" ] && [ ! -L "$2" ] && [ "$(digest "$2")" = "$expected" ]
+        }
         evict_store_entry() {
           quarantine=
           if quarantine="$(mktemp "$dir/.velnor-ci.evict.XXXXXX" 2> /dev/null)" && mv -f "$dir/$archive" "$quarantine" 2> /dev/null; then
-            if [ "${1:-}" = unreadable ]; then
-              echo "::warning title=setup-velnor::removed the tool-cache copy of $archive for velnor-ci $VERSION without reading it, because it is larger than $MAX_BYTES bytes or could not be read in time"
+            if [ -n "${1:-}" ]; then
+              echo "::warning title=setup-velnor::removed the tool-cache copy of $archive for velnor-ci $VERSION $1"
             elif [ "$(digest "$quarantine")" = "$expected" ]; then
               mv -n "$quarantine" "$dir/$archive" 2> /dev/null || true
             else
@@ -98,9 +108,20 @@ runs:
           if [ "$source" = cache ]; then
             n=1
             if [ -n "$dir" ] && [ -f "$dir/$archive" ] && [ ! -L "$dir/$archive" ]; then
-              if ! bounded_copy "$dir/$archive" "$file"; then
+              if [ -n "$(find "$dir/$archive" -size +"${MAX_BYTES}c" 2> /dev/null)" ]; then
                 rm -f "$file"
-                evict_store_entry unreadable
+                evict_store_entry "without reading it, because it is larger than $MAX_BYTES bytes"
+                continue
+              fi
+              rc=0
+              bounded_copy "$dir/$archive" "$file" || rc=$?
+              if [ "$rc" -ne 0 ]; then
+                rm -f "$file"
+                if [ "$rc" -eq 2 ]; then
+                  echo "::warning title=setup-velnor::the tool-cache copy of $archive for velnor-ci $VERSION could not be read in time, so it is not used and is kept"
+                else
+                  evict_store_entry "because it could not be read"
+                fi
                 continue
               fi
             else
@@ -159,7 +180,7 @@ runs:
           echo "$archive for velnor-ci $VERSION is in the tool cache at $dir, so the download is skipped"
         else
           entry=
-          if [ -n "$dir" ] && entry="$(mktemp "$dir/.velnor-ci.XXXXXX" 2> /dev/null)" && cp "$archive_file" "$entry" 2> /dev/null && flush "$entry" && mv -f "$entry" "$dir/$archive" 2> /dev/null; then
+          if [ -n "$dir" ] && entry="$(mktemp "$dir/.velnor-ci.XXXXXX" 2> /dev/null)" && cp "$archive_file" "$entry" 2> /dev/null && flush "$entry" && clear_entry "$dir/$archive" 2> /dev/null && publish_entry "$entry" "$dir/$archive"; then
             echo "Verified SHA-256 $expected and installed velnor-ci $VERSION in $dir"
           else
             [ -z "$entry" ] || rm -f "$entry"

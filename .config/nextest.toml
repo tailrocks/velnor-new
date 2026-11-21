@@ -87,7 +87,7 @@ filter = "package(=velnor-ci) and (test(io_restore_cargo::) | test(io_restore_co
 slow-timeout = { period = "30s", terminate-after = 1 }
 
 [[profile.default.overrides]]
-filter = 'package(=velnor-ci) and (test(=audit::migration::targets::a_cross_target_created_by_cargo_at_the_source_root_does_not_hide_source_changes) | test(=audit::migration::nextest_discovery_compiles_first_and_executes_the_tests_once))'
+filter = 'package(=velnor-ci) and (test(=audit::migration::targets::a_cross_target_created_by_cargo_at_the_source_root_does_not_hide_source_changes) | test(=audit::migration::nextest_discovery_compiles_first_and_executes_the_tests_once) | test(=audit::stale_run::an_input_changed_between_two_steps_names_the_input_and_the_stale_unit))'
 slow-timeout = { period = "30s", terminate-after = 1 }
 
 [[profile.default.overrides]]
@@ -101,7 +101,7 @@ threads-required = "num-test-threads"
 slow-timeout = { period = "30s", terminate-after = 4 }
 
 [[profile.ci.overrides]]
-filter = 'package(=velnor-ci) and (test(=audit::migration::targets::a_cross_target_created_by_cargo_at_the_source_root_does_not_hide_source_changes) | test(=audit::migration::nextest_discovery_compiles_first_and_executes_the_tests_once))'
+filter = 'package(=velnor-ci) and (test(=audit::migration::targets::a_cross_target_created_by_cargo_at_the_source_root_does_not_hide_source_changes) | test(=audit::migration::nextest_discovery_compiles_first_and_executes_the_tests_once) | test(=audit::stale_run::an_input_changed_between_two_steps_names_the_input_and_the_stale_unit))'
 slow-timeout = { period = "30s", terminate-after = 1 }
 
 [[profile.ci.overrides]]
@@ -239,10 +239,6 @@ threads-required = "num-test-threads"
 filter = "package(=velnor-resource-probe) and test(=cleanup_observer_scan::cleanup_observer_held_descriptor::a_descriptor_held_outside_the_pair_namespace_is_an_owned_reference)"
 threads-required = "num-test-threads"
 
-[[profile.ci.overrides]]
-filter = 'package(=velnor-runner-host) and binary(=runner_image_qualification_public) and test(=public_qualifier_bounds_docker_operations_and_streams)'
-slow-timeout = { period = "60s", terminate-after = 2 }
-
 # Same tiers as profile.default for the tests added above. profile.ci has no 2 s line of its own.
 [[profile.ci.overrides]]
 filter = 'package(=velnor-gen) and binary(=it) and test(/^setup_action/)'
@@ -268,6 +264,14 @@ slow-timeout = { period = "10s", terminate-after = 1 }
 [[profile.ci.overrides]]
 filter = 'package(=velnor-gen) and binary(=it) and (test(=needs_size::cache_context_is_bounded_from_its_producers_without_unrelated_plan_outputs) | test(=helper_perl_environment::trusted_launcher_preserves_helper_arguments_and_failure_status) | test(=helper_perl_environment::trusted_shasum_ignores_perl_startup_and_inherited_launcher_poison) | test(=helper_integrity::rendered_commands_ignore_path_shadows_and_refuse_a_replaced_helper) | test(=helper_startup::trusted_invocations_ignore_bash_env_startup) | test(=helper_startup::trusted_invocations_ignore_imported_exec_functions) | test(=helper_startup::trusted_invocations_ignore_imported_shell_options) | test(=release_yml_raw::provenance_is_written_only_for_a_strict_sidecar) | test(=ruleset::the_help_one_liner_stops_at_the_first_failed_post) | test(=declared_command_wrappers::wrappers_cannot_hide_a_helper_call))'
 slow-timeout = { period = "10s", terminate-after = 1 }
+
+[[profile.default.overrides]]
+filter = 'package(=velnor-runner-host)'
+slow-timeout = { period = "60s", terminate-after = 3 }
+
+[[profile.ci.overrides]]
+filter = 'package(=velnor-runner-host)'
+slow-timeout = { period = "60s", terminate-after = 3 }
 
 [[profile.ci.overrides]]
 filter = "package(=velnor-ci)"

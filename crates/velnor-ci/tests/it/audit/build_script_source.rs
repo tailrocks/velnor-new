@@ -28,7 +28,7 @@ fn workspace(script: &str) -> Repo {
         format!("build = \"{script}\"\n")
     };
     repo.write_all(&[
-        ("mise.toml", "[tools]\nrust = \"1.99.1\"\n"),
+        ("mise.toml", "[tools]\nrust = \"1.100.0\"\n"),
         (
             "Cargo.toml",
             "[workspace]\nmembers = [\"member\"]\nresolver = \"3\"\n",
