@@ -372,7 +372,7 @@ pub(crate) fn fixture(name: &str) -> Result<Repo, Box<dyn std::error::Error>> {
 #[test]
 fn report_says_why_a_refused_base_cache_was_not_generated() -> ResultTest {
     let repo = Repo::new("report-not-generated");
-    let reason = "private dependencies; declare [private_sources]";
+    let reason = "private dependencies";
     let metrics = report(
         &repo,
         &json!([{"family":"sources","root":null,"restore_step":"restore","save_step":"save","not_generated":reason}]),
@@ -386,7 +386,7 @@ fn report_says_why_a_refused_base_cache_was_not_generated() -> ResultTest {
     assert!(
         metrics
             .summary()
-            .contains("| not generated (private dependencies; declare [private_sources]) |"),
+            .contains("| not generated (private dependencies) |"),
         "{}",
         metrics.summary()
     );

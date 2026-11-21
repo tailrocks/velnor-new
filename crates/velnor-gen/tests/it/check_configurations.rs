@@ -49,8 +49,7 @@ fn found(jobs: &serde_json::Value) -> Vec<(String, usize, Option<usize>, serde_j
     for (id, job) in jobs.as_object().into_iter().flatten() {
         let steps = job["steps"]
             .as_array()
-            .map(Vec::as_slice)
-            .unwrap_or_default();
+            .map_or_else(Default::default, Vec::as_slice);
         let tests = steps.iter().position(|step| step["id"] == "test");
         for (index, step) in steps.iter().enumerate() {
             if step["name"] == STEP {

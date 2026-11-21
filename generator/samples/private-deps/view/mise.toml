@@ -17,7 +17,7 @@ rust = { version = "1.99.1", profile = "minimal", components = [
   "aarch64-unknown-linux-gnu",
   "x86_64-unknown-linux-gnu",
 ], mr_boxington = true }
-mr-boxington = { version = "1.29.2", workflow = "release.yml@refs/heads/main" }
+mr-boxington = { version = "1.30.0", workflow = "release.yml@refs/heads/main" }
 bun = "1.4.4"
 hk = "2.8.0"
 cargo-binstall = "1.26.0"
