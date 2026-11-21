@@ -31,6 +31,7 @@ pub const HELPER_COMMANDS: &[&str] = &[
     "check-configurations",
     "lane-guard",
     "test-groups",
+    "artifacts",
     "restored",
     "delta",
     "image",

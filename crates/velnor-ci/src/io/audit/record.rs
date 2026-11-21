@@ -11,7 +11,8 @@ use velnor_rust::{Located, Owner, add_reads, locate, rerun_if_changed};
 
 use super::super::units::{UnitFile, profile};
 use super::Audit;
-use crate::coverage::{Fingerprint, Unit, UnitKind};
+use super::freshness::Cause;
+use crate::coverage::{Fingerprint, RunGap, Unit, UnitKind};
 use crate::error::CiError;
 
 impl Audit<'_> {
@@ -158,14 +159,19 @@ impl Audit<'_> {
         let paths = rerun_if_changed(&text);
         let mut seen = BTreeSet::new();
         for &index in indices {
-            let scripts: Vec<RepoPath> = self
+            let known: Vec<(RepoPath, SystemTime)> = self
                 .scripts
                 .get(&(index, profile(configuration).to_owned(), package.to_owned()))
                 .into_iter()
                 .flatten()
-                .filter(|(_, compiled)| **compiled <= built)
+                .map(|(source, compiled)| (source.clone(), *compiled))
+                .collect();
+            let scripts: Vec<RepoPath> = known
+                .iter()
+                .filter(|(_, compiled)| *compiled <= built)
                 .map(|(source, _)| source.clone())
                 .collect();
+            let mut gap = (!known.is_empty() && scripts.is_empty()).then_some(RunGap::Older);
             let mut current = false;
             for source in scripts {
                 let mut ran = false;
@@ -174,7 +180,14 @@ impl Audit<'_> {
                         || self.repository.to_path_buf(),
                         |d| self.repository.join(d.as_str()),
                     );
-                    if self.changed_since(&base, &paths, built, file, true)? {
+                    if let Some((first, cause)) = self
+                        .changed_inputs(&base, &paths, built, file, true, 1)?
+                        .into_iter()
+                        .next()
+                    {
+                        if gap.is_none() {
+                            gap = Some(self.stale_gap(&base, &paths, built, file, first, cause));
+                        }
                         continue;
                     }
                     ran = true;
@@ -197,9 +210,37 @@ impl Audit<'_> {
             if current {
                 self.present
                     .insert((index, configuration.to_owned(), hash.to_owned()));
+            } else if let Some(gap) = gap {
+                self.built[index].run_gaps.insert(
+                    (
+                        configuration.to_owned(),
+                        package.to_owned(),
+                        hash.to_owned(),
+                    ),
+                    gap,
+                );
             }
         }
         Ok(())
+    }
+
+    fn stale_gap(
+        &mut self,
+        base: &Path,
+        paths: &[String],
+        built: SystemTime,
+        output: &Path,
+        first: String,
+        cause: Cause,
+    ) -> RunGap {
+        std::mem::swap(&mut self.freshness, &mut self.diagnostic);
+        let all = self.changed_inputs(base, paths, built, output, true, usize::MAX);
+        std::mem::swap(&mut self.freshness, &mut self.diagnostic);
+        let more = all.map_or(0, |all| all.len().saturating_sub(1));
+        match cause {
+            Cause::Changed => RunGap::Stale { input: first, more },
+            Cause::Unproven => RunGap::Unproven { input: first, more },
+        }
     }
 
     pub(super) fn credit(

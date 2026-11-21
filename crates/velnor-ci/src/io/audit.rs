@@ -13,6 +13,7 @@ mod timing;
 
 pub(crate) use build::build;
 pub use options::AuditOptions;
+pub(crate) use options::max_entries_from_env;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -42,6 +43,7 @@ pub(super) struct Audit<'a> {
     owners: Owners<'a>,
     tracked: &'a BTreeSet<RepoPath>,
     freshness: freshness::Freshness,
+    diagnostic: freshness::Freshness,
     pub(super) fingerprints: BTreeMap<(usize, String, String), (String, Fingerprint)>,
     pub(super) names: BTreeMap<(usize, String, String), (String, Fingerprint)>,
     pub(super) runs: BTreeMap<(usize, String, String), String>,
@@ -95,7 +97,7 @@ pub fn audit_inputs(directory: &Path, options: &AuditOptions) -> Result<String, 
         .zip(&audit.built)
         .map(|(workspace, built)| {
             if gated {
-                platforms(&workspace.workspace_root, built)
+                platforms(&workspace.root, built)
             } else {
                 Ok(Platforms::default())
             }
@@ -108,8 +110,14 @@ pub fn audit_inputs(directory: &Path, options: &AuditOptions) -> Result<String, 
                 .zip(&groups)
                 .find(|(indices, _)| indices.contains(&index))
                 .map_or_else(
-                    || workspaces[index].target_directory.clone(),
-                    |(_, directory)| directory.clone(),
+                    || workspaces[index].build_directory.clone(),
+                    |(_, directory)| {
+                        if workspaces[index].build_directory == workspaces[index].target_directory {
+                            directory.clone()
+                        } else {
+                            workspaces[index].build_directory.clone()
+                        }
+                    },
                 )
         })
         .collect();

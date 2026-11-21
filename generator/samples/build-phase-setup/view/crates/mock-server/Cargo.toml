@@ -1,0 +1,18 @@
+[package]
+name = "mock-server"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+name = "mock_server"
+
+[[bin]]
+name = "mock-server"
+path = "src/main.rs"
+
+[dependencies]
+fixture-types = { path = "../fixture-types" }
+
+[lints]
+workspace = true

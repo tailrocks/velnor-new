@@ -3,11 +3,24 @@
 
 use std::collections::BTreeMap;
 
-use crate::plan::{job, step};
+use crate::audit_job::AUDIT_JOB;
+use crate::plan::{HELPER_JOB, job, step};
 use velnor_model::{
     Access, CI_RUN_LABEL, HelperVersion, Job, JobId, PermissionScope, Permissions, PrCi, PrRun,
     PushAfterMergeGroup, RepoFacts, Step, StepKind, ToolsLocalVerb, ToolsTelemetry, When,
 };
+
+const NOT_GENERATED_HELPER: (u64, u64, u64) = (0, 1, 111);
+
+fn not_generated(facts: &RepoFacts) -> Option<&'static str> {
+    let refused = facts.private_sources.is_some()
+        && facts
+            .helper
+            .as_ref()
+            .is_some_and(|helper| helper.version().at_least(NOT_GENERATED_HELPER))
+        && !crate::base_cache::writes_base(facts);
+    refused.then_some("private dependencies")
+}
 
 fn attach(facts: &RepoFacts, jobs: &mut [Job], maintenance: Option<&Job>) -> Job {
     let nextest_artifacts = crate::mise::nextest_tool(&facts.tools)
@@ -19,6 +32,7 @@ fn attach(facts: &RepoFacts, jobs: &mut [Job], maintenance: Option<&Job>) -> Job
                         .is_ok_and(|version| version.at_least((0, 9, 123)))
                 })
         });
+    let not_generated = not_generated(facts);
     let mut producers = Vec::new();
     for job in jobs {
         let saves = job
@@ -33,7 +47,8 @@ fn attach(facts: &RepoFacts, jobs: &mut [Job], maintenance: Option<&Job>) -> Job
         {
             continue;
         }
-        attach_metrics(job, nextest_artifacts);
+        let reason = not_generated.filter(|_| job.id != HELPER_JOB && job.id != AUDIT_JOB);
+        attach_metrics(job, nextest_artifacts, reason);
         producers.push(&*job);
     }
     producers.extend(maintenance);
@@ -66,7 +81,7 @@ fn attach(facts: &RepoFacts, jobs: &mut [Job], maintenance: Option<&Job>) -> Job
     cache
 }
 
-fn attach_metrics(job: &mut Job, nextest_artifacts: bool) {
+fn attach_metrics(job: &mut Job, nextest_artifacts: bool, not_generated: Option<&'static str>) {
     let caches = job
         .steps
         .iter()
@@ -75,10 +90,15 @@ fn attach_metrics(job: &mut Job, nextest_artifacts: bool) {
             _ => None,
         })
         .collect();
+    let saves_cache = job
+        .steps
+        .iter()
+        .any(|step| matches!(&step.kind, StepKind::CacheSave(key) if key.family() != "tools"));
+    let not_generated = not_generated.filter(|_| !saves_cache).map(str::to_owned);
     let has = |verb| {
         job.steps
             .iter()
-            .any(|step| step.kind == StepKind::ToolsLocal(verb))
+            .any(|step| matches!(&step.kind, StepKind::ToolsLocal(found, _) if *found == verb))
     };
     let node_tools = ToolsTelemetry {
         restore: has(ToolsLocalVerb::RecordRestore),
@@ -90,6 +110,7 @@ fn attach_metrics(job: &mut Job, nextest_artifacts: bool) {
                 caches,
                 nextest_artifacts,
                 node_tools,
+                not_generated,
             },
             StepKind::UploadMetrics,
         ]

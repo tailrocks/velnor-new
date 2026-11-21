@@ -6,20 +6,42 @@ use velnor_model::{
     StepKind, StepNeed, When,
 };
 
+pub(crate) fn runs_after_merge(facts: &RepoFacts, kind: &StepKind) -> bool {
+    match kind {
+        StepKind::Cargo(CargoCommand::Doc | CargoCommand::DocFeatures { .. }) => {
+            facts.config.docs_run == DocsRun::PostMerge
+        }
+        StepKind::Cargo(CargoCommand::CheckAlone { .. }) => {
+            facts.config.check_alone_run == DocsRun::PostMerge
+        }
+        _ => false,
+    }
+}
+
 pub(crate) fn apply(facts: &RepoFacts, jobs: &mut [Job]) {
-    let docs = facts.config.docs_run == DocsRun::PostMerge;
-    let alone = facts.config.check_alone_run == DocsRun::PostMerge;
-    for step in jobs.iter_mut().flat_map(|job| job.steps.iter_mut()) {
-        let deferred = match step.kind {
-            StepKind::Cargo(CargoCommand::Doc | CargoCommand::DocFeatures { .. }) => docs,
-            StepKind::Cargo(CargoCommand::CheckAlone { .. }) => alone,
-            _ => false,
-        };
-        if deferred {
-            step.when = When::NotCancelledPostMerge;
-            step.skip_after_merge_group = None;
+    for job in jobs.iter_mut() {
+        let after_merge = job
+            .steps
+            .iter()
+            .any(|step| runs_after_merge(facts, &step.kind));
+        let pre_merge_build = job
+            .steps
+            .iter()
+            .any(|step| !runs_after_merge(facts, &step.kind) && compiles(&step.kind));
+        let defer_inputs = after_merge && !pre_merge_build;
+        for step in &mut job.steps {
+            if runs_after_merge(facts, &step.kind) {
+                step.when = When::NotCancelledPostMerge;
+                step.skip_after_merge_group = None;
+            } else if defer_inputs && step.kind.feeds_build() {
+                step.when = When::NotCancelledPostMerge;
+            }
         }
     }
+}
+
+fn compiles(kind: &StepKind) -> bool {
+    matches!(kind, StepKind::Cargo(command) if command.builds())
 }
 
 #[must_use]

@@ -2,10 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod evidence;
+mod handle;
 mod walk;
 
 pub(super) use evidence::{Evidence, State, state};
-pub(super) use walk::{scan, unresolved_link};
+pub(super) use walk::{Budget, scan, unresolved_link};
 
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
@@ -21,7 +22,6 @@ use velnor_rust::{normalize, sha256_hex};
 use super::super::units::Workspace;
 use crate::error::CiError;
 
-pub(super) const LIMIT: usize = 100_000;
 pub(super) const STORE: &str = ".velnor-input-inventories";
 pub(super) type Entries = BTreeMap<PathBuf, BTreeMap<PathBuf, Kind>>;
 
@@ -48,10 +48,9 @@ pub(super) fn exclusions(workspaces: &[Workspace]) -> Result<BTreeSet<PathBuf>, 
     workspaces
         .iter()
         .flat_map(|workspace| {
-            [
-                workspace.workspace_root.join("target"),
-                workspace.target_directory.clone(),
-            ]
+            let mut excluded = vec![workspace.root.join("target")];
+            excluded.extend(workspace.directories());
+            excluded
         })
         .map(|target| velnor_rust::resolve(&target).map_err(|error| unresolved(&target, &error)))
         .collect()

@@ -116,6 +116,7 @@ fn quiet_nonfresh_artifacts_save_the_cache_without_counting_verbose_artifacts_tw
             .current_dir(&temp)
             .env("RUNNER_TEMP", &temp)
             .env("GITHUB_OUTPUT", temp.join("outputs"))
+            .env("HOME", &temp)
             .output()
             .expect("decision");
         assert!(decision.status.success(), "{decision:?}");
@@ -271,6 +272,7 @@ fn rejected_oversized_output_cannot_establish_zero_cache_activity() {
             .current_dir(&temp)
             .env("RUNNER_TEMP", &temp)
             .env("GITHUB_OUTPUT", temp.join("outputs"))
+            .env("HOME", &temp)
             .output()
             .expect("decision");
         assert_eq!(decision.status.success(), active, "{decision:?}");

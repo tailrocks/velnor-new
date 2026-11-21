@@ -3,50 +3,91 @@
 
 use std::{
     error::Error,
-    thread,
     time::{Duration, Instant},
 };
+
+use velnor_resource_probe::cleanup_observer_wire::CleanupObserverRecord;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Observation {
     Counted,
     NotYetVisible,
-    Faulted,
+}
+
+pub(crate) fn owned_reference_observation(record: &CleanupObserverRecord) -> Observation {
+    if record.owned_reference_count >= 1 {
+        Observation::Counted
+    } else {
+        Observation::NotYetVisible
+    }
 }
 
 pub(crate) fn poll_observation<T>(
     limit: Duration,
     interval: Duration,
+    now: impl Fn() -> Instant,
+    sleep: impl Fn(Duration),
     mut observe: impl FnMut() -> Result<T, Box<dyn Error>>,
     classify: impl Fn(&T) -> Observation,
 ) -> Result<T, Box<dyn Error>> {
-    let deadline = Instant::now() + limit;
+    let deadline = now() + limit;
     loop {
         let value = observe()?;
         match classify(&value) {
-            Observation::Counted | Observation::Faulted => return Ok(value),
-            Observation::NotYetVisible if Instant::now() >= deadline => return Ok(value),
-            Observation::NotYetVisible => thread::sleep(interval),
+            Observation::Counted => return Ok(value),
+            Observation::NotYetVisible if now() >= deadline => return Ok(value),
+            Observation::NotYetVisible => sleep(interval),
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::cell::Cell;
+
     use super::*;
 
     const LIMIT: Duration = Duration::from_secs(5);
     const INTERVAL: Duration = Duration::from_millis(1);
+    const MAX_CALLS: usize = 100;
+
+    struct FakeClock {
+        start: Instant,
+        elapsed: Cell<Duration>,
+    }
+
+    impl FakeClock {
+        fn new() -> Self {
+            Self {
+                start: Instant::now(),
+                elapsed: Cell::new(Duration::ZERO),
+            }
+        }
+
+        fn now(&self) -> Instant {
+            self.start + self.elapsed.get()
+        }
+
+        fn sleep(&self, duration: Duration) {
+            self.elapsed.set(self.elapsed.get() + duration);
+        }
+    }
 
     fn run(
         sequence: &[(u32, Observation)],
         limit: Duration,
     ) -> Result<(u32, usize), Box<dyn Error>> {
+        let clock = FakeClock::new();
         let mut calls = 0;
         let value = poll_observation(
             limit,
             INTERVAL,
+            || clock.now(),
+            |duration| clock.sleep(duration),
             || {
+                if calls >= MAX_CALLS {
+                    return Err("poll did not reach its deadline".into());
+                }
                 let index = calls.min(sequence.len() - 1);
                 calls += 1;
                 Ok(sequence[index])
@@ -56,11 +97,43 @@ mod tests {
         Ok((value.0, calls))
     }
 
+    fn loaded_ci_host_record() -> CleanupObserverRecord {
+        CleanupObserverRecord {
+            schema_version: 1,
+            operation_id: "0123456789abcdef0123456789abcdef".to_owned(),
+            binding_sha256: "1d4362f29562fb1668677fd4d9bdc54c982b3a402a9fe4b1fd357d7beb1c9fd5"
+                .to_owned(),
+            guest_boot_id: Some("35d64c2c-ee1f-42a2-8d26-96f68eeb1853".to_owned()),
+            docker_root: None,
+            complete: false,
+            owned_references_absent: false,
+            issues: [
+                "initial_cgroup_or_root_check_incomplete",
+                "daemon_identity_unreadable",
+                "descriptor_limit",
+                "final_cgroup_or_root_check_incomplete",
+                "docker_root_changed",
+                "daemon_identity_changed",
+            ]
+            .map(str::to_owned)
+            .to_vec(),
+            task_count: 5037,
+            descriptor_count: 68493,
+            namespace_count: 1,
+            owned_reference_count: 0,
+            absent_volume_mountpoints: Vec::new(),
+            absent_tmpfs_devices: Vec::new(),
+            absent_mount_namespaces: Vec::new(),
+            absent_cgroup_paths: None,
+        }
+    }
+
     #[test]
-    fn a_faulted_observation_fails_on_the_first_attempt() -> Result<(), Box<dyn Error>> {
-        let sequence = [(7, Observation::Faulted), (8, Observation::Counted)];
-        assert_eq!(run(&sequence, LIMIT)?, (7, 1));
-        Ok(())
+    fn a_scan_that_hit_the_descriptor_limit_on_a_loaded_host_is_retried() {
+        assert_eq!(
+            owned_reference_observation(&loaded_ci_host_record()),
+            Observation::NotYetVisible
+        );
     }
 
     #[test]
@@ -75,24 +148,40 @@ mod tests {
     }
 
     #[test]
-    fn a_never_visible_observation_returns_the_last_one_at_the_deadline()
+    fn a_never_visible_observation_returns_at_a_zero_deadline_without_retrying()
     -> Result<(), Box<dyn Error>> {
         let sequence = [
             (1, Observation::NotYetVisible),
             (2, Observation::NotYetVisible),
         ];
-        let (last, calls) = run(&sequence, Duration::from_millis(20))?;
-        assert_eq!(last, 2);
-        assert!(calls >= 2);
+        let (last, calls) = run(&sequence, Duration::ZERO)?;
+        assert_eq!((last, calls), (1, 1));
+        Ok(())
+    }
+
+    #[test]
+    fn a_never_visible_observation_returns_the_latest_one_at_a_positive_deadline()
+    -> Result<(), Box<dyn Error>> {
+        let sequence = [
+            (1, Observation::NotYetVisible),
+            (2, Observation::NotYetVisible),
+            (3, Observation::NotYetVisible),
+            (4, Observation::NotYetVisible),
+        ];
+        let (last, calls) = run(&sequence, INTERVAL * 3)?;
+        assert_eq!((last, calls), (4, 4));
         Ok(())
     }
 
     #[test]
     fn a_failed_observation_is_returned_without_retrying() {
+        let clock = FakeClock::new();
         let mut calls = 0;
         let result: Result<u32, _> = poll_observation(
             LIMIT,
             INTERVAL,
+            || clock.now(),
+            |duration| clock.sleep(duration),
             || {
                 calls += 1;
                 Err::<u32, Box<dyn Error>>("scan failed".into())

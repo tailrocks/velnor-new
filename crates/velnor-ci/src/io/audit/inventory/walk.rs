@@ -2,106 +2,233 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::ffi::OsStr;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
+use super::super::options::{MAX_ENTRIES_CEILING, MAX_ENTRIES_VARIABLE};
+use super::handle::{self, Current, Opened, Origin};
 use super::{Entries, Kind, excluded_entry};
+
+pub(in crate::io::audit) struct Budget {
+    remaining: usize,
+    limit: usize,
+    overflowed: bool,
+}
+
+impl Budget {
+    pub(in crate::io::audit) fn new(limit: usize) -> Self {
+        Self {
+            remaining: limit,
+            limit,
+            overflowed: false,
+        }
+    }
+
+    pub(in crate::io::audit) fn overflowed(&self) -> bool {
+        self.overflowed
+    }
+
+    fn reserve(&mut self) -> io::Result<()> {
+        let Some(remaining) = self.remaining.checked_sub(1) else {
+            self.overflowed = true;
+            return Err(io::Error::other(format!(
+                "audit freshness scan limit exceeded: more than {} entries; raise it with {MAX_ENTRIES_VARIABLE} (at most {MAX_ENTRIES_CEILING})",
+                self.limit
+            )));
+        };
+        self.remaining = remaining;
+        Ok(())
+    }
+}
 
 pub(in crate::io::audit) fn scan(
     root: &Path,
     targets: &BTreeSet<PathBuf>,
-    remaining: &mut usize,
+    budget: &mut Budget,
 ) -> io::Result<Entries> {
-    scan_with(root, targets, remaining, |directory: &Path| {
-        fs::read_dir(directory)
-    })
+    scan_with(root, targets, budget, &Probe::default())
+}
+
+pub(super) struct Probe<'a> {
+    pub(super) before_open: &'a dyn Fn(&Path) -> io::Result<()>,
+    pub(super) after_open: &'a dyn Fn(&Path),
+    pub(super) listed: &'a dyn Fn(&OsStr),
+}
+
+impl Default for Probe<'_> {
+    fn default() -> Self {
+        Self {
+            before_open: &|_| Ok(()),
+            after_open: &|_| {},
+            listed: &|_| {},
+        }
+    }
+}
+
+struct Pending {
+    path: PathBuf,
+    origin: Origin,
 }
 
 pub(super) fn scan_with(
     root: &Path,
     targets: &BTreeSet<PathBuf>,
-    remaining: &mut usize,
-    open: impl Fn(&Path) -> io::Result<fs::ReadDir>,
+    budget: &mut Budget,
+    probe: &Probe<'_>,
 ) -> io::Result<Entries> {
     let root = fs::canonicalize(root)?;
     let mut entries = Entries::new();
-    let mut pending = vec![root.clone()];
+    let mut pending = vec![Pending {
+        path: root.clone(),
+        origin: Origin::Path,
+    }];
     let mut visited = BTreeSet::new();
-    let mut vanished = Vec::new();
-    while let Some(directory) = pending.pop() {
+    while let Some(Pending {
+        path: directory,
+        origin,
+    }) = pending.pop()
+    {
         if !visited.insert(directory.clone()) {
             continue;
         }
-        reserve(remaining)?;
-        let listing = match open(&directory) {
+        budget.reserve()?;
+        let opened =
+            (probe.before_open)(&directory).and_then(|()| handle::open(&origin, &directory));
+        let mut listing = match opened {
             Ok(listing) => listing,
-            Err(error) if error.kind() == io::ErrorKind::NotFound && directory != root => {
-                vanished.push(directory);
+            Err(error) if handle::replaced(&error) && directory != root => {
+                match handle::current(&origin, &directory)? {
+                    Current::Directory(_) => return Err(changed(error.kind(), &directory)),
+                    current => settle(
+                        &mut entries,
+                        &mut pending,
+                        &directory,
+                        &origin,
+                        current,
+                        (&root, targets),
+                    )?,
+                }
                 continue;
             }
             Err(error) => return Err(error),
         };
+        let identity = handle::identity(&listing)?;
+        (probe.after_open)(&directory);
+        let names = handle::names(&mut listing, |name| {
+            (probe.listed)(name);
+            budget.reserve()
+        })?;
+        let listing = Opened::new(listing);
+        let queued_before = pending.len();
         let mut children = BTreeMap::new();
-        for entry in listing {
-            reserve(remaining)?;
-            let entry = entry?;
-            let path = entry.path();
-            let Some(kind) = kind(&path)? else {
+        for name in names {
+            let path = directory.join(&name);
+            let Some(kind) = handle::kind_at(listing.as_ref(), &name, &path)? else {
                 continue;
             };
-            if !excluded_entry(&path, &kind, &root, targets) {
-                match &kind {
-                    Kind::Directory => pending.push(path),
-                    Kind::Link {
-                        resolved: Some(resolved),
-                        ..
-                    } if is_directory(resolved)? => pending.push(resolved.clone()),
-                    Kind::File | Kind::Link { .. } | Kind::Other => {}
-                }
-            }
-            children.insert(PathBuf::from(entry.file_name()), kind);
+            let child = Origin::Child {
+                parent: Opened::clone(&listing),
+                name: name.clone(),
+            };
+            pending.extend(queue(&kind, &path, child, (&root, targets))?);
+            children.insert(PathBuf::from(name), kind);
         }
-        entries.insert(directory, children);
-    }
-    for directory in vanished {
-        let (Some(parent), Some(name)) = (directory.parent(), directory.file_name()) else {
-            continue;
-        };
-        if let Some(children) = entries.get_mut(parent)
-            && children.get(Path::new(name)) == Some(&Kind::Directory)
-        {
-            children.remove(Path::new(name));
+        match handle::current(&origin, &directory)? {
+            Current::Directory(now) if now == identity => {
+                entries.insert(directory, children);
+            }
+            Current::Directory(_) => {
+                return Err(io::Error::other(format!(
+                    "{} was replaced by another directory while it was listed",
+                    directory.display()
+                )));
+            }
+            _ if directory == root => {
+                return Err(io::Error::other(format!(
+                    "{} was replaced while it was listed",
+                    directory.display()
+                )));
+            }
+            current => {
+                pending.truncate(queued_before);
+                settle(
+                    &mut entries,
+                    &mut pending,
+                    &directory,
+                    &origin,
+                    current,
+                    (&root, targets),
+                )?;
+            }
         }
     }
     Ok(entries)
 }
 
-fn kind(path: &Path) -> io::Result<Option<Kind>> {
-    let metadata = match fs::symlink_metadata(path) {
-        Ok(metadata) => metadata,
-        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
-        Err(error) => return Err(error),
-    };
-    if !metadata.is_symlink() {
-        return Ok(Some(if metadata.is_dir() {
-            Kind::Directory
-        } else if metadata.is_file() {
-            Kind::File
-        } else {
-            Kind::Other
-        }));
+fn changed(kind: io::ErrorKind, directory: &Path) -> io::Error {
+    io::Error::new(
+        kind,
+        format!(
+            "{} changed while the audit scanned it; retry",
+            directory.display()
+        ),
+    )
+}
+
+fn queue(
+    kind: &Kind,
+    path: &Path,
+    origin: Origin,
+    (root, targets): (&Path, &BTreeSet<PathBuf>),
+) -> io::Result<Option<Pending>> {
+    if excluded_entry(path, kind, root, targets) {
+        return Ok(None);
     }
-    let resolved = match fs::canonicalize(path) {
-        Ok(resolved) => Some(resolved),
-        Err(error) if unresolved_link(&error) => None,
-        Err(error) => return Err(error),
-    };
-    match fs::read_link(path) {
-        Ok(target) => Ok(Some(Kind::Link { target, resolved })),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
-        Err(error) => Err(error),
+    Ok(match kind {
+        Kind::Directory => Some(Pending {
+            path: path.to_path_buf(),
+            origin,
+        }),
+        Kind::Link {
+            resolved: Some(resolved),
+            ..
+        } if is_directory(resolved)? => Some(Pending {
+            path: resolved.clone(),
+            origin: Origin::Path,
+        }),
+        Kind::File | Kind::Link { .. } | Kind::Other => None,
+    })
+}
+
+fn settle(
+    entries: &mut Entries,
+    pending: &mut Vec<Pending>,
+    directory: &Path,
+    origin: &Origin,
+    current: Current,
+    (root, targets): (&Path, &BTreeSet<PathBuf>),
+) -> io::Result<()> {
+    let children = directory
+        .parent()
+        .and_then(|container| entries.get_mut(container));
+    let key = directory.file_name().map(Path::new);
+    match current {
+        Current::Gone => {
+            if let (Some(children), Some(key)) = (children, key) {
+                children.remove(key);
+            }
+        }
+        Current::Directory(_) => return Err(changed(io::ErrorKind::Other, directory)),
+        Current::Other(kind) => {
+            pending.extend(queue(&kind, directory, origin.clone(), (root, targets))?);
+            if let (Some(children), Some(key)) = (children, key) {
+                children.insert(key.to_path_buf(), kind);
+            }
+        }
     }
+    Ok(())
 }
 
 fn is_directory(path: &Path) -> io::Result<bool> {
@@ -112,13 +239,7 @@ fn is_directory(path: &Path) -> io::Result<bool> {
     }
 }
 
-fn reserve(remaining: &mut usize) -> io::Result<()> {
-    *remaining = remaining
-        .checked_sub(1)
-        .ok_or_else(|| io::Error::other("audit freshness scan limit exceeded"))?;
-    Ok(())
-}
-
 pub(in crate::io::audit) fn unresolved_link(error: &io::Error) -> bool {
-    error.kind() == io::ErrorKind::NotFound || error.raw_os_error() == Some(libc::ELOOP)
+    error.kind() == io::ErrorKind::NotFound
+        || matches!(error.raw_os_error(), Some(libc::ELOOP | libc::ENOTDIR))
 }

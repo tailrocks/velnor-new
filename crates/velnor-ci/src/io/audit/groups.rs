@@ -54,9 +54,9 @@ pub(super) fn standalone(facts: &RepoFacts) -> Vec<bool> {
 
 pub(super) fn scan_dirs(workspaces: &[Workspace]) -> Vec<PathBuf> {
     let mut directories = Vec::new();
-    for workspace in workspaces {
-        if !directories.contains(&workspace.target_directory) {
-            directories.push(workspace.target_directory.clone());
+    for directory in workspaces.iter().flat_map(Workspace::directories) {
+        if !directories.contains(&directory) {
+            directories.push(directory);
         }
     }
     directories

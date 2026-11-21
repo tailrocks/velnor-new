@@ -45,6 +45,10 @@ fn trust_follows_the_event_and_the_default_branch() {
             false,
         ),
         ("push", "refs/heads/feature", false),
+        ("push", "refs/heads/MAIN", false),
+        ("push", "refs/heads/Main", false),
+        ("workflow_dispatch", "refs/heads/MAIN", false),
+        ("schedule", "refs/heads/MAIN", false),
         ("push", "refs/tags/main", false),
         ("pull_request", "refs/pull/1/merge", false),
         ("pull_request_target", "refs/heads/main", false),
@@ -60,6 +64,9 @@ fn trust_follows_the_event_and_the_default_branch() {
         );
     }
     assert!(!trusted_event("push", "refs/heads/main", None));
+    assert!(!trusted_event("push", "refs/heads/main", Some("")));
+    assert!(!trusted_event("push", "refs/heads/MAIN", Some("main")));
+    assert!(!trusted_event("push", "refs/heads/main", Some("MAIN")));
 }
 
 #[test]
@@ -79,8 +86,7 @@ fn a_trusted_event_uses_the_shared_directory_with_pod_private_shims() {
         );
     }
     let mode = fs::metadata(host.root.join("temp/velnor-mbx-shims"))
-        .map(|m| m.permissions().mode() & 0o777)
-        .unwrap_or_default();
+        .map_or_default(|m| m.permissions().mode() & 0o777);
     assert_eq!(mode, 0o700);
     let leftovers: Vec<_> = fs::read_dir(&shared)
         .map(Iterator::count)

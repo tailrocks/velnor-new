@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 # SPDX-License-Identifier: Apache-2.0
 
-min_version = "2026.10.18"
+min_version = "2026.11.10"
 
 [tools]
 # Owner standard layout: `mr_boxington = true` plus `[wrappers.cargo]` run
@@ -10,7 +10,7 @@ min_version = "2026.10.18"
 # rustup-only tools read only the file, and generation fails on drift. Generated CI reads every version in this table
 # at run time (hard decision 4); clean checkouts resolve MBX from this file
 # via `mise install`, never globally.
-rust = { version = "1.99.1", profile = "minimal", components = [
+rust = { version = "1.100.0", profile = "minimal", components = [
   "clippy",
   "rustfmt",
 ], targets = [
@@ -79,7 +79,7 @@ for EXPECTED in generator/samples/*/expected; do
   git -C "$SAMPLE" init -q
   # The repository's config supplies the self-hosted runner labels (velnor,
   # ubuntu-26.04-scale-set) that the generated workflows use; the sample has none.
-  (cd "$SAMPLE" && echo "$FILES" | xargs jactionlint --config-file "$ROOT/.github/jactionlint.yaml" --profile correctness --format gcc --strict-exit --no-online --shellcheck= --pyflakes=)
+  (cd "$SAMPLE" && echo "$FILES" | xargs jactionlint --config-file "$ROOT/.github/jactionlint.yaml" --format gcc --strict-exit --no-online --shellcheck= --pyflakes=)
   CHECKED=$((CHECKED + 1))
 done
 test "$CHECKED" -gt 0
