@@ -86,3 +86,70 @@ fn handle_relative_resolution_agrees_with_canonicalize_on_a_stable_tree() {
     }
     fs::remove_dir_all(&base).unwrap_or_else(|e| unreachable!("{e}"));
 }
+
+fn chain(directory: &Path, prefix: &str, links: usize) {
+    for index in 0..links {
+        let target = if index + 1 == links {
+            "../a/b".to_owned()
+        } else {
+            format!("{prefix}-{}", index + 1)
+        };
+        symlink(target, directory.join(format!("{prefix}-{index}")))
+            .unwrap_or_else(|e| unreachable!("{e}"));
+    }
+}
+
+#[test]
+fn a_link_to_a_file_written_with_a_trailing_slash_is_unresolved() {
+    let base = base("slashed-file");
+    let dir = base.join("dir");
+    fs::create_dir_all(base.join("a")).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::create_dir_all(&dir).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::write(base.join("a/file"), b"").unwrap_or_else(|e| unreachable!("{e}"));
+    symlink("../a/file/", dir.join("slashed")).unwrap_or_else(|e| unreachable!("{e}"));
+    symlink("../a/file", dir.join("plain")).unwrap_or_else(|e| unreachable!("{e}"));
+    let slashed = link_kind(&dir, "slashed");
+    let plain = link_kind(&dir, "plain");
+    fs::remove_dir_all(&base).unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(
+        matches!(slashed, Kind::Link { resolved: None, .. }),
+        "{slashed:?}"
+    );
+    assert!(
+        matches!(
+            plain,
+            Kind::Link {
+                resolved: Some(_),
+                ..
+            }
+        ),
+        "{plain:?}"
+    );
+}
+
+#[test]
+fn a_link_crossing_more_than_forty_links_is_unresolved_and_forty_resolves() {
+    let base = base("hops");
+    let dir = base.join("dir");
+    fs::create_dir_all(base.join("a/b")).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::create_dir_all(&dir).unwrap_or_else(|e| unreachable!("{e}"));
+    chain(&dir, "short", 40);
+    chain(&dir, "long", 41);
+    let short = link_kind(&dir, "short-0");
+    let long = link_kind(&dir, "long-0");
+    fs::remove_dir_all(&base).unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(
+        matches!(
+            short,
+            Kind::Link {
+                resolved: Some(_),
+                ..
+            }
+        ),
+        "{short:?}"
+    );
+    assert!(
+        matches!(long, Kind::Link { resolved: None, .. }),
+        "{long:?}"
+    );
+}

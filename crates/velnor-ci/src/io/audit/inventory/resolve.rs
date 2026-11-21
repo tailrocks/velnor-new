@@ -133,9 +133,14 @@ enum Step {
     Root,
     Parent,
     Name(OsString),
+    Directory,
 }
 
 fn steps(target: &Path, pending: &mut Vec<Step>) {
+    let bytes = target.as_os_str().as_encoded_bytes();
+    if bytes.ends_with(b"/") || bytes.ends_with(b"/.") {
+        pending.push(Step::Directory);
+    }
     for component in target.components().rev() {
         match component {
             Component::Normal(name) => pending.push(Step::Name(name.to_owned())),
@@ -162,7 +167,7 @@ pub(super) fn resolve(
     let mut trail = Trail::new(reach.bound);
     let mut path = base.to_path_buf();
     let mut pending = Vec::new();
-    let mut links = 0;
+    let mut links = 1;
     let mut last = None;
     steps(target, &mut pending);
     while let Some(step) = pending.pop() {
@@ -190,6 +195,7 @@ pub(super) fn resolve(
                 path.pop();
                 last = None;
             }
+            Step::Directory => {}
             Step::Name(name) => {
                 let stat = fstatat(&current, name.as_os_str(), AtFlags::AT_SYMLINK_NOFOLLOW)
                     .map_err(failure)?;
