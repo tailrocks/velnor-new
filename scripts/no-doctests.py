@@ -12,7 +12,6 @@ FENCE_OPEN = r"(?:`{3,}(?=[^`\n]*$)|~{3,})"
 LINE_FENCE = re.compile(r"[ \t]*" + CONTAINER + FENCE_OPEN)
 LINE_INDENT = re.compile(r"(?:" + MARKER + r")* {5,}\S")
 ATTR_INDENT = re.compile(r" {4,}\S|(?:" + MARKER + r")+ {5,}\S")
-BLOCK_FENCE = re.compile(r"^[ \t]*\*?[ \t]*" + CONTAINER + FENCE_OPEN, re.M)
 HTML6_TAGS = (
     "address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt"
     "|fieldset|figcaption|figure|footer|form|frame|frameset|h[1-6]|head|header|hr|html|iframe|legend|li|link|main|menu"
@@ -27,7 +26,11 @@ RAW_OPEN = re.compile(r"[ ]{0,3}(?:<(script|pre|style|textarea)(?=[\s>]|$)|<!--|
 RAW_END = {"<!--": "-->", "<?": "?>", "<![cdata[": "]]>"}
 QUOTE_PREFIX = re.compile(r"(?:[ \t]*>)*")
 NON_PROSE = re.compile(r"[ \t]*(?:#{1,6}(?:[ \t]|$)|(?:[-*+]|\d{1,9}[.)])(?:[ \t]|$)|[-*_=\s]*$)")
-BLOCK_INDENT = re.compile(r"^[ \t]*\*?(?:" + MARKER + r")* {5,}\S", re.M)
+LIST_MARK = re.compile(r"[ \t]*(?:[-*+]|\d{1,9}[.)])(?=[ \t]|$)[ \t]*")
+LIST_ITEM = re.compile(r"[ \t]*(?:[-*+]|\d{1,9}[.)])[ \t]+")
+LIST_CODE = re.compile(r"[ \t]*(?:[-*+]|\d{1,9}[.)])[ \t]{5,}\S")
+BLOCK_MARGIN = re.compile(r"[ \t]*\*?")
+NEWLINE = re.compile(r"\r\n|\r|\n")
 DOC_OPEN = re.compile(r"/\*(?:!|\*(?![*/]))")
 DOC_EQ = re.compile(r"\s*=(?!=)")
 DOC_INCLUDE = re.compile(r"\s*=\s*include_str!")
@@ -108,17 +111,13 @@ def attr_open(src, i):
 
 
 def expand_tabs(text):
-    out = []
-    col = 0
-    for ch in text:
-        if ch == "\t":
-            width = 4 - col % 4
-            out.append(" " * width)
-            col += width
-        else:
-            out.append(ch)
-            col += 1
-    return "".join(out)
+    return text.expandtabs(4)
+
+
+def doc_text_tabs(text):
+    if text[:1] in (" ", "\t"):
+        return " " + text[1:].expandtabs(4)
+    return text.expandtabs(4)
 
 
 def line_indent_text(body):
@@ -128,10 +127,10 @@ def line_indent_text(body):
 
 
 def value_has_fence(value):
-    return any(
-        LINE_FENCE.match(line) or ATTR_INDENT.match(line.replace("\t", "    "))
-        for line in re.split(r"\r\n|\r|\n", value)
-    )
+    lines = re.split(r"\r\n|\r|\n", value)
+    margin = min((len(line) - len(line.lstrip(" ")) for line in lines if line.strip()), default=0)
+    state = {"html": False, "prose": None, "raw": None, "depth": 0, "item": None}
+    return any(doc_line(" " + line[margin:], state) for line in lines)
 
 
 def decode_escape(match):
@@ -160,6 +159,7 @@ def doc_content(body):
 
 
 def is_prose(content):
+    content = LIST_MARK.sub("", content, count=1)
     if NON_PROSE.match(content):
         return False
     return re.match(r"[ \t]*" + FENCE_OPEN, content) is None
@@ -176,45 +176,60 @@ def doc_line(body, state):
     quote = QUOTE_PREFIX.match(rel)
     depth = quote.group().count(">")
     text = rel[quote.end() :]
-    if depth < state["depth"]:
+    indent = len(text) - len(text.lstrip(" "))
+    if depth < state["depth"] or (state["item"] is not None and rel.strip() and indent < state["item"]):
         state["html"] = False
         state["raw"] = None
+        state["item"] = None
     if state["html"]:
         state["html"] = bool(rel.strip())
+        if not state["html"]:
+            state["item"] = None
         return False
     if state["raw"] is not None:
         if state["raw"] in text.lower():
             state["raw"] = None
+            state["item"] = None
         return False
     if not rel.strip():
         state["prose"] = None
         return False
-    if opener := RAW_OPEN.match(text):
-        end = raw_end(opener)
+    item = LIST_ITEM.match(text)
+    opener = text[item.end() :] if item else text
+    item_col = item.end() if item else None
+    if match := RAW_OPEN.match(opener):
+        end = raw_end(match)
         state["prose"] = None
-        if end not in text[opener.end() :].lower():
+        if end not in opener[match.end() :].lower():
             state["raw"] = end
             state["depth"] = depth
+            state["item"] = item_col
         return False
-    if HTML_BLOCK6.match(rel) or (state["prose"] is None and HTML_BLOCK7.match(rel)):
+    if HTML_BLOCK6.match(opener) or ((item is not None or state["prose"] is None) and HTML_BLOCK7.match(opener)):
         state["html"] = True
         state["prose"] = None
         state["depth"] = depth
+        state["item"] = item_col
         return False
-    continued = state["prose"] == depth
-    if LINE_FENCE.match(body) or (LINE_INDENT.match(line_indent_text(body)) and not continued):
+    continued = state["prose"] is not None and depth <= state["prose"]
+    indented = LINE_INDENT.match(line_indent_text(body)) is not None
+    if LIST_CODE.match(text) or (indented and not continued) or (LINE_FENCE.match(body) and not (continued and indented)):
         state["prose"] = None
         return True
-    state["prose"] = depth if is_prose(rel[quote.end() :]) else None
+    state["prose"] = depth if (continued and indented) or is_prose(text) else None
     return False
 
 
 def doc_findings(src):
     i = 0
     attr_depth = 0
+    attr_name = ""
+    paren = 0
+    cfg_comma = False
+    doc_paren = 0
     doc_value = False
     doc_end = -2
-    doc_state = {"html": False, "prose": None, "raw": None, "depth": 0}
+    doc_state = {"html": False, "prose": None, "raw": None, "depth": 0, "item": None}
     while i < len(src):
         c = src[i]
         if src.startswith("//", i):
@@ -223,7 +238,7 @@ def doc_findings(src):
             if LINE_DOC.match(src, i):
                 start = src.rfind("\n", 0, i) + 1
                 if start != doc_end + 1:
-                    doc_state = {"html": False, "prose": None, "raw": None, "depth": 0}
+                    doc_state = {"html": False, "prose": None, "raw": None, "depth": 0, "item": None}
                 doc_end = end
                 if doc_line(src[i + 3 : end], doc_state):
                     yield i
@@ -231,8 +246,8 @@ def doc_findings(src):
         elif src.startswith("/*", i):
             end = block_end(src, i)
             if DOC_OPEN.match(src, i):
-                body = src[i + 3 : end]
-                if BLOCK_FENCE.search(body) or BLOCK_INDENT.search(body.replace("\t", "    ")):
+                state = {"html": False, "prose": None, "raw": None, "depth": 0, "item": None}
+                if any(doc_line(doc_text_tabs(BLOCK_MARGIN.sub("", line, count=1)), state) for line in NEWLINE.split(src[i + 3 : end])):
                     yield i
             i = end
         elif c == '"':
@@ -245,6 +260,12 @@ def doc_findings(src):
             i = i + 1 if j is None else j
         elif c == "#" and (j := attr_open(src, i)) is not None:
             attr_depth = 1
+            paren = 0
+            cfg_comma = False
+            k = skip_trivia(src, j)
+            k += 2 if src.startswith("r#", k) else 0
+            name = IDENT.match(src, k)
+            attr_name = name.group() if name else ""
             i = j
         elif c == "[":
             if attr_depth:
@@ -254,6 +275,17 @@ def doc_findings(src):
             if attr_depth:
                 attr_depth -= 1
             doc_value = doc_value and attr_depth > 0
+            i += 1
+        elif c in "(),":
+            if attr_depth and c == "(":
+                paren += 1
+            elif attr_depth and c == ")":
+                paren -= 1
+                doc_value = doc_value and paren >= doc_paren
+            elif attr_depth and c == ",":
+                doc_value = doc_value and paren > doc_paren
+                if attr_name == "cfg_attr" and paren == 1:
+                    cfg_comma = True
             i += 1
         elif m := IDENT.match(src, i):
             word = m.group()
@@ -268,7 +300,7 @@ def doc_findings(src):
                     i = end
             elif word in BYTE_PREFIX and j < len(src) and src[j] == '"':
                 i = skip_string(src, j)
-            elif word == "include_str" and doc_value:
+            elif doc_value and src.startswith("!", skip_trivia(src, j)) and word != "concat":
                 yield i
                 i = j
             else:
@@ -276,8 +308,11 @@ def doc_findings(src):
                     k = skip_trivia(src, j)
                     if DOC_INCLUDE.match(src, k):
                         yield i
-                    elif attr_depth and DOC_EQ.match(src, k):
+                    elif DOC_EQ.match(src, k) and (
+                        (attr_name == "doc" and paren == 0) or (attr_name == "cfg_attr" and paren == 1 and cfg_comma)
+                    ):
                         doc_value = True
+                        doc_paren = paren
                 i = j
         else:
             i += 1
