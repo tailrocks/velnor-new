@@ -377,3 +377,24 @@ fn a_helper_without_the_newest_anchor_keeps_one_anchor_restore_per_job() -> Test
     }
     Ok(())
 }
+
+#[test]
+fn the_anchor_key_output_is_kept_before_helper_0_1_112_and_dropped_from_it() -> TestResult {
+    for config in STORES.iter().copied() {
+        for (helper, keyed) in [("0.1.111", true), ("0.1.112", false)] {
+            let mut readers = 0;
+            for (id, job) in jobs(&render(&["Cargo.toml"], config, helper)?)? {
+                let Some(outputs) = job["outputs"].as_object() else {
+                    continue;
+                };
+                if outputs.contains_key("tools_anchor") {
+                    readers += 1;
+                    let has_key = outputs.contains_key("tools_anchor_key");
+                    assert_eq!(has_key, keyed, "{helper} {id}");
+                }
+            }
+            assert!(readers > 0, "{config:?} {helper}");
+        }
+    }
+    Ok(())
+}
