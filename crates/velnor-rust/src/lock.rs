@@ -14,6 +14,7 @@ pub(crate) const CI: &str = "velnor-ci";
 pub(crate) const GENERATOR: &str = "velnor-gen";
 const BINARY_SUMS: &str = "BINARY-SHA256SUMS";
 
+// helper-gate: first in tools-v0.1.111 via 1e48e76705
 pub(crate) const GENERATOR_BINARY_RELEASE: (u64, u64, u64) = (0, 1, 111);
 
 #[derive(Debug, Clone, PartialEq, Eq)]

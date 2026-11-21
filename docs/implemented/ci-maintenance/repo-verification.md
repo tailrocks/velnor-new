@@ -29,8 +29,9 @@ uses that same project Bun pin in its preparation step and tools-cache identity.
 with Nextest-applicable targets (`test = true`). A successful empty result
 skips Nextest only for that workspace; metadata errors fail verification. The
 root workspace runs per-package and workspace-wide Nextest scopes with
-`--no-tests fail` when applicable targets exist. The required
-`test-maintenance-helpers` task applies the same metadata rule to its two named
+`--no-tests fail` when applicable targets exist. The
+`test-maintenance-helpers` task (a local full run: no generated workflow job runs it, so it is
+not a required check) applies the same metadata rule to its two named
 package scopes and first runs the `pin-mirror` repository-policy action against
 the PR head with `refs/remotes/origin/main` as the base ref. Each invoked
 Nextest scope fails when its selected suite is empty. The task generator

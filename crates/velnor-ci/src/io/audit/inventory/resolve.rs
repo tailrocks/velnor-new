@@ -8,7 +8,7 @@ use std::path::{Component, Path, PathBuf};
 
 use nix::errno::Errno;
 use nix::fcntl::{AT_FDCWD, AtFlags, OFlag, openat, readlinkat};
-use nix::sys::stat::{Mode, SFlag, fstatat};
+use nix::sys::stat::{FileStat, Mode, SFlag, fstat, fstatat};
 
 const MAX_LINKS: usize = 40;
 
@@ -67,16 +67,22 @@ fn steps(target: &Path, pending: &mut Vec<Step>) {
     }
 }
 
+pub(super) struct Followed {
+    pub(super) path: PathBuf,
+    pub(super) stat: FileStat,
+}
+
 pub(super) fn resolve(
     directory: BorrowedFd<'_>,
     base: &Path,
     target: &Path,
-) -> io::Result<PathBuf> {
+) -> io::Result<Followed> {
     let mut current = directory.try_clone_to_owned()?;
     let mut trail: Vec<OwnedFd> = Vec::new();
     let mut path = base.to_path_buf();
     let mut pending = Vec::new();
     let mut links = 0;
+    let mut last = None;
     steps(target, &mut pending);
     while let Some(step) = pending.pop() {
         match step {
@@ -84,6 +90,7 @@ pub(super) fn resolve(
                 current = open_path(Path::new("/"), false)?;
                 trail.clear();
                 path = PathBuf::from("/");
+                last = None;
             }
             Step::Parent => {
                 current = match trail.pop() {
@@ -91,11 +98,13 @@ pub(super) fn resolve(
                     None => open_directory(current.as_fd(), Path::new(".."), false)?,
                 };
                 path.pop();
+                last = None;
             }
             Step::Name(name) => {
                 let stat = fstatat(&current, name.as_os_str(), AtFlags::AT_SYMLINK_NOFOLLOW)
                     .map_err(failure)?;
                 let format = SFlag::from_bits_truncate(stat.st_mode) & SFlag::S_IFMT;
+                last = None;
                 if format == SFlag::S_IFLNK {
                     links += 1;
                     if links > MAX_LINKS {
@@ -113,11 +122,16 @@ pub(super) fn resolve(
                     path.push(&name);
                 } else if pending.is_empty() {
                     path.push(&name);
+                    last = Some(stat);
                 } else {
                     return Err(failure(Errno::ENOTDIR));
                 }
             }
         }
     }
-    Ok(path)
+    let stat = match last {
+        Some(stat) => stat,
+        None => fstat(&current).map_err(failure)?,
+    };
+    Ok(Followed { path, stat })
 }
