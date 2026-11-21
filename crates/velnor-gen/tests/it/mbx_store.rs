@@ -158,3 +158,24 @@ fn a_job_that_builds_nothing_runs_no_shared_store_steps_from_helper_0_1_112() ->
     assert_eq!(steps_of("0.1.112")?, Vec::<String>::new());
     Ok(())
 }
+
+#[test]
+fn a_cargo_capable_archive_job_keeps_the_shared_store_steps_from_helper_0_1_112() -> TestResult {
+    let config = format!("mbx_shared_store = true\n{}", crate::test_groups::SHELL);
+    let text = workflow(&crate::test_groups::view_with(
+        &["Cargo.toml"],
+        &config,
+        "0.1.112",
+    )?)?;
+    let yaml: serde_json::Value = crate::yaml_tree::document(&text)?;
+    let job = crate::test_groups::job(&yaml, "rust-test-shell")?;
+    let runs: Vec<&str> = job["steps"]
+        .as_array()
+        .ok_or("steps missing")?
+        .iter()
+        .filter_map(|s| s["run"].as_str())
+        .collect();
+    assert!(runs.iter().any(|run| run.contains(EXEC)), "{runs:?}");
+    assert!(runs.iter().any(|run| run.contains(SEED)), "{runs:?}");
+    Ok(())
+}

@@ -35,7 +35,7 @@ pub(crate) fn apply(facts: &RepoFacts, jobs: &mut [Job]) {
         .is_some_and(|helper| helper.version().at_least(MBX_COMPILING_JOBS_HELPER));
     for job in jobs {
         if !compiles(job) {
-            if compiling_only {
+            if compiling_only && !prepares_cargo(job) {
                 job.steps
                     .retain(|step| !matches!(step.kind, StepKind::MbxStore | StepKind::MbxSeed));
             }
@@ -82,6 +82,12 @@ fn compiles(job: &Job) -> bool {
     job.steps
         .iter()
         .any(|step| matches!(&step.kind, StepKind::Cargo(command) if command.builds()))
+}
+
+fn prepares_cargo(job: &Job) -> bool {
+    job.steps
+        .iter()
+        .any(|step| matches!(step.kind, StepKind::Prepare(_)))
 }
 
 fn insert(job: &mut Job, kinds: &[StepKind], place: After) {
