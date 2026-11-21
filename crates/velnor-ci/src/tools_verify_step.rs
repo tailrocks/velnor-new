@@ -14,11 +14,8 @@ use crate::tools_verify::{Anchor, Discard, Recording, Verb, Verdict, check, read
 
 const ANCHOR_DIR: &str = "velnor-tools-anchor";
 const ANCHOR_NAME: &str = "digest";
-/// The `path:` of the tools cache step, which is `CacheKey::Tools::paths()` in `velnor-model`; the
-/// `tools_cache` tests of `velnor-gen` pin the rendered paths.
 const TOOLS_PATHS: [&str; 2] = ["~/.local/share/mise", "~/.rustup"];
 
-/// Where the notice sends the delete command: the host, its API and the repository.
 #[derive(Debug, Clone)]
 pub struct Remote {
     pub host: String,
@@ -131,7 +128,6 @@ fn host_of(server: Option<&str>) -> &str {
         .unwrap_or("github.com")
 }
 
-/// The host is always named, so that `GH_HOST` cannot point the command at another instance.
 fn remote(server: Option<&str>, api: Option<&str>, repository: Option<&str>) -> Remote {
     let host = host_of(server);
     let api_url = api.filter(|url| !url.is_empty()).map_or_else(

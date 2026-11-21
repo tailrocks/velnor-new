@@ -13,8 +13,6 @@ const GZIP_VERSION: &str = "0e860ad0f6378509df797cde101e51911acafca877e9ef5e166e
 const ZSTD_VERSION: &str = "0cccfb17094855db4c75b312ac9e0441b5c3cbdbccea182d94251e8142ff4640";
 const REPO: &str = "tailrocks/velnor-new";
 
-/// The `version` the cache service stores: the SHA-256 of the paths, the compression method and
-/// the toolkit's salt, joined with `|`, as `getCacheVersion` in `@actions/cache` computes it.
 fn version(path: &str, compression: &str) -> String {
     let text = format!("{path}|{compression}|1.0");
     hex(&Sha256::digest(text.as_bytes()))

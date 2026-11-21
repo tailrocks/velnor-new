@@ -1,9 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-//! Deletes one cache entry by ID. A key names every entry saved under it, one per `version`, so
-//! the key alone could remove a healthy entry beside the poisoned one.
-
 use super::cache_api::{Entry, client, delete_entries, pages};
 use crate::cache::encode;
 use crate::cli_cache::DeleteEntryArgs;

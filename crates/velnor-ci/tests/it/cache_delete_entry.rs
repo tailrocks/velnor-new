@@ -14,7 +14,6 @@ const MAIN: &str = "refs/heads/main";
 const ZSTD: &str = "0cccfb17094855db4c75b312ac9e0441b5c3cbdbccea182d94251e8142ff4640";
 const GZIP: &str = "0e860ad0f6378509df797cde101e51911acafca877e9ef5e166e86d508c549da";
 
-/// A cache API that filters its listing by `key` (a prefix) and `ref` the way GitHub does.
 struct Api {
     entries: Vec<Value>,
     asked: RefCell<Vec<String>>,
