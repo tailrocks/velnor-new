@@ -11,7 +11,8 @@ use velnor_rust::LOCK_PATH;
 use crate::facts::TestResult;
 use crate::release_family_fixture::generate;
 use crate::release_fixture::{APP, LOCK, release_view};
-use crate::step_refs::{dangling_refs, gate_patch, gate_patches};
+use crate::step_refs::{Callees, dangling_refs};
+use crate::step_refs_sweep::{gate_patch, gate_patches};
 use crate::yaml_tree::document;
 
 const RELEASE_GATES: &[(&[&str], &str)] = &[
@@ -102,7 +103,7 @@ fn threshold(keys: &[&str]) -> Result<u64, Box<dyn Error>> {
 
 fn check(text: &str, config: &str, patch: u64) -> Result<usize, Box<dyn Error>> {
     let yaml = document(text)?;
-    let (refs, dangling) = dangling_refs(&yaml);
+    let (refs, dangling) = dangling_refs(&yaml, &Callees::new());
     assert!(
         dangling.is_empty(),
         "helper 0.1.{patch}, {config:?}: {dangling:#?}"

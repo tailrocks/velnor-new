@@ -6,44 +6,70 @@ use crate::pipeline::workflow;
 use std::collections::BTreeSet;
 
 const SETUP: &str = "tailrocks/velnor-new/actions/setup-velnor@";
-const PIN: &str = "0.1.110";
+const REPORT_STEP: &str = "report_cache_metrics";
+const CHECK_STEP: &str = "Check cache waste";
 
-#[test]
-fn every_job_that_reports_or_checks_the_cache_installs_the_one_helper_pin() -> TestResult {
-    for shape in ["", "shape = \"lint-test\"\n", "shape = \"groups\"\n"] {
-        let parsed: serde_json::Value = serde_saphyr::from_str(
-            &crate::archive::plain_invocations(&workflow(&crate::base_save::pinned(PIN, shape)?)?),
-        )?;
-        let mut producers = 0;
-        let mut checkers = 0;
-        for (id, job) in parsed["jobs"].as_object().ok_or("jobs")? {
-            let steps = job["steps"].as_array().ok_or("steps")?;
-            let reports = steps
-                .iter()
-                .any(|step| step["id"] == "report_cache_metrics");
-            let checks = steps.iter().any(|step| step["name"] == "Check cache waste");
-            if !reports && !checks {
-                continue;
-            }
-            producers += usize::from(reports);
-            checkers += usize::from(checks);
-            let pins = steps
-                .iter()
-                .filter(|step| {
-                    step["uses"]
-                        .as_str()
-                        .is_some_and(|uses| uses.starts_with(SETUP))
-                })
-                .map(|step| {
+#[derive(Default)]
+struct JobPins {
+    name: String,
+    pins: BTreeSet<String>,
+    producer: bool,
+    checker: bool,
+}
+
+fn job_pins(shape: &str) -> Result<Vec<JobPins>, Box<dyn std::error::Error>> {
+    let parsed: serde_json::Value = serde_saphyr::from_str(&crate::archive::plain_invocations(
+        &workflow(&crate::base_save::pinned("0.1.110", shape)?)?,
+    ))?;
+    let mut jobs = Vec::new();
+    for (name, job) in parsed["jobs"].as_object().ok_or("jobs")? {
+        let mut found = JobPins {
+            name: name.clone(),
+            ..JobPins::default()
+        };
+        for step in job["steps"].as_array().ok_or("steps")? {
+            if step["uses"]
+                .as_str()
+                .is_some_and(|uses| uses.starts_with(SETUP))
+            {
+                found.pins.insert(
                     step["with"]["version"]
                         .as_str()
-                        .map(str::to_owned)
-                        .ok_or("version")
-                })
-                .collect::<Result<BTreeSet<_>, _>>()?;
-            assert_eq!(pins, BTreeSet::from([PIN.to_owned()]), "{id} {shape}");
+                        .ok_or("version")?
+                        .to_owned(),
+                );
+            }
+            found.producer |= step["id"] == REPORT_STEP;
+            found.checker |= step["name"] == CHECK_STEP;
         }
-        assert!(producers > 0 && checkers > 0, "{shape}");
+        jobs.push(found);
+    }
+    Ok(jobs)
+}
+
+#[test]
+fn every_report_job_and_the_checker_install_one_helper_pin() -> TestResult {
+    for shape in [
+        "",
+        "shape = \"lint-test\"\n",
+        "shape = \"groups\"\n",
+        "pr_ci = \"label\"\n",
+    ] {
+        let jobs = job_pins(shape)?;
+        assert!(
+            jobs.iter().any(|job| job.producer) && jobs.iter().any(|job| job.checker),
+            "{shape}"
+        );
+        for job in &jobs {
+            if job.producer || job.checker || !job.pins.is_empty() {
+                assert_eq!(
+                    job.pins,
+                    BTreeSet::from(["0.1.110".to_owned()]),
+                    "{shape} job {}",
+                    job.name
+                );
+            }
+        }
     }
     Ok(())
 }
