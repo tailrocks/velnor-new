@@ -57,6 +57,19 @@ class SpellingFixtureTests(unittest.TestCase):
         "spaced_pair_letters": "z z o r g / z z r e p o\n",
         "spaced_around_slash": "zzorg / zzrepo\n",
         "nbsp_between_letters": "z\u00a0z\u00a0p\u00a0l\u00a0a\u00a0n\u00a0t\u00a0e\u00a0d\n",
+        "title_case_spaced": "see Zz Two Parts here\n",
+        "title_case_spaced_single_word": "see Zz Planted here\n",
+        "hyphen_form": "see zz-two-parts here\n",
+        "under_score_form": "see zz_two_parts here\n",
+        "dot_form": "see zz.two.parts here\n",
+        "no_separator_form": "see ZzTwoParts here\n",
+        "mixed_separators": "see Zz two_parts here and zz - two . parts\n",
+        "many_blanks_and_tabs": "Zz  Two\tParts\n",
+        "nbsp_separated_words": "Zz\u00a0Two\u00a0Parts\n",
+        "percent_encoded_space": "Zz%20Two%20Parts\n",
+        "title_case_spaced_pair": "Zz Org / Zz Repo\n",
+        "title_case_spaced_pair_without_blanks_around_slash": "Zz Org/Zz Repo\n",
+        "spaced_word_after_prose": "the quick brown fox and Zz Planted jumped\n",
     }
 
     def test_every_spelling_is_flagged_in_any_file_type(self):
@@ -77,6 +90,9 @@ class SpellingFixtureTests(unittest.TestCase):
             ("fullwidth", "docs/ｚｚplanted.md"),
             ("zero_width", "docs/zz​planted.md"),
             ("spaced", "docs/z z p l a n t e d.md"),
+            ("title_case_spaced", "docs/Zz Two Parts.md"),
+            ("under_score", "docs/zz_two_parts.md"),
+            ("dot_form", "docs/zz.two.parts.md"),
         ]:
             with self.subTest(label=label):
                 tmp, root = indexed({name.encode(): b"plain\n"})
@@ -91,7 +107,9 @@ class SpellingFixtureTests(unittest.TestCase):
                 "https://example.org/zz%70lant and zzplant​",
                 "ｚｚplant \U0001d433\U0001d433other",
                 "zz&#112;lant zz two other",
-                "zzorg / other and other/zzrepo and zz two parts",
+                "zzorg / other and other/zzrepo and zz two other",
+                "zz two, parts and zz | two | parts and zz (two) parts",
+                "zzplan ten and zz two pars",
                 "a b c d e f g h i j k l m",
                 '{"ownerName": "example-org", "owner_id": "42"}',
                 "https://github.com/example-org/example-repo-1.git",

@@ -24,8 +24,6 @@ TRIM = b".-_"
 GIT_SUFFIX = b".git"
 ENCODED = re.compile(rb"%[0-9a-f]{2}|\\u[0-9a-f]{4}|\\x[0-9a-f]{2}|&#?[a-z0-9]+;|[\x80-\xff]")
 ESCAPE = re.compile(r"\\u([0-9a-f]{4})|\\x([0-9a-f]{2})")
-SLASH_SPACE = re.compile(rb"[ \t\r\f\v]+/[ \t\r\f\v]*|/[ \t\r\f\v]+")
-LETTER_RUN = re.compile(rb"(?<![a-z0-9])[a-z0-9](?:[ \t\r\f\v]+[a-z0-9](?![a-z0-9]))+")
 BLANKS = re.compile(rb"[ \t\r\f\v]+")
 NON_ASCII = re.compile(r"[^\x00-\x7f]+")
 IGNORED_CATEGORIES = frozenset({"Cf", "Mn", "Me"})
@@ -182,7 +180,7 @@ def decoded(text):
 
 
 def spaced(text):
-    return LETTER_RUN.sub(lambda run: BLANKS.sub(b"", run.group()), SLASH_SPACE.sub(b"/", text))
+    return BLANKS.sub(b"", text)
 
 
 def views(content):
