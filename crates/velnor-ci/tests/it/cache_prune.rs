@@ -123,6 +123,7 @@ pub(crate) fn decide(repo: &Checkout, records: &[Value], budget: Option<&str>) -
         .args(["cache", "decide", "--target-dir", "target"])
         .env("RUNNER_TEMP", &temp)
         .env("GITHUB_OUTPUT", &outputs)
+        .env("HOME", repo.root())
         .current_dir(repo.root());
     if let Some(budget) = budget {
         command.env("VELNOR_CACHE_BUDGET_BYTES", budget);
