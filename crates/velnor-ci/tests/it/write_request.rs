@@ -104,7 +104,6 @@ fn check(case: &Path, by_flags: bool) {
         );
         assert!(!request.exists(), "{name} left a request file");
     }
-    fs::remove_dir_all(temp.path()).unwrap_or_else(|e| unreachable!("{e}"));
 }
 
 #[test]
@@ -161,7 +160,6 @@ fn an_existing_request_is_never_overwritten() {
             .unwrap_or_else(|e| unreachable!("{e}")),
         first
     );
-    fs::remove_dir_all(temp.path()).unwrap_or_else(|e| unreachable!("{e}"));
 }
 
 #[test]
@@ -185,8 +183,6 @@ fn a_request_outside_runner_temp_or_through_a_symlink_is_refused() {
     assert!(!linked.status.success());
     assert!(String::from_utf8_lossy(&linked.stderr).contains("symlink_refused"));
     assert!(!elsewhere.join("request").exists());
-    fs::remove_dir_all(temp.path()).unwrap_or_else(|e| unreachable!("{e}"));
-    fs::remove_dir_all(elsewhere.path()).unwrap_or_else(|e| unreachable!("{e}"));
 }
 
 #[test]
@@ -204,7 +200,6 @@ fn a_payload_that_is_a_symlink_is_refused() {
         .output()
         .unwrap_or_else(|e| unreachable!("{e}"));
     assert!(String::from_utf8_lossy(&output.stderr).contains("unreadable_event_payload"));
-    fs::remove_dir_all(temp.path()).unwrap_or_else(|e| unreachable!("{e}"));
 }
 
 #[test]
@@ -227,7 +222,6 @@ fn a_payload_that_is_a_fifo_is_refused_instead_of_waiting_for_a_writer() {
             .is_some_and(|text| text.contains("unreadable_event_payload")),
         "{stderr:?}"
     );
-    fs::remove_dir_all(temp.path()).unwrap_or_else(|e| unreachable!("{e}"));
 }
 
 #[test]

@@ -216,9 +216,7 @@ fn answer(
 pub(crate) fn run_helper(world: &mut World, bin: &str) -> Outcome {
     world.finish();
     let laid = lay(world, "plan-v1-request.json");
-    if world.quirk != Some(Quirk::NotARepository) {
-        copy_repo(world, &laid.repo);
-    }
+    let template = world.template_repo();
     let (api, log) = serve(world);
     let mut command = Command::new(bin);
     command
@@ -228,7 +226,7 @@ pub(crate) fn run_helper(world: &mut World, bin: &str) -> Outcome {
         .current_dir(if world.quirk == Some(Quirk::NotARepository) {
             laid.root.path()
         } else {
-            &laid.repo
+            template.as_path()
         });
     command
         .env("RUNNER_TEMP", &laid.temp)
@@ -245,16 +243,14 @@ pub(crate) fn run_helper(world: &mut World, bin: &str) -> Outcome {
         command.arg("--request").arg(&laid.request);
     }
     let output = timed(&mut command);
-    let outcome = Outcome {
+    Outcome {
         error: error_of(&output),
         requests: log
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clone(),
         admission: admission_of(&laid.temp),
-    };
-    fs::remove_dir_all(laid.root.path()).unwrap_or_else(|e| unreachable!("{e}"));
-    outcome
+    }
 }
 
 /// The legacy engine in the same world. The legacy preparation wants an installed release; the
@@ -315,13 +311,11 @@ pub(crate) fn run_legacy(world: &mut World, engine: &str) -> Outcome {
     let output = timed(&mut command);
     let requests = fs::read_to_string(api_dir.join("requests.log"))
         .map_or_default(|text| text.lines().map(str::to_owned).collect());
-    let outcome = Outcome {
+    Outcome {
         error: error_of(&output),
         requests,
         admission: admission_of(&laid.temp),
-    };
-    fs::remove_dir_all(laid.root.path()).unwrap_or_else(|e| unreachable!("{e}"));
-    outcome
+    }
 }
 
 #[test]

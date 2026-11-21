@@ -179,6 +179,7 @@ mod resolve_cases;
 mod resolve_cases_receipts;
 mod resolve_qualification;
 mod resolve_run;
+mod resolve_template;
 mod resolve_wire;
 mod resolve_world;
 mod rulesets;

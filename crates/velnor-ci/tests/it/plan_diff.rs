@@ -104,7 +104,6 @@ fn run_case(case: &Path) -> (String, String) {
         String::from_utf8_lossy(&output.stderr)
     );
     let written = read(&outputs);
-    fs::remove_dir_all(repo.path()).unwrap_or_else(|e| unreachable!("{e}"));
     (
         written,
         String::from_utf8_lossy(&output.stderr).into_owned(),
@@ -184,7 +183,6 @@ fn a_request_without_lane_routes_is_refused() {
         stderr.contains("diff_selection_needs_lane_inventory"),
         "{stderr}"
     );
-    fs::remove_dir_all(repo.path()).unwrap_or_else(|e| unreachable!("{e}"));
 }
 
 #[test]
@@ -197,7 +195,6 @@ fn a_checkout_that_is_not_the_head_is_refused() {
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("checkout_head_mismatch"), "{stderr}");
-    fs::remove_dir_all(repo.path()).unwrap_or_else(|e| unreachable!("{e}"));
 }
 
 #[test]
@@ -208,7 +205,6 @@ fn an_untracked_file_runs_every_job() {
     assert!(output.status.success());
     assert!(read(&io.join("outputs")).contains("\nnot_affected_jobs=\n"));
     assert!(String::from_utf8_lossy(&output.stderr).contains("untracked_files:all_changed"));
-    fs::remove_dir_all(repo.path()).unwrap_or_else(|e| unreachable!("{e}"));
 }
 
 fn check_tail(id: &str) -> String {
@@ -235,7 +231,8 @@ fn planned_with_check(
 
 #[test]
 fn a_check_id_with_a_line_break_is_refused_and_adds_no_output_key() {
-    let (repo, output, io) = planned_with_check("injected-id", "x\nqualification_cache_write=true");
+    let (_repo, output, io) =
+        planned_with_check("injected-id", "x\nqualification_cache_write=true");
     let written = fs::read_to_string(io.join("outputs")).unwrap_or_default();
     assert!(!output.status.success(), "{written}");
     assert!(
@@ -250,7 +247,6 @@ fn a_check_id_with_a_line_break_is_refused_and_adds_no_output_key() {
         "{stderr}"
     );
     assert!(!stderr.contains("x\nqualification"), "{stderr}");
-    fs::remove_dir_all(repo.path()).unwrap_or_else(|e| unreachable!("{e}"));
 }
 
 #[test]
@@ -271,12 +267,11 @@ fn a_check_id_outside_the_identifier_alphabet_is_refused() {
             "{stderr}"
         );
     }
-    fs::remove_dir_all(repo.path()).unwrap_or_else(|e| unreachable!("{e}"));
 }
 
 #[test]
 fn a_check_id_with_dots_dashes_and_underscores_is_kept() {
-    let (repo, output, io) = planned_with_check("good-id", "jactionlint-linux_x64.1");
+    let (_repo, output, io) = planned_with_check("good-id", "jactionlint-linux_x64.1");
     assert!(
         output.status.success(),
         "{}",
@@ -287,7 +282,6 @@ fn a_check_id_with_dots_dashes_and_underscores_is_kept() {
         written.contains(",check-jactionlint-linux_x64.1,"),
         "{written}"
     );
-    fs::remove_dir_all(repo.path()).unwrap_or_else(|e| unreachable!("{e}"));
 }
 
 #[test]
@@ -312,5 +306,4 @@ fn a_lane_route_id_with_a_line_break_cannot_add_an_output_key() {
         !written.contains("qualification_cache_write=true"),
         "{written}"
     );
-    fs::remove_dir_all(repo.path()).unwrap_or_else(|e| unreachable!("{e}"));
 }

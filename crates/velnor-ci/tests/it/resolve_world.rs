@@ -9,11 +9,11 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::Arc;
 
 use serde_json::{Value, json};
 
-use crate::support::fresh_dir;
-
+use crate::resolve_template::{Template, shared_template};
 use crate::resolve_wire::zip_of;
 pub(crate) use crate::resolve_wire::{
     artifact_route, branch_route, digest_b3, list_route, repo_route, run_route, sha256, zip_route,
@@ -62,16 +62,10 @@ pub(crate) fn make_repo(dir: &Path) -> Shas {
     }
 }
 
-fn template() -> (velnor_test_support::ScratchDir, Shas) {
-    let root = fresh_dir("velnor-ci-resolve", "template");
-    let shas = make_repo(&root.join("repo"));
-    (root, shas)
-}
-
 pub(crate) fn copy_repo(world: &World, dest: &Path) {
     let copied = Command::new("cp")
         .arg("-R")
-        .arg(format!("{}/.", world.template.join("repo").display()))
+        .arg(format!("{}/.", world.template.root.join("repo").display()))
         .arg(dest)
         .status()
         .unwrap_or_else(|e| unreachable!("{e}"));
@@ -113,7 +107,7 @@ type Edit = Box<dyn Fn(&mut Node) + Send>;
 
 /// Everything outside the repository a case reads, and the ways a case can differ.
 pub(crate) struct World {
-    template: velnor_test_support::ScratchDir,
+    template: Arc<Template>,
     pub(crate) shas: Shas,
     pub(crate) request: Value,
     pub(crate) payload: Value,
@@ -156,7 +150,8 @@ impl World {
     /// A `phase` dispatch with its predecessors: warm has the cold run, third the warm and cold,
     /// `useful_delta` the third, warm and cold.
     pub(crate) fn new(phase: &str) -> Self {
-        let (template, shas) = template();
+        let template = shared_template();
+        let shas = template.shas.clone();
         let phases: &[&str] = match phase {
             "warm" => &["cold"],
             "third" => &["warm", "cold"],
@@ -257,6 +252,10 @@ impl World {
             zip_override: None,
             zip: Vec::new(),
         }
+    }
+
+    pub(crate) fn template_repo(&self) -> PathBuf {
+        self.template.root.join("repo")
     }
 
     /// Change node `index` after its link to its predecessor is set and before it is packed.
