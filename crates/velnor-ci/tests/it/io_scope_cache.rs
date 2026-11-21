@@ -1,7 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
 use std::fs;
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::time::{Duration, UNIX_EPOCH};
@@ -124,6 +126,41 @@ fn reset_to(repo: &Repo, pristine: &Repo) {
         }
     }
     copy_into(pristine.root(), repo.root());
+    assert_eq!(
+        tree(repo.root()),
+        tree(pristine.root()),
+        "reset_to left the checkout off the baseline"
+    );
+}
+
+fn tree(root: &Path) -> BTreeMap<String, String> {
+    let mut entries = BTreeMap::new();
+    walk(root, root, &mut entries);
+    entries
+}
+
+fn walk(root: &Path, dir: &Path, entries: &mut BTreeMap<String, String>) {
+    for entry in fs::read_dir(dir).unwrap_or_else(|e| unreachable!("{e}")) {
+        let path = entry.unwrap_or_else(|e| unreachable!("{e}")).path();
+        let relative = path
+            .strip_prefix(root)
+            .unwrap_or_else(|e| unreachable!("{e}"))
+            .display()
+            .to_string();
+        let metadata = fs::symlink_metadata(&path).unwrap_or_else(|e| unreachable!("{e}"));
+        let mode = metadata.permissions().mode() & 0o7777;
+        let kind = if metadata.is_symlink() {
+            let target = fs::read_link(&path).unwrap_or_else(|e| unreachable!("{e}"));
+            format!("link {}", target.display())
+        } else if metadata.is_dir() {
+            walk(root, &path, entries);
+            format!("dir {mode:o}")
+        } else {
+            let bytes = fs::read(&path).unwrap_or_else(|e| unreachable!("{e}"));
+            format!("file {mode:o} {}", velnor_rust::sha256_hex(&bytes))
+        };
+        entries.insert(relative, kind);
+    }
 }
 
 #[test]
@@ -146,7 +183,6 @@ fn changed_checkout_inputs_or_identity_refuse_scope_reuse() {
                 repo.git(&["add", ".cargo/new-input"]);
             }
             "mode" => {
-                use std::os::unix::fs::PermissionsExt;
                 fs::set_permissions(
                     repo.root().join("src/lib.rs"),
                     fs::Permissions::from_mode(0o755),
