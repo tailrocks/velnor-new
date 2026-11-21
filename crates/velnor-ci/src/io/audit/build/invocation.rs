@@ -81,7 +81,7 @@ impl Invocation {
         let mut provable = true;
         for (index, word) in words.iter().enumerate() {
             let name = if *word == "--exclude" {
-                words.get(index + 1).copied()
+                Some(words.get(index + 1).copied().unwrap_or_default())
             } else {
                 word.strip_prefix("--exclude=")
             };

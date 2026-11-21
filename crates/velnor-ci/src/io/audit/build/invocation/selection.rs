@@ -57,3 +57,14 @@ fn an_explicit_package_beside_an_exclusion_stays_selected() {
     let line = "cargo build --workspace --exclude app -p app";
     assert!(selected(line, "app"));
 }
+
+#[test]
+fn an_exclusion_flag_with_no_name_selects_nothing_it_cannot_prove() {
+    for line in [
+        "cargo build --workspace --exclude",
+        "cargo test --all --exclude",
+    ] {
+        assert!(!selected(line, "lib"), "{line}");
+        assert!(!selected(line, "app"), "{line}");
+    }
+}
