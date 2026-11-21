@@ -327,6 +327,7 @@ mod test_groups_selection;
 mod test_lane_flags;
 mod test_setup;
 mod test_setup_any_root;
+mod test_setup_lane_order;
 mod test_setup_phase;
 mod test_setup_skipped;
 mod token_order;

@@ -153,7 +153,7 @@ fn helper_job(facts: &RepoFacts, root: &RustRoot, deltas: bool) -> Job {
         }))
     });
     let mut steps = crate::test_setup::before_builds(facts, root, steps);
-    crate::test_setup::gate_job(&mut steps);
+    crate::test_setup::gate_job(facts, &mut steps);
     Job {
         needs: vec![PLAN_JOB],
         gate: lane.job(),
