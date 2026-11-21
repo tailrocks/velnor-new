@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
+use std::collections::VecDeque;
 use std::time::Duration;
 
 use serde_json::{Value, json};
@@ -14,6 +15,8 @@ struct Api {
     asked: RefCell<Vec<String>>,
     deleted: RefCell<Vec<u64>>,
     fail_delete: Option<u64>,
+    listings: Cell<usize>,
+    arrivals: RefCell<VecDeque<Vec<Value>>>,
 }
 
 fn entry(id: u64, key: &str, reference: &str) -> Value {
@@ -27,7 +30,15 @@ impl Api {
             asked: RefCell::default(),
             deleted: RefCell::default(),
             fail_delete: None,
+            listings: Cell::default(),
+            arrivals: RefCell::default(),
         }
+    }
+
+    fn arriving_after_each_relist(batches: Vec<Vec<Value>>) -> Self {
+        let api = Self::new(mixed());
+        *api.arrivals.borrow_mut() = batches.into();
+        api
     }
 }
 
@@ -38,6 +49,15 @@ impl GitHub for Api {
             .rsplit_once("page=")
             .and_then(|(_, page)| page.parse().ok())
             .ok_or_else(|| CiError::new("missing page"))?;
+        if page == 1 {
+            let listing = self.listings.get();
+            self.listings.set(listing + 1);
+            if listing > 0
+                && let Some(batch) = self.arrivals.borrow_mut().pop_front()
+            {
+                self.entries.borrow_mut().extend(batch);
+            }
+        }
         let entries = self.entries.borrow();
         let rows: Vec<_> = entries
             .iter()
@@ -207,4 +227,40 @@ fn the_command_is_a_dry_run_unless_yes_is_passed() {
     assert_eq!(parse(&[]), Some(false));
     assert_eq!(parse(&["--repo", "tailrocks/lab"]), Some(false));
     assert_eq!(parse(&["--yes"]), Some(true));
+}
+
+#[test]
+fn a_write_that_lands_during_the_purge_is_deleted_on_a_later_pass() {
+    let late = vec![entry(
+        9,
+        "velnor-private-tgt-late.root.Linux-X64-cc-1",
+        "refs/heads/main",
+    )];
+    let api = Api::arriving_after_each_relist(vec![late]);
+    let report = purge_private(&api, &repo(), true).unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(report.contains("deleted 4 entries"), "{report}");
+    assert_eq!(*api.deleted.borrow(), vec![1, 2, 3, 9]);
+    assert!(api.entries.borrow().iter().all(|e| e["id"] != 9));
+}
+
+#[test]
+fn a_write_that_keeps_arriving_fails_after_the_bounded_passes() {
+    let batches = (100..110)
+        .map(|id| {
+            vec![entry(
+                id,
+                &format!("velnor-private-tgt-late.root.Linux-X64-{id}"),
+                "refs/heads/main",
+            )]
+        })
+        .collect();
+    let api = Api::arriving_after_each_relist(batches);
+    let error = purge_private(&api, &repo(), true)
+        .err()
+        .map(|e| e.to_string());
+    assert_eq!(
+        error.as_deref(),
+        Some("1 velnor-private- entries remain after the purge; run it again")
+    );
+    assert_eq!(*api.deleted.borrow(), vec![1, 2, 3, 100, 101]);
 }
