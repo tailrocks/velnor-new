@@ -334,6 +334,7 @@ pub enum VerifiedSave {
 pub struct ToolsTelemetry {
     pub restore: bool,
     pub save: bool,
+    pub network_save: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

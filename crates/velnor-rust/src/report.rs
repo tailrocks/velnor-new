@@ -12,6 +12,7 @@ use velnor_model::{
 
 // helper-gate: first in tools-v0.1.111 via 2c70d48ddc
 const NOT_GENERATED_HELPER: (u64, u64, u64) = (0, 1, 111);
+const RESTORE_ONLY_TOOLS_HELPER: (u64, u64, u64) = (0, 1, 112);
 
 fn not_generated(facts: &RepoFacts) -> Option<&'static str> {
     let refused = facts.private_sources.is_some()
@@ -34,6 +35,10 @@ fn attach(facts: &RepoFacts, jobs: &mut [Job], maintenance: Option<&Job>) -> Job
                 })
         });
     let not_generated = not_generated(facts);
+    let legacy_tools_save = !facts
+        .helper
+        .as_ref()
+        .is_some_and(|release| release.version().at_least(RESTORE_ONLY_TOOLS_HELPER));
     let mut producers = Vec::new();
     for job in jobs {
         let saves = job
@@ -49,7 +54,7 @@ fn attach(facts: &RepoFacts, jobs: &mut [Job], maintenance: Option<&Job>) -> Job
             continue;
         }
         let reason = not_generated.filter(|_| job.id != HELPER_JOB && job.id != AUDIT_JOB);
-        attach_metrics(job, nextest_artifacts, reason);
+        attach_metrics(job, nextest_artifacts, reason, legacy_tools_save);
         producers.push(&*job);
     }
     producers.extend(maintenance);
@@ -82,7 +87,12 @@ fn attach(facts: &RepoFacts, jobs: &mut [Job], maintenance: Option<&Job>) -> Job
     cache
 }
 
-fn attach_metrics(job: &mut Job, nextest_artifacts: bool, not_generated: Option<&'static str>) {
+fn attach_metrics(
+    job: &mut Job,
+    nextest_artifacts: bool,
+    not_generated: Option<&'static str>,
+    legacy_tools_save: bool,
+) {
     let caches = job
         .steps
         .iter()
@@ -104,6 +114,10 @@ fn attach_metrics(job: &mut Job, nextest_artifacts: bool, not_generated: Option<
     let node_tools = ToolsTelemetry {
         restore: has(ToolsLocalVerb::RecordRestore),
         save: has(ToolsLocalVerb::RecordSave),
+        network_save: legacy_tools_save
+            || job.steps.iter().any(
+                |step| matches!(&step.kind, StepKind::CacheSave(key) if key.family() == "tools"),
+            ),
     };
     job.steps.extend(
         [
