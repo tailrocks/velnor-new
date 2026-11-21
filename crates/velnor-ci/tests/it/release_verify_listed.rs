@@ -73,7 +73,6 @@ fn the_command_runs_for_a_listed_file_and_its_failure_fails_the_step() {
         verify_listed(&dir, "app-macos", "false").status.code(),
         Some(1)
     );
-    let _ignored = std::fs::remove_dir_all(dir.path());
 }
 
 #[test]
@@ -83,7 +82,6 @@ fn a_listed_file_that_is_not_on_disk_fails_without_running_the_command() {
         verify_listed(&dir, "app-macos", "true").status.code(),
         Some(1)
     );
-    let _ignored = std::fs::remove_dir_all(dir.path());
 }
 
 #[test]
@@ -93,5 +91,4 @@ fn an_unlisted_file_skips_the_command_even_when_it_would_fail() {
         verify_listed(&dir, "app-macos", "false").status.code(),
         Some(0)
     );
-    let _ignored = std::fs::remove_dir_all(dir.path());
 }

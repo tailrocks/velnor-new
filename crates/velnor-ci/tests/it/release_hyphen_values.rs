@@ -9,14 +9,12 @@ fn run(label: &str, args: &[&str]) -> Output {
     let dir = crate::scratch_path("velnor-ci-hyphen", label);
     std::fs::create_dir_all(dir.path()).unwrap_or_else(|e| unreachable!("{e}"));
     std::fs::write(dir.join("release-plz.toml"), CONFIG).unwrap_or_else(|e| unreachable!("{e}"));
-    let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+    Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
         .args(args)
         .env_remove("GITHUB_TOKEN")
         .current_dir(dir.path())
         .output()
-        .unwrap_or_else(|e| unreachable!("{e}"));
-    let _ignored = std::fs::remove_dir_all(dir.path());
-    output
+        .unwrap_or_else(|e| unreachable!("{e}"))
 }
 
 fn showed_help(output: &Output) -> bool {
