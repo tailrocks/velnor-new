@@ -7,7 +7,7 @@ use std::process::{Command, Stdio};
 use serde::Deserialize;
 
 use crate::error::CiError;
-use crate::io::assign_mbx_report;
+use crate::io::mbx_reports::assign as assign_mbx_report;
 
 pub type TestKey = (String, String);
 
