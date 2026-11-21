@@ -119,7 +119,7 @@ scan() {
   function versions(line, out,    rest, n, v) {
     n = 0
     rest = line
-    while (match(rest, /\(0, ?1, ?[0-9]+\)|0\.1\.[0-9]+/)) {
+    while (match(rest, /\( *0 *, *1 *, *[0-9]+ *\)|0\.1\.[0-9]+/)) {
       v = substr(rest, RSTART, RLENGTH)
       gsub(/[() ]/, "", v)
       gsub(/,/, ".", v)
@@ -141,13 +141,27 @@ scan() {
   }
   function tuple_code(line,    s, off, st) {
     off = 0; s = line
-    while (match(s, /\(0, ?1, ?[0-9]+\)/)) {
+    while (match(s, /\( *0 *, *1 *, *[0-9]+ *\)/)) {
       st = off + RSTART
       if (!inrange(st) && !inlit(st)) return 1
       off = st + RLENGTH - 1
       s = substr(line, off + 1)
     }
     return 0
+  }
+  function mask_tuples(line,    out, off, s, st, pad, j) {
+    out = line; off = 0; s = line
+    while (match(s, /\( *0 *, *1 *, *[0-9]+ *\)/)) {
+      st = off + RSTART
+      if (inlit(st)) {
+        pad = ""
+        for (j = 0; j < RLENGTH; j++) pad = pad " "
+        out = substr(out, 1, st - 1) pad substr(out, st + RLENGTH)
+      }
+      off = st + RLENGTH - 1
+      s = substr(line, off + 1)
+    }
+    return out
   }
   function lex_line(s,    i, n, c, cs, pc, ppc, j, h, hs, k) {
     split("", rs)
@@ -244,11 +258,13 @@ scan() {
     aboveadded = prevadded
     p_mv = c_mv; p_mn = c_mn; p_mc = c_mc
     analyze(text)
+    scanned_now = strip(mask_tuples(text))
     prevnew = text
     prevadded = ($0 ~ /^\+/)
     if (!prevadded) {
       if (!counted || !aboveadded || !p_mv || versions(strip(above), av) > 0) next
       added[++count] = file SUBSEP strip(text)
+      scan_of[count] = scanned_now
       markN[count] = p_mn
       markC[count] = p_mc
       ctx[count] = 1
@@ -261,9 +277,10 @@ scan() {
     has = c_mv || p_mv
     markN_now = c_mv ? c_mn : (p_mv ? p_mn : "")
     markC_now = c_mv ? c_mc : (p_mv ? p_mc : "")
-    if (has && versions(stripped, probe) == 0) next
+    if (has && versions(scanned_now, probe) == 0) next
     if (tolower(stripped) !~ /helper|gate|minimum|at_least|pin/ && !c_tuple) next
     added[++count] = file SUBSEP stripped
+    scan_of[count] = scanned_now
     markN[count] = markN_now
     markC[count] = markC_now
   }
@@ -271,7 +288,7 @@ scan() {
     for (i = 1; i <= count; i++) {
       split(added[i], parts, SUBSEP)
       if (!ctx[i] && added[i] in removed) continue
-      n = versions(parts[2], found)
+      n = versions(scan_of[i], found)
       for (k = 1; k <= n; k++) {
         if ((added[i] SUBSEP found[k]) in seen) continue
         seen[added[i] SUBSEP found[k]] = 1
