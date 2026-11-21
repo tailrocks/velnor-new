@@ -2,23 +2,76 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeSet;
+use std::error::Error;
+use std::fs;
+use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
 use crate::facts::TestResult;
 use crate::pipeline::{pin_helper, view, workflow};
 
-const BEFORE_SHARED_STORE: &[&str] = &["0.1.81", "0.1.84"];
-const HELPERS: &[&str] = &[
-    "0.1.85", "0.1.86", "0.1.87", "0.1.88", "0.1.89", "0.1.91", "0.1.92", "0.1.93", "0.1.94",
-    "0.1.95", "0.1.96", "0.1.97", "0.1.98", "0.1.99", "0.1.100", "0.1.101", "0.1.102", "0.1.103",
-    "0.1.104", "0.1.106", "0.1.107", "0.1.109", "0.1.110", "0.1.111",
-];
 const CONFIGS: &[Option<&str>] = &[
     None,
     Some("mbx_shared_store = true\n"),
     Some("mbx_shared_store = false\n"),
 ];
+
+fn rust_sources(dir: &Path, out: &mut Vec<PathBuf>) -> std::io::Result<()> {
+    for entry in fs::read_dir(dir)? {
+        let path = entry?.path();
+        if path.is_dir() {
+            rust_sources(&path, out)?;
+        } else if path.extension().is_some_and(|ext| ext == "rs") {
+            out.push(path);
+        }
+    }
+    Ok(())
+}
+
+/// The patch number of every `(0, 1, N)` tuple in `text`, in order.
+fn patches_in(text: &str) -> Vec<u64> {
+    text.split("(0, 1, ")
+        .skip(1)
+        .filter_map(|rest| rest.split_once(')')?.0.parse().ok())
+        .collect()
+}
+
+/// Every helper patch that gates a workflow shape: each `(0, 1, N)` gate tuple in the generator,
+/// planner and renderer sources, so a new gate is covered without editing this test.
+fn gate_patches() -> Result<BTreeSet<u64>, Box<dyn Error>> {
+    let mut files = Vec::new();
+    for krate in ["velnor-gen", "velnor-rust", "velnor-render"] {
+        let src = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .join(krate)
+            .join("src");
+        rust_sources(&src, &mut files)?;
+    }
+    let mut patches = BTreeSet::new();
+    for file in files {
+        let text = fs::read_to_string(file)?;
+        patches.extend(
+            patches_in(&text)
+                .into_iter()
+                .filter(|patch| *patch >= velnor_gen::HELPER_MINIMUM.2),
+        );
+    }
+    Ok(patches)
+}
+
+/// The first patch whose helper accepts `mbx_shared_store`, from its gate in `key_gates`.
+fn shared_store_patch() -> Result<u64, Box<dyn Error>> {
+    let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/key_gates/rust_ci.rs");
+    let text = fs::read_to_string(path)?;
+    let (_, after) = text
+        .split_once("\"mbx_shared_store\"")
+        .ok_or("the mbx_shared_store gate is missing")?;
+    patches_in(after)
+        .first()
+        .copied()
+        .ok_or_else(|| "the mbx_shared_store gate has no threshold".into())
+}
 
 fn strings<'a>(value: &'a Value, out: &mut Vec<&'a str>) {
     match value {
@@ -86,29 +139,38 @@ fn dangling_refs(workflow: &Value) -> Vec<String> {
 #[test]
 fn every_steps_reference_names_a_step_of_its_own_job() -> TestResult {
     let mut refs = 0;
-    let pins = [(BEFORE_SHARED_STORE, &CONFIGS[..1]), (HELPERS, CONFIGS)];
-    for (helpers, configs) in pins {
-        for helper in helpers {
-            for config in configs.iter().copied() {
-                let mut repo = view(
-                    &["Cargo.toml", "tools/Cargo.toml"],
-                    config.map(str::as_bytes),
-                )?;
-                pin_helper(&mut repo, helper)?;
-                let yaml = crate::yaml_tree::document(&workflow(&repo)?)?;
-                let mut texts = Vec::new();
-                strings(&yaml, &mut texts);
-                refs += texts
-                    .iter()
-                    .flat_map(|text| expressions(text))
-                    .map(|expr| step_refs(expr).len())
-                    .sum::<usize>();
-                let dangling = dangling_refs(&yaml);
-                assert!(
-                    dangling.is_empty(),
-                    "helper {helper}, config {config:?}: {dangling:#?}"
-                );
-            }
+    let patches = gate_patches()?;
+    let shared_store = shared_store_patch()?;
+    assert!(
+        patches.contains(&velnor_gen::HELPER_MINIMUM.2) && patches.contains(&shared_store),
+        "gate scan found {patches:?}, which misses the minimum or the shared-store gate"
+    );
+    for patch in patches {
+        let helper = format!("0.1.{patch}");
+        let configs = if patch < shared_store {
+            &CONFIGS[..1]
+        } else {
+            CONFIGS
+        };
+        for config in configs.iter().copied() {
+            let mut repo = view(
+                &["Cargo.toml", "tools/Cargo.toml"],
+                config.map(str::as_bytes),
+            )?;
+            pin_helper(&mut repo, &helper)?;
+            let yaml = crate::yaml_tree::document(&workflow(&repo)?)?;
+            let mut texts = Vec::new();
+            strings(&yaml, &mut texts);
+            refs += texts
+                .iter()
+                .flat_map(|text| expressions(text))
+                .map(|expr| step_refs(expr).len())
+                .sum::<usize>();
+            let dangling = dangling_refs(&yaml);
+            assert!(
+                dangling.is_empty(),
+                "helper {helper}, config {config:?}: {dangling:#?}"
+            );
         }
     }
     assert_ne!(refs, 0, "no steps reference was checked");
