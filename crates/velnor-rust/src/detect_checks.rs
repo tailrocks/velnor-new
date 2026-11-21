@@ -1,14 +1,51 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{RepoPath, RepoView, RustCiConfig, RustRoot, ToolPins, Toolchain};
+use velnor_model::{LintKind, RepoPath, RepoView, RustCiConfig, RustRoot, ToolPins, Toolchain};
 
 use crate::build_target::{build_targets, check_host_tuple_version};
 use crate::config::CONFIG_PATH;
-use crate::detect::HELPER_PACKAGE;
+use crate::detect::{GENERATOR_PACKAGE, HELPER_PACKAGE};
 use crate::error::{DetectError, Reason};
 use crate::mise::MISE_CONFIGS;
 use crate::toolchain::{TOOLCHAIN_PLAIN, TOOLCHAIN_TOML};
+
+fn generator_members(rust_roots: &[RustRoot]) -> usize {
+    rust_roots
+        .iter()
+        .flat_map(|root| &root.members)
+        .filter(|member| member.name.as_str() == GENERATOR_PACKAGE)
+        .count()
+}
+
+pub(crate) fn generator_manifest(rust_roots: &[RustRoot]) -> Option<RepoPath> {
+    rust_roots
+        .iter()
+        .find(|root| {
+            root.members
+                .iter()
+                .any(|member| member.name.as_str() == GENERATOR_PACKAGE)
+        })
+        .map(|root| root.manifest.clone())
+}
+
+pub(crate) fn check_generator(
+    config: &RustCiConfig,
+    rust_roots: &[RustRoot],
+) -> Result<(), DetectError> {
+    let from_source = config
+        .lint
+        .iter()
+        .any(|lint| matches!(lint.kind, LintKind::GeneratedCheck { from_source: true }));
+    let found = generator_members(rust_roots);
+    if !from_source || found == 1 {
+        return Ok(());
+    }
+    Err(DetectError::invalid(
+        &CONFIG_PATH,
+        Reason::GeneratorPackage { found },
+    ))
+}
 
 pub(crate) fn check_helper_box(
     config: &RustCiConfig,

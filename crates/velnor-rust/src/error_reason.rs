@@ -30,6 +30,10 @@ impl Reason {
                 f,
                 "inputs names {package}, which is not a package of this repository"
             ),
+            Self::GeneratorPackage { found } => write!(
+                f,
+                "from_source builds velnor-gen from this repository, so exactly one Cargo workspace member must be named velnor-gen; found {found}"
+            ),
             Self::AmbiguousNextestHarness(entry) => write!(
                 f,
                 "nextest_harnesses names {entry}, which more than one test target declares"
@@ -177,7 +181,8 @@ impl fmt::Display for Reason {
             | Self::UntrackedManifest
             | Self::LockLine(_)
             | Self::UnknownLockedPackage(_)
-            | Self::UnknownRoot(_) => self.fmt_inputs(f),
+            | Self::UnknownRoot(_)
+            | Self::GeneratorPackage { .. } => self.fmt_inputs(f),
             Self::UnknownTestGroupRoot(_)
             | Self::TestGroupWithoutNextest(_)
             | Self::TestGroupFilter(_)

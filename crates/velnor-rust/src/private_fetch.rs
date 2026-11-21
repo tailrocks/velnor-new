@@ -260,10 +260,12 @@ fn runs_repository_code(step: &Step) -> bool {
 }
 
 pub(crate) fn compiles(step: &Step) -> bool {
-    matches!(&step.kind, StepKind::Cargo(command) if !matches!(
-        command,
-        CargoCommand::FmtCheck
-            | CargoCommand::Machete
-            | CargoCommand::NextestRunArchive { .. }
-    ))
+    match &step.kind {
+        StepKind::Cargo(command) => !matches!(
+            command,
+            CargoCommand::FmtCheck | CargoCommand::Machete | CargoCommand::NextestRunArchive { .. }
+        ),
+        StepKind::GeneratorCheck { source } => source.is_some(),
+        _ => false,
+    }
 }

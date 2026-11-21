@@ -108,24 +108,29 @@ pub(crate) fn install_generator_step(release: &HelperRelease) -> RenderedStep {
     }
 }
 
-pub(crate) fn generator_check_step(from_source: bool) -> RenderedStep {
-    if !from_source {
+const CHECK_FROM_SOURCE: &str = "set -euo pipefail; fail() { printf '%s\\n' \"::error title=velnor-gen::$1\"; exit 1; }; target=$(rustc -vV | sed -n 's/^host: //p'); [ -n \"$target\" ] || fail \"rustc reports no host triple\"; cargo run --locked --manifest-path \"$VELNOR_GEN_MANIFEST\" --target \"$target\" --package velnor-gen -- check --verify-release";
+
+pub(crate) fn generator_check_step(source: Option<&str>) -> RenderedStep {
+    let Some(manifest) = source else {
         return RenderedStep {
             name: "Check the generated workflow".to_owned(),
             run: Some("velnor-gen check --verify-release".to_owned()),
             ..RenderedStep::default()
         };
-    }
+    };
     RenderedStep {
         name: "Check the generated workflow with velnor-gen built from the checkout".to_owned(),
-        run: Some(
-            "cargo run --locked --target \"$VELNOR_GEN_TARGET\" --package velnor-gen -- check --verify-release"
-                .to_owned(),
-        ),
-        env: vec![(
-            "VELNOR_GEN_TARGET".to_owned(),
-            Value::Expr(choice(|platform| Some(platform.host_triple().to_owned()))),
-        )],
+        run: Some("eval \"$VELNOR_GEN_CHECK\"".to_owned()),
+        env: vec![
+            (
+                "VELNOR_GEN_CHECK".to_owned(),
+                Value::Text(CHECK_FROM_SOURCE.to_owned()),
+            ),
+            (
+                "VELNOR_GEN_MANIFEST".to_owned(),
+                Value::Text(manifest.to_owned()),
+            ),
+        ],
         ..RenderedStep::default()
     }
 }

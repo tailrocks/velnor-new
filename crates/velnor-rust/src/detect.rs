@@ -27,6 +27,7 @@ use crate::unowned::unowned;
 use crate::weaken::{is_nextest_config, weakenings};
 
 pub(crate) const HELPER_PACKAGE: &str = "velnor-ci";
+pub(crate) const GENERATOR_PACKAGE: &str = "velnor-gen";
 const CARGO_MANIFEST: &str = "Cargo.toml";
 
 #[must_use]
@@ -141,6 +142,7 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
     }
     check_nextest_harnesses(&config, &rust_roots)?;
     check_helper_box(&config, &rust_roots)?;
+    crate::detect_checks::check_generator(&config, &rust_roots)?;
     crate::config_test_groups::check_tests(&config, &rust_roots)?;
     crate::groups::check(view, &config, &rust_roots)?;
     crate::groups::check_shape(&config)?;

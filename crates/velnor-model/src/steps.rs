@@ -149,8 +149,10 @@ pub enum StepKind {
         run: String,
         before_build: bool,
     },
+    /// `None` runs the released velnor-gen; `Some(manifest)` builds it from the checkout, from the
+    /// workspace whose manifest is named.
     GeneratorCheck {
-        from_source: bool,
+        source: Option<RepoPath>,
     },
     InstallGenerator(HelperRelease),
     InstallHelper(HelperRelease),

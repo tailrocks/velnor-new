@@ -5,11 +5,12 @@ use velnor_model::{
     Gate, GateNeed, Job, LintCommand, LintJob, LintKind, PlanFrom, PrRun, RepoFacts, Step, StepKind,
 };
 
+use crate::detect_checks::generator_manifest;
 use crate::lane::PLAN_JOB;
 use crate::lint_tools::{ALINT, JACTIONLINT, NODE, RUST, SHELLCHECK, usable};
 use crate::mbx_pin::MBX_TOOL;
 use crate::plan::{CHECKOUT_DEPTH, job, mbx, quick, step};
-use crate::plan_tools::mirror_step;
+use crate::plan_tools::{mirror_step, tools_install};
 
 pub(crate) fn lint_jobs(facts: &RepoFacts) -> Vec<Job> {
     facts
@@ -91,12 +92,14 @@ fn generated_check_tools(facts: &RepoFacts) -> Vec<String> {
 }
 
 fn generated_check_job(facts: &RepoFacts, lint: &LintJob, from_source: bool) -> Job {
-    let tools = generated_check_tools(facts);
+    let source = from_source
+        .then(|| generator_manifest(&facts.rust_roots))
+        .flatten();
     let mut steps = vec![step(StepKind::Checkout {
         depth: CHECKOUT_DEPTH,
         sparse: None,
     })];
-    if from_source {
+    if source.is_some() {
         steps.extend(
             facts
                 .helper
@@ -105,16 +108,17 @@ fn generated_check_job(facts: &RepoFacts, lint: &LintJob, from_source: bool) -> 
         );
         steps.extend(mbx(facts, None));
         steps.extend(mirror_step(facts));
-    }
-    if !tools.is_empty() {
-        steps.push(step(StepKind::InstallTools {
-            only: Some(tools.join(" ")),
-        }));
-        if from_source {
+        steps.extend(tools_install(facts));
+        if !facts.tools.tools.is_empty() {
             steps.extend(mirror_step(facts));
         }
-    }
-    if !from_source {
+    } else {
+        let tools = generated_check_tools(facts);
+        if !tools.is_empty() {
+            steps.push(step(StepKind::InstallTools {
+                only: Some(tools.join(" ")),
+            }));
+        }
         steps.extend(
             facts
                 .helper
@@ -122,7 +126,7 @@ fn generated_check_job(facts: &RepoFacts, lint: &LintJob, from_source: bool) -> 
                 .map(|release| step(StepKind::InstallGenerator(release.clone()))),
         );
     }
-    steps.push(step(StepKind::GeneratorCheck { from_source }));
+    steps.push(step(StepKind::GeneratorCheck { source }));
     Job {
         name: Some(lint.name.clone()),
         timeout_minutes: lint.timeout_minutes,

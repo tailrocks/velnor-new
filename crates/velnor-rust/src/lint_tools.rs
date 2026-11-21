@@ -192,7 +192,14 @@ fn check_job(
             }
             lint_tasks::check(catalog, tools, task, named)
         }
-        LintKind::GeneratedCheck { .. } => check(RUST, Need::Optional),
+        LintKind::GeneratedCheck { from_source } => check(
+            RUST,
+            if *from_source {
+                Need::Required
+            } else {
+                Need::Optional
+            },
+        ),
     }
 }
 
