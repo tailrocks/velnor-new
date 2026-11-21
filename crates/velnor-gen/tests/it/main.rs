@@ -70,6 +70,7 @@ mod declared_triggers;
 mod declared_workflow;
 mod declared_working_directory;
 mod default_branch;
+mod delete_entry_unrendered;
 mod delta_budget;
 mod delta_cache;
 mod delta_helper;

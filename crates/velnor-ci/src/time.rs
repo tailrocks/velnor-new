@@ -61,6 +61,28 @@ pub(crate) fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
 }
 
 #[must_use]
+pub fn utc_text(unix_seconds: i64) -> String {
+    let second_of_day = unix_seconds.rem_euclid(86_400);
+    format!(
+        "{}T{:02}:{:02}:{:02}Z",
+        date_text(unix_seconds),
+        second_of_day / 3_600,
+        second_of_day % 3_600 / 60,
+        second_of_day % 60
+    )
+}
+
+#[must_use]
+pub fn now_utc_text() -> String {
+    let seconds = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()
+        .and_then(|elapsed| i64::try_from(elapsed.as_secs()).ok())
+        .unwrap_or(0);
+    utc_text(seconds)
+}
+
+#[must_use]
 pub fn date_text(unix_seconds: i64) -> String {
     let days = unix_seconds.div_euclid(86_400) + 719_468;
     let era = days.div_euclid(146_097);

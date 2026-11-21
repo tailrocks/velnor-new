@@ -36,6 +36,37 @@ pub enum CacheCommand {
         about = "List every GitHub Actions cache entry of the repository whose key starts with velnor-private-, on every ref, and delete them only with --yes (a dry run otherwise); prints counts and bytes, never a token. Run it once when a private repository becomes public, because a fork pull request of a public repository can restore a default-branch entry by its exact key; it does not look at the repository visibility, so it also removes the entries of a repository that is still private. It covers only velnor-private- keys: before a private repository goes public, delete ALL its caches (`gh cache delete --all -R <owner/repo>`), because helper 0.1.111 stored private sources and build outputs under velnor-src- and velnor-tgt- keys. With --yes it refuses, and deletes nothing, while any workflow of the repository is enabled (state active; disable every workflow first), when the workflow listing is incomplete, and while any workflow run hasn't finished (in progress, queued, waiting, requested or pending; wait for them, then run it again); a dry run only warns about unfinished runs. Reads GITHUB_TOKEN, which needs actions: write to delete, and GITHUB_REPOSITORY"
     )]
     PurgePrivate(PurgePrivateArgs),
+    #[command(
+        about = "Delete one poisoned cache entry in two steps. With --key, one or more --ref (the refs the tools-verify notice prints, in restore order) and --restored-before (the time the notice prints; required) it only READS: it resolves the one entry on the FIRST --ref, the ref the restore reads first, prints its ID, version and ref and the command that deletes it, and deletes nothing, so running it again is harmless; it refuses when no ref holds the key, when the first --ref no longer holds it but a later one does (the entry may be deleted already: it names the refs checked and the ref that holds the key, and only a rerun with that ref first resolves it), when any listing fails or is inconsistent, when an entry has no version, when the first --ref has more than one entry (two versions under one key), when a later ref holds the key under a different version, or when the entry was saved at or after --restored-before (or has no parsable created_at), because it is then not the entry this run restored. The two steps are needed once per run, not once per job. With --key and --id it deletes exactly that entry, and refuses, deleting nothing, when the ID no longer exists or does not have that exact key. Reads GITHUB_TOKEN, which needs actions: write to delete, and GITHUB_API_URL (default https://api.github.com); the printed --id command repeats a non-default GITHUB_API_URL and never prints the token"
+    )]
+    DeleteEntry(DeleteEntryArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct DeleteEntryArgs {
+    #[arg(long, help = "The exact cache key")]
+    pub key: String,
+    #[arg(
+        long = "ref",
+        required_unless_present = "id",
+        conflicts_with = "id",
+        help = "A ref the entry can belong to, such as refs/pull/7/merge or refs/heads/main; repeat it in the order the cache action reads refs (the run's own ref, then the base branch, then the default branch)"
+    )]
+    pub refs: Vec<String>,
+    #[arg(
+        long,
+        required_unless_present = "id",
+        conflicts_with = "id",
+        help = "RFC 3339 UTC time such as 2026-11-22T10:00:00Z, printed by the notice: the moment this run's tools check began, after its restore had finished; step 1 refuses an entry whose created_at is at or after it, and one without a parsable created_at"
+    )]
+    pub restored_before: Option<String>,
+    #[arg(
+        long,
+        help = "Delete exactly this cache entry ID, which must still exist under --key; the ID comes from the output of the --ref form"
+    )]
+    pub id: Option<u64>,
+    #[arg(long, help = "Repository as owner/name, default GITHUB_REPOSITORY")]
+    pub repo: Option<String>,
 }
 
 #[derive(Debug, Args)]

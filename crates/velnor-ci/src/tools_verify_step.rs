@@ -6,13 +6,20 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use crate::error::CiError;
-use crate::escape::{escape, inert};
+use crate::escape::{escape, inert, shell_quote as quoted};
 use crate::mbx_store::trusted_event;
 use crate::tools_discard;
 use crate::tools_verify::{Anchor, Discard, Recording, Verb, Verdict, check, read, record};
 
 const ANCHOR_DIR: &str = "velnor-tools-anchor";
 const ANCHOR_NAME: &str = "digest";
+
+#[derive(Debug, Clone)]
+pub struct Remote {
+    pub host: String,
+    pub api_url: String,
+    pub repository: String,
+}
 
 #[derive(Debug, Clone)]
 pub struct Context {
@@ -24,17 +31,21 @@ pub struct Context {
     pub verified: bool,
     pub event_name: String,
     pub git_ref: String,
+    pub base_ref: String,
     pub default_branch: Option<String>,
     pub cache_key: String,
     pub anchor_key: String,
-    pub repository: String,
+    pub restored_before: String,
+    pub remote: Remote,
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct Remedy<'a> {
     pub key: &'a str,
     pub anchor_key: &'a str,
-    pub repository: &'a str,
+    pub remote: &'a Remote,
+    pub refs: &'a [String],
+    pub restored_before: &'a str,
 }
 
 fn reason(discard: &Discard) -> String {
@@ -47,10 +58,43 @@ fn reason(discard: &Discard) -> String {
     }
 }
 
-fn delete_sentence(what: &str, key: &str, repository: &str) -> String {
-    let quoted = format!("'{}'", key.replace('\'', "'\\''"));
+fn delete_command(key: &str, refs: &[String], remote: &Remote, restored_before: &str) -> String {
+    let refs: String = refs.iter().fold(String::new(), |mut line, reference| {
+        line.push_str(" --ref ");
+        line.push_str(&quoted(reference));
+        line
+    });
     format!(
-        ". The restored {what} is {quoted}; delete it with `gh cache delete {quoted} -R {repository}`, which removes every entry with that key in the repository, on any ref"
+        "GITHUB_API_URL={} GITHUB_TOKEN=\"$(gh auth token --hostname {})\" velnor-ci cache delete-entry --repo {} --key {}{refs} --restored-before {}",
+        quoted(&remote.api_url),
+        quoted(&remote.host),
+        quoted(&remote.repository),
+        quoted(key),
+        quoted(restored_before),
+    )
+}
+
+const HELPER_RELEASES: &str = "https://github.com/tailrocks/velnor-new/releases";
+
+fn trust_hint(remote: &Remote) -> String {
+    if remote.host == "github.com" {
+        return String::new();
+    }
+    format!(
+        " If the certificate of {} is signed by a private CA, set SSL_CERT_FILE to a PEM bundle that holds it",
+        quoted(&remote.host)
+    )
+}
+
+fn delete_sentence(what: &str, key: &str, remedy: Remedy<'_>) -> String {
+    if remedy.refs.is_empty() {
+        return String::new();
+    }
+    format!(
+        ". The restored {what} is {}; the cache action does not report which ref or version it came from, so the command below only reads: it lists every ref the action can have read, in its order (the ref of this run, then the base and default branches), and prints the one entry the restore read (ID, version and ref) together with the command that deletes that entry by its ID. It deletes nothing itself, so running it again is harmless. It resolves an entry only when the FIRST ref holds the key and the entry was saved before --restored-before (the time this job's tools check began, after its restore had finished; an entry saved at or after it, or without a usable created_at, is not the entry this run read, so a stale notice of another run can never delete an entry saved later), and refuses, printing nothing to delete, when the first ref no longer holds it (another job of this run or you may have deleted the entry already; if so, stop), when that ref has more than one entry, when a later ref holds the key under a different version or when an entry has no version; then check which version the job used and delete that ID. Step 1: run the command below and read the entry it prints. Step 2: run the --id command it prints, once; it deletes exactly that ID and refuses when the ID no longer exists or has another key. The two steps are needed once per run, not once per job, even though every tools job of the run prints this notice: after one job's entry is deleted, step 1 refuses instead of naming the next ref's healthy entry. It needs velnor-ci 0.1.112 or newer on the machine that runs it, which the pinned helper does not provide: download it from {HELPER_RELEASES} (tag tools-v0.1.112 or newer) and put it on PATH. The token is the one `gh auth token` prints, which prefers an exported GH_TOKEN or GITHUB_TOKEN (GH_ENTERPRISE_TOKEN or GITHUB_ENTERPRISE_TOKEN on a host other than github.com) to the stored login, and it needs actions: write.{} Command: `{}`",
+        quoted(key),
+        trust_hint(remedy.remote),
+        delete_command(key, remedy.refs, remedy.remote, remedy.restored_before)
     )
 }
 
@@ -58,17 +102,13 @@ fn anchor_sentence(remedy: Remedy<'_>) -> String {
     if remedy.anchor_key.is_empty() {
         return String::new();
     }
-    delete_sentence("anchor entry", remedy.anchor_key, remedy.repository)
+    delete_sentence("anchor entry", remedy.anchor_key, remedy)
 }
 
 fn delete_hint(remedy: Remedy<'_>) -> String {
     let mut hint = String::new();
     if !remedy.key.is_empty() {
-        hint.push_str(&delete_sentence(
-            "Actions cache entry",
-            remedy.key,
-            remedy.repository,
-        ));
+        hint.push_str(&delete_sentence("Actions cache entry", remedy.key, remedy));
     }
     hint.push_str(&anchor_sentence(remedy));
     escape(&hint, false)
@@ -78,18 +118,33 @@ fn anchor_hint(remedy: Remedy<'_>) -> String {
     escape(&anchor_sentence(remedy), false)
 }
 
-fn repository_target(server: Option<&str>, repository: Option<&str>) -> String {
-    let repository = repository.unwrap_or("<owner/repo>");
-    let host = server
+fn host_of(server: Option<&str>) -> &str {
+    server
         .map(|url| {
             url.trim_end_matches('/')
                 .trim_start_matches("https://")
                 .trim_start_matches("http://")
         })
-        .filter(|host| !host.is_empty());
-    match host {
-        Some(host) => format!("{host}/{repository}"),
-        None => repository.to_owned(),
+        .filter(|host| !host.is_empty())
+        .unwrap_or("github.com")
+}
+
+fn remote(server: Option<&str>, api: Option<&str>, repository: Option<&str>) -> Remote {
+    let host = host_of(server);
+    let api_url = api.filter(|url| !url.is_empty()).map_or_else(
+        || {
+            if host == "github.com" {
+                "https://api.github.com".to_owned()
+            } else {
+                format!("https://{host}/api/v3")
+            }
+        },
+        str::to_owned,
+    );
+    Remote {
+        host: host.to_owned(),
+        api_url,
+        repository: repository.unwrap_or("<owner/repo>").to_owned(),
     }
 }
 
@@ -147,6 +202,27 @@ fn checked(context: &Context, anchor: &Anchor<'_>, file: &Path) -> Result<Verdic
     Ok(verdict)
 }
 
+fn restore_refs(context: &Context) -> Vec<String> {
+    let branch = |name: Option<&str>| {
+        name.filter(|name| !name.is_empty())
+            .map(|name| format!("refs/heads/{name}"))
+    };
+    let mut refs: Vec<String> = Vec::new();
+    for candidate in [
+        Some(context.git_ref.clone()),
+        branch(Some(&context.base_ref)),
+        branch(context.default_branch.as_deref()),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        if !candidate.is_empty() && !refs.contains(&candidate) {
+            refs.push(candidate);
+        }
+    }
+    refs
+}
+
 pub fn run(verb: Verb, context: &Context) -> Result<String, CiError> {
     let file = context.runner_temp.join(ANCHOR_DIR).join(ANCHOR_NAME);
     let anchor = Anchor(&context.anchor);
@@ -177,15 +253,19 @@ pub fn run(verb: Verb, context: &Context) -> Result<String, CiError> {
         .open(path)
         .and_then(|mut handle| handle.write_all(outputs(&verdict).as_bytes()))
         .map_err(|error| CiError::new(format!("cannot write {}: {error}", path.display())))?;
+    let refs = restore_refs(context);
     let remedy = Remedy {
         key: &context.cache_key,
         anchor_key: &context.anchor_key,
-        repository: &context.repository,
+        remote: &context.remote,
+        refs: &refs,
+        restored_before: &context.restored_before,
     };
     Ok(format!("{}\n", message(&verdict, remedy)))
 }
 
 pub fn setup(verb: Verb) -> Result<String, CiError> {
+    let restored_before = crate::time::now_utc_text();
     let var = |name: &str| std::env::var(name).ok();
     let required = |name: &str| {
         var(name)
@@ -209,11 +289,14 @@ pub fn setup(verb: Verb) -> Result<String, CiError> {
             verified: var("VELNOR_TOOLS_VERIFIED").as_deref() == Some("true"),
             event_name: var("GITHUB_EVENT_NAME").unwrap_or_default(),
             git_ref: var("GITHUB_REF").unwrap_or_default(),
+            base_ref: var("GITHUB_BASE_REF").unwrap_or_default(),
             default_branch,
             cache_key: var("VELNOR_TOOLS_CACHE_KEY").unwrap_or_default(),
             anchor_key: var("VELNOR_ANCHOR_CACHE_KEY").unwrap_or_default(),
-            repository: repository_target(
+            restored_before,
+            remote: remote(
                 var("GITHUB_SERVER_URL").as_deref(),
+                var("GITHUB_API_URL").as_deref(),
                 var("GITHUB_REPOSITORY").as_deref(),
             ),
         },
