@@ -61,17 +61,12 @@ fn inspect_volume(path: &str, state: &mut State) -> Reply {
 }
 
 fn volume_response(name: &str, labels: &Value) -> Value {
-    let labels = labels
-        .as_object()
-        .map(|labels| {
-            labels
-                .iter()
-                .filter_map(|(key, value)| {
-                    value.as_str().map(|value| (key.clone(), value.to_owned()))
-                })
-                .collect()
-        })
-        .unwrap_or_default();
+    let labels = labels.as_object().map_or_default(|labels| {
+        labels
+            .iter()
+            .filter_map(|(key, value)| value.as_str().map(|value| (key.clone(), value.to_owned())))
+            .collect()
+    });
     let volume = bollard::models::Volume {
         name: name.to_owned(),
         driver: "local".to_owned(),

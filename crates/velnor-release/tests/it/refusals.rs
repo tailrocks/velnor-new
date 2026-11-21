@@ -242,9 +242,7 @@ fn a_root_without_package_entries_is_checked_at_the_workspace_level() -> TestRes
 fn errors_read_as_messages_naming_the_file_and_package() {
     let mut files = files();
     files.release_toml = Some("[[binaries]]\npackage = \"tool\"\n".to_owned());
-    let message = refusal(&files)
-        .map(|error| error.to_string())
-        .unwrap_or_default();
+    let message = refusal(&files).map_or_default(|error| error.to_string());
     assert!(
         message.contains("tool") && message.contains(".velnor/release.toml"),
         "{message}"
@@ -252,8 +250,7 @@ fn errors_read_as_messages_naming_the_file_and_package() {
     let message = plz_refusal("name = \"app\"\n", "name = \"app\"\nsemver_check = true\n")
         .ok()
         .flatten()
-        .map(|error| error.to_string())
-        .unwrap_or_default();
+        .map_or_default(|error| error.to_string());
     assert!(
         message.contains("./release-plz.toml")
             && message.contains("semver_check")
