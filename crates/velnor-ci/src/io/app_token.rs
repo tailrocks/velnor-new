@@ -16,13 +16,18 @@ const CLIENT_VARIABLE: &str = "VELNOR_APP_CLIENT_ID";
 const KEY_VARIABLE: &str = "VELNOR_APP_PRIVATE_KEY";
 const MINT_TIMEOUT: Duration = Duration::from_secs(60);
 
+fn valid_client_id(id: &str) -> bool {
+    id.starts_with(|c: char| c.is_ascii_alphanumeric())
+        && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '.')
+}
+
 fn signed_jwt() -> Result<Zeroizing<String>, CiError> {
     let client_id = std::env::var(CLIENT_VARIABLE)
         .ok()
-        .filter(|id| !id.is_empty() && id.chars().all(|c| c.is_ascii_alphanumeric()))
+        .filter(|id| valid_client_id(id))
         .ok_or_else(|| {
             CiError::new(format!(
-                "set {CLIENT_VARIABLE} to the App's client ID (letters and digits)"
+                "set {CLIENT_VARIABLE} to the App's client ID (letters, digits and dots)"
             ))
         })?;
     let pem = Zeroizing::new(
@@ -47,7 +52,7 @@ pub(super) fn run(args: &AppTokenArgs) -> Result<String, CiError> {
         )));
     }
     let app = super::fetch::api_client(signed_jwt()?.to_string(), MINT_TIMEOUT)?;
-    let token = mint(&app, &args.owner, &args.repositories)
+    let token = mint(&app, &args.owner, &args.repositories, &std::thread::sleep)
         .map_err(|e| e.context("no installation token was created"))?;
     drop(app);
     let mut stdout = std::io::stdout().lock();

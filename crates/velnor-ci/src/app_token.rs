@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::time::Duration;
+
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use ring::rand::SystemRandom;
@@ -95,22 +97,57 @@ struct Minted {
     token: String,
 }
 
-#[must_use]
-pub fn valid_name(name: &str) -> bool {
+const ATTEMPTS: usize = 3;
+const BACKOFF: [Duration; ATTEMPTS - 1] = [Duration::from_secs(1), Duration::from_secs(3)];
+const TOKEN_LIMIT: usize = 4096;
+
+fn plain(name: &str) -> bool {
     !name.is_empty()
-        && !name.starts_with('.')
         && name
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+}
+
+fn valid_owner(name: &str) -> bool {
+    plain(name) && !name.starts_with('.')
+}
+
+fn valid_repository(name: &str) -> bool {
+    plain(name) && !name.chars().all(|c| c == '.')
+}
+
+fn retried(
+    pause: &dyn Fn(Duration),
+    mut attempt: impl FnMut() -> Result<String, CiError>,
+) -> Result<String, CiError> {
+    let mut failure = None;
+    for delay in std::iter::once(None).chain(BACKOFF.map(Some)) {
+        if let Some(delay) = delay {
+            pause(delay);
+        }
+        match attempt() {
+            Err(error) if error.is_transient() => failure = Some(error),
+            done => return done,
+        }
+    }
+    Err(failure.unwrap_or_else(|| CiError::new("no attempt was made")))
 }
 
 pub fn mint(
     app: &impl GitHubPost,
     owner: &str,
     repositories: &[String],
+    pause: &dyn Fn(Duration),
 ) -> Result<Zeroizing<String>, CiError> {
-    let mut names = std::iter::once(owner).chain(repositories.iter().map(String::as_str));
-    if let Some(bad) = names.find(|name| !valid_name(name)) {
+    let mut bad = std::iter::once(owner)
+        .filter(|name| !valid_owner(name))
+        .chain(
+            repositories
+                .iter()
+                .map(String::as_str)
+                .filter(|name| !valid_repository(name)),
+        );
+    if let Some(bad) = bad.next() {
         return Err(CiError::new(format!(
             "{} is not a plain GitHub owner or repository name",
             crate::escape::inert(bad)
@@ -119,24 +156,24 @@ pub fn mint(
     let first = repositories
         .first()
         .ok_or_else(|| CiError::new("name at least one --repository"))?;
-    let installation: Installation =
-        serde_json::from_str(&app.get(&format!("/repos/{owner}/{first}/installation"))?)
-            .map_err(|_| CiError::new("the App installation answer has no numeric id"))?;
-    let answer = Zeroizing::new(app.post(
-        &format!("/app/installations/{}/access_tokens", installation.id),
-        &token_request(repositories),
-    )?);
+    let lookup = format!("/repos/{owner}/{first}/installation");
+    let installation: Installation = serde_json::from_str(&retried(pause, || app.get(&lookup))?)
+        .map_err(|_| CiError::new("the App installation answer has no numeric id"))?;
+    let path = format!("/app/installations/{}/access_tokens", installation.id);
+    let request = token_request(repositories);
+    let answer = Zeroizing::new(retried(pause, || app.post(&path, &request))?);
     let minted: Minted = serde_json::from_str(&answer)
         .map_err(|_| CiError::new("the installation token answer holds no token"))?;
     let token = Zeroizing::new(minted.token);
     if token.is_empty()
+        || token.len() > TOKEN_LIMIT
         || !token
             .chars()
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '.' | '-'))
     {
-        return Err(CiError::new(
-            "the installation token answer holds a token that is not plain letters, digits, _, . and -",
-        ));
+        return Err(CiError::new(format!(
+            "the installation token answer holds a token that is not plain letters, digits, _, . and - of at most {TOKEN_LIMIT} bytes"
+        )));
     }
     Ok(token)
 }

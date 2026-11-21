@@ -92,6 +92,9 @@ fn serve(installation: (u16, &str), minted: (u16, &str)) -> Result<Api, Box<dyn 
     Ok(Api { url, requests })
 }
 
+mod names;
+mod retries;
+
 const PKCS1: &str = include_str!("data/app_token/TEST-ONLY-not-a-secret-rsa-pkcs1.pem");
 const PKCS8: &str = include_str!("data/app_token/TEST-ONLY-not-a-secret-rsa-pkcs8.pem");
 
@@ -133,11 +136,15 @@ impl Key {
 }
 
 fn mint(key: &str, api: &Api, output: &Path, repositories: &[&str]) -> Output {
+    mint_as(CLIENT_ID, key, api, output, repositories)
+}
+
+fn mint_as(client_id: &str, key: &str, api: &Api, output: &Path, repositories: &[&str]) -> Output {
     let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
     command
         .env_clear()
         .args(["app-token", "--owner", "acme"])
-        .env("VELNOR_APP_CLIENT_ID", CLIENT_ID)
+        .env("VELNOR_APP_CLIENT_ID", client_id)
         .env("VELNOR_APP_PRIVATE_KEY", key)
         .env("VELNOR_API_URL", &api.url)
         .env("GITHUB_OUTPUT", output);
