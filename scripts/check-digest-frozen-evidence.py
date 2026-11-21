@@ -1,13 +1,4 @@
 #!/usr/bin/env python3
-"""Check that every file exempt from the no-absolute-local-paths rule is digest-frozen.
-
-The exempt paths are listed in .alint.yml under no-absolute-local-paths. Each one must
-be recorded with the same sha256 (and size) in a retained manifest: capture-inventory.json,
-first/freeze.json or SHA256SUMS. Claim records in the tree are not evidence: a file they name
-is only trusted through those manifests. Anything else is an ordinary file and must be rewritten.
-
-Usage: check-digest-frozen-evidence.py [repo-root] [alint-config]
-"""
 import hashlib
 import json
 import os
@@ -23,7 +14,6 @@ MANIFESTS = [
 
 
 def exempt_paths(config):
-    """Return the exclude entries of the local-path rules in RULE_IDS, minus each rule's own file."""
     out = []
     for rule_id in RULE_IDS:
         on, in_exclude = False, False
@@ -47,7 +37,6 @@ def exempt_paths(config):
 
 
 def manifest_entries(root, rel_manifest):
-    """Map manifest-relative names to (sha256, size or None) for one manifest file."""
     path = os.path.join(root, rel_manifest)
     if not os.path.exists(path):
         return {}

@@ -287,9 +287,9 @@ Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-25T17:10:08.8184859Z There is NO 
 Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-25T17:10:08.8185290Z 
 Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-25T17:10:08.8186043Z Written by John Gilmore and Jay Fenlason.
 Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-25T17:10:08.8213833Z Using curl to download mise
-Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-25T17:10:08.8227496Z [command]/usr/bin/curl -fsSL https://github.com/jdx/mise/releases/download/v2026.10.18/mise-v2026.10.18-linux-x64.tar.zst --output /tmp/mise-action-PtjFuq/mise-v2026.10.18-linux-x64.tar.zst
-Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-25T17:10:09.2338001Z [command]/usr/bin/tar --zstd -xf /tmp/mise-action-PtjFuq/mise-v2026.10.18-linux-x64.tar.zst -C /tmp/mise-action-PtjFuq
-Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-25T17:10:09.5191362Z [command]/usr/bin/mv /tmp/mise-action-PtjFuq/mise/bin/mise /home/runner/.local/share/mise/bin/mise
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-25T17:10:08.8227496Z [command]/usr/bin/curl -fsSL https://github.com/jdx/mise/releases/download/v2026.10.18/mise-v2026.10.18-linux-x64.tar.zst --output <tmp>/mise-action-PtjFuq/mise-v2026.10.18-linux-x64.tar.zst
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-25T17:10:09.2338001Z [command]/usr/bin/tar --zstd -xf <tmp>/mise-action-PtjFuq/mise-v2026.10.18-linux-x64.tar.zst -C <tmp>/mise-action-PtjFuq
+Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-25T17:10:09.5191362Z [command]/usr/bin/mv <tmp>/mise-action-PtjFuq/mise/bin/mise /home/runner/.local/share/mise/bin/mise
 Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-25T17:10:09.8860781Z ##[group]Setting env vars
 Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-25T17:10:09.8861359Z Setting MISE_LOG_LEVEL=info
 Rust / velnor-actions-cli	UNKNOWN STEP	2026-10-25T17:10:09.8865068Z Setting MISE_TRUSTED_CONFIG_PATHS=/home/runner/work/velnor-new/velnor-new

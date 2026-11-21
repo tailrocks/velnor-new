@@ -37,8 +37,6 @@ bash scripts/test-no-doctests-rule.sh || exit 1
 bash scripts/test-no-absolute-local-paths-rule.sh || exit 1
 python3 -I scripts/check-digest-frozen-evidence.py "$ROOT" "$ROOT/.alint.yml" || exit 1
 
-# Negative control: an ordinary doc added to the local-path exempt list, plus a matching claim
-# in a claim file that no retained manifest pins, must fail the digest guard.
 attack="$(mktemp -d "${TMPDIR:-/tmp}/digest-attack.XXXXXX")" || exit 1
 mkdir -p "$attack/docs/reviews" || exit 1
 printf 'ordinary doc\n' > "$attack/docs/attack.md"

@@ -313,17 +313,17 @@ PR 16 squash `d40868152f7fe0106e3ede858a411f502f00810f` published tag `generator
 
 PR 17 squash `b9fdb1bc27b7aeeb71264cd2195328b4c5387627`: `daemon run` calls `launch_once`, and a second daemon fails closed. The installed LaunchAgent binary is a local release of `030363df06a99355afc9534fa42868faf7f39500`, sha256 `8a989ac6b7592b570b6c102e4f0d916b48d4e362c3d2e989be2b8aa3fe41a8df`. It is not a newly published macos-binary-release asset.
 
-example-org hosted baseline PR run [37113202410](https://github.com/example-org/example-repo/actions/runs/37113202410) succeeded. Main push [37114238559](https://github.com/example-org/example-repo/actions/runs/37114238559) failed only on Post Restore MBX objects (`mbx cache export exited with code 1`). That is not a scale-set failure.
+example-org hosted baseline PR run 37113202410 (private repository run, link withheld) succeeded. Main push 37114238559 (private repository run, link withheld) failed only on Post Restore MBX objects (`mbx cache export exited with code 1`). That is not a scale-set failure.
 
-example-org pins generator commit `d40868152f7fe0106e3ede858a411f502f00810f`, schema 2, `execution.mode` `hosted`. PR [2084](https://github.com/example-org/example-repo/pull/2084) squash `0a937e0c0442782bfb88c43cfdf67c1fc3f3b4f0` added dispatch-only `qualification.yml`. Required CI [37116617913](https://github.com/example-org/example-repo/actions/runs/37116617913) succeeded. `ci.yml` stayed `ubuntu-26.04`.
+example-org pins generator commit `d40868152f7fe0106e3ede858a411f502f00810f`, schema 2, `execution.mode` `hosted`. PR 2084 (private repository pull request, link withheld) squash `0a937e0c0442782bfb88c43cfdf67c1fc3f3b4f0` added dispatch-only `qualification.yml`. Required CI 37116617913 (private repository run, link withheld) succeeded. `ci.yml` stayed `ubuntu-26.04`.
 
-N=1 default dispatch (`mode` `both`, one scale-set job) run [37117721384](https://github.com/example-org/example-repo/actions/runs/37117721384) succeeded on head `0a937e0c0442782bfb88c43cfdf67c1fc3f3b4f0`. This is not G7.
+N=1 default dispatch (`mode` `both`, one scale-set job) run 37117721384 (private repository run, link withheld) succeeded on head `0a937e0c0442782bfb88c43cfdf67c1fc3f3b4f0`. This is not G7.
 
 | Lane | Job | Result |
 | --- | --- | --- |
-| hosted | [111187658087](https://github.com/example-org/example-repo/actions/runs/37117721384/job/111187658087) | labels `ubuntu-26.04`; runner GitHub Actions `1000059887`; `success` |
-| scale-set | [111187658197](https://github.com/example-org/example-repo/actions/runs/37117721384/job/111187658197) | labels `velnor`, `ubuntu-26.04-scale-set`; runner `m100000001`; group `Default`; `success`; log line `qualification-scale-set` |
-| compare | [111187714536](https://github.com/example-org/example-repo/actions/runs/37117721384/job/111187714536) | labels `ubuntu-26.04`; `success` |
+| hosted | 111187658087 (private repository job, link withheld) | labels `ubuntu-26.04`; runner GitHub Actions `1000059887`; `success` |
+| scale-set | 111187658197 (private repository job, link withheld) | labels `velnor`, `ubuntu-26.04-scale-set`; runner `m100000001`; group `Default`; `success`; log line `qualification-scale-set` |
+| compare | 111187714536 (private repository job, link withheld) | labels `ubuntu-26.04`; `success` |
 
 Listener `set_id=3` is on example-org scale set `ubuntu-26.04-scale-set`. Host architecture is `arm64`. Runner and DinD images are `amd64` (emulation). The runner container was not privileged, user `runner`, env key `PATH` only. DinD was privileged. Launch row 71, docker `e38aae1eb975`, exited. DinD was left running because the launch path does not remove containers. That is not cleanup proof.
 

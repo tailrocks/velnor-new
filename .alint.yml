@@ -276,13 +276,15 @@ rules:
   - id: no-local-temp-paths
     kind: file_content_forbidden
     paths:
-      include: ["**/*.md", "**/*.json", "**/*.txt"]
+      include: ["**/*.md", "**/*.json", "**/*.txt", "**/*.log"]
       exclude:
         - ".alint.yml"
         - "docs/implemented/evidence/freshness-2026-10-24/alint-0.20.0-to-0.20.1-compare.json"
         - "docs/implemented/evidence/freshness-2026-10-24/qualification/binary-checksums-verified.txt"
         - "docs/implemented/evidence/freshness-2026-10-24/qualification/commands.txt"
-    pattern: '(?m)(?:^|[^A-Za-z0-9._/-])(?:/private/(?:tmp|var)/[A-Za-z0-9_]|/tmp/[A-Za-z0-9_]*[-._0-9])'
+        - "docs/implemented/evidence/freshness-2026-10-20/main-ci-plan.log"
+        - "docs/implemented/evidence/freshness-2026-10-24/main-ci-plan.log"
+    pattern: '(?m)(?:^|[^A-Za-z0-9._/-])(?:/private/(?:tmp|var)/[A-Za-z0-9_]|/var/folders/[A-Za-z0-9_]|/tmp/[A-Za-z0-9_]*[-._0-9])'
     level: error
     message: "Local temp path in a doc or evidence file: use a repo-relative path, a relative link or <tmp>/... as the placeholder. Plain /tmp/example style examples are allowed."
 

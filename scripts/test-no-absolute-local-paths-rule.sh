@@ -7,7 +7,6 @@ alint_bin="${ALINT:-alint}"
 work="$(mktemp -d "${TMPDIR:-/tmp}/no-local-paths.XXXXXX")"
 trap 'rm -rf "$work"' EXIT
 
-# extract_rule <rule-id> <out-file>: the named rule from $config, without its exclude list.
 extract_rule() {
   local id="$1" out="$2"
   {
@@ -26,9 +25,9 @@ tmp="/t""mp"
 
 fails=0
 check() {
-  local name="$1" expect="$2" dir="$work/$1"
+  local name="$1" expect="$2" dir="$work/$1" ext="${4:-md}"
   mkdir -p "$dir/docs"
-  printf '%s\n' "$3" > "$dir/docs/fixture.md"
+  printf '%s\n' "$3" > "$dir/docs/fixture.$ext"
   if "$alint_bin" check -c "$rule" "$dir" >/dev/null 2>&1; then got=pass; else got=fail; fi
   if [ "$got" != "$expect" ]; then
     echo "FAIL $name: expected $expect, got $got"
@@ -73,7 +72,6 @@ if [ "$fails" -ne 0 ]; then
 fi
 echo "no-absolute-local-paths fixtures: OK"
 
-# no-local-temp-paths covers doc and evidence files only (.md, .json, .txt).
 rule="$work/rule-temp.yml"
 extract_rule no-local-temp-paths "$rule"
 check temp_private_claude  fail "see ${priv}/claude-501/session/out.md"
@@ -86,6 +84,12 @@ check temp_example_dir     pass "use ${tmp}/example/file.md as the sample"
 check temp_example_plain   pass "use ${tmp}/foo for the sample"
 check temp_placeholder     pass "wrote <tmp>/velnor-jit.abc/out.md"
 check temp_repo_relative   pass "see docs/implemented/a.md and ../goals.md"
+check temp_log_private     fail "workspace ${priv}/sdk57-refresh.AbC/scratch/out" log
+check temp_log_bare        fail "extract to ${tmp}/mise-action-AbC123/bin" log
+check temp_log_placeholder pass "extract to <tmp>/mise-action-AbC123/bin" log
+check temp_log_example     pass "use ${tmp}/example/file for the sample" log
+check temp_var_folders     fail "fixture under /va""r/folders/8p/h376l/T/mbx-iso-zv6g" md
+check temp_var_folders_log fail "fixture under /va""r/folders/8p/h376l/T/mbx-iso-zv6g" log
 check temp_url_segment     pass "https://example.com${tmp}/velnor-x/page"
 check temp_dotted_prefix   pass "pkg.${tmp}/velnor-x and a-${tmp}/velnor-y"
 
