@@ -321,8 +321,6 @@ impl Builder<'_> {
                     .and_then(|()| fs::write(&saved, &bytes))
                     .map_err(|e| CiError::new(format!("cannot save input inventory: {e}")))?;
             }
-            // A failed command may leave partial output that the strict scan
-            // refuses; cleanup must still run so the real exit status is reported.
             let units = if status.success() {
                 build_unit_files(&self.workspaces, directory)?
             } else {

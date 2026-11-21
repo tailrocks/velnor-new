@@ -21,9 +21,6 @@ struct Printed {
     packages: Vec<Member>,
 }
 
-/// Cargo resolves a relative build directory against the step's directory and
-/// keeps `..` as written, so a symlinked parent resolves through the link. The
-/// same spelling is passed on, so the audit reads what cargo writes.
 pub(super) fn step_relative(relative: &Path) -> Result<PathBuf, CiError> {
     std::env::current_dir()
         .map(|directory| directory.join(relative))

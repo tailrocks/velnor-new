@@ -55,3 +55,22 @@ fn a_failed_command_that_leaves_output_and_no_unit_reports_its_own_failure() {
         "{stderr}"
     );
 }
+
+#[test]
+fn a_plain_target_named_through_a_parent_component_still_refuses_an_unknown_layout() {
+    let repo = workspace_below_the_root();
+    std::fs::create_dir_all(repo.root().join("scratch")).unwrap_or_else(|e| unreachable!("{e}"));
+    unit(&repo, "rust/target/debug/libapp.rlib", "");
+    let refused = velnor_ci()
+        .current_dir(repo.root())
+        .env("CARGO_BUILD_BUILD_DIR", "scratch/../rust/target")
+        .args(["inputs", "build", "--", "true"])
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(refused.status.code(), Some(1), "{refused:?}");
+    let stderr = String::from_utf8_lossy(&refused.stderr);
+    assert!(
+        stderr.contains("found no units in") && stderr.contains("unknown cargo layout?"),
+        "{stderr}"
+    );
+}
