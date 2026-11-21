@@ -239,8 +239,7 @@ fn fetched(job: &velnor_model::Job) -> Option<String> {
 }
 
 const FETCH_ROOTS: &str = "velnor-ci sources fetch --roots";
-
-fn fetch_chunks(manifests: &[RepoPath]) -> Vec<Vec<String>> {
+pub(crate) fn fetch_chunks(manifests: &[RepoPath]) -> Vec<Vec<String>> {
     let budget = MAX_RUN_CHARACTERS
         - crate::helper_integrity::INVOCATION_PREFIX.len()
         - (FETCH_ROOTS.len() - "velnor-ci ".len());
@@ -299,10 +298,18 @@ fn fetch_all_steps(manifests: &[RepoPath], cache_debug: bool, offline: bool) -> 
                 )
             }),
             continue_on_error: true,
-            run: Some(format!("{FETCH_ROOTS} {}", roots.join(" "))),
+            run: Some(format!(
+                "{FETCH_ROOTS} {}",
+                roots_argument(manifests, &roots)
+            )),
             ..RenderedStep::default()
         })
         .collect()
+}
+
+fn roots_argument(manifests: &[RepoPath], roots: &[String]) -> String {
+    crate::source_roots::roots_env(manifests)
+        .map_or_else(|| roots.join(" "), |(name, _)| format!("${name}"))
 }
 
 pub(crate) fn sources_fetch_all(

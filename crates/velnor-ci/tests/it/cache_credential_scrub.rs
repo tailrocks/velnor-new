@@ -13,7 +13,7 @@ fn saved_sources_with(name: &str, relative: &str, content: &str) -> (Output, Str
     decide_with(&repo, Some("true"))
 }
 
-fn sources_save_stops(cases: &[(&str, &str, &str)]) {
+pub(crate) fn sources_save_stops(cases: &[(&str, &str, &str)]) {
     for (label, relative, content) in cases {
         let (output, written) =
             saved_sources_with(&format!("decide-credential-{label}"), relative, content);
@@ -26,7 +26,7 @@ fn sources_save_stops(cases: &[(&str, &str, &str)]) {
     }
 }
 
-fn sources_save_goes_on(cases: &[(&str, &str, &str)]) {
+pub(crate) fn sources_save_goes_on(cases: &[(&str, &str, &str)]) {
     for (label, relative, content) in cases {
         let (output, written) =
             saved_sources_with(&format!("decide-outside-{label}"), relative, content);

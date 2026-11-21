@@ -14,6 +14,14 @@ pub(crate) fn saving_facts(
     roots: usize,
     blocks: bool,
 ) -> Result<velnor_model::RepoFacts, Box<dyn std::error::Error>> {
+    saving_facts_pinned(roots, blocks, None)
+}
+
+pub(crate) fn saving_facts_pinned(
+    roots: usize,
+    blocks: bool,
+    helper: Option<&str>,
+) -> Result<velnor_model::RepoFacts, Box<dyn std::error::Error>> {
     let manifests: Vec<_> = (0..roots)
         .map(|index| format!("root_{index:02}_{}/Cargo.toml", "x".repeat(150)))
         .collect();
@@ -22,7 +30,10 @@ pub(crate) fn saving_facts(
         &manifests.iter().map(String::as_str).collect::<Vec<_>>(),
         Some(format!("shape = \"lint-test\"\ncache_check_blocks = {blocks}\n").as_bytes()),
     )?;
-    let lock = String::from_utf8(HELPER_LOCK.to_vec())?;
+    let mut lock = String::from_utf8(HELPER_LOCK.to_vec())?;
+    if let Some(helper) = helper {
+        lock = lock.replace("0.1.81", helper);
+    }
     view.files
         .insert(RepoPath::new(".velnor/rust-ci.lock")?, lock.into_bytes());
     Ok(velnor_rust::detect(&view)?)
@@ -39,8 +50,13 @@ pub(crate) fn test_packages(
     roots: usize,
     blocks: bool,
 ) -> Result<Packages, Box<dyn std::error::Error>> {
-    let facts = saving_facts(roots, blocks)?;
-    let plan = velnor_rust::plan(&facts);
+    test_packages_of(&saving_facts(roots, blocks)?)
+}
+
+pub(crate) fn test_packages_of(
+    facts: &velnor_model::RepoFacts,
+) -> Result<Packages, Box<dyn std::error::Error>> {
+    let plan = velnor_rust::plan(facts);
     let mut packages = Packages::new();
     for job in &plan.jobs {
         let slug = job.steps.iter().find_map(|step| match &step.kind {
