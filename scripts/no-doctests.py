@@ -107,8 +107,6 @@ def expand_tabs(text):
 
 
 def line_indent_text(body):
-    # rustdoc drops one leading space or tab after `///`; the tabs left after that
-    # expand to the next 4-column stop, not to a fixed four spaces each.
     if body[:1] in (" ", "\t"):
         return " " + expand_tabs(body[1:])
     return expand_tabs(body)
