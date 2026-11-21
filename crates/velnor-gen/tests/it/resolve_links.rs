@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use velnor_rust::resolve;
-use velnor_test_support::ScratchDir;
+use velnor_test_support::{ScratchDir, keeping};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -90,7 +90,7 @@ fn assert_scratch_leaves_nothing_in_tmpdir(tag: &str) -> TestResult {
         let (_guard, d) = scratch(tag)?;
         fs::write(d.join("probe"), "")?;
     }
-    assert_eq!(leftovers(tag), before);
+    assert_eq!(leftovers(tag), before + usize::from(keeping()));
     Ok(())
 }
 

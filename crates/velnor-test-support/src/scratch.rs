@@ -39,7 +39,7 @@ impl ScratchDir {
 
 impl Drop for ScratchDir {
     fn drop(&mut self) {
-        if !keep_requested(std::env::var_os(KEEP_ENV).as_deref()) {
+        if !keeping() {
             fs::remove_dir_all(&self.path).ok();
         }
     }
@@ -54,6 +54,11 @@ impl Deref for ScratchDir {
 }
 
 #[must_use]
+pub fn keeping() -> bool {
+    keep_requested(std::env::var_os(KEEP_ENV).as_deref())
+}
+
+#[must_use]
 pub fn keep_requested(value: Option<&OsStr>) -> bool {
     value == Some(OsStr::new("1"))
 }
@@ -65,7 +70,7 @@ mod tests {
     use std::path::{Path, PathBuf};
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    use super::{ScratchDir, keep_requested};
+    use super::{ScratchDir, keep_requested, keeping};
 
     fn entry_count(root: &Path) -> usize {
         fs::read_dir(root).map_or(0, Iterator::count)
@@ -85,20 +90,21 @@ mod tests {
 
     fn assert_cleanup_leaves_nothing_behind() {
         let root = fresh_root();
+        let retained = usize::from(keeping());
 
         let success = ScratchDir::new(root.join("success"));
         fs::write(success.join("payload"), "data").unwrap_or_else(|e| unreachable!("{e}"));
         drop(success);
-        assert_eq!(entry_count(&root), 0);
+        assert_eq!(entry_count(&root), retained);
 
         let panicked = catch_unwind(AssertUnwindSafe(|| {
             let _guard = ScratchDir::new(root.join("panic"));
             panic_any("expected test panic");
         }));
         assert!(panicked.is_err());
-        assert_eq!(entry_count(&root), 0);
+        assert_eq!(entry_count(&root), 2 * retained);
 
-        fs::remove_dir(&root).unwrap_or_else(|e| unreachable!("{e}"));
+        fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
     }
 
     #[test]

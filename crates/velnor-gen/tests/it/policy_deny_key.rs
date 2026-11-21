@@ -121,6 +121,7 @@ fn the_parser_keeps_the_written_policy_table() -> TestResult {
         Some(PolicyTable {
             deny: DenyLane::Off,
             deny_checks: Some(vec![DenyCheck::Bans]),
+            gate_on_plan: false,
         })
     );
     assert_eq!(detect(&repo(b"", true, "0.1.111")?)?.config.policy, None);
@@ -171,5 +172,16 @@ fn a_license_file_starts_no_policy_run_when_licenses_are_not_checked() -> TestRe
     assert!(!policy_runs(facts.policy, &changed, false, true).deny);
     let all = detect(&repo(b"", true, "0.1.111")?)?;
     assert!(policy_runs(all.policy, &changed, false, true).deny);
+    Ok(())
+}
+
+#[test]
+fn a_policy_gate_with_neither_deny_nor_machete_is_refused() -> TestResult {
+    let error = workflow(&repo(b"[policy]\ngate_on_plan = true\n", false, "0.1.112")?)
+        .err()
+        .ok_or("gate_on_plan with no enabled lane was accepted")?;
+    assert!(error.to_string().contains("gate_on_plan"), "{error}");
+    let text = workflow(&repo(b"[policy]\ngate_on_plan = true\n", true, "0.1.112")?)?;
+    assert!(text.contains("cargo-deny --"), "{text}");
     Ok(())
 }
