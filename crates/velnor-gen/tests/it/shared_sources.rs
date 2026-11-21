@@ -97,6 +97,7 @@ pub(crate) fn locks_hash(manifests: &[&str]) -> Result<String, Box<dyn std::erro
                 skip_when_cold: false,
                 private_repo: false,
                 hosted_only: false,
+                any_gate: Vec::new(),
             }],
         }],
     };
