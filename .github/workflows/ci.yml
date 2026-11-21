@@ -173,13 +173,13 @@ jobs:
               exit 1
             fi
           done
-          for f in gate-call-cast gate-call-parens gate-call-sum gate-call-const gate-call-split gate-call-split-open gate-call-value-cast gate-call-new-ctor gate-call-callee-newline gate-call-open-tuple gate-call-bare-elements; do
+          for f in gate-call-cast gate-call-parens gate-call-sum gate-call-const gate-call-split gate-call-split-open gate-call-value-cast gate-call-new-ctor gate-call-callee-newline gate-call-open-tuple gate-call-bare-elements gate-call-paren-first gate-call-paren-later; do
             if bash scripts/check-helper-gates.sh --diff "$fixtures/$f.diff" --current 0.1.110; then
               echo "the check accepted a gate row that is not a literal tuple: $f" >&2
               exit 1
             fi
           done
-          for f in gate-minimum-raise gate-minimum-split; do
+          for f in gate-minimum-raise gate-minimum-split gate-minimum-split-value; do
             if bash scripts/check-helper-gates.sh --diff "$fixtures/$f.diff" --current 0.1.110; then
               echo "the check accepted a change of HELPER_MINIMUM without a released marker: $f" >&2
               exit 1

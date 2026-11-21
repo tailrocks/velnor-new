@@ -175,6 +175,7 @@ scan() {
   }
   function tuple_bad(line,    s, off, m, st, t, c, pre, rest) {
     if (open_tuple_bad(line)) return 1
+    if (line ~ ("(\\(|,)" ws "\\(" ws num ws "\\)")) return 1
     off = 0; s = line
     while (match(s, "(^|[^A-Za-z0-9_.])" num ws "," ws num ws ",")) {
       m = substr(s, RSTART, RLENGTH)
@@ -346,7 +347,7 @@ scan() {
     if (file ~ /^crates\/velnor-gen\/src\/key_gates\// && (gate_call_bad(mask_code(text)) || tuple_bad(mask_code(text)))) { printf "SHAPE\t%s\t%s\n", file, text; next }
     stripped = strip(text)
     has = c_mv || p_mv
-    if (!tree && mask_code(text) ~ /HELPER_MINIMUM[[:space:]]*:/ && (!has || versions(scanned_now, probe) == 0)) { printf "PIN\t%s\t%s\n", file, text; next }
+    if (!tree && (mask_code(text) ~ /HELPER_MINIMUM[[:space:]]*:/ || mask_code(text) ~ ("^" ws tup ws ";" ws "$")) && (!has || versions(scanned_now, probe) == 0)) { printf "PIN\t%s\t%s\n", file, text; next }
     markN_now = c_mv ? c_mn : (p_mv ? p_mn : "")
     markC_now = c_mv ? c_mc : (p_mv ? p_mc : "")
     if (has && versions(scanned_now, probe) == 0) next
