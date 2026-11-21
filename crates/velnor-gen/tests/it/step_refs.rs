@@ -10,9 +10,11 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
 
 use serde_json::{Value, json};
+use velnor_model::WORKFLOWS_CONFIG_PATH;
 
-use crate::facts::{TestResult, lock_pinned_tools};
+use crate::facts::{TestResult, lock_pinned_tools, path};
 use crate::pipeline::{pin_helper, view};
+use crate::private_base_caches::GIT_LOCK;
 use crate::private_sources::{SECTION, private_repo};
 use crate::release_family_fixture;
 use crate::release_fixture;
@@ -27,6 +29,15 @@ const RELEASE_BINARIES: &str = "[[binaries]]\npackage = \"app\"\n";
 const ARTIFACTS_ON: &str = "[[test_groups]]\nname = 'shell'\nfilter = 'binary(it) and test(~cargo_)'\nneeds = ['cargo']\nartifacts = [{ name = 'shell-failures', paths = ['junit.xml'], when = 'failure' }]\n";
 const TWO_GROUPS: &str = "[[test_groups]]\nname = 'database'\nroot = '.'\nfilter = 'package(package-0) and test(/^db_/)'\nneeds = ['docker']\ntest_threads = 2\ntimeout_minutes = 45\nrunner = 'velnor-box'\n[[test_groups]]\nname = 'shell'\nroot = '.'\nfilter = 'binary(it) and test(~cargo_)'\nneeds = ['cargo']\n";
 const PR_ONLY_CHECKS_MINIMUM: u64 = 82;
+const PRIVATE_BASE_MINIMUM: u64 = 111;
+const FAMILY_KEYS: [&str; 5] = [
+    "roots",
+    "family_tag",
+    "binaries.package",
+    "binaries.smoke",
+    "binaries.platforms",
+];
+const DECLARED: &str = "[[workflow]]\nfile = \"declared\"\nname = \"Declared\"\n\n[[workflow.job]]\nid = \"check\"\n\n[[workflow.job.step]]\nid = \"warm\"\nname = \"Warm the cache\"\nrun = \"echo ok\"\n\n[[workflow.job.step]]\nname = \"Use the warm step\"\nrun = \"echo $WARM\"\nenv = { WARM = \"${{ steps.warm.outputs.ready }}\" }\n";
 
 struct StepRef<'a> {
     id: &'a str,
@@ -38,6 +49,8 @@ enum Shape {
     Rust(Option<&'static str>),
     Groups(&'static str),
     Private,
+    PrivateBase,
+    Declared,
     Release(&'static str),
     Family,
 }
@@ -95,6 +108,14 @@ fn gate_patch(key: &str) -> Result<u64, Box<dyn Error>> {
         .find(|gate| gate.key == key && gate.value.is_none())
         .map(|gate| gate.first.2)
         .ok_or_else(|| format!("the {key} gate is missing").into())
+}
+
+fn family_first() -> Result<u64, Box<dyn Error>> {
+    let mut first = 0;
+    for key in FAMILY_KEYS {
+        first = first.max(gate_patch(key)?);
+    }
+    Ok(first)
 }
 
 fn strings<'a>(value: &'a Value, out: &mut Vec<&'a str>) {
@@ -190,6 +211,19 @@ fn documents(shape: Shape, helper: &str) -> Result<Vec<Value>, Box<dyn Error>> {
         }
         Shape::Groups(config) => view_with(&["Cargo.toml"], config, helper)?,
         Shape::Private => private_repo(&["Cargo.toml"], SECTION, helper)?,
+        Shape::PrivateBase => {
+            let mut repo = private_repo(&["Cargo.toml"], SECTION, helper)?;
+            repo.files
+                .insert(path("Cargo.lock")?, GIT_LOCK.as_bytes().to_vec());
+            repo
+        }
+        Shape::Declared => {
+            let mut repo = release_fixture::release_view(&[], None)?;
+            repo.files
+                .insert(WORKFLOWS_CONFIG_PATH, DECLARED.as_bytes().to_vec());
+            pin_helper(&mut repo, helper)?;
+            repo
+        }
         Shape::Release(config) => {
             let (text, _) = release_fixture::render_pinned(&[APP], Some(config), helper)?;
             return Ok(vec![document(&text)?]);
@@ -238,14 +272,14 @@ fn sweep_job(
 
 #[test]
 fn every_steps_reference_names_a_step_of_its_own_job() -> TestResult {
-    let patches = gate_patches()?;
-    let newest = *patches.last().ok_or("the gate scan found no helper")?;
+    let scanned = gate_patches()?;
+    let newest = *scanned.last().ok_or("the gate scan found no helper")?;
     let shared_store = gate_patch("mbx_shared_store")?;
     let cache_debug = gate_patch("cache_debug")?;
     let test_groups = gate_patch("test_groups")?;
     let artifacts = gate_patch("test_groups.artifacts")?;
     let private_sources = gate_patch("private_sources")?;
-    let family = gate_patch("family_required_checks")?;
+    let family = family_first()?;
     for gate in [
         velnor_gen::HELPER_MINIMUM.2,
         shared_store,
@@ -253,16 +287,16 @@ fn every_steps_reference_names_a_step_of_its_own_job() -> TestResult {
         test_groups,
         artifacts,
         private_sources,
-        family,
+        PRIVATE_BASE_MINIMUM,
         PR_ONLY_CHECKS_MINIMUM,
     ] {
         assert!(
-            patches.contains(&gate),
-            "gate scan found {patches:?}, which misses the gate at 0.1.{gate}"
+            scanned.contains(&gate),
+            "gate scan found {scanned:?}, which misses the gate at 0.1.{gate}"
         );
     }
     let mut work: Vec<(u64, Shape)> = Vec::new();
-    for &patch in &patches {
+    for &patch in &scanned {
         let at_gate = |gate: u64| patch >= gate && (patch == gate || patch == newest);
         work.push((patch, Shape::Rust(None)));
         if patch >= shared_store {
@@ -280,15 +314,21 @@ fn every_steps_reference_names_a_step_of_its_own_job() -> TestResult {
         if at_gate(private_sources) {
             work.push((patch, Shape::Private));
         }
+        if at_gate(PRIVATE_BASE_MINIMUM) {
+            work.push((patch, Shape::PrivateBase));
+        }
+        if at_gate(velnor_gen::HELPER_MINIMUM.2) {
+            work.push((patch, Shape::Declared));
+        }
         if at_gate(PR_ONLY_CHECKS_MINIMUM) {
             work.push((patch, Shape::Release(PR_ONLY_CHECKS_ON)));
         }
         if at_gate(velnor_gen::HELPER_MINIMUM.2) {
             work.push((patch, Shape::Release(RELEASE_BINARIES)));
         }
-        if at_gate(family) {
-            work.push((patch, Shape::Family));
-        }
+    }
+    for patch in family..=newest {
+        work.push((patch, Shape::Family));
     }
     let seen = Mutex::new(HashSet::new());
     let next = AtomicUsize::new(0);
