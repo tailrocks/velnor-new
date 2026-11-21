@@ -10,7 +10,7 @@ if [ -f Cargo.lock ]; then
 fi
 
 status=0
-listing="$(cargo test --doc --workspace --all-features "${locked[@]}" -- --list 2>&1)" || status=$?
+listing="$(RUSTDOCFLAGS="${RUSTDOCFLAGS:-} --test --test-args --list" cargo doc --workspace --no-deps --all-features "${locked[@]}" 2>&1)" || status=$?
 
 doctests="$(printf '%s\n' "$listing" | grep -E ': test$' || true)"
 if [ -n "$doctests" ]; then

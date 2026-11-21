@@ -13,7 +13,7 @@ check() {
   local name="$1" expect="$2" dir="$work/$1"
   mkdir -p "$dir/fx/src"
   printf '[workspace]\nmembers = ["fx"]\nresolver = "3"\n' > "$dir/Cargo.toml"
-  printf '[package]\nname = "fx"\nversion = "0.0.0"\nedition = "2024"\n\n[lib]\ndoctest = false\n' > "$dir/fx/Cargo.toml"
+  printf '[package]\nname = "fx"\nversion = "0.0.0"\nedition = "2024"\n\n[lib]\ndoctest = false\n\n[features]\ngated = []\n' > "$dir/fx/Cargo.toml"
   printf '%b' "$3" > "$dir/fx/src/lib.rs"
   printf '%s\nlet x = 1;\n%s\n' "$fence" "$fence" > "$dir/fx/src/fence.md"
   if out="$(bash "$checker" "$dir" 2>&1)"; then
@@ -42,6 +42,7 @@ check concat_split_fence fail '#[doc = concat!("``", "`\\nlet x = 1;\\n``", "`")
 check include_str_fence fail '#[doc = include_str!("fence.md")]\nfn f() {}\n'
 check cfg_attr_fence    fail '#![cfg_attr(all(), doc = "```\\nlet x = 1;\\n```")]\nfn f() {}\n'
 check list5_bare        fail '/// -     let x = 1;\nfn f() {}\n'
+check feature_gated_fence fail '#[cfg(feature = "gated")]\n/// ```\n/// let x = 1;\n/// ```\nfn f() {}\n'
 check plain_prose       pass '//! inner prose\n/// plain prose\nfn f() {}\n'
 check text_fence        pass '/// ```text\n/// not rust\n/// ```\nfn f() {}\n'
 check prose_cont_line   pass '/// prose\n///     let x = 1;\nfn f() {}\n'
