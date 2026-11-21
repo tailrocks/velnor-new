@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fs;
+use std::{fs, thread, time::Duration};
 
 use super::super::{audit, own_units, unit, workspace_below_the_root};
 
@@ -50,6 +50,7 @@ fn dep_info_budget_is_per_cargo_root() {
         "",
     );
     repo.git(&["add", "--all"]);
+    thread::sleep(Duration::from_secs(1));
 
     let mut index = 0;
     // 60 MiB in each root: 120 MiB in total, above the 64 MiB aggregate.
