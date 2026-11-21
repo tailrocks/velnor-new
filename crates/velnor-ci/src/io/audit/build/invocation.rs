@@ -98,7 +98,9 @@ impl Invocation {
         for (index, word) in words.iter().enumerate() {
             if matches!(*word, "-p" | "--package") {
                 match words.get(index + 1) {
-                    Some(name) if !name.is_empty() => packages.push((*name).to_owned()),
+                    Some(name) if !name.is_empty() && !name.starts_with('-') => {
+                        packages.push((*name).to_owned());
+                    }
                     _ => provable = false,
                 }
             } else if let Some(name) = word
@@ -111,6 +113,9 @@ impl Invocation {
                     packages.push(name.to_owned());
                 }
             }
+        }
+        if words.iter().any(|word| target_filter(word)) {
+            provable = false;
         }
         let all = provable
             && words
@@ -311,6 +316,27 @@ fn chdir(globals: &[&str]) -> Option<PathBuf> {
         }
     }
     directory
+}
+
+fn target_filter(word: &str) -> bool {
+    const FILTERS: [&str; 10] = [
+        "--lib",
+        "--bins",
+        "--bin",
+        "--examples",
+        "--example",
+        "--tests",
+        "--test",
+        "--benches",
+        "--bench",
+        "--doc",
+    ];
+    FILTERS.iter().any(|filter| {
+        word == *filter
+            || word
+                .strip_prefix(filter)
+                .is_some_and(|rest| rest.starts_with('='))
+    })
 }
 
 fn subcommand(words: &[&str]) -> Option<usize> {

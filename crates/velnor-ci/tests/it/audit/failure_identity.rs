@@ -73,7 +73,29 @@ fn a_workspace_build_with_a_bare_exclusion_is_not_named() {
 
 #[test]
 fn a_workspace_build_with_a_package_flag_and_no_name_is_not_named() {
-    let stderr = refusal_after(&["cargo", "build", "--workspace", "-p"], None);
+    let failing: [&[&str]; 2] = [
+        &["cargo", "build", "--workspace", "-p"],
+        &["cargo", "build", "--workspace", "-p", "--offline"],
+    ];
+    for command in failing {
+        let stderr = refusal_after(command, None);
+        assert!(!stderr.contains(NAMED), "{command:?}: {stderr}");
+    }
+}
+
+#[test]
+fn a_workspace_build_with_a_target_filter_is_not_named() {
+    let failing = [
+        "cargo",
+        "build",
+        "--workspace",
+        "--exclude",
+        "app",
+        "--bins",
+        "--offline",
+        "--no-such-flag",
+    ];
+    let stderr = refusal_after(&failing, None);
     assert!(!stderr.contains(NAMED), "{stderr}");
 }
 
