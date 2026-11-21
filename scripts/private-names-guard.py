@@ -134,6 +134,14 @@ class Matcher:
         self.learn(CHUNK.findall(text.lower()))
         return self.lines(text)
 
+    def view_lines(self, views):
+        return sorted({number for view in views for number in self.lines(view)})
+
+
+def views(content):
+    lowered = content.lower()
+    return (lowered, lowered.replace(b"\0", b"")) if b"\0" in lowered else (lowered,)
+
 
 def tracked_files(root):
     output = subprocess.run(["git", "-C", str(root), "ls-files", "-s", "-z"], check=True, capture_output=True).stdout
@@ -178,10 +186,9 @@ def scan(root, hashes, only=None):
             continue
         by_object.setdefault((mode == SYMLINK_MODE, obj), []).append(path)
     contents = blobs(root, {obj for _symlink, obj in by_object})
-    texts = {
-        key: contents[key[1]].lower() for key in by_object if key[0] or b"\0" not in contents[key[1]]
-    }
-    seen = {name: set(CHUNK.findall(text)) for name, text in [*texts.items(), *((path, path.lower()) for path in paths)]}
+    texts = {key: views(contents[key[1]]) for key in by_object}
+    seen = {key: set().union(*(CHUNK.findall(view) for view in found)) for key, found in texts.items()}
+    seen.update((path, set(CHUNK.findall(path.lower()))) for path in paths)
     matcher.learn(set().union(*seen.values()))
     found = []
     labels = {}
@@ -190,11 +197,14 @@ def scan(root, hashes, only=None):
         labels[path] = f"ls-files line {number}" if flagged else path.decode("utf-8", "backslashreplace")
         if flagged:
             found.append(labels[path])
-    for key, text in texts.items():
-        lines = matcher.lines(text) if matcher.touches(seen[key]) else []
+    for key, found_views in texts.items():
+        lines = matcher.view_lines(found_views) if matcher.touches(seen[key]) else []
         places = ["target"] if key[0] and lines else lines
         found.extend(f"{labels[path]}:{place}" for path in by_object[key] for place in places)
     return sorted(found)
+
+
+FULL_SCAN_TRIGGERS = frozenset({f"scripts/{HASH_FILE.name}".encode(), f"scripts/{Path(__file__).name}".encode()})
 
 
 def changed_paths(root, environ):
@@ -208,7 +218,8 @@ def changed_paths(root, environ):
         ).stdout
     except (KeyError, TypeError, OSError, ValueError, subprocess.CalledProcessError):
         return None
-    return set(filter(None, listed.split(b"\0")))
+    changed = set(filter(None, listed.split(b"\0")))
+    return None if not changed.isdisjoint(FULL_SCAN_TRIGGERS) else changed
 
 
 def run(root, hashes, environ):

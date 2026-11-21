@@ -189,10 +189,30 @@ class PathTests(unittest.TestCase):
             self.assertEqual(len(found), 1)
             self.assertNotIn("zzplanted", found[0])
 
-    def test_binary_blob_is_skipped_and_text_blob_with_the_same_word_is_not(self):
-        tmp, root = indexed({b"a.bin": b"zzplanted\0\x01", b"b.txt": b"zzplanted\n"})
+    def test_blob_with_nul_bytes_is_scanned_not_skipped(self):
+        tmp, root = indexed({b"a.bin": b"\x01zzplanted\0\x01", b"b.txt": b"zzplanted\n", b"c.bin": b"plain\0\x01"})
         with tmp:
-            self.assertEqual(guard.scan(root, planted("zzplanted")), ["b.txt:1"])
+            self.assertEqual(guard.scan(root, planted("zzplanted")), ["a.bin:1", "b.txt:1"])
+
+    def test_utf16_and_utf32_text_is_scanned(self):
+        text = "one\nsee ZzPlanted here\n"
+        tmp, root = indexed(
+            {
+                b"le.txt": text.encode("utf-16-le"),
+                b"be.txt": text.encode("utf-16-be"),
+                b"bom.txt": text.encode("utf-16"),
+                b"wide.txt": text.encode("utf-32"),
+                b"clean.txt": "one\ntwo\n".encode("utf-16"),
+            }
+        )
+        with tmp:
+            found = guard.scan(root, planted("zzplanted"))
+            self.assertEqual(found, ["be.txt:2", "bom.txt:2", "le.txt:2", "wide.txt:2"])
+
+    def test_nul_inside_a_word_does_not_hide_it(self):
+        tmp, root = indexed({b"a.bin": b"zzplan\0ted\n"})
+        with tmp:
+            self.assertEqual(guard.scan(root, planted("zzplanted")), ["a.bin:1"])
 
     def test_gitlink_whose_commit_is_absent_is_not_read_and_its_path_is_still_scanned(self):
         tmp, root = indexed({b"docs/a.md": b"plain\n"})
@@ -285,6 +305,31 @@ class PullRequestScopeTests(unittest.TestCase):
         with tmp:
             for name in ["push", "schedule", "merge_group", "workflow_dispatch"]:
                 self.assertEqual(outcome(root, ["zzplanted"], {**environ, "GITHUB_EVENT_NAME": name})[0], 1, name)
+
+
+class FullScanTriggerTests(unittest.TestCase):
+    def test_changing_the_digest_list_rescans_the_whole_tree(self):
+        tmp, root, environ = pull_request(
+            {"scripts/private-names-hashes.txt": "", "old.md": "zzplanted\n"}, {"scripts/private-names-hashes.txt": "digest 9\n"}
+        )
+        with tmp:
+            code, text = outcome(root, ["zzplanted"], environ)
+            self.assertEqual(code, 1)
+            self.assertIn("old.md:1", text)
+
+    def test_changing_the_guard_itself_rescans_the_whole_tree(self):
+        tmp, root, environ = pull_request(
+            {"scripts/private-names-guard.py": "a\n", "old.md": "zzplanted\n"}, {"scripts/private-names-guard.py": "b\n"}
+        )
+        with tmp:
+            self.assertEqual(outcome(root, ["zzplanted"], environ)[0], 1)
+
+    def test_an_unrelated_change_still_scans_only_changed_files(self):
+        tmp, root, environ = pull_request(
+            {"scripts/private-names-hashes.txt": "", "old.md": "zzplanted\n"}, {"new.md": "clean\n"}
+        )
+        with tmp:
+            self.assertEqual(outcome(root, ["zzplanted"], environ)[0], 0)
 
 
 class LongTokenTests(unittest.TestCase):

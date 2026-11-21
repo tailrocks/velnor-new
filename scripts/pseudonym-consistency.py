@@ -4,6 +4,7 @@
 import csv
 import io
 import json
+import os
 import re
 import subprocess
 import sys
@@ -31,22 +32,70 @@ def row_keys(row):
     return keys
 
 
-def disagreements(root):
-    output = subprocess.run(
-        ["git", "-C", str(root), "grep", "-n", "-I", "-E", "-z", "-e", "example-repo-[0-9]+", "--", "."],
+def git_bytes(root, *args):
+    return subprocess.run(["git", "-C", str(root), *args], check=True, capture_output=True).stdout
+
+
+def index_blob(root, path):
+    return git_bytes(root, "cat-file", "blob", b":" + path)
+
+
+def scalars(node):
+    for key, value in node.items():
+        if isinstance(value, list):
+            for item in value:
+                if not isinstance(item, (dict, list)):
+                    yield key, item
+        elif not isinstance(value, dict):
+            yield key, value
+
+
+def json_rows(node):
+    if isinstance(node, dict):
+        fields = []
+        for key, value in scalars(node):
+            literal = value if key == "number" and isinstance(value, str) and value.isdigit() else json.dumps(value)
+            fields.append(f"{json.dumps(key)}: {literal}")
+        yield ", ".join(fields).encode()
+        for value in node.values():
+            yield from json_rows(value)
+    elif isinstance(node, list):
+        for value in node:
+            yield from json_rows(value)
+
+
+def json_document(root, path):
+    return json.loads(index_blob(root, path).decode())
+
+
+def pseudonym_files(root):
+    done = subprocess.run(
+        ["git", "-C", str(root), "grep", "--cached", "-a", "-l", "-z", "-E", "-e", "example-repo-[0-9]+", "--", "."],
         capture_output=True,
-    ).stdout
+    )
+    if done.returncode not in (0, 1):
+        raise subprocess.CalledProcessError(done.returncode, done.args, done.stdout, done.stderr)
+    return sorted(filter(None, done.stdout.split(b"\0")))
+
+
+def file_rows(root, path):
+    if path.endswith(b".json"):
+        try:
+            return list(json_rows(json_document(root, path)))
+        except (ValueError, RecursionError):
+            pass
+    return index_blob(root, path).split(b"\n")
+
+
+def disagreements(root):
     seen = defaultdict(lambda: defaultdict(set))
-    for line in output.split(b"\n"):
-        path, _, rest = line.partition(b"\0")
-        _number, _, row = rest.partition(b"\0")
-        if not row:
-            continue
-        names = PSEUDONYM.findall(row)
-        if not names:
-            continue
-        for key in row_keys(row):
-            seen[key][names[0]].add(path)
+    for path in pseudonym_files(root):
+        for row in file_rows(root, path):
+            names = PSEUDONYM.findall(row)
+            if not names:
+                continue
+            for key in row_keys(row):
+                seen[key][names[0]].add(path)
     labelled = defaultdict(lambda: defaultdict(set))
     for key, names in seen.items():
         if len(names) > 1:
@@ -54,6 +103,17 @@ def disagreements(root):
             for name, paths in names.items():
                 labelled[label][name] |= paths
     return sorted(labelled.items())
+
+
+def broken_json(root):
+    broken = []
+    for path in pseudonym_files(root):
+        if path.endswith(b".json"):
+            try:
+                json_document(root, path)
+            except (ValueError, RecursionError):
+                broken.append(os.fsdecode(path))
+    return broken
 
 
 def owner_values(node, number=None):
@@ -78,22 +138,28 @@ def csv_owner_values(text):
 
 
 def evidence_values(root, path):
-    try:
-        text = (root / path).read_text()
-        return list(owner_values(json.loads(text)) if path.endswith(".json") else csv_owner_values(text))
-    except (OSError, ValueError):
-        return []
+    text = index_blob(root, os.fsencode(path)).decode()
+    if "\0" in text:
+        raise ValueError(path)
+    return list(owner_values(json.loads(text)) if path.endswith(".json") else csv_owner_values(text))
+
+
+def describe(path):
+    return os.fsencode(path).decode("utf-8", "backslashreplace")
 
 
 def unscrubbed_owners(root):
-    listed = subprocess.run(
-        ["git", "-C", str(root), "ls-files", "-z", "--", *(f"{base}/*.{kind}" for base in EVIDENCE_DIRS for kind in ("json", "csv"))],
-        capture_output=True,
-    ).stdout
+    patterns = [f"{base}/*.{kind}" for base in EVIDENCE_DIRS for kind in ("json", "csv")]
+    listed = git_bytes(root, "ls-files", "-z", "--", *patterns)
     found = []
-    for raw in listed.split(b"\0"):
-        path = raw.decode()
-        for number, key, value in evidence_values(root, path) if path else []:
+    for raw in filter(None, listed.split(b"\0")):
+        path = os.fsdecode(raw)
+        try:
+            values = evidence_values(root, path)
+        except (OSError, ValueError, csv.Error, RecursionError, subprocess.CalledProcessError):
+            found.append((path, None, "unparseable"))
+            continue
+        for number, key, value in values:
             org = value.split("/", 1)[0]
             if org not in PROJECT_OWNERS and not ALIAS.fullmatch(org):
                 found.append((path, number, key))
@@ -102,6 +168,12 @@ def unscrubbed_owners(root):
 
 def main():
     root = Path(subprocess.run(["git", "rev-parse", "--show-toplevel"], check=True, capture_output=True, text=True).stdout.strip())
+    broken = broken_json(root)
+    if broken:
+        print(f"{len(broken)} tracked JSON file(s) naming example-repo-N pseudonyms cannot be parsed, so their records cannot be compared; fix the syntax:")
+        for path in broken[:MAX_REPORTED]:
+            print(f"  {describe(path)}")
+        return 1
     found = disagreements(root)
     if found:
         print(f"{len(found)} record(s) carry different example-repo-N pseudonyms in different files; one repository must map to one pseudonym everywhere:")
@@ -110,9 +182,9 @@ def main():
         return 1
     owners = unscrubbed_owners(root)
     if owners:
-        print(f"{len(owners)} owner, account, login or org value(s) in evidence files are not example-org or example-account pseudonyms or the project org; replace each with an alias:")
+        print(f"{len(owners)} owner, account, login or org value(s) in evidence files are not example-org or example-account pseudonyms or the project org, or the file cannot be parsed; replace each with an alias or fix the file:")
         for path, number, field in owners[:MAX_REPORTED]:
-            print(f"  {path} row {number} field {field}")
+            print(f"  {describe(path)} row {number} field {field}")
         return 1
     return 0
 

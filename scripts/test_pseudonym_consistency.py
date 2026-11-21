@@ -32,6 +32,25 @@ def repository(files):
     return tmp, root
 
 
+def indexed(entries):
+    tmp = tempfile.TemporaryDirectory(prefix="pseudonym-test-")
+    root = Path(tmp.name)
+    env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+    subprocess.run(["git", "init", "-q", str(root)], check=True, env=env)
+    for path, data in entries.items():
+        obj = subprocess.run(
+            ["git", "-C", str(root), "hash-object", "-w", "--stdin"], input=data, check=True, capture_output=True, env=env
+        ).stdout.decode().strip()
+        subprocess.run(
+            ["git", "-C", str(root), "update-index", "--add", "--cacheinfo", f"100644,{obj},".encode() + path], check=True, env=env
+        )
+    return tmp, root
+
+
+def pretty(number, name, sha=SHA):
+    return f'[\n  {{\n    "number": {number},\n    "wave": "C",\n    "repository": "example-org/{name}",\n    "sha": "{sha}"\n  }}\n]\n'
+
+
 class ConsistencyTests(unittest.TestCase):
     def test_same_record_and_sha_with_one_pseudonym_everywhere_passes(self):
         tmp, root = repository(
@@ -101,6 +120,53 @@ class ConsistencyTests(unittest.TestCase):
             self.assertEqual(check.disagreements(root), [])
 
 
+class MultiLineJsonTests(unittest.TestCase):
+    def test_pretty_printed_record_disagreeing_with_a_companion_row_fails(self):
+        tmp, root = repository(
+            {"docs/reviews/a.json": pretty(44, repo(9)), "docs/reviews/b.md": f"| 44 | C | `example-org/{repo(3)}` | {SHA} |\n"}
+        )
+        with tmp:
+            found = check.disagreements(root)
+            self.assertEqual([label for label, _names in found], [b"record:44"])
+            self.assertEqual(sorted(found[0][1]), [repo(3).encode(), repo(9).encode()])
+
+    def test_pretty_printed_record_agreeing_with_a_companion_row_passes(self):
+        tmp, root = repository(
+            {"a.json": pretty(44, repo(9)), "b.md": f"| 44 | C | `example-org/{repo(9)}` | {SHA} |\n", "c.json": pretty(45, repo(2), OTHER)}
+        )
+        with tmp:
+            self.assertEqual(check.disagreements(root), [])
+
+    def test_two_pretty_printed_files_disagreeing_on_one_node_id_fail(self):
+        node = '[\n  {\n    "repository": "example-org/%s",\n    "node_id": "R_kgDOR3ckuA"\n  }\n]\n'
+        tmp, root = repository({"a.json": node % repo(1), "b.json": node % repo(2)})
+        with tmp:
+            self.assertEqual([label for label, _names in check.disagreements(root)], [b"node:R_kgDOR3ckuA"])
+
+    def test_string_record_numbers_and_listed_repositories_are_compared(self):
+        tmp, root = repository(
+            {
+                "a.json": f'{{"number": "44", "repositories": ["example-org/{repo(9)}"], "sha": "{SHA}"}}\n',
+                "b.md": f"| 44 | C | `example-org/{repo(3)}` | {SHA} |\n",
+            }
+        )
+        with tmp:
+            self.assertEqual([label for label, _names in check.disagreements(root)], [b"record:44"])
+
+    def test_json_that_cannot_be_parsed_is_reported_wherever_it_names_a_pseudonym(self):
+        tmp, root = indexed(
+            {
+                b"anywhere/a.json": f'{{"repository": "example-org/{repo(1)}",'.encode(),
+                b"anywhere/b.json": f'{{"repository": "example-org/{repo(1)}"}}\xff'.encode(),
+                b"anywhere/c.json": b"[" * 200000 + f"example-org/{repo(1)}".encode(),
+                b"anywhere/d.json": b'{"no": "pseudonym"',
+                b"anywhere/e.json": f'{{"repository": "example-org/{repo(1)}"}}'.encode(),
+            }
+        )
+        with tmp:
+            self.assertEqual(check.broken_json(root), ["anywhere/a.json", "anywhere/b.json", "anywhere/c.json"])
+
+
 class OwnerFieldTests(unittest.TestCase):
     def found(self, files):
         tmp, root = repository(files)
@@ -156,6 +222,43 @@ class OwnerFieldTests(unittest.TestCase):
     def test_csv_columns_named_like_owner_fields_are_checked(self):
         found = self.found({"docs/reviews/rows.csv": "number,owner,note\n5,acme-labs,x\n6,example-org,y\n"})
         self.assertEqual(found, [("docs/reviews/rows.csv", None, "owner")])
+
+
+class FailClosedOwnerTests(unittest.TestCase):
+    def found(self, entries):
+        tmp, root = indexed(entries)
+        with tmp:
+            return check.unscrubbed_owners(root)
+
+    def test_non_utf8_evidence_path_is_checked_not_a_crash(self):
+        found = self.found({b"docs/reviews/caf\xe9.json": b'{"number": 2, "login": "acme-labs"}\n'})
+        self.assertEqual(len(found), 1)
+        self.assertEqual(found[0][1:], (2, "login"))
+        self.assertEqual(check.describe(found[0][0]), "docs/reviews/caf\\xe9.json")
+
+    def test_malformed_evidence_json_is_reported_not_clean(self):
+        found = self.found({b"docs/reviews/x.json": b'{"number": 1, "login": "acme-labs"'})
+        self.assertEqual(found, [("docs/reviews/x.json", None, "unparseable")])
+
+    def test_evidence_json_with_invalid_utf8_is_reported_not_clean(self):
+        found = self.found({b"docs/proposed/x.json": b'{"login": "acme-labs\xff"}\n'})
+        self.assertEqual(found, [("docs/proposed/x.json", None, "unparseable")])
+
+    def test_too_deeply_nested_evidence_json_is_reported_not_clean(self):
+        found = self.found({b"docs/reviews/x.json": b"[" * 200000})
+        self.assertEqual(found, [("docs/reviews/x.json", None, "unparseable")])
+
+    def test_evidence_csv_with_invalid_utf8_or_nul_is_reported_not_clean(self):
+        found = self.found(
+            {b"docs/reviews/a.csv": b"number,owner\n1,acme-labs\xff\n", b"docs/reviews/b.csv": b"number,owner\n1,acme\x00labs\n"}
+        )
+        self.assertEqual(
+            found, [("docs/reviews/a.csv", None, "unparseable"), ("docs/reviews/b.csv", None, "unparseable")]
+        )
+
+    def test_evidence_present_only_in_the_index_is_read_from_the_index(self):
+        found = self.found({b"docs/reviews/x.json": b'{"number": 4, "owner": "acme-labs"}\n'})
+        self.assertEqual(found, [("docs/reviews/x.json", 4, "owner")])
 
 
 if __name__ == "__main__":
