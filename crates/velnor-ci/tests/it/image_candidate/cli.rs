@@ -122,12 +122,6 @@ impl Candidate {
     }
 }
 
-impl Drop for Candidate {
-    fn drop(&mut self) {
-        fs::remove_dir_all(self.dir.path()).ok();
-    }
-}
-
 fn archive() -> Vec<u8> {
     let layer = plain_layer();
     build(&spec(vec![(gzip(&layer), LAYER_GZ), (layer, LAYER)])).archive()

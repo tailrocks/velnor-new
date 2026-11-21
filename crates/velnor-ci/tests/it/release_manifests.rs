@@ -82,12 +82,6 @@ impl Checkout {
     }
 }
 
-impl Drop for Checkout {
-    fn drop(&mut self) {
-        fs::remove_dir_all(self.0.path()).ok();
-    }
-}
-
 /// The search path the stub hands to the real cargo: the job's own, minus every folder whose
 /// `cargo` is the crates-mirror wrapper, so no lookup by name can reach the wrapper.
 fn exec_path() -> std::ffi::OsString {

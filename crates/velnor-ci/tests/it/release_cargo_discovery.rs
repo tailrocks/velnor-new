@@ -49,12 +49,6 @@ impl Checkout {
     }
 }
 
-impl Drop for Checkout {
-    fn drop(&mut self) {
-        fs::remove_dir_all(self.0.path()).ok();
-    }
-}
-
 fn refused(checkout: &Checkout, file: &str, needle: &str) {
     let (code, stderr) = checkout.check(file);
     assert_eq!(code, Some(1), "{stderr}");

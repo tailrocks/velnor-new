@@ -33,12 +33,6 @@ impl Dir {
     }
 }
 
-impl Drop for Dir {
-    fn drop(&mut self) {
-        let _ignored = fs::remove_dir_all(self.0.path());
-    }
-}
-
 fn answer(fake: &FakeReleases, api: &str, stream: &TcpStream) -> Result<String, CiError> {
     let mut reader = BufReader::new(stream);
     let mut line = String::new();

@@ -76,12 +76,6 @@ impl Fixture {
     }
 }
 
-impl Drop for Fixture {
-    fn drop(&mut self) {
-        let _ignored = fs::remove_dir_all(self.0.path());
-    }
-}
-
 fn refused(fixture: &Fixture, members: &[&str], expected: &str) {
     let before = fixture.snapshot();
     let output = fixture.align(members);

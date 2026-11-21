@@ -278,12 +278,6 @@ fn copy_tree(from: &Path, to: &Path) {
     }
 }
 
-impl Drop for Repo {
-    fn drop(&mut self) {
-        let _ignored = fs::remove_dir_all(self.0.path());
-    }
-}
-
 pub(crate) fn serve(responses: BTreeMap<String, String>) -> String {
     serve_with_status(
         responses
