@@ -202,7 +202,16 @@ fn the_reader_maps_a_real_mbx_report_and_names_what_it_cannot_read() {
         }))
     );
     let probes = br#"{"version":5,"hits":0,"misses":0,"unconsulted":0,"bypasses":{"compiler-query":2,"standard-input":1}}"#;
-    assert_eq!(parse(probes), Ok(None));
+    assert_eq!(
+        parse(probes),
+        Ok(Some(MbxSession {
+            bypasses: BTreeMap::from([
+                ("compiler-query".to_owned(), 2),
+                ("standard-input".to_owned(), 1)
+            ]),
+            ..session(0, 0, 0)
+        }))
+    );
     let bypassed = br#"{"version":5,"hits":0,"misses":0,"unconsulted":0,"bypasses":{"compiler-query":1,"other":1}}"#;
     assert_eq!(
         parse(bypassed),

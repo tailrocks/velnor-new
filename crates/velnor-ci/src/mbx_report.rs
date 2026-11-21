@@ -12,12 +12,6 @@ pub const SWITCH: &str = "VELNOR_MBX_REPORTS";
 pub const DIRECTORY: &str = "velnor-mbx-reports";
 pub const VARIABLE: &str = "MBX_STATS_REPORT";
 pub const KNOWN_VERSIONS: &[u64] = &[5];
-const ROUTINE_PROBES: &[&str] = &[
-    "compiler-query",
-    "standard-input",
-    "cc-compiler-query",
-    "cc-standard-input",
-];
 const BUILD_ONLY_SUBCOMMANDS: &[&str] =
     &["build", "b", "check", "c", "clippy", "doc", "d", "rustc"];
 
@@ -133,10 +127,7 @@ pub fn parse(report: &[u8]) -> Result<Option<MbxSession>, String> {
     }
     let counts: Counts = serde_json::from_value(value)
         .map_err(|error| format!("version {version} without its counts ({error})"))?;
-    let bypassed = counts
-        .bypasses
-        .keys()
-        .any(|reason| !ROUTINE_PROBES.contains(&reason.as_str()));
+    let bypassed = !counts.bypasses.is_empty();
     let looked_at = counts.hits > 0 || counts.misses > 0 || counts.unconsulted > 0;
     Ok((looked_at || bypassed).then_some(MbxSession {
         hits: counts.hits,
