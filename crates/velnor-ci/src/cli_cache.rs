@@ -36,6 +36,25 @@ pub enum CacheCommand {
         about = "List every GitHub Actions cache entry of the repository whose key starts with velnor-private-, on every ref, and delete them only with --yes (a dry run otherwise); prints counts and bytes, never a token. Run it once when a private repository becomes public, because a fork pull request of a public repository can restore a default-branch entry by its exact key; it does not look at the repository visibility, so it also removes the entries of a repository that is still private. It covers only velnor-private- keys: before a private repository goes public, delete ALL its caches (`gh cache delete --all -R <owner/repo>`), because helper 0.1.111 stored private sources and build outputs under velnor-src- and velnor-tgt- keys. With --yes it refuses, and deletes nothing, while the repository has any workflow run that hasn't finished (in progress, queued, waiting, requested, pending or awaiting approval; wait for them or disable workflows, then run it again); a dry run only warns. Reads GITHUB_TOKEN, which needs actions: write to delete, and GITHUB_REPOSITORY"
     )]
     PurgePrivate(PurgePrivateArgs),
+    #[command(
+        about = "Delete the one cache entry with --key and --version (the version is printed by the tools-verify notice), through the GitHub API; refuses when no entry or more than one entry matches; reads GITHUB_TOKEN, which needs actions: write"
+    )]
+    DeleteEntry(DeleteEntryArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct DeleteEntryArgs {
+    #[arg(long, help = "The exact cache key")]
+    pub key: String,
+    #[arg(long, help = "The cache entry version, as the cache API lists it")]
+    pub version: String,
+    #[arg(
+        long = "ref",
+        help = "The ref the entry belongs to, such as refs/heads/main; without it every ref is searched"
+    )]
+    pub reference: Option<String>,
+    #[arg(long, help = "Repository as owner/name, default GITHUB_REPOSITORY")]
+    pub repo: Option<String>,
 }
 
 #[derive(Debug, Args)]

@@ -5,8 +5,9 @@ use std::fs;
 use std::os::unix::fs::{PermissionsExt, symlink};
 use std::path::PathBuf;
 
+use velnor_ci::cache_version::Compression;
 use velnor_ci::tools_verify::{Anchor, Discard, Recording, Verb, Verdict, check, record};
-use velnor_ci::tools_verify_step::{Context, run};
+use velnor_ci::tools_verify_step::{Context, Remote, run};
 
 use crate::io::Repo;
 
@@ -257,7 +258,12 @@ pub(crate) fn context(job: &Job, anchor: &str, event: &str) -> Context {
         default_branch: Some("main".to_owned()),
         cache_key: String::new(),
         anchor_key: String::new(),
-        repository: "tailrocks/velnor-new".to_owned(),
+        remote: Remote {
+            host: "github.com".to_owned(),
+            api_url: "https://api.github.com".to_owned(),
+            repository: "tailrocks/velnor-new".to_owned(),
+        },
+        compression: Compression::Gzip,
     }
 }
 
