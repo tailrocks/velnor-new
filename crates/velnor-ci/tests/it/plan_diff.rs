@@ -15,11 +15,11 @@ use std::process::{Command, Output};
 
 use crate::support::fresh_dir;
 
-fn data() -> PathBuf {
+pub(crate) fn data() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/it/data/plan_diff")
 }
 
-fn read(path: &Path) -> String {
+pub(crate) fn read(path: &Path) -> String {
     fs::read_to_string(path).unwrap_or_else(|e| unreachable!("{}: {e}", path.display()))
 }
 
@@ -81,7 +81,7 @@ fn repository(case: &Path, event: &str, name: &str) -> (PathBuf, String, String)
     repository_with(case, event, name, "")
 }
 
-fn repository_with(
+pub(crate) fn repository_with(
     case: &Path,
     event: &str,
     name: &str,
@@ -119,13 +119,13 @@ fn repository_with(
 }
 
 /// Where a run's request and outputs go: beside the repository, which they must not dirty.
-fn aside(repo: &Path) -> PathBuf {
+pub(crate) fn aside(repo: &Path) -> PathBuf {
     let dir = repo.with_extension("io");
     fs::create_dir_all(&dir).unwrap_or_else(|e| unreachable!("{e}"));
     dir
 }
 
-fn plan(repo: &Path, request: &Path, outputs: &Path) -> Output {
+pub(crate) fn plan(repo: &Path, request: &Path, outputs: &Path) -> Output {
     Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
         .current_dir(repo)
         .env_clear()
@@ -141,7 +141,7 @@ fn plan(repo: &Path, request: &Path, outputs: &Path) -> Output {
         .unwrap_or_else(|e| unreachable!("{e}"))
 }
 
-fn bind(request: &str, base: &str, head: &str) -> String {
+pub(crate) fn bind(request: &str, base: &str, head: &str) -> String {
     let mut value: serde_json::Value =
         serde_json::from_str(request).unwrap_or_else(|e| unreachable!("{e}"));
     if !value["base"].is_null() {
