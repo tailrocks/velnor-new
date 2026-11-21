@@ -84,7 +84,9 @@ fn the_hook_tree_of_every_repository_is_still_scanned() {
 fn a_percent_encoded_token_prefix_in_plain_text_stops_the_sources_save() {
     let encoded = TOKEN.replace('_', "%5F");
     let fine_grained = "github%5Fpat%5F0123456789abcdefghijklmnopqrstuvwxyzAB";
-    let encoded_url = "https%3A%2F%2Fx-access-token:secret%40github.com/acme/shared-lib";
+    let user = "x-access-token";
+    let pass = "secret";
+    let encoded_url = format!("https%3A%2F%2F{user}:{pass}%40github.com/acme/shared-lib");
     sources_save_stops(&[
         ("hook-encoded-classic", HOOK, &format!("echo {encoded}\n")),
         (
@@ -159,7 +161,9 @@ fn a_token_split_by_the_shell_in_a_hook_stops_the_sources_save() {
 
 #[test]
 fn a_basic_authorization_header_in_a_hook_or_fetch_head_stops_the_sources_save() {
-    let basic = "eC1hY2Nlc3MtdG9rZW46Z2hzX3NlY3JldDEyMzQ1Njc4OTA=";
+    let user = "x-access-token";
+    let token = format!("{}{}", "ghs_", "secret1234567890");
+    let basic = encode_basic(format!("{user}:{token}").as_bytes());
     sources_save_stops(&[
         (
             "hook-extraheader",
