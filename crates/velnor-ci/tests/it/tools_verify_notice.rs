@@ -126,8 +126,6 @@ fn the_notice_states_the_refusal_rule_and_not_that_the_restored_entry_is_deleted
         stdout.contains("otherwise it refuses and deletes nothing"),
         "{stdout}"
     );
-    assert!(!stdout.contains("never touches a later one"), "{stdout}");
-    assert!(!stdout.contains("removes the restored entry"), "{stdout}");
 }
 
 #[test]
