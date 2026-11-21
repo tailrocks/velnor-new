@@ -63,7 +63,7 @@ fn inputs_build_in(repo: &Repo, root: &str, cargo: &[&str]) -> std::process::Out
         .unwrap_or_else(|e| unreachable!("{e}"))
 }
 
-fn a_failed_build_in_tools_a_does_not_blame_tools_b_after_it(failing: &[&str]) {
+fn failed_build_in_tools_a_with_untrusted_b_output(failing: &[&str]) -> Repo {
     let repo = grouped_tools();
     let failed = inputs_build_in(&repo, "tools/a", failing);
     assert!(!failed.status.success(), "{failed:?}");
@@ -75,6 +75,16 @@ fn a_failed_build_in_tools_a_does_not_blame_tools_b_after_it(failing: &[&str]) {
         "the failed build was not recorded in the shared target directory"
     );
     untrusted_b_output(&repo);
+    repo
+}
+
+fn stderr_of_tools_b_build(repo: &Repo, args: &[&str]) -> String {
+    let output = inputs_build_in(repo, "tools/b", args);
+    String::from_utf8_lossy(&output.stderr).into_owned()
+}
+
+fn a_failed_build_in_tools_a_does_not_blame_tools_b_after_it(failing: &[&str]) {
+    let repo = failed_build_in_tools_a_with_untrusted_b_output(failing);
     let refused = inputs_build_in(&repo, "tools/b", &["cargo", "build"]);
     let stderr = String::from_utf8_lossy(&refused.stderr).into_owned();
     assert_eq!(refused.status.code(), Some(1), "{stderr}");
@@ -110,4 +120,64 @@ fn a_failed_workspace_build_in_one_root_does_not_blame_another_roots_package_in_
         "--workspace",
         "--no-such-flag",
     ]);
+}
+
+const MEMBER_PACKAGE_SPELLINGS: [&[&str]; 4] = [
+    &["cargo", "build", "-p", "b", "--no-such-flag"],
+    &["cargo", "build", "--package", "b", "--no-such-flag"],
+    &["cargo", "build", "--package=b", "--no-such-flag"],
+    &["cargo", "build", "-pb", "--no-such-flag"],
+];
+
+const NON_MEMBER_PACKAGE_SPELLINGS: [&[&str]; 4] = [
+    &["cargo", "build", "-p", "no-such", "--no-such-flag"],
+    &["cargo", "build", "--package=no-such", "--no-such-flag"],
+    &["cargo", "build", "-pno-such", "--no-such-flag"],
+    &[
+        "cargo",
+        "build",
+        "--package=git+https://example.invalid/app#app@0.1.0",
+        "--no-such-flag",
+    ],
+];
+
+#[test]
+fn every_spelling_of_a_member_package_flag_selects_that_member_in_another_roots_build() {
+    for args in MEMBER_PACKAGE_SPELLINGS {
+        let repo = failed_build_in_tools_a_with_untrusted_b_output(&[
+            "cargo",
+            "build",
+            "-p",
+            "a",
+            "-p",
+            "b",
+            "--no-such-flag",
+        ]);
+        let stderr = stderr_of_tools_b_build(&repo, args);
+        assert!(
+            !stderr.contains("outside this command's explicit selection"),
+            "{args:?}: {stderr}"
+        );
+        assert!(stderr.contains("build command failed"), "{args:?}: {stderr}");
+    }
+}
+
+#[test]
+fn every_spelling_of_a_non_member_package_flag_refuses_the_untrusted_member_output() {
+    for args in NON_MEMBER_PACKAGE_SPELLINGS {
+        let repo = failed_build_in_tools_a_with_untrusted_b_output(&[
+            "cargo",
+            "build",
+            "-p",
+            "a",
+            "-p",
+            "b",
+            "--no-such-flag",
+        ]);
+        let stderr = stderr_of_tools_b_build(&repo, args);
+        assert!(
+            stderr.contains("outside this command's explicit selection: b (build-script output)"),
+            "{args:?}: {stderr}"
+        );
+    }
 }

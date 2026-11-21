@@ -326,6 +326,3 @@ fn subcommand(words: &[&str]) -> Option<usize> {
 #[cfg(test)]
 #[path = "invocation/preflight.rs"]
 mod preflight;
-#[cfg(test)]
-#[path = "invocation/selection.rs"]
-mod selection;
