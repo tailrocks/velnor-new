@@ -186,3 +186,16 @@ fn an_older_helper_keeps_the_self_planning_store_ungated() -> TestResult {
     assert!(one_root_store_step("0.1.111")?.get("if").is_none());
     Ok(())
 }
+
+#[test]
+fn the_shared_store_is_skipped_when_the_plan_failed_or_was_skipped_from_0_1_112() -> TestResult {
+    let condition = store_condition("0.1.112")?;
+    for outcome in ["failure", "skipped"] {
+        let context = Context::new(&[
+            ("steps.plan.outcome", outcome),
+            ("steps.plan.outputs.rust_root_mode", ""),
+        ]);
+        assert!(!runs(&condition, &context)?, "{outcome}: {condition}");
+    }
+    Ok(())
+}
