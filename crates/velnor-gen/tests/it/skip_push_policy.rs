@@ -11,8 +11,16 @@ use crate::pipeline::{view, workflow};
 const KNOB: &str = "[ci]\nskip_push_after_merge_group = true\n";
 
 fn repo(roots: &[&str], config: &str) -> Result<RepoView, Box<dyn std::error::Error>> {
+    repo_at(roots, config, "0.1.103")
+}
+
+fn repo_at(
+    roots: &[&str],
+    config: &str,
+    helper: &str,
+) -> Result<RepoView, Box<dyn std::error::Error>> {
     let mut repo = view(roots, Some(config.as_bytes()))?;
-    crate::pipeline::pin_helper(&mut repo, "0.1.103")?;
+    crate::pipeline::pin_helper(&mut repo, helper)?;
     for (name, text) in [("deny.toml", ""), ("mise.toml", DENY_MISE)] {
         let name = RepoPath::new(name)?;
         repo.tracked_paths.insert(name.clone());
@@ -121,6 +129,25 @@ fn a_lane_that_planned_everything_again_runs_its_checks_whatever_the_queue_run_d
         when.contains(
             "(steps.merge_group.outputs.skip != 'true' || steps.replan.outcome == 'success')"
         ),
+        "{when}"
+    );
+    Ok(())
+}
+
+#[test]
+fn the_one_root_policy_job_reads_the_rust_job_skip_push_before_0_1_110() -> TestResult {
+    let all = jobs(&workflow(&repo_at(&["Cargo.toml"], KNOB, "0.1.109")?)?)?;
+    let policy = &all["policy"];
+    let needs: Vec<&str> = policy["needs"]
+        .as_array()
+        .ok_or("needs")?
+        .iter()
+        .filter_map(Value::as_str)
+        .collect();
+    assert_eq!(needs, ["rust"], "{policy}");
+    let when = deny_condition(policy);
+    assert!(
+        when.contains("needs.rust.outputs.skip_push != 'true'"),
         "{when}"
     );
     Ok(())

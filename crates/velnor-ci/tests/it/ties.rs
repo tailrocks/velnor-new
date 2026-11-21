@@ -93,7 +93,7 @@ fn a_filesystem_that_rounds_distinct_times_back_into_a_tie_fails_the_restore() {
             .map_err(|e| CiError::new(e.to_string()))
     };
     let error = break_time_ties_with(repo.root(), &round_to_seconds).err();
-    let text = error.map(|e| e.to_string()).unwrap_or_default();
+    let text = error.map_or_default(|e| e.to_string());
     assert!(
         text.contains("still share a modification time") && text.contains("build.rs"),
         "{text}"

@@ -152,6 +152,7 @@ fn the_verify_step_names_the_restored_cache_entry_only_from_helper_0_1_110() -> 
 #[test]
 fn the_verify_step_names_the_anchor_entry_only_from_helper_0_1_111() -> TestResult {
     const ANCHOR_KEY: &str = "${{ steps.toolsanchor.outputs.cache-matched-key }}";
+    const PLAN_KEY: &str = "${{ needs.rust-plan.outputs.tools_anchor_key }}";
     for config in STORES {
         let before = verify_key_env(config, "0.1.110", "VELNOR_ANCHOR_CACHE_KEY")?;
         assert_ne!(before.len(), 0, "{config:?}: no verify step at 0.1.110");
@@ -160,7 +161,9 @@ fn the_verify_step_names_the_anchor_entry_only_from_helper_0_1_111() -> TestResu
         let named = verify_key_env(config, "0.1.111", "VELNOR_ANCHOR_CACHE_KEY")?;
         assert_eq!(named.len(), before.len(), "{config:?}");
         assert!(
-            named.iter().all(|key| key == &Some(ANCHOR_KEY.to_owned())),
+            named.iter().all(|key| {
+                key == &Some(ANCHOR_KEY.to_owned()) || key == &Some(PLAN_KEY.to_owned())
+            }),
             "{config:?}: {named:?}"
         );
     }

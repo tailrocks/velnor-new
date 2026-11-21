@@ -38,7 +38,7 @@ fn an_inherited_tag_of_one_root_is_compared_with_a_listed_tag_of_another() {
         ),
         "{error:?}"
     );
-    let text = error.map(|e| e.to_string()).unwrap_or_default();
+    let text = error.map_or_default(|e| e.to_string());
     assert!(text.contains("a{{ version }}"), "{text}");
     assert_eq!(refusal(&two_roots("tool-v{{ version }}")), None);
 }

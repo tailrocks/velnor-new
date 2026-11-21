@@ -81,8 +81,7 @@ async fn start_listening_pair(
     let command = Command::new("ps")
         .args(["-p", pid.trim(), "-o", "command="])
         .output()
-        .map(|out| String::from_utf8_lossy(&out.stdout).into_owned())
-        .unwrap_or_default();
+        .map_or_default(|out| String::from_utf8_lossy(&out.stdout).into_owned());
     Command::new("kill")
         .args(["-KILL", pid.trim()])
         .status()
@@ -102,7 +101,7 @@ async fn start_returns_only_once_the_agent_is_online_at_runner_server() {
 async fn start_fails_at_the_deadline_when_the_agent_never_comes_online() {
     let (started, asked, command) =
         start_listening_pair("supervisor-offline", usize::MAX, Duration::from_millis(500)).await;
-    let message = started.err().map(|e| e.to_string()).unwrap_or_default();
+    let message = started.err().map_or_default(|e| e.to_string());
     assert!(asked > 0, "the agent was never asked about");
     assert!(
         !command.contains("fake-authority"),

@@ -19,8 +19,8 @@
 # inheritance predicates).
 #
 # Schema: alint config model (`version` + `rules`, each rule with
-# id/kind/level). The top-level `command` rule is trusted and checks only
-# each AGENTS.md's sibling CLAUDE.md pointer file, which Alint has no native
+# id/kind/level). The `command` rules are trusted: the top-level one checks
+# only each AGENTS.md's sibling CLAUDE.md pointer file, which Alint has no native
 # exact-content rule to express. Its `pair` rule checks existence only;
 # the command below checks the regular-file type and exact pointer body on
 # the CI Linux runner. Generated trees must not emit symlinks: plugin
@@ -229,11 +229,20 @@ rules:
     level: error
     message: "src/lib.rs and src/main.rs MUST stay under 150 physical lines (§5)"
 
+  - id: no-doctests-scanner
+    kind: file_exists
+    paths:
+      - scripts/no-doctests.py
+    level: error
+    message: "The doc scanner is required: the no-doctests rule runs scripts/no-doctests.py, so a missing scanner must fail the lint instead of passing."
+
   - id: no-doctests
-    kind: file_content_forbidden
+    kind: command
     paths:
       include:
-        - "crates/**/src/**/*.rs"
-    pattern: '(?m)^[ \t]*//[/!][ \t]*(?:```|~~~)|(?m)^[ \t]*//[/!] {5,}\S|/\*!(?:[^*]|\*+[^*/])*?(?:```|~~~)|/\*\*(?:```|~~~|[^*/](?:[^*]|\*+[^*/])*?(?:```|~~~))|#!?\[doc\s*=[^\]]*(?:```|~~~|include_str)|\bdoc\s*=\s*include_str!'
+        - "scripts/no-doctests.py"
+    command:
+      - python3
+      - scripts/no-doctests.py
     level: error
-    message: "Doctests are off by decision (Cargo `doctest = false`). A doctest would bring back the MBX `rustdoc` bypass in every CI run. Do not add a doc fence, an indented doc code block or a `#[doc]` include; a decision is needed first."
+    message: "Doctests are off by decision (Cargo `doctest = false`). A doc comment (`///`, `//!`, `/** */` or `/*! */`) or a `#[doc]` attribute must not hold a doc fence (``` or ~~~) at the start of a line, an indented doc code block, or an `include_str!` include. The check reads Rust tokens, so string literals are not doc comments and an inline run of backticks is not a fence. Do not add one; a decision is needed first."

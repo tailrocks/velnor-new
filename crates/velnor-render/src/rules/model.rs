@@ -24,6 +24,7 @@ pub struct RenderedStep {
     pub shell: Option<String>,
     pub run: Option<String>,
     pub shared: bool,
+    pub share_run: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

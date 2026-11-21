@@ -3,7 +3,8 @@
 
 use std::collections::BTreeMap;
 
-use crate::plan::{job, step};
+use crate::audit_job::AUDIT_JOB;
+use crate::plan::{HELPER_JOB, job, step};
 use crate::plan_tools::TOOLS_SAVED_KEY_HELPER;
 use velnor_model::{
     Access, CI_RUN_LABEL, HelperVersion, Job, JobId, PermissionScope, Permissions, PrCi, PrRun,
@@ -12,20 +13,14 @@ use velnor_model::{
 
 const NOT_GENERATED_HELPER: (u64, u64, u64) = (0, 1, 111);
 
-fn not_generated(facts: &RepoFacts) -> Option<String> {
+fn not_generated(facts: &RepoFacts) -> Option<&'static str> {
     let refused = facts.private_sources.is_some()
         && facts
             .helper
             .as_ref()
             .is_some_and(|helper| helper.version().at_least(NOT_GENERATED_HELPER))
         && !crate::base_cache::writes_base(facts);
-    refused.then(|| {
-        if facts.config.private_sources.is_some() {
-            "private dependencies".to_owned()
-        } else {
-            "private dependencies; declare [private_sources]".to_owned()
-        }
-    })
+    refused.then_some("private dependencies")
 }
 
 fn attach(facts: &RepoFacts, jobs: &mut [Job], maintenance: Option<&Job>) -> Job {
@@ -57,7 +52,8 @@ fn attach(facts: &RepoFacts, jobs: &mut [Job], maintenance: Option<&Job>) -> Job
         {
             continue;
         }
-        attach_metrics(job, nextest_artifacts, saved_keys, not_generated.as_deref());
+        let reason = not_generated.filter(|_| job.id != HELPER_JOB && job.id != AUDIT_JOB);
+        attach_metrics(job, nextest_artifacts, saved_keys, reason);
         producers.push(&*job);
     }
     producers.extend(maintenance);
@@ -94,7 +90,7 @@ fn attach_metrics(
     job: &mut Job,
     nextest_artifacts: bool,
     saved_keys: bool,
-    not_generated: Option<&str>,
+    not_generated: Option<&'static str>,
 ) {
     let caches = job
         .steps
