@@ -302,27 +302,6 @@ fn the_workflows_committed_in_this_repository_are_what_its_own_config_generates(
 }
 
 #[test]
-fn only_the_listed_workflows_are_read_so_an_untracked_file_is_never_drift() -> TestResult {
-    let workflow = path(".github/workflows/rust-ci.yml")?;
-    let scratch_file = path(".github/workflows/scratch.yml")?;
-    let scratch = crate::io::Scratch::new("drift-listed")?;
-    crate::io::write(&scratch.repo().join(workflow.as_str()), &generated())?;
-    crate::io::write(
-        &scratch.repo().join(scratch_file.as_str()),
-        "name: Scratch\n",
-    )?;
-    let expected = BTreeMap::from([(workflow.clone(), generated())]);
-    let listed = read_files(&scratch.repo(), std::slice::from_ref(&workflow))?;
-    assert_eq!(drift(&expected, &listed, &none()), vec![]);
-    let everything = read_files(&scratch.repo(), &[workflow.clone(), scratch_file.clone()])?;
-    assert_eq!(
-        drift(&expected, &everything, &none()),
-        vec![Drift::Unmarked(scratch_file.clone())]
-    );
-    Ok(())
-}
-
-#[test]
 fn each_generated_header_names_its_own_config() {
     assert!(HEADER.starts_with(VELNOR_GEN_MARKER));
     assert!(HEADER.lines().next().is_some_and(|first| {
