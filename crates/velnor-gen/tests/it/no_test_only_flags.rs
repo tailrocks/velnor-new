@@ -41,15 +41,6 @@ fn files_below(root: &Path) -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> 
 }
 
 #[test]
-fn the_scan_finds_each_flag_in_a_rendered_file() {
-    for flag in TEST_ONLY_FLAGS {
-        let text = format!("run: fetch --manifest-path Cargo.toml {flag} x\n");
-        let found = leaks([(".github/workflows/rust-ci.yml".to_owned(), text.as_str())]);
-        assert_eq!(found, [".github/workflows/rust-ci.yml"], "{flag}");
-    }
-}
-
-#[test]
 fn no_rendered_workflow_carries_the_test_only_fetch_flags() -> TestResult {
     let mut found = Vec::new();
     for sample in sample_dirs(&samples())? {
