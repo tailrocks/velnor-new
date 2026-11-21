@@ -50,6 +50,14 @@ fn host(text: &str) -> bool {
 }
 
 fn classify(key: &str) -> Option<(CacheFamily, &str)> {
+    if let Some(rest) = key.strip_prefix("velnor-tools-anchor-") {
+        let (platform, after) = rest.split_once("-mise")?;
+        let (version, tail) = after.split_once('-')?;
+        let (lock, run) = tail.split_at_checked(64)?;
+        let named = run.strip_prefix('-').is_some_and(|run| !run.is_empty());
+        return (hex(lock, 64) && host(platform) && !version.is_empty() && named)
+            .then_some((CacheFamily::Tools, platform));
+    }
     if let Some(rest) = key.strip_prefix("velnor-tools-") {
         let (group, lock) = rest.rsplit_once('-')?;
         let (platform, version) = group.split_once("-mise")?;
