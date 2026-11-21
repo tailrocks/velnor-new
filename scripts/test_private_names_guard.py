@@ -34,6 +34,24 @@ def repository(files, links=None):
     return tmp, root
 
 
+def indexed(entries):
+    """A temp repository whose index holds raw byte paths; no file touches the filesystem."""
+    tmp = tempfile.TemporaryDirectory(prefix="private-names-test-")
+    root = Path(tmp.name)
+    env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
+    subprocess.run(["git", "init", "-q", str(root)], check=True, env=env)
+    for path, text in entries.items():
+        obj = subprocess.run(
+            ["git", "-C", str(root), "hash-object", "-w", "--stdin"], input=text, check=True, capture_output=True, env=env
+        ).stdout.decode().strip()
+        subprocess.run(
+            ["git", "-C", str(root), "update-index", "--add", "--cacheinfo", f"100644,{obj},".encode() + path],
+            check=True,
+            env=env,
+        )
+    return tmp, root
+
+
 class ContentTests(unittest.TestCase):
     def test_planted_word_is_found_whole_inside_a_longer_name_and_in_a_pair(self):
         matcher = guard.Matcher(planted("zzplanted", "zzorg/zzrepo", "zz-two-parts"))
@@ -73,6 +91,17 @@ class ContentTests(unittest.TestCase):
             ("zzrep0", False),
         ]:
             self.assertEqual(len(matcher.flagged_lines(line.encode())) == 1, expected, line)
+
+    def test_parallel_search_finds_the_same_names_as_the_serial_one(self):
+        text = b"one\ntwo zzplanted\n" + b"".join(b"filler%d x%dword\n" % (n, n) for n in range(300)) + b"zzplanted again\n"
+        serial = guard.Matcher(planted("zzplanted")).flagged_lines(text)
+        before = guard.PARALLEL_FROM
+        guard.PARALLEL_FROM = 0
+        try:
+            self.assertEqual(guard.Matcher(planted("zzplanted")).flagged_lines(text), serial)
+        finally:
+            guard.PARALLEL_FROM = before
+        self.assertEqual(serial, [2, 303])
 
     def test_report_names_the_line_and_never_the_word(self):
         matcher = guard.Matcher(planted("zzplanted"))
@@ -139,6 +168,27 @@ class PathTests(unittest.TestCase):
             found = guard.scan(root, planted("zzplanted"))
             self.assertEqual(len(found), 2)
             self.assertTrue(all("zzplanted" not in item for item in found))
+
+    def test_non_utf8_path_content_is_scanned_and_the_report_hides_the_word(self):
+        tmp, root = indexed({b"docs/caf\xe9.md": b"one\nsee zzplanted\n", b"docs/plain.md": b"plain\n"})
+        with tmp:
+            found = guard.scan(root, planted("zzplanted"))
+            self.assertEqual(len(found), 1)
+            self.assertTrue(found[0].endswith(":2"), found)
+            self.assertNotIn("zzplanted", found[0])
+            self.assertEqual(guard.scan(root, planted("zzother")), [])
+
+    def test_planted_name_in_a_non_utf8_path_fails(self):
+        tmp, root = indexed({b"docs/zzplanted-\xff.md": b"plain\n"})
+        with tmp:
+            found = guard.scan(root, planted("zzplanted"))
+            self.assertEqual(len(found), 1)
+            self.assertNotIn("zzplanted", found[0])
+
+    def test_binary_blob_is_skipped_and_text_blob_with_the_same_word_is_not(self):
+        tmp, root = indexed({b"a.bin": b"zzplanted\0\x01", b"b.txt": b"zzplanted\n"})
+        with tmp:
+            self.assertEqual(guard.scan(root, planted("zzplanted")), ["b.txt:1"])
 
     def test_exempt_file_is_skipped(self):
         tmp, root = repository({"docs/hard-decisions.md": "zzplanted\n"})

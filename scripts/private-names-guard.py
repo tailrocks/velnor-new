@@ -2,6 +2,8 @@
 # SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 # SPDX-License-Identifier: Apache-2.0
 import hashlib
+import multiprocessing
+import os
 import re
 import subprocess
 import sys
@@ -11,10 +13,18 @@ SALT = b"velnor-private-name-guard-v1:"
 HASH_FILE = Path(__file__).with_name("private-names-hashes.txt")
 EXEMPT = frozenset({"docs/hard-decisions.md"})
 MAX_REPORTED = 50
-TOKEN = re.compile(rb"[a-z0-9_.\-]+")
-NON_ALNUM = re.compile(rb"[^a-z0-9]+")
+CHUNK = re.compile(rb"[a-z0-9_.\-]+(?:/[a-z0-9_.\-]+)*")
+DROP = b"._-"
 SYMLINK_MODE = "120000"
 TRIM = b".-_"
+
+
+def sha(candidate):
+    return hashlib.sha256(SALT + candidate).digest()
+
+
+def join(first, second):
+    return first.strip(TRIM) + b"/" + second.strip(TRIM)
 
 
 def digest(word):
@@ -38,98 +48,156 @@ def load_hashes(path=HASH_FILE):
     )
 
 
+SHARED = {}
+PARALLEL_FROM = 20_000
+
+
+def search(task):
+    """Runs in a forked worker: the stored-name substrings of one slice of words at one length."""
+    length, low, high = task
+    digests = SHARED["digests"]
+    sha256 = hashlib.sha256
+    salt = SALT
+    substrings = {
+        word[start : start + length]
+        for word in SHARED["words"][low:high]
+        if len(word) >= length
+        for start in range(len(word) - length + 1)
+    }
+    return {candidate for candidate in substrings if sha256(salt + candidate).digest() in digests}
+
+
 class Matcher:
+    """Decides whether a text embeds a stored name, as one token or as a slashed `a/b` pair.
+
+    A chunk is a run of token characters joined by single slashes. `learn` hashes each
+    distinct substring of the whole batch's tokens once, and only at the distinct stored
+    lengths; the verdict per chunk lands in `bad`.
+    """
+
     def __init__(self, hashes):
-        self.hashes = hashes
+        self.digests = frozenset(bytes.fromhex(hex_digest) for hex_digest in hashes)
         self.lengths = sorted(set(hashes.values()))
-        self.words = {}
-        self.pairs = {}
+        self.bad = set()
+        self.seen = set()
 
-    def word(self, token):
-        known = self.words.get(token)
-        if known is None:
-            squeezed = NON_ALNUM.sub(b"", token)
-            known = any(
-                digest(squeezed[start : start + length]) in self.hashes
-                for length in self.lengths
-                for start in range(len(squeezed) - length + 1)
-            )
-            self.words[token] = known
-        return known
+    def learn(self, chunks):
+        fresh = set(chunks) - self.seen
+        self.seen |= fresh
+        split = {chunk: chunk.split(b"/") for chunk in fresh}
+        by_word = {}
+        for parts in split.values():
+            for part in parts:
+                by_word.setdefault(part.translate(None, DROP), set()).add(part)
+        names = self.names_in(list(by_word))
+        bad_tokens = {part for word, parts in by_word.items() if any(name in word for name in names) for part in parts}
+        pairs = {
+            pair
+            for parts in split.values()
+            for pair in map(join, parts, parts[1:])
+            if len(pair) in self.lengths
+        }
+        bad_pairs = {pair for pair in pairs if sha(pair) in self.digests}
+        for chunk, parts in split.items():
+            if not bad_tokens.isdisjoint(parts) or (bad_pairs and not bad_pairs.isdisjoint(map(join, parts, parts[1:]))):
+                self.bad.add(chunk)
 
-    def pair(self, first, second):
-        pair = first.strip(TRIM) + b"/" + second.strip(TRIM)
-        known = self.pairs.get(pair)
-        if known is None:
-            known = digest(pair) in self.hashes
-            self.pairs[pair] = known
-        return known
+    def names_in(self, words):
+        SHARED.update(digests=self.digests, words=words)
+        workers = min(os.cpu_count() or 1, 8)
+        step = -(-len(words) // workers) or 1
+        tasks = [(length, low, low + step) for length in self.lengths for low in range(0, len(words), step)]
+        if workers == 1 or len(words) < PARALLEL_FROM or "fork" not in multiprocessing.get_all_start_methods():
+            return set().union(*map(search, tasks))
+        context = multiprocessing.get_context("fork")
+        children = []
+        for index in range(workers):
+            part = tasks[index::workers]
+            receiver, sender = context.Pipe(False)
+            child = context.Process(target=lambda: sender.send(set().union(*map(search, part))))
+            child.start()
+            sender.close()
+            children.append((child, receiver, part))
+        names = set()
+        for child, receiver, part in children:
+            try:
+                names |= receiver.recv()
+            except EOFError:
+                names |= set().union(*map(search, part))
+            child.join()
+        return names
+
+    def touches(self, chunks):
+        return not self.bad.isdisjoint(chunks)
+
+    def lines(self, text):
+        return [
+            number
+            for number, line in enumerate(text.lower().split(b"\n"), 1)
+            if not self.bad.isdisjoint(CHUNK.findall(line))
+        ]
 
     def flagged_lines(self, text):
-        flagged = []
-        for number, line in enumerate(text.lower().split(b"\n"), 1):
-            previous = None
-            for match in TOKEN.finditer(line):
-                start, end = match.span()
-                token = match.group()
-                slashed = previous is not None and previous[1] + 1 == start and line[previous[1]] == 0x2F
-                if self.word(token) or (slashed and self.pair(line[previous[0] : previous[1]], token)):
-                    flagged.append(number)
-                    break
-                previous = (start, end)
-        return flagged
+        self.learn(CHUNK.findall(text.lower()))
+        return self.lines(text)
 
 
 def tracked_files(root):
-    output = subprocess.run(
-        ["git", "-C", str(root), "ls-files", "-s", "-z"], check=True, capture_output=True
-    ).stdout
+    output = subprocess.run(["git", "-C", str(root), "ls-files", "-s", "-z"], check=True, capture_output=True).stdout
     entries = {}
-    for line in output.decode("utf-8", "replace").split("\0"):
-        meta, tab, path = line.partition("\t")
+    for line in output.split(b"\0"):
+        meta, tab, path = line.partition(b"\t")
         if tab:
-            mode, obj, _stage = meta.split(" ")
-            entries.setdefault(path, (mode, obj))
+            mode, obj, _stage = meta.split(b" ")
+            entries.setdefault(path, (mode.decode(), obj.decode()))
     return entries
 
 
-def blob_of(root, obj):
-    return subprocess.run(
-        ["git", "-C", str(root), "cat-file", "blob", obj], check=True, capture_output=True
+def blobs(root, objects):
+    """Every blob's bytes through one `git cat-file --batch` process."""
+    objects = sorted(objects)
+    output = subprocess.run(
+        ["git", "-C", str(root), "cat-file", "--batch"],
+        input="".join(f"{obj}\n" for obj in objects).encode(),
+        check=True,
+        capture_output=True,
     ).stdout
-
-
-def text_of(root, path, mode, obj):
-    if mode == SYMLINK_MODE:
-        return blob_of(root, obj)
-    file = root / path
-    if not file.is_file() or file.is_symlink():
-        return None
-    data = file.read_bytes()
-    return None if b"\0" in data else data
+    texts = {}
+    position = 0
+    for obj in objects:
+        newline = output.index(b"\n", position)
+        size = int(output[position:newline].split(b" ")[2])
+        texts[obj] = output[newline + 1 : newline + 1 + size]
+        position = newline + 2 + size
+    return texts
 
 
 def scan(root, hashes):
     matcher = Matcher(hashes)
-    entries = tracked_files(root)
+    listed = tracked_files(root)
+    exempt = {path.encode() for path in EXEMPT}
+    paths = {path: number for number, path in enumerate(listed, 1) if path not in exempt}
     by_object = {}
-    labels = {}
+    for path in paths:
+        mode, obj = listed[path]
+        by_object.setdefault((mode == SYMLINK_MODE, obj), []).append(path)
+    contents = blobs(root, {obj for _symlink, obj in by_object})
+    texts = {
+        key: contents[key[1]].lower() for key in by_object if key[0] or b"\0" not in contents[key[1]]
+    }
+    seen = {name: set(CHUNK.findall(text)) for name, text in [*texts.items(), *((path, path.lower()) for path in paths)]}
+    matcher.learn(set().union(*seen.values()))
     found = []
-    for number, (path, (mode, obj)) in enumerate(entries.items(), 1):
-        if path in EXEMPT:
-            continue
-        flagged = bool(matcher.flagged_lines(path.encode("utf-8")))
-        labels[path] = f"ls-files line {number}" if flagged else path
+    labels = {}
+    for path, number in paths.items():
+        flagged = matcher.touches(seen[path])
+        labels[path] = f"ls-files line {number}" if flagged else path.decode("utf-8", "backslashreplace")
         if flagged:
             found.append(labels[path])
-        by_object.setdefault((mode == SYMLINK_MODE, obj), []).append((path, mode))
-    for (symlink, obj), paths in by_object.items():
-        first, mode = paths[0]
-        text = text_of(root, first, mode, obj)
-        lines = matcher.flagged_lines(text) if text is not None else []
-        places = ["target"] if symlink and lines else lines
-        for path, _mode in paths:
-            found.extend(f"{labels[path]}:{place}" for place in places)
+    for key, text in texts.items():
+        lines = matcher.lines(text) if matcher.touches(seen[key]) else []
+        places = ["target"] if key[0] and lines else lines
+        found.extend(f"{labels[path]}:{place}" for path in by_object[key] for place in places)
     return sorted(found)
 
 
