@@ -174,6 +174,17 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
         .and_then(|policy| policy.deny_checks.as_deref())
         .map_or(DenyChecks::ALL, DenyChecks::of);
     let policy = policy_tools(view, &deny_configs, config.runner.as_str(), lane, checks)?;
+    if config
+        .policy
+        .as_ref()
+        .is_some_and(|table| table.gate_on_plan)
+        && !(policy.deny || policy.machete)
+    {
+        return Err(DetectError::invalid(
+            &CONFIG_PATH,
+            Reason::PolicyGateWithoutLane,
+        ));
+    }
     let weakenings = weakenings(&view.files, &rust_roots);
     let private_sources = crate::config_cache::private_sources(view, &rust_roots, &config)?;
     let repository = repository_identity(view, &config)?;

@@ -58,7 +58,10 @@ fn a_credential_provider_a_checkout_config_declares_is_never_run_and_never_sees_
     }
     assert_eq!(
         fixture.log("cargo.args").trim(),
-        "fetch --locked --manifest-path Cargo.toml --config net.offline=false --config registry.global-credential-providers=[\"cargo:token-from-stdout /usr/bin/true\"]"
+        format!(
+            "fetch --locked --manifest-path {} --config net.offline=false --config registry.global-credential-providers=[\"cargo:token-from-stdout /usr/bin/true\"]",
+            fixture.manifest("tools/Cargo.toml")?.display()
+        )
     );
     Ok(())
 }
@@ -196,13 +199,23 @@ fn through_a_rustup_proxy(
     fixture: &Fixture,
     active: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let bin = fixture.repo.root().join("trusted/bin");
+    let root = fixture.repo.root();
+    let bin = root.join("trusted/bin");
     fs::remove_file(bin.join("cargo"))?;
-    let log = fixture.repo.root().join("log");
+    let log = root.join("log");
+    let toolchain = root.join("home/.rustup/toolchains/stable-test/bin/cargo");
+    script(
+        &toolchain,
+        &format!(
+            "env > {log}/cargo.env; echo \"$*\" > {log}/cargo.args",
+            log = log.display()
+        ),
+    )?;
     script(
         &bin.join("rustup"),
         &format!(
-            "case \"$0\" in *rustup) echo '{active} (default)' ;; *) env > {log}/cargo.env; echo \"$*\" > {log}/cargo.args ;; esac",
+            "case \"$0\" in *rustup) case \"$1\" in which) echo {toolchain} ;; *) echo '{active} (default)' ;; esac ;; *) echo proxy >> {log}/proxy.ran ;; esac",
+            toolchain = toolchain.display(),
             log = log.display()
         ),
     )?;
