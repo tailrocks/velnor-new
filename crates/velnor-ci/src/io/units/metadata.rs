@@ -47,13 +47,18 @@ fn metadata(
         command
             .env_remove("CARGO_TARGET_DIR")
             .env_remove("CARGO_BUILD_BUILD_DIR");
-    } else if invocation.is_none() {
-        for name in ["CARGO_TARGET_DIR", "CARGO_BUILD_BUILD_DIR"] {
-            if let Some(value) = std::env::var_os(name)
-                .map(PathBuf::from)
-                .filter(|value| build_dir::is_step_relative(value))
-            {
-                command.env(name, step.join(value));
+    } else {
+        if let Some(build) = std::env::var_os("CARGO_BUILD_BUILD_DIR").map(PathBuf::from) {
+            build_dir::refuse_template(&build)?;
+        }
+        if invocation.is_none() {
+            for name in ["CARGO_TARGET_DIR", "CARGO_BUILD_BUILD_DIR"] {
+                if let Some(value) = std::env::var_os(name)
+                    .map(PathBuf::from)
+                    .filter(|value| value.is_relative())
+                {
+                    command.env(name, step.join(value));
+                }
             }
         }
     }

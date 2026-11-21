@@ -21,15 +21,14 @@ struct Printed {
     packages: Vec<Member>,
 }
 
-const TEMPLATES: [&str; 3] = [
-    "{workspace-root}",
-    "{cargo-cache-home}",
-    "{workspace-path-hash}",
-];
-
-pub(super) fn is_step_relative(value: &Path) -> bool {
-    let text = value.to_string_lossy();
-    value.is_relative() && !TEMPLATES.iter().any(|template| text.contains(template))
+pub(super) fn refuse_template(build: &Path) -> Result<(), CiError> {
+    if build.to_string_lossy().contains('{') {
+        return Err(CiError::new(format!(
+            "CARGO_BUILD_BUILD_DIR={} uses a cargo path template; set a plain absolute path instead",
+            build.display()
+        )));
+    }
+    Ok(())
 }
 
 pub(super) fn refuse(workspace: &Workspace, metadata: &[u8]) -> Result<(), CiError> {

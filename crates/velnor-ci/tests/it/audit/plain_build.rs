@@ -151,22 +151,25 @@ fn a_relative_target_dir_is_resolved_after_the_command_changes_directory() {
 }
 
 #[test]
-fn a_build_directory_template_is_left_for_cargo_to_expand() {
+fn a_templated_build_directory_is_refused_by_inputs_build_and_audit() {
     let repo = workspace_below_the_root();
-    let built = velnor_ci()
-        .current_dir(repo.root())
-        .env("CARGO_BUILD_BUILD_DIR", "{workspace-root}/target")
-        .args([
-            "inputs",
-            "build",
-            "--",
-            "cargo",
-            "build",
-            "--offline",
-            "--manifest-path",
-            "rust/Cargo.toml",
-        ])
-        .output()
-        .unwrap_or_else(|e| unreachable!("{e}"));
-    assert!(built.status.success(), "{built:?}");
+    for arguments in [
+        &["inputs", "build", "--", "true"][..],
+        &["inputs", "audit"][..],
+    ] {
+        let refused = velnor_ci()
+            .current_dir(repo.root())
+            .env("CARGO_BUILD_BUILD_DIR", "{workspace-root}/target")
+            .args(arguments)
+            .output()
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        assert_eq!(refused.status.code(), Some(1), "{refused:?}");
+        let stderr = String::from_utf8_lossy(&refused.stderr);
+        assert!(
+            stderr.contains(
+                "CARGO_BUILD_BUILD_DIR={workspace-root}/target uses a cargo path template; set a plain absolute path instead"
+            ),
+            "{stderr}"
+        );
+    }
 }
