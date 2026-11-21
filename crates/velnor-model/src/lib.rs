@@ -47,6 +47,7 @@ pub use cache_outputs::{
     BASE_PREFIX_OUTPUT, BASE_SAVE_OUTPUT, CacheLaneOutput, PUBLIC_SOURCES_STEP,
     PUBLIC_VERDICTS_OUTPUT, SOURCES_PREFIX_OUTPUT, SOURCES_SAVED_OUTPUT, cache_lane_outputs,
 };
+pub use cargo_build::BuildRecord;
 pub use check_configurations::CheckConfigurations;
 pub use cron::CronExpr;
 pub use helper::{HelperRelease, Platform};
@@ -56,7 +57,7 @@ pub use ids::{
     RunnerLabel, Sha256, TargetName, looks_github_hosted,
 };
 pub use lint::{LintCommand, LintJob, LintKind};
-pub use mbx::MbxMode;
+pub use mbx::{MbxMode, MbxStats};
 pub use mbx_config::{
     MBX_ACTION_RELEASE, MBX_TOOL, MbxConflict, MbxDeclaration, MbxRule, mbx_declaration,
 };
