@@ -127,8 +127,12 @@ cd "$ROOT"
 printf "maintenance-phase: setup-velnor-install\n"
 python3 scripts/test-setup-velnor-action.py
 printf "maintenance-phase: mise-binary-digests\n"
-command -v minisign >/dev/null || { echo "minisign is not installed: run mise install" >&2; exit 1; }
-VELNOR_REQUIRE_MINISIGN=1 python3 scripts/test_mise_binary_digests.py
+if [ -n "${CI:-}" ]; then
+  VELNOR_REQUIRE_MINISIGN=1
+  export VELNOR_REQUIRE_MINISIGN
+fi
+python3 scripts/test_mise_binary_digests.py
+python3 scripts/test_mise_binary_digests_entry.py
 printf "maintenance-phase: tag-ruleset-drift\n"
 bun test ./scripts/tag-ruleset-drift.test.ts
 printf "maintenance-phase: source-fetch\n"
