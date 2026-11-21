@@ -1,18 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-//! Every generated `jdx/mise-action` step pins the mise binary by SHA-256 (issue #2158). A
-//! GitHub-hosted job whose label names one platform carries that platform's digest as a literal;
-//! any other job (a self-hosted label, which may be registered under any name) selects the digest
-//! by `runner.os` and `runner.arch` when it runs. The digests below are copied from the official
-//! `SHASUMS256.txt` of the pinned release, not from the renderer, so a change to the renderer's
-//! table must also change this test.
-
 use std::collections::BTreeMap;
 
 use crate::facts::TestResult;
 use crate::lint_lane::rendered;
-use crate::pipeline::{view, workflow};
+use crate::pipeline::{pin_helper, view, workflow};
 use crate::release_fixture::two_binaries;
 use velnor_render::{MISE_BINARIES, UnknownMiseVersion, Value, mise_sha256_input};
 
@@ -35,7 +28,6 @@ const DIGESTS: [(&str, &str); 4] = [
         "7eab8054d301b75dcbd93440ff184bee6864d95799cfdc4a00ce858313b68783",
     ),
 ];
-/// The platform one runner label runs on, for the labels the fixtures use.
 fn platform_of(label: &str) -> Option<&'static str> {
     if label.starts_with("macos-") {
         return Some("macOS-ARM64");
@@ -51,8 +43,6 @@ fn platform_of(label: &str) -> Option<&'static str> {
     }
 }
 
-/// The digest literal a job must carry: set only for a GitHub-hosted job (plain `runs-on`) whose
-/// label names one platform. A fork fence means a self-hosted label, which proves no platform.
 fn literal_for(runs_on: &str) -> Option<&'static str> {
     if runs_on.contains("${{") {
         return None;
@@ -64,7 +54,6 @@ fn literal_for(runs_on: &str) -> Option<&'static str> {
         .map(|(_, digest)| *digest)
 }
 
-/// The mise steps of a rendered workflow, with the `runs-on` of their job.
 fn mise_steps(text: &str) -> Result<Vec<(String, serde_json::Value)>, Box<dyn std::error::Error>> {
     let yaml: serde_json::Value = serde_saphyr::from_str(text)?;
     let mut found = Vec::new();
@@ -82,7 +71,6 @@ fn mise_steps(text: &str) -> Result<Vec<(String, serde_json::Value)>, Box<dyn st
     Ok(found)
 }
 
-/// The run-time selection: one `runner.os && runner.arch && digest` clause per platform.
 fn assert_selection(label: &str, input: &str) -> TestResult {
     let expected: BTreeMap<&str, &str> = DIGESTS
         .into_iter()
@@ -113,7 +101,6 @@ fn assert_selection(label: &str, input: &str) -> TestResult {
     Ok(())
 }
 
-/// Every mise step is pinned; returns how many carry a literal and how many a selection.
 fn assert_pinned(label: &str, text: &str) -> Result<(usize, usize), Box<dyn std::error::Error>> {
     let steps = mise_steps(text)?;
     assert!(!steps.is_empty(), "{label}: no mise-action step rendered");
@@ -261,6 +248,114 @@ fn a_self_hosted_runner_under_an_ubuntu_label_gets_no_glibc_digest() -> TestResu
             let input = with["sha256"].as_str().ok_or("no sha256 input")?;
             assert_selection(config, input)?;
         }
+    }
+    Ok(())
+}
+
+#[test]
+fn a_trusted_pool_behind_an_ubuntu_label_gets_no_glibc_digest() -> TestResult {
+    let mut repo = view(
+        &["Cargo.toml", "tools/Cargo.toml"],
+        Some(
+            b"runner = 'ubuntu-26.04-scale-set'\nhosted = false\ntrusted_runner = 'ubuntu-26.04-scale-set-musl'\n",
+        ),
+    )?;
+    pin_helper(&mut repo, "0.1.110")?;
+    let steps = mise_steps(&workflow(&repo)?)?;
+    assert!(!steps.is_empty(), "no mise-action step rendered");
+    for (runs_on, with) in steps {
+        assert!(runs_on.contains("ubuntu-26.04-scale-set-musl"), "{runs_on}");
+        let input = with["sha256"].as_str().ok_or("no sha256 input")?;
+        assert_selection("trusted pool", input)?;
+    }
+    Ok(())
+}
+
+fn mixed_case_runner_inputs(helper: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    let mut repo = view(
+        &["Cargo.toml", "tools/Cargo.toml"],
+        Some(b"runner = 'Ubuntu-Latest'\nhosted = true\n"),
+    )?;
+    pin_helper(&mut repo, helper)?;
+    mise_steps(&workflow(&repo)?)?
+        .into_iter()
+        .map(|(_, with)| {
+            with["sha256"]
+                .as_str()
+                .map(str::to_owned)
+                .ok_or_else(|| "no sha256 input".into())
+        })
+        .collect()
+}
+
+#[test]
+fn a_mixed_case_ubuntu_label_gets_the_linux_digest_from_the_case_insensitive_helper() -> TestResult
+{
+    let inputs = mixed_case_runner_inputs("0.1.112")?;
+    assert!(!inputs.is_empty(), "no mise-action step rendered");
+    for input in inputs {
+        assert_eq!(input, DIGESTS[1].1);
+    }
+    Ok(())
+}
+
+#[test]
+fn a_mixed_case_ubuntu_label_below_the_case_insensitive_helper_selects_the_digest_by_runner()
+-> TestResult {
+    let inputs = mixed_case_runner_inputs("0.1.111")?;
+    assert!(!inputs.is_empty(), "no mise-action step rendered");
+    for input in inputs {
+        assert_selection("Ubuntu-Latest", &input)?;
+    }
+    Ok(())
+}
+
+fn lint_job_inputs(helper: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    let config = format!(
+        "runner = 'Ubuntu-Latest'\nhosted = true\n\n{}",
+        crate::lint_lane::LINT
+    );
+    let mut repo = crate::lint_lane::repo(&config)?;
+    pin_helper(&mut repo, helper)?;
+    let yaml: serde_json::Value = serde_saphyr::from_str(&workflow(&repo)?)?;
+    let mut inputs = Vec::new();
+    for id in crate::lint_lane::IDS {
+        let steps = yaml["jobs"][*id]["steps"].as_array().ok_or("no steps")?;
+        assert!(
+            !steps.iter().any(|step| step["name"]
+                .as_str()
+                .is_some_and(|name| name.starts_with("Install velnor-ci"))),
+            "{id}: the job is meant to hold no helper step"
+        );
+        for step in steps {
+            if step["uses"]
+                .as_str()
+                .is_some_and(|uses| uses.starts_with("jdx/mise-action@"))
+            {
+                let input = step["with"]["sha256"].as_str().ok_or("no sha256 input")?;
+                inputs.push(input.to_owned());
+            }
+        }
+    }
+    Ok(inputs)
+}
+
+#[test]
+fn a_mise_only_job_follows_the_workflow_helper_for_a_mixed_case_ubuntu_label() -> TestResult {
+    let inputs = lint_job_inputs("0.1.112")?;
+    assert_eq!(inputs.len(), crate::lint_lane::IDS.len(), "{inputs:?}");
+    for input in inputs {
+        assert_eq!(input, DIGESTS[1].1);
+    }
+    Ok(())
+}
+
+#[test]
+fn a_mise_only_job_below_the_case_insensitive_helper_selects_the_digest_by_runner() -> TestResult {
+    let inputs = lint_job_inputs("0.1.111")?;
+    assert_eq!(inputs.len(), crate::lint_lane::IDS.len(), "{inputs:?}");
+    for input in inputs {
+        assert_selection("Ubuntu-Latest lint", &input)?;
     }
     Ok(())
 }
