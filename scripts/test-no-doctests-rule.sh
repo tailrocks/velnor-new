@@ -213,6 +213,11 @@ check line_tab_then_four fail '/// text\n///\n///\t    assert_eq!(1, 1);\npub fn
 check fence_indent_after_prose pass '/// prose\n///     ```\n///     let x = 1;\n///     ```\npub fn g() {}\n'
 check fence_3sp_after_prose fail '/// prose\n///    ```\n///    let x = 1;\n///    ```\npub fn k() {}\n'
 check cfg_attr_predicate_doc pass '#![allow(unexpected_cfgs)]\n#[cfg_attr(doc = "```not documentation```", allow(dead_code))]\npub fn h() {}\n'
+check footnote_blank_cont pass '/// [^x]: prose\n///\n///     compile_error!("x");\npub fn f() {}\n'
+check footnote_blank_code fail '/// [^x]: prose\n///\n///         compile_error!("x");\npub fn f() {}\n'
+check setext_indent4_cont pass '/// Title\n///     ====\n///     compile_error!("x");\npub fn f() {}\n'
+check block_blank_unstarred fail '/**\n * - item\n\n *     compile_error!("x");\n */\npub fn f() {}\n'
+check cfg_attr_doc_follow fail '///     compile_error!("x");\n#[cfg_attr(all(), doc = "prose")]\npub fn f() {}\n'
 
 missing="$work/scanner_missing"
 mkdir -p "$missing/crates/fx/src"
