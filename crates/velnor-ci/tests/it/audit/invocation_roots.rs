@@ -169,6 +169,31 @@ fn every_spelling_of_a_non_member_package_flag_refuses_the_untrusted_member_outp
     }
 }
 
+#[test]
+fn a_failed_build_records_only_its_own_roots_selection() {
+    for failing in [
+        &["cargo", "build", "--workspace", "--no-such-flag"][..],
+        &["cargo", "build", "-p", "a", "-p", "b", "--no-such-flag"],
+    ] {
+        let repo = grouped_tools();
+        let failed = inputs_build_in(&repo, "tools/a", failing);
+        assert!(!failed.status.success(), "{failing:?}: {failed:?}");
+        let marker = std::fs::read(
+            repo.root()
+                .join(SHARED_TARGET)
+                .join(".velnor-input-inventories/failed-inputs-build.json"),
+        )
+        .unwrap_or_else(|e| unreachable!("{e}"));
+        let recorded: serde_json::Value =
+            serde_json::from_slice(&marker).unwrap_or_else(|e| unreachable!("{e}"));
+        assert_eq!(
+            recorded["selection"]["packages"],
+            serde_json::json!(["a"]),
+            "{failing:?}"
+        );
+    }
+}
+
 fn grouped_packages(packages: [(&str, &str); 2]) -> Repo {
     let repo = Repo::new("audit-invocation-roots");
     unit(&repo, ".gitignore", "target/\ntarget-velnor/\n");
