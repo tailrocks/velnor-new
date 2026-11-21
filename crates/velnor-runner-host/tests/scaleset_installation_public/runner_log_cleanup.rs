@@ -332,7 +332,6 @@ async fn run_one_worker_pass(
         state_dir,
     )
     .await?;
-    // Wall-clock bound: 5 ms polls stretch to 7-30 ms under parallel load.
     let deadline = std::time::Instant::now() + Duration::from_secs(120);
     while !stub.dind_stop_entered.load(Ordering::Acquire) {
         let bad_exit_done = {
