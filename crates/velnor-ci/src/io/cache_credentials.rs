@@ -75,7 +75,6 @@ fn walk(directory: &Path, depth: usize, budget: &mut usize) -> Option<String> {
         };
         listed.push(entry);
     }
-    // Name order, so the file reported does not depend on the filesystem's directory order.
     listed.sort_by_key(fs::DirEntry::file_name);
     let mut subdirectories: Vec<PathBuf> = Vec::new();
     for entry in listed {

@@ -228,8 +228,6 @@ fn records_execution() {
     assert_fresh(&repo, "");
 }
 
-/// The build-script output of `package`, in the `build/<package>/<hash>/run/` layout Cargo 1.100
-/// writes.
 pub(super) fn package_output(repo: &Repo, package: &str) -> std::path::PathBuf {
     fs::read_dir(repo.root().join("rust/target/debug/build").join(package))
         .unwrap_or_else(|e| unreachable!("{e}"))
