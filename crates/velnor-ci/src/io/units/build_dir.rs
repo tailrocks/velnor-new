@@ -21,10 +21,15 @@ struct Printed {
     packages: Vec<Member>,
 }
 
-pub(super) fn step_relative(relative: &Path) -> Result<PathBuf, CiError> {
-    std::env::current_dir()
-        .map(|directory| directory.join(relative))
-        .map_err(|e| CiError::new(format!("cannot read the working directory: {e}")))
+const TEMPLATES: [&str; 3] = [
+    "{workspace-root}",
+    "{cargo-cache-home}",
+    "{workspace-path-hash}",
+];
+
+pub(super) fn is_step_relative(value: &Path) -> bool {
+    let text = value.to_string_lossy();
+    value.is_relative() && !TEMPLATES.iter().any(|template| text.contains(template))
 }
 
 pub(super) fn refuse(workspace: &Workspace, metadata: &[u8]) -> Result<(), CiError> {

@@ -125,3 +125,48 @@ fn a_relative_plain_target_is_audited_from_the_step_directory_as_cargo_writes_it
     let stderr = String::from_utf8_lossy(&refused.stderr);
     assert!(stderr.contains("unknown cargo layout?"), "{stderr}");
 }
+
+#[test]
+fn a_relative_target_dir_is_resolved_after_the_command_changes_directory() {
+    let repo = workspace_below_the_root();
+    let built = velnor_ci()
+        .current_dir(repo.root())
+        .env("CARGO_TARGET_DIR", "target")
+        .env("RUSTC_BOOTSTRAP", "1")
+        .args([
+            "inputs",
+            "build",
+            "--",
+            "cargo",
+            "-Z",
+            "unstable-options",
+            "-C",
+            "rust",
+            "build",
+            "--offline",
+        ])
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(built.status.success(), "{built:?}");
+}
+
+#[test]
+fn a_build_directory_template_is_left_for_cargo_to_expand() {
+    let repo = workspace_below_the_root();
+    let built = velnor_ci()
+        .current_dir(repo.root())
+        .env("CARGO_BUILD_BUILD_DIR", "{workspace-root}/target")
+        .args([
+            "inputs",
+            "build",
+            "--",
+            "cargo",
+            "build",
+            "--offline",
+            "--manifest-path",
+            "rust/Cargo.toml",
+        ])
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(built.status.success(), "{built:?}");
+}

@@ -65,21 +65,22 @@ pub(super) fn scan_dirs(workspaces: &[Workspace]) -> Vec<PathBuf> {
 pub(super) fn root_workspace(
     manifest: &Path,
     invocation: Option<&MetadataInvocation<'_>>,
+    step: &Path,
     inherit: bool,
     alone: bool,
     groups: &[PathBuf],
 ) -> Result<Workspace, CiError> {
     if !inherit {
-        return own_workspace(manifest, invocation);
+        return own_workspace(manifest, invocation, step);
     }
-    let found = workspace(manifest, invocation)?;
+    let found = workspace(manifest, invocation, step)?;
     let target = resolve(&found.target_directory)
         .map_err(|error| unresolved(&found.target_directory, &error))?;
     if alone {
         for group in groups {
             let directory = resolve(group).map_err(|error| unresolved(group, &error))?;
             if directory == target {
-                return own_workspace(manifest, invocation);
+                return own_workspace(manifest, invocation, step);
             }
         }
     }
@@ -147,6 +148,7 @@ pub(super) fn audit_inheriting(
 pub(super) fn workspaces(
     facts: &RepoFacts,
     repository: &Path,
+    step: &Path,
     inherit: &[bool],
 ) -> Result<Vec<Workspace>, CiError> {
     let groups = group_dirs(facts, repository);
@@ -157,7 +159,7 @@ pub(super) fn workspaces(
         .zip(inherit)
         .map(|((root, alone), inherit)| {
             let manifest = repository.join(root.manifest.as_str());
-            root_workspace(&manifest, None, *inherit, alone, &groups)
+            root_workspace(&manifest, None, step, *inherit, alone, &groups)
         })
         .collect()
 }

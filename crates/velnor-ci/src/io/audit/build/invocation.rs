@@ -180,14 +180,18 @@ impl Invocation {
         }
     }
 
+    pub(super) fn step(&self, directory: &Path) -> PathBuf {
+        self.chdir
+            .as_ref()
+            .filter(|_| self.cargo)
+            .map_or_else(|| directory.to_path_buf(), |chdir| directory.join(chdir))
+    }
+
     pub(super) fn location(&self, directory: &Path) -> PathBuf {
         if !self.cargo {
             return directory.to_path_buf();
         }
-        let base = self
-            .chdir
-            .as_ref()
-            .map_or_else(|| directory.to_path_buf(), |chdir| directory.join(chdir));
+        let base = self.step(directory);
         self.command
             .iter()
             .enumerate()
@@ -249,7 +253,14 @@ impl Invocation {
         };
         for ((expected, alone), inherit) in workspaces.iter().zip(standalone).zip(inherit) {
             let manifest = expected.root.join("Cargo.toml");
-            let actual = root_workspace(&manifest, Some(&invocation), *inherit, *alone, groups)?;
+            let actual = root_workspace(
+                &manifest,
+                Some(&invocation),
+                directory,
+                *inherit,
+                *alone,
+                groups,
+            )?;
             if actual.root != expected.root
                 || actual.target_directory != expected.target_directory
                 || actual.build_directory != expected.build_directory
