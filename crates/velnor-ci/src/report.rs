@@ -174,10 +174,25 @@ fn git_waste(metrics: &LaneMetrics, invocation: &Invocation) -> Option<String> {
     })
 }
 
+#[must_use]
+pub fn notices(lanes: &[LaneMetrics]) -> Vec<String> {
+    let mut notices = Vec::new();
+    for lane in lanes {
+        notices.extend(
+            crate::restored_units::base_gaps(lane)
+                .into_iter()
+                .map(|gap| format!("::notice::{gap}")),
+        );
+        notices.extend(crate::restored_units::unknown_restores(lane));
+    }
+    notices.sort();
+    notices.dedup();
+    notices
+}
+
 pub fn check(lanes: &[LaneMetrics]) -> Result<String, CiError> {
     let mut identities = BTreeSet::new();
     let mut violations = Vec::new();
-    let mut notices = Vec::new();
     for lane in lanes {
         validate_evidence(lane)?;
         if !identities.insert(&lane.lane) {
@@ -194,27 +209,18 @@ pub fn check(lanes: &[LaneMetrics]) -> Result<String, CiError> {
         }
         violations.extend(lane.violations.iter().cloned());
         violations.extend(waste(lane));
-        notices.extend(
-            crate::restored_units::base_gaps(lane)
-                .into_iter()
-                .map(|gap| format!("::notice::{gap}")),
-        );
-        notices.extend(crate::restored_units::unknown_restores(lane));
     }
     violations.extend(compilation_repeats(lanes)?);
     violations.sort();
     violations.dedup();
-    notices.sort();
-    notices.dedup();
     if violations.is_empty() {
         let mut text = format!("Cache: {} lanes checked, no waste\n", lanes.len());
-        for notice in notices {
+        for notice in notices(lanes) {
             text.push_str(&notice);
             text.push('\n');
         }
         Ok(text)
     } else {
-        violations.extend(notices);
         Err(CiError::new(violations.join("\n")))
     }
 }

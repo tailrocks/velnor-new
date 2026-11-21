@@ -67,20 +67,23 @@ fn a_missing_or_unreadable_manifest_is_a_warning_and_a_present_one_a_notice() {
 }
 
 #[test]
-fn a_failing_check_keeps_the_restore_warning_next_to_the_violation() {
+fn a_failing_check_keeps_the_restore_warning_out_of_the_error_text() {
     let mut value = lane();
     value["invocations"][0]["restored_manifest"] = json!("absent");
     value["violations"] = json!([".: a failing lane"]);
-    let error = check(&[metrics(value)])
+    let lanes = [metrics(value)];
+    let error = check(&lanes)
         .expect_err("a violation fails the check")
         .to_string();
-    assert!(
-        error.contains(
-            "::warning::.: dependency compiles with an unknown restore status (restored-units manifest absent): serde v1.0.0"
-        ),
-        "{error}"
-    );
     assert!(error.contains(".: a failing lane"), "{error}");
+    assert!(!error.contains("::warning::"), "{error}");
+    assert!(
+        notices(&lanes).contains(
+            &"::warning::.: dependency compiles with an unknown restore status (restored-units manifest absent): serde v1.0.0".to_owned()
+        ),
+        "{:?}",
+        notices(&lanes)
+    );
 }
 
 #[test]

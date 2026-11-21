@@ -46,7 +46,12 @@ pub(super) fn explains_rebuilds(argv: &[String]) -> bool {
     cargo
         && crate::telemetry::target_selection(command)
             .iter()
-            .any(|word| matches!(word.as_str(), "check" | "clippy" | "build" | "doc"))
+            .any(|word| {
+                matches!(
+                    word.as_str(),
+                    "check" | "c" | "clippy" | "build" | "b" | "doc" | "d"
+                )
+            })
 }
 
 pub(super) fn start_invocation(argv: &[String]) -> Result<Invocation, CiError> {

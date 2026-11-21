@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use serde_json::{Value, json};
-use velnor_ci::report::{LaneMetrics, check, waste};
+use velnor_ci::report::{LaneMetrics, check, notices, waste};
 use velnor_ci::telemetry::configuration;
 
 mod fallback;

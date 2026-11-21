@@ -170,3 +170,31 @@ fn cargos_dirty_reason_reaches_the_compilation_it_explains()
     );
     Ok(())
 }
+
+#[test]
+fn a_dirty_reason_is_not_attached_when_two_compilations_share_the_name_and_version()
+-> Result<(), Box<dyn std::error::Error>> {
+    let repo = base("report-restored-units-dirty-ambiguous", "old")?;
+    let registry = registry_artifact(&repo, GAP)?;
+    let mut git = artifact(
+        &repo,
+        "serde",
+        "lib",
+        &format!("target/debug/deps/libserde-{HELD}.rmeta"),
+        false,
+        false,
+    )?;
+    git["package_id"] = json!("git+https://example.invalid/serde#serde@1.0.0");
+    let reason = "FsStatusOutdated(StaleItem(MissingFile { path: \"/store/out-dirs/v1/x.rs\" }))";
+    let metrics = observation_with(
+        &repo,
+        &[],
+        &[registry, git],
+        json!([{"package":"serde","version":"1.0.0","reason":reason}]),
+    )?;
+    assert_eq!(metrics.invocations[0].compilations.len(), 2);
+    for compilation in &metrics.invocations[0].compilations {
+        assert_eq!(compilation.dirty, None);
+    }
+    Ok(())
+}

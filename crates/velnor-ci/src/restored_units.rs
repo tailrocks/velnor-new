@@ -142,7 +142,18 @@ pub fn classify(invocation: &mut Invocation, restored: &RestoredUnits) {
 }
 
 pub fn attach_dirty(invocation: &mut Invocation) {
+    let mut identities: BTreeMap<(String, String), usize> = BTreeMap::new();
+    for compilation in &invocation.compilations {
+        *identities
+            .entry((compilation.package.clone(), compilation.version.clone()))
+            .or_insert(0) += 1;
+    }
     for compilation in &mut invocation.compilations {
+        let identity = (compilation.package.clone(), compilation.version.clone());
+        if identities.get(&identity).copied().unwrap_or(0) > 1 {
+            compilation.dirty = None;
+            continue;
+        }
         let mut reasons = invocation
             .dirty
             .iter()
