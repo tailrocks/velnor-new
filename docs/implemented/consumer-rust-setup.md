@@ -238,7 +238,7 @@ step that builds a root, to that root's cached target directory.
 
 `prepare` refuses a `CARGO_BUILD_BUILD_DIR` that differs from the target
 directory, because the Target cache does not cover a separate build directory.
-A relative build directory that contains `..` or a cargo path template such as `{workspace-root}` is refused; set an absolute path instead.
+A relative build directory that contains `..` is refused, and any build directory that contains a cargo path template such as `{workspace-root}` or `{workspace-path-hash}` is refused; set a plain absolute path instead.
 
 ## 5. Developer machines: MBX garbage collection
 
