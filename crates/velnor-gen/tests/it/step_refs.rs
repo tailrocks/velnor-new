@@ -27,7 +27,6 @@ fn rust_sources(dir: &Path, out: &mut Vec<PathBuf>) -> std::io::Result<()> {
     Ok(())
 }
 
-/// The patch number of every `(0, 1, N)` tuple in `text`, in order.
 fn patches_in(text: &str) -> Vec<u64> {
     text.split("(0, 1, ")
         .skip(1)
@@ -35,8 +34,6 @@ fn patches_in(text: &str) -> Vec<u64> {
         .collect()
 }
 
-/// Every helper patch that gates a workflow shape: each `(0, 1, N)` gate tuple in the generator,
-/// planner and renderer sources, so a new gate is covered without editing this test.
 fn gate_patches() -> Result<BTreeSet<u64>, Box<dyn Error>> {
     let mut files = Vec::new();
     for krate in ["velnor-gen", "velnor-rust", "velnor-render", "velnor-model"] {
@@ -58,7 +55,6 @@ fn gate_patches() -> Result<BTreeSet<u64>, Box<dyn Error>> {
     Ok(patches)
 }
 
-/// The first patch whose helper accepts `key`, from its gate in `key_gates`.
 fn gate_patch(key: &str) -> Result<u64, Box<dyn Error>> {
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/key_gates/rust_ci.rs");
     let text = fs::read_to_string(path)?;
@@ -148,7 +144,6 @@ fn every_steps_reference_names_a_step_of_its_own_job() -> TestResult {
     );
     for patch in patches {
         let helper = format!("0.1.{patch}");
-        // Each config enables one gated shape, so the render reaches the steps that shape adds.
         let mut configs: Vec<Option<&str>> = vec![None];
         if patch >= shared_store {
             configs.extend([Some(SHARED_STORE_ON), Some(SHARED_STORE_OFF)]);
