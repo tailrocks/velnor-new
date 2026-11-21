@@ -332,6 +332,7 @@ impl RootJobs<'_> {
             .collect();
         let lint_id = self.id(LINT_JOB);
         let mut steps = self.setup(&lint_id);
+        let lint_checks = tests.is_empty() || crate::test_setup::checks_per_member(self.facts);
         for member in &self.members {
             steps.extend(self.cargo(member, lint().into_iter().chain([CargoCommand::Doc])));
         }
@@ -345,7 +346,7 @@ impl RootJobs<'_> {
         let mut jobs = vec![Job {
             comment,
             pr: crate::plan::quick(self.facts),
-            ..self.lane_job(lint_id, steps, tests.is_empty())
+            ..self.lane_job(lint_id, steps, lint_checks)
         }];
         if archive && self.nextest() && self.facts.config.private_sources.is_none() {
             jobs.extend(self.archived_tests());

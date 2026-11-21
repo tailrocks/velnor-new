@@ -343,3 +343,48 @@ fn a_later_grouped_root_check_runs_before_its_own_test_not_before_an_earlier_roo
     assert!(first < check && check < second, "{steps:?}");
     Ok(())
 }
+
+#[test]
+fn a_testless_member_of_a_mixed_split_group_gets_its_check_in_the_lint_job() -> TestResult {
+    let config = "shape = 'lint-test'\n[[workspace_groups]]\nname = 'tools'\nroots = ['tools/a', 'tools/b']\n[[check_configurations]]\nroot = 'tools/a'\n";
+    let mut view = view_with(
+        &["Cargo.toml", "tools/a/Cargo.toml", "tools/b/Cargo.toml"],
+        config,
+        "0.1.112",
+    )?;
+    for metadata in view.rust_metadata.values_mut() {
+        for member in &mut metadata.members {
+            if member.manifest.as_str() == "tools/a/Cargo.toml" {
+                for target in &mut member.targets {
+                    target.tests = false;
+                }
+            }
+        }
+    }
+    let steps = found(&document(&workflow(&view)?)?["jobs"]);
+    assert_eq!(steps.len(), 1, "{steps:?}");
+    assert!(steps[0].0.contains("lint"), "{steps:?}");
+    Ok(())
+}
+
+#[test]
+fn before_0_1_112_a_mixed_split_group_keeps_its_released_rendering_without_the_check() -> TestResult
+{
+    let config = "shape = 'lint-test'\n[[workspace_groups]]\nname = 'tools'\nroots = ['tools/a', 'tools/b']\n[[check_configurations]]\nroot = 'tools/a'\n";
+    let mut view = view_with(
+        &["Cargo.toml", "tools/a/Cargo.toml", "tools/b/Cargo.toml"],
+        config,
+        "0.1.111",
+    )?;
+    for metadata in view.rust_metadata.values_mut() {
+        for member in &mut metadata.members {
+            if member.manifest.as_str() == "tools/a/Cargo.toml" {
+                for target in &mut member.targets {
+                    target.tests = false;
+                }
+            }
+        }
+    }
+    assert_eq!(found(&document(&workflow(&view)?)?["jobs"]).len(), 0);
+    Ok(())
+}

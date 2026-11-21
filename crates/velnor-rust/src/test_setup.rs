@@ -111,6 +111,15 @@ pub(crate) fn before_tests(
     steps
 }
 
+const MEMBER_CHECK_HELPER: (u64, u64, u64) = (0, 1, 112);
+
+pub(crate) fn checks_per_member(facts: &RepoFacts) -> bool {
+    facts
+        .helper
+        .as_ref()
+        .is_some_and(|helper| helper.version().at_least(MEMBER_CHECK_HELPER))
+}
+
 pub(crate) fn checked_members(
     facts: &RepoFacts,
     members: &[Member],
