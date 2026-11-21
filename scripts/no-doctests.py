@@ -7,14 +7,18 @@ IDENT = re.compile(r"[^\W\d]\w*")
 FENCE = re.compile(r"```|~~~")
 LINE_DOC = re.compile(r"//(?:!|/(?!/))")
 QUOTE = r"(?:[ \t]*>)*"
-CONTAINER = r"(?:>[ \t]*|(?:[-*+]|\d{1,9}[.)])(?:[ \t]+(?:\[[ xX]\][ \t]+)?|$)|\[\^[^\]\s]+\]:[ \t]*)*"
+CONTAINER = r"(?:>[ \t]*|(?:[-*+]|\d{1,9}[.)])(?:[ \t]+(?:\[[ xX]\][ \t]+)?|$)|\[\^[^\]]*[^\]\s][^\]]*\]:[ \t]*)*"
 LINE_FENCE = re.compile(r"[ \t]*" + CONTAINER + r"(?:```|~~~)")
 LINE_INDENT = re.compile(QUOTE + r" {5,}\S")
 ATTR_INDENT = re.compile(r" {4,}\S|(?:[ \t]*>)+ {5,}\S")
 LIST_INDENT = re.compile(r"[ \t]*" + CONTAINER + r"(?:[-*+]|\d{1,9}[.)]) {5,}\S")
 BLOCK_MARGIN = re.compile(r"[ \t]*\*?")
+BLOCK_STAR = re.compile(r"[ \t]*\*")
+LIST_ITEM = re.compile(r" *(?:[-*+]|\d{1,9}[.)]) +\S")
 QUOTE_START = re.compile(r"[ \t]*>")
 HRULE = re.compile(r"(?:-[ \t]*){3,}|(?:\*[ \t]*){3,}|(?:_[ \t]*){3,}")
+SETEXT = re.compile(r"=+[ \t]*|-+[ \t]*")
+HTML_DONE = re.compile(r"<!--.*-->|<\?.*\?>|<![A-Za-z].*>|<!\[CDATA\[.*\]\]>")
 DOC_OPEN = re.compile(r"/\*(?:!|\*(?![*/]))")
 NEWLINE = re.compile(r"\r\n|\r|\n")
 DOC_EQ = re.compile(r"\s*=(?!=)")
@@ -99,7 +103,7 @@ def prose(line):
     if line is None:
         return False
     text = re.sub("^" + CONTAINER, "", line.strip(), count=1)
-    return bool(text) and not text.startswith("#") and not HRULE.fullmatch(text)
+    return bool(text) and not text.startswith("#") and not HRULE.fullmatch(text) and not HTML_DONE.fullmatch(text)
 
 
 def split_lines(text):
@@ -112,24 +116,47 @@ def doc_text_tabs(text):
     return text.expandtabs(4)
 
 
-def markdown_hit(lines, indent):
-    prev = None
+def block_text(lines):
+    rest = lines[1:]
+    if all(not line.strip() or BLOCK_STAR.match(line) for line in rest):
+        body = [BLOCK_MARGIN.sub("", line, count=1) for line in rest]
+    else:
+        text = [line for line in rest if line.strip()]
+        margin = min((len(line) - len(line.lstrip(" \t")) for line in text), default=0)
+        body = [" " + line[margin:] if line.strip() else "" for line in rest]
+    return [BLOCK_MARGIN.sub("", lines[0], count=1)] + body
+
+
+def carried(tail, inner):
+    return tail[1] if tail is not None and tail[0] == inner else None
+
+
+def markdown_hit(lines, indent, prev=None):
+    item = None
     for k, raw in enumerate(lines):
         line = raw.expandtabs(4)
+        blank = not line.strip()
+        width = len(line) - len(line.lstrip(" "))
+        if not blank and item is not None and width < item:
+            item = None
         lazy = prose(prev) and not QUOTE_START.match(line)
         if LIST_INDENT.match(line) or (LINE_FENCE.match(line) and not (lazy and indent.match(line))):
             return k
-        if indent.match(line) and not lazy:
+        code = indent.match(line) if item is None or blank else width >= item + 4
+        if code and not lazy:
             return k
-        prev = line
+        match = LIST_ITEM.match(line)
+        if match:
+            item = match.end() - 1
+        prev = "" if prose(prev) and SETEXT.fullmatch(line.strip()) else line
     return None
 
 
-def value_has_fence(value):
+def value_has_fence(value, prev=None):
     lines = [line.expandtabs(4) for line in split_lines(value)]
     margin = min((len(line) - len(line.lstrip(" ")) for line in lines if line.strip()), default=0)
     lines = [line[margin:] for line in lines]
-    return markdown_hit(lines, ATTR_INDENT) is not None
+    return markdown_hit(lines, ATTR_INDENT, prev) is not None
 
 
 def decode_escape(match):
@@ -176,14 +203,19 @@ def doc_findings(src):
     cfg_comma = False
     doc_paren = 0
     doc_value = False
+    attr_inner = False
+    tail = None
     while i < len(src):
         c = src[i]
         if src.startswith("//", i):
             if LINE_DOC.match(src, i):
                 run, end = line_run(src, i)
-                hit = markdown_hit([body for _, body in run], LINE_INDENT)
+                bodies = [body for _, body in run]
+                inner = src.startswith("//!", i)
+                hit = markdown_hit(bodies, LINE_INDENT, carried(tail, inner))
                 if hit is not None:
                     yield run[hit][0]
+                tail = (inner, bodies[-1])
             else:
                 k = src.find("\n", i)
                 end = len(src) if k < 0 else k
@@ -192,16 +224,23 @@ def doc_findings(src):
             end = block_end(src, i)
             if DOC_OPEN.match(src, i):
                 start = i + 3
-                lines = split_lines(src[start:end])
-                stripped = [doc_text_tabs(BLOCK_MARGIN.sub("", line, count=1)) for line in lines]
-                hit = markdown_hit(stripped, LINE_INDENT)
+                body = src[start:end]
+                lines = split_lines(body[:-2] if body.endswith("*/") else body)
+                stripped = [doc_text_tabs(line) for line in block_text(lines)]
+                inner = src.startswith("/*!", i)
+                hit = markdown_hit(stripped, LINE_INDENT, carried(tail, inner))
                 if hit is not None:
                     yield start + sum(len(line) + 1 for line in lines[:hit])
+                tail = (inner, stripped[-1])
             i = end
         elif c == '"':
             end = skip_string(src, i)
-            if doc_value and value_has_fence(plain_value(src[i:end])):
-                yield i
+            if doc_value:
+                value = plain_value(src[i:end])
+                if value_has_fence(value, carried(tail, attr_inner)):
+                    yield i
+                if attr_name == "doc":
+                    tail = (attr_inner, split_lines(value)[-1])
             i = end
         elif c == "'":
             j = skip_char(src, i)
@@ -214,26 +253,32 @@ def doc_findings(src):
             k += 2 if src.startswith("r#", k) else 0
             name = IDENT.match(src, k)
             attr_name = name.group() if name else ""
+            attr_inner = src.startswith("!", skip_trivia(src, i + 1))
             i = j
-        elif c == "[":
+        elif c in "([{":
             if attr_depth:
-                attr_depth += 1
-            i += 1
-        elif c == "]":
-            if attr_depth:
-                attr_depth -= 1
-            doc_value = doc_value and attr_depth > 0
-            i += 1
-        elif c in "(),":
-            if attr_depth and c == "(":
                 paren += 1
-            elif attr_depth and c == ")":
+                if c == "[":
+                    attr_depth += 1
+            elif c == "{":
+                tail = None
+            i += 1
+        elif c in ")]}":
+            if attr_depth:
                 paren -= 1
-                doc_value = doc_value and paren >= doc_paren
-            elif attr_depth and c == ",":
+                if c == "]":
+                    attr_depth -= 1
+                doc_value = doc_value and attr_depth > 0 and paren >= doc_paren
+            elif c == "}":
+                tail = None
+            i += 1
+        elif c in ",;":
+            if attr_depth:
                 doc_value = doc_value and paren > doc_paren
-                if attr_name == "cfg_attr" and paren == 1:
+                if c == "," and attr_name == "cfg_attr" and paren == 1:
                     cfg_comma = True
+            else:
+                tail = None
             i += 1
         elif m := IDENT.match(src, i):
             word = m.group()
@@ -243,8 +288,12 @@ def doc_findings(src):
                 if end is None:
                     i = j
                 else:
-                    if doc_value and value_has_fence(raw_value(src[i:end], len(word))):
-                        yield i
+                    if doc_value:
+                        value = raw_value(src[i:end], len(word))
+                        if value_has_fence(value, carried(tail, attr_inner)):
+                            yield i
+                        if attr_name == "doc":
+                            tail = (attr_inner, split_lines(value)[-1])
                     i = end
             elif word in BYTE_PREFIX and j < len(src) and src[j] == '"':
                 i = skip_string(src, j)
