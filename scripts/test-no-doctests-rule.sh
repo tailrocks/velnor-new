@@ -171,6 +171,13 @@ check list_dedent_base_code fail '/// text\n///   1. nested\n///\n///     assert
 check html_type7_setext_code fail '/// text\n/// <x>\n/// ---\n///     assert_eq!(1, 1);\npub fn f() {}\n'
 check empty_item_blank_code fail '/// -\n///\n///     assert_eq!(1, 1);\npub fn f() {}\n'
 check quote_type7_code fail '/// text\n/// > <x>\n///     assert_eq!(1, 1);\npub fn f() {}\n'
+check quote_depth_html_outdent fail '/// > > <pre>\n/// >     assert_eq!(1, 1);\npub fn f() {}\n'
+check list_html_outdent fail '/// - <pre>\n/// </pre>\n///\n///     assert_eq!(1, 1);\npub fn f() {}\n'
+check list_div_outdent fail '/// - <div>\n/// </div>\n///\n///     assert_eq!(1, 1);\npub fn f() {}\n'
+check type7_malformed_open fail '/// <x = y>\n/// ---\n///     assert_eq!(1, 1);\npub fn f() {}\n'
+check type7_attr_lines pass '/// <x a="b">\n///     code\n/// </x>\npub fn f() {}\n'
+check footnote_indent4_prose pass '/// text[^x]\n///\n/// [^x]: footnote\n///\n///     continuation\npub fn f() {}\n'
+check footnote_indent8_code fail '/// text[^x]\n///\n/// [^x]: footnote\n///\n///         assert_eq!(1, 1);\npub fn f() {}\n'
 
 missing="$work/scanner_missing"
 mkdir -p "$missing/crates/fx/src"

@@ -34,6 +34,12 @@ HTML_TYPE6 = (
     "link|main|menu|menuitem|nav|noframes|ol|optgroup|option|p|param|search|section|summary|table|tbody|td|tfoot|th|"
     "thead|title|tr|track|ul"
 )
+HTML_ATTR_NAME = r"[A-Za-z_:][A-Za-z0-9_.:-]*"
+HTML_ATTR_VALUE = r"[ \t]*=[ \t]*(?:[^ \t\"'=<>`]+|'[^']*'|\"[^\"]*\")"
+HTML_ATTRIBUTE = r"[ \t]+" + HTML_ATTR_NAME + r"(?:" + HTML_ATTR_VALUE + r")?"
+HTML_OPEN_TAG = r"<[A-Za-z][A-Za-z0-9-]*(?:" + HTML_ATTRIBUTE + r")*[ \t]*/?>"
+HTML_CLOSE_TAG = r"</[A-Za-z][A-Za-z0-9-]*[ \t]*>"
+FOOTNOTE = re.compile(r"\[\^[^\]\s]+\]:[ \t]*")
 HTML_BLOCKS = (
     (re.compile(r"<(?:script|pre|style|textarea)(?:[ ]|>|$)", re.I), re.compile(r"</(?:script|pre|style|textarea)>", re.I)),
     (re.compile(r"<!--"), re.compile(r"-->")),
@@ -41,7 +47,7 @@ HTML_BLOCKS = (
     (re.compile(r"<![A-Za-z]"), re.compile(r">")),
     (re.compile(r"<!\[CDATA\["), re.compile(r"\]\]>")),
     (re.compile(r"</?(?:" + HTML_TYPE6 + r")(?:[ ]|/?>|$)", re.I), None),
-    (re.compile(r"(?:<[A-Za-z][A-Za-z0-9-]*(?:[ ]+[^<>]*)?/?>|</[A-Za-z][A-Za-z0-9-]*[ ]*>)[ ]*$"), None),
+    (re.compile(r"(?:" + HTML_OPEN_TAG + "|" + HTML_CLOSE_TAG + r")[ \t]*$"), None),
 )
 
 
@@ -193,24 +199,35 @@ class Doc:
         self.empty_item = False
         self.html = None
 
-    def open_html(self, s, quoted):
+    def open_html(self, s, depth):
         matched, end = html_start(s)
         if not matched:
             return False
-        self.html = None if end is not None and end.search(s) else (end, quoted)
+        self.html = None if end is not None and end.search(s) else (end, depth)
         self.para = False
         return True
 
+    def begin_block(self, rest, quoted, depth):
+        if self.open_html(rest, depth):
+            return
+        self.para = bool(rest) and not (ATX.match(rest) or THEMATIC.match(rest) or FENCE_OPEN.match(rest))
+        self.para_quoted = quoted
+
     def feed(self, text):
         q = QUOTE_PREFIX.match(text)
-        quoted = q is not None
+        depth = q.group().count(">") if q else 0
+        quoted = depth > 0
         body = text[q.end() :] if quoted else text
+        ind = len(body) - len(body.lstrip(" "))
+        s = body[ind:].rstrip()
+        if s and not quoted and self.item is not None and ind < self.item:
+            self.item = None
         if self.html is not None:
-            end, in_quote = self.html
-            if in_quote and not quoted:
+            end, open_depth = self.html
+            if depth < open_depth:
                 self.html = None
             else:
-                content = body if in_quote else text
+                content = body if open_depth else text
                 if end is None:
                     if content.strip():
                         return True
@@ -222,8 +239,6 @@ class Doc:
                 return True
         if quoted:
             self.item = None
-        ind = len(body) - len(body.lstrip(" "))
-        s = body[ind:].rstrip()
         if not s:
             self.para = False
             if self.empty_item:
@@ -232,8 +247,6 @@ class Doc:
         self.empty_item = False
         if quoted and self.para and not self.para_quoted:
             self.para = False
-        if not quoted and self.item is not None and ind < self.item:
-            self.item = None
         base = 0 if quoted or self.item is None else self.item
         rel = ind - base
         plain = not quoted and ind >= 4
@@ -255,15 +268,14 @@ class Doc:
                 spaces = len(m.group(2))
                 self.item = ind + len(m.group(1)) + (spaces if 0 < spaces <= 4 else 1)
                 self.empty_item = not rest
-            if self.open_html(rest, quoted):
-                return plain
-            self.para = bool(rest) and not (ATX.match(rest) or THEMATIC.match(rest) or FENCE_OPEN.match(rest))
-            self.para_quoted = quoted
+            self.begin_block(rest, quoted, depth)
             return plain
-        if self.open_html(s, quoted):
+        f = FOOTNOTE.match(s)
+        if f and not quoted:
+            self.item = ind + 4
+            self.begin_block(s[f.end() :], quoted, depth)
             return plain
-        self.para = True
-        self.para_quoted = quoted
+        self.begin_block(s, quoted, depth)
         return plain
 
 
