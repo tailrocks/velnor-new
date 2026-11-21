@@ -97,6 +97,27 @@ for arg; do last="$arg"; done
 case "$last" in */velnor-ci-x86_64-unknown-linux-musl.tar.gz) mkdir -p "$last" ;; esac
 """
 
+STUB_REPLANTING_EVICT_MV = """#!/bin/sh
+for arg; do last="$arg"; done
+"$REAL_MV" "$@" || exit $?
+case "$last" in
+  *.velnor-ci.evict.*)
+    if [ ! -e "$STUB_RACE_MARK" ]; then
+      : > "$STUB_RACE_MARK"
+      mkdir -p "$STUB_ENTRY"
+    fi ;;
+esac
+"""
+
+STUB_GARBAGE_FIRST_HEAD = """#!/bin/sh
+if [ ! -e "$STUB_HEAD_MARK" ]; then
+  : > "$STUB_HEAD_MARK"
+  printf 'garbage\\n'
+  exit 0
+fi
+exec "$REAL_HEAD" "$@"
+"""
+
 STUB_PLANT_PID_QUARANTINE_MV = """#!/bin/sh
 for arg; do last="$arg"; done
 case "$last" in
@@ -1071,6 +1092,30 @@ class SetupVelnorInstallTests(unittest.TestCase):
         self.assertEqual(installed_files(cached), [], "the verified copy was moved inside the directory at the store entry path")
         self.assertIn("refusing to publish over the directory", result.output)
         self.assertIn("could not publish velnor-ci 0.1.79 to the tool cache", result.output)
+        self.assertEqual(self.installed_binary().read_bytes(), PAYLOAD)
+
+
+    def test_a_verified_copy_evicted_while_a_directory_is_planted_at_the_store_entry_path_is_kept(self):
+        cached = self.cached_archive()
+        cached.parent.mkdir(parents=True)
+        cached.write_bytes(self.archive)
+        stub_head = self.stub_bin / "head"
+        stub_head.write_text(STUB_GARBAGE_FIRST_HEAD)
+        stub_head.chmod(0o755)
+        stub_mv = self.stub_bin / "mv"
+        stub_mv.write_text(STUB_REPLANTING_EVICT_MV)
+        stub_mv.chmod(0o755)
+        result = self.install(
+            sha256(self.archive),
+            extra_env={
+                "REAL_MV": shutil.which("mv"),
+                "STUB_ENTRY": str(cached),
+                "STUB_RACE_MARK": str(self.root / "race-mark"),
+                "STUB_HEAD_MARK": str(self.root / "head-mark"),
+            },
+        )
+        self.assertEqual(result.returncode, 0, result.output)
+        self.assertIn("because the store entry path is taken", result.output)
         self.assertEqual(self.installed_binary().read_bytes(), PAYLOAD)
 
 
