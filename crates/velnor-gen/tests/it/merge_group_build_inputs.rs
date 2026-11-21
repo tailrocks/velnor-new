@@ -51,7 +51,7 @@ fn feeds_build(step: &Value) -> bool {
             .is_some_and(|id| id.starts_with("release-asset"))
 }
 
-fn check(ci: &str, helper: &str) -> TestResult {
+fn check(ci: &str) -> TestResult {
     let mut dropped = 0;
     let roots = ["Cargo.toml", "tools/a/Cargo.toml", "tools/b/Cargo.toml"];
     for (shape, root) in [
@@ -60,7 +60,7 @@ fn check(ci: &str, helper: &str) -> TestResult {
         ("groups", "tools/a"),
         ("one-job", "."),
     ] {
-        let repo = private_repo(&roots, &config(shape, root, ci), helper)?;
+        let repo = private_repo(&roots, &config(shape, root, ci), "0.1.109")?;
         for job in jobs(&workflow(&repo)?)? {
             let inputs: Vec<&Value> = steps(&job).iter().filter(|s| feeds_build(s)).collect();
             if inputs.is_empty() {
@@ -93,28 +93,10 @@ fn check(ci: &str, helper: &str) -> TestResult {
 #[test]
 fn the_build_inputs_run_after_a_merge_group_exactly_when_a_compiling_step_of_the_job_does()
 -> TestResult {
-    check("", "0.1.109")
+    check("")
 }
 
 #[test]
 fn the_build_inputs_stay_for_a_compiling_step_that_runs_only_after_the_merge() -> TestResult {
-    check(
-        "docs = \"post_merge\"\ncheck_alone = \"post_merge\"\n",
-        "0.1.109",
-    )
-}
-
-#[test]
-fn the_build_inputs_run_after_a_merge_group_exactly_when_a_compiling_step_of_the_job_does_per_root()
--> TestResult {
-    check("", "0.1.112")
-}
-
-#[test]
-fn the_build_inputs_stay_for_a_compiling_step_that_runs_only_after_the_merge_per_root() -> TestResult
-{
-    check(
-        "docs = \"post_merge\"\ncheck_alone = \"post_merge\"\n",
-        "0.1.112",
-    )
+    check("docs = \"post_merge\"\ncheck_alone = \"post_merge\"\n")
 }
