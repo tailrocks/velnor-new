@@ -87,11 +87,7 @@ fn the_archive_digest_is_not_the_digest_of_the_binary() -> TestResult {
         .ok_or("accepted the archive digest as the binary's")?;
     assert!(error.to_string().contains("[velnor-gen-binary]"), "{error}");
     assert!(error.to_string().contains(GEN_BINARY_X64), "{error}");
-    assert_eq!(
-        error.remedy(),
-        Some(&Remedy::Reinstall(VERSION.to_owned())),
-        "{error}"
-    );
+    assert_eq!(error.remedy(), Some(&Remedy::VerifyRelease), "{error}");
     Ok(())
 }
 

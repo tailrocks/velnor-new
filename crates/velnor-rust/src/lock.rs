@@ -26,14 +26,16 @@ pub struct LockError {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Remedy {
     Repin(String),
-    Reinstall(String),
+    VerifyRelease,
 }
 
 impl fmt::Display for Remedy {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Repin(version) => write!(f, "re-pin with `velnor-gen pin-helper {version}`"),
-            Self::Reinstall(version) => write!(f, "reinstall velnor-gen {version}"),
+            Self::VerifyRelease => f.write_str(
+                "run `velnor-gen check --verify-release`: if it names the lock, re-pin it, and if the lock matches the release, reinstall velnor-gen",
+            ),
         }
     }
 }

@@ -109,7 +109,7 @@ pub fn check_generator_entry(bytes: &[u8], running: RunningGenerator<'_>) -> Res
             "[{section}] {} digest is {listed} but this binary hashes to {sha}",
             platform.file_suffix(),
         ))
-        .with_remedy(Remedy::Reinstall(running.version.to_owned())));
+        .with_remedy(Remedy::VerifyRelease));
     }
     Ok(())
 }
