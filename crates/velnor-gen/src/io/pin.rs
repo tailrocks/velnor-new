@@ -4,6 +4,8 @@
 use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::thread;
+use std::time::Duration;
 
 use velnor_rust::{
     LOCK_PATH, RunningGenerator, binary_sums_url, check_generator_entry, commit_url,
@@ -65,18 +67,30 @@ pub fn lock_root(root: &Path) -> Result<PathBuf, Error> {
     fs::canonicalize(root).map_err(|e| Error::File(root.into(), e))
 }
 
+const DOWNLOAD_ATTEMPTS: u32 = 4;
+
 fn download(root: &Path, url: &str) -> Result<Vec<u8>, Error> {
-    program(
-        root,
-        "curl",
-        &[
-            OsStr::new("--fail"),
-            OsStr::new("--silent"),
-            OsStr::new("--show-error"),
-            OsStr::new("--location"),
-            OsStr::new(url),
-        ],
-    )
+    let mut attempt = 1;
+    loop {
+        match program(
+            root,
+            "curl",
+            &[
+                OsStr::new("--fail"),
+                OsStr::new("--silent"),
+                OsStr::new("--show-error"),
+                OsStr::new("--location"),
+                OsStr::new(url),
+            ],
+        ) {
+            Ok(bytes) => return Ok(bytes),
+            Err(error) if attempt == DOWNLOAD_ATTEMPTS => return Err(error),
+            Err(_) => {
+                thread::sleep(Duration::from_secs(1 << (attempt - 1)));
+                attempt += 1;
+            }
+        }
+    }
 }
 
 pub fn write_lock(root: &Path, lock: &str) -> Result<(), Error> {

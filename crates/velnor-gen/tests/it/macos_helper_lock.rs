@@ -26,7 +26,7 @@ fn repo(runner: &str, macos_digest: bool) -> Result<RepoView, Box<dyn std::error
 
 #[test]
 fn a_macos_runner_needs_a_helper_lock_with_a_macos_digest() -> TestResult {
-    for runner in ["macos-latest", "macos-15", "MacOS-26"] {
+    for runner in ["macos-latest", "macos-15", "MacOS-26", "self-macos-arm"] {
         expected_with_notes(&repo(runner, true)?)?;
         match expected_with_notes(&repo(runner, false)?) {
             Err(GenerateError::HelperLockLacksMacos { runner: named, .. }) => {
