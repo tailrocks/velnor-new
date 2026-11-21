@@ -115,6 +115,7 @@ mod lane_guard;
 mod lane_guard_generated;
 mod logscan;
 mod mbx_out_dirs;
+mod mbx_report_comments;
 mod mbx_seed;
 mod mbx_seed_env;
 mod mbx_seed_order;

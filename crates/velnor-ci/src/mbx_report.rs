@@ -43,7 +43,6 @@ const VALUE_LONG_OPTIONS: &[&str] = &["--config", "--color"];
 const VALUE_FREE_LONG_OPTIONS: &[&str] =
     &["--quiet", "--verbose", "--frozen", "--locked", "--offline"];
 
-/// Whether a cargo global option takes the next word, or `None` when it is not one of these.
 fn global_option(word: &str) -> Option<bool> {
     if let Some(shorts) = word
         .strip_prefix('-')
@@ -60,7 +59,6 @@ fn global_option(word: &str) -> Option<bool> {
     .then_some(false)
 }
 
-/// `-qv` and `-vC dir` are bundles: `C` and `Z` take the rest of the bundle, or the next word when none is left.
 fn short_cluster(shorts: &str) -> Option<bool> {
     for (index, letter) in shorts.char_indices() {
         match letter {
@@ -116,9 +114,6 @@ fn lists(words: &[String]) -> bool {
     words.first().is_some_and(|word| word == "list")
 }
 
-/// # Errors
-///
-/// The report is not JSON, has an unknown `version`, or lacks a count.
 pub fn parse(report: &[u8]) -> Result<Option<MbxSession>, String> {
     let value: Value =
         serde_json::from_slice(report).map_err(|error| format!("not JSON ({error})"))?;
