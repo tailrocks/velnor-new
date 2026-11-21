@@ -9,7 +9,8 @@ use std::path::{Component, Path, PathBuf};
 
 use nix::errno::Errno;
 use nix::fcntl::{AT_FDCWD, AtFlags, OFlag, openat, readlinkat};
-use nix::sys::stat::{Mode, SFlag, fstatat};
+use nix::libc;
+use nix::sys::stat::{Mode, SFlag, fstat, fstatat};
 
 use super::walk::DESCRIPTOR_BUDGET;
 
@@ -69,8 +70,11 @@ impl Default for Reach<'_> {
     }
 }
 
+type Inode = (libc::dev_t, libc::ino_t);
+
 struct Trail {
     parents: VecDeque<OwnedFd>,
+    lineage: Vec<Inode>,
     bound: usize,
 }
 
@@ -78,25 +82,31 @@ impl Trail {
     fn new(bound: usize) -> Self {
         Self {
             parents: VecDeque::new(),
+            lineage: Vec::new(),
             bound,
         }
     }
 
-    fn push(&mut self, parent: OwnedFd) {
+    fn push(&mut self, parent: OwnedFd) -> io::Result<()> {
+        let stat = fstat(&parent).map_err(failure)?;
+        self.lineage.push((stat.st_dev, stat.st_ino));
         while self.parents.len() >= self.bound {
             if self.parents.pop_front().is_none() {
-                return;
+                return Ok(());
             }
         }
         self.parents.push_back(parent);
+        Ok(())
     }
 
-    fn pop(&mut self) -> Option<OwnedFd> {
-        self.parents.pop_back()
+    fn pop(&mut self) -> Option<(Option<OwnedFd>, Inode)> {
+        let inode = self.lineage.pop()?;
+        Some((self.parents.pop_back(), inode))
     }
 
     fn clear(&mut self) {
         self.parents.clear();
+        self.lineage.clear();
     }
 
     #[cfg(test)]
@@ -148,7 +158,15 @@ pub(super) fn resolve(
             }
             Step::Parent => {
                 current = match trail.pop() {
-                    Some(parent) => parent,
+                    Some((Some(parent), _)) => parent,
+                    Some((None, inode)) => {
+                        let parent = open_directory(current.as_fd(), Path::new(".."), false)?;
+                        let stat = fstat(&parent).map_err(failure)?;
+                        if (stat.st_dev, stat.st_ino) != inode {
+                            return Err(failure(Errno::ESTALE));
+                        }
+                        parent
+                    }
                     None => open_directory(current.as_fd(), Path::new(".."), false)?,
                 };
                 (reach.opened)();
@@ -172,7 +190,7 @@ pub(super) fn resolve(
                 } else if format == SFlag::S_IFDIR {
                     let opened = open_directory(current.as_fd(), Path::new(&name), false)?;
                     (reach.opened)();
-                    trail.push(std::mem::replace(&mut current, opened));
+                    trail.push(std::mem::replace(&mut current, opened))?;
                     path.push(&name);
                 } else if pending.is_empty() {
                     path.push(&name);
@@ -214,7 +232,9 @@ mod tests {
     fn a_trail_never_holds_more_parents_than_its_bound() {
         let mut trail = Trail::new(3);
         for _ in 0..10 {
-            trail.push(open_path(Path::new("/"), false).unwrap_or_else(|e| unreachable!("{e}")));
+            trail
+                .push(open_path(Path::new("/"), false).unwrap_or_else(|e| unreachable!("{e}")))
+                .unwrap_or_else(|e| unreachable!("{e}"));
         }
         assert_eq!(trail.len(), 3);
         trail.clear();
@@ -246,5 +266,38 @@ mod tests {
             }
         }
         fs::remove_dir_all(&base).unwrap_or_else(|e| unreachable!("{e}"));
+    }
+
+    #[test]
+    fn an_ancestor_moved_beyond_the_trail_is_refused_not_followed_to_its_new_parent() {
+        let base = base("moved");
+        let start = base.join("start");
+        let other = base.join("other");
+        fs::create_dir_all(start.join("a/b/c/d/e")).unwrap_or_else(|e| unreachable!("{e}"));
+        fs::create_dir_all(&other).unwrap_or_else(|e| unreachable!("{e}"));
+        fs::write(start.join("marker"), b"").unwrap_or_else(|e| unreachable!("{e}"));
+        fs::write(other.join("marker"), b"").unwrap_or_else(|e| unreachable!("{e}"));
+        let held = open_path(&start, false).unwrap_or_else(|e| unreachable!("{e}"));
+        let opened = std::cell::Cell::new(0);
+        let moved = || {
+            opened.set(opened.get() + 1);
+            if opened.get() == 6 {
+                fs::rename(start.join("a"), other.join("a"))
+                    .unwrap_or_else(|e| unreachable!("{e}"));
+            }
+        };
+        let reach = Reach {
+            bound: 2,
+            opened: &moved,
+        };
+        let resolved = resolve(
+            held.as_fd(),
+            &start,
+            Path::new("a/b/c/d/e/../../../../../marker"),
+            reach,
+        );
+        fs::remove_dir_all(&base).unwrap_or_else(|e| unreachable!("{e}"));
+        let error = resolved.expect_err("the resolver followed a moved ancestor");
+        assert_eq!(error.raw_os_error(), Some(Errno::ESTALE as i32));
     }
 }
