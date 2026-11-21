@@ -115,3 +115,48 @@ fn restore(step: &Value) -> Result<(String, Option<String>, Option<Hit>), &'stat
     };
     Ok((requested.to_owned(), matched.map(str::to_owned), Some(hit)))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{CachePlan, observe_caches};
+    use crate::report::{LaneMetrics, SaveOutcome, check};
+    use serde_json::json;
+
+    #[test]
+    fn a_restore_and_save_skipped_by_the_privacy_verdict_fail_no_check() {
+        let plans = vec![CachePlan {
+            family: "sources".to_owned(),
+            root: None,
+            restore_step: "restore".to_owned(),
+            save_step: "save".to_owned(),
+            not_generated: None,
+        }];
+        let steps = json!({
+            "restore": {"outcome": "skipped", "outputs": {}},
+            "save": {"outcome": "skipped", "outputs": {}},
+        });
+        let (caches, errors) = observe_caches(plans, &steps, true);
+        assert!(errors.is_empty(), "{errors:?}");
+        assert_eq!(caches[0].save, SaveOutcome::NotAttempted);
+        let lane = json!({
+            "schema": 1,
+            "lane": "rust",
+            "caches": caches,
+            "invocations": [],
+            "downloaded": 0,
+            "first_cargo_seconds": null,
+            "slowest_tests": [],
+            "tests_run": null,
+            "diagnostics": [],
+            "violations": [],
+        });
+        let metrics: LaneMetrics =
+            serde_json::from_value(lane).unwrap_or_else(|error| unreachable!("{error}"));
+        let verdict = check(&[metrics]);
+        assert!(
+            verdict.is_ok(),
+            "{}",
+            verdict.err().map_or_else(String::new, |e| e.to_string())
+        );
+    }
+}

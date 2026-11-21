@@ -1,0 +1,9 @@
+diff --git a/crates/velnor-rust/src/plan_tools.rs b/crates/velnor-rust/src/plan_tools.rs
+--- a/crates/velnor-rust/src/plan_tools.rs
++++ b/crates/velnor-rust/src/plan_tools.rs
+@@ -22,3 +22,4 @@ pub(crate) const TOOLS_ANCHOR_KEY_HELPER: (u64, u64, u64) = (0, 1, 111);
+ // helper-gate: first in tools-v0.1.110 via 8db5d70509
+ const TOOLS_CLEAR_HELPER: (u64, u64, u64) = (0, 1, 110);
+ 
++// helper-gate: first in tools-v0.1.110 via deadbeef
+ const TOOLS_ANCHOR_HELPER: (u64, u64, u64) = (0, 1, 110);

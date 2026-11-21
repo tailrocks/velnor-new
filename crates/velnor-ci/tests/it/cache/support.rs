@@ -34,6 +34,7 @@ pub(super) fn decide(repo: &Checkout, log: Option<&str>) -> (Output, String) {
         ])
         .env("RUNNER_TEMP", &temp)
         .env("GITHUB_OUTPUT", &outputs)
+        .env("HOME", repo.root())
         .current_dir(repo.root())
         .output()
         .unwrap_or_else(|e| unreachable!("{e}"));
@@ -82,6 +83,7 @@ pub(super) fn decide_target_within(
         .args(["cache", "decide", "--target-dir", target])
         .env("RUNNER_TEMP", &temp)
         .env("GITHUB_OUTPUT", &outputs)
+        .env("HOME", repo.root())
         .env("VELNOR_CACHE_BUDGET_BYTES", budget)
         .current_dir(repo.root())
         .output()
