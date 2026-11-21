@@ -71,7 +71,14 @@ const SHARED_STORE_RUN: &str = ". \"$VELNOR_EXEC\" mbx-store";
 const SHARED_SEED_RUN: &str = ". \"$VELNOR_EXEC\" mbx-seed";
 
 fn shared_store_runs(version: &str) -> Result<Vec<Vec<String>>, Box<dyn std::error::Error>> {
-    let yaml = document(&workflow(&pinned(Some(SHARED), version)?)?)?;
+    shared_runs(SHARED, version)
+}
+
+fn shared_runs(
+    config: &[u8],
+    version: &str,
+) -> Result<Vec<Vec<String>>, Box<dyn std::error::Error>> {
+    let yaml = document(&workflow(&pinned(Some(config), version)?)?)?;
     let mut jobs = Vec::new();
     for job in yaml["jobs"].as_object().ok_or("no jobs")?.values() {
         let runs: Vec<String> = job["steps"]
@@ -116,6 +123,39 @@ fn a_helper_that_appends_the_setting_itself_renders_no_standalone_step_in_the_sh
         for runs in jobs {
             assert_eq!(runs, [SHARED_STORE_RUN, SHARED_SEED_RUN], "{version}");
         }
+    }
+    Ok(())
+}
+
+const SHARED_REMOTE: &[u8] = b"mbx_shared_store = true\n[cache]\nmbx_remote = \"github-actions\"\n";
+
+#[test]
+fn a_shared_store_with_a_remote_cache_has_one_writer_of_the_setting_from_0_1_112() -> TestResult {
+    for version in ["0.1.112", "0.1.113"] {
+        let jobs = shared_runs(SHARED_REMOTE, version)?;
+        assert_ne!(jobs.len(), 0, "{version}");
+        for runs in jobs {
+            assert_eq!(runs, [SHARED_STORE_RUN, SHARED_SEED_RUN], "{version}");
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn a_shared_store_with_a_remote_cache_renders_two_identical_steps_at_0_1_111_as_on_main()
+-> TestResult {
+    let jobs = shared_runs(SHARED_REMOTE, "0.1.111")?;
+    assert_ne!(jobs.len(), 0);
+    for runs in jobs {
+        assert_eq!(
+            runs,
+            [
+                SHARED_STORE_RUN,
+                OUT_DIRS_RUN,
+                SHARED_SEED_RUN,
+                OUT_DIRS_RUN
+            ]
+        );
     }
     Ok(())
 }
