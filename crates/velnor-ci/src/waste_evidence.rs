@@ -34,8 +34,8 @@ pub struct MbxSession {
     pub probe_only: bool,
 }
 
-fn is_zero(count: &u64) -> bool {
-    *count == 0
+fn is_zero<T: Default + PartialEq>(value: &T) -> bool {
+    *value == T::default()
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
