@@ -109,7 +109,7 @@ fn a_directory_appearing_where_a_link_named_none_makes_the_declared_input_stale(
             "../../elsewhere/file/more",
             "elsewhere/file",
         ),
-        ("dangling", "nowhere", "shared/dir/nowhere"),
+        ("dangling", "../../elsewhere/nowhere", "elsewhere/nowhere"),
     ] {
         let repo = declared_link(target);
         build(&repo, OUTPUT, None);
