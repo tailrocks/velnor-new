@@ -238,7 +238,7 @@ step that builds a root, to that root's cached target directory.
 
 `prepare` refuses a `CARGO_BUILD_BUILD_DIR` that differs from the target
 directory, because the Target cache does not cover a separate build directory.
-A relative build directory that contains `..` is refused, a relative build directory is refused when the cargo command uses `-C` (in any spelling, such as `-C app`, `-Capp` or `-C=app`), and any build directory that contains a cargo path template such as `{workspace-root}` or `{workspace-path-hash}` is refused; set an absolute path without a template instead.
+The `velnor-ci inputs build` and `velnor-ci inputs audit` commands also refuse a relative build directory that contains `..`, and any build directory that contains a cargo path template such as `{workspace-root}` or `{workspace-path-hash}`; set an absolute path without a template instead. They also refuse a relative build directory when the cargo command uses `-C` (in any spelling, such as `-C app`, `-Capp` or `-C=app`). Only `inputs build` wraps a cargo command, so `-C` reaches that check only through `inputs build`. `prepare` does not run these checks.
 
 ## 5. Developer machines: MBX garbage collection
 
