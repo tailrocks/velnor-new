@@ -274,15 +274,10 @@ pub(super) fn run_decide(args: &crate::cli_cache::DecideArgs) -> Result<String, 
     ));
     let admission =
         super::cache_sources::refusal(&root, &manifests, &args.public_probe_api, deadline)?;
-    let leak = admission
-        .private_sources
-        .then(|| {
-            super::cache_credentials::saved_root().map_or_else(
-                || Some("HOME is not set".to_owned()),
-                |home| super::cache_credentials::find(&home),
-            )
-        })
-        .flatten();
+    let leak = super::cache_credentials::saved_root().map_or_else(
+        || Some("HOME is not set".to_owned()),
+        |home| super::cache_credentials::find(&home),
+    );
     let sources = admission.refusal.is_none() && leak.is_none();
     let (probe_log, mismatch) = (admission.log, admission.mismatch);
     let decision = if let Some(reason) = admission.refusal {

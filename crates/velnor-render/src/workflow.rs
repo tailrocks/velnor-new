@@ -325,6 +325,8 @@ fn yaml_step(step: &RenderedStep, marks: ShellcheckMarks) -> Yaml {
     if let Some(run) = &step.run {
         let value = if run.contains('\n') {
             Yaml::Block(run.clone())
+        } else if step.share_run {
+            Yaml::Shared(Box::new(text(run)))
         } else {
             text(run)
         };
