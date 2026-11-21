@@ -71,6 +71,7 @@ pub enum StepKind {
         budget_bytes: u64,
         verdicts: Option<PlanFrom>,
         private: PrivateVerdict,
+        sources_restore: Option<RootSlug>,
     },
     PublicSources {
         manifests: Vec<RepoPath>,

@@ -202,6 +202,8 @@ mod private_base_budget;
 mod private_base_caches;
 mod private_base_order;
 mod private_base_prefix;
+mod private_base_shadowed_config;
+mod private_base_token_order;
 mod private_helper_note;
 mod private_sources;
 mod private_sources_advisory;

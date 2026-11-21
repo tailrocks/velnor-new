@@ -80,12 +80,20 @@ pub struct LaneMetrics {
     pub mbx: MbxEvidence,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub toolchain_installs: Vec<String>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub privacy_unavailable: bool,
     pub violations: Vec<String>,
 }
 
 #[must_use]
 pub fn waste(metrics: &LaneMetrics) -> Vec<String> {
     let mut violations = Vec::new();
+    if metrics.privacy_unavailable {
+        violations.push(format!(
+            "{}: the repository privacy lookup was unavailable, so the base caches of its private dependencies were neither restored nor saved; the Cache check needs a verdict of private, public or internal",
+            metrics.lane
+        ));
+    }
     for invocation in &metrics.invocations {
         let warm = invocation.restored_target_usable != Some(false)
             && metrics.caches.iter().any(|cache| {

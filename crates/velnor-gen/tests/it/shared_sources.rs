@@ -309,3 +309,30 @@ fn lanes_that_do_not_save_the_sources_run_no_fetch() -> TestResult {
     assert_eq!(fetches(audit), Vec::<String>::new());
     Ok(())
 }
+
+#[test]
+fn every_decision_to_save_a_build_directory_is_told_whether_the_sources_restore_hit() -> TestResult
+{
+    let mut repo = view(
+        &["Cargo.toml", "xtask/Cargo.toml"],
+        Some(b"shape = \"lint-test\"\n"),
+    )?;
+    crate::pipeline::pin_helper(&mut repo, "0.1.112")?;
+    let lanes = jobs_of(&workflow(&repo)?);
+    let deciders: Vec<(&String, String)> = lanes
+        .iter()
+        .filter_map(|(id, block)| {
+            step(block, "Decide whether to save the build directory")
+                .map(|decide| (id, decide.to_owned()))
+        })
+        .collect();
+    assert_ne!(deciders.len(), 0);
+    for (id, decide) in deciders {
+        assert!(
+            decide.contains("VELNOR_SOURCES_RESTORED: '${{ steps.sources_")
+                && decide.contains(".outputs.cache-hit }}'"),
+            "{id}\n{decide}"
+        );
+    }
+    Ok(())
+}

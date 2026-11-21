@@ -27,8 +27,11 @@ mod cache_prune_fresh;
 mod cache_prune_layout;
 mod cache_purge;
 mod cache_retention_flow;
+mod cache_shadowed_config;
+mod cache_sources_restored;
 mod io_cold_foreign;
 mod io_gate;
+mod io_report_privacy;
 mod run_escape;
 mod runtime_gitlink;
 

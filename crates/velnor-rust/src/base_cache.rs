@@ -43,6 +43,7 @@ pub(crate) fn inputs_cli(facts: &RepoFacts) -> InputsCli {
 // helper-gate: first in tools-v0.1.111 via 193adc8c56
 const PRIVATE_BASE_HELPER: (u64, u64, u64) = (0, 1, 111);
 const PRIVATE_PREFIX_HELPER: (u64, u64, u64) = (0, 1, 112);
+const SOURCES_RESTORED_ENV_HELPER: (u64, u64, u64) = (0, 1, 112);
 const SOURCES_FETCH_HELPER: (u64, u64, u64) = (0, 1, 88);
 // helper-gate: first in tools-v0.1.88 via 1a97547af5
 const MEMBER_LOCK_HELPER: (u64, u64, u64) = (0, 1, 88);
@@ -64,11 +65,15 @@ pub(crate) fn writes_base(facts: &RepoFacts) -> bool {
     has_saving_helper(facts) && (facts.private_sources.is_none() || private_base(facts))
 }
 
-fn has_private_base_helper(facts: &RepoFacts) -> bool {
+fn has_helper_at_least(facts: &RepoFacts, gate: (u64, u64, u64)) -> bool {
     facts
         .helper
         .as_ref()
-        .is_some_and(|helper| helper.version().at_least(PRIVATE_BASE_HELPER))
+        .is_some_and(|helper| helper.version().at_least(gate))
+}
+
+fn has_private_base_helper(facts: &RepoFacts) -> bool {
+    has_helper_at_least(facts, PRIVATE_BASE_HELPER)
 }
 
 pub(crate) fn private_base(facts: &RepoFacts) -> bool {
@@ -282,6 +287,8 @@ pub(crate) fn save_steps(
                     .as_ref()
                     .map(|_| lane.plan.clone().map_or(PlanFrom::ThisJob, PlanFrom::Job)),
                 private: private_verdict(facts),
+                sources_restore: has_helper_at_least(facts, SOURCES_RESTORED_ENV_HELPER)
+                    .then(|| cache_root.slug().clone()),
             })
         },
         Step {

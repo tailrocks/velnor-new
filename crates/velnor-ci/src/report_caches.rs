@@ -18,6 +18,31 @@ pub(crate) struct CachePlan {
     not_generated: Option<String>,
 }
 
+fn no_crate_selected(steps: &Value) -> bool {
+    let mode = [&steps["replan"], &steps["plan"]]
+        .into_iter()
+        .find_map(|step| {
+            step["outputs"]["rust_root_mode"]
+                .as_str()
+                .filter(|mode| !mode.is_empty())
+        });
+    steps["plan"]["outcome"] == "success" && mode == Some("none")
+}
+
+pub(crate) fn privacy_unavailable(steps: &Value) -> bool {
+    let step = &steps["private_repo"];
+    if step.is_null() {
+        return false;
+    }
+    if step["outcome"] == "skipped" {
+        return !no_crate_selected(steps);
+    }
+    let outputs = &step["outputs"];
+    step["outcome"] != "success"
+        || outputs["unavailable"] == "true"
+        || !matches!(outputs["private"].as_str(), Some("true" | "false"))
+}
+
 pub(crate) fn observe_caches(
     plans: Vec<CachePlan>,
     steps: &Value,
@@ -118,7 +143,7 @@ fn restore(step: &Value) -> Result<(String, Option<String>, Option<Hit>), &'stat
 
 #[cfg(test)]
 mod tests {
-    use super::{CachePlan, observe_caches};
+    use super::{CachePlan, observe_caches, privacy_unavailable};
     use crate::report::{LaneMetrics, SaveOutcome, check};
     use serde_json::json;
 
@@ -159,5 +184,103 @@ mod tests {
             "{}",
             verdict.err().map_or_else(String::new, |e| e.to_string())
         );
+    }
+
+    fn skipped_lane(privacy: serde_json::Value) -> LaneMetrics {
+        let mut lane = json!({
+            "schema": 1,
+            "lane": "rust",
+            "caches": [],
+            "invocations": [],
+            "downloaded": 0,
+            "first_cargo_seconds": null,
+            "slowest_tests": [],
+            "tests_run": null,
+            "diagnostics": [],
+            "violations": [],
+        });
+        lane["privacy_unavailable"] = privacy;
+        serde_json::from_value(lane).unwrap_or_else(|error| unreachable!("{error}"))
+    }
+
+    #[test]
+    fn only_an_unavailable_privacy_lookup_is_carried_into_the_metrics() {
+        let step = |outputs| json!({"private_repo": {"outcome": "success", "outputs": outputs}});
+        assert!(privacy_unavailable(&step(
+            json!({"private": "false", "unavailable": "true"})
+        )));
+        assert!(!privacy_unavailable(&step(json!({"private": "false"}))));
+        assert!(!privacy_unavailable(&step(json!({"private": "true"}))));
+        assert!(!privacy_unavailable(&json!({})));
+    }
+
+    #[test]
+    fn a_private_repo_step_that_did_not_confirm_the_visibility_is_unavailable() {
+        for (label, step) in [
+            ("failed, no outputs", json!({"outcome": "failure"})),
+            (
+                "failed, empty outputs",
+                json!({"outcome": "failure", "outputs": {}}),
+            ),
+            ("cancelled", json!({"outcome": "cancelled"})),
+            (
+                "succeeded without a verdict",
+                json!({"outcome": "success", "outputs": {}}),
+            ),
+            (
+                "succeeded with an unreadable verdict",
+                json!({"outcome": "success", "outputs": {"private": ""}}),
+            ),
+            (
+                "succeeded without an outcome",
+                json!({"outputs": {"private": "false"}}),
+            ),
+        ] {
+            assert!(
+                privacy_unavailable(&json!({"private_repo": step})),
+                "{label}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_privacy_step_skipped_by_the_lane_selection_is_not_unavailable() {
+        let unselected = json!({
+            "plan": {"outcome": "success", "outputs": {"rust_root_mode": "none"}},
+            "private_repo": {"outcome": "skipped", "outputs": {}},
+        });
+        assert!(!privacy_unavailable(&unselected));
+        let replanned_none = json!({
+            "plan": {"outcome": "success", "outputs": {"rust_root_mode": "all"}},
+            "replan": {"outcome": "success", "outputs": {"rust_root_mode": "none"}},
+            "private_repo": {"outcome": "skipped", "outputs": {}},
+        });
+        assert!(!privacy_unavailable(&replanned_none));
+    }
+
+    #[test]
+    fn a_privacy_step_skipped_after_a_failed_plan_is_unavailable() {
+        for plan in [
+            json!({"outcome": "failure", "outputs": {}}),
+            json!({"outcome": "skipped", "outputs": {}}),
+            json!({"outcome": "success", "outputs": {"rust_root_mode": "all"}}),
+        ] {
+            let steps = json!({
+                "plan": plan,
+                "private_repo": {"outcome": "skipped", "outputs": {}},
+            });
+            assert!(privacy_unavailable(&steps), "{plan}");
+        }
+    }
+
+    #[test]
+    fn an_unavailable_privacy_verdict_fails_the_cache_check() {
+        let verdict = check(&[skipped_lane(json!(true))]);
+        let message = verdict.err().map_or_default(|e| e.to_string());
+        assert!(
+            message.contains("privacy lookup was unavailable"),
+            "{message}"
+        );
+        assert!(check(&[skipped_lane(json!(false))]).is_ok());
     }
 }
