@@ -106,15 +106,16 @@ exec "$REAL_MV" "$@"
 """
 
 STUB_PLANT_QUARANTINE_MV = """#!/bin/sh
-for arg; do last="$arg"; done
-case "$last" in
+for arg; do src="$dst"; dst="$arg"; done
+"$REAL_MV" "$@" || exit $?
+case "$dst" in
   */.velnor-ci.evict.*)
     if [ ! -e "$STUB_RACE_MARK" ]; then
       : > "$STUB_RACE_MARK"
-      cp "$STUB_RACE" "$last"
+      cp -p "$STUB_RACE" "$dst"
+      cp -p "$STUB_RACE" "$src"
     fi ;;
 esac
-exec "$REAL_MV" "$@"
 """
 
 STUB_TAR = """#!/bin/sh
@@ -827,6 +828,33 @@ class SetupVelnorInstallTests(unittest.TestCase):
         self.assertEqual(len(kept), 1, "the verified quarantine written by this eviction was not kept")
         self.assertFalse(link.is_symlink(), "the stale symlink in the quarantine was not removed")
         self.assertEqual(outside.read_bytes(), b"outside the quarantine\n", "a quarantine symlink was followed")
+
+    def test_the_archive_kept_by_an_eviction_is_not_pruned_as_its_own_oldest_quarantine(self):
+        cached = self.cached_archive()
+        cached.parent.mkdir(parents=True)
+        cached.write_bytes(b"tampered archive\n")
+        now = time.time()
+        os.utime(self.payload, (now - 10000, now - 10000))
+        for index, age in enumerate((100, 200, 300)):
+            entry = cached.parent / f".velnor-ci.evict.{100 + index}.{index}"
+            entry.write_bytes(b"recent quarantine\n")
+            os.utime(entry, (now - age, now - age))
+        stub = self.stub_bin / "mv"
+        stub.write_text(STUB_PLANT_QUARANTINE_MV)
+        stub.chmod(0o755)
+        result = self.install(
+            sha256(self.archive),
+            extra_env={
+                "STUB_RACE": str(self.payload),
+                "STUB_RACE_MARK": str(self.root / "race-mark"),
+                "REAL_MV": shutil.which("mv"),
+                "STUB_MISSING": "tools-v0.1.79 rust-ci-v0.1.79",
+            },
+        )
+        self.assertEqual(result.returncode, 1, result.output)
+        self.assertIn("is kept at", result.output)
+        kept = [path for path in cached.parent.glob(".velnor-ci.evict.*") if path.read_bytes() == self.archive]
+        self.assertEqual(len(kept), 1, "the verified archive this eviction kept was pruned as the oldest quarantine")
 
     def test_a_directory_at_the_store_entry_path_is_removed_when_the_download_fails(self):
         cached = self.cached_archive()
