@@ -270,3 +270,41 @@ fn a_trusted_pool_behind_an_ubuntu_label_gets_no_glibc_digest() -> TestResult {
     }
     Ok(())
 }
+
+fn mixed_case_runner_inputs(helper: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    let mut repo = view(
+        &["Cargo.toml", "tools/Cargo.toml"],
+        Some(b"runner = 'Ubuntu-Latest'\nhosted = true\n"),
+    )?;
+    pin_helper(&mut repo, helper)?;
+    mise_steps(&workflow(&repo)?)?
+        .into_iter()
+        .map(|(_, with)| {
+            with["sha256"]
+                .as_str()
+                .map(str::to_owned)
+                .ok_or_else(|| "no sha256 input".into())
+        })
+        .collect()
+}
+
+#[test]
+fn a_mixed_case_ubuntu_label_gets_the_linux_digest_from_the_case_insensitive_helper() -> TestResult {
+    let inputs = mixed_case_runner_inputs("0.1.112")?;
+    assert!(!inputs.is_empty(), "no mise-action step rendered");
+    for input in inputs {
+        assert_eq!(input, DIGESTS[1].1);
+    }
+    Ok(())
+}
+
+#[test]
+fn a_mixed_case_ubuntu_label_below_the_case_insensitive_helper_selects_the_digest_by_runner()
+-> TestResult {
+    let inputs = mixed_case_runner_inputs("0.1.111")?;
+    assert!(!inputs.is_empty(), "no mise-action step rendered");
+    for input in inputs {
+        assert_selection("Ubuntu-Latest", &input)?;
+    }
+    Ok(())
+}

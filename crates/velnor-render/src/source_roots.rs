@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 use std::collections::btree_map::Entry;
 
-use velnor_model::{RepoPath, StepKind, WorkflowPlan, sha256_hex};
+use velnor_model::{Job, RepoPath, StepKind, WorkflowPlan, sha256_hex};
 
 use crate::base_steps::fetch_chunks;
 use crate::rules::{Rule, RuleViolation};
@@ -38,6 +38,12 @@ pub(crate) fn roots_env(manifests: &[RepoPath]) -> Option<(String, String)> {
         .then(|| (name_of(&value), value))
 }
 
+const LITERAL_ROOTS_HELPER: (u64, u64, u64) = (0, 1, 112);
+
+pub(crate) fn literal_roots(job: &Job) -> bool {
+    crate::job_helper::at_least(job, LITERAL_ROOTS_HELPER)
+}
+
 fn collect(
     entries: impl IntoIterator<Item = (String, String)>,
 ) -> Result<BTreeMap<String, String>, Rule> {
@@ -60,6 +66,7 @@ pub(crate) fn workflow_roots(
     collect(
         plan.jobs
             .iter()
+            .filter(|job| !literal_roots(job))
             .flat_map(|job| &job.steps)
             .filter_map(|step| match &step.kind {
                 StepKind::SourcesFetchAll { manifests, .. } => roots_env(manifests),

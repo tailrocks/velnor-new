@@ -23,6 +23,7 @@ pub(crate) struct CargoLane {
     pub(crate) artifacts: ArtifactFormat,
     pub(crate) cache_debug: bool,
     pub(crate) offline: bool,
+    pub(crate) literal_roots: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -73,6 +74,7 @@ pub(crate) fn cargo_lane(job: &Job) -> CargoLane {
             .steps
             .iter()
             .any(|step| matches!(step.kind, StepKind::PrivateFetch { .. })),
+        literal_roots: crate::source_roots::literal_roots(job),
     }
 }
 

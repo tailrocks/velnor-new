@@ -4,7 +4,7 @@
 use std::error::Error;
 use std::fmt;
 
-use velnor_model::MisePlatform;
+use velnor_model::{HelperRelease, MisePlatform};
 
 use crate::rules::{RenderedJob, Value};
 use crate::steps::MISE_VERSION;
@@ -114,8 +114,15 @@ fn selecting(binary: &MiseBinary) -> Value {
     ))
 }
 
-pub(crate) fn pin_to_runner_platform(mut job: RenderedJob) -> RenderedJob {
-    let Some(digest) = runner_digest(&job) else {
+const CASE_INSENSITIVE_LABEL_HELPER: (u64, u64, u64) = (0, 1, 112);
+
+pub(crate) fn pin_to_runner_platform(
+    mut job: RenderedJob,
+    helper: Option<&HelperRelease>,
+) -> RenderedJob {
+    let case_insensitive =
+        helper.is_some_and(|release| release.version().at_least(CASE_INSENSITIVE_LABEL_HELPER));
+    let Some(digest) = runner_digest(&job, case_insensitive) else {
         return job;
     };
     for step in job.steps.iter_mut().filter(|step| {
@@ -132,11 +139,11 @@ pub(crate) fn pin_to_runner_platform(mut job: RenderedJob) -> RenderedJob {
     job
 }
 
-fn runner_digest(job: &RenderedJob) -> Option<&'static str> {
+fn runner_digest(job: &RenderedJob, case_insensitive: bool) -> Option<&'static str> {
     if job.runs_on_axis.is_some() || job.fork_runner.is_some() {
         return None;
     }
-    let platform = plain_label_platform(&job.runs_on)?;
+    let platform = plain_label_platform(&job.runs_on, case_insensitive)?;
     let binary = MISE_BINARIES
         .iter()
         .find(|binary| binary.version == MISE_VERSION)?;
@@ -147,11 +154,16 @@ fn runner_digest(job: &RenderedJob) -> Option<&'static str> {
         .map(|(_, digest)| *digest)
 }
 
-fn plain_label_platform(label: &str) -> Option<String> {
+fn plain_label_platform(label: &str, case_insensitive: bool) -> Option<String> {
     label
         .bytes()
         .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'.' | b'_'))
         .then_some(())?;
     let platform = MisePlatform::runner(label)?;
-    (!platform.matches("linux") || label.starts_with("ubuntu-")).then(|| platform.lock_key())
+    let ubuntu = if case_insensitive {
+        label.to_ascii_lowercase().starts_with("ubuntu-")
+    } else {
+        label.starts_with("ubuntu-")
+    };
+    (!platform.matches("linux") || ubuntu).then(|| platform.lock_key())
 }
