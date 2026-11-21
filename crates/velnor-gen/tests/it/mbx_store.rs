@@ -132,3 +132,40 @@ fn an_older_helper_keeps_phase_one_without_a_seed_step() -> TestResult {
     assert!(!workflow(&repo("", "0.1.86")?)?.contains("mbx-seed"));
     Ok(())
 }
+
+fn one_root_store_step(helper: &str) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
+    let mut repo = view(&["Cargo.toml"], None)?;
+    repo.files
+        .insert(path(".velnor/rust-ci.toml")?, b"mbx_shared_store = true\n".to_vec());
+    crate::pipeline::pin_helper(&mut repo, helper)?;
+    let yaml: serde_json::Value = crate::yaml_tree::document(&workflow(&repo)?)?;
+    let steps = yaml["jobs"]["rust"]["steps"]
+        .as_array()
+        .ok_or("the one-job workflow has no rust steps")?;
+    steps
+        .iter()
+        .find(|step| step["run"].as_str().is_some_and(|run| run.ends_with("mbx-store")))
+        .cloned()
+        .ok_or_else(|| "the one-job workflow has no mbx-store".into())
+}
+
+#[test]
+fn a_self_planning_job_gates_the_shared_store_on_the_selection_from_0_1_112() -> TestResult {
+    let store = one_root_store_step("0.1.112")?;
+    let condition = store["if"].as_str().ok_or("mbx-store has no if")?;
+    assert!(
+        condition.contains("steps.plan.outputs.rust_root_mode != 'none'"),
+        "{condition}"
+    );
+    assert!(
+        condition.contains("steps.plan.outcome == 'success'"),
+        "{condition}"
+    );
+    Ok(())
+}
+
+#[test]
+fn an_older_helper_keeps_the_self_planning_store_ungated() -> TestResult {
+    assert!(one_root_store_step("0.1.111")?.get("if").is_none());
+    Ok(())
+}
