@@ -6,6 +6,7 @@ mod declarations;
 mod failure;
 mod generated;
 mod invocation;
+mod outputs;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -17,7 +18,7 @@ use velnor_gen::io::read_checkout;
 use velnor_model::RepoFacts;
 use velnor_rust::{detect, sha256_hex};
 
-use super::super::units::{UnitFile, Workspace, apart, build_unit_files, unchecked_unit_files};
+use super::super::units::{Workspace, apart, build_unit_files, unchecked_unit_files};
 use super::groups::{group_dirs, inheriting, scan_dirs, shared_groups, standalone, workspaces};
 use super::inventory::{self, Evidence};
 use super::options::max_entries_from_env;
@@ -25,6 +26,7 @@ use super::timing;
 use crate::cli::InputsBuildArgs;
 use crate::error::CiError;
 use invocation::Invocation;
+use outputs::{identity, output};
 
 const TARGET_VARIABLE: &str = "CARGO_TARGET_DIR";
 
@@ -384,19 +386,4 @@ fn outside_selection(packages: &BTreeSet<&str>, earlier: Option<String>) -> CiEr
         "untrusted build outputs include packages outside this command's explicit selection: {}. {cause}",
         names.join(", ")
     ))
-}
-
-fn output(unit: &UnitFile) -> bool {
-    matches!(
-        unit,
-        UnitFile::BuildOutput { .. } | UnitFile::DepInfo { .. } | UnitFile::Script { .. }
-    )
-}
-
-fn identity(path: &Path) -> Result<(String, SystemTime), CiError> {
-    let bytes = fs::read(path).map_err(|e| CiError::new(e.to_string()))?;
-    let modified = fs::metadata(path)
-        .and_then(|metadata| metadata.modified())
-        .map_err(|e| CiError::new(e.to_string()))?;
-    Ok((sha256_hex(&bytes), modified))
 }
