@@ -88,7 +88,6 @@ fn finish(result: Result<String, Error>) -> Exit {
     }
 }
 
-#[must_use]
 pub fn main() -> Exit {
     let cli = match parse_cli(std::env::args_os()) {
         Ok(cli) => cli,

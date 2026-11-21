@@ -62,7 +62,7 @@ fn a_150_byte_state_path_names_the_path_length_and_limit() {
         error,
         Some(HostError::SocketPathTooLong { length: 150, limit, .. }) if limit == SOCKET_PATH_LIMIT
     ));
-    let message = error.map(|error| error.to_string()).unwrap_or_default();
+    let message = error.map_or_default(|error| error.to_string());
     assert!(message.contains(&path.display().to_string()));
     assert!(message.contains("150 bytes"));
     assert!(message.contains(&format!("{SOCKET_PATH_LIMIT}-byte limit")));

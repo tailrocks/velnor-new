@@ -22,8 +22,7 @@ fn step<'a>(job: &'a Value, name: &str) -> Option<&'a Value> {
 fn names(job: &Value) -> Vec<&str> {
     job["steps"]
         .as_array()
-        .map(|steps| steps.iter().filter_map(|s| s["name"].as_str()).collect())
-        .unwrap_or_default()
+        .map_or_default(|steps| steps.iter().filter_map(|s| s["name"].as_str()).collect())
 }
 
 fn calls_it(jobs: &Value) -> bool {

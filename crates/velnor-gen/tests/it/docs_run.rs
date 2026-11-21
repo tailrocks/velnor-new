@@ -218,3 +218,35 @@ fn documentation_the_post_merge_mode_defers_is_reported_as_left_out_before_the_m
         run
     );
 }
+
+#[test]
+fn a_build_phase_setup_still_runs_before_a_pre_merge_check_that_shares_its_job_with_post_merge_docs()
+-> TestResult {
+    let mut repo = view(&["Cargo.toml", "tools/Cargo.toml"], None)?;
+    pin_helper(&mut repo, "0.1.109")?;
+    let config = "docs = \"post_merge\"\nshape = \"lint-test\"\n[[test_setup]]\nroot = '.'\nname = 'Prepare the fixture'\nrun = 'true'\nphase = 'build'\n";
+    repo.files
+        .insert(path(".velnor/rust-ci.toml")?, config.as_bytes().to_vec());
+    let yaml: serde_json::Value = crate::yaml_tree::document(&workflow(&repo)?)?;
+    let mut checked = 0;
+    for job in yaml["jobs"].as_object().ok_or("jobs missing")?.values() {
+        let steps = job["steps"].as_array().map_or(&[][..], Vec::as_slice);
+        let named = |name: &str| steps.iter().any(|step| step["name"] == name);
+        if !named("Lint") || !named("Documentation") {
+            continue;
+        }
+        for setup in steps
+            .iter()
+            .filter(|step| step["name"] == "Prepare the fixture")
+        {
+            checked += 1;
+            let condition = setup["if"].as_str().unwrap_or_default();
+            assert!(
+                !condition.contains("github.event_name == 'push'"),
+                "{condition}"
+            );
+        }
+    }
+    assert_ne!(checked, 0);
+    Ok(())
+}

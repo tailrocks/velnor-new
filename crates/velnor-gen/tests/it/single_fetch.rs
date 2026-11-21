@@ -3,9 +3,9 @@
 
 use velnor_gen::{GenerateError, expected_with_notes};
 use velnor_model::{
-    CacheKey, CacheRoot, Concurrency, Host, Job, JobId, Permissions, PrRun, PullRequestType,
-    RepoPath, RepoView, RootSlug, RunnerLabel, Step, StepKind, Triggers, WORKFLOW_PATH, When,
-    WorkflowPlan,
+    BuildRecord, CacheKey, CacheRoot, Concurrency, Host, Job, JobId, Permissions, PrRun,
+    PullRequestType, RepoPath, RepoView, RootSlug, RunnerLabel, Step, StepKind, Triggers,
+    WORKFLOW_PATH, When, WorkflowPlan,
 };
 use velnor_render::render;
 
@@ -203,6 +203,7 @@ fn step_of(kind: StepKind) -> Step {
         reads: None,
         skip_after_merge_group: None,
         skip_when_cold: false,
+        private_repo: false,
         hosted_only: false,
     }
 }
@@ -235,8 +236,9 @@ fn render_fetch(manifests: Vec<RepoPath>) -> Result<String, Box<dyn std::error::
             permissions: Permissions::default(),
             timeout_minutes: 10,
             reports_ignored: false,
-            records_build: false,
+            build_record: BuildRecord::Unrecorded,
             chained_saves: false,
+            mbx_stats: velnor_model::MbxStats::Summary,
             selection_name: None,
             gate: None,
             skip_after_merge_group: None,

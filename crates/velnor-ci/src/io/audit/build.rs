@@ -17,7 +17,7 @@ use velnor_gen::io::read_checkout;
 use velnor_model::RepoFacts;
 use velnor_rust::{detect, sha256_hex};
 
-use super::super::units::{UnitFile, Workspace, apart, unit_files};
+use super::super::units::{UnitFile, Workspace, apart, unchecked_unit_files};
 use super::groups::{group_dirs, inheriting, scan_dirs, shared_groups, standalone, workspaces};
 use super::inventory::{self, Evidence};
 use super::options::max_entries_from_env;
@@ -75,19 +75,65 @@ pub(crate) fn build(directory: &Path, args: &InputsBuildArgs) -> Result<String, 
         declared: BTreeSet::new(),
         location,
     };
-    if let Some(preflight) = &invocation.preflight {
-        builder.stabilize(preflight, true, true)?;
+    let marker = builder.marker_directories();
+    match builder.audit(&invocation) {
+        Ok(()) => {
+            if let Err(error) = failure::clear_failure(&marker) {
+                eprintln!("velnor-ci: {error}");
+            }
+            timing::report();
+            Ok(String::new())
+        }
+        Err(Stop::Refused(error)) => Err(error),
+        Err(Stop::Failed(error)) => {
+            let failed =
+                failure::Failure::new(invocation.label(), invocation.selection(&builder.members()));
+            match failure::record_failure(&marker, &failed) {
+                Ok(()) => Err(error),
+                Err(record) => Err(CiError::new(format!("{error}; {record}"))),
+            }
+        }
     }
-    builder.stabilize(
-        &invocation.command,
-        invocation.compiler,
-        invocation.cargo && invocation.preflight.is_none(),
-    )?;
-    timing::report();
-    Ok(String::new())
+}
+
+enum Stop {
+    Refused(CiError),
+    Failed(CiError),
+}
+
+impl From<CiError> for Stop {
+    fn from(error: CiError) -> Self {
+        Self::Failed(error)
+    }
 }
 
 impl Builder<'_> {
+    fn audit(&mut self, invocation: &Invocation) -> Result<(), Stop> {
+        if let Some(preflight) = &invocation.preflight {
+            self.stabilize(preflight, true, true)?;
+        }
+        self.stabilize(
+            &invocation.command,
+            invocation.compiler,
+            invocation.cargo && invocation.preflight.is_none(),
+        )
+    }
+
+    fn members(&self) -> BTreeSet<&str> {
+        self.facts
+            .rust_roots
+            .iter()
+            .flat_map(|root| root.members.iter().map(|member| member.name.as_str()))
+            .collect()
+    }
+
+    fn marker_directories(&self) -> Vec<PathBuf> {
+        self.target_directory().map_or_else(
+            || self.directories.clone(),
+            |target| vec![target.to_path_buf()],
+        )
+    }
+
     fn declared(&self) -> Result<Vec<declarations::Declared>, CiError> {
         declarations::declarations(
             &self.repository,
@@ -103,7 +149,7 @@ impl Builder<'_> {
         command: &[String],
         replayable: bool,
         invalidate: bool,
-    ) -> Result<(), CiError> {
+    ) -> Result<(), Stop> {
         self.targets.extend(timing::phase("proven", || {
             generated::proven(&self.workspaces)
         })?);
@@ -123,17 +169,19 @@ impl Builder<'_> {
             self.declared
                 .extend(declared.iter().flat_map(|unit| unit.paths.iter().cloned()));
             if invalidate {
-                let invocation = Invocation::new(command);
+                let selection = Invocation::new(command)
+                    .selection(&self.members())
+                    .unwrap_or_default();
                 let outside: BTreeSet<&str> = declared
                     .iter()
-                    .filter(|unit| !unit.trusted && !invocation.selects(&unit.package))
+                    .filter(|unit| !unit.trusted && !selection.selects(&unit.package))
                     .map(|unit| unit.package.as_str())
                     .collect();
                 if !outside.is_empty() {
-                    return Err(outside_selection(
+                    return Err(Stop::Refused(outside_selection(
                         &outside,
-                        failure::earlier_failure(&self.directories),
-                    ));
+                        failure::earlier_failure(&self.marker_directories(), &outside),
+                    )));
                 }
                 declarations::invalidate(&declared)?;
             }
@@ -147,9 +195,9 @@ impl Builder<'_> {
                 return Ok(());
             }
         }
-        Err(CiError::new(
+        Err(Stop::Failed(CiError::new(
             "build directory declarations did not stabilize after two compiler passes; a compiler pass must leave declared directory membership unchanged before inputs can be audited",
-        ))
+        )))
     }
 
     fn capture(&self) -> Result<(Evidence, bool), CiError> {
@@ -185,7 +233,7 @@ impl Builder<'_> {
     fn identities(&self) -> Result<Identities, CiError> {
         let mut before = BTreeMap::new();
         for directory in &self.directories {
-            for (unit, path) in unit_files(directory)? {
+            for (unit, path) in unchecked_unit_files(directory)? {
                 if output(&unit) {
                     before.insert(path.clone(), identity(&path)?);
                 }
@@ -198,7 +246,7 @@ impl Builder<'_> {
         self.workspaces
             .iter()
             .filter_map(|workspace| {
-                let root = fs::canonicalize(&workspace.workspace_root).ok()?;
+                let root = fs::canonicalize(&workspace.root).ok()?;
                 self.location
                     .starts_with(&root)
                     .then_some((root.components().count(), workspace))
@@ -224,6 +272,7 @@ impl Builder<'_> {
             })?;
         let mut build = Command::new(&command[0]);
         build.args(&command[1..]).current_dir(self.directory);
+        super::super::mbx_reports::assign(&mut build, command);
         if Invocation::new(command).cargo
             && std::env::var_os(TARGET_VARIABLE).is_none()
             && let Some(target) = self.target_directory()
@@ -242,10 +291,9 @@ impl Builder<'_> {
             Invocation::new(command).compiler,
         )?;
         if !status.success() {
-            failure::record_failure(&self.directories, &Invocation::new(command).label())?;
             return Err(CiError::new(format!("build command failed: {status}")));
         }
-        failure::clear_failure(&self.directories)
+        Ok(())
     }
 
     fn record(
@@ -273,7 +321,7 @@ impl Builder<'_> {
                     .and_then(|()| fs::write(&saved, &bytes))
                     .map_err(|e| CiError::new(format!("cannot save input inventory: {e}")))?;
             }
-            for (unit, file) in unit_files(directory)? {
+            for (unit, file) in unchecked_unit_files(directory)? {
                 if !output(&unit) {
                     continue;
                 }
@@ -304,7 +352,6 @@ impl Builder<'_> {
     }
 }
 
-/// Packages named in the refusal before the list is cut off.
 const LISTED_PACKAGES: usize = 20;
 
 fn outside_selection(packages: &BTreeSet<&str>, earlier: Option<String>) -> CiError {
