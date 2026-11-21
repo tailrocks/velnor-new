@@ -59,6 +59,7 @@ fn fetch(repo: &Repo, config: &Path, index: usize) -> TestResult {
     let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
         .args(["fetch", "--trusted-dir"])
         .arg(root.join("trusted"))
+        .arg("--no-fixed-toolchain")
         .arg("--manifest-path")
         .arg(root.join(&project).join("Cargo.toml"))
         .env_clear()
