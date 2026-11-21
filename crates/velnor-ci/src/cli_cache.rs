@@ -11,9 +11,17 @@ pub enum CacheCommand {
     )]
     TrimDeltas(crate::delta_cli::TrimDeltasArgs),
     #[command(
-        about = "Read velnor-run.log in $RUNNER_TEMP and write the step output save=true when the run compiled, checked or documented at least one crate, save=false otherwise or when any checkout Cargo.lock has dependency sources not proven public; a missing or unreadable run log is an error; with true, remove <target>/<profile>/incremental and <target>/<triple>/<profile>/incremental, remove the --archive file, write target/.velnor/born with today's date when it is missing, and print the size of --target-dir"
+        about = "Read velnor-run.log in $RUNNER_TEMP and write the step output save=true when the run compiled, checked or documented at least one crate, save=false otherwise or when any checkout Cargo.lock has dependency sources not proven public (a lock whose only non-public sources are git dependencies with no credentials in their URL counts as public only when the environment variable VELNOR_REPOSITORY_PRIVATE is exactly true, the answer of the `cache private-repo` step that the workflow copies into the env of this step; this command makes no API request for it and reads no token, and an empty or unset value refuses such a lock, and then the sources output is false when the saved cargo directories hold a credential); a missing or unreadable run log is an error; with true, remove <target>/<profile>/incremental and <target>/<triple>/<profile>/incremental, remove the --archive file, write target/.velnor/born with today's date when it is missing, and print the size of --target-dir"
     )]
     Decide(DecideArgs),
+    #[command(
+        about = "Write private=true to $GITHUB_OUTPUT only when GET /repos/$GITHUB_REPOSITORY on the API in VELNOR_API_URL, with the job token in GITHUB_TOKEN, answers for this repository with private=true and a visibility of private (an internal repository is not private); writes private=false and exits 0 for a public or internal repository, a failed lookup, a missing token or any other answer, so that no cache of private dependencies is restored or saved"
+    )]
+    PrivateRepo,
+    #[command(
+        about = "Look up each commit-pinned github.com git dependency of the checkout Cargo.lock files once, with the job GITHUB_TOKEN (sent only to https://api.github.com, never redirected), and write the step output verdicts={\"owner/name\":true} for the lanes of this run; a failed lookup is recorded as false and never fails the step"
+    )]
+    PublicSources(PublicSourcesArgs),
     #[command(
         about = "Delete all but the newest entries whose key starts with --prefix on $GITHUB_REF, through the GitHub API; reads GITHUB_TOKEN, which needs actions: write, and GITHUB_REPOSITORY. A missing token or a failed API call exits with an error"
     )]
@@ -38,6 +46,10 @@ pub struct BudgetArgs {
 
 #[derive(Debug, Args)]
 pub struct DecideArgs {
+    #[arg(long, hide = true, default_value = "https://api.github.com")]
+    pub public_probe_api: String,
+    #[arg(long, hide = true, default_value_t = crate::public_probe::DEFAULT_TOTAL_SECONDS)]
+    pub public_probe_seconds: u64,
     #[arg(
         long,
         default_value = "Cargo.toml",
@@ -62,6 +74,20 @@ pub struct DecideArgs {
         help = "Environment variable containing JSON [hex target, optional hex archive] paths"
     )]
     pub paths_env: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct PublicSourcesArgs {
+    #[arg(long, hide = true, default_value = "https://api.github.com")]
+    pub public_probe_api: String,
+    #[arg(long, hide = true, default_value_t = crate::public_probe::DEFAULT_TOTAL_SECONDS)]
+    pub public_probe_seconds: u64,
+    #[arg(
+        long,
+        default_value = "Cargo.toml",
+        help = "Detected Cargo root manifests of the checkout"
+    )]
+    pub manifest_path: Vec<PathBuf>,
 }
 
 #[derive(Debug, Args)]

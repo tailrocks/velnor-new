@@ -17,7 +17,9 @@ mod mbx;
 mod mbx_config;
 mod mise;
 mod plan;
+mod plan_gate;
 mod policy_table;
+mod public_sources;
 mod release_asset;
 mod repo;
 mod repo_config;
@@ -43,9 +45,10 @@ pub use cache_layout::{
     json_char_bytes, json_string_bytes,
 };
 pub use cache_outputs::{
-    BASE_PREFIX_OUTPUT, BASE_SAVE_OUTPUT, CacheLaneOutput, SOURCES_PREFIX_OUTPUT,
-    SOURCES_SAVED_OUTPUT, cache_lane_outputs,
+    BASE_PREFIX_OUTPUT, BASE_SAVE_OUTPUT, CacheLaneOutput, PUBLIC_SOURCES_STEP,
+    PUBLIC_VERDICTS_OUTPUT, SOURCES_PREFIX_OUTPUT, SOURCES_SAVED_OUTPUT, cache_lane_outputs,
 };
+pub use cargo_build::BuildRecord;
 pub use check_configurations::CheckConfigurations;
 pub use cron::CronExpr;
 pub use helper::{HelperRelease, Platform};
@@ -62,20 +65,21 @@ pub use mbx_config::{
 pub use mise::MisePlatform;
 pub use plan::{
     Access, BUILD_TESTS_STEP, BUILT_OUTPUT, CI_AUTO_LABEL, CI_RUN_LABEL, CargoCommand, Concurrency,
-    FilterRef, Gate, GateNeed, Job, LINT_STEP, MERGE_GROUP_SKIP_OUTPUT, MERGE_GROUP_STEP,
-    PermissionScope, Permissions, PlanFrom, PlanRef, PrRun, PullRequestType, Step, TEST_STEP,
-    TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, Triggers,
-    When, WorkflowPlan, group_output_name,
+    FilterRef, Job, LINT_STEP, MERGE_GROUP_SKIP_OUTPUT, MERGE_GROUP_STEP, PermissionScope,
+    Permissions, PlanRef, PrRun, PullRequestType, Step, TEST_STEP, TESTS_BY_PACKAGE_OUTPUT,
+    TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, Triggers, When, WorkflowPlan,
 };
+pub use plan_gate::{Gate, GateNeed, PlanFrom, group_output_name};
 pub use release_asset::{ReleaseAsset, ReleaseAssetError, ReleaseAssetPart};
 pub use repo::{
     CacheDebug, CheckoutScope, CiDebugInfo, CompileInputs, CratesMirror, CustomHarness, DenyCheck,
-    DenyChecks, DenyLane, DependencyKind, DocsRun, FullRun, InputOwner, InputRule, LaneFeatures,
-    LaneJob, LaneKeysWritten, MbxRemote, MbxStore, MemberDependency, OnMain, PackageDependency,
-    PolicyTable, PolicyTools, PrCi, PrivateSources, PushAfterMergeGroup, RepoFacts, RepoView,
-    RepositoryIdentity, RustCiConfig, RustMember, RustMetadata, RustPackage, RustRoot, SetupPhase,
-    SpeedBudget, Target, TargetKind, TestLane, TestSetup, Timings, ToolLock, ToolPin, ToolPins,
-    ToolRequest, Toolchain, UnownedPackage, Unread, Weakening, WorkspaceGroup,
+    DenyChecks, DenyLane, DependencyKind, DocsRun, FullRun, GitRepository, InputOwner, InputRule,
+    LaneFeatures, LaneJob, LaneKeysWritten, MbxRemote, MbxStore, MemberDependency, OnMain,
+    PackageDependency, PolicyTable, PolicyTools, PrCi, PrivateSources, PublicSources,
+    PushAfterMergeGroup, RepoFacts, RepoView, RepositoryIdentity, RustCiConfig, RustMember,
+    RustMetadata, RustPackage, RustRoot, SetupPhase, SpeedBudget, Target, TargetKind, TestLane,
+    TestSetup, Timings, ToolLock, ToolPin, ToolPins, ToolRequest, Toolchain, UnownedPackage,
+    Unread, Weakening, WorkspaceGroup,
 };
 pub use sealed::{Owner, VELNOR_GEN_MARKER, lf_normalized, owner_of, seal};
 pub use selection::{
@@ -94,5 +98,5 @@ pub use verdict::{JobCondition, VerdictJob, VerdictSpec};
 
 pub use steps::{
     BUDGET_JOB, BaseExpiry, GroupFilter, GroupUpload, HelperCommand, InputsCli, PrepareLocks,
-    StepKind, ToolsLocalVerb, ToolsTelemetry, TrimFamily, VerifiedSave,
+    PrivateVerdict, StepKind, ToolsLocalVerb, ToolsTelemetry, TrimFamily, VerifiedSave,
 };
