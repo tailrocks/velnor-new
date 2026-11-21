@@ -238,6 +238,7 @@ check quote_list_fence_indent fail '/// > - item\n/// >     ```rust\n/// >     a
 check attr_split_pre_fence fail '#[doc = "<pre>"]\n#[doc = "</pre>\\n```\\nassert_eq!(1, 2);\\n```"]\npub fn f() {}\n'
 check attr_split_across_attr fail '#[doc = "<pre>"]\n#[allow(dead_code)]\n#[doc = "</pre>\\n```\\nassert_eq!(1, 2);\\n```"]\npub fn f() {}\n'
 check attr_split_across_item pass '#[doc = "<pre>"]\npub fn g() {}\n#[doc = "</pre>\\n```\\nassert_eq!(1, 2);\\n```"]\npub fn f() {}\n'
+check list_item_span_fence fail '/// - item\n/// <span>\n/// ```\n/// assert_eq!(1, 2);\n/// ```\npub fn f() {}\n'
 check cfg_attr_predicate_doc pass '#![allow(unexpected_cfgs)]\n#[cfg_attr(doc = "```not documentation```", allow(dead_code))]\npub fn h() {}\n'
 
 missing="$work/scanner_missing"
