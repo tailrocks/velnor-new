@@ -8,6 +8,7 @@ use velnor_model::{
 
 use crate::plan::step;
 
+// helper-gate: first in tools-v0.1.111 via 00cab67428
 pub const TOKEN_FIRST_HELPER: (u64, u64, u64) = (0, 1, 111);
 
 pub(crate) fn tokens_first(facts: &RepoFacts) -> bool {

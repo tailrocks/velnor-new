@@ -18,7 +18,7 @@ fn a_directory_whose_parent_grants_search_but_not_read_is_scanned() {
     fs::set_permissions(&parent, fs::Permissions::from_mode(0o311))
         .unwrap_or_else(|e| unreachable!("{e}"));
     let mut budget = Budget::new(usize::MAX);
-    let entries = scan(&root, &BTreeSet::new(), &mut budget);
+    let entries = scan(&root, &BTreeSet::new(), &mut budget).map(|scan| scan.entries);
     fs::set_permissions(&parent, fs::Permissions::from_mode(0o755))
         .unwrap_or_else(|e| unreachable!("{e}"));
     fs::remove_dir_all(&base).unwrap_or_else(|e| unreachable!("{e}"));
@@ -41,7 +41,7 @@ fn the_filesystem_root_is_scanned_without_a_containing_directory() {
         .map(|entry| entry.unwrap_or_else(|e| unreachable!("{e}")).path())
         .collect();
     let mut budget = Budget::new(usize::MAX);
-    let entries = scan(Path::new("/"), &top_level, &mut budget);
+    let entries = scan(Path::new("/"), &top_level, &mut budget).map(|scan| scan.entries);
     let entries = entries.unwrap_or_else(|e| panic!("scan of / failed: {e}"));
     let children = entries
         .get(Path::new("/"))
