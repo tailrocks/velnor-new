@@ -196,18 +196,24 @@ pub fn check(lanes: &[LaneMetrics]) -> Result<String, CiError> {
     violations.extend(compilation_repeats(lanes)?);
     violations.sort();
     violations.dedup();
+    notices.sort();
+    notices.dedup();
+    let mut notice_text = String::new();
+    for notice in notices {
+        notice_text.push_str("::notice::");
+        notice_text.push_str(&notice);
+        notice_text.push('\n');
+    }
     if violations.is_empty() {
-        let mut text = format!("Cache: {} lanes checked, no waste\n", lanes.len());
-        notices.sort();
-        notices.dedup();
-        for notice in notices {
-            text.push_str("::notice::");
-            text.push_str(&notice);
-            text.push('\n');
-        }
-        Ok(text)
+        Ok(format!(
+            "Cache: {} lanes checked, no waste\n{notice_text}",
+            lanes.len()
+        ))
     } else {
-        Err(CiError::new(violations.join("\n")))
+        Err(CiError::new(format!(
+            "{}\n{notice_text}",
+            violations.join("\n")
+        )))
     }
 }
 
