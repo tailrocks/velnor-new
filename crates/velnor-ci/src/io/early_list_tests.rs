@@ -1,12 +1,14 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{Bounds, Environment, Failure, try_list};
+use super::{Bounds, EarlyList, Environment, Failure, State, try_list};
 use crate::tests_run::Listing;
 use std::ffi::OsString;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
+use std::sync::mpsc;
+use std::time::{Duration, Instant};
 
 const UNBOUNDED: Bounds<'static> = Bounds {
     stdout_bytes: usize::MAX,
@@ -46,6 +48,25 @@ fn report(result: Result<Listing, Failure>) -> String {
         Err(failure) => failure.reason,
         other => unreachable!("{other:?}"),
     }
+}
+
+#[test]
+fn a_listing_that_never_reports_is_abandoned_at_the_join_bound_without_counts() {
+    let list = EarlyList::new(&[]);
+    let (sender, receiver) = mpsc::channel::<Option<Listing>>();
+    *list
+        .state
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = State::Running(receiver);
+    let started = Instant::now();
+    let counts = list.finish_within(true, Duration::from_millis(100));
+    assert!(counts.is_none());
+    assert!(
+        started.elapsed() < Duration::from_secs(5),
+        "{:?}",
+        started.elapsed()
+    );
+    drop(sender);
 }
 
 #[test]

@@ -98,6 +98,10 @@ impl EarlyList {
     }
 
     pub(super) fn finish(&self, wanted: bool) -> Option<Listing> {
+        self.finish_within(wanted, grace() + JOIN_SLACK)
+    }
+
+    fn finish_within(&self, wanted: bool, bound: Duration) -> Option<Listing> {
         self.run_ended.get_or_init(Instant::now);
         let state = std::mem::replace(
             &mut *self
@@ -107,12 +111,12 @@ impl EarlyList {
             State::Taken,
         );
         match state {
-            State::Running(receiver) => match receiver.recv_timeout(grace() + JOIN_SLACK) {
+            State::Running(receiver) => match receiver.recv_timeout(bound) {
                 Ok(listing) => listing,
                 Err(RecvTimeoutError::Timeout) => {
                     eprintln!(
                         "::warning::early test listing did not finish within {} s after the test run finished; continuing without test counts",
-                        (grace() + JOIN_SLACK).as_secs_f64()
+                        bound.as_secs_f64()
                     );
                     None
                 }
