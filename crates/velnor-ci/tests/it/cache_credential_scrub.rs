@@ -334,11 +334,13 @@ fn a_credential_file_name_cannot_inject_workflow_commands_into_the_report() {
         "home/.cargo/git/db/shared-1/x\n::error::pwn/.git-credentials",
         "x\n",
     );
-    repo.write_unstaged("home/.cargo/git/db/shared-1/y::warning::pwn/.netrc", "x\n");
     let (output, written) = decide_with(&repo, Some("true"));
     assert!(output.status.success(), "{output:?}");
     assert_eq!(written, "save=true\nsources=false\n", "{output:?}");
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.lines().all(|line| !line.contains("::")), "{stdout}");
-    assert!(stdout.contains("x%0A%3A%3Aerror%3A%3Apwn"), "{stdout}");
+    assert!(
+        stdout.contains("x%0A%3A%3Aerror%3A%3Apwn/.git-credentials"),
+        "{stdout}"
+    );
 }

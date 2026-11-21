@@ -25,8 +25,6 @@ async fn retirement_against_a_stalled_docker_returns_at_the_turn_deadline() -> T
         FAILED.container_id("runner")
     ));
 
-    // Completing at all proves the deadline cut the stalled DELETE: the fixture never answers it.
-    // A wall-clock bound on top would measure host load, not the deadline.
     let started = Instant::now();
     let outcome = tokio::time::timeout(
         Duration::from_secs(60),
@@ -78,5 +76,28 @@ async fn the_sweep_of_uncertain_pairs_stops_at_the_deadline_when_docker_stalls()
         seed::text(&journal, RESERVATION, FAILED.reservation).await?,
         "uncertain/00/uncertain/0/1/none/"
     );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_sweep_whose_deadline_has_passed_retires_nothing_and_leaves_the_pair_uncertain()
+-> TestResult<()> {
+    let dir = tempfile::tempdir()?;
+    let socket = dir.path().join("docker.sock");
+    let fixture = FixtureDocker::start(&socket, &[FAILED])?;
+    let docker = crate::docker_client::connect_unix(&socket.to_string_lossy())?;
+    let journal = Journal::open(&dir.path().join("launch.db")).await?;
+    let (scope, engine) = seed::started_pairs(&journal, &docker, &[FAILED]).await?;
+    scope.abandon_unbound_pair(FAILED.reservation).await?;
+    let before = fixture.objects(FAILED);
+    assert!(before.contains(&FAILED.container_id("runner")));
+
+    retire_uncertain_unbound_pairs(Instant::now(), &docker, &scope, &engine).await?;
+
+    assert_eq!(
+        seed::text(&journal, RESERVATION, FAILED.reservation).await?,
+        "uncertain/00/uncertain/0/1/none/"
+    );
+    assert_eq!(fixture.objects(FAILED), before);
     Ok(())
 }
