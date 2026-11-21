@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::facts::{TestResult, path};
+use crate::gate_eval::{Context, runs};
 use crate::pipeline::{view, workflow};
 
 const EXEC: &str = "\"$VELNOR_EXEC\" mbx-store";
@@ -155,18 +156,28 @@ fn one_root_store_step(helper: &str) -> Result<serde_json::Value, Box<dyn std::e
         .ok_or_else(|| "the one-job workflow has no mbx-store".into())
 }
 
+fn store_condition(helper: &str) -> Result<String, Box<dyn std::error::Error>> {
+    let condition = one_root_store_step(helper)?["if"]
+        .as_str()
+        .ok_or("mbx-store has no if")?
+        .to_owned();
+    condition
+        .strip_prefix("${{ ")
+        .and_then(|rest| rest.strip_suffix(" }}"))
+        .map(str::to_owned)
+        .ok_or_else(|| format!("unexpected if: {condition}").into())
+}
+
 #[test]
-fn a_self_planning_job_gates_the_shared_store_on_the_selection_from_0_1_112() -> TestResult {
-    let store = one_root_store_step("0.1.112")?;
-    let condition = store["if"].as_str().ok_or("mbx-store has no if")?;
-    assert!(
-        condition.contains("steps.plan.outputs.rust_root_mode != 'none'"),
-        "{condition}"
-    );
-    assert!(
-        condition.contains("steps.plan.outcome == 'success'"),
-        "{condition}"
-    );
+fn the_shared_store_is_skipped_on_the_no_work_path_from_0_1_112() -> TestResult {
+    let condition = store_condition("0.1.112")?;
+    let mut context = Context::new(&[
+        ("steps.plan.outcome", "success"),
+        ("steps.plan.outputs.rust_root_mode", "none"),
+    ]);
+    assert!(!runs(&condition, &context)?, "{condition}");
+    context.set("steps.plan.outputs.rust_root_mode", "full");
+    assert!(runs(&condition, &context)?, "{condition}");
     Ok(())
 }
 
