@@ -113,6 +113,20 @@ fn an_alias_definition_that_cannot_be_read_fails_closed_for_an_unknown_subcomman
 }
 
 #[test]
+fn a_legacy_cargo_config_alias_wins_over_config_toml() -> TestResult {
+    let repo = declared_job()?;
+    let launch = repo.root().join("launch");
+    let (inside, _) = manifests(&repo);
+    aliases(&launch, "[alias]\nxb = \"check\"\n")?;
+    fs::write(
+        launch.join(".cargo/config"),
+        format!("[alias]\nxb = \"build --manifest-path {inside}\"\n"),
+    )?;
+    assert_refused(&run_with_args(&repo, &launch, &["xb"])?);
+    Ok(())
+}
+
+#[test]
 fn an_alias_given_on_the_command_line_fails_closed() -> TestResult {
     let repo = declared_job()?;
     let launch = repo.root().join("launch");

@@ -10,7 +10,7 @@ use toml::{Table, Value};
 use super::crates_mirror_mbx::{option_value, subcommand};
 
 const DEPTH: usize = 8;
-const CONFIGS: &[&str] = &["config.toml", "config"];
+const CONFIGS: &[&str] = &["config", "config.toml"];
 
 enum Alias {
     Found(Vec<OsString>),
