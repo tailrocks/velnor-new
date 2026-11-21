@@ -3,7 +3,7 @@
 
 # Rust CI report
 
-`ci-metrics.json` is the per-lane, schema-2 report. The checker reads these
+`ci-metrics.json` is the per-lane, schema-1 report. The checker reads these
 files from artifact directories and recomputes policy from their evidence;
 `violations` is useful for display, but is not trusted as the only verdict.
 The top-level report and policy structs reject unknown fields. Nested Cargo
@@ -125,7 +125,7 @@ so separate test or binary targets do not become repeated compilations of one
 unit. Unhashed documentation outputs cannot establish compiler identity and
 remain unknown, like ordinary unhashed binary outputs.
 API enrichment runs after provenance collection. These inputs do not change
-the schema-2 output contract.
+the schema-1 output contract.
 
 Generated report and upload steps continue on error. The separate `Cache`
 job reports missing or invalid metrics. API lookups are read-only. Job timing

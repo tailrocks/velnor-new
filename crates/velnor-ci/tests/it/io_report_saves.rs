@@ -35,7 +35,7 @@ fn report_observes_a_failed_save_step_of_a_cache_descriptor() -> ResultTest {
 }
 
 #[test]
-fn report_without_a_save_step_writes_the_schema_that_names_the_field_optional() -> ResultTest {
+fn report_without_a_save_step_keeps_schema_1() -> ResultTest {
     let repo = Repo::new("report-no-save-step");
     let plan = json!([{"family":"tools","root":null,"restore_step":"restore"}]);
     let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
@@ -55,7 +55,7 @@ fn report_without_a_save_step_writes_the_schema_that_names_the_field_optional() 
         .output()?;
     assert!(output.status.success(), "{output:?}");
     let metrics = metrics(&repo);
-    assert_eq!(metrics.schema, 2);
+    assert_eq!(metrics.schema, 1);
     assert!(metrics.caches[0].save_step.is_none());
     Ok(())
 }

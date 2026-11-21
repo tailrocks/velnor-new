@@ -140,7 +140,7 @@ mod tests {
         assert!(errors.is_empty(), "{errors:?}");
         assert_eq!(caches[0].save, SaveOutcome::NotAttempted);
         let lane = json!({
-            "schema": 2,
+            "schema": 1,
             "lane": "rust",
             "caches": caches,
             "invocations": [],
