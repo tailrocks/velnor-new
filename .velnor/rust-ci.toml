@@ -85,6 +85,14 @@ timeout_minutes = 5
 
 [[lint]]
 kind = "mise-task"
+id = "mise-binary-digests"
+name = "mise binary digest signature tests"
+task = "test-mise-binary-digests"
+tools = ["minisign", "python"]
+timeout_minutes = 5
+
+[[lint]]
+kind = "mise-task"
 id = "validate-hk"
 name = "hk config"
 task = "validate-hk"
