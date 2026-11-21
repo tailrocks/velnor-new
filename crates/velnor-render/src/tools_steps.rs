@@ -40,10 +40,7 @@ pub(crate) fn is_anchor_expression(expression: &str) -> bool {
         || expression.ends_with(&format!(".outputs.{ANCHOR_OUTPUT}"))
 }
 
-pub(crate) fn anchor_outputs(
-    job: &velnor_model::Job,
-    jobs: &[velnor_model::Job],
-) -> Vec<(String, String)> {
+pub(crate) fn anchor_outputs(job: &velnor_model::Job) -> Vec<(String, String)> {
     let reads = job.steps.iter().any(|step| {
         matches!(
             step.kind,
@@ -53,21 +50,11 @@ pub(crate) fn anchor_outputs(
     if !reads {
         return Vec::new();
     }
-    let names_key = jobs
-        .iter()
-        .flat_map(|reader| &reader.steps)
-        .any(|step| match &step.kind {
-            velnor_model::StepKind::ToolsLocal(
-                ToolsLocalVerb::VerifyNamedAnchor,
-                ToolsAnchor::Restored(AnchorSource::Job(source)),
-            ) => *source == job.id,
-            _ => false,
-        });
     let mut outputs = vec![(
         ANCHOR_OUTPUT.to_owned(),
         anchor_expression(&ToolsAnchor::Restored(AnchorSource::ThisJob)),
     )];
-    if names_key {
+    if job.anchor_key_output {
         outputs.push((
             ANCHOR_KEY_OUTPUT.to_owned(),
             format!("${{{{ steps.{ANCHOR_STEP}.outputs.cache-matched-key }}}}"),

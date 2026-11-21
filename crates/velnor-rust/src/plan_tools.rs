@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    AnchorSource, CacheKey, Host, JobId, MbxStore, RepoFacts, RunnerLabel, Step, StepKind,
+    AnchorSource, CacheKey, Host, Job, JobId, MbxStore, RepoFacts, RunnerLabel, Step, StepKind,
     ToolsAnchor, ToolsLocalVerb, VerifiedSave, When,
 };
 
@@ -42,6 +42,24 @@ fn restored_anchor(facts: &RepoFacts, plan: Option<&JobId>) -> ToolsAnchor {
         return ToolsAnchor::Unanchored;
     }
     ToolsAnchor::Restored(plan.map_or(AnchorSource::ThisJob, |job| AnchorSource::Job(job.clone())))
+}
+
+pub(crate) fn mark_anchor_keys(facts: &RepoFacts, jobs: &mut [Job]) {
+    let always = !names_anchor_entry(facts);
+    let named: Vec<JobId> = jobs
+        .iter()
+        .flat_map(|job| &job.steps)
+        .filter_map(|step| match &step.kind {
+            StepKind::ToolsLocal(
+                ToolsLocalVerb::VerifyNamedAnchor,
+                ToolsAnchor::Restored(AnchorSource::Job(source)),
+            ) => Some(source.clone()),
+            _ => None,
+        })
+        .collect();
+    for job in jobs {
+        job.anchor_key_output = always || named.contains(&job.id);
+    }
 }
 
 pub(crate) fn tools_anchor_read(facts: &RepoFacts) -> Vec<Step> {

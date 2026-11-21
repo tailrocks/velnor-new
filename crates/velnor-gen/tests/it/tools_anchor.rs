@@ -337,16 +337,14 @@ fn every_job_reading_the_plan_anchor_key_has_it_declared_and_lists_the_plan_job(
 }
 
 #[test]
-fn the_plan_job_of_helper_0_1_110_emits_only_the_anchor_digest_output() -> TestResult {
+fn the_plan_job_of_helper_0_1_110_emits_the_anchor_digest_and_key_outputs() -> TestResult {
     for config in STORES.iter().copied() {
         let yaml = render(&["Cargo.toml", "tools/Cargo.toml"], config, HELPER)?;
         let outputs = yaml["jobs"][PLAN]["outputs"]
             .as_object()
             .ok_or("plan outputs missing")?;
         assert_eq!(outputs["tools_anchor"], READ_ANCHOR, "{config:?}");
-        assert!(!outputs.contains_key("tools_anchor_key"), "{config:?}");
-        let rendered = serde_json::to_string(&yaml)?;
-        assert!(!rendered.contains("tools_anchor_key"), "{config:?}");
+        assert_eq!(outputs["tools_anchor_key"], PLAN_ANCHOR_KEY_OUTPUT, "{config:?}");
     }
     Ok(())
 }
