@@ -314,6 +314,7 @@ mod test_lane_flags;
 mod test_setup;
 mod test_setup_any_root;
 mod test_setup_phase;
+mod test_setup_skipped;
 mod token_order;
 mod tool_pins;
 mod toolchain;
