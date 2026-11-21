@@ -48,6 +48,11 @@ root = "."
 name = "Prepare pinned attestation verifier"
 run = "mise --no-config --no-env --no-hooks install gh@2.104.0"
 
+[[test_setup]]
+root = "."
+name = "No doctests (rustdoc listing)"
+run = '. "$VELNOR_EXEC" run -- bash scripts/check-no-doctests.sh'
+
 [[test_lane]]
 root = "."
 features = ["local-mode"]
