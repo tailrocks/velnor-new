@@ -1,38 +1,31 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::ffi::OsString;
 use std::os::unix::fs::symlink;
 
 use super::*;
 
-fn walked_last(directory: &Path, name: &str) -> bool {
+pub(super) fn chain_child(directory: &Path) -> Option<OsString> {
     let mut listing = handle::open(&handle::Origin::Path, directory, &handle::Climb::none())
         .unwrap_or_else(|e| unreachable!("{e}"));
     let names = handle::names(&mut listing, |_| Ok(())).unwrap_or_else(|e| unreachable!("{e}"));
-    names.last().is_some_and(|last| last == name)
+    names.into_iter().next_back()
 }
 
-pub(super) fn deep_tree(root: &Path, depth: usize, siblings: usize) {
+pub(super) fn deep_tree(root: &Path, depth: usize, siblings: usize) -> Vec<PathBuf> {
     let mut directory = root.to_path_buf();
+    let mut chain = Vec::with_capacity(depth);
     for _ in 0..depth {
-        let chain = directory.join("c");
-        fs::create_dir_all(&chain).unwrap_or_else(|e| unreachable!("{e}"));
-        let mut kept = 0;
-        let mut candidate = 0;
-        while kept < siblings {
-            let prefix = if candidate % 2 == 0 { "a" } else { "s" };
-            let sibling = directory.join(format!("{prefix}{}", candidate / 2));
-            candidate += 1;
-            fs::create_dir(&sibling).unwrap_or_else(|e| unreachable!("{e}"));
-            if walked_last(&directory, "c") {
-                kept += 1;
-            } else {
-                fs::remove_dir(&sibling).unwrap_or_else(|e| unreachable!("{e}"));
-            }
+        for sibling in 0..=siblings {
+            fs::create_dir_all(directory.join(format!("n{sibling}")))
+                .unwrap_or_else(|e| unreachable!("{e}"));
         }
-        assert!(walked_last(&directory, "c"), "{directory:?}");
-        directory = chain;
+        let next = chain_child(&directory).unwrap_or_else(|| unreachable!("{directory:?}"));
+        directory.push(next);
+        chain.push(directory.clone());
     }
+    chain
 }
 
 fn scan_deep(name: &str, depth: usize, held: usize) -> io::Result<Entries> {
@@ -56,16 +49,14 @@ fn scan_deep(name: &str, depth: usize, held: usize) -> io::Result<Entries> {
 }
 
 pub(super) fn deep_links_tree(root: &Path, depth: usize, linked_from: usize, target_depth: usize) {
-    deep_tree(root, depth, 4);
+    let chain = deep_tree(root, depth, 4);
     let mut target = root.join("t");
     for _ in 0..target_depth {
         target.push("a");
     }
     fs::create_dir_all(&target).unwrap_or_else(|e| unreachable!("{e}"));
     let relative = "a/".repeat(target_depth);
-    let mut directory = root.to_path_buf();
-    for level in 0..depth {
-        directory.push("c");
+    for (level, directory) in chain.iter().enumerate() {
         if level >= linked_from {
             let up = "../".repeat(level + 1);
             symlink(format!("{up}t/{relative}"), directory.join("rel"))
