@@ -332,6 +332,7 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
         StepKind::MbxPin => crate::helper_steps::mbx_pin_step(),
         StepKind::CratesMirror(mirror) => crate::helper_steps::mirror_step(mirror),
         StepKind::MbxStore | StepKind::MbxPrivate => crate::helper_steps::mbx_local_step(kind),
+        StepKind::MbxOutDirs => crate::mbx_out_dirs::mbx_out_dirs_step(),
         StepKind::RepositoryPrivacy
         | StepKind::PrivateCheck { .. }
         | StepKind::PrivateToken { .. }

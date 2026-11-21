@@ -148,3 +148,36 @@ jobs:
         env:
           BASE_REF: ${{ github.base_ref }}
         run: bash scripts/check-helper-gates.sh "origin/$BASE_REF"
+  secret-scan:
+    name: Secret scanners
+    runs-on: [velnor, ubuntu-26.04-scale-set]
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash -e {0}
+    if: (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || github.event_name == 'push' || github.event_name == 'merge_group'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: "1"
+          persist-credentials: "false"
+      - name: Fetch the history of the checked-out commit
+        run: git fetch --no-tags --unshallow origin "$(git rev-parse HEAD)"
+      - name: Test that the scanner pins ignore repository tool config
+        run: bash scripts/test-install-secret-scanners.sh
+      - name: Install the pinned secret scanners
+        run: bash scripts/install-secret-scanners.sh "$RUNNER_TEMP/secret-scanners"
+      - name: Test that the working-tree secret scan fails on a planted token and passes a clean tree
+        run: bash scripts/test-secret-scan-worktree.sh
+      - name: Print scanner versions
+        run: |
+          gitleaks version
+          betterleaks version
+          kingfisher --version
+      - name: Scan the commit history with gitleaks
+        run: gitleaks git . --redact --no-banner --config .gitleaks.toml --log-opts="--full-history --diff-merges=first-parent HEAD"
+      - name: Scan the commit history with betterleaks
+        run: betterleaks git . --redact -c .gitleaks.toml --log-opts="--full-history --diff-merges=first-parent HEAD"
+      - name: Scan the working tree with kingfisher
+        run: bash scripts/secret-scan-worktree.sh
