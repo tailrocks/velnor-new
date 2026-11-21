@@ -23,7 +23,7 @@ pub enum ReleaseAssetPart {
     /// Merge queue only: decide whether the queue entry may get a token.
     Check,
     /// The read-only App token for the repositories of the assets.
-    Token(crate::repo::PrivateSources),
+    Token(crate::repo::PrivateSources, crate::repo::TokenMint),
     /// Download, verify and revoke, or verify the restored files.
     Fetch,
     /// Save the verified asset at this index.
