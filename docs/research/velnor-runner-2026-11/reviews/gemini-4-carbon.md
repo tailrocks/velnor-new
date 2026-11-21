@@ -85,7 +85,7 @@ nine `mbx` variants in issue `#585` and dropped `mbx` in `velnor-gen`.
 ### 3. Missed bottlenecks or risks
 
 - **Dropping CI's `push` trigger breaks releases, cache saves, and pruning (proposal-G.md:276).** `velnor-ci release-gate`
-  ([velnor-new/ci-helper/crates/velnor-ci/src/gate.rs:137-155](../../../../crates/velnor-ci/src/gate.rs#L137-L155)), `velnor-gen`'s `release.yml` (velnor-new/generator/crates/velnor-render/src/release.rs:95-105),
+  ([velnor-new/ci-helper/crates/velnor-ci/src/gate.rs:138-155](../../../../crates/velnor-ci/src/gate.rs#L138-L155)), `velnor-gen`'s `release.yml` (velnor-new/generator/crates/velnor-render/src/release.rs:95-105),
   velnor-new/.github/workflows/product-release.yml:86, and velnor-new/.github/workflows/cache-prune.yml:20 all require `event == "push"` on `main`, and
   direct pushes bypassing the queue would land unverified.
 - **Dropped `local-mode` coverage and ruleset `24396608` deadlock in Phase 1 (proposal-G.md:368).** Switching to `rust-ci.yml` as-is drops
@@ -320,7 +320,7 @@ runtime-read fixtures, samples, or scripts changed.
 - **Test skipping, slow suites, and `main` pushes.** `landlock(7)` (`stat(2)` gap) and runtime fixture reads (cli.rs:214,
   [golden.rs:19-24](../../../../crates/velnor-gen/tests/it/golden.rs#L19-L24)) decisively support **E** over G and F: never skip selected test binaries across code or fixture edits, refactor the four
   `>250 s` suites (`unbound_retirement`, `runner_image_qualification_public`, `image_publication_public`, `maintenance-helpers`) before
-  sharding, and emit a fast tree-verified `push` receipt on `main` ([gate.rs:137-155](../../../../crates/velnor-ci/src/gate.rs#L137-L155)) rather than dropping the `push` trigger as G proposes.
+  sharding, and emit a fast tree-verified `push` receipt on `main` ([gate.rs:138-155](../../../../crates/velnor-ci/src/gate.rs#L138-L155)) rather than dropping the `push` trigger as G proposes.
 
 ### Hypotheses judged differently after reading G, E, and F
 
@@ -333,7 +333,7 @@ runtime-read fixtures, samples, or scripts changed.
 - **H5 (workflow design and merge-queue latency).** Two findings revise my numbers. First, Proposal E's check of ruleset `24396608`
   (`min_entries_to_merge: 1`) and PR `#990` (`45 s` gap) shows `min_entries_to_merge_wait_minutes: 5` does not add a 5-minute pause to single
   PRs. The real queue bottlenecks are `max_entries_to_build: 2` (`2 -> 5`) and Proposal G's 10.4% contention-flake batch ejection rate. Second,
-  Proposal E's [gate.rs:137-155](../../../../crates/velnor-ci/src/gate.rs#L137-L155) audit and `rust-ci.yml`'s missing `local-mode` target prove H5 must keep a fast tree-verified `push` run on
+  Proposal E's [gate.rs:138-155](../../../../crates/velnor-ci/src/gate.rs#L138-L155) audit and `rust-ci.yml`'s missing `local-mode` target prove H5 must keep a fast tree-verified `push` run on
   `main` for release gates and carry `velnor-runner-host --features local-mode` into `velnor-gen`.
 - **H1, H3, and H4.** Unchanged (`H1` fails on JS and C# CPU and holds only for local data endpoints, `H3` holds for DaemonSets and fails for
   per-job pods, and `H4` holds via node-local XFS CoW `target/` clones, reinforced by all three proposals hitting `mbx` locking and freshness traps).

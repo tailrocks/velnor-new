@@ -628,7 +628,7 @@ all 9 `mbx` configurations (`v1.29.2` and `v1.30.0`):
 - **Recommendation.** Retire `mbx cache export/import` bundles (the State seal workflow) and run **plain
   `cargo` directly over node-local XFS CoW `target/` clones + `velnor-ci inputs restore`** (matching
   `velnor-gen`
-  [crates/velnor-rust/src/compat.rs:9](../../../../crates/velnor-rust/src/compat.rs#L9)).
+  [crates/velnor-rust/src/compat.rs:11](../../../../crates/velnor-rust/src/compat.rs#L11)).
   Because a 48-thread EPYC node cold-builds all 527 external crates in `~80 to 100 s` only on rare
   `Cargo.lock` bumps, an L2 compiler cache (`sccache` or `mbx-cache` with `MBX_SHARE_OUT_DIR=0`)
   affects `<5%` of runs; test `sccache` vs `mbx-cache` (`MBX_SHARE_OUT_DIR=0`) on `velnor-lab` only
