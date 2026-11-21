@@ -64,9 +64,12 @@ fn library_with_asset_input() -> Repo {
 }
 
 fn run_finished(repo: &Repo, hash: &str) -> SystemTime {
-    fs::metadata(repo.root().join(format!("{DEBUG}/build/lib-{hash}/output")))
-        .and_then(|metadata| metadata.modified())
-        .unwrap_or_else(|e| unreachable!("{e}"))
+    fs::metadata(
+        repo.root()
+            .join(format!("{DEBUG}/build/lib/{hash}/run/stdout")),
+    )
+    .and_then(|metadata| metadata.modified())
+    .unwrap_or_else(|e| unreachable!("{e}"))
 }
 
 #[test]
@@ -79,10 +82,14 @@ fn an_input_changed_after_its_run_names_the_input_and_the_stale_unit() {
     let stale = before.iter().next().unwrap_or_else(|| unreachable!());
 
     repo.write_unstaged("rust/lib/asset.txt", "second\n");
-    repo.set_mtime(
-        "rust/lib/asset.txt",
-        run_finished(&repo, stale) + Duration::from_secs(2),
-    );
+    let build = build_step(&repo, &["build", "--workspace", "--all-targets"]);
+    assert!(build.status.success(), "{build:?}");
+    let after = lib_runs(&repo);
+    assert_eq!(after.len(), 2, "{after:?}");
+    let current = after
+        .difference(&before)
+        .next()
+        .unwrap_or_else(|| unreachable!());
 
     let output = audit(&repo, &["--write"]);
     refused_with(
@@ -91,6 +98,7 @@ fn an_input_changed_after_its_run_names_the_input_and_the_stale_unit() {
             "output stale: input asset.txt changed after it ran (unit {stale}); produce build-script inputs before the first compile step, e.g. a [[test_setup]] table with phase = \"build\""
         )],
     );
+    assert!(!String::from_utf8_lossy(&output.stderr).contains(current.as_str()));
     assert!(!repo.root().join(".velnor/rust-inputs.lock").exists());
 }
 
@@ -127,7 +135,7 @@ const ENTRY_LIMIT: &str = "8";
 fn fan_out_repo() -> Repo {
     let repo = Repo::new("stale-gaps");
     repo.write_all(&[
-        ("mise.toml", "[tools]\n"),
+        ("mise.toml", "[tools]\nrust = \"1.100.0\"\n"),
         ("rust/Cargo.lock", "version = 4\n"),
     ]);
     let members: Vec<String> = (1..=FAN_OUT).map(|i| format!("\"lib{i}\"")).collect();
@@ -169,12 +177,17 @@ fn stale_gaps_share_one_entry_budget_when_they_count_their_changed_inputs() {
     assert!(build.status.success(), "{build:?}");
     let ran = fs::read_dir(repo.root().join(DEBUG).join("build"))
         .unwrap_or_else(|e| unreachable!("{e}"))
-        .filter_map(|entry| {
-            let output = entry
+        .flat_map(|package| {
+            fs::read_dir(package.unwrap_or_else(|e| unreachable!("{e}")).path())
                 .unwrap_or_else(|e| unreachable!("{e}"))
-                .path()
-                .join("output");
-            fs::metadata(output)
+                .map(|run| {
+                    run.unwrap_or_else(|e| unreachable!("{e}"))
+                        .path()
+                        .join("run/stdout")
+                })
+        })
+        .filter_map(|stdout| {
+            fs::metadata(stdout)
                 .and_then(|metadata| metadata.modified())
                 .ok()
         })
@@ -252,7 +265,7 @@ fn a_stale_run_with_several_changed_inputs_names_the_first_and_counts_the_rest()
 fn a_run_with_unreadable_and_changed_inputs_counts_each_cause_separately() {
     let repo = Repo::new("stale-run-mixed");
     repo.write_all(&[
-        ("mise.toml", "[tools]\n"),
+        ("mise.toml", "[tools]\nrust = \"1.100.0\"\n"),
         (
             "rust/Cargo.toml",
             "[workspace]\nmembers = [\"lib\"]\nresolver = \"3\"\n",
