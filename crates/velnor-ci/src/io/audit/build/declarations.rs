@@ -29,6 +29,7 @@ pub(super) fn declarations(
     max_entries: usize,
 ) -> Result<Vec<Declared>, CiError> {
     let mut found = Vec::new();
+    let mut budget = inventory::Budget::new(max_entries);
     let targets = inventory::exclusions(workspaces)?;
     let active = workspaces
         .iter()
@@ -83,7 +84,7 @@ pub(super) fn declarations(
                 .filter(|path| fs::metadata(path).is_ok_and(|metadata| metadata.is_dir()))
                 .cloned()
                 .collect();
-            let trusted = trusted(&output, &paths, &directories, &targets, max_entries)?;
+            let trusted = trusted(&output, &paths, &directories, &targets, &mut budget)?;
             let targets = inventory::load(&output)
                 .ok()
                 .filter(|saved| targets.is_subset(&saved.targets))
@@ -106,9 +107,8 @@ fn trusted(
     paths: &[PathBuf],
     directories: &[PathBuf],
     targets: &BTreeSet<PathBuf>,
-    max_entries: usize,
+    budget: &mut inventory::Budget,
 ) -> Result<bool, CiError> {
-    let mut budget = inventory::Budget::new(max_entries);
     let saved = inventory::load(output).ok();
     let targets = saved
         .as_ref()
@@ -125,7 +125,7 @@ fn trusted(
         return Ok(false);
     }
     for path in directories {
-        let matched = inventory::scan(path, targets, &mut budget)
+        let matched = inventory::scan(path, targets, budget)
             .and_then(|entries| inventory::view(&entries, &fs::canonicalize(path)?, targets))
             .and_then(|entries| inventory::matches(output, path, &entries, targets));
         match matched {
