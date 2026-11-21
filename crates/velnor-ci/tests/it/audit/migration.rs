@@ -21,7 +21,7 @@ enum InputDirectory {
 
 fn cargo_project(input: InputDirectory) -> Repo {
     let repo = Repo::new("audit-build-migration");
-    repo.write("mise.toml", "[tools]\nrust = \"1.100.0\"\n");
+    repo.write("mise.toml", &crate::toolchain::mise_rust_pin());
     repo.write(
         "rust/Cargo.toml",
         "[package]\nname = \"app\"\nversion = \"0.1.0\"\nedition = \"2024\"\n",
@@ -341,7 +341,7 @@ fn compiler_discovery_with(prefix: &[&str]) {
 
 #[test]
 fn a_cargo_toolchain_override_keeps_compiler_discovery_enabled() {
-    compiler_discovery_with(&["+1.100.0"]);
+    compiler_discovery_with(&[format!("+{}", crate::toolchain::pinned_channel()).as_str()]);
 }
 
 #[test]

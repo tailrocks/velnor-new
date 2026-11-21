@@ -20,7 +20,7 @@ rust = { version = "1.100.0", profile = "minimal", components = [
 mr-boxington = { version = "v1.30.0", workflow = "release.yml@refs/heads/main" }
 bun = "1.4.5"
 hk = "2.13.0"
-cargo-binstall = "1.27.0"
+cargo-binstall = "1.28.0"
 "aqua:nextest-rs/nextest/cargo-nextest" = "0.9.152"
 # Workflow linting (hard decision 10): CI reads these versions at run time,
 # and hk's check-only jactionlint step runs the same binaries locally.
