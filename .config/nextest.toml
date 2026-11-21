@@ -83,7 +83,7 @@ filter = 'package(=velnor-gen) and binary(=it) and (test(=golden::every_sample_r
 slow-timeout = { period = "10s", terminate-after = 1 }
 
 [[profile.default.overrides]]
-filter = "package(=velnor-ci) and (test(io_restore_cargo::) | test(io_restore_cold_cargo::) | test(io_raw_paths::) | test(io_cold_targets::) | test(io_shared_targets::) | test(io_foreign_targets::) | test(io_restored_targets::) | test(io_nested_targets::) | test(io_snapshot_storage::) | test(io_inputs_scope::) | test(io_inputs_batch::) | test(io_inputs_spec::) | test(io_scope_cache::) | test(io_scope_cache_races::) | test(io_scope_cache_paths::))"
+filter = "package(=velnor-ci) and (test(io_restore_cargo::) | test(io_restore_cold_cargo::) | test(io_raw_paths::) | test(io_cold_targets::) | test(io_shared_targets::) | test(io_foreign_targets::) | test(io_restored_targets::) | test(io_nested_targets::) | test(io_snapshot_storage::) | test(io_inputs_scope::) | test(io_inputs_batch::) | test(io_inputs_spec::) | test(io_scope_cache::) | test(io_scope_cache_races::) | test(io_scope_cache_paths::)) and not (test(=io_scope_cache::changed_checkout_inputs_or_identity_refuse_scope_reuse) | test(=io_scope_cache::malformed_or_missing_scope_caches_refuse_save_and_remove_the_old_snapshot))"
 slow-timeout = { period = "30s", terminate-after = 1 }
 
 [[profile.default.overrides]]
@@ -160,16 +160,8 @@ filter = 'package(=velnor-ci) and (test(io_scope_cache::) | test(io_scope_cache_
 test-group = "velnor-ci-serial"
 
 [[profile.default.overrides]]
-filter = 'package(=velnor-ci) and test(=resolve_qualification::every_recorded_case_matches_the_legacy_op)'
-slow-timeout = { period = "60s", terminate-after = 2 }
-
-[[profile.default.overrides]]
 filter = 'package(=velnor-ci) and (test(=audit::freshness::distinct_declared_trees_cannot_exceed_the_audit_scan_budget) | test(=audit::freshness::repeated_directory_declarations_share_the_audit_scan_budget) | test(=audit::inventory::directly_named_files_do_not_consume_the_directory_walk_budget) | test(=io_plan_docs::plan_treats_sources_over_the_total_size_bound_as_possibly_holding_docs) | test(=release_manifests::an_excluded_example_and_a_nested_workspace_are_not_packages_of_the_root))'
 slow-timeout = { period = "30s", terminate-after = 1 }
-
-[[profile.ci.overrides]]
-filter = 'package(=velnor-ci) and test(=resolve_qualification::every_recorded_case_matches_the_legacy_op)'
-slow-timeout = { period = "60s", terminate-after = 2 }
 
 [[profile.ci.overrides]]
 filter = 'package(=velnor-ci) and (test(=audit::freshness::distinct_declared_trees_cannot_exceed_the_audit_scan_budget) | test(=audit::freshness::repeated_directory_declarations_share_the_audit_scan_budget) | test(=audit::inventory::directly_named_files_do_not_consume_the_directory_walk_budget) | test(=io_plan_docs::plan_treats_sources_over_the_total_size_bound_as_possibly_holding_docs) | test(=release_manifests::an_excluded_example_and_a_nested_workspace_are_not_packages_of_the_root))'
@@ -288,3 +280,21 @@ slow-timeout = { period = "60s", terminate-after = 3 }
 [[profile.ci.overrides]]
 filter = "package(=velnor-ci)"
 slow-timeout = { period = "30s", terminate-after = 1 }
+
+# nextest applies the last matching override for each setting, so the 60 s overrides below must
+# come after the 2 s and 30 s catch-all overrides above, or those catch-alls win.
+[[profile.default.overrides]]
+filter = 'package(=velnor-ci) and (test(=resolve_qualification::every_recorded_case_matches_the_legacy_op) | test(=io_scope_cache::changed_checkout_inputs_or_identity_refuse_scope_reuse) | test(=io_scope_cache::malformed_or_missing_scope_caches_refuse_save_and_remove_the_old_snapshot))'
+slow-timeout = { period = "60s", terminate-after = 2 }
+
+[[profile.default.overrides]]
+filter = 'package(=velnor-gen) and binary(=it) and test(=untracked_config::an_untracked_config_is_refused_by_generate_and_check_and_names_the_file)'
+slow-timeout = { period = "60s", terminate-after = 2 }
+
+[[profile.ci.overrides]]
+filter = 'package(=velnor-ci) and (test(=resolve_qualification::every_recorded_case_matches_the_legacy_op) | test(=io_scope_cache::changed_checkout_inputs_or_identity_refuse_scope_reuse) | test(=io_scope_cache::malformed_or_missing_scope_caches_refuse_save_and_remove_the_old_snapshot))'
+slow-timeout = { period = "60s", terminate-after = 2 }
+
+[[profile.ci.overrides]]
+filter = 'package(=velnor-gen) and binary(=it) and test(=untracked_config::an_untracked_config_is_refused_by_generate_and_check_and_names_the_file)'
+slow-timeout = { period = "60s", terminate-after = 2 }
