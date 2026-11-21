@@ -89,6 +89,14 @@ fn a_replacement_that_cannot_remove_the_old_entry_fails_instead_of_healing() {
         .join(".rustup/toolchains/1.99.1-x86_64-unknown-linux-gnu/bin");
     fs::set_permissions(&toolchain, fs::Permissions::from_mode(0o555))
         .unwrap_or_else(|e| unreachable!("{e}"));
+    let probe = toolchain.join(".probe");
+    if fs::File::create(&probe).is_ok() {
+        // A privileged process (root, or CAP_DAC_OVERRIDE) ignores the mode bits, so this
+        // directory cannot be made undeletable here and the failure path is not reachable.
+        fs::remove_file(&probe).ok();
+        eprintln!("skipped: the mode bits do not stop a privileged process from removing files");
+        return;
+    }
     let outcome = save(&store, home, true);
     let retired: Vec<PathBuf> = fs::read_dir(store.join("tools"))
         .unwrap_or_else(|e| unreachable!("{e}"))
