@@ -69,11 +69,22 @@ fn a_required_context_over_the_limit_with_the_anchor_outputs_is_refused() -> Tes
 #[test]
 fn the_tools_anchor_outputs_are_budgeted_for_a_0_1_110_helper() -> TestResult {
     for roots in [1, 2] {
-        let (actual, bound, _) = check_at(roots, "0.1.110")?;
+        let (actual, bound, refused) = check_at(roots, "0.1.110")?;
         assert!(
             actual <= bound,
             "roots={roots}, actual={actual}, bound={bound}"
         );
+        assert!(!refused, "roots={roots}, actual={actual}");
     }
+    let roots = 27;
+    let (actual, bound, refused) = check_at(roots, "0.1.110")?;
+    assert!(
+        actual <= bound,
+        "roots={roots}, actual={actual}, bound={bound}"
+    );
+    assert!(
+        actual > MAX_ENV_CHARACTERS && refused,
+        "roots={roots}, actual={actual}, refused={refused}"
+    );
     Ok(())
 }
