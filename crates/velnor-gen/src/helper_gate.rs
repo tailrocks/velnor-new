@@ -101,7 +101,6 @@ pub fn require_compatible(version: &HelperVersion) -> Result<(), GenerateError> 
     }
 }
 
-// helper-gate: untagged tools-v0.1.111
 const MINT_ORDER_HELPER: (u64, u64, u64) = (0, 1, 111);
 
 /// An older helper mints the App token after the steps that check out the repository's code when
