@@ -332,7 +332,7 @@ async fn run_one_worker_pass(
         state_dir,
     )
     .await?;
-    let mut waited_polls = 0_usize;
+    let deadline = std::time::Instant::now() + Duration::from_secs(120);
     while !stub.dind_stop_entered.load(Ordering::Acquire) {
         let bad_exit_done = {
             let g = stub
@@ -345,8 +345,7 @@ async fn run_one_worker_pass(
         if bad_exit_done && seed::retry_committed(state_dir, &mut observer).await? {
             break;
         }
-        waited_polls += 1;
-        if waited_polls > 2_000 {
+        if std::time::Instant::now() >= deadline {
             return Err("timed out waiting for completion worker pass".into());
         }
         tokio::time::sleep(Duration::from_millis(5)).await;
