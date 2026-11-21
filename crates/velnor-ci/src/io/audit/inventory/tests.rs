@@ -7,16 +7,15 @@ use std::{fs, thread};
 use super::walk::scan_with;
 use super::*;
 
-fn scan_with_open_failing(kind: io::ErrorKind) -> io::Result<Entries> {
-    let root =
-        std::env::temp_dir().join(format!("velnor-scan-open-{kind:?}-{}", std::process::id()));
+fn scan_racing(name: &str, race: impl Fn(&Path) -> io::Result<fs::ReadDir>) -> io::Result<Entries> {
+    let root = std::env::temp_dir().join(format!("velnor-scan-{name}-{}", std::process::id()));
     let _ = fs::remove_dir_all(&root);
     fs::create_dir_all(root.join("sub")).unwrap_or_else(|e| unreachable!("{e}"));
     fs::write(root.join("kept.txt"), b"").unwrap_or_else(|e| unreachable!("{e}"));
     let mut budget = Budget::new(usize::MAX);
     let result = scan_with(&root, &BTreeSet::new(), &mut budget, |directory| {
         if directory.ends_with("sub") {
-            Err(io::Error::from(kind))
+            race(directory)
         } else {
             fs::read_dir(directory)
         }
@@ -25,30 +24,196 @@ fn scan_with_open_failing(kind: io::ErrorKind) -> io::Result<Entries> {
     result
 }
 
+fn root_children(entries: &Entries) -> &BTreeMap<PathBuf, Kind> {
+    entries
+        .values()
+        .next()
+        .unwrap_or_else(|| unreachable!("root is always recorded"))
+}
+
 #[test]
 fn a_directory_removed_before_it_is_opened_is_skipped_not_an_error() {
-    let entries = scan_with_open_failing(io::ErrorKind::NotFound);
+    let entries = scan_racing("removed", |directory: &Path| -> io::Result<fs::ReadDir> {
+        fs::remove_dir(directory)?;
+        fs::read_dir(directory)
+    });
     let Ok(entries) = entries else {
         panic!("scan failed on a directory removed before it was opened: {entries:?}");
     };
-    let root_children = entries
-        .values()
-        .next()
-        .unwrap_or_else(|| unreachable!("root is always recorded"));
-    assert!(
-        root_children.contains_key(Path::new("kept.txt")),
-        "{root_children:?}"
+    let children = root_children(&entries);
+    assert!(children.contains_key(Path::new("kept.txt")), "{children:?}");
+    assert!(!children.contains_key(Path::new("sub")), "{children:?}");
+    assert_eq!(entries.len(), 1, "{:?}", entries.keys());
+}
+
+#[test]
+fn a_directory_replaced_by_a_regular_file_before_it_is_opened_is_recorded_as_that_file() {
+    let entries = scan_racing(
+        "replaced-file",
+        |directory: &Path| -> io::Result<fs::ReadDir> {
+            fs::remove_dir(directory)?;
+            fs::write(directory, b"")?;
+            fs::read_dir(directory)
+        },
     );
-    assert!(
-        !root_children.contains_key(Path::new("sub")),
-        "vanished directory still recorded: {root_children:?}"
+    let Ok(entries) = entries else {
+        panic!("scan failed on a directory replaced by a file: {entries:?}");
+    };
+    let children = root_children(&entries);
+    assert_eq!(
+        children.get(Path::new("sub")),
+        Some(&Kind::File),
+        "{children:?}"
     );
     assert_eq!(entries.len(), 1, "{:?}", entries.keys());
 }
 
 #[test]
+fn a_directory_replaced_by_a_symbolic_link_before_it_is_opened_is_recorded_as_that_link() {
+    let entries = scan_racing(
+        "replaced-link",
+        |directory: &Path| -> io::Result<fs::ReadDir> {
+            let target = directory.with_file_name("kept.txt");
+            fs::remove_dir(directory)?;
+            std::os::unix::fs::symlink(target, directory)?;
+            fs::read_dir(directory)
+        },
+    );
+    let Ok(entries) = entries else {
+        panic!("scan failed on a directory replaced by a link: {entries:?}");
+    };
+    let children = root_children(&entries);
+    assert!(
+        matches!(children.get(Path::new("sub")), Some(Kind::Link { .. })),
+        "{children:?}"
+    );
+    assert_eq!(entries.len(), 1, "{:?}", entries.keys());
+}
+
+#[test]
+fn a_directory_replaced_by_a_link_to_itself_before_it_is_opened_is_recorded_as_that_link() {
+    let entries = scan_racing(
+        "replaced-loop",
+        |directory: &Path| -> io::Result<fs::ReadDir> {
+            fs::remove_dir(directory)?;
+            std::os::unix::fs::symlink(directory, directory)?;
+            fs::read_dir(directory)
+        },
+    );
+    let Ok(entries) = entries else {
+        panic!("scan failed on a directory replaced by a cyclic link: {entries:?}");
+    };
+    let children = root_children(&entries);
+    assert!(
+        matches!(
+            children.get(Path::new("sub")),
+            Some(Kind::Link { resolved: None, .. })
+        ),
+        "{children:?}"
+    );
+    assert_eq!(entries.len(), 1, "{:?}", entries.keys());
+}
+
+fn assert_link_to_directory_recorded(entries: io::Result<Entries>) {
+    let Ok(entries) = entries else {
+        panic!("scan failed on a directory replaced by a link to a directory: {entries:?}");
+    };
+    let children = root_children(&entries);
+    assert!(
+        matches!(
+            children.get(Path::new("sub")),
+            Some(Kind::Link {
+                resolved: Some(_),
+                ..
+            })
+        ),
+        "the replaced directory must be recorded as the link it now is: {children:?}"
+    );
+    assert!(
+        entries.keys().any(|path| path.ends_with("elsewhere")),
+        "the link target must be walked as a stable scan would: {:?}",
+        entries.keys()
+    );
+    assert!(
+        !entries.keys().any(|path| path.ends_with("sub")),
+        "the link must not be recorded as a directory: {:?}",
+        entries.keys()
+    );
+}
+
+fn replace_with_link_to_directory(directory: &Path) -> io::Result<()> {
+    let elsewhere = directory.with_file_name("elsewhere");
+    fs::create_dir(&elsewhere)?;
+    fs::write(elsewhere.join("inner.txt"), b"")?;
+    fs::remove_dir(directory)?;
+    std::os::unix::fs::symlink(elsewhere, directory)
+}
+
+#[test]
+fn a_directory_replaced_by_a_link_to_a_directory_before_it_is_opened_is_recorded_as_that_link() {
+    assert_link_to_directory_recorded(scan_racing(
+        "replaced-dir-link",
+        |directory: &Path| -> io::Result<fs::ReadDir> {
+            replace_with_link_to_directory(directory)?;
+            fs::read_dir(directory)
+        },
+    ));
+}
+
+#[test]
+fn a_directory_replaced_by_a_link_to_a_directory_just_after_it_is_opened_is_recorded_as_that_link()
+{
+    assert_link_to_directory_recorded(scan_racing(
+        "opened-then-replaced",
+        |directory: &Path| -> io::Result<fs::ReadDir> {
+            let listing = fs::read_dir(directory)?;
+            replace_with_link_to_directory(directory)?;
+            Ok(listing)
+        },
+    ));
+}
+
+#[test]
+fn a_directory_swapped_for_a_new_directory_after_it_is_opened_fails_the_scan() {
+    let entries = scan_racing(
+        "swapped-directory",
+        |directory: &Path| -> io::Result<fs::ReadDir> {
+            fs::write(directory.join("old.txt"), b"")?;
+            let listing = fs::read_dir(directory)?;
+            fs::rename(directory, directory.with_file_name("sub-old"))?;
+            fs::create_dir(directory)?;
+            fs::write(directory.join("old.txt"), b"")?;
+            fs::write(directory.join("new.txt"), b"")?;
+            Ok(listing)
+        },
+    );
+    assert!(
+        entries.is_err(),
+        "a directory swapped after it was opened must fail the scan, not record the old listing: {entries:?}"
+    );
+}
+
+#[test]
+fn a_directory_that_is_a_directory_again_before_it_is_opened_still_fails_the_scan() {
+    let entries = scan_racing(
+        "directory-again",
+        |directory: &Path| -> io::Result<fs::ReadDir> {
+            fs::remove_dir(directory)?;
+            fs::create_dir(directory)?;
+            Err(io::Error::from(io::ErrorKind::NotFound))
+        },
+    );
+    assert!(
+        matches!(&entries, Err(error) if error.kind() == io::ErrorKind::NotFound),
+        "{entries:?}"
+    );
+}
+
+#[test]
 fn a_directory_that_cannot_be_opened_still_fails_the_scan() {
-    let entries = scan_with_open_failing(io::ErrorKind::PermissionDenied);
+    let entries = scan_racing("denied", |_: &Path| {
+        Err(io::Error::from(io::ErrorKind::PermissionDenied))
+    });
     assert!(
         matches!(&entries, Err(error) if error.kind() == io::ErrorKind::PermissionDenied),
         "{entries:?}"
