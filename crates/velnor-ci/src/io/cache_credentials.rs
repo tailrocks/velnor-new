@@ -61,7 +61,7 @@ fn walk(directory: &Path, depth: usize, budget: &mut usize) -> Option<String> {
             ));
         }
     };
-    let mut subdirectories: Vec<PathBuf> = Vec::new();
+    let mut listed = Vec::new();
     for entry in entries {
         let Some(left) = budget.checked_sub(1) else {
             return Some(format!(
@@ -73,6 +73,11 @@ fn walk(directory: &Path, depth: usize, budget: &mut usize) -> Option<String> {
         let Ok(entry) = entry else {
             return Some(format!("cannot list {}", shown(directory)));
         };
+        listed.push(entry);
+    }
+    listed.sort_by_key(fs::DirEntry::file_name);
+    let mut subdirectories: Vec<PathBuf> = Vec::new();
+    for entry in listed {
         let path = entry.path();
         let name = entry.file_name().to_string_lossy().to_ascii_lowercase();
         let Ok(kind) = entry.file_type() else {
