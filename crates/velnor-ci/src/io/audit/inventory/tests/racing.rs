@@ -254,10 +254,16 @@ fn a_directory_removed_after_it_is_opened_is_dropped_from_the_inventory() {
     assert_eq!(entries.len(), 1, "{:?}", entries.keys());
 }
 
-fn scan_with_root_replaced_after_it_is_opened(replace: fn(&Path, &Path)) -> io::Result<Entries> {
+fn scan_with_root_replaced_after_it_is_opened(
+    name: &str,
+    replace: fn(&Path, &Path),
+) -> io::Result<Entries> {
     let base = fs::canonicalize(std::env::temp_dir())
         .unwrap_or_else(|e| unreachable!("{e}"))
-        .join(format!("velnor-scan-root-swap-{}", std::process::id()));
+        .join(format!(
+            "velnor-scan-root-swap-{name}-{}",
+            std::process::id()
+        ));
     let _ = fs::remove_dir_all(&base);
     let root = base.join("root");
     fs::create_dir_all(root.join("sub")).unwrap_or_else(|e| unreachable!("{e}"));
@@ -282,7 +288,7 @@ fn scan_with_root_replaced_after_it_is_opened(replace: fn(&Path, &Path)) -> io::
 
 #[test]
 fn a_root_removed_while_it_is_listed_fails_the_scan() {
-    let entries = scan_with_root_replaced_after_it_is_opened(|root, aside| {
+    let entries = scan_with_root_replaced_after_it_is_opened("removed", |root, aside| {
         fs::rename(root, aside).unwrap_or_else(|e| unreachable!("{e}"));
     });
     assert!(
@@ -293,7 +299,7 @@ fn a_root_removed_while_it_is_listed_fails_the_scan() {
 
 #[test]
 fn a_root_replaced_by_a_file_while_it_is_listed_fails_the_scan() {
-    let entries = scan_with_root_replaced_after_it_is_opened(|root, aside| {
+    let entries = scan_with_root_replaced_after_it_is_opened("replaced-by-file", |root, aside| {
         fs::rename(root, aside).unwrap_or_else(|e| unreachable!("{e}"));
         fs::write(root, b"").unwrap_or_else(|e| unreachable!("{e}"));
     });
@@ -305,10 +311,11 @@ fn a_root_replaced_by_a_file_while_it_is_listed_fails_the_scan() {
 
 #[test]
 fn a_root_replaced_by_a_directory_while_it_is_listed_fails_the_scan() {
-    let entries = scan_with_root_replaced_after_it_is_opened(|root, aside| {
-        fs::rename(root, aside).unwrap_or_else(|e| unreachable!("{e}"));
-        fs::create_dir(root).unwrap_or_else(|e| unreachable!("{e}"));
-    });
+    let entries =
+        scan_with_root_replaced_after_it_is_opened("replaced-by-directory", |root, aside| {
+            fs::rename(root, aside).unwrap_or_else(|e| unreachable!("{e}"));
+            fs::create_dir(root).unwrap_or_else(|e| unreachable!("{e}"));
+        });
     assert!(
         matches!(&entries, Err(error) if error.to_string().contains("was replaced by another directory while it was listed")),
         "{entries:?}"
