@@ -300,7 +300,13 @@ pub(crate) fn nextest_run(
     path: &str,
 ) -> (String, String, Vec<(String, Value)>) {
     let profile = if ci_profile { " --profile ci" } else { "" };
-    let explicit = if matches!(filter, FilterRef::Group { .. } | FilterRef::Expr { .. }) {
+    let explicit = if matches!(
+        filter,
+        FilterRef::Group {
+            include: Some(_),
+            ..
+        } | FilterRef::Expr { .. }
+    ) {
         " --ignore-default-filter"
     } else {
         ""

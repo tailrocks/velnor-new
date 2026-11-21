@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use serde::Deserialize;
 use velnor_rust::package_token;
 
-const NOT_RUNNABLE: &[&str] = &["ignored", "not-benchmark"];
+const NOT_RUNNABLE: &[&str] = &["ignored", "not-benchmark", "default-filter"];
 
 #[derive(Deserialize)]
 pub(super) struct Listed {
@@ -111,6 +111,13 @@ mod tests {
             "{{\"reason\":\"compiler-artifact\",\"package_id\":\"a\"}}\n{{\"reason\":\"build-finished\",\"success\":true}}\n{LISTING}\n"
         );
         let listing = runnable_matches(stdout.as_bytes()).expect("parses");
+        assert_eq!(listing.packages.get("a"), Some(&1));
+    }
+
+    #[test]
+    fn a_test_the_profile_filter_excludes_is_not_expected_to_run() {
+        let filtered = r#"{"rust-suites":{"a::lib":{"package-name":"a","testcases":{"t":{"filter-match":{"status":"matches"}},"u":{"filter-match":{"status":"mismatch","reason":"default-filter"}}}}}}"#;
+        let listing = runnable_matches(filtered.as_bytes()).expect("parses");
         assert_eq!(listing.packages.get("a"), Some(&1));
     }
 
