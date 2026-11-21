@@ -15,7 +15,7 @@ fn fixture_teardown_does_not_wait_for_a_silent_client() -> TestResult<()> {
     probe.write_all(b"GET /probe HTTP/1.1\r\nHost: fixture\r\n\r\n")?;
     let mut reply = Vec::new();
     probe.read_to_end(&mut reply)?;
-    assert!(!reply.is_empty());
+    assert_ne!(reply.len(), 0);
     let started = Instant::now();
     drop(api);
     let teardown = started.elapsed();
