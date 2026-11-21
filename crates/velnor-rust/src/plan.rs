@@ -209,18 +209,15 @@ pub(crate) fn mbx(facts: &RepoFacts, seed_gate: Option<Gate>) -> Vec<Step> {
 pub(crate) fn rust_additions(declared: Option<&Toolchain>, root: &RustRoot) -> Vec<Step> {
     let mut steps = Vec::new();
     if declared.is_none_or(|toolchain| toolchain.path.is_none()) {
-        let mut components: Vec<String> = declared
-            .map(|toolchain| toolchain.components.clone())
-            .unwrap_or_default();
+        let mut components: Vec<String> =
+            declared.map_or_default(|toolchain| toolchain.components.clone());
         if declared.is_some_and(|toolchain| toolchain.profile.as_deref() == Some("default")) {
             components.push("rust-docs".to_owned());
         }
         components.extend(["rustfmt".to_owned(), "clippy".to_owned()]);
         components.sort();
         components.dedup();
-        let targets = declared
-            .map(|toolchain| toolchain.targets.clone())
-            .unwrap_or_default();
+        let targets = declared.map_or_default(|toolchain| toolchain.targets.clone());
         for (kind, names) in [
             (StepKind::RustComponents(components.clone()), &components),
             (StepKind::RustTargets(targets.clone()), &targets),
@@ -301,6 +298,7 @@ pub(crate) fn setup_units(
                 step(StepKind::CacheRestore(CacheKey::Sources {
                     host: Host,
                     lane: cache_root.clone(),
+                    scope: crate::base_cache::base_scope(facts),
                 })),
             ));
         }
@@ -310,6 +308,7 @@ pub(crate) fn setup_units(
                 job: family.clone(),
                 root: cache_root,
                 host: Host,
+                scope: crate::base_cache::base_scope(facts),
             })),
         ));
         toolchain.extend(crate::delta_cache::restore(facts, unit, family, lane));

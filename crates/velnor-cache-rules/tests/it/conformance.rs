@@ -96,7 +96,7 @@ fn token_scopes_match_the_access_of_each_recorded_event() {
             .collect();
         let recorded: Vec<(u64, String)> = document["legs"][name]["cache_scopes"]
             .as_array()
-            .map(|items| {
+            .map_or_default(|items| {
                 items
                     .iter()
                     .map(|item| {
@@ -106,8 +106,7 @@ fn token_scopes_match_the_access_of_each_recorded_event() {
                         (item["permission"].as_u64().unwrap_or(0), normalized(&scope))
                     })
                     .collect()
-            })
-            .unwrap_or_default();
+            });
         assert_eq!(recorded, expected, "{name}");
     }
 }

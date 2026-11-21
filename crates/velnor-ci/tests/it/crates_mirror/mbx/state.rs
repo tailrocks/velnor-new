@@ -18,7 +18,7 @@ const CONFIG_FILES: [&str; 6] = [
     ".config/mise.toml",
     ".config/mise/config.toml",
 ];
-const ARRAY_FORM: &str = "[tools]\nrust = [{ version = \"1.99.1\", mr_boxington = true }]\n";
+const ARRAY_FORM: &str = "[tools]\nrust = [{ version = \"1.100.0\", mr_boxington = true }]\n";
 const WRAPPER_PATH: &str = "[wrappers.cargo]\ncommand = \"/opt/tools/bin/mbx\"\n";
 
 fn final_env(root: &Path, name: &str) -> Result<Option<String>, Box<dyn std::error::Error>> {
@@ -67,7 +67,7 @@ fn setup_run_without_mbx_or_mirror_clears_the_modes_an_earlier_run_exported() ->
         Some("required")
     );
     assert!(final_env(repo.root(), "VELNOR_CARGO_CONFIG")?.is_some_and(|value| !value.is_empty()));
-    repo.write_unstaged("mise.toml", "[tools]\nrust = \"1.99.1\"\n");
+    repo.write_unstaged("mise.toml", "[tools]\nrust = \"1.100.0\"\n");
     let second = setup_command(repo.root(), REGISTRY)
         .current_dir(repo.root())
         .env("VELNOR_CRATES_MIRROR", "off")
@@ -93,7 +93,7 @@ fn setup_run_with_the_mirror_and_no_mbx_clears_a_stale_mbx_mode() -> TestResult 
         .current_dir(repo.root())
         .output()?;
     assert!(first.status.success(), "{first:?}");
-    repo.write_unstaged("mise.toml", "[tools]\nrust = \"1.99.1\"\n");
+    repo.write_unstaged("mise.toml", "[tools]\nrust = \"1.100.0\"\n");
     let second = setup_command(repo.root(), REGISTRY)
         .current_dir(repo.root())
         .output()?;
