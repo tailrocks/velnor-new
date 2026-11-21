@@ -13,7 +13,9 @@ LINE_INDENT = re.compile(QUOTE + r" {5,}\S")
 ATTR_INDENT = re.compile(r" {4,}\S|(?:[ \t]*>)+ {5,}\S")
 LIST_START = re.compile(r"[ \t]*" + QUOTE + r"(?:[-*+]|\d{1,9}[.)])(?:[ \t]|$)")
 ORDERED_LEAD = re.compile(r"[ \t]*(?:>[ \t]*)*(\d{1,9})[.)](?=[ \t])")
-HTML_END = re.compile(r"</(?:script|pre|style|textarea)\s*>|-->|\?>|\]\]>", re.I)
+HTML_END = re.compile(r"(?:</(?:script|pre|style|textarea)\s*>|-->|\?>|\]\]>)\s*$", re.I)
+SETEXT_EQ = re.compile(r"=+")
+TABLE_LINE = re.compile(r"\|.*\||:?-+:?(?:\s*\|\s*:?-+:?)+")
 LIST_INDENT = re.compile(r"[ \t]*" + CONTAINER + r"(?:[-*+]|\d{1,9}[.)]) {5,}\S")
 BLOCK_MARGIN = re.compile(r"[ \t]*\*?")
 QUOTE_START = re.compile(r"[ \t]*>")
@@ -102,7 +104,14 @@ def prose(line):
     if line is None:
         return False
     text = re.sub("^" + CONTAINER, "", line.strip(), count=1)
-    return bool(text) and not text.startswith("#") and not HRULE.fullmatch(text) and not HTML_END.search(text)
+    return (
+        bool(text)
+        and not text.startswith("#")
+        and not HRULE.fullmatch(text)
+        and not SETEXT_EQ.fullmatch(text)
+        and not TABLE_LINE.fullmatch(text)
+        and not HTML_END.search(text)
+    )
 
 
 def split_lines(text):
@@ -139,6 +148,8 @@ def markdown_hit(lines, indent):
             return k
         if LIST_START.match(line) and not continues:
             opened = True
+        elif prose(line) and not prose(prev) and len(line) - len(line.lstrip(" ")) <= 1:
+            opened = False
         prev = line
     return None
 
