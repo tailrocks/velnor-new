@@ -54,6 +54,7 @@ check bin_target_fence  fail 'pub fn f() {}\n' src/main.rs '/// ```\n/// let x =
 check example_fence     fail 'pub fn f() {}\n' examples/e.rs '/// ```\n/// let x = 1;\n/// ```\nfn main() {}\n'
 check not_feature_fence fail '#[cfg(not(feature = "gated"))]\n/// ```\n/// let x = 1;\n/// ```\nfn f() {}\n'
 check default_only_fence fail '#[cfg(all(feature = "on", not(feature = "gated")))]\n/// ```\n/// let x = 1;\n/// ```\nfn f() {}\n'
+check no_default_only_fence fail '#[cfg(not(feature = "on"))]\n/// ```\n/// let x = 1;\n/// ```\nfn f() {}\n'
 check plain_prose       pass '//! inner prose\n/// plain prose\nfn f() {}\n'
 check text_fence        pass '/// ```text\n/// not rust\n/// ```\nfn f() {}\n'
 check prose_cont_line   pass '/// prose\n///     let x = 1;\nfn f() {}\n'
