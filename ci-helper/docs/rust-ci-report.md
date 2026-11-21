@@ -13,8 +13,12 @@ deliberately when changing this contract.
 ## Lane fields
 
 - `lane` identifies the job; `caches` describes each cache family and root.
-- Cache keys include `requested_key`, `matched_key` and, for a save whose key a
-  step records, `saved_key` (absent otherwise); `hit` is `exact`,
+- Cache keys include `requested_key`, `matched_key` and `saved_key`, the key a
+  save ran under. `saved_key` has three states: absent, when the plan names no
+  `save_key_step` or no save was attempted; a nonempty string, when the named
+  step recorded its `key` output; and `""`, when a save was attempted under a
+  `save_key_step` but that step recorded no key. The checker treats `""` as
+  unavailable and fails that save as unverifiable. `hit` is `exact`,
   `fallback`, or `miss`. `bytes` is the archive byte count, or `null` when the
   API cannot establish it. `usable` and `usable_same_lock` describe restored
   target data. `save` is `not_attempted`, `saved`, `failed`, or `unknown`.

@@ -179,7 +179,7 @@ fn tools_save_under_a_new_key_after_a_miss_is_looked_up_under_the_saved_key() ->
             steps["saved_key"]["outputs"]["key"] = json!(key);
         }
         let listing = |key: &str| {
-            let entries = if key == "tools-new" || key == "tools-old" {
+            let entries = if key == "tools-new" {
                 json!([{"key":key,"ref":"refs/heads/main","size_in_bytes":12}])
             } else {
                 json!([])

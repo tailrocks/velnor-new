@@ -150,11 +150,7 @@ pub fn waste(metrics: &LaneMetrics) -> Vec<String> {
                 format!(
                     "{} cache save failed: {}",
                     cache.family,
-                    cache
-                        .saved_key
-                        .as_deref()
-                        .filter(|key| !key.is_empty())
-                        .unwrap_or(&cache.requested_key)
+                    save_key(cache)
                 )
             }),
     );
@@ -354,6 +350,14 @@ impl LaneMetrics {
     }
 }
 
+fn save_key(cache: &Cache) -> &str {
+    cache
+        .saved_key
+        .as_deref()
+        .filter(|key| !key.is_empty())
+        .unwrap_or(&cache.requested_key)
+}
+
 fn validate_evidence(lane: &LaneMetrics) -> Result<(), CiError> {
     if let Some(cache) = lane
         .caches
@@ -362,7 +366,8 @@ fn validate_evidence(lane: &LaneMetrics) -> Result<(), CiError> {
     {
         return Err(CiError::new(format!(
             "cannot verify cache save for lane {}: {}",
-            lane.lane, cache.requested_key
+            lane.lane,
+            save_key(cache)
         )));
     }
     if !lane.verification_errors.is_empty() {

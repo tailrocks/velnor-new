@@ -299,7 +299,9 @@ fn tools_saved_key_step(key: String) -> RenderedStep {
     RenderedStep {
         id: Some(crate::gate::TOOLS_SAVED_KEY_STEP.to_owned()),
         name: "Record the tools cache key".to_owned(),
-        condition: Some(format!("${{{{ steps.{network}.outcome == 'success' }}}}")),
+        condition: Some(format!(
+            "${{{{ !cancelled() && steps.{network}.outcome != 'skipped' }}}}"
+        )),
         env: vec![("CACHE_KEY".to_owned(), Value::Expr(key))],
         run: Some("echo \"key=$CACHE_KEY\" >> \"$GITHUB_OUTPUT\"".to_owned()),
         ..RenderedStep::default()

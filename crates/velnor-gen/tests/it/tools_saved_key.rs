@@ -92,7 +92,7 @@ fn the_tools_save_exposes_its_recorded_key_and_the_report_reads_it_from_helper_0
                 "{config:?} {id}: {record}"
             );
             assert_eq!(
-                record["if"], "${{ steps.save_tools.outcome == 'success' }}",
+                record["if"], "${{ !cancelled() && steps.save_tools.outcome != 'skipped' }}",
                 "{config:?} {id}"
             );
             assert!(
