@@ -16,7 +16,7 @@ fn a_private_store_path_with_a_line_break_cannot_add_an_environment_variable() {
     };
     assert_eq!(
         env_lines(&seeded("/runner/mbx")).as_deref().ok(),
-        Some("MBX_CACHE_DIR=/runner/mbx\nMBX_SHARE_OUT_DIR=0\n")
+        Some("MBX_CACHE_DIR=/runner/mbx\n")
     );
     assert!(env_lines(&seeded("/runner/mbx\nGITHUB_PATH=/evil")).is_err());
 }

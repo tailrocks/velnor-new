@@ -108,11 +108,44 @@ fn a_shared_store_helper_that_ships_the_setting_keeps_build_script_outputs_under
 }
 
 #[test]
+fn a_helper_that_appends_the_setting_itself_renders_no_standalone_step_in_the_shared_store()
+-> TestResult {
+    for version in ["0.1.112", "0.1.113"] {
+        let jobs = shared_store_runs(version)?;
+        assert_ne!(jobs.len(), 0, "{version}");
+        for runs in jobs {
+            assert_eq!(runs, [SHARED_STORE_RUN, SHARED_SEED_RUN], "{version}");
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn the_private_and_remote_paths_keep_the_standalone_step_where_no_helper_command_runs() -> TestResult
+{
+    for (config, expected) in [
+        (None, vec![STORE_RUN, OUT_DIRS_RUN]),
+        (Some(REMOTE), vec![OUT_DIRS_RUN]),
+    ] {
+        let jobs = compiling_jobs(config, "0.1.112")?;
+        assert_ne!(jobs.len(), 0);
+        for runs in jobs {
+            assert_eq!(runs, expected);
+        }
+    }
+    Ok(())
+}
+
+#[test]
 fn an_older_helper_renders_the_shared_store_byte_for_byte_as_before() -> TestResult {
     for (version, expected) in [
         ("0.1.85", vec![SHARED_STORE_RUN]),
         ("0.1.86", vec![SHARED_STORE_RUN, SHARED_SEED_RUN]),
         ("0.1.110", vec![SHARED_STORE_RUN, SHARED_SEED_RUN]),
+        (
+            "0.1.111",
+            vec![SHARED_STORE_RUN, OUT_DIRS_RUN, SHARED_SEED_RUN],
+        ),
     ] {
         let jobs = shared_store_runs(version)?;
         assert_ne!(jobs.len(), 0, "{version}");
