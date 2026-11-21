@@ -122,8 +122,10 @@ scan() {
     }
     return n
   }
-  function marker(line, out,    m) {
+  function marker(line, out,    m, pre) {
     if (!match(line, /helper-gate: first in (tools|rust-ci)-v0\.1\.[0-9]+ via [^ ]+/)) return 0
+    pre = substr(line, 1, RSTART - 1)
+    if (pre !~ /^[ \t]*(\/\/|\/\*|\*)/ && pre !~ /[;,{}][ \t]*\/\/[^"]*$/) return 0
     m = substr(line, RSTART, RLENGTH)
     match(m, /0\.1\.[0-9]+/)
     out["n"] = substr(m, RSTART + 4, RLENGTH - 4)
@@ -163,7 +165,7 @@ scan() {
     markC_now = has ? mk["commit"] : ""
     delete mk
     if (has && versions(stripped, probe) == 0) next
-    if (tolower(stripped) !~ /helper|gate|minimum|at_least|pin/) next
+    if (tolower(stripped) !~ /helper|gate|minimum|at_least|pin/ && stripped !~ /(const|static) [^=]*= *\(0, ?1, ?[0-9]+\)/) next
     added[++count] = file SUBSEP stripped
     markN[count] = markN_now
     markC[count] = markC_now

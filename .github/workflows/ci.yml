@@ -126,6 +126,15 @@ jobs:
           bash scripts/check-helper-gates.sh --diff /dev/null --tree "$fixtures/gate-tree-marked.diff" "${rel[@]}"
           bash scripts/check-helper-gates.sh --diff /dev/null --tree "$fixtures/gate-tree-future.diff" "${rel[@]}"
           bash scripts/check-helper-gates.sh --diff "$fixtures/gate-marker-in-code.diff" --current 0.1.110
+          bash scripts/check-helper-gates.sh --diff "$fixtures/gate-const-marked.diff" --current 0.1.110
+          if bash scripts/check-helper-gates.sh --diff "$fixtures/gate-const-unmarked.diff" --current 0.1.110; then
+            echo "the check accepted an unmarked released gate in a bare constant" >&2
+            exit 1
+          fi
+          if bash scripts/check-helper-gates.sh --diff "$fixtures/gate-string-marker.diff" --current 0.1.110; then
+            echo "the check accepted a helper-gate marker inside a string literal" >&2
+            exit 1
+          fi
           if bash scripts/check-helper-gates.sh --diff "$fixtures/gate-marker-malformed.diff" --current 0.1.110; then
             echo "the check accepted a malformed marker comment" >&2
             exit 1
