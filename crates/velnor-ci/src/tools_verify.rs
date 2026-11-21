@@ -12,6 +12,7 @@ use crate::tools_local::HOME_PATHS;
 use crate::tree_removal::remove_tree;
 
 const FORMAT: &str = "velnor-tools-anchor-v2";
+pub const MALFORMED_ANCHOR: &str = "malformed";
 const SET_MAX_BYTES: u64 = 1 << 20;
 const ANCHOR_MAX_BYTES: u64 = 1024;
 const FILE_MAX_BYTES: u64 = 2 << 30;
