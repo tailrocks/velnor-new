@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_model::{CheckoutScope, FullRun, OnMain, RepoPath, RepoView};
+use velnor_model::{CheckoutScope, FullRun, OnMain, RepoFacts, RepoPath, RepoView};
 use velnor_rust::{
     bytes_outside_lanes, detect, silent_build_scripts, sparse_checkout_planned,
     suggest_groups as suggested_groups,
@@ -25,6 +25,16 @@ pub fn notes(view: &RepoView) -> Result<Vec<String>, GenerateError> {
                 .map(velnor_rust::SilentBuildScript::note),
         )
         .collect())
+}
+
+pub(crate) fn expected_notes(facts: &RepoFacts) -> Vec<String> {
+    velnor_rust::untimed_auto_note(facts)
+        .into_iter()
+        .chain(velnor_rust::unverified_tools_note(facts))
+        .chain(velnor_rust::base_cache_note(facts))
+        .chain(crate::helper_gate::mint_note(facts))
+        .chain(facts.timings_notes.iter().cloned())
+        .collect()
 }
 
 pub const SPARSE_SUGGESTION_BYTES: u64 = 100 * 1024 * 1024;

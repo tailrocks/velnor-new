@@ -18,7 +18,7 @@ use crate::inputs::{
 use crate::restored_units::RestoredUnits;
 use crate::scope::Scope;
 pub(super) use sources::{
-    TrackedPaths, capture_inputs, source_files, top_level_files, tracked_paths,
+    TrackedPaths, capture_inputs, gitlinks, source_files, top_level_files, tracked_paths,
 };
 
 static NEXT_SNAPSHOT: AtomicU64 = AtomicU64::new(0);
