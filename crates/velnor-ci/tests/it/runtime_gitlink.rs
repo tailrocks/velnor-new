@@ -34,12 +34,13 @@ fn a_configurations_path_that_became_a_submodule_is_refused_by_scope_detection()
     );
     repo.write_unstaged(".velnor/rust-ci.toml", CONFIG);
     let digest = "a".repeat(64);
-    let lock = format!(
-        "{}\n[velnor-gen-binary]\nlinux-arm64 = \"{digest}\"\nlinux-x64 = \"{digest}\"\nmacos-arm64 = \"{digest}\"\n",
-        fs::read_to_string(repo.root().join(".velnor/rust-ci.lock"))
-            .unwrap_or_else(|e| unreachable!("{e}"))
-            .replace("0.1.111", "0.1.112")
-    );
+    let lock = fs::read_to_string(repo.root().join(".velnor/rust-ci.lock"))
+        .unwrap_or_else(|e| unreachable!("{e}"))
+        .replace("0.1.111", "0.1.112")
+        .replace(
+            "[velnor-gen-binary]\n",
+            &format!("[velnor-gen-binary]\nmacos-arm64 = \"{digest}\"\n"),
+        );
     repo.write_unstaged(".velnor/rust-ci.lock", &lock);
     repo.write_unstaged("ci/configurations.json", "[]\n");
     for lib in ["src/lib.rs", "tools/a/src/lib.rs", "tools/b/src/lib.rs"] {
@@ -60,9 +61,7 @@ fn a_configurations_path_that_became_a_submodule_is_refused_by_scope_detection()
         .current_dir(repo.root())
         .output()
         .unwrap_or_else(|e| unreachable!("{e}"));
-    assert!(
-        !output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!output.status.success(), "{stderr}");
+    assert!(stderr.contains("a git submodule"), "{stderr}");
 }
