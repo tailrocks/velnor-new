@@ -146,4 +146,18 @@ mod tests {
             verdict.err().map_or_else(String::new, |e| e.to_string())
         );
     }
+
+    #[test]
+    fn a_descriptor_with_a_save_step_is_parsed_and_its_failed_save_is_reported() {
+        let plans: Vec<CachePlan> = serde_json::from_str(
+            r#"[{"family":"sources","root":null,"restore_step":"restore","save_step":"save"}]"#,
+        )
+        .unwrap_or_else(|error| unreachable!("{error}"));
+        let steps = json!({
+            "restore": {"outcome": "success", "outputs": {}},
+            "save": {"outcome": "failure", "outputs": {}},
+        });
+        let (caches, _) = observe_caches(plans, &steps, true);
+        assert_eq!(caches[0].save, SaveOutcome::Failed);
+    }
 }

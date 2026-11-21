@@ -150,3 +150,20 @@ fn assert_named_saves_are_rendered(repo: &RepoView) -> TestResult {
     assert!(named > 0);
     Ok(())
 }
+
+#[test]
+fn a_released_pin_keeps_a_save_step_on_every_cache_descriptor() -> TestResult {
+    let parsed = parsed(&crate::base_save::pinned(
+        "0.1.110",
+        "shape = \"lint-test\"\n",
+    )?)?;
+    let mut checked = 0;
+    for job in parsed["jobs"].as_object().ok_or("jobs")?.values() {
+        for cache in caches_of(job)? {
+            checked += 1;
+            assert!(cache["save_step"].is_string(), "{cache}");
+        }
+    }
+    assert!(checked > 0);
+    Ok(())
+}
