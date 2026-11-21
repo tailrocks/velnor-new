@@ -51,7 +51,7 @@ pub(crate) fn prepared() -> (Repo, PathBuf) {
     (repo, cache)
 }
 
-fn rejected(repo: &Repo, cache: &Path, root: &str, job: &str) {
+fn rejected(repo: &Repo, cache: &Path, root: &str, job: &str) -> Output {
     let output = run(repo, root, job, "save", cache);
     assert!(!output.status.success(), "{output:?}");
     assert!(
@@ -66,6 +66,7 @@ fn rejected(repo: &Repo, cache: &Path, root: &str, job: &str) {
             }))
             .exists()
     );
+    output
 }
 
 #[test]
@@ -222,21 +223,21 @@ fn changed_checkout_inputs_or_identity_refuse_scope_reuse() {
                 rejected(&other, &cache, "", "job");
                 continue;
             }
-            "root" => {
-                let path = format!(
-                    "one/custom-target/{}",
-                    velnor_ci::inputs::inputs_file("one/")
-                );
-                repo.write_unstaged(&path, "stale");
-            }
             _ => {}
         }
-        rejected(
+        let output = rejected(
             &repo,
             &cache,
             if change == "root" { "one" } else { "" },
             if change == "job" { "other-job" } else { "job" },
         );
+        if change == "root" {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            assert!(
+                stderr.contains("cache has no scope for this root"),
+                "root refusal did not name the root identity: {stderr}"
+            );
+        }
     }
 }
 
