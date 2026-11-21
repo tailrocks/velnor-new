@@ -136,6 +136,7 @@ impl Fixture {
             .arg(root.join("trusted"))
             .arg("--home")
             .arg(root.join("home"))
+            .arg("--no-fixed-toolchain")
             .env_clear()
             .env("PATH", path)
             .env("VELNOR_API_URL", &api.url)
@@ -167,6 +168,7 @@ impl Fixture {
 }
 
 mod environment;
+mod fixed_toolchain;
 mod token;
 
 const MIRROR: &str = "# velnor-ci crates-mirror owns this file\n[source.crates-io]\nreplace-with = \"velnor-crates-mirror\"\n[source.velnor-crates-mirror]\nregistry = \"sparse+https://mirror.invalid/\"\n[http]\ncainfo = \"/etc/ssl/mirror.pem\"\n";

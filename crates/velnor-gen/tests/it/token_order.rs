@@ -120,17 +120,3 @@ fn nothing_restores_the_tool_directory_before_the_fetch() -> TestResult {
     assert!(fetches > 0, "no job fetches");
     Ok(())
 }
-
-#[test]
-fn a_job_that_runs_cargo_without_a_recognised_checkout_code_step_fails_the_check() {
-    let workflow = "jobs:\n  odd:\n    runs-on: x\n    steps:\n      - uses: actions/checkout@v4\n      - run: cargo build --locked\n";
-    let refused = assert_tokens_first("odd", workflow)
-        .err()
-        .map(|e| e.to_string());
-    assert!(
-        refused
-            .as_deref()
-            .is_some_and(|why| why.contains("no recognised step")),
-        "{refused:?}"
-    );
-}

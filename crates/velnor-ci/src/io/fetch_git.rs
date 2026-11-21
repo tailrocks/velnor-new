@@ -8,7 +8,6 @@ use std::path::{Path, PathBuf};
 
 use crate::error::CiError;
 
-const CONFIGS: &[&str] = &["config", "config.worktree"];
 const NEVER_COPIED: &[&str] = &[
     "config",
     "config.worktree",
@@ -18,33 +17,6 @@ const NEVER_COPIED: &[&str] = &[
 ];
 const BARE: &str = "[core]\n\trepositoryformatversion = 0\n\tfilemode = true\n\tbare = true\n";
 const WORKING: &str = "[core]\n\trepositoryformatversion = 0\n\tfilemode = true\n\tbare = false\n\tlogallrefupdates = true\n";
-
-pub(super) fn check_databases(cache: &Path) -> Result<(), CiError> {
-    for database in children(&cache.join("git/db"))? {
-        if !fs::metadata(&database).is_ok_and(|meta| meta.is_dir()) {
-            continue;
-        }
-        let mut configs: Vec<PathBuf> = CONFIGS.iter().map(|name| database.join(name)).collect();
-        configs.extend(
-            children(&database.join("worktrees"))?
-                .into_iter()
-                .map(|worktree| worktree.join("config.worktree")),
-        );
-        for config in configs {
-            match fs::read_to_string(&config) {
-                Ok(text) if super::saved_git_config::is_plain(&text) => {}
-                Err(e) if e.kind() == ErrorKind::NotFound => {}
-                _ => {
-                    return Err(CiError::new(format!(
-                        "{} is not a plain git config; refusing to run the fetch with the token",
-                        config.display()
-                    )));
-                }
-            }
-        }
-    }
-    Ok(())
-}
 
 pub(super) fn merge(fetched: &Path, cache: &Path) -> Result<(), CiError> {
     for directory in [
@@ -71,6 +43,8 @@ pub(super) fn merge(fetched: &Path, cache: &Path) -> Result<(), CiError> {
             unlinked(&target)?;
             if !target.exists() {
                 install(&target, |staged| working_tree(&revision, staged))?;
+            } else if !complete(&target) && complete(&revision) {
+                replace(&target, |staged| working_tree(&revision, staged))?;
             }
         }
     }
@@ -101,6 +75,27 @@ fn install(target: &Path, copy: impl FnOnce(&Path) -> Result<(), CiError>) -> Re
             Err(failed(target, &e))
         }
     })
+}
+
+fn complete(checkout: &Path) -> bool {
+    fs::symlink_metadata(checkout.join(".cargo-ok")).is_ok_and(|meta| meta.is_file())
+}
+
+fn replace(target: &Path, copy: impl FnOnce(&Path) -> Result<(), CiError>) -> Result<(), CiError> {
+    let aside = target.with_file_name(format!(
+        ".{}.velnor-old-{}",
+        name(target)?,
+        std::process::id()
+    ));
+    drop(fs::remove_dir_all(&aside));
+    fs::rename(target, &aside).map_err(|e| failed(target, &e))?;
+    let installed = install(target, copy);
+    if installed.is_err() && !target.exists() {
+        drop(fs::rename(&aside, target));
+    } else {
+        drop(fs::remove_dir_all(&aside));
+    }
+    installed
 }
 
 fn git_directory(source: &Path, target: &Path, config: &str) -> Result<(), CiError> {
@@ -146,6 +141,7 @@ fn working_tree(source: &Path, target: &Path) -> Result<(), CiError> {
 }
 
 fn objects(source: &Path, target: &Path) -> Result<(), CiError> {
+    unlinked(target)?;
     let mut entries = children(source)?;
     entries.sort_by_key(|entry| {
         entry
@@ -197,4 +193,88 @@ fn failed(path: &Path, error: &std::io::Error) -> CiError {
         "cannot move the fetched git sources at {}: {error}",
         path.display()
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn tree(name: &str) -> PathBuf {
+        let root = std::env::temp_dir().join(format!("velnor-git-{name}-{}", std::process::id()));
+        drop(fs::remove_dir_all(&root));
+        fs::create_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+        fs::canonicalize(&root).unwrap_or_else(|e| unreachable!("{e}"))
+    }
+
+    fn put(path: &Path, text: &str) {
+        fs::create_dir_all(path.parent().unwrap_or_else(|| unreachable!()))
+            .and_then(|()| fs::write(path, text))
+            .unwrap_or_else(|e| unreachable!("{e}"));
+    }
+
+    #[test]
+    fn a_cached_checkout_without_the_completion_marker_is_replaced_by_the_fetched_one() {
+        let root = tree("incomplete");
+        let (fetched, cache) = (root.join("fetched"), root.join("cache"));
+        let revision = "checkouts/dep-1/abc";
+        put(&fetched.join(revision).join("lib.rs"), "whole");
+        put(&fetched.join(revision).join(".cargo-ok"), "{}");
+        put(&cache.join(revision).join("lib.rs"), "trunc");
+        put(&cache.join(revision).join("stale.rs"), "stale");
+        merge(&fetched, &cache).unwrap_or_else(|e| unreachable!("{e}"));
+        let kept = cache.join(revision);
+        assert_eq!(
+            fs::read_to_string(kept.join("lib.rs")).ok().as_deref(),
+            Some("whole")
+        );
+        assert!(kept.join(".cargo-ok").is_file());
+        assert!(!kept.join("stale.rs").exists());
+        assert_eq!(
+            children(&cache.join("checkouts/dep-1"))
+                .map(|c| c.len())
+                .ok(),
+            Some(1)
+        );
+    }
+
+    #[test]
+    fn a_complete_cached_checkout_is_left_alone() {
+        let root = tree("complete");
+        let (fetched, cache) = (root.join("fetched"), root.join("cache"));
+        let revision = "checkouts/dep-1/abc";
+        put(&fetched.join(revision).join("lib.rs"), "fetched");
+        put(&fetched.join(revision).join(".cargo-ok"), "{}");
+        put(&cache.join(revision).join("lib.rs"), "cached");
+        put(&cache.join(revision).join(".cargo-ok"), "{}");
+        merge(&fetched, &cache).unwrap_or_else(|e| unreachable!("{e}"));
+        let text = fs::read_to_string(cache.join(revision).join("lib.rs"));
+        assert_eq!(text.ok().as_deref(), Some("cached"));
+    }
+
+    #[test]
+    fn a_linked_objects_directory_in_a_cached_database_is_never_written_through() {
+        for linked in ["objects", "objects/pack"] {
+            let root = tree(&format!("objects-{}", linked.replace('/', "-")));
+            let (fetched, cache) = (root.join("fetched"), root.join("cache"));
+            let outside = root.join("outside");
+            fs::create_dir_all(&outside).unwrap_or_else(|e| unreachable!("{e}"));
+            put(&fetched.join("db/dep-1/objects/pack/pack-1.pack"), "data");
+            put(&fetched.join("db/dep-1/objects/ab/cdef"), "loose");
+            put(&cache.join("db/dep-1/HEAD"), "ref");
+            let link = cache.join("db/dep-1").join(linked);
+            fs::create_dir_all(link.parent().unwrap_or_else(|| unreachable!()))
+                .unwrap_or_else(|e| unreachable!("{e}"));
+            symlink(&outside, &link).unwrap_or_else(|e| unreachable!("{e}"));
+            let error = merge(&fetched, &cache).err().map(|e| e.to_string());
+            assert_eq!(
+                fs::read_dir(&outside).map(Iterator::count).ok(),
+                Some(0),
+                "{linked}"
+            );
+            assert!(
+                error.is_some_and(|e| e.contains("symbolic link")),
+                "{linked}"
+            );
+        }
+    }
 }

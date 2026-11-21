@@ -11,12 +11,6 @@ use crate::private_fetch::{
     after_trusted_setup, compiles, shared_gate, status, token_mint, tokens_first,
 };
 
-/// Put the release asset phase in front of the first step that runs checkout code (the first
-/// cargo step before helper 0.1.111) of every job that compiles or runs tests, because a build
-/// script may read the assets: the restores, the merge queue check, the token, the one step that
-/// downloads and verifies and revokes, and the saves, so no repository code runs between the
-/// verification and the save. Formatting, `cargo machete` and `cargo deny` run no build script
-/// and get nothing.
 pub(crate) fn insert(facts: &RepoFacts, jobs: &mut [Job]) {
     let config = &facts.config;
     let (Some(sources), false) = (&config.private_sources, config.release_assets.is_empty()) else {

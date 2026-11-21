@@ -80,6 +80,7 @@ pub mod tests_run;
 pub mod ties;
 pub mod time;
 pub mod timings;
+pub mod tools_discard;
 pub mod tools_local;
 pub mod tools_verify;
 pub mod tools_verify_step;
