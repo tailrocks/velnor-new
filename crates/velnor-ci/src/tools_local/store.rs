@@ -192,7 +192,9 @@ pub(super) fn save(inputs: &Inputs<'_>) -> Outcome {
             Outcome::Failed("the entry could not be published")
         };
     }
-    fs::remove_dir_all(&retired).ok();
+    if replaced && fs::remove_dir_all(&retired).is_err() {
+        return Outcome::Failed("the replaced entry could not be removed");
+    }
     prune(&tools, inputs.key);
     if replaced {
         Outcome::Healed { to: entry }
