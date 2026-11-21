@@ -8,6 +8,7 @@ use crate::plan::step;
 
 const MBX_REPORTS_HELPER: (u64, u64, u64) = (0, 1, 111);
 const MBX_REPORTS_RELEASE: (u64, u64, u64) = (1, 30, 0);
+const MBX_COMPILING_JOBS_HELPER: (u64, u64, u64) = (0, 1, 112);
 
 pub(crate) fn apply(facts: &RepoFacts, jobs: &mut [Job]) {
     let remote = facts.config.mbx_remote == MbxRemote::GithubActions;
@@ -28,8 +29,16 @@ pub(crate) fn apply(facts: &RepoFacts, jobs: &mut [Job]) {
     } else {
         MbxStats::Summary
     };
+    let compiling_only = facts
+        .helper
+        .as_ref()
+        .is_some_and(|helper| helper.version().at_least(MBX_COMPILING_JOBS_HELPER));
     for job in jobs {
         if !compiles(job) {
+            if compiling_only {
+                job.steps
+                    .retain(|step| !matches!(step.kind, StepKind::MbxStore | StepKind::MbxSeed));
+            }
             continue;
         }
         job.mbx_stats = stats;
