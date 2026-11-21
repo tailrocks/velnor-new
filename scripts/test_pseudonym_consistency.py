@@ -77,6 +77,28 @@ class ConsistencyTests(unittest.TestCase):
         with tmp:
             self.assertEqual(check.disagreements(root), [])
 
+    def test_row_with_repository_and_owner_is_compared_by_its_repository(self):
+        tmp, root = repository(
+            {
+                "scope.json": f'{{"number": 44, "repository": "example-org/{repo(9)}", "iac_owner": "example-org/{repo(5)}", "sha": "{SHA}"}}\n',
+                "scope.md": f"| 44 | C | `example-org/{repo(3)}` | {SHA} |\n",
+            }
+        )
+        with tmp:
+            found = check.disagreements(root)
+            self.assertEqual([label for label, _names in found], [b"record:44"])
+            self.assertEqual(sorted(found[0][1]), [repo(3).encode(), repo(9).encode()])
+
+    def test_owner_pseudonym_after_the_repository_does_not_conflict(self):
+        tmp, root = repository(
+            {
+                "scope.json": f'{{"number": 44, "repository": "example-org/{repo(9)}", "iac_owner": "example-org/{repo(5)}", "sha": "{SHA}"}}\n',
+                "scope.csv": f"44,C,example-org/{repo(9)},{SHA},x\n",
+            }
+        )
+        with tmp:
+            self.assertEqual(check.disagreements(root), [])
+
 
 if __name__ == "__main__":
     unittest.main()

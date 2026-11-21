@@ -11,7 +11,6 @@ from pathlib import Path
 
 SALT = b"velnor-private-name-guard-v1:"
 HASH_FILE = Path(__file__).with_name("private-names-hashes.txt")
-EXEMPT = frozenset({"docs/hard-decisions.md"})
 MAX_REPORTED = 50
 CHUNK = re.compile(rb"[a-z0-9_.\-]+(?:/[a-z0-9_.\-]+)*")
 DROP = b"._-"
@@ -54,7 +53,6 @@ PARALLEL_FROM = 20_000
 
 
 def search(task):
-    """Runs in a forked worker: the stored-name substrings of one slice of words at one length."""
     length, low, high = task
     digests = SHARED["digests"]
     sha256 = hashlib.sha256
@@ -69,13 +67,6 @@ def search(task):
 
 
 class Matcher:
-    """Decides whether a text embeds a stored name, as one token or as a slashed `a/b` pair.
-
-    A chunk is a run of token characters joined by single slashes. `learn` hashes each
-    distinct substring of the whole batch's tokens once, and only at the distinct stored
-    lengths; the verdict per chunk lands in `bad`.
-    """
-
     def __init__(self, hashes):
         self.digests = frozenset(bytes.fromhex(hex_digest) for hex_digest in hashes)
         self.lengths = sorted(set(hashes.values()))
@@ -155,7 +146,6 @@ def tracked_files(root):
 
 
 def blobs(root, objects):
-    """Every blob's bytes through one `git cat-file --batch` process."""
     objects = sorted(objects)
     output = subprocess.run(
         ["git", "-C", str(root), "cat-file", "--batch"],
@@ -179,8 +169,7 @@ def blobs(root, objects):
 def scan(root, hashes):
     matcher = Matcher(hashes)
     listed = tracked_files(root)
-    exempt = {path.encode() for path in EXEMPT}
-    paths = {path: number for number, path in enumerate(listed, 1) if path not in exempt}
+    paths = {path: number for number, path in enumerate(listed, 1)}
     by_object = {}
     for path in paths:
         mode, obj = listed[path]

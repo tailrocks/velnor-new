@@ -1,11 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 # SPDX-License-Identifier: Apache-2.0
-"""Fail when one audit record carries different example-repo-N pseudonyms in different files.
-
-A record is keyed by what identifies it inside one row: its number together with its source SHA,
-or its repository node id. Every tracked row that carries such a key and a pseudonym must agree.
-"""
 import re
 import subprocess
 import sys
@@ -39,11 +34,11 @@ def disagreements(root):
         _number, _, row = rest.partition(b"\0")
         if not row:
             continue
-        found = set(PSEUDONYM.findall(row))
-        if len(found) != 1:
+        names = PSEUDONYM.findall(row)
+        if not names:
             continue
         for key in row_keys(row):
-            seen[key][next(iter(found))].add(path)
+            seen[key][names[0]].add(path)
     labelled = defaultdict(lambda: defaultdict(set))
     for key, names in seen.items():
         if len(names) > 1:

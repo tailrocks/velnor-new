@@ -35,7 +35,6 @@ def repository(files, links=None):
 
 
 def indexed(entries):
-    """A temp repository whose index holds raw byte paths; no file touches the filesystem."""
     tmp = tempfile.TemporaryDirectory(prefix="private-names-test-")
     root = Path(tmp.name)
     env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
@@ -200,10 +199,10 @@ class PathTests(unittest.TestCase):
             self.assertNotIn("zzplanted", found[0])
             self.assertEqual(guard.scan(root, planted("zzother")), [])
 
-    def test_exempt_file_is_skipped(self):
+    def test_name_in_hard_decisions_doc_is_found(self):
         tmp, root = repository({"docs/hard-decisions.md": "zzplanted\n"})
         with tmp:
-            self.assertEqual(guard.scan(root, planted("zzplanted")), [])
+            self.assertEqual(guard.scan(root, planted("zzplanted")), ["docs/hard-decisions.md:1"])
 
 
 if __name__ == "__main__":
