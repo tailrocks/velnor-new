@@ -83,3 +83,22 @@ fn a_global_option_list_cargo_would_reject_requires_mbx() -> TestResult {
     }
     Ok(())
 }
+
+#[test]
+fn a_dash_c_symlink_resolves_to_the_directory_whose_config_expands_the_alias() -> TestResult {
+    let repo = declared_job()?;
+    let launch = repo.root().join("launch");
+    fs::create_dir_all(&launch)?;
+    let deep = repo.root().join("scratch-project/deep");
+    fs::create_dir_all(&deep)?;
+    let config = repo.root().join("scratch-project/.cargo");
+    fs::create_dir_all(&config)?;
+    let manifest = repo.root().join("Cargo.toml").display().to_string();
+    fs::write(
+        config.join("config.toml"),
+        format!("[alias]\nfoo = \"build --manifest-path {manifest}\"\n"),
+    )?;
+    std::os::unix::fs::symlink(&deep, launch.join("link"))?;
+    assert_refused(&run_with_args(&repo, &launch, &["-C", "link", "foo"])?);
+    Ok(())
+}

@@ -141,26 +141,28 @@ pub fn parse(report: &[u8]) -> Result<Option<MbxSession>, String> {
             .bypasses
             .keys()
             .all(|reason| ROUTINE_PROBES.contains(&reason.as_str()));
-    Ok((looked_at || bypassed).then_some(MbxSession {
-        hits: counts.hits,
-        misses: counts.misses,
-        not_looked_up: counts.unconsulted,
-        verifications: Some(counts.verifications).filter(|count| *count > 0),
-        bypasses: counts
-            .bypasses
-            .iter()
-            .filter_map(|(reason, count)| Some((reason.clone(), count.as_u64()?)))
-            .collect(),
-        compiler: counts
-            .compiler
-            .into_iter()
-            .filter_map(|(outcome, work)| {
-                Some((
-                    outcome,
-                    serde_json::from_value::<MbxCompilerWork>(work).ok()?,
-                ))
-            })
-            .collect(),
-        probe_only,
-    }))
+    Ok(
+        (looked_at || bypassed || counts.verifications > 0).then_some(MbxSession {
+            hits: counts.hits,
+            misses: counts.misses,
+            not_looked_up: counts.unconsulted,
+            verifications: Some(counts.verifications).filter(|count| *count > 0),
+            bypasses: counts
+                .bypasses
+                .iter()
+                .filter_map(|(reason, count)| Some((reason.clone(), count.as_u64()?)))
+                .collect(),
+            compiler: counts
+                .compiler
+                .into_iter()
+                .filter_map(|(outcome, work)| {
+                    Some((
+                        outcome,
+                        serde_json::from_value::<MbxCompilerWork>(work).ok()?,
+                    ))
+                })
+                .collect(),
+            probe_only,
+        }),
+    )
 }

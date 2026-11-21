@@ -97,7 +97,9 @@ struct Leading<'a> {
 
 fn invocation_directory(launch: &Path, args: &[OsString]) -> Option<PathBuf> {
     let directory = leading(args)?.directory;
-    Some(directory.map_or_else(|| launch.to_path_buf(), |directory| launch.join(directory)))
+    let directory =
+        directory.map_or_else(|| launch.to_path_buf(), |directory| launch.join(directory));
+    std::fs::canonicalize(directory).ok()
 }
 
 pub(super) fn subcommand(args: &[OsString]) -> Option<(usize, &str)> {
