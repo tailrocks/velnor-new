@@ -12,6 +12,7 @@ use super::{Entries, Kind, Scan};
 pub(super) struct Hooks<'a> {
     pub(super) listed: &'a dyn Fn(&OsStr),
     pub(super) observed: &'a dyn Fn(&Path),
+    pub(super) resolved: &'a dyn Fn(&Path),
 }
 
 impl Default for Hooks<'_> {
@@ -19,6 +20,7 @@ impl Default for Hooks<'_> {
         Self {
             listed: &|_| {},
             observed: &|_| {},
+            resolved: &|_| {},
         }
     }
 }
@@ -42,7 +44,9 @@ pub(super) fn newest_with(
         };
         for (name, kind) in children {
             let path = directory.join(name);
-            match handle::observe(&listing, name.as_os_str(), &path)? {
+            match handle::observe(&listing, name.as_os_str(), &path, &|| {
+                (hooks.resolved)(&path);
+            })? {
                 Some(Observed {
                     kind: current,
                     modified,

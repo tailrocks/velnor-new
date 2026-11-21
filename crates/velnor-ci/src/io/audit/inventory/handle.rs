@@ -131,15 +131,16 @@ pub(super) fn names(
 }
 
 pub(super) fn kind_at(directory: impl AsFd, name: &OsStr, path: &Path) -> io::Result<Option<Kind>> {
-    Ok(classify(directory, name, path, false)?.map(|observed| observed.kind))
+    Ok(classify(directory, name, path, false, &|| {})?.map(|observed| observed.kind))
 }
 
 pub(super) fn observe(
     directory: impl AsFd,
     name: &OsStr,
     path: &Path,
+    resolved: &dyn Fn(),
 ) -> io::Result<Option<Observed>> {
-    classify(directory, name, path, true)
+    classify(directory, name, path, true, resolved)
 }
 
 fn modified(stat: &FileStat) -> SystemTime {
@@ -160,6 +161,7 @@ fn classify(
     name: &OsStr,
     path: &Path,
     with_modified: bool,
+    after_resolve: &dyn Fn(),
 ) -> io::Result<Option<Observed>> {
     let stat = match fstatat(&directory, name, AtFlags::AT_SYMLINK_NOFOLLOW) {
         Ok(stat) => stat,
@@ -184,23 +186,19 @@ fn classify(
         Err(errno) => return Err(failure(errno)),
     };
     let base = path.parent().unwrap_or(path);
-    let resolved = match resolve::resolve(directory.as_fd(), base, &target) {
-        Ok(resolved) => Some(resolved),
+    let followed = match resolve::resolve(directory.as_fd(), base, &target) {
+        Ok(followed) => Some(followed),
         Err(error) if unresolved_link(&error) => None,
         Err(error) => return Err(error),
     };
+    after_resolve();
     let modified = if with_modified {
-        let followed = match fstatat(&directory, name, AtFlags::empty()) {
-            Ok(followed) => followed,
-            Err(
-                nix::errno::Errno::ENOENT | nix::errno::Errno::ELOOP | nix::errno::Errno::ENOTDIR,
-            ) => stat,
-            Err(errno) => return Err(failure(errno)),
-        };
-        (format_of(&followed) != SFlag::S_IFDIR).then(|| modified(&followed))
+        let observed = followed.as_ref().map_or(&stat, |followed| &followed.stat);
+        (format_of(observed) != SFlag::S_IFDIR).then(|| modified(observed))
     } else {
         None
     };
+    let resolved = followed.map(|followed| followed.path);
     Ok(Some(Observed {
         kind: Kind::Link { target, resolved },
         modified,

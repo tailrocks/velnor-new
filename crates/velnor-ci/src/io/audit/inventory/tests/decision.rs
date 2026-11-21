@@ -107,3 +107,62 @@ fn a_directory_changed_while_its_children_are_observed_makes_the_snapshot_stale(
         "a change made while the children were observed was accepted: {newest:?}"
     );
 }
+
+fn set_modified(path: &Path, seconds: u64) {
+    fs::File::open(path)
+        .and_then(|file| {
+            file.set_times(
+                fs::FileTimes::new()
+                    .set_modified(UNIX_EPOCH + std::time::Duration::from_secs(seconds)),
+            )
+        })
+        .unwrap_or_else(|e| unreachable!("{e}"));
+}
+
+#[test]
+fn a_link_target_ancestor_swapped_after_it_is_resolved_never_reports_the_decoy_time() {
+    let base = arena("ancestor-swap");
+    let root = base.join("root");
+    let real = base.join("ext").join("target.txt");
+    let decoy = base.join("evil").join("target.txt");
+    fs::create_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+    for file in [&real, &decoy] {
+        fs::create_dir_all(file.parent().unwrap_or_else(|| unreachable!("parent")))
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        fs::write(file, b"").unwrap_or_else(|e| unreachable!("{e}"));
+    }
+    std::os::unix::fs::symlink("../ext/target.txt", root.join("link"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    set_modified(&decoy, 0);
+    let scan = scanned(&root);
+    set_modified(&real, 1_700_000_000);
+    let swapped = AtomicBool::new(false);
+    let newest = newest_with(
+        &scan,
+        &scan.entries,
+        &Hooks {
+            resolved: &|_| {
+                if !swapped.swap(true, Ordering::Relaxed) {
+                    fs::rename(base.join("ext"), base.join("ext.gone"))
+                        .unwrap_or_else(|e| unreachable!("{e}"));
+                    fs::rename(base.join("evil"), base.join("ext"))
+                        .unwrap_or_else(|e| unreachable!("{e}"));
+                }
+            },
+            ..Hooks::default()
+        },
+    );
+    let swapped = swapped.load(Ordering::Relaxed);
+    fs::remove_dir_all(&base).unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(swapped, "the ancestor was never swapped");
+    let real_time = UNIX_EPOCH + std::time::Duration::from_secs(1_700_000_000);
+    let kept = match &newest {
+        Ok(None) => true,
+        Ok(Some(time)) => *time == real_time,
+        Err(_) => false,
+    };
+    assert!(
+        kept,
+        "an ancestor swapped after the target was resolved leaked the decoy: {newest:?}"
+    );
+}
