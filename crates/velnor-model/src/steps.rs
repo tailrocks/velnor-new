@@ -146,6 +146,7 @@ pub enum StepKind {
         name: String,
         run: String,
         before_build: bool,
+        offline_after_private_fetch: bool,
     },
     GeneratorCheck,
     InstallGenerator(HelperRelease),

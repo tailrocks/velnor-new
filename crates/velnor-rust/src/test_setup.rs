@@ -42,7 +42,7 @@ pub(crate) fn before_builds(facts: &RepoFacts, root: &RustRoot, mut steps: Vec<S
     let setup: Vec<Step> = setups
         .map(|setup| Step {
             gate: gate.clone(),
-            ..setup_step(root, setup, when, pr)
+            ..setup_step(root, setup, when, pr, false)
         })
         .collect();
     steps.splice(first..first, setup);
@@ -67,7 +67,7 @@ pub(crate) fn before_tests(
         .filter(|setup| setup.root == root.manifest.parent())
         .map(|setup| Step {
             gate: lane.steps(),
-            ..setup_step(root, setup, when, pr)
+            ..setup_step(root, setup, when, pr, false)
         })
         .collect();
     steps.splice(first..first, setup);
@@ -136,6 +136,7 @@ pub(crate) fn checked(
                 },
                 when,
                 pr,
+                true,
             )
         })
         .map(|check| Step {
@@ -175,6 +176,7 @@ fn setup_step(
     setup: &TestSetup,
     when: velnor_model::When,
     pr: velnor_model::PrRun,
+    offline_after_private_fetch: bool,
 ) -> Step {
     Step {
         directory: root.manifest.parent(),
@@ -184,6 +186,7 @@ fn setup_step(
             name: setup.name.clone(),
             run: setup.run.clone(),
             before_build: setup.before_build(),
+            offline_after_private_fetch,
         })
     }
 }
