@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs;
-use std::os::unix::fs::{MetadataExt, PermissionsExt};
+use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 
 use velnor_ci::tools_discard;
@@ -82,33 +82,10 @@ fn a_discard_lets_the_verified_tree_replace_the_poisoned_entry() {
 #[test]
 fn a_replacement_that_cannot_remove_the_old_entry_fails_instead_of_healing() {
     let (_repo, job, store) = poisoned_store("tools-heal-undeletable");
-    let home = &job.home;
-    let toolchain = store
-        .join("tools")
-        .join(KEY)
-        .join(".rustup/toolchains/1.99.1-x86_64-unknown-linux-gnu/bin");
-    fs::set_permissions(&toolchain, fs::Permissions::from_mode(0o555))
-        .unwrap_or_else(|e| unreachable!("{e}"));
-    let probe = toolchain.join(".probe");
-    if fs::File::create(&probe).is_ok() {
-        // A privileged process (root, or CAP_DAC_OVERRIDE) ignores the mode bits, so this
-        // directory cannot be made undeletable here and the failure path is not reachable.
-        fs::remove_file(&probe).ok();
-        eprintln!("skipped: the mode bits do not stop a privileged process from removing files");
-        return;
-    }
-    let outcome = save(&store, home, true);
-    let retired: Vec<PathBuf> = fs::read_dir(store.join("tools"))
-        .unwrap_or_else(|e| unreachable!("{e}"))
-        .flatten()
-        .map(|entry| entry.path())
-        .filter(|path| path.to_string_lossy().contains(".staging-retired-"))
-        .collect();
-    for path in &retired {
-        let stuck = path.join(".rustup/toolchains/1.99.1-x86_64-unknown-linux-gnu/bin");
-        fs::set_permissions(&stuck, fs::Permissions::from_mode(0o755))
-            .unwrap_or_else(|e| unreachable!("{e}"));
-    }
+    let entry = store.join("tools").join(KEY);
+    fs::remove_dir_all(&entry).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::write(&entry, "not a tree").unwrap_or_else(|e| unreachable!("{e}"));
+    let outcome = save(&store, &job.home, true);
     assert!(matches!(outcome, Outcome::Failed(_)), "{outcome:?}");
 }
 
