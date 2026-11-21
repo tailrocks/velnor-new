@@ -167,3 +167,15 @@ fn a_released_pin_keeps_a_save_step_on_every_cache_descriptor() -> TestResult {
     assert!(checked > 0);
     Ok(())
 }
+
+#[test]
+fn a_restore_only_tools_cache_names_no_save_step_it_does_not_render() -> TestResult {
+    let mut repo = crate::base_save::pinned("0.1.112", "")?;
+    let mise = RepoPath::new("mise.toml")?;
+    repo.tracked_paths.insert(mise.clone());
+    repo.files.insert(
+        mise,
+        b"[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n\n[tools]\nrust = { version = \"1.99.1\", mr_boxington = true }\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\ncargo-machete = \"0.9.1\"\n".to_vec(),
+    );
+    assert_named_saves_are_rendered(&repo)
+}

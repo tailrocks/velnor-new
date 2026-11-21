@@ -50,7 +50,12 @@ pub(crate) fn lane(kind: &StepKind, test_id: Option<String>) -> RenderedStep {
         let tools = matches!(key, CacheKey::Tools { .. });
         let step = |restore: bool, node: bool, id: &str| if tools && node { id.to_owned() } else { cache_id(key, restore) };
         let mut plan = serde_json::json!({"family":key.family(),"root":root,"restore_step":step(true, node_tools.restore, crate::gate::TOOLS_RESTORED_STEP)});
-        if tools || saved.contains(key) {
+        let saves = if tools {
+            node_tools.save || saved.iter().any(|saved| saved.family() == "tools")
+        } else {
+            saved.contains(key)
+        };
+        if saves {
             plan["save_step"] = serde_json::Value::String(step(false, node_tools.save, crate::gate::TOOLS_SAVED_STEP));
         }
         if let (false, Some(reason)) = (tools, not_generated) {
