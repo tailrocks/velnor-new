@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 
 use velnor_model::{
     CargoCommand, Gate, GateNeed, HelperCommand, Job, JobId, LaneFeatures, PackageName, PlanFrom,
-    PlanRef, PrCi, PrRun, RepoFacts, RootSlug, RustRoot, Step, StepKind, When,
+    PlanRef, PrCi, PrRun, RepoFacts, RootSlug, RustRoot, SetupOrder, Step, StepKind, When,
 };
 
 use crate::plan::{CHECKOUT_DEPTH, PLAN_DEPTH, RUST_JOB, head, job, mbx, step};
@@ -166,6 +166,7 @@ impl Lane {
             private_repo: false,
             pr: PrRun::Always,
             hosted_only: false,
+            setup_order: SetupOrder::Unordered,
             any_gate: Vec::new(),
         }
     }

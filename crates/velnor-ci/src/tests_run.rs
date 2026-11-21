@@ -23,6 +23,7 @@ pub use tap::SummaryTap;
 
 const LINE_LIMIT: usize = 4096;
 const RUN_FLAGS: &[&str] = &[
+    "--extract-overwrite",
     "--fail-fast",
     "--hide-progress-bar",
     "--no-capture",
@@ -31,9 +32,11 @@ const RUN_FLAGS: &[&str] = &[
     "--no-output-indent",
     "--no-run",
     "--nocapture",
+    "--persist-extract-tempdir",
 ];
 const RUN_OPTIONS: &[&str] = &[
     "--cargo-message-format",
+    "--extract-to",
     "--failure-output",
     "--final-status-level",
     "--flaky-result",
