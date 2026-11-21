@@ -96,8 +96,8 @@ fn plan_with(facts: &RepoFacts, deltas: bool) -> WorkflowPlan {
         jobs.insert(1, helper_job(facts, root, deltas));
     }
     apply_extensions(facts, &mut jobs, single);
-    crate::report::finish(facts, &mut jobs, single, draft_guard);
     crate::plan_tools::mark_anchor_keys(facts, &mut jobs);
+    crate::report::finish(facts, &mut jobs, single, draft_guard);
     WorkflowPlan {
         name: "Rust CI".to_owned(),
         triggers: triggers(facts),

@@ -93,9 +93,12 @@ fn anchor_bytes(facts: &RepoFacts, job: &Job) -> usize {
     if !reads || !budgets_anchor_outputs(facts) {
         return 0;
     }
-    property_bytes(TOOLS_ANCHOR_OUTPUT, TOOLS_ANCHOR_DIGEST_BYTES + 2).saturating_add(
-        property_bytes(TOOLS_ANCHOR_KEY_OUTPUT, CACHE_KEY_MAX_BYTES + 2),
-    )
+    let key = if job.anchor_key_output {
+        property_bytes(TOOLS_ANCHOR_KEY_OUTPUT, CACHE_KEY_MAX_BYTES + 2)
+    } else {
+        0
+    };
+    property_bytes(TOOLS_ANCHOR_OUTPUT, TOOLS_ANCHOR_DIGEST_BYTES + 2).saturating_add(key)
 }
 
 fn package_map_bytes(facts: &RepoFacts, slug: Option<&RootSlug>) -> usize {

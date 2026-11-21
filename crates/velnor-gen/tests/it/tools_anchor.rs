@@ -7,12 +7,9 @@ use crate::facts::TestResult;
 use crate::pipeline::{pin_helper, view, workflow};
 
 pub(crate) const HELPER: &str = "0.1.110";
-const PLAN: &str = "rust-plan";
+pub(crate) const PLAN: &str = "rust-plan";
 const PLAN_ANCHOR: &str = "${{ needs.rust-plan.outputs.tools_anchor }}";
-const PLAN_ANCHOR_KEY: &str = "${{ needs.rust-plan.outputs.tools_anchor_key }}";
-const PLAN_ANCHOR_KEY_NAME: &str = "needs.rust-plan.outputs.tools_anchor_key";
-const PLAN_ANCHOR_KEY_OUTPUT: &str = "${{ steps.toolsanchor.outputs.cache-matched-key }}";
-const READ_ANCHOR: &str = "${{ steps.toolsread.outputs.anchor }}";
+pub(crate) const READ_ANCHOR: &str = "${{ steps.toolsread.outputs.anchor }}";
 const RECORDED: &str = "${{ steps.toolsrecord.outputs.digest }}";
 pub(crate) const STORES: &[&str] = &["mbx_shared_store = true\n", "mbx_shared_store = false\n"];
 pub(crate) const PREFIX: &str = "velnor-tools-anchor-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles('mise.lock') }}-";
@@ -49,7 +46,7 @@ fn named<'a>(steps: &'a [Value], name: &str) -> Option<&'a Value> {
     steps.iter().find(|step| step["name"] == name)
 }
 
-fn position(steps: &[Value], pick: impl Fn(&Value) -> bool) -> Option<usize> {
+pub(crate) fn position(steps: &[Value], pick: impl Fn(&Value) -> bool) -> Option<usize> {
     steps.iter().position(pick)
 }
 
@@ -57,7 +54,7 @@ fn restores_tools(step: &Value) -> bool {
     step["name"] == "Restore the tools cache" || text(step, "run").contains("tools-local restore")
 }
 
-fn verifies(step: &Value) -> bool {
+pub(crate) fn verifies(step: &Value) -> bool {
     text(step, "run").ends_with("tools-verify check")
 }
 
@@ -282,77 +279,6 @@ fn a_job_without_a_plan_job_reads_the_anchor_itself() -> TestResult {
 }
 
 #[test]
-fn a_job_that_names_the_anchor_entry_reads_its_key_from_the_plan_job() -> TestResult {
-    for config in STORES.iter().copied() {
-        let yaml = render(&["Cargo.toml", "tools/Cargo.toml"], config, "0.1.111")?;
-        let mut verified = 0;
-        for (id, job) in jobs(&yaml)? {
-            if id == PLAN {
-                assert_eq!(
-                    job["outputs"]["tools_anchor_key"], PLAN_ANCHOR_KEY_OUTPUT,
-                    "{config:?}"
-                );
-                continue;
-            }
-            let steps = steps(&job);
-            let Some(verify) = position(&steps, verifies) else {
-                continue;
-            };
-            verified += 1;
-            assert_eq!(
-                steps[verify]["env"]["VELNOR_ANCHOR_CACHE_KEY"], PLAN_ANCHOR_KEY,
-                "{config:?} {id}"
-            );
-        }
-        assert!(verified >= 1, "{config:?}");
-    }
-    Ok(())
-}
-
-#[test]
-fn every_job_reading_the_plan_anchor_key_has_it_declared_and_lists_the_plan_job() -> TestResult {
-    for config in STORES.iter().copied() {
-        for manifests in [
-            &["Cargo.toml", "tools/Cargo.toml"][..],
-            &["Cargo.toml", "a/Cargo.toml", "b/Cargo.toml"][..],
-        ] {
-            let yaml = render(manifests, config, "0.1.111")?;
-            let declared = yaml["jobs"][PLAN]["outputs"]
-                .as_object()
-                .is_some_and(|outputs| outputs.contains_key("tools_anchor_key"));
-            let mut readers = 0;
-            for (id, job) in jobs(&yaml)? {
-                let reads = serde_json::to_string(&job["steps"])?.contains(PLAN_ANCHOR_KEY_NAME);
-                if reads {
-                    readers += 1;
-                    assert!(declared, "{config:?} {id} reads an undeclared plan output");
-                    let needs = serde_json::to_string(&job["needs"])?;
-                    assert!(needs.contains(PLAN), "{config:?} {id} needs {needs}");
-                }
-            }
-            assert_eq!(declared, readers > 0, "{config:?} {manifests:?}");
-        }
-    }
-    Ok(())
-}
-
-#[test]
-fn the_plan_job_of_helper_0_1_110_emits_the_anchor_digest_and_key_outputs() -> TestResult {
-    for config in STORES.iter().copied() {
-        let yaml = render(&["Cargo.toml", "tools/Cargo.toml"], config, HELPER)?;
-        let outputs = yaml["jobs"][PLAN]["outputs"]
-            .as_object()
-            .ok_or("plan outputs missing")?;
-        assert_eq!(outputs["tools_anchor"], READ_ANCHOR, "{config:?}");
-        assert_eq!(
-            outputs["tools_anchor_key"], PLAN_ANCHOR_KEY_OUTPUT,
-            "{config:?}"
-        );
-    }
-    Ok(())
-}
-
-#[test]
 fn a_helper_without_the_newest_anchor_keeps_one_anchor_restore_per_job() -> TestResult {
     for config in STORES.iter().copied() {
         let yaml = render(&["Cargo.toml", "tools/Cargo.toml"], config, "0.1.109")?;
@@ -374,27 +300,6 @@ fn a_helper_without_the_newest_anchor_keeps_one_anchor_restore_per_job() -> Test
                 .count();
         }
         assert!(restores >= 2, "{config:?}");
-    }
-    Ok(())
-}
-
-#[test]
-fn the_anchor_key_output_is_kept_before_helper_0_1_112_and_dropped_from_it() -> TestResult {
-    for config in STORES.iter().copied() {
-        for (helper, keyed) in [("0.1.111", true), ("0.1.112", false)] {
-            let mut readers = 0;
-            for (id, job) in jobs(&render(&["Cargo.toml"], config, helper)?)? {
-                let Some(outputs) = job["outputs"].as_object() else {
-                    continue;
-                };
-                if outputs.contains_key("tools_anchor") {
-                    readers += 1;
-                    let has_key = outputs.contains_key("tools_anchor_key");
-                    assert_eq!(has_key, keyed, "{helper} {id}");
-                }
-            }
-            assert!(readers > 0, "{config:?} {helper}");
-        }
     }
     Ok(())
 }

@@ -324,6 +324,7 @@ mod toolchain_components;
 mod tools_anchor;
 mod tools_anchor_attempt;
 mod tools_anchor_gate;
+mod tools_anchor_key;
 mod tools_anchor_size;
 mod tools_cache;
 mod tools_clear;
