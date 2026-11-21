@@ -154,14 +154,15 @@ impl RootJobs<'_> {
     }
 
     fn lane_job(&self, id: JobId, steps: Vec<Step>, checks: bool) -> Job {
-        let mut steps = if self.unit.grouped {
+        let grouped = self.unit.grouped;
+        let mut steps = if grouped {
             self.members.iter().fold(steps, |steps, member| {
                 crate::test_setup::before_builds(self.facts, &member.root, steps)
             })
         } else {
             crate::test_setup::inserted(self.facts, &self.unit.roots[0], self.lane, steps)
         };
-        steps = crate::test_setup::checked_members(self.facts, &self.members, steps, checks);
+        steps = crate::test_setup::place_checks(self.facts, &self.members, grouped, checks, steps);
         crate::delta_cache::append(&mut steps, self.facts, self.unit, self.lane, &id);
         Job {
             permissions: crate::base_cache::lane_permissions(self.facts),

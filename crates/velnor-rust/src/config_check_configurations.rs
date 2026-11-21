@@ -7,6 +7,8 @@ use velnor_model::{CheckConfigurations, RepoPath, RepoView, RustCiConfig, RustRo
 use crate::config::{CONFIG_PATH, rule_matches};
 use crate::error::{DetectError, Reason};
 
+pub(crate) const CHECKS_HELPER: (u64, u64, u64) = (0, 1, 112);
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct RawCheckConfigurations {
@@ -15,23 +17,7 @@ pub(crate) struct RawCheckConfigurations {
 }
 
 pub(crate) fn parse(raw: Vec<RawCheckConfigurations>) -> Result<Vec<CheckConfigurations>, Reason> {
-    let entries: Vec<CheckConfigurations> = raw.into_iter().map(entry).collect::<Result<_, _>>()?;
-    for (index, entry) in entries.iter().enumerate() {
-        if entries[..index].contains(entry) {
-            return Err(Reason::InvalidValue {
-                key: "check_configurations",
-                value: format!(
-                    "root {} with {}, listed twice",
-                    entry
-                        .root
-                        .as_ref()
-                        .map_or_else(|| ".".to_owned(), ToString::to_string),
-                    entry.command()
-                ),
-            });
-        }
-    }
-    Ok(entries)
+    raw.into_iter().map(entry).collect()
 }
 
 fn entry(raw: RawCheckConfigurations) -> Result<CheckConfigurations, Reason> {
@@ -69,8 +55,30 @@ pub(crate) fn check(
     view: &RepoView,
     config: &RustCiConfig,
     rust_roots: &[RustRoot],
+    current: bool,
 ) -> Result<(), DetectError> {
     let invalid = |reason| DetectError::invalid(&CONFIG_PATH, reason);
+    if current
+        && let Some(index) = config
+            .check_configurations
+            .iter()
+            .enumerate()
+            .find(|(index, entry)| config.check_configurations[..*index].contains(entry))
+            .map(|(index, _)| index)
+    {
+        let entry = &config.check_configurations[index];
+        return Err(invalid(Reason::InvalidValue {
+            key: "check_configurations",
+            value: format!(
+                "root {} with {}, listed twice",
+                entry
+                    .root
+                    .as_ref()
+                    .map_or_else(|| ".".to_owned(), ToString::to_string),
+                entry.command()
+            ),
+        }));
+    }
     if let Some(entry) = config.check_configurations.iter().find(|entry| {
         !rust_roots
             .iter()
@@ -91,7 +99,7 @@ pub(crate) fn check(
         let parts: Vec<RepoPath> =
             std::iter::successors(Some(file.clone()), RepoPath::parent).collect();
         let linked = parts.iter().any(|part| view.symlinks.contains(part));
-        let submodule = parts.iter().any(|part| view.gitlinks.contains(part));
+        let submodule = current && parts.iter().any(|part| view.gitlinks.contains(part));
         let reason = if !view.tracked_paths.contains(&file) {
             Some("a file that is not tracked in the repository")
         } else if linked {

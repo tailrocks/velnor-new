@@ -12,7 +12,8 @@ use crate::test_groups::{DATABASE, view_with};
 use crate::yaml_tree::document;
 
 const ROOTS: &[&str] = &["Cargo.toml", "tools/Cargo.toml"];
-const HELPER: &str = "0.1.111";
+const HELPER: &str = "0.1.110";
+const NEXT: &str = "0.1.112";
 const STEP: &str = "velnor-ci check-configurations";
 const KEY: &str =
     "[[check_configurations]]\nroot = '.'\nconfigurations = 'ci/configurations.json'\n";
@@ -96,11 +97,9 @@ fn the_configurations_file_is_optional_and_a_nested_root_runs_in_its_folder() ->
 
 #[test]
 fn a_helper_older_than_the_subcommand_is_refused_with_the_key_and_release() -> TestResult {
-    for older in ["0.1.109", "0.1.110"] {
-        let text = refusal(KEY, older)?;
-        assert!(text.contains("check_configurations"), "{older}: {text}");
-        assert!(text.contains("0.1.111"), "{older}: {text}");
-    }
+    let text = refusal(KEY, "0.1.109")?;
+    assert!(text.contains("check_configurations"), "{text}");
+    assert!(text.contains("0.1.110"), "{text}");
     jobs_of(KEY, HELPER)?;
     Ok(())
 }
@@ -255,7 +254,7 @@ fn a_symlinked_configurations_file_or_folder_is_refused() -> TestResult {
 fn a_parallel_test_lane_does_not_repeat_the_check_in_its_own_job() -> TestResult {
     let config =
         format!("{KEY}[[test_lane]]\nroot = '.'\nfeatures = ['local-mode']\njob = 'parallel'\n");
-    let steps = found(&jobs_of(&config, HELPER)?);
+    let steps = found(&jobs_of(&config, NEXT)?);
     let ids: Vec<&str> = steps.iter().map(|step| step.0.as_str()).collect();
     assert_eq!(ids, ["rust-root"], "{steps:?}");
     Ok(())
@@ -263,7 +262,7 @@ fn a_parallel_test_lane_does_not_repeat_the_check_in_its_own_job() -> TestResult
 
 #[test]
 fn a_root_without_a_test_command_still_gets_the_check_in_a_compiling_job() -> TestResult {
-    let mut view = tracked(KEY, HELPER)?;
+    let mut view = tracked(KEY, NEXT)?;
     for metadata in view.rust_metadata.values_mut() {
         for member in &mut metadata.members {
             for target in &mut member.targets {
@@ -282,7 +281,7 @@ fn a_grouped_root_runs_the_check_in_the_group_target_directory() -> TestResult {
     let view = view_with(
         &["Cargo.toml", "tools/a/Cargo.toml", "tools/b/Cargo.toml"],
         config,
-        HELPER,
+        NEXT,
     )?;
     let steps = found(&document(&workflow(&view)?)?["jobs"]);
     assert_eq!(steps.len(), 1, "{steps:?}");
@@ -295,7 +294,7 @@ fn a_grouped_root_runs_the_check_in_the_group_target_directory() -> TestResult {
 
 #[test]
 fn a_configurations_path_that_is_a_submodule_is_refused_like_a_symlink() -> TestResult {
-    let mut view = tracked(KEY, HELPER)?;
+    let mut view = tracked(KEY, NEXT)?;
     view.gitlinks
         .insert(RepoPath::new("ci/configurations.json")?);
     let error = workflow(&view)
@@ -316,7 +315,7 @@ fn a_configurations_path_that_is_a_submodule_is_refused_like_a_symlink() -> Test
 
 #[test]
 fn a_repeated_check_entry_is_refused_so_the_check_runs_once() -> TestResult {
-    let text = refusal(&format!("{KEY}{KEY}"), HELPER)?;
+    let text = refusal(&format!("{KEY}{KEY}"), NEXT)?;
     assert!(text.contains("check_configurations"), "{text}");
     Ok(())
 }
@@ -326,7 +325,7 @@ fn in_a_private_sources_job_the_check_runs_offline_after_the_token_is_revoked() 
     let config = format!(
         "{KEY}[private_sources]\napp_id = 'vars.A'\nprivate_key = 'secrets.K'\nrepositories = ['acme/lib']\n"
     );
-    let steps = found(&jobs_of(&config, HELPER)?);
+    let steps = found(&jobs_of(&config, NEXT)?);
     assert_eq!(steps.len(), 1, "{steps:?}");
     assert_eq!(steps[0].3["env"]["CARGO_NET_OFFLINE"], "true", "{steps:?}");
     Ok(())
@@ -338,7 +337,7 @@ fn a_testless_grouped_root_beside_a_tested_one_still_gets_its_check() -> TestRes
     let mut view = view_with(
         &["Cargo.toml", "tools/a/Cargo.toml", "tools/b/Cargo.toml"],
         config,
-        HELPER,
+        NEXT,
     )?;
     let testless = RepoPath::new("tools/b/Cargo.toml")?;
     let metadata = view
@@ -362,7 +361,7 @@ fn a_private_sources_job_makes_only_the_check_offline_not_the_repositorys_own_se
     let config = format!(
         "{KEY}[[test_setup]]\nroot = '.'\nname = 'Prepare the fixture'\nrun = 'bash scripts/prepare-fixture.sh'\n[private_sources]\napp_id = 'vars.A'\nprivate_key = 'secrets.K'\nrepositories = ['acme/lib']\n"
     );
-    let jobs = jobs_of(&config, HELPER)?;
+    let jobs = jobs_of(&config, NEXT)?;
     let mut setups = 0;
     for (id, job) in jobs.as_object().into_iter().flatten() {
         for step in job["steps"].as_array().into_iter().flatten() {
@@ -374,5 +373,13 @@ fn a_private_sources_job_makes_only_the_check_offline_not_the_repositorys_own_se
     }
     assert_eq!(setups, 1);
     assert_eq!(found(&jobs).len(), 1);
+    Ok(())
+}
+
+#[test]
+fn a_helper_before_0_1_112_renders_a_repeated_check_entry_as_it_did() -> TestResult {
+    let once = found(&jobs_of(KEY, "0.1.111")?).len();
+    let twice = found(&jobs_of(&format!("{KEY}{KEY}"), "0.1.111")?).len();
+    assert_eq!(twice, 2 * once, "{once} {twice}");
     Ok(())
 }
