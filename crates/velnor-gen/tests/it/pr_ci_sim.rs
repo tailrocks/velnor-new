@@ -121,8 +121,7 @@ pub(crate) fn context(
                 })
             }),
             "github.event.pull_request.labels.*.name" => Value::List(
-                pull.map(|pull| pull.labels.iter().map(|label| text(label)).collect())
-                    .unwrap_or_default(),
+                pull.map_or_default(|pull| pull.labels.iter().map(|label| text(label)).collect()),
             ),
             "needs.*.result" => Value::List(
                 needs
@@ -146,16 +145,13 @@ pub(crate) fn context(
 }
 
 pub(crate) fn strings(value: Option<&Json>) -> Vec<String> {
-    value
-        .and_then(Json::as_array)
-        .map(|items| {
-            items
-                .iter()
-                .filter_map(Json::as_str)
-                .map(str::to_owned)
-                .collect()
-        })
-        .unwrap_or_default()
+    value.and_then(Json::as_array).map_or_default(|items| {
+        items
+            .iter()
+            .filter_map(Json::as_str)
+            .map(str::to_owned)
+            .collect()
+    })
 }
 
 pub(crate) fn simulate(

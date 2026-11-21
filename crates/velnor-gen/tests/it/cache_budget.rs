@@ -2,20 +2,21 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeSet;
-use velnor_model::{CacheKey, CacheRoot, Host, JobId, RepoPath, ToolsAnchor};
+use velnor_model::{BaseScope, CacheKey, CacheRoot, Host, JobId, RepoPath, ToolsAnchor};
 use velnor_render::render_key_with_mise;
 use velnor_rust::{CacheEntry, budget_plan};
 
 const DAY: i64 = 86_400;
 const NOW: i64 = 20 * DAY;
 
-fn entry(id: u64, family: &str, age: i64) -> CacheEntry {
+pub(crate) fn entry(id: u64, family: &str, age: i64) -> CacheEntry {
     let key = match family {
         "tgt" => target_key(id, "rust-test", "Cargo.toml"),
         "src" => resolve_cache_key(
             &CacheKey::Sources {
                 host: Host,
                 lane: cache_root("Cargo.toml"),
+                scope: BaseScope::Shared,
             },
             id,
         ),
@@ -49,10 +50,10 @@ fn entry(id: u64, family: &str, age: i64) -> CacheEntry {
 fn delta(id: u64, age: i64) -> CacheEntry {
     entry(id, "dlt", age)
 }
-fn base(id: u64, family: &str) -> CacheEntry {
+pub(crate) fn base(id: u64, family: &str) -> CacheEntry {
     entry(id, family, 10 * DAY)
 }
-fn plan(entries: &[CacheEntry], budget: u64) -> Vec<u64> {
+pub(crate) fn plan(entries: &[CacheEntry], budget: u64) -> Vec<u64> {
     budget_plan(entries, &BTreeSet::from([1]), NOW, budget)
 }
 
@@ -239,18 +240,19 @@ fn target_key(id: u64, job: &str, manifest: &str) -> String {
         job: JobId::new(job).unwrap_or_else(|e| unreachable!("{e}")),
         root: cache_root(manifest),
         host: Host,
+        scope: BaseScope::Shared,
     };
     resolve_cache_key(&key, id)
 }
 
-fn cache_root(manifest: &str) -> CacheRoot {
+pub(crate) fn cache_root(manifest: &str) -> CacheRoot {
     CacheRoot::new(
         &RepoPath::new(manifest).unwrap_or_else(|e| unreachable!("{e}")),
         RepoPath::from_static("target"),
     )
 }
 
-fn resolve_cache_key(key: &CacheKey, id: u64) -> String {
+pub(crate) fn resolve_cache_key(key: &CacheKey, id: u64) -> String {
     let rendered = render_key_with_mise(key, &format!("2026.1.{id}")).key;
     let mut resolved = String::new();
     let mut rest = rendered.as_str();

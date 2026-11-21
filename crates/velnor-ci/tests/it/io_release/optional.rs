@@ -50,8 +50,9 @@ fn release_publish_drops_a_stale_optional_asset_from_a_retried_draft() {
     let sums: String = all_files()
         .iter()
         .find(|(name, _)| *name == "SHA256SUMS")
-        .map(|(_, text)| text.lines().take(2).flat_map(|line| [line, "\n"]).collect())
-        .unwrap_or_default();
+        .map_or_else(String::new, |(_, text)| {
+            text.lines().take(2).flat_map(|line| [line, "\n"]).collect()
+        });
     for (name, text) in all_files() {
         match name {
             "velnor-ci-macos-arm64" => {}
@@ -79,8 +80,9 @@ fn release_publish_skips_an_optional_asset_that_is_not_in_the_directory() {
     let sums: String = all_files()
         .iter()
         .find(|(name, _)| *name == "SHA256SUMS")
-        .map(|(_, text)| text.lines().take(2).flat_map(|line| [line, "\n"]).collect())
-        .unwrap_or_default();
+        .map_or_else(String::new, |(_, text)| {
+            text.lines().take(2).flat_map(|line| [line, "\n"]).collect()
+        });
     for (name, text) in all_files() {
         match name {
             "velnor-ci-macos-arm64" => {}

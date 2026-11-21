@@ -111,13 +111,14 @@ fn the_policy_tools_run_for_their_own_triggers() -> TestResult {
         deny: true,
         machete: true,
         deny_off: false,
+        checks: DenyChecks::ALL,
     };
     let cases: [Case<'_>; 11] = [
         (&["README.md"], false, false, (false, false)),
         (&[], false, false, (false, false)),
         (&["Cargo.lock"], false, true, (true, true)),
         (&["crates/a/Cargo.toml"], false, true, (true, true)),
-        (&["deny.toml"], false, true, (true, true)),
+        (&["deny.toml"], false, true, (true, false)),
         (&[".cargo/config.toml"], false, true, (true, true)),
         (
             &["docs/deny.toml.md", "src/Cargo.tomls"],
@@ -135,7 +136,12 @@ fn the_policy_tools_run_for_their_own_triggers() -> TestResult {
         assert_eq!((runs.deny, runs.machete), (deny, machete), "{paths:?}");
     }
     let no_tools = policy_runs(
-        PolicyTools::default(),
+        PolicyTools {
+            deny: false,
+            machete: false,
+            deny_off: false,
+            checks: DenyChecks::of(&[]),
+        },
         &changed(&["Cargo.lock"])?,
         true,
         true,
@@ -151,11 +157,13 @@ fn a_source_change_runs_the_policy_lane_when_machete_is_pinned() -> TestResult {
         deny: true,
         machete: false,
         deny_off: false,
+        checks: DenyChecks::ALL,
     };
     let machete = PolicyTools {
         deny: false,
         machete: true,
         deny_off: false,
+        checks: DenyChecks::ALL,
     };
     assert_eq!(
         policy_runs(deny_only, &changed, false, true),

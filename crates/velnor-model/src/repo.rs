@@ -103,6 +103,7 @@ pub struct RepoFacts {
     pub timings: BTreeMap<RepoPath, Timings>,
     pub timings_notes: Vec<String>,
     pub private_sources: Option<String>,
+    pub private_base_caches: bool,
     pub private_suggestion: Option<String>,
     pub unowned: BTreeMap<RepoPath, UnownedPackage>,
     pub policy: PolicyTools,
@@ -110,11 +111,31 @@ pub struct RepoFacts {
     pub weakenings: Vec<Weakening>,
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PolicyTools {
     pub deny: bool,
     pub machete: bool,
     pub deny_off: bool,
+    pub checks: DenyChecks,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DenyChecks(u8);
+
+impl DenyChecks {
+    pub const ALL: Self = Self(0b1111);
+
+    #[must_use]
+    pub fn of(checks: &[DenyCheck]) -> Self {
+        checks
+            .iter()
+            .fold(Self(0), |set, check| Self(set.0 | (1 << *check as u8)))
+    }
+
+    #[must_use]
+    pub fn contains(self, check: DenyCheck) -> bool {
+        self.0 & (1 << check as u8) != 0
+    }
 }
 
 impl PolicyTools {
@@ -309,8 +330,8 @@ pub struct ToolLock {
 
 pub use crate::policy_table::{DenyCheck, DenyLane, PolicyTable};
 pub use crate::repo_config::{
-    CacheDebug, CheckoutScope, CiDebugInfo, CratesMirror, DocsRun, FullRun, InputRule,
-    LaneFeatures, LaneJob, LaneKeysWritten, MbxRemote, MbxStore, OnMain, PrCi, PrivateSources,
-    PushAfterMergeGroup, RustCiConfig, SetupPhase, SpeedBudget, TestLane, TestSetup,
-    WorkspaceGroup,
+    CacheDebug, CheckoutScope, CiDebugInfo, CratesMirror, DocsRun, FullRun, GitRepository,
+    InputRule, LaneFeatures, LaneJob, LaneKeysWritten, MbxRemote, MbxStore, OnMain, PrCi,
+    PrivateSources, PublicSources, PushAfterMergeGroup, RustCiConfig, SetupPhase, SpeedBudget,
+    TestLane, TestSetup, WorkspaceGroup,
 };

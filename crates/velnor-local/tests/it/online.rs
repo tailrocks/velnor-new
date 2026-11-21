@@ -73,10 +73,7 @@ async fn it_fails_naming_the_count_when_a_runner_never_comes_online() {
         asked: AtomicUsize::new(0),
     };
     let error = await_online(&server, &SIDES, Duration::from_millis(500)).await;
-    let message = error
-        .err()
-        .map(|error| error.to_string())
-        .unwrap_or_default();
+    let message = error.err().map_or_default(|error| error.to_string());
     assert!(
         message.contains("0 of 2 trusted runners were online"),
         "{message}"
@@ -91,10 +88,7 @@ async fn it_needs_as_many_online_agents_as_pairs() {
         asked: AtomicUsize::new(0),
     };
     let error = await_online(&server, &SIDES, Duration::from_millis(500)).await;
-    let message = error
-        .err()
-        .map(|error| error.to_string())
-        .unwrap_or_default();
+    let message = error.err().map_or_default(|error| error.to_string());
     assert!(message.contains("1 of 2 trusted runners"), "{message}");
 }
 
@@ -128,8 +122,7 @@ async fn it_honours_the_deadline_when_runner_server_never_answers() {
     let message = result
         .expect("await_online hung past its own deadline")
         .err()
-        .map(|error| error.to_string())
-        .unwrap_or_default();
+        .map_or_default(|error| error.to_string());
     assert!(message.contains("did not answer within 60 s"), "{message}");
 }
 

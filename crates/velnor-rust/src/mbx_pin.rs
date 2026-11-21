@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{MbxRemote, RepoFacts};
+use velnor_model::{MBX_ACTION_RELEASE, MbxRemote, RepoFacts};
 
 use crate::error::{DetectError, Reason};
 use crate::mise::MISE_CONFIG;
@@ -25,32 +25,59 @@ pub fn exact_release(text: &str) -> Option<&str> {
 }
 
 pub(crate) fn check_mbx_pin(facts: &RepoFacts) -> Result<(), DetectError> {
-    let reads_pin = facts.config.mbx_remote == MbxRemote::GithubActions
-        && facts
-            .helper
-            .as_ref()
-            .is_some_and(|helper| helper.version().at_least(MBX_PIN_HELPER));
-    if !reads_pin {
+    if facts.config.mbx_remote != MbxRemote::GithubActions {
         return Ok(());
     }
-    let exact = match facts
+    let requests = facts
         .tools
         .tools
         .get(MBX_TOOL)
-        .map(|pin| &pin.requested[..])
+        .map(|pin| &pin.requested[..]);
+    let (major, minor, patch) = MBX_PIN_HELPER;
+    if facts
+        .helper
+        .as_ref()
+        .is_some_and(|helper| helper.version().at_least(MBX_PIN_HELPER))
     {
-        Some([request]) => request.os.is_none() && exact_release(&request.version).is_some(),
-        _ => false,
-    };
-    if exact {
-        return Ok(());
+        let exact = match requests {
+            Some([request]) => request.os.is_none() && exact_release(&request.version).is_some(),
+            _ => false,
+        };
+        if exact {
+            return Ok(());
+        }
+        return Err(pin_error(
+            facts,
+            "one exact X.Y.Z release, because the mbx action reads it from mise.toml".to_owned(),
+        ));
     }
-    Err(DetectError::invalid(
+    match requests {
+        None | Some([]) => Ok(()),
+        Some([request])
+            if request.os.is_none()
+                && exact_release(&request.version) == Some(MBX_ACTION_RELEASE) =>
+        {
+            Ok(())
+        }
+        Some(pins) => {
+            let pinned: Vec<&str> = pins.iter().map(|pin| pin.version.as_str()).collect();
+            Err(pin_error(
+                facts,
+                format!(
+                    "{MBX_ACTION_RELEASE}, the only release a velnor-ci helper before {major}.{minor}.{patch} installs (this pin is {}); pin mr-boxington to {MBX_ACTION_RELEASE} or pin velnor-ci {major}.{minor}.{patch} or later",
+                    pinned.join(", ")
+                ),
+            ))
+        }
+    }
+}
+
+fn pin_error(facts: &RepoFacts, value: String) -> DetectError {
+    DetectError::invalid(
         facts.tools.configs.first().unwrap_or(&MISE_CONFIG),
         Reason::InvalidValue {
             key: "tools.mr-boxington",
-            value: "one exact X.Y.Z release, because the mbx action reads it from mise.toml"
-                .to_owned(),
+            value,
         },
-    ))
+    )
 }
