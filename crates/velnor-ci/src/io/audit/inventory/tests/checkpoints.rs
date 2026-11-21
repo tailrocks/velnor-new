@@ -3,6 +3,7 @@
 
 use std::cell::RefCell;
 
+use super::super::latest::{Hooks, newest_with};
 use super::descriptors::deep_tree;
 use super::walk::HELD_HANDLES;
 use super::*;
@@ -169,6 +170,67 @@ fn a_child_removed_before_it_is_reopened_from_a_retained_ancestor_is_skipped() {
 }
 
 #[test]
+fn a_child_swapped_for_a_link_after_its_parent_was_evicted_is_recorded_as_a_link() {
+    let root = comb("linked", 40);
+    let target = root.with_file_name(format!(
+        "velnor-scan-checkpoints-target-{}",
+        std::process::id()
+    ));
+    let _ = fs::remove_dir_all(&target);
+    fs::create_dir_all(target.join("inside")).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::write(target.join("planted"), b"").unwrap_or_else(|e| unreachable!("{e}"));
+    let opened = RefCell::new(BTreeSet::new());
+    let swapped = RefCell::new(None);
+    let entries = scan_comb(
+        &root,
+        &Probe {
+            held: 8,
+            after_open: &|directory| {
+                opened.borrow_mut().insert(directory.to_path_buf());
+            },
+            reopened: &|parent, steps| {
+                if steps >= parent.components().count() || swapped.borrow().is_some() {
+                    return;
+                }
+                for entry in fs::read_dir(parent).unwrap_or_else(|e| unreachable!("{e}")) {
+                    let path = entry.unwrap_or_else(|e| unreachable!("{e}")).path();
+                    if path.ends_with("c") || opened.borrow().contains(&path) {
+                        continue;
+                    }
+                    fs::remove_dir(&path).unwrap_or_else(|e| unreachable!("{e}"));
+                    std::os::unix::fs::symlink(&target, &path)
+                        .unwrap_or_else(|e| unreachable!("{e}"));
+                    *swapped.borrow_mut() = Some(path);
+                    return;
+                }
+            },
+            ..Probe::default()
+        },
+    );
+    let _ = fs::remove_dir_all(&target);
+    fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+    let link = swapped
+        .into_inner()
+        .unwrap_or_else(|| panic!("no sibling was swapped after an anchored reopen"));
+    let entries = entries.unwrap_or_else(|e| panic!("{e}"));
+    let parent = link.parent().unwrap_or_else(|| unreachable!());
+    let name = link.file_name().map_or(Path::new(""), Path::new);
+    assert!(
+        matches!(&entries[parent][name], Kind::Link { resolved: Some(resolved), .. } if *resolved == target),
+        "{:?}",
+        entries[parent][name]
+    );
+    assert!(
+        !entries.keys().any(|key| key.starts_with(&link)),
+        "{link:?} was followed"
+    );
+    assert!(
+        entries.contains_key(&target),
+        "the link target was not recorded"
+    );
+}
+
+#[test]
 fn an_inventory_scanned_through_retained_ancestors_equals_the_unbounded_one() {
     let root = comb("equal", 40);
     let bounded = scan_comb(
@@ -189,5 +251,38 @@ fn an_inventory_scanned_through_retained_ancestors_equals_the_unbounded_one() {
     assert_eq!(
         bounded.unwrap_or_else(|e| panic!("{e}")),
         unbounded.unwrap_or_else(|e| panic!("{e}"))
+    );
+}
+
+#[test]
+fn a_checkpoint_moved_during_the_scan_is_rejected_by_the_freshness_pass() {
+    let root = comb("moved", 40);
+    let moved = RefCell::new(None);
+    let scan = walk(
+        &root,
+        &BTreeSet::new(),
+        &mut Budget::new(usize::MAX),
+        &Probe {
+            held: 8,
+            reopened: &|parent, steps| {
+                let anchored = steps < parent.components().count();
+                let anchor = parent.ancestors().nth(steps);
+                let pending = moved.borrow().is_none();
+                if let (true, true, Some(anchor)) = (anchored, pending, anchor) {
+                    aside(anchor);
+                    *moved.borrow_mut() = Some(anchor.to_path_buf());
+                }
+            },
+            ..Probe::default()
+        },
+    );
+    let newest = scan
+        .as_ref()
+        .map(|scan| newest_with(scan, &scan.entries, &Hooks::default()));
+    fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(moved.into_inner().is_some(), "no checkpoint was moved");
+    assert!(
+        matches!(newest, Ok(Ok(None))),
+        "a scan through a moved checkpoint was accepted as fresh: {newest:?}"
     );
 }
