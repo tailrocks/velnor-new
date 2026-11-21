@@ -3,7 +3,7 @@
 
 //! Every key `.velnor/rust-ci.toml` accepts, with the first `velnor-ci` that parses it.
 
-use super::{ConfigFile::RustCi, KeyGate, gate, gate_value};
+use super::{ConfigFile::RustCi, KeyGate, gate, gate_untagged, gate_value};
 use crate::HELPER_MINIMUM;
 
 pub(super) const RUST_CI: &[KeyGate] = &[
