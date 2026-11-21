@@ -114,9 +114,6 @@ fn run_lists_the_archive_scope_without_run_only_flags() {
             "list",
             "--archive-file",
             "a.tar.zst",
-            "--extract-to",
-            ".",
-            "--extract-overwrite",
             "--workspace-remap",
             "--ignore-default-filter",
             "-E",
@@ -124,7 +121,12 @@ fn run_lists_the_archive_scope_without_run_only_flags() {
             "--message-format",
             "json",
         ],
-        &["--locked", "--workspace"],
+        &[
+            "--locked",
+            "--workspace",
+            "--extract-to",
+            "--extract-overwrite",
+        ],
     );
 }
 

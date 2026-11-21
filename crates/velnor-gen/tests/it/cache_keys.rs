@@ -3,8 +3,8 @@
 
 use velnor_model::{
     BaseScope, BuildRecord, CacheKey, CacheRoot, Concurrency, Host, Job, JobId, Permissions, PrRun,
-    PullRequestType, RepoPath, RootSlug, RunnerLabel, Step, StepKind, ToolsAnchor, Triggers,
-    WORKFLOW_PATH, When, WorkflowPlan,
+    PullRequestType, RepoPath, RootSlug, RunnerLabel, SetupOrder, Step, StepKind, ToolsAnchor,
+    Triggers, WORKFLOW_PATH, When, WorkflowPlan,
 };
 use velnor_render::{RenderedKey, render, render_key, render_key_with_mise};
 
@@ -274,6 +274,7 @@ fn a_save_step_renders_the_same_key_without_fallbacks() -> TestResult {
                 pr: PrRun::Always,
                 gate: None,
                 reads: None,
+                setup_order: SetupOrder::Unordered,
             }],
         }],
     };
