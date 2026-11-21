@@ -91,12 +91,15 @@ fn anchor_bytes(job: &Job) -> usize {
     if !reads {
         return 0;
     }
-    property_bytes(TOOLS_ANCHOR_OUTPUT, TOOLS_ANCHOR_DIGEST_BYTES + 2).saturating_add(
+    let key = if job.anchor_key_output {
         property_bytes(
             TOOLS_ANCHOR_KEY_OUTPUT,
             CACHE_KEY_MAX_UNITS * JSON_UNIT_MAX_BYTES + 2,
-        ),
-    )
+        )
+    } else {
+        0
+    };
+    property_bytes(TOOLS_ANCHOR_OUTPUT, TOOLS_ANCHOR_DIGEST_BYTES + 2).saturating_add(key)
 }
 
 fn package_map_bytes(facts: &RepoFacts, slug: Option<&RootSlug>) -> usize {
