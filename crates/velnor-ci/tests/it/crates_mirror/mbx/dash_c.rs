@@ -5,6 +5,7 @@ use std::fs;
 
 use super::super::fixture::TestResult;
 use super::scope::{assert_plain, assert_refused, declared_job, run_with_args};
+use super::{MBX_DECLARED, plain_cargo, wrapper_command};
 
 #[test]
 fn a_dash_c_directory_names_the_project_for_a_build_started_outside_it() -> TestResult {
@@ -29,8 +30,14 @@ fn every_dash_c_spelling_names_the_project_it_changes_into() -> TestResult {
         (repo.root().display().to_string(), true),
         (scratch.display().to_string(), false),
     ] {
-        let spellings: [Vec<String>; 8] = [
+        let spellings: [Vec<String>; 9] = [
             vec!["-C".into(), directory.clone(), "build".into()],
+            vec![
+                "+stable".into(),
+                "-C".into(),
+                directory.clone(),
+                "build".into(),
+            ],
             vec![format!("-C{directory}"), "build".into()],
             vec![format!("-C={directory}"), "build".into()],
             vec![format!("-vC{directory}"), "build".into()],
@@ -66,7 +73,9 @@ fn every_dash_c_spelling_names_the_project_it_changes_into() -> TestResult {
 fn a_global_option_list_cargo_would_reject_requires_mbx() -> TestResult {
     let repo = declared_job()?;
     let launch = repo.root().join("launch");
-    let scratch = repo.root().join("scratch-project").display().to_string();
+    let scratch_dir = repo.root().join("scratch-project");
+    fs::create_dir_all(&scratch_dir)?;
+    let scratch = scratch_dir.display().to_string();
     let attached = format!("-C{scratch}");
     let twice = ["-C", scratch.as_str(), attached.as_str(), "build"];
     let rejected: [&[&str]; 7] = [
@@ -100,5 +109,54 @@ fn a_dash_c_symlink_resolves_to_the_directory_whose_config_expands_the_alias() -
     )?;
     std::os::unix::fs::symlink(&deep, launch.join("link"))?;
     assert_refused(&run_with_args(&repo, &launch, &["-C", "link", "foo"])?);
+    Ok(())
+}
+
+#[test]
+fn a_relative_manifest_path_resolves_against_the_dash_c_directory() -> TestResult {
+    let repo = declared_job()?;
+    let launch = repo.root().join("launch");
+    fs::create_dir_all(repo.root().join("scratch-project"))?;
+    let run = |directory: &str| -> Result<std::process::Output, Box<dyn std::error::Error>> {
+        run_with_args(
+            &repo,
+            &launch,
+            &["-C", directory, "metadata", "--manifest-path", "Cargo.toml"],
+        )
+    };
+    assert_refused(&run("..")?);
+    assert_plain(&run("../scratch-project")?);
+    Ok(())
+}
+
+#[test]
+fn a_dash_c_directory_that_does_not_exist_fails_closed() -> TestResult {
+    let repo = declared_job()?;
+    let launch = repo.root().join("launch");
+    assert_refused(&run_with_args(
+        &repo,
+        &launch,
+        &["-C", "missing-directory", "build"],
+    )?);
+    Ok(())
+}
+
+#[test]
+fn a_dash_c_into_a_member_of_a_declaring_workspace_walks_up_to_the_workspace() -> TestResult {
+    let repo = declared_job()?;
+    let launch = repo.root().join("launch");
+    let workspace = repo.root().join("workspace");
+    let member = workspace.join("crates/member");
+    fs::create_dir_all(&member)?;
+    fs::create_dir_all(&launch)?;
+    fs::write(workspace.join("mise.toml"), MBX_DECLARED)?;
+    let plain = plain_cargo(&repo)?;
+    let output = wrapper_command(repo.root(), &plain, false, &[])?
+        .current_dir(&launch)
+        .env("VELNOR_CARGO_MBX", "required")
+        .env("GITHUB_WORKSPACE", &workspace)
+        .args(["-C", "../workspace/crates/member", "build"])
+        .output()?;
+    assert_refused(&output);
     Ok(())
 }
