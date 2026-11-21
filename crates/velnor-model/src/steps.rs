@@ -167,6 +167,7 @@ pub enum StepKind {
         nextest_artifacts: bool,
         node_tools: ToolsTelemetry,
         not_generated: Option<String>,
+        unsuppressed: Vec<CacheKey>,
     },
     UploadMetrics,
     DownloadMetrics,
