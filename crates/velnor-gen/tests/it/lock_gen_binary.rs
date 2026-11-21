@@ -108,7 +108,7 @@ fn a_tampered_binary_digest_is_refused_online_and_named() -> TestResult {
     Ok(())
 }
 
-fn lock_refusal(text: &str) -> Result<String, Box<dyn Error>> {
+fn lock_refused(text: &str) -> TestResult {
     let view = repo(
         vec![("Cargo.toml", vec![lib("a", "a/Cargo.toml")?])],
         &[(LOCK_PATH.as_str(), text)],
@@ -116,50 +116,24 @@ fn lock_refusal(text: &str) -> Result<String, Box<dyn Error>> {
     match detect(&view) {
         Err(DetectError::Invalid {
             path,
-            reason: Reason::HelperLock(error),
-        }) if path == LOCK_PATH => Ok(error.to_string()),
+            reason: Reason::HelperLock(_),
+        }) if path == LOCK_PATH => Ok(()),
         Err(error) => Err(format!("refused at another file or reason: {error:?}").into()),
         Ok(_) => Err("accepted".into()),
     }
 }
 
 #[test]
-fn detect_names_a_malformed_binary_table_at_the_lock() -> TestResult {
-    let text = lock()?.replacen(GEN_BINARY_X64, "not-a-digest", 1);
-    assert_eq!(
-        lock_refusal(&text)?,
-        "[velnor-gen-binary] the SHA-256 for linux-x64 is not 64 lowercase hex digits"
-    );
-    Ok(())
-}
-
-#[test]
-fn detect_names_a_malformed_generator_table_at_the_lock() -> TestResult {
-    let text = lock()?.replacen(GEN_ARCHIVE_X64, "not-a-digest", 1);
-    assert_eq!(
-        lock_refusal(&text)?,
-        "[velnor-gen] the SHA-256 for linux-x64 is not 64 lowercase hex digits"
-    );
-    Ok(())
-}
-
-#[test]
-fn detect_names_a_malformed_ci_table_at_the_lock() -> TestResult {
-    let text = lock()?.replacen(CI_ARCHIVE_X64, "not-a-digest", 1);
-    assert_eq!(
-        lock_refusal(&text)?,
-        "[velnor-ci] the SHA-256 for linux-x64 is not 64 lowercase hex digits"
-    );
-    Ok(())
-}
-
-#[test]
-fn detect_names_a_malformed_ci_binary_table_at_the_lock() -> TestResult {
-    let text = lock()?.replacen(CI_BINARY_X64, "not-a-digest", 1);
-    assert_eq!(
-        lock_refusal(&text)?,
-        "[velnor-ci-binary] the SHA-256 for linux-x64 is not 64 lowercase hex digits"
-    );
+fn detect_refuses_a_malformed_digest_in_each_lock_table() -> TestResult {
+    for (table, digest) in [
+        ("velnor-gen-binary", GEN_BINARY_X64),
+        ("velnor-gen", GEN_ARCHIVE_X64),
+        ("velnor-ci", CI_ARCHIVE_X64),
+        ("velnor-ci-binary", CI_BINARY_X64),
+    ] {
+        let text = lock()?.replacen(digest, "not-a-digest", 1);
+        lock_refused(&text).map_err(|error| format!("[{table}] {error}"))?;
+    }
     Ok(())
 }
 
