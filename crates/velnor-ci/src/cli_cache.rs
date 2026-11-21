@@ -32,6 +32,10 @@ pub enum CacheCommand {
     Check(CheckArgs),
     #[command(about = "Enforce the repository cache budget while protecting newest bases")]
     Budget(BudgetArgs),
+    #[command(
+        about = "Delete every entry whose key starts with velnor-private-, unless GET /repos/$GITHUB_REPOSITORY on the API in VELNOR_API_URL, with the token in GITHUB_TOKEN, proves the repository private; a failed lookup deletes them too. Run it on the default branch, so that a repository that went public stops offering its private dependency caches to fork pull requests"
+    )]
+    PurgePrivate,
 }
 
 #[derive(Debug, Args)]

@@ -264,6 +264,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Cache(CacheCommand::Trim(args)) => cache::run_trim(&args.prefix, args.keep),
         Command::Cache(CacheCommand::TrimDeltas(args)) => delta_trim::run(args.run_id),
         Command::Cache(CacheCommand::Budget(args)) => cache_api::run_budget(&args),
+        Command::Cache(CacheCommand::PurgePrivate) => cache_api::run_purge_private(),
         Command::Restored(args) => small::run_restored(&args),
         Command::ValidateArtifactId => small::run_validate_artifact_id(),
         Command::Run(_) | Command::Sources(_) => {

@@ -233,6 +233,37 @@ pub fn budget(
     Ok(report.concat())
 }
 
+pub fn purge_private(github: &dyn GitHubWrite, repo: &Repo) -> Result<String, CiError> {
+    if crate::private_repo::require_private(&repo.to_string(), github).is_ok() {
+        return Ok(format!(
+            "{repo} is private, so its private-base entries stay\n"
+        ));
+    }
+    let entries = caches(github, repo)?;
+    unique_ids(entries.iter().map(|entry| entry.id))?;
+    let ids: Vec<u64> = entries
+        .iter()
+        .filter(|entry| velnor_rust::is_private_key(&entry.key))
+        .map(|entry| entry.id)
+        .collect();
+    delete_entries(github, repo, &ids)?;
+    Ok(format!(
+        "deleted {} private-base entries of {repo}\n",
+        ids.len()
+    ))
+}
+
+pub(super) fn run_purge_private() -> Result<String, CiError> {
+    let repository =
+        std::env::var("GITHUB_REPOSITORY").map_err(|_| CiError::new("set GITHUB_REPOSITORY"))?;
+    let github = super::http::HttpGitHub::new(
+        super::api_url(),
+        super::token()?,
+        super::http::DEFAULT_TIMEOUT,
+    );
+    purge_private(&github, &Repo::parse(&repository)?)
+}
+
 pub(super) fn run_budget(args: &BudgetArgs) -> Result<String, CiError> {
     let repository = args
         .repo

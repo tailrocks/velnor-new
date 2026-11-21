@@ -4,7 +4,7 @@
 use serde::Deserialize;
 
 use crate::error::CiError;
-pub use crate::io::cache_api::trim;
+pub use crate::io::cache_api::{purge_private, trim};
 use crate::logscan::LogScan;
 use crate::time::parse_utc;
 

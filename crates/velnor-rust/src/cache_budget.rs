@@ -168,6 +168,13 @@ pub fn is_sources_prefix(prefix: &str) -> bool {
 }
 
 #[must_use]
+pub fn is_private_key(key: &str) -> bool {
+    base_tag(key, "src", PRIVATE_SOURCES_TAG)
+        .or_else(|| base_tag(key, "tgt", PRIVATE_TARGET_TAG))
+        .is_some_and(|(_, private)| private)
+}
+
+#[must_use]
 pub fn target_family_prefix(prefix: &str) -> Option<&str> {
     let owner = prefix.strip_suffix('-')?;
     let (owner, compat) = owner.rsplit_once('-')?;

@@ -330,10 +330,15 @@ pub(crate) fn trim_job(facts: &RepoFacts, jobs: &[Job]) -> Option<Job> {
         })
     });
     let result = (!uploads.is_empty()).then(|| step(StepKind::CacheResult(uploads.clone())));
+    let purge = release
+        .version()
+        .at_least(PRIVATE_PREFIX_HELPER)
+        .then(|| step(StepKind::CachePurgePrivate));
     let steps = std::iter::once(step(StepKind::InstallHelper(release.clone())))
         .chain(trims)
         .chain(verifies)
         .chain(result)
+        .chain(purge)
         .chain([step(StepKind::CacheBudget(facts.config.cache_budget_bytes))])
         .collect();
     Some(Job {

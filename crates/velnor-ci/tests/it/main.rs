@@ -24,6 +24,7 @@ mod cache_private_repo;
 mod cache_prune;
 mod cache_prune_fresh;
 mod cache_prune_layout;
+mod cache_purge;
 mod cache_retention_flow;
 mod io_cold_foreign;
 mod io_gate;

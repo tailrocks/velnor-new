@@ -205,3 +205,25 @@ fn decide_gets_the_configured_cache_budget() -> TestResult {
     }
     Ok(())
 }
+
+#[test]
+fn the_private_base_purge_runs_before_the_budget_only_from_helper_0_1_112() -> TestResult {
+    let older = render("0.1.111", "full_run = \"off\"\n")?;
+    assert!(!older.contains("cache purge-private"), "{older}");
+    let text = render("0.1.112", "full_run = \"off\"\n")?;
+    let all = jobs_of(&text);
+    let (_, trim) = all.iter().find(|(id, _)| id == "rust-trim").ok_or("trim")?;
+    let purge = step(
+        trim,
+        "Delete the private-base caches of a public repository",
+    )
+    .ok_or("purge")?;
+    assert!(purge.contains("velnor-ci cache purge-private"), "{purge}");
+    assert!(purge.contains("GITHUB_TOKEN:"), "{purge}");
+    assert!(!purge.contains("    if:"), "{purge}");
+    assert_eq!(text.matches("cache purge-private").count(), 1);
+    let purge_at = trim.find("cache purge-private").ok_or("purge position")?;
+    let budget_at = trim.find("cache budget").ok_or("budget position")?;
+    assert!(purge_at < budget_at, "{trim}");
+    Ok(())
+}

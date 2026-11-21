@@ -9,7 +9,7 @@ use velnor_model::{
 
 use crate::artifact_steps::{download_step, upload_cargo_log, upload_step};
 use crate::base_steps::{
-    cache_budget, cache_trim, lane_outputs, sources_fetch, sources_fetch_all,
+    cache_budget, cache_purge_private, cache_trim, lane_outputs, sources_fetch, sources_fetch_all,
     sources_fetch_all_rest, sources_locks, trimmed_lane,
 };
 use crate::budget_steps::budget_step;
@@ -313,6 +313,7 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
         StepKind::CacheVerify { lane, family } => crate::cache_upload::verify(lane, *family),
         StepKind::CacheTrim { lane, family } => cache_trim(lane, *family),
         StepKind::CacheBudget(bytes) => cache_budget(*bytes),
+        StepKind::CachePurgePrivate => cache_purge_private(),
         StepKind::DeltaPrepare(root) => crate::delta_steps::delta_step(root, "prepare"),
         StepKind::DeltaApply(root) => crate::delta_steps::delta_step(root, "apply"),
         StepKind::DeltaStage(root, packages) => crate::delta_steps::delta_stage(root, packages),
