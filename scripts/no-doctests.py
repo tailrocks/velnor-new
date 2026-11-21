@@ -127,8 +127,16 @@ def block_text(lines):
     return [BLOCK_MARGIN.sub("", lines[0], count=1)] + body
 
 
+def unindent_run(bodies):
+    texts = [body[1:] if body[:1] == " " else body for body in bodies]
+    margin = min((len(text) - len(text.lstrip(" ")) for text in texts if text.strip()), default=0)
+    return [" " + text[margin:] if text.strip() else "" for text in texts]
+
+
 def carried(tail, inner):
-    return tail[1] if tail is not None and tail[0] == inner else None
+    if tail is None or tail[0] != inner:
+        return None, False
+    return tail[1], tail[2]
 
 
 def markdown_hit(lines, indent, prev=None):
@@ -186,11 +194,12 @@ def line_run(src, i):
     while True:
         k = src.find("\n", pos)
         end = len(src) if k < 0 else k
-        run.append((pos, doc_text_tabs(src[pos + 3 : end])))
+        text = src[pos + 3 : end]
+        run.append((pos, doc_text_tabs(text), "\t" in text))
         j = end + 1
         while j < len(src) and src[j] in " \t":
             j += 1
-        if not joinable or end >= len(src) or not LINE_DOC.match(src, j):
+        if not joinable or end >= len(src) or not LINE_DOC.match(src, j) or src.startswith("//!", j) != src.startswith("//!", i):
             return run, end
         pos = j
 
@@ -210,12 +219,14 @@ def doc_findings(src):
         if src.startswith("//", i):
             if LINE_DOC.match(src, i):
                 run, end = line_run(src, i)
-                bodies = [body for _, body in run]
+                bodies = [body for _, body, _ in run]
                 inner = src.startswith("//!", i)
-                hit = markdown_hit(bodies, LINE_INDENT, carried(tail, inner))
+                prev, seen = carried(tail, inner)
+                tabbed = any(tab for _, _, tab in run)
+                hit = markdown_hit(bodies if seen or tabbed else unindent_run(bodies), LINE_INDENT, prev)
                 if hit is not None:
                     yield run[hit][0]
-                tail = (inner, bodies[-1])
+                tail = (inner, bodies[-1], seen or any(body.strip() for body in bodies))
             else:
                 k = src.find("\n", i)
                 end = len(src) if k < 0 else k
@@ -228,19 +239,20 @@ def doc_findings(src):
                 lines = split_lines(body[:-2] if body.endswith("*/") else body)
                 stripped = [doc_text_tabs(line) for line in block_text(lines)]
                 inner = src.startswith("/*!", i)
-                hit = markdown_hit(stripped, LINE_INDENT, carried(tail, inner))
+                prev, seen = carried(tail, inner)
+                hit = markdown_hit(stripped, LINE_INDENT, prev)
                 if hit is not None:
                     yield start + sum(len(line) + 1 for line in lines[:hit])
-                tail = (inner, stripped[-1])
+                tail = (inner, stripped[-1], seen or any(line.strip() for line in stripped))
             i = end
         elif c == '"':
             end = skip_string(src, i)
             if doc_value:
                 value = plain_value(src[i:end])
-                if value_has_fence(value, carried(tail, attr_inner)):
+                if value_has_fence(value, carried(tail, attr_inner)[0]):
                     yield i
                 if attr_name == "doc":
-                    tail = (attr_inner, split_lines(value)[-1])
+                    tail = (attr_inner, split_lines(value)[-1], True)
             i = end
         elif c == "'":
             j = skip_char(src, i)
@@ -290,10 +302,10 @@ def doc_findings(src):
                 else:
                     if doc_value:
                         value = raw_value(src[i:end], len(word))
-                        if value_has_fence(value, carried(tail, attr_inner)):
+                        if value_has_fence(value, carried(tail, attr_inner)[0]):
                             yield i
                         if attr_name == "doc":
-                            tail = (attr_inner, split_lines(value)[-1])
+                            tail = (attr_inner, split_lines(value)[-1], True)
                     i = end
             elif word in BYTE_PREFIX and j < len(src) and src[j] == '"':
                 i = skip_string(src, j)
