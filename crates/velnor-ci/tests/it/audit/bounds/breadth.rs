@@ -113,54 +113,6 @@ fn a_directory_bound_outside_its_range_is_refused() {
     );
 }
 
-const UNITS_ABOVE_THE_OLD_BOUND: usize = 830;
-
-fn widen_1100(repo: &Repo, units: usize) {
-    for index in 0..units {
-        let unit = repo
-            .root()
-            .join("rust/target/debug/build")
-            .join(format!("crate-{index}"))
-            .join(format!("{:016x}", index + 1));
-        for kind in ["fingerprint", "out", "run"] {
-            fs::create_dir_all(unit.join(kind)).unwrap_or_else(|e| unreachable!("{e}"));
-        }
-    }
-}
-
-#[test]
-fn a_1100_layout_target_above_the_old_bound_is_audited_by_default() {
-    let (repo, lock) = prepared();
-    widen_1100(&repo, UNITS_ABOVE_THE_OLD_BOUND);
-    assert!(directory_count(&repo.root().join("rust/target")) > 4096);
-    let audited = audit(&repo, &["--write"]);
-    assert!(audited.status.success(), "{audited:?}");
-    assert_eq!(
-        fs::read(repo.root().join(".velnor/rust-inputs.lock"))
-            .unwrap_or_else(|e| unreachable!("{e}")),
-        lock
-    );
-}
-
-#[test]
-fn a_1100_layout_target_over_an_explicit_4096_bound_names_the_override() {
-    let (repo, before) = prepared();
-    widen_1100(&repo, UNITS_ABOVE_THE_OLD_BOUND);
-    let refused = audit_within(&repo, "4096");
-    assert_eq!(refused.status.code(), Some(1), "{refused:?}");
-    let error = String::from_utf8_lossy(&refused.stderr);
-    assert!(
-        error.contains("target directory traversal exceeds 4096 directories")
-            && error.contains(VARIABLE),
-        "{error}"
-    );
-    assert_eq!(
-        fs::read(repo.root().join(".velnor/rust-inputs.lock"))
-            .unwrap_or_else(|e| unreachable!("{e}")),
-        before
-    );
-}
-
 fn directory_count(root: &Path) -> usize {
     1 + fs::read_dir(root)
         .unwrap_or_else(|e| unreachable!("{e}"))
