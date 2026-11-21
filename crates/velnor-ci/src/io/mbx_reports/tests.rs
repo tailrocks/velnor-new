@@ -1,10 +1,18 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use super::collect;
 use super::inside_session;
 use std::ffi::OsStr;
+use std::io;
 use std::os::unix::net::UnixListener;
 use std::path::PathBuf;
+
+#[test]
+fn an_entry_that_cannot_be_listed_is_unknown_evidence() {
+    let entries = std::iter::once(Err(io::Error::other("entry vanished")));
+    assert_eq!(collect(entries).map(|reports| reports.unlisted), Some(1));
+}
 
 struct Dir(PathBuf);
 

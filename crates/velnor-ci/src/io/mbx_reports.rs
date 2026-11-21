@@ -7,10 +7,10 @@ use nix::errno::Errno;
 use nix::sys::socket::{AddressFamily, SockFlag, SockType, UnixAddr, connect, socket};
 use std::collections::BTreeMap;
 use std::ffi::OsStr;
-use std::fs::{self, File, OpenOptions};
-use std::io::{Read, Write};
+use std::fs::{self, OpenOptions};
+use std::io::{self, Read, Write};
 use std::os::fd::AsRawFd;
-use std::os::unix::fs::FileTypeExt;
+use std::os::unix::fs::{FileTypeExt, OpenOptionsExt};
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -120,13 +120,17 @@ fn note_unrecorded(temp: &Path) {
     }
 }
 
-pub(super) fn unrecorded(runner_temp: &Path) -> u64 {
+pub(super) fn unrecorded(runner_temp: &Path) -> Result<u64, String> {
     if !enabled() {
-        return 0;
+        return Ok(0);
     }
-    fs::read_to_string(runner_temp.join(UNRECORDED)).map_or(0, |text| {
-        u64::try_from(text.lines().count()).unwrap_or(u64::MAX)
-    })
+    let file = runner_temp.join(UNRECORDED);
+    if fs::symlink_metadata(&file).is_err_and(|error| error.kind() == io::ErrorKind::NotFound) {
+        return Ok(0);
+    }
+    let bytes = read_regular(&file)?;
+    let text = String::from_utf8(bytes).map_err(|_| "not UTF-8".to_owned())?;
+    Ok(u64::try_from(text.lines().count()).unwrap_or(u64::MAX))
 }
 
 #[derive(Default)]
@@ -135,6 +139,7 @@ pub(super) struct Reports {
     pub(super) unreadable: Vec<String>,
     pub(super) missing: Vec<String>,
     pub(super) overflowed: bool,
+    pub(super) unlisted: usize,
 }
 
 #[derive(Default)]
@@ -147,12 +152,25 @@ pub(super) fn read(runner_temp: &Path) -> Option<Reports> {
     if !enabled() {
         return None;
     }
-    let listed: Vec<PathBuf> = fs::read_dir(runner_temp.join(DIRECTORY))
-        .ok()?
-        .flatten()
-        .take(MAX_ENTRIES + 1)
-        .map(|entry| entry.path())
-        .collect();
+    match fs::read_dir(runner_temp.join(DIRECTORY)) {
+        Ok(entries) => collect(entries),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => None,
+        Err(_) => Some(Reports {
+            unlisted: 1,
+            ..Reports::default()
+        }),
+    }
+}
+
+fn collect(entries: impl Iterator<Item = io::Result<fs::DirEntry>>) -> Option<Reports> {
+    let mut listed: Vec<PathBuf> = Vec::new();
+    let mut unlisted = 0;
+    for entry in entries.take(MAX_ENTRIES + 1) {
+        match entry {
+            Ok(entry) => listed.push(entry.path()),
+            Err(_) => unlisted += 1,
+        }
+    }
     let mut found: BTreeMap<String, Session> = BTreeMap::new();
     for path in listed.iter().take(MAX_ENTRIES) {
         let Some(name) = path
@@ -167,16 +185,19 @@ pub(super) fn read(runner_temp: &Path) -> Option<Reports> {
             _ => {}
         }
     }
-    if listed.len() > MAX_ENTRIES || found.len() > MAX_SESSIONS {
+    if listed.len() + unlisted > MAX_ENTRIES || found.len() > MAX_SESSIONS {
         return Some(Reports {
             overflowed: true,
             ..Reports::default()
         });
     }
-    if found.is_empty() {
+    if found.is_empty() && unlisted == 0 {
         return None;
     }
-    let mut reports = Reports::default();
+    let mut reports = Reports {
+        unlisted,
+        ..Reports::default()
+    };
     for (name, session) in found {
         match session.report {
             None if session.marker => reports.missing.push(name),
@@ -204,9 +225,22 @@ fn read_regular(file: &Path) -> Result<Vec<u8>, String> {
     if !metadata.file_type().is_file() {
         return Err("not a regular file".to_owned());
     }
+    let report = OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+        .open(file)
+        .map_err(|error| error.to_string())?;
+    if !report
+        .metadata()
+        .map_err(|error| error.to_string())?
+        .is_file()
+    {
+        return Err("not a regular file".to_owned());
+    }
     let mut bytes = Vec::new();
-    File::open(file)
-        .and_then(|report| report.take(MAX_REPORT_BYTES + 1).read_to_end(&mut bytes))
+    report
+        .take(MAX_REPORT_BYTES + 1)
+        .read_to_end(&mut bytes)
         .map_err(|error| error.to_string())?;
     if bytes.len() as u64 > MAX_REPORT_BYTES {
         return Err(format!("larger than {MAX_REPORT_BYTES} bytes"));

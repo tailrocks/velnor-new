@@ -328,3 +328,57 @@ fn a_nextest_listing_builds_test_binaries_so_it_gets_a_report() {
         "--workspace"
     ])));
 }
+
+#[test]
+fn a_stats_directory_that_cannot_be_listed_is_unknown_evidence() -> ResultTest {
+    let repo = fixture("mbx-reports-dir-file")?;
+    cargo(&repo, "build", &report_json(5, 1, 0, 0), "compiled")?;
+    let directory = repo.root().join("velnor-mbx-reports");
+    fs::remove_dir_all(&directory)?;
+    fs::write(&directory, b"")?;
+    let metrics = report(&repo)?;
+    assert_eq!(metrics.mbx.unparsed, 1, "{metrics:?}");
+    assert!(
+        metrics
+            .verification_errors
+            .join("\n")
+            .contains("could not be read"),
+        "{:?}",
+        metrics.verification_errors
+    );
+    Ok(())
+}
+
+#[test]
+fn a_ledger_that_is_a_link_or_oversized_is_unknown_evidence_not_read() -> ResultTest {
+    let repo = fixture("mbx-ledger-planted")?;
+    cargo(&repo, "build", &report_json(5, 1, 0, 0), "compiled")?;
+    let ledger = repo.root().join("velnor-mbx-reports.unrecorded");
+    let real = repo.root().join("real-ledger.txt");
+    fs::write(&real, "unrecorded\n")?;
+    std::os::unix::fs::symlink(&real, &ledger)?;
+    let metrics = report(&repo)?;
+    assert_eq!(metrics.mbx.sessions, [session(1, 0, 0)], "{metrics:?}");
+    assert_eq!(metrics.mbx.unparsed, 1, "{metrics:?}");
+    assert!(
+        metrics
+            .verification_errors
+            .join("\n")
+            .contains("unrecorded-session ledger not understood (not a regular file)"),
+        "{:?}",
+        metrics.verification_errors
+    );
+    fs::remove_file(&ledger)?;
+    fs::write(&ledger, vec![b'\n'; 2 << 20])?;
+    let metrics = report(&repo)?;
+    assert_eq!(metrics.mbx.unparsed, 1, "{metrics:?}");
+    assert!(
+        metrics
+            .verification_errors
+            .join("\n")
+            .contains("unrecorded-session ledger not understood (larger than"),
+        "{:?}",
+        metrics.verification_errors
+    );
+    Ok(())
+}
