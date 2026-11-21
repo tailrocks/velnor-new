@@ -46,7 +46,10 @@ mod tests {
 
     #[test]
     fn budget_and_age_parse_numbers_and_treat_empty_as_unset() {
-        assert_eq!(budget_bytes_from(Some(OsStr::new(" 10 "))).ok(), Some(Some(10)));
+        assert_eq!(
+            budget_bytes_from(Some(OsStr::new(" 10 "))).ok(),
+            Some(Some(10))
+        );
         assert_eq!(budget_bytes_from(Some(OsStr::new(" "))).ok(), Some(None));
         assert_eq!(budget_bytes_from(None).ok(), Some(None));
         assert_eq!(max_age_days_from(Some(OsStr::new("7"))).ok(), Some(Some(7)));
