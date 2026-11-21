@@ -214,6 +214,7 @@ mod timings_composite;
 mod timings_groups;
 mod timings_runs;
 mod timings_setup;
+mod toolchain;
 mod tools_digest;
 mod tools_heal;
 mod tools_home_clear;
