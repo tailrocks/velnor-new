@@ -3,8 +3,8 @@
 
 The exempt paths are listed in .alint.yml under no-absolute-local-paths. Each one must
 be recorded with the same sha256 (and size) in a retained manifest: capture-inventory.json,
-first/freeze.json or SHA256SUMS, or as a "manifest" / "manifest_sha256" pair in CLAIM_FILES.
-Anything else is an ordinary file and must be rewritten.
+first/freeze.json or SHA256SUMS. Claim records in the tree are not evidence: a file they name
+is only trusted through those manifests. Anything else is an ordinary file and must be rewritten.
 
 Usage: check-digest-frozen-evidence.py [repo-root] [alint-config]
 """
@@ -19,10 +19,6 @@ MANIFESTS = [
     "docs/implemented/evidence/freshness-2026-10-20/capture-inventory.json",
     "docs/implemented/evidence/freshness-2026-10-20/first/freeze.json",
     "docs/implemented/evidence/freshness-2026-10-24/SHA256SUMS",
-]
-# Checkpoint records that carry the sha256 of a retained file they name.
-CLAIM_FILES = [
-    "docs/reviews/phasec-registered-source-fixes-v32.json",
 ]
 
 
@@ -48,27 +44,6 @@ def exempt_paths(config):
                 else:
                     in_exclude = False
     return [p for p in out if p != ".alint.yml"]
-
-
-def claimed_digests(root):
-    """Map repo-relative file -> sha256 claimed for it by a CLAIM_FILES record."""
-    claims = {}
-
-    def walk(node):
-        if isinstance(node, dict):
-            if "manifest" in node and "manifest_sha256" in node:
-                claims.setdefault(node["manifest"], set()).add(node["manifest_sha256"])
-            for value in node.values():
-                walk(value)
-        elif isinstance(node, list):
-            for value in node:
-                walk(value)
-
-    for rel in CLAIM_FILES:
-        path = os.path.join(root, rel)
-        if os.path.exists(path):
-            walk(json.load(open(path, encoding="utf-8")))
-    return claims
 
 
 def manifest_entries(root, rel_manifest):
@@ -105,7 +80,6 @@ def sha256_of(path):
 def check(root, paths):
     failures = []
     cache = {m: manifest_entries(root, m) for m in MANIFESTS}
-    claims = claimed_digests(root)
     for p in paths:
         full = os.path.join(root, p)
         if not os.path.isfile(full):
@@ -125,8 +99,6 @@ def check(root, paths):
             if want_sha == digest and (want_size is None or want_size == size):
                 recorded = True
                 break
-        if not recorded and digest in claims.get(p, ()):
-            recorded = True
         if not recorded:
             failures.append(f"{p}: sha256 not recorded with a matching value in a retained manifest")
     return failures

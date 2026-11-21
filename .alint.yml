@@ -282,7 +282,6 @@ rules:
         - "docs/implemented/evidence/freshness-2026-10-24/alint-0.20.0-to-0.20.1-compare.json"
         - "docs/implemented/evidence/freshness-2026-10-24/qualification/binary-checksums-verified.txt"
         - "docs/implemented/evidence/freshness-2026-10-24/qualification/commands.txt"
-        - "docs/reviews/phasec-registered-source-fixes-v31.json"
     pattern: '(?m)(?:^|[^A-Za-z0-9._/-])(?:/private/(?:tmp|var)/[A-Za-z0-9_]|/tmp/[A-Za-z0-9_]*[-._0-9])'
     level: error
     message: "Local temp path in a doc or evidence file: use a repo-relative path, a relative link or <tmp>/... as the placeholder. Plain /tmp/example style examples are allowed."

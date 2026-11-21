@@ -10,7 +10,7 @@
     "commit": "05308a2371ae89db5b1751882545732cf69ce225",
     "tree": "89cb2c383236b8861fd5681709c15e368d8bf7ee",
     "clean_worktree": true,
-    "private_detached_author_worktree": "/private/tmp/velnor-phasec-registered-assembly-v30",
+    "private_detached_author_worktree": "<tmp>/velnor-phasec-registered-assembly-v30",
     "remote_operations": false
   },
   "commits": [

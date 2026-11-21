@@ -37,4 +37,23 @@ bash scripts/test-no-doctests-rule.sh || exit 1
 bash scripts/test-no-absolute-local-paths-rule.sh || exit 1
 python3 -I scripts/check-digest-frozen-evidence.py "$ROOT" "$ROOT/.alint.yml" || exit 1
 
+# Negative control: an ordinary doc added to the local-path exempt list, plus a matching claim
+# in a claim file that no retained manifest pins, must fail the digest guard.
+attack="$(mktemp -d "${TMPDIR:-/tmp}/digest-attack.XXXXXX")" || exit 1
+mkdir -p "$attack/docs/reviews" || exit 1
+printf 'ordinary doc\n' > "$attack/docs/attack.md"
+sha="$(shasum -a 256 "$attack/docs/attack.md" | cut -d' ' -f1)"
+printf '{"base_checkpoint": {"manifest": "docs/attack.md", "manifest_sha256": "%s"}}\n' "$sha" \
+  > "$attack/docs/reviews/phasec-registered-source-fixes-v32.json"
+printf 'version: 1\nrules:\n  - id: no-local-temp-paths\n    paths:\n      exclude:\n        - "docs/attack.md"\n' \
+  > "$attack/.alint.yml"
+out="$(python3 -I scripts/check-digest-frozen-evidence.py "$attack" "$attack/.alint.yml")"
+rc=$?
+rm -rf "$attack"
+if [ "$rc" -eq 0 ] || ! grep -q 'docs/attack.md: sha256 not recorded' <<<"$out"; then
+  echo "::error::digest guard accepted an exempt doc recorded only by an unpinned claim file" >&2
+  exit 1
+fi
+echo "digest guard negative control: OK (unpinned claim rejected)"
+
 rm -f "$PROBE"
