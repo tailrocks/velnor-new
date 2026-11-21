@@ -146,13 +146,7 @@ pub fn waste(metrics: &LaneMetrics) -> Vec<String> {
             .caches
             .iter()
             .filter(|cache| cache.save == SaveOutcome::Failed)
-            .map(|cache| {
-                format!(
-                    "{} cache save failed: {}",
-                    cache.family,
-                    save_key(cache)
-                )
-            }),
+            .map(|cache| format!("{} cache save failed: {}", cache.family, save_key(cache))),
     );
     violations.extend(crate::waste_evidence::waste(metrics));
     violations
