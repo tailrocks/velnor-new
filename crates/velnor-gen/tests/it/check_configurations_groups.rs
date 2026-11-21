@@ -32,7 +32,9 @@ fn mixed_split_group(
     testless: &str,
     helper: &str,
 ) -> Result<velnor_model::RepoView, Box<dyn std::error::Error>> {
-    let config = format!("shape = 'lint-test'\n[[workspace_groups]]\nname = 'tools'\nroots = ['tools/a', 'tools/b']\n[[check_configurations]]\nroot = '{testless}'\n");
+    let config = format!(
+        "shape = 'lint-test'\n[[workspace_groups]]\nname = 'tools'\nroots = ['tools/a', 'tools/b']\n[[check_configurations]]\nroot = '{testless}'\n"
+    );
     let mut view = view_with(
         &["Cargo.toml", "tools/a/Cargo.toml", "tools/b/Cargo.toml"],
         &config,
