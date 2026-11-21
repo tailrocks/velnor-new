@@ -58,14 +58,18 @@ pub(crate) fn decide_env(step: &Step) -> Vec<(String, Value)> {
     else {
         return Vec::new();
     };
-    let value = match private {
-        PrivateVerdict::Unset => return Vec::new(),
-        PrivateVerdict::Cleared => Value::Text(String::new()),
-        PrivateVerdict::Checked => {
-            Value::Expr(format!("${{{{ steps.{PRIVACY_STEP}.outputs.private }}}}"))
-        }
-    };
-    let mut env = vec![("VELNOR_REPOSITORY_PRIVATE".to_owned(), value)];
+    let mut env = Vec::new();
+    match private {
+        PrivateVerdict::Unset => {}
+        PrivateVerdict::Cleared => env.push((
+            "VELNOR_REPOSITORY_PRIVATE".to_owned(),
+            Value::Text(String::new()),
+        )),
+        PrivateVerdict::Checked => env.push((
+            "VELNOR_REPOSITORY_PRIVATE".to_owned(),
+            Value::Expr(format!("${{{{ steps.{PRIVACY_STEP}.outputs.private }}}}")),
+        )),
+    }
     if let Some(lane) = sources_restore {
         env.push((
             "VELNOR_SOURCES_RESTORED".to_owned(),

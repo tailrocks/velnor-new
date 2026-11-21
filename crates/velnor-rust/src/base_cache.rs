@@ -282,7 +282,7 @@ pub(crate) fn save_steps(
                     .as_ref()
                     .map(|_| lane.plan.clone().map_or(PlanFrom::ThisJob, PlanFrom::Job)),
                 private: private_verdict(facts),
-                sources_restore: private_base(facts).then(|| cache_root.slug().clone()),
+                sources_restore: has_private_base_helper(facts).then(|| cache_root.slug().clone()),
             })
         },
         Step {

@@ -16,10 +16,24 @@ pub(crate) struct CachePlan {
     not_generated: Option<String>,
 }
 
+fn no_crate_selected(steps: &Value) -> bool {
+    let mode = [&steps["replan"], &steps["plan"]]
+        .into_iter()
+        .find_map(|step| {
+            step["outputs"]["rust_root_mode"]
+                .as_str()
+                .filter(|mode| !mode.is_empty())
+        });
+    steps["plan"]["outcome"] == "success" && mode == Some("none")
+}
+
 pub(crate) fn privacy_unavailable(steps: &Value) -> bool {
     let step = &steps["private_repo"];
-    if step.is_null() || step["outcome"] == "skipped" {
+    if step.is_null() {
         return false;
+    }
+    if step["outcome"] == "skipped" {
+        return !no_crate_selected(steps);
     }
     let outputs = &step["outputs"];
     step["outcome"] != "success"
@@ -217,8 +231,32 @@ mod tests {
 
     #[test]
     fn a_privacy_step_skipped_by_the_lane_selection_is_not_unavailable() {
-        let step = json!({"private_repo": {"outcome": "skipped", "outputs": {}}});
-        assert!(!privacy_unavailable(&step));
+        let unselected = json!({
+            "plan": {"outcome": "success", "outputs": {"rust_root_mode": "none"}},
+            "private_repo": {"outcome": "skipped", "outputs": {}},
+        });
+        assert!(!privacy_unavailable(&unselected));
+        let replanned_none = json!({
+            "plan": {"outcome": "success", "outputs": {"rust_root_mode": "all"}},
+            "replan": {"outcome": "success", "outputs": {"rust_root_mode": "none"}},
+            "private_repo": {"outcome": "skipped", "outputs": {}},
+        });
+        assert!(!privacy_unavailable(&replanned_none));
+    }
+
+    #[test]
+    fn a_privacy_step_skipped_after_a_failed_plan_is_unavailable() {
+        for plan in [
+            json!({"outcome": "failure", "outputs": {}}),
+            json!({"outcome": "skipped", "outputs": {}}),
+            json!({"outcome": "success", "outputs": {"rust_root_mode": "all"}}),
+        ] {
+            let steps = json!({
+                "plan": plan,
+                "private_repo": {"outcome": "skipped", "outputs": {}},
+            });
+            assert!(privacy_unavailable(&steps), "{plan}");
+        }
     }
 
     #[test]
