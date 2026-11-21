@@ -73,6 +73,7 @@ fn completed_observations_survive_a_descendant_holding_the_stream_open() {
             .current_dir(&temp)
             .env("RUNNER_TEMP", &temp)
             .env("GITHUB_OUTPUT", temp.join("cache-outputs"))
+            .env("HOME", &temp)
             .output()
             .expect("cache decision");
         if active {

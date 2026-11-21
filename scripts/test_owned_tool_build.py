@@ -280,7 +280,7 @@ class BuildTests(unittest.TestCase):
 
     def mocked_candidate(self, tool, banner=None, target="aarch64-apple-darwin"):
         spec, calls = fixture(tool), []
-        compiler = "rustc 1.99.1\nhost: aarch64-apple-darwin\nrelease: 1.99.1"
+        compiler = "rustc 1.100.0\nhost: aarch64-apple-darwin\nrelease: 1.100.0"
         def admit(_spec, path, _env):
             path.mkdir()
             (path / "LICENSE").write_bytes(b"license")
@@ -333,13 +333,13 @@ class BuildTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             builder.compiler_identity("release: 1.98.0\nhost: aarch64-apple-darwin")
         self.assertEqual(
-            builder.compiler_identity("release: 1.99.1\nhost: aarch64-apple-darwin"),
+            builder.compiler_identity("release: 1.100.0\nhost: aarch64-apple-darwin"),
             "aarch64-apple-darwin",
         )
         with self.assertRaises(ValueError):
             builder.compiler_identity("release: 1.99.0\nhost: aarch64-apple-darwin")
         with self.assertRaises(ValueError):
-            builder.compiler_identity("release: 1.99.1\nhost: x86_64-apple-darwin")
+            builder.compiler_identity("release: 1.100.0\nhost: x86_64-apple-darwin")
         with self.assertRaises(ValueError):
             self.mocked_candidate("mise", target="x86_64-unknown-linux-gnu")
 

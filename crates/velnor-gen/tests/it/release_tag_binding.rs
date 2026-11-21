@@ -31,20 +31,17 @@ fn refuse_steps(version: &str) -> Result<Vec<Step>, Box<dyn Error>> {
         for step in steps(job) {
             let run = step.get("run").and_then(Node::text).unwrap_or_default();
             if run.starts_with("velnor-ci release check-config") {
-                let mut env: Vec<String> = step
-                    .get("env")
-                    .map(|env| {
-                        env.keys()
-                            .into_iter()
-                            .map(|key| {
-                                format!(
-                                    "{key}={}",
-                                    env.get(key).and_then(Node::text).unwrap_or_default()
-                                )
-                            })
-                            .collect()
-                    })
-                    .unwrap_or_default();
+                let mut env: Vec<String> = step.get("env").map_or_default(|env| {
+                    env.keys()
+                        .into_iter()
+                        .map(|key| {
+                            format!(
+                                "{key}={}",
+                                env.get(key).and_then(Node::text).unwrap_or_default()
+                            )
+                        })
+                        .collect()
+                });
                 env.sort();
                 env.insert(0, run.to_owned());
                 found.push((id.to_owned(), env));
