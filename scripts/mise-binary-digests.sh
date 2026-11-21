@@ -1,20 +1,6 @@
 #!/bin/sh
 # SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 # SPDX-License-Identifier: Apache-2.0
-#
-# Maintains the SHA-256 table of the mise binary that generated workflows pin
-# (`MISE_BINARIES` in crates/velnor-render/src/mise_digest.rs, issue #2158).
-# The digests come from the official `SHASUMS256.txt` of the mise release
-# (the raw `mise-v<version>-<os>-<arch>` executables), never from a build.
-#
-# Usage: scripts/mise-binary-digests.sh [VERSION] [--check|--write] [--sums FILE [--sig FILE]]
-#   VERSION  the mise release; defaults to MISE_VERSION in crates/velnor-render/src/steps.rs
-#   (none)   print the table row for VERSION
-#   --check  exit 1 unless the checked-in table has exactly that row
-#   --write  replace the checked-in table with that row (a bump of MISE_VERSION
-#            still edits steps.rs by hand, and the pinned test literals follow)
-#   --sums   read SHASUMS256.txt from FILE instead of the release download
-#   --sig    the minisign signature of --sums (default: FILE.minisig); always required
 set -eu
 
 root=$(cd "$(dirname "$0")/.." && pwd)
