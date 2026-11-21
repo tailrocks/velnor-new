@@ -340,5 +340,11 @@ fn a_credential_file_name_cannot_inject_workflow_commands_into_the_report() {
     assert_eq!(written, "save=true\nsources=false\n", "{output:?}");
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.lines().all(|line| !line.contains("::")), "{stdout}");
-    assert!(stdout.contains("x%0A%3A%3Aerror%3A%3Apwn"), "{stdout}");
+    // Which of the two credential files the scan names depends on directory
+    // listing order. The property is that the name is escaped, not which one.
+    assert!(
+        stdout.contains("x%0A%3A%3Aerror%3A%3Apwn/.git-credentials")
+            || stdout.contains("y%3A%3Awarning%3A%3Apwn/.netrc"),
+        "{stdout}"
+    );
 }
