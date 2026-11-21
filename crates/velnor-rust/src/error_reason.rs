@@ -56,6 +56,9 @@ impl Reason {
 
     fn fmt_setup(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::PolicyDenyWithoutConfig => f.write_str(
+                "[policy] deny = true needs a cargo-deny config (deny.toml, .deny.toml, .cargo/deny.toml or .config/deny.toml) that the lane can read; add one, or remove deny = true",
+            ),
             Self::UnpinnedTool(tool) => write!(
                 f,
                 "is present but {tool} is not pinned in mise.toml, so the policy lane could not run it; pin it there"
@@ -74,6 +77,14 @@ impl Reason {
             Self::MbxOffConflict(key) => write!(
                 f,
                 "cache.mbx = false turns mbx off, but {key} needs it; remove one of them"
+            ),
+            Self::PublicSourceOverlap(repository) => write!(
+                f,
+                "{repository} is listed in both [private_sources] and [public_sources]; a repository is private or public, so remove it from one of them"
+            ),
+            Self::PublicSourcesUnused(repositories) => write!(
+                f,
+                "[public_sources].git lists {repositories}, which no Cargo.lock locks as a git dependency pinned to a full commit on github.com; remove it"
             ),
             _ => Ok(()),
         }
@@ -144,6 +155,10 @@ impl fmt::Display for Reason {
             Self::MissingTable(table) => write!(f, "missing table [{table}]"),
             Self::MissingKey(key) => write!(f, "missing key {key}"),
             Self::InvalidValue { key, value } => write!(f, "invalid value {value:?} for {key}"),
+            Self::UnsupportedGlob { key, value } => write!(
+                f,
+                "{key} entry {value:?} uses ?, [ or ]; only * and ** are supported in a glob"
+            ),
             Self::Hosting(error) => error.fmt(f),
             Self::OutOfRange {
                 key,
@@ -199,9 +214,12 @@ impl fmt::Display for Reason {
                 "[env] sets {name}: cargo passes it to the compilers and clippy the checks run, and with force = true it replaces what the step sets, so a check could pass without checking; remove it, or set it without force and with a name that does not start with CLIPPY, RUST or CARGO"
             ),
             Self::UnpinnedTool(_)
+            | Self::PolicyDenyWithoutConfig
             | Self::HelperBox(_)
             | Self::MbxRemotePrivate(_)
             | Self::MbxOffConflict(_)
+            | Self::PublicSourceOverlap(_)
+            | Self::PublicSourcesUnused(_)
             | Self::PrCiWithSkipDraft => self.fmt_setup(f),
             Self::BuildExecutable
             | Self::CargoCredentialProvider(_)

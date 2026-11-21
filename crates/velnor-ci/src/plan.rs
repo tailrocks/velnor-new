@@ -4,8 +4,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
-    AllTrigger, OptionalSteps, PackageName, RepoPath, RootSlug, RustSelection, StepNeed, Unread,
-    Weakening, WorkspaceGroup, group_output_name,
+    AllTrigger, GateNeed, JobId, OptionalSteps, PackageName, PathGlob, RepoPath, RootSlug,
+    RustSelection, StepNeed, Unread, Weakening, WorkspaceGroup, group_output_name,
 };
 use velnor_rust::{CONFIG_PATH, GroupPlan, PolicyRuns};
 
@@ -114,6 +114,50 @@ pub fn group_explanation(groups: &[GroupPlan]) -> String {
                 inert(group.root.as_str()),
                 lane(group.decision.run),
                 escape(&group.decision.reason, false)
+            )
+        })
+        .collect::<Vec<String>>()
+        .concat()
+}
+
+#[must_use]
+pub fn lint_outputs(runs: &BTreeMap<RootSlug, bool>) -> String {
+    runs.iter()
+        .map(|(slug, run)| {
+            format!(
+                "{}={}\n",
+                GateNeed::Lint.output_name(slug),
+                if *run { "run" } else { "skip" }
+            )
+        })
+        .collect::<Vec<String>>()
+        .concat()
+}
+
+#[must_use]
+pub fn lint_explanation(skipped: &[String]) -> String {
+    skipped
+        .iter()
+        .map(|id| {
+            format!(
+                "left out: {}: {}\n",
+                inert(id),
+                crate::summary::LINT_SKIP_REASON
+            )
+        })
+        .collect::<Vec<String>>()
+        .concat()
+}
+
+#[must_use]
+pub fn input_warnings(unmatched: &[(JobId, PathGlob)]) -> String {
+    unmatched
+        .iter()
+        .map(|(id, glob)| {
+            format!(
+                "warning: {}: inputs entry {} matches no tracked file\n",
+                inert(id.as_str()),
+                toml_string(glob.as_str())
             )
         })
         .collect::<Vec<String>>()

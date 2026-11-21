@@ -267,7 +267,7 @@ fn a_stale_build_script_run_is_not_covered_by_another_current_run_of_the_same_sc
     refuses(
         &audit(&repo, &["--write"]),
         &format!(
-            "/{DEBUG} for lib target  (output stale: input data.txt changed after it ran (unit f0000000000000e2);"
+            "/{DEBUG} for lib target  (output not proven current: freshness could not be proven for input data.txt (unit f0000000000000e2);"
         ),
     );
     assert!(!written(&repo));

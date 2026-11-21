@@ -12,9 +12,18 @@ use crate::plan::{CHECKOUT_DEPTH, PLAN_DEPTH, RUST_JOB, head, job, mbx, step};
 use crate::plan_tools::{mirror_step, tools_install, tools_restore, tools_save};
 
 pub(crate) const PLAN_JOB: JobId = JobId::from_static("rust-plan");
-const POLICY_JOB: JobId = JobId::from_static("policy");
-// First released in tools-v0.1.110 (not tagged yet when this gate was written).
+pub(crate) const POLICY_JOB: JobId = JobId::from_static("policy");
+// helper-gate: first in tools-v0.1.110 via 9c258dd24a
 pub(crate) const EARLY_POLICY_HELPER: (u64, u64, u64) = (0, 1, 110);
+// Gated on the unreleased tools-v0.1.111 helper.
+const LANE_JOB_FIXES_HELPER: (u64, u64, u64) = (0, 1, 111);
+
+pub(crate) fn lane_job_fixes(facts: &RepoFacts) -> bool {
+    facts
+        .helper
+        .as_ref()
+        .is_some_and(|helper| helper.version().at_least(LANE_JOB_FIXES_HELPER))
+}
 
 pub(crate) struct Lane {
     pub(crate) slug: RootSlug,
@@ -153,6 +162,7 @@ impl Lane {
             when: When::NotCancelled,
             skip_after_merge_group: None,
             skip_when_cold: false,
+            private_repo: false,
             pr: PrRun::Always,
             hosted_only: false,
         }
@@ -217,6 +227,8 @@ pub(crate) fn plan_job(
 ) -> Job {
     let mut steps = head(facts, PLAN_DEPTH, None);
     steps.push(step(StepKind::Helper(HelperCommand::Plan)));
+    steps.extend(crate::base_cache::public_sources_step(facts));
+    steps.extend(crate::plan_tools::tools_anchor_read(facts));
     Job {
         plan_outputs: outputs,
         group_outputs,
@@ -247,13 +259,13 @@ pub(crate) fn policy_job(facts: &RepoFacts, lane: &Lane) -> Job {
     }));
     if !facts.tools.tools.is_empty() {
         steps.extend(
-            tools_restore(facts)
+            tools_restore(facts, lane.plan.as_ref())
                 .into_iter()
                 .chain(tools_install(facts))
                 .chain(mirror_step(facts))
                 .chain(
                     (!crate::plan_tools::tools_verified(facts))
-                        .then(|| tools_save(facts))
+                        .then(|| tools_save(facts, lane.plan.as_ref()))
                         .into_iter()
                         .flatten(),
                 )
@@ -269,6 +281,11 @@ pub(crate) fn policy_job(facts: &RepoFacts, lane: &Lane) -> Job {
                 CargoCommand::Deny {
                     manifest: root.manifest.clone(),
                     config: facts.deny_configs.get(&root.manifest).cloned(),
+                    checks: facts
+                        .config
+                        .policy
+                        .as_ref()
+                        .and_then(|policy| policy.deny_checks.clone()),
                 },
                 None,
             )

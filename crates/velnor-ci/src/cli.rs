@@ -125,7 +125,7 @@ pub enum Command {
     )]
     MbxSeed,
     #[command(
-        about = "Keep the mise and rustup tool directories on the node's own disk. restore copies ~/.local/share/mise and ~/.rustup from tools/<key> of the store (VELNOR_MBX_SHARED_DIR on a trusted event, VELNOR_MBX_SEED_DIR otherwise) and writes hit=true or hit=false to $GITHUB_OUTPUT, so the network cache action can be skipped on a hit; save, on a trusted event only, copies them into tools/<key> with an atomic rename, keeping the two newest keys. A missing store, a failed check or a failed copy is a miss, never an error. restore first deletes ~/.local/share/mise and ~/.rustup so that the home holds exactly the stored tree, and clear (no --key) deletes the same two directories before any restore; both refuse, with a warning and nothing deleted, a symlinked tool directory or parent, or a HOME that is not an absolute directory below the root"
+        about = "Keep the mise and rustup tool directories on the node's own disk. restore copies ~/.local/share/mise and ~/.rustup from tools/<key> of the store (VELNOR_MBX_SHARED_DIR on a trusted event, VELNOR_MBX_SEED_DIR otherwise) and writes hit=true or hit=false to $GITHUB_OUTPUT, so the network cache action can be skipped on a hit; save, on a trusted event only, copies them into tools/<key> with an atomic rename, keeping the two newest keys. A missing store, a failed check or a failed copy is a miss, never an error. restore first deletes ~/.local/share/mise and ~/.rustup so that the home holds exactly the stored tree, and clear (no --key) deletes the same two directories before any restore; both refuse, with a warning and nothing deleted, a symlinked tool directory or parent, or a HOME that is a symlink, not absolute or the filesystem root"
     )]
     ToolsLocal(ToolsLocalArgs),
     #[command(
@@ -133,7 +133,7 @@ pub enum Command {
     )]
     MisePin(MisePinArgs),
     #[command(
-        about = "Verify restored tools against the anchor a trusted run recorded in $RUNNER_TEMP/velnor-tools-anchor/digest, which counts only when $VELNOR_ANCHOR_HIT is true. reset deletes $RUNNER_TEMP/velnor-tools-anchor before the anchor restore; check, after the restores, keeps ~/.local/share/mise and ~/.rustup only when their digest equals the anchor and otherwise deletes both, writing verified=true or verified=false to $GITHUB_OUTPUT; record, after the install, refuses an event that is not a push, schedule or workflow_dispatch on the default branch, and otherwise writes the anchor when none was restored and writes matches= and recorded= so the saves run only for tools equal to the anchor"
+        about = "Verify restored tools against the anchor digest a trusted run recorded. read, in the one job that restores the anchor cache entry, takes $RUNNER_TEMP/velnor-tools-anchor/digest when $VELNOR_ANCHOR_MATCHED names the restored entry and writes anchor=<digest> (empty when there is none) to $GITHUB_OUTPUT; check, after the restores, keeps ~/.local/share/mise and ~/.rustup only when their digest equals $VELNOR_TOOLS_ANCHOR and otherwise deletes both, writing verified=true or verified=false; record, after the install, refuses an event that is not a push, schedule or workflow_dispatch on the default branch, writes matches= and recorded= and the digest= of the tools so the saves run only for tools equal to the anchor, and writes a new anchor file when $VELNOR_TOOLS_VERIFIED is not true and the digest differs from $VELNOR_TOOLS_ANCHOR"
     )]
     ToolsVerify(ToolsVerifyArgs),
     #[command(

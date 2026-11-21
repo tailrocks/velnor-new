@@ -36,7 +36,7 @@ const NEEDS_JSON: &str = "NEEDS_JSON";
 const GATE_SPEC: &str = "GATE_SPEC";
 pub(crate) const ON_DEFAULT_BRANCH: &str =
     "github.ref == format('refs/heads/{0}', github.event.repository.default_branch)";
-const ACTIVE_EVENT: &str = "(github.event_name != 'pull_request' || (startsWith(github.ref, 'refs/pull/') && github.event.pull_request.state != 'closed'))";
+pub(crate) const ACTIVE_EVENT: &str = "(github.event_name != 'pull_request' || (startsWith(github.ref, 'refs/pull/') && github.event.pull_request.state != 'closed'))";
 pub(crate) fn sources_step(lane: &RootSlug) -> String {
     format!("sources_{lane}")
 }
@@ -345,6 +345,7 @@ pub(crate) fn gate_parts(gate: &Gate, replanned: bool) -> Vec<String> {
                 }),
             );
         }
+        GateNeed::Lint => parts.push(runs(GateNeed::Lint)),
         GateNeed::Deny => parts.push(runs(GateNeed::Deny)),
         GateNeed::Machete => parts.push(runs(GateNeed::Machete)),
         GateNeed::Policy => parts.push(format!(

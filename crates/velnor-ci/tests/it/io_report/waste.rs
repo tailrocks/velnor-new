@@ -16,7 +16,7 @@ fn cache_plan() -> serde_json::Value {
 
 const TOOLS_HIT: &str = r#"{"tools":{"outcome":"success","outputs":{"cache-primary-key":"tools-key","cache-matched-key":"tools-key","cache-hit":"true"}}}"#;
 
-fn primed_store(repo: &Repo) -> ResultTest {
+pub(super) fn primed_store(repo: &Repo) -> ResultTest {
     let object = repo.root().join("store/actions/cas/object");
     fs::create_dir_all(object.parent().ok_or("parent")?)?;
     fs::write(&object, "entry")?;
@@ -40,7 +40,7 @@ fn run_cargo(repo: &Repo) -> ResultTest {
     Ok(())
 }
 
-fn with_store(
+pub(super) fn with_store(
     repo: &Repo,
     store: bool,
 ) -> Result<velnor_ci::report::LaneMetrics, Box<dyn std::error::Error>> {

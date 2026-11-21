@@ -4,6 +4,7 @@
 use std::collections::BTreeSet;
 use std::fs;
 use std::process::Output;
+use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use super::{audit, own_units, unit, velnor_ci, workspace_below_the_root};
@@ -11,6 +12,7 @@ use crate::io::Repo;
 use velnor_test_support::{ci_safe_cargo_env, real_cargo_str};
 
 const DEBUG: &str = "rust/target/debug";
+const VARIABLE: &str = "VELNOR_AUDIT_MAX_ENTRIES";
 
 fn refused_with(output: &Output, texts: &[&str]) {
     assert_eq!(output.status.code(), Some(1), "{output:?}");
@@ -20,7 +22,6 @@ fn refused_with(output: &Output, texts: &[&str]) {
     }
 }
 
-/// The unit hashes of the `lib` build-script runs with an output under `target/debug`.
 fn lib_runs(repo: &Repo) -> BTreeSet<String> {
     fs::read_dir(repo.root().join(DEBUG).join("build"))
         .unwrap_or_else(|e| unreachable!("{e}"))
@@ -80,20 +81,27 @@ fn an_input_changed_between_two_steps_names_the_input_and_the_stale_unit() {
     repo.write_unstaged("rust/lib/asset.txt", "second\n");
     repo.set_mtime(
         "rust/lib/asset.txt",
-        SystemTime::now() + Duration::from_secs(100),
+        SystemTime::now() + Duration::from_secs(1),
     );
+    thread::sleep(Duration::from_secs(1));
     let build = build_step(&repo, &["build", "--workspace", "--all-targets"]);
     assert!(build.status.success(), "{build:?}");
     let after = lib_runs(&repo);
     assert_eq!(after.len(), 2, "{after:?}");
     let stale = before.iter().next().unwrap_or_else(|| unreachable!());
+    let current = after
+        .difference(&before)
+        .next()
+        .unwrap_or_else(|| unreachable!());
 
+    let output = audit(&repo, &["--write"]);
     refused_with(
-        &audit(&repo, &["--write"]),
+        &output,
         &[&format!(
-            "output stale: input asset.txt changed after it ran (unit {stale}); produce build-script inputs before the first compile step, e.g. [[test_setup]] phase = \"build\""
+            "output stale: input asset.txt changed after it ran (unit {stale}); produce build-script inputs before the first compile step, e.g. a [[test_setup]] table with phase = \"build\""
         )],
     );
+    assert!(!String::from_utf8_lossy(&output.stderr).contains(current.as_str()));
     assert!(!repo.root().join(".velnor/rust-inputs.lock").exists());
 }
 
@@ -121,4 +129,116 @@ fn a_run_whose_output_is_older_than_its_build_script_says_so() {
             "/rust/target/debug for lib target  (output older than its build script (unit f0000000000000e3));",
         ],
     );
+}
+
+const FAN_OUT: usize = 3;
+const ENTRIES: usize = 5;
+const ENTRY_LIMIT: &str = "8";
+
+fn fan_out_repo() -> Repo {
+    let repo = Repo::new("stale-gaps");
+    repo.write_all(&[
+        ("mise.toml", "[tools]\n"),
+        ("rust/Cargo.lock", "version = 4\n"),
+    ]);
+    let members: Vec<String> = (1..=FAN_OUT).map(|i| format!("\"lib{i}\"")).collect();
+    repo.write_unstaged(
+        "rust/Cargo.toml",
+        &format!(
+            "[workspace]\nmembers = [{}]\nresolver = \"3\"\n",
+            members.join(", ")
+        ),
+    );
+    for i in 1..=FAN_OUT {
+        repo.write_unstaged(
+            &format!("rust/lib{i}/Cargo.toml"),
+            &format!("[package]\nname = \"lib{i}\"\nedition = \"2024\"\nbuild = \"build.rs\"\n"),
+        );
+        repo.write_unstaged(
+            &format!("rust/lib{i}/src/lib.rs"),
+            "pub fn value() -> u32 { 1 }\n",
+        );
+        repo.write_unstaged(
+            &format!("rust/lib{i}/build.rs"),
+            &format!(
+                "fn main() {{ println!(\"cargo:rerun-if-changed=asset.txt\"); println!(\"cargo:rerun-if-changed=../../shared/d{i}\"); }}\n"
+            ),
+        );
+        repo.write_unstaged(&format!("rust/lib{i}/asset.txt"), "first\n");
+        for entry in 0..ENTRIES {
+            repo.write_unstaged(&format!("shared/d{i}/f{entry}"), "");
+        }
+    }
+    repo.git(&["add", "--all"]);
+    repo
+}
+
+#[test]
+fn stale_gaps_share_one_entry_budget_when_they_count_their_changed_inputs() {
+    let repo = fan_out_repo();
+    let build = build_step(&repo, &["build", "--workspace", "--all-targets"]);
+    assert!(build.status.success(), "{build:?}");
+    thread::sleep(Duration::from_secs(1));
+    for i in 1..=FAN_OUT {
+        repo.write_unstaged(&format!("rust/lib{i}/asset.txt"), "second\n");
+        repo.write_unstaged(&format!("shared/d{i}/new"), "");
+    }
+    let output = velnor_ci()
+        .env(VARIABLE, ENTRY_LIMIT)
+        .current_dir(repo.root())
+        .args(["inputs", "audit", "--write"])
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(output.status.code(), Some(1), "{output:?}");
+    assert_eq!(
+        stderr.matches("output stale: input asset.txt").count(),
+        FAN_OUT,
+        "{stderr}"
+    );
+    assert_eq!(stderr.matches(", and 1 more").count(), 1, "{stderr}");
+}
+
+#[test]
+fn a_stale_run_with_several_changed_inputs_names_the_first_and_counts_the_rest() {
+    let repo = Repo::new("stale-run-many");
+    repo.write_all(&[
+        ("mise.toml", "[tools]\n"),
+        (
+            "rust/Cargo.toml",
+            "[workspace]\nmembers = [\"lib\"]\nresolver = \"3\"\n",
+        ),
+        ("rust/Cargo.lock", "version = 4\n"),
+        (
+            "rust/lib/Cargo.toml",
+            "[package]\nname = \"lib\"\nedition = \"2024\"\nbuild = \"build.rs\"\n",
+        ),
+        ("rust/lib/src/lib.rs", "pub fn value() -> u32 { 1 }\n"),
+        (
+            "rust/lib/build.rs",
+            "fn main() {\n    println!(\"cargo:rerun-if-changed=a.txt\");\n    println!(\"cargo:rerun-if-changed=b.txt\");\n    println!(\"cargo:rerun-if-changed=c.txt\");\n}\n",
+        ),
+        ("rust/lib/a.txt", "first\n"),
+        ("rust/lib/b.txt", "first\n"),
+        ("rust/lib/c.txt", "first\n"),
+    ]);
+    let clippy = build_step(&repo, &["clippy", "--workspace", "--all-targets"]);
+    assert!(clippy.status.success(), "{clippy:?}");
+    let before = lib_runs(&repo);
+    assert_eq!(before.len(), 1, "{before:?}");
+
+    for input in ["a.txt", "b.txt", "c.txt"] {
+        repo.write_unstaged(&format!("rust/lib/{input}"), "second\n");
+        repo.set_mtime(
+            &format!("rust/lib/{input}"),
+            SystemTime::now() + Duration::from_secs(100),
+        );
+    }
+    let build = build_step(&repo, &["build", "--workspace", "--all-targets"]);
+    assert!(build.status.success(), "{build:?}");
+    refused_with(
+        &audit(&repo, &["--write"]),
+        &["output stale: input a.txt changed after it ran, and 2 more (unit "],
+    );
+    assert!(!repo.root().join(".velnor/rust-inputs.lock").exists());
 }

@@ -132,3 +132,22 @@ pub fn group_summary(groups: &[GroupPlan]) -> String {
     }));
     lines.join("\n") + "\n\n"
 }
+
+pub const LINT_SKIP_REASON: &str = "no changed file reaches its inputs";
+
+#[must_use]
+pub fn lint_summary(skipped: &[String]) -> String {
+    if skipped.is_empty() {
+        return String::new();
+    }
+    let mut lines = vec![
+        "| Lint | Plan | Reason |".to_owned(),
+        "|---|---|---|".to_owned(),
+    ];
+    lines.extend(
+        skipped
+            .iter()
+            .map(|id| format!("| {} | skip | {LINT_SKIP_REASON} |", cell(id))),
+    );
+    lines.join("\n") + "\n\n"
+}
