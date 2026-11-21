@@ -3,11 +3,13 @@
 
 mod evidence;
 mod handle;
+mod latest;
 mod resolve;
 mod walk;
 
 pub(super) use evidence::{Evidence, State, state};
-pub(super) use walk::{Budget, scan, unresolved_link};
+pub(super) use latest::newest;
+pub(super) use walk::{Budget, scan};
 
 use std::cell::RefCell;
 use std::collections::{BTreeMap, BTreeSet};
@@ -25,6 +27,12 @@ use crate::error::CiError;
 
 pub(super) const STORE: &str = ".velnor-input-inventories";
 pub(super) type Entries = BTreeMap<PathBuf, BTreeMap<PathBuf, Kind>>;
+
+#[derive(Default)]
+pub(super) struct Scan {
+    pub(super) entries: Entries,
+    pub(super) identities: BTreeMap<PathBuf, handle::Stamp>,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(super) enum Kind {
