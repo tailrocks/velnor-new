@@ -19,7 +19,7 @@ RELEASE_URL = f"{RELEASES}/tools-v0.1.79/velnor-ci-x86_64-unknown-linux-musl.tar
 LEGACY_RELEASE_URL = f"{RELEASES}/rust-ci-v0.1.79/velnor-ci-x86_64-unknown-linux-musl.tar.gz"
 PAYLOAD = b"the released velnor-ci binary\n"
 DIGEST_TOOLS = ("sha256sum", "shasum")
-SCRIPT_TOOLS = ("bash", "cut", "tr", "mktemp", "rm", "cp", "mkdir", "chmod", "mv", "wc", "gzip", "head", "sleep", "seq", "env", "sync")
+SCRIPT_TOOLS = ("bash", "cut", "tr", "mktemp", "rm", "cp", "mkdir", "chmod", "mv", "wc", "gzip", "head", "sleep", "seq", "env", "sync", "find", "uname")
 ARCHIVE = "velnor-ci-x86_64-unknown-linux-musl.tar.gz"
 PLATFORMS = (
     ("Linux", "X64", "x86_64-unknown-linux-musl", "SHA256_LINUX_X64"),
@@ -76,6 +76,22 @@ fi
 exec "$REAL_MV" "$@"
 """
 
+STUB_PLANTING_MV = """#!/bin/sh
+if [ ! -e "$STUB_RACE_MARK" ]; then
+  for arg; do
+    case "$arg" in
+      */velnor-ci-x86_64-unknown-linux-musl.tar.gz)
+        : > "$STUB_RACE_MARK"; mkdir -p "$STUB_TARGET"; ln -s "$STUB_TARGET" "$arg"; break ;;
+    esac
+  done
+  if [ -n "$STUB_FOLLOW" ]; then
+    for arg; do src="$dst"; dst="$arg"; done
+    exec "$REAL_MV" -f "$src" "$dst"
+  fi
+fi
+exec "$REAL_MV" "$@"
+"""
+
 STUB_TAR = """#!/bin/sh
 if [ -p /dev/stdin ]; then pipe=pipe; else pipe=none; fi
 printf '%s\\t%s\\n' "$pipe" "$*" >> "$STUB_TAR_LOG"
@@ -90,6 +106,13 @@ exec "$REAL_SHASUM" -a 256 "$@"
 
 STUB_SLOW_HEAD = """#!/bin/sh
 /bin/sleep 1
+exec "$REAL_HEAD" "$@"
+"""
+
+STUB_COUNTING_HEAD = """#!/bin/sh
+for arg; do
+  case "$arg" in */velnor-ci-x86_64-unknown-linux-musl.tar.gz) printf '%s\\n' "$2" >> "$STUB_READ_LOG" ;; esac
+done
 exec "$REAL_HEAD" "$@"
 """
 
@@ -588,12 +611,17 @@ class SetupVelnorInstallTests(unittest.TestCase):
         stub = self.stub_bin / "sha256sum"
         stub.write_text(STUB_DIGEST)
         stub.chmod(0o755)
+        head = self.stub_bin / "head"
+        head.write_text(STUB_COUNTING_HEAD)
+        head.chmod(0o755)
         digest_log = self.root / "digest-calls.log"
+        read_log = self.root / "bytes-read.log"
         result = self.install(
             sha256(self.archive),
             extra_env={
                 "STUB_MISSING": "tools-v0.1.79 rust-ci-v0.1.79",
                 "STUB_DIGEST_LOG": str(digest_log),
+                "STUB_READ_LOG": str(read_log),
                 "REAL_SHA256SUM": shutil.which("sha256sum") or "",
                 "REAL_SHASUM": shutil.which("shasum") or "",
             },
@@ -606,6 +634,8 @@ class SetupVelnorInstallTests(unittest.TestCase):
             [],
             "an oversized store entry was read in full to hash it",
         )
+        requested = [int(count) for count in read_log.read_text().split()] if read_log.exists() else []
+        self.assertEqual(requested, [], f"head was asked for {sum(requested)} bytes of an oversized store entry")
 
     def test_a_verified_copy_published_during_an_eviction_is_kept_for_the_next_job(self):
         cached = self.cached_archive()
@@ -637,12 +667,14 @@ class SetupVelnorInstallTests(unittest.TestCase):
         calls = self.curl_calls()
         self.assertEqual(len(calls), 2, calls)
         limits = {"--max-time": 600, "--retry-max-time": 900}
+        minimum = 60
         for call in calls:
             words = call.split()
             for flag, limit in limits.items():
                 self.assertIn(flag, words, call)
                 value = words[words.index(flag) + 1]
                 self.assertRegex(value, r"^[1-9][0-9]*$", call)
+                self.assertGreaterEqual(int(value), minimum, f"{flag} {value} is too short for a 256 MiB archive: {call}")
                 self.assertLessEqual(int(value), limit, call)
 
     def test_a_stored_archive_that_mismatches_is_removed_even_when_the_download_is_also_bad(self):
@@ -652,6 +684,30 @@ class SetupVelnorInstallTests(unittest.TestCase):
         result = self.install(sha256(b"some other archive"))
         self.assertEqual(result.returncode, 1, result.output)
         self.assertFalse(cached.exists(), "a mismatched store entry was left for the next job")
+
+    def test_a_valid_store_entry_that_reads_slowly_is_kept_and_not_reported_as_oversized(self):
+        cached = self.cached_archive()
+        cached.parent.mkdir(parents=True)
+        cached.write_bytes(self.archive)
+        slow = self.stub_bin / "head"
+        slow.write_text(STUB_SLOW_HEAD)
+        slow.chmod(0o755)
+        result = self.install(sha256(self.archive), extra_env={"STUB_MISSING": "tools-v0.1.79 rust-ci-v0.1.79"})
+        self.assertEqual(result.returncode, 1, result.output)
+        self.assertNotIn("removed the tool-cache copy", result.output)
+        self.assertIn("could not be read in time", result.output)
+        self.assertTrue(cached.exists(), "a valid store entry that was only slow to read was deleted")
+        self.assertEqual(cached.read_bytes(), self.archive)
+
+    def test_a_directory_at_the_store_entry_path_is_replaced_by_the_verified_file(self):
+        cached = self.cached_archive()
+        cached.mkdir(parents=True)
+        (cached / "stale").write_bytes(b"left behind\n")
+        result = self.install(sha256(self.archive))
+        self.assertEqual(result.returncode, 0, result.output)
+        self.assertTrue(cached.is_file(), "the verified copy was moved inside the directory at the store entry path")
+        self.assertEqual(cached.read_bytes(), self.archive)
+        self.assertEqual(self.installed_binary().read_bytes(), PAYLOAD)
 
     def test_a_store_write_is_flushed_to_disk_before_it_is_renamed_into_the_tool_cache(self):
         order = self.root / "order.log"
@@ -680,6 +736,39 @@ class SetupVelnorInstallTests(unittest.TestCase):
         self.assertTrue(synced.exists(), "the temp file was never flushed")
         self.assertEqual(synced.read_bytes(), self.archive, "the flushed bytes are not the complete archive")
         self.assertEqual(self.cached_archive().read_bytes(), self.archive)
+
+    def plant_symlink_before_publish(self, follow):
+        target = self.root / "attacker-target"
+        stub = self.stub_bin / "mv"
+        stub.write_text(STUB_PLANTING_MV)
+        stub.chmod(0o755)
+        result = self.install(
+            sha256(self.archive),
+            extra_env={
+                "STUB_TARGET": str(target),
+                "STUB_RACE_MARK": str(self.root / "race-mark"),
+                "STUB_FOLLOW": "1" if follow else "",
+                "REAL_MV": shutil.which("mv"),
+            },
+        )
+        return result, target
+
+    def test_a_symlink_planted_at_the_store_entry_path_before_the_rename_is_replaced_not_followed(self):
+        result, target = self.plant_symlink_before_publish(follow=False)
+        self.assertEqual(result.returncode, 0, result.output)
+        self.assertEqual(installed_files(target), [], "the verified copy was published into the symlink target")
+        cached = self.cached_archive()
+        self.assertTrue(cached.is_file() and not cached.is_symlink(), "the store entry is not a regular file")
+        self.assertEqual(cached.read_bytes(), self.archive)
+        self.assertEqual(self.installed_binary().read_bytes(), PAYLOAD)
+
+    def test_a_rename_that_follows_a_planted_symlink_is_not_reported_as_installed_in_the_store(self):
+        result, target = self.plant_symlink_before_publish(follow=True)
+        self.assertEqual(result.returncode, 0, result.output)
+        self.assertIn("could not publish velnor-ci 0.1.79 to the tool cache", result.output)
+        self.assertNotIn(f"installed velnor-ci 0.1.79 in {self.cached_archive().parent}", result.output)
+        self.assertIn(f"installed velnor-ci 0.1.79 in {self.runner_temp}/velnor-ci-bin", result.output)
+        self.assertEqual(self.installed_binary().read_bytes(), PAYLOAD)
 
 
 if __name__ == "__main__":

@@ -43,6 +43,7 @@ pub(super) struct Audit<'a> {
     owners: Owners<'a>,
     tracked: &'a BTreeSet<RepoPath>,
     freshness: freshness::Freshness,
+    diagnostic: freshness::Freshness,
     pub(super) fingerprints: BTreeMap<(usize, String, String), (String, Fingerprint)>,
     pub(super) names: BTreeMap<(usize, String, String), (String, Fingerprint)>,
     pub(super) runs: BTreeMap<(usize, String, String), String>,
