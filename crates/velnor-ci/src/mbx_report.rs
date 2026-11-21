@@ -1,9 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::waste_evidence::MbxSession;
+use crate::waste_evidence::{MbxCompilerWork, MbxSession};
 use serde::Deserialize;
 use serde_json::{Map, Value};
+use std::fs;
+use std::os::unix::fs::FileTypeExt;
 use std::path::Path;
 
 pub const SWITCH: &str = "VELNOR_MBX_REPORTS";
@@ -25,7 +27,16 @@ struct Counts {
     misses: u64,
     unconsulted: u64,
     #[serde(default)]
+    verifications: u64,
+    #[serde(default)]
     bypasses: Map<String, Value>,
+    #[serde(default)]
+    compiler: Map<String, Value>,
+}
+
+#[must_use]
+pub fn is_socket(path: &Path) -> bool {
+    fs::symlink_metadata(path).is_ok_and(|metadata| metadata.file_type().is_socket())
 }
 
 const VALUE_LONG_OPTIONS: &[&str] = &["--config", "--color"];
@@ -122,14 +133,34 @@ pub fn parse(report: &[u8]) -> Result<Option<MbxSession>, String> {
     }
     let counts: Counts = serde_json::from_value(value)
         .map_err(|error| format!("version {version} without its counts ({error})"))?;
-    let bypassed = counts
-        .bypasses
-        .keys()
-        .any(|reason| !ROUTINE_PROBES.contains(&reason.as_str()));
     let looked_at = counts.hits > 0 || counts.misses > 0 || counts.unconsulted > 0;
+    let bypassed = !counts.bypasses.is_empty();
+    let probe_only = !looked_at
+        && counts.verifications == 0
+        && counts
+            .bypasses
+            .keys()
+            .all(|reason| ROUTINE_PROBES.contains(&reason.as_str()));
     Ok((looked_at || bypassed).then_some(MbxSession {
         hits: counts.hits,
         misses: counts.misses,
         not_looked_up: counts.unconsulted,
+        verifications: Some(counts.verifications).filter(|count| *count > 0),
+        bypasses: counts
+            .bypasses
+            .iter()
+            .filter_map(|(reason, count)| Some((reason.clone(), count.as_u64()?)))
+            .collect(),
+        compiler: counts
+            .compiler
+            .into_iter()
+            .filter_map(|(outcome, work)| {
+                Some((
+                    outcome,
+                    serde_json::from_value::<MbxCompilerWork>(work).ok()?,
+                ))
+            })
+            .collect(),
+        probe_only,
     }))
 }
