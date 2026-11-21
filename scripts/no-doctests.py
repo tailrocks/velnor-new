@@ -16,6 +16,9 @@ BLOCK_MARGIN = re.compile(r"[ \t]*\*")
 QUOTE_START = re.compile(r"[ \t]*>")
 HRULE = re.compile(r"(?:-[ \t]*){3,}|(?:\*[ \t]*){3,}|(?:_[ \t]*){3,}")
 SETEXT_UNDERLINE = re.compile(r"(?:=+|-+)[ \t]*")
+LINK_REF = re.compile(
+    r"\[(?!\^)[^\]]+\]:[ \t]*\S+(?:[ \t]+(?:\"[^\"]*\"|'[^']*'|\([^)]*\)))?"
+)
 HTML_CLOSED = re.compile(
     r"<!--.*-->|<\?.*\?>|<!\[CDATA\[.*\]\]>|<![A-Za-z].*>"
     r"|<(script|pre|style|textarea)(?:\s|>|$).*</\1\s*>",
@@ -110,6 +113,7 @@ def prose(line):
         and not HRULE.fullmatch(text)
         and not SETEXT_UNDERLINE.fullmatch(text)
         and not HTML_CLOSED.match(text)
+        and not LINK_REF.fullmatch(text)
     )
 
 
