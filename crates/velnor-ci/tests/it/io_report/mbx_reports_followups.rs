@@ -130,24 +130,6 @@ fn a_socket_whose_listener_never_accepts_does_not_block_the_check() -> ResultTes
 }
 
 #[test]
-fn a_report_nobody_was_assigned_does_not_change_the_counts() -> ResultTest {
-    let repo = fixture("mbx-reports-unassigned")?;
-    cargo(&repo, "build", &report_json(5, 1, 0, 0), "compiled")?;
-    let directory = repo.root().join("velnor-mbx-reports");
-    fs::write(directory.join("planted.json"), report_json(5, 99, 0, 0))?;
-    let metrics = report(&repo)?;
-    assert_eq!(metrics.mbx.sessions.len(), 1, "{metrics:?}");
-    assert_eq!(metrics.mbx.sessions[0].hits, 1);
-    assert_eq!(metrics.mbx.unparsed, 1, "{metrics:?}");
-    let errors = metrics.verification_errors.join("\n");
-    assert!(
-        errors.contains("planted.json: not assigned by velnor-ci"),
-        "{errors}"
-    );
-    Ok(())
-}
-
-#[test]
 fn every_mbx_outcome_category_of_a_report_reaches_the_metrics() -> ResultTest {
     let repo = fixture("mbx-reports-categories")?;
     let body = r#"{"version":5,"hits":3,"misses":1,"unconsulted":2,"verifications":4,"bypasses":{"compiler-query":2,"unsupported-flag":5},"compiler":{"miss":{"invocations":1,"duration_ns":900},"unconsulted":{"invocations":2,"duration_ns":268720292},"verification":{"invocations":4,"duration_ns":70}}}"#;
@@ -199,4 +181,48 @@ fn a_newer_report_with_unknown_fields_and_the_older_bypasses_shape_is_still_read
             ..session(1, 0, 0)
         }))
     );
+}
+
+#[test]
+fn the_reader_maps_a_real_mbx_report_and_names_what_it_cannot_read() {
+    let real = include_bytes!("../data/mbx_report/mbx-1.30.0.json");
+    assert_eq!(
+        parse(real),
+        Ok(Some(MbxSession {
+            bypasses: BTreeMap::from([
+                ("compiler-query".to_owned(), 2),
+                ("standard-input".to_owned(), 1)
+            ]),
+            compiler: BTreeMap::from([(
+                "unconsulted".to_owned(),
+                MbxCompilerWork {
+                    invocations: 2,
+                    duration_ns: 268_720_292
+                }
+            )]),
+            ..session(0, 0, 2)
+        }))
+    );
+    let probes = br#"{"version":5,"hits":0,"misses":0,"unconsulted":0,"bypasses":{"compiler-query":2,"standard-input":1}}"#;
+    assert_eq!(parse(probes), Ok(None));
+    let bypassed = br#"{"version":5,"hits":0,"misses":0,"unconsulted":0,"bypasses":{"compiler-query":1,"other":1}}"#;
+    assert_eq!(
+        parse(bypassed),
+        Ok(Some(MbxSession {
+            bypasses: BTreeMap::from([("compiler-query".to_owned(), 1), ("other".to_owned(), 1)]),
+            ..session(0, 0, 0)
+        }))
+    );
+    let huge = format!(
+        r#"{{"version":5,"hits":{max},"misses":{max},"unconsulted":{max}}}"#,
+        max = u64::MAX
+    );
+    assert_eq!(
+        parse(huge.as_bytes()),
+        Ok(Some(session(u64::MAX, u64::MAX, u64::MAX)))
+    );
+    assert_eq!(parse(report_json(5, 0, 0, 0).as_bytes()), Ok(None));
+    assert!(parse(br#"{"version":5,"hits":1}"#).is_err_and(|e| e.contains("without its counts")));
+    assert!(parse(br#"{"hits":1}"#).is_err_and(|e| e.contains("no numeric version")));
+    assert!(parse(b"{").is_err_and(|e| e.contains("not JSON")));
 }

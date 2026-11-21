@@ -4,16 +4,17 @@
 use crate::mbx_report::{DIRECTORY, SWITCH, VARIABLE, is_socket, parse, reports_session};
 use crate::waste_evidence::MbxSession;
 use std::collections::BTreeMap;
-use std::fs::{self, File};
-use std::io::Read;
+use std::fs::{self, File, OpenOptions};
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const EXPECTED: &str = "expected";
-const MAX_SESSIONS: usize = 4096;
-const MAX_ENTRIES: usize = 2 * MAX_SESSIONS;
+const UNRECORDED: &str = "velnor-mbx-reports.unrecorded";
+pub(super) const MAX_SESSIONS: usize = 4096;
+pub(super) const MAX_ENTRIES: usize = 2 * MAX_SESSIONS;
 const MAX_REPORT_BYTES: u64 = 1 << 20;
 
 static SESSIONS: AtomicU64 = AtomicU64::new(0);
@@ -30,7 +31,7 @@ fn inside_session() -> bool {
         .is_some_and(|socket| is_socket(Path::new(&socket)))
 }
 
-pub(super) fn assign(command: &mut Command, argv: &[String]) {
+pub(crate) fn assign(command: &mut Command, argv: &[String]) {
     command.env_remove(VARIABLE);
     if !enabled() || !reports_session(argv) || inside_session() {
         return;
@@ -38,26 +39,54 @@ pub(super) fn assign(command: &mut Command, argv: &[String]) {
     let Some(temp) = std::env::var_os("RUNNER_TEMP").filter(|temp| !temp.is_empty()) else {
         return;
     };
-    let directory = PathBuf::from(temp).join(DIRECTORY);
-    if let Err(error) = fs::create_dir_all(&directory) {
-        eprintln!(
-            "velnor-ci: cannot create {}: {error}; MBX sessions are counted from their stderr summary",
-            directory.display()
-        );
-        return;
+    let temp = PathBuf::from(temp);
+    match expect(&temp) {
+        Ok(report) => {
+            command.env(VARIABLE, report);
+        }
+        Err(error) => {
+            eprintln!("velnor-ci: {error}; the command runs without an MBX report");
+            note_unrecorded(&temp);
+        }
     }
+}
+
+fn expect(temp: &Path) -> Result<PathBuf, String> {
+    let directory = temp.join(DIRECTORY);
+    fs::create_dir_all(&directory)
+        .map_err(|error| format!("cannot create {}: {error}", directory.display()))?;
     let started = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |since| since.as_nanos());
     let session = SESSIONS.fetch_add(1, Ordering::Relaxed);
     let name = format!("{started:020}-{}-{session}", std::process::id());
-    if let Err(error) = fs::write(directory.join(format!("{name}.{EXPECTED}")), b"") {
+    fs::write(directory.join(format!("{name}.{EXPECTED}")), b"")
+        .map_err(|error| format!("cannot record the expected MBX report {name}: {error}"))?;
+    Ok(directory.join(format!("{name}.json")))
+}
+
+fn note_unrecorded(temp: &Path) {
+    let file = temp.join(UNRECORDED);
+    let written = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&file)
+        .and_then(|mut note| note.write_all(b"unrecorded\n"));
+    if let Err(error) = written {
         eprintln!(
-            "velnor-ci: cannot record the expected MBX report {name}: {error}; the session is counted from its stderr summary"
+            "velnor-ci: cannot note an unrecorded MBX session in {}: {error}",
+            file.display()
         );
-        return;
     }
-    command.env(VARIABLE, directory.join(format!("{name}.json")));
+}
+
+pub(super) fn unrecorded(runner_temp: &Path) -> u64 {
+    if !enabled() {
+        return 0;
+    }
+    fs::read_to_string(runner_temp.join(UNRECORDED)).map_or(0, |text| {
+        u64::try_from(text.lines().count()).unwrap_or(u64::MAX)
+    })
 }
 
 #[derive(Default)]
@@ -112,11 +141,13 @@ pub(super) fn read(runner_temp: &Path) -> Option<Reports> {
         match session.report {
             None if session.marker => reports.missing.push(name),
             None => {}
-            Some(file) if !session.marker => reports.unreadable.push(format!(
-                "{}: not assigned by velnor-ci",
-                file.file_name().unwrap_or_default().to_string_lossy()
-            )),
-            Some(file) => match read_regular(&file).and_then(|bytes| parse(&bytes)) {
+            Some(file) => match read_regular(&file).and_then(|bytes| {
+                if session.marker {
+                    parse(&bytes)
+                } else {
+                    Err("no expected marker".to_owned())
+                }
+            }) {
                 Ok(parsed) => reports.sessions.extend(parsed),
                 Err(reason) => reports.unreadable.push(format!(
                     "{}: {reason}",

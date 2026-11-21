@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use super::mbx_reports::{MAX_ENTRIES, MAX_SESSIONS};
 use crate::mbx_report::reports_session;
 use crate::report::{Cache, Hit, LaneMetrics};
 use crate::waste_evidence::{
@@ -42,10 +43,18 @@ pub(super) fn collect_local(metrics: &mut LaneMetrics, log: &[u8], runner_temp: 
 }
 
 fn sessions(metrics: &mut LaneMetrics, log: &[u8], runner_temp: &Path) -> (Vec<MbxSession>, u64) {
+    let unrecorded = super::mbx_reports::unrecorded(runner_temp);
     let Some(reports) = super::mbx_reports::read(runner_temp) else {
-        return summaries(metrics, log);
+        let (sessions, unparsed) = summaries(metrics, log);
+        return (
+            sessions,
+            unparsed.saturating_add(unrecorded_sessions(metrics, unrecorded)),
+        );
     };
     if reports.overflowed {
+        metrics.verification_errors.push(format!(
+            "MBX stats reports exceed the reader's bounds ({MAX_SESSIONS} sessions or {MAX_ENTRIES} entries); the MBX session counts are unknown."
+        ));
         return (Vec::new(), 1);
     }
     let mut unassigned = Vec::new();
@@ -76,8 +85,19 @@ fn sessions(metrics: &mut LaneMetrics, log: &[u8], runner_temp: &Path) -> (Vec<M
     let unknown = u64::try_from(reports.unreadable.len() + missing).unwrap_or(u64::MAX);
     (
         reports.sessions.into_iter().chain(text).collect(),
-        unparsed.saturating_add(unknown),
+        unparsed
+            .saturating_add(unknown)
+            .saturating_add(unrecorded_sessions(metrics, unrecorded)),
     )
+}
+
+fn unrecorded_sessions(metrics: &mut LaneMetrics, count: u64) -> u64 {
+    if count > 0 {
+        metrics.verification_errors.push(format!(
+            "MBX stats could not be recorded for {count} session(s): the stats directory could not be written. Those commands ran without a report; the MBX session counts are incomplete."
+        ));
+    }
+    count
 }
 
 fn summaries(metrics: &mut LaneMetrics, log: &[u8]) -> (Vec<MbxSession>, u64) {

@@ -55,3 +55,22 @@ impl CargoCommand {
         }
     }
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BuildRecord {
+    Unrecorded,
+    Tests,
+    TestsAndLanes,
+}
+
+impl BuildRecord {
+    #[must_use]
+    pub const fn tests(self) -> bool {
+        !matches!(self, Self::Unrecorded)
+    }
+
+    #[must_use]
+    pub const fn lanes(self) -> bool {
+        matches!(self, Self::TestsAndLanes)
+    }
+}

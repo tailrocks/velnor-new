@@ -72,19 +72,20 @@ fn short_cluster(shorts: &str) -> Option<bool> {
     Some(false)
 }
 
-fn cargo_subcommand(words: &[String]) -> Option<&str> {
-    let mut words = words.iter().map(String::as_str).peekable();
-    if words.peek().is_some_and(|word| word.starts_with('+')) {
-        words.next();
-    }
-    while let Some(word) = words.next() {
+fn cargo_subcommand(words: &[String]) -> Option<(&str, &[String])> {
+    let mut index = usize::from(words.first().is_some_and(|word| word.starts_with('+')));
+    while let Some(word) = words.get(index) {
+        index += 1;
         match global_option(word) {
             Some(takes_next) => {
                 if takes_next {
-                    words.next()?;
+                    words.get(index)?;
+                    index += 1;
                 }
             }
-            None => return (!word.starts_with('-')).then_some(word),
+            None => {
+                return (!word.starts_with('-')).then(|| (word.as_str(), &words[index..]));
+            }
         }
     }
     None
@@ -99,12 +100,20 @@ pub fn reports_session(argv: &[String]) -> bool {
     else {
         return false;
     };
-    let subcommand = if program == "cargo" {
-        cargo_subcommand(&argv[1..])
-    } else {
-        program.strip_prefix("cargo-")
-    };
-    subcommand.is_some_and(|name| BUILD_ONLY_SUBCOMMANDS.contains(&name))
+    if program == "cargo" {
+        return cargo_subcommand(&argv[1..]).is_some_and(|(name, after)| {
+            BUILD_ONLY_SUBCOMMANDS.contains(&name) || (name == "nextest" && lists(after))
+        });
+    }
+    match program.strip_prefix("cargo-") {
+        Some("nextest") => lists(argv.get(2..).unwrap_or_default()),
+        Some(name) => BUILD_ONLY_SUBCOMMANDS.contains(&name),
+        None => false,
+    }
+}
+
+fn lists(words: &[String]) -> bool {
+    words.first().is_some_and(|word| word == "list")
 }
 
 /// # Errors
