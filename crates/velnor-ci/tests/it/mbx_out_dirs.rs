@@ -20,8 +20,42 @@ impl Scratch {
         removable(&root);
         fs::remove_dir_all(&root).ok();
         fs::create_dir_all(&root)?;
-        Ok(Self(fs::canonicalize(root)?))
+        let root = fs::canonicalize(root)?;
+        declare_mbx(&root)?;
+        Ok(Self(root))
     }
+}
+
+/// Declares mbx for the scratch tree the way a real project does: the checkout's own `rust` and
+/// `mr-boxington` tool entries in a `mise.toml`. The scratch tree sits outside the checkout, so
+/// without this mise's cargo wrapper finds no config that names mbx and runs plain cargo (a
+/// developer's global mise config hides that locally; a CI runner has none).
+fn declare_mbx(root: &Path) -> TestResult {
+    let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mise.toml");
+    let repo: toml::Table = fs::read_to_string(repo)?.parse()?;
+    let tools = repo
+        .get("tools")
+        .and_then(toml::Value::as_table)
+        .ok_or("the checkout's mise.toml has no [tools]")?;
+    let mut declared = toml::Table::new();
+    for tool in ["rust", "mr-boxington"] {
+        let entry = tools
+            .get(tool)
+            .ok_or_else(|| format!("the checkout's mise.toml pins no {tool}"))?;
+        declared.insert(tool.to_owned(), entry.clone());
+    }
+    let config = toml::Table::from_iter([("tools".to_owned(), toml::Value::Table(declared))]);
+    fs::write(root.join("mise.toml"), toml::to_string(&config)?)?;
+    Ok(())
+}
+
+/// `MISE_TRUSTED_CONFIG_PATHS` with the scratch tree added, so mise reads its `mise.toml`.
+fn trusted_with(root: &Path) -> std::ffi::OsString {
+    let mut paths: Vec<PathBuf> = std::env::var_os("MISE_TRUSTED_CONFIG_PATHS")
+        .map(|value| std::env::split_paths(&value).collect())
+        .unwrap_or_default();
+    paths.push(root.to_path_buf());
+    std::env::join_paths(paths).unwrap_or_else(|_| root.into())
 }
 
 impl Drop for Scratch {
@@ -82,6 +116,9 @@ fn build(
         }
     }
     ci_safe_cargo_env(&mut cargo);
+    if let Some(root) = krate.parent() {
+        cargo.env("MISE_TRUSTED_CONFIG_PATHS", trusted_with(root));
+    }
     cargo.env("MBX_CACHE_DIR", store);
     if let Some((name, value)) = setting {
         cargo.env(name, value);
