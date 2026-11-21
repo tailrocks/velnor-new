@@ -5,14 +5,23 @@ SHA-256 as the `sha256` input of every `jdx/mise-action` step (issue #2158).
 The renderer holds the digests (`MISE_BINARIES` in
 `crates/velnor-render/src/mise_digest.rs`, next to `MISE_VERSION`). A job whose
 runner labels name one platform gets that platform's digest (a Linux label only
-when it starts with `ubuntu-`, which names a glibc runner); any other job
-selects it at run time from `runner.os` and `runner.arch`. Windows and Linux
+when it starts with `ubuntu-`); any other job selects it at run time from
+`runner.os` and `runner.arch`. Windows and Linux
 are not pinned by that selection: it is an empty `sha256`, so the action keeps
 its signed-archive check, which covers `mise-shim.exe` on Windows and the
 binary that suits the runner's libc on Linux (a musl runner downloads a
 different binary than the glibc digest names). Any other platform without a row
 selects a text that matches no binary, so the action fails instead of
-installing an unchecked executable. The design
+installing an unchecked executable.
+
+The literal for an `ubuntu-*` label assumes a glibc runner, and it applies only
+to a job on a runner declared GitHub-hosted (`hosted = true`, or the default
+`ubuntu-latest`). A self-hosted pool is fenced (`hosted = false`) and gets the
+run-time selection, which has no Linux row, so a musl pool behind an `ubuntu-*`
+label keeps the action's signed-archive check and downloads its own binary. A
+self-hosted pool therefore has to say `hosted = false`; declaring it
+`hosted = true` claims a GitHub-hosted glibc runner. A `trusted_runner` pool is
+always self-hosted and never gets the literal. The design
 and the bump procedure are in [docs/rust-ci.md](../rust-ci.md#the-mise-binary-is-pinned-by-sha-256).
 
 The digests come from the official
@@ -20,8 +29,9 @@ The digests come from the official
 of the release and agree with the `digest` field of each release asset in the
 GitHub releases API. The raw executable equals the binary inside the release
 archive that the action downloads and extracts (checked for `linux-x64`: the
-extracted `mise/bin/mise` has the digest below).
-`scripts/mise-binary-digests.sh --check` repeats the comparison.
+extracted `mise/bin/mise` has the digest below). Both comparisons were made by
+hand. `scripts/mise-binary-digests.sh --check` compares only the checked-in
+table with `SHASUMS256.txt`.
 
 | `runner.os`-`runner.arch` | Official raw executable | SHA-256 |
 | --- | --- | --- |
@@ -29,12 +39,3 @@ extracted `mise/bin/mise` has the digest below).
 | `Linux-ARM64` | `mise-v2026.11.10-linux-arm64` | `86ef275d541c5243cd20b1c0fcd16810e5f3601113d8db09278d0608617a3833` |
 | `macOS-ARM64` | `mise-v2026.11.10-macos-arm64` | `3f4ba9d21c6f2170048d0870fd98ab287e04730b76a6fc8e83964d59c80eb704` |
 | `macOS-X64` | `mise-v2026.11.10-macos-x64` | `7eab8054d301b75dcbd93440ff184bee6864d95799cfdc4a00ce858313b68783` |
-
-## History
-
-The old engine (velnor-actions 0.1.78) pinned the same digests per target. The
-rewrite dropped them, so the generated steps passed only `version` until #2158.
-The previous table (`v2026.10.8`, captured `2026-10-12T23:08:53Z`, receipt in
-[`freshness-upstream-probe-2026-10-13.json`](freshness-upstream-probe-2026-10-13.json))
-qualified Linux x64 and macOS x64 in the exact-source
-[`mise-pin` run 38321521320](https://github.com/tailrocks/velnor-new/actions/runs/38321521320).
