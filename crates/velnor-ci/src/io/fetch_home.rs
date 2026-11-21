@@ -80,13 +80,32 @@ impl Drop for Scratch {
     }
 }
 
-pub(super) fn temp_parent(home: &Path) -> PathBuf {
+pub(super) fn temp_parent(home: &Path, token: bool) -> Result<PathBuf, CiError> {
+    let runner = std::env::var_os("RUNNER_TEMP").map(PathBuf::from);
+    let candidates = runner.into_iter().chain([std::env::temp_dir()]);
+    match choose_temp(home, candidates) {
+        Some(parent) => Ok(parent),
+        None if !token => Ok(std::env::temp_dir()),
+        None => Err(CiError::new(
+            "no temporary directory outside the runner home and every Cargo config; refusing to run the fetch with the token",
+        )),
+    }
+}
+
+fn choose_temp(home: &Path, candidates: impl Iterator<Item = PathBuf>) -> Option<PathBuf> {
     let home = std::fs::canonicalize(home).unwrap_or_else(|_| home.to_path_buf());
-    std::env::var_os("RUNNER_TEMP")
-        .map(PathBuf::from)
+    candidates
         .filter(|dir| dir.is_absolute() && dir.is_dir())
-        .filter(|dir| !std::fs::canonicalize(dir).is_ok_and(|dir| dir.starts_with(&home)))
-        .unwrap_or_else(std::env::temp_dir)
+        .filter_map(|dir| std::fs::canonicalize(dir).ok())
+        .find(|dir| !dir.starts_with(&home) && !under_cargo_config(dir))
+}
+
+fn under_cargo_config(dir: &Path) -> bool {
+    dir.ancestors().any(|ancestor| {
+        ["config.toml", "config"]
+            .iter()
+            .any(|name| ancestor.join(".cargo").join(name).exists())
+    })
 }
 
 pub(super) fn cache_home(home: &Path, job: Option<&OsStr>) -> PathBuf {
@@ -312,5 +331,36 @@ mod tests {
         let second = Scratch::create(&root.join("home/.cargo"), &root.join("tmp"), true)
             .unwrap_or_else(|e| unreachable!("{e}"));
         assert_ne!(first.path(), second.path());
+    }
+
+    #[test]
+    fn a_temp_directory_below_a_cargo_config_is_not_chosen_for_the_token_fetch() {
+        let root = tree("ancestor-config");
+        let checkout = root.join("checkout");
+        fs::create_dir_all(checkout.join(".cargo")).unwrap_or_else(|e| unreachable!("{e}"));
+        fs::write(
+            checkout.join(".cargo/config.toml"),
+            "[http]\ncainfo = \"/x\"\n",
+        )
+        .unwrap_or_else(|e| unreachable!("{e}"));
+        fs::create_dir_all(checkout.join("temp")).unwrap_or_else(|e| unreachable!("{e}"));
+        let clean = root.join("tmp");
+        let chosen = choose_temp(
+            &root.join("home"),
+            [checkout.join("temp"), clean.clone()].into_iter(),
+        );
+        assert_eq!(chosen, Some(clean));
+        let none = choose_temp(&root.join("home"), [checkout.join("temp")].into_iter());
+        assert_eq!(none, None);
+    }
+
+    #[test]
+    fn a_temp_directory_inside_the_runner_home_is_not_chosen() {
+        let root = tree("home-temp");
+        let inside = root.join("home/tmp");
+        fs::create_dir_all(&inside).unwrap_or_else(|e| unreachable!("{e}"));
+        let outside = root.join("tmp");
+        let chosen = choose_temp(&root.join("home"), [inside, outside.clone()].into_iter());
+        assert_eq!(chosen, Some(outside));
     }
 }

@@ -36,7 +36,7 @@ pub(super) fn resolve(
             toolchain: chosen()
                 .or_else(|| default_toolchain(rustup_home))
                 .unwrap_or_else(unpinned),
-            rustc: None,
+            rustc: fixed.map(|fixed| sealed_rustc(cargo, fixed)).transpose()?,
         });
     };
     let rustup_home = std::fs::canonicalize(rustup_home).map_err(|e| {

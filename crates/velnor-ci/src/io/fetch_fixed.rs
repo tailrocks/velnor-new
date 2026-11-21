@@ -343,4 +343,20 @@ mod tests {
             "writable rustc"
         );
     }
+
+    #[test]
+    fn a_sealed_cargo_without_rustup_runs_the_sealed_rustc_and_refuses_a_writable_one() {
+        let (root, fixed) = sealed_tree("no-rustup");
+        let rustc = fixed.base.join("cargo/bin/rustc");
+        script(&rustc);
+        let sealed = resolve_named(&root, &fixed).unwrap_or_else(|e| unreachable!("{e}"));
+        assert_eq!(sealed.rustc, fs::canonicalize(&rustc).ok());
+        fs::set_permissions(&rustc, fs::Permissions::from_mode(0o666))
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        let refused = resolve_named(&root, &fixed).err().map(|e| e.to_string());
+        assert!(
+            refused.is_some_and(|e| e.contains("rustc") && e.contains("sealed")),
+            "writable rustc"
+        );
+    }
 }
