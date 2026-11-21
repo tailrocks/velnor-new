@@ -23,14 +23,14 @@ Every row remains `INCOMPLETE`: no cold/warm/third-run measurement or resulting 
 | # | Wave | Repository | Visibility | Default SHA | Migration PR | Relevant diff gaps | Status |
 |---:|---|---|---|---|---|---|---|
 | 0 | G | `tailrocks/velnor-new` | public | `c57c700459bbe1549fe7eedcb7d8689585c38986` | — | generator PR audit pending | INCOMPLETE |
-| 1 | A | `example-org/example-repo` | public | `6c389d38eadab93d6d6a4005e01dbdd8c4160221` | 1110 (private repository pull request, link withheld) | `.github/workflows/ci-main.yml`; `.github/workflows/ci-pr.yml`; `.github/workflows/ci.yml` | INCOMPLETE |
-| 2 | A | `example-org/example-repo` | public | `2e7119b9c668ca7a9c55218b20049885299d198f` | 213 (private repository pull request, link withheld) | patches downloaded; review pending | INCOMPLETE |
-| 3 | A | `example-org/example-repo` | public | `cd05a0ea2cf68fd6c2753ee938247b2dcd4c7551` | 505 (private repository pull request, link withheld) | patches downloaded; review pending | INCOMPLETE |
-| 4 | A | `example-org/example-repo` | public | `59e538704b8c119f3b6668cea0154909a6158ff6` | 189 (private repository pull request, link withheld) | patches downloaded; review pending | INCOMPLETE |
-| 5 | A | `example-org/example-repo` | public | `587a0d1a8eef96108c9d9d530bdaa13df91edd2b` | 154 (private repository pull request, link withheld) | patches downloaded; review pending | INCOMPLETE |
-| 6 | A | `example-org/example-repo` | public | `a01b342162bc56cdf1e8bbaab793e73d31c1d621` | 48 (private repository pull request, link withheld) | patches downloaded; review pending | INCOMPLETE |
-| 7 | A | `example-org/example-repo` | public | `b43a2314c6b58906d52828115d3b3973026f6a2a` | 48 (private repository pull request, link withheld) | patches downloaded; review pending | INCOMPLETE |
-| 8 | A | `example-org/example-repo` | public | `2cf461e2fed1b95d9fd1e7ba74c10d4d8b1c685d` | 478 (private repository pull request, link withheld) | patches downloaded; review pending | INCOMPLETE |
+| 1 | A | `jackin-project/jackin` | public | `6c389d38eadab93d6d6a4005e01dbdd8c4160221` | [1110](https://github.com/jackin-project/jackin/pull/1110) | `.github/workflows/ci-main.yml`; `.github/workflows/ci-pr.yml`; `.github/workflows/ci.yml` | INCOMPLETE |
+| 2 | A | `jackin-project/jackin-agent-smith` | public | `2e7119b9c668ca7a9c55218b20049885299d198f` | [213](https://github.com/jackin-project/jackin-agent-smith/pull/213) | patches downloaded; review pending | INCOMPLETE |
+| 3 | A | `jackin-project/homebrew-tap` | public | `cd05a0ea2cf68fd6c2753ee938247b2dcd4c7551` | [505](https://github.com/jackin-project/homebrew-tap/pull/505) | patches downloaded; review pending | INCOMPLETE |
+| 4 | A | `jackin-project/jackin-role-action` | public | `59e538704b8c119f3b6668cea0154909a6158ff6` | [189](https://github.com/jackin-project/jackin-role-action/pull/189) | patches downloaded; review pending | INCOMPLETE |
+| 5 | A | `jackin-project/jackin-sentinel` | public | `587a0d1a8eef96108c9d9d530bdaa13df91edd2b` | [154](https://github.com/jackin-project/jackin-sentinel/pull/154) | patches downloaded; review pending | INCOMPLETE |
+| 6 | A | `jackin-project/jackin-dev` | public | `a01b342162bc56cdf1e8bbaab793e73d31c1d621` | [48](https://github.com/jackin-project/jackin-dev/pull/48) | patches downloaded; review pending | INCOMPLETE |
+| 7 | A | `jackin-project/jackin-github-terraform` | public | `b43a2314c6b58906d52828115d3b3973026f6a2a` | [48](https://github.com/jackin-project/jackin-github-terraform/pull/48) | patches downloaded; review pending | INCOMPLETE |
+| 8 | A | `jackin-project/jackin-the-architect` | public | `2cf461e2fed1b95d9fd1e7ba74c10d4d8b1c685d` | [478](https://github.com/jackin-project/jackin-the-architect/pull/478) | patches downloaded; review pending | INCOMPLETE |
 | 9 | B | `tailrocks/github-terraform` | public | `288dc40dec53500dfeb8bed148613b99cfea92c2` | [38](https://github.com/tailrocks/github-terraform/pull/38) | patches downloaded; review pending | INCOMPLETE |
 | 10 | B | `tailrocks/termpane` | public | `7cf2f9981ef9a3f7c8fc295a7501a261fba955a8` | [31](https://github.com/tailrocks/termpane/pull/31) | patches downloaded; review pending | INCOMPLETE |
 | 11 | B | `tailrocks/tui-snap` | public | `a47c9aaefb34e4c00026f99d8a8dd7ee5916b274` | [10](https://github.com/tailrocks/tui-snap/pull/10) | `.github/workflows/ci.yml` | INCOMPLETE |
@@ -64,7 +64,7 @@ Every row remains `INCOMPLETE`: no cold/warm/third-run measurement or resulting 
 | 39 | B | `tailrocks/tailrocks-open-source-skills` | public | `3e51bc5c91949f361ed926d8f760bcb16edef111` | [2](https://github.com/tailrocks/tailrocks-open-source-skills/pull/2) | patches downloaded; review pending | INCOMPLETE |
 | 40 | B | `tailrocks/tailrocks-macos-skills` | public | `eb0be5522fe0c1c9c74d41ee354446a011b10c74` | [2](https://github.com/tailrocks/tailrocks-macos-skills/pull/2) | patches downloaded; review pending | INCOMPLETE |
 | 41 | B | `tailrocks/tailrocks-code-quality-skills` | public | `e63a82f28b688a7fada418e615aa9ec0eeec4c04` | [2](https://github.com/tailrocks/tailrocks-code-quality-skills/pull/2) | patches downloaded; review pending | INCOMPLETE |
-| 42 | C | `example-org/example-repo` | public | `0881638712a837bdcb90b3cd811a8a9be3aa8d83` | 729 (private repository pull request, link withheld) | `.github/workflows/ci-main.yml`; `.github/workflows/ci-pr.yml`; `.github/workflows/release.yml` | INCOMPLETE |
+| 42 | C | `example-org/example-repo` | public | `0881638712a837bdcb90b3cd811a8a9be3aa8d83` | 729 (link withheld: private organization) | `.github/workflows/ci-main.yml`; `.github/workflows/ci-pr.yml`; `.github/workflows/release.yml` | INCOMPLETE |
 | 43 | C | `example-org/example-repo` | private | `5f77c0b09eda3ac4a6fb8c5de0a622a0cb926c45` | 2081 (private repository pull request, link withheld) | `.github/ci/project.toml`; `.github/workflows/ci-main.yml`; `.github/workflows/ci-pr.yml`; `.github/workflows/ci.yml` | INCOMPLETE |
 | 44 | C | `example-org/example-repo` | private | `6b2ac2277103a22b9ae155bc92415ca5ddf05f95` | 243 (private repository pull request, link withheld) | patches downloaded; review pending | INCOMPLETE |
 | 45 | C | `example-org/example-repo` | private | `cc0e2b687dc6c1a9943b0ae9f5911f1e782c1a20` | 6 (private repository pull request, link withheld) | patches downloaded; review pending | INCOMPLETE |

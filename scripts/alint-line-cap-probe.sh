@@ -83,4 +83,25 @@ manifest_case() {
 }
 manifest_case
 
+# One path exempt from both rules is verified once and accepted; a duplicate inside one rule is refused.
+dup_case() {
+  local label="$1" checker="$2" cfg out rc
+  cfg="$(mktemp "${TMPDIR:-/tmp}/digest-dup.XXXXXX")" || exit 1
+  awk -v dup="$3" '{print} /^  - id: no-absolute-local-paths/{r=1} r && /^      exclude:/{print dup; r=0}' .alint.yml > "$cfg"
+  out="$(python3 -I "$checker" "$ROOT" "$cfg" 2>&1)"
+  rc=$?
+  rm -f "$cfg"
+  echo "$out" | sed "s/^/digest guard ($label): /"
+  if [ "$4" = accept ] && { [ "$rc" -ne 0 ] || ! grep -q 'digest-frozen evidence check: OK' <<<"$out"; }; then
+    echo "::error::digest guard refused a path exempt from two rules" >&2
+    exit 1
+  fi
+  if [ "$4" = refuse ] && { [ "$rc" -eq 0 ] || ! grep -q 'duplicate exclude entries' <<<"$out"; }; then
+    echo "::error::digest guard accepted a duplicate exclude inside one rule" >&2
+    exit 1
+  fi
+}
+dup_case cross-rule scripts/check-digest-frozen-evidence.py '        - docs/reviews/phasec-registered-source-fixes-v31.json' accept
+dup_case same-rule scripts/check-digest-frozen-evidence.py '        - .alint.yml' refuse
+
 rm -f "$PROBE"

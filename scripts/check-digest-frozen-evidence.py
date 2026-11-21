@@ -101,6 +101,8 @@ def resolved_excludes(config, rule_id):
 
 
 def exempt_paths(config):
+    # Duplicates are rejected within one rule only: alint takes excludes per rule, so a
+    # file that must be exempt from two rules is listed in both. Each path is verified once.
     out = []
     for rule_id in RULE_IDS:
         parsed = exclude_lines(config, rule_id)
@@ -109,8 +111,10 @@ def exempt_paths(config):
             raise ValueError(
                 f"{rule_id}: parsed {len(parsed)} exclude entries but alint resolves {len(resolved)}; refusing"
             )
+        if len(parsed) != len(set(parsed)):
+            raise ValueError(f"{rule_id}: duplicate exclude entries")
         out.extend(parsed)
-    return [p for p in out if p != ".alint.yml"]
+    return list(dict.fromkeys(p for p in out if p != ".alint.yml"))
 
 
 def manifest_entries(root, rel_manifest):
@@ -188,9 +192,6 @@ def main():
         paths = exempt_paths(config)
     except ValueError as err:
         print("FAIL", err)
-        return 1
-    if len(paths) != len(set(paths)):
-        print("duplicate exempt paths")
         return 1
     failures = check(root, paths)
     for f in failures:
