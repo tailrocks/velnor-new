@@ -1,11 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{HelperRelease, Platform, PrivateSources};
+use velnor_model::{HelperRelease, Platform, PrivateSources, TokenMint};
 use velnor_release::{BinaryFormat, BinaryPlan, Libc, ReleasePlan};
 
 use crate::install_steps::install_tools;
-use crate::private_steps::release_phase as private_phase;
+use crate::private_steps::{release_mint, release_phase as private_phase};
 use crate::release::{FROM_A_PASSED_PUSH, GATE_IS_READY};
 use crate::release_assets::{
     STAGE_SHELL, archive_packaging, asset, bind_version, read_version, selection, uploaded,
@@ -167,6 +167,12 @@ pub(crate) fn build_steps(
         steps.push(private_mbx_store(&build_id(&binary.package, platform)));
     }
     steps.push(same_commit);
+    let minted = private
+        .as_ref()
+        .is_some_and(|private| release_mint(private.helper) == TokenMint::Helper);
+    if let Some(private) = private.as_ref().filter(|_| minted) {
+        steps.extend(private_steps(binary, private));
+    }
     if linux {
         steps.push(command(
             "Install the musl C compiler".to_owned(),
@@ -184,12 +190,8 @@ pub(crate) fn build_steps(
             format!("rustup target add {triple}"),
         ),
     ]);
-    if let Some(private) = &private {
-        steps.push(install_helper(private.helper));
-        steps.extend(private_phase(
-            private.sources,
-            &join(&binary.root, "Cargo.toml"),
-        ));
+    if let Some(private) = private.as_ref().filter(|_| !minted) {
+        steps.extend(private_steps(binary, private));
     }
     let offline = if private.is_some() { " --offline" } else { "" };
     steps.extend([
@@ -222,6 +224,16 @@ pub(crate) fn build_steps(
         uploaded(binary, platform),
     ));
     bind_version(&mut steps);
+    steps
+}
+
+fn private_steps(binary: &BinaryPlan, private: &Private<'_>) -> Vec<RenderedStep> {
+    let mut steps = vec![install_helper(private.helper)];
+    steps.extend(private_phase(
+        private.sources,
+        &join(&binary.root, "Cargo.toml"),
+        release_mint(private.helper),
+    ));
     steps
 }
 

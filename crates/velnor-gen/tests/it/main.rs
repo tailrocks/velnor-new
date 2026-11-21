@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod app_key;
 mod archive;
 mod auto_shape_note;
 mod base_cache_rules;
@@ -169,6 +170,7 @@ mod mise_install;
 mod mise_names;
 mod mise_platform;
 mod mise_trust;
+mod mise_version_pin;
 mod needs_size;
 mod needs_size_plan;
 mod nested_target_dir;
