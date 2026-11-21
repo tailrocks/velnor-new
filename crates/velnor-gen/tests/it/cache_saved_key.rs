@@ -87,16 +87,21 @@ fn a_target_and_sources_save_reports_the_key_it_recorded_from_helper_0_1_112() -
 
 #[test]
 fn an_older_helper_gets_no_saved_key_step_for_target_or_sources() -> TestResult {
-    for config in STORES.iter().copied() {
-        let caches = trimmed_caches(config, "0.1.110")?;
-        assert!(!caches.is_empty(), "{config:?}: no target or sources cache");
-        for cache in caches {
+    for helper in ["0.1.110", "0.1.111"] {
+        for config in STORES.iter().copied() {
+            let caches = trimmed_caches(config, helper)?;
             assert!(
-                cache.save_key_step.is_none(),
-                "{config:?} {}: {:?}",
-                cache.family,
-                cache.save_key_step
+                !caches.is_empty(),
+                "{config:?} {helper}: no target or sources cache"
             );
+            for cache in caches {
+                assert!(
+                    cache.save_key_step.is_none(),
+                    "{config:?} {helper} {}: {:?}",
+                    cache.family,
+                    cache.save_key_step
+                );
+            }
         }
     }
     Ok(())
