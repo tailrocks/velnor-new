@@ -52,8 +52,7 @@ fn declare_mbx(root: &Path) -> TestResult {
 /// `MISE_TRUSTED_CONFIG_PATHS` with the scratch tree added, so mise reads its `mise.toml`.
 fn trusted_with(root: &Path) -> std::ffi::OsString {
     let mut paths: Vec<PathBuf> = std::env::var_os("MISE_TRUSTED_CONFIG_PATHS")
-        .map(|value| std::env::split_paths(&value).collect())
-        .unwrap_or_default();
+        .map_or_default(|value| std::env::split_paths(&value).collect());
     paths.push(root.to_path_buf());
     std::env::join_paths(paths).unwrap_or_else(|_| root.into())
 }
