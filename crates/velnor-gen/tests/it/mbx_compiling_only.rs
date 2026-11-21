@@ -70,7 +70,10 @@ fn an_idle_job_and_the_archive_test_job_render_no_shared_store_steps() -> TestRe
     for id in IDLE_JOBS {
         let names = step_names(&jobs, id)?;
         for step in [STORE, OUT_DIRS, SEED] {
-            assert!(!names.iter().any(|name| name == step), "{id} renders {step:?}");
+            assert!(
+                !names.iter().any(|name| name == step),
+                "{id} renders {step:?}"
+            );
         }
     }
     let archive = jobs["rust-test-default"]["steps"]
@@ -97,7 +100,11 @@ fn a_job_that_runs_cargo_check_renders_the_shared_store_seed_and_out_dirs_steps(
             .as_array()
             .ok_or("no steps")?
             .iter()
-            .any(|step| step["run"].as_str().is_some_and(|run| run.contains("cargo check")));
+            .any(|step| {
+                step["run"]
+                    .as_str()
+                    .is_some_and(|run| run.contains("cargo check"))
+            });
         if runs_check {
             checking.push(id.clone());
         }
