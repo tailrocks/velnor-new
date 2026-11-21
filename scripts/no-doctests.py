@@ -164,8 +164,11 @@ def raw_value(literal, prefix):
     return literal[hashes + prefix + 1 : len(literal) - hashes - 1]
 
 
-def html_start(s):
-    for start, end in HTML_BLOCKS:
+HTML_INTERRUPTING = HTML_BLOCKS[:-1]
+
+
+def html_start(s, blocks=HTML_BLOCKS):
+    for start, end in blocks:
         if start.match(s):
             return True, end
     return False, None
@@ -178,7 +181,7 @@ def block_start(s):
         or ATX.match(s)
         or FENCE_OPEN.match(s)
         or LIST_ITEM.match(s)
-        or html_start(s)[0]
+        or html_start(s, HTML_INTERRUPTING)[0]
     )
 
 
@@ -186,6 +189,7 @@ class Doc:
     def __init__(self):
         self.para = False
         self.item = None
+        self.empty_item = False
         self.html = None
 
     def open_html(self, s, quoted):
@@ -221,10 +225,13 @@ class Doc:
         s = body[ind:].rstrip()
         if not s:
             self.para = False
+            if self.empty_item:
+                self.item = None
             return False
-        base = 0 if quoted or self.item is None else self.item
+        self.empty_item = False
         if not quoted and self.item is not None and ind < self.item:
             self.item = None
+        base = 0 if quoted or self.item is None else self.item
         rel = ind - base
         plain = not quoted and ind >= 4
         if self.para and not (rel < 4 and block_start(s)):
@@ -244,6 +251,7 @@ class Doc:
             if not quoted:
                 spaces = len(m.group(2))
                 self.item = ind + len(m.group(1)) + (spaces if 0 < spaces <= 4 else 1)
+                self.empty_item = not rest
             if self.open_html(rest, quoted):
                 return plain
             self.para = bool(rest) and not (ATX.match(rest) or THEMATIC.match(rest) or FENCE_OPEN.match(rest))
