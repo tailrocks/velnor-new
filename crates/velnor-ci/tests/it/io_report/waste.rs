@@ -50,6 +50,7 @@ pub(super) fn with_store(
         .current_dir(repo.root())
         .env("RUNNER_TEMP", repo.root())
         .env("GITHUB_JOB", "rust")
+        .env("VELNOR_MBX_REPORTS", "true")
         .env("VELNOR_REPORT_CACHES", cache_plan().to_string())
         .env("VELNOR_REPORT_STEPS", TOOLS_HIT)
         .env_remove("GITHUB_TOKEN")
