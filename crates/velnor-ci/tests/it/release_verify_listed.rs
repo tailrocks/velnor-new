@@ -15,7 +15,7 @@ fn sums(names: &[&str]) -> Vec<u8> {
 #[test]
 fn an_optional_file_the_sums_list_must_be_on_disk() {
     let error = listing(&sums(&["app", "app-macos"]), "app-macos", false).err();
-    let message = error.map(|e| e.to_string()).unwrap_or_default();
+    let message = error.map_or_else(String::new, |e| e.to_string());
     assert!(message.contains("app-macos"), "{message}");
     assert!(message.contains("SHA256SUMS"), "{message}");
 }
