@@ -5,8 +5,6 @@ use std::fs;
 use std::process::Output;
 use std::time::{Duration, UNIX_EPOCH};
 
-mod refusals;
-
 use velnor_test_support::real_cargo;
 
 use super::migration::app_and_lib_project;
@@ -14,14 +12,14 @@ use super::new_layout::own_units_1100;
 use super::{command, unit, velnor_ci, workspace_below_the_root};
 use crate::io::Repo;
 
-pub(super) const APART: &str = "rust/build";
+const APART: &str = "rust/build";
 const NESTED: &str = "rust/target/bd";
 
 fn output(directory: &str) -> String {
     format!("{directory}/debug/build/lib/f000000000000008/run/stdout")
 }
 
-pub(super) fn with_build_directory(repo: &Repo, directory: &str, arguments: &[&str]) -> Output {
+fn with_build_directory(repo: &Repo, directory: &str, arguments: &[&str]) -> Output {
     velnor_ci()
         .current_dir(repo.root())
         .env("CARGO_BUILD_BUILD_DIR", repo.root().join(directory))
@@ -30,7 +28,7 @@ pub(super) fn with_build_directory(repo: &Repo, directory: &str, arguments: &[&s
         .unwrap_or_else(|e| unreachable!("{e}"))
 }
 
-pub(super) fn built_in(directory: &str, left_out: &[&str]) -> Repo {
+fn built_in(directory: &str, left_out: &[&str]) -> Repo {
     let repo = workspace_below_the_root();
     own_units_1100(&repo, &format!("{directory}/debug"), left_out);
     unit(&repo, "rust/target/debug/app.d", "app: app/src/lib.rs\n");
@@ -39,7 +37,7 @@ pub(super) fn built_in(directory: &str, left_out: &[&str]) -> Repo {
     repo
 }
 
-pub(super) fn stamp(repo: &Repo, directory: &str) {
+fn stamp(repo: &Repo, directory: &str) {
     let built = with_build_directory(
         repo,
         directory,
@@ -83,6 +81,37 @@ fn a_file_written_into_the_build_directory_after_the_build_does_not_make_the_inp
     let written = with_build_directory(&repo, APART, &["inputs", "audit", "--write"]);
     assert!(written.status.success(), "{written:?}");
     assert_eq!(lock(&repo), ".\tlib\n");
+}
+
+#[test]
+fn a_unit_without_dep_info_in_a_separate_build_directory_makes_the_audit_refuse() {
+    let repo = built_in(APART, &["lib"]);
+    let refused = with_build_directory(&repo, APART, &["inputs", "audit", "--write"]);
+    assert_eq!(refused.status.code(), Some(1), "{refused:?}");
+    let stderr = String::from_utf8_lossy(&refused.stderr);
+    assert!(
+        stderr.contains("found no current dep-info in")
+            && stderr.contains("rust/build/debug")
+            && stderr.contains("lib"),
+        "{stderr}"
+    );
+    assert!(!repo.root().join(".velnor/rust-inputs.lock").exists());
+}
+
+#[test]
+fn a_build_directory_that_holds_no_units_while_the_target_holds_outputs_makes_the_audit_refuse() {
+    let repo = workspace_below_the_root();
+    unit(&repo, "rust/target/debug/app.d", "app: app/src/lib.rs\n");
+    unit(&repo, "rust/target/debug/libapp.rlib", "");
+    fs::create_dir_all(repo.root().join("rust/build")).unwrap_or_else(|e| unreachable!("{e}"));
+    let refused = with_build_directory(&repo, APART, &["inputs", "audit", "--write"]);
+    assert_eq!(refused.status.code(), Some(1), "{refused:?}");
+    let stderr = String::from_utf8_lossy(&refused.stderr);
+    assert!(
+        stderr.contains("found no units in") && stderr.contains("rust/build"),
+        "{stderr}"
+    );
+    assert!(!repo.root().join(".velnor/rust-inputs.lock").exists());
 }
 
 fn unit_count(output: &Output) -> usize {
@@ -162,46 +191,42 @@ fn a_relative_build_directory_names_the_same_directory_for_the_workspace_and_the
     assert!(repo.root().join("build/debug").is_dir(), "{built:?}");
 }
 
-pub(super) fn from_step_directory(repo: &Repo, value: &str, arguments: &[&str]) -> Output {
-    velnor_ci()
+#[test]
+fn a_relative_build_directory_is_audited_from_the_step_directory_as_cargo_writes_it() {
+    let repo = built_in(APART, &[]);
+    stamp(&repo, APART);
+    let written = velnor_ci()
         .current_dir(repo.root().join("rust/app"))
-        .env("CARGO_BUILD_BUILD_DIR", value)
-        .args(arguments)
+        .env("CARGO_BUILD_BUILD_DIR", "../build")
+        .args(["inputs", "audit", "--write"])
         .output()
-        .unwrap_or_else(|e| unreachable!("{e}"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(written.status.success(), "{written:?}");
+    assert_eq!(lock(&repo), ".\tlib\n");
 }
 
 #[test]
-fn a_relative_build_directory_through_a_symlink_is_audited_where_cargo_writes_it() {
+fn a_relative_build_directory_resolves_parent_components_through_a_symlink_as_cargo_does() {
     let repo = workspace_below_the_root();
-    let target = repo.root().join("rust/lnk-target");
-    fs::create_dir_all(&target).unwrap_or_else(|e| unreachable!("{e}"));
-    std::os::unix::fs::symlink(&target, repo.root().join("rust/app/lnk"))
+    unit(&repo, "rust/target/debug/app.d", "app: app/src/lib.rs\n");
+    unit(&repo, "rust/target/debug/libapp.rlib", "");
+    fs::create_dir_all(repo.root().join("rust/build")).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::create_dir_all(repo.root().join("rust/inner")).unwrap_or_else(|e| unreachable!("{e}"));
+    std::os::unix::fs::symlink("../inner", repo.root().join("rust/app/link"))
         .unwrap_or_else(|e| unreachable!("{e}"));
-    let built = from_step_directory(
-        &repo,
-        "lnk/bd",
-        &[
-            "inputs",
-            "build",
-            "--",
-            "cargo",
-            "build",
-            "--workspace",
-            "--all-targets",
-        ],
-    );
-    assert!(built.status.success(), "{built:?}");
-    assert!(target.join("bd/debug").is_dir(), "{built:?}");
-    let through_link = from_step_directory(&repo, "lnk/bd", &["inputs", "audit", "--write"]);
-    assert!(through_link.status.success(), "{through_link:?}");
-    let direct = target.join("bd").display().to_string();
-    let direct = from_step_directory(&repo, &direct, &["inputs", "audit", "--write"]);
-    assert!(direct.status.success(), "{direct:?}");
-    assert_eq!(through_link.stdout, direct.stdout);
+    let refused = velnor_ci()
+        .current_dir(repo.root().join("rust/app"))
+        .env("CARGO_BUILD_BUILD_DIR", "link/../build")
+        .args(["inputs", "audit", "--write"])
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(refused.status.code(), Some(1), "{refused:?}");
+    let resolved =
+        fs::canonicalize(repo.root().join("rust/build")).unwrap_or_else(|e| unreachable!("{e}"));
+    let stderr = String::from_utf8_lossy(&refused.stderr);
     assert!(
-        !String::from_utf8_lossy(&through_link.stdout).contains("from 0 unit files"),
-        "{through_link:?}"
+        stderr.contains("found no units in") && stderr.contains(&*resolved.to_string_lossy()),
+        "the audit must read the directory cargo resolves through the link: {stderr}"
     );
 }
 
@@ -233,6 +258,15 @@ fn an_absolute_build_directory_through_a_symlink_is_audited_to_success() {
     );
     assert!(written.status.success(), "{written:?}");
     assert_eq!(lock(&repo), ".\tlib\n");
+}
+
+fn from_step_directory(repo: &Repo, value: &str, arguments: &[&str]) -> Output {
+    velnor_ci()
+        .current_dir(repo.root().join("rust/app"))
+        .env("CARGO_BUILD_BUILD_DIR", value)
+        .args(arguments)
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"))
 }
 
 #[test]
@@ -302,4 +336,34 @@ fn a_cargo_that_prints_no_build_directory_is_audited_in_the_target_directory() {
     let _ignored = fs::remove_dir_all(&shims);
     assert!(written.status.success(), "{written:?}");
     assert!(unit_count(&written) > 0, "{written:?}");
+}
+
+fn two_standalone_roots() -> Repo {
+    let repo = Repo::new("audit-shared-build");
+    unit(&repo, ".gitignore", "target/\nbuild/\n");
+    unit(&repo, "mise.toml", &crate::toolchain::mise_rust_pin());
+    for (directory, name) in [("web", "w"), ("tools/b", "b")] {
+        unit(
+            &repo,
+            &format!("{directory}/Cargo.toml"),
+            &format!("[package]\nname = \"{name}\"\nversion = \"0.1.0\"\nedition = \"2024\"\n"),
+        );
+        unit(&repo, &format!("{directory}/Cargo.lock"), "version = 4\n");
+        unit(&repo, &format!("{directory}/src/lib.rs"), "");
+    }
+    unit(&repo, "build/keep", "");
+    repo.git(&["add", "--all"]);
+    repo
+}
+
+#[test]
+fn two_ungrouped_roots_sharing_a_build_directory_are_refused() {
+    let repo = two_standalone_roots();
+    let refused = with_build_directory(&repo, "build", &["inputs", "audit", "--write"]);
+    assert_eq!(refused.status.code(), Some(1), "{refused:?}");
+    assert!(
+        String::from_utf8_lossy(&refused.stderr).contains("cannot be told apart"),
+        "{refused:?}"
+    );
+    assert!(!repo.root().join(".velnor/rust-inputs.lock").exists());
 }

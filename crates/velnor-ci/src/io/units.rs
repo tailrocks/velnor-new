@@ -19,6 +19,8 @@ mod layout_tests;
 #[cfg(test)]
 mod limit_tests;
 mod metadata;
+#[cfg(test)]
+mod owner_tests;
 mod separation;
 mod workspace;
 
@@ -166,19 +168,14 @@ fn scan(target: &Path, limit: usize, skip: Option<&Path>) -> Result<Scanned, CiE
                 found.push((unit, path));
             } else if kind.is_file() && built::output(&entry.file_name()) {
                 built = true;
-                if !generated(&path) && !built::run_folder(&path) {
+                if !generated(&path) && !built::bookkeeping(&path) {
                     outputs.push(path);
                 }
             }
         }
     }
-    let orphan = outputs.into_iter().find(|output| {
-        output.parent().is_some_and(|directory| {
-            !found.iter().any(|(unit, path)| {
-                !matches!(unit, UnitFile::Directory { .. }) && path.starts_with(directory)
-            })
-        })
-    });
+    let owners = built::Owners::new(&found, &outputs);
+    let orphan = outputs.iter().find(|output| !owners.owns(output)).cloned();
     Ok(Scanned {
         found,
         built,
@@ -208,7 +205,9 @@ fn generated(file: &Path) -> bool {
     let Some(unit) = out.parent() else {
         return false;
     };
-    unit.join("run").is_dir() || unit.parent().is_some_and(|build| build.ends_with("build"))
+    unit.join("run/stdout").is_file()
+        || unit.parent().is_some_and(|build| build.ends_with("build"))
+            && unit.join("output").is_file()
 }
 
 fn unit_file(relative: &Path) -> Option<UnitFile> {
@@ -235,12 +234,14 @@ fn unit_file(relative: &Path) -> Option<UnitFile> {
     let unit = folders.last().and_then(|folder| split(folder));
     let parent = folders.len().checked_sub(2).map(|at| folders[at]);
     match (parent, unit) {
-        (Some(".fingerprint"), Some((package, hash))) => Some(UnitFile::Fingerprint {
-            configuration: configuration(2)?,
-            package: package.to_owned(),
-            hash: hash.to_owned(),
-            name: (*name).to_owned(),
-        }),
+        (Some(".fingerprint"), Some((package, hash))) if !built::artifact(OsStr::new(name)) => {
+            Some(UnitFile::Fingerprint {
+                configuration: configuration(2)?,
+                package: package.to_owned(),
+                hash: hash.to_owned(),
+                name: (*name).to_owned(),
+            })
+        }
         (Some("build"), Some((package, hash))) if *name == "output" => {
             Some(UnitFile::BuildOutput {
                 configuration: configuration(2)?,
@@ -284,7 +285,7 @@ fn unit_in_new_layout(folders: &[&str], name: &str) -> Option<UnitFile> {
     let configuration = configuration.join("/");
     let (package, hash) = ((*package).to_owned(), (*hash).to_owned());
     match (*kind, name) {
-        ("fingerprint", _) => Some(UnitFile::Fingerprint {
+        ("fingerprint", _) if !built::artifact(OsStr::new(name)) => Some(UnitFile::Fingerprint {
             configuration,
             package,
             hash,

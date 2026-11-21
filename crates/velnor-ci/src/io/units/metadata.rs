@@ -4,8 +4,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use super::Workspace;
-use super::build_dir;
+use super::{Workspace, build_dir};
 use crate::error::CiError;
 
 pub(in crate::io) struct MetadataInvocation<'a> {
@@ -17,20 +16,23 @@ pub(in crate::io) struct MetadataInvocation<'a> {
 pub(in crate::io) fn workspace(
     manifest: &Path,
     invocation: Option<&MetadataInvocation<'_>>,
+    step: &Path,
 ) -> Result<Workspace, CiError> {
-    metadata(manifest, invocation, false)
+    metadata(manifest, invocation, step, false)
 }
 
 pub(in crate::io) fn own_workspace(
     manifest: &Path,
     invocation: Option<&MetadataInvocation<'_>>,
+    step: &Path,
 ) -> Result<Workspace, CiError> {
-    metadata(manifest, invocation, true)
+    metadata(manifest, invocation, step, true)
 }
 
 fn metadata(
     manifest: &Path,
     invocation: Option<&MetadataInvocation<'_>>,
+    step: &Path,
     own_target: bool,
 ) -> Result<Workspace, CiError> {
     let mut command = Command::new(invocation.map_or("cargo", |invocation| invocation.executable));
@@ -46,34 +48,18 @@ fn metadata(
             .env_remove("CARGO_TARGET_DIR")
             .env_remove("CARGO_BUILD_BUILD_DIR");
     } else {
-        let base = || match invocation {
-            Some(invocation) => Ok(invocation.directory.to_path_buf()),
-            None => std::env::current_dir()
-                .map_err(|e| CiError::new(format!("cannot read the working directory: {e}"))),
-        };
         if let Some(build) = std::env::var_os("CARGO_BUILD_BUILD_DIR").map(PathBuf::from) {
             build_dir::refuse_template(&build)?;
-            if build.is_relative() {
-                build_dir::refuse_chdir(
-                    &build,
-                    invocation.map_or(&[], |invocation| invocation.arguments),
-                )?;
-                build_dir::refuse_parent(&build)?;
-                command.env(
-                    "CARGO_BUILD_BUILD_DIR",
-                    build_dir::step_relative(&build, &base()?),
-                );
-            }
         }
-        if invocation.is_none()
-            && let Some(target) = std::env::var_os("CARGO_TARGET_DIR")
-                .map(PathBuf::from)
-                .filter(|target| target.is_relative())
-        {
-            command.env(
-                "CARGO_TARGET_DIR",
-                build_dir::step_relative(&target, &base()?),
-            );
+        if invocation.is_none() {
+            for name in ["CARGO_TARGET_DIR", "CARGO_BUILD_BUILD_DIR"] {
+                if let Some(value) = std::env::var_os(name)
+                    .map(PathBuf::from)
+                    .filter(|value| value.is_relative())
+                {
+                    command.env(name, step.join(value));
+                }
+            }
         }
     }
     let output = command

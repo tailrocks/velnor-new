@@ -347,6 +347,8 @@ mod mbx_reports_followups;
 mod mbx_reports_sessions;
 mod policy;
 mod provenance;
+mod saved_key;
+mod saved_key_failure;
 mod target_identity;
 mod waste;
 mod waste_mbx;
