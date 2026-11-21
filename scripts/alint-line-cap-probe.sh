@@ -45,12 +45,12 @@ attack_case() {
   sha="$(shasum -a 256 "$attack/docs/attack.md" | cut -d' ' -f1)"
   printf '{"base_checkpoint": {"manifest": "docs/attack.md", "manifest_sha256": "%s"}}\n' "$sha" \
     > "$attack/docs/reviews/phasec-registered-source-fixes-v32.json"
-  printf 'version: 1\nrules:\n  - id: no-local-temp-paths\n    paths:\n%b\n' "$exclude" \
+  printf 'version: 1\nrules:\n  - id: no-absolute-local-paths\n    kind: file_content_forbidden\n    level: error\n    paths:\n      include: ["**/*.md"]\n    pattern: "x"\n  - id: no-local-temp-paths\n    kind: file_content_forbidden\n    level: error\n    paths:\n      include: ["**/*.md"]\n%b\n    pattern: "x"\n' "$exclude" \
     > "$attack/.alint.yml"
   out="$(python3 -I scripts/check-digest-frozen-evidence.py "$attack" "$attack/.alint.yml" 2>&1)"
   rc=$?
   rm -rf "$attack"
-  if [ "$rc" -eq 0 ] || ! grep -qE 'docs/attack.md: sha256 not recorded|unsupported' <<<"$out"; then
+  if [ "$rc" -eq 0 ] || ! grep -qE 'docs/attack.md: sha256 not recorded|unsupported|refusing|could not resolve|unexpected line' <<<"$out"; then
     echo "::error::digest guard accepted an exempt doc ($label) recorded only by an unpinned claim file" >&2
     exit 1
   fi
@@ -62,5 +62,6 @@ attack_case unquoted '      exclude:\n        - docs/attack.md'
 attack_case unquoted-comment '      exclude:\n        - docs/attack.md # why'
 attack_case shallow-indent '      exclude:\n      - docs/attack.md'
 attack_case flow-list '      exclude: [docs/attack.md]'
+attack_case non-list-key-between-entries '      exclude:\n        - .alint.yml\n        note: stray\n        - docs/attack.md'
 
 rm -f "$PROBE"

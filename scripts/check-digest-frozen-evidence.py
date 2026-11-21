@@ -3,6 +3,7 @@ import hashlib
 import json
 import os
 import re
+import subprocess
 import sys
 
 RULE_IDS = ["no-absolute-local-paths", "no-local-temp-paths"]
@@ -47,34 +48,62 @@ def scalar(raw):
     return value
 
 
+def exclude_lines(config, rule_id):
+    out = []
+    on, exclude_indent = False, None
+    for line in open(config, encoding="utf-8"):
+        line = line.rstrip("\n")
+        if line == f"  - id: {rule_id}":
+            on = True
+            continue
+        if on and re.match(r"^  - id:", line):
+            break
+        if not on:
+            continue
+        m = re.match(r"^(\s*)exclude:\s*(.*)$", line)
+        if m:
+            if m.group(2) and not m.group(2).startswith("#"):
+                raise ValueError(f"unsupported exclude syntax: {line.strip()}")
+            exclude_indent = len(m.group(1))
+            continue
+        if exclude_indent is None:
+            continue
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        m = re.match(r"^(\s*)- (.*)$", line)
+        if m and len(m.group(1)) >= exclude_indent:
+            out.append(scalar(m.group(2)))
+        elif len(line) - len(line.lstrip()) > exclude_indent:
+            raise ValueError(f"unexpected line inside {rule_id} exclude: {line.strip()}")
+        else:
+            exclude_indent = None
+    return out
+
+
+def resolved_excludes(config, rule_id):
+    # What alint itself resolves for the rule: the authority the parser must agree with.
+    try:
+        run = subprocess.run(
+            ["alint", "explain", rule_id, "--config", config, "--format", "json"],
+            capture_output=True, text=True, timeout=60, check=False,
+        )
+        if run.returncode != 0:
+            raise ValueError(f"alint could not resolve {rule_id}: {run.stderr.strip() or run.stdout.strip()}")
+        return json.loads(run.stdout)["paths"]["exclude"]
+    except (OSError, subprocess.SubprocessError, KeyError, TypeError, json.JSONDecodeError) as err:
+        raise ValueError(f"alint could not resolve {rule_id}: {err}")
+
+
 def exempt_paths(config):
     out = []
     for rule_id in RULE_IDS:
-        on, exclude_indent = False, None
-        for line in open(config, encoding="utf-8"):
-            line = line.rstrip("\n")
-            if line == f"  - id: {rule_id}":
-                on = True
-                continue
-            if on and re.match(r"^  - id:", line):
-                break
-            if not on:
-                continue
-            m = re.match(r"^(\s*)exclude:\s*(.*)$", line)
-            if m:
-                if m.group(2) and not m.group(2).startswith("#"):
-                    raise ValueError(f"unsupported exclude syntax: {line.strip()}")
-                exclude_indent = len(m.group(1))
-                continue
-            if exclude_indent is None:
-                continue
-            if not line.strip() or line.lstrip().startswith("#"):
-                continue
-            m = re.match(r"^(\s*)- (.*)$", line)
-            if m and len(m.group(1)) >= exclude_indent:
-                out.append(scalar(m.group(2)))
-            else:
-                exclude_indent = None
+        parsed = exclude_lines(config, rule_id)
+        resolved = resolved_excludes(config, rule_id)
+        if parsed != resolved:
+            raise ValueError(
+                f"{rule_id}: parsed {len(parsed)} exclude entries but alint resolves {len(resolved)}; refusing"
+            )
+        out.extend(parsed)
     return [p for p in out if p != ".alint.yml"]
 
 
