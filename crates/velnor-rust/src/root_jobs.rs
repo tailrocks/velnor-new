@@ -161,7 +161,7 @@ impl RootJobs<'_> {
         } else {
             crate::test_setup::inserted(self.facts, &self.unit.roots[0], self.lane, steps)
         };
-        crate::test_setup::gate_job(&mut steps);
+        crate::test_setup::gate_job(self.facts, &mut steps);
         crate::delta_cache::append(&mut steps, self.facts, self.unit, self.lane, &id);
         Job {
             permissions: crate::base_cache::lane_permissions(self.facts),
