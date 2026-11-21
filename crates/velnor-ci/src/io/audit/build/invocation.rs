@@ -6,19 +6,28 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+use velnor_model::RustRoot;
+
+use package_spec::package_name;
+
 use super::super::super::units::{MetadataInvocation, Workspace, refuse_arguments};
 use super::super::groups::root_workspace;
 use crate::error::CiError;
 
 #[derive(Default, Serialize, Deserialize)]
 pub(super) struct Selection {
-    all: bool,
+    #[serde(default)]
+    root: String,
     packages: Vec<String>,
 }
 
 impl Selection {
     pub(super) fn selects(&self, package: &str) -> bool {
-        self.all || self.packages.iter().any(|selected| selected == package)
+        self.packages.iter().any(|selected| selected == package)
+    }
+
+    pub(super) fn is_root(&self, root: &str) -> bool {
+        self.root == root
     }
 }
 
@@ -64,7 +73,7 @@ impl Invocation {
         }
     }
 
-    pub(super) fn selection(&self, members: &BTreeSet<&str>) -> Option<Selection> {
+    pub(super) fn selection(&self, root: &str, members: &BTreeSet<&str>) -> Option<Selection> {
         if !self.cargo_program() {
             return None;
         }
@@ -75,26 +84,47 @@ impl Invocation {
             .map(String::as_str)
             .take_while(|word| *word != "--")
             .collect();
-        let excluded = words
+        let workspace = words
             .iter()
-            .any(|word| *word == "--exclude" || word.starts_with("--exclude="));
-        let all = !excluded
-            && words
-                .iter()
-                .any(|word| matches!(*word, "--workspace" | "--all"));
-        let mut packages = Vec::new();
+            .any(|word| matches!(*word, "--workspace" | "--all"));
+        let mut selected = Vec::new();
+        let mut excluded = BTreeSet::new();
         for (index, word) in words.iter().enumerate() {
-            if matches!(*word, "-p" | "--package") {
-                packages.extend(words.get(index + 1).map(|name| (*name).to_owned()));
-            } else if let Some(name) = word
-                .strip_prefix("--package=")
-                .or_else(|| word.strip_prefix("-p"))
-            {
-                packages.push(name.to_owned());
+            match *word {
+                "-p" | "--package" => selected.extend(words.get(index + 1).copied()),
+                "--exclude" => {
+                    excluded.extend(words.get(index + 1).and_then(|spec| package_name(spec)));
+                }
+                _ => {
+                    if let Some(spec) = word
+                        .strip_prefix("--package=")
+                        .or_else(|| word.strip_prefix("-p"))
+                    {
+                        selected.push(spec);
+                    } else if let Some(spec) = word.strip_prefix("--exclude=") {
+                        excluded.extend(package_name(spec));
+                    }
+                }
             }
         }
-        packages.retain(|name| members.contains(name.as_str()));
-        Some(Selection { all, packages })
+        let packages = if workspace {
+            members
+                .iter()
+                .filter(|member| !excluded.contains(**member))
+                .map(|member| (*member).to_owned())
+                .collect()
+        } else {
+            selected
+                .into_iter()
+                .filter_map(package_name)
+                .filter(|name| members.contains(name))
+                .map(str::to_owned)
+                .collect()
+        };
+        Some(Selection {
+            root: root.to_owned(),
+            packages,
+        })
     }
 
     fn cargo_program(&self) -> bool {
@@ -263,6 +293,39 @@ impl Invocation {
     }
 }
 
+pub(super) fn invoked_root<'a>(
+    roots: &'a [RustRoot],
+    repository: &Path,
+    location: &Path,
+) -> Option<&'a RustRoot> {
+    let owns = |root: &&RustRoot| {
+        root_directory(root, repository) == location
+            || root.members.iter().any(|member| {
+                member
+                    .manifest
+                    .parent()
+                    .is_some_and(|parent| repository.join(parent.as_str()) == location)
+            })
+    };
+    roots
+        .iter()
+        .filter(owns)
+        .max_by_key(|root| root_directory(root, repository).components().count())
+        .or_else(|| {
+            roots
+                .iter()
+                .filter(|root| location.starts_with(root_directory(root, repository)))
+                .max_by_key(|root| root_directory(root, repository).components().count())
+        })
+}
+
+pub(super) fn root_directory(root: &RustRoot, repository: &Path) -> PathBuf {
+    root.manifest.parent().map_or_else(
+        || repository.to_path_buf(),
+        |parent| repository.join(parent.as_str()),
+    )
+}
+
 fn chdir(globals: &[&str]) -> Option<PathBuf> {
     let mut directory = None;
     let mut index = 0;
@@ -319,6 +382,8 @@ fn subcommand(words: &[&str]) -> Option<usize> {
     }
     None
 }
+
+mod package_spec;
 
 #[cfg(test)]
 #[path = "invocation/label.rs"]
