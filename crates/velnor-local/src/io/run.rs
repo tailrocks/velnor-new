@@ -36,7 +36,6 @@ use crate::cli::{
 };
 use crate::protocol::control_only;
 
-#[must_use]
 pub fn main() -> ExitCode {
     let command = Cli::parse().command;
     match tokio::runtime::Runtime::new().and_then(|runtime| runtime.block_on(run(command))) {
