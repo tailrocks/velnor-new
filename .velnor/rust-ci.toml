@@ -61,6 +61,7 @@ doc = true
 [[lint]]
 kind = "jactionlint"
 config = ".github/jactionlint.yaml"
+inputs = [".github/**", "actions/**", "mise.toml", "mise.lock"]
 
 [[lint]]
 kind = "alint"
@@ -74,6 +75,7 @@ name = "Generator samples"
 task = "lint-generator-samples"
 tools = ["jactionlint"]
 timeout_minutes = 5
+inputs = ["generator/samples/**", ".github/jactionlint.yaml", "mise.toml", "mise.lock"]
 
 [[lint]]
 kind = "mise-task"
@@ -82,6 +84,7 @@ name = "Parity verifier unit tests"
 task = "lint-parity-verify-candidate"
 tools = ["python"]
 timeout_minutes = 5
+inputs = ["scripts/parity-verify-candidate.py", "scripts/test_parity_verify_candidate.py", "scripts/hosted_phase_measurement/**", "mise.toml", "mise.lock"]
 
 [[lint]]
 kind = "mise-task"
@@ -98,3 +101,4 @@ name = "hk config"
 task = "validate-hk"
 tools = ["hk"]
 timeout_minutes = 5
+inputs = ["hk.pkl", "mise.toml", "mise.lock"]
