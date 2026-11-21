@@ -184,3 +184,53 @@ fn a_unit_whose_dep_info_names_a_missing_file_outside_target_is_a_base_gap_not_w
     }
     Ok(())
 }
+
+const REGISTRY_SOURCE: &str = "00000000bad00004";
+const GIT_CHECKOUT: &str = "00000000bad00005";
+const DANGLING: &str = "00000000bad00006";
+
+#[test]
+fn sources_cargo_unpacks_again_do_not_make_a_unit_a_base_gap()
+-> Result<(), Box<dyn std::error::Error>> {
+    let repo = fixture("report-restored-units-unpacked-sources")?;
+    let root = repo.root().display().to_string();
+    dep_info_unit(
+        &repo,
+        REGISTRY_SOURCE,
+        &format!(
+            "{root}/home/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/serde-1.0.0/src/lib.rs"
+        ),
+    );
+    dep_info_unit(
+        &repo,
+        GIT_CHECKOUT,
+        &format!("{root}/home/.cargo/git/checkouts/dep-1a2b3c/0123abc/src/lib.rs"),
+    );
+    restore(&repo);
+    let record = restored_record(&repo)?;
+    let lines: Vec<&str> = record.lines().collect();
+    for held in [REGISTRY_SOURCE, GIT_CHECKOUT] {
+        assert!(lines.contains(&held), "{held}: {record}");
+    }
+    assert!(!record.contains("missing-input"), "{record}");
+    Ok(())
+}
+
+#[test]
+fn a_dep_info_input_that_is_a_dangling_symlink_is_missing() -> Result<(), Box<dyn std::error::Error>>
+{
+    let repo = fixture("report-restored-units-dangling")?;
+    let link = repo.root().join("kept/link.rs");
+    fs::create_dir_all(repo.root().join("kept"))?;
+    std::os::unix::fs::symlink(repo.root().join("kept/gone.rs"), &link)?;
+    dep_info_unit(&repo, DANGLING, &link.display().to_string());
+    restore(&repo);
+    let record = restored_record(&repo)?;
+    assert!(
+        record
+            .lines()
+            .any(|line| line == format!("missing-input {DANGLING}")),
+        "{record}"
+    );
+    Ok(())
+}

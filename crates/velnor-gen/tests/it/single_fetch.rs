@@ -3,9 +3,9 @@
 
 use velnor_gen::{GenerateError, expected_with_notes};
 use velnor_model::{
-    CacheKey, CacheRoot, Concurrency, Host, Job, JobId, Permissions, PrRun, PullRequestType,
-    RepoPath, RepoView, RootSlug, RunnerLabel, Step, StepKind, Triggers, WORKFLOW_PATH, When,
-    WorkflowPlan,
+    BaseScope, BuildRecord, CacheKey, CacheRoot, Concurrency, Host, Job, JobId, Permissions, PrRun,
+    PullRequestType, RepoPath, RepoView, RootSlug, RunnerLabel, Step, StepKind, Triggers,
+    WORKFLOW_PATH, When, WorkflowPlan,
 };
 use velnor_render::render;
 
@@ -17,7 +17,10 @@ use crate::pipeline::{view, workflow};
 const FETCH_STEP: &str = "Fetch the sources of every root";
 const SAVE_STEP: &str = "Save the sources cache";
 
-fn repo(manifests: &[&str], helper: &str) -> Result<RepoView, Box<dyn std::error::Error>> {
+pub(crate) fn repo(
+    manifests: &[&str],
+    helper: &str,
+) -> Result<RepoView, Box<dyn std::error::Error>> {
     let mut repo = view(manifests, None)?;
     let lock = RepoPath::new(".velnor/rust-ci.lock")?;
     let text = String::from_utf8(repo.files.remove(&lock).ok_or("no helper lock")?)?;
@@ -143,24 +146,37 @@ fn the_released_helpers_without_sources_fetch_keep_the_per_root_steps_and_the_li
 }
 
 #[test]
-fn nineteen_roots_fit_the_workflow_limit_with_the_single_fetch_step() -> TestResult {
-    let manifests = many(19);
+fn twenty_roots_fit_the_workflow_limit_with_the_single_fetch_step() -> TestResult {
+    let manifests = many(20);
     let names: Vec<&str> = manifests.iter().map(String::as_str).collect();
     let text = workflow(&repo(&names, "0.1.88")?)?;
-    assert!(text.len() <= 500_000, "{} bytes", text.len());
+    assert!(text.len() <= 494_000, "{} bytes", text.len());
     let savers = savers(&text);
-    assert!(savers.len() >= 19, "{}", savers.len());
-    let (_, block) = &savers[0];
-    let fetch = step(block, FETCH_STEP).ok_or("no fetch")?;
-    let run = fetch
+    assert!(savers.len() >= 20, "{}", savers.len());
+    let lists: Vec<&str> = text
         .lines()
-        .find_map(|line| line.trim().strip_prefix("run: "))
-        .ok_or("no run")?;
+        .filter_map(|line| line.trim().strip_prefix("VELNOR_SOURCE_ROOTS_"))
+        .collect();
+    let [list] = lists[..] else {
+        return Err(format!("one workflow env entry per root list: {lists:?}").into());
+    };
+    let (name, value) = list.split_once(": ").ok_or("no value")?;
     assert_eq!(
-        run.split_whitespace().count(),
-        4 + 19,
-        "one word per root: {run}"
+        value.trim_matches('\'').split_whitespace().count(),
+        20,
+        "one word per root: {value}"
     );
+    for (id, block) in &savers {
+        let fetch = step(block, FETCH_STEP).ok_or("no fetch")?;
+        let run = fetch
+            .lines()
+            .find_map(|line| line.trim().strip_prefix("run: "))
+            .ok_or("no run")?;
+        assert!(
+            run.ends_with(&format!("--roots $VELNOR_SOURCE_ROOTS_{name}")),
+            "{id}: {run}"
+        );
+    }
     Ok(())
 }
 
@@ -187,7 +203,9 @@ fn step_of(kind: StepKind) -> Step {
         reads: None,
         skip_after_merge_group: None,
         skip_when_cold: false,
+        private_repo: false,
         hosted_only: false,
+        any_gate: Vec::new(),
     }
 }
 
@@ -219,8 +237,9 @@ fn render_fetch(manifests: Vec<RepoPath>) -> Result<String, Box<dyn std::error::
             permissions: Permissions::default(),
             timeout_minutes: 10,
             reports_ignored: false,
-            records_build: false,
+            build_record: BuildRecord::Unrecorded,
             chained_saves: false,
+            mbx_stats: velnor_model::MbxStats::Summary,
             selection_name: None,
             gate: None,
             skip_after_merge_group: None,
@@ -231,6 +250,7 @@ fn render_fetch(manifests: Vec<RepoPath>) -> Result<String, Box<dyn std::error::
                 step_of(StepKind::CacheSave(CacheKey::Sources {
                     host: Host,
                     lane: root,
+                    scope: BaseScope::Shared,
                 })),
             ],
         }],

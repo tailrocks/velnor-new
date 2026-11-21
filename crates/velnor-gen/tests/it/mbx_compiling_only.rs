@@ -90,7 +90,7 @@ fn jobs_with_a_library(version: &str) -> Result<Vec<Job>, Box<dyn std::error::Er
 #[test]
 fn a_job_that_compiles_nothing_gets_no_shared_store_step_for_a_helper_that_confines_them()
 -> TestResult {
-    let jobs = jobs("0.1.111")?;
+    let jobs = jobs("0.1.112")?;
     let idle: Vec<_> = jobs.iter().filter(|job| !job.compiles).collect();
     assert!(
         idle.iter().any(|job| job.id == "policy"),
@@ -104,7 +104,7 @@ fn a_job_that_compiles_nothing_gets_no_shared_store_step_for_a_helper_that_confi
 
 #[test]
 fn every_compiling_job_keeps_the_shared_store_and_its_seed() -> TestResult {
-    let jobs = jobs("0.1.111")?;
+    let jobs = jobs("0.1.112")?;
     let compiling: Vec<_> = jobs.iter().filter(|job| job.compiles).collect();
     assert!(!compiling.is_empty());
     for job in compiling {
@@ -119,7 +119,7 @@ fn every_compiling_job_keeps_the_shared_store_and_its_seed() -> TestResult {
 
 #[test]
 fn a_job_that_runs_cargo_check_keeps_the_shared_store_and_its_seed() -> TestResult {
-    let jobs = jobs_with_a_library("0.1.111")?;
+    let jobs = jobs_with_a_library("0.1.112")?;
     let checking: Vec<_> = jobs.iter().filter(|job| job.checks).collect();
     assert!(!checking.is_empty(), "no job runs cargo check");
     for job in checking {
@@ -134,11 +134,13 @@ fn a_job_that_runs_cargo_check_keeps_the_shared_store_and_its_seed() -> TestResu
 
 #[test]
 fn an_older_helper_still_renders_the_store_in_the_policy_job() -> TestResult {
-    let jobs = jobs("0.1.110")?;
-    let policy = jobs
-        .iter()
-        .find(|job| job.id == "policy")
-        .ok_or("no policy job")?;
-    assert!(policy.shared_store);
+    for version in ["0.1.110", "0.1.111"] {
+        let jobs = jobs(version)?;
+        let policy = jobs
+            .iter()
+            .find(|job| job.id == "policy")
+            .ok_or("no policy job")?;
+        assert!(policy.shared_store, "{version}");
+    }
     Ok(())
 }
