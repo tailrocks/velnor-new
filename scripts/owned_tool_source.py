@@ -27,7 +27,7 @@ OWNED_VERSION_PATTERN = r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*
 PORTABLE_LICENSE_PATTERN = r"[A-Za-z0-9._/-]+"
 BASES = {"mise": ("jdx/mise", "8369bc78dc4761660337a2518b1445447438159d"),
          "mbx": ("jdx/mr-boxington", "44f50c329a83dedd012e1e49cf9f265f79226a83")}
-BOOTSTRAP = ["rust@1.99.1"]
+BOOTSTRAP = ["rust@1.100.0"]
 PREFIX = ["--no-config", "--no-env", "--no-hooks", "exec", *BOOTSTRAP, "--"]
 BUILD = {
     "mise": ["<verified-bootstrap-mbx>", "build", "--release", "--locked", "--package", "mise",
@@ -38,17 +38,17 @@ BUILD = {
 }
 ABI = {"mise": "mise-owned-cargo-wrapper-v1", "mbx": None}
 
-OFFICIAL_MISE_VERSION = "2026.11.1"
-OFFICIAL_MISE_SOURCE_COMMIT = "0fa558048f88cfc1d3e9ad29f52b26a11debb1d9"
-OFFICIAL_MISE_SOURCE_TREE = "865bec85a4afdf369ce9ab731db5c6e38fe64ac9"
-OFFICIAL_MISE_BASE = "https://github.com/jdx/mise/releases/download/v2026.11.1/mise-v2026.11.1-"
+OFFICIAL_MISE_VERSION = "2026.11.10"
+OFFICIAL_MISE_SOURCE_COMMIT = "b1a56ec1753ea028bb60299c11cdb8289e240d9d"
+OFFICIAL_MISE_SOURCE_TREE = "e0a61adbc5b2d5ee7ce1732634dc92fb564754e0"
+OFFICIAL_MISE_BASE = "https://github.com/jdx/mise/releases/download/v2026.11.10/mise-v2026.11.10-"
 OFFICIAL_MISE_PINS = {
-    "linux-x64": ("standalone", "7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9",
-                  "7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9"),
-    "linux-arm64.tar.gz": ("tar.gz", "6b54d9223f8bce04f9168ef482d9ee27f219c1ea11f4903569660049e5dec5aa",
-                           "ed5dc8d5d8b334684409ef7abad2ffe5c22cf8e311905ae906c3246cbe2c5442"),
-    "macos-arm64.tar.gz": ("tar.gz", "e1eaf20469e586f65849256a0be6a58dd7a3e93ae8db68bc74dd7af5ca0fe7f6",
-                           "9ca1005930fed90e0f4c30d9b13fe4530fe88d0549a71349716a3aab9051c627"),
+    "linux-x64": ("standalone", "b603a4f48563fc379a794d9ea2cf9f709ed276c9141068604cb0c59fa3e674a9",
+                  "b603a4f48563fc379a794d9ea2cf9f709ed276c9141068604cb0c59fa3e674a9"),
+    "linux-arm64.tar.gz": ("tar.gz", "af305e1efc58433a79b893738bfbf11b4b1662bdea9f0ea71f2ecab990058ad6",
+                           "86ef275d541c5243cd20b1c0fcd16810e5f3601113d8db09278d0608617a3833"),
+    "macos-arm64.tar.gz": ("tar.gz", "0ff163f78007130393ed5303aad06bc5e793c0bd298bc77eeb5913a3748e1922",
+                           "3f4ba9d21c6f2170048d0870fd98ab287e04730b76a6fc8e83964d59c80eb704"),
 }
 OFFICIAL_MISE_HOSTS = {"x86_64-unknown-linux-gnu": "linux-x64",
                       "aarch64-unknown-linux-gnu": "linux-arm64.tar.gz",
