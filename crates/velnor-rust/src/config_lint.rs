@@ -107,7 +107,15 @@ fn inputs(raw: Option<Vec<String>>) -> Result<Vec<PathGlob>, Reason> {
     }
     entries
         .into_iter()
-        .map(|entry| rule_glob("lint.inputs", entry))
+        .map(|entry| {
+            if entry.contains(['?', '[', ']']) {
+                return Err(Reason::UnsupportedGlob {
+                    key: "lint.inputs",
+                    value: entry,
+                });
+            }
+            rule_glob("lint.inputs", entry)
+        })
         .collect()
 }
 

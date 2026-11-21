@@ -67,7 +67,13 @@ fn selected(paths: &[&str], event: EventKind) -> Result<bool, Box<dyn std::error
         .iter()
         .map(|path| RepoPath::new(*path))
         .collect::<Result<_, _>>()?;
-    let runs = lint_runs(&facts, event, Some(&changed), &BTreeSet::new());
+    let runs = lint_runs(
+        &facts,
+        event,
+        Some(&changed),
+        &BTreeSet::new(),
+        &BTreeSet::new(),
+    );
     runs.into_iter()
         .find(|(slug, _)| slug.as_str() == "generated_check")
         .map(|(_, run)| run)
@@ -216,7 +222,13 @@ fn an_empty_change_list_on_a_pull_request_runs_the_gated_generated_check() -> Te
 #[test]
 fn an_unlisted_change_set_runs_the_gated_generated_check() -> TestResult {
     let facts = detect(&check_repo(CHECK_GATED, FIRST)?)?;
-    let runs = lint_runs(&facts, EventKind::PullRequest, None, &BTreeSet::new());
+    let runs = lint_runs(
+        &facts,
+        EventKind::PullRequest,
+        None,
+        &BTreeSet::new(),
+        &BTreeSet::new(),
+    );
     assert!(runs.values().all(|run| *run), "{runs:?}");
     Ok(())
 }
@@ -227,7 +239,13 @@ fn a_tracked_symlink_runs_the_gated_generated_check_unless_it_is_a_markdown_file
     let changed: BTreeSet<RepoPath> = [RepoPath::new("README.md")?].into();
     for (link, expected) in [("CLAUDE.md", false), ("Cargo.toml", true)] {
         let links: BTreeSet<RepoPath> = [RepoPath::new(link)?].into();
-        let runs = lint_runs(&facts, EventKind::PullRequest, Some(&changed), &links);
+        let runs = lint_runs(
+            &facts,
+            EventKind::PullRequest,
+            Some(&changed),
+            &BTreeSet::new(),
+            &links,
+        );
         assert_eq!(
             runs.get(&velnor_model::RootSlug::new("generated_check")?),
             Some(&expected),

@@ -15,9 +15,23 @@ const PUBLIC_SOURCES: &[&str] = &[
     "sparse+https://index.crates.io/",
 ];
 
+const NOT_SAVED: &str =
+    "base caches are not saved because this repository has private dependencies";
+const PRIVATE_ONLY: &str = "base caches are restored and saved only while GitHub reports this repository private, because it has private dependencies";
+
 /// The note that explains why the base caches are not saved.
 pub(crate) fn note(cause: &str) -> String {
-    format!("base caches are not saved because this repository has private dependencies ({cause})")
+    format!("{NOT_SAVED} ({cause})")
+}
+
+#[must_use]
+pub fn base_cache_note(facts: &velnor_model::RepoFacts) -> Option<String> {
+    let note = facts.private_sources.as_ref()?;
+    Some(if crate::base_cache::private_base(facts) {
+        note.replacen(NOT_SAVED, PRIVATE_ONLY, 1)
+    } else {
+        note.clone()
+    })
 }
 
 /// The first reason the repository's dependencies are not proven public.
@@ -132,6 +146,50 @@ fn configured_source(path: &RepoPath, bytes: &[u8]) -> Option<String> {
                 .is_some_and(|entries| !entries.is_empty())
         })
         .map(|section| format!("{path} declares [{section}]"))
+}
+
+pub fn cacheable_private_lock(text: &str) -> Result<bool, crate::lock::LockError> {
+    let lock = crate::cargo_lock::CargoLock::parse(text)?;
+    Ok(lock.patch.is_none()
+        && lock.packages.iter().all(|package| {
+            package
+                .source
+                .as_deref()
+                .is_none_or(|source| PUBLIC_SOURCES.contains(&source) || plain_git_source(source))
+        }))
+}
+
+fn plain_git_source(source: &str) -> bool {
+    let Some((scheme, tail)) = source
+        .strip_prefix("git+")
+        .and_then(|rest| rest.split_once("://"))
+    else {
+        return false;
+    };
+    let authority = tail.split('/').next().unwrap_or("");
+    match (scheme, authority.split_once('@')) {
+        ("https" | "ssh", None) => !authority.is_empty(),
+        ("ssh", Some((user, host))) => !user.contains(':') && !host.is_empty(),
+        _ => false,
+    }
+}
+
+pub(crate) fn only_private_git(view: &RepoView, roots: &[RustRoot]) -> bool {
+    let locks = roots.iter().all(|root| {
+        view.files
+            .get(&root.manifest.sibling(&CARGO_LOCK))
+            .and_then(|bytes| std::str::from_utf8(bytes).ok())
+            .is_some_and(|text| cacheable_private_lock(text).unwrap_or(false))
+    });
+    locks
+        && !view
+            .files
+            .iter()
+            .filter(|(path, _)| is_cargo_config(path) && reaches_a_check(path, roots))
+            .any(|(_, bytes)| {
+                !std::str::from_utf8(bytes)
+                    .is_ok_and(|text| cacheable_config(text).unwrap_or(false))
+            })
 }
 
 pub fn cacheable_config(text: &str) -> Result<bool, crate::lock::LockError> {

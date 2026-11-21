@@ -30,11 +30,14 @@ pub(super) fn begin<'a>(
                 .push(index);
         }
     }
+    let freshness = super::freshness::Freshness::new(workspaces, groups, max_directory_entries)?;
+    let diagnostic = freshness.scratch();
     Ok(Audit {
         repository: &checkout.root,
         owners: Owners::new(facts, &checkout.view.tracked_paths),
         tracked: &checkout.view.tracked_paths,
-        freshness: super::freshness::Freshness::new(workspaces, groups, max_directory_entries)?,
+        freshness,
+        diagnostic,
         fingerprints: BTreeMap::new(),
         names: BTreeMap::new(),
         runs: BTreeMap::new(),
