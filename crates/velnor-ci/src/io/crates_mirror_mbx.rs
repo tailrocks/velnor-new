@@ -74,7 +74,7 @@ fn declared_for_project(args: &[OsString]) -> bool {
 }
 
 fn project_directory(launch: &Path, args: &[OsString]) -> Option<PathBuf> {
-    let work = invocation_directory(launch, args);
+    let work = invocation_directory(launch, args)?;
     let args = super::crates_mirror_alias::expand(&work, args, MANIFEST_COMMANDS)?;
     let command = subcommand(&args).map(|(_, command)| command);
     if command == Some("install")
@@ -90,31 +90,79 @@ fn project_directory(launch: &Path, args: &[OsString]) -> Option<PathBuf> {
     )
 }
 
-fn invocation_directory(launch: &Path, args: &[OsString]) -> PathBuf {
-    let end = subcommand(args).map_or(args.len(), |(index, _)| index);
-    let mut directory = launch.to_path_buf();
-    let mut options = args[..end].iter();
-    while let Some(arg) = options.next() {
-        if arg == "-C"
-            && let Some(value) = options.next()
-        {
-            directory.push(value);
-        }
-    }
-    directory
+struct Leading<'a> {
+    directory: Option<PathBuf>,
+    subcommand: Option<(usize, &'a str)>,
+}
+
+fn invocation_directory(launch: &Path, args: &[OsString]) -> Option<PathBuf> {
+    let directory = leading(args)?.directory;
+    Some(directory.map_or_else(|| launch.to_path_buf(), |directory| launch.join(directory)))
 }
 
 pub(super) fn subcommand(args: &[OsString]) -> Option<(usize, &str)> {
+    leading(args)?.subcommand
+}
+
+fn leading(args: &[OsString]) -> Option<Leading<'_>> {
+    let mut directory = None;
     let mut seen = args.iter().enumerate().take_while(|(_, arg)| *arg != "--");
     while let Some((index, arg)) = seen.next() {
         let arg = arg.to_str()?;
-        if matches!(arg, "-C" | "-Z" | "--config" | "--color") {
-            seen.next();
-        } else if !arg.starts_with(['-', '+']) {
-            return Some((index, arg));
+        if arg.starts_with('+') {
+            continue;
+        }
+        if let Some(long) = arg.strip_prefix("--") {
+            let (name, attached) = long
+                .split_once('=')
+                .map_or((long, false), |(name, _)| (name, true));
+            match name {
+                "color" | "config" | "explain" => {
+                    if !attached {
+                        seen.next()?;
+                    }
+                }
+                "version" | "list" | "verbose" | "quiet" | "locked" | "offline" | "frozen"
+                | "help"
+                    if !attached => {}
+                _ => return None,
+            }
+        } else if let Some(cluster) = arg.strip_prefix('-') {
+            if cluster.is_empty() {
+                return None;
+            }
+            for (offset, flag) in cluster.char_indices() {
+                match flag {
+                    'v' | 'q' | 'V' | 'h' => {}
+                    'C' | 'Z' => {
+                        let rest = &cluster[offset + 1..];
+                        let value = if rest.is_empty() {
+                            seen.next()?.1.to_str()?
+                        } else {
+                            rest.strip_prefix('=').unwrap_or(rest)
+                        };
+                        if value.is_empty() {
+                            return None;
+                        }
+                        if flag == 'C' && directory.replace(PathBuf::from(value)).is_some() {
+                            return None;
+                        }
+                        break;
+                    }
+                    _ => return None,
+                }
+            }
+        } else {
+            return Some(Leading {
+                directory,
+                subcommand: Some((index, arg)),
+            });
         }
     }
-    None
+    Some(Leading {
+        directory,
+        subcommand: None,
+    })
 }
 
 pub(super) fn option_value(args: &[OsString], long: &str, shorthand: bool) -> Option<OsString> {
