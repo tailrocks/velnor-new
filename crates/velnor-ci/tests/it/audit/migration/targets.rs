@@ -48,11 +48,14 @@ fn a_cross_target_created_by_cargo_at_the_source_root_does_not_hide_source_chang
     assert!(built.status.success(), "{built:?}");
     let receipt = fs::read_dir(repo.root().join(host).join("debug/build"))
         .unwrap_or_else(|e| unreachable!("{e}"))
-        .map(|entry| {
-            entry
+        .flat_map(|package| {
+            fs::read_dir(package.unwrap_or_else(|e| unreachable!("{e}")).path())
                 .unwrap_or_else(|e| unreachable!("{e}"))
+        })
+        .map(|hash| {
+            hash.unwrap_or_else(|e| unreachable!("{e}"))
                 .path()
-                .join("output.velnor-inputs.json")
+                .join("run/stdout.velnor-inputs.json")
         })
         .find(|path| path.is_file())
         .unwrap_or_else(|| unreachable!("no build output receipt"));

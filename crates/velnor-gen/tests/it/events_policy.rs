@@ -3,8 +3,8 @@
 
 use std::collections::BTreeSet;
 
-use velnor_model::{PolicyTools, RepoPath};
-use velnor_rust::policy_runs;
+use velnor_model::{DenyChecks, PolicyTools, RepoPath};
+use velnor_rust::{policy_runs, policy_unread};
 
 use super::events::DENY_MISE;
 use crate::facts::TestResult;
@@ -45,10 +45,14 @@ fn a_license_text_change_runs_the_policy_lane_only_with_cargo_deny() -> TestResu
     let deny = PolicyTools {
         deny: true,
         machete: false,
+        deny_off: false,
+        checks: DenyChecks::ALL,
     };
     let machete = PolicyTools {
         deny: false,
         machete: true,
+        deny_off: false,
+        checks: DenyChecks::ALL,
     };
     for path in [
         "LICENSE",
@@ -169,6 +173,8 @@ fn changes_to_cargo_deny_configs_select_policy() -> TestResult {
     let tools = PolicyTools {
         deny: false,
         machete: false,
+        deny_off: false,
+        checks: DenyChecks::ALL,
     };
     for name in [
         "deny.toml",
@@ -273,4 +279,22 @@ fn a_deny_config_with_a_quote_is_passed_as_one_checkout_relative_argument() -> T
     );
     assert!(steps.iter().any(|step| step["run"].as_str() == Some(r#". "$VELNOR_EXEC" run -- cargo-deny --manifest-path 'lab'\''s/Cargo.toml' --config 'lab'\''s/.config/deny.toml' --locked check"#)));
     Ok(())
+}
+
+#[test]
+fn an_empty_change_list_runs_every_enabled_policy_lane() {
+    let tools = PolicyTools {
+        deny: true,
+        machete: true,
+        deny_off: false,
+        checks: DenyChecks::ALL,
+    };
+    let runs = policy_unread(tools);
+    assert!(runs.deny && runs.machete, "{runs:?}");
+    let off = PolicyTools {
+        deny: false,
+        machete: false,
+        ..tools
+    };
+    assert_eq!(policy_unread(off), velnor_rust::PolicyRuns::default());
 }

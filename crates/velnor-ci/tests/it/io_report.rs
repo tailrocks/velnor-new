@@ -342,10 +342,14 @@ fn metadata_inputs(repo: &Repo) -> ResultTest {
 mod api;
 mod build_failure;
 mod evidence;
+mod mbx_reports;
+mod mbx_reports_followups;
+mod mbx_reports_sessions;
 mod policy;
 mod provenance;
 mod target_identity;
 mod waste;
+mod waste_mbx;
 mod wrapped;
 
 pub(crate) fn fixture(name: &str) -> Result<Repo, Box<dyn std::error::Error>> {
@@ -364,4 +368,28 @@ pub(crate) fn fixture(name: &str) -> Result<Repo, Box<dyn std::error::Error>> {
     metadata_inputs(&repo)?;
     velnor_gen::io::write_metadata(repo.root())?;
     Ok(repo)
+}
+
+#[test]
+fn report_says_why_a_refused_base_cache_was_not_generated() -> ResultTest {
+    let repo = Repo::new("report-not-generated");
+    let reason = "private dependencies";
+    let metrics = report(
+        &repo,
+        &json!([{"family":"sources","root":null,"restore_step":"restore","save_step":"save","not_generated":reason}]),
+        r#"{"restore":{"outcome":"success","outputs":{"cache-primary-key":"key","cache-matched-key":"key","cache-hit":"true"}}}"#,
+    )?;
+    assert_eq!(
+        metrics.caches[0].save,
+        velnor_ci::report::SaveOutcome::NotAttempted
+    );
+    assert_eq!(metrics.caches[0].not_generated.as_deref(), Some(reason));
+    assert!(
+        metrics
+            .summary()
+            .contains("| not generated (private dependencies) |"),
+        "{}",
+        metrics.summary()
+    );
+    Ok(())
 }

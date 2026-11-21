@@ -5,8 +5,10 @@ mod boundary;
 mod bounds;
 mod build_clock;
 mod build_directory;
+mod build_script_source;
 mod freshness;
 mod gated;
+mod global_options;
 mod groups;
 mod guards;
 mod identity;
@@ -21,6 +23,8 @@ mod optional;
 mod partial;
 mod per_root;
 mod reads;
+mod selection;
+mod separate_build;
 mod stale_run;
 mod stand_ins;
 
@@ -35,7 +39,8 @@ pub(super) fn command(program: impl AsRef<OsStr>) -> Command {
     command
         .env_remove("CARGO_TARGET_DIR")
         .env("MBX_BUILD_SCRIPT_EXECUTION", "0")
-        .env("MBX_SHARE_OUT_DIR", "0");
+        .env("MBX_SHARE_OUT_DIR", "0")
+        .env_remove("VELNOR_AUDIT_MAX_ENTRIES");
     command
 }
 
@@ -43,7 +48,8 @@ pub(super) fn velnor_ci() -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
     command
         .env_remove("CARGO_TARGET_DIR")
-        .env_remove("CARGO_BUILD_BUILD_DIR");
+        .env_remove("CARGO_BUILD_BUILD_DIR")
+        .env_remove("VELNOR_AUDIT_MAX_ENTRIES");
     command
 }
 
@@ -75,7 +81,7 @@ pub(super) fn placed(repo: &Repo, target: &str) {
 pub(super) fn workspace_below_the_root() -> Repo {
     let repo = Repo::new("audit");
     unit(&repo, ".gitignore", "target/\n");
-    unit(&repo, "mise.toml", "[tools]\nrust = \"1.99.1\"\n");
+    unit(&repo, "mise.toml", "[tools]\nrust = \"1.100.0\"\n");
     unit(
         &repo,
         "rust/Cargo.toml",
@@ -234,7 +240,7 @@ pub(super) fn own_units_in(repo: &Repo, host: &str, target: &str, left_out: &[&s
 pub(super) fn root_package_with_path_dependencies() -> Repo {
     let repo = Repo::new("audit-owners");
     unit(&repo, ".gitignore", "target/\n");
-    unit(&repo, "mise.toml", "[tools]\nrust = \"1.99.1\"\n");
+    unit(&repo, "mise.toml", "[tools]\nrust = \"1.100.0\"\n");
     unit(&repo, ".velnor/rust-ci.toml", "exclude = [\"vendor\"]\n");
     unit(
         &repo,

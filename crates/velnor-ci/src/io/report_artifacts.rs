@@ -200,6 +200,8 @@ fn from_progress(
         unchanged: unchanged.contains(event.package.as_str()),
         workspace: member.is_some(),
         dependencies: super::dependencies(root, member),
+        restored: None,
+        missing_input: false,
         package: event.package.clone(),
         version: event.version.clone(),
     }

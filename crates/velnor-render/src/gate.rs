@@ -36,7 +36,7 @@ const NEEDS_JSON: &str = "NEEDS_JSON";
 const GATE_SPEC: &str = "GATE_SPEC";
 pub(crate) const ON_DEFAULT_BRANCH: &str =
     "github.ref == format('refs/heads/{0}', github.event.repository.default_branch)";
-const ACTIVE_EVENT: &str = "(github.event_name != 'pull_request' || (startsWith(github.ref, 'refs/pull/') && github.event.pull_request.state != 'closed'))";
+pub(crate) const ACTIVE_EVENT: &str = "(github.event_name != 'pull_request' || (startsWith(github.ref, 'refs/pull/') && github.event.pull_request.state != 'closed'))";
 pub(crate) fn sources_step(lane: &RootSlug) -> String {
     format!("sources_{lane}")
 }
@@ -73,7 +73,7 @@ pub(crate) fn output(slug: &RootSlug, need: GateNeed) -> String {
     need.output_name(slug)
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Setup {
     Before,
     Restored,
@@ -327,6 +327,14 @@ pub(crate) fn gate_parts(gate: &Gate, replanned: bool) -> Vec<String> {
     let read = |need| read_key(output(&gate.slug, need));
     let runs = |need| format!("{} == 'run'", read(need));
     match gate.need {
+        GateNeed::Selected if !gate.also.is_empty() => {
+            let any = gate
+                .roots()
+                .map(|slug| format!("{} != 'none'", read_key(output(slug, GateNeed::Selected))))
+                .collect::<Vec<_>>()
+                .join(" || ");
+            parts.push(format!("({any})"));
+        }
         GateNeed::Selected | GateNeed::Doctests | GateNeed::Docs => {
             parts.push(format!("{} != 'none'", read(GateNeed::Selected)));
             match gate.need {
@@ -345,6 +353,7 @@ pub(crate) fn gate_parts(gate: &Gate, replanned: bool) -> Vec<String> {
                 }),
             );
         }
+        GateNeed::Lint => parts.push(runs(GateNeed::Lint)),
         GateNeed::Deny => parts.push(runs(GateNeed::Deny)),
         GateNeed::Machete => parts.push(runs(GateNeed::Machete)),
         GateNeed::Policy => parts.push(format!(

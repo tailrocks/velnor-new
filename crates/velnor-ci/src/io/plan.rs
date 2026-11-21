@@ -10,9 +10,10 @@ use velnor_model::{
     AllTrigger, ChangeSet, EventKind, RepoFacts, RepoPath, RustRoot, RustSelection,
 };
 use velnor_rust::{
-    cargo_files, defer_post_merge_docs, detect, introduced, is_workflow_file, member_sources,
-    optional_steps, plan_groups, policy_runs, root_sources, select_event, selects_by_diff,
-    tests_expected, unknown_paths, unread_packages,
+    cargo_files, defer_post_merge_docs, detect, introduced, is_workflow_file, lint_runs,
+    member_sources, optional_steps, plan_groups, policy_runs, policy_unread, root_sources,
+    select_event, selects_by_diff, tests_expected, unknown_paths, unmatched_inputs,
+    unread_packages,
 };
 
 use super::{
@@ -24,10 +25,10 @@ use crate::error::CiError;
 use crate::escape::stderr_line;
 use crate::event::{Event, check_default_branch, parse_event};
 use crate::plan::{
-    Steps, explain, group_explanation, group_outputs, outputs, tests_outputs, warnings, weakened,
-    workspace_group_outputs,
+    Steps, explain, group_explanation, group_outputs, input_warnings, lint_explanation,
+    lint_outputs, outputs, tests_outputs, warnings, weakened, workspace_group_outputs,
 };
-use crate::summary::{group_summary, summary};
+use crate::summary::{group_summary, lint_summary, summary};
 
 const EVENT_PATH_VARIABLE: &str = "GITHUB_EVENT_PATH";
 const LOCK_FILE: &str = "Cargo.lock";
@@ -48,8 +49,12 @@ pub(super) fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
     }
     let name = std::env::var(EVENT_VARIABLE).ok();
     let full = args.full || name.as_deref() == Some(SCHEDULED);
-    let (selections, changes, kind) =
-        choose(args, &checkout, &facts, name.as_deref(), event.as_ref())?;
+    let Chosen {
+        selections,
+        changes,
+        kind,
+        listed,
+    } = choose(args, &checkout, &facts, name.as_deref(), event.as_ref())?;
     let groups = plan_groups(&facts, kind, &changes.paths, &selections);
     let steps: Steps = plan_steps(&facts, &checkout, &selections, full)?
         .into_iter()
@@ -61,7 +66,11 @@ pub(super) fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
     let selected = selections
         .values()
         .any(|selection| !matches!(selection, RustSelection::None));
-    let policy = policy_runs(facts.policy, &changes.paths, everything, selected);
+    let policy = if kind == EventKind::PullRequest && changes.paths.is_empty() {
+        policy_unread(facts.policy)
+    } else {
+        policy_runs(facts.policy, &changes.paths, everything, selected)
+    };
     let expected: BTreeMap<RepoPath, bool> = facts
         .rust_roots
         .iter()
@@ -72,14 +81,31 @@ pub(super) fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
             (root.manifest.clone(), tests)
         })
         .collect();
+    let lints = lint_runs(
+        &facts,
+        kind,
+        listed.then_some(&changes.paths),
+        &checkout.view.tracked_paths,
+        &checkout.view.symlinks,
+    );
+    let skipped: Vec<String> = facts
+        .config
+        .lint
+        .iter()
+        .filter(|lint| lints.get(&lint.slug()) == Some(&false))
+        .map(|lint| lint.id.to_string())
+        .collect();
     let outputs = outputs(&selections, &steps, policy)?
         + &tests_outputs(&expected)
+        + &lint_outputs(&lints)
         + &group_outputs(&groups)
         + &workspace_group_outputs(&facts.config.workspace_groups, &selections);
     append_outputs(&outputs)?;
     append_to(
         SUMMARY_VARIABLE,
-        &(summary(&facts.rust_roots, &selections, &steps) + &group_summary(&groups)),
+        &(summary(&facts.rust_roots, &selections, &steps)
+            + &group_summary(&groups)
+            + &lint_summary(&skipped)),
     )?;
     let new = introduced(&facts, &changes);
     let report = if args.explain {
@@ -89,6 +115,14 @@ pub(super) fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
             &unknown_paths(&facts, &changes),
             &unread_packages(&facts, &changes),
         ) + &group_explanation(&groups)
+            + &lint_explanation(&skipped)
+            + &input_warnings(&unmatched_inputs(
+                &facts,
+                kind,
+                listed.then_some(&changes.paths),
+                &checkout.view.tracked_paths,
+                &checkout.view.symlinks,
+            ))
             + &weakened(&facts.weakenings, &new)
     } else {
         outputs
@@ -146,13 +180,20 @@ fn event_kind(name: Option<&str>, manual: bool) -> EventKind {
     }
 }
 
+struct Chosen {
+    selections: BTreeMap<RepoPath, RustSelection>,
+    changes: ChangeSet,
+    kind: EventKind,
+    listed: bool,
+}
+
 fn choose(
     args: &PlanArgs,
     checkout: &Checkout,
     facts: &RepoFacts,
     name: Option<&str>,
     event: Option<&Event>,
-) -> Result<(BTreeMap<RepoPath, RustSelection>, ChangeSet, EventKind), CiError> {
+) -> Result<Chosen, CiError> {
     let kind = if args.full {
         EventKind::WorkflowDispatch
     } else {
@@ -163,8 +204,14 @@ fn choose(
     } else {
         None
     };
+    let listed = diff.is_some();
     let (selections, changes) = select_event(facts, kind, || diff);
-    Ok((selections, changes, kind))
+    Ok(Chosen {
+        selections,
+        changes,
+        kind,
+        listed,
+    })
 }
 
 fn changes(

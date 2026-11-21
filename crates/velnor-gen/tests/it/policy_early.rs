@@ -32,10 +32,9 @@ fn job(text: &str, id: &str) -> Result<serde_json::Value, Box<dyn std::error::Er
 }
 
 fn needs(job: &serde_json::Value) -> Vec<&str> {
-    job["needs"]
-        .as_array()
-        .map(|needs| needs.iter().filter_map(serde_json::Value::as_str).collect())
-        .unwrap_or_default()
+    job["needs"].as_array().map_or_else(Vec::new, |needs| {
+        needs.iter().filter_map(serde_json::Value::as_str).collect()
+    })
 }
 
 fn conditions(job: &serde_json::Value) -> String {
@@ -119,6 +118,23 @@ fn the_multi_job_shape_keeps_policy_on_the_plan_job_at_every_pin() -> TestResult
     for helper in ["0.1.109", "0.1.110"] {
         let text = workflow(&repo(&["Cargo.toml", "lab/Cargo.toml"], helper, None)?)?;
         assert_eq!(needs(&job(&text, "policy")?), ["rust-plan"], "{helper}");
+    }
+    Ok(())
+}
+
+#[test]
+fn a_project_with_no_policy_tool_gets_no_policy_job_and_required_does_not_wait_for_one()
+-> TestResult {
+    for helper in ["0.1.81", "0.1.109", "0.1.110"] {
+        let mut repo = view(&["Cargo.toml"], None)?;
+        pin_helper(&mut repo, helper)?;
+        let text = workflow(&repo)?;
+        assert!(!text.contains("\n  policy:\n"), "{helper}: {text}");
+        let required = job(&text, "required")?;
+        assert!(
+            !needs(&required).contains(&"policy"),
+            "{helper}: {required}"
+        );
     }
     Ok(())
 }

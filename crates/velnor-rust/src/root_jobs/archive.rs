@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    ArtifactWhen, CacheKey, CargoCommand, FilterRef, GroupFilter, GroupUpload, Host, Job, JobId,
-    NoTests, PrepareLocks, Step, StepKind, TestGroup, TestNeed, When,
+    ArtifactWhen, BaseScope, CacheKey, CargoCommand, FilterRef, GroupFilter, GroupUpload, Host,
+    Job, JobId, NoTests, PrepareLocks, Step, StepKind, TestGroup, TestNeed, When,
 };
 
 use super::{ARCHIVE_FILE, ARCHIVE_ID, RootJobs};
@@ -150,11 +150,13 @@ impl RootJobs<'_> {
             step(StepKind::CacheRestore(CacheKey::Sources {
                 host: Host,
                 lane: cache_root.clone(),
+                scope: BaseScope::Shared,
             })),
             step(StepKind::CacheRestore(CacheKey::Target {
                 job: build_id.clone(),
                 root: cache_root,
                 host: Host,
+                scope: BaseScope::Shared,
             })),
         ]
         .into_iter()
@@ -187,15 +189,27 @@ impl RootJobs<'_> {
         let mut steps = head(
             self.facts,
             CHECKOUT_DEPTH,
-            crate::sparse::paths(self.facts, std::slice::from_ref(&self.member().root)),
+            crate::sparse::with_artifacts(
+                crate::sparse::paths(self.facts, std::slice::from_ref(&self.member().root)),
+                group.map_or(&[], |group| &group.artifacts),
+            ),
         );
         steps.extend(mbx(self.facts, self.lane.steps()));
         steps.extend(mirror());
-        steps.extend(tools_restore(self.facts).into_iter().map(|restore| Step {
-            gate: self.lane.steps(),
-            ..restore
-        }));
-        steps.extend(tools_prime(self.facts).map(|prime| Step {
+        let plan = self
+            .lane
+            .plan
+            .as_ref()
+            .filter(|_| runner == self.facts.config.runner);
+        steps.extend(
+            tools_restore(self.facts, plan)
+                .into_iter()
+                .map(|restore| Step {
+                    gate: self.lane.steps(),
+                    ..restore
+                }),
+        );
+        steps.extend(tools_prime(self.facts, plan).map(|prime| Step {
             gate: self.lane.steps(),
             ..prime
         }));
@@ -229,6 +243,7 @@ impl RootJobs<'_> {
             steps.push(self.gated(StepKind::TestSetup {
                 name: "Check that Docker answers".to_owned(),
                 run: "docker info".to_owned(),
+                before_build: false,
             }));
         }
         steps.extend(

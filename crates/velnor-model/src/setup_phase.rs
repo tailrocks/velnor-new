@@ -4,18 +4,23 @@
 use crate::repo_config::TestSetup;
 
 impl TestSetup {
-    /// Whether the step runs before the first cargo step that compiles, not only before the tests.
     #[must_use]
     pub fn before_build(&self) -> bool {
         self.phase == Some(SetupPhase::Build)
     }
 }
 
-/// How early a `[[test_setup]]` step runs in the jobs of its root.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SetupPhase {
-    /// Before the first test step.
     Test,
-    /// Before the first cargo step that compiles or runs tests, so a build script can read it.
     Build,
+}
+
+/// Where a step sits against the `[[test_setup]]` steps of its job.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SetupOrder {
+    /// Not gated by the setup steps.
+    Unordered,
+    /// Skipped when a setup step before it failed or was cancelled.
+    AfterSetup,
 }
