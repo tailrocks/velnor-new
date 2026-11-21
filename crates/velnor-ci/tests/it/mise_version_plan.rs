@@ -40,10 +40,18 @@ fn planned_packages(changed: &str) -> Vec<String> {
 
 #[test]
 fn a_change_to_mise_version_runs_the_velnor_gen_tests_that_read_it() {
-    let packages = planned_packages(".mise-version");
-    assert!(
-        packages.iter().any(|package| package == "velnor-gen"),
-        "a change to .mise-version selects {packages:?}, not velnor-gen, so \
-         crates/velnor-gen/tests/it/mise_version_pin.rs would not run"
+    let mut packages = planned_packages(".mise-version");
+    packages.sort();
+    assert_eq!(
+        packages,
+        [
+            "velnor-archive-guard",
+            "velnor-ci",
+            "velnor-gen",
+            "velnor-runner-cli",
+            "velnor-runner-host",
+        ],
+        "a change to .mise-version must select exactly these packages, \
+         velnor-gen included so crates/velnor-gen/tests/it/mise_version_pin.rs runs"
     );
 }
