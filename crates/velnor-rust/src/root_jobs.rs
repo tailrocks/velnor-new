@@ -345,7 +345,7 @@ impl RootJobs<'_> {
         let mut jobs = vec![Job {
             comment,
             pr: crate::plan::quick(self.facts),
-            ..self.lane_job(lint_id, steps, tests.is_empty())
+            ..self.lane_job(lint_id, steps, true)
         }];
         if archive && self.nextest() && self.facts.config.private_sources.is_none() {
             jobs.extend(self.archived_tests());

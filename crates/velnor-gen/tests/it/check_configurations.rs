@@ -319,3 +319,24 @@ fn in_a_private_sources_job_the_check_runs_offline_after_the_token_is_revoked() 
     assert_eq!(steps[0].3["env"]["CARGO_NET_OFFLINE"], "true", "{steps:?}");
     Ok(())
 }
+
+#[test]
+fn a_testless_grouped_root_beside_a_tested_one_still_gets_its_check() -> TestResult {
+    let config = "shape = 'lint-test'\n[[workspace_groups]]\nname = 'tools'\nroots = ['tools/a', 'tools/b']\n[[check_configurations]]\nroot = 'tools/b'\n";
+    let mut view = view_with(
+        &["Cargo.toml", "tools/a/Cargo.toml", "tools/b/Cargo.toml"],
+        config,
+        HELPER,
+    )?;
+    let testless = RepoPath::new("tools/b/Cargo.toml")?;
+    let metadata = view.rust_metadata.get_mut(&testless).ok_or("no tools/b metadata")?;
+    for member in &mut metadata.members {
+        for target in &mut member.targets {
+            target.tests = false;
+        }
+    }
+    let steps = found(&document(&workflow(&view)?)?["jobs"]);
+    assert_eq!(steps.len(), 1, "{steps:?}");
+    assert_eq!(steps[0].3["working-directory"], "tools/b", "{steps:?}");
+    Ok(())
+}
