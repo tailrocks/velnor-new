@@ -8,6 +8,7 @@ use velnor_model::{
 };
 use velnor_rust::{PackageCounts, encode_package_counts};
 
+mod extract_to;
 #[cfg(test)]
 mod list_argv;
 #[path = "tests_run/listed.rs"]
@@ -18,6 +19,7 @@ mod status;
 mod statuses;
 mod tap;
 
+pub(crate) use extract_to::{extracts, retarget_extract};
 pub(crate) use listed::{Listing, runnable_matches};
 pub use tap::SummaryTap;
 

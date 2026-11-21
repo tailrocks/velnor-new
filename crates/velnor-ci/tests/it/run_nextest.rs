@@ -15,6 +15,9 @@ pub(crate) fn fake_nextest(directory: &Path, run: &str, list_json: &str) {
     let program = directory.join("cargo-nextest");
     let mut script = String::from("#!/bin/sh\nif [ \"$2\" = list ]; then\n");
     script.push_str("printf '%s\\n' \"$@\" > \"$RUNNER_TEMP/list-argv\"\n");
+    script.push_str(
+        "p=; for a in \"$@\"; do d=; [ \"$p\" = --extract-to ] && d=$a; case $a in --extract-to=*) d=${a#--extract-to=};; esac; [ -n \"$d\" ] && [ -d \"$d\" ] && : > \"$RUNNER_TEMP/list-dest-existed\"; p=$a; done\n",
+    );
     script.push_str("echo 'Summary [   0.001s] 99 tests run: 99 passed, 0 skipped' >&2\n");
     script.push_str("printf '%s\\n' '");
     script.push_str(list_json);

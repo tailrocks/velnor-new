@@ -6,7 +6,8 @@ use std::process::{Command, Stdio};
 use std::sync::Mutex;
 use std::thread::{self, JoinHandle};
 
-use crate::tests_run::{Listing, list_argv, runnable_matches};
+use super::early_list_dir::ListDir;
+use crate::tests_run::{Listing, extracts, list_argv, retarget_extract, runnable_matches};
 
 const STEP_FILE_VARIABLES: &[&str] = &[
     "GITHUB_OUTPUT",
@@ -63,7 +64,16 @@ impl EarlyList {
 }
 
 fn list_matches(argv: &[String]) -> Option<Listing> {
-    let argv = list_argv(argv)?;
+    let mut argv = list_argv(argv)?;
+    let directory = match isolate(&mut argv) {
+        Ok(directory) => directory,
+        Err(error) => {
+            eprintln!(
+                "velnor-ci: the early nextest list needs its own extraction directory: {error}; the step reports no per-package counts"
+            );
+            return None;
+        }
+    };
     let mut command = Command::new(&argv[0]);
     command
         .args(&argv[1..])
@@ -73,10 +83,39 @@ fn list_matches(argv: &[String]) -> Option<Listing> {
         command.env_remove(name);
     }
     super::mbx_reports::assign(&mut command, &argv);
-    let output = command.output().ok()?;
+    let output = match command.output() {
+        Ok(output) => output,
+        Err(error) => {
+            eprintln!(
+                "velnor-ci: cannot start the early nextest list: {error}; the step reports no per-package counts"
+            );
+            return None;
+        }
+    };
+    drop(directory);
     if !output.status.success() {
         drop(std::io::stderr().write_all(&output.stderr));
         return None;
     }
-    runnable_matches(&output.stdout)
+    let listing = runnable_matches(&output.stdout);
+    if listing.is_none() {
+        eprintln!(
+            "velnor-ci: the early nextest list printed no usable listing; the step reports no per-package counts"
+        );
+    }
+    listing
+}
+
+fn isolate(argv: &mut [String]) -> Result<Option<ListDir>, String> {
+    if !extracts(argv) {
+        return Ok(None);
+    }
+    let directory = ListDir::create(std::env::var_os("RUNNER_TEMP"), std::process::id())?;
+    let path = directory
+        .path()
+        .to_str()
+        .ok_or("the directory is not valid UTF-8")?
+        .to_owned();
+    retarget_extract(argv, &path);
+    Ok(Some(directory))
 }
