@@ -335,18 +335,18 @@ with = { name = "assets", path = "target/release/app" }
 
 #[test]
 fn every_steps_reference_in_a_reusable_workflow_names_a_step_of_its_own_job() -> TestResult {
-    let patch = gate_patches()?
+    let pin = gate_patches()?
         .into_iter()
-        .last()
+        .next_back()
         .ok_or("no helper gate patch")?;
     let mut repo = view(ROOTS, None)?;
     repo.files
         .insert(WORKFLOWS_CONFIG_PATH, REUSABLE.as_bytes().to_vec());
-    pinned(&mut repo, patch)?;
+    pinned(&mut repo, pin)?;
     let files = generated(&mut repo)?;
-    let path = RepoPath::new(".github/workflows/build-assets.yml")?;
+    let file = RepoPath::new(".github/workflows/build-assets.yml")?;
     let text = files
-        .get(&path)
+        .get(&file)
         .ok_or("build-assets.yml was not rendered")?;
     let mut scan = Scan::default();
     scan_workflow(
