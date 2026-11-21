@@ -72,6 +72,7 @@ runs:
           *) no_follow=-T ;;
         esac
         publish_entry() {
+          [ ! -d "$2" ] || return 1
           mv -f "$no_follow" "$1" "$2" 2> /dev/null && [ -f "$2" ] && [ ! -L "$2" ] && [ "$(digest "$2")" = "$expected" ]
         }
         evict_store_entry() {

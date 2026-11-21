@@ -92,6 +92,21 @@ fi
 exec "$REAL_MV" "$@"
 """
 
+STUB_BSD_MV = """#!/bin/sh
+for arg; do src="$dst"; dst="$arg"; done
+exec "$REAL_MV" -f "$src" "$dst"
+"""
+
+STUB_REPLANTING_RM = """#!/bin/sh
+for arg; do last="$arg"; done
+"$REAL_RM" "$@" || exit $?
+case "$last" in */velnor-ci-x86_64-unknown-linux-musl.tar.gz) mkdir -p "$last" ;; esac
+"""
+
+STUB_UNAME_DARWIN = """#!/bin/sh
+echo Darwin
+"""
+
 STUB_TAR = """#!/bin/sh
 if [ -p /dev/stdin ]; then pipe=pipe; else pipe=none; fi
 printf '%s\\t%s\\n' "$pipe" "$*" >> "$STUB_TAR_LOG"
@@ -770,6 +785,22 @@ class SetupVelnorInstallTests(unittest.TestCase):
         self.assertIn(f"installed velnor-ci 0.1.79 in {self.runner_temp}/velnor-ci-bin", result.output)
         self.assertEqual(self.installed_binary().read_bytes(), PAYLOAD)
 
+
+    def test_a_directory_at_the_store_entry_path_on_a_bsd_mv_is_not_moved_into(self):
+        for name, body in (("uname", STUB_UNAME_DARWIN), ("mv", STUB_BSD_MV), ("rm", STUB_REPLANTING_RM)):
+            stub = self.stub_bin / name
+            stub.write_text(body)
+            stub.chmod(0o755)
+        cached = self.cached_archive()
+        cached.mkdir(parents=True)
+        result = self.install(
+            sha256(self.archive),
+            extra_env={"REAL_MV": shutil.which("mv"), "REAL_RM": shutil.which("rm")},
+        )
+        self.assertEqual(result.returncode, 0, result.output)
+        self.assertEqual(installed_files(cached), [], "the verified copy was moved inside the directory at the store entry path")
+        self.assertIn("could not publish velnor-ci 0.1.79 to the tool cache", result.output)
+        self.assertEqual(self.installed_binary().read_bytes(), PAYLOAD)
 
 if __name__ == "__main__":
     unittest.main()
