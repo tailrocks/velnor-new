@@ -77,6 +77,16 @@ fn a_test_fixture_outside_the_workspace_runs_plain_even_beside_a_declaring_works
 }
 
 #[test]
+fn a_directory_outside_the_workspace_that_declares_mbx_still_fails_closed() -> TestResult {
+    let repo = declared_job()?;
+    let workspace = repo.root().join("workspace");
+    fs::create_dir_all(&workspace)?;
+    let output = run_in(&repo, repo.root(), Some(&workspace), false)?;
+    assert_refused(&output);
+    Ok(())
+}
+
+#[test]
 fn a_build_in_the_declaring_directory_still_fails_closed_without_the_mise_wrapper() -> TestResult {
     let repo = declared_job()?;
     let output = run_in(&repo, repo.root(), None, true)?;
@@ -164,7 +174,8 @@ fn assert_refused(output: &Output) {
 #[test]
 fn every_manifest_path_spelling_decides_by_the_project_it_names() -> TestResult {
     let repo = declared_job()?;
-    let scratch = repo.root().join("scratch");
+    let scratch = repo.root().join("scratch/deeper");
+    let launch = repo.root().join("launch");
     let inside = repo.root().join("Cargo.toml").display().to_string();
     let outside = repo
         .root()
@@ -187,7 +198,7 @@ fn every_manifest_path_spelling_decides_by_the_project_it_names() -> TestResult 
             if manifest == &inside {
                 assert_refused(&run_with_args(&repo, &scratch, &args)?);
             } else {
-                assert_plain(&run_with_args(&repo, repo.root(), &args)?);
+                assert_plain(&run_with_args(&repo, &launch, &args)?);
             }
         }
     }
