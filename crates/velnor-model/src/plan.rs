@@ -28,6 +28,10 @@ pub const TESTS_IGNORED_OUTPUT: &str = "tests_ignored";
 pub const TESTS_BY_PACKAGE_OUTPUT: &str = "tests_by_package";
 pub const MERGE_GROUP_STEP: &str = "merge_group";
 pub const MERGE_GROUP_SKIP_OUTPUT: &str = "skip_push";
+pub const TOOLS_ANCHOR_OUTPUT: &str = "tools_anchor";
+pub const TOOLS_ANCHOR_KEY_OUTPUT: &str = "tools_anchor_key";
+pub const TOOLS_ANCHOR_DIGEST_BYTES: usize = 64;
+pub const CACHE_KEY_MAX_BYTES: usize = 512;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorkflowPlan {
@@ -130,6 +134,7 @@ pub struct Step {
     pub private_repo: bool,
     pub pr: PrRun,
     pub gate: Option<Gate>,
+    pub any_gate: Vec<Gate>,
     pub reads: Option<PlanRef>,
     /// Skipped on a self-hosted runner, so that the step runs only on a GitHub-hosted one.
     pub hosted_only: bool,

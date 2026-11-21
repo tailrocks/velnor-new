@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{CacheKey, CacheRoot, Host, JobId, RepoPath, RepoView, ToolsAnchor};
+use velnor_model::{BaseScope, CacheKey, CacheRoot, Host, JobId, RepoPath, RepoView, ToolsAnchor};
 use velnor_render::render_key;
 
 use crate::facts::TestResult;
@@ -74,11 +74,13 @@ fn no_key_family_carries_the_run_attempt() -> TestResult {
         CacheKey::Sources {
             host: Host,
             lane: root.clone(),
+            scope: BaseScope::Shared,
         },
         CacheKey::Target {
             job: JobId::new("rust")?,
             root: root.clone(),
             host: Host,
+            scope: BaseScope::Shared,
         },
         CacheKey::Delta {
             job: JobId::new("rust")?,
@@ -184,6 +186,7 @@ fn target_key(manifest: &str) -> Result<String, Box<dyn std::error::Error>> {
         job: JobId::new("rust")?,
         root: CacheRoot::new(&RepoPath::new(manifest)?, RepoPath::new("target")?),
         host: Host,
+        scope: BaseScope::Shared,
     })
     .key)
 }

@@ -104,6 +104,13 @@ pub enum ToolsAnchor {
     Recorded,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum BaseScope {
+    #[default]
+    Shared,
+    PrivateRepo,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum CacheKey {
     Tools {
@@ -113,11 +120,13 @@ pub enum CacheKey {
     Sources {
         host: Host,
         lane: CacheRoot,
+        scope: BaseScope,
     },
     Target {
         job: JobId,
         root: CacheRoot,
         host: Host,
+        scope: BaseScope,
     },
     Delta {
         job: JobId,
