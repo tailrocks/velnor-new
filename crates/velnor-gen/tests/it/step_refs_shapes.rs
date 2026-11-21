@@ -7,9 +7,12 @@ use std::error::Error;
 use velnor_model::{RepoPath, WORKFLOWS_CONFIG_PATH};
 
 use crate::facts::TestResult;
+use crate::public_sources::{DECLARED as PUBLIC_SOURCES, SHA, SOURCE};
 use crate::release_family_fixture;
 use crate::release_fixture::release_view;
-use crate::step_refs_sweep::{Sweep, gate_patch, gate_patches, generated, pinned};
+use crate::step_refs_sweep::{
+    Case, Sweep, gate_patch, gate_patches, generated, pinned, rust_ci_sweep,
+};
 
 const DECLARED: &str = "[[workflow]]\nfile = \"declared\"\nname = \"Declared\"\n\n[[workflow.job]]\nid = \"check\"\n\n[[workflow.job.step]]\nid = \"warm\"\nname = \"Warm the cache\"\nrun = \"echo ok\"\n\n[[workflow.job.step]]\nname = \"Use the warm step\"\nrun = \"echo $WARM\"\nenv = { WARM = \"${{ steps.warm.outputs.ready }}\" }\n";
 
@@ -61,4 +64,20 @@ fn every_steps_reference_in_a_family_release_workflow_names_a_step_of_its_own_jo
     }
     sweep.finish();
     Ok(())
+}
+
+#[test]
+fn every_steps_reference_in_a_public_sources_job_names_a_step_of_its_own_job() -> TestResult {
+    let public_sources = gate_patch("public_sources")?;
+    let lock = format!(
+        "version = 4\n\n[[package]]\nname = \"package-0\"\nversion = \"0.1.0\"\n\n[[package]]\nname = \"dep0\"\nversion = \"1.0.0\"\nsource = \"git+{SOURCE}?rev=v1#{SHA}\"\n"
+    );
+    rust_ci_sweep(&[Case {
+        from: public_sources,
+        config: Some(PUBLIC_SOURCES),
+        files: &[
+            ("Cargo.lock", lock.as_str()),
+            ("tools/Cargo.lock", lock.as_str()),
+        ],
+    }])
 }

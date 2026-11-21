@@ -230,13 +230,13 @@ impl Sweep {
 }
 
 #[derive(Clone, Copy)]
-struct Case<'a> {
-    from: u64,
-    config: Option<&'a str>,
-    files: &'a [(&'a str, &'a str)],
+pub(crate) struct Case<'a> {
+    pub(crate) from: u64,
+    pub(crate) config: Option<&'a str>,
+    pub(crate) files: &'a [(&'a str, &'a str)],
 }
 
-fn rust_ci_sweep(cases: &[Case<'_>]) -> TestResult {
+pub(crate) fn rust_ci_sweep(cases: &[Case<'_>]) -> TestResult {
     let mut sweep = Sweep::default();
     let mut rendered = BTreeSet::new();
     for patch in gate_patches()? {
@@ -319,7 +319,9 @@ fn every_steps_reference_in_a_lint_test_setup_or_private_sources_job_names_a_ste
 
 #[test]
 fn every_steps_reference_in_the_release_workflow_names_a_step_of_its_own_job() -> TestResult {
-    let cases: [(u64, &[Root], &str); 4] = [
+    let raw = gate_patch("binaries.format")?;
+    let asset_name = gate_patch("binaries.asset_name")?;
+    let cases: [(u64, &[Root], &str); 6] = [
         (0, &[APP], "[[binaries]]\npackage = \"app\"\n"),
         (0, &[APP, TOOLS], TWO_BINARIES),
         (
@@ -328,6 +330,16 @@ fn every_steps_reference_in_the_release_workflow_names_a_step_of_its_own_job() -
             "roots = [\".\", \"tools\"]\nafter = [\"Rust CI\", \"Lint\"]\n",
         ),
         (PR_ONLY_CHECKS_MINIMUM, &[APP], PR_ONLY_CHECKS_ON),
+        (
+            raw,
+            &[APP],
+            "[[binaries]]\npackage = \"app\"\nformat = \"raw\"\n",
+        ),
+        (
+            asset_name,
+            &[APP],
+            "[[binaries]]\npackage = \"app\"\nasset_name = \"app-{{ version }}-{{ platform }}\"\n",
+        ),
     ];
     let mut sweep = Sweep::default();
     let mut rendered = BTreeSet::new();
