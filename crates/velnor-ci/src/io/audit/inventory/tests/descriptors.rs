@@ -172,28 +172,31 @@ fn a_parent_swapped_after_its_handle_was_released_fails_the_scan() {
 }
 
 #[test]
-fn a_replaced_parent_that_reuses_the_inode_is_refused() {
+fn a_parent_whose_inode_is_unchanged_but_whose_stamp_differs_is_refused() {
     let root = fs::canonicalize(std::env::temp_dir())
         .unwrap_or_else(|e| unreachable!("{e}"))
         .join(format!("velnor-scan-recycled-{}", std::process::id()));
     let _ = fs::remove_dir_all(&root);
     let parent = root.join("d");
     fs::create_dir_all(parent.join("sub")).unwrap_or_else(|e| unreachable!("{e}"));
-    fs::remove_dir_all(&parent).unwrap_or_else(|e| unreachable!("{e}"));
-    fs::create_dir_all(parent.join("sub")).unwrap_or_else(|e| unreachable!("{e}"));
-    let replacement = handle::open(&Origin::Path, &parent).unwrap_or_else(|e| unreachable!("{e}"));
-    let mut recycled = handle::identity(&replacement).unwrap_or_else(|e| unreachable!("{e}"));
-    recycled.born = Some(std::time::UNIX_EPOCH);
+    let recorded =
+        handle::stamp(handle::open(&Origin::Path, &parent).unwrap_or_else(|e| unreachable!("{e}")))
+            .unwrap_or_else(|e| unreachable!("{e}"));
     let origin = Origin::Reopen {
         parent: parent.clone(),
-        identity: recycled,
+        stamp: recorded,
         name: "sub".into(),
     };
-    let opened = handle::open(&origin, &parent.join("sub"));
+    let unchanged = handle::open(&origin, &parent.join("sub"));
+    fs::File::open(&parent)
+        .and_then(|directory| directory.set_modified(std::time::UNIX_EPOCH))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let refused = handle::open(&origin, &parent.join("sub"));
     fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(unchanged.is_ok(), "{:?}", unchanged.err());
     assert!(
-        matches!(&opened, Err(error) if error.to_string().contains("changed while the audit scanned it; retry")),
-        "a replacement with the recorded inode but another birth must be refused: {:?}",
-        opened.as_ref().err()
+        matches!(&refused, Err(error) if error.to_string().contains("changed while the audit scanned it; retry")),
+        "a parent with the recorded inode but another stamp must be refused: {:?}",
+        refused.err()
     );
 }

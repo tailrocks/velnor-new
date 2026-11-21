@@ -10,9 +10,9 @@ use std::path::{Component, Path, PathBuf};
 use nix::errno::Errno;
 use nix::fcntl::{AT_FDCWD, AtFlags, OFlag, openat, readlinkat};
 use nix::libc;
-use nix::sys::stat::{Mode, SFlag, fstat, fstatat};
+use nix::sys::stat::{FileStat, Mode, SFlag, fstat, fstatat};
 
-use super::walk::DESCRIPTOR_BUDGET;
+use super::walk::{DESCRIPTOR_BUDGET, UNTRACKED_LISTING};
 
 const MAX_LINKS: usize = 40;
 pub(super) const RESOLVER_FIXED: usize = 3;
@@ -64,7 +64,7 @@ pub(super) struct Reach<'a> {
 impl Default for Reach<'_> {
     fn default() -> Self {
         Self {
-            bound: DESCRIPTOR_BUDGET,
+            bound: DESCRIPTOR_BUDGET.saturating_sub(RESOLVER_FIXED + UNTRACKED_LISTING),
             opened: &|| {},
         }
     }
@@ -132,21 +132,24 @@ fn steps(target: &Path, pending: &mut Vec<Step>) {
     }
 }
 
-/// Canonical path of `target`, a link target found in `directory` (whose canonical
-/// path is `base`), resolved link by link through descriptors so no ancestor named
-/// by a path is looked up again.
+pub(super) struct Followed {
+    pub(super) path: PathBuf,
+    pub(super) stat: FileStat,
+}
+
 pub(super) fn resolve(
     directory: BorrowedFd<'_>,
     base: &Path,
     target: &Path,
     reach: Reach<'_>,
-) -> io::Result<PathBuf> {
+) -> io::Result<Followed> {
     let mut current = directory.try_clone_to_owned()?;
     (reach.opened)();
     let mut trail = Trail::new(reach.bound);
     let mut path = base.to_path_buf();
     let mut pending = Vec::new();
     let mut links = 0;
+    let mut last = None;
     steps(target, &mut pending);
     while let Some(step) = pending.pop() {
         match step {
@@ -155,6 +158,7 @@ pub(super) fn resolve(
                 current = open_path(Path::new("/"), false)?;
                 (reach.opened)();
                 path = PathBuf::from("/");
+                last = None;
             }
             Step::Parent => {
                 current = match trail.pop() {
@@ -171,11 +175,13 @@ pub(super) fn resolve(
                 };
                 (reach.opened)();
                 path.pop();
+                last = None;
             }
             Step::Name(name) => {
                 let stat = fstatat(&current, name.as_os_str(), AtFlags::AT_SYMLINK_NOFOLLOW)
                     .map_err(failure)?;
                 let format = SFlag::from_bits_truncate(stat.st_mode) & SFlag::S_IFMT;
+                last = None;
                 if format == SFlag::S_IFLNK {
                     links += 1;
                     if links > MAX_LINKS {
@@ -194,13 +200,18 @@ pub(super) fn resolve(
                     path.push(&name);
                 } else if pending.is_empty() {
                     path.push(&name);
+                    last = Some(stat);
                 } else {
                     return Err(failure(Errno::ENOTDIR));
                 }
             }
         }
     }
-    Ok(path)
+    let stat = match last {
+        Some(stat) => stat,
+        None => fstat(&current).map_err(failure)?,
+    };
+    Ok(Followed { path, stat })
 }
 
 #[cfg(test)]
@@ -225,7 +236,7 @@ mod tests {
             bound,
             ..Reach::default()
         };
-        resolve(held.as_fd(), directory, target, reach)
+        resolve(held.as_fd(), directory, target, reach).map(|followed| followed.path)
     }
 
     #[test]
@@ -297,7 +308,11 @@ mod tests {
             reach,
         );
         fs::remove_dir_all(&base).unwrap_or_else(|e| unreachable!("{e}"));
-        let error = resolved.expect_err("the resolver followed a moved ancestor");
-        assert_eq!(error.raw_os_error(), Some(Errno::ESTALE as i32));
+        let errno = resolved.err().and_then(|error| error.raw_os_error());
+        assert_eq!(
+            errno,
+            Some(Errno::ESTALE as i32),
+            "the resolver followed a moved ancestor"
+        );
     }
 }
