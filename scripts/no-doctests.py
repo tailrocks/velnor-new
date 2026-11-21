@@ -6,17 +6,33 @@ from pathlib import Path
 IDENT = re.compile(r"[^\W\d]\w*")
 FENCE = re.compile(r"```|~~~")
 LINE_DOC = re.compile(r"//(?:!|/(?!/))")
-QUOTE = r"(?:[ \t]*>)*"
-CONTAINER = r"(?:>[ \t]*|(?:[-*+]|\d{1,9}[.)])(?:[ \t]+(?:\[[ xX]\][ \t]+)?|$)|\[\^[^\]\s]+\]:[ \t]*)*"
-LINE_FENCE = re.compile(r"[ \t]*" + CONTAINER + r"(?:```|~~~)")
-LINE_INDENT = re.compile(QUOTE + r" {5,}\S")
-ATTR_INDENT = re.compile(r" {4,}\S|(?:[ \t]*>)+ {5,}\S")
-LIST_INDENT = re.compile(r"[ \t]*" + CONTAINER + r"(?:[-*+]|\d{1,9}[.)]) {5,}\S")
+CONTAINER = r"(?:>[ \t]*|(?:[-*+]|\d{1,9}[.)])[ \t]+(?:\[[ xX]\][ \t]+)?|\[\^[^\]\s]+\]:[ \t]*)*"
+MARKER = r"[ \t]*(?:>|(?:[-*+]|\d{1,9}[.)])(?=[ \t])|\[\^[^\]\s]+\]:)"
+FENCE_OPEN = r"(?:`{3,}(?=[^`\n]*$)|~{3,})"
+LINE_FENCE = re.compile(r"[ \t]*" + CONTAINER + FENCE_OPEN)
+LINE_INDENT = re.compile(r"(?:" + MARKER + r")* {5,}\S")
+ATTR_INDENT = re.compile(r" {4,}\S|(?:" + MARKER + r")+ {5,}\S")
+HTML6_TAGS = (
+    "address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt"
+    "|fieldset|figcaption|figure|footer|form|frame|frameset|h[1-6]|head|header|hr|html|iframe|legend|li|link|main|menu"
+    "|menuitem|nav|noframes|ol|optgroup|option|p|param|search|section|summary|table|tbody|td|tfoot|th|thead|title|tr"
+    "|track|ul"
+)
+HTML_BLOCK6 = re.compile(r"[ ]{0,3}</?(?:" + HTML6_TAGS + r")(?=[ \t>]|/>|$)", re.I)
+TAG_OPEN = r"<[A-Za-z][A-Za-z0-9-]*(?:[ \t]+[A-Za-z_:][A-Za-z0-9_.:-]*(?:[ \t]*=[ \t]*(?:[^ \t\"'=<>`]+|'[^']*'|\"[^\"]*\"))?)*[ \t]*/?>"
+TAG_CLOSE = r"</[A-Za-z][A-Za-z0-9-]*[ \t]*>"
+HTML_BLOCK7 = re.compile(r"[ ]{0,3}(?:" + TAG_OPEN + "|" + TAG_CLOSE + r")[ \t]*$")
+RAW_OPEN = re.compile(r"[ ]{0,3}(?:<((?i:script|pre|style|textarea))(?=[\s>]|$)|<!--|<\?|<!\[CDATA\[|<![A-Za-z])")
+RAW_END = {"<!--": "-->", "<?": "?>", "<![cdata[": "]]>"}
+QUOTE_PREFIX = re.compile(r"(?:[ \t]*>)*")
+NON_PROSE = re.compile(r"[ \t]*(?:#{1,6}(?:[ \t]|$)|(?:[-*+]|\d{1,9}[.)])(?:[ \t]|$)|[-*_\s]*$|\[\^[^\]\s]+\]:[ \t]*$)")
+EQ_UNDERLINE = re.compile(r"[ \t]*=+[ \t]*$")
+LIST_MARK = re.compile(r"[ \t]*(?:[-*+]|\d{1,9}[.)])(?=[ \t]|$)[ \t]*")
+LIST_ITEM = re.compile(r"[ \t]*(?:[-*+]|\d{1,9}[.)])[ \t]+")
+LIST_CODE = re.compile(r"[ \t]*(?:[-*+]|\d{1,9}[.)])[ \t]{5,}\S")
 BLOCK_MARGIN = re.compile(r"[ \t]*\*?")
-QUOTE_START = re.compile(r"[ \t]*>")
-HRULE = re.compile(r"(?:-[ \t]*){3,}|(?:\*[ \t]*){3,}|(?:_[ \t]*){3,}")
-DOC_OPEN = re.compile(r"/\*(?:!|\*(?![*/]))")
 NEWLINE = re.compile(r"\r\n|\r|\n")
+DOC_OPEN = re.compile(r"/\*(?:!|\*(?![*/]))")
 DOC_EQ = re.compile(r"\s*=(?!=)")
 DOC_INCLUDE = re.compile(r"\s*=\s*include_str!")
 STRING_ESCAPE = re.compile(r"\\(?:x([0-9a-fA-F]{2})|u\{([0-9a-fA-F_]{1,8})\}|(\r?\n[ \t\r\n]*)|(.))", re.S)
@@ -56,13 +72,6 @@ def skip_trivia(src, i):
     return i
 
 
-def attr_open(src, i):
-    j = skip_trivia(src, i + 1)
-    if j < len(src) and src[j] == "!":
-        j = skip_trivia(src, j + 1)
-    return j + 1 if j < len(src) and src[j] == "[" else None
-
-
 def skip_string(src, i):
     i += 1
     while i < len(src):
@@ -95,15 +104,15 @@ def skip_char(src, i):
     return None
 
 
-def prose(line):
-    if line is None:
-        return False
-    text = re.sub("^" + CONTAINER, "", line.strip(), count=1)
-    return bool(text) and not text.startswith("#") and not HRULE.fullmatch(text)
+def attr_open(src, i):
+    k = skip_trivia(src, i + 1)
+    if src.startswith("!", k):
+        k = skip_trivia(src, k + 1)
+    return k + 1 if src.startswith("[", k) else None
 
 
-def split_lines(text):
-    return NEWLINE.split(text)
+def expand_tabs(text):
+    return text.expandtabs(4)
 
 
 def doc_text_tabs(text):
@@ -112,24 +121,20 @@ def doc_text_tabs(text):
     return text.expandtabs(4)
 
 
-def markdown_hit(lines, indent):
-    prev = None
-    for k, raw in enumerate(lines):
-        line = raw.expandtabs(4)
-        lazy = prose(prev) and not QUOTE_START.match(line)
-        if LIST_INDENT.match(line) or (LINE_FENCE.match(line) and not (lazy and indent.match(line))):
-            return k
-        if indent.match(line) and not lazy:
-            return k
-        prev = line
-    return None
+def line_indent_text(body):
+    if body[:1] in (" ", "\t"):
+        return " " + expand_tabs(body[1:])
+    return expand_tabs(body)
 
 
-def value_has_fence(value):
-    lines = [line.expandtabs(4) for line in split_lines(value)]
+def new_doc_state():
+    return {"html": False, "prose": None, "raw": None, "depth": 0, "item": None, "list": None}
+
+
+def value_has_fence(value, state):
+    lines = re.split(r"\r\n|\r|\n", value)
     margin = min((len(line) - len(line.lstrip(" ")) for line in lines if line.strip()), default=0)
-    lines = [line[margin:] for line in lines]
-    return markdown_hit(lines, ATTR_INDENT) is not None
+    return any(doc_line(" " + line[margin:], state) for line in lines)
 
 
 def decode_escape(match):
@@ -152,20 +157,78 @@ def raw_value(literal, prefix):
     return literal[hashes + prefix + 1 : len(literal) - hashes - 1]
 
 
-def line_run(src, i):
-    run = []
-    pos = i
-    joinable = not src[src.rfind("\n", 0, i) + 1 : i].strip()
-    while True:
-        k = src.find("\n", pos)
-        end = len(src) if k < 0 else k
-        run.append((pos, doc_text_tabs(src[pos + 3 : end])))
-        j = end + 1
-        while j < len(src) and src[j] in " \t":
-            j += 1
-        if not joinable or end >= len(src) or not LINE_DOC.match(src, j):
-            return run, end
-        pos = j
+def doc_content(body):
+    text = line_indent_text(body)
+    return text[1:] if body[:1] in (" ", "\t") else text
+
+
+def is_prose(content):
+    content = LIST_MARK.sub("", content, count=1)
+    if NON_PROSE.match(content):
+        return False
+    return re.match(r"[ \t]*" + FENCE_OPEN, content) is None
+
+
+def raw_end(opener):
+    if opener.group(1):
+        return f"</{opener.group(1).lower()}>"
+    return RAW_END.get(opener.group().lstrip(" ").lower(), ">")
+
+
+def doc_line(body, state):
+    rel = doc_content(body)
+    quote = QUOTE_PREFIX.match(rel)
+    depth = quote.group().count(">")
+    text = rel[quote.end() :]
+    indent = len(text) - len(text.lstrip(" "))
+    if depth < state["depth"] or (state["item"] is not None and text.strip() and indent < state["item"]):
+        state["html"] = False
+        state["raw"] = None
+        state["item"] = None
+    if state["html"]:
+        state["html"] = bool(text.strip())
+        if not state["html"]:
+            state["item"] = None
+        return False
+    if state["raw"] is not None:
+        if state["raw"] in text.lower():
+            state["raw"] = None
+            state["item"] = None
+        return False
+    if not text.strip():
+        state["prose"] = None
+        return False
+    item = LIST_ITEM.match(text)
+    opener = text[item.end() :] if item else text
+    continued = state["prose"] is not None and depth <= state["prose"]
+    if item:
+        state["list"] = (depth, item.end())
+    elif state["list"] is not None and (state["list"][0] != depth or (indent < state["list"][1] and not continued)):
+        state["list"] = None
+    item_col = item.end() if item else None
+    if item is None and state["list"] is not None and indent >= state["list"][1]:
+        item_col = state["list"][1]
+    if match := RAW_OPEN.match(opener):
+        end = raw_end(match)
+        state["prose"] = None
+        if end not in opener[match.end() :].lower():
+            state["raw"] = end
+            state["depth"] = depth
+            state["item"] = item_col
+        return False
+    if HTML_BLOCK6.match(opener) or ((item is not None or state["prose"] is None) and HTML_BLOCK7.match(opener)):
+        state["html"] = True
+        state["prose"] = None
+        state["depth"] = depth
+        state["item"] = item_col
+        return False
+    indented = LINE_INDENT.match(line_indent_text(body)) is not None and (item is not None or item_col is None or indent - item_col >= 4)
+    if LIST_CODE.match(text) or (indented and not continued) or (LINE_FENCE.match(body) and not (continued and indented)):
+        state["prose"] = None
+        return True
+    setext = state["prose"] is not None and EQ_UNDERLINE.match(text) is not None
+    state["prose"] = depth if not setext and ((continued and indented) or is_prose(text)) else None
+    return False
 
 
 def doc_findings(src):
@@ -176,32 +239,35 @@ def doc_findings(src):
     cfg_comma = False
     doc_paren = 0
     doc_value = False
+    doc_end = -2
+    doc_state = new_doc_state()
+    attr_doc = None
     while i < len(src):
         c = src[i]
         if src.startswith("//", i):
+            k = src.find("\n", i)
+            end = len(src) if k < 0 else k
             if LINE_DOC.match(src, i):
-                run, end = line_run(src, i)
-                hit = markdown_hit([body for _, body in run], LINE_INDENT)
-                if hit is not None:
-                    yield run[hit][0]
-            else:
-                k = src.find("\n", i)
-                end = len(src) if k < 0 else k
+                start = src.rfind("\n", 0, i) + 1
+                if start != doc_end + 1:
+                    doc_state = new_doc_state()
+                doc_end = end
+                if doc_line(src[i + 3 : end], doc_state):
+                    yield i
             i = end
         elif src.startswith("/*", i):
             end = block_end(src, i)
             if DOC_OPEN.match(src, i):
-                start = i + 3
-                lines = split_lines(src[start:end])
-                stripped = [doc_text_tabs(BLOCK_MARGIN.sub("", line, count=1)) for line in lines]
-                hit = markdown_hit(stripped, LINE_INDENT)
-                if hit is not None:
-                    yield start + sum(len(line) + 1 for line in lines[:hit])
+                state = new_doc_state()
+                if any(doc_line(doc_text_tabs(BLOCK_MARGIN.sub("", line, count=1)), state) for line in NEWLINE.split(src[i + 3 : end])):
+                    yield i
             i = end
         elif c == '"':
             end = skip_string(src, i)
-            if doc_value and value_has_fence(plain_value(src[i:end])):
-                yield i
+            if doc_value:
+                attr_doc = attr_doc or new_doc_state()
+                if value_has_fence(plain_value(src[i:end]), attr_doc):
+                    yield i
             i = end
         elif c == "'":
             j = skip_char(src, i)
@@ -236,6 +302,8 @@ def doc_findings(src):
                     cfg_comma = True
             i += 1
         elif m := IDENT.match(src, i):
+            if not attr_depth:
+                attr_doc = None
             word = m.group()
             j = i + len(word)
             if word in RAW_PREFIX and j < len(src) and src[j] in '#"':
@@ -243,8 +311,10 @@ def doc_findings(src):
                 if end is None:
                     i = j
                 else:
-                    if doc_value and value_has_fence(raw_value(src[i:end], len(word))):
-                        yield i
+                    if doc_value:
+                        attr_doc = attr_doc or new_doc_state()
+                        if value_has_fence(raw_value(src[i:end], len(word)), attr_doc):
+                            yield i
                     i = end
             elif word in BYTE_PREFIX and j < len(src) and src[j] == '"':
                 i = skip_string(src, j)
@@ -263,6 +333,8 @@ def doc_findings(src):
                         doc_paren = paren
                 i = j
         else:
+            if c in ";{}" and not attr_depth:
+                attr_doc = None
             i += 1
 
 
@@ -272,7 +344,7 @@ def rust_sources():
 
 def strip_shebang(src):
     src = src.removeprefix("\ufeff")
-    if src.startswith("#!") and not src.startswith("[", skip_trivia(src, 2)):
+    if src.startswith("#!") and attr_open(src, 0) is None:
         first, newline, rest = src.partition("\n")
         return newline + rest
     return src
