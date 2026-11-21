@@ -70,9 +70,8 @@ pub fn lock_root(root: &Path) -> Result<PathBuf, Error> {
 const DOWNLOAD_ATTEMPTS: u32 = 4;
 
 fn download(root: &Path, url: &str) -> Result<Vec<u8>, Error> {
-    let mut attempt = 1;
-    loop {
-        match program(
+    retry_download(thread::sleep, || {
+        program(
             root,
             "curl",
             &[
@@ -82,12 +81,22 @@ fn download(root: &Path, url: &str) -> Result<Vec<u8>, Error> {
                 OsStr::new("--location"),
                 OsStr::new(url),
             ],
-        ) {
-            Ok(bytes) => return Ok(bytes),
-            Err(error) if attempt == DOWNLOAD_ATTEMPTS => return Err(error),
+        )
+    })
+}
+
+pub fn retry_download<T>(
+    mut sleep: impl FnMut(Duration),
+    mut attempt: impl FnMut() -> Result<T, Error>,
+) -> Result<T, Error> {
+    let mut number = 1;
+    loop {
+        match attempt() {
+            Ok(value) => return Ok(value),
+            Err(error) if number == DOWNLOAD_ATTEMPTS => return Err(error),
             Err(_) => {
-                thread::sleep(Duration::from_secs(1 << (attempt - 1)));
-                attempt += 1;
+                sleep(Duration::from_secs(1 << (number - 1)));
+                number += 1;
             }
         }
     }
