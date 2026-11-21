@@ -9,6 +9,7 @@ use super::{audit, own_units, unit, workspace_below_the_root};
 mod aggregate;
 mod breadth;
 mod build_output;
+mod declared_budget;
 mod entries;
 mod limit_env;
 
