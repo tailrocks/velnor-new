@@ -33,7 +33,7 @@ a7e9a4897a81bb86338896573e43b79b4f05e34a489549f1687117dd456648ba  velnor-ci-aarc
 
 fn sums() -> String {
     ARCHIVE_SUMS.replace(
-        "4e9a485939165d82a9ebd49078778ca47137f344524ce8d87d03116760d5bb6d",
+        "f01395fa6269aaa252cd933664fa731cb85597773efeca7d18c4cfd67409b396",
         BINARY_SUMS_DIGEST,
     )
 }
@@ -171,7 +171,10 @@ fn a_release_from_the_binary_section_on_is_not_pinned_without_velnor_gen_digests
     let error = pin_lock(
         VERSION,
         COMMIT_FILE,
-        ARCHIVE_SUMS,
+        &ARCHIVE_SUMS.replace(
+            "f01395fa6269aaa252cd933664fa731cb85597773efeca7d18c4cfd67409b396",
+            "4e9a485939165d82a9ebd49078778ca47137f344524ce8d87d03116760d5bb6d",
+        ),
         Some(CI_ONLY_BINARY_SUMS),
     )
     .err()

@@ -6,6 +6,8 @@ use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::process::Command;
 
+use velnor_rust::pin_lock;
+
 use crate::io::unique_id;
 use crate::lock::{COMMIT_FILE, SUMS};
 use crate::release_symlink::Scratch;
@@ -51,6 +53,9 @@ fn a_release_metadata_download_that_fails_midway_is_retried_without_its_partial_
         .output()?;
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert_eq!(output.status.code(), Some(0), "{stderr}");
-    assert!(repo.join(".velnor/rust-ci.lock").is_file());
+    assert_eq!(
+        fs::read_to_string(repo.join(".velnor/rust-ci.lock"))?,
+        pin_lock("0.1.81", COMMIT_FILE, SUMS, None)?
+    );
     Ok(())
 }

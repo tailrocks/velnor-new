@@ -48,7 +48,7 @@ const CI_BINARIES: &[(&str, &str, &str)] = &[
 
 pub(crate) const ARCHIVE_SUMS: &str = "\
 0e5bd0f714140aa32270568a463b252853b828318ed29e3bad93a1bf18ce2fbd  COMMIT
-4e9a485939165d82a9ebd49078778ca47137f344524ce8d87d03116760d5bb6d  BINARY-SHA256SUMS
+f01395fa6269aaa252cd933664fa731cb85597773efeca7d18c4cfd67409b396  BINARY-SHA256SUMS
 b91a87ecac8eda2809f202b4566d886273d7b34d6ef29f726751fcbc8bb3d502  velnor-ci-x86_64-unknown-linux-musl.tar.gz
 5ff173c7729c981f5e85d9506d5e496729eefaeabf54ab475d814a4955de0830  velnor-ci-aarch64-unknown-linux-musl.tar.gz
 2e0aa3b9b6338d1149761739d87f67def027c35ab8c4b888198cc611141f0d0a  velnor-ci-aarch64-apple-darwin.tar.gz
@@ -60,6 +60,8 @@ d8a670bd3cbbcec7a282121cbd37d7d52e1ee17793c7c453d5d7ff345ca7318c  velnor-gen-aar
 pub(crate) const BINARY_SUMS: &str = "\
 9de941ee8e31748973283b2cd31a439119a9d22f60ec3e2884d855a8e2971c6f  velnor-ci-x86_64-unknown-linux-musl.tar.gz/velnor-ci
 6d887a0b48bba9c85da802b1943beb3ff38a2ffbc0effbdff615e5f53fe6a4a8  velnor-ci-aarch64-unknown-linux-musl.tar.gz/velnor-ci
+688de4ea38919690be48fd7a38c53a7e2d894bfdc952993d0b1a969ae6aaddae  velnor-gen-x86_64-unknown-linux-musl.tar.gz/velnor-gen
+a303768ccf354514ee312e52ffcc00074d21f27bffe72ec28c1903e4cc4251f9  velnor-gen-aarch64-unknown-linux-musl.tar.gz/velnor-gen
 a7e9a4897a81bb86338896573e43b79b4f05e34a489549f1687117dd456648ba  velnor-ci-aarch64-apple-darwin.tar.gz/velnor-ci
 ";
 
@@ -152,7 +154,7 @@ fn an_archive_release_is_not_pinned_without_a_verified_complete_binary_digest_fi
         ),
         (unlisted, Some(BINARY_SUMS)),
         (no_archive, Some(BINARY_SUMS)),
-        (swap("4e9a4859", "4e9a485A"), Some(BINARY_SUMS)),
+        (swap("f01395fa", "f01395fA"), Some(BINARY_SUMS)),
     ];
     for (sums, binary) in cases {
         let result = pin_lock("0.1.81", COMMIT_FILE, &sums, binary);
@@ -171,8 +173,8 @@ fn a_linux_only_archive_release_is_pinned() -> TestResult {
             .collect()
     };
     let sums = linux(ARCHIVE_SUMS).replace(
-        "4e9a485939165d82a9ebd49078778ca47137f344524ce8d87d03116760d5bb6d",
-        "501023317acc4d029a91ce011d5ac710e07432d040d17dfd0ce88d4c0a6b132a",
+        "f01395fa6269aaa252cd933664fa731cb85597773efeca7d18c4cfd67409b396",
+        "73c6c94e65b1ffdb28593f153f2971ac0408ebf58fc977aee3b95981377094eb",
     );
     let lock = pin_lock("0.1.79", COMMIT_FILE, &sums, Some(&linux(BINARY_SUMS)))?;
     assert!(
