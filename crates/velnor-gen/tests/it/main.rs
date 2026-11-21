@@ -171,6 +171,7 @@ mod needs_size_plan;
 mod nested_target_dir;
 mod nextest_profile;
 mod no_programs;
+mod no_test_only_flags;
 mod node_store_cache;
 mod patch;
 mod per_root_audit;
