@@ -4,7 +4,7 @@
 use crate::cache_credential_scrub::{sources_save_goes_on, sources_save_stops};
 
 const FAKE_BODY: &str = "a1B2c3D4e5F6g7H8i9J0k1L2m3N4o5P6q7R8";
-const HOOK: &str = ".cargo/git/db/shared-1/hooks/post-fetch";
+const FETCH_HEAD: &str = ".cargo/git/db/shared-1/FETCH_HEAD";
 const CONFIG: &str = ".cargo/git/db/shared-1/config";
 
 fn as_cases(owned: &[(String, String, String)]) -> Vec<(&str, &str, &str)> {
@@ -65,8 +65,8 @@ fn a_full_token_glued_to_other_characters_stops_the_sources_save() {
     let mut owned = Vec::new();
     for (label, form) in &forms {
         owned.push((
-            format!("hook-{label}"),
-            HOOK.to_string(),
+            format!("fetch-head-{label}"),
+            FETCH_HEAD.to_string(),
             format!("echo {form}\n"),
         ));
         owned.push((
@@ -83,12 +83,12 @@ fn a_token_prefix_without_a_token_shaped_body_is_saved() {
     sources_save_goes_on(&[
         (
             "prefix-in-prose",
-            HOOK,
+            FETCH_HEAD,
             "#!/bin/sh\n# a ghp_ token or a glpat- token is never written here\n",
         ),
         (
             "prefix-then-short-word",
-            HOOK,
+            FETCH_HEAD,
             "#!/bin/sh\n# see ghp_docs and github_pat_help for the glpat-guide\n",
         ),
         (

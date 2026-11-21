@@ -106,16 +106,6 @@ fn a_planted_token_in_a_git_file_the_scan_used_to_skip_stops_the_sources_save() 
             "# pack-refs with: peeled fully-peeled sorted\n0123456789abcdef0123456789abcdef01234567 refs/tags/ghs_0123456789abcdefghijklmnopqrstuvwxyzAB\n",
         ),
         (
-            "hook-token",
-            ".cargo/git/db/shared-1/hooks/post-fetch",
-            "#!/bin/sh\necho ghp_0123456789abcdefghijklmnopqrstuvwxyzAB\n",
-        ),
-        (
-            "hook-userinfo-url",
-            ".cargo/git/db/shared-1/hooks/post-fetch",
-            "#!/bin/sh\ngit push https://x-access-token:ghs_secret@github.com/acme/shared-lib\n",
-        ),
-        (
             "gitconfig-extraheader",
             ".cargo/git/db/shared-1/.gitconfig",
             "[http]\n\textraheader = AUTHORIZATION: basic eC1hY2Nlc3M6c2VjcmV0\n",
@@ -141,48 +131,6 @@ fn plain_git_files_the_scan_reads_are_saved() {
             ".cargo/git/db/shared-1/packed-refs",
             "# pack-refs with: peeled fully-peeled sorted\n0123456789abcdef0123456789abcdef01234567 refs/heads/main\n",
         ),
-        (
-            "plain-hook",
-            ".cargo/git/db/shared-1/hooks/post-fetch.sample",
-            "#!/bin/sh\necho done\n",
-        ),
-    ]);
-}
-
-const FSMONITOR_WATCHMAN_HEAD: &str = "#!/usr/bin/perl
-
-use strict;
-use warnings;
-use IPC::Open2;
-
-# An example hook script to integrate Watchman
-# (https://facebook.github.io/watchman/) with git to speed up detecting
-# new and modified files.
-#
-# The hook is passed a version (currently 2) and last update token
-# formatted as a string and outputs to stdout a new update token and
-# all files that have been modified since the update token. Paths must
-# be relative to the root of the working tree and separated by a single NUL.
-#
-# To enable this hook, rename this file to \"query-watchman\" and set
-# 'git config core.fsmonitor .git/hooks/query-watchman'
-#
-my ($version, $last_update_token) = @ARGV;
-";
-
-#[test]
-fn git_stock_hook_samples_with_a_parenthesised_url_are_saved() {
-    sources_save_goes_on(&[
-        (
-            "stock-fsmonitor-watchman-sample",
-            ".cargo/git/db/shared-1/hooks/fsmonitor-watchman.sample",
-            FSMONITOR_WATCHMAN_HEAD,
-        ),
-        (
-            "url-in-brackets-and-trailing-punctuation",
-            ".cargo/git/db/shared-1/hooks/post-fetch",
-            "# see [https://example.org/docs], <https://example.org/a>, https://example.org/b.\n",
-        ),
     ]);
 }
 
@@ -191,22 +139,22 @@ fn a_credential_url_embedded_in_a_word_stops_the_sources_save() {
     sources_save_stops(&[
         (
             "embedded-userinfo-url",
-            ".cargo/git/db/shared-1/hooks/post-fetch",
+            ".cargo/git/db/shared-1/FETCH_HEAD",
             "# (https://x-access-token:secret@github.com/acme/shared-lib)\n",
         ),
         (
             "embedded-query-token-url",
-            ".cargo/git/db/shared-1/hooks/post-fetch",
+            ".cargo/git/db/shared-1/FETCH_HEAD",
             "# (https://github.example/acme/shared?access_token=secret)\n",
         ),
         (
             "embedded-url-after-a-plain-one",
-            ".cargo/git/db/shared-1/hooks/post-fetch",
+            ".cargo/git/db/shared-1/FETCH_HEAD",
             "# (https://example.org/docs)(https://user@github.example/acme/shared-lib)\n",
         ),
         (
             "embedded-foreign-scheme-url",
-            ".cargo/git/db/shared-1/hooks/post-fetch",
+            ".cargo/git/db/shared-1/FETCH_HEAD",
             "# (ftp://user:secret@example.org/file)\n",
         ),
     ]);
@@ -231,8 +179,8 @@ fn a_token_in_a_config_comment_or_header_or_a_gitlab_token_stops_the_sources_sav
             "[remote \"ghp_0123456789abcdefghijklmnopqrstuvwxyzAB\"]\n\turl = https://github.com/acme/shared-lib\n",
         ),
         (
-            "gitlab-token-in-hook",
-            ".cargo/git/db/shared-1/hooks/post-fetch",
+            "gitlab-token-in-fetch-head",
+            ".cargo/git/db/shared-1/FETCH_HEAD",
             "#!/bin/sh\necho glpat-abcdefghijklmnopqrst\n",
         ),
     ]);

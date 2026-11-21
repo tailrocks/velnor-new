@@ -7,10 +7,10 @@ use std::path::{Path, PathBuf};
 use crate::escape::inert;
 
 const SAVED_ROOT: &str = ".cargo";
-const SAVED: &[(&str, Zone)] = &[
-    ("registry/index", Zone::Crate),
-    ("registry/cache", Zone::Crate),
-    ("git/db", Zone::Databases),
+const SAVED: &[(&str, bool)] = &[
+    ("registry/index", false),
+    ("registry/cache", false),
+    ("git/db", true),
 ];
 const GIT_DIRECTORY: &str = ".git";
 const CREDENTIAL_FILES: &[&str] = &[
@@ -26,69 +26,43 @@ const GIT_TEXT: &[&str] = &["fetch_head", "packed-refs"];
 const HOOKS: &str = "hooks";
 const LOGS: &str = "logs";
 const REFS: &str = "refs";
-const HEADS: &str = "heads";
-const TAGS: &str = "tags";
-const REMOTES: &str = "remotes";
-const WORKTREES: &str = "worktrees";
-const MODULES: &str = "modules";
-const GIT_DIRECTORY_MARKERS: &[&str] = &["head", "config"];
+const HEAD: &str = "head";
+const CONFIG: &str = "config";
+const OBJECTS: &str = "objects";
 const MAX_CONFIG_BYTES: u64 = 1 << 20;
 const MAX_DEPTH: usize = 12;
 const MAX_ENTRIES: usize = 2_000_000;
 
 #[derive(Clone, Copy, PartialEq)]
-enum Zone {
-    Crate,
-    Databases,
+enum Context {
+    Outside,
     Repository,
-    Modules,
+    Database,
     Refs,
-    Worktrees,
-    Plain,
-    Hooks,
     Logs,
-    Namespace,
 }
 
-impl Zone {
-    fn entering(self, directory: &Path, parent_is_git_directory: bool) -> Self {
-        let name = directory.file_name();
-        let is = |wanted: &str| name.is_some_and(|name| name.eq_ignore_ascii_case(wanted));
-        match self {
-            Self::Crate if is(GIT_DIRECTORY) => Self::Repository,
-            Self::Databases | Self::Worktrees => Self::Repository,
-            Self::Repository => Self::entering_repository(is),
-            Self::Modules if parent_is_git_directory && is(HOOKS) => Self::Hooks,
-            Self::Modules if parent_is_git_directory && is(LOGS) => Self::Logs,
-            Self::Modules if parent_is_git_directory && is(REFS) => Self::Refs,
-            Self::Refs if is(HEADS) || is(TAGS) || is(REMOTES) => Self::Namespace,
-            Self::Refs if is_git_directory(directory) => Self::Modules,
-            other => other,
-        }
-    }
-
-    fn entering_repository(is: impl Fn(&str) -> bool) -> Self {
-        if is(HOOKS) {
-            Self::Hooks
-        } else if is(LOGS) {
-            Self::Logs
-        } else if is(MODULES) {
-            Self::Modules
-        } else if is(GIT_DIRECTORY) {
+impl Context {
+    fn entering(self, name: &str, parent_is_git_directory: bool, databases: bool) -> Self {
+        if databases {
+            Self::Database
+        } else if name == GIT_DIRECTORY {
             Self::Repository
-        } else if is(WORKTREES) {
-            Self::Worktrees
+        } else if parent_is_git_directory && name == REFS {
+            Self::Refs
+        } else if parent_is_git_directory && name == LOGS {
+            Self::Logs
         } else {
-            Self::Plain
+            self
         }
     }
 
     fn git(self) -> bool {
-        self != Self::Crate
+        self != Self::Outside
     }
 
-    fn scans_every_file(self) -> bool {
-        matches!(self, Self::Hooks | Self::Logs)
+    fn keeps_hooks(self) -> bool {
+        matches!(self, Self::Refs | Self::Logs)
     }
 }
 
@@ -100,13 +74,18 @@ pub(super) fn saved_root() -> Option<PathBuf> {
 
 pub(super) fn find(root: &Path) -> Option<String> {
     let mut budget = MAX_ENTRIES;
-    for (saved, zone) in SAVED {
+    for (saved, git) in SAVED {
         let directory = match plain_path(root, saved) {
             Ok(Some(directory)) => directory,
             Ok(None) => continue,
             Err(reason) => return Some(reason),
         };
-        if let Some(found) = walk(&directory, 0, &mut budget, *zone) {
+        let context = if *git {
+            Context::Repository
+        } else {
+            Context::Outside
+        };
+        if let Some(found) = walk(&directory, 0, &mut budget, context) {
             return Some(found);
         }
     }
@@ -139,7 +118,7 @@ fn shown(path: &Path) -> String {
     inert(&path.display().to_string())
 }
 
-fn walk(directory: &Path, depth: usize, budget: &mut usize, zone: Zone) -> Option<String> {
+fn walk(directory: &Path, depth: usize, budget: &mut usize, context: Context) -> Option<String> {
     if depth > MAX_DEPTH {
         return Some(format!("{} is nested too deeply to scan", shown(directory)));
     }
@@ -168,11 +147,14 @@ fn walk(directory: &Path, depth: usize, budget: &mut usize, zone: Zone) -> Optio
         listed.push(entry);
     }
     listed.sort_by_key(fs::DirEntry::file_name);
-    let is_git_directory = listed.iter().any(|entry| {
-        let name = entry.file_name().to_string_lossy().to_ascii_lowercase();
-        GIT_DIRECTORY_MARKERS.contains(&name.as_str())
-    });
-    let mut subdirectories: Vec<PathBuf> = Vec::new();
+    let databases = depth == 0 && context.git();
+    let is_git_directory = context == Context::Database || is_git_directory(&listed);
+    let context = if is_git_directory {
+        Context::Repository
+    } else {
+        context
+    };
+    let mut subdirectories: Vec<(PathBuf, Context)> = Vec::new();
     for entry in listed {
         let path = entry.path();
         let name = entry.file_name().to_string_lossy().to_ascii_lowercase();
@@ -185,14 +167,24 @@ fn walk(directory: &Path, depth: usize, budget: &mut usize, zone: Zone) -> Optio
                 shown(&path)
             ));
         }
-        let git = zone.git();
+        let git = context.git();
         if CREDENTIAL_FILES.contains(&name.as_str())
             || (git && GIT_CREDENTIAL_FILES.contains(&name.as_str()))
         {
             return Some(format!("{} is a credential file", shown(&path)));
         }
         if kind.is_dir() {
-            subdirectories.push(path);
+            if git && name == HOOKS && !context.keeps_hooks() {
+                if let Err(error) = fs::remove_dir_all(&path) {
+                    return Some(format!(
+                        "cannot leave out {}: {}",
+                        shown(&path),
+                        inert(&error.to_string())
+                    ));
+                }
+                continue;
+            }
+            subdirectories.push((path, context.entering(&name, is_git_directory, databases)));
         } else if !kind.is_file() {
             return Some(format!(
                 "{} is not a regular file that can be checked for a credential",
@@ -204,8 +196,8 @@ fn walk(directory: &Path, depth: usize, budget: &mut usize, zone: Zone) -> Optio
                 shown(&path)
             ));
         } else if git
-            && (GIT_TEXT.contains(&name.as_str()) || zone.scans_every_file())
-            && names_credential_file(&path, zone)
+            && (GIT_TEXT.contains(&name.as_str()) || context == Context::Logs)
+            && names_credential_file(&path)
         {
             return Some(format!(
                 "{} names a credential or a transport setting",
@@ -213,23 +205,21 @@ fn walk(directory: &Path, depth: usize, budget: &mut usize, zone: Zone) -> Optio
             ));
         }
     }
-    subdirectories.iter().find_map(|path| {
-        walk(
-            path,
-            depth + 1,
-            budget,
-            zone.entering(path, is_git_directory),
-        )
-    })
+    subdirectories
+        .iter()
+        .find_map(|(path, context)| walk(path, depth + 1, budget, *context))
 }
 
-fn is_git_directory(directory: &Path) -> bool {
-    fs::read_dir(directory).is_ok_and(|entries| {
-        entries.flatten().any(|entry| {
-            let name = entry.file_name().to_string_lossy().to_ascii_lowercase();
-            GIT_DIRECTORY_MARKERS.contains(&name.as_str())
+fn is_git_directory(listed: &[fs::DirEntry]) -> bool {
+    let has = |wanted: &str, directory: bool| {
+        listed.iter().any(|entry| {
+            entry.file_name().eq_ignore_ascii_case(wanted)
+                && entry
+                    .file_type()
+                    .is_ok_and(|kind| kind.is_dir() == directory && (directory || kind.is_file()))
         })
-    })
+    };
+    has(HEAD, false) && (has(CONFIG, false) || has(OBJECTS, true))
 }
 
 fn holds_credential(path: &Path) -> bool {
@@ -239,14 +229,8 @@ fn holds_credential(path: &Path) -> bool {
     })
 }
 
-fn names_credential_file(path: &Path, zone: Zone) -> bool {
-    read_small(path).is_none_or(|text| {
-        if zone == Zone::Hooks {
-            crate::io::saved_git_config::names_hook_credential(&text)
-        } else {
-            crate::io::saved_git_config::names_credential(&text)
-        }
-    })
+fn names_credential_file(path: &Path) -> bool {
+    read_small(path).is_none_or(|text| crate::io::saved_git_config::names_credential(&text))
 }
 
 fn read_small(path: &Path) -> Option<String> {
