@@ -298,7 +298,7 @@ fn a_manifest_path_after_a_rs_script_belongs_to_the_script() -> TestResult {
 }
 
 #[test]
-fn a_multi_component_target_is_scoped_by_its_path_without_zscript() -> TestResult {
+fn a_multi_component_script_path_without_zscript_is_scoped_by_its_path() -> TestResult {
     let repo = declared_job()?;
     let launch = repo.root().join("launch");
     fs::create_dir_all(repo.root().join("scratch-project"))?;
