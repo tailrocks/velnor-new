@@ -39,11 +39,25 @@ fn planned_packages(changed: &str) -> Vec<String> {
 }
 
 #[test]
-fn a_change_to_mise_version_runs_the_velnor_gen_tests_that_read_it() {
+fn a_change_to_mise_version_selects_velnor_gen_and_no_unrelated_package() {
     let packages = planned_packages(".mise-version");
     assert!(
         packages.iter().any(|package| package == "velnor-gen"),
         "a change to .mise-version selects {packages:?}, not velnor-gen, so \
          crates/velnor-gen/tests/it/mise_version_pin.rs would not run"
     );
+    for unrelated in [
+        "velnor-local",
+        "velnor-cache-rules",
+        "velnor-runner-attestation",
+        "velnor-render",
+        "velnor-model",
+        "velnor-release",
+        "velnor-rust",
+    ] {
+        assert!(
+            !packages.iter().any(|package| package == unrelated),
+            "a change to .mise-version selects {unrelated}: {packages:?}"
+        );
+    }
 }
