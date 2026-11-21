@@ -548,7 +548,7 @@ Memory (MiB used; percent of node): sample 1: 105=35,939 (27%), 190=39,298 (30%)
 - Runner groups: tailrocks velnor-ci id 4 (velnor-new, velnor-lab, ruxel, tuiscotti, termpane), example-org velnor-ci id 5 (15 private repos), jackin-project group id 4 (4 repos) (RESULT multi-org table).
 - Control/release/seal jobs stay on GitHub-hosted runners by design (RESULT "Stays on hosted runners").
 
-#### 3.3 Runner pod spec (same in all three scale sets except as noted) [K ars.json, example-org/example-repo-13 spec]
+#### 3.3 Runner pod spec (same in all three scale sets except as noted) [K ars.json, example-org/jackin-project spec]
 - Runner container image `ghcr.io/tailrocks/velnor-ci-runner:2026-11-16.2`, imagePullPolicy IfNotPresent, command `/usr/local/bin/velnor-runner-start`.
 - Env: `ImageOS=velnor-arc-ubuntu24`, `DOCKER_HOST=unix:///var/run/docker.sock`, `RUNNER_WAIT_FOR_DOCKER_IN_SECONDS=120`.
 - Resources: requests cpu 2, memory 4Gi; limits memory 32Gi; no cpu limit; no ephemeral-storage request/limit.
