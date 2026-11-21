@@ -34,7 +34,7 @@ for f in "${fixtures[@]}"; do
   printf 'const TOKEN: &str = "%s";\n' "$token" >"$tmp/tree/$f"
 done
 mkdir "$tmp/tree/src"
-printf 'let password = "secret";\n' >"$tmp/tree/src/unrelated.rs"
+printf 'let password = "%s";\n' secret >"$tmp/tree/src/unrelated.rs"
 
 cd "$tmp"
 

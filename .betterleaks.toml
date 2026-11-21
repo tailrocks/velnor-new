@@ -100,3 +100,15 @@ regexTarget = "secret"
 regexes = [
   '''^velnor$''',
 ]
+
+[[allowlists]]
+description = "test fixture: fake password in the secret scan config test"
+targetRules = ["generic-password"]
+condition = "AND"
+regexTarget = "secret"
+paths = [
+  '''^scripts/test-secret-scan-config\.sh$''',
+]
+regexes = [
+  '''^secret$''',
+]
