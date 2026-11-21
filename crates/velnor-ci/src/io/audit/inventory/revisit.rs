@@ -29,6 +29,7 @@ fn looped_root(label: &str) -> PathBuf {
     root
 }
 
+#[derive(Clone, Copy)]
 enum Swap {
     None,
     Directory,
