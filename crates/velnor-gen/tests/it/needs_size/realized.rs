@@ -76,7 +76,7 @@ fn realized_output(
     }
     if name == "tools_anchor_key" {
         assert_eq!(expression, "steps.toolsanchor.outputs.cache-matched-key");
-        return Ok("k".repeat(512));
+        return Ok("\u{1}".repeat(512));
     }
     if name == "skip_push" {
         assert_eq!(expression, "steps.merge_group.outputs.skip");
