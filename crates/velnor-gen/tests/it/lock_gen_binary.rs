@@ -3,10 +3,13 @@
 
 use std::error::Error;
 
+use velnor_gen::{GenerateError, expected_with_notes};
 use velnor_model::Platform;
-use velnor_rust::{RunningGenerator, check_generator_entry, pin_lock, verify_release};
+use velnor_rust::{
+    DetectError, Reason, RunningGenerator, check_generator_entry, pin_lock, verify_release,
+};
 
-use crate::lock::COMMIT_FILE;
+use crate::lock::{COMMIT_FILE, with_lock};
 use crate::lock_archive::ARCHIVE_SUMS;
 
 type TestResult = Result<(), Box<dyn Error>>;
@@ -121,5 +124,57 @@ fn a_release_older_than_the_binary_section_is_pinned_without_it() -> TestResult 
     };
     let error = check(&injected, older).err().ok_or("accepted")?;
     assert!(error.contains("[velnor-gen-binary]"), "{error}");
+    Ok(())
+}
+
+fn with_binary_table(table: &str) -> Result<String, Box<dyn Error>> {
+    let pinned = lock()?;
+    let head = pinned
+        .split("[velnor-gen-binary]")
+        .next()
+        .ok_or("the lock has no binary table")?;
+    Ok(format!("{head}[velnor-gen-binary]\n{table}\n"))
+}
+
+fn generation_refuses_the_lock(lock: &str) -> Result<bool, Box<dyn Error>> {
+    Ok(matches!(
+        expected_with_notes(&with_lock(lock)?).map(|(files, _)| files),
+        Err(GenerateError::Detect(DetectError::Invalid {
+            reason: Reason::HelperLock(_),
+            ..
+        }))
+    ))
+}
+
+#[test]
+fn generation_accepts_a_well_formed_generator_binary_table() -> TestResult {
+    let sum = "b".repeat(64);
+    let lock = with_binary_table(&format!("linux-x64 = \"{sum}\"\nlinux-arm64 = \"{sum}\""))?;
+    assert!(!generation_refuses_the_lock(&lock)?, "{lock}");
+    Ok(())
+}
+
+#[test]
+fn generation_refuses_a_truncated_generator_binary_digest() -> TestResult {
+    let lock = with_binary_table("linux-x64 = \"abc\"\nlinux-arm64 = \"abc\"")?;
+    assert!(generation_refuses_the_lock(&lock)?, "{lock}");
+    Ok(())
+}
+
+#[test]
+fn generation_refuses_a_generator_binary_table_missing_a_required_platform() -> TestResult {
+    let sum = "b".repeat(64);
+    let lock = with_binary_table(&format!("linux-x64 = \"{sum}\""))?;
+    assert!(generation_refuses_the_lock(&lock)?, "{lock}");
+    Ok(())
+}
+
+#[test]
+fn generation_refuses_a_generator_binary_table_with_an_unknown_platform() -> TestResult {
+    let sum = "b".repeat(64);
+    let lock = with_binary_table(&format!(
+        "linux-x64 = \"{sum}\"\nlinux-arm64 = \"{sum}\"\nlinux-riscv64 = \"{sum}\""
+    ))?;
+    assert!(generation_refuses_the_lock(&lock)?, "{lock}");
     Ok(())
 }

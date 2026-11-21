@@ -338,7 +338,3 @@ fn digest(found: &BTreeMap<String, String>, platform: Platform) -> Result<Sha256
         ))
     })
 }
-
-#[cfg(test)]
-#[path = "lock_tests.rs"]
-mod tests;
