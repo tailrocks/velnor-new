@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::mbx_report::{DIRECTORY, SWITCH, VARIABLE, parse, reports_session};
+use crate::mbx_report::{DIRECTORY, SWITCH, VARIABLE, is_socket, parse, reports_session};
 use crate::waste_evidence::MbxSession;
 use nix::errno::Errno;
 use nix::sys::socket::{AddressFamily, SockFlag, SockType, UnixAddr, connect, socket};
@@ -10,7 +10,7 @@ use std::ffi::OsStr;
 use std::fs::{self, OpenOptions};
 use std::io::{self, Read, Write};
 use std::os::fd::AsRawFd;
-use std::os::unix::fs::{FileTypeExt, OpenOptionsExt};
+use std::os::unix::fs::OpenOptionsExt;
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -37,8 +37,7 @@ fn inside_session(socket: Option<&OsStr>) -> bool {
 }
 
 fn is_live_socket(path: &Path) -> bool {
-    fs::symlink_metadata(path).is_ok_and(|metadata| metadata.file_type().is_socket())
-        && accepts_without_blocking(path)
+    is_socket(path) && accepts_without_blocking(path)
 }
 
 fn accepts_without_blocking(path: &Path) -> bool {

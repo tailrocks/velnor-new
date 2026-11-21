@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::mbx_reports::{SWITCH, cargo, cargo_with, report, report_json, session};
-use super::mbx_socket::{Socket, run_bounded};
+use super::mbx_reports::{SWITCH, cargo, cargo_command, cargo_with, report, report_json, session};
+use super::mbx_socket::{fill_backlog, run_bounded};
 use super::{Repo, ResultTest, fixture};
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
@@ -22,7 +22,9 @@ fn a_planted_symlink_or_oversized_report_is_unreadable_evidence_not_read() -> Re
     cargo(&repo, "build", &report_json(5, 1, 0, 0), "compiled")?;
     let real = repo.root().join("real.json");
     fs::write(&real, report_json(5, 7, 0, 0))?;
+    plant_session(&repo, "1-linked", None)?;
     std::os::unix::fs::symlink(&real, plant(&repo, "1-linked.json")?)?;
+    plant_session(&repo, "2-huge", None)?;
     fs::write(plant(&repo, "2-huge.json")?, vec![b' '; 2 << 20])?;
     let metrics = report(&repo)?;
     assert_eq!(metrics.mbx.sessions, [session(1, 0, 0)], "{metrics:?}");
@@ -133,6 +135,8 @@ fn a_dangling_json_symlink_is_one_unreadable_report_not_also_missing() -> Result
 #[test]
 fn a_session_inside_an_enclosing_mbx_session_gets_no_report_path() -> ResultTest {
     let repo = fixture("mbx-reports-nested")?;
+    let socket = repo.root().join("cache-agent.sock");
+    let _daemon = std::os::unix::net::UnixListener::bind(&socket)?;
     cargo_with(
         &repo,
         "build",
@@ -140,7 +144,7 @@ fn a_session_inside_an_enclosing_mbx_session_gets_no_report_path() -> ResultTest
         "compiled",
         None,
         true,
-        Socket::Live,
+        Some(&socket),
     )?;
     assert!(!repo.root().join("velnor-mbx-reports").exists());
     let metrics = report(&repo)?;
@@ -153,6 +157,8 @@ fn a_session_inside_an_enclosing_mbx_session_gets_no_report_path() -> ResultTest
 #[test]
 fn a_stale_socket_left_by_a_dead_listener_does_not_hide_the_session() -> ResultTest {
     let repo = fixture("mbx-reports-stale-socket")?;
+    let socket = repo.root().join("cache-agent.sock");
+    drop(UnixListener::bind(&socket)?);
     cargo_with(
         &repo,
         "build",
@@ -160,7 +166,7 @@ fn a_stale_socket_left_by_a_dead_listener_does_not_hide_the_session() -> ResultT
         "compiled",
         None,
         true,
-        Socket::Stale,
+        Some(&socket),
     )?;
     let metrics = report(&repo)?;
     assert_eq!(metrics.mbx.sessions, [session(2, 0, 0)], "{metrics:?}");
@@ -206,15 +212,20 @@ fn a_stale_socket_is_not_inherited_by_a_command_that_reports_nothing() -> Result
 #[test]
 fn a_listener_with_a_full_queue_does_not_stall_the_session() -> ResultTest {
     let repo = fixture("mbx-reports-busy-socket")?;
-    cargo_with(
+    let socket = repo.root().join("cache-agent.sock");
+    let _listener = UnixListener::bind(&socket)?;
+    let _clients = fill_backlog(&socket)?;
+    let mut command = cargo_command(
         &repo,
         "build",
         &report_json(5, 1, 0, 0),
         "compiled",
         None,
         true,
-        Socket::Busy,
+        Some(&socket),
     )?;
+    let output = run_bounded(&mut command)?;
+    assert!(output.status.success(), "{output:?}");
     Ok(())
 }
 

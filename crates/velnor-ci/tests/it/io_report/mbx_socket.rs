@@ -12,14 +12,6 @@ use std::time::{Duration, Instant};
 const COMMAND_LIMIT: Duration = Duration::from_secs(60);
 const BACKLOG_LIMIT: usize = 1 << 12;
 
-#[derive(Clone, Copy)]
-pub(super) enum Socket {
-    Absent,
-    Live,
-    Stale,
-    Busy,
-}
-
 pub(super) fn fill_backlog(path: &Path) -> Result<Vec<UnixStream>, Box<dyn std::error::Error>> {
     let address = UnixAddr::new(path)?;
     let mut clients = Vec::new();

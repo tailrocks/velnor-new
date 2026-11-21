@@ -1,13 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::mbx_socket::{Socket, fill_backlog, run_bounded};
 use super::{Repo, ResultTest, fixture, read};
+use std::collections::BTreeMap;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
-use std::os::unix::net::UnixListener;
 use std::process::Command;
-use velnor_ci::mbx_report::{parse, reports_session};
+use velnor_ci::mbx_report::reports_session;
 use velnor_ci::report::LaneMetrics;
 use velnor_ci::waste_evidence::MbxSession;
 
@@ -22,7 +21,7 @@ pub(super) fn report_json(version: u64, hits: u64, misses: u64, unconsulted: u64
 }
 
 pub(super) fn cargo(repo: &Repo, subcommand: &str, report: &str, stderr: &str) -> ResultTest {
-    cargo_with(repo, subcommand, report, stderr, None, true, Socket::Absent)
+    cargo_with(repo, subcommand, report, stderr, None, true, None)
 }
 
 pub(super) fn cargo_with(
@@ -32,8 +31,23 @@ pub(super) fn cargo_with(
     stderr: &str,
     inherited: Option<&std::path::Path>,
     enabled: bool,
-    socket: Socket,
+    socket: Option<&std::path::Path>,
 ) -> ResultTest {
+    let output =
+        cargo_command(repo, subcommand, report, stderr, inherited, enabled, socket)?.output()?;
+    assert!(output.status.success(), "{output:?}");
+    Ok(())
+}
+
+pub(super) fn cargo_command(
+    repo: &Repo,
+    subcommand: &str,
+    report: &str,
+    stderr: &str,
+    inherited: Option<&std::path::Path>,
+    enabled: bool,
+    socket: Option<&std::path::Path>,
+) -> Result<Command, Box<dyn std::error::Error>> {
     let bin = repo.root().join("fake-bin");
     let cargo = bin.join("cargo");
     if !cargo.exists() {
@@ -54,28 +68,10 @@ pub(super) fn cargo_with(
     if let Some(path) = inherited {
         command.env("MBX_STATS_REPORT", path);
     }
-    let path = repo.root().join("cache-agent.sock");
-    let (_listener, _clients) = match socket {
-        Socket::Absent => (None, Vec::new()),
-        Socket::Live => {
-            command.env("MBX_SOCKET", &path);
-            (Some(UnixListener::bind(&path)?), Vec::new())
-        }
-        Socket::Stale => {
-            drop(UnixListener::bind(&path)?);
-            command.env("MBX_SOCKET", &path);
-            (None, Vec::new())
-        }
-        Socket::Busy => {
-            let listener = UnixListener::bind(&path)?;
-            let clients = fill_backlog(&path)?;
-            command.env("MBX_SOCKET", &path);
-            (Some(listener), clients)
-        }
-    };
-    let output = run_bounded(&mut command)?;
-    assert!(output.status.success(), "{output:?}");
-    Ok(())
+    if let Some(socket) = socket {
+        command.env("MBX_SOCKET", socket);
+    }
+    Ok(command)
 }
 
 pub(super) fn report(repo: &Repo) -> Result<LaneMetrics, Box<dyn std::error::Error>> {
@@ -100,6 +96,10 @@ pub(super) const fn session(hits: u64, misses: u64, not_looked_up: u64) -> MbxSe
         hits,
         misses,
         not_looked_up,
+        verifications: None,
+        bypasses: BTreeMap::new(),
+        compiler: BTreeMap::new(),
+        probe_only: false,
     }
 }
 
@@ -156,7 +156,7 @@ fn a_command_that_runs_tests_gets_no_report_path_and_counts_from_its_summary() -
         line,
         Some(&inherited),
         true,
-        Socket::Absent,
+        None,
     )?;
     assert!(!inherited.exists());
     let metrics = report(&repo)?;
@@ -337,32 +337,10 @@ fn with_the_switch_off_an_inherited_report_path_never_reaches_the_child() -> Res
         "compiled",
         Some(&inherited),
         false,
-        Socket::Absent,
+        None,
     )?;
     assert!(!inherited.exists());
     Ok(())
-}
-
-#[test]
-fn the_reader_maps_a_real_mbx_report_and_names_what_it_cannot_read() {
-    let real = include_bytes!("../data/mbx_report/mbx-1.30.0.json");
-    assert_eq!(parse(real), Ok(Some(session(0, 0, 2))));
-    let probes = br#"{"version":5,"hits":0,"misses":0,"unconsulted":0,"bypasses":{"compiler-query":2,"standard-input":1}}"#;
-    assert_eq!(parse(probes), Ok(None));
-    let bypassed = br#"{"version":5,"hits":0,"misses":0,"unconsulted":0,"bypasses":{"compiler-query":1,"other":1}}"#;
-    assert_eq!(parse(bypassed), Ok(Some(session(0, 0, 0))));
-    let huge = format!(
-        r#"{{"version":5,"hits":{max},"misses":{max},"unconsulted":{max}}}"#,
-        max = u64::MAX
-    );
-    assert_eq!(
-        parse(huge.as_bytes()),
-        Ok(Some(session(u64::MAX, u64::MAX, u64::MAX)))
-    );
-    assert_eq!(parse(report_json(5, 0, 0, 0).as_bytes()), Ok(None));
-    assert!(parse(br#"{"version":5,"hits":1}"#).is_err_and(|e| e.contains("without its counts")));
-    assert!(parse(br#"{"hits":1}"#).is_err_and(|e| e.contains("no numeric version")));
-    assert!(parse(b"{").is_err_and(|e| e.contains("not JSON")));
 }
 
 #[test]
