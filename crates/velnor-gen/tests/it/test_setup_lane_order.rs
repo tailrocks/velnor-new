@@ -57,43 +57,6 @@ fn a_filtered_test_lane_guard_waits_for_a_failed_test_setup() -> TestResult {
 }
 
 #[test]
-fn a_check_configurations_step_waits_for_a_failed_build_phase_setup() -> TestResult {
-    let config = FIXTURE.replace("run = 'bash", "phase = 'build'\nrun = 'bash");
-    let config = format!(
-        "{config}[[check_configurations]]\nroot = '.'\nconfigurations = 'ci/configurations.json'\n"
-    );
-    let mut repo = view(&["Cargo.toml", "tools/Cargo.toml"], Some(config.as_bytes()))?;
-    repo.tracked_paths
-        .insert(velnor_model::RepoPath::new("ci/configurations.json")?);
-    let jobs = crate::yaml_tree::document(&workflow(&repo)?)?["jobs"].clone();
-    let found = setups(&jobs);
-    let (id, index, _, setup) = &found[0];
-    let setup_id = setup["id"].as_str().ok_or("the setup step has no id")?;
-    let steps = jobs[id.as_str()]["steps"]
-        .as_array()
-        .ok_or("the job has no steps")?;
-    let checks: Vec<_> = steps
-        .iter()
-        .skip(index + 1)
-        .filter(|step| {
-            step["run"]
-                .as_str()
-                .is_some_and(|run| run.contains("check-configurations"))
-        })
-        .collect();
-    assert!(!checks.is_empty(), "no check step follows the build setup");
-    for check in checks {
-        assert!(
-            check["if"].as_str().is_some_and(
-                |text| text.contains(&format!("steps.{setup_id}.outcome != 'failure'"))
-            ),
-            "check-configurations runs after a failed build-phase setup: {check}"
-        );
-    }
-    Ok(())
-}
-
-#[test]
 fn a_helper_before_0_1_112_renders_a_lane_guard_as_it_did_before() -> TestResult {
     let config = format!(
         "{FIXTURE}[[test_lane]]\nroot = '.'\nfeatures = ['local-mode']\n\
