@@ -14,7 +14,7 @@ use std::process::{Command, ExitStatus};
 use std::time::SystemTime;
 
 use velnor_gen::io::read_checkout;
-use velnor_model::RepoFacts;
+use velnor_model::{RepoFacts, RustRoot};
 use velnor_rust::{detect, sha256_hex};
 
 use super::super::units::{UnitFile, Workspace, apart, unchecked_unit_files};
@@ -24,7 +24,7 @@ use super::options::max_entries_from_env;
 use super::timing;
 use crate::cli::InputsBuildArgs;
 use crate::error::CiError;
-use invocation::{Invocation, invoked_members};
+use invocation::{Invocation, invoked_root, root_directory};
 
 const TARGET_VARIABLE: &str = "CARGO_TARGET_DIR";
 
@@ -86,8 +86,7 @@ pub(crate) fn build(directory: &Path, args: &InputsBuildArgs) -> Result<String, 
         }
         Err(Stop::Refused(error)) => Err(error),
         Err(Stop::Failed(error)) => {
-            let failed =
-                failure::Failure::new(invocation.label(), invocation.selection(&builder.members()));
+            let failed = failure::Failure::new(invocation.label(), builder.selection(&invocation));
             match failure::record_failure(&marker, &failed) {
                 Ok(()) => Err(error),
                 Err(record) => Err(CiError::new(format!("{error}; {record}"))),
@@ -119,10 +118,21 @@ impl Builder<'_> {
         )
     }
 
-    fn members(&self) -> BTreeSet<&str> {
+    fn invoked(&self) -> Option<&RustRoot> {
         let repository =
             fs::canonicalize(&self.repository).unwrap_or_else(|_| self.repository.clone());
-        invoked_members(&self.facts.rust_roots, &repository, &self.location)
+        invoked_root(&self.facts.rust_roots, &repository, &self.location)
+    }
+
+    fn selection(&self, invocation: &Invocation) -> Option<invocation::Selection> {
+        let root = self.invoked();
+        let members = root.map_or_else(BTreeSet::new, |root| {
+            root.members
+                .iter()
+                .map(|member| member.name.as_str())
+                .collect()
+        });
+        invocation.selection(root.map_or("", |root| root.manifest.as_str()), &members)
     }
 
     fn marker_directories(&self) -> Vec<PathBuf> {
@@ -138,6 +148,9 @@ impl Builder<'_> {
             &self.facts,
             &self.workspaces,
             &self.location,
+            self.invoked()
+                .map(|root| root_directory(root, &self.repository))
+                .as_deref(),
             self.max_entries,
         )
     }
@@ -167,8 +180,8 @@ impl Builder<'_> {
             self.declared
                 .extend(declared.iter().flat_map(|unit| unit.paths.iter().cloned()));
             if invalidate {
-                let selection = Invocation::new(command)
-                    .selection(&self.members())
+                let selection = self
+                    .selection(&Invocation::new(command))
                     .unwrap_or_default();
                 let outside: BTreeSet<&str> = declared
                     .iter()
@@ -176,9 +189,13 @@ impl Builder<'_> {
                     .map(|unit| unit.package.as_str())
                     .collect();
                 if !outside.is_empty() {
-                    return Err(Stop::Refused(outside_selection(
+                    return Err(Stop::Refused(failure::outside_selection(
                         &outside,
-                        failure::earlier_failure(&self.marker_directories(), &outside),
+                        failure::earlier_failure(
+                            &self.marker_directories(),
+                            self.invoked().map_or("", |root| root.manifest.as_str()),
+                            &outside,
+                        ),
                     )));
                 }
                 declarations::invalidate(&declared)?;
@@ -353,30 +370,6 @@ impl Builder<'_> {
         }
         Ok(())
     }
-}
-
-const LISTED_PACKAGES: usize = 20;
-
-fn outside_selection(packages: &BTreeSet<&str>, earlier: Option<String>) -> CiError {
-    let mut names: Vec<String> = packages
-        .iter()
-        .take(LISTED_PACKAGES)
-        .map(|package| format!("{package} (build-script output)"))
-        .collect();
-    let more = packages.len().saturating_sub(LISTED_PACKAGES);
-    if more > 0 {
-        names.push(format!("and {more} more"));
-    }
-    let cause = match earlier {
-        Some(command) => format!(
-            "An earlier inputs build failed: `{command}` (failed commands record no receipts); fix that step first"
-        ),
-        None => "This usually means an earlier `velnor-ci inputs build` step in this job failed (failed commands record no receipts); fix that step first. Otherwise prepare inventory first with velnor-ci inputs build -- cargo build --workspace --all-targets, preserving this build's feature, target and profile options".to_owned(),
-    };
-    CiError::new(format!(
-        "untrusted build outputs include packages outside this command's explicit selection: {}. {cause}",
-        names.join(", ")
-    ))
 }
 
 fn output(unit: &UnitFile) -> bool {
