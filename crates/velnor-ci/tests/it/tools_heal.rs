@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs;
-use std::os::unix::fs::MetadataExt;
+use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 
 use velnor_ci::tools_discard;
@@ -80,13 +80,14 @@ fn a_discard_lets_the_verified_tree_replace_the_poisoned_entry() {
 }
 
 #[test]
-fn a_replacement_that_cannot_remove_the_old_entry_fails_instead_of_healing() {
-    let (_repo, job, store) = poisoned_store("tools-heal-undeletable");
+fn a_stray_file_at_the_entry_path_is_replaced_by_the_verified_tree() {
+    let (_repo, job, store) = poisoned_store("tools-heal-stray-file");
     let entry = store.join("tools").join(KEY);
     fs::remove_dir_all(&entry).unwrap_or_else(|e| unreachable!("{e}"));
     fs::write(&entry, "not a tree").unwrap_or_else(|e| unreachable!("{e}"));
     let outcome = save(&store, &job.home, true);
-    assert!(matches!(outcome, Outcome::Failed(_)), "{outcome:?}");
+    assert!(matches!(outcome, Outcome::Healed { .. }), "{outcome:?}");
+    assert_eq!(stored_rustc(&store), "rustc binary");
 }
 
 #[test]
@@ -113,4 +114,21 @@ fn a_mismatching_restore_marks_the_job_and_a_clean_one_does_not() {
     assert!(tools_discard::pending(&job.root));
     tools_discard::clear(&job.root);
     assert!(!tools_discard::pending(&job.root));
+}
+
+#[test]
+fn a_read_only_retired_leftover_is_removed_by_the_next_save() {
+    let (_repo, job, store) = poisoned_store("tools-heal-retired-leftover");
+    let leftover = store.join("tools").join(format!(".staging-retired-{KEY}"));
+    fs::create_dir_all(&leftover).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::write(leftover.join("rustc"), "old binary").unwrap_or_else(|e| unreachable!("{e}"));
+    fs::set_permissions(&leftover, fs::Permissions::from_mode(0o555))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let healed = save(&store, &job.home, true);
+    assert!(matches!(healed, Outcome::Healed { .. }), "{healed:?}");
+    assert!(
+        fs::symlink_metadata(&leftover).is_err(),
+        "the leftover stays"
+    );
+    assert_eq!(stored_rustc(&store), "rustc binary");
 }

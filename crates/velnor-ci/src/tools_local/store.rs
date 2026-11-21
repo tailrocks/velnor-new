@@ -10,6 +10,7 @@ use std::time::{Duration, SystemTime};
 use super::clear::clear_home;
 use super::{HOME_PATHS, Inputs, KEEP_KEYS, Outcome, TOOLS_DIR};
 use crate::mbx_store::{random_u64, writable_by_job};
+use crate::tree_removal::remove_tree;
 
 const MARKER: &str = ".complete";
 const STAGING_PREFIX: &str = ".staging-";
@@ -179,7 +180,11 @@ pub(super) fn save(inputs: &Inputs<'_>) -> Outcome {
         fs::remove_dir_all(&staging).ok();
         return Outcome::Failed("the copy to the store failed");
     }
-    let retired = tools.join(format!("{STAGING_PREFIX}retired-{:016x}", random_u64()));
+    let retired = tools.join(format!("{STAGING_PREFIX}retired-{}", inputs.key));
+    if remove_tree(&retired).is_err() {
+        fs::remove_dir_all(&staging).ok();
+        return Outcome::Failed("a retired entry from an earlier replacement could not be removed");
+    }
     let replaced = fs::symlink_metadata(&entry).is_ok() && fs::rename(&entry, &retired).is_ok();
     if fs::rename(&staging, &entry).is_err() {
         if replaced {
@@ -192,7 +197,7 @@ pub(super) fn save(inputs: &Inputs<'_>) -> Outcome {
             Outcome::Failed("the entry could not be published")
         };
     }
-    if replaced && fs::remove_dir_all(&retired).is_err() {
+    if replaced && remove_tree(&retired).is_err() {
         return Outcome::Failed("the replaced entry could not be removed");
     }
     prune(&tools, inputs.key);
