@@ -106,8 +106,9 @@ pub(crate) fn mint_note(facts: &RepoFacts) -> Option<String> {
     let uses_token =
         facts.config.private_sources.is_some() || !facts.config.release_assets.is_empty();
     (uses_token && !version.at_least(TOKEN_FIRST_HELPER)).then(|| {
+        let (major, minor, patch) = TOKEN_FIRST_HELPER;
         format!(
-            "[private_sources] / release assets with helper {} mint the App token after checkout-controlled steps; upgrade the helper to 0.1.111 or later",
+            "[private_sources] / release assets with helper {} mint the App token after checkout-controlled steps; upgrade the helper to {major}.{minor}.{patch} or later",
             version.as_str()
         )
     })
