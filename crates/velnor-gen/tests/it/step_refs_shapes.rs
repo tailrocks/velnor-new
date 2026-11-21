@@ -8,6 +8,7 @@ use velnor_model::{RepoPath, WORKFLOWS_CONFIG_PATH};
 
 use crate::events::DENY_MISE;
 use crate::facts::TestResult;
+use crate::pipeline::view;
 use crate::public_sources::{DECLARED as PUBLIC_SOURCES, SHA, SOURCE};
 use crate::release_family_fixture;
 use crate::release_fixture::release_view;
@@ -50,18 +51,35 @@ fn every_steps_reference_in_a_declared_workflow_names_a_step_of_its_own_job() ->
     Ok(())
 }
 
+const TAG_PUSH: &str = "family_trigger = \"tag_push\"\ncommit_file = true\n";
+
 #[test]
 fn every_steps_reference_in_a_family_release_workflow_names_a_step_of_its_own_job() -> TestResult {
     let newest = *gate_patches()?
         .last()
         .ok_or("the gate scan found no helper")?;
+    let tag_push = family_first()?
+        .max(gate_patch("family_trigger")?)
+        .max(gate_patch("commit_file")?);
     let mut sweep = Sweep::default();
-    for patch in family_first()?..=newest {
-        let helper = format!("0.1.{patch}");
-        let (text, _) =
-            release_family_fixture::generate(&helper, &release_family_fixture::tools_like(""))?;
-        let files = BTreeMap::from([(RepoPath::new(".github/workflows/family.yml")?, text)]);
-        sweep.add(&format!("{helper}, family"), &files)?;
+    for (first, config, label) in [
+        (
+            family_first()?,
+            release_family_fixture::tools_like(""),
+            "family",
+        ),
+        (
+            tag_push,
+            release_family_fixture::tools_like(TAG_PUSH),
+            "tag-push family",
+        ),
+    ] {
+        for patch in first..=newest {
+            let helper = format!("0.1.{patch}");
+            let (text, _) = release_family_fixture::generate(&helper, &config)?;
+            let files = BTreeMap::from([(RepoPath::new(".github/workflows/family.yml")?, text)]);
+            sweep.add(&format!("{helper}, {label}"), &files)?;
+        }
     }
     sweep.finish();
     Ok(())
@@ -123,9 +141,22 @@ fn every_steps_reference_in_an_mbx_remote_job_names_a_step_of_its_own_job() -> T
 
 #[test]
 fn every_steps_reference_in_a_dependency_policy_job_names_a_step_of_its_own_job() -> TestResult {
-    rust_ci_sweep(&[Case {
-        from: 0,
-        config: None,
-        files: &[("deny.toml", ""), ("mise.toml", DENY_MISE)],
-    }])
+    let policy = gate_patch("policy.deny")?;
+    let mut sweep = Sweep::default();
+    for patch in gate_patches()?.into_iter().filter(|patch| *patch >= policy) {
+        let mut repo = view(&["Cargo.toml", "tools/Cargo.toml"], None)?;
+        for (path, text) in [
+            ("deny.toml", ""),
+            ("mise.toml", DENY_MISE),
+            (".velnor/rust-ci.toml", "[policy]\ndeny = true\n"),
+        ] {
+            let path = RepoPath::new(path)?;
+            repo.tracked_paths.insert(path.clone());
+            repo.files.insert(path, text.as_bytes().to_vec());
+        }
+        let effective = pinned(&mut repo, patch)?;
+        sweep.add(&format!("0.1.{effective}, deny"), &generated(&mut repo)?)?;
+    }
+    sweep.finish();
+    Ok(())
 }

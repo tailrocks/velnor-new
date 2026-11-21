@@ -321,7 +321,8 @@ fn every_steps_reference_in_a_lint_test_setup_or_private_sources_job_names_a_ste
 fn every_steps_reference_in_the_release_workflow_names_a_step_of_its_own_job() -> TestResult {
     let raw = gate_patch("binaries.format")?;
     let asset_name = gate_patch("binaries.asset_name")?;
-    let cases: [(u64, &[Root], &str); 6] = [
+    let attested = asset_name.max(gate_patch("binaries.attest")?);
+    let cases: [(u64, &[Root], &str); 7] = [
         (0, &[APP], "[[binaries]]\npackage = \"app\"\n"),
         (0, &[APP, TOOLS], TWO_BINARIES),
         (
@@ -339,6 +340,11 @@ fn every_steps_reference_in_the_release_workflow_names_a_step_of_its_own_job() -
             asset_name,
             &[APP],
             "[[binaries]]\npackage = \"app\"\nasset_name = \"app-{{ version }}-{{ platform }}\"\n",
+        ),
+        (
+            attested,
+            &[APP],
+            "[[binaries]]\npackage = \"app\"\nasset_name = \"app-{{ version }}-{{ platform }}\"\nattest = true\n",
         ),
     ];
     let mut sweep = Sweep::default();
