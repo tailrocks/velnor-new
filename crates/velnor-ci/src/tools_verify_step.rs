@@ -85,7 +85,7 @@ fn repository_target(server: Option<&str>, repository: Option<&str>) -> String {
                 .trim_start_matches("https://")
                 .trim_start_matches("http://")
         })
-        .filter(|host| !host.is_empty());
+        .filter(|host| !host.is_empty() && *host != "github.com");
     match host {
         Some(host) => format!("{host}/{repository}"),
         None => repository.to_owned(),
