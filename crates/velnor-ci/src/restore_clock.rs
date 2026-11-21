@@ -53,19 +53,30 @@ fn digits(text: &str, now: i64) -> Option<i64> {
 
 fn recorded(runner_temp: &Path, now: i64) -> Record {
     let path = runner_temp.join(BEGAN);
-    let meta = match fs::symlink_metadata(&path) {
-        Ok(meta) => meta,
+    let file = match fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+        .open(&path)
+    {
+        Ok(file) => file,
         Err(error) if error.kind() == ErrorKind::NotFound => return Record::Missing,
         Err(_) => return Record::Untrusted,
     };
-    let mut text = String::new();
-    let read = meta
-        .is_file()
-        .then(|| fs::File::open(&path).ok())
-        .flatten()
-        .and_then(|file| file.take(MAX_RECORD_BYTES).read_to_string(&mut text).ok());
-    read.and_then(|_| digits(&text, now))
+    read_capped(file)
+        .and_then(|text| digits(&text, now))
         .map_or(Record::Untrusted, Record::Began)
+}
+
+fn read_capped(file: fs::File) -> Option<String> {
+    let meta = file.metadata().ok()?;
+    if !meta.is_file() || meta.len() > MAX_RECORD_BYTES {
+        return None;
+    }
+    let mut text = String::new();
+    file.take(MAX_RECORD_BYTES + 1)
+        .read_to_string(&mut text)
+        .ok()?;
+    (text.len() as u64 <= MAX_RECORD_BYTES).then_some(text)
 }
 
 #[must_use]

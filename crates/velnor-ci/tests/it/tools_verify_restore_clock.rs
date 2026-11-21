@@ -43,7 +43,7 @@ fn a_missing_record_falls_back_to_the_time_of_the_check() {
 fn a_present_record_that_cannot_be_trusted_gives_no_cutoff_and_never_panics() {
     let job = job("restore-clock-untrusted");
     let beyond = (NOW + 1).to_string();
-    let huge = "9".repeat(4096);
+    let padded = format!("{BEGAN:0>4096}");
     for text in [
         "-9223372036854775808",
         "9223372036854775807",
@@ -64,7 +64,7 @@ fn a_present_record_that_cannot_be_trusted_gives_no_cutoff_and_never_panics() {
         "12.5",
         "2026-11-18T00:00:00Z",
         "99999999999999999999",
-        &huge,
+        &padded,
     ] {
         plant(&job.root, text);
         assert_eq!(cutoff(&job.root, NOW), None, "{text}");
@@ -82,6 +82,47 @@ fn the_oldest_and_the_newest_plausible_records_and_a_trailing_newline_are_used()
         plant(&job.root, text);
         assert_eq!(cutoff(&job.root, NOW), Some(margined(began)), "{text}");
     }
+}
+
+#[test]
+fn a_record_of_exactly_64_bytes_is_used_and_one_of_65_bytes_is_refused() {
+    let job = job("restore-clock-length");
+    let sixty_four_zeros = format!("{BEGAN:0>64}");
+    assert_eq!(sixty_four_zeros.len(), 64);
+    plant(&job.root, &sixty_four_zeros);
+    assert_eq!(cutoff(&job.root, NOW), Some(margined(BEGAN)));
+    plant(&job.root, &format!("{BEGAN:0>63}\n"));
+    assert_eq!(cutoff(&job.root, NOW), Some(margined(BEGAN)));
+    plant(&job.root, &format!("{BEGAN:0>64}5"));
+    assert_eq!(cutoff(&job.root, NOW), None);
+    plant(&job.root, &format!("{BEGAN:0>64}\n"));
+    assert_eq!(cutoff(&job.root, NOW), None);
+}
+
+#[test]
+fn a_valid_time_followed_by_a_newline_and_garbage_is_refused_for_length() {
+    let job = job("restore-clock-trailing-garbage");
+    plant(&job.root, &format!("{BEGAN:0>63}\nGARBAGE"));
+    assert_eq!(cutoff(&job.root, NOW), None);
+}
+
+#[test]
+fn a_fifo_at_the_record_path_is_refused_without_blocking() {
+    let job = job("restore-clock-fifo");
+    let status = std::process::Command::new("mkfifo")
+        .arg(job.root.join("velnor-tools-restore-began"))
+        .status()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(status.success());
+    let root = job.root.clone();
+    let (sender, receiver) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let _ = sender.send(cutoff(&root, NOW));
+    });
+    assert_eq!(
+        receiver.recv_timeout(std::time::Duration::from_secs(10)),
+        Ok(None)
+    );
 }
 
 #[test]
