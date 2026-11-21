@@ -89,7 +89,7 @@ An explicit request for CI evidence uses the committed snapshot and shows its SH
 `--local` runs Docker with the closest supported environment and shows its actual fingerprint.
 For the latency comparison, charge upload, queue and the slower witness. The architecture's measured
 0.25 s clone + 0.31 s no-op build versus 92 s cold describes preparation on one idle workspace.
-Measure real edited work before using that difference to predict agent feedback. [Architecture §7.3](../../pr-worktree/docs/proposed/velnor-runner-architecture.md#73-compile-reuse)
+Measure real edited work before using that difference to predict agent feedback. [Architecture §7.3](../../../proposed/velnor-runner-architecture.md#73-compile-reuse)
 
 ### N03. Count independent executions
 
@@ -103,7 +103,7 @@ A qualified interactive attempt can fill one assigned slot. A labelled request e
 if it is still missing. An explicit `velnor verify` can request both. A failed witness blocks its record,
 and cancelling or repeating the command cannot turn it into a pass. Qualify seed ordering and independence
 against delayed pairs. If the twins are correlated, run the changed obligations again in the merge group,
-including an exact-tree match, as the architecture prescribes. [Architecture §6.2](../../pr-worktree/docs/proposed/velnor-runner-architecture.md#62-verification-records-witnesses-joins-and-scopes)
+including an exact-tree match, as the architecture prescribes. [Architecture §6.2](../../../proposed/velnor-runner-architecture.md#62-verification-records-witnesses-joins-and-scopes)
 
 ### N04. Separate host, execution, and target architectures
 
@@ -128,7 +128,7 @@ capacity with a per-repository budget. Drop superseded claims and evict unpushed
 There is no GitHub status from this flow. Labelled verification still resolves the latest head and
 actual test tree, and the merge queue verifies its own subject. The gain is overlap with editing and
 review. A replay must show that completed useful proof beats superseded work at a fixed cluster budget.
-The default remains explicit pre-push `velnor verify`. [Architecture owner question D19](../../pr-worktree/docs/proposed/velnor-runner-architecture.md#13-owner-questions)
+The default remains explicit pre-push `velnor verify`. [Architecture owner question D19](../../../proposed/velnor-runner-architecture.md#13-owner-questions)
 
 ### N06. Query and join the same work
 
@@ -152,7 +152,7 @@ An authorized re-request of a failed obligation needs a new pair of passing witn
 Every required failure stays in the flake-rate denominator. Use the architecture's threshold of
 two false failures in seven days to flag the test for repair. Removal from the required inventory
 requires equivalent blocking coverage or an expiring owner exception. Sampled reuse disagreements
-take the reuse-revocation path, even when an exploratory rerun later passes. [Architecture §1.3](../../pr-worktree/docs/proposed/velnor-runner-architecture.md#13-flake-budget)
+take the reuse-revocation path, even when an exploratory rerun later passes. [Architecture §1.3](../../../proposed/velnor-runner-architecture.md#13-flake-budget)
 
 ### N08. Give interactive work a short queue
 
@@ -164,7 +164,7 @@ compare the estimated wait with starting on a capable cold node. A shared claim 
 live priority. When a higher-priority claim arrives, move queued work or admit its missing witness
 against reserve. Only a proven infrastructure abort can replace an already running attempt.
 Charge occupied slots, including cancelled work and the second witness. Compare time to first red,
-interactive queue wait, group P90, and A1 lag on the same loaded trace. [Architecture §9](../../pr-worktree/docs/proposed/velnor-runner-architecture.md#9-the-cluster)
+interactive queue wait, group P90, and A1 lag on the same loaded trace. [Architecture §9](../../../proposed/velnor-runner-architecture.md#9-the-cluster)
 
 ### N09. Attest the observation, then validate it
 
@@ -229,7 +229,7 @@ Per-PR authorization requires a gating mechanism that can distinguish the PRs. H
 case until the policy and enforcement agree. Also test a revocation racing GitHub's merge acceptance.
 Velnor can stop new success writes, correct posted statuses, and audit commits that already landed.
 An asynchronous status correction cannot make an already accepted merge contingent on the audit.
-[Architecture §§6.5 and 8.2](../../pr-worktree/docs/proposed/velnor-runner-architecture.md#82-the-label-flow-and-the-required-status) · [GitHub commit statuses](https://docs.github.com/en/rest/commits/statuses#create-a-commit-status)
+[Architecture §§6.5 and 8.2](../../../proposed/velnor-runner-architecture.md#82-the-label-flow-and-the-required-status) · [GitHub commit statuses](https://docs.github.com/en/rest/commits/statuses#create-a-commit-status)
 
 ## The first three steps
 
@@ -254,6 +254,6 @@ An asynchronous status correction cannot make an already accepted merge continge
    Compare paired requests with a warm conventional baseline. Include the second witness, fresh-only
    work, audits, upload, and superseded claims. Keep commit watching behind the N05 owner decision.
    **16–24 agent-hours** on top of step 2. Shared capacity and a matched sample of agent sessions set
-   the elapsed time. [Comparison, benchmarks K03–K09 and K24](../../pr-worktree/docs/research/velnor-runner-2026-11/fastest-comparison.md#benchmarks-proposed)
+   the elapsed time. [Comparison, benchmarks K03–K09 and K24](../fastest-comparison.md#benchmarks-proposed)
 
-Basis for the proposal. [Owner decisions](../../pr-worktree/docs/research/velnor-runner-2026-11/owner-decisions.md) · [Runner architecture](../../pr-worktree/docs/proposed/velnor-runner-architecture.md) · [User experience, including pre-push CLI](../../pr-worktree/docs/proposed/velnor-user-experience.md#5-the-cli) · [Explainer](../../pr-worktree/docs/research/velnor-runner-2026-11/explainer.md) · [Comparison of fastest-runner critiques](../../pr-worktree/docs/research/velnor-runner-2026-11/fastest-comparison.md)
+Basis for the proposal. [Owner decisions](../owner-decisions.md) · [Runner architecture](../../../proposed/velnor-runner-architecture.md) · [User experience, including pre-push CLI](../../../proposed/velnor-user-experience.md#5-the-cli) · [Explainer](../explainer.md) · [Comparison of fastest-runner critiques](../fastest-comparison.md)
