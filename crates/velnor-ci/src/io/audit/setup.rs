@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use velnor_gen::io::Checkout;
 use velnor_model::{CompileInputs, RepoFacts};
@@ -11,7 +11,7 @@ use velnor_rust::{Located, Owners, locate};
 use super::Audit;
 use crate::coverage::{Built, gaps};
 use crate::error::CiError;
-use crate::io::units::{UnitFile, Workspace, unit_files};
+use crate::io::units::{UnitFile, Workspace, unit_files, unit_files_apart};
 use crate::platform::Platforms;
 
 pub(super) fn begin<'a>(
@@ -47,7 +47,8 @@ pub(super) fn begin<'a>(
         scripts: BTreeMap::new(),
         targets: workspaces
             .iter()
-            .filter_map(|w| match locate(&checkout.root, &w.target_directory, "") {
+            .flat_map(Workspace::directories)
+            .filter_map(|directory| match locate(&checkout.root, &directory, "") {
                 Located::Inside(target) => Some(target),
                 Located::Repository | Located::Outside => None,
             })
@@ -62,7 +63,7 @@ pub(super) fn begin<'a>(
             .collect(),
         roots: workspaces
             .iter()
-            .map(|workspace| workspace.workspace_root.clone())
+            .map(|workspace| workspace.root.clone())
             .collect(),
         members,
         found: CompileInputs::new(),
@@ -86,7 +87,8 @@ pub(super) fn gathered_files(
         .filter(|(index, _)| chosen[*index])
     {
         files.extend(
-            unit_files(&workspace.target_directory)?
+            workspace
+                .units()?
                 .into_iter()
                 .map(|(unit, file)| (unit, file, vec![index])),
         );
@@ -96,7 +98,7 @@ pub(super) fn gathered_files(
             continue;
         }
         files.extend(
-            unit_files(directory)?
+            group_units(directory, &workspaces[indices[0]])?
                 .into_iter()
                 .map(|(unit, file)| (unit, file, indices.clone())),
         );
@@ -108,6 +110,14 @@ pub(super) fn gathered_files(
             .then_with(|| left.2.cmp(&right.2))
     });
     Ok(files)
+}
+
+fn group_units(directory: &Path, first: &Workspace) -> Result<Vec<(UnitFile, PathBuf)>, CiError> {
+    if first.build_directory == first.target_directory {
+        unit_files(directory)
+    } else {
+        unit_files_apart(directory, &first.build_directory)
+    }
 }
 
 pub(super) fn complete(

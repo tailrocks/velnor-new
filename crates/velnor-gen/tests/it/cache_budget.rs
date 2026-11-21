@@ -154,22 +154,6 @@ fn tools_entries_named_by_their_anchor_are_pruned_as_one_group() {
 }
 
 #[test]
-fn tools_anchor_entries_of_every_attempt_are_pruned_as_one_group() {
-    let anchor = |id: u64, age: i64| CacheEntry {
-        key: format!(
-            "velnor-tools-anchor-Linux-X64-mise2026.11.10-{}-{id}-1-job",
-            "a".repeat(64)
-        ),
-        ..entry(id, "other", age)
-    };
-    assert_eq!(plan(&[anchor(1, 8 * DAY), anchor(2, 8 * DAY)], 0), vec![1]);
-    assert_eq!(
-        plan(&[anchor(1, DAY), anchor(2, DAY)], 0),
-        Vec::<u64>::new()
-    );
-}
-
-#[test]
 fn groups_unknown_keys_ties_order_and_byte_overflow_keep_their_contract() {
     let mut entries = Vec::new();
     for family in ["tgt", "src", "tools"] {

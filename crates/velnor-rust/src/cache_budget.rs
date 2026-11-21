@@ -9,6 +9,7 @@ pub type CacheId = u64;
 pub type Timestamp = i64;
 pub const DEFAULT_CACHE_BUDGET_BYTES: u64 = 8_000_000_000;
 const DAY: i64 = 86_400;
+const ANCHOR_GENERATIONS: usize = 2;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CacheEntry {
@@ -25,6 +26,7 @@ pub enum CacheFamily {
     Target,
     Sources,
     Tools,
+    ToolsAnchor,
     Delta,
     Unknown,
 }
@@ -49,15 +51,21 @@ fn host(text: &str) -> bool {
     )
 }
 
+fn anchor_platform(rest: &str) -> Option<&str> {
+    let (platform, rest) = rest.split_once("-mise")?;
+    let (version, rest) = rest.split_once('-')?;
+    let (lock, run) = rest.split_at_checked(64)?;
+    let run_ok = run.is_empty()
+        || run
+            .strip_prefix('-')
+            .and_then(|run| run.split_once('-'))
+            .is_some_and(|(id, job)| numeric(id) && !job.is_empty());
+    (host(platform) && !version.is_empty() && hex(lock, 64) && run_ok).then_some(platform)
+}
+
 fn classify(key: &str) -> Option<(CacheFamily, &str)> {
     if let Some(rest) = key.strip_prefix("velnor-tools-anchor-") {
-        let (platform, after) = rest.split_once("-mise")?;
-        let (version, tail) = after.split_once('-')?;
-        let (lock, run) = tail.split_at_checked(64)?;
-        let suffixed = run.is_empty() || run.strip_prefix('-').is_some_and(|run| !run.is_empty());
-        let group = &key["velnor-tools-".len().."velnor-tools-anchor-".len() + platform.len()];
-        return (hex(lock, 64) && host(platform) && !version.is_empty() && suffixed)
-            .then_some((CacheFamily::Tools, group));
+        return anchor_platform(rest).map(|platform| (CacheFamily::ToolsAnchor, platform));
     }
     if let Some(rest) = key.strip_prefix("velnor-tools-") {
         let (group, lock) = rest.rsplit_once('-')?;
@@ -204,6 +212,7 @@ fn tier(
         }
         (CacheFamily::Sources, _) if !idle(1) => None,
         (CacheFamily::Target | CacheFamily::Sources, _) if rank >= 2 => Some(2),
+        (CacheFamily::ToolsAnchor, _) if rank >= ANCHOR_GENERATIONS => Some(0),
         (CacheFamily::Tools, _) if rank > 0 && idle(7) => Some(3),
         _ => None,
     }
