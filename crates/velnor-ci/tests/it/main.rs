@@ -88,6 +88,7 @@ mod io_policy;
 mod io_raw_paths;
 mod io_release;
 mod io_report;
+mod io_report_saves;
 mod io_report_slowest;
 mod io_report_sparse;
 mod io_required;
