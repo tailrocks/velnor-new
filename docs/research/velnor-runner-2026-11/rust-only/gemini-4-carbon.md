@@ -325,7 +325,7 @@ fetches Check Runs, Job/Step REST objects, raw job & step logs, annotations, ste
 Artifacts v4 zips, and Attestation bundles, normalising **only**:
 - Ephemeral identifiers and clocks: `run_id`, `job_id`, `step.external_id` GUIDs, ISO-8601 timestamps, elapsed
   durations, runner/machine names, `RUNNER_TRACKING_ID`.
-- Root prefixes: `/home/runner/_work` vs `/w`, `/tmp/_runner_file_commands/<guid>`.
+- Root prefixes: `/home/runner/_work` vs `/w`, `<tmp>/_runner_file_commands/<guid>`.
 - Official-runner chrome lines: `Current runner version:`, `Download action repository`, Node setup banners, and
   concurrent `background: true` stdout line interleaving (compared per-step before merge, and as multiset across
   concurrent background steps).

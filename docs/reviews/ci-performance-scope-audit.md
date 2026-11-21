@@ -12,7 +12,7 @@ All 47 repositories are accessible, nonarchived, and currently use `main`. There
 
 Downloaded live repository metadata, ten most recently updated PRs, referenced migration PR metadata, fully paginated migration file lists, and immutable current default-branch commit identities for all 47 repositories. All 46 consumer migration PRs are merged. API file listings can omit large patches; their presence is not a completed PR-diff review. Current workflow family, runtime digests, all relevant subsequent workflow changes, protection/gates, step logs, cache state, and controlled hosted experiments remain separate tasks.
 
-Raw authenticated API evidence is stored outside this public checkout at `/tmp/velnor-ci-performance-scope-audit/`; private repository source/diff evidence must stay outside public artifacts. Files use `owner__repository.json`, plus `summary.json`. A collector timestamp is retained per repository. Reuse these downloads rather than repeat API requests.
+Raw authenticated API evidence is stored outside this public checkout at `<tmp>/velnor-ci-performance-scope-audit/`; private repository source/diff evidence must stay outside public artifacts. Files use `owner__repository.json`, plus `summary.json`. A collector timestamp is retained per repository. Reuse these downloads rather than repeat API requests.
 
 Prior `<local-path>` and `ci_migration_ledger.json` record a narrow private-example-org admin-merge policy. Their old outcomes are stale and do not qualify current changes or performance. Live metadata confirms the four private identities; apply the goal policy only after current review/authority checks. No waiver is claimed granted by this audit.
 

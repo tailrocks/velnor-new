@@ -300,7 +300,7 @@ including `.github` or `.velnor/config.toml`. The canonical preview invocation
 is:
 
 ```text
-velnor-actions generate --output-dir "$(mktemp -d "/tmp/velnor-actions-preview.XXXXXX")"
+velnor-actions generate --output-dir "$(mktemp -d "<tmp>/velnor-actions-preview.XXXXXX")"
 ```
 
 The destination MUST be outside the repository root and MUST NOT be an ancestor

@@ -206,7 +206,7 @@ The generated publisher output was refreshed through the supported CLI, with
 no hand edits:
 
 ```text
-cargo run --locked -p velnor-actions-cli -- generate --output-dir /private/tmp/velnor-publication-generated
+cargo run --locked -p velnor-actions-cli -- generate --output-dir <tmp>/velnor-publication-generated
 ```
 
 The first preview attempt exposed uncached registry entries used by offline

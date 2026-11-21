@@ -4,12 +4,12 @@
     "source_commit": "bbf2cb2df8380b173a0629d07cb862f4870588f8",
     "source_tree": "ebb160d5cbea5d021aac14c269f9e52aee86fda4",
     "checked_at": "2026-10-09T22:40:38Z",
-    "command": "env MISE_DATA_DIR=/tmp/velnor-110-mise-data-run2 CARGO_HOME=/tmp/velnor-110-cargo-home MISE_AUTO_INSTALL=false MISE_GH_VERSION=2.102.0 PATH=/tmp/velnor-110-cargo-home/bin:/tmp/velnor-110-mise-data-run2/installs/aqua-jdx-mise/2026.10.6/mise/bin:/usr/bin:/bin:/usr/sbin:/sbin /bin/bash scripts/check-freshness.sh --check-upstream",
+    "command": "env MISE_DATA_DIR=<tmp>/velnor-110-mise-data-run2 CARGO_HOME=<tmp>/velnor-110-cargo-home MISE_AUTO_INSTALL=false MISE_GH_VERSION=2.102.0 PATH=<tmp>/velnor-110-cargo-home/bin:<tmp>/velnor-110-mise-data-run2/installs/aqua-jdx-mise/2026.10.6/mise/bin:/usr/bin:/bin:/usr/sbin:/sbin /bin/bash scripts/check-freshness.sh --check-upstream",
     "exit_code": 1,
     "interpretation": "The bounded upstream observation emitted all 19 tool/action rows. The command exit is not a passing freshness result: at the time of capture the inventory still had a pending Mise qualification and stale checked_at values, while five newer versions were held."
   },
   "raw_log": {
-    "path": "/private/tmp/velnor-pr126-gates-bbf2-fixedcontext-20261010/freshness-upstream-refresh.log",
+    "path": "<tmp>/velnor-pr126-gates-bbf2-fixedcontext-20261010/freshness-upstream-refresh.log",
     "sha256": "b67989c10464445cff9b5b22958427f4629378117307959b7888ca95e9404193",
     "bytes": 56579
   },
@@ -132,7 +132,7 @@
   "release_identity_receipts": {
     "source_api_receipts_captured_at": "2026-10-09T22:06:19Z/2026-10-09T22:06:25Z",
     "source_api_receipt_file": {
-      "path": "/private/tmp/velnor-freshness-pr126-1791582885318/upstream-current-receipts.json",
+      "path": "<tmp>/velnor-freshness-pr126-1791582885318/upstream-current-receipts.json",
       "sha256": "d953b025a0d50be6c1a6c1ee9607c3198fafc59436600816dd35084316525193",
       "bytes": 3226
     },
@@ -142,7 +142,7 @@
       "commit_sha": "fb614644ff98c8ee3a3f28a6d31b3ba0af37b17f",
       "commit_observed_at": "2026-10-09T22:06:20Z",
       "receipt": {
-        "path": "/private/tmp/velnor-freshness-pr126-1791582885318/release-commit-mr-boxington.json",
+        "path": "<tmp>/velnor-freshness-pr126-1791582885318/release-commit-mr-boxington.json",
         "sha256": "e55fb66f4af118c628e7c5f8b19276b23aab6bf176488ab0b2d8fc926280695b",
         "bytes": 7228
       }
@@ -153,7 +153,7 @@
       "commit_sha": "d0825fbaf3cc36ca2609aa38e71046265a1f1e37",
       "commit_observed_at": "2026-10-09T22:06:25Z",
       "receipt": {
-        "path": "/private/tmp/velnor-freshness-pr126-1791582885318/release-commit-mr-boxington-action.json",
+        "path": "<tmp>/velnor-freshness-pr126-1791582885318/release-commit-mr-boxington-action.json",
         "sha256": "c5fd1653245e974e6df60a5afc642e4d173dada0df36caa46c73cb23e4f8ccf6",
         "bytes": 1712
       }

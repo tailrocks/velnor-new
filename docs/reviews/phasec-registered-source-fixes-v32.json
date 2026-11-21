@@ -11,7 +11,7 @@
     "commit": "5fcfc7c53e78a99e184ca19c850bc46d6657073a",
     "tree": "fd49fa5b8183c2fe78d09b41215d82f87ed50070",
     "clean_worktree": true,
-    "private_detached_author_worktree": "/private/tmp/velnor-phasec-registered-assembly-v30",
+    "private_detached_author_worktree": "<tmp>/velnor-phasec-registered-assembly-v30",
     "remote_operations": false
   },
   "fix": {
@@ -36,7 +36,7 @@
     ]
   },
   "toolchain": {
-    "mise_path": "/private/tmp/velnor-mise-official-2026.9.18/mise",
+    "mise_path": "<tmp>/velnor-mise-official-2026.9.18/mise",
     "mise_version": "2026.9.18 macos-arm64 (2026-09-30)",
     "mise_sha256": "484c135bd4329975d608d3f77e26c2ece5d2f5590f18ca71f44440294f8cfa6f",
     "rustc": "1.98.1 (48a229cea 2026-09-01)",
@@ -45,7 +45,7 @@
     "nextest": "0.9.146 (8af696ddc 2026-09-21)",
     "mbx": "1.22.0",
     "build_jobs": 2,
-    "target_dir": "/private/tmp/velnor-phasec-registered-target-13fb-v31"
+    "target_dir": "<tmp>/velnor-phasec-registered-target-13fb-v31"
   },
   "verification": [
     {
@@ -55,7 +55,7 @@
     {"command": "rtk git diff --check", "result": "passed"},
     {
       "checkpoint": "13fb3a8e6cce4d44f5c8afc1dca8e6e3a5f05fc6",
-      "command": "cargo-nextest 0.9.146 nextest list --locked --package velnor-actions-workflow-renderer --lib --target-dir /private/tmp/velnor-phasec-registered-target-13fb-v31 --build-jobs 2 --message-format oneline -E 'test(/mbx_bundle|schema2_mbx_(cancel_probe|parallel_probe|resource_probe|corrupt_probe|stock_restore)/)'",
+      "command": "cargo-nextest 0.9.146 nextest list --locked --package velnor-actions-workflow-renderer --lib --target-dir <tmp>/velnor-phasec-registered-target-13fb-v31 --build-jobs 2 --message-format oneline -E 'test(/mbx_bundle|schema2_mbx_(cancel_probe|parallel_probe|resource_probe|corrupt_probe|stock_restore)/)'",
       "exit_code": 101,
       "result": "pre-test compile failed; zero tests executed",
       "diagnostics": [

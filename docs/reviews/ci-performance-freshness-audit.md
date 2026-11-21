@@ -50,7 +50,7 @@ Checked 2026-10-02 19:54–19:55 UTC (2026-10-03 local). This is official source
 
 Bounded official API requests used authenticated `gh api` for exact Git tag/ref/release metadata. Each source response is saved with retrieval timestamp and SHA256. Crates.io versions were filtered to stable and non-yanked. Rust uses both stable and exact pinned distribution manifests. Runner official HTML was independently read alongside the cached Firecrawl document (cache timestamp `2026-10-02T16:45:39.283Z`). No access errors occurred.
 
-Local raw evidence: `/tmp/velnor-freshness-tools`, `/tmp/velnor-freshness-actions`, `/tmp/velnor-freshness-platform`; each has `results.json`. Latest sources are mutable: future refetches need not reproduce these hashes. These source hashes identify fetched evidence, not installed tool artifact digests.
+Local raw evidence: `<tmp>/velnor-freshness-tools`, `<tmp>/velnor-freshness-actions`, `<tmp>/velnor-freshness-platform`; each has `results.json`. Latest sources are mutable: future refetches need not reproduce these hashes. These source hashes identify fetched evidence, not installed tool artifact digests.
 
 | Platform source | Evidence SHA256 | Detail |
 |---|---|---|
@@ -88,11 +88,11 @@ The current inventory contains **26 Mise/catalog tools** (the earlier 25-tool ch
 
 Java freshness now uses Oracle GraalVM 25 vendor/channel selection, excluding the separate innovation channel: [official downloads metadata](https://www.oracle.com/a/tech/docs/graalvm-downloads.json) and [25.0.4.1.1 metadata](https://www.oracle.com/a/tech/docs/graalvm-25.0.4.1.1.json). Historical `25.0.3` is stale. A former lookup failure has been resolved by source research; that is not installation or performance proof.
 
-Native source details are retained in `/tmp/velnor-native-authorities/summary.json`; eleven initial workload/tool additions are in `/tmp/velnor-tool-pin-evidence/inventory-ready.json`. XcodeGen `2.46.0` and jq `1.8.2` match latest source metadata. Boltffi `0.30.1` remains stale against `0.31.0`; desktop Rust `1.97.1` remains stale against `1.99.0`, without a new hold. Exact commit and published asset digest records prove source identity only.
+Native source details are retained in `<tmp>/velnor-native-authorities/summary.json`; eleven initial workload/tool additions are in `<tmp>/velnor-tool-pin-evidence/inventory-ready.json`. XcodeGen `2.46.0` and jq `1.8.2` match latest source metadata. Boltffi `0.30.1` remains stale against `0.31.0`; desktop Rust `1.97.1` remains stale against `1.99.0`, without a new hold. Exact commit and published asset digest records prove source identity only.
 
 ### Mise executable byte qualification
 
-Release source commit: `bc11f90c74eba23bf0d7350efb540e62fb7d9ffd`. `catalog_mise_binary.rs` pins installed executable SHA256 independently from compressed archive SHA256. Platform downloads matched official standalone/checksum metadata; ARM64 binaries were extracted from `mise/bin/mise`. Raw results: `/tmp/velnor-mise-platforms/results.json`. Cryptographic release signatures were downloaded but **not verified**.
+Release source commit: `bc11f90c74eba23bf0d7350efb540e62fb7d9ffd`. `catalog_mise_binary.rs` pins installed executable SHA256 independently from compressed archive SHA256. Platform downloads matched official standalone/checksum metadata; ARM64 binaries were extracted from `mise/bin/mise`. Raw results: `<tmp>/velnor-mise-platforms/results.json`. Cryptographic release signatures were downloaded but **not verified**.
 
 | Platform | Installed executable SHA256 |
 |---|---|
@@ -115,7 +115,7 @@ The catalog workstream reports its 46-fixture probe passed and root-local checks
 
 This later checkpoint supersedes counts and statuses in the preceding historical snapshots. Inventory now has **28 tool rows: 27 `PinnedTool` entries plus Mise**, and **four native source authority records covering 13 exact pins**. Eight stale tools remain: Bun, Java, Gradle, Python, Uv, Node, Boltffi and desktop Rust. Alint's previous hold was removed after the paired compatibility update; Rust and Mise action holds remain. No new hold or hosted performance qualification is claimed.
 
-Alint tool/action now both pin approved `0.17.0`; action/source commit `d93c0283b19dd78afcd8a4b303f1556a7759ba81`. Paired actual configuration and action-flag compatibility evidence is `/tmp/velnor-tool-pin-evidence/alint-qualification/qualification-report.json`: both versions validate the 53-rule config, and actual check/action outputs have identical five errors/four informational findings. This verifies upgrade compatibility, not a green repository check; the reported policy failures remain separate work.
+Alint tool/action now both pin approved `0.17.0`; action/source commit `d93c0283b19dd78afcd8a4b303f1556a7759ba81`. Paired actual configuration and action-flag compatibility evidence is `<tmp>/velnor-tool-pin-evidence/alint-qualification/qualification-report.json`: both versions validate the 53-rule config, and actual check/action outputs have identical five errors/four informational findings. This verifies upgrade compatibility, not a green repository check; the reported policy failures remain separate work.
 
 | Added source-current tool | Version | Peeled source commit | Evidence SHA256 |
 |---|---|---|---|
@@ -124,7 +124,7 @@ Alint tool/action now both pin approved `0.17.0`; action/source commit `d93c0283
 
 These Swift tool observations retain published asset metadata and source qualification in `/tmp/nativeauthority/summary.json`; isolated acquisition probes are separately reported. Actual hosted workload/cache performance remains unqualified.
 
-The Gradle wrapper authority records execution engine `9.5.1` separately from bootstrap `9.4.1` source commit `2d6327017519d23b96af35865dc997fcb544fb40`. Distribution SHA256 is `bafc141b619ad6350fd975fc903156dd5c151998cc8b058e8c1044ab5f7b031f`; actual project script SHA256 is `aed171fb114f82e6eaea4970a245a200e0582a7dcc8ec0891ca41b6e4a62b754`; JAR SHA256 is `55243ef57851f12b070ad14f7f5bb8302daceeebc5bce5ece5fa6edb23e1145c`. The JAR matches official 9.4.1 bytes. The project-generated script has a template-origin/VM-options substitution; it must not be described as byte-identical to the official root script. Source comparison is retained in `/tmp/velnor-gradle-authority/README.md`.
+The Gradle wrapper authority records execution engine `9.5.1` separately from bootstrap `9.4.1` source commit `2d6327017519d23b96af35865dc997fcb544fb40`. Distribution SHA256 is `bafc141b619ad6350fd975fc903156dd5c151998cc8b058e8c1044ab5f7b031f`; actual project script SHA256 is `aed171fb114f82e6eaea4970a245a200e0582a7dcc8ec0891ca41b6e4a62b754`; JAR SHA256 is `55243ef57851f12b070ad14f7f5bb8302daceeebc5bce5ece5fa6edb23e1145c`. The JAR matches official 9.4.1 bytes. The project-generated script has a template-origin/VM-options substitution; it must not be described as byte-identical to the official root script. Source comparison is retained in `<tmp>/velnor-gradle-authority/README.md`.
 
 PostgreSQL fixture authority is `postgres:18.6-trixie@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280`. Its exact registry manifest identifies the source image; database startup, tests, trust and hosted cache behavior are not qualified by this metadata.
 
