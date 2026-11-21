@@ -54,9 +54,10 @@ fn classify(key: &str) -> Option<(CacheFamily, &str)> {
         let (platform, after) = rest.split_once("-mise")?;
         let (version, tail) = after.split_once('-')?;
         let (lock, run) = tail.split_at_checked(64)?;
-        let named = run.strip_prefix('-').is_some_and(|run| !run.is_empty());
-        return (hex(lock, 64) && host(platform) && !version.is_empty() && named)
-            .then_some((CacheFamily::Tools, platform));
+        let suffixed = run.is_empty() || run.strip_prefix('-').is_some_and(|run| !run.is_empty());
+        let group = &key["velnor-tools-".len().."velnor-tools-anchor-".len() + platform.len()];
+        return (hex(lock, 64) && host(platform) && !version.is_empty() && suffixed)
+            .then_some((CacheFamily::Tools, group));
     }
     if let Some(rest) = key.strip_prefix("velnor-tools-") {
         let (group, lock) = rest.rsplit_once('-')?;
