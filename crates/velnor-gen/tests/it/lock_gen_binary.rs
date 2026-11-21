@@ -72,7 +72,7 @@ fn the_archive_digest_is_not_the_digest_of_the_binary() -> TestResult {
         .ok_or("accepted the archive digest as the binary's")?;
     assert!(error.contains("[velnor-gen-binary]"), "{error}");
     assert!(error.contains(GEN_BINARY_X64), "{error}");
-    assert!(error.contains("pin-helper 0.1.111"), "{error}");
+    assert!(error.contains("reinstall velnor-gen 0.1.111"), "{error}");
     Ok(())
 }
 

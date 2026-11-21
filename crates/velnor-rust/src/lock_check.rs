@@ -53,9 +53,6 @@ fn named(section: &str, error: &LockError) -> LockError {
     LockError::new(format!("[{section}] {error}"))
 }
 
-/// Offline: the `[velnor-gen]` entry agrees with the lock's own version and commit and, when
-/// the running binary is a release build of the lock's commit, with that binary's bytes.
-/// A local build (`unknown` commit) is not compared, since its digest is not the published one.
 pub fn check_generator_entry(bytes: &[u8], running: RunningGenerator<'_>) -> Result<(), LockError> {
     let lock = parse(bytes)?;
     release_version(&lock.version)?;
@@ -86,9 +83,9 @@ pub fn check_generator_entry(bytes: &[u8], running: RunningGenerator<'_>) -> Res
         && listed != sha
     {
         return Err(LockError::new(format!(
-            "[{section}] {} digest is {listed} but this binary hashes to {sha}; {}",
+            "[{section}] {} digest is {listed} but this binary hashes to {sha}; reinstall velnor-gen {}",
             platform.file_suffix(),
-            repin_hint()
+            running.version
         )));
     }
     Ok(())
