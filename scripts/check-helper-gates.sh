@@ -115,14 +115,24 @@ verify_correction() {
 scan() {
   local tree=$1 file=$2
   awk -v series="$series" -v patch="$patch" -v tree="$tree" -v lo="${base_version##*.}" '
-  BEGIN { lx_mode = "code"; sq = sprintf("%c", 39); lx_depth = 0; lit_s = 0 }
+  BEGIN {
+    lx_mode = "code"; sq = sprintf("%c", 39); lx_depth = 0; lit_s = 0
+    sfx = "(u8|u16|u32|u64|u128|usize|i8|i16|i32|i64|i128|isize)?"
+    ws = "[[:space:]]*"
+    tup = "\\(" ws "0" sfx ws "," ws "1" sfx ws "," ws "[0-9]+" sfx ws ",?" ws "\\)"
+    ver = "(" tup ")|0\\.1\\.[0-9]+"
+  }
   function versions(line, out,    rest, n, v) {
     n = 0
     rest = line
-    while (match(rest, /\( *0 *, *1 *, *[0-9]+ *\)|0\.1\.[0-9]+/)) {
+    while (match(rest, ver)) {
       v = substr(rest, RSTART, RLENGTH)
-      gsub(/[() ]/, "", v)
-      gsub(/,/, ".", v)
+      if (substr(v, 1, 1) == "(") {
+        gsub(/(u|i)(size|128|64|32|16|8)/, "", v)
+        gsub(/[^0-9,]/, "", v)
+        sub(/,+$/, "", v)
+        gsub(/,/, ".", v)
+      }
       out[++n] = v
       rest = substr(rest, RSTART + RLENGTH)
     }
@@ -141,7 +151,7 @@ scan() {
   }
   function tuple_code(line,    s, off, st) {
     off = 0; s = line
-    while (match(s, /\( *0 *, *1 *, *[0-9]+ *\)/)) {
+    while (match(s, tup)) {
       st = off + RSTART
       if (!inrange(st) && !inlit(st)) return 1
       off = st + RLENGTH - 1
@@ -149,18 +159,9 @@ scan() {
     }
     return 0
   }
-  function mask_tuples(line,    out, off, s, st, pad, j) {
-    out = line; off = 0; s = line
-    while (match(s, /\( *0 *, *1 *, *[0-9]+ *\)/)) {
-      st = off + RSTART
-      if (inlit(st)) {
-        pad = ""
-        for (j = 0; j < RLENGTH; j++) pad = pad " "
-        out = substr(out, 1, st - 1) pad substr(out, st + RLENGTH)
-      }
-      off = st + RLENGTH - 1
-      s = substr(line, off + 1)
-    }
+  function mask_code(line,    out, i, n) {
+    out = ""; n = length(line)
+    for (i = 1; i <= n; i++) out = out ((inrange(i) || inlit(i)) ? " " : substr(line, i, 1))
     return out
   }
   function lex_line(s,    i, n, c, cs, pc, ppc, j, h, hs, k) {
@@ -258,7 +259,7 @@ scan() {
     aboveadded = prevadded
     p_mv = c_mv; p_mn = c_mn; p_mc = c_mc
     analyze(text)
-    scanned_now = strip(mask_tuples(text))
+    scanned_now = strip(mask_code(text))
     prevnew = text
     prevadded = ($0 ~ /^\+/)
     if (!prevadded) {
