@@ -85,7 +85,7 @@ fn sessions(metrics: &mut LaneMetrics, log: &[u8], runner_temp: &Path) -> (Vec<M
     }
     if reports.unlisted > 0 {
         metrics.verification_errors.push(format!(
-            "MBX stats directory has {} entry(ies) that could not be read; the MBX session counts are incomplete.",
+            "MBX stats directory or entry could not be read ({} failure(s)); the MBX session counts are incomplete.",
             reports.unlisted
         ));
     }

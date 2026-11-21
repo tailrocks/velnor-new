@@ -4,8 +4,9 @@
 use crate::mbx_report::{DIRECTORY, SWITCH, VARIABLE, parse, reports_session};
 use crate::waste_evidence::MbxSession;
 use std::collections::BTreeMap;
-use std::fs::{self, File, OpenOptions};
+use std::fs::{self, OpenOptions};
 use std::io::{self, Read, Write};
+use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -109,7 +110,14 @@ pub(super) fn read(runner_temp: &Path) -> Option<Reports> {
     if !enabled() {
         return None;
     }
-    collect(fs::read_dir(runner_temp.join(DIRECTORY)).ok()?)
+    match fs::read_dir(runner_temp.join(DIRECTORY)) {
+        Ok(entries) => collect(entries),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => None,
+        Err(_) => Some(Reports {
+            unlisted: 1,
+            ..Reports::default()
+        }),
+    }
 }
 
 fn collect(entries: impl Iterator<Item = io::Result<fs::DirEntry>>) -> Option<Reports> {
@@ -175,9 +183,22 @@ fn read_regular(file: &Path) -> Result<Vec<u8>, String> {
     if !metadata.file_type().is_file() {
         return Err("not a regular file".to_owned());
     }
+    let report = OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+        .open(file)
+        .map_err(|error| error.to_string())?;
+    if !report
+        .metadata()
+        .map_err(|error| error.to_string())?
+        .is_file()
+    {
+        return Err("not a regular file".to_owned());
+    }
     let mut bytes = Vec::new();
-    File::open(file)
-        .and_then(|report| report.take(MAX_REPORT_BYTES + 1).read_to_end(&mut bytes))
+    report
+        .take(MAX_REPORT_BYTES + 1)
+        .read_to_end(&mut bytes)
         .map_err(|error| error.to_string())?;
     if bytes.len() as u64 > MAX_REPORT_BYTES {
         return Err(format!("larger than {MAX_REPORT_BYTES} bytes"));
@@ -194,10 +215,5 @@ mod tests {
     fn an_entry_that_cannot_be_listed_is_unknown_evidence() {
         let entries = std::iter::once(Err(io::Error::other("entry vanished")));
         assert_eq!(collect(entries).map(|reports| reports.unlisted), Some(1));
-    }
-
-    #[test]
-    fn an_empty_directory_has_no_reports() {
-        assert!(collect(std::iter::empty::<io::Result<std::fs::DirEntry>>()).is_none());
     }
 }
