@@ -91,21 +91,6 @@ fn a_token_in_a_remote_url_query_or_path_stops_the_sources_save() {
 fn a_planted_token_in_a_git_file_the_scan_used_to_skip_stops_the_sources_save() {
     sources_save_stops(&[
         (
-            "fetch-head-userinfo",
-            ".cargo/git/db/shared-1/FETCH_HEAD",
-            "0123456789abcdef0123456789abcdef01234567\t\tbranch 'main' of https://x-access-token:ghs_secret@github.com/acme/shared-lib\n",
-        ),
-        (
-            "fetch-head-token",
-            ".cargo/git/db/shared-1/FETCH_HEAD",
-            "0123456789abcdef0123456789abcdef01234567\t\tbranch 'main' ghp_0123456789abcdefghijklmnopqrstuvwxyzAB\n",
-        ),
-        (
-            "packed-refs-token",
-            ".cargo/git/db/shared-1/packed-refs",
-            "# pack-refs with: peeled fully-peeled sorted\n0123456789abcdef0123456789abcdef01234567 refs/tags/ghs_0123456789abcdefghijklmnopqrstuvwxyzAB\n",
-        ),
-        (
             "gitconfig-extraheader",
             ".cargo/git/db/shared-1/.gitconfig",
             "[http]\n\textraheader = AUTHORIZATION: basic eC1hY2Nlc3M6c2VjcmV0\n",
@@ -119,43 +104,27 @@ fn a_planted_token_in_a_git_file_the_scan_used_to_skip_stops_the_sources_save() 
 }
 
 #[test]
-fn plain_git_files_the_scan_reads_are_saved() {
-    sources_save_goes_on(&[
-        (
-            "plain-fetch-head",
-            ".cargo/git/db/shared-1/FETCH_HEAD",
-            "0123456789abcdef0123456789abcdef01234567\t\tbranch 'main' of https://github.com/acme/shared-lib\n",
-        ),
-        (
-            "plain-packed-refs",
-            ".cargo/git/db/shared-1/packed-refs",
-            "# pack-refs with: peeled fully-peeled sorted\n0123456789abcdef0123456789abcdef01234567 refs/heads/main\n",
-        ),
-    ]);
-}
-
-#[test]
 fn a_credential_url_embedded_in_a_word_stops_the_sources_save() {
     sources_save_stops(&[
         (
             "embedded-userinfo-url",
-            ".cargo/git/db/shared-1/FETCH_HEAD",
-            "# (https://x-access-token:secret@github.com/acme/shared-lib)\n",
+            ".cargo/git/db/shared-1/config",
+            "[core]\n\tbare = true\n# (https://x-access-token:secret@github.com/acme/shared-lib)\n",
         ),
         (
             "embedded-query-token-url",
-            ".cargo/git/db/shared-1/FETCH_HEAD",
-            "# (https://github.example/acme/shared?access_token=secret)\n",
+            ".cargo/git/db/shared-1/config",
+            "[core]\n\tbare = true\n# (https://github.example/acme/shared?access_token=secret)\n",
         ),
         (
             "embedded-url-after-a-plain-one",
-            ".cargo/git/db/shared-1/FETCH_HEAD",
-            "# (https://example.org/docs)(https://user@github.example/acme/shared-lib)\n",
+            ".cargo/git/db/shared-1/config",
+            "[core]\n\tbare = true\n# (https://example.org/docs)(https://user@github.example/acme/shared-lib)\n",
         ),
         (
             "embedded-foreign-scheme-url",
-            ".cargo/git/db/shared-1/FETCH_HEAD",
-            "# (ftp://user:secret@example.org/file)\n",
+            ".cargo/git/db/shared-1/config",
+            "[core]\n\tbare = true\n# (ftp://user:secret@example.org/file)\n",
         ),
     ]);
 }
@@ -179,20 +148,11 @@ fn a_token_in_a_config_comment_or_header_or_a_gitlab_token_stops_the_sources_sav
             "[remote \"ghp_0123456789abcdefghijklmnopqrstuvwxyzAB\"]\n\turl = https://github.com/acme/shared-lib\n",
         ),
         (
-            "gitlab-token-in-fetch-head",
-            ".cargo/git/db/shared-1/FETCH_HEAD",
-            "#!/bin/sh\necho glpat-abcdefghijklmnopqrst\n",
+            "gitlab-token-in-a-config-comment",
+            ".cargo/git/db/shared-1/config",
+            "[core]\n\tbare = true\n# glpat-abcdefghijklmnopqrst\n",
         ),
     ]);
-}
-
-#[test]
-fn a_ref_name_that_only_contains_a_token_prefix_is_saved() {
-    sources_save_goes_on(&[(
-        "packed-refs-prefix-inside-a-word",
-        ".cargo/git/db/shared-1/packed-refs",
-        "0123456789abcdef0123456789abcdef01234567 refs/heads/weighs_x\n",
-    )]);
 }
 
 #[cfg(unix)]

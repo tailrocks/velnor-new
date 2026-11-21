@@ -22,9 +22,9 @@ const CREDENTIAL_FILES: &[&str] = &[
 ];
 const GIT_CREDENTIAL_FILES: &[&str] = &["credentials"];
 const GIT_CONFIGS: &[&str] = &["config", "config.worktree", ".gitconfig", "config.bak"];
-const GIT_TEXT: &[&str] = &["fetch_head", "packed-refs"];
 const HOOKS: &str = "hooks";
 const LOGS: &str = "logs";
+const FETCH_HEAD: &str = "fetch_head";
 const REFS: &str = "refs";
 const HEAD: &str = "head";
 const CONFIG: &str = "config";
@@ -39,7 +39,6 @@ enum Context {
     Repository,
     Database,
     Refs,
-    Logs,
 }
 
 impl Context {
@@ -50,8 +49,6 @@ impl Context {
             Self::Repository
         } else if parent_is_git_directory && name == REFS {
             Self::Refs
-        } else if parent_is_git_directory && name == LOGS {
-            Self::Logs
         } else {
             self
         }
@@ -61,8 +58,8 @@ impl Context {
         self != Self::Outside
     }
 
-    fn keeps_hooks(self) -> bool {
-        matches!(self, Self::Refs | Self::Logs)
+    fn names_refs(self) -> bool {
+        self == Self::Refs
     }
 }
 
@@ -173,17 +170,29 @@ fn walk(directory: &Path, depth: usize, budget: &mut usize, context: Context) ->
         {
             return Some(format!("{} is a credential file", shown(&path)));
         }
-        if kind.is_dir() {
-            if git && name == HOOKS && !context.keeps_hooks() {
-                if let Err(error) = fs::remove_dir_all(&path) {
-                    return Some(format!(
-                        "cannot leave out {}: {}",
-                        shown(&path),
-                        inert(&error.to_string())
-                    ));
-                }
-                continue;
+        let left_out = git
+            && !context.names_refs()
+            && if kind.is_dir() {
+                name == HOOKS || name == LOGS
+            } else {
+                name == FETCH_HEAD
+            };
+        if left_out {
+            let removed = if kind.is_dir() {
+                fs::remove_dir_all(&path)
+            } else {
+                fs::remove_file(&path)
+            };
+            if let Err(error) = removed {
+                return Some(format!(
+                    "cannot leave out {}: {}",
+                    shown(&path),
+                    inert(&error.to_string())
+                ));
             }
+            continue;
+        }
+        if kind.is_dir() {
             subdirectories.push((path, context.entering(&name, is_git_directory, databases)));
         } else if !kind.is_file() {
             return Some(format!(
@@ -193,14 +202,6 @@ fn walk(directory: &Path, depth: usize, budget: &mut usize, context: Context) ->
         } else if git && GIT_CONFIGS.contains(&name.as_str()) && holds_credential(&path) {
             return Some(format!(
                 "{} holds a credential or a transport setting",
-                shown(&path)
-            ));
-        } else if git
-            && (GIT_TEXT.contains(&name.as_str()) || context == Context::Logs)
-            && names_credential_file(&path)
-        {
-            return Some(format!(
-                "{} names a credential or a transport setting",
                 shown(&path)
             ));
         }
@@ -227,10 +228,6 @@ fn holds_credential(path: &Path) -> bool {
         !crate::io::saved_git_config::is_plain(&text)
             || crate::io::saved_git_config::names_credential(&text)
     })
-}
-
-fn names_credential_file(path: &Path) -> bool {
-    read_small(path).is_none_or(|text| crate::io::saved_git_config::names_credential(&text))
 }
 
 fn read_small(path: &Path) -> Option<String> {

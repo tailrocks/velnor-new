@@ -42,6 +42,7 @@ fn repository(root: &str, extra: &[(&str, &str)]) -> Vec<(String, String)> {
 }
 
 const SAVED: &str = "save=true\nsources=true\n";
+const CREDENTIAL_URL: &str = "https://x-access-token:ghs_secret@github.com/acme/shared-lib";
 const REFUSED: &str = "save=true\nsources=false\n";
 
 #[test]
@@ -156,6 +157,59 @@ fn hooks_with_every_reported_evasion_are_absent_from_the_saved_sources() {
 }
 
 #[test]
+fn fetch_head_and_reflogs_are_never_saved_wherever_the_git_directory_sits() {
+    let roots = [
+        DATABASE.to_owned(),
+        format!("{DATABASE}/vendor/.git"),
+        format!("{DATABASE}/modules/vendor"),
+        format!("{DATABASE}/worktrees/w1/modules/vendor"),
+        ".cargo/registry/index/index.crates.io-1/.git".to_owned(),
+    ];
+    for root in roots {
+        let fetched = format!("{SHA}\t\tbranch 'main' of {CREDENTIAL_URL}\n");
+        let logged = format!(
+            "{SHA} {SHA} Builder <b@example.invalid> 1 +0000\tclone: from {CREDENTIAL_URL}\n"
+        );
+        let decided = decided(
+            &format!("left-out-{}", root.replace('/', "-")),
+            &repository(
+                &root,
+                &[
+                    ("FETCH_HEAD", &fetched),
+                    ("logs/HEAD", &logged),
+                    ("logs/refs/remotes/origin/main", &logged),
+                    ("packed-refs", &format!("{SHA} refs/heads/main\n")),
+                    ("refs/heads/main", SHA),
+                ],
+            ),
+        );
+        assert_eq!(decided.written, SAVED, "{root}");
+        let git = decided.home.join(&root);
+        assert!(!git.join("FETCH_HEAD").exists(), "{root}");
+        assert!(!git.join("logs").exists(), "{root}");
+        for kept in ["HEAD", "config", "packed-refs", "refs/heads/main"] {
+            assert!(git.join(kept).is_file(), "{root}: {kept}");
+        }
+    }
+}
+
+#[test]
+fn a_credential_in_a_git_config_still_stops_the_save_beside_a_left_out_fetch_head() {
+    let stopped = decided(
+        "config-beside-fetch-head",
+        &repository(
+            DATABASE,
+            &[
+                ("config", TOKEN_REMOTE),
+                ("FETCH_HEAD", SHA),
+                ("logs/HEAD", SHA),
+            ],
+        ),
+    );
+    assert_eq!(stopped.written, REFUSED);
+}
+
+#[test]
 fn a_ref_named_hooks_survives_the_hooks_exclusion() {
     for root in [
         DATABASE.to_owned(),
@@ -168,7 +222,8 @@ fn a_ref_named_hooks_survives_the_hooks_exclusion() {
             "refs/heads/hooks/main",
             "refs/remotes/origin/hooks/main",
             "refs/tags/hooks/v1",
-            "logs/refs/heads/hooks/main",
+            "refs/heads/logs/main",
+            "refs/remotes/origin/FETCH_HEAD",
         ];
         let files: Vec<(&str, &str)> = refs.iter().map(|path| (*path, SHA)).collect();
         let kept = decided(

@@ -4,7 +4,7 @@
 use crate::cache_credential_scrub::{sources_save_goes_on, sources_save_stops};
 
 const SHA: &str = "0123456789abcdef0123456789abcdef01234567";
-const FETCH_HEAD: &str = ".cargo/git/db/shared-1/FETCH_HEAD";
+const CONFIG: &str = ".cargo/git/db/shared-1/config";
 const TOKEN: &str = "ghp_0123456789abcdefghijklmnopqrstuvwxyzAB";
 
 fn encode_basic(credentials: &[u8]) -> String {
@@ -26,6 +26,14 @@ fn encode_basic(credentials: &[u8]) -> String {
         .collect()
 }
 
+fn commented(text: &str) -> String {
+    let lines: Vec<String> = text
+        .lines()
+        .map(|line| format!("# {}", line.trim_start_matches("# ")))
+        .collect();
+    format!("[core]\n\tbare = true\n{}\n", lines.join("\n"))
+}
+
 #[test]
 fn a_percent_encoded_token_prefix_in_plain_text_stops_the_sources_save() {
     let encoded = TOKEN.replace('_', "%5F");
@@ -35,41 +43,43 @@ fn a_percent_encoded_token_prefix_in_plain_text_stops_the_sources_save() {
     let encoded_url = format!("https%3A%2F%2F{user}:{pass}%40github.com/acme/shared-lib");
     sources_save_stops(&[
         (
-            "fetch-head-encoded-classic",
-            FETCH_HEAD,
-            &format!("{SHA}\t\tbranch 'main' {encoded}\n"),
+            "config-encoded-classic",
+            CONFIG,
+            &commented(&format!("{SHA}\t\tbranch 'main' {encoded}")),
         ),
         (
-            "fetch-head-encoded-fine-grained",
-            FETCH_HEAD,
-            &format!("{SHA}\t\tbranch 'main' {fine_grained}\n"),
+            "config-encoded-fine-grained",
+            CONFIG,
+            &commented(&format!("{SHA}\t\tbranch 'main' {fine_grained}")),
         ),
         (
-            "fetch-head-encoded-url",
-            FETCH_HEAD,
-            &format!("{SHA}\t\tbranch 'main' of {encoded_url}\n"),
+            "config-encoded-url",
+            CONFIG,
+            &commented(&format!("{SHA}\t\tbranch 'main' of {encoded_url}")),
         ),
     ]);
 }
 
 #[test]
-fn a_basic_authorization_header_in_fetch_head_stops_the_sources_save() {
+fn a_basic_authorization_header_in_a_config_comment_stops_the_sources_save() {
     let user = "x-access-token";
     let token = format!("{}{}", "ghs_", "secret1234567890");
     let basic = encode_basic(format!("{user}:{token}").as_bytes());
     sources_save_stops(&[
         (
-            "fetch-head-header",
-            FETCH_HEAD,
-            &format!("{SHA}\t\tbranch 'main' Authorization: Basic {basic}\n"),
+            "config-header",
+            CONFIG,
+            &commented(&format!(
+                "{SHA}\t\tbranch 'main' Authorization: Basic {basic}"
+            )),
         ),
         (
-            "fetch-head-short-basic-header",
-            FETCH_HEAD,
-            &format!(
-                "{SHA}\t\tbranch 'main' Authorization: Basic {}\n",
+            "config-short-basic-header",
+            CONFIG,
+            &commented(&format!(
+                "{SHA}\t\tbranch 'main' Authorization: Basic {}",
                 encode_basic(b"user:pass")
-            ),
+            )),
         ),
     ]);
 }
@@ -79,58 +89,61 @@ fn prose_about_a_basic_authorization_header_is_saved() {
     sources_save_goes_on(&[
         (
             "placeholder-token",
-            FETCH_HEAD,
-            "# send Authorization: Basic <base64 of user:token> when asked\n",
+            CONFIG,
+            &commented("send Authorization: Basic <base64 of user:token> when asked"),
         ),
         (
             "variable-reference",
-            FETCH_HEAD,
-            "curl -H \"Authorization: Basic $ENCODED\" https://example.org\n",
+            CONFIG,
+            &commented("curl -H \"Authorization: Basic $ENCODED\" https://example.org"),
         ),
         (
             "word-after-basic",
-            FETCH_HEAD,
-            "# the Authorization: Basic header is never written here\n",
+            CONFIG,
+            &commented("the Authorization: Basic header is never written here"),
         ),
         (
             "bearer-prose",
-            FETCH_HEAD,
-            "# an authorization header like Bearer is configured elsewhere\n",
+            CONFIG,
+            &commented("an authorization header like Bearer is configured elsewhere"),
         ),
         (
             "basic-auth-prose",
-            FETCH_HEAD,
-            "# Authorization: Basic authentication is required\n",
+            CONFIG,
+            &commented("Authorization: Basic authentication is required"),
         ),
-        ("benign-four-times-encoded-space", FETCH_HEAD, "%25252520\n"),
+        (
+            "benign-four-times-encoded-space",
+            CONFIG,
+            &commented("%25252520"),
+        ),
     ]);
 }
 
 #[test]
 fn a_basic_authorization_header_with_non_ascii_credentials_stops_the_sources_save() {
     sources_save_stops(&[(
-        "fetch-head-utf8-password",
-        FETCH_HEAD,
-        &format!(
-            "{SHA}\t\tbranch 'main' Authorization: Basic {}\n",
+        "config-utf8-password",
+        CONFIG,
+        &commented(&format!(
+            "{SHA}\t\tbranch 'main' Authorization: Basic {}",
             encode_basic(b"user:p\xc3\xa4ss")
-        ),
+        )),
     )]);
 }
 
 #[test]
 fn a_credential_in_a_comment_of_a_saved_git_config_stops_the_sources_save() {
-    let config = ".cargo/git/db/shared-1/config";
     sources_save_stops(&[
         (
             "config-comment-encoded-token",
-            config,
-            &format!("[core]\n\tbare = true\n# {}\n", TOKEN.replace('_', "%5F")),
+            CONFIG,
+            &commented(&TOKEN.replace('_', "%5F")),
         ),
         (
             "config-comment-basic-header",
-            config,
-            "[core]\n\tbare = true\n# Authorization: Basic dXNlcjpwYXNz\n",
+            CONFIG,
+            &commented("Authorization: Basic dXNlcjpwYXNz"),
         ),
     ]);
 }
@@ -138,17 +151,21 @@ fn a_credential_in_a_comment_of_a_saved_git_config_stops_the_sources_save() {
 #[test]
 fn a_form_encoded_basic_header_stops_the_sources_save() {
     sources_save_stops(&[(
-        "fetch-head-form-encoded-basic",
-        FETCH_HEAD,
-        &format!("{SHA}\t\tbranch 'main' Authorization%3A+Basic+dXNlcjpwYXNz\n"),
+        "config-form-encoded-basic",
+        CONFIG,
+        &commented(&format!(
+            "{SHA}\t\tbranch 'main' Authorization%3A+Basic+dXNlcjpwYXNz"
+        )),
     )]);
 }
 
 #[test]
 fn a_basic_payload_with_control_bytes_stops_the_sources_save() {
     sources_save_stops(&[(
-        "fetch-head-base64-with-a-tab",
-        FETCH_HEAD,
-        &format!("{SHA}\t\tbranch 'main' Authorization: Basic dXNlcjpwYQlzcw==\n"),
+        "config-base64-with-a-tab",
+        CONFIG,
+        &commented(&format!(
+            "{SHA}\t\tbranch 'main' Authorization: Basic dXNlcjpwYQlzcw=="
+        )),
     )]);
 }
