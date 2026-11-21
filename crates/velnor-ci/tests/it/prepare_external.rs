@@ -45,6 +45,33 @@ fn the_config_prepare_rewrites_stays_out_of_the_compat_digest() {
 }
 
 #[test]
+fn prepare_refuses_a_build_directory_set_in_the_cargo_home_config() {
+    for body in [
+        "[build]\nbuild-dir = \"out\"\n",
+        "build.build-dir = \"out\"\n",
+        "build = { build-dir = \"out\" }\n",
+    ] {
+        let mut setup = Setup::new(reported("1.99.1", Some("0.9.151")));
+        setup.cargo_config = Some(body);
+        let run = prepare("home_build_dir", &setup);
+        assert!(!run.output.status.success(), "{body}: {:?}", run.output);
+        let stderr = String::from_utf8_lossy(&run.output.stderr);
+        assert!(
+            stderr.contains("cargo-home/config.toml") && stderr.contains("build.build-dir"),
+            "{body}: {stderr}"
+        );
+        assert_eq!(
+            (run.env_file, run.outputs, run.velnor_config),
+            (String::new(), String::new(), String::new())
+        );
+    }
+    let mut accepted = Setup::new(reported("1.99.1", Some("0.9.151")));
+    accepted.cargo_config = Some("[build]\njobs = 2\n");
+    let run = prepare("home_jobs", &accepted);
+    assert!(run.output.status.success(), "{:?}", run.output);
+}
+
+#[test]
 fn an_external_config_shadowed_by_the_legacy_one_is_never_read() {
     let mut setup = Setup::new(reported("1.99.1", Some("0.9.151")));
     setup.populate = Some(Box::new(|base| {

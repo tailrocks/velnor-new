@@ -5,6 +5,7 @@ mod boundary;
 mod bounds;
 mod build_clock;
 mod build_directory;
+mod build_script_source;
 mod freshness;
 mod gated;
 mod groups;
@@ -22,6 +23,7 @@ mod partial;
 mod per_root;
 mod reads;
 mod selection;
+mod separate_build;
 mod stale_run;
 mod stand_ins;
 

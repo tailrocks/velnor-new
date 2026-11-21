@@ -50,6 +50,6 @@ fn reopen(scan: &Scan, directory: &Path) -> io::Result<Option<nix::dir::Dir>> {
         .entries
         .get(directory)
         .is_some_and(|children| children.keys().cloned().collect::<BTreeSet<_>>() == listed);
-    let same = scan.identities.get(directory) == Some(&handle::identity(&listing)?);
+    let same = scan.identities.get(directory) == Some(&handle::stamp(&listing)?);
     Ok((walked && same).then_some(listing))
 }

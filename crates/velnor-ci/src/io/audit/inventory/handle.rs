@@ -3,23 +3,45 @@
 
 use std::ffi::{OsStr, OsString};
 use std::io;
+use std::os::fd::{AsFd, BorrowedFd};
 use std::os::unix::ffi::OsStringExt;
 use std::path::Path;
 use std::rc::Rc;
 use std::time::{Duration, SystemTime};
 
 use nix::dir::Dir;
-use nix::fcntl::{AtFlags, OFlag, openat, readlinkat};
+use nix::fcntl::{AT_FDCWD, AtFlags, OFlag, openat, readlinkat};
 use nix::sys::stat::{FileStat, Mode, SFlag, fstat, fstatat};
 
 use super::Kind;
 use super::walk::unresolved_link;
 
 pub(super) type Opened = Rc<Dir>;
+pub(super) type Identity = (libc::dev_t, libc::ino_t);
 
+/// A directory's identity together with the times that change when its entries do.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::io::audit) struct Stamp {
+    device: i128,
+    inode: i128,
+    modified: (i128, i128),
+    changed: (i128, i128),
+}
+
+#[derive(Clone)]
 pub(super) enum Origin {
     Path,
     Child { parent: Opened, name: OsString },
+}
+pub(super) enum Current {
+    Gone,
+    Directory(Identity),
+    Other(Kind),
+}
+
+pub(super) struct Observed {
+    pub(super) kind: Kind,
+    pub(super) modified: Option<SystemTime>,
 }
 
 fn failure(errno: nix::errno::Errno) -> io::Error {
@@ -36,13 +58,49 @@ pub(super) fn replaced(error: &io::Error) -> bool {
 pub(super) fn open(origin: &Origin, path: &Path) -> io::Result<Dir> {
     let flags = OFlag::O_RDONLY | OFlag::O_DIRECTORY | OFlag::O_NOFOLLOW | OFlag::O_CLOEXEC;
     let fd = match origin {
-        Origin::Path => openat(nix::fcntl::AT_FDCWD, path, flags, Mode::empty()),
+        Origin::Path => openat(AT_FDCWD, path, flags, Mode::empty()),
         Origin::Child { parent, name } => {
             openat(parent.as_ref(), name.as_os_str(), flags, Mode::empty())
         }
     }
     .map_err(failure)?;
     Dir::from_fd(fd).map_err(failure)
+}
+pub(super) fn identity(directory: &Dir) -> io::Result<Identity> {
+    let stat = fstat(directory).map_err(failure)?;
+    Ok((stat.st_dev, stat.st_ino))
+}
+pub(super) fn stamp(directory: &Dir) -> io::Result<Stamp> {
+    let stat = fstat(directory).map_err(failure)?;
+    Ok(Stamp {
+        device: i128::from(stat.st_dev),
+        inode: i128::from(stat.st_ino),
+        modified: (i128::from(stat.st_mtime), i128::from(stat.st_mtime_nsec)),
+        changed: (i128::from(stat.st_ctime), i128::from(stat.st_ctime_nsec)),
+    })
+}
+pub(super) fn current(origin: &Origin, path: &Path) -> io::Result<Current> {
+    let (anchor, name) = anchor(origin, path);
+    let stat = match fstatat(anchor, name, AtFlags::AT_SYMLINK_NOFOLLOW) {
+        Ok(stat) => stat,
+        Err(nix::errno::Errno::ENOENT) => return Ok(Current::Gone),
+        Err(errno) => return Err(failure(errno)),
+    };
+    let format = SFlag::from_bits_truncate(stat.st_mode) & SFlag::S_IFMT;
+    if format == SFlag::S_IFDIR {
+        return Ok(Current::Directory((stat.st_dev, stat.st_ino)));
+    }
+    Ok(match kind_at(anchor, name, path)? {
+        Some(kind) => Current::Other(kind),
+        None => Current::Gone,
+    })
+}
+
+fn anchor<'a>(origin: &'a Origin, path: &'a Path) -> (BorrowedFd<'a>, &'a OsStr) {
+    match origin {
+        Origin::Path => (AT_FDCWD, path.as_os_str()),
+        Origin::Child { parent, name } => (parent.as_fd(), name.as_os_str()),
+    }
 }
 
 pub(super) fn names(
@@ -61,27 +119,16 @@ pub(super) fn names(
     Ok(names)
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(in crate::io::audit) struct Identity {
-    device: i128,
-    inode: i128,
-    modified: (i128, i128),
-    changed: (i128, i128),
+pub(super) fn kind_at(directory: impl AsFd, name: &OsStr, path: &Path) -> io::Result<Option<Kind>> {
+    Ok(classify(directory, name, path, false)?.map(|observed| observed.kind))
 }
 
-pub(super) fn identity(directory: &Dir) -> io::Result<Identity> {
-    let stat = fstat(directory).map_err(failure)?;
-    Ok(Identity {
-        device: i128::from(stat.st_dev),
-        inode: i128::from(stat.st_ino),
-        modified: (i128::from(stat.st_mtime), i128::from(stat.st_mtime_nsec)),
-        changed: (i128::from(stat.st_ctime), i128::from(stat.st_ctime_nsec)),
-    })
-}
-
-pub(super) struct Observed {
-    pub(super) kind: Kind,
-    pub(super) modified: Option<SystemTime>,
+pub(super) fn observe(
+    directory: impl AsFd,
+    name: &OsStr,
+    path: &Path,
+) -> io::Result<Option<Observed>> {
+    classify(directory, name, path, true)
 }
 
 fn modified(stat: &FileStat) -> SystemTime {
@@ -97,21 +144,13 @@ fn format_of(stat: &FileStat) -> SFlag {
     SFlag::from_bits_truncate(stat.st_mode) & SFlag::S_IFMT
 }
 
-pub(super) fn kind_at(directory: &Dir, name: &OsStr, path: &Path) -> io::Result<Option<Kind>> {
-    Ok(classify(directory, name, path, false)?.map(|observed| observed.kind))
-}
-
-pub(super) fn observe(directory: &Dir, name: &OsStr, path: &Path) -> io::Result<Option<Observed>> {
-    classify(directory, name, path, true)
-}
-
 fn classify(
-    directory: &Dir,
+    directory: impl AsFd,
     name: &OsStr,
     path: &Path,
     with_modified: bool,
 ) -> io::Result<Option<Observed>> {
-    let stat = match fstatat(directory, name, AtFlags::AT_SYMLINK_NOFOLLOW) {
+    let stat = match fstatat(&directory, name, AtFlags::AT_SYMLINK_NOFOLLOW) {
         Ok(stat) => stat,
         Err(nix::errno::Errno::ENOENT) => return Ok(None),
         Err(errno) => return Err(failure(errno)),
@@ -134,7 +173,7 @@ fn classify(
         Err(error) => return Err(error),
     };
     let modified = if with_modified {
-        let followed = match fstatat(directory, name, AtFlags::empty()) {
+        let followed = match fstatat(&directory, name, AtFlags::empty()) {
             Ok(followed) => followed,
             Err(
                 nix::errno::Errno::ENOENT | nix::errno::Errno::ELOOP | nix::errno::Errno::ENOTDIR,
@@ -145,7 +184,7 @@ fn classify(
     } else {
         None
     };
-    match readlinkat(directory, name) {
+    match readlinkat(&directory, name) {
         Ok(target) => Ok(Some(Observed {
             kind: Kind::Link {
                 target: target.into(),

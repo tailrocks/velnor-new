@@ -26,10 +26,11 @@ use crate::error::CiError;
 
 pub(super) const STORE: &str = ".velnor-input-inventories";
 pub(super) type Entries = BTreeMap<PathBuf, BTreeMap<PathBuf, Kind>>;
+
 #[derive(Default)]
 pub(super) struct Scan {
     pub(super) entries: Entries,
-    pub(super) identities: BTreeMap<PathBuf, handle::Identity>,
+    pub(super) identities: BTreeMap<PathBuf, handle::Stamp>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -55,10 +56,9 @@ pub(super) fn exclusions(workspaces: &[Workspace]) -> Result<BTreeSet<PathBuf>, 
     workspaces
         .iter()
         .flat_map(|workspace| {
-            [
-                workspace.workspace_root.join("target"),
-                workspace.target_directory.clone(),
-            ]
+            let mut excluded = vec![workspace.root.join("target")];
+            excluded.extend(workspace.directories());
+            excluded
         })
         .map(|target| velnor_rust::resolve(&target).map_err(|error| unresolved(&target, &error)))
         .collect()
