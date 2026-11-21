@@ -103,6 +103,16 @@ jobs:
           fi
           bash scripts/check-helper-gates.sh --diff "$fixtures/gate-good.diff" --current 0.1.100
           bash scripts/check-helper-gates.sh --diff "$fixtures/gate-correction-good.diff" --current 0.1.100
+          out=$(bash scripts/check-helper-gates.sh --diff "$fixtures/gate-correction-untagged.diff" --current 0.1.111)
+          case "$out" in
+            *"first in tools-v0.1.111 via 66940bed2e"*) ;;
+            *) echo "the check did not name the release tag tools-v0.1.111: $out" >&2; exit 1 ;;
+          esac
+          out=$(bash scripts/check-helper-gates.sh --diff "$fixtures/gate-correction-legacy-rust-ci.diff" --current 0.1.100)
+          case "$out" in
+            *"first in rust-ci-v0.1.82 via 6d583dd497"*) ;;
+            *) echo "the check did not name the release tag rust-ci-v0.1.82: $out" >&2; exit 1 ;;
+          esac
           for f in gate-unreleased-untagged gate-unreleased-released-marker gate-prose-released gate-released-unmarked gate-marker-unchanged-wrong-commit gate-marker-unchanged-wrong-version; do
             if bash scripts/check-helper-gates.sh --diff "$fixtures/$f.diff" --current 0.1.110; then
               echo "the check accepted $f.diff" >&2

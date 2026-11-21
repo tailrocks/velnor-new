@@ -170,6 +170,7 @@ pub(super) fn decide_declaring(
         ])
         .env("RUNNER_TEMP", &temp)
         .env("GITHUB_OUTPUT", &outputs)
+        .env("HOME", repo.root())
         .env_remove("GITHUB_TOKEN")
         .env_remove("GH_TOKEN")
         .env_remove("VELNOR_PUBLIC_VERDICTS")

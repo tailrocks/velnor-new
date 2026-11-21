@@ -212,8 +212,7 @@ fn a_failure_artifact_is_uploaded_after_the_tests_under_the_default_token_only()
     assert!(upload["env"].is_null(), "{upload}");
     let keys: Vec<&str> = upload["with"]
         .as_object()
-        .map(|with| with.keys().map(String::as_str).collect())
-        .unwrap_or_default();
+        .map_or_else(Vec::new, |with| with.keys().map(String::as_str).collect());
     assert!(keys.iter().all(|key| !key.contains("token")), "{keys:?}");
     let all = steps(job);
     let test = all
