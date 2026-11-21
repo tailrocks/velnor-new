@@ -308,9 +308,6 @@ fn a_lane_whose_only_mbx_reports_are_probes_still_compiled_without_mbx() -> Resu
     Ok(())
 }
 
-/// A verification-only report is a real session, so a lane compiled through mbx is not
-/// "compiled without mbx". The complement (a probe-only report still fires the guard) is
-/// `a_lane_whose_only_mbx_reports_are_probes_still_compiled_without_mbx` above.
 #[test]
 fn a_lane_whose_only_mbx_report_is_verification_only_is_a_session_not_compiled_without_mbx()
 -> ResultTest {
