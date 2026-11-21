@@ -166,6 +166,33 @@ scan() {
     if (match(call, tup ws "\\)")) return !literal_tuple(substr(call, RSTART, RLENGTH - 1))
     return 0
   }
+  function open_tuple_bad(line,    t, c) {
+    if (!match(line, "(^|\\()" ws num ws "(," ws num ws ")?,?" ws "$")) return 0
+    t = substr(line, RSTART)
+    gsub(/[()[:space:]]/, "", t)
+    split(t, c, ",")
+    return intval(c[1]) == 0
+  }
+  function tuple_bad(line,    s, off, m, st, t, c, pre, rest) {
+    if (open_tuple_bad(line)) return 1
+    off = 0; s = line
+    while (match(s, "(^|[^A-Za-z0-9_.])" num ws "," ws num ws ",")) {
+      m = substr(s, RSTART, RLENGTH)
+      st = off + RSTART
+      if (m !~ /^[0-9]/) { m = substr(m, 2); st++ }
+      off = st + length(m) - 1
+      s = substr(line, off + 1)
+      t = m
+      gsub(/[[:space:]]/, "", t)
+      split(t, c, ",")
+      if (intval(c[1]) != 0 || intval(c[2]) != 1) continue
+      pre = substr(line, 1, st - 1)
+      if (!match(pre, "\\(" ws "$")) return 1
+      rest = substr(line, RSTART)
+      if (!match(rest, "^" tup) || !literal_tuple(substr(rest, 1, RLENGTH))) return 1
+    }
+    return 0
+  }
   function versions(line, out,    rest, n, v) {
     n = 0
     rest = line
@@ -316,9 +343,10 @@ scan() {
     if (!tree && tolower(text) ~ /^[ \t]*(\/\/|\/\*|\*).*(first released in|not tagged yet)/) { printf "PROSE\t%s\t%s\n", file, text; next }
     if (!tree && c_mention && !c_mv) { printf "MARKER\t%s\t%s\n", file, text; next }
     if (!counted) next
-    if (file ~ /^crates\/velnor-gen\/src\/key_gates\// && gate_call_bad(mask_code(text))) { printf "SHAPE\t%s\t%s\n", file, text; next }
+    if (file ~ /^crates\/velnor-gen\/src\/key_gates\// && (gate_call_bad(mask_code(text)) || tuple_bad(mask_code(text)))) { printf "SHAPE\t%s\t%s\n", file, text; next }
     stripped = strip(text)
     has = c_mv || p_mv
+    if (!tree && mask_code(text) ~ /HELPER_MINIMUM[[:space:]]*:/ && (!has || versions(scanned_now, probe) == 0)) { printf "PIN\t%s\t%s\n", file, text; next }
     markN_now = c_mv ? c_mn : (p_mv ? p_mn : "")
     markC_now = c_mv ? c_mc : (p_mv ? p_mc : "")
     if (has && versions(scanned_now, probe) == 0) next
@@ -375,7 +403,10 @@ while IFS=$'\t' read -r kind f1 f2 f3 f4; do
       printf '%s: helper-gate marker is not the released form: %s\n  use `// helper-gate: first in tools-v0.1.N via <commit>` on a released gate; leave unreleased gates unmarked\n' "$f1" "$f2" >&2
       bad=1 ;;
     SHAPE)
-      printf '%s: gate row is not a literal tuple on one line: %s\n  write the gate as `gate(File, "key", (0, 1, N))` with three integer literals on that line (or HELPER_MINIMUM)\n' "$f1" "$f2" >&2
+      printf '%s: gate row is not a literal tuple on one line: %s\n  write every (0, 1, N) tuple here as three integer literals on one line, in `gate(File, "key", (0, 1, N))` or HELPER_MINIMUM\n' "$f1" "$f2" >&2
+      bad=1 ;;
+    PIN)
+      printf '%s: HELPER_MINIMUM is the floor of the supported helper range and may change only with the marker of a released helper on the same definition: %s\n  use `// helper-gate: first in tools-v0.1.N via <commit>` above `pub const HELPER_MINIMUM: (u64, u64, u64) = (0, 1, N);`\n' "$f1" "$f2" >&2
       bad=1 ;;
     BAD)
       printf '%s: gate %s, but tools-v%s is already released; use %s\n  %s\n' "$f1" "$f2" "$f2" "$next" "$f3" >&2

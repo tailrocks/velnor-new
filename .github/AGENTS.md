@@ -4,6 +4,12 @@
 
 The other files under `.github/` are repository-owned: `workflows/ci.yml` is hand-written (the `workflow_dispatch` contract inputs and the helper-gates check), and so are the configuration files `dco.yml` and `jactionlint.yaml`.
 
+## What the helper-gate check guards
+
+`scripts/check-helper-gates.sh` is a line-based lint, so it is a fast early warning and not the guard. It reads one added line at a time and cannot parse Rust: in `crates/velnor-gen/src/key_gates/` it rejects any `(0, 1, N)` tuple that is not three integer literals on one line, whatever the function is called, and it rejects a change of `HELPER_MINIMUM` that lacks the marker of a released helper. Outside that folder it reads only literal tuples, so a gate written as `(0, 1, 110 as u64)`, as `(0, 1, 100 + 10)` in a constant, or as a tuple split over lines passes the lint.
+
+The guard against new behaviour at a released pin is byte-identical rendering. A gate that changes output at 0.1.110 or 0.1.111 changes the output that `velnor-gen check` compares with the committed workflows, and the `golden` and `drift` tests compare with every sample and with this repository's own workflows. Each of the three forms above was added with a wired output change in a scratch copy: `velnor-gen check` exited 1 and `golden::every_sample_repository_renders_exactly_its_expected_files` and `drift::the_workflows_committed_in_this_repository_are_what_its_own_config_generates` failed, while the lint printed `helper gates: OK`.
+
 ## Workflow Issues and Enhancements
 
 When issues, bugs, limitations, or enhancements are observed in a generated workflow:

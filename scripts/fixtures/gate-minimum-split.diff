@@ -1,0 +1,6 @@
+diff --git a/crates/velnor-gen/src/lib.rs b/crates/velnor-gen/src/lib.rs
+--- a/crates/velnor-gen/src/lib.rs
++++ b/crates/velnor-gen/src/lib.rs
+@@ -0,0 +1,2 @@
++pub const HELPER_MINIMUM: (u64, u64, u64) =
++    (0, 1, 112);
