@@ -17,6 +17,7 @@ const WORKFLOW: &str = ".github/workflows/rust-ci.yml";
 
 struct Job {
     ids: Vec<String>,
+    conditions: Vec<String>,
     checks: Vec<usize>,
 }
 
@@ -54,7 +55,18 @@ fn render(
                 .iter()
                 .map(|step| step["id"].as_str().unwrap_or_default().to_owned())
                 .collect();
-            found.insert(id.clone(), Job { ids, checks });
+            let conditions = steps
+                .iter()
+                .map(|step| step["if"].as_str().unwrap_or_default().to_owned())
+                .collect();
+            found.insert(
+                id.clone(),
+                Job {
+                    ids,
+                    conditions,
+                    checks,
+                },
+            );
         }
     }
     Ok(found)
@@ -107,10 +119,13 @@ fn a_testless_group_of_the_sample_gets_its_checks_in_the_build_phase_only_from_0
         tools.ids
     );
     for check in &tools.checks {
+        let wait = format!("steps.{}.outcome != 'failure'", tools.ids[*check]);
         assert!(
-            tools.ids[check + 1].starts_with("compile"),
-            "{:?}",
-            tools.ids
+            tools.ids[check + 1].starts_with("compile")
+                && tools.conditions[check + 1].contains(&wait),
+            "{:?} {:?}",
+            tools.ids,
+            tools.conditions
         );
     }
     let before = render(RELEASED, Some("tools/"))?;
