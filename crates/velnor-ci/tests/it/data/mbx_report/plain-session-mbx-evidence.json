@@ -1,0 +1,13 @@
+{
+  "declared": false,
+  "store_primed": false,
+  "seed_truncated": false,
+  "sessions": [
+    {
+      "hits": 3,
+      "misses": 1,
+      "not_looked_up": 0
+    }
+  ],
+  "unparsed": 0
+}

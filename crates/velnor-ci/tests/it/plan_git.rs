@@ -279,3 +279,43 @@ fn a_dirty_file_in_a_submodule_that_gitmodules_ignores_selects_everything() {
     assert!(output.status.success(), "{output:?}");
     assert_eq!(selected(&output), EVERYTHING);
 }
+
+#[test]
+fn an_empty_pull_request_diff_runs_the_policy_lanes_when_gate_on_plan_is_set() {
+    let repo = plan_repo("git-empty-policy");
+    repo.write(
+        "mise.toml",
+        "[tools]\nrust = \"1.99.1\"\n\"cargo:cargo-machete\" = \"0.9.1\"\ncargo-deny = \"0.20.2\"\n",
+    );
+    repo.write("deny.toml", "");
+    repo.write(".velnor/rust-ci.toml", "[policy]\ngate_on_plan = true\n");
+    repo.commit();
+    repo.git(&["branch", "-M", "main"]);
+    repo.git(&["checkout", "--quiet", "-b", "topic"]);
+    git(
+        &repo,
+        &["commit", "--allow-empty", "--quiet", "--message", "topic"],
+    );
+    repo.git(&["checkout", "--quiet", "main"]);
+    repo.write("a/src/later.rs", "pub fn later() {}\n");
+    repo.commit();
+    git(
+        &repo,
+        &["merge", "--quiet", "--no-ff", "--message", "merge", "topic"],
+    );
+    let head = rev(&repo, "HEAD");
+    let output = plan_command(&repo)
+        .arg("plan")
+        .env("GITHUB_EVENT_NAME", "pull_request")
+        .env("GITHUB_EVENT_PATH", event(&repo, "main"))
+        .env("GITHUB_SHA", &head)
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(output.status.success(), "{output:?}");
+    let lanes: String = String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .filter(|line| line.starts_with("rust_deny=") || line.starts_with("rust_machete="))
+        .flat_map(|line| [line, "\n"])
+        .collect();
+    assert_eq!(lanes, "rust_deny=run\nrust_machete=run\n");
+}
