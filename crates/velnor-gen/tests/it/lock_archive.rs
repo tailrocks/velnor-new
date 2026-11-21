@@ -8,6 +8,8 @@ use velnor_rust::{binary_sums_url, lists_binary_sums, pin_lock, release_version}
 use crate::lock::{COMMIT_FILE, SUMS, locked};
 use crate::pipeline::workflow;
 
+const GENERATOR_BINARY_RELEASE: (u64, u64, u64) = (0, 1, 111);
+
 type TestResult = Result<(), Box<dyn Error>>;
 
 const CI_ARCHIVES: &[(&str, &str, &str)] = &[
@@ -57,17 +59,44 @@ b91a87ecac8eda2809f202b4566d886273d7b34d6ef29f726751fcbc8bb3d502  velnor-ci-x86_
 d8a670bd3cbbcec7a282121cbd37d7d52e1ee17793c7c453d5d7ff345ca7318c  velnor-gen-aarch64-apple-darwin.tar.gz
 ";
 
-const BINARY_SUMS: &str = "\
+pub(crate) const BINARY_SUMS: &str = "\
 9de941ee8e31748973283b2cd31a439119a9d22f60ec3e2884d855a8e2971c6f  velnor-ci-x86_64-unknown-linux-musl.tar.gz/velnor-ci
 6d887a0b48bba9c85da802b1943beb3ff38a2ffbc0effbdff615e5f53fe6a4a8  velnor-ci-aarch64-unknown-linux-musl.tar.gz/velnor-ci
 a7e9a4897a81bb86338896573e43b79b4f05e34a489549f1687117dd456648ba  velnor-ci-aarch64-apple-darwin.tar.gz/velnor-ci
 ";
+
+pub(crate) const GENERATOR_BINARY_SUMS: &str = "\
+9de941ee8e31748973283b2cd31a439119a9d22f60ec3e2884d855a8e2971c6f  velnor-ci-x86_64-unknown-linux-musl.tar.gz/velnor-ci
+6d887a0b48bba9c85da802b1943beb3ff38a2ffbc0effbdff615e5f53fe6a4a8  velnor-ci-aarch64-unknown-linux-musl.tar.gz/velnor-ci
+a7e9a4897a81bb86338896573e43b79b4f05e34a489549f1687117dd456648ba  velnor-ci-aarch64-apple-darwin.tar.gz/velnor-ci
+24da48018435c7e9b2e0153a05c7d65b68017db69b073cc8398c78dc6e4274df  velnor-gen-x86_64-unknown-linux-musl.tar.gz/velnor-gen
+8a7852af13610acee22317e764266301a83884595823a9b006a525d395cfa543  velnor-gen-aarch64-unknown-linux-musl.tar.gz/velnor-gen
+5b8f0d27e1a7f6a3c9d4e2b1a0c8f7e6d5c4b3a2918070605f4e3d2c1b0a9f8e  velnor-gen-aarch64-apple-darwin.tar.gz/velnor-gen
+";
+
+const GENERATOR_BINARY_SUMS_DIGEST: &str =
+    "69033b9cdde1860652f3d64fdb4f3757cafc0b666d50ad1ba409dda6b078ddaf";
+
+pub(crate) fn generator_sums() -> String {
+    ARCHIVE_SUMS.replace(
+        "4e9a485939165d82a9ebd49078778ca47137f344524ce8d87d03116760d5bb6d",
+        GENERATOR_BINARY_SUMS_DIGEST,
+    )
+}
 
 pub(crate) fn archive_lock() -> Result<String, Box<dyn Error>> {
     archive_lock_at("0.1.81")
 }
 
 pub(crate) fn archive_lock_at(version: &str) -> Result<String, Box<dyn Error>> {
+    if release_version(version)?.at_least(GENERATOR_BINARY_RELEASE) {
+        return Ok(pin_lock(
+            version,
+            COMMIT_FILE,
+            &generator_sums(),
+            Some(GENERATOR_BINARY_SUMS),
+        )?);
+    }
     Ok(pin_lock(
         version,
         COMMIT_FILE,
