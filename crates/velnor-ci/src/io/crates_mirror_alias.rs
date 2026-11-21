@@ -11,6 +11,52 @@ use super::crates_mirror_mbx::{direct_target, subcommand};
 
 const DEPTH: usize = 8;
 const CONFIGS: &[&str] = &["config", "config.toml"];
+const BUILTINS: &[&str] = &[
+    "add",
+    "b",
+    "bench",
+    "build",
+    "c",
+    "check",
+    "clean",
+    "config",
+    "d",
+    "doc",
+    "fetch",
+    "fix",
+    "generate-lockfile",
+    "help",
+    "info",
+    "init",
+    "install",
+    "locate-project",
+    "login",
+    "logout",
+    "metadata",
+    "new",
+    "owner",
+    "package",
+    "pkgid",
+    "publish",
+    "r",
+    "read-manifest",
+    "remove",
+    "report",
+    "rm",
+    "run",
+    "rustc",
+    "rustdoc",
+    "search",
+    "t",
+    "test",
+    "tree",
+    "uninstall",
+    "update",
+    "vendor",
+    "verify-project",
+    "version",
+    "yank",
+];
 const ALIASABLE_BUILTINS: &[&str] = &["b", "c", "clippy", "d", "r", "rm", "t"];
 
 enum Alias {
@@ -19,17 +65,14 @@ enum Alias {
     Unknown,
 }
 
-pub(super) fn expand(work: &Path, args: &[OsString], builtin: &[&str]) -> Option<Vec<OsString>> {
+pub(super) fn expand(work: &Path, args: &[OsString]) -> Option<Vec<OsString>> {
     let mut args = args.to_vec();
     for _ in 0..DEPTH {
         let Some((index, name)) = subcommand(&args) else {
             return Some(args);
         };
-        if name == "install" {
-            return Some(args);
-        }
         let name = name.to_owned();
-        if builtin.contains(&name.as_str()) && !ALIASABLE_BUILTINS.contains(&name.as_str()) {
+        if BUILTINS.contains(&name.as_str()) && !ALIASABLE_BUILTINS.contains(&name.as_str()) {
             return Some(args);
         }
         if direct_target(&name) {

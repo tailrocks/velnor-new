@@ -87,7 +87,7 @@ fn declared_for_project(args: &[OsString]) -> bool {
 
 fn project_directories(work: &Path, args: &[OsString]) -> Option<Vec<PathBuf>> {
     let base = directory_flag(work, args);
-    let args = super::crates_mirror_alias::expand(&base, args, MANIFEST_COMMANDS)?;
+    let args = super::crates_mirror_alias::expand(&base, args)?;
     let command = subcommand(&args).map(|(_, command)| command);
     if let Some(target) = command.filter(|command| direct_target(command)) {
         let script = base.join(target);

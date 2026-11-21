@@ -296,3 +296,36 @@ fn a_manifest_path_after_a_rs_script_belongs_to_the_script() -> TestResult {
     )?);
     Ok(())
 }
+
+#[test]
+fn a_multi_component_target_is_scoped_by_its_path_without_zscript() -> TestResult {
+    let repo = declared_job()?;
+    let launch = repo.root().join("launch");
+    fs::create_dir_all(repo.root().join("scratch-project"))?;
+    assert_refused(&run_with_args(&repo, &launch, &["../tool"])?);
+    assert_plain(&run_with_args(
+        &repo,
+        &launch,
+        &["../scratch-project/tool"],
+    )?);
+    Ok(())
+}
+
+#[test]
+fn a_bare_rs_script_under_zscript_is_scoped_by_its_own_path_not_the_manifest_path() -> TestResult {
+    let repo = declared_job()?;
+    let launch = repo.root().join("launch");
+    let inside = repo.root().join("Cargo.toml").display().to_string();
+    assert_plain(&run_with_args(
+        &repo,
+        &launch,
+        &[
+            "+nightly",
+            "-Zscript",
+            "tool.rs",
+            "--manifest-path",
+            &inside,
+        ],
+    )?);
+    Ok(())
+}

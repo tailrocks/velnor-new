@@ -188,6 +188,21 @@ fn a_user_alias_never_overrides_a_real_built_in_command() -> TestResult {
 }
 
 #[test]
+fn a_user_alias_never_overrides_any_other_built_in_command() -> TestResult {
+    let repo = declared_job()?;
+    let launch = repo.root().join("launch");
+    let (inside, _) = manifests(&repo);
+    for name in ["new", "version", "info"] {
+        aliases(
+            &launch,
+            &format!("[alias]\n{name} = \"build -m {inside}\"\n"),
+        )?;
+        assert_plain(&run_with_args(&repo, &launch, &[name])?);
+    }
+    Ok(())
+}
+
+#[test]
 fn an_included_override_of_a_short_alias_fails_closed() -> TestResult {
     let repo = declared_job()?;
     let launch = repo.root().join("launch");
