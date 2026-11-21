@@ -110,8 +110,9 @@ steps also run after an earlier failure unless the run was cancelled. Report
 and upload failures do not replace the lane's build result. The report retains
 logs, provenance and step results, and emits local metrics without calling the
 API or using `GITHUB_TOKEN`.
-The workflow supplies each cache's family, root, and restore/save step IDs; the
-helper derives observed facts from step results and filesystem evidence. When a
+The workflow supplies each cache's family, root, and restore step ID, and the
+save step ID for each cache the job saves; the helper derives observed facts
+from step results and filesystem evidence. When a
 released bootstrap helper is older than `0.1.81`, the source-built artifact helper runs the
 tokenless local checks and diagnostics without API access.
 
