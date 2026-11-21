@@ -13,6 +13,8 @@ use crate::facts::{lib, repo};
 use crate::lock::COMMIT_FILE;
 use crate::lock_archive::ARCHIVE_SUMS;
 
+const BINARY_SUMS_FILE: &str = "BINARY-SHA256SUMS";
+
 type TestResult = Result<(), Box<dyn Error>>;
 
 const VERSION: &str = "0.1.111";
@@ -210,5 +212,27 @@ fn a_release_older_than_the_binary_section_is_pinned_without_it() -> TestResult 
         error,
         "[velnor-gen-binary] is not allowed: release 0.1.110 does not read it"
     );
+    Ok(())
+}
+
+const CI_ONLY_BINARY_SUMS: &str = "\
+9de941ee8e31748973283b2cd31a439119a9d22f60ec3e2884d855a8e2971c6f  velnor-ci-x86_64-unknown-linux-musl.tar.gz/velnor-ci
+6d887a0b48bba9c85da802b1943beb3ff38a2ffbc0effbdff615e5f53fe6a4a8  velnor-ci-aarch64-unknown-linux-musl.tar.gz/velnor-ci
+a7e9a4897a81bb86338896573e43b79b4f05e34a489549f1687117dd456648ba  velnor-ci-aarch64-apple-darwin.tar.gz/velnor-ci
+";
+
+#[test]
+fn a_release_from_the_binary_section_on_is_not_pinned_without_velnor_gen_digests() -> TestResult {
+    let error = pin_lock(
+        VERSION,
+        COMMIT_FILE,
+        ARCHIVE_SUMS,
+        Some(CI_ONLY_BINARY_SUMS),
+    )
+    .err()
+    .ok_or("pinned a 0.1.111 lock without the velnor-gen binary digests")?
+    .to_string();
+    assert!(error.contains("velnor-gen"), "{error}");
+    assert!(error.contains(BINARY_SUMS_FILE), "{error}");
     Ok(())
 }
