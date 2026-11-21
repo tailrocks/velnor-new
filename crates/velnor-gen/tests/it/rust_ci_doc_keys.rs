@@ -42,3 +42,21 @@ fn the_settings_table_of_the_rust_ci_page_lists_exactly_the_keys_the_config_acce
     );
     Ok(())
 }
+
+#[test]
+fn the_docs_do_not_state_a_gate_release_as_prose() {
+    for page in [
+        include_str!("../../../../generator/CONFIG.md"),
+        include_str!("../../../../docs/rust-ci.md"),
+    ] {
+        let page = page.to_lowercase();
+        assert!(
+            !page.contains("first released in"),
+            "gate release written as prose"
+        );
+        assert!(
+            !page.contains("not tagged yet"),
+            "gate release written as prose"
+        );
+    }
+}
