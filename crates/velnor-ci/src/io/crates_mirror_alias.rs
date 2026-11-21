@@ -7,13 +7,11 @@ use std::path::{Path, PathBuf};
 
 use toml::{Table, Value};
 
-use super::crates_mirror_mbx::{option_value, subcommand};
+use super::crates_mirror_mbx::{direct_target, option_value, subcommand};
 
 const DEPTH: usize = 8;
 const CONFIGS: &[&str] = &["config", "config.toml"];
-// Built-in names a user alias may still override: cargo's short aliases, and clippy,
-// which is an external subcommand. Every other built-in name ignores a user alias.
-const OVERRIDABLE: &[&str] = &["b", "c", "clippy", "d", "r", "rm", "t"];
+const ALIASABLE_BUILTINS: &[&str] = &["b", "c", "clippy", "d", "r", "rm", "t"];
 
 enum Alias {
     Found(Vec<OsString>),
@@ -31,15 +29,18 @@ pub(super) fn expand(work: &Path, args: &[OsString], builtin: &[&str]) -> Option
             return Some(args);
         }
         let name = name.to_owned();
-        if builtin.contains(&name.as_str()) && !OVERRIDABLE.contains(&name.as_str()) {
+        if builtin.contains(&name.as_str()) && !ALIASABLE_BUILTINS.contains(&name.as_str()) {
             return Some(args);
+        }
+        if direct_target(&name) {
+            return matches!(lookup(work, &args, &name), Alias::Absent).then_some(args);
         }
         match lookup(work, &args, &name) {
             Alias::Found(words) => {
                 args.splice(index..=index, words);
             }
             Alias::Absent => return Some(args),
-            Alias::Unknown if builtin.contains(&name.as_str()) => return Some(args),
+            Alias::Unknown if builtin.contains(&name.as_str()) => return None,
             Alias::Unknown => {
                 return option_value(&args, "--manifest-path", true)
                     .is_none()
@@ -115,7 +116,7 @@ fn config_directories(work: &Path) -> Vec<PathBuf> {
         .collect();
     let home = std::env::var_os("CARGO_HOME")
         .filter(|value| !value.is_empty())
-        .map(PathBuf::from)
+        .map(|value| work.join(value))
         .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".cargo")));
     directories.extend(home);
     directories

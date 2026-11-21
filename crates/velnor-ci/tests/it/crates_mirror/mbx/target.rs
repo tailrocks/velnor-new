@@ -71,3 +71,14 @@ fn each_directory_flag_is_applied_in_order_like_cargo() -> TestResult {
     )?);
     Ok(())
 }
+
+#[test]
+fn an_equals_attached_directory_flag_names_the_project_the_command_runs_in() -> TestResult {
+    let repo = declared_job()?;
+    let launch = repo.root().join("launch");
+    let declaring = format!("-C={}", repo.root().display());
+    let scratch = format!("-C={}", repo.root().join("scratch-project").display());
+    assert_refused(&run_with_args(&repo, &launch, &[&declaring, "build"])?);
+    assert_plain(&run_with_args(&repo, &launch, &[&scratch, "build"])?);
+    Ok(())
+}

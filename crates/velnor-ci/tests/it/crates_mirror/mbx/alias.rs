@@ -186,3 +186,62 @@ fn a_user_alias_never_overrides_a_real_built_in_command() -> TestResult {
     assert_plain(&run_with_args(&repo, &launch, &["test", "-m", &outside])?);
     Ok(())
 }
+
+#[test]
+fn an_included_override_of_a_short_alias_fails_closed() -> TestResult {
+    let repo = declared_job()?;
+    let launch = repo.root().join("launch");
+    let (inside, outside) = manifests(&repo);
+    aliases(&launch, "include = [\"aliases.toml\"]\n")?;
+    fs::write(
+        launch.join(".cargo/aliases.toml"),
+        format!("[alias]\nb = \"build -m {inside}\"\n"),
+    )?;
+    assert_refused(&run_with_args(&repo, &launch, &["b"])?);
+    assert_refused(&run_with_args(&repo, &launch, &["b", "-m", &outside])?);
+    Ok(())
+}
+
+#[test]
+fn a_relative_cargo_home_is_read_from_the_directory_flag_directory() -> TestResult {
+    let repo = declared_job()?;
+    let launch = repo.root().join("launch");
+    let (inside, _) = manifests(&repo);
+    let target = launch.join("elsewhere");
+    fs::create_dir_all(target.join("relative-home"))?;
+    fs::write(
+        target.join("relative-home/config.toml"),
+        format!("[alias]\nb = \"build -m {inside}\"\n"),
+    )?;
+    let plain = plain_cargo(&repo)?;
+    let output = wrapper_command(
+        repo.root(),
+        &plain,
+        false,
+        &[("CARGO_HOME", "relative-home")],
+    )?
+    .current_dir(&launch)
+    .env("VELNOR_CARGO_MBX", "required")
+    .args(["-C", "elsewhere", "b"])
+    .output()?;
+    assert_refused(&output);
+    Ok(())
+}
+
+#[test]
+fn an_alias_named_like_a_script_path_does_not_replace_the_script_target() -> TestResult {
+    let repo = declared_job()?;
+    let launch = repo.root().join("launch");
+    let (_, outside) = manifests(&repo);
+    let script = repo.root().join("tool.rs").display().to_string();
+    aliases(
+        &launch,
+        &format!("[alias]\n\"{script}\" = \"build -m {outside}\"\n"),
+    )?;
+    assert_refused(&run_with_args(
+        &repo,
+        &launch,
+        &["+nightly", "-Zscript", &script],
+    )?);
+    Ok(())
+}

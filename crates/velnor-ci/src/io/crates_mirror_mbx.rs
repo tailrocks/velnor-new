@@ -110,7 +110,7 @@ fn directory_flag(work: &Path, args: &[OsString]) -> PathBuf {
                 base = base.join(directory);
             }
         } else if let Some(directory) = text.strip_prefix("-C") {
-            base = base.join(directory);
+            base = base.join(directory.strip_prefix('=').unwrap_or(directory));
         } else if matches!(text, "-Z" | "--config" | "--color") {
             seen.next();
         } else if !text.starts_with(['-', '+']) {
@@ -120,7 +120,7 @@ fn directory_flag(work: &Path, args: &[OsString]) -> PathBuf {
     base
 }
 
-fn direct_target(command: &str) -> bool {
+pub(super) fn direct_target(command: &str) -> bool {
     let path = Path::new(command);
     path.extension().is_some_and(|extension| extension == "rs")
         || path.file_name().is_some_and(|name| name == "Cargo.toml")
