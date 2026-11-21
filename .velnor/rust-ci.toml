@@ -74,6 +74,7 @@ name = "Generator samples"
 task = "lint-generator-samples"
 tools = ["jactionlint"]
 timeout_minutes = 5
+inputs = ["generator/samples/*/expected/**", "generator/samples/*/view/.github/**", ".github/jactionlint.yaml", "mise.toml", "mise.lock"]
 
 [[lint]]
 kind = "mise-task"
@@ -82,6 +83,7 @@ name = "Parity verifier unit tests"
 task = "lint-parity-verify-candidate"
 tools = ["python"]
 timeout_minutes = 5
+inputs = ["scripts/parity-verify-candidate.py", "scripts/test_parity_verify_candidate.py", "scripts/hosted_phase_measurement/__init__.py", "scripts/hosted_phase_measurement/mbx_summary.py", "scripts/hosted_phase_measurement/tests/test_mbx_summary.py", "images/job/ubuntu-26.04/candidate/candidate.py", "mise.toml", "mise.lock"]
 
 [[lint]]
 kind = "mise-task"
@@ -90,6 +92,7 @@ name = "mise binary digest signature tests"
 task = "test-mise-binary-digests"
 tools = ["minisign", "python"]
 timeout_minutes = 5
+inputs = ["scripts/mise-binary-digests.sh", "scripts/mise-minisign.pub", "scripts/test_mise_binary_digests.py", "scripts/test_mise_binary_digests_entry.py", "scripts/fixtures/mise-2026.11.10", "scripts/fixtures/mise-2026.11.11", "crates/velnor-render/src/steps.rs", "crates/velnor-render/src/mise_digest.rs", "mise.toml", "mise.lock"]
 
 [[lint]]
 kind = "mise-task"
@@ -98,3 +101,8 @@ name = "hk config"
 task = "validate-hk"
 tools = ["hk"]
 timeout_minutes = 5
+inputs = ["hk.pkl", "hk.local.pkl", ".hkrc.pkl", "mise.toml", "mise.lock"]
+
+[[inputs]]
+glob = ".mise-version"
+packages = ["velnor-gen"]

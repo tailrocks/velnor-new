@@ -71,6 +71,17 @@ fn a_build_command_over_a_target_directory_with_many_directories_succeeds() {
 }
 
 #[test]
+fn a_non_numeric_directory_limit_is_quoted_in_the_refusal() {
+    let (repo, _) = prepared();
+    let refused = audit_within(&repo, " 5");
+    assert_eq!(refused.status.code(), Some(1), "{refused:?}");
+    assert!(
+        String::from_utf8_lossy(&refused.stderr).contains("not \" 5\""),
+        "{refused:?}"
+    );
+}
+
+#[test]
 fn target_directory_count_is_bounded_without_removing_the_existing_lock() {
     let (repo, before) = prepared();
     let existing = directory_count(&repo.root().join("rust/target"));
