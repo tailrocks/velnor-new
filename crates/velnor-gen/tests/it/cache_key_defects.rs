@@ -52,7 +52,7 @@ fn a_root_path_with_glob_characters_is_read_literally_by_hash_files() -> TestRes
 }
 
 #[test]
-fn a_rendered_key_over_512_characters_fails_generation() -> TestResult {
+fn a_rendered_key_over_512_utf16_units_fails_generation() -> TestResult {
     let long = |letters: usize| format!("{}/Cargo.toml", "d".repeat(letters));
     workflow(&view(&[&long(300)], None)?)?;
     let error = workflow(&view(&[&long(360)], None)?)

@@ -40,6 +40,7 @@ pub(crate) fn lane(kind: &StepKind, test_id: Option<String>) -> RenderedStep {
         saved,
         node_tools,
         not_generated,
+        unsuppressed,
         ..
     } = kind
     else {
@@ -58,7 +59,7 @@ pub(crate) fn lane(kind: &StepKind, test_id: Option<String>) -> RenderedStep {
         if saves {
             plan["save_step"] = serde_json::Value::String(step(false, node_tools.save, crate::gate::TOOLS_SAVED_STEP));
         }
-        if let (false, Some(reason)) = (tools, not_generated) {
+        if let (false, false, Some(reason)) = (tools, unsuppressed.contains(key), not_generated) {
             plan["not_generated"] = serde_json::Value::String(reason.to_owned());
         }
         plan

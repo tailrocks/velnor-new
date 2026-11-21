@@ -59,7 +59,8 @@ for the compiler-artifact and build-script records used as input evidence.
 ## Producer and enforcement
 
 `VELNOR_REPORT_CACHES` supplies an array of cache plans. Each plan contains
-only `family`, `root` (a Cargo root or `null`), `restore_step`, and `save_step`.
+`family`, `root` (a Cargo root or `null`), and `restore_step`, plus the optional
+`save_step` and `not_generated` fields described under lane fields.
 Observed report fields such as `requested_key`, `hit`, and `usable` are
 rejected as plan input. `VELNOR_REPORT_STEPS` supplies the actual step outputs
 and outcomes. The report resolves keys, restore hits, and save outcomes before

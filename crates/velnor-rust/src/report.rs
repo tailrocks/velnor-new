@@ -6,8 +6,8 @@ use std::collections::BTreeMap;
 use crate::audit_job::AUDIT_JOB;
 use crate::plan::{HELPER_JOB, job, step};
 use velnor_model::{
-    Access, CI_RUN_LABEL, HelperVersion, Job, JobId, PermissionScope, Permissions, PrCi, PrRun,
-    PushAfterMergeGroup, RepoFacts, Step, StepKind, ToolsLocalVerb, ToolsTelemetry, When,
+    Access, CI_RUN_LABEL, CacheKey, HelperVersion, Job, JobId, PermissionScope, Permissions, PrCi,
+    PrRun, PushAfterMergeGroup, RepoFacts, Step, StepKind, ToolsLocalVerb, ToolsTelemetry, When,
 };
 
 // helper-gate: first in tools-v0.1.111 via 2c70d48ddc
@@ -54,7 +54,7 @@ fn attach(facts: &RepoFacts, jobs: &mut [Job], maintenance: Option<&Job>) -> Job
         {
             continue;
         }
-        let reason = not_generated.filter(|_| job.id != HELPER_JOB && job.id != AUDIT_JOB);
+        let reason = not_generated.filter(|_| job.id != AUDIT_JOB);
         attach_metrics(job, nextest_artifacts, reason, optional_saves);
         producers.push(&*job);
     }
@@ -94,7 +94,7 @@ fn attach_metrics(
     not_generated: Option<&'static str>,
     optional_saves: bool,
 ) {
-    let caches: Vec<_> = job
+    let caches: Vec<CacheKey> = job
         .steps
         .iter()
         .filter_map(|step| match &step.kind {
@@ -117,6 +117,11 @@ fn attach_metrics(
         caches.clone()
     };
     let not_generated = not_generated.filter(|_| !saves_cache).map(str::to_owned);
+    let unsuppressed: Vec<CacheKey> = caches
+        .iter()
+        .filter(|key| job.id == HELPER_JOB && matches!(key, CacheKey::Target { .. }))
+        .cloned()
+        .collect();
     let has = |verb| {
         job.steps
             .iter()
@@ -134,6 +139,7 @@ fn attach_metrics(
                 nextest_artifacts,
                 node_tools,
                 not_generated,
+                unsuppressed,
             },
             StepKind::UploadMetrics,
         ]

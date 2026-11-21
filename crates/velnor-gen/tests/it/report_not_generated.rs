@@ -61,7 +61,7 @@ fn refused_base_caches_say_why_when_the_helper_reads_the_reason() -> TestResult 
 }
 
 #[test]
-fn the_helper_bootstrap_job_never_saves_so_its_caches_are_not_labelled() -> TestResult {
+fn the_helper_bootstrap_target_is_never_saved_so_it_is_not_labelled() -> TestResult {
     let helper = package(
         "velnor-ci",
         "ci-helper/Cargo.toml",
@@ -89,8 +89,23 @@ fn the_helper_bootstrap_job_never_saves_so_its_caches_are_not_labelled() -> Test
     let bootstrap = caches_of(jobs.get("rust-helper").ok_or("no helper job")?)?;
     assert_ne!(bootstrap.len(), 0);
     for cache in &bootstrap {
-        assert!(cache.get("not_generated").is_none(), "{cache}");
+        let label = cache.get("not_generated").and_then(|value| value.as_str());
+        if matches!(cache["family"].as_str(), Some("target" | "tools")) {
+            assert_eq!(label, None, "{cache}");
+        } else {
+            assert_eq!(label, Some("private dependencies"), "{cache}");
+        }
     }
+    assert!(
+        bootstrap
+            .iter()
+            .any(|cache| cache["family"] == "sources" && cache.get("not_generated").is_some()),
+        "{bootstrap:?}"
+    );
+    assert!(
+        bootstrap.iter().any(|cache| cache["family"] == "target"),
+        "{bootstrap:?}"
+    );
     let lane = caches_of(jobs.get("rust").ok_or("no lane job")?)?;
     assert!(
         lane.iter()
