@@ -378,10 +378,13 @@ fn the_privacy_check_is_gated_by_the_lane_selection_like_the_cache_steps() -> Te
     let (text, _) = text_and_notes(&repo)?;
     let lane = lane(&text)?;
     let verdict = step(&lane, "Check that the repository is private").ok_or("no verdict step")?;
-    assert!(
-        verdict
-            .lines()
-            .any(|line| line.trim_start().starts_with("if: ")),
+    let condition = verdict
+        .lines()
+        .find_map(|line| line.trim_start().strip_prefix("if: "))
+        .ok_or("no if on the verdict step")?;
+    assert_eq!(
+        condition,
+        r#"'${{ steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' }}'"#,
         "{verdict}"
     );
     Ok(())
