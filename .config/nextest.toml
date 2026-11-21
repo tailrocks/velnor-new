@@ -241,6 +241,14 @@ filter = 'package(=velnor-ci) and binary(=it) and test(=plan_diff::every_recorde
 slow-timeout = { period = "30s", terminate-after = 1 }
 
 [[profile.default.overrides]]
+filter = 'package(=velnor-gen) and binary(=it) and (test(=release_step_refs::every_release_gate_renders_steps_that_name_their_own_job) or test(=step_refs::every_steps_reference_names_a_step_of_its_own_job))'
+slow-timeout = { period = "30s", terminate-after = 1 }
+
+[[profile.default.overrides]]
+filter = 'package(=velnor-gen) and binary(=it) and test(=release_step_refs::every_family_gate_renders_steps_that_name_their_own_job)'
+slow-timeout = { period = "10s", terminate-after = 1 }
+
+[[profile.default.overrides]]
 filter = "package(=velnor-ci) or package(=velnor-gen) or package(=velnor-model) or package(=velnor-release) or package(=velnor-render) or package(=velnor-rust)"
 slow-timeout = { period = "2s", terminate-after = 1 }
 
@@ -301,6 +309,10 @@ slow-timeout = { period = "30s", terminate-after = 1 }
 [[profile.default.overrides]]
 filter = 'package(=velnor-gen) and binary(=it) and (test(=release_step_refs::every_release_gate_renders_steps_that_name_their_own_job) or test(=release_step_refs::every_family_gate_renders_steps_that_name_their_own_job) or test(=step_refs::every_steps_reference_names_a_step_of_its_own_job))'
 slow-timeout = { period = "10s", terminate-after = 1 }
+
+[[profile.ci.overrides]]
+filter = 'package(=velnor-gen) and binary(=it) and (test(=release_step_refs::every_release_gate_renders_steps_that_name_their_own_job) or test(=step_refs::every_steps_reference_names_a_step_of_its_own_job))'
+slow-timeout = { period = "30s", terminate-after = 1 }
 
 [[profile.ci.overrides]]
 filter = 'package(=velnor-gen) and binary(=it) and (test(=release_step_refs::every_release_gate_renders_steps_that_name_their_own_job) or test(=release_step_refs::every_family_gate_renders_steps_that_name_their_own_job) or test(=step_refs::every_steps_reference_names_a_step_of_its_own_job))'

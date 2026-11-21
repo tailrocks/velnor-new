@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeSet, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::error::Error;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -10,22 +10,40 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
 
 use serde_json::{Value, json};
+use velnor_gen::expected_with_notes;
+use velnor_model::{RepoPath, RepoView};
+use velnor_render::DELTA_CLEANUP_PATH;
 
 use crate::facts::TestResult;
-use crate::pipeline::{pin_helper, view, workflow};
+use crate::pipeline::{pin_helper, view};
 
 const SHARED_STORE_ON: &str = "mbx_shared_store = true\n";
+const SHARED_STORE_OFF: &str = "mbx_shared_store = false\n";
 const CACHE_DEBUG_ON: &str = "cache_debug = true\n";
 const TEST_GROUPS_ON: &str = "[[test_groups]]\nname = 'database'\nroot = '.'\nfilter = 'package(package-0) and test(/^db_/)'\n\n[[test_groups]]\nname = 'shell'\nroot = '.'\nfilter = 'binary(it) and test(~cargo_)'\n";
 const ARTIFACTS_ON: &str = "[[test_groups]]\nname = 'shell'\nroot = '.'\nfilter = 'binary(it) and test(~cargo_)'\n[[test_groups.artifacts]]\nname = 'shell-logs'\npaths = ['target/debug/app']\nwhen = 'always'\n";
 const RESTORE_CACHE_ON: &str = "[[test_groups]]\nname = 'shell'\nroot = '.'\nfilter = 'binary(it) and test(~cargo_)'\nneeds = ['cargo']\nrestore_cache = true\n";
+const PARTITIONS_ON: &str = "[[test_groups]]\nname = 'database'\nroot = '.'\nfilter = 'package(package-0) and test(/^db_/)'\npartitions = 2\n";
+const HOSTED_ON: &str = "[[test_groups]]\nname = 'shell'\nroot = '.'\nfilter = 'binary(it) and test(~cargo_)'\nrunner = 'ubuntu-26.04'\nhosted = true\n";
+const NO_TESTS_ON: &str = "[[test_groups]]\nname = 'shell'\nroot = '.'\nfilter = 'binary(it) and test(~cargo_)'\nno_tests = 'warn'\n";
+const DELTA_CLEANUP_HELPER: u64 = 102;
 const SWEEP_CONFIGS: &[(&str, &str)] = &[
     ("mbx_shared_store", SHARED_STORE_ON),
+    ("mbx_shared_store", SHARED_STORE_OFF),
     ("cache_debug", CACHE_DEBUG_ON),
     ("test_groups", TEST_GROUPS_ON),
     ("test_groups.artifacts", ARTIFACTS_ON),
+    ("test_groups.partitions", PARTITIONS_ON),
     ("test_groups.restore_cache", RESTORE_CACHE_ON),
+    ("test_groups.hosted", HOSTED_ON),
+    ("test_groups.no_tests", NO_TESTS_ON),
 ];
+
+fn documents(repo: &RepoView) -> Result<BTreeMap<RepoPath, String>, Box<dyn Error>> {
+    let mut locked = repo.clone();
+    crate::facts::lock_pinned_tools(&mut locked)?;
+    Ok(expected_with_notes(&locked)?.0)
+}
 
 pub(crate) struct StepRef<'a> {
     pub(crate) id: &'a str,
@@ -174,19 +192,40 @@ fn sweep_job(
         config.map(str::as_bytes),
     )?;
     pin_helper(&mut repo, &helper)?;
-    let text = workflow(&repo)?;
+    let files = documents(&repo)?;
+    let mut failures = Vec::new();
+    if patch >= DELTA_CLEANUP_HELPER && !files.contains_key(&DELTA_CLEANUP_PATH) {
+        failures.push(format!(
+            "helper {helper}, config {config:?}: no cache-cleanup workflow was rendered"
+        ));
+    }
+    let yaml: Vec<(&RepoPath, &String)> = files
+        .iter()
+        .filter(|(path, _)| {
+            Path::new(path.as_str())
+                .extension()
+                .is_some_and(|ext| ext == "yml")
+        })
+        .collect();
+    let shapes: Vec<String> = yaml.iter().map(|(_, text)| shape(text, &helper)).collect();
     if !seen
         .lock()
         .map_err(|_| "the render set is poisoned")?
-        .insert(shape(&text, &helper))
+        .insert(shapes.join("\n"))
     {
-        return Ok((0, Vec::new()));
+        return Ok((0, failures));
     }
-    let (checked, dangling) = dangling_refs(&crate::yaml_tree::document(&text)?);
-    let failures = dangling
-        .into_iter()
-        .map(|found| format!("helper {helper}, config {config:?}: {found}"))
-        .collect();
+    let mut checked = 0;
+    for (path, text) in yaml {
+        let (count, dangling) = dangling_refs(&crate::yaml_tree::document(text)?);
+        checked += count;
+        failures.extend(dangling.into_iter().map(|found| {
+            format!(
+                "helper {helper}, config {config:?}, {}: {found}",
+                path.as_str()
+            )
+        }));
+    }
     Ok((checked, failures))
 }
 
