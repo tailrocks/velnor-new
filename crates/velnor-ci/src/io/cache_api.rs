@@ -104,9 +104,8 @@ pub fn trim(
     let (entries, truncated): (Vec<crate::cache::CacheEntry>, bool) =
         pages(github, &path, Some(MAX_PAGES))?;
     unique_ids(entries.iter().map(|entry| entry.id))?;
-    let in_use_since = prefix
-        .starts_with("velnor-src-")
-        .then(|| now.saturating_sub(RESTORED_GRACE_SECONDS));
+    let in_use_since =
+        velnor_rust::is_sources_prefix(prefix).then(|| now.saturating_sub(RESTORED_GRACE_SECONDS));
     let mut stale = stale_entries(&entries, prefix, keep, in_use_since);
     let foreign = foreign_entries(&entries, prefix);
     stale.extend(&foreign);
