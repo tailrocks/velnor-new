@@ -23,6 +23,7 @@ mod cache_credential_scrub_tokens;
 mod cache_delete_entry;
 mod cache_delete_entry_cli;
 mod cache_delete_entry_id;
+mod cache_delete_entry_later_ref;
 mod cache_flow;
 mod cache_private_repo;
 mod cache_prune;

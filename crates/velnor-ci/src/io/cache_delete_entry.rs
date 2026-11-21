@@ -5,7 +5,7 @@ use super::cache_api::{Entry, client, delete_entries, exact_entries};
 use crate::cache::encode;
 use crate::cli_cache::DeleteEntryArgs;
 use crate::error::CiError;
-use crate::escape::inert;
+use crate::escape::{inert, shell_quote};
 use crate::github::{GitHubWrite, Repo};
 
 fn describe(entries: &[&Entry]) -> String {
@@ -76,6 +76,20 @@ pub fn resolve_entry(
             searched.join(" or ")
         )));
     };
+    if first.reference != refs[0] {
+        let earlier: Vec<String> = refs
+            .iter()
+            .take_while(|reference| **reference != first.reference)
+            .map(|reference| inert(reference))
+            .collect();
+        let checked: Vec<String> = refs.iter().map(|reference| inert(reference)).collect();
+        let holder = inert(&first.reference);
+        return Err(CiError::new(format!(
+            "the key {named} is no longer on {} (refs checked, in order: {}; the first ref that holds it is {holder}); if you or another job already deleted this run's entry, stop. Otherwise the restore read {holder}: re-run with `--ref {holder}` first only if you know this run restored from it; nothing was deleted",
+            earlier.join(" or "),
+            checked.join(", ")
+        )));
+    }
     let on_first: Vec<&Entry> = held
         .iter()
         .filter(|entry| entry.reference == first.reference)
@@ -134,14 +148,15 @@ pub fn delete_by_id(
     ))
 }
 
-fn resolved_report(repo: &Repo, key: &str, found: &Candidate) -> String {
+pub fn resolved_report(repo: &Repo, key: &str, found: &Candidate) -> String {
     let named = inert(key);
     format!(
-        "cache entry ID {} ({named}, version {}, {}) is the entry the restore read; nothing was deleted\nTo delete exactly this entry, run the same command (same GITHUB_API_URL and GITHUB_TOKEN) with the refs replaced by its ID: velnor-ci cache delete-entry --repo {repo} --key '{}' --id {}\n",
+        "cache entry ID {} ({named}, version {}, {}) is the entry on the first --ref, the ref the restore reads first; nothing was deleted\nThe two steps are needed once per run, not once per job: when another job of this run already deleted its entry, step 1 refuses instead of naming a later ref's entry. To delete exactly this entry, run the same command (same GITHUB_API_URL and GITHUB_TOKEN) with the refs replaced by its ID: velnor-ci cache delete-entry --repo {} --key {} --id {}\n",
         found.id,
         inert(&found.version),
         inert(&found.reference),
-        named.replace('\'', "'\\''"),
+        shell_quote(&repo.to_string()),
+        shell_quote(key),
         found.id
     )
 }

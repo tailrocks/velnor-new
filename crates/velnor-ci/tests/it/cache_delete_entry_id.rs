@@ -31,21 +31,6 @@ fn resolving_never_issues_a_delete_even_for_a_clear_candidate() {
 }
 
 #[test]
-fn a_second_resolve_after_the_delete_finds_the_next_ref_and_deletes_nothing() {
-    let api = api(vec![
-        entry(11, KEY, MAIN, VERSION_A),
-        entry(12, KEY, MERGE, VERSION_A),
-    ]);
-    let asked = refs(&[MERGE, MAIN]);
-    let first = resolve_entry(&api, &repo(), KEY, &asked).unwrap_or_else(|e| unreachable!("{e}"));
-    delete_by_id(&api, &repo(), KEY, first.id).unwrap_or_else(|e| unreachable!("{e}"));
-    assert_eq!(*api.deleted.borrow(), [12]);
-    let again = resolve_entry(&api, &repo(), KEY, &asked).unwrap_or_else(|e| unreachable!("{e}"));
-    assert_eq!(again.id, 11);
-    assert_eq!(*api.deleted.borrow(), [12]);
-}
-
-#[test]
 fn a_stale_id_is_refused_after_its_entry_is_gone() {
     let api = api(vec![entry(12, KEY, MERGE, VERSION_A)]);
     delete_by_id(&api, &repo(), KEY, 12).unwrap_or_else(|e| unreachable!("{e}"));
@@ -86,6 +71,9 @@ fn the_right_id_with_the_right_key_deletes_exactly_that_entry() {
 #[test]
 fn an_empty_key_is_refused_for_a_delete_by_id() {
     let api = api(vec![entry(12, "", MERGE, VERSION_A)]);
-    assert!(delete_by_id(&api, &repo(), "", 12).is_err());
+    let error = delete_by_id(&api, &repo(), "", 12)
+        .err()
+        .unwrap_or_else(|| unreachable!("an empty key must be refused"));
+    assert_eq!(error.to_string(), "pass the exact cache key and its refs");
     assert!(api.deleted.borrow().is_empty());
 }

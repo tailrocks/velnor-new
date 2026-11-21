@@ -170,7 +170,13 @@ fn a_key_without_any_entry_on_the_ref_is_refused() {
 #[test]
 fn an_empty_listing_is_refused() {
     let api = api(Vec::new());
-    assert!(resolve_entry(&api, &repo(), KEY, &refs(&[MAIN])).is_err());
+    let error = resolve_entry(&api, &repo(), KEY, &refs(&[MAIN]))
+        .err()
+        .unwrap_or_else(|| unreachable!("an empty listing must be refused"));
+    assert_eq!(
+        error.to_string(),
+        format!("no cache entry has the key {KEY} on {MAIN}; nothing was deleted")
+    );
     assert!(api.deleted.borrow().is_empty());
 }
 
@@ -188,7 +194,7 @@ fn an_entry_on_another_ref_is_ignored_even_when_the_listing_returns_it() {
 }
 
 #[test]
-fn a_match_on_the_second_page_is_found_and_deleted() {
+fn a_match_on_the_second_page_is_found_and_not_deleted() {
     let mut entries: Vec<Value> = (1..=PAGE_SIZE as u64)
         .map(|id| entry(id, &format!("{KEY}-{id}"), MAIN, VERSION_A))
         .collect();
@@ -239,7 +245,7 @@ fn split_versions() -> Api {
 }
 
 #[test]
-fn the_same_version_on_two_refs_deletes_only_the_entry_on_the_first_ref() {
+fn the_same_version_on_two_refs_resolves_only_the_entry_on_the_first_ref() {
     let api = both_refs();
     let found = resolve_entry(&api, &repo(), KEY, &refs(&[MERGE, MAIN]))
         .unwrap_or_else(|e| unreachable!("{e}"));
@@ -248,18 +254,9 @@ fn the_same_version_on_two_refs_deletes_only_the_entry_on_the_first_ref() {
 }
 
 #[test]
-fn the_order_of_the_refs_decides_which_entry_is_deleted() {
+fn the_order_of_the_refs_decides_which_entry_is_resolved() {
     let api = both_refs();
     let found = resolve_entry(&api, &repo(), KEY, &refs(&[MAIN, MERGE]))
-        .unwrap_or_else(|e| unreachable!("{e}"));
-    assert_eq!(found.id, 11);
-    assert!(api.deleted.borrow().is_empty());
-}
-
-#[test]
-fn the_key_only_on_a_later_ref_deletes_that_entry() {
-    let api = api(vec![entry(11, KEY, MAIN, VERSION_A)]);
-    let found = resolve_entry(&api, &repo(), KEY, &refs(&[MERGE, MAIN]))
         .unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(found.id, 11);
     assert!(api.deleted.borrow().is_empty());
@@ -294,8 +291,12 @@ fn a_failing_listing_of_the_first_ref_refuses_instead_of_skipping_to_the_next() 
 #[test]
 fn no_refs_and_an_empty_ref_among_them_are_refused() {
     let api = both_refs();
-    assert!(resolve_entry(&api, &repo(), KEY, &[]).is_err());
-    assert!(resolve_entry(&api, &repo(), KEY, &refs(&[MERGE, ""])).is_err());
+    for asked in [refs(&[]), refs(&[MERGE, ""])] {
+        let error = resolve_entry(&api, &repo(), KEY, &asked)
+            .err()
+            .unwrap_or_else(|| unreachable!("missing refs must be refused"));
+        assert_eq!(error.to_string(), "pass the exact cache key and its refs");
+    }
     assert!(api.deleted.borrow().is_empty());
 }
 
@@ -331,7 +332,15 @@ fn a_different_version_on_a_later_ref_refuses_and_names_both_entries() {
 #[test]
 fn the_refusal_does_not_depend_on_which_ref_comes_first() {
     let api = split_versions();
-    assert!(resolve_entry(&api, &repo(), KEY, &refs(&[MAIN, MERGE])).is_err());
+    let error = resolve_entry(&api, &repo(), KEY, &refs(&[MAIN, MERGE]))
+        .err()
+        .unwrap_or_else(|| unreachable!("a version split must be refused in either order"));
+    assert!(
+        error
+            .to_string()
+            .contains("held under more than one version"),
+        "{error}"
+    );
     assert!(api.deleted.borrow().is_empty());
 }
 

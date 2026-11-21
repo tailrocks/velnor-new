@@ -6,7 +6,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use crate::error::CiError;
-use crate::escape::{escape, inert};
+use crate::escape::{escape, inert, shell_quote as quoted};
 use crate::mbx_store::trusted_event;
 use crate::tools_discard;
 use crate::tools_verify::{Anchor, Discard, Recording, Verb, Verdict, check, read, record};
@@ -56,10 +56,6 @@ fn reason(discard: &Discard) -> String {
     }
 }
 
-fn quoted(text: &str) -> String {
-    format!("'{}'", text.replace('\'', "'\\''"))
-}
-
 fn delete_command(key: &str, refs: &[String], remote: &Remote) -> String {
     let refs: String = refs.iter().fold(String::new(), |mut line, reference| {
         line.push_str(" --ref ");
@@ -92,7 +88,7 @@ fn delete_sentence(what: &str, key: &str, remedy: Remedy<'_>) -> String {
         return String::new();
     }
     format!(
-        ". The restored {what} is {}; the cache action does not report which ref or version it came from, so the command below only reads: it lists every ref the action can have read, in its order (the ref of this run, then the base and default branches), and prints the one entry the restore read (ID, version and ref) together with the command that deletes that entry by its ID. It deletes nothing itself, so running it again is harmless. It picks the first ref that holds the key and refuses, printing nothing to delete, when that ref has more than one entry, when a later ref holds the key under a different version or when an entry has no version; then check which version the job used and delete that ID. Step 1: run the command below and read the entry it prints. Step 2: run the --id command it prints, once; it deletes exactly that ID and refuses when the ID no longer exists or has another key. It needs velnor-ci 0.1.112 or newer on the machine that runs it, which the pinned helper does not provide: download it from {HELPER_RELEASES} (tag tools-v0.1.112 or newer) and put it on PATH.{} Command: `{}`",
+        ". The restored {what} is {}; the cache action does not report which ref or version it came from, so the command below only reads: it lists every ref the action can have read, in its order (the ref of this run, then the base and default branches), and prints the one entry the restore read (ID, version and ref) together with the command that deletes that entry by its ID. It deletes nothing itself, so running it again is harmless. It resolves an entry only when the FIRST ref holds the key, and refuses, printing nothing to delete, when the first ref no longer holds it (another job of this run or you may have deleted the entry already; if so, stop), when that ref has more than one entry, when a later ref holds the key under a different version or when an entry has no version; then check which version the job used and delete that ID. Step 1: run the command below and read the entry it prints. Step 2: run the --id command it prints, once; it deletes exactly that ID and refuses when the ID no longer exists or has another key. The two steps are needed once per run, not once per job, even though every tools job of the run prints this notice: after one job's entry is deleted, step 1 refuses instead of naming the next ref's healthy entry. It needs velnor-ci 0.1.112 or newer on the machine that runs it, which the pinned helper does not provide: download it from {HELPER_RELEASES} (tag tools-v0.1.112 or newer) and put it on PATH.{} Command: `{}`",
         quoted(key),
         trust_hint(remedy.remote),
         delete_command(key, remedy.refs, remedy.remote)

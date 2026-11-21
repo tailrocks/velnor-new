@@ -147,7 +147,7 @@ fn the_binary_resolves_the_only_entry_its_key_and_ref_name_and_deletes_nothing()
     assert!(stdout.contains("nothing was deleted"), "{stdout}");
     assert!(
         stdout.contains(&format!(
-            "cache delete-entry --repo {REPO} --key '{KEY}' --id 12"
+            "cache delete-entry --repo '{REPO}' --key '{KEY}' --id 12"
         )),
         "{stdout}"
     );
@@ -284,6 +284,25 @@ fn the_binary_resolves_the_first_ref_when_a_later_ref_holds_the_same_version() {
 }
 
 #[test]
+fn the_binary_refuses_a_key_that_only_a_later_ref_holds_and_prints_no_id_command() {
+    let (api, served) = serve(vec![entry(11, KEY, MAIN, VERSION_A)]);
+    let output = delete_entry(&api, &["--key", KEY, "--ref", MERGE, "--ref", MAIN]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!output.status.success(), "{stdout}{stderr}");
+    assert!(
+        stderr.contains(&format!("is no longer on {MERGE}"))
+            && stderr.contains(&format!("re-run with `--ref {MAIN}` first")),
+        "{stderr}"
+    );
+    assert!(
+        !stdout.contains("--id") && !stderr.contains("--id"),
+        "{stdout}{stderr}"
+    );
+    assert_eq!(deleted(&served), Vec::<String>::new());
+}
+
+#[test]
 fn the_binary_respects_the_order_of_the_refs() {
     let (api, served) = serve(vec![
         entry(11, KEY, MAIN, VERSION_A),
@@ -301,6 +320,7 @@ fn the_binary_refuses_when_the_listing_of_the_first_ref_fails() {
     let output = delete_entry(&api, &["--key", KEY, "--ref", FAIL, "--ref", MAIN]);
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(!output.status.success(), "{stderr}");
+    assert!(stderr.contains("502"), "{stderr}");
     assert_eq!(deleted(&served), Vec::<String>::new());
 }
 

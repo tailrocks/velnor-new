@@ -23,6 +23,11 @@ fn the_notice_explains_the_two_steps_and_prints_only_the_resolve_command() {
             && stdout.contains("Step 2: run the --id command it prints, once"),
         "{stdout}"
     );
+    assert!(
+        stdout.contains("needed once per run, not once per job")
+            && stdout.contains("resolves an entry only when the FIRST ref holds the key"),
+        "{stdout}"
+    );
     assert_eq!(stdout.matches("cache delete-entry").count(), 1, "{stdout}");
     assert!(!stdout.contains(" --id '"), "{stdout}");
     assert!(
