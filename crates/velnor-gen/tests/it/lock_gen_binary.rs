@@ -6,8 +6,8 @@ use std::error::Error;
 use velnor_gen::{GenerateError, expected_with_notes};
 use velnor_model::Platform;
 use velnor_rust::{
-    DetectError, LOCK_PATH, Reason, RunningGenerator, check_generator_entry, detect, pin_lock,
-    verify_release,
+    DetectError, LOCK_PATH, LockError, Reason, RunningGenerator, check_generator_entry, detect,
+    pin_lock, verify_release,
 };
 
 use crate::facts::{lib, repo};
@@ -236,12 +236,12 @@ fn with_binary_table(table: &str) -> Result<String, Box<dyn Error>> {
     Ok(format!("{head}[velnor-gen-binary]\n{table}\n"))
 }
 
-fn generation_refused(lock: &str) -> Result<String, Box<dyn Error>> {
+fn generation_refused(lock: &str) -> Result<LockError, Box<dyn Error>> {
     match expected_with_notes(&with_lock(lock)?) {
         Err(GenerateError::Detect(DetectError::Invalid {
             path,
             reason: Reason::HelperLock(error),
-        })) if path == LOCK_PATH => Ok(error.to_string()),
+        })) if path == LOCK_PATH => Ok(error),
         Err(error) => Err(format!("refused at another file or reason: {error}").into()),
         Ok(_) => Err("generation accepted the lock".into()),
     }
@@ -275,8 +275,8 @@ fn generation_refuses_a_malformed_generator_binary_table() -> TestResult {
 #[test]
 fn generation_names_the_generator_binary_table_in_its_refusal() -> TestResult {
     for table in malformed_binary_tables() {
-        let message = generation_refused(&with_binary_table(&table)?)?;
-        assert!(message.starts_with("[velnor-gen-binary] "), "{message}");
+        let error = generation_refused(&with_binary_table(&table)?)?;
+        assert_eq!(error.table(), Some("velnor-gen-binary"));
     }
     Ok(())
 }
