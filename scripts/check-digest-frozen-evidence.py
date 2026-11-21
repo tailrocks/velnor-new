@@ -76,18 +76,18 @@ def exclude_lines(config, rule_id):
             continue
         if not line.strip() or line.lstrip().startswith("#"):
             continue
-        m = re.match(r"^(\s*)- (.*)$", line)
-        if m and len(m.group(1)) >= exclude_indent:
-            out.append(scalar(m.group(2)))
-        elif len(line) - len(line.lstrip()) > exclude_indent:
-            raise ValueError(f"unexpected line inside {rule_id} exclude: {line.strip()}")
-        else:
+        indent = len(line) - len(line.lstrip())
+        if indent < exclude_indent:
             exclude_indent = None
+            continue
+        m = re.match(r"^\s*- (.*)$", line)
+        if not m:
+            raise ValueError(f"unexpected line inside {rule_id} exclude: {line.strip()}")
+        out.append(scalar(m.group(1)))
     return out
 
 
 def resolved_excludes(config, rule_id):
-    # What alint itself resolves for the rule: the authority the parser must agree with.
     try:
         run = subprocess.run(
             ["alint", "explain", rule_id, "--config", config, "--format", "json"],
@@ -101,8 +101,6 @@ def resolved_excludes(config, rule_id):
 
 
 def exempt_paths(config):
-    # Duplicates are rejected within one rule only: alint takes excludes per rule, so a
-    # file that must be exempt from two rules is listed in both. Each path is verified once.
     out = []
     for rule_id in RULE_IDS:
         parsed = exclude_lines(config, rule_id)

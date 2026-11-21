@@ -118,6 +118,14 @@ check temp_var_folders     fail "fixture under /va""r/folders/8p/h376l/T/mbx-iso
 check temp_var_folders_log fail "fixture under /va""r/folders/8p/h376l/T/mbx-iso-zv6g" log
 check temp_url_segment     pass "https://example.com${tmp}/velnor-x/page"
 check temp_dotted_prefix   pass "pkg.${tmp}/velnor-x and a-${tmp}/velnor-y"
+check temp_file_url_tmp    fail "open file://${tmp}/velnor-audit-gap/report.json"
+check temp_file_url_bare   fail "see file://${tmp}/new.json"
+check temp_file_url_private fail "open file://${priv}/claude-501/session/out.md"
+check temp_file_url_var    fail "open file:///va""r/folders/8p/h376l/T/mbx-iso-zv6g/x"
+check temp_file_url_log    fail "open file://${tmp}/mise-action-AbC123/bin" log
+check temp_file_url_example pass "use file://${tmp}/example/file.md as the sample"
+check temp_file_url_other  pass "open file:///opt/velnor/report.json"
+check temp_file_url_repo   pass "open file://docs/implemented/a.md"
 
 if [ "$fails" -ne 0 ]; then
   echo "no-local-temp-paths fixtures: $fails failing"

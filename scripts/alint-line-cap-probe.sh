@@ -63,6 +63,8 @@ attack_case unquoted-comment '      exclude:\n        - docs/attack.md # why'
 attack_case shallow-indent '      exclude:\n      - docs/attack.md'
 attack_case flow-list '      exclude: [docs/attack.md]'
 attack_case non-list-key-between-entries '      exclude:\n        - .alint.yml\n        note: stray\n        - docs/attack.md'
+attack_case key-at-exclude-indent '      exclude:\n        - .alint.yml\n      note: stray\n        - docs/attack.md'
+attack_case key-at-exclude-indent-tail '      exclude:\n        - .alint.yml\n      note: stray'
 
 manifest_case() {
   local attack out rc ev=docs/implemented/evidence/freshness-2026-10-24
@@ -83,7 +85,6 @@ manifest_case() {
 }
 manifest_case
 
-# One path exempt from both rules is verified once and accepted; a duplicate inside one rule is refused.
 dup_case() {
   local label="$1" checker="$2" cfg out rc
   cfg="$(mktemp "${TMPDIR:-/tmp}/digest-dup.XXXXXX")" || exit 1
