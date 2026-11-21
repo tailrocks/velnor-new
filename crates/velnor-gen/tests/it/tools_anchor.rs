@@ -353,7 +353,7 @@ fn anchor_steps(helper: &str) -> Result<Vec<Value>, Box<dyn std::error::Error>> 
 }
 
 #[test]
-fn a_rerun_of_a_job_names_its_anchor_by_run_attempt_from_helper_0_1_111() -> TestResult {
+fn a_rerun_of_a_job_names_its_anchor_by_run_attempt_from_helper_0_1_112() -> TestResult {
     let before = anchor_steps(HELPER)?;
     assert!(
         before.iter().any(|step| step["name"] == "Save anchor"),
@@ -362,7 +362,7 @@ fn a_rerun_of_a_job_names_its_anchor_by_run_attempt_from_helper_0_1_111() -> Tes
     for step in &before {
         assert_eq!(step["with"]["key"], format!("{PREFIX}{PLAIN_RUN}"));
     }
-    let after = anchor_steps("0.1.111")?;
+    let after = anchor_steps("0.1.112")?;
     assert_eq!(after.len(), before.len(), "{after:?}");
     for step in &after {
         assert_eq!(step["with"]["key"], format!("{PREFIX}{ATTEMPT_RUN}"));
@@ -372,7 +372,7 @@ fn a_rerun_of_a_job_names_its_anchor_by_run_attempt_from_helper_0_1_111() -> Tes
 
 #[test]
 fn a_new_anchor_is_saved_only_on_the_default_branch() -> TestResult {
-    for helper in [HELPER, "0.1.111"] {
+    for helper in [HELPER, "0.1.112"] {
         let saves: Vec<Value> = anchor_steps(helper)?
             .into_iter()
             .filter(|step| step["name"] == "Save anchor")
