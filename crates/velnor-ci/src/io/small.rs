@@ -3,7 +3,7 @@
 
 use super::{
     CiError, append_outputs, break_time_ties, cold, cold_on_failure, current_dir, expire_old_bases,
-    inputs_batch, now_seconds,
+    inputs_batch, now_seconds, restore_floor,
 };
 
 pub(super) fn run_restored(args: &crate::cli::RestoredArgs) -> Result<String, CiError> {
@@ -16,7 +16,9 @@ pub(super) fn run_restored(args: &crate::cli::RestoredArgs) -> Result<String, Ci
     };
     let expiry = expire_old_bases(&targets, now_seconds())?;
     append_outputs(&format!("expired={}\n", expiry.expired))?;
-    let report = cold_on_failure(&targets, "restored", || break_time_ties(&root))?;
+    let report = cold_on_failure(&targets, "restored", || {
+        Ok(break_time_ties(&root)? + &restore_floor::mark(&root)?)
+    })?;
     pending.consume()?;
     Ok(expiry.report + &report)
 }

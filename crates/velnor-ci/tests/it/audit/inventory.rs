@@ -12,22 +12,19 @@ use crate::io::Repo;
 const OUTPUT: &str = "rust/target/debug/build/lib-f000000000000008/output";
 
 pub(super) fn build(repo: &Repo, output: &str, target: Option<&Path>) {
+    build_stamping(repo, output, target, &["-t", "206501010000"]);
+}
+
+pub(super) fn build_stamping(repo: &Repo, output: &str, target: Option<&Path>, stamp: &[&str]) {
     let mut command = super::velnor_ci();
     command.current_dir(repo.root());
     if let Some(target) = target {
         command.env("CARGO_TARGET_DIR", target);
     }
     let built = command
-        .args([
-            "inputs",
-            "build",
-            "--",
-            "touch",
-            "-m",
-            "-t",
-            "206501010000",
-            output,
-        ])
+        .args(["inputs", "build", "--", "touch", "-m"])
+        .args(stamp)
+        .arg(output)
         .output()
         .unwrap_or_else(|e| unreachable!("{e}"));
     assert!(built.status.success(), "{built:?}");

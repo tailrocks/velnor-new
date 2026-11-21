@@ -4,8 +4,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io;
+use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 
 use velnor_rust::{Located, locate};
 
@@ -25,6 +26,7 @@ pub(super) struct Freshness {
     directories: BTreeMap<(PathBuf, BTreeSet<PathBuf>), (SystemTime, Entries)>,
     budget: Budget,
     max_directory_entries: usize,
+    floor: Option<SystemTime>,
 }
 
 impl Freshness {
@@ -32,6 +34,7 @@ impl Freshness {
         workspaces: &[Workspace],
         groups: &[PathBuf],
         max_directory_entries: usize,
+        floor: Option<SystemTime>,
     ) -> Result<Self, CiError> {
         let mut targets = inventory::exclusions(workspaces)?;
         for dir in groups {
@@ -44,6 +47,7 @@ impl Freshness {
             directories: BTreeMap::new(),
             budget: Budget::new(max_directory_entries),
             max_directory_entries,
+            floor,
         })
     }
 
@@ -53,6 +57,7 @@ impl Freshness {
             directories: BTreeMap::new(),
             budget: Budget::new(self.max_directory_entries),
             max_directory_entries: self.max_directory_entries,
+            floor: self.floor,
         }
     }
 
@@ -63,16 +68,22 @@ impl Freshness {
         output: &Path,
         targets: &BTreeSet<PathBuf>,
     ) -> io::Result<bool> {
+        if let Ok(link) = fs::symlink_metadata(path)
+            && link.file_type().is_symlink()
+            && changed_since(&link, built, self.floor, false)?
+        {
+            return Ok(true);
+        }
         let metadata = fs::metadata(path)?;
         if !metadata.is_dir() {
-            return Ok(metadata.modified()? > built);
+            return changed_since(&metadata, built, self.floor, true);
         }
         let root = fs::canonicalize(path)?;
         let key = (root.clone(), targets.clone());
         if !self.directories.contains_key(&key) {
             let scanned = inventory::scan(&root, targets, &mut self.budget)?;
             let entries = inventory::view(&scanned.entries, &root, targets)?;
-            let Some(newest) = inventory::newest(&scanned, &entries)? else {
+            let Some(newest) = inventory::newest(&scanned, &entries, self.floor)? else {
                 return Ok(true);
             };
             self.directories.insert(key.clone(), (newest, entries));
@@ -80,7 +91,10 @@ impl Freshness {
         let Some((newest, entries)) = self.directories.get(&key) else {
             return Err(io::Error::other("directory inventory missing after scan"));
         };
-        Ok(*newest > built || !inventory::matches(output, path, entries, targets).unwrap_or(false))
+        Ok(
+            *newest >= built
+                || !inventory::matches(output, path, entries, targets).unwrap_or(false),
+        )
     }
 }
 
@@ -168,6 +182,22 @@ impl Audit<'_> {
     }
 }
 
+fn changed_since(
+    metadata: &fs::Metadata,
+    built: SystemTime,
+    floor: Option<SystemTime>,
+    keeps_modified: bool,
+) -> io::Result<bool> {
+    let counted = |time: SystemTime| floor.is_none_or(|floor| time >= floor);
+    let inode = u64::try_from(metadata.ctime()).ok().map(|seconds| {
+        let nanos = u32::try_from(metadata.ctime_nsec()).unwrap_or(0);
+        SystemTime::UNIX_EPOCH + Duration::new(seconds, nanos)
+    });
+    let modified = metadata.modified()?;
+    Ok((modified >= built && (keeps_modified || counted(modified)))
+        || inode.is_some_and(|inode| inode >= built && counted(inode)))
+}
+
 fn failed(path: &Path, error: &io::Error) -> CiError {
     CiError::new(format!(
         "cannot establish input freshness for {}: {error}",
@@ -176,92 +206,4 @@ fn failed(path: &Path, error: &io::Error) -> CiError {
 }
 
 #[cfg(test)]
-mod tests {
-    use std::fs;
-    use std::time::UNIX_EPOCH;
-
-    use super::*;
-
-    fn snapshot(name: &str) -> (PathBuf, inventory::Scan) {
-        let root =
-            std::env::temp_dir().join(format!("velnor-freshness-{name}-{}", std::process::id()));
-        let _ = fs::remove_dir_all(&root);
-        fs::create_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
-        for file in ["kept.txt", "gone.txt"] {
-            let path = root.join(file);
-            fs::write(&path, b"").unwrap_or_else(|e| unreachable!("{e}"));
-            fs::File::open(&path)
-                .and_then(|file| file.set_times(fs::FileTimes::new().set_modified(UNIX_EPOCH)))
-                .unwrap_or_else(|e| unreachable!("{e}"));
-        }
-        let mut budget = Budget::new(usize::MAX);
-        let scan = inventory::scan(&root, &BTreeSet::new(), &mut budget)
-            .unwrap_or_else(|e| unreachable!("{e}"));
-        (root, scan)
-    }
-
-    #[test]
-    fn a_snapshot_whose_entries_all_remain_has_a_newest_file() {
-        let (root, scan) = snapshot("control");
-        let newest = inventory::newest(&scan, &scan.entries);
-        fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
-        assert!(matches!(newest, Ok(Some(_))), "{newest:?}");
-    }
-
-    #[test]
-    fn an_entry_removed_after_the_scan_is_reported_as_vanished_not_as_an_error() {
-        let (root, scan) = snapshot("vanished");
-        fs::remove_file(root.join("gone.txt")).unwrap_or_else(|e| unreachable!("{e}"));
-        let newest = inventory::newest(&scan, &scan.entries);
-        fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
-        assert!(matches!(newest, Ok(None)), "{newest:?}");
-    }
-
-    fn directory_snapshot(name: &str) -> (PathBuf, inventory::Scan) {
-        let root = fs::canonicalize(std::env::temp_dir())
-            .unwrap_or_else(|e| unreachable!("{e}"))
-            .join(format!("velnor-freshness-{name}-{}", std::process::id()));
-        let _ = fs::remove_dir_all(&root);
-        let directory = root.join("d");
-        fs::create_dir_all(&directory).unwrap_or_else(|e| unreachable!("{e}"));
-        fs::write(directory.join("f"), b"").unwrap_or_else(|e| unreachable!("{e}"));
-        for path in [directory.join("f"), directory.clone(), root.clone()] {
-            fs::File::open(&path)
-                .and_then(|file| file.set_times(fs::FileTimes::new().set_modified(UNIX_EPOCH)))
-                .unwrap_or_else(|e| unreachable!("{e}"));
-        }
-        let mut budget = Budget::new(usize::MAX);
-        let scan = inventory::scan(&root, &BTreeSet::new(), &mut budget)
-            .unwrap_or_else(|e| unreachable!("{e}"));
-        (root, scan)
-    }
-
-    #[test]
-    fn a_file_created_after_the_walk_makes_the_snapshot_stale() {
-        let (root, scan) = directory_snapshot("created");
-        fs::write(root.join("d").join("new"), b"").unwrap_or_else(|e| unreachable!("{e}"));
-        let newest = inventory::newest(&scan, &scan.entries);
-        fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
-        assert!(
-            matches!(newest, Ok(None)),
-            "a file created after the walk was missed: {newest:?}"
-        );
-    }
-
-    #[test]
-    fn a_directory_rewritten_with_the_same_names_after_the_walk_makes_the_snapshot_stale() {
-        let (root, scan) = directory_snapshot("rewritten");
-        let directory = root.join("d");
-        fs::remove_file(directory.join("f")).unwrap_or_else(|e| unreachable!("{e}"));
-        fs::write(directory.join("f"), b"").unwrap_or_else(|e| unreachable!("{e}"));
-        fs::File::open(directory.join("f"))
-            .and_then(|file| file.set_times(fs::FileTimes::new().set_modified(UNIX_EPOCH)))
-            .unwrap_or_else(|e| unreachable!("{e}"));
-        let newest = inventory::newest(&scan, &scan.entries);
-        fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
-        assert!(
-            matches!(newest, Ok(None)),
-            "a directory rewritten after the walk was accepted as the walked one: {newest:?}"
-        );
-    }
-}
+mod tests;

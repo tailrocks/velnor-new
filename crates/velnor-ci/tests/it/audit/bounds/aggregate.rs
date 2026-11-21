@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs;
+use std::os::unix::fs::MetadataExt;
+use std::time::{Duration, UNIX_EPOCH};
 
 use super::super::{audit, own_units, unit, workspace_below_the_root};
 
@@ -50,6 +52,15 @@ fn dep_info_budget_is_per_cargo_root() {
         "",
     );
     repo.git(&["add", "--all"]);
+    built_after_inputs(
+        &repo,
+        "tools/src/main.rs",
+        &[
+            "target-tools/debug/deps/tools-0000000000000001.d",
+            "target-tools/debug/deps/tools-0000000000000002.d",
+        ],
+        Duration::from_secs(1),
+    );
 
     let mut index = 0;
     // 60 MiB in each root: 120 MiB in total, above the 64 MiB aggregate.
@@ -74,6 +85,16 @@ fn dep_info_budget_is_per_cargo_root() {
         fs::read(lock).unwrap_or_else(|e| unreachable!("{e}")),
         before
     );
+}
+
+fn built_after_inputs(repo: &crate::io::Repo, input: &str, outputs: &[&str], gap: Duration) {
+    let metadata = fs::metadata(repo.root().join(input)).unwrap_or_else(|e| unreachable!("{e}"));
+    let seconds = u64::try_from(metadata.ctime()).unwrap_or_else(|e| unreachable!("{e}"));
+    let nanos = u32::try_from(metadata.ctime_nsec()).unwrap_or_else(|e| unreachable!("{e}"));
+    let built = UNIX_EPOCH + Duration::new(seconds, nanos) + gap;
+    for output in outputs {
+        repo.set_mtime(output, built);
+    }
 }
 
 pub(super) fn write_dep_info_files(

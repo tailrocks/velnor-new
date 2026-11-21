@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::os::unix::fs::MetadataExt;
 use std::time::UNIX_EPOCH;
 
 use super::super::latest::{Hooks, newest_with};
@@ -54,7 +55,7 @@ fn a_link_target_replaced_by_a_directory_after_the_scan_makes_the_snapshot_stale
     fs::remove_file(&outside).unwrap_or_else(|e| unreachable!("{e}"));
     fs::create_dir(&outside).unwrap_or_else(|e| unreachable!("{e}"));
     fs::write(outside.join("new"), b"").unwrap_or_else(|e| unreachable!("{e}"));
-    let newest = newest_with(&scan, &scan.entries, &Hooks::default());
+    let newest = newest_with(&scan, &scan.entries, None, &Hooks::default());
     fs::remove_dir_all(&base).unwrap_or_else(|e| unreachable!("{e}"));
     assert!(
         matches!(newest, Ok(None)),
@@ -72,6 +73,7 @@ fn a_directory_that_grew_after_the_scan_is_not_read_to_its_end() {
     let newest = newest_with(
         &scan,
         &scan.entries,
+        None,
         &Hooks {
             listed: &|_| {
                 read.fetch_add(1, Ordering::Relaxed);
@@ -92,6 +94,7 @@ fn a_directory_changed_while_its_children_are_observed_makes_the_snapshot_stale(
     let newest = newest_with(
         &scan,
         &scan.entries,
+        None,
         &Hooks {
             observed: &|_| {
                 if !changed.swap(true, Ordering::Relaxed) {
@@ -119,6 +122,13 @@ fn set_modified(path: &Path, seconds: u64) {
         .unwrap_or_else(|e| unreachable!("{e}"));
 }
 
+fn change_time(path: &Path) -> std::time::SystemTime {
+    let metadata = fs::metadata(path).unwrap_or_else(|e| unreachable!("{e}"));
+    let seconds = u64::try_from(metadata.ctime()).unwrap_or_else(|e| unreachable!("{e}"));
+    let nanos = u32::try_from(metadata.ctime_nsec()).unwrap_or_else(|e| unreachable!("{e}"));
+    UNIX_EPOCH + std::time::Duration::new(seconds, nanos)
+}
+
 #[test]
 fn a_link_target_ancestor_swapped_after_it_is_resolved_never_reports_the_decoy_time() {
     let base = arena("ancestor-swap");
@@ -133,13 +143,15 @@ fn a_link_target_ancestor_swapped_after_it_is_resolved_never_reports_the_decoy_t
     }
     std::os::unix::fs::symlink("../ext/target.txt", root.join("link"))
         .unwrap_or_else(|e| unreachable!("{e}"));
-    set_modified(&decoy, 0);
+    set_modified(&decoy, 4_000_000_000);
     let scan = scanned(&root);
     set_modified(&real, 1_700_000_000);
+    let real_time = change_time(&real);
     let swapped = AtomicBool::new(false);
     let newest = newest_with(
         &scan,
         &scan.entries,
+        None,
         &Hooks {
             resolved: &|_| {
                 if !swapped.swap(true, Ordering::Relaxed) {
@@ -155,7 +167,6 @@ fn a_link_target_ancestor_swapped_after_it_is_resolved_never_reports_the_decoy_t
     let swapped = swapped.load(Ordering::Relaxed);
     fs::remove_dir_all(&base).unwrap_or_else(|e| unreachable!("{e}"));
     assert!(swapped, "the ancestor was never swapped");
-    let real_time = UNIX_EPOCH + std::time::Duration::from_secs(1_700_000_000);
     let kept = match &newest {
         Ok(None) => true,
         Ok(Some(time)) => *time == real_time,
