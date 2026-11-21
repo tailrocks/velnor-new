@@ -36,9 +36,6 @@ pub(super) fn declared_tree(entries: usize) -> Repo {
     repo
 }
 
-// Each hard link is a metadata round trip, so a serial loop over 100 000
-// entries dominates the test. The seeds exist before any link is made, so
-// the links are independent and can be created from a few threads.
 fn link_entries(directory: &Path, entries: usize) {
     const THREADS: usize = 8;
     let chunk = entries.div_ceil(THREADS).max(1);
