@@ -123,3 +123,38 @@ fn a_failed_check_prints_the_restore_notices_on_their_own_lines() {
         "{notices}"
     );
 }
+
+#[test]
+fn the_check_command_prints_the_restore_notices_before_it_fails()
+-> Result<(), Box<dyn std::error::Error>> {
+    let repo = crate::io::Repo::empty("report-check-restore-notice");
+    let mut value = lane();
+    value["invocations"][0]["compilations"] = json!([
+        {"package":"serde","version":"1.0.0","workspace":false,"unchanged":false,"dependencies":[],"restored":true},
+        {"package":"tokio","version":"1.0.0","workspace":false,"unchanged":false,"dependencies":[],"restored":false,"missing_input":true}
+    ]);
+    std::fs::write(repo.root().join("ci-metrics.json"), value.to_string())?;
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        .args(["report", "--check"])
+        .arg(repo.root())
+        .env("GITHUB_REF", "refs/heads/main")
+        .env("VELNOR_REPORT_DEFAULT_BRANCH", "main")
+        .env("VELNOR_REPORT_NEEDS", "{}")
+        .env("GITHUB_STEP_SUMMARY", repo.root().join("summary"))
+        .env_remove("GITHUB_TOKEN")
+        .output()?;
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!output.status.success(), "{stdout}{stderr}");
+    assert!(
+        stderr.contains("compiled despite usable restored inputs"),
+        "{stderr}"
+    );
+    assert!(
+        stdout.lines().any(|line| line.starts_with("::notice::")
+            && line.contains("names a file outside target/ that is missing")
+            && line.contains("tokio")),
+        "{stdout}"
+    );
+    Ok(())
+}
