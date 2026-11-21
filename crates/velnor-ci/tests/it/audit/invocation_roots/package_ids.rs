@@ -9,7 +9,7 @@ const REFUSAL: &str = "outside this command's explicit selection";
 
 const ROOT: &str = "@ROOT@";
 
-const FORMS: [(&str, &str, bool); 19] = [
+const FORMS: [(&str, &str, bool); 24] = [
     ("x", "x", true),
     ("beta", "beta", true),
     ("x@0.1.0", "x", true),
@@ -33,6 +33,11 @@ const FORMS: [(&str, &str, bool); 19] = [
         false,
     ),
     ("git+https://example.invalid/x#x@0.1.0", "x", false),
+    ("x@9.9.9", "x", false),
+    ("x:9.9.9", "x", false),
+    ("path+file://@ROOT@/x#9.9.9", "x", false),
+    ("path+file://@ROOT@/x#x@9.9.9", "x", false),
+    ("path+file://@ROOT@/pkg-beta#beta@9.9.9", "beta", false),
 ];
 
 fn workspace_with_beta() -> Repo {

@@ -1,12 +1,28 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-pub(super) fn package_name(spec: &str) -> Option<&str> {
+use velnor_model::RustMember;
+
+pub(super) struct Spec<'a> {
+    name: &'a str,
+    version: Option<&'a str>,
+}
+
+impl Spec<'_> {
+    pub(super) fn matches(&self, member: &RustMember) -> bool {
+        member.name.as_str() == self.name
+            && self
+                .version
+                .is_none_or(|version| member.version.as_deref() == Some(version))
+    }
+}
+
+pub(super) fn parse(spec: &str) -> Option<Spec<'_>> {
     let Some((scheme, location)) = spec.split_once("://") else {
         return if spec.contains('#') {
             None
         } else {
-            versioned_name(spec)
+            Some(versioned(spec))
         };
     };
     if scheme.strip_prefix("path+").unwrap_or(scheme) != "file" {
@@ -19,12 +35,32 @@ pub(super) fn package_name(spec: &str) -> Option<&str> {
         });
     match fragment {
         Some(fragment) if !fragment.starts_with(|c: char| c.is_ascii_digit()) => {
-            versioned_name(fragment)
+            Some(versioned(fragment))
         }
-        _ => address.rsplit('/').next(),
+        Some(version) => Some(Spec {
+            name: last_segment(address),
+            version: Some(version),
+        }),
+        None => Some(Spec {
+            name: last_segment(address),
+            version: None,
+        }),
     }
 }
 
-fn versioned_name(spec: &str) -> Option<&str> {
-    spec.split(['@', ':']).next()
+fn versioned(spec: &str) -> Spec<'_> {
+    match spec.split_once(['@', ':']) {
+        Some((name, version)) => Spec {
+            name,
+            version: Some(version),
+        },
+        None => Spec {
+            name: spec,
+            version: None,
+        },
+    }
+}
+
+fn last_segment(address: &str) -> &str {
+    address.rsplit('/').next().unwrap_or(address)
 }

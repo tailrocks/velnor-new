@@ -126,13 +126,8 @@ impl Builder<'_> {
 
     fn selection(&self, invocation: &Invocation) -> Option<invocation::Selection> {
         let root = self.invoked();
-        let members = root.map_or_else(BTreeSet::new, |root| {
-            root.members
-                .iter()
-                .map(|member| member.name.as_str())
-                .collect()
-        });
-        invocation.selection(root.map_or("", |root| root.manifest.as_str()), &members)
+        let members = root.map_or(&[][..], |root| root.members.as_slice());
+        invocation.selection(root.map_or("", |root| root.manifest.as_str()), members)
     }
 
     fn marker_directories(&self) -> Vec<PathBuf> {

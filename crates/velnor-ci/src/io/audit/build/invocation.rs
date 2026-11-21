@@ -1,14 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use velnor_model::RustRoot;
+use velnor_model::{RustMember, RustRoot};
 
-use package_spec::package_name;
+use package_spec::Spec;
 
 use super::super::super::units::{MetadataInvocation, Workspace, refuse_arguments};
 use super::super::groups::root_workspace;
@@ -73,7 +72,7 @@ impl Invocation {
         }
     }
 
-    pub(super) fn selection(&self, root: &str, members: &BTreeSet<&str>) -> Option<Selection> {
+    pub(super) fn selection(&self, root: &str, members: &[RustMember]) -> Option<Selection> {
         if !self.cargo_program() {
             return None;
         }
@@ -88,13 +87,11 @@ impl Invocation {
             .iter()
             .any(|word| matches!(*word, "--workspace" | "--all"));
         let mut selected = Vec::new();
-        let mut excluded = BTreeSet::new();
+        let mut excluded = Vec::new();
         for (index, word) in words.iter().enumerate() {
             match *word {
                 "-p" | "--package" => selected.extend(words.get(index + 1).copied()),
-                "--exclude" => {
-                    excluded.extend(words.get(index + 1).and_then(|spec| package_name(spec)));
-                }
+                "--exclude" => excluded.extend(words.get(index + 1).copied()),
                 _ => {
                     if let Some(spec) = word
                         .strip_prefix("--package=")
@@ -102,25 +99,30 @@ impl Invocation {
                     {
                         selected.push(spec);
                     } else if let Some(spec) = word.strip_prefix("--exclude=") {
-                        excluded.extend(package_name(spec));
+                        excluded.push(spec);
                     }
                 }
             }
         }
-        let packages = if workspace {
-            members
-                .iter()
-                .filter(|member| !excluded.contains(**member))
-                .map(|member| (*member).to_owned())
-                .collect()
-        } else {
-            selected
-                .into_iter()
-                .filter_map(package_name)
-                .filter(|name| members.contains(name))
-                .map(str::to_owned)
-                .collect()
-        };
+        let selected: Vec<Spec<'_>> = selected
+            .into_iter()
+            .filter_map(package_spec::parse)
+            .collect();
+        let excluded: Vec<Spec<'_>> = excluded
+            .into_iter()
+            .filter_map(package_spec::parse)
+            .collect();
+        let packages = members
+            .iter()
+            .filter(|member| {
+                if workspace {
+                    !excluded.iter().any(|spec| spec.matches(member))
+                } else {
+                    selected.iter().any(|spec| spec.matches(member))
+                }
+            })
+            .map(|member| member.name.as_str().to_owned())
+            .collect();
         Some(Selection {
             root: root.to_owned(),
             packages,

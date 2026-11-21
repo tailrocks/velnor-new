@@ -259,6 +259,7 @@ pub struct RustRoot {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RustMember {
     pub name: PackageName,
+    pub version: Option<String>,
     pub manifest: RepoPath,
     pub directory: Option<RepoPath>,
     pub dependencies: Vec<MemberDependency>,

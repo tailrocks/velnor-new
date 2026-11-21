@@ -334,6 +334,7 @@ fn user_rules_win_and_default_ignores_can_be_turned_off() {
 #[test]
 fn a_target_source_the_root_package_does_not_hold_in_its_own_folders_selects_that_package() {
     let root_package = RustMember {
+        version: None,
         name: name("tool"),
         manifest: path("Cargo.toml"),
         directory: None,
