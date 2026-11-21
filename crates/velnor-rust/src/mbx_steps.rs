@@ -1,12 +1,14 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{HelperCommand, Job, MbxRemote, MbxStore, RepoFacts, Step, StepKind};
+use velnor_model::{HelperCommand, Job, MbxRemote, MbxStats, MbxStore, RepoFacts, Step, StepKind};
 
-use crate::mbx_pin::MBX_PIN_HELPER;
+use crate::mbx_pin::{MBX_PIN_HELPER, MBX_TOOL, exact_release};
 use crate::plan::step;
 
 pub(crate) const MBX_OUT_DIR_HELPER: (u64, u64, u64) = (0, 1, 111);
+const MBX_REPORTS_HELPER: (u64, u64, u64) = (0, 1, 111);
+const MBX_REPORTS_RELEASE: (u64, u64, u64) = (1, 30, 0);
 
 pub(crate) fn apply(facts: &RepoFacts, jobs: &mut [Job]) {
     let remote = facts.config.mbx_remote == MbxRemote::GithubActions;
@@ -20,10 +22,22 @@ pub(crate) fn apply(facts: &RepoFacts, jobs: &mut [Job]) {
         .helper
         .as_ref()
         .is_some_and(|helper| helper.version().at_least(MBX_OUT_DIR_HELPER));
+    let stats = if facts.config.mbx.routed()
+        && facts
+            .helper
+            .as_ref()
+            .is_some_and(|helper| helper.version().at_least(MBX_REPORTS_HELPER))
+        && !pinned_before_reports(facts)
+    {
+        MbxStats::Reports
+    } else {
+        MbxStats::Summary
+    };
     for job in jobs {
         if !compiles(job) {
             continue;
         }
+        job.mbx_stats = stats;
         if remote && facts.private_sources.is_none() {
             let remote_steps = if from_pin {
                 vec![StepKind::MbxPin, StepKind::MbxRemote { from_pin }]
@@ -51,6 +65,22 @@ fn with_out_dirs(mut kinds: Vec<StepKind>, in_target: bool) -> Vec<StepKind> {
         kinds.push(StepKind::MbxOutDirs);
     }
     kinds
+}
+
+fn pinned_before_reports(facts: &RepoFacts) -> bool {
+    facts.tools.tools.get(MBX_TOOL).is_some_and(|pin| {
+        pin.requested.iter().any(|request| {
+            exact_release(&request.version).is_some_and(|text| {
+                let mut parts = text.split('.').filter_map(|part| part.parse::<u64>().ok());
+                let release = (
+                    parts.next().unwrap_or(0),
+                    parts.next().unwrap_or(0),
+                    parts.next().unwrap_or(0),
+                );
+                release < MBX_REPORTS_RELEASE
+            })
+        })
+    })
 }
 
 #[derive(Clone, Copy)]

@@ -8,6 +8,7 @@ use std::process::Command;
 use crate::io::Repo as Checkout;
 
 mod born;
+mod git_admissions;
 mod public_declared;
 mod public_git;
 mod public_guards;
@@ -324,6 +325,7 @@ fn a_refused_manifest_path_with_a_line_break_stays_on_one_line() {
         .arg(manifest)
         .env("RUNNER_TEMP", &temp)
         .env("GITHUB_OUTPUT", &outputs)
+        .env("HOME", repo.root())
         .current_dir(repo.root())
         .output()
         .unwrap_or_else(|e| unreachable!("{e}"));

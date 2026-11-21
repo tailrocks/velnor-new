@@ -49,9 +49,6 @@ pub fn decode(text: &str) -> Option<RestoredUnits> {
     Some(units)
 }
 
-/// One fingerprint directory entry: the unit `hash` of `package`, named `unit`
-/// (for example `lib-serde`, or a build script's `run-build-script-...`), and
-/// the crate names it depends on.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Fingerprint {
     pub hash: String,
@@ -84,10 +81,6 @@ pub fn cascade(units: &mut RestoredUnits, fingerprints: &[Fingerprint]) {
     }
 }
 
-/// The crates with a gap unit that no restored unit of the same crate and
-/// kind holds. Another unit of the same package, such as a build script's run
-/// unit, is a different kind and does not hide the gap; a restored unit of the
-/// same kind (another version, say) does, because the name is then ambiguous.
 fn gap_crates(units: &RestoredUnits, fingerprints: &[Fingerprint]) -> BTreeSet<String> {
     let (gaps, held): (Vec<_>, Vec<_>) = fingerprints
         .iter()

@@ -103,6 +103,7 @@ pub struct RepoFacts {
     pub timings: BTreeMap<RepoPath, Timings>,
     pub timings_notes: Vec<String>,
     pub private_sources: Option<String>,
+    pub private_base_caches: bool,
     pub private_suggestion: Option<String>,
     pub unowned: BTreeMap<RepoPath, UnownedPackage>,
     pub policy: PolicyTools,
@@ -110,7 +111,7 @@ pub struct RepoFacts {
     pub weakenings: Vec<Weakening>,
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PolicyTools {
     pub deny: bool,
     pub machete: bool,
@@ -118,7 +119,7 @@ pub struct PolicyTools {
     pub checks: DenyChecks,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DenyChecks(u8);
 
 impl DenyChecks {

@@ -4,10 +4,13 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::time::{Duration, Instant, UNIX_EPOCH};
 
 use velnor_test_support::{ci_safe_cargo_env, real_cargo};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+const SOURCE_MTIME_SECS: u64 = 1_600_000_000;
 
 const SETTING: (&str, &str) = ("MBX_SHARE_OUT_DIR", "0");
 
@@ -17,17 +20,60 @@ impl Scratch {
     fn new(name: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let root =
             std::env::temp_dir().join(format!("velnor-mbx-out-dirs-{}-{name}", std::process::id()));
-        removable(&root);
-        fs::remove_dir_all(&root).ok();
+        remove_tree(&root).ok();
         fs::create_dir_all(&root)?;
-        Ok(Self(fs::canonicalize(root)?))
+        let root = fs::canonicalize(root)?;
+        declare_mbx(&root)?;
+        Ok(Self(root))
     }
+}
+
+fn declare_mbx(root: &Path) -> TestResult {
+    let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mise.toml");
+    let repo: toml::Table = fs::read_to_string(repo)?.parse()?;
+    let tools = repo
+        .get("tools")
+        .and_then(toml::Value::as_table)
+        .ok_or("the checkout's mise.toml has no [tools]")?;
+    let mut declared = toml::Table::new();
+    for tool in ["rust", "mr-boxington"] {
+        let entry = tools
+            .get(tool)
+            .ok_or_else(|| format!("the checkout's mise.toml pins no {tool}"))?;
+        declared.insert(tool.to_owned(), entry.clone());
+    }
+    let config = toml::Table::from_iter([("tools".to_owned(), toml::Value::Table(declared))]);
+    fs::write(root.join("mise.toml"), toml::to_string(&config)?)?;
+    Ok(())
+}
+
+fn trusted_with(root: &Path) -> std::ffi::OsString {
+    let mut paths: Vec<PathBuf> = std::env::var_os("MISE_TRUSTED_CONFIG_PATHS")
+        .map_or_default(|value| std::env::split_paths(&value).collect());
+    paths.push(root.to_path_buf());
+    std::env::join_paths(paths).unwrap_or_else(|_| root.into())
 }
 
 impl Drop for Scratch {
     fn drop(&mut self) {
-        removable(&self.0);
-        fs::remove_dir_all(&self.0).ok();
+        remove_tree(&self.0).ok();
+    }
+}
+
+fn remove_tree(path: &Path) -> std::io::Result<()> {
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        removable(path);
+        match fs::remove_dir_all(path) {
+            Err(error)
+                if error.kind() == std::io::ErrorKind::DirectoryNotEmpty
+                    && Instant::now() < deadline =>
+            {
+                std::thread::yield_now();
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            other => return other,
+        }
     }
 }
 
@@ -59,6 +105,13 @@ fn the_crate(root: &Path) -> Result<PathBuf, Box<dyn std::error::Error>> {
         krate.join("src/lib.rs"),
         "include!(concat!(env!(\"OUT_DIR\"), \"/x.rs\"));\n",
     )?;
+    let settled = UNIX_EPOCH + Duration::from_secs(SOURCE_MTIME_SECS);
+    for source in ["Cargo.toml", "build.rs", "src/lib.rs"] {
+        fs::File::options()
+            .write(true)
+            .open(krate.join(source))?
+            .set_modified(settled)?;
+    }
     Ok(krate)
 }
 
@@ -82,6 +135,9 @@ fn build(
         }
     }
     ci_safe_cargo_env(&mut cargo);
+    if let Some(root) = krate.parent() {
+        cargo.env("MISE_TRUSTED_CONFIG_PATHS", trusted_with(root));
+    }
     cargo.env("MBX_CACHE_DIR", store);
     if let Some((name, value)) = setting {
         cargo.env(name, value);
@@ -137,14 +193,20 @@ fn rebuild_from_base(
     assert!(cold.contains("Compiling probe"), "{cold}");
     let base = scratch.0.join("base.tar").display().to_string();
     let target = fs::canonicalize(krate.join("target"))?;
-    tar(&["-C", &target.display().to_string(), "-cf", &base, "."])?;
+    tar(&[
+        "--format=ustar",
+        "-C",
+        &target.display().to_string(),
+        "-cf",
+        &base,
+        ".",
+    ])?;
     let seed = scratch.0.join("seed");
     if seeded {
         copy_seeded_subsets(&store, &seed)?;
     }
     fs::remove_file(krate.join("target"))?;
-    removable(&scratch.0.join("runner-temp"));
-    fs::remove_dir_all(scratch.0.join("runner-temp"))?;
+    remove_tree(&scratch.0.join("runner-temp"))?;
     if seeded {
         copy_seeded_subsets(&seed, &store)?;
     }

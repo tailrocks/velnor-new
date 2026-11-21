@@ -239,8 +239,7 @@ fn fetched(job: &velnor_model::Job) -> Option<String> {
 }
 
 const FETCH_ROOTS: &str = "velnor-ci sources fetch --roots";
-
-fn fetch_chunks(manifests: &[RepoPath]) -> Vec<Vec<String>> {
+pub(crate) fn fetch_chunks(manifests: &[RepoPath]) -> Vec<Vec<String>> {
     let budget = MAX_RUN_CHARACTERS
         - crate::helper_integrity::INVOCATION_PREFIX.len()
         - (FETCH_ROOTS.len() - "velnor-ci ".len());
@@ -276,7 +275,7 @@ fn last_fetch_all_id(manifests: &[RepoPath]) -> String {
     fetch_all_id(fetch_chunks(manifests).len() - 1)
 }
 
-fn fetch_all_steps(manifests: &[RepoPath], cache_debug: bool) -> Vec<RenderedStep> {
+fn fetch_all_steps(manifests: &[RepoPath], cache_debug: bool, offline: bool) -> Vec<RenderedStep> {
     fetch_chunks(manifests)
         .into_iter()
         .enumerate()
@@ -284,6 +283,7 @@ fn fetch_all_steps(manifests: &[RepoPath], cache_debug: bool) -> Vec<RenderedSte
             env: cache_debug
                 .then(crate::cargo::cache_debug_env)
                 .into_iter()
+                .chain(offline.then(crate::cargo::offline_env))
                 .collect(),
             id: Some(fetch_all_id(chunk)),
             name: if chunk == 0 {
@@ -298,14 +298,26 @@ fn fetch_all_steps(manifests: &[RepoPath], cache_debug: bool) -> Vec<RenderedSte
                 )
             }),
             continue_on_error: true,
-            run: Some(format!("{FETCH_ROOTS} {}", roots.join(" "))),
+            run: Some(format!(
+                "{FETCH_ROOTS} {}",
+                roots_argument(manifests, &roots)
+            )),
             ..RenderedStep::default()
         })
         .collect()
 }
 
-pub(crate) fn sources_fetch_all(manifests: &[RepoPath], cache_debug: bool) -> RenderedStep {
-    fetch_all_steps(manifests, cache_debug)
+fn roots_argument(manifests: &[RepoPath], roots: &[String]) -> String {
+    crate::source_roots::roots_env(manifests)
+        .map_or_else(|| roots.join(" "), |(name, _)| format!("${name}"))
+}
+
+pub(crate) fn sources_fetch_all(
+    manifests: &[RepoPath],
+    cache_debug: bool,
+    offline: bool,
+) -> RenderedStep {
+    fetch_all_steps(manifests, cache_debug, offline)
         .into_iter()
         .next()
         .unwrap_or_default()
@@ -314,8 +326,9 @@ pub(crate) fn sources_fetch_all(manifests: &[RepoPath], cache_debug: bool) -> Re
 pub(crate) fn sources_fetch_all_rest(
     manifests: &[RepoPath],
     cache_debug: bool,
+    offline: bool,
 ) -> Vec<RenderedStep> {
-    fetch_all_steps(manifests, cache_debug)
+    fetch_all_steps(manifests, cache_debug, offline)
         .into_iter()
         .skip(1)
         .collect()
