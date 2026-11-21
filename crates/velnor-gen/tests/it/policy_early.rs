@@ -32,10 +32,9 @@ fn job(text: &str, id: &str) -> Result<serde_json::Value, Box<dyn std::error::Er
 }
 
 fn needs(job: &serde_json::Value) -> Vec<&str> {
-    job["needs"]
-        .as_array()
-        .map(|needs| needs.iter().filter_map(serde_json::Value::as_str).collect())
-        .unwrap_or_default()
+    job["needs"].as_array().map_or_else(Vec::new, |needs| {
+        needs.iter().filter_map(serde_json::Value::as_str).collect()
+    })
 }
 
 fn conditions(job: &serde_json::Value) -> String {

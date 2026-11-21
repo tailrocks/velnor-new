@@ -315,7 +315,7 @@ async fn build_refuses_a_checkout_whose_images_would_not_match_head() {
         .unwrap_or_else(|e| unreachable!("{e}"));
     let refused =
         velnor_local::io::pair::build(velnor_local::cli::BuildArgs { root: root.clone() }).await;
-    let message = refused.err().map(|e| e.to_string()).unwrap_or_default();
+    let message = refused.err().map_or_default(|e| e.to_string());
     assert!(
         message.contains("crates/velnor-runner-host/lib.rs"),
         "{message}"
@@ -331,7 +331,7 @@ async fn a_registration_that_cannot_be_packed_reports_the_runner_name_it_registe
         .unwrap_or_else(|e| unreachable!("{e}"));
     let failure = mint(&env, Side::Trusted).await.err();
     let call = docker.calls().concat().join(" ");
-    let name = failure.map(|failure| failure.name).unwrap_or_default();
+    let name = failure.map_or_default(|failure| failure.name);
     assert!(name.starts_with(&format!("{}-jit-", env.name)), "{name}");
     assert!(call.contains(&format!("--name {name}")), "{call}");
 }
