@@ -1,7 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::ffi::OsStr;
 use std::fs;
+use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::PermissionsExt;
 use std::process::Command;
 
@@ -227,6 +229,24 @@ fn an_unreadable_cache_budget_fails_the_decision_instead_of_saving() {
     let (output, written) = decide_within(&repo, "eight");
     assert!(!output.status.success());
     assert_eq!(written, "");
+}
+
+#[test]
+fn a_cache_budget_that_is_not_unicode_fails_the_decision_and_prunes_nothing() {
+    let repo = Checkout::new("decide-non-unicode-budget");
+    seed(&repo);
+    let (output, written) = decide_target_within(&repo, "target", OsStr::from_bytes(b"\xff"));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!output.status.success(), "{output:?}");
+    assert!(stderr.contains("VELNOR_CACHE_BUDGET_BYTES"), "{stderr}");
+    assert_eq!(written, "");
+    assert!(
+        repo.root()
+            .join("target/debug/incremental/app-1/work")
+            .is_file()
+    );
+    assert!(repo.root().join("target/debug/deps/libapp.rlib").is_file());
+    assert!(repo.root().join("nextest-archive.tar.zst").is_file());
 }
 
 #[test]
