@@ -4,12 +4,16 @@
 use crate::mbx_report::{DIRECTORY, SWITCH, VARIABLE, parse, reports_session};
 use crate::waste_evidence::MbxSession;
 use std::collections::BTreeMap;
+use std::ffi::OsStr;
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
+
+#[cfg(test)]
+mod tests;
 
 const EXPECTED: &str = "expected";
 const UNRECORDED: &str = "velnor-mbx-reports.unrecorded";
@@ -24,13 +28,13 @@ fn enabled() -> bool {
 }
 
 /// An enclosing mbx session (its socket is set) answers for nested cargo calls and writes no report of their own.
-fn inside_session() -> bool {
-    std::env::var_os("MBX_SOCKET").is_some_and(|socket| !socket.is_empty())
+fn inside_session(socket: Option<&OsStr>) -> bool {
+    socket.is_some_and(|socket| !socket.is_empty())
 }
 
 pub(crate) fn assign(command: &mut Command, argv: &[String]) {
     command.env_remove(VARIABLE);
-    if !enabled() || !reports_session(argv) || inside_session() {
+    if !enabled() || !reports_session(argv) || inside_session(std::env::var_os("MBX_SOCKET").as_deref()) {
         return;
     }
     let Some(temp) = std::env::var_os("RUNNER_TEMP").filter(|temp| !temp.is_empty()) else {
