@@ -98,3 +98,7 @@ name = "hk config"
 task = "validate-hk"
 tools = ["hk"]
 timeout_minutes = 5
+
+[[inputs]]
+glob = ".mise-version"
+packages = ["velnor-gen"]
