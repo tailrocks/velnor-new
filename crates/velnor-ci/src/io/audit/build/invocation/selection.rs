@@ -65,6 +65,18 @@ fn an_exclusion_wins_over_an_explicit_package_of_the_same_name() {
 }
 
 #[test]
+fn an_unprovable_exclusion_selects_no_explicit_package_either() {
+    for line in [
+        "cargo build --workspace --exclude lib@0.1.0 -p lib",
+        "cargo build --workspace --exclude=lib@0.1.0 --package=lib",
+        "cargo build --workspace --exclude lib@0.1.0 --package app",
+    ] {
+        assert!(!selected(line, "lib"), "{line}");
+        assert!(!selected(line, "app"), "{line}");
+    }
+}
+
+#[test]
 fn an_exclusion_flag_with_no_name_selects_nothing_it_cannot_prove() {
     for line in [
         "cargo build --workspace --exclude",

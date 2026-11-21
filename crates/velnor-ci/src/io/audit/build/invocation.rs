@@ -108,7 +108,7 @@ impl Invocation {
                 packages.push(name.to_owned());
             }
         }
-        packages.retain(|name| members.contains(name.as_str()));
+        packages.retain(|name| provable && members.contains(name.as_str()));
         Some(Selection {
             all,
             excluded,
