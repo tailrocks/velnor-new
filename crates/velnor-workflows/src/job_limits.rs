@@ -123,8 +123,8 @@ pub(crate) fn secret_without_write(
     Ok(())
 }
 
-/// The cache client rejects a key over 512 characters, and an expression is as long as the
-/// value a caller gives it.
+/// The cache client rejects a key over 512 UTF-16 code units, and an expression is as long as
+/// the value a caller gives it.
 pub(crate) fn bounded_cache_keys(
     job: &str,
     body: &Body,
