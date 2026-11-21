@@ -100,3 +100,21 @@ pub fn require_compatible(version: &HelperVersion) -> Result<(), GenerateError> 
         Err(GenerateError::IncompatibleHelper(version.clone()))
     }
 }
+
+// helper-gate: untagged tools-v0.1.111
+const MINT_ORDER_HELPER: (u64, u64, u64) = (0, 1, 111);
+
+/// An older helper mints the App token after the steps that check out the repository's code when
+/// the repository has `[private_sources]` or release assets. Released pins render unchanged, so
+/// this is a printed note only.
+pub(crate) fn mint_note(facts: &RepoFacts) -> Option<String> {
+    let version = facts.helper.as_ref()?.version();
+    let uses_token =
+        facts.config.private_sources.is_some() || !facts.config.release_assets.is_empty();
+    (uses_token && !version.at_least(MINT_ORDER_HELPER)).then(|| {
+        format!(
+            "[private_sources] / release assets with helper {} mint the App token after checkout-controlled steps; upgrade the helper to 0.1.111 or later",
+            version.as_str()
+        )
+    })
+}

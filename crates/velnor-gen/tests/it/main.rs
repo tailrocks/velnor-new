@@ -189,6 +189,7 @@ mod pr_ci_sim;
 mod private_base_budget;
 mod private_base_caches;
 mod private_base_prefix;
+mod private_helper_note;
 mod private_sources;
 mod private_sources_advisory;
 mod private_sources_phase;

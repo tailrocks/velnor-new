@@ -27,8 +27,7 @@ pub use key_gates::{ConfigFile, KeyGate, check_config_keys, key_gates, required_
 pub use tag::check_tag;
 pub use velnor_workflows::HELPER_COMMANDS;
 
-use std::collections::BTreeMap;
-use std::io::Write;
+use std::{collections::BTreeMap, io::Write};
 
 use velnor_model::{CacheKey, RepoPath, RepoView, RunnerLabel, StepKind, WorkflowPlan};
 use velnor_rust::{
@@ -113,6 +112,7 @@ pub fn expected_with_notes(
         .into_iter()
         .chain(velnor_rust::unverified_tools_note(&facts))
         .chain(velnor_rust::base_cache_note(&facts))
+        .chain(helper_gate::mint_note(&facts))
         .chain(facts.timings_notes)
         .collect();
     notes.extend(facts.private_suggestion);
