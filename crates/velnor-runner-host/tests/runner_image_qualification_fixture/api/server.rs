@@ -9,7 +9,7 @@ use std::sync::{Arc, Condvar, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
-use super::http::{read_request, write_reply};
+use super::http::{read_request, sleep_unless_stopping, write_reply};
 use super::routes::route;
 use super::state::{ApiPlan, Snapshot, State};
 
@@ -107,9 +107,13 @@ fn run_server(
 ) -> JoinHandle<()> {
     thread::spawn(move || {
         let mut workers = Vec::new();
+        let mut connections = Vec::new();
         while !stopping.load(Ordering::Acquire) {
             match listener.accept() {
                 Ok((stream, _)) => {
+                    if let Ok(handle) = stream.try_clone() {
+                        connections.push(handle);
+                    }
                     let state = Arc::clone(&state);
                     let settled = Arc::clone(&settled);
                     let stopping = Arc::clone(&stopping);
@@ -122,6 +126,9 @@ fn run_server(
                 }
                 Err(_) => break,
             }
+        }
+        for connection in &connections {
+            drop(connection.shutdown(std::net::Shutdown::Both));
         }
         for worker in workers {
             drop(worker.join());
@@ -146,7 +153,7 @@ fn serve(
         && let (Some(delay), Some(mutation)) =
             (reply.deferred_delay.take(), reply.deferred_mutation.take())
     {
-        drop(write_reply(&mut stream, &reply));
+        drop(write_reply(&mut stream, &reply, stopping));
         drop(stream);
         if sleep_unless_stopping(delay, stopping) {
             apply_deferred(state, settled, mutation);
@@ -164,7 +171,7 @@ fn serve(
             apply_deferred(state, settled, mutation);
         }
     }
-    drop(write_reply(&mut stream, &reply));
+    drop(write_reply(&mut stream, &reply, stopping));
 }
 
 fn apply_deferred(
@@ -178,20 +185,6 @@ fn apply_deferred(
     state.apply_deferred(mutation);
     drop(state);
     settled.notify_all();
-}
-
-fn sleep_unless_stopping(duration: Duration, stopping: &AtomicBool) -> bool {
-    let end = Instant::now() + duration;
-    loop {
-        if stopping.load(Ordering::Acquire) {
-            return false;
-        }
-        let remaining = end.saturating_duration_since(Instant::now());
-        if remaining.is_zero() {
-            return true;
-        }
-        thread::sleep(Duration::from_millis(10).min(remaining));
-    }
 }
 
 fn configure_stream(stream: &UnixStream) -> std::io::Result<()> {
