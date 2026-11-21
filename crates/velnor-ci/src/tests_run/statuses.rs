@@ -132,3 +132,19 @@ fn a_nextest_setup_script_line_does_not_poison_package_counts() {
         )]))
     );
 }
+
+#[test]
+fn a_missing_listing_withholds_every_count_the_listing_supplies() {
+    let mut tap = SummaryTap::default();
+    tap.feed(
+        b"PASS [   0.012s] (1/2) kept test\n\
+          Summary [   0.022s] 1 test run: 1 passed, 1 skipped\n",
+    );
+    let counts = tap.finish().expect("nextest summary");
+    let counts = apply_runnable(counts, None);
+
+    assert_eq!(
+        (counts.run, counts.listed, counts.ignored, counts.by_package),
+        (1, None, None, None)
+    );
+}
