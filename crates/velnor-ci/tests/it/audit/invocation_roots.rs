@@ -5,6 +5,7 @@ use crate::io::Repo;
 
 use super::{command, placed, unit};
 
+mod descendant;
 mod package_ids;
 
 const GROUP_LOCK: &str =
@@ -91,11 +92,12 @@ fn a_failed_workspace_build_in_one_root_does_not_blame_another_roots_package_in_
     ]);
 }
 
-const MEMBER_PACKAGE_SPELLINGS: [&[&str]; 6] = [
+const MEMBER_PACKAGE_SPELLINGS: [&[&str]; 7] = [
     &["cargo", "build", "-p", "b", "--no-such-flag"],
     &["cargo", "build", "--package", "b", "--no-such-flag"],
     &["cargo", "build", "--package=b", "--no-such-flag"],
     &["cargo", "build", "-pb", "--no-such-flag"],
+    &["cargo", "build", "-p=b", "--no-such-flag"],
     &["cargo", "build", "-p", "b@0.1.0", "--no-such-flag"],
     &["cargo", "build", "--package=b@0.1.0", "--no-such-flag"],
 ];

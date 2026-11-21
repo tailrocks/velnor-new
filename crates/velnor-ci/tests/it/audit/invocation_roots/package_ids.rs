@@ -9,7 +9,7 @@ const REFUSAL: &str = "outside this command's explicit selection";
 
 const ROOT: &str = "@ROOT@";
 
-const FORMS: [(&str, &str, bool); 24] = [
+const FORMS: [(&str, &str, bool); 46] = [
     ("x", "x", true),
     ("beta", "beta", true),
     ("x@0.1.0", "x", true),
@@ -38,6 +38,28 @@ const FORMS: [(&str, &str, bool); 24] = [
     ("path+file://@ROOT@/x#9.9.9", "x", false),
     ("path+file://@ROOT@/x#x@9.9.9", "x", false),
     ("path+file://@ROOT@/pkg-beta#beta@9.9.9", "beta", false),
+    ("beta@0.1", "beta", true),
+    ("beta@0", "beta", true),
+    ("x@0.1", "x", true),
+    ("beta:0.1", "beta", true),
+    ("beta@0.2", "beta", false),
+    ("beta@1", "beta", false),
+    ("beta@0.1.1", "beta", false),
+    ("path+file://@ROOT@/pkg-beta#beta@0.1", "beta", true),
+    ("path+file://@ROOT@/pkg-beta#0.1", "beta", false),
+    ("FILE://@ROOT@/pkg-beta#beta", "beta", true),
+    ("PATH+FILE://@ROOT@/pkg-beta#beta", "beta", true),
+    ("path+FILE://@ROOT@/pkg-beta#beta", "beta", true),
+    ("PATH+FILE://@ROOT@/pkg-beta#beta@0.1.0", "beta", true),
+    ("b*", "beta", true),
+    ("be?a", "beta", true),
+    ("b[a-f]ta", "beta", true),
+    ("b[!x]ta", "beta", true),
+    ("x*", "x", true),
+    ("b[x-z]ta", "beta", false),
+    ("B*", "beta", false),
+    ("b*@0.1", "beta", false),
+    ("nomatch*", "beta", false),
 ];
 
 fn workspace_with_beta() -> Repo {

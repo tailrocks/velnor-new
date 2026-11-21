@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
-use velnor_model::{RustMember, RustRoot};
+use velnor_model::RustMember;
 
 use package_spec::Spec;
 
@@ -97,7 +97,7 @@ impl Invocation {
                         .strip_prefix("--package=")
                         .or_else(|| word.strip_prefix("-p"))
                     {
-                        selected.push(spec);
+                        selected.push(spec.strip_prefix('=').unwrap_or(spec));
                     } else if let Some(spec) = word.strip_prefix("--exclude=") {
                         excluded.push(spec);
                     }
@@ -295,39 +295,6 @@ impl Invocation {
     }
 }
 
-pub(super) fn invoked_root<'a>(
-    roots: &'a [RustRoot],
-    repository: &Path,
-    location: &Path,
-) -> Option<&'a RustRoot> {
-    let owns = |root: &&RustRoot| {
-        root_directory(root, repository) == location
-            || root.members.iter().any(|member| {
-                member
-                    .manifest
-                    .parent()
-                    .is_some_and(|parent| repository.join(parent.as_str()) == location)
-            })
-    };
-    roots
-        .iter()
-        .filter(owns)
-        .max_by_key(|root| root_directory(root, repository).components().count())
-        .or_else(|| {
-            roots
-                .iter()
-                .filter(|root| location.starts_with(root_directory(root, repository)))
-                .max_by_key(|root| root_directory(root, repository).components().count())
-        })
-}
-
-pub(super) fn root_directory(root: &RustRoot, repository: &Path) -> PathBuf {
-    root.manifest.parent().map_or_else(
-        || repository.to_path_buf(),
-        |parent| repository.join(parent.as_str()),
-    )
-}
-
 fn chdir(globals: &[&str]) -> Option<PathBuf> {
     let mut directory = None;
     let mut index = 0;
@@ -386,6 +353,9 @@ fn subcommand(words: &[&str]) -> Option<usize> {
 }
 
 mod package_spec;
+mod root;
+
+pub(super) use root::{invoked_root, root_directory};
 
 #[cfg(test)]
 #[path = "invocation/label.rs"]
