@@ -192,7 +192,10 @@ fn a_one_job_lane_gates_the_shared_store_on_its_selection_from_helper_0_1_112() 
     for (id, job) in yaml["jobs"].as_object().ok_or("jobs missing")? {
         for step in job["steps"].as_array().ok_or("steps missing")? {
             if step["run"].as_str().is_some_and(|run| run.contains(EXEC)) {
-                assert!(step.get("if").is_some(), "{id}: mbx-store runs without a selection gate");
+                assert!(
+                    step.get("if").is_some(),
+                    "{id}: mbx-store runs without a selection gate"
+                );
                 stores += 1;
             }
         }

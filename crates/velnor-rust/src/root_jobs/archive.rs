@@ -194,7 +194,7 @@ impl RootJobs<'_> {
                 group.map_or(&[], |group| &group.artifacts),
             ),
         );
-        steps.extend(mbx(self.facts, self.lane.steps()));
+        steps.extend(mbx(self.facts, self.lane.steps().as_ref()));
         steps.extend(mirror());
         let plan = self
             .lane
