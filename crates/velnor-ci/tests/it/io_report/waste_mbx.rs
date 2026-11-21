@@ -390,7 +390,8 @@ fn a_lane_whose_only_mbx_reports_are_probes_still_compiled_without_mbx() -> Resu
 }
 
 #[test]
-fn a_lane_whose_only_mbx_report_is_incremental_compilations_is_not_compiled_without_mbx() -> ResultTest {
+fn a_lane_whose_only_mbx_report_is_incremental_compilations_is_not_compiled_without_mbx()
+-> ResultTest {
     let incremental =
         r#"{"version":5,"hits":0,"misses":0,"unconsulted":0,"incremental_compilations":15}"#;
     let metrics = lane_with_mbx_report("report-mbx-incremental-only", incremental)?;
