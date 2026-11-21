@@ -103,6 +103,7 @@ pub(super) fn scan_with(
     }) = pending.pop()
     {
         if !visited.insert(directory.clone()) {
+            revisited(&identities, &directory)?;
             continue;
         }
         budget.reserve()?;
@@ -189,6 +190,18 @@ pub(super) fn scan_with(
     })
 }
 
+fn revisited(identities: &BTreeMap<PathBuf, handle::Stamp>, directory: &Path) -> io::Result<()> {
+    let Some(recorded) = identities.get(directory) else {
+        return Ok(());
+    };
+    match handle::current(&Origin::Path, directory) {
+        Ok(Current::Directory(now)) if recorded.is(now) => Ok(()),
+        Ok(_) => Err(changed(io::ErrorKind::Other, directory)),
+        Err(error) if handle::replaced(&error) => Err(changed(error.kind(), directory)),
+        Err(error) => Err(error),
+    }
+}
+
 fn changed(kind: io::ErrorKind, directory: &Path) -> io::Error {
     io::Error::new(
         kind,
@@ -254,9 +267,10 @@ fn settle(
 }
 
 fn is_directory(path: &Path) -> io::Result<bool> {
-    match fs::metadata(path) {
-        Ok(metadata) => Ok(metadata.is_dir()),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
+    match handle::current(&Origin::Path, path) {
+        Ok(Current::Directory(_) | Current::Other(Kind::Link { .. })) => Ok(true),
+        Ok(Current::Gone | Current::Other(_)) => Ok(false),
+        Err(error) if handle::replaced(&error) => Ok(true),
         Err(error) => Err(error),
     }
 }
