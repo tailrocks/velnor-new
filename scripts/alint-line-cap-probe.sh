@@ -34,5 +34,6 @@ for lines in 401 400; do
 done
 
 bash scripts/test-no-doctests-rule.sh || exit 1
+bash scripts/test-no-absolute-local-paths-rule.sh || exit 1
 
 rm -f "$PROBE"

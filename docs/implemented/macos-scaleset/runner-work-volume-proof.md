@@ -291,7 +291,7 @@ local image and volume behavior only, not a live Scale Set or Actions job.
 The combined build context includes all 23 regular files in the two image
 directories, excluding `.dockerignore`. The newline-terminated sorted
 `sha256sum` manifest is
-`/root/.cache/velnor-pr25-image-context-final.sha256` and hashes to
+`<retained-cache>/velnor-pr25-image-context-final.sha256` and hashes to
 `83544967e64300a68a4969c119e0d8353965e8cf9017d862375315692bd9e7ed`:
 
 ```text
@@ -349,7 +349,7 @@ public socket. In the final runner image, `wait-docker-sock-test.sh`,
 `clear-dockerenv-test.sh`, and the DinD readiness harness passed. The
 Dockerfile's own tar probes also completed during the runner build. Separate
 tar shell suites passed 18/18 and 22/22 with logs under
-`/root/.cache/velnor-pr25-tar-strip-test-logs/`.
+`<retained-cache>/velnor-pr25-tar-strip-test-logs/`.
 
 A fresh-volume probe used the immutable IDs above and volume
 `velnor-pr25-work-imagefix-20261005-01`. The volume was confirmed absent before
@@ -366,7 +366,7 @@ every probe container, with no `/tmp` mount. All named containers and the
 volume were removed and then confirmed absent.
 
 The raw build logs, installed-file hash check, component-test transcript,
-probe script, and probe output are retained in `/root/.cache` as
+probe script, and probe output are retained in `<retained-cache>` as
 `velnor-pr25-imagefix-dind-build.log`,
 `velnor-pr25-imagefix-runner-build.log`,
 `runner25-imagefix-installed-files.log`,

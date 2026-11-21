@@ -26,7 +26,7 @@ A fresh named volume was confirmed absent before creation, then created with `ve
 
 An instrumented `mktemp` observed a private `/tmp/velnor-jit.*` path with mode `600`; explicit chmod also set `600`. Container inspection confirmed the `_work` volume and the probe bind mount, with no mount at `/tmp`. The stopped entrypoint container did not contain the JIT tempfile. All named probe containers and the volume were absent after cleanup.
 
-Raw source snapshot, context, build logs, image inspections, installed-file hashes, test logs, probe script, command output, and cleanup checks are retained under `/root/.cache/velnor-pr25-aggregate-image-3f2e35a7`. Key artifact hashes are:
+Raw source snapshot, context, build logs, image inspections, installed-file hashes, test logs, probe script, command output, and cleanup checks are retained under `<retained-cache>/velnor-pr25-aggregate-image-3f2e35a7`. Key artifact hashes are:
 
 | Artifact | SHA-256 |
 | --- | --- |
