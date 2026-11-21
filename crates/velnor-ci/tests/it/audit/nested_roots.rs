@@ -11,7 +11,7 @@ use crate::io::Repo;
 pub(super) fn nested_roots() -> Repo {
     let repo = Repo::new("audit-nested-roots");
     unit(&repo, ".gitignore", "/target/\n/lab/target/\n");
-    unit(&repo, "mise.toml", "[tools]\nrust = \"1.100.0\"\n");
+    unit(&repo, "mise.toml", &crate::toolchain::mise_rust_pin());
     for (directory, name) in [("", "top"), ("lab/", "lab")] {
         unit(
             &repo,
