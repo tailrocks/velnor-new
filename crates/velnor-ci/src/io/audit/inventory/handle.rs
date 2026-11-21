@@ -3,28 +3,26 @@
 
 use std::ffi::{OsStr, OsString};
 use std::io;
+use std::os::fd::{AsFd, BorrowedFd};
 use std::os::unix::ffi::OsStringExt;
 use std::path::Path;
 use std::rc::Rc;
 
 use nix::dir::Dir;
-use nix::fcntl::{AtFlags, OFlag, openat, readlinkat};
+use nix::fcntl::{AT_FDCWD, AtFlags, OFlag, openat, readlinkat};
 use nix::sys::stat::{Mode, SFlag, fstat, fstatat};
 
 use super::Kind;
 use super::walk::unresolved_link;
 
 pub(super) type Opened = Rc<Dir>;
-
-/// The device and inode of a directory.
 pub(super) type Identity = (libc::dev_t, libc::ino_t);
 
+#[derive(Clone)]
 pub(super) enum Origin {
     Path,
     Child { parent: Opened, name: OsString },
 }
-
-/// What a name holds now, read without following links.
 pub(super) enum Current {
     Gone,
     Directory(Identity),
@@ -45,7 +43,7 @@ pub(super) fn replaced(error: &io::Error) -> bool {
 pub(super) fn open(origin: &Origin, path: &Path) -> io::Result<Dir> {
     let flags = OFlag::O_RDONLY | OFlag::O_DIRECTORY | OFlag::O_NOFOLLOW | OFlag::O_CLOEXEC;
     let fd = match origin {
-        Origin::Path => openat(nix::fcntl::AT_FDCWD, path, flags, Mode::empty()),
+        Origin::Path => openat(AT_FDCWD, path, flags, Mode::empty()),
         Origin::Child { parent, name } => {
             openat(parent.as_ref(), name.as_os_str(), flags, Mode::empty())
         }
@@ -53,34 +51,13 @@ pub(super) fn open(origin: &Origin, path: &Path) -> io::Result<Dir> {
     .map_err(failure)?;
     Dir::from_fd(fd).map_err(failure)
 }
-
-/// The identity of the directory an open handle refers to.
 pub(super) fn identity(directory: &Dir) -> io::Result<Identity> {
     let stat = fstat(directory).map_err(failure)?;
     Ok((stat.st_dev, stat.st_ino))
 }
-
-/// The directory that holds `path`, and the name `path` has in it.
-pub(super) fn locate(origin: &Origin, path: &Path) -> io::Result<(Opened, OsString)> {
-    match origin {
-        Origin::Child { parent, name } => Ok((Rc::clone(parent), name.clone())),
-        Origin::Path => {
-            let (Some(container), Some(name)) = (path.parent(), path.file_name()) else {
-                return Err(io::Error::other(format!(
-                    "{} has no containing directory",
-                    path.display()
-                )));
-            };
-            let flags = OFlag::O_RDONLY | OFlag::O_DIRECTORY | OFlag::O_CLOEXEC;
-            let dir = Dir::open(container, flags, Mode::empty()).map_err(failure)?;
-            Ok((Rc::new(dir), name.to_os_string()))
-        }
-    }
-}
-
-/// What `name` in `parent` holds now.
-pub(super) fn current(parent: &Opened, name: &OsStr, path: &Path) -> io::Result<Current> {
-    let stat = match fstatat(parent.as_ref(), name, AtFlags::AT_SYMLINK_NOFOLLOW) {
+pub(super) fn current(origin: &Origin, path: &Path) -> io::Result<Current> {
+    let (anchor, name) = anchor(origin, path);
+    let stat = match fstatat(anchor, name, AtFlags::AT_SYMLINK_NOFOLLOW) {
         Ok(stat) => stat,
         Err(nix::errno::Errno::ENOENT) => return Ok(Current::Gone),
         Err(errno) => return Err(failure(errno)),
@@ -89,10 +66,17 @@ pub(super) fn current(parent: &Opened, name: &OsStr, path: &Path) -> io::Result<
     if format == SFlag::S_IFDIR {
         return Ok(Current::Directory((stat.st_dev, stat.st_ino)));
     }
-    Ok(match kind_at(parent, name, path)? {
+    Ok(match kind_at(anchor, name, path)? {
         Some(kind) => Current::Other(kind),
         None => Current::Gone,
     })
+}
+
+fn anchor<'a>(origin: &'a Origin, path: &'a Path) -> (BorrowedFd<'a>, &'a OsStr) {
+    match origin {
+        Origin::Path => (AT_FDCWD, path.as_os_str()),
+        Origin::Child { parent, name } => (parent.as_fd(), name.as_os_str()),
+    }
 }
 
 pub(super) fn names(
@@ -111,8 +95,8 @@ pub(super) fn names(
     Ok(names)
 }
 
-pub(super) fn kind_at(directory: &Dir, name: &OsStr, path: &Path) -> io::Result<Option<Kind>> {
-    let stat = match fstatat(directory, name, AtFlags::AT_SYMLINK_NOFOLLOW) {
+pub(super) fn kind_at(directory: impl AsFd, name: &OsStr, path: &Path) -> io::Result<Option<Kind>> {
+    let stat = match fstatat(&directory, name, AtFlags::AT_SYMLINK_NOFOLLOW) {
         Ok(stat) => stat,
         Err(nix::errno::Errno::ENOENT) => return Ok(None),
         Err(errno) => return Err(failure(errno)),
@@ -132,7 +116,7 @@ pub(super) fn kind_at(directory: &Dir, name: &OsStr, path: &Path) -> io::Result<
         Err(error) if unresolved_link(&error) => None,
         Err(error) => return Err(error),
     };
-    match readlinkat(directory, name) {
+    match readlinkat(&directory, name) {
         Ok(target) => Ok(Some(Kind::Link {
             target: target.into(),
             resolved,

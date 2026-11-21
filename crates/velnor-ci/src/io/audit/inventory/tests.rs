@@ -8,6 +8,7 @@ use super::super::options::MAX_ENTRIES_VARIABLE;
 use super::walk::{Probe, scan_with};
 use super::*;
 
+mod placement;
 mod racing;
 
 fn scan_with_open_failing(kind: io::ErrorKind) -> io::Result<Entries> {
