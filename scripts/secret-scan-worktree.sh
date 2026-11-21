@@ -8,9 +8,15 @@
 # Run with bash: the hook calls `bash scripts/secret-scan-worktree.sh`, as CI does.
 set -euo pipefail
 
+# The baseline is repo-relative: resolve it from the repo root, so the scan works from any cwd.
+# The target is still the cwd (scan .).
+root="$(cd "$(dirname "$0")/.." && pwd)"
+baseline="$root/.kingfisher-worktree-baseline.yml"
+[ -f "$baseline" ] || { echo "secret-scan-worktree: baseline $baseline is missing" >&2; exit 2; }
+
 exec kingfisher scan . --git-history none --confidence low --no-validate --redact --no-update-check \
   --skip-regex '^m-[0-9a-f]{16}$' \
-  --baseline-file .kingfisher-worktree-baseline.yml \
+  --baseline-file "$baseline" \
   --exclude '**/.git/**' \
   --exclude '.kingfisher-baseline.yml' \
   --exclude '.kingfisher-worktree-baseline.yml' \

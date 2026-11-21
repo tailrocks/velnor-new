@@ -25,7 +25,13 @@ else
   scanner=stub
   cat >"$tmp/stub/kingfisher" <<'SH'
 #!/bin/sh
-# Stub for the scan arguments, which it ignores: 200 on a ghp_ token, 0 otherwise.
+# Stub: exit 2 when --baseline-file names a file that is not there, relative to the cwd (the real
+# kingfisher ignores a missing baseline silently). Otherwise 200 on a ghp_ token, 0 if none.
+prev=
+for a in "$@"; do
+  if [ "$prev" = --baseline-file ] && [ ! -f "$a" ]; then echo "stub: no baseline $a" >&2; exit 2; fi
+  prev=$a
+done
 if grep -rqE 'ghp_[A-Za-z0-9]{36}' --exclude-dir=.git .; then exit 200; fi
 exit 0
 SH
@@ -50,4 +56,14 @@ printf 'no secrets here\n' >"$tmp/tree/README.txt"
   cat "$tmp/clean.log" >&2
   fail "clean tree: exit $?, want 0"
 }
+# The wrapper reads its baseline from the repo root, so the clean tree above (scanned from a cwd
+# that has no baseline) must pass. A wrapper copy in a root without the baseline must fail clearly.
+mkdir -p "$tmp/noroot/scripts"
+cp "$scan" "$tmp/noroot/scripts/"
+set +e
+bash "$tmp/noroot/scripts/secret-scan-worktree.sh" >"$tmp/noroot.log" 2>&1
+rc=$?
+set -e
+[ "$rc" -ne 0 ] || fail "wrapper without a baseline file exited 0"
+grep -q 'baseline' "$tmp/noroot.log" || { cat "$tmp/noroot.log" >&2; fail "missing-baseline error does not name the baseline"; }
 echo "secret-scan-worktree: OK"
