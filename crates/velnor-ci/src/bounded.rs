@@ -1,11 +1,15 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::io::{self, Read};
+use std::io::{self, ErrorKind, Read};
+use std::os::unix::process::CommandExt;
 use std::process::{Child, Command, ExitStatus, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, mpsc};
 use std::time::{Duration, Instant};
+
+use nix::sys::signal::{Signal, killpg};
+use nix::unistd::Pid;
 
 const POLL: Duration = Duration::from_millis(10);
 
@@ -75,6 +79,7 @@ pub fn capture_streams(
     deadline: &dyn Fn() -> Option<Instant>,
 ) -> io::Result<Outcome> {
     let mut child = command
+        .process_group(0)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -114,6 +119,9 @@ pub fn capture_streams(
 }
 
 fn stop(child: &mut Child, outcome: Outcome) -> io::Result<Outcome> {
+    if let Ok(group) = i32::try_from(child.id()) {
+        killpg(Pid::from_raw(group), Signal::SIGKILL).ok();
+    }
     child.kill().ok();
     child.wait()?;
     Ok(outcome)
@@ -130,8 +138,9 @@ fn drain(
         let mut chunk = [0_u8; 8192];
         loop {
             let read = match pipe.read(&mut chunk) {
+                Ok(read @ 1..) => read,
+                Err(error) if error.kind() == ErrorKind::Interrupted => continue,
                 Ok(0) | Err(_) => break,
-                Ok(read) => read,
             };
             let room = keep.saturating_sub(kept.len());
             kept.extend_from_slice(&chunk[..read.min(room)]);
@@ -145,4 +154,41 @@ fn drain(
         sender.send(kept).ok();
     });
     receiver
+}
+
+#[cfg(test)]
+mod tests {
+    use super::drain;
+    use std::io::{self, Read};
+
+    struct InterruptedOnce {
+        interrupted: bool,
+        data: &'static [u8],
+    }
+
+    impl Read for InterruptedOnce {
+        fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+            if !self.interrupted {
+                self.interrupted = true;
+                return Err(io::ErrorKind::Interrupted.into());
+            }
+            let count = self.data.len().min(buffer.len());
+            buffer[..count].copy_from_slice(&self.data[..count]);
+            self.data = &self.data[count..];
+            Ok(count)
+        }
+    }
+
+    #[test]
+    fn an_interrupted_read_is_retried_and_the_data_after_it_is_captured() {
+        let receiver = drain(
+            InterruptedOnce {
+                interrupted: false,
+                data: b"listing",
+            },
+            100,
+            None,
+        );
+        assert_eq!(receiver.recv().ok(), Some(b"listing".to_vec()));
+    }
 }

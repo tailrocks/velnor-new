@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::fs;
 use std::io::ErrorKind;
 use std::process::Command;
 use std::time::{Duration, Instant};
@@ -70,5 +71,45 @@ fn streams_kill_a_child_past_the_deadline_and_report_it() {
     command.arg("600");
     let outcome = capture_streams(&mut command, 1000, 100, &move || Some(at));
     assert!(matches!(outcome, Ok(Outcome::TimedOut)), "{outcome:?}");
+    assert!(started.elapsed() < Duration::from_secs(15));
+}
+
+fn gone(pid: &str) -> bool {
+    let stat = Command::new("ps")
+        .args(["-o", "stat=", "-p", pid])
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let stat = String::from_utf8_lossy(&stat.stdout);
+    stat.trim().is_empty() || stat.trim_start().starts_with('Z')
+}
+
+#[test]
+fn streams_past_the_deadline_take_the_whole_process_group_down_with_the_child() {
+    let started = Instant::now();
+    let pid_file = crate::scratch_path("velnor-ci-bounded", "grandchild-pid");
+    fs::remove_file(&pid_file).ok();
+    let mut command = Command::new("sh");
+    command.arg("-c").arg(format!(
+        "sleep 30 & echo $! > '{}'; wait",
+        pid_file.display()
+    ));
+    let ready = pid_file.clone();
+    let outcome = capture_streams(&mut command, 1000, 100, &move || {
+        fs::read_to_string(&ready)
+            .ok()
+            .filter(|pid| pid.ends_with('\n'))
+            .map(|_| Instant::now())
+    });
+    assert!(matches!(outcome, Ok(Outcome::TimedOut)), "{outcome:?}");
+    let pid = fs::read_to_string(&pid_file)
+        .unwrap_or_else(|e| unreachable!("{e}"))
+        .trim()
+        .to_owned();
+    fs::remove_file(&pid_file).ok();
+    let limit = Instant::now() + Duration::from_secs(10);
+    while !gone(&pid) && Instant::now() < limit {
+        std::thread::yield_now();
+    }
+    assert!(gone(&pid), "grandchild {pid} survived the deadline kill");
     assert!(started.elapsed() < Duration::from_secs(15));
 }
