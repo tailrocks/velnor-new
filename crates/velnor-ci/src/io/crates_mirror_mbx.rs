@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::ffi::OsString;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 use crate::error::CiError;
 
@@ -67,7 +67,17 @@ fn declared_for_project(args: &[OsString]) -> bool {
     let Some(directory) = project_directory(&work, args) else {
         return true;
     };
-    let directory = std::fs::canonicalize(&directory).unwrap_or(directory);
+    let directory = match std::fs::canonicalize(&directory) {
+        Ok(resolved) => resolved,
+        Err(_)
+            if directory
+                .components()
+                .any(|part| part == Component::ParentDir) =>
+        {
+            return true;
+        }
+        Err(_) => directory,
+    };
     scope(&directory, workspace.as_deref())
         .into_iter()
         .any(crate::mbx_declared::declared_or_unreadable_in)
@@ -77,7 +87,7 @@ fn project_directory(work: &Path, args: &[OsString]) -> Option<PathBuf> {
     let base = directory_flag(work, args);
     let args = super::crates_mirror_alias::expand(&base, args, MANIFEST_COMMANDS)?;
     let command = subcommand(&args).map(|(_, command)| command);
-    if let Some(target) = command.filter(|command| direct_target(command)) {
+    if let Some(target) = command.filter(|command| direct_target(command, &args)) {
         let script = base.join(target);
         return Some(
             script
@@ -120,10 +130,35 @@ fn directory_flag(work: &Path, args: &[OsString]) -> PathBuf {
     base
 }
 
-pub(super) fn direct_target(command: &str) -> bool {
+pub(super) fn direct_target(command: &str, args: &[OsString]) -> bool {
     let path = Path::new(command);
     path.extension().is_some_and(|extension| extension == "rs")
         || path.file_name().is_some_and(|name| name == "Cargo.toml")
+        || path.components().count() > 1
+        || (script_mode(args) && command != "install" && !MANIFEST_COMMANDS.contains(&command))
+}
+
+fn script_mode(args: &[OsString]) -> bool {
+    let mut seen = args.iter().take_while(|arg| *arg != "--");
+    while let Some(arg) = seen.next() {
+        let Some(text) = arg.to_str() else {
+            return true;
+        };
+        let flag = if text == "-Z" {
+            let Some(value) = seen.next() else {
+                return true;
+            };
+            value.to_str().unwrap_or("script")
+        } else if let Some(value) = text.strip_prefix("-Z") {
+            value
+        } else {
+            continue;
+        };
+        if flag.contains("script") {
+            return true;
+        }
+    }
+    false
 }
 
 pub(super) fn subcommand(args: &[OsString]) -> Option<(usize, &str)> {
