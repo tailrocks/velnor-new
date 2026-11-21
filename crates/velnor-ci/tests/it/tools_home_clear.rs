@@ -97,7 +97,8 @@ fn a_restore_over_a_baked_home_leaves_exactly_the_stored_tree() {
     let restored = go(&node, Verb::Restore, &baked);
     assert!(restored.hit(), "{restored:?}");
     let anchor = Anchor(&anchor);
-    assert_eq!(check(&baked, &anchor).ok(), Some(Verdict::Verified));
+    let file = baked.join("velnor-tools-anchor/digest");
+    assert_eq!(check(&baked, &anchor, &file).ok(), Some(Verdict::Verified));
     assert_eq!(digest(&baked), digest(&node.root.join("stored")));
     assert!(
         !baked
