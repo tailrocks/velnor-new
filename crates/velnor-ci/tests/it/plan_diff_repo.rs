@@ -1,10 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-//! The repositories `plan_diff` cases plan. Their commits come from one `git fast-import` stream,
-//! which writes one pack, not one loose object per snapshot file: a snapshot of about 740 files
-//! took `git add -A` and `git commit` about a second on the loaded host, and the stream about 0.1.
-
 use std::collections::BTreeMap;
 use std::fs;
 use std::io::Write;
@@ -13,7 +9,6 @@ use std::process::{Command, Stdio};
 
 use crate::support::fresh_dir;
 
-/// Repository path to contents, in sorted order.
 type Tree = BTreeMap<String, Vec<u8>>;
 
 fn git(repo: &Path, args: &[&str]) -> String {
@@ -45,7 +40,6 @@ pub(crate) fn collect_files(dir: &Path, root: &Path, found: &mut Vec<PathBuf>) {
     }
 }
 
-/// The files under `dir`, keyed by their path with the `.fixture` suffix stripped.
 fn tree(dir: &Path) -> Tree {
     let mut found = Vec::new();
     collect_files(dir, dir, &mut found);
@@ -62,7 +56,6 @@ fn tree(dir: &Path) -> Tree {
         .collect()
 }
 
-/// Writes `commits`, each a full tree on the previous one, to `refs/heads/main` in one stream.
 fn import(repo: &Path, commits: &[Tree]) {
     let mut stream = Vec::new();
     let mut mark = 0;
@@ -114,8 +107,6 @@ fn import(repo: &Path, commits: &[Tree]) {
     );
 }
 
-/// The case's repository: a base commit and a head commit for a `pull_request` or fork,
-/// one commit for a local run. Returns the repository and the commits' ids.
 pub(crate) fn repository(case: &Path, event: &str, name: &str) -> (PathBuf, String, String) {
     repository_with(case, event, name, "")
 }

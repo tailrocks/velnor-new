@@ -53,8 +53,6 @@ pub(super) fn git(root: &Path, args: &[&str]) -> Result<Vec<u8>, String> {
     }
 }
 
-/// Reads the blob that each `<rev>:<path>` names, in order, with one `git cat-file --batch`
-/// process instead of one process per path.
 pub(super) fn blobs(root: &Path, specs: &[String]) -> Result<Vec<Vec<u8>>, String> {
     if specs.is_empty() {
         return Ok(Vec::new());
@@ -94,7 +92,6 @@ pub(super) fn blobs(root: &Path, specs: &[String]) -> Result<Vec<Vec<u8>>, Strin
     split_blobs(&output.stdout, specs)
 }
 
-/// Splits `git cat-file --batch` output: a `<oid> blob <size>` header, the body, then a newline.
 fn split_blobs(mut rest: &[u8], specs: &[String]) -> Result<Vec<Vec<u8>>, String> {
     let mut blobs = Vec::with_capacity(specs.len());
     for spec in specs {

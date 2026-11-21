@@ -1,14 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-//! `velnor-ci plan --mode ci --request` for `pull_request`, fork and local requests against what
-//! the legacy `plan-v1` op did for the same change. `data/plan_diff/<case>/` holds the request,
-//! `expected_outputs` recorded from the engine on a real commit pair (or a real commit with an
-//! uncommitted change), and `snapshot/`, the reduced repository the helper plans here: files
-//! equal at both commits in `common/`, the others in `base-only/` and `head-only/`.
-//! Every file under `snapshot/` and `local/` carries a `.fixture` suffix that the test strips.
-//! `record.sh` re-records a case.
-
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
@@ -39,7 +31,6 @@ fn copy_tree(from: &Path, to: &Path) {
     }
 }
 
-/// Where a run's request and outputs go: beside the repository, which they must not dirty.
 pub(crate) fn aside(repo: &Path) -> PathBuf {
     let dir = repo.with_extension("io");
     fs::create_dir_all(&dir).unwrap_or_else(|e| unreachable!("{e}"));
@@ -261,7 +252,6 @@ fn a_check_id_with_a_line_break_is_refused_and_adds_no_output_key() {
 
 #[test]
 fn a_check_id_outside_the_identifier_alphabet_is_refused() {
-    // One repository: each id goes into the checked-out config, which the plan refuses before it diffs.
     let case = data().join("pr-one-crate");
     let (repo, base, head) = repository(&case, "pull_request", "odd-id");
     let request = bind(&read(&case.join("request.json")), &base, &head);
