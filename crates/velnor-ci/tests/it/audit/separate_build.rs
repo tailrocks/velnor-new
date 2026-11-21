@@ -266,7 +266,7 @@ fn a_cargo_that_prints_no_build_directory_is_audited_in_the_target_directory() {
 fn two_standalone_roots() -> Repo {
     let repo = Repo::new("audit-shared-build");
     unit(&repo, ".gitignore", "target/\nbuild/\n");
-    unit(&repo, "mise.toml", "[tools]\nrust = \"1.99.1\"\n");
+    unit(&repo, "mise.toml", &crate::toolchain::mise_rust_pin());
     for (directory, name) in [("web", "w"), ("tools/b", "b")] {
         unit(
             &repo,
