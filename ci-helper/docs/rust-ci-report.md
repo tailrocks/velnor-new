@@ -10,6 +10,14 @@ The top-level report and policy structs reject unknown fields. Nested Cargo
 artifact records tolerate additional upstream fields. Change the schema
 deliberately when changing this contract.
 
+Producer and checker always share one helper pin. A generated workflow installs
+one exact `velnor-ci` version, with checksums, in every job, and the `Cache`
+job reads only the `ci-metrics-*` artifacts of the same run, so a lane report
+is never read by a different helper version. A change that only a reader of
+the same version sees, such as making a field optional, keeps schema 1. Bump
+the schema when a report can outlive its producer's pin, for example when a
+stored baseline or another run's artifact is read.
+
 ## Lane fields
 
 - `lane` identifies the job; `caches` describes each cache family and root.
