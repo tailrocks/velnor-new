@@ -102,6 +102,9 @@ def skip_char(src, i):
     return None
 
 
+HTML_END = re.compile(r"</(?:script|pre|style|textarea)\s*>|-->|\?>|\]\]>", re.I)
+
+
 def prose(line):
     if line is None:
         return False
@@ -112,6 +115,7 @@ def prose(line):
         and not HRULE.fullmatch(text)
         and not SETEXT_UNDERLINE.fullmatch(text)
         and not HTML_CLOSED.match(text)
+        and not HTML_END.search(text)
     )
 
 
@@ -135,7 +139,7 @@ def markdown_hit(lines, indent):
             return k
         if indent.match(text) and not (prose(prev) and not QUOTE_START.match(text)):
             return k
-        opened = opened or LIST_START.match(line) is not None
+        opened = opened or (LIST_START.match(line) is not None and list_interrupts(prev, text, opened))
         prev = line
     return None
 
