@@ -115,7 +115,7 @@ mod tests {
             std::env::temp_dir().join(format!("velnor-ci-gitlink-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&directory);
         std::fs::create_dir_all(&directory).unwrap_or_else(|e| unreachable!("{e}"));
-        git(&directory, &["init", "--quiet"]);
+        git(&directory, &["init", "--quiet", "--object-format=sha1"]);
         git(
             &directory,
             &[
@@ -153,7 +153,7 @@ mod tests {
         std::fs::create_dir_all(&submodule).unwrap_or_else(|e| unreachable!("{e}"));
         std::fs::write(submodule.join("configurations.json"), "{}\n")
             .unwrap_or_else(|e| unreachable!("{e}"));
-        git(&submodule, &["init", "--quiet"]);
+        git(&submodule, &["init", "--quiet", "--object-format=sha1"]);
         git(&submodule, &["add", "configurations.json"]);
         git(
             &submodule,
@@ -193,7 +193,7 @@ mod tests {
             "[submodule \"vendor/lib\"]\n\tpath = vendor/lib\n\turl = ./vendor/lib\n",
         )
         .unwrap_or_else(|e| unreachable!("{e}"));
-        git(&directory, &["init", "--quiet"]);
+        git(&directory, &["init", "--quiet", "--object-format=sha1"]);
         git(
             &directory,
             &[
