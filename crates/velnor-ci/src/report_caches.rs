@@ -143,7 +143,7 @@ mod tests {
         assert!(
             verdict.is_ok(),
             "{}",
-            verdict.err().map(|e| e.to_string()).unwrap_or_default()
+            verdict.err().map_or_else(String::new, |e| e.to_string())
         );
     }
 }

@@ -7,7 +7,7 @@ IDENT = re.compile(r"[^\W\d]\w*")
 FENCE = re.compile(r"```|~~~")
 LINE_DOC = re.compile(r"//(?:!|/(?!/))")
 QUOTE = r"(?:[ \t]*>)*"
-CONTAINER = r"(?:>[ \t]*|(?:[-*+]|\d{1,9}[.)])(?:[ \t]+|$)|\[\^[^\]\s]+\]:[ \t]*)*"
+CONTAINER = r"(?:>[ \t]*|(?:[-*+]|\d{1,9}[.)])(?:[ \t]+(?:\[[ xX]\][ \t]+)?|$)|\[\^[^\]\s]+\]:[ \t]*)*"
 LINE_FENCE = re.compile(r"[ \t]*" + CONTAINER + r"(?:```|~~~)")
 LINE_INDENT = re.compile(QUOTE + r" {5,}\S")
 ATTR_INDENT = re.compile(r" {4,}\S|(?:[ \t]*>)+ {5,}\S")
@@ -107,7 +107,7 @@ def split_lines(text):
 
 
 def doc_text_tabs(text):
-    if text.startswith(" "):
+    if text[:1] in (" ", "\t"):
         return " " + text[1:].expandtabs(4)
     return text.expandtabs(4)
 
