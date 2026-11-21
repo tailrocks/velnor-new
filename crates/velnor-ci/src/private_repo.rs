@@ -47,14 +47,15 @@ pub fn require_private(repository: &str, github: &dyn GitHub) -> Result<(), Reje
     let confirmed = |message: String| Rejection::NotPrivate(CiError::new(message));
     match (answer.private, answer.visibility.as_deref()) {
         (true, Some("private")) => Ok(()),
-        (_, None) => Err(unavailable(format!(
-            "GET {path} did not state the visibility of {repository}, and only a private repository can keep private dependencies in its caches"
-        ))),
-        (true, Some(visibility)) => Err(confirmed(format!(
-            "{repository} has the visibility {visibility}, and only a private repository can keep private dependencies in its caches"
-        ))),
-        (false, _) => Err(confirmed(format!(
+        (false, Some("public")) => Err(confirmed(format!(
             "{repository} is not private, and a cache of a public repository can be read by a fork"
+        ))),
+        (true, Some("internal")) => Err(confirmed(format!(
+            "{repository} is internal, and only a private repository can keep private dependencies in its caches"
+        ))),
+        (private, visibility) => Err(unavailable(format!(
+            "GET {path} answered private={private} with visibility {}, which does not confirm the visibility of {repository}",
+            visibility.unwrap_or("(none)")
         ))),
     }
 }

@@ -8,9 +8,14 @@ use crate::cache_private_repo::{GIT_LOCK, private_checkout};
 
 const CREDENTIAL: &str = "home/.cargo/git/db/shared-1/.git-credentials";
 
+fn credential_line() -> String {
+    let (user, password) = ("x-access-token", "ghs_secret");
+    format!("https://{user}:{password}@github.com\n")
+}
+
 fn decide(name: &str, restored: Option<&str>) -> (Output, String) {
     let repo = private_checkout(name, GIT_LOCK);
-    repo.write_unstaged(CREDENTIAL, "https://x-access-token:ghs_secret@github.com\n");
+    repo.write_unstaged(CREDENTIAL, &credential_line());
     let temp = repo.root().join("runner-temp");
     fs::create_dir_all(&temp).unwrap_or_else(|e| unreachable!("{e}"));
     fs::write(

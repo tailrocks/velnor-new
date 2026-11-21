@@ -139,6 +139,42 @@ fn an_answer_that_does_not_prove_privacy_of_this_repository_is_reported_not_priv
                 Some(TOKEN),
             ),
             (
+                "enterprise-visibility",
+                200,
+                r#"{"full_name":"acme/app","private":true,"visibility":"enterprise"}"#,
+                Some(TOKEN),
+            ),
+            (
+                "unknown-visibility-not-private",
+                200,
+                r#"{"full_name":"acme/app","private":false,"visibility":"enterprise"}"#,
+                Some(TOKEN),
+            ),
+            (
+                "private-visibility-not-private",
+                200,
+                r#"{"full_name":"acme/app","private":false,"visibility":"private"}"#,
+                Some(TOKEN),
+            ),
+            (
+                "public-visibility-private",
+                200,
+                r#"{"full_name":"acme/app","private":true,"visibility":"public"}"#,
+                Some(TOKEN),
+            ),
+            (
+                "internal-visibility-not-private",
+                200,
+                r#"{"full_name":"acme/app","private":false,"visibility":"internal"}"#,
+                Some(TOKEN),
+            ),
+            (
+                "empty-visibility",
+                200,
+                r#"{"full_name":"acme/app","private":true,"visibility":""}"#,
+                Some(TOKEN),
+            ),
+            (
                 "no-full-name",
                 200,
                 r#"{"private":true,"visibility":"private"}"#,
