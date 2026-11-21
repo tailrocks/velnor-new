@@ -29,7 +29,7 @@ pub(super) fn declarations(
     max_entries: usize,
 ) -> Result<Vec<Declared>, CiError> {
     let mut found = Vec::new();
-    let mut budget = inventory::Budget::new(max_entries);
+    let mut pass = Pass::new(max_entries);
     let targets = inventory::exclusions(workspaces)?;
     let active = workspaces
         .iter()
@@ -84,7 +84,7 @@ pub(super) fn declarations(
                 .filter(|path| fs::metadata(path).is_ok_and(|metadata| metadata.is_dir()))
                 .cloned()
                 .collect();
-            let trusted = trusted(&output, &paths, &directories, &targets, &mut budget)?;
+            let trusted = trusted(&output, &paths, &directories, &targets, &mut pass)?;
             let targets = inventory::load(&output)
                 .ok()
                 .filter(|saved| targets.is_subset(&saved.targets))
@@ -102,12 +102,29 @@ pub(super) fn declarations(
     Ok(found)
 }
 
+/// One declaration pass. A directory is walked once per exclusion set and its
+/// view is shared by every build output that declares it, so the entry budget
+/// charges the tree once instead of once per output.
+struct Pass {
+    budget: inventory::Budget,
+    views: BTreeMap<(PathBuf, BTreeSet<PathBuf>), inventory::Entries>,
+}
+
+impl Pass {
+    fn new(max_entries: usize) -> Self {
+        Self {
+            budget: inventory::Budget::new(max_entries),
+            views: BTreeMap::new(),
+        }
+    }
+}
+
 fn trusted(
     output: &Path,
     paths: &[PathBuf],
     directories: &[PathBuf],
     targets: &BTreeSet<PathBuf>,
-    budget: &mut inventory::Budget,
+    pass: &mut Pass,
 ) -> Result<bool, CiError> {
     let saved = inventory::load(output).ok();
     let targets = saved
@@ -125,13 +142,23 @@ fn trusted(
         return Ok(false);
     }
     for path in directories {
-        let matched = inventory::scan(path, targets, budget)
-            .and_then(|entries| inventory::view(&entries, &fs::canonicalize(path)?, targets))
-            .and_then(|entries| inventory::matches(output, path, &entries, targets));
-        match matched {
-            Ok(true) => {}
-            Err(error) if budget.overflowed() => return Err(CiError::new(error.to_string())),
-            Ok(false) | Err(_) => return Ok(false),
+        let key = (path.clone(), targets.clone());
+        if !pass.views.contains_key(&key) {
+            let scanned = inventory::scan(path, targets, &mut pass.budget)
+                .and_then(|entries| inventory::view(&entries, &fs::canonicalize(path)?, targets));
+            match scanned {
+                Ok(view) => {
+                    pass.views.insert(key.clone(), view);
+                }
+                Err(error) if pass.budget.overflowed() => {
+                    return Err(CiError::new(error.to_string()));
+                }
+                Err(_) => return Ok(false),
+            }
+        }
+        let current = &pass.views[&key];
+        if !matches!(inventory::matches(output, path, current, targets), Ok(true)) {
+            return Ok(false);
         }
     }
     Ok(true)

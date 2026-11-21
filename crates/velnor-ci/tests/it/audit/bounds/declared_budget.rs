@@ -37,15 +37,15 @@ fn build_within(repo: &Repo, limit: &str) -> Output {
 #[test]
 fn declaration_trust_scans_over_the_entry_limit_fail_and_name_the_variable() {
     let repo = outputs_declaring_one_directory(200);
-    let refused = build_within(&repo, "900");
+    let refused = build_within(&repo, "150");
     assert_eq!(refused.status.code(), Some(1), "{refused:?}");
     let error = String::from_utf8_lossy(&refused.stderr);
     assert!(error.contains(VARIABLE), "{refused:?}");
 }
 
 #[test]
-fn declaration_trust_scans_within_the_entry_limit_pass() {
+fn outputs_sharing_one_declared_directory_pass_within_the_entry_limit() {
     let repo = outputs_declaring_one_directory(200);
-    let within = build_within(&repo, "5000");
+    let within = build_within(&repo, "900");
     assert!(within.status.success(), "{within:?}");
 }
