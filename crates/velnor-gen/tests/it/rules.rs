@@ -5,9 +5,9 @@ use std::collections::BTreeMap;
 use std::error::Error;
 
 use velnor_model::{
-    CommitSha, Concurrency, HelperRelease, HelperVersion, Job, JobId, Permissions, Platform, PrRun,
-    PullRequestType, RunnerLabel, Sha256, Step, StepKind, Triggers, WORKFLOW_PATH, When,
-    WorkflowPlan,
+    BuildRecord, CommitSha, Concurrency, HelperRelease, HelperVersion, Job, JobId, Permissions,
+    Platform, PrRun, PullRequestType, RunnerLabel, Sha256, Step, StepKind, Triggers, WORKFLOW_PATH,
+    When, WorkflowPlan,
 };
 use velnor_render::{
     MAX_RUN_CHARACTERS, RenderedJob, RenderedStep, RenderedWorkflow, Rule, RuleViolation,
@@ -96,7 +96,7 @@ pub(crate) fn plan(kinds: Vec<StepKind>) -> Result<WorkflowPlan, Box<dyn Error>>
             plan_outputs: Vec::new(),
             group_outputs: Vec::new(),
             reports_ignored: false,
-            records_build: false,
+            build_record: BuildRecord::Unrecorded,
             chained_saves: false,
             selection_name: None,
             steps: kinds
