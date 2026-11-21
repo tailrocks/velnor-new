@@ -46,14 +46,14 @@ Three families hold the work between runs. Each key is built from one typed valu
 | Family | Key holds | Restored from | Saved by |
 |---|---|---|---|
 | Tools | runner OS and arch, mise version, hash of `mise.lock` | exact key only | default branch, on a miss |
-| Sources (cargo registry and git) | OS and arch, hash of every `Cargo.lock` | exact key, else the newest earlier entry | default branch, when sources are proven public |
+| Sources (cargo registry and git) | OS and arch, hash of every `Cargo.lock` | exact key, else the newest earlier entry | default branch, when sources are proven public, or private git sources in a repository proven private (see Private dependencies) |
 | Target (build directory) | job, root, OS and arch, `compat`, lock hash, commit, run id | newest entry with the same lock hash, else the newest with the same `compat` | default branch, when the run compiled something |
 
 **What makes a hit.**
 
 - `compat` is a hash of the `rustc` version, build target, the CI build profile, the repository's `[profile]` tables, `RUSTFLAGS`, the runner image, the workspace path and the build driver (plain cargo or the mise wrapper that runs mbx). A different toolchain or profile starts a new line of entries.
 - The lock hash leaves out the version of the workspace's own path packages (helper 0.1.88 or later). A release version bump does not move the key. A dependency bump does, and then the newest entry for the same `compat` is restored.
-- A restore is useful only if cargo treats the files as fresh. `velnor-ci inputs save` records each tracked file's content and modification time with the build directory. `inputs restore` sets the time back on files whose bytes did not change. `velnor-ci restored` gives files that share a time distinct times, so cargo picks the same file every run.
+- A restore is useful only if cargo treats the files as fresh. `velnor-ci inputs save` records each tracked file's content and modification time with the build directory. `inputs restore` sets the time back on files whose bytes did not change. `velnor-ci restored` gives files that share a time distinct times, so cargo picks the same file every run. From helper 0.1.111, `inputs audit` credits a `clippy.toml` repository's clippy units with their reads; a repository with a committed `.velnor/rust-inputs.lock` and a `clippy.toml` runs `velnor-ci inputs audit --write` once when it moves to 0.1.111 and commits the lock ([details](rust-ci-cache-keys.md#saving-the-build-directory)).
 - The CI profile sets `CARGO_INCREMENTAL=0`, `SOURCE_DATE_EPOCH=0` and debug info to `line-tables-only` (`ci_debuginfo`). Every build step of a root uses the same `CARGO_TARGET_DIR`. A root at the repository root builds into `target`. Any other root builds into `target/velnor-roots/<root>` under the repository (locked helper 0.1.107 or later), outside every package directory, so Cargo's package fingerprint walk cannot meet a build that is writing there. A `build.target-dir` setting still wins. A lock that pins an older helper keeps `<dir>/target`, and moving the pin changes the target cache path of each nested root once, which costs one cold build.
 - On the default branch, a restored Target older than seven days is dropped. The run builds cold and selects everything.
 
@@ -86,11 +86,10 @@ A pull request from a fork gets the quick set whatever its labels. The full suit
 
 ## Private dependencies
 
-`[private_sources]` (`app_id`, `private_key`, `repositories`) names the private repositories the build may read. The full rules are in [`generator/CONFIG.md`](../generator/CONFIG.md#optional-private-dependencies).
+`[private_sources]` (`app_id`, `private_key`, `repositories`) names the private repositories the build may read. The full rules are in [`generator/CONFIG.md`](../generator/CONFIG.md#optional-private-dependencies). With `velnor-ci` 0.1.111 or later, the Sources and Target base caches also work for private git dependencies, but only while GitHub reports the repository private.
 
 - A GitHub App token that can read only the listed repositories is created, and `velnor-ci fetch` runs `cargo fetch --locked` with it. The token is revoked when the fetch ends, before any code of the project or its dependencies builds or runs. The fetch runs the real `cargo` and `git`, never a mise shim or a command wrapper, and fails closed when it finds only a shim. Every later cargo command runs with `--offline`. The token is written to no file. Each job that compiles creates its own token, because a cache or an artifact is readable by anyone who can read the repository.
-- The checkout stores no credentials and the jobs hold `contents: read`. No token is created for a fork pull request or for a pull request opened or pushed by a bot. In the merge queue a token is created only when the queued pull request comes from this repository (`velnor-ci private-token-allowed`).
-- The `groups` shape builds and tests in one job and uploads no nextest archive, because workflow artifacts are readable by anyone who can read the repository. `[[test_groups]]` is refused together with `[private_sources]` for the same reason.
+- The checkout stores no credentials and the jobs hold `contents: read`. No token is created for a fork pull request or for a pull request opened or pushed by a bot. In the merge queue a token is created only when the queued pull request comes from this repository (`velnor-ci private-token-allowed`). The `groups` shape builds and tests in one job and uploads no nextest archive, because workflow artifacts are readable by anyone who can read the repository. `[[test_groups]]` is refused together with `[private_sources]` for the same reason.
 - `velnor-gen generate` prints a note that suggests this table when `Cargo.lock` locks a github.com git dependency over ssh or from the repository's own owner, and notes a locked repository of the token's owner that `repositories` does not list.
 
 ## Speed budget
@@ -137,6 +136,7 @@ Every key of `.velnor/rust-ci.toml`, with its default. `generator/CONFIG.md` has
 | `cache_debug` | `false` | cargo fingerprint log, see above |
 | `ci_debuginfo` | `"line-tables-only"` | `full`, `line-tables-only` or `none` |
 | `private_sources` | none | private dependencies, see above |
+| `public_sources` | none | public git dependencies that may be cached, see [`generator/CONFIG.md`](../generator/CONFIG.md#optional-public-git-dependencies) (needs `velnor-ci` 0.1.111; not tagged yet) |
 | `release_assets` | none | `[[release_assets]]` entries: private release assets that a build script or test reads, fetched with the `[private_sources]` App, checked against a required `sha256` and cached by it, see `generator/CONFIG.md` (needs `velnor-ci` 0.1.109) |
 | `crates_mirror` | none | a crates mirror for a self-hosted runner (needs `velnor-ci` 0.1.93); it stays in effect for a step that passes its own `--config` |
 | `runner` | `"ubuntu-latest"` | the runner label of every job |

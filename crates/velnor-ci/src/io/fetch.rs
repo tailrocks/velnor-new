@@ -110,7 +110,7 @@ pub(super) fn api_client(
 ) -> Result<super::http::HttpGitHub, CiError> {
     let api = std::env::var(API_VARIABLE)
         .ok()
-        .filter(|api| api.starts_with("https://") || api.starts_with("http://127.0.0.1"))
+        .filter(|api| super::http::trusted_api(api))
         .ok_or_else(|| CiError::new(format!("set {API_VARIABLE} to github.api_url")))?;
     Ok(super::http::HttpGitHub::new(api, token, timeout))
 }
@@ -131,8 +131,7 @@ fn run_fetches(
             let cargo_home = environment
                 .iter()
                 .find(|(name, _)| name == "CARGO_HOME")
-                .map(|(_, home)| PathBuf::from(home))
-                .unwrap_or_default();
+                .map_or_default(|(_, home)| PathBuf::from(home));
             let here = manifest
                 .parent()
                 .filter(|parent| !parent.as_os_str().is_empty())
@@ -375,9 +374,7 @@ fn non_empty_variable(name: &str) -> Option<OsString> {
 }
 
 pub(super) fn search_path() -> Vec<PathBuf> {
-    std::env::var_os("PATH")
-        .map(|path| std::env::split_paths(&path).collect())
-        .unwrap_or_default()
+    std::env::var_os("PATH").map_or_default(|path| std::env::split_paths(&path).collect())
 }
 
 fn account_home() -> Result<PathBuf, CiError> {

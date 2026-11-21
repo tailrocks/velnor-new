@@ -135,10 +135,9 @@ pub fn waste(metrics: &LaneMetrics) -> Vec<String> {
         }
     }
     let sessions = &metrics.mbx.sessions;
-    let lookups: u64 = sessions
-        .iter()
-        .map(|session| session.misses + session.not_looked_up)
-        .sum();
+    let lookups: u64 = sessions.iter().fold(0_u64, |total, session| {
+        total.saturating_add(session.misses.saturating_add(session.not_looked_up))
+    });
     if metrics.mbx.store_primed
         && !metrics.mbx.seed_truncated
         && metrics.mbx.unparsed == 0

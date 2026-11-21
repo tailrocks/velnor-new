@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod evidence;
+mod handle;
 mod walk;
 
 pub(super) use evidence::{Evidence, State, state};
@@ -47,10 +48,9 @@ pub(super) fn exclusions(workspaces: &[Workspace]) -> Result<BTreeSet<PathBuf>, 
     workspaces
         .iter()
         .flat_map(|workspace| {
-            [
-                workspace.workspace_root.join("target"),
-                workspace.target_directory.clone(),
-            ]
+            let mut excluded = vec![workspace.root.join("target")];
+            excluded.extend(workspace.directories());
+            excluded
         })
         .map(|target| velnor_rust::resolve(&target).map_err(|error| unresolved(&target, &error)))
         .collect()
