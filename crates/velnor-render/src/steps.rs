@@ -105,7 +105,7 @@ pub(crate) fn rendered_job(job: &Job, plan: &WorkflowPlan) -> RenderedJob {
                 }))
                 .chain(test_outputs(job, &tests))
                 .chain(merge_group_output(job))
-                .chain(crate::tools_steps::anchor_outputs(&job.steps))
+                .chain(crate::tools_steps::anchor_outputs(job))
                 .chain(lane_outputs(&job.steps))
                 .chain(crate::base_steps::public::job_output(&job.steps))
                 .collect(),
