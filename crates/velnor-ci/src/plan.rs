@@ -295,14 +295,14 @@ pub fn explain(
     }
     for path in unknown {
         let shown = escape(path.as_str(), false);
-        if path.as_str().contains('*') {
+        if path.as_str().contains(['*', '?', '[', ']']) {
             let advice = if path.as_str().contains('/') {
                 format!(
-                    "  no exact rule can name a path with a *; use a glob of a folder above it that ends in /** in non_inputs or inputs in {CONFIG_PATH}\n"
+                    "  no exact rule can name a path with a *, ?, [ or ]; use a glob of a folder above it that ends in /** in non_inputs or inputs in {CONFIG_PATH}\n"
                 )
             } else {
                 format!(
-                    "  no exact rule can name a path with a *, and a root-level path has no folder above it; to select packages for every root-level file, add this to {CONFIG_PATH}:\n    [[inputs]]\n    glob = \"*\"\n    packages = [\"<package>\"]\n"
+                    "  no rule can name a root-level path with a *, ?, [ or ]: rename it without those characters, or move it into a folder and use a glob of that folder that ends in /** in non_inputs or inputs in {CONFIG_PATH}\n"
                 )
             };
             lines.push(format!("unknown path: {shown}\n{advice}"));

@@ -6,11 +6,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use velnor_ci::plan::Steps;
 use velnor_ci::plan::{explain, outputs, warnings, weakened, workspace_group_outputs};
 use velnor_model::{
-    AllTrigger, OptionalSteps, PackageName, RepoPath, RepoView, RootSlug, RustMetadata,
-    RustPackage, RustSelection, SelectionReason, SkipReason, StepNeed, Target, TargetKind,
-    TargetName, Weakening, WorkspaceGroup,
+    AllTrigger, OptionalSteps, PackageName, RepoPath, RootSlug, RustSelection, SelectionReason,
+    SkipReason, StepNeed, Weakening, WorkspaceGroup,
 };
-use velnor_rust::{CONFIG_PATH, PolicyRuns};
+use velnor_rust::PolicyRuns;
 
 fn path(text: &str) -> RepoPath {
     RepoPath::new(text).unwrap_or_else(|e| unreachable!("{e}"))
@@ -164,65 +163,38 @@ fn every_unknown_path_is_explained_once_with_lines_that_would_classify_it() {
     assert!(starred.contains("unknown path: scripts/a*b\n"), "{starred}");
     assert!(!starred.contains("glob = "), "{starred}");
     assert!(!starred.contains("\"scripts/a*b\""), "{starred}");
-}
 
-fn root_crate_view(config: &str) -> RepoView {
-    let mut view = RepoView::default();
-    let manifest = path("Cargo.toml");
-    let member = RustPackage {
-        name: name("a"),
-        version: Some("0.1.0".to_owned()),
-        manifest: manifest.clone(),
-        dependencies: Vec::new(),
-        targets: vec![Target {
-            name: TargetName::new("a").unwrap_or_else(|e| unreachable!("{e}")),
-            kinds: vec![TargetKind::Lib],
-            tests: true,
-            doctest: true,
-            source: None,
-            requires_features: false,
-        }],
-    };
-    view.rust_metadata.insert(
-        manifest,
-        RustMetadata {
-            members: vec![member],
-        },
+    let questioned = explain(
+        &selections,
+        &Steps::new(),
+        &BTreeSet::from([path("scripts/a?b")]),
+        &BTreeMap::new(),
     );
-    for (file, text) in [
-        (path("Cargo.toml"), "[package]\nname = \"a\"\n"),
-        (path("Cargo.lock"), ""),
-        (
-            path("mise.toml"),
-            "[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n",
-        ),
-        (CONFIG_PATH, config),
-    ] {
-        view.tracked_paths.insert(file.clone());
-        view.files.insert(file, text.as_bytes().to_vec());
-    }
-    view
+    assert!(
+        questioned.contains("use a glob of a folder above it that ends in /**"),
+        "{questioned}"
+    );
+    assert!(!questioned.contains("glob = "), "{questioned}");
 }
 
 #[test]
-fn a_root_level_unknown_path_with_a_star_is_explained_by_a_rule_the_loader_accepts() {
+fn a_root_level_unknown_path_with_a_wildcard_gets_no_rule_that_shadows_root_files() {
     let selections = BTreeMap::from([(
         path("Cargo.toml"),
         RustSelection::All(AllTrigger::CargoConfig(path(".cargo/config.toml"))),
     )]);
-    let text = explain(
-        &selections,
-        &Steps::new(),
-        &BTreeSet::from([path("build*.sh")]),
-        &BTreeMap::new(),
-    );
-    assert!(text.contains("unknown path: build*.sh\n"), "{text}");
-    assert!(!text.contains("use a glob of a folder above"), "{text}");
-    let rule = "    [[inputs]]\n    glob = \"*\"\n    packages = [\"<package>\"]\n";
-    assert!(text.contains(rule), "{text}");
-    let config = "[[inputs]]\nglob = \"*\"\npackages = [\"a\"]\n";
-    let loaded = velnor_rust::detect(&root_crate_view(config));
-    assert!(loaded.is_ok(), "{config}: {:?}", loaded.err());
+    for name in ["build*.sh", "build?.sh", "b[a]d.sh"] {
+        let text = explain(
+            &selections,
+            &Steps::new(),
+            &BTreeSet::from([path(name)]),
+            &BTreeMap::new(),
+        );
+        assert!(text.contains(&format!("unknown path: {name}\n")), "{text}");
+        assert!(!text.contains("glob = "), "{text}");
+        assert!(!text.contains("use a glob of a folder above"), "{text}");
+        assert!(text.contains("rename it"), "{text}");
+    }
 }
 
 #[test]
