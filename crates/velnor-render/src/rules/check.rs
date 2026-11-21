@@ -2,12 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{
-    ALLOWED_ACTIONS, APP_TOKEN_ACTION, FORBIDDEN_SYMBOLS, FORBIDDEN_WORDS,
-    MAX_CACHE_KEY_CHARACTERS, MAX_ENV_CHARACTERS, MAX_RUN_CHARACTERS, MISE_ACTION, RenderedJob,
-    RenderedStep, RenderedWorkflow, Rule, RuleViolation, Value,
+    ALLOWED_ACTIONS, APP_TOKEN_ACTION, FORBIDDEN_SYMBOLS, FORBIDDEN_WORDS, MAX_ENV_CHARACTERS,
+    MAX_RUN_CHARACTERS, MISE_ACTION, RenderedJob, RenderedStep, RenderedWorkflow, Rule,
+    RuleViolation, Value,
 };
 use crate::key_length::longest_cache_key;
 use crate::pinned_actions::{credential_rules, pin_rules};
+use velnor_model::CACHE_KEY_MAX_UNITS;
 
 pub fn check_rules(workflow: &RenderedWorkflow) -> Result<(), Vec<RuleViolation>> {
     let violations: Vec<RuleViolation> = workflow
@@ -92,7 +93,7 @@ fn step_rules(step: &RenderedStep) -> Vec<Rule> {
     }
     credential_rules(step, &mut rules);
     if let Some(length) = longest_cache_key(step)
-        && length > MAX_CACHE_KEY_CHARACTERS
+        && length > CACHE_KEY_MAX_UNITS
     {
         rules.push(Rule::CacheKeyTooLong(length));
     }

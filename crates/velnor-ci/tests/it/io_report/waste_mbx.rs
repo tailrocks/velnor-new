@@ -86,7 +86,7 @@ pub(super) fn fails_closed(metrics: &velnor_ci::report::LaneMetrics) -> bool {
     })
 }
 
-fn waste_gates(metrics: &velnor_ci::report::LaneMetrics) -> Vec<&String> {
+pub(super) fn waste_gates(metrics: &velnor_ci::report::LaneMetrics) -> Vec<&String> {
     metrics
         .violations
         .iter()

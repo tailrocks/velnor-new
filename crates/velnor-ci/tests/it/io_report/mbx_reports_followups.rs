@@ -271,3 +271,15 @@ fn a_version_five_report_with_only_incremental_compilations_yields_a_session() {
         br#"{"version":5,"hits":0,"misses":0,"unconsulted":0,"incremental_compilations":15}"#;
     assert_eq!(parse(incremental), Ok(Some(session(0, 0, 15))));
 }
+
+#[test]
+fn a_verification_only_report_is_a_session() {
+    let verified = br#"{"version":5,"hits":0,"misses":0,"unconsulted":0,"verifications":4,"bypasses":{},"compiler":{}}"#;
+    assert_eq!(
+        parse(verified),
+        Ok(Some(MbxSession {
+            verifications: Some(4),
+            ..session(0, 0, 0)
+        }))
+    );
+}

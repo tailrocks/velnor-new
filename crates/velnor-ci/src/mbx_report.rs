@@ -145,10 +145,10 @@ pub fn parse(report: &[u8]) -> Result<Option<MbxSession>, String> {
     let not_looked_up = counts
         .unconsulted
         .saturating_add(counts.incremental_compilations);
-    let looked_at = counts.hits > 0 || counts.misses > 0 || not_looked_up > 0;
+    let looked_at =
+        counts.hits > 0 || counts.misses > 0 || not_looked_up > 0 || counts.verifications > 0;
     let has_bypasses = !counts.bypasses.is_empty();
     let probe_only = !looked_at
-        && counts.verifications == 0
         && counts
             .bypasses
             .keys()

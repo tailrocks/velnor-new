@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::ResultTest;
-use super::waste_mbx::{fails_closed, lane_with_mbx_log, lane_with_mbx_report};
+use super::waste_mbx::{fails_closed, lane_with_mbx_log, lane_with_mbx_report, waste_gates};
 
 #[test]
 fn every_truncation_of_the_object_cache_label_is_unparsed_and_fails_closed() -> ResultTest {
@@ -84,5 +84,21 @@ fn a_lane_whose_only_mbx_report_is_incremental_compilations_is_not_compiled_with
         "{:?}",
         metrics.violations
     );
+    Ok(())
+}
+
+#[test]
+fn a_lane_whose_only_mbx_report_is_verification_only_is_a_session_not_compiled_without_mbx()
+-> ResultTest {
+    let verified = r#"{"version":5,"hits":0,"misses":0,"unconsulted":0,"verifications":4,"bypasses":{},"compiler":{}}"#;
+    let metrics = lane_with_mbx_report("report-mbx-verification-only", verified)?;
+    assert_eq!(metrics.mbx.sessions.len(), 1, "{metrics:?}");
+    assert_eq!(
+        metrics.mbx.sessions[0].verifications,
+        Some(4),
+        "{metrics:?}"
+    );
+    assert!(!metrics.mbx.sessions[0].probe_only, "{metrics:?}");
+    assert!(waste_gates(&metrics).is_empty(), "{:?}", metrics.violations);
     Ok(())
 }
