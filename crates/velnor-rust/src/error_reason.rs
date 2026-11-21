@@ -244,13 +244,8 @@ impl fmt::Display for Reason {
             | Self::Lint(_)
             | Self::LintDuplicate(_)
             | Self::LintKeyForeign { .. }
-            | Self::GeneratorPackage { .. } => self.fmt_config(f),
-            Self::InvalidPatch(key) => {
-                write!(
-                    f,
-                    "{key} must be a table whose path is a folder in the repository"
-                )
-            }
+            | Self::GeneratorPackage { .. }
+            | Self::InvalidPatch(_) => self.fmt_config(f),
         }
     }
 }

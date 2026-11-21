@@ -47,6 +47,10 @@ impl Reason {
             Self::LintKeyForeign { kind, key } => {
                 write!(f, "lint kind {kind} does not take the key {key}")
             }
+            Self::InvalidPatch(key) => write!(
+                f,
+                "{key} must be a table whose path is a folder in the repository"
+            ),
             Self::GeneratorPackage { found } => write!(
                 f,
                 "from_source builds velnor-gen from the checkout, so exactly one Cargo root must hold a velnor-gen package; found {found}"

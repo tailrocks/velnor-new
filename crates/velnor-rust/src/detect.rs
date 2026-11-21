@@ -108,12 +108,9 @@ pub fn metadata_roots(view: &RepoView) -> Result<Vec<RepoPath>, DetectError> {
     Ok(manifests)
 }
 
-pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
-    let config = config(view)?;
-    let (rust_roots, targets) = rust_roots(view, &config)?;
-    let unowned = unowned(view, &rust_roots, &targets);
+fn check_slugs(rust_roots: &[RustRoot]) -> Result<(), DetectError> {
     let mut slugs = BTreeMap::new();
-    for root in &rust_roots {
+    for root in rust_roots {
         if let Some(first) = slugs.insert(RootSlug::of(&root.manifest), &root.manifest) {
             return Err(DetectError::SameSlug {
                 first: first.clone(),
@@ -121,6 +118,14 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
             });
         }
     }
+    Ok(())
+}
+
+pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
+    let config = config(view)?;
+    let (rust_roots, targets) = rust_roots(view, &config)?;
+    let unowned = unowned(view, &rust_roots, &targets);
+    check_slugs(&rust_roots)?;
     let compile_inputs = crate::embedded::locked_and_embedded(view, &rust_roots)?;
     let inputs_lock_identified = view
         .files

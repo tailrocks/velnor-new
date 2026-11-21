@@ -68,6 +68,13 @@ pub(crate) fn archive_lock() -> Result<String, Box<dyn Error>> {
 }
 
 pub(crate) fn archive_lock_at(version: &str) -> Result<String, Box<dyn Error>> {
+    let numbers: Vec<u64> = version
+        .split('.')
+        .map(str::parse)
+        .collect::<Result<_, _>>()?;
+    if numbers.as_slice() >= [0, 1, 111].as_slice() {
+        return crate::lock_gen_binary::generator_lock_at(version);
+    }
     Ok(pin_lock(
         version,
         COMMIT_FILE,

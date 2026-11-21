@@ -9,7 +9,7 @@ use velnor_rust::{CONFIG_PATH, DetectError, LOCK_PATH, Reason};
 use crate::facts::TestResult;
 use crate::generated_check::CHECK;
 use crate::lint_lane::{LINT, MISE, runs};
-use crate::lock_gen_binary::generator_lock_at;
+use crate::lock_archive::archive_lock_at;
 use crate::pipeline::{view, workflow};
 
 const FROM_SOURCE: &str = "[[lint]]\nkind = 'generated-check'\nfrom_source = true\n";
@@ -35,7 +35,7 @@ fn generators(
         .insert(RepoPath::new("mise.toml")?, MISE.as_bytes().to_vec());
     view.tracked_paths.insert(LOCK_PATH);
     view.files
-        .insert(LOCK_PATH, generator_lock_at(version)?.into_bytes());
+        .insert(LOCK_PATH, archive_lock_at(version)?.into_bytes());
     for root in generator_roots {
         let metadata = view
             .rust_metadata
