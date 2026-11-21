@@ -347,7 +347,7 @@ fn assert_inventory(metrics: &velnor_ci::report::LaneMetrics) {
     }
 }
 
-fn checking(repo: &Repo) -> Command {
+pub(super) fn checking(repo: &Repo) -> Command {
     let mut check = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
     check
         .args(["report", "--check"])
