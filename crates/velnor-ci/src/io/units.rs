@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use serde::Deserialize;
-use velnor_rust::{NESTED_ROOTS_FOLDER, resolve};
+use velnor_rust::NESTED_ROOTS_FOLDER;
 
 use crate::cache_prune::is_hash;
 use crate::error::CiError;
@@ -19,8 +19,12 @@ mod fill;
 mod layout_tests;
 #[cfg(test)]
 mod limit_tests;
+mod separation;
+mod workspace;
 
 pub(super) use build_dir::refuse_arguments;
+pub(super) use separation::apart;
+pub(super) use workspace::{unchecked_unit_files, unit_files_apart};
 
 const MAX_TARGET_DEPTH: usize = 64;
 /// A target directory after a full build and test run holds one directory per
@@ -33,9 +37,11 @@ const TARGET_DIRECTORIES_CEILING: usize = 10_000_000;
 const MAX_TARGET_DIRECTORIES_VARIABLE: &str = "VELNOR_TARGET_MAX_DIRECTORIES";
 
 #[derive(Deserialize)]
+#[serde(from = "workspace::Printed")]
 pub(super) struct Workspace {
-    pub(super) workspace_root: PathBuf,
+    pub(super) root: PathBuf,
     pub(super) target_directory: PathBuf,
+    pub(super) build_directory: PathBuf,
 }
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -91,6 +97,14 @@ fn limit_from(value: Option<&OsStr>) -> Result<usize, CiError> {
 }
 
 fn unit_files_within(target: &Path, limit: usize) -> Result<Vec<(UnitFile, PathBuf)>, CiError> {
+    let (found, built) = scan(target, limit, None)?;
+    built::refuse_without_units(target, built, &found)?;
+    Ok(found)
+}
+
+type Scanned = (Vec<(UnitFile, PathBuf)>, bool);
+
+fn scan(target: &Path, limit: usize, skip: Option<&Path>) -> Result<Scanned, CiError> {
     let mut found = Vec::new();
     let mut pending = vec![(target.to_path_buf(), 0)];
     let mut directories = 1;
@@ -113,6 +127,9 @@ fn unit_files_within(target: &Path, limit: usize) -> Result<Vec<(UnitFile, PathB
             let kind = entry
                 .file_type()
                 .map_err(|e| CiError::new(format!("cannot read {}: {e}", path.display())))?;
+            if kind.is_dir() && skip == Some(path.as_path()) {
+                continue;
+            }
             if kind.is_dir() && entry.file_name() != "incremental" {
                 if depth == 0 && entry.file_name() == NESTED_ROOTS_FOLDER {
                     // The build folders of the Cargo roots below this one, each audited as its own root.
@@ -141,8 +158,7 @@ fn unit_files_within(target: &Path, limit: usize) -> Result<Vec<(UnitFile, PathB
             }
         }
     }
-    built::refuse_without_units(target, built, &found)?;
-    Ok(found)
+    Ok((found, built))
 }
 
 fn directory_limit_exceeded(path: &Path, limit: usize) -> CiError {
@@ -283,44 +299,6 @@ fn split(stem: &str) -> Option<(&str, &str)> {
             .bytes()
             .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f')))
     .then_some((name, hash))
-}
-
-pub(super) fn apart(workspaces: &[Workspace], shared: &[Vec<usize>]) -> Result<(), CiError> {
-    let directories: Vec<PathBuf> = workspaces
-        .iter()
-        .map(|w| {
-            resolve(&w.target_directory).map_err(|error| {
-                CiError::new(format!(
-                    "cannot resolve {}: {error}",
-                    w.target_directory.display()
-                ))
-            })
-        })
-        .collect::<Result<_, _>>()?;
-    for (outer, holder) in directories.iter().enumerate() {
-        for (inner, held) in directories.iter().enumerate() {
-            if outer == inner
-                || !held.starts_with(holder)
-                || held.starts_with(holder.join(NESTED_ROOTS_FOLDER))
-            {
-                continue;
-            }
-            let grouped = held == holder
-                && shared
-                    .iter()
-                    .any(|group| group.contains(&outer) && group.contains(&inner));
-            if !grouped {
-                return Err(CiError::new(format!(
-                    "the target directory {} of the Cargo root {} holds the target directory {} of the Cargo root {}, so their units cannot be told apart; give each Cargo root its own target directory, outside the others",
-                    holder.display(),
-                    workspaces[outer].workspace_root.display(),
-                    held.display(),
-                    workspaces[inner].workspace_root.display()
-                )));
-            }
-        }
-    }
-    Ok(())
 }
 
 pub(super) struct MetadataInvocation<'a> {
