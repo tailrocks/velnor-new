@@ -4,6 +4,7 @@
 use std::fs;
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
+use std::time::{Duration, SystemTime};
 
 use velnor_ci::tools_discard;
 use velnor_ci::tools_local::{Inputs, Outcome, Verb, run};
@@ -131,4 +132,81 @@ fn a_read_only_retired_leftover_is_removed_by_the_next_save() {
         "the leftover stays"
     );
     assert_eq!(stored_rustc(&store), "rustc binary");
+}
+
+#[test]
+fn a_stale_read_only_leftover_with_a_random_name_is_swept_by_the_next_save() {
+    let (_repo, job, store) = poisoned_store("tools-heal-random-leftover");
+    let leftover = store
+        .join("tools")
+        .join(".staging-retired-0123456789abcdef");
+    fs::create_dir_all(&leftover).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::write(leftover.join("rustc"), "old binary").unwrap_or_else(|e| unreachable!("{e}"));
+    fs::File::open(&leftover)
+        .and_then(|dir| dir.set_modified(SystemTime::now() - Duration::from_hours(2)))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    fs::set_permissions(&leftover, fs::Permissions::from_mode(0o555))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let healed = save(&store, &job.home, true);
+    assert!(matches!(healed, Outcome::Healed { .. }), "{healed:?}");
+    assert!(
+        fs::symlink_metadata(&leftover).is_err(),
+        "the stale leftover stays"
+    );
+}
+
+#[test]
+fn a_failed_copy_leaves_no_staging_tree_behind_even_when_it_holds_a_read_only_directory() {
+    let repo = Repo::empty("tools-heal-failed-copy");
+    let root = fs::canonicalize(repo.root()).unwrap_or_else(|e| unreachable!("{e}"));
+    let store = root.join("store");
+    fs::create_dir_all(&store).unwrap_or_else(|e| unreachable!("{e}"));
+    let home = root.join("home");
+    let mise = home.join(".local/share/mise/installs");
+    fs::create_dir_all(&mise).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::write(mise.join("cosign"), "cosign binary").unwrap_or_else(|e| unreachable!("{e}"));
+    let read_only = home.join(".rustup/toolchains/read-only");
+    fs::create_dir_all(&read_only).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::write(read_only.join("rustc"), "rustc binary").unwrap_or_else(|e| unreachable!("{e}"));
+    fs::set_permissions(&read_only, fs::Permissions::from_mode(0o555))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let unreadable = home.join(".rustup/unreadable");
+    fs::write(&unreadable, "no access").unwrap_or_else(|e| unreachable!("{e}"));
+    fs::set_permissions(&unreadable, fs::Permissions::from_mode(0o000))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let outcome = save(&store, &home, false);
+    fs::set_permissions(&read_only, fs::Permissions::from_mode(0o755))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    fs::set_permissions(&unreadable, fs::Permissions::from_mode(0o644))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(matches!(outcome, Outcome::Failed(_)), "{outcome:?}");
+    let staging: Vec<_> = fs::read_dir(store.join("tools"))
+        .unwrap_or_else(|e| unreachable!("{e}"))
+        .flatten()
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .filter(|name| name.starts_with(".staging-"))
+        .collect();
+    assert_eq!(staging, Vec::<String>::new(), "a staging tree stays");
+}
+
+#[test]
+fn a_discard_removes_a_read_only_subdirectory_of_the_replaced_entry() {
+    let (_repo, job, store) = poisoned_store("tools-heal-read-only-subdir");
+    let subdir = store
+        .join("tools")
+        .join(KEY)
+        .join(".rustup/toolchains/old-read-only");
+    fs::create_dir_all(&subdir).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::write(subdir.join("rustc"), "old binary").unwrap_or_else(|e| unreachable!("{e}"));
+    fs::set_permissions(&subdir, fs::Permissions::from_mode(0o555))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let healed = save(&store, &job.home, true);
+    assert!(matches!(healed, Outcome::Healed { .. }), "{healed:?}");
+    assert_eq!(stored_rustc(&store), "rustc binary");
+    let leftovers: Vec<_> = fs::read_dir(store.join("tools"))
+        .unwrap_or_else(|e| unreachable!("{e}"))
+        .flatten()
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .collect();
+    assert_eq!(leftovers, [KEY], "no retired or staging entry stays");
 }

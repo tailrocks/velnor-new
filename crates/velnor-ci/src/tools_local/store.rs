@@ -139,7 +139,7 @@ fn sweep(tools: &Path) {
         if (name.starts_with(STAGING_PREFIX) || name.starts_with(LOCK_PREFIX))
             && stale(&entry.path())
         {
-            fs::remove_dir_all(entry.path()).ok();
+            remove_tree(&entry.path()).ok();
         }
     }
 }
@@ -177,12 +177,12 @@ pub(super) fn save(inputs: &Inputs<'_>) -> Outcome {
             .all(|path| copy_tree(&inputs.home.join(path), &staging.join(slot(path))))
         && fs::File::create(staging.join(MARKER)).is_ok();
     if !copied {
-        fs::remove_dir_all(&staging).ok();
+        remove_tree(&staging).ok();
         return Outcome::Failed("the copy to the store failed");
     }
     let retired = tools.join(format!("{STAGING_PREFIX}retired-{}", inputs.key));
     if remove_tree(&retired).is_err() {
-        fs::remove_dir_all(&staging).ok();
+        remove_tree(&staging).ok();
         return Outcome::Failed("a retired entry from an earlier replacement could not be removed");
     }
     let replaced = fs::symlink_metadata(&entry).is_ok() && fs::rename(&entry, &retired).is_ok();
@@ -190,7 +190,7 @@ pub(super) fn save(inputs: &Inputs<'_>) -> Outcome {
         if replaced {
             fs::rename(&retired, &entry).ok();
         }
-        fs::remove_dir_all(&staging).ok();
+        remove_tree(&staging).ok();
         return if complete(&entry, inputs.owner) {
             Outcome::AlreadySaved
         } else {
