@@ -24,11 +24,8 @@ impl Checkout {
     }
 
     fn pinned(name: &str, helper: Option<&str>) -> Result<Self, Box<dyn Error>> {
-        let base = crate::scratch_path("velnor-gen-check", name);
-        if base.exists() {
-            fs::remove_dir_all(base.path())?;
-        }
-        fs::create_dir_all(base.path())?;
+        let base =
+            velnor_test_support::ScratchDir::new(crate::scratch_name("velnor-gen-check", name));
         let checkout = Self(base.canonicalized()?);
         checkout.git(&["init", "--quiet"])?;
         checkout.write(
@@ -65,17 +62,18 @@ impl Checkout {
     }
 }
 
-impl Drop for Checkout {
-    fn drop(&mut self) {
-        fs::remove_dir_all(self.0.path()).ok();
-    }
-}
-
 fn differs(result: &Result<(), IoError>) -> bool {
     matches!(
         result,
         Err(IoError::MetadataFile(MetadataFileError::Differs(_)))
     )
+}
+
+#[test]
+fn a_checkout_is_removed_unless_the_keep_flag_is_set() -> TestResult {
+    let path = Checkout::new("kept")?.path().to_path_buf();
+    assert_eq!(path.exists(), velnor_test_support::keeping());
+    Ok(())
 }
 
 #[test]

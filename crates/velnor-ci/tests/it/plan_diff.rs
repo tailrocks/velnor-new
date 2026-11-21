@@ -31,10 +31,8 @@ fn copy_tree(from: &Path, to: &Path) {
     }
 }
 
-pub(crate) fn aside(repo: &Path) -> PathBuf {
-    let dir = repo.with_extension("io");
-    fs::create_dir_all(&dir).unwrap_or_else(|e| unreachable!("{e}"));
-    dir
+pub(crate) fn aside(repo: &Path) -> velnor_test_support::ScratchDir {
+    velnor_test_support::ScratchDir::new(repo.with_extension("io"))
 }
 
 pub(crate) fn plan(repo: &Path, request: &Path, outputs: &Path) -> Output {
@@ -95,9 +93,10 @@ fn run_case(case: &Path) -> (String, String) {
     if event == "local" {
         apply_local(case, &repo);
     }
-    let file = aside(&repo).join("plan-request.json");
+    let io = aside(&repo);
+    let file = io.join("plan-request.json");
     fs::write(&file, bind(&request, &base, &head)).unwrap_or_else(|e| unreachable!("{e}"));
-    let outputs = aside(&repo).join("outputs");
+    let outputs = io.join("outputs");
     let output = plan(&repo, &file, &outputs);
     assert!(
         output.status.success(),
@@ -106,7 +105,6 @@ fn run_case(case: &Path) -> (String, String) {
     );
     let written = read(&outputs);
     fs::remove_dir_all(repo.path()).unwrap_or_else(|e| unreachable!("{e}"));
-    fs::remove_dir_all(aside(&repo)).unwrap_or_else(|e| unreachable!("{e}"));
     (
         written,
         String::from_utf8_lossy(&output.stderr).into_owned(),
@@ -164,10 +162,12 @@ fn prepared(name: &str) -> (velnor_test_support::ScratchDir, String) {
     (repo, bind(&read(&case.join("request.json")), &base, &head))
 }
 
-fn planned(request: &str, repo: &Path) -> Output {
-    let file = aside(repo).join("plan-request.json");
+fn planned(request: &str, repo: &Path) -> (Output, velnor_test_support::ScratchDir) {
+    let io = aside(repo);
+    let file = io.join("plan-request.json");
     fs::write(&file, request).unwrap_or_else(|e| unreachable!("{e}"));
-    plan(repo, &file, &aside(repo).join("outputs"))
+    let output = plan(repo, &file, &io.join("outputs"));
+    (output, io)
 }
 
 #[test]
@@ -176,16 +176,15 @@ fn a_request_without_lane_routes_is_refused() {
     let mut value: serde_json::Value =
         serde_json::from_str(&request).unwrap_or_else(|e| unreachable!("{e}"));
     value["lane_inventory"] = serde_json::Value::Null;
-    let output = planned(&value.to_string(), &repo);
+    let (output, io) = planned(&value.to_string(), &repo);
     assert!(!output.status.success());
-    assert!(!aside(&repo).join("outputs").exists());
+    assert!(!io.join("outputs").exists());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         stderr.contains("diff_selection_needs_lane_inventory"),
         "{stderr}"
     );
     fs::remove_dir_all(repo.path()).unwrap_or_else(|e| unreachable!("{e}"));
-    fs::remove_dir_all(aside(&repo)).unwrap_or_else(|e| unreachable!("{e}"));
 }
 
 #[test]
@@ -194,24 +193,22 @@ fn a_checkout_that_is_not_the_head_is_refused() {
     let mut value: serde_json::Value =
         serde_json::from_str(&request).unwrap_or_else(|e| unreachable!("{e}"));
     value["head"] = "0".repeat(40).into();
-    let output = planned(&value.to_string(), &repo);
+    let (output, _io) = planned(&value.to_string(), &repo);
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("checkout_head_mismatch"), "{stderr}");
     fs::remove_dir_all(repo.path()).unwrap_or_else(|e| unreachable!("{e}"));
-    fs::remove_dir_all(aside(&repo)).unwrap_or_else(|e| unreachable!("{e}"));
 }
 
 #[test]
 fn an_untracked_file_runs_every_job() {
     let (repo, request) = prepared("untracked");
     fs::write(repo.join("stray.txt"), "x").unwrap_or_else(|e| unreachable!("{e}"));
-    let output = planned(&request, &repo);
+    let (output, io) = planned(&request, &repo);
     assert!(output.status.success());
-    assert!(read(&aside(&repo).join("outputs")).contains("\nnot_affected_jobs=\n"));
+    assert!(read(&io.join("outputs")).contains("\nnot_affected_jobs=\n"));
     assert!(String::from_utf8_lossy(&output.stderr).contains("untracked_files:all_changed"));
     fs::remove_dir_all(repo.path()).unwrap_or_else(|e| unreachable!("{e}"));
-    fs::remove_dir_all(aside(&repo)).unwrap_or_else(|e| unreachable!("{e}"));
 }
 
 fn check_tail(id: &str) -> String {
@@ -221,18 +218,25 @@ fn check_tail(id: &str) -> String {
     )
 }
 
-fn planned_with_check(name: &str, id: &str) -> (velnor_test_support::ScratchDir, Output) {
+fn planned_with_check(
+    name: &str,
+    id: &str,
+) -> (
+    velnor_test_support::ScratchDir,
+    Output,
+    velnor_test_support::ScratchDir,
+) {
     let case = data().join("pr-one-crate");
     let (repo, base, head) = repository_with(&case, "pull_request", name, &check_tail(id));
     let request = bind(&read(&case.join("request.json")), &base, &head);
-    let output = planned(&request, &repo);
-    (repo, output)
+    let (output, io) = planned(&request, &repo);
+    (repo, output, io)
 }
 
 #[test]
 fn a_check_id_with_a_line_break_is_refused_and_adds_no_output_key() {
-    let (repo, output) = planned_with_check("injected-id", "x\nqualification_cache_write=true");
-    let written = fs::read_to_string(aside(&repo).join("outputs")).unwrap_or_default();
+    let (repo, output, io) = planned_with_check("injected-id", "x\nqualification_cache_write=true");
+    let written = fs::read_to_string(io.join("outputs")).unwrap_or_default();
     assert!(!output.status.success(), "{written}");
     assert!(
         !written
@@ -247,7 +251,6 @@ fn a_check_id_with_a_line_break_is_refused_and_adds_no_output_key() {
     );
     assert!(!stderr.contains("x\nqualification"), "{stderr}");
     fs::remove_dir_all(repo.path()).unwrap_or_else(|e| unreachable!("{e}"));
-    fs::remove_dir_all(aside(&repo)).unwrap_or_else(|e| unreachable!("{e}"));
 }
 
 #[test]
@@ -260,7 +263,7 @@ fn a_check_id_outside_the_identifier_alphabet_is_refused() {
     for id in ["", "a b", "a,b", "a/b", "é"] {
         fs::write(&config, checked_out.clone() + &check_tail(id))
             .unwrap_or_else(|e| unreachable!("{e}"));
-        let output = planned(&request, &repo);
+        let (output, _io) = planned(&request, &repo);
         assert!(!output.status.success(), "{id:?}");
         let stderr = String::from_utf8_lossy(&output.stderr);
         assert!(
@@ -269,24 +272,22 @@ fn a_check_id_outside_the_identifier_alphabet_is_refused() {
         );
     }
     fs::remove_dir_all(repo.path()).unwrap_or_else(|e| unreachable!("{e}"));
-    fs::remove_dir_all(aside(&repo)).unwrap_or_else(|e| unreachable!("{e}"));
 }
 
 #[test]
 fn a_check_id_with_dots_dashes_and_underscores_is_kept() {
-    let (repo, output) = planned_with_check("good-id", "jactionlint-linux_x64.1");
+    let (repo, output, io) = planned_with_check("good-id", "jactionlint-linux_x64.1");
     assert!(
         output.status.success(),
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
-    let written = read(&aside(&repo).join("outputs"));
+    let written = read(&io.join("outputs"));
     assert!(
         written.contains(",check-jactionlint-linux_x64.1,"),
         "{written}"
     );
     fs::remove_dir_all(repo.path()).unwrap_or_else(|e| unreachable!("{e}"));
-    fs::remove_dir_all(aside(&repo)).unwrap_or_else(|e| unreachable!("{e}"));
 }
 
 #[test]
@@ -304,13 +305,12 @@ fn a_lane_route_id_with_a_line_break_cannot_add_an_output_key() {
     }) {
         route["job_id"] = "rust-x\nqualification_cache_write=true".into();
     }
-    let output = planned(&value.to_string(), &repo);
-    let written = fs::read_to_string(aside(&repo).join("outputs")).unwrap_or_default();
+    let (output, io) = planned(&value.to_string(), &repo);
+    let written = fs::read_to_string(io.join("outputs")).unwrap_or_default();
     assert!(!output.status.success(), "{written}");
     assert!(
         !written.contains("qualification_cache_write=true"),
         "{written}"
     );
     fs::remove_dir_all(repo.path()).unwrap_or_else(|e| unreachable!("{e}"));
-    fs::remove_dir_all(aside(&repo)).unwrap_or_else(|e| unreachable!("{e}"));
 }

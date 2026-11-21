@@ -232,6 +232,8 @@ fn a_payload_that_is_a_fifo_is_refused_instead_of_waiting_for_a_writer() {
 
 #[test]
 fn no_runner_temp_or_payload_is_named_in_the_error() {
+    let runner_temp = crate::scratch_path("velnor-ci-write-request", "no-payload");
+    fs::create_dir_all(runner_temp.path()).unwrap_or_else(|e| unreachable!("{e}"));
     for (temp, event_path, code) in [
         (false, true, "missing_runner_temp"),
         (true, false, "missing_event_payload"),
@@ -239,7 +241,7 @@ fn no_runner_temp_or_payload_is_named_in_the_error() {
         let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
         command.env_clear().arg("write-request");
         if temp {
-            command.env("RUNNER_TEMP", std::env::temp_dir());
+            command.env("RUNNER_TEMP", runner_temp.path());
         }
         if event_path {
             command.env("GITHUB_EVENT_PATH", "/nonexistent");

@@ -9,7 +9,6 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::OnceLock;
 
 use serde_json::{Value, json};
 
@@ -26,7 +25,6 @@ pub(crate) const WORKFLOW: &str = ".github/workflows/ci.yml";
 pub(crate) const ARTIFACT: &str = "velnor-qualification-cache-receipt-v2";
 pub(crate) const MEMBER: &str = "qualification-cache-receipt.json";
 const CURRENT_RUN: u64 = 2001;
-static TEMPLATE: OnceLock<(PathBuf, Shas)> = OnceLock::new();
 
 pub(crate) fn data_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/it/data/resolve_qualification")
@@ -64,22 +62,17 @@ pub(crate) fn make_repo(dir: &Path) -> Shas {
     }
 }
 
-fn template() -> &'static (PathBuf, Shas) {
-    TEMPLATE.get_or_init(|| {
-        let dir = fresh_dir("velnor-ci-resolve", "template").join("repo");
-        let shas = make_repo(&dir);
-        (dir, shas)
-    })
-}
-
-pub(crate) fn repo_template() -> &'static Path {
-    &template().0
+fn template() -> (velnor_test_support::ScratchDir, Shas) {
+    let root = fresh_dir("velnor-ci-resolve", "template");
+    let shas = make_repo(&root.join("repo"));
+    (root, shas)
 }
 
 pub(crate) fn copy_repo(dest: &Path) {
+    let (root, _) = template();
     let copied = Command::new("cp")
         .arg("-R")
-        .arg(format!("{}/.", template().0.display()))
+        .arg(format!("{}/.", root.join("repo").display()))
         .arg(dest)
         .status()
         .unwrap_or_else(|e| unreachable!("{e}"));
@@ -163,7 +156,7 @@ impl World {
     /// A `phase` dispatch with its predecessors: warm has the cold run, third the warm and cold,
     /// `useful_delta` the third, warm and cold.
     pub(crate) fn new(phase: &str) -> Self {
-        let shas = template().1.clone();
+        let (_, shas) = template();
         let phases: &[&str] = match phase {
             "warm" => &["cold"],
             "third" => &["warm", "cold"],

@@ -14,7 +14,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, Weak};
 use std::time::{Duration, Instant};
 
-use crate::resolve_world::{Quirk, World, copy_repo, data_dir, repo_template, sha256};
+use crate::resolve_world::{Quirk, World, copy_repo, data_dir, sha256};
 use crate::support::fresh_dir;
 
 static LAST_MICROS: AtomicU64 = AtomicU64::new(0);
@@ -216,6 +216,9 @@ fn answer(
 pub(crate) fn run_helper(world: &mut World, bin: &str) -> Outcome {
     world.finish();
     let laid = lay(world, "plan-v1-request.json");
+    if world.quirk != Some(Quirk::NotARepository) {
+        copy_repo(&laid.repo);
+    }
     let (api, log) = serve(world);
     let mut command = Command::new(bin);
     command
@@ -225,7 +228,7 @@ pub(crate) fn run_helper(world: &mut World, bin: &str) -> Outcome {
         .current_dir(if world.quirk == Some(Quirk::NotARepository) {
             laid.root.path()
         } else {
-            repo_template()
+            &laid.repo
         });
     command
         .env("RUNNER_TEMP", &laid.temp)
