@@ -190,6 +190,16 @@ class PathTests(unittest.TestCase):
         with tmp:
             self.assertEqual(guard.scan(root, planted("zzplanted")), ["b.txt:1"])
 
+    def test_gitlink_whose_commit_is_absent_is_not_read_and_its_path_is_still_scanned(self):
+        tmp, root = indexed({b"docs/a.md": b"plain\n"})
+        with tmp:
+            gitlink = f"160000,{'1' * 40},vendor/zzplanted-module".encode()
+            subprocess.run(["git", "-C", str(root), "update-index", "--add", "--cacheinfo", gitlink], check=True)
+            found = guard.scan(root, planted("zzplanted"))
+            self.assertEqual(len(found), 1)
+            self.assertNotIn("zzplanted", found[0])
+            self.assertEqual(guard.scan(root, planted("zzother")), [])
+
     def test_exempt_file_is_skipped(self):
         tmp, root = repository({"docs/hard-decisions.md": "zzplanted\n"})
         with tmp:

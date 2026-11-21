@@ -16,6 +16,7 @@ MAX_REPORTED = 50
 CHUNK = re.compile(rb"[a-z0-9_.\-]+(?:/[a-z0-9_.\-]+)*")
 DROP = b"._-"
 SYMLINK_MODE = "120000"
+GITLINK_MODE = "160000"
 TRIM = b".-_"
 
 
@@ -166,7 +167,10 @@ def blobs(root, objects):
     position = 0
     for obj in objects:
         newline = output.index(b"\n", position)
-        size = int(output[position:newline].split(b" ")[2])
+        header = output[position:newline].split(b" ")
+        if len(header) != 3:
+            raise SystemExit(f"git cat-file could not read blob {obj}; the guard cannot scan what it cannot read")
+        size = int(header[2])
         texts[obj] = output[newline + 1 : newline + 1 + size]
         position = newline + 2 + size
     return texts
@@ -180,6 +184,8 @@ def scan(root, hashes):
     by_object = {}
     for path in paths:
         mode, obj = listed[path]
+        if mode == GITLINK_MODE:
+            continue
         by_object.setdefault((mode == SYMLINK_MODE, obj), []).append(path)
     contents = blobs(root, {obj for _symlink, obj in by_object})
     texts = {
