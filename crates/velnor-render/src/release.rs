@@ -70,7 +70,7 @@ pub fn render_release(
     jobs.extend(finalize_job(plan, helper));
     let jobs = jobs
         .into_iter()
-        .map(crate::mise_digest::pin_to_runner_platform);
+        .map(|job| crate::mise_digest::pin_to_runner_platform(job, Some(helper)));
     let rendered = RenderedWorkflow {
         jobs: jobs.collect(),
     };
