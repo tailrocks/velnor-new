@@ -7,7 +7,9 @@ use velnor_model::{
 };
 
 use crate::plan::step;
-use crate::private_fetch::{after_trusted_setup, compiles, shared_gate, status, tokens_first};
+use crate::private_fetch::{
+    after_trusted_setup, compiles, shared_gate, status, token_mint, tokens_first,
+};
 
 pub(crate) fn insert(facts: &RepoFacts, jobs: &mut [Job]) {
     let config = &facts.config;
@@ -37,7 +39,7 @@ pub(crate) fn insert(facts: &RepoFacts, jobs: &mut [Job]) {
         let parts = restores(assets)
             .chain([
                 ReleaseAssetPart::Check,
-                ReleaseAssetPart::Token(sources.clone()),
+                ReleaseAssetPart::Token(sources.clone(), token_mint(facts)),
                 ReleaseAssetPart::Fetch,
             ])
             .chain(saves(assets));

@@ -64,7 +64,7 @@ fn step_env_cannot_switch_the_mirror_off_while_keeping_the_config() -> TestResul
 fn step_env_cannot_drop_a_declared_mbx_requirement() -> TestResult {
     let repo = Repo::empty("crates-mirror-marker-mbx");
     repo.write_unstaged("ca.pem", "not used by this fixture");
-    repo.write_unstaged("mise.toml", MBX_DECLARED);
+    repo.write_unstaged("mise.toml", &MBX_DECLARED);
     let output = setup_command(repo.root(), REGISTRY)
         .current_dir(repo.root())
         .env("PATH", path_with(repo.root())?)
@@ -94,7 +94,7 @@ fn a_deleted_mode_record_cannot_swap_the_mirror_config() -> TestResult {
 fn a_deleted_mode_record_cannot_drop_a_declared_mbx_requirement() -> TestResult {
     let repo = Repo::empty("crates-mirror-marker-deleted-mbx");
     repo.write_unstaged("ca.pem", "not used by this fixture");
-    repo.write_unstaged("mise.toml", MBX_DECLARED);
+    repo.write_unstaged("mise.toml", &MBX_DECLARED);
     let output = setup_command(repo.root(), REGISTRY)
         .current_dir(repo.root())
         .env("PATH", path_with(repo.root())?)
@@ -111,7 +111,7 @@ fn setup_records_the_mirror_mode_beside_the_wrapper() -> TestResult {
     let on = configured_repo("crates-mirror-marker-record-on")?;
     assert!(read_marker(on.root())?.contains("mirror=on"));
     let off = Repo::empty("crates-mirror-marker-record-off");
-    off.write_unstaged("mise.toml", MBX_DECLARED);
+    off.write_unstaged("mise.toml", &MBX_DECLARED);
     let output = setup_command(off.root(), REGISTRY)
         .current_dir(off.root())
         .env("VELNOR_CRATES_MIRROR", "off")
@@ -130,7 +130,7 @@ fn setup_records_the_mirror_mode_beside_the_wrapper() -> TestResult {
 fn a_later_mirror_on_setup_supersedes_an_earlier_mirror_off_marker() -> TestResult {
     let repo = Repo::empty("crates-mirror-marker-rerun");
     repo.write_unstaged("ca.pem", "not used by this fixture");
-    repo.write_unstaged("mise.toml", MBX_DECLARED);
+    repo.write_unstaged("mise.toml", &MBX_DECLARED);
     let off = setup_command(repo.root(), REGISTRY)
         .current_dir(repo.root())
         .env("VELNOR_CRATES_MIRROR", "off")

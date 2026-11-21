@@ -113,6 +113,7 @@ fn test_setup_and_the_advisory_fetch_are_checks_and_other_steps_are_not() {
             name: String::from("setup"),
             run: String::from("true"),
             before_build: false,
+            offline_after_private_fetch: false,
         }
         .is_check()
     );
@@ -132,6 +133,7 @@ fn only_a_build_phase_setup_and_the_release_assets_feed_a_target_build() {
         name: String::from("setup"),
         run: String::from("true"),
         before_build,
+        offline_after_private_fetch: false,
     };
     assert!(setup(true).feeds_build());
     assert!(!setup(false).feeds_build());
