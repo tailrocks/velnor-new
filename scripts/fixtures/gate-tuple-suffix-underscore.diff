@@ -1,0 +1,5 @@
+diff --git a/crates/velnor-gen/src/policy.rs b/crates/velnor-gen/src/policy.rs
+--- a/crates/velnor-gen/src/policy.rs
++++ b/crates/velnor-gen/src/policy.rs
+@@ -0,0 +1 @@
++    gate(RustCi, "budget", (0_u64, 1_u64, 110_u64)),

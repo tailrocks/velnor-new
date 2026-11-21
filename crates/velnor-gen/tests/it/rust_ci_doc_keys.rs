@@ -21,11 +21,18 @@ fn documented_keys(page: &str) -> Vec<String> {
         .collect()
 }
 
+fn read_repo_file(relative: &str) -> std::io::Result<String> {
+    fs::read_to_string(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../..")
+            .join(relative),
+    )
+}
+
 #[test]
 fn the_settings_table_of_the_rust_ci_page_lists_exactly_the_keys_the_config_accepts() -> TestResult
 {
-    let page =
-        fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/rust-ci.md"))?;
+    let page = read_repo_file("docs/rust-ci.md")?;
     let documented = documented_keys(&page);
     let documented_set: BTreeSet<&str> = documented.iter().map(String::as_str).collect();
     let accepted: BTreeSet<&str> = KEYS.iter().copied().collect();
@@ -40,5 +47,21 @@ fn the_settings_table_of_the_rust_ci_page_lists_exactly_the_keys_the_config_acce
         missing.is_empty() && extra.is_empty(),
         "missing from docs/rust-ci.md: {missing:?}; not accepted by the config: {extra:?}"
     );
+    Ok(())
+}
+
+#[test]
+fn the_docs_do_not_state_a_gate_release_as_prose() -> TestResult {
+    for path in ["generator/CONFIG.md", "docs/rust-ci.md"] {
+        let page = read_repo_file(path)?.to_lowercase();
+        assert!(
+            !page.contains("first released in"),
+            "{path}: gate release written as prose"
+        );
+        assert!(
+            !page.contains("not tagged yet"),
+            "{path}: gate release written as prose"
+        );
+    }
     Ok(())
 }

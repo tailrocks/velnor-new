@@ -136,6 +136,29 @@ jobs:
           bash scripts/check-helper-gates.sh --diff /dev/null --tree "$fixtures/gate-tree-marked.diff" "${rel[@]}"
           bash scripts/check-helper-gates.sh --diff /dev/null --tree "$fixtures/gate-tree-future.diff" "${rel[@]}"
           bash scripts/check-helper-gates.sh --diff "$fixtures/gate-marker-in-code.diff" --current 0.1.110
+          bash scripts/check-helper-gates.sh --diff "$fixtures/gate-const-marked.diff" --current 0.1.110
+          if bash scripts/check-helper-gates.sh --diff "$fixtures/gate-const-unmarked.diff" --current 0.1.110; then
+            echo "the check accepted an unmarked released gate in a bare constant" >&2
+            exit 1
+          fi
+          if bash scripts/check-helper-gates.sh --diff "$fixtures/gate-string-marker.diff" --current 0.1.110; then
+            echo "the check accepted a helper-gate marker inside a string literal" >&2
+            exit 1
+          fi
+          for f in gate-string-marker-semicolon gate-string-marker-comma gate-string-marker-brace-open gate-string-marker-brace-close; do
+            if bash scripts/check-helper-gates.sh --diff "$fixtures/$f.diff" --current 0.1.110; then
+              echo "the check accepted a helper-gate marker after a character inside a string literal: $f" >&2
+              exit 1
+            fi
+          done
+          bash scripts/check-helper-gates.sh --diff "$fixtures/gate-marker-after-string.diff" --current 0.1.110
+          for f in gate-string-marker-raw gate-string-marker-raw-hash gate-string-marker-multiline; do
+            if bash scripts/check-helper-gates.sh --diff "$fixtures/$f.diff" --current 0.1.110; then
+              echo "the check accepted a helper-gate marker inside a raw or multi-line string literal: $f" >&2
+              exit 1
+            fi
+          done
+          bash scripts/check-helper-gates.sh --diff "$fixtures/gate-marker-after-raw-string.diff" --current 0.1.110
           if bash scripts/check-helper-gates.sh --diff "$fixtures/gate-marker-malformed.diff" --current 0.1.110; then
             echo "the check accepted a malformed marker comment" >&2
             exit 1
@@ -144,6 +167,22 @@ jobs:
             echo "the check let a lowered head version hide a released gate" >&2
             exit 1
           fi
+          for f in gate-string-marker-cr gate-tuple-unmarked gate-tuple-spaces gate-tuple-spaces-gate gate-tuple-u64 gate-tuple-trailing-comma gate-tuple-tab gate-dotted-code gate-tuple-suffix-underscore gate-tuple-digit-underscore gate-tuple-radix gate-tuple-leading-zero gate-added-plus-plus; do
+            if bash scripts/check-helper-gates.sh --diff "$fixtures/$f.diff" --current 0.1.110; then
+              echo "the check accepted $f.diff" >&2
+              exit 1
+            fi
+          done
+          bash scripts/check-helper-gates.sh --diff "$fixtures/gate-tuple-mixed-string.diff" --current 0.1.110
+          bash scripts/check-helper-gates.sh --diff "$fixtures/gate-tuple-other-series.diff" --current 0.1.110
+          bash scripts/check-helper-gates.sh --diff "$fixtures/gate-removed-minus-minus.diff" --current 0.1.110
+          bash scripts/check-helper-gates.sh --diff "$fixtures/gate-marker-after-cstring.diff" --current 0.1.110
+          bash scripts/check-helper-gates.sh --diff "$fixtures/gate-marker-nested-comment.diff" --current 0.1.110
+          bash scripts/check-helper-gates.sh --diff "$fixtures/gate-const-in-string.diff" --current 0.1.110
+          for f in gate-dotted-comment gate-dotted-string gate-dotted-gate-string; do
+            bash scripts/check-helper-gates.sh --diff "$fixtures/$f.diff" --current 0.1.110
+          done
+          bash scripts/test-helper-gates-history.sh
       - name: Check the added gates against the base
         env:
           BASE_REF: ${{ github.base_ref }}
