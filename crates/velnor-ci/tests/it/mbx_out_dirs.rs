@@ -4,7 +4,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::time::{Duration, UNIX_EPOCH};
+use std::time::{Duration, Instant, UNIX_EPOCH};
 
 use velnor_test_support::{ci_safe_cargo_env, real_cargo};
 
@@ -20,8 +20,7 @@ impl Scratch {
     fn new(name: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let root =
             std::env::temp_dir().join(format!("velnor-mbx-out-dirs-{}-{name}", std::process::id()));
-        removable(&root);
-        fs::remove_dir_all(&root).ok();
+        remove_tree(&root).ok();
         fs::create_dir_all(&root)?;
         let root = fs::canonicalize(root)?;
         declare_mbx(&root)?;
@@ -57,8 +56,21 @@ fn trusted_with(root: &Path) -> std::ffi::OsString {
 
 impl Drop for Scratch {
     fn drop(&mut self) {
-        removable(&self.0);
-        fs::remove_dir_all(&self.0).ok();
+        remove_tree(&self.0).ok();
+    }
+}
+
+fn remove_tree(path: &Path) -> std::io::Result<()> {
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        removable(path);
+        match fs::remove_dir_all(path) {
+            Err(error)
+                if error.kind() == std::io::ErrorKind::DirectoryNotEmpty
+                    && Instant::now() < deadline => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            other => return other,
+        }
     }
 }
 
@@ -191,8 +203,7 @@ fn rebuild_from_base(
         copy_seeded_subsets(&store, &seed)?;
     }
     fs::remove_file(krate.join("target"))?;
-    removable(&scratch.0.join("runner-temp"));
-    fs::remove_dir_all(scratch.0.join("runner-temp"))?;
+    remove_tree(&scratch.0.join("runner-temp"))?;
     if seeded {
         copy_seeded_subsets(&seed, &store)?;
     }
