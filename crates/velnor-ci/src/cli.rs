@@ -5,6 +5,7 @@ use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand};
 
+mod app_token;
 mod fetch_reports;
 pub use crate::cli_inputs::{
     AuditArgs, InputsArgs, InputsBatchArgs, InputsBuildArgs, InputsCommand, InputsSaveArgs,
@@ -13,6 +14,7 @@ pub use crate::cli_inputs::{
 mod gate;
 mod report;
 mod resolve_qualification;
+pub use app_token::AppTokenArgs;
 pub use fetch_reports::FetchReportsArgs;
 mod write_request;
 pub use crate::cli_args::{
@@ -116,6 +118,10 @@ pub enum Command {
         about = "Run before the private-source token step on a merge_group event: read the queue entry from VELNOR_MERGE_GROUP_HEAD_REF (gh-readonly-queue/<base>/pr-<number>-<sha>), look the pull request up with GET /repos/$GITHUB_REPOSITORY/pulls/<number> on the API in VELNOR_API_URL with the job token in GITHUB_TOKEN, and write allowed=true to $GITHUB_OUTPUT only when its head repository is $GITHUB_REPOSITORY, its author's login does not end in [bot] and its head sha is the queue entry's sha, and when the live queue ref of that entry still points at $GITHUB_SHA, the commit this run checked out. Every other queue entry of the same base whose commit is in that checkout (one GET /repos/$GITHUB_REPOSITORY/compare/<base>...$GITHUB_SHA, at most three pages of 100 commits) must pass the same pull request checks; a queue of 100 entries or more fails. Writes allowed=false and exits 0 for a malformed reference, a failed lookup, a fork or bot entry, a sha mismatch, a queue that was rebuilt, a bound that is exceeded or anything else, so that no token is created"
     )]
     PrivateTokenAllowed,
+    #[command(
+        about = "Create a GitHub App installation token that can only read the contents of the --repository repositories of --owner, and write it to $GITHUB_OUTPUT as token after an ::add-mask:: line. Signs a JWT of at most ten minutes (iss VELNOR_APP_CLIENT_ID) with the PEM private key in VELNOR_APP_PRIVATE_KEY, which never leaves the process, looks the installation up with GET /repos/<owner>/<first repository>/installation and asks POST /app/installations/<id>/access_tokens on the API in VELNOR_API_URL. Runs no post step: the step that uses the token revokes it"
+    )]
+    AppToken(AppTokenArgs),
     #[command(
         about = "Use the runner's shared MBX store: when VELNOR_MBX_SHARED_DIR names an absolute, existing, symlink-free, writable directory and the event is trusted (a push or schedule on the default branch), append MBX_CACHE_DIR and a pod-private MBX_SHIMS_DIR under $RUNNER_TEMP to $GITHUB_ENV. Every other event, and a directory that fails a check (with a warning), keeps MBX's per-job store"
     )]
@@ -221,6 +227,19 @@ pub struct FetchArgs {
         help = "An extra absolute directory whose programs and CARGO_HOME count as installed by the runner"
     )]
     pub trusted_dir: Vec<PathBuf>,
+    #[arg(
+        long,
+        hide = true,
+        help = "An absolute home directory used in place of the runner account's own"
+    )]
+    pub home: Option<PathBuf>,
+    #[arg(
+        long,
+        hide = true,
+        requires = "trusted_dir",
+        help = "Never look for the sealed runner toolchain under /opt/rust; find cargo only through --trusted-dir and the runner's own tool directories, as on a runner without one"
+    )]
+    pub no_fixed_toolchain: bool,
 }
 
 #[derive(Debug, Args)]

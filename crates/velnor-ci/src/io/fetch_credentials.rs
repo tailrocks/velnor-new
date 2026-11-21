@@ -28,11 +28,14 @@ struct Declared {
     seen: BTreeSet<PathBuf>,
 }
 
-pub(super) fn neutralise(directory: &Path, cargo_home: &Path) -> Result<Neutralised, CiError> {
+pub(super) fn neutralise(directories: &[&Path], cargo_home: &Path) -> Result<Neutralised, CiError> {
     let mut declared = Declared::default();
-    let mut starts = vec![std::path::absolute(directory).unwrap_or_else(|_| directory.into())];
-    if let Ok(real) = std::fs::canonicalize(directory) {
-        starts.push(real);
+    let mut starts = Vec::new();
+    for directory in directories {
+        starts.push(std::path::absolute(directory).unwrap_or_else(|_| directory.into()));
+        if let Ok(real) = std::fs::canonicalize(directory) {
+            starts.push(real);
+        }
     }
     for start in &starts {
         for ancestor in start.ancestors() {

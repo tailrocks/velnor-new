@@ -4123,14 +4123,16 @@ dependencies = [
 
 [[package]]
 name = "velnor-ci"
-version = "0.1.110"
+version = "0.1.111"
 dependencies = [
+ "base64 0.23.1",
  "blake3",
  "clap",
  "flate2",
  "libc",
  "nix",
  "ring",
+ "rustls-pki-types",
  "serde",
  "serde_json",
  "sha2",
@@ -4143,12 +4145,13 @@ dependencies = [
  "velnor-render",
  "velnor-rust",
  "velnor-test-support",
+ "zeroize",
  "zip",
 ]
 
 [[package]]
 name = "velnor-gen"
-version = "0.1.110"
+version = "0.1.111"
 dependencies = [
  "clap",
  "serde-saphyr",
