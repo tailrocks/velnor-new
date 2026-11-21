@@ -38,6 +38,8 @@ const TOKEN_PREFIXES: &[&str] = &[
 const TOKEN_HEX_LEN: usize = 40;
 const TOKEN_BODY_LEN: usize = 20;
 const MAX_UNESCAPE_PASSES: usize = 4;
+const AUTHORIZATION: &str = "authorization";
+const BASIC: &str = "basic";
 
 pub(super) fn is_plain(text: &str) -> bool {
     if has_token_prefix(&text.to_ascii_lowercase()) {
@@ -99,16 +101,120 @@ fn plain_entry(section: &str, entry: &str) -> bool {
 }
 
 pub(super) fn names_credential(text: &str) -> bool {
-    let text = text.to_ascii_lowercase();
-    has_token_prefix(&text)
-        || text
+    variants(text).is_none_or(|variants| variants.iter().any(|text| names_in(text, false)))
+}
+
+pub(super) fn names_hook_credential(text: &str) -> bool {
+    variants(text).is_none_or(|variants| variants.iter().any(|text| names_in(text, true)))
+}
+
+fn names_in(text: &str, hook: bool) -> bool {
+    let lower = text.to_ascii_lowercase();
+    has_token_prefix(&lower)
+        || names_basic_authorization(text)
+        || (hook && looks_like_token(&lower))
+        || lower
             .split(|each: char| each.is_whitespace() || matches!(each, '\'' | '"' | '<' | '>'))
             .flat_map(embedded_urls)
             .any(|url| !plain_remote(url))
 }
 
-pub(super) fn names_hook_credential(text: &str) -> bool {
-    names_credential(text) || looks_like_token(&text.to_ascii_lowercase())
+fn variants(text: &str) -> Option<[String; 6]> {
+    let decoded = unescaped(text)?;
+    let form = unescaped(&text.replace('+', " "))?;
+    Some([
+        joined(text),
+        joined(&decoded),
+        joined(&form),
+        text.to_owned(),
+        decoded,
+        form,
+    ])
+}
+
+fn joined(text: &str) -> String {
+    without_expansions(
+        &text
+            .replace("\\\r\n", "")
+            .replace("\\\n", "")
+            .replace("$'", "")
+            .replace("$\"", ""),
+    )
+    .replace(['\\', '\'', '"'], "")
+}
+
+fn without_expansions(text: &str) -> String {
+    let mut kept = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(at) = rest.find('$') {
+        kept.push_str(&rest[..at]);
+        let after = &rest[at + 1..];
+        let consumed = match after.strip_prefix('{') {
+            Some(braced) => closing_brace(braced).map_or(after.len(), |close| close + 2),
+            None => after
+                .bytes()
+                .take_while(|each| each.is_ascii_alphanumeric() || *each == b'_')
+                .count(),
+        };
+        rest = &after[consumed..];
+    }
+    kept.push_str(rest);
+    kept
+}
+
+fn closing_brace(text: &str) -> Option<usize> {
+    let mut depth = 0_usize;
+    for (index, each) in text.bytes().enumerate() {
+        match each {
+            b'{' => depth += 1,
+            b'}' if depth == 0 => return Some(index),
+            b'}' => depth -= 1,
+            _ => {}
+        }
+    }
+    None
+}
+
+fn names_basic_authorization(text: &str) -> bool {
+    text.to_ascii_lowercase()
+        .match_indices(AUTHORIZATION)
+        .any(|(at, _)| {
+            let rest = text[at + AUTHORIZATION.len()..].trim_start_matches(|each: char| {
+                each.is_whitespace() || matches!(each, ':' | '=' | '\'' | '"')
+            });
+            rest.get(..BASIC.len())
+                .is_some_and(|word| word.eq_ignore_ascii_case(BASIC))
+                && basic_payload_credential(
+                    rest[BASIC.len()..]
+                        .trim_start_matches(|each: char| each.is_whitespace() || each == '\''),
+                )
+        })
+}
+
+fn basic_payload_credential(payload: &str) -> bool {
+    let mut bits = 0_u32;
+    let mut filled = 0_u32;
+    let mut decoded = Vec::new();
+    for each in payload.bytes() {
+        let value = match each {
+            b'A'..=b'Z' => each - b'A',
+            b'a'..=b'z' => each - b'a' + 26,
+            b'0'..=b'9' => each - b'0' + 52,
+            b'+' | b'-' => 62,
+            b'/' | b'_' => 63,
+            _ => break,
+        };
+        bits = (bits << 6) | u32::from(value);
+        filled += 6;
+        if filled >= 8 {
+            filled -= 8;
+            if let Ok(byte) = u8::try_from(bits >> filled) {
+                decoded.push(byte);
+            }
+            bits &= (1 << filled) - 1;
+        }
+    }
+    decoded.contains(&b':')
 }
 
 fn embedded_urls(word: &str) -> impl Iterator<Item = &str> {
@@ -156,7 +262,7 @@ fn unescaped(segment: &str) -> Option<String> {
         }
         current = decoded;
     }
-    None
+    (unescape_once(&current) == current).then_some(current)
 }
 
 fn unescape_once(text: &str) -> String {
