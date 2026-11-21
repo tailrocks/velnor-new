@@ -50,7 +50,7 @@ adopted native recipe or inherit the earlier PR run's validation.
 ## Immutable evidence and correction
 
 Durable private evidence lives under
-`~/.codex-chainargos2/private/ci-performance/generator-source-map/`.
+`~/.codex-example-org2/private/ci-performance/generator-source-map/`.
 Corrected immutable map:
 `source-map-24d2d53886ed5fa9497d16992915f26015f95b1ae74aae42a4b676e83c1d54d1.json`.
 Independent review: `independent-review-24d2d538.md`.

@@ -1,7 +1,7 @@
 # Product version preparation for v0.1.34
 
 This prepares the workspace and generated release graph for 0.1.34, which
-carries five fixes found while generating CI for the ChainArgos repositories
+carries five fixes found while generating CI for the example-org repositories
 on top of 0.1.33:
 
 - D2 (#268): the git-tag `rust-tag-release` publication job holds
