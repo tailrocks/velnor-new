@@ -71,23 +71,29 @@ fn any_gate(step: &Step, setup: Setup) -> Option<String> {
         .iter()
         .filter(|part| gates.iter().all(|parts| parts.contains(part)))
         .collect();
-    let alternatives: Vec<String> = gates
+    let owns: Vec<Vec<&String>> = gates
         .iter()
-        .map(|parts| {
-            let own: Vec<&String> = parts.iter().filter(|part| !shared.contains(part)).collect();
-            match own.as_slice() {
-                [only] => (*only).clone(),
-                _ => format!(
-                    "({})",
-                    own.iter()
-                        .map(|part| part.as_str())
-                        .collect::<Vec<_>>()
-                        .join(" && ")
-                ),
-            }
-        })
+        .map(|parts| parts.iter().filter(|part| !shared.contains(part)).collect())
         .collect();
     let mut terms: Vec<String> = shared.into_iter().cloned().collect();
+    // An alternative with no parts of its own holds as soon as the shared terms do, so the OR is
+    // redundant and the shared terms alone decide the gate.
+    if owns.iter().any(Vec::is_empty) {
+        return (!terms.is_empty()).then(|| terms.join(" && "));
+    }
+    let alternatives: Vec<String> = owns
+        .iter()
+        .map(|own| match own.as_slice() {
+            [only] => (*only).clone(),
+            _ => format!(
+                "({})",
+                own.iter()
+                    .map(|part| part.as_str())
+                    .collect::<Vec<_>>()
+                    .join(" && ")
+            ),
+        })
+        .collect();
     terms.push(format!("({})", alternatives.join(" || ")));
     Some(terms.join(" && "))
 }

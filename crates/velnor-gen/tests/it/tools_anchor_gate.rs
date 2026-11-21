@@ -90,3 +90,23 @@ fn the_anchor_lookup_is_skipped_when_the_plan_selects_nothing() -> TestResult {
     }
     Ok(())
 }
+
+#[test]
+fn no_gate_renders_an_empty_alternative_when_a_group_shares_the_selected_gate() -> TestResult {
+    let config = "[[test_groups]]\nname = 'slow'\nroot = 'tools'\nfilter = 'all()'\npaths = ['tools/slow/**']\nevents = ['push']\n";
+    let yaml = render(&["tools/Cargo.toml"], config)?;
+    let jobs = yaml["jobs"].as_object().ok_or("jobs missing")?;
+    for (id, job) in jobs {
+        for step in steps(job) {
+            let text = condition(&step);
+            let empty_group = text.match_indices("()").any(|(at, _)| {
+                !text[..at]
+                    .chars()
+                    .last()
+                    .is_some_and(|c| c.is_ascii_alphanumeric() || c == '_')
+            });
+            assert!(!empty_group, "{id}: {text}");
+        }
+    }
+    Ok(())
+}
