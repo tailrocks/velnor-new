@@ -45,11 +45,17 @@ fn job_sizes(file: &str) -> Vec<(usize, &str)> {
                 sizes.push((pending + line.len(), id));
                 pending = 0;
             }
-            None if job_comment || pending > 0 || sizes.is_empty() => pending += line.len(),
+            None if job_comment
+                || sizes.is_empty()
+                || (pending > 0 && !line.starts_with("   ")) =>
+            {
+                pending += line.len();
+            }
             None => {
                 if let Some((size, _)) = sizes.last_mut() {
-                    *size += line.len();
+                    *size += pending + line.len();
                 }
+                pending = 0;
             }
         }
     }
@@ -69,9 +75,25 @@ mod tests {
 
     #[test]
     fn every_byte_of_the_jobs_section_is_charged_to_a_job() {
-        let file = "on: push\njobs:\n\n  # first\n  a:\n    runs-on: x\n\n  # second\n  b:\n    runs-on: y\n  # end\n";
+        let file = "on: push\njobs:\n\n  # first\n  a:\n    runs-on: x\n\n  # second\n  b:\n    runs-on: y\n  # end\n# trailer\n";
         let total: usize = job_sizes(file).iter().map(|(size, _)| size).sum();
         assert_eq!(total, file.len() - header_len(file));
+    }
+
+    #[test]
+    fn a_deeper_line_after_a_job_comment_stays_with_the_previous_job() {
+        let file = "on: push\njobs:\n  a:\n    runs-on: x\n  # note\n    steps:\n      - run: x\n  b:\n    runs-on: y\n";
+        let sizes = job_sizes(file);
+        assert_eq!(
+            sizes,
+            vec![
+                (
+                    "  a:\n    runs-on: x\n  # note\n    steps:\n      - run: x\n".len(),
+                    "a"
+                ),
+                ("  b:\n    runs-on: y\n".len(), "b"),
+            ]
+        );
     }
 
     #[test]
