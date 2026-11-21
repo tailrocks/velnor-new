@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod activity;
+mod app_token;
 mod archive_witness;
 mod artifact_api;
 mod artifact_unzip;
@@ -233,6 +234,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Fetch(args) => fetch::fetch(&args),
         Command::FetchAssets(args) => release_assets::fetch_assets(&args),
         Command::PrivateTokenAllowed => private_check::run(),
+        Command::AppToken(args) => app_token::run(&args),
         Command::MbxStore => crate::mbx_store::setup(),
         Command::MbxSeed => crate::mbx_seed::setup(),
         Command::MisePin(args) => crate::mise_pin::run(&args.tool),
