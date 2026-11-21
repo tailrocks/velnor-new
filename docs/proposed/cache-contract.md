@@ -92,7 +92,7 @@ family spec (`workflow::cache_family`); a path change requires a schema bump (pi
 keys, writers and budgets are specified in [cache families](cache-families.md). The Plan `Compute cache keys` step
 computes `trust` (`trusted`: protected default-branch push; `pr`: same-repo PR; `none` otherwise) and `s256-<64 hex>`
 digests with coreutils `sha256sum`. The cache doctor rejects keys with `hashFiles`, job/workflow/run IDs, action
-SHAs, literal versions, or `ImageVersion`. Keys over 512 bytes fail generation (family bound) and the key step.
+SHAs, literal versions, or `ImageVersion`. Keys over 512 UTF-16 code units fail generation (family bound) and the key step; a non-BMP character counts as two units, as in the `actions/cache` `key.length` check.
 Restore prefixes omit `snapshot_id` only within the same compatibility ID and the `trusted` scope; a `pr` prefix is
 never restored. A commit SHA alone MUST NOT be a cache identity.
 

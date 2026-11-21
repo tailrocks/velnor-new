@@ -6,7 +6,7 @@ use std::io;
 use std::path::Path;
 use std::time::SystemTime;
 
-use super::handle::{self, Observed, Origin};
+use super::handle::{self, Climb, Observed, Origin};
 use super::{Entries, Kind, Scan};
 
 pub(super) struct Hooks<'a> {
@@ -80,7 +80,7 @@ fn reopen(scan: &Scan, directory: &Path, hooks: &Hooks<'_>) -> io::Result<Option
     let Some(walked) = scan.entries.get(directory) else {
         return Ok(None);
     };
-    let mut listing = match handle::open(&Origin::Path, directory) {
+    let mut listing = match handle::open(&Origin::Path, directory, &Climb::none()) {
         Ok(listing) => listing,
         Err(error) if handle::replaced(&error) => return Ok(None),
         Err(error) => return Err(error),
