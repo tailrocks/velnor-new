@@ -125,11 +125,11 @@ pub(super) const RUST_CI: &[KeyGate] = &[
     gate(RustCi, "nextest_harnesses", HELPER_MINIMUM),
     gate(RustCi, "non_inputs", HELPER_MINIMUM),
     gate(RustCi, "on_main", HELPER_MINIMUM),
-    // helper-gate: first in tools-v0.1.111 via 050fcb6e1
+    // helper-gate: first in tools-v0.1.111 via 050fcb6e15
     gate(RustCi, "policy", (0, 1, 111)),
-    // helper-gate: first in tools-v0.1.111 via 050fcb6e1
+    // helper-gate: first in tools-v0.1.111 via 050fcb6e15
     gate(RustCi, "policy.deny", (0, 1, 111)),
-    // helper-gate: first in tools-v0.1.111 via 050fcb6e1
+    // helper-gate: first in tools-v0.1.111 via 050fcb6e15
     gate(RustCi, "policy.deny_checks", (0, 1, 111)),
     // helper-gate: first in tools-v0.1.88 via e061b56eac
     gate(RustCi, "pr_ci", (0, 1, 88)),
