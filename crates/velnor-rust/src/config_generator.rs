@@ -8,8 +8,6 @@ use crate::error::{DetectError, Reason};
 
 const GENERATOR_PACKAGE: &str = "velnor-gen";
 
-/// The manifest of the one Cargo root whose workspace holds the `velnor-gen` package. A
-/// `from_source` check builds the generator with this manifest, so it works in any root.
 pub(crate) fn generator_root(rust_roots: &[RustRoot]) -> Result<RepoPath, Reason> {
     let holders: Vec<&RustRoot> = rust_roots
         .iter()

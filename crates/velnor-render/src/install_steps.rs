@@ -4,7 +4,6 @@
 use velnor_model::{HelperRelease, Platform, RepoPath};
 
 use crate::mise_digest::pinned_sha256;
-use crate::release_steps::shell_word;
 use crate::rules::{RenderedStep, SETUP_VELNOR_ACTION, Value};
 use crate::steps::{MISE, MISE_VERSION};
 
@@ -109,6 +108,13 @@ pub(crate) fn install_generator_step(release: &HelperRelease) -> RenderedStep {
     }
 }
 
+fn manifest_file(manifest: &RepoPath) -> &str {
+    manifest
+        .as_str()
+        .rsplit_once('/')
+        .map_or(manifest.as_str(), |(_, file)| file)
+}
+
 pub(crate) fn generator_check_step(source: Option<&RepoPath>) -> RenderedStep {
     let Some(manifest) = source else {
         return RenderedStep {
@@ -121,7 +127,7 @@ pub(crate) fn generator_check_step(source: Option<&RepoPath>) -> RenderedStep {
         name: "Check the generated workflow with velnor-gen built from the checkout".to_owned(),
         run: Some(format!(
             "cargo run --locked --manifest-path {} --target \"$VELNOR_GEN_TARGET\" --package velnor-gen -- check --verify-release",
-            shell_word(manifest.as_str())
+            manifest_file(manifest)
         )),
         env: vec![(
             "VELNOR_GEN_TARGET".to_owned(),

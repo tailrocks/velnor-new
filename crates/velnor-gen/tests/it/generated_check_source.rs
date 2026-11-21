@@ -2,13 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use serde_json::Value;
+use velnor_gen::GenerateError;
 use velnor_model::{PackageName, RepoPath, RepoView};
-use velnor_rust::LOCK_PATH;
+use velnor_rust::{CONFIG_PATH, DetectError, LOCK_PATH, Reason};
 
 use crate::facts::TestResult;
 use crate::generated_check::CHECK;
 use crate::lint_lane::{LINT, MISE, runs};
-use crate::lock_archive::archive_lock_at;
+use crate::lock_gen_binary::generator_lock_at;
 use crate::pipeline::{view, workflow};
 
 const FROM_SOURCE: &str = "[[lint]]\nkind = 'generated-check'\nfrom_source = true\n";
@@ -34,7 +35,7 @@ fn generators(
         .insert(RepoPath::new("mise.toml")?, MISE.as_bytes().to_vec());
     view.tracked_paths.insert(LOCK_PATH);
     view.files
-        .insert(LOCK_PATH, archive_lock_at(version)?.into_bytes());
+        .insert(LOCK_PATH, generator_lock_at(version)?.into_bytes());
     for root in generator_roots {
         let metadata = view
             .rust_metadata
@@ -45,6 +46,14 @@ fn generators(
         }
     }
     Ok(view)
+}
+
+fn refused(view: &RepoView) -> Result<GenerateError, Box<dyn std::error::Error>> {
+    let error = workflow(view).err().ok_or("the repository was accepted")?;
+    error
+        .downcast::<GenerateError>()
+        .map(|error| *error)
+        .map_err(|error| format!("not a GenerateError: {error}").into())
 }
 
 fn rendered(config: &str, version: &str) -> Result<String, Box<dyn std::error::Error>> {
@@ -127,10 +136,18 @@ fn from_source_false_renders_the_release_install_byte_for_byte() -> TestResult {
 
 #[test]
 fn a_helper_older_than_from_source_is_refused_with_the_gate_error() -> TestResult {
-    let error = workflow(&locked(&format!("{LINT}\n{FROM_SOURCE}"), "0.1.111")?).err();
-    let text = format!("{error:?}");
-    assert!(text.contains("ConfigKeyHelperTooOld"), "{text}");
-    assert!(text.contains("lint.from_source"), "{text}");
+    let error = refused(&locked(&format!("{LINT}\n{FROM_SOURCE}"), "0.1.111")?)?;
+    assert!(
+        matches!(
+            error,
+            GenerateError::ConfigKeyHelperTooOld {
+                key: "lint.from_source",
+                first: (0, 1, 112),
+                ..
+            }
+        ),
+        "{error}"
+    );
     assert!(workflow(&locked(&format!("{LINT}\n{FROM_SOURCE}"), FIRST)?).is_ok());
     Ok(())
 }
@@ -153,17 +170,23 @@ fn a_release_without_the_key_still_renders_the_plain_check_unchanged() -> TestRe
 
 #[test]
 fn from_source_is_refused_on_every_other_lint_kind() -> TestResult {
-    for kind in [
-        "kind = 'jactionlint'",
-        "kind = 'alint'\nconfig = '.alint.yml'",
-        "kind = 'mise-task'\ntask = 'check'",
+    for (name, kind) in [
+        ("jactionlint", "kind = 'jactionlint'"),
+        ("alint", "kind = 'alint'\nconfig = '.alint.yml'"),
+        ("mise-task", "kind = 'mise-task'\ntask = 'check'"),
     ] {
         let config = format!("[[lint]]\n{kind}\nfrom_source = true\n");
-        let error = workflow(&locked(&config, FIRST)?).err();
-        let text = format!("{error:?}");
-        assert!(text.contains("LintKeyForeign"), "{kind}: {text}");
-        assert!(text.contains("from_source"), "{kind}: {text}");
-        assert!(!text.contains("HelperTooOld"), "{kind}: {text}");
+        let error = refused(&locked(&config, FIRST)?)?;
+        assert!(
+            matches!(
+                &error,
+                GenerateError::Detect(DetectError::Invalid {
+                    reason: Reason::LintKeyForeign { kind, key: "from_source" },
+                    ..
+                }) if kind == name
+            ),
+            "{name}: {error}"
+        );
     }
     Ok(())
 }
@@ -217,14 +240,50 @@ fn from_source_builds_the_generator_from_the_root_that_holds_its_package() -> Te
     assert_eq!(
         runs(&job).last().map(String::as_str),
         Some(
-            "cargo run --locked --manifest-path tools/gen/Cargo.toml --target \"$VELNOR_GEN_TARGET\" --package velnor-gen -- check --verify-release"
+            "cargo run --locked --manifest-path Cargo.toml --target \"$VELNOR_GEN_TARGET\" --package velnor-gen -- check --verify-release"
         )
     );
     Ok(())
 }
 
 #[test]
-fn from_source_quotes_a_nested_manifest_path_with_spaces_and_a_quote() -> TestResult {
+fn from_source_runs_cargo_in_the_nested_root_so_its_cargo_config_applies() -> TestResult {
+    let mut view = generators(
+        &format!("{LINT}\n{FROM_SOURCE}"),
+        FIRST,
+        &["Cargo.toml", NESTED],
+        &[NESTED],
+    )?;
+    view.files.insert(
+        RepoPath::new("tools/gen/.cargo/config.toml")?,
+        b"[build]\nrustflags = ['--cfg', 'nested']\n".to_vec(),
+    );
+    let job = job(&workflow(&view)?)?;
+    let check = job["steps"]
+        .as_array()
+        .and_then(|steps| steps.last())
+        .ok_or("no steps")?;
+    assert_eq!(check["working-directory"], "tools/gen", "{check}");
+    assert_eq!(
+        check["run"],
+        "cargo run --locked --manifest-path Cargo.toml --target \"$VELNOR_GEN_TARGET\" --package velnor-gen -- check --verify-release"
+    );
+    Ok(())
+}
+
+#[test]
+fn from_source_in_the_repository_root_sets_no_working_directory() -> TestResult {
+    let job = job(&rendered(&format!("{LINT}\n{FROM_SOURCE}"), FIRST)?)?;
+    let check = job["steps"]
+        .as_array()
+        .and_then(|steps| steps.last())
+        .ok_or("no steps")?;
+    assert!(check["working-directory"].is_null(), "{check}");
+    Ok(())
+}
+
+#[test]
+fn from_source_runs_in_a_nested_directory_with_spaces_and_a_quote() -> TestResult {
     let nested = "tools/gen dir/it's/Cargo.toml";
     let view = generators(
         &format!("{LINT}\n{FROM_SOURCE}"),
@@ -233,12 +292,12 @@ fn from_source_quotes_a_nested_manifest_path_with_spaces_and_a_quote() -> TestRe
         &[nested],
     )?;
     let job = job(&workflow(&view)?)?;
-    assert_eq!(
-        runs(&job).last().map(String::as_str),
-        Some(
-            "cargo run --locked --manifest-path 'tools/gen dir/it'\\''s/Cargo.toml' --target \"$VELNOR_GEN_TARGET\" --package velnor-gen -- check --verify-release"
-        )
-    );
+    let check = job["steps"]
+        .as_array()
+        .and_then(|steps| steps.last())
+        .ok_or("no steps")?;
+    assert_eq!(check["working-directory"], "tools/gen dir/it's", "{check}");
+    assert_eq!(check["run"], CHECK_FROM_SOURCE);
     Ok(())
 }
 
@@ -250,10 +309,17 @@ fn from_source_refuses_a_repository_without_a_velnor_gen_package() -> TestResult
         &["Cargo.toml"],
         &[],
     )?;
-    let error = workflow(&view).err();
-    let text = format!("{error:?}");
-    assert!(text.contains("GeneratorPackage"), "{text}");
-    assert!(text.contains("found: 0"), "{text}");
+    let error = refused(&view)?;
+    assert!(
+        matches!(
+            &error,
+            GenerateError::Detect(DetectError::Invalid {
+                path,
+                reason: Reason::GeneratorPackage { found: 0 },
+            }) if *path == CONFIG_PATH
+        ),
+        "{error}"
+    );
     Ok(())
 }
 
@@ -265,9 +331,16 @@ fn from_source_refuses_two_roots_that_both_hold_a_velnor_gen_package() -> TestRe
         &["Cargo.toml", NESTED],
         &["Cargo.toml", NESTED],
     )?;
-    let error = workflow(&view).err();
-    let text = format!("{error:?}");
-    assert!(text.contains("GeneratorPackage"), "{text}");
-    assert!(text.contains("found: 2"), "{text}");
+    let error = refused(&view)?;
+    assert!(
+        matches!(
+            &error,
+            GenerateError::Detect(DetectError::Invalid {
+                path,
+                reason: Reason::GeneratorPackage { found: 2 },
+            }) if *path == CONFIG_PATH
+        ),
+        "{error}"
+    );
     Ok(())
 }
