@@ -26,6 +26,16 @@ fn a_ref_named_hooks_is_not_the_hook_tree_and_is_saved() {
             ".cargo/registry/index/index.crates.io-1/.git/refs/heads/hooks/main",
             SHA,
         ),
+        (
+            "ref-named-hooks-in-a-submodule-git-directory",
+            ".cargo/git/db/shared-1/modules/vendor/refs/heads/hooks/main",
+            SHA,
+        ),
+        (
+            "remote-ref-named-hooks-in-a-nested-submodule-git-directory",
+            ".cargo/git/db/shared-1/modules/vendor/modules/deep/refs/remotes/origin/hooks/main",
+            SHA,
+        ),
     ]);
 }
 
@@ -101,6 +111,16 @@ fn a_token_split_by_the_shell_in_a_hook_stops_the_sources_save() {
             "echo ghp_0123456789'abcdefghijklmnopqrstuvwxyzAB'\n",
         ),
         (
+            "dollar-single-quote-concatenation",
+            HOOK,
+            "echo ghp_0123456789$'abcdefghijklmnopqrstuvwxyzAB'\n",
+        ),
+        (
+            "dollar-double-quote-concatenation",
+            HOOK,
+            "echo ghp_0123456789$\"abcdefghijklmnopqrstuvwxyzAB\"\n",
+        ),
+        (
             "empty-quotes-inside-the-prefix",
             HOOK,
             "echo gh\"\"p_0123456789abcdefghijklmnopqrstuvwxyzAB\n",
@@ -147,6 +167,16 @@ fn a_basic_authorization_header_in_a_hook_or_fetch_head_stops_the_sources_save()
             FETCH_HEAD,
             &format!("{SHA}\t\tbranch 'main' Authorization: Basic {basic}\n"),
         ),
+        (
+            "hook-short-basic-header",
+            HOOK,
+            "curl -H 'Authorization: Basic dXNlcjpwYXNz' https://example.org\n",
+        ),
+        (
+            "fetch-head-short-basic-header",
+            FETCH_HEAD,
+            &format!("{SHA}\t\tbranch 'main' Authorization: Basic dXNlcjpwYXNz\n"),
+        ),
     ]);
 }
 
@@ -173,5 +203,11 @@ fn prose_about_a_basic_authorization_header_is_saved() {
             HOOK,
             "# an authorization header like Bearer is configured elsewhere\n",
         ),
+        (
+            "basic-auth-prose",
+            HOOK,
+            "# Authorization: Basic authentication is required\n",
+        ),
+        ("benign-four-times-encoded-space", FETCH_HEAD, "%25252520\n"),
     ]);
 }
