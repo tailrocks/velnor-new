@@ -1,0 +1,6 @@
+diff --git a/crates/velnor-gen/src/policy.rs b/crates/velnor-gen/src/policy.rs
+--- a/crates/velnor-gen/src/policy.rs
++++ b/crates/velnor-gen/src/policy.rs
+@@ -1,1 +1,2 @@
++// example (0, 1, 999); helper-gate: first in tools-v0.1.110 via not-a-commit
+     gate(RustCi, "budget", (0, 1, 110)),

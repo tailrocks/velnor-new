@@ -42,10 +42,11 @@ fi
 if [ -z "$diff_file" ]; then
   diff_file=$(mktemp)
   trap 'rm -f "$diff_file" "$tree_file"' EXIT
-  moved_from=$(git diff -M --name-status "$base...HEAD" | awk -F'\t' -v dirs="$gate_dirs" '
+  moved_from=()
+  while IFS= read -r old; do moved_from+=("$old"); done < <(git diff -M --name-status "$base...HEAD" | awk -F'\t' -v dirs="$gate_dirs" '
     BEGIN { n = split(dirs, d, " ") }
     $1 ~ /^R/ { for (i = 1; i <= n; i++) if (index($3, d[i] "/") == 1) { print $2; break } }')
-  git diff -M -U100000000 "$base...HEAD" -- $gate_dirs $moved_from >"$diff_file"
+  git diff -M -U100000000 "$base...HEAD" -- $gate_dirs ${moved_from[@]+"${moved_from[@]}"} >"$diff_file"
   tree_file=$(mktemp)
   if [ "$scan_tree" = 1 ]; then
     git ls-files -- $(printf '%s/src ' $gate_dirs) | while IFS= read -r f; do
@@ -168,7 +169,7 @@ scan() {
       t = m
       gsub(/[()[:space:]]/, "", t)
       split(t, e, ",")
-      if (intval(e[1]) != 0 || intval(e[2]) != 1 || (st > 1 && isword(substr(line, st - 1, 1)))) continue
+      if (intval(e[1]) != 0 || intval(e[2]) != 1 || is_call(line, st)) continue
       rest = s
       if (rest !~ /\)/) continue
       if (!match(rest, "^" ws num ws ",?" ws "\\)")) return 1
@@ -194,6 +195,14 @@ scan() {
     return n
   }
   function isword(ch) { return ch ~ /^[A-Za-z0-9_]$/ }
+  function is_call(line, st,    j, w) {
+    j = st - 1
+    while (j > 0 && substr(line, j, 1) ~ /[[:space:]]/) j--
+    if (j < 1 || !isword(substr(line, j, 1))) return 0
+    w = ""
+    while (j > 0 && isword(substr(line, j, 1))) { w = substr(line, j, 1) w; j-- }
+    return (w !~ /^(return|in|else|break|yield|if|match|let|mut|const|static|where)$/)
+  }
   function lex_addr(a, b) { nr++; rs[nr] = a; re[nr] = b }
   function inrange(p,    k) {
     for (k = 1; k <= nr; k++) if (rs[k] <= p && p < re[k]) return 1
@@ -208,7 +217,7 @@ scan() {
     off = 0; s = line
     while (match(s, tup)) {
       st = off + RSTART
-      if (!inrange(st) && !inlit(st) && (st < 2 || !isword(substr(line, st - 1, 1))) && tupver(substr(s, RSTART, RLENGTH)) != "") return 1
+      if (!inrange(st) && !inlit(st) && !is_call(line, st) && tupver(substr(s, RSTART, RLENGTH)) != "") return 1
       off = st + RLENGTH - 1
       s = substr(line, off + 1)
     }
@@ -304,25 +313,26 @@ scan() {
     sub(/helper-gate: first in (tools|rust-ci)-v0\.1\.[0-9]+ via [^ ]+/, "", s)
     return s
   }
-  /^diff --git / { file = $4; sub(/^b\//, "", file); counted = (file ~ /^crates\/velnor-(gen|render|rust)\/src\//); prevnew = ""; prevadded = 0; prevdecl = 0; lx_mode = "code"; p_mv = 0; c_mv = 0; inhdr = 1; next }
-  /^@@/ { inhdr = 0; prevnew = ""; prevadded = 0; prevdecl = 0; p_mv = 0; c_mv = 0; next }
+  /^diff --git / { file = $4; sub(/^b\//, "", file); counted = (file ~ /^crates\/velnor-(gen|render|rust)\/src\//); prevmask = ""; prevadded = 0; prevdecl = 0; lx_mode = "code"; p_mv = 0; c_mv = 0; inhdr = 1; next }
+  /^@@/ { inhdr = 0; prevmask = ""; prevadded = 0; prevdecl = 0; p_mv = 0; c_mv = 0; next }
   inhdr && /^(\+\+\+|---) / { next }
   /^-/ { if (counted) removed[file SUBSEP substr($0, 2)] = 1; next }
   /^[ +]/ {
     text = substr($0, 2)
-    above = prevnew
+    abovemask = prevmask
     wasdecl = prevdecl
     aboveadded = prevadded
     p_mv = c_mv; p_mn = c_mn; p_mc = c_mc
     analyze(text)
-    scanned_now = strip(mask_code(text))
+    m_now = mask_code(text)
+    scanned_now = strip(m_now)
     split_min = ((" " scanned_now) ~ /[^A-Za-z0-9_]HELPER_MINIMUM[[:space:]]*:[^;]*=[[:space:]]*$/)
     if (split_min && !c_mv && p_mv) { c_mv = 1; c_mn = p_mn; c_mc = p_mc }
-    prevnew = text
+    prevmask = m_now
     prevdecl = split_min
     prevadded = ($0 ~ /^\+/)
     if (!prevadded) {
-      if (!counted || !aboveadded || !p_mv || versions(strip(above), av) > 0) next
+      if (!counted || !aboveadded || !p_mv || versions(abovemask, av) > 0) next
       added[++count] = file SUBSEP strip(text)
       scan_of[count] = scanned_now
       markN[count] = p_mn
@@ -336,7 +346,7 @@ scan() {
     if (file ~ /^crates\/velnor-gen\/src\/key_gates\// && tuple_bad(mask_code(text))) { printf "SHAPE\t%s\t%s\n", file, text; next }
     stripped = strip(text)
     has = c_mv || p_mv
-    if (!tree && (((" " mask_code(text)) ~ /[^A-Za-z0-9_]HELPER_MINIMUM[[:space:]]*:/) || (wasdecl && mask_code(text) ~ ("^" ws tup ws ";" ws "$"))) && (!has || (versions(scanned_now, probe) == 0 && !split_min))) { printf "PIN\t%s\t%s\n", file, text; next }
+    if (!tree && (((" " mask_code(text)) ~ /[^A-Za-z0-9_]HELPER_MINIMUM[[:space:]]*:[^;]*=/) || (wasdecl && mask_code(text) ~ ("^" ws tup ws ";" ws "$"))) && (!has || (versions(scanned_now, probe) == 0 && !split_min))) { printf "PIN\t%s\t%s\n", file, text; next }
     markN_now = c_mv ? c_mn : (p_mv ? p_mn : "")
     markC_now = c_mv ? c_mc : (p_mv ? p_mc : "")
     if (has && versions(scanned_now, probe) == 0) next

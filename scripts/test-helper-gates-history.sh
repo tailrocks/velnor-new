@@ -78,3 +78,13 @@ if bash "$checker" "$moved_base"; then
   echo "the check accepted a new unmarked released gate in a moved file" >&2
   exit 1
 fi
+
+git checkout -q -b move-spaced-path "$marker"
+mkdir -p "generator/old dir"
+echo '    gate(RustCi, "budget", (0, 1, 110)),' >"generator/old dir/gates.rs"
+git add "generator/old dir/gates.rs"
+git commit -qm "a released gate under a path with a space"
+spaced_base=$(git rev-parse HEAD)
+git mv "generator/old dir/gates.rs" crates/velnor-gen/src/gates.rs
+git commit -qm "move the spaced file into the gate crates unchanged"
+bash "$checker" "$spaced_base"

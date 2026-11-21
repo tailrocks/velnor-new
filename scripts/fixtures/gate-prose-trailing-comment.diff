@@ -1,0 +1,5 @@
+diff --git a/crates/velnor-gen/src/release_note.rs b/crates/velnor-gen/src/release_note.rs
+--- a/crates/velnor-gen/src/release_note.rs
++++ b/crates/velnor-gen/src/release_note.rs
+@@ -1,0 +1,1 @@
++const RELEASE_NOTE_VERSION: u64 = 1; // first released in tools-v0.1.110
