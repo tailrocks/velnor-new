@@ -296,8 +296,15 @@ pub fn explain(
     for path in unknown {
         let shown = escape(path.as_str(), false);
         if path.as_str().contains(['*', '?', '[', ']']) {
+            let advice = if path.as_str().contains('/') {
+                format!(
+                    "use a glob of a folder above it that ends in /** in non_inputs or inputs in {CONFIG_PATH}"
+                )
+            } else {
+                "rename the file so its name has none of them".to_owned()
+            };
             lines.push(format!(
-                "unknown path: {shown}\n  no exact rule can name a path with a *, ?, [ or ]; use a glob of a folder above it that ends in /** in non_inputs or inputs in {CONFIG_PATH}\n"
+                "unknown path: {shown}\n  no exact rule can name a path with a *, ?, [ or ]; {advice}\n"
             ));
             continue;
         }

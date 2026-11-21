@@ -185,6 +185,26 @@ fn an_unknown_path_with_a_question_mark_or_a_bracket_gets_no_config_line_that_wo
 }
 
 #[test]
+fn an_unknown_root_level_path_with_a_glob_character_gets_no_folder_glob_advice() {
+    let selections = BTreeMap::from([(
+        path("Cargo.toml"),
+        RustSelection::All(AllTrigger::CargoConfig(path(".cargo/config.toml"))),
+    )]);
+    for name in ["build?.sh", "build*.sh", "b[u]ild.sh"] {
+        let text = explain(
+            &selections,
+            &Steps::new(),
+            &BTreeSet::from([path(name)]),
+            &BTreeMap::new(),
+        );
+        assert!(text.contains(&format!("unknown path: {name}\n")), "{text}");
+        assert!(!text.contains("/**"), "{text}");
+        assert!(!text.contains("glob = "), "{text}");
+        assert!(text.contains("rename"), "{text}");
+    }
+}
+
+#[test]
 fn a_package_name_cargo_would_not_accept_selects_the_whole_workspace_in_the_package_arguments() {
     for bad in [
         "a;b",
