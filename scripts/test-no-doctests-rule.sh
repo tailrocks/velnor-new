@@ -20,7 +20,7 @@ fails=0
 check() {
   local name="$1" expect="$2" dir="$work/$1"
   mkdir -p "$dir/crates/fx/src" "$dir/scripts"
-  cp "$repo/scripts/no-doctests.py" "$dir/scripts/"
+  cp -R "$repo/scripts/no-doctests.py" "$repo/scripts/no_doctests" "$dir/scripts/"
   printf '%b' "$3" > "$dir/crates/fx/src/lib.rs"
   if "$alint_bin" check -c "$rule" "$dir" >/dev/null 2>&1; then got=pass; else got=fail; fi
   if [ "$got" != "$expect" ]; then
@@ -229,7 +229,7 @@ check doc_concat_glued_fence fail '#[doc = concat!("a\\n``", "`\\ncompile_error!
 
 long="$work/footnote_long"
 mkdir -p "$long/scripts" "$long/crates/fx/src"
-cp "$repo/scripts/no-doctests.py" "$long/scripts/"
+cp -R "$repo/scripts/no-doctests.py" "$repo/scripts/no_doctests" "$long/scripts/"
 python3 -c 'import sys; sys.stdout.write("/// [^" + "a" * 120000 + "\npub fn f() {}\n")' > "$long/crates/fx/src/lib.rs"
 if (ulimit -t 5; python3 -I "$long/scripts/no-doctests.py" "$long/crates/fx/src/lib.rs") >/dev/null 2>&1; then
   echo "ok   footnote_label_linear (pass within 5 s of CPU)"
@@ -249,9 +249,21 @@ else
   echo "ok   scanner_missing (fail)"
 fi
 
+no_package="$work/package_missing"
+mkdir -p "$no_package/crates/fx/src" "$no_package/scripts"
+cp "$repo/scripts/no-doctests.py" "$no_package/scripts/"
+printf '%b' '/** ```\n * f();\n * ```\n */\nfn f() {}\n' > "$no_package/crates/fx/src/lib.rs"
+if "$alint_bin" check -c "$rule" "$no_package" >/dev/null 2>&1; then got=pass; else got=fail; fi
+if [ "$got" != fail ]; then
+  echo "FAIL package_missing: expected fail, got $got"
+  fails=$((fails + 1))
+else
+  echo "ok   package_missing (fail)"
+fi
+
 bad_utf8="$work/not_utf8"
 mkdir -p "$bad_utf8/scripts"
-cp "$repo/scripts/no-doctests.py" "$bad_utf8/scripts/"
+cp -R "$repo/scripts/no-doctests.py" "$repo/scripts/no_doctests" "$bad_utf8/scripts/"
 printf 'fn f() { let s = "caf\xe9"; }\n' > "$bad_utf8/bad.rs"
 out="$(python3 -I "$bad_utf8/scripts/no-doctests.py" "$bad_utf8/bad.rs" 2>&1)" && utf_rc=0 || utf_rc=$?
 if [ "$utf_rc" -eq 1 ] && printf '%s' "$out" | grep -q 'not valid UTF-8' && ! printf '%s' "$out" | grep -q Traceback; then
