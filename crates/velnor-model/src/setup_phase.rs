@@ -15,3 +15,12 @@ pub enum SetupPhase {
     Test,
     Build,
 }
+
+/// Where a step sits against the `[[test_setup]]` steps of its job.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SetupOrder {
+    /// Not gated by the setup steps.
+    Unordered,
+    /// Skipped when a setup step before it failed or was cancelled.
+    AfterSetup,
+}

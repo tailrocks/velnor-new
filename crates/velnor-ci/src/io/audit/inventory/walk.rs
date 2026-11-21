@@ -91,7 +91,7 @@ pub(super) fn scan_with(
 ) -> io::Result<Scan> {
     let root = fs::canonicalize(root)?;
     let mut entries = Entries::new();
-    let mut identities: BTreeMap<PathBuf, handle::Stamp> = BTreeMap::new();
+    let mut identities = BTreeMap::new();
     let mut pending = vec![Pending {
         path: root.clone(),
         origin: Origin::Path,
