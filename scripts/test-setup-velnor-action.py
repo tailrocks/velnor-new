@@ -206,6 +206,24 @@ esac
 exec "$REAL_MV" "$@"
 """
 
+MV_COMPAT = """#!/bin/sh
+if [ "$1" = -f ] && [ "$2" = -T ]; then
+  shift 2
+  if [ -d "$2" ]; then echo "mv: cannot overwrite directory $2 with a non-directory" >&2; exit 1; fi
+  exec "{real}" -f "$1" "$2"
+fi
+exec "{real}" "$@"
+"""
+
+STUB_PLANTING_PUBLISH_MV = """#!/bin/sh
+for arg; do last="$arg"; done
+if [ "$last" = "$STUB_ENTRY" ] && [ ! -e "$STUB_RACE_MARK" ]; then
+  : > "$STUB_RACE_MARK"
+  mkdir -p "$STUB_ENTRY"
+fi
+exec "$REAL_MV" "$@"
+"""
+
 WATCHED_TOOLS = (
     "cat", "head", "tail", "dd", "cp", "od", "xxd", "hexdump", "sha256sum", "shasum", "tar", "gzip", "zcat",
     "wc", "awk", "sed", "grep", "base64", "strings", "openssl", "find", "mv", "rm",
@@ -293,6 +311,11 @@ class SetupVelnorInstallTests(unittest.TestCase):
             stub = self.stub_bin / name
             stub.write_text(body)
             stub.chmod(0o755)
+        self.mv_compat = self.root / "mv-compat"
+        self.mv_compat.write_text(MV_COMPAT.replace("{real}", shutil.which("mv")))
+        self.mv_compat.chmod(0o755)
+        (self.stub_bin / "mv").write_text(self.mv_compat.read_text())
+        (self.stub_bin / "mv").chmod(0o755)
 
     def path_with(self, digest_tool):
         if shutil.which(digest_tool) is None:
@@ -300,7 +323,7 @@ class SetupVelnorInstallTests(unittest.TestCase):
         bin_dir = self.root / f"path-{digest_tool}"
         bin_dir.mkdir()
         for name in (*SCRIPT_TOOLS, digest_tool):
-            (bin_dir / name).symlink_to(shutil.which(name))
+            (bin_dir / name).symlink_to(self.mv_compat if name == "mv" else shutil.which(name))
         (bin_dir / "curl").symlink_to(self.stub_bin / "curl")
         (bin_dir / "tar").symlink_to(self.stub_bin / "tar")
         return str(bin_dir)
@@ -750,7 +773,7 @@ class SetupVelnorInstallTests(unittest.TestCase):
             handle.truncate(268435457)
         read_log = self.root / "store-entry-calls.log"
         for name in WATCHED_TOOLS:
-            real = shutil.which(name)
+            real = str(self.mv_compat) if name == "mv" else shutil.which(name)
             if real is None:
                 continue
             stub = self.stub_bin / name
@@ -781,7 +804,7 @@ class SetupVelnorInstallTests(unittest.TestCase):
         extra_env = {
             "STUB_RACE": str(self.payload),
             "STUB_RACE_MARK": str(self.root / "race-mark"),
-            "REAL_MV": shutil.which("mv"),
+            "REAL_MV": str(self.mv_compat),
             "STUB_MISSING": "tools-v0.1.79 rust-ci-v0.1.79",
         }
         first = self.install(sha256(self.archive), extra_env=extra_env)
@@ -807,7 +830,7 @@ class SetupVelnorInstallTests(unittest.TestCase):
             extra_env={
                 "STUB_RACE": str(self.payload),
                 "STUB_RACE_MARK": str(self.root / "race-mark"),
-                "REAL_MV": shutil.which("mv"),
+                "REAL_MV": str(self.mv_compat),
                 "STUB_MISSING": "tools-v0.1.79 rust-ci-v0.1.79",
             },
         )
@@ -839,7 +862,7 @@ class SetupVelnorInstallTests(unittest.TestCase):
             extra_env={
                 "STUB_RACE": str(self.payload),
                 "STUB_RACE_MARK": str(self.root / "race-mark"),
-                "REAL_MV": shutil.which("mv"),
+                "REAL_MV": str(self.mv_compat),
                 "STUB_MISSING": "tools-v0.1.79 rust-ci-v0.1.79",
             },
         )
@@ -872,7 +895,7 @@ class SetupVelnorInstallTests(unittest.TestCase):
             extra_env={
                 "STUB_RACE": str(self.payload),
                 "STUB_RACE_MARK": str(self.root / "race-mark"),
-                "REAL_MV": shutil.which("mv"),
+                "REAL_MV": str(self.mv_compat),
                 "STUB_MISSING": "tools-v0.1.79 rust-ci-v0.1.79",
             },
         )
@@ -973,7 +996,7 @@ class SetupVelnorInstallTests(unittest.TestCase):
             extra_env={
                 "STUB_RACE": str(self.payload),
                 "STUB_RACE_MARK": str(self.root / "race-mark"),
-                "REAL_MV": shutil.which("mv"),
+                "REAL_MV": str(self.mv_compat),
                 "STUB_MISSING": "tools-v0.1.79 rust-ci-v0.1.79",
             },
         )
@@ -1041,7 +1064,7 @@ class SetupVelnorInstallTests(unittest.TestCase):
             extra_env={
                 "STUB_ORDER_LOG": str(order),
                 "STUB_SYNCED": str(synced),
-                "REAL_MV": shutil.which("mv"),
+                "REAL_MV": str(self.mv_compat),
             },
         )
         self.assertEqual(result.returncode, 0, result.output)
@@ -1067,7 +1090,7 @@ class SetupVelnorInstallTests(unittest.TestCase):
             extra_env={
                 "STUB_TARGET": str(target),
                 "STUB_RACE_MARK": str(self.root / "race-mark"),
-                "REAL_MV": shutil.which("mv"),
+                "REAL_MV": str(self.mv_compat),
             },
         )
         return result, target
@@ -1108,7 +1131,7 @@ class SetupVelnorInstallTests(unittest.TestCase):
         result = self.install(
             sha256(self.archive),
             extra_env={
-                "REAL_MV": shutil.which("mv"),
+                "REAL_MV": str(self.mv_compat),
                 "STUB_ENTRY": str(cached),
                 "STUB_RACE_MARK": str(self.root / "race-mark"),
                 "STUB_HEAD_MARK": str(self.root / "head-mark"),
@@ -1116,6 +1139,24 @@ class SetupVelnorInstallTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.output)
         self.assertIn("because the store entry path is taken", result.output)
+        self.assertEqual(self.installed_binary().read_bytes(), PAYLOAD)
+
+    def test_a_directory_planted_between_the_check_and_the_publish_rename_is_not_moved_into(self):
+        stub = self.stub_bin / "mv"
+        stub.write_text(STUB_PLANTING_PUBLISH_MV)
+        stub.chmod(0o755)
+        cached = self.cached_archive()
+        result = self.install(
+            sha256(self.archive),
+            extra_env={
+                "REAL_MV": str(self.mv_compat),
+                "STUB_ENTRY": str(cached),
+                "STUB_RACE_MARK": str(self.root / "race-mark"),
+            },
+        )
+        self.assertEqual(result.returncode, 0, result.output)
+        self.assertEqual(installed_files(cached), [], "the verified copy was moved inside the directory planted at the store entry path")
+        self.assertIn("could not publish velnor-ci 0.1.79 to the tool cache", result.output)
         self.assertEqual(self.installed_binary().read_bytes(), PAYLOAD)
 
 
