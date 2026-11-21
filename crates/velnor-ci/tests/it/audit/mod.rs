@@ -23,6 +23,7 @@ mod optional;
 mod partial;
 mod per_root;
 mod reads;
+mod script_dep_info;
 mod selection;
 mod separate_build;
 mod stale_run;
