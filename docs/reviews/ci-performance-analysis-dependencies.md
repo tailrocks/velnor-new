@@ -21,7 +21,7 @@ wheel builds or an independently verified build attestation.
 
 Raw responses and the downloaded wheel remain mode-0600 in an external
 mode-0700 private directory, recorded in `source-evidence.json`. Evidence root:
-`/Users/donbeave/.codex-chainargos2/private/ci-performance/analysis-dependencies/pyyaml-6.0.3`.
+`/Users/donbeave/.codex-example-org2/private/ci-performance/analysis-dependencies/pyyaml-6.0.3`.
 
 | Raw evidence | Source | SHA-256 |
 | --- | --- | --- |

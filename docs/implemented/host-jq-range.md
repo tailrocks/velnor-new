@@ -2,7 +2,7 @@
 
 Decision, adopted per the split brief; owner may revisit. Two defects made every
 generated verification job fail on GitHub-hosted `ubuntu-26.04` (found by
-`ChainArgos/infrastructure` running its Delorean policy test as a verification
+`example-org/example-repo-16` running its Delorean policy test as a verification
 task).
 
 ## 1. Host `jq`: accept the 1.8 line, not one patch
