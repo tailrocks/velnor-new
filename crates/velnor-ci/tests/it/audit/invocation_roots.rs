@@ -5,6 +5,8 @@ use crate::io::Repo;
 
 use super::{command, placed, unit};
 
+mod package_ids;
+
 const GROUP_LOCK: &str =
     include_str!("../../../../../generator/samples/helper-lock/view/.velnor/rust-ci.lock");
 
@@ -98,7 +100,7 @@ const MEMBER_PACKAGE_SPELLINGS: [&[&str]; 6] = [
     &["cargo", "build", "--package=b@0.1.0", "--no-such-flag"],
 ];
 
-const NON_MEMBER_PACKAGE_SPELLINGS: [&[&str]; 4] = [
+const NON_MEMBER_PACKAGE_SPELLINGS: [&[&str]; 6] = [
     &["cargo", "build", "-p", "no-such", "--no-such-flag"],
     &["cargo", "build", "--package=no-such", "--no-such-flag"],
     &["cargo", "build", "-pno-such", "--no-such-flag"],
@@ -106,6 +108,19 @@ const NON_MEMBER_PACKAGE_SPELLINGS: [&[&str]; 4] = [
         "cargo",
         "build",
         "--package=git+https://example.invalid/app#app@0.1.0",
+        "--no-such-flag",
+    ],
+    &[
+        "cargo",
+        "build",
+        "-p",
+        "registry+https://github.com/rust-lang/crates.io-index#b@0.1.0",
+        "--no-such-flag",
+    ],
+    &[
+        "cargo",
+        "build",
+        "--package=git+https://example.invalid/b#b:0.1.0",
         "--no-such-flag",
     ],
 ];

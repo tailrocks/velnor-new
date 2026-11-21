@@ -8,6 +8,8 @@ use serde::{Deserialize, Serialize};
 
 use velnor_model::RustRoot;
 
+use package_spec::package_name;
+
 use super::super::super::units::{MetadataInvocation, Workspace, refuse_arguments};
 use super::super::groups::root_workspace;
 use crate::error::CiError;
@@ -324,13 +326,6 @@ pub(super) fn root_directory(root: &RustRoot, repository: &Path) -> PathBuf {
     )
 }
 
-fn package_name(spec: &str) -> Option<&str> {
-    if spec.contains('#') {
-        return None;
-    }
-    spec.split('@').next()
-}
-
 fn chdir(globals: &[&str]) -> Option<PathBuf> {
     let mut directory = None;
     let mut index = 0;
@@ -387,6 +382,8 @@ fn subcommand(words: &[&str]) -> Option<usize> {
     }
     None
 }
+
+mod package_spec;
 
 #[cfg(test)]
 #[path = "invocation/label.rs"]
