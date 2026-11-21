@@ -45,7 +45,6 @@ struct Builder<'a> {
 type Identities = BTreeMap<PathBuf, (String, SystemTime)>;
 
 pub(crate) fn build(directory: &Path, args: &InputsBuildArgs) -> Result<String, CiError> {
-    let open_files = inventory::raise_open_file_limit();
     let checkout = read_checkout(directory).map_err(|e| CiError::new(e.to_string()))?;
     let facts = detect(&checkout.view).map_err(|e| CiError::new(e.to_string()))?;
     let standalone = standalone(&facts);
@@ -73,7 +72,7 @@ pub(crate) fn build(directory: &Path, args: &InputsBuildArgs) -> Result<String, 
         workspaces,
         directories,
         max_entries: max_entries_from_env()?,
-        open_files,
+        open_files: inventory::raise_open_file_limit(),
         roots,
         declared: BTreeSet::new(),
         location,
@@ -290,11 +289,7 @@ impl Builder<'_> {
         {
             build.env(TARGET_VARIABLE, target);
         }
-        let spawned = match self.open_files {
-            Some(limit) => limit.for_child(|| build.status()),
-            None => build.status(),
-        };
-        let status = spawned.map_err(|e| CiError::new(format!("cannot run build command: {e}")))?;
+        let status = inventory::run_build(self.open_files, &mut build)?;
         self.record(
             entries,
             complete,

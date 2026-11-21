@@ -7,7 +7,7 @@ mod handle;
 mod resolve;
 mod walk;
 
-pub(super) use descriptors::{OpenFileLimit, raise_open_file_limit};
+pub(super) use descriptors::{OpenFileLimit, raise_open_file_limit, run_build};
 pub(super) use evidence::{Evidence, State, state};
 pub(super) use walk::{Budget, scan, unresolved_link};
 
