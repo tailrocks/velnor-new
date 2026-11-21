@@ -217,9 +217,13 @@ fn facts_at(helper: &'static str, rust_roots: Vec<RustRoot>) -> RepoFacts {
     }
 }
 
+const JOB_WIDE: &str = "0.1.109";
+const JOB_WIDE_LATER: &str = "0.1.111";
+const PER_ROOT: &str = "0.1.112";
+
 #[test]
 fn the_setup_scope_follows_the_helper_pin_from_0_1_112() {
-    for (helper, kept) in [("0.1.109", true), ("0.1.111", true), ("0.1.112", false)] {
+    for (helper, kept) in [(JOB_WIDE, true), (JOB_WIDE_LATER, true), (PER_ROOT, false)] {
         let roots = vec![
             root("tools/a/Cargo.toml", &[]),
             root("tools/b/Cargo.toml", &[]),
