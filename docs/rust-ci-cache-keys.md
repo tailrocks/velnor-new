@@ -135,12 +135,15 @@ invocation in `ci-metrics.json` carries `restored_manifest` (`present`,
 `absent` or `unreadable`). A dependency compile whose restore status is
 unknown, because that record is absent or unreadable, is not waste. The check
 prints it as `::warning::` naming the manifest state, or as `::notice::` when
-the manifest is present but no unit matched. For every rebuilt unit, a
-`velnor-ci run` of `cargo check`, `clippy`, `build` or `doc` sets
-`CARGO_LOG` to `cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info`
-unless it is set to a non-empty value,
-and the report keeps cargo's `dirty:` reason as `dirty` on the compilation. The
-reason is appended to the waste and notice lines as `(cargo: <reason>)`.
+the manifest is present but no unit matched. Fingerprint tracing is opt-in:
+only when `VELNOR_CACHE_DEBUG` is `1` (generated workflows expose it through
+`cache_debug = true`, see `generator/CONFIG.md`), a `velnor-ci run` of
+`cargo check`, `clippy`, `build` or `doc` sets `CARGO_LOG` to
+`cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info`,
+unless `CARGO_LOG` is already set to a non-empty value. Without the opt-in no
+`dirty:` reason is recorded. With it, the report keeps cargo's `dirty:` reason
+as `dirty` on the compilation. The reason is appended to the waste and notice
+lines as `(cargo: <reason>)`.
 
 The MBX evidence is advisory and not authenticated. A step that runs in the same job, such as checkout code, can plant a matching `.expected` and `.json` pair in `$RUNNER_TEMP/velnor-mbx-reports`, and `velnor-ci` counts it as a session. Closing that gap needs a secret the checkout cannot read, so the check stays advisory unless `cache_check_blocks` is set, and a forged session is not a reason to trust a green `Cache` check.
 
