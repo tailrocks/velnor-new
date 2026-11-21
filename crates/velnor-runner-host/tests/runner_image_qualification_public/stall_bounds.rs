@@ -1,14 +1,22 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::time::Instant;
+
 use super::*;
 
 fn bounded(fault: ApiFault) -> TestResult<()> {
     let git = GitFixture::new()?;
     let mut plan = ApiPlan::new(git.source_sha());
     plan.fault = Some(fault);
+    let started = Instant::now();
     let (output, state, elapsed) =
         qualify_with_timeout_timed(&git, git.source_sha(), plan, Duration::from_secs(24))?;
+    let teardown = started.elapsed().saturating_sub(elapsed);
+    assert!(
+        teardown < Duration::from_secs(2),
+        "fixture teardown outlasted the qualifier by {teardown:?}"
+    );
     assert_failed_and_cleaned(&output, &state);
     let readiness = matches!(fault, ApiFault::StallExecCreate | ApiFault::StallExecStream);
     assert!(elapsed < Duration::from_secs(if readiness { 22 } else { 9 }));
