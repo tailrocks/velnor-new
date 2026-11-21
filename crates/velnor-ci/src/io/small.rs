@@ -1,9 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::cell::RefCell;
+
 use super::{
-    CiError, append_outputs, break_time_ties, cold, cold_on_failure, current_dir, expire_old_bases,
-    inputs_batch, now_seconds, restore_floor,
+    CiError, append_outputs, break_time_ties_with, cold, cold_on_failure, current_dir,
+    expire_old_bases, inputs, inputs_batch, now_seconds, restore_record,
 };
 
 pub(super) fn run_restored(args: &crate::cli::RestoredArgs) -> Result<String, CiError> {
@@ -17,7 +19,14 @@ pub(super) fn run_restored(args: &crate::cli::RestoredArgs) -> Result<String, Ci
     let expiry = expire_old_bases(&targets, now_seconds())?;
     append_outputs(&format!("expired={}\n", expiry.expired))?;
     let report = cold_on_failure(&targets, "restored", || {
-        Ok(break_time_ties(&root)? + &restore_floor::mark(&root)?)
+        let moved = RefCell::new(restore_record::Restored::default());
+        let report = break_time_ties_with(&root, &|path, time| {
+            inputs::set_modified_ns(path, time)?;
+            moved.borrow_mut().paths.push(path.to_path_buf());
+            Ok(())
+        })?;
+        restore_record::record(&root, &moved.into_inner())?;
+        Ok(report)
     })?;
     pending.consume()?;
     Ok(expiry.report + &report)

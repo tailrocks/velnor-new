@@ -8,6 +8,7 @@ use std::time::SystemTime;
 
 use super::handle::{self, Observed, Origin};
 use super::{Entries, Kind, Scan};
+use crate::io::restore_record::Record;
 
 pub(super) struct Hooks<'a> {
     pub(super) listed: &'a dyn Fn(&OsStr),
@@ -28,15 +29,15 @@ impl Default for Hooks<'_> {
 pub(in crate::io::audit) fn newest(
     scan: &Scan,
     entries: &Entries,
-    floor: Option<SystemTime>,
+    record: &Record,
 ) -> io::Result<Option<SystemTime>> {
-    newest_with(scan, entries, floor, &Hooks::default())
+    newest_with(scan, entries, record, &Hooks::default())
 }
 
 pub(super) fn newest_with(
     scan: &Scan,
     entries: &Entries,
-    floor: Option<SystemTime>,
+    record: &Record,
     hooks: &Hooks<'_>,
 ) -> io::Result<Option<SystemTime>> {
     let mut newest = SystemTime::UNIX_EPOCH;
@@ -46,7 +47,7 @@ pub(super) fn newest_with(
         };
         for (name, kind) in children {
             let path = directory.join(name);
-            match handle::observe(&listing, name.as_os_str(), &path, floor, &|| {
+            match handle::observe(&listing, name.as_os_str(), &path, record, &|| {
                 (hooks.resolved)(&path);
             })? {
                 Some(Observed {
@@ -71,7 +72,7 @@ pub(super) fn newest_with(
             .get(directory)
             .is_some_and(|walked| walked.len() == children.len())
         {
-            newest = newest.max(stamp.latest(floor));
+            newest = newest.max(stamp.latest(record, directory));
         }
     }
     Ok(Some(newest))

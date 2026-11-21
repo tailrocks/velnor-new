@@ -100,7 +100,7 @@ pub(super) fn read(root: &Path) -> Result<Pending, CiError> {
 }
 
 fn directory(root: &Path) -> Result<PathBuf, CiError> {
-    super::restore_floor::git_path(root, "velnor-restored-targets")
+    super::restore_record::git_path(root, "velnor-restored-targets")
 }
 
 fn regular_directory(path: &Path) -> Result<(), CiError> {

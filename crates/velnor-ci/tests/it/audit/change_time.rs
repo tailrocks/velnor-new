@@ -4,7 +4,6 @@
 use std::ffi::OsStr;
 use std::fs::{self, File, FileTimes};
 use std::os::unix::fs::{MetadataExt, PermissionsExt};
-use std::process::Command;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use super::inventory::build_stamping;
@@ -139,61 +138,7 @@ fn restore(repo: &Repo) {
     assert!(restored.status.success(), "{restored:?}");
 }
 
-fn floor_written_at(repo: &Repo) -> SystemTime {
-    let located = Command::new("git")
-        .arg("-C")
-        .arg(repo.root())
-        .args([
-            "rev-parse",
-            "--path-format=absolute",
-            "--git-path",
-            "velnor-restore-floor",
-        ])
-        .output()
-        .unwrap_or_else(|e| unreachable!("{e}"));
-    let path = String::from_utf8(located.stdout).unwrap_or_else(|e| unreachable!("{e}"));
-    fs::metadata(path.trim())
-        .and_then(|metadata| metadata.modified())
-        .unwrap_or_else(|e| unreachable!("{e}"))
-}
-
-#[test]
-fn an_input_whose_change_time_moved_during_the_restore_is_fresh() {
-    let (repo, built) = built_repository();
-    chmod_until_changed_after(&repo, built);
-    restore(&repo);
-    assert_fresh(&repo, "ties/stamped.txt\tlib\n");
-}
-
-#[test]
-fn an_input_changed_after_the_restore_is_stale() {
-    let (repo, built) = built_repository();
-    chmod_until_changed_after(&repo, built);
-    restore(&repo);
-    chmod_until_changed_after(&repo, floor_written_at(&repo));
-    assert_stale(&repo);
-}
-
-#[test]
-fn a_rewrite_with_its_modified_time_restored_after_the_restore_is_stale() {
-    let (repo, built) = built_repository();
-    restore(&repo);
-    let floor = floor_written_at(&repo);
-    let deadline = Instant::now() + Duration::from_secs(30);
-    while changed_at(&repo) <= floor {
-        repo.write_unstaged(INPUT, "");
-        repo.set_mtime(INPUT, at(OLD));
-        assert!(
-            Instant::now() < deadline,
-            "the rewrite never passed the floor"
-        );
-    }
-    assert!(repo.mtime(INPUT) < built);
-    assert_stale(&repo);
-}
-
-fn restored_by(operation: &[&OsStr]) {
-    let (repo, _) = built_repository();
+fn saved(repo: &Repo) {
     repo.git(&["add", "--all"]);
     repo.commit();
     let saved = super::velnor_ci()
@@ -202,7 +147,9 @@ fn restored_by(operation: &[&OsStr]) {
         .output()
         .unwrap_or_else(|e| unreachable!("{e}"));
     assert!(saved.status.success(), "{saved:?}");
-    repo.set_mtime(INPUT, at(OLD + 1));
+}
+
+fn restore_inputs(repo: &Repo, operation: &[&OsStr]) {
     let restored = super::velnor_ci()
         .current_dir(repo.root())
         .env("GITHUB_JOB", "job")
@@ -210,13 +157,66 @@ fn restored_by(operation: &[&OsStr]) {
         .output()
         .unwrap_or_else(|e| unreachable!("{e}"));
     assert!(restored.status.success(), "{restored:?}");
+}
+
+const INPUTS_RESTORE: [&str; 4] = ["inputs", "restore", "--target-dir", "rust/target"];
+
+fn restored_input() -> (Repo, SystemTime) {
+    let (repo, built) = built_repository();
+    saved(&repo);
+    repo.set_mtime(INPUT, at(OLD + 1));
+    restore_inputs(&repo, &INPUTS_RESTORE.map(OsStr::new));
+    assert_eq!(repo.mtime(INPUT), at(OLD));
+    (repo, built)
+}
+
+#[test]
+fn an_input_whose_change_time_moved_before_a_restore_that_left_it_alone_is_stale() {
+    let (repo, built) = built_repository();
+    chmod_until_changed_after(&repo, built);
+    restore(&repo);
+    assert_stale(&repo);
+}
+
+#[test]
+fn an_input_changed_after_the_restore_is_stale() {
+    let (repo, built) = restored_input();
+    chmod_until_changed_after(&repo, built);
+    assert_stale(&repo);
+}
+
+#[test]
+fn a_rewrite_with_its_modified_time_restored_after_the_restore_is_stale() {
+    let (repo, built) = restored_input();
+    repo.write_unstaged(INPUT, "");
+    repo.set_mtime(INPUT, at(OLD));
+    assert!(repo.mtime(INPUT) < built);
+    assert_stale(&repo);
+}
+
+#[test]
+fn a_changed_input_with_its_modified_time_put_back_before_the_restore_is_stale() {
+    let (repo, built) = built_repository();
+    saved(&repo);
+    repo.write_unstaged(INPUT, "changed");
+    repo.set_mtime(INPUT, at(OLD));
+    restore_inputs(&repo, &INPUTS_RESTORE.map(OsStr::new));
+    assert!(repo.mtime(INPUT) < built);
+    assert_stale(&repo);
+}
+
+fn restored_by(operation: &[&OsStr]) {
+    let (repo, _) = built_repository();
+    saved(&repo);
+    repo.set_mtime(INPUT, at(OLD + 1));
+    restore_inputs(&repo, operation);
     assert_eq!(repo.mtime(INPUT), at(OLD));
     assert_fresh(&repo, "ties/stamped.txt\tlib\n");
 }
 
 #[test]
 fn inputs_restored_by_inputs_restore_are_fresh() {
-    restored_by(&["inputs", "restore", "--target-dir", "rust/target"].map(OsStr::new));
+    restored_by(&INPUTS_RESTORE.map(OsStr::new));
 }
 
 #[test]
@@ -271,7 +271,8 @@ fn a_nested_directory_replaced_by_one_prepared_before_the_build_is_stale() {
 #[test]
 fn a_nested_directory_replaced_after_the_restore_is_stale() {
     let repo = nested_directory();
-    restore(&repo);
+    saved(&repo);
+    restore_inputs(&repo, &INPUTS_RESTORE.map(OsStr::new));
     swap_in_the_staged_directory(&repo);
     assert_stale(&repo);
 }
@@ -279,10 +280,11 @@ fn a_nested_directory_replaced_after_the_restore_is_stale() {
 #[test]
 fn directories_touched_during_the_restore_are_fresh() {
     let repo = nested_directory();
+    saved(&repo);
     repo.write_unstaged("ties/sub/transient.txt", "");
     fs::remove_file(repo.root().join("ties/sub/transient.txt"))
         .unwrap_or_else(|e| unreachable!("{e}"));
-    restore(&repo);
+    restore_inputs(&repo, &INPUTS_RESTORE.map(OsStr::new));
     assert_fresh(&repo, "ties\tlib\n");
 }
 
@@ -297,7 +299,8 @@ fn a_directory_touched_after_the_build_without_a_restore_is_stale() {
 
 fn settled_after(repo: &Repo, path: &str) {
     let ctime = |path: &str| {
-        let metadata = fs::metadata(repo.root().join(path)).unwrap_or_else(|e| unreachable!("{e}"));
+        let metadata =
+            fs::symlink_metadata(repo.root().join(path)).unwrap_or_else(|e| unreachable!("{e}"));
         (metadata.ctime(), metadata.ctime_nsec())
     };
     let created = ctime(path);

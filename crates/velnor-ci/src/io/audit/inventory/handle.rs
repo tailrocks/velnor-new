@@ -16,6 +16,7 @@ use nix::sys::stat::{FileStat, Mode, SFlag, fstat, fstatat};
 use super::Kind;
 use super::resolve;
 use super::walk::unresolved_link;
+use crate::io::restore_record::Record;
 
 pub(super) type Opened = Rc<Dir>;
 pub(super) type Identity = (libc::dev_t, libc::ino_t);
@@ -33,14 +34,18 @@ impl Stamp {
         self.device == i128::from(device) && self.inode == i128::from(inode)
     }
 
-    pub(super) fn latest(&self, floor: Option<SystemTime>) -> SystemTime {
+    pub(super) fn latest(&self, record: &Record, path: &Path) -> SystemTime {
         let time = |(seconds, nanos): (i128, i128)| {
             instant(
                 i64::try_from(seconds).unwrap_or(0),
                 i64::try_from(nanos).unwrap_or(0),
             )
         };
-        counted(time(self.modified), floor).max(counted(time(self.changed), floor))
+        let vouched = match (i64::try_from(self.changed.0), i64::try_from(self.changed.1)) {
+            (Ok(seconds), Ok(nanos)) => record.vouches(path, (seconds, nanos)),
+            _ => false,
+        };
+        counted(time(self.modified), vouched).max(counted(time(self.changed), vouched))
     }
 }
 
@@ -142,17 +147,20 @@ pub(super) fn names(
 }
 
 pub(super) fn kind_at(directory: impl AsFd, name: &OsStr, path: &Path) -> io::Result<Option<Kind>> {
-    Ok(classify(directory, name, path, false, None, &|| {})?.map(|observed| observed.kind))
+    Ok(
+        classify(directory, name, path, false, &Record::default(), &|| {})?
+            .map(|observed| observed.kind),
+    )
 }
 
 pub(super) fn observe(
     directory: impl AsFd,
     name: &OsStr,
     path: &Path,
-    floor: Option<SystemTime>,
+    record: &Record,
     resolved: &dyn Fn(),
 ) -> io::Result<Option<Observed>> {
-    classify(directory, name, path, true, floor, resolved)
+    classify(directory, name, path, true, record, resolved)
 }
 
 fn instant(seconds: i64, nanos: i64) -> SystemTime {
@@ -163,22 +171,35 @@ fn instant(seconds: i64, nanos: i64) -> SystemTime {
     }
 }
 
-fn counted(time: SystemTime, floor: Option<SystemTime>) -> SystemTime {
-    if floor.is_some_and(|floor| time < floor) {
+fn counted(time: SystemTime, vouched: bool) -> SystemTime {
+    if vouched {
         SystemTime::UNIX_EPOCH
     } else {
         time
     }
 }
 
-fn file_changed(stat: &FileStat, floor: Option<SystemTime>) -> SystemTime {
-    instant(stat.st_mtime, stat.st_mtime_nsec)
-        .max(counted(instant(stat.st_ctime, stat.st_ctime_nsec), floor))
+fn vouched(stat: &FileStat, path: &Path, record: &Record) -> bool {
+    record.vouches(path, (stat.st_ctime, stat.st_ctime_nsec))
 }
 
-fn link_changed(stat: &FileStat, floor: Option<SystemTime>) -> SystemTime {
-    counted(instant(stat.st_mtime, stat.st_mtime_nsec), floor)
-        .max(counted(instant(stat.st_ctime, stat.st_ctime_nsec), floor))
+fn file_changed(stat: &FileStat, path: &Path, record: &Record) -> SystemTime {
+    instant(stat.st_mtime, stat.st_mtime_nsec).max(counted(
+        instant(stat.st_ctime, stat.st_ctime_nsec),
+        vouched(stat, path, record),
+    ))
+}
+
+fn link_changed(stat: &FileStat, path: &Path, record: &Record) -> SystemTime {
+    let vouched = vouched(stat, path, record);
+    counted(instant(stat.st_mtime, stat.st_mtime_nsec), vouched)
+        .max(counted(instant(stat.st_ctime, stat.st_ctime_nsec), vouched))
+}
+
+fn same_link(first: &FileStat, second: &FileStat) -> bool {
+    (first.st_dev, first.st_ino, first.st_mode) == (second.st_dev, second.st_ino, second.st_mode)
+        && (first.st_ctime, first.st_ctime_nsec) == (second.st_ctime, second.st_ctime_nsec)
+        && (first.st_mtime, first.st_mtime_nsec) == (second.st_mtime, second.st_mtime_nsec)
 }
 
 fn format_of(stat: &FileStat) -> SFlag {
@@ -190,7 +211,7 @@ fn classify(
     name: &OsStr,
     path: &Path,
     with_changed: bool,
-    floor: Option<SystemTime>,
+    record: &Record,
     after_resolve: &dyn Fn(),
 ) -> io::Result<Option<Observed>> {
     let stat = match fstatat(&directory, name, AtFlags::AT_SYMLINK_NOFOLLOW) {
@@ -208,7 +229,7 @@ fn classify(
             Kind::Other
         };
         let changed =
-            (with_changed && format != SFlag::S_IFDIR).then(|| file_changed(&stat, floor));
+            (with_changed && format != SFlag::S_IFDIR).then(|| file_changed(&stat, path, record));
         return Ok(Some(Observed {
             kind,
             changed,
@@ -227,10 +248,19 @@ fn classify(
         Err(error) => return Err(error),
     };
     after_resolve();
+    let relisted = match fstatat(&directory, name, AtFlags::AT_SYMLINK_NOFOLLOW) {
+        Ok(relisted) => relisted,
+        Err(nix::errno::Errno::ENOENT) => return Ok(None),
+        Err(errno) => return Err(failure(errno)),
+    };
+    if !same_link(&stat, &relisted) {
+        return Ok(None);
+    }
     let observed = followed.as_ref().map_or(&stat, |followed| &followed.stat);
+    let observed_path = followed.as_ref().map_or(path, |followed| &followed.path);
     let changed = (with_changed && format_of(observed) != SFlag::S_IFDIR)
-        .then(|| file_changed(observed, floor));
-    let link = with_changed.then(|| link_changed(&stat, floor));
+        .then(|| file_changed(observed, observed_path, record));
+    let link = with_changed.then(|| link_changed(&stat, path, record));
     let resolved = followed.map(|followed| followed.path);
     Ok(Some(Observed {
         kind: Kind::Link { target, resolved },

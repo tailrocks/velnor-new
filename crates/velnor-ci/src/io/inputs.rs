@@ -191,8 +191,11 @@ pub(super) fn input_witness(tracked: &Tracked) -> String {
 }
 
 pub fn restore_inputs(root: &Path, target: &Path) -> Result<String, CiError> {
-    let report = restore_inputs_scoped(root, target, None, &mut BTreeMap::new())?;
-    Ok(report + &super::restore_floor::mark(root)?)
+    super::restore_record::clear(root)?;
+    let mut restored = super::restore_record::Restored::default();
+    let report = restore_inputs_scoped(root, target, None, &mut BTreeMap::new(), &mut restored)?;
+    super::restore_record::record(root, &restored)?;
+    Ok(report)
 }
 
 pub(super) fn restore_inputs_scoped(
@@ -200,6 +203,7 @@ pub(super) fn restore_inputs_scoped(
     target: &Path,
     scope: Option<&Scope>,
     scans: &mut BTreeMap<PathBuf, Option<RestoredUnits>>,
+    restored: &mut super::restore_record::Restored,
 ) -> Result<String, CiError> {
     let prefix = git_prefix(root)?;
     remove_restored(&root.join(target).join(snapshot_file(&prefix)))?;
@@ -241,8 +245,14 @@ pub(super) fn restore_inputs_scoped(
         .or_insert_with(|| super::restored_units::scan(&units_target));
     super::restored_units::record(&units_target, &prefix, units.as_ref())?;
     for input in &plan.restore {
-        set_modified_ns(&top.join(&input.file.path), input.mtime_ns)?;
+        let path = top.join(&input.file.path);
+        set_modified_ns(&path, input.mtime_ns)?;
+        restored.paths.push(path);
     }
+    restored
+        .paths
+        .extend(tracked.links.iter().map(|link| top.join(&link.path)));
+    restored.top = Some(top);
     Ok(format!(
         "restored the modification time of {} unchanged files; {} changed, {} new, {} deleted, {} not in the worktree, {} with a path the file cannot hold, {} submodules not checked out\n",
         plan.restore.len(),

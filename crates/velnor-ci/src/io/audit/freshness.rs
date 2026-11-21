@@ -6,10 +6,12 @@ use std::fs;
 use std::io;
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 use std::time::{Duration, SystemTime};
 
 use velnor_rust::{Located, locate};
 
+use super::super::restore_record::Record;
 use super::super::units::Workspace;
 use super::Audit;
 use super::inventory::{self, Budget, Entries};
@@ -26,7 +28,7 @@ pub(super) struct Freshness {
     directories: BTreeMap<(PathBuf, BTreeSet<PathBuf>), (SystemTime, Entries)>,
     budget: Budget,
     max_directory_entries: usize,
-    floor: Option<SystemTime>,
+    record: Rc<Record>,
 }
 
 impl Freshness {
@@ -34,7 +36,7 @@ impl Freshness {
         workspaces: &[Workspace],
         groups: &[PathBuf],
         max_directory_entries: usize,
-        floor: Option<SystemTime>,
+        record: Rc<Record>,
     ) -> Result<Self, CiError> {
         let mut targets = inventory::exclusions(workspaces)?;
         for dir in groups {
@@ -47,7 +49,7 @@ impl Freshness {
             directories: BTreeMap::new(),
             budget: Budget::new(max_directory_entries),
             max_directory_entries,
-            floor,
+            record,
         })
     }
 
@@ -57,7 +59,7 @@ impl Freshness {
             directories: BTreeMap::new(),
             budget: Budget::new(self.max_directory_entries),
             max_directory_entries: self.max_directory_entries,
-            floor: self.floor,
+            record: Rc::clone(&self.record),
         }
     }
 
@@ -68,22 +70,40 @@ impl Freshness {
         output: &Path,
         targets: &BTreeSet<PathBuf>,
     ) -> io::Result<bool> {
-        if let Ok(link) = fs::symlink_metadata(path)
-            && link.file_type().is_symlink()
-            && changed_since(&link, built, self.floor, false)?
+        self.changed_with(path, built, output, targets, &|| {})
+    }
+
+    fn changed_with(
+        &mut self,
+        path: &Path,
+        built: SystemTime,
+        output: &Path,
+        targets: &BTreeSet<PathBuf>,
+        between: &dyn Fn(),
+    ) -> io::Result<bool> {
+        let link = fs::symlink_metadata(path)?;
+        between();
+        let metadata = fs::metadata(path)?;
+        if !same_inode(&link, &fs::symlink_metadata(path)?) {
+            return Ok(true);
+        }
+        let record = Rc::clone(&self.record);
+        if link.file_type().is_symlink()
+            && changed_since(&link, built, false, || vouched(&record, path, &link))
         {
             return Ok(true);
         }
-        let metadata = fs::metadata(path)?;
         if !metadata.is_dir() {
-            return changed_since(&metadata, built, self.floor, true);
+            return Ok(changed_since(&metadata, built, true, || {
+                fs::canonicalize(path).is_ok_and(|target| vouched(&record, &target, &metadata))
+            }));
         }
         let root = fs::canonicalize(path)?;
         let key = (root.clone(), targets.clone());
         if !self.directories.contains_key(&key) {
             let scanned = inventory::scan(&root, targets, &mut self.budget)?;
             let entries = inventory::view(&scanned.entries, &root, targets)?;
-            let Some(newest) = inventory::newest(&scanned, &entries, self.floor)? else {
+            let Some(newest) = inventory::newest(&scanned, &entries, &self.record)? else {
                 return Ok(true);
             };
             self.directories.insert(key.clone(), (newest, entries));
@@ -185,17 +205,35 @@ impl Audit<'_> {
 fn changed_since(
     metadata: &fs::Metadata,
     built: SystemTime,
-    floor: Option<SystemTime>,
     keeps_modified: bool,
-) -> io::Result<bool> {
-    let counted = |time: SystemTime| floor.is_none_or(|floor| time >= floor);
-    let inode = u64::try_from(metadata.ctime()).ok().map(|seconds| {
-        let nanos = u32::try_from(metadata.ctime_nsec()).unwrap_or(0);
-        SystemTime::UNIX_EPOCH + Duration::new(seconds, nanos)
-    });
-    let modified = metadata.modified()?;
-    Ok((modified >= built && (keeps_modified || counted(modified)))
-        || inode.is_some_and(|inode| inode >= built && counted(inode)))
+    vouched: impl FnOnce() -> bool,
+) -> bool {
+    let (Ok(modified), Some(inode)) = (metadata.modified(), change_time(metadata)) else {
+        return true;
+    };
+    let (modified, inode) = (modified >= built, inode >= built);
+    (modified && keeps_modified) || ((modified || inode) && !vouched())
+}
+
+fn change_time(metadata: &fs::Metadata) -> Option<SystemTime> {
+    let seconds = u64::try_from(metadata.ctime()).ok()?;
+    let nanos = u32::try_from(metadata.ctime_nsec()).unwrap_or(0);
+    Some(SystemTime::UNIX_EPOCH + Duration::new(seconds, nanos))
+}
+
+fn vouched(record: &Record, path: &Path, metadata: &fs::Metadata) -> bool {
+    record.vouches_entry(path, (metadata.ctime(), metadata.ctime_nsec()))
+}
+
+fn same_inode(first: &fs::Metadata, second: &fs::Metadata) -> bool {
+    (first.dev(), first.ino(), first.ctime(), first.ctime_nsec())
+        == (
+            second.dev(),
+            second.ino(),
+            second.ctime(),
+            second.ctime_nsec(),
+        )
+        && (first.mtime(), first.mtime_nsec()) == (second.mtime(), second.mtime_nsec())
 }
 
 fn failed(path: &Path, error: &io::Error) -> CiError {

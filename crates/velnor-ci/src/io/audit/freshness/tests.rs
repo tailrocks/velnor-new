@@ -27,7 +27,7 @@ fn snapshot(name: &str) -> (PathBuf, inventory::Scan) {
 #[test]
 fn a_snapshot_whose_entries_all_remain_has_a_newest_file() {
     let (root, scan) = snapshot("control");
-    let newest = inventory::newest(&scan, &scan.entries, None);
+    let newest = inventory::newest(&scan, &scan.entries, &Record::default());
     fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
     assert!(matches!(newest, Ok(Some(_))), "{newest:?}");
 }
@@ -36,7 +36,7 @@ fn a_snapshot_whose_entries_all_remain_has_a_newest_file() {
 fn an_entry_removed_after_the_scan_is_reported_as_vanished_not_as_an_error() {
     let (root, scan) = snapshot("vanished");
     fs::remove_file(root.join("gone.txt")).unwrap_or_else(|e| unreachable!("{e}"));
-    let newest = inventory::newest(&scan, &scan.entries, None);
+    let newest = inventory::newest(&scan, &scan.entries, &Record::default());
     fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
     assert!(matches!(newest, Ok(None)), "{newest:?}");
 }
@@ -48,7 +48,7 @@ fn a_write_after_the_walk_is_seen_by_the_decision() {
     fs::File::open(root.join("kept.txt"))
         .and_then(|file| file.set_times(fs::FileTimes::new().set_modified(future)))
         .unwrap_or_else(|e| unreachable!("{e}"));
-    let newest = inventory::newest(&scan, &scan.entries, None);
+    let newest = inventory::newest(&scan, &scan.entries, &Record::default());
     fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
     assert!(
         matches!(newest, Ok(Some(time)) if time == future),
@@ -79,7 +79,7 @@ fn directory_snapshot(name: &str) -> (PathBuf, inventory::Scan) {
 fn a_file_created_after_the_walk_makes_the_snapshot_stale() {
     let (root, scan) = directory_snapshot("created");
     fs::write(root.join("d").join("new"), b"").unwrap_or_else(|e| unreachable!("{e}"));
-    let newest = inventory::newest(&scan, &scan.entries, None);
+    let newest = inventory::newest(&scan, &scan.entries, &Record::default());
     fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
     assert!(
         matches!(newest, Ok(None)),
@@ -96,7 +96,7 @@ fn a_directory_rewritten_with_the_same_names_after_the_walk_makes_the_snapshot_s
     fs::File::open(directory.join("f"))
         .and_then(|file| file.set_times(fs::FileTimes::new().set_modified(UNIX_EPOCH)))
         .unwrap_or_else(|e| unreachable!("{e}"));
-    let newest = inventory::newest(&scan, &scan.entries, None);
+    let newest = inventory::newest(&scan, &scan.entries, &Record::default());
     fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
     assert!(
         matches!(newest, Ok(None)),
@@ -126,7 +126,7 @@ fn a_same_size_rewrite_with_its_modified_time_restored_makes_the_snapshot_stale(
     fs::File::open(&file)
         .and_then(|handle| handle.set_times(fs::FileTimes::new().set_modified(UNIX_EPOCH)))
         .unwrap_or_else(|e| unreachable!("{e}"));
-    let newest = inventory::newest(&scan, &scan.entries, None);
+    let newest = inventory::newest(&scan, &scan.entries, &Record::default());
     fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
     let built = UNIX_EPOCH + std::time::Duration::from_secs(1_000_000_000);
     assert!(
@@ -153,7 +153,7 @@ fn a_single_file_rewritten_at_the_same_size_with_its_modified_time_restored_is_s
         .and_then(|handle| handle.set_times(fs::FileTimes::new().set_modified(UNIX_EPOCH)))
         .unwrap_or_else(|e| unreachable!("{e}"));
     let mut freshness =
-        Freshness::new(&[], &[], usize::MAX, None).unwrap_or_else(|e| unreachable!("{e}"));
+        Freshness::new(&[], &[], usize::MAX, Rc::default()).unwrap_or_else(|e| unreachable!("{e}"));
     let changed = freshness.changed(&file, built, &file, &BTreeSet::new());
     fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
     assert!(
@@ -163,7 +163,7 @@ fn a_single_file_rewritten_at_the_same_size_with_its_modified_time_restored_is_s
 }
 
 fn change_time(path: &Path) -> SystemTime {
-    let metadata = fs::metadata(path).unwrap_or_else(|e| unreachable!("{e}"));
+    let metadata = fs::symlink_metadata(path).unwrap_or_else(|e| unreachable!("{e}"));
     let seconds = u64::try_from(metadata.ctime()).unwrap_or_else(|e| unreachable!("{e}"));
     let nanos = u32::try_from(metadata.ctime_nsec()).unwrap_or_else(|e| unreachable!("{e}"));
     SystemTime::UNIX_EPOCH + Duration::new(seconds, nanos)
@@ -183,7 +183,7 @@ fn a_file_whose_change_time_equals_the_snapshot_time_is_stale() {
         .unwrap_or_else(|e| unreachable!("{e}"));
     let built = change_time(&file);
     let mut freshness =
-        Freshness::new(&[], &[], usize::MAX, None).unwrap_or_else(|e| unreachable!("{e}"));
+        Freshness::new(&[], &[], usize::MAX, Rc::default()).unwrap_or_else(|e| unreachable!("{e}"));
     let changed = freshness.changed(&file, built, &file, &BTreeSet::new());
     fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
     assert!(
@@ -233,7 +233,7 @@ fn walked_directory(name: &str) -> (PathBuf, PathBuf, PathBuf, SystemTime) {
 fn a_directory_entry_whose_change_time_equals_the_snapshot_time_is_stale() {
     let (root, directory, output, built) = walked_directory("dir-tie");
     let mut freshness =
-        Freshness::new(&[], &[], usize::MAX, None).unwrap_or_else(|e| unreachable!("{e}"));
+        Freshness::new(&[], &[], usize::MAX, Rc::default()).unwrap_or_else(|e| unreachable!("{e}"));
     let changed = freshness.changed(&directory, built, &output, &BTreeSet::new());
     fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
     assert!(
@@ -247,11 +247,52 @@ fn an_untouched_directory_older_than_the_snapshot_is_fresh() {
     let (root, directory, output, changed_at) = walked_directory("dir-older");
     let built = changed_at + Duration::from_secs(1);
     let mut freshness =
-        Freshness::new(&[], &[], usize::MAX, None).unwrap_or_else(|e| unreachable!("{e}"));
+        Freshness::new(&[], &[], usize::MAX, Rc::default()).unwrap_or_else(|e| unreachable!("{e}"));
     let changed = freshness.changed(&directory, built, &output, &BTreeSet::new());
     fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
     assert!(
         matches!(changed, Ok(false)),
         "an untouched directory older than the snapshot was treated as stale: {changed:?}"
+    );
+}
+
+fn settled_after(root: &Path, entries: &[&Path]) -> SystemTime {
+    let newest = entries.iter().map(|entry| change_time(entry)).max();
+    let probe = root.join("probe");
+    loop {
+        fs::write(&probe, b"").unwrap_or_else(|e| unreachable!("{e}"));
+        let time = change_time(&probe);
+        if Some(time) > newest {
+            return time;
+        }
+    }
+}
+
+#[test]
+fn a_link_retargeted_between_its_two_lookups_is_stale() {
+    let root = fs::canonicalize(std::env::temp_dir())
+        .unwrap_or_else(|e| unreachable!("{e}"))
+        .join(format!("velnor-freshness-link-race-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&root);
+    fs::create_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+    let link = root.join("link");
+    for name in ["old.txt", "other.txt"] {
+        fs::write(root.join(name), b"").unwrap_or_else(|e| unreachable!("{e}"));
+    }
+    std::os::unix::fs::symlink("old.txt", &link).unwrap_or_else(|e| unreachable!("{e}"));
+    let built = settled_after(
+        &root,
+        &[&root.join("old.txt"), &root.join("other.txt"), &link],
+    );
+    let mut freshness =
+        Freshness::new(&[], &[], usize::MAX, Rc::default()).unwrap_or_else(|e| unreachable!("{e}"));
+    let changed = freshness.changed_with(&link, built, &link, &BTreeSet::new(), &|| {
+        fs::remove_file(&link).unwrap_or_else(|e| unreachable!("{e}"));
+        std::os::unix::fs::symlink("other.txt", &link).unwrap_or_else(|e| unreachable!("{e}"));
+    });
+    fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(
+        matches!(changed, Ok(true)),
+        "a link retargeted between its lookups was treated as fresh: {changed:?}"
     );
 }

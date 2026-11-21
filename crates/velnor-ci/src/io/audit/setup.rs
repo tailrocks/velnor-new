@@ -3,6 +3,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 
 use velnor_gen::io::Checkout;
 use velnor_model::{CompileInputs, RepoFacts};
@@ -11,6 +12,7 @@ use velnor_rust::{Located, Owners, locate};
 use super::Audit;
 use crate::coverage::{Built, gaps};
 use crate::error::CiError;
+use crate::io::restore_record::Record;
 use crate::io::units::{UnitFile, Workspace, unit_files, unit_files_apart};
 use crate::platform::Platforms;
 
@@ -34,7 +36,7 @@ pub(super) fn begin<'a>(
         workspaces,
         groups,
         max_directory_entries,
-        super::super::restore_floor::read(&checkout.root),
+        Rc::new(Record::read(&checkout.root)),
     )?;
     let diagnostic = freshness.scratch();
     Ok(Audit {
