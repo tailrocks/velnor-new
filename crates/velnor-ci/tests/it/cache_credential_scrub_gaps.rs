@@ -8,6 +8,25 @@ const HOOK: &str = ".cargo/git/db/shared-1/hooks/post-fetch";
 const FETCH_HEAD: &str = ".cargo/git/db/shared-1/FETCH_HEAD";
 const TOKEN: &str = "ghp_0123456789abcdefghijklmnopqrstuvwxyzAB";
 
+fn encode_basic(credentials: &[u8]) -> String {
+    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    credentials
+        .chunks(3)
+        .flat_map(|chunk| {
+            let bits = chunk.iter().enumerate().fold(0u32, |acc, (i, byte)| {
+                acc | (u32::from(*byte) << (16 - 8 * i))
+            });
+            (0..4).map(move |i| {
+                if i <= chunk.len() {
+                    char::from(ALPHABET[((bits >> (18 - 6 * i)) & 63) as usize])
+                } else {
+                    '='
+                }
+            })
+        })
+        .collect()
+}
+
 #[test]
 fn a_ref_named_hooks_is_not_the_hook_tree_and_is_saved() {
     sources_save_goes_on(&[
@@ -170,12 +189,18 @@ fn a_basic_authorization_header_in_a_hook_or_fetch_head_stops_the_sources_save()
         (
             "hook-short-basic-header",
             HOOK,
-            "curl -H 'Authorization: Basic dXNlcjpwYXNz' https://example.org\n",
+            &format!(
+                "curl -H 'Authorization: Basic {}' https://example.org\n",
+                encode_basic(b"user:pass")
+            ),
         ),
         (
             "fetch-head-short-basic-header",
             FETCH_HEAD,
-            &format!("{SHA}\t\tbranch 'main' Authorization: Basic dXNlcjpwYXNz\n"),
+            &format!(
+                "{SHA}\t\tbranch 'main' Authorization: Basic {}\n",
+                encode_basic(b"user:pass")
+            ),
         ),
     ]);
 }
@@ -218,32 +243,50 @@ fn a_basic_authorization_header_with_non_ascii_credentials_stops_the_sources_sav
         (
             "hook-utf8-password",
             HOOK,
-            "curl -H 'Authorization: Basic dXNlcjpww6Rzcw==' https://example.org\n",
+            &format!(
+                "curl -H 'Authorization: Basic {}' https://example.org\n",
+                encode_basic(b"user:p\xc3\xa4ss")
+            ),
         ),
         (
             "hook-utf8-user",
             HOOK,
-            "curl -H 'Authorization: Basic w7xzZXI6cGFzcw==' https://example.org\n",
+            &format!(
+                "curl -H 'Authorization: Basic {}' https://example.org\n",
+                encode_basic(b"\xc3\xbcser:pass")
+            ),
         ),
         (
             "hook-invalid-utf8-password",
             HOOK,
-            "curl -H 'Authorization: Basic dXNlcjpw5HNz' https://example.org\n",
+            &format!(
+                "curl -H 'Authorization: Basic {}' https://example.org\n",
+                encode_basic(b"user:p\xe4ss")
+            ),
         ),
         (
             "hook-invalid-utf8-user",
             HOOK,
-            "curl -H 'Authorization: Basic dXPpcjpwYXNz' https://example.org\n",
+            &format!(
+                "curl -H 'Authorization: Basic {}' https://example.org\n",
+                encode_basic(b"us\xe9r:pass")
+            ),
         ),
         (
             "hook-invalid-utf8-bytes-only",
             HOOK,
-            "curl -H 'Authorization: Basic dXNlcjpw//5zcw==' https://example.org\n",
+            &format!(
+                "curl -H 'Authorization: Basic {}' https://example.org\n",
+                encode_basic(b"user:p\xff\xfess")
+            ),
         ),
         (
             "fetch-head-utf8-password",
             FETCH_HEAD,
-            &format!("{SHA}\t\tbranch 'main' Authorization: Basic dXNlcjpww6Rzcw==\n"),
+            &format!(
+                "{SHA}\t\tbranch 'main' Authorization: Basic {}\n",
+                encode_basic(b"user:p\xc3\xa4ss")
+            ),
         ),
     ]);
 }
