@@ -42,6 +42,9 @@ pub(crate) fn apply(facts: &RepoFacts, jobs: &mut [Job]) {
         if !compiles(job) {
             if compiling_only {
                 job.steps.retain(|step| !is_shared_store_step(&step.kind));
+                if facts.config.mbx.routed() {
+                    insert(job, &[StepKind::MbxPrivate], After::Helper);
+                }
             }
             continue;
         }
