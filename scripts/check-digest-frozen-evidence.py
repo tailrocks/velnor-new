@@ -13,7 +13,7 @@ MANIFESTS = [
 ]
 
 
-PINNED_LOGS = {
+PINNED_FILES = {
     "docs/implemented/evidence/freshness-2026-10-13/main-run-38316930881-plan-job-115035687366.log": (
         "acc1236ed3ab0fd94030bedcf3e496e9790a8dcce0bcb8001b31b263f4295f91",
         347778,
@@ -22,13 +22,35 @@ PINNED_LOGS = {
         "13e24e5b054cb423fdfad5b60a6bc84d852d992679efa933219433d3d454ae43",
         665901,
     ),
+    "docs/reviews/phasec-registered-source-fixes-v31.json": (
+        "2adf9a2f7c4e8c7251f902088424fb2096e6430c2885be8c85e2a1fd63a8cc75",
+        9363,
+    ),
 }
+
+
+def scalar(raw):
+    raw = raw.strip()
+    if raw.startswith('"'):
+        m = re.match(r'^("(?:[^"\\]|\\.)*")\s*(?:#.*)?$', raw)
+        if not m:
+            raise ValueError(f"unsupported exclude entry: {raw}")
+        return json.loads(m.group(1))
+    if raw.startswith("'"):
+        m = re.match(r"^'((?:[^']|'')*)'\s*(?:#.*)?$", raw)
+        if not m:
+            raise ValueError(f"unsupported exclude entry: {raw}")
+        return m.group(1).replace("''", "'")
+    value = re.sub(r"\s+#.*$", "", raw)
+    if not value or value[0] in "[]{}&*!|>%@`," or ": " in value or value.endswith(":"):
+        raise ValueError(f"unsupported exclude entry: {raw}")
+    return value
 
 
 def exempt_paths(config):
     out = []
     for rule_id in RULE_IDS:
-        on, in_exclude = False, False
+        on, exclude_indent = False, None
         for line in open(config, encoding="utf-8"):
             line = line.rstrip("\n")
             if line == f"  - id: {rule_id}":
@@ -36,15 +58,23 @@ def exempt_paths(config):
                 continue
             if on and re.match(r"^  - id:", line):
                 break
-            if on and line == "      exclude:":
-                in_exclude = True
+            if not on:
                 continue
-            if in_exclude:
-                m = re.match(r'^        - "(.+)"$', line)
-                if m:
-                    out.append(m.group(1))
-                else:
-                    in_exclude = False
+            m = re.match(r"^(\s*)exclude:\s*(.*)$", line)
+            if m:
+                if m.group(2) and not m.group(2).startswith("#"):
+                    raise ValueError(f"unsupported exclude syntax: {line.strip()}")
+                exclude_indent = len(m.group(1))
+                continue
+            if exclude_indent is None:
+                continue
+            if not line.strip() or line.lstrip().startswith("#"):
+                continue
+            m = re.match(r"^(\s*)- (.*)$", line)
+            if m and len(m.group(1)) >= exclude_indent:
+                out.append(scalar(m.group(2)))
+            else:
+                exclude_indent = None
     return [p for p in out if p != ".alint.yml"]
 
 
@@ -87,8 +117,8 @@ def check(root, paths):
             failures.append(f"{p}: exempt path does not exist")
             continue
         digest, size = sha256_of(full)
-        if p in PINNED_LOGS:
-            if PINNED_LOGS[p] != (digest, size):
+        if p in PINNED_FILES:
+            if PINNED_FILES[p] != (digest, size):
                 failures.append(f"{p}: differs from the sha256 and bytes its claim record pins")
             continue
         recorded = False
@@ -112,7 +142,11 @@ def check(root, paths):
 def main():
     root = os.path.abspath(sys.argv[1]) if len(sys.argv) > 1 else os.getcwd()
     config = sys.argv[2] if len(sys.argv) > 2 else os.path.join(root, ".alint.yml")
-    paths = exempt_paths(config)
+    try:
+        paths = exempt_paths(config)
+    except ValueError as err:
+        print("FAIL", err)
+        return 1
     if len(paths) != len(set(paths)):
         print("duplicate exempt paths")
         return 1

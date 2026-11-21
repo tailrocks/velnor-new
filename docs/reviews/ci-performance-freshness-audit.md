@@ -122,7 +122,7 @@ Alint tool/action now both pin approved `0.17.0`; action/source commit `d93c0283
 | [swiftlint](https://api.github.com/repos/realm/SwiftLint/releases/latest) | 0.65.1 | `6aba03e3d8302b33f106e0f922210f35ca4b52cf` | `d03a40908ebd3301389d45f8354e9e489a051a1ab34deb95c4c5eb55a96078b0` |
 | [periphery](https://api.github.com/repos/peripheryapp/periphery/releases/latest) | 3.8.0 | `a2db299196ae774cd644c79fa6b1f67556d78de8` | `cc0eafdc5cc4c14965b172ac271006e04232982baa35056bdaf1effc8da9e22e` |
 
-These Swift tool observations retain published asset metadata and source qualification in `/tmp/nativeauthority/summary.json`; isolated acquisition probes are separately reported. Actual hosted workload/cache performance remains unqualified.
+These Swift tool observations retain published asset metadata and source qualification in `<tmp>/nativeauthority/summary.json`; isolated acquisition probes are separately reported. Actual hosted workload/cache performance remains unqualified.
 
 The Gradle wrapper authority records execution engine `9.5.1` separately from bootstrap `9.4.1` source commit `2d6327017519d23b96af35865dc997fcb544fb40`. Distribution SHA256 is `bafc141b619ad6350fd975fc903156dd5c151998cc8b058e8c1044ab5f7b031f`; actual project script SHA256 is `aed171fb114f82e6eaea4970a245a200e0582a7dcc8ec0891ca41b6e4a62b754`; JAR SHA256 is `55243ef57851f12b070ad14f7f5bb8302daceeebc5bce5ece5fa6edb23e1145c`. The JAR matches official 9.4.1 bytes. The project-generated script has a template-origin/VM-options substitution; it must not be described as byte-identical to the official root script. Source comparison is retained in `<tmp>/velnor-gradle-authority/README.md`.
 
