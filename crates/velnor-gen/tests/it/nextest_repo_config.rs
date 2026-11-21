@@ -103,7 +103,7 @@ fn the_velnor_ci_serial_group_holds_every_plan_main_groups_test() -> TestResult 
     Ok(())
 }
 
-const TEN_SECOND_TESTS: [&str; 8] = [
+const TEN_SECOND_TESTS: [&str; 14] = [
     "audit::build_directory::a_build_command_naming_a_build_directory_is_refused",
     "audit::groups::a_real_grouped_build_passes_the_audit",
     "audit::groups::a_real_grouped_build_passes_the_audit_through_a_symlinked_root",
@@ -112,6 +112,12 @@ const TEN_SECOND_TESTS: [&str; 8] = [
     "plan_diff::every_recorded_case_matches_the_legacy_op",
     "plan_main::a_push_reads_the_base_lock_while_it_fits_and_selects_everything_past_the_byte_budget",
     "io_plan_groups::plan_outputs_one_run_or_skip_per_group_and_root",
+    "plan_main_groups::a_merge_group_runs_a_group_that_only_names_events",
+    "plan_main_groups::a_merge_group_skips_a_group_whose_paths_the_diff_does_not_touch",
+    "plan_main_groups::a_merge_group_runs_a_group_whose_paths_the_diff_touches",
+    "plan_main_groups::a_merge_group_whose_diff_cannot_be_computed_runs_every_group",
+    "plan_main_groups::a_push_to_main_runs_every_group_whatever_its_paths_or_events",
+    "plan_main_groups::on_a_push_to_main_the_groups_follow_the_selection_of_the_default_lanes",
 ];
 
 fn covers(filter: &str, name: &str) -> bool {
@@ -122,7 +128,6 @@ fn covers(filter: &str, name: &str) -> bool {
     }
 }
 
-/// The period that nextest applies to `name`: the first override that sets a slow-timeout and matches it.
 fn first_timeout_period(entries: &[toml::Table], name: &str) -> Option<String> {
     entries
         .iter()
@@ -138,7 +143,8 @@ fn first_timeout_period(entries: &[toml::Table], name: &str) -> Option<String> {
 }
 
 #[test]
-fn the_scoped_ten_second_tier_is_the_timeout_nextest_applies_to_each_named_slow_test() -> TestResult {
+fn the_scoped_ten_second_tier_is_the_timeout_nextest_applies_to_each_named_slow_test() -> TestResult
+{
     for profile in PROFILES {
         let entries = overrides(profile)?;
         for name in TEN_SECOND_TESTS {
