@@ -22,7 +22,7 @@ fn anchor(id: u64, reference: &str, key: String) -> CacheEntry {
         reference: reference.to_owned(),
         size_in_bytes: 1,
         created_at: i64::try_from(id).unwrap_or(0),
-        last_accessed_at: NOW,
+        last_accessed_at: NOW - 2 * DAY,
     }
 }
 
@@ -135,4 +135,28 @@ fn anchors_do_not_displace_or_count_as_tools_entries() {
     ];
     assert_eq!(plan(&entries, 0), [1]);
     assert_eq!(plan(&entries, u64::MAX), Vec::<u64>::new());
+}
+
+#[test]
+fn an_anchor_read_within_the_last_day_is_never_trimmed() {
+    let mut entries: Vec<_> = (1..=3)
+        .map(|id| anchor(id, MAIN, anchor_key("Linux-X64", 'a', id)))
+        .collect();
+    entries[0].last_accessed_at = NOW;
+    assert_eq!(plan(&entries, 0), Vec::<u64>::new());
+}
+
+#[test]
+fn newest_by_created_at_wins_even_when_last_accessed_orders_differently() {
+    let entry = |id: u64, created_at: i64, last_accessed_at: i64| CacheEntry {
+        created_at,
+        last_accessed_at,
+        ..anchor(id, MAIN, anchor_key("Linux-X64", 'a', id))
+    };
+    let entries = [
+        entry(1, 3, NOW - 4 * DAY),
+        entry(2, 1, NOW - 2 * DAY),
+        entry(3, 2, NOW - 3 * DAY),
+    ];
+    assert_eq!(plan(&entries, u64::MAX), [2]);
 }

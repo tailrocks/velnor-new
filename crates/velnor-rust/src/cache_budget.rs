@@ -210,7 +210,7 @@ fn tier(
                 4
             })
         }
-        (CacheFamily::Sources, _) if !idle(1) => None,
+        (CacheFamily::Sources | CacheFamily::ToolsAnchor, _) if !idle(1) => None,
         (CacheFamily::Target | CacheFamily::Sources, _) if rank >= 2 => Some(2),
         (CacheFamily::ToolsAnchor, _) if rank >= ANCHOR_GENERATIONS => Some(0),
         (CacheFamily::Tools, _) if rank > 0 && idle(7) => Some(3),
