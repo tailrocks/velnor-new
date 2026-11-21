@@ -15,4 +15,9 @@ exec kingfisher scan . --git-history none --confidence low --no-validate --redac
   --exclude '**/crates/velnor-runner-attestation/tests/fixtures/tough/snakeoil.pem' \
   --exclude '**/velnor-gen/tests/it/detect_private.rs' \
   --exclude 'dist/**/index.js' --exclude 'dist/index.js' \
-  --exclude 'e2e/**'
+  --exclude 'e2e/**' \
+  --exclude '.velnor/runner.lock' \
+  --exclude 'docs/implemented/evidence/freshness-2026-10-20/qualification/mise-crypto-admission.json' \
+  --exclude 'docs/implemented/freshness-evidence-2026-10-08.md' \
+  --exclude 'docs/reviews/ci-performance-owned-source-publication.json' \
+  --exclude 'docs/reviews/uv-0.12.23-qualification-evidence.json'
