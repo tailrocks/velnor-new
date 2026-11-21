@@ -13,7 +13,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
-use crate::support::fresh_dir;
+use crate::plan_diff_repo::{collect_files, repository, repository_with};
 
 pub(crate) fn data() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/it/data/plan_diff")
@@ -21,29 +21,6 @@ pub(crate) fn data() -> PathBuf {
 
 pub(crate) fn read(path: &Path) -> String {
     fs::read_to_string(path).unwrap_or_else(|e| unreachable!("{}: {e}", path.display()))
-}
-
-fn git(repo: &Path, args: &[&str]) -> String {
-    let output = Command::new("git")
-        .arg("-C")
-        .arg(repo)
-        .args(["-c", "user.name=t", "-c", "user.email=t@example.com"])
-        .args([
-            "-c",
-            "commit.gpgsign=false",
-            "-c",
-            "core.hooksPath=/dev/null",
-        ])
-        .args(args)
-        .env("GIT_CONFIG_NOSYSTEM", "1")
-        .output()
-        .unwrap_or_else(|e| unreachable!("{e}"));
-    assert!(
-        output.status.success(),
-        "git {args:?}: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    String::from_utf8_lossy(&output.stdout).trim().to_owned()
 }
 
 fn copy_tree(from: &Path, to: &Path) {
@@ -60,62 +37,6 @@ fn copy_tree(from: &Path, to: &Path) {
             fs::copy(entry.path(), &target).unwrap_or_else(|e| unreachable!("{e}"));
         }
     }
-}
-
-fn collect_files(dir: &Path, root: &Path, found: &mut Vec<PathBuf>) {
-    let Ok(entries) = fs::read_dir(dir) else {
-        return;
-    };
-    for entry in entries.filter_map(Result::ok) {
-        if entry.path().is_dir() {
-            collect_files(&entry.path(), root, found);
-        } else if let Ok(relative) = entry.path().strip_prefix(root) {
-            found.push(relative.to_path_buf());
-        }
-    }
-}
-
-/// The case's repository: a base commit and a head commit for a `pull_request` or fork,
-/// one commit for a local run. Returns the repository and the commits' ids.
-fn repository(case: &Path, event: &str, name: &str) -> (PathBuf, String, String) {
-    repository_with(case, event, name, "")
-}
-
-pub(crate) fn repository_with(
-    case: &Path,
-    event: &str,
-    name: &str,
-    config_tail: &str,
-) -> (PathBuf, String, String) {
-    let repo = fresh_dir("velnor-ci-plan-diff", name);
-    git(&repo, &["init", "-q", "-b", "main"]);
-    let snapshot = case.join("snapshot");
-    copy_tree(&snapshot.join("common"), &repo);
-    if !config_tail.is_empty() {
-        let config = repo.join(".velnor/config.toml");
-        fs::write(&config, read(&config) + config_tail).unwrap_or_else(|e| unreachable!("{e}"));
-    }
-    copy_tree(&snapshot.join("base-only"), &repo);
-    git(&repo, &["add", "-A"]);
-    git(&repo, &["commit", "-q", "-m", "base", "--allow-empty"]);
-    let base = git(&repo, &["rev-parse", "HEAD"]);
-    if event != "local" {
-        let base_only = snapshot.join("base-only");
-        let mut stale = Vec::new();
-        collect_files(&base_only, &base_only, &mut stale);
-        for file in stale {
-            let path = file
-                .to_string_lossy()
-                .trim_end_matches(".fixture")
-                .to_owned();
-            fs::remove_file(repo.join(path)).unwrap_or_else(|e| unreachable!("{e}"));
-        }
-        copy_tree(&snapshot.join("head-only"), &repo);
-        git(&repo, &["add", "-A"]);
-        git(&repo, &["commit", "-q", "-m", "head"]);
-    }
-    let head = git(&repo, &["rev-parse", "HEAD"]);
-    (repo, base, head)
 }
 
 /// Where a run's request and outputs go: beside the repository, which they must not dirty.
@@ -302,13 +223,16 @@ fn an_untracked_file_runs_every_job() {
     fs::remove_dir_all(aside(&repo)).unwrap_or_else(|e| unreachable!("{e}"));
 }
 
+fn check_tail(id: &str) -> String {
+    let quoted = serde_json::Value::from(id).to_string();
+    format!(
+        "\n[[checks]]\nid = {quoted}\ninputs = [\"zzz-never\"]\nselection = \"declared_inputs\"\n"
+    )
+}
+
 fn planned_with_check(name: &str, id: &str) -> (PathBuf, Output) {
     let case = data().join("pr-one-crate");
-    let quoted = serde_json::Value::from(id).to_string();
-    let tail = format!(
-        "\n[[checks]]\nid = {quoted}\ninputs = [\"zzz-never\"]\nselection = \"declared_inputs\"\n"
-    );
-    let (repo, base, head) = repository_with(&case, "pull_request", name, &tail);
+    let (repo, base, head) = repository_with(&case, "pull_request", name, &check_tail(id));
     let request = bind(&read(&case.join("request.json")), &base, &head);
     let output = planned(&request, &repo);
     (repo, output)
@@ -337,17 +261,25 @@ fn a_check_id_with_a_line_break_is_refused_and_adds_no_output_key() {
 
 #[test]
 fn a_check_id_outside_the_identifier_alphabet_is_refused() {
+    // One repository: each id goes into the checked-out config, which the plan refuses before it diffs.
+    let case = data().join("pr-one-crate");
+    let (repo, base, head) = repository(&case, "pull_request", "odd-id");
+    let request = bind(&read(&case.join("request.json")), &base, &head);
+    let config = repo.join(".velnor/config.toml");
+    let checked_out = read(&config);
     for id in ["", "a b", "a,b", "a/b", "é"] {
-        let (repo, output) = planned_with_check("odd-id", id);
+        fs::write(&config, checked_out.clone() + &check_tail(id))
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        let output = planned(&request, &repo);
         assert!(!output.status.success(), "{id:?}");
         let stderr = String::from_utf8_lossy(&output.stderr);
         assert!(
             stderr.contains("diff_selection_not_supported:check_id"),
             "{stderr}"
         );
-        fs::remove_dir_all(&repo).unwrap_or_else(|e| unreachable!("{e}"));
-        fs::remove_dir_all(aside(&repo)).unwrap_or_else(|e| unreachable!("{e}"));
     }
+    fs::remove_dir_all(&repo).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::remove_dir_all(aside(&repo)).unwrap_or_else(|e| unreachable!("{e}"));
 }
 
 #[test]

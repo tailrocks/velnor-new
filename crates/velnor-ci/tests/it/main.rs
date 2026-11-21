@@ -109,6 +109,7 @@ mod mise_pin;
 mod plan;
 mod plan_api;
 mod plan_diff;
+mod plan_diff_repo;
 mod plan_git;
 mod plan_main;
 mod plan_main_groups;
