@@ -42,7 +42,10 @@ fi
 if [ -z "$diff_file" ]; then
   diff_file=$(mktemp)
   trap 'rm -f "$diff_file" "$tree_file"' EXIT
-  git diff -U100000000 "$base...HEAD" -- $gate_dirs >"$diff_file"
+  moved_from=$(git diff -M --name-status "$base...HEAD" | awk -F'\t' -v dirs="$gate_dirs" '
+    BEGIN { n = split(dirs, d, " ") }
+    $1 ~ /^R/ { for (i = 1; i <= n; i++) if (index($3, d[i] "/") == 1) { print $2; break } }')
+  git diff -M -U100000000 "$base...HEAD" -- $gate_dirs $moved_from >"$diff_file"
   tree_file=$(mktemp)
   if [ "$scan_tree" = 1 ]; then
     git ls-files -- $(printf '%s/src ' $gate_dirs) | while IFS= read -r f; do

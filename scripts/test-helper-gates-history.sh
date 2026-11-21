@@ -61,3 +61,20 @@ fi
 echo 'The key needs velnor-ci 0.1.110 or later.' >docs/rust-ci.md
 git commit -qam "doc states only the version"
 bash "$checker" "$marker"
+
+git checkout -q -b move-base "$marker"
+mkdir -p generator
+echo '    gate(RustCi, "budget", (0, 1, 110)),' >generator/gates.rs
+git add generator/gates.rs
+git commit -qm "an unmarked gate outside the gate crates"
+moved_base=$(git rev-parse HEAD)
+mkdir -p crates/velnor-gen/src
+git mv generator/gates.rs crates/velnor-gen/src/gates.rs
+git commit -qm "move the file into the gate crates unchanged"
+bash "$checker" "$moved_base"
+echo '    gate(RustCi, "lint", (0, 1, 110)),' >>crates/velnor-gen/src/gates.rs
+git commit -qam "add an unmarked released gate to the moved file"
+if bash "$checker" "$moved_base"; then
+  echo "the check accepted a new unmarked released gate in a moved file" >&2
+  exit 1
+fi
