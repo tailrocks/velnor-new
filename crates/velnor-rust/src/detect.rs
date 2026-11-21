@@ -154,8 +154,7 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
         .transpose()?;
     crate::config_test_lane::check(&config, &rust_roots)?;
     crate::config_root_timeouts::check(&config, &rust_roots)?;
-    let current = crate::config_check_configurations::current(helper.as_ref());
-    crate::config_check_configurations::check(view, &config, &rust_roots, current)?;
+    crate::config_check_configurations::check(view, &config, &rust_roots, helper.as_ref())?;
     let toolchain = toolchain(&view.files)?;
     let tools = crate::config_lint::pinned_tools(view, &config)?;
     check_setup_files(view, &rust_roots)?;

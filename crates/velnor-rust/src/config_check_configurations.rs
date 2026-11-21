@@ -61,8 +61,9 @@ pub(crate) fn check(
     view: &RepoView,
     config: &RustCiConfig,
     rust_roots: &[RustRoot],
-    current: bool,
+    helper: Option<&HelperRelease>,
 ) -> Result<(), DetectError> {
+    let current = current(helper);
     let invalid = |reason| DetectError::invalid(&CONFIG_PATH, reason);
     if current
         && let Some(index) = config
