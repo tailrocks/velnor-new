@@ -1,8 +1,7 @@
 # Repository policy, enforced by asamarts/alint as the generated lint-alint job
 # (`[[lint]]` in .velnor/rust-ci.toml; the pin is in mise.toml).
 # Local rules cover generic file/path requirements and agent-instruction
-# file integrity only. The no-doctests scanner runs as a mise-task lint (see
-# `lint-no-doctests` in mise.toml), so the Python pin applies to it.
+# file integrity only.
 # No dependency-architecture, Rust-syntax, or test-layout claims: Alint
 # cannot inspect those (see docs/proposed/rust-quality-contract.md §1, §4).
 #
