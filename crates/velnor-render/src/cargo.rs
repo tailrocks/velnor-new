@@ -3,7 +3,7 @@
 
 use velnor_model::{
     BUILD_TESTS_STEP, CargoCommand, FilterRef, Job, LINT_STEP, LaneFeatures, RepoPath, StepKind,
-    TEST_STEP, TargetKind, TargetName,
+    TEST_STEP, TargetKind, TargetName, WorkflowPlan,
 };
 
 use crate::cargo_features::NO_TESTS_PASS;
@@ -49,7 +49,7 @@ impl ArtifactFormat {
     }
 }
 
-pub(crate) fn cargo_lane(job: &Job) -> CargoLane {
+pub(crate) fn cargo_lane(job: &Job, plan: &WorkflowPlan) -> CargoLane {
     let artifacts = job
         .steps
         .iter()
@@ -74,7 +74,7 @@ pub(crate) fn cargo_lane(job: &Job) -> CargoLane {
             .steps
             .iter()
             .any(|step| matches!(step.kind, StepKind::PrivateFetch { .. })),
-        literal_roots: crate::source_roots::literal_roots(job),
+        literal_roots: crate::source_roots::literal_roots(job, plan),
     }
 }
 

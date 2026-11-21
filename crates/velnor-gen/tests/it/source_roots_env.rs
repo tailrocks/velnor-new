@@ -172,3 +172,17 @@ fn the_helper_just_below_the_literal_roots_gate_still_hoists_the_roots() -> Test
     assert!(run.contains("--roots $VELNOR_SOURCE_ROOTS_"), "{run}");
     Ok(())
 }
+
+#[test]
+fn a_single_root_longer_than_the_run_limit_is_refused_by_the_cache_key_limit_at_every_helper()
+-> TestResult {
+    let manifest = format!("{}/Cargo.toml", vec!["a".repeat(240); 9].join("/"));
+    for helper in [HELPER, LITERAL_HELPER] {
+        let error = workflow(&repo(&[manifest.as_str()], helper)?)
+            .err()
+            .ok_or("an oversized root rendered")?
+            .to_string();
+        assert!(error.contains("a cache key can be"), "{helper}: {error}");
+    }
+    Ok(())
+}

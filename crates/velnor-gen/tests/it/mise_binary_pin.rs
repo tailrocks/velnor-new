@@ -309,3 +309,53 @@ fn a_mixed_case_ubuntu_label_below_the_case_insensitive_helper_selects_the_diges
     }
     Ok(())
 }
+
+fn lint_job_inputs(helper: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    let config = format!(
+        "runner = 'Ubuntu-Latest'\nhosted = true\n\n{}",
+        crate::lint_lane::LINT
+    );
+    let mut repo = crate::lint_lane::repo(&config)?;
+    pin_helper(&mut repo, helper)?;
+    let yaml: serde_json::Value = serde_saphyr::from_str(&workflow(&repo)?)?;
+    let mut inputs = Vec::new();
+    for id in crate::lint_lane::IDS {
+        let steps = yaml["jobs"][*id]["steps"].as_array().ok_or("no steps")?;
+        assert!(
+            !steps.iter().any(|step| step["name"]
+                .as_str()
+                .is_some_and(|name| name.starts_with("Install velnor-ci"))),
+            "{id}: the job is meant to hold no helper step"
+        );
+        for step in steps {
+            if step["uses"]
+                .as_str()
+                .is_some_and(|uses| uses.starts_with("jdx/mise-action@"))
+            {
+                let input = step["with"]["sha256"].as_str().ok_or("no sha256 input")?;
+                inputs.push(input.to_owned());
+            }
+        }
+    }
+    Ok(inputs)
+}
+
+#[test]
+fn a_mise_only_job_follows_the_workflow_helper_for_a_mixed_case_ubuntu_label() -> TestResult {
+    let inputs = lint_job_inputs("0.1.112")?;
+    assert_eq!(inputs.len(), crate::lint_lane::IDS.len(), "{inputs:?}");
+    for input in inputs {
+        assert_eq!(input, DIGESTS[1].1);
+    }
+    Ok(())
+}
+
+#[test]
+fn a_mise_only_job_below_the_case_insensitive_helper_selects_the_digest_by_runner() -> TestResult {
+    let inputs = lint_job_inputs("0.1.111")?;
+    assert_eq!(inputs.len(), crate::lint_lane::IDS.len(), "{inputs:?}");
+    for input in inputs {
+        assert_selection("Ubuntu-Latest lint", &input)?;
+    }
+    Ok(())
+}

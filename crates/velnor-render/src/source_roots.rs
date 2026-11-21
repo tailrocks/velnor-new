@@ -40,8 +40,8 @@ pub(crate) fn roots_env(manifests: &[RepoPath]) -> Option<(String, String)> {
 
 const LITERAL_ROOTS_HELPER: (u64, u64, u64) = (0, 1, 112);
 
-pub(crate) fn literal_roots(job: &Job) -> bool {
-    crate::job_helper::at_least(job, LITERAL_ROOTS_HELPER)
+pub(crate) fn literal_roots(job: &Job, plan: &WorkflowPlan) -> bool {
+    crate::job_helper::at_least(job, plan, LITERAL_ROOTS_HELPER)
 }
 
 fn collect(
@@ -66,7 +66,7 @@ pub(crate) fn workflow_roots(
     collect(
         plan.jobs
             .iter()
-            .filter(|job| !literal_roots(job))
+            .filter(|job| !literal_roots(job, plan))
             .flat_map(|job| &job.steps)
             .filter_map(|step| match &step.kind {
                 StepKind::SourcesFetchAll { manifests, .. } => roots_env(manifests),

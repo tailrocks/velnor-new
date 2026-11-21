@@ -60,7 +60,7 @@ const A_NEED_FAILED: &str =
 
 pub(crate) fn rendered_job(job: &Job, plan: &WorkflowPlan) -> RenderedJob {
     let (restores, audit) = crate::base_steps::job_setup(job);
-    let lane = crate::cargo::cargo_lane(job);
+    let lane = crate::cargo::cargo_lane(job, plan);
     let tests = Tests::of(job);
     let mut steps =
         crate::helper_integrity::secure_steps(job, job_steps(job, restores, audit, &tests, lane));
@@ -113,7 +113,7 @@ pub(crate) fn rendered_job(job: &Job, plan: &WorkflowPlan) -> RenderedJob {
             steps,
             ..RenderedJob::default()
         },
-        crate::job_helper::release_of(job),
+        crate::job_helper::release_of(job, plan),
     )
 }
 
