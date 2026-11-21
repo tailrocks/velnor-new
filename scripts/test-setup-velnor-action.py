@@ -10,6 +10,7 @@ import shutil
 import subprocess
 import tarfile
 import tempfile
+import time
 import unittest
 
 
@@ -19,7 +20,7 @@ RELEASE_URL = f"{RELEASES}/tools-v0.1.79/velnor-ci-x86_64-unknown-linux-musl.tar
 LEGACY_RELEASE_URL = f"{RELEASES}/rust-ci-v0.1.79/velnor-ci-x86_64-unknown-linux-musl.tar.gz"
 PAYLOAD = b"the released velnor-ci binary\n"
 DIGEST_TOOLS = ("sha256sum", "shasum")
-SCRIPT_TOOLS = ("bash", "cut", "tr", "mktemp", "rm", "cp", "mkdir", "chmod", "mv", "wc", "gzip", "head", "sleep", "seq", "env", "sync", "find", "uname")
+SCRIPT_TOOLS = ("bash", "cut", "tr", "mktemp", "rm", "cp", "mkdir", "chmod", "mv", "wc", "gzip", "head", "sleep", "seq", "env", "sync", "find", "uname", "sort", "stat", "touch")
 ARCHIVE = "velnor-ci-x86_64-unknown-linux-musl.tar.gz"
 PLATFORMS = (
     ("Linux", "X64", "x86_64-unknown-linux-musl", "SHA256_LINUX_X64"),
@@ -92,6 +93,31 @@ fi
 exec "$REAL_MV" "$@"
 """
 
+STUB_PLANT_PID_QUARANTINE_MV = """#!/bin/sh
+for arg; do last="$arg"; done
+case "$last" in
+  */.velnor-ci.evict.*)
+    if [ ! -e "$STUB_RACE_MARK" ]; then
+      : > "$STUB_RACE_MARK"
+      cp "$STUB_RACE" "${last%/*}/.velnor-ci.evict.$PPID"
+    fi ;;
+esac
+exec "$REAL_MV" "$@"
+"""
+
+STUB_PLANT_QUARANTINE_MV = """#!/bin/sh
+for arg; do src="$dst"; dst="$arg"; done
+"$REAL_MV" "$@" || exit $?
+case "$dst" in
+  */.velnor-ci.evict.*)
+    if [ ! -e "$STUB_RACE_MARK" ]; then
+      : > "$STUB_RACE_MARK"
+      cp -p "$STUB_RACE" "$dst"
+      cp -p "$STUB_RACE" "$src"
+    fi ;;
+esac
+"""
+
 STUB_TAR = """#!/bin/sh
 if [ -p /dev/stdin ]; then pipe=pipe; else pipe=none; fi
 printf '%s\\t%s\\n' "$pipe" "$*" >> "$STUB_TAR_LOG"
@@ -114,6 +140,60 @@ for arg; do
   case "$arg" in */velnor-ci-x86_64-unknown-linux-musl.tar.gz) printf '%s\\n' "$2" >> "$STUB_READ_LOG" ;; esac
 done
 exec "$REAL_HEAD" "$@"
+"""
+
+STUB_FAILING_FIRST_HEAD = """#!/bin/sh
+if [ ! -e "$STUB_HEAD_MARK" ]; then
+  : > "$STUB_HEAD_MARK"
+  echo "head: write error: No space left on device" >&2
+  exit 1
+fi
+exec "$REAL_HEAD" "$@"
+"""
+
+STUB_NO_INODE_MKTEMP = """#!/bin/sh
+for arg; do
+  case "$arg" in *.velnor-ci.evict.*) echo "mktemp: $arg: No space left on device" >&2; exit 1 ;; esac
+done
+exec "$REAL_MKTEMP" "$@"
+"""
+
+STUB_FAILING_RM = """#!/bin/sh
+for arg; do
+  case "$arg" in *.velnor-ci.evict.*) echo "rm: $arg: Permission denied" >&2; exit 1 ;; esac
+done
+exec "$REAL_RM" "$@"
+"""
+
+STUB_RESTORE_RACE_MV = """#!/bin/sh
+for arg; do last="$arg"; done
+case "$last" in
+  *.velnor-ci.evict.*)
+    if [ ! -e "$STUB_RACE_MARK" ]; then
+      : > "$STUB_RACE_MARK"
+      for arg; do
+        case "$arg" in */velnor-ci-x86_64-unknown-linux-musl.tar.gz) cp "$STUB_RACE" "$arg" ;; esac
+      done
+    fi ;;
+  *)
+    case "$*" in *.velnor-ci.evict.*) printf 'planted\\n' > "$last" ;; esac ;;
+esac
+exec "$REAL_MV" "$@"
+"""
+
+WATCHED_TOOLS = (
+    "cat", "head", "tail", "dd", "cp", "od", "xxd", "hexdump", "sha256sum", "shasum", "tar", "gzip", "zcat",
+    "wc", "awk", "sed", "grep", "base64", "strings", "openssl", "find", "mv", "rm",
+)
+NON_READING_TOOLS = ("find", "mv", "rm")
+
+
+def watch_shim(name, real):
+    return f"""#!/bin/sh
+for arg; do
+  case "$arg" in *"$STUB_WATCHED"*) printf '%s %s\\n' "{name}" "$*" >> "$STUB_READ_LOG" ;; esac
+done
+exec "{real}" "$@"
 """
 
 
@@ -637,6 +717,35 @@ class SetupVelnorInstallTests(unittest.TestCase):
         requested = [int(count) for count in read_log.read_text().split()] if read_log.exists() else []
         self.assertEqual(requested, [], f"head was asked for {sum(requested)} bytes of an oversized store entry")
 
+    def test_an_oversized_store_entry_is_not_read_by_any_command(self):
+        cached = self.cached_archive()
+        cached.parent.mkdir(parents=True)
+        cached.write_bytes(self.archive)
+        with cached.open("r+b") as handle:
+            handle.truncate(268435457)
+        read_log = self.root / "store-entry-calls.log"
+        for name in WATCHED_TOOLS:
+            real = shutil.which(name)
+            if real is None:
+                continue
+            stub = self.stub_bin / name
+            stub.write_text(watch_shim(name, real))
+            stub.chmod(0o755)
+        result = self.install(
+            sha256(self.archive),
+            extra_env={
+                "STUB_MISSING": "tools-v0.1.79 rust-ci-v0.1.79",
+                "STUB_WATCHED": str(cached),
+                "STUB_READ_LOG": str(read_log),
+            },
+        )
+        self.assertEqual(result.returncode, 1, result.output)
+        self.assertFalse(cached.exists(), "an oversized store entry survived the job")
+        calls = read_log.read_text().splitlines() if read_log.exists() else []
+        self.assertTrue(calls, "the eviction did not name the store entry at all, so the check saw nothing")
+        reads = [call for call in calls if call.split()[0] not in NON_READING_TOOLS]
+        self.assertEqual(reads, [], "a command read the bytes of an oversized store entry")
+
     def test_a_verified_copy_published_during_an_eviction_is_kept_for_the_next_job(self):
         cached = self.cached_archive()
         cached.parent.mkdir(parents=True)
@@ -660,6 +769,192 @@ class SetupVelnorInstallTests(unittest.TestCase):
         self.assertEqual(second.returncode, 0, second.output)
         self.assertEqual(self.curl_calls(), [])
         self.assertEqual(self.installed_binary().read_bytes(), PAYLOAD)
+
+    def test_a_verified_archive_retained_by_an_earlier_eviction_is_not_overwritten_by_a_later_one(self):
+        cached = self.cached_archive()
+        cached.parent.mkdir(parents=True)
+        cached.write_bytes(b"tampered archive\n")
+        stub = self.stub_bin / "mv"
+        stub.write_text(STUB_PLANT_PID_QUARANTINE_MV)
+        stub.chmod(0o755)
+        result = self.install(
+            sha256(self.archive),
+            extra_env={
+                "STUB_RACE": str(self.payload),
+                "STUB_RACE_MARK": str(self.root / "race-mark"),
+                "REAL_MV": shutil.which("mv"),
+                "STUB_MISSING": "tools-v0.1.79 rust-ci-v0.1.79",
+            },
+        )
+        self.assertEqual(result.returncode, 1, result.output)
+        retained = [path for path in installed_files(self.tool_cache) if path.read_bytes() == self.archive]
+        self.assertTrue(retained, "a verified archive kept by an earlier eviction was overwritten and deleted")
+
+    def test_kept_quarantines_are_pruned_to_the_newest_three_and_a_symlink_among_them_is_not_followed(self):
+        cached = self.cached_archive()
+        cached.parent.mkdir(parents=True)
+        cached.write_bytes(b"tampered archive\n")
+        stub = self.stub_bin / "mv"
+        stub.write_text(STUB_PLANT_QUARANTINE_MV)
+        stub.chmod(0o755)
+        now = time.time()
+        stale = []
+        for index, age in enumerate((5000, 4000, 3000, 2000, 1000)):
+            entry = cached.parent / f".velnor-ci.evict.{100 + index}.{index}"
+            entry.write_bytes(b"old quarantine\n")
+            os.utime(entry, (now - age, now - age))
+            stale.append((entry.name, age))
+        outside = self.root / "outside-target"
+        outside.write_bytes(b"outside the quarantine\n")
+        link = cached.parent / ".velnor-ci.evict.1.1"
+        link.symlink_to(outside)
+        os.utime(link, (now - 10000, now - 10000), follow_symlinks=False)
+        result = self.install(
+            sha256(self.archive),
+            extra_env={
+                "STUB_RACE": str(self.payload),
+                "STUB_RACE_MARK": str(self.root / "race-mark"),
+                "REAL_MV": shutil.which("mv"),
+                "STUB_MISSING": "tools-v0.1.79 rust-ci-v0.1.79",
+            },
+        )
+        self.assertEqual(result.returncode, 1, result.output)
+        self.assertIn("is kept at", result.output)
+        remaining = sorted(path.name for path in cached.parent.glob(".velnor-ci.evict.*"))
+        self.assertEqual(len(remaining), 3, f"expected the newest three quarantines, found {remaining}")
+        self.assertIn(".velnor-ci.evict.104.4", remaining)
+        self.assertIn(".velnor-ci.evict.103.3", remaining)
+        kept = [path for path in cached.parent.glob(".velnor-ci.evict.*") if path.read_bytes() == self.archive]
+        self.assertEqual(len(kept), 1, "the verified quarantine written by this eviction was not kept")
+        self.assertFalse(link.is_symlink(), "the stale symlink in the quarantine was not removed")
+        self.assertEqual(outside.read_bytes(), b"outside the quarantine\n", "a quarantine symlink was followed")
+
+    def test_the_archive_kept_by_an_eviction_is_not_pruned_as_its_own_oldest_quarantine(self):
+        cached = self.cached_archive()
+        cached.parent.mkdir(parents=True)
+        cached.write_bytes(b"tampered archive\n")
+        now = time.time()
+        os.utime(self.payload, (now - 10000, now - 10000))
+        for index, age in enumerate((100, 200, 300)):
+            entry = cached.parent / f".velnor-ci.evict.{100 + index}.{index}"
+            entry.write_bytes(b"recent quarantine\n")
+            os.utime(entry, (now - age, now - age))
+        stub = self.stub_bin / "mv"
+        stub.write_text(STUB_PLANT_QUARANTINE_MV)
+        stub.chmod(0o755)
+        result = self.install(
+            sha256(self.archive),
+            extra_env={
+                "STUB_RACE": str(self.payload),
+                "STUB_RACE_MARK": str(self.root / "race-mark"),
+                "REAL_MV": shutil.which("mv"),
+                "STUB_MISSING": "tools-v0.1.79 rust-ci-v0.1.79",
+            },
+        )
+        self.assertEqual(result.returncode, 1, result.output)
+        self.assertIn("is kept at", result.output)
+        kept = [path for path in cached.parent.glob(".velnor-ci.evict.*") if path.read_bytes() == self.archive]
+        self.assertEqual(len(kept), 1, "the verified archive this eviction kept was pruned as the oldest quarantine")
+
+    def test_a_directory_at_the_store_entry_path_is_removed_when_the_download_fails(self):
+        cached = self.cached_archive()
+        cached.mkdir(parents=True)
+        (cached / "stale").write_bytes(b"left behind\n")
+        result = self.install(
+            sha256(self.archive), extra_env={"STUB_MISSING": "tools-v0.1.79 rust-ci-v0.1.79"}
+        )
+        self.assertEqual(result.returncode, 1, result.output)
+        self.assertFalse(
+            cached.exists() or cached.is_symlink(),
+            "a directory at the store entry path survived a job that could not download",
+        )
+
+    def test_a_dangling_symlink_at_the_store_entry_path_is_removed_when_the_download_fails(self):
+        cached = self.cached_archive()
+        cached.parent.mkdir(parents=True)
+        cached.symlink_to(self.root / "no-such-target")
+        result = self.install(
+            sha256(self.archive), extra_env={"STUB_MISSING": "tools-v0.1.79 rust-ci-v0.1.79"}
+        )
+        self.assertEqual(result.returncode, 1, result.output)
+        self.assertFalse(
+            cached.exists() or cached.is_symlink(),
+            "a dangling symlink at the store entry path survived a job that could not download",
+        )
+
+    def test_a_mismatched_store_entry_is_evicted_even_when_no_new_file_can_be_created_for_it(self):
+        cached = self.cached_archive()
+        cached.parent.mkdir(parents=True)
+        cached.write_bytes(b"tampered archive\n")
+        stub = self.stub_bin / "mktemp"
+        stub.write_text(STUB_NO_INODE_MKTEMP)
+        stub.chmod(0o755)
+        result = self.install(
+            sha256(self.archive),
+            extra_env={
+                "STUB_MISSING": "tools-v0.1.79 rust-ci-v0.1.79",
+                "REAL_MKTEMP": shutil.which("mktemp"),
+            },
+        )
+        self.assertEqual(result.returncode, 1, result.output)
+        self.assertFalse(cached.exists(), "a mismatched store entry survived because eviction needed a new file")
+
+    def test_a_healthy_store_entry_that_cannot_be_copied_to_the_runner_temp_directory_is_kept(self):
+        cached = self.cached_archive()
+        cached.parent.mkdir(parents=True)
+        cached.write_bytes(self.archive)
+        head = self.stub_bin / "head"
+        head.write_text(STUB_FAILING_FIRST_HEAD)
+        head.chmod(0o755)
+        head_mark = str(self.root / "head-mark")
+        first = self.install(
+            sha256(self.archive),
+            extra_env={"STUB_HEAD_MARK": head_mark, "STUB_MISSING": "tools-v0.1.79 rust-ci-v0.1.79"},
+        )
+        self.assertEqual(first.returncode, 1, first.output)
+        self.assertNotIn("removed the tool-cache copy", first.output)
+        self.assertIn("is kept", first.output)
+        self.assertTrue(
+            cached.is_file() and cached.read_bytes() == self.archive, "the healthy store entry was not kept"
+        )
+        self.stub_log.unlink(missing_ok=True)
+        self.github_path.write_text("")
+        second = self.install(sha256(self.archive), extra_env={"STUB_HEAD_MARK": head_mark})
+        self.assertEqual(second.returncode, 0, second.output)
+        self.assertIn("is in the tool cache", second.output)
+        self.assertEqual(self.curl_calls(), [])
+        self.assertEqual(self.installed_binary().read_bytes(), PAYLOAD)
+
+    def test_a_failed_removal_of_the_eviction_quarantine_does_not_abort_the_install(self):
+        cached = self.cached_archive()
+        cached.parent.mkdir(parents=True)
+        cached.write_bytes(b"tampered archive\n")
+        stub = self.stub_bin / "rm"
+        stub.write_text(STUB_FAILING_RM)
+        stub.chmod(0o755)
+        result = self.install(sha256(self.archive), extra_env={"REAL_RM": shutil.which("rm")})
+        self.assertEqual(result.returncode, 0, result.output)
+        self.assertEqual(self.installed_binary().read_bytes(), PAYLOAD)
+
+    def test_a_verified_archive_is_kept_when_it_cannot_be_put_back_at_the_store_entry_path(self):
+        cached = self.cached_archive()
+        cached.parent.mkdir(parents=True)
+        cached.write_bytes(b"tampered archive\n")
+        stub = self.stub_bin / "mv"
+        stub.write_text(STUB_RESTORE_RACE_MV)
+        stub.chmod(0o755)
+        result = self.install(
+            sha256(self.archive),
+            extra_env={
+                "STUB_RACE": str(self.payload),
+                "STUB_RACE_MARK": str(self.root / "race-mark"),
+                "REAL_MV": shutil.which("mv"),
+                "STUB_MISSING": "tools-v0.1.79 rust-ci-v0.1.79",
+            },
+        )
+        self.assertEqual(result.returncode, 1, result.output)
+        kept = [path for path in installed_files(self.tool_cache) if path.read_bytes() == self.archive]
+        self.assertTrue(kept, "the verified archive was deleted when it could not be put back at the store entry path")
 
     def test_every_download_attempt_is_capped_at_ten_minutes_and_a_fifteen_minute_retry_window(self):
         result = self.install(sha256(self.archive), extra_env={"STUB_MISSING": "tools-v0.1.79"})
