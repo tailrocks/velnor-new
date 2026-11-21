@@ -7,6 +7,7 @@ use std::ffi::OsStr;
 use std::io;
 use std::os::unix::net::UnixListener;
 use std::path::PathBuf;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[test]
 fn an_entry_that_cannot_be_listed_is_unknown_evidence() {
@@ -18,7 +19,11 @@ struct Dir(PathBuf);
 
 impl Dir {
     fn new(label: &str) -> Self {
-        let path = std::env::temp_dir().join(format!("velnor-mbx-{label}-{}", std::process::id()));
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_or(0, |since| since.as_nanos());
+        let path =
+            std::env::temp_dir().join(format!("velnor-mbx-{label}-{}-{nonce}", std::process::id()));
         std::fs::create_dir_all(&path).unwrap_or_else(|e| unreachable!("{e}"));
         Self(path)
     }
@@ -48,6 +53,14 @@ fn leftover_socket_path_without_a_socket_is_not_a_nested_session() {
     let regular = dir.0.join("regular.sock");
     std::fs::write(&regular, b"").unwrap_or_else(|e| unreachable!("{e}"));
     assert!(!inside_session(Some(regular.as_os_str())));
+}
+
+#[test]
+fn a_socket_left_by_a_dead_listener_is_not_a_nested_session() {
+    let dir = Dir::new("dropped");
+    let path = dir.0.join("mbx.sock");
+    drop(UnixListener::bind(&path).unwrap_or_else(|e| unreachable!("{e}")));
+    assert!(!inside_session(Some(path.as_os_str())));
 }
 
 #[test]
