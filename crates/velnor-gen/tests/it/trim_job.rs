@@ -4,7 +4,7 @@
 use std::fs;
 
 use velnor_gen::expected_with_notes;
-use velnor_model::{CacheKey, CacheRoot, Host, JobId, RepoPath};
+use velnor_model::{BaseScope, CacheKey, CacheRoot, Host, JobId, RepoPath};
 use velnor_render::render_key;
 use velnor_rust::{LOCK_PATH, pin_lock};
 

@@ -11,6 +11,8 @@ mod fixture;
 mod runtime;
 #[path = "runner_image_qualification_public/source.rs"]
 mod source;
+#[path = "runner_image_qualification_public/stall_bounds.rs"]
+mod stall_bounds;
 #[path = "runner_image_qualification_public/support.rs"]
 mod support;
 #[path = "runner_image_qualification_public/tool_versions.rs"]
@@ -369,30 +371,5 @@ fn public_qualifier_rejects_unfinished_exec() -> TestResult<()> {
     assert!(state.fault_reached);
     assert!(state.containers.is_empty());
     assert_eq!(state.volumes, Vec::<String>::new());
-    Ok(())
-}
-
-#[test]
-fn public_qualifier_bounds_docker_operations_and_streams() -> TestResult<()> {
-    for fault in [
-        ApiFault::StallImageInspect,
-        ApiFault::StallContainerCreate,
-        ApiFault::StallContainerStart,
-        ApiFault::StallContainerInspect,
-        ApiFault::StallWait,
-        ApiFault::StallLogs,
-        ApiFault::StallExecCreate,
-        ApiFault::StallExecStream,
-    ] {
-        let git = GitFixture::new()?;
-        let mut plan = ApiPlan::new(git.source_sha());
-        plan.fault = Some(fault);
-        let (output, state, elapsed) =
-            qualify_with_timeout_timed(&git, git.source_sha(), plan, Duration::from_secs(24))?;
-        assert_failed_and_cleaned(&output, &state);
-        let readiness = matches!(fault, ApiFault::StallExecCreate | ApiFault::StallExecStream);
-        assert!(elapsed < Duration::from_secs(if readiness { 22 } else { 9 }));
-        assert!(elapsed >= Duration::from_secs(if readiness { 11 } else { 4 }));
-    }
     Ok(())
 }
