@@ -10,6 +10,7 @@ const HELPER: &str = "0.1.110";
 const PLAN: &str = "rust-plan";
 const PLAN_ANCHOR: &str = "${{ needs.rust-plan.outputs.tools_anchor }}";
 const PLAN_ANCHOR_KEY: &str = "${{ needs.rust-plan.outputs.tools_anchor_key }}";
+const PLAN_ANCHOR_KEY_NAME: &str = "needs.rust-plan.outputs.tools_anchor_key";
 const PLAN_ANCHOR_KEY_OUTPUT: &str = "${{ steps.toolsanchor.outputs.cache-matched-key }}";
 const READ_ANCHOR: &str = "${{ steps.toolsread.outputs.anchor }}";
 const RECORDED: &str = "${{ steps.toolsrecord.outputs.digest }}";
@@ -304,6 +305,33 @@ fn a_job_that_names_the_anchor_entry_reads_its_key_from_the_plan_job() -> TestRe
             );
         }
         assert!(verified >= 1, "{config:?}");
+    }
+    Ok(())
+}
+
+#[test]
+fn every_job_reading_the_plan_anchor_key_has_it_declared_and_lists_the_plan_job() -> TestResult {
+    for config in STORES.iter().copied() {
+        for manifests in [
+            &["Cargo.toml", "tools/Cargo.toml"][..],
+            &["Cargo.toml", "a/Cargo.toml", "b/Cargo.toml"][..],
+        ] {
+            let yaml = render(manifests, config, "0.1.111")?;
+            let declared = yaml["jobs"][PLAN]["outputs"]
+                .as_object()
+                .is_some_and(|outputs| outputs.contains_key("tools_anchor_key"));
+            let mut readers = 0;
+            for (id, job) in jobs(&yaml)? {
+                let reads = serde_json::to_string(&job["steps"])?.contains(PLAN_ANCHOR_KEY_NAME);
+                if reads {
+                    readers += 1;
+                    assert!(declared, "{config:?} {id} reads an undeclared plan output");
+                    let needs = serde_json::to_string(&job["needs"])?;
+                    assert!(needs.contains(PLAN), "{config:?} {id} needs {needs}");
+                }
+            }
+            assert_eq!(declared, readers > 0, "{config:?} {manifests:?}");
+        }
     }
     Ok(())
 }

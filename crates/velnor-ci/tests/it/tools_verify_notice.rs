@@ -88,7 +88,6 @@ fn a_restored_malformed_anchor_names_the_anchor_entry_when_the_read_step_left_it
     let _ = recorded(&job);
     fs::write(&job.anchor, "velnor-tools-anchor-v1 not-a-digest\n")
         .unwrap_or_else(|e| unreachable!("{e}"));
-    // The read step writes an empty anchor for this file, so the check step gets an empty anchor.
     let stdout = check_stdout(
         &job,
         "",
