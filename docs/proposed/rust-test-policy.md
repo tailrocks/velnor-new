@@ -25,7 +25,7 @@ MUST NOT become an unreviewed escape hatch.
 Integration tests SHOULD use a small declared entry point, such as
 `tests/integration.rs`, with related cases in `tests/cases/`. Do not create one
 Cargo test binary per case file. Doctests are off: every lib sets
-`doctest = false` and the `no-doctests` alint rule fails on a doc fence
+`doctest = false` and the `lint-no-doctests` mise-task lint (`scripts/no-doctests.py`) fails on a doc fence
 (see former hard decision 1, removed in #608).
 The scanner follows rustdoc's Markdown rules for indented code. An indented line
 after a prose line continues that paragraph and is not a doctest; a blank line,

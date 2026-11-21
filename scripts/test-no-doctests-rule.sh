@@ -2,18 +2,8 @@
 set -euo pipefail
 
 repo="$(cd "$(dirname "$0")/.." && pwd)"
-config="${1:-$repo/.alint.yml}"
-alint_bin="${ALINT:-alint}"
 work="$(mktemp -d "${TMPDIR:-/tmp}/no-doctests.XXXXXX")"
 trap 'rm -rf "$work"' EXIT
-
-rule="$work/rule.yml"
-{
-  printf 'version: 1\nrules:\n'
-  awk '/^  - id: no-doctests/ {on = 1; print; next} /^  - id: / {on = 0} on && /^[^ #]/ {exit} on {print}' "$config"
-} > "$rule"
-grep -q 'id: no-doctests$' "$rule" || { echo "no-doctests rule not found in $config" >&2; exit 2; }
-grep -q 'id: no-doctests-scanner' "$rule" || { echo "no-doctests-scanner rule not found in $config" >&2; exit 2; }
 
 fails=0
 # check <name> <fail|pass> <file content with printf %b escapes>
@@ -22,7 +12,7 @@ check() {
   mkdir -p "$dir/crates/fx/src" "$dir/scripts"
   cp "$repo/scripts/no-doctests.py" "$dir/scripts/"
   printf '%b' "$3" > "$dir/crates/fx/src/lib.rs"
-  if "$alint_bin" check -c "$rule" "$dir" >/dev/null 2>&1; then got=pass; else got=fail; fi
+  if (cd "$dir" && python3 -I scripts/no-doctests.py) >/dev/null 2>&1; then got=pass; else got=fail; fi
   if [ "$got" != "$expect" ]; then
     echo "FAIL $name: expected $expect, got $got"
     fails=$((fails + 1))
@@ -40,24 +30,7 @@ check crlf_blank_indent fail '/// a\r\n///\r\n///     code\r\nfn f() {}\r\n'
 check include_str       fail '#[doc = include_str!("README.md")]\nfn f() {}\n'
 check attr_doc_fence    fail '#[doc = "```\\nlet x = 1;\\n```"]\nfn f() {}\n'
 check attr_nested_include fail '#![cfg_attr(all(), doc = include_str!("README.md"))]\nfn f() {}\n'
-check indent_list_cont  pass '/// - item\n///     onto the next line\nfn f() {}\n'
-check prose_cont_line   pass '/// prose\n///     let x = 1;\nfn f() {}\n'
-check prose_cont_three  pass '/// one\n/// two\n///     let x = 1;\nfn f() {}\n'
-check prose_cont_wide   pass '/// prose\n///       let x = 1;\nfn f() {}\n'
-check prose_cont_block  pass '/**\n * prose\n *     let x = 1;\n */\nfn f() {}\n'
-check prose_cont_attr   pass '#[doc = "prose\n    let x = 1;"]\nfn f() {}\n'
-check quote_lazy_cont   pass '/// > quote\n///     let x = 1;\nfn f() {}\n'
-check hr_indent         fail '/// ---\n///     let x = 1;\nfn f() {}\n'
-check list5_bare        fail '/// -     let x = 1;\nfn f() {}\n'
-check list5_after_prose fail '/// text\n/// -     let x = 1;\nfn f() {}\n'
-check list5_num         fail '/// text\n/// 1.     let x = 1;\nfn f() {}\n'
-check list5_star        fail '/// *     let x = 1;\nfn f() {}\n'
-check list5_plus        fail '/// +     let x = 1;\nfn f() {}\n'
-check list5_paren       fail '/// 1)     let x = 1;\nfn f() {}\n'
-check list5_quoted      fail '/// >     - let x = 1;\nfn f() {}\n'
-check list5_block       fail '/**\n * text\n * -     let x = 1;\n */\nfn f() {}\n'
-check list5_attr        fail '#[doc = "text\n-     let x = 1;"]\nfn f() {}\n'
-check quote5_after_prose fail '/// text\n/// >     let x = 1;\nfn f() {}\n'
+check list_item_no_blank pass '/// - item\n///     onto the next line\nfn f() {}\n'
 check block_outer_fence fail '/** ```\n * let x = 1;\n * ```\n */\nfn f() {}\n'
 check block_inner_tilde fail '/*! ~~~\n * let x = 1;\n * ~~~\n */\nfn f() {}\n'
 check block_one_line    fail '/** ```let x = 1;``` */\nfn f() {}\n'
@@ -74,6 +47,7 @@ check str_block_literal pass 'fn f() { let s = "/** ```"; }\n'
 check str_inner_literal pass 'fn f() { let s = "/*! ~~~"; }\n'
 check unicode_ident   pass 'fn café() {}\n/** plain prose */\nfn f() {}\n'
 check shebang_block    pass '#!/usr/bin/env run /** ```\nfn f() {}\n'
+check shebang_attr_sep fail '#! /* separator */ [allow(dead_code)] /** ```\n */\nfn f() {}\n'
 check block_indent_code fail '/**\n * prose\n *\n *     let x = 1;\n */\nfn f() {}\n'
 check block_inline_span pass '/** Use ```foo``` as an inline code span. */\nfn f() {}\n'
 check block_inline_mid  pass '/**\n * Call ~~~ here and ``` there.\n */\nfn f() {}\n'
@@ -134,8 +108,6 @@ check list_str_literal pass 'fn f() { let s = "- ```\n    x"; }\n'
 check attr_hex_escape_fence fail '#![doc = "prose\\x0a```\\x0aassert_eq!(1, 2);\\x0a```"]\npub fn f() {}\n'
 check attr_unicode_escape_fence fail '#![doc = "prose\\u{a}```\\u{a}assert_eq!(1, 2);\\u{a}```"]\npub fn f() {}\n'
 check attr_line_cont_fence fail '#![doc = "prose\\n\\\n```\\nassert_eq!(1, 2);\\n```"]\npub fn f() {}\n'
-check attr_escape_backtick_fence fail '#[doc = "\\x60\\x60\\x60\\nlet x = 1;\\n\\x60\\x60\\x60"]\npub fn f() {}\n'
-check attr_unicode_backtick_fence fail '#[doc = "\\u{60}\\u{60}\\u{60}\\nlet x = 1;\\n\\u{60}\\u{60}\\u{60}"]\npub fn f() {}\n'
 check attr_escape_inline_pass pass '#[doc = "Use \\x60\\x60\\x60foo inline"]\npub fn f() {}\n'
 check attr_gap_comment_fence fail '#[doc /* gap */ = "```\\nassert_eq!(1, 1);\\n```"]\npub fn f() {}\n'
 check attr_gap_comment_include fail '#[doc /* gap */ = include_str!("README.md")]\npub fn f() {}\n'
@@ -143,25 +115,13 @@ check attr_gap_line_comment_fence fail '#[doc // gap\n = "```\\nassert_eq!(1, 1)
 check footnote_block_unclosed fail '/**\n * prose\n *\n * [^x]: ```\n * assert_eq!(1, 2);\n */\nfn f() {}\n'
 check footnote_line_unclosed fail '/// [^x]: ```\n/// assert_eq!(1, 2);\nfn f() {}\n'
 check footnote_prose_pass pass '/// [^x]: plain footnote text\n/// assert_eq!(1, 2);\nfn f() {}\n'
-check cfg_attr_meta_after_doc pass '#[cfg_attr(all(), doc = "prose", deprecated(note = "```not docs```"))]\npub fn f() {}\n'
-check cfg_attr_doc_concat_comma fail '#[cfg_attr(all(), doc = concat!("prose", "```\\nx\\n```"))]\npub fn f() {}\n'
-check cfg_attr_doc_then_fence fail '#[cfg_attr(all(), doc = "prose", doc = "```\\nx\\n```")]\npub fn f() {}\n'
-check shebang_attr_sep fail '#! /* separator */ [allow(dead_code)] /** ```\n */\nfn f() {}\n'
-check line_space_tab   fail '/// \tlet x = 1;\nfn f() {}\n'
-check attr_tab_indent  fail '#[doc = "prose\\n\\n\\tassert_eq!(1, 1);"]\npub fn f() {}\n'
-check attr_cr_fence    fail '#[doc = "prose\\r\\r```\\rassert_eq!(1, 1);\\r```"]\npub fn f() {}\n'
-check attr_gap_opener  fail '#/* gap */[doc = "```\\nassert_eq!(1, 1);\\n```"]\npub fn f() {}\n'
-check attr_empty_marker fail '#[doc = "1.\\n       assert_eq!(1, 1);"]\npub fn f() {}\n'
-check cfg_doc_value    pass '#![allow(unexpected_cfgs)]\n#[cfg(doc = "```not documentation```")]\npub fn f() {}\n'
-check attr_env_macro   fail '#[doc = env!("MYDOC")]\npub fn f() {}\n'
-check attr_margin_pass pass '#[doc = "    assert!(true);"]\npub fn f() {}\n'
-check attr_margin_fence fail '#[doc = "    assert!(true);\\n\\nprose\\n\\n        code();"]\npub fn f() {}\n'
-check attr_gap_macro_bang fail '#[doc = env /* gap */ !("MYDOC")]\npub fn f() {}\n'
-check attr_raw_ident_doc fail '#[r#doc = "```\\nassert_eq!(1, 1);\\n```"]\npub fn f() {}\n'
 check attr_gap_hash_fence fail '# /* gap */ [doc = "```\\nassert_eq!(1, 1);\\n```"]\npub fn f() {}\n'
 check shebang_gap_attr  fail '#!/* g */[doc = "```\\nassert_eq!(1, 1);\\n```"]\npub fn f() {}\n'
 check line_tab_indent   fail '/// text\n///\n/// \tassert_eq!(1, 1);\npub fn f() {}\n'
+check attr_tab_indent   fail '#[doc = "prose\\n\\n\\tassert_eq!(1, 1);"]\npub fn f() {}\n'
 check block_tab_indent  fail '/**\n * prose\n *\n * \tassert_eq!(1, 1);\n */\npub fn f() {}\n'
+check attr_cr_fence_outer fail '#[doc = "prose\\r\\r```\\rassert_eq!(1, 1);\\r```"]\npub fn f() {}\n'
+check attr_cr_fence     fail '#![doc = "prose\\r```\\rassert_eq!(1, 1);\\r```"]\npub fn f() {}\n'
 check attr_cr_indent    fail '#![doc = "prose\\r\\r    assert_eq!(1, 1);\\r"]\npub fn f() {}\n'
 check line_list_indent  fail '/// -     assert_eq!(1, 1);\npub fn f() {}\n'
 check block_list_indent fail '/**\n * -     assert_eq!(1, 1);\n */\npub fn f() {}\n'
@@ -175,6 +135,83 @@ check dash_adjacent_prose pass '/// Doc.\n/// -- text\n/// --     text\npub fn f
 check line_tab_then_space pass '/// text\n///\n///\t assert_eq!(1, 1);\npub fn f() {}\n'
 check line_tab_two_tabs fail '/// text\n///\n///\t\tassert_eq!(1, 1);\npub fn f() {}\n'
 check line_tab_then_four fail '/// text\n///\n///\t    assert_eq!(1, 1);\npub fn f() {}\n'
+check list_item_blank_four pass '/// - item\n///\n///     code\nfn f() {}\n'
+check list_item_nested_lazy pass '/// - a\n///   - b\n///       code\nfn f() {}\n'
+check list_item_blank_six fail '/// - item\n///\n///       code\nfn f() {}\n'
+check list_heading_code fail '/// - a\n///   # h\n///       code\nfn f() {}\n'
+check para_heading_code fail '/// text\n/// # h\n///     code\nfn f() {}\n'
+check list_block_blank_six fail '/**\n * - a\n *\n *       code\n */\nfn f() {}\n'
+check list_nested_blank_ten fail '/// - a\n///\n///   - b\n///\n///         code\nfn f() {}\n'
+check list_lazy_blank_six fail '/// - a\n///   lazy\n///\n///       code\nfn f() {}\n'
+check para_list_blank_six fail '/// text\n/// - a\n///\n///       code\nfn f() {}\n'
+check list_html_after_blank fail '/// - a\n///\n/// <div>\n///\n///     code\nfn f() {}\n'
+check list_item_html_blank_six fail '/// - <div>\n///\n///       code\nfn f() {}\n'
+check quote_lazy_prose pass '/// > prose\n///     code\nfn f() {}\n'
+check quote_lazy_blank_code fail '/// > prose\n///\n///     code\nfn f() {}\n'
+check fence_info_foo fail '/// ```foo\n/// code();\n/// ```\nfn f() {}\n'
+check fence_info_text fail '/// ```text\n/// code();\n/// ```\nfn f() {}\n'
+check fence_info_tilde fail '/// ~~~foo\n/// code();\n/// ~~~\nfn f() {}\n'
+check html_div_lines pass '/// <div>\n///     code\n/// </div>\nfn f() {}\n'
+check html_div_blank_code fail '/// <div>\n///\n///     code\nfn f() {}\n'
+check html_block_div_lines pass '/**\n * <div>\n *     code\n * </div>\n */\nfn f() {}\n'
+check html_block_pre_lines pass '/**\n * <pre>\n *     code\n * </pre>\n */\nfn f() {}\n'
+check html_block_div_blank_code fail '/**\n * <div>\n *\n *     code\n */\nfn f() {}\n'
+check html_quote_marker_lines pass '/// > <div>\n/// >     code\nfn f() {}\n'
+check html_quote_no_marker_code fail '/// > <div>\n///     code\nfn f() {}\n'
+check html_quote_blank_code fail '/// > <div>\n/// >\n///     code\nfn f() {}\n'
+check html_block_quote_no_marker fail '/**\n * > <div>\n *     code\n */\nfn f() {}\n'
+check html_list_item_lines pass '/// - <div>\n///     code\nfn f() {}\n'
+check html_type1_lines pass '/// <pre>\n///     code\n/// </pre>\nfn f() {}\n'
+check html_type1_same_line_code fail '/// <pre>x</pre>\n///     code\nfn f() {}\n'
+check html_type2_lines pass '/// <!--\n///     code\n/// -->\nfn f() {}\n'
+check html_type2_same_line_code fail '/// <!-- x -->\n///     code\nfn f() {}\n'
+check html_type3_lines pass '/// <?x\n///     code\n/// ?>\nfn f() {}\n'
+check html_type4_lines pass '/// <!X\n///     code\n/// >\nfn f() {}\n'
+check html_type5_lines pass '/// <![CDATA[\n///     code\n/// ]]>\nfn f() {}\n'
+check list_dedent_base_code fail '/// text\n///   1. nested\n///\n///     assert_eq!(1, 1);\npub fn f() {}\n'
+check html_type7_setext_code fail '/// text\n/// <x>\n/// ---\n///     assert_eq!(1, 1);\npub fn f() {}\n'
+check empty_item_blank_code fail '/// -\n///\n///     assert_eq!(1, 1);\npub fn f() {}\n'
+check quote_type7_code fail '/// text\n/// > <x>\n///     assert_eq!(1, 1);\npub fn f() {}\n'
+check quote_depth_html_outdent fail '/// > > <pre>\n/// >     assert_eq!(1, 1);\npub fn f() {}\n'
+check list_html_outdent fail '/// - <pre>\n/// </pre>\n///\n///     assert_eq!(1, 1);\npub fn f() {}\n'
+check list_div_outdent fail '/// - <div>\n/// </div>\n///\n///     assert_eq!(1, 1);\npub fn f() {}\n'
+check type7_malformed_open fail '/// <x = y>\n/// ---\n///     assert_eq!(1, 1);\npub fn f() {}\n'
+check type7_attr_lines pass '/// <x a="b">\n///     code\n/// </x>\npub fn f() {}\n'
+check footnote_indent4_prose pass '/// text[^x]\n///\n/// [^x]: footnote\n///\n///     continuation\npub fn f() {}\n'
+check footnote_indent8_code fail '/// text[^x]\n///\n/// [^x]: footnote\n///\n///         assert_eq!(1, 1);\npub fn f() {}\n'
+
+check indent_list_cont  pass '/// - item\n///     onto the next line\nfn f() {}\n'
+check prose_cont_line   pass '/// prose\n///     let x = 1;\nfn f() {}\n'
+check prose_cont_three  pass '/// one\n/// two\n///     let x = 1;\nfn f() {}\n'
+check prose_cont_wide   pass '/// prose\n///       let x = 1;\nfn f() {}\n'
+check prose_cont_block  pass '/**\n * prose\n *     let x = 1;\n */\nfn f() {}\n'
+check prose_cont_attr   pass '#[doc = "prose\n    let x = 1;"]\nfn f() {}\n'
+check quote_lazy_cont   pass '/// > quote\n///     let x = 1;\nfn f() {}\n'
+check hr_indent         fail '/// ---\n///     let x = 1;\nfn f() {}\n'
+check list5_bare        fail '/// -     let x = 1;\nfn f() {}\n'
+check list5_after_prose fail '/// text\n/// -     let x = 1;\nfn f() {}\n'
+check list5_num         fail '/// text\n/// 1.     let x = 1;\nfn f() {}\n'
+check list5_star        fail '/// *     let x = 1;\nfn f() {}\n'
+check list5_plus        fail '/// +     let x = 1;\nfn f() {}\n'
+check list5_paren       fail '/// 1)     let x = 1;\nfn f() {}\n'
+check list5_quoted      fail '/// >     - let x = 1;\nfn f() {}\n'
+check list5_block       fail '/**\n * text\n * -     let x = 1;\n */\nfn f() {}\n'
+check list5_attr        fail '#[doc = "text\n-     let x = 1;"]\nfn f() {}\n'
+check quote5_after_prose fail '/// text\n/// >     let x = 1;\nfn f() {}\n'
+check attr_escape_backtick_fence fail '#[doc = "\\x60\\x60\\x60\\nlet x = 1;\\n\\x60\\x60\\x60"]\npub fn f() {}\n'
+check attr_unicode_backtick_fence fail '#[doc = "\\u{60}\\u{60}\\u{60}\\nlet x = 1;\\n\\u{60}\\u{60}\\u{60}"]\npub fn f() {}\n'
+check cfg_attr_meta_after_doc pass '#[cfg_attr(all(), doc = "prose", deprecated(note = "```not docs```"))]\npub fn f() {}\n'
+check cfg_attr_doc_concat_comma fail '#[cfg_attr(all(), doc = concat!("prose", "```\\nx\\n```"))]\npub fn f() {}\n'
+check cfg_attr_doc_then_fence fail '#[cfg_attr(all(), doc = "prose", doc = "```\\nx\\n```")]\npub fn f() {}\n'
+check line_space_tab   fail '/// \tlet x = 1;\nfn f() {}\n'
+check attr_gap_opener  fail '#/* gap */[doc = "```\\nassert_eq!(1, 1);\\n```"]\npub fn f() {}\n'
+check attr_empty_marker fail '#[doc = "1.\\n       assert_eq!(1, 1);"]\npub fn f() {}\n'
+check cfg_doc_value    pass '#![allow(unexpected_cfgs)]\n#[cfg(doc = "```not documentation```")]\npub fn f() {}\n'
+check attr_env_macro   fail '#[doc = env!("MYDOC")]\npub fn f() {}\n'
+check attr_margin_pass pass '#[doc = "    assert!(true);"]\npub fn f() {}\n'
+check attr_margin_fence fail '#[doc = "    assert!(true);\\n\\nprose\\n\\n        code();"]\npub fn f() {}\n'
+check attr_gap_macro_bang fail '#[doc = env /* gap */ !("MYDOC")]\npub fn f() {}\n'
+check attr_raw_ident_doc fail '#[r#doc = "```\\nassert_eq!(1, 1);\\n```"]\npub fn f() {}\n'
 check fence_indent_after_prose pass '/// prose\n///     ```\n///     let x = 1;\n///     ```\npub fn g() {}\n'
 check fence_3sp_after_prose fail '/// prose\n///    ```\n///    let x = 1;\n///    ```\npub fn k() {}\n'
 check cfg_attr_predicate_doc pass '#![allow(unexpected_cfgs)]\n#[cfg_attr(doc = "```not documentation```", allow(dead_code))]\npub fn h() {}\n'
@@ -182,7 +219,7 @@ check cfg_attr_predicate_doc pass '#![allow(unexpected_cfgs)]\n#[cfg_attr(doc = 
 missing="$work/scanner_missing"
 mkdir -p "$missing/crates/fx/src"
 printf '%b' '/** ```\n * f();\n * ```\n */\nfn f() {}\n' > "$missing/crates/fx/src/lib.rs"
-if "$alint_bin" check -c "$rule" "$missing" >/dev/null 2>&1; then got=pass; else got=fail; fi
+if (cd "$missing" && python3 -I scripts/no-doctests.py) >/dev/null 2>&1; then got=pass; else got=fail; fi
 if [ "$got" != fail ]; then
   echo "FAIL scanner_missing: expected fail, got $got"
   fails=$((fails + 1))

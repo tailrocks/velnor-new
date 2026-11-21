@@ -351,9 +351,9 @@ from workflow-syntax jactionlint):
 ```
 
 It runs only the generic rules configured in `.alint.yml`: file/path rules,
-required-file rules, line-count rules, and the `no-doctests` content rule that
-forbids doctests in crate sources. Alint MUST run as its own job even
-when no product crate is selected. Dependency policy, Rust formatting/Clippy,
+required-file rules, line-count rules. The `no-doctests` scanner, which forbids
+doctests in crate sources, runs as the `lint-no-doctests` mise-task lint. Alint MUST run as its own job
+even when no product crate is selected. Dependency policy, Rust formatting/Clippy,
 and workflow-security checks remain separate verification jobs. The final
 required status depends on the Alint job and every other required job.
 
