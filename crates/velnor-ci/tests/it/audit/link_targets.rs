@@ -47,8 +47,13 @@ fn assert_fresh(repo: &Repo, name: &str) {
         "{name}: {}",
         String::from_utf8_lossy(&written.stderr)
     );
-    fs::remove_file(repo.root().join(".velnor/rust-inputs.lock"))
-        .unwrap_or_else(|e| unreachable!("{e}"));
+    let lock = repo.root().join(".velnor/rust-inputs.lock");
+    assert_eq!(
+        fs::read_to_string(&lock).unwrap_or_else(|e| unreachable!("{e}")),
+        "shared\tlib\n",
+        "{name}"
+    );
+    fs::remove_file(lock).unwrap_or_else(|e| unreachable!("{e}"));
 }
 
 fn assert_declared_input_stale(repo: &Repo, name: &str) {
@@ -90,6 +95,7 @@ fn a_new_entry_beside_a_link_naming_no_directory_leaves_the_declared_input_fresh
     ] {
         let repo = declared_link(target);
         build(&repo, OUTPUT, None);
+        assert_fresh(&repo, name);
         add_entry(&repo, "elsewhere/inner/new.txt");
         assert_fresh(&repo, name);
     }
