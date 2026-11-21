@@ -12,11 +12,11 @@ deliberately when changing this contract.
 
 Producer and checker always share one helper pin. Each job that produces a lane
 report and the `Cache` checker install one exact `velnor-ci` version, with
-checksums, and the `Cache` job reads only the `ci-metrics-*` artifacts of the same run, so a lane report
-is never read by a different helper version. A change that only a reader of
-the same version sees, such as making a field optional, keeps schema 1. Bump
-the schema when a report can outlive its producer's pin, for example when a
-stored baseline or another run's artifact is read.
+checksums. The `Cache` job reads only the `ci-metrics-*` artifacts of the same
+run, so a lane report is never read by a different helper version. A change
+that only a reader of the same version sees, such as making a field optional,
+keeps schema 1. Bump the schema when a report can outlive its producer's pin,
+for example when a stored baseline or another run's artifact is read.
 
 ## Lane fields
 
