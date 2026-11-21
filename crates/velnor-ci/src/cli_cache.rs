@@ -37,7 +37,7 @@ pub enum CacheCommand {
     )]
     PurgePrivate(PurgePrivateArgs),
     #[command(
-        about = "Delete the one cache entry with the exact --key on the FIRST --ref that holds it (the refs are printed by the tools-verify notice in restore order), through the GitHub API; later refs are never touched; refuses, and deletes nothing, when no ref holds the key, when a listing fails, or when the first ref that holds it has more than one entry (two versions under one key); reads GITHUB_TOKEN, which needs actions: write"
+        about = "Delete the one cache entry with the exact --key on the FIRST --ref that holds it (the refs are printed by the tools-verify notice in restore order), through the GitHub API; lists every --ref first and refuses, and deletes nothing, when no ref holds the key, when any listing fails or is inconsistent, when the first ref that holds it has more than one entry (two versions under one key), or when a later ref holds the key under a different version (delete by ID after checking which version the job used); reads GITHUB_TOKEN, which needs actions: write"
     )]
     DeleteEntry(DeleteEntryArgs),
 }

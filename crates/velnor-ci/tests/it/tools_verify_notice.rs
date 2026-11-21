@@ -112,19 +112,55 @@ fn a_restored_malformed_anchor_names_the_anchor_entry_when_the_read_step_left_it
 }
 
 #[test]
-fn the_notice_promises_the_first_ref_and_a_refusal_when_several_match() {
+fn the_notice_states_the_refusal_rule_and_not_that_the_restored_entry_is_deleted() {
     let stdout = poisoned("tools-verify-named-scope", &[]);
     assert!(
-        stdout.contains("deletes the entry on the first ref that holds the key"),
+        stdout.contains("lists every ref the action can have read"),
         "{stdout}"
     );
-    assert!(stdout.contains("never touches a later one"), "{stdout}");
     assert!(
-        stdout.contains("refuses unless exactly one entry has the key on that ref"),
+        stdout.contains("only when that ref has exactly one entry and no later ref holds the key under a different version"),
         "{stdout}"
     );
-    assert!(!stdout.contains("on any ref"), "{stdout}");
-    assert!(!stdout.contains(" or `"), "{stdout}");
+    assert!(
+        stdout.contains("otherwise it refuses and deletes nothing"),
+        "{stdout}"
+    );
+    assert!(!stdout.contains("never touches a later one"), "{stdout}");
+    assert!(!stdout.contains("removes the restored entry"), "{stdout}");
+}
+
+#[test]
+fn the_notice_says_which_velnor_ci_to_install_before_the_command() {
+    let stdout = poisoned("tools-verify-named-install", &[]);
+    let requirement = stdout
+        .find("needs velnor-ci 0.1.112 or newer")
+        .unwrap_or_else(|| unreachable!("{stdout}"));
+    let command = stdout
+        .find("GITHUB_API_URL=")
+        .unwrap_or_else(|| unreachable!("{stdout}"));
+    assert!(requirement < command, "{stdout}");
+    assert!(
+        stdout.contains(
+            "https://github.com/tailrocks/velnor-new/releases (tag tools-v0.1.112 or newer)"
+        ),
+        "{stdout}"
+    );
+    assert!(!stdout.contains("SSL_CERT_FILE"), "{stdout}");
+}
+
+#[test]
+fn a_private_enterprise_host_is_told_how_to_trust_its_certificate() {
+    let stdout = poisoned(
+        "tools-verify-named-trust",
+        &[("GITHUB_SERVER_URL", "https://ghe.example.com")],
+    );
+    assert!(
+        stdout.contains(
+            "If the certificate of 'ghe.example.com' is signed by a private CA, set SSL_CERT_FILE to a PEM bundle that holds it"
+        ),
+        "{stdout}"
+    );
 }
 
 #[test]

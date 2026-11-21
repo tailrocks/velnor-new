@@ -46,6 +46,26 @@ pub(super) fn pages<T: serde::de::DeserializeOwned>(
     path: &str,
     limit: Option<usize>,
 ) -> Result<(Vec<T>, bool), CiError> {
+    counted_pages(github, path, limit).map(|(entries, truncated, _)| (entries, truncated))
+}
+
+pub(super) fn exact_entries(github: &dyn GitHubWrite, path: &str) -> Result<Vec<Entry>, CiError> {
+    let (entries, _, total) = counted_pages::<Entry>(github, path, None)?;
+    if entries.len() != total {
+        return Err(CiError::new(format!(
+            "the cache listing returned {} entries but reports a total of {total}; it changed during pagination",
+            entries.len()
+        )));
+    }
+    unique_ids(entries.iter().map(|entry| entry.id))?;
+    Ok(entries)
+}
+
+fn counted_pages<T: serde::de::DeserializeOwned>(
+    github: &dyn GitHubWrite,
+    path: &str,
+    limit: Option<usize>,
+) -> Result<(Vec<T>, bool, usize), CiError> {
     let mut entries = Vec::new();
     let mut page = 1;
     let mut expected_total = None;
@@ -62,13 +82,13 @@ pub(super) fn pages<T: serde::de::DeserializeOwned>(
         let count = listing.actions_caches.len();
         entries.extend(listing.actions_caches);
         if entries.len() >= listing.total_count {
-            return Ok((entries, false));
+            return Ok((entries, false, listing.total_count));
         }
         if count < PAGE {
             return Err(CiError::new("the cache listing is incomplete"));
         }
         if limit == Some(page) {
-            return Ok((entries, true));
+            return Ok((entries, true, listing.total_count));
         }
         page += 1;
     }

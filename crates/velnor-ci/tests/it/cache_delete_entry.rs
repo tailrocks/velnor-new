@@ -20,6 +20,7 @@ struct Api {
     entries: Vec<Value>,
     filters_by_ref: bool,
     failing_ref: Option<&'static str>,
+    second_page: Option<Vec<Value>>,
     asked: RefCell<Vec<String>>,
     deleted: RefCell<Vec<u64>>,
 }
@@ -55,6 +56,9 @@ impl GitHub for Api {
             })
             .collect();
         let total = rows.len();
+        if let (2, Some(second)) = (page, &self.second_page) {
+            return Ok(json!({"total_count":total,"actions_caches":second}).to_string());
+        }
         let rows: Vec<&Value> = rows
             .into_iter()
             .skip(page.saturating_sub(1) * PAGE_SIZE)
@@ -86,6 +90,7 @@ fn api(entries: Vec<Value>) -> Api {
         entries,
         filters_by_ref: true,
         failing_ref: None,
+        second_page: None,
         asked: RefCell::default(),
         deleted: RefCell::default(),
     }
@@ -216,23 +221,22 @@ fn an_ambiguity_spanning_two_pages_deletes_nothing_and_names_both_ids() {
 fn both_refs() -> Api {
     api(vec![
         entry(11, KEY, MAIN, VERSION_A),
+        entry(12, KEY, MERGE, VERSION_A),
+    ])
+}
+
+fn split_versions() -> Api {
+    api(vec![
+        entry(11, KEY, MAIN, VERSION_A),
         entry(12, KEY, MERGE, VERSION_B),
     ])
 }
 
 #[test]
-fn the_key_on_two_refs_deletes_only_the_entry_on_the_first_ref() {
+fn the_same_version_on_two_refs_deletes_only_the_entry_on_the_first_ref() {
     let api = both_refs();
     delete_entry(&api, &repo(), KEY, &refs(&[MERGE, MAIN])).unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(*api.deleted.borrow(), [12]);
-    assert!(
-        api.asked
-            .borrow()
-            .iter()
-            .all(|path| !path.contains("heads")),
-        "{:?}",
-        api.asked.borrow()
-    );
 }
 
 #[test]
@@ -250,7 +254,7 @@ fn the_key_only_on_a_later_ref_deletes_that_entry() {
 }
 
 #[test]
-fn two_entries_on_the_first_ref_refuse_without_looking_at_a_later_ref() {
+fn two_entries_on_the_first_ref_refuse_and_delete_nothing() {
     let api = api(vec![
         entry(11, KEY, MAIN, VERSION_A),
         entry(12, KEY, MERGE, VERSION_A),
@@ -262,14 +266,6 @@ fn two_entries_on_the_first_ref_refuse_without_looking_at_a_later_ref() {
     let text = error.to_string();
     assert!(text.contains("ID 12 ") && text.contains("ID 13 "), "{text}");
     assert!(api.deleted.borrow().is_empty());
-    assert!(
-        api.asked
-            .borrow()
-            .iter()
-            .all(|path| !path.contains("heads")),
-        "{:?}",
-        api.asked.borrow()
-    );
 }
 
 #[test]
@@ -301,4 +297,78 @@ fn a_key_with_no_entry_on_any_ref_names_every_ref_searched() {
         error.to_string(),
         format!("no cache entry has the key {KEY} on {MERGE} or {MAIN}; nothing was deleted")
     );
+}
+
+#[test]
+fn a_different_version_on_a_later_ref_refuses_and_names_both_entries() {
+    let api = split_versions();
+    let error = delete_entry(&api, &repo(), KEY, &refs(&[MERGE, MAIN]))
+        .err()
+        .unwrap_or_else(|| unreachable!("a version split across refs must be refused"));
+    let text = error.to_string();
+    assert!(
+        text.contains(&format!("ID 12 version {VERSION_B} on {MERGE}"))
+            && text.contains(&format!("ID 11 version {VERSION_A} on {MAIN}"))
+            && text.contains("nothing was deleted")
+            && text.contains("/repos/tailrocks/velnor-new/actions/caches/<ID>"),
+        "{text}"
+    );
+    assert!(api.deleted.borrow().is_empty());
+}
+
+#[test]
+fn the_refusal_does_not_depend_on_which_ref_comes_first() {
+    let api = split_versions();
+    assert!(delete_entry(&api, &repo(), KEY, &refs(&[MAIN, MERGE])).is_err());
+    assert!(api.deleted.borrow().is_empty());
+}
+
+#[test]
+fn a_failing_listing_of_a_later_ref_refuses_and_deletes_nothing() {
+    let mut api = both_refs();
+    api.failing_ref = Some(MAIN);
+    let error = delete_entry(&api, &repo(), KEY, &refs(&[MERGE, MAIN]))
+        .err()
+        .unwrap_or_else(|| unreachable!("a failed listing of any ref must refuse"));
+    assert!(error.to_string().contains("502"), "{error}");
+    assert!(api.deleted.borrow().is_empty());
+}
+
+fn long_listing(second_page: Vec<Value>) -> Api {
+    let mut entries = vec![entry(1, KEY, MAIN, VERSION_A)];
+    entries.extend(
+        (2..=PAGE_SIZE as u64).map(|id| entry(id, &format!("{KEY}-{id}"), MAIN, VERSION_A)),
+    );
+    entries.push(entry(500, KEY, MAIN, VERSION_B));
+    let mut api = api(entries);
+    api.second_page = Some(second_page);
+    api
+}
+
+#[test]
+fn a_repeated_id_between_pages_refuses_and_deletes_nothing() {
+    let api = long_listing(vec![entry(
+        PAGE_SIZE as u64,
+        &format!("{KEY}-{PAGE_SIZE}"),
+        MAIN,
+        VERSION_A,
+    )]);
+    let error = delete_entry(&api, &repo(), KEY, &refs(&[MAIN]))
+        .err()
+        .unwrap_or_else(|| unreachable!("a shifted listing must be refused"));
+    assert!(error.to_string().contains("repeats"), "{error}");
+    assert!(api.deleted.borrow().is_empty());
+}
+
+#[test]
+fn a_collected_count_that_differs_from_the_total_refuses_and_deletes_nothing() {
+    let api = long_listing(vec![
+        entry(600, &format!("{KEY}-600"), MAIN, VERSION_A),
+        entry(700, &format!("{KEY}-700"), MAIN, VERSION_A),
+    ]);
+    let error = delete_entry(&api, &repo(), KEY, &refs(&[MAIN]))
+        .err()
+        .unwrap_or_else(|| unreachable!("a listing that does not add up must be refused"));
+    assert!(error.to_string().contains("total"), "{error}");
+    assert!(api.deleted.borrow().is_empty());
 }

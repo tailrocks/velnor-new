@@ -239,10 +239,10 @@ fn a_missing_token_is_refused_and_nothing_is_deleted() {
 }
 
 #[test]
-fn the_binary_deletes_on_the_first_ref_that_holds_the_key_and_leaves_the_later_one() {
+fn the_binary_deletes_on_the_first_ref_when_a_later_ref_holds_the_same_version() {
     let (api, served) = serve(vec![
         entry(11, KEY, MAIN, VERSION_A),
-        entry(12, KEY, MERGE, VERSION_B),
+        entry(12, KEY, MERGE, VERSION_A),
     ]);
     let output = delete_entry(&api, &["--key", KEY, "--ref", MERGE, "--ref", MAIN]);
     assert!(output.status.success(), "{output:?}");
@@ -256,7 +256,7 @@ fn the_binary_deletes_on_the_first_ref_that_holds_the_key_and_leaves_the_later_o
 fn the_binary_respects_the_order_of_the_refs() {
     let (api, served) = serve(vec![
         entry(11, KEY, MAIN, VERSION_A),
-        entry(12, KEY, MERGE, VERSION_B),
+        entry(12, KEY, MERGE, VERSION_A),
     ]);
     let output = delete_entry(&api, &["--key", KEY, "--ref", MAIN, "--ref", MERGE]);
     assert!(output.status.success(), "{output:?}");
@@ -272,5 +272,22 @@ fn the_binary_refuses_when_the_listing_of_the_first_ref_fails() {
     let output = delete_entry(&api, &["--key", KEY, "--ref", FAIL, "--ref", MAIN]);
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(!output.status.success(), "{stderr}");
+    assert_eq!(deleted(&served), Vec::<String>::new());
+}
+
+#[test]
+fn the_binary_refuses_a_version_split_across_refs_and_names_both_entries() {
+    let (api, served) = serve(vec![
+        entry(11, KEY, MAIN, VERSION_A),
+        entry(12, KEY, MERGE, VERSION_B),
+    ]);
+    let output = delete_entry(&api, &["--key", KEY, "--ref", MERGE, "--ref", MAIN]);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!output.status.success(), "{stderr}");
+    assert!(
+        stderr.contains(&format!("ID 12 version {VERSION_B}"))
+            && stderr.contains(&format!("ID 11 version {VERSION_A}")),
+        "{stderr}"
+    );
     assert_eq!(deleted(&served), Vec::<String>::new());
 }

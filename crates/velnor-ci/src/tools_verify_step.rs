@@ -75,13 +75,26 @@ fn delete_command(key: &str, refs: &[String], remote: &Remote) -> String {
     )
 }
 
+const HELPER_RELEASES: &str = "https://github.com/tailrocks/velnor-new/releases";
+
+fn trust_hint(remote: &Remote) -> String {
+    if remote.host == "github.com" {
+        return String::new();
+    }
+    format!(
+        " If the certificate of {} is signed by a private CA, set SSL_CERT_FILE to a PEM bundle that holds it",
+        quoted(&remote.host)
+    )
+}
+
 fn delete_sentence(what: &str, key: &str, remedy: Remedy<'_>) -> String {
     if remedy.refs.is_empty() {
         return String::new();
     }
     format!(
-        ". The restored {what} is {}; the cache action does not report which ref it came from, so the command lists the refs in the order the action reads them (the ref of this run, then the base and default branches), deletes the entry on the first ref that holds the key and never touches a later one: `{}`. It refuses unless exactly one entry has the key on that ref",
+        ". The restored {what} is {}; the cache action does not report which ref or version it came from, so the command lists every ref the action can have read, in its order (the ref of this run, then the base and default branches), before it deletes anything. It deletes the entry on the first ref that holds the key only when that ref has exactly one entry and no later ref holds the key under a different version; otherwise it refuses and deletes nothing, and you delete by ID after checking which version the job used. It needs velnor-ci 0.1.112 or newer on the machine that runs it, which the pinned helper does not provide: download it from {HELPER_RELEASES} (tag tools-v0.1.112 or newer) and put it on PATH.{} Command: `{}`",
         quoted(key),
+        trust_hint(remedy.remote),
         delete_command(key, remedy.refs, remedy.remote)
     )
 }
