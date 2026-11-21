@@ -11,7 +11,7 @@ struct Dir(PathBuf);
 impl Dir {
     fn new(label: &str) -> Self {
         let path = std::env::temp_dir().join(format!("velnor-mbx-{label}-{}", std::process::id()));
-        std::fs::create_dir_all(&path).unwrap();
+        std::fs::create_dir_all(&path).unwrap_or_else(|e| unreachable!("{e}"));
         Self(path)
     }
 }
@@ -38,7 +38,7 @@ fn leftover_socket_path_without_a_socket_is_not_a_nested_session() {
     let missing = dir.0.join("missing.sock");
     assert!(!inside_session(Some(missing.as_os_str())));
     let regular = dir.0.join("regular.sock");
-    std::fs::write(&regular, b"").unwrap();
+    std::fs::write(&regular, b"").unwrap_or_else(|e| unreachable!("{e}"));
     assert!(!inside_session(Some(regular.as_os_str())));
 }
 
@@ -46,6 +46,6 @@ fn leftover_socket_path_without_a_socket_is_not_a_nested_session() {
 fn live_socket_is_a_nested_session() {
     let dir = Dir::new("live");
     let path = dir.0.join("mbx.sock");
-    let _listener = UnixListener::bind(&path).unwrap();
+    let _listener = UnixListener::bind(&path).unwrap_or_else(|e| unreachable!("{e}"));
     assert!(inside_session(Some(path.as_os_str())));
 }

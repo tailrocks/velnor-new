@@ -52,9 +52,13 @@ pub(super) fn cargo_with(
     if let Some(path) = inherited {
         command.env("MBX_STATS_REPORT", path);
     }
-    if inside_session {
-        command.env("MBX_SOCKET", repo.root().join("cache-agent.sock"));
-    }
+    let socket = repo.root().join("cache-agent.sock");
+    let _listener = if inside_session {
+        command.env("MBX_SOCKET", &socket);
+        Some(std::os::unix::net::UnixListener::bind(&socket)?)
+    } else {
+        None
+    };
     let output = command.output()?;
     assert!(output.status.success(), "{output:?}");
     Ok(())

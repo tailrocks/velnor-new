@@ -7,6 +7,7 @@ use std::collections::BTreeMap;
 use std::ffi::OsStr;
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
+use std::os::unix::fs::FileTypeExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -27,14 +28,21 @@ fn enabled() -> bool {
     std::env::var(SWITCH).is_ok_and(|value| value == "true")
 }
 
-/// An enclosing mbx session (its socket is set) answers for nested cargo calls and writes no report of their own.
+/// An enclosing mbx session (its socket is live) answers for nested cargo calls and writes no report of their own.
 fn inside_session(socket: Option<&OsStr>) -> bool {
-    socket.is_some_and(|socket| !socket.is_empty())
+    socket.is_some_and(|socket| !socket.is_empty() && is_socket(Path::new(socket)))
+}
+
+fn is_socket(path: &Path) -> bool {
+    fs::symlink_metadata(path).is_ok_and(|metadata| metadata.file_type().is_socket())
 }
 
 pub(crate) fn assign(command: &mut Command, argv: &[String]) {
     command.env_remove(VARIABLE);
-    if !enabled() || !reports_session(argv) || inside_session(std::env::var_os("MBX_SOCKET").as_deref()) {
+    if !enabled()
+        || !reports_session(argv)
+        || inside_session(std::env::var_os("MBX_SOCKET").as_deref())
+    {
         return;
     }
     let Some(temp) = std::env::var_os("RUNNER_TEMP").filter(|temp| !temp.is_empty()) else {
