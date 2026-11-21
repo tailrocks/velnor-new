@@ -5,7 +5,6 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 
-/// The packages `velnor-ci plan` selects for one changed file of this repository.
 fn planned_packages(changed: &str) -> Vec<String> {
     let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     let scratch = std::env::temp_dir().join(format!(

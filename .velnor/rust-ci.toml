@@ -91,9 +91,6 @@ task = "validate-hk"
 tools = ["hk"]
 timeout_minutes = 5
 
-# mise_version_pin.rs reads this file at run time, so the input lock (compile-time
-# reads only) does not list it. Without this rule a change to the pin alone skips
-# the velnor-gen tests that compare it with mise.toml.
 [[inputs]]
 glob = ".mise-version"
 packages = ["velnor-gen"]
