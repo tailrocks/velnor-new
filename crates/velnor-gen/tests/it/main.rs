@@ -29,6 +29,7 @@ mod cargo_flags;
 mod cargo_lock;
 mod check_configurations;
 mod check_configurations_groups;
+mod check_configurations_sample;
 mod classify;
 mod classify_test_runner;
 mod cleanup_job;

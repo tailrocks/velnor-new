@@ -325,8 +325,19 @@ fn a_configurations_path_that_is_a_submodule_is_refused_like_a_symlink() -> Test
 
 #[test]
 fn a_repeated_check_entry_is_refused_so_the_check_runs_once() -> TestResult {
-    let text = refusal(&format!("{KEY}{KEY}"), NEXT)?;
-    assert!(text.contains("check_configurations"), "{text}");
+    let error = workflow(&tracked(&format!("{KEY}{KEY}"), NEXT)?)
+        .err()
+        .ok_or("a repeated entry was accepted")?;
+    assert!(
+        matches!(
+            error.downcast_ref::<GenerateError>(),
+            Some(GenerateError::Detect(DetectError::Invalid {
+                path,
+                reason: Reason::InvalidValue { key: "check_configurations", .. },
+            })) if path.as_str() == ".velnor/rust-ci.toml"
+        ),
+        "{error:?}"
+    );
     Ok(())
 }
 
