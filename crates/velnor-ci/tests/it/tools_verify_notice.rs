@@ -119,7 +119,7 @@ fn the_notice_states_the_refusal_rule_and_not_that_the_restored_entry_is_deleted
         "{stdout}"
     );
     assert!(
-        stdout.contains("refuses, printing nothing to delete, when that ref has more than one entry, when a later ref holds the key under a different version"),
+        stdout.contains("refuses, printing nothing to delete, when the first ref no longer holds it (another job of this run or you may have deleted the entry already; if so, stop), when that ref has more than one entry, when a later ref holds the key under a different version"),
         "{stdout}"
     );
     assert!(stdout.contains("It deletes nothing itself"), "{stdout}");

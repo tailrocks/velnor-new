@@ -13,6 +13,7 @@ pub fn shell_quote(text: &str) -> String {
     format!("'{}'", text.replace('\'', "'\\''"))
 }
 
+#[must_use]
 pub fn escape(text: &str, property: bool) -> String {
     text.chars()
         .map(|c| match c {

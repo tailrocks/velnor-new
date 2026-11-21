@@ -148,6 +148,7 @@ pub fn delete_by_id(
     ))
 }
 
+#[must_use]
 pub fn resolved_report(repo: &Repo, key: &str, found: &Candidate) -> String {
     let named = inert(key);
     format!(
