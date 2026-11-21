@@ -1,13 +1,4 @@
 #!/usr/bin/env bash
-# Proves a pull request that edits mise.toml cannot change the secret scanner binaries CI runs.
-#
-# 1. Static: the secret-scan job in ci.yml and the installer's code never mention mise or
-#    .tool-versions, so no repo tool config can reach them.
-# 2. Behaviour: with a hostile mise.toml and .tool-versions in the working directory and a `mise`
-#    shim on PATH that records any call, the installer must not run mise, and it must refuse a
-#    download whose sha256 differs from the pin (the fake curl serves bytes that are not the
-#    pinned release).
-# The real download path is exercised by the Install step of the same job.
 set -euo pipefail
 
 root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)

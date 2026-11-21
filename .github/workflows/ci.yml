@@ -1,7 +1,6 @@
 # Hand-maintained. Rust CI, Alint, Jactionlint, Cargo Deny and Cargo Machete are generated into
 # rust-ci.yml (velnor-gen, .velnor/rust-ci.toml). What stays here: the workflow_dispatch contract
-# inputs (the qualification code addresses this workflow path), the helper-gates check and the
-# secret scanners.
+# inputs (the qualification code addresses this workflow path) and the helper-gates check.
 name: CI
 "on":
   pull_request:
@@ -153,12 +152,8 @@ jobs:
         with:
           fetch-depth: "1"
           persist-credentials: "false"
-      # The scanners walk the history of the checked-out commit only. fetch-depth 0 would also
-      # fetch every branch, so a fixture on an unrelated PR branch could fail this job.
       - name: Fetch the history of the checked-out commit
         run: git fetch --no-tags --unshallow origin "$(git rev-parse HEAD)"
-      # The scanners come from release assets pinned by sha256 in the script, not from mise: on a
-      # self-hosted runner a pull request's own mise.toml must not choose or run tools.
       - name: Test that the scanner pins ignore repository tool config
         run: bash scripts/test-install-secret-scanners.sh
       - name: Install the pinned secret scanners

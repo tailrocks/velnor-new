@@ -1,9 +1,8 @@
 # SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 # SPDX-License-Identifier: Apache-2.0
 
-# Gitleaks and BetterLeaks config; BetterLeaks reads this when -c is given (the pre-push hook and CI pass it).
-# Uses upstream defaults. The allowlists are narrow: a secret pattern and exact test-fixture
-# paths. Other reviewed findings are fingerprints in .gitleaksignore.
+# Gitleaks and BetterLeaks config; BetterLeaks reads this when no .betterleaks.toml exists.
+# Uses upstream defaults.
 [extend]
 useDefault = true
 

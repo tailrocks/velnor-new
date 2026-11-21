@@ -1,6 +1,3 @@
-# Reviewed false positives in git history and live files that the .gitleaks.toml allowlists do not cover.
-# Each line is one finding fingerprint (commit:file:rule:line) from a scan of main (HEAD ancestry); regenerate it
-# with gitleaks git --report-format json rather than editing it. A new real secret is never listed here.
 4c363f4836f35c226695f6dfe095d4872d19ac56:docs/implemented/evidence/freshness-2026-10-20/qualification/mise-crypto-admission.json:generic-api-key:176
 536ffbb79ce54faf73eda608b4004cf03fd20802:docs/implemented/freshness-evidence-2026-10-08.md:generic-api-key:73
 99bfdfeaf7cb6b5fe2c23c98ae6b8fe4d334863b:docs/proposed/dbt-contract.md:generic-password:29

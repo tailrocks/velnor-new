@@ -86,16 +86,12 @@ hooks {
       ["kingfisher-staged"] { check = "kingfisher scan . --staged --no-validate --redact --no-update-check --baseline-file .kingfisher-baseline.yml" }
     }
   }
-  // The pre-push scans cover HEAD ancestry only. The CI secret-scan job is an ADVISORY check: it is not
-  // in the Required aggregate, but it also runs on merge_group.
   ["pre-push"] {
     steps {
       ["betterleaks-history"] { check = "betterleaks git . --redact -c .gitleaks.toml --log-opts=\"--full-history --diff-merges=first-parent HEAD\"" }
       ["kingfisher-worktree"] { check = "bash scripts/secret-scan-worktree.sh" }
     }
   }
-  // Manual only: full-history kingfisher. Its findings vary between runs, so it is not
-  // in pre-push or CI. Run it by hand before a release-level security review.
   ["security-audit"] {
     steps {
       ["kingfisher-history"] { check = "kingfisher scan . --git-history full --confidence low --no-validate --redact --no-update-check --skip-regex '^m-[0-9a-f]{16}$' --exclude '**/.git/**' --baseline-file .kingfisher-baseline.yml" }

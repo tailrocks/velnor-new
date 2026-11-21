@@ -1,16 +1,4 @@
 #!/usr/bin/env bash
-# Installs the pinned secret scanners for the CI secret-scan job, WITHOUT mise.
-#
-# On a self-hosted runner a pull request's own mise.toml, .mise.toml or .tool-versions must not
-# choose or run tools. This script never reads them and never runs mise: it downloads each
-# release asset for the runner's platform and refuses to install it unless its sha256 matches
-# the digest pinned below. The digests are the ones the upstream releases publish (gitleaks and
-# betterleaks checksums.txt; kingfisher has no checksum file, so the GitHub release asset digest).
-# When mise.toml bumps a scanner, bump the version and both digests here in the same change.
-#
-# Usage: install-secret-scanners.sh <install-dir>
-# Puts gitleaks, betterleaks and kingfisher into <install-dir>/bin and, when GITHUB_PATH is
-# set, adds that directory to the PATH of the following workflow steps.
 set -euo pipefail
 
 GITLEAKS_VERSION=8.30.1
@@ -46,8 +34,6 @@ work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 mkdir -p "$dest/bin"
 
-# fetch <name> <url> <sha256>: download, verify the digest, then extract only the binary.
-# Nothing is extracted or installed before the digest matches.
 fetch() {
   local name=$1 url=$2 sha=$3
   curl --fail --silent --show-error --location --retry 3 --output "$work/$name.tgz" "$url"
