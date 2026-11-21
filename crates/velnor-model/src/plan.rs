@@ -4,6 +4,7 @@
 use std::collections::BTreeMap;
 
 use crate::budget_mode::SelectionName;
+use crate::cargo_build::BuildRecord;
 use crate::cron::CronExpr;
 use crate::hosted::HostedRunners;
 use crate::ids::{JobId, PackageName, RepoPath, RootSlug, RunnerLabel, TargetName};
@@ -108,10 +109,9 @@ pub struct Job {
     pub plan_outputs: Vec<(RootSlug, GateNeed)>,
     pub group_outputs: Vec<(RootSlug, JobId)>,
     pub reports_ignored: bool,
-    /// The pinned helper records the build in its test step (`outputs.built`), so the saves
-    /// may wait for that record instead of a build step.
-    pub records_build: bool,
+    pub build_record: BuildRecord,
     pub chained_saves: bool,
+    pub mbx_stats: crate::MbxStats,
     /// Titles the job with the selection of the run, read from the plan outputs.
     pub selection_name: Option<SelectionName>,
     pub steps: Vec<Step>,
