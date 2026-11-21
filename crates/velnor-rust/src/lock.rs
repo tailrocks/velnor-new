@@ -49,8 +49,6 @@ pub(crate) struct Lock {
     pub(crate) ci_binary: Option<BTreeMap<String, String>>,
     #[serde(rename = "velnor-gen")]
     pub(crate) generator: BTreeMap<String, String>,
-    /// The digests of the velnor-gen executables inside the archives, which `check` compares
-    /// with the running binary. `[velnor-gen]` keeps the archive digests the install step checks.
     #[serde(
         rename = "velnor-gen-binary",
         default,

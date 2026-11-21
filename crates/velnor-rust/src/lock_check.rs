@@ -49,12 +49,6 @@ fn parse(bytes: &[u8]) -> Result<Lock, LockError> {
     toml::from_str(text).map_err(|error| LockError::new(error.to_string()))
 }
 
-/// Offline: the `[velnor-gen]` entry agrees with the lock's own version and commit and, when
-/// the running binary is a release build of the lock's commit, with that binary's bytes.
-/// A local build (`unknown` commit) is not compared, since its digest is not the published one.
-/// An archive release is compared with `[velnor-gen-binary]`; a lock pinned before that section
-/// existed lists only the archive digests, which are not the binary's, so it is not compared.
-/// A newer binary that is not the locked release is not compared either.
 pub fn check_generator_entry(bytes: &[u8], running: RunningGenerator<'_>) -> Result<(), LockError> {
     let lock = parse(bytes)?;
     release_version(&lock.version)?;
@@ -92,12 +86,8 @@ pub fn check_generator_entry(bytes: &[u8], running: RunningGenerator<'_>) -> Res
     Ok(())
 }
 
-/// A section name and the digests it lists.
 type BinaryEntry<'a> = (String, &'a BTreeMap<String, String>);
 
-/// The section that lists the digests of the velnor-gen executable, if the lock has one: a raw
-/// release's `[velnor-gen]`, an archive release's `[velnor-gen-binary]`. A lock pinned before
-/// that section existed has none, because its `[velnor-gen]` digests are the archives'.
 fn binary_entry(lock: &Lock) -> Result<Option<BinaryEntry<'_>>, LockError> {
     let archive = check_format(lock)?;
     let reads = release_version(&lock.version)?.at_least(GENERATOR_BINARY_RELEASE);
@@ -185,6 +175,7 @@ pub fn verify_release(
         lock.generator_binary.as_ref(),
         release.generator_binary.as_ref(),
     )
+    .map_err(|error| LockError::new(format!("{error}; {}", repin_hint())))
 }
 
 fn compare_section(
