@@ -67,7 +67,10 @@ fn remove_tree(path: &Path) -> std::io::Result<()> {
         match fs::remove_dir_all(path) {
             Err(error)
                 if error.kind() == std::io::ErrorKind::DirectoryNotEmpty
-                    && Instant::now() < deadline => {}
+                    && Instant::now() < deadline =>
+            {
+                std::thread::yield_now();
+            }
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
             other => return other,
         }
