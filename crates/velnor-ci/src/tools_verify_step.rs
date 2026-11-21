@@ -38,7 +38,7 @@ pub struct Context {
     pub base_ref: String,
     pub default_branch: Option<String>,
     pub cache_key: String,
-    pub restored_before: String,
+    pub restored_before: Option<String>,
     pub remote: Remote,
 }
 
@@ -47,7 +47,7 @@ pub struct Remedy<'a> {
     pub key: &'a str,
     pub remote: &'a Remote,
     pub refs: &'a [String],
-    pub restored_before: &'a str,
+    pub restored_before: Option<&'a str>,
 }
 
 fn reason(discard: &Discard) -> String {
@@ -90,11 +90,20 @@ fn delete_sentence(what: &str, key: &str, remedy: Remedy<'_>) -> String {
     if remedy.refs.is_empty() {
         return String::new();
     }
+    let Some(restored_before) = remedy.restored_before else {
+        return format!(
+            ". The restored {what} is {}, but the restore-time record is unreadable; rerun step 1 with an explicit --restored-before, an RFC 3339 UTC time after the poisoned entry was saved and before this run's restore began, together with --repo {}, --key {} and{} (docs/rust-ci.md describes step 1). No command is printed, because its cutoff would come from that record",
+            quoted(key),
+            quoted(&remedy.remote.repository),
+            quoted(key),
+            ref_options(remedy.refs),
+        );
+    };
     format!(
-        ". The restored {what} is {}; the cache action does not report which ref or version it came from, so the command below only reads: it lists every ref the action can have read, in its order (the ref of this run, then the base and default branches), and prints the one entry the restore read (ID, version and ref) together with the command that deletes that entry by its ID. It deletes nothing itself, so running it again is harmless. It resolves an entry only when the FIRST ref holds the key and the entry was saved before --restored-before (the time this job's restore began, taken from the record that `tools-local clear` leaves before the restores or, when there is none, from this check, whichever is earlier, minus a safety margin of {margin} minutes for clock skew; an entry saved at or after it, or without a usable created_at, is not shown to be the entry this run read, so a stale notice of another run does not resolve an entry saved after this run's restore, unless the runner clock is ahead of GitHub's by more than the margin; a refusal says why and prints the command that reruns step 1 with an explicit --restored-before), and refuses, printing nothing to delete, when the first ref no longer holds it (another job of this run or you may have deleted the entry already; if so, stop), when that ref has more than one entry, when a later ref holds the key under a different version or when an entry has no version; then check which version the job used and delete that ID. Step 1: run the command below and read the entry it prints. Step 2: run the --id command it prints, once; it deletes exactly that ID and refuses when the ID no longer exists or has another key. The two steps are needed once per run, not once per job, even though every tools job of the run prints this notice: after one job's entry is deleted, step 1 refuses instead of naming the next ref's healthy entry. It needs velnor-ci 0.1.112 or newer on the machine that runs it, which the pinned helper does not provide: download it from {HELPER_RELEASES} (tag tools-v0.1.112 or newer) and put it on PATH. The token is the one `gh auth token` prints, which prefers an exported GH_TOKEN or GITHUB_TOKEN (GH_ENTERPRISE_TOKEN or GITHUB_ENTERPRISE_TOKEN on a host other than github.com) to the stored login, and it needs actions: write.{} Command: `{}`",
+        ". The restored {what} is {}; the cache action does not report which ref or version it came from, so the command below only reads: it lists every ref the action can have read, in its order (the ref of this run, then the base and default branches), and prints the one entry the restore read (ID, version and ref) together with the command that deletes that entry by its ID. It deletes nothing itself, so running it again is harmless. It resolves an entry only when the FIRST ref holds the key and the entry was saved before --restored-before (the time this job's restore began, taken from the record that `tools-local clear` leaves before the restores or, when there is no record, from this check, minus a safety margin of {margin} minutes for clock skew; an entry saved at or after it, or without a usable created_at, is not shown to be the entry this run read, so a stale notice of another run does not resolve an entry saved after this run's restore, unless the runner clock is ahead of GitHub's by more than the margin; a refusal says why and prints the command that reruns step 1 with an explicit --restored-before), and refuses, printing nothing to delete, when the first ref no longer holds it (another job of this run or you may have deleted the entry already; if so, stop), when that ref has more than one entry, when a later ref holds the key under a different version or when an entry has no version; then check which version the job used and delete that ID. The restore step reports neither the ref nor the version, so when the entry this run restored from a later ref has been deleted or evicted since and the first ref still holds an older entry under another version, step 1 resolves that older entry, which this run never restored: compare the version it prints with the one your jobs use before step 2, and note that a wrong delete costs one cold install. Step 1: run the command below and read the entry it prints. Step 2: run the --id command it prints, once; it deletes exactly that ID and refuses when the ID no longer exists or has another key. The two steps are needed once per run, not once per job, even though every tools job of the run prints this notice: after one job's entry is deleted, step 1 refuses instead of naming the next ref's healthy entry. It needs velnor-ci 0.1.112 or newer on the machine that runs it, which the pinned helper does not provide: download it from {HELPER_RELEASES} (tag tools-v0.1.112 or newer) and put it on PATH. The token is the one `gh auth token` prints, which prefers an exported GH_TOKEN or GITHUB_TOKEN (GH_ENTERPRISE_TOKEN or GITHUB_ENTERPRISE_TOKEN on a host other than github.com) to the stored login, and it needs actions: write.{} Command: `{}`",
         quoted(key),
         trust_hint(remedy.remote),
-        delete_command(key, remedy.refs, remedy.remote, remedy.restored_before),
+        delete_command(key, remedy.refs, remedy.remote, restored_before),
         margin = restore_clock::SAFETY_MARGIN_SECONDS / 60,
     )
 }
@@ -250,7 +259,7 @@ pub fn run(verb: Verb, context: &Context) -> Result<String, CiError> {
         key: &context.cache_key,
         remote: &context.remote,
         refs: &refs,
-        restored_before: &context.restored_before,
+        restored_before: context.restored_before.as_deref(),
     };
     Ok(format!("{}\n", message(&verdict, remedy)))
 }

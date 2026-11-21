@@ -257,7 +257,7 @@ pub(crate) fn context(job: &Job, anchor: &str, event: &str) -> Context {
         base_ref: String::new(),
         default_branch: Some("main".to_owned()),
         cache_key: String::new(),
-        restored_before: "2026-11-22T00:00:00Z".to_owned(),
+        restored_before: Some("2026-11-22T00:00:00Z".to_owned()),
         remote: Remote {
             host: "github.com".to_owned(),
             api_url: "https://api.github.com".to_owned(),

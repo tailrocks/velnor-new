@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs;
-use std::io::{ErrorKind, Write};
+use std::io::{ErrorKind, Read, Write};
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 
@@ -10,6 +10,9 @@ use crate::error::CiError;
 use crate::time::utc_text;
 
 pub const SAFETY_MARGIN_SECONDS: i64 = 300;
+
+const EARLIEST: i64 = 1_577_836_800;
+const MAX_RECORD_BYTES: u64 = 64;
 
 const BEGAN: &str = "velnor-tools-restore-began";
 
@@ -32,16 +35,45 @@ pub fn record(runner_temp: &Path, now: i64) -> Result<(), CiError> {
     })
 }
 
-fn recorded(runner_temp: &Path) -> Option<i64> {
-    let path = runner_temp.join(BEGAN);
-    fs::symlink_metadata(&path)
+enum Record {
+    Missing,
+    Began(i64),
+    Untrusted,
+}
+
+fn digits(text: &str, now: i64) -> Option<i64> {
+    let text = text.strip_suffix('\n').unwrap_or(text);
+    if text.is_empty() || !text.bytes().all(|byte| byte.is_ascii_digit()) {
+        return None;
+    }
+    text.parse()
         .ok()
-        .filter(fs::Metadata::is_file)?;
-    fs::read_to_string(path).ok()?.trim().parse().ok()
+        .filter(|began| (EARLIEST..=now).contains(began))
+}
+
+fn recorded(runner_temp: &Path, now: i64) -> Record {
+    let path = runner_temp.join(BEGAN);
+    let meta = match fs::symlink_metadata(&path) {
+        Ok(meta) => meta,
+        Err(error) if error.kind() == ErrorKind::NotFound => return Record::Missing,
+        Err(_) => return Record::Untrusted,
+    };
+    let mut text = String::new();
+    let read = meta
+        .is_file()
+        .then(|| fs::File::open(&path).ok())
+        .flatten()
+        .and_then(|file| file.take(MAX_RECORD_BYTES).read_to_string(&mut text).ok());
+    read.and_then(|_| digits(&text, now))
+        .map_or(Record::Untrusted, Record::Began)
 }
 
 #[must_use]
-pub fn cutoff(runner_temp: &Path, now: i64) -> String {
-    let began = recorded(runner_temp).map_or(now, |began| began.min(now));
-    utc_text(began - SAFETY_MARGIN_SECONDS)
+pub fn cutoff(runner_temp: &Path, now: i64) -> Option<String> {
+    let began = match recorded(runner_temp, now) {
+        Record::Missing => now,
+        Record::Began(began) => began,
+        Record::Untrusted => return None,
+    };
+    began.checked_sub(SAFETY_MARGIN_SECONDS).map(utc_text)
 }

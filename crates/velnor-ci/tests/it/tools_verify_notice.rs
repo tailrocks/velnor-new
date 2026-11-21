@@ -167,6 +167,17 @@ fn the_notice_states_the_refusal_rule_and_not_that_the_restored_entry_is_deleted
 }
 
 #[test]
+fn the_notice_names_the_window_where_a_first_ref_entry_of_another_version_resolves() {
+    let stdout = poisoned("tools-verify-version-window", &[]);
+    assert!(
+        stdout.contains(
+            "The restore step reports neither the ref nor the version, so when the entry this run restored from a later ref has been deleted or evicted since and the first ref still holds an older entry under another version, step 1 resolves that older entry, which this run never restored: compare the version it prints with the one your jobs use before step 2, and note that a wrong delete costs one cold install"
+        ),
+        "{stdout}"
+    );
+}
+
+#[test]
 fn the_notice_says_which_velnor_ci_to_install_before_the_command() {
     let stdout = poisoned("tools-verify-named-install", &[]);
     let requirement = stdout

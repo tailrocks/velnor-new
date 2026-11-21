@@ -10,7 +10,7 @@ use velnor_ci::time::{now_unix, parse_utc, utc_text};
 use velnor_ci::tools_local::{Verb as ToolsVerb, note_clear};
 
 use crate::cache_delete_entry::{KEY, MAIN, VERSION_A, api, entry_saved, refs, repo};
-use crate::tools_verify::{job, recorded, rustc};
+use crate::tools_verify::{discarded, job, recorded, rustc};
 use crate::tools_verify_notice::check_stdout;
 
 const BEGAN: i64 = 1_790_000_000;
@@ -21,52 +21,92 @@ fn margined(seconds: i64) -> String {
     utc_text(seconds - SAFETY_MARGIN_SECONDS)
 }
 
+fn plant(root: &std::path::Path, text: &str) {
+    fs::write(root.join("velnor-tools-restore-began"), text)
+        .unwrap_or_else(|e| unreachable!("{e}"));
+}
+
 #[test]
 fn the_recorded_start_is_used_when_it_is_earlier_than_now() {
     let job = job("restore-clock-earlier");
     record(&job.root, BEGAN).unwrap_or_else(|e| unreachable!("{e}"));
-    assert_eq!(cutoff(&job.root, NOW), margined(BEGAN));
+    assert_eq!(cutoff(&job.root, NOW), Some(margined(BEGAN)));
 }
 
 #[test]
-fn a_recorded_start_in_the_future_is_ignored() {
-    let job = job("restore-clock-future");
-    record(&job.root, NOW + 3_600).unwrap_or_else(|e| unreachable!("{e}"));
-    assert_eq!(cutoff(&job.root, NOW), margined(NOW));
+fn a_missing_record_falls_back_to_the_time_of_the_check() {
+    let job = job("restore-clock-missing");
+    assert_eq!(cutoff(&job.root, NOW), Some(margined(NOW)));
 }
 
 #[test]
-fn a_missing_or_unparsable_record_falls_back_to_now() {
-    let job = job("restore-clock-unparsable");
-    assert_eq!(cutoff(&job.root, NOW), margined(NOW));
+fn a_present_record_that_cannot_be_trusted_gives_no_cutoff_and_never_panics() {
+    let job = job("restore-clock-untrusted");
+    let beyond = (NOW + 1).to_string();
+    let huge = "9".repeat(4096);
     for text in [
+        "-9223372036854775808",
+        "9223372036854775807",
+        "9223372036854775808",
+        "-5",
+        "-1790000000",
+        "0",
+        "1000",
+        "1577836799",
+        "4000000000000",
+        &beyond,
+        "+1790000000",
+        " 1790000000",
+        "1790000000 ",
+        "1790000000\n\n",
         "",
         "yesterday",
         "12.5",
         "2026-11-18T00:00:00Z",
         "99999999999999999999",
+        &huge,
     ] {
-        fs::write(job.root.join("velnor-tools-restore-began"), text)
-            .unwrap_or_else(|e| unreachable!("{e}"));
-        assert_eq!(cutoff(&job.root, NOW), margined(NOW), "{text}");
+        plant(&job.root, text);
+        assert_eq!(cutoff(&job.root, NOW), None, "{text}");
     }
 }
 
 #[test]
-fn a_record_that_is_a_symlink_is_not_followed() {
+fn the_oldest_and_the_newest_plausible_records_and_a_trailing_newline_are_used() {
+    let job = job("restore-clock-bounds");
+    for (text, began) in [
+        ("1577836800", 1_577_836_800),
+        (&NOW.to_string(), NOW),
+        (&format!("{BEGAN}\n"), BEGAN),
+    ] {
+        plant(&job.root, text);
+        assert_eq!(cutoff(&job.root, NOW), Some(margined(began)), "{text}");
+    }
+}
+
+#[test]
+fn a_record_that_is_not_a_regular_file_gives_no_cutoff() {
+    let job = job("restore-clock-directory");
+    fs::create_dir(job.root.join("velnor-tools-restore-began"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(cutoff(&job.root, NOW), None);
+}
+
+#[test]
+fn a_record_that_is_a_symlink_gives_no_cutoff() {
     let job = job("restore-clock-symlink");
     let target = job.root.join("elsewhere");
     fs::write(&target, BEGAN.to_string()).unwrap_or_else(|e| unreachable!("{e}"));
     symlink(&target, job.root.join("velnor-tools-restore-began"))
         .unwrap_or_else(|e| unreachable!("{e}"));
-    assert_eq!(cutoff(&job.root, NOW), margined(NOW));
+    assert_eq!(cutoff(&job.root, NOW), None);
 }
 
 #[test]
 fn an_entry_saved_inside_the_margin_before_the_start_is_refused_and_one_outside_it_resolves() {
     let job = job("restore-clock-margin");
     record(&job.root, BEGAN).unwrap_or_else(|e| unreachable!("{e}"));
-    let stamp = cutoff(&job.root, NOW);
+    let stamp = cutoff(&job.root, NOW).unwrap_or_else(|| unreachable!("a recorded start"));
     for (id, saved, resolves) in [
         (21, BEGAN - 1, false),
         (22, BEGAN - SAFETY_MARGIN_SECONDS, false),
@@ -109,10 +149,53 @@ fn the_check_prints_the_recorded_start_minus_the_margin() {
 }
 
 #[test]
+fn a_clock_so_early_that_the_margin_cannot_be_subtracted_gives_no_cutoff() {
+    let job = job("restore-clock-early-clock");
+    assert_eq!(
+        cutoff(&job.root, i64::MIN + SAFETY_MARGIN_SECONDS - 1),
+        None
+    );
+    assert_eq!(
+        cutoff(&job.root, i64::MIN + SAFETY_MARGIN_SECONDS),
+        Some(utc_text(i64::MIN))
+    );
+}
+
+#[test]
+fn an_untrusted_record_makes_the_check_print_no_command_and_ask_for_an_explicit_cutoff() {
+    for (name, text) in [
+        ("restore-clock-notice-min", "-9223372036854775808"),
+        ("restore-clock-notice-max", "9223372036854775807"),
+        ("restore-clock-notice-negative", "-5"),
+        ("restore-clock-notice-garbage", "yesterday"),
+        ("restore-clock-notice-future", "4000000000000"),
+    ] {
+        let job = job(name);
+        let anchor = recorded(&job);
+        fs::write(rustc(&job), "evil binary!").unwrap_or_else(|e| unreachable!("{e}"));
+        plant(&job.root, text);
+        let stdout = check_stdout(
+            &job,
+            &anchor,
+            &[("VELNOR_TOOLS_CACHE_KEY", "velnor-tools-abc123")],
+        );
+        assert!(
+            stdout.contains(
+                "the restore-time record is unreadable; rerun step 1 with an explicit --restored-before"
+            ),
+            "{text}: {stdout}"
+        );
+        assert!(!stdout.contains("cache delete-entry"), "{text}: {stdout}");
+        assert!(!stdout.contains("restored-before '"), "{text}: {stdout}");
+        assert!(discarded(&job), "{text}");
+    }
+}
+
+#[test]
 fn the_clear_step_records_the_clock_it_is_given_exactly() {
     let job = job("restore-clock-clear-exact");
     note_clear(ToolsVerb::Clear, Some(&job.root), BEGAN);
-    assert_eq!(cutoff(&job.root, FAR_FUTURE), margined(BEGAN));
+    assert_eq!(cutoff(&job.root, FAR_FUTURE), Some(margined(BEGAN)));
     let record = fs::read_to_string(job.root.join("velnor-tools-restore-began"));
     assert_eq!(record.ok().as_deref(), Some(BEGAN.to_string().as_str()));
 }
@@ -123,7 +206,7 @@ fn only_the_clear_step_records_a_start() {
     for verb in [ToolsVerb::Restore, ToolsVerb::Save] {
         note_clear(verb, Some(&job.root), BEGAN);
     }
-    assert_eq!(cutoff(&job.root, FAR_FUTURE), margined(FAR_FUTURE));
+    assert_eq!(cutoff(&job.root, FAR_FUTURE), Some(margined(FAR_FUTURE)));
 }
 
 #[test]
@@ -139,7 +222,7 @@ fn a_record_path_that_is_a_symlink_is_replaced_and_its_target_is_never_written()
         Some("untouched")
     );
     assert!(fs::symlink_metadata(&path).is_ok_and(|meta| meta.is_file()));
-    assert_eq!(cutoff(&job.root, NOW), margined(BEGAN));
+    assert_eq!(cutoff(&job.root, NOW), Some(margined(BEGAN)));
 }
 
 #[test]

@@ -19,7 +19,7 @@ pub(crate) const VERSION_B: &str = "b2b2";
 pub(crate) const RESTORED_BEFORE: &str = "2026-11-18T00:00:00Z";
 
 pub(crate) struct Served {
-    entries: Vec<Value>,
+    entries: Mutex<Vec<Value>>,
     deleted: Mutex<Vec<String>>,
 }
 
@@ -37,8 +37,11 @@ fn param(query: &str, name: &str) -> Option<String> {
 fn listing(served: &Served, query: &str) -> String {
     let key = param(query, "key").unwrap_or_default();
     let reference = param(query, "ref");
-    let rows: Vec<&Value> = served
+    let entries = served
         .entries
+        .lock()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let rows: Vec<&Value> = entries
         .iter()
         .filter(|row| row["key"].as_str().is_some_and(|k| k.starts_with(&key)))
         .filter(|row| reference.as_deref().is_none_or(|r| row["ref"] == r))
@@ -66,6 +69,15 @@ fn answer(served: &Served, stream: TcpStream) {
     }
     let mut status = "200 OK";
     let body = if method == "DELETE" {
+        let gone = target
+            .rsplit('/')
+            .next()
+            .and_then(|id| id.parse::<u64>().ok());
+        served
+            .entries
+            .lock()
+            .unwrap_or_else(|e| unreachable!("{e}"))
+            .retain(|row| row["id"].as_u64() != gone);
         served
             .deleted
             .lock()
@@ -93,7 +105,7 @@ pub(crate) fn serve(entries: Vec<Value>) -> (String, Arc<Served>) {
         .local_addr()
         .unwrap_or_else(|e| unreachable!("{e}"));
     let served = Arc::new(Served {
-        entries,
+        entries: Mutex::new(entries),
         deleted: Mutex::default(),
     });
     let shared = Arc::clone(&served);
@@ -163,9 +175,11 @@ fn the_binary_resolves_the_only_entry_its_key_and_ref_name_and_deletes_nothing()
 
 #[test]
 fn the_binary_deletes_by_id_only_when_the_key_still_has_that_id() {
+    let longer = format!("{KEY}-other");
     let (api, served) = serve(vec![
         entry(11, KEY, MAIN, VERSION_A),
         entry(12, KEY, MERGE, VERSION_B),
+        entry(20, &longer, MAIN, VERSION_A),
     ]);
     let output = delete_entry(&api, &["--key", KEY, "--id", "12"]);
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -175,10 +189,15 @@ fn the_binary_deletes_by_id_only_when_the_key_still_has_that_id() {
         deleted(&served),
         [format!("/repos/{REPO}/actions/caches/12")]
     );
-    let stale = delete_entry(&api, &["--key", KEY, "--id", "13"]);
-    assert!(!stale.status.success());
-    let other = delete_entry(&api, &["--key", "another", "--id", "11"]);
-    assert!(!other.status.success());
+    for args in [
+        ["--key", KEY, "--id", "13"],
+        ["--key", KEY, "--id", "12"],
+        ["--key", "another", "--id", "11"],
+        ["--key", KEY, "--id", "20"],
+    ] {
+        let refused = delete_entry(&api, &args);
+        assert!(!refused.status.success(), "{args:?}");
+    }
     assert_eq!(deleted(&served).len(), 1);
 }
 
