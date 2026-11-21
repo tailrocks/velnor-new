@@ -2,10 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::mbx_reports::{SWITCH, cargo, cargo_with, report, report_json, session};
-use super::mbx_socket::Socket;
+use super::mbx_socket::{Socket, run_bounded};
 use super::{Repo, ResultTest, fixture};
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
+use std::os::unix::net::UnixListener;
 use std::process::Command;
 use velnor_ci::mbx_report::reports_session;
 
@@ -165,6 +166,40 @@ fn a_stale_socket_left_by_a_dead_listener_does_not_hide_the_session() -> ResultT
     assert_eq!(metrics.mbx.sessions, [session(2, 0, 0)], "{metrics:?}");
     assert_eq!(metrics.mbx.unparsed, 0, "{metrics:?}");
     assert!(metrics.verification_errors.is_empty(), "{metrics:?}");
+    Ok(())
+}
+
+#[test]
+fn a_stale_socket_is_not_inherited_by_a_command_that_reports_nothing() -> ResultTest {
+    let repo = fixture("mbx-reports-stale-inherited")?;
+    let bin = repo.root().join("fake-bin");
+    fs::create_dir_all(&bin)?;
+    let nextest = bin.join("cargo-nextest");
+    fs::write(
+        &nextest,
+        "#!/bin/sh\nif [ -z \"${MBX_SOCKET+x}\" ]; then printf unset > \"$FAKE_CHILD_ENV\"; else printf set > \"$FAKE_CHILD_ENV\"; fi\n",
+    )?;
+    fs::set_permissions(&nextest, fs::Permissions::from_mode(0o755))?;
+    let socket = repo.root().join("cache-agent.sock");
+    drop(UnixListener::bind(&socket)?);
+    let observed = repo.root().join("child-env");
+    let output = run_bounded(
+        Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+            .args([
+                "run",
+                "--",
+                nextest.to_str().ok_or("path")?,
+                "nextest",
+                "run",
+            ])
+            .current_dir(repo.root())
+            .env("RUNNER_TEMP", repo.root())
+            .env(SWITCH, "true")
+            .env("MBX_SOCKET", &socket)
+            .env("FAKE_CHILD_ENV", &observed),
+    )?;
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(fs::read_to_string(&observed)?, "unset");
     Ok(())
 }
 
