@@ -1,219 +1,100 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::{fs, thread};
 
-use super::walk::scan_with;
+use super::super::options::MAX_ENTRIES_VARIABLE;
+use super::walk::{Probe, scan_with};
 use super::*;
 
-fn scan_racing(name: &str, race: impl Fn(&Path) -> io::Result<fs::ReadDir>) -> io::Result<Entries> {
-    let root = std::env::temp_dir().join(format!("velnor-scan-{name}-{}", std::process::id()));
+mod placement;
+mod racing;
+
+fn scan_with_open_failing(kind: io::ErrorKind) -> io::Result<Entries> {
+    let root =
+        std::env::temp_dir().join(format!("velnor-scan-open-{kind:?}-{}", std::process::id()));
     let _ = fs::remove_dir_all(&root);
     fs::create_dir_all(root.join("sub")).unwrap_or_else(|e| unreachable!("{e}"));
     fs::write(root.join("kept.txt"), b"").unwrap_or_else(|e| unreachable!("{e}"));
     let mut budget = Budget::new(usize::MAX);
-    let result = scan_with(&root, &BTreeSet::new(), &mut budget, |directory| {
-        if directory.ends_with("sub") {
-            race(directory)
-        } else {
-            fs::read_dir(directory)
-        }
-    });
+    let result = scan_with(
+        &root,
+        &BTreeSet::new(),
+        &mut budget,
+        &Probe {
+            before_open: &|directory| {
+                if directory.ends_with("sub") {
+                    Err(io::Error::from(kind))
+                } else {
+                    Ok(())
+                }
+            },
+            after_open: &|_| {},
+            ..Probe::default()
+        },
+    );
     fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
     result
 }
 
-fn root_children(entries: &Entries) -> &BTreeMap<PathBuf, Kind> {
-    entries
-        .values()
-        .next()
-        .unwrap_or_else(|| unreachable!("root is always recorded"))
+fn scan_with_sub_removed_before_open() -> io::Result<Entries> {
+    let root = std::env::temp_dir().join(format!("velnor-scan-removed-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&root);
+    fs::create_dir_all(root.join("sub")).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::write(root.join("kept.txt"), b"").unwrap_or_else(|e| unreachable!("{e}"));
+    let mut budget = Budget::new(usize::MAX);
+    let result = scan_with(
+        &root,
+        &BTreeSet::new(),
+        &mut budget,
+        &Probe {
+            before_open: &|directory| {
+                if directory.ends_with("sub") {
+                    fs::remove_dir(directory).unwrap_or_else(|e| unreachable!("{e}"));
+                }
+                Ok(())
+            },
+            ..Probe::default()
+        },
+    );
+    fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+    result
 }
 
 #[test]
 fn a_directory_removed_before_it_is_opened_is_skipped_not_an_error() {
-    let entries = scan_racing("removed", |directory: &Path| -> io::Result<fs::ReadDir> {
-        fs::remove_dir(directory)?;
-        fs::read_dir(directory)
-    });
+    let entries = scan_with_sub_removed_before_open();
     let Ok(entries) = entries else {
         panic!("scan failed on a directory removed before it was opened: {entries:?}");
     };
-    let children = root_children(&entries);
-    assert!(children.contains_key(Path::new("kept.txt")), "{children:?}");
-    assert!(!children.contains_key(Path::new("sub")), "{children:?}");
-    assert_eq!(entries.len(), 1, "{:?}", entries.keys());
-}
-
-#[test]
-fn a_directory_replaced_by_a_regular_file_before_it_is_opened_is_recorded_as_that_file() {
-    let entries = scan_racing(
-        "replaced-file",
-        |directory: &Path| -> io::Result<fs::ReadDir> {
-            fs::remove_dir(directory)?;
-            fs::write(directory, b"")?;
-            fs::read_dir(directory)
-        },
+    let root_children = entries
+        .values()
+        .next()
+        .unwrap_or_else(|| unreachable!("root is always recorded"));
+    assert!(
+        root_children.contains_key(Path::new("kept.txt")),
+        "{root_children:?}"
     );
-    let Ok(entries) = entries else {
-        panic!("scan failed on a directory replaced by a file: {entries:?}");
-    };
-    let children = root_children(&entries);
-    assert_eq!(
-        children.get(Path::new("sub")),
-        Some(&Kind::File),
-        "{children:?}"
+    assert!(
+        !root_children.contains_key(Path::new("sub")),
+        "vanished directory still recorded: {root_children:?}"
     );
     assert_eq!(entries.len(), 1, "{:?}", entries.keys());
 }
 
 #[test]
-fn a_directory_replaced_by_a_symbolic_link_before_it_is_opened_is_recorded_as_that_link() {
-    let entries = scan_racing(
-        "replaced-link",
-        |directory: &Path| -> io::Result<fs::ReadDir> {
-            let target = directory.with_file_name("kept.txt");
-            fs::remove_dir(directory)?;
-            std::os::unix::fs::symlink(target, directory)?;
-            fs::read_dir(directory)
-        },
-    );
-    let Ok(entries) = entries else {
-        panic!("scan failed on a directory replaced by a link: {entries:?}");
-    };
-    let children = root_children(&entries);
+fn a_directory_that_still_exists_is_never_dropped_because_its_open_reported_not_found() {
+    let entries = scan_with_open_failing(io::ErrorKind::NotFound);
     assert!(
-        matches!(children.get(Path::new("sub")), Some(Kind::Link { .. })),
-        "{children:?}"
-    );
-    assert_eq!(entries.len(), 1, "{:?}", entries.keys());
-}
-
-#[test]
-fn a_directory_replaced_by_a_link_to_itself_before_it_is_opened_is_recorded_as_that_link() {
-    let entries = scan_racing(
-        "replaced-loop",
-        |directory: &Path| -> io::Result<fs::ReadDir> {
-            fs::remove_dir(directory)?;
-            std::os::unix::fs::symlink(directory, directory)?;
-            fs::read_dir(directory)
-        },
-    );
-    let Ok(entries) = entries else {
-        panic!("scan failed on a directory replaced by a cyclic link: {entries:?}");
-    };
-    let children = root_children(&entries);
-    assert!(
-        matches!(
-            children.get(Path::new("sub")),
-            Some(Kind::Link { resolved: None, .. })
-        ),
-        "{children:?}"
-    );
-    assert_eq!(entries.len(), 1, "{:?}", entries.keys());
-}
-
-fn assert_link_to_directory_recorded(entries: io::Result<Entries>) {
-    let Ok(entries) = entries else {
-        panic!("scan failed on a directory replaced by a link to a directory: {entries:?}");
-    };
-    let children = root_children(&entries);
-    assert!(
-        matches!(
-            children.get(Path::new("sub")),
-            Some(Kind::Link {
-                resolved: Some(_),
-                ..
-            })
-        ),
-        "the replaced directory must be recorded as the link it now is: {children:?}"
-    );
-    assert!(
-        entries.keys().any(|path| path.ends_with("elsewhere")),
-        "the link target must be walked as a stable scan would: {:?}",
-        entries.keys()
-    );
-    assert!(
-        !entries.keys().any(|path| path.ends_with("sub")),
-        "the link must not be recorded as a directory: {:?}",
-        entries.keys()
-    );
-}
-
-fn replace_with_link_to_directory(directory: &Path) -> io::Result<()> {
-    let elsewhere = directory.with_file_name("elsewhere");
-    fs::create_dir(&elsewhere)?;
-    fs::write(elsewhere.join("inner.txt"), b"")?;
-    fs::remove_dir(directory)?;
-    std::os::unix::fs::symlink(elsewhere, directory)
-}
-
-#[test]
-fn a_directory_replaced_by_a_link_to_a_directory_before_it_is_opened_is_recorded_as_that_link() {
-    assert_link_to_directory_recorded(scan_racing(
-        "replaced-dir-link",
-        |directory: &Path| -> io::Result<fs::ReadDir> {
-            replace_with_link_to_directory(directory)?;
-            fs::read_dir(directory)
-        },
-    ));
-}
-
-#[test]
-fn a_directory_replaced_by_a_link_to_a_directory_just_after_it_is_opened_is_recorded_as_that_link()
-{
-    assert_link_to_directory_recorded(scan_racing(
-        "opened-then-replaced",
-        |directory: &Path| -> io::Result<fs::ReadDir> {
-            let listing = fs::read_dir(directory)?;
-            replace_with_link_to_directory(directory)?;
-            Ok(listing)
-        },
-    ));
-}
-
-#[test]
-fn a_directory_swapped_for_a_new_directory_after_it_is_opened_fails_the_scan() {
-    let entries = scan_racing(
-        "swapped-directory",
-        |directory: &Path| -> io::Result<fs::ReadDir> {
-            fs::write(directory.join("old.txt"), b"")?;
-            let listing = fs::read_dir(directory)?;
-            fs::rename(directory, directory.with_file_name("sub-old"))?;
-            fs::create_dir(directory)?;
-            fs::write(directory.join("old.txt"), b"")?;
-            fs::write(directory.join("new.txt"), b"")?;
-            Ok(listing)
-        },
-    );
-    assert!(
-        entries.is_err(),
-        "a directory swapped after it was opened must fail the scan, not record the old listing: {entries:?}"
-    );
-}
-
-#[test]
-fn a_directory_that_is_a_directory_again_before_it_is_opened_still_fails_the_scan() {
-    let entries = scan_racing(
-        "directory-again",
-        |directory: &Path| -> io::Result<fs::ReadDir> {
-            fs::remove_dir(directory)?;
-            fs::create_dir(directory)?;
-            Err(io::Error::from(io::ErrorKind::NotFound))
-        },
-    );
-    assert!(
-        matches!(&entries, Err(error) if error.kind() == io::ErrorKind::NotFound),
-        "{entries:?}"
+        matches!(&entries, Err(error) if error.to_string().contains("changed while the audit scanned it; retry")),
+        "a directory that still exists was silently dropped: {entries:?}"
     );
 }
 
 #[test]
 fn a_directory_that_cannot_be_opened_still_fails_the_scan() {
-    let entries = scan_racing("denied", |_: &Path| {
-        Err(io::Error::from(io::ErrorKind::PermissionDenied))
-    });
+    let entries = scan_with_open_failing(io::ErrorKind::PermissionDenied);
     assert!(
         matches!(&entries, Err(error) if error.kind() == io::ErrorKind::PermissionDenied),
         "{entries:?}"
@@ -246,5 +127,117 @@ fn an_entry_removed_during_the_walk_is_not_an_error() {
     assert!(
         failure.is_none(),
         "scan failed on a vanished entry: {failure:?}"
+    );
+}
+
+#[test]
+fn a_directory_replaced_by_a_symbolic_link_before_it_is_opened_is_not_followed() {
+    let root = fs::canonicalize(std::env::temp_dir())
+        .unwrap_or_else(|e| unreachable!("{e}"))
+        .join(format!("velnor-scan-link-swap-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&root);
+    let scanned = root.join("scanned");
+    let elsewhere = root.join("elsewhere");
+    fs::create_dir_all(scanned.join("d")).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::create_dir_all(&elsewhere).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::write(elsewhere.join("secret"), b"").unwrap_or_else(|e| unreachable!("{e}"));
+    let mut budget = Budget::new(usize::MAX);
+    let entries = scan_with(
+        &scanned,
+        &BTreeSet::new(),
+        &mut budget,
+        &Probe {
+            before_open: &|directory| {
+                if directory.ends_with("d") {
+                    fs::remove_dir(directory).unwrap_or_else(|e| unreachable!("{e}"));
+                    std::os::unix::fs::symlink(&elsewhere, directory)
+                        .unwrap_or_else(|e| unreachable!("{e}"));
+                }
+                Ok(())
+            },
+            after_open: &|_| {},
+            ..Probe::default()
+        },
+    )
+    .unwrap_or_else(|e| unreachable!("{e}"));
+    fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(
+        !entries.contains_key(&scanned.join("d")),
+        "opened the replacement link as a directory: {:?}",
+        entries.keys()
+    );
+    let children = entries
+        .get(&scanned)
+        .unwrap_or_else(|| unreachable!("{:?}", entries.keys()));
+    assert!(
+        matches!(children.get(Path::new("d")), Some(Kind::Link { .. })),
+        "the replacement link is missing from the inventory: {children:?}"
+    );
+}
+
+#[test]
+fn a_symbolic_link_through_a_regular_file_is_an_unresolved_link_not_an_error() {
+    let root = fs::canonicalize(std::env::temp_dir())
+        .unwrap_or_else(|e| unreachable!("{e}"))
+        .join(format!("velnor-scan-notdir-link-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&root);
+    fs::create_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::write(root.join("file"), b"").unwrap_or_else(|e| unreachable!("{e}"));
+    std::os::unix::fs::symlink("file/child", root.join("link"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let mut budget = Budget::new(usize::MAX);
+    let entries = scan_with(&root, &BTreeSet::new(), &mut budget, &Probe::default());
+    fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+    let entries = entries.unwrap_or_else(|e| panic!("scan failed on a link through a file: {e}"));
+    let children = entries
+        .values()
+        .next()
+        .unwrap_or_else(|| unreachable!("root is always recorded"));
+    assert!(
+        matches!(
+            children.get(Path::new("link")),
+            Some(Kind::Link { resolved: None, .. })
+        ),
+        "{children:?}"
+    );
+}
+
+#[test]
+fn a_huge_directory_stops_being_read_once_the_entry_budget_is_spent() {
+    let root = fs::canonicalize(std::env::temp_dir())
+        .unwrap_or_else(|e| unreachable!("{e}"))
+        .join(format!("velnor-scan-huge-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&root);
+    fs::create_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+    for index in 0..2_000 {
+        fs::write(root.join(format!("entry-{index}")), b"").unwrap_or_else(|e| unreachable!("{e}"));
+    }
+    let limit = 10;
+    let read = AtomicUsize::new(0);
+    let mut budget = Budget::new(limit);
+    let result = scan_with(
+        &root,
+        &BTreeSet::new(),
+        &mut budget,
+        &Probe {
+            listed: &|_| {
+                read.fetch_add(1, Ordering::Relaxed);
+            },
+            ..Probe::default()
+        },
+    );
+    fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+    let Err(error) = result else {
+        panic!("a directory larger than the budget was scanned");
+    };
+    assert!(
+        error.to_string().contains(MAX_ENTRIES_VARIABLE),
+        "limit error does not name {MAX_ENTRIES_VARIABLE}: {error}"
+    );
+    assert!(budget.overflowed());
+    let read = read.load(Ordering::Relaxed);
+    assert!(
+        read <= limit + 1,
+        "read {read} names for a limit of {limit}"
     );
 }
