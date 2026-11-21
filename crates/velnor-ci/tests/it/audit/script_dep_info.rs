@@ -78,7 +78,7 @@ fn a_build_script_run_whose_compile_left_no_dep_info_is_not_called_outputless() 
     assert_eq!(output.status.code(), Some(1), "{output:?}");
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains("build script run without the dep-info of its compile"),
+        stderr.contains("build script run without a current dep-info of its compile"),
         "{stderr}"
     );
     assert!(!stderr.contains("no output"), "{stderr}");
