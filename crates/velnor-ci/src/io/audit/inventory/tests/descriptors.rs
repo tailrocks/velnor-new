@@ -1,7 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::os::unix::fs::symlink;
+
 use super::handle::{self, Origin};
+use super::walk::DESCRIPTOR_BUDGET;
 use super::*;
 
 fn deep_tree(root: &Path, depth: usize, siblings: usize) {
@@ -51,8 +54,60 @@ fn a_deep_tree_with_pending_siblings_is_walked_within_a_small_descriptor_budget(
     let entries = entries.unwrap_or_else(|e| panic!("deep tree scan failed: {e}"));
     assert_eq!(entries.len(), 1 + 160 * 5, "{}", entries.len());
     assert!(
-        peak < baseline + 100,
+        peak <= baseline + DESCRIPTOR_BUDGET,
         "walk held {peak} descriptors (baseline {baseline}) in a tree 160 levels deep"
+    );
+}
+
+fn deep_links_tree(root: &Path, depth: usize, linked_from: usize, target_depth: usize) {
+    deep_tree(root, depth, 4);
+    let mut target = root.join("t");
+    for _ in 0..target_depth {
+        target.push("a");
+    }
+    fs::create_dir_all(&target).unwrap_or_else(|e| unreachable!("{e}"));
+    let relative = "a/".repeat(target_depth);
+    let mut directory = root.to_path_buf();
+    for level in 0..depth {
+        directory.push("c");
+        if level >= linked_from {
+            let up = "../".repeat(level + 1);
+            symlink(format!("{up}t/{relative}"), directory.join("rel"))
+                .unwrap_or_else(|e| unreachable!("{e}"));
+            symlink(&target, directory.join("abs")).unwrap_or_else(|e| unreachable!("{e}"));
+        }
+    }
+}
+
+#[test]
+fn a_deep_tree_with_deep_link_targets_stays_within_one_descriptor_budget() {
+    let root = fs::canonicalize(std::env::temp_dir())
+        .unwrap_or_else(|e| unreachable!("{e}"))
+        .join(format!("velnor-scan-links-budget-{}", std::process::id()));
+    let _ = fs::remove_dir_all(&root);
+    deep_links_tree(&root, 120, 56, 200);
+    let baseline = open_descriptors();
+    let peak = AtomicUsize::new(0);
+    let sample = || {
+        peak.fetch_max(open_descriptors(), Ordering::Relaxed);
+    };
+    let mut budget = Budget::new(usize::MAX);
+    let result = scan_with(
+        &root,
+        &BTreeSet::new(),
+        &mut budget,
+        &Probe {
+            after_open: &|_| sample(),
+            opened: &sample,
+            ..Probe::default()
+        },
+    );
+    fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+    result.unwrap_or_else(|e| panic!("deep link scan failed: {e}"));
+    let peak = peak.load(Ordering::Relaxed);
+    assert!(
+        peak <= baseline + DESCRIPTOR_BUDGET,
+        "audit held {peak} descriptors (baseline {baseline}), more than {DESCRIPTOR_BUDGET}"
     );
 }
 

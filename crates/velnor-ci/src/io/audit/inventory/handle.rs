@@ -17,7 +17,7 @@ use nix::sys::stat::Mode;
 use nix::sys::stat::{SFlag, fstat, fstatat};
 
 use super::Kind;
-use super::resolve;
+use super::resolve::{self, Reach};
 use super::walk::{changed, unresolved_link};
 
 pub(super) type Opened = Rc<Dir>;
@@ -100,7 +100,7 @@ pub(super) fn identity(directory: impl AsFd) -> io::Result<Identity> {
         born: metadata.created().ok(),
     })
 }
-pub(super) fn current(origin: &Origin, path: &Path) -> io::Result<Current> {
+pub(super) fn current(origin: &Origin, path: &Path, reach: Reach<'_>) -> io::Result<Current> {
     let held: OwnedFd;
     let (anchor, name) = match origin {
         Origin::Child { parent, name, .. } => (parent.as_fd(), name.as_os_str()),
@@ -136,7 +136,7 @@ pub(super) fn current(origin: &Origin, path: &Path) -> io::Result<Current> {
     if format == SFlag::S_IFDIR {
         return Ok(Current::Directory((stat.st_dev, stat.st_ino)));
     }
-    Ok(match kind_at(anchor, name, path)? {
+    Ok(match kind_at(anchor, name, path, reach)? {
         Some(kind) => Current::Other(kind),
         None => Current::Gone,
     })
@@ -158,7 +158,12 @@ pub(super) fn names(
     Ok(names)
 }
 
-pub(super) fn kind_at(directory: impl AsFd, name: &OsStr, path: &Path) -> io::Result<Option<Kind>> {
+pub(super) fn kind_at(
+    directory: impl AsFd,
+    name: &OsStr,
+    path: &Path,
+    reach: Reach<'_>,
+) -> io::Result<Option<Kind>> {
     let stat = match fstatat(&directory, name, AtFlags::AT_SYMLINK_NOFOLLOW) {
         Ok(stat) => stat,
         Err(nix::errno::Errno::ENOENT) => return Ok(None),
@@ -180,7 +185,7 @@ pub(super) fn kind_at(directory: impl AsFd, name: &OsStr, path: &Path) -> io::Re
         Err(errno) => return Err(failure(errno)),
     };
     let base = path.parent().unwrap_or(path);
-    let resolved = match resolve::resolve(directory.as_fd(), base, &target) {
+    let resolved = match resolve::resolve(directory.as_fd(), base, &target, reach) {
         Ok(resolved) => Some(resolved),
         Err(error) if unresolved_link(&error) => None,
         Err(error) => return Err(error),

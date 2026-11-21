@@ -11,9 +11,10 @@ use nix::errno::Errno;
 use nix::fcntl::{AT_FDCWD, AtFlags, OFlag, openat, readlinkat};
 use nix::sys::stat::{Mode, SFlag, fstatat};
 
-use super::walk::HELD_HANDLES;
+use super::walk::DESCRIPTOR_BUDGET;
 
 const MAX_LINKS: usize = 40;
+pub(super) const RESOLVER_FIXED: usize = 3;
 
 fn failure(errno: Errno) -> io::Error {
     io::Error::from_raw_os_error(errno as i32)
@@ -53,6 +54,21 @@ pub(super) fn open_path(path: &Path, listing: bool) -> io::Result<OwnedFd> {
     Ok(current)
 }
 
+#[derive(Clone, Copy)]
+pub(super) struct Reach<'a> {
+    pub(super) bound: usize,
+    pub(super) opened: &'a dyn Fn(),
+}
+
+impl Default for Reach<'_> {
+    fn default() -> Self {
+        Self {
+            bound: DESCRIPTOR_BUDGET,
+            opened: &|| {},
+        }
+    }
+}
+
 struct Trail {
     parents: VecDeque<OwnedFd>,
     bound: usize,
@@ -67,10 +83,12 @@ impl Trail {
     }
 
     fn push(&mut self, parent: OwnedFd) {
-        self.parents.push_back(parent);
-        while self.parents.len() > self.bound {
-            self.parents.pop_front();
+        while self.parents.len() >= self.bound {
+            if self.parents.pop_front().is_none() {
+                return;
+            }
         }
+        self.parents.push_back(parent);
     }
 
     fn pop(&mut self) -> Option<OwnedFd> {
@@ -111,18 +129,11 @@ pub(super) fn resolve(
     directory: BorrowedFd<'_>,
     base: &Path,
     target: &Path,
-) -> io::Result<PathBuf> {
-    resolve_within(directory, base, target, HELD_HANDLES)
-}
-
-fn resolve_within(
-    directory: BorrowedFd<'_>,
-    base: &Path,
-    target: &Path,
-    bound: usize,
+    reach: Reach<'_>,
 ) -> io::Result<PathBuf> {
     let mut current = directory.try_clone_to_owned()?;
-    let mut trail = Trail::new(bound);
+    (reach.opened)();
+    let mut trail = Trail::new(reach.bound);
     let mut path = base.to_path_buf();
     let mut pending = Vec::new();
     let mut links = 0;
@@ -130,8 +141,9 @@ fn resolve_within(
     while let Some(step) = pending.pop() {
         match step {
             Step::Root => {
-                current = open_path(Path::new("/"), false)?;
                 trail.clear();
+                current = open_path(Path::new("/"), false)?;
+                (reach.opened)();
                 path = PathBuf::from("/");
             }
             Step::Parent => {
@@ -139,6 +151,7 @@ fn resolve_within(
                     Some(parent) => parent,
                     None => open_directory(current.as_fd(), Path::new(".."), false)?,
                 };
+                (reach.opened)();
                 path.pop();
             }
             Step::Name(name) => {
@@ -158,6 +171,7 @@ fn resolve_within(
                     steps(&next, &mut pending);
                 } else if format == SFlag::S_IFDIR {
                     let opened = open_directory(current.as_fd(), Path::new(&name), false)?;
+                    (reach.opened)();
                     trail.push(std::mem::replace(&mut current, opened));
                     path.push(&name);
                 } else if pending.is_empty() {
@@ -189,7 +203,11 @@ mod tests {
 
     fn resolve_from(directory: &Path, target: &Path, bound: usize) -> io::Result<PathBuf> {
         let held = open_path(directory, false)?;
-        resolve_within(held.as_fd(), directory, target, bound)
+        let reach = Reach {
+            bound,
+            ..Reach::default()
+        };
+        resolve(held.as_fd(), directory, target, reach)
     }
 
     #[test]
@@ -222,7 +240,7 @@ mod tests {
         let start = base.join("start");
         for target in &targets {
             let expected = fs::canonicalize(start.join(target)).ok();
-            for bound in [0, 1, 7, HELD_HANDLES, usize::MAX] {
+            for bound in [0, 1, 7, DESCRIPTOR_BUDGET, usize::MAX] {
                 let resolved = resolve_from(&start, Path::new(target), bound).ok();
                 assert_eq!(resolved, expected, "bound {bound}, target {target}");
             }

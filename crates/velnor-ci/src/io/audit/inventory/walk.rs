@@ -12,6 +12,7 @@ use super::super::options::{MAX_ENTRIES_CEILING, MAX_ENTRIES_VARIABLE};
 use nix::dir::Dir;
 
 use super::handle::{self, Current, Opened, Origin};
+use super::resolve::{RESOLVER_FIXED, Reach};
 use super::{Entries, Kind, excluded_entry};
 
 pub(in crate::io::audit) struct Budget {
@@ -65,12 +66,15 @@ pub(in crate::io::audit) fn scan(
     scan_with(root, targets, budget, &Probe::default())
 }
 
-pub(super) const HELD_HANDLES: usize = 64;
+pub(super) const DESCRIPTOR_BUDGET: usize = 64;
+pub(super) const HELD_HANDLES: usize = 48;
+const UNTRACKED_LISTING: usize = 1;
 
 pub(super) struct Probe<'a> {
     pub(super) before_open: &'a dyn Fn(&Path) -> io::Result<()>,
     pub(super) after_open: &'a dyn Fn(&Path),
     pub(super) listed: &'a dyn Fn(&OsStr),
+    pub(super) opened: &'a dyn Fn(),
     pub(super) held: usize,
 }
 
@@ -80,6 +84,7 @@ impl Default for Probe<'_> {
             before_open: &|_| Ok(()),
             after_open: &|_| {},
             listed: &|_| {},
+            opened: &|| {},
             held: HELD_HANDLES,
         }
     }
@@ -100,6 +105,15 @@ impl Held {
         Self {
             handles: Vec::new(),
             limit,
+        }
+    }
+
+    fn reach<'a>(&mut self, probe: &Probe<'a>) -> Reach<'a> {
+        self.handles.retain(|handle| handle.strong_count() > 0);
+        let in_use = self.handles.len() + UNTRACKED_LISTING + RESOLVER_FIXED;
+        Reach {
+            bound: DESCRIPTOR_BUDGET.saturating_sub(in_use),
+            opened: probe.opened,
         }
     }
 
@@ -164,7 +178,7 @@ pub(super) fn scan_with(
         let mut listing = match opened {
             Ok(listing) => listing,
             Err(error) if handle::replaced(&error) && directory != root => {
-                match handle::current(&origin, &directory)? {
+                match handle::current(&origin, &directory, held.reach(probe))? {
                     Current::Directory(_) => return Err(changed(error.kind(), &directory)),
                     current => settle(
                         &mut entries,
@@ -190,7 +204,8 @@ pub(super) fn scan_with(
         let mut children = BTreeMap::new();
         for name in names {
             let path = directory.join(&name);
-            let Some(kind) = handle::kind_at(listing.as_ref(), &name, &path)? else {
+            let Some(kind) = handle::kind_at(listing.as_ref(), &name, &path, held.reach(probe))?
+            else {
                 continue;
             };
             let child = Origin::Child {
@@ -202,7 +217,7 @@ pub(super) fn scan_with(
             children.insert(PathBuf::from(name), kind);
         }
         held.track(&listing, &mut pending);
-        match handle::current(&origin, &directory)? {
+        match handle::current(&origin, &directory, held.reach(probe))? {
             Current::Directory(now) if now == identity.inode => {
                 entries.insert(directory, children);
             }
