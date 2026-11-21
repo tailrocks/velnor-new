@@ -185,7 +185,12 @@ pub fn base_gaps(metrics: &LaneMetrics) -> Vec<String> {
         {
             gaps.entry((&invocation.root, event.missing_input))
                 .or_default()
-                .insert(format!("{} v{}", event.package, event.version));
+                .insert(format!(
+                    "{} v{}{}",
+                    event.package,
+                    event.version,
+                    cargo_reason(event)
+                ));
         }
     }
     gaps.into_iter()

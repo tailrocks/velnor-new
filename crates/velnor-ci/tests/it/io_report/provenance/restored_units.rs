@@ -198,3 +198,31 @@ fn a_dirty_reason_is_not_attached_when_two_compilations_share_the_name_and_versi
     }
     Ok(())
 }
+
+#[test]
+fn a_base_gap_names_cargos_dirty_reason_and_stays_bare_without_one()
+-> Result<(), Box<dyn std::error::Error>> {
+    let reason = "FsStatusOutdated(StaleItem(MissingFile { path: \"/store/out-dirs/v1/x.rs\" }))";
+    let repo = base("report-restored-units-base-gap-reason", "old")?;
+    let gap = registry_artifact(&repo, GAP)?;
+    let with_reason = observation_with(
+        &repo,
+        &[],
+        std::slice::from_ref(&gap),
+        json!([{"package":"serde","version":"1.0.0","reason":reason}]),
+    )?;
+    let gaps = velnor_ci::restored_units::base_gaps(&with_reason);
+    assert_eq!(gaps.len(), 1, "{gaps:?}");
+    assert!(
+        gaps[0].ends_with(&format!("serde v1.0.0 (cargo: {reason})")),
+        "{gaps:?}"
+    );
+
+    let repo = base("report-restored-units-base-gap-bare", "old")?;
+    let gap = registry_artifact(&repo, GAP)?;
+    let bare = observation(&repo, &[], &[gap])?;
+    let gaps = velnor_ci::restored_units::base_gaps(&bare);
+    assert_eq!(gaps.len(), 1, "{gaps:?}");
+    assert!(gaps[0].ends_with(": serde v1.0.0"), "{gaps:?}");
+    Ok(())
+}
