@@ -32,7 +32,8 @@ pub use crate::lock::{
 };
 pub use crate::lock_affected::lock_affected;
 pub use crate::lock_check::{
-    RunningGenerator, check_generator_entry, lock_version, running_platform, verify_release,
+    ReleaseFiles, RunningGenerator, check_generator_entry, check_lock_entries, lock_version,
+    running_platform, verify_release,
 };
 pub use crate::lock_key::lock_key;
 pub use crate::mbx_layout::{Layout, Provider, Split, check_mbx};

@@ -5,7 +5,8 @@ use std::error::Error;
 
 use velnor_model::Platform;
 use velnor_rust::{
-    LockError, Remedy, RunningGenerator, check_generator_entry, pin_lock, verify_release,
+    LockError, ReleaseFiles, Remedy, RunningGenerator, check_generator_entry, check_lock_entries,
+    pin_lock, verify_release,
 };
 
 use crate::lock::COMMIT_FILE;
@@ -25,12 +26,24 @@ const GEN_BINARY_ARM64: &str = "8a7852af13610acee22317e764266301a83884595823a9b0
 const GEN_BINARY_MACOS: &str = "5b8f0d27e1a7f6a3c9d4e2b1a0c8f7e6d5c4b3a2918070605f4e3d2c1b0a9f8e";
 
 fn lock() -> Result<String, Box<dyn Error>> {
+    lock_at(VERSION)
+}
+
+fn lock_at(version: &str) -> Result<String, Box<dyn Error>> {
     Ok(pin_lock(
-        VERSION,
+        version,
         COMMIT_FILE,
         &generator_sums(),
         Some(GENERATOR_BINARY_SUMS),
     )?)
+}
+
+fn release_files() -> ReleaseFiles {
+    ReleaseFiles {
+        sums: generator_sums(),
+        commit: COMMIT_FILE.to_owned(),
+        binary_sums: Some(GENERATOR_BINARY_SUMS.to_owned()),
+    }
 }
 
 fn running(sha256: &str) -> RunningGenerator<'_> {
@@ -103,12 +116,11 @@ fn a_tampered_binary_digest_is_refused_online_and_named() -> TestResult {
     Ok(())
 }
 
-fn without_binary_section() -> Result<String, Box<dyn Error>> {
-    Ok(lock()?
-        .split("\n\n")
+fn without_binary_section(lock: &str) -> String {
+    lock.split("\n\n")
         .filter(|block| !block.starts_with("[velnor-gen-binary]"))
         .collect::<Vec<_>>()
-        .join("\n\n"))
+        .join("\n\n")
 }
 
 #[test]
@@ -129,7 +141,7 @@ fn a_lock_pinned_before_the_binary_section_still_passes() -> TestResult {
 
 #[test]
 fn a_release_that_lists_binary_digests_is_refused_offline_without_its_section() -> TestResult {
-    let error = check(&without_binary_section()?, running(GEN_BINARY_X64))
+    let error = check(&without_binary_section(&lock()?), running(GEN_BINARY_X64))
         .err()
         .ok_or("accepted a 0.1.111 lock without [velnor-gen-binary]")?;
     assert!(error.to_string().contains("[velnor-gen-binary]"), "{error}");
@@ -144,7 +156,7 @@ fn a_release_that_lists_binary_digests_is_refused_offline_without_its_section() 
 #[test]
 fn verify_release_names_the_repin_when_the_binary_section_is_missing() -> TestResult {
     let error = verify_release(
-        without_binary_section()?.as_bytes(),
+        without_binary_section(&lock()?).as_bytes(),
         &generator_sums(),
         COMMIT_FILE,
         Some(GENERATOR_BINARY_SUMS),
@@ -190,5 +202,68 @@ fn a_release_from_the_binary_section_on_is_not_pinned_without_velnor_gen_digests
         .to_string();
     assert!(error.contains("velnor-gen"), "{error}");
     assert!(error.contains(BINARY_SUMS_FILE), "{error}");
+    Ok(())
+}
+
+#[test]
+fn the_release_is_checked_before_the_offline_entry_so_a_tampered_binary_is_named_as_tampered()
+-> TestResult {
+    let tampered = lock()?.replacen(GEN_BINARY_X64, &"0".repeat(64), 1);
+    let error = check_lock_entries(
+        tampered.as_bytes(),
+        Some(release_files()),
+        running(GEN_BINARY_X64),
+    )
+    .err()
+    .ok_or("accepted")?;
+    assert_eq!(
+        error.remedy(),
+        Some(&Remedy::Repin(VERSION.to_owned())),
+        "{error}"
+    );
+    Ok(())
+}
+
+#[test]
+fn a_repin_names_the_version_of_the_lock_it_repairs() -> TestResult {
+    let later = "0.1.112";
+    let tampered = lock_at(later)?.replacen(GEN_BINARY_X64, &"0".repeat(64), 1);
+    let online = verify_release(
+        tampered.as_bytes(),
+        &generator_sums(),
+        COMMIT_FILE,
+        Some(GENERATOR_BINARY_SUMS),
+    )
+    .err()
+    .ok_or("accepted a tampered digest")?;
+    assert_eq!(
+        online.remedy(),
+        Some(&Remedy::Repin(later.to_owned())),
+        "{online}"
+    );
+
+    let missing = without_binary_section(&lock_at(later)?);
+    let offline = check(&missing, running(GEN_BINARY_X64))
+        .err()
+        .ok_or("accepted a 0.1.112 lock without [velnor-gen-binary]")?;
+    assert_eq!(
+        offline.remedy(),
+        Some(&Remedy::Repin(later.to_owned())),
+        "{offline}"
+    );
+
+    let online_missing = verify_release(
+        missing.as_bytes(),
+        &generator_sums(),
+        COMMIT_FILE,
+        Some(GENERATOR_BINARY_SUMS),
+    )
+    .err()
+    .ok_or("accepted")?;
+    assert_eq!(
+        online_missing.remedy(),
+        Some(&Remedy::Repin(later.to_owned())),
+        "{online_missing}"
+    );
     Ok(())
 }

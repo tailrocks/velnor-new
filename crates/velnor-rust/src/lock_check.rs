@@ -39,6 +39,33 @@ pub fn running_platform() -> Option<Platform> {
     }
 }
 
+/// The files a release publishes for its version, as fetched for the online check.
+#[derive(Debug, Clone)]
+pub struct ReleaseFiles {
+    pub sums: String,
+    pub commit: String,
+    pub binary_sums: Option<String>,
+}
+
+/// The lock's `[velnor-gen]` entry checked against this binary, and with `release` the whole
+/// lock checked against what the release publishes. The release comes first, so a tampered
+/// `[velnor-gen-binary]` is reported as tampered rather than as a binary to reinstall.
+pub fn check_lock_entries(
+    bytes: &[u8],
+    release: Option<ReleaseFiles>,
+    running: RunningGenerator<'_>,
+) -> Result<(), LockError> {
+    if let Some(files) = release {
+        verify_release(
+            bytes,
+            &files.sums,
+            &files.commit,
+            files.binary_sums.as_deref(),
+        )?;
+    }
+    check_generator_entry(bytes, running)
+}
+
 /// The version of the lock's helper release.
 pub fn lock_version(bytes: &[u8]) -> Result<HelperVersion, LockError> {
     release_version(&parse(bytes)?.version)
