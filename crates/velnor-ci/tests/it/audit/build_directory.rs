@@ -160,3 +160,44 @@ fn an_absolute_build_directory_with_a_cargo_path_template_is_refused_by_the_audi
     }
     assert!(!repo.root().join(".velnor/rust-inputs.lock").exists());
 }
+
+fn build_in_app_parent(repo: &Repo, build_dir: &str, arguments: &[&str]) -> Output {
+    velnor_ci()
+        .current_dir(repo.root().join("rust"))
+        .env("CARGO_BUILD_BUILD_DIR", build_dir)
+        .args(["inputs", "build", "--", "cargo"])
+        .args(arguments)
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"))
+}
+
+#[test]
+fn a_relative_build_directory_with_cargo_dash_c_is_refused_in_every_spelling() {
+    for arguments in [
+        &["-C", "app", "build", "--help"][..],
+        &["-Capp", "build", "--help"],
+        &["-C=app", "build", "--help"],
+    ] {
+        let repo = workspace_below_the_root();
+        let stderr = refused(&build_in_app_parent(&repo, "bd", arguments));
+        assert!(
+            stderr.contains("set an absolute build directory when using cargo -C"),
+            "{arguments:?}: {stderr}"
+        );
+        assert!(!repo.root().join("rust/app/bd").exists());
+        assert!(!repo.root().join("rust/bd").exists());
+    }
+}
+
+#[test]
+fn an_absolute_build_directory_with_cargo_dash_c_is_not_refused_for_cargo_dash_c() {
+    let repo = workspace_below_the_root();
+    let absolute = repo.root().join("bld");
+    let output = build_in_app_parent(
+        &repo,
+        &absolute.display().to_string(),
+        &["-C", "app", "build", "--help"],
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!stderr.contains("when using cargo -C"), "{stderr}");
+}

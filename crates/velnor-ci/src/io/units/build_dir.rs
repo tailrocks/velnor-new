@@ -34,6 +34,16 @@ pub(super) fn refuse_parent(relative: &Path) -> Result<(), CiError> {
     Ok(())
 }
 
+pub(super) fn refuse_chdir(build: &Path, arguments: &[String]) -> Result<(), CiError> {
+    if arguments.iter().any(|word| word.starts_with("-C")) {
+        return Err(CiError::new(format!(
+            "CARGO_BUILD_BUILD_DIR={} is relative and the cargo command changes directory with -C; set an absolute build directory when using cargo -C",
+            build.display()
+        )));
+    }
+    Ok(())
+}
+
 pub(super) fn refuse_template(build: &Path) -> Result<(), CiError> {
     if build.to_string_lossy().contains('{') {
         return Err(CiError::new(format!(

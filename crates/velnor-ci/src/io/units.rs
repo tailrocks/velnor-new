@@ -341,6 +341,10 @@ fn metadata(
     } else if let Some(build) = std::env::var_os("CARGO_BUILD_BUILD_DIR").map(PathBuf::from) {
         build_dir::refuse_template(&build)?;
         if build.is_relative() {
+            build_dir::refuse_chdir(
+                &build,
+                invocation.map_or(&[], |invocation| invocation.arguments),
+            )?;
             build_dir::refuse_parent(&build)?;
             let base = match invocation {
                 Some(invocation) => invocation.directory.to_path_buf(),
