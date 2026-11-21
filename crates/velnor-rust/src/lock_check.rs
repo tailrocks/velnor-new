@@ -189,6 +189,7 @@ pub fn verify_release(
         lock.generator_binary.as_ref(),
         release.generator_binary.as_ref(),
     )
+    .map_err(|error| LockError::new(format!("{error}; {}", repin_hint())))
 }
 
 fn compare_section(

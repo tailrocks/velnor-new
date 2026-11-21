@@ -96,6 +96,17 @@ fn a_tampered_binary_digest_is_refused_online_and_named() -> TestResult {
     Ok(())
 }
 
+#[test]
+fn a_tampered_binary_digest_online_names_the_repin() -> TestResult {
+    let tampered = lock()?.replacen(GEN_BINARY_X64, &"0".repeat(64), 1);
+    let error = verify_release(tampered.as_bytes(), &sums(), COMMIT_FILE, Some(BINARY_SUMS))
+        .err()
+        .ok_or("accepted")?
+        .to_string();
+    assert!(error.contains("pin-helper 0.1.111"), "{error}");
+    Ok(())
+}
+
 fn without_binary_section() -> Result<String, Box<dyn Error>> {
     Ok(lock()?
         .split("\n\n")
