@@ -27,7 +27,6 @@ pub fn notes(view: &RepoView) -> Result<Vec<String>, GenerateError> {
         .collect())
 }
 
-/// The notes every generation reports, in their fixed order.
 pub(crate) fn expected_notes(facts: &RepoFacts) -> Vec<String> {
     velnor_rust::untimed_auto_note(facts)
         .into_iter()

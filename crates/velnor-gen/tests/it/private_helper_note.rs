@@ -1,12 +1,17 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_gen::{expected_files, expected_with_notes};
+use std::collections::BTreeMap;
+
+use sha2::{Digest, Sha256};
+use velnor_gen::expected_with_notes;
+use velnor_model::RepoPath;
 
 use crate::facts::TestResult;
 use crate::private_sources::{SECTION, private_repo};
 
 const ROOTS: &[&str] = &["Cargo.toml", "tools/Cargo.toml"];
+const RENDERED_DIGEST: &str = "bad491e3ef2b60cbc8744ccf0cc5d1c0962e09490f15b199209d1696ce8027f6";
 const SHA: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
 
 fn assets() -> String {
@@ -65,6 +70,22 @@ fn the_warning_changes_neither_the_rendered_files_nor_the_generation() -> TestRe
     let repo = private_repo(ROOTS, SECTION, "0.1.110")?;
     let (files, notes) = expected_with_notes(&repo)?;
     assert_eq!(minted_notes(&notes).len(), 1, "{notes:?}");
-    assert_eq!(files, expected_files(&repo)?);
+    assert_eq!(rendered_digest(&files), RENDERED_DIGEST);
     Ok(())
+}
+
+fn rendered_digest(files: &BTreeMap<RepoPath, String>) -> String {
+    let mut hasher = Sha256::new();
+    for (path, text) in files {
+        hasher.update(path.as_str().as_bytes());
+        hasher.update([0]);
+        hasher.update(text.as_bytes());
+        hasher.update([0]);
+    }
+    hasher
+        .finalize()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<Vec<_>>()
+        .concat()
 }
