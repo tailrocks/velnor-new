@@ -65,15 +65,12 @@ fn accepts_without_blocking(path: &Path) -> bool {
 
 pub(crate) fn assign(command: &mut Command, argv: &[String]) {
     command.env_remove(VARIABLE);
-    if !enabled() {
-        return;
-    }
     let socket = std::env::var_os("MBX_SOCKET");
     let nested = inside_session(socket.as_deref());
     if !nested {
         command.env_remove("MBX_SOCKET");
     }
-    if nested || !reports_session(argv) {
+    if !enabled() || nested || !reports_session(argv) {
         return;
     }
     let Some(temp) = std::env::var_os("RUNNER_TEMP").filter(|temp| !temp.is_empty()) else {

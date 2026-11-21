@@ -343,6 +343,7 @@ mod api;
 mod build_failure;
 mod evidence;
 mod mbx_reports;
+mod mbx_reports_child_env;
 mod mbx_reports_sessions;
 mod mbx_socket;
 mod policy;
