@@ -94,6 +94,57 @@ fn a_git_directory_planted_in_a_refs_tree_is_still_scanned() {
 }
 
 #[test]
+fn a_ref_namespace_named_objects_does_not_make_its_parent_a_repository() {
+    for namespace in ["notes", "heads/x", "custom/nested"] {
+        for objects in ["objects/main", "objects/pack/main", "objects/info/main"] {
+            let head = format!("refs/{namespace}/HEAD");
+            let named = format!("refs/{namespace}/{objects}");
+            let hooks = format!("refs/{namespace}/hooks/main");
+            let root = format!("{DATABASE}/modules/x");
+            let decided = decided(
+                &format!(
+                    "objects-{}-{}",
+                    namespace.replace('/', "-"),
+                    objects.replace('/', "-")
+                ),
+                &repository(&root, &[(&head, SHA), (&named, SHA), (&hooks, SHA)]),
+            );
+            assert_eq!(decided.written, SAVED, "{namespace} {objects}");
+            assert!(
+                decided.home.join(&root).join(&hooks).is_file(),
+                "{namespace}"
+            );
+            assert!(
+                decided.home.join(&root).join(&named).is_file(),
+                "{namespace}"
+            );
+        }
+    }
+}
+
+#[test]
+fn a_git_directory_with_an_object_store_planted_in_a_refs_tree_is_still_found() {
+    for place in ["refs/heads/planted", "refs/notes/planted"] {
+        let root = format!("{DATABASE}/{place}");
+        let dropped = decided(
+            &format!("planted-store-{}", place.replace('/', "-")),
+            &[
+                (format!("{root}/HEAD"), "ref: refs/heads/main\n".to_owned()),
+                (format!("{root}/objects/info/packs"), String::new()),
+                (
+                    format!("{root}/objects/pack/pack-1.pack"),
+                    "pack".to_owned(),
+                ),
+                (format!("{root}/hooks/post-fetch"), format!("TOKEN={SHA}\n")),
+            ],
+        );
+        assert_eq!(dropped.written, SAVED, "{place}");
+        assert!(!dropped.home.join(&root).join("hooks").exists(), "{place}");
+        assert!(dropped.home.join(&root).join("HEAD").is_file(), "{place}");
+    }
+}
+
+#[test]
 fn hooks_are_never_saved_wherever_the_git_directory_sits() {
     let hook = format!("TOKEN={SHA}\n");
     for root in [

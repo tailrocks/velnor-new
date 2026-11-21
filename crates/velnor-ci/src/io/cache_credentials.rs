@@ -6,6 +6,10 @@ use std::path::{Path, PathBuf};
 
 use crate::escape::inert;
 
+mod prune;
+
+use prune::Identity;
+
 const SAVED_ROOT: &str = ".cargo";
 const SAVED: &[(&str, bool)] = &[
     ("registry/index", false),
@@ -29,6 +33,8 @@ const REFS: &str = "refs";
 const HEAD: &str = "head";
 const CONFIG: &str = "config";
 const OBJECTS: &str = "objects";
+const OBJECT_INFO: &str = "info";
+const OBJECT_PACK: &str = "pack";
 const MAX_CONFIG_BYTES: u64 = 1 << 20;
 const MAX_DEPTH: usize = 12;
 const MAX_ENTRIES: usize = 2_000_000;
@@ -87,7 +93,7 @@ fn find_within(root: &Path, entries: usize) -> Option<String> {
         } else {
             Context::Outside
         };
-        if let Some(found) = walk(&directory, 0, &mut budget, context) {
+        if let Some(found) = walk(&directory, 0, &mut budget, context, None) {
             return Some(found);
         }
     }
@@ -153,40 +159,21 @@ fn leave_out(path: &Path, removed: std::io::Result<()>) -> Option<String> {
     })
 }
 
-fn prune(
+fn walk(
     directory: &Path,
-    listed: Vec<fs::DirEntry>,
     depth: usize,
     budget: &mut usize,
+    context: Context,
+    identity: Option<Identity>,
 ) -> Option<String> {
-    for entry in listed {
-        let path = entry.path();
-        let Ok(kind) = entry.file_type() else {
-            return Some(format!("cannot inspect {}", shown(&path)));
-        };
-        if !kind.is_dir() {
-            if let Some(found) = leave_out(&path, fs::remove_file(&path)) {
-                return Some(found);
-            }
-            continue;
-        }
-        if depth + 1 > MAX_DEPTH {
-            return Some(format!("{} is nested too deeply to scan", shown(&path)));
-        }
-        let inner = match list(&path, budget) {
-            Ok(inner) => inner,
-            Err(reason) => return Some(reason),
-        };
-        if let Some(found) = prune(&path, inner, depth + 1, budget) {
-            return Some(found);
-        }
-    }
-    leave_out(directory, fs::remove_dir(directory))
-}
-
-fn walk(directory: &Path, depth: usize, budget: &mut usize, context: Context) -> Option<String> {
     if depth > MAX_DEPTH {
         return Some(format!("{} is nested too deeply to scan", shown(directory)));
+    }
+    if context == Context::Prunable {
+        return match identity {
+            Some(identity) => prune::remove_tree(directory, identity, depth, budget),
+            None => Some(format!("cannot inspect {}", shown(directory))),
+        };
     }
     let listed = match list(directory, budget) {
         Ok(listed) => listed,
@@ -199,15 +186,12 @@ fn walk(directory: &Path, depth: usize, budget: &mut usize, context: Context) ->
         } else {
             is_git_directory(&listed)
         };
-    if context == Context::Prunable {
-        return prune(directory, listed, depth, budget);
-    }
     let context = if is_git_directory {
         Context::Repository
     } else {
         context
     };
-    let mut subdirectories: Vec<(PathBuf, Context)> = Vec::new();
+    let mut subdirectories: Vec<(PathBuf, Context, Option<Identity>)> = Vec::new();
     for entry in listed {
         let path = entry.path();
         let name = entry.file_name().to_string_lossy().to_ascii_lowercase();
@@ -231,7 +215,16 @@ fn walk(directory: &Path, depth: usize, budget: &mut usize, context: Context) ->
                 return Some(found);
             }
         } else if kind.is_dir() {
-            subdirectories.push((path, context.entering(&name, is_git_directory, databases)));
+            let entering = context.entering(&name, is_git_directory, databases);
+            let identity = if entering == Context::Prunable {
+                match entry.metadata() {
+                    Ok(metadata) => Some(Identity::of(&metadata)),
+                    Err(_) => return Some(format!("cannot inspect {}", shown(&path))),
+                }
+            } else {
+                None
+            };
+            subdirectories.push((path, entering, identity));
         } else if !kind.is_file() {
             return Some(format!(
                 "{} is not a regular file that can be checked for a credential",
@@ -246,7 +239,7 @@ fn walk(directory: &Path, depth: usize, budget: &mut usize, context: Context) ->
     }
     subdirectories
         .iter()
-        .find_map(|(path, context)| walk(path, depth + 1, budget, *context))
+        .find_map(|(path, context, identity)| walk(path, depth + 1, budget, *context, *identity))
 }
 
 fn has_entry(listed: &[fs::DirEntry], wanted: &str, directory: bool) -> bool {
@@ -265,8 +258,22 @@ fn is_git_directory(listed: &[fs::DirEntry]) -> bool {
 
 fn is_repository_in_refs(directory: &Path, listed: &[fs::DirEntry]) -> bool {
     has_entry(listed, HEAD, false)
-        && (has_entry(listed, OBJECTS, true)
+        && (has_object_store(listed)
             || (has_entry(listed, CONFIG, false) && !is_object_id(&directory.join(CONFIG))))
+}
+
+fn has_object_store(listed: &[fs::DirEntry]) -> bool {
+    listed
+        .iter()
+        .find(|entry| {
+            entry.file_name().eq_ignore_ascii_case(OBJECTS)
+                && entry.file_type().is_ok_and(|kind| kind.is_dir())
+        })
+        .and_then(|objects| fs::read_dir(objects.path()).ok())
+        .is_some_and(|inner| {
+            let inner: Vec<_> = inner.flatten().collect();
+            has_entry(&inner, OBJECT_INFO, true) && has_entry(&inner, OBJECT_PACK, true)
+        })
 }
 
 fn is_object_id(path: &Path) -> bool {
