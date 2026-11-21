@@ -88,9 +88,6 @@ fn fetch_with(args: &FetchArgs, token: Option<&str>) -> Result<(), CiError> {
                 "CARGO_HOME",
             )?,
         };
-        if token.is_some() {
-            super::fetch_git::check_databases(&cache)?;
-        }
         let temp = super::fetch_home::temp_parent(&home);
         Some(super::fetch_home::Scratch::create(
             &cache,

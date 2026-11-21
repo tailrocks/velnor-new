@@ -36,20 +36,31 @@ fn existing_database(root: &Path, config: &str) -> TestResult {
 }
 
 #[test]
-fn a_url_scoped_proxy_in_a_restored_git_database_refuses_the_fetch_and_still_revokes() -> TestResult
-{
+fn a_planted_git_database_or_registry_index_in_the_cache_never_reaches_the_token_fetch()
+-> TestResult {
     let fixture = Fixture::new("fetch-git-proxy", 0)?;
     let root = fixture.repo.root().to_path_buf();
     existing_database(&root, PROXY_CONFIG)?;
+    let cache = root.join("home/.cargo");
+    fs::write(cache.join("git/db/old-1/commondir"), "../../../attacker")?;
+    let index = cache.join("registry/index/github.com-1ecc6299db9ec823");
+    fs::create_dir_all(index.join(".git/.git"))?;
+    fs::write(index.join(".git/commondir"), "../../attacker")?;
+    fs::write(index.join(".git/.git/config"), PROXY_CONFIG)?;
+    let log = root.join("log");
+    script(
+        &root.join("trusted/bin/cargo"),
+        &format!(
+            "ls -A \"$CARGO_HOME/git\" > {log}/git.seen\nls -A \"$CARGO_HOME/registry/index\" > {log}/index.seen",
+            log = log.display()
+        ),
+    )?;
     let api = serve(204)?;
     let output = fixture.run_with(&api, Some(TOKEN), None, &["Cargo.toml"], &[]);
-    assert!(!output.status.success(), "{output:?}");
-    assert!(
-        String::from_utf8_lossy(&output.stderr).contains("old-1"),
-        "{output:?}"
-    );
-    assert_eq!(fixture.log("cargo.args"), "");
-    assert_eq!(fixture.log("git.env"), "");
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(fixture.log("git.seen"), "");
+    assert_eq!(fixture.log("index.seen"), "");
+    assert!(index.join(".git/commondir").is_file());
     assert_eq!(api.requests.lock().map_err(|e| e.to_string())?.len(), 1);
     Ok(())
 }
