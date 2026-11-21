@@ -511,16 +511,16 @@ The retired `.velnor/config.toml` still makes `velnor-gen check` skip every unow
 
 ## Checking the helper lock
 
-`velnor-gen check` reads `.velnor/rust-ci.lock` before it compares the generated files. Offline it refuses a lock whose `[velnor-gen]` entry disagrees with itself or with the running binary. Each message starts with the field it names: `version:`, `commit:` or `[velnor-gen] <platform>`. A `[velnor-gen]` digest that is not 64 lowercase hex digits, or that lacks a required platform, is refused the same way. The checks are these:
+`velnor-gen check` reads `.velnor/rust-ci.lock` before it compares the generated files. Offline it refuses a lock whose velnor-gen entry disagrees with itself or with the running binary. A mismatch message starts with the field it names: `version:`, `commit:`, or `[<table>] <platform> digest is`, where `<table>` is `velnor-gen` or `velnor-gen-binary`. A malformed table is refused with its name in brackets. A digest that is not 64 lowercase hex digits gives `[<table>] the SHA-256 for <platform> is not 64 lowercase hex digits`. A table that lacks a required platform, or lists an unknown one, gives `[<table>] a program must list the platforms linux-x64, linux-arm64 and may list macos-arm64`, which names no platform. A `[velnor-gen-binary]` table on a raw release, or on an archive release older than 0.1.111, is refused as not allowed. The executable's digests are in one table: `[velnor-gen]` for a raw release, and `[velnor-gen-binary]` for an archive release at or above 0.1.111, where `[velnor-gen]` holds the archive digests. A lock pinned from an archive release older than 0.1.111 has no `[velnor-gen-binary]`, and its `[velnor-gen]` digests are not compared with the binary. The checks are these:
 
 - The `version` and `commit` must be well-formed (a numeric `MAJOR.MINOR.PATCH` and 40 lowercase hex digits).
-- A running `velnor-gen` that is a release build of the lock's commit (it stamps that commit with `VELNOR_COMMIT`) must have the lock's version. Its own SHA-256 must equal the lock's digest for its platform, when that platform is listed.
+- A running `velnor-gen` that is a release build of the lock's commit (it stamps that commit with `VELNOR_COMMIT`) must have the lock's version. Its own SHA-256 must equal the digest for its platform in the executable's table (`[velnor-gen]` or `[velnor-gen-binary]`, as above), when that platform is listed.
 - A running release build of the lock's version but another commit is refused: the lock names the wrong commit.
 - A local build stamps no commit (`unknown`). Its bytes are not the published binary, so nothing about it is compared, and a newer or older release that the lock does not pin is not compared either.
 
 Offline, `check` cannot tell that a lock names a wrong version or commit when the running binary is a different release. That needs the network.
 
-`velnor-gen check --verify-release` also downloads `SHA256SUMS`, `COMMIT` and, when it is listed, `BINARY-SHA256SUMS` of the lock's release and pins the release again from them. It refuses a lock that differs from what the release publishes, and names the first field that differs (`commit:` or `[velnor-ci]`, `[velnor-ci-binary]`, `[velnor-gen]` with the platform). It needs the network and fails without it, so it is not run by default.
+`velnor-gen check --verify-release` also downloads `SHA256SUMS`, `COMMIT` and, when it is listed, `BINARY-SHA256SUMS` of the lock's release and pins the release again from them. It refuses a lock that differs from what the release publishes in any table, `[velnor-gen-binary]` included, and names the first field that differs (`commit:` or `[velnor-ci]`, `[velnor-ci-binary]`, `[velnor-gen]`, `[velnor-gen-binary]`, with the platform). It needs the network and fails without it, so it is not run by default.
 
 ## Test groups
 
