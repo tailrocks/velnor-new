@@ -339,6 +339,12 @@ pub struct CratesMirror {
     pub cainfo: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TokenMint {
+    Action,
+    Helper,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PrivateSources {
     pub app_id: String,
