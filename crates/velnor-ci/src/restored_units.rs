@@ -49,6 +49,60 @@ pub fn decode(text: &str) -> Option<RestoredUnits> {
     Some(units)
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Fingerprint {
+    pub hash: String,
+    pub package: String,
+    pub unit: String,
+    pub dependencies: BTreeSet<String>,
+}
+
+pub fn cascade(units: &mut RestoredUnits, fingerprints: &[Fingerprint]) {
+    loop {
+        let gaps = gap_crates(units, fingerprints);
+        let forced: Vec<String> = fingerprints
+            .iter()
+            .filter(|print| {
+                !units.missing_input.contains(&print.hash)
+                    && print
+                        .dependencies
+                        .iter()
+                        .any(|name| gaps.contains(&crate_name(name)))
+            })
+            .map(|print| print.hash.clone())
+            .collect();
+        if forced.is_empty() {
+            return;
+        }
+        for hash in forced {
+            units.present.remove(&hash);
+            units.missing_input.insert(hash);
+        }
+    }
+}
+
+fn gap_crates(units: &RestoredUnits, fingerprints: &[Fingerprint]) -> BTreeSet<String> {
+    let (gaps, held): (Vec<_>, Vec<_>) = fingerprints
+        .iter()
+        .partition(|print| units.missing_input.contains(&print.hash));
+    let held: BTreeSet<(String, &str)> = held
+        .iter()
+        .map(|print| (crate_name(&print.package), unit_kind(&print.unit)))
+        .collect();
+    gaps.iter()
+        .filter(|print| !held.contains(&(crate_name(&print.package), unit_kind(&print.unit))))
+        .map(|print| crate_name(&print.package))
+        .collect()
+}
+
+fn unit_kind(unit: &str) -> &str {
+    unit.strip_suffix(".json").unwrap_or(unit)
+}
+
+fn crate_name(package: &str) -> String {
+    package.replace('-', "_")
+}
+
 pub fn classify(invocation: &mut Invocation, restored: &RestoredUnits) {
     for compilation in invocation
         .compilations
@@ -101,7 +155,7 @@ pub fn base_gaps(metrics: &LaneMetrics) -> Vec<String> {
             let packages = packages.into_iter().collect::<Vec<_>>().join(", ");
             if missing_input {
                 format!(
-                    "{root}: dependency packages whose restored dep-info names a file outside target/ that is missing (for example mbx build-script outputs in a cache directory this job did not have; MBX_SHARE_OUT_DIR=0 keeps them under target/): {packages}"
+                    "{root}: dependency packages whose restored dep-info names a file outside target/ that is missing (for example mbx build-script outputs in a cache directory this job did not have; MBX_SHARE_OUT_DIR=0 keeps them under target/), and packages that rebuild because such a dependency is rebuilt: {packages}"
                 )
             } else {
                 format!(
