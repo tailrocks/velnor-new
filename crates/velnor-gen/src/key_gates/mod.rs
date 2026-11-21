@@ -64,13 +64,7 @@ const fn gate_filled(file: ConfigFile, key: &'static str, first: (u64, u64, u64)
 }
 
 const fn gate_untagged(file: ConfigFile, key: &'static str, first: (u64, u64, u64)) -> KeyGate {
-    KeyGate {
-        file,
-        key,
-        value: None,
-        first,
-        filled: false,
-    }
+    gate(file, key, first)
 }
 
 const fn gate_value(

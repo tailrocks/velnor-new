@@ -71,14 +71,6 @@ pub(crate) fn write(path: &Path, text: &str) -> TestResult {
     Ok(())
 }
 
-pub(crate) fn read_repo_file(relative: &str) -> std::io::Result<String> {
-    fs::read_to_string(
-        Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../..")
-            .join(relative),
-    )
-}
-
 fn workflow() -> Result<RepoPath, Box<dyn Error>> {
     Ok(RepoPath::new(WORKFLOW)?)
 }

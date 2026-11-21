@@ -49,3 +49,15 @@ git checkout -q -b in-comment "$marker"
 } >crates/velnor-gen/src/policy.rs
 git commit -qam "marker in a comment"
 bash "$checker" "$marker"
+
+mkdir -p docs
+echo 'The key needs velnor-ci 0.1.110 or later (first released in tools-v0.1.110).' >docs/rust-ci.md
+git add docs/rust-ci.md
+git commit -qm "prose release marker in a doc"
+if bash "$checker" "$marker"; then
+  echo "the check accepted a prose release marker in a documentation page" >&2
+  exit 1
+fi
+echo 'The key needs velnor-ci 0.1.110 or later.' >docs/rust-ci.md
+git commit -qam "doc states only the version"
+bash "$checker" "$marker"

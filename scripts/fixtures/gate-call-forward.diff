@@ -1,0 +1,7 @@
+diff --git a/crates/velnor-gen/src/key_gates/mod.rs b/crates/velnor-gen/src/key_gates/mod.rs
+--- a/crates/velnor-gen/src/key_gates/mod.rs
++++ b/crates/velnor-gen/src/key_gates/mod.rs
+@@ -0,0 +1,3 @@
++const fn gate_untagged(file: ConfigFile, key: &'static str, first: (u64, u64, u64)) -> KeyGate {
++    gate(file, key, first)
++}

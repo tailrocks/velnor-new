@@ -52,6 +52,11 @@ if [ -z "$diff_file" ]; then
   fi
 fi
 
+prose_docs=""
+if [ -n "$base" ]; then
+  prose_docs=$(git grep -n -i -e 'first released in' -e 'not tagged yet' HEAD -- generator/CONFIG.md docs/rust-ci.md || true)
+fi
+
 patch=${current##*.}
 case "$patch" in '' | *[!0-9]*) echo "cannot read the velnor-ci version from '$current'" >&2; exit 2 ;; esac
 series=${current%.*}
@@ -150,58 +155,24 @@ scan() {
     if (a != 0 || b != 1 || c < 0) return ""
     return "0.1." c
   }
-  function literal_tuple(t,    e) {
-    gsub(/[()[:space:]]/, "", t)
-    sub(/,$/, "", t)
-    if (split(t, e, ",") != 3) return 0
-    return intval(e[1]) >= 0 && intval(e[2]) >= 0 && intval(e[3]) >= 0
-  }
-  function gate_call_bad(line,    pre, call, st) {
-    if (!match(line, /(^|[^A-Za-z0-9_.])gate(_untagged|_filled|_value)?[[:space:]]*\(/)) return 0
-    st = RSTART + ((substr(line, RSTART, 1) == "g") ? 0 : 1)
-    pre = substr(line, 1, st - 1)
-    if (pre ~ /(^|[^A-Za-z0-9_])fn[[:space:]]+$/) return 0
-    call = substr(line, st)
-    if (call !~ ("^gate[A-Za-z_]*[[:space:]]*\\([^()]*," ws "(" tup "|HELPER_MINIMUM)" ws "\\)" ws "[,;]?" ws "$")) return 1
-    if (match(call, tup ws "\\)")) return !literal_tuple(substr(call, RSTART, RLENGTH - 1))
-    return 0
-  }
-  function open_tuple_bad(line,    t, c) {
-    if (!match(line, "\\(" ws num ws "(," ws num ws ")?,?" ws "$")) return 0
-    t = substr(line, RSTART)
-    gsub(/[()[:space:]]/, "", t)
-    split(t, c, ",")
-    return intval(c[1]) == 0
-  }
-  function nonliteral_tuple_bad(line,    s, m, n, e) {
-    s = line
-    while (match(s, "\\([^(),]*," ws "1" ws ",[^()]*\\)")) {
-      m = substr(s, RSTART + 1, RLENGTH - 2)
-      s = substr(s, RSTART + RLENGTH)
-      n = split(m, e, ",")
-      gsub(/[[:space:]]/, "", e[1])
-      if (n == 3 && e[1] ~ /^0/ && intval(e[1]) < 0) return 1
-    }
-    return 0
-  }
-  function tuple_bad(line,    s, off, m, st, t, c, pre, rest) {
-    if (open_tuple_bad(line) || nonliteral_tuple_bad(line)) return 1
-    if (line ~ ("(\\(|,)" ws "\\(" ws num ws "\\)")) return 1
+  function tuple_bad(line,    s, off, m, st, rest, t, e, tok) {
     off = 0; s = line
-    while (match(s, "(^|[^A-Za-z0-9_.])" num ws "," ws num ws ",")) {
+    while (match(s, "\\(" ws num ws "," ws num ws ",")) {
       m = substr(s, RSTART, RLENGTH)
       st = off + RSTART
-      if (m !~ /^[0-9]/) { m = substr(m, 2); st++ }
-      off = st + length(m) - 1
+      off = st + RLENGTH - 1
       s = substr(line, off + 1)
       t = m
-      gsub(/[[:space:]]/, "", t)
-      split(t, c, ",")
-      if (intval(c[1]) != 0 || intval(c[2]) != 1) continue
-      pre = substr(line, 1, st - 1)
-      if (!match(pre, "\\(" ws "$")) return 1
-      rest = substr(line, RSTART)
-      if (!match(rest, "^" tup) || !literal_tuple(substr(rest, 1, RLENGTH))) return 1
+      gsub(/[()[:space:]]/, "", t)
+      split(t, e, ",")
+      if (intval(e[1]) != 0 || intval(e[2]) != 1 || (st > 1 && isword(substr(line, st - 1, 1)))) continue
+      rest = s
+      if (rest !~ /\)/) continue
+      if (!match(rest, "^" ws num ws ",?" ws "\\)")) return 1
+      tok = rest
+      sub(/^[[:space:]]*/, "", tok)
+      sub(/[[:space:]]*,?[[:space:]]*\).*$/, "", tok)
+      if (intval(tok) < 0) return 1
     }
     return 0
   }
@@ -341,6 +312,8 @@ scan() {
     p_mv = c_mv; p_mn = c_mn; p_mc = c_mc
     analyze(text)
     scanned_now = strip(mask_code(text))
+    split_min = (scanned_now ~ /HELPER_MINIMUM[[:space:]]*:[^;]*=[[:space:]]*$/)
+    if (split_min && !c_mv && p_mv) { c_mv = 1; c_mn = p_mn; c_mc = p_mc }
     prevnew = text
     prevadded = ($0 ~ /^\+/)
     if (!prevadded) {
@@ -355,10 +328,10 @@ scan() {
     if (!tree && tolower(text) ~ /^[ \t]*(\/\/|\/\*|\*).*(first released in|not tagged yet)/) { printf "PROSE\t%s\t%s\n", file, text; next }
     if (!tree && c_mention && !c_mv) { printf "MARKER\t%s\t%s\n", file, text; next }
     if (!counted) next
-    if (file ~ /^crates\/velnor-gen\/src\/key_gates\// && (gate_call_bad(mask_code(text)) || tuple_bad(mask_code(text)))) { printf "SHAPE\t%s\t%s\n", file, text; next }
+    if (file ~ /^crates\/velnor-gen\/src\/key_gates\// && tuple_bad(mask_code(text))) { printf "SHAPE\t%s\t%s\n", file, text; next }
     stripped = strip(text)
     has = c_mv || p_mv
-    if (!tree && (mask_code(text) ~ /HELPER_MINIMUM[[:space:]]*:/ || mask_code(text) ~ ("^" ws tup ws ";" ws "$")) && (!has || versions(scanned_now, probe) == 0)) { printf "PIN\t%s\t%s\n", file, text; next }
+    if (!tree && (mask_code(text) ~ /HELPER_MINIMUM[[:space:]]*:/ || mask_code(text) ~ ("^" ws tup ws ";" ws "$")) && (!has || (versions(scanned_now, probe) == 0 && !split_min))) { printf "PIN\t%s\t%s\n", file, text; next }
     markN_now = c_mv ? c_mn : (p_mv ? p_mn : "")
     markC_now = c_mv ? c_mc : (p_mv ? p_mc : "")
     if (has && versions(scanned_now, probe) == 0) next
@@ -425,6 +398,11 @@ while IFS=$'\t' read -r kind f1 f2 f3 f4; do
       bad=1 ;;
   esac
 done <<<"$report"
+
+if [ -n "$prose_docs" ]; then
+  printf '%s\n  name a released gate by its tag and commit marker in the source, and state only the required velnor-ci version in these pages\n' "$prose_docs" >&2
+  bad=1
+fi
 
 if [ "$bad" != 0 ]; then
   echo "helper gates must be above velnor-ci $current (this tree), or at or below it with the released marker" >&2

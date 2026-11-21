@@ -1,0 +1,9 @@
+diff --git a/crates/velnor-gen/src/key_gates/mod.rs b/crates/velnor-gen/src/key_gates/mod.rs
+--- a/crates/velnor-gen/src/key_gates/mod.rs
++++ b/crates/velnor-gen/src/key_gates/mod.rs
+@@ -0,0 +1,5 @@
++    gate(
++        RustCi,
++        "budget",
++        (0, 1, 112),
++    ),
