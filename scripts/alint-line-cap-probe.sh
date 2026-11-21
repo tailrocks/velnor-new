@@ -64,4 +64,23 @@ attack_case shallow-indent '      exclude:\n      - docs/attack.md'
 attack_case flow-list '      exclude: [docs/attack.md]'
 attack_case non-list-key-between-entries '      exclude:\n        - .alint.yml\n        note: stray\n        - docs/attack.md'
 
+manifest_case() {
+  local attack out rc ev=docs/implemented/evidence/freshness-2026-10-24
+  attack="$(mktemp -d "${TMPDIR:-/tmp}/digest-attack.XXXXXX")" || exit 1
+  mkdir -p "$attack/$ev" || exit 1
+  printf 'rewritten receipt\n' > "$attack/$ev/receipt.txt"
+  printf '%s  receipt.txt\n' "$(shasum -a 256 "$attack/$ev/receipt.txt" | cut -d' ' -f1)" > "$attack/$ev/SHA256SUMS"
+  printf 'version: 1\nrules:\n  - id: no-absolute-local-paths\n    kind: file_content_forbidden\n    level: error\n    paths:\n      include: ["**/*.md"]\n    pattern: "x"\n  - id: no-local-temp-paths\n    kind: file_content_forbidden\n    level: error\n    paths:\n      include: ["**/*.md"]\n      exclude:\n        - %s/receipt.txt\n    pattern: "x"\n' "$ev" \
+    > "$attack/.alint.yml"
+  out="$(python3 -I scripts/check-digest-frozen-evidence.py "$attack" "$attack/.alint.yml" 2>&1)"
+  rc=$?
+  rm -rf "$attack"
+  if [ "$rc" -eq 0 ] || ! grep -q 'manifest differs from its pinned sha256' <<<"$out"; then
+    echo "::error::digest guard accepted a receipt rewritten together with its manifest" >&2
+    exit 1
+  fi
+  echo "digest guard negative control: OK (rewritten manifest rejected)"
+}
+manifest_case
+
 rm -f "$PROBE"

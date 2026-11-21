@@ -13,6 +13,12 @@ MANIFESTS = [
     "docs/implemented/evidence/freshness-2026-10-24/SHA256SUMS",
 ]
 
+MANIFEST_PINS = {
+    "docs/implemented/evidence/freshness-2026-10-20/capture-inventory.json": "5d94060363ac71580dcd22413799b2e80280aad8a43e9f4a4732d35c86d9dd57",
+    "docs/implemented/evidence/freshness-2026-10-20/first/freeze.json": "4311b117aac03d3a3ea3e75c597a14f7c1bcaaf44b00cdb2f7d8d6c0158dcdbf",
+    "docs/implemented/evidence/freshness-2026-10-24/SHA256SUMS": "f6533ec27eb072155de6996eae9031475840b2254ba423a9c9feab1fd51f6215",
+}
+
 
 PINNED_FILES = {
     "docs/implemented/evidence/freshness-2026-10-13/main-run-38316930881-plan-job-115035687366.log": (
@@ -139,7 +145,14 @@ def sha256_of(path):
 
 def check(root, paths):
     failures = []
-    cache = {m: manifest_entries(root, m) for m in MANIFESTS}
+    cache = {}
+    for m in MANIFESTS:
+        full = os.path.join(root, m)
+        if os.path.exists(full) and sha256_of(full)[0] != MANIFEST_PINS[m]:
+            failures.append(f"{m}: manifest differs from its pinned sha256")
+            cache[m] = {}
+        else:
+            cache[m] = manifest_entries(root, m)
     for p in paths:
         full = os.path.join(root, p)
         if not os.path.isfile(full):
