@@ -252,3 +252,15 @@ fn the_reader_maps_a_real_mbx_report_and_names_what_it_cannot_read() {
     assert!(parse(br#"{"hits":1}"#).is_err_and(|e| e.contains("no numeric version")));
     assert!(parse(b"{").is_err_and(|e| e.contains("not JSON")));
 }
+
+#[test]
+fn a_verification_only_report_is_a_session() {
+    let verified = br#"{"version":5,"hits":0,"misses":0,"unconsulted":0,"verifications":4,"bypasses":{},"compiler":{}}"#;
+    assert_eq!(
+        parse(verified),
+        Ok(Some(MbxSession {
+            verifications: Some(4),
+            ..session(0, 0, 0)
+        }))
+    );
+}
