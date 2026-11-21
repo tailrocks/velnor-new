@@ -62,10 +62,10 @@ fn saving_jobs(config: &str, helper: &str) -> Result<Vec<SavingJob>, Box<dyn std
 }
 
 #[test]
-fn the_tools_save_exposes_its_recorded_key_and_the_report_reads_it_from_helper_0_1_111()
+fn the_tools_save_exposes_its_recorded_key_and_the_report_reads_it_from_helper_0_1_112()
 -> TestResult {
     for config in STORES.iter().copied() {
-        let jobs = saving_jobs(config, "0.1.111")?;
+        let jobs = saving_jobs(config, "0.1.112")?;
         assert_ne!(jobs.len(), 0, "{config:?}: no job saves the tools");
         for job in jobs {
             let SavingJob {

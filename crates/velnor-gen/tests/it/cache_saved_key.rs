@@ -48,9 +48,9 @@ fn trimmed_caches(config: &str, helper: &str) -> Result<Vec<Trimmed>, Box<dyn st
 }
 
 #[test]
-fn a_target_and_sources_save_reports_the_key_it_recorded_from_helper_0_1_111() -> TestResult {
+fn a_target_and_sources_save_reports_the_key_it_recorded_from_helper_0_1_112() -> TestResult {
     for config in STORES.iter().copied() {
-        let caches = trimmed_caches(config, "0.1.111")?;
+        let caches = trimmed_caches(config, "0.1.112")?;
         assert!(
             caches.iter().any(|cache| cache.family == "target"),
             "{config:?}: no target cache in the report"

@@ -11,6 +11,7 @@ use velnor_model::{
     PushAfterMergeGroup, RepoFacts, Step, StepKind, ToolsLocalVerb, ToolsTelemetry, When,
 };
 
+// helper-gate: first in tools-v0.1.111 via 2c70d48ddc
 const NOT_GENERATED_HELPER: (u64, u64, u64) = (0, 1, 111);
 
 fn not_generated(facts: &RepoFacts) -> Option<&'static str> {
