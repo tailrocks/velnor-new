@@ -100,7 +100,7 @@ runs:
               echo "::warning title=setup-velnor::removed the tool-cache copy of $archive for velnor-ci $VERSION $1"
               rm -f "$quarantine" 2> /dev/null || true
             elif [ "$(digest "$quarantine")" = "$expected" ]; then
-              [ ! -d "$dir/$archive" ] && mv -n "$quarantine" "$dir/$archive" 2> /dev/null || true
+              mv -n -T "$quarantine" "$dir/$archive" 2> /dev/null || true
               if [ -e "$quarantine" ]; then
                 echo "::warning title=setup-velnor::the verified copy of $archive for velnor-ci $VERSION is kept at $quarantine, because the store entry path is taken"
                 prune_quarantine
