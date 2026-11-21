@@ -56,9 +56,6 @@ fn a_parallel_lane_adds_a_bounded_job_to_a_sixteen_root_workflow() -> TestResult
     Ok(())
 }
 
-/// The 20-root parallel workflow, rendered for the newest helper, stays inside this budget, 500 B
-/// under `MAX_WORKFLOW_BYTES`: any growth of a job's steps fails here instead of becoming a
-/// refusal for a user's repository.
 const TWENTY_ROOT_BUDGET: usize = 499_500;
 
 #[test]

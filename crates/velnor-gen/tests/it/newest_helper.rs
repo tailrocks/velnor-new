@@ -54,8 +54,6 @@ fn released_patch() -> Result<u64, Box<dyn std::error::Error>> {
         .map_err(Into::into)
 }
 
-/// The newest helper the generator renders for: the velnor-ci in this checkout or the newest
-/// `(0, 1, N)` gate in the generator crates, whichever is later.
 pub(crate) fn newest_helper() -> Result<String, Box<dyn std::error::Error>> {
     let mut found = vec![released_patch()?];
     for source in SOURCES {
