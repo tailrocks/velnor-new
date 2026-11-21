@@ -28,11 +28,15 @@ Cargo test binary per case file. Doctests are off: every lib sets
 `doctest = false` and the rustdoc listing check fails on a doc fence
 (see former hard decision 1, removed in #608).
 Enforcement is by rustdoc itself: `scripts/check-no-doctests.sh` runs
-`cargo doc --workspace --no-deps --all-features` with
-`RUSTDOCFLAGS="--test --test-args --list"` in the Rust CI job, so rustdoc lists
-the doctests without compiling the workspace again (rustdoc lists the doctests
-of crates that set `doctest = false` too), and fails when rustdoc lists any
-doctest, so no fence form, including a `concat!`-split one, gets through.
+`cargo doc --workspace --no-deps --lib --bins --examples` with
+`RUSTDOCFLAGS="--test --test-args --list"` for all features, no default
+features and the default features, so rustdoc lists the doctests without
+compiling the workspace again (rustdoc lists the doctests of crates that set
+`doctest = false` too), and fails when rustdoc lists any doctest. Every fence
+form that rustdoc recognizes in a library, binary or example of the host target
+is caught, including a `concat!`-split one. Items behind another operating
+system's `cfg` or behind a mixed feature combination are not listed on one
+host; see `docs/implemented/ci-maintenance/repo-verification.md`.
 If a package gains a doctest target, doctests MUST run in a separate gate
 because Nextest does not execute them, and the generator adds that lane.
 
