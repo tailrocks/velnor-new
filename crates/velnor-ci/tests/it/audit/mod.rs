@@ -36,6 +36,7 @@ use crate::io::Repo;
 
 pub(super) fn command(program: impl AsRef<OsStr>) -> Command {
     let mut command = Command::new(program);
+    crate::run::strip_nextest_environment(&mut command);
     command
         .env_remove("CARGO_TARGET_DIR")
         .env("MBX_BUILD_SCRIPT_EXECUTION", "0")
