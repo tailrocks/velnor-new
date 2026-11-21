@@ -170,6 +170,10 @@ fn an_untrusted_build_output_in_a_build_directory_inside_the_target_is_invalidat
     );
 }
 
+// Main (#2351) refused this case as `..._read_differently_is_refused`: the baseline
+// workspace resolved the variable against the manifest directory while the command
+// resolved it against the step directory. #2381 resolves both against the step
+// directory, so no mismatch is left to refuse and cargo's own meaning is audited.
 #[test]
 fn a_relative_build_directory_names_the_same_directory_for_the_workspace_and_the_command() {
     let repo = workspace_below_the_root();
@@ -203,6 +207,29 @@ fn a_relative_build_directory_is_audited_from_the_step_directory_as_cargo_writes
         .unwrap_or_else(|e| unreachable!("{e}"));
     assert!(written.status.success(), "{written:?}");
     assert_eq!(lock(&repo), ".\tlib\n");
+}
+
+#[test]
+fn a_relative_build_directory_keeps_parent_components_through_a_symlink_as_cargo_does() {
+    let repo = workspace_below_the_root();
+    unit(&repo, "rust/target/debug/app.d", "app: app/src/lib.rs\n");
+    unit(&repo, "rust/target/debug/libapp.rlib", "");
+    fs::create_dir_all(repo.root().join("rust/build")).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::create_dir_all(repo.root().join("rust/inner")).unwrap_or_else(|e| unreachable!("{e}"));
+    std::os::unix::fs::symlink("../inner", repo.root().join("rust/app/link"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let refused = velnor_ci()
+        .current_dir(repo.root().join("rust/app"))
+        .env("CARGO_BUILD_BUILD_DIR", "link/../build")
+        .args(["inputs", "audit", "--write"])
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(refused.status.code(), Some(1), "{refused:?}");
+    let stderr = String::from_utf8_lossy(&refused.stderr);
+    assert!(
+        stderr.contains("found no units in") && stderr.contains("rust/app/link/../build"),
+        "the audit must read the directory cargo resolves through the link: {stderr}"
+    );
 }
 
 #[test]

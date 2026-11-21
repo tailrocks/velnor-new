@@ -7,7 +7,8 @@
 use std::fs;
 use std::path::Path;
 
-use super::{UnitFile, unit_file, unit_files_within};
+use super::workspace::build_unit_files;
+use super::{UnitFile, Workspace, unit_file, unit_files_within};
 
 const LIB: &str = "debug/build/dep/5c64b2dee9af80ce";
 const SCRIPT: &str = "debug/build/dep/3f722b21ff7c4711";
@@ -200,4 +201,30 @@ fn a_built_target_directory_with_units_in_either_layout_is_not_refused() {
             "{layout}"
         );
     }
+}
+
+fn sharing(root: &std::path::Path, build: &std::path::Path) -> Workspace {
+    Workspace {
+        root: root.join("..").join(build.file_name().unwrap_or_default()),
+        target_directory: root.to_owned(),
+        build_directory: build.to_owned(),
+    }
+}
+
+#[test]
+fn a_shared_target_is_scanned_strictly_only_when_every_workspace_using_it_is_plain() {
+    let root = target_with(&["debug/CACHEDIR.TAG", "debug/libapp.rlib"]);
+    let plain = sharing(&root, &root);
+    let apart = sharing(&root, &root.join("build"));
+    let alone = build_unit_files(std::slice::from_ref(&plain), &root);
+    let mixed = build_unit_files(&[apart, plain], &root);
+    fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+    let message = alone
+        .expect_err("a plain target that holds outputs and no unit must be refused")
+        .to_string();
+    assert!(message.contains("unknown cargo layout?"), "{message}");
+    assert!(
+        mixed.is_ok(),
+        "a target shared with a separate build directory must keep the unchecked scan"
+    );
 }

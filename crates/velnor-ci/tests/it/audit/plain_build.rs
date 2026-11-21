@@ -32,3 +32,26 @@ fn a_plain_target_with_units_builds_without_refusal() {
         .unwrap_or_else(|e| unreachable!("{e}"));
     assert!(built.status.success(), "{built:?}");
 }
+
+#[test]
+fn a_failed_command_that_leaves_output_and_no_unit_reports_its_own_failure() {
+    let repo = workspace_below_the_root();
+    let failed = velnor_ci()
+        .current_dir(repo.root())
+        .args([
+            "inputs",
+            "build",
+            "--",
+            "sh",
+            "-c",
+            "mkdir -p rust/target/debug && : > rust/target/debug/libapp.rlib && exit 3",
+        ])
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(failed.status.code(), Some(1), "{failed:?}");
+    let stderr = String::from_utf8_lossy(&failed.stderr);
+    assert!(
+        stderr.contains("build command failed") && !stderr.contains("unknown cargo layout?"),
+        "{stderr}"
+    );
+}
