@@ -13,11 +13,11 @@ guard = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(guard)
 
 
-def planted(*words):
-    return frozenset(guard.digest(word.encode()) for word in words)
+def planted(*names):
+    return dict((digest, int(length)) for digest, length in (guard.entry(name).split() for name in names))
 
 
-def repository(files):
+def repository(files, links=None):
     tmp = tempfile.TemporaryDirectory(prefix="private-names-test-")
     root = Path(tmp.name)
     env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
@@ -26,6 +26,10 @@ def repository(files):
         path = root / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text)
+    for name, target in (links or {}).items():
+        path = root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.symlink_to(target)
     subprocess.run(["git", "-C", str(root), "add", "-A"], check=True, env=env)
     return tmp, root
 
@@ -42,9 +46,31 @@ class ContentTests(unittest.TestCase):
             ("[zz-two-parts](x)", True),
             ("backend-zz-two-parts-x", True),
             ("zzorg / zzrepo", False),
-            ("zzplantedx", False),
+            ("zzplantedx", True),
+            ("zzplante", False),
+            ("zzplant", False),
             ("zzrepo/zzorg", False),
             ("nothing to see", False),
+        ]:
+            self.assertEqual(len(matcher.flagged_lines(line.encode())) == 1, expected, line)
+
+    def test_planted_name_embedded_in_an_identifier_is_found(self):
+        matcher = guard.Matcher(planted("zzplanted", "zzrepo", "zz-two-parts"))
+        for line, expected in [
+            ("let client = ZzPlantedClient::new();", True),
+            ("fn loadZzPlantedConfig()", True),
+            ("fn load_zzplanted_config()", True),
+            ("const LOAD_ZZPLANTED_CONFIG: u8 = 1;", True),
+            ("loadzzplantedconfig", True),
+            ("zzplantedzzrepo", True),
+            ("ZzRepoZzPlanted", True),
+            ("xzzrepoy", True),
+            ("ZzTwoPartsClient", True),
+            ("zz_two_parts", True),
+            ("zz.two.parts", True),
+            ("ZzPlantClient", False),
+            ("zz two parts", False),
+            ("zzrep0", False),
         ]:
             self.assertEqual(len(matcher.flagged_lines(line.encode())) == 1, expected, line)
 
@@ -52,12 +78,14 @@ class ContentTests(unittest.TestCase):
         matcher = guard.Matcher(planted("zzplanted"))
         self.assertEqual(matcher.flagged_lines(b"one\ntwo zzplanted\nthree\nzzplanted again\n"), [2, 4])
 
-    def test_committed_hashes_are_one_salted_digest_per_line(self):
+    def test_committed_hashes_are_a_salted_digest_and_a_length_per_line(self):
         lines = guard.HASH_FILE.read_text().splitlines()
         self.assertTrue(lines)
         for line in lines:
-            self.assertRegex(line, r"^[0-9a-f]{64}$")
-        self.assertEqual(len(set(lines)), len(lines))
+            self.assertRegex(line, r"^[0-9a-f]{64} [1-9][0-9]*$")
+        digests = [line.split()[0] for line in lines]
+        self.assertEqual(len(set(digests)), len(digests))
+        self.assertEqual(len(guard.load_hashes()), len(lines))
 
 
 class PathTests(unittest.TestCase):
@@ -87,6 +115,26 @@ class PathTests(unittest.TestCase):
 
     def test_content_hit_in_a_flagged_path_hides_the_path(self):
         tmp, root = repository({"zzplanted.md": "zzplanted\n"})
+        with tmp:
+            found = guard.scan(root, planted("zzplanted"))
+            self.assertEqual(len(found), 2)
+            self.assertTrue(all("zzplanted" not in item for item in found))
+
+    def test_planted_symlink_target_fails_and_the_report_hides_the_word(self):
+        tmp, root = repository({"docs/a.md": "plain\n"}, {"docs/link": "../zzorg/zzrepo/notes.md"})
+        with tmp:
+            found = guard.scan(root, planted("zzorg/zzrepo"))
+            self.assertEqual(found, ["docs/link:target"])
+            self.assertEqual(len(guard.scan(root, planted("zzorg"))), 1)
+            self.assertEqual(guard.scan(root, planted("zzother")), [])
+
+    def test_planted_name_embedded_in_a_symlink_target_fails(self):
+        tmp, root = repository({}, {"docs/link": "../LoadZzPlantedConfig.md"})
+        with tmp:
+            self.assertEqual(guard.scan(root, planted("zzplanted")), ["docs/link:target"])
+
+    def test_symlink_in_a_flagged_path_hides_the_path(self):
+        tmp, root = repository({}, {"zzplanted-link": "zzplanted"})
         with tmp:
             found = guard.scan(root, planted("zzplanted"))
             self.assertEqual(len(found), 2)

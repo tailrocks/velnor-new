@@ -29,6 +29,13 @@ regexes = [
 ]
 
 [[allowlists]]
+description = "dbt contract proposal: the placeholder service credential, in this one document only"
+condition = "AND"
+paths = ['''^docs/proposed/dbt-contract\.md$''']
+regexTarget = "secret"
+regexes = ['''^example-org$''']
+
+[[allowlists]]
 description = "test fixtures and tests with fake tokens, keys or public upstream material"
 paths = [
   '''^crates/velnor-ci/tests/it/cache_private_repo\.rs$''',
