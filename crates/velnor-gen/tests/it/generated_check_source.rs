@@ -127,7 +127,7 @@ fn from_source_false_renders_the_release_install_byte_for_byte() -> TestResult {
 
 #[test]
 fn a_helper_older_than_from_source_is_refused_with_the_gate_error() -> TestResult {
-    let error = workflow(&locked(&format!("{LINT}\n{FROM_SOURCE}"), "0.1.110")?).err();
+    let error = workflow(&locked(&format!("{LINT}\n{FROM_SOURCE}"), "0.1.111")?).err();
     let text = format!("{error:?}");
     assert!(text.contains("ConfigKeyHelperTooOld"), "{text}");
     assert!(text.contains("lint.from_source"), "{text}");
