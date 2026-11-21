@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeSet;
 use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
@@ -8,7 +9,7 @@ use std::path::{Path, PathBuf};
 use super::units::{UnitFile, unit_files};
 use crate::error::CiError;
 use crate::inputs::restored_units_file;
-use crate::restored_units::{Manifest, RestoredUnits};
+use crate::restored_units::{Fingerprint, Manifest, RestoredUnits};
 
 const DEP_INFO_LIMIT: u64 = 4 * 1024 * 1024;
 
@@ -16,9 +17,21 @@ pub(super) fn scan(target: &Path) -> Option<RestoredUnits> {
     let units = unit_files(target).ok()?;
     let inside = [Some(target.to_path_buf()), fs::canonicalize(target).ok()];
     let mut found = RestoredUnits::default();
+    let mut fingerprints = Vec::new();
     for (unit, path) in units {
         match unit {
-            UnitFile::Fingerprint { hash, .. } => {
+            UnitFile::Fingerprint {
+                hash,
+                package,
+                name,
+                ..
+            } => {
+                fingerprints.push(Fingerprint {
+                    hash: hash.clone(),
+                    package,
+                    unit: name,
+                    dependencies: dependency_crates(&path),
+                });
                 found.present.insert(hash);
             }
             UnitFile::DepInfo {
@@ -31,15 +44,35 @@ pub(super) fn scan(target: &Path) -> Option<RestoredUnits> {
     }
     let missing = found.missing_input.clone();
     found.present.retain(|hash| !missing.contains(hash));
+    crate::restored_units::cascade(&mut found, &fingerprints);
     Some(found)
 }
 
-fn names_missing_file<'a>(dep_info: &Path, inside: impl Iterator<Item = &'a PathBuf>) -> bool {
-    let Some(text) = fs::metadata(dep_info)
+fn dependency_crates(fingerprint: &Path) -> BTreeSet<String> {
+    let Some(text) = read_small(fingerprint) else {
+        return BTreeSet::new();
+    };
+    let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) else {
+        return BTreeSet::new();
+    };
+    value
+        .get("deps")
+        .and_then(serde_json::Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|dependency| dependency.get(1)?.as_str().map(str::to_owned))
+        .collect()
+}
+
+fn read_small(file: &Path) -> Option<String> {
+    fs::metadata(file)
         .ok()
         .filter(|metadata| metadata.len() <= DEP_INFO_LIMIT)
-        .and_then(|_| fs::read_to_string(dep_info).ok())
-    else {
+        .and_then(|_| fs::read_to_string(file).ok())
+}
+
+fn names_missing_file<'a>(dep_info: &Path, inside: impl Iterator<Item = &'a PathBuf>) -> bool {
+    let Some(text) = read_small(dep_info) else {
         return false;
     };
     let inside: Vec<&PathBuf> = inside.collect();
