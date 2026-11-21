@@ -31,6 +31,7 @@ pub(crate) struct RawLint {
     task: Option<String>,
     tools: Option<Vec<String>>,
     inputs: Option<Vec<String>>,
+    gate_on_plan: Option<bool>,
 }
 
 fn word(value: &str) -> bool {
@@ -51,6 +52,17 @@ fn path(key: &'static str, value: Option<String>) -> Result<Option<RepoPath>, Re
             RepoPath::new(text.clone()).map_err(|_| invalid(text))
         })
         .transpose()
+}
+
+fn tool_names(tools: Option<Vec<String>>) -> Result<Vec<String>, Reason> {
+    let tools = tools.unwrap_or_default();
+    match tools.iter().find(|tool| !word(tool)) {
+        Some(tool) => Err(Reason::InvalidValue {
+            key: "lint.tools",
+            value: tool.clone(),
+        }),
+        None => Ok(tools),
+    }
 }
 
 fn foreign(kind: &str, key: &'static str, present: bool) -> Result<(), Reason> {
@@ -120,6 +132,9 @@ fn inputs(raw: Option<Vec<String>>) -> Result<Vec<PathGlob>, Reason> {
 
 fn lint(raw: RawLint) -> Result<LintJob, Reason> {
     let kind = raw.kind.as_str();
+    if kind != GENERATED_CHECK {
+        foreign(kind, "gate_on_plan", raw.gate_on_plan.is_some())?;
+    }
     let config = path("lint.config", raw.config.clone())?;
     let probe = path("lint.probe", raw.probe.clone())?;
     let (kind, id, name) = match kind {
@@ -153,13 +168,7 @@ fn lint(raw: RawLint) -> Result<LintJob, Reason> {
                     value: task,
                 });
             }
-            let tools = raw.tools.clone().unwrap_or_default();
-            if let Some(tool) = tools.iter().find(|tool| !word(tool)) {
-                return Err(Reason::InvalidValue {
-                    key: "lint.tools",
-                    value: tool.clone(),
-                });
-            }
+            let tools = tool_names(raw.tools.clone())?;
             let id = task.clone();
             let name = format!("Mise task {task}");
             (LintKind::MiseTask { task, tools }, id, name)
@@ -197,6 +206,7 @@ fn lint(raw: RawLint) -> Result<LintJob, Reason> {
         name: title(raw.name, name)?,
         timeout_minutes,
         inputs: inputs(raw.inputs)?,
+        plan_gated: raw.gate_on_plan.unwrap_or(false),
         kind,
     })
 }
