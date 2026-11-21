@@ -7,7 +7,7 @@ use crate::run::scratch;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
+use std::process::Output;
 const BOLD: &str = "\u{1b}[1m";
 const RESET: &str = "\u{1b}[0m";
 pub(crate) fn fake_nextest(directory: &Path, run: &str, list_json: &str) {
@@ -117,7 +117,7 @@ pub(crate) fn execute_nextest(
         temp.display(),
         std::env::var("PATH").unwrap_or_default()
     );
-    let mut child = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
+    let mut child = crate::run::velnor_ci_run();
     child
         .arg("run")
         .arg("--")

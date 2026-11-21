@@ -6,7 +6,6 @@
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
-use std::process::Command;
 
 use crate::run::scratch;
 use crate::run_nextest::listed;
@@ -70,7 +69,7 @@ fn the_early_list_of_an_archive_run_leaves_the_running_test_binaries_alone() {
     );
     let extract = tree.display().to_string();
     fs::write(temp.join("a.tar.zst"), b"").unwrap_or_else(|e| unreachable!("{e}"));
-    let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+    let output = crate::run::velnor_ci_run()
         .args(["run", "--", "cargo-nextest", "nextest", "run"])
         .args(["--archive-file", "a.tar.zst", "--extract-to", &extract])
         .args(["--extract-overwrite", "--workspace-remap", &extract])

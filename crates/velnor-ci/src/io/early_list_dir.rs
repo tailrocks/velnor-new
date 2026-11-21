@@ -10,12 +10,14 @@ use std::process::{Command, Stdio};
 const PREFIX: &str = "velnor-nextest-list";
 const PROBE: &str = "velnor-exec-probe";
 const NOT_EXECUTABLE: i32 = 126;
-const PROBE_SCRIPT: &str = "printf '#!/bin/sh\\nexit 0\\n' > \"$1\" && chmod 755 \"$1\" && \"$1\"; status=$?; rm -f \"$1\"; exit $status";
+const SHELL: &str = "/bin/sh";
+const PROBE_SCRIPT: &str = "printf '#!/bin/sh\\nexit 0\\n' > \"$1\" && /bin/chmod 755 \"$1\" && \"$1\"; status=$?; /bin/rm -f \"$1\"; exit $status";
 
 pub(super) type ExecProbe = dyn Fn(&Path) -> io::Result<bool>;
 
 pub(super) fn can_execute_from(directory: &Path) -> io::Result<bool> {
-    let output = Command::new("/bin/sh")
+    let output = Command::new(SHELL)
+        .env_clear()
         .args(["-c", PROBE_SCRIPT, PROBE])
         .arg(directory.join(PROBE))
         .stdin(Stdio::null())

@@ -60,25 +60,25 @@ fn a_missing_runner_temp_is_reported_before_anything_is_started() {
 }
 
 #[test]
-fn an_unwritable_runner_temp_is_reported_with_the_directory_it_could_not_create() {
-    let directory = scratch("readonly");
-    fs::set_permissions(&directory, fs::Permissions::from_mode(0o555))
-        .unwrap_or_else(|e| unreachable!("{e}"));
+fn a_runner_temp_that_is_a_file_is_reported_with_the_directory_it_could_not_prepare() {
+    let directory = scratch("file-as-temp");
+    let temp = directory.join("not-a-directory");
+    fs::write(&temp, b"").unwrap_or_else(|e| unreachable!("{e}"));
     let message = report(try_list(
         &archive_run(Path::new("/nonexistent/cargo-nextest")),
-        &environment(Some(OsString::from(&directory))),
+        &environment(Some(OsString::from(&temp))),
         &|_| Ok(true),
         &|_| Ok(u64::MAX),
     ));
-    fs::set_permissions(&directory, fs::Permissions::from_mode(0o755))
-        .unwrap_or_else(|e| unreachable!("{e}"));
-    let expected = format!(
-        "cannot create {}",
-        directory
-            .join(format!("velnor-nextest-list-{}", std::process::id()))
-            .display()
+    let expected = temp.join(format!("velnor-nextest-list-{}", std::process::id()));
+    assert!(
+        message.starts_with("cannot prepare its own extraction directory: cannot "),
+        "{message}"
     );
-    assert!(message.contains(&expected), "{message}");
+    assert!(
+        message.contains(&expected.display().to_string()),
+        "{message}"
+    );
     fs::remove_dir_all(&directory).unwrap_or_else(|e| unreachable!("{e}"));
 }
 

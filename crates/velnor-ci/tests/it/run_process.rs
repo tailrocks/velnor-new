@@ -125,7 +125,7 @@ mod tests_run {
     use std::fs;
     use std::os::unix::fs::PermissionsExt;
     use std::path::{Path, PathBuf};
-    use std::process::{Command, Output};
+    use std::process::Output;
     use std::time::{Duration, SystemTime};
 
     use super::scratch;
@@ -166,7 +166,7 @@ mod tests_run {
             temp.display(),
             std::env::var("PATH").unwrap_or_default()
         );
-        let mut child = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
+        let mut child = crate::run::velnor_ci_run();
         child
             .arg("run")
             .arg("--")
@@ -317,7 +317,7 @@ exit 0";
             temp.display(),
             std::env::var("PATH").unwrap_or_default()
         );
-        let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        let output = crate::run::velnor_ci_run()
             .arg("run")
             .arg("--")
             .args(NEXTEST_RUN)

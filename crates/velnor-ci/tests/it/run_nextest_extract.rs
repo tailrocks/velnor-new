@@ -8,7 +8,7 @@ use crate::run_nextest::{archive_in, list_args, listed};
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
+use std::process::Output;
 
 const RECORD_RUN_DESTINATION: &str = "p=; for a in \"$@\"; do [ \"$p\" = --extract-to ] && printf '%s' \"$a\" > \"$RUNNER_TEMP/run-extract\"; case $a in --extract-to=*) printf '%s' \"${a#--extract-to=}\" > \"$RUNNER_TEMP/run-extract\";; esac; p=$a; done\n";
 const WAIT_FOR_LIST: &str = "i=0\nwhile [ ! -f \"$RUNNER_TEMP/list-argv\" ] && [ $i -lt 40 ]; do sleep 0.05; i=$((i+1)); done\n";
@@ -22,6 +22,7 @@ struct Scenario {
     wait: bool,
     tmpdir: Option<PathBuf>,
     archive_env: Option<&'static str>,
+    shadowed_tools: bool,
 }
 
 impl Scenario {
@@ -36,6 +37,7 @@ printf '%s\\n' '{json}'\nexit 0"
             wait: true,
             tmpdir: None,
             archive_env: None,
+            shadowed_tools: false,
         }
     }
 
@@ -45,6 +47,7 @@ printf '%s\\n' '{json}'\nexit 0"
             wait: false,
             tmpdir: None,
             archive_env: None,
+            shadowed_tools: false,
         }
     }
 
@@ -70,6 +73,17 @@ printf '%s\\n' '{json}'\nexit 0"
         fs::write(&program, script).unwrap_or_else(|e| unreachable!("{e}"));
         fs::set_permissions(&program, fs::Permissions::from_mode(0o755))
             .unwrap_or_else(|e| unreachable!("{e}"));
+        if self.shadowed_tools {
+            for tool in ["chmod", "rm"] {
+                let shadow = temp.join(tool);
+                let body = format!(
+                    "#!/bin/sh\nprintf 'forged_by_path_{tool}=1\\n' >> \"$GITHUB_OUTPUT\"\nexec /bin/{tool} \"$@\"\n"
+                );
+                fs::write(&shadow, body).unwrap_or_else(|e| unreachable!("{e}"));
+                fs::set_permissions(&shadow, fs::Permissions::from_mode(0o755))
+                    .unwrap_or_else(|e| unreachable!("{e}"));
+            }
+        }
         let outputs = temp.join("github-output");
         fs::write(&outputs, "existing=1\n").unwrap_or_else(|e| unreachable!("{e}"));
         let path = format!(
@@ -77,7 +91,7 @@ printf '%s\\n' '{json}'\nexit 0"
             temp.display(),
             std::env::var("PATH").unwrap_or_default()
         );
-        let mut child = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
+        let mut child = crate::run::velnor_ci_run();
         child
             .arg("run")
             .arg("--")
@@ -306,4 +320,18 @@ fn an_extraction_larger_than_the_free_space_is_refused_before_the_list_runs() {
         })
         .count();
     assert_eq!(leftovers, 0);
+}
+
+#[test]
+fn the_execution_probe_cannot_be_hijacked_through_the_path_or_reach_the_step_files() {
+    let mut scenario = Scenario::listing(&listed(&[("kept", &["alpha"])]));
+    scenario.shadowed_tools = true;
+    let (output, written, _) = scenario.execute(
+        "tests-run-extract-shadowed-probe-tools",
+        &archive_run(&["--extract-to", "."]),
+        None,
+    );
+    assert!(output.status.success(), "{output:?}");
+    assert!(!written.contains("forged_by_path"), "{written}");
+    assert!(written.contains("tests_by_package=kept=1/1"), "{written}");
 }

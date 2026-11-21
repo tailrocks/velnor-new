@@ -18,7 +18,7 @@ fn completed_observations_survive_a_descendant_holding_the_stream_open() {
         let temp = crate::scratch_path("velnor-capture", name);
         let program = fixture(&temp, active, held).expect("fixture");
         let started = Instant::now();
-        let mut child = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        let mut child = crate::run::velnor_ci_run()
             .args([
                 "run",
                 "--",
