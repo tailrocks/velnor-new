@@ -90,6 +90,54 @@ fn an_unknown_output_beside_stale_units_in_a_plain_target_makes_the_build_refuse
     assert!(stderr.contains("unknown cargo layout?"), "{stderr}");
 }
 
+fn refuses_beside_stale_units(output: &str) {
+    let repo = workspace_below_the_root();
+    own_units_1100(&repo, "rust/target/debug", &[]);
+    unit(&repo, output, "");
+    let refused = velnor_ci()
+        .current_dir(repo.root())
+        .args(["inputs", "build", "--", "true"])
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(refused.status.code(), Some(1), "{output}: {refused:?}");
+    let stderr = String::from_utf8_lossy(&refused.stderr);
+    assert!(stderr.contains("unknown cargo layout?"), "{stderr}");
+}
+
+#[test]
+fn an_unknown_output_directly_in_the_configuration_beside_stale_units_makes_the_build_refuse() {
+    for output in [
+        "rust/target/debug/libapp.rlib",
+        "rust/target/debug/libapp.rmeta",
+        "rust/target/debug/other.d",
+        "rust/target/libapp.rlib",
+        "rust/target/debug/examples/libapp.rlib",
+    ] {
+        refuses_beside_stale_units(output);
+    }
+}
+
+#[test]
+fn the_outputs_cargo_places_beside_its_units_do_not_make_a_plain_build_refuse() {
+    let repo = workspace_below_the_root();
+    own_units_1100(&repo, "rust/target/debug", &[]);
+    for output in [
+        "rust/target/debug/build/app/f000000000000001/out/libapp-f000000000000001.rlib",
+        "rust/target/debug/libapp.rlib",
+        "rust/target/debug/libapp.d",
+        "rust/target/debug/app.d",
+        "rust/target/debug/examples/app.d",
+    ] {
+        unit(&repo, output, "");
+    }
+    let built = velnor_ci()
+        .current_dir(repo.root())
+        .args(["inputs", "build", "--", "true"])
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(built.status.success(), "{built:?}");
+}
+
 #[test]
 fn a_plain_target_named_through_a_parent_component_that_the_command_creates_still_refuses() {
     let repo = workspace_below_the_root();

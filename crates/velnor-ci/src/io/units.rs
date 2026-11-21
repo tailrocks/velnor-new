@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::HashSet;
 use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -173,16 +172,8 @@ fn scan(target: &Path, limit: usize, skip: Option<&Path>) -> Result<Scanned, CiE
             }
         }
     }
-    let holding: HashSet<&Path> = found
-        .iter()
-        .filter(|(unit, _)| !matches!(unit, UnitFile::Directory { .. }))
-        .flat_map(|(_, path)| path.ancestors())
-        .collect();
-    let orphan = outputs.into_iter().find(|output| {
-        output
-            .parent()
-            .is_some_and(|directory| !holding.contains(directory))
-    });
+    let owners = built::Owners::new(&found, &outputs);
+    let orphan = outputs.iter().find(|output| !owners.owns(output)).cloned();
     Ok(Scanned {
         found,
         built,

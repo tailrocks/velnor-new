@@ -256,3 +256,49 @@ fn a_plain_root_that_shares_its_target_with_a_separate_build_root_reads_its_buil
     fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
     assert!(found.is_ok(), "{found:?}");
 }
+
+const BUILT_DEP: [&str; 3] = [
+    "debug/.fingerprint/dep-5c64b2dee9af80ce/lib-dep",
+    "debug/deps/libdep-5c64b2dee9af80ce.rlib",
+    "debug/deps/dep-5c64b2dee9af80ce.d",
+];
+
+#[test]
+fn an_unknown_output_directly_in_a_configuration_beside_stale_units_is_refused() {
+    for unknown in [
+        "debug/libother.rlib",
+        "debug/libdep.rmeta",
+        "libdep.rlib",
+        "debug/examples/libother.rlib",
+    ] {
+        let root = target_with(&[&BUILT_DEP[..], &[unknown]].concat());
+        let refused = unit_files_within(&root, 100);
+        fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+        let message = refused
+            .expect_err("an output no unit produced must be refused")
+            .to_string();
+        assert!(
+            message.contains("unknown cargo layout?"),
+            "{unknown}: {message}"
+        );
+    }
+}
+
+#[test]
+fn the_final_artifacts_cargo_places_beside_its_units_are_not_refused() {
+    let root = target_with(
+        &[
+            &BUILT_DEP[..],
+            &[
+                "debug/libdep.rlib",
+                "debug/libdep.d",
+                "debug/dep.d",
+                "debug/examples/dep.d",
+            ],
+        ]
+        .concat(),
+    );
+    let found = unit_files_within(&root, 100);
+    fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(found.is_ok(), "{found:?}");
+}
