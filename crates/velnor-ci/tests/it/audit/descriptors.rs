@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use std::process::{Command, Output};
 
 use nix::sys::resource::{Resource, getrlimit};
+use velnor_test_support::real_cargo;
 
 use super::inventory::build;
 use super::{own_units, unit, workspace_below_the_root};
@@ -64,12 +65,7 @@ fn audit_under(repo: &Repo, limits: &str) -> Output {
 fn fake_cargo() -> (Repo, String) {
     let bin = Repo::empty("cargo-bin");
     let cargo = bin.root().join("cargo");
-    let real = std::env::var("PATH")
-        .unwrap_or_default()
-        .split(':')
-        .map(|dir| PathBuf::from(dir).join("cargo"))
-        .find(|candidate| candidate.is_file())
-        .unwrap_or_else(|| unreachable!("no cargo on PATH"));
+    let real = real_cargo();
     fs::write(
         &cargo,
         format!(
