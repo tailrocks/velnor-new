@@ -105,3 +105,21 @@ fn a_gap_on_a_changed_lock_is_no_notice() {
     let report = check(&[metrics(value)]).unwrap_or_else(|error| unreachable!("{error}"));
     assert!(!report.contains("restored base"), "{report}");
 }
+
+#[test]
+fn a_failed_check_prints_the_restore_notices_on_their_own_lines() {
+    let mut value = lane();
+    value["invocations"][0]["compilations"][0]["restored"] = json!(false);
+    value["invocations"][0]["compilations"][0]["missing_input"] = json!(true);
+    value["violations"] = json!(["rust: a lane violation"]);
+    let error = check(&[metrics(value.clone())])
+        .err()
+        .map_or_default(|error| error.to_string());
+    assert_eq!(error, "rust: a lane violation");
+    let notices = restore_notices(&[metrics(value)]);
+    assert!(notices.starts_with("::notice::"), "{notices}");
+    assert!(
+        notices.contains("dependency packages whose restored dep-info names a file outside target/ that is missing"),
+        "{notices}"
+    );
+}
