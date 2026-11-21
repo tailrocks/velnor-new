@@ -104,6 +104,7 @@ mod helper_release_tag;
 mod helper_source;
 mod helper_startup;
 mod helper_tool_paths;
+mod helper_warning_cli;
 mod helper_workflow_size;
 mod hosted_key;
 mod key_gates;
