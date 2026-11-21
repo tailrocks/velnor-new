@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 # SPDX-License-Identifier: Apache-2.0
 
-min_version = "2026.10.18"
+min_version = "2026.11.1"
 
 [tools]
 # Owner standard layout: `mr_boxington = true` plus `[wrappers.cargo]` run
