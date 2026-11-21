@@ -6,10 +6,13 @@ use serde_json::Value;
 use crate::facts::{TestResult, package, path, repo};
 use crate::lock::{COMMIT_FILE, SUMS};
 use crate::pipeline::workflow;
+use crate::private_base_caches::GIT_LOCK;
+use crate::private_sources::SECTION;
 use velnor_model::{RepoPath, TargetKind};
 use velnor_rust::{CONFIG_PATH, pin_lock};
 
 const LOCK: &str = "version = 4\n\n[[package]]\nname = \"shared\"\nversion = \"1.0.0\"\nsource = \"git+https://github.com/acme/shared-lib?branch=main#abc\"\n";
+const HELPER_ONLY: &str = "helper = { path = \"ci-helper/\" }\n";
 
 fn caches_of(job: &Value) -> Result<Vec<Value>, Box<dyn std::error::Error>> {
     let mut caches = Vec::new();
@@ -31,6 +34,37 @@ fn parsed(view: &velnor_model::RepoView) -> Result<Value, Box<dyn std::error::Er
     Ok(serde_saphyr::from_str(&crate::archive::plain_invocations(
         &workflow(view)?,
     ))?)
+}
+
+fn bootstrap(
+    helper: &str,
+    config: &str,
+    root_lock: Option<&str>,
+) -> Result<Value, Box<dyn std::error::Error>> {
+    let manifest = package(
+        "velnor-ci",
+        "ci-helper/Cargo.toml",
+        &[],
+        &[("velnor-ci", TargetKind::Bin, true)],
+    )?;
+    let mise = "[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n\n[tools]\nrust = { version = \"1.99.1\", mr_boxington = true }\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n";
+    let mut view = repo(
+        vec![("ci-helper/Cargo.toml", vec![manifest])],
+        &[("mise.toml", mise)],
+    )?;
+    view.files.insert(
+        path(".velnor/rust-ci.lock")?,
+        pin_lock(helper, COMMIT_FILE, SUMS, None)?.into_bytes(),
+    );
+    view.tracked_paths.insert(CONFIG_PATH);
+    view.files.insert(CONFIG_PATH, config.as_bytes().to_vec());
+    if let Some(lock) = root_lock {
+        view.files
+            .insert(RepoPath::new("Cargo.lock")?, lock.as_bytes().to_vec());
+    }
+    view.files
+        .insert(path("ci-helper/Cargo.lock")?, LOCK.as_bytes().to_vec());
+    parsed(&view)
 }
 
 #[test]
@@ -62,29 +96,7 @@ fn refused_base_caches_say_why_when_the_helper_reads_the_reason() -> TestResult 
 
 #[test]
 fn the_helper_bootstrap_target_is_never_saved_so_it_is_not_labelled() -> TestResult {
-    let helper = package(
-        "velnor-ci",
-        "ci-helper/Cargo.toml",
-        &[],
-        &[("velnor-ci", TargetKind::Bin, true)],
-    )?;
-    let mise = "[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n\n[tools]\nrust = { version = \"1.99.1\", mr_boxington = true }\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n";
-    let mut view = repo(
-        vec![("ci-helper/Cargo.toml", vec![helper])],
-        &[("mise.toml", mise)],
-    )?;
-    view.files.insert(
-        path(".velnor/rust-ci.lock")?,
-        pin_lock("0.1.111", COMMIT_FILE, SUMS, None)?.into_bytes(),
-    );
-    view.tracked_paths.insert(CONFIG_PATH);
-    view.files.insert(
-        CONFIG_PATH,
-        b"helper = { path = \"ci-helper/\" }\n".to_vec(),
-    );
-    view.files
-        .insert(path("ci-helper/Cargo.lock")?, LOCK.as_bytes().to_vec());
-    let parsed = parsed(&view)?;
+    let parsed = bootstrap("0.1.111", HELPER_ONLY, None)?;
     let jobs = parsed["jobs"].as_object().ok_or("jobs")?;
     let bootstrap = caches_of(jobs.get("rust-helper").ok_or("no helper job")?)?;
     assert_ne!(bootstrap.len(), 0);
@@ -112,5 +124,35 @@ fn the_helper_bootstrap_target_is_never_saved_so_it_is_not_labelled() -> TestRes
             .any(|cache| cache["not_generated"] == "private dependencies"),
         "{lane:?}"
     );
+    Ok(())
+}
+
+#[test]
+fn the_helper_bootstrap_is_unlabelled_before_the_helper_reads_the_reason() -> TestResult {
+    let parsed = bootstrap("0.1.110", HELPER_ONLY, None)?;
+    let jobs = parsed["jobs"].as_object().ok_or("jobs")?;
+    let bootstrap = caches_of(jobs.get("rust-helper").ok_or("no helper job")?)?;
+    assert_ne!(bootstrap.len(), 0);
+    for cache in &bootstrap {
+        assert!(cache.get("not_generated").is_none(), "{cache}");
+    }
+    Ok(())
+}
+
+#[test]
+fn a_helper_that_writes_private_base_caches_labels_none() -> TestResult {
+    let parsed = bootstrap(
+        "0.1.111",
+        &format!("{HELPER_ONLY}{SECTION}"),
+        Some(GIT_LOCK),
+    )?;
+    let mut checked = 0;
+    for job in parsed["jobs"].as_object().ok_or("jobs")?.values() {
+        for cache in caches_of(job)? {
+            checked += 1;
+            assert!(cache.get("not_generated").is_none(), "{cache}");
+        }
+    }
+    assert!(checked > 0);
     Ok(())
 }
