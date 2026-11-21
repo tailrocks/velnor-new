@@ -15,6 +15,7 @@ pub(crate) const PLAN_JOB: JobId = JobId::from_static("rust-plan");
 pub(crate) const POLICY_JOB: JobId = JobId::from_static("policy");
 // helper-gate: first in tools-v0.1.110 via 9c258dd24a
 pub(crate) const EARLY_POLICY_HELPER: (u64, u64, u64) = (0, 1, 110);
+// helper-gate: first in tools-v0.1.111 via 68c167d71e
 const LANE_JOB_FIXES_HELPER: (u64, u64, u64) = (0, 1, 111);
 
 pub(crate) fn lane_job_fixes(facts: &RepoFacts) -> bool {
