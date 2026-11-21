@@ -30,6 +30,8 @@ pub(super) struct Entry {
     #[serde(rename = "ref")]
     pub(super) reference: String,
     pub(super) size_in_bytes: u64,
+    #[serde(default)]
+    pub(super) version: String,
     created_at: String,
     last_accessed_at: String,
 }

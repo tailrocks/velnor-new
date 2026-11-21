@@ -19,6 +19,7 @@ mod cache_credential_scrub_ancestry;
 mod cache_credential_scrub_crates;
 mod cache_credential_scrub_hardening;
 mod cache_credential_scrub_tokens;
+mod cache_delete_entry;
 mod cache_flow;
 mod cache_private_repo;
 mod cache_prune;

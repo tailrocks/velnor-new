@@ -5,6 +5,7 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
+use crate::cache_version::{Compression, cache_version};
 use crate::error::CiError;
 use crate::escape::{escape, inert};
 use crate::mbx_store::trusted_event;
@@ -13,6 +14,17 @@ use crate::tools_verify::{Anchor, Discard, Recording, Verb, Verdict, check, read
 
 const ANCHOR_DIR: &str = "velnor-tools-anchor";
 const ANCHOR_NAME: &str = "digest";
+/// The `path:` of the tools cache step, which is `CacheKey::Tools::paths()` in `velnor-model`; the
+/// `tools_cache` tests of `velnor-gen` pin the rendered paths.
+const TOOLS_PATHS: [&str; 2] = ["~/.local/share/mise", "~/.rustup"];
+
+/// Where the notice sends the delete command: the host, its API and the repository.
+#[derive(Debug, Clone)]
+pub struct Remote {
+    pub host: String,
+    pub api_url: String,
+    pub repository: String,
+}
 
 #[derive(Debug, Clone)]
 pub struct Context {
@@ -27,14 +39,18 @@ pub struct Context {
     pub default_branch: Option<String>,
     pub cache_key: String,
     pub anchor_key: String,
-    pub repository: String,
+    pub remote: Remote,
+    pub compression: Compression,
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct Remedy<'a> {
     pub key: &'a str,
+    pub key_version: &'a str,
     pub anchor_key: &'a str,
-    pub repository: &'a str,
+    pub anchor_version: &'a str,
+    pub remote: &'a Remote,
+    pub reference: Option<&'a str>,
 }
 
 fn reason(discard: &Discard) -> String {
@@ -47,10 +63,30 @@ fn reason(discard: &Discard) -> String {
     }
 }
 
-fn delete_sentence(what: &str, key: &str, repository: &str) -> String {
-    let quoted = format!("'{}'", key.replace('\'', "'\\''"));
+fn quoted(text: &str) -> String {
+    format!("'{}'", text.replace('\'', "'\\''"))
+}
+
+fn delete_command(key: &str, version: &str, remedy: Remedy<'_>) -> String {
+    let remote = remedy.remote;
+    let mut command = format!(
+        "GITHUB_API_URL={} GITHUB_TOKEN=\"$(gh auth token --hostname {})\" velnor-ci cache delete-entry --repo {} --key {} --version {version}",
+        quoted(&remote.api_url),
+        quoted(&remote.host),
+        quoted(&remote.repository),
+        quoted(key),
+    );
+    if let Some(reference) = remedy.reference {
+        command = format!("{command} --ref {}", quoted(reference));
+    }
+    command
+}
+
+fn delete_sentence(what: &str, key: &str, version: &str, remedy: Remedy<'_>) -> String {
     format!(
-        ". The restored {what} is {quoted}; delete it with `gh cache delete {quoted} -R {repository}`, which removes every entry with that key in the repository, on any ref"
+        ". The restored {what} is {} (version {version}); delete that entry by ID with `{}`, which deletes only the entry with that key and version and refuses when more than one entry matches",
+        quoted(key),
+        delete_command(key, version, remedy)
     )
 }
 
@@ -58,7 +94,12 @@ fn anchor_sentence(remedy: Remedy<'_>) -> String {
     if remedy.anchor_key.is_empty() {
         return String::new();
     }
-    delete_sentence("anchor entry", remedy.anchor_key, remedy.repository)
+    delete_sentence(
+        "anchor entry",
+        remedy.anchor_key,
+        remedy.anchor_version,
+        remedy,
+    )
 }
 
 fn delete_hint(remedy: Remedy<'_>) -> String {
@@ -67,7 +108,8 @@ fn delete_hint(remedy: Remedy<'_>) -> String {
         hint.push_str(&delete_sentence(
             "Actions cache entry",
             remedy.key,
-            remedy.repository,
+            remedy.key_version,
+            remedy,
         ));
     }
     hint.push_str(&anchor_sentence(remedy));
@@ -78,17 +120,35 @@ fn anchor_hint(remedy: Remedy<'_>) -> String {
     escape(&anchor_sentence(remedy), false)
 }
 
-fn repository_target(server: Option<&str>, repository: Option<&str>) -> String {
-    let repository = repository.unwrap_or("<owner/repo>");
-    let host = server
+fn host_of(server: Option<&str>) -> &str {
+    server
         .map(|url| {
             url.trim_end_matches('/')
                 .trim_start_matches("https://")
                 .trim_start_matches("http://")
         })
         .filter(|host| !host.is_empty())
-        .unwrap_or("github.com");
-    format!("{host}/{repository}")
+        .unwrap_or("github.com")
+}
+
+/// The host is always named, so that `GH_HOST` cannot point the command at another instance.
+fn remote(server: Option<&str>, api: Option<&str>, repository: Option<&str>) -> Remote {
+    let host = host_of(server);
+    let api_url = api.filter(|url| !url.is_empty()).map_or_else(
+        || {
+            if host == "github.com" {
+                "https://api.github.com".to_owned()
+            } else {
+                format!("https://{host}/api/v3")
+            }
+        },
+        str::to_owned,
+    );
+    Remote {
+        host: host.to_owned(),
+        api_url,
+        repository: repository.unwrap_or("<owner/repo>").to_owned(),
+    }
 }
 
 #[must_use]
@@ -175,10 +235,20 @@ pub fn run(verb: Verb, context: &Context) -> Result<String, CiError> {
         .open(path)
         .and_then(|mut handle| handle.write_all(outputs(&verdict).as_bytes()))
         .map_err(|error| CiError::new(format!("cannot write {}: {error}", path.display())))?;
+    let anchor_dir = context.runner_temp.join(ANCHOR_DIR);
+    let key_version = cache_version(&TOOLS_PATHS, context.compression);
+    let anchor_version = cache_version(&[&anchor_dir.to_string_lossy()], context.compression);
+    let reference = context
+        .default_branch
+        .as_ref()
+        .map(|branch| format!("refs/heads/{branch}"));
     let remedy = Remedy {
         key: &context.cache_key,
+        key_version: &key_version,
         anchor_key: &context.anchor_key,
-        repository: &context.repository,
+        anchor_version: &anchor_version,
+        remote: &context.remote,
+        reference: reference.as_deref(),
     };
     Ok(format!("{}\n", message(&verdict, remedy)))
 }
@@ -210,10 +280,12 @@ pub fn setup(verb: Verb) -> Result<String, CiError> {
             default_branch,
             cache_key: var("VELNOR_TOOLS_CACHE_KEY").unwrap_or_default(),
             anchor_key: var("VELNOR_ANCHOR_CACHE_KEY").unwrap_or_default(),
-            repository: repository_target(
+            remote: remote(
                 var("GITHUB_SERVER_URL").as_deref(),
+                var("GITHUB_API_URL").as_deref(),
                 var("GITHUB_REPOSITORY").as_deref(),
             ),
+            compression: Compression::detect(),
         },
     )
 }
