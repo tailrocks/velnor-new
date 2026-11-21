@@ -276,7 +276,7 @@ pub(super) fn run_decide(args: &crate::cli_cache::DecideArgs) -> Result<String, 
     let admission =
         super::cache_sources::refusal(&root, &manifests, &args.public_probe_api, deadline)?;
     let sources_restored = std::env::var(SOURCES_RESTORED_VARIABLE).is_ok_and(|hit| hit == "true");
-    let leak = (admission.private_sources && !sources_restored)
+    let leak = (!sources_restored)
         .then(|| {
             super::cache_credentials::saved_root().map_or_else(
                 || Some("HOME is not set".to_owned()),
