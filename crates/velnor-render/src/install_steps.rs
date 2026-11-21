@@ -108,7 +108,7 @@ pub(crate) fn install_generator_step(release: &HelperRelease) -> RenderedStep {
     }
 }
 
-const CHECK_FROM_SOURCE: &str = "set -euo pipefail; fail() { printf '%s\\n' \"::error title=velnor-gen::$1\"; exit 1; }; target=$(rustc -vV | sed -n 's/^host: //p'); [ -n \"$target\" ] || fail \"rustc reports no host triple\"; cargo run --locked --manifest-path \"$VELNOR_GEN_MANIFEST\" --target \"$target\" --package velnor-gen -- check --verify-release";
+const CHECK_FROM_SOURCE: &str = "set -euo pipefail; fail() { printf '%s\\n' \"::error title=velnor-gen::$1\"; exit 1; }; root=$PWD; cd \"$(dirname \"$VELNOR_GEN_MANIFEST\")\"; target=$(rustc -vV | sed -n 's/^host: //p'); [ -n \"$target\" ] || fail \"rustc reports no host triple\"; cargo run --locked --manifest-path \"$root/$VELNOR_GEN_MANIFEST\" --target \"$target\" --package velnor-gen --bin velnor-gen -- --root \"$root\" check --verify-release";
 
 pub(crate) fn generator_check_step(source: Option<&str>) -> RenderedStep {
     let Some(manifest) = source else {

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use serde_json::Value;
-use velnor_model::{PackageName, RepoPath, RepoView};
+use velnor_model::{PackageName, RepoPath, RepoView, Target, TargetKind, TargetName};
 use velnor_rust::LOCK_PATH;
 
 use crate::facts::TestResult;
@@ -19,6 +19,17 @@ const FIRST: &str = "0.1.112";
 const STORE: &str = "MBX_CACHE_DIR=$RUNNER_TEMP/mbx";
 const MIRROR: &str = "[crates_mirror]\nrunner = 'mirror-box'\nregistry = 'sparse+https://crates-mirror.velnor-system.svc.cluster.local/index/'\ncainfo = '/opt/velnor/crates-mirror/ca-bundle.pem'\n";
 
+fn bin(name: &str) -> Result<Target, Box<dyn std::error::Error>> {
+    Ok(Target {
+        name: TargetName::new(name)?,
+        kinds: vec![TargetKind::Bin],
+        tests: false,
+        doctest: false,
+        source: None,
+        requires_features: false,
+    })
+}
+
 fn packages(
     config: &str,
     version: &str,
@@ -34,6 +45,7 @@ fn packages(
             .get_mut(&RepoPath::new(*manifest)?)
             .ok_or("no such root")?;
         metadata.members[0].name = PackageName::new(*name)?;
+        metadata.members[0].targets = vec![bin(name)?];
     }
     repo.tracked_paths.insert(LOCK_PATH);
     repo.files
@@ -292,6 +304,33 @@ fn from_source_refuses_a_repository_without_exactly_one_velnor_gen() -> TestResu
 }
 
 #[test]
+fn from_source_refuses_a_velnor_gen_package_without_a_binary() -> TestResult {
+    let mut repo = locked(&format!("{LINT}\n{FROM_SOURCE}"), FIRST)?;
+    let lib = Target {
+        kinds: vec![TargetKind::Lib],
+        ..bin("velnor-gen")?
+    };
+    repo.rust_metadata
+        .get_mut(&RepoPath::new("Cargo.toml")?)
+        .ok_or("no root")?
+        .members[0]
+        .targets = vec![lib];
+    let error = workflow(&repo).err();
+    let text = format!("{error:?}");
+    assert!(text.contains("GeneratorPackage"), "{text}");
+    Ok(())
+}
+
+#[test]
+fn from_source_runs_cargo_in_the_generator_directory_for_the_named_binary() -> TestResult {
+    let job = job(&rendered(&format!("{LINT}\n{FROM_SOURCE}"), FIRST)?)?;
+    let script = check_script(&job);
+    assert!(script.contains("cd \"$(dirname"), "{script}");
+    assert!(script.contains("--bin velnor-gen"), "{script}");
+    Ok(())
+}
+
+#[test]
 fn from_source_fetches_private_dependencies_before_it_builds_the_generator() -> TestResult {
     let mut repo = private_repo(&["Cargo.toml"], &format!("{SECTION}{FROM_SOURCE}"), FIRST)?;
     repo.tracked_paths.insert(LOCK_PATH);
@@ -304,6 +343,11 @@ fn from_source_fetches_private_dependencies_before_it_builds_the_generator() -> 
         .ok_or("no root")?
         .members[0]
         .name = PackageName::new("velnor-gen")?;
+    repo.rust_metadata
+        .get_mut(&RepoPath::new("Cargo.toml")?)
+        .ok_or("no root")?
+        .members[0]
+        .targets = vec![bin("velnor-gen")?];
     let job = job(&workflow(&repo)?)?;
     let token = position(&job, |step| step["id"] == "private-token").ok_or("no token")?;
     let fetch =

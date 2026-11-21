@@ -10,7 +10,7 @@ use crate::lane::PLAN_JOB;
 use crate::lint_tools::{ALINT, JACTIONLINT, NODE, RUST, SHELLCHECK, usable};
 use crate::mbx_pin::MBX_TOOL;
 use crate::plan::{CHECKOUT_DEPTH, job, mbx, quick, step};
-use crate::plan_tools::{mirror_step, tools_install};
+use crate::plan_tools::{mirror_step, tools_install, tools_restore};
 
 pub(crate) fn lint_jobs(facts: &RepoFacts) -> Vec<Job> {
     facts
@@ -108,6 +108,7 @@ fn generated_check_job(facts: &RepoFacts, lint: &LintJob, from_source: bool) -> 
         );
         steps.extend(mbx(facts, None));
         steps.extend(mirror_step(facts));
+        steps.extend(tools_restore(facts, None));
         steps.extend(tools_install(facts));
         if !facts.tools.tools.is_empty() {
             steps.extend(mirror_step(facts));

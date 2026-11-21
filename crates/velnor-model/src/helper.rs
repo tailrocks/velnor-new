@@ -103,15 +103,6 @@ impl Platform {
     }
 
     #[must_use]
-    pub const fn host_triple(self) -> &'static str {
-        match self {
-            Self::LinuxX64 => "x86_64-unknown-linux-gnu",
-            Self::LinuxArm64 => "aarch64-unknown-linux-gnu",
-            Self::MacosArm64 => "aarch64-apple-darwin",
-        }
-    }
-
-    #[must_use]
     pub const fn runner_key(self) -> &'static str {
         match self {
             Self::LinuxX64 => "Linux-X64",

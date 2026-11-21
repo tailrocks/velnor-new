@@ -246,7 +246,11 @@ pub(crate) fn any_gate(first: Option<&Gate>, second: Option<&Gate>) -> Option<Ga
 }
 
 fn manifest(step: &Step) -> RepoPath {
-    if let StepKind::Cargo(CargoCommand::Deny { manifest, .. }) = &step.kind {
+    if let StepKind::Cargo(CargoCommand::Deny { manifest, .. })
+    | StepKind::GeneratorCheck {
+        source: Some(manifest),
+    } = &step.kind
+    {
         return manifest.clone();
     }
     step.directory.as_ref().map_or_else(
