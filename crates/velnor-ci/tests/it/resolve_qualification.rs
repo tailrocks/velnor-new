@@ -9,6 +9,7 @@
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::PathBuf;
+use std::sync::{Mutex, PoisonError};
 
 use crate::resolve_cases::cases;
 use crate::resolve_run::{Outcome, last_micros, run_helper, run_legacy};
@@ -52,14 +53,31 @@ fn write_expected(name: &str, outcome: &Outcome) {
 fn every_recorded_case_matches_the_legacy_op() {
     let all = cases();
     assert!(all.len() >= 110, "{} cases", all.len());
-    let mut wrong = Vec::new();
-    for (name, mut world) in all {
-        let got = run_helper(&mut world, BIN);
-        let want = read_expected(name);
-        if got != want {
-            wrong.push(format!("{name}: want {want:?}, got {got:?}"));
+    let workers = std::thread::available_parallelism()
+        .map_or(1, usize::from)
+        .clamp(1, 4);
+    let queue = Mutex::new(all.into_iter());
+    let wrong = Mutex::new(Vec::new());
+    std::thread::scope(|scope| {
+        for _ in 0..workers {
+            scope.spawn(|| {
+                loop {
+                    let next = queue.lock().unwrap_or_else(PoisonError::into_inner).next();
+                    let Some((name, mut world)) = next else { break };
+                    let got = run_helper(&mut world, BIN);
+                    let want = read_expected(name);
+                    if got != want {
+                        wrong
+                            .lock()
+                            .unwrap_or_else(PoisonError::into_inner)
+                            .push(format!("{name}: want {want:?}, got {got:?}"));
+                    }
+                }
+            });
         }
-    }
+    });
+    let mut wrong = wrong.into_inner().unwrap_or_else(PoisonError::into_inner);
+    wrong.sort();
     assert!(
         wrong.is_empty(),
         "{} differ:\n{}",

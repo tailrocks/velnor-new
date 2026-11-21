@@ -64,6 +64,7 @@ pub(crate) fn rendered_job(job: &Job, plan: &WorkflowPlan) -> RenderedJob {
         crate::helper_integrity::secure_steps(job, job_steps(job, restores, audit, &tests, lane));
     let mut env = crate::cargo::hoist_target_dir(job, &mut steps);
     env.extend(crate::cargo_target::mbx_reports_env(job));
+    crate::shared_runs::mark(job, &mut steps);
     crate::mise_digest::pin_to_runner_platform(RenderedJob {
         id: job.id.to_string(),
         name: job.name.clone(),
@@ -349,6 +350,7 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
         StepKind::MbxPin => crate::helper_steps::mbx_pin_step(),
         StepKind::CratesMirror(mirror) => crate::helper_steps::mirror_step(mirror),
         StepKind::MbxStore | StepKind::MbxPrivate => crate::helper_steps::mbx_local_step(kind),
+        StepKind::MbxOutDirs => crate::mbx_out_dirs::mbx_out_dirs_step(),
         StepKind::RepositoryPrivacy
         | StepKind::PrivateCheck { .. }
         | StepKind::PrivateToken { .. }
