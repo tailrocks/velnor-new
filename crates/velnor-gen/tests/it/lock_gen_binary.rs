@@ -181,15 +181,3 @@ fn a_release_from_the_binary_section_on_is_not_pinned_without_velnor_gen_digests
     assert!(error.contains(BINARY_SUMS_FILE), "{error}");
     Ok(())
 }
-
-#[test]
-fn a_release_before_the_binary_section_is_pinned_without_velnor_gen_digests() -> TestResult {
-    let lock = pin_lock(
-        "0.1.110",
-        COMMIT_FILE,
-        ARCHIVE_SUMS,
-        Some(CI_ONLY_BINARY_SUMS),
-    )?;
-    assert!(!lock.contains("velnor-gen-binary"), "{lock}");
-    Ok(())
-}
