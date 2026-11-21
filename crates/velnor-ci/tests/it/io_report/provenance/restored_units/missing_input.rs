@@ -28,15 +28,13 @@ fn restored_record(repo: &Repo) -> Result<String, Box<dyn std::error::Error>> {
 fn a_unit_whose_dep_info_names_a_missing_file_outside_target_is_a_base_gap_not_waste()
 -> Result<(), Box<dyn std::error::Error>> {
     let repo = fixture("report-restored-units-missing-input")?;
-    let outside = repo.root().join("kept/private.rs");
+    let root = fs::canonicalize(repo.root())?;
+    let outside = root.join("kept/private.rs");
     repo.write("kept/private.rs", "pub fn v() {}\n");
-    let missing = format!("{}/store/out-dirs/v1/abc/private.rs", repo.root().display());
+    let missing = format!("{}/store/out-dirs/v1/abc/private.rs", root.display());
     dep_info_unit(&repo, MISSING_INPUT, &missing);
     dep_info_unit(&repo, KEPT_INPUT, &outside.display().to_string());
-    let inside = format!(
-        "{}/target/debug/build/serde/out/x.rs",
-        repo.root().display()
-    );
+    let inside = format!("{}/target/debug/build/serde/out/x.rs", root.display());
     dep_info_unit(&repo, IN_TARGET, &inside);
     restore(&repo);
     let record = restored_record(&repo)?;
