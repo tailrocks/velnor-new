@@ -112,26 +112,14 @@ fn every_group_has_one_lead_that_owns_the_tag() -> TestResult {
     Ok(())
 }
 
-/// No package tags with a bare `v<version>`, and the old engine
-/// (`velnor-actions-*`, being deleted) neither releases nor joins a group.
+/// No package tags with a bare `v<version>`.
 #[test]
-fn no_bare_v_tag_and_no_engine_group() -> TestResult {
+fn no_bare_v_tag() -> TestResult {
     for (package, entry) in entries()? {
         if let Some(pattern) = str_field(&entry, "git_tag_name") {
             assert!(
                 !pattern.starts_with("v{{"),
                 "{package}: bare tag pattern {pattern:?}"
-            );
-        }
-        if package.starts_with("velnor-actions-") {
-            assert_ne!(
-                entry.get("release").and_then(toml::Value::as_bool),
-                Some(true),
-                "{package}: the engine must not release"
-            );
-            assert!(
-                entry.get("version_group").is_none(),
-                "{package}: the engine has no group"
             );
         }
     }
