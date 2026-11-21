@@ -3,15 +3,49 @@
 
 use std::ffi::OsString;
 use std::fs;
-use std::io::ErrorKind;
+use std::io::{self, ErrorKind};
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
+use std::process::Command;
+use std::thread;
+use std::time::Duration;
 
 const PREFIX: &str = "velnor-nextest-list";
+const PROBE: &str = "velnor-exec-probe";
+const TEXT_FILE_BUSY: i32 = 26;
+const PROBE_ATTEMPTS: u32 = 10;
+
+pub(super) type ExecProbe = dyn Fn(&Path) -> io::Result<bool>;
+
+pub(super) fn can_execute_from(directory: &Path) -> io::Result<bool> {
+    let probe = directory.join(PROBE);
+    fs::write(&probe, "#!/bin/sh\nexit 0\n")?;
+    fs::set_permissions(&probe, fs::Permissions::from_mode(0o755))?;
+    let mut outcome = Ok(false);
+    for _ in 0..PROBE_ATTEMPTS {
+        outcome = match Command::new(&probe).status() {
+            Ok(_) => Ok(true),
+            Err(error) if error.kind() == ErrorKind::PermissionDenied => Ok(false),
+            Err(error) if error.raw_os_error() == Some(TEXT_FILE_BUSY) => {
+                thread::sleep(Duration::from_millis(20));
+                continue;
+            }
+            Err(error) => Err(error),
+        };
+        break;
+    }
+    drop(fs::remove_file(&probe));
+    outcome
+}
 
 pub(super) struct ListDir(PathBuf);
 
 impl ListDir {
-    pub(super) fn create(runner_temp: Option<OsString>, process: u32) -> Result<Self, String> {
+    pub(super) fn create(
+        runner_temp: Option<OsString>,
+        process: u32,
+        can_execute: &ExecProbe,
+    ) -> Result<Self, String> {
         let temp = runner_temp
             .filter(|temp| !temp.is_empty())
             .ok_or("RUNNER_TEMP is not set")?;
@@ -23,7 +57,18 @@ impl ListDir {
         }
         fs::create_dir_all(&directory)
             .map_err(|error| format!("cannot create {}: {error}", directory.display()))?;
-        Ok(Self(directory))
+        let created = Self(directory);
+        match can_execute(&created.0) {
+            Ok(true) => Ok(created),
+            Ok(false) => Err(format!(
+                "{} does not allow executing files (mounted noexec?), so the extracted test binaries could not run there",
+                created.0.display()
+            )),
+            Err(error) => Err(format!(
+                "cannot check that {} allows executing files: {error}",
+                created.0.display()
+            )),
+        }
     }
 
     pub(super) fn path(&self) -> &Path {
@@ -39,15 +84,16 @@ impl Drop for ListDir {
 
 #[cfg(test)]
 mod tests {
-    use super::ListDir;
+    use super::{ListDir, can_execute_from};
     use std::ffi::OsString;
+    use std::io;
 
     #[test]
     fn creates_a_directory_under_the_runner_temp_and_removes_it_on_drop() {
         let temp = std::env::temp_dir().join(format!("velnor-list-dir-{}", std::process::id()));
         std::fs::create_dir_all(&temp).unwrap_or_else(|e| unreachable!("{e}"));
-        let directory =
-            ListDir::create(Some(OsString::from(&temp)), 7).unwrap_or_else(|e| unreachable!("{e}"));
+        let directory = ListDir::create(Some(OsString::from(&temp)), 7, &|_| Ok(true))
+            .unwrap_or_else(|e| unreachable!("{e}"));
         let path = directory.path().to_path_buf();
         assert_eq!(path, temp.join("velnor-nextest-list-7"));
         assert!(path.is_dir());
@@ -62,8 +108,8 @@ mod tests {
         let stale = temp.join("velnor-nextest-list-9");
         std::fs::create_dir_all(&stale).unwrap_or_else(|e| unreachable!("{e}"));
         std::fs::write(stale.join("old"), "x").unwrap_or_else(|e| unreachable!("{e}"));
-        let directory =
-            ListDir::create(Some(OsString::from(&temp)), 9).unwrap_or_else(|e| unreachable!("{e}"));
+        let directory = ListDir::create(Some(OsString::from(&temp)), 9, &|_| Ok(true))
+            .unwrap_or_else(|e| unreachable!("{e}"));
         assert!(!directory.path().join("old").exists());
         drop(directory);
         std::fs::remove_dir_all(&temp).unwrap_or_else(|e| unreachable!("{e}"));
@@ -71,7 +117,51 @@ mod tests {
 
     #[test]
     fn refuses_a_missing_or_empty_runner_temp() {
-        assert!(ListDir::create(None, 1).is_err());
-        assert!(ListDir::create(Some(OsString::new()), 1).is_err());
+        assert!(ListDir::create(None, 1, &|_| Ok(true)).is_err());
+        assert!(ListDir::create(Some(OsString::new()), 1, &|_| Ok(true)).is_err());
+    }
+
+    #[test]
+    fn refuses_a_directory_that_does_not_allow_execution_and_removes_it() {
+        let temp = std::env::temp_dir().join(format!("velnor-list-noexec-{}", std::process::id()));
+        std::fs::create_dir_all(&temp).unwrap_or_else(|e| unreachable!("{e}"));
+        let error = ListDir::create(Some(OsString::from(&temp)), 3, &|_| Ok(false))
+            .err()
+            .unwrap_or_else(|| unreachable!("a noexec directory was accepted"));
+        let expected = temp.join("velnor-nextest-list-3");
+        assert!(error.contains(&expected.display().to_string()), "{error}");
+        assert!(error.contains("does not allow executing files"), "{error}");
+        assert!(!expected.exists());
+        std::fs::remove_dir_all(&temp).unwrap_or_else(|e| unreachable!("{e}"));
+    }
+
+    #[test]
+    fn reports_a_failed_execution_check_with_its_cause() {
+        let temp = std::env::temp_dir().join(format!("velnor-list-probe-{}", std::process::id()));
+        std::fs::create_dir_all(&temp).unwrap_or_else(|e| unreachable!("{e}"));
+        let error = ListDir::create(Some(OsString::from(&temp)), 4, &|_| {
+            Err(io::Error::other("probe broke"))
+        })
+        .err()
+        .unwrap_or_else(|| unreachable!("a failed check was accepted"));
+        assert!(error.contains("cannot check that"), "{error}");
+        assert!(error.contains("probe broke"), "{error}");
+        assert!(!temp.join("velnor-nextest-list-4").exists());
+        std::fs::remove_dir_all(&temp).unwrap_or_else(|e| unreachable!("{e}"));
+    }
+
+    #[test]
+    fn the_real_probe_runs_a_file_from_an_ordinary_directory_and_leaves_nothing() {
+        let temp = std::env::temp_dir().join(format!("velnor-list-real-{}", std::process::id()));
+        std::fs::create_dir_all(&temp).unwrap_or_else(|e| unreachable!("{e}"));
+        assert!(can_execute_from(&temp).unwrap_or_else(|e| unreachable!("{e}")));
+        assert_eq!(std::fs::read_dir(&temp).map(Iterator::count).ok(), Some(0));
+        std::fs::remove_dir_all(&temp).unwrap_or_else(|e| unreachable!("{e}"));
+    }
+
+    #[test]
+    fn the_real_probe_fails_loudly_for_a_missing_directory() {
+        let missing = std::env::temp_dir().join(format!("velnor-list-gone-{}", std::process::id()));
+        assert!(can_execute_from(&missing).is_err());
     }
 }

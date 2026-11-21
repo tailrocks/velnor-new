@@ -124,6 +124,47 @@ fn a_list_that_prints_no_listing_says_so() {
 }
 
 #[test]
+fn a_list_that_exits_non_zero_names_its_status_and_the_omission() {
+    let temp = scratch("tests-run-extract-list-fails");
+    let program = temp.join("cargo-nextest");
+    let script = format!(
+        "#!/bin/sh\nif [ \"$2\" = list ]; then echo '[double-spawn] failed' >&2; exit 104; fi\n{RUN_EXTRACT}\n"
+    )
+    .replace(
+        "while [ ! -f \"$RUNNER_TEMP/list-argv\" ] && [ $i -lt 40 ]; do sleep 0.05; i=$((i+1)); done\n",
+        "",
+    );
+    fs::write(&program, script).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::set_permissions(&program, fs::Permissions::from_mode(0o755))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let outputs = temp.join("github-output");
+    fs::write(&outputs, "existing=1\n").unwrap_or_else(|e| unreachable!("{e}"));
+    let path = format!(
+        "{}:{}",
+        temp.display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        .arg("run")
+        .arg("--")
+        .args(archive_run(&["--extract-to", "."]))
+        .env("RUNNER_TEMP", &temp)
+        .env("GITHUB_OUTPUT", &outputs)
+        .env("PATH", path)
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(output.status.success(), "{output:?}");
+    let written = fs::read_to_string(&outputs).unwrap_or_default();
+    assert!(!written.contains("tests_by_package="), "{written}");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("[double-spawn] failed"), "{stderr}");
+    assert!(
+        stderr.contains("velnor-ci: the early nextest list exited with exit status: 104; the step reports no per-package counts"),
+        "{stderr}"
+    );
+}
+
+#[test]
 fn the_early_list_does_not_extract_into_an_unusable_tmpdir() {
     let temp = scratch("tests-run-extract-noexec-tmpdir");
     fake_nextest(&temp, RUN_EXTRACT, &listed(&[("kept", &["alpha"])]));
