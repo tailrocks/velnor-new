@@ -11,7 +11,7 @@ use std::process::Command;
 
 #[test]
 fn a_stale_socket_is_not_inherited_when_mbx_reports_is_off() -> ResultTest {
-    let repo = fixture("mbx-reports-stale-switch-off")?;
+    let repo = fixture("mbx-stale-switch-off")?;
     let bin = repo.root().join("fake-bin");
     fs::create_dir_all(&bin)?;
     let cargo = bin.join("cargo");
