@@ -5,15 +5,33 @@ use std::os::unix::fs::symlink;
 
 use super::*;
 
+fn walked_last(directory: &Path, name: &str) -> bool {
+    let mut listing = handle::open(&handle::Origin::Path, directory, &handle::Climb::none())
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let names = handle::names(&mut listing, |_| Ok(())).unwrap_or_else(|e| unreachable!("{e}"));
+    names.last().is_some_and(|last| last == name)
+}
+
 pub(super) fn deep_tree(root: &Path, depth: usize, siblings: usize) {
     let mut directory = root.to_path_buf();
     for _ in 0..depth {
-        for sibling in 0..siblings {
-            fs::create_dir_all(directory.join(format!("s{sibling}")))
-                .unwrap_or_else(|e| unreachable!("{e}"));
+        let chain = directory.join("c");
+        fs::create_dir_all(&chain).unwrap_or_else(|e| unreachable!("{e}"));
+        let mut kept = 0;
+        let mut candidate = 0;
+        while kept < siblings {
+            let prefix = if candidate % 2 == 0 { "a" } else { "s" };
+            let sibling = directory.join(format!("{prefix}{}", candidate / 2));
+            candidate += 1;
+            fs::create_dir(&sibling).unwrap_or_else(|e| unreachable!("{e}"));
+            if walked_last(&directory, "c") {
+                kept += 1;
+            } else {
+                fs::remove_dir(&sibling).unwrap_or_else(|e| unreachable!("{e}"));
+            }
         }
-        directory = directory.join("c");
-        fs::create_dir_all(&directory).unwrap_or_else(|e| unreachable!("{e}"));
+        assert!(walked_last(&directory, "c"), "{directory:?}");
+        directory = chain;
     }
 }
 
