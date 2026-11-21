@@ -14,7 +14,7 @@ use crate::escape::{command_line, inert};
 use crate::github::{GitHubWrite, Repo};
 use crate::time::parse_utc;
 
-const PAGE: usize = 100;
+pub(super) const PAGE: usize = 100;
 const RESTORED_GRACE_SECONDS: i64 = 86_400;
 
 #[derive(Deserialize)]
@@ -24,12 +24,12 @@ struct Listing<T> {
 }
 
 #[derive(Deserialize)]
-struct Entry {
-    id: u64,
-    key: String,
+pub(super) struct Entry {
+    pub(super) id: u64,
+    pub(super) key: String,
     #[serde(rename = "ref")]
-    reference: String,
-    size_in_bytes: u64,
+    pub(super) reference: String,
+    pub(super) size_in_bytes: u64,
     created_at: String,
     last_accessed_at: String,
 }
@@ -39,7 +39,7 @@ struct PullRequest {
     number: u64,
 }
 
-fn pages<T: serde::de::DeserializeOwned>(
+pub(super) fn pages<T: serde::de::DeserializeOwned>(
     github: &dyn GitHubWrite,
     path: &str,
     limit: Option<usize>,
@@ -72,7 +72,11 @@ fn pages<T: serde::de::DeserializeOwned>(
     }
 }
 
-fn delete_entries(github: &dyn GitHubWrite, repo: &Repo, ids: &[u64]) -> Result<(), CiError> {
+pub(super) fn delete_entries(
+    github: &dyn GitHubWrite,
+    repo: &Repo,
+    ids: &[u64],
+) -> Result<(), CiError> {
     for id in ids {
         github.wait(Duration::from_millis(160));
         if let Err(error) = github.delete(&format!("/repos/{repo}/actions/caches/{id}"))
@@ -104,9 +108,8 @@ pub fn trim(
     let (entries, truncated): (Vec<crate::cache::CacheEntry>, bool) =
         pages(github, &path, Some(MAX_PAGES))?;
     unique_ids(entries.iter().map(|entry| entry.id))?;
-    let in_use_since = prefix
-        .starts_with("velnor-src-")
-        .then(|| now.saturating_sub(RESTORED_GRACE_SECONDS));
+    let in_use_since =
+        velnor_rust::is_sources_prefix(prefix).then(|| now.saturating_sub(RESTORED_GRACE_SECONDS));
     let mut stale = stale_entries(&entries, prefix, keep, in_use_since);
     let foreign = foreign_entries(&entries, prefix);
     stale.extend(&foreign);
@@ -234,10 +237,9 @@ pub fn budget(
     Ok(report.concat())
 }
 
-pub(super) fn run_budget(args: &BudgetArgs) -> Result<String, CiError> {
-    let repository = args
-        .repo
-        .clone()
+pub(super) fn client(repo: Option<&str>) -> Result<(super::http::HttpGitHub, Repo), CiError> {
+    let repository = repo
+        .map(str::to_owned)
         .or_else(|| std::env::var("GITHUB_REPOSITORY").ok())
         .ok_or_else(|| CiError::new("set GITHUB_REPOSITORY or pass --repo owner/name"))?;
     let github = super::http::HttpGitHub::new(
@@ -245,9 +247,14 @@ pub(super) fn run_budget(args: &BudgetArgs) -> Result<String, CiError> {
         super::token()?,
         super::http::DEFAULT_TIMEOUT,
     );
+    Ok((github, Repo::parse(&repository)?))
+}
+
+pub(super) fn run_budget(args: &BudgetArgs) -> Result<String, CiError> {
+    let (github, repo) = client(args.repo.as_deref())?;
     budget(
         &github,
-        &Repo::parse(&repository)?,
+        &repo,
         super::now_seconds(),
         args.budget_bytes,
         args.dry_run,
