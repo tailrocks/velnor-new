@@ -35,7 +35,7 @@ fn a_release_root_below_the_git_root_is_refused_whatever_it_publishes() {
             matches!(&error, Some(ReleaseError::NestedReleasePlzRoot { root }) if root == "tools"),
             "{extra:?}: {error:?}"
         );
-        let text = error.map(|e| e.to_string()).unwrap_or_default();
+        let text = error.map_or_default(|e| e.to_string());
         assert!(text.contains("tools"), "{text}");
     }
 }

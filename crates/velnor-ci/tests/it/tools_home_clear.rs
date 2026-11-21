@@ -68,6 +68,7 @@ fn go(node: &Node, verb: Verb, home: &Path) -> Outcome {
         seed_dir: Some(&store),
         home,
         owner: fs::metadata(home).map_or(0, |metadata| metadata.uid()),
+        replace: false,
     })
 }
 
