@@ -150,6 +150,23 @@ fn every_mbx_outcome_category_of_a_report_reaches_the_metrics() -> ResultTest {
 }
 
 #[test]
+fn a_session_with_only_routine_bypasses_reaches_the_metrics() -> ResultTest {
+    let repo = fixture("mbx-reports-routine-only")?;
+    let body = r#"{"version":5,"hits":0,"misses":0,"unconsulted":0,"bypasses":{"compiler-query":2,"standard-input":1}}"#;
+    cargo(&repo, "build", body, "compiled")?;
+    let metrics = report(&repo)?;
+    assert_eq!(metrics.mbx.sessions.len(), 1, "{metrics:?}");
+    assert_eq!(
+        metrics.mbx.sessions[0].bypasses,
+        BTreeMap::from([
+            ("compiler-query".to_owned(), 2),
+            ("standard-input".to_owned(), 1)
+        ])
+    );
+    Ok(())
+}
+
+#[test]
 fn a_session_without_extra_categories_keeps_its_metrics_bytes() -> ResultTest {
     let repo = fixture("mbx-reports-plain-session")?;
     cargo(&repo, "build", &report_json(5, 3, 1, 0), "compiled")?;
@@ -202,7 +219,16 @@ fn the_reader_maps_a_real_mbx_report_and_names_what_it_cannot_read() {
         }))
     );
     let probes = br#"{"version":5,"hits":0,"misses":0,"unconsulted":0,"bypasses":{"compiler-query":2,"standard-input":1}}"#;
-    assert_eq!(parse(probes), Ok(None));
+    assert_eq!(
+        parse(probes),
+        Ok(Some(MbxSession {
+            bypasses: BTreeMap::from([
+                ("compiler-query".to_owned(), 2),
+                ("standard-input".to_owned(), 1)
+            ]),
+            ..session(0, 0, 0)
+        }))
+    );
     let bypassed = br#"{"version":5,"hits":0,"misses":0,"unconsulted":0,"bypasses":{"compiler-query":1,"other":1}}"#;
     assert_eq!(
         parse(bypassed),
