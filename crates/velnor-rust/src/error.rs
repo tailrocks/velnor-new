@@ -67,6 +67,9 @@ pub enum Reason {
     UnknownTestSetupRoot(String),
     UnknownCheckConfigurationsRoot(String),
     UnknownRootTimeoutRoot(String),
+    GeneratorPackage {
+        found: usize,
+    },
     Hosting(crate::config_hosting::HostingError),
     DuplicateGroup(String),
     GroupRootTwice {

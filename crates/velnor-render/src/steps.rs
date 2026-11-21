@@ -23,7 +23,9 @@ use crate::gate::{
 };
 use crate::helper_steps::{inputs_step, restore_inputs_step, restored_targets_step};
 pub(crate) use crate::install_steps::install_helper;
-use crate::install_steps::{install_generator_step, install_mise, install_tools};
+use crate::install_steps::{
+    generator_check_step, install_generator_step, install_mise, install_tools,
+};
 use crate::permission_pairs;
 use crate::rules::{RenderedJob, RenderedStep, Value};
 use crate::save_gate::SaveGate;
@@ -355,7 +357,9 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
             run: Some(run.clone()),
             ..RenderedStep::default()
         },
-        StepKind::GeneratorCheck => crate::helper_steps::generator_check_step(),
+        StepKind::GeneratorCheck { source } => {
+            generator_check_step(source.as_ref().map(RepoPath::as_str))
+        }
         StepKind::InstallGenerator(release) => install_generator_step(release),
         StepKind::InstallHelper(release) => install_helper(release),
         StepKind::FailOnDraftRun => crate::draft_steps::fail_on_draft(),

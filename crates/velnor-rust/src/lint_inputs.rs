@@ -155,7 +155,7 @@ fn own_files(lint: &LintJob) -> impl Iterator<Item = &RepoPath> {
     let (config, probe) = match &lint.kind {
         LintKind::Jactionlint { config } => (config.as_ref(), None),
         LintKind::Alint { config, probe, .. } => (Some(config), probe.as_ref()),
-        LintKind::MiseTask { .. } | LintKind::GeneratedCheck => (None, None),
+        LintKind::MiseTask { .. } | LintKind::GeneratedCheck { .. } => (None, None),
     };
     config.into_iter().chain(probe)
 }
@@ -176,7 +176,7 @@ fn declared(lint: &LintJob, path: &RepoPath) -> bool {
 }
 
 fn reached(lint: &LintJob, path: &RepoPath) -> bool {
-    if lint.kind == LintKind::GeneratedCheck {
+    if matches!(lint.kind, LintKind::GeneratedCheck { .. }) {
         return !inert(path);
     }
     declared(lint, path)

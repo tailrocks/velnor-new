@@ -151,7 +151,9 @@ pub enum StepKind {
         before_build: bool,
         offline_after_private_fetch: bool,
     },
-    GeneratorCheck,
+    GeneratorCheck {
+        source: Option<RepoPath>,
+    },
     InstallGenerator(HelperRelease),
     InstallHelper(HelperRelease),
     FailWhenANeedFailed,

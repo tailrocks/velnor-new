@@ -22,7 +22,7 @@ fn one_command_steps_render_a_single_line_each() -> TestResult {
             roots: vec![(manifest, target)],
             cli: InputsCli::Batched,
         },
-        StepKind::GeneratorCheck,
+        StepKind::GeneratorCheck { source: None },
     ])?)
     .map_err(|found| format!("{found:?}"))?;
     let text = files.get(&WORKFLOW_PATH).ok_or("no workflow")?;

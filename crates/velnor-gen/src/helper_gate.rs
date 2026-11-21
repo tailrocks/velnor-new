@@ -85,7 +85,7 @@ fn require_generator_digests(
         .config
         .lint
         .iter()
-        .any(|lint| lint.kind == LintKind::GeneratedCheck);
+        .any(|lint| matches!(lint.kind, LintKind::GeneratedCheck { .. }));
     if wanted && release.generator_digests().is_none() {
         return Err(GenerateError::GeneratorNotLocked(release.version().clone()));
     }
