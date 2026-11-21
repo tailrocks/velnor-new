@@ -3,6 +3,7 @@
 
 use std::collections::BTreeSet;
 use std::error::Error;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::thread;
 
 use velnor_gen::expected_files;
@@ -136,13 +137,22 @@ fn sweep_release_gate(
 #[test]
 fn every_release_gate_renders_steps_that_name_their_own_job() -> TestResult {
     let patches = gate_patches()?;
+    let next = AtomicUsize::new(0);
+    let workers = thread::available_parallelism()
+        .map_or(1, usize::from)
+        .min(4);
     let results: Vec<Result<usize, String>> = thread::scope(|scope| {
-        let handles: Vec<_> = RELEASE_GATES
-            .iter()
-            .map(|(keys, config)| {
-                let patches = &patches;
-                scope.spawn(move || {
-                    sweep_release_gate(keys, config, patches).map_err(|error| error.to_string())
+        let handles: Vec<_> = (0..workers)
+            .map(|_| {
+                scope.spawn(|| {
+                    let mut refs = 0;
+                    while let Some((keys, config)) =
+                        RELEASE_GATES.get(next.fetch_add(1, Ordering::Relaxed))
+                    {
+                        refs += sweep_release_gate(keys, config, &patches)
+                            .map_err(|error| error.to_string())?;
+                    }
+                    Ok(refs)
                 })
             })
             .collect();
