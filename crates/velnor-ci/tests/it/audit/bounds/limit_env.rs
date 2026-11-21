@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::ffi::OsStr;
+use std::fs;
 use std::os::unix::ffi::OsStrExt;
+use std::path::Path;
 
 use super::super::{command, velnor_ci};
 use super::entries::{VARIABLE, audit_within, declared_tree};
@@ -40,5 +42,39 @@ fn every_audit_launcher_clears_an_inherited_entry_limit() {
                 .any(|(name, value)| name == VARIABLE && value.is_none()),
             "{launcher:?}"
         );
+    }
+    let mut direct = Vec::new();
+    direct_launch_sites(
+        &Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/it/audit"),
+        &mut direct,
+    );
+    assert_eq!(
+        direct,
+        Vec::<String>::new(),
+        "every audit launcher must come from the helpers in audit/mod.rs"
+    );
+}
+
+const DIRECT_SPAWN: &str = concat!("Command", "::new(");
+const BINARY: &str = concat!("CARGO_BIN_EXE_", "velnor-ci");
+const SHELL: &str = concat!("\"", "sh", "\"");
+
+// Fixture code embedded in string literals spawns other programs; only spawns
+// of the audited binary, or of the shell that wraps it, must go through a helper.
+fn direct_launch_sites(dir: &Path, found: &mut Vec<String>) {
+    for entry in fs::read_dir(dir).unwrap_or_else(|e| unreachable!("{e}")) {
+        let path = entry.unwrap_or_else(|e| unreachable!("{e}")).path();
+        if path.is_dir() {
+            direct_launch_sites(&path, found);
+        } else if path.extension().is_some_and(|ext| ext == "rs") && !path.ends_with("audit/mod.rs")
+        {
+            let text = fs::read_to_string(&path).unwrap_or_else(|e| unreachable!("{e}"));
+            for (index, line) in text.lines().enumerate() {
+                let spawns_audit = line.contains(BINARY) || line.contains(SHELL);
+                if line.contains(DIRECT_SPAWN) && spawns_audit {
+                    found.push(format!("{}:{}", path.display(), index + 1));
+                }
+            }
+        }
     }
 }
