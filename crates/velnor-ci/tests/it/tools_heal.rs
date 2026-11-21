@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs;
-use std::os::unix::fs::MetadataExt;
+use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -81,12 +81,35 @@ fn a_discard_lets_the_verified_tree_replace_the_poisoned_entry() {
 }
 
 #[test]
-fn a_replacement_that_cannot_remove_the_old_entry_fails_instead_of_healing() {
-    let (_repo, job, store) = poisoned_store("tools-heal-undeletable");
+fn a_replacement_heals_a_regular_file_left_at_the_entry() {
+    let (_repo, job, store) = poisoned_store("tools-heal-file-entry");
     let entry = store.join("tools").join(KEY);
     fs::remove_dir_all(&entry).unwrap_or_else(|e| unreachable!("{e}"));
     fs::write(&entry, "not a tree").unwrap_or_else(|e| unreachable!("{e}"));
+    let healed = save(&store, &job.home, true);
+    assert!(matches!(healed, Outcome::Healed { .. }), "{healed:?}");
+    assert_eq!(stored_rustc(&store), "rustc binary");
+    let leftovers: Vec<_> = fs::read_dir(store.join("tools"))
+        .unwrap_or_else(|e| unreachable!("{e}"))
+        .flatten()
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .collect();
+    assert_eq!(leftovers, [KEY], "no retired entry stays");
+    assert_eq!(save(&store, &job.home, false), Outcome::AlreadySaved);
+}
+
+#[test]
+fn a_replacement_that_cannot_remove_the_old_entry_fails_instead_of_healing() {
+    let (_repo, job, store) = poisoned_store("tools-heal-undeletable");
+    let bin = store
+        .join("tools")
+        .join(KEY)
+        .join(".rustup/toolchains/1.99.1-x86_64-unknown-linux-gnu/bin");
+    fs::set_permissions(&bin, fs::Permissions::from_mode(0o555))
+        .unwrap_or_else(|e| unreachable!("{e}"));
     let outcome = save(&store, &job.home, true);
+    fs::set_permissions(&bin, fs::Permissions::from_mode(0o755))
+        .unwrap_or_else(|e| unreachable!("{e}"));
     assert!(matches!(outcome, Outcome::Failed(_)), "{outcome:?}");
 }
 

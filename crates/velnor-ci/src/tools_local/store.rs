@@ -198,7 +198,7 @@ pub(super) fn save(inputs: &Inputs<'_>) -> Outcome {
             Outcome::Failed("the entry could not be published")
         };
     }
-    if replaced && fs::remove_dir_all(&retired).is_err() {
+    if replaced && remove_tree_or_file(&retired).is_err() {
         return Outcome::Failed("the replaced entry could not be removed");
     }
     prune(&tools, inputs.key);
@@ -206,6 +206,14 @@ pub(super) fn save(inputs: &Inputs<'_>) -> Outcome {
         Outcome::Healed { to: entry }
     } else {
         Outcome::Saved { to: entry }
+    }
+}
+
+fn remove_tree_or_file(path: &Path) -> std::io::Result<()> {
+    if fs::symlink_metadata(path)?.is_dir() {
+        fs::remove_dir_all(path)
+    } else {
+        fs::remove_file(path)
     }
 }
 
