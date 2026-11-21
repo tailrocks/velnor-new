@@ -2,12 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use serde::Deserialize;
-use velnor_model::{CheckConfigurations, RepoPath, RepoView, RustCiConfig, RustRoot};
+use velnor_model::{
+    CheckConfigurations, HelperRelease, RepoPath, RepoView, RustCiConfig, RustRoot,
+};
 
 use crate::config::{CONFIG_PATH, rule_matches};
 use crate::error::{DetectError, Reason};
 
 pub(crate) const CHECKS_HELPER: (u64, u64, u64) = (0, 1, 112);
+
+pub(crate) fn current(helper: Option<&HelperRelease>) -> bool {
+    helper.is_some_and(|helper| helper.version().at_least(CHECKS_HELPER))
+}
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]

@@ -6,7 +6,6 @@ use velnor_model::{
     WorkspaceGroup,
 };
 
-use crate::config_check_configurations::CHECKS_HELPER;
 use crate::lane::Lane;
 use crate::members::Member;
 use crate::plan::step;
@@ -134,7 +133,7 @@ fn with_checks(
     checks: bool,
     mut steps: Vec<Step>,
 ) -> Vec<Step> {
-    if !pinned_for_checks(facts) {
+    if !crate::config_check_configurations::current(facts.helper.as_ref()) {
         return match members.first() {
             Some(member) if !grouped => checked(
                 facts,
@@ -158,13 +157,6 @@ fn with_checks(
         steps = checked(facts, &member.root, &member.lane, steps, placement);
     }
     steps
-}
-
-fn pinned_for_checks(facts: &RepoFacts) -> bool {
-    facts
-        .helper
-        .as_ref()
-        .is_some_and(|helper| helper.version().at_least(CHECKS_HELPER))
 }
 
 #[derive(Clone, Copy)]
