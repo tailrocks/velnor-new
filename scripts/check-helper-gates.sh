@@ -42,7 +42,7 @@ fi
 if [ -z "$diff_file" ]; then
   diff_file=$(mktemp)
   trap 'rm -f "$diff_file" "$tree_file"' EXIT
-  git diff "$base...HEAD" -- $gate_dirs >"$diff_file"
+  git diff -U100000000 "$base...HEAD" -- $gate_dirs >"$diff_file"
   tree_file=$(mktemp)
   if [ "$scan_tree" = 1 ]; then
     git ls-files -- $(printf '%s/src ' $gate_dirs) | while IFS= read -r f; do
@@ -115,7 +115,7 @@ verify_correction() {
 scan() {
   local tree=$1 file=$2
   awk -v series="$series" -v patch="$patch" -v tree="$tree" -v lo="${base_version##*.}" '
-  BEGIN { lx_mode = "code"; sq = sprintf("%c", 39) }
+  BEGIN { lx_mode = "code"; sq = sprintf("%c", 39); lx_depth = 0; lit_s = 0 }
   function versions(line, out,    rest, n, v) {
     n = 0
     rest = line
@@ -134,30 +134,53 @@ scan() {
     for (k = 1; k <= nr; k++) if (rs[k] <= p && p < re[k]) return 1
     return 0
   }
+  function lit_addr(a, b) { nq++; qs[nq] = a; qe[nq] = b }
+  function inlit(p,    k) {
+    for (k = 1; k <= nq; k++) if (qs[k] <= p && p < qe[k]) return 1
+    return 0
+  }
+  function tuple_code(line,    s, off, st) {
+    off = 0; s = line
+    while (match(s, /\(0, ?1, ?[0-9]+\)/)) {
+      st = off + RSTART
+      if (!inrange(st) && !inlit(st)) return 1
+      off = st + RLENGTH - 1
+      s = substr(line, off + 1)
+    }
+    return 0
+  }
   function lex_line(s,    i, n, c, cs, pc, ppc, j, h, hs, k) {
     split("", rs)
     split("", re)
+    split("", qs)
+    split("", qe)
     nr = 0
+    nq = 0
     n = length(s)
     cs = (lx_mode == "block") ? 1 : 0
+    lit_s = (lx_mode == "str" || lx_mode == "raw") ? 1 : 0
     for (i = 1; i <= n; i++) {
       c = substr(s, i, 1)
       if (lx_mode == "block") {
-        if (c == "*" && substr(s, i + 1, 1) == "/") { i++; lx_mode = "code"; lex_addr(cs, i + 1); cs = 0 }
+        if (c == "/" && substr(s, i + 1, 1) == "*") { i++; lx_depth++; continue }
+        if (c == "*" && substr(s, i + 1, 1) == "/") {
+          i++
+          if (--lx_depth == 0) { lx_mode = "code"; lex_addr(cs, i + 1); cs = 0 }
+        }
         continue
       }
       if (lx_mode == "str") {
         if (c == "\\") i++
-        else if (c == "\"") lx_mode = "code"
+        else if (c == "\"") { lx_mode = "code"; lit_addr(lit_s, i + 1) }
         continue
       }
       if (lx_mode == "raw") {
-        if (c == "\"" && substr(s, i + 1, lx_h) == lx_hs) { i += lx_h; lx_mode = "code" }
+        if (c == "\"" && substr(s, i + 1, lx_h) == lx_hs) { i += lx_h; lx_mode = "code"; lit_addr(lit_s, i + 1) }
         continue
       }
       if (c == "/" && substr(s, i + 1, 1) == "/") { lex_addr(i, n + 1); break }
-      if (c == "/" && substr(s, i + 1, 1) == "*") { cs = i; lx_mode = "block"; i++; continue }
-      if (c == "\"") { lx_mode = "str"; continue }
+      if (c == "/" && substr(s, i + 1, 1) == "*") { cs = i; lx_mode = "block"; lx_depth = 1; i++; continue }
+      if (c == "\"") { lx_mode = "str"; lit_s = i; continue }
       if (c == sq) {
         if (substr(s, i + 1, 1) == "\\") { k = index(substr(s, i + 3), sq); if (k > 0) i += 2 + k }
         else if (substr(s, i + 2, 1) == sq) i += 2
@@ -166,24 +189,26 @@ scan() {
       if (c == "r") {
         pc = (i > 1) ? substr(s, i - 1, 1) : ""
         ppc = (i > 2) ? substr(s, i - 2, 1) : ""
-        if (!isword(pc) || (pc == "b" && !isword(ppc))) {
+        if (!isword(pc) || ((pc == "b" || pc == "c") && !isword(ppc))) {
           j = i + 1
           h = 0
           while (substr(s, j, 1) == "#") { h++; j++ }
           if (substr(s, j, 1) == "\"") {
             hs = ""
             for (k = 0; k < h; k++) hs = hs "#"
-            lx_mode = "raw"; lx_h = h; lx_hs = hs
+            lx_mode = "raw"; lx_h = h; lx_hs = hs; lit_s = i
             i = j
           }
         }
       }
     }
     if (lx_mode == "block" && cs) lex_addr(cs, n + 1)
+    if ((lx_mode == "str" || lx_mode == "raw") && lit_s) lit_addr(lit_s, n + 1)
   }
   function analyze(line,    s, off, p, m, st) {
     c_mv = 0; c_mn = ""; c_mc = ""; c_mention = 0
     lex_line(line)
+    c_tuple = tuple_code(line)
     off = 0; s = line
     while (!c_mv && match(s, /helper-gate: first in (tools|rust-ci)-v0\.1\.[0-9]+ via [^ ]+/)) {
       st = off + RSTART
@@ -237,7 +262,7 @@ scan() {
     markN_now = c_mv ? c_mn : (p_mv ? p_mn : "")
     markC_now = c_mv ? c_mc : (p_mv ? p_mc : "")
     if (has && versions(stripped, probe) == 0) next
-    if (tolower(stripped) !~ /helper|gate|minimum|at_least|pin/ && stripped !~ /(const|static) [^=]*= *\(0, ?1, ?[0-9]+\)/) next
+    if (tolower(stripped) !~ /helper|gate|minimum|at_least|pin/ && !c_tuple) next
     added[++count] = file SUBSEP stripped
     markN[count] = markN_now
     markC[count] = markC_now

@@ -167,6 +167,16 @@ jobs:
             echo "the check let a lowered head version hide a released gate" >&2
             exit 1
           fi
+          for f in gate-string-marker-cr gate-tuple-unmarked; do
+            if bash scripts/check-helper-gates.sh --diff "$fixtures/$f.diff" --current 0.1.110; then
+              echo "the check accepted $f.diff" >&2
+              exit 1
+            fi
+          done
+          bash scripts/check-helper-gates.sh --diff "$fixtures/gate-marker-after-cstring.diff" --current 0.1.110
+          bash scripts/check-helper-gates.sh --diff "$fixtures/gate-marker-nested-comment.diff" --current 0.1.110
+          bash scripts/check-helper-gates.sh --diff "$fixtures/gate-const-in-string.diff" --current 0.1.110
+          bash scripts/test-helper-gates-history.sh
       - name: Check the added gates against the base
         env:
           BASE_REF: ${{ github.base_ref }}
