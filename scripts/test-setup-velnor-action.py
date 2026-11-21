@@ -1020,6 +1020,13 @@ class SetupVelnorInstallTests(unittest.TestCase):
             },
         )
         self.assertTrue((self.root / "race-mark").exists(), result.output)
+        self.assertEqual(result.returncode, 0, result.output)
+        self.assertIn(
+            f"::warning title=setup-velnor::could not remove the tool-cache copy of {ARCHIVE} for velnor-ci 0.1.79",
+            result.output,
+        )
+        self.assertEqual(self.installed_binary().read_bytes(), PAYLOAD)
+        self.assertEqual(cached.read_bytes(), self.archive, "the store entry was not refreshed with the verified archive")
         nested = [path for path in cached.parent.rglob("*") if path.is_file() and path.parent != cached.parent]
         self.assertEqual(nested, [], "the evicted archive was moved inside the directory planted at the quarantine path")
 
