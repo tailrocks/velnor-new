@@ -59,13 +59,30 @@ impl Drop for OpenFileLimit {
     }
 }
 
+const CONFINE: &str = "limit=$1; shift; ulimit -Sn \"$limit\" && exec \"$@\"";
+
 impl OpenFileLimit {
-    pub(in crate::io::audit) fn for_child<T>(&self, child: impl FnOnce() -> T) -> T {
-        let raised = open_file_limit();
-        let _ = setrlimit(Resource::RLIMIT_NOFILE, self.soft, self.hard);
-        let output = child();
-        let _ = setrlimit(Resource::RLIMIT_NOFILE, raised, self.hard);
-        output
+    fn confine(&self, build: &Command) -> Command {
+        let limit = if self.soft == RLIM_INFINITY {
+            "unlimited".to_owned()
+        } else {
+            self.soft.to_string()
+        };
+        let mut confined = Command::new("sh");
+        confined
+            .args(["-c", CONFINE, "velnor-build", &limit])
+            .arg(build.get_program())
+            .args(build.get_args());
+        if let Some(directory) = build.get_current_dir() {
+            confined.current_dir(directory);
+        }
+        for (name, value) in build.get_envs() {
+            match value {
+                Some(value) => confined.env(name, value),
+                None => confined.env_remove(name),
+            };
+        }
+        confined
     }
 }
 
@@ -74,7 +91,7 @@ pub(in crate::io::audit) fn run_build(
     build: &mut Command,
 ) -> Result<ExitStatus, CiError> {
     let status = match limit {
-        Some(limit) => limit.for_child(|| build.status()),
+        Some(limit) => limit.confine(build).status(),
         None => build.status(),
     };
     status.map_err(|e| CiError::new(format!("cannot run build command: {e}")))
@@ -91,19 +108,44 @@ pub(super) fn descriptor_shortage(error: &io::Error) -> Option<i32> {
 }
 
 pub(super) fn shortage_message(errno: i32, depth: usize) -> String {
+    let place = if depth == 0 {
+        "at the scan root".to_owned()
+    } else {
+        format!("{depth} levels deep")
+    };
     if errno == libc::ENFILE {
         return format!(
-            "the system-wide open-file table is full while scanning {depth} levels deep; free descriptors on this host or retry (raising the per-process open-file limit does not help)"
+            "the system-wide open-file table is full while scanning {place}; free descriptors on this host or retry (raising the per-process open-file limit does not help)"
         );
     }
+    let tree = if depth == 0 {
+        "the scan root".to_owned()
+    } else {
+        format!("directory tree deeper than {depth} levels with pending siblings")
+    };
     format!(
-        "directory tree deeper than {depth} levels with pending siblings exceeds the open-file limit ({}); raise the open-file limit",
+        "{tree} exceeds the open-file limit ({}); raise the open-file limit",
+        open_file_limit()
+    )
+}
+
+pub(super) fn comparison_message(errno: i32) -> String {
+    if errno == libc::ENFILE {
+        return "the system-wide open-file table is full while comparing a recorded inventory; free descriptors on this host or retry (raising the per-process open-file limit does not help)".to_owned();
+    }
+    format!(
+        "the open-file limit ({}) was exhausted while comparing a recorded inventory; raise the open-file limit",
         open_file_limit()
     )
 }
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+
+    use nix::sys::stat::Mode;
+    use nix::unistd::mkfifo;
+
     use super::*;
 
     const LOW: u64 = 256;
@@ -128,14 +170,42 @@ mod tests {
     }
 
     #[test]
-    fn a_child_sees_the_original_limit_and_the_raise_returns_afterwards() {
+    fn a_build_child_gets_the_original_limit_while_the_parent_keeps_the_raised_one() {
         let (soft, _) = lowered();
         let Some(raised) = raise_open_file_limit() else {
             unreachable!("the limit can be read")
         };
         let during = open_file_limit();
-        let inside = raised.for_child(open_file_limit);
-        assert_eq!((inside, open_file_limit()), (soft, during));
+        assert!(during > soft, "the limit was not raised");
+        let scratch =
+            std::env::temp_dir().join(format!("velnor-child-limit-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&scratch);
+        fs::create_dir_all(&scratch).unwrap_or_else(|e| unreachable!("{e}"));
+        let (seen, up, go) = (scratch.join("seen"), scratch.join("up"), scratch.join("go"));
+        for fifo in [&up, &go] {
+            mkfifo(fifo, Mode::S_IRWXU).unwrap_or_else(|e| unreachable!("{e}"));
+        }
+        let mut build = Command::new("sh");
+        build
+            .arg("-c")
+            .arg("ulimit -Sn >\"$0\"; echo up >\"$1\"; read line <\"$2\" || :")
+            .args([&seen, &up, &go]);
+        let (parent, status) = std::thread::scope(|scope| {
+            let child = scope.spawn(|| run_build(Some(&raised), &mut build));
+            fs::read_to_string(&up).unwrap_or_else(|e| unreachable!("{e}"));
+            let parent = open_file_limit();
+            drop(fs::OpenOptions::new().write(true).open(&go));
+            (parent, child.join())
+        });
+        let child_limit = fs::read_to_string(&seen).unwrap_or_else(|e| unreachable!("{e}"));
+        fs::remove_dir_all(&scratch).unwrap_or_else(|e| unreachable!("{e}"));
+        assert_eq!(
+            parent, during,
+            "the parent's limit changed while the child ran"
+        );
+        assert!(matches!(status, Ok(Ok(status)) if status.success()));
+        assert_eq!(child_limit.trim(), soft.to_string());
+        assert_eq!(open_file_limit(), during);
     }
 
     #[test]

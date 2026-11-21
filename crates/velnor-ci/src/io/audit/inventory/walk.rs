@@ -8,7 +8,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use super::super::options::{MAX_ENTRIES_CEILING, MAX_ENTRIES_VARIABLE};
-use super::descriptors::{descriptor_shortage, shortage_message};
+use super::descriptors::{comparison_message, descriptor_shortage, shortage_message};
 use super::handle::{self, Climb, Current, Opened, Origin, Stamp};
 use super::held::Held;
 use super::resolve::Reach;
@@ -40,9 +40,17 @@ impl Budget {
         self.descriptors
     }
 
-    pub(in crate::io::audit) fn warn_descriptors_exhausted(&self, error: &io::Error) {
+    pub(in crate::io::audit) fn descriptor_warning(&self, error: &io::Error) -> Option<String> {
         if self.descriptors {
-            eprintln!("velnor-ci: WARNING: {error}");
+            return Some(format!("velnor-ci: WARNING: {error}"));
+        }
+        let errno = descriptor_shortage(error)?;
+        Some(format!("velnor-ci: WARNING: {}", comparison_message(errno)))
+    }
+
+    pub(in crate::io::audit) fn warn_descriptors_exhausted(&self, error: &io::Error) {
+        if let Some(warning) = self.descriptor_warning(error) {
+            eprintln!("{warning}");
         }
     }
 
@@ -83,6 +91,7 @@ pub(super) const HELD_HANDLES: usize = 48;
 pub(super) const UNTRACKED_LISTING: usize = 1;
 
 pub(super) struct Probe<'a> {
+    pub(super) resolve: &'a dyn Fn(&Path) -> io::Result<PathBuf>,
     pub(super) before_open: &'a dyn Fn(&Path) -> io::Result<()>,
     pub(super) after_open: &'a dyn Fn(&Path),
     pub(super) listed: &'a dyn Fn(&OsStr),
@@ -94,6 +103,7 @@ pub(super) struct Probe<'a> {
 impl Default for Probe<'_> {
     fn default() -> Self {
         Self {
+            resolve: &|root| fs::canonicalize(root),
             before_open: &|_| Ok(()),
             after_open: &|_| {},
             listed: &|_| {},
@@ -116,15 +126,16 @@ pub(super) fn scan_with(
     budget: &mut Budget,
     probe: &Probe<'_>,
 ) -> io::Result<Scan> {
-    let root = fs::canonicalize(root)?;
     let mut depth = 0;
-    walk(&root, targets, budget, probe, &mut depth).map_err(|error| {
-        let Some(errno) = descriptor_shortage(&error) else {
-            return error;
-        };
-        budget.descriptors = true;
-        io::Error::other(shortage_message(errno, depth))
-    })
+    (probe.resolve)(root)
+        .and_then(|root| walk(&root, targets, budget, probe, &mut depth))
+        .map_err(|error| {
+            let Some(errno) = descriptor_shortage(&error) else {
+                return error;
+            };
+            budget.descriptors = true;
+            io::Error::other(shortage_message(errno, depth))
+        })
 }
 
 fn walk(

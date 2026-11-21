@@ -32,19 +32,70 @@ fn assert_the_raise_can_run() {
     );
 }
 
+const CANDIDATES: usize = 512;
+
+fn lists_before(directory: &Path, name: &str, spine: &str) -> bool {
+    let mut seen_spine = false;
+    for entry in fs::read_dir(directory).unwrap_or_else(|e| unreachable!("{e}")) {
+        let listed = entry.unwrap_or_else(|e| unreachable!("{e}")).file_name();
+        if listed == spine {
+            seen_spine = true;
+        } else if listed == name {
+            return !seen_spine;
+        }
+    }
+    false
+}
+
+fn spine_listed_last(directory: &Path) -> PathBuf {
+    let spine = directory.join("z");
+    fs::create_dir_all(&spine).unwrap_or_else(|e| unreachable!("{e}"));
+    let mut kept = 0;
+    for candidate in 0..CANDIDATES {
+        if kept == SIBLINGS {
+            break;
+        }
+        let name = format!("a{candidate}");
+        let sibling = directory.join(&name);
+        fs::create_dir(&sibling).unwrap_or_else(|e| unreachable!("{e}"));
+        if lists_before(directory, &name, "z") {
+            kept += 1;
+        } else {
+            fs::remove_dir(&sibling).unwrap_or_else(|e| unreachable!("{e}"));
+        }
+    }
+    assert_eq!(
+        kept,
+        SIBLINGS,
+        "{} lists too few siblings before the deep one",
+        directory.display()
+    );
+    spine
+}
+
 fn deep_repository() -> Repo {
     let repo = workspace_below_the_root();
     own_units(&repo, "rust/target/debug", &[]);
     unit(&repo, OUTPUT, "cargo:rerun-if-changed=../..\n");
     let mut directory = repo.root().join("deep");
-    for _ in 0..DEPTH {
-        for sibling in 0..SIBLINGS {
-            fs::create_dir_all(directory.join(format!("a{sibling}")))
-                .unwrap_or_else(|e| unreachable!("{e}"));
-        }
-        directory = directory.join("z");
-    }
     fs::create_dir_all(&directory).unwrap_or_else(|e| unreachable!("{e}"));
+    let mut levels = Vec::new();
+    for _ in 0..DEPTH {
+        levels.push(directory.clone());
+        directory = spine_listed_last(&directory);
+    }
+    for level in &levels {
+        let last = fs::read_dir(level)
+            .unwrap_or_else(|e| unreachable!("{e}"))
+            .last()
+            .map(|entry| entry.unwrap_or_else(|e| unreachable!("{e}")).file_name());
+        assert_eq!(
+            last.as_deref(),
+            Some(std::ffi::OsStr::new("z")),
+            "{} no longer lists the deep directory last",
+            level.display()
+        );
+    }
     build(&repo, OUTPUT, None);
     repo
 }

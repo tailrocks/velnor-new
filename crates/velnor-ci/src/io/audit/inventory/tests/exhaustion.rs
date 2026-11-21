@@ -44,7 +44,7 @@ fn nested(name: &str) -> PathBuf {
 
 #[test]
 fn a_per_process_descriptor_shortage_names_the_depth_and_asks_to_raise_the_limit() {
-    let root = nested("emfile");
+    let root = nested("per_process");
     let (error, budget) = failing_at(&root, "c", libc::EMFILE);
     let message = error.to_string();
     assert!(
@@ -58,7 +58,7 @@ fn a_per_process_descriptor_shortage_names_the_depth_and_asks_to_raise_the_limit
 
 #[test]
 fn a_system_wide_descriptor_shortage_is_not_blamed_on_the_per_process_limit() {
-    let root = nested("enfile");
+    let root = nested("system_wide");
     let (error, budget) = failing_at(&root, "c", libc::ENFILE);
     let message = error.to_string();
     assert!(message.contains("system-wide"), "{message}");
@@ -89,4 +89,51 @@ fn depth_follows_a_directory_link_that_leaves_the_scanned_root() {
     let (error, _) = failing_at(&root, "c", libc::EMFILE);
     let message = error.to_string();
     assert!(message.contains("deeper than 3 levels"), "{message}");
+}
+
+#[test]
+fn a_descriptor_shortage_while_resolving_the_root_is_classified_like_one_while_listing() {
+    for (errno, wording) in [
+        (libc::EMFILE, "raise the open-file limit"),
+        (libc::ENFILE, "system-wide"),
+    ] {
+        let root = nested("resolving");
+        let mut budget = Budget::new(usize::MAX);
+        let error = scan_with(
+            &root,
+            &BTreeSet::new(),
+            &mut budget,
+            &Probe {
+                resolve: &|_| Err(io::Error::from_raw_os_error(errno)),
+                ..Probe::default()
+            },
+        )
+        .err()
+        .unwrap_or_else(|| unreachable!("resolving the root must fail"));
+        let message = error.to_string();
+        assert!(message.contains(wording), "{message}");
+        assert!(budget.descriptors_exhausted());
+    }
+}
+
+#[test]
+fn a_descriptor_shortage_while_matching_a_recorded_inventory_is_warned_about() {
+    let budget = Budget::new(usize::MAX);
+    let per_process = budget
+        .descriptor_warning(&io::Error::from_raw_os_error(libc::EMFILE))
+        .unwrap_or_else(|| unreachable!("an EMFILE while matching must warn"));
+    assert!(
+        per_process.starts_with("velnor-ci: WARNING: ")
+            && per_process.contains("raise the open-file limit"),
+        "{per_process}"
+    );
+    let system_wide = budget
+        .descriptor_warning(&io::Error::from_raw_os_error(libc::ENFILE))
+        .unwrap_or_else(|| unreachable!("an ENFILE while matching must warn"));
+    assert!(system_wide.contains("system-wide"), "{system_wide}");
+    assert!(
+        budget
+            .descriptor_warning(&io::Error::from_raw_os_error(libc::EACCES))
+            .is_none()
+    );
 }
