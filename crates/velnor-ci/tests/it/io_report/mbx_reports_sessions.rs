@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::mbx_reports::{SWITCH, cargo, cargo_with, report, report_json, session};
+use super::mbx_reports::{SWITCH, Socket, cargo, cargo_with, report, report_json, session};
 use super::{Repo, ResultTest, fixture};
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
@@ -138,13 +138,47 @@ fn a_session_inside_an_enclosing_mbx_session_gets_no_report_path() -> ResultTest
         "compiled",
         None,
         true,
-        true,
+        Socket::Live,
     )?;
     assert!(!repo.root().join("velnor-mbx-reports").exists());
     let metrics = report(&repo)?;
     assert!(metrics.mbx.sessions.is_empty(), "{metrics:?}");
     assert_eq!(metrics.mbx.unparsed, 0);
     assert!(metrics.verification_errors.is_empty(), "{metrics:?}");
+    Ok(())
+}
+
+#[test]
+fn a_stale_socket_left_by_a_dead_listener_does_not_hide_the_session() -> ResultTest {
+    let repo = fixture("mbx-reports-stale-socket")?;
+    cargo_with(
+        &repo,
+        "build",
+        &report_json(5, 2, 0, 0),
+        "compiled",
+        None,
+        true,
+        Socket::Stale,
+    )?;
+    let metrics = report(&repo)?;
+    assert_eq!(metrics.mbx.sessions, [session(2, 0, 0)], "{metrics:?}");
+    assert_eq!(metrics.mbx.unparsed, 0, "{metrics:?}");
+    assert!(metrics.verification_errors.is_empty(), "{metrics:?}");
+    Ok(())
+}
+
+#[test]
+fn a_listener_with_a_full_queue_does_not_stall_the_session() -> ResultTest {
+    let repo = fixture("mbx-reports-busy-socket")?;
+    cargo_with(
+        &repo,
+        "build",
+        &report_json(5, 1, 0, 0),
+        "compiled",
+        None,
+        true,
+        Socket::Busy,
+    )?;
     Ok(())
 }
 

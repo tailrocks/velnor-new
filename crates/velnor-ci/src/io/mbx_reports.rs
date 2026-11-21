@@ -3,10 +3,13 @@
 
 use crate::mbx_report::{DIRECTORY, SWITCH, VARIABLE, parse, reports_session};
 use crate::waste_evidence::MbxSession;
+use nix::errno::Errno;
+use nix::sys::socket::{AddressFamily, SockFlag, SockType, UnixAddr, connect, socket};
 use std::collections::BTreeMap;
 use std::ffi::OsStr;
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
+use std::os::fd::AsRawFd;
 use std::os::unix::fs::FileTypeExt;
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
@@ -35,17 +38,41 @@ fn inside_session(socket: Option<&OsStr>) -> bool {
 
 fn is_live_socket(path: &Path) -> bool {
     fs::symlink_metadata(path).is_ok_and(|metadata| metadata.file_type().is_socket())
-        && UnixStream::connect(path).is_ok()
+        && accepts_without_blocking(path)
+}
+
+fn accepts_without_blocking(path: &Path) -> bool {
+    let Ok(address) = UnixAddr::new(path) else {
+        return false;
+    };
+    let Ok(endpoint) = socket(
+        AddressFamily::Unix,
+        SockType::Stream,
+        SockFlag::empty(),
+        None,
+    ) else {
+        return false;
+    };
+    let endpoint = UnixStream::from(endpoint);
+    if endpoint.set_nonblocking(true).is_err() {
+        return false;
+    }
+    matches!(
+        connect(endpoint.as_raw_fd(), &address),
+        Ok(()) | Err(Errno::EAGAIN | Errno::EINPROGRESS)
+    )
 }
 
 pub(crate) fn assign(command: &mut Command, argv: &[String]) {
     command.env_remove(VARIABLE);
-    if !enabled()
-        || !reports_session(argv)
-        || inside_session(std::env::var_os("MBX_SOCKET").as_deref())
-    {
+    if !enabled() || !reports_session(argv) {
         return;
     }
+    let socket = std::env::var_os("MBX_SOCKET");
+    if inside_session(socket.as_deref()) {
+        return;
+    }
+    command.env_remove("MBX_SOCKET");
     let Some(temp) = std::env::var_os("RUNNER_TEMP").filter(|temp| !temp.is_empty()) else {
         return;
     };

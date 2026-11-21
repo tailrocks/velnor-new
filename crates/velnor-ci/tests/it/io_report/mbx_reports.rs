@@ -2,15 +2,31 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{Repo, ResultTest, fixture, read};
+use nix::sys::socket::{AddressFamily, SockFlag, SockType, UnixAddr, connect, socket};
 use std::fs;
+use std::os::fd::AsRawFd;
 use std::os::unix::fs::PermissionsExt;
-use std::process::Command;
+use std::os::unix::net::{UnixListener, UnixStream};
+use std::path::Path;
+use std::process::{Command, Output, Stdio};
+use std::thread;
+use std::time::{Duration, Instant};
 use velnor_ci::mbx_report::{parse, reports_session};
 use velnor_ci::report::LaneMetrics;
 use velnor_ci::waste_evidence::MbxSession;
 
 pub(super) const SWITCH: &str = "VELNOR_MBX_REPORTS";
-const FAKE_CARGO: &str = "#!/bin/sh\nprintf '%s\\n' \"$FAKE_MBX_STDERR\" >&2\nif [ -n \"$MBX_STATS_REPORT\" ] && [ -n \"$FAKE_MBX_REPORT\" ]; then printf '%s' \"$FAKE_MBX_REPORT\" > \"$MBX_STATS_REPORT\"; fi\n";
+const FAKE_CARGO: &str = "#!/bin/sh\nprintf '%s\\n' \"$FAKE_MBX_STDERR\" >&2\nif [ -n \"$MBX_STATS_REPORT\" ] && [ -n \"$FAKE_MBX_REPORT\" ] && [ -z \"$MBX_SOCKET\" ]; then printf '%s' \"$FAKE_MBX_REPORT\" > \"$MBX_STATS_REPORT\"; fi\n";
+const COMMAND_LIMIT: Duration = Duration::from_secs(60);
+const BACKLOG_LIMIT: usize = 1 << 12;
+
+#[derive(Clone, Copy)]
+pub(super) enum Socket {
+    Absent,
+    Live,
+    Stale,
+    Busy,
+}
 
 pub(super) fn report_json(version: u64, hits: u64, misses: u64, unconsulted: u64) -> String {
     format!(
@@ -20,7 +36,42 @@ pub(super) fn report_json(version: u64, hits: u64, misses: u64, unconsulted: u64
 }
 
 pub(super) fn cargo(repo: &Repo, subcommand: &str, report: &str, stderr: &str) -> ResultTest {
-    cargo_with(repo, subcommand, report, stderr, None, true, false)
+    cargo_with(repo, subcommand, report, stderr, None, true, Socket::Absent)
+}
+
+fn fill_backlog(path: &Path) -> Result<Vec<UnixStream>, Box<dyn std::error::Error>> {
+    let address = UnixAddr::new(path)?;
+    let mut clients = Vec::new();
+    while clients.len() < BACKLOG_LIMIT {
+        let client = UnixStream::from(socket(
+            AddressFamily::Unix,
+            SockType::Stream,
+            SockFlag::empty(),
+            None,
+        )?);
+        client.set_nonblocking(true)?;
+        if connect(client.as_raw_fd(), &address).is_err() {
+            break;
+        }
+        clients.push(client);
+    }
+    Ok(clients)
+}
+
+fn run_bounded(command: &mut Command) -> Result<Output, Box<dyn std::error::Error>> {
+    let mut child = command
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
+    let deadline = Instant::now() + COMMAND_LIMIT;
+    while child.try_wait()?.is_none() {
+        if Instant::now() >= deadline {
+            child.kill()?;
+            return Err("velnor-ci did not finish within the limit".into());
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+    Ok(child.wait_with_output()?)
 }
 
 pub(super) fn cargo_with(
@@ -30,7 +81,7 @@ pub(super) fn cargo_with(
     stderr: &str,
     inherited: Option<&std::path::Path>,
     enabled: bool,
-    inside_session: bool,
+    socket: Socket,
 ) -> ResultTest {
     let bin = repo.root().join("fake-bin");
     let cargo = bin.join("cargo");
@@ -52,14 +103,26 @@ pub(super) fn cargo_with(
     if let Some(path) = inherited {
         command.env("MBX_STATS_REPORT", path);
     }
-    let socket = repo.root().join("cache-agent.sock");
-    let _listener = if inside_session {
-        command.env("MBX_SOCKET", &socket);
-        Some(std::os::unix::net::UnixListener::bind(&socket)?)
-    } else {
-        None
+    let path = repo.root().join("cache-agent.sock");
+    let (_listener, _clients) = match socket {
+        Socket::Absent => (None, Vec::new()),
+        Socket::Live => {
+            command.env("MBX_SOCKET", &path);
+            (Some(UnixListener::bind(&path)?), Vec::new())
+        }
+        Socket::Stale => {
+            drop(UnixListener::bind(&path)?);
+            command.env("MBX_SOCKET", &path);
+            (None, Vec::new())
+        }
+        Socket::Busy => {
+            let listener = UnixListener::bind(&path)?;
+            let clients = fill_backlog(&path)?;
+            command.env("MBX_SOCKET", &path);
+            (Some(listener), clients)
+        }
     };
-    let output = command.output()?;
+    let output = run_bounded(&mut command)?;
     assert!(output.status.success(), "{output:?}");
     Ok(())
 }
@@ -142,7 +205,7 @@ fn a_command_that_runs_tests_gets_no_report_path_and_counts_from_its_summary() -
         line,
         Some(&inherited),
         true,
-        false,
+        Socket::Absent,
     )?;
     assert!(!inherited.exists());
     let metrics = report(&repo)?;
@@ -323,7 +386,7 @@ fn with_the_switch_off_an_inherited_report_path_never_reaches_the_child() -> Res
         "compiled",
         Some(&inherited),
         false,
-        false,
+        Socket::Absent,
     )?;
     assert!(!inherited.exists());
     Ok(())
