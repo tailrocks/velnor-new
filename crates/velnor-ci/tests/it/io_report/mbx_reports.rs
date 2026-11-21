@@ -372,3 +372,21 @@ fn an_inputs_build_wrapper_leaves_no_orphaned_report_marker() -> ResultTest {
     assert!(metrics.verification_errors.is_empty(), "{metrics:?}");
     Ok(())
 }
+
+#[test]
+fn a_non_numeric_bypass_count_is_not_understood_instead_of_zero() -> ResultTest {
+    let repo = fixture("mbx-reports-text-bypass-count")?;
+    let bad =
+        r#"{"version":5,"hits":1,"misses":0,"unconsulted":0,"bypasses":{"cc-missing-output":"4"}}"#;
+    cargo(&repo, "build", bad, "")?;
+    let metrics = report(&repo)?;
+    assert!(metrics.mbx.sessions.is_empty(), "{metrics:?}");
+    assert_eq!(metrics.mbx.unparsed, 1, "{metrics:?}");
+    assert!(
+        velnor_ci::report::check(std::slice::from_ref(&metrics)).is_err_and(|error| error
+            .to_string()
+            .contains("MBX stats report not understood")),
+        "{metrics:?}"
+    );
+    Ok(())
+}

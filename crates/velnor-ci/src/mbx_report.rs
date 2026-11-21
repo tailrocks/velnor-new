@@ -4,6 +4,7 @@
 use crate::waste_evidence::{MbxCompilerWork, MbxSession};
 use serde::Deserialize;
 use serde_json::{Map, Value};
+use std::collections::BTreeMap;
 use std::fs;
 use std::os::unix::fs::FileTypeExt;
 use std::path::Path;
@@ -29,7 +30,7 @@ struct Counts {
     #[serde(default)]
     verifications: u64,
     #[serde(default)]
-    bypasses: Map<String, Value>,
+    bypasses: BTreeMap<String, u64>,
     #[serde(default)]
     compiler: Map<String, Value>,
 }
@@ -136,7 +137,7 @@ pub fn parse(report: &[u8]) -> Result<Option<MbxSession>, String> {
     let mut bypassed = 0_u64;
     for (reason, count) in &counts.bypasses {
         if !ROUTINE_PROBES.contains(&reason.as_str()) {
-            bypassed = bypassed.saturating_add(count.as_u64().unwrap_or(0));
+            bypassed = bypassed.saturating_add(*count);
         }
     }
     let looked_at = counts.hits > 0 || counts.misses > 0 || counts.unconsulted > 0;
@@ -153,11 +154,7 @@ pub fn parse(report: &[u8]) -> Result<Option<MbxSession>, String> {
         not_looked_up: counts.unconsulted,
         bypassed,
         verifications: Some(counts.verifications).filter(|count| *count > 0),
-        bypasses: counts
-            .bypasses
-            .iter()
-            .filter_map(|(reason, count)| Some((reason.clone(), count.as_u64()?)))
-            .collect(),
+        bypasses: counts.bypasses,
         compiler: counts
             .compiler
             .into_iter()

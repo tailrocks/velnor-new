@@ -67,13 +67,29 @@ pub fn seed_truncated(runner_temp: &Path) -> bool {
     runner_temp.join(SEED_TRUNCATED).is_file()
 }
 
+const OBJECT_CACHE_LABEL: &str = "object cache:";
+
 fn cache_text(line: &str) -> Option<(bool, &str)> {
     let text = line.split_once("mbx[cache]: ")?.1;
-    Some(match text.strip_prefix("object cache:") {
+    Some(match text.strip_prefix(OBJECT_CACHE_LABEL) {
         Some(rest) => (true, rest.trim_start()),
-        None if matches!(text.trim_end(), "object" | "object cache") => (true, ""),
+        // Any nonempty prefix of the label is a label cut short, not an unrelated detail line.
+        None if !text.trim_end().is_empty() && OBJECT_CACHE_LABEL.starts_with(text.trim_end()) => {
+            (true, "")
+        }
         None => (false, text),
     })
+}
+
+/// The transfer statistics after the `;` start with `<size> <unit> downloaded`, as every complete summary does.
+fn has_transfer_suffix(tail: &str) -> bool {
+    let clause = tail.split(',').next().unwrap_or_default();
+    matches!(
+        clause.split_whitespace().collect::<Vec<_>>().as_slice(),
+        [size, unit, "downloaded"]
+            if size.starts_with(|character: char| character.is_ascii_digit())
+                && unit.chars().all(|character| character.is_ascii_alphabetic())
+    )
 }
 
 fn looks_like_lookup_summary(text: &str) -> bool {
@@ -86,7 +102,10 @@ fn looks_like_lookup_summary(text: &str) -> bool {
 }
 
 fn parse_lookup_summary(summary: &str) -> Option<MbxSession> {
-    let (counts, _) = summary.split_once(';')?;
+    let (counts, tail) = summary.split_once(';')?;
+    if !has_transfer_suffix(tail) {
+        return None;
+    }
     let mut session = MbxSession::default();
     let mut seen: Vec<&str> = Vec::new();
     for clause in counts.split(',') {

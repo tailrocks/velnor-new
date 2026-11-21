@@ -182,11 +182,11 @@ fn a_session_without_extra_categories_keeps_its_metrics_bytes() -> ResultTest {
 
 #[test]
 fn a_newer_report_with_unknown_fields_and_the_older_bypasses_shape_is_still_read() {
-    let newer = br#"{"version":5,"hits":1,"misses":0,"unconsulted":0,"added_later":{"a":1},"bypasses":{"compiler-query":"2","unsupported-flag":{"count":5},"other":1},"compiler":{"miss":{"invocations":1,"duration_ns":9,"added_later":true},"future":"text"}}"#;
+    let newer = br#"{"version":5,"hits":1,"misses":0,"unconsulted":0,"added_later":{"a":1},"bypasses":{"compiler-query":2,"other":1},"compiler":{"miss":{"invocations":1,"duration_ns":9,"added_later":true},"future":"text"}}"#;
     assert_eq!(
         parse(newer),
         Ok(Some(MbxSession {
-            bypasses: BTreeMap::from([("other".to_owned(), 1)]),
+            bypasses: BTreeMap::from([("compiler-query".to_owned(), 2), ("other".to_owned(), 1)]),
             bypassed: 1,
             compiler: BTreeMap::from([(
                 "miss".to_owned(),
@@ -197,6 +197,16 @@ fn a_newer_report_with_unknown_fields_and_the_older_bypasses_shape_is_still_read
             )]),
             ..session(1, 0, 0)
         }))
+    );
+    let non_numeric = br#"{"version":5,"hits":1,"misses":0,"unconsulted":0,"bypasses":{"compiler-query":"2","other":1}}"#;
+    assert!(
+        parse(non_numeric).is_err(),
+        "a string bypass count must not be zero"
+    );
+    let object = br#"{"version":5,"hits":1,"misses":0,"unconsulted":0,"bypasses":{"unsupported-flag":{"count":5}}}"#;
+    assert!(
+        parse(object).is_err(),
+        "an object bypass count must not be zero"
     );
 }
 
