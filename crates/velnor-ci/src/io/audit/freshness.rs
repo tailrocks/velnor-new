@@ -217,21 +217,6 @@ mod tests {
         assert!(matches!(newest, Ok(None)), "{newest:?}");
     }
 
-    #[test]
-    fn a_write_after_the_walk_is_seen_by_the_decision() {
-        let (root, scan) = snapshot("late-write");
-        let future = UNIX_EPOCH + std::time::Duration::from_secs(4_000_000_000);
-        fs::File::open(root.join("kept.txt"))
-            .and_then(|file| file.set_times(fs::FileTimes::new().set_modified(future)))
-            .unwrap_or_else(|e| unreachable!("{e}"));
-        let newest = inventory::newest(&scan, &scan.entries);
-        fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
-        assert!(
-            matches!(newest, Ok(Some(time)) if time == future),
-            "a write after the walk was missed: {newest:?}"
-        );
-    }
-
     fn directory_snapshot(name: &str) -> (PathBuf, inventory::Scan) {
         let root = fs::canonicalize(std::env::temp_dir())
             .unwrap_or_else(|e| unreachable!("{e}"))

@@ -19,13 +19,18 @@ use super::walk::unresolved_link;
 pub(super) type Opened = Rc<Dir>;
 pub(super) type Identity = (libc::dev_t, libc::ino_t);
 
-/// A directory's identity together with the times that change when its entries do.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(in crate::io::audit) struct Stamp {
     device: i128,
     inode: i128,
     modified: (i128, i128),
     changed: (i128, i128),
+}
+
+impl Stamp {
+    pub(super) fn is(&self, (device, inode): Identity) -> bool {
+        self.device == i128::from(device) && self.inode == i128::from(inode)
+    }
 }
 
 #[derive(Clone)]
@@ -65,10 +70,6 @@ pub(super) fn open(origin: &Origin, path: &Path) -> io::Result<Dir> {
     }
     .map_err(failure)?;
     Dir::from_fd(fd).map_err(failure)
-}
-pub(super) fn identity(directory: &Dir) -> io::Result<Identity> {
-    let stat = fstat(directory).map_err(failure)?;
-    Ok((stat.st_dev, stat.st_ino))
 }
 pub(super) fn stamp(directory: &Dir) -> io::Result<Stamp> {
     let stat = fstat(directory).map_err(failure)?;

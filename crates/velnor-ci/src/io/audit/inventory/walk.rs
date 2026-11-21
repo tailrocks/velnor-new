@@ -118,8 +118,8 @@ pub(super) fn scan_with(
             }
             Err(error) => return Err(error),
         };
-        let identity = handle::identity(&listing)?;
-        identities.insert(directory.clone(), handle::stamp(&listing)?);
+        let stamp = handle::stamp(&listing)?;
+        identities.insert(directory.clone(), stamp);
         (probe.after_open)(&directory);
         let names = handle::names(&mut listing, |name| {
             (probe.listed)(name);
@@ -141,7 +141,7 @@ pub(super) fn scan_with(
             children.insert(PathBuf::from(name), kind);
         }
         match handle::current(&origin, &directory)? {
-            Current::Directory(now) if now == identity => {
+            Current::Directory(now) if stamp.is(now) => {
                 entries.insert(directory, children);
             }
             Current::Directory(_) => {
