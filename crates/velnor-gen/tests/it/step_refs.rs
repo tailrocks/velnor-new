@@ -11,11 +11,9 @@ use serde_json::Value;
 use crate::facts::TestResult;
 use crate::pipeline::{pin_helper, view, workflow};
 
-const CONFIGS: &[Option<&str>] = &[
-    None,
-    Some("mbx_shared_store = true\n"),
-    Some("mbx_shared_store = false\n"),
-];
+const SHARED_STORE_ON: &str = "mbx_shared_store = true\n";
+const SHARED_STORE_OFF: &str = "mbx_shared_store = false\n";
+const CACHE_DEBUG_ON: &str = "cache_debug = true\n";
 
 fn rust_sources(dir: &Path, out: &mut Vec<PathBuf>) -> std::io::Result<()> {
     for entry in fs::read_dir(dir)? {
@@ -41,7 +39,7 @@ fn patches_in(text: &str) -> Vec<u64> {
 /// planner and renderer sources, so a new gate is covered without editing this test.
 fn gate_patches() -> Result<BTreeSet<u64>, Box<dyn Error>> {
     let mut files = Vec::new();
-    for krate in ["velnor-gen", "velnor-rust", "velnor-render"] {
+    for krate in ["velnor-gen", "velnor-rust", "velnor-render", "velnor-model"] {
         let src = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("..")
             .join(krate)
@@ -60,17 +58,17 @@ fn gate_patches() -> Result<BTreeSet<u64>, Box<dyn Error>> {
     Ok(patches)
 }
 
-/// The first patch whose helper accepts `mbx_shared_store`, from its gate in `key_gates`.
-fn shared_store_patch() -> Result<u64, Box<dyn Error>> {
+/// The first patch whose helper accepts `key`, from its gate in `key_gates`.
+fn gate_patch(key: &str) -> Result<u64, Box<dyn Error>> {
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/key_gates/rust_ci.rs");
     let text = fs::read_to_string(path)?;
     let (_, after) = text
-        .split_once("\"mbx_shared_store\"")
-        .ok_or("the mbx_shared_store gate is missing")?;
+        .split_once(&format!("\"{key}\""))
+        .ok_or_else(|| format!("the {key} gate is missing"))?;
     patches_in(after)
         .first()
         .copied()
-        .ok_or_else(|| "the mbx_shared_store gate has no threshold".into())
+        .ok_or_else(|| format!("the {key} gate has no threshold").into())
 }
 
 fn strings<'a>(value: &'a Value, out: &mut Vec<&'a str>) {
@@ -140,19 +138,25 @@ fn dangling_refs(workflow: &Value) -> Vec<String> {
 fn every_steps_reference_names_a_step_of_its_own_job() -> TestResult {
     let mut refs = 0;
     let patches = gate_patches()?;
-    let shared_store = shared_store_patch()?;
+    let shared_store = gate_patch("mbx_shared_store")?;
+    let cache_debug = gate_patch("cache_debug")?;
     assert!(
-        patches.contains(&velnor_gen::HELPER_MINIMUM.2) && patches.contains(&shared_store),
-        "gate scan found {patches:?}, which misses the minimum or the shared-store gate"
+        patches.contains(&velnor_gen::HELPER_MINIMUM.2)
+            && patches.contains(&shared_store)
+            && patches.contains(&cache_debug),
+        "gate scan found {patches:?}, which misses the minimum, shared-store or cache_debug gate"
     );
     for patch in patches {
         let helper = format!("0.1.{patch}");
-        let configs = if patch < shared_store {
-            &CONFIGS[..1]
-        } else {
-            CONFIGS
-        };
-        for config in configs.iter().copied() {
+        // Each config enables one gated shape, so the render reaches the steps that shape adds.
+        let mut configs: Vec<Option<&str>> = vec![None];
+        if patch >= shared_store {
+            configs.extend([Some(SHARED_STORE_ON), Some(SHARED_STORE_OFF)]);
+        }
+        if patch >= cache_debug {
+            configs.push(Some(CACHE_DEBUG_ON));
+        }
+        for config in configs {
             let mut repo = view(
                 &["Cargo.toml", "tools/Cargo.toml"],
                 config.map(str::as_bytes),
