@@ -6,7 +6,7 @@ use super::{ResultTest, fixture};
 use serde_json::json;
 use std::collections::BTreeMap;
 use std::fs;
-use std::io::ErrorKind;
+use std::io::{ErrorKind, Read};
 use std::os::unix::net::UnixListener;
 use std::process::{Command, Stdio};
 use std::sync::mpsc;
@@ -70,11 +70,12 @@ fn a_socket_path_that_is_a_regular_file_is_not_a_live_session() -> ResultTest {
 }
 
 #[test]
-fn an_existing_socket_file_is_a_live_session_without_a_connection() -> ResultTest {
+fn an_orphaned_socket_is_not_trusted_as_an_enclosing_session() -> ResultTest {
     let repo = fixture("mbx-reports-orphan-socket")?;
     let orphan = repo.root().join("orphan.sock");
     drop(UnixListener::bind(&orphan)?);
-    cargo_with(
+    let seen = repo.root().join("seen-socket");
+    let output = cargo_command(
         &repo,
         "build",
         &report_json(5, 1, 0, 0),
@@ -82,8 +83,38 @@ fn an_existing_socket_file_is_a_live_session_without_a_connection() -> ResultTes
         None,
         true,
         Some(&orphan),
-    )?;
+    )?
+    .env("FAKE_MBX_SOCKET_OUT", &seen)
+    .output()?;
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(markers(&repo), 1);
+    assert_eq!(fs::read_to_string(&seen)?, "unset");
+    let metrics = report(&repo)?;
+    assert_eq!(metrics.mbx.sessions, [session(1, 0, 0)], "{metrics:?}");
+    assert!(metrics.verification_errors.is_empty(), "{metrics:?}");
+    Ok(())
+}
+
+#[test]
+fn a_live_enclosing_session_keeps_its_socket_and_gets_no_report_path() -> ResultTest {
+    let repo = fixture("mbx-reports-live-socket")?;
+    let socket = repo.root().join("live.sock");
+    let _daemon = UnixListener::bind(&socket)?;
+    let seen = repo.root().join("seen-socket");
+    let output = cargo_command(
+        &repo,
+        "build",
+        &report_json(5, 1, 0, 0),
+        "compiled",
+        None,
+        true,
+        Some(&socket),
+    )?
+    .env("FAKE_MBX_SOCKET_OUT", &seen)
+    .output()?;
+    assert!(output.status.success(), "{output:?}");
     assert_eq!(markers(&repo), 0);
+    assert_eq!(fs::read_to_string(&seen)?, socket.to_string_lossy());
     Ok(())
 }
 
@@ -118,12 +149,15 @@ fn a_socket_whose_listener_never_accepts_does_not_block_the_check() -> ResultTes
     assert!(output.status.success(), "{output:?}");
     assert_eq!(markers(&repo), 0);
     listener.set_nonblocking(true)?;
-    assert!(
-        listener
-            .accept()
-            .is_err_and(|error| error.kind() == ErrorKind::WouldBlock),
-        "the check connected to the listener"
-    );
+    match listener.accept() {
+        Ok((mut probe, _)) => {
+            let mut received = Vec::new();
+            probe.read_to_end(&mut received)?;
+            assert!(received.is_empty(), "the check sent {received:?}");
+        }
+        Err(error) if error.kind() == ErrorKind::WouldBlock => {}
+        Err(error) => return Err(error.into()),
+    }
     Ok(())
 }
 
