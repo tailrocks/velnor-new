@@ -12,16 +12,19 @@ fn every_private_base_restore_follows_the_merge_queue_check_and_admits_a_trusted
     const MERGE_QUEUE_VERDICT: &str =
         "(github.event_name == 'merge_group' && steps.private-check.outputs.allowed == 'true')";
     const REPOSITORY_VERDICT: &str = "steps.private_repo.outputs.private == 'true'";
-    for shape in ["", "shape = 'groups'\n"] {
-        let mut repo = private_repo(
-            &["Cargo.toml", "tools/Cargo.toml"],
-            &format!("{shape}{SECTION}"),
-            "0.1.111",
-        )?;
-        repo.files
-            .insert(path("Cargo.lock")?, GIT_LOCK.as_bytes().to_vec());
-        repo.files
-            .insert(path("tools/Cargo.lock")?, GIT_LOCK.as_bytes().to_vec());
+    for (roots, shape) in [
+        (&["Cargo.toml"][..], ""),
+        (&["Cargo.toml", "tools/Cargo.toml"][..], ""),
+        (&["Cargo.toml", "tools/Cargo.toml"][..], "shape = 'groups'\n"),
+    ] {
+        let case = format!("{roots:?} {shape}");
+        let mut repo = private_repo(roots, &format!("{shape}{SECTION}"), "0.1.111")?;
+        for root in roots {
+            repo.files.insert(
+                path(root)?.sibling(&path("Cargo.lock")?),
+                GIT_LOCK.as_bytes().to_vec(),
+            );
+        }
         let text = workflow(&repo)?;
         let mut restores = 0;
         for job in crate::private_sources::jobs(&text)? {
@@ -35,22 +38,22 @@ fn every_private_base_restore_follows_the_merge_queue_check_and_admits_a_trusted
                     continue;
                 }
                 restores += 1;
-                let check = position("private-check").ok_or_else(|| format!("{shape}: {job}"))?;
+                let check = position("private-check").ok_or_else(|| format!("{case}:{job}"))?;
                 let repository =
-                    position("private_repo").ok_or_else(|| format!("{shape}: {job}"))?;
-                assert!(check < index && repository < index, "{shape}: {step}");
+                    position("private_repo").ok_or_else(|| format!("{case}:{job}"))?;
+                assert!(check < index && repository < index, "{case}:{step}");
                 let condition = step["if"].as_str().ok_or("restore has no condition")?;
                 assert!(
                     condition.contains(MERGE_QUEUE_VERDICT),
-                    "{shape}: {condition}"
+                    "{case}:{condition}"
                 );
                 assert!(
                     condition.contains(REPOSITORY_VERDICT),
-                    "{shape}: {condition}"
+                    "{case}:{condition}"
                 );
             }
         }
-        assert!(restores > 0, "{shape}: no base cache restore");
+        assert!(restores > 0, "{case}:no base cache restore");
     }
     Ok(())
 }
