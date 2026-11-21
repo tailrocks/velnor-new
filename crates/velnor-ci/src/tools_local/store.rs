@@ -71,16 +71,21 @@ fn copy_tree(from: &Path, to: &Path) -> bool {
             .is_ok_and(|status| status.success())
 }
 
-pub(super) fn restore(inputs: &Inputs<'_>, dir: Option<&str>, read_only: bool) -> Outcome {
+pub(super) fn restore(
+    inputs: &Inputs<'_>,
+    dir: Option<&str>,
+    read_only: bool,
+    owner: u32,
+) -> Outcome {
     if let Err(reason) = check_home(inputs.home) {
         return Outcome::Rejected(reason);
     }
-    let base = match base(dir, inputs.owner, read_only) {
+    let base = match base(dir, owner, read_only) {
         Ok(base) => base,
         Err(outcome) => return outcome,
     };
     let entry = base.join(TOOLS_DIR).join(inputs.key);
-    if !complete(&entry, inputs.owner) {
+    if !complete(&entry, owner) {
         return Outcome::Miss;
     }
     if let Err(reason) = clear_home(inputs.home) {
@@ -146,14 +151,14 @@ fn sweep(tools: &Path) {
     }
 }
 
-pub(super) fn save(inputs: &Inputs<'_>) -> Outcome {
-    let base = match base(inputs.shared_dir, inputs.owner, false) {
+pub(super) fn save(inputs: &Inputs<'_>, owner: u32) -> Outcome {
+    let base = match base(inputs.shared_dir, owner, false) {
         Ok(base) => base,
         Err(outcome) => return outcome,
     };
     let tools = base.join(TOOLS_DIR);
     let entry = tools.join(inputs.key);
-    if !inputs.replace && complete(&entry, inputs.owner) {
+    if !inputs.replace && complete(&entry, owner) {
         return Outcome::AlreadySaved;
     }
     if fs::create_dir_all(&tools).is_err() {
@@ -165,7 +170,7 @@ pub(super) fn save(inputs: &Inputs<'_>) -> Outcome {
         Claim::Broken => return Outcome::Failed("cannot lock the key"),
     };
     sweep(&tools);
-    if !inputs.replace && complete(&entry, inputs.owner) {
+    if !inputs.replace && complete(&entry, owner) {
         return Outcome::AlreadySaved;
     }
     let staging = tools.join(format!(
@@ -189,7 +194,7 @@ pub(super) fn save(inputs: &Inputs<'_>) -> Outcome {
             fs::rename(&retired, &entry).ok();
         }
         fs::remove_dir_all(&staging).ok();
-        return if complete(&entry, inputs.owner) {
+        return if complete(&entry, owner) {
             Outcome::AlreadySaved
         } else {
             Outcome::Failed("the entry could not be published")

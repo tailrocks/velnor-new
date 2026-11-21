@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs;
-use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 
 use velnor_ci::tools_discard;
@@ -26,7 +25,6 @@ fn save(store: &Path, home: &Path, replace: bool) -> Outcome {
         shared_dir: Some(&store),
         seed_dir: Some(&store),
         home,
-        owner: fs::metadata(home).map_or(0, |metadata| metadata.uid()),
         replace,
     })
 }

@@ -4,8 +4,9 @@
 use std::fs;
 use std::os::unix::fs::symlink;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
-use velnor_ci::tools_local::{Inputs, Outcome, Verb, home_owner, run};
+use velnor_ci::tools_local::{Inputs, Outcome, Verb, run};
 use velnor_ci::tools_verify::{Anchor, Recording, Verdict, check, digest, record};
 
 use crate::io::Repo;
@@ -67,7 +68,6 @@ fn go(node: &Node, verb: Verb, home: &Path) -> Outcome {
         shared_dir: Some(&store),
         seed_dir: Some(&store),
         home,
-        owner: home_owner(home).unwrap_or(0),
         replace: false,
     })
 }
@@ -282,11 +282,10 @@ fn a_dangling_or_looping_home_link_is_a_warning_and_deletes_nothing() {
     symlink(&second, &first).unwrap_or_else(|e| unreachable!("{e}"));
     symlink(&first, &second).unwrap_or_else(|e| unreachable!("{e}"));
     for home in [&dangling, &first] {
-        assert!(home_owner(home).is_ok(), "{}", home.display());
         for verb in [Verb::Clear, Verb::Restore] {
             let outcome = go(&node, verb, home);
             assert!(
-                matches!(outcome, Outcome::Rejected(_)),
+                matches!(&outcome, Outcome::Rejected(reason) if reason.starts_with("HOME is")),
                 "{verb:?} {}: {outcome:?}",
                 home.display()
             );
@@ -306,12 +305,11 @@ fn a_dangling_home_link_with_a_trailing_slash_or_no_stored_entry_is_a_warning() 
     let dangling = node.root.join("dangling-home");
     symlink(node.root.join("missing"), &dangling).unwrap_or_else(|e| unreachable!("{e}"));
     let slashed = PathBuf::from(format!("{}/", dangling.display()));
-    assert!(home_owner(&slashed).is_ok(), "{}", slashed.display());
     for home in [&slashed, &dangling] {
         for verb in [Verb::Clear, Verb::Restore] {
             let outcome = go(&node, verb, home);
             assert!(
-                matches!(outcome, Outcome::Rejected(_)),
+                matches!(&outcome, Outcome::Rejected(reason) if reason.starts_with("HOME is")),
                 "{verb:?} {}: {outcome:?}",
                 home.display()
             );
@@ -320,4 +318,50 @@ fn a_dangling_home_link_with_a_trailing_slash_or_no_stored_entry_is_a_warning() 
     assert!(
         fs::symlink_metadata(&dangling).is_ok_and(|metadata| metadata.file_type().is_symlink())
     );
+}
+
+fn tools_local(home: &Path, verb: &str, output: &Path) -> std::process::Output {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
+    command
+        .env("HOME", home)
+        .env("GITHUB_OUTPUT", output)
+        .env("GITHUB_EVENT_NAME", "pull_request")
+        .env("GITHUB_REF", "refs/pull/1/merge")
+        .env_remove("GITHUB_EVENT_PATH")
+        .env_remove("RUNNER_TEMP")
+        .env_remove("VELNOR_MBX_SHARED_DIR")
+        .env_remove("VELNOR_MBX_SEED_DIR")
+        .args(["tools-local", verb]);
+    if verb != "clear" {
+        command.args(["--key", KEY]);
+    }
+    command.output().unwrap_or_else(|e| unreachable!("{e}"))
+}
+
+#[test]
+fn a_missing_or_empty_home_is_a_warning_and_restore_still_reports_a_miss() {
+    let node = node("tools-home-clear-missing-home");
+    for (name, home) in [
+        ("missing", node.root.join("missing-home")),
+        ("empty", PathBuf::new()),
+    ] {
+        let cleared = tools_local(&home, "clear", &node.root.join(format!("{name}-clear")));
+        assert!(cleared.status.success(), "{name}: {cleared:?}");
+        assert!(
+            String::from_utf8_lossy(&cleared.stdout).starts_with("::warning::"),
+            "{name}: {cleared:?}"
+        );
+        let output_file = node.root.join(format!("{name}-restore"));
+        let restored = tools_local(&home, "restore", &output_file);
+        assert!(restored.status.success(), "{name}: {restored:?}");
+        assert!(
+            String::from_utf8_lossy(&restored.stdout).starts_with("::warning::"),
+            "{name}: {restored:?}"
+        );
+        assert_eq!(
+            fs::read_to_string(&output_file).unwrap_or_default(),
+            "hit=false\n",
+            "{name}"
+        );
+    }
 }
