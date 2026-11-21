@@ -224,11 +224,33 @@ fn a_target_directory_larger_than_the_cache_budget_is_not_saved() {
 
 #[test]
 fn an_unreadable_cache_budget_fails_the_decision_instead_of_saving() {
-    let repo = Checkout::new("decide-bad-budget");
+    for value in ["eight", "-1", "1.5", "99999999999999999999999"] {
+        let repo = Checkout::new("decide-bad-budget");
+        seed(&repo);
+        let (output, written) = decide_within(&repo, value);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(!output.status.success(), "{value}: {output:?}");
+        assert!(
+            stderr.contains("VELNOR_CACHE_BUDGET_BYTES must be a whole number of bytes"),
+            "{value}: {stderr}"
+        );
+        assert!(stderr.contains(&format!("{value:?}")), "{value}: {stderr}");
+        assert_eq!(written, "", "{value}");
+    }
+}
+
+#[test]
+fn an_empty_or_padded_cache_budget_means_no_limit_or_its_number() {
+    let repo = Checkout::new("decide-empty-budget");
     seed(&repo);
-    let (output, written) = decide_within(&repo, "eight");
-    assert!(!output.status.success());
-    assert_eq!(written, "");
+    repo.write_unstaged("target/debug/deps/libbig.rlib", &"x".repeat(4096));
+    let (output, written) = decide_within(&repo, "");
+    assert!(output.status.success());
+    assert_eq!(written, "save=true\nsources=true\n");
+    fs::remove_file(repo.root().join("github-output")).unwrap_or_else(|e| unreachable!("{e}"));
+    let (output, written) = decide_within(&repo, " 1000 ");
+    assert!(output.status.success());
+    assert_eq!(written, "save=false\nsources=true\n");
 }
 
 #[test]

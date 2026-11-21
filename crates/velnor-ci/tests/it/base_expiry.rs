@@ -227,3 +227,12 @@ fn plan_full_selects_everything_on_an_affected_only_push_and_plain_plan_does_not
     assert!(!chosen.contains("none"), "{chosen}");
     assert!(chosen.contains("all:"), "{chosen}");
 }
+
+#[test]
+fn restored_trims_a_padded_max_age_before_reading_it() {
+    let repo = built("report-padded-age", Some(&today(8)));
+    let (output, written) = restored(&repo, Some(" 7 "));
+    assert!(output.status.success());
+    assert_eq!(written, "expired=true\n");
+    assert!(!repo.root().join("target").exists());
+}
