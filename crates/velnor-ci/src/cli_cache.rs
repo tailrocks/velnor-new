@@ -37,7 +37,7 @@ pub enum CacheCommand {
     )]
     PurgePrivate(PurgePrivateArgs),
     #[command(
-        about = "Delete one poisoned cache entry in two steps. With --key and one or more --ref (the refs the tools-verify notice prints, in restore order) it only READS: it resolves the one entry on the FIRST --ref, the ref the restore reads first, prints its ID, version and ref and the command that deletes it, and deletes nothing, so running it again is harmless; it refuses when no ref holds the key, when the first --ref no longer holds it but a later one does (the entry may be deleted already: it names the refs checked and the ref that holds the key, and only a rerun with that ref first resolves it), when any listing fails or is inconsistent, when an entry has no version, when the first --ref has more than one entry (two versions under one key), or when a later ref holds the key under a different version. The two steps are needed once per run, not once per job. With --key and --id it deletes exactly that entry, and refuses, deleting nothing, when the ID no longer exists or does not have that exact key. Reads GITHUB_TOKEN, which needs actions: write to delete"
+        about = "Delete one poisoned cache entry in two steps. With --key, one or more --ref (the refs the tools-verify notice prints, in restore order) and --restored-before (the time the notice prints; required) it only READS: it resolves the one entry on the FIRST --ref, the ref the restore reads first, prints its ID, version and ref and the command that deletes it, and deletes nothing, so running it again is harmless; it refuses when no ref holds the key, when the first --ref no longer holds it but a later one does (the entry may be deleted already: it names the refs checked and the ref that holds the key, and only a rerun with that ref first resolves it), when any listing fails or is inconsistent, when an entry has no version, when the first --ref has more than one entry (two versions under one key), when a later ref holds the key under a different version, or when the entry was saved at or after --restored-before (or has no parsable created_at), because it is then not the entry this run restored. The two steps are needed once per run, not once per job. With --key and --id it deletes exactly that entry, and refuses, deleting nothing, when the ID no longer exists or does not have that exact key. Reads GITHUB_TOKEN, which needs actions: write to delete, and GITHUB_API_URL (default https://api.github.com); the printed --id command repeats a non-default GITHUB_API_URL and never prints the token"
     )]
     DeleteEntry(DeleteEntryArgs),
 }
@@ -53,6 +53,13 @@ pub struct DeleteEntryArgs {
         help = "A ref the entry can belong to, such as refs/pull/7/merge or refs/heads/main; repeat it in the order the cache action reads refs (the run's own ref, then the base branch, then the default branch)"
     )]
     pub refs: Vec<String>,
+    #[arg(
+        long,
+        required_unless_present = "id",
+        conflicts_with = "id",
+        help = "RFC 3339 UTC time such as 2026-11-22T10:00:00Z, printed by the notice: the moment this run's tools check began, after its restore had finished; step 1 refuses an entry whose created_at is at or after it, and one without a parsable created_at"
+    )]
+    pub restored_before: Option<String>,
     #[arg(
         long,
         help = "Delete exactly this cache entry ID, which must still exist under --key; the ID comes from the output of the --ref form"

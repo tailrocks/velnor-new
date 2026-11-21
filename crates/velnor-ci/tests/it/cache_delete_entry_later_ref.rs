@@ -3,9 +3,11 @@
 
 use std::process::Command;
 
-use velnor_ci::io::cache_delete_entry::{Candidate, delete_by_id, resolve_entry, resolved_report};
+use velnor_ci::io::cache_delete_entry::{Candidate, delete_by_id, resolved_report};
 
-use crate::cache_delete_entry::{KEY, MAIN, MERGE, VERSION_A, api, entry, refs, repo};
+use crate::cache_delete_entry::{
+    KEY, MAIN, MERGE, VERSION_A, VERSION_B, api, entry, refs, repo, resolve_entry,
+};
 
 const BASE: &str = "refs/heads/release";
 
@@ -78,7 +80,7 @@ fn printed_arguments(key: &str) -> Vec<String> {
         version: VERSION_A.to_owned(),
         reference: MERGE.to_owned(),
     };
-    let report = resolved_report(&repo(), key, &found);
+    let report = resolved_report(&repo(), key, &found, "https://api.github.com");
     let start = report
         .find("velnor-ci cache delete-entry")
         .unwrap_or_else(|| unreachable!("{report}"));
@@ -126,4 +128,47 @@ fn the_printed_id_command_passes_awkward_keys_to_the_shell_unchanged() {
             "{key:?}"
         );
     }
+}
+
+#[test]
+fn the_version_split_refusal_suggests_a_shell_quoted_raw_key() {
+    let key = "velnor a'b:c%d";
+    let api = api(vec![
+        entry(11, key, MAIN, VERSION_A),
+        entry(12, key, MERGE, VERSION_B),
+    ]);
+    let error = resolve_entry(&api, &repo(), key, &refs(&[MERGE, MAIN]))
+        .err()
+        .unwrap_or_else(|| unreachable!("a version split must be refused"));
+    let text = error.to_string();
+    assert!(
+        text.contains("--id <ID> --key 'velnor a'\\''b:c%d'"),
+        "{text}"
+    );
+    assert!(api.deleted.borrow().is_empty());
+}
+
+#[test]
+fn a_printed_id_command_names_a_non_default_api_and_never_a_token() {
+    let found = Candidate {
+        id: 12,
+        version: VERSION_A.to_owned(),
+        reference: MERGE.to_owned(),
+    };
+    let default = resolved_report(&repo(), KEY, &found, "https://api.github.com");
+    assert!(
+        !default.contains("GITHUB_API_URL=") && !default.contains("ghp_"),
+        "{default}"
+    );
+    let enterprise = resolved_report(&repo(), KEY, &found, "https://ghe.example.com/api/v3");
+    assert!(
+        enterprise.contains(
+            "GITHUB_API_URL='https://ghe.example.com/api/v3' velnor-ci cache delete-entry --repo"
+        ),
+        "{enterprise}"
+    );
+    assert!(
+        enterprise.contains("GITHUB_TOKEN taken from the same source"),
+        "{enterprise}"
+    );
 }

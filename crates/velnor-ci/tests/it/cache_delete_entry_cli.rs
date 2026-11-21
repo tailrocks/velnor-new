@@ -9,20 +9,21 @@ use std::thread;
 
 use serde_json::{Value, json};
 
-const REPO: &str = "tailrocks/velnor-new";
-const KEY: &str = "velnor-tools-Linux-X64-mise2026.11.10-aa";
-const MAIN: &str = "refs/heads/main";
-const FAIL: &str = "refs/pull/9/merge";
-const MERGE: &str = "refs/pull/7/merge";
-const VERSION_A: &str = "a1a1";
-const VERSION_B: &str = "b2b2";
+pub(crate) const REPO: &str = "tailrocks/velnor-new";
+pub(crate) const KEY: &str = "velnor-tools-Linux-X64-mise2026.11.10-aa";
+pub(crate) const MAIN: &str = "refs/heads/main";
+pub(crate) const FAIL: &str = "refs/pull/9/merge";
+pub(crate) const MERGE: &str = "refs/pull/7/merge";
+pub(crate) const VERSION_A: &str = "a1a1";
+pub(crate) const VERSION_B: &str = "b2b2";
+pub(crate) const RESTORED_BEFORE: &str = "2026-11-18T00:00:00Z";
 
-struct Served {
+pub(crate) struct Served {
     entries: Vec<Value>,
     deleted: Mutex<Vec<String>>,
 }
 
-fn entry(id: u64, key: &str, reference: &str, version: &str) -> Value {
+pub(crate) fn entry(id: u64, key: &str, reference: &str, version: &str) -> Value {
     json!({"id":id,"key":key,"ref":reference,"version":version,"created_at":"2026-11-17T00:00:00Z","last_accessed_at":"2026-11-17T00:00:00Z","size_in_bytes":10})
 }
 
@@ -86,7 +87,7 @@ fn answer(served: &Served, stream: TcpStream) {
     stream.write_all(reply.as_bytes()).ok();
 }
 
-fn serve(entries: Vec<Value>) -> (String, Arc<Served>) {
+pub(crate) fn serve(entries: Vec<Value>) -> (String, Arc<Served>) {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap_or_else(|e| unreachable!("{e}"));
     let address = listener
         .local_addr()
@@ -104,8 +105,14 @@ fn serve(entries: Vec<Value>) -> (String, Arc<Served>) {
     (format!("http://{address}"), served)
 }
 
-fn delete_entry(api: &str, args: &[&str]) -> Output {
+pub(crate) fn delete_entry(api: &str, args: &[&str]) -> Output {
     run(api, args, Some(REPO), Some("recorded"))
+}
+
+pub(crate) fn step_one(api: &str, args: &[&str]) -> Output {
+    let mut all = args.to_vec();
+    all.extend(["--restored-before", RESTORED_BEFORE]);
+    delete_entry(api, &all)
 }
 
 fn run(api: &str, args: &[&str], repo: Option<&str>, token: Option<&str>) -> Output {
@@ -125,7 +132,7 @@ fn run(api: &str, args: &[&str], repo: Option<&str>, token: Option<&str>) -> Out
     command.output().unwrap_or_else(|e| unreachable!("{e}"))
 }
 
-fn deleted(served: &Served) -> Vec<String> {
+pub(crate) fn deleted(served: &Served) -> Vec<String> {
     served
         .deleted
         .lock()
@@ -139,7 +146,7 @@ fn the_binary_resolves_the_only_entry_its_key_and_ref_name_and_deletes_nothing()
         entry(11, KEY, MAIN, VERSION_A),
         entry(12, KEY, MERGE, VERSION_B),
     ]);
-    let output = delete_entry(&api, &["--key", KEY, "--ref", MERGE]);
+    let output = step_one(&api, &["--key", KEY, "--ref", MERGE]);
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(output.status.success(), "{stdout}{stderr}");
@@ -189,7 +196,7 @@ fn two_versions_under_one_key_on_one_ref_are_refused_and_both_are_named() {
         entry(31, KEY, MAIN, VERSION_A),
         entry(32, KEY, MAIN, VERSION_B),
     ]);
-    let output = delete_entry(&api, &["--key", KEY, "--ref", MAIN]);
+    let output = step_one(&api, &["--key", KEY, "--ref", MAIN]);
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(!output.status.success(), "{stderr}");
     assert!(stderr.contains("2 entries have the key"), "{stderr}");
@@ -204,7 +211,7 @@ fn two_versions_under_one_key_on_one_ref_are_refused_and_both_are_named() {
 #[test]
 fn a_key_with_no_entry_on_the_ref_is_refused_and_nothing_is_deleted() {
     let (api, served) = serve(vec![entry(51, KEY, MAIN, VERSION_A)]);
-    let output = delete_entry(&api, &["--key", KEY, "--ref", MERGE]);
+    let output = step_one(&api, &["--key", KEY, "--ref", MERGE]);
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(!output.status.success(), "{stderr}");
     assert!(stderr.contains("nothing was deleted"), "{stderr}");
@@ -214,7 +221,7 @@ fn a_key_with_no_entry_on_the_ref_is_refused_and_nothing_is_deleted() {
 #[test]
 fn an_empty_ref_is_refused_and_nothing_is_deleted() {
     let (api, served) = serve(vec![entry(41, KEY, "", VERSION_A)]);
-    let output = delete_entry(&api, &["--key", KEY, "--ref", ""]);
+    let output = step_one(&api, &["--key", KEY, "--ref", ""]);
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(!output.status.success(), "{stderr}");
     assert!(
@@ -227,7 +234,7 @@ fn an_empty_ref_is_refused_and_nothing_is_deleted() {
 #[test]
 fn an_empty_key_is_refused_and_nothing_is_deleted() {
     let (api, served) = serve(vec![entry(42, "", MAIN, VERSION_A)]);
-    let output = delete_entry(&api, &["--key", "", "--ref", MAIN]);
+    let output = step_one(&api, &["--key", "", "--ref", MAIN]);
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(!output.status.success(), "{stderr}");
     assert!(
@@ -248,7 +255,19 @@ fn a_missing_ref_argument_is_refused_and_nothing_is_deleted() {
 #[test]
 fn a_missing_repo_is_refused_and_nothing_is_deleted() {
     let (api, served) = serve(vec![entry(61, KEY, MAIN, VERSION_A)]);
-    let output = run(&api, &["--key", KEY, "--ref", MAIN], None, Some("recorded"));
+    let output = run(
+        &api,
+        &[
+            "--key",
+            KEY,
+            "--ref",
+            MAIN,
+            "--restored-before",
+            RESTORED_BEFORE,
+        ],
+        None,
+        Some("recorded"),
+    );
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(!output.status.success(), "{stderr}");
     assert!(
@@ -261,81 +280,23 @@ fn a_missing_repo_is_refused_and_nothing_is_deleted() {
 #[test]
 fn a_missing_token_is_refused_and_nothing_is_deleted() {
     let (api, served) = serve(vec![entry(71, KEY, MAIN, VERSION_A)]);
-    let output = run(&api, &["--key", KEY, "--ref", MAIN], Some(REPO), None);
+    let output = run(
+        &api,
+        &[
+            "--key",
+            KEY,
+            "--ref",
+            MAIN,
+            "--restored-before",
+            RESTORED_BEFORE,
+        ],
+        Some(REPO),
+        None,
+    );
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(!output.status.success(), "{stderr}");
     assert!(
         stderr.contains("set GITHUB_TOKEN to a GitHub token"),
-        "{stderr}"
-    );
-    assert_eq!(deleted(&served), Vec::<String>::new());
-}
-
-#[test]
-fn the_binary_resolves_the_first_ref_when_a_later_ref_holds_the_same_version() {
-    let (api, served) = serve(vec![
-        entry(11, KEY, MAIN, VERSION_A),
-        entry(12, KEY, MERGE, VERSION_A),
-    ]);
-    let output = delete_entry(&api, &["--key", KEY, "--ref", MERGE, "--ref", MAIN]);
-    assert!(output.status.success(), "{output:?}");
-    assert!(String::from_utf8_lossy(&output.stdout).contains("--id 12"));
-    assert_eq!(deleted(&served), Vec::<String>::new());
-}
-
-#[test]
-fn the_binary_refuses_a_key_that_only_a_later_ref_holds_and_prints_no_id_command() {
-    let (api, served) = serve(vec![entry(11, KEY, MAIN, VERSION_A)]);
-    let output = delete_entry(&api, &["--key", KEY, "--ref", MERGE, "--ref", MAIN]);
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(!output.status.success(), "{stdout}{stderr}");
-    assert!(
-        stderr.contains(&format!("is no longer on {MERGE}"))
-            && stderr.contains(&format!("re-run with `--ref {MAIN}` first")),
-        "{stderr}"
-    );
-    assert!(
-        !stdout.contains("--id") && !stderr.contains("--id"),
-        "{stdout}{stderr}"
-    );
-    assert_eq!(deleted(&served), Vec::<String>::new());
-}
-
-#[test]
-fn the_binary_respects_the_order_of_the_refs() {
-    let (api, served) = serve(vec![
-        entry(11, KEY, MAIN, VERSION_A),
-        entry(12, KEY, MERGE, VERSION_A),
-    ]);
-    let output = delete_entry(&api, &["--key", KEY, "--ref", MAIN, "--ref", MERGE]);
-    assert!(output.status.success(), "{output:?}");
-    assert!(String::from_utf8_lossy(&output.stdout).contains("--id 11"));
-    assert_eq!(deleted(&served), Vec::<String>::new());
-}
-
-#[test]
-fn the_binary_refuses_when_the_listing_of_the_first_ref_fails() {
-    let (api, served) = serve(vec![entry(11, KEY, MAIN, VERSION_A)]);
-    let output = delete_entry(&api, &["--key", KEY, "--ref", FAIL, "--ref", MAIN]);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(!output.status.success(), "{stderr}");
-    assert!(stderr.contains("502"), "{stderr}");
-    assert_eq!(deleted(&served), Vec::<String>::new());
-}
-
-#[test]
-fn the_binary_refuses_a_version_split_across_refs_and_names_both_entries() {
-    let (api, served) = serve(vec![
-        entry(11, KEY, MAIN, VERSION_A),
-        entry(12, KEY, MERGE, VERSION_B),
-    ]);
-    let output = delete_entry(&api, &["--key", KEY, "--ref", MERGE, "--ref", MAIN]);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(!output.status.success(), "{stderr}");
-    assert!(
-        stderr.contains(&format!("ID 12 version {VERSION_B}"))
-            && stderr.contains(&format!("ID 11 version {VERSION_A}")),
         "{stderr}"
     );
     assert_eq!(deleted(&served), Vec::<String>::new());

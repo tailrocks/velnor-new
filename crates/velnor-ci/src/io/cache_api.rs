@@ -32,7 +32,8 @@ pub(super) struct Entry {
     pub(super) size_in_bytes: u64,
     #[serde(default)]
     pub(super) version: String,
-    created_at: String,
+    #[serde(default)]
+    pub(super) created_at: String,
     last_accessed_at: String,
 }
 

@@ -1,9 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_ci::io::cache_delete_entry::{delete_by_id, resolve_entry};
+use velnor_ci::io::cache_delete_entry::delete_by_id;
 
-use crate::cache_delete_entry::{KEY, MAIN, MERGE, VERSION_A, api, entry, refs, repo};
+use crate::cache_delete_entry::{
+    KEY, MAIN, MERGE, VERSION_A, api, entry, refs, repo, resolve_entry,
+};
 
 #[test]
 fn an_entry_the_api_returns_without_a_version_is_refused_and_named() {

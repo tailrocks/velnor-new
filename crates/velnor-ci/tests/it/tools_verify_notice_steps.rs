@@ -3,8 +3,12 @@
 
 use std::fs;
 
-use crate::tools_verify::{discarded, job, recorded, rustc};
+use velnor_ci::time::parse_utc;
+
+use crate::tools_verify::{Job, discarded, job, recorded, rustc};
 use crate::tools_verify_notice::check_stdout;
+
+const REPO: &str = "tailrocks/velnor-new";
 
 #[test]
 fn the_notice_explains_the_two_steps_and_prints_only_the_resolve_command() {
@@ -35,4 +39,131 @@ fn the_notice_explains_the_two_steps_and_prints_only_the_resolve_command() {
         "{stdout}"
     );
     assert!(discarded(&job));
+}
+
+#[test]
+fn the_notice_stamps_the_command_with_the_time_the_check_began() {
+    let job = job("tools-verify-stamp");
+    let anchor = recorded(&job);
+    fs::write(rustc(&job), "evil binary!").unwrap_or_else(|e| unreachable!("{e}"));
+    let before = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |elapsed| elapsed.as_secs());
+    let stdout = check_stdout(
+        &job,
+        &anchor,
+        &[("VELNOR_TOOLS_CACHE_KEY", "velnor-tools-abc123")],
+    );
+    let after = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |elapsed| elapsed.as_secs());
+    let (_, after_flag) = stdout
+        .split_once("--restored-before '")
+        .unwrap_or_else(|| unreachable!("no stamp in {stdout}"));
+    let stamp = after_flag.split('\'').next().unwrap_or_default().to_owned();
+    let seconds = parse_utc(&stamp)
+        .and_then(|seconds| u64::try_from(seconds).ok())
+        .unwrap_or_else(|| unreachable!("{stamp}"));
+    assert!(
+        (before..=after).contains(&seconds),
+        "{stamp} {before} {after}"
+    );
+    assert!(
+        stdout.contains("--restored-before (the time this job's tools check began"),
+        "{stdout}"
+    );
+    assert!(
+        stdout.contains("prefers an exported GH_TOKEN or GITHUB_TOKEN"),
+        "{stdout}"
+    );
+}
+
+fn printed_command(stdout: &str) -> String {
+    let (_, rest) = stdout
+        .split_once("Command: `")
+        .unwrap_or_else(|| unreachable!("no command in {stdout}"));
+    let (command, _) = rest
+        .split_once('`')
+        .unwrap_or_else(|| unreachable!("unterminated command in {stdout}"));
+    command.to_owned()
+}
+
+fn run_printed_command(job: &Job, command: &str) -> Vec<String> {
+    use std::os::unix::fs::PermissionsExt;
+    let bin = job.root.join("fake-bin");
+    fs::create_dir_all(&bin).unwrap_or_else(|e| unreachable!("{e}"));
+    for (name, body) in [
+        ("gh", "#!/bin/sh\necho the-token\n"),
+        (
+            "velnor-ci",
+            "#!/bin/sh\nprintf '%s\\n' \"$GITHUB_API_URL\" \"$GITHUB_TOKEN\" \"$@\"\n",
+        ),
+    ] {
+        let path = bin.join(name);
+        fs::write(&path, body).unwrap_or_else(|e| unreachable!("{e}"));
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o755))
+            .unwrap_or_else(|e| unreachable!("{e}"));
+    }
+    let path = format!("{}:/usr/bin:/bin", bin.display());
+    let output = std::process::Command::new("/bin/sh")
+        .args(["-c", command])
+        .env_clear()
+        .env("PATH", path)
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(output.status.success(), "{output:?}");
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .map(str::to_owned)
+        .collect()
+}
+
+#[test]
+fn the_printed_command_quotes_a_hostile_key_and_base_branch_so_a_shell_reads_them_back_unchanged() {
+    let job = job("tools-verify-shell-quoting");
+    let anchor = recorded(&job);
+    fs::write(rustc(&job), "evil binary!").unwrap_or_else(|e| unreachable!("{e}"));
+    let key = "velnor-tools-a'$(id)'b";
+    let base = "a'$(id)'";
+    let stdout = check_stdout(
+        &job,
+        &anchor,
+        &[
+            ("VELNOR_TOOLS_CACHE_KEY", key),
+            ("GITHUB_EVENT_NAME", "pull_request"),
+            ("GITHUB_REF", "refs/pull/7/merge"),
+            ("GITHUB_BASE_REF", base),
+        ],
+    );
+    let mut read_back = run_printed_command(&job, &printed_command(&stdout));
+    let stamp = read_back.pop().unwrap_or_default();
+    assert_eq!(
+        read_back.pop().as_deref(),
+        Some("--restored-before"),
+        "{stdout}"
+    );
+    assert!(
+        parse_utc(&stamp).is_some() && stamp.ends_with('Z'),
+        "{stamp}"
+    );
+    assert_eq!(
+        read_back,
+        [
+            "https://api.github.com",
+            "the-token",
+            "cache",
+            "delete-entry",
+            "--repo",
+            REPO,
+            "--key",
+            key,
+            "--ref",
+            "refs/pull/7/merge",
+            "--ref",
+            &format!("refs/heads/{base}"),
+            "--ref",
+            "refs/heads/main",
+        ],
+        "{stdout}"
+    );
 }

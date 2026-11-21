@@ -35,6 +35,7 @@ pub struct Context {
     pub default_branch: Option<String>,
     pub cache_key: String,
     pub anchor_key: String,
+    pub restored_before: String,
     pub remote: Remote,
 }
 
@@ -44,6 +45,7 @@ pub struct Remedy<'a> {
     pub anchor_key: &'a str,
     pub remote: &'a Remote,
     pub refs: &'a [String],
+    pub restored_before: &'a str,
 }
 
 fn reason(discard: &Discard) -> String {
@@ -56,18 +58,19 @@ fn reason(discard: &Discard) -> String {
     }
 }
 
-fn delete_command(key: &str, refs: &[String], remote: &Remote) -> String {
+fn delete_command(key: &str, refs: &[String], remote: &Remote, restored_before: &str) -> String {
     let refs: String = refs.iter().fold(String::new(), |mut line, reference| {
         line.push_str(" --ref ");
         line.push_str(&quoted(reference));
         line
     });
     format!(
-        "GITHUB_API_URL={} GITHUB_TOKEN=\"$(gh auth token --hostname {})\" velnor-ci cache delete-entry --repo {} --key {}{refs}",
+        "GITHUB_API_URL={} GITHUB_TOKEN=\"$(gh auth token --hostname {})\" velnor-ci cache delete-entry --repo {} --key {}{refs} --restored-before {}",
         quoted(&remote.api_url),
         quoted(&remote.host),
         quoted(&remote.repository),
         quoted(key),
+        quoted(restored_before),
     )
 }
 
@@ -88,10 +91,10 @@ fn delete_sentence(what: &str, key: &str, remedy: Remedy<'_>) -> String {
         return String::new();
     }
     format!(
-        ". The restored {what} is {}; the cache action does not report which ref or version it came from, so the command below only reads: it lists every ref the action can have read, in its order (the ref of this run, then the base and default branches), and prints the one entry the restore read (ID, version and ref) together with the command that deletes that entry by its ID. It deletes nothing itself, so running it again is harmless. It resolves an entry only when the FIRST ref holds the key, and refuses, printing nothing to delete, when the first ref no longer holds it (another job of this run or you may have deleted the entry already; if so, stop), when that ref has more than one entry, when a later ref holds the key under a different version or when an entry has no version; then check which version the job used and delete that ID. Step 1: run the command below and read the entry it prints. Step 2: run the --id command it prints, once; it deletes exactly that ID and refuses when the ID no longer exists or has another key. The two steps are needed once per run, not once per job, even though every tools job of the run prints this notice: after one job's entry is deleted, step 1 refuses instead of naming the next ref's healthy entry. It needs velnor-ci 0.1.112 or newer on the machine that runs it, which the pinned helper does not provide: download it from {HELPER_RELEASES} (tag tools-v0.1.112 or newer) and put it on PATH.{} Command: `{}`",
+        ". The restored {what} is {}; the cache action does not report which ref or version it came from, so the command below only reads: it lists every ref the action can have read, in its order (the ref of this run, then the base and default branches), and prints the one entry the restore read (ID, version and ref) together with the command that deletes that entry by its ID. It deletes nothing itself, so running it again is harmless. It resolves an entry only when the FIRST ref holds the key and the entry was saved before --restored-before (the time this job's tools check began, after its restore had finished; an entry saved at or after it, or without a usable created_at, is not the entry this run read, so a stale notice of another run can never delete an entry saved later), and refuses, printing nothing to delete, when the first ref no longer holds it (another job of this run or you may have deleted the entry already; if so, stop), when that ref has more than one entry, when a later ref holds the key under a different version or when an entry has no version; then check which version the job used and delete that ID. Step 1: run the command below and read the entry it prints. Step 2: run the --id command it prints, once; it deletes exactly that ID and refuses when the ID no longer exists or has another key. The two steps are needed once per run, not once per job, even though every tools job of the run prints this notice: after one job's entry is deleted, step 1 refuses instead of naming the next ref's healthy entry. It needs velnor-ci 0.1.112 or newer on the machine that runs it, which the pinned helper does not provide: download it from {HELPER_RELEASES} (tag tools-v0.1.112 or newer) and put it on PATH. The token is the one `gh auth token` prints, which prefers an exported GH_TOKEN or GITHUB_TOKEN (GH_ENTERPRISE_TOKEN or GITHUB_ENTERPRISE_TOKEN on a host other than github.com) to the stored login, and it needs actions: write.{} Command: `{}`",
         quoted(key),
         trust_hint(remedy.remote),
-        delete_command(key, remedy.refs, remedy.remote)
+        delete_command(key, remedy.refs, remedy.remote, remedy.restored_before)
     )
 }
 
@@ -256,11 +259,13 @@ pub fn run(verb: Verb, context: &Context) -> Result<String, CiError> {
         anchor_key: &context.anchor_key,
         remote: &context.remote,
         refs: &refs,
+        restored_before: &context.restored_before,
     };
     Ok(format!("{}\n", message(&verdict, remedy)))
 }
 
 pub fn setup(verb: Verb) -> Result<String, CiError> {
+    let restored_before = crate::time::now_utc_text();
     let var = |name: &str| std::env::var(name).ok();
     let required = |name: &str| {
         var(name)
@@ -288,6 +293,7 @@ pub fn setup(verb: Verb) -> Result<String, CiError> {
             default_branch,
             cache_key: var("VELNOR_TOOLS_CACHE_KEY").unwrap_or_default(),
             anchor_key: var("VELNOR_ANCHOR_CACHE_KEY").unwrap_or_default(),
+            restored_before,
             remote: remote(
                 var("GITHUB_SERVER_URL").as_deref(),
                 var("GITHUB_API_URL").as_deref(),
