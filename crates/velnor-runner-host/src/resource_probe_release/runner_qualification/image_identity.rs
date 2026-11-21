@@ -216,3 +216,7 @@ pub(crate) fn source_healthcheck(
     }
     Ok(config.healthcheck)
 }
+
+#[cfg(test)]
+#[path = "image_identity_tests.rs"]
+mod tests;

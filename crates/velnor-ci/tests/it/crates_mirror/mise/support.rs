@@ -57,7 +57,7 @@ impl Mise {
         }
         std::os::unix::fs::symlink(
             root.join("rust-bin"),
-            root.join("mise-data/installs/rust/1.99.1"),
+            root.join("mise-data/installs/rust/1.100.0"),
         )?;
         std::os::unix::fs::symlink(
             rustup.parent().ok_or("Rustup bin")?,
@@ -145,11 +145,11 @@ impl Mise {
         };
         let tools = if kind == "implicit" {
             format!(
-                "rust={{version='1.99.1', mr_boxington=true}}\nmr-boxington='path:{}'\n",
+                "rust={{version='1.100.0', mr_boxington=true}}\nmr-boxington='path:{}'\n",
                 root.join("mbx").display()
             )
         } else {
-            "rust='1.99.1'\n".to_owned()
+            "rust='1.100.0'\n".to_owned()
         };
         repo.write_unstaged("mise.toml", &format!("[tools]\n{tools}[env]\nCONFIG_ROOT_MARKER='{{{{ config_root }}}}'\nMISE_DATA_DIR='{}'\nCARGO_HOME='{}'\nRUSTUP_HOME='{}'\n{wrappers}[settings]\nauto_install=false\n[settings.rust]\ncargo_home='{}'\nrustup_home='{}'\n", root.join("mise-data").display(), root.join("cargo-home").display(), self.rustup_home.display(), root.join("unused-cargo-home").display(), root.join("unused-rustup-home").display()));
     }

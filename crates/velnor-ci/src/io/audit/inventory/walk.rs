@@ -33,13 +33,24 @@ impl Budget {
     fn reserve(&mut self) -> io::Result<()> {
         let Some(remaining) = self.remaining.checked_sub(1) else {
             self.overflowed = true;
-            return Err(io::Error::other(format!(
-                "audit freshness scan limit exceeded: more than {} entries; raise it with {MAX_ENTRIES_VARIABLE} (at most {MAX_ENTRIES_CEILING})",
-                self.limit
-            )));
+            return Err(io::Error::other(self.exceeded()));
         };
         self.remaining = remaining;
         Ok(())
+    }
+
+    fn exceeded(&self) -> String {
+        if self.limit >= MAX_ENTRIES_CEILING {
+            format!(
+                "audit freshness scan limit exceeded: more than {} entries; the tree must be reduced or split",
+                self.limit
+            )
+        } else {
+            format!(
+                "audit freshness scan limit exceeded: more than {} entries; raise it with {MAX_ENTRIES_VARIABLE} (at most {MAX_ENTRIES_CEILING})",
+                self.limit
+            )
+        }
     }
 }
 
@@ -242,4 +253,28 @@ fn is_directory(path: &Path) -> io::Result<bool> {
 pub(in crate::io::audit) fn unresolved_link(error: &io::Error) -> bool {
     error.kind() == io::ErrorKind::NotFound
         || matches!(error.raw_os_error(), Some(libc::ELOOP | libc::ENOTDIR))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_scan_at_the_ceiling_says_the_tree_must_shrink_not_raise_the_limit() {
+        let mut budget = Budget::new(MAX_ENTRIES_CEILING);
+        budget.remaining = 0;
+        let error = budget.reserve().err().map_or_default(|e| e.to_string());
+        assert!(error.contains("more than 10000000 entries"), "{error}");
+        assert!(error.contains("reduced or split"), "{error}");
+        assert!(!error.contains("raise"), "{error}");
+    }
+
+    #[test]
+    fn a_scan_below_the_ceiling_says_how_to_raise_the_limit() {
+        let mut budget = Budget::new(3);
+        budget.remaining = 0;
+        let error = budget.reserve().err().map_or_default(|e| e.to_string());
+        assert!(error.contains(MAX_ENTRIES_VARIABLE), "{error}");
+        assert!(error.contains("raise it with"), "{error}");
+    }
 }

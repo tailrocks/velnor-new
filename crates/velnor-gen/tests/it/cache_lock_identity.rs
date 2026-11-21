@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{CacheKey, CacheRoot, Host, JobId, LockIdentity, RepoPath};
+use velnor_model::{BaseScope, CacheKey, CacheRoot, Host, JobId, LockIdentity, RepoPath};
 use velnor_render::render_key;
 use velnor_rust::LOCK_PATH;
 
@@ -55,6 +55,7 @@ fn the_member_lock_key_replaces_only_the_lock_segment_of_the_target_key() -> Tes
             job: JobId::new("rust-lint")?,
             root: root.clone(),
             host: Host,
+            scope: BaseScope::Shared,
         }))
     };
     let (old, new) = (target(&file)?, target(&members)?);

@@ -48,6 +48,11 @@ fn realized_output(
             .replace("${{ runner.os }}", "Windows")
             .replace("${{ runner.arch }}", "ARM64")
             .replace("${{ steps.prepare.outputs.compat }}", &"f".repeat(16));
+        let mut value = value;
+        while let Some(start) = value.find("${{ steps.prepare.outputs.lock_") {
+            let end = value[start..].find(" }}").ok_or("lock expression")? + start + 3;
+            value.replace_range(start..end, &"f".repeat(64));
+        }
         if value.contains("${{") {
             return Err(format!("unsupported cache expression: {name}: {text}").into());
         }
@@ -57,13 +62,21 @@ fn realized_output(
         .strip_prefix("${{ ")
         .and_then(|inner| inner.strip_suffix(" }}"))
         .ok_or_else(|| format!("unsupported output expression: {name}: {text}"))?;
-    if matches!(name, "tests_run" | "tests_listed") {
+    if matches!(name, "tests_run" | "tests_listed" | "tests_ignored") {
         assert_eq!(expression, format!("steps.test.outputs.{name}"));
         return Ok(u64::MAX.to_string());
     }
     if name == "tests_by_package" {
         assert_eq!(expression, "steps.test.outputs.tests_by_package");
         return worst_package_counts(packages.get(&job.id).ok_or("test packages")?);
+    }
+    if name == "tools_anchor" {
+        assert_eq!(expression, "steps.toolsread.outputs.anchor");
+        return Ok("f".repeat(64));
+    }
+    if name == "tools_anchor_key" {
+        assert_eq!(expression, "steps.toolsanchor.outputs.cache-matched-key");
+        return Ok("k".repeat(512));
     }
     if name == "skip_push" {
         assert_eq!(expression, "steps.merge_group.outputs.skip");
