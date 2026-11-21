@@ -25,6 +25,7 @@ mod cache_keys;
 mod cache_lock_identity;
 mod cache_mode_default;
 mod cache_mode_scan;
+mod cache_saved_key;
 mod call_fork_fence;
 mod cargo_flags;
 mod cargo_lock;
