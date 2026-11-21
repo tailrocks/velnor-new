@@ -9,7 +9,7 @@ use velnor_model::{
 use crate::plan::step;
 
 // helper-gate: first in tools-v0.1.111 via 00cab67428
-const TOKEN_FIRST_HELPER: (u64, u64, u64) = (0, 1, 111);
+pub const TOKEN_FIRST_HELPER: (u64, u64, u64) = (0, 1, 111);
 const HELPER_MINT: (u64, u64, u64) = (0, 1, 112);
 
 pub(crate) fn tokens_first(facts: &RepoFacts) -> bool {
@@ -101,7 +101,7 @@ pub(crate) fn insert(facts: &RepoFacts, jobs: &mut [Job]) {
             .any(|step| matches!(step.kind, StepKind::PrivateCheck { .. }))
         {
             kinds.push(StepKind::PrivateCheck {
-                cached: cached.clone(),
+                cached: if early { Vec::new() } else { cached.clone() },
             });
         }
         kinds.extend([
