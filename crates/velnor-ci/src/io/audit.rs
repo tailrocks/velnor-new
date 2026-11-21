@@ -20,7 +20,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
-use velnor_gen::io::read_checkout;
+use velnor_gen::io::{Checkout, read_checkout};
 use velnor_model::{CompileInputs, MemberDependency, RepoFacts, RepoPath};
 use velnor_rust::{
     INPUTS_IDENTITY_HELPER, INPUTS_LOCK, Owners, detect, inputs_lock_text, parse_inputs_lock,
@@ -28,7 +28,7 @@ use velnor_rust::{
 };
 
 use super::unit_platforms::platforms;
-use super::units::apart;
+use super::units::{Workspace, apart};
 use crate::coverage::{Built, Fingerprint};
 use crate::error::CiError;
 use crate::platform::Platforms;
@@ -63,7 +63,6 @@ pub(super) struct Audit<'a> {
 }
 
 pub fn audit_inputs(directory: &Path, options: &AuditOptions) -> Result<String, CiError> {
-    inventory::raise_open_file_limit();
     let failed = |e: &dyn std::fmt::Display| CiError::new(e.to_string());
     let mut checkout = read_checkout(directory).map_err(|e| failed(&e))?;
     let mut listed = checkout
@@ -81,17 +80,13 @@ pub fn audit_inputs(directory: &Path, options: &AuditOptions) -> Result<String, 
     apart(&workspaces, &shared)?;
     let chosen = selected(&facts, &shared, options.root.as_deref())?;
     let groups = group_dirs(&facts, &checkout.root);
-    let mut audit = setup::begin(
+    let audit = scanned(
         &checkout,
         &facts,
-        &workspaces,
-        &groups,
-        options.max_directory_entries,
+        (&workspaces, &shared, &groups),
+        &chosen,
+        options,
     )?;
-    for (unit, file, indices) in setup::gathered_files(&workspaces, &shared, &groups, &chosen)? {
-        audit.record(&indices, &file, unit)?;
-    }
-    audit.orphans();
     let gated = gated(&facts);
     let platforms = workspaces
         .iter()
@@ -139,6 +134,28 @@ pub fn audit_inputs(directory: &Path, options: &AuditOptions) -> Result<String, 
         listed = within(listed, &facts, &chosen);
     }
     compare(&audit.found, &listed, &summary, identified)
+}
+
+fn scanned<'a>(
+    checkout: &'a Checkout,
+    facts: &'a RepoFacts,
+    (workspaces, shared, groups): (&[Workspace], &[Vec<usize>], &[PathBuf]),
+    chosen: &[bool],
+    options: &AuditOptions,
+) -> Result<Audit<'a>, CiError> {
+    let _raised = inventory::raise_open_file_limit();
+    let mut audit = setup::begin(
+        checkout,
+        facts,
+        workspaces,
+        groups,
+        options.max_directory_entries,
+    )?;
+    for (unit, file, indices) in setup::gathered_files(workspaces, shared, groups, chosen)? {
+        audit.record(&indices, &file, unit)?;
+    }
+    audit.orphans();
+    Ok(audit)
 }
 
 fn gated(facts: &RepoFacts) -> bool {

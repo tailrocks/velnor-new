@@ -9,7 +9,6 @@ use crate::error::CiError;
 
 const UNLIMITED_TARGET: u64 = 10_240;
 
-#[derive(Clone, Copy)]
 pub(in crate::io::audit) struct OpenFileLimit {
     soft: u64,
     hard: u64,
@@ -28,8 +27,14 @@ pub(in crate::io::audit) fn raise_open_file_limit() -> Option<OpenFileLimit> {
     Some(OpenFileLimit { soft, hard })
 }
 
+impl Drop for OpenFileLimit {
+    fn drop(&mut self) {
+        let _ = setrlimit(Resource::RLIMIT_NOFILE, self.soft, self.hard);
+    }
+}
+
 impl OpenFileLimit {
-    pub(in crate::io::audit) fn for_child<T>(self, child: impl FnOnce() -> T) -> T {
+    pub(in crate::io::audit) fn for_child<T>(&self, child: impl FnOnce() -> T) -> T {
         let raised = open_file_limit();
         let _ = setrlimit(Resource::RLIMIT_NOFILE, self.soft, self.hard);
         let output = child();
@@ -39,7 +44,7 @@ impl OpenFileLimit {
 }
 
 pub(in crate::io::audit) fn run_build(
-    limit: Option<OpenFileLimit>,
+    limit: Option<&OpenFileLimit>,
     build: &mut Command,
 ) -> Result<ExitStatus, CiError> {
     let status = match limit {
@@ -51,4 +56,41 @@ pub(in crate::io::audit) fn run_build(
 
 pub(super) fn open_file_limit() -> u64 {
     getrlimit(Resource::RLIMIT_NOFILE).map_or(0, |(soft, _)| soft)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const LOW: u64 = 256;
+
+    fn lowered() -> (u64, u64) {
+        let (_, hard) = getrlimit(Resource::RLIMIT_NOFILE).unwrap_or_else(|e| unreachable!("{e}"));
+        assert!(
+            hard > LOW,
+            "the hard open-file limit {hard} leaves no room to raise the soft limit from {LOW}"
+        );
+        setrlimit(Resource::RLIMIT_NOFILE, LOW, hard).unwrap_or_else(|e| unreachable!("{e}"));
+        (LOW, hard)
+    }
+
+    #[test]
+    fn dropping_the_raise_restores_the_soft_limit_the_caller_had() {
+        let (soft, _) = lowered();
+        let raised = raise_open_file_limit();
+        assert!(open_file_limit() > soft, "the limit was not raised");
+        drop(raised);
+        assert_eq!(open_file_limit(), soft);
+    }
+
+    #[test]
+    fn a_child_sees_the_original_limit_and_the_raise_returns_afterwards() {
+        let (soft, _) = lowered();
+        let Some(raised) = raise_open_file_limit() else {
+            unreachable!("the limit can be read")
+        };
+        let during = open_file_limit();
+        let inside = raised.for_child(open_file_limit);
+        assert_eq!((inside, open_file_limit()), (soft, during));
+    }
 }

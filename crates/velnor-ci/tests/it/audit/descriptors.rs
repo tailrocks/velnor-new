@@ -3,10 +3,10 @@
 
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Output;
 
-use nix::sys::resource::{Resource, getrlimit};
+use nix::sys::resource::{Resource, getrlimit, setrlimit};
 use velnor_test_support::real_cargo;
 
 use super::inventory::build;
@@ -62,14 +62,14 @@ fn audit_under(repo: &Repo, limits: &str) -> Output {
     velnor_ci_under(repo, limits, &["inputs", "audit", "--write"], None)
 }
 
-fn fake_cargo() -> (Repo, String) {
+fn cargo_script(metadata: &str, build: &str) -> (Repo, String) {
     let bin = Repo::empty("cargo-bin");
     let cargo = bin.root().join("cargo");
     let real = real_cargo();
     fs::write(
         &cargo,
         format!(
-            "#!/bin/sh\nif [ \"$1\" = metadata ]; then exec \"{}\" \"$@\"; fi\nulimit -Sn\ntouch -m -t 206601010000 {OUTPUT}\n",
+            "#!/bin/sh\ncase \" $* \" in *\" metadata \"*) {metadata}exec \"{}\" \"$@\";; esac\n{build}\n",
             real.display()
         ),
     )
@@ -82,6 +82,13 @@ fn fake_cargo() -> (Repo, String) {
         std::env::var("PATH").unwrap_or_default()
     );
     (bin, path)
+}
+
+fn fake_cargo() -> (Repo, String) {
+    cargo_script(
+        "",
+        &format!("ulimit -Sn\ntouch -m -t 206601010000 {OUTPUT}"),
+    )
 }
 
 fn receipt(repo: &Repo) -> PathBuf {
@@ -155,6 +162,27 @@ fn a_build_that_exhausts_the_open_file_limit_runs_cargo_warns_and_treats_the_tre
 }
 
 #[test]
+fn a_deep_tree_is_captured_completely_by_a_build_that_raised_the_open_file_limit() {
+    let repo = deep_repository();
+    let (_bin, path) = fake_cargo();
+    let built = velnor_ci_under(
+        &repo,
+        &format!("ulimit -Sn {SOFT_LIMIT_WITHOUT_RAISE}"),
+        &["inputs", "build", "--", "cargo", "build"],
+        Some(&path),
+    );
+    assert!(built.status.success(), "{built:?}");
+    assert!(
+        !String::from_utf8_lossy(&built.stderr).contains("WARNING"),
+        "{built:?}"
+    );
+    assert!(
+        receipt(&repo).exists(),
+        "the build did not record its inputs: {built:?}"
+    );
+}
+
+#[test]
 fn the_build_command_sees_the_open_file_limit_the_process_started_with() {
     let repo = workspace_below_the_root();
     own_units(&repo, "rust/target/debug", &[]);
@@ -172,4 +200,119 @@ fn the_build_command_sees_the_open_file_limit_the_process_started_with() {
             .any(|line| line == SOFT_LIMIT_WITHOUT_RAISE.to_string()),
         "the build command inherited the raised limit: {built:?}"
     );
+}
+
+fn shallow_repository() -> Repo {
+    let repo = workspace_below_the_root();
+    own_units(&repo, "rust/target/debug", &[]);
+    unit(&repo, OUTPUT, "cargo:rerun-if-changed=../..\n");
+    build(&repo, OUTPUT, None);
+    repo
+}
+
+fn metadata_logging_cargo() -> (Repo, String, PathBuf) {
+    let log = std::env::temp_dir().join(format!("velnor-metadata-limits-{}", std::process::id()));
+    let _ = fs::remove_file(&log);
+    let (bin, path) = cargo_script(&format!("ulimit -Sn >> \"{}\"; ", log.display()), "");
+    (bin, path, log)
+}
+
+fn logged_limits(log: &Path) -> Vec<String> {
+    let text = fs::read_to_string(log)
+        .unwrap_or_else(|e| unreachable!("the metadata command never ran: {e}"));
+    let _ = fs::remove_file(log);
+    text.lines().map(str::to_owned).collect()
+}
+
+#[test]
+fn setup_subprocesses_of_an_audit_run_under_the_original_open_file_limit() {
+    let repo = shallow_repository();
+    let (_bin, path, log) = metadata_logging_cargo();
+    let audited = velnor_ci_under(
+        &repo,
+        &format!("ulimit -Sn {SOFT_LIMIT_WITHOUT_RAISE}"),
+        &["inputs", "audit", "--write"],
+        Some(&path),
+    );
+    assert!(audited.status.success(), "{audited:?}");
+    let limits = logged_limits(&log);
+    assert!(!limits.is_empty(), "no setup subprocess ran");
+    assert!(
+        limits
+            .iter()
+            .all(|limit| limit == &SOFT_LIMIT_WITHOUT_RAISE.to_string()),
+        "a setup subprocess ran under the raised limit: {limits:?}"
+    );
+}
+
+#[test]
+fn setup_subprocesses_of_a_build_run_under_the_original_open_file_limit() {
+    let repo = shallow_repository();
+    let (_bin, path, log) = metadata_logging_cargo();
+    let built = velnor_ci_under(
+        &repo,
+        &format!("ulimit -Sn {SOFT_LIMIT_WITHOUT_RAISE}"),
+        &["inputs", "build", "--", "cargo", "build"],
+        Some(&path),
+    );
+    assert!(built.status.success(), "{built:?}");
+    let limits = logged_limits(&log);
+    assert!(!limits.is_empty(), "no setup subprocess ran");
+    assert!(
+        limits
+            .iter()
+            .all(|limit| limit == &SOFT_LIMIT_WITHOUT_RAISE.to_string()),
+        "a setup subprocess ran under the raised limit: {limits:?}"
+    );
+}
+
+fn soft_open_file_limit() -> u64 {
+    getrlimit(Resource::RLIMIT_NOFILE).map_or(0, |(soft, _)| soft)
+}
+
+fn lower_soft_limit_below_the_hard_limit() -> u64 {
+    let hard = hard_open_file_limit();
+    assert!(
+        hard > u64::from(SOFT_LIMIT_WITHOUT_RAISE),
+        "the hard open-file limit {hard} leaves no room above {SOFT_LIMIT_WITHOUT_RAISE} to observe a raise"
+    );
+    setrlimit(
+        Resource::RLIMIT_NOFILE,
+        u64::from(SOFT_LIMIT_WITHOUT_RAISE),
+        hard,
+    )
+    .unwrap_or_else(|e| unreachable!("{e}"));
+    soft_open_file_limit()
+}
+
+fn options(max_directory_entries: usize) -> velnor_ci::io::AuditOptions {
+    velnor_ci::io::AuditOptions {
+        write: true,
+        root: None,
+        max_directory_entries,
+        inherit_target_dir: false,
+    }
+}
+
+#[test]
+fn the_public_audit_call_returns_with_the_callers_open_file_limit_unchanged() {
+    let repo = shallow_repository();
+    let before = lower_soft_limit_below_the_hard_limit();
+    let written = velnor_ci::io::audit_inputs(repo.root(), &options(1_000_000));
+    assert!(written.is_ok(), "{written:?}");
+    assert_eq!(soft_open_file_limit(), before);
+}
+
+#[test]
+fn the_public_audit_call_restores_the_open_file_limit_when_the_scan_fails() {
+    let repo = shallow_repository();
+    let before = lower_soft_limit_below_the_hard_limit();
+    let refused = velnor_ci::io::audit_inputs(repo.root(), &options(1));
+    assert!(
+        refused
+            .as_ref()
+            .is_err_and(|error| error.to_string().contains("freshness scan limit")),
+        "{refused:?}"
+    );
+    assert_eq!(soft_open_file_limit(), before);
 }

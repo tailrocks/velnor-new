@@ -289,7 +289,7 @@ impl Builder<'_> {
         {
             build.env(TARGET_VARIABLE, target);
         }
-        let status = inventory::run_build(self.open_files, &mut build)?;
+        let status = inventory::run_build(self.open_files.as_ref(), &mut build)?;
         self.record(
             entries,
             complete,

@@ -10,6 +10,7 @@ use super::*;
 
 mod ancestors;
 mod decision;
+mod exhaustion;
 mod links;
 mod placement;
 mod racing;
