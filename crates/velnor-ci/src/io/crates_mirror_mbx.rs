@@ -122,7 +122,8 @@ fn may_be_external_subcommand(args: &[OsString]) -> bool {
 }
 
 fn script_enabled(args: &[OsString]) -> bool {
-    let mut args = args.iter().take_while(|arg| *arg != "--");
+    let end = subcommand(args).map_or(args.len(), |(index, _)| index);
+    let mut args = args[..end].iter();
     while let Some(arg) = args.next() {
         if arg == "-Zscript" || (arg == "-Z" && args.next().is_some_and(|flag| flag == "script")) {
             return true;
@@ -133,24 +134,29 @@ fn script_enabled(args: &[OsString]) -> bool {
 
 fn directory_flag(work: &Path, args: &[OsString]) -> PathBuf {
     let mut base = work.to_path_buf();
-    let mut seen = args.iter().take_while(|arg| *arg != "--");
+    let mut seen = args.iter();
     while let Some(arg) = seen.next() {
         let Some(text) = arg.to_str() else {
             break;
         };
-        if text == "-C" {
-            if let Some(directory) = seen.next() {
+        if let Some((flag, attached)) = value_flag(text) {
+            let value = if attached.is_empty() {
+                seen.next().cloned()
+            } else {
+                Some(OsString::from(
+                    attached.strip_prefix('=').unwrap_or(attached),
+                ))
+            };
+            if let Some(directory) = value.filter(|_| flag == 'C') {
                 base = base.join(directory);
             }
-        } else if let Some(directory) = text.strip_prefix("-C") {
-            base = base.join(directory.strip_prefix('=').unwrap_or(directory));
-        } else if matches!(text, "-Z" | "--config" | "--color") {
+        } else if matches!(text, "--config" | "--color") {
             seen.next();
         } else if !text.starts_with(['-', '+']) {
             break;
         }
     }
-    base
+    std::fs::canonicalize(&base).unwrap_or(base)
 }
 
 pub(super) fn direct_target(command: &str) -> bool {
@@ -159,10 +165,14 @@ pub(super) fn direct_target(command: &str) -> bool {
 }
 
 pub(super) fn subcommand(args: &[OsString]) -> Option<(usize, &str)> {
-    let mut seen = args.iter().enumerate().take_while(|(_, arg)| *arg != "--");
+    let mut seen = args.iter().enumerate();
     while let Some((index, arg)) = seen.next() {
         let arg = arg.to_str()?;
-        if matches!(arg, "-C" | "-Z" | "--config" | "--color") {
+        if let Some((_, attached)) = value_flag(arg) {
+            if attached.is_empty() {
+                seen.next();
+            }
+        } else if matches!(arg, "--config" | "--color") {
             seen.next();
         } else if !arg.starts_with(['-', '+']) {
             return Some((index, arg));
@@ -171,8 +181,24 @@ pub(super) fn subcommand(args: &[OsString]) -> Option<(usize, &str)> {
     None
 }
 
+fn value_flag(arg: &str) -> Option<(char, &str)> {
+    if arg.starts_with("--") {
+        return None;
+    }
+    let flags = arg.strip_prefix('-')?;
+    flags
+        .char_indices()
+        .find(|(_, flag)| matches!(flag, 'C' | 'Z'))
+        .map(|(index, flag)| (flag, &flags[index + flag.len_utf8()..]))
+}
+
 pub(super) fn option_value(args: &[OsString], long: &str, shorthand: bool) -> Option<OsString> {
-    let mut args = args.iter().take_while(|arg| *arg != "--");
+    let split = subcommand(args).map_or(args.len(), |(index, _)| index);
+    let mut args = args
+        .iter()
+        .enumerate()
+        .take_while(|(index, arg)| *index < split || *arg != "--")
+        .map(|(_, arg)| arg);
     while let Some(arg) = args.next() {
         if arg == long || (shorthand && arg == "-m") {
             return args.next().cloned();
