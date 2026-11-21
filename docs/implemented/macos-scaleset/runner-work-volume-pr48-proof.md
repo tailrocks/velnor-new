@@ -37,8 +37,9 @@ The exact source digests used for the image and contract check are:
 | `crates/velnor-runner/crates/velnor-runner-host/src/worker/volumes_tests.rs` | `6088c0e85bc589f0f35e6e60a7a4989b9cf1498bb291fa535a634ade435762e9` |
 | `docs/proposed/macos-scaleset-runner.md` | `62366616a5e0b6a44c16bb6b755641cbbb1197207d1f700420328b39ce1ba69d` |
 
-The entrypoint creates its mode-`0600` JIT scratch file at
-`<tmp>/velnor-jit.XXXXXX`, outside the worker work volume. The source-bound
+The entrypoint creates its mode-`0600` JIT scratch file with `mktemp` as
+`velnor-jit.XXXXXX` directly in the literal `/tmp` directory, outside the worker
+work volume. The source-bound
 contract test asserts that path and verifies `/tmp` is not a runner mount.
 
 The images were rebuilt from these checked-in Dockerfiles after pulling the
@@ -131,15 +132,15 @@ dind_image=sha256:c75f47ba6049197aa3ca0161bcaaf29eb4756b6c63f370e1e65bfec234d493
 runner_image=sha256:28183f6f55daa486d1901415ffcf6d884930bed120ab7a70e57dced77789ec46
 docker image inspect "$dind_image" --format 'dind={{.Id}} {{.Os}}/{{.Architecture}}'
 docker image inspect "$runner_image" --format 'runner={{.Id}} {{.Os}}/{{.Architecture}} {{.Config.User}} {{.Config.WorkingDir}} {{json .Config.Entrypoint}}'
-if docker volume inspect "$volume" > <tmp>/runner48-volume-freshness-preinspect-20261005.txt 2>&1; then
-  cat <tmp>/runner48-volume-freshness-preinspect-20261005.txt
+if docker volume inspect "$volume" > ${TMPDIR:-/tmp}/runner48-volume-freshness-preinspect-20261005.txt 2>&1; then
+  cat ${TMPDIR:-/tmp}/runner48-volume-freshness-preinspect-20261005.txt
   exit 1
 else
   preinspect_status=$?
   printf 'precreate-inspect-status=%s\n' "$preinspect_status"
-  cat <tmp>/runner48-volume-freshness-preinspect-20261005.txt
+  cat ${TMPDIR:-/tmp}/runner48-volume-freshness-preinspect-20261005.txt
   test "$preinspect_status" -eq 1
-  grep -F 'no such volume' <tmp>/runner48-volume-freshness-preinspect-20261005.txt
+  grep -F 'no such volume' ${TMPDIR:-/tmp}/runner48-volume-freshness-preinspect-20261005.txt
 fi
 docker volume create --label "velnor.worker=$worker" --label velnor.role=work "$volume"
 docker run --rm --volume "$volume:/home/runner/_work" --entrypoint /bin/sh "$dind_image" -ec 'id; stat -c "%u:%g %a %n" /home/runner/_work; printf "dind-ok\\n" > /home/runner/_work/dind-probe; stat -c "%u:%g %a %n" /home/runner/_work/dind-probe'
@@ -154,15 +155,15 @@ printf 'empty-payload-entrypoint-status=%s\n' "$runner_status"
 docker run --rm --volume "$volume:/home/runner/_work" --entrypoint /bin/sh "$runner_image" -ec 'id; stat -c "%u:%g %a %n" /home/runner/_work; test "$(cat /home/runner/_work/dind-probe)" = dind-ok; test -z "$(find /home/runner/_work -maxdepth 1 -name "jit.*" -print -quit)"; printf "runner-ok\\n" > /home/runner/_work/runner-probe; stat -c "%u:%g %a %n" /home/runner/_work/runner-probe; cat /home/runner/_work/dind-probe'
 docker volume inspect "$volume" --format 'labels={{.Labels}}'
 docker volume rm "$volume"
-if docker volume inspect "$volume" > <tmp>/runner48-volume-freshness-afterinspect-20261005.txt 2>&1; then
-  cat <tmp>/runner48-volume-freshness-afterinspect-20261005.txt
+if docker volume inspect "$volume" > ${TMPDIR:-/tmp}/runner48-volume-freshness-afterinspect-20261005.txt 2>&1; then
+  cat ${TMPDIR:-/tmp}/runner48-volume-freshness-afterinspect-20261005.txt
   exit 1
 else
   afterinspect_status=$?
   printf 'postremove-inspect-status=%s\n' "$afterinspect_status"
-  cat <tmp>/runner48-volume-freshness-afterinspect-20261005.txt
+  cat ${TMPDIR:-/tmp}/runner48-volume-freshness-afterinspect-20261005.txt
   test "$afterinspect_status" -eq 1
-  grep -F 'no such volume' <tmp>/runner48-volume-freshness-afterinspect-20261005.txt
+  grep -F 'no such volume' ${TMPDIR:-/tmp}/runner48-volume-freshness-afterinspect-20261005.txt
 fi
 printf 'cleanup=confirmed volume=%s absent\n' "$volume"
 ```
