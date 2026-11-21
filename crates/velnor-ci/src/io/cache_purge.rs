@@ -42,7 +42,6 @@ fn running_workflows(github: &dyn GitHubWrite, repo: &Repo) -> Result<u64, CiErr
         "waiting",
         "requested",
         "pending",
-        "action_required",
     ] {
         let json = github.get(&format!(
             "/repos/{repo}/actions/runs?status={status}&per_page=1"

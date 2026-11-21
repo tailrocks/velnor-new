@@ -48,19 +48,11 @@ fn waiting_runs_alone_refuse_the_purge_and_delete_nothing() {
 }
 
 #[test]
-fn action_required_runs_alone_refuse_the_purge_and_delete_nothing() {
-    let api = Api::with_runs(mixed(), &[("action_required", 1)]);
-    let error = purge_private(&api, &repo(), true)
-        .err()
-        .map(|e| e.to_string());
-    assert_eq!(
-        error.as_deref(),
-        Some(
-            "1 workflow runs are in progress; wait for them or disable workflows, then run purge-private again"
-        )
-    );
-    assert!(api.deleted.borrow().is_empty());
-    assert_eq!(api.entries.borrow().len(), 8);
+fn action_required_conclusions_of_finished_runs_do_not_refuse_the_purge() {
+    let api = Api::with_runs(mixed(), &[("action_required", 4)]);
+    let report = purge_private(&api, &repo(), true).unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(report.contains("deleted 3 entries"), "{report}");
+    assert_eq!(api.deleted.borrow().len(), 3);
 }
 
 #[test]
@@ -129,5 +121,5 @@ fn no_running_workflows_in_either_pass_lets_the_purge_proceed() {
     let api = Api::new(mixed());
     let report = purge_private(&api, &repo(), true).unwrap_or_else(|e| unreachable!("{e}"));
     assert!(report.contains("deleted 3 entries"), "{report}");
-    assert_eq!(api.run_listings.get(), 12);
+    assert_eq!(api.run_listings.get(), 10);
 }
