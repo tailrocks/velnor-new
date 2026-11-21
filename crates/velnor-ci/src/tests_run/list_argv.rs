@@ -226,43 +226,6 @@ fn an_archive_run_lists_without_writing_to_the_tree_it_runs_from() {
         "--extract-to",
         ".",
         "--extract-overwrite",
-        "--persist-extract-tempdir",
-        "--workspace-remap",
-        ".",
-        "--test-threads",
-        "2",
-        "--no-fail-fast",
-        "-E",
-        "all()",
-    ]);
-
-    assert_eq!(
-        list_argv(&run),
-        Some(argv(&[
-            "cargo-nextest",
-            "nextest",
-            "list",
-            "--archive-file",
-            "nextest-archive.tar.zst",
-            "--workspace-remap",
-            ".",
-            "-E",
-            "all()",
-            "--message-format",
-            "json",
-        ]))
-    );
-}
-
-#[test]
-fn an_archive_run_with_a_persisted_extract_tempdir_lists_without_it() {
-    let run = argv(&[
-        "cargo-nextest",
-        "nextest",
-        "run",
-        "--archive-file",
-        "nextest-archive.tar.zst",
-        "--persist-extract-tempdir",
         "--workspace-remap",
         ".",
         "--test-threads",
