@@ -68,8 +68,10 @@ fn rejected(repo: &Repo, cache: &Path, root: &str, job: &str) {
 
 #[test]
 fn malformed_or_missing_scope_caches_refuse_save_and_remove_the_old_snapshot() {
+    let (repo, cache) = prepared();
+    let pristine = pristine_copy(&repo);
     for damage in ["missing", "truncated", "schema", "digest", "body"] {
-        let (repo, cache) = prepared();
+        reset_to(&repo, &pristine);
         let mut envelope: serde_json::Value =
             serde_json::from_slice(&fs::read(&cache).unwrap_or_default())
                 .unwrap_or_else(|e| unreachable!("{e}"));
