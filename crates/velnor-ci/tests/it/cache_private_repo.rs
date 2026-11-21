@@ -134,6 +134,12 @@ fn an_answer_that_does_not_prove_privacy_of_this_repository_is_reported_not_priv
                 Some(TOKEN),
             ),
             (
+                "no-visibility-not-private",
+                200,
+                r#"{"full_name":"acme/app","private":false}"#,
+                Some(TOKEN),
+            ),
+            (
                 "no-full-name",
                 200,
                 r#"{"private":true,"visibility":"private"}"#,

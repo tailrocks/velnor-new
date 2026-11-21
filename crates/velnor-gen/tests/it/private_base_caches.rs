@@ -166,6 +166,42 @@ fn the_helpers_verdict_gates_every_restore_and_every_save_of_the_base_caches() -
 }
 
 #[test]
+fn a_lane_that_saves_no_sources_still_tells_the_decision_that_the_sources_restore_hit() -> TestResult
+{
+    let mut repo = private_repo(
+        &["Cargo.toml"],
+        &format!("shape = \"lint-test\"\n{SECTION}"),
+        "0.1.111",
+    )?;
+    repo.files
+        .insert(path("Cargo.lock")?, GIT_LOCK.as_bytes().to_vec());
+    let text = workflow(&repo)?;
+    let target_only: Vec<String> = jobs_of(&text)
+        .into_iter()
+        .map(|(_, block)| block)
+        .filter(|block| {
+            block.contains("Decide whether to save the build directory")
+                && !block.contains("Save the sources cache")
+        })
+        .collect();
+    assert!(!target_only.is_empty(), "no lane saves no sources");
+    for block in target_only {
+        assert!(
+            step(&block, "Restore the sources cache").is_some(),
+            "{block}"
+        );
+        let decide =
+            step(&block, "Decide whether to save the build directory").ok_or("no decide")?;
+        assert!(
+            decide.contains("VELNOR_SOURCES_RESTORED: '${{ steps.sources_")
+                && decide.contains(".outputs.cache-hit }}'"),
+            "{decide}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn the_sources_cache_saves_the_cargo_downloads_and_nothing_that_holds_a_credential() -> TestResult {
     let text = workflow(&consumer("0.1.111", GIT_LOCK, "")?)?;
     let lane = lane(&text)?;

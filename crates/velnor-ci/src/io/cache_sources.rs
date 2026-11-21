@@ -91,7 +91,9 @@ pub(super) fn refusal(
             .map(|dir| dir.join(".cargo"))
             .chain([cargo_home.clone()])
         {
-            let path = effective_config(&dir);
+            let Ok(path) = effective_config(&dir) else {
+                return Ok(refused(&dir.join("config"), None));
+            };
             match fs::symlink_metadata(&path) {
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
                 Ok(meta) if meta.is_file() => {}
@@ -138,12 +140,12 @@ pub(super) fn refusal(
     Ok(admission)
 }
 
-fn effective_config(dir: &Path) -> PathBuf {
+fn effective_config(dir: &Path) -> std::io::Result<PathBuf> {
     let plain = dir.join("config");
-    if fs::symlink_metadata(&plain).is_ok() {
-        plain
-    } else {
-        dir.join("config.toml")
+    match fs::symlink_metadata(&plain) {
+        Ok(_) => Ok(plain),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(dir.join("config.toml")),
+        Err(error) => Err(error),
     }
 }
 

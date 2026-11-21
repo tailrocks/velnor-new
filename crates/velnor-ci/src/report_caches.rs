@@ -16,10 +16,6 @@ pub(crate) struct CachePlan {
     not_generated: Option<String>,
 }
 
-/// The `private_repo` step exists only on lanes with private base caches, and
-/// those caches are used only when the repository was positively confirmed. A
-/// step that failed, was skipped or wrote no readable verdict is not a
-/// confirmation.
 pub(crate) fn privacy_unavailable(steps: &Value) -> bool {
     let step = &steps["private_repo"];
     if step.is_null() {
