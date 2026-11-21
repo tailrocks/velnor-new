@@ -4,6 +4,7 @@
 use velnor_render::MAX_WORKFLOW_BYTES;
 
 use crate::facts::TestResult;
+use crate::newest_helper::newest_helper;
 use crate::pipeline::{pin_helper, view, workflow};
 
 const LANE: &str = "[[test_lane]]\nroot = '.'\nfeatures = ['local-mode']\npackages = ['package-0']\nfilter = 'test(~local::)'\nlint = true\ndoc = true\njob = 'parallel'\n";
@@ -45,7 +46,7 @@ fn one_anchor_read_keeps_a_twenty_root_workflow_smaller_than_one_read_per_job() 
 fn a_twenty_one_root_parallel_workflow_with_a_read_per_job_is_refused_and_one_read_renders()
 -> TestResult {
     assert!(roots(PARALLEL_ROOTS, Some(LANE), "0.1.109").is_err());
-    let once = roots(PARALLEL_ROOTS, Some(LANE), "0.1.110")?;
+    let once = roots(PARALLEL_ROOTS, Some(LANE), &newest_helper()?)?;
     assert!(once < MAX_WORKFLOW_BYTES, "{once} bytes");
     Ok(())
 }

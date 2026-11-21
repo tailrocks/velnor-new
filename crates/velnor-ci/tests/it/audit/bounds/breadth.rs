@@ -1,7 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::ffi::OsStr;
 use std::fs;
+use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 use std::process::Output;
 
@@ -106,6 +108,27 @@ fn a_directory_bound_outside_its_range_is_refused() {
             "{refused:?}"
         );
     }
+    assert_eq!(
+        fs::read(repo.root().join(".velnor/rust-inputs.lock"))
+            .unwrap_or_else(|e| unreachable!("{e}")),
+        before
+    );
+}
+
+#[test]
+fn a_directory_bound_that_is_not_unicode_is_refused() {
+    let (repo, before) = prepared();
+    let refused = velnor_ci()
+        .env(VARIABLE, OsStr::from_bytes(b"\xff"))
+        .current_dir(repo.root())
+        .args(["inputs", "audit", "--write"])
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(refused.status.code(), Some(1), "{refused:?}");
+    assert!(
+        String::from_utf8_lossy(&refused.stderr).contains(VARIABLE),
+        "{refused:?}"
+    );
     assert_eq!(
         fs::read(repo.root().join(".velnor/rust-inputs.lock"))
             .unwrap_or_else(|e| unreachable!("{e}")),
