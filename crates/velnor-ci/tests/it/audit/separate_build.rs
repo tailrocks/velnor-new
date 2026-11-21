@@ -230,21 +230,43 @@ fn a_relative_build_directory_resolves_parent_components_through_a_symlink_as_ca
     );
 }
 
+fn link_to_build(repo: &Repo) {
+    std::os::unix::fs::symlink("../build", repo.root().join("rust/app/link-to-build"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+}
+
 #[test]
-fn a_build_directory_spelled_through_a_symlink_and_a_parent_component_is_audited_to_success() {
+fn a_relative_build_directory_through_a_symlink_without_parent_components_is_audited_to_success() {
     let repo = built_in(APART, &[]);
-    fs::create_dir_all(repo.root().join("rust/inner")).unwrap_or_else(|e| unreachable!("{e}"));
-    std::os::unix::fs::symlink("../inner", repo.root().join("rust/app/link"))
-        .unwrap_or_else(|e| unreachable!("{e}"));
+    link_to_build(&repo);
     stamp(&repo, APART);
-    let written = velnor_ci()
-        .current_dir(repo.root().join("rust/app"))
-        .env("CARGO_BUILD_BUILD_DIR", "link/../build")
-        .args(["inputs", "audit", "--write"])
-        .output()
-        .unwrap_or_else(|e| unreachable!("{e}"));
+    let written = from_step_directory(&repo, "link-to-build", &["inputs", "audit", "--write"]);
     assert!(written.status.success(), "{written:?}");
     assert_eq!(lock(&repo), ".\tlib\n");
+}
+
+#[test]
+fn an_absolute_build_directory_through_a_symlink_is_audited_to_success() {
+    let repo = built_in(APART, &[]);
+    link_to_build(&repo);
+    stamp(&repo, APART);
+    let through_link = repo.root().join("rust/app/link-to-build");
+    let written = from_step_directory(
+        &repo,
+        &through_link.to_string_lossy(),
+        &["inputs", "audit", "--write"],
+    );
+    assert!(written.status.success(), "{written:?}");
+    assert_eq!(lock(&repo), ".\tlib\n");
+}
+
+fn from_step_directory(repo: &Repo, value: &str, arguments: &[&str]) -> Output {
+    velnor_ci()
+        .current_dir(repo.root().join("rust/app"))
+        .env("CARGO_BUILD_BUILD_DIR", value)
+        .args(arguments)
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"))
 }
 
 #[test]
