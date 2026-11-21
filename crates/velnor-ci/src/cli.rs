@@ -131,7 +131,7 @@ pub enum Command {
     )]
     MbxSeed,
     #[command(
-        about = "Keep the mise and rustup tool directories on the node's own disk. restore copies ~/.local/share/mise and ~/.rustup from tools/<key> of the store (VELNOR_MBX_SHARED_DIR on a trusted event, VELNOR_MBX_SEED_DIR otherwise) and writes hit=true or hit=false to $GITHUB_OUTPUT, so the network cache action can be skipped on a hit; save, on a trusted event only, copies them into tools/<key> with an atomic rename, keeping the two newest keys. A missing store, a failed check or a failed copy is a miss, never an error. restore first deletes ~/.local/share/mise and ~/.rustup so that the home holds exactly the stored tree, and clear (no --key) deletes the same two directories before any restore; both refuse, with a warning and nothing deleted, a symlinked tool directory or parent, or a HOME that is a symlink, not absolute or the filesystem root"
+        about = "Keep the mise and rustup tool directories on the node's own disk. restore copies ~/.local/share/mise and ~/.rustup from tools/<key> of the store (VELNOR_MBX_SHARED_DIR on a trusted event, VELNOR_MBX_SEED_DIR otherwise) and writes hit=true or hit=false to $GITHUB_OUTPUT, so the network cache action can be skipped on a hit; save, on a trusted event only, copies them into tools/<key> with an atomic rename, keeping the two newest keys. A missing store, a failed check or a failed copy is a miss, never an error. restore first deletes ~/.local/share/mise and ~/.rustup so that the home holds exactly the stored tree, and clear (no --key) deletes the same two directories before any restore; both refuse, with a warning and nothing deleted, a symlinked tool directory or parent, and (helper 0.1.111 or later) a HOME that is a symlink, dangling or looping included, not absolute or the filesystem root"
     )]
     ToolsLocal(ToolsLocalArgs),
     #[command(
@@ -147,7 +147,7 @@ pub enum Command {
     )]
     CheckMetadata,
     #[command(
-        about = "Resolve every requested feature configuration afresh, then cargo check each distinct full package feature map once, offline and locked"
+        about = "Resolve every requested feature configuration afresh, then cargo check each distinct full package feature map once, locked; cargo runs offline when CARGO_NET_OFFLINE is set, as in a job with private sources"
     )]
     CheckConfigurations(CheckConfigurationsArgs),
     #[command(

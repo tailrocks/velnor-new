@@ -30,6 +30,7 @@ mod cache_retention_flow;
 mod io_cold_foreign;
 mod io_gate;
 mod run_escape;
+mod runtime_gitlink;
 
 mod cache_safety;
 mod cache_upload;
@@ -214,6 +215,7 @@ mod timings_composite;
 mod timings_groups;
 mod timings_runs;
 mod timings_setup;
+mod toolchain;
 mod tools_digest;
 mod tools_heal;
 mod tools_home_clear;
