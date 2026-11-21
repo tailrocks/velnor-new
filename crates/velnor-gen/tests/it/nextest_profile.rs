@@ -37,6 +37,24 @@ fn ci_runs(text: &str) -> usize {
 }
 
 #[test]
+fn the_test_run_keeps_the_default_filter_of_the_profile() -> TestResult {
+    let ci = rendered(
+        &["Cargo.toml"],
+        None,
+        &[(".config/nextest.toml", CI_PROFILE)],
+    )?;
+    assert!(
+        ci.contains("--profile ci --no-fail-fast --status-level pass -E"),
+        "{ci}"
+    );
+    assert!(
+        !ci.contains("--ignore-default-filter --status-level"),
+        "{ci}"
+    );
+    Ok(())
+}
+
+#[test]
 fn a_root_that_defines_profile_ci_runs_nextest_with_it() -> TestResult {
     let ci = rendered(
         &["Cargo.toml"],

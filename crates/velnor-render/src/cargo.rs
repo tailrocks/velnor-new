@@ -301,7 +301,7 @@ pub(crate) fn nextest_run(
     (
         TEST_STEP.into(),
         format!(
-            "cargo-nextest nextest run{path} {scope}{profile} --no-fail-fast --ignore-default-filter --status-level pass -E \"{}\" --no-tests={no_tests}",
+            "cargo-nextest nextest run{path} {scope}{profile} --no-fail-fast --status-level pass -E \"{}\" --no-tests={no_tests}",
             nextest_filter(filter)
         ),
         vec![],
