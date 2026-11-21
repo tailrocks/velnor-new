@@ -8,6 +8,7 @@ use std::ffi::OsStr;
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
 use std::os::unix::fs::FileTypeExt;
+use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -28,13 +29,13 @@ fn enabled() -> bool {
     std::env::var(SWITCH).is_ok_and(|value| value == "true")
 }
 
-/// An enclosing mbx session (its socket is live) answers for nested cargo calls and writes no report of their own.
 fn inside_session(socket: Option<&OsStr>) -> bool {
-    socket.is_some_and(|socket| !socket.is_empty() && is_socket(Path::new(socket)))
+    socket.is_some_and(|socket| !socket.is_empty() && is_live_socket(Path::new(socket)))
 }
 
-fn is_socket(path: &Path) -> bool {
+fn is_live_socket(path: &Path) -> bool {
     fs::symlink_metadata(path).is_ok_and(|metadata| metadata.file_type().is_socket())
+        && UnixStream::connect(path).is_ok()
 }
 
 pub(crate) fn assign(command: &mut Command, argv: &[String]) {

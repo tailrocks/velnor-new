@@ -49,3 +49,13 @@ fn live_socket_is_a_nested_session() {
     let _listener = UnixListener::bind(&path).unwrap_or_else(|e| unreachable!("{e}"));
     assert!(inside_session(Some(path.as_os_str())));
 }
+
+#[test]
+fn stale_socket_file_without_a_listener_is_not_a_nested_session() {
+    let dir = Dir::new("dropped");
+    let path = dir.0.join("mbx.sock");
+    let listener = UnixListener::bind(&path).unwrap_or_else(|e| unreachable!("{e}"));
+    drop(listener);
+    assert!(path.exists());
+    assert!(!inside_session(Some(path.as_os_str())));
+}
