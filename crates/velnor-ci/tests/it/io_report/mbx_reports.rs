@@ -99,6 +99,7 @@ pub(super) const fn session(hits: u64, misses: u64, not_looked_up: u64) -> MbxSe
         verifications: None,
         bypasses: BTreeMap::new(),
         compiler: BTreeMap::new(),
+        probe_only: false,
     }
 }
 

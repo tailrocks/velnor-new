@@ -163,6 +163,7 @@ fn a_session_with_only_routine_bypasses_reaches_the_metrics() -> ResultTest {
             ("standard-input".to_owned(), 1)
         ])
     );
+    assert!(metrics.mbx.sessions[0].probe_only, "{metrics:?}");
     Ok(())
 }
 
@@ -226,6 +227,7 @@ fn the_reader_maps_a_real_mbx_report_and_names_what_it_cannot_read() {
                 ("compiler-query".to_owned(), 2),
                 ("standard-input".to_owned(), 1)
             ]),
+            probe_only: true,
             ..session(0, 0, 0)
         }))
     );

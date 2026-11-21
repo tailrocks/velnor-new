@@ -28,6 +28,8 @@ pub struct MbxSession {
     pub bypasses: BTreeMap<String, u64>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub compiler: BTreeMap<String, MbxCompilerWork>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub probe_only: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -143,7 +145,12 @@ pub fn waste(metrics: &LaneMetrics) -> Vec<String> {
             ));
         }
     }
-    let sessions = &metrics.mbx.sessions;
+    let sessions: Vec<&MbxSession> = metrics
+        .mbx
+        .sessions
+        .iter()
+        .filter(|session| !session.probe_only)
+        .collect();
     let lookups: u64 = sessions.iter().fold(0_u64, |total, session| {
         total.saturating_add(session.misses.saturating_add(session.not_looked_up))
     });
@@ -160,7 +167,7 @@ pub fn waste(metrics: &LaneMetrics) -> Vec<String> {
         ));
     }
     if metrics.mbx.declared
-        && metrics.mbx.sessions.is_empty()
+        && sessions.is_empty()
         && metrics.mbx.unparsed == 0
         && metrics
             .invocations
