@@ -105,12 +105,17 @@ description = "Check the alint no-doctests rule against doctest fixtures: every 
 run = "bash scripts/test-no-doctests-rule.sh"
 
 [tasks.test-mise-binary-digests]
-description = "Run the minisign signature tests of scripts/mise-binary-digests.sh; a missing minisign fails instead of skipping"
+description = "Run the minisign signature tests of scripts/mise-binary-digests.sh; CI requires minisign, elsewhere a missing minisign skips"
 run = '''
 set -eu
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
-VELNOR_REQUIRE_MINISIGN=1 python3 scripts/test_mise_binary_digests.py
+if [ -n "${CI:-}" ]; then
+  VELNOR_REQUIRE_MINISIGN=1
+  export VELNOR_REQUIRE_MINISIGN
+fi
+python3 scripts/test_mise_binary_digests.py
+python3 scripts/test_mise_binary_digests_entry.py
 '''
 
 [tasks.test-maintenance-helpers]

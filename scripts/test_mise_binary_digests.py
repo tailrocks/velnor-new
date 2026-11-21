@@ -3,9 +3,8 @@
 """scripts/mise-binary-digests.sh trusts SHASUMS256.txt only after the real `minisign` verifies it.
 
 The tests run the pinned tool (mise.toml, `minisign`), never a stand-in. Without it on PATH they
-skip, unless VELNOR_REQUIRE_MINISIGN is set, as the `test-mise-binary-digests` task sets it (the
-`mise-binary-digests` lint job of rust-ci runs that task): then a missing tool is a failure, so CI
-cannot pass by skipping.
+print one line and exit 0, unless VELNOR_REQUIRE_MINISIGN is set: then a missing tool is a failure,
+so CI cannot pass by skipping. The `test-mise-binary-digests` task sets it when CI is set.
 """
 
 import os
@@ -224,4 +223,7 @@ class MiseTomlMinisignPin(unittest.TestCase):
 
 
 if __name__ == "__main__":
+    if MINISIGN is None and not os.environ.get("VELNOR_REQUIRE_MINISIGN"):
+        print("minisign is not available on this platform; signature tests skipped; CI runs them")
+        sys.exit(0)
     unittest.main()
