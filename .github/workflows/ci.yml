@@ -97,9 +97,87 @@ jobs:
             echo "the check accepted a correction whose commit already shipped in the previous release" >&2
             exit 1
           fi
+          if bash scripts/check-helper-gates.sh --diff "$fixtures/gate-prose.diff" --current 0.1.100; then
+            echo "the check accepted the prose gate marker" >&2
+            exit 1
+          fi
           bash scripts/check-helper-gates.sh --diff "$fixtures/gate-good.diff" --current 0.1.100
           bash scripts/check-helper-gates.sh --diff "$fixtures/gate-correction-good.diff" --current 0.1.100
+          out=$(bash scripts/check-helper-gates.sh --diff "$fixtures/gate-correction-untagged.diff" --current 0.1.111)
+          case "$out" in
+            *"first in tools-v0.1.111 via 66940bed2e"*) ;;
+            *) echo "the check did not name the release tag tools-v0.1.111: $out" >&2; exit 1 ;;
+          esac
+          out=$(bash scripts/check-helper-gates.sh --diff "$fixtures/gate-correction-legacy-rust-ci.diff" --current 0.1.100)
+          case "$out" in
+            *"first in rust-ci-v0.1.82 via 6d583dd497"*) ;;
+            *) echo "the check did not name the release tag rust-ci-v0.1.82: $out" >&2; exit 1 ;;
+          esac
+          for f in gate-unreleased-untagged gate-unreleased-released-marker gate-prose-released gate-released-unmarked gate-marker-unchanged-wrong-commit gate-marker-unchanged-wrong-version; do
+            if bash scripts/check-helper-gates.sh --diff "$fixtures/$f.diff" --current 0.1.110; then
+              echo "the check accepted $f.diff" >&2
+              exit 1
+            fi
+          done
+          bash scripts/check-helper-gates.sh --diff "$fixtures/gate-unreleased-none.diff" --current 0.1.110
+          bash scripts/check-helper-gates.sh --diff "$fixtures/gate-released-marked.diff" --current 0.1.110
+          bash scripts/check-helper-gates.sh --diff "$fixtures/gate-marker-unchanged-good.diff" --current 0.1.110
+          bash scripts/check-helper-gates.sh --diff "$fixtures/gate-prose-in-code.diff" --current 0.1.110
+          bash scripts/check-helper-gates.sh --diff "$fixtures/gate-bump-marked.diff" --current 0.1.111
+          if bash scripts/check-helper-gates.sh --diff "$fixtures/gate-bump-unmarked.diff" --current 0.1.111; then
+            echo "the check accepted an unmarked gate in the release bump" >&2
+            exit 1
+          fi
+          rel=(--base-version 0.1.110 --tag-version 0.1.110 --current 0.1.111)
+          if bash scripts/check-helper-gates.sh --diff /dev/null --tree "$fixtures/gate-tree-unmarked.diff" "${rel[@]}"; then
+            echo "the check accepted an unmarked gate already in the tree at the release bump" >&2
+            exit 1
+          fi
+          bash scripts/check-helper-gates.sh --diff /dev/null --tree "$fixtures/gate-tree-marked.diff" "${rel[@]}"
+          bash scripts/check-helper-gates.sh --diff /dev/null --tree "$fixtures/gate-tree-future.diff" "${rel[@]}"
+          bash scripts/check-helper-gates.sh --diff "$fixtures/gate-marker-in-code.diff" --current 0.1.110
+          if bash scripts/check-helper-gates.sh --diff "$fixtures/gate-marker-malformed.diff" --current 0.1.110; then
+            echo "the check accepted a malformed marker comment" >&2
+            exit 1
+          fi
+          if bash scripts/check-helper-gates.sh --diff "$fixtures/gate-released-unmarked.diff" --current 0.1.109 --base-version 0.1.110 --tag-version 0.1.110; then
+            echo "the check let a lowered head version hide a released gate" >&2
+            exit 1
+          fi
       - name: Check the added gates against the base
         env:
           BASE_REF: ${{ github.base_ref }}
         run: bash scripts/check-helper-gates.sh "origin/$BASE_REF"
+  secret-scan:
+    name: Secret scanners
+    runs-on: [velnor, ubuntu-26.04-scale-set]
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash -e {0}
+    if: (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || github.event_name == 'push' || github.event_name == 'merge_group'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: "1"
+          persist-credentials: "false"
+      - name: Fetch the history of the checked-out commit
+        run: git fetch --no-tags --unshallow origin "$(git rev-parse HEAD)"
+      - name: Test that the scanner pins ignore repository tool config
+        run: bash scripts/test-install-secret-scanners.sh
+      - name: Install the pinned secret scanners
+        run: bash scripts/install-secret-scanners.sh "$RUNNER_TEMP/secret-scanners"
+      - name: Test that the working-tree secret scan fails on a planted token and passes a clean tree
+        run: bash scripts/test-secret-scan-worktree.sh
+      - name: Print scanner versions
+        run: |
+          gitleaks version
+          betterleaks version
+          kingfisher --version
+      - name: Scan the commit history with gitleaks
+        run: gitleaks git . --redact --no-banner --config .gitleaks.toml --log-opts="--full-history --diff-merges=first-parent HEAD"
+      - name: Scan the commit history with betterleaks
+        run: betterleaks git . --redact -c .gitleaks.toml --log-opts="--full-history --diff-merges=first-parent HEAD"
+      - name: Scan the working tree with kingfisher
+        run: bash scripts/secret-scan-worktree.sh

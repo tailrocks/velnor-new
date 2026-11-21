@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs;
-use std::time::UNIX_EPOCH;
+use std::os::unix::fs::MetadataExt;
+use std::time::{Duration, UNIX_EPOCH};
 
 use super::*;
 
