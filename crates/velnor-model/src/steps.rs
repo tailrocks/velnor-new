@@ -121,6 +121,7 @@ pub enum StepKind {
     PrivateToken {
         sources: crate::repo::PrivateSources,
         cached: Vec<crate::ids::RootSlug>,
+        mint: crate::repo::TokenMint,
     },
     PrivateFetch {
         manifests: Vec<RepoPath>,
@@ -140,6 +141,7 @@ pub enum StepKind {
     },
     MbxPin,
     MbxPrivate,
+    MbxOutDirs,
     MbxStore,
     MbxSeed,
     ToolsLocal(ToolsLocalVerb, crate::ToolsAnchor),
@@ -165,6 +167,7 @@ pub enum StepKind {
         nextest_artifacts: bool,
         node_tools: ToolsTelemetry,
         not_generated: Option<String>,
+        unsuppressed: Vec<CacheKey>,
     },
     UploadMetrics,
     DownloadMetrics,
@@ -239,6 +242,7 @@ impl StepKind {
             | Self::MbxRemote { .. }
             | Self::MbxPin
             | Self::MbxPrivate
+            | Self::MbxOutDirs
             | Self::MbxStore { .. }
             | Self::MbxSeed { .. }
             | Self::ToolsLocal(..)
@@ -270,7 +274,10 @@ impl StepKind {
             self,
             Self::CacheSave(_)
                 | Self::MbxRemote { .. }
-                | Self::ToolsLocal(ToolsLocalVerb::AnchorSave, _)
+                | Self::ToolsLocal(
+                    ToolsLocalVerb::AnchorSave | ToolsLocalVerb::AnchorSaveAttempt,
+                    _
+                )
         )
     }
 }
@@ -293,12 +300,14 @@ pub enum ToolsLocalVerb {
     AnchorReset,
     AnchorRestore,
     AnchorFind,
+    AnchorFindAttempt,
     AnchorRead,
     Verify,
     VerifyNamed,
     VerifyNamedAnchor,
     Record,
     AnchorSave,
+    AnchorSaveAttempt,
 }
 
 impl ToolsLocalVerb {

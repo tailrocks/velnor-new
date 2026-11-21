@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    BuildRecord, CacheKey, CacheRoot, Concurrency, Host, Job, JobId, Permissions, PrRun,
-    PullRequestType, RepoPath, RootSlug, RunnerLabel, Step, StepKind, ToolsAnchor, Triggers,
-    WORKFLOW_PATH, When, WorkflowPlan,
+    BaseScope, BuildRecord, CacheKey, CacheRoot, Concurrency, Host, Job, JobId, Permissions, PrRun,
+    PullRequestType, RepoPath, RootSlug, RunnerLabel, SetupOrder, Step, StepKind, ToolsAnchor,
+    Triggers, WORKFLOW_PATH, When, WorkflowPlan,
 };
 use velnor_render::{RenderedKey, render, render_key, render_key_with_mise};
 
@@ -26,6 +26,7 @@ fn target(job: &str, manifest: &str) -> Result<RenderedKey, Box<dyn std::error::
         job: JobId::new(job)?,
         root: root(manifest)?,
         host: Host,
+        scope: BaseScope::Shared,
     }))
 }
 
@@ -57,6 +58,7 @@ fn each_family_renders_its_key_and_ordered_fallbacks() -> TestResult {
     let sources = render_key(&CacheKey::Sources {
         host: Host,
         lane: root("lab/Cargo.toml")?,
+        scope: BaseScope::Shared,
     });
     assert_eq!(
         sources,
@@ -107,6 +109,7 @@ fn a_delta_key_is_never_equal_to_or_a_prefix_of_a_base_key() -> TestResult {
                 job: job.clone(),
                 root: root.clone(),
                 host: Host,
+                scope: BaseScope::Shared,
             });
             keys.push(CacheKey::Delta {
                 job,
@@ -117,6 +120,7 @@ fn a_delta_key_is_never_equal_to_or_a_prefix_of_a_base_key() -> TestResult {
         keys.push(CacheKey::Sources {
             host: Host,
             lane: root,
+            scope: BaseScope::Shared,
         });
     }
     keys.push(CacheKey::Tools {
@@ -221,6 +225,7 @@ fn a_save_step_renders_the_same_key_without_fallbacks() -> TestResult {
     let key = CacheKey::Sources {
         host: Host,
         lane: root("Cargo.toml")?,
+        scope: BaseScope::Shared,
     };
     let plan = WorkflowPlan {
         name: "Rust CI".to_owned(),
@@ -265,9 +270,11 @@ fn a_save_step_renders_the_same_key_without_fallbacks() -> TestResult {
                 skip_when_cold: false,
                 private_repo: false,
                 hosted_only: false,
+                any_gate: Vec::new(),
                 pr: PrRun::Always,
                 gate: None,
                 reads: None,
+                setup_order: SetupOrder::Unordered,
             }],
         }],
     };

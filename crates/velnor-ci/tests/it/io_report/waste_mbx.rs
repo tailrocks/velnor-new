@@ -20,11 +20,14 @@ const REAL_MBX_1_30_DETAIL_ONLY: &str = "\
 mbx[cache]: 12 compilations had no usable prior inputs or matching prediction for a lookup
 mbx[cache]: Cargo artifact reuse and CI cache archive transfers are not included above
 ";
-const SINGULAR_SUMMARY: &str = "mbx[cache]: object cache: 3 hit, 0 miss; 0 B downloaded";
+const SINGULAR_SUMMARY: &str = "mbx[cache]: object cache: 3 hit, 1 miss; 0 B downloaded";
+const DUPLICATE_HITS_SUMMARY: &str = "mbx[cache]: object cache: 3 hits, 5 misses, 0 hits; 0 B downloaded, 0 B uploaded, 0 B stored locally";
+const OMITTED_ZERO_SUMMARY: &str = "mbx[cache]: object cache: 0 misses, 15 incremental; 0 B downloaded, 0 B uploaded, 0 B stored locally";
+const BYPASSED_ONLY_SUMMARY: &str = "mbx[cache]: object cache: 0 hits, 0 misses, 4 bypassed; 0 B downloaded, 0 B uploaded, 0 B stored locally";
 const ZERO_HIT_SUMMARY: &str = "mbx[cache]: object cache: 0 hits, 5 misses; 0 B downloaded";
 const PARTIAL_SUMMARY: &str = "mbx[cache]: object cache: 4 hits, many misses; 0 B downloaded";
 
-fn registry_compiled_unit() -> serde_json::Value {
+pub(super) fn registry_compiled_unit() -> serde_json::Value {
     json!({
         "package_id":"registry+https://example.invalid/index#serde@1.0.0",
         "manifest_path":"/registry/serde/Cargo.toml",
@@ -34,7 +37,7 @@ fn registry_compiled_unit() -> serde_json::Value {
     })
 }
 
-fn lane_with_mbx_log(
+pub(super) fn lane_with_mbx_log(
     name: &str,
     log: &str,
     declared: bool,
@@ -75,8 +78,7 @@ fn unparsed_warning(metrics: &velnor_ci::report::LaneMetrics, first: &str) -> bo
     })
 }
 
-/// An unparsed summary leaves the lane unverifiable, so the final check fails closed.
-fn fails_closed(metrics: &velnor_ci::report::LaneMetrics) -> bool {
+pub(super) fn fails_closed(metrics: &velnor_ci::report::LaneMetrics) -> bool {
     velnor_ci::report::check(std::slice::from_ref(metrics)).is_err_and(|error| {
         error
             .to_string()
@@ -84,7 +86,7 @@ fn fails_closed(metrics: &velnor_ci::report::LaneMetrics) -> bool {
     })
 }
 
-fn waste_gates(metrics: &velnor_ci::report::LaneMetrics) -> Vec<&String> {
+pub(super) fn waste_gates(metrics: &velnor_ci::report::LaneMetrics) -> Vec<&String> {
     metrics
         .violations
         .iter()
@@ -93,22 +95,17 @@ fn waste_gates(metrics: &velnor_ci::report::LaneMetrics) -> Vec<&String> {
 }
 
 #[test]
-fn a_singular_mbx_summary_is_unparsed_with_a_warning_and_never_a_silent_zero() -> ResultTest {
+fn a_singular_mbx_summary_is_accepted_and_an_absent_one_is_not_silent() -> ResultTest {
     let metrics = lane_with_mbx_log(
         "report-mbx-singular",
         &format!("{SINGULAR_SUMMARY}\n"),
         true,
         false,
     )?;
-    assert!(metrics.mbx.sessions.is_empty(), "{metrics:?}");
-    assert_eq!(metrics.mbx.unparsed, 1, "{metrics:?}");
-    assert!(
-        unparsed_warning(&metrics, SINGULAR_SUMMARY),
-        "{:?}",
-        metrics.verification_errors
-    );
-    assert!(fails_closed(&metrics), "{metrics:?}");
-    assert!(waste_gates(&metrics).is_empty(), "{:?}", metrics.violations);
+    assert_eq!(metrics.mbx.sessions.len(), 1, "{metrics:?}");
+    assert_eq!(metrics.mbx.sessions[0].hits, 3, "{metrics:?}");
+    assert_eq!(metrics.mbx.sessions[0].misses, 1, "{metrics:?}");
+    assert_eq!(metrics.mbx.unparsed, 0, "{metrics:?}");
     let silent = lane_with_mbx_log("report-mbx-no-summary", "", true, false)?;
     assert_eq!(silent.mbx.unparsed, 0);
     assert!(
@@ -245,6 +242,90 @@ fn bypassed_and_incremental_counters_are_accepted() -> ResultTest {
 }
 
 #[test]
+fn a_repeated_mbx_counter_makes_the_summary_unparsed() -> ResultTest {
+    let metrics = lane_with_mbx_log(
+        "report-mbx-duplicate-counter",
+        &format!("{DUPLICATE_HITS_SUMMARY}\n"),
+        true,
+        false,
+    )?;
+    assert!(metrics.mbx.sessions.is_empty(), "{metrics:?}");
+    assert_eq!(metrics.mbx.unparsed, 1, "{metrics:?}");
+    assert!(fails_closed(&metrics), "{metrics:?}");
+    Ok(())
+}
+
+#[test]
+fn an_omitted_zero_counter_is_zero_and_incremental_work_is_not_dropped() -> ResultTest {
+    let metrics = lane_with_mbx_log(
+        "report-mbx-omitted-zero",
+        &format!("{OMITTED_ZERO_SUMMARY}\n"),
+        true,
+        false,
+    )?;
+    assert_eq!(metrics.mbx.sessions.len(), 1, "{metrics:?}");
+    assert_eq!(metrics.mbx.sessions[0].hits, 0, "{metrics:?}");
+    assert_eq!(metrics.mbx.sessions[0].misses, 0, "{metrics:?}");
+    assert_eq!(metrics.mbx.sessions[0].not_looked_up, 15, "{metrics:?}");
+    assert_eq!(metrics.mbx.unparsed, 0, "{metrics:?}");
+    Ok(())
+}
+
+#[test]
+fn undifferentiated_stderr_bypasses_do_not_trigger_the_zero_hit_gate() -> ResultTest {
+    let metrics = lane_with_mbx_log(
+        "report-mbx-bypassed-only",
+        &format!("{BYPASSED_ONLY_SUMMARY}\n"),
+        true,
+        true,
+    )?;
+    assert_eq!(metrics.mbx.unparsed, 0, "{metrics:?}");
+    assert!(waste_gates(&metrics).is_empty(), "{:?}", metrics.violations);
+    Ok(())
+}
+
+#[test]
+fn a_label_cut_before_its_colon_is_unparsed_and_fails_closed() -> ResultTest {
+    for (index, line) in ["mbx[cache]: object cache", "mbx[cache]: object"]
+        .into_iter()
+        .enumerate()
+    {
+        let metrics = lane_with_mbx_log(
+            &format!("report-mbx-cut-label-{index}"),
+            &format!("{line}\n"),
+            true,
+            false,
+        )?;
+        assert!(metrics.mbx.sessions.is_empty(), "{line}: {metrics:?}");
+        assert_eq!(metrics.mbx.unparsed, 1, "{line}: {metrics:?}");
+        assert!(fails_closed(&metrics), "{line}: {metrics:?}");
+    }
+    Ok(())
+}
+
+#[test]
+fn a_summary_cut_before_its_terminator_is_unparsed_not_a_zero_hit_session() -> ResultTest {
+    for (index, line) in [
+        "mbx[cache]: object cache: 5 misses",
+        "mbx[cache]: object cache: 0 hits, 5 misses",
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let metrics = lane_with_mbx_log(
+            &format!("report-mbx-cut-terminator-{index}"),
+            &format!("{line}\n"),
+            true,
+            false,
+        )?;
+        assert!(metrics.mbx.sessions.is_empty(), "{line}: {metrics:?}");
+        assert_eq!(metrics.mbx.unparsed, 1, "{line}: {metrics:?}");
+        assert!(fails_closed(&metrics), "{line}: {metrics:?}");
+    }
+    Ok(())
+}
+
+#[test]
 fn a_non_numeric_hit_count_is_unparsed_not_dropped() -> ResultTest {
     let line = "mbx[cache]: object cache: unknown hits, 2 misses; 0 B downloaded, 0 B uploaded, 0 B stored locally";
     let metrics = lane_with_mbx_log(
@@ -256,5 +337,54 @@ fn a_non_numeric_hit_count_is_unparsed_not_dropped() -> ResultTest {
     assert!(metrics.mbx.sessions.is_empty(), "{metrics:?}");
     assert_eq!(metrics.mbx.unparsed, 1, "{metrics:?}");
     assert!(fails_closed(&metrics), "{metrics:?}");
+    Ok(())
+}
+
+pub(super) fn lane_with_mbx_report(
+    name: &str,
+    report: &str,
+) -> Result<velnor_ci::report::LaneMetrics, Box<dyn std::error::Error>> {
+    let repo = fixture(name)?;
+    repo.write("mise.toml", "[wrappers.cargo]\ncommand = \"mbx\"\n");
+    let root = fs::canonicalize(repo.root())?;
+    let mut invocation = crate::report::lane()["invocations"][0].clone();
+    invocation["root"] = json!(root);
+    invocation["argv"] = json!(["cargo", "build", "--workspace"]);
+    invocation["started_at"] = json!(2_000_000);
+    invocation["compilations"] = json!([]);
+    invocation["progress"] = serde_json::Value::Null;
+    invocation["log_start"] = json!(0);
+    invocation["log_end"] = json!(0);
+    invocation["artifacts"] = json!([registry_compiled_unit()]);
+    fs::write(repo.root().join("velnor-run.log"), "")?;
+    fs::write(
+        repo.root().join("velnor-invocations.jsonl"),
+        format!("{invocation}\n"),
+    )?;
+    let reports = repo.root().join("velnor-mbx-reports");
+    fs::create_dir_all(&reports)?;
+    fs::write(reports.join("1-1-0.expected"), "")?;
+    fs::write(reports.join("1-1-0.json"), report)?;
+    with_store(&repo, false)
+}
+
+#[test]
+fn a_lane_whose_only_mbx_reports_are_probes_still_compiled_without_mbx() -> ResultTest {
+    let idle = r#"{"version":5,"hits":0,"misses":0,"unconsulted":0,"bypasses":{"compiler-query":2,"standard-input":1}}"#;
+    let probed = lane_with_mbx_report("report-mbx-probe-only", idle)?;
+    assert_eq!(probed.mbx.sessions.len(), 1, "{probed:?}");
+    assert_eq!(probed.mbx.sessions[0].bypasses.len(), 2, "{probed:?}");
+    assert!(
+        probed
+            .violations
+            .iter()
+            .any(|line| line.contains("compiled without mbx")),
+        "{:?}",
+        probed.violations
+    );
+    let compiled =
+        r#"{"version":5,"hits":0,"misses":3,"unconsulted":0,"bypasses":{"compiler-query":2}}"#;
+    let real = lane_with_mbx_report("report-mbx-probe-and-compile", compiled)?;
+    assert!(waste_gates(&real).is_empty(), "{:?}", real.violations);
     Ok(())
 }

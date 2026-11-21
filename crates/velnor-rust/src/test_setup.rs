@@ -1,7 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{CargoCommand, RepoFacts, RepoPath, RustRoot, Step, StepKind, TestSetup};
+use velnor_model::{
+    CargoCommand, RepoFacts, RepoPath, RustRoot, SetupOrder, Step, StepKind, TestSetup,
+};
 
 use crate::lane::Lane;
 use crate::plan::step;
@@ -20,7 +22,7 @@ pub(crate) fn inserted(
 
 pub(crate) fn before_builds(facts: &RepoFacts, root: &RustRoot, mut steps: Vec<Step>) -> Vec<Step> {
     let owned = |step: &Step| builds_or_tests(step) && owns(step, root);
-    let compiled = compiled_dirs(facts, root);
+    let compiled = compiled_dirs(&facts.rust_roots, root);
     let setups = facts
         .config
         .test_setup
@@ -35,6 +37,7 @@ pub(crate) fn before_builds(facts: &RepoFacts, root: &RustRoot, mut steps: Vec<S
     let mut setup: Vec<Step> = Vec::new();
     for candidate in setups.map(|setup| Step {
         gate: gate.clone(),
+        setup_order: SetupOrder::AfterSetup,
         ..setup_step(setup, when, pr)
     }) {
         match steps.iter().position(|step| same_setup(step, &candidate)) {
@@ -66,7 +69,7 @@ fn same_setup(step: &Step, candidate: &Step) -> bool {
         && step.directory == candidate.directory
 }
 
-fn compiled_dirs(facts: &RepoFacts, root: &RustRoot) -> Vec<Option<RepoPath>> {
+pub(crate) fn compiled_dirs(roots: &[RustRoot], root: &RustRoot) -> Vec<Option<RepoPath>> {
     let mut seen: Vec<&RepoPath> = Vec::new();
     let mut pending = vec![root];
     while let Some(next) = pending.pop() {
@@ -75,8 +78,7 @@ fn compiled_dirs(facts: &RepoFacts, root: &RustRoot) -> Vec<Option<RepoPath>> {
         }
         seen.push(&next.manifest);
         pending.extend(
-            facts
-                .rust_roots
+            roots
                 .iter()
                 .filter(|other| next.depends_on.contains(&other.manifest)),
         );
@@ -102,6 +104,7 @@ pub(crate) fn before_tests(
         .filter(|setup| setup.root == root.manifest.parent())
         .map(|setup| Step {
             gate: lane.steps(),
+            setup_order: SetupOrder::AfterSetup,
             ..setup_step(setup, when, pr)
         })
         .collect();
@@ -139,6 +142,7 @@ fn checked(facts: &RepoFacts, root: &RustRoot, lane: &Lane, mut steps: Vec<Step>
         })
         .map(|check| Step {
             gate: lane.steps(),
+            setup_order: SetupOrder::AfterSetup,
             ..check
         })
         .collect();
@@ -157,6 +161,22 @@ fn archives(step: &Step) -> bool {
         step.kind,
         StepKind::Cargo(CargoCommand::NextestArchive { .. })
     )
+}
+
+pub(crate) fn gate_job(steps: &mut [Step]) {
+    let (mut building, mut testing) = (false, false);
+    for step in steps {
+        match &step.kind {
+            StepKind::TestSetup { before_build, .. } => {
+                building |= *before_build;
+                testing |= !*before_build;
+            }
+            StepKind::Cargo(_) if building || (testing && tests(step)) => {
+                step.setup_order = SetupOrder::AfterSetup;
+            }
+            _ => {}
+        }
+    }
 }
 
 fn setup_step(setup: &TestSetup, when: velnor_model::When, pr: velnor_model::PrRun) -> Step {
