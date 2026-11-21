@@ -64,7 +64,8 @@ fn mbx_setting(key: &str) -> Option<PathBuf> {
         return None;
     }
     let text = text.strip_suffix('\n').unwrap_or(&text);
-    Some(PathBuf::from(text.strip_suffix('\r').unwrap_or(text)))
+    let text = text.strip_suffix('\r').unwrap_or(text);
+    (!text.is_empty()).then(|| PathBuf::from(text))
 }
 
 fn env_path(name: &str) -> Option<PathBuf> {
@@ -74,9 +75,7 @@ fn env_path(name: &str) -> Option<PathBuf> {
 }
 
 fn setting(env: &str, key: &str) -> Option<PathBuf> {
-    std::env::var_os(env)
-        .map(PathBuf::from)
-        .or_else(|| mbx_setting(key))
+    env_path(env).or_else(|| mbx_setting(key))
 }
 
 fn default_cache_dir_for(
@@ -100,9 +99,7 @@ fn default_cache_dir() -> Option<PathBuf> {
 }
 
 fn allowed_roots(checkout: &Path) -> Vec<PathBuf> {
-    let cache_dir = setting("MBX_CACHE_DIR", "cache_dir")
-        .filter(|dir| !dir.as_os_str().is_empty())
-        .or_else(default_cache_dir);
+    let cache_dir = setting("MBX_CACHE_DIR", "cache_dir").or_else(default_cache_dir);
     let target_root = setting("MBX_TARGET_ROOT", "target.root").map(|root| match &cache_dir {
         Some(cache) => cache.join(&root),
         None => root,

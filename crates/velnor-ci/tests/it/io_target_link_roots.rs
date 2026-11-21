@@ -210,16 +210,48 @@ fn on_macos_xdg_cache_home_does_not_move_the_default_mbx_cache() {
 }
 
 #[test]
-fn an_empty_target_root_setting_follows_a_link_below_the_cache_dir() {
-    let repo = lone("empty-target-root");
+fn an_empty_target_root_setting_is_unset_so_a_link_in_the_store_root_is_refused() {
+    let repo = lone("empty-target-root-store");
     let stub = mbx_stub();
-    let home = Repo::empty("empty-target-root-home");
-    let cache = Repo::empty("empty-target-root-cache");
+    let home = Repo::empty("empty-target-root-store-home");
+    let cache = Repo::empty("empty-target-root-store-cache");
     let dir = managed(cache.root(), "v1/0123456789abcdef");
     symlink(&dir, repo.root().join("target")).unwrap_or_else(|e| unreachable!("{e}"));
     let output = restored(&repo, &stub, home.root(), |command| {
         command.env("MBX_CACHE_DIR", cache.root());
         command.env("FAKE_MBX_TARGET_ROOT", "");
+    });
+    assert!(!output.status.success(), "{output:?}");
+    assert!(dir.join(ARTIFACT).is_file());
+}
+
+#[test]
+fn an_empty_target_root_setting_does_not_widen_to_the_whole_cache_dir() {
+    let repo = lone("empty-target-root-elsewhere");
+    let stub = mbx_stub();
+    let home = Repo::empty("empty-target-root-elsewhere-home");
+    let cache = Repo::empty("empty-target-root-elsewhere-cache");
+    let dir = managed(&cache.root().join("elsewhere"), "0123456789abcdef");
+    symlink(&dir, repo.root().join("target")).unwrap_or_else(|e| unreachable!("{e}"));
+    let output = restored(&repo, &stub, home.root(), |command| {
+        command.env("MBX_CACHE_DIR", cache.root());
+        command.env("FAKE_MBX_TARGET_ROOT", "");
+    });
+    assert!(!output.status.success(), "{output:?}");
+    assert!(dir.join(ARTIFACT).is_file());
+}
+
+#[test]
+fn an_empty_mbx_cache_dir_env_falls_through_to_the_mbx_cache_dir_setting() {
+    let repo = lone("empty-cache-dir-env");
+    let stub = mbx_stub();
+    let home = Repo::empty("empty-cache-dir-env-home");
+    let cache = Repo::empty("empty-cache-dir-env-cache");
+    let dir = managed(&cache.root().join("targets"), "v1/0123456789abcdef");
+    symlink(&dir, repo.root().join("target")).unwrap_or_else(|e| unreachable!("{e}"));
+    let output = restored(&repo, &stub, home.root(), |command| {
+        command.env("MBX_CACHE_DIR", "");
+        command.env("FAKE_MBX_CACHE_DIR", cache.root());
     });
     assert!(
         output.status.success(),
