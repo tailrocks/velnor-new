@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs;
-use std::os::unix::fs::{MetadataExt, PermissionsExt};
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -31,7 +31,6 @@ pub(crate) fn save_as(store: &Path, home: &Path, key: &str, replace: bool) -> Ou
         shared_dir: Some(&store),
         seed_dir: Some(&store),
         home,
-        owner: fs::metadata(home).map_or(0, |metadata| metadata.uid()),
         replace,
     })
 }
