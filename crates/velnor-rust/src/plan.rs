@@ -259,12 +259,9 @@ pub(crate) fn setup_units(
     steps.extend(
         crate::base_cache::privacy_check(facts)
             .into_iter()
-            .map(|step| match step.kind {
-                StepKind::RepositoryPrivacy => step,
-                _ => Step {
-                    gate: lane.steps(),
-                    ..step
-                },
+            .map(|step| Step {
+                gate: lane.steps(),
+                ..step
             }),
     );
     steps.extend(mbx(facts, lane.steps()));

@@ -18,7 +18,7 @@ pub(crate) struct CachePlan {
 
 pub(crate) fn privacy_unavailable(steps: &Value) -> bool {
     let step = &steps["private_repo"];
-    if step.is_null() {
+    if step.is_null() || step["outcome"] == "skipped" {
         return false;
     }
     let outputs = &step["outputs"];
@@ -194,7 +194,6 @@ mod tests {
                 "failed, empty outputs",
                 json!({"outcome": "failure", "outputs": {}}),
             ),
-            ("skipped", json!({"outcome": "skipped", "outputs": {}})),
             ("cancelled", json!({"outcome": "cancelled"})),
             (
                 "succeeded without a verdict",
@@ -214,6 +213,12 @@ mod tests {
                 "{label}"
             );
         }
+    }
+
+    #[test]
+    fn a_privacy_step_skipped_by_the_lane_selection_is_not_unavailable() {
+        let step = json!({"private_repo": {"outcome": "skipped", "outputs": {}}});
+        assert!(!privacy_unavailable(&step));
     }
 
     #[test]

@@ -373,13 +373,13 @@ fn a_declared_public_dependency_beside_a_private_one_saves_only_behind_the_verdi
 }
 
 #[test]
-fn the_privacy_check_runs_even_when_no_crate_is_selected() -> TestResult {
+fn the_privacy_check_is_gated_by_the_lane_selection_like_the_cache_steps() -> TestResult {
     let repo = consumer("0.1.111", GIT_LOCK, "")?;
     let (text, _) = text_and_notes(&repo)?;
     let lane = lane(&text)?;
     let verdict = step(&lane, "Check that the repository is private").ok_or("no verdict step")?;
     assert!(
-        !verdict
+        verdict
             .lines()
             .any(|line| line.trim_start().starts_with("if: ")),
         "{verdict}"
