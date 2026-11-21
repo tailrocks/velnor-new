@@ -177,3 +177,13 @@ fn a_held_lease_owned_by_someone_else_is_not_a_live_session() {
     assert!(lease_held_by(&socket, ours));
     assert!(!lease_held_by(&socket, ours.wrapping_add(1)));
 }
+
+#[test]
+fn a_held_lock_on_a_directory_named_like_the_lease_is_not_held() {
+    let dir = Dir::new("lease-directory");
+    let lease = dir.0.join("owner.lock");
+    std::fs::create_dir(&lease).unwrap_or_else(|e| unreachable!("{e}"));
+    let holder = File::open(&lease).unwrap_or_else(|e| unreachable!("{e}"));
+    holder.lock().unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(!session_lease_is_held(&dir.0.join("cache-agent.sock")));
+}
