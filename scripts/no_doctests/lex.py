@@ -4,7 +4,11 @@ import re
 IDENT = re.compile(r"[^\W\d]\w*")
 LINE_DOC = re.compile(r"//(?:!|/(?!/))")
 DOC_OPEN = re.compile(r"/\*(?:!|\*(?![*/]))")
+DOC_EQ = re.compile(r"\s*=(?!=)")
 NEWLINE = re.compile(r"\r\n|\r|\n")
+NUMBER = re.compile(r"0[xX][0-9a-fA-F_]+|0[oO][0-7_]+|0[bB][01_]+|\d[\d_]*(?:\.(?![.\w])|\.\d[\d_]*)?(?:[eE][+-]?[\d_]+)?")
+BOOLS = {"true", "false"}
+BASES = {"x": 16, "o": 8, "b": 2}
 RAW_PREFIX = {"r", "br", "cr"}
 BYTE_PREFIX = {"b", "c"}
 
@@ -88,3 +92,11 @@ def literal_end(src, word, j):
 
 def split_lines(text):
     return NEWLINE.split(text)
+
+
+def number_piece(src, i):
+    m = NUMBER.match(src, i)
+    text = m.group().replace("_", "")
+    base = BASES.get(text[1:2].lower()) if text[:1] == "0" else None
+    suffix = IDENT.match(src, m.end())
+    return (str(int(text, base)) if base else text), (suffix.end() if suffix else m.end())

@@ -1,9 +1,9 @@
 import re
-from .lex import DOC_OPEN, IDENT, LINE_DOC, NEWLINE, attr_open, block_end, literal_end, skip_char, skip_string, skip_trivia, split_lines
+from .lex import DOC_OPEN, IDENT, LINE_DOC, NEWLINE, attr_open, block_end, literal_end, skip_char, skip_string, skip_trivia
+from .cfg import cfg_has_doc
 from .markdown import carried, value_has_fence
 
 
-DOC_EQ = re.compile(r"\s*=(?!=)")
 DOC_INCLUDE = re.compile(r"\s*=\s*include_str!")
 STRING_ESCAPE = re.compile(r"\\(?:x([0-9a-fA-F]{2})|u\{([0-9a-fA-F_]{1,8})\}|(\r?\n[ \t\r\n]*)|(.))", re.S)
 SIMPLE_ESCAPE = {"n": "\n", "r": "\r", "t": "\t", "0": "\0", "\\": "\\", "'": "'", '"': '"'}
@@ -44,35 +44,14 @@ def flush_value(src, end, pieces, inner, tail):
     text = "".join(piece for _, piece in pieces)
     prev, seen, item = carried(tail, inner)
     standalone = not seen and not has_following_doc(src, end, inner)
-    hit, item = value_has_fence(text, prev, standalone, item)
-    tail = (inner, split_lines(text)[-1], seen or bool(text.strip()), item)
+    hit, item, prev = value_has_fence(text, prev, standalone, item)
+    tail = (inner, prev, seen or bool(text.strip()), item)
     return (None if hit is None else piece_at(pieces, hit)), tail
 
 
-class CfgLevels:
-    def __init__(self, name, tail):
-        self.stack = [[1, False, [tail]]] if name == "cfg_attr" else []
-
-    def comma(self, paren):
-        if self.stack and paren == self.stack[-1][0]:
-            self.stack[-1][1] = True
-
-    def close(self, paren):
-        while self.stack and paren < self.stack[-1][0]:
-            self.stack.pop()
-
-    def meta(self, paren):
-        return bool(self.stack) and self.stack[-1][1] and paren == self.stack[-1][0]
-
-    def nests(self, src, word, j, paren):
-        if word == "cfg_attr" and self.meta(paren) and src.startswith("(", skip_trivia(src, j)):
-            self.stack.append([paren + 1, False, self.stack[-1][2]])
-
-
-def cfg_has_doc(src, i):
-    levels = CfgLevels("cfg_attr", None)
-    paren = 0
-    while i < len(src):
+def attr_end(src, i):
+    depth = 1
+    while i < len(src) and depth:
         c = src[i]
         if (j := skip_trivia(src, i)) != i:
             i = j
@@ -81,43 +60,12 @@ def cfg_has_doc(src, i):
         elif c == "'":
             j = skip_char(src, i)
             i = i + 1 if j is None else j
-        elif c in "([{":
-            paren += 1
-            i += 1
-        elif c in ")]}":
-            paren -= 1
-            if paren < 0:
-                return False
-            levels.close(paren)
-            i += 1
-        elif c == ",":
-            levels.comma(paren)
-            i += 1
         elif m := IDENT.match(src, i):
-            word, j = m.group(), m.end()
-            if (end := literal_end(src, word, j)) is not None:
-                i = end
-                continue
-            if word == "doc" and levels.meta(paren) and DOC_EQ.match(src, skip_trivia(src, j)):
-                return True
-            levels.nests(src, word, j, paren)
-            i = j
+            end = literal_end(src, m.group(), m.end())
+            i = m.end() if end is None else end
         else:
+            depth += (c == "[") - (c == "]")
             i += 1
-    return False
-
-
-def attr_end(src, i):
-    depth = 1
-    while i < len(src) and depth:
-        if src[i] == '"':
-            i = skip_string(src, i)
-            continue
-        if src[i] == "[":
-            depth += 1
-        elif src[i] == "]":
-            depth -= 1
-        i += 1
     return i
 
 

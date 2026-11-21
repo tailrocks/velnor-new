@@ -252,6 +252,23 @@ else
   echo "ok   scanner_missing (fail)"
 fi
 
+check quote_after_list fail '/// - item\n///\n///   >     compile_error!("x");\nfn f() {}\n'
+check quote_lazy_quoted pass '/// > prose\n/// >     continuation\nfn f() {}\n'
+check block_list_fence fail '/**\nprose\n- item\n    ```\n    compile_error!("x");\n    ```\n*/\nfn f() {}\n'
+check indent_hr_lazy pass '/// prose\n///     ---\n///     more\nfn f() {}\n'
+check attr_comment_bracket fail '#[doc = "    compile_error!(\"x\");"]\n#[allow(/* ] */ dead_code)]\n#[doc = "prose"]\nfn f() {}\n'
+check concat_numeric fail '#[doc = concat!("    compile_error!(\"x\");\\n", 1)]\nfn f() {}\n'
+check html_multiline fail '/// <!--\n/// hidden\n/// -->\n///     compile_error!("x");\nfn f() {}\n'
+check cfg_active_then_doc pass '#[cfg_attr(all(), doc = "prose")]\n#[doc = "    compile_error!(\"x\");\\nsecond"]\nfn f() {}\n'
+check block_first_indent fail '/**    compile_error!("x");\nprose\n*/\nfn f() {}\n'
+check footnote_escaped_label fail '/// [^a\\]b]: ```\nfn f() {}\n'
+check cfg_frame_outer_state pass '/// prose\n#[cfg_attr(all(), doc = "    let _x = 1;\\nsecond")]\nfn f() {}\n'
+
+check html_comment_fence pass '/// <!--\n/// ```\n/// x\n/// ```\n/// -->\nfn f() {}\n'
+check block_star_first_line pass '/**     code\n * prose\n*/\nfn f() {}\n'
+check block_star_first_code fail '/**     code\n* x\n*/\nfn f() {}\n'
+check concat_bool fail '#[doc = concat!("    compile_error!(\"x\");\\n", true)]\nfn f() {}\n'
+
 no_package="$work/package_missing"
 mkdir -p "$no_package/crates/fx/src" "$no_package/scripts"
 cp "$repo/scripts/no-doctests.py" "$no_package/scripts/"
