@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::ffi::OsStr;
 use std::fs;
 use std::process::{Command, Output};
 
@@ -73,7 +74,7 @@ pub(super) fn decide_within(repo: &Checkout, budget: &str) -> (Output, String) {
 pub(super) fn decide_target_within(
     repo: &Checkout,
     target: &str,
-    budget: &str,
+    budget: impl AsRef<OsStr>,
 ) -> (Output, String) {
     let temp = repo.root().join("runner-temp");
     fs::create_dir_all(&temp).unwrap_or_else(|e| unreachable!("{e}"));
