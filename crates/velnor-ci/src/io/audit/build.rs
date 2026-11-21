@@ -17,7 +17,7 @@ use velnor_gen::io::read_checkout;
 use velnor_model::RepoFacts;
 use velnor_rust::{detect, sha256_hex};
 
-use super::super::units::{UnitFile, Workspace, apart, unit_files};
+use super::super::units::{UnitFile, Workspace, apart, unchecked_unit_files};
 use super::groups::{group_dirs, inheriting, scan_dirs, shared_groups, standalone, workspaces};
 use super::inventory::{self, Evidence};
 use super::options::max_entries_from_env;
@@ -86,7 +86,8 @@ pub(crate) fn build(directory: &Path, args: &InputsBuildArgs) -> Result<String, 
         }
         Err(Stop::Refused(error)) => Err(error),
         Err(Stop::Failed(error)) => {
-            let failed = failure::Failure::new(invocation.label(), invocation.selection());
+            let failed =
+                failure::Failure::new(invocation.label(), invocation.selection(&builder.members()));
             match failure::record_failure(&marker, &failed) {
                 Ok(()) => Err(error),
                 Err(record) => Err(CiError::new(format!("{error}; {record}"))),
@@ -116,6 +117,14 @@ impl Builder<'_> {
             invocation.compiler,
             invocation.cargo && invocation.preflight.is_none(),
         )
+    }
+
+    fn members(&self) -> BTreeSet<&str> {
+        self.facts
+            .rust_roots
+            .iter()
+            .flat_map(|root| root.members.iter().map(|member| member.name.as_str()))
+            .collect()
     }
 
     fn marker_directories(&self) -> Vec<PathBuf> {
@@ -160,7 +169,9 @@ impl Builder<'_> {
             self.declared
                 .extend(declared.iter().flat_map(|unit| unit.paths.iter().cloned()));
             if invalidate {
-                let selection = Invocation::new(command).selection().unwrap_or_default();
+                let selection = Invocation::new(command)
+                    .selection(&self.members())
+                    .unwrap_or_default();
                 let outside: BTreeSet<&str> = declared
                     .iter()
                     .filter(|unit| !unit.trusted && !selection.selects(&unit.package))
@@ -204,12 +215,17 @@ impl Builder<'_> {
             }
         }
         let mut budget = inventory::Budget::new(self.max_entries);
-        for root in &self.roots {
+        let roots: BTreeSet<PathBuf> = self
+            .roots
+            .iter()
+            .map(|root| fs::canonicalize(root).unwrap_or_else(|_| root.clone()))
+            .collect();
+        for root in &roots {
             if !root.exists() {
                 continue;
             }
             match inventory::scan(root, &self.targets, &mut budget) {
-                Ok(found) => evidence.entries.extend(found),
+                Ok(found) => evidence.entries.extend(found.entries),
                 Err(error) if budget.overflowed() => {
                     return Err(CiError::new(error.to_string()));
                 }
@@ -222,7 +238,7 @@ impl Builder<'_> {
     fn identities(&self) -> Result<Identities, CiError> {
         let mut before = BTreeMap::new();
         for directory in &self.directories {
-            for (unit, path) in unit_files(directory)? {
+            for (unit, path) in unchecked_unit_files(directory)? {
                 if output(&unit) {
                     before.insert(path.clone(), identity(&path)?);
                 }
@@ -235,7 +251,7 @@ impl Builder<'_> {
         self.workspaces
             .iter()
             .filter_map(|workspace| {
-                let root = fs::canonicalize(&workspace.workspace_root).ok()?;
+                let root = fs::canonicalize(&workspace.root).ok()?;
                 self.location
                     .starts_with(&root)
                     .then_some((root.components().count(), workspace))
@@ -261,6 +277,7 @@ impl Builder<'_> {
             })?;
         let mut build = Command::new(&command[0]);
         build.args(&command[1..]).current_dir(self.directory);
+        super::super::mbx_reports::assign(&mut build, command);
         if Invocation::new(command).cargo
             && std::env::var_os(TARGET_VARIABLE).is_none()
             && let Some(target) = self.target_directory()
@@ -309,7 +326,7 @@ impl Builder<'_> {
                     .and_then(|()| fs::write(&saved, &bytes))
                     .map_err(|e| CiError::new(format!("cannot save input inventory: {e}")))?;
             }
-            for (unit, file) in unit_files(directory)? {
+            for (unit, file) in unchecked_unit_files(directory)? {
                 if !output(&unit) {
                     continue;
                 }

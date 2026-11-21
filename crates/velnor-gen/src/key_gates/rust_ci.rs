@@ -3,7 +3,7 @@
 
 //! Every key `.velnor/rust-ci.toml` accepts, with the first `velnor-ci` that parses it.
 
-use super::{ConfigFile::RustCi, KeyGate, gate, gate_untagged, gate_value};
+use super::{ConfigFile::RustCi, KeyGate, gate, gate_value};
 use crate::HELPER_MINIMUM;
 
 pub(super) const RUST_CI: &[KeyGate] = &[
@@ -104,8 +104,8 @@ pub(super) const RUST_CI: &[KeyGate] = &[
     gate(RustCi, "lint.config", (0, 1, 89)),
     // helper-gate: first in tools-v0.1.89 via 330573ef6d
     gate(RustCi, "lint.id", (0, 1, 89)),
-    // helper-gate: first in tools-v0.1.110 via e26fec3103
-    gate(RustCi, "lint.inputs", (0, 1, 110)),
+    // helper-gate: first in tools-v0.1.111 via 78cb5295bf
+    gate(RustCi, "lint.inputs", (0, 1, 111)),
     // helper-gate: first in tools-v0.1.89 via 330573ef6d
     gate(RustCi, "lint.kind", (0, 1, 89)),
     // helper-gate: first in tools-v0.1.110 via ef61950555
@@ -125,13 +125,20 @@ pub(super) const RUST_CI: &[KeyGate] = &[
     gate(RustCi, "nextest_harnesses", HELPER_MINIMUM),
     gate(RustCi, "non_inputs", HELPER_MINIMUM),
     gate(RustCi, "on_main", HELPER_MINIMUM),
-    gate_untagged(RustCi, "policy", (0, 1, 111)),
-    gate_untagged(RustCi, "policy.deny", (0, 1, 111)),
-    gate_untagged(RustCi, "policy.deny_checks", (0, 1, 111)),
+    // helper-gate: first in tools-v0.1.111 via 050fcb6e15
+    gate(RustCi, "policy", (0, 1, 111)),
+    // helper-gate: first in tools-v0.1.111 via 050fcb6e15
+    gate(RustCi, "policy.deny", (0, 1, 111)),
+    // helper-gate: first in tools-v0.1.111 via 050fcb6e15
+    gate(RustCi, "policy.deny_checks", (0, 1, 111)),
     // helper-gate: first in tools-v0.1.88 via e061b56eac
     gate(RustCi, "pr_ci", (0, 1, 88)),
     // helper-gate: first in tools-v0.1.88 via eb3f4deda4
     gate(RustCi, "private_sources", (0, 1, 88)),
+    // helper-gate: first in tools-v0.1.111 via d4ec926378
+    gate(RustCi, "public_sources", (0, 1, 111)),
+    // helper-gate: first in tools-v0.1.111 via d4ec926378
+    gate(RustCi, "public_sources.git", (0, 1, 111)),
     // helper-gate: first in tools-v0.1.88 via eb3f4deda4
     gate(RustCi, "private_sources.app_id", (0, 1, 88)),
     // helper-gate: first in tools-v0.1.88 via eb3f4deda4

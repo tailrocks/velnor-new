@@ -12,7 +12,7 @@ use velnor_model::{
 use velnor_rust::{
     cargo_files, defer_post_merge_docs, detect, introduced, is_workflow_file, lint_runs,
     member_sources, optional_steps, plan_groups, policy_runs, root_sources, select_event,
-    selects_by_diff, tests_expected, unknown_paths, unread_packages,
+    selects_by_diff, tests_expected, unknown_paths, unmatched_inputs, unread_packages,
 };
 
 use super::{
@@ -24,8 +24,8 @@ use crate::error::CiError;
 use crate::escape::stderr_line;
 use crate::event::{Event, check_default_branch, parse_event};
 use crate::plan::{
-    Steps, explain, group_explanation, group_outputs, lint_explanation, lint_outputs, outputs,
-    tests_outputs, warnings, weakened, workspace_group_outputs,
+    Steps, explain, group_explanation, group_outputs, input_warnings, lint_explanation,
+    lint_outputs, outputs, tests_outputs, warnings, weakened, workspace_group_outputs,
 };
 use crate::summary::{group_summary, lint_summary, summary};
 
@@ -80,6 +80,7 @@ pub(super) fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
         &facts,
         kind,
         listed.then_some(&changes.paths),
+        &checkout.view.tracked_paths,
         &checkout.view.symlinks,
     );
     let skipped: Vec<String> = facts
@@ -110,6 +111,13 @@ pub(super) fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
             &unread_packages(&facts, &changes),
         ) + &group_explanation(&groups)
             + &lint_explanation(&skipped)
+            + &input_warnings(&unmatched_inputs(
+                &facts,
+                kind,
+                listed.then_some(&changes.paths),
+                &checkout.view.tracked_paths,
+                &checkout.view.symlinks,
+            ))
             + &weakened(&facts.weakenings, &new)
     } else {
         outputs
