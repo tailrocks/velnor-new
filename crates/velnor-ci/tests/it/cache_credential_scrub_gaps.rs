@@ -127,6 +127,16 @@ fn a_token_split_by_the_shell_in_a_hook_stops_the_sources_save() {
             "echo ghp_0123456789$'abcdefghijklmnopqrstuvwxyzAB'\n",
         ),
         (
+            "dollar-single-quote-exact-length-token",
+            HOOK,
+            "echo ghp_0123456789$'abcdefghijklmnopqrstuvwxyz'\n",
+        ),
+        (
+            "braced-expansion-exact-length-token",
+            HOOK,
+            "echo ghp_0123456789${EMPTY}abcdefghijklmnopqrstuvwxyz\n",
+        ),
+        (
             "dollar-double-quote-concatenation",
             HOOK,
             "echo ghp_0123456789$\"abcdefghijklmnopqrstuvwxyzAB\"\n",
