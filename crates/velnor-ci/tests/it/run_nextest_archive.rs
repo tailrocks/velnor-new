@@ -76,7 +76,7 @@ fn the_early_list_of_an_archive_run_leaves_the_running_test_binaries_alone() {
         .args(["--archive-file", "a.tar.zst", "--extract-to", &extract])
         .args(["--extract-overwrite", "--workspace-remap", &extract])
         .args(["--no-fail-fast", "--no-tests=pass"])
-        .env("RUNNER_TEMP", &temp)
+        .env("RUNNER_TEMP", temp.path())
         .env("GITHUB_OUTPUT", temp.join("github-output"))
         .env("LIST_JSON", listed(&[("kept", &["alpha"])]))
         .env("TREE", &tree)

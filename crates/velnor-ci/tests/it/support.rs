@@ -122,8 +122,13 @@ pub(crate) fn assert_dead(pid: i32) {
 
 pub(crate) static CREATED: AtomicU64 = AtomicU64::new(0);
 
-pub(crate) fn fresh_dir(prefix: &str, name: &str) -> PathBuf {
-    fresh_dir_in(&std::env::temp_dir(), &CREATED, prefix, name)
+pub(crate) fn fresh_dir(prefix: &str, name: &str) -> velnor_test_support::ScratchDir {
+    velnor_test_support::ScratchDir::adopt(fresh_dir_in(
+        &std::env::temp_dir(),
+        &CREATED,
+        prefix,
+        name,
+    ))
 }
 
 pub(crate) fn fresh_dir_in(root: &Path, counter: &AtomicU64, prefix: &str, name: &str) -> PathBuf {
@@ -154,8 +159,11 @@ fn sweep_dead(root: &Path, prefix: &str) {
         else {
             continue;
         };
-        if !is_running(pid) && entry.path().is_dir() {
-            let _ignored = fs::remove_dir_all(entry.path());
+        if !is_running(pid)
+            && entry.path().is_dir()
+            && let Err(error) = velnor_test_support::remove_tree(&entry.path())
+        {
+            eprintln!("cannot sweep {}: {error}", entry.path().display());
         }
     }
 }

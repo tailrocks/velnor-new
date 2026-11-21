@@ -5,7 +5,7 @@
 
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 
 const STEP_FILES: &[&str] = &[
@@ -16,10 +16,10 @@ const STEP_FILES: &[&str] = &[
     "GITHUB_STATE",
 ];
 
-fn scratch(name: &str) -> PathBuf {
+fn scratch(name: &str) -> velnor_test_support::ScratchDir {
     let dir = crate::scratch_path("velnor-ci", name);
-    fs::remove_dir_all(&dir).ok();
-    fs::create_dir_all(&dir).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::remove_dir_all(dir.path()).ok();
+    fs::create_dir_all(dir.path()).unwrap_or_else(|e| unreachable!("{e}"));
     dir
 }
 

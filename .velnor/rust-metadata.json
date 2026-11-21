@@ -927,6 +927,11 @@
               "features": [
                 "test-util"
               ]
+            },
+            {
+              "name": "velnor-test-support",
+              "kind": "dev",
+              "manifest": "crates/velnor-test-support/Cargo.toml"
             }
           ],
           "targets": [
@@ -2041,7 +2046,7 @@
     "crates/velnor-cache-rules/Cargo.toml": "b1f91a7da1743297b500893e7ce85fb1cfb03f2f854c757beabba023089930e2",
     "crates/velnor-ci/Cargo.toml": "42364456087b1ec322c2657c2c66fe6f40f574e0e2ef276537de054346ffc9f8",
     "crates/velnor-gen/Cargo.toml": "f7adcf5554147e3a17f6c6230c089bfa7f922db8999fc9f16093e384b053c6f7",
-    "crates/velnor-local/Cargo.toml": "e6d3b5198ae94ac9ed44e8c9dad53e7b8231c92f64abd8e33eea72f8812f2ffb",
+    "crates/velnor-local/Cargo.toml": "7b5c97dae1a08d8e1e2a7102b7ad56ef5c5d87e79eef8848894464fe9e971ec2",
     "crates/velnor-model/Cargo.toml": "8f25044711f94d1edf7a9cf8a37842019c7dc82d0f9f14f3659fb9af5fecf7a8",
     "crates/velnor-release/Cargo.toml": "dca29d0f14443af5811f5454770fce6193056a6e8e3c0c72ae1729399b176459",
     "crates/velnor-render/Cargo.toml": "71bb93bc3b049d7f387be28e8442b37c36c902ce9295e39d56aa38abeb66d46d",
