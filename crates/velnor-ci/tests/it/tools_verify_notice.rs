@@ -5,13 +5,13 @@ use std::fs;
 
 use crate::tools_verify::{Job, discarded, job, recorded, rustc};
 
-fn check_stdout(job: &Job, anchor: &str, env: &[(&str, &str)]) -> String {
+fn run_verb(job: &Job, verb: &str, anchor: &str, env: &[(&str, &str)]) -> String {
     let event = job.root.join("event.json");
     fs::write(&event, r#"{"repository":{"default_branch":"main"}}"#).unwrap_or_default();
     let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
     command
         .env_clear()
-        .args(["tools-verify", "check"])
+        .args(["tools-verify", verb])
         .env("HOME", &job.home)
         .env("RUNNER_TEMP", &job.root)
         .env("GITHUB_OUTPUT", job.root.join("github-output"))
@@ -26,6 +26,10 @@ fn check_stdout(job: &Job, anchor: &str, env: &[(&str, &str)]) -> String {
     let run = command.output().unwrap_or_else(|e| unreachable!("{e}"));
     assert!(run.status.success(), "{run:?}");
     String::from_utf8_lossy(&run.stdout).into_owned()
+}
+
+fn check_stdout(job: &Job, anchor: &str, env: &[(&str, &str)]) -> String {
+    run_verb(job, "check", anchor, env)
 }
 
 #[test]
@@ -72,6 +76,43 @@ fn a_malformed_anchor_names_the_anchor_entry_that_feeds_the_check() {
     let stdout = check_stdout(
         &job,
         "not-a-digest",
+        &[
+            ("VELNOR_TOOLS_CACHE_KEY", "velnor-tools-abc123"),
+            ("VELNOR_ANCHOR_CACHE_KEY", "velnor-tools-anchor-abc123"),
+        ],
+    );
+    assert!(stdout.contains("the anchor is malformed"), "{stdout}");
+    assert!(
+        stdout.contains("gh cache delete 'velnor-tools-anchor-abc123' -R tailrocks/velnor-new"),
+        "{stdout}"
+    );
+    assert!(!stdout.contains("velnor-tools-abc123'"), "{stdout}");
+    assert!(discarded(&job));
+}
+
+#[test]
+fn a_malformed_anchor_read_in_the_plan_job_still_names_the_anchor_entry_in_the_check() {
+    let job = job("tools-verify-plan-bad-anchor");
+    fs::create_dir_all(job.anchor.parent().unwrap_or(&job.root))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    fs::write(&job.anchor, "velnor-tools-anchor-v1 not-a-digest\n")
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    run_verb(
+        &job,
+        "read",
+        "",
+        &[("VELNOR_ANCHOR_MATCHED", "velnor-tools-anchor-abc123")],
+    );
+    let read =
+        fs::read_to_string(job.root.join("github-output")).unwrap_or_else(|e| unreachable!("{e}"));
+    let anchor = read.trim_start_matches("anchor=").trim_end();
+    fs::remove_file(&job.anchor).unwrap_or_else(|e| unreachable!("{e}"));
+    for path in [".local/share/mise", ".rustup"] {
+        fs::remove_dir_all(job.home.join(path)).unwrap_or_else(|e| unreachable!("{e}"));
+    }
+    let stdout = check_stdout(
+        &job,
+        anchor,
         &[("VELNOR_ANCHOR_CACHE_KEY", "velnor-tools-anchor-abc123")],
     );
     assert!(stdout.contains("the anchor is malformed"), "{stdout}");
@@ -167,4 +208,23 @@ fn a_hostile_cache_key_cannot_forge_a_second_workflow_command() {
         "{stdout}"
     );
     assert!(!stdout.contains('\r'), "{stdout:?}");
+}
+
+#[test]
+fn a_restore_on_github_com_names_the_host_in_the_delete_command() {
+    let job = job("tools-verify-named-github-com");
+    let anchor = recorded(&job);
+    fs::write(rustc(&job), "evil binary!").unwrap_or_else(|e| unreachable!("{e}"));
+    let stdout = check_stdout(
+        &job,
+        &anchor,
+        &[
+            ("VELNOR_TOOLS_CACHE_KEY", "velnor-tools-abc123"),
+            ("GITHUB_SERVER_URL", "https://github.com"),
+        ],
+    );
+    assert!(
+        stdout.contains("gh cache delete 'velnor-tools-abc123' -R github.com/tailrocks/velnor-new"),
+        "{stdout}"
+    );
 }
