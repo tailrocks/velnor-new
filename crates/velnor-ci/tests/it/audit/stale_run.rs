@@ -87,8 +87,16 @@ fn an_input_changed_after_its_run_names_the_input_and_the_stale_unit() {
     repo.write_unstaged("rust/lib/asset.txt", "second\n");
     repo.set_mtime(
         "rust/lib/asset.txt",
-        run_finished(&repo, stale) + Duration::from_secs(1),
+        run_finished(&repo, stale) + Duration::from_secs(2),
     );
+    let build = build_step(&repo, &["build", "--workspace", "--all-targets"]);
+    assert!(build.status.success(), "{build:?}");
+    let after = lib_runs(&repo);
+    assert_eq!(after.len(), 2, "{after:?}");
+    let current = after
+        .difference(&before)
+        .next()
+        .unwrap_or_else(|| unreachable!());
 
     let output = audit(&repo, &["--write"]);
     refused_with(
@@ -97,6 +105,7 @@ fn an_input_changed_after_its_run_names_the_input_and_the_stale_unit() {
             "output stale: input asset.txt changed after it ran (unit {stale}); produce build-script inputs before the first compile step, e.g. a [[test_setup]] table with phase = \"build\""
         )],
     );
+    assert!(!String::from_utf8_lossy(&output.stderr).contains(current.as_str()));
     assert!(!repo.root().join(".velnor/rust-inputs.lock").exists());
 }
 
@@ -190,10 +199,10 @@ fn stale_gaps_share_one_entry_budget_when_they_count_their_changed_inputs() {
         repo.write_unstaged(&format!("rust/lib{i}/asset.txt"), "second\n");
         repo.set_mtime(
             &format!("rust/lib{i}/asset.txt"),
-            ran + Duration::from_secs(1),
+            ran + Duration::from_secs(2),
         );
         repo.write_unstaged(&format!("shared/d{i}/new"), "");
-        repo.set_mtime(&format!("shared/d{i}/new"), ran + Duration::from_secs(1));
+        repo.set_mtime(&format!("shared/d{i}/new"), ran + Duration::from_secs(2));
     }
     let output = velnor_ci()
         .env(VARIABLE, ENTRY_LIMIT)
