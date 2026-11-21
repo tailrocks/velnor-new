@@ -3,6 +3,7 @@
 
 use super::*;
 use velnor_ci::inputs::restored_units_file;
+use velnor_ci::restored_units::Manifest;
 
 const HELD: &str = "0123456789abcdef";
 const HELD_NEW_LAYOUT: &str = "fedcba9876543210";
@@ -48,6 +49,10 @@ fn a_registry_unit_is_waste_only_when_the_restored_base_held_it_in_either_layout
         let repo = base(&format!("report-restored-units-{layout}"), layout)?;
         let rebuilt = registry_artifact(&repo, held)?;
         let metrics = observation(&repo, &[], &[rebuilt])?;
+        assert_eq!(
+            metrics.invocations[0].restored_manifest,
+            Some(Manifest::Present)
+        );
         assert_eq!(metrics.invocations[0].compilations[0].restored, Some(true));
         assert!(
             metrics
@@ -67,25 +72,50 @@ fn a_registry_unit_is_waste_only_when_the_restored_base_held_it_in_either_layout
 }
 
 #[test]
-fn a_restore_that_left_no_record_keeps_every_dependency_compile_waste()
+fn a_restore_that_left_no_record_is_unknown_not_waste_and_says_so()
 -> Result<(), Box<dyn std::error::Error>> {
     let repo = base("report-restored-units-absent", "old")?;
     fs::remove_file(repo.root().join("target").join(restored_units_file("")))?;
     let missing = registry_artifact(&repo, GAP)?;
     let metrics = observation(&repo, &[], &[missing])?;
     assert_eq!(metrics.invocations[0].compilations[0].restored, None);
+    assert_eq!(
+        metrics.invocations[0].restored_manifest,
+        Some(Manifest::Absent)
+    );
+    assert_eq!(metrics.violations, [] as [String; 0]);
+    let report = check(&repo);
+    assert!(report.status.success(), "{report:?}");
     assert!(
-        metrics
-            .violations
-            .iter()
-            .any(|line| line.contains("serde v1.0.0")),
-        "{metrics:?}"
+        String::from_utf8_lossy(&report.stdout).contains(
+            "::warning::.: dependency compiles with an unknown restore status (restored-units manifest absent): serde v1.0.0"
+        ),
+        "{report:?}"
     );
     Ok(())
 }
 
 #[test]
-fn a_restore_whose_scan_fails_clears_the_older_record_so_held_units_stay_waste()
+fn a_record_that_cannot_be_decoded_is_unreadable_not_absent()
+-> Result<(), Box<dyn std::error::Error>> {
+    let repo = base("report-restored-units-garbage", "old")?;
+    fs::write(
+        repo.root().join("target").join(restored_units_file("")),
+        "not a record\n",
+    )?;
+    let missing = registry_artifact(&repo, GAP)?;
+    let metrics = observation(&repo, &[], &[missing])?;
+    assert_eq!(metrics.invocations[0].compilations[0].restored, None);
+    assert_eq!(
+        metrics.invocations[0].restored_manifest,
+        Some(Manifest::Unreadable)
+    );
+    assert_eq!(metrics.violations, [] as [String; 0]);
+    Ok(())
+}
+
+#[test]
+fn a_restore_whose_scan_fails_clears_the_older_record_so_no_unit_is_claimed_as_held()
 -> Result<(), Box<dyn std::error::Error>> {
     let repo = base("report-restored-units-stale", "old")?;
     let record = repo.root().join("target").join(restored_units_file(""));
@@ -108,12 +138,33 @@ fn a_restore_whose_scan_fails_clears_the_older_record_so_held_units_stay_waste()
     let gap = registry_artifact(&repo, GAP)?;
     let metrics = observation(&repo, &[], &[gap])?;
     assert_eq!(metrics.invocations[0].compilations[0].restored, None);
-    assert!(
-        metrics
-            .violations
-            .iter()
-            .any(|line| line.contains("serde v1.0.0")),
-        "{metrics:?}"
+    assert_eq!(
+        metrics.invocations[0].restored_manifest,
+        Some(Manifest::Absent)
+    );
+    assert_eq!(metrics.violations, [] as [String; 0]);
+    Ok(())
+}
+
+#[test]
+fn cargos_dirty_reason_reaches_the_compilation_it_explains()
+-> Result<(), Box<dyn std::error::Error>> {
+    let repo = base("report-restored-units-dirty", "old")?;
+    let missing = registry_artifact(&repo, GAP)?;
+    let reason = "FsStatusOutdated(StaleItem(MissingFile { path: \"/store/out-dirs/v1/x.rs\" }))";
+    let metrics = observation_with(
+        &repo,
+        &[],
+        &[missing],
+        json!([
+            {"package":"serde","version":"1.0.0","reason":"FsStatusOutdated(StaleDepFingerprint { unit: UnitIndex(1) })"},
+            {"package":"serde","version":"1.0.0","reason":reason},
+            {"package":"other","version":"2.0.0","reason":"ignored"}
+        ]),
+    )?;
+    assert_eq!(
+        metrics.invocations[0].compilations[0].dirty.as_deref(),
+        Some(reason)
     );
     Ok(())
 }

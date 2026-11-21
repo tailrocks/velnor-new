@@ -201,6 +201,7 @@ fn from_progress(
         workspace: member.is_some(),
         dependencies: super::dependencies(root, member),
         restored: None,
+        dirty: None,
         package: event.package.clone(),
         version: event.version.clone(),
     }

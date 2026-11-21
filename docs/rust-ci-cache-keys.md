@@ -121,6 +121,19 @@ include it in Required's dependencies and verdict specification, set this in
 cache_check_blocks = true
 ```
 
+A dependency compile counts as compiled despite restored inputs only when the
+restore proved the base held the unit (`restored: true`). `inputs restore`
+records the units of the restored target in `.velnor/restored-units`, and each
+invocation in `ci-metrics.json` carries `restored_manifest` (`present`,
+`absent` or `unreadable`). A dependency compile whose restore status is
+unknown, because that record is absent or unreadable, is not waste. The check
+prints it as `::warning::` naming the manifest state, or as `::notice::` when
+the manifest is present but no unit matched. For every rebuilt unit, a
+`velnor-ci run` of `cargo check`, `clippy`, `build` or `doc` sets
+`CARGO_LOG=cargo::compiler::fingerprint=info` unless it is already set,
+and the report keeps cargo's `dirty:` reason as `dirty` on the compilation. The
+reason is appended to the waste and notice lines as `(cargo: <reason>)`.
+
 Besides compiled-despite-restored-inputs and download waste, the report names
 five more avoidable costs, each only when the evidence shows it was avoidable:
 

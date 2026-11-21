@@ -41,12 +41,20 @@ pub struct BuildScriptRun {
     pub out_dir: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DirtyUnit {
+    pub package: String,
+    pub version: String,
+    pub reason: String,
+}
+
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct ArtifactBatch {
     pub artifacts: Vec<CargoArtifact>,
     pub build_scripts: Vec<BuildScriptRun>,
     pub rejected: u64,
     pub progress: Vec<CargoProgress>,
+    pub dirty: Vec<DirtyUnit>,
     pub tests: Vec<(String, f64)>,
     /// Units cargo reported a compile error for.
     pub failed_units: Vec<FailedUnit>,
@@ -144,6 +152,9 @@ impl ArtifactTap {
             if let Some(unit) = failed_unit(line) {
                 self.batch.failed_units.push(unit);
             }
+            if let Some(unit) = dirty_unit(line) {
+                self.batch.dirty.push(unit);
+            }
         }
         let Ok(value) = serde_json::from_slice::<serde_json::Value>(&self.line) else {
             return;
@@ -201,6 +212,24 @@ fn failed_unit(line: &str) -> Option<FailedUnit> {
     (!package.is_empty()).then(|| FailedUnit {
         package: package.to_owned(),
         version: None,
+    })
+}
+
+const FINGERPRINT_TARGET: &str = "cargo::compiler::fingerprint:";
+const MAX_REASON_CHARS: usize = 512;
+
+fn dirty_unit(line: &str) -> Option<DirtyUnit> {
+    let (span, message) = line.split_once(FINGERPRINT_TARGET)?;
+    let reason = message.trim().strip_prefix("dirty: ")?;
+    let identity = span.split_once("package_id=")?.1;
+    let mut words = identity.split_whitespace();
+    let package = words.next()?;
+    let version = words.next()?.strip_prefix('v')?;
+    let reason: String = reason.chars().take(MAX_REASON_CHARS).collect();
+    (!package.is_empty() && !reason.is_empty()).then(|| DirtyUnit {
+        package: package.to_owned(),
+        version: version.to_owned(),
+        reason,
     })
 }
 

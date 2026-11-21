@@ -108,7 +108,7 @@ pub fn waste(metrics: &LaneMetrics) -> Vec<String> {
             .map(|event| event.package.as_str())
             .collect();
         for event in &invocation.compilations {
-            if (same_lock && !event.workspace && event.restored != Some(false))
+            if (same_lock && !event.workspace && event.restored == Some(true))
                 || (warm
                     && event.workspace
                     && (event.unchanged
@@ -118,8 +118,11 @@ pub fn waste(metrics: &LaneMetrics) -> Vec<String> {
                             .all(|dependency| !compiled.contains(dependency.as_str()))))
             {
                 violations.push(format!(
-                    "{}: {} v{} compiled despite usable restored inputs",
-                    invocation.root, event.package, event.version
+                    "{}: {} v{} compiled despite usable restored inputs{}",
+                    invocation.root,
+                    event.package,
+                    event.version,
+                    crate::restored_units::cargo_reason(event)
                 ));
             }
         }
@@ -191,7 +194,12 @@ pub fn check(lanes: &[LaneMetrics]) -> Result<String, CiError> {
         }
         violations.extend(lane.violations.iter().cloned());
         violations.extend(waste(lane));
-        notices.extend(crate::restored_units::base_gaps(lane));
+        notices.extend(
+            crate::restored_units::base_gaps(lane)
+                .into_iter()
+                .map(|gap| format!("::notice::{gap}")),
+        );
+        notices.extend(crate::restored_units::unknown_restores(lane));
     }
     violations.extend(compilation_repeats(lanes)?);
     violations.sort();
@@ -201,7 +209,6 @@ pub fn check(lanes: &[LaneMetrics]) -> Result<String, CiError> {
         notices.sort();
         notices.dedup();
         for notice in notices {
-            text.push_str("::notice::");
             text.push_str(&notice);
             text.push('\n');
         }
