@@ -5,13 +5,16 @@ use std::collections::BTreeMap;
 use std::error::Error;
 
 use velnor_model::{RepoPath, WORKFLOWS_CONFIG_PATH};
+use velnor_rust::CONFIG_PATH;
 
 use crate::events::DENY_MISE;
 use crate::facts::TestResult;
 use crate::pipeline::view;
+use crate::private_sources::SECTION;
 use crate::public_sources::{DECLARED as PUBLIC_SOURCES, SHA, SOURCE};
 use crate::release_family_fixture;
-use crate::release_fixture::release_view;
+use crate::release_fixture::{APP, release_view};
+use crate::release_unguarded::expected_release;
 use crate::step_refs_sweep::{
     Case, Sweep, gate_patch, gate_patches, generated, pinned, rust_ci_sweep,
 };
@@ -50,6 +53,8 @@ fn every_steps_reference_in_a_declared_workflow_names_a_step_of_its_own_job() ->
     sweep.finish();
     Ok(())
 }
+
+const MERGE_GROUP_MINIMUM: u64 = 103;
 
 const TAG_PUSH: &str = "family_trigger = \"tag_push\"\ncommit_file = true\n";
 
@@ -110,6 +115,39 @@ fn every_steps_reference_in_a_workspace_group_job_names_a_step_of_its_own_job() 
         config: Some("[[workspace_groups]]\nname = 'pair'\nroots = ['.', 'tools']\n"),
         files: &[],
     }])
+}
+
+#[test]
+fn every_steps_reference_in_a_merge_group_skip_job_names_a_step_of_its_own_job() -> TestResult {
+    rust_ci_sweep(&[Case {
+        from: MERGE_GROUP_MINIMUM,
+        config: Some("[ci]\nskip_push_after_merge_group = true\n"),
+        files: &[],
+    }])
+}
+
+#[test]
+fn every_steps_reference_in_a_private_release_binary_job_names_a_step_of_its_own_job() -> TestResult
+{
+    let private = gate_patch("private_sources")?;
+    let mut sweep = Sweep::default();
+    for patch in gate_patches()?
+        .into_iter()
+        .filter(|patch| *patch >= private)
+    {
+        let mut repo = release_view(&[APP], Some("[[binaries]]\npackage = \"app\"\n"))?;
+        repo.files.insert(
+            CONFIG_PATH,
+            format!("full_run = \"off\"\n{SECTION}").into_bytes(),
+        );
+        let effective = pinned(&mut repo, patch)?;
+        sweep.add(
+            &format!("0.1.{effective}, private release binary"),
+            &expected_release(&repo)?,
+        )?;
+    }
+    sweep.finish();
+    Ok(())
 }
 
 #[test]
