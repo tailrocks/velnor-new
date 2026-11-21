@@ -3,7 +3,9 @@
 
 use std::ffi::OsStr;
 use std::fs;
+use std::io;
 use std::ops::Deref;
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
 const KEEP_ENV: &str = "VELNOR_KEEP_TEST_DIRS";
@@ -16,7 +18,7 @@ pub struct ScratchDir {
 impl ScratchDir {
     #[must_use]
     pub fn new(path: PathBuf) -> Self {
-        fs::remove_dir_all(&path).ok();
+        remove_tree(&path).unwrap_or_else(|e| panic!("cannot clear {}: {e}", path.display()));
         fs::create_dir_all(&path).unwrap_or_else(|e| unreachable!("{e}"));
         Self { path }
     }
@@ -40,9 +42,36 @@ impl ScratchDir {
 impl Drop for ScratchDir {
     fn drop(&mut self) {
         if !keeping() {
-            fs::remove_dir_all(&self.path).ok();
+            remove_tree(&self.path).ok();
         }
     }
+}
+
+fn remove_tree(path: &Path) -> io::Result<()> {
+    match fs::symlink_metadata(path) {
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(e),
+        Ok(_) => {}
+    }
+    if fs::remove_dir_all(path).is_ok() {
+        return Ok(());
+    }
+    make_writable(path)?;
+    fs::remove_dir_all(path)
+}
+
+fn make_writable(path: &Path) -> io::Result<()> {
+    let metadata = fs::symlink_metadata(path)?;
+    if !metadata.is_dir() {
+        return Ok(());
+    }
+    let mut permissions = metadata.permissions();
+    permissions.set_mode(permissions.mode() | 0o700);
+    fs::set_permissions(path, permissions)?;
+    for entry in fs::read_dir(path)? {
+        make_writable(&entry?.path())?;
+    }
+    Ok(())
 }
 
 impl Deref for ScratchDir {
@@ -66,6 +95,7 @@ pub fn keep_requested(value: Option<&OsStr>) -> bool {
 #[cfg(test)]
 mod tests {
     use std::fs;
+    use std::os::unix::fs::PermissionsExt;
     use std::panic::{AssertUnwindSafe, catch_unwind, panic_any};
     use std::path::{Path, PathBuf};
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -86,6 +116,18 @@ mod tests {
         ));
         fs::create_dir(&root).unwrap_or_else(|e| unreachable!("{e}"));
         root
+    }
+
+    fn selftest_path(name: &str) -> PathBuf {
+        std::env::temp_dir().join(format!(
+            "velnor-scratch-selftest-{}-{name}",
+            std::process::id()
+        ))
+    }
+
+    fn lock(path: &Path, mode: u32) {
+        fs::set_permissions(path, fs::Permissions::from_mode(mode))
+            .unwrap_or_else(|e| unreachable!("{e}"));
     }
 
     fn assert_cleanup_leaves_nothing_behind() {
@@ -113,14 +155,39 @@ mod tests {
     }
 
     #[test]
-    fn a_stale_tree_left_by_an_earlier_process_does_not_break_cleanup() {
-        let stale = ScratchDir::adopt(std::env::temp_dir().join(format!(
-            "velnor-scratch-selftest-{}-stale-success",
-            std::process::id()
-        )));
-        fs::create_dir_all(stale.path()).unwrap_or_else(|e| unreachable!("{e}"));
-        fs::write(stale.join("left"), "stale").unwrap_or_else(|e| unreachable!("{e}"));
-        assert_cleanup_leaves_nothing_behind();
+    fn a_stale_tree_at_the_same_path_is_cleared_before_reuse() {
+        let path = selftest_path("reuse");
+        fs::create_dir_all(&path).unwrap_or_else(|e| unreachable!("{e}"));
+        fs::write(path.join("left"), "stale").unwrap_or_else(|e| unreachable!("{e}"));
+        let fresh = ScratchDir::new(path.clone());
+        assert!(!fresh.join("left").exists());
+        drop(fresh);
+        assert_eq!(path.exists(), keeping());
+    }
+
+    #[test]
+    fn a_stale_tree_that_cannot_be_removed_is_cleared_before_reuse() {
+        let path = selftest_path("locked");
+        let locked = path.join("locked");
+        fs::create_dir_all(&locked).unwrap_or_else(|e| unreachable!("{e}"));
+        fs::write(locked.join("left"), "stale").unwrap_or_else(|e| unreachable!("{e}"));
+        lock(&locked, 0o500);
+        let fresh = ScratchDir::new(path.clone());
+        assert!(!locked.exists());
+        drop(fresh);
+        assert_eq!(path.exists(), keeping());
+    }
+
+    #[test]
+    fn a_tree_that_cannot_be_removed_is_cleaned_when_its_guard_drops() {
+        let guard = ScratchDir::new(selftest_path("drop-locked"));
+        let locked = guard.join("locked");
+        fs::create_dir_all(&locked).unwrap_or_else(|e| unreachable!("{e}"));
+        fs::write(locked.join("left"), "data").unwrap_or_else(|e| unreachable!("{e}"));
+        lock(&locked, 0o500);
+        let path = guard.path().to_path_buf();
+        drop(guard);
+        assert_eq!(path.exists(), keeping());
     }
 
     #[test]
