@@ -4,7 +4,7 @@
     "source_commit": "bbf2cb2df8380b173a0629d07cb862f4870588f8",
     "source_tree": "ebb160d5cbea5d021aac14c269f9e52aee86fda4",
     "checked_at": "2026-10-09T22:40:38Z",
-    "command": "env MISE_DATA_DIR=<tmp>/velnor-110-mise-data-run2 CARGO_HOME=<tmp>/velnor-110-cargo-home MISE_AUTO_INSTALL=false MISE_GH_VERSION=2.102.0 PATH=<tmp>/velnor-110-cargo-home/bin:<tmp>/velnor-110-mise-data-run2/installs/aqua-jdx-mise/2026.10.6/mise/bin:/usr/bin:/bin:/usr/sbin:/sbin /bin/bash scripts/check-freshness.sh --check-upstream",
+    "command": "env MISE_DATA_DIR=${TMPDIR:-/tmp}/velnor-110-mise-data-run2 CARGO_HOME=${TMPDIR:-/tmp}/velnor-110-cargo-home MISE_AUTO_INSTALL=false MISE_GH_VERSION=2.102.0 PATH=${TMPDIR:-/tmp}/velnor-110-cargo-home/bin:${TMPDIR:-/tmp}/velnor-110-mise-data-run2/installs/aqua-jdx-mise/2026.10.6/mise/bin:/usr/bin:/bin:/usr/sbin:/sbin /bin/bash scripts/check-freshness.sh --check-upstream",
     "exit_code": 1,
     "interpretation": "The bounded upstream observation emitted all 19 tool/action rows. The command exit is not a passing freshness result: at the time of capture the inventory still had a pending Mise qualification and stale checked_at values, while five newer versions were held."
   },

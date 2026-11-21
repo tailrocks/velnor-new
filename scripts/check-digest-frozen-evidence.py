@@ -3,10 +3,13 @@ import hashlib
 import json
 import os
 import re
+import stat
 import subprocess
 import sys
 
 RULE_IDS = ["no-absolute-local-paths", "no-local-temp-paths"]
+FROZEN_LIST = "scripts/digest-frozen-paths.txt"
+FROZEN_MODE = "100644"
 MANIFESTS = [
     "docs/implemented/evidence/freshness-2026-10-20/capture-inventory.json",
     "docs/implemented/evidence/freshness-2026-10-20/first/freeze.json",
@@ -145,21 +148,75 @@ def sha256_of(path):
     return h.hexdigest(), os.path.getsize(path)
 
 
-def check(root, paths):
+def git_modes(root, paths):
+    run = subprocess.run(
+        ["git", "-C", root, "ls-files", "-s", "-z", "--", *paths],
+        capture_output=True, text=True, timeout=60, check=False,
+    )
+    if run.returncode != 0:
+        return None
+    modes = {}
+    for rec in run.stdout.split("\0"):
+        meta, _, name = rec.partition("\t")
+        if name:
+            modes[name] = meta.split()[0]
+    return modes
+
+
+def list_failures(root, paths):
+    full = os.path.join(root, FROZEN_LIST)
+    if not os.path.isfile(full):
+        return [f"{FROZEN_LIST}: pinned exempt list is missing"], []
+    listed = [line.strip() for line in open(full, encoding="utf-8") if line.strip()]
     failures = []
+    if len(listed) != len(set(listed)):
+        failures.append(f"{FROZEN_LIST}: duplicate entries")
+    failures += [f"{p}: exempt but not pinned in {FROZEN_LIST}" for p in paths if p not in listed]
+    failures += [f"{p}: pinned in {FROZEN_LIST} but no longer exempt" for p in listed if p not in paths]
+    return failures, listed
+
+
+def file_failures(root, paths):
+    failures, regular = [], []
+    for p in paths:
+        try:
+            st = os.lstat(os.path.join(root, p))
+        except OSError:
+            failures.append(f"{p}: exempt path does not exist")
+            continue
+        if not stat.S_ISREG(st.st_mode):
+            failures.append(f"{p}: not a regular file (symlink or other type)")
+        elif st.st_mode & 0o111:
+            failures.append(f"{p}: mode {oct(st.st_mode & 0o7777)} has an executable bit")
+        else:
+            regular.append(p)
+    modes = git_modes(root, regular)
+    if modes is None:
+        return failures + ["git ls-files failed; cannot verify the pinned file modes"], regular
+    for p in list(regular):
+        if modes.get(p) != FROZEN_MODE:
+            failures.append(f"{p}: git mode {modes.get(p)} is not {FROZEN_MODE}")
+            regular.remove(p)
+    return failures, regular
+
+
+def check(root, paths):
+    failures, listed = list_failures(root, paths)
     cache = {}
     for m in MANIFESTS:
         full = os.path.join(root, m)
-        if os.path.exists(full) and sha256_of(full)[0] != MANIFEST_PINS[m]:
+        if not os.path.isfile(full):
+            failures.append(f"{m}: pinned manifest is missing")
+            cache[m] = {}
+        elif sha256_of(full)[0] != MANIFEST_PINS[m]:
             failures.append(f"{m}: manifest differs from its pinned sha256")
             cache[m] = {}
         else:
             cache[m] = manifest_entries(root, m)
-    for p in paths:
+    file_problems, regular = file_failures(root, sorted(set(paths) | set(listed)))
+    failures += file_problems
+    for p in regular:
         full = os.path.join(root, p)
-        if not os.path.isfile(full):
-            failures.append(f"{p}: exempt path does not exist")
-            continue
         digest, size = sha256_of(full)
         if p in PINNED_FILES:
             if PINNED_FILES[p] != (digest, size):

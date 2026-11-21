@@ -24,7 +24,7 @@ The installed DinD/runner entrypoints, socket wait and cleanup helpers, and tar 
 
 A fresh named volume was confirmed absent before creation, then created with `velnor.role=work` and a unique `velnor.worker` label. DinD's first mount initialized `/home/runner/_work` as `1000:1000 755`; its root process wrote a `0:0 644` marker. The default runner user `uid=1000(runner)` read that marker and wrote its own `1000:1000 644` marker. The actual runner entrypoint, given a dummy JIT body and one socket-wait attempt, exited 1 with exactly `docker socket missing`.
 
-An instrumented `mktemp` observed a private `<tmp>/velnor-jit.*` path with mode `600`; explicit chmod also set `600`. Container inspection confirmed the `_work` volume and the probe bind mount, with no mount at `/tmp`. The stopped entrypoint container did not contain the JIT tempfile. All named probe containers and the volume were absent after cleanup.
+An instrumented `mktemp` observed a private `velnor-jit.*` file under `/tmp` with mode `600`; explicit chmod also set `600`. Container inspection confirmed the `_work` volume and the probe bind mount, with no mount at `/tmp`. The stopped entrypoint container did not contain the JIT tempfile. All named probe containers and the volume were absent after cleanup.
 
 Raw source snapshot, context, build logs, image inspections, installed-file hashes, test logs, probe script, command output, and cleanup checks are retained under `<retained-cache>/velnor-pr25-aggregate-image-3f2e35a7`. Key artifact hashes are:
 

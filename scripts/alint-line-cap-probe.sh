@@ -36,6 +36,7 @@ done
 bash scripts/test-no-doctests-rule.sh || exit 1
 bash scripts/test-no-absolute-local-paths-rule.sh || exit 1
 python3 -I scripts/check-digest-frozen-evidence.py "$ROOT" "$ROOT/.alint.yml" || exit 1
+bash scripts/test-digest-frozen-evidence.sh || exit 1
 
 attack_case() {
   local label="$1" exclude="$2" attack out rc

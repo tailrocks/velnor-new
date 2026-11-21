@@ -78,6 +78,17 @@ check task_id_sender    pass "sender \`${root}/version_fixture_closure_v4\`"
 check task_id_payload   pass "Task name: ${root}/archive_postpublication_review_v3"
 check task_id_quoted    pass "'Task name: ${root}/archive_postpublication_review_v3'"
 check task_id_eol       pass "role was ${root}/review_shell_context"
+check root_env_underscore fail "HOME=${root}/build_agent"
+check root_env_nested_us  fail "WORKDIR=${root}/my_project/build_output"
+check root_cd_underscore  fail "run cd ${root}/build_agent first"
+check root_flag_underscore fail "pass --dir ${root}/build_agent to the tool"
+check root_key_underscore fail "\"home\": \"${root}/build_agent\"" json
+check root_yaml_key_underscore fail "workdir: ${root}/build_agent"
+check task_id_prose_after_colon pass "Task name: ${root}/build_agent"
+check json_escaped_root_home fail "{\"directory\": \"\\/ro""ot\\/.cache\\/x\"}" json
+check json_escaped_root_work fail "{\"directory\": \"\\/ro""ot\\/work\\/out\"}" json
+check json_unicode_root      fail "{\"directory\": \"\\u002fro""ot\\u002f.cache\\u002fx\"}" json
+check json_escaped_root_task pass "{\"actor\": \"\\/ro""ot\\/performance_coordinator\"}" json
 check gh_runner_work    pass "log at ${home}/runner/work/repo/repo/out.txt"
 check gh_runner_config  pass "wrote ${home}/runner/.docker/config.json"
 check gh_runner_bare    pass "home is ${home}/runner"
@@ -134,6 +145,18 @@ check temp_file_url_log    fail "open file://${tmp}/mise-action-AbC123/bin" log
 check temp_file_url_example pass "use file://${tmp}/example/file.md as the sample"
 check temp_file_url_other  pass "open file:///opt/velnor/report.json"
 check temp_file_url_repo   pass "open file://docs/implemented/a.md"
+check temp_dash_dir_file   fail "wrote ${tmp}/a-b/x"
+check temp_dash_dir_file_log fail "wrote ${tmp}/a-b/x" log
+check temp_json_escaped_tmp fail "{\"path\":\"\\${tmp}\\/velnor-a\\/out.log\"}" json
+check temp_json_unicode_tmp fail "{\"path\":\"\\u002ft""mp\\u002fvelnor-a\\u002fout.log\"}" json
+check temp_json_dash_dir   fail "{\"path\":\"\\${tmp}\\/a-b\\/x\"}" json
+check temp_json_double_esc fail "{\"path\":\"\\\\${tmp}\\\\/velnor-a\\\\/out.log\"}" json
+check temp_json_private    fail "{\"path\":\"\\/priv""ate\\/tmp\\/velnor-a\\/out.log\"}" json
+check temp_json_private_u  fail "{\"path\":\"\\u002fpriv""ate\\u002ftmp\\u002fvelnor-a\\u002fout\"}" json
+check temp_json_var_folders fail "{\"path\":\"\\/va""r\\/folders\\/8p\\/T\\/x\"}" json
+check temp_json_example    pass "{\"path\":\"\\${tmp}\\/example\\/out.log\"}" json
+check temp_json_bare_tmp   pass "{\"path\":\"\\${tmp}\\/foo\"}" json
+check temp_json_repo       pass "{\"path\":\"docs\\/implemented\\/a.md\"}" json
 
 if [ "$fails" -ne 0 ]; then
   echo "no-local-temp-paths fixtures: $fails failing"

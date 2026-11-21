@@ -55,7 +55,7 @@
     {"command": "rtk git diff --check", "result": "passed"},
     {
       "checkpoint": "13fb3a8e6cce4d44f5c8afc1dca8e6e3a5f05fc6",
-      "command": "cargo-nextest 0.9.146 nextest list --locked --package velnor-actions-workflow-renderer --lib --target-dir <tmp>/velnor-phasec-registered-target-13fb-v31 --build-jobs 2 --message-format oneline -E 'test(/mbx_bundle|schema2_mbx_(cancel_probe|parallel_probe|resource_probe|corrupt_probe|stock_restore)/)'",
+      "command": "cargo-nextest 0.9.146 nextest list --locked --package velnor-actions-workflow-renderer --lib --target-dir ${TMPDIR:-/tmp}/velnor-phasec-registered-target-13fb-v31 --build-jobs 2 --message-format oneline -E 'test(/mbx_bundle|schema2_mbx_(cancel_probe|parallel_probe|resource_probe|corrupt_probe|stock_restore)/)'",
       "exit_code": 101,
       "result": "pre-test compile failed; zero tests executed",
       "diagnostics": [

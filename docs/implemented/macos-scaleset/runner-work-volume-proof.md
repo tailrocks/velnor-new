@@ -173,8 +173,8 @@ Regenerate and check the manifest with:
 ```sh
 find images/dind images/runner/ubuntu-26.04 -type f ! -name .dockerignore -print0 \
   | LC_ALL=C sort -z \
-  | xargs -0 sha256sum > <tmp>/runner25-main-b3-context.sha256
-sha256sum <tmp>/runner25-main-b3-context.sha256
+  | xargs -0 sha256sum > "${TMPDIR:-/tmp}/runner25-main-b3-context.sha256"
+sha256sum "${TMPDIR:-/tmp}/runner25-main-b3-context.sha256"
 ```
 
 ```text
@@ -267,7 +267,7 @@ The entrypoint invocation is expected to exit 1 with exactly `docker socket
 missing`; the other probe commands pass. The complete build and probe receipts
 are retained at `<tmp>/runner25-b3-image-build.log` and
 `<tmp>/runner25-b3-work-volume-probe.log`. The nested source contract test also
-checks the `_work` mount, private `<tmp>/velnor-jit.*` location, and absence of
+checks the `_work` mount, private `velnor-jit.*` location under `/tmp`, and absence of
 a runner mount at `/tmp`. Its source SHA-256 is
 `6e27926566362fb05ca792437ed8a148644c31589cfbdb56af77745620c3fe04`.
 
@@ -359,7 +359,7 @@ as `1000:1000 755`; its root process wrote a `0:0 644` marker. The default
 runner user `uid=1000(runner)` read that marker and wrote a `1000:1000 644`
 marker. A wrapper invoked the actual runner entrypoint with a dummy JIT body
 and one socket-wait attempt; it exited 1 with `docker socket missing`. An
-exported `mktemp` observer recorded a temporary path under `<tmp>/velnor-jit.*`,
+exported `mktemp` observer recorded a temporary path matching `velnor-jit.*` under `/tmp`,
 verified that file was removed, and verified that no JIT file appeared in the
 work volume. Container inspection showed only the `_work` volume mount on
 every probe container, with no `/tmp` mount. All named containers and the

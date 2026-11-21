@@ -9,7 +9,7 @@ working tree carried concurrent-builder uncommitted changes).
 Machine: `arm64`, macOS 27.0, Apple M5 Max, 128 GiB RAM.
 Toolchain: rustc/cargo 1.98.1, mise 2026.9.16, mbx 1.20.0,
 nextest 0.9.143, git 2.56.0, python 3.14.7.
-`CARGO_TARGET_DIR=<tmp>/t-p13` for every build below.
+`CARGO_TARGET_DIR="${TMPDIR:-/tmp}/t-p13"` for every build below.
 
 Method: `run_inventories` reuses one fetched `cargo metadata`
 record per member manifest after membership validation (own
