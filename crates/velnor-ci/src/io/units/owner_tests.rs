@@ -30,7 +30,7 @@ fn lib() -> Vec<String> {
     )
 }
 
-fn bin_only_build() -> Vec<String> {
+pub(super) fn bin_only_build() -> Vec<String> {
     let mut files = lib();
     files.extend(with(
         TOOL,
@@ -48,7 +48,7 @@ fn bin_only_build() -> Vec<String> {
     files
 }
 
-fn example_build() -> Vec<String> {
+pub(super) fn example_build() -> Vec<String> {
     let mut files = lib();
     files.extend(with(
         TOOL_EXAMPLE,
@@ -66,7 +66,7 @@ fn example_build() -> Vec<String> {
     files
 }
 
-fn scanned(files: &[String]) -> Result<usize, String> {
+pub(super) fn scanned(files: &[String]) -> Result<usize, String> {
     let names: Vec<&str> = files.iter().map(String::as_str).collect();
     let root = target_with(&names);
     let found = unit_files_within(&root, 1000);

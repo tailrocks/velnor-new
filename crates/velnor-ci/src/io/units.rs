@@ -21,6 +21,8 @@ mod limit_tests;
 mod metadata;
 #[cfg(test)]
 mod owner_tests;
+#[cfg(test)]
+mod profile_tests;
 mod separation;
 mod workspace;
 
@@ -143,7 +145,7 @@ fn scan(target: &Path, limit: usize, skip: Option<&Path>) -> Result<Scanned, CiE
             if kind.is_dir() && skip == Some(path.as_path()) {
                 continue;
             }
-            if kind.is_dir() && entry.file_name() != "incremental" {
+            if kind.is_dir() && (depth == 0 || entry.file_name() != "incremental") {
                 if depth == 0 && entry.file_name() == NESTED_ROOTS_FOLDER {
                     // The build folders of the Cargo roots below this one, each audited as its own root.
                     continue;
@@ -254,13 +256,16 @@ fn unit_file(relative: &Path) -> Option<UnitFile> {
         _ => {
             let stem = name.strip_suffix(".d")?;
             let hash = split(stem).map(|(_, hash)| hash.to_owned());
-            let placed = folders
-                .last()
-                .is_some_and(|folder| matches!(*folder, "deps" | "examples"));
-            (hash.is_some() || folders.last() == Some(&"deps")).then(|| UnitFile::DepInfo {
-                configuration: configuration(1).filter(|_| placed),
-                hash,
-                stem: stem.to_owned(),
+            let placed = folders.len() > 1
+                && folders
+                    .last()
+                    .is_some_and(|folder| matches!(*folder, "deps" | "examples"));
+            (hash.is_some() || (placed && folders.last() == Some(&"deps"))).then(|| {
+                UnitFile::DepInfo {
+                    configuration: configuration(1).filter(|_| placed),
+                    hash,
+                    stem: stem.to_owned(),
+                }
             })
         }
     }

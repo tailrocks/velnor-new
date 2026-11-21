@@ -28,7 +28,12 @@ fn workspace() -> Repo {
     unit(
         &repo,
         "Cargo.toml",
-        "[workspace]\nmembers = [\"my-app\", \"my-lib\", \"my-macro\", \"my-tool\"]\nresolver = \"3\"\n\n[profile.examples]\ninherits = \"dev\"\n",
+        &format!(
+            "[workspace]\nmembers = [\"my-app\", \"my-lib\", \"my-macro\", \"my-tool\"]\nresolver = \"3\"\n{}",
+            CUSTOM_PROFILES
+                .map(|name| format!("\n[profile.{name}]\ninherits = \"dev\"\n"))
+                .concat()
+        ),
     );
     unit(&repo, "Cargo.lock", "version = 4\n");
     let package = |name: &str, extra: &str| {
@@ -97,6 +102,8 @@ const OTHER_PROFILES: [&[&str]; 3] = [
     &["build", "--profile", "examples", "-p", "my-lib"],
 ];
 
+const CUSTOM_PROFILES: [&str; 5] = ["examples", "deps", "incremental", "out", "fingerprint"];
+
 fn build_in_one_target(repo: &Repo, scenarios: &[&[&str]]) {
     for arguments in scenarios {
         let mut command = vec!["cargo"];
@@ -163,6 +170,43 @@ fn plant_orphans_beside_a_real_build(repo: &Repo) {
     assert!(accepted.status.success(), "{accepted:?}");
 }
 
+fn custom_profiles_named_like_cargo_folders(repo: &Repo) {
+    for profile in CUSTOM_PROFILES {
+        build_in_one_target(
+            repo,
+            &[&[
+                "build",
+                "-p",
+                "my-tool",
+                "--all-targets",
+                "--profile",
+                profile,
+            ]],
+        );
+        let root = repo.root().join("target").join(profile);
+        for orphan in ["libzzz.rlib", "zzz.d", "deps/libzzz.rlib", "examples/zzz.d"] {
+            let path = root.join(orphan);
+            fs::create_dir_all(path.parent().unwrap_or_else(|| unreachable!()))
+                .unwrap_or_else(|e| unreachable!("{e}"));
+            fs::write(&path, "").unwrap_or_else(|e| unreachable!("{e}"));
+            let refused = inputs_build(repo, &["true"]);
+            fs::remove_file(&path).unwrap_or_else(|e| unreachable!("{e}"));
+            assert_eq!(
+                refused.status.code(),
+                Some(1),
+                "{profile} {orphan}: {refused:?}"
+            );
+            let stderr = String::from_utf8_lossy(&refused.stderr);
+            assert!(
+                stderr.contains("found no units in") && stderr.contains("unknown cargo layout?"),
+                "{profile} {orphan}: {stderr}"
+            );
+        }
+        let accepted = inputs_build(repo, &["true"]);
+        assert!(accepted.status.success(), "{profile}: {accepted:?}");
+    }
+}
+
 fn a_failed_build_script_does_not_block_the_retry(repo: &Repo) {
     let fail = repo.root().join("my-app/FAIL");
     fs::write(&fail, "").unwrap_or_else(|e| unreachable!("{e}"));
@@ -205,11 +249,12 @@ fn a_real_cargo_build_is_not_refused_and_an_output_no_unit_of_it_owns_is() {
     std::thread::scope(|scope| {
         let debug = scope.spawn(|| build_in_one_target(&workspace(), &DEBUG));
         let other = scope.spawn(|| build_in_one_target(&workspace(), &OTHER_PROFILES));
+        let custom = scope.spawn(|| custom_profiles_named_like_cargo_folders(&workspace()));
         let repo = workspace();
         a_failed_build_script_does_not_block_the_retry(&repo);
         an_empty_target_dir_is_left_to_cargo_to_reject(&repo);
         plant_orphans_beside_a_real_build(&repo);
-        for handle in [debug, other] {
+        for handle in [debug, other, custom] {
             handle
                 .join()
                 .unwrap_or_else(|e| std::panic::resume_unwind(e));
