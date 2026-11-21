@@ -22,7 +22,11 @@ check() {
     printf '%b' "$2" > "$dir/fx/$1"
     shift 2
   done
-  if out="$(bash "$checker" "$dir" 2>&1)"; then
+  if [ -e "$dir/Cargo.lock" ]; then
+    echo "FAIL $name: fixture unexpectedly has a Cargo.lock"
+    fails=$((fails + 1))
+  fi
+  if out="$("$BASH" "$checker" "$dir" 2>&1)"; then
     got=pass
   elif printf '%s\n' "$out" | grep -q 'rustdoc lists the doctests above'; then
     got=fail

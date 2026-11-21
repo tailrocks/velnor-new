@@ -19,7 +19,7 @@ for features in --all-features --no-default-features default; do
     selection=("$features")
   fi
   status=0
-  listing="$(RUSTDOCFLAGS="${RUSTDOCFLAGS:-} --test --test-args --list" cargo doc --workspace --no-deps --lib --bins --examples ${selection[@]+"${selection[@]}"} "${locked[@]}" 2>"$diagnostics")" || status=$?
+  listing="$(RUSTDOCFLAGS="${RUSTDOCFLAGS:-} --test --test-args --list" cargo doc --workspace --no-deps --lib --bins --examples ${selection[@]+"${selection[@]}"} ${locked[@]+"${locked[@]}"} 2>"$diagnostics")" || status=$?
   if [ "$status" -ne 0 ]; then
     cat "$diagnostics" >&2
     printf '%s\n' "$listing" >&2
