@@ -127,6 +127,20 @@ fn a_legacy_cargo_config_alias_wins_over_config_toml() -> TestResult {
 }
 
 #[test]
+fn an_alias_only_in_config_toml_is_ignored_when_a_legacy_config_exists() -> TestResult {
+    let repo = declared_job()?;
+    let launch = repo.root().join("launch");
+    let (inside, _) = manifests(&repo);
+    aliases(
+        &launch,
+        &format!("[alias]\nxb = \"build --manifest-path {inside}\"\n"),
+    )?;
+    fs::write(launch.join(".cargo/config"), "[alias]\nother = \"check\"\n")?;
+    assert_plain(&run_with_args(&repo, &launch, &["xb"])?);
+    Ok(())
+}
+
+#[test]
 fn an_alias_given_on_the_command_line_fails_closed() -> TestResult {
     let repo = declared_job()?;
     let launch = repo.root().join("launch");
