@@ -4,10 +4,13 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::time::{Duration, UNIX_EPOCH};
 
 use velnor_test_support::{ci_safe_cargo_env, real_cargo};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+const SOURCE_MTIME_SECS: u64 = 1_600_000_000;
 
 const SETTING: (&str, &str) = ("MBX_SHARE_OUT_DIR", "0");
 
@@ -92,6 +95,13 @@ fn the_crate(root: &Path) -> Result<PathBuf, Box<dyn std::error::Error>> {
         krate.join("src/lib.rs"),
         "include!(concat!(env!(\"OUT_DIR\"), \"/x.rs\"));\n",
     )?;
+    let settled = UNIX_EPOCH + Duration::from_secs(SOURCE_MTIME_SECS);
+    for source in ["Cargo.toml", "build.rs", "src/lib.rs"] {
+        fs::File::options()
+            .write(true)
+            .open(krate.join(source))?
+            .set_modified(settled)?;
+    }
     Ok(krate)
 }
 
@@ -173,7 +183,14 @@ fn rebuild_from_base(
     assert!(cold.contains("Compiling probe"), "{cold}");
     let base = scratch.0.join("base.tar").display().to_string();
     let target = fs::canonicalize(krate.join("target"))?;
-    tar(&["-C", &target.display().to_string(), "-cf", &base, "."])?;
+    tar(&[
+        "--format=ustar",
+        "-C",
+        &target.display().to_string(),
+        "-cf",
+        &base,
+        ".",
+    ])?;
     let seed = scratch.0.join("seed");
     if seeded {
         copy_seeded_subsets(&store, &seed)?;
