@@ -161,10 +161,10 @@ jobs:
       # self-hosted runner a pull request's own mise.toml must not choose or run tools.
       - name: Test that the scanner pins ignore repository tool config
         run: bash scripts/test-install-secret-scanners.sh
-      - name: Test that the working-tree secret scan fails on a planted token and passes a clean tree
-        run: bash scripts/test-secret-scan-worktree.sh
       - name: Install the pinned secret scanners
         run: bash scripts/install-secret-scanners.sh "$RUNNER_TEMP/secret-scanners"
+      - name: Test that the working-tree secret scan fails on a planted token and passes a clean tree
+        run: bash scripts/test-secret-scan-worktree.sh
       - name: Print scanner versions
         run: |
           gitleaks version
