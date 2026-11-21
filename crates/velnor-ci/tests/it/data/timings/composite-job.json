@@ -1,0 +1,578 @@
+{
+ "total_count": 1,
+ "jobs": [
+  {
+   "id": 136194327268,
+   "name": "rust",
+   "conclusion": "success",
+   "created_at": "2026-11-20T09:11:32Z",
+   "started_at": "2026-11-20T09:11:34Z",
+   "completed_at": "2026-11-20T09:20:46Z",
+   "labels": [
+    "ubuntu-latest"
+   ],
+   "steps": [
+    {
+     "number": 1,
+     "name": "Set up job",
+     "conclusion": "success",
+     "started_at": "2026-11-20T09:11:36Z",
+     "completed_at": "2026-11-20T09:11:43Z"
+    },
+    {
+     "number": 2,
+     "name": "Check out",
+     "conclusion": "success",
+     "started_at": "2026-11-20T09:11:43Z",
+     "completed_at": "2026-11-20T09:11:46Z"
+    },
+    {
+     "number": 3,
+     "name": "Resolve released helper tools",
+     "conclusion": "success",
+     "started_at": "2026-11-20T09:11:46Z",
+     "completed_at": "2026-11-20T09:11:46Z"
+    },
+    {
+     "number": 4,
+     "name": "Install velnor-ci 0.1.108",
+     "conclusion": "success",
+     "started_at": "2026-11-20T09:11:46Z",
+     "completed_at": "2026-11-20T09:11:47Z"
+    },
+    {
+     "number": 5,
+     "name": "Install the released helper launcher",
+     "conclusion": "success",
+     "started_at": "2026-11-20T09:11:47Z",
+     "completed_at": "2026-11-20T09:11:47Z"
+    },
+    {
+     "number": 6,
+     "name": "velnor-ci plan",
+     "conclusion": "success",
+     "started_at": "2026-11-20T09:11:47Z",
+     "completed_at": "2026-11-20T09:11:48Z"
+    },
+    {
+     "number": 7,
+     "name": "velnor-ci merge-queue-check",
+     "conclusion": "skipped",
+     "started_at": "2026-11-20T09:11:48Z",
+     "completed_at": "2026-11-20T09:11:48Z"
+    },
+    {
+     "number": 8,
+     "name": "velnor-ci merge-group-passed",
+     "conclusion": "success",
+     "started_at": "2026-11-20T09:11:48Z",
+     "completed_at": "2026-11-20T09:11:49Z"
+    },
+    {
+     "number": 9,
+     "name": "velnor-ci mbx-store",
+     "conclusion": "success",
+     "started_at": "2026-11-20T09:11:49Z",
+     "completed_at": "2026-11-20T09:11:49Z"
+    },
+    {
+     "number": 10,
+     "name": "velnor-ci mbx-seed",
+     "conclusion": "skipped",
+     "started_at": "2026-11-20T09:11:49Z",
+     "completed_at": "2026-11-20T09:11:49Z"
+    },
+    {
+     "number": 11,
+     "name": "Configure the crates mirror in $RUNNER_TEMP/velnor-cargo/config.toml",
+     "conclusion": "success",
+     "started_at": "2026-11-20T09:11:49Z",
+     "completed_at": "2026-11-20T09:11:49Z"
+    },
+    {
+     "number": 12,
+     "name": "Restore the tools from the node store",
+     "conclusion": "success",
+     "started_at": "2026-11-20T09:11:49Z",
+     "completed_at": "2026-11-20T09:11:50Z"
+    },
+    {
+     "number": 13,
+     "name": "Restore the tools cache",
+     "conclusion": "skipped",
+     "started_at": "2026-11-20T09:11:50Z",
+     "completed_at": "2026-11-20T09:11:50Z"
+    },
+    {
+     "number": 14,
+     "name": "Record where the tools came from",
+     "conclusion": "success",
+     "started_at": "2026-11-20T09:11:50Z",
+     "completed_at": "2026-11-20T09:11:50Z"
+    },
+    {
+     "number": 15,
+     "name": "Install tools",
+     "conclusion": "success",
+     "started_at": "2026-11-20T09:11:50Z",
+     "completed_at": "2026-11-20T09:11:52Z"
+    },
+    {
+     "number": 16,
+     "name": "Configure the crates mirror in $RUNNER_TEMP/velnor-cargo/config.toml",
+     "conclusion": "success",
+     "started_at": "2026-11-20T09:11:52Z",
+     "completed_at": "2026-11-20T09:11:52Z"
+    },
+    {
+     "number": 17,
+     "name": "Add Rust components",
+     "conclusion": "success",
+     "started_at": "2026-11-20T09:11:52Z",
+     "completed_at": "2026-11-20T09:11:52Z"
+    },
+    {
+     "number": 18,
+     "name": "Add Rust targets",
+     "conclusion": "success",
+     "started_at": "2026-11-20T09:11:52Z",
+     "completed_at": "2026-11-20T09:11:52Z"
+    },
+    {
+     "number": 19,
+     "name": "Look up the tools cache",
+     "conclusion": "success",
+     "started_at": "2026-11-20T09:11:52Z",
+     "completed_at": "2026-11-20T09:11:53Z"
+    },
+    {
+     "number": 20,
+     "name": "Save the tools to the node store",
+     "conclusion": "success",
+     "started_at": "2026-11-20T09:11:53Z",
+     "completed_at": "2026-11-20T09:11:53Z"
+    },
+    {
+     "number": 21,
+     "name": "Save the tools cache",
+     "conclusion": "skipped",
+     "started_at": "2026-11-20T09:11:53Z",
+     "completed_at": "2026-11-20T09:11:53Z"
+    },
+    {
+     "number": 22,
+     "name": "Record the tools save",
+     "conclusion": "skipped",
+     "started_at": "2026-11-20T09:11:53Z",
+     "completed_at": "2026-11-20T09:11:53Z"
+    },
+    {
+     "number": 23,
+     "name": "velnor-ci prepare",
+     "conclusion": "success",
+     "started_at": "2026-11-20T09:11:53Z",
+     "completed_at": "2026-11-20T09:11:53Z"
+    },
+    {
+     "number": 24,
+     "name": "velnor-ci check-metadata",
+     "conclusion": "success",
+     "started_at": "2026-11-20T09:11:53Z",
+     "completed_at": "2026-11-20T09:11:54Z"
+    },
+    {
+     "number": 25,
+     "name": "Hash the sources lockfiles",
+     "conclusion": "success",
+     "started_at": "2026-11-20T09:11:54Z",
+     "completed_at": "2026-11-20T09:11:54Z"
+    },
+    {
+     "number": 26,
+     "name": "Restore the sources cache",
+     "conclusion": "success",
+     "started_at": "2026-11-20T09:11:54Z",
+     "completed_at": "2026-11-20T09:12:05Z"
+    },
+    {
+     "number": 27,
+     "name": "Restore the target cache",
+     "conclusion": "success",
+     "started_at": "2026-11-20T09:12:05Z",
+     "completed_at": "2026-11-20T09:12:49Z"
+    },
+    {
+     "number": 28,
+     "name": "velnor-ci delta prepare",
+     "conclusion": "skipped",
+     "started_at": "2026-11-20T09:12:49Z",
+     "completed_at": "2026-11-20T09:12:49Z"
+    },
+    {
+     "number": 29,
+     "name": "Restore the delta cache",
+     "conclusion": "skipped",
+     "started_at": "2026-11-20T09:12:49Z",
+     "completed_at": "2026-11-20T09:12:49Z"
+    },
+    {
+     "number": 30,
+     "name": "velnor-ci delta apply",
+     "conclusion": "skipped",
+     "started_at": "2026-11-20T09:12:49Z",
+     "completed_at": "2026-11-20T09:12:49Z"
+    },
+    {
+     "number": 31,
+     "name": "velnor-ci inputs restore",
+     "conclusion": "success",
+     "started_at": "2026-11-20T09:12:49Z",
+     "completed_at": "2026-11-20T09:12:50Z"
+    },
+    {
+     "number": 32,
+     "name": "velnor-ci restored",
+     "conclusion": "success",
+     "started_at": "2026-11-20T09:12:50Z",
+     "completed_at": "2026-11-20T09:12:50Z"
+    },
+    {
+     "number": 33,
+     "name": "velnor-ci plan --full",
+     "conclusion": "skipped",
+     "started_at": "2026-11-20T09:12:50Z",
+     "completed_at": "2026-11-20T09:12:50Z"
+    },
+    {
+     "number": 34,
+     "name": "Format",
+     "conclusion": "success",
+     "started_at": "2026-11-20T09:12:50Z",
+     "completed_at": "2026-11-20T09:12:54Z"
+    },
+    {
+     "number": 35,
+     "name": "Lint",
+     "conclusion": "success",
+     "started_at": "2026-11-20T09:12:54Z",
+     "completed_at": "2026-11-20T09:13:20Z"
+    },
+    {
+     "number": 36,
+     "name": "Documentation",
+     "conclusion": "success",
+     "started_at": "2026-11-20T09:13:20Z",
+     "completed_at": "2026-11-20T09:13:33Z"
+    },
+    {
+     "number": 37,
+     "name": "Check velnor-archive-guard alone",
+     "conclusion": "success",
+     "started_at": "2026-11-20T09:13:33Z",
+     "completed_at": "2026-11-20T09:13:37Z"
+    },
+    {
+     "number": 38,
+     "name": "Check velnor-cache-rules alone",
+     "conclusion": "success",
+     "started_at": "2026-11-20T09:13:37Z",
+     "completed_at": "2026-11-20T09:13:39Z"
+    },
+    {
+     "number": 39,
+     "name": "Check velnor-ci alone",
+     "conclusion": "success",
+     "started_at": "2026-11-20T09:13:39Z",
+     "completed_at": "2026-11-20T09:13:50Z"
+    },
+    {
+     "number": 40,
+     "name": "Check velnor-gen alone",
+     "conclusion": "success",
+     "started_at": "2026-11-20T09:13:50Z",
+     "completed_at": "2026-11-20T09:13:54Z"
+    },
+    {
+     "number": 41,
+     "name": "Check velnor-local alone",
+     "conclusion": "success",
+     "started_at": "2026-11-20T09:13:54Z",
+     "completed_at": "2026-11-20T09:13:57Z"
+    },
+    {
+     "number": 42,
+     "name": "Check velnor-model alone",
+     "conclusion": "success",
+     "started_at": "2026-11-20T09:13:57Z",
+     "completed_at": "2026-11-20T09:14:00Z"
+    },
+    {
+     "number": 43,
+     "name": "Check velnor-release alone",
+     "conclusion": "success",
+     "started_at": "2026-11-20T09:14:00Z",
+     "completed_at": "2026-11-20T09:14:03Z"
+    },
+    {
+     "number": 44,
+     "name": "Check velnor-render alone",
+     "conclusion": "success",
+     "started_at": "2026-11-20T09:14:03Z",
+     "completed_at": "2026-11-20T09:14:06Z"
+    },
+    {
+     "number": 45,
+     "name": "Check velnor-resource-probe alone",
+     "conclusion": "success",
+     "started_at": "2026-11-20T09:14:06Z",
+     "completed_at": "2026-11-20T09:14:09Z"
+    },
+    {
+     "number": 46,
+     "name": "Check velnor-runner-attestation alone",
+     "conclusion": "success",
+     "started_at": "2026-11-20T09:14:09Z",
+     "completed_at": "2026-11-20T09:14:12Z"
+    },
+    {
+     "number": 47,
+     "name": "Check velnor-runner-cli alone",
+     "conclusion": "success",
+     "started_at": "2026-11-20T09:14:12Z",
+     "completed_at": "2026-11-20T09:14:15Z"
+    },
+    {
+     "number": 48,
+     "name": "Check velnor-runner-core alone",
+     "conclusion": "success",
+     "started_at": "2026-11-20T09:14:15Z",
+     "completed_at": "2026-11-20T09:14:18Z"
+    },
+    {
+     "number": 49,
+     "name": "Check velnor-runner-github alone",
+     "conclusion": "success",
+     "started_at": "2026-11-20T09:14:18Z",
+     "completed_at": "2026-11-20T09:14:21Z"
+    },
+    {
+     "number": 50,
+     "name": "Check velnor-runner-host alone",
+     "conclusion": "success",
+     "started_at": "2026-11-20T09:14:21Z",
+     "completed_at": "2026-11-20T09:14:24Z"
+    },
+    {
+     "number": 51,
+     "name": "Check velnor-runner-image-manifest alone",
+     "conclusion": "success",
+     "started_at": "2026-11-20T09:14:24Z",
+     "completed_at": "2026-11-20T09:14:27Z"
+    },
+    {
+     "number": 52,
+     "name": "Check velnor-runner-qualification alone",
+     "conclusion": "success",
+     "started_at": "2026-11-20T09:14:27Z",
+     "completed_at": "2026-11-20T09:14:30Z"
+    },
+    {
+     "number": 53,
+     "name": "Check velnor-rust alone",
+     "conclusion": "success",
+     "started_at": "2026-11-20T09:14:30Z",
+     "completed_at": "2026-11-20T09:14:34Z"
+    },
+    {
+     "number": 54,
+     "name": "Check velnor-test-support alone",
+     "conclusion": "success",
+     "started_at": "2026-11-20T09:14:34Z",
+     "completed_at": "2026-11-20T09:14:37Z"
+    },
+    {
+     "number": 55,
+     "name": "Check velnor-workflows alone",
+     "conclusion": "success",
+     "started_at": "2026-11-20T09:14:37Z",
+     "completed_at": "2026-11-20T09:14:40Z"
+    },
+    {
+     "number": 56,
+     "name": "Prepare pinned Mac proof verifier",
+     "conclusion": "success",
+     "started_at": "2026-11-20T09:14:40Z",
+     "completed_at": "2026-11-20T09:14:40Z"
+    },
+    {
+     "number": 57,
+     "name": "Prepare pinned attestation verifier",
+     "conclusion": "success",
+     "started_at": "2026-11-20T09:14:40Z",
+     "completed_at": "2026-11-20T09:14:43Z"
+    },
+    {
+     "number": 58,
+     "name": "Test",
+     "conclusion": "success",
+     "started_at": "2026-11-20T09:14:43Z",
+     "completed_at": "2026-11-20T09:18:53Z"
+    },
+    {
+     "number": 59,
+     "name": "Test (features: local-mode)",
+     "conclusion": "success",
+     "started_at": "2026-11-20T09:18:53Z",
+     "completed_at": "2026-11-20T09:20:02Z"
+    },
+    {
+     "number": 60,
+     "name": "Skip test lane (features: local-mode)",
+     "conclusion": "skipped",
+     "started_at": "2026-11-20T09:20:02Z",
+     "completed_at": "2026-11-20T09:20:02Z"
+    },
+    {
+     "number": 61,
+     "name": "Test lane guard (features: local-mode)",
+     "conclusion": "success",
+     "started_at": "2026-11-20T09:20:02Z",
+     "completed_at": "2026-11-20T09:20:04Z"
+    },
+    {
+     "number": 62,
+     "name": "Lint (features: local-mode)",
+     "conclusion": "success",
+     "started_at": "2026-11-20T09:20:04Z",
+     "completed_at": "2026-11-20T09:20:08Z"
+    },
+    {
+     "number": 63,
+     "name": "Documentation (features: local-mode)",
+     "conclusion": "success",
+     "started_at": "2026-11-20T09:20:08Z",
+     "completed_at": "2026-11-20T09:20:15Z"
+    },
+    {
+     "number": 64,
+     "name": "velnor-ci inputs audit --root .",
+     "conclusion": "skipped",
+     "started_at": "2026-11-20T09:20:15Z",
+     "completed_at": "2026-11-20T09:20:15Z"
+    },
+    {
+     "number": 65,
+     "name": "velnor-ci inputs save",
+     "conclusion": "success",
+     "started_at": "2026-11-20T09:20:15Z",
+     "completed_at": "2026-11-20T09:20:16Z"
+    },
+    {
+     "number": 66,
+     "name": "Decide whether to save the build directory",
+     "conclusion": "success",
+     "started_at": "2026-11-20T09:20:16Z",
+     "completed_at": "2026-11-20T09:20:20Z"
+    },
+    {
+     "number": 67,
+     "name": "Save the target cache",
+     "conclusion": "success",
+     "started_at": "2026-11-20T09:20:20Z",
+     "completed_at": "2026-11-20T09:20:34Z"
+    },
+    {
+     "number": 68,
+     "name": "Record the target cache key",
+     "conclusion": "success",
+     "started_at": "2026-11-20T09:20:34Z",
+     "completed_at": "2026-11-20T09:20:34Z"
+    },
+    {
+     "number": 69,
+     "name": "Note the target cache saved after a test failure",
+     "conclusion": "skipped",
+     "started_at": "2026-11-20T09:20:34Z",
+     "completed_at": "2026-11-20T09:20:34Z"
+    },
+    {
+     "number": 70,
+     "name": "Fetch the sources of every root",
+     "conclusion": "skipped",
+     "started_at": "2026-11-20T09:20:34Z",
+     "completed_at": "2026-11-20T09:20:34Z"
+    },
+    {
+     "number": 71,
+     "name": "Save the sources cache",
+     "conclusion": "skipped",
+     "started_at": "2026-11-20T09:20:34Z",
+     "completed_at": "2026-11-20T09:20:34Z"
+    },
+    {
+     "number": 72,
+     "name": "Record the sources cache key",
+     "conclusion": "skipped",
+     "started_at": "2026-11-20T09:20:34Z",
+     "completed_at": "2026-11-20T09:20:34Z"
+    },
+    {
+     "number": 73,
+     "name": "velnor-ci inputs save",
+     "conclusion": "skipped",
+     "started_at": "2026-11-20T09:20:34Z",
+     "completed_at": "2026-11-20T09:20:34Z"
+    },
+    {
+     "number": 74,
+     "name": "velnor-ci delta stage",
+     "conclusion": "skipped",
+     "started_at": "2026-11-20T09:20:34Z",
+     "completed_at": "2026-11-20T09:20:34Z"
+    },
+    {
+     "number": 75,
+     "name": "Save the delta cache",
+     "conclusion": "skipped",
+     "started_at": "2026-11-20T09:20:34Z",
+     "completed_at": "2026-11-20T09:20:34Z"
+    },
+    {
+     "number": 76,
+     "name": "Report cache telemetry",
+     "conclusion": "success",
+     "started_at": "2026-11-20T09:20:34Z",
+     "completed_at": "2026-11-20T09:20:36Z"
+    },
+    {
+     "number": 77,
+     "name": "Upload cache metrics",
+     "conclusion": "success",
+     "started_at": "2026-11-20T09:20:36Z",
+     "completed_at": "2026-11-20T09:20:39Z"
+    },
+    {
+     "number": 153,
+     "name": "Post Install tools",
+     "conclusion": "success",
+     "started_at": "2026-11-20T09:20:39Z",
+     "completed_at": "2026-11-20T09:20:39Z"
+    },
+    {
+     "number": 154,
+     "name": "Post Check out",
+     "conclusion": "success",
+     "started_at": "2026-11-20T09:20:39Z",
+     "completed_at": "2026-11-20T09:20:40Z"
+    },
+    {
+     "number": 155,
+     "name": "Complete job",
+     "conclusion": "success",
+     "started_at": "2026-11-20T09:20:40Z",
+     "completed_at": "2026-11-20T09:20:40Z"
+    }
+   ]
+  }
+ ]
+}

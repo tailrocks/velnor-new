@@ -24,7 +24,7 @@ const RUNTIME_IMAGE: &str =
     "sha256:9999999999999999999999999999999999999999999999999999999999999999";
 const HEX64_A: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const HEX64_B: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
-const TABLES: [&str; 5] = [
+const TABLES: &[&str] = &[
     "resource_probe_operations",
     "host_operation_leases",
     "execution_publication_operations",
@@ -209,7 +209,7 @@ pub(super) async fn seed_helper_rows(
 
 async fn drop_triggers(conn: &turso::Connection) -> TestResult<Vec<String>> {
     let mut found = Vec::new();
-    for table in TABLES {
+    for table in TABLES.iter().copied() {
         let mut rows = conn
             .query(
                 "SELECT name, sql FROM sqlite_schema WHERE type = 'trigger' AND tbl_name = ?1",

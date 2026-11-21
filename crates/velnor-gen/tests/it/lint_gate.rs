@@ -11,7 +11,7 @@ use crate::facts::TestResult;
 use crate::lint_lane::{IDS, LINT, rendered, repo, runs};
 use crate::pipeline::workflow;
 
-fn spec(text: &str) -> Result<VerdictSpec, String> {
+pub(crate) fn spec(text: &str) -> Result<VerdictSpec, String> {
     let line = text
         .split("GATE_SPEC: '")
         .nth(1)
@@ -29,7 +29,7 @@ fn spec(text: &str) -> Result<VerdictSpec, String> {
     VerdictSpec::parse(&plan, &after("--job"), &after("--tests"))
 }
 
-fn needs_of(text: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+pub(crate) fn needs_of(text: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
     let document = crate::yaml_tree::document(text)?;
     Ok(document["jobs"]["required"]["needs"]
         .as_array()
@@ -39,7 +39,7 @@ fn needs_of(text: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
         .collect())
 }
 
-fn verdict(
+pub(crate) fn verdict(
     text: &str,
     result_of: impl Fn(&str) -> Option<&'static str>,
 ) -> Result<(bool, String), Box<dyn std::error::Error>> {
@@ -80,10 +80,10 @@ fn the_one_required_job_needs_every_lint_job_next_to_the_rust_lanes() -> TestRes
     let needs = needs_of(&text)?;
     assert!(needs.contains(&"rust".to_owned()), "{needs:?}");
     for id in IDS {
-        assert!(needs.contains(&id.to_owned()), "{id}: {needs:?}");
+        assert!(needs.contains(&id.to_string()), "{id}: {needs:?}");
     }
     let spec = spec(&text)?;
-    for id in IDS {
+    for id in IDS.iter().copied() {
         let job = spec
             .jobs
             .iter()
@@ -107,7 +107,7 @@ fn the_gate_passes_only_when_every_lint_job_succeeded() -> TestResult {
     let text = rendered(LINT)?;
     let (green, table) = verdict(&text, |_| Some("success"))?;
     assert!(green, "{table}");
-    for broken in IDS {
+    for broken in IDS.iter().copied() {
         for result in ["failure", "cancelled", "skipped"] {
             let (green, table) = verdict(&text, |id| {
                 Some(if id == broken { result } else { "success" })
@@ -234,7 +234,7 @@ fn an_unpinned_jactionlint_is_refused_instead_of_installed_unpinned() -> TestRes
     let mut repo = repo("[[lint]]\nkind = 'jactionlint'\n")?;
     repo.files.insert(
         RepoPath::new("mise.toml")?,
-        b"[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n"
+        b"[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n\n[tools]\nrust = { version = \"1.99.1\", mr_boxington = true }\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n"
             .to_vec(),
     );
     let error = workflow(&repo).err().ok_or("accepted without a pin")?;
@@ -247,7 +247,7 @@ fn jactionlint_without_a_pinned_shellcheck_turns_shellcheck_off() -> TestResult 
     let mut repo = repo("[[lint]]\nkind = 'jactionlint'\n")?;
     repo.files.insert(
         RepoPath::new("mise.toml")?,
-        b"[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\njactionlint = \"2.4.0\"\n"
+        b"[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n\n[tools]\nrust = { version = \"1.99.1\", mr_boxington = true }\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\njactionlint = \"2.4.0\"\n"
             .to_vec(),
     );
     let text = workflow(&repo)?;

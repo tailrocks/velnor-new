@@ -105,11 +105,14 @@ fn tag_push_needs_a_helper_that_checks_the_pushed_tag() -> TestResult {
     match generate("0.1.97", &tools_like(TAG_PUSH)) {
         Err(error) => assert!(matches!(
             error.downcast::<GenerateError>().map(|error| *error),
-            Ok(GenerateError::TagPushHelperTooOld(_))
+            Ok(GenerateError::ConfigKeyHelperTooOld {
+                first: (0, 1, 98),
+                ..
+            })
         )),
         Ok(_) => return Err("an old helper was accepted".into()),
     }
-    assert!(generate("0.1.97", &tools_like("commit_file = true\n")).is_ok());
+    assert!(generate("0.1.97", &tools_like("")).is_ok());
     Ok(())
 }
 

@@ -8,14 +8,14 @@ use serde_json::Value;
 use crate::facts::TestResult;
 use crate::golden::{sample_dirs, samples};
 
-const SECRET_MARKERS: [&str; 5] = [
+const SECRET_MARKERS: &[&str] = &[
     "GITHUB_TOKEN",
     "GH_TOKEN",
     "github.token",
     "ACTIONS_RUNTIME_TOKEN",
     "secrets.",
 ];
-const VERDICT_MARKERS: [&str; 6] = [
+const VERDICT_MARKERS: &[&str] = &[
     "velnor-ci verify",
     "velnor-ci gate",
     "velnor-ci cache check",
@@ -52,7 +52,7 @@ fn needs_a_clean_job(step: &Value, inherited: &str) -> Option<&'static str> {
 }
 
 pub(crate) fn violations(workflow: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
-    let parsed: Value = serde_saphyr::from_str(workflow)?;
+    let parsed: Value = crate::yaml_tree::document(workflow)?;
     let mut found = Vec::new();
     let workflow_env = text(&parsed["env"]);
     for (id, job) in parsed["jobs"].as_object().ok_or("jobs")? {

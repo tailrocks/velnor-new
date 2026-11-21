@@ -136,7 +136,7 @@ fn nextest_ci_profile(view: &RepoView, manifest: &RepoPath) -> bool {
         })
 }
 
-const CARGO_CONFIGS: [&str; 2] = [".cargo/config.toml", ".cargo/config"];
+const CARGO_CONFIGS: &[&str] = &[".cargo/config.toml", ".cargo/config"];
 
 pub(crate) fn is_cargo_config(path: &RepoPath) -> bool {
     CARGO_CONFIGS.iter().any(|name| {
@@ -245,7 +245,7 @@ fn rustdocflags_list(bytes: &[u8], file: &RepoPath) -> Result<(), DetectError> {
     Ok(())
 }
 
-const CHECKED_ENV: [&str; 3] = ["CLIPPY", "RUST", "CARGO"];
+const CHECKED_ENV: &[&str] = &["CLIPPY", "RUST", "CARGO"];
 
 fn patches(
     bytes: &[u8],

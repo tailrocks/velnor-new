@@ -392,6 +392,7 @@ run = "nc -z -w 1 redis 6379"
 id = "cancel-service"
 title = "Cancel service"
 timeout_minutes = 5
+permissions = { contents = "read", actions = "write" }
 
 [[workflow.case.service]]
 name = "redis"
@@ -408,8 +409,21 @@ name = "Announce service"
 run = "echo service-up"
 
 [[workflow.case.step]]
-name = "Sleep until cancelled"
-run = "sleep 900"
+name = "Sleep before the cancel"
+run = "sleep 10"
+
+[[workflow.case.step]]
+name = "Cancel the run mid-step"
+run = 'curl --fail --silent --show-error --request POST --header "Accept: application/vnd.github+json" --header "Authorization: Bearer $GITHUB_TOKEN" "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/cancel"'
+env = { GITHUB_TOKEN = "${{ github.token }}" }
+
+[[workflow.case.step]]
+name = "Wait for the cancel"
+run = "sleep 120"
+
+[[workflow.case.step]]
+name = "Fail when the cancel was not delivered"
+run = "exit 1"
 
 [[workflow.case]]
 id = "ports-a"
@@ -472,6 +486,24 @@ run = "echo '::error title=unknown_qualification_mode::The mode is not one that 
 [[workflow.job.step]]
 name = "Fail the guard"
 run = "exit 1"
+
+[[workflow.job]]
+id = "cancel-service-check"
+name = "Check cancel-service / cancelled, not timed out"
+if = "always() && inputs.mode == 'cancel-service'"
+runner = "ubuntu-26.04"
+timeout_minutes = 5
+needs = ["cancel-service-hosted", "cancel-service-scale-set"]
+permissions = { contents = "read", actions = "read" }
+
+[[workflow.job.step]]
+name = "Check out"
+uses = "checkout"
+
+[[workflow.job.step]]
+name = "Check the cancelled runs"
+run = "bash qualification/cancel-service-check.sh"
+env = { GITHUB_TOKEN = "${{ github.token }}" }
 
 [[workflow.job]]
 id = "stable-sources-guard"
@@ -684,7 +716,7 @@ uses = "checkout"
 [[workflow.job.step]]
 name = "Set up Mise"
 uses = "mise"
-with = { version = "2026.11.1", sha256 = "7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9", install = "false", env = "false" }
+with = { version = "2026.11.10", sha256 = "b603a4f48563fc379a794d9ea2cf9f709ed276c9141068604cb0c59fa3e674a9", install = "false", env = "false" }
 
 [[workflow.job.step]]
 name = "Resolve project tool versions"
@@ -706,7 +738,7 @@ run = "bash qualification/mbx-cache-roundtrip.sh rust-path"
 id = "mbx_cache"
 name = "Restore MBX objects"
 uses = "mr-boxington"
-with = { github-cache-mode = "objects", version = "1.29.2", toolchain = "1.99.1", isolate-objects-cache = "true", cache-generation = "velnor-mbx-1.29.2-share-out-dir-disabled-v1", save-on-workflow-dispatch = "true" }
+with = { github-cache-mode = "objects", version = "1.30.0", toolchain = "1.100.0", isolate-objects-cache = "true", cache-generation = "velnor-mbx-1.30.0-share-out-dir-disabled-v1", save-on-workflow-dispatch = "true" }
 
 [[workflow.job.step]]
 id = "mbx-ready"
@@ -745,7 +777,7 @@ uses = "checkout"
 [[workflow.job.step]]
 name = "Set up Mise"
 uses = "mise"
-with = { version = "2026.11.1", sha256 = "7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9", install = "false", env = "false" }
+with = { version = "2026.11.10", sha256 = "b603a4f48563fc379a794d9ea2cf9f709ed276c9141068604cb0c59fa3e674a9", install = "false", env = "false" }
 
 [[workflow.job.step]]
 name = "Resolve project tool versions"
@@ -767,7 +799,7 @@ run = "bash qualification/mbx-cache-roundtrip.sh rust-path"
 id = "mbx_cache"
 name = "Restore MBX objects"
 uses = "mr-boxington"
-with = { github-cache-mode = "objects", version = "1.29.2", toolchain = "1.99.1", isolate-objects-cache = "true", cache-generation = "velnor-mbx-1.29.2-share-out-dir-disabled-v1", save-on-workflow-dispatch = "false" }
+with = { github-cache-mode = "objects", version = "1.30.0", toolchain = "1.100.0", isolate-objects-cache = "true", cache-generation = "velnor-mbx-1.30.0-share-out-dir-disabled-v1", save-on-workflow-dispatch = "false" }
 
 [[workflow.job.step]]
 id = "mbx-ready"
@@ -808,12 +840,12 @@ with = { ref = "${{ github.sha }}" }
 [[workflow.job.step]]
 name = "Setup Mise"
 uses = "mise"
-with = { version = "2026.11.1", sha256 = "7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9", install = "false", env = "false" }
+with = { version = "2026.11.10", sha256 = "b603a4f48563fc379a794d9ea2cf9f709ed276c9141068604cb0c59fa3e674a9", install = "false", env = "false" }
 
 [[workflow.job.step]]
 name = "Verify selected ref, version, and binary digest"
 run = "bash qualification/mise-pin.sh"
-env = { MISE_VERSION = "2026.11.1", MISE_SHA256 = "7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9" }
+env = { MISE_VERSION = "2026.11.10", MISE_SHA256 = "b603a4f48563fc379a794d9ea2cf9f709ed276c9141068604cb0c59fa3e674a9" }
 
 [[workflow.job]]
 id = "stable-sources-producer-linux"
@@ -835,7 +867,7 @@ run = "bash qualification/stable-sources.sh verify-source"
 [[workflow.job.step]]
 name = "Set up Mise"
 uses = "mise"
-with = { version = "2026.11.1", sha256 = "7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9", install = "false", env = "false" }
+with = { version = "2026.11.10", sha256 = "b603a4f48563fc379a794d9ea2cf9f709ed276c9141068604cb0c59fa3e674a9", install = "false", env = "false" }
 
 [[workflow.job.step]]
 name = "Resolve project tool versions"
@@ -885,7 +917,7 @@ run = "bash qualification/stable-sources.sh verify-source"
 [[workflow.job.step]]
 name = "Set up Mise"
 uses = "mise"
-with = { version = "2026.11.1", sha256 = "7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9", install = "false", env = "false" }
+with = { version = "2026.11.10", sha256 = "b603a4f48563fc379a794d9ea2cf9f709ed276c9141068604cb0c59fa3e674a9", install = "false", env = "false" }
 
 [[workflow.job.step]]
 name = "Resolve project tool versions"
@@ -964,7 +996,7 @@ run = "bash qualification/stable-sources.sh verify-source"
 [[workflow.job.step]]
 name = "Set up Mise"
 uses = "mise"
-with = { version = "2026.11.1", sha256 = "7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9", install = "false", env = "false" }
+with = { version = "2026.11.10", sha256 = "b603a4f48563fc379a794d9ea2cf9f709ed276c9141068604cb0c59fa3e674a9", install = "false", env = "false" }
 
 [[workflow.job.step]]
 name = "Resolve project tool versions"

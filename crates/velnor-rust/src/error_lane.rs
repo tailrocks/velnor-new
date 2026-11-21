@@ -20,6 +20,10 @@ impl Reason {
                 f,
                 "test_lane.packages names {package}, which is not a package of the lane's root; name the packages that hold the lane's tests"
             ),
+            Self::TestLaneFeatureConflict { first, second } => write!(
+                f,
+                "test_lane sets {first} together with {second}, which select features in conflicting ways; keep one of them: all_features selects every feature and no_default_features drops the default ones, so the two cannot be combined with each other or with a features list"
+            ),
             _ => Ok(()),
         }
     }

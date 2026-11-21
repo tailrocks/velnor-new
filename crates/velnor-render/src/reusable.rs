@@ -8,11 +8,16 @@ use velnor_workflows::{
 };
 
 use crate::gate::all_conditions;
-use crate::pinned_actions::{ACTIONS_CACHE, GITHUB_SCRIPT, MR_BOXINGTON, PinnedAction};
+use crate::pinned_actions::{
+    ACTIONS_CACHE, DOCKER_BUILD_PUSH, DOCKER_LOGIN, GITHUB_SCRIPT, MR_BOXINGTON, PinnedAction,
+};
+use crate::release_steps::APP_TOKEN_COMMIT;
 use crate::reusable_on::on;
+use crate::rules::APP_TOKEN_ACTION;
 use crate::rules::{
     MAX_WORKFLOW_BYTES, RenderedConcurrency, RenderedContainer, RenderedJob, RenderedMatrix,
-    RenderedMatrixSource, RenderedStep, RenderedWorkflow, Rule, RuleViolation, Value, check_rules,
+    RenderedMatrixSource, RenderedStep, RenderedTrusted, RenderedWorkflow, RuleViolation, Value,
+    check_rules,
 };
 use crate::steps::{
     ATTEST_BUILD_PROVENANCE, CACHE_RESTORE, CACHE_SAVE, CHECKOUT, DOWNLOAD_ARTIFACT, MISE,
@@ -75,11 +80,10 @@ fn render_one(
     ));
     let file = crate::seal(REUSABLE_HEADER, &emit(&document));
     if file.len() > MAX_WORKFLOW_BYTES {
-        return Err(vec![RuleViolation {
-            job: String::new(),
-            step: 0,
-            rule: Rule::WorkflowTooLarge(file.len()),
-        }]);
+        return Err(vec![crate::rule_messages::size_report::too_large(
+            &format!(".github/workflows/{}.yml", workflow.file),
+            &file,
+        )]);
     }
     Ok((format!(".github/workflows/{}.yml", workflow.file), file))
 }
@@ -89,6 +93,22 @@ fn rendered_concurrency(concurrency: &Concurrency) -> RenderedConcurrency {
         group: concurrency.group.clone(),
         cancel_in_progress: concurrency.cancel_in_progress,
     }
+}
+
+fn trusted_runner(workflow: &Workflow, job: &Job) -> Option<RenderedTrusted> {
+    let pool = workflow.trusted.as_ref()?;
+    let names_pool = |label: &str| label.eq_ignore_ascii_case(&pool.replaces);
+    let on_pool = match &job.matrix_runner {
+        Some(runner) => runner
+            .labels
+            .iter()
+            .any(|(label, hosted)| !hosted && names_pool(label)),
+        None => names_pool(job.runner.as_ref().unwrap_or(&workflow.runner)) && !job.hosted,
+    };
+    on_pool.then(|| RenderedTrusted {
+        label: pool.label.clone(),
+        replaces: pool.replaces.clone(),
+    })
 }
 
 fn rendered_job(workflow: &Workflow, job: &Job, helper: &HelperRelease) -> RenderedJob {
@@ -115,6 +135,7 @@ fn rendered_job(workflow: &Workflow, job: &Job, helper: &HelperRelease) -> Rende
             .collect(),
         runs_on_axis: job.matrix_runner.as_ref().map(|runner| runner.axis.clone()),
         fork_runner: (!job.hosted).then(|| workflow.fork_runner.clone()),
+        trusted_runner: trusted_runner(workflow, job),
         permissions: job.permissions.clone(),
         no_permissions: job.permissions.is_empty(),
         outputs: job
@@ -253,6 +274,11 @@ fn pin(action: Action) -> String {
         Action::Cache => return pinned(ACTIONS_CACHE),
         Action::GithubScript => return pinned(GITHUB_SCRIPT),
         Action::MrBoxington => return pinned(MR_BOXINGTON),
+        Action::DockerLogin => return pinned(DOCKER_LOGIN),
+        Action::DockerBuildPush => return pinned(DOCKER_BUILD_PUSH),
+        Action::CreateGithubAppToken => {
+            return format!("{APP_TOKEN_ACTION}@{APP_TOKEN_COMMIT}");
+        }
     };
     fixed.to_owned()
 }

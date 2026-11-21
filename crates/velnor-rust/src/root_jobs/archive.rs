@@ -2,14 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    CargoCommand, FilterRef, GroupFilter, Job, JobId, PrepareLocks, Step, StepKind, TestGroup,
-    TestNeed, When,
+    ArtifactWhen, BaseScope, CacheKey, CargoCommand, FilterRef, GroupFilter, GroupUpload, Host,
+    Job, JobId, NoTests, PrepareLocks, Step, StepKind, TestGroup, TestNeed, When,
 };
 
 use super::{ARCHIVE_FILE, ARCHIVE_ID, RootJobs};
+use crate::base_cache::sources_locks;
 use crate::members::Member;
 use crate::mise::nextest_tool;
-use crate::plan::{CHECKOUT_DEPTH, DEFAULT_GROUP_JOB, TEST_JOB, head, mbx, rust_additions};
+use crate::plan::{CHECKOUT_DEPTH, DEFAULT_GROUP_JOB, TEST_JOB, head, mbx, rust_additions, step};
 use crate::plan_tools::{mirror_step_on, tools_prime, tools_restore};
 
 impl RootJobs<'_> {
@@ -61,28 +62,46 @@ impl RootJobs<'_> {
             true,
         ));
         let mut jobs = vec![
-            self.lane_job(build_id.clone(), build),
+            self.inline_lanes_timeout(self.lane_job(build_id.clone(), build)),
             self.archive_runner(
                 self.id(DEFAULT_GROUP_JOB),
                 &build_id,
                 &artifact,
                 None,
                 self.default_filter(&groups),
+                None,
             ),
         ];
-        jobs.extend(groups.iter().map(|group| {
-            self.archive_runner(
-                self.id(TEST_JOB.suffixed(group.name.as_str())),
-                &build_id,
-                &artifact,
-                Some(group),
-                FilterRef::Group {
-                    include: Some(group.filter.clone()),
-                    exclude: Vec::new(),
-                    except: member.direct_binaries(self.facts),
-                },
-            )
-        }));
+        for group in groups {
+            let base = TEST_JOB.suffixed(group.name.as_str());
+            let filter = FilterRef::Group {
+                include: Some(group.filter.clone()),
+                exclude: Vec::new(),
+                except: member.direct_binaries(self.facts),
+            };
+            let count = group.partition_count();
+            if count < 2 {
+                jobs.push(self.archive_runner(
+                    self.id(base),
+                    &build_id,
+                    &artifact,
+                    Some(group),
+                    filter,
+                    None,
+                ));
+                continue;
+            }
+            jobs.extend((1..=count).map(|index| {
+                self.archive_runner(
+                    self.id(base.suffixed(&index.to_string())),
+                    &build_id,
+                    &artifact,
+                    Some(group),
+                    filter.clone(),
+                    Some((index, count)),
+                )
+            }));
+        }
         jobs
     }
 
@@ -101,6 +120,57 @@ impl RootJobs<'_> {
         })
     }
 
+    fn artifact_steps(&self, group: &TestGroup, partition: Option<(u16, u16)>) -> Vec<Step> {
+        group
+            .artifacts
+            .iter()
+            .enumerate()
+            .map(|(position, artifact)| Step {
+                when: match artifact.when {
+                    ArtifactWhen::Failure => When::Failure,
+                    ArtifactWhen::Always => When::Always,
+                },
+                ..self.gated(StepKind::UploadGroupArtifact(GroupUpload {
+                    position,
+                    name: partition.map_or_else(
+                        || artifact.name.clone(),
+                        |(index, _)| format!("{}-{index}", artifact.name),
+                    ),
+                    paths: artifact.paths.clone(),
+                    retention_days: artifact.retention_days,
+                }))
+            })
+            .collect()
+    }
+
+    fn cache_restores(&self, build_id: &JobId) -> Vec<Step> {
+        let cache_root = self.unit.cache_root(self.facts);
+        [
+            sources_locks(self.facts),
+            step(StepKind::CacheRestore(CacheKey::Sources {
+                host: Host,
+                lane: cache_root.clone(),
+                scope: BaseScope::Shared,
+            })),
+            step(StepKind::CacheRestore(CacheKey::Target {
+                job: build_id.clone(),
+                root: cache_root,
+                host: Host,
+                scope: BaseScope::Shared,
+            })),
+        ]
+        .into_iter()
+        .chain(crate::units::restore_file_times(
+            self.facts,
+            std::slice::from_ref(self.unit),
+        ))
+        .map(|restore| Step {
+            gate: self.lane.steps(),
+            ..restore
+        })
+        .collect()
+    }
+
     fn archive_runner(
         &self,
         id: JobId,
@@ -108,6 +178,7 @@ impl RootJobs<'_> {
         artifact: &str,
         group: Option<&TestGroup>,
         filter: FilterRef,
+        partition: Option<(u16, u16)>,
     ) -> Job {
         let runner = group
             .and_then(|group| group.runner.clone())
@@ -118,15 +189,27 @@ impl RootJobs<'_> {
         let mut steps = head(
             self.facts,
             CHECKOUT_DEPTH,
-            crate::sparse::paths(self.facts, std::slice::from_ref(&self.member().root)),
+            crate::sparse::with_artifacts(
+                crate::sparse::paths(self.facts, std::slice::from_ref(&self.member().root)),
+                group.map_or(&[], |group| &group.artifacts),
+            ),
         );
         steps.extend(mbx(self.facts, self.lane.steps()));
         steps.extend(mirror());
-        steps.extend(tools_restore(self.facts).into_iter().map(|restore| Step {
-            gate: self.lane.steps(),
-            ..restore
-        }));
-        steps.extend(tools_prime(self.facts).map(|prime| Step {
+        let plan = self
+            .lane
+            .plan
+            .as_ref()
+            .filter(|_| runner == self.facts.config.runner);
+        steps.extend(
+            tools_restore(self.facts, plan)
+                .into_iter()
+                .map(|restore| Step {
+                    gate: self.lane.steps(),
+                    ..restore
+                }),
+        );
+        steps.extend(tools_prime(self.facts, plan).map(|prime| Step {
             gate: self.lane.steps(),
             ..prime
         }));
@@ -148,6 +231,9 @@ impl RootJobs<'_> {
                     }),
             );
             steps.push(self.gated(StepKind::Prepare(PrepareLocks::All)));
+            if group.is_some_and(TestGroup::restores_cache) {
+                steps.extend(self.cache_restores(build_id));
+            }
         }
         steps.push(self.gated(StepKind::DownloadArchive {
             name: artifact.to_owned(),
@@ -157,6 +243,7 @@ impl RootJobs<'_> {
             steps.push(self.gated(StepKind::TestSetup {
                 name: "Check that Docker answers".to_owned(),
                 run: "docker info".to_owned(),
+                before_build: false,
             }));
         }
         steps.extend(
@@ -166,7 +253,9 @@ impl RootJobs<'_> {
                     file: ARCHIVE_FILE,
                     filter,
                     threads: group.and_then(|group| group.test_threads),
+                    partition,
                     ci_profile: self.member().root.nextest_ci_profile,
+                    no_tests: group.map_or(NoTests::Pass, TestGroup::no_tests_mode),
                 }],
             )
             .into_iter()
@@ -174,6 +263,11 @@ impl RootJobs<'_> {
                 when: When::Success,
                 ..step
             }),
+        );
+        steps.extend(
+            group
+                .into_iter()
+                .flat_map(|group| self.artifact_steps(group, partition)),
         );
         let mut job = self.lane_job(id, steps);
         if let Some(group) = group.filter(|group| group.selects()) {

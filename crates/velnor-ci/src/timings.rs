@@ -69,7 +69,10 @@ pub fn gather(
     let mut runs = Vec::new();
     for id in &run_ids {
         match collect(github, repo, *id, false) {
-            Ok(run) => runs.push(run),
+            Ok(run) => {
+                notes.extend(unmatched_logs(&run));
+                runs.push(run);
+            }
             Err(error) if error.is_missing() => {
                 notes.push(format!("run {id} has no readable logs and was skipped"));
             }
@@ -104,6 +107,22 @@ pub fn gather(
         }
     }
     Ok(TimingsReport { timings, notes })
+}
+
+fn unmatched_logs(run: &RunMetrics) -> Option<String> {
+    let jobs: Vec<String> = run
+        .jobs
+        .iter()
+        .filter(|job| job.step_logs_unmatched)
+        .map(|job| format!("`{}`", job.name))
+        .collect();
+    (!jobs.is_empty()).then(|| {
+        format!(
+            "run {}: the log of job {} has a different number of step groups than the job has steps, so no step timings were read from it",
+            run.run_id,
+            jobs.join(", ")
+        )
+    })
 }
 
 fn default_branch(github: &dyn GitHub, repo: &Repo) -> Result<String, CiError> {

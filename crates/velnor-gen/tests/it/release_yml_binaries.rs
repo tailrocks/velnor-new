@@ -35,7 +35,7 @@ fn release_yml_has_one_build_job_per_binary_and_platform_then_sums_and_publish()
     ]
     .map(str::to_owned)
     .into();
-    want.extend(build_ids("app", &PLATFORMS));
+    want.extend(build_ids("app", PLATFORMS));
     want.extend(build_ids("tools", &["linux-x64", "macos-arm64"]));
     assert_eq!(ids, want.iter().map(String::as_str).collect());
     for forbidden in ["strategy", "matrix", "fromJSON"] {
@@ -153,6 +153,7 @@ fn release_yml_build_packs_the_named_bin_and_uploads_exactly_that_file() -> Test
     assert_eq!(
         runs(build),
         [
+            "echo \"MBX_CACHE_DIR=$RUNNER_TEMP/mbx-release-build-app-linux-arm64\" >> \"$GITHUB_ENV\"",
             "test -n \"$COMMIT\" -a \"$CHECKED_OUT\" = \"$COMMIT\"",
             "sudo apt-get install --yes musl-tools",
             "rustup target add aarch64-unknown-linux-musl",
@@ -187,6 +188,7 @@ fn release_yml_builds_a_root_package_from_its_own_manifest_and_target_directory(
     assert_eq!(
         runs(build),
         [
+            "echo \"MBX_CACHE_DIR=$RUNNER_TEMP/mbx-release-build-tools-linux-x64\" >> \"$GITHUB_ENV\"",
             "test -n \"$COMMIT\" -a \"$CHECKED_OUT\" = \"$COMMIT\"",
             "sudo apt-get install --yes musl-tools",
             "rustup target add x86_64-unknown-linux-musl",

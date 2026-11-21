@@ -15,7 +15,7 @@ pub(super) const DEFAULT_TIMEOUT: Duration = Duration::from_secs(300);
 const BODY_LIMIT: u64 = 512 * 1024 * 1024;
 const ERROR_BODY_LIMIT: u64 = 64 * 1024;
 const DETAIL_LIMIT: usize = 500;
-const RESPONSE_HEADERS: [&str; 3] = ["retry-after", "x-ratelimit-remaining", "x-ratelimit-reset"];
+const RESPONSE_HEADERS: &[&str] = &["retry-after", "x-ratelimit-remaining", "x-ratelimit-reset"];
 
 #[derive(Debug)]
 pub(super) struct HttpGitHub {
@@ -75,7 +75,7 @@ fn status_error(what: &str, response: &mut Response<ureq::Body>) -> CiError {
         .read_to_end(&mut raw)
         .ok();
     let mut details = describe_body(&raw);
-    for name in RESPONSE_HEADERS {
+    for name in RESPONSE_HEADERS.iter().copied() {
         if let Some(value) = response
             .headers()
             .get(name)
@@ -190,6 +190,29 @@ impl GitHubWrite for HttpGitHub {
 }
 
 impl HttpGitHub {
+    /// Open the content of a release asset. The API answers with a redirect to signed storage,
+    /// and the agent drops the `Authorization` header when it follows it.
+    pub(super) fn open_asset(&self, path: &str) -> Result<Box<dyn Read + Send>, CiError> {
+        let url = format!("{}{path}", self.api);
+        let what = format!("GET {path}");
+        let mut response = self
+            .agent
+            .get(&url)
+            .config()
+            .redirect_auth_headers(ureq::config::RedirectAuthHeaders::Never)
+            .build()
+            .header("Authorization", format!("Bearer {}", self.token))
+            .header("Accept", "application/octet-stream")
+            .header("X-GitHub-Api-Version", "2022-11-28")
+            .header("User-Agent", "velnor-ci")
+            .call()
+            .map_err(|e| CiError::new(format!("{what}: {e}")))?;
+        if is_failure(response.status()) {
+            return Err(status_error(&what, &mut response));
+        }
+        Ok(Box::new(response.into_body().into_reader()))
+    }
+
     /// The body of a GET of `path`, `None` on any failure or a body over `limit` bytes.
     pub(super) fn get_bytes(&self, path: &str, limit: u64) -> Option<Vec<u8>> {
         let url = format!("{}{path}", self.api);
@@ -198,5 +221,16 @@ impl HttpGitHub {
             return None;
         }
         super::read_limited(response.body_mut().as_reader(), limit).ok()
+    }
+}
+
+pub(super) fn trusted_api(api: &str) -> bool {
+    let Ok(uri) = api.parse::<ureq::http::Uri>() else {
+        return false;
+    };
+    match uri.scheme_str() {
+        Some("https") => uri.host().is_some(),
+        Some("http") => matches!(uri.host(), Some("127.0.0.1" | "localhost")),
+        _ => false,
     }
 }

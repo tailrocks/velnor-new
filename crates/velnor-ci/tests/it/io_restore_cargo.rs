@@ -4,6 +4,7 @@
 use std::path::Path;
 use std::process::Command;
 use std::time::{Duration, SystemTime};
+use velnor_test_support::real_cargo_str;
 
 use crate::io::Repo;
 
@@ -35,7 +36,7 @@ fn inputs(root: &Path, operation: &str, target: Option<&str>) -> String {
 }
 
 fn cargo(root: &Path) -> String {
-    run(root, "cargo", &["build", "--offline", "-v"])
+    run(root, &real_cargo_str(), &["build", "--offline", "-v"])
 }
 
 fn reject_target(root: &Path, target: &Path) {

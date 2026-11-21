@@ -11,13 +11,15 @@ fn render(roots: &[&str], config: &str) -> Result<String, Box<dyn std::error::Er
 }
 
 const OFF: &str = "full_run = \"off\"\n";
-const NEXTEST_ONLY: &str = "[tools]\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n";
+const NEXTEST_ONLY: &str = "[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n\n[tools]\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n";
 const ON: &str = "full_run = \"off\"\nsparse_checkout = true\n";
 
 #[test]
 fn off_is_byte_identical_to_the_default() -> TestResult {
     let roots = ["a/Cargo.toml", "b/Cargo.toml"];
-    let default = render(&roots, OFF)?;
+    let mut plain = view(&roots, Some(OFF.as_bytes()))?;
+    crate::pipeline::pin_helper(&mut plain, "0.1.92")?;
+    let default = workflow(&plain)?;
     let explicit = render(&roots, "full_run = \"off\"\nsparse_checkout = false\n")?;
     assert_eq!(default, explicit);
     assert!(!default.contains("sparse-checkout"));
@@ -146,17 +148,17 @@ fn a_nested_root_keeps_the_cargo_configuration_of_each_ancestor_folder() -> Test
 #[test]
 fn declared_inputs_are_escaped_for_gitignore_syntax() -> TestResult {
     let config =
-        format!("{ON}[[inputs]]\nglob = \"fixtures/[data]/a?b c\"\npackages = [\"package-0\"]\n");
+        format!("{ON}[[inputs]]\nglob = \"fixtures/data dir/a b\"\npackages = [\"package-0\"]\n");
     let text = render(&["a/Cargo.toml", "b/Cargo.toml"], &config)?;
     let lanes = lanes_of(&text);
     assert!(!lanes.is_empty(), "{text}");
     for (id, block) in lanes {
         let listing = lane_listing(&block);
         assert!(
-            listing.contains(&"/fixtures/\\[data\\]/a\\?b\\ c"),
+            listing.contains(&"/fixtures/data\\ dir/a\\ b"),
             "{id}: {listing:?}"
         );
-        assert!(!listing.contains(&"/fixtures/[data]/a?b c"), "{id}");
+        assert!(!listing.contains(&"/fixtures/data dir/a b"), "{id}");
     }
     Ok(())
 }
@@ -197,10 +199,9 @@ fn a_path_toolchain_inside_the_repository_is_checked_out_and_an_escaping_one_for
     Ok(())
 }
 
-const WITH_RUST: &str =
-    "[tools]\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\nrust = \"1.99.1\"\n";
+const WITH_RUST: &str = "[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n\n[tools]\nrust = { version = \"1.99.1\", mr_boxington = true }\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n";
 
-const VENDORED: [(&str, &str); 4] = [
+const VENDORED: &[(&str, &str)] = &[
     ("mise.toml", WITH_RUST),
     (".velnor/rust-ci.toml", ON),
     (
@@ -228,7 +229,7 @@ fn vendored(files: &[(&str, &str)]) -> Result<String, Box<dyn std::error::Error>
 
 #[test]
 fn a_lane_keeps_the_path_dependencies_that_sit_outside_every_root() -> TestResult {
-    let text = vendored(&VENDORED)?;
+    let text = vendored(VENDORED)?;
     let lanes = lanes_of(&text);
     let with_app: Vec<_> = lanes
         .iter()
@@ -268,5 +269,30 @@ fn an_outside_dependency_that_cannot_be_read_forces_a_full_checkout() -> TestRes
             .all(|(_, block)| !lane_listing(block).contains(&"/a/")),
         "the lane that reaches the unreadable package stayed sparse\n{text}"
     );
+    Ok(())
+}
+
+#[test]
+fn a_toolchain_path_with_question_mark_or_brackets_is_escaped_for_gitignore() -> TestResult {
+    let mut view = view(&["a/Cargo.toml", "b/Cargo.toml"], Some(ON.as_bytes()))?;
+    let file = velnor_model::RepoPath::new("rust-toolchain.toml")?;
+    view.tracked_paths.insert(file.clone());
+    view.files.insert(
+        file,
+        b"[toolchain]\npath = \"toolchains/[custom]?\"\n".to_vec(),
+    );
+    view.files.insert(
+        velnor_model::RepoPath::new("mise.toml")?,
+        NEXTEST_ONLY.as_bytes().to_vec(),
+    );
+    let text = workflow(&view)?;
+    let lanes = lanes_of(&text);
+    assert!(!lanes.is_empty(), "{text}");
+    for (id, block) in lanes {
+        assert!(
+            lane_listing(&block).contains(&"/toolchains/\\[custom\\]\\?/"),
+            "{id}"
+        );
+    }
     Ok(())
 }

@@ -42,7 +42,7 @@ impl fmt::Display for Drift {
             ),
             Self::Unmarked(path) => write!(
                 f,
-                "{path} has no generated header and no generator owns it; delete it or generate it"
+                "{path} has no generated header and no generator owns it; delete it, generate it, or list it under external_workflows in .velnor/rust-ci.toml"
             ),
         }
     }
@@ -52,7 +52,7 @@ impl fmt::Display for Drift {
 pub fn drift(
     expected: &BTreeMap<RepoPath, String>,
     workflows: &BTreeMap<RepoPath, Vec<u8>>,
-    engine_configured: bool,
+    external: &BTreeSet<RepoPath>,
 ) -> Vec<Drift> {
     let paths: BTreeSet<&RepoPath> = expected.keys().chain(workflows.keys()).collect();
     paths
@@ -72,7 +72,7 @@ pub fn drift(
                 Owner::VelnorGen => Some(Drift::Stale(path.clone())),
                 Owner::Forged => Some(Drift::Foreign(path.clone())),
                 Owner::Engine => None,
-                Owner::Nobody => (!engine_configured).then(|| Drift::Unmarked(path.clone())),
+                Owner::Nobody => (!external.contains(path)).then(|| Drift::Unmarked(path.clone())),
             },
             (None, None) => None,
         })

@@ -146,12 +146,12 @@ fn a_tool_without_a_prebuilt_binary_for_the_runner_fails_generation_naming_the_t
         set(
             repo,
             "mise.toml",
-            "[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n\"cargo:ripgrep\" = \"14\"\n",
+            "[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n\n[tools]\nrust = { version = \"1.99.1\", mr_boxington = true }\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n\"cargo:ripgrep\" = \"14\"\n",
         )?;
         set(
             repo,
             "mise.lock",
-            "[[tools.rust]]\nversion = \"1.99.1\"\n\n[[tools.\"cargo:ripgrep\"]]\nversion = \"14.0.0\"\n\n[[tools.\"aqua:nextest-rs/nextest/cargo-nextest\"]]\nversion = \"0.9.151\"\n\n[tools.\"aqua:nextest-rs/nextest/cargo-nextest\".\"platforms.linux-x64\"]\nurl = \"https://example.invalid/nextest\"\n",
+            "[[tools.rust]]\nversion = \"1.99.1\"\n[[tools.mr-boxington]]\nversion = \"1.30.0\"\nspecifiers = [\"v1.30.0\"]\n[tools.mr-boxington.\"platforms.linux-x64\"]\nurl = \"https://fixtures.invalid/mbx\"\n[tools.mr-boxington.\"platforms.linux-arm64\"]\nurl = \"https://fixtures.invalid/mbx\"\n[tools.mr-boxington.\"platforms.macos-arm64\"]\nurl = \"https://fixtures.invalid/mbx\"\n[tools.mr-boxington.\"platforms.macos-x64\"]\nurl = \"https://fixtures.invalid/mbx\"\n\n[[tools.\"cargo:ripgrep\"]]\nversion = \"14.0.0\"\n\n[[tools.\"aqua:nextest-rs/nextest/cargo-nextest\"]]\nversion = \"0.9.151\"\n\n[tools.\"aqua:nextest-rs/nextest/cargo-nextest\".\"platforms.linux-x64\"]\nurl = \"https://example.invalid/nextest\"\n",
         )
     };
     assert_eq!(

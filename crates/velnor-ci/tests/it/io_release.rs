@@ -17,6 +17,8 @@ use crate::release_fake::{FakeReleases, REPO, TAG, all_files, published_digests}
 use crate::release_record::{CI, NOTHING};
 use crate::support::fresh_dir;
 
+mod optional;
+
 struct Dir(PathBuf);
 
 impl Dir {

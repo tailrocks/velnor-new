@@ -12,9 +12,9 @@
   tests), `tool_catalog_resolve::rust_mirror::tests`,
   `tool_catalog_resolve::rust_source::tests`.
 - Deviations: none
-- Follow-up: Rust 1.100 (about 2026-11-12) brings Cargo's new build-dir
-  layout, which lets MBX collect unused units one at a time and seed new
-  worktrees from existing ones; bump the catalog when it ships.
+- Follow-up: none for the pin. Rust 1.100.0 brings Cargo's new build-dir
+  layout, which MBX could use to collect unused units one at a time and seed
+  new worktrees from existing ones; that use is not implemented yet.
 
 ## 1. `mise.toml` and `rust-toolchain.toml` (owner standard layout)
 
@@ -27,7 +27,7 @@ newest stable version of each tool when applying it.
 min_version = "2026.10.17"
 
 [tools]
-rust = { version = "1.99.1", profile = "minimal", components = ["clippy", "rustfmt"], targets = ["aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"], mr_boxington = true }
+rust = { version = "1.100.0", profile = "minimal", components = ["clippy", "rustfmt"], targets = ["aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"], mr_boxington = true }
 mr-boxington = "1.26.0"
 hk = "2.8.0"
 cargo-binstall = "1.26.0"
@@ -47,7 +47,7 @@ edited alone):
 
 ```toml
 [toolchain]
-channel = "1.99.1"
+channel = "1.100.0"
 profile = "minimal"
 components = ["clippy", "rustfmt"]
 targets = ["aarch64-unknown-linux-gnu", "x86_64-unknown-linux-gnu"]
@@ -236,6 +236,9 @@ is set; with any of them it leaves the directory alone and never collects it.
 The generated workflow is the one exception: it sets `CARGO_TARGET_DIR` on each
 step that builds a root, to that root's cached target directory.
 
+`prepare` refuses a `CARGO_BUILD_BUILD_DIR` that differs from the target
+directory, because the Target cache does not cover a separate build directory.
+
 ## 5. Developer machines: MBX garbage collection
 
 MBX shares compiled outputs across every checkout through its action store
@@ -287,6 +290,5 @@ velnor-new uses the same layout: `mise.toml` with `min_version`,
 targets). Its `.velnor/config.toml`
 keeps `[stacks.rust] compile_driver = "mbx"` as a sticky declaration that the
 Mise evidence agrees with. `scripts/toml-tool-pin.awk` reads both the plain
-and the inline-table form of a `[tools]` entry, so `verify-local.sh` and
-`local-cargo.sh` still report the local pin. The hk configuration (`hk.pkl`
+and the inline-table form of a `[tools]` entry. The hk configuration (`hk.pkl`
 and its secret scanners) comes with the hk rollout, not this page.

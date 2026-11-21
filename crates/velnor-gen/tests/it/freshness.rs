@@ -91,7 +91,9 @@ fn a_pinned_helper_restores_inputs_once_per_root() -> TestResult {
 
 #[test]
 fn the_workflow_reads_no_repository_variable_unless_cache_debug_is_opted_in() -> TestResult {
-    let text = workflow(&view(&["Cargo.toml"], None)?)?;
+    let mut plain = view(&["Cargo.toml"], None)?;
+    crate::pipeline::pin_helper(&mut plain, "0.1.82")?;
+    let text = workflow(&plain)?;
     assert!(!text.contains("vars."), "{text}");
     assert!(!text.contains("CARGO_LOG"), "{text}");
     assert_eq!(named(&text, "Upload the cargo fingerprint log").len(), 0);
@@ -228,7 +230,7 @@ fn generate_rejects_a_build_script_that_is_a_filesystem_symlink() -> TestResult 
     git(&root, &["init", "--quiet"])?;
     git(&root, &["add", "--all"])?;
 
-    let cargo = std::path::Path::new(env!("CARGO"));
+    let cargo = velnor_test_support::real_cargo();
     let cargo_dir = cargo.parent().ok_or("cargo executable has no parent")?;
     let search_path = std::env::join_paths([
         cargo_dir,

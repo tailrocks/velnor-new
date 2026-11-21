@@ -15,6 +15,7 @@ const KEY: &str = "build.target-dir";
 pub const NESTED_ROOTS_FOLDER: &str = "velnor-roots";
 /// The first `velnor-ci` that works out the same default folder for a root outside the repository
 /// root, so a lock that pins an older one keeps the folder beside the manifest.
+// helper-gate: first in tools-v0.1.107 via 8c68e540ed
 const NESTED_TARGET_HELPER: (u64, u64, u64) = (0, 1, 107);
 
 type Found<'v> = (&'v RepoPath, Option<RepoPath>, toml::Value);
@@ -89,6 +90,15 @@ fn default_dir(view: &RepoView, manifest: &RepoPath) -> RepoPath {
         return nested_default(manifest);
     }
     manifest.sibling(&DEFAULT)
+}
+
+#[must_use]
+pub fn default_folder(manifest: &RepoPath) -> RepoPath {
+    if manifest.parent().is_some() {
+        nested_default(manifest)
+    } else {
+        manifest.sibling(&DEFAULT)
+    }
 }
 
 fn nested_default(manifest: &RepoPath) -> RepoPath {

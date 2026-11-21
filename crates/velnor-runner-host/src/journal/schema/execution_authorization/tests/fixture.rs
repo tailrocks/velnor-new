@@ -8,7 +8,7 @@ use crate::journal::Journal;
 pub(super) type TestResult<T> = Result<T, Box<dyn std::error::Error>>;
 
 pub(super) const PROOF_TABLE: &str = "connection_execution_proofs";
-pub(super) const GUARDS: [&str; 4] = [
+pub(super) const GUARDS: &[&str] = &[
     "execution_proof_source_immutable_guard",
     "execution_proof_published_file_guard",
     "execution_proof_published_mount_guard",
@@ -23,7 +23,7 @@ pub(super) const PUBLISHED_CHALLENGE: &str =
 pub(super) const CHALLENGE_JSON: &str = r#"{"challenge":1}"#;
 pub(super) const SOURCE_JSON: &str = r#"{"source":1}"#;
 pub(super) const OTHER_SOURCE_JSON: &str = r#"{"source":2}"#;
-pub(super) const FILE_COLUMNS: [&str; 16] = [
+pub(super) const FILE_COLUMNS: &[&str] = &[
     "challenge_file_path",
     "challenge_file_inode",
     "challenge_file_bytes",
@@ -42,7 +42,7 @@ pub(super) const FILE_COLUMNS: [&str; 16] = [
     "challenge_no_copy",
 ];
 
-const PARENT_TABLES: [&str; 5] = [
+const PARENT_TABLES: &[&str] = &[
     "CREATE TABLE connection_intents (id INTEGER PRIMARY KEY)",
     "CREATE TABLE capacity_reservations (id INTEGER PRIMARY KEY)",
     "CREATE TABLE connection_scopes (connection_id TEXT PRIMARY KEY)",
@@ -78,7 +78,7 @@ pub(super) async fn journal_proof_guards(journal: &Journal) -> TestResult<(Strin
     let source = journal.connection().await?;
     let proof_table = object_sql(&source, "table", PROOF_TABLE).await?;
     let mut guards = Vec::with_capacity(GUARDS.len());
-    for name in GUARDS {
+    for name in GUARDS.iter().copied() {
         guards.push(object_sql(&source, "trigger", name).await?);
     }
     Ok((proof_table, guards))
@@ -91,7 +91,7 @@ pub(super) async fn scratch_database(
     guards: &[String],
 ) -> TestResult<Connection> {
     let connection = scratch_connection(dir, name).await?;
-    for statement in PARENT_TABLES {
+    for statement in PARENT_TABLES.iter().copied() {
         connection.execute(statement, ()).await?;
     }
     connection

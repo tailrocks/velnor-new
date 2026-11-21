@@ -141,13 +141,13 @@ fn a_changed_mise_wrapper_env_is_new_and_defaults_stay_unnamed() -> TestResult {
             "[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n\n[wrappers.cargo]\ncommand = \"mbx\"\n{env}"
         )
     };
-    let before = facts(&[("mise.toml", &mise(""))])?;
+    let standard = "env = { MBX_CARGO_SHIM_MODE = \"1\" }\n";
+    let after = facts(&[(
+        "mise.toml",
+        &mise("env = { MBX_CARGO_SHIM_MODE = \"1\", RUSTDOC = \"true\" }\n"),
+    )])?;
     assert_eq!(
-        introduced_files(
-            &before,
-            &["mise.toml"],
-            &[("mise.toml", &mise("env = { RUSTDOC = \"true\" }\n"))]
-        )?,
+        introduced_files(&after, &["mise.toml"], &[("mise.toml", &mise(standard))])?,
         ["mise.toml"]
     );
     let build = named(
@@ -185,6 +185,60 @@ fn a_zero_count_retry_table_is_not_named_and_a_script_platform_change_is_new() -
     assert_eq!(
         introduced_files(&before, &[NEXTEST], &[(NEXTEST, &wrapper("cfg(unix)"))])?,
         [NEXTEST]
+    );
+    Ok(())
+}
+
+#[test]
+fn turning_the_cargo_deny_policy_off_or_narrowing_its_checks_is_new() -> TestResult {
+    const CONFIG: &str = ".velnor/rust-ci.toml";
+    let off = facts(&[(CONFIG, "[policy]\ndeny = false\n")])?;
+    assert_eq!(introduced_files(&off, &[CONFIG], &[])?, [CONFIG]);
+    assert_eq!(
+        introduced_files(&off, &[CONFIG], &[(CONFIG, "[policy]\ndeny = false\n")])?,
+        Vec::<String>::new()
+    );
+    let narrowed = facts(&[(CONFIG, "[policy]\ndeny_checks = [\"advisories\"]\n")])?;
+    assert_eq!(introduced_files(&narrowed, &[CONFIG], &[])?, [CONFIG]);
+    Ok(())
+}
+
+#[test]
+fn naming_every_cargo_deny_check_is_not_a_weakening() -> TestResult {
+    const CONFIG: &str = ".velnor/rust-ci.toml";
+    for checks in [
+        "[\"advisories\", \"bans\", \"licenses\", \"sources\"]",
+        "[\"sources\", \"licenses\", \"bans\", \"advisories\"]",
+    ] {
+        let all = facts(&[(CONFIG, &format!("[policy]\ndeny_checks = {checks}\n"))])?;
+        assert_eq!(
+            introduced_files(&all, &[CONFIG], &[])?,
+            Vec::<String>::new(),
+            "{checks}"
+        );
+    }
+    let three = facts(&[(
+        CONFIG,
+        "[policy]\ndeny_checks = [\"advisories\", \"bans\", \"licenses\"]\n",
+    )])?;
+    assert_eq!(introduced_files(&three, &[CONFIG], &[])?, [CONFIG]);
+    Ok(())
+}
+
+#[test]
+fn adding_a_cargo_deny_check_to_a_narrowed_list_is_not_a_weakening() -> TestResult {
+    const CONFIG: &str = ".velnor/rust-ci.toml";
+    let head = facts(&[(
+        CONFIG,
+        "[policy]\ndeny_checks = [\"advisories\", \"bans\"]\n",
+    )])?;
+    assert_eq!(
+        introduced_files(
+            &head,
+            &[CONFIG],
+            &[(CONFIG, "[policy]\ndeny_checks = [\"advisories\"]\n")]
+        )?,
+        Vec::<String>::new()
     );
     Ok(())
 }

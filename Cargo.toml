@@ -20,6 +20,7 @@ members = [
     "crates/velnor-runner-image-manifest",
     "crates/velnor-runner-qualification",
     "crates/velnor-rust",
+    "crates/velnor-test-support",
     "crates/velnor-workflows",
 ]
 resolver = "3"

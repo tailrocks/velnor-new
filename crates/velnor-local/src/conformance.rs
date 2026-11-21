@@ -8,13 +8,13 @@ use serde_json::{Value, json};
 /// The values a run's placeholders stand for, such as `ref` for `${ref}`.
 pub type Values = BTreeMap<String, String>;
 
-const TYPE_WORDS: [&str; 8] = [
+const TYPE_WORDS: &[&str] = &[
     "string", "number", "boolean", "object", "array", "null", "sha", "absent",
 ];
 
 /// Paths compared by value however the stored file writes them: the identity claims that name
 /// the repository and the refs the run was triggered on, and the cache and token scope lists.
-const EXACT: [&str; 5] = [
+const EXACT: &[&str] = &[
     "claims.repository",
     "claims.ref",
     "claims.defaultRef",
@@ -183,21 +183,21 @@ pub fn report(
     stored: &dyn Fn(&str) -> Option<Value>,
     values: &dyn Fn(&str) -> Values,
 ) -> (Vec<String>, bool) {
-    let mut seen: BTreeMap<(String, String), (&str, Value)> = BTreeMap::new();
+    let mut seen: BTreeMap<(String, String), Vec<(&str, Value)>> = BTreeMap::new();
     for (name, log) in logs {
         for document in observations(log) {
             let probe = document["probe"].as_str().unwrap_or_default().to_owned();
             for (leg, value) in document["legs"].as_object().into_iter().flatten() {
-                seen.insert((probe.clone(), leg.clone()), (name, value.clone()));
+                seen.entry((probe.clone(), leg.clone()))
+                    .or_default()
+                    .push((name, value.clone()));
             }
         }
     }
     let probes: BTreeSet<&String> = seen.keys().map(|(probe, _)| probe).collect();
-    let (mut lines, mut reproduced) = (Vec::new(), true);
+    let mut lines = Vec::new();
     for probe in probes {
-        let recorded = stored(probe)
-            .map(|file| file["legs"].clone())
-            .unwrap_or_default();
+        let recorded = stored(probe).map_or_default(|file| file["legs"].clone());
         let names: BTreeSet<String> = recorded
             .as_object()
             .into_iter()
@@ -210,28 +210,53 @@ pub fn report(
             )
             .collect();
         for leg in names {
-            let line = match (recorded.get(&leg), seen.get(&(probe.clone(), leg.clone()))) {
-                (Some(want), Some((log, got))) => {
-                    let found = differences(want, got, &values(log));
-                    if found.is_empty() {
-                        format!("{probe} / {leg} ({log}): reproduced")
-                    } else {
-                        let listed: Vec<String> =
-                            found.iter().map(|line| format!("\n    {line}")).collect();
-                        format!(
-                            "{probe} / {leg} ({log}): {} differences{}",
-                            found.len(),
-                            listed.concat()
-                        )
-                    }
-                }
-                (Some(_), None) => format!("{probe} / {leg}: not observed"),
-                (None, _) => format!("{probe} / {leg}: not stored in conformance/{probe}.json"),
-            };
-            reproduced &= line.ends_with(": reproduced");
-            lines.push(line);
+            let observed = seen
+                .get(&(probe.clone(), leg.clone()))
+                .map_or(&[][..], Vec::as_slice);
+            lines.extend(leg_lines(probe, &leg, recorded.get(&leg), observed, values));
         }
     }
-    let reproduced = reproduced && !lines.is_empty();
+    let reproduced = lines.iter().all(|line| line.ends_with(": reproduced")) && !lines.is_empty();
     (lines, reproduced)
+}
+
+/// The report lines of one leg. Every observation of the leg must agree with the others and with
+/// the stored result; observations that disagree with each other are a conflict.
+fn leg_lines(
+    probe: &str,
+    leg: &str,
+    want: Option<&Value>,
+    observed: &[(&str, Value)],
+    values: &dyn Fn(&str) -> Values,
+) -> Vec<String> {
+    let label = format!("{probe} / {leg}");
+    let Some(want) = want else {
+        return vec![format!("{label}: not stored in conformance/{probe}.json")];
+    };
+    let Some((_, first)) = observed.first() else {
+        return vec![format!("{label}: not observed")];
+    };
+    let logs: Vec<&str> = observed.iter().map(|(log, _)| *log).collect();
+    if observed.iter().any(|(_, got)| got != first) {
+        return vec![format!(
+            "{label} ({}): conflicting observations",
+            logs.join(", ")
+        )];
+    }
+    let mut lines = Vec::new();
+    for (log, got) in observed {
+        let found = differences(want, got, &values(log));
+        if !found.is_empty() {
+            let listed: Vec<String> = found.iter().map(|line| format!("\n    {line}")).collect();
+            lines.push(format!(
+                "{label} ({log}): {} differences{}",
+                found.len(),
+                listed.concat()
+            ));
+        }
+    }
+    if lines.is_empty() {
+        lines.push(format!("{label} ({}): reproduced", logs.join(", ")));
+    }
+    lines
 }

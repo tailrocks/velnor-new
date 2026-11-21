@@ -4,6 +4,7 @@
 use std::path::Path;
 use std::process::Command;
 use std::time::{Duration, SystemTime};
+use velnor_test_support::real_cargo_str;
 
 use crate::io::Repo;
 
@@ -39,7 +40,7 @@ fn cargo(root: &Path, target: Option<&str>) -> String {
     if let Some(target) = target {
         args.extend(["--target-dir", target]);
     }
-    run(root, "cargo", &args)
+    run(root, &real_cargo_str(), &args)
 }
 
 fn assert_fresh(root: &Path, name: &str, target: Option<&str>) {

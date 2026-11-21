@@ -114,7 +114,7 @@ impl Node {
     }
 }
 
-type Edit = Box<dyn Fn(&mut Node)>;
+type Edit = Box<dyn Fn(&mut Node) + Send>;
 
 /// Everything outside the repository a case reads, and the ways a case can differ.
 pub(crate) struct World {
@@ -263,7 +263,7 @@ impl World {
     }
 
     /// Change node `index` after its link to its predecessor is set and before it is packed.
-    pub(crate) fn edit(&mut self, index: usize, change: impl Fn(&mut Node) + 'static) {
+    pub(crate) fn edit(&mut self, index: usize, change: impl Fn(&mut Node) + Send + 'static) {
         self.edits.push((index, Box::new(change)));
     }
 

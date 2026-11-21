@@ -3,7 +3,7 @@
 
 use std::error::Error;
 
-use crate::release_fixture::{APP, TOOLS, TWO_BINARIES, jobs, render, steps, uses};
+use crate::release_fixture::{APP, TOOLS, TWO_BINARIES, jobs, render, render_pinned, steps, uses};
 use crate::release_yml_binaries::{job, permissions};
 use crate::yaml_tree::Node;
 
@@ -75,13 +75,13 @@ fn attest_true_adds_a_pinned_provenance_step_over_the_assets_and_checksums_in_th
 
 #[test]
 fn attest_false_or_absent_leaves_the_workflow_unchanged() -> TestResult {
-    let (plain, _) = render(&[APP, TOOLS], Some(TWO_BINARIES))?;
+    let (plain, _) = render_pinned(&[APP, TOOLS], Some(TWO_BINARIES), "0.1.91")?;
     let explicit = TWO_BINARIES.replacen(
         "package = \"app\"\n",
         "package = \"app\"\nattest = false\n",
         1,
     );
-    let (off, tree) = render(&[APP, TOOLS], Some(&explicit))?;
+    let (off, tree) = render_pinned(&[APP, TOOLS], Some(&explicit), "0.1.91")?;
     assert_eq!(plain, off);
     assert!(!plain.contains("attest"));
     assert!(!plain.contains("id-token"));

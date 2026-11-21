@@ -6,6 +6,7 @@ use std::path::PathBuf;
 
 use super::{command, own_units, workspace_below_the_root};
 use crate::io::Repo;
+use velnor_test_support::real_cargo_str;
 
 fn prepared() -> (Repo, PathBuf) {
     let repo = workspace_below_the_root();
@@ -18,7 +19,7 @@ use std::path::Path;
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     if args.first().is_some_and(|arg| arg == "metadata") {
-        std::process::exit(std::process::Command::new("cargo").args(&args).status().unwrap().code().unwrap_or(1));
+        std::process::exit(std::process::Command::new("@CARGO@").args(&args).status().unwrap().code().unwrap_or(1));
     }
     match std::env::var_os("CARGO_TARGET_DIR") {
         Some(directory) => fs::write("pinned.txt", directory.to_string_lossy().as_bytes()).unwrap(),
@@ -29,7 +30,9 @@ fn main() {
         }
     }
 }
-"#,
+"#
+        .replace("@CARGO@", &real_cargo_str())
+        .as_str(),
     );
     let compiled = command("rustc")
         .current_dir(repo.root())

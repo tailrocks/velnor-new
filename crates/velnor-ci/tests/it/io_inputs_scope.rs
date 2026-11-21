@@ -5,6 +5,7 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 use std::time::{Duration, UNIX_EPOCH};
+use velnor_test_support::real_cargo;
 
 use crate::io::Repo;
 
@@ -88,7 +89,7 @@ fn recorded_external_inputs_follow_root_owners_and_sibling_dependencies() {
         (".velnor/rust-inputs.lock", "shared.txt\tapp-pkg\nnotes.txt\tother-pkg\ndep-input.txt\tdep-pkg\n"),
     ]);
     for root in ["app", "other", "dep"] {
-        let output = Command::new("cargo")
+        let output = Command::new(real_cargo())
             .args(["generate-lockfile", "--offline"])
             .current_dir(repo.root().join(root))
             .output()

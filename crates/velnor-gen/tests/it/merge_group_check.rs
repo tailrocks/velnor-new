@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    CargoCommand, FilterRef, PackageName, RepoPath, StepKind, TargetKind, TargetName,
+    CargoCommand, FilterRef, LaneFeatures, PackageName, RepoPath, StepKind, TargetKind, TargetName,
 };
 
 #[test]
@@ -30,28 +30,29 @@ fn every_cargo_command_has_its_check_classification() {
         ),
         (
             CargoCommand::NextestFeatures {
-                features: Vec::new(),
+                features: LaneFeatures::default(),
                 packages: vec![package()],
                 filter: FilterRef::All,
                 ci_profile: true,
+                reports: false,
             },
             true,
         ),
         (
             CargoCommand::ClippyFeatures {
-                features: Vec::new(),
+                features: LaneFeatures::default(),
             },
             true,
         ),
         (
             CargoCommand::DocFeatures {
-                features: Vec::new(),
+                features: LaneFeatures::default(),
             },
             true,
         ),
         (
             CargoCommand::LaneGuard {
-                features: Vec::new(),
+                features: LaneFeatures::default(),
                 packages: vec![package()],
                 filter: String::new(),
                 except: Vec::new(),
@@ -69,7 +70,9 @@ fn every_cargo_command_has_its_check_classification() {
                 file: RepoPath::from_static("target/nextest.tar.zst"),
                 filter: FilterRef::All,
                 threads: None,
+                partition: None,
                 ci_profile: true,
+                no_tests: velnor_model::NoTests::Pass,
             },
             true,
         ),
@@ -88,6 +91,7 @@ fn every_cargo_command_has_its_check_classification() {
             CargoCommand::Deny {
                 manifest: RepoPath::from_static("deny.toml"),
                 config: None,
+                checks: None,
             },
             true,
         ),
@@ -103,13 +107,33 @@ fn every_cargo_command_has_its_check_classification() {
 }
 
 #[test]
-fn test_setup_is_a_check_and_other_steps_are_not() {
+fn test_setup_and_the_advisory_fetch_are_checks_and_other_steps_are_not() {
     assert!(
         StepKind::TestSetup {
             name: String::from("setup"),
             run: String::from("true"),
+            before_build: false,
+        }
+        .is_check()
+    );
+    // It serves the cargo-deny check (a check above), so it must skip with it.
+    assert!(
+        StepKind::AdvisoryFetch {
+            configs: vec![None],
         }
         .is_check()
     );
     assert!(!StepKind::MergeQueueCheck.is_check());
+}
+
+#[test]
+fn only_a_build_phase_setup_and_the_release_assets_feed_a_target_build() {
+    let setup = |before_build| StepKind::TestSetup {
+        name: String::from("setup"),
+        run: String::from("true"),
+        before_build,
+    };
+    assert!(setup(true).feeds_build());
+    assert!(!setup(false).feeds_build());
+    assert!(!StepKind::MergeQueueCheck.feeds_build());
 }

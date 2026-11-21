@@ -2,17 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeSet;
+use std::io::Write;
 use std::path::Path;
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 use super::Event;
 
 const NON_UTF8: &str = "non_utf8_path";
 const SHORT_SHA_MIN: usize = 7;
 const FULL_SHA: usize = 64;
-const PROJECT_TOOL_FILES: [&str; 3] = [".tool-versions", "rust-toolchain.toml", "rust-toolchain"];
-const MISE_LOCKS: [&str; 2] = ["mise.lock", ".mise.lock"];
-const MISE_CONFIGS: [&str; 13] = [
+const PROJECT_TOOL_FILES: &[&str] = &[".tool-versions", "rust-toolchain.toml", "rust-toolchain"];
+const MISE_LOCKS: &[&str] = &["mise.lock", ".mise.lock"];
+const MISE_CONFIGS: &[&str] = &[
     "mise.toml",
     ".mise.toml",
     "mise.*.toml",
@@ -50,6 +51,67 @@ pub(super) fn git(root: &Path, args: &[&str]) -> Result<Vec<u8>, String> {
             String::from_utf8_lossy(&output.stderr).trim()
         ))
     }
+}
+
+pub(super) fn blobs(root: &Path, specs: &[String]) -> Result<Vec<Vec<u8>>, String> {
+    if specs.is_empty() {
+        return Ok(Vec::new());
+    }
+    if specs.iter().any(|spec| spec.contains('\n')) {
+        return Err("unsafe_object_path".to_owned());
+    }
+    let mut child = Command::new("git")
+        .arg("-C")
+        .arg(root)
+        .args(["cat-file", "--batch"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|error| error.to_string())?;
+    let mut stdin = child.stdin.take().ok_or("git_stdin_unavailable")?;
+    let mut input = String::new();
+    for spec in specs {
+        input.push_str(spec);
+        input.push('\n');
+    }
+    let writer = std::thread::spawn(move || stdin.write_all(input.as_bytes()));
+    let output = child
+        .wait_with_output()
+        .map_err(|error| error.to_string())?;
+    writer
+        .join()
+        .map_err(|_| "git_stdin_failed".to_owned())?
+        .map_err(|error| error.to_string())?;
+    if !output.status.success() {
+        return Err(format!(
+            "git cat-file failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    split_blobs(&output.stdout, specs)
+}
+
+fn split_blobs(mut rest: &[u8], specs: &[String]) -> Result<Vec<Vec<u8>>, String> {
+    let mut blobs = Vec::with_capacity(specs.len());
+    for spec in specs {
+        let missing = || format!("missing_object:{spec}");
+        let end = rest
+            .iter()
+            .position(|byte| *byte == b'\n')
+            .ok_or_else(missing)?;
+        let header = String::from_utf8_lossy(&rest[..end]).into_owned();
+        let mut fields = header.rsplitn(3, ' ');
+        let size = match (fields.next(), fields.next()) {
+            (Some(size), Some("blob")) => size.parse::<usize>().map_err(|_| missing())?,
+            _ => return Err(missing()),
+        };
+        let start = end + 1;
+        let body = rest.get(start..start + size).ok_or_else(missing)?;
+        blobs.push(body.to_vec());
+        rest = rest.get(start + size + 1..).ok_or_else(missing)?;
+    }
+    Ok(blobs)
 }
 
 pub(super) fn nul_paths(stdout: &[u8]) -> Result<BTreeSet<String>, String> {

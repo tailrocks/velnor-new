@@ -3,6 +3,7 @@
 
 mod archive;
 mod lanes;
+mod timeouts;
 
 use velnor_model::{
     CargoCommand, HelperCommand, Job, JobId, RepoFacts, RepoPath, Shape, ShapeDecision, Step,
@@ -20,7 +21,7 @@ const ARCHIVE_ID: JobId = JobId::from_static("nextest-archive");
 const ARCHIVE_FILE: RepoPath = RepoPath::from_static("nextest-archive.tar.zst");
 /// The first `velnor-ci` whose test step records the build in `steps.<test>.outputs.built`,
 /// so a save waits for that record and the lane needs no separate build step.
-// First released in tools-v0.1.107 (not tagged yet when this gate was written).
+// helper-gate: first in tools-v0.1.107 via 4ee933bf35
 pub(crate) const BUILT_RECORD_HELPER: (u64, u64, u64) = (0, 1, 107);
 
 struct RootJobs<'a> {
@@ -154,7 +155,9 @@ impl RootJobs<'_> {
 
     fn lane_job(&self, id: JobId, steps: Vec<Step>) -> Job {
         let mut steps = if self.unit.grouped {
-            steps
+            self.members.iter().fold(steps, |steps, member| {
+                crate::test_setup::before_builds(self.facts, &member.root, steps)
+            })
         } else {
             crate::test_setup::inserted(self.facts, &self.unit.roots[0], self.lane, steps)
         };
@@ -181,6 +184,7 @@ impl RootJobs<'_> {
             },
             gate: self.lane.job(),
             steps,
+            timeout_minutes: self.timeout_minutes(),
             ..job(self.facts, id)
         }
     }
@@ -209,7 +213,7 @@ impl RootJobs<'_> {
 
     fn member_steps(&self, member: &Member, steps: Vec<Step>) -> Vec<Step> {
         if self.unit.grouped {
-            crate::test_setup::inserted(self.facts, &member.root, &member.lane, steps)
+            crate::test_setup::before_tests(self.facts, &member.root, &member.lane, steps)
         } else {
             steps
         }
@@ -313,10 +317,10 @@ impl RootJobs<'_> {
             steps.extend(self.audit());
             steps.extend(saves);
         }
-        Job {
+        self.inline_lanes_timeout(Job {
             pr: crate::plan::quick(self.facts),
             ..self.lane_job(job_id, steps)
-        }
+        })
     }
 
     fn split(&self, comment: Option<String>, archive: bool) -> Vec<Job> {
@@ -330,13 +334,13 @@ impl RootJobs<'_> {
         for member in &self.members {
             steps.extend(self.cargo(member, lint().into_iter().chain([CargoCommand::Doc])));
         }
+        for member in &self.members {
+            steps.extend(self.cargo(member, check_alone(&member.root)));
+        }
         if tests.is_empty() {
             steps.extend(self.audit());
         }
         steps.extend(self.saves(&lint_id, None, tests.is_empty()));
-        for member in &self.members {
-            steps.extend(self.cargo(member, check_alone(&member.root)));
-        }
         let mut jobs = vec![Job {
             comment,
             pr: crate::plan::quick(self.facts),
@@ -380,7 +384,7 @@ impl RootJobs<'_> {
             if !saving {
                 steps.extend(saves);
             }
-            jobs.push(self.lane_job(test_id, steps));
+            jobs.push(self.inline_lanes_timeout(self.lane_job(test_id, steps)));
         }
         jobs
     }

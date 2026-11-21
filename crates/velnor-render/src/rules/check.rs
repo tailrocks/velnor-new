@@ -47,7 +47,11 @@ pub fn check_rules(workflow: &RenderedWorkflow) -> Result<(), Vec<RuleViolation>
 
 fn holds_app_token(job: &RenderedJob) -> bool {
     job.steps.iter().any(|step| {
-        step.id.as_deref() != Some(crate::private_steps::TOKEN_STEP)
+        ![
+            crate::private_steps::TOKEN_STEP,
+            crate::private_steps::release_asset_steps::TOKEN_STEP,
+        ]
+        .contains(&step.id.as_deref().unwrap_or_default())
             && step
                 .uses
                 .as_deref()

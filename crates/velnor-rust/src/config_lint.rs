@@ -4,13 +4,17 @@
 use std::collections::BTreeSet;
 
 use serde::Deserialize;
-use velnor_model::{JobId, LintJob, LintKind, RepoPath, RepoView, RustCiConfig, ToolPins};
+use velnor_model::{
+    JobId, LintJob, LintKind, PathGlob, RepoPath, RepoView, RustCiConfig, ToolPins,
+};
 
+use crate::config::rule_glob;
 use crate::error::{DetectError, Reason};
 use crate::lint_tools::{ALINT, JACTIONLINT};
 use crate::mise::tool_pins;
 
 const MISE_TASK: &str = "mise-task";
+const GENERATED_CHECK: &str = "generated-check";
 const PREFIX: &str = "lint-";
 const DEFAULT_TIMEOUT_MINUTES: u16 = 10;
 const TIMEOUT_RANGE: std::ops::RangeInclusive<u16> = 1..=360;
@@ -26,6 +30,7 @@ pub(crate) struct RawLint {
     probe: Option<String>,
     task: Option<String>,
     tools: Option<Vec<String>>,
+    inputs: Option<Vec<String>>,
 }
 
 fn word(value: &str) -> bool {
@@ -89,6 +94,30 @@ fn title(raw_name: Option<String>, fallback: String) -> Result<String, Reason> {
     Ok(name)
 }
 
+fn inputs(raw: Option<Vec<String>>) -> Result<Vec<PathGlob>, Reason> {
+    let Some(entries) = raw else {
+        return Ok(Vec::new());
+    };
+    if entries.is_empty() {
+        return Err(Reason::InvalidValue {
+            key: "lint.inputs",
+            value: "[]".to_owned(),
+        });
+    }
+    entries
+        .into_iter()
+        .map(|entry| {
+            if entry.contains(['?', '[', ']']) {
+                return Err(Reason::UnsupportedGlob {
+                    key: "lint.inputs",
+                    value: entry,
+                });
+            }
+            rule_glob("lint.inputs", entry)
+        })
+        .collect()
+}
+
 fn lint(raw: RawLint) -> Result<LintJob, Reason> {
     let kind = raw.kind.as_str();
     let config = path("lint.config", raw.config.clone())?;
@@ -135,6 +164,18 @@ fn lint(raw: RawLint) -> Result<LintJob, Reason> {
             let name = format!("Mise task {task}");
             (LintKind::MiseTask { task, tools }, id, name)
         }
+        GENERATED_CHECK => {
+            foreign(kind, "inputs", raw.inputs.is_some())?;
+            foreign(kind, "config", config.is_some())?;
+            foreign(kind, "probe", probe.is_some())?;
+            foreign(kind, "task", raw.task.is_some())?;
+            foreign(kind, "tools", raw.tools.is_some())?;
+            (
+                LintKind::GeneratedCheck,
+                GENERATED_CHECK.to_owned(),
+                "Generated workflows".to_owned(),
+            )
+        }
         other => {
             return Err(Reason::InvalidValue {
                 key: "lint.kind",
@@ -155,6 +196,7 @@ fn lint(raw: RawLint) -> Result<LintJob, Reason> {
         id: identifier(raw.id, &id)?,
         name: title(raw.name, name)?,
         timeout_minutes,
+        inputs: inputs(raw.inputs)?,
         kind,
     })
 }
@@ -162,7 +204,11 @@ fn lint(raw: RawLint) -> Result<LintJob, Reason> {
 pub(crate) fn parse(raw: Vec<RawLint>) -> Result<Vec<LintJob>, Reason> {
     let jobs = raw.into_iter().map(lint).collect::<Result<Vec<_>, _>>()?;
     let mut seen = BTreeSet::new();
-    match jobs.iter().find(|job| !seen.insert(job.id.clone())) {
+    let mut slugs = BTreeSet::new();
+    match jobs
+        .iter()
+        .find(|job| !seen.insert(job.id.clone()) || !slugs.insert(job.slug()))
+    {
         Some(job) => Err(Reason::LintDuplicate(job.id.to_string())),
         None => Ok(jobs),
     }

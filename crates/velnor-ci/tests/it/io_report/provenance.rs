@@ -13,6 +13,7 @@ use velnor_ci::telemetry::INVOCATIONS;
 mod artifacts;
 mod downloads;
 mod links;
+mod restored_units;
 mod roots;
 mod targets;
 

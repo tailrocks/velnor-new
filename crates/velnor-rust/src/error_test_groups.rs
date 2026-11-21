@@ -16,9 +16,22 @@ impl Reason {
                 f,
                 "test group {name} belongs to a root with no nextest tests; a group runs a nextest filter from the root's archive"
             ),
+            Self::PartitionsWithoutNextest(name) => write!(
+                f,
+                "test_groups.partitions is set on group {name}, whose root has no nextest tests; partitions are a nextest feature (--partition), so remove partitions or give the root tests that nextest runs"
+            ),
+            Self::TestGroupArtifact { key, value, fix } => write!(f, "{key} {value:?} is refused: {fix}"),
+            Self::ArtifactNameTaken(name) => write!(
+                f,
+                "test_groups.artifacts.name {name:?} is used twice; an artifact name is unique in a workflow run, and a partitioned group appends -<partition> to each name, so give each artifact its own name"
+            ),
             Self::TestGroupFilter(filter) => write!(
                 f,
                 "test_groups.filter {filter:?} is empty or has a character a generated one-command step cannot carry (a control character, a quote, $, a backtick, a backslash, |, &, ; or <); write nextest's and, or and not instead of &, | and !"
+            ),
+            Self::TestGroupRestoreWithoutCargo(name) => write!(
+                f,
+                "test group {name} sets restore_cache = true without needs = [\"cargo\"]; the cache restore needs the toolchain and the lock hashes that the cargo need sets up"
             ),
             Self::TestGroupsWithPrivateSources => f.write_str(
                 "[[test_groups]] and [private_sources] cannot both be set: a test group runs from the nextest archive, and that archive holds the compiled private dependencies, which anyone who can read the repository's workflow artifacts could download; remove the test groups, or remove [private_sources] when every dependency is public",

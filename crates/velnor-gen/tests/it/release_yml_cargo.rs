@@ -68,6 +68,7 @@ fn release_yml_quotes_a_root_with_a_space_in_the_build_commands() -> TestResult 
     assert_eq!(
         runs(job(&tree, "build-tools-linux-x64")?),
         [
+            "echo \"MBX_CACHE_DIR=$RUNNER_TEMP/mbx-release-build-tools-linux-x64\" >> \"$GITHUB_ENV\"",
             "test -n \"$COMMIT\" -a \"$CHECKED_OUT\" = \"$COMMIT\"",
             "sudo apt-get install --yes musl-tools",
             "rustup target add x86_64-unknown-linux-musl",

@@ -21,7 +21,10 @@ use std::time::{Duration, Instant};
 
 use crate::setup_action::program;
 
-const WATCHDOG: &str = "sleep \"$3\"; kill -KILL -- \"-$1\" 2>/dev/null; rm -rf \"$2\"";
+/// Both snippets say `kill -s KILL --`: dash, which is `sh` on Ubuntu, rejects `kill -KILL --`.
+pub(crate) const WATCHDOG: &str =
+    "sleep \"$3\"; kill -s KILL -- \"-$1\" 2>/dev/null; rm -rf \"$2\"";
+pub(crate) const KILL_GROUP: &str = "kill -s KILL -- \"-$1\" 2>/dev/null";
 
 #[derive(Debug)]
 pub(crate) struct Running {
@@ -85,13 +88,15 @@ impl Drop for Running {
     fn drop(&mut self) {
         self.terminate();
         kill_group(self.watchdog.id());
+        // Whatever happens to the group kill, never wait out the watchdog's sleep.
+        self.watchdog.kill().ok();
         self.watchdog.wait().ok();
     }
 }
 
 fn kill_group(leader: u32) {
     Command::new(program("sh"))
-        .args(["-c", "kill -KILL -- \"-$1\" 2>/dev/null", "sh"])
+        .args(["-c", KILL_GROUP, "sh"])
         .arg(leader.to_string())
         .status()
         .ok();

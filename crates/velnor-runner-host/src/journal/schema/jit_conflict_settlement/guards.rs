@@ -237,7 +237,7 @@ pub(super) const CHALLENGE_FENCE: &str = "CREATE TRIGGER jit_conflict_challenge_
 pub(super) const DECISION_FENCE: &str = "CREATE TRIGGER jit_conflict_decision_fence BEFORE INSERT ON connection_execution_decisions WHEN EXISTS(SELECT 1 FROM physical_attempt_jit_conflict_recovery_claims claim WHERE claim.reservation_id=NEW.reservation_id AND claim.connection_id=NEW.connection_id AND claim.scale_set_id=NEW.scale_set_id) BEGIN SELECT RAISE(ABORT,'A JIT conflict claim prevents this operation.'); END";
 pub(super) const PUBLICATION_INSERT_FENCE: &str = "CREATE TRIGGER jit_conflict_publication_insert_fence BEFORE INSERT ON execution_publication_operations WHEN EXISTS(SELECT 1 FROM physical_attempt_jit_conflict_recovery_claims claim WHERE claim.reservation_id=NEW.reservation_id AND claim.connection_id=NEW.connection_id AND claim.scale_set_id=NEW.scale_set_id) BEGIN SELECT RAISE(ABORT,'A JIT conflict claim prevents this operation.'); END";
 
-pub(super) const IMMUTABLE_GUARDS: [&str; 6] = [
+pub(super) const IMMUTABLE_GUARDS: &[&str] = &[
     CLAIM_NO_UPDATE,
     CLAIM_NO_DELETE,
     PROGRESS_NO_UPDATE,
@@ -246,7 +246,7 @@ pub(super) const IMMUTABLE_GUARDS: [&str; 6] = [
     SETTLEMENT_NO_DELETE,
 ];
 
-pub(super) const INSERT_GUARDS: [&str; 7] = [
+pub(super) const INSERT_GUARDS: &[&str] = &[
     CLAIM_INSERT_GUARD,
     PROGRESS_INSERT_GUARD,
     SETTLEMENT_INSERT_GUARD,
@@ -256,7 +256,7 @@ pub(super) const INSERT_GUARDS: [&str; 7] = [
     METADATA_JIT_REMOTE_NO_EVENTS_PROOF_GUARD,
 ];
 
-pub(super) const EFFECT_FENCES: [&str; 8] = [
+pub(super) const EFFECT_FENCES: &[&str] = &[
     JIT_INSERT_FENCE,
     JIT_START_FENCE,
     PROVISIONING_JIT_FENCE,

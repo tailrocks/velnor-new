@@ -17,8 +17,9 @@ pub use fetch_reports::FetchReportsArgs;
 mod write_request;
 pub use crate::cli_args::{
     BaseFile, BenchCommand, BudgetArgs, CheckConfigurationsArgs, CollectArgs, CompareArgs,
-    CratesMirrorArgs, ImageCommand, PlanArgs, PlanMode, PrepareArgs, QualificationCommand,
-    QualificationCompareArgs, ToolsLocalArgs, VerifyCandidateArgs,
+    CratesMirrorArgs, ImageCommand, MisePinArgs, PlanArgs, PlanMode, PrepareArgs,
+    QualificationCommand, QualificationCompareArgs, ToolsLocalArgs, ToolsVerifyArgs,
+    VerifyCandidateArgs,
 };
 pub use crate::cli_cache::{CacheCommand, DecideArgs, TrimArgs};
 pub use gate::GateArgs;
@@ -108,6 +109,10 @@ pub enum Command {
     )]
     Fetch(FetchArgs),
     #[command(
+        about = "Fetch private GitHub release assets for test fixtures. For each --asset owner/name,tag,asset,sha256,dest: with the token in VELNOR_PRIVATE_TOKEN, look the release up by tag on the API in VELNOR_API_URL, download the asset by id (the token is not sent to the redirect target), check its SHA-256 and only then move it to <dest>/<asset> under the current directory; a digest mismatch, a destination that is absolute, holds .. or passes a symbolic link, or a missing asset fails the command and leaves no file. The token is revoked with DELETE /installation/token afterwards, also when a download fails. Without a token it re-checks the digest of the file that a cache restored and makes no request, and fails when the file is missing or differs, naming the fork case"
+    )]
+    FetchAssets(FetchAssetsArgs),
+    #[command(
         about = "Run before the private-source token step on a merge_group event: read the queue entry from VELNOR_MERGE_GROUP_HEAD_REF (gh-readonly-queue/<base>/pr-<number>-<sha>), look the pull request up with GET /repos/$GITHUB_REPOSITORY/pulls/<number> on the API in VELNOR_API_URL with the job token in GITHUB_TOKEN, and write allowed=true to $GITHUB_OUTPUT only when its head repository is $GITHUB_REPOSITORY, its author's login does not end in [bot] and its head sha is the queue entry's sha, and when the live queue ref of that entry still points at $GITHUB_SHA, the commit this run checked out. Every other queue entry of the same base whose commit is in that checkout (one GET /repos/$GITHUB_REPOSITORY/compare/<base>...$GITHUB_SHA, at most three pages of 100 commits) must pass the same pull request checks; a queue of 100 entries or more fails. Writes allowed=false and exits 0 for a malformed reference, a failed lookup, a fork or bot entry, a sha mismatch, a queue that was rebuilt, a bound that is exceeded or anything else, so that no token is created"
     )]
     PrivateTokenAllowed,
@@ -120,9 +125,17 @@ pub enum Command {
     )]
     MbxSeed,
     #[command(
-        about = "Keep the mise and rustup tool directories on the node's own disk. restore copies ~/.local/share/mise and ~/.rustup from tools/<key> of the store (VELNOR_MBX_SHARED_DIR on a trusted event, VELNOR_MBX_SEED_DIR otherwise) and writes hit=true or hit=false to $GITHUB_OUTPUT, so the network cache action can be skipped on a hit; save, on a trusted event only, copies them into tools/<key> with an atomic rename, keeping the two newest keys. A missing store, a failed check or a failed copy is a miss, never an error"
+        about = "Keep the mise and rustup tool directories on the node's own disk. restore copies ~/.local/share/mise and ~/.rustup from tools/<key> of the store (VELNOR_MBX_SHARED_DIR on a trusted event, VELNOR_MBX_SEED_DIR otherwise) and writes hit=true or hit=false to $GITHUB_OUTPUT, so the network cache action can be skipped on a hit; save, on a trusted event only, copies them into tools/<key> with an atomic rename, keeping the two newest keys. A missing store, a failed check or a failed copy is a miss, never an error. restore first deletes ~/.local/share/mise and ~/.rustup so that the home holds exactly the stored tree, and clear (no --key) deletes the same two directories before any restore; both refuse, with a warning and nothing deleted, a symlinked tool directory or parent, or a HOME that is a symlink, not absolute or the filesystem root"
     )]
     ToolsLocal(ToolsLocalArgs),
+    #[command(
+        about = "Print the exact release that the workspace's mise.toml (and .mise.toml) pins for <tool>, with a leading v removed, and fail unless it is one X.Y.Z release that mise.lock, when present, resolves to the same version. A range, latest, a loose or leading-zero version, a missing pin or two different pins fail. Appends version=<release> to $GITHUB_OUTPUT when that variable is set"
+    )]
+    MisePin(MisePinArgs),
+    #[command(
+        about = "Verify restored tools against the anchor digest a trusted run recorded. read, in the one job that restores the anchor cache entry, takes $RUNNER_TEMP/velnor-tools-anchor/digest when $VELNOR_ANCHOR_MATCHED names the restored entry and writes anchor=<digest> (empty when there is none) to $GITHUB_OUTPUT; check, after the restores, keeps ~/.local/share/mise and ~/.rustup only when their digest equals $VELNOR_TOOLS_ANCHOR and otherwise deletes both, writing verified=true or verified=false; record, after the install, refuses an event that is not a push, schedule or workflow_dispatch on the default branch, writes matches= and recorded= and the digest= of the tools so the saves run only for tools equal to the anchor, and writes a new anchor file when $VELNOR_TOOLS_VERIFIED is not true and the digest differs from $VELNOR_TOOLS_ANCHOR"
+    )]
+    ToolsVerify(ToolsVerifyArgs),
     #[command(
         about = "Run after the tools are installed, in the directory of a Cargo root: exit 1 unless .velnor/rust-metadata.json is exactly what velnor-gen generate writes for that root, which reads cargo metadata --no-deps --offline"
     )]
@@ -140,6 +153,11 @@ pub enum Command {
         about = "Check the [[test_groups]] of .velnor/rust-ci.toml against the tests cargo-nextest lists"
     )]
     TestGroups(TestGroupsCommand),
+    #[command(
+        subcommand,
+        about = "Guard the files a workflow artifact upload would publish"
+    )]
+    Artifacts(ArtifactsCommand),
     #[command(
         about = "Run after every cache and after velnor-ci inputs restore: every action that must follow the restores. Gives each tracked file that shares its modification time with another tracked file a distinct time, one microsecond below the time it had and ordered by path, so that cargo, which picks the newest file of a package by time alone, names the same file after every restore. When VELNOR_BASE_MAX_AGE_DAYS is a positive number, first removes every restored target directory whose target/.velnor/born date is more than that many days old, so the run builds cold. Writes the step output expired=true when it removed one (an unreadable born date counts as expired) and expired=false otherwise, so a later step can plan a full run"
     )]
@@ -203,6 +221,29 @@ pub struct FetchArgs {
         help = "An extra absolute directory whose programs and CARGO_HOME count as installed by the runner"
     )]
     pub trusted_dir: Vec<PathBuf>,
+    #[arg(
+        long,
+        hide = true,
+        help = "An absolute home directory used in place of the runner account's own"
+    )]
+    pub home: Option<PathBuf>,
+    #[arg(
+        long,
+        hide = true,
+        requires = "trusted_dir",
+        help = "Never look for the sealed runner toolchain under /opt/rust; find cargo only through --trusted-dir and the runner's own tool directories, as on a runner without one"
+    )]
+    pub no_fixed_toolchain: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct FetchAssetsArgs {
+    #[arg(
+        long,
+        required = true,
+        help = "owner/name,tag,asset,sha256,dest of one release asset; repeat for each asset"
+    )]
+    pub asset: Vec<String>,
 }
 
 #[derive(Debug, Args)]
@@ -212,7 +253,11 @@ pub struct LaneGuardArgs {
         value_parser = clap::builder::NonEmptyStringValueParser::new(),
         help = "Comma-separated features the lane step passes to cargo"
     )]
-    pub features: String,
+    pub features: Option<String>,
+    #[arg(long, help = "The lane step passes --all-features to cargo")]
+    pub all_features: bool,
+    #[arg(long, help = "The lane step passes --no-default-features to cargo")]
+    pub no_default_features: bool,
     #[arg(
         long,
         value_parser = clap::builder::NonEmptyStringValueParser::new(),
@@ -225,6 +270,35 @@ pub struct LaneGuardArgs {
         help = "Nextest binary id the lane never lists; repeatable"
     )]
     pub except_binary: Vec<String>,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum ArtifactsCommand {
+    #[command(
+        about = "Run in the workspace (GITHUB_WORKSPACE, else the current directory) right before an actions/upload-artifact step, which follows symbolic links and so can publish files from outside the workspace, and which reads the workspace later than this step runs. Walks each --path without following links, copies only the regular files that the path selects into a fresh --into directory (any earlier content is removed) with their paths relative to the workspace, and the upload then publishes only that directory. Symbolic links, devices, sockets and pipes are skipped, as is every file whose path has a part that looks like a secret (a .env file, a key, a token, a password, credentials) and, without a warning, every hidden file, printing one ::warning:: per skipped entry, so nothing that changes in the workspace after this step can change what is uploaded; a path that does not exist selects nothing, and an --into directory that cannot be created or a copy that cannot be written fails the step with exit 1"
+    )]
+    Stage(ArtifactsStageArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct ArtifactsStageArgs {
+    #[arg(
+        long,
+        required = true,
+        allow_hyphen_values = true,
+        value_name = "DIR",
+        help = "The staging directory, under RUNNER_TEMP; it is emptied first and the upload step names exactly this directory"
+    )]
+    pub into: std::path::PathBuf,
+    #[arg(
+        long = "path",
+        required = true,
+        allow_hyphen_values = true,
+        value_name = "PATH",
+        value_parser = clap::builder::NonEmptyStringValueParser::new(),
+        help = "A repository path or glob that the upload names, relative to the workspace; repeat for each path"
+    )]
+    pub paths: Vec<String>,
 }
 
 #[derive(Debug, Subcommand)]
@@ -302,5 +376,5 @@ pub struct CheckTagArgs {
 
 pub use crate::cli_release::{
     AlignArgs, CheckConfigArgs, FamilyTagArgs, PreflightArgs, PublishArgs, RecordArgs,
-    ReleaseCommand, ReleaseGateArgs,
+    ReleaseCommand, ReleaseGateArgs, VerifyListedArgs,
 };

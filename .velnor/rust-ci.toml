@@ -4,7 +4,7 @@
 runner = "ubuntu-26.04-scale-set"
 required_check = "Required"
 mbx_shared_store = true
-docs = "post_merge"
+docs = "always"
 check_alone = "post_merge"
 pr_ci = "label"
 
@@ -81,4 +81,20 @@ id = "parity-verify-candidate"
 name = "Parity verifier unit tests"
 task = "lint-parity-verify-candidate"
 tools = ["python"]
+timeout_minutes = 5
+
+[[lint]]
+kind = "mise-task"
+id = "mise-binary-digests"
+name = "mise binary digest signature tests"
+task = "test-mise-binary-digests"
+tools = ["minisign", "python"]
+timeout_minutes = 5
+
+[[lint]]
+kind = "mise-task"
+id = "validate-hk"
+name = "hk config"
+task = "validate-hk"
+tools = ["hk"]
 timeout_minutes = 5

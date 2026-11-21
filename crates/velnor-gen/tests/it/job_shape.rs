@@ -298,12 +298,14 @@ const LAB: &str = r#"{"lab/Cargo.toml": {"lint_build_seconds": 10, "test_build_s
 const GONE: &str =
     r#"{"gone/Cargo.toml": {"lint_build_seconds": 1, "test_build_seconds": 1, "test_seconds": 1}}"#;
 
-/// The notes that are not the `shape = "auto"` note of an untimed root.
+/// The notes that are not the `shape = "auto"` note of an untimed root or the note about the
+/// fixture's helper restoring the tools unverified.
 fn without_auto_note(notes: &[String]) -> Vec<&str> {
     notes
         .iter()
         .map(String::as_str)
         .filter(|note| !note.starts_with("shape = \"auto\""))
+        .filter(|note| !note.starts_with("the pinned velnor-ci restores the tools cache"))
         .collect()
 }
 
@@ -366,7 +368,7 @@ fn a_timings_entry_for_a_root_that_is_gone_is_ignored_and_the_others_still_count
     assert_eq!(
         without_auto_note(&notes),
         [
-            ".velnor/rust-ci-timings.json: has times for gone/Cargo.toml, which is not a Cargo root of this repository; run `velnor-ci timings` again; entry ignored"
+            ".velnor/rust-ci-timings.json: has times for gone/Cargo.toml, which is not a Cargo root of this repository; run `velnor-ci timings --repo owner/name` again; entry ignored"
         ]
     );
     assert_eq!(

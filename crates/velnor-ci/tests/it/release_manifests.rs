@@ -6,6 +6,8 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use velnor_test_support::{is_mirror_wrapper, real_cargo};
+
 const PLZ: &str = "[workspace]\ngit_tag_name = \"{{ package }}-v{{ version }}\"\ngit_release_draft = true\nrelease_always = false\nsemver_check = false\npublish_no_verify = true\n";
 
 struct Checkout(PathBuf);
@@ -86,28 +88,6 @@ impl Drop for Checkout {
     }
 }
 
-/// Whether `cargo` is the crates-mirror wrapper (or a per-toolchain copy of it): the
-/// mirror's `config.toml` sits beside it or one directory up.
-fn is_mirror_wrapper(cargo: &Path) -> bool {
-    let marker = "# velnor-ci crates-mirror owns this file";
-    let beside = cargo
-        .parent()
-        .into_iter()
-        .flat_map(|dir| [Some(dir), dir.parent()]);
-    beside.flatten().any(|dir| {
-        fs::read_to_string(dir.join("config.toml")).is_ok_and(|text| text.starts_with(marker))
-    })
-}
-
-/// A cargo that is not the crates-mirror wrapper, however the job's environment names it.
-fn real_cargo() -> PathBuf {
-    let path = std::env::var_os("PATH").unwrap_or_default();
-    std::iter::once(PathBuf::from(env!("CARGO")))
-        .chain(std::env::split_paths(&path).map(|dir| dir.join("cargo")))
-        .find(|cargo| cargo.is_file() && !is_mirror_wrapper(cargo))
-        .unwrap_or_else(|| unreachable!("no cargo outside the crates mirror wrapper"))
-}
-
 /// The search path the stub hands to the real cargo: the job's own, minus every folder whose
 /// `cargo` is the crates-mirror wrapper, so no lookup by name can reach the wrapper.
 fn exec_path() -> std::ffi::OsString {
@@ -158,9 +138,9 @@ fn an_excluded_example_and_a_nested_workspace_are_not_packages_of_the_root() {
         std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default()),
     ))
     .unwrap_or_else(|e| unreachable!("{e}"));
-    // Neither `CARGO` from the environment nor `env!("CARGO")` as is: a CI job that
-    // configured the crates mirror has `CARGO` set to the mirror wrapper while this test
-    // is compiled and run, so both name the wrapper, which would forward back into this
+    // Neither the `CARGO` variable nor the cargo path compiled into this test, as is: a CI
+    // job that configured the crates mirror has `CARGO` set to the mirror wrapper while this
+    // test is compiled and run, so both name the wrapper, which would forward back into this
     // stub forever (each round prepends to PATH until exec fails with E2BIG).
     let cargo = real_cargo();
     let stub = checkout.0.join("bin/cargo");

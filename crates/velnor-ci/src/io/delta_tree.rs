@@ -239,7 +239,10 @@ mod tests {
     use super::*;
 
     fn fixture(name: &str) -> PathBuf {
-        let exe = std::env::current_exe().expect("fixture step");
+        // Canonical so that a symlinked target folder (mbx) is not part of the fixture path.
+        let exe = std::env::current_exe()
+            .and_then(|exe| exe.canonicalize())
+            .expect("fixture step");
         let root = exe
             .parent()
             .expect("fixture step")

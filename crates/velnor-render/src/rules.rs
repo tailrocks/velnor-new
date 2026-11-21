@@ -14,14 +14,14 @@ mod model;
 pub use check::check_rules;
 pub use model::{
     RenderedConcurrency, RenderedContainer, RenderedJob, RenderedMatrix, RenderedMatrixSource,
-    RenderedStep, RenderedWorkflow, Value,
+    RenderedStep, RenderedTrusted, RenderedWorkflow, Value,
 };
 
 pub const SETUP_VELNOR_ACTION: &str = "tailrocks/velnor-new/actions/setup-velnor";
 
 pub const APP_TOKEN_ACTION: &str = "actions/create-github-app-token";
 
-pub const ALLOWED_ACTIONS: [&str; 16] = [
+pub const ALLOWED_ACTIONS: &[&str] = &[
     "actions/checkout",
     APP_TOKEN_ACTION,
     "actions/cache/restore",
@@ -48,8 +48,8 @@ pub const MAX_WORKFLOW_BYTES: usize = 500_000;
 pub const MAX_CACHE_KEY_CHARACTERS: usize = 512;
 pub const MAX_ENV_CHARACTERS: usize = 100_000;
 
-const FORBIDDEN_WORDS: [&str; 5] = ["if", "for", "while", "case", "coproc"];
-const FORBIDDEN_SYMBOLS: [&str; 9] = ["|", "&", "&&", "||", ";", "$(", "`", "<(", ">("];
+const FORBIDDEN_WORDS: &[&str] = &["if", "for", "while", "case", "coproc"];
+const FORBIDDEN_SYMBOLS: &[&str] = &["|", "&", "&&", "||", ";", "$(", "`", "<(", ">("];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Rule {
@@ -75,6 +75,7 @@ pub enum Rule {
     CombinedCacheNotLastStep,
     TokenJobRunnerNotX64(String),
     WorkflowTooLarge(usize),
+    SourceRootsEnvCollision(String),
     CacheKeyTooLong(usize),
     OutputNameCollision(String),
     DistFileCollision(String),
@@ -133,6 +134,7 @@ impl fmt::Display for RuleViolation {
             ),
             Rule::CombinedCacheNotLastStep => f.write_str(crate::combined_cache::MESSAGE),
             Rule::WorkflowTooLarge(_)
+            | Rule::SourceRootsEnvCollision(_)
             | Rule::OutputNameCollision(_)
             | Rule::DistFileCollision(_) => Ok(()),
             Rule::CacheKeyTooLong(length) => write!(

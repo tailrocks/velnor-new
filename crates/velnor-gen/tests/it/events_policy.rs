@@ -3,7 +3,7 @@
 
 use std::collections::BTreeSet;
 
-use velnor_model::{PolicyTools, RepoPath};
+use velnor_model::{DenyChecks, PolicyTools, RepoPath};
 use velnor_rust::policy_runs;
 
 use super::events::DENY_MISE;
@@ -45,10 +45,14 @@ fn a_license_text_change_runs_the_policy_lane_only_with_cargo_deny() -> TestResu
     let deny = PolicyTools {
         deny: true,
         machete: false,
+        deny_off: false,
+        checks: DenyChecks::ALL,
     };
     let machete = PolicyTools {
         deny: false,
         machete: true,
+        deny_off: false,
+        checks: DenyChecks::ALL,
     };
     for path in [
         "LICENSE",
@@ -105,7 +109,7 @@ fn the_policy_lane_runs_machete_once_from_the_repository_root() -> TestResult {
     let mise = RepoPath::new("mise.toml")?;
     view.files.insert(
         mise,
-        b"[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\ncargo-machete = \"0.9.1\"\n"
+        b"[wrappers.cargo]\ncommand = \"mbx\"\nenv = { MBX_CARGO_SHIM_MODE = \"1\" }\n\n[tools]\nrust = { version = \"1.99.1\", mr_boxington = true }\nmr-boxington = \"v1.30.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\ncargo-machete = \"0.9.1\"\n"
             .to_vec(),
     );
     let text = workflow(&view)?;
@@ -169,6 +173,8 @@ fn changes_to_cargo_deny_configs_select_policy() -> TestResult {
     let tools = PolicyTools {
         deny: false,
         machete: false,
+        deny_off: false,
+        checks: DenyChecks::ALL,
     };
     for name in [
         "deny.toml",

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{CacheKey, CacheRoot, Host, JobId, RepoPath, RepoView};
+use velnor_model::{BaseScope, CacheKey, CacheRoot, Host, JobId, RepoPath, RepoView, ToolsAnchor};
 use velnor_render::render_key;
 
 use crate::facts::TestResult;
@@ -57,8 +57,7 @@ fn a_rendered_key_over_512_characters_fails_generation() -> TestResult {
     workflow(&view(&[&long(300)], None)?)?;
     let error = workflow(&view(&[&long(360)], None)?)
         .err()
-        .map(|error| error.to_string())
-        .unwrap_or_default();
+        .map_or_default(|error| error.to_string());
     assert!(error.contains("512"), "{error}");
     assert!(error.contains("rust"), "{error}");
     Ok(())
@@ -68,15 +67,20 @@ fn a_rendered_key_over_512_characters_fails_generation() -> TestResult {
 fn no_key_family_carries_the_run_attempt() -> TestResult {
     let root = CacheRoot::new(&RepoPath::new("Cargo.toml")?, RepoPath::new("target")?);
     for key in [
-        CacheKey::Tools { host: Host },
+        CacheKey::Tools {
+            host: Host,
+            anchor: ToolsAnchor::Unanchored,
+        },
         CacheKey::Sources {
             host: Host,
             lane: root.clone(),
+            scope: BaseScope::Shared,
         },
         CacheKey::Target {
             job: JobId::new("rust")?,
             root: root.clone(),
             host: Host,
+            scope: BaseScope::Shared,
         },
         CacheKey::Delta {
             job: JobId::new("rust")?,
@@ -168,8 +172,7 @@ fn a_target_dir_outside_the_repository_fails_generation() -> TestResult {
         )?;
         let error = workflow(&one)
             .err()
-            .map(|error| error.to_string())
-            .unwrap_or_default();
+            .map_or_default(|error| error.to_string());
         assert!(
             error.contains("lab/.cargo/config.toml") && error.contains("target-dir"),
             "{value}: {error}"
@@ -183,6 +186,7 @@ fn target_key(manifest: &str) -> Result<String, Box<dyn std::error::Error>> {
         job: JobId::new("rust")?,
         root: CacheRoot::new(&RepoPath::new(manifest)?, RepoPath::new("target")?),
         host: Host,
+        scope: BaseScope::Shared,
     })
     .key)
 }

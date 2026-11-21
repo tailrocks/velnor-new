@@ -1,5 +1,3 @@
-"""Parse the pinned MBX object-cache summary without dropping marked rows."""
-
 from __future__ import annotations
 
 import re
@@ -7,15 +5,17 @@ from decimal import Decimal, InvalidOperation
 from typing import Any
 
 
-MBX_MARKER = re.compile(r"mbx\[cache\]:\s*object cache:", re.IGNORECASE)
+MBX_MARKER = re.compile(r"mbx\[cache\]:", re.IGNORECASE)
+SUMMARY_SHAPE = re.compile(r";.*\bdownloaded\b", re.IGNORECASE)
+LABEL = re.compile(r"mbx\[cache\]:\s*object cache:", re.IGNORECASE)
 SUMMARY = re.compile(
-    r"mbx\[cache\]:\s*object cache:\s*(?P<lookups>[^;]*);\s*"
+    r"mbx\[cache\]:\s*(?:object cache:\s*)?(?P<lookups>[^;]*);\s*"
     r"(?P<downloaded>\d+(?:\.\d+)?)\s*(?P<download_unit>[A-Za-z]+)\s+downloaded,\s*"
     r"(?P<uploaded>\d+(?:\.\d+)?)\s*(?P<upload_unit>[A-Za-z]+)\s+uploaded,\s*"
     r"(?P<local>\d+(?:\.\d+)?)\s*(?P<local_unit>[A-Za-z]+)\s+stored locally\s*[.!]?\s*",
     re.IGNORECASE,
 )
-LOOKUP = re.compile(r"(?P<count>\d+)\s+(?P<label>hits?|miss(?:es)?|not\s+looked\s+up|bypassed)", re.IGNORECASE)
+LOOKUP = re.compile(r"(?P<count>\d+)\s+(?P<label>hits?|miss(?:es)?|not\s+looked\s+up|bypassed|incremental)", re.IGNORECASE)
 UNIT_BYTES = {
     "b": 1,
     "kb": 1_000,
@@ -38,7 +38,7 @@ def _lookup_counts(value: str) -> dict[str, int]:
     counts: dict[str, int] = {}
     labels = {
         "hit": "hits", "hits": "hits", "miss": "misses", "misses": "misses",
-        "not looked up": "not_looked_up", "bypassed": "bypassed",
+        "not looked up": "not_looked_up", "bypassed": "bypassed", "incremental": "incremental",
     }
     for item in value.split(","):
         match = LOOKUP.fullmatch(item.strip())
@@ -80,15 +80,24 @@ def _local_store_mib(value: str, unit: str) -> float:
 
 
 def parse_mbx_summary(line: str) -> dict[str, Any] | None:
-    """Return one summary; malformed lines carrying its marker fail visibly."""
     markers = list(MBX_MARKER.finditer(line))
     if not markers:
         return None
     if len(markers) != 1:
-        _fail("line contains multiple MBX object-cache markers")
-    match = SUMMARY.fullmatch(line[markers[0].start():].strip())
+        _fail(f"line contains multiple MBX object-cache markers: {line!r}")
+    text = line[markers[0].start():].strip()
+    if LABEL.match(text) is None and SUMMARY_SHAPE.search(text) is None:
+        return None
+    match = SUMMARY.fullmatch(text)
     if match is None:
         _fail(f"malformed MBX object-cache summary: {line!r}")
+    try:
+        return _summary_row(match)
+    except ValueError as error:
+        raise ValueError(f"{error} in MBX object-cache summary: {line!r}") from error
+
+
+def _summary_row(match: re.Match[str]) -> dict[str, Any]:
     downloaded = _byte_count(match.group("downloaded"), match.group("download_unit"), "download")
     uploaded = _byte_count(match.group("uploaded"), match.group("upload_unit"), "upload")
     return {

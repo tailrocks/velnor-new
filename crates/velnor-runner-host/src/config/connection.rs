@@ -11,7 +11,7 @@ use super::{KeychainReference, SourcePolicy};
 use crate::error::HostError;
 
 const VELNOR_LABEL: &str = "velnor";
-const HOSTED_LABELS: [&str; 6] = [
+const HOSTED_LABELS: &[&str] = &[
     "ubuntu-22.04",
     "ubuntu-24.04",
     "ubuntu-26.04",

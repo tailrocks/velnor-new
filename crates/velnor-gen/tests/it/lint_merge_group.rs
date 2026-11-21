@@ -23,10 +23,7 @@ fn repo(roots: &[&str], knob: bool) -> Result<RepoView, Box<dyn std::error::Erro
     let mut repo = view(roots, Some(config.as_bytes()))?;
     repo.files
         .insert(RepoPath::new("mise.toml")?, MISE.as_bytes().to_vec());
-    let lock = RepoPath::new(".velnor/rust-ci.lock")?;
-    let old = String::from_utf8(repo.files[&lock].clone())?;
-    repo.files
-        .insert(lock, old.replace("0.1.81", "0.1.103").into_bytes());
+    crate::pipeline::pin_helper(&mut repo, "0.1.103")?;
     Ok(repo)
 }
 

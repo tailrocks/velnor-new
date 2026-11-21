@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use velnor_gen::io::read_files;
 use velnor_model::{LOCK_OUTPUT_PREFIX, MisePlatform, RepoPath, RootSlug, ToolPins, Toolchain};
 use velnor_rust::{
-    BUILD_DRIVER, CONFIG_PATH, CompatInputs, METADATA_PATH, TOOLCHAIN_PLAIN, TOOLCHAIN_TOML,
+    CONFIG_PATH, CompatInputs, METADATA_PATH, TOOLCHAIN_PLAIN, TOOLCHAIN_TOML, build_driver,
     build_profile, ci_debuginfo, compat, lock_key, mise_files, recorded_members, tool_pins,
     toolchain,
 };
@@ -60,7 +60,7 @@ pub(super) fn prepare(args: &PrepareArgs) -> Result<String, CiError> {
         profile: profile.clone(),
         rustflags: env_text("RUSTFLAGS").unwrap_or_default(),
         workspace: root.display().to_string(),
-        driver: BUILD_DRIVER.to_owned(),
+        driver: build_driver(cargo_on_path().as_deref()).to_owned(),
         repo_profile,
         image,
     };
@@ -249,6 +249,14 @@ fn host_triple(root: &std::path::Path) -> Result<String, CiError> {
 pub(super) fn check_metadata() -> Result<String, CiError> {
     velnor_gen::io::check_metadata(&current_dir()?).map_err(|e| CiError::new(e.to_string()))?;
     Ok(String::new())
+}
+
+/// The `cargo` that `PATH` resolves to, as the job's cargo calls will run it.
+fn cargo_on_path() -> Option<PathBuf> {
+    let path = std::env::var_os("PATH")?;
+    std::env::split_paths(&path)
+        .map(|dir| dir.join("cargo"))
+        .find(|candidate| candidate.is_file())
 }
 
 fn env_text(name: &str) -> Option<String> {

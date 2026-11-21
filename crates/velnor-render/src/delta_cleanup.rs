@@ -7,12 +7,16 @@ use crate::rules::{RenderedJob, RenderedStep, Value};
 use crate::steps::install_helper;
 use crate::workflow::{ShellcheckMarks, yaml_job};
 use crate::yaml::{Yaml, emit, entry, text};
-use velnor_model::{CACHE_TRIM_WORKFLOW_PATH, HelperRelease, RepoPath};
+use velnor_model::{CACHE_TRIM_WORKFLOW_PATH, HelperRelease, RepoPath, RunnerLabel};
 
 pub const DELTA_CLEANUP_PATH: RepoPath = CACHE_TRIM_WORKFLOW_PATH;
 
 #[must_use]
-pub fn delta_cleanup(helper: &HelperRelease, workflow: &str) -> Option<String> {
+pub fn delta_cleanup(
+    helper: &HelperRelease,
+    workflow: &str,
+    runner: &RunnerLabel,
+) -> Option<String> {
     // helper-gate: first in tools-v0.1.102 via d56256c182
     if !helper.version().at_least((0, 1, 102)) {
         return None;
@@ -20,11 +24,16 @@ pub fn delta_cleanup(helper: &HelperRelease, workflow: &str) -> Option<String> {
     let job = RenderedJob {
         id: "rust-trim".to_owned(),
         condition: Some("${{ github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.path == '.github/workflows/rust-ci.yml' && github.event.workflow_run.head_repository.id == github.event.repository.id }}".to_owned()),
-        runs_on: "ubuntu-latest".to_owned(),
+        // The job only runs for same-repository pull requests, so the repository's own
+        // runner is safe here and a private repository pays for no hosted minutes.
+        runs_on: runner.as_str().to_owned(),
         timeout_minutes: 5,
+        // `trim-deltas` reads GET /pulls/{n} and /commits/{sha}/pulls, which a private
+        // repository answers with 403 unless the token holds `pull-requests: read`.
         permissions: vec![
             ("actions".to_owned(), "write".to_owned()),
             ("contents".to_owned(), "read".to_owned()),
+            ("pull-requests".to_owned(), "read".to_owned()),
         ],
         steps: vec![
             install_helper(helper),

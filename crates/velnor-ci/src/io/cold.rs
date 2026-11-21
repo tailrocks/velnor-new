@@ -9,7 +9,19 @@ use super::input_target::{check_removal_target, check_target};
 use super::inputs::tracked_paths;
 use super::restored_targets::{self, Pending};
 use crate::error::CiError;
-use velnor_rust::{METADATA_PATH, detect};
+use velnor_model::RepoPath;
+use velnor_rust::{METADATA_PATH, default_folder, detect};
+
+const ROOT_MANIFEST: RepoPath = RepoPath::from_static("Cargo.toml");
+
+fn manifest_path(path: &Path) -> Result<RepoPath, CiError> {
+    path.to_str()
+        .ok_or_else(|| CiError::new(format!("{} is not UTF-8", path.display())))
+        .and_then(|text| {
+            RepoPath::new(text)
+                .map_err(|e| CiError::new(format!("cannot name {}: {e}", path.display())))
+        })
+}
 
 pub fn cold_on_failure(
     targets: &[PathBuf],
@@ -70,12 +82,12 @@ pub(super) fn targets_with_receipts(root: &Path) -> Result<(Vec<PathBuf>, Pendin
         }
         targets
     } else {
-        let mut targets = vec![root.join("target")];
+        let mut targets = vec![root.join(default_folder(&ROOT_MANIFEST).as_str())];
         for path in listed.paths {
-            if path.file_name().is_some_and(|name| name == "Cargo.toml")
-                && let Some(dir) = path.parent()
-            {
-                let target = listed.top.join(dir).join("target");
+            if path.file_name().is_some_and(|name| name == "Cargo.toml") {
+                let target = listed
+                    .top
+                    .join(default_folder(&manifest_path(&path)?).as_str());
                 if !targets.contains(&target) {
                     targets.push(target);
                 }

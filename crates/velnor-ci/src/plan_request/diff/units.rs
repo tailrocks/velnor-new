@@ -6,9 +6,9 @@ use std::path::Path;
 
 use toml::{Table, Value};
 
-use super::changes::git;
+use super::changes::blobs;
 
-const SECTIONS: [&str; 3] = ["dependencies", "build-dependencies", "dev-dependencies"];
+const SECTIONS: &[&str] = &["dependencies", "build-dependencies", "dev-dependencies"];
 
 #[derive(Debug, Clone)]
 pub(super) struct Unit {
@@ -119,15 +119,17 @@ pub(super) fn base_edges(
     added: &BTreeSet<String>,
 ) -> Result<Vec<(String, String)>, String> {
     let dirs: BTreeSet<&str> = units.iter().map(|unit| unit.dir.as_str()).collect();
+    let pending: Vec<&Unit> = units
+        .iter()
+        .filter(|unit| !added.contains(&format!("{}/Cargo.toml", unit.dir)))
+        .collect();
+    let specs: Vec<String> = pending
+        .iter()
+        .map(|unit| format!("{base}:{}/Cargo.toml", unit.dir))
+        .collect();
     let mut edges = Vec::new();
-    for unit in units {
-        let manifest = format!("{}/Cargo.toml", unit.dir);
-        if added.contains(&manifest) {
-            continue;
-        }
-        let object = format!("{base}:{manifest}");
-        let text =
-            String::from_utf8(git(root, &["show", &object])?).map_err(|error| error.to_string())?;
+    for (unit, blob) in pending.into_iter().zip(blobs(root, &specs)?) {
+        let text = String::from_utf8(blob).map_err(|error| error.to_string())?;
         let table: Table = toml::from_str(&text).map_err(|error| error.to_string())?;
         for (_, path) in dependency_specs(&table, &unit.dir) {
             if let Some(path) = path.filter(|path| dirs.contains(path.as_str())) {
@@ -221,7 +223,7 @@ fn dependency_specs(table: &Table, dir: &str) -> Vec<(Option<String>, Option<Str
             .filter_map(Value::as_table),
     );
     for table in tables {
-        for section in SECTIONS {
+        for section in SECTIONS.iter().copied() {
             for (name, spec) in table
                 .get(section)
                 .and_then(Value::as_table)

@@ -11,7 +11,7 @@ use velnor_model::{RepoPath, RepoView};
 const MIB: u64 = 1024 * 1024;
 const OFF: &str = "full_run = \"off\"\n";
 const ON: &str = "full_run = \"off\"\nsparse_checkout = true\n";
-const ROOTS: [&str; 2] = ["a/Cargo.toml", "b/Cargo.toml"];
+const ROOTS: &[&str] = &["a/Cargo.toml", "b/Cargo.toml"];
 
 fn sizes(entries: &[(&str, u64)]) -> Result<BTreeMap<RepoPath, u64>, Box<dyn std::error::Error>> {
     entries
@@ -21,7 +21,7 @@ fn sizes(entries: &[(&str, u64)]) -> Result<BTreeMap<RepoPath, u64>, Box<dyn std
 }
 
 fn with(config: &str) -> Result<RepoView, Box<dyn std::error::Error>> {
-    view(&ROOTS, Some(config.as_bytes()))
+    view(ROOTS, Some(config.as_bytes()))
 }
 
 #[test]

@@ -9,7 +9,9 @@ use serde_json::Value;
 use crate::io::Repo;
 
 fn helper(repo: &Repo, args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+    let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
+    velnor_test_support::keep_mise_cargo_home(&mut command);
+    command
         .args(args)
         .env("RUNNER_TEMP", repo.root().join("temp"))
         .env("CARGO_TERM_COLOR", "never")
@@ -17,13 +19,11 @@ fn helper(repo: &Repo, args: &[&str]) -> Output {
         .env("CARGO_HOME", repo.root().join("cargo-home"))
         .env_remove("CARGO_TARGET_DIR")
         .env_remove("RUSTC_WRAPPER")
-        .env(
-            "RUSTC",
-            std::path::Path::new(env!("CARGO")).with_file_name("rustc"),
-        )
-        .current_dir(repo.root())
-        .output()
-        .unwrap_or_else(|e| unreachable!("{e}"))
+        .current_dir(repo.root());
+    if args.contains(&"decide") {
+        command.env("HOME", repo.root());
+    }
+    command.output().unwrap_or_else(|e| unreachable!("{e}"))
 }
 
 fn success(output: &Output) {
@@ -37,12 +37,13 @@ fn build(repo: &Repo) {
     for file in ["velnor-run.log", "velnor-invocations.jsonl"] {
         repo.write_unstaged(&format!("temp/{file}"), "");
     }
+    let cargo = velnor_test_support::real_cargo_str();
     success(&helper(
         repo,
         &[
             "run",
             "--",
-            env!("CARGO"),
+            &cargo,
             "build",
             "--offline",
             "--config",

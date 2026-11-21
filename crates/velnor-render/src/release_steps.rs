@@ -10,8 +10,8 @@ use crate::steps::{CHECKOUT, MISE, MISE_VERSION};
 pub(crate) const RECORD_RECOVERY_HELPER: (u64, u64, u64) = (0, 1, 93);
 pub(crate) const RECORD_GROUPS_HELPER: (u64, u64, u64) = (0, 1, 97);
 pub(crate) const COMMIT_OUTPUT_SUFFIX: &str = "_commit";
-pub(crate) const APP_TOKEN_COMMIT: &str = "f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc";
-pub(crate) const APP_TOKEN_VERSION: &str = "v3.4.0";
+pub(crate) const APP_TOKEN_COMMIT: &str = "64ab729a6294000f5aa4a4bc0b73d1f32bc45510";
+pub(crate) const APP_TOKEN_VERSION: &str = "v3.3.0";
 pub(crate) const APP_TOKEN_OUTPUT: &str = "${{ steps.app.outputs.token }}";
 
 pub(crate) fn expression(condition: &str) -> String {
@@ -51,6 +51,7 @@ pub(crate) fn install_tool(tool: &str) -> RenderedStep {
         uses: Some(MISE.to_owned()),
         with: vec![
             ("version".to_owned(), Value::Text(MISE_VERSION.to_owned())),
+            ("sha256".to_owned(), crate::mise_digest::pinned_sha256()),
             ("install_args".to_owned(), Value::Text(tool.to_owned())),
             ("cache".to_owned(), Value::Bool(false)),
         ],
@@ -110,7 +111,7 @@ pub(crate) fn install_release_plz(plan: &ReleasePlan) -> Vec<RenderedStep> {
     ]
 }
 
-const NO_PROGRAM_VARIABLES: [(&str, &str); 6] = [
+const NO_PROGRAM_VARIABLES: &[(&str, &str)] = &[
     ("RUSTC_WRAPPER", ""),
     ("RUSTC_WORKSPACE_WRAPPER", ""),
     ("CARGO_BUILD_RUSTC_WRAPPER", ""),

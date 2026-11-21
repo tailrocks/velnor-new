@@ -13,7 +13,7 @@ fn job_running(job_keys: &str, command: &str, step_keys: &str) -> String {
     )
 }
 
-const WRAPPED_HELPER: [&str; 14] = [
+const WRAPPED_HELPER: &[&str] = &[
     "env -C stage velnor-ci check",
     "env -C stage env -u A velnor-ci check",
     "env -u A velnor-ci check",
@@ -32,7 +32,7 @@ const WRAPPED_HELPER: [&str; 14] = [
 
 #[test]
 fn env_options_cannot_hide_a_helper_call() -> TestResult {
-    for command in WRAPPED_HELPER {
+    for command in WRAPPED_HELPER.iter().copied() {
         let message = refusal(&job_running("", command, ""))
             .map_err(|error| format!("{command:?}: {error}"))?;
         assert!(message.contains("helper = true"), "{command:?}: {message}");

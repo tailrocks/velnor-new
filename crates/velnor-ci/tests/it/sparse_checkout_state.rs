@@ -13,15 +13,16 @@ use crate::io::Repo;
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
+/// `sparse_checkout` is parsed from velnor-ci 0.1.92, so the lock pins that release.
 const HELPER_LOCK: &str =
-    include_str!("../../../../generator/samples/helper-lock/view/.velnor/rust-ci.lock");
+    include_str!("../../../../generator/samples/feature-lane/view/.velnor/rust-ci.lock");
 const WORKFLOW: &str = ".github/workflows/rust-ci.yml";
 const CONFIG: &str = "full_run = \"off\"\nsparse_checkout = true\n\n[[inputs]]\nglob = \"data/kept.txt\"\npackages = [\"a\"]\n";
 const MISE: &str = include_str!("../../../../generator/samples/feature-lane/view/mise.toml");
 const MISE_LOCK: &str = include_str!("../../../../generator/samples/feature-lane/view/mise.lock");
 
 /// Present in every lane, whatever crate it builds.
-const ALWAYS: [&str; 5] = [
+const ALWAYS: &[&str] = &[
     ".cargo/config.toml",
     ".velnor/rust-ci.lock",
     ".velnor/rust-ci.toml",

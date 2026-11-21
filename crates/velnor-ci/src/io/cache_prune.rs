@@ -3,10 +3,10 @@
 
 use std::collections::BTreeMap;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use super::cache::{directory_size, entries};
-use crate::cache_prune::{Category, UsedUnits, is_executable};
+use crate::cache_prune::{Category, UsedUnits, is_executable, is_hash};
 use crate::error::CiError;
 
 /// Directories of the build directory that no later build reads back.
@@ -92,7 +92,24 @@ fn reject_symlink(entry: &fs::DirEntry) -> Result<(), CiError> {
 }
 
 fn is_profile(dir: &Path) -> bool {
-    dir.join(".fingerprint").is_dir() && dir.join("deps").is_dir()
+    (dir.join(".fingerprint").is_dir() && dir.join("deps").is_dir())
+        || fs::read_dir(dir.join("build")).is_ok_and(|build| {
+            build
+                .flatten()
+                .any(|package| !unit_dirs(&package.path()).is_empty())
+        })
+}
+
+/// The unit directories `<package>/<hash>` that Cargo 1.100 keeps below `build/`; none for an
+/// older `build/<package>-<hash>` unit.
+fn unit_dirs(package: &Path) -> Vec<PathBuf> {
+    fs::read_dir(package)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter(|unit| unit.path().is_dir() && is_hash(&unit.file_name().to_string_lossy()))
+        .map(|unit| unit.path())
+        .collect()
 }
 
 fn prune_profile(
@@ -110,11 +127,72 @@ fn prune_profile(
             (".fingerprint", true) => {
                 prune_units(&path, used, Category::Fingerprints, removed)?;
             }
-            ("build", true) => prune_units(&path, used, Category::BuildScripts, removed)?,
+            ("build", true) => prune_build(&path, used, removed)?,
             ("examples", true) => removed.take(Category::Executables, &path)?,
             (_, true) if name.ends_with(".dSYM") => removed.take(Category::Executables, &path)?,
             (".cargo-lock", false) | (_, true) => {}
+            (name, false) if name.starts_with(".cargo-") => {}
             (_, false) => removed.take(Category::Executables, &path)?,
+        }
+    }
+    Ok(())
+}
+
+/// `build/` holds one directory per build script unit (`<package>-<hash>`), and since Cargo 1.100
+/// one per package with a directory per unit of any kind below it (`<package>/<hash>`).
+fn prune_build(dir: &Path, used: Option<&UsedUnits>, removed: &mut Removed) -> Result<(), CiError> {
+    for entry in entries(dir)? {
+        reject_symlink(&entry)?;
+        let units = unit_dirs(&entry.path());
+        if units.is_empty() {
+            if used.is_some_and(|used| used.unused(&entry.file_name().to_string_lossy())) {
+                removed.take(Category::BuildScripts, &entry.path())?;
+            }
+            continue;
+        }
+        for unit in units {
+            prune_unit(&unit, used, removed)?;
+        }
+    }
+    Ok(())
+}
+
+fn prune_unit(unit: &Path, used: Option<&UsedUnits>, removed: &mut Removed) -> Result<(), CiError> {
+    let ran = unit.join("run").is_dir();
+    let unused = used.is_some_and(|used| {
+        unit.file_name()
+            .is_some_and(|hash| used.unused(&hash.to_string_lossy()))
+    });
+    for part in entries(unit)? {
+        reject_symlink(&part)?;
+        let path = part.path();
+        let category = match (part.file_name().to_string_lossy().as_ref(), ran) {
+            ("fingerprint", _) => Category::Fingerprints,
+            ("run", _) | ("out", true) => Category::BuildScripts,
+            ("out", false) => Category::Dependencies,
+            _ => continue,
+        };
+        if unused {
+            removed.take(category, &path)?;
+        } else if !ran && category == Category::Dependencies {
+            prune_executables(&path, removed)?;
+        }
+    }
+    if unused {
+        fs::remove_dir(unit)
+            .map_err(|e| CiError::new(format!("cannot remove {}: {e}", unit.display())))?;
+    }
+    Ok(())
+}
+
+/// The test, bench and binary executables of a unit's `out`; the executable of a build script
+/// stays, as it does in `build/<package>-<hash>`.
+fn prune_executables(out: &Path, removed: &mut Removed) -> Result<(), CiError> {
+    for file in entries(out)? {
+        reject_symlink(&file)?;
+        let name = file.file_name().to_string_lossy().into_owned();
+        if !name.starts_with("build_script_") && is_executable(&name) && file.path().is_file() {
+            removed.take(Category::Executables, &file.path())?;
         }
     }
     Ok(())

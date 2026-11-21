@@ -4,6 +4,7 @@
 use std::path::Path;
 use std::process::Command;
 use std::time::{Duration, UNIX_EPOCH};
+use velnor_test_support::real_cargo;
 
 use crate::io::Repo;
 
@@ -40,7 +41,7 @@ fn a_malformed_snapshot_discards_old_cargo_artifacts_before_a_backdated_edit_bui
         ),
         ("src/main.rs", "fn main() { println!(\"A\"); }\n"),
     ]);
-    let cargo = Path::new(env!("CARGO"));
+    let cargo = &real_cargo();
     let helper = Path::new(env!("CARGO_BIN_EXE_velnor-ci"));
     run(repo.root(), cargo, &["build", "--offline", "-v"]);
     let binary = repo.root().join("target/debug/app");
@@ -78,7 +79,7 @@ fn a_missing_snapshot_discards_old_cargo_artifacts_before_a_backdated_edit_build
         ),
         ("src/main.rs", "fn main() { println!(\"A\"); }\n"),
     ]);
-    let cargo = Path::new(env!("CARGO"));
+    let cargo = &real_cargo();
     let helper = Path::new(env!("CARGO_BIN_EXE_velnor-ci"));
     run(repo.root(), cargo, &["build", "--offline", "-v"]);
     let binary = repo.root().join("target/debug/app");
@@ -116,7 +117,7 @@ fn a_retargeted_source_link_discards_old_cargo_artifacts_before_building() {
         ("src/b.rs", "fn main() { println!(\"B\"); }\n"),
     ]);
     repo.link("a.rs", "src/main.rs");
-    let cargo = Path::new(env!("CARGO"));
+    let cargo = &real_cargo();
     let helper = Path::new(env!("CARGO_BIN_EXE_velnor-ci"));
     run(repo.root(), cargo, &["build", "--offline", "-v"]);
     let binary = repo.root().join("target/debug/app");
