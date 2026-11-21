@@ -1,10 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
+
 use super::{
     CacheKey, CargoCommand, CargoLane, GateNeed, RenderedStep, Setup, Step, StepKind, cargo_step,
     merge_group_skipped, sources_step, trimmed_lane,
 };
+use velnor_model::{RepoPath, SetupOrder};
 
 pub(super) fn saved_unless_hit(kind: &StepKind) -> Vec<String> {
     match kind {
@@ -96,9 +99,10 @@ fn any_gate(step: &Step, setup: Setup) -> Option<String> {
     Some(terms.join(" && "))
 }
 
-pub(super) fn extra_conditions(step: &Step, setup: Setup) -> Vec<String> {
+pub(super) fn extra_conditions(step: &Step, setup: Setup, after: &[String]) -> Vec<String> {
     let mut extra = saved_unless_hit(&step.kind);
     extra.extend(crate::private_steps::repository_conditions(step));
+    extra.extend(after.iter().map(String::as_str).map(setup_not_failed));
     extra.extend(
         step.hosted_only
             .then(|| crate::gate::NOT_SELF_HOSTED.to_owned()),
@@ -130,4 +134,27 @@ pub(super) fn leading_steps(step: &Step, audit: bool, lane: CargoLane) -> Vec<Re
         }
         _ => Vec::new(),
     }
+}
+
+pub(super) fn root_key(step: &Step) -> Option<RepoPath> {
+    step.directory
+        .clone()
+        .or_else(|| step.manifest.as_ref().and_then(RepoPath::parent))
+}
+
+pub(super) fn after_setup(
+    step: &Step,
+    setups: &BTreeMap<Option<RepoPath>, Vec<String>>,
+) -> Vec<String> {
+    if step.setup_order != SetupOrder::AfterSetup {
+        return Vec::new();
+    }
+    if matches!(step.kind, StepKind::TestSetup { .. }) {
+        return setups.get(&root_key(step)).cloned().unwrap_or_default();
+    }
+    setups.values().flatten().cloned().collect()
+}
+
+pub(super) fn setup_not_failed(id: &str) -> String {
+    format!("steps.{id}.outcome != 'failure' && steps.{id}.outcome != 'cancelled'")
 }

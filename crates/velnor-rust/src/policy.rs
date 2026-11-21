@@ -115,6 +115,14 @@ pub struct PolicyRuns {
 }
 
 #[must_use]
+pub fn policy_unread(tools: PolicyTools) -> PolicyRuns {
+    PolicyRuns {
+        deny: tools.deny,
+        machete: tools.machete,
+    }
+}
+
+#[must_use]
 pub fn policy_runs(
     tools: PolicyTools,
     changed: &BTreeSet<RepoPath>,
