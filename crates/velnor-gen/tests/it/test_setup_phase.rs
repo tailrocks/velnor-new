@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use serde_json::Value;
+use velnor_model::{DependencyKind, PackageDependency, PackageName, RepoPath};
 
 use crate::facts::TestResult;
 use crate::golden::{load, samples};
@@ -276,5 +277,111 @@ fn a_build_phase_setup_of_the_helper_root_runs_before_the_source_built_helper_co
         .position(compiles)
         .ok_or("the helper job builds nothing")?;
     assert_eq!(setups(helper), vec![build - 1]);
+    Ok(())
+}
+
+#[test]
+fn a_build_phase_setup_precedes_a_test_phase_setup_of_the_same_grouped_root() -> TestResult {
+    const GROUP: &str =
+        "[[workspace_groups]]\nname = \"tools\"\nroots = [\"tools/a\", \"tools/b\"]\n";
+    const ROOTS: [&str; 3] = ["Cargo.toml", "tools/a/Cargo.toml", "tools/b/Cargo.toml"];
+    let config = format!(
+        "shape = 'lint-test'\n{GROUP}[[test_setup]]\nroot = 'tools/a'\nname = 'Build fixture'\nrun = 'bash build.sh'\nphase = 'build'\n[[test_setup]]\nroot = 'tools/a'\nname = 'Test fixture'\nrun = 'bash test.sh'\nphase = 'test'\n"
+    );
+    let mut repo = view(&ROOTS, Some(config.as_bytes()))?;
+    pin_helper(&mut repo, "0.1.109")?;
+    let parsed = document(&workflow(&repo)?)?;
+    let mut checked = 0;
+    for (id, job) in jobs(&parsed) {
+        let position = |wanted: &str| steps(job).iter().position(|step| step["name"] == wanted);
+        let (Some(build), Some(test)) = (position("Build fixture"), position("Test fixture"))
+        else {
+            continue;
+        };
+        checked += 1;
+        assert_eq!(build + 1, test, "{id}");
+        assert!(compiles(&steps(job)[test + 1]), "{id}");
+    }
+    assert!(checked > 0, "no job holds both setups");
+    Ok(())
+}
+
+#[test]
+fn a_build_phase_setup_of_a_path_dependency_runs_before_the_root_that_compiles_it() -> TestResult {
+    let config = "shape = 'one-job'\n[[test_setup]]\nroot = 'lib'\nname = 'Prepare the fixture'\nrun = 'bash scripts/prepare-fixture.sh'\nphase = 'build'\n";
+    let mut repo = view(
+        &["app/Cargo.toml", "lib/Cargo.toml"],
+        Some(config.as_bytes()),
+    )?;
+    pin_helper(&mut repo, "0.1.109")?;
+    let app = RepoPath::new("app/Cargo.toml")?;
+    let dependency = PackageDependency {
+        name: PackageName::new("package-1")?,
+        kind: DependencyKind::Normal,
+        platform: None,
+        optional: false,
+        manifest: Some(RepoPath::new("lib/Cargo.toml")?),
+        features: Vec::new(),
+        rename: None,
+    };
+    repo.rust_metadata
+        .get_mut(&app)
+        .ok_or("no app metadata")?
+        .members[0]
+        .dependencies
+        .push(dependency);
+    let parsed = document(&workflow(&repo)?)?;
+    let mut checked = 0;
+    for (id, job) in jobs(&parsed) {
+        let Some(first) = steps(job)
+            .iter()
+            .position(|step| compiles(step) && step["working-directory"] == "app")
+        else {
+            continue;
+        };
+        checked += 1;
+        let found = setups(job);
+        let setup = found.first().copied().ok_or("no setup")?;
+        assert!(setup < first, "{id}: {found:?}");
+        assert_eq!(steps(job)[setup]["working-directory"], "lib", "{id}");
+    }
+    assert!(checked > 0, "no job compiles app");
+    Ok(())
+}
+
+#[test]
+fn a_build_phase_setup_of_a_grouped_dependency_runs_once_per_job() -> TestResult {
+    const GROUP: &str =
+        "[[workspace_groups]]\nname = \"tools\"\nroots = [\"tools/a\", \"tools/b\"]\n";
+    const ROOTS: [&str; 3] = ["Cargo.toml", "tools/a/Cargo.toml", "tools/b/Cargo.toml"];
+    for shape in ["one-job", "lint-test"] {
+        let config = format!(
+            "shape = '{shape}'\n{GROUP}[[test_setup]]\nroot = 'tools/b'\nname = '{NAME}'\nrun = 'bash scripts/prepare-fixture.sh'\nphase = 'build'\n"
+        );
+        let mut repo = view(&ROOTS, Some(config.as_bytes()))?;
+        pin_helper(&mut repo, "0.1.109")?;
+        let dependent = RepoPath::new("tools/a/Cargo.toml")?;
+        repo.rust_metadata
+            .get_mut(&dependent)
+            .ok_or("no a metadata")?
+            .members[0]
+            .dependencies
+            .push(PackageDependency {
+                name: PackageName::new("b")?,
+                kind: DependencyKind::Normal,
+                platform: None,
+                optional: false,
+                manifest: Some(RepoPath::new("tools/b/Cargo.toml")?),
+                features: Vec::new(),
+                rename: None,
+            });
+        let parsed = document(&workflow(&repo)?)?;
+        let mut rendered = 0;
+        for (id, job) in jobs(&parsed) {
+            assert!(setups(job).len() <= 1, "{shape} {id}: {:?}", setups(job));
+            rendered += setups(job).len();
+        }
+        assert_ne!(rendered, 0, "{shape}: no setup was rendered");
+    }
     Ok(())
 }

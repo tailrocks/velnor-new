@@ -28,8 +28,7 @@ impl Outcome {
         self.api
             .requests
             .lock()
-            .map(|requests| requests.clone())
-            .unwrap_or_default()
+            .map_or_else(|_| Vec::new(), |requests| requests.clone())
     }
 }
 

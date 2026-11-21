@@ -17,7 +17,6 @@ pub(crate) enum Fail {
     Checker(EvidenceError),
 }
 
-#[must_use]
 pub(crate) fn compare_dir(path: &Path) -> ExitCode {
     match prove(path) {
         Ok(proof) => {
