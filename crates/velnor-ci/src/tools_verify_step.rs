@@ -49,7 +49,7 @@ pub struct Context {
     pub cache_key: String,
     pub anchor_key: String,
     pub remote: Remote,
-    pub compression: Option<Compression>,
+    pub compression: Compression,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -244,9 +244,8 @@ pub fn run(verb: Verb, context: &Context) -> Result<String, CiError> {
         .and_then(|mut handle| handle.write_all(outputs(&verdict).as_bytes()))
         .map_err(|error| CiError::new(format!("cannot write {}: {error}", path.display())))?;
     let anchor_dir = context.runner_temp.join(ANCHOR_DIR);
-    let compression = context.compression.unwrap_or_else(Compression::detect);
-    let key_version = cache_version(&tools_paths(), compression);
-    let anchor_version = cache_version(&[&anchor_dir.to_string_lossy()], compression);
+    let key_version = cache_version(&tools_paths(), context.compression);
+    let anchor_version = cache_version(&[&anchor_dir.to_string_lossy()], context.compression);
     let reference = context
         .default_branch
         .as_ref()
@@ -294,7 +293,7 @@ pub fn setup(verb: Verb) -> Result<String, CiError> {
                 var("GITHUB_API_URL").as_deref(),
                 var("GITHUB_REPOSITORY").as_deref(),
             ),
-            compression: None,
+            compression: Compression::detect(),
         },
     )
 }

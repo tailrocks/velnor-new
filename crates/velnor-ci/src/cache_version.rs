@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::path::Path;
 use std::process::Command;
 
 use sha2::{Digest, Sha256};
@@ -8,6 +9,13 @@ use sha2::{Digest, Sha256};
 use crate::image_candidate::hashing::hex;
 
 const SALT: &str = "1.0";
+
+const TRUSTED_ZSTD: [&str; 4] = [
+    "/usr/bin/zstd",
+    "/usr/local/bin/zstd",
+    "/bin/zstd",
+    "/opt/homebrew/bin/zstd",
+];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Compression {
@@ -25,7 +33,14 @@ impl Compression {
 
     #[must_use]
     pub fn detect() -> Self {
-        let Ok(output) = Command::new("zstd").args(["--quiet", "--version"]).output() else {
+        let Some(zstd) = TRUSTED_ZSTD
+            .iter()
+            .map(Path::new)
+            .find(|path| path.is_file())
+        else {
+            return Self::Gzip;
+        };
+        let Ok(output) = Command::new(zstd).args(["--quiet", "--version"]).output() else {
             return Self::Gzip;
         };
         let mut text = output.stdout;
