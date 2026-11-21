@@ -35,7 +35,7 @@ pub fn purge_private(
         .sum();
     let refs: BTreeSet<_> = private.iter().map(|entry| &entry.reference).collect();
     let ids: Vec<u64> = ids.into_iter().collect();
-    let mut report = format!(
+    let report = format!(
         "{} entries ({bytes} bytes) in {} refs of {repo} have a key starting with {PRIVATE_PREFIX}\n",
         ids.len(),
         refs.len()
