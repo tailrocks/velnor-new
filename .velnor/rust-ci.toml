@@ -48,6 +48,12 @@ root = "."
 name = "Prepare pinned attestation verifier"
 run = "mise --no-config --no-env --no-hooks install gh@2.104.0"
 
+[[test_setup]]
+root = "."
+name = "No doctests (rustdoc listing)"
+run = '. "$VELNOR_EXEC" run -- bash scripts/check-no-doctests.sh'
+phase = "build"
+
 [[test_lane]]
 root = "."
 features = ["local-mode"]
@@ -93,6 +99,15 @@ task = "test-mise-binary-digests"
 tools = ["minisign", "python"]
 timeout_minutes = 5
 inputs = ["scripts/mise-binary-digests.sh", "scripts/mise-minisign.pub", "scripts/test_mise_binary_digests.py", "scripts/test_mise_binary_digests_entry.py", "scripts/fixtures/mise-2026.11.10", "scripts/fixtures/mise-2026.11.11", "crates/velnor-render/src/steps.rs", "crates/velnor-render/src/mise_digest.rs", "mise.toml", "mise.lock"]
+
+[[lint]]
+kind = "mise-task"
+id = "no-doctests-listing"
+name = "No-doctests listing fixtures"
+task = "test-no-doctests-listing"
+tools = ["rust", "mr-boxington"]
+timeout_minutes = 10
+inputs = ["scripts/check-no-doctests.sh", "scripts/test-no-doctests-listing.sh", "mise.toml", "mise.lock"]
 
 [[lint]]
 kind = "mise-task"

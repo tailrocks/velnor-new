@@ -25,15 +25,18 @@ MUST NOT become an unreviewed escape hatch.
 Integration tests SHOULD use a small declared entry point, such as
 `tests/integration.rs`, with related cases in `tests/cases/`. Do not create one
 Cargo test binary per case file. Doctests are off: every lib sets
-`doctest = false` and the `no-doctests` alint rule fails on a doc fence
+`doctest = false` and the rustdoc listing check fails on a doc fence
 (see former hard decision 1, removed in #608).
-The scanner follows rustdoc's Markdown rules for indented code. An indented line
-after a prose line continues that paragraph and is not a doctest; a blank line,
-heading or thematic break before it starts a code block, and so does a list
-marker followed by five or more spaces (`-     code`). Doc attribute values are
-decoded for Rust string escapes. Fences split with `concat!` are not evaluated:
-that evasion is left to code review (decision #2344), because evaluating
-`concat!` is a larger scanner change with its own false-positive risk.
+Enforcement is by rustdoc itself: `scripts/check-no-doctests.sh` runs
+`cargo doc --workspace --no-deps --lib --bins --examples` with
+`RUSTDOCFLAGS="--test --test-args --list"` for all features, no default
+features and the default features, so rustdoc lists the doctests without
+compiling the workspace again (rustdoc lists the doctests of crates that set
+`doctest = false` too), and fails when rustdoc lists any doctest. Every fence
+form that rustdoc recognizes in a library, binary or example of the host target
+is caught, including a `concat!`-split one. Items behind another operating
+system's `cfg` or behind a mixed feature combination are not listed on one
+host; see `docs/implemented/ci-maintenance/repo-verification.md`.
 If a package gains a doctest target, doctests MUST run in a separate gate
 because Nextest does not execute them, and the generator adds that lane.
 

@@ -1,7 +1,7 @@
 # Repository policy, enforced by asamarts/alint as the generated lint-alint job
 # (`[[lint]]` in .velnor/rust-ci.toml; the pin is in mise.toml).
 # Local rules cover generic file/path requirements and agent-instruction
-# file integrity only, plus the `no-doctests` content rule (decision X76).
+# file integrity only.
 # No dependency-architecture, Rust-syntax, or test-layout claims: Alint
 # cannot inspect those (see docs/proposed/rust-quality-contract.md §1, §4).
 #
@@ -229,21 +229,3 @@ rules:
     max_lines: 150
     level: error
     message: "src/lib.rs and src/main.rs MUST stay under 150 physical lines (§5)"
-
-  - id: no-doctests-scanner
-    kind: file_exists
-    paths:
-      - scripts/no-doctests.py
-    level: error
-    message: "The doc scanner is required: the no-doctests rule runs scripts/no-doctests.py, so a missing scanner must fail the lint instead of passing."
-
-  - id: no-doctests
-    kind: command
-    paths:
-      include:
-        - "scripts/no-doctests.py"
-    command:
-      - python3
-      - scripts/no-doctests.py
-    level: error
-    message: "Doctests are off by decision (Cargo `doctest = false`). A doc comment (`///`, `//!`, `/** */` or `/*! */`) or a `#[doc]` attribute must not hold a doc fence (``` or ~~~) at the start of a line, an indented doc code block, or an `include_str!` include. The check reads Rust tokens, so string literals are not doc comments and an inline run of backticks is not a fence. Do not add one; a decision is needed first."
