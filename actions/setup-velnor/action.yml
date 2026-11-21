@@ -90,7 +90,7 @@ runs:
         }
         evict_store_entry() {
           quarantine="$dir/.velnor-ci.evict.$$.$RANDOM$RANDOM"
-          if mv -n "$dir/$archive" "$quarantine" 2> /dev/null; then
+          if mv -n -T "$dir/$archive" "$quarantine" 2> /dev/null; then
             touch -- "$quarantine" 2> /dev/null || true
             if [ -n "${1:-}" ]; then
               echo "::warning title=setup-velnor::removed the tool-cache copy of $archive for velnor-ci $VERSION $1"

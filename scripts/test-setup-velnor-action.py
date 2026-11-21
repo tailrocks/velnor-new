@@ -258,6 +258,18 @@ fi
 exec "$REAL_MV" "$@"
 """
 
+STUB_PLANTING_EVICTION_MV = """#!/bin/sh
+for arg; do last="$arg"; done
+case "$last" in
+  *.velnor-ci.evict.*)
+    if [ ! -e "$STUB_RACE_MARK" ]; then
+      : > "$STUB_RACE_MARK"
+      mkdir -p -- "$last"
+    fi ;;
+esac
+exec "$REAL_MV" "$@"
+"""
+
 STUB_PLANTING_SYMLINK_PUBLISH_MV = """#!/bin/sh
 for arg; do last="$arg"; done
 if [ "$last" = "$STUB_ENTRY" ] && [ ! -e "$STUB_RACE_MARK" ]; then
@@ -991,6 +1003,25 @@ class SetupVelnorInstallTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 1, result.output)
         self.assertFalse(cached.exists(), "a mismatched store entry survived because eviction needed a new file")
+
+    def test_a_directory_planted_at_the_eviction_quarantine_path_does_not_receive_the_evicted_archive(self):
+        cached = self.cached_archive()
+        cached.parent.mkdir(parents=True)
+        cached.write_bytes(b"tampered archive\n")
+        stub_mv = self.stub_bin / "mv"
+        stub_mv.write_text(STUB_PLANTING_EVICTION_MV)
+        stub_mv.chmod(0o755)
+        result = self.install(
+            sha256(self.archive),
+            extra_env={
+                "REAL_MV": str(self.mv_compat),
+                "STUB_ENTRY": str(cached),
+                "STUB_RACE_MARK": str(self.root / "race-mark"),
+            },
+        )
+        self.assertTrue((self.root / "race-mark").exists(), result.output)
+        nested = [path for path in cached.parent.rglob("*") if path.is_file() and path.parent != cached.parent]
+        self.assertEqual(nested, [], "the evicted archive was moved inside the directory planted at the quarantine path")
 
     def test_a_healthy_store_entry_that_cannot_be_copied_to_the_runner_temp_directory_is_kept(self):
         cached = self.cached_archive()
