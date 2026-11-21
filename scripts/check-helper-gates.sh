@@ -117,24 +117,50 @@ scan() {
   awk -v series="$series" -v patch="$patch" -v tree="$tree" -v lo="${base_version##*.}" '
   BEGIN {
     lx_mode = "code"; sq = sprintf("%c", 39); lx_depth = 0; lit_s = 0
-    sfx = "(u8|u16|u32|u64|u128|usize|i8|i16|i32|i64|i128|isize)?"
     ws = "[[:space:]]*"
-    tup = "\\(" ws "0" sfx ws "," ws "1" sfx ws "," ws "[0-9]+" sfx ws ",?" ws "\\)"
+    num = "[0-9][0-9A-Za-z_]*"
+    tup = "\\(" ws num ws "," ws num ws "," ws num ws ",?" ws "\\)"
     ver = "(" tup ")|0\\.1\\.[0-9]+"
+    digits = "0123456789abcdef"
+  }
+  function intval(s,    base, i, d, v, n) {
+    sub(/_*(u8|u16|u32|u64|u128|usize|i8|i16|i32|i64|i128|isize)$/, "", s)
+    gsub(/_/, "", s)
+    base = 10
+    if (s ~ /^0x/) { base = 16; s = substr(s, 3) }
+    else if (s ~ /^0o/) { base = 8; s = substr(s, 3) }
+    else if (s ~ /^0b/) { base = 2; s = substr(s, 3) }
+    n = length(s)
+    if (n == 0) return -1
+    v = 0
+    for (i = 1; i <= n; i++) {
+      d = index(digits, tolower(substr(s, i, 1))) - 1
+      if (d < 0 || d >= base) return -1
+      v = v * base + d
+      if (v > 1000000000) v = 1000000000
+    }
+    return v
+  }
+  function tupver(t,    e, n, a, b, c) {
+    gsub(/[()[:space:]]/, "", t)
+    sub(/,$/, "", t)
+    n = split(t, e, ",")
+    if (n != 3) return ""
+    a = intval(e[1]); b = intval(e[2]); c = intval(e[3])
+    if (a != 0 || b != 1 || c < 0) return ""
+    return "0.1." c
   }
   function versions(line, out,    rest, n, v) {
     n = 0
     rest = line
     while (match(rest, ver)) {
       v = substr(rest, RSTART, RLENGTH)
+      rest = substr(rest, RSTART + RLENGTH)
       if (substr(v, 1, 1) == "(") {
-        gsub(/(u|i)(size|128|64|32|16|8)/, "", v)
-        gsub(/[^0-9,]/, "", v)
-        sub(/,+$/, "", v)
-        gsub(/,/, ".", v)
+        v = tupver(v)
+        if (v == "") continue
       }
       out[++n] = v
-      rest = substr(rest, RSTART + RLENGTH)
     }
     return n
   }
@@ -153,7 +179,7 @@ scan() {
     off = 0; s = line
     while (match(s, tup)) {
       st = off + RSTART
-      if (!inrange(st) && !inlit(st)) return 1
+      if (!inrange(st) && !inlit(st) && tupver(substr(s, RSTART, RLENGTH)) != "") return 1
       off = st + RLENGTH - 1
       s = substr(line, off + 1)
     }
@@ -249,9 +275,9 @@ scan() {
     sub(/helper-gate: first in (tools|rust-ci)-v0\.1\.[0-9]+ via [^ ]+/, "", s)
     return s
   }
-  /^diff --git / { file = $4; sub(/^b\//, "", file); counted = (file ~ /^crates\/velnor-(gen|render|rust)\/src\//); prevnew = ""; prevadded = 0; lx_mode = "code"; p_mv = 0; c_mv = 0; next }
-  /^@@/ { prevnew = ""; prevadded = 0; p_mv = 0; c_mv = 0; next }
-  /^\+\+\+ |^--- / { next }
+  /^diff --git / { file = $4; sub(/^b\//, "", file); counted = (file ~ /^crates\/velnor-(gen|render|rust)\/src\//); prevnew = ""; prevadded = 0; lx_mode = "code"; p_mv = 0; c_mv = 0; inhdr = 1; next }
+  /^@@/ { inhdr = 0; prevnew = ""; prevadded = 0; p_mv = 0; c_mv = 0; next }
+  inhdr && /^(\+\+\+|---) / { next }
   /^-/ { if (counted) removed[file SUBSEP substr($0, 2)] = 1; next }
   /^[ +]/ {
     text = substr($0, 2)
