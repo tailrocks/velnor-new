@@ -14,7 +14,11 @@ fn outputs_declaring_one_directory(entries: usize) -> Repo {
     let repo = declared_tree(entries);
     for index in 1..OUTPUTS {
         let output = format!("rust/target/debug/build/lib-f00000000000000{index:x}/output");
-        unit(&repo, &output, "cargo:rerun-if-changed=../../shared/first\n");
+        unit(
+            &repo,
+            &output,
+            "cargo:rerun-if-changed=../../shared/first\n",
+        );
         repo.set_mtime(&output, UNIX_EPOCH + Duration::from_secs(3_000_000_001));
         inventory::build(&repo, &output, None);
     }
