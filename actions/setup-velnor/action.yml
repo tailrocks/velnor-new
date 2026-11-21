@@ -75,18 +75,21 @@ runs:
           mv -f "$no_follow" "$1" "$2" 2> /dev/null && [ -f "$2" ] && [ ! -L "$2" ] && [ "$(digest "$2")" = "$expected" ]
         }
         evict_store_entry() {
-          quarantine=
-          if quarantine="$(mktemp "$dir/.velnor-ci.evict.XXXXXX" 2> /dev/null)" && mv -f "$dir/$archive" "$quarantine" 2> /dev/null; then
+          quarantine="$dir/.velnor-ci.evict.$$"
+          if mv -f "$no_follow" "$dir/$archive" "$quarantine" 2> /dev/null; then
             if [ -n "${1:-}" ]; then
               echo "::warning title=setup-velnor::removed the tool-cache copy of $archive for velnor-ci $VERSION $1"
+              rm -f "$quarantine" 2> /dev/null || true
             elif [ "$(digest "$quarantine")" = "$expected" ]; then
-              mv -n "$quarantine" "$dir/$archive" 2> /dev/null || true
+              mv -n "$no_follow" "$quarantine" "$dir/$archive" 2> /dev/null || true
+              if [ -e "$quarantine" ]; then
+                echo "::warning title=setup-velnor::the verified copy of $archive for velnor-ci $VERSION is kept at $quarantine, because the store entry path is taken"
+              fi
             else
               echo "::warning title=setup-velnor::removed the tool-cache copy of $archive for velnor-ci $VERSION, which is not the archive with SHA-256 $expected"
+              rm -f "$quarantine" 2> /dev/null || true
             fi
-            rm -f "$quarantine"
           else
-            [ -z "$quarantine" ] || rm -f "$quarantine"
             echo "::warning title=setup-velnor::could not remove the tool-cache copy of $archive for velnor-ci $VERSION, which is not the archive with SHA-256 $expected"
           fi
           return 0
@@ -116,9 +119,11 @@ runs:
               rc=0
               bounded_copy "$dir/$archive" "$file" || rc=$?
               if [ "$rc" -ne 0 ]; then
-                rm -f "$file"
+                rm -f "$file" 2> /dev/null || true
                 if [ "$rc" -eq 2 ]; then
                   echo "::warning title=setup-velnor::the tool-cache copy of $archive for velnor-ci $VERSION could not be read in time, so it is not used and is kept"
+                elif [ "$(digest "$dir/$archive")" = "$expected" ]; then
+                  echo "::warning title=setup-velnor::the tool-cache copy of $archive for velnor-ci $VERSION could not be copied to $RUNNER_TEMP, so it is not used and is kept"
                 else
                   evict_store_entry "because it could not be read"
                 fi
@@ -126,6 +131,10 @@ runs:
               fi
             else
               rm -f "$file"
+              if [ -n "$dir" ] && { [ -e "$dir/$archive" ] || [ -L "$dir/$archive" ]; }; then
+                echo "::warning title=setup-velnor::removed the tool-cache entry at $dir/$archive for velnor-ci $VERSION, which is not a regular file"
+                clear_entry "$dir/$archive" 2> /dev/null || true
+              fi
               continue
             fi
           else

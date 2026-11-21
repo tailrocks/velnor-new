@@ -116,6 +116,45 @@ done
 exec "$REAL_HEAD" "$@"
 """
 
+STUB_FAILING_FIRST_HEAD = """#!/bin/sh
+if [ ! -e "$STUB_HEAD_MARK" ]; then
+  : > "$STUB_HEAD_MARK"
+  echo "head: write error: No space left on device" >&2
+  exit 1
+fi
+exec "$REAL_HEAD" "$@"
+"""
+
+STUB_NO_INODE_MKTEMP = """#!/bin/sh
+for arg; do
+  case "$arg" in *.velnor-ci.evict.*) echo "mktemp: $arg: No space left on device" >&2; exit 1 ;; esac
+done
+exec "$REAL_MKTEMP" "$@"
+"""
+
+STUB_FAILING_RM = """#!/bin/sh
+for arg; do
+  case "$arg" in *.velnor-ci.evict.*) echo "rm: $arg: Permission denied" >&2; exit 1 ;; esac
+done
+exec "$REAL_RM" "$@"
+"""
+
+STUB_RESTORE_RACE_MV = """#!/bin/sh
+for arg; do last="$arg"; done
+case "$last" in
+  *.velnor-ci.evict.*)
+    if [ ! -e "$STUB_RACE_MARK" ]; then
+      : > "$STUB_RACE_MARK"
+      for arg; do
+        case "$arg" in */velnor-ci-x86_64-unknown-linux-musl.tar.gz) cp "$STUB_RACE" "$arg" ;; esac
+      done
+    fi ;;
+  *)
+    case "$*" in *.velnor-ci.evict.*) printf 'planted\\n' > "$last" ;; esac ;;
+esac
+exec "$REAL_MV" "$@"
+"""
+
 
 def archive_bytes(members=None):
     members = [("velnor-ci", PAYLOAD, 0o755)] if members is None else members
@@ -660,6 +699,81 @@ class SetupVelnorInstallTests(unittest.TestCase):
         self.assertEqual(second.returncode, 0, second.output)
         self.assertEqual(self.curl_calls(), [])
         self.assertEqual(self.installed_binary().read_bytes(), PAYLOAD)
+
+    def test_a_directory_at_the_store_entry_path_is_removed_when_the_download_fails(self):
+        cached = self.cached_archive()
+        cached.mkdir(parents=True)
+        (cached / "stale").write_bytes(b"left behind\n")
+        result = self.install(
+            sha256(self.archive), extra_env={"STUB_MISSING": "tools-v0.1.79 rust-ci-v0.1.79"}
+        )
+        self.assertEqual(result.returncode, 1, result.output)
+        self.assertFalse(
+            cached.exists() or cached.is_symlink(),
+            "a directory at the store entry path survived a job that could not download",
+        )
+
+    def test_a_mismatched_store_entry_is_evicted_even_when_no_new_file_can_be_created_for_it(self):
+        cached = self.cached_archive()
+        cached.parent.mkdir(parents=True)
+        cached.write_bytes(b"tampered archive\n")
+        stub = self.stub_bin / "mktemp"
+        stub.write_text(STUB_NO_INODE_MKTEMP)
+        stub.chmod(0o755)
+        result = self.install(
+            sha256(self.archive),
+            extra_env={
+                "STUB_MISSING": "tools-v0.1.79 rust-ci-v0.1.79",
+                "REAL_MKTEMP": shutil.which("mktemp"),
+            },
+        )
+        self.assertEqual(result.returncode, 1, result.output)
+        self.assertFalse(cached.exists(), "a mismatched store entry survived because eviction needed a new file")
+
+    def test_a_healthy_store_entry_that_cannot_be_copied_to_the_runner_temp_directory_is_kept(self):
+        cached = self.cached_archive()
+        cached.parent.mkdir(parents=True)
+        cached.write_bytes(self.archive)
+        head = self.stub_bin / "head"
+        head.write_text(STUB_FAILING_FIRST_HEAD)
+        head.chmod(0o755)
+        result = self.install(
+            sha256(self.archive), extra_env={"STUB_HEAD_MARK": str(self.root / "head-mark")}
+        )
+        self.assertEqual(result.returncode, 0, result.output)
+        self.assertNotIn("removed the tool-cache copy", result.output)
+        self.assertIn("is kept", result.output)
+
+    def test_a_failed_removal_of_the_eviction_quarantine_does_not_abort_the_install(self):
+        cached = self.cached_archive()
+        cached.parent.mkdir(parents=True)
+        cached.write_bytes(b"tampered archive\n")
+        stub = self.stub_bin / "rm"
+        stub.write_text(STUB_FAILING_RM)
+        stub.chmod(0o755)
+        result = self.install(sha256(self.archive), extra_env={"REAL_RM": shutil.which("rm")})
+        self.assertEqual(result.returncode, 0, result.output)
+        self.assertEqual(self.installed_binary().read_bytes(), PAYLOAD)
+
+    def test_a_verified_archive_is_kept_when_it_cannot_be_put_back_at_the_store_entry_path(self):
+        cached = self.cached_archive()
+        cached.parent.mkdir(parents=True)
+        cached.write_bytes(b"tampered archive\n")
+        stub = self.stub_bin / "mv"
+        stub.write_text(STUB_RESTORE_RACE_MV)
+        stub.chmod(0o755)
+        result = self.install(
+            sha256(self.archive),
+            extra_env={
+                "STUB_RACE": str(self.payload),
+                "STUB_RACE_MARK": str(self.root / "race-mark"),
+                "REAL_MV": shutil.which("mv"),
+                "STUB_MISSING": "tools-v0.1.79 rust-ci-v0.1.79",
+            },
+        )
+        self.assertEqual(result.returncode, 1, result.output)
+        kept = [path for path in installed_files(self.tool_cache) if path.read_bytes() == self.archive]
+        self.assertTrue(kept, "the verified archive was deleted when it could not be put back at the store entry path")
 
     def test_every_download_attempt_is_capped_at_ten_minutes_and_a_fifteen_minute_retry_window(self):
         result = self.install(sha256(self.archive), extra_env={"STUB_MISSING": "tools-v0.1.79"})
