@@ -85,8 +85,12 @@ fn a_replacement_that_cannot_remove_the_old_entry_fails_instead_of_healing() {
     let entry = store.join("tools").join(KEY);
     fs::remove_dir_all(&entry).unwrap_or_else(|e| unreachable!("{e}"));
     fs::write(&entry, "not a tree").unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(fs::metadata(&entry).is_ok_and(|metadata| metadata.is_file()));
     let outcome = save(&store, &job.home, true);
-    assert!(matches!(outcome, Outcome::Failed(_)), "{outcome:?}");
+    assert_eq!(
+        outcome,
+        Outcome::Failed("the replaced entry could not be removed")
+    );
 }
 
 #[test]
