@@ -223,11 +223,11 @@ filter = 'package(=velnor-ci) and binary(=it) and test(=plan_diff::every_recorde
 slow-timeout = { period = "30s", terminate-after = 1 }
 
 [[profile.default.overrides]]
-filter = 'package(=velnor-gen) and binary(=it) and (test(=step_refs_sweep::every_steps_reference_names_a_step_of_its_own_job) or test(=step_refs_sweep::every_steps_reference_in_a_feature_lane_or_test_group_names_a_step_of_its_own_job) or test(=step_refs_sweep::every_steps_reference_in_a_lint_test_setup_or_private_sources_job_names_a_step_of_its_own_job) or test(=step_refs_sweep::every_steps_reference_in_the_release_workflow_names_a_step_of_its_own_job) or test(=step_refs_sweep::every_steps_reference_in_a_reusable_workflow_names_a_step_of_its_own_job))'
+filter = 'package(=velnor-gen) and binary(=it) and (test(=step_refs_sweep::every_steps_reference_names_a_step_of_its_own_job) or test(=step_refs_sweep::every_steps_reference_in_a_feature_lane_or_test_group_names_a_step_of_its_own_job) or test(=step_refs_sweep::every_steps_reference_in_a_lint_test_setup_or_private_sources_job_names_a_step_of_its_own_job) or test(=step_refs_sweep::every_steps_reference_in_the_release_workflow_names_a_step_of_its_own_job))'
 slow-timeout = { period = "30s", terminate-after = 1 }
 
 [[profile.ci.overrides]]
-filter = 'package(=velnor-gen) and binary(=it) and (test(=step_refs_sweep::every_steps_reference_names_a_step_of_its_own_job) or test(=step_refs_sweep::every_steps_reference_in_a_feature_lane_or_test_group_names_a_step_of_its_own_job) or test(=step_refs_sweep::every_steps_reference_in_a_lint_test_setup_or_private_sources_job_names_a_step_of_its_own_job) or test(=step_refs_sweep::every_steps_reference_in_the_release_workflow_names_a_step_of_its_own_job) or test(=step_refs_sweep::every_steps_reference_in_a_reusable_workflow_names_a_step_of_its_own_job))'
+filter = 'package(=velnor-gen) and binary(=it) and (test(=step_refs_sweep::every_steps_reference_names_a_step_of_its_own_job) or test(=step_refs_sweep::every_steps_reference_in_a_feature_lane_or_test_group_names_a_step_of_its_own_job) or test(=step_refs_sweep::every_steps_reference_in_a_lint_test_setup_or_private_sources_job_names_a_step_of_its_own_job) or test(=step_refs_sweep::every_steps_reference_in_the_release_workflow_names_a_step_of_its_own_job))'
 slow-timeout = { period = "30s", terminate-after = 1 }
 
 [[profile.default.overrides]]

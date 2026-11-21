@@ -331,6 +331,22 @@ run = "cargo build --release --locked"
 id = "upload"
 uses = "upload-artifact"
 with = { name = "assets", path = "target/release/app" }
+
+[[workflow.job]]
+id = "package"
+needs = ["build"]
+permissions = { contents = "read" }
+
+[[workflow.job.step]]
+id = "fetch"
+name = "Fetch"
+run = "echo fetched"
+
+[[workflow.job.step]]
+id = "pack"
+name = "Pack"
+run = "echo packed"
+if = "steps.fetch.outcome == 'success'"
 "#;
 
 #[test]
