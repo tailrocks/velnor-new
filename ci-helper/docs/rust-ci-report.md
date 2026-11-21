@@ -3,7 +3,7 @@
 
 # Rust CI report
 
-`ci-metrics.json` is the per-lane, schema-1 report. The checker reads these
+`ci-metrics.json` is the per-lane, schema-2 report. The checker reads these
 files from artifact directories and recomputes policy from their evidence;
 `violations` is useful for display, but is not trusted as the only verdict.
 The top-level report and policy structs reject unknown fields. Nested Cargo
@@ -22,6 +22,9 @@ deliberately when changing this contract.
   `fallback`, or `miss`. `bytes` is the archive byte count, or `null` when the
   API cannot establish it. `usable` and `usable_same_lock` describe restored
   target data. `save` is `not_attempted`, `saved`, `failed`, or `unknown`.
+  `save_step` names the save step of a cache the job renders a save for. It is
+  absent when the job renders none, and `not_generated` gives the reason a base
+  cache is not generated.
 - `invocations` records Cargo `argv`, root, normalized configuration, start
   time, elapsed seconds, output offsets, compilation evidence, downloads,
   compiler artifacts, progress, test timings, capture status, and execution
@@ -61,9 +64,9 @@ for the compiler-artifact and build-script records used as input evidence.
 ## Producer and enforcement
 
 `VELNOR_REPORT_CACHES` supplies an array of cache plans. Each plan contains
-only `family`, `root` (a Cargo root or `null`), `restore_step`, and `save_step`,
-plus an optional `save_key_step` naming the step whose `key` output is the key
-the save ran under.
+`family`, `root` (a Cargo root or `null`), and `restore_step`, plus the optional
+`save_step`, `save_key_step` and `not_generated` fields described under lane
+fields.
 Observed report fields such as `requested_key`, `hit`, and `usable` are
 rejected as plan input. `VELNOR_REPORT_STEPS` supplies the actual step outputs
 and outcomes. The report resolves keys, restore hits, and save outcomes before
@@ -114,7 +117,7 @@ so separate test or binary targets do not become repeated compilations of one
 unit. Unhashed documentation outputs cannot establish compiler identity and
 remain unknown, like ordinary unhashed binary outputs.
 API enrichment runs after provenance collection. These inputs do not change
-the schema-1 output contract.
+the schema-2 output contract.
 
 Generated report and upload steps continue on error. The separate `Cache`
 job reports missing or invalid metrics. API lookups are read-only. Job timing
