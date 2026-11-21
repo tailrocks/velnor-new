@@ -3,19 +3,32 @@
 
 use velnor_model::{
     Access, CacheKey, CargoCommand, DenyCheck, Gate, GateNeed, HelperCommand, Job, PermissionScope,
-    RepoFacts, RepoPath, RootSlug, Step, StepKind, When,
+    RepoFacts, RepoPath, RootSlug, Step, StepKind, TokenMint, When,
 };
 
 use crate::plan::step;
 
 // helper-gate: first in tools-v0.1.111 via 00cab67428
-const TOKEN_FIRST_HELPER: (u64, u64, u64) = (0, 1, 111);
+pub const TOKEN_FIRST_HELPER: (u64, u64, u64) = (0, 1, 111);
+const HELPER_MINT: (u64, u64, u64) = (0, 1, 112);
 
 pub(crate) fn tokens_first(facts: &RepoFacts) -> bool {
     facts
         .helper
         .as_ref()
         .is_some_and(|helper| helper.version().at_least(TOKEN_FIRST_HELPER))
+}
+
+pub(crate) fn token_mint(facts: &RepoFacts) -> TokenMint {
+    if facts
+        .helper
+        .as_ref()
+        .is_some_and(|helper| helper.version().at_least(HELPER_MINT))
+    {
+        TokenMint::Helper
+    } else {
+        TokenMint::Action
+    }
 }
 
 pub(crate) fn after_trusted_setup(steps: &[Step]) -> usize {
@@ -88,13 +101,14 @@ pub(crate) fn insert(facts: &RepoFacts, jobs: &mut [Job]) {
             .any(|step| matches!(step.kind, StepKind::PrivateCheck { .. }))
         {
             kinds.push(StepKind::PrivateCheck {
-                cached: cached.clone(),
+                cached: if early { Vec::new() } else { cached.clone() },
             });
         }
         kinds.extend([
             StepKind::PrivateToken {
                 sources: sources.clone(),
                 cached: cached.clone(),
+                mint: token_mint(facts),
             },
             StepKind::PrivateFetch { manifests, cached },
         ]);

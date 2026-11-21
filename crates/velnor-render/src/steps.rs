@@ -107,7 +107,7 @@ pub(crate) fn rendered_job(job: &Job, plan: &WorkflowPlan) -> RenderedJob {
                 }))
                 .chain(test_outputs(job, &tests))
                 .chain(merge_group_output(job))
-                .chain(crate::tools_steps::anchor_outputs(&job.steps))
+                .chain(crate::tools_steps::anchor_outputs(job))
                 .chain(lane_outputs(&job.steps))
                 .chain(crate::base_steps::public::job_output(&job.steps))
                 .collect(),
@@ -204,8 +204,21 @@ fn rendered_steps(
         rendered.extend(sources_fetch_all_rest(manifests, lane));
     }
     for body in &mut rendered {
-        if let (StepKind::Cargo(_), Some(target)) = (&step.kind, &step.target_dir) {
+        if let (StepKind::Cargo(_) | StepKind::TestSetup { .. }, Some(target)) =
+            (&step.kind, &step.target_dir)
+        {
             body.env.push(crate::cargo::target_dir_env(target));
+        }
+        if lane.offline
+            && matches!(
+                step.kind,
+                StepKind::TestSetup {
+                    offline_after_private_fetch: true,
+                    ..
+                }
+            )
+        {
+            body.env.push(crate::cargo::offline_env());
         }
         if matches!(step.kind, StepKind::ReportCaches { .. })
             && let Some(name) = job_name

@@ -121,6 +121,7 @@ pub enum StepKind {
     PrivateToken {
         sources: crate::repo::PrivateSources,
         cached: Vec<crate::ids::RootSlug>,
+        mint: crate::repo::TokenMint,
     },
     PrivateFetch {
         manifests: Vec<RepoPath>,
@@ -148,6 +149,7 @@ pub enum StepKind {
         name: String,
         run: String,
         before_build: bool,
+        offline_after_private_fetch: bool,
     },
     GeneratorCheck {
         source: Option<RepoPath>,
@@ -167,7 +169,9 @@ pub enum StepKind {
         caches: Vec<CacheKey>,
         nextest_artifacts: bool,
         node_tools: ToolsTelemetry,
+        saved_keys: bool,
         not_generated: Option<String>,
+        unsuppressed: Vec<CacheKey>,
     },
     UploadMetrics,
     DownloadMetrics,
@@ -297,6 +301,7 @@ pub enum ToolsLocalVerb {
     Prime,
     RecordRestore,
     RecordSave,
+    RecordSavedKey,
     AnchorReset,
     AnchorRestore,
     AnchorFind,
@@ -336,6 +341,7 @@ pub enum VerifiedSave {
 pub struct ToolsTelemetry {
     pub restore: bool,
     pub save: bool,
+    pub saved_key: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
