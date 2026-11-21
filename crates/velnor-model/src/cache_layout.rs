@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{CacheKey, CacheRoot, JobId, LockIdentity, RepoPath, RootSlug, ToolsAnchor};
+use crate::{BaseScope, CacheKey, CacheRoot, JobId, LockIdentity, RepoPath, RootSlug, ToolsAnchor};
 
 pub const CACHE_COMPAT_LENGTH: usize = 16;
 pub const TOOLS_ANCHOR_LENGTH: usize = 64;
@@ -9,6 +9,8 @@ pub const LOCK_OUTPUT_PREFIX: &str = "lock_";
 pub const RUNNER_OS_MAX_LENGTH: usize = "Windows".len();
 pub const RUNNER_ARCH_MAX_LENGTH: usize = "ARM64".len();
 pub const SHARED_SOURCES_OWNER: &str = "all.roots";
+pub const PRIVATE_SOURCES_TAG: &str = "private-src";
+pub const PRIVATE_TARGET_TAG: &str = "private-tgt";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CacheKeySegment {
@@ -56,8 +58,22 @@ impl CacheKey {
     pub const fn tag(&self) -> &'static str {
         match self {
             Self::Tools { .. } => "tools",
-            Self::Sources { .. } => "src",
-            Self::Target { .. } => "tgt",
+            Self::Sources {
+                scope: BaseScope::Shared,
+                ..
+            } => "src",
+            Self::Sources {
+                scope: BaseScope::PrivateRepo,
+                ..
+            } => PRIVATE_SOURCES_TAG,
+            Self::Target {
+                scope: BaseScope::Shared,
+                ..
+            } => "tgt",
+            Self::Target {
+                scope: BaseScope::PrivateRepo,
+                ..
+            } => PRIVATE_TARGET_TAG,
             Self::Delta { .. } => "dlt",
         }
     }

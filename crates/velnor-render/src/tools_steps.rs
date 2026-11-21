@@ -1,7 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{AnchorSource, CacheKey, ToolsAnchor, ToolsLocalVerb, VerifiedSave, When};
+use velnor_model::{
+    AnchorSource, CacheKey, TOOLS_ANCHOR_KEY_OUTPUT as ANCHOR_KEY_OUTPUT,
+    TOOLS_ANCHOR_OUTPUT as ANCHOR_OUTPUT, ToolsAnchor, ToolsLocalVerb, VerifiedSave, When,
+};
 
 use crate::gate::{
     ON_DEFAULT_BRANCH, SAVING_EVENTS, TOOLS_LOCAL_STEP, TOOLS_LOOKUP_STEP, TOOLS_STEP,
@@ -13,9 +16,8 @@ const RECORD_STEP: &str = "toolsrecord";
 const ANCHOR_STEP: &str = "toolsanchor";
 const READ_STEP: &str = "toolsread";
 const ANCHOR_DIR: &str = "${{ runner.temp }}/velnor-tools-anchor";
-const ANCHOR_OUTPUT: &str = "tools_anchor";
-const ANCHOR_KEY_OUTPUT: &str = "tools_anchor_key";
 const ANCHOR_RUN: &str = "${{ github.run_id }}-${{ github.job }}";
+const ANCHOR_RUN_ATTEMPT: &str = "${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}";
 
 pub(crate) fn anchor_expression(anchor: &ToolsAnchor) -> String {
     match anchor {
@@ -147,14 +149,16 @@ fn anchor_cache_step(action: &str, verb: &str) -> RenderedStep {
     }
 }
 
-fn newest_anchor_step(action: &str, find: bool) -> RenderedStep {
+fn newest_anchor_step(action: &str, find: bool, attempt: bool) -> RenderedStep {
     let prefix = format!("{}-", anchor_prefix());
+    let run = if attempt {
+        ANCHOR_RUN_ATTEMPT
+    } else {
+        ANCHOR_RUN
+    };
     let mut with = vec![
         ("path".to_owned(), Value::Expr(ANCHOR_DIR.to_owned())),
-        (
-            "key".to_owned(),
-            Value::Expr(format!("{prefix}{ANCHOR_RUN}")),
-        ),
+        ("key".to_owned(), Value::Expr(format!("{prefix}{run}"))),
     ];
     if find {
         with.push(("restore-keys".to_owned(), Value::Expr(prefix)));
@@ -287,10 +291,16 @@ pub(crate) fn tools_local_step(verb: ToolsLocalVerb, anchor: &ToolsAnchor) -> Re
         Verb::RecordSave => return tools_saved_step(),
         Verb::AnchorRestore => return anchor_cache_step(crate::steps::CACHE_RESTORE, "Restore"),
         Verb::AnchorSave if *anchor == ToolsAnchor::Recorded => {
-            return newest_anchor_step(crate::steps::CACHE_SAVE, false);
+            return newest_anchor_step(crate::steps::CACHE_SAVE, false, false);
+        }
+        Verb::AnchorSaveAttempt => {
+            return newest_anchor_step(crate::steps::CACHE_SAVE, false, true);
         }
         Verb::AnchorSave => return anchor_cache_step(crate::steps::CACHE_SAVE, "Save"),
-        Verb::AnchorFind => return newest_anchor_step(crate::steps::CACHE_RESTORE, true),
+        Verb::AnchorFind => return newest_anchor_step(crate::steps::CACHE_RESTORE, true, false),
+        Verb::AnchorFindAttempt => {
+            return newest_anchor_step(crate::steps::CACHE_RESTORE, true, true);
+        }
         Verb::AnchorRead => return read_step(),
         Verb::AnchorReset
         | Verb::Verify
