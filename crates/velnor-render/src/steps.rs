@@ -9,7 +9,7 @@ use velnor_model::{
 
 use crate::artifact_steps::{download_step, upload_cargo_log, upload_step};
 use crate::base_steps::{
-    cache_budget, cache_decide, cache_trim, lane_outputs, sources_fetch, sources_fetch_all,
+    cache_budget, cache_trim, lane_outputs, sources_fetch, sources_fetch_all,
     sources_fetch_all_rest, sources_locks, trimmed_lane,
 };
 use crate::budget_steps::budget_step;
@@ -46,7 +46,7 @@ pub(crate) const MISE_VERSION: &str = "2026.11.10";
 mod chained_save;
 #[path = "steps_helpers.rs"]
 mod steps_helpers;
-use steps_helpers::{leading_steps, rustup_add, saved_unless_hit, variable};
+use steps_helpers::{extra_conditions, leading_steps, rustup_add, variable};
 
 pub(crate) const CACHE_RESTORE: &str =
     "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
@@ -60,8 +60,10 @@ pub(crate) fn rendered_job(job: &Job, plan: &WorkflowPlan) -> RenderedJob {
     let tests = Tests::of(job);
     let mut steps =
         crate::helper_integrity::secure_steps(job, job_steps(job, restores, audit, &tests, lane));
-    let env = crate::cargo::hoist_target_dir(job, &mut steps);
-    RenderedJob {
+    let mut env = crate::cargo::hoist_target_dir(job, &mut steps);
+    env.extend(crate::cargo_target::mbx_reports_env(job));
+    crate::shared_runs::mark(job, &mut steps);
+    crate::mise_digest::pin_to_runner_platform(RenderedJob {
         id: job.id.to_string(),
         name: job.name.clone(),
         check_name: crate::selection_name::title(job),
@@ -98,13 +100,14 @@ pub(crate) fn rendered_job(job: &Job, plan: &WorkflowPlan) -> RenderedJob {
             }))
             .chain(test_outputs(job, &tests))
             .chain(merge_group_output(job))
-            .chain(crate::tools_steps::anchor_output(&job.steps))
+            .chain(crate::tools_steps::anchor_outputs(&job.steps))
             .chain(lane_outputs(&job.steps))
+            .chain(crate::base_steps::public::job_output(&job.steps))
             .collect(),
         cache_mode: crate::cache::saving_mode(job),
         steps,
         ..RenderedJob::default()
-    }
+    })
 }
 
 fn test_outputs<'a>(job: &'a Job, tests: &'a Tests) -> impl Iterator<Item = (String, String)> + 'a {
@@ -209,7 +212,11 @@ fn rendered_steps(
     }
     rendered.push(body);
     if let StepKind::SourcesFetchAll { manifests, .. } = &step.kind {
-        rendered.extend(sources_fetch_all_rest(manifests, lane.cache_debug));
+        rendered.extend(sources_fetch_all_rest(
+            manifests,
+            lane.cache_debug,
+            lane.offline,
+        ));
     }
     for body in &mut rendered {
         if let (StepKind::Cargo(_), Some(target)) = (&step.kind, &step.target_dir) {
@@ -223,20 +230,7 @@ fn rendered_steps(
                 Value::Text(name.to_owned()),
             ));
         }
-        let mut extra = saved_unless_hit(&step.kind);
-        extra.extend(
-            step.hosted_only
-                .then(|| crate::gate::NOT_SELF_HOSTED.to_owned()),
-        );
-        extra.extend(
-            step.skip_when_cold
-                .then(|| crate::gate::PREPARE_COLD.to_owned()),
-        );
-        extra.extend(
-            step.skip_after_merge_group
-                .as_ref()
-                .map(|from| merge_group_skipped(from, setup)),
-        );
+        let extra = extra_conditions(step, setup);
         body.condition = chained_save::combined(
             around.chained,
             step,
@@ -245,6 +239,7 @@ fn rendered_steps(
             around.saved_after,
             body.condition.take(),
         );
+        body.env.extend(crate::private_steps::decide_env(step));
         body.working_directory = step.directory.as_ref().map(ToString::to_string);
         body.shared |= matches!(step.when, velnor_model::When::SaveVerifiedTools(_));
         if matches!(step.kind, StepKind::InputsSave { .. })
@@ -310,13 +305,9 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
         StepKind::CacheRestore(key) => cache_step(CACHE_RESTORE, "Restore", key, true),
         StepKind::CacheLookup(key) => crate::tools_steps::tools_lookup(key),
         StepKind::CacheSave(key) => cache_step(CACHE_SAVE, "Save", key, false),
-        StepKind::CacheDecide {
-            target,
-            archive,
-            manifests,
-            cli,
-            budget_bytes,
-        } => cache_decide(target, archive.as_ref(), manifests, *cli, *budget_bytes),
+        StepKind::CacheDecide { .. } | StepKind::PublicSources { .. } => {
+            crate::base_steps::public::render(kind)
+        }
         StepKind::SourcesLocks(locks) => sources_locks(locks),
         StepKind::CacheResult(lanes) => crate::cache_upload::result(lanes),
         StepKind::CacheVerify { lane, family } => crate::cache_upload::verify(lane, *family),
@@ -329,7 +320,7 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
         StepKind::RustTargets(targets) => rustup_add("target", targets),
         StepKind::SourcesFetch { position, .. } => sources_fetch(*position, lane),
         StepKind::SourcesFetchAll { manifests, .. } => {
-            sources_fetch_all(manifests, lane.cache_debug)
+            sources_fetch_all(manifests, lane.cache_debug, lane.offline)
         }
         StepKind::Cargo(command) => cargo_step(
             command,
@@ -357,7 +348,8 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
         StepKind::MbxPin => crate::helper_steps::mbx_pin_step(),
         StepKind::CratesMirror(mirror) => crate::helper_steps::mirror_step(mirror),
         StepKind::MbxStore | StepKind::MbxPrivate => crate::helper_steps::mbx_local_step(kind),
-        StepKind::PrivateCheck { .. }
+        StepKind::RepositoryPrivacy
+        | StepKind::PrivateCheck { .. }
         | StepKind::PrivateToken { .. }
         | StepKind::PrivateFetch { .. }
         | StepKind::ReleaseAssets { .. } => crate::private_steps::render(kind),

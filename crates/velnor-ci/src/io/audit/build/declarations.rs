@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use velnor_model::RepoFacts;
 use velnor_rust::rerun_if_changed;
 
-use super::super::super::units::{UnitFile, Workspace, unit_files};
+use super::super::super::units::{UnitFile, Workspace};
 use super::super::inventory;
 use crate::error::CiError;
 
@@ -29,12 +29,13 @@ pub(super) fn declarations(
     max_entries: usize,
 ) -> Result<Vec<Declared>, CiError> {
     let mut found = Vec::new();
+    let mut pass = Pass::new(max_entries);
     let targets = inventory::exclusions(workspaces)?;
     let active = workspaces
         .iter()
         .enumerate()
-        .filter(|(_, workspace)| location.starts_with(&workspace.workspace_root))
-        .max_by_key(|(_, workspace)| workspace.workspace_root.components().count())
+        .filter(|(_, workspace)| location.starts_with(&workspace.root))
+        .max_by_key(|(_, workspace)| workspace.root.components().count())
         .map(|(index, _)| index);
     for (_, workspace) in workspaces
         .iter()
@@ -43,9 +44,7 @@ pub(super) fn declarations(
     {
         let mut bases: BTreeMap<String, BTreeSet<PathBuf>> = BTreeMap::new();
         for root in &facts.rust_roots {
-            if repository.join(root.manifest.as_str()).parent()
-                == Some(workspace.workspace_root.as_path())
-            {
+            if repository.join(root.manifest.as_str()).parent() == Some(workspace.root.as_path()) {
                 for member in &root.members {
                     if let Some(base) = repository.join(member.manifest.as_str()).parent() {
                         bases
@@ -64,7 +63,7 @@ pub(super) fn declarations(
                     .insert(base.to_path_buf());
             }
         }
-        for (unit, output) in unit_files(&workspace.target_directory)? {
+        for (unit, output) in workspace.unchecked_units()? {
             let UnitFile::BuildOutput { package, .. } = unit else {
                 continue;
             };
@@ -85,7 +84,7 @@ pub(super) fn declarations(
                 .filter(|path| fs::metadata(path).is_ok_and(|metadata| metadata.is_dir()))
                 .cloned()
                 .collect();
-            let trusted = trusted(&output, &paths, &directories, &targets, max_entries)?;
+            let trusted = trusted(&output, &paths, &directories, &targets, &mut pass)?;
             let targets = inventory::load(&output)
                 .ok()
                 .filter(|saved| targets.is_subset(&saved.targets))
@@ -103,14 +102,27 @@ pub(super) fn declarations(
     Ok(found)
 }
 
+struct Pass {
+    budget: inventory::Budget,
+    views: BTreeMap<(PathBuf, BTreeSet<PathBuf>), inventory::Entries>,
+}
+
+impl Pass {
+    fn new(max_entries: usize) -> Self {
+        Self {
+            budget: inventory::Budget::new(max_entries),
+            views: BTreeMap::new(),
+        }
+    }
+}
+
 fn trusted(
     output: &Path,
     paths: &[PathBuf],
     directories: &[PathBuf],
     targets: &BTreeSet<PathBuf>,
-    max_entries: usize,
+    pass: &mut Pass,
 ) -> Result<bool, CiError> {
-    let mut budget = inventory::Budget::new(max_entries);
     let saved = inventory::load(output).ok();
     let targets = saved
         .as_ref()
@@ -127,13 +139,26 @@ fn trusted(
         return Ok(false);
     }
     for path in directories {
-        let matched = inventory::scan(path, targets, &mut budget)
-            .and_then(|scan| inventory::view(&scan.entries, &fs::canonicalize(path)?, targets))
-            .and_then(|entries| inventory::matches(output, path, &entries, targets));
-        match matched {
-            Ok(true) => {}
-            Err(error) if budget.overflowed() => return Err(CiError::new(error.to_string())),
-            Ok(false) | Err(_) => return Ok(false),
+        let Ok(root) = fs::canonicalize(path) else {
+            return Ok(false);
+        };
+        let key = (root.clone(), targets.clone());
+        if !pass.views.contains_key(&key) {
+            let scanned = inventory::scan(path, targets, &mut pass.budget)
+                .and_then(|scan| inventory::view(&scan.entries, &root, targets));
+            match scanned {
+                Ok(view) => {
+                    pass.views.insert(key.clone(), view);
+                }
+                Err(error) if pass.budget.overflowed() => {
+                    return Err(CiError::new(error.to_string()));
+                }
+                Err(_) => return Ok(false),
+            }
+        }
+        let current = &pass.views[&key];
+        if !matches!(inventory::matches(output, path, current, targets), Ok(true)) {
+            return Ok(false);
         }
     }
     Ok(true)

@@ -14,10 +14,17 @@ use super::Audit;
 use super::inventory::{self, Budget, Entries};
 use crate::error::CiError;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Cause {
+    Changed,
+    Unproven,
+}
+
 pub(super) struct Freshness {
     targets: BTreeSet<PathBuf>,
     directories: BTreeMap<(PathBuf, BTreeSet<PathBuf>), (SystemTime, Entries)>,
     budget: Budget,
+    max_directory_entries: usize,
 }
 
 impl Freshness {
@@ -36,7 +43,17 @@ impl Freshness {
             targets,
             directories: BTreeMap::new(),
             budget: Budget::new(max_directory_entries),
+            max_directory_entries,
         })
+    }
+
+    pub(super) fn scratch(&self) -> Self {
+        Self {
+            targets: self.targets.clone(),
+            directories: BTreeMap::new(),
+            budget: Budget::new(self.max_directory_entries),
+            max_directory_entries: self.max_directory_entries,
+        }
     }
 
     fn changed(
@@ -68,8 +85,6 @@ impl Freshness {
 }
 
 impl Audit<'_> {
-    /// The first `limit` declared inputs that changed since `built` (or whose receipt no longer
-    /// matches), in declaration order. A `limit` of 1 stops at the first change.
     pub(super) fn changed_inputs(
         &mut self,
         base: &Path,
@@ -78,7 +93,7 @@ impl Audit<'_> {
         output: &Path,
         declared: bool,
         limit: usize,
-    ) -> Result<Vec<String>, CiError> {
+    ) -> Result<Vec<(String, Cause)>, CiError> {
         // A cross-target cache without a prior receipt cannot prove its inputs and remains stale.
         let saved = inventory::load(output)
             .ok()
@@ -93,15 +108,19 @@ impl Audit<'_> {
                 break;
             }
             let path = base.join(raw);
-            if declared
-                && !saved
-                    .as_ref()
-                    .and_then(|saved| saved.state(&path))
-                    .zip(inventory::state(&path).ok())
-                    .is_some_and(|(before, current)| before == current)
-            {
-                changed.push(raw.clone());
-                continue;
+            if declared {
+                let before = saved.as_ref().and_then(|saved| saved.state(&path));
+                match (before, inventory::state(&path).ok()) {
+                    (Some(before), Some(current)) if before == current => {}
+                    (Some(_), Some(_)) => {
+                        changed.push((raw.clone(), Cause::Changed));
+                        continue;
+                    }
+                    _ => {
+                        changed.push((raw.clone(), Cause::Unproven));
+                        continue;
+                    }
+                }
             }
             let stale = match fs::metadata(&path) {
                 Ok(metadata)
@@ -127,7 +146,7 @@ impl Audit<'_> {
                 Err(error) => return Err(failed(&path, &error)),
             };
             if stale {
-                changed.push(raw.clone());
+                changed.push((raw.clone(), Cause::Changed));
             }
         }
         Ok(changed)
@@ -198,63 +217,51 @@ mod tests {
         assert!(matches!(newest, Ok(None)), "{newest:?}");
     }
 
-    #[test]
-    fn a_write_after_the_walk_is_seen_by_the_decision() {
-        let (root, scan) = snapshot("late-write");
-        let future = UNIX_EPOCH + std::time::Duration::from_secs(4_000_000_000);
-        fs::File::open(root.join("kept.txt"))
-            .and_then(|file| file.set_times(fs::FileTimes::new().set_modified(future)))
+    fn directory_snapshot(name: &str) -> (PathBuf, inventory::Scan) {
+        let root = fs::canonicalize(std::env::temp_dir())
+            .unwrap_or_else(|e| unreachable!("{e}"))
+            .join(format!("velnor-freshness-{name}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let directory = root.join("d");
+        fs::create_dir_all(&directory).unwrap_or_else(|e| unreachable!("{e}"));
+        fs::write(directory.join("f"), b"").unwrap_or_else(|e| unreachable!("{e}"));
+        for path in [directory.join("f"), directory.clone(), root.clone()] {
+            fs::File::open(&path)
+                .and_then(|file| file.set_times(fs::FileTimes::new().set_modified(UNIX_EPOCH)))
+                .unwrap_or_else(|e| unreachable!("{e}"));
+        }
+        let mut budget = Budget::new(usize::MAX);
+        let scan = inventory::scan(&root, &BTreeSet::new(), &mut budget)
             .unwrap_or_else(|e| unreachable!("{e}"));
-        let newest = inventory::newest(&scan, &scan.entries);
-        fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
-        assert!(
-            matches!(newest, Ok(Some(time)) if time == future),
-            "a write after the walk was missed: {newest:?}"
-        );
+        (root, scan)
     }
 
     #[test]
-    fn a_directory_swapped_in_after_the_walk_makes_the_snapshot_stale() {
-        let root = fs::canonicalize(std::env::temp_dir())
-            .unwrap_or_else(|e| unreachable!("{e}"))
-            .join(format!("velnor-freshness-swap-{}", std::process::id()));
-        let _ = fs::remove_dir_all(&root);
-        let original = root.join("d");
-        fs::create_dir_all(&original).unwrap_or_else(|e| unreachable!("{e}"));
-        let set = |path: &Path, time: SystemTime| {
-            fs::write(path, b"").unwrap_or_else(|e| unreachable!("{e}"));
-            fs::File::open(path)
-                .and_then(|file| file.set_times(fs::FileTimes::new().set_modified(time)))
-                .unwrap_or_else(|e| unreachable!("{e}"));
-        };
-        let future = UNIX_EPOCH + std::time::Duration::from_secs(4_000_000_000);
-        set(&original.join("f"), future);
-        let swapped = std::sync::atomic::AtomicBool::new(false);
-        let mut budget = Budget::new(usize::MAX);
-        let scan = inventory::scan_with(
-            &root,
-            &BTreeSet::new(),
-            &mut budget,
-            &inventory::Probe {
-                after_open: &|directory| {
-                    if directory.ends_with("d")
-                        && !swapped.swap(true, std::sync::atomic::Ordering::Relaxed)
-                    {
-                        fs::rename(directory, directory.with_file_name("d.aside"))
-                            .unwrap_or_else(|e| unreachable!("{e}"));
-                        fs::create_dir_all(directory).unwrap_or_else(|e| unreachable!("{e}"));
-                        set(&directory.join("f"), UNIX_EPOCH);
-                    }
-                },
-                ..inventory::Probe::default()
-            },
-        )
-        .unwrap_or_else(|e| unreachable!("{e}"));
+    fn a_file_created_after_the_walk_makes_the_snapshot_stale() {
+        let (root, scan) = directory_snapshot("created");
+        fs::write(root.join("d").join("new"), b"").unwrap_or_else(|e| unreachable!("{e}"));
         let newest = inventory::newest(&scan, &scan.entries);
         fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
         assert!(
             matches!(newest, Ok(None)),
-            "a swapped-in directory was read as the walked one: {newest:?}"
+            "a file created after the walk was missed: {newest:?}"
+        );
+    }
+
+    #[test]
+    fn a_directory_rewritten_with_the_same_names_after_the_walk_makes_the_snapshot_stale() {
+        let (root, scan) = directory_snapshot("rewritten");
+        let directory = root.join("d");
+        fs::remove_file(directory.join("f")).unwrap_or_else(|e| unreachable!("{e}"));
+        fs::write(directory.join("f"), b"").unwrap_or_else(|e| unreachable!("{e}"));
+        fs::File::open(directory.join("f"))
+            .and_then(|file| file.set_times(fs::FileTimes::new().set_modified(UNIX_EPOCH)))
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        let newest = inventory::newest(&scan, &scan.entries);
+        fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
+        assert!(
+            matches!(newest, Ok(None)),
+            "a directory rewritten after the walk was accepted as the walked one: {newest:?}"
         );
     }
 }

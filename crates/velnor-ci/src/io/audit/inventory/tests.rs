@@ -8,6 +8,12 @@ use super::super::options::MAX_ENTRIES_VARIABLE;
 use super::walk::{Probe, scan_with as walk};
 use super::*;
 
+mod ancestors;
+mod decision;
+mod links;
+mod placement;
+mod racing;
+
 fn scan_with(
     root: &Path,
     targets: &BTreeSet<PathBuf>,
@@ -134,73 +140,6 @@ fn an_entry_removed_during_the_walk_is_not_an_error() {
         failure.is_none(),
         "scan failed on a vanished entry: {failure:?}"
     );
-}
-
-fn swapped_directory_scan(label: &str) -> (PathBuf, Entries) {
-    let root = fs::canonicalize(std::env::temp_dir())
-        .unwrap_or_else(|e| unreachable!("{e}"))
-        .join(format!("velnor-scan-swap-{label}-{}", std::process::id()));
-    let _ = fs::remove_dir_all(&root);
-    let original = root.join("d");
-    fs::create_dir_all(original.join("b")).unwrap_or_else(|e| unreachable!("{e}"));
-    fs::write(original.join("a"), b"").unwrap_or_else(|e| unreachable!("{e}"));
-    fs::write(original.join("b").join("inner"), b"").unwrap_or_else(|e| unreachable!("{e}"));
-    let swapped = AtomicBool::new(false);
-    let mut budget = Budget::new(usize::MAX);
-    let entries = scan_with(
-        &root,
-        &BTreeSet::new(),
-        &mut budget,
-        &Probe {
-            before_open: &|_| Ok(()),
-            after_open: &|directory| {
-                if directory.ends_with("d") && !swapped.swap(true, Ordering::Relaxed) {
-                    fs::rename(directory, directory.with_file_name("d.aside"))
-                        .unwrap_or_else(|e| unreachable!("{e}"));
-                    fs::create_dir_all(directory.join("a")).unwrap_or_else(|e| unreachable!("{e}"));
-                    fs::write(directory.join("a").join("x"), b"")
-                        .unwrap_or_else(|e| unreachable!("{e}"));
-                    fs::write(directory.join("b"), b"").unwrap_or_else(|e| unreachable!("{e}"));
-                }
-            },
-            ..Probe::default()
-        },
-    )
-    .unwrap_or_else(|e| unreachable!("{e}"));
-    fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
-    (root, entries)
-}
-
-#[test]
-fn a_directory_swapped_after_it_is_opened_is_recorded_from_the_opened_directory() {
-    let (root, entries) = swapped_directory_scan("kinds");
-    let children = entries
-        .get(&root.join("d"))
-        .unwrap_or_else(|| unreachable!("{:?}", entries.keys()));
-    assert_eq!(
-        children.get(Path::new("a")),
-        Some(&Kind::File),
-        "{children:?}"
-    );
-    assert_eq!(
-        children.get(Path::new("b")),
-        Some(&Kind::Directory),
-        "{children:?}"
-    );
-}
-
-#[test]
-fn a_subdirectory_is_descended_through_its_opened_parent_not_its_path() {
-    let (root, entries) = swapped_directory_scan("descent");
-    assert!(
-        !entries.contains_key(&root.join("d").join("a")),
-        "walked the replacement directory: {:?}",
-        entries.keys()
-    );
-    let inner = entries
-        .get(&root.join("d").join("b"))
-        .unwrap_or_else(|| unreachable!("{:?}", entries.keys()));
-    assert!(inner.contains_key(Path::new("inner")), "{inner:?}");
 }
 
 #[test]
@@ -345,50 +284,5 @@ fn a_link_target_directory_removed_before_it_is_opened_fails_the_scan_closed() {
     assert!(
         matches!(&result, Err(error) if error.to_string().contains("changed while the audit scanned it; retry")),
         "a link target replaced during the scan was silently dropped: {result:?}"
-    );
-}
-
-#[test]
-fn a_root_that_is_a_regular_file_fails_the_scan_with_not_a_directory() {
-    let root = std::env::temp_dir().join(format!("velnor-scan-root-file-{}", std::process::id()));
-    fs::write(&root, b"").unwrap_or_else(|e| unreachable!("{e}"));
-    let mut budget = Budget::new(usize::MAX);
-    let result = scan_with(&root, &BTreeSet::new(), &mut budget, &Probe::default());
-    fs::remove_file(&root).unwrap_or_else(|e| unreachable!("{e}"));
-    assert!(
-        matches!(&result, Err(error) if error.raw_os_error() == Some(libc::ENOTDIR)),
-        "{result:?}"
-    );
-}
-
-#[test]
-fn a_root_replaced_by_a_symbolic_link_before_it_is_opened_fails_the_scan_instead_of_following_it() {
-    let base = fs::canonicalize(std::env::temp_dir())
-        .unwrap_or_else(|e| unreachable!("{e}"))
-        .join(format!("velnor-scan-root-link-{}", std::process::id()));
-    let _ = fs::remove_dir_all(&base);
-    let root = base.join("root");
-    let elsewhere = base.join("elsewhere");
-    fs::create_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));
-    fs::create_dir_all(&elsewhere).unwrap_or_else(|e| unreachable!("{e}"));
-    let mut budget = Budget::new(usize::MAX);
-    let result = scan_with(
-        &root,
-        &BTreeSet::new(),
-        &mut budget,
-        &Probe {
-            before_open: &|directory| {
-                fs::remove_dir(directory).unwrap_or_else(|e| unreachable!("{e}"));
-                std::os::unix::fs::symlink(&elsewhere, directory)
-                    .unwrap_or_else(|e| unreachable!("{e}"));
-                Ok(())
-            },
-            ..Probe::default()
-        },
-    );
-    fs::remove_dir_all(&base).unwrap_or_else(|e| unreachable!("{e}"));
-    assert!(
-        matches!(&result, Err(error) if matches!(error.raw_os_error(), Some(libc::ELOOP | libc::ENOTDIR))),
-        "{result:?}"
     );
 }
