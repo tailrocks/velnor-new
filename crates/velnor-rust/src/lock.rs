@@ -14,6 +14,7 @@ pub(crate) const CI: &str = "velnor-ci";
 pub(crate) const GENERATOR: &str = "velnor-gen";
 const BINARY_SUMS: &str = "BINARY-SHA256SUMS";
 
+// helper-gate: first in tools-v0.1.111 via 1e48e76705
 pub(crate) const GENERATOR_BINARY_RELEASE: (u64, u64, u64) = (0, 1, 111);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -112,10 +113,16 @@ pub fn pin_lock(
     let (ci_binary, generator_binary) = match (form, binary_sums) {
         (Form::Archive, Some(binary_sums)) => {
             let (ci, generator) = binary_digests(binary_sums, &listed)?;
-            (
-                ci,
-                generator.filter(|_| version.at_least(GENERATOR_BINARY_RELEASE)),
-            )
+            let generator = if version.at_least(GENERATOR_BINARY_RELEASE) {
+                Some(generator.ok_or_else(|| {
+                    LockError(format!(
+                        "{BINARY_SUMS} lists no {GENERATOR} binary digests, but release {version} must list them"
+                    ))
+                })?)
+            } else {
+                None
+            };
+            (ci, generator)
         }
         (Form::Archive, None) => {
             return Err(LockError(format!(

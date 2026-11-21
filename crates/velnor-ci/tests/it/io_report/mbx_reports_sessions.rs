@@ -20,7 +20,9 @@ fn a_planted_symlink_or_oversized_report_is_unreadable_evidence_not_read() -> Re
     cargo(&repo, "build", &report_json(5, 1, 0, 0), "compiled")?;
     let real = repo.root().join("real.json");
     fs::write(&real, report_json(5, 7, 0, 0))?;
+    plant_session(&repo, "1-linked", None)?;
     std::os::unix::fs::symlink(&real, plant(&repo, "1-linked.json")?)?;
+    plant_session(&repo, "2-huge", None)?;
     fs::write(plant(&repo, "2-huge.json")?, vec![b' '; 2 << 20])?;
     let metrics = report(&repo)?;
     assert_eq!(metrics.mbx.sessions, [session(1, 0, 0)], "{metrics:?}");
@@ -131,6 +133,8 @@ fn a_dangling_json_symlink_is_one_unreadable_report_not_also_missing() -> Result
 #[test]
 fn a_session_inside_an_enclosing_mbx_session_gets_no_report_path() -> ResultTest {
     let repo = fixture("mbx-reports-nested")?;
+    let socket = repo.root().join("cache-agent.sock");
+    let _daemon = std::os::unix::net::UnixListener::bind(&socket)?;
     cargo_with(
         &repo,
         "build",
@@ -138,7 +142,7 @@ fn a_session_inside_an_enclosing_mbx_session_gets_no_report_path() -> ResultTest
         "compiled",
         None,
         true,
-        true,
+        Some(&socket),
     )?;
     assert!(!repo.root().join("velnor-mbx-reports").exists());
     let metrics = report(&repo)?;
