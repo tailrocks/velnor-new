@@ -47,8 +47,8 @@ The exact-main final CI artifact reports 71 selected/executed, zero failed/reuse
 
 ## Evidence custody
 
-Frozen raw packet: `~/.codex-chainargos2/evidence/velnor-pr12/recovery-20261004/current-main-47815-ci-audit/`; `SHA256SUMS` has 252 verified entries and SHA-256 `31a91f2c76889cad4a8ce8588bee5e6c183ba3ced31196bf25cc2a6a51e1b416`. Raw cache API response is `cache-index-final.json`, SHA-256 `d91ec1ea8f4400204602183cc69fa981417cafcffe68675123ced47e324cca4d`, from `GET /repos/tailrocks/velnor-new/actions/caches?per_page=100`.
+Frozen raw packet: `~/.codex-example-org2/evidence/velnor-pr12/recovery-20261004/current-main-47815-ci-audit/`; `SHA256SUMS` has 252 verified entries and SHA-256 `31a91f2c76889cad4a8ce8588bee5e6c183ba3ced31196bf25cc2a6a51e1b416`. Raw cache API response is `cache-index-final.json`, SHA-256 `d91ec1ea8f4400204602183cc69fa981417cafcffe68675123ced47e324cca4d`, from `GET /repos/tailrocks/velnor-new/actions/caches?per_page=100`.
 
-Independent cross-check receipt: `~/.codex-chainargos2/evidence/velnor-pr12/recovery-20261004/current-main-47815-ci-audit-independent-review.md`, SHA-256 `f5a6406a1fbb5d1602b23e7a48bae8d33532021910c9f01d3314da61b09a5f3a`. It records the raw/enriched Plan-log distinction and corrected Mise hash. The versioned erratum `ci-performance-actual-runs-20261004-erratum-v2.md` preserves those corrections separately from the packet.
+Independent cross-check receipt: `~/.codex-example-org2/evidence/velnor-pr12/recovery-20261004/current-main-47815-ci-audit-independent-review.md`, SHA-256 `f5a6406a1fbb5d1602b23e7a48bae8d33532021910c9f01d3314da61b09a5f3a`. It records the raw/enriched Plan-log distinction and corrected Mise hash. The versioned erratum `ci-performance-actual-runs-20261004-erratum-v2.md` preserves those corrections separately from the packet.
 
 No repository status or 47-row qualification ledger was changed. This source audit does not mark any performance or runtime gate complete.
