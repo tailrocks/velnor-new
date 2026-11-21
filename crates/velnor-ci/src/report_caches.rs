@@ -14,6 +14,8 @@ pub(crate) struct CachePlan {
     #[serde(default)]
     save_step: Option<String>,
     #[serde(default)]
+    save_key_step: Option<String>,
+    #[serde(default)]
     not_generated: Option<String>,
 }
 
@@ -42,12 +44,23 @@ pub(crate) fn observe_caches(
                 },
                 _ => SaveOutcome::NotAttempted,
             };
+            let saved_key = plan
+                .save_key_step
+                .as_ref()
+                .filter(|_| save != SaveOutcome::NotAttempted)
+                .map(|id| {
+                    steps[id]["outputs"]["key"]
+                        .as_str()
+                        .unwrap_or_default()
+                        .to_owned()
+                });
             Cache {
                 family: plan.family,
                 root: plan.root,
                 restore_step: plan.restore_step,
                 save_step: plan.save_step,
                 requested_key,
+                saved_key,
                 matched_key,
                 hit: hit.unwrap_or(Hit::Miss),
                 bytes: None,
@@ -116,6 +129,7 @@ mod tests {
             root: None,
             restore_step: "restore".to_owned(),
             save_step: Some("save".to_owned()),
+            save_key_step: None,
             not_generated: None,
         }];
         let steps = json!({
