@@ -67,6 +67,24 @@ pub(crate) fn archive_lock() -> Result<String, Box<dyn Error>> {
     archive_lock_at("0.1.81")
 }
 
+const GENERATOR_BINARY_SUMS: &str = "\
+24da48018435c7e9b2e0153a05c7d65b68017db69b073cc8398c78dc6e4274df  velnor-gen-x86_64-unknown-linux-musl.tar.gz/velnor-gen
+8a7852af13610acee22317e764266301a83884595823a9b006a525d395cfa543  velnor-gen-aarch64-unknown-linux-musl.tar.gz/velnor-gen
+5b8f0d27e1a7f6a3c9d4e2b1a0c8f7e6d5c4b3a2918070605f4e3d2c1b0a9f8e  velnor-gen-aarch64-apple-darwin.tar.gz/velnor-gen
+";
+
+const BINARY_SUMS_WITH_GENERATOR_DIGEST: &str =
+    "69033b9cdde1860652f3d64fdb4f3757cafc0b666d50ad1ba409dda6b078ddaf";
+
+pub(crate) fn generator_archive_lock_at(version: &str) -> Result<String, Box<dyn Error>> {
+    let sums = ARCHIVE_SUMS.replace(
+        "4e9a485939165d82a9ebd49078778ca47137f344524ce8d87d03116760d5bb6d",
+        BINARY_SUMS_WITH_GENERATOR_DIGEST,
+    );
+    let binary = format!("{BINARY_SUMS}{GENERATOR_BINARY_SUMS}");
+    Ok(pin_lock(version, COMMIT_FILE, &sums, Some(&binary))?)
+}
+
 pub(crate) fn archive_lock_at(version: &str) -> Result<String, Box<dyn Error>> {
     Ok(pin_lock(
         version,

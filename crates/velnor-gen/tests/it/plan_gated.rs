@@ -11,7 +11,7 @@ use velnor_rust::{LOCK_PATH, detect, lint_runs};
 use crate::events::DENY_MISE;
 use crate::facts::TestResult;
 use crate::lint_lane::{LINT, repo as lint_repo};
-use crate::lock_archive::archive_lock_at;
+use crate::lock_archive::generator_archive_lock_at;
 use crate::pipeline::{pin_helper, view, workflow};
 
 const POLICY_GATED: &[u8] = b"[policy]\ngate_on_plan = true\n";
@@ -38,7 +38,7 @@ fn check_repo(config: &str, helper: &str) -> Result<RepoView, Box<dyn std::error
     crate::facts::lock_pinned_tools(&mut repo)?;
     repo.tracked_paths.insert(LOCK_PATH);
     repo.files
-        .insert(LOCK_PATH, archive_lock_at(helper)?.into_bytes());
+        .insert(LOCK_PATH, generator_archive_lock_at(helper)?.into_bytes());
     Ok(repo)
 }
 
