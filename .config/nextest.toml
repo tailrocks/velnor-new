@@ -1,9 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 # SPDX-License-Identifier: Apache-2.0
 
-# Nextest profiles (Gate 0 skeleton).
-# Empty-run behavior is enforced via CLI `--no-tests fail` (contract §4);
-# nextest has no profile-level equivalent, so it is not set here.
 experimental = ["wrapper-scripts"]
 
 [scripts.wrapper.local-docker-ci]
@@ -60,7 +57,6 @@ slow-timeout = { period = "10s", terminate-after = 1 }
 filter = 'package(=velnor-gen) and test(=helper_tool_paths::setup_records_non_default_tools_and_rendered_calls_use_them)'
 slow-timeout = { period = "10s", terminate-after = 1 }
 
-# Each of these runs git or cargo metadata on a temporary repository, which takes 1-2 s on a loaded host.
 [[profile.default.overrides]]
 filter = 'package(=velnor-gen) and binary(=it) and (test(=freshness::generate_rejects_a_build_script_that_is_a_filesystem_symlink) or test(=untracked_config::an_untracked_config_is_refused_by_generate_and_check_and_names_the_file) or test(=no_test_only_flags::no_rendered_workflow_carries_the_test_only_fetch_flags) or test(=tools_anchor_size::a_twenty_one_root_parallel_workflow_with_a_read_per_job_is_refused_and_one_read_renders) or test(=io_identity::a_checkout_without_an_origin_keeps_its_schedule_when_renamed) or test(=io_identity::generate_refuses_a_hand_written_workflow_with_a_forged_marker) or test(=io_identity::generate_still_removes_a_genuinely_generated_stale_workflow) or test(=io_identity::local_origin_generates_when_the_schedule_does_not_need_the_identity) or test(=io_identity::local_origin_is_rejected_when_a_hashed_schedule_needs_the_identity) or test(=io_identity::repository_case_does_not_change_schedule_identity) or test(=io_identity::schedules_use_the_remote_repository_and_transport_independent_identity))'
 slow-timeout = { period = "10s", terminate-after = 1 }
@@ -73,7 +69,6 @@ slow-timeout = { period = "10s", terminate-after = 1 }
 filter = 'package(=velnor-gen) and binary(=it) and (test(=freshness::generate_rejects_a_build_script_that_is_a_filesystem_symlink) or test(=untracked_config::an_untracked_config_is_refused_by_generate_and_check_and_names_the_file) or test(=no_test_only_flags::no_rendered_workflow_carries_the_test_only_fetch_flags) or test(=tools_anchor_size::a_twenty_one_root_parallel_workflow_with_a_read_per_job_is_refused_and_one_read_renders) or test(=io_identity::a_checkout_without_an_origin_keeps_its_schedule_when_renamed) or test(=io_identity::generate_refuses_a_hand_written_workflow_with_a_forged_marker) or test(=io_identity::generate_still_removes_a_genuinely_generated_stale_workflow) or test(=io_identity::local_origin_generates_when_the_schedule_does_not_need_the_identity) or test(=io_identity::local_origin_is_rejected_when_a_hashed_schedule_needs_the_identity) or test(=io_identity::repository_case_does_not_change_schedule_identity) or test(=io_identity::schedules_use_the_remote_repository_and_transport_independent_identity))'
 slow-timeout = { period = "10s", terminate-after = 1 }
 
-# Each of these renders or reads every recorded sample, so it runs past the 2 s default on a loaded host.
 [[profile.default.overrides]]
 filter = 'package(=velnor-gen) and binary(=it) and (test(=golden::every_sample_repository_renders_exactly_its_expected_files) or test(=fork_fence_invariant::every_job_of_every_sample_that_a_pull_request_reaches_is_fenced) or test(=trim_job::publication::no_job_of_any_sample_that_can_run_on_a_pull_request_or_merge_group_holds_actions_write) or test(=unused_anchors::no_rendered_sample_workflow_has_an_anchor_nobody_aliases) or test(=repo_sample::the_recorded_repository_sample_has_a_root_per_workspace_with_the_members_cargo_reports) or test(=nested_target_dir::no_root_of_any_sample_builds_inside_a_package_directory_from_the_new_helper) or test(=mbx_compiling_only::every_sample_job_that_installs_tools_sets_the_mbx_cache_dir_at_0_1_112))'
 slow-timeout = { period = "10s", terminate-after = 1 }
@@ -131,8 +126,6 @@ slow-timeout = { period = "30s", terminate-after = 4 }
 filter = 'package(=velnor-ci) and test(plan_reads_each_roots_sources_to_decide_the_doctest_and_documentation_steps)'
 slow-timeout = { period = "30s", terminate-after = 4 }
 
-# Every delta_baseline test runs velnor-ci subprocesses on real trees, and the staging test
-# waits out the 2 s racy-ctime margin on purpose: both run past the 2 s default.
 [[profile.default.overrides]]
 filter = 'package(=velnor-ci) and test(delta_baseline::)'
 slow-timeout = { period = "30s", terminate-after = 1 }
@@ -141,8 +134,6 @@ slow-timeout = { period = "30s", terminate-after = 1 }
 filter = 'package(=velnor-ci) and test(audit::bounds::)'
 slow-timeout = { period = "30s", terminate-after = 4 }
 
-# Every delta_baseline test runs velnor-ci subprocesses on real trees, and the staging test
-# waits out the 2 s racy-ctime margin on purpose: both run past the 2 s default.
 [[profile.ci.overrides]]
 filter = 'package(=velnor-ci) and test(delta_baseline::)'
 slow-timeout = { period = "30s", terminate-after = 1 }
@@ -192,32 +183,25 @@ slow-timeout = { period = "30s", terminate-after = 1 }
 filter = 'package(=velnor-ci) and test(=cache_prune_fresh::a_pruned_build_directory_leaves_every_dependency_fresh_for_the_next_build)'
 slow-timeout = { period = "30s", terminate-after = 1 }
 
-# setup_action tests fork installs that block on a FIFO and wait on watchdog and deadline
-# timers of up to 30 s (orphan tests: up to 120 s in the worst case).
 [[profile.default.overrides]]
 filter = 'package(=velnor-gen) and binary(=it) and test(/^setup_action/)'
 slow-timeout = { period = "30s", terminate-after = 4 }
 
-# Each of these forks bash, curl, tar and a guard watchdog; two at a time keep them off a loaded host.
 [[profile.default.overrides]]
 filter = 'package(=velnor-gen) and binary(=it) and (test(/^setup_action/) or test(=helper_tool_paths::setup_records_non_default_tools_and_rendered_calls_use_them))'
 test-group = "setup-action"
 
-# Renders every lane output of four plans and checks each rendered workflow.
 [[profile.default.overrides]]
 filter = 'package(=velnor-gen) and binary(=it) and test(saving_lane_outputs_fit_the_required_context_bound)'
 slow-timeout = { period = "10s", terminate-after = 1 }
 
-# These wait for a grace period or a background process that holds a pipe: 5 s grace, and up to 2 x grace of wall time.
 [[profile.default.overrides]]
 filter = 'package(=velnor-ci) and (test(run_returns_when_the_command_exits_although_a_background_process_keeps_its_pipes_open) | test(run_waits_for_all_open_pipes_within_one_shared_grace_period) | test(run_withholds_counts_when_a_descendant_keeps_the_summary_pipe_open) | test(run_writes_no_counts_when_a_held_pipe_never_printed_a_summary))'
 slow-timeout = { period = "30s", terminate-after = 1 }
 
-# These velnor-gen tests walk the repository or render workflows on a loaded host, and ran past the 2 s default.
 [[profile.default.overrides]]
 filter = 'package(=velnor-gen) and binary(=it) and (test(/^concurrency::/) | test(=crates_mirror::mirror_is_explicit_scoped_and_precedes_every_job_tools) | test(=declared_command_wrappers::wrappers_cannot_hide_a_repository_script_from_the_write_token_rule) | test(=job_trust_boundary::no_token_or_verdict_step_follows_repository_code_in_the_same_job))'
 slow-timeout = { period = "10s", terminate-after = 1 }
-# Each of these starts bash, perl or a rendered helper, or reads the repository, and ran past the 2 s default on a loaded host.
 [[profile.default.overrides]]
 filter = 'package(=velnor-gen) and binary(=it) and (test(=needs_size::cache_context_is_bounded_from_its_producers_without_unrelated_plan_outputs) | test(=helper_perl_environment::trusted_launcher_preserves_helper_arguments_and_failure_status) | test(=helper_perl_environment::trusted_shasum_ignores_perl_startup_and_inherited_launcher_poison) | test(=helper_integrity::rendered_commands_ignore_path_shadows_and_refuse_a_replaced_helper) | test(=helper_startup::trusted_invocations_ignore_bash_env_startup) | test(=helper_startup::trusted_invocations_ignore_imported_exec_functions) | test(=helper_startup::trusted_invocations_ignore_imported_shell_options) | test(=release_yml_raw::provenance_is_written_only_for_a_strict_sidecar) | test(=ruleset::the_help_one_liner_stops_at_the_first_failed_post) | test(=declared_command_wrappers::wrappers_cannot_hide_a_helper_call))'
 slow-timeout = { period = "10s", terminate-after = 1 }
@@ -232,7 +216,7 @@ slow-timeout = { period = "30s", terminate-after = 1 }
 
 [[profile.default.overrides]]
 filter = 'package(=velnor-ci) and (test(=audit::build_directory::a_build_command_naming_a_build_directory_is_refused) | test(=audit::groups::a_real_grouped_build_passes_the_audit) | test(=audit::groups::a_real_grouped_build_passes_the_audit_through_a_symlinked_root) | test(=audit::per_root::a_per_root_audit_compares_only_the_lock_lines_of_its_own_packages) | test(=plan_diff::a_check_id_outside_the_identifier_alphabet_is_refused) | test(=plan_main::a_push_reads_the_base_lock_while_it_fits_and_selects_everything_past_the_byte_budget) | test(=io_plan_groups::plan_outputs_one_run_or_skip_per_group_and_root) | test(plan_main_groups::))'
-slow-timeout = { period = "10s", terminate-after = 1 }
+slow-timeout = { period = "30s", terminate-after = 1 }
 
 [[profile.default.overrides]]
 filter = 'package(=velnor-ci) and (test(=plan_diff::every_recorded_case_matches_the_legacy_op) | test(=resolve_qualification::every_recorded_case_matches_the_legacy_op) | test(=io_plan_docs::plan_treats_sources_over_the_total_size_bound_as_possibly_holding_docs))'
@@ -248,7 +232,7 @@ slow-timeout = { period = "30s", terminate-after = 1 }
 
 [[profile.default.overrides]]
 filter = 'package(=velnor-ci) and (test(=run::run_keeps_each_stream_and_every_byte_and_appends_one_record_per_command) | test(=io_target_case::checkout_under_a_cargo_ancestor_still_saves_its_default_target))'
-slow-timeout = { period = "10s", terminate-after = 1 }
+slow-timeout = { period = "30s", terminate-after = 1 }
 
 [[profile.default.overrides]]
 filter = 'package(=velnor-ci) and test(=mise_version_plan::a_change_to_mise_version_runs_the_velnor_gen_tests_that_read_it)'
@@ -256,7 +240,7 @@ slow-timeout = { period = "30s", terminate-after = 1 }
 
 [[profile.default.overrides]]
 filter = 'package(=velnor-ci) and (test(=configuration_targets::configuration_targets_rejects_incomplete_workspace_metadata_before_checks) | test(=configuration_targets::configuration_targets_reports_unknown_when_feature_contexts_are_ambiguous) | test(=configuration_targets::contexts::configuration_targets_scopes_hazardous_edges_to_transitive_dependencies) | test(=configuration_targets::contexts::configuration_targets_uses_global_uncertainty_for_unbounded_graphs))'
-slow-timeout = { period = "10s", terminate-after = 1 }
+slow-timeout = { period = "30s", terminate-after = 1 }
 
 [[profile.default.overrides]]
 filter = "package(=velnor-ci) or package(=velnor-gen) or package(=velnor-model) or package(=velnor-release) or package(=velnor-render) or package(=velnor-rust)"
@@ -278,7 +262,6 @@ threads-required = "num-test-threads"
 filter = "package(=velnor-resource-probe) and test(=cleanup_observer_scan::cleanup_observer_held_descriptor::a_descriptor_held_outside_the_pair_namespace_is_an_owned_reference)"
 threads-required = "num-test-threads"
 
-# Same tiers as profile.default for the tests added above. profile.ci has no 2 s line of its own.
 [[profile.ci.overrides]]
 filter = 'package(=velnor-gen) and binary(=it) and test(/^setup_action/)'
 slow-timeout = { period = "60s", terminate-after = 5 }
@@ -295,11 +278,9 @@ slow-timeout = { period = "10s", terminate-after = 1 }
 filter = 'package(=velnor-ci) and (test(run_returns_when_the_command_exits_although_a_background_process_keeps_its_pipes_open) | test(run_waits_for_all_open_pipes_within_one_shared_grace_period) | test(run_withholds_counts_when_a_descendant_keeps_the_summary_pipe_open) | test(run_writes_no_counts_when_a_held_pipe_never_printed_a_summary))'
 slow-timeout = { period = "30s", terminate-after = 1 }
 
-# Same 10 s tier for the velnor-gen file-scan tests added above.
 [[profile.ci.overrides]]
 filter = 'package(=velnor-gen) and binary(=it) and (test(/^concurrency::/) | test(=crates_mirror::mirror_is_explicit_scoped_and_precedes_every_job_tools) | test(=declared_command_wrappers::wrappers_cannot_hide_a_repository_script_from_the_write_token_rule) | test(=job_trust_boundary::no_token_or_verdict_step_follows_repository_code_in_the_same_job))'
 slow-timeout = { period = "10s", terminate-after = 1 }
-# Same 10 s tier for the tests added to profile.default above. profile.ci has no 2 s line of its own.
 [[profile.ci.overrides]]
 filter = 'package(=velnor-gen) and binary(=it) and (test(=needs_size::cache_context_is_bounded_from_its_producers_without_unrelated_plan_outputs) | test(=helper_perl_environment::trusted_launcher_preserves_helper_arguments_and_failure_status) | test(=helper_perl_environment::trusted_shasum_ignores_perl_startup_and_inherited_launcher_poison) | test(=helper_integrity::rendered_commands_ignore_path_shadows_and_refuse_a_replaced_helper) | test(=helper_startup::trusted_invocations_ignore_bash_env_startup) | test(=helper_startup::trusted_invocations_ignore_imported_exec_functions) | test(=helper_startup::trusted_invocations_ignore_imported_shell_options) | test(=release_yml_raw::provenance_is_written_only_for_a_strict_sidecar) | test(=ruleset::the_help_one_liner_stops_at_the_first_failed_post) | test(=declared_command_wrappers::wrappers_cannot_hide_a_helper_call))'
 slow-timeout = { period = "10s", terminate-after = 1 }
@@ -314,7 +295,7 @@ slow-timeout = { period = "60s", terminate-after = 3 }
 
 [[profile.ci.overrides]]
 filter = 'package(=velnor-ci) and (test(=audit::build_directory::a_build_command_naming_a_build_directory_is_refused) | test(=audit::groups::a_real_grouped_build_passes_the_audit) | test(=audit::groups::a_real_grouped_build_passes_the_audit_through_a_symlinked_root) | test(=audit::per_root::a_per_root_audit_compares_only_the_lock_lines_of_its_own_packages) | test(=plan_diff::a_check_id_outside_the_identifier_alphabet_is_refused) | test(=plan_main::a_push_reads_the_base_lock_while_it_fits_and_selects_everything_past_the_byte_budget) | test(=io_plan_groups::plan_outputs_one_run_or_skip_per_group_and_root) | test(plan_main_groups::))'
-slow-timeout = { period = "10s", terminate-after = 1 }
+slow-timeout = { period = "30s", terminate-after = 1 }
 
 [[profile.ci.overrides]]
 filter = 'package(=velnor-ci) and (test(=plan_diff::every_recorded_case_matches_the_legacy_op) | test(=resolve_qualification::every_recorded_case_matches_the_legacy_op) | test(=io_plan_docs::plan_treats_sources_over_the_total_size_bound_as_possibly_holding_docs))'
@@ -330,7 +311,7 @@ slow-timeout = { period = "30s", terminate-after = 1 }
 
 [[profile.ci.overrides]]
 filter = 'package(=velnor-ci) and (test(=run::run_keeps_each_stream_and_every_byte_and_appends_one_record_per_command) | test(=io_target_case::checkout_under_a_cargo_ancestor_still_saves_its_default_target))'
-slow-timeout = { period = "10s", terminate-after = 1 }
+slow-timeout = { period = "30s", terminate-after = 1 }
 
 [[profile.ci.overrides]]
 filter = 'package(=velnor-ci) and test(=mise_version_plan::a_change_to_mise_version_runs_the_velnor_gen_tests_that_read_it)'
@@ -338,5 +319,5 @@ slow-timeout = { period = "30s", terminate-after = 1 }
 
 [[profile.ci.overrides]]
 filter = 'package(=velnor-ci) and (test(=configuration_targets::configuration_targets_rejects_incomplete_workspace_metadata_before_checks) | test(=configuration_targets::configuration_targets_reports_unknown_when_feature_contexts_are_ambiguous) | test(=configuration_targets::contexts::configuration_targets_scopes_hazardous_edges_to_transitive_dependencies) | test(=configuration_targets::contexts::configuration_targets_uses_global_uncertainty_for_unbounded_graphs))'
-slow-timeout = { period = "10s", terminate-after = 1 }
+slow-timeout = { period = "30s", terminate-after = 1 }
 

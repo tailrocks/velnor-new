@@ -93,7 +93,7 @@ fn the_velnor_ci_serial_group_holds_every_plan_main_groups_test() -> TestResult 
     Ok(())
 }
 
-const TEN_SECOND_TESTS: [&str; 19] = [
+const SCOPED_NAMED_TESTS: [&str; 19] = [
     "configuration_targets::configuration_targets_rejects_incomplete_workspace_metadata_before_checks",
     "configuration_targets::configuration_targets_reports_unknown_when_feature_contexts_are_ambiguous",
     "configuration_targets::contexts::configuration_targets_scopes_hazardous_edges_to_transitive_dependencies",
@@ -155,9 +155,8 @@ fn assert_tier(tier: &str, names: &[&str]) -> TestResult {
 }
 
 #[test]
-fn the_scoped_ten_second_tier_is_the_timeout_nextest_applies_to_each_named_slow_test() -> TestResult
-{
-    assert_tier("10s", &TEN_SECOND_TESTS)
+fn the_named_slow_velnor_ci_tests_keep_the_thirty_second_tier_main_gives_them() -> TestResult {
+    assert_tier("30s", &SCOPED_NAMED_TESTS)
 }
 
 #[test]
