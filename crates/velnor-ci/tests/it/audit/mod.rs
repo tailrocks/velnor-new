@@ -13,6 +13,7 @@ mod groups;
 mod guards;
 mod identity;
 mod inventory;
+mod link_targets;
 mod links;
 mod lock_identity;
 mod managed_target;

@@ -97,6 +97,7 @@ fn plan_with(facts: &RepoFacts, deltas: bool) -> WorkflowPlan {
         jobs.insert(1, helper_job(facts, root, deltas));
     }
     apply_extensions(facts, &mut jobs, single);
+    crate::plan_tools::mark_anchor_keys(facts, &mut jobs);
     crate::report::finish(facts, &mut jobs, single, draft_guard);
     WorkflowPlan {
         name: "Rust CI".to_owned(),
@@ -368,6 +369,7 @@ pub(crate) fn job(facts: &RepoFacts, id: JobId) -> Job {
             .helper
             .as_ref()
             .is_some_and(|helper| helper.version().at_least(CHAINED_SAVES_HELPER)),
+        anchor_key_output: false,
         mbx_stats: velnor_model::MbxStats::Summary,
         selection_name: None,
         steps: Vec::new(),
