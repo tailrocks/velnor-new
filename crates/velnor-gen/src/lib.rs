@@ -112,7 +112,6 @@ pub fn expected_with_notes(
         .into_iter()
         .chain(velnor_rust::unverified_tools_note(&facts))
         .chain(velnor_rust::base_cache_note(&facts))
-        .chain(helper_gate::mint_note(&facts))
         .chain(facts.timings_notes)
         .collect();
     notes.extend(facts.private_suggestion);

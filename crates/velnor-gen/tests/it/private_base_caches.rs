@@ -187,27 +187,12 @@ fn the_sources_cache_saves_the_cargo_downloads_and_nothing_that_holds_a_credenti
 }
 
 #[test]
-fn an_older_helper_or_a_config_that_names_registries_keeps_the_refusal() -> TestResult {
-    for (helper, config, lock) in [
-        ("0.1.110", "", GIT_LOCK),
-        ("0.1.107", "", GIT_LOCK),
-        ("0.1.88", "", GIT_LOCK),
-    ] {
-        let repo = consumer(helper, lock, config)?;
-        let (text, notes) = text_and_notes(&repo)?;
-        for absent in [
-            "Save the target cache",
-            "Save the sources cache",
-            "cache decide",
-            "private_repo",
-            "cache private-repo",
-        ] {
-            assert!(!text.contains(absent), "{helper}: {absent}");
-        }
-        assert!(
-            notes.iter().any(|note| note.contains(REFUSED_NOTE)),
-            "{helper}: {notes:?}"
-        );
+fn an_older_helper_is_refused_before_it_renders_private_base_caches() -> TestResult {
+    for helper in ["0.1.110", "0.1.107", "0.1.88"] {
+        let error = workflow(&consumer(helper, GIT_LOCK, "")?)
+            .err()
+            .ok_or("rendered with an older helper")?;
+        assert!(error.to_string().contains("0.1.111"), "{helper}: {error}");
     }
     Ok(())
 }

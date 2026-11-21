@@ -33,7 +33,7 @@ fn pull_request(path: &str) -> Value {
 
 #[test]
 fn a_failed_format_step_does_not_skip_the_private_token_and_the_fetch() -> TestResult {
-    let repo = private_repo(&["Cargo.toml"], SECTION, "0.1.88")?;
+    let repo = private_repo(&["Cargo.toml"], SECTION, "0.1.111")?;
     let mut checked = 0;
     for job in jobs(&workflow(&repo)?)? {
         let steps = job["steps"].as_array().ok_or("steps missing")?;

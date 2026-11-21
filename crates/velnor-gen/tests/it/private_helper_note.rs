@@ -1,9 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_gen::{expected_files, expected_with_notes};
-
-use crate::facts::TestResult;
+use crate::pipeline::workflow;
 use crate::private_sources::{SECTION, private_repo};
 
 const ROOTS: &[&str] = &["Cargo.toml", "tools/Cargo.toml"];
@@ -15,48 +13,42 @@ fn assets() -> String {
     )
 }
 
-fn warning(helper: &str) -> String {
-    format!(
-        "[private_sources] / release assets with helper {helper} mint the App token after checkout-controlled steps; upgrade the helper to 0.1.111 or later"
-    )
-}
-
-fn minted_notes(notes: &[String]) -> Vec<&String> {
-    notes
-        .iter()
-        .filter(|note| note.contains("mint the App token"))
-        .collect()
+fn refusal(section: &str, helper: &str) -> Result<String, Box<dyn std::error::Error>> {
+    let repo = private_repo(ROOTS, section, helper)?;
+    Ok(match workflow(&repo) {
+        Ok(_) => String::new(),
+        Err(error) => format!("{error:?}"),
+    })
 }
 
 #[test]
-fn an_older_helper_with_private_sources_is_warned_about_the_token_order() -> TestResult {
-    let repo = private_repo(ROOTS, SECTION, "0.1.110")?;
-    let (_, notes) = expected_with_notes(&repo)?;
-    assert_eq!(minted_notes(&notes), [&warning("0.1.110")], "{notes:?}");
+fn an_older_helper_with_private_sources_is_refused_before_it_mints_the_token()
+-> Result<(), Box<dyn std::error::Error>> {
+    let refused = refusal(SECTION, "0.1.110")?;
+    assert!(refused.contains("PrivateTokenHelperTooOld"), "{refused}");
     Ok(())
 }
 
 #[test]
-fn an_older_helper_with_release_assets_is_warned_about_the_token_order() -> TestResult {
-    let repo = private_repo(ROOTS, &format!("{SECTION}{}", assets()), "0.1.110")?;
-    let (_, notes) = expected_with_notes(&repo)?;
-    assert_eq!(minted_notes(&notes), [&warning("0.1.110")], "{notes:?}");
+fn an_older_helper_with_release_assets_is_refused_before_it_mints_the_token()
+-> Result<(), Box<dyn std::error::Error>> {
+    let refused = refusal(&format!("{SECTION}{}", assets()), "0.1.110")?;
+    assert!(refused.contains("PrivateTokenHelperTooOld"), "{refused}");
     Ok(())
 }
 
 #[test]
-fn the_helper_that_mints_first_is_not_warned_about() -> TestResult {
-    let repo = private_repo(ROOTS, &format!("{SECTION}{}", assets()), "0.1.111")?;
-    let (_, notes) = expected_with_notes(&repo)?;
-    assert!(minted_notes(&notes).is_empty(), "{notes:?}");
+fn private_sources_render_on_the_first_helper_that_mints_the_token_first()
+-> Result<(), Box<dyn std::error::Error>> {
+    let refused = refusal(SECTION, "0.1.111")?;
+    assert!(!refused.contains("HelperTooOld"), "{refused}");
     Ok(())
 }
 
 #[test]
-fn the_warning_changes_neither_the_rendered_files_nor_the_generation() -> TestResult {
-    let repo = private_repo(ROOTS, SECTION, "0.1.110")?;
-    let (files, notes) = expected_with_notes(&repo)?;
-    assert_eq!(minted_notes(&notes).len(), 1, "{notes:?}");
-    assert_eq!(files, expected_files(&repo)?);
+fn release_assets_render_on_the_first_helper_that_mints_the_token_first()
+-> Result<(), Box<dyn std::error::Error>> {
+    let refused = refusal(&format!("{SECTION}{}", assets()), "0.1.111")?;
+    assert!(!refused.contains("HelperTooOld"), "{refused}");
     Ok(())
 }

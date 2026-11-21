@@ -37,6 +37,7 @@ pub enum GenerateError {
     MergeGroupHelperTooOld(HelperVersion),
     DocsHelperTooOld(HelperVersion),
     CheckAloneHelperTooOld(HelperVersion),
+    PrivateTokenHelperTooOld(HelperVersion),
     TooManySourceRoots(usize),
     HelperLockLacksMacos {
         version: HelperVersion,
@@ -102,6 +103,10 @@ impl fmt::Display for GenerateError {
             Self::CheckAloneHelperTooOld(version) => write!(
                 f,
                 "velnor-ci {version} does not know the check_alone key of .velnor/rust-ci.toml; pin velnor-ci 0.1.97 or later with `velnor-gen pin-helper 0.1.97`"
+            ),
+            Self::PrivateTokenHelperTooOld(version) => write!(
+                f,
+                "velnor-ci {version} mints the App token after the steps that check out the repository's code, so [private_sources] and release assets would expose it to that code; pin velnor-ci 0.1.111 or later with `velnor-gen pin-helper 0.1.111`"
             ),
             Self::HelperLockLacksMacos { version, runner } => write!(
                 f,
