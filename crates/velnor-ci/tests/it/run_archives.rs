@@ -204,6 +204,5 @@ fn recording(
     let output = command.output()?;
     let text = fs::read_to_string(temp.join("velnor-invocations.jsonl"))?;
     let invocation = serde_json::from_str(text.trim())?;
-    fs::remove_dir_all(temp.path())?;
     Ok((output.status, invocation))
 }

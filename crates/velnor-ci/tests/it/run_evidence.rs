@@ -8,7 +8,9 @@ use velnor_ci::telemetry::Invocation;
 
 #[test]
 fn toolchain_identity_uses_only_the_first_argument_and_preserves_config_values() {
-    let temp = std::env::temp_dir().join(format!("velnor-toolchain-{}", std::process::id()));
+    let temp = velnor_test_support::ScratchDir::new(
+        std::env::temp_dir().join(format!("velnor-toolchain-{}", std::process::id())),
+    );
     let mut units = BTreeMap::new();
     let mut baseline = None;
     for args in [
@@ -29,8 +31,8 @@ fn toolchain_identity_uses_only_the_first_argument_and_preserves_config_values()
             .args(["run", "--"])
             .arg(&program)
             .args(&args)
-            .current_dir(&temp)
-            .env("RUNNER_TEMP", &temp)
+            .current_dir(temp.path())
+            .env("RUNNER_TEMP", temp.path())
             .env("CARGO_HOME", temp.join("cargo-home"))
             .output()
             .expect("capture");
@@ -60,7 +62,6 @@ fn toolchain_identity_uses_only_the_first_argument_and_preserves_config_values()
     }
     assert_eq!(units.len(), 2);
     assert_eq!(units.values().filter(|(_, count)| *count == 2).count(), 1);
-    fs::remove_dir_all(temp).expect("cleanup");
 }
 
 #[test]
@@ -131,7 +132,6 @@ fn quiet_nonfresh_artifacts_save_the_cache_without_counting_verbose_artifacts_tw
                 "{decision:?}"
             );
         }
-        fs::remove_dir_all(temp.path()).expect("cleanup");
     }
 }
 
@@ -142,7 +142,9 @@ fn cargo_build_compiler_selectors_are_recorded_and_distinguish_compilation_ident
         "CARGO_BUILD_RUSTC_WRAPPER",
         "CARGO_BUILD_RUSTC_WORKSPACE_WRAPPER",
     ];
-    let temp = std::env::temp_dir().join(format!("velnor-selectors-{}", std::process::id()));
+    let temp = velnor_test_support::ScratchDir::new(
+        std::env::temp_dir().join(format!("velnor-selectors-{}", std::process::id())),
+    );
     let mut units = BTreeMap::new();
     let mut baseline = None;
     for changed in [
@@ -158,8 +160,8 @@ fn cargo_build_compiler_selectors_are_recorded_and_distinguish_compilation_ident
         command
             .args(["run", "--"])
             .arg(&program)
-            .current_dir(&temp)
-            .env("RUNNER_TEMP", &temp);
+            .current_dir(temp.path())
+            .env("RUNNER_TEMP", temp.path());
         for selector in selectors {
             command.env(
                 selector,
@@ -201,13 +203,14 @@ fn cargo_build_compiler_selectors_are_recorded_and_distinguish_compilation_ident
     }
     assert_eq!(units.len(), 4);
     assert_eq!(units.values().filter(|(_, count)| *count == 2).count(), 1);
-    fs::remove_dir_all(temp).expect("cleanup");
 }
 
 #[test]
 fn non_unicode_compiler_selectors_are_rejected_before_execution_but_unrelated_values_work() {
     use std::os::unix::ffi::OsStringExt;
-    let temp = std::env::temp_dir().join(format!("velnor-selector-bytes-{}", std::process::id()));
+    let temp = velnor_test_support::ScratchDir::new(
+        std::env::temp_dir().join(format!("velnor-selector-bytes-{}", std::process::id())),
+    );
     for key in ["CARGO_BUILD_RUSTC", "UNRELATED"] {
         for byte in [0xfe, 0xff] {
             let program = crate::run_capture::fixture(&temp, false, false).expect("fixture");
@@ -215,8 +218,8 @@ fn non_unicode_compiler_selectors_are_rejected_before_execution_but_unrelated_va
             let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
                 .args(["run", "--"])
                 .arg(program)
-                .current_dir(&temp)
-                .env("RUNNER_TEMP", &temp)
+                .current_dir(temp.path())
+                .env("RUNNER_TEMP", temp.path())
                 .env(key, std::ffi::OsString::from_vec(vec![byte]))
                 .output()
                 .expect("capture");
@@ -229,7 +232,6 @@ fn non_unicode_compiler_selectors_are_rejected_before_execution_but_unrelated_va
             }
         }
     }
-    fs::remove_dir_all(temp).expect("cleanup");
 }
 
 #[test]
@@ -285,6 +287,5 @@ fn rejected_oversized_output_cannot_establish_zero_cache_activity() {
             assert!(String::from_utf8_lossy(&decision.stderr).contains("rejected"));
             assert!(!temp.join("outputs").exists());
         }
-        fs::remove_dir_all(temp.path()).expect("cleanup");
     }
 }

@@ -68,6 +68,7 @@ mod fetch_real_cargo;
 mod fetch_reports;
 mod fetch_server;
 mod fetch_unpinned;
+mod fresh_dir_sweep;
 mod gate;
 mod group_runs;
 mod helper_commands;

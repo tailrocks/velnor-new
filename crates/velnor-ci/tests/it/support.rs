@@ -159,8 +159,11 @@ fn sweep_dead(root: &Path, prefix: &str) {
         else {
             continue;
         };
-        if !is_running(pid) && entry.path().is_dir() {
-            let _ignored = fs::remove_dir_all(entry.path());
+        if !is_running(pid)
+            && entry.path().is_dir()
+            && let Err(error) = velnor_test_support::remove_tree(&entry.path())
+        {
+            eprintln!("cannot sweep {}: {error}", entry.path().display());
         }
     }
 }

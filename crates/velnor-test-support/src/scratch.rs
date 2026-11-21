@@ -47,7 +47,7 @@ impl Drop for ScratchDir {
     }
 }
 
-fn remove_tree(path: &Path) -> io::Result<()> {
+pub fn remove_tree(path: &Path) -> io::Result<()> {
     match fs::symlink_metadata(path) {
         Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(()),
         Err(e) => return Err(e),
@@ -100,7 +100,9 @@ mod tests {
     use std::path::{Path, PathBuf};
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    use super::{ScratchDir, keep_requested, keeping};
+    use super::{KEEP_ENV, ScratchDir, keep_requested, keeping};
+
+    const CHILD_PATH_ENV: &str = "VELNOR_SCRATCH_SELFTEST_CHILD_PATH";
 
     fn entry_count(root: &Path) -> usize {
         fs::read_dir(root).map_or(0, Iterator::count)
@@ -188,6 +190,30 @@ mod tests {
         let path = guard.path().to_path_buf();
         drop(guard);
         assert_eq!(path.exists(), keeping());
+    }
+
+    #[test]
+    fn a_kept_directory_survives_its_guard_when_the_flag_is_set() {
+        if let Some(path) = std::env::var_os(CHILD_PATH_ENV) {
+            drop(ScratchDir::new(PathBuf::from(path)));
+            return;
+        }
+        let path = selftest_path("kept");
+        let status = std::process::Command::new(
+            std::env::current_exe().unwrap_or_else(|e| unreachable!("{e}")),
+        )
+        .args([
+            "--exact",
+            "scratch::tests::a_kept_directory_survives_its_guard_when_the_flag_is_set",
+        ])
+        .env(KEEP_ENV, "1")
+        .env(CHILD_PATH_ENV, &path)
+        .status()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+        let kept = path.exists();
+        fs::remove_dir_all(&path).ok();
+        assert!(status.success());
+        assert!(kept);
     }
 
     #[test]
