@@ -152,3 +152,16 @@ fn an_alias_given_on_the_command_line_fails_closed() -> TestResult {
     )?);
     Ok(())
 }
+
+#[test]
+fn a_legacy_config_in_a_parent_directory_does_not_hide_a_child_config_toml_alias() -> TestResult {
+    let repo = declared_job()?;
+    let parent = repo.root().join("parent");
+    let child = parent.join("child");
+    let (inside, _) = manifests(&repo);
+    fs::create_dir_all(parent.join(".cargo"))?;
+    fs::write(parent.join(".cargo/config"), "[alias]\nother = \"check\"\n")?;
+    aliases(&child, &format!("[alias]\nxb = \"build --manifest-path {inside}\"\n"))?;
+    assert_refused(&run_with_args(&repo, &child, &["xb"])?);
+    Ok(())
+}
