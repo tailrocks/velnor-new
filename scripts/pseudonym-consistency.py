@@ -18,6 +18,7 @@ NUMBER = re.compile(rb'^(?:\|\s*|\s*\{?\s*"number":\s*)?([0-9]+)\s*[,|]|"number"
 MAX_REPORTED = 50
 ALIAS = re.compile(r"example-(?:org|account)(?:-[a-z0-9]+)*")
 OWNER_FIELD = re.compile(r"(?:^|_)(?:owner|account|login|org|organization)s?$")
+REPOSITORY_FIELD = re.compile(r"(?:^|_)(?:repo|repos|repository|repositories)$")
 WORD_BREAK = re.compile(r"(?<=[a-z0-9])(?=[A-Z])|[^A-Za-z0-9]+")
 LIST_DELIMITERS = re.compile(r"[;,|]")
 BOM = "\ufeff"
@@ -54,13 +55,20 @@ def scalars(node):
             yield key, value
 
 
+def repository_names(fields):
+    own = [(key, PSEUDONYM.findall(str(value).encode())) for key, value in fields if not owner_key(key)]
+    named = [names for key, names in own if names and REPOSITORY_FIELD.search(WORD_BREAK.sub("_", key).lower())]
+    return (named or [names for _key, names in own if names] or [[]])[0]
+
+
 def json_rows(node):
     if isinstance(node, dict):
         fields = []
-        for key, value in scalars(node):
+        pairs = list(scalars(node))
+        for key, value in pairs:
             literal = value if key == "number" and isinstance(value, str) and value.isdigit() else json.dumps(value)
             fields.append(f"{json.dumps(key)}: {literal}")
-        yield ", ".join(fields).encode()
+        yield ", ".join(fields).encode(), repository_names(pairs)
         for value in node.values():
             yield from json_rows(value)
     elif isinstance(node, list):
@@ -106,14 +114,13 @@ def file_rows(root, path):
             return list(json_rows(json_document(root, path)))
         except (ValueError, RecursionError):
             pass
-    return index_blob(root, path).split(b"\n")
+    return [(row, PSEUDONYM.findall(row)) for row in index_blob(root, path).split(b"\n")]
 
 
 def disagreements(root):
     seen = defaultdict(lambda: defaultdict(set))
     for path in pseudonym_files(root):
-        for row in file_rows(root, path):
-            names = PSEUDONYM.findall(row)
+        for row, names in file_rows(root, path):
             if not names:
                 continue
             for key in row_keys(row):

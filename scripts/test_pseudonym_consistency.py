@@ -120,6 +120,40 @@ class ConsistencyTests(unittest.TestCase):
             self.assertEqual(check.disagreements(root), [])
 
 
+class RepositoryFieldTests(unittest.TestCase):
+    def test_owner_field_before_the_repository_does_not_take_its_place(self):
+        tmp, root = repository(
+            {
+                "a.json": f'{{"number": 44, "iac_owner": "example-org/{repo(5)}", "repository": "example-org/{repo(9)}", "sha": "{SHA}"}}\n',
+                "b.csv": f"44,C,example-org/{repo(9)},{SHA},x\n",
+            }
+        )
+        with tmp:
+            self.assertEqual(check.disagreements(root), [])
+
+    def test_owner_field_before_the_repository_still_reports_a_real_disagreement(self):
+        tmp, root = repository(
+            {
+                "a.json": f'{{"number": 44, "iac_owner": "example-org/{repo(5)}", "repository": "example-org/{repo(9)}", "sha": "{SHA}"}}\n',
+                "b.csv": f"44,C,example-org/{repo(5)},{SHA},x\n",
+            }
+        )
+        with tmp:
+            found = check.disagreements(root)
+            self.assertEqual([label for label, _names in found], [b"record:44"])
+            self.assertEqual(sorted(found[0][1]), [repo(5).encode(), repo(9).encode()])
+
+    def test_a_listed_repository_field_is_read_like_a_single_one(self):
+        tmp, root = repository(
+            {
+                "a.json": f'{{"number": 44, "login": "example-org/{repo(5)}", "repositories": ["example-org/{repo(9)}"], "sha": "{SHA}"}}\n',
+                "b.csv": f"44,C,example-org/{repo(9)},{SHA},x\n",
+            }
+        )
+        with tmp:
+            self.assertEqual(check.disagreements(root), [])
+
+
 class MultiLineJsonTests(unittest.TestCase):
     def test_pretty_printed_record_disagreeing_with_a_companion_row_fails(self):
         tmp, root = repository(
