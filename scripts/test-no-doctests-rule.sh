@@ -202,6 +202,13 @@ check ordered_two_after_blank fail '/// prose\n///\n/// 2.     let x = 1;\npub f
 check ordered_two_quoted_after_prose fail '/// prose\n/// > 2.     let x = 1;\npub fn m() {}\n'
 check block_margin_star_later pass '/**\n    --- *\n        let x = 1;\n*/\npub fn n() {}\n'
 check quote_indent_after_prose pass '/// prose\n///     > let x = 1;\npub fn q() {}\n'
+check nested_ordered_after_prose fail '/// prose\n/// 1. 2.     compile_error!("ran");\npub fn n1() {}\n'
+check ordered_after_quote fail '/// > quote\n/// 2.     compile_error!("ran");\npub fn n2() {}\n'
+check quote_four_margin_after_prose fail '/// prose\n///    >     compile_error!("ran");\npub fn n3() {}\n'
+check setext_eq_without_heading pass '/// ===\n///     let x = 1;\npub fn n4() {}\n'
+check html_close_with_space pass '/// <script></script >\n///     let x = 1;\npub fn n5() {}\n'
+check html_indented_lazy_pass pass '/// prose\n///     <script></script>\n///     let x = 1;\npub fn n6() {}\n'
+check nested_starless_block_pass pass '    /**\n        Prose.\n\n        let x = 1;\n    */\npub fn n7() {}\n'
 
 missing="$work/scanner_missing"
 mkdir -p "$missing/crates/fx/src"
