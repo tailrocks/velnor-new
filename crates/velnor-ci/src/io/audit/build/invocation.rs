@@ -35,6 +35,7 @@ pub(super) struct Invocation {
     pub(super) compiler: bool,
     pub(super) cargo: bool,
     globals: Vec<String>,
+    chdir: Option<PathBuf>,
 }
 
 impl Invocation {
@@ -168,12 +169,14 @@ impl Invocation {
                 globals.push((*word).to_owned());
             }
         }
+        let chdir = start.and_then(|start| chdir(&words[..start]));
         Self {
             command: command.to_vec(),
             preflight,
             compiler,
             cargo: compilation || nextest || test,
             globals,
+            chdir,
         }
     }
 
@@ -181,6 +184,10 @@ impl Invocation {
         if !self.cargo {
             return directory.to_path_buf();
         }
+        let base = self
+            .chdir
+            .as_ref()
+            .map_or_else(|| directory.to_path_buf(), |chdir| directory.join(chdir));
         self.command
             .iter()
             .enumerate()
@@ -195,14 +202,8 @@ impl Invocation {
                     })
             })
             .map_or_else(
-                || directory.to_path_buf(),
-                |manifest| {
-                    directory
-                        .join(manifest)
-                        .parent()
-                        .unwrap_or(directory)
-                        .to_path_buf()
-                },
+                || base.clone(),
+                |manifest| base.join(manifest).parent().unwrap_or(&base).to_path_buf(),
             )
     }
 
@@ -247,18 +248,42 @@ impl Invocation {
             directory,
         };
         for ((expected, alone), inherit) in workspaces.iter().zip(standalone).zip(inherit) {
-            let manifest = expected.workspace_root.join("Cargo.toml");
+            let manifest = expected.root.join("Cargo.toml");
             let actual = root_workspace(&manifest, Some(&invocation), *inherit, *alone, groups)?;
-            if actual.workspace_root != expected.workspace_root
+            if actual.root != expected.root
                 || actual.target_directory != expected.target_directory
+                || actual.build_directory != expected.build_directory
             {
                 return Err(CiError::new(
-                    "Cargo invocation configuration redirects the workspace or target away from inputs audit; use persistent Cargo configuration or CARGO_TARGET_DIR for both build and audit",
+                    "Cargo invocation configuration redirects the workspace, target or build directory away from inputs audit; use persistent Cargo configuration, CARGO_TARGET_DIR or CARGO_BUILD_BUILD_DIR for both build and audit",
                 ));
             }
         }
         Ok(())
     }
+}
+
+fn chdir(globals: &[&str]) -> Option<PathBuf> {
+    let mut directory = None;
+    let mut index = 0;
+    while let Some(word) = globals.get(index) {
+        match *word {
+            "-C" => {
+                directory = globals.get(index + 1).map(PathBuf::from);
+                index += 2;
+            }
+            "--config" | "-Z" | "--color" | "-j" | "--jobs" | "--manifest-path" => index += 2,
+            value if value.starts_with("-C") => {
+                let attached = &value[2..];
+                directory = Some(PathBuf::from(
+                    attached.strip_prefix('=').unwrap_or(attached),
+                ));
+                index += 1;
+            }
+            _ => index += 1,
+        }
+    }
+    directory
 }
 
 fn subcommand(words: &[&str]) -> Option<usize> {
@@ -270,14 +295,18 @@ fn subcommand(words: &[&str]) -> Option<usize> {
     while let Some(word) = words.get(index) {
         match *word {
             "-q" | "--quiet" | "--verbose" | "--locked" | "--offline" | "--frozen" => index += 1,
-            "--color" | "--config" | "-Z" => {
+            "--color" | "--config" | "-Z" | "-C" | "-j" | "--jobs" | "--manifest-path" => {
                 words.get(index + 1)?;
                 index += 2;
             }
             value
                 if value.starts_with("--color=")
                     || value.starts_with("--config=")
+                    || value.starts_with("--jobs=")
+                    || value.starts_with("--manifest-path=")
                     || value.starts_with("-Z") && value.len() > 2
+                    || value.starts_with("-C") && value.len() > 2
+                    || value.starts_with("-j") && value.len() > 2
                     || value.starts_with('-')
                         && value.len() > 1
                         && value[1..].chars().all(|character| character == 'v') =>
@@ -291,6 +320,12 @@ fn subcommand(words: &[&str]) -> Option<usize> {
     None
 }
 
+#[cfg(test)]
+#[path = "invocation/label.rs"]
+mod label;
+#[cfg(test)]
+#[path = "invocation/location.rs"]
+mod location;
 #[cfg(test)]
 #[path = "invocation/preflight.rs"]
 mod preflight;

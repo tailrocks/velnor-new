@@ -59,6 +59,9 @@ impl Reason {
             Self::PolicyDenyWithoutConfig => f.write_str(
                 "[policy] deny = true needs a cargo-deny config (deny.toml, .deny.toml, .cargo/deny.toml or .config/deny.toml) that the lane can read; add one, or remove deny = true",
             ),
+            Self::PolicyGateWithoutLane => f.write_str(
+                "[policy] gate_on_plan = true needs a policy lane to plan for: a cargo-deny config with cargo-deny pinned, or cargo-machete pinned in mise.toml; enable one, or remove gate_on_plan",
+            ),
             Self::UnpinnedTool(tool) => write!(
                 f,
                 "is present but {tool} is not pinned in mise.toml, so the policy lane could not run it; pin it there"
@@ -155,6 +158,10 @@ impl fmt::Display for Reason {
             Self::MissingTable(table) => write!(f, "missing table [{table}]"),
             Self::MissingKey(key) => write!(f, "missing key {key}"),
             Self::InvalidValue { key, value } => write!(f, "invalid value {value:?} for {key}"),
+            Self::UnsupportedGlob { key, value } => write!(
+                f,
+                "{key} entry {value:?} uses ?, [ or ]; only * and ** are supported in a glob"
+            ),
             Self::Hosting(error) => error.fmt(f),
             Self::OutOfRange {
                 key,
@@ -211,6 +218,7 @@ impl fmt::Display for Reason {
             ),
             Self::UnpinnedTool(_)
             | Self::PolicyDenyWithoutConfig
+            | Self::PolicyGateWithoutLane
             | Self::HelperBox(_)
             | Self::MbxRemotePrivate(_)
             | Self::MbxOffConflict(_)

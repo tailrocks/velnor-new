@@ -2,13 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::ffi::OsStr;
 use std::fs;
 use std::io;
-use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 
 use super::super::options::{MAX_ENTRIES_CEILING, MAX_ENTRIES_VARIABLE};
-use super::{Entries, Kind, excluded_entry};
+use super::handle::{self, Current, Opened, Origin};
+use super::{Entries, Kind, Scan, excluded_entry};
 
 pub(in crate::io::audit) struct Budget {
     remaining: usize,
@@ -32,13 +33,24 @@ impl Budget {
     fn reserve(&mut self) -> io::Result<()> {
         let Some(remaining) = self.remaining.checked_sub(1) else {
             self.overflowed = true;
-            return Err(io::Error::other(format!(
-                "audit freshness scan limit exceeded: more than {} entries; raise it with {MAX_ENTRIES_VARIABLE} (at most {MAX_ENTRIES_CEILING})",
-                self.limit
-            )));
+            return Err(io::Error::other(self.exceeded()));
         };
         self.remaining = remaining;
         Ok(())
+    }
+
+    fn exceeded(&self) -> String {
+        if self.limit >= MAX_ENTRIES_CEILING {
+            format!(
+                "audit freshness scan limit exceeded: more than {} entries; the tree must be reduced or split",
+                self.limit
+            )
+        } else {
+            format!(
+                "audit freshness scan limit exceeded: more than {} entries; raise it with {MAX_ENTRIES_VARIABLE} (at most {MAX_ENTRIES_CEILING})",
+                self.limit
+            )
+        }
     }
 }
 
@@ -46,245 +58,234 @@ pub(in crate::io::audit) fn scan(
     root: &Path,
     targets: &BTreeSet<PathBuf>,
     budget: &mut Budget,
-) -> io::Result<Entries> {
-    scan_with(root, targets, budget, |directory: &Path| {
-        fs::read_dir(directory)
-    })
+) -> io::Result<Scan> {
+    scan_with(root, targets, budget, &Probe::default())
 }
 
-type Identity = (u64, u64);
+pub(super) struct Probe<'a> {
+    pub(super) before_open: &'a dyn Fn(&Path) -> io::Result<()>,
+    pub(super) after_open: &'a dyn Fn(&Path),
+    pub(super) listed: &'a dyn Fn(&OsStr),
+}
 
-struct Queued {
+impl Default for Probe<'_> {
+    fn default() -> Self {
+        Self {
+            before_open: &|_| Ok(()),
+            after_open: &|_| {},
+            listed: &|_| {},
+        }
+    }
+}
+
+struct Pending {
     path: PathBuf,
-    identity: Identity,
+    origin: Origin,
 }
-
-struct Seen {
-    kind: Kind,
-    identity: Identity,
-}
-
-enum Listed {
-    Children(BTreeMap<PathBuf, Kind>),
-    Replaced(Option<Kind>),
-}
-
-type Replacements = Vec<(PathBuf, Option<Kind>)>;
 
 pub(super) fn scan_with(
     root: &Path,
     targets: &BTreeSet<PathBuf>,
     budget: &mut Budget,
-    open: impl Fn(&Path) -> io::Result<fs::ReadDir>,
-) -> io::Result<Entries> {
+    probe: &Probe<'_>,
+) -> io::Result<Scan> {
     let root = fs::canonicalize(root)?;
     let mut entries = Entries::new();
-    let mut pending = vec![Queued {
-        identity: identity(&fs::metadata(&root)?),
+    let mut identities = BTreeMap::new();
+    let mut pending = vec![Pending {
         path: root.clone(),
+        origin: Origin::Path,
     }];
     let mut visited = BTreeSet::new();
-    let mut replaced = Replacements::new();
-    while let Some(queued) = pending.pop() {
-        if !visited.insert(queued.path.clone()) {
+    while let Some(Pending {
+        path: directory,
+        origin,
+    }) = pending.pop()
+    {
+        if !visited.insert(directory.clone()) {
             continue;
         }
         budget.reserve()?;
-        match list(&queued, &root, targets, budget, &mut pending, &open)? {
-            Listed::Children(children) => {
-                entries.insert(queued.path, children);
+        let opened =
+            (probe.before_open)(&directory).and_then(|()| handle::open(&origin, &directory));
+        let mut listing = match opened {
+            Ok(listing) => listing,
+            Err(error) if handle::replaced(&error) && directory != root => {
+                if matches!(origin, Origin::Path) {
+                    return Err(changed(error.kind(), &directory));
+                }
+                match handle::current(&origin, &directory)? {
+                    Current::Directory(_) => return Err(changed(error.kind(), &directory)),
+                    current => settle(
+                        &mut entries,
+                        &mut pending,
+                        &directory,
+                        &origin,
+                        current,
+                        (&root, targets),
+                    )?,
+                }
+                continue;
             }
-            Listed::Replaced(current) => {
-                replace(
-                    queued.path,
-                    current,
-                    &root,
-                    targets,
+            Err(error) => return Err(error),
+        };
+        let stamp = handle::stamp(&listing)?;
+        identities.insert(directory.clone(), stamp);
+        (probe.after_open)(&directory);
+        let names = handle::names(&mut listing, |name| {
+            (probe.listed)(name);
+            budget.reserve()
+        })?;
+        let listing = Opened::new(listing);
+        let queued_before = pending.len();
+        let mut children = BTreeMap::new();
+        for name in names {
+            let path = directory.join(&name);
+            let Some(kind) = handle::kind_at(listing.as_ref(), &name, &path)? else {
+                continue;
+            };
+            let child = Origin::Child {
+                parent: Opened::clone(&listing),
+                name: name.clone(),
+            };
+            pending.extend(queue(&kind, &path, child, (&root, targets))?);
+            children.insert(PathBuf::from(name), kind);
+        }
+        match handle::current(&origin, &directory)? {
+            Current::Directory(now) if stamp.is(now) => {
+                entries.insert(directory, children);
+            }
+            Current::Directory(_) => {
+                return Err(io::Error::other(format!(
+                    "{} was replaced by another directory while it was listed",
+                    directory.display()
+                )));
+            }
+            _ if directory == root => {
+                return Err(io::Error::other(format!(
+                    "{} was replaced while it was listed",
+                    directory.display()
+                )));
+            }
+            _ if matches!(origin, Origin::Path) => {
+                return Err(changed(io::ErrorKind::Other, &directory));
+            }
+            current => {
+                pending.truncate(queued_before);
+                settle(
+                    &mut entries,
                     &mut pending,
-                    &mut replaced,
+                    &directory,
+                    &origin,
+                    current,
+                    (&root, targets),
                 )?;
             }
         }
     }
-    reconcile(&mut entries, replaced);
-    Ok(entries)
+    Ok(Scan {
+        entries,
+        identities,
+    })
 }
 
-fn list(
-    queued: &Queued,
-    root: &Path,
-    targets: &BTreeSet<PathBuf>,
-    budget: &mut Budget,
-    pending: &mut Vec<Queued>,
-    open: &impl Fn(&Path) -> io::Result<fs::ReadDir>,
-) -> io::Result<Listed> {
-    let directory = queued.path.as_path();
-    let listing = match open(directory) {
-        Ok(listing) => listing,
-        Err(error) if moved_before_open(&error) && directory != root => {
-            return match kind(directory)? {
-                Some(Kind::Directory) => Err(error),
-                current => Ok(Listed::Replaced(current)),
-            };
-        }
-        Err(error) => return Err(error),
-    };
-    let queued_before = pending.len();
-    let mut children = BTreeMap::new();
-    for entry in listing {
-        budget.reserve()?;
-        let entry = entry?;
-        let path = entry.path();
-        let Some(Seen { kind, identity }) = seen(&path)? else {
-            continue;
-        };
-        if !excluded_entry(&path, &kind, root, targets) {
-            match &kind {
-                Kind::Directory => pending.push(Queued { path, identity }),
-                Kind::Link {
-                    resolved: Some(resolved),
-                    ..
-                } => {
-                    if let Some(identity) = directory_identity(resolved)? {
-                        pending.push(Queued {
-                            path: resolved.clone(),
-                            identity,
-                        });
-                    }
-                }
-                Kind::File | Kind::Link { .. } | Kind::Other => {}
-            }
-        }
-        children.insert(PathBuf::from(entry.file_name()), kind);
-    }
-    match seen(directory)? {
-        Some(Seen {
-            kind: Kind::Directory,
-            identity,
-        }) if identity == queued.identity => Ok(Listed::Children(children)),
-        Some(Seen {
-            kind: Kind::Directory,
-            ..
-        }) => Err(io::Error::other(format!(
-            "{} was replaced by another directory while it was listed",
+fn changed(kind: io::ErrorKind, directory: &Path) -> io::Error {
+    io::Error::new(
+        kind,
+        format!(
+            "{} changed while the audit scanned it; retry",
             directory.display()
-        ))),
-        _ if directory == root => Err(io::Error::other(format!(
-            "{} was replaced while it was listed",
-            directory.display()
-        ))),
-        current => {
-            pending.truncate(queued_before);
-            Ok(Listed::Replaced(current.map(|current| current.kind)))
-        }
-    }
+        ),
+    )
 }
 
-fn replace(
-    directory: PathBuf,
-    current: Option<Kind>,
-    root: &Path,
-    targets: &BTreeSet<PathBuf>,
-    pending: &mut Vec<Queued>,
-    replaced: &mut Replacements,
-) -> io::Result<()> {
-    if let Some(
-        link @ Kind::Link {
+fn queue(
+    kind: &Kind,
+    path: &Path,
+    origin: Origin,
+    (root, targets): (&Path, &BTreeSet<PathBuf>),
+) -> io::Result<Option<Pending>> {
+    if excluded_entry(path, kind, root, targets) {
+        return Ok(None);
+    }
+    Ok(match kind {
+        Kind::Directory => Some(Pending {
+            path: path.to_path_buf(),
+            origin,
+        }),
+        Kind::Link {
             resolved: Some(resolved),
             ..
-        },
-    ) = &current
-        && !excluded_entry(&directory, link, root, targets)
-        && let Some(identity) = directory_identity(resolved)?
-    {
-        pending.push(Queued {
+        } if is_directory(resolved)? => Some(Pending {
             path: resolved.clone(),
-            identity,
-        });
+            origin: Origin::Path,
+        }),
+        Kind::File | Kind::Link { .. } | Kind::Other => None,
+    })
+}
+
+fn settle(
+    entries: &mut Entries,
+    pending: &mut Vec<Pending>,
+    directory: &Path,
+    origin: &Origin,
+    current: Current,
+    (root, targets): (&Path, &BTreeSet<PathBuf>),
+) -> io::Result<()> {
+    let children = directory
+        .parent()
+        .and_then(|container| entries.get_mut(container));
+    let key = directory.file_name().map(Path::new);
+    match current {
+        Current::Gone => {
+            if let (Some(children), Some(key)) = (children, key) {
+                children.remove(key);
+            }
+        }
+        Current::Directory(_) => return Err(changed(io::ErrorKind::Other, directory)),
+        Current::Other(kind) => {
+            pending.extend(queue(&kind, directory, origin.clone(), (root, targets))?);
+            if let (Some(children), Some(key)) = (children, key) {
+                children.insert(key.to_path_buf(), kind);
+            }
+        }
     }
-    replaced.push((directory, current));
     Ok(())
 }
 
-fn reconcile(entries: &mut Entries, replaced: Replacements) {
-    for (directory, current) in replaced {
-        let (Some(parent), Some(name)) = (directory.parent(), directory.file_name()) else {
-            continue;
-        };
-        if let Some(children) = entries.get_mut(parent)
-            && children.get(Path::new(name)) == Some(&Kind::Directory)
-        {
-            match current {
-                Some(current) => {
-                    children.insert(PathBuf::from(name), current);
-                }
-                None => {
-                    children.remove(Path::new(name));
-                }
-            }
-        }
-    }
-}
-
-fn moved_before_open(error: &io::Error) -> bool {
-    error.raw_os_error() == Some(libc::ELOOP)
-        || matches!(
-            error.kind(),
-            io::ErrorKind::NotFound | io::ErrorKind::NotADirectory
-        )
-}
-
-fn identity(metadata: &fs::Metadata) -> Identity {
-    (metadata.dev(), metadata.ino())
-}
-
-fn kind(path: &Path) -> io::Result<Option<Kind>> {
-    Ok(seen(path)?.map(|seen| seen.kind))
-}
-
-fn seen(path: &Path) -> io::Result<Option<Seen>> {
-    let metadata = match fs::symlink_metadata(path) {
-        Ok(metadata) => metadata,
-        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
-        Err(error) => return Err(error),
-    };
-    let identity = identity(&metadata);
-    let kind = if metadata.is_symlink() {
-        let Some(kind) = link_kind(path)? else {
-            return Ok(None);
-        };
-        kind
-    } else if metadata.is_dir() {
-        Kind::Directory
-    } else if metadata.is_file() {
-        Kind::File
-    } else {
-        Kind::Other
-    };
-    Ok(Some(Seen { kind, identity }))
-}
-
-fn link_kind(path: &Path) -> io::Result<Option<Kind>> {
-    let resolved = match fs::canonicalize(path) {
-        Ok(resolved) => Some(resolved),
-        Err(error) if unresolved_link(&error) => None,
-        Err(error) => return Err(error),
-    };
-    match fs::read_link(path) {
-        Ok(target) => Ok(Some(Kind::Link { target, resolved })),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
-        Err(error) => Err(error),
-    }
-}
-
-fn directory_identity(path: &Path) -> io::Result<Option<Identity>> {
+fn is_directory(path: &Path) -> io::Result<bool> {
     match fs::metadata(path) {
-        Ok(metadata) => Ok(metadata.is_dir().then(|| identity(&metadata))),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
+        Ok(metadata) => Ok(metadata.is_dir()),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
         Err(error) => Err(error),
     }
 }
 
 pub(in crate::io::audit) fn unresolved_link(error: &io::Error) -> bool {
-    error.kind() == io::ErrorKind::NotFound || error.raw_os_error() == Some(libc::ELOOP)
+    error.kind() == io::ErrorKind::NotFound
+        || matches!(error.raw_os_error(), Some(libc::ELOOP | libc::ENOTDIR))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_scan_at_the_ceiling_says_the_tree_must_shrink_not_raise_the_limit() {
+        let mut budget = Budget::new(MAX_ENTRIES_CEILING);
+        budget.remaining = 0;
+        let error = budget.reserve().err().map_or_default(|e| e.to_string());
+        assert!(error.contains("more than 10000000 entries"), "{error}");
+        assert!(error.contains("reduced or split"), "{error}");
+        assert!(!error.contains("raise"), "{error}");
+    }
+
+    #[test]
+    fn a_scan_below_the_ceiling_says_how_to_raise_the_limit() {
+        let mut budget = Budget::new(3);
+        budget.remaining = 0;
+        let error = budget.reserve().err().map_or_default(|e| e.to_string());
+        assert!(error.contains(MAX_ENTRIES_VARIABLE), "{error}");
+        assert!(error.contains("raise it with"), "{error}");
+    }
 }

@@ -17,6 +17,7 @@ mod mbx;
 mod mbx_config;
 mod mise;
 mod plan;
+mod plan_gate;
 mod policy_table;
 mod public_sources;
 mod release_asset;
@@ -37,16 +38,19 @@ pub use artifact_paths::{
     selects,
 };
 pub use budget_mode::{BUDGET_JOB_NAME, BUDGET_MODES_HELPER, ModeBudget, Selection, SelectionName};
-pub use cache::{AnchorSource, CacheKey, CachePath, CacheRoot, Host, LockIdentity, ToolsAnchor};
+pub use cache::{
+    AnchorSource, BaseScope, CacheKey, CachePath, CacheRoot, Host, LockIdentity, ToolsAnchor,
+};
 pub use cache_layout::{
-    CACHE_COMPAT_LENGTH, CacheKeyLayout, CacheKeySegment, LOCK_OUTPUT_PREFIX,
-    RUNNER_ARCH_MAX_LENGTH, RUNNER_OS_MAX_LENGTH, SHARED_SOURCES_OWNER, TOOLS_ANCHOR_LENGTH,
-    json_char_bytes, json_string_bytes,
+    CACHE_COMPAT_LENGTH, CacheKeyLayout, CacheKeySegment, LOCK_OUTPUT_PREFIX, PRIVATE_SOURCES_TAG,
+    PRIVATE_TARGET_TAG, RUNNER_ARCH_MAX_LENGTH, RUNNER_OS_MAX_LENGTH, SHARED_SOURCES_OWNER,
+    TOOLS_ANCHOR_LENGTH, json_char_bytes, json_string_bytes,
 };
 pub use cache_outputs::{
     BASE_PREFIX_OUTPUT, BASE_SAVE_OUTPUT, CacheLaneOutput, PUBLIC_SOURCES_STEP,
     PUBLIC_VERDICTS_OUTPUT, SOURCES_PREFIX_OUTPUT, SOURCES_SAVED_OUTPUT, cache_lane_outputs,
 };
+pub use cargo_build::BuildRecord;
 pub use check_configurations::CheckConfigurations;
 pub use cron::CronExpr;
 pub use helper::{HelperRelease, Platform};
@@ -56,18 +60,20 @@ pub use ids::{
     RunnerLabel, Sha256, TargetName, looks_github_hosted,
 };
 pub use lint::{LintCommand, LintJob, LintKind};
-pub use mbx::MbxMode;
+pub use mbx::{MbxMode, MbxStats};
 pub use mbx_config::{
     MBX_ACTION_RELEASE, MBX_TOOL, MbxConflict, MbxDeclaration, MbxRule, mbx_declaration,
 };
 pub use mise::MisePlatform;
 pub use plan::{
-    Access, BUILD_TESTS_STEP, BUILT_OUTPUT, CI_AUTO_LABEL, CI_RUN_LABEL, CargoCommand, Concurrency,
-    FilterRef, Gate, GateNeed, Job, LINT_STEP, MERGE_GROUP_SKIP_OUTPUT, MERGE_GROUP_STEP,
-    PermissionScope, Permissions, PlanFrom, PlanRef, PrRun, PullRequestType, Step, TEST_STEP,
-    TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, Triggers,
-    When, WorkflowPlan, group_output_name,
+    Access, BUILD_TESTS_STEP, BUILT_OUTPUT, CACHE_KEY_MAX_BYTES, CI_AUTO_LABEL, CI_RUN_LABEL,
+    CargoCommand, Concurrency, FilterRef, Job, LINT_STEP, MERGE_GROUP_SKIP_OUTPUT,
+    MERGE_GROUP_STEP, PermissionScope, Permissions, PlanRef, PrRun, PullRequestType, Step,
+    TEST_STEP, TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT,
+    TESTS_RUN_OUTPUT, TOOLS_ANCHOR_DIGEST_BYTES, TOOLS_ANCHOR_KEY_OUTPUT, TOOLS_ANCHOR_OUTPUT,
+    Triggers, When, WorkflowPlan,
 };
+pub use plan_gate::{Gate, GateNeed, PlanFrom, group_output_name};
 pub use release_asset::{ReleaseAsset, ReleaseAssetError, ReleaseAssetPart};
 pub use repo::{
     CacheDebug, CheckoutScope, CiDebugInfo, CompileInputs, CratesMirror, CustomHarness, DenyCheck,
@@ -79,12 +85,13 @@ pub use repo::{
     TestSetup, Timings, ToolLock, ToolPin, ToolPins, ToolRequest, Toolchain, UnownedPackage,
     Unread, Weakening, WorkspaceGroup,
 };
-pub use sealed::{Owner, VELNOR_GEN_MARKER, lf_normalized, owner_of, seal};
+pub use sealed::{Owner, VELNOR_GEN_MARKER, lf_normalized, owner_of, seal, sha256_hex};
 pub use selection::{
     AllTrigger, CACHE_TRIM_WORKFLOW_PATH, ChangeSet, EventKind, OptionalSteps, RELEASE_CONFIG_PATH,
     RELEASE_PLZ_FILE, RELEASE_WORKFLOW_PATH, RustSelection, SAMPLES, SelectionReason, SkipReason,
     StepNeed, WORKFLOW_PATH, WORKFLOWS_CONFIG_PATH,
 };
+pub use setup_phase::SetupOrder;
 pub use shape::{Shape, ShapeDecision};
 pub use test_group::{
     ARTIFACT_RETENTION_DEFAULT, ArtifactWhen, GroupArtifact, GroupEvent, GroupRoot, NoTests,
