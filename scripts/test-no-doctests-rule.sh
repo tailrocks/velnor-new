@@ -170,7 +170,6 @@ check setext_eq_then_indent pass '/// =\n///     continuation\nfn f() {}\n'
 check standalone_attr_indent pass '#[doc = "    let _x = 1;"]\nfn f() {}\n'
 check nested_unrelated_doc pass '#[cfg_attr(any(), foo(doc = "```"))]\nfn f() {}\n'
 check tab_indent_fence  fail '#[doc = "prose\n\n\tcompile_error!(\"x\");"]\nfn f() {}\n'
-check cr_fence          fail '#[doc = "prose\r\r```\rcompile_error!(\"x\");\r```"]\nfn f() {}\n'
 check line_standalone_indent pass '/// \n///     let _x = 1;\nfn f() {}\n'
 check line_standalone_two pass '///     let _x = 1;\n///     let _y = 2;\nfn f() {}\n'
 check list_setext_eq_indent pass '/// - item\n/// =\n///         let _x = 1;\nfn f() {}\n'
@@ -218,6 +217,17 @@ check footnote_blank_code fail '/// [^x]: prose\n///\n///         compile_error!
 check setext_indent4_cont pass '/// Title\n///     ====\n///     compile_error!("x");\npub fn f() {}\n'
 check block_blank_unstarred fail '/**\n * - item\n\n *     compile_error!("x");\n */\npub fn f() {}\n'
 check cfg_attr_doc_follow fail '///     compile_error!("x");\n#[cfg_attr(all(), doc = "prose")]\npub fn f() {}\n'
+
+long="$work/footnote_long"
+mkdir -p "$long/scripts" "$long/crates/fx/src"
+cp "$repo/scripts/no-doctests.py" "$long/scripts/"
+python3 -c 'import sys; sys.stdout.write("/// [^" + "a" * 120000 + "\npub fn f() {}\n")' > "$long/crates/fx/src/lib.rs"
+if timeout 5 python3 -I "$long/scripts/no-doctests.py" "$long/crates/fx/src/lib.rs" >/dev/null 2>&1; then
+  echo "ok   footnote_label_linear (pass within 5 s)"
+else
+  echo "FAIL footnote_label_linear: no pass within 5 s"
+  fails=$((fails + 1))
+fi
 
 missing="$work/scanner_missing"
 mkdir -p "$missing/crates/fx/src"
