@@ -12,7 +12,7 @@ use super::{MBX_DECLARED, REFUSED, REGISTRY, configured_repo, plain_cargo, wrapp
 
 const MISSING: &str = "mise's cargo wrapper is missing after activation";
 
-fn declared_job() -> Result<Repo, Box<dyn std::error::Error>> {
+pub(super) fn declared_job() -> Result<Repo, Box<dyn std::error::Error>> {
     let repo = configured_repo("crates-mirror-mbx-scope")?;
     fs::write(repo.root().join("mise.toml"), MBX_DECLARED)?;
     let setup = setup_command(repo.root(), REGISTRY)
@@ -49,7 +49,7 @@ fn run_in(
     Ok(command.output()?)
 }
 
-fn assert_plain(output: &Output) {
+pub(super) fn assert_plain(output: &Output) {
     assert!(output.status.success(), "{output:?}");
     assert!(String::from_utf8_lossy(&output.stdout).contains("plain-cargo-ran"));
 }
@@ -151,7 +151,7 @@ fn a_manifest_path_inside_the_declaring_directory_still_fails_closed() -> TestRe
     Ok(())
 }
 
-fn run_with_args(
+pub(super) fn run_with_args(
     repo: &Repo,
     directory: &Path,
     args: &[&str],
@@ -165,7 +165,7 @@ fn run_with_args(
         .output()?)
 }
 
-fn assert_refused(output: &Output) {
+pub(super) fn assert_refused(output: &Output) {
     assert!(!output.status.success(), "{output:?}");
     assert!(String::from_utf8_lossy(&output.stderr).contains(REFUSED));
     assert!(!String::from_utf8_lossy(&output.stdout).contains("plain-cargo-ran"));
@@ -267,6 +267,19 @@ fn a_workspace_path_that_cannot_be_resolved_fails_closed() -> TestResult {
     let member = repo.root().join("crates/member");
     let gone = repo.root().join("renamed-checkout");
     assert_refused(&run_in(&repo, &member, Some(&gone), false)?);
+    Ok(())
+}
+
+#[test]
+fn a_workspace_path_that_is_a_regular_file_fails_closed() -> TestResult {
+    let repo = declared_job()?;
+    let member = repo.root().join("crates/member");
+    let file = repo.root().join("not-a-directory");
+    fs::write(&file, "")?;
+    assert_refused(&run_in(&repo, &member, Some(&file), false)?);
+    let output = run_in(&repo, &member, Some(&file), true)?;
+    assert!(!output.status.success(), "{output:?}");
+    assert!(String::from_utf8_lossy(&output.stderr).contains(MISSING));
     Ok(())
 }
 

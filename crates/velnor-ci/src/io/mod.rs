@@ -18,6 +18,7 @@ mod cache_upload;
 mod cold;
 mod configurations;
 mod crates_mirror;
+mod crates_mirror_alias;
 mod crates_mirror_args;
 mod crates_mirror_depth;
 mod crates_mirror_dispatch;

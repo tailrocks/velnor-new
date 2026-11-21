@@ -30,6 +30,7 @@ const MANIFEST_COMMANDS: &[&str] = &[
     "pkgid",
     "publish",
     "r",
+    "read-manifest",
     "remove",
     "rm",
     "run",
@@ -63,40 +64,45 @@ fn declared_for_project(args: &[OsString]) -> bool {
     let Ok(workspace) = workspace() else {
         return true;
     };
-    let directory = project_directory(&work, args);
+    let Some(directory) = project_directory(&work, args) else {
+        return true;
+    };
     let directory = std::fs::canonicalize(&directory).unwrap_or(directory);
     scope(&directory, workspace.as_deref())
         .into_iter()
         .any(crate::mbx_declared::declared_or_unreadable_in)
 }
 
-fn project_directory(work: &Path, args: &[OsString]) -> PathBuf {
-    let command = subcommand(args);
+fn project_directory(work: &Path, args: &[OsString]) -> Option<PathBuf> {
+    let args = super::crates_mirror_alias::expand(work, args, MANIFEST_COMMANDS)?;
+    let command = subcommand(&args).map(|(_, command)| command);
     if command == Some("install")
-        && let Some(path) = option_value(args, "--path", false)
+        && let Some(path) = option_value(&args, "--path", false)
     {
-        return work.join(path);
+        return Some(work.join(path));
     }
     let shorthand = command.is_some_and(|command| MANIFEST_COMMANDS.contains(&command));
-    option_value(args, "--manifest-path", shorthand)
-        .and_then(|manifest| work.join(manifest).parent().map(Path::to_path_buf))
-        .unwrap_or_else(|| work.to_path_buf())
+    Some(
+        option_value(&args, "--manifest-path", shorthand)
+            .and_then(|manifest| work.join(manifest).parent().map(Path::to_path_buf))
+            .unwrap_or_else(|| work.to_path_buf()),
+    )
 }
 
-fn subcommand(args: &[OsString]) -> Option<&str> {
-    let mut args = args.iter().take_while(|arg| *arg != "--");
-    while let Some(arg) = args.next() {
+pub(super) fn subcommand(args: &[OsString]) -> Option<(usize, &str)> {
+    let mut seen = args.iter().enumerate().take_while(|(_, arg)| *arg != "--");
+    while let Some((index, arg)) = seen.next() {
         let arg = arg.to_str()?;
         if matches!(arg, "-C" | "-Z" | "--config" | "--color") {
-            args.next();
+            seen.next();
         } else if !arg.starts_with(['-', '+']) {
-            return Some(arg);
+            return Some((index, arg));
         }
     }
     None
 }
 
-fn option_value(args: &[OsString], long: &str, shorthand: bool) -> Option<OsString> {
+pub(super) fn option_value(args: &[OsString], long: &str, shorthand: bool) -> Option<OsString> {
     let mut args = args.iter().take_while(|arg| *arg != "--");
     while let Some(arg) = args.next() {
         if arg == long || (shorthand && arg == "-m") {
@@ -124,7 +130,14 @@ fn option_value(args: &[OsString], long: &str, shorthand: bool) -> Option<OsStri
 fn workspace() -> std::io::Result<Option<PathBuf>> {
     std::env::var_os("GITHUB_WORKSPACE")
         .filter(|value| !value.is_empty())
-        .map(std::fs::canonicalize)
+        .map(|path| {
+            let path = std::fs::canonicalize(path)?;
+            if path.is_dir() {
+                Ok(path)
+            } else {
+                Err(std::io::ErrorKind::NotADirectory.into())
+            }
+        })
         .transpose()
 }
 

@@ -10,6 +10,7 @@ use crate::io::Repo;
 
 use super::fixture::{TestResult, setup, setup_command};
 
+mod alias;
 mod scope;
 mod state;
 
