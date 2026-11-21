@@ -249,7 +249,15 @@ fn a_relative_build_directory_through_a_symlink_is_audited_where_cargo_writes_it
     let built = from_step_directory(
         &repo,
         "lnk/bd",
-        &["inputs", "build", "--", "cargo", "build", "--workspace", "--all-targets"],
+        &[
+            "inputs",
+            "build",
+            "--",
+            "cargo",
+            "build",
+            "--workspace",
+            "--all-targets",
+        ],
     );
     assert!(built.status.success(), "{built:?}");
     assert!(target.join("bd/debug").is_dir(), "{built:?}");

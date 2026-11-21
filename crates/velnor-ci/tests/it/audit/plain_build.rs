@@ -70,7 +70,8 @@ fn a_plain_target_named_through_a_parent_component_is_refused_before_the_layout_
     assert_eq!(refused.status.code(), Some(1), "{refused:?}");
     let stderr = String::from_utf8_lossy(&refused.stderr);
     assert!(
-        stderr.contains("CARGO_BUILD_BUILD_DIR=scratch/../rust/target is relative and contains `..`"),
+        stderr
+            .contains("CARGO_BUILD_BUILD_DIR=scratch/../rust/target is relative and contains `..`"),
         "{stderr}"
     );
 }
