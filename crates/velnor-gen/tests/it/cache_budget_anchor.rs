@@ -147,6 +147,16 @@ fn an_anchor_read_within_the_last_day_is_never_trimmed() {
 }
 
 #[test]
+fn an_anchor_stays_protected_until_a_full_day_after_its_last_read() {
+    let mut entries: Vec<_> = (1..=4)
+        .map(|id| anchor(id, MAIN, anchor_key("Linux-X64", 'a', id)))
+        .collect();
+    entries[0].last_accessed_at = NOW - DAY + 1;
+    entries[1].last_accessed_at = NOW - DAY;
+    assert_eq!(plan(&entries, 0), [2]);
+}
+
+#[test]
 fn newest_by_created_at_wins_even_when_last_accessed_orders_differently() {
     let entry = |id: u64, created_at: i64, last_accessed_at: i64| CacheEntry {
         created_at,
