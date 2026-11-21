@@ -161,6 +161,7 @@ impl RootJobs<'_> {
         } else {
             crate::test_setup::inserted(self.facts, &self.unit.roots[0], self.lane, steps)
         };
+        crate::test_setup::gate_job(&mut steps);
         steps = crate::test_setup::checked_members(self.facts, &self.members, steps, checks);
         crate::delta_cache::append(&mut steps, self.facts, self.unit, self.lane, &id);
         Job {
@@ -389,12 +390,5 @@ impl RootJobs<'_> {
             jobs.push(self.inline_lanes_timeout(self.lane_job(test_id, steps, true)));
         }
         jobs
-    }
-
-    fn gated(&self, kind: StepKind) -> Step {
-        Step {
-            gate: self.lane.steps(),
-            ..step(kind)
-        }
     }
 }

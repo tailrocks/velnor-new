@@ -280,4 +280,11 @@ impl RootJobs<'_> {
         }
         job
     }
+
+    fn gated(&self, kind: StepKind) -> Step {
+        Step {
+            gate: self.lane.steps(),
+            ..step(kind)
+        }
+    }
 }

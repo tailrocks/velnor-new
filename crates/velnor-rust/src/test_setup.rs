@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    CargoCommand, RepoFacts, RepoPath, RustRoot, Step, StepKind, TestSetup, WorkspaceGroup,
+    CargoCommand, RepoFacts, RepoPath, RustRoot, SetupOrder, Step, StepKind, TestSetup,
+    WorkspaceGroup,
 };
 
 use crate::lane::Lane;
@@ -37,6 +38,7 @@ pub(crate) fn before_builds(facts: &RepoFacts, root: &RustRoot, mut steps: Vec<S
     let mut setup: Vec<Step> = Vec::new();
     for candidate in setups.map(|setup| Step {
         gate: gate.clone(),
+        setup_order: SetupOrder::AfterSetup,
         ..setup_step(setup, when, pr)
     }) {
         match steps.iter().position(|step| same_setup(step, &candidate)) {
@@ -104,6 +106,7 @@ pub(crate) fn before_tests(
         .filter(|setup| setup.root == root.manifest.parent())
         .map(|setup| Step {
             gate: lane.steps(),
+            setup_order: SetupOrder::AfterSetup,
             ..setup_step(setup, when, pr)
         })
         .collect();
@@ -186,6 +189,7 @@ pub(crate) fn checked(
         .map(|check| Step {
             gate: lane.steps(),
             target_dir: target.clone(),
+            setup_order: SetupOrder::AfterSetup,
             ..check
         })
         .collect();
@@ -213,6 +217,22 @@ fn archives(step: &Step) -> bool {
         step.kind,
         StepKind::Cargo(CargoCommand::NextestArchive { .. })
     )
+}
+
+pub(crate) fn gate_job(steps: &mut [Step]) {
+    let (mut building, mut testing) = (false, false);
+    for step in steps {
+        match &step.kind {
+            StepKind::TestSetup { before_build, .. } => {
+                building |= *before_build;
+                testing |= !*before_build;
+            }
+            StepKind::Cargo(_) if building || (testing && tests(step)) => {
+                step.setup_order = SetupOrder::AfterSetup;
+            }
+            _ => {}
+        }
+    }
 }
 
 fn setup_step(setup: &TestSetup, when: velnor_model::When, pr: velnor_model::PrRun) -> Step {
