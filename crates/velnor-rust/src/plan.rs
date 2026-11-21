@@ -29,6 +29,7 @@ pub(crate) const RUST_JOB: JobId = JobId::from_static("rust");
 pub(crate) const LINT_JOB: JobId = JobId::from_static("rust-lint");
 pub(crate) const TEST_JOB: JobId = JobId::from_static("rust-test");
 pub(crate) const MBX_SEED_HELPER: (u64, u64, u64) = (0, 1, 86);
+const MBX_SELECTED_STORE_HELPER: (u64, u64, u64) = (0, 1, 112);
 pub(crate) const TOOLS_LOCAL_HELPER: (u64, u64, u64) = (0, 1, 89);
 // helper-gate: first in tools-v0.1.110 via c14fa4818f
 pub(crate) const CHAINED_SAVES_HELPER: (u64, u64, u64) = (0, 1, 110);
@@ -96,6 +97,7 @@ fn plan_with(facts: &RepoFacts, deltas: bool) -> WorkflowPlan {
         jobs.insert(1, helper_job(facts, root, deltas));
     }
     apply_extensions(facts, &mut jobs, single);
+    crate::plan_tools::mark_anchor_keys(facts, &mut jobs);
     crate::report::finish(facts, &mut jobs, single, draft_guard);
     WorkflowPlan {
         name: "Rust CI".to_owned(),
@@ -182,6 +184,14 @@ pub(crate) fn mbx(facts: &RepoFacts, seed_gate: Option<Gate>) -> Vec<Step> {
         .as_ref()
         .is_some_and(|release| release.version().at_least(MBX_OUT_DIR_HELPER))
         .then(|| step(StepKind::MbxOutDirs));
+    let selected_store = facts
+        .helper
+        .as_ref()
+        .is_some_and(|release| release.version().at_least(MBX_SELECTED_STORE_HELPER));
+    let store = Step {
+        gate: seed_gate.clone().filter(|_| selected_store),
+        ..step(StepKind::MbxStore)
+    };
     let seed = facts
         .helper
         .as_ref()
@@ -190,7 +200,7 @@ pub(crate) fn mbx(facts: &RepoFacts, seed_gate: Option<Gate>) -> Vec<Step> {
             gate: seed_gate,
             ..step(StepKind::MbxSeed)
         });
-    [Some(step(StepKind::MbxStore)), out_dirs, seed]
+    [Some(store), out_dirs, seed]
         .into_iter()
         .flatten()
         .collect()
@@ -359,6 +369,7 @@ pub(crate) fn job(facts: &RepoFacts, id: JobId) -> Job {
             .helper
             .as_ref()
             .is_some_and(|helper| helper.version().at_least(CHAINED_SAVES_HELPER)),
+        anchor_key_output: false,
         mbx_stats: velnor_model::MbxStats::Summary,
         selection_name: None,
         steps: Vec::new(),

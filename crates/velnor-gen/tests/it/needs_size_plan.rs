@@ -22,13 +22,22 @@ pub(crate) fn saving_facts_pinned(
     blocks: bool,
     helper: Option<&str>,
 ) -> Result<velnor_model::RepoFacts, Box<dyn std::error::Error>> {
+    saving_facts_shaped(roots, blocks, helper, "lint-test")
+}
+
+pub(crate) fn saving_facts_shaped(
+    roots: usize,
+    blocks: bool,
+    helper: Option<&str>,
+    shape: &str,
+) -> Result<velnor_model::RepoFacts, Box<dyn std::error::Error>> {
     let manifests: Vec<_> = (0..roots)
         .map(|index| format!("root_{index:02}_{}/Cargo.toml", "x".repeat(150)))
         .collect();
 
     let mut view = view(
         &manifests.iter().map(String::as_str).collect::<Vec<_>>(),
-        Some(format!("shape = \"lint-test\"\ncache_check_blocks = {blocks}\n").as_bytes()),
+        Some(format!("shape = \"{shape}\"\ncache_check_blocks = {blocks}\n").as_bytes()),
     )?;
     let mut lock = String::from_utf8(HELPER_LOCK.to_vec())?;
     if let Some(helper) = helper {
