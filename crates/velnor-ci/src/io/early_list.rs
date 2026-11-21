@@ -12,7 +12,7 @@ use std::thread::{self, JoinHandle};
 use super::early_list_dir::{ExecProbe, ListDir, can_execute_from};
 use crate::tests_run::{Listing, extracts, list_argv, retarget_extract, runnable_matches};
 
-const EXPANSION_HEADROOM: u64 = 4;
+const EXPANSION_HEADROOM: u64 = 8;
 
 type FreeProbe = dyn Fn(&Path) -> io::Result<u64>;
 
@@ -342,14 +342,42 @@ mod tests {
             &run,
             Some(OsString::from(&directory)),
             &|_| Ok(true),
-            &|_| Ok(399),
+            &|_| Ok(799),
         ));
         assert!(
-            message.contains("bytes free, but the extraction may need 400"),
+            message.contains("bytes free, but the extraction may need 800"),
             "{message}"
         );
         let list_dir = directory.join(format!("velnor-nextest-list-{}", std::process::id()));
         assert!(!list_dir.exists(), "{}", list_dir.display());
+        fs::remove_dir_all(&directory).unwrap_or_else(|e| unreachable!("{e}"));
+    }
+
+    #[test]
+    fn an_extraction_that_fits_the_headroom_is_admitted() {
+        let directory = scratch("fits");
+        let archive = directory.join("a.tar.zst");
+        fs::write(&archive, vec![0_u8; 100]).unwrap_or_else(|e| unreachable!("{e}"));
+        let program = directory.join("cargo-nextest");
+        fs::write(&program, "#!/bin/sh\nexit 0\n").unwrap_or_else(|e| unreachable!("{e}"));
+        fs::set_permissions(&program, fs::Permissions::from_mode(0o755))
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        let run = [
+            program.display().to_string(),
+            "nextest".to_owned(),
+            "run".to_owned(),
+            "--archive-file".to_owned(),
+            archive.display().to_string(),
+            "--extract-to".to_owned(),
+            ".".to_owned(),
+        ];
+        let message = report(try_list(
+            &run,
+            Some(OsString::from(&directory)),
+            &|_| Ok(true),
+            &|_| Ok(800),
+        ));
+        assert_eq!(message, "the early nextest list printed no usable listing");
         fs::remove_dir_all(&directory).unwrap_or_else(|e| unreachable!("{e}"));
     }
 
