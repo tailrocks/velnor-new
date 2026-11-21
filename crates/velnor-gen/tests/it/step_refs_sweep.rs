@@ -14,6 +14,7 @@ use velnor_model::{RepoPath, RepoView};
 use crate::facts::{TestResult, lock_pinned_tools};
 use crate::lint_lane::{LINT as LINT_LANE, MISE};
 use crate::pipeline::{pin_helper, view};
+use crate::private_base_caches::GIT_LOCK;
 use crate::private_sources::SECTION;
 use crate::release_fixture::{APP, Root, TOOLS, TWO_BINARIES, release_view};
 use crate::release_unguarded::expected_release;
@@ -25,6 +26,11 @@ const SHARED_STORE_ON: &str = "mbx_shared_store = true\n";
 const CACHE_DEBUG_ON: &str = "cache_debug = true\n";
 const LANE: &str = "[[test_lane]]\nroot = '.'\nfeatures = ['local-mode']\npackages = ['package-0']\nfilter = 'test(~local::) or binary(local_host_public)'\n";
 const SETUP: &str = "[[test_setup]]\nroot = '.'\nname = 'Prepare the fixture'\nrun = 'bash scripts/prepare-fixture.sh'\n";
+const ARTIFACTS_ON: &str = "[[test_groups]]\nname = 'shell'\nroot = '.'\nfilter = 'binary(it) and test(~cargo_)'\nneeds = ['cargo']\nartifacts = [{ name = 'shell-failures', paths = ['junit.xml'], when = 'failure' }]\n";
+const RELEASE_ASSETS_ON: &str = "[[release_assets]]\nrepo = 'acme/fixtures'\ntag = 'fixtures-2026.11.1'\nasset = 'dataset.tar.zst'\nsha256 = '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef'\ndest = 'tests/fixtures/dataset'\n";
+const PR_ONLY_CHECKS_ON: &str = "pr_only_checks = [\"DCO\"]\n";
+const PR_ONLY_CHECKS_MINIMUM: u64 = 82;
+const PRIVATE_BASE_MINIMUM: u64 = 111;
 
 fn rust_sources(dir: &Path, out: &mut Vec<PathBuf>) -> std::io::Result<()> {
     for entry in fs::read_dir(dir)? {
@@ -45,7 +51,7 @@ fn patches_in(text: &str) -> Vec<u64> {
         .collect()
 }
 
-fn gate_patches() -> Result<BTreeSet<u64>, Box<dyn Error>> {
+pub(crate) fn gate_patches() -> Result<BTreeSet<u64>, Box<dyn Error>> {
     let mut files = Vec::new();
     for krate in ["velnor-gen", "velnor-rust", "velnor-render", "velnor-model"] {
         let src = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -66,7 +72,7 @@ fn gate_patches() -> Result<BTreeSet<u64>, Box<dyn Error>> {
     Ok(patches)
 }
 
-fn gate_patch(key: &str) -> Result<u64, Box<dyn Error>> {
+pub(crate) fn gate_patch(key: &str) -> Result<u64, Box<dyn Error>> {
     velnor_gen::key_gates()
         .find(|gate| gate.key == key && gate.value.is_none())
         .map(|gate| gate.first.2)
@@ -118,7 +124,7 @@ fn callees_of(files: &BTreeMap<RepoPath, String>) -> Result<Callees, Box<dyn Err
     Ok(callees)
 }
 
-fn generated(repo: &mut RepoView) -> Result<BTreeMap<RepoPath, String>, Box<dyn Error>> {
+pub(crate) fn generated(repo: &mut RepoView) -> Result<BTreeMap<RepoPath, String>, Box<dyn Error>> {
     lock_pinned_tools(repo)?;
     Ok(velnor_gen::expected_with_notes(repo)?.0)
 }
@@ -189,7 +195,7 @@ fn every_steps_reference_names_a_step_of_its_own_job() -> TestResult {
     Ok(())
 }
 
-fn pinned(repo: &mut RepoView, patch: u64) -> Result<u64, Box<dyn Error>> {
+pub(crate) fn pinned(repo: &mut RepoView, patch: u64) -> Result<u64, Box<dyn Error>> {
     let required = velnor_gen::required_helper(repo).map_or(0, |(_, _, patch)| patch);
     let effective = patch.max(required);
     pin_helper(repo, &format!("0.1.{effective}"))?;
@@ -197,13 +203,13 @@ fn pinned(repo: &mut RepoView, patch: u64) -> Result<u64, Box<dyn Error>> {
 }
 
 #[derive(Default)]
-struct Sweep {
+pub(crate) struct Sweep {
     scan: Scan,
     problems: Vec<String>,
 }
 
 impl Sweep {
-    fn add(&mut self, label: &str, files: &BTreeMap<RepoPath, String>) -> TestResult {
+    pub(crate) fn add(&mut self, label: &str, files: &BTreeMap<RepoPath, String>) -> TestResult {
         let callees = callees_of(files)?;
         for (_, text) in files.iter().filter(|(path, _)| is_workflow(path)) {
             scan_workflow(&crate::yaml_tree::document(text)?, &callees, &mut self.scan);
@@ -217,26 +223,33 @@ impl Sweep {
         Ok(())
     }
 
-    fn finish(self) {
+    pub(crate) fn finish(self) {
         assert!(self.problems.is_empty(), "{:#?}", self.problems);
         assert_ne!(self.scan.refs, 0, "no steps reference was checked");
     }
 }
 
-fn rust_ci_sweep(cases: &[(Option<&str>, Option<&str>)]) -> TestResult {
+#[derive(Clone, Copy)]
+pub(crate) struct Case<'a> {
+    pub(crate) from: u64,
+    pub(crate) config: Option<&'a str>,
+    pub(crate) files: &'a [(&'a str, &'a str)],
+}
+
+pub(crate) fn rust_ci_sweep(cases: &[Case<'_>]) -> TestResult {
     let mut sweep = Sweep::default();
     let mut rendered = BTreeSet::new();
     for patch in gate_patches()? {
-        for (config, tools) in cases {
-            let mut repo = view(ROOTS, config.map(str::as_bytes))?;
-            if let Some(tools) = tools {
+        for (index, case) in cases.iter().enumerate().filter(|(_, c)| patch >= c.from) {
+            let mut repo = view(ROOTS, case.config.map(str::as_bytes))?;
+            for (path, text) in case.files {
                 repo.files
-                    .insert(RepoPath::new("mise.toml")?, tools.as_bytes().to_vec());
+                    .insert(RepoPath::new(*path)?, text.as_bytes().to_vec());
             }
             let effective = pinned(&mut repo, patch)?;
-            if rendered.insert((format!("{config:?}{tools:?}"), effective)) {
+            if rendered.insert((index, effective)) {
                 sweep.add(
-                    &format!("0.1.{effective}, {config:?}"),
+                    &format!("0.1.{effective}, {:?}", case.config),
                     &generated(&mut repo)?,
                 )?;
             }
@@ -250,33 +263,91 @@ fn rust_ci_sweep(cases: &[(Option<&str>, Option<&str>)]) -> TestResult {
 fn every_steps_reference_in_a_feature_lane_or_test_group_names_a_step_of_its_own_job() -> TestResult
 {
     let groups = format!("{DATABASE}root = '.'\n{SHELL}root = '.'\n");
-    rust_ci_sweep(&[(Some(LANE), None), (Some(groups.as_str()), None)])
+    let artifacts = gate_patch("test_groups.artifacts")?;
+    rust_ci_sweep(&[
+        Case {
+            from: 0,
+            config: Some(LANE),
+            files: &[],
+        },
+        Case {
+            from: 0,
+            config: Some(groups.as_str()),
+            files: &[],
+        },
+        Case {
+            from: artifacts,
+            config: Some(ARTIFACTS_ON),
+            files: &[],
+        },
+    ])
 }
 
 #[test]
 fn every_steps_reference_in_a_lint_test_setup_or_private_sources_job_names_a_step_of_its_own_job()
 -> TestResult {
+    let release_assets = gate_patch("release_assets")?;
+    let private_assets = format!("{SECTION}{RELEASE_ASSETS_ON}");
     rust_ci_sweep(&[
-        (Some(LINT_LANE), Some(MISE)),
-        (Some(SETUP), None),
-        (Some(SECTION), None),
+        Case {
+            from: 0,
+            config: Some(LINT_LANE),
+            files: &[("mise.toml", MISE)],
+        },
+        Case {
+            from: 0,
+            config: Some(SETUP),
+            files: &[],
+        },
+        Case {
+            from: 0,
+            config: Some(SECTION),
+            files: &[],
+        },
+        Case {
+            from: release_assets,
+            config: Some(private_assets.as_str()),
+            files: &[],
+        },
+        Case {
+            from: PRIVATE_BASE_MINIMUM,
+            config: Some(SECTION),
+            files: &[("Cargo.lock", GIT_LOCK), ("tools/Cargo.lock", GIT_LOCK)],
+        },
     ])
 }
 
 #[test]
 fn every_steps_reference_in_the_release_workflow_names_a_step_of_its_own_job() -> TestResult {
-    let cases: [(&[Root], &str); 3] = [
-        (&[APP], "[[binaries]]\npackage = \"app\"\n"),
-        (&[APP, TOOLS], TWO_BINARIES),
+    let raw = gate_patch("binaries.format")?;
+    let asset_name = gate_patch("binaries.asset_name")?;
+    let cases: [(u64, &[Root], &str); 6] = [
+        (0, &[APP], "[[binaries]]\npackage = \"app\"\n"),
+        (0, &[APP, TOOLS], TWO_BINARIES),
         (
+            0,
             &[APP, TOOLS],
             "roots = [\".\", \"tools\"]\nafter = [\"Rust CI\", \"Lint\"]\n",
+        ),
+        (PR_ONLY_CHECKS_MINIMUM, &[APP], PR_ONLY_CHECKS_ON),
+        (
+            raw,
+            &[APP],
+            "[[binaries]]\npackage = \"app\"\nformat = \"raw\"\n",
+        ),
+        (
+            asset_name,
+            &[APP],
+            "[[binaries]]\npackage = \"app\"\nasset_name = \"app-{{ version }}-{{ platform }}\"\n",
         ),
     ];
     let mut sweep = Sweep::default();
     let mut rendered = BTreeSet::new();
     for patch in gate_patches()? {
-        for (roots, release_toml) in cases {
+        for (from, roots, release_toml) in cases {
+            if patch < from {
+                continue;
+            }
             let mut repo = release_view(roots, Some(release_toml))?;
             let effective = pinned(&mut repo, patch)?;
             if rendered.insert((release_toml, effective)) {
