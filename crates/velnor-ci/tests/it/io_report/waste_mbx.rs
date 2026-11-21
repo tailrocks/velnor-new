@@ -307,3 +307,22 @@ fn a_lane_whose_only_mbx_reports_are_probes_still_compiled_without_mbx() -> Resu
     assert!(waste_gates(&real).is_empty(), "{:?}", real.violations);
     Ok(())
 }
+
+/// A verification-only report is a real session, so a lane compiled through mbx is not
+/// "compiled without mbx". The complement (a probe-only report still fires the guard) is
+/// `a_lane_whose_only_mbx_reports_are_probes_still_compiled_without_mbx` above.
+#[test]
+fn a_lane_whose_only_mbx_report_is_verification_only_is_a_session_not_compiled_without_mbx()
+-> ResultTest {
+    let verified = r#"{"version":5,"hits":0,"misses":0,"unconsulted":0,"verifications":4,"bypasses":{},"compiler":{}}"#;
+    let metrics = lane_with_mbx_report("report-mbx-verification-only", verified)?;
+    assert_eq!(metrics.mbx.sessions.len(), 1, "{metrics:?}");
+    assert_eq!(
+        metrics.mbx.sessions[0].verifications,
+        Some(4),
+        "{metrics:?}"
+    );
+    assert!(!metrics.mbx.sessions[0].probe_only, "{metrics:?}");
+    assert!(waste_gates(&metrics).is_empty(), "{:?}", metrics.violations);
+    Ok(())
+}
