@@ -62,24 +62,25 @@ is_released() {
   [ "${v%.*}" = "$series" ] && [ "${v##*.}" -le "$patch" ]
 }
 
-release_tag() {
-  echo "tools-v0.1.$1"
-}
-
+# The ref a release is verified against. A release shipped under the legacy
+# rust-ci-v prefix keeps that prefix; an untagged current release defaults to tools-v.
 release_ref() {
-  if git rev-parse -q --verify "refs/tags/tools-v0.1.$1^{commit}" >/dev/null; then
-    echo "refs/tags/tools-v0.1.$1"
+  local n=$1
+  if git rev-parse -q --verify "refs/tags/tools-v0.1.$n^{commit}" >/dev/null; then
+    echo "refs/tags/tools-v0.1.$n"
+  elif [ "$n" != "$patch" ] || git rev-parse -q --verify "refs/tags/rust-ci-v0.1.$n^{commit}" >/dev/null; then
+    echo "refs/tags/rust-ci-v0.1.$n"
   else
-    echo "refs/tags/rust-ci-v0.1.$1"
+    echo "refs/tags/tools-v0.1.$n"
   fi
 }
 
 verify_correction() {
   local file=$1 gate=$2 n=$3 commit=$4 tag prev ref prev_ref
-  tag=$(release_tag "$n")
-  prev=$(release_tag "$((n - 1))")
   ref=$(release_ref "$n")
   prev_ref=$(release_ref "$((n - 1))")
+  tag=${ref#refs/tags/}
+  prev=${prev_ref#refs/tags/}
   if [ "$gate" != "0.1.$n" ]; then
     echo "$file: marker names $tag but the gate is $gate; the marker must name the gate's release" >&2
     return 1
