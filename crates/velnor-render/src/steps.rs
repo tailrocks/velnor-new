@@ -60,58 +60,61 @@ const A_NEED_FAILED: &str =
 
 pub(crate) fn rendered_job(job: &Job, plan: &WorkflowPlan) -> RenderedJob {
     let (restores, audit) = crate::base_steps::job_setup(job);
-    let lane = crate::cargo::cargo_lane(job);
+    let lane = crate::cargo::cargo_lane(job, plan);
     let tests = Tests::of(job);
     let mut steps =
         crate::helper_integrity::secure_steps(job, job_steps(job, restores, audit, &tests, lane));
     let mut env = crate::cargo::hoist_target_dir(job, &mut steps);
     env.extend(crate::cargo_target::mbx_reports_env(job));
     crate::shared_runs::mark(job, &mut steps);
-    crate::mise_digest::pin_to_runner_platform(RenderedJob {
-        id: job.id.to_string(),
-        name: job.name.clone(),
-        check_name: crate::selection_name::title(job),
-        comment: job.comment.clone(),
-        env,
-        needs: job.needs.iter().map(ToString::to_string).collect(),
-        condition: Some(crate::base_steps::audited_lane(
-            admission(
-                job.when,
-                job.gate.as_ref(),
-                job.pr,
-                &job.needs,
-                job.skip_after_merge_group.as_ref(),
-            ),
-            job,
-        )),
-        runs_on: job.runs_on.as_str().to_owned(),
-        fork_runner: crate::workflow::fork_runner(job, plan),
-        trusted_runner: crate::workflow::trusted_runner(job, plan),
-        permissions: permission_pairs(&job.permissions),
-        timeout_minutes: job.timeout_minutes,
-        outputs: job
-            .plan_outputs
-            .iter()
-            .map(|(slug, need)| {
-                let key = output(slug, *need);
-                let value = format!("${{{{ steps.{PLAN_STEP}.outputs.{key} }}}}");
-                (key, value)
-            })
-            .chain(job.group_outputs.iter().map(|(slug, name)| {
-                let key = group_output_name(slug, name);
-                let value = format!("${{{{ steps.{PLAN_STEP}.outputs.{key} }}}}");
-                (key, value)
-            }))
-            .chain(test_outputs(job, &tests))
-            .chain(merge_group_output(job))
-            .chain(crate::tools_steps::anchor_outputs(&job.steps))
-            .chain(lane_outputs(&job.steps))
-            .chain(crate::base_steps::public::job_output(&job.steps))
-            .collect(),
-        cache_mode: crate::cache::saving_mode(job),
-        steps,
-        ..RenderedJob::default()
-    })
+    crate::mise_digest::pin_to_runner_platform(
+        RenderedJob {
+            id: job.id.to_string(),
+            name: job.name.clone(),
+            check_name: crate::selection_name::title(job),
+            comment: job.comment.clone(),
+            env,
+            needs: job.needs.iter().map(ToString::to_string).collect(),
+            condition: Some(crate::base_steps::audited_lane(
+                admission(
+                    job.when,
+                    job.gate.as_ref(),
+                    job.pr,
+                    &job.needs,
+                    job.skip_after_merge_group.as_ref(),
+                ),
+                job,
+            )),
+            runs_on: job.runs_on.as_str().to_owned(),
+            fork_runner: crate::workflow::fork_runner(job, plan),
+            trusted_runner: crate::workflow::trusted_runner(job, plan),
+            permissions: permission_pairs(&job.permissions),
+            timeout_minutes: job.timeout_minutes,
+            outputs: job
+                .plan_outputs
+                .iter()
+                .map(|(slug, need)| {
+                    let key = output(slug, *need);
+                    let value = format!("${{{{ steps.{PLAN_STEP}.outputs.{key} }}}}");
+                    (key, value)
+                })
+                .chain(job.group_outputs.iter().map(|(slug, name)| {
+                    let key = group_output_name(slug, name);
+                    let value = format!("${{{{ steps.{PLAN_STEP}.outputs.{key} }}}}");
+                    (key, value)
+                }))
+                .chain(test_outputs(job, &tests))
+                .chain(merge_group_output(job))
+                .chain(crate::tools_steps::anchor_outputs(&job.steps))
+                .chain(lane_outputs(&job.steps))
+                .chain(crate::base_steps::public::job_output(&job.steps))
+                .collect(),
+            cache_mode: crate::cache::saving_mode(job),
+            steps,
+            ..RenderedJob::default()
+        },
+        crate::job_helper::release_of(job, plan),
+    )
 }
 
 fn job_steps(
@@ -196,11 +199,7 @@ fn rendered_steps(
     }
     rendered.push(body);
     if let StepKind::SourcesFetchAll { manifests, .. } = &step.kind {
-        rendered.extend(sources_fetch_all_rest(
-            manifests,
-            lane.cache_debug,
-            lane.offline,
-        ));
+        rendered.extend(sources_fetch_all_rest(manifests, lane));
     }
     for body in &mut rendered {
         if let (StepKind::Cargo(_) | StepKind::TestSetup { .. }, Some(target)) =
@@ -316,9 +315,7 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
         StepKind::RustComponents(components) => rustup_add("component", components),
         StepKind::RustTargets(targets) => rustup_add("target", targets),
         StepKind::SourcesFetch { position, .. } => sources_fetch(*position, lane),
-        StepKind::SourcesFetchAll { manifests, .. } => {
-            sources_fetch_all(manifests, lane.cache_debug, lane.offline)
-        }
+        StepKind::SourcesFetchAll { manifests, .. } => sources_fetch_all(manifests, lane),
         StepKind::Cargo(command) => cargo_step(
             command,
             step.manifest.as_ref(),
