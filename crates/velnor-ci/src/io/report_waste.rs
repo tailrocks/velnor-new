@@ -14,6 +14,7 @@ use std::path::Path;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 const PROBE_LIMIT: usize = 20_000;
+const OBJECT_CACHE: [&str; 2] = ["actions/cas", "actions/action-results"];
 
 pub(super) fn collect_local(metrics: &mut LaneMetrics, log: &[u8], runner_temp: &Path) {
     let first_cargo = metrics
@@ -25,9 +26,11 @@ pub(super) fn collect_local(metrics: &mut LaneMetrics, log: &[u8], runner_temp: 
     let (sessions, unparsed) = sessions(metrics, log, runner_temp);
     metrics.mbx = MbxEvidence {
         declared: crate::mbx_declared::declared_in(Path::new(".")),
-        store_primed: store
-            .zip(first_cargo)
-            .is_some_and(|(dir, start)| has_entry_before(Path::new(&dir), start)),
+        store_primed: store.zip(first_cargo).is_some_and(|(dir, start)| {
+            OBJECT_CACHE
+                .iter()
+                .any(|part| has_entry_before(&Path::new(&dir).join(part), start))
+        }),
         seed_truncated: seed_truncated(runner_temp),
         sessions,
         unparsed,
