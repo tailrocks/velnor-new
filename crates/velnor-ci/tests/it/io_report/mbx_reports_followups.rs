@@ -264,3 +264,10 @@ fn the_reader_maps_a_real_mbx_report_and_names_what_it_cannot_read() {
     assert!(parse(br#"{"hits":1}"#).is_err_and(|e| e.contains("no numeric version")));
     assert!(parse(b"{").is_err_and(|e| e.contains("not JSON")));
 }
+
+#[test]
+fn a_version_five_report_with_only_incremental_compilations_yields_a_session() {
+    let incremental =
+        br#"{"version":5,"hits":0,"misses":0,"unconsulted":0,"incremental_compilations":15}"#;
+    assert_eq!(parse(incremental), Ok(Some(session(0, 0, 15))));
+}

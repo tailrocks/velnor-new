@@ -30,6 +30,8 @@ struct Counts {
     #[serde(default)]
     verifications: u64,
     #[serde(default)]
+    incremental_compilations: u64,
+    #[serde(default)]
     bypasses: BTreeMap<String, u64>,
     #[serde(default)]
     compiler: Map<String, Value>,
@@ -140,7 +142,10 @@ pub fn parse(report: &[u8]) -> Result<Option<MbxSession>, String> {
             bypassed = bypassed.saturating_add(*count);
         }
     }
-    let looked_at = counts.hits > 0 || counts.misses > 0 || counts.unconsulted > 0;
+    let not_looked_up = counts
+        .unconsulted
+        .saturating_add(counts.incremental_compilations);
+    let looked_at = counts.hits > 0 || counts.misses > 0 || not_looked_up > 0;
     let has_bypasses = !counts.bypasses.is_empty();
     let probe_only = !looked_at
         && counts.verifications == 0
@@ -151,7 +156,7 @@ pub fn parse(report: &[u8]) -> Result<Option<MbxSession>, String> {
     Ok((looked_at || has_bypasses).then_some(MbxSession {
         hits: counts.hits,
         misses: counts.misses,
-        not_looked_up: counts.unconsulted,
+        not_looked_up,
         bypassed,
         verifications: Some(counts.verifications).filter(|count| *count > 0),
         bypasses: counts.bypasses,
