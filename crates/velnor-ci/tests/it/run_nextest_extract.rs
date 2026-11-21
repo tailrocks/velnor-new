@@ -3,9 +3,12 @@
 
 #![cfg(unix)]
 
-use crate::run_nextest::{execute_nextest, list_args, listed};
+use crate::run::scratch;
+use crate::run_nextest::{execute_nextest, fake_nextest, list_args, listed};
 use std::fs;
+use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
+use std::process::Command;
 
 const RUN_EXTRACT: &str = "p=; for a in \"$@\"; do [ \"$p\" = --extract-to ] && printf '%s' \"$a\" > \"$RUNNER_TEMP/run-extract\"; case $a in --extract-to=*) printf '%s' \"${a#--extract-to=}\" > \"$RUNNER_TEMP/run-extract\";; esac; p=$a; done\n\
 echo '    Starting 1 tests across 1 binary' >&2\n\
@@ -118,4 +121,43 @@ fn a_list_that_prints_no_listing_says_so() {
         stderr.contains("velnor-ci: the early nextest list printed no usable listing"),
         "{stderr}"
     );
+}
+
+#[test]
+fn the_early_list_does_not_extract_into_an_unusable_tmpdir() {
+    let temp = scratch("tests-run-extract-noexec-tmpdir");
+    fake_nextest(&temp, RUN_EXTRACT, &listed(&[("kept", &["alpha"])]));
+    let unusable = temp.join("unusable-tmpdir");
+    fs::create_dir_all(&unusable).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::set_permissions(&unusable, fs::Permissions::from_mode(0o000))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let outputs = temp.join("github-output");
+    fs::write(&outputs, "existing=1\n").unwrap_or_else(|e| unreachable!("{e}"));
+    let path = format!(
+        "{}:{}",
+        temp.display(),
+        std::env::var("PATH").unwrap_or_default()
+    );
+    let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        .arg("run")
+        .arg("--")
+        .args(archive_run(&["--extract-to", "."]))
+        .env("RUNNER_TEMP", &temp)
+        .env("TMPDIR", &unusable)
+        .env("GITHUB_OUTPUT", &outputs)
+        .env("PATH", path)
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    fs::set_permissions(&unusable, fs::Permissions::from_mode(0o755))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(output.status.success(), "{output:?}");
+    let args = list_args(&temp);
+    let list_value = extract_to(&args).unwrap_or_else(|| unreachable!("{args:?}"));
+    assert!(
+        Path::new(&list_value).starts_with(&temp) && !Path::new(&list_value).starts_with(&unusable),
+        "{list_value} must be under RUNNER_TEMP, not TMPDIR"
+    );
+    assert!(temp.join("list-dest-existed").exists());
+    let written = fs::read_to_string(&outputs).unwrap_or_default();
+    assert!(written.contains("tests_by_package="), "{written}");
 }
