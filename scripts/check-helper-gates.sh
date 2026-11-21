@@ -129,11 +129,6 @@ scan() {
     for (k = 1; k <= nr; k++) if (rs[k] <= p && p < re[k]) return 1
     return 0
   }
-  # Walks one line of Rust source, carrying string and comment state from the
-  # lines before it. Records the column ranges that are real comments: a //
-  # or /* opened in code, or a /* still open from an earlier line. Text inside
-  # normal, byte, raw (any number of #) or multi-line string literals is never
-  # recorded, so a marker there cannot count.
   function lex_line(s,    i, n, c, cs, pc, ppc, j, h, hs, k) {
     split("", rs)
     split("", re)
@@ -181,9 +176,6 @@ scan() {
     }
     if (lx_mode == "block" && cs) lex_addr(cs, n + 1)
   }
-  # Sets c_mv (a released-form marker sits in a real comment), c_mn and c_mc
-  # (its version and commit), and c_mention (a helper-gate: text sits in a
-  # comment). Must run once per new-file line, in order.
   function analyze(line,    s, off, p, m, st) {
     c_mv = 0; c_mn = ""; c_mc = ""; c_mention = 0
     lex_line(line)
