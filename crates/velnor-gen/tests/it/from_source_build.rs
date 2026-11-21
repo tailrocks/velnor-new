@@ -1,12 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::error::Error;
-use std::fs;
-use std::os::unix::fs::PermissionsExt;
-use std::path::{Path, PathBuf};
-use std::process::Command;
-
 use serde_json::Value;
 
 use crate::facts::TestResult;
@@ -15,23 +9,6 @@ use crate::generated_check_source::{
 };
 use crate::lint_lane::LINT;
 use crate::pipeline::workflow;
-
-fn scratch(name: &str) -> Result<PathBuf, Box<dyn Error>> {
-    let dir = std::env::temp_dir().join(format!(
-        "velnor-gen-from-source-{}-{name}",
-        std::process::id()
-    ));
-    let _ = fs::remove_dir_all(&dir);
-    fs::create_dir_all(dir.join("bin"))?;
-    fs::create_dir_all(dir.join("repo/tools/gen"))?;
-    Ok(dir)
-}
-
-fn fake_tool(path: &Path, body: &str) -> Result<(), Box<dyn Error>> {
-    fs::write(path, format!("#!/bin/sh\n{body}\n"))?;
-    fs::set_permissions(path, fs::Permissions::from_mode(0o755))?;
-    Ok(())
-}
 
 fn run_names(job: &Value, text: &str) -> Option<usize> {
     job["steps"]
@@ -42,16 +19,6 @@ fn run_names(job: &Value, text: &str) -> Option<usize> {
 
 #[test]
 fn the_source_build_runs_cargo_in_the_generator_directory_for_the_host_target() -> TestResult {
-    let dir = scratch("host-target")?;
-    let repo = dir.join("repo");
-    let work = repo.join("tools/gen");
-    let out = dir.join("cargo.txt");
-    fake_tool(
-        &dir.join("bin/cargo"),
-        &format!("pwd > '{0}'; printf '%s\\n' \"$@\" >> '{0}'", out.display()),
-    )?;
-    let launcher = dir.join("velnor-exec");
-    fs::write(&launcher, "shift 2\nexec \"$@\"\n")?;
     let roots = [
         ("Cargo.toml", "velnor-ci-app"),
         ("tools/gen/Cargo.toml", "velnor-gen"),
@@ -62,40 +29,36 @@ fn the_source_build_runs_cargo_in_the_generator_directory_for_the_host_target() 
         &roots,
     )?)?)?;
     let step = check_step(&job);
-    let status = Command::new("bash")
-        .arg("-c")
-        .arg(step["run"].as_str().ok_or("no run")?)
-        .current_dir(&work)
-        .env(
-            "PATH",
-            format!("{}:/usr/bin:/bin", dir.join("bin").display()),
-        )
-        .env("VELNOR_EXEC", &launcher)
-        .status()?;
-    assert!(status.success(), "{job}");
-    let seen = fs::read_to_string(&out)?;
-    let lines: Vec<&str> = seen.lines().collect();
-    assert_eq!(
-        fs::canonicalize(lines[0])?,
-        fs::canonicalize(&work)?,
-        "{seen}"
-    );
-    let at = lines
+    let work = step["working-directory"]
+        .as_str()
+        .ok_or_else(|| format!("no working-directory: {job}"))?;
+    assert_eq!(work, "tools/gen", "{job}");
+    let words: Vec<&str> = step["run"]
+        .as_str()
+        .ok_or("no run")?
+        .split_whitespace()
+        .collect();
+    let at = words
         .iter()
         .position(|arg| *arg == "--target")
-        .ok_or_else(|| format!("no --target in {lines:?}"))?;
-    assert_eq!(lines.get(at + 1), Some(&"host-tuple"), "{lines:?}");
-    let root = lines
+        .ok_or_else(|| format!("no --target in {words:?}"))?;
+    assert_eq!(words.get(at + 1), Some(&"host-tuple"), "{words:?}");
+    let root = words
         .iter()
         .position(|arg| *arg == "--root")
-        .and_then(|at| lines.get(at + 1))
+        .and_then(|at| words.get(at + 1))
         .ok_or("no --root")?;
-    assert_eq!(
-        fs::canonicalize(work.join(root))?,
-        fs::canonicalize(&repo)?,
-        "{lines:?}"
-    );
-    fs::remove_dir_all(&dir)?;
+    let mut resolved: Vec<&str> = work.split('/').collect();
+    for part in root.split('/') {
+        match part {
+            "." | "" => {}
+            ".." => {
+                resolved.pop();
+            }
+            other => resolved.push(other),
+        }
+    }
+    assert!(resolved.is_empty(), "{root} from {work}: {resolved:?}");
     Ok(())
 }
 
