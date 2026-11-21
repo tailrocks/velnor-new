@@ -342,6 +342,7 @@ fn metadata(
         .map(PathBuf::from)
         .filter(|build| build.is_relative())
     {
+        build_dir::refuse_parent(&build)?;
         let base = match invocation {
             Some(invocation) => invocation.directory.to_path_buf(),
             None => std::env::current_dir()

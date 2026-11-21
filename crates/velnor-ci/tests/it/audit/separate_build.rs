@@ -191,18 +191,48 @@ fn a_relative_build_directory_names_the_same_directory_for_the_workspace_and_the
     assert!(repo.root().join("build/debug").is_dir(), "{built:?}");
 }
 
+fn from_step_directory(repo: &Repo, value: &str, arguments: &[&str]) -> Output {
+    velnor_ci()
+        .current_dir(repo.root().join("rust/app"))
+        .env("CARGO_BUILD_BUILD_DIR", value)
+        .args(arguments)
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"))
+}
+
+fn refused_for_parent_component(output: &Output, value: &str) {
+    assert_eq!(output.status.code(), Some(1), "{output:?}");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains(&format!(
+            "CARGO_BUILD_BUILD_DIR={value} is relative and contains `..`"
+        )),
+        "{stderr}"
+    );
+}
+
 #[test]
-fn a_relative_build_directory_is_audited_from_the_step_directory_as_cargo_writes_it() {
+fn a_relative_build_directory_with_a_parent_component_is_refused_by_the_audit() {
     let repo = built_in(APART, &[]);
     stamp(&repo, APART);
-    let written = velnor_ci()
-        .current_dir(repo.root().join("rust/app"))
-        .env("CARGO_BUILD_BUILD_DIR", "../build")
-        .args(["inputs", "audit", "--write"])
-        .output()
+    let refused = from_step_directory(&repo, "../build", &["inputs", "audit", "--write"]);
+    refused_for_parent_component(&refused, "../build");
+    assert!(!repo.root().join(".velnor/rust-inputs.lock").exists());
+}
+
+#[test]
+fn a_build_directory_through_a_symlink_and_a_parent_component_is_refused_before_cargo_reads_it() {
+    let repo = workspace_below_the_root();
+    let outside = repo.root().join("../lnk-target/inner");
+    fs::create_dir_all(&outside).unwrap_or_else(|e| unreachable!("{e}"));
+    std::os::unix::fs::symlink(&outside, repo.root().join("rust/app/lnk"))
         .unwrap_or_else(|e| unreachable!("{e}"));
-    assert!(written.status.success(), "{written:?}");
-    assert_eq!(lock(&repo), ".\tlib\n");
+    let audit = from_step_directory(&repo, "lnk/../bd", &["inputs", "audit", "--write"]);
+    refused_for_parent_component(&audit, "lnk/../bd");
+    let build = from_step_directory(&repo, "lnk/../bd", &["inputs", "build", "--", "cargo", "build"]);
+    refused_for_parent_component(&build, "lnk/../bd");
+    assert!(!repo.root().join(".velnor/rust-inputs.lock").exists());
+    assert!(!outside.parent().unwrap_or(&outside).join("bd").exists());
 }
 
 #[test]
@@ -305,14 +335,9 @@ fn two_ungrouped_roots_sharing_a_build_directory_are_refused() {
 }
 
 #[test]
-fn a_relative_build_directory_is_built_from_a_subdirectory_as_cargo_writes_it() {
+fn a_relative_build_directory_with_a_parent_component_is_refused_by_the_build() {
     let repo = workspace_below_the_root();
-    let built = velnor_ci()
-        .current_dir(repo.root().join("rust/app"))
-        .env("CARGO_BUILD_BUILD_DIR", "../build")
-        .args(["inputs", "build", "--", "cargo", "build"])
-        .output()
-        .unwrap_or_else(|e| unreachable!("{e}"));
-    assert!(built.status.success(), "{built:?}");
-    assert!(repo.root().join("rust/build/debug").is_dir(), "{built:?}");
+    let refused = from_step_directory(&repo, "../build", &["inputs", "build", "--", "cargo", "build"]);
+    refused_for_parent_component(&refused, "../build");
+    assert!(!repo.root().join("rust/build").exists());
 }
