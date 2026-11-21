@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::mbx_reports::{SWITCH, Socket, cargo, cargo_with, report, report_json, session};
+use super::mbx_reports::{SWITCH, cargo, cargo_with, report, report_json, session};
+use super::mbx_socket::Socket;
 use super::{Repo, ResultTest, fixture};
 use std::fs;
 use std::os::unix::fs::PermissionsExt;

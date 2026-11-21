@@ -344,6 +344,7 @@ mod build_failure;
 mod evidence;
 mod mbx_reports;
 mod mbx_reports_sessions;
+mod mbx_socket;
 mod policy;
 mod provenance;
 mod target_identity;

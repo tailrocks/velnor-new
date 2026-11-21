@@ -1,32 +1,18 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use super::mbx_socket::{Socket, fill_backlog, run_bounded};
 use super::{Repo, ResultTest, fixture, read};
-use nix::sys::socket::{AddressFamily, SockFlag, SockType, UnixAddr, connect, socket};
 use std::fs;
-use std::os::fd::AsRawFd;
 use std::os::unix::fs::PermissionsExt;
-use std::os::unix::net::{UnixListener, UnixStream};
-use std::path::Path;
-use std::process::{Command, Output, Stdio};
-use std::thread;
-use std::time::{Duration, Instant};
+use std::os::unix::net::UnixListener;
+use std::process::Command;
 use velnor_ci::mbx_report::{parse, reports_session};
 use velnor_ci::report::LaneMetrics;
 use velnor_ci::waste_evidence::MbxSession;
 
 pub(super) const SWITCH: &str = "VELNOR_MBX_REPORTS";
 const FAKE_CARGO: &str = "#!/bin/sh\nprintf '%s\\n' \"$FAKE_MBX_STDERR\" >&2\nif [ -n \"$MBX_STATS_REPORT\" ] && [ -n \"$FAKE_MBX_REPORT\" ] && [ -z \"$MBX_SOCKET\" ]; then printf '%s' \"$FAKE_MBX_REPORT\" > \"$MBX_STATS_REPORT\"; fi\n";
-const COMMAND_LIMIT: Duration = Duration::from_secs(60);
-const BACKLOG_LIMIT: usize = 1 << 12;
-
-#[derive(Clone, Copy)]
-pub(super) enum Socket {
-    Absent,
-    Live,
-    Stale,
-    Busy,
-}
 
 pub(super) fn report_json(version: u64, hits: u64, misses: u64, unconsulted: u64) -> String {
     format!(
@@ -37,41 +23,6 @@ pub(super) fn report_json(version: u64, hits: u64, misses: u64, unconsulted: u64
 
 pub(super) fn cargo(repo: &Repo, subcommand: &str, report: &str, stderr: &str) -> ResultTest {
     cargo_with(repo, subcommand, report, stderr, None, true, Socket::Absent)
-}
-
-fn fill_backlog(path: &Path) -> Result<Vec<UnixStream>, Box<dyn std::error::Error>> {
-    let address = UnixAddr::new(path)?;
-    let mut clients = Vec::new();
-    while clients.len() < BACKLOG_LIMIT {
-        let client = UnixStream::from(socket(
-            AddressFamily::Unix,
-            SockType::Stream,
-            SockFlag::empty(),
-            None,
-        )?);
-        client.set_nonblocking(true)?;
-        if connect(client.as_raw_fd(), &address).is_err() {
-            break;
-        }
-        clients.push(client);
-    }
-    Ok(clients)
-}
-
-fn run_bounded(command: &mut Command) -> Result<Output, Box<dyn std::error::Error>> {
-    let mut child = command
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()?;
-    let deadline = Instant::now() + COMMAND_LIMIT;
-    while child.try_wait()?.is_none() {
-        if Instant::now() >= deadline {
-            child.kill()?;
-            return Err("velnor-ci did not finish within the limit".into());
-        }
-        thread::sleep(Duration::from_millis(10));
-    }
-    Ok(child.wait_with_output()?)
 }
 
 pub(super) fn cargo_with(
