@@ -154,7 +154,7 @@ mod tests {
         assert!(
             verdict.is_ok(),
             "{}",
-            verdict.err().map(|e| e.to_string()).unwrap_or_default()
+            verdict.err().map_or_else(String::new, |e| e.to_string())
         );
     }
 
@@ -219,7 +219,7 @@ mod tests {
     #[test]
     fn an_unavailable_privacy_verdict_fails_the_cache_check() {
         let verdict = check(&[skipped_lane(json!(true))]);
-        let message = verdict.err().map(|e| e.to_string()).unwrap_or_default();
+        let message = verdict.err().map_or_default(|e| e.to_string());
         assert!(
             message.contains("privacy lookup was unavailable"),
             "{message}"
