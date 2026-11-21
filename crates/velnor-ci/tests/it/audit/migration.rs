@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+pub(super) mod outputs;
 mod targets;
 
 use std::fs;
@@ -229,15 +230,11 @@ fn records_execution() {
 }
 
 pub(super) fn package_output(repo: &Repo, package: &str) -> std::path::PathBuf {
-    fs::read_dir(repo.root().join("rust/target/debug/build").join(package))
-        .unwrap_or_else(|e| unreachable!("{e}"))
-        .map(|hash| {
-            hash.unwrap_or_else(|e| unreachable!("{e}"))
-                .path()
-                .join("run/stdout")
-        })
-        .find(|output| output.is_file())
+    outputs::run_outputs(&repo.root().join("rust/target/debug/build"), package)
+        .into_iter()
+        .next()
         .unwrap_or_else(|| unreachable!("missing {package} output"))
+        .stdout
 }
 
 pub(super) fn wrapped_build(repo: &Repo, cargo: &[&str]) -> Output {
