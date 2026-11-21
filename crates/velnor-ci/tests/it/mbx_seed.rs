@@ -181,17 +181,18 @@ fn a_second_run_skips_what_is_already_present() {
 
 #[test]
 fn an_absent_seed_appends_only_the_out_dir_setting() {
+    let keep = "MBX_SHARE_OUT_DIR=0\n";
     let host = host("mbx-seed-absent");
     let outcome = run(&host, "pull_request", "refs/pull/1/merge", None);
     assert_eq!(outcome, Outcome::NotOffered);
-    assert_eq!(env_lines(&outcome).expect("env lines"), KEEP_OUT_DIR);
+    assert_eq!(env_lines(&outcome).expect("env lines"), keep);
     assert!(!host.root.join("temp/velnor").exists());
     let empty = host.root.join("empty");
     fs::create_dir_all(&empty).unwrap_or_else(|e| unreachable!("{e}"));
     read_only(&empty);
     let outcome = run(&host, "pull_request", "refs/pull/1/merge", Some(&empty));
     assert_eq!(outcome, Outcome::Empty);
-    assert_eq!(env_lines(&outcome).expect("env lines"), KEEP_OUT_DIR);
+    assert_eq!(env_lines(&outcome).expect("env lines"), keep);
     assert!(!host.root.join("temp/velnor").exists());
 }
 

@@ -144,7 +144,10 @@ fn no_offered_directory_appends_only_the_out_dir_setting() {
     let host = host("mbx-store-none");
     let outcome = run(&host, "push", "refs/heads/main", None);
     assert_eq!(outcome, Outcome::NotOffered);
-    assert_eq!(env_lines(&outcome).expect("env lines"), KEEP_OUT_DIR);
+    assert_eq!(
+        env_lines(&outcome).expect("env lines"),
+        "MBX_SHARE_OUT_DIR=0\n"
+    );
 }
 
 #[test]

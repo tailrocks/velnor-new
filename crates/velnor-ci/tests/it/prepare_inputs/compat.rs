@@ -151,18 +151,19 @@ fn compat_follows_the_mise_cargo_wrapper_that_mbx_runs_through() {
 
 #[test]
 fn compat_follows_the_mbx_share_out_dir_setting() {
-    let unset = compat_with("compat-out-dir", |_| {});
-    let kept = compat_with("compat-out-dir", |setup| {
-        setup.env.push(("MBX_SHARE_OUT_DIR", "0"));
-    });
+    let out_dir = |value: Option<&'static str>| {
+        compat_with("compat-out-dir", |setup| {
+            if let Some(value) = value {
+                setup.env.push(("MBX_SHARE_OUT_DIR", value));
+            }
+        })
+    };
+    let (unset, kept, other) = (out_dir(None), out_dir(Some("0")), out_dir(Some("1")));
     assert_ne!(
         unset, kept,
         "a target built with build-script output kept in target must not restore one built without it"
     );
-    assert_eq!(
-        kept,
-        compat_with("compat-out-dir", |setup| {
-            setup.env.push(("MBX_SHARE_OUT_DIR", "0"));
-        })
-    );
+    assert_ne!(unset, other);
+    assert_ne!(kept, other);
+    assert_eq!(kept, out_dir(Some("0")));
 }
