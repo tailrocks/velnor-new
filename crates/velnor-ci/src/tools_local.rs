@@ -167,6 +167,14 @@ fn describe(outcome: &Outcome) -> String {
     }
 }
 
+/// The user that owns `home` itself. A symlinked `HOME` is not followed, so a dangling link or a
+/// loop still has an owner and reaches the refusal in `clear_home` instead of failing here.
+pub fn home_owner(home: &Path) -> Result<u32, CiError> {
+    fs::symlink_metadata(home)
+        .map(|metadata| metadata.uid())
+        .map_err(|error| CiError::new(format!("cannot stat {}: {error}", home.display())))
+}
+
 pub fn setup(verb: Verb, key: Option<&str>) -> Result<String, CiError> {
     let key = match (verb, key) {
         (Verb::Clear, key) => key.unwrap_or_default(),
@@ -190,9 +198,7 @@ pub fn setup(verb: Verb, key: Option<&str>) -> Result<String, CiError> {
         shared_dir: shared.as_deref(),
         seed_dir: seed.as_deref(),
         home: &home,
-        owner: fs::metadata(&home)
-            .map(|metadata| metadata.uid())
-            .map_err(|error| CiError::new(format!("cannot stat {}: {error}", home.display())))?,
+        owner: home_owner(&home)?,
     });
     if verb == Verb::Restore
         && let Some(file) = var("GITHUB_OUTPUT")

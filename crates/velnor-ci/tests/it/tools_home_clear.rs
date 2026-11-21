@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs;
-use std::os::unix::fs::{MetadataExt, symlink};
+use std::os::unix::fs::symlink;
 use std::path::{Path, PathBuf};
 
-use velnor_ci::tools_local::{Inputs, Outcome, Verb, run};
+use velnor_ci::tools_local::{Inputs, Outcome, Verb, home_owner, run};
 use velnor_ci::tools_verify::{Anchor, Recording, Verdict, check, digest, record};
 
 use crate::io::Repo;
@@ -67,7 +67,7 @@ fn go(node: &Node, verb: Verb, home: &Path) -> Outcome {
         shared_dir: Some(&store),
         seed_dir: Some(&store),
         home,
-        owner: fs::metadata(home).map_or(0, |metadata| metadata.uid()),
+        owner: home_owner(home).unwrap_or(0),
     })
 }
 
@@ -268,4 +268,32 @@ fn a_home_below_a_symlinked_ancestor_is_still_cleared() {
     assert_eq!(outcome, Outcome::Cleared);
     assert!(!home.join(".local/share/mise").exists());
     assert!(!home.join(".rustup").exists());
+}
+
+#[test]
+fn a_dangling_or_looping_home_link_is_a_warning_and_deletes_nothing() {
+    let node = node("tools-home-clear-dangling-home");
+    saved(&node);
+    let dangling = node.root.join("dangling-home");
+    symlink(node.root.join("missing"), &dangling).unwrap_or_else(|e| unreachable!("{e}"));
+    let (first, second) = (node.root.join("loop-a"), node.root.join("loop-b"));
+    symlink(&second, &first).unwrap_or_else(|e| unreachable!("{e}"));
+    symlink(&first, &second).unwrap_or_else(|e| unreachable!("{e}"));
+    for home in [&dangling, &first] {
+        assert!(home_owner(home).is_ok(), "{}", home.display());
+        for verb in [Verb::Clear, Verb::Restore] {
+            let outcome = go(&node, verb, home);
+            assert!(
+                matches!(outcome, Outcome::Rejected(_)),
+                "{verb:?} {}: {outcome:?}",
+                home.display()
+            );
+        }
+        assert!(
+            fs::symlink_metadata(home).is_ok_and(|metadata| metadata.file_type().is_symlink()),
+            "{}",
+            home.display()
+        );
+    }
+    assert!(!node.root.join("missing").exists());
 }
