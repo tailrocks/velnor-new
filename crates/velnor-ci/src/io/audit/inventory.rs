@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod descriptors;
 mod evidence;
 mod handle;
 mod held;
@@ -8,6 +9,7 @@ mod latest;
 mod resolve;
 mod walk;
 
+pub(super) use descriptors::{OpenFileLimit, raise_open_file_limit, run_build};
 pub(super) use evidence::{Evidence, State, state};
 pub(super) use latest::newest;
 pub(super) use walk::{Budget, scan};

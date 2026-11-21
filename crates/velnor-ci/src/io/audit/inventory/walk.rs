@@ -8,6 +8,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use super::super::options::{MAX_ENTRIES_CEILING, MAX_ENTRIES_VARIABLE};
+use super::descriptors::{descriptor_shortage, shortage_message};
 use super::handle::{self, Climb, Current, Opened, Origin, Stamp};
 use super::held::Held;
 use super::resolve::Reach;
@@ -17,6 +18,7 @@ pub(in crate::io::audit) struct Budget {
     remaining: usize,
     limit: usize,
     overflowed: bool,
+    descriptors: bool,
 }
 
 impl Budget {
@@ -25,11 +27,23 @@ impl Budget {
             remaining: limit,
             limit,
             overflowed: false,
+            descriptors: false,
         }
     }
 
     pub(in crate::io::audit) fn overflowed(&self) -> bool {
         self.overflowed
+    }
+
+    #[cfg(test)]
+    pub(in crate::io::audit) fn descriptors_exhausted(&self) -> bool {
+        self.descriptors
+    }
+
+    pub(in crate::io::audit) fn warn_descriptors_exhausted(&self, error: &io::Error) {
+        if self.descriptors {
+            eprintln!("velnor-ci: WARNING: {error}");
+        }
     }
 
     fn reserve(&mut self) -> io::Result<()> {
@@ -93,6 +107,7 @@ impl Default for Probe<'_> {
 pub(super) struct Pending {
     pub(super) path: PathBuf,
     pub(super) origin: Origin,
+    depth: usize,
 }
 
 pub(super) fn scan_with(
@@ -102,19 +117,39 @@ pub(super) fn scan_with(
     probe: &Probe<'_>,
 ) -> io::Result<Scan> {
     let root = fs::canonicalize(root)?;
+    let mut depth = 0;
+    walk(&root, targets, budget, probe, &mut depth).map_err(|error| {
+        let Some(errno) = descriptor_shortage(&error) else {
+            return error;
+        };
+        budget.descriptors = true;
+        io::Error::other(shortage_message(errno, depth))
+    })
+}
+
+fn walk(
+    root: &Path,
+    targets: &BTreeSet<PathBuf>,
+    budget: &mut Budget,
+    probe: &Probe<'_>,
+    depth: &mut usize,
+) -> io::Result<Scan> {
     let mut entries = Entries::new();
     let mut identities = BTreeMap::new();
     let mut pending = vec![Pending {
-        path: root.clone(),
+        path: root.to_path_buf(),
         origin: Origin::Path,
+        depth: 0,
     }];
     let mut visited = BTreeSet::new();
     let mut held = Held::new(probe);
     while let Some(Pending {
         path: directory,
         origin,
+        depth: level,
     }) = pending.pop()
     {
+        *depth = level;
         if !visited.insert(directory.clone()) {
             handle::revisited(&identities, &directory, held.reach())?;
             continue;
@@ -135,10 +170,9 @@ pub(super) fn scan_with(
                     current => settle(
                         &mut entries,
                         &mut pending,
-                        &directory,
-                        &origin,
+                        (&directory, &origin, level),
                         current,
-                        (&root, targets),
+                        (root, targets),
                         held.reach(),
                     )?,
                 }
@@ -157,9 +191,9 @@ pub(super) fn scan_with(
         let queued_before = pending.len();
         let children = list(
             (&listing, names),
-            (&directory, stamp),
+            (&directory, stamp, level),
             (&mut pending, &mut held),
-            (&root, targets),
+            (root, targets),
         )?;
         held.track(&listing, &directory, &mut pending, queued_before);
         let current = handle::current(&origin, &directory, held.reach(), &held.climb(&origin))?;
@@ -187,10 +221,9 @@ pub(super) fn scan_with(
                 settle(
                     &mut entries,
                     &mut pending,
-                    &directory,
-                    &origin,
+                    (&directory, &origin, level),
                     current,
-                    (&root, targets),
+                    (root, targets),
                     held.reach(),
                 )?;
             }
@@ -204,7 +237,7 @@ pub(super) fn scan_with(
 
 fn list(
     (listing, names): (&Opened, Vec<OsString>),
-    (directory, stamp): (&Path, Stamp),
+    (directory, stamp, level): (&Path, Stamp, usize),
     (pending, held): (&mut Vec<Pending>, &mut Held<'_, '_>),
     (root, targets): (&Path, &BTreeSet<PathBuf>),
 ) -> io::Result<BTreeMap<PathBuf, Kind>> {
@@ -219,7 +252,13 @@ fn list(
             stamp,
             name: name.clone(),
         };
-        pending.extend(queue(&kind, &path, child, (root, targets), held.reach())?);
+        pending.extend(queue(
+            &kind,
+            &path,
+            (child, level + 1),
+            (root, targets),
+            held.reach(),
+        )?);
         children.insert(PathBuf::from(name), kind);
     }
     Ok(children)
@@ -238,7 +277,7 @@ pub(super) fn changed(kind: io::ErrorKind, directory: &Path) -> io::Error {
 fn queue(
     kind: &Kind,
     path: &Path,
-    origin: Origin,
+    (origin, depth): (Origin, usize),
     (root, targets): (&Path, &BTreeSet<PathBuf>),
     reach: Reach<'_>,
 ) -> io::Result<Option<Pending>> {
@@ -249,6 +288,7 @@ fn queue(
         Kind::Directory => Some(Pending {
             path: path.to_path_buf(),
             origin,
+            depth,
         }),
         Kind::Link {
             resolved: Some(resolved),
@@ -256,6 +296,7 @@ fn queue(
         } if is_directory(resolved, reach)? => Some(Pending {
             path: resolved.clone(),
             origin: Origin::Path,
+            depth,
         }),
         Kind::File | Kind::Link { .. } | Kind::Other => None,
     })
@@ -264,8 +305,7 @@ fn queue(
 fn settle(
     entries: &mut Entries,
     pending: &mut Vec<Pending>,
-    directory: &Path,
-    origin: &Origin,
+    (directory, origin, level): (&Path, &Origin, usize),
     current: Current,
     (root, targets): (&Path, &BTreeSet<PathBuf>),
     reach: Reach<'_>,
@@ -285,7 +325,7 @@ fn settle(
             pending.extend(queue(
                 &kind,
                 directory,
-                origin.clone(),
+                (origin.clone(), level),
                 (root, targets),
                 reach,
             )?);

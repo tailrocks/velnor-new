@@ -35,6 +35,7 @@ struct Builder<'a> {
     workspaces: Vec<Workspace>,
     directories: Vec<PathBuf>,
     max_entries: usize,
+    open_files: Option<inventory::OpenFileLimit>,
     targets: BTreeSet<PathBuf>,
     roots: BTreeSet<PathBuf>,
     declared: BTreeSet<PathBuf>,
@@ -71,6 +72,7 @@ pub(crate) fn build(directory: &Path, args: &InputsBuildArgs) -> Result<String, 
         workspaces,
         directories,
         max_entries: max_entries_from_env()?,
+        open_files: inventory::raise_open_file_limit(),
         roots,
         declared: BTreeSet::new(),
         location,
@@ -229,7 +231,10 @@ impl Builder<'_> {
                 Err(error) if budget.overflowed() => {
                     return Err(CiError::new(error.to_string()));
                 }
-                Err(_) => return Ok((evidence, false)),
+                Err(error) => {
+                    budget.warn_descriptors_exhausted(&error);
+                    return Ok((evidence, false));
+                }
             }
         }
         Ok((evidence, true))
@@ -284,9 +289,7 @@ impl Builder<'_> {
         {
             build.env(TARGET_VARIABLE, target);
         }
-        let status = build
-            .status()
-            .map_err(|e| CiError::new(format!("cannot run build command: {e}")))?;
+        let status = inventory::run_build(self.open_files.as_ref(), &mut build)?;
         self.record(
             entries,
             complete,

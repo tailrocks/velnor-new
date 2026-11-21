@@ -153,12 +153,20 @@ fn trusted(
                 Err(error) if pass.budget.overflowed() => {
                     return Err(CiError::new(error.to_string()));
                 }
-                Err(_) => return Ok(false),
+                Err(error) => {
+                    pass.budget.warn_descriptors_exhausted(&error);
+                    return Ok(false);
+                }
             }
         }
         let current = &pass.views[&key];
-        if !matches!(inventory::matches(output, path, current, targets), Ok(true)) {
-            return Ok(false);
+        match inventory::matches(output, path, current, targets) {
+            Ok(true) => {}
+            Err(error) => {
+                pass.budget.warn_descriptors_exhausted(&error);
+                return Ok(false);
+            }
+            Ok(false) => return Ok(false),
         }
     }
     Ok(true)

@@ -13,6 +13,7 @@ mod budget;
 mod checkpoints;
 mod decision;
 mod descriptors;
+mod exhaustion;
 mod links;
 mod placement;
 mod racing;
