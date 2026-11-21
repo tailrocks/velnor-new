@@ -9,6 +9,7 @@ use std::process::{Command, Output};
 use crate::error::CiError;
 
 use super::fetch::Trusted;
+use super::fetch_fixed::Located;
 
 const PROXY: &str = "rustup";
 const TOOLCHAIN_VARIABLE: &str = "RUSTUP_TOOLCHAIN";
@@ -16,6 +17,7 @@ const TOOLCHAIN_VARIABLE: &str = "RUSTUP_TOOLCHAIN";
 pub(super) struct Resolved {
     pub(super) cargo: PathBuf,
     pub(super) toolchain: OsString,
+    pub(super) rustc: Option<PathBuf>,
 }
 
 pub(super) fn resolve(
@@ -24,15 +26,17 @@ pub(super) fn resolve(
     rustup_home: &Path,
     neutral: &Path,
     trusted: &Trusted,
+    fixed: Option<&Located>,
 ) -> Result<Resolved, CiError> {
     let resolved = std::fs::canonicalize(cargo)
         .map_err(|e| CiError::new(format!("cannot resolve {}: {e}", cargo.display())))?;
-    let Some(rustup) = beside(cargo, &resolved, trusted) else {
+    let Some(rustup) = beside(cargo, &resolved, trusted, fixed) else {
         return Ok(Resolved {
             cargo: cargo.to_path_buf(),
             toolchain: chosen()
                 .or_else(|| default_toolchain(rustup_home))
                 .unwrap_or_else(unpinned),
+            rustc: fixed.map(|fixed| sealed_rustc(cargo, fixed)).transpose()?,
         });
     };
     let rustup_home = std::fs::canonicalize(rustup_home).map_err(|e| {
@@ -88,20 +92,51 @@ pub(super) fn resolve(
                 rustup_home.display()
             ))
         })?;
+    if fixed.is_some_and(|fixed| !fixed.seals(&real)) {
+        return Err(CiError::new(format!(
+            "{} is outside the sealed toolchain; refusing to run it with the token",
+            real.display()
+        )));
+    }
+    let rustc = fixed.map(|fixed| sealed_rustc(&real, fixed)).transpose()?;
     Ok(Resolved {
         cargo: real,
         toolchain: name.into(),
+        rustc,
     })
 }
 
-fn beside(cargo: &Path, resolved: &Path, trusted: &Trusted) -> Option<PathBuf> {
+fn sealed_rustc(cargo: &Path, fixed: &Located) -> Result<PathBuf, CiError> {
+    cargo
+        .with_file_name("rustc")
+        .canonicalize()
+        .ok()
+        .filter(|rustc| rustc.is_file() && fixed.seals(rustc))
+        .ok_or_else(|| {
+            CiError::new(format!(
+                "no sealed rustc beside {}; refusing to run cargo with the token",
+                cargo.display()
+            ))
+        })
+}
+
+pub(super) fn beside(
+    cargo: &Path,
+    resolved: &Path,
+    trusted: &Trusted,
+    fixed: Option<&Located>,
+) -> Option<PathBuf> {
     if resolved.file_name().is_some_and(|name| name == PROXY) {
         return Some(resolved.to_path_buf());
     }
     [cargo.with_file_name(PROXY), resolved.with_file_name(PROXY)]
         .into_iter()
         .filter_map(|candidate| std::fs::canonicalize(candidate).ok())
-        .find(|rustup| rustup.is_file() && trusted.within(rustup))
+        .find(|rustup| {
+            rustup.is_file()
+                && trusted.within(rustup)
+                && fixed.is_none_or(|fixed| fixed.seals(rustup))
+        })
 }
 
 fn real_cargo(printed: &str, rustup_home: &Path, proxies: &[&Path]) -> Option<PathBuf> {

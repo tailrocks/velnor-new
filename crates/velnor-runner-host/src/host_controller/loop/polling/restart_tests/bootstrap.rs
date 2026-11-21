@@ -328,11 +328,19 @@ async fn bootstrap_restart_releases_recorded_network_before_container_create() -
     Box::pin(recovers(Crash::NetworkRecorded, false)).await
 }
 #[tokio::test(flavor = "multi_thread")]
-async fn bootstrap_restart_retains_foreign_objects_at_the_deterministic_names() -> TestResult<()> {
-    for crash in [Crash::DindCreate, Crash::VolumeCreate, Crash::NetworkCreate] {
-        Box::pin(recovers(crash, true)).await?;
-    }
-    Ok(())
+async fn bootstrap_restart_retains_foreign_objects_at_the_deterministic_names_dind_create()
+-> TestResult<()> {
+    Box::pin(recovers(Crash::DindCreate, true)).await
+}
+#[tokio::test(flavor = "multi_thread")]
+async fn bootstrap_restart_retains_foreign_objects_at_the_deterministic_names_volume_create()
+-> TestResult<()> {
+    Box::pin(recovers(Crash::VolumeCreate, true)).await
+}
+#[tokio::test(flavor = "multi_thread")]
+async fn bootstrap_restart_retains_foreign_objects_at_the_deterministic_names_network_create()
+-> TestResult<()> {
+    Box::pin(recovers(Crash::NetworkCreate, true)).await
 }
 
 #[tokio::test(flavor = "multi_thread")]

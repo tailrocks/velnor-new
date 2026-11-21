@@ -14,9 +14,8 @@ pub fn trust_mise_dir<'a>(command: &'a mut Command, dir: &Path) -> &'a mut Comma
 }
 
 fn trusted_paths_with(inherited: Option<&OsStr>, dir: &Path) -> OsString {
-    let mut trusted: Vec<PathBuf> = inherited
-        .map(|value| std::env::split_paths(value).collect())
-        .unwrap_or_default();
+    let mut trusted: Vec<PathBuf> =
+        inherited.map_or_else(Vec::new, |value| std::env::split_paths(value).collect());
     trusted.push(dir.to_path_buf());
     std::env::join_paths(trusted)
         .unwrap_or_else(|error| unreachable!("MISE_TRUSTED_CONFIG_PATHS: {error}"))

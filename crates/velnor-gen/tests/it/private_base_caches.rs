@@ -340,3 +340,21 @@ fn the_token_bearing_steps_run_before_any_step_that_executes_checkout_code() -> 
     }
     Ok(())
 }
+
+#[test]
+fn a_declared_public_dependency_beside_a_private_one_saves_only_behind_the_verdict() -> TestResult {
+    let sha = "0123456789abcdef0123456789abcdef01234567";
+    let lock = format!(
+        "{GIT_LOCK}\n[[package]]\nname = \"open\"\nversion = \"1.0.0\"\nsource = \"git+https://github.com/acme/open-lib#{sha}\"\n"
+    );
+    let declared = "[public_sources]\ngit = ['https://github.com/acme/open-lib']\n";
+    let (text, notes) = text_and_notes(&consumer("0.1.111", &lock, declared)?)?;
+    let lane = lane(&text)?;
+    assert!(lane.contains("Save the target cache"), "{lane}");
+    assert!(lane.contains(VERDICT), "{lane}");
+    assert!(
+        notes.iter().any(|note| note.contains(SAVING_NOTE)),
+        "{notes:?}"
+    );
+    Ok(())
+}

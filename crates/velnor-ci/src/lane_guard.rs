@@ -11,7 +11,6 @@ use crate::nextest_list::{Case, TestKey, list};
 const PREFIX: &str = "velnor-ci lane-guard";
 const LISTED_LIMIT: usize = 50;
 
-#[must_use]
 pub fn run(args: &LaneGuardArgs) -> ExitCode {
     match guard(args) {
         Ok(report) => {

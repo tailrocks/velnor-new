@@ -49,3 +49,12 @@ pub(crate) fn target_dir_env(target: &RepoPath) -> (String, Value) {
         )),
     )
 }
+
+pub(crate) fn mbx_reports_env(job: &Job) -> Option<(String, Value)> {
+    (job.mbx_stats == velnor_model::MbxStats::Reports).then(|| {
+        (
+            "VELNOR_MBX_REPORTS".to_owned(),
+            Value::Text("true".to_owned()),
+        )
+    })
+}

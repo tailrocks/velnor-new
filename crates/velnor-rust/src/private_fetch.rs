@@ -8,7 +8,6 @@ use velnor_model::{
 
 use crate::plan::step;
 
-// First released in tools-v0.1.111 (not tagged yet when this gate was written).
 const TOKEN_FIRST_HELPER: (u64, u64, u64) = (0, 1, 111);
 
 pub(crate) fn tokens_first(facts: &RepoFacts) -> bool {
@@ -212,6 +211,37 @@ pub(crate) fn shared_gate<'a>(steps: impl Iterator<Item = &'a Step>) -> Option<G
         };
     }
     Some(shared)
+}
+
+pub(crate) fn any_gate(first: Option<&Gate>, second: Option<&Gate>) -> Option<Gate> {
+    let (first, second) = (first?, second?);
+    if first == second {
+        return Some(first.clone());
+    }
+    let selects = |gate: &Gate| {
+        matches!(
+            gate.need,
+            GateNeed::Selected | GateNeed::Doctests | GateNeed::Docs | GateNeed::PackageArgs
+        )
+    };
+    if first.from != second.from || !selects(first) || !selects(second) {
+        return None;
+    }
+    let mut roots: Vec<RootSlug> = Vec::new();
+    for slug in first.roots().chain(second.roots()) {
+        if !roots.contains(slug) {
+            roots.push(slug.clone());
+        }
+    }
+    let mut rest = roots.into_iter();
+    Some(Gate {
+        slug: rest.next()?,
+        need: GateNeed::Selected,
+        packages: Vec::new(),
+        unselected: false,
+        also: rest.collect(),
+        ..first.clone()
+    })
 }
 
 fn manifest(step: &Step) -> RepoPath {

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{PrivateSources, RepoPath, RootSlug, Step, StepKind};
+use velnor_model::{PrivateSources, PrivateVerdict, RepoPath, RootSlug, Step, StepKind};
 
 use crate::gate::sources_step;
 use crate::release_steps::{APP_TOKEN_COMMIT, APP_TOKEN_VERSION, shell_word};
@@ -46,15 +46,21 @@ pub(crate) fn repository_conditions(step: &Step) -> Vec<String> {
     conditions
 }
 
+/// `cache decide` trusts `VELNOR_REPOSITORY_PRIVATE` alone, and a step `env` overrides
+/// `$GITHUB_ENV`, so the step always sets it itself: to the privacy step's answer, or to an
+/// empty string that refuses every private source.
 pub(crate) fn decide_env(step: &Step) -> Vec<(String, Value)> {
-    if step.private_repo && matches!(step.kind, StepKind::CacheDecide { .. }) {
-        vec![(
-            "VELNOR_REPOSITORY_PRIVATE".to_owned(),
-            Value::Expr(format!("${{{{ steps.{PRIVACY_STEP}.outputs.private }}}}")),
-        )]
-    } else {
-        Vec::new()
-    }
+    let StepKind::CacheDecide { private, .. } = &step.kind else {
+        return Vec::new();
+    };
+    let value = match private {
+        PrivateVerdict::Unset => return Vec::new(),
+        PrivateVerdict::Cleared => Value::Text(String::new()),
+        PrivateVerdict::Checked => {
+            Value::Expr(format!("${{{{ steps.{PRIVACY_STEP}.outputs.private }}}}"))
+        }
+    };
+    vec![("VELNOR_REPOSITORY_PRIVATE".to_owned(), value)]
 }
 
 fn api_env() -> Vec<(String, Value)> {

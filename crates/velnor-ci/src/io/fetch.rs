@@ -60,8 +60,11 @@ pub(super) fn fetch(args: &FetchArgs) -> Result<String, CiError> {
                 e.context("the fetch token could not be revoked; it expires within the hour")
             })
     });
-    outcome?;
+    let scratch = outcome?;
     revocation?;
+    if let Some(scratch) = scratch {
+        scratch.keep_index()?;
+    }
     Ok(if token.is_some() {
         "Fetched the dependencies and revoked the token\n".to_owned()
     } else {
@@ -69,9 +72,16 @@ pub(super) fn fetch(args: &FetchArgs) -> Result<String, CiError> {
     })
 }
 
-fn fetch_with(args: &FetchArgs, token: Option<&str>) -> Result<(), CiError> {
+fn fetch_with(
+    args: &FetchArgs,
+    token: Option<&str>,
+) -> Result<Option<super::fetch_home::Scratch>, CiError> {
     let home = super::fetch_fixed::account_home(args.home.as_deref())?;
-    let fixed = super::fetch_fixed::Fixed::system().find();
+    let fixed = if args.no_fixed_toolchain {
+        None
+    } else {
+        super::fetch_fixed::Fixed::system().find()
+    };
     let mut roots = args.trusted_dir.clone();
     roots.extend(fixed.iter().flat_map(super::fetch_fixed::Located::roots));
     let mut trusted = Trusted::new(&home, &roots);
@@ -88,10 +98,7 @@ fn fetch_with(args: &FetchArgs, token: Option<&str>) -> Result<(), CiError> {
                 "CARGO_HOME",
             )?,
         };
-        if token.is_some() {
-            super::fetch_git::check_databases(&cache)?;
-        }
-        let temp = super::fetch_home::temp_parent(&home);
+        let temp = super::fetch_home::temp_parent(&home, token.is_some())?;
         Some(super::fetch_home::Scratch::create(
             &cache,
             &temp,
@@ -120,19 +127,30 @@ fn fetch_with(args: &FetchArgs, token: Option<&str>) -> Result<(), CiError> {
         .filter(|_| token.is_some())
         .map(super::fetch_home::Scratch::path);
     let mut toolchain = None;
+    let mut rustc = None;
     if let Some(neutral) = neutral {
         let rustup_home = trusted.home_variable(
             inherited.rustup_home.as_ref(),
             home.join(".rustup"),
             "RUSTUP_HOME",
         )?;
-        let resolved =
-            super::fetch_toolchain::resolve(&cargo, &home, &rustup_home, neutral, &trusted)?;
+        let resolved = super::fetch_toolchain::resolve(
+            &cargo,
+            &home,
+            &rustup_home,
+            neutral,
+            &trusted,
+            fixed.as_ref(),
+        )?;
         cargo = resolved.cargo;
         toolchain = Some(resolved.toolchain);
+        rustc = resolved.rustc;
     }
     let mut environment = trusted.environment(&home, &cargo, &git, &inherited, token, &server)?;
     environment.extend(toolchain.map(|name| ("RUSTUP_TOOLCHAIN".into(), name)));
+    for name in ["RUSTC", "CARGO_BUILD_RUSTC"] {
+        environment.extend(rustc.iter().map(|rustc| (name.into(), rustc.into())));
+    }
     super::fetch_run::run_fetches(
         &cargo,
         &environment,
@@ -140,10 +158,12 @@ fn fetch_with(args: &FetchArgs, token: Option<&str>) -> Result<(), CiError> {
         &args.manifest_path,
         neutral,
     )?;
-    match (&scratch, token) {
-        (Some(scratch), Some(_)) => scratch.keep_git(),
-        _ => Ok(()),
+    if token.is_some()
+        && let Some(scratch) = &scratch
+    {
+        scratch.keep_git()?;
     }
+    Ok(scratch.filter(|_| token.is_some()))
 }
 
 pub(super) fn api_client(
@@ -364,7 +384,5 @@ fn non_empty_variable(name: &str) -> Option<OsString> {
 }
 
 pub(super) fn search_path() -> Vec<PathBuf> {
-    std::env::var_os("PATH")
-        .map(|path| std::env::split_paths(&path).collect())
-        .unwrap_or_default()
+    std::env::var_os("PATH").map_or_default(|path| std::env::split_paths(&path).collect())
 }
