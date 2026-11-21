@@ -57,7 +57,7 @@ fn enabled_workflows(github: &dyn GitHubWrite, repo: &Repo) -> Result<u64, CiErr
     Ok(list
         .workflows
         .iter()
-        .filter(|workflow| !workflow.state.starts_with("disabled"))
+        .filter(|workflow| workflow.state == "active")
         .count() as u64)
 }
 

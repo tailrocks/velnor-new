@@ -75,6 +75,28 @@ fn disabled_workflows_let_the_purge_proceed() {
     let api = Api::with_workflows(mixed(), &["disabled_manually", "disabled_inactivity"]);
     assert!(purge_private(&api, &repo(), true).is_ok());
 }
+
+#[test]
+fn a_deleted_workflow_does_not_block_the_purge() {
+    let api = Api::with_workflows(mixed(), &["deleted", "disabled_fork", "disabled_manually"]);
+    let report = purge_private(&api, &repo(), true);
+    assert!(report.is_ok(), "{report:?}");
+    assert_eq!(api.deleted.borrow().len(), 3);
+}
+
+#[test]
+fn an_incomplete_workflow_listing_refuses_the_purge_and_deletes_nothing() {
+    let api = Api::with_incomplete_workflow_listing(mixed(), &["disabled_manually"]);
+    let error = purge_private(&api, &repo(), true)
+        .err()
+        .map(|e| e.to_string());
+    assert_eq!(
+        error.as_deref(),
+        Some("the workflow listing is incomplete; run purge-private again")
+    );
+    assert!(api.deleted.borrow().is_empty());
+}
+
 #[test]
 fn requested_runs_alone_refuse_the_purge_and_delete_nothing() {
     let api = Api::with_runs(mixed(), &[("requested", 1)]);

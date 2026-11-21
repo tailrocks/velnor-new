@@ -23,6 +23,7 @@ struct Api {
     run_listings: Cell<usize>,
     promoted_to: Option<&'static str>,
     workflows: RefCell<Vec<&'static str>>,
+    workflows_total: Cell<Option<u64>>,
 }
 
 fn entry(id: u64, key: &str, reference: &str) -> Value {
@@ -42,6 +43,7 @@ impl Api {
             run_listings: Cell::default(),
             promoted_to: None,
             workflows: RefCell::default(),
+            workflows_total: Cell::default(),
         }
     }
 
@@ -57,6 +59,12 @@ impl Api {
         api
     }
 
+    fn with_incomplete_workflow_listing(entries: Vec<Value>, listed: &[&'static str]) -> Self {
+        let api = Self::with_workflows(entries, listed);
+        api.workflows_total.set(Some(listed.len() as u64 + 1));
+        api
+    }
+
     fn arriving_after_each_relist(batches: Vec<Vec<Value>>) -> Self {
         let api = Self::new(mixed());
         *api.arrivals.borrow_mut() = batches.into();
@@ -69,7 +77,8 @@ impl GitHub for Api {
         if path.contains("/actions/workflows?") {
             let states = self.workflows.borrow();
             let rows: Vec<Value> = states.iter().map(|state| json!({"state": state})).collect();
-            return Ok(json!({"total_count":rows.len(),"workflows":rows}).to_string());
+            let total = self.workflows_total.get().unwrap_or(rows.len() as u64);
+            return Ok(json!({"total_count":total,"workflows":rows}).to_string());
         }
         if path.contains("/actions/runs?") {
             let status = path
