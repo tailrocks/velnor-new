@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::ResultTest;
-use super::waste_mbx::{fails_closed, lane_with_mbx_log};
+use super::waste_mbx::{fails_closed, lane_with_mbx_log, lane_with_mbx_report};
 
 #[test]
 fn every_truncation_of_the_object_cache_label_is_unparsed_and_fails_closed() -> ResultTest {
@@ -66,5 +66,23 @@ fn an_omitted_counter_is_zero_only_when_the_downloaded_tail_is_present() -> Resu
     assert_eq!(whole.mbx.sessions[0].hits, 0, "{whole:?}");
     assert_eq!(whole.mbx.sessions[0].misses, 5, "{whole:?}");
     assert_eq!(whole.mbx.unparsed, 0, "{whole:?}");
+    Ok(())
+}
+
+#[test]
+fn a_lane_whose_only_mbx_report_is_incremental_compilations_is_not_compiled_without_mbx()
+-> ResultTest {
+    let incremental =
+        r#"{"version":5,"hits":0,"misses":0,"unconsulted":0,"incremental_compilations":15}"#;
+    let metrics = lane_with_mbx_report("report-mbx-incremental-only", incremental)?;
+    assert_eq!(metrics.mbx.sessions.len(), 1, "{metrics:?}");
+    assert!(
+        metrics
+            .violations
+            .iter()
+            .all(|line| !line.contains("compiled without mbx")),
+        "{:?}",
+        metrics.violations
+    );
     Ok(())
 }
