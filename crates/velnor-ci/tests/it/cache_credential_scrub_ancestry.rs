@@ -165,7 +165,9 @@ fn a_credential_url_in_a_git_reflog_stops_the_sources_save() {
         (
             "reflog-head-userinfo",
             ".cargo/git/db/shared-1/logs/HEAD",
-            &format!("{REFLOG_CLONE}https://x-access-token:ghs_secret@github.com/acme/shared-lib\n"),
+            &format!(
+                "{REFLOG_CLONE}https://x-access-token:ghs_secret@github.com/acme/shared-lib\n"
+            ),
         ),
         (
             "reflog-ref-token",
@@ -177,7 +179,9 @@ fn a_credential_url_in_a_git_reflog_stops_the_sources_save() {
         (
             "capitalized-logs-token",
             ".cargo/git/db/shared-1/Logs/HEAD",
-            &format!("{REFLOG_CLONE}https://x-access-token:ghs_secret@github.com/acme/shared-lib\n"),
+            &format!(
+                "{REFLOG_CLONE}https://x-access-token:ghs_secret@github.com/acme/shared-lib\n"
+            ),
         ),
     ]);
 }
