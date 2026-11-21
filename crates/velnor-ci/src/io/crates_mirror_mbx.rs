@@ -86,7 +86,7 @@ fn declared_for_project(args: &[OsString]) -> bool {
 }
 
 fn project_directories(work: &Path, args: &[OsString]) -> Option<Vec<PathBuf>> {
-    let base = directory_flag(work, args);
+    let base = directory_flag(work, args)?;
     let args = super::crates_mirror_alias::expand(&base, args)?;
     let command = subcommand(&args).map(|(_, command)| command);
     if let Some(target) = command.filter(|command| direct_target(command)) {
@@ -125,20 +125,24 @@ fn script_enabled(args: &[OsString]) -> bool {
     let end = subcommand(args).map_or(args.len(), |(index, _)| index);
     let mut args = args[..end].iter();
     while let Some(arg) = args.next() {
-        if arg == "-Zscript" || (arg == "-Z" && args.next().is_some_and(|flag| flag == "script")) {
+        let Some((flag, attached)) = arg.to_str().and_then(value_flag) else {
+            continue;
+        };
+        if flag == 'Z'
+            && (attached == "script"
+                || (attached.is_empty() && args.next().is_some_and(|word| word == "script")))
+        {
             return true;
         }
     }
     false
 }
 
-fn directory_flag(work: &Path, args: &[OsString]) -> PathBuf {
+fn directory_flag(work: &Path, args: &[OsString]) -> Option<PathBuf> {
     let mut base = work.to_path_buf();
     let mut seen = args.iter();
     while let Some(arg) = seen.next() {
-        let Some(text) = arg.to_str() else {
-            break;
-        };
+        let text = arg.to_str()?;
         if let Some((flag, attached)) = value_flag(text) {
             let value = if attached.is_empty() {
                 seen.next().cloned()
@@ -156,7 +160,7 @@ fn directory_flag(work: &Path, args: &[OsString]) -> PathBuf {
             break;
         }
     }
-    std::fs::canonicalize(&base).unwrap_or(base)
+    Some(std::fs::canonicalize(&base).unwrap_or(base))
 }
 
 pub(super) fn direct_target(command: &str) -> bool {
@@ -182,13 +186,17 @@ pub(super) fn subcommand(args: &[OsString]) -> Option<(usize, &str)> {
 }
 
 fn value_flag(arg: &str) -> Option<(char, &str)> {
+    short_value(arg, &['C', 'Z'])
+}
+
+fn short_value<'a>(arg: &'a str, takes_value: &[char]) -> Option<(char, &'a str)> {
     if arg.starts_with("--") {
         return None;
     }
     let flags = arg.strip_prefix('-')?;
     flags
         .char_indices()
-        .find(|(_, flag)| matches!(flag, 'C' | 'Z'))
+        .find(|(_, flag)| takes_value.contains(flag))
         .map(|(index, flag)| (flag, &flags[index + flag.len_utf8()..]))
 }
 
@@ -200,7 +208,7 @@ pub(super) fn option_value(args: &[OsString], long: &str, shorthand: bool) -> Op
         .take_while(|(index, arg)| *index < split || *arg != "--")
         .map(|(_, arg)| arg);
     while let Some(arg) = args.next() {
-        if arg == long || (shorthand && arg == "-m") {
+        if arg == long {
             return args.next().cloned();
         }
         let Some(arg) = arg.to_str() else {
@@ -212,11 +220,11 @@ pub(super) fn option_value(args: &[OsString], long: &str, shorthand: bool) -> Op
         {
             return Some(value.into());
         }
-        if shorthand
-            && !arg.starts_with("--")
-            && let Some(value) = arg.strip_prefix("-m")
-        {
-            return Some(value.strip_prefix('=').unwrap_or(value).into());
+        if shorthand && let Some(('m', attached)) = short_value(arg, &['C', 'Z', 'm']) {
+            if attached.is_empty() {
+                return args.next().cloned();
+            }
+            return Some(attached.strip_prefix('=').unwrap_or(attached).into());
         }
     }
     None

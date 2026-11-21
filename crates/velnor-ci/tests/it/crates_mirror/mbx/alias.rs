@@ -293,3 +293,41 @@ fn a_user_alias_named_like_any_cargo_built_in_is_ignored() -> TestResult {
     )?);
     Ok(())
 }
+
+#[test]
+fn a_trailing_config_argument_of_an_external_subcommand_is_not_an_alias_definition() -> TestResult {
+    let repo = declared_job()?;
+    let launch = repo.root().join("launch");
+    assert_plain(&run_with_args(
+        &repo,
+        &launch,
+        &["foo", "--config", "custom.toml", "value"],
+    )?);
+    Ok(())
+}
+
+#[test]
+fn a_relative_home_is_resolved_from_the_directory_flag() -> TestResult {
+    let repo = declared_job()?;
+    let launch = repo.root().join("launch");
+    let target = repo.root().join("target");
+    let (inside, outside) = manifests(&repo);
+    for (directory, manifest) in [(&launch, &outside), (&target, &inside)] {
+        let config = directory.join("relative-home/.cargo");
+        fs::create_dir_all(&config)?;
+        fs::write(
+            config.join("config.toml"),
+            format!("[alias]\nx = \"build --manifest-path {manifest}\"\n"),
+        )?;
+    }
+    fs::create_dir_all(&launch)?;
+    let output = wrapper_command(repo.root(), &plain_cargo(&repo)?, false, &[])?
+        .current_dir(&launch)
+        .env_remove("CARGO_HOME")
+        .env("HOME", "relative-home")
+        .env("VELNOR_CARGO_MBX", "required")
+        .args(["-C", &target.display().to_string(), "x"])
+        .output()?;
+    assert_refused(&output);
+    Ok(())
+}

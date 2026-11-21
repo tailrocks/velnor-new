@@ -99,7 +99,7 @@ fn a_nested_script_target_is_scoped_by_its_path() -> TestResult {
     let launch = repo.root().join("launch");
     fs::create_dir_all(launch.join("a/b"))?;
     fs::create_dir_all(launch.join("a/x"))?;
-    fs::write(launch.join("a/b/mise.toml"), MBX_DECLARED)?;
+    fs::write(launch.join("a/b/mise.toml"), MBX_DECLARED.as_str())?;
     assert_refused(&run_with_args(
         &repo,
         &launch,

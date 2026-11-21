@@ -129,7 +129,8 @@ fn config_text(directory: &Path) -> std::io::Result<Option<String>> {
 }
 
 fn command_line_may_define_aliases(args: &[OsString]) -> bool {
-    let mut args = args.iter().take_while(|arg| *arg != "--");
+    let end = subcommand(args).map_or(args.len(), |(index, _)| index);
+    let mut args = args[..end].iter();
     while let Some(arg) = args.next() {
         if arg == "--config" {
             let value = args.next().and_then(|value| value.to_str());
@@ -155,7 +156,7 @@ fn config_directories(work: &Path) -> Vec<PathBuf> {
     let home = std::env::var_os("CARGO_HOME")
         .filter(|value| !value.is_empty())
         .map(|value| work.join(value))
-        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".cargo")));
+        .or_else(|| std::env::var_os("HOME").map(|home| work.join(home).join(".cargo")));
     directories.extend(home);
     directories
 }
