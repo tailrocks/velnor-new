@@ -4,6 +4,7 @@
 mod descriptors;
 mod evidence;
 mod handle;
+mod resolve;
 mod walk;
 
 pub(super) use descriptors::{OpenFileLimit, raise_open_file_limit};

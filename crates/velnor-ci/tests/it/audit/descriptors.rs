@@ -4,7 +4,7 @@
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
-use std::process::{Command, Output};
+use std::process::Output;
 
 use nix::sys::resource::{Resource, getrlimit};
 use velnor_test_support::real_cargo;
@@ -42,7 +42,7 @@ fn deep_repository() -> Repo {
 }
 
 fn velnor_ci_under(repo: &Repo, limits: &str, args: &[&str], path: Option<&str>) -> Output {
-    let mut command = Command::new("sh");
+    let mut command = super::command("sh");
     command
         .arg("-c")
         .arg(format!("{limits} && exec \"$0\" \"$@\""))

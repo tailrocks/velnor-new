@@ -136,7 +136,12 @@ fn the_policy_tools_run_for_their_own_triggers() -> TestResult {
         assert_eq!((runs.deny, runs.machete), (deny, machete), "{paths:?}");
     }
     let no_tools = policy_runs(
-        PolicyTools::default(),
+        PolicyTools {
+            deny: false,
+            machete: false,
+            deny_off: false,
+            checks: DenyChecks::of(&[]),
+        },
         &changed(&["Cargo.lock"])?,
         true,
         true,

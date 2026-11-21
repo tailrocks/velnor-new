@@ -29,6 +29,7 @@ pub(super) fn declarations(
     max_entries: usize,
 ) -> Result<Vec<Declared>, CiError> {
     let mut found = Vec::new();
+    let mut pass = Pass::new(max_entries);
     let targets = inventory::exclusions(workspaces)?;
     let active = workspaces
         .iter()
@@ -83,7 +84,7 @@ pub(super) fn declarations(
                 .filter(|path| fs::metadata(path).is_ok_and(|metadata| metadata.is_dir()))
                 .cloned()
                 .collect();
-            let trusted = trusted(&output, &paths, &directories, &targets, max_entries)?;
+            let trusted = trusted(&output, &paths, &directories, &targets, &mut pass)?;
             let targets = inventory::load(&output)
                 .ok()
                 .filter(|saved| targets.is_subset(&saved.targets))
@@ -101,14 +102,27 @@ pub(super) fn declarations(
     Ok(found)
 }
 
+struct Pass {
+    budget: inventory::Budget,
+    views: BTreeMap<(PathBuf, BTreeSet<PathBuf>), inventory::Entries>,
+}
+
+impl Pass {
+    fn new(max_entries: usize) -> Self {
+        Self {
+            budget: inventory::Budget::new(max_entries),
+            views: BTreeMap::new(),
+        }
+    }
+}
+
 fn trusted(
     output: &Path,
     paths: &[PathBuf],
     directories: &[PathBuf],
     targets: &BTreeSet<PathBuf>,
-    max_entries: usize,
+    pass: &mut Pass,
 ) -> Result<bool, CiError> {
-    let mut budget = inventory::Budget::new(max_entries);
     let saved = inventory::load(output).ok();
     let targets = saved
         .as_ref()
@@ -125,14 +139,31 @@ fn trusted(
         return Ok(false);
     }
     for path in directories {
-        let matched = inventory::scan(path, targets, &mut budget)
-            .and_then(|entries| inventory::view(&entries, &fs::canonicalize(path)?, targets))
-            .and_then(|entries| inventory::matches(output, path, &entries, targets));
-        match matched {
+        let Ok(root) = fs::canonicalize(path) else {
+            return Ok(false);
+        };
+        let key = (root.clone(), targets.clone());
+        if !pass.views.contains_key(&key) {
+            let scanned = inventory::scan(path, targets, &mut pass.budget)
+                .and_then(|entries| inventory::view(&entries, &root, targets));
+            match scanned {
+                Ok(view) => {
+                    pass.views.insert(key.clone(), view);
+                }
+                Err(error) if pass.budget.overflowed() => {
+                    return Err(CiError::new(error.to_string()));
+                }
+                Err(error) => {
+                    pass.budget.warn_descriptors_exhausted(&error);
+                    return Ok(false);
+                }
+            }
+        }
+        let current = &pass.views[&key];
+        match inventory::matches(output, path, current, targets) {
             Ok(true) => {}
-            Err(error) if budget.overflowed() => return Err(CiError::new(error.to_string())),
             Err(error) => {
-                budget.warn_descriptors_exhausted(&error);
+                pass.budget.warn_descriptors_exhausted(&error);
                 return Ok(false);
             }
             Ok(false) => return Ok(false),
