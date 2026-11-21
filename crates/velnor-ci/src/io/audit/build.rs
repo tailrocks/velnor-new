@@ -18,7 +18,9 @@ use velnor_gen::io::read_checkout;
 use velnor_model::RepoFacts;
 use velnor_rust::{detect, sha256_hex};
 
-use super::super::units::{Workspace, apart, build_unit_files, unchecked_unit_files};
+use super::super::units::{
+    MetadataInvocation, Workspace, apart, build_unit_files, unchecked_unit_files,
+};
 use super::groups::{group_dirs, inheriting, scan_dirs, shared_groups, standalone, workspaces};
 use super::inventory::{self, Evidence};
 use super::options::max_entries_from_env;
@@ -53,12 +55,13 @@ pub(crate) fn build(directory: &Path, args: &InputsBuildArgs) -> Result<String, 
     let location = fs::canonicalize(invocation.location(directory))
         .map_err(|e| CiError::new(e.to_string()))?;
     let inherit = inheriting(&facts, &checkout.root, Some(&location))?;
-    let workspaces = workspaces(
-        &facts,
-        &checkout.root,
-        &invocation.step(directory),
-        &inherit,
-    )?;
+    let step = invocation.step(directory);
+    let baseline = MetadataInvocation {
+        executable: "cargo",
+        arguments: &[],
+        directory: &step,
+    };
+    let workspaces = workspaces(&facts, &checkout.root, &step, Some(&baseline), &inherit)?;
     apart(&workspaces, &shared_groups(&facts))?;
     let directories = scan_dirs(&workspaces);
     invocation.validate_targets(

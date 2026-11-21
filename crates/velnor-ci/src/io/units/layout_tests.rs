@@ -154,7 +154,7 @@ fn the_old_layout_is_still_read() {
     ));
 }
 
-fn target_with(files: &[&str]) -> std::path::PathBuf {
+pub(super) fn target_with(files: &[&str]) -> std::path::PathBuf {
     static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
     let root = std::env::temp_dir().join(format!(
         "velnor-units-built-{}-{}",
@@ -209,7 +209,7 @@ fn a_built_target_directory_with_units_in_either_layout_is_not_refused() {
         let root = target_with(&[
             layout,
             "debug/deps/libdep-5c64b2dee9af80ce.rlib",
-            "debug/deps/libdep-5c64b2dee9af80ce.d",
+            "debug/deps/dep-5c64b2dee9af80ce.d",
         ]);
         let found = unit_files_within(&root, 100);
         fs::remove_dir_all(&root).unwrap_or_else(|e| unreachable!("{e}"));

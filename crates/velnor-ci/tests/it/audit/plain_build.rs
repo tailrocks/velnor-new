@@ -221,3 +221,32 @@ fn a_templated_build_directory_is_refused_by_inputs_build_and_audit() {
         );
     }
 }
+
+#[test]
+fn a_cargo_configuration_under_the_changed_directory_decides_the_target_the_build_audits() {
+    let repo = workspace_below_the_root();
+    unit(
+        &repo,
+        "rust/app/.cargo/config.toml",
+        "[build]\ntarget-dir = \"../elsewhere\"\n",
+    );
+    let built = velnor_ci()
+        .current_dir(repo.root())
+        .env("RUSTC_BOOTSTRAP", "1")
+        .args([
+            "inputs",
+            "build",
+            "--",
+            "cargo",
+            "-Z",
+            "unstable-options",
+            "-C",
+            "rust/app",
+            "build",
+            "--offline",
+        ])
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(built.status.success(), "{built:?}");
+    assert!(repo.root().join("rust/elsewhere/debug").is_dir());
+}

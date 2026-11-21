@@ -26,6 +26,7 @@ mod path_dependency_fixture;
 mod per_root;
 mod plain_build;
 mod reads;
+mod real_cargo;
 mod selection;
 mod separate_build;
 mod stale_run;

@@ -149,6 +149,7 @@ pub(super) fn workspaces(
     facts: &RepoFacts,
     repository: &Path,
     step: &Path,
+    probe: Option<&MetadataInvocation<'_>>,
     inherit: &[bool],
 ) -> Result<Vec<Workspace>, CiError> {
     let groups = group_dirs(facts, repository);
@@ -159,7 +160,7 @@ pub(super) fn workspaces(
         .zip(inherit)
         .map(|((root, alone), inherit)| {
             let manifest = repository.join(root.manifest.as_str());
-            root_workspace(&manifest, None, step, *inherit, alone, &groups)
+            root_workspace(&manifest, probe, step, *inherit, alone, &groups)
         })
         .collect()
 }
