@@ -53,9 +53,15 @@ fn a_plain_workspace_run_selects_every_member() {
 }
 
 #[test]
-fn an_explicit_package_beside_an_exclusion_stays_selected() {
-    let line = "cargo build --workspace --exclude app -p app";
-    assert!(selected(line, "app"));
+fn an_exclusion_wins_over_an_explicit_package_of_the_same_name() {
+    for line in [
+        "cargo build --workspace --exclude app -p app",
+        "cargo build --workspace --exclude app --package app",
+        "cargo build --workspace --exclude=app -p app",
+    ] {
+        assert!(!selected(line, "app"), "{line}");
+        assert!(selected(line, "lib"), "{line}");
+    }
 }
 
 #[test]

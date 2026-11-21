@@ -20,8 +20,8 @@ pub(super) struct Selection {
 
 impl Selection {
     pub(super) fn selects(&self, package: &str) -> bool {
-        self.all && !self.excluded.iter().any(|excluded| excluded == package)
-            || self.packages.iter().any(|selected| selected == package)
+        !self.excluded.iter().any(|excluded| excluded == package)
+            && (self.all || self.packages.iter().any(|selected| selected == package))
     }
 }
 
