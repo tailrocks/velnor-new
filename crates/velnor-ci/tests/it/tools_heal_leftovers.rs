@@ -54,6 +54,28 @@ fn a_stale_read_only_leftover_with_a_random_name_is_swept_by_the_next_save() {
 }
 
 #[test]
+fn a_stale_legacy_random_leftover_is_kept_while_another_save_runs() {
+    let (_repo, job, store) = poisoned_store("tools-heal-legacy-held");
+    let tools = store.join("tools");
+    let lock = tools.join(format!(".lock-{OTHER}"));
+    let leftover = tools.join(".staging-retired-0123456789abcdef");
+    fs::create_dir(&lock).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::create_dir(&leftover).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::write(leftover.join("rustc"), "in use").unwrap_or_else(|e| unreachable!("{e}"));
+    aged(&leftover, Duration::from_hours(2));
+    let healed = save(&store, &job.home, true);
+    assert!(matches!(healed, Outcome::Healed { .. }), "{healed:?}");
+    assert!(
+        leftover.join("rustc").is_file(),
+        "a legacy retired tree was removed while another save runs"
+    );
+    fs::remove_dir(&lock).unwrap_or_else(|e| unreachable!("{e}"));
+    let healed = save(&store, &job.home, true);
+    assert!(matches!(healed, Outcome::Healed { .. }), "{healed:?}");
+    assert_eq!(leftovers(&store), [KEY], "the legacy leftover stays");
+}
+
+#[test]
 fn pruning_removes_an_old_entry_holding_a_read_only_directory() {
     let job = job("tools-heal-prune-read-only");
     let store = job.root.join("store");

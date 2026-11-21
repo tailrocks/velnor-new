@@ -164,6 +164,27 @@ fn hold_owners(tools: &Path, name: &str, current: &str) -> Option<Vec<Lock>> {
     Some(held)
 }
 
+fn legacy(name: &str) -> bool {
+    name.strip_prefix(STAGING_PREFIX)
+        .and_then(|rest| rest.strip_prefix(RETIRED_PREFIX))
+        .is_some_and(|suffix| {
+            suffix.len() == 16 && suffix.bytes().all(|byte| byte.is_ascii_hexdigit())
+        })
+}
+
+fn another_save_running(tools: &Path, current: &str) -> bool {
+    let own = format!("{LOCK_PREFIX}{current}");
+    fs::read_dir(tools)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .any(|entry| {
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            name.starts_with(LOCK_PREFIX) && name != own && !stale(&entry.path())
+        })
+}
+
 fn sweep(tools: &Path, current: &str) {
     let Ok(entries) = fs::read_dir(tools) else {
         return;
@@ -179,7 +200,12 @@ fn sweep(tools: &Path, current: &str) {
         {
             continue;
         }
-        let _held = if leftover {
+        let _held = if legacy(&name) {
+            if another_save_running(tools, current) {
+                continue;
+            }
+            Vec::new()
+        } else if leftover {
             match hold_owners(tools, &name, current) {
                 Some(held) => held,
                 None => continue,
