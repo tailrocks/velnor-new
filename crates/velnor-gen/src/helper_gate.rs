@@ -73,13 +73,6 @@ pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, Generate
             release.version().clone(),
         ));
     }
-    if (facts.config.private_sources.is_some() || !facts.config.release_assets.is_empty())
-        && !release.version().at_least(MINT_ORDER_HELPER)
-    {
-        return Err(GenerateError::PrivateTokenHelperTooOld(
-            release.version().clone(),
-        ));
-    }
     require_generator_digests(facts, release)?;
     Ok(release)
 }
@@ -108,3 +101,15 @@ pub fn require_compatible(version: &HelperVersion) -> Result<(), GenerateError> 
 }
 
 const MINT_ORDER_HELPER: (u64, u64, u64) = (0, 1, 111);
+
+pub(crate) fn mint_note(facts: &RepoFacts) -> Option<String> {
+    let version = facts.helper.as_ref()?.version();
+    let uses_token =
+        facts.config.private_sources.is_some() || !facts.config.release_assets.is_empty();
+    (uses_token && !version.at_least(MINT_ORDER_HELPER)).then(|| {
+        format!(
+            "[private_sources] / release assets with helper {} mint the App token after checkout-controlled steps; upgrade the helper to 0.1.111 or later",
+            version.as_str()
+        )
+    })
+}

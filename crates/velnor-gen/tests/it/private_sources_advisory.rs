@@ -22,7 +22,7 @@ fn the_dependency_policy_job_fetches_the_advisory_db_before_the_token_and_offlin
     let repo = with_deny_config(private_repo(
         &["Cargo.toml", "tools/Cargo.toml"],
         SECTION,
-        "0.1.111",
+        "0.1.88",
     )?)?;
     let text = workflow(&repo)?;
     let mut checked = 0;

@@ -195,7 +195,7 @@ fn a_setup_of_another_root_stays_out_of_this_roots_jobs() -> TestResult {
 fn private_sources_put_the_token_and_the_fetch_before_a_build_phase_setup() -> TestResult {
     for shape in SHAPES.iter().copied().filter(|shape| *shape != "groups") {
         let config = format!("shape = '{shape}'\n{SECTION}{}", build_phase());
-        let text = workflow(&private_repo(&["Cargo.toml"], &config, "0.1.111")?)?;
+        let text = workflow(&private_repo(&["Cargo.toml"], &config, "0.1.109")?)?;
         let parsed = document(&text)?;
         let mut checked = 0;
         for (id, job) in jobs(&parsed) {
@@ -223,7 +223,7 @@ fn private_sources_put_the_token_and_the_fetch_before_a_build_phase_setup() -> T
         }
         assert_eq!(checked, if shape == "one-job" { 1 } else { 2 }, "{shape}");
         let bare = format!("shape = '{shape}'\n{SECTION}");
-        let without = workflow(&private_repo(&["Cargo.toml"], &bare, "0.1.111")?)?;
+        let without = workflow(&private_repo(&["Cargo.toml"], &bare, "0.1.109")?)?;
         assert_eq!(violations(&text)?, violations(&without)?, "{shape}");
     }
     Ok(())

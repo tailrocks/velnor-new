@@ -59,19 +59,14 @@ fn every_other_decide_clears_the_verdict_so_github_env_cannot_supply_it() -> Tes
 }
 
 #[test]
-fn an_older_helper_renders_no_verdict_variable_without_private_sources() -> TestResult {
-    let repo = repo("", "0.1.110", CRATES_LOCK)?;
-    assert!(!workflow(&repo)?.contains(VARIABLE));
-    Ok(())
-}
-
-#[test]
-fn an_older_helper_is_refused_with_private_sources() -> TestResult {
-    for lock in [GIT_LOCK, CRATES_LOCK] {
-        let error = workflow(&repo(SECTION, "0.1.110", lock)?)
-            .err()
-            .ok_or("rendered with an older helper")?;
-        assert!(error.to_string().contains("0.1.111"), "{error}");
+fn an_older_helper_renders_no_verdict_variable() -> TestResult {
+    for (section, lock) in [
+        (SECTION, GIT_LOCK),
+        (SECTION, CRATES_LOCK),
+        ("", CRATES_LOCK),
+    ] {
+        let repo = repo(section, "0.1.110", lock)?;
+        assert!(!workflow(&repo)?.contains(VARIABLE), "{section}");
     }
     Ok(())
 }

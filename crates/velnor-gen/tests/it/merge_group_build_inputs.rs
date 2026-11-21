@@ -60,7 +60,7 @@ fn check(ci: &str) -> TestResult {
         ("groups", "tools/a"),
         ("one-job", "."),
     ] {
-        let repo = private_repo(&roots, &config(shape, root, ci), "0.1.111")?;
+        let repo = private_repo(&roots, &config(shape, root, ci), "0.1.109")?;
         for job in jobs(&workflow(&repo)?)? {
             let inputs: Vec<&Value> = steps(&job).iter().filter(|s| feeds_build(s)).collect();
             if inputs.is_empty() {
