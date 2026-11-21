@@ -329,7 +329,10 @@ fn a_testless_grouped_root_beside_a_tested_one_still_gets_its_check() -> TestRes
         HELPER,
     )?;
     let testless = RepoPath::new("tools/b/Cargo.toml")?;
-    let metadata = view.rust_metadata.get_mut(&testless).ok_or("no tools/b metadata")?;
+    let metadata = view
+        .rust_metadata
+        .get_mut(&testless)
+        .ok_or("no tools/b metadata")?;
     for member in &mut metadata.members {
         for target in &mut member.targets {
             target.tests = false;
